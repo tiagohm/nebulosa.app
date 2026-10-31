@@ -5,6 +5,7 @@ import { AutoFocusSessions, createAutoFocusRoutes } from './autofocus'
 import { CameraCommands, createCameraRoutes } from './cameras'
 import { CaptureFrameRegistry, createCaptureFrameRoutes, DEFAULT_CAPTURE_FRAMES_FILE } from './captureframes'
 import { CameraCaptures, createCaptureRoutes } from './captures'
+import { CloseApproachesService, createCloseApproachRoutes } from './closeapproaches'
 import { connections, createConnectionRoutes } from './connection'
 import { CoverCommands, createCoverRoutes } from './covers'
 import { createDarvRoutes, DarvSessions } from './darv'
@@ -37,7 +38,7 @@ import { NotificationClassifier } from './notifications.rules'
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
-import { annotationSky, skyLocator, skyRoutes, ssdRequests } from './sky'
+import { annotationSky, minorBodies, skyLocator, skyRoutes, ssdRequests } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createStarProfileRoutes, StarProfileService } from './starprofile'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
@@ -73,6 +74,8 @@ export type {
 	CaptureLeaseReconcileResponse,
 	CaptureSourceSummary,
 } from './captureframes'
+export type { CloseApproach, CloseApproachErrorCode, CloseApproachFilters, CloseApproachHistoryFilters, CloseApproachPageResponse } from './closeapproaches'
+export type { CloseApproachBody, CloseApproachSort, CloseApproachSortField } from 'nebulosa/src/adapters/orbits/sbd'
 export type { ConnectionCloseCause, ConnectionEvent, ConnectionRegistryEvent, ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest } from './connection'
 export type { CommandAccepted, CommandError, CommandErrorCode, CommandRequest } from './commands'
 export type { EclipseDirection, EclipseLocation } from './eclipses'
@@ -267,7 +270,33 @@ export type { MoonAlmanacRequest, MoonAlmanacResponse, MoonApsisEvent, MoonAppea
 export type { LunarFeatureCategory, LunarFeatureRow, MoonFeatureCatalog, MoonFeatureCatalogSource } from './sky/moon.features'
 export type { SunImageChannel, SunImageErrorCode, SunImageSize } from './sky/sdo'
 export type { SolarAstronomicalNight, SolarDailyState, SolarSeasonEvent, SolarSeasonKind, SolarTwilightCrossings, SunAlmanacRequest, SunAlmanacResponse, SunLocalDay, SunPhysicalData } from './sky/sun'
-export type { MinorBody, MinorBodyParameter, MinorBodySearchResponse, SkyBodiesRequest, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyObjectCategory, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult, SkyStarData, SolarSystemBodyCode } from './sky/types'
+export type {
+	MinorBody,
+	MinorBodyAlternateOrbit,
+	MinorBodyDetails,
+	MinorBodyDetailsResponse,
+	MinorBodyDiscovery,
+	MinorBodyOrbitDetails,
+	MinorBodyParameter,
+	MinorBodyPublishedValue,
+	MinorBodyRadarObservation,
+	MinorBodySatellite,
+	MinorBodySearchResponse,
+	MinorBodyVirtualImpactor,
+	SkyBodiesRequest,
+	SkyBodyPosition,
+	SkyCatalogObject,
+	SkyConstellation,
+	SkyConstellations,
+	SkyDeepSkyData,
+	SkyObjectCategory,
+	SkyObjectRef,
+	SkyPositionRequest,
+	SkyPositionResponse,
+	SkySearchResult,
+	SkyStarData,
+	SolarSystemBodyCode,
+} from './sky/types'
 export type { Binning, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, ProcessingProvenance, RenderRequest, RenderResult, SampleConversion, SaveFormat, SaveRequest, SaveResult, Stretch } from './images'
 export type {
 	ArcsinhStretchOperation,
@@ -509,6 +538,9 @@ const lunarEclipses = new LunarEclipseService()
 // Solar eclipse queries of the Solar Eclipse Map tool; their maps are computed on a worker.
 const solarEclipses = new SolarEclipseService()
 
+// Close approach queries of the Close Approaches tool, over the minor bodies and the JPL queue of the Sky.
+const closeApproaches = new CloseApproachesService(minorBodies, ssdRequests)
+
 // Earth orientation tables of the process, shared by the converter and, once installed, by every Time of the server.
 const earthOrientation = new EarthOrientationData()
 
@@ -579,6 +611,7 @@ export const routes = {
 	...skyRoutes,
 	...createLunarEclipseRoutes(lunarEclipses),
 	...createSolarEclipseRoutes(solarEclipses),
+	...createCloseApproachRoutes(closeApproaches),
 	...createAstronomicalTimeRoutes(astronomicalTime),
 	'/api/ws': {
 		// Upgrades to the event WebSocket, attaching the client id the tab names itself with; Bun sends the handshake

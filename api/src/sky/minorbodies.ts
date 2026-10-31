@@ -1,12 +1,14 @@
-import { SBD_BASE_URL, SEARCH_PATH, type SmallBodySearch, type SmallBodySearchFound, type SmallBodySearchOrbitElement, type SmallBodySearchPhyscalParameter } from 'nebulosa/src/adapters/orbits/sbd'
+// oxfmt-ignore
+import { assertSupportedSignature, SBD_BASE_URL, SEARCH_PATH, type SmallBodySearch, type SmallBodySearchFound, type SmallBodySearchModelParameter, type SmallBodySearchOrbit, type SmallBodySearchOrbitElement, type SmallBodySearchPhyscalParameter } from 'nebulosa/src/adapters/orbits/sbd'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { SsdBusyError, SsdRequestQueue, SsdThrottledError, SsdTimeoutError } from '../ssd'
-import type { MinorBodyElements } from './ephemeris'
-import type { MinorBody, MinorBodySearchResponse } from './types'
+import { LruCache, type MinorBodyElements } from './ephemeris'
+import type { MinorBody, MinorBodyDetails, MinorBodyDetailsResponse, MinorBodyOrbitDetails, MinorBodyPublishedValue, MinorBodySearchResponse } from './types'
 
 // Asteroid and comet lookup in the JPL Small-Body Database (SBDB): search by name or designation, the
-// identity, classification, orbit, and physical parameters of a body, and its osculating elements for
-// the local ephemeris model. Bodies are cached by SPK-ID so positions do not query SBDB again. The
+// identity, classification, orbit, and physical parameters of a body, its osculating elements for
+// the local ephemeris model, and everything else SBDB publishes about it for the Close Approaches tool. Bodies are
+// cached by SPK-ID so positions do not query SBDB again. The
 // service is remote, so every request goes through the JPL queue, has a timeout, and may be aborted.
 
 // Budget of one SBDB request in milliseconds.
@@ -14,6 +16,9 @@ export const SBDB_TIMEOUT_MS = 8_000
 
 // Minor bodies kept in memory.
 const MINOR_BODY_CACHE_LIMIT = 128
+
+// How long the details of a body stay fresh in milliseconds: an orbit solution changes rarely, but not never.
+const DETAILS_TTL_MS = 3_600_000
 
 // SBDB did not answer, or answered with an error status.
 export class SbdbUnavailableError extends Error {
@@ -104,16 +109,86 @@ export function elementsOf(result: SmallBodySearchFound): MinorBodyElements | un
 	}
 }
 
+// SBDB match without its close approaches, which CAD gives paged and which are most of its size.
+type RetainedSearchFound = Omit<SmallBodySearchFound, 'ca_data'>
+
 // Minor body of an SBDB match, with its elements for the local model.
 interface ResolvedMinorBody {
 	// Public data of the body.
 	readonly body: MinorBody
 	// Osculating elements; undefined when SBDB does not publish usable ones.
 	readonly elements?: MinorBodyElements
+	// Match the body came from, for its details.
+	readonly found: RetainedSearchFound
+	// When the match was read, Unix milliseconds.
+	readonly fetchedAt: number
+}
+
+// Published text, without the nulls and empty strings of the source.
+function published(value: string | null | undefined) {
+	return value || undefined
+}
+
+// Value of an orbital element, model parameter, or physical parameter as published.
+function publishedValue(value: SmallBodySearchOrbitElement | SmallBodySearchModelParameter | SmallBodySearchPhyscalParameter): MinorBodyPublishedValue {
+	const parameter = value as Partial<SmallBodySearchPhyscalParameter>
+	return { name: value.name, title: value.title.trim(), value: published(value.value), sigma: published(value.sigma), units: published(value.units), reference: published(parameter.ref), notes: published(parameter.notes) }
+}
+
+// Orbit solution of an SBDB match as published.
+function orbitDetails(orbit: SmallBodySearchOrbit): MinorBodyOrbitDetails {
+	return {
+		orbitId: orbit.orbit_id,
+		epoch: orbit.epoch,
+		epochCalendar: orbit.epoch_cd,
+		equinox: orbit.equinox,
+		solutionDate: orbit.soln_date,
+		producer: published(orbit.producer),
+		source: orbit.source,
+		firstObservation: orbit.first_obs,
+		lastObservation: orbit.last_obs,
+		dataArc: published(orbit.data_arc),
+		observations: orbit.n_obs_used,
+		delayObservations: orbit.n_del_obs_used ?? undefined,
+		dopplerObservations: orbit.n_dop_obs_used ?? undefined,
+		rms: published(orbit.rms),
+		conditionCode: published(orbit.condition_code),
+		moid: published(orbit.moid),
+		moidJupiter: published(orbit.moid_jup),
+		tisserandJupiter: published(orbit.t_jup),
+		planetaryEphemeris: published(orbit.pe_used),
+		smallBodyEphemeris: published(orbit.sb_used),
+		comment: published(orbit.comment),
+		notValidAfter: published(orbit.not_valid_after),
+		elements: orbit.elements.map(publishedValue),
+		model: (orbit.model_pars ?? []).map(publishedValue),
+	}
+}
+
+// Everything SBDB published about a match, read at `fetchedAt` (Unix milliseconds). Rejects with SmallBodyResponseError
+// a format of another major version.
+export function detailsOf(found: RetainedSearchFound, fetchedAt: number): MinorBodyDetails {
+	assertSupportedSignature(found.signature)
+	const { object, orbit, discovery, signature } = found
+
+	return {
+		alternateDesignations: (object.des_alt ?? []).flatMap((e) => Object.values(e)),
+		orbitClassCode: object.orbit_class.code,
+		orbit: orbitDetails(orbit),
+		alternateOrbits: (found.alt_orbits ?? []).map((e) => ({ orbitId: e.orbit_id, epochCalendar: e.epoch_cd, firstObservation: e.first_obs, lastObservation: e.last_obs })),
+		physical: found.phys_par.map(publishedValue),
+		discovery: discovery && { date: published(discovery.date), location: published(discovery.location), who: published(discovery.who), narrative: published(discovery.discovery), citation: published(discovery.citation) },
+		radar: (found.radar_obs ?? []).map((e) => ({ epoch: e.epoch, value: e.value, sigma: published(e.sigma), units: e.units, frequency: published(e.freq), observer: published(e.observer) })),
+		satellites: (found.sat ?? []).map((e) => ({ name: e.fullname ?? e.prov_des ?? '', designation: published(e.prov_des), confirmed: e.confirmed === 'Y', reference: published(e.ref) })),
+		virtualImpactors: (found.vi_data ?? []).map((e) => ({ date: e.date, probability: e.ip, palermo: published(e.ps), torino: published(e.ts) })),
+		source: signature.source,
+		sourceVersion: signature.version,
+		fetchedAt,
+	}
 }
 
 // Converts an SBDB match to the API's minor body.
-function resolve(result: SmallBodySearchFound): ResolvedMinorBody {
+function resolve({ ca_data: _, ...result }: SmallBodySearchFound, fetchedAt: number): ResolvedMinorBody {
 	const { object, orbit } = result
 	const parameters = [...orbit.elements.map((e) => ({ name: e.name, title: e.title, value: e.value ?? '', units: e.units ?? undefined })), ...result.phys_par.map((e) => ({ name: e.name, title: e.title, value: e.value, units: e.units ?? undefined }))]
 
@@ -132,6 +207,8 @@ function resolve(result: SmallBodySearchFound): ResolvedMinorBody {
 			parameters: parameters.filter((e) => e.value !== ''),
 		},
 		elements: elementsOf(result),
+		found: result,
+		fetchedAt,
 	}
 }
 
@@ -140,14 +217,17 @@ export class MinorBodies {
 	readonly #queue: SsdRequestQueue
 	readonly #fetch: SbdbFetch
 	readonly #timeoutMs: number
+	readonly #now: () => number
 	readonly #bodies = new Map<string, ResolvedMinorBody>()
+	readonly #designations = new LruCache<string>(MINOR_BODY_CACHE_LIMIT)
 
-	// Creates the service; options replace the JPL queue, the SBDB client, and its budget.
-	constructor(options: { readonly queue?: SsdRequestQueue; readonly fetch?: SbdbFetch; readonly timeoutMs?: number } = {}) {
+	// Creates the service; options replace the JPL queue, the SBDB client, its budget, and the clock.
+	constructor(options: { readonly queue?: SsdRequestQueue; readonly fetch?: SbdbFetch; readonly timeoutMs?: number; readonly now?: () => number } = {}) {
 		const queue = options.queue ?? new SsdRequestQueue()
 		this.#queue = queue
 		this.#fetch = options.fetch ?? ((text, signal, selector) => fetchSbdb(queue, text, signal, selector))
 		this.#timeoutMs = options.timeoutMs ?? SBDB_TIMEOUT_MS
+		this.#now = options.now ?? Date.now
 	}
 
 	// Searches SBDB by name or designation: one body, several candidates to choose from, or none.
@@ -156,7 +236,7 @@ export class MinorBodies {
 		const result = await this.#lookup(text, signal)
 
 		if ('object' in result) {
-			const resolved = resolve(result)
+			const resolved = resolve(result, this.#now())
 			this.#remember(resolved)
 			return { kind: 'found', body: resolved.body }
 		}
@@ -176,9 +256,31 @@ export class MinorBodies {
 		const result = await this.#lookup(spkId, signal)
 		if (!('object' in result)) return undefined
 
-		const resolved = resolve(result)
+		const resolved = resolve(result, this.#now())
 		this.#remember(resolved)
 		return resolved
+	}
+
+	// Returns what SBDB publishes about a designation or IAU number, from a match of the last hour or from SBDB, sharing
+	// the cache of the bodies. A close-approach row names a body exactly, so this never searches names. Rejects with
+	// SbdbUnavailableError when SBDB times out or cannot be reached, and with SmallBodyResponseError for a format of
+	// another major version.
+	async details(designation: string, signal?: AbortSignal): Promise<MinorBodyDetailsResponse> {
+		const spkId = this.#designations.get(designation)
+		const cached = spkId === undefined ? undefined : this.#bodies.get(spkId)
+		if (cached && this.#now() - cached.fetchedAt < DETAILS_TTL_MS) return { kind: 'found', body: cached.body, details: detailsOf(cached.found, cached.fetchedAt) }
+
+		const result = await this.#lookup(designation, signal, 'des')
+
+		if ('object' in result) {
+			const resolved = resolve(result, this.#now())
+			this.#remember(resolved)
+			this.#designations.set(designation, resolved.body.spkId)
+			return { kind: 'found', body: resolved.body, details: detailsOf(resolved.found, resolved.fetchedAt) }
+		}
+
+		if ('list' in result) return { kind: 'ambiguous', matches: result.list.map((e) => ({ designation: e.pdes, name: e.name })) }
+		return { kind: 'notFound', message: result.message }
 	}
 
 	// Caches a body, evicting the oldest beyond the limit.

@@ -182,6 +182,173 @@ export interface MinorBody {
 // Outcome of a minor body search: one body, several candidates to search again by designation, or none.
 export type MinorBodySearchResponse = { readonly kind: 'found'; readonly body: MinorBody } | { readonly kind: 'ambiguous'; readonly matches: readonly { readonly designation: string; readonly name: string }[] } | { readonly kind: 'notFound'; readonly message: string }
 
+// One value as SBDB publishes it, kept as text so no digit of the value or of its uncertainty is lost.
+export interface MinorBodyPublishedValue {
+	// Short name, such as "e" or "diameter".
+	readonly name: string
+	// Title of the value.
+	readonly title: string
+	// Value; absent when not published.
+	readonly value?: string
+	// 1-sigma uncertainty, in the units of the value; absent when not published.
+	readonly sigma?: string
+	// Units; absent for a dimensionless value.
+	readonly units?: string
+	// Reference of the value; absent when not published.
+	readonly reference?: string
+	// Notes of the value; absent when not published.
+	readonly notes?: string
+}
+
+// Orbit solution of a minor body, as published.
+export interface MinorBodyOrbitDetails {
+	// Identifier of the solution.
+	readonly orbitId: string
+	// Epoch of the elements, Julian date (TDB) as published.
+	readonly epoch: string
+	// Epoch of the elements, TDB calendar date as published.
+	readonly epochCalendar: string
+	// Reference equinox and frame, such as "J2000".
+	readonly equinox: string
+	// Date of the solution, as published.
+	readonly solutionDate: string
+	// Author of the solution; absent when not published.
+	readonly producer?: string
+	// Source of the solution.
+	readonly source: string
+	// Date of the first observation used.
+	readonly firstObservation: string
+	// Date of the last observation used.
+	readonly lastObservation: string
+	// Span of the observations used, in days.
+	readonly dataArc?: string
+	// Optical observations used.
+	readonly observations: number
+	// Radar delay observations used; absent when none.
+	readonly delayObservations?: number
+	// Radar Doppler observations used; absent when none.
+	readonly dopplerObservations?: number
+	// Weighted RMS of the residuals of the fit, as published.
+	readonly rms?: string
+	// JPL condition code, 0 (best determined) to 9; absent when not published.
+	readonly conditionCode?: string
+	// Earth minimum orbit intersection distance in AU: a property of the two orbits, not of any encounter.
+	readonly moid?: string
+	// Jupiter minimum orbit intersection distance in AU.
+	readonly moidJupiter?: string
+	// Jupiter Tisserand invariant.
+	readonly tisserandJupiter?: string
+	// Planetary ephemeris of the solution, such as "DE441".
+	readonly planetaryEphemeris?: string
+	// Small-body perturbers of the solution, such as "SB441-N16".
+	readonly smallBodyEphemeris?: string
+	// Comment of the solution; absent when not published.
+	readonly comment?: string
+	// Last valid date of a solution of limited validity; absent when it has none.
+	readonly notValidAfter?: string
+	// Osculating elements.
+	readonly elements: readonly MinorBodyPublishedValue[]
+	// Fitted or assumed force-model parameters, such as non-gravitational accelerations.
+	readonly model: readonly MinorBodyPublishedValue[]
+}
+
+// Earlier orbit solution of a comet.
+export interface MinorBodyAlternateOrbit {
+	// Identifier of the solution.
+	readonly orbitId: string
+	// Epoch of the elements, TDB calendar date as published.
+	readonly epochCalendar: string
+	// Date of the first observation used.
+	readonly firstObservation: string
+	// Date of the last observation used.
+	readonly lastObservation: string
+}
+
+// Discovery circumstances, as published; a field is absent when SBDB does not give it.
+export interface MinorBodyDiscovery {
+	// Date of the discovery.
+	readonly date?: string
+	// Place of the discovery.
+	readonly location?: string
+	// Discoverers.
+	readonly who?: string
+	// Narrative of the discovery.
+	readonly narrative?: string
+	// Citation of the name.
+	readonly citation?: string
+}
+
+// Radar astrometry measurement.
+export interface MinorBodyRadarObservation {
+	// UTC epoch of the measurement.
+	readonly epoch: string
+	// Measured delay or Doppler shift, in `units`.
+	readonly value: string
+	// 1-sigma uncertainty, in `units`.
+	readonly sigma?: string
+	// Units: us for a delay, Hz for a Doppler shift.
+	readonly units: string
+	// Transmitter frequency in MHz.
+	readonly frequency?: string
+	// Observer of the measurement.
+	readonly observer?: string
+}
+
+// Known satellite of a body.
+export interface MinorBodySatellite {
+	// Full name.
+	readonly name: string
+	// Provisional designation.
+	readonly designation?: string
+	// Whether the satellite is confirmed.
+	readonly confirmed: boolean
+	// Reference of the discovery.
+	readonly reference?: string
+}
+
+// Virtual impactor of the JPL Sentry risk table, as published through SBDB; never computed here.
+export interface MinorBodyVirtualImpactor {
+	// Date of the potential impact, TDB calendar day with a decimal fraction.
+	readonly date: string
+	// Impact probability, as published.
+	readonly probability: string
+	// Palermo scale, as published.
+	readonly palermo?: string
+	// Torino scale, as published.
+	readonly torino?: string
+}
+
+// What SBDB publishes about a body beyond MinorBody. A block SBDB has nothing for is empty or absent.
+export interface MinorBodyDetails {
+	// Other designations of the body.
+	readonly alternateDesignations: readonly string[]
+	// Orbit class code, such as "ATE".
+	readonly orbitClassCode: string
+	// Current orbit solution.
+	readonly orbit: MinorBodyOrbitDetails
+	// Earlier orbit solutions, of comets.
+	readonly alternateOrbits: readonly MinorBodyAlternateOrbit[]
+	// Measured physical parameters.
+	readonly physical: readonly MinorBodyPublishedValue[]
+	// Discovery circumstances.
+	readonly discovery?: MinorBodyDiscovery
+	// Radar astrometry.
+	readonly radar: readonly MinorBodyRadarObservation[]
+	// Known satellites.
+	readonly satellites: readonly MinorBodySatellite[]
+	// Virtual impactors; empty says only that SBDB lists none, never that the risk is zero.
+	readonly virtualImpactors: readonly MinorBodyVirtualImpactor[]
+	// Source of the data.
+	readonly source: string
+	// Format version of the source.
+	readonly sourceVersion: string
+	// When the data was read from SBDB, Unix milliseconds.
+	readonly fetchedAt: number
+}
+
+// Outcome of asking for a body by designation: the body, several candidates to choose from, or none.
+export type MinorBodyDetailsResponse = { readonly kind: 'found'; readonly body: MinorBody; readonly details: MinorBodyDetails } | { readonly kind: 'ambiguous'; readonly matches: readonly { readonly designation: string; readonly name: string }[] } | { readonly kind: 'notFound'; readonly message: string }
+
 // Position of a major body for drawing it on the map.
 export interface SkyBodyPosition {
 	// Horizons command.

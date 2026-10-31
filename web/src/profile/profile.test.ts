@@ -1046,6 +1046,16 @@ describe('camera forms', () => {
 		const stored = { debayer: { enabled: true, pattern: 'XYZW' }, stretch: { mode: 'manual', stretch: { shadow: 0.9, midtone: 0.5, highlight: 0.1 } }, brightness: 9, gamma: 2, scnr: { enabled: true, channel: 'GREEN', method: 'bogus', amount: 1 }, invert: 'yes' }
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 11, profiles: [{ id: 'a', name: 'A', settings: { imageDisplay: stored } }] }))
 		expect(imageDisplaySettings(load(invalid).profiles[0].settings)).toEqual({ ...ORIGINAL_DISPLAY_SETTINGS, gamma: 2 })
+
+		const presets = newStores()
+		const saved = (id: string, stretch: unknown) => ({ id, name: id, settings: { imageDisplay: { stretch } } })
+		presets.local.setItem(PROFILES_KEY, JSON.stringify({ version: 11, profiles: [saved('a', { mode: 'auto', preset: 'moon', linked: false }), saved('b', { mode: 'auto', linked: false }), saved('c', { mode: 'auto', preset: 'bogus', linked: true })] }))
+		const stretches = load(presets).profiles.map(({ settings }) => imageDisplaySettings(settings)?.stretch)
+		expect(stretches).toEqual([
+			{ mode: 'auto', preset: 'moon', linked: false },
+			{ mode: 'auto', preset: 'medium', linked: false },
+			{ mode: 'auto', preset: 'medium', linked: true },
+		])
 	})
 
 	test('version 3 forms of a camera role move to the camera that role is assigned in each setup', () => {

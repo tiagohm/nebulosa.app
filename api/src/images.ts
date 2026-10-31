@@ -2,6 +2,7 @@ import { rename, rm } from 'fs/promises'
 import { resolve } from 'path'
 import { type CfaPattern, type Image, type ImageChannel, shiftCfaPattern } from 'nebulosa/src/imaging/model/types'
 import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
+import type { AutoStfPreset } from 'nebulosa/src/imaging/processing/stf.presets'
 import type { FitsHeader, FitsHeaderKey } from 'nebulosa/src/io/formats/fits/fits'
 import { cfaPatternKeyword, exposureTimeKeyword, numericKeyword, observationDateKeyword, textKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { errorResponse } from './http'
@@ -208,9 +209,10 @@ export interface Stretch {
 	readonly highlight: number
 }
 
-// Stretch of a rendering: computed from the image statistics (auto; linked computes one stretch from
-// the luminance, unlinked one per RGB channel), explicit (manual), or none (linear).
-export type DisplayStretch = { readonly mode: 'auto'; readonly linked: boolean } | { readonly mode: 'manual'; readonly stretch: Stretch } | { readonly mode: 'linear' }
+// Stretch of a rendering: computed from the image statistics with a named toolkit profile (auto; linked
+// computes one stretch from the luminance, unlinked one per RGB channel), explicit (manual), or none
+// (linear). The moon and planet profiles sample the whole image, so they suit a target that fills most of it.
+export type DisplayStretch = { readonly mode: 'auto'; readonly preset: AutoStfPreset; readonly linked: boolean } | { readonly mode: 'manual'; readonly stretch: Stretch } | { readonly mode: 'linear' }
 
 // Debayering of a mono CFA mosaic: off, or with the pattern of the image (auto, its ImageInfo cfa) or
 // an explicit one. Ignored for an image that is not mono.

@@ -3,6 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'f
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { readImageFromPath } from 'nebulosa/src/imaging/model/image'
+import type { AutoStfPreset } from 'nebulosa/src/imaging/processing/stf.presets'
 import type { ApiError } from './http'
 import { cropImage } from './imagedecode'
 import { cfaPattern, type DisplaySettings, imageAcquisition, type ImageInfo, images, precisionOf, type RenderResult, type SaveRequest } from './images'
@@ -31,7 +32,7 @@ function writeFits(name: string, width: number, height: number, channels = 1, ex
 }
 
 // Display settings that leave everything neutral, with an auto linked stretch and no debayering.
-const NEUTRAL: DisplaySettings = { debayer: { enabled: false }, stretch: { mode: 'auto', linked: true }, brightness: 1, contrast: 1, gamma: 1, saturation: 1, scnr: { enabled: false }, invert: false }
+const NEUTRAL: DisplaySettings = { debayer: { enabled: false }, stretch: { mode: 'auto', preset: 'medium', linked: true }, brightness: 1, contrast: 1, gamma: 1, saturation: 1, scnr: { enabled: false }, invert: false }
 
 // Settings with some fields replaced.
 function settings(patch: Partial<DisplaySettings>): DisplaySettings {
@@ -124,6 +125,19 @@ describe('image documents', () => {
 		expect(((await closed.json()) as ApiError).code).toBe('notFound')
 	})
 
+	test('an auto stretch follows its preset, each one memoized apart', async () => {
+		const { id } = await openFits(writeFits('presets.fits', 16, 8))
+		const stretchOf = async (preset: AutoStfPreset) => resultOf(await render(id, settings({ stretch: { mode: 'auto', preset, linked: true } }))).stretch
+		const medium = await stretchOf('medium')
+		const moon = await stretchOf('moon')
+
+		expect(medium).toEqual(resultOf(await render(id, NEUTRAL)).stretch)
+		expect(moon).not.toEqual(medium)
+		expect(await stretchOf('medium')).toEqual(medium)
+		expect(await stretchOf('moon')).toEqual(moon)
+		images.close(id)
+	})
+
 	test('renderings never modify the decoded image', async () => {
 		const { id } = await openFits(writeFits('pristine.fits', 16, 8))
 		const first = new Uint8Array(await (await render(id, NEUTRAL)).arrayBuffer())
@@ -140,7 +154,7 @@ describe('image documents', () => {
 		expect(info.bayer).toBe('RGGB')
 		expect(info.cfa).toBe('GRBG')
 
-		const debayered = await render(info.id, settings({ debayer: { enabled: true, pattern: 'auto' }, stretch: { mode: 'auto', linked: false } }))
+		const debayered = await render(info.id, settings({ debayer: { enabled: true, pattern: 'auto' }, stretch: { mode: 'auto', preset: 'medium', linked: false } }))
 		expect(resultOf(debayered)).toMatchObject({ cfa: 'GRBG', channels: 3 })
 		expect(resultOf(debayered).stretch).toHaveLength(3)
 

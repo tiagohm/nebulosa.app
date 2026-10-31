@@ -1,6 +1,6 @@
 import type { DisplaySettings, FlatWizardFilter, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import { CAMERA_ROLES, type DeviceAssignment, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
-import { CFA_PATTERNS, DISPLAY_RANGES, type DisplayRange, ORIGINAL_DISPLAY_SETTINGS, SCNR_CHANNELS, SCNR_METHODS } from '../images/display'
+import { AUTO_STRETCH_PRESETS, CFA_PATTERNS, DEFAULT_AUTO_STRETCH_PRESET, DISPLAY_RANGES, type DisplayRange, ORIGINAL_DISPLAY_SETTINGS, SCNR_CHANNELS, SCNR_METHODS } from '../images/display'
 import { COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, DEFAULT_IMAGE_ASTROMETRY, GRID_COLORS, GRID_OPACITY_RANGE, type ImageAstrometrySettings, ORIENTATION_MODES } from '../platesolving/preferences'
 import { WORKSPACE_IDS } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
@@ -231,7 +231,7 @@ function normalizeDisplaySettings(value: unknown): DisplaySettings | undefined {
 
 	return {
 		debayer: debayer.enabled === true && (debayer.pattern === 'auto' || oneOf(debayer.pattern, CFA_PATTERNS)) ? { enabled: true, pattern: debayer.pattern } : defaults.debayer,
-		stretch: stretch.mode === 'linear' ? { mode: 'linear' } : stretch.mode === 'manual' && manual.shadow <= manual.highlight ? { mode: 'manual', stretch: manual } : { mode: 'auto', linked: stretch.linked !== false },
+		stretch: stretch.mode === 'linear' ? { mode: 'linear' } : stretch.mode === 'manual' && manual.shadow <= manual.highlight ? { mode: 'manual', stretch: manual } : { mode: 'auto', preset: oneOf(stretch.preset, AUTO_STRETCH_PRESETS) ? stretch.preset : DEFAULT_AUTO_STRETCH_PRESET, linked: stretch.linked !== false },
 		brightness: displayNumber(value.brightness, DISPLAY_RANGES.brightness, defaults.brightness),
 		contrast: displayNumber(value.contrast, DISPLAY_RANGES.contrast, defaults.contrast),
 		gamma: displayNumber(value.gamma, DISPLAY_RANGES.gamma, defaults.gamma),

@@ -9,6 +9,9 @@ export type CfaPatternChoice = Exclude<Extract<DisplayDebayer, { enabled: true }
 // SCNR settings of an enabled color cast removal.
 export type EnabledScnr = Extract<DisplayScnr, { enabled: true }>
 
+// Named profile of an auto stretch.
+export type AutoStretchPreset = Extract<DisplayStretch, { mode: 'auto' }>['preset']
+
 // Group of display settings a popup of the viewer toolbar edits and applies together.
 export type DisplaySection = 'stretch' | 'tone' | 'color'
 
@@ -28,6 +31,12 @@ export const CFA_PATTERNS = ['RGGB', 'BGGR', 'GBRG', 'GRBG', 'GRGB', 'GBGR', 'RG
 // Stretch modes, in selector order.
 export const STRETCH_MODES = ['auto', 'manual', 'linear'] as const satisfies readonly DisplayStretch['mode'][]
 
+// Auto stretch profiles, in selector order.
+export const AUTO_STRETCH_PRESETS = ['low', 'medium', 'high', 'moon', 'planet'] as const satisfies readonly AutoStretchPreset[]
+
+// Auto stretch profile of an image with no saved choice: the toolkit's default adaptive display function.
+export const DEFAULT_AUTO_STRETCH_PRESET: AutoStretchPreset = 'medium'
+
 // SCNR channels, in selector order.
 export const SCNR_CHANNELS = ['GREEN', 'RED', 'BLUE'] as const satisfies readonly EnabledScnr['channel'][]
 
@@ -45,9 +54,9 @@ export const DISPLAY_RANGES = {
 	stretch: { min: 0, max: 1, step: 0.0001 },
 } as const satisfies Readonly<Record<string, DisplayRange>>
 
-// Settings of the unprocessed image: no debayering, a linked auto stretch, and neutral adjustments. Shown by Show
-// Original, and the values Reset Parameters restores in a popup.
-export const ORIGINAL_DISPLAY_SETTINGS: DisplaySettings = { debayer: { enabled: false }, stretch: { mode: 'auto', linked: true }, brightness: 1, contrast: 1, gamma: 1, saturation: 1, scnr: { enabled: false }, invert: false }
+// Settings of the unprocessed image: no debayering, a linked auto stretch with the default profile, and neutral
+// adjustments. Shown by Show Original, and the values Reset Parameters restores in a popup.
+export const ORIGINAL_DISPLAY_SETTINGS: DisplaySettings = { debayer: { enabled: false }, stretch: { mode: 'auto', preset: DEFAULT_AUTO_STRETCH_PRESET, linked: true }, brightness: 1, contrast: 1, gamma: 1, saturation: 1, scnr: { enabled: false }, invert: false }
 
 // Settings each popup section edits and applies.
 export const DISPLAY_SECTION_FIELDS = {

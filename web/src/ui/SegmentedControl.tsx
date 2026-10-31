@@ -1,7 +1,7 @@
 import { cn } from 'cn'
 import { Field } from './Field'
 
-// Row of mutually exclusive options shown side by side, for a choice of two to four short labels, such as
+// Row of mutually exclusive options shown side by side, for a choice of two to five short labels, such as
 // an acquisition mode.
 
 export interface SegmentedControlProps<T extends string> {

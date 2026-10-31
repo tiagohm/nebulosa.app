@@ -4,9 +4,10 @@ import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { IconButton } from '../ui/IconButton'
 import { Popover } from '../ui/Popover'
+import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { Slider } from '../ui/Slider'
-import { CFA_PATTERNS, type CfaPatternChoice, DISPLAY_RANGES, type DisplaySection, type EnabledScnr, ORIGINAL_DISPLAY_SETTINGS, SCNR_CHANNELS, SCNR_METHODS, sectionPatch, STRETCH_MODES } from './display'
+import { AUTO_STRETCH_PRESETS, type AutoStretchPreset, CFA_PATTERNS, type CfaPatternChoice, DEFAULT_AUTO_STRETCH_PRESET, DISPLAY_RANGES, type DisplaySection, type EnabledScnr, ORIGINAL_DISPLAY_SETTINGS, SCNR_CHANNELS, SCNR_METHODS, sectionPatch, STRETCH_MODES } from './display'
 import { applyDisplay, copySettings, currentDisplaySettings, type ImageViewState, imagesState, isMosaic, summaryStretch } from './images'
 
 // Display controls of the viewer toolbar of an image document: Debayer, Stretch, Brightness & Contrast, and Color
@@ -28,6 +29,9 @@ const FALLBACK_PATTERN: CfaPatternChoice = 'RGGB'
 
 // Display names of the stretch modes.
 const STRETCH_MODE_LABELS: Readonly<Record<DisplayStretch['mode'], string>> = { auto: 'Auto', manual: 'Manual', linear: 'Linear' }
+
+// Display names of the auto stretch profiles.
+const AUTO_STRETCH_PRESET_LABELS: Readonly<Record<AutoStretchPreset, string>> = { low: 'Low', medium: 'Medium', high: 'High', moon: 'Moon', planet: 'Planet' }
 
 // SCNR applied when it is enabled: green cast removal at half strength.
 const DEFAULT_SCNR: EnabledScnr = { enabled: true, channel: 'GREEN', amount: 0.5, method: 'AVERAGE_NEUTRAL' }
@@ -171,7 +175,7 @@ interface StretchControlsProps extends SectionControlsProps {
 	readonly rendering?: RenderResult
 }
 
-// Stretch popup: the mode and, for a manual stretch, its levels.
+// Stretch popup: the mode and, for an auto stretch, its profile and channel linking or, for a manual stretch, its levels.
 function StretchControls({ applied, color, rendering, onApply }: StretchControlsProps) {
 	const [draft, edit] = useDraft(applied)
 	const { stretch } = draft
@@ -182,7 +186,7 @@ function StretchControls({ applied, color, rendering, onApply }: StretchControls
 	}
 
 	function selectMode(mode: DisplayStretch['mode']) {
-		if (mode === 'auto') edit({ stretch: { mode, linked: true } })
+		if (mode === 'auto') edit({ stretch: { mode, preset: DEFAULT_AUTO_STRETCH_PRESET, linked: true } })
 		else if (mode === 'manual') edit({ stretch: { mode, stretch: rendering ? summaryStretch(rendering) : IDENTITY_STRETCH } })
 		else edit({ stretch: { mode } })
 	}
@@ -190,7 +194,8 @@ function StretchControls({ applied, color, rendering, onApply }: StretchControls
 	return (
 		<>
 			<Select label="Mode" options={STRETCH_MODES} value={stretch.mode} format={(m) => STRETCH_MODE_LABELS[m]} onChange={selectMode} />
-			{stretch.mode === 'auto' && color && <Checkbox label="Linked channels" checked={stretch.linked} onChange={(linked) => edit({ stretch: { mode: 'auto', linked } })} />}
+			{stretch.mode === 'auto' && <SegmentedControl label="Preset" className="[&_button]:px-0.5" options={AUTO_STRETCH_PRESETS} value={stretch.preset} format={(p) => AUTO_STRETCH_PRESET_LABELS[p]} onChange={(preset) => edit({ stretch: { ...stretch, preset } })} />}
+			{stretch.mode === 'auto' && color && <Checkbox label="Linked channels" checked={stretch.linked} onChange={(linked) => edit({ stretch: { ...stretch, linked } })} />}
 			{stretch.mode === 'manual' && (
 				<>
 					<Slider label="Shadow" {...DISPLAY_RANGES.stretch} value={stretch.stretch.shadow} onChange={(shadow) => editLevels({ shadow })} />

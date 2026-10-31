@@ -3,11 +3,11 @@ import { basename } from 'path'
 import { writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
 import type { CfaPattern, Image, ImageChannel } from 'nebulosa/src/imaging/model/types'
 import { clone } from 'nebulosa/src/imaging/processing/arithmetic'
-import { adf } from 'nebulosa/src/imaging/processing/computation'
 import { debayer } from 'nebulosa/src/imaging/processing/debayer'
 import { invert } from 'nebulosa/src/imaging/processing/geometry'
 import { scnr } from 'nebulosa/src/imaging/processing/scnr'
 import { stf } from 'nebulosa/src/imaging/processing/stf'
+import { type AutoStfPreset, autoStf } from 'nebulosa/src/imaging/processing/stf.presets'
 import { brightness, contrast, gamma, saturation } from 'nebulosa/src/imaging/processing/tone'
 import { fileHandleSource } from 'nebulosa/src/io/file'
 import { Bitpix, type FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
@@ -67,7 +67,7 @@ interface DocumentEntry {
 	readonly cfa?: CfaPattern
 	// Debayered image of the latest pattern used; replaced when another pattern is requested.
 	debayered?: { readonly pattern: CfaPattern; readonly image: Image }
-	// Auto stretches computed, by base image (pattern or 'mono') and linking.
+	// Auto stretches computed, by base image (pattern or 'mono'), linking, and preset.
 	readonly autoStretches: Map<string, readonly Stretch[]>
 }
 
@@ -158,15 +158,15 @@ function baseImage(entry: DocumentEntry, settings: DisplaySettings): { readonly 
 	return { image: debayered, cfa: pattern }
 }
 
-// Returns the auto stretch of a base image: one from the luminance when linked or mono, otherwise one
-// per RGB channel. Memoized per base image and linking.
-function autoStretch(entry: DocumentEntry, image: Image, cfa: CfaPattern | undefined, linked: boolean): readonly Stretch[] {
+// Returns the auto stretch of a base image with a named profile: one from the luminance when linked or
+// mono, otherwise one per RGB channel. Memoized per base image, linking, and preset.
+function autoStretch(entry: DocumentEntry, image: Image, cfa: CfaPattern | undefined, linked: boolean, preset: AutoStfPreset): readonly Stretch[] {
 	const perChannel = !linked && image.metadata.channels === 3
-	const key = `${cfa ?? 'mono'}:${perChannel}`
+	const key = `${cfa ?? 'mono'}:${perChannel}:${preset}`
 	const cached = entry.autoStretches.get(key)
 	if (cached) return cached
 
-	const stretches = (perChannel ? RGB_CHANNELS.map((channel) => adf(image, { channel })) : [adf(image)]).map(([midtone, shadow, highlight]) => ({ midtone, shadow, highlight }))
+	const stretches = (perChannel ? RGB_CHANNELS.map((channel) => autoStf(image, preset, { channel })) : [autoStf(image, preset)]).map(([midtone, shadow, highlight]) => ({ midtone, shadow, highlight }))
 	entry.autoStretches.set(key, stretches)
 	return stretches
 }
@@ -177,7 +177,7 @@ function autoStretch(entry: DocumentEntry, image: Image, cfa: CfaPattern | undef
 function displayImage(entry: DocumentEntry, settings: DisplaySettings): { readonly image: Image; readonly result: RenderResult } {
 	const base = baseImage(entry, settings)
 	const channels = base.image.metadata.channels === 3 ? 3 : 1
-	const stretch = settings.stretch.mode === 'auto' ? autoStretch(entry, base.image, base.cfa, settings.stretch.linked) : settings.stretch.mode === 'manual' ? [settings.stretch.stretch] : [LINEAR_STRETCH]
+	const stretch = settings.stretch.mode === 'auto' ? autoStretch(entry, base.image, base.cfa, settings.stretch.linked, settings.stretch.preset) : settings.stretch.mode === 'manual' ? [settings.stretch.stretch] : [LINEAR_STRETCH]
 	if (stretch.some((s) => !(s.shadow <= s.highlight))) throw new DisplayError('The stretch shadow must not exceed its highlight')
 
 	const image = clone(base.image)

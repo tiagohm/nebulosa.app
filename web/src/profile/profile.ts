@@ -716,13 +716,15 @@ export function markNotificationsRead(state: ProfileState, ids: readonly string[
 	touch(profile)
 }
 
-// Hides a notification from the lists of the active profile, marking it as read. The server history keeps it.
-export function dismissNotification(state: ProfileState, id: string) {
-	markNotificationsRead(state, [id])
+// Hides notifications from the lists of the active profile, marking them as read. The server history keeps them.
+export function dismissNotifications(state: ProfileState, ids: readonly string[]) {
+	markNotificationsRead(state, ids)
 	const profile = activeProfile(state)
 	const preferences = profile.settings.notifications
-	if (!preferences || preferences.dismissedIds.includes(id)) return
-	preferences.dismissedIds = [...preferences.dismissedIds, id].slice(-MAX_NOTIFICATION_IDS)
+	if (!preferences) return
+	const listed = Array.from(new Set(ids)).filter((id) => !preferences.dismissedIds.includes(id))
+	if (listed.length === 0) return
+	preferences.dismissedIds = [...preferences.dismissedIds, ...listed].slice(-MAX_NOTIFICATION_IDS)
 	touch(profile)
 }
 

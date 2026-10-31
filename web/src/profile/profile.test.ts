@@ -76,7 +76,7 @@ import {
 	updateOpticalPreset,
 	imageDisplaySettings,
 	setImageDisplaySettings,
-	dismissNotification,
+	dismissNotifications,
 	markNotificationsRead,
 	pruneNotificationPreferences,
 	deleteFramingReference,
@@ -977,11 +977,15 @@ describe('camera forms', () => {
 		const other = createProfile(state, 'Other')!
 
 		markNotificationsRead(state, ['a', 'b', 'a'])
-		dismissNotification(state, 'c')
+		dismissNotifications(state, ['c'])
 		expect(activeProfile(state).settings.notifications).toEqual({ readIds: ['a', 'b', 'c'], dismissedIds: ['c'] })
 		expect(other.settings.notifications).toBeUndefined()
 		await Bun.sleep(0)
 		expect(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings.notifications).toEqual({ readIds: ['a', 'b', 'c'], dismissedIds: ['c'] })
+
+		// Dismissing several at once reads them too and keeps each id once.
+		dismissNotifications(state, ['c', 'd', 'e', 'd'])
+		expect(activeProfile(state).settings.notifications).toEqual({ readIds: ['a', 'b', 'c', 'd', 'e'], dismissedIds: ['c', 'd', 'e'] })
 
 		const updatedAt = activeProfile(state).updatedAt
 		pruneNotificationPreferences(state, ['b', 'c'])

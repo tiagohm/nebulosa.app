@@ -2,13 +2,15 @@ import type { CloseApproach, CloseApproachSortField } from 'api'
 import { cn } from 'cn'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
+import { profileState, setCloseApproachPreferences } from '../../profile/profile'
+import { CLOSE_APPROACH_DISTANCE_DISPLAYS, CLOSE_APPROACH_TIME_DISPLAYS, type CloseApproachPreferences } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Icon } from '../../ui/Icon'
 import { moveIndex } from '../../ui/navigation'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
-import { bodyName, closeApproachesState, DISTANCE_DISPLAYS, formatApproachTime, formatDiameter, formatDistance, formatDistanceRange, formatVelocity, loadCloseApproaches, pageCloseApproaches, pageCount, resizeCloseApproachPages, selectCloseApproach, sortCloseApproaches, TIME_DISPLAYS } from './closeapproaches'
+import { bodyName, closeApproachesState, formatApproachTime, formatDiameter, formatDistance, formatDistanceRange, formatVelocity, loadCloseApproaches, pageCloseApproaches, pageCount, resizeCloseApproachPages, selectCloseApproach, sortCloseApproaches } from './closeapproaches'
 
 // Table of the Close Approaches tool: one row per encounter of the page JPL answered, so an object appears once per
 // encounter. Sorting and paging ask the server again: rows are never sorted or sliced here. Arrow keys, Home, and End move
@@ -60,6 +62,8 @@ interface EncounterRowProps {
 	readonly approach: CloseApproach
 	// Zone of the time shown.
 	readonly timeZone: string
+	// Unit of the distances shown.
+	readonly distanceDisplay: CloseApproachPreferences['distanceDisplay']
 	// Position of the row, for the keyboard.
 	readonly index: number
 	// Rows of the page.
@@ -67,8 +71,8 @@ interface EncounterRowProps {
 }
 
 // Row of one encounter.
-function EncounterRow({ approach, timeZone, index, count }: EncounterRowProps) {
-	const { selected, distanceDisplay } = useSnapshot(closeApproachesState)
+function EncounterRow({ approach, timeZone, distanceDisplay, index, count }: EncounterRowProps) {
+	const { selected } = useSnapshot(closeApproachesState)
 	const { id, fullName, designation, time, calendarDate, body, distance, distanceMin, distanceMax, relativeVelocity, absoluteMagnitude, diameter, diameterSigma, orbitId } = approach
 
 	function press(event: KeyboardEvent<HTMLTableRowElement>) {
@@ -108,16 +112,17 @@ function EncounterRow({ approach, timeZone, index, count }: EncounterRowProps) {
 }
 
 // Distance unit and time zone of the table, with where the rows came from and when.
-function ResultsBar({ timeZone }: { readonly timeZone: string }) {
-	const { result, loading, pageSize, distanceDisplay, timeDisplay } = useSnapshot(closeApproachesState)
+function ResultsBar({ timeZone, preferences }: { readonly timeZone: string; readonly preferences: CloseApproachPreferences }) {
+	const { result, loading, pageSize } = useSnapshot(closeApproachesState)
+	const { distanceDisplay, timeDisplay } = preferences
 	const origin = result && `${result.total} ${result.total === 1 ? 'encounter' : 'encounters'} · ${result.source} ${result.sourceVersion} · read ${formatApproachTime(result.fetchedAt, timeZone)}`
 
 	return (
 		<div className="flex flex-none flex-wrap items-end justify-between gap-2 border-b border-line-100 px-4 py-2">
 			<p className="m-0 min-w-0 text-xs leading-5 text-ink-300">{loading ? 'Reading from JPL…' : origin}</p>
 			<div className="flex items-end gap-2">
-				<SegmentedControl options={DISTANCE_DISPLAYS} value={distanceDisplay} format={(value) => (value === 'au' ? 'AU' : value)} onChange={(value) => (closeApproachesState.distanceDisplay = value)} />
-				<SegmentedControl options={TIME_DISPLAYS} value={timeDisplay} format={(value) => (value === 'utc' ? 'UTC' : 'Observer')} onChange={(value) => (closeApproachesState.timeDisplay = value)} />
+				<SegmentedControl options={CLOSE_APPROACH_DISTANCE_DISPLAYS} value={distanceDisplay} format={(value) => (value === 'au' ? 'AU' : value)} onChange={(value) => setCloseApproachPreferences(profileState, { distanceDisplay: value })} />
+				<SegmentedControl options={CLOSE_APPROACH_TIME_DISPLAYS} value={timeDisplay} format={(value) => (value === 'utc' ? 'UTC' : 'Observer')} onChange={(value) => setCloseApproachPreferences(profileState, { timeDisplay: value })} />
 				<Select className="w-20" options={PAGE_SIZES} value={`${pageSize}` as (typeof PAGE_SIZES)[number]} onChange={(value) => void resizeCloseApproachPages(closeApproachesState, +value)} />
 			</div>
 		</div>
@@ -146,13 +151,14 @@ function Pager() {
 }
 
 // Encounters of the page shown, or why there are none.
-export function CloseApproachTable({ timeZone }: { readonly timeZone: string }) {
-	const { result, loading, error, distanceDisplay } = useSnapshot(closeApproachesState)
+export function CloseApproachTable({ timeZone, preferences }: { readonly timeZone: string; readonly preferences: CloseApproachPreferences }) {
+	const { result, loading, error } = useSnapshot(closeApproachesState)
+	const { distanceDisplay } = preferences
 	const rows = result?.rows ?? []
 
 	return (
 		<div className="flex min-h-96 flex-1 flex-col lg:min-h-0">
-			<ResultsBar timeZone={timeZone} />
+			<ResultsBar timeZone={timeZone} preferences={preferences} />
 			{error && <EmptyState title="JPL did not answer" description={error} action={<Button onClick={() => void loadCloseApproaches(closeApproachesState)}>Retry</Button>} />}
 			{!error && !result && <EmptyState title={loading ? 'Reading from JPL' : 'No search yet'} />}
 			{!error && result && rows.length === 0 && <EmptyState title="No encounters" description={result.total > 0 ? 'This page is past the last match.' : 'No close approach matches these filters.'} />}
@@ -180,7 +186,7 @@ export function CloseApproachTable({ timeZone }: { readonly timeZone: string }) 
 						</thead>
 						<tbody>
 							{rows.map((approach, index) => (
-								<EncounterRow key={approach.id} approach={approach} timeZone={timeZone} index={index} count={rows.length} />
+								<EncounterRow key={approach.id} approach={approach} timeZone={timeZone} distanceDisplay={distanceDisplay} index={index} count={rows.length} />
 							))}
 						</tbody>
 					</table>

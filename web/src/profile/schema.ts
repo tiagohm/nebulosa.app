@@ -1,4 +1,4 @@
-import type { AutoFocusRequest, CaptureRequest, DisplaySettings, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, MountRemoteProtocol, MountRemoteStartRequest, PlateSolveRequest, StarDetectionRequest, StreakDetectorSettings } from 'api'
+import type { AutoFocusRequest, CaptureRequest, CloseApproachBody, DisplaySettings, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, MountRemoteProtocol, MountRemoteStartRequest, PlateSolveRequest, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
@@ -26,8 +26,9 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // (tppa.solver) to the plate solving settings each camera shares between its operations (plateSolving), and adds the
 // Pointing Model Builder form of each camera (pointingModel). Version 17 adds the Target Centering form of each camera
 // (targetCentering) and the saved framings of the profile (framingReferences). Version 18 adds the settings of the Star
-// Profile Inspector (starProfile), and version 19 the preferences of the status bar (statusBar).
-export const PROFILES_VERSION = 19
+// Profile Inspector (starProfile), version 19 the preferences of the status bar (statusBar), and version 20 those of the
+// Close Approaches tool (closeApproaches).
+export const PROFILES_VERSION = 20
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -77,7 +78,45 @@ export interface ProfileSettings {
 	imageAstrometry?: ImageAstrometrySettings
 	// Preferences of the status bar; absent until edited, and then DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES holds.
 	statusBar?: StatusBarPreferences
+	// Preferences of the Close Approaches tool; absent until edited, and then DEFAULT_CLOSE_APPROACH_PREFERENCES holds. The
+	// results, the selection, and the dates of a search are never stored.
+	closeApproaches?: CloseApproachPreferences
 }
+
+// Target bodies of the Close Approaches tool, in the order offered, every body last.
+export const CLOSE_APPROACH_BODIES: readonly CloseApproachBody[] = ['Earth', 'Moon', 'Merc', 'Venus', 'Mars', 'Juptr', 'Satrn', 'Urnus', 'Neptn', 'Pluto', 'ALL']
+
+// Units of a largest distance: AU, or lunar distances.
+export const CLOSE_APPROACH_DISTANCE_UNITS = ['LD', 'au'] as const
+
+// Units a distance is shown in.
+export const CLOSE_APPROACH_DISTANCE_DISPLAYS = ['LD', 'au', 'km'] as const
+
+// Unit a distance is shown in.
+export type CloseApproachDistanceDisplay = (typeof CLOSE_APPROACH_DISTANCE_DISPLAYS)[number]
+
+// How the times of the encounters are shown: UTC, or the civil zone of the Sky observer.
+export const CLOSE_APPROACH_TIME_DISPLAYS = ['utc', 'observer'] as const
+
+// How the times of the encounters are shown.
+export type CloseApproachTimeDisplay = (typeof CLOSE_APPROACH_TIME_DISPLAYS)[number]
+
+// Preferences of the Close Approaches tool: how values are shown, and what a new tab searches first.
+export interface CloseApproachPreferences {
+	// Unit of the distances shown.
+	readonly distanceDisplay: CloseApproachDistanceDisplay
+	// Zone of the times shown.
+	readonly timeDisplay: CloseApproachTimeDisplay
+	// Target body of the first search.
+	readonly body: CloseApproachBody
+	// Largest nominal distance of the first search, in `distanceUnit`, above 0.
+	readonly distanceMax: number
+	// Unit of `distanceMax`.
+	readonly distanceUnit: (typeof CLOSE_APPROACH_DISTANCE_UNITS)[number]
+}
+
+// Preferences of a profile that has not edited them: lunar distances, UTC, and the Earth within 10 LD.
+export const DEFAULT_CLOSE_APPROACH_PREFERENCES: CloseApproachPreferences = { distanceDisplay: 'LD', timeDisplay: 'utc', body: 'Earth', distanceMax: 10, distanceUnit: 'LD' }
 
 // Readings the status bar clock can show: local apparent and mean sidereal time, Julian and Modified Julian Date in UTC,
 // and the UTC and local civil time. All of them are the real current time, never the Sky simulation clock.

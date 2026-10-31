@@ -16,6 +16,8 @@ import {
 	ACTIVE_PROFILE_KEY,
 	activeProfile,
 	astronomicalClockPreferences,
+	closeApproachPreferences,
+	setCloseApproachPreferences,
 	setAstronomicalClockPreferences,
 	activeSetup,
 	assignDevice,
@@ -104,6 +106,7 @@ import {
 	FRAMING_REFERENCES_MAXIMUM,
 	type FramingReference,
 	PROFILES_VERSION,
+	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 } from './schema'
 
 function dev(id: string) {
@@ -1059,6 +1062,37 @@ describe('camera forms', () => {
 		expect(stored({ enabled: 'no', primary: 'bogus', secondary: 7, showSeconds: 1 })).toEqual(DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES)
 		expect(stored({ enabled: false, primary: 'mjd', secondary: 'mjd', showSeconds: false })).toEqual({ enabled: false, primary: 'mjd', secondary: 'none', showSeconds: false })
 		expect(stored('x')).toEqual(DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES)
+	})
+
+	test('the preferences of Close Approaches are kept per profile', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(closeApproachPreferences(activeProfile(state).settings)).toEqual(DEFAULT_CLOSE_APPROACH_PREFERENCES)
+
+		setCloseApproachPreferences(state, { distanceDisplay: 'km', body: 'Moon', distanceMax: 2 })
+		await Bun.sleep(0)
+		expect(closeApproachPreferences(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual({ ...DEFAULT_CLOSE_APPROACH_PREFERENCES, distanceDisplay: 'km', body: 'Moon', distanceMax: 2 })
+	})
+
+	test('a version 19 document gets the default preferences of Close Approaches and keeps its others', () => {
+		const stores = newStores()
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 19, profiles: [{ id: 'a', name: 'A', settings: { statusBar: { astronomicalClock: { primary: 'jd' } } } }] }))
+		const { settings } = load(stores).profiles[0]
+		expect(settings.closeApproaches).toBeUndefined()
+		expect(closeApproachPreferences(settings)).toEqual(DEFAULT_CLOSE_APPROACH_PREFERENCES)
+		expect(astronomicalClockPreferences(settings).primary).toBe('jd')
+	})
+
+	test('invalid preferences of Close Approaches are restored field by field', () => {
+		const stored = (closeApproaches: unknown) => {
+			const stores = newStores()
+			stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 20, profiles: [{ id: 'a', name: 'A', settings: { closeApproaches } }] }))
+			return closeApproachPreferences(load(stores).profiles[0].settings)
+		}
+
+		expect(stored({ distanceDisplay: 'parsec', timeDisplay: 1, body: 'Vulcan', distanceMax: -1, distanceUnit: 'km' })).toEqual(DEFAULT_CLOSE_APPROACH_PREFERENCES)
+		expect(stored({ distanceDisplay: 'au', timeDisplay: 'observer', body: 'ALL', distanceMax: 0.05, distanceUnit: 'au' })).toEqual({ distanceDisplay: 'au', timeDisplay: 'observer', body: 'ALL', distanceMax: 0.05, distanceUnit: 'au' })
+		expect(stored('x')).toEqual(DEFAULT_CLOSE_APPROACH_PREFERENCES)
 	})
 
 	test('a version 14 document keeps its preferences and ignores the observatory code it stored', () => {

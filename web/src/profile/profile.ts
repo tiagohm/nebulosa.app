@@ -27,6 +27,8 @@ import {
 	type Profile,
 	type ProfileSettings,
 	PROFILES_VERSION,
+	type CloseApproachPreferences,
+	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 	type ProfilesStorage,
 	type SkyFramingSettings,
 	type SkyObserverSettings,
@@ -506,6 +508,18 @@ export function setAstronomicalClockPreferences(state: ProfileState, patch: Part
 	const profile = activeProfile(state)
 	const clock = { ...astronomicalClockPreferences(profile.settings), ...patch }
 	profile.settings.statusBar = { astronomicalClock: clock.secondary === clock.primary ? { ...clock, secondary: 'none' } : clock }
+	touch(profile)
+}
+
+// Returns the preferences of the Close Approaches tool of a profile.
+export function closeApproachPreferences(settings: Pick<ProfileSettings, 'closeApproaches'>): CloseApproachPreferences {
+	return settings.closeApproaches ?? DEFAULT_CLOSE_APPROACH_PREFERENCES
+}
+
+// Changes the preferences of the Close Approaches tool of the active profile.
+export function setCloseApproachPreferences(state: ProfileState, patch: Partial<CloseApproachPreferences>) {
+	const profile = activeProfile(state)
+	profile.settings.closeApproaches = { ...closeApproachPreferences(profile.settings), ...patch }
 	touch(profile)
 }
 

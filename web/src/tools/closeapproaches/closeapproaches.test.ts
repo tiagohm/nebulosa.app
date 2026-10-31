@@ -1,11 +1,17 @@
 import { describe, expect, test } from 'bun:test'
-import type { CloseApproach } from 'api'
+import type { CloseApproach, MinorBody } from 'api'
 import { proxy } from 'valtio'
+import type { RouteState } from '../../shell/route'
+import type { SkyClock } from '../../sky/clock'
+import type { SkyState } from '../../sky/sky'
 // oxfmt-ignore
-import { catalogUrl, clearCloseApproachSelection, type CloseApproachesIo, type CloseApproachesState, displayTimeZone, draftFilters, filterCloseApproachHistory, formatApproachTime, formatDiameter, formatDistance, formatDistanceRange, historyDates, initialCloseApproachesState, initialDraft, loadCloseApproaches, nextSort, openCloseApproaches, pageCloseApproaches, pageCount, periodDates, searchCloseApproaches, selectCloseApproach, setCloseApproachDate, setCloseApproachPeriod, sortCloseApproaches } from './closeapproaches'
+import { catalogUrl, clearCloseApproachSelection, type CloseApproachesIo, type CloseApproachesState, displayTimeZone, draftFilters, filterCloseApproachHistory, formatApproachTime, formatDiameter, formatDistance, formatDistanceRange, historyDates, initialCloseApproachesState, initialDraft, loadCloseApproaches, loadCloseApproachObservability, nextSort, openCloseApproaches, pageCloseApproaches, pageCount, periodDates, searchCloseApproaches, selectCloseApproach, setCloseApproachDate, setCloseApproachPeriod, showInSky, sortCloseApproaches } from './closeapproaches'
 
 // 2026-10-31T12:00:00Z.
 const NOW = Date.UTC(2026, 9, 31, 12)
+
+// Instant the Sky shows in these tests, 2030-01-01T00:00:00Z.
+const SKY_TIME = Date.UTC(2030, 0, 1)
 
 const row = (id: string, designation = id): CloseApproach => ({ id, designation, orbitId: '1', body: 'Earth', jd: '2461348.2', calendarDate: '2026-Nov-03 17:29', time: 1, distance: 0.01, relativeVelocity: 5 })
 
@@ -18,6 +24,7 @@ function fakeIo(reply: (url: URL) => Response | Promise<Response> = () => Respon
 	const urls: URL[] = []
 	const io: CloseApproachesIo = {
 		now: () => NOW,
+		skyTime: () => SKY_TIME,
 		fetch: async (input) => {
 			const url = new URL(input, 'http://localhost')
 			urls.push(url)
@@ -86,10 +93,14 @@ describe('catalog', () => {
 	test('the first opening searches once, and returning keeps the result', async () => {
 		const state = newState()
 		const { io, urls } = fakeIo()
-		await openCloseApproaches(state, io)
-		await openCloseApproaches(state, io)
+		const preferences = { distanceDisplay: 'km', timeDisplay: 'utc', body: 'Moon', distanceMax: 2, distanceUnit: 'au' } as const
+		await openCloseApproaches(state, preferences, io)
+		await openCloseApproaches(state, preferences, io)
 
 		expect(urls).toHaveLength(1)
+		expect(urls[0].searchParams.get('body')).toBe('Moon')
+		expect(urls[0].searchParams.get('distanceMax')).toBe('2')
+		expect(urls[0].searchParams.get('distanceUnit')).toBe('au')
 		expect(state.result?.rows).toHaveLength(1)
 		expect(state.loading).toBeFalse()
 	})
@@ -266,6 +277,120 @@ describe('selection', () => {
 		expect(state.selected).toBeUndefined()
 		expect(state.object).toBeUndefined()
 		expect(state.objectLoading).toBeFalse()
+	})
+})
+
+describe('observability', () => {
+	const position = (time: number) => ({ position: { time, source: 'horizons', center: 'topocentric', altitude: 1 }, events: { state: 'normal' } })
+	const BODY = { spkId: '20099942', designation: '99942' }
+	const OBSERVER = { latitude: -22, longitude: -45, elevation: 850, timeZone: 'America/Sao_Paulo' }
+
+	// Answers each position with the instant asked, recording the bodies of the requests.
+	function positionIo() {
+		const bodies: { readonly target: unknown; readonly time: number; readonly observer?: unknown; readonly mode: string }[] = []
+		const io: CloseApproachesIo = {
+			now: () => NOW,
+			skyTime: () => SKY_TIME,
+			fetch: (input, init) => {
+				const body = JSON.parse(init?.body as string) as (typeof bodies)[number]
+				bodies.push(body)
+				expect(input).toBe('/api/sky/position')
+				return Promise.resolve(Response.json(position(body.time)))
+			},
+		}
+		return { io, bodies }
+	}
+
+	test('asks the route of the Sky for the object at the encounter, for the observer', async () => {
+		const state = newState()
+		const { io, bodies } = positionIo()
+		await loadCloseApproachObservability(state, BODY, 1234, OBSERVER, io)
+
+		expect(bodies).toEqual([{ target: { kind: 'minorBody', ...BODY }, time: 1234, observer: { latitude: -22, longitude: -45, elevation: 850 }, mode: 'accurate' }])
+		expect(state.observability?.position.time).toBe(1234)
+		expect(state.observabilityLoading).toBeFalse()
+	})
+
+	test('evaluates the real current time or the instant the Sky shows when chosen', async () => {
+		const state = newState()
+		const { io, bodies } = positionIo()
+		state.observabilityInstant = 'now'
+		await loadCloseApproachObservability(state, BODY, 1234, OBSERVER, io)
+		state.observabilityInstant = 'sky'
+		await loadCloseApproachObservability(state, BODY, 1234, OBSERVER, io)
+
+		expect(bodies.map((e) => e.time)).toEqual([NOW, SKY_TIME])
+	})
+
+	test('without an observer the position is geocentric', async () => {
+		const state = newState()
+		const { io, bodies } = positionIo()
+		await loadCloseApproachObservability(state, BODY, 1234, undefined, io)
+
+		expect(bodies[0].observer).toBeUndefined()
+	})
+
+	test('a failure says why, and a stale answer is dropped', async () => {
+		const state = newState()
+		const slow = Promise.withResolvers<Response>()
+		const replies = [slow.promise, Promise.resolve(Response.json({ error: 'Horizons is unavailable (network)' }, { status: 503 }))]
+		const io: CloseApproachesIo = { now: () => NOW, skyTime: () => SKY_TIME, fetch: () => replies.shift()! }
+		const old = loadCloseApproachObservability(state, BODY, 1, undefined, io)
+		await loadCloseApproachObservability(state, BODY, 2, undefined, io)
+		slow.resolve(Response.json(position(1)))
+		await old
+
+		expect(state.observability).toBeUndefined()
+		expect(state.observabilityError).toBe('Horizons is unavailable (network)')
+	})
+
+	test('a selection cleared leaves no position behind', async () => {
+		const state = newState()
+		const { io } = positionIo()
+		await loadCloseApproachObservability(state, BODY, 1, undefined, io)
+		clearCloseApproachSelection(state)
+
+		expect(state.observability).toBeUndefined()
+	})
+})
+
+describe('handoff to the Sky', () => {
+	const BODY = { spkId: '20099942', designation: '99942', name: '99942 Apophis', kind: 'asteroid', parameters: [] } as unknown as MinorBody
+	const TIME = Date.UTC(2029, 3, 13, 21, 45, 3)
+
+	// Sky, clock, and route of a test, recording the instant the selection read.
+	function handoff() {
+		const sky = proxy<SkyState>({ panel: 'observer' })
+		const clock = proxy<SkyClock>({ mode: 'now', anchor: 0, startedAt: 0, rate: 1 })
+		const route = proxy<RouteState>({ route: { workspace: 'tools', tool: 'close-approaches' } })
+		const paths: unknown[] = []
+		return { sky, clock, route, io: { fetch: () => Promise.resolve(Response.json({ position: {} })), time: () => clock.anchor }, history: { pushState: (_: unknown, __: string, path?: string | URL | null) => void paths.push(path) }, paths }
+	}
+
+	test('Open in Sky selects the object and leaves the clock alone', () => {
+		const target = handoff()
+		showInSky(BODY, undefined, undefined, target)
+
+		expect(target.sky.selection).toMatchObject({ key: 'minor:20099942', name: '99942 Apophis', category: 'minorBody' })
+		expect(target.sky.panel).toBe('inspector')
+		expect(target.clock.mode).toBe('now')
+		expect(target.route.route).toEqual({ workspace: 'sky' })
+		expect(target.paths).toEqual(['/sky'])
+	})
+
+	test('a body from a snapshot of a render reaches the Sky as a plain copy', () => {
+		const target = handoff()
+		showInSky(new Proxy(Object.freeze({ ...BODY }), {}), undefined, undefined, target)
+
+		expect(target.sky.selection?.minorBody).toMatchObject({ spkId: '20099942' })
+	})
+
+	test('View at the approach moves the clock before the selection reads it', () => {
+		const target = handoff()
+		showInSky(BODY, undefined, TIME, target)
+
+		expect(target.clock).toMatchObject({ mode: 'fixed', anchor: TIME })
+		expect(target.sky.selection?.key).toBe('minor:20099942')
 	})
 })
 

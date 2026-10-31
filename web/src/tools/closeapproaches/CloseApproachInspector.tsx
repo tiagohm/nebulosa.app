@@ -1,6 +1,7 @@
 import type { CloseApproach, CloseApproachBody, MinorBody, MinorBodyDetails, MinorBodyPublishedValue } from 'api'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
+import { CLOSE_APPROACH_BODIES, type CloseApproachDistanceDisplay } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Datum, Note } from '../../sky/InspectorParts'
 import { Button } from '../../ui/Button'
@@ -8,7 +9,6 @@ import { Select } from '../../ui/Select'
 import {
 	BODY_NAMES,
 	bodyName,
-	CLOSE_APPROACH_BODIES,
 	type CloseApproachesState,
 	closeApproachesState,
 	filterCloseApproachHistory,
@@ -70,11 +70,12 @@ interface EncounterProps {
 	readonly approach: CloseApproach
 	// Zone of the times.
 	readonly timeZone: string
+	// Unit of the distances.
+	readonly distanceDisplay: CloseApproachDistanceDisplay
 }
 
 // Overview of the encounter and, once known, of the object.
-function Overview({ approach, timeZone, body, children }: EncounterProps & { readonly body?: MinorBody; readonly children?: ReactNode }) {
-	const { distanceDisplay } = useSnapshot(closeApproachesState)
+function Overview({ approach, timeZone, distanceDisplay, body, children }: EncounterProps & { readonly body?: MinorBody; readonly children?: ReactNode }) {
 	const { distance, distanceMin, distanceMax, relativeVelocity, time, fullName, designation } = approach
 
 	return (
@@ -218,8 +219,8 @@ function VirtualImpactorsSection({ details: { virtualImpactors } }: { readonly d
 }
 
 // Other encounters of the object with any target, paged by JPL.
-function OtherApproachesSection({ timeZone }: { readonly timeZone: string }) {
-	const { history, historyBody, historyWindow, historyPage, historyLoading, historyError, distanceDisplay, selected } = useSnapshot(closeApproachesState) as CloseApproachesState
+function OtherApproachesSection({ timeZone, distanceDisplay }: Omit<EncounterProps, 'approach'>) {
+	const { history, historyBody, historyWindow, historyPage, historyLoading, historyError, selected } = useSnapshot(closeApproachesState) as CloseApproachesState
 	const pages = history ? pageCount(history.total, history.pageSize) : 1
 
 	return (
@@ -261,15 +262,16 @@ function OtherApproachesSection({ timeZone }: { readonly timeZone: string }) {
 	)
 }
 
-// Inspector of the encounter selected: `overview` adds to the first section, `children` follows the object's sections.
-export function CloseApproachInspector({ approach, timeZone, overview, children }: EncounterProps & { readonly overview?: ReactNode; readonly children?: ReactNode }) {
+// Inspector of the encounter selected: `actions` receives the body once known and adds to the first section, and
+// `observability` receives it after the sections of the object.
+export function CloseApproachInspector({ approach, timeZone, distanceDisplay, actions, observability }: EncounterProps & { readonly actions: (body: MinorBody) => ReactNode; readonly observability: (body: MinorBody) => ReactNode }) {
 	const { object, objectLoading, objectError, designation } = useSnapshot(closeApproachesState) as CloseApproachesState
 	const found = object?.kind === 'found' ? object : undefined
 
 	return (
 		<>
-			<Overview approach={approach} timeZone={timeZone} body={found?.body}>
-				{overview}
+			<Overview approach={approach} timeZone={timeZone} distanceDisplay={distanceDisplay} body={found?.body}>
+				{found && actions(found.body)}
 				{objectLoading && <Note>Reading the object from SBDB…</Note>}
 				{objectError && <Note danger>Object details unavailable: {objectError}</Note>}
 				{objectError && designation && (
@@ -296,8 +298,8 @@ export function CloseApproachInspector({ approach, timeZone, overview, children 
 					<PhysicalSection details={found.details} />
 					<ObservationsSection details={found.details} />
 					<VirtualImpactorsSection details={found.details} />
-					<OtherApproachesSection timeZone={timeZone} />
-					{children}
+					<OtherApproachesSection timeZone={timeZone} distanceDisplay={distanceDisplay} />
+					{observability(found.body)}
 					<div className="px-4 py-3">
 						<Note>
 							{found.details.source} {found.details.sourceVersion}, read {formatApproachTime(found.details.fetchedAt, timeZone)}.

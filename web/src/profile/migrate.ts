@@ -30,6 +30,12 @@ import {
 	type SkyObserverSettings,
 	type SkySettings,
 	type StatusBarPreferences,
+	CLOSE_APPROACH_BODIES,
+	CLOSE_APPROACH_DISTANCE_DISPLAYS,
+	CLOSE_APPROACH_DISTANCE_UNITS,
+	CLOSE_APPROACH_TIME_DISPLAYS,
+	type CloseApproachPreferences,
+	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 	DARV_MAXIMUM_LEG_DURATION,
 	DARV_MINIMUM_LEG_DURATION,
 	type DarvSettings,
@@ -680,6 +686,23 @@ function normalizeStatusBar(value: unknown): StatusBarPreferences | undefined {
 	return { astronomicalClock: { enabled: typeof clock.enabled === 'boolean' ? clock.enabled : defaults.enabled, primary, secondary, showSeconds: typeof clock.showSeconds === 'boolean' ? clock.showSeconds : defaults.showSeconds } }
 }
 
+// Restores the persisted preferences of the Close Approaches tool (version 20), filling every invalid field with its
+// default. Undefined for anything that is not a record.
+function normalizeCloseApproaches(value: unknown): CloseApproachPreferences | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_CLOSE_APPROACH_PREFERENCES
+	const distanceMax = typeof value.distanceMax === 'number' && Number.isFinite(value.distanceMax) && value.distanceMax > 0 ? value.distanceMax : defaults.distanceMax
+
+	return {
+		distanceDisplay: oneOf(value.distanceDisplay, CLOSE_APPROACH_DISTANCE_DISPLAYS) ? value.distanceDisplay : defaults.distanceDisplay,
+		timeDisplay: oneOf(value.timeDisplay, CLOSE_APPROACH_TIME_DISPLAYS) ? value.timeDisplay : defaults.timeDisplay,
+		body: oneOf(value.body, CLOSE_APPROACH_BODIES) ? value.body : defaults.body,
+		distanceMax,
+		distanceUnit: oneOf(value.distanceUnit, CLOSE_APPROACH_DISTANCE_UNITS) ? value.distanceUnit : defaults.distanceUnit,
+	}
+}
+
 // Restores persisted preferences, falling back to the default of every missing or invalid preference.
 function normalizeSettings(value: unknown): ProfileSettings {
 	const settings = defaultSettings()
@@ -720,6 +743,8 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	if (imageAstrometry) settings.imageAstrometry = imageAstrometry
 	const statusBar = normalizeStatusBar(value.statusBar)
 	if (statusBar) settings.statusBar = statusBar
+	const closeApproaches = normalizeCloseApproaches(value.closeApproaches)
+	if (closeApproaches) settings.closeApproaches = closeApproaches
 
 	return settings
 }
@@ -868,7 +893,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 16:
 		case 17:
 		case 18:
-		case 19: {
+		case 19:
+		case 20: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

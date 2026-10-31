@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { activeProfile, profileState } from '../../profile/profile'
+import { activeProfile, closeApproachPreferences, profileState } from '../../profile/profile'
 import { useMediaQuery, WIDE_SCREEN } from '../../shell/useMediaQuery'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { BROWSER_TIME_ZONE } from '../../sky/clock'
@@ -8,6 +8,7 @@ import { Button } from '../../ui/Button'
 import { clearCloseApproachSelection, type CloseApproachesState, closeApproachesState, displayTimeZone, openCloseApproaches } from './closeapproaches'
 import { CloseApproachFilters } from './CloseApproachFilters'
 import { CloseApproachInspector } from './CloseApproachInspector'
+import { CloseApproachObservability, CloseApproachSkyActions } from './CloseApproachObservability'
 import { CloseApproachTable } from './CloseApproachTable'
 
 // Close Approaches tool: browses the close encounters of asteroids and comets that JPL publishes and opens the object
@@ -18,14 +19,25 @@ import { CloseApproachTable } from './CloseApproachTable'
 // Close Approaches tool.
 export function CloseApproaches() {
 	const profiles = useSnapshot(profileState)
-	const { selected, timeDisplay } = useSnapshot(closeApproachesState) as CloseApproachesState
+	const { selected } = useSnapshot(closeApproachesState) as CloseApproachesState
+	const { settings } = activeProfile(profiles)
+	const preferences = closeApproachPreferences(settings)
+	const { observer } = settings.sky
 	const docked = useMediaQuery(WIDE_SCREEN)
-	const timeZone = displayTimeZone(timeDisplay, activeProfile(profiles).settings.sky.observer?.timeZone, BROWSER_TIME_ZONE)
+	const timeZone = displayTimeZone(preferences.timeDisplay, observer?.timeZone, BROWSER_TIME_ZONE)
 
 	// Runs the first search of the tab.
-	useEffect(() => void openCloseApproaches(closeApproachesState), [])
+	useEffect(() => void openCloseApproaches(closeApproachesState, preferences), [])
 
-	const inspector = selected && <CloseApproachInspector approach={selected} timeZone={timeZone} />
+	const inspector = selected && (
+		<CloseApproachInspector
+			approach={selected}
+			timeZone={timeZone}
+			distanceDisplay={preferences.distanceDisplay}
+			actions={(body) => <CloseApproachSkyActions body={body} time={selected.time} observer={observer} />}
+			observability={(body) => <CloseApproachObservability body={body} time={selected.time} observer={observer} timeZone={timeZone} />}
+		/>
+	)
 
 	if (!docked && selected) {
 		return (
@@ -46,7 +58,7 @@ export function CloseApproaches() {
 		<WorkspaceLayout workspace="tools" title="Close Approaches" panel={docked ? { title: 'Encounter', content: inspector ?? <EmptyState title="No encounter selected" description="Select an encounter to see its object." /> } : undefined}>
 			<div className="flex h-full min-h-0 flex-col overflow-y-auto lg:overflow-hidden">
 				<CloseApproachFilters />
-				<CloseApproachTable timeZone={timeZone} />
+				<CloseApproachTable timeZone={timeZone} preferences={preferences} />
 			</div>
 		</WorkspaceLayout>
 	)

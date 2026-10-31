@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { readImageFromPath } from 'nebulosa/src/imaging/model/image'
 import type { ApiError } from './http'
+import { cropImage } from './imagedecode'
 import { cfaPattern, type DisplaySettings, imageAcquisition, type ImageInfo, images, precisionOf, type RenderResult, type SaveRequest } from './images'
 import { routes } from './index'
 
@@ -459,6 +460,85 @@ describe('detection image', () => {
 		expect(Array.from(image.raw)).not.toEqual(Array.from(mosaic.raw))
 		images.close(info.id)
 		images.close(untrusted.id)
+	})
+})
+
+describe('detection region', () => {
+	// Rectangles of a 16 × 8 image: inside it at odd and even origins, and against each of its edges.
+	const RECTS = [
+		{ left: 5, top: 3, width: 6, height: 3 },
+		{ left: 4, top: 2, width: 6, height: 3 },
+		{ left: 0, top: 0, width: 4, height: 4 },
+		{ left: 11, top: 5, width: 5, height: 3 },
+	]
+
+	// Expects each rectangle of a document to hold the same samples as that rectangle of its whole detection image.
+	async function expectSameAsDetectionImage(id: string) {
+		const image = (await images.detectionImage(id))!
+
+		for (const rect of RECTS) {
+			const region = (await images.detectionRegion(id, rect))!
+			expect(region.image.metadata).toMatchObject({ width: rect.width, height: rect.height, channels: 1, stride: rect.width, pixelCount: rect.width * rect.height, bayer: undefined })
+			expect(Array.from(region.image.raw)).toEqual(Array.from(cropImage(image, rect).raw))
+		}
+	}
+
+	test('is that rectangle of the detection image of a mono image', async () => {
+		const info = await openFits(writeFits('region-mono.fits', 16, 8))
+		await expectSameAsDetectionImage(info.id)
+		images.close(info.id)
+	})
+
+	test('is that rectangle of the detection image of an RGB image', async () => {
+		const info = await openFits(writeFits('region-rgb.fits', 16, 8, 3))
+		await expectSameAsDetectionImage(info.id)
+		images.close(info.id)
+	})
+
+	test('keeps the phase of a CFA mosaic at any origin, with or without header offsets', async () => {
+		const plain = await openFits(writeFits('region-cfa.fits', 16, 8, 1, ["BAYERPAT= 'RGGB    '"]))
+		const shifted = await openFits(writeFits('region-cfa-shifted.fits', 16, 8, 1, ["BAYERPAT= 'RGGB    '", 'XBAYROFF=                    1', 'YBAYROFF=                    1']))
+		await expectSameAsDetectionImage(plain.id)
+		await expectSameAsDetectionImage(shifted.id)
+		images.close(plain.id)
+		images.close(shifted.id)
+	})
+
+	test('measures a mosaic without a trusted pattern as is', async () => {
+		const info = await openFits(writeFits('region-cfa-unknown.fits', 16, 8, 1, ["BAYERPAT= 'XYZW    '"]))
+		await expectSameAsDetectionImage(info.id)
+		images.close(info.id)
+	})
+
+	test('converts integer samples to ADU', async () => {
+		const info = await openFits(writeFits('region-adu.fits', 16, 8))
+		const { image, conversion } = (await images.detectionRegion(info.id, { left: 3, top: 1, width: 2, height: 1 }))!
+
+		expect(conversion).toEqual({ unit: 'adu', scale: 255, offset: 0, rescaled: false })
+		expect(image.raw[0] * conversion.scale + conversion.offset).toBeCloseTo(((16 + 3) * 7) % 256, 3)
+		images.close(info.id)
+	})
+
+	test('restores the scale of a source rescaled by the read', async () => {
+		const { path, samples } = writeFloatFits('region-float.fits')
+		const info = await openFits(path)
+		const { image, conversion } = (await images.detectionRegion(info.id, { left: 2, top: 1, width: 3, height: 2 }))!
+
+		expect(image.metadata.normalization).toBeDefined()
+		expect(conversion).toMatchObject({ unit: 'source', rescaled: true })
+		expect(image.raw[0] * conversion.scale + conversion.offset).toBeCloseTo(samples[16 + 2], 6)
+		images.close(info.id)
+	})
+
+	test('reads a retained document closed meanwhile, and nothing once it is released', async () => {
+		const info = await openFits(writeFits('region-retained.fits', 16, 8))
+		const rect = { left: 0, top: 0, width: 2, height: 2 }
+
+		images.retain(info.id)
+		images.close(info.id)
+		expect(await images.detectionRegion(info.id, rect)).toBeDefined()
+		images.release(info.id)
+		expect(await images.detectionRegion(info.id, rect)).toBeUndefined()
 	})
 })
 

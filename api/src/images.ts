@@ -17,7 +17,8 @@ import type { ImageProcessingStep } from './imageprocessing'
 // document arrives, or whose request is aborted, is dropped without being computed.
 //
 // A document can be retained by an analysis while it uses the pixels, such as a star detection: closing it then
-// hides it from every route at once, but its pixels are released only when the last analysis lets it go.
+// hides it from every route at once, but its pixels are released only when the last analysis lets it go. An analysis
+// of one spot of the image asks for a grayscale copy of that region alone, so it never copies the whole image.
 //
 // A document can also be adopted from the result of an image processing pipeline (imageprocessing.ts) computed on a
 // copy of another document: the result is a new, independent document that lives only in memory until it is saved to a file of the
@@ -283,8 +284,42 @@ export interface SaveResult {
 	readonly path: string
 }
 
-// Message sent to the image worker. Open, open capture, render, encode, detection image, processing image,
-// and adopt carry an id that their response echoes; open capture and adopt transfer their bytes to the worker; a
+// Rectangle of image pixels, 0-based from the upper-left sample, x right and y down.
+export interface ImageRect {
+	// Column of the first pixel.
+	readonly left: number
+	// Row of the first pixel.
+	readonly top: number
+	// Width, in pixels; positive.
+	readonly width: number
+	// Height, in pixels; positive.
+	readonly height: number
+}
+
+// How the samples of an image convert to the scale of its source: scale × sample + offset for a level such as a sky
+// background, scale × sample for a difference such as a signal above it.
+export interface SampleConversion {
+	// Unit of the converted values: ADU of integer data, or the unit of the source otherwise, as floating-point data or
+	// data with a BSCALE stored it.
+	readonly unit: 'adu' | 'source'
+	// Units per normalized sample; 0 for a flat image.
+	readonly scale: number
+	// Units at a sample of 0.
+	readonly offset: number
+	// Whether the read rescaled the image to fit 0..1, so a sample of 1 is its brightest pixel, not its full scale.
+	readonly rescaled: boolean
+}
+
+// Grayscale copy of a region of a document, owned by the caller, with what converts its samples.
+export interface ImageRegion {
+	// Grayscale image of the region, without a header nor a Bayer pattern; see ImageStore.detectionRegion.
+	readonly image: Image
+	// Conversion of its samples to the scale of the source.
+	readonly conversion: SampleConversion
+}
+
+// Message sent to the image worker. Open, open capture, render, encode, detection image, detection region, processing
+// image, and adopt carry an id that their response echoes; open capture and adopt transfer their bytes to the worker; a
 // close has no response, and a
 // cancel drops the render with that id if it has not started yet (the render then answers superseded).
 export type ImageWorkerRequest =
@@ -293,13 +328,15 @@ export type ImageWorkerRequest =
 	| { readonly type: 'render'; readonly id: number; readonly document: string; readonly request: RenderRequest }
 	| { readonly type: 'encode'; readonly id: number; readonly document: string; readonly format: SaveFormat; readonly settings?: DisplaySettings; readonly omit?: readonly string[] }
 	| { readonly type: 'detectionImage'; readonly id: number; readonly document: string }
+	| { readonly type: 'detectionRegion'; readonly id: number; readonly document: string; readonly rect: ImageRect }
 	| { readonly type: 'processingImage'; readonly id: number; readonly document: string }
 	| { readonly type: 'adopt'; readonly id: number; readonly image: Image; readonly provenance: ProcessingProvenance }
 	| { readonly type: 'cancel'; readonly id: number }
 	| { readonly type: 'close'; readonly document: string }
 
 // Message the image worker answers a request with, by request id: the opened document, the
-// rendering, the encoded file, the grayscale copy a star detection measures (see ImageStore.detectionImage), the
+// rendering, the encoded file, the grayscale copy a star detection measures (see ImageStore.detectionImage), that of
+// a region (see ImageStore.detectionRegion), the
 // full copy an image processing pipeline works on (see ImageStore.processingImage), the adopted document, a
 // document that is not open (missing), a render dropped before it
 // started (superseded), settings that cannot be applied to the image (invalid), a file that cannot be
@@ -308,6 +345,7 @@ export type ImageWorkerResponse =
 	| { readonly id: number; readonly status: 'opened'; readonly info: ImageInfo }
 	| { readonly id: number; readonly status: 'encoded'; readonly bytes: Uint8Array<ArrayBuffer> }
 	| { readonly id: number; readonly status: 'detectionImage'; readonly image: Image }
+	| ({ readonly id: number; readonly status: 'detectionRegion' } & ImageRegion)
 	| { readonly id: number; readonly status: 'processingImage'; readonly image: Image }
 	| { readonly id: number; readonly status: 'adopted'; readonly info: ImageInfo }
 	| ({ readonly id: number; readonly status: 'rendered' } & Rendering)
@@ -508,6 +546,19 @@ export class ImageStore {
 		if (!this.#documents.has(id) && !this.#retained.has(id)) return undefined
 		const response = await this.#request({ type: 'detectionImage', id: this.#id++, document: id })
 		if (response.status === 'detectionImage') return response.image
+		if (response.status === 'missing') return undefined
+		throw responseError(response)
+	}
+
+	// Returns a new grayscale copy of a rectangle of an open or retained document, which must lie inside the image, and
+	// the conversion of its samples: the same samples as that rectangle of detectionImage, sized like the rectangle and
+	// computed without copying the rest of the image. Its metadata keeps the min-max rescale of the read of the document
+	// and names no Bayer pattern; its header is empty. Owned by the caller, whose buffer may be transferred. Resolves to
+	// undefined when the document is neither open nor retained.
+	async detectionRegion(id: string, rect: ImageRect): Promise<ImageRegion | undefined> {
+		if (!this.#documents.has(id) && !this.#retained.has(id)) return undefined
+		const response = await this.#request({ type: 'detectionRegion', id: this.#id++, document: id, rect })
+		if (response.status === 'detectionRegion') return { image: response.image, conversion: response.conversion }
 		if (response.status === 'missing') return undefined
 		throw responseError(response)
 	}

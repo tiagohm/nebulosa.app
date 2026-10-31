@@ -13,7 +13,7 @@ import { fileHandleSource } from 'nebulosa/src/io/file'
 import { Bitpix, type FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSource } from 'nebulosa/src/io/io'
 import type { Sink } from 'nebulosa/src/io/types'
-import { luminanceImage, readImageFrom } from './imagedecode'
+import { luminanceImage, luminanceRegion, readImageFrom, sampleConversion } from './imagedecode'
 import {
 	cfaPattern,
 	DisplayError,
@@ -36,7 +36,7 @@ import {
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
 // work on them: decoding FITS and XISF files and camera frames, the display pipeline, JPEG encoding, encoding
 // documents as FITS, XISF, or JPEG files, preparing the grayscale
-// copies star detections measure on their own worker (stars.worker.ts), and the full copies image processing
+// copies star detections measure on their own worker (stars.worker.ts), whole or of one small region, and the full copies image processing
 // pipelines work on (imageprocessing.worker.ts), whose results come back to be adopted as documents. Keeping the
 // pixels here means they are never copied between threads, and the server event loop stays free while
 // a large image is decoded or rendered. Renderings run one at a time, always on a copy of the decoded
@@ -428,7 +428,7 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 		return
 	}
 
-	if (request.type === 'encode' || request.type === 'detectionImage' || request.type === 'processingImage') {
+	if (request.type === 'encode' || request.type === 'detectionImage' || request.type === 'detectionRegion' || request.type === 'processingImage') {
 		const entry = documents.get(request.document)
 
 		if (!entry) {
@@ -440,6 +440,9 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 			if (request.type === 'detectionImage') {
 				const image = detectionImage(entry)
 				reply({ id: request.id, status: 'detectionImage', image }, [image.raw.buffer])
+			} else if (request.type === 'detectionRegion') {
+				const image = luminanceRegion(entry.image, entry.cfa, request.rect)
+				reply({ id: request.id, status: 'detectionRegion', image, conversion: sampleConversion(entry.image) }, [image.raw.buffer])
 			} else if (request.type === 'processingImage') {
 				const image = processingImage(entry)
 				reply({ id: request.id, status: 'processingImage', image }, [image.raw.buffer])

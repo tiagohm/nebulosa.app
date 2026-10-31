@@ -46,6 +46,63 @@ test('values are fresh for the time to live and shared while loading', async () 
 	expect((await cache.get('other', load)).value).toBe(3)
 })
 
+test('an error status is kept on the failure', async () => {
+	const error = await fetchUpstream(respond('busy', { status: 429 }), 'https://example.org/a.jpg', 'image/jpeg', 1000, 10).catch((e: unknown) => e)
+	expect(error).toBeInstanceOf(UpstreamUnavailableError)
+	expect((error as UpstreamUnavailableError).status).toBe(429)
+})
+
+test('a limit keeps only the keys used most recently', async () => {
+	let loads = 0
+	const cache = new RemoteCache<number>(1000, () => 0, { limit: 2 })
+	const load = () => Promise.resolve(++loads)
+
+	await cache.get('a', load)
+	await cache.get('b', load)
+	await cache.get('a', load)
+	await cache.get('c', load)
+	expect(loads).toBe(3)
+
+	await cache.get('a', load)
+	expect(loads).toBe(3)
+	await cache.get('b', load)
+	expect(loads).toBe(4)
+})
+
+test('a value older than the stale limit is no longer answered', async () => {
+	let now = 0
+	let fail = false
+	const cache = new RemoteCache<number>(1000, () => now, { maxStaleMs: 10_000 })
+	const load = () => (fail ? Promise.reject(new UpstreamUnavailableError('down')) : Promise.resolve(1))
+
+	await cache.get('k', load)
+	fail = true
+	now = 9000
+	expect((await cache.get('k', load)).stale).toBeTrue()
+
+	now = 9500
+	expect((await cache.get('k', load)).stale).toBeTrue()
+
+	now = 10_000
+	await expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+})
+
+test('a remembered failure is repeated for a minute without downloading', async () => {
+	let now = 0
+	let loads = 0
+	const cache = new RemoteCache<number>(1000, () => now, { rememberFailure: true })
+	const load = () => (++loads, Promise.reject(new UpstreamUnavailableError('down')))
+
+	await expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	now = 59_999
+	await expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	expect(loads).toBe(1)
+
+	now = 60_000
+	await expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	expect(loads).toBe(2)
+})
+
 test('a failed download answers the last value as stale, or rejects without one', async () => {
 	let now = 0
 	let fail = false

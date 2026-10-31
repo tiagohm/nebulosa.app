@@ -5,7 +5,7 @@ import type { SkyObserverSettings } from '../profile/schema'
 import { Celestial, type CelestialObject, type CelestialOptions, type ConstellationLine, type CoordinateSystem, type MovingBody, type MovingBodyType, type RenderState, type SelectionTarget } from './celestial/celestial'
 import { SKY_REALTIME_TICK_MS, type SkyClockMode, skyClock, skyTime } from './clock'
 import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
-import { type ImageFootprint, ofDateMatrix, type SkyCoordinateIntent, type SkyPoint, toDate } from './footprint'
+import { type ImageFootprint, ofDateMatrix, outlineLabel, type ScreenPoint, type SkyCoordinateIntent, type SkyPoint, toDate } from './footprint'
 import { formatAngularSize } from './format'
 import { type FramePoint, framePolygon, isFraming, type OpticalConfiguration, resolveFraming } from './framing'
 import { type MountPoint, mountRuntime } from './mount'
@@ -144,56 +144,12 @@ function drawRememberedObject(ctx: CanvasRenderingContext2D, x: number, y: numbe
 	ctx.fillText(name, x + REMEMBERED_RING_RADIUS + 4, y)
 }
 
-// Strokes the outline of a field of view (equatorial points in radians), breaking it where points cannot
-// be projected, with a cross at its center and, when it is large enough on screen, its label.
-function drawFraming(ctx: CanvasRenderingContext2D, state: RenderState, outline: readonly FramePoint[], label: string) {
+// Adds an outline (equatorial points in radians, undefined where there is none) to the current path, breaking it where
+// a point is missing or cannot be projected, and returns the points projected, in CSS pixels.
+function traceOutline(ctx: CanvasRenderingContext2D, state: RenderState, outline: readonly (FramePoint | undefined)[]) {
 	const point = new Float64Array(2)
+	const projected: ScreenPoint[] = []
 	let open = false
-	let minX = Infinity
-	let maxX = -Infinity
-	let minY = Infinity
-
-	ctx.beginPath()
-
-	for (const { rightAscension, declination } of outline) {
-		if (!state.projectEquatorialToScreen(rightAscension, declination, point)) {
-			open = false
-			continue
-		}
-
-		if (open) ctx.lineTo(point[0], point[1])
-		else ctx.moveTo(point[0], point[1])
-		open = true
-		minX = Math.min(minX, point[0])
-		maxX = Math.max(maxX, point[0])
-		minY = Math.min(minY, point[1])
-	}
-
-	ctx.strokeStyle = FRAMING_COLOR
-	ctx.lineWidth = 1.5
-	ctx.stroke()
-
-	if (maxX - minX >= FRAMING_LABEL_MIN_PX) {
-		ctx.fillStyle = FRAMING_COLOR
-		ctx.font = '11px ui-monospace, monospace'
-		ctx.textAlign = 'left'
-		ctx.textBaseline = 'bottom'
-		ctx.fillText(label, minX, minY - 4)
-	}
-}
-
-// Strokes the footprint of a solved image (points of date in radians, undefined where its WCS could not unproject),
-// dashed, breaking it where a point is missing or cannot be projected, with a cross at its centre and its name when it
-// is large enough on screen.
-function drawImageFootprint(ctx: CanvasRenderingContext2D, state: RenderState, center: { readonly x: number; readonly y: number }, outline: readonly (FramePoint | undefined)[], name: string) {
-	const point = new Float64Array(2)
-	let open = false
-	let minX = Infinity
-	let maxX = -Infinity
-	let minY = Infinity
-
-	ctx.save()
-	ctx.beginPath()
 
 	for (const vertex of outline) {
 		if (!vertex || !state.projectEquatorialToScreen(vertex.rightAscension, vertex.declination, point)) {
@@ -204,10 +160,44 @@ function drawImageFootprint(ctx: CanvasRenderingContext2D, state: RenderState, c
 		if (open) ctx.lineTo(point[0], point[1])
 		else ctx.moveTo(point[0], point[1])
 		open = true
-		minX = Math.min(minX, point[0])
-		maxX = Math.max(maxX, point[0])
-		minY = Math.min(minY, point[1])
+		projected.push([point[0], point[1]])
 	}
+
+	return projected
+}
+
+// Draws the label of an outline above its topmost point (see outlineLabel), when it is large enough on screen.
+function drawOutlineLabel(ctx: CanvasRenderingContext2D, projected: readonly ScreenPoint[], label: string, color: string) {
+	const placement = outlineLabel(projected)
+	if (!placement || placement.width < FRAMING_LABEL_MIN_PX) return
+
+	ctx.fillStyle = color
+	ctx.font = '11px ui-monospace, monospace'
+	ctx.textAlign = placement.align
+	ctx.textBaseline = 'bottom'
+	ctx.fillText(label, placement.x, placement.y - 4)
+}
+
+// Strokes the outline of a field of view (equatorial points in radians), breaking it where points cannot
+// be projected, with a cross at its center and, when it is large enough on screen, its label.
+function drawFraming(ctx: CanvasRenderingContext2D, state: RenderState, outline: readonly FramePoint[], label: string) {
+	ctx.beginPath()
+	const projected = traceOutline(ctx, state, outline)
+
+	ctx.strokeStyle = FRAMING_COLOR
+	ctx.lineWidth = 1.5
+	ctx.stroke()
+
+	drawOutlineLabel(ctx, projected, label, FRAMING_COLOR)
+}
+
+// Strokes the footprint of a solved image (points of date in radians, undefined where its WCS could not unproject),
+// dashed, breaking it where a point is missing or cannot be projected, with a cross at its centre and its name when it
+// is large enough on screen.
+function drawImageFootprint(ctx: CanvasRenderingContext2D, state: RenderState, center: { readonly x: number; readonly y: number }, outline: readonly (FramePoint | undefined)[], name: string) {
+	ctx.save()
+	ctx.beginPath()
+	const projected = traceOutline(ctx, state, outline)
 
 	ctx.moveTo(center.x - 5, center.y)
 	ctx.lineTo(center.x + 5, center.y)
@@ -219,13 +209,7 @@ function drawImageFootprint(ctx: CanvasRenderingContext2D, state: RenderState, c
 	ctx.stroke()
 	ctx.restore()
 
-	if (maxX - minX >= FRAMING_LABEL_MIN_PX) {
-		ctx.fillStyle = FOOTPRINT_COLOR
-		ctx.font = '11px ui-monospace, monospace'
-		ctx.textAlign = 'left'
-		ctx.textBaseline = 'bottom'
-		ctx.fillText(name, minX, minY - 4)
-	}
+	drawOutlineLabel(ctx, projected, name, FOOTPRINT_COLOR)
 }
 
 // Returns a sky position [right ascension, declination] in radians as a point of the map.

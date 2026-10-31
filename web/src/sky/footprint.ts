@@ -55,6 +55,39 @@ export interface ImageFootprint {
 	readonly outline: readonly (SkyPoint | undefined)[]
 }
 
+// Point on the screen, in CSS pixels: [x, y], y growing downwards.
+export type ScreenPoint = readonly [number, number]
+
+// Where the label of an outline drawn on the screen goes.
+export interface OutlineLabel {
+	// Topmost point of the outline, in CSS pixels, which the label sits right above.
+	readonly x: number
+	readonly y: number
+	// Side of x the text is anchored on, so that it runs towards the middle of the outline.
+	readonly align: 'left' | 'right'
+	// Width of the outline on the screen, in CSS pixels.
+	readonly width: number
+}
+
+// Returns the placement of the label of an outline from its projected points, or undefined without any. The label is
+// tied to a point of the outline: the corner of the bounding box would drift away from a rotated outline as the zoom
+// scales it.
+export function outlineLabel(points: readonly ScreenPoint[]): OutlineLabel | undefined {
+	if (points.length === 0) return undefined
+
+	let [[x, y]] = points
+	let minX = x
+	let maxX = x
+
+	for (const point of points) {
+		if (point[1] < y) [x, y] = point
+		minX = Math.min(minX, point[0])
+		maxX = Math.max(maxX, point[0])
+	}
+
+	return { x, y, align: x > (minX + maxX) / 2 ? 'right' : 'left', width: maxX - minX }
+}
+
 // Handoffs of the tab to the Sky map.
 export interface SkyImageState {
 	// Coordinate requested last.

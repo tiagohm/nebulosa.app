@@ -6,7 +6,7 @@ import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
 import { deg, normalizeAngle, toArcmin } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import { skyAt } from '../platesolving/wcs'
-import { clearImageFootprint, clearSkyCoordinate, imageFootprint, ofDateMatrix, showCoordinateInSky, showFootprintInSky, type SkyImageState, toDate, toggleImageFootprint } from './footprint'
+import { clearImageFootprint, clearSkyCoordinate, imageFootprint, ofDateMatrix, outlineLabel, showCoordinateInSky, showFootprintInSky, type SkyImageState, toDate, toggleImageFootprint } from './footprint'
 
 // A TAN solution of a 2000×1000 image, 0.001° per pixel.
 const SOLUTION: FitsHeader = { CTYPE1: 'RA---TAN', CTYPE2: 'DEC--TAN', CRPIX1: 1000.5, CRPIX2: 500.5, CRVAL1: 83.8, CRVAL2: -5.4, CD1_1: -0.001, CD1_2: 0, CD2_1: 0, CD2_2: 0.001, NAXIS1: 2000, NAXIS2: 1000 }
@@ -82,5 +82,41 @@ describe('handoffs', () => {
 		toggleImageFootprint(state)
 		clearImageFootprint(state)
 		expect(state).toEqual({ intent: { seq: 4, rightAscension: footprint.center[0], declination: footprint.center[1], label: 'M42', mark: false }, footprint: undefined })
+	})
+})
+
+describe('label of an outline', () => {
+	// A square of half-diagonal r turned 30°, centred on the origin.
+	function rotated(r: number) {
+		return [15, 105, 195, 285].map((angle) => [r * Math.cos((angle * Math.PI) / 180), -r * Math.sin((angle * Math.PI) / 180)] as const)
+	}
+
+	test('stays on the topmost corner of a rotated outline at any zoom', () => {
+		for (const r of [100, 1000, 10000]) {
+			const label = outlineLabel(rotated(r))!
+			const top = rotated(r)[1]
+			expect(label.x).toBe(top[0])
+			expect(label.y).toBe(top[1])
+		}
+	})
+
+	test('runs towards the middle of the outline', () => {
+		expect(outlineLabel(rotated(100))?.align).toBe('left')
+		expect(outlineLabel(rotated(100).map(([x, y]) => [-x, y] as const))?.align).toBe('right')
+	})
+
+	test('an upright outline keeps it on the top-left corner', () => {
+		expect(
+			outlineLabel([
+				[10, 20],
+				[110, 20],
+				[110, 80],
+				[10, 80],
+			]),
+		).toEqual({ x: 10, y: 20, align: 'left', width: 100 })
+	})
+
+	test('an outline with no projected point has no label', () => {
+		expect(outlineLabel([])).toBeUndefined()
 	})
 })

@@ -2,14 +2,15 @@ import { stat } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 import { IersA, IersAB, IersB } from 'nebulosa/src/astronomy/time/iers'
-import type { Time, TimeProviders } from 'nebulosa/src/astronomy/time/time'
+import { type Time, TIME_PROVIDERS, type TimeProviders } from 'nebulosa/src/astronomy/time/time'
 import { errorCode, writeAtomically } from './util'
 
-// Earth orientation data of the Astronomical Time Converter: private IERS tables, kept apart from the shared `iersab` of
-// the toolkit so that mounts, the Sky, and every other reader of the default providers are unaffected. The tables are
-// read from the cache of the server on first use, and a conversion that finds them old starts one background refresh
-// from the IERS. No request waits on the network, no timer runs, and an offline server keeps answering from its cache,
-// or with DUT1 = 0 and an explicit status when it has none.
+// Earth orientation data of the application: IERS tables kept apart from the shared `iersab` of the toolkit, whose lookups
+// clamp to the edge of a table, and installed as the default providers of the toolkit when the server starts, so every Time
+// of the process reads them. Nothing is installed in a test that does not ask for it. The tables are read from the cache of
+// the server, and a conversion that finds them old starts one background refresh from the IERS. No request waits on the
+// network, no timer runs, and an offline server keeps answering from its cache, or with DUT1 = 0 and an explicit status
+// when it has none.
 
 // Directory of the cached tables.
 export const DEFAULT_IERS_DIRECTORY = join(homedir(), 'Nebulosa', 'iers')
@@ -73,6 +74,8 @@ export interface EarthOrientationOptions {
 	readonly fetch?: (url: string, init: RequestInit) => Promise<Response>
 	// Current time in Unix milliseconds.
 	readonly now?: () => number
+	// Whether old tables are downloaded again; false for a worker, which only reads the cache of the server thread.
+	readonly refresh?: boolean
 }
 
 // Tables of one generation; a refresh replaces them whole, so a conversion never sees a table half replaced.
@@ -95,11 +98,51 @@ async function parsed<T extends IersA | IersB>(table: T, text: string) {
 	return table
 }
 
-// Earth orientation data of the converter.
+// Whether this thread reads installed tables instead of the empty ones of the toolkit.
+let installed = false
+
+// Makes the tables the default providers of the toolkit on this thread, for every Time without providers of its own. A later
+// refresh of the data reaches them too, since the providers read the tables in force. Returns the function that puts the
+// previous providers back.
+export function installEarthOrientation(data: EarthOrientationData) {
+	const { dut1, pm } = TIME_PROVIDERS
+	TIME_PROVIDERS.dut1 = data.providers.dut1
+	TIME_PROVIDERS.pm = data.providers.pm
+	installed = true
+
+	return () => {
+		TIME_PROVIDERS.dut1 = dut1
+		TIME_PROVIDERS.pm = pm
+		installed = false
+	}
+}
+
+// Whether this thread has installed tables, which tells a worker of this thread to install them too.
+export function earthOrientationInstalled() {
+	return installed
+}
+
+// Tables installed in this worker; one read per worker, since a worker may run many jobs.
+let workerTables: Promise<void> | undefined
+
+// Reads the cached tables once and installs them on a worker thread, which never downloads them. Without a cache this leaves
+// the tables empty, as on the server thread. Never rejects.
+export function installCachedEarthOrientation(directory?: string) {
+	workerTables ??= (async () => {
+		const data = new EarthOrientationData({ directory, refresh: false })
+		await data.load()
+		installEarthOrientation(data)
+	})()
+
+	return workerTables
+}
+
+// Earth orientation data of the server.
 export class EarthOrientationData {
 	readonly #directory: string
 	readonly #fetch: (url: string, init: RequestInit) => Promise<Response>
 	readonly #now: () => number
+	readonly #refreshes: boolean
 	#tables: LoadedTables = this.#combine(new IersA(), new IersB())
 	#updatedAt?: number
 	#attemptedAt?: number
@@ -108,16 +151,17 @@ export class EarthOrientationData {
 
 	// Provider of the private tables: UT1-UTC and polar motion of the tables, 0 for an instant no table holds, unlike
 	// the toolkit's lookups, which clamp to the edge of the table.
-	readonly providers: Readonly<TimeProviders> = {
+	readonly providers: Readonly<Required<Pick<TimeProviders, 'dut1' | 'pm'>>> = {
 		dut1: (time) => (this.#tables.combined.covers(time) ? this.#tables.combined.dut1(time) : 0),
 		pm: (time) => (this.#tables.combined.covers(time) ? this.#tables.combined.xy(time) : [0, 0]),
 	}
 
-	// Creates the data, reading nothing until prepare is called.
-	constructor({ directory = DEFAULT_IERS_DIRECTORY, fetch: download = (url, init) => fetch(url, init), now = Date.now }: EarthOrientationOptions = {}) {
+	// Creates the data, reading nothing until load or prepare is called.
+	constructor({ directory = DEFAULT_IERS_DIRECTORY, fetch: download = (url, init) => fetch(url, init), now = Date.now, refresh = true }: EarthOrientationOptions = {}) {
 		this.#directory = directory
 		this.#fetch = download
 		this.#now = now
+		this.#refreshes = refresh
 	}
 
 	// Bundles two tables with their combined provider.
@@ -125,12 +169,17 @@ export class EarthOrientationData {
 		return { a, b, combined: new IersAB(a, b) }
 	}
 
-	// Reads the cached tables once and starts a refresh when they are old. Resolves after the local read, never after
-	// the network, and never rejects: a cache that cannot be read leaves the tables empty.
-	async prepare() {
+	// Reads the cached tables once, with no network. Never rejects: a cache that cannot be read leaves the tables empty.
+	async load() {
 		this.#loading ??= this.#read()
 		await this.#loading
-		this.#refreshWhenOld()
+	}
+
+	// Reads the cached tables once and starts a refresh when they are old. Resolves after the local read, never after
+	// the network, and never rejects.
+	async prepare() {
+		await this.load()
+		if (this.#refreshes) this.#refreshWhenOld()
 	}
 
 	// Waits for the refresh running now, if any. For a server about to stop and for tests.

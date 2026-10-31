@@ -317,7 +317,7 @@ export class AstronomicalTimeService {
 		}
 	}
 
-	// Binds an instant to the private Earth orientation data and to the observer's site.
+	// Binds an instant to the Earth orientation data of the converter and to the observer's site.
 	#bind(instant: Time, observer: SkyObserver | undefined) {
 		instant.providers = this.eop.providers
 		if (observer) instant.location = geographic(observer)

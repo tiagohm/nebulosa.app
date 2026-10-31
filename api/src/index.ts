@@ -1,5 +1,6 @@
 import { AnnotationService, createAnnotationRoutes } from './annotations'
 import { AstronomicalTimeService, createAstronomicalTimeRoutes } from './astronomicaltime'
+import { EarthOrientationData, installEarthOrientation } from './astronomicaltime.eop'
 import { AutoFocusSessions, createAutoFocusRoutes } from './autofocus'
 import { CameraCommands, createCameraRoutes } from './cameras'
 import { CaptureFrameRegistry, createCaptureFrameRoutes, DEFAULT_CAPTURE_FRAMES_FILE } from './captureframes'
@@ -508,8 +509,20 @@ const lunarEclipses = new LunarEclipseService()
 // Solar eclipse queries of the Solar Eclipse Map tool; their maps are computed on a worker.
 const solarEclipses = new SolarEclipseService()
 
+// Earth orientation tables of the process, shared by the converter and, once installed, by every Time of the server.
+const earthOrientation = new EarthOrientationData()
+
 // Conversions of the Astronomical Time Converter and the real-time reference of the status bar clock.
-const astronomicalTime = new AstronomicalTimeService()
+const astronomicalTime = new AstronomicalTimeService(earthOrientation)
+
+// Reads the cached Earth orientation tables and makes them the default of the toolkit, so the Sky, the mounts, and the pointing
+// models read the same UT1 as the converter, and starts a refresh of old tables, so they are kept current even if nothing ever
+// opens the converter or the clock. Called by the app before it serves; a test that only imports this module keeps the empty
+// tables of the toolkit. Never waits on the network, and never rejects.
+export async function startEarthOrientation() {
+	await earthOrientation.prepare()
+	installEarthOrientation(earthOrientation)
+}
 
 // Writes the changes the persisted stores still hold in memory, for a server about to stop. Resolves once they are
 // written or failed to be; never rejects.

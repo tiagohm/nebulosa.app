@@ -1,4 +1,4 @@
-import { type AboutInfo, createAboutRoutes, flushStores, routes, websocket } from 'api'
+import { type AboutInfo, createAboutRoutes, flushStores, routes, startEarthOrientation, websocket } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
 
@@ -23,6 +23,9 @@ const ABOUT: AboutInfo = {
 
 // Signals that stop the server: Ctrl+C, a service manager, and a closed terminal or console window.
 const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
+
+// The first request already reads the same Earth orientation data as every later one.
+await startEarthOrientation()
 
 // HTTP server listening on APP_HOST (default localhost) and APP_PORT (default 7000).
 const server = Bun.serve({

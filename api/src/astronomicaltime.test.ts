@@ -2,14 +2,22 @@ import { describe, expect, test } from 'bun:test'
 import { rm } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { dut1 as sharedDut1, iersab } from 'nebulosa/src/astronomy/time/iers'
-import { timeUnix } from 'nebulosa/src/astronomy/time/time'
+import { type Time, TIME_PROVIDERS, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { type AstronomicalTimeInput, type AstronomicalTimeReference, type AstronomicalTimeRequest, type AstronomicalTimeResult, AstronomicalTimeService, createAstronomicalTimeRoutes } from './astronomicaltime'
-import { EarthOrientationData, type EarthOrientationOptions } from './astronomicaltime.eop'
+import { earthOrientationInstalled, EarthOrientationData, type EarthOrientationOptions, installEarthOrientation } from './astronomicaltime.eop'
+import { geographic } from './sky/ephemeris'
 
 const SITE = { latitude: -22, longitude: -45, elevation: 850 }
 const NOW = Date.UTC(2026, 9, 31, 12)
 const DAY = 86_400_000
+
+// Clock of the test of a refresh, moved past the age of the tables.
+let later = NOW
+
+// UT1-UTC of the default providers of the toolkit at an instant, in seconds.
+const sharedDut1Of = (time: Time) => TIME_PROVIDERS.dut1(time)
 
 // Values of astropy 7.1.1 and pyerfa 2.0.1.5 for 2024-03-15T06:00:00 UTC at SITE, with erfa.gmst06 and erfa.gst06a.
 const GOLDEN = {
@@ -306,6 +314,66 @@ describe('Earth orientation data', () => {
 			{ fetch: fakeDownload(NOW, 0.1) },
 		))
 
+	test('once installed, every Time reads the tables, and the converter agrees with it', () =>
+		withService(
+			async (service, eop) => {
+				await eop.prepare()
+				await eop.settled()
+				const plain = timeUnix(NOW / 1000)
+				expect(earthOrientationInstalled()).toBeFalse()
+				expect(sharedDut1Of(plain)).toBe(0)
+				const uninstall = installEarthOrientation(eop)
+
+				try {
+					const time = timeUnix(NOW / 1000)
+					expect(earthOrientationInstalled()).toBeTrue()
+					expect(sharedDut1Of(time)).toBeCloseTo(0.25, 9)
+					const { sidereal } = await converted(service, { kind: 'now' }, { observer: SITE })
+					expect(localSiderealTime(time, geographic(SITE))).toBeCloseTo(sidereal.last!, 12)
+					expect(sharedDut1Of(timeUnix(Date.UTC(1900, 0, 1) / 1000))).toBe(0)
+				} finally {
+					uninstall()
+				}
+
+				expect(earthOrientationInstalled()).toBeFalse()
+				expect(sharedDut1Of(timeUnix(NOW / 1000))).toBe(0)
+			},
+			{ fetch: fakeDownload(NOW, 0.25) },
+		))
+
+	test('a refresh reaches the installed providers', async () => {
+		const requests: string[] = []
+		let dut1 = 0.25
+
+		await withService(
+			async (_, eop) => {
+				await eop.prepare()
+				await eop.settled()
+				const uninstall = installEarthOrientation(eop)
+
+				try {
+					expect(sharedDut1Of(timeUnix(NOW / 1000))).toBeCloseTo(0.25, 9)
+					dut1 = 0.5
+					later = NOW + 8 * DAY
+					await eop.prepare()
+					await eop.settled()
+					expect(sharedDut1Of(timeUnix(NOW / 1000))).toBeCloseTo(0.5, 9)
+				} finally {
+					uninstall()
+				}
+			},
+			{ fetch: (url, init) => fakeDownload(NOW, dut1, requests)(url, init), now: () => later },
+		)
+	})
+
+	test('a read-only copy never downloads', async () => {
+		const requests: string[] = []
+		const data = new EarthOrientationData({ directory: join(tmpdir(), `nebulosa-iers-${crypto.randomUUID()}`), fetch: fakeDownload(NOW, 0.25, requests), now: () => NOW, refresh: false })
+		await data.prepare()
+		await data.settled()
+		expect(requests).toEqual([])
+	})
+
 	test('flags an instant outside its tables and takes DUT1 as 0 there', () =>
 		withService(
 			async (service, eop) => {
@@ -334,7 +402,7 @@ describe('Earth orientation data', () => {
 			const covered = timeUnix(NOW / 1000)
 			expect(second.coverage(covered).status).toBe('covered')
 			expect(requests).toEqual([])
-			expect(second.providers.dut1!(covered)).toBeCloseTo(0.25, 9)
+			expect(second.providers.dut1(covered)).toBeCloseTo(0.25, 9)
 		} finally {
 			await rm(directory, { recursive: true, force: true })
 		}

@@ -5,6 +5,7 @@ import type { PierSide } from 'nebulosa/src/devices/indi/device'
 import { arcsec, deg, normalizeAngle, toArcsec } from 'nebulosa/src/math/units/angle'
 import { correctPointingCoordinate, predictPointingModelError } from 'nebulosa/src/observation/mount/pointing'
 import { planPointingWaypoints } from 'nebulosa/src/observation/mount/pointing.plan'
+import { EarthOrientationData, installEarthOrientation } from './astronomicaltime.eop'
 import { computePointingFit, type PointingFitRequest, type PointingFitSample, pointingFitOptions, PointingModelFitter } from './mountpointing.fit'
 import { POINTING_MODEL_FRAME, type PointingSite } from './mountpointing.frames'
 
@@ -106,6 +107,16 @@ test('the worker answers the same model, which survives a JSON copy', async () =
 
 	expect(predictPointingModelError(copy, context).dx).toBeCloseTo(predictPointingModelError(result.fitted, context).dx, 12)
 	expect(correctPointingCoordinate(copy, context).converged).toBeTrue()
+})
+
+test('with Earth orientation tables on the server thread, the worker reads them and still answers', async () => {
+	const uninstall = installEarthOrientation(new EarthOrientationData({ refresh: false }))
+
+	try {
+		expect((await new PointingModelFitter().fit(request(samples(30)))).fitted.usable).toBeTrue()
+	} finally {
+		uninstall()
+	}
 })
 
 test('a fit is cancelled by its signal, and the next one still runs', async () => {

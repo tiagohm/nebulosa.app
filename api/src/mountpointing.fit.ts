@@ -3,6 +3,7 @@ import type { PierSide } from 'nebulosa/src/devices/indi/device'
 import { percentileOf } from 'nebulosa/src/math/numerical/statistics'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import { computePointingError, type FittedPointingModel, fitPointingModel, type PointingFitOptions, type PointingModelStrategy, type PointingSample, predictPointingModelError, selectPointingStrategy } from 'nebulosa/src/observation/mount/pointing'
+import { earthOrientationInstalled } from './astronomicaltime.eop'
 import { type EquatorialPosition, POINTING_MODEL_FRAME, type PointingSite } from './mountpointing.frames'
 
 // Fitting of the mount pointing models: what the fit worker (`mountpointing.worker.ts`) computes, and the queue that
@@ -115,6 +116,8 @@ export interface PointingFitWorkerRequest {
 	readonly jobId: string
 	// What to compute.
 	readonly request: PointingFitRequest
+	// Whether the server thread reads Earth orientation tables, so the worker must read them too.
+	readonly earthOrientation: boolean
 }
 
 // Response of the fit worker.
@@ -265,7 +268,7 @@ export class PointingModelFitter {
 		signal?.addEventListener('abort', onAbort, { once: true })
 
 		try {
-			worker.postMessage({ jobId, request } satisfies PointingFitWorkerRequest, [])
+			worker.postMessage({ jobId, request, earthOrientation: earthOrientationInstalled() } satisfies PointingFitWorkerRequest, [])
 			return await promise
 		} finally {
 			clearTimeout(timer)

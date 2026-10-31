@@ -104,7 +104,7 @@ test('a faint star beside a brighter one is measured, not that neighbor', () => 
 test('a centroid carried away from where it started is ambiguous, not what carried it', () => {
 	const image = field([[132, 120, 0.8]])
 
-	expect(inspect(image, 123, 120, { detectedHfd: 6 })).toMatchObject({ status: 'noStar', reason: 'ambiguous' })
+	expect(inspect(image, 123, 120, { detected: true })).toMatchObject({ status: 'noStar', reason: 'ambiguous' })
 })
 
 test('a faint star beside much brighter ones is found', () => {
@@ -133,11 +133,11 @@ test('the sky where the detector cannot look finds no star', () => {
 
 test('a star a detection already found skips the search', () => {
 	const image = field([[120.3, 90.6, 0.4]])
-	expect(measured(inspect(image, 120.3, 90.6, { detectedHfd: 3.5 })).profile.x).toBeCloseTo(120.3, 1)
+	expect(measured(inspect(image, 120.3, 90.6, { detected: true })).profile.x).toBeCloseTo(120.3, 1)
 })
 
 test('a faint star on a real sky keeps its aperture, its size, and its place among its neighbors', () => {
-	// Sky noise that keeps the positive samples of an outer band above 1% of the flux, which grew the aperture to its limit.
+	// Noise that keeps the positive samples of an outer band above 1% of the flux, which must not grow the aperture.
 	const image = field(
 		[
 			[120, 120, 0.05],

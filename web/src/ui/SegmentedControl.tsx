@@ -31,7 +31,7 @@ export function SegmentedControl<T extends string>({ label, options, value, onCh
 						disabled={disabled}
 						onClick={() => option !== value && onChange(option)}
 						className={cn(
-							'min-w-0 flex-1 cursor-pointer truncate border border-line-200 px-2 text-[13px] leading-5 transition-colors duration-150 first:rounded-l-sm last:rounded-r-sm not-first:-ml-px disabled:cursor-not-allowed',
+							'min-w-fit flex-1 cursor-pointer truncate border border-line-200 px-2 text-[13px] leading-5 transition-colors duration-150 first:rounded-l-sm last:rounded-r-sm not-first:-ml-px disabled:cursor-not-allowed',
 							option === value ? 'z-1 border-accent bg-accent-subtle text-accent disabled:border-line-200 disabled:bg-base-300 disabled:text-ink-200' : 'bg-base-200 text-ink-200 not-disabled:hover:bg-base-300 not-disabled:hover:text-ink-100 disabled:text-ink-300',
 						)}
 					>

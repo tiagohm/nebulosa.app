@@ -181,7 +181,7 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 					className={cn(inputClassName, 'flex cursor-pointer items-center gap-2 pr-9 text-left select-none', open && 'border-accent outline-2 -outline-offset-1 outline-accent')}
 				>
 					<span className="min-w-0 flex-1 truncate">{format(value)}</span>
-					<span className={cn('pointer-events-none absolute top-1/2 right-3.5 size-[7px] rotate-45 border-r-[1.5px] border-b-[1.5px] border-ink-200 transition-[rotate,margin-top] duration-150', open ? '-mt-0.5 -rotate-135 border-accent' : '-mt-1.5')} />
+					<span className={cn('pointer-events-none absolute top-1/2 right-3.5 size-2 rotate-45 border-r-[1.5px] border-b-[1.5px] border-ink-200 transition-[rotate,margin-top] duration-150', open ? '-mt-0.5 -rotate-135 border-accent' : '-mt-1.5')} />
 				</button>
 				<ul
 					ref={listRef}

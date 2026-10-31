@@ -194,7 +194,7 @@ function StretchControls({ applied, color, rendering, onApply }: StretchControls
 	return (
 		<>
 			<Select label="Mode" options={STRETCH_MODES} value={stretch.mode} format={(m) => STRETCH_MODE_LABELS[m]} onChange={selectMode} />
-			{stretch.mode === 'auto' && <SegmentedControl label="Preset" className="[&_button]:px-0.5" options={AUTO_STRETCH_PRESETS} value={stretch.preset} format={(p) => AUTO_STRETCH_PRESET_LABELS[p]} onChange={(preset) => edit({ stretch: { ...stretch, preset } })} />}
+			{stretch.mode === 'auto' && <SegmentedControl label="Preset" options={AUTO_STRETCH_PRESETS} value={stretch.preset} format={(p) => AUTO_STRETCH_PRESET_LABELS[p]} onChange={(preset) => edit({ stretch: { ...stretch, preset } })} />}
 			{stretch.mode === 'auto' && color && <Checkbox label="Linked channels" checked={stretch.linked} onChange={(linked) => edit({ stretch: { ...stretch, linked } })} />}
 			{stretch.mode === 'manual' && (
 				<>

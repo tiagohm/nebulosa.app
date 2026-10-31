@@ -89,7 +89,7 @@ export function Popover({ icon, label, open, onOpenChange, disabled = false, chi
 		<span ref={rootRef} className="flex flex-none">
 			<IconButton icon={icon} label={label} pressed={open} disabled={disabled} onClick={() => (open ? onOpenChange(false) : show())} />
 			{open && position && (
-				<div style={{ top: position.top, left: position.left, width: PANEL_WIDTH }} className="fixed z-30 box-border flex max-w-[calc(100vw-32px)] flex-col gap-2 rounded-md border border-line-100 bg-base-200 p-3 text-sm shadow-[0_12px_32px_rgb(0_0_0/0.45)]">
+				<div style={{ top: position.top, left: position.left }} className="min-w-fit fixed z-30 box-border flex max-w-[calc(100vw-32px)] flex-col gap-2 rounded-md border border-line-100 bg-base-200 p-3 text-sm shadow-[0_12px_32px_rgb(0_0_0/0.45)]">
 					<h4 className="m-0 text-xs font-medium text-ink-100">{label}</h4>
 					{children}
 				</div>

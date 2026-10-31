@@ -44,6 +44,13 @@ describe('credits', () => {
 		}
 	})
 
+	test('the models behind the ephemerides are credited to their authors', () => {
+		const authors = new Map(credits.map((credit) => [credit.name, credit.owner]))
+		expect(authors.get('VSOP87')).toBe('P. Bretagnon and G. Francou')
+		expect(authors.get('ELP/MPP02')).toBe('J. Chapront and G. Francou')
+		expect(authors.get('Astronomical Algorithms')).toBe('Jean Meeus')
+	})
+
 	test('no work is credited twice', () => {
 		expect(new Set(credits.map((credit) => credit.name)).size).toBe(credits.length)
 	})

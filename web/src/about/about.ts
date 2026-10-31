@@ -40,8 +40,10 @@ export interface CreditGroup {
 	readonly credits: readonly Credit[]
 }
 
-// Every external service, dataset, and program the application uses, shown even when the server cannot be reached. Only what
-// runs or ships with the application is listed: toolkit adapters no feature uses are not. A new source adds its credit here.
+// Every external service, dataset, published model or method, and program the application uses, shown even when the server
+// cannot be reached. Only what runs or ships with the application is listed: toolkit adapters and models no feature reaches
+// are not. Authors and references come from the toolkit's own citations and the publisher's record. A new source adds its
+// credit here.
 export const CREDIT_GROUPS: readonly CreditGroup[] = [
 	{
 		title: 'Online Services',
@@ -73,10 +75,41 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 		],
 	},
 	{
+		title: 'Models and Methods',
+		credits: [
+			{ name: 'VSOP87', owner: 'P. Bretagnon and G. Francou', url: 'https://ui.adsabs.harvard.edu/abs/1988A%26A...202..309B', use: 'Positions of the Sun and the planets.', notice: 'A&A 202, 309 (1988).' },
+			{ name: 'VSOP2000', owner: 'X. Moisson and P. Bretagnon', url: 'https://doi.org/10.1023/A:1012279014297', use: 'Position of the Earth behind the eclipse maps.', notice: 'Celestial Mechanics and Dynamical Astronomy, 2001.' },
+			{ name: 'ELP/MPP02', owner: 'J. Chapront and G. Francou', url: 'https://doi.org/10.1051/0004-6361:20030529', use: 'Position of the Moon.', notice: 'A&A 404, 735 (2003).' },
+			{ name: 'Astronomical Algorithms', owner: 'Jean Meeus', url: 'https://en.wikipedia.org/wiki/Jean_Meeus', use: 'Lunar phases and apsides, eclipse series, and the position of Pluto.', notice: '2nd ed., Willmann-Bell, 1998.' },
+			{ name: 'Standards of Fundamental Astronomy', owner: 'IAU SOFA Board', url: 'https://www.iausofa.org/', use: 'Time scales, precession, nutation, and reductions to the observed place.' },
+			{ name: 'ERFA', owner: 'ERFA contributors', url: 'https://github.com/liberfa/erfa', use: 'The routines the toolkit ports, derived from SOFA.' },
+			{ name: 'ΔT polynomials', owner: 'Fred Espenak and Jean Meeus', url: 'https://eclipse.gsfc.nasa.gov/SEhelp/deltatpoly2004.html', use: 'Difference between TT and UT1 outside the historical record.', notice: 'Five Millennium Canon of Solar Eclipses, NASA/TP-2006-214141.' },
+			{ name: "Measurement of the Earth's rotation", owner: 'F. R. Stephenson, L. V. Morrison, and C. Y. Hohenkerk', url: 'https://doi.org/10.1098/rspa.2016.0404', use: 'Difference between TT and UT1 over history.', notice: 'Proc. R. Soc. A 472 (2016).' },
+			{ name: 'Rotational elements', owner: 'IAU Working Group on Cartographic Coordinates and Rotational Elements', url: 'https://doi.org/10.1007/s10569-017-9805-5', use: 'Rotation of the Moon and orientation of its surface.' },
+			{ name: 'Planetary magnitudes', owner: 'A. Mallama and J. L. Hilton', url: 'https://doi.org/10.1016/j.ascom.2018.08.002', use: 'Apparent magnitudes of the planets.', notice: 'Astronomy and Computing, 2018.' },
+			{ name: 'H-G magnitudes', owner: 'E. Bowell et al.', url: 'https://ui.adsabs.harvard.edu/abs/1989aste.conf..524B', use: 'Magnitude of asteroids with their phase angle.', notice: 'Asteroids II, 524 (1989).' },
+			{ name: 'Air mass formula', owner: 'F. Kasten and A. T. Young', url: 'https://doi.org/10.1364/AO.28.004735', use: 'Air mass in the Calculator.', notice: 'Applied Optics 28, 4735 (1989).' },
+			{ name: 'Refraction formula', owner: 'Thorsteinn Sæmundsson', url: 'https://en.wikipedia.org/wiki/Atmospheric_refraction', use: 'Refraction in the Calculator.', notice: 'Sky & Telescope 72, 70 (1986).' },
+			{ name: 'Improved Magnus approximation', owner: 'O. A. Alduchov and R. E. Eskridge', url: 'https://doi.org/10.1175/1520-0450(1996)035%3C0601:IMFAOS%3E2.0.CO;2', use: 'Frost point in the Calculator.', notice: 'Journal of Applied Meteorology 35, 601 (1996).' },
+			{ name: 'Resolution limits', owner: 'William R. Dawes and Lord Rayleigh', url: "https://en.wikipedia.org/wiki/Dawes'_limit", use: 'Resolving power of a telescope in the Calculator.' },
+			{ name: 'World coordinates in FITS', owner: 'E. W. Greisen and M. R. Calabretta', url: 'https://doi.org/10.1051/0004-6361:20021326', use: 'Reading and writing plate solutions.', notice: 'A&A, 2002.' },
+			{ name: 'SIP distortion convention', owner: 'D. L. Shupe et al.', url: 'https://fits.gsfc.nasa.gov/registry/sip/SIP_distortion_v1_0.pdf', use: 'Distortion of plate solutions.', notice: '2005.' },
+			{ name: 'TPOINT', owner: 'Patrick Wallace', url: 'https://www.tpointsw.uk/', use: 'Semi-physical terms of the mount pointing models.' },
+			{ name: 'PHD2', owner: 'Open PHD Guiding', url: 'https://openphdguiding.org/', use: 'Protocol and behavior the native guiding follows.' },
+			{ name: 'DARV', owner: 'Robert Vice', url: 'https://astrophotography.app/usersguide/darv.htm', use: 'Drift alignment method of the DARV camera operation.' },
+			{ name: 'Moffat profile', owner: 'A. F. J. Moffat', url: 'https://ui.adsabs.harvard.edu/abs/1969A%26A.....3..455M', use: 'Fits of the Star Profile Inspector.', notice: 'A&A 3, 455 (1969).' },
+			{ name: 'PixInsight', owner: 'Pleiades Astrophoto', url: 'https://pixinsight.com/', use: 'Adaptive display function, arcsinh stretch, and multiscale median transform the image tools follow.' },
+			{ name: 'Hough transform', owner: 'Paul V. C. Hough, R. O. Duda, and P. E. Hart', url: 'https://doi.org/10.1145/361237.361242', use: 'Streak detection and the trails of DARV.', notice: 'Communications of the ACM 15, 11 (1972).' },
+			{ name: 'Levenberg-Marquardt', owner: 'K. Levenberg and D. W. Marquardt', url: 'https://doi.org/10.1137/0111030', use: 'Nonlinear fits, such as star profiles and focus curves.', notice: 'Q. Appl. Math. 2, 164 (1944), and SIAM J. 11, 431 (1963).' },
+			{ name: 'Theil-Sen estimator', owner: 'Henri Theil and Pranab K. Sen', url: 'https://doi.org/10.1080/01621459.1968.10480934', use: 'Robust trend lines of Auto Focus and flat frames.', notice: 'JASA 63, 1379 (1968).' },
+			{ name: 'Robust weights', owner: 'P. J. Huber, A. E. Beaton, and J. W. Tukey', url: 'https://doi.org/10.1214/aoms/1177703732', use: 'Outlier rejection of the pointing model and DARV fits.', notice: 'Ann. Math. Stat. (1964), and Technometrics 16, 147 (1974).' },
+		],
+	},
+	{
 		title: 'External Programs',
 		credits: [
 			{ name: 'ASTAP', owner: 'Han Kleijn', url: 'https://www.hnsky.org/astap.htm', use: 'Optional plate solving and star detection, installed by you.' },
-			{ name: 'Astrometry.net', url: 'https://astrometry.net/', use: 'Optional local plate solving with solve-field, installed by you.' },
+			{ name: 'Astrometry.net', url: 'https://astrometry.net/', use: 'Optional local plate solving with solve-field, installed by you.', notice: 'Lang et al., The Astronomical Journal, 2010.' },
 		],
 	},
 ]

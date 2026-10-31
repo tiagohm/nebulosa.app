@@ -147,7 +147,7 @@ function CreditList({ group }: { readonly group: CreditGroup }) {
 			<h3 className="m-0 text-sm font-medium text-ink-100">{group.title}</h3>
 			<ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm leading-5">
 				{group.credits.map(({ name, owner, url, use, license, notice }) => (
-					<li key={name} className="min-w-0 wrap-break-word mt-1">
+					<li key={name} className="min-w-0 wrap-break-word mt-2">
 						<ExternalLink href={url}>{name}</ExternalLink>
 						{owner && <span className="text-ink-300"> · {owner}</span>}
 						<p className="m-0 text-ink-200">{use}</p>

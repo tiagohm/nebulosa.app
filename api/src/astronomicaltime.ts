@@ -96,6 +96,8 @@ export interface AstronomicalTimeResult {
 		readonly unixMillis?: number
 		// Whether the instant is inside an inserted leap second.
 		readonly leapSecond: boolean
+		// Whether the UTC day of the instant has a leap second, so JD(UTC) is on a stretched ERFA quasi-JD day.
+		readonly leapSecondDay: boolean
 	}
 	// The instant in each timescale.
 	readonly scales: Readonly<Record<TimeScaleName, TimeScaleReading>>
@@ -352,7 +354,7 @@ export class AstronomicalTimeService {
 		const terrestrial = tt(instant)
 
 		return {
-			civil: { local, offsetSeconds: offset / 1000, unixMillis: leapSecond ? undefined : unixMillis, leapSecond },
+			civil: { local, offsetSeconds: offset / 1000, unixMillis: leapSecond ? undefined : unixMillis, leapSecond, leapSecondDay: utcLeapSeconds(year, month, day) !== 0 },
 			scales: Object.fromEntries(Object.entries(TIME_SCALES).map(([name, scale]) => [name, scaleReading(instant, scale)])) as Record<TimeScaleName, TimeScaleReading>,
 			sidereal: { gmst: greenwichMeanSiderealTime(instant), gast: greenwichApparentSiderealTime(instant), lmst: location && localSiderealTime(instant, location, true), last },
 			offsets: {

@@ -146,6 +146,7 @@ describe('leap seconds', () => {
 			const { civil, scales, offsets } = await converted(service, utcCalendar(2016, 12, 31, 23, 59, 60), { timeZone: 'America/Sao_Paulo' })
 			expect(scales.UTC.calendar).toBe('2016-12-31T23:59:60.000')
 			expect(civil.leapSecond).toBeTrue()
+			expect(civil.leapSecondDay).toBeTrue()
 			expect(civil.unixMillis).toBeUndefined()
 			expect(civil.local).toBe('2016-12-31T21:59:60.000')
 			expect(scales.TAI.calendar).toBe('2017-01-01T00:00:36.000')

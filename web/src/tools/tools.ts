@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { ToolId } from '../shell/route'
 import type { IconName } from '../ui/Icon'
+import { AstronomicalTimeConverter } from './astronomicaltime/AstronomicalTimeConverter'
 import { Calculator } from './calculator/Calculator'
 import { LunarEclipseMap } from './lunareclipse/LunarEclipseMap'
 import { MountPointingModel } from './mountpointing/MountPointingModel'
@@ -33,6 +34,7 @@ export interface ToolDefinition {
 // Every standalone tool, by id.
 export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 	calculator: { id: 'calculator', label: 'Calculator', description: 'Field of view, image scale, sampling, and other observing calculations.', icon: 'calculator', view: Calculator },
+	'astronomical-time-converter': { id: 'astronomical-time-converter', label: 'Astronomical Time Converter', description: 'Civil time, Julian dates, timescales, sidereal time, and epochs of any instant.', icon: 'clock', view: AstronomicalTimeConverter },
 	'solar-eclipse-map': { id: 'solar-eclipse-map', label: 'Solar Eclipse Map', description: 'Path and local circumstances of solar eclipses.', icon: 'sun', view: SolarEclipseMap },
 	'lunar-eclipse-map': { id: 'lunar-eclipse-map', label: 'Lunar Eclipse Map', description: 'Visibility and local circumstances of lunar eclipses.', icon: 'moon', view: LunarEclipseMap },
 	'mount-remote-control': { id: 'mount-remote-control', label: 'Mount Remote Control', description: 'Lets planetarium programs drive the mount over the LX200 and Stellarium protocols.', icon: 'mount', view: MountRemoteControl },

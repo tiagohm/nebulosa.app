@@ -485,7 +485,6 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 					—
 				</span>
 			)}
-			<span className="pointer-events-none absolute bottom-1 right-1 text-[0.525rem] text-neutral-600 font-sans">Original image: https://w.wiki/eok8</span>
 		</div>
 	)
 }

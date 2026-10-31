@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { AboutInfo } from 'api'
 import { ApiResponseError } from '../http'
-import { type AboutIo, fetchAbout, versionInfoText } from './about'
+import { type AboutIo, CREDIT_GROUPS, fetchAbout, versionInfoText } from './about'
 
 const INFO: AboutInfo = { description: 'Astronomical imaging application', version: '0.1.0', commit: 'abc123', coreCommit: 'def456', builtAt: '2026-10-27T12:00:00.000Z', runtime: 'Bun 1.4.0', platform: 'linux/x64' }
 
@@ -30,6 +30,27 @@ describe('fetch', () => {
 		const error = await fetchAbout(io).catch((e: unknown) => e)
 		expect(error).toBeInstanceOf(ApiResponseError)
 		expect(error).toMatchObject({ message: 'Boom', status: 500 })
+	})
+})
+
+describe('credits', () => {
+	const credits = CREDIT_GROUPS.flatMap((group) => group.credits)
+
+	test('each one names its use, with a secure link', () => {
+		for (const { url, use, license } of credits) {
+			expect(use).not.toBe('')
+			expect(url).toStartWith('https://')
+			if (license) expect(license.url).toStartWith('https://')
+		}
+	})
+
+	test('no work is credited twice', () => {
+		expect(new Set(credits.map((credit) => credit.name)).size).toBe(credits.length)
+	})
+
+	test('the services of the server are credited', () => {
+		const urls = credits.map((credit) => credit.url).join(' ')
+		for (const host of ['open-meteo.com', '7timer.info', 'ssd-api.jpl.nasa.gov', 'ssp.imcce.fr', 'sdo.gsfc.nasa.gov', 'swpc.noaa.gov', 'iers.org', 'nova.astrometry.net']) expect(urls).toContain(host)
 	})
 })
 

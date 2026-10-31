@@ -3,11 +3,11 @@ import { type ReactNode, useEffect, useState } from 'react'
 import logo from '../../assets/nebulosa.ico'
 import { copyText } from '../clipboard'
 import { Button } from '../ui/Button'
-import { APP_REPOSITORY_URL, aboutFields, browserAboutIo, CORE_REPOSITORY_URL, fetchAbout, LICENSE_URL, NOT_AVAILABLE, versionInfoText } from './about'
+import { APP_REPOSITORY_URL, aboutFields, browserAboutIo, CORE_REPOSITORY_URL, CREDIT_GROUPS, type CreditGroup, fetchAbout, LICENSE_URL, NOT_AVAILABLE, versionInfoText } from './about'
 
 // About page (the button at the bottom of the navigation rail): the identity of the application, the version and
-// build of the distribution the server runs, fetched once when the page opens, and the author, license, and
-// repositories of the project, shown even when the server cannot be reached. It changes no state of the server.
+// build of the distribution the server runs, fetched once when the page opens, and the author, license, repositories,
+// and credits of the project, shown even when the server cannot be reached. It changes no state of the server.
 
 // Number of leading hexadecimal digits shown of a commit; the full commit is its tooltip.
 const SHORT_COMMIT_LENGTH = 12
@@ -108,6 +108,13 @@ export function AboutPage() {
 							</dd>
 						</dl>
 					</AboutSection>
+
+					<AboutSection title="Credits">
+						<p className="m-0 text-sm text-ink-200">Nebulosa stands on the work of these organizations and projects, which neither run nor endorse it. Each keeps its own terms.</p>
+						{CREDIT_GROUPS.map((group) => (
+							<CreditList key={group.title} group={group} />
+						))}
+					</AboutSection>
 				</div>
 			</div>
 		</section>
@@ -129,6 +136,32 @@ function AboutSection({ title, children }: AboutSectionProps) {
 			<h2 className="m-0 text-xs font-semibold tracking-wide text-ink-200 uppercase">{title}</h2>
 			{children}
 		</section>
+	)
+}
+
+// Credits of one kind of work: each name links to the work, followed by who publishes it, what it is used for, and the license
+// and acknowledgment its publisher states.
+function CreditList({ group }: { readonly group: CreditGroup }) {
+	return (
+		<div className="flex flex-col gap-2">
+			<h3 className="m-0 text-sm font-medium text-ink-100">{group.title}</h3>
+			<ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm leading-5">
+				{group.credits.map(({ name, owner, url, use, license, notice }) => (
+					<li key={name} className="min-w-0 wrap-break-word mt-1">
+						<ExternalLink href={url}>{name}</ExternalLink>
+						{owner && <span className="text-ink-300"> · {owner}</span>}
+						<p className="m-0 text-ink-200">{use}</p>
+						{(license ?? notice) && (
+							<p className="m-0 text-xs leading-4 text-ink-300">
+								{license && <ExternalLink href={license.url}>{license.name}</ExternalLink>}
+								{license && notice && ' · '}
+								{notice}
+							</p>
+						)}
+					</li>
+				))}
+			</ul>
+		</div>
 	)
 }
 

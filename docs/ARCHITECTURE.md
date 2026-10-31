@@ -638,6 +638,8 @@ The preferences of the status bar (version 19) are kept in `ProfileSettings.stat
 
 The preferences of Close Approaches (version 20) are kept in `ProfileSettings.closeApproaches` (`closeApproachPreferences`, `setCloseApproachPreferences`, defaults `DEFAULT_CLOSE_APPROACH_PREFERENCES`: LD, UTC, Earth, 10 LD), every invalid field restored to its default: the units and zone shown, and the target and distance of the last search that ran, which a new tab starts from. Results, selection, and dates are tab memory.
 
+The preferences of Astro Weather (version 21) are kept in `ProfileSettings.astroWeather` (`astroWeatherPreferences`, `setAstroWeatherPreferences`, defaults `DEFAULT_ASTRO_WEATHER_PREFERENCES`: Visual), an invalid mode restored to its default: only the observing mode chosen last. Forecasts, sites typed in, and the night shown are tab memory.
+
 The notifications a profile read or dismissed (version 13) are kept in `ProfileSettings.notifications` as lists of notification ids (`markNotificationsRead`, `dismissNotifications`), since the server keeps one history for every browser and never stores read states. Each refresh of the history drops from every profile the ids the server no longer retains (`pruneNotificationPreferences`), so each list holds at most the 500 retained ids; read states are never synchronized between browsers.
 
 Version 14 stored an observatory code for the solar-system searches of Images → Annotation (`annotation`), removed since: the searches use the site of the image header. A stored code is ignored when read, and the version stays 14.

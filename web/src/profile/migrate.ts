@@ -31,10 +31,13 @@ import {
 	type SkySettings,
 	type StatusBarPreferences,
 	CLOSE_APPROACH_BODIES,
+	ASTRO_WEATHER_MODES,
+	type AstroWeatherPreferences,
 	CLOSE_APPROACH_DISTANCE_DISPLAYS,
 	CLOSE_APPROACH_DISTANCE_UNITS,
 	CLOSE_APPROACH_TIME_DISPLAYS,
 	type CloseApproachPreferences,
+	DEFAULT_ASTRO_WEATHER_PREFERENCES,
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 	DARV_MAXIMUM_LEG_DURATION,
 	DARV_MINIMUM_LEG_DURATION,
@@ -703,6 +706,13 @@ function normalizeCloseApproaches(value: unknown): CloseApproachPreferences | un
 	}
 }
 
+// Restores the persisted preferences of the Astro Weather tool (version 21), filling every invalid field with its default.
+// Undefined for anything that is not a record.
+function normalizeAstroWeather(value: unknown): AstroWeatherPreferences | undefined {
+	if (!isRecord(value)) return undefined
+	return { mode: oneOf(value.mode, ASTRO_WEATHER_MODES) ? value.mode : DEFAULT_ASTRO_WEATHER_PREFERENCES.mode }
+}
+
 // Restores persisted preferences, falling back to the default of every missing or invalid preference.
 function normalizeSettings(value: unknown): ProfileSettings {
 	const settings = defaultSettings()
@@ -745,6 +755,8 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	if (statusBar) settings.statusBar = statusBar
 	const closeApproaches = normalizeCloseApproaches(value.closeApproaches)
 	if (closeApproaches) settings.closeApproaches = closeApproaches
+	const astroWeather = normalizeAstroWeather(value.astroWeather)
+	if (astroWeather) settings.astroWeather = astroWeather
 
 	return settings
 }
@@ -894,7 +906,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 17:
 		case 18:
 		case 19:
-		case 20: {
+		case 20:
+		case 21: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

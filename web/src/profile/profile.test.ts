@@ -16,7 +16,9 @@ import {
 	ACTIVE_PROFILE_KEY,
 	activeProfile,
 	astronomicalClockPreferences,
+	astroWeatherPreferences,
 	closeApproachPreferences,
+	setAstroWeatherPreferences,
 	setCloseApproachPreferences,
 	setAstronomicalClockPreferences,
 	activeSetup,
@@ -106,6 +108,7 @@ import {
 	FRAMING_REFERENCES_MAXIMUM,
 	type FramingReference,
 	PROFILES_VERSION,
+	DEFAULT_ASTRO_WEATHER_PREFERENCES,
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 } from './schema'
 
@@ -1093,6 +1096,29 @@ describe('camera forms', () => {
 		expect(stored({ distanceDisplay: 'parsec', timeDisplay: 1, body: 'Vulcan', distanceMax: -1, distanceUnit: 'km' })).toEqual(DEFAULT_CLOSE_APPROACH_PREFERENCES)
 		expect(stored({ distanceDisplay: 'au', timeDisplay: 'observer', body: 'ALL', distanceMax: 0.05, distanceUnit: 'au' })).toEqual({ distanceDisplay: 'au', timeDisplay: 'observer', body: 'ALL', distanceMax: 0.05, distanceUnit: 'au' })
 		expect(stored('x')).toEqual(DEFAULT_CLOSE_APPROACH_PREFERENCES)
+	})
+
+	test('the mode of Astro Weather is kept in the profile', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(astroWeatherPreferences(activeProfile(state).settings)).toEqual(DEFAULT_ASTRO_WEATHER_PREFERENCES)
+
+		setAstroWeatherPreferences(state, { mode: 'planetary' })
+		await Bun.sleep(0)
+		expect(astroWeatherPreferences(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual({ mode: 'planetary' })
+	})
+
+	test('a version 20 document gets the default mode of Astro Weather, and an invalid one is restored', () => {
+		const stored = (version: number, settings: object) => {
+			const stores = newStores()
+			stores.local.setItem(PROFILES_KEY, JSON.stringify({ version, profiles: [{ id: 'a', name: 'A', settings }] }))
+			return load(stores).profiles[0].settings
+		}
+
+		expect(stored(20, {}).astroWeather).toBeUndefined()
+		expect(astroWeatherPreferences(stored(20, {}))).toEqual(DEFAULT_ASTRO_WEATHER_PREFERENCES)
+		expect(astroWeatherPreferences(stored(21, { astroWeather: { mode: 'solar' } }))).toEqual(DEFAULT_ASTRO_WEATHER_PREFERENCES)
+		expect(astroWeatherPreferences(stored(21, { astroWeather: { mode: 'deepSky' } }))).toEqual({ mode: 'deepSky' })
 	})
 
 	test('a version 14 document keeps its preferences and ignores the observatory code it stored', () => {

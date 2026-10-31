@@ -27,7 +27,9 @@ import {
 	type Profile,
 	type ProfileSettings,
 	PROFILES_VERSION,
+	type AstroWeatherPreferences,
 	type CloseApproachPreferences,
+	DEFAULT_ASTRO_WEATHER_PREFERENCES,
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 	type ProfilesStorage,
 	type SkyFramingSettings,
@@ -520,6 +522,18 @@ export function closeApproachPreferences(settings: Pick<ProfileSettings, 'closeA
 export function setCloseApproachPreferences(state: ProfileState, patch: Partial<CloseApproachPreferences>) {
 	const profile = activeProfile(state)
 	profile.settings.closeApproaches = { ...closeApproachPreferences(profile.settings), ...patch }
+	touch(profile)
+}
+
+// Returns the preferences of the Astro Weather tool of a profile.
+export function astroWeatherPreferences(settings: Pick<ProfileSettings, 'astroWeather'>): AstroWeatherPreferences {
+	return settings.astroWeather ?? DEFAULT_ASTRO_WEATHER_PREFERENCES
+}
+
+// Changes the preferences of the Astro Weather tool of the active profile.
+export function setAstroWeatherPreferences(state: ProfileState, patch: Partial<AstroWeatherPreferences>) {
+	const profile = activeProfile(state)
+	profile.settings.astroWeather = { ...astroWeatherPreferences(profile.settings), ...patch }
 	touch(profile)
 }
 

@@ -26,9 +26,9 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // (tppa.solver) to the plate solving settings each camera shares between its operations (plateSolving), and adds the
 // Pointing Model Builder form of each camera (pointingModel). Version 17 adds the Target Centering form of each camera
 // (targetCentering) and the saved framings of the profile (framingReferences). Version 18 adds the settings of the Star
-// Profile Inspector (starProfile), version 19 the preferences of the status bar (statusBar), and version 20 those of the
-// Close Approaches tool (closeApproaches).
-export const PROFILES_VERSION = 20
+// Profile Inspector (starProfile), version 19 the preferences of the status bar (statusBar), version 20 those of the
+// Close Approaches tool (closeApproaches), and version 21 those of the Astro Weather tool (astroWeather).
+export const PROFILES_VERSION = 21
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -81,7 +81,25 @@ export interface ProfileSettings {
 	// Preferences of the Close Approaches tool; absent until edited, and then DEFAULT_CLOSE_APPROACH_PREFERENCES holds. The
 	// results, the selection, and the dates of a search are never stored.
 	closeApproaches?: CloseApproachPreferences
+	// Preferences of the Astro Weather tool; absent until edited, and then DEFAULT_ASTRO_WEATHER_PREFERENCES holds. Forecasts,
+	// sites typed in, and the night shown are never stored.
+	astroWeather?: AstroWeatherPreferences
 }
+
+// Observing modes of the Astro Weather tool, in the order offered.
+export const ASTRO_WEATHER_MODES = ['visual', 'deepSky', 'planetary'] as const
+
+// Observing mode of the Astro Weather tool: how a forecast is read, never what it holds.
+export type AstroWeatherMode = (typeof ASTRO_WEATHER_MODES)[number]
+
+// Preferences of the Astro Weather tool.
+export interface AstroWeatherPreferences {
+	// Observing mode chosen last.
+	readonly mode: AstroWeatherMode
+}
+
+// Preferences of a profile that has not edited them.
+export const DEFAULT_ASTRO_WEATHER_PREFERENCES: AstroWeatherPreferences = { mode: 'visual' }
 
 // Target bodies of the Close Approaches tool, in the order offered, every body last.
 export const CLOSE_APPROACH_BODIES: readonly CloseApproachBody[] = ['Earth', 'Moon', 'Merc', 'Venus', 'Mars', 'Juptr', 'Satrn', 'Urnus', 'Neptn', 'Pluto', 'ALL']

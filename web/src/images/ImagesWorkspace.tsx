@@ -258,7 +258,6 @@ export function ImagesWorkspace() {
 						}
 						status={solution ? (cursor) => <WcsCursorStatus solution={solution} cursor={cursor} style={astrometry.coordinates} /> : undefined}
 						interaction={astrometryTool.interaction}
-						crosshair={!!solution}
 						onImageContextMenu={
 							solution && document && imageInfo
 								? (point, client) => {

@@ -10,10 +10,6 @@ import type { OverlayView, Point } from './transform'
 // Interaction of a tool with the viewer, in image coordinates and the current view. The viewer stays unaware of what
 // the tool does: it only hands it the presses it takes, and keeps zoom and pan otherwise.
 export interface ViewerInteraction {
-	// Pointer shown over the image while the interaction is active, Space is not held, and the viewer is not asked for a
-	// crosshair anyway: a crosshair to draw, the arrow, or the open hand of the pan for a tool that takes only some
-	// presses and leaves the rest to the pan.
-	readonly cursor: 'crosshair' | 'default' | 'grab'
 	// Called on the first pointer of a press; returns whether the tool takes the gesture, otherwise the viewer pans.
 	readonly onPointerDown: (point: Point, view: OverlayView) => boolean
 	// Called as the pointer moves during a gesture the tool took, and as a mouse hovers without any button pressed.
@@ -65,6 +61,12 @@ export interface GestureStep {
 
 // Gesture when no pointer is pressed.
 export const IDLE_GESTURE: GestureState = { pressed: [] }
+
+// Returns whether a gesture is dragging the image: a press of the pan that left the click tolerance, so a click never
+// counts as one.
+export function isPanning({ owner, press }: GestureState): boolean {
+	return owner === 'pan' && press === undefined
+}
 
 // Returns the gesture after a pointer event and what the viewer does for it; tolerance is the distance in CSS pixels a
 // press may move and still be a click.

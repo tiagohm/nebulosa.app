@@ -77,7 +77,6 @@ export function useAstrometryTool(options: AstrometryToolOptions): AstrometryToo
 		const inside = (point: Point) => (latest.current.image ? clampToImage(point, latest.current.image) : point)
 
 		return {
-			cursor: drawing ? 'crosshair' : 'grab',
 			onPointerDown(point, view) {
 				const { documentKey, imageId, astrometry, mode } = latest.current
 				if (!documentKey || !imageId || !astrometry) return false
@@ -106,7 +105,7 @@ export function useAstrometryTool(options: AstrometryToolOptions): AstrometryToo
 				if (documentKey && astrometry?.selected) removeAstrometryItem(imagesState, documentKey, astrometry.selected)
 			},
 		}
-	}, [drawing])
+	}, [])
 
 	const measureFrom = (point: Point) => {
 		const { imageId, image } = latest.current

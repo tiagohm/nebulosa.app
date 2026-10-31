@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type GestureEvent, type GestureState, IDLE_GESTURE, routeGesture } from './interaction'
+import { type GestureEvent, type GestureState, IDLE_GESTURE, isPanning, routeGesture } from './interaction'
 
 const TOLERANCE = 4
 
@@ -52,6 +52,33 @@ describe('pan', () => {
 
 	test('moves without a press are hovers', () => {
 		expect(run([{ type: 'move', id: 1, at: at(0) }]).effects).toEqual(['hover'])
+	})
+})
+
+describe('dragging', () => {
+	const down: GestureEvent = { type: 'down', id: 1, at: at(0), tool: false }
+
+	test('a press is not a drag until it leaves the tolerance, and a release ends it', () => {
+		expect(isPanning(IDLE_GESTURE)).toBeFalse()
+		expect(isPanning(run([down]).state)).toBeFalse()
+		expect(isPanning(run([down, { type: 'move', id: 1, at: at(TOLERANCE) }]).state)).toBeFalse()
+		expect(isPanning(run([down, { type: 'move', id: 1, at: at(TOLERANCE + 1) }]).state)).toBeTrue()
+		expect(isPanning(run([down, { type: 'move', id: 1, at: at(TOLERANCE + 1) }, { type: 'up', id: 1 }]).state)).toBeFalse()
+	})
+
+	test('a press the tool took never drags the image', () => {
+		expect(
+			isPanning(
+				run([
+					{ ...down, tool: true },
+					{ type: 'move', id: 1, at: at(50) },
+				]).state,
+			),
+		).toBeFalse()
+	})
+
+	test('a pinch does not drag the image', () => {
+		expect(isPanning(run([down, { type: 'down', id: 2, at: at(10), tool: false }]).state)).toBeFalse()
 	})
 })
 

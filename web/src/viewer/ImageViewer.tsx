@@ -1,7 +1,7 @@
 import { cn } from 'cn'
 import { type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { IconButton } from '../ui/IconButton'
-import { type GestureEvent, type GestureState, IDLE_GESTURE, routeGesture, type ViewerInteraction } from './interaction'
+import { type GestureEvent, type GestureState, IDLE_GESTURE, isPanning, routeGesture, type ViewerInteraction } from './interaction'
 import { centered, FIT_VIEW, manualView, type OverlayView, panBy, type Point, pixelAt, type Size, toImage, type ViewerView, type ViewTransform, viewTransform, visibleRegion, ZOOM_STEP, zoomAt } from './transform'
 
 // Reusable image viewer: a toolbar, a viewport with zoom, pan, overlays, and clicks on the image, and a status line. It
@@ -11,6 +11,8 @@ import { centered, FIT_VIEW, manualView, type OverlayView, panBy, type Point, pi
 // so it survives switching between subjects and unmounting the viewer. A tool may take presses through an
 // interaction (interaction.ts routes each gesture to the pan, a pinch, or the tool), read the cursor in its overlays
 // and in the status line, and handle the context menu of the image; Space held on the focused viewport always pans.
+// The pointer over the image is a crosshair, since any point of it can be clicked, read, or drawn from, and the hand of
+// the pan only while the image is being dragged or Space is held.
 
 // Pointer over the image.
 export interface ViewerCursor {
@@ -55,9 +57,6 @@ export interface ImageViewerProps {
 	readonly onImageClick?: (point: Point, view: OverlayView) => void
 	// Tool that takes presses over the image; the viewer pans the presses it declines.
 	readonly interaction?: ViewerInteraction
-	// Whether the pointer over the image is a crosshair whatever the interaction, for an image whose every point is
-	// read, such as a solved one; Space held still shows the open hand of the pan.
-	readonly crosshair?: boolean
 	// Called on a context menu request over the image (a right click, or a long press on touch devices), with its image
 	// point, its client position in CSS pixels, and the current view; returns whether it was handled, which keeps the
 	// browser's own menu from opening.
@@ -78,7 +77,7 @@ const WHEEL_ZOOM_RATE = 0.0015
 const CLICK_TOLERANCE = 4
 
 // Image viewer.
-export function ImageViewer({ image, loading = false, error, empty, view, onViewChange, overlays, onImageClick, interaction, crosshair = false, onImageContextMenu, status, toolbar }: ImageViewerProps) {
+export function ImageViewer({ image, loading = false, error, empty, view, onViewChange, overlays, onImageClick, interaction, onImageContextMenu, status, toolbar }: ImageViewerProps) {
 	const viewportRef = useRef<HTMLDivElement>(null)
 	const [viewport, setViewport] = useState<Size>({ width: 0, height: 0 })
 	// Pointer position over the viewport, in viewport pixels; the pixel under it follows zoom and pan.
@@ -93,6 +92,8 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 	const gesture = useRef<GestureState>(IDLE_GESTURE)
 	// Whether Space is held on the viewport, which pans whatever the interaction.
 	const [spaceHeld, setSpaceHeld] = useState(false)
+	// Whether the gesture in progress is dragging the image.
+	const [panning, setPanning] = useState(false)
 	const width = image?.width ?? 0
 	const height = image?.height ?? 0
 	const transform = viewTransform(view, { width, height }, viewport)
@@ -167,6 +168,7 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 	function route(e: PointerEvent<HTMLDivElement>, event: GestureEvent) {
 		const step = routeGesture(gesture.current, event, CLICK_TOLERANCE)
 		gesture.current = step.state
+		setPanning(isPanning(step.state))
 		const { interaction, onImageClick } = latest.current
 
 		switch (step.effect) {
@@ -295,7 +297,6 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 	const pointed = image && cursor ? toImage(transform, cursor) : undefined
 	const pixel = pointed && pixelAt({ width, height }, pointed)
 	const viewerCursor: ViewerCursor | undefined = pointed && cursor && { image: pointed, ...(pixel && { pixel }), viewport: cursor }
-	const pointer = spaceHeld ? 'grab' : crosshair ? 'crosshair' : (interaction?.cursor ?? 'grab')
 	const fitted = view.kind === 'fit'
 
 	return (
@@ -321,11 +322,7 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 				onKeyDown={handleKeyDown}
 				onKeyUp={handleKeyUp}
 				onBlur={() => setSpaceHeld(false)}
-				className={
-					image
-						? cn('relative min-h-0 flex-1 touch-none overflow-hidden outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', pointer === 'grab' ? 'cursor-grab active:cursor-grabbing' : pointer === 'crosshair' ? 'cursor-crosshair' : 'cursor-default')
-						: 'relative min-h-0 flex-1 overflow-hidden'
-				}
+				className={image ? cn('relative min-h-0 flex-1 touch-none overflow-hidden outline-none select-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', spaceHeld || panning ? 'cursor-grab' : 'cursor-crosshair') : 'relative min-h-0 flex-1 overflow-hidden'}
 			>
 				{image && (
 					<div className="absolute top-0 left-0 origin-top-left" style={{ width, height, transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})` }}>

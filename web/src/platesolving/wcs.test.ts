@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { arcsec, deg, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
-import { fitsToViewer, pixelScaleAt, pointAt, skyAt, skyDirections, skyOffset, viewerToFits, wcsFrame } from './wcs'
+import { fitsToViewer, isotropicPixelScaleAt, pixelScaleAt, pointAt, skyAt, skyDirections, skyOffset, viewerToFits, wcsFrame } from './wcs'
 
 // A TAN solution of a 200×100 image centred at its CRPIX, scale s degrees per pixel, rotated by angle (degrees) and
 // mirrored when flipped. Standard orientation (angle 0, not flipped) has east towards -X and north towards +Y.
@@ -146,6 +146,14 @@ describe('pixel scale', () => {
 		const right = pixelScaleAt(header, { x: 180, y: 50 })!
 
 		expect(right).toBeGreaterThan(left * 1.1)
+	})
+
+	test('stands for both axes of a TAN solution, and not of one stretched along an axis', () => {
+		const header = solution(42, -17, { angle: 61, flipped: true })
+		const point = { x: 100, y: 50 }
+
+		expect(isotropicPixelScaleAt(header, point)).toBe(pixelScaleAt(header, point))
+		expect(isotropicPixelScaleAt({ ...header, CD1_1: Number(header.CD1_1) * 1.5, CD2_1: Number(header.CD2_1) * 1.5 }, point)).toBeUndefined()
 	})
 })
 

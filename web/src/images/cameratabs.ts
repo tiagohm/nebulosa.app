@@ -5,7 +5,7 @@ import { jsonInit, responseError } from '../http'
 import { adaptView } from '../viewer/transform'
 import { type CaptureFramesState, captureFrameUrl, frameSourceKey } from './captureframes'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
-import { applyingSettings, browserIo, copySettings, documentOf, type ImageDocument, type ImagesIo, type ImagesState, type ImageToolContext, type ImageViewState, initialDisplaySettings, message, newView, releaseLease, removeDocument, requestRendering, settleApplying } from './images'
+import { applyingSettings, browserIo, clearStarProfile, copySettings, documentOf, type ImageDocument, type ImagesIo, type ImagesState, type ImageToolContext, type ImageViewState, initialDisplaySettings, message, newView, releaseLease, removeDocument, requestRendering, settleApplying } from './images'
 
 // Camera tabs of the Images workspace. Every connected camera of the watched connection has a camera tab, created and
 // removed with the camera and never closed by the operator. A camera tab shows one frame of the server's capture frame
@@ -249,6 +249,7 @@ export async function showCameraFrame(state: ImagesState, key: string, frameId: 
 	}
 
 	committed.stars.selected = undefined
+	clearStarProfile(committed)
 	committed.streaks.selected = undefined
 	committed.annotation.selected = undefined
 	committed.plateSolving.selected = undefined

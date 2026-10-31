@@ -3,7 +3,7 @@ import { proxy, snapshot } from 'valtio'
 import type { Stores } from '../storage'
 import { MemoryStorage } from '../storage.memory'
 // oxfmt-ignore
-import { DEFAULT_AUTO_FOCUS_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DARV_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_MOUNT_REMOTE_BINDINGS, DEFAULT_TPPA_SETTINGS, DEFAULT_TARGET_CENTERING_SETTINGS, FRAMING_REFERENCES_MAXIMUM, type FramingReference, PROFILES_VERSION } from './schema'
+import { DEFAULT_STAR_PROFILE_SETTINGS } from '../stars/starprofile.settings'
 import type { DisplaySettings } from 'api'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
 import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
@@ -70,6 +70,8 @@ import {
 	setGuideTelescopeOptics,
 	setTelescopeOptics,
 	starDetectionSettings,
+	starProfileSettings,
+	setStarProfileSettings,
 	streakDetectionSettings,
 	updateOpticalPreset,
 	imageDisplaySettings,
@@ -84,6 +86,22 @@ import {
 	setTargetCenteringSettings,
 	targetCenteringSettings,
 } from './profile'
+import {
+	DEFAULT_AUTO_FOCUS_SETTINGS,
+	DEFAULT_CAMERA_PLATE_SOLVING,
+	DEFAULT_EXPOSURE_SETTINGS,
+	DEFAULT_ACQUISITION_SETTINGS,
+	DEFAULT_DARV_SETTINGS,
+	DEFAULT_FLAT_WIZARD_FILTER,
+	DEFAULT_FLAT_WIZARD_SETTINGS,
+	DEFAULT_GUIDING_SETTINGS,
+	DEFAULT_MOUNT_REMOTE_BINDINGS,
+	DEFAULT_TPPA_SETTINGS,
+	DEFAULT_TARGET_CENTERING_SETTINGS,
+	FRAMING_REFERENCES_MAXIMUM,
+	type FramingReference,
+	PROFILES_VERSION,
+} from './schema'
 
 function dev(id: string) {
 	return { id, name: `${id} name` }
@@ -918,6 +936,20 @@ describe('camera forms', () => {
 		const invalid = newStores()
 		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 4, profiles: [{ id: 'a', name: 'A', settings: { starDetection: { detector: { provider: 'builtin', maximumRadius: 2 } } } }] }))
 		expect(starDetectionSettings(load(invalid).profiles[0].settings)).toEqual(DEFAULT_STAR_REQUEST)
+	})
+
+	test('the Star Profile Inspector settings are the profile ones, persisted and restored with defaults for invalid fields', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(starProfileSettings(activeProfile(state).settings)).toEqual(DEFAULT_STAR_PROFILE_SETTINGS)
+
+		setStarProfileSettings(state, { model: 'moments', minSNR: 3, grid: false })
+		await Bun.sleep(0)
+		expect(starProfileSettings(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual({ ...DEFAULT_STAR_PROFILE_SETTINGS, model: 'moments', minSNR: 3, grid: false })
+
+		const invalid = newStores()
+		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 17, profiles: [{ id: 'a', name: 'A', settings: { starProfile: { model: 'gaussian', searchRadius: 1000, maximumRadius: 2, minSNR: -1, grid: 'yes' } } }] }))
+		expect(starProfileSettings(load(invalid).profiles[0].settings)).toEqual(DEFAULT_STAR_PROFILE_SETTINGS)
 	})
 
 	test('the streak detector settings are the profile ones, persisted and restored with defaults for invalid fields', async () => {

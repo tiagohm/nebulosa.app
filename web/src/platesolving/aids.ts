@@ -1,7 +1,7 @@
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
 import type { OverlayView, Point, Rect, Size } from '../viewer/transform'
-import { skyAt } from './wcs'
+import { MAX_ANISOTROPY, skyAt } from './wcs'
 
 // Geometry of the passive astrometric aids drawn over a solved image, in viewer coordinates (image pixels): the
 // angular scale bar, measured through the WCS where it is drawn, and the anchor of the compact north and east arrows
@@ -16,9 +16,6 @@ const SCALE_BAR_LENGTH = [60, 180] as const
 
 // Distance of the scale bar from the bottom-left corner of the visible image, in screen pixels.
 const SCALE_BAR_INSET = 24
-
-// Largest relative difference between the scales along the two image axes for a single bar to stand for both.
-const MAX_ANISOTROPY = 0.1
 
 // Bisection steps of the end of the scale bar.
 const BISECTION_STEPS = 32

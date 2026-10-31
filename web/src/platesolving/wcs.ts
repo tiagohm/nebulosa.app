@@ -13,6 +13,9 @@ import type { Point } from '../viewer/transform'
 // rotation, parity, and distortion of the solution. Sky positions are in the frame of the solution (ICRS, or FK5 J2000
 // for a header that says so), never of date.
 
+// Largest relative difference between the scales along the two image axes for a single scale to stand for both.
+export const MAX_ANISOTROPY = 0.1
+
 // Equatorial unit vector.
 type UnitVector = readonly [number, number, number]
 
@@ -133,16 +136,34 @@ function pointAlong(solution: FitsHeader, position: UnitVector, tangent: UnitVec
 	return pointAt(solution, Math.atan2(y, x), Math.atan2(z, Math.hypot(x, y)))
 }
 
-// Returns the angle one image pixel spans at a viewer point, radians per pixel: the mean separation of its neighbours
-// one pixel to the right and one below, so it follows the local distortion of the solution; undefined when they cannot
-// be unprojected.
-export function pixelScaleAt(solution: FitsHeader, point: Point): number | undefined {
+// Returns the separation from a viewer point to its neighbours one pixel to the right and one below, radians per pixel;
+// undefined when they cannot be unprojected.
+function axisScalesAt(solution: FitsHeader, point: Point): readonly [number, number] | undefined {
 	const a = skyAt(solution, point)
 	const b = skyAt(solution, { x: point.x + 1, y: point.y })
 	const c = skyAt(solution, { x: point.x, y: point.y + 1 })
 	if (!a || !b || !c) return undefined
-	const step = (sphericalSeparation(a[0], a[1], b[0], b[1]) + sphericalSeparation(a[0], a[1], c[0], c[1])) / 2
+	return [sphericalSeparation(a[0], a[1], b[0], b[1]), sphericalSeparation(a[0], a[1], c[0], c[1])]
+}
+
+// Returns the angle one image pixel spans at a viewer point, radians per pixel: the mean separation of its neighbours
+// one pixel to the right and one below, so it follows the local distortion of the solution; undefined when they cannot
+// be unprojected.
+export function pixelScaleAt(solution: FitsHeader, point: Point): number | undefined {
+	const scales = axisScalesAt(solution, point)
+	if (!scales) return undefined
+	const step = (scales[0] + scales[1]) / 2
 	return step > 0 ? step : undefined
+}
+
+// Returns the pixel scale of pixelScaleAt when a single scale stands for both image axes there, undefined when they
+// differ by more than MAX_ANISOTROPY, so a width in pixels is only converted to an angle when its direction does not
+// matter.
+export function isotropicPixelScaleAt(solution: FitsHeader, point: Point): number | undefined {
+	const scales = axisScalesAt(solution, point)
+	if (!scales) return undefined
+	const step = (scales[0] + scales[1]) / 2
+	return step > 0 && Math.abs(scales[0] - scales[1]) <= MAX_ANISOTROPY * step ? step : undefined
 }
 
 // Returns the unit vector from a point towards another one; undefined when there is none.

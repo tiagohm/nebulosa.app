@@ -4,6 +4,7 @@ import type { ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
 import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } from '../sky/framing'
+import type { StarProfileSettings } from '../stars/starprofile.settings'
 
 // Persisted format of the profiles: what a profile holds, the defaults of its preferences and camera forms, and the
 // version of the format. Profiles hold selections and preferences only, never operational device state.
@@ -24,8 +25,9 @@ import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } fro
 // of the astrometric aids of solved images (imageAstrometry). Version 16 moves the plate solver of the TPPA form
 // (tppa.solver) to the plate solving settings each camera shares between its operations (plateSolving), and adds the
 // Pointing Model Builder form of each camera (pointingModel). Version 17 adds the Target Centering form of each camera
-// (targetCentering) and the saved framings of the profile (framingReferences).
-export const PROFILES_VERSION = 17
+// (targetCentering) and the saved framings of the profile (framingReferences). Version 18 adds the settings of the Star
+// Profile Inspector (starProfile).
+export const PROFILES_VERSION = 18
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -46,6 +48,9 @@ export interface ProfileSettings {
 	// Star detection request edited in Images → Star Detection, shared by every document and by the frames of Auto
 	// Focus; absent until edited, and then DEFAULT_STAR_REQUEST holds.
 	starDetection?: StarDetectionRequest
+	// Settings of the Star Profile Inspector, shared by every document; absent until edited, and then
+	// DEFAULT_STAR_PROFILE_SETTINGS holds. The stars it measured are never stored.
+	starProfile?: StarProfileSettings
 	// Streak detector settings edited in Images → Streak Detection, shared by every document; absent until edited, and
 	// then DEFAULT_STREAK_SETTINGS holds. The context jobs of a detection are chosen per document, never stored here.
 	streakDetection?: StreakDetectorSettings

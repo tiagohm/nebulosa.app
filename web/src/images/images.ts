@@ -1,4 +1,4 @@
-import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveFormat, SaveRequest, SaveResult, Stretch } from 'api'
+import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveFormat, SaveRequest, SaveResult, StarProfileRequest, StarProfileResult, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { deviceState } from '../equipment/equipment'
@@ -34,6 +34,7 @@ import type { ImageToolId } from './tools'
 //
 // The star detection of a document keeps how its markers are shown; its request is the profile's, shared by every
 // document and sent only by Run Detection. Neither zoom, pan, display settings, nor the markers ever run a detection.
+// The Star Profile Inspector keeps the latest star measured here too, so it leaves with the document or its frame.
 //
 // A derived image, computed by an image processing pipeline (imageprocessing.ts), opens as a new document that is
 // unsaved until a save of its pixels (FITS or XISF) to a server file succeeds; the page asks before unloading while
@@ -114,6 +115,25 @@ export interface ImageStreaksState {
 	useStars: boolean
 	// Selected streak: its index in the result of a job, which only counts while that result is shown.
 	selected?: { readonly jobId: string; readonly index: number }
+}
+
+// Latest measurement of the Star Profile Inspector of a document (web/src/stars/starprofile.ts), in tab memory. It belongs
+// to the image it measured, never to the document, so a read goes through starProfileOf.
+export interface ImageStarProfileState {
+	// Id of the image measured.
+	readonly imageId: string
+	// What was asked for.
+	readonly request: StarProfileRequest
+	// Identity of the measurement among those of the tab; a later answer of any other is dropped.
+	readonly token: number
+	// Whether it runs, what it found, or that it failed.
+	status: 'measuring' | StarProfileResult['status'] | 'failed'
+	// Aborts it while it runs.
+	controller?: AbortController
+	// What the server answered.
+	result?: StarProfileResult
+	// Why it failed.
+	error?: string
 }
 
 // How many labels the annotation of a document places: a few of the most important objects, a balanced number, or many.
@@ -200,6 +220,8 @@ export interface ImageViewState {
 	error?: string
 	// Star detection request and markers.
 	stars: ImageStarsState
+	// Latest star measured by the Star Profile Inspector; absent when none was asked for.
+	starProfile?: ImageStarProfileState
 	// Streak lines and the context of the next streak detection.
 	streaks: ImageStreaksState
 	// Plate solving request, solution shown, and overlay.
@@ -624,6 +646,13 @@ export function selectStar(state: ImagesState, key: string, selected?: ImageStar
 	if (stars) stars.selected = selected
 }
 
+// Drops the star a view shows, aborting its measurement while it runs: another star was asked for, the frame shown
+// changed, or the document closed.
+export function clearStarProfile(view: Pick<ImageViewState, 'starProfile'>) {
+	view.starProfile?.controller?.abort()
+	view.starProfile = undefined
+}
+
 // Changes how the streak lines of a document are shown, or the context its next detection sends; never runs one.
 // Ignored for an unknown key.
 export function setStreakView(state: ImagesState, key: string, patch: Partial<Omit<ImageStreaksState, 'selected'>>) {
@@ -801,6 +830,7 @@ export function removeDocument(state: ImagesState, key: string, io: ImagesIo) {
 	applies.delete(key)
 	if (view?.rendering) io.revokeObjectURL(view.rendering.url)
 	if (view?.display.original) io.revokeObjectURL(view.display.original.url)
+	if (view) clearStarProfile(view)
 
 	if (document.camera) {
 		if (document.camera.shown?.lease) releaseLease(document.camera.shown.lease, io)

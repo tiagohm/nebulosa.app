@@ -6,6 +6,7 @@ import { type AstrometryGridSettings, DEFAULT_IMAGE_ASTROMETRY, type ImageAstrom
 import type { WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '../sky/display'
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
+import { DEFAULT_STAR_PROFILE_SETTINGS, type StarProfileSettings } from '../stars/starprofile.settings'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { parseJson, readText, type Stores, writeText } from '../storage'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
@@ -478,6 +479,18 @@ export function setStreakDetectionSettings(state: ProfileState, settings: Streak
 // Returns the appearance of the astrometric aids of solved images of a profile: the one edited last, or the default.
 export function imageAstrometrySettings(settings: Pick<ProfileSettings, 'imageAstrometry'>): ImageAstrometrySettings {
 	return settings.imageAstrometry ?? DEFAULT_IMAGE_ASTROMETRY
+}
+
+// Returns the settings of the Star Profile Inspector of a profile, shared by every document.
+export function starProfileSettings(settings: Pick<ProfileSettings, 'starProfile'>): StarProfileSettings {
+	return settings.starProfile ?? DEFAULT_STAR_PROFILE_SETTINGS
+}
+
+// Changes the settings of the Star Profile Inspector of the active profile; never measures anything.
+export function setStarProfileSettings(state: ProfileState, patch: Partial<StarProfileSettings>) {
+	const profile = activeProfile(state)
+	profile.settings.starProfile = { ...starProfileSettings(profile.settings), ...patch }
+	touch(profile)
 }
 
 // Changes the appearance of the astrometric aids of solved images of the active profile: the coordinates, grid, and

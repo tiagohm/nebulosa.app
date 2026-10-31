@@ -14,6 +14,13 @@ describe('tool registry', () => {
 		for (const id of IMAGE_TOOLS) expect(IMAGE_TOOL_DEFINITIONS[id].id).toBe(id)
 	})
 
+	test('the Star Profile Inspector is an analysis of any document, right after Star Detection', () => {
+		expect(IMAGE_TOOLS[IMAGE_TOOLS.indexOf('star-detection') + 1]).toBe('star-profile')
+		expect(IMAGE_TOOL_DEFINITIONS['star-profile']).toMatchObject({ label: 'Star Profile Inspector', category: 'image', outputs: ['analysis'] })
+		expect(imageToolsFor(FILE)).toContain('star-profile')
+		expect(imageToolsFor(DERIVED)).toContain('star-profile')
+	})
+
 	test('every tool with a panel can be selected', () => {
 		for (const id of IMAGE_TOOLS) expect(imageToolUnavailable(id)).toBeUndefined()
 	})

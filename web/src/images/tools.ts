@@ -13,6 +13,7 @@ import { MountNudgeTool } from './MountNudgeTool'
 import { PlateSolverPanel } from './PlateSolverPanel'
 import { PointingModelBuilderTool } from './PointingModelBuilderTool'
 import { StarDetectionPanel } from './StarDetectionPanel'
+import { StarProfileInspectorPanel } from './StarProfileInspectorPanel'
 import { StreakDetectionPanel } from './StreakDetectionPanel'
 import { TargetCenteringTool } from './TargetCenteringTool'
 import { TppaTool } from './TppaTool'
@@ -25,7 +26,7 @@ import { TppaTool } from './TppaTool'
 // a tool never starts or stops an operation. This registry is the only place Images tools are declared.
 
 // Contextual tools of the Images workspace, in selector order: the image tools, then the camera operations.
-export const IMAGE_TOOLS = ['inspector', 'plate-solver', 'star-detection', 'streak-detection', 'annotation', 'image-processing', 'camera-acquisition', 'auto-focus', 'mount-nudge', 'guiding', 'darv', 'tppa', 'pointing-model-builder', 'target-centering', 'flat-wizard'] as const
+export const IMAGE_TOOLS = ['inspector', 'plate-solver', 'star-detection', 'star-profile', 'streak-detection', 'annotation', 'image-processing', 'camera-acquisition', 'auto-focus', 'mount-nudge', 'guiding', 'darv', 'tppa', 'pointing-model-builder', 'target-centering', 'flat-wizard'] as const
 
 // Identifier of an Images contextual tool.
 export type ImageToolId = (typeof IMAGE_TOOLS)[number]
@@ -87,6 +88,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	inspector: { id: 'inspector', label: 'Image Inspector', panelTitle: 'Image Inspector', category: 'image', outputs: ['display'], panel: ImageInspector },
 	'plate-solver': { id: 'plate-solver', label: 'Plate Solving', panelTitle: 'Plate Solving', category: 'image', outputs: ['analysis'], panel: PlateSolverPanel },
 	'star-detection': { id: 'star-detection', label: 'Star Detection', panelTitle: 'Star Detection', category: 'image', outputs: ['analysis'], panel: StarDetectionPanel },
+	'star-profile': { id: 'star-profile', label: 'Star Profile Inspector', panelTitle: 'Star Profile Inspector', category: 'image', outputs: ['analysis'], panel: StarProfileInspectorPanel },
 	'streak-detection': { id: 'streak-detection', label: 'Streak Detection', panelTitle: 'Streak Detection', category: 'image', outputs: ['analysis'], panel: StreakDetectionPanel },
 	annotation: { id: 'annotation', label: 'Annotation', panelTitle: 'Annotation', category: 'image', outputs: ['analysis'], panel: AnnotationPanel },
 	'image-processing': { id: 'image-processing', label: 'Image Processing', panelTitle: 'Image Processing', category: 'image', outputs: ['derived'], panel: ImageProcessingPanel },

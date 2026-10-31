@@ -5,6 +5,7 @@ import { COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, DEFAULT_IMAGE_ASTROMETR
 import { WORKSPACE_IDS } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
 import type { OpticalPreset, SensorGeometry, TelescopeOptics } from '../sky/framing'
+import { DEFAULT_STAR_PROFILE_SETTINGS, MAXIMUM_RADIUS_RANGE, MINIMUM_SNR_RANGE, SEARCH_RADIUS_RANGE, STAR_PROFILE_MODELS, type StarProfileSettings } from '../stars/starprofile.settings'
 import { DEFAULT_APERTURE_RADIUS, DEFAULT_ASTAP_SETTINGS, DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { isRecord } from '../storage'
 import { clampStreakSettings, DEFAULT_STREAK_SETTINGS, STREAK_LIMITS, STREAK_PLANES, type StreakNumericSetting } from '../streaks/streaks'
@@ -617,6 +618,25 @@ function normalizeSky(value: unknown, sky: SkySettings) {
 	if (framing) sky.framing = framing
 }
 
+// Restores the persisted settings of the Star Profile Inspector (version 18), filling every invalid field with its
+// default; undefined for anything that is not a record.
+function normalizeStarProfile(value: unknown): StarProfileSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_STAR_PROFILE_SETTINGS
+
+	return {
+		model: oneOf(value.model, STAR_PROFILE_MODELS) ? value.model : defaults.model,
+		searchRadius: boundedNumber(value.searchRadius, ...SEARCH_RADIUS_RANGE, defaults.searchRadius),
+		maximumRadius: boundedNumber(value.maximumRadius, ...MAXIMUM_RADIUS_RANGE, defaults.maximumRadius),
+		minSNR: boundedNumber(value.minSNR, ...MINIMUM_SNR_RANGE, defaults.minSNR),
+		grid: typeof value.grid === 'boolean' ? value.grid : defaults.grid,
+		ellipse: typeof value.ellipse === 'boolean' ? value.ellipse : defaults.ellipse,
+		halfFlux: typeof value.halfFlux === 'boolean' ? value.halfFlux : defaults.halfFlux,
+		modelCurves: typeof value.modelCurves === 'boolean' ? value.modelCurves : defaults.modelCurves,
+	}
+}
+
 // Restores the persisted appearance of the astrometric aids of solved images (version 15), filling every invalid field
 // with its value in DEFAULT_IMAGE_ASTROMETRY; undefined for anything that is not a record.
 function normalizeImageAstrometry(value: unknown): ImageAstrometrySettings | undefined {
@@ -664,6 +684,9 @@ function normalizeSettings(value: unknown): ProfileSettings {
 	settings.cameras = normalizeCameras(value.cameras)
 	const starDetection = normalizeStarRequest(value.starDetection)
 	if (starDetection) settings.starDetection = starDetection
+
+	const starProfile = normalizeStarProfile(value.starProfile)
+	if (starProfile) settings.starProfile = starProfile
 	const streakDetection = normalizeStreakSettings(value.streakDetection)
 	if (streakDetection) settings.streakDetection = streakDetection
 	const imageDisplay = normalizeDisplaySettings(value.imageDisplay)
@@ -825,7 +848,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 14:
 		case 15:
 		case 16:
-		case 17: {
+		case 17:
+		case 18: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

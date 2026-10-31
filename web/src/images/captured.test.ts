@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CaptureFrameSummary, CaptureSourceSummary, DisplaySettings, ServerEvent } from 'api'
-import { proxy } from 'valtio'
+import { proxy, ref } from 'valtio'
 import { cameraTabKey, connectionCameraTab, handleCapturedFrame, holdCameraFrame, reconcileCameraTabs, reconcileCapturedFrames, selectCameraFrame } from './cameratabs'
 import { type CaptureFramesState, frameLabel, frameUnavailableReason, handleCaptureFramesEvent, loadRecentFrames, refreshCaptureFrames } from './captureframes'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
@@ -350,6 +350,20 @@ describe('selection', () => {
 		await Bun.sleep(10)
 
 		expect(tab(state).camera).toMatchObject({ selection: { kind: 'inspect', frameId: 's:1' }, shown: { frame: { frameId: 's:1' } } })
+	})
+
+	test('a star measured on a frame leaves with it, aborting its measurement', async () => {
+		const { io } = fakeIo()
+		const state = await cameraTab(io, 's:1')
+		const controller = new AbortController()
+		state.views[KEY].starProfile = { imageId: 'img-1', request: { x: 1, y: 2, model: 'moments', searchRadius: 8, maximumRadius: 32, minSNR: 5 }, token: 1, status: 'measuring', controller: ref(controller) }
+
+		handleCapturedFrame(state, event(frame(2)), io, 'page')
+		await Bun.sleep(10)
+
+		expect(tab(state).camera).toMatchObject({ shown: { frame: { frameId: 's:2' } } })
+		expect(state.views[KEY].starProfile).toBeUndefined()
+		expect(controller.signal.aborted).toBeTrue()
 	})
 })
 

@@ -107,11 +107,14 @@ export function skyOffset(from: readonly [number, number], to: readonly [number,
 // great circles that leave its sky position towards north and towards east, normalized. A step along a parallel would
 // follow its curvature, which near a pole bends east towards north and wraps around the pole within a few pixels of it,
 // while the great circles keep the true tangent directions at any declination, a pole included, where they are those
-// of the meridian of the right ascension the solution gives there.
+// of the meridian of the right ascension the solution gives there. The offsets are measured from the projection of the
+// sky position, not from the point: the inverse SIP of a solver may not close on the forward one by whole pixels, which
+// over a step of ten would turn the directions by tens of degrees and take them off perpendicular.
 export function skyDirections(solution: FitsHeader, point: Point): SkyDirections {
 	const sky = skyAt(solution, point)
 	const step = pixelScaleAt(solution, point)
-	if (!sky || !step) return {}
+	const origin = sky && pointAt(solution, sky[0], sky[1])
+	if (!sky || !step || !origin) return {}
 
 	const [ra, dec] = sky
 	const delta = 10 * step
@@ -120,8 +123,8 @@ export function skyDirections(solution: FitsHeader, point: Point): SkyDirections
 	const cosDec = Math.cos(dec)
 	const sinDec = Math.sin(dec)
 	const position = [cosDec * cosRa, cosDec * sinRa, sinDec] as const
-	const north = direction(point, pointAlong(solution, position, [-sinDec * cosRa, -sinDec * sinRa, cosDec], delta))
-	const east = direction(point, pointAlong(solution, position, [-sinRa, cosRa, 0], delta))
+	const north = direction(origin, pointAlong(solution, position, [-sinDec * cosRa, -sinDec * sinRa, cosDec], delta))
+	const east = direction(origin, pointAlong(solution, position, [-sinRa, cosRa, 0], delta))
 	return { ...(north && { north }), ...(east && { east }) }
 }
 

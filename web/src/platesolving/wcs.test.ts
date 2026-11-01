@@ -56,6 +56,18 @@ describe('directions', () => {
 		expect(east!.y).toBeCloseTo(e.y, 3)
 	})
 
+	test('are kept when the inverse SIP does not close on the forward one', () => {
+		const header = { ...solution(42, -17, { angle: 37 }), CTYPE1: 'RA---TAN-SIP', CTYPE2: 'DEC--TAN-SIP', A_ORDER: 2, B_ORDER: 2, AP_ORDER: 2, BP_ORDER: 2, AP_0_0: 3, BP_0_0: -2 }
+		const { north, east } = skyDirections(header, { x: 100, y: 50 })
+
+		const n = expected(header, [0, 1])
+		const e = expected(header, [1, 0])
+		expect(north!.x).toBeCloseTo(n.x, 3)
+		expect(north!.y).toBeCloseTo(n.y, 3)
+		expect(east!.x).toBeCloseTo(e.x, 3)
+		expect(east!.y).toBeCloseTo(e.y, 3)
+	})
+
 	test('north points down and east left on a standard image', () => {
 		const { north, east } = skyDirections(solution(42, -17), { x: 100, y: 50 })
 

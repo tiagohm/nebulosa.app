@@ -11,7 +11,7 @@ import type { RoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { operationsState } from '../operations'
 import { activeProfile, exposureSettings, flatWizardSettings, profileState, setFlatWizardSettings } from '../profile/profile'
-import { type CameraIdentity, DEFAULT_FLAT_WIZARD_FILTER, FLAT_WIZARD_MAXIMUM_COUNT, FLAT_WIZARD_MAXIMUM_EXPOSURE, FLAT_WIZARD_MAXIMUM_FILTERS, FLAT_WIZARD_MAXIMUM_REJECTIONS, FLAT_WIZARD_MAXIMUM_TRIALS, type FlatWizardSettings } from '../profile/schema'
+import { type CameraIdentity, DEFAULT_FLAT_WIZARD_EFFECTIVE_CLIP, DEFAULT_FLAT_WIZARD_FILTER, FLAT_WIZARD_MAXIMUM_COUNT, FLAT_WIZARD_MAXIMUM_EXPOSURE, FLAT_WIZARD_MAXIMUM_FILTERS, FLAT_WIZARD_MAXIMUM_REJECTIONS, FLAT_WIZARD_MAXIMUM_TRIALS, type FlatWizardSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -131,9 +131,13 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 					<TextInput label="Server Directory" className="flex-1" placeholder="~/Nebulosa/captures" value={shown.directory ?? ''} disabled={locked} onChange={(e) => update({ directory: e.target.value.trim() || undefined })} />
 					<IconButton icon="folder" label="Choose directory" className="size-[38px]" disabled={locked} onClick={() => setChoosingDirectory(true)} />
 				</div>
-				<Checkbox label="Known Effective Clipping" checked={shown.effectiveClip !== undefined} disabled={locked} onChange={(known) => update({ effectiveClip: known ? 65535 : undefined })} />
+				<Checkbox label="Known Effective Clipping" checked={shown.effectiveClip !== undefined} disabled={locked} onChange={(known) => update({ effectiveClip: known ? DEFAULT_FLAT_WIZARD_EFFECTIVE_CLIP : undefined })} />
 				{shown.effectiveClip !== undefined && <NumberInput label="Effective Clipping" value={shown.effectiveClip} min={1} step={1} suffix="DN" disabled={locked} onChange={(effectiveClip) => update({ effectiveClip })} />}
-				<Notice>{shown.effectiveClip === undefined ? 'Without the level at which the sensor saturates, a frame inside its target is accepted, but the absence of saturation is reported as unknown.' : 'Samples at or above this level are clipped; a clipped frame is rejected.'}</Notice>
+				<Notice>
+					{shown.effectiveClip === undefined
+						? 'Without the level at which the sensor saturates, a frame inside its target is accepted, but the absence of saturation is reported as unknown.'
+						: 'Samples at or above this level are clipped; a clipped frame is rejected. Keep it a little below the highest value the camera writes, which can be under the 65535 DN of the file format.'}
+				</Notice>
 				{panelAssigned && <NumberInput label="Settle Time" value={shown.settleTime} min={0} max={600} step={0.5} suffix="s" disabled={locked} onChange={(settleTime) => update({ settleTime })} />}
 				<div className="grid grid-cols-2 gap-2">
 					<NumberInput label="Trial Frames" value={shown.maximumTrials} min={1} max={FLAT_WIZARD_MAXIMUM_TRIALS} disabled={locked} onChange={(maximumTrials) => update({ maximumTrials })} />

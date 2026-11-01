@@ -601,6 +601,10 @@ export const FLAT_WIZARD_MAXIMUM_EXPOSURE = 600
 // at 20000–35000 DN, about a third to a half of a 16-bit range; edit the target for cameras of another depth.
 export const DEFAULT_FLAT_WIZARD_FILTER: FlatWizardFilter = { slot: 0, count: 20, initialExposure: 1, minimumExposure: 0.01, maximumExposure: 30, targetRange: [20000, 35000] }
 
+// Effective clipping level the Flat Wizard form proposes once the operator declares one, in DN: under the 65520 and
+// 65532 DN at which left-aligned 12-bit and 14-bit cameras top out in a 16-bit file, which a limit of 65535 would miss.
+export const DEFAULT_FLAT_WIZARD_EFFECTIVE_CLIP = 65000
+
 // Flat Wizard form of a camera that has none yet: one luminance group, a 2 s settle, and the default limits.
 export const DEFAULT_FLAT_WIZARD_SETTINGS: FlatWizardSettings = { filters: [DEFAULT_FLAT_WIZARD_FILTER], settleTime: 2, maximumTrials: 8, maximumRejections: 5 }
 

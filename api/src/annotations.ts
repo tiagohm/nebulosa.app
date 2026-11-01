@@ -725,7 +725,8 @@ export class AnnotationService {
 	}
 
 	// Searches the solar-system objects of the groups of a job with SkyBoT, within the time budget, and keeps those on
-	// the image, brightest first. Rejects with AnnotationError on a timeout or a failure of the service.
+	// the image, brightest first. When a search that includes the planets fails, the asteroids and comets are asked for
+	// alone, with a warning. Rejects with AnnotationError on a timeout or a failure of the service.
 	async #solarSystemBodies(entry: JobEntry): Promise<AnnotationCompletion> {
 		const { request, solution, field, observation, location } = entry.preparation
 		const { bodies = ALL_BODIES } = request
@@ -733,14 +734,31 @@ export class AnnotationService {
 		const timeout = AbortSignal.timeout(this.#skybotTimeout)
 		// SkyBoT lists the Sun, the planets, and every satellite together; the groups asked for are kept afterwards.
 		const objects = { asteroids: bodies.minorBody, comets: bodies.minorBody, planets: bodies.solarSystem || bodies.satellite }
+		const signal = AbortSignal.any([entry.controller.signal, timeout])
+		const search = (classes: typeof objects) => this.#skybot(observation.time, field.rightAscension, field.declination, field.radius + FIELD_MARGIN, { observer: GEOCENTER, objects: classes }, signal)
+		// Reason of a search that failed, under the same time budget for every attempt.
+		const failure = (error: unknown) => {
+			if (entry.controller.signal.aborted) return new AnnotationError('cancelled', 'The annotation was cancelled')
+			if (timeout.aborted) return new AnnotationError('timeout', `SkyBoT did not answer within ${this.#skybotTimeout / 1000} s`)
+			return new AnnotationError('providerFailed', `SkyBoT could not be used: ${Error.isError(error) ? error.message : String(error)}`)
+		}
 		let found: readonly SkybotObject[]
+		let planetsFailed = false
 
 		try {
-			found = await this.#skybot(observation.time, field.rightAscension, field.declination, field.radius + FIELD_MARGIN, { observer: GEOCENTER, objects }, AbortSignal.any([entry.controller.signal, timeout]))
+			found = await search(objects)
 		} catch (error) {
-			if (entry.controller.signal.aborted) throw new AnnotationError('cancelled', 'The annotation was cancelled')
-			if (timeout.aborted) throw new AnnotationError('timeout', `SkyBoT did not answer within ${this.#skybotTimeout / 1000} s`)
-			throw new AnnotationError('providerFailed', `SkyBoT could not be used: ${Error.isError(error) ? error.message : String(error)}`)
+			const failed = failure(error)
+			if (failed.code !== 'providerFailed' || !objects.planets || !objects.asteroids) throw failed
+
+			// An ephemeris SkyBoT cannot compute for a planet or a satellite of the field fails its whole answer, while the
+			// asteroids and comets of the same field are still served.
+			try {
+				found = await search({ ...objects, planets: false })
+				planetsFailed = true
+			} catch (retryError) {
+				throw failure(retryError)
+			}
 		}
 
 		const onField = found
@@ -752,6 +770,7 @@ export class AnnotationService {
 		const annotated = onField.slice(0, MAX_SOLAR_SYSTEM_BODIES).map((e) => skybotAnnotation(e, observation, location))
 		const warnings = ['Positions are predictions of SkyBoT, not detections in the image.']
 
+		if (planetsFailed) warnings.push('SkyBoT failed for the planets and their satellites of this field, so only the asteroids and comets are listed.')
 		if (!location) warnings.push('The image header gives no site, so the bodies are seen from the center of the Earth; the Moon may be up to a degree and a near-Earth object far from its predicted position.')
 		else if (annotated.some((e) => e.center === 'geocentric')) warnings.push('SkyBoT gave no distance for some bodies, so their positions are not corrected for the site.')
 		if (observation.approximate) warnings.push('The header gives the observation time to more than a second only.')

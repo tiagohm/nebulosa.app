@@ -455,6 +455,29 @@ describe('solar-system bodies', () => {
 		expect(await ended(slow.events, timedOut.jobId)).toMatchObject({ state: 'failed', code: 'timeout' })
 	})
 
+	test('keeps the asteroids and comets when SkyBoT fails for the planets', async () => {
+		const calls: { args: Parameters<SolarSystemSearch> }[] = []
+		const search: SolarSystemSearch = (...args) => {
+			calls.push({ args })
+			if (args[4]?.objects?.planets) return Promise.reject(new Error('SkyBoT answered: planetary_ephem'))
+			return Promise.resolve([skybotObject('2017 YJ66', 0.001)])
+		}
+		const { images, service, events } = setup(sky(), { skybot: search })
+		const info = await images.open(exposed())
+		const job = submit(service, info.id, MINOR)
+
+		expect((await ended(events, job.jobId)).state).toBe('completed')
+		const result = service.result(job.jobId)!
+		expect(result.objects.map((e) => e.id)).toEqual(['skybot:2017 YJ66'])
+		expect(result.warnings).toContainEqual(expect.stringContaining('only the asteroids and comets'))
+		expect(calls.map((e) => e.args[4]?.objects?.planets)).toEqual([true, false])
+
+		const planets = setup(sky(), { skybot: search })
+		const image = await planets.images.open(exposed())
+		const failed = submit(planets.service, image.id, { ...MINOR, bodies: { solarSystem: true, satellite: true, minorBody: false } })
+		expect(await ended(planets.events, failed.jobId)).toMatchObject({ state: 'failed', code: 'providerFailed', error: expect.stringContaining('planetary_ephem') })
+	})
+
 	test('a running search does not hold the local annotation back, and cancelling it aborts the request', async () => {
 		const { images, service, events } = setup(sky(), { skybot: skybot('hang') })
 		const info = await images.open(exposed())

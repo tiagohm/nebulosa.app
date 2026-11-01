@@ -14,7 +14,7 @@ import { asteroid, comet, type KeplerOrbit } from 'nebulosa/src/astronomy/orbits
 import { type Time, Timescale, time as makeJulianTime, timeShift, timeUnix, toJulianEpoch, tt } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, DEG2RAD, GM_SUN_PITJEVA_2005, J2000, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
 import { type MutVec3, type Vec3, vecAngle, vecLength, vecPlus } from 'nebulosa/src/math/linear-algebra/vec3'
-import { deg, normalizeAngle, normalizePI } from 'nebulosa/src/math/units/angle'
+import { deg, normalizeAngle, normalizePI, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { LruCache } from '../lrucache'
 import { SsdBusyError, SsdRequestQueue, SsdThrottledError } from '../ssd'
@@ -61,9 +61,22 @@ const LIGHT_TIME_ITERATIONS = 2
 // Apparent visual magnitude of the Sun.
 const SUN_MAGNITUDE = -26.74
 
-// Refracted altitude of the upper limb at rise and set: the semi-diameter below the horizon for the
-// Sun (16′) and the Moon (15.5′, its mean value), and the horizon itself for point-like objects.
-const RISE_SET_ALTITUDE: Readonly<Partial<Record<SolarSystemBodyKind, number>>> = { sun: deg(-16 / 60), moon: deg(-15.5 / 60) }
+// Airless altitude of a point at the horizon: standard refraction lifts it by 34′, the value of the almanacs. The ERFA
+// model cannot give it, since it caps refraction at about 11′ near the horizon.
+const HORIZON_ALTITUDE = deg(-34 / 60)
+
+// Airless altitude of the center at rise and set of the bodies with a disk: the upper limb at the horizon, with the
+// semi-diameter of the Sun (16′, as in sun.ts) and the mean one of the Moon (15.5′).
+const RISE_SET_ALTITUDE: Readonly<Partial<Record<SolarSystemBodyKind, number>>> = { sun: deg(-50 / 60), moon: deg(-49.5 / 60) }
+
+// Airless altitude from which the ERFA refraction model is used, in radians (5°): below it the model is capped, and
+// refraction grows too fast for the formula, so the one of Sæmundsson (1986) is used.
+const ERFA_REFRACTION_LIMIT = deg(5)
+
+// Airless altitudes, in degrees, between which refraction fades out below the horizon, where the object is not seen
+// and the formula diverges.
+const REFRACTION_FADE_FROM = -1
+const REFRACTION_FADE_TO = -2
 
 // Horizons quantities requested, airless so that apparent RA/Dec match the local reduction (Horizons
 // refracts RA/Dec too otherwise; the elevation is refracted afterwards with the ERFA model the local
@@ -156,16 +169,18 @@ export interface SkyPosition {
 	readonly constellationName?: string
 }
 
-// Rise, transit, and set nearest the instant, within ±12 h, for an observer. Times are Unix
-// milliseconds (UTC); a missing time means the event does not happen in the window.
+// Rise, transit, and set nearest the instant, within ±12 h, for an observer: rise and set with the standard horizon
+// (34′ of refraction, and the upper limb of the Sun and the Moon), and the transit on the meridian, which for the Moon
+// can be minutes from its highest point. Times are Unix milliseconds (UTC); a missing time means the event does not
+// happen in the window.
 export interface SkyEvents {
 	// Whether the object crosses the horizon, stays above it, or stays below it during the window.
 	readonly state: 'normal' | 'circumpolar' | 'belowHorizon'
 	// Rise time.
 	readonly rise?: number
-	// Upper culmination time.
+	// Time of the upper transit, the crossing of the meridian.
 	readonly transit?: number
-	// Refracted altitude at the upper culmination in radians.
+	// Refracted altitude at the upper transit in radians.
 	readonly transitAltitude?: number
 	// Set time.
 	readonly set?: number
@@ -287,6 +302,17 @@ interface HorizonsSample {
 	readonly constellation: string
 }
 
+// Returns the refracted altitude of an airless altitude, both in radians: the ERFA model of the observed places above
+// ERFA_REFRACTION_LIMIT, and below it the formula of Sæmundsson for 1010 hPa and 10 °C, which reaches the 34′ of the
+// horizon the rise and set times use. It fades out just below the horizon, so a body under it reads its true altitude.
+export function apparentAltitude(altitude: number) {
+	if (altitude >= ERFA_REFRACTION_LIMIT) return refractedAltitude(altitude)
+	const degrees = toDeg(altitude)
+	if (degrees <= REFRACTION_FADE_TO) return altitude
+	const fade = degrees >= REFRACTION_FADE_FROM ? 1 : (degrees - REFRACTION_FADE_TO) / (REFRACTION_FADE_FROM - REFRACTION_FADE_TO)
+	return altitude + deg((fade * 1.02) / Math.tan(deg(degrees + 10.3 / (degrees + 5.11))) / 60)
+}
+
 // Parses a finite number of a Horizons cell; undefined for "n.a." and empty cells.
 function horizonsNumber(cell: string | undefined) {
 	if (!cell) return undefined
@@ -308,7 +334,7 @@ function parseHorizonsRow(row: readonly string[], time: number): HorizonsSample 
 		time,
 		j2000: [deg(+row[3]), deg(+row[4])],
 		apparent: [deg(+row[5]), deg(+row[6])],
-		horizontal: az !== undefined && el !== undefined ? [deg(az), refractedAltitude(deg(el))] : undefined,
+		horizontal: az !== undefined && el !== undefined ? [deg(az), apparentAltitude(deg(el))] : undefined,
 		magnitude: horizonsNumber(row[9]),
 		illuminated: illuminated === undefined ? undefined : illuminated / 100,
 		distance: (horizonsNumber(row[12]) ?? 0) * AU_PER_LIGHT_MINUTE,
@@ -490,23 +516,38 @@ function solarSystemModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>,
 }
 
 // Apparent place of date and observed azimuth and altitude of an astrometric ICRS direction (vector or
-// spherical) seen at `time`, whose location (if any) is the observer.
-function apparentPlace(direction: Vec3 | readonly [number, number], time: Time, earth: PositionAndVelocity) {
-	const [ri, di] = icrsToCirs(direction, time, earth)
+// spherical) seen at `time`, whose location (if any) is the observer. `deflected` applies the light deflection by the
+// Sun; it is off for the Sun itself. `geometricAltitude` and `hourAngle` are airless, for the rise, set, and transit.
+function apparentPlace(direction: Vec3 | readonly [number, number], time: Time, earth: PositionAndVelocity, deflected: boolean = true) {
+	const [ri, di] = icrsToCirs(direction, time, earth, undefined, undefined, deflected)
 	const a = tt(time)
 	// CIRS right ascension is referred to the CIO; subtracting the equation of the origins refers it to
 	// the true equinox of date.
 	const rightAscension = normalizeAngle(ri - eraEo06a(a.day, a.fraction))
-	const observed = time.location ? cirsToObserved([ri, di], time) : undefined
-	return { rightAscension, declination: di, azimuth: observed?.azimuth, altitude: observed?.altitude }
+	const observed = time.location ? cirsToObserved([ri, di], time, false) : undefined
+	return { rightAscension, declination: di, azimuth: observed?.azimuth, altitude: observed && apparentAltitude(observed.altitude), geometricAltitude: observed?.altitude, hourAngle: observed && normalizePI(observed.hourAngle) }
+}
+
+// Airless altitude and hour angle of an object for an observer, in radians, at an instant.
+interface HorizontalSample {
+	// Airless altitude.
+	readonly altitude: number
+	// Hour angle, (−π, π], positive west of the meridian.
+	readonly hourAngle: number
+}
+
+// Apparent place of a catalog object: its J2000 place moved by proper motion.
+function catalogPlace(object: CatalogAstrometry, time: Time) {
+	const years = (time.day - J2000 + time.fraction) / 365.25
+	const ra = normalizeAngle(object.rightAscension + object.pmRA * years)
+	const dec = object.declination + object.pmDEC * years
+	return apparentPlace([ra, dec], time, vsop.earth(time))
 }
 
 // Local position of a catalog object: J2000 place moved by proper motion, then to the apparent place.
 function catalogPosition(object: CatalogAstrometry, time: Time): Omit<SkyPosition, 'source' | 'fallbackReason' | 'time'> {
-	const years = (time.day - J2000 + time.fraction) / 365.25
-	const ra = normalizeAngle(object.rightAscension + object.pmRA * years)
-	const dec = object.declination + object.pmDEC * years
-	const apparent = apparentPlace([ra, dec], time, vsop.earth(time))
+	const { rightAscension, declination, azimuth, altitude } = catalogPlace(object, time)
+	const apparent = { rightAscension, declination, azimuth, altitude }
 
 	return {
 		center: time.location ? 'topocentric' : 'geocentric',
@@ -518,12 +559,12 @@ function catalogPosition(object: CatalogAstrometry, time: Time): Omit<SkyPositio
 	}
 }
 
-// Refracted altitude model in radians of a solar-system target for an observer, over Unix milliseconds.
+// Airless altitude and hour angle model of a solar-system target for an observer, over Unix milliseconds.
 // The model is evaluated once per hour as a geocentric geometric vector (neglecting light-time, under
 // 15″ for the planets and 1″ for the Moon) and interpolated linearly in between (about 2″ for the
 // Moon), so a day of event samples costs about 25 evaluations of models as slow as ELPMPP02; the
 // observer's offset is then removed and the direction reduced to the observed place.
-function solarSystemAltitudeModel(model: SolarSystemModel, observer: SkyObserver) {
+function solarSystemHorizontalModel(model: SolarSystemModel, observer: SkyObserver, deflected: boolean): (time: number) => HorizontalSample {
 	const nodes = new Map<number, Vec3>()
 
 	const node = (hour: number) => {
@@ -548,16 +589,17 @@ function solarSystemAltitudeModel(model: SolarSystemModel, observer: SkyObserver
 		const t = makeTime(time, observer)
 		const site = frameToFrame(itrs(t.location!), ITRS, ICRS, t)
 		const direction: Vec3 = [lerp(a[0], b[0], fraction) - site[0], lerp(a[1], b[1], fraction) - site[1], lerp(a[2], b[2], fraction) - site[2]]
-		return apparentPlace(direction, t, vsop.earth(t)).altitude!
+		const { geometricAltitude, hourAngle } = apparentPlace(direction, t, vsop.earth(t), deflected)
+		return { altitude: geometricAltitude!, hourAngle: hourAngle! }
 	}
 }
 
 // Height in radians of the Moon's upper limb above the refracted horizon of an observer, over Unix milliseconds: positive
 // while the Moon is up, with the rise and set convention of SkyEphemeris.events.
 export function moonHorizonMargin(observer: SkyObserver) {
-	const altitude = solarSystemAltitudeModel({ state: bodyModel('301'), magnitude: () => undefined }, observer)
+	const horizontal = solarSystemHorizontalModel({ state: bodyModel('301'), magnitude: () => undefined }, observer, true)
 	const threshold = RISE_SET_ALTITUDE.moon!
-	return (time: number) => altitude(time) - threshold
+	return (time: number) => horizontal(time).altitude - threshold
 }
 
 // Local position of a solar-system target: light-time corrected direction from the observer, apparent
@@ -567,7 +609,8 @@ function solarSystemPosition(model: SolarSystemModel, time: Time, isSun: boolean
 	topocentricDirection(model.state, observerBarycentric, time, LIGHT_TIME_ITERATIONS, direction)
 	const [rightAscensionJ2000, declinationJ2000] = eraC2s(...direction)
 	const earth = vsop.earth(time)
-	const apparent = apparentPlace(direction, time, earth)
+	const { rightAscension, declination, azimuth, altitude } = apparentPlace(direction, time, earth, !isSun)
+	const apparent = { rightAscension, declination, azimuth, altitude }
 	const distance = vecLength(direction)
 
 	const emission = timeShift(time, -lightTime(direction))
@@ -682,31 +725,39 @@ export class SkyEphemeris {
 		const cached = this.#events.get(cacheKey)
 		if (cached) return cached
 
-		const altitudeAt = this.#altitudeModel(target, observer)
-		if (!altitudeAt) return undefined
+		const horizontalAt = this.#horizontalModel(target, observer)
+		if (!horizontalAt) return undefined
 
-		const threshold = target.type === 'body' ? (RISE_SET_ALTITUDE[solarSystemBody(target.code)?.kind ?? 'mercury'] ?? 0) : 0
+		const threshold = target.type === 'body' ? (RISE_SET_ALTITUDE[solarSystemBody(target.code)?.kind ?? 'mercury'] ?? HORIZON_ALTITUDE) : HORIZON_ALTITUDE
 		const center = Math.floor(time / SAMPLE_STEP_MS) * SAMPLE_STEP_MS
 		const times: number[] = []
 		const altitudes: number[] = []
+		const hourAngles: number[] = []
 
 		for (let t = center - EVENT_HALF_WINDOW_MS; t <= center + EVENT_HALF_WINDOW_MS; t += SAMPLE_STEP_MS) {
+			const { altitude, hourAngle } = horizontalAt(t)
 			times.push(t)
-			altitudes.push(altitudeAt(t))
+			altitudes.push(altitude)
+			hourAngles.push(hourAngle)
 		}
 
-		const events = findEvents(times, altitudes, threshold, time)
+		const events = findEvents(times, altitudes, hourAngles, threshold, time)
 		this.#events.set(cacheKey, events)
 		return events
 	}
 
-	// Refracted altitude model of a target over time for an observer; undefined without a local model.
-	#altitudeModel(target: EphemerisTarget, observer: SkyObserver): ((time: number) => number) | undefined {
-		if (target.type === 'catalog') return (t) => catalogPosition(target.object, makeTime(t, observer)).altitude!
+	// Airless altitude and hour angle model of a target over time for an observer; undefined without a local model.
+	#horizontalModel(target: EphemerisTarget, observer: SkyObserver): ((time: number) => HorizontalSample) | undefined {
+		if (target.type === 'catalog') {
+			return (t) => {
+				const { geometricAltitude, hourAngle } = catalogPlace(target.object, makeTime(t, observer))
+				return { altitude: geometricAltitude!, hourAngle: hourAngle! }
+			}
+		}
 
 		const model = solarSystemModel(target, this.#orbits)
 		if (!model) return undefined
-		return solarSystemAltitudeModel(model, observer)
+		return solarSystemHorizontalModel(model, observer, !(target.type === 'body' && target.code === '10'))
 	}
 
 	// Horizons table of a command at 10-minute steps over a 25 h window around `time`, shared by
@@ -742,10 +793,11 @@ export class SkyEphemeris {
 	}
 }
 
-// Finds rise, transit, and set nearest `time` from altitudes sampled at increasing times. Crossings of
-// `threshold` are interpolated linearly; the upper culmination is the local maximum nearest `time`,
-// refined by a parabola through its neighbors.
-export function findEvents(times: readonly number[], altitudes: readonly number[], threshold: number, time: number): SkyEvents {
+// Finds rise, transit, and set nearest `time` from airless altitudes and hour angles (radians, (−π, π]) sampled at
+// increasing times. Crossings of `threshold` are interpolated linearly; the transit is the crossing of the meridian
+// nearest `time`, where the hour angle goes from negative to positive, interpolated linearly, with its altitude from
+// a parabola through the samples around it. The hour angle's own wrap, at ±π, is the lower transit and is skipped.
+export function findEvents(times: readonly number[], altitudes: readonly number[], hourAngles: readonly number[], threshold: number, time: number): SkyEvents {
 	let rise: number | undefined
 	let set: number | undefined
 	let transit: number | undefined
@@ -762,20 +814,26 @@ export function findEvents(times: readonly number[], altitudes: readonly number[
 			else set = nearest(set, crossing)
 		}
 
-		if (i < altitudes.length - 1 && altitudes[i] >= altitudes[i - 1] && altitudes[i] > altitudes[i + 1]) {
-			const y0 = altitudes[i - 1]
-			const y1 = altitudes[i]
-			const y2 = altitudes[i + 1]
-			const denominator = y0 - 2 * y1 + y2
-			const offset = denominator === 0 ? 0 : (0.5 * (y0 - y2)) / denominator
-			const candidate = times[i] + offset * (times[i] - times[i - 1])
+		const ha0 = hourAngles[i - 1]
+		const ha1 = hourAngles[i]
+
+		if (ha0 < 0 && ha1 >= 0 && ha1 - ha0 < Math.PI) {
+			const fraction = ha0 / (ha0 - ha1)
+			const candidate = times[i - 1] + (times[i] - times[i - 1]) * fraction
 
 			if (transit === undefined || Math.abs(candidate - time) < Math.abs(transit - time)) {
+				const j = i < altitudes.length - 1 ? i : i - 1
+				const s = fraction + i - 1 - j
+				const y0 = altitudes[j - 1]
+				const y1 = altitudes[j]
+				const y2 = altitudes[j + 1]
 				transit = candidate
-				transitAltitude = y1 - 0.25 * (y0 - y2) * offset
+				transitAltitude = y1 + 0.5 * s * (y2 - y0 + s * (y0 - 2 * y1 + y2))
 			}
 		}
 	}
+
+	if (transitAltitude !== undefined) transitAltitude = apparentAltitude(transitAltitude)
 
 	const state = rise !== undefined || set !== undefined ? 'normal' : altitudes.every((e) => e >= threshold) ? 'circumpolar' : 'belowHorizon'
 	return { state, rise, transit, transitAltitude, set }

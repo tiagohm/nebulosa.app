@@ -108,7 +108,7 @@ export function ObserverSection({ position, events, hasObserver, onSetObserver, 
 				</Datum>
 			)}
 			{events?.set !== undefined && <Datum label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</Datum>}
-			<Note>Refracted altitude. Rise, transit, and set are the ones nearest the instant, within 12 hours{isSolarSystem ? ', from the local model' : ''}.</Note>
+			<Note>Refracted altitude. Rise and set are at the standard horizon (34′ of refraction), and the transit is on the meridian: the ones nearest the instant, within 12 hours{isSolarSystem ? ', from the local model' : ''}.</Note>
 		</CollapsibleSection>
 	)
 }

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
-import { deg, toDeg } from 'nebulosa/src/math/units/angle'
+import { deg, normalizePI, toDeg } from 'nebulosa/src/math/units/angle'
 import { SsdRequestQueue } from '../ssd'
-import { EphemerisUnavailableError, findEvents, HorizonsEphemerisError, type HorizonsObserver, SkyEphemeris } from './ephemeris'
+import { apparentAltitude, EphemerisUnavailableError, findEvents, HorizonsEphemerisError, type HorizonsObserver, SkyEphemeris } from './ephemeris'
 
 const observer = { latitude: -23.5, longitude: -46.6, elevation: 760 }
 
@@ -175,11 +175,16 @@ test('catalog positions are local', async () => {
 	expect(toDeg(events.transitAltitude!)).toBeCloseTo(83.2, 0)
 })
 
+// Hour angles of an object whose transit is at 12 h, in radians.
+function hourAngles(times: readonly number[]) {
+	return times.map((t) => normalizePI(((t / 3_600_000 - 12) / 24) * 2 * Math.PI))
+}
+
 test('find events in sampled altitudes', () => {
 	const times = Array.from({ length: 145 }, (_, i) => i * 600_000)
 	// One sinusoidal day: rises at 6 h, culminates at 12 h, sets at 18 h.
 	const altitudes = times.map((t) => Math.sin(((t / 3_600_000 - 6) / 24) * 2 * Math.PI))
-	const events = findEvents(times, altitudes, 0, 12 * 3_600_000)
+	const events = findEvents(times, altitudes, hourAngles(times), 0, 12 * 3_600_000)
 
 	expect(events.state).toBe('normal')
 	expect(events.rise! / 3_600_000).toBeCloseTo(6, 2)
@@ -191,6 +196,7 @@ test('find events in sampled altitudes', () => {
 		findEvents(
 			times,
 			times.map(() => 0.5),
+			hourAngles(times),
 			0,
 			0,
 		).state,
@@ -199,8 +205,34 @@ test('find events in sampled altitudes', () => {
 		findEvents(
 			times,
 			times.map(() => -0.5),
+			hourAngles(times),
 			0,
 			0,
 		).state,
 	).toBe('belowHorizon')
+})
+
+// Reference instants from Skyfield 1.53 with JPL DE421, airless, at the horizon each test names, from Greenwich.
+const GREENWICH = { latitude: 51.4779, longitude: 0, elevation: 46 }
+
+test('rise and set of a point are at the standard horizon of 34 arcminutes', () => {
+	const sirius = { rightAscension: 1.7677953696, declination: -0.2917512585, pmRA: 0, pmDEC: 0 }
+	const events = new SkyEphemeris({ observer: horizons(undefined).observe }).events({ type: 'catalog', object: sirius }, Date.UTC(2024, 3, 15, 17, 0, 0), GREENWICH, 'sirius')!
+
+	expect(events.state).toBe('normal')
+	expect(Math.abs(events.rise! - 1713184458586)).toBeLessThan(10_000)
+	expect(Math.abs(events.set! - 1713217400950)).toBeLessThan(10_000)
+})
+
+test('the Moon rises with its upper limb at the standard horizon, and transits on the meridian, not at its highest point', () => {
+	const events = new SkyEphemeris({ observer: horizons(undefined).observe }).events({ type: 'body', code: '301' }, Date.UTC(2024, 2, 20, 15, 0, 0), GREENWICH, 'moon')!
+
+	expect(Math.abs(events.rise! - 1710938956431)).toBeLessThan(15_000)
+	expect(Math.abs(events.transit! - 1710969092930)).toBeLessThan(15_000)
+})
+
+test('the altitude holds the refraction of the horizon and ends below it', () => {
+	expect(toDeg(apparentAltitude(deg(-34 / 60)))).toBeCloseTo(0, 1)
+	expect(toDeg(apparentAltitude(deg(-6)))).toBeCloseTo(-6, 9)
+	expect(toDeg(apparentAltitude(deg(30))) - 30).toBeCloseTo(0.0275, 2)
 })

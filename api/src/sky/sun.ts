@@ -210,7 +210,11 @@ function wallParts(time: number, timeZone: string) {
 export function zoneOffset(time: number, timeZone: string) {
 	const whole = Math.floor(time / 1000) * 1000
 	const { year, month, day, hour, minute, second } = wallParts(whole, timeZone)
-	return Date.UTC(year, month - 1, day, hour, minute, second) - whole
+	// Unlike Date.UTC, this takes years below 100 as they are.
+	const local = new Date(0)
+	local.setUTCFullYear(year, month - 1, day)
+	local.setUTCHours(hour, minute, second)
+	return local.getTime() - whole
 }
 
 // Returns the first instant (Unix milliseconds) of a civil date in a time zone: its midnight, or the

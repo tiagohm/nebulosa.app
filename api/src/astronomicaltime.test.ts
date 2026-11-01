@@ -450,3 +450,10 @@ describe('Earth orientation data', () => {
 		)
 	})
 })
+
+test('the local calendar of a date before the year 100 stays in its year, west of Greenwich', async () => {
+	const service = new AstronomicalTimeService(new EarthOrientationData({ refresh: false }))
+	const result = await service.convert({ input: { kind: 'calendar', year: -4712, month: 1, day: 1, hour: 12, minute: 0, second: 0, reference: { kind: 'scale', scale: 'TT' } }, timeZone: 'America/Sao_Paulo' })
+	expect('refusal' in result).toBeFalse()
+	if (!('refusal' in result)) expect(result.civil.local.startsWith('-4712-01-01T')).toBeTrue()
+})

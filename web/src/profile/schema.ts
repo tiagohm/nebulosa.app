@@ -10,36 +10,15 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // Persisted format of the profiles: what a profile holds, the defaults of its preferences and camera forms, and the
 // version of the format. Profiles hold selections and preferences only, never operational device state.
 
-// Current version of the persisted format. Version 1 stored each assignment as a bare device id;
-// version 2 stores the device id and name; version 3 names the Capture modes auto-focus and tppa,
-// which version 2 called focus-calibrator and polar-alignment; version 4 keeps the camera forms by
-// physical camera (cameras) instead of by camera role, and drops the post-capture analysis and plate
-// solving of the frames of a capture. The preferences of the Capture workspace (capture), removed since, are ignored
-// when read. Version 5 adds the TPPA form of each camera (tppa), version 6 its DARV form (darv), and version 7 its Flat
-// Wizard form (flatWizard). Version 8 adds the guiding form of each camera (guiding), and version 9 moves the guide
-// focal length of those forms to the guide telescope of the profile (guideTelescope). Version 10 adds the listener
-// bindings of Mount Remote Control of each mount (mountRemoteControl), and version 11 the display settings last applied
-// in Images, to the frames of each camera (display) and to every other image (imageDisplay). Version 12 adds the streak
-// detector settings of Images (streakDetection), version 13 the notifications the profile read or dismissed (notifications),
-// and version 14 the observatory code of the solar-system searches of Images → Annotation (annotation), removed since:
-// the searches use the site of the image header, and a stored code is ignored when read. Version 15 adds the appearance
-// of the astrometric aids of solved images (imageAstrometry). Version 16 moves the plate solver of the TPPA form
-// (tppa.solver) to the plate solving settings each camera shares between its operations (plateSolving), and adds the
-// Pointing Model Builder form of each camera (pointingModel). Version 17 adds the Target Centering form of each camera
-// (targetCentering) and the saved framings of the profile (framingReferences). Version 18 adds the settings of the Star
-// Profile Inspector (starProfile), version 19 the preferences of the status bar (statusBar), version 20 those of the
-// Close Approaches tool (closeApproaches), version 21 those of the Astro Weather tool (astroWeather), version 22 what
-// each device shows in the status bar (statusBar.chips), version 23 the directory Images saved to last
-// (lastSaveDirectory), and version 24 the settings of the Image Tools that were kept per document: those of Annotation
-// (imageAnnotation), of Plate Solving for images outside a camera tab (imagePlateSolving), and the pipeline of Image
-// Processing (imageProcessing).
+// Current version of the persisted format. A document of any other version is discarded, never migrated, so a change to
+// the shape of what is stored only raises this number; an added optional field, which reads as its default, does not.
 export const PROFILES_VERSION = 24
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
 
 // Application preferences that belong to a profile. Each preference is added here, with its default in
-// defaultSettings and its restoration in normalizeSettings.
+// defaultSettings when it is not optional.
 export interface ProfileSettings {
 	// Whether the contextual panel of each workspace is expanded on wide screens; an absent workspace
 	// shows it expanded. Narrow screens open the panel as a drawer that is never persisted.
@@ -120,9 +99,6 @@ export interface AnnotationPreferences {
 	// Groups the next solar-system search lists.
 	readonly bodies: AnnotationBodies
 }
-
-// Label densities of Annotation.
-export const ANNOTATION_DENSITIES = ['minimal', 'balanced', 'detailed'] as const satisfies readonly AnnotationDensity[]
 
 // Annotation of a profile that has not edited it: every group but the constellation names, and the stars of the catalog
 // and the brighter deep-sky objects.

@@ -33,7 +33,7 @@ import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
 import { useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { activeProfile, cameraPlateSolving, exposureSettings, pointingModelSettings, profileState, setPointingModelSettings } from '../profile/profile'
-import { type CameraIdentity, POINTING_MODEL_PRESETS, type PointingModelSettings } from '../profile/schema'
+import { type CameraIdentity, POINTING_MODEL_MAXIMUM_POINTS, POINTING_MODEL_MINIMUM_POINTS, POINTING_MODEL_PRESETS, type PointingModelSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
@@ -167,7 +167,7 @@ export function PointingModelBuilderSections({ device, availability, role, mount
 						</Button>
 					))}
 				</div>
-				<NumberInput label="Points" value={shown.count} min={6} max={120} step={1} disabled={locked} onChange={(count) => update({ count })} />
+				<NumberInput label="Points" value={shown.count} min={POINTING_MODEL_MINIMUM_POINTS} max={POINTING_MODEL_MAXIMUM_POINTS} step={1} disabled={locked} onChange={(count) => update({ count })} />
 				<NumberInput label="Minimum Altitude" value={shown.minimumAltitude} min={5} max={75} step={1} suffix="°" disabled={locked} onChange={(minimumAltitude) => update({ minimumAltitude })} />
 				<NumberInput label="Meridian Avoidance" value={shown.meridianAvoidance} min={0} max={30} step={1} suffix="°" disabled={locked} onChange={(meridianAvoidance) => update({ meridianAvoidance })} />
 				<NumberInput label="Settle Time" value={shown.settleDelay} min={0} max={120} step={0.5} suffix="s" disabled={locked} onChange={(settleDelay) => update({ settleDelay })} />

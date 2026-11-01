@@ -56,9 +56,6 @@ export const SKY_LAYERS: readonly SkyLayerDefinition[] = [
 	{ id: 'localMeridian', label: 'Local meridian', visible: true, localOnly: true },
 ]
 
-// Ids of the layers, for validating stored preferences.
-export const SKY_LAYER_IDS: ReadonlySet<string> = new Set(SKY_LAYERS.map((layer) => layer.id))
-
 // Faintest star magnitude downloaded for the map, and so the faintest that can be drawn; fainter stars
 // are still found by search.
 export const MAP_STAR_MAGNITUDE_LIMIT = 8

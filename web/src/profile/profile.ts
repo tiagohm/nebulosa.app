@@ -9,9 +9,8 @@ import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
 import { DEFAULT_STAR_PROFILE_SETTINGS, type StarProfileSettings } from '../stars/starprofile.settings'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
-import { parseJson, readText, type Stores, writeText } from '../storage'
+import { isRecord, parseJson, readText, type Stores, writeText } from '../storage'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
-import { migrate, normalizeDegrees, normalizeSkyObserver } from './migrate'
 import {
 	type AstronomicalClockPreferences,
 	type AutoFocusSettings,
@@ -65,9 +64,9 @@ import {
 } from './schema'
 
 // Profiles of the browser and the profile active in this tab, and the actions that change them. Profiles are a
-// versioned collection (schema.ts) in localStorage, shared by every tab with last-write-wins semantics, read through
-// migrate.ts; the active profile id is kept per tab in sessionStorage, and also as the browser's last selection so
-// that new tabs open it.
+// versioned collection (schema.ts) in localStorage, shared by every tab with last-write-wins semantics; a document of
+// another version is discarded, never migrated, and one of the current version is trusted as written. The active
+// profile id is kept per tab in sessionStorage, and also as the browser's last selection so that new tabs open it.
 
 // localStorage key of the persisted ProfilesStorage.
 export const PROFILES_KEY = 'nebulosa:profiles'
@@ -106,6 +105,11 @@ function writeProfiles(state: ProfileState, stores: Stores, profiles: readonly P
 	return ok
 }
 
+// Returns the profiles of a stored document, or undefined for one that is not of the current version.
+function storedProfiles(data: unknown): Profile[] | undefined {
+	return isRecord(data) && data.version === PROFILES_VERSION && Array.isArray(data.profiles) ? (data.profiles as Profile[]) : undefined
+}
+
 // Loads the profiles into state and restores the tab's active profile: this tab's last profile, then
 // the browser's last selection, then the first profile. Creates and stores a Default profile when
 // nothing is stored. A stored document that cannot be read is left untouched until the next change,
@@ -113,7 +117,7 @@ function writeProfiles(state: ProfileState, stores: Stores, profiles: readonly P
 export function loadProfiles(state: ProfileState, stores: Stores) {
 	const now = new Date().toISOString()
 	const text = readText(stores.local, PROFILES_KEY)
-	let profiles = text === undefined ? undefined : migrate(parseJson(text), now)
+	let profiles = text === undefined ? undefined : storedProfiles(parseJson(text))
 
 	if (!profiles?.length) {
 		profiles = [newProfile(DEFAULT_PROFILE_NAME, now)]
@@ -613,6 +617,41 @@ export function setImageAstrometrySettings(state: ProfileState, patch: Partial<O
 	const current = imageAstrometrySettings(profile.settings)
 	profile.settings.imageAstrometry = { ...current, ...patch, coordinates: { ...current.coordinates, ...patch.coordinates }, grid: { ...current.grid, ...patch.grid } }
 	touch(profile)
+}
+
+// Lowest elevation accepted for an observer in meters (below the Dead Sea shore, -430 m).
+const MIN_OBSERVER_ELEVATION = -500
+
+// Highest elevation accepted for an observer in meters (above Everest, 8849 m).
+const MAX_OBSERVER_ELEVATION = 9000
+
+// Whether a name is an IANA time zone the browser knows; an unknown one is dropped, using the browser's.
+function isKnownTimeZone(timeZone: string) {
+	try {
+		return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone !== ''
+	} catch {
+		return false
+	}
+}
+
+// Returns a valid observer, or undefined for anything out of range or incomplete.
+export function normalizeSkyObserver(value: unknown): SkyObserverSettings | undefined {
+	if (!isRecord(value)) return undefined
+
+	const { latitude, longitude, elevation, name, timeZone } = value
+	if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90) return undefined
+	if (typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return undefined
+	if (typeof elevation !== 'number' || !Number.isFinite(elevation) || elevation < MIN_OBSERVER_ELEVATION || elevation > MAX_OBSERVER_ELEVATION) return undefined
+
+	const observer: SkyObserverSettings = { latitude, longitude, elevation }
+	if (typeof name === 'string' && name.trim()) observer.name = name.trim()
+	if (typeof timeZone === 'string' && isKnownTimeZone(timeZone)) observer.timeZone = timeZone
+	return observer
+}
+
+// Normalizes an angle in degrees to [0, 360).
+function normalizeDegrees(angle: number) {
+	return ((angle % 360) + 360) % 360
 }
 
 // Sets the Sky observer of the active profile, or clears it with undefined. Returns false, changing

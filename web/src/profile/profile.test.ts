@@ -168,40 +168,35 @@ describe('load', () => {
 		expect(stores.local.getItem(PROFILES_KEY)).toBe('{oops')
 	})
 
-	test('fills missing fields and drops invalid or duplicate profiles', () => {
-		const stores = newStores()
-		const profiles = [{ id: 'a', name: ' A ', connectionId: 'c', equipment: { c: { MAIN_CAMERA: 'cam', BOGUS: 'x', MOUNT: 3 } } }, { name: 'no id' }, { id: 'a', name: 'dup' }, { id: 'b' }]
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 1, profiles }))
-		const state = load(stores)
+	test('a document of another version falls back to Default and is replaced by the next change', async () => {
+		for (const version of [PROFILES_VERSION - 1, PROFILES_VERSION + 1]) {
+			const stores = newStores()
+			const document = JSON.stringify({ version, profiles: [newProfile('Old')] })
+			stores.local.setItem(PROFILES_KEY, document)
+			const state = load(stores)
 
-		expect(state.profiles.map((p) => [p.id, p.name])).toEqual([
-			['a', 'A'],
-			['b', 'Unnamed'],
-		])
-		expect(state.profiles[0]).toMatchObject({ connectionId: 'c', equipment: { c: { MAIN_CAMERA: { id: 'cam', name: '' } } }, settings: {} })
-		expect(state.profiles[1]).toMatchObject({ equipment: {}, settings: {}, createdAt: expect.any(String) })
+			expect(state.profiles.map((p) => p.name)).toEqual(['Default'])
+			expect(stores.local.getItem(PROFILES_KEY)).toBe(document)
+
+			renameProfile(state, state.profiles[0].id, 'Renamed')
+			await Bun.sleep(0)
+			expect(stored(stores)).toMatchObject({ version: PROFILES_VERSION, profiles: [{ name: 'Renamed' }] })
+		}
 	})
 
-	test('version 2 restores assigned device names', () => {
+	test('a document of the current version is read as written', () => {
 		const stores = newStores()
-		const profiles = [{ id: 'a', name: 'A', equipment: { c: { MAIN_CAMERA: { id: 'cam', name: 'ZWO ASI2600' }, MOUNT: { name: 'no id' }, FOCUSER: { id: 'f' } } } }]
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
+		const profile = { ...newProfile('A'), connectionId: 'c', equipment: { c: { MAIN_CAMERA: dev('cam') } } }
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: PROFILES_VERSION, profiles: [profile] }))
 
-		expect(load(stores).profiles[0].equipment).toEqual({ c: { MAIN_CAMERA: { id: 'cam', name: 'ZWO ASI2600' }, FOCUSER: { id: 'f', name: '' } } })
-	})
-
-	test('an unknown version falls back to Default', () => {
-		const stores = newStores()
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 99, profiles: [{ id: 'a', name: 'A' }] }))
-
-		expect(load(stores).profiles.map((p) => p.name)).toEqual(['Default'])
+		expect(snapshot(load(stores)).profiles).toEqual([profile])
 	})
 })
 
 describe('active profile', () => {
 	function seeded() {
 		const local = new MemoryStorage()
-		local.setItem(PROFILES_KEY, JSON.stringify({ version: 1, profiles: [newProfile('A'), newProfile('B'), newProfile('C')] }))
+		local.setItem(PROFILES_KEY, JSON.stringify({ version: PROFILES_VERSION, profiles: [newProfile('A'), newProfile('B'), newProfile('C')] }))
 		return local
 	}
 
@@ -372,22 +367,6 @@ describe('equipment', () => {
 })
 
 describe('settings', () => {
-	test('restores panel visibility and drops invalid entries', () => {
-		const stores = newStores()
-		const profiles = [
-			{ id: 'a', name: 'A', settings: { panels: { capture: false, images: true, sky: 'no', bogus: false }, lastImageDirectory: '/data' } },
-			{ id: 'b', name: 'B', settings: { lastImageDirectory: 3 } },
-			{ id: 'c', name: 'C', settings: 'oops' },
-		]
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
-		const state = load(stores)
-
-		// The Capture workspace and its preferences are gone, so its panel and views are dropped.
-		expect(state.profiles[0].settings).toEqual({ panels: { images: true }, lastImageDirectory: '/data', cameras: {}, sky: {} })
-		expect(state.profiles[1].settings).toEqual({ panels: {}, cameras: {}, sky: {} })
-		expect(state.profiles[2].settings).toEqual({ panels: {}, cameras: {}, sky: {} })
-	})
-
 	test('panels are expanded by default and persisted per profile', () => {
 		const stores = newStores()
 		const state = load(stores)
@@ -438,13 +417,6 @@ describe('settings', () => {
 		expect(annotationPreferences(createProfile(state, 'Other')!.settings)).toEqual(defaults)
 	})
 
-	test('invalid Annotation preferences are restored field by field', () => {
-		const stores = newStores()
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 24, profiles: [{ id: 'a', name: 'A', settings: { imageAnnotation: { layers: { stars: 'no', deepSky: false, bogus: true }, density: 'huge', magnitudeLimit: 'x', labels: false, bodies: 3 } } }] }))
-		const defaults = DEFAULT_ANNOTATION_PREFERENCES
-		expect(annotationPreferences(load(stores).profiles[0].settings)).toEqual({ ...defaults, labels: false, layers: { ...defaults.layers, deepSky: false } })
-	})
-
 	test('the plate solving of images is kept per profile, apart from those of the cameras', async () => {
 		const stores = newStores()
 		const state = load(stores)
@@ -472,57 +444,9 @@ describe('settings', () => {
 
 		expect(imageProcessingPipeline(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual(steps)
 	})
-
-	test('an invalid pipeline loses the step of an unknown operation, and an invalid parameter takes its default', () => {
-		const defaults = createOperation('backgroundNeutralization')
-		const [parameter] = Object.entries(defaults).find(([, value]) => typeof value === 'number')!
-		const stores = newStores()
-		const stored = [{ enabled: 'yes', operation: { ...defaults, [parameter]: 'x' } }, { enabled: true, operation: { type: 'bogus' } }, 7]
-		stores.local.setItem(
-			PROFILES_KEY,
-			JSON.stringify({
-				version: 24,
-				profiles: [
-					{ id: 'a', name: 'A', settings: { imageProcessing: stored } },
-					{ id: 'b', name: 'B', settings: { imageProcessing: 'no' } },
-				],
-			}),
-		)
-		const [first, second] = load(stores).profiles
-		expect(imageProcessingPipeline(first.settings)).toEqual([{ enabled: true, operation: defaults }])
-		expect(second.settings.imageProcessing).toBeUndefined()
-	})
-
-	test('a version 22 document has no save directory, and an invalid one is dropped', () => {
-		const stored = (lastSaveDirectory: unknown, version: number) => {
-			const stores = newStores()
-			stores.local.setItem(PROFILES_KEY, JSON.stringify({ version, profiles: [{ id: 'a', name: 'A', settings: { lastSaveDirectory } }] }))
-			return load(stores).profiles[0].settings.lastSaveDirectory
-		}
-
-		expect(stored(undefined, 22)).toBeUndefined()
-		expect(stored(3, 23)).toBeUndefined()
-		expect(stored('', 23)).toBeUndefined()
-		expect(stored('/out', 23)).toBe('/out')
-	})
 })
 
 describe('sky settings', () => {
-	test('restores the observer and drops invalid ones', () => {
-		const stores = newStores()
-		const profiles = [
-			{ id: 'a', name: 'A', settings: { sky: { observer: { name: ' Backyard ', latitude: -23.5, longitude: -46.6, elevation: 760 } } } },
-			{ id: 'b', name: 'B', settings: { sky: { observer: { latitude: 91, longitude: 0, elevation: 0 } } } },
-			{ id: 'c', name: 'C', settings: { sky: { observer: { latitude: 10, longitude: 20 } } } },
-		]
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
-		const state = load(stores)
-
-		expect(state.profiles[0].settings.sky).toEqual({ observer: { name: 'Backyard', latitude: -23.5, longitude: -46.6, elevation: 760 } })
-		expect(state.profiles[1].settings.sky).toEqual({})
-		expect(state.profiles[2].settings.sky).toEqual({})
-	})
-
 	test('sets, validates, and clears the observer of the active profile', () => {
 		const state = load(newStores())
 		const before = state.profiles[0].updatedAt
@@ -554,19 +478,6 @@ describe('sky settings', () => {
 		expect(state.profiles[0].settings.sky.observer).toEqual({ latitude: 10, longitude: 20, elevation: 30 })
 	})
 
-	test('restores display preferences, dropping unknown layers and limits out of range', () => {
-		const stores = newStores()
-		const profiles = [
-			{ id: 'a', name: 'A', settings: { sky: { display: { layers: { deepSky: false, milkyWay: true, grid: 'no' }, magnitudeLimit: 5 } } } },
-			{ id: 'b', name: 'B', settings: { sky: { display: { layers: { stars: false }, magnitudeLimit: 12 } } } },
-		]
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
-		const state = load(stores)
-
-		expect(state.profiles[0].settings.sky.display).toEqual({ layers: { deepSky: false }, magnitudeLimit: 5 })
-		expect(state.profiles[1].settings.sky.display).toEqual({ layers: { stars: false } })
-	})
-
 	test('sets display preferences of the active profile', () => {
 		const state = load(newStores())
 		setSkyLayerVisible(state, 'constellationBoundaries', true)
@@ -575,17 +486,11 @@ describe('sky settings', () => {
 	})
 
 	test('keeps the time bar hidden unless it was shown', () => {
-		const stores = newStores()
-		const profiles = [
-			{ id: 'a', name: 'A', settings: { sky: { timeBar: true } } },
-			{ id: 'b', name: 'B', settings: { sky: { timeBar: 'yes' } } },
-		]
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles }))
-		const state = load(stores)
+		const state = load(newStores())
+		expect(state.profiles[0].settings.sky).toEqual({})
 
+		setSkyTimeBarVisible(state, true)
 		expect(state.profiles[0].settings.sky.timeBar).toBeTrue()
-		expect(state.profiles[1].settings.sky).toEqual({})
-
 		setSkyTimeBarVisible(state, false)
 		expect(state.profiles[0].settings.sky).toEqual({})
 		setSkyTimeBarVisible(state, true)
@@ -618,48 +523,7 @@ describe('sky settings', () => {
 		expect(state.profiles[0].equipment).toEqual(equipment)
 	})
 
-	test('restores presets, dropping invalid ones and a missing active preset', () => {
-		const stores = newStores()
-		const optics = { focalLength: 600, focalMultiplier: 1, aperture: 0, sensor: { kind: 'physical' as const, width: 23.5, height: 15.6 }, rotation: -90 }
-		const framing = {
-			presets: [
-				{ id: 'p', name: 'P', optics },
-				{ id: '', name: 'X', optics },
-				{ id: 'q', name: 'Q', optics: { ...optics, sensor: { kind: 'film' } } },
-			],
-			activePresetId: 'gone',
-			visible: true,
-		}
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 2, profiles: [{ id: 'a', name: 'A', settings: { sky: { framing } } }] }))
-		const state = load(stores)
-
-		expect(state.profiles[0].settings.sky.framing).toEqual({ presets: [{ id: 'p', name: 'P', optics: { ...optics, rotation: 270 } }], visible: true })
-	})
-
-	test('restores the Equipment Setup framing and telescope, dropping invalid values', () => {
-		const stores = newStores()
-		const framing = { presets: [], visible: false, source: 'equipment', sensorSource: 'GUIDE_CAMERA', manualSensor: { kind: 'pixels', width: 100, height: 50, pixelSize: 2 }, equipmentRotation: -30 }
-		const telescope = { focalLength: 800, focalMultiplier: 0.8, aperture: 'wide' }
-		stores.local.setItem(
-			PROFILES_KEY,
-			JSON.stringify({
-				version: 2,
-				profiles: [
-					{ id: 'a', name: 'A', settings: { sky: { framing }, telescope } },
-					{ id: 'b', name: 'B', settings: { sky: { framing: { ...framing, source: 'other', sensorSource: 'ROTATOR' } } } },
-				],
-			}),
-		)
-		const state = load(stores)
-
-		expect(state.profiles[0].settings.sky.framing).toEqual({ presets: [], visible: false, source: 'equipment', sensorSource: 'GUIDE_CAMERA', manualSensor: { kind: 'pixels', width: 100, height: 50, pixelSize: 2 }, equipmentRotation: 330 })
-		expect(state.profiles[0].settings.telescope).toEqual({ focalLength: 800, focalMultiplier: 0.8, aperture: 0 })
-		expect(state.profiles[1].settings.sky.framing?.source).toBeUndefined()
-		expect(state.profiles[1].settings.sky.framing?.sensorSource).toBeUndefined()
-		expect(state.profiles[1].settings.telescope).toBeUndefined()
-	})
-
-	test('the guide telescope belongs to the active profile, is persisted, and takes the guide focal length of version 8', async () => {
+	test('the guide telescope belongs to the active profile and is persisted', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		setGuideTelescopeOptics(state, { focalLength: 240, focalMultiplier: 0.8, aperture: 60 })
@@ -673,28 +537,6 @@ describe('sky settings', () => {
 			{ focalLength: 240, focalMultiplier: 0.8, aperture: 60 },
 			{ focalLength: 400, focalMultiplier: 1, aperture: 80 },
 		])
-
-		// Version 8 kept the focal length in the guiding form of each camera: the Guide Camera of the active setup wins,
-		// else the first form with one.
-		const guiding = (focalLength: unknown) => ({ guiding: { ...DEFAULT_GUIDING_SETTINGS, focalLength } })
-		const cameras = { c: { 'cam-main': guiding(1000), 'cam-guide': guiding(200) }, d: { other: guiding(-1) } }
-		const older = newStores()
-		older.local.setItem(
-			PROFILES_KEY,
-			JSON.stringify({
-				version: 8,
-				profiles: [
-					{ id: 'a', name: 'A', connectionId: 'c', equipment: { c: { GUIDE_CAMERA: { id: 'cam-guide', name: 'Guide' } } }, settings: { cameras } },
-					{ id: 'b', name: 'B', settings: { cameras } },
-					{ id: 'c', name: 'C', settings: { cameras: { d: { other: guiding(-1) } } } },
-					{ id: 'd', name: 'D', settings: { cameras, guideTelescope: { focalLength: 50, focalMultiplier: 1, aperture: 0 } } },
-				],
-			}),
-		)
-		const migrated = load(older).profiles
-		expect(migrated.map((profile) => profile.settings.guideTelescope?.focalLength)).toEqual([200, 1000, undefined, 50])
-		expect(migrated[0].settings.guideTelescope).toEqual({ focalLength: 200, focalMultiplier: 1, aperture: 0 })
-		expect(guidingSettings(migrated[0].settings, GUIDE)).toEqual(DEFAULT_GUIDING_SETTINGS)
 	})
 
 	test('Equipment Setup framing choices and telescope belong to the active profile', () => {
@@ -779,7 +621,7 @@ describe('camera forms', () => {
 		expect(profileCamera({ connectionId: 'c' }, 'cam-main')).toEqual(MAIN)
 	})
 
-	test('are persisted and restored, replacing invalid fields with defaults', async () => {
+	test('are persisted and restored', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		setExposureSettings(state, MAIN, { exposureTime: 0.0001, binX: 2, binY: 2, subframe: true, width: 100, height: 80 })
@@ -791,32 +633,9 @@ describe('camera forms', () => {
 		expect(exposureSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 0.0001, binX: 2, binY: 2, subframe: true, width: 100, height: 80 })
 		expect(acquisitionSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'fixed', count: 30, output: { mode: 'preview-save', directory: '/data/allsky', filenameTemplate: 'sky_{seq}', format: 'XISF' } })
 		expect(autoFocusSettings(reloaded, MAIN)).toMatchObject({ fittingMode: 'TREND_PARABOLIC', stepSize: 80, initialOffsetSteps: 6, settleDelay: 1.5 })
-
-		const invalid = newStores()
-		const cameras = {
-			c: {
-				'cam-main': {
-					exposure: { exposureTime: 0, binX: 0, gain: 'high' },
-					acquisition: { exposureMode: 'burst', count: 2.5, delay: -1, frameType: 'SKY', output: { mode: 'x', format: 'NATIVE', directory: '  ' } },
-					autoFocus: { fittingMode: 'CUBIC', stepSize: 0, initialOffsetSteps: 0, measureTimeout: 0, detection: { detector: { provider: 'astap' } } },
-				},
-				'cam-empty': 'oops',
-			},
-			d: 'oops',
-		}
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 4, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
-		expect(load(invalid).profiles[0].settings.cameras).toEqual({
-			c: {
-				'cam-main': {
-					exposure: DEFAULT_EXPOSURE_SETTINGS,
-					acquisition: DEFAULT_ACQUISITION_SETTINGS,
-					autoFocus: DEFAULT_AUTO_FOCUS_SETTINGS,
-				},
-			},
-		})
 	})
 
-	test('the TPPA form is kept per camera, persisted, and restored with defaults for invalid fields', async () => {
+	test('the TPPA form is kept per camera and persisted', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		expect(tppaSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_TPPA_SETTINGS)
@@ -827,22 +646,6 @@ describe('camera forms', () => {
 
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
 		expect(tppaSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_TPPA_SETTINGS, direction: 'EAST', slewRate: 'SPEED_4', rotation: 10 })
-
-		const invalid = newStores()
-		const cameras = { c: { 'cam-main': { tppa: { direction: 'NORTH', slewRate: '', rotation: 40, settleDelay: -1, refinementDelay: 'x' } } } }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 4, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
-		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-main': { tppa: DEFAULT_TPPA_SETTINGS } } })
-	})
-
-	test('the plate solver of a TPPA form becomes the plate solving settings of its camera', () => {
-		const stores = newStores()
-		const cameras = { c: { 'cam-main': { tppa: { ...DEFAULT_TPPA_SETTINGS, solver: { provider: 'nova', strategy: 'blind', downsample: 2 } } }, 'cam-guide': { tppa: { ...DEFAULT_TPPA_SETTINGS, solver: { provider: 'gaia', strategy: 'x', downsample: 0 } } } } }
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 15, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
-
-		const settings = load(stores).profiles[0].settings
-		expect(cameraPlateSolving(settings, MAIN)).toEqual({ provider: 'nova', strategy: 'blind', downsample: 2 })
-		expect(cameraPlateSolving(settings, GUIDE)).toEqual(DEFAULT_CAMERA_PLATE_SOLVING)
-		expect(tppaSettings(settings, MAIN)).toEqual(DEFAULT_TPPA_SETTINGS)
 	})
 
 	test('the plate solving settings belong to the camera and keep the scale tolerance', async () => {
@@ -854,28 +657,9 @@ describe('camera forms', () => {
 
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
 		expect(cameraPlateSolving(reloaded, MAIN)).toEqual({ provider: 'nova', strategy: 'assisted', scaleTolerance: 0.3 })
-
-		const invalid = newStores()
-		const cameras = { c: { 'cam-main': { plateSolving: { provider: 'gaia', strategy: 'x', downsample: 0, scaleTolerance: 2 } } } }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 16, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
-		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-main': { plateSolving: DEFAULT_CAMERA_PLATE_SOLVING } } })
 	})
 
-	test('Auto Focus and TPPA forms saved without an exposure time keep the one of the camera they used', () => {
-		const stores = newStores()
-		const { exposureTime: _autoFocus, ...autoFocus } = DEFAULT_AUTO_FOCUS_SETTINGS
-		const { exposureTime: _tppa, ...tppa } = DEFAULT_TPPA_SETTINGS
-		const cameras = { c: { 'cam-main': { exposure: { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 30 }, autoFocus, tppa }, 'cam-guide': { autoFocus: { ...autoFocus, exposureTime: 4 }, tppa: { ...tppa, exposureTime: 6 } } } }
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 15, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
-		const settings = load(stores).profiles[0].settings
-
-		expect(autoFocusSettings(settings, MAIN).exposureTime).toBe(30)
-		expect(tppaSettings(settings, MAIN).exposureTime).toBe(30)
-		expect(autoFocusSettings(settings, GUIDE).exposureTime).toBe(4)
-		expect(tppaSettings(settings, GUIDE).exposureTime).toBe(6)
-	})
-
-	test('the DARV form is kept per camera, persisted, restored with defaults for invalid fields, and a version 5 document keeps its forms', async () => {
+	test('the DARV form is kept per camera and persisted', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		expect(darvSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_DARV_SETTINGS)
@@ -887,19 +671,9 @@ describe('camera forms', () => {
 
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
 		expect(darvSettings(reloaded, MAIN)).toEqual({ axis: 'altitude', direction: 'WEST', slewRate: 'SPEED_1', legDuration: 90, stopTracking: true })
-
-		const invalid = newStores()
-		const cameras = { c: { 'cam-main': { darv: { axis: 'roll', direction: 'NORTH', slewRate: '', legDuration: 1 } } } }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 6, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
-		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-main': { darv: DEFAULT_DARV_SETTINGS } } })
-
-		const older = newStores()
-		const forms = { c: { 'cam-main': { exposure: { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 4 }, tppa: { ...DEFAULT_TPPA_SETTINGS, rotation: 12 } } } }
-		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 5, profiles: [{ id: 'a', name: 'A', settings: { cameras: forms } }] }))
-		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 	})
 
-	test('the Flat Wizard form is kept per camera, persisted, restored with defaults for invalid fields, and a version 6 document keeps its forms', async () => {
+	test('the Flat Wizard form is kept per camera and persisted', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		expect(flatWizardSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_FLAT_WIZARD_SETTINGS)
@@ -914,24 +688,9 @@ describe('camera forms', () => {
 
 		const reloaded = load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings
 		expect(flatWizardSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_FLAT_WIZARD_SETTINGS, filters, directory: '/flats', effectiveClip: 60000, settleTime: 5 })
-
-		const invalid = newStores()
-		const bad = { label: ' ', slot: -1, count: 0, initialExposure: 99, minimumExposure: 5, maximumExposure: 1, targetRange: [3, 2], brightness: -1 }
-		const cameras = { c: { 'cam-main': { flatWizard: { filters: [bad, 'x'], settleTime: -1, directory: ' ', effectiveClip: 0, maximumTrials: 0, maximumRejections: 1.5 } } } }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 7, profiles: [{ id: 'a', name: 'A', settings: { cameras } }] }))
-		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-main': { flatWizard: DEFAULT_FLAT_WIZARD_SETTINGS } } })
-
-		const empty = newStores()
-		empty.local.setItem(PROFILES_KEY, JSON.stringify({ version: 7, profiles: [{ id: 'a', name: 'A', settings: { cameras: { c: { 'cam-main': { flatWizard: { filters: [] } } } } } }] }))
-		expect(flatWizardSettings(load(empty).profiles[0].settings, MAIN).filters).toEqual([DEFAULT_FLAT_WIZARD_FILTER])
-
-		const older = newStores()
-		const forms = { c: { 'cam-main': { darv: { ...DEFAULT_DARV_SETTINGS, legDuration: 90 } } } }
-		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 6, profiles: [{ id: 'a', name: 'A', settings: { cameras: forms } }] }))
-		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
 	})
 
-	test('the guiding form is kept per camera, persisted, restored with defaults for invalid fields, and a version 7 document keeps its forms', async () => {
+	test('the guiding form is kept per camera and persisted', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		expect(guidingSettings(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_GUIDING_SETTINGS)
@@ -957,38 +716,6 @@ describe('camera forms', () => {
 			fastRecenter: false,
 			reverseDecOutputAfterMeridianFlip: true,
 		})
-
-		const invalid = newStores()
-		const bad = {
-			exposureTime: 0,
-			trackingMode: 'x',
-			focalLength: -1,
-			recalibrate: 'no',
-			calibrationPulse: 0,
-			aggressivenessRA: 2,
-			aggressivenessDEC: -1,
-			maximumPulseRA: 1e9,
-			maximumPulseDEC: Number.NaN,
-			settle: { pixels: 0, time: -1, timeout: 0 },
-			ditherPixels: 0,
-			ditherRaOnly: 'yes',
-			searchRegion: 200,
-			stickyLockPosition: 'yes',
-			ditherMode: 'square',
-			fastRecenter: 0,
-			reverseDecOutputAfterMeridianFlip: 1,
-		}
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 9, profiles: [{ id: 'a', name: 'A', settings: { cameras: { c: { 'cam-guide': { guiding: bad } } } } }] }))
-		expect(load(invalid).profiles[0].settings.cameras).toEqual({ c: { 'cam-guide': { guiding: DEFAULT_GUIDING_SETTINGS } } })
-
-		const older = newStores()
-		const forms = { c: { 'cam-main': { flatWizard: { ...DEFAULT_FLAT_WIZARD_SETTINGS, settleTime: 4 } } } }
-		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 7, profiles: [{ id: 'a', name: 'A', settings: { cameras: forms } }] }))
-		expect(load(older).profiles[0].settings.cameras).toEqual(forms)
-
-		const newer = newStores()
-		newer.local.setItem(PROFILES_KEY, JSON.stringify({ version: PROFILES_VERSION + 1, profiles: [{ id: 'a', name: 'A' }] }))
-		expect(load(newer).profiles.map((profile) => profile.id)).not.toContain('a')
 	})
 
 	const CAMERA = { connectionId: 'c', deviceId: 'cam' }
@@ -1020,27 +747,7 @@ describe('camera forms', () => {
 		expect(saveFramingReference(state, { name: 'One too many', rightAscension: 0, declination: 0, source: 'manual' })).toBeUndefined()
 	})
 
-	test('a version 16 document reads without the new forms, and invalid ones are repaired or dropped alone', () => {
-		const older = newStores()
-		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 16, profiles: [{ id: 'a', name: 'A', settings: { cameras: { c: { cam: { tppa: DEFAULT_TPPA_SETTINGS } } } } }] }))
-		const read = load(older).profiles[0].settings
-		expect(read.framingReferences).toBeUndefined()
-		expect(targetCenteringSettings(read, CAMERA)).toEqual(DEFAULT_TARGET_CENTERING_SETTINGS)
-		expect(read.cameras.c.cam.tppa).toBeDefined()
-
-		const valid = { id: 'f', name: 'Good', rightAscension: 1, declination: 1, source: 'sky', createdAt: 1, updatedAt: 2 }
-		const invalid = [valid, { ...valid, name: 'Same id' }, { ...valid, id: 'g', rightAscension: -1 }, { ...valid, id: 'h', declination: 2 }, { ...valid, id: 'i', rightAscension: 'x' }, { ...valid, id: '', name: 'No id' }, { ...valid, id: 'j', name: ' ' }, 'nothing']
-		const form = { exposureTime: -1, tolerance: 1e6, maximumCorrections: 2.5, noSolutionRetries: 9, maximumFrames: 0, settleDelay: -1, maximumCorrection: 90, blindRetry: 'yes', framingId: 7 }
-		const broken = newStores()
-		broken.local.setItem(PROFILES_KEY, JSON.stringify({ version: PROFILES_VERSION, profiles: [{ id: 'a', name: 'A', settings: { framingReferences: invalid, cameras: { c: { cam: { targetCentering: form, tppa: DEFAULT_TPPA_SETTINGS } } } } }] }))
-		const repaired = load(broken).profiles[0].settings
-
-		expect(repaired.framingReferences).toEqual([valid as FramingReference])
-		expect(targetCenteringSettings(repaired, CAMERA)).toEqual(DEFAULT_TARGET_CENTERING_SETTINGS)
-		expect(repaired.cameras.c.cam.tppa).toBeDefined()
-	})
-
-	test('the star detection request is the profile one, persisted and restored with defaults for invalid fields', async () => {
+	test('the star detection request is the profile one, and is persisted', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		expect(starDetectionSettings(activeProfile(state).settings)).toEqual(DEFAULT_STAR_REQUEST)
@@ -1049,13 +756,9 @@ describe('camera forms', () => {
 		setStarDetectionSettings(state, request)
 		await Bun.sleep(0)
 		expect(starDetectionSettings(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual(request)
-
-		const invalid = newStores()
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 4, profiles: [{ id: 'a', name: 'A', settings: { starDetection: { detector: { provider: 'builtin', maximumRadius: 2 } } } }] }))
-		expect(starDetectionSettings(load(invalid).profiles[0].settings)).toEqual(DEFAULT_STAR_REQUEST)
 	})
 
-	test('the Star Profile Inspector settings are the profile ones, persisted and restored with defaults for invalid fields', async () => {
+	test('the Star Profile Inspector settings are the profile ones, and are persisted', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		expect(starProfileSettings(activeProfile(state).settings)).toEqual(DEFAULT_STAR_PROFILE_SETTINGS)
@@ -1063,13 +766,9 @@ describe('camera forms', () => {
 		setStarProfileSettings(state, { model: 'moments', minSNR: 3, grid: false })
 		await Bun.sleep(0)
 		expect(starProfileSettings(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual({ ...DEFAULT_STAR_PROFILE_SETTINGS, model: 'moments', minSNR: 3, grid: false })
-
-		const invalid = newStores()
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 17, profiles: [{ id: 'a', name: 'A', settings: { starProfile: { model: 'gaussian', searchRadius: 1000, maximumRadius: 2, minSNR: -1, grid: 'yes' } } }] }))
-		expect(starProfileSettings(load(invalid).profiles[0].settings)).toEqual(DEFAULT_STAR_PROFILE_SETTINGS)
 	})
 
-	test('the streak detector settings are the profile ones, persisted and restored with defaults for invalid fields', async () => {
+	test('the streak detector settings are the profile ones, and are persisted', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		expect(streakDetectionSettings(activeProfile(state).settings)).toEqual(DEFAULT_STREAK_SETTINGS)
@@ -1078,17 +777,9 @@ describe('camera forms', () => {
 		setStreakDetectionSettings(state, settings)
 		await Bun.sleep(0)
 		expect(streakDetectionSettings(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual(settings)
-
-		const invalid = newStores()
-		const stored = { minLength: -1, minCoverage: -0.5, minCoherence: 1.5, maxStreaks: 2.5, plane: 'luminance', allowBorderClipping: 'yes', angleStep: Math.PI / 180, orientationTolerance: Math.PI / 2 }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 12, profiles: [{ id: 'a', name: 'A', settings: { streakDetection: stored } }] }))
-		// The tolerance is cut to the 16 angle steps the Hough voting budget allows.
-		const restored = streakDetectionSettings(load(invalid).profiles[0].settings)
-		expect(restored).toEqual({ ...DEFAULT_STREAK_SETTINGS, angleStep: Math.PI / 180, orientationTolerance: restored.orientationTolerance })
-		expect(restored.orientationTolerance).toBeCloseTo((16 * Math.PI) / 180, 6)
 	})
 
-	test('the notifications read and dismissed are the profile ones, persisted, migrated, and pruned', async () => {
+	test('the notifications read and dismissed are the profile ones, persisted, and pruned', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		const other = createProfile(state, 'Other')!
@@ -1108,21 +799,9 @@ describe('camera forms', () => {
 		pruneNotificationPreferences(state, ['b', 'c'])
 		expect(activeProfile(state).settings.notifications).toEqual({ readIds: ['b', 'c'], dismissedIds: ['c'] })
 		expect(activeProfile(state).updatedAt).toBe(updatedAt)
-
-		// A version 12 document keeps its preferences and gains none; invalid ids are dropped.
-		const older = newStores()
-		const streakDetection = { ...DEFAULT_STREAK_SETTINGS, minLength: 30 }
-		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 12, profiles: [{ id: 'a', name: 'A', settings: { streakDetection } }] }))
-		const migrated = load(older).profiles[0].settings
-		expect(migrated.streakDetection).toEqual(streakDetection)
-		expect(migrated.notifications).toBeUndefined()
-
-		const invalid = newStores()
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 13, profiles: [{ id: 'a', name: 'A', settings: { notifications: { readIds: ['x', 1, '', 'x', 'y'], dismissedIds: 'z' } } }] }))
-		expect(load(invalid).profiles[0].settings.notifications).toEqual({ readIds: ['x', 'y'], dismissedIds: [] })
 	})
 
-	test('the appearance of the astrometric aids is kept, merging partial changes, and restored with defaults for invalid fields', async () => {
+	test('the appearance of the astrometric aids is kept, merging partial changes', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		expect(imageAstrometrySettings(activeProfile(state).settings)).toEqual(DEFAULT_IMAGE_ASTROMETRY)
@@ -1132,11 +811,6 @@ describe('camera forms', () => {
 		await Bun.sleep(0)
 		const expected = { ...DEFAULT_IMAGE_ASTROMETRY, coordinates: { format: 'decimal', precision: 3 }, grid: { ...DEFAULT_IMAGE_ASTROMETRY.grid, color: 'axes', opacity: 0.8 }, orientation: 'center' } satisfies typeof DEFAULT_IMAGE_ASTROMETRY
 		expect(imageAstrometrySettings(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual(expected)
-
-		const invalid = newStores()
-		const stored = { coordinates: { format: 'roman', precision: 1.5 }, grid: { mode: 'dots', labels: 'yes', minor: false, opacity: 4, color: 'accent' }, crosshair: true, scaleBar: 1, orientation: 'up' }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 15, profiles: [{ id: 'a', name: 'A', settings: { imageAstrometry: stored } }] }))
-		expect(imageAstrometrySettings(load(invalid).profiles[0].settings)).toEqual({ ...DEFAULT_IMAGE_ASTROMETRY, grid: { ...DEFAULT_IMAGE_ASTROMETRY.grid, minor: false, color: 'accent' }, crosshair: true })
 	})
 
 	test('the status bar clock defaults to the apparent sidereal time, is kept per profile, and never repeats a reading', async () => {
@@ -1151,28 +825,6 @@ describe('camera forms', () => {
 
 		setAstronomicalClockPreferences(state, { primary: 'utc' })
 		expect(astronomicalClockPreferences(activeProfile(state).settings).secondary).toBe('none')
-	})
-
-	test('a version 18 document gets the default clock and keeps its other preferences', () => {
-		const stores = newStores()
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 18, profiles: [{ id: 'a', name: 'A', settings: { sky: { timeBar: true }, lastImageDirectory: '/data' } }] }))
-		const { settings } = load(stores).profiles[0]
-		expect(settings.statusBar).toBeUndefined()
-		expect(settings.sky.timeBar).toBeTrue()
-		expect(settings.lastImageDirectory).toBe('/data')
-		expect(astronomicalClockPreferences(settings)).toEqual(DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES)
-	})
-
-	test('an invalid status bar is restored field by field', () => {
-		const stored = (astronomicalClock: unknown) => {
-			const stores = newStores()
-			stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 19, profiles: [{ id: 'a', name: 'A', settings: { statusBar: { astronomicalClock } } }] }))
-			return astronomicalClockPreferences(load(stores).profiles[0].settings)
-		}
-
-		expect(stored({ enabled: 'no', primary: 'bogus', secondary: 7, showSeconds: 1 })).toEqual(DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES)
-		expect(stored({ enabled: false, primary: 'mjd', secondary: 'mjd', showSeconds: false })).toEqual({ enabled: false, primary: 'mjd', secondary: 'none', showSeconds: false })
-		expect(stored('x')).toEqual(DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES)
 	})
 
 	test('the preferences of Close Approaches are kept per profile', async () => {
@@ -1202,42 +854,6 @@ describe('camera forms', () => {
 		expect(astronomicalClockPreferences(settings).primary).toBe('jd')
 	})
 
-	test('a version 21 document gets the default chips and keeps its clock', () => {
-		const stores = newStores()
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 21, profiles: [{ id: 'a', name: 'A', settings: { statusBar: { astronomicalClock: { primary: 'jd' } } } }] }))
-		const { settings } = load(stores).profiles[0]
-		expect(settings.statusBar?.chips).toBeUndefined()
-		expect(astronomicalClockPreferences(settings).primary).toBe('jd')
-	})
-
-	test('invalid chips are restored field by field', () => {
-		const stores = newStores()
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 22, profiles: [{ id: 'a', name: 'A', settings: { statusBar: { chips: { FOCUSER: { visible: 'no', fields: ['azimuth', 'position'] }, MOUNT: { visible: false, fields: 1 }, COVER: 3, BOGUS: {} } } } }] }))
-		const { settings } = load(stores).profiles[0]
-		expect(settings.statusBar?.chips).toEqual({ FOCUSER: { visible: true, fields: ['position'] }, MOUNT: { visible: false, fields: DEFAULT_STATUS_CHIPS.MOUNT.fields } })
-	})
-
-	test('a version 19 document gets the default preferences of Close Approaches and keeps its others', () => {
-		const stores = newStores()
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 19, profiles: [{ id: 'a', name: 'A', settings: { statusBar: { astronomicalClock: { primary: 'jd' } } } }] }))
-		const { settings } = load(stores).profiles[0]
-		expect(settings.closeApproaches).toBeUndefined()
-		expect(closeApproachPreferences(settings)).toEqual(DEFAULT_CLOSE_APPROACH_PREFERENCES)
-		expect(astronomicalClockPreferences(settings).primary).toBe('jd')
-	})
-
-	test('invalid preferences of Close Approaches are restored field by field', () => {
-		const stored = (closeApproaches: unknown) => {
-			const stores = newStores()
-			stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 20, profiles: [{ id: 'a', name: 'A', settings: { closeApproaches } }] }))
-			return closeApproachPreferences(load(stores).profiles[0].settings)
-		}
-
-		expect(stored({ distanceDisplay: 'parsec', timeDisplay: 1, body: 'Vulcan', distanceMax: -1, distanceUnit: 'km' })).toEqual(DEFAULT_CLOSE_APPROACH_PREFERENCES)
-		expect(stored({ distanceDisplay: 'au', timeDisplay: 'observer', body: 'ALL', distanceMax: 0.05, distanceUnit: 'au' })).toEqual({ distanceDisplay: 'au', timeDisplay: 'observer', body: 'ALL', distanceMax: 0.05, distanceUnit: 'au' })
-		expect(stored('x')).toEqual(DEFAULT_CLOSE_APPROACH_PREFERENCES)
-	})
-
 	test('the mode of Astro Weather is kept in the profile', async () => {
 		const stores = newStores()
 		const state = load(stores)
@@ -1248,28 +864,7 @@ describe('camera forms', () => {
 		expect(astroWeatherPreferences(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual({ mode: 'planetary' })
 	})
 
-	test('a version 20 document gets the default mode of Astro Weather, and an invalid one is restored', () => {
-		const stored = (version: number, settings: object) => {
-			const stores = newStores()
-			stores.local.setItem(PROFILES_KEY, JSON.stringify({ version, profiles: [{ id: 'a', name: 'A', settings }] }))
-			return load(stores).profiles[0].settings
-		}
-
-		expect(stored(20, {}).astroWeather).toBeUndefined()
-		expect(astroWeatherPreferences(stored(20, {}))).toEqual(DEFAULT_ASTRO_WEATHER_PREFERENCES)
-		expect(astroWeatherPreferences(stored(21, { astroWeather: { mode: 'solar' } }))).toEqual(DEFAULT_ASTRO_WEATHER_PREFERENCES)
-		expect(astroWeatherPreferences(stored(21, { astroWeather: { mode: 'deepSky' } }))).toEqual({ mode: 'deepSky' })
-	})
-
-	test('a version 14 document keeps its preferences and ignores the observatory code it stored', () => {
-		const stores = newStores()
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 14, profiles: [{ id: 'a', name: 'A', settings: { annotation: { observatoryCode: 'I41' }, sky: { timeBar: true } } }] }))
-		const settings = load(stores).profiles[0].settings
-		expect(settings.sky.timeBar).toBeTrue()
-		expect('annotation' in settings).toBeFalse()
-	})
-
-	test('display settings applied in Images are kept per camera and globally, restored with defaults for invalid fields', async () => {
+	test('display settings applied in Images are kept per camera and globally', async () => {
 		const stores = newStores()
 		const state = load(stores)
 		const global = { ...ORIGINAL_DISPLAY_SETTINGS, stretch: { mode: 'manual', stretch: { shadow: 0.1, midtone: 0.3, highlight: 0.9 } }, invert: true } as const satisfies DisplaySettings
@@ -1284,48 +879,6 @@ describe('camera forms', () => {
 		expect(imageDisplaySettings(reloaded)).toEqual(global)
 		expect(imageDisplaySettings(reloaded, MAIN)).toEqual(camera)
 		expect(imageDisplaySettings(reloaded, { connectionId: 'c', deviceId: 'other' })).toBeUndefined()
-
-		const invalid = newStores()
-		const stored = { debayer: { enabled: true, pattern: 'XYZW' }, stretch: { mode: 'manual', stretch: { shadow: 0.9, midtone: 0.5, highlight: 0.1 } }, brightness: 9, gamma: 2, scnr: { enabled: true, channel: 'GREEN', method: 'bogus', amount: 1 }, invert: 'yes' }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 11, profiles: [{ id: 'a', name: 'A', settings: { imageDisplay: stored } }] }))
-		expect(imageDisplaySettings(load(invalid).profiles[0].settings)).toEqual({ ...ORIGINAL_DISPLAY_SETTINGS, gamma: 2 })
-
-		const presets = newStores()
-		const saved = (id: string, stretch: unknown) => ({ id, name: id, settings: { imageDisplay: { stretch } } })
-		presets.local.setItem(PROFILES_KEY, JSON.stringify({ version: 11, profiles: [saved('a', { mode: 'auto', preset: 'moon', linked: false }), saved('b', { mode: 'auto', linked: false }), saved('c', { mode: 'auto', preset: 'bogus', linked: true })] }))
-		const stretches = load(presets).profiles.map(({ settings }) => imageDisplaySettings(settings)?.stretch)
-		expect(stretches).toEqual([
-			{ mode: 'auto', preset: 'moon', linked: false },
-			{ mode: 'auto', preset: 'medium', linked: false },
-			{ mode: 'auto', preset: 'medium', linked: true },
-		])
-	})
-
-	test('version 3 forms of a camera role move to the camera that role is assigned in each setup', () => {
-		const stores = newStores()
-		const acquisition = { MAIN_CAMERA: { exposureMode: 'loop', delay: 2, exposureTime: 30, frameType: 'DARK', gain: 120, binX: 2, binY: 2, output: { mode: 'preview-only', format: 'FITS' } }, GUIDE_CAMERA: { exposureTime: 2 } }
-		const autoFocus = { MAIN_CAMERA: { stepSize: 40 } }
-		const analysis = { MAIN_CAMERA: { enabled: true } }
-		const equipment = { c: { MAIN_CAMERA: dev('cam-main'), GUIDE_CAMERA: dev('cam-guide') }, d: { MAIN_CAMERA: dev('other-main') }, e: { MOUNT: dev('mount') } }
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', connectionId: 'c', equipment, settings: { capture: { activeCamera: 'MAIN_CAMERA', views: { MAIN_CAMERA: { mode: 'auto-focus' } }, acquisition, autoFocus, analysis } } }] }))
-		const settings = load(stores).profiles[0].settings
-
-		const main = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 30, gain: 120, binX: 2, binY: 2 }
-		expect('capture' in settings).toBeFalse()
-		expect(exposureSettings(settings, MAIN)).toEqual(main)
-		expect(acquisitionSettings(settings, MAIN)).toEqual({ ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'loop', delay: 2, frameType: 'DARK', output: { mode: 'preview-only', format: 'FITS' } })
-		expect(autoFocusSettings(settings, MAIN).stepSize).toBe(40)
-		expect(exposureSettings(settings, GUIDE).exposureTime).toBe(2)
-		expect(autoFocusSettings(settings, GUIDE)).toEqual(DEFAULT_AUTO_FOCUS_SETTINGS)
-		// The Main Camera of another connection's setup took the same role, so it gets the same form.
-		expect(exposureSettings(settings, { connectionId: 'd', deviceId: 'other-main' })).toEqual(main)
-		expect(Object.keys(settings.cameras).sort()).toEqual(['c', 'd'])
-	})
-
-	test('version 3 forms of a role without an assigned camera are dropped', () => {
-		const stores = newStores()
-		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 3, profiles: [{ id: 'a', name: 'A', settings: { capture: { views: {}, acquisition: { MAIN_CAMERA: { exposureTime: 30 } } } } }] }))
-		expect(load(stores).profiles[0].settings.cameras).toEqual({})
 	})
 })
 
@@ -1349,16 +902,5 @@ describe('mount remote control bindings', () => {
 
 		await Bun.sleep(0)
 		expect(load(stores).profiles[0].settings.mountRemoteControl).toEqual({ c: { 'mount-1': { lx200: { host: '127.0.0.1', port: 4030 } } } })
-	})
-
-	test('drop invalid persisted bindings and read version 9 documents without them', () => {
-		const invalid = newStores()
-		const bindings = { c: { m: { lx200: { host: ' localhost ', port: 4030 }, stellarium: { host: '', port: 10001 } }, n: { lx200: { host: 'h', port: 70000 } } }, d: 'x' }
-		invalid.local.setItem(PROFILES_KEY, JSON.stringify({ version: 10, profiles: [{ id: 'a', name: 'A', settings: { mountRemoteControl: bindings } }] }))
-		expect(load(invalid).profiles[0].settings.mountRemoteControl).toEqual({ c: { m: { lx200: { host: 'localhost', port: 4030 } } } })
-
-		const older = newStores()
-		older.local.setItem(PROFILES_KEY, JSON.stringify({ version: 9, profiles: [{ id: 'a', name: 'A' }] }))
-		expect(load(older).profiles[0].settings.mountRemoteControl).toBeUndefined()
 	})
 })

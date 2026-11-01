@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { CaptureFrameSummary, CaptureSourceSummary, DisplaySettings, ServerEvent } from 'api'
 import { proxy, ref } from 'valtio'
-import { cameraTabKey, connectionCameraTab, handleCapturedFrame, holdCameraFrame, reconcileCameraTabs, reconcileCapturedFrames, selectCameraFrame } from './cameratabs'
+import { cameraTabKey, connectionCameraTab, handleCapturedFrame, holdCameraFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseCameraFrame, selectCameraFrame } from './cameratabs'
 import { type CaptureFramesState, frameLabel, frameUnavailableReason, handleCaptureFramesEvent, loadRecentFrames, refreshCaptureFrames } from './captureframes'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
 import { addStep } from './imageprocessing'
@@ -351,6 +351,31 @@ describe('selection', () => {
 		await Bun.sleep(10)
 
 		expect(tab(state).camera).toMatchObject({ selection: { kind: 'inspect', frameId: 's:1' }, shown: { frame: { frameId: 's:1' } } })
+	})
+
+	test('releasing a held frame follows the latest frame again', async () => {
+		const { io } = fakeIo()
+		const state = await cameraTab(io, 's:1')
+
+		holdCameraFrame(state, KEY)
+		handleCapturedFrame(state, event(frame(2)), io, 'page')
+		await Bun.sleep(10)
+		await releaseCameraFrame(state, KEY, framesOf('s:2'), io, 'page')
+		expect(tab(state).camera).toMatchObject({ selection: { kind: 'latest' }, shown: { frame: { frameId: 's:2' } } })
+
+		handleCapturedFrame(state, event(frame(3)), io, 'page')
+		await Bun.sleep(10)
+		expect(tab(state).camera).toMatchObject({ selection: { kind: 'latest' }, shown: { frame: { frameId: 's:3' } } })
+	})
+
+	test('releasing keeps a saved frame selected', async () => {
+		const { io } = fakeIo()
+		const state = await cameraTab(io, 's:5')
+
+		await selectCameraFrame(state, KEY, { kind: 'saved', frameId: 's:2' }, framesOf('s:5'), io, 'page')
+		await releaseCameraFrame(state, KEY, framesOf('s:5'), io, 'page')
+
+		expect(tab(state).camera).toMatchObject({ selection: { kind: 'saved', frameId: 's:2' }, shown: { frame: { frameId: 's:2' } } })
 	})
 
 	test('a star measured on a frame leaves with it, aborting its measurement', async () => {

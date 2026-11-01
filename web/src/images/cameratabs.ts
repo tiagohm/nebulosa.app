@@ -269,6 +269,13 @@ export function holdCameraFrame(state: ImagesState, key: string) {
 	camera.requested = undefined
 }
 
+// Stops holding the frame of a camera tab, which follows the latest frame again, shown at once when it is another
+// frame; frames is the mirror of the registry. Ignored for any other document, and for a tab following the latest
+// frame or showing a saved one.
+export async function releaseCameraFrame(state: ImagesState, key: string, frames: Pick<CaptureFramesState, 'sources'>, io: ImagesIo = browserIo, client: string = clientId) {
+	if (cameraTabOf(state, key)?.camera.selection.kind === 'inspect') await selectCameraFrame(state, key, { kind: 'latest' }, frames, io, client)
+}
+
 // Follows the registry events: a camera tab following the latest frame shows each newer frame of its camera that is
 // in memory, and the frame a camera tab shows takes its latest description (such as its file being saved).
 export function handleCapturedFrame(state: ImagesState, event: ServerEvent, io: ImagesIo = browserIo, client: string = clientId) {

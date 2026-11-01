@@ -6,6 +6,9 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import type { RoleAvailability } from '../equipment/availability'
 import { FileExplorerModal } from '../files/FileExplorerModal'
+import { cameraTabKey, releaseCameraFrame } from '../images/cameratabs'
+import { captureFramesState } from '../images/captureframes'
+import { imagesState } from '../images/images'
 import { acquisitionSettings, activeProfile, exposureSettings, profileState, setAcquisitionSettings, setExposureSettings } from '../profile/profile'
 import type { CameraAcquisitionSettings, CameraExposureSettings, CameraIdentity } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -24,7 +27,7 @@ import { CameraSettings, ExposureSection, formatSeconds } from './ExposureSettin
 // and file state are shown apart from the outcome of the capture that took it. The exposure and camera settings are
 // the physical camera's, whose camera settings its other operations share, and the rest of the form is its Camera
 // Acquisition form, both kept in the profile; the capture it starts is the server's, run on the camera the panel targets when it starts, and
-// shown here from the server state whichever tab started it. Controls that would change a running capture are
+// shown here from the server state whichever tab started it. A capture started here releases a frame its camera tab held for analysis. Controls that would change a running capture are
 // disabled; a control the camera does not support is not shown, and the values sent are fitted to the camera's
 // reported capabilities. Every capture snoops the devices of its target into its frame headers.
 
@@ -105,8 +108,11 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 		update({ output: { ...settings.output, ...patch } })
 	}
 
-	function start() {
-		if (device) void startCapture(captureRuntime, device.connectionId, device.id, { ...captureRequest(exposure, settings, capabilities), snoop })
+	// Starts the capture; once accepted, the camera tab stops holding a frame for analysis, so it shows what the capture takes.
+	async function start() {
+		if (!device || !key) return
+		await startCapture(captureRuntime, device.connectionId, device.id, { ...captureRequest(exposure, settings, capabilities), snoop })
+		if (!captureRuntime.errors[key]) await releaseCameraFrame(imagesState, cameraTabKey(device.connectionId, device.id), captureFramesState)
 	}
 
 	const xisf = capabilities?.transferFormats.includes('XISF') === true
@@ -131,7 +137,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 					mode={settings.exposureMode}
 					pending={pending}
 					startable={availability.status === 'ready' && device !== undefined}
-					onStart={start}
+					onStart={() => void start()}
 					onStop={() => device && void stopCapture(captureRuntime, device.connectionId, device.id)}
 					onAbort={() => device && void abortCapture(captureRuntime, device.connectionId, device.id)}
 				/>

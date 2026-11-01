@@ -1,6 +1,7 @@
-import type { DisplaySettings, FlatWizardFilter, StarDetectionRequest, StreakDetectorSettings } from 'api'
+import type { DisplaySettings, FlatWizardFilter, ImageProcessingOperation, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import { CAMERA_ROLES, type DeviceAssignment, type EquipmentSetup, isCameraRole, isEquipmentRole } from '../equipment/roles'
 import { AUTO_STRETCH_PRESETS, CFA_PATTERNS, DEFAULT_AUTO_STRETCH_PRESET, DISPLAY_RANGES, type DisplayRange, ORIGINAL_DISPLAY_SETTINGS, SCNR_CHANNELS, SCNR_METHODS } from '../images/display'
+import { createOperation, OPERATION_TYPES } from '../images/imageprocessing.catalog'
 import { COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, DEFAULT_IMAGE_ASTROMETRY, GRID_COLORS, GRID_OPACITY_RANGE, type ImageAstrometrySettings, ORIENTATION_MODES } from '../platesolving/preferences'
 import { WORKSPACE_IDS } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, SKY_LAYER_IDS, type SkyDisplaySettings, type SkyLayerId } from '../sky/display'
@@ -16,7 +17,11 @@ import {
 	type CameraExposureSettings,
 	type CameraSettings,
 	DEFAULT_ACQUISITION_SETTINGS,
+	ANNOTATION_DENSITIES,
+	type AnnotationPreferences,
+	DEFAULT_ANNOTATION_PREFERENCES,
 	DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES,
+	type ImageProcessingPresetStep,
 	DEFAULT_STATUS_CHIPS,
 	type AstronomicalClockPreferences,
 	STATUS_CHIP_FIELDS,
@@ -682,6 +687,69 @@ function normalizeImageAstrometry(value: unknown): ImageAstrometrySettings | und
 	}
 }
 
+// Returns a persisted record of flags over its defaults, each invalid flag keeping its default.
+function normalizeFlags<T extends object>(value: unknown, defaults: T): T {
+	if (!isRecord(value)) return defaults
+	const flags = { ...defaults } as Record<string, unknown>
+	for (const key of Object.keys(defaults)) if (typeof value[key] === 'boolean') flags[key] = value[key]
+	return flags as T
+}
+
+// Restores the persisted preferences of Annotation (version 24), filling every invalid field with its default. Undefined
+// for anything that is not a record.
+function normalizeAnnotation(value: unknown): AnnotationPreferences | undefined {
+	if (!isRecord(value)) return undefined
+
+	const defaults = DEFAULT_ANNOTATION_PREFERENCES
+	const { labels, outlines, motion, density, magnitudeLimit } = value
+
+	return {
+		layers: normalizeFlags(value.layers, defaults.layers),
+		labels: typeof labels === 'boolean' ? labels : defaults.labels,
+		outlines: typeof outlines === 'boolean' ? outlines : defaults.outlines,
+		motion: typeof motion === 'boolean' ? motion : defaults.motion,
+		density: oneOf(density, ANNOTATION_DENSITIES) ? density : defaults.density,
+		magnitudeLimit: typeof magnitudeLimit === 'number' && Number.isFinite(magnitudeLimit) ? magnitudeLimit : defaults.magnitudeLimit,
+		bodies: normalizeFlags(value.bodies, defaults.bodies),
+	}
+}
+
+// Returns a persisted parameter of an operation shaped like its default: a record is restored key by key, a list keeps
+// the items shaped like the first default item, and anything else keeps the value only when it has the type of the
+// default. undefined when it cannot be kept.
+function shapedLike(value: unknown, defaults: unknown): unknown {
+	if (Array.isArray(defaults)) {
+		if (!Array.isArray(value)) return undefined
+		return defaults.length === 0 ? value : value.flatMap((item) => shapedLike(item, defaults[0]) ?? [])
+	}
+
+	if (isRecord(defaults)) {
+		if (!isRecord(value)) return undefined
+		const shaped: Record<string, unknown> = { ...value }
+		for (const [key, parameter] of Object.entries(defaults)) shaped[key] = shapedLike(value[key], parameter) ?? parameter
+		return shaped
+	}
+
+	return typeof value === typeof defaults && (typeof value !== 'number' || Number.isFinite(value)) ? value : undefined
+}
+
+// Restores a persisted Image Processing pipeline (version 24), in order: a step of an unknown operation is dropped, and an
+// invalid parameter takes its default, the server staying the authority on the values. Undefined for anything that is
+// not a list.
+function normalizeImageProcessing(value: unknown): ImageProcessingPresetStep[] | undefined {
+	if (!Array.isArray(value)) return undefined
+
+	const steps: ImageProcessingPresetStep[] = []
+
+	for (const step of value as unknown[]) {
+		if (!isRecord(step) || !isRecord(step.operation) || !oneOf(step.operation.type, OPERATION_TYPES)) continue
+		const operation = shapedLike(step.operation, createOperation(step.operation.type)) as ImageProcessingOperation
+		steps.push({ enabled: typeof step.enabled === 'boolean' ? step.enabled : true, operation })
+	}
+
+	return steps
+}
+
 // Restores what the status bar shows for each role (version 22), keeping the valid readings of a role and filling
 // anything invalid with its default; a role that is not a record keeps its default, and is left out. Undefined when
 // no role is left.
@@ -759,6 +827,13 @@ function normalizeSettings(value: unknown): ProfileSettings {
 
 	if (typeof value.lastImageDirectory === 'string' && value.lastImageDirectory) settings.lastImageDirectory = value.lastImageDirectory
 	if (typeof value.lastSaveDirectory === 'string' && value.lastSaveDirectory) settings.lastSaveDirectory = value.lastSaveDirectory
+
+	const imageAnnotation = normalizeAnnotation(value.imageAnnotation)
+	if (imageAnnotation) settings.imageAnnotation = imageAnnotation
+	const imagePlateSolving = normalizePlateSolving(value.imagePlateSolving)
+	if (imagePlateSolving) settings.imagePlateSolving = imagePlateSolving
+	const imageProcessing = normalizeImageProcessing(value.imageProcessing)
+	if (imageProcessing) settings.imageProcessing = imageProcessing
 
 	settings.cameras = normalizeCameras(value.cameras)
 	const starDetection = normalizeStarRequest(value.starDetection)
@@ -939,7 +1014,8 @@ export function migrate(data: unknown, now: string): Profile[] | undefined {
 		case 20:
 		case 21:
 		case 22:
-		case 23: {
+		case 23:
+		case 24: {
 			const profiles: Profile[] = []
 
 			for (const value of data.profiles) {

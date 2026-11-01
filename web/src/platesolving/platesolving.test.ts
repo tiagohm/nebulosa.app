@@ -28,11 +28,6 @@ test('a camera tab solves with the settings of its camera and the hints of its d
 	expect(effectivePlateSolveRequest({ provider: 'astap', strategy: 'assisted' }, camera)).toEqual(camera)
 })
 
-test('any other document keeps its own request', () => {
-	const request = { provider: 'astap', strategy: 'assisted', downsample: 4 } as const
-	expect(effectivePlateSolveRequest(request, undefined)).toBe(request)
-})
-
 test('the settings of a request leave its hints out', () => {
 	expect(plateSolveSettings({ provider: 'nova', strategy: 'blind', scaleTolerance: 0.3, hints: { rightAscension: 1 } })).toEqual({ provider: 'nova', strategy: 'blind', scaleTolerance: 0.3 })
 })

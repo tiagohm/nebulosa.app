@@ -129,7 +129,7 @@ export function reconcileCameraTabs(state: ImagesState, cameras: readonly Camera
 		const restored = parked.get(key)
 		parked.delete(key)
 		state.documents.push({ key, name, source: { kind: 'camera', connectionId: camera.connectionId, deviceId: camera.id }, status: 'ready', unsaved: false, camera: { selection: { kind: 'latest' } } })
-		state.views[key] = restored?.view ?? newView()
+		state.views[key] = restored?.view ?? newView(io.loadToolPreferences())
 		state.tools[key] = restored?.tool ?? { tool: 'inspector' }
 		added.push(key)
 	}

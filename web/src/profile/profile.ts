@@ -1,7 +1,8 @@
-import type { DisplaySettings, MountRemoteProtocol, StarDetectionRequest, StreakDetectorSettings } from 'api'
+import type { AnnotationBodies, DisplaySettings, MountRemoteProtocol, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot, subscribe } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
+import type { AnnotationLayers } from '../images/images'
 import { type AstrometryGridSettings, DEFAULT_IMAGE_ASTROMETRY, type ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '../sky/display'
@@ -19,7 +20,10 @@ import {
 	type CameraIdentity,
 	type CameraSettings,
 	DEFAULT_ACQUISITION_SETTINGS,
+	type AnnotationPreferences,
+	DEFAULT_ANNOTATION_PREFERENCES,
 	DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES,
+	type ImageProcessingPresetStep,
 	DEFAULT_STATUS_CHIPS,
 	STATUS_CHIP_FIELDS,
 	type StatusChipField,
@@ -281,6 +285,43 @@ export function setLastImageDirectory(state: ProfileState, directory: string) {
 	const profile = activeProfile(state)
 	if (profile.settings.lastImageDirectory === directory) return
 	profile.settings.lastImageDirectory = directory
+	touch(profile)
+}
+
+// Returns how Annotation of a profile draws and what it searches.
+export function annotationPreferences(settings: Pick<ProfileSettings, 'imageAnnotation'>): AnnotationPreferences {
+	return settings.imageAnnotation ?? DEFAULT_ANNOTATION_PREFERENCES
+}
+
+// Changes how Annotation of the active profile draws and what it searches, merging partial groups; absent fields stay.
+export function setAnnotationPreferences(state: ProfileState, { layers, bodies, ...patch }: Partial<Omit<AnnotationPreferences, 'layers' | 'bodies'>> & { readonly layers?: Partial<AnnotationLayers>; readonly bodies?: Partial<AnnotationBodies> }) {
+	const profile = activeProfile(state)
+	const current = annotationPreferences(profile.settings)
+	profile.settings.imageAnnotation = { ...current, ...patch, layers: { ...current.layers, ...layers }, bodies: { ...current.bodies, ...bodies } }
+	touch(profile)
+}
+
+// Returns the plate solving settings a profile shares between the documents outside a camera tab.
+export function imagePlateSolving(settings: Pick<ProfileSettings, 'imagePlateSolving'>): Readonly<CameraPlateSolvingSettings> {
+	return settings.imagePlateSolving ?? DEFAULT_CAMERA_PLATE_SOLVING
+}
+
+// Changes the plate solving settings the active profile shares between the documents outside a camera tab.
+export function setImagePlateSolving(state: ProfileState, plateSolving: Readonly<CameraPlateSolvingSettings>) {
+	const profile = activeProfile(state)
+	profile.settings.imagePlateSolving = plateSolving
+	touch(profile)
+}
+
+// Returns the Image Processing pipeline of a profile, which every document opened next starts with.
+export function imageProcessingPipeline(settings: Pick<ProfileSettings, 'imageProcessing'>): readonly ImageProcessingPresetStep[] {
+	return settings.imageProcessing ?? []
+}
+
+// Keeps in the active profile the Image Processing pipeline edited last.
+export function setImageProcessingPipeline(state: ProfileState, steps: readonly ImageProcessingPresetStep[]) {
+	const profile = activeProfile(state)
+	profile.settings.imageProcessing = steps
 	touch(profile)
 }
 

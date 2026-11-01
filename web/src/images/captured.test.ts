@@ -5,7 +5,7 @@ import { cameraTabKey, connectionCameraTab, handleCapturedFrame, holdCameraFrame
 import { type CaptureFramesState, frameLabel, frameUnavailableReason, handleCaptureFramesEvent, loadRecentFrames, refreshCaptureFrames } from './captureframes'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
 import { addStep } from './imageprocessing'
-import { addMeasurement, applyDisplay, setAstrometryTarget, closeImage, type ImageSource, type ImagesIo, type ImagesState, isClosable, setImageView } from './images'
+import { addMeasurement, applyDisplay, DEFAULT_IMAGE_TOOL_PREFERENCES, setAstrometryTarget, closeImage, type ImageSource, type ImagesIo, type ImagesState, isClosable, setImageView } from './images'
 
 interface Call {
 	readonly url: string
@@ -88,6 +88,7 @@ function fakeIo() {
 			loads.push(source)
 			return control.saved
 		},
+		loadToolPreferences: () => DEFAULT_IMAGE_TOOL_PREFERENCES,
 		saveDisplay: (source, settings) => void saves.push({ source, settings }),
 	}
 

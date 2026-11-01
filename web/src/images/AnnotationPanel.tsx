@@ -8,7 +8,7 @@ import { annotationKey, annotationPlateSolveJobId, annotationRequest, annotation
 import { useAnnotationContext, useAnnotationResult } from '../annotations/useAnnotationResult'
 import { Actions, Notice } from '../equipment-control/parts'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
-import { activeProfile, profileState } from '../profile/profile'
+import { activeProfile, profileState, setAnnotationPreferences } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -114,7 +114,13 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 	const results = [result, solar.result].filter((e) => e !== undefined)
 	const owner = results.find((e) => e.jobId === annotation.selected?.jobId)
 	const selected = owner?.objects.find((e) => e.id === annotation.selected!.id)
-	const edit = (patch: Parameters<typeof setAnnotationView>[2]) => setAnnotationView(imagesState, documentKey, patch)
+
+	// Changes the document, and the profile for the documents opened next.
+	function edit(patch: Parameters<typeof setAnnotationView>[2]) {
+		setAnnotationView(imagesState, documentKey, patch)
+		setAnnotationPreferences(profileState, patch)
+	}
+
 	const submitError = (kind: AnnotationKind) => (imageId === undefined ? undefined : submitErrors[annotationKey(imageId, kind)])
 
 	return (

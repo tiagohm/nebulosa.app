@@ -47,14 +47,14 @@ export const STAGE_LABELS: Readonly<Record<PlateSolveStage, string>> = { prepari
 // Request of a first solve: ASTAP around the pointing of the header.
 export const DEFAULT_PLATE_SOLVE_REQUEST: PlateSolveRequest = { provider: 'astap', strategy: 'assisted' }
 
-// Returns the settings of a request that a camera shares, leaving its hints out.
+// Returns the settings of a request that a camera or a profile shares, leaving its hints out.
 export function plateSolveSettings({ provider, strategy, downsample, scaleTolerance }: PlateSolveRequest): CameraPlateSolvingSettings {
 	return { provider, strategy, ...(downsample !== undefined && { downsample }), ...(scaleTolerance !== undefined && { scaleTolerance }) }
 }
 
-// Returns the request of a document: its own, or for a camera tab the settings of the camera with the document's hints.
-export function effectivePlateSolveRequest(request: PlateSolveRequest, camera: Readonly<CameraPlateSolvingSettings> | undefined): PlateSolveRequest {
-	return camera ? { ...camera, ...(request.hints && { hints: request.hints }) } : request
+// Returns the request of a document: the settings it shares, those of its camera or of its profile, with its own hints.
+export function effectivePlateSolveRequest(request: PlateSolveRequest, shared: Readonly<CameraPlateSolvingSettings>): PlateSolveRequest {
+	return { ...shared, ...(request.hints && { hints: request.hints }) }
 }
 
 // Mirror of the server's plate solving jobs, shared by every component of the tab.

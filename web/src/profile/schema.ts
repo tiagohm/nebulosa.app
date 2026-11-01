@@ -1,5 +1,6 @@
-import type { AutoFocusRequest, CaptureRequest, CloseApproachBody, DisplaySettings, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, MountRemoteProtocol, MountRemoteStartRequest, PlateSolveRequest, StarDetectionRequest, StreakDetectorSettings } from 'api'
+import type { AnnotationBodies, ImageProcessingOperation, AutoFocusRequest, CaptureRequest, CloseApproachBody, DisplaySettings, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, MountRemoteProtocol, MountRemoteStartRequest, PlateSolveRequest, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
+import type { AnnotationDensity, AnnotationLayers } from '../images/images'
 import type { ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
@@ -28,9 +29,11 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // (targetCentering) and the saved framings of the profile (framingReferences). Version 18 adds the settings of the Star
 // Profile Inspector (starProfile), version 19 the preferences of the status bar (statusBar), version 20 those of the
 // Close Approaches tool (closeApproaches), version 21 those of the Astro Weather tool (astroWeather), version 22 what
-// each device shows in the status bar (statusBar.chips), and version 23 the directory Images saved to last
-// (lastSaveDirectory).
-export const PROFILES_VERSION = 23
+// each device shows in the status bar (statusBar.chips), version 23 the directory Images saved to last
+// (lastSaveDirectory), and version 24 the settings of the Image Tools that were kept per document: those of Annotation
+// (imageAnnotation), of Plate Solving for images outside a camera tab (imagePlateSolving), and the pipeline of Image
+// Processing (imageProcessing).
+export const PROFILES_VERSION = 24
 
 // Name of the profile created when none is stored.
 export const DEFAULT_PROFILE_NAME = 'Default'
@@ -59,6 +62,15 @@ export interface ProfileSettings {
 	// Streak detector settings edited in Images → Streak Detection, shared by every document; absent until edited, and
 	// then DEFAULT_STREAK_SETTINGS holds. The context jobs of a detection are chosen per document, never stored here.
 	streakDetection?: StreakDetectorSettings
+	// How Annotation draws and what it searches, which every document opened next starts with; absent until edited, and
+	// then DEFAULT_ANNOTATION_PREFERENCES holds. Results and the selected object are never stored.
+	imageAnnotation?: AnnotationPreferences
+	// Plate solving settings shared by every document outside a camera tab, each of which keeps its own hints; absent until
+	// edited, and then DEFAULT_CAMERA_PLATE_SOLVING holds. A camera tab uses those of its camera (CameraSettings plateSolving).
+	imagePlateSolving?: CameraPlateSolvingSettings
+	// Image Processing pipeline edited last, which every document opened next starts with; absent until edited. Jobs and
+	// their outputs are never stored.
+	imageProcessing?: readonly ImageProcessingPresetStep[]
 	// Display settings applied last in Images to a file or derived image, which every image opened next starts with;
 	// absent until the first one is applied. Camera frames use those of their camera (CameraSettings display).
 	imageDisplay?: DisplaySettings
@@ -89,6 +101,47 @@ export interface ProfileSettings {
 	// Preferences of the Astro Weather tool; absent until edited, and then DEFAULT_ASTRO_WEATHER_PREFERENCES holds. Forecasts,
 	// sites typed in, and the night shown are never stored.
 	astroWeather?: AstroWeatherPreferences
+}
+
+// How Annotation draws its results and what its next runs ask for.
+export interface AnnotationPreferences {
+	// Groups drawn.
+	readonly layers: AnnotationLayers
+	// Whether the objects are labeled.
+	readonly labels: boolean
+	// Whether the extent of a deep-sky object of known size is drawn as its outline.
+	readonly outlines: boolean
+	// Whether the predicted motion of a solar-system object during the exposure is drawn.
+	readonly motion: boolean
+	// How many labels are placed.
+	readonly density: AnnotationDensity
+	// Faintest magnitude of the next run.
+	readonly magnitudeLimit: number
+	// Groups the next solar-system search lists.
+	readonly bodies: AnnotationBodies
+}
+
+// Label densities of Annotation.
+export const ANNOTATION_DENSITIES = ['minimal', 'balanced', 'detailed'] as const satisfies readonly AnnotationDensity[]
+
+// Annotation of a profile that has not edited it: every group but the constellation names, and the stars of the catalog
+// and the brighter deep-sky objects.
+export const DEFAULT_ANNOTATION_PREFERENCES: AnnotationPreferences = {
+	layers: { stars: true, deepSky: true, solarSystem: true, satellites: true, minorBodies: true, constellations: true, constellationLabels: false },
+	labels: true,
+	outlines: true,
+	motion: true,
+	density: 'balanced',
+	magnitudeLimit: 12,
+	bodies: { solarSystem: true, satellite: true, minorBody: true },
+}
+
+// Step of the Image Processing pipeline a profile keeps.
+export interface ImageProcessingPresetStep {
+	// Whether Run applies it.
+	readonly enabled: boolean
+	// Operation and its parameters.
+	readonly operation: ImageProcessingOperation
 }
 
 // Observing modes of the Astro Weather tool, in the order offered.

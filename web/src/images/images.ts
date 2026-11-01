@@ -1,11 +1,12 @@
-import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, PlateSolveRequest, RenderRequest, RenderResult, SaveFormat, SaveRequest, SaveResult, StarProfileRequest, StarProfileResult, Stretch } from 'api'
+import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, ImageProcessingOperation, PlateSolveRequest, RenderRequest, RenderResult, SaveFormat, SaveRequest, SaveResult, StarProfileRequest, StarProfileResult, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { deviceState } from '../equipment/equipment'
 import { jsonInit, responseError } from '../http'
 import type { AstrometricMarker, AstrometrySelection, AstrometryTarget, Measurement } from '../platesolving/measurement'
 import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
-import { activeProfile, imageDisplaySettings, profileCamera, profileState, setImageDisplaySettings } from '../profile/profile'
+import { activeProfile, annotationPreferences, imageDisplaySettings, imageProcessingPipeline, profileCamera, profileState, setImageDisplaySettings } from '../profile/profile'
+import { type AnnotationPreferences, DEFAULT_ANNOTATION_PREFERENCES, type ImageProcessingPresetStep } from '../profile/schema'
 import { FIT_VIEW, type ViewerView } from '../viewer/transform'
 import type { CameraTabState } from './cameratabs'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
@@ -267,7 +268,20 @@ export interface ImagesIo {
 	readonly loadDisplay: (source: ImageSource) => DisplaySettings | undefined
 	// Saves in the profile the display settings just applied to a document of a source, as loadDisplay reads them.
 	readonly saveDisplay: (source: ImageSource, settings: DisplaySettings) => void
+	// Returns what the profile saved for the Image Tools a new document starts with.
+	readonly loadToolPreferences: () => ImageToolPreferences
 }
+
+// What a new document takes from its profile for its Image Tools.
+export interface ImageToolPreferences {
+	// How Annotation draws and what it searches.
+	readonly annotation: AnnotationPreferences
+	// Image Processing pipeline.
+	readonly processing: readonly ImageProcessingPresetStep[]
+}
+
+// Image Tools of a document whose profile saved nothing for them.
+export const DEFAULT_IMAGE_TOOL_PREFERENCES: ImageToolPreferences = { annotation: DEFAULT_ANNOTATION_PREFERENCES, processing: [] }
 
 // Response header with the RenderResult of a rendering (RENDER_HEADER of the API).
 const RENDER_HEADER = 'X-Image-Render'
@@ -295,6 +309,10 @@ export const browserIo: ImagesIo = {
 	saveDisplay: (source, settings) => {
 		const scope = displayScope(source)
 		if (scope !== null) setImageDisplaySettings(profileState, scope, settings)
+	},
+	loadToolPreferences: () => {
+		const { settings } = activeProfile(profileState)
+		return { annotation: annotationPreferences(settings), processing: imageProcessingPipeline(settings) }
 	},
 }
 
@@ -419,7 +437,7 @@ export async function openImage(state: ImagesState, path: string, io: ImagesIo =
 	const key = nanoid()
 	const name = path.split(/[\\/]/).at(-1) || path
 	const source: ImageSource = { kind: 'file', path }
-	addDocument(state, { key, name, source, status: 'loading', unsaved: false })
+	addDocument(state, { key, name, source, status: 'loading', unsaved: false }, io)
 
 	try {
 		const response = await io.fetch('/api/images', jsonInit('POST', { path }))
@@ -446,11 +464,9 @@ export async function openImage(state: ImagesState, path: string, io: ImagesIo =
 	}
 }
 
-// Faintest magnitude an annotation keeps by default: the stars of the catalog and the brighter deep-sky objects.
-export const DEFAULT_ANNOTATION_MAGNITUDE_LIMIT = 12
-
-// Returns the view state of a document just opened: fitted to the viewer, with nothing rendered yet.
-export function newView(): ImageViewState {
+// Returns the view state of a document just opened: fitted to the viewer, with nothing rendered yet, and the Annotation
+// and the Image Processing pipeline its profile saved, as copies of its own that it edits apart from any other document.
+export function newView({ annotation, processing }: ImageToolPreferences = DEFAULT_IMAGE_TOOL_PREFERENCES): ImageViewState {
 	return {
 		view: FIT_VIEW,
 		display: { showOriginal: false },
@@ -459,23 +475,15 @@ export function newView(): ImageViewState {
 		streaks: { visible: true, labels: true, useSolution: true, useStars: true },
 		plateSolving: { request: { ...DEFAULT_PLATE_SOLVE_REQUEST }, overlay: true, grid: false },
 		astrometry: { measurements: [], markers: [] },
-		annotation: {
-			layers: { stars: true, deepSky: true, solarSystem: true, satellites: true, minorBodies: true, constellations: true, constellationLabels: false },
-			labels: true,
-			outlines: true,
-			motion: true,
-			density: 'balanced',
-			magnitudeLimit: DEFAULT_ANNOTATION_MAGNITUDE_LIMIT,
-			bodies: { solarSystem: true, satellite: true, minorBody: true },
-		},
-		processing: { steps: [], expanded: [], adding: DEFAULT_ADDED_OPERATION },
+		annotation: { ...annotation, layers: { ...annotation.layers }, bodies: { ...annotation.bodies } },
+		processing: { steps: processing.map(({ enabled, operation }) => ({ id: nanoid(), enabled, operation: JSON.parse(JSON.stringify(operation)) as ImageProcessingOperation })), expanded: [], adding: DEFAULT_ADDED_OPERATION },
 	}
 }
 
 // Adds a document, fitted to the viewer and shown with the Image Inspector. It becomes the active one unless activate is false and another one is shown.
-function addDocument(state: ImagesState, document: ImageDocument, activate = true) {
+function addDocument(state: ImagesState, document: ImageDocument, io: ImagesIo, activate = true) {
 	state.documents.push(document)
-	state.views[document.key] = newView()
+	state.views[document.key] = newView(io.loadToolPreferences())
 	state.tools[document.key] = { tool: 'inspector' }
 	if (activate || state.activeKey === undefined) state.activeKey = document.key
 }
@@ -487,7 +495,7 @@ function addDocument(state: ImagesState, document: ImageDocument, activate = tru
 export async function openDerivedImage(state: ImagesState, info: ImageInfo, sourceName: string, activate: boolean, io: ImagesIo = browserIo) {
 	const key = nanoid()
 	const source: ImageSource = { kind: 'derived', sourceName }
-	addDocument(state, { key, name: info.name, source, status: 'ready', info: ref(info), unsaved: true }, activate)
+	addDocument(state, { key, name: info.name, source, status: 'ready', info: ref(info), unsaved: true }, io, activate)
 	await renderDisplay(state, key, initialDisplaySettings(info, io.loadDisplay(source)), io)
 }
 

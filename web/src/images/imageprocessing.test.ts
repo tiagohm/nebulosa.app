@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { ImageProcessingJob, ImageProcessingStep } from 'api'
 import { proxy } from 'valtio'
-import { addStep, duplicateStep, enabledSteps, handleImageProcessingEvent, type ImageProcessingState, moveStep, refreshImageProcessing, removeStep, runProcessing, setStepEnabled, toggleExpanded, updateStep } from './imageprocessing'
+import { addStep, duplicateStep, enabledSteps, handleImageProcessingEvent, type ImageProcessingState, moveStep, pipelinePreset, refreshImageProcessing, removeStep, runProcessing, setStepEnabled, toggleExpanded, updateStep } from './imageprocessing'
 import { createOperation, pipelineIssue } from './imageprocessing.catalog'
-import { type ImagesIo, type ImagesState, newView, openImage } from './images'
+import { DEFAULT_IMAGE_TOOL_PREFERENCES, type ImagesIo, type ImagesState, newView, openImage } from './images'
 
 interface Call {
 	readonly url: string
@@ -46,6 +46,7 @@ function fakeIo() {
 		createObjectURL: () => 'blob:1',
 		revokeObjectURL: () => undefined,
 		loadDisplay: () => undefined,
+		loadToolPreferences: () => DEFAULT_IMAGE_TOOL_PREFERENCES,
 		saveDisplay: () => undefined,
 	}
 
@@ -201,4 +202,34 @@ describe('jobs', () => {
 		expect(images.views[key].processing).toMatchObject({ submitError: 'Background neutralization needs an RGB image', submitErrorStepId: draft.steps[0].id })
 		expect(images.views[key].processing.jobId).toBeUndefined()
 	})
+})
+
+test('a new document starts with copies of the pipeline and the Annotation of its profile', () => {
+	const operation = createOperation('backgroundNeutralization')
+	const preferences = { ...DEFAULT_IMAGE_TOOL_PREFERENCES, processing: [{ enabled: false, operation }], annotation: { ...DEFAULT_IMAGE_TOOL_PREFERENCES.annotation, magnitudeLimit: 8 } }
+	const first = newView(preferences)
+	const second = newView(preferences)
+
+	expect(first.processing.steps).toMatchObject([{ enabled: false, operation }])
+	expect(first.processing.steps[0].id).not.toBe(second.processing.steps[0].id)
+	expect(first.processing.steps[0].operation).not.toBe(operation)
+	expect(first.annotation.magnitudeLimit).toBe(8)
+	first.annotation.layers.stars = false
+	expect(second.annotation.layers.stars).toBe(true)
+	expect(preferences.annotation.layers.stars).toBe(true)
+})
+
+test('the pipeline the profile keeps has every step, detached from the draft and without its ids', () => {
+	const draft = newView().processing
+	addStep(draft, 'backgroundNeutralization')
+	addStep(draft, 'debayer')
+	setStepEnabled(draft, draft.steps[1].id, false)
+
+	const preset = pipelinePreset(draft)
+	expect(preset.map(({ enabled, operation }) => [enabled, operation.type])).toEqual([
+		[true, 'backgroundNeutralization'],
+		[false, 'debayer'],
+	])
+	expect(preset[0].operation).not.toBe(draft.steps[0].operation)
+	expect(Object.keys(preset[0])).not.toContain('id')
 })

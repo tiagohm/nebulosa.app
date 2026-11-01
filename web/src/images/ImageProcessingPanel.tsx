@@ -3,13 +3,14 @@ import { cn } from 'cn'
 import { Fragment, type PointerEvent, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, Notice } from '../equipment-control/parts'
+import { profileState, setImageProcessingPipeline } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/Select'
 import { useNow } from '../useNow'
-import { addStep, cancelProcessing, duplicateStep, enabledSteps, type ImageProcessingDraft, imageProcessingState, isActive, moveStep, removeStep, runProcessing, setStepEnabled, toggleExpanded, updateStep } from './imageprocessing'
+import { addStep, cancelProcessing, duplicateStep, enabledSteps, type ImageProcessingDraft, imageProcessingState, isActive, moveStep, pipelinePreset, removeStep, runProcessing, setStepEnabled, toggleExpanded, updateStep } from './imageprocessing'
 import { OPERATION_TYPES, OPERATIONS, operationLabel, pipelineIssue } from './imageprocessing.catalog'
 import { type ImageDocument, imagesState, imageUnavailableReason } from './images'
 import { ProcessingStepCard } from './ProcessingStepCard'
@@ -20,7 +21,8 @@ import type { ImageToolPanelProps } from './tools'
 // edits, duplicates, and removes, and Run Pipeline, which sends the enabled steps to the server to be applied to the
 // scientific pixels of the image the document shows. The job runs on the server, so switching tool, tab, or profile, or
 // collapsing the panel, never stops it; only Stop Processing does. Its output opens as a new unsaved derived document;
-// the source never changes. There is no preview: running again, with the steps edited, makes another document.
+// the source never changes. There is no preview: running again, with the steps edited, makes another document. Editing
+// the steps also keeps them in the profile, for the documents opened next.
 
 // Display names of the job states.
 const STATE_LABELS: Readonly<Record<ImageProcessingJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
@@ -157,6 +159,14 @@ function Pipeline({ documentKey, draft, stepError, runningStepId }: PipelineProp
 	// The pipeline as the store holds it, for edits.
 	const edit = () => imagesState.views[documentKey]?.processing
 
+	// Changes the steps of the pipeline and keeps them in the profile.
+	function changeSteps(change: (pipeline: ImageProcessingDraft) => void) {
+		const pipeline = edit()
+		if (!pipeline) return
+		change(pipeline)
+		setImageProcessingPipeline(profileState, pipelinePreset(pipeline))
+	}
+
 	useEffect(() => {
 		if (focusStep === undefined) return
 		cards.current.get(focusStep)?.querySelector('button')?.focus()
@@ -201,8 +211,7 @@ function Pipeline({ documentKey, draft, stepError, runningStepId }: PipelineProp
 			const current = dragRef.current
 			dragRef.current = undefined
 			setDrag(undefined)
-			const pipeline = edit()
-			if (current && e.type === 'pointerup' && pipeline) moveStep(pipeline, current.from, current.to)
+			if (current && e.type === 'pointerup') changeSteps((pipeline) => moveStep(pipeline, current.from, current.to))
 		}
 
 		handle.addEventListener('pointermove', onMove)
@@ -242,31 +251,17 @@ function Pipeline({ documentKey, draft, stepError, runningStepId }: PipelineProp
 									}}
 									onDragStart={(event) => startDrag(event, step.id, index)}
 									onMove={(offset) => {
-										const pipeline = edit()
-										if (!pipeline) return
-										moveStep(pipeline, index, index + offset)
+										changeSteps((pipeline) => moveStep(pipeline, index, index + offset))
 										setFocusStep(step.id)
 									}}
-									onEnabledChange={(enabled) => {
-										const pipeline = edit()
-										if (pipeline) setStepEnabled(pipeline, step.id, enabled)
-									}}
+									onEnabledChange={(enabled) => changeSteps((pipeline) => setStepEnabled(pipeline, step.id, enabled))}
 									onToggleExpanded={() => {
 										const pipeline = edit()
 										if (pipeline) toggleExpanded(pipeline, step.id)
 									}}
-									onChange={(operation) => {
-										const pipeline = edit()
-										if (pipeline) updateStep(pipeline, step.id, operation)
-									}}
-									onDuplicate={() => {
-										const pipeline = edit()
-										if (pipeline) duplicateStep(pipeline, step.id)
-									}}
-									onRemove={() => {
-										const pipeline = edit()
-										if (pipeline) removeStep(pipeline, step.id)
-									}}
+									onChange={(operation) => changeSteps((pipeline) => updateStep(pipeline, step.id, operation))}
+									onDuplicate={() => changeSteps((pipeline) => duplicateStep(pipeline, step.id))}
+									onRemove={() => changeSteps((pipeline) => removeStep(pipeline, step.id))}
 								/>
 								{last && <InsertionLine />}
 							</Fragment>
@@ -287,14 +282,7 @@ function Pipeline({ documentKey, draft, stepError, runningStepId }: PipelineProp
 						if (pipeline) pipeline.adding = type
 					}}
 				/>
-				<Button
-					variant="secondary"
-					title={`Add ${operationLabel(draft.adding)} at the end`}
-					onClick={() => {
-						const pipeline = edit()
-						if (pipeline) addStep(pipeline, pipeline.adding)
-					}}
-				>
+				<Button variant="secondary" title={`Add ${operationLabel(draft.adding)} at the end`} onClick={() => changeSteps((pipeline) => addStep(pipeline, pipeline.adding))}>
 					<Icon name="plus" className="size-4" />
 					Add
 				</Button>

@@ -14,7 +14,7 @@ import { cancelPlateSolve, effectivePlateSolveRequest, loadHints, mountSyncBlock
 import { type AstrometryGridSettings, COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, type CoordinateFormat, GRID_COLORS, GRID_OPACITY_RANGE, type GridColor, ORIENTATION_MODES, type OrientationMode } from '../platesolving/preferences'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { wcsFrame } from '../platesolving/wcs'
-import { activeProfile, cameraPlateSolving, imageAstrometrySettings, profileState, setCameraPlateSolving, setImageAstrometrySettings } from '../profile/profile'
+import { activeProfile, cameraPlateSolving, imageAstrometrySettings, imagePlateSolving, profileState, setCameraPlateSolving, setImageAstrometrySettings, setImagePlateSolving } from '../profile/profile'
 import type { CameraIdentity } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
@@ -36,9 +36,9 @@ import type { ImageToolPanelProps } from './tools'
 
 // Plate Solver tool of the Images workspace: solves the active document on the server with ASTAP, Astrometry.net Local,
 // or Astrometry.net Online, and shows the solution (centre in the frame of its WCS, scale, rotation, parity, field of view), the hints it
-// used with their origins, and its overlay. Settings are edited as the document's pending request and sent only by
-// Solve Image; zoom, pan, stretch, or the overlay never solve. A camera tab edits the plate solving settings of its
-// camera instead, which the operations of that camera share, and keeps only its hints in the document. The settings are editable before the document has an
+// used with their origins, and its overlay. The settings are those the profile shares between the documents, or on a
+// camera tab those of its camera, which the operations of that camera share; a document keeps only its hints. They are
+// sent only by Solve Image; zoom, pan, stretch, or the overlay never solve. The settings are editable before the document has an
 // image (a camera tab waiting for its first frame), with Solve Image disabled until it has one. A job stays bound to the image it solved, so switching
 // documents never shows its solution on another one, and a job that ends never replaces the solution chosen. Solvers
 // are configured in Settings → External Tools, which the solver section links to. Sync Mount, after a confirmation,
@@ -106,11 +106,12 @@ function PlateSolver({ documentKey, imageId, image, name, plateSolving, astromet
 	const { settings } = activeProfile(profiles)
 	const { coordinates } = imageAstrometrySettings(settings)
 	const { job, result, solution, resultError } = usePlateSolution(imageId, plateSolving.selected)
-	const request = effectivePlateSolveRequest(plateSolving.request, camera && cameraPlateSolving(settings, camera))
+	const request = effectivePlateSolveRequest(plateSolving.request, camera ? cameraPlateSolving(settings, camera) : imagePlateSolving(settings))
 
-	// Keeps the hints in the document; a camera tab also keeps the settings with its camera.
+	// Keeps the hints in the document, and the settings with the camera of a camera tab or else in the profile.
 	function edit(next: PlateSolveRequest) {
 		if (camera) setCameraPlateSolving(profileState, camera, plateSolveSettings(next))
+		else setImagePlateSolving(profileState, plateSolveSettings(next))
 		setPlateSolveRequest(imagesState, documentKey, next)
 	}
 

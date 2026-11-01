@@ -42,6 +42,7 @@ import {
 	shownRendering,
 	summaryStretch,
 	toggleOriginal,
+	DEFAULT_IMAGE_TOOL_PREFERENCES,
 } from './images'
 
 interface Call {
@@ -110,6 +111,7 @@ function fakeIo(gated = false) {
 			loads.push(source)
 			return control.saved
 		},
+		loadToolPreferences: () => DEFAULT_IMAGE_TOOL_PREFERENCES,
 		saveDisplay: (source, settings) => void saves.push({ source, settings }),
 	}
 

@@ -2,6 +2,7 @@ import type { ImageInfo, ImageProcessingJob, ImageProcessingOperation, ImageProc
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../http'
+import type { ImageProcessingPresetStep } from '../profile/schema'
 import { createOperation } from './imageprocessing.catalog'
 import { browserIo, documentOf, type ImagesIo, type ImagesState, message, openDerivedImage } from './images'
 
@@ -17,6 +18,9 @@ import { browserIo, documentOf, type ImagesIo, type ImagesState, message, openDe
 // imageProcessing:updated events, never letting a late event take a job back to an earlier stage. The output of a
 // job this tab submitted is claimed once, when the job completes, and opens as a new unsaved derived document, the
 // active one only when its source still is; a job of another tab is never claimed here.
+
+// The steps of a pipeline, enabled or not, with their parameters, are also the pipeline of the profile (pipelinePreset), which
+// every document opened next starts with; a document keeps editing its own copy.
 
 // Step of a pipeline being edited.
 export interface ProcessingDraftStep {
@@ -127,6 +131,11 @@ export function toggleExpanded(draft: ImageProcessingDraft, stepId: string) {
 // Returns the steps Run sends: the enabled ones, in order, as a deep copy detached from the draft.
 export function enabledSteps(draft: Pick<ImageProcessingDraft, 'steps'>): ImageProcessingStep[] {
 	return draft.steps.filter((step) => step.enabled).map(({ id, operation }) => ({ id, operation: copyOf(operation) }))
+}
+
+// Returns the pipeline as the profile keeps it: every step, enabled or not, as a deep copy detached from the draft.
+export function pipelinePreset(draft: Pick<ImageProcessingDraft, 'steps'>): ImageProcessingPresetStep[] {
+	return draft.steps.map(({ enabled, operation }) => ({ enabled, operation: copyOf(operation) }))
 }
 
 // Returns a plain deep copy of an operation, detached from any proxy.

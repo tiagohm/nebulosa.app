@@ -6,6 +6,7 @@ import { MemoryStorage } from '../storage.memory'
 import { DEFAULT_STAR_PROFILE_SETTINGS } from '../stars/starprofile.settings'
 import type { DisplaySettings } from 'api'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
+import { createOperation } from '../images/imageprocessing.catalog'
 import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
@@ -31,7 +32,6 @@ import {
 	setAutoFocusSettings,
 	setExposureSettings,
 	setTppaSettings,
-	cameraPlateSolving,
 	setCameraPlateSolving,
 	tppaSettings,
 	darvSettings,
@@ -65,6 +65,13 @@ import {
 	setFramingVisible,
 	setLastImageDirectory,
 	setLastSaveDirectory,
+	annotationPreferences,
+	cameraPlateSolving,
+	imagePlateSolving,
+	imageProcessingPipeline,
+	setAnnotationPreferences,
+	setImagePlateSolving,
+	setImageProcessingPipeline,
 	setManualSensor,
 	setPanelOpen,
 	setSensorSource,
@@ -101,6 +108,7 @@ import {
 	DEFAULT_EXPOSURE_SETTINGS,
 	DEFAULT_ACQUISITION_SETTINGS,
 	DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES,
+	DEFAULT_ANNOTATION_PREFERENCES,
 	DEFAULT_DARV_SETTINGS,
 	DEFAULT_STATUS_CHIPS,
 	DEFAULT_FLAT_WIZARD_FILTER,
@@ -413,6 +421,76 @@ describe('settings', () => {
 		expect(settings.lastSaveDirectory).toBe('/out/processed')
 		expect(settings.lastImageDirectory).toBe('/data/m31')
 		expect(createProfile(state, 'Other')?.settings.lastSaveDirectory).toBeUndefined()
+	})
+
+	test('Annotation is kept per profile, merging its groups', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(annotationPreferences(activeProfile(state).settings)).toEqual(DEFAULT_ANNOTATION_PREFERENCES)
+
+		setAnnotationPreferences(state, { magnitudeLimit: 9.5, density: 'minimal', layers: { stars: false }, bodies: { satellite: false } })
+		setAnnotationPreferences(state, { labels: false })
+		await Bun.sleep(0)
+
+		const defaults = DEFAULT_ANNOTATION_PREFERENCES
+		const saved = annotationPreferences(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)
+		expect(saved).toEqual({ ...defaults, magnitudeLimit: 9.5, density: 'minimal', labels: false, layers: { ...defaults.layers, stars: false }, bodies: { ...defaults.bodies, satellite: false } })
+		expect(annotationPreferences(createProfile(state, 'Other')!.settings)).toEqual(defaults)
+	})
+
+	test('invalid Annotation preferences are restored field by field', () => {
+		const stores = newStores()
+		stores.local.setItem(PROFILES_KEY, JSON.stringify({ version: 24, profiles: [{ id: 'a', name: 'A', settings: { imageAnnotation: { layers: { stars: 'no', deepSky: false, bogus: true }, density: 'huge', magnitudeLimit: 'x', labels: false, bodies: 3 } } }] }))
+		const defaults = DEFAULT_ANNOTATION_PREFERENCES
+		expect(annotationPreferences(load(stores).profiles[0].settings)).toEqual({ ...defaults, labels: false, layers: { ...defaults.layers, deepSky: false } })
+	})
+
+	test('the plate solving of images is kept per profile, apart from those of the cameras', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(imagePlateSolving(activeProfile(state).settings)).toEqual(DEFAULT_CAMERA_PLATE_SOLVING)
+
+		setImagePlateSolving(state, { provider: 'nova', strategy: 'blind', downsample: 2 })
+		await Bun.sleep(0)
+
+		const { settings } = load({ local: stores.local, session: new MemoryStorage() }).profiles[0]
+		expect(imagePlateSolving(settings)).toEqual({ provider: 'nova', strategy: 'blind', downsample: 2 })
+		expect(cameraPlateSolving(settings, { connectionId: 'c', deviceId: 'd' })).toEqual(DEFAULT_CAMERA_PLATE_SOLVING)
+	})
+
+	test('the Image Processing pipeline survives a reload, in order, disabled steps included', async () => {
+		const stores = newStores()
+		const state = load(stores)
+		expect(imageProcessingPipeline(activeProfile(state).settings)).toEqual([])
+
+		const steps = [
+			{ enabled: true, operation: { ...createOperation('backgroundNeutralization') } },
+			{ enabled: false, operation: createOperation('debayer') },
+		]
+		setImageProcessingPipeline(state, steps)
+		await Bun.sleep(0)
+
+		expect(imageProcessingPipeline(load({ local: stores.local, session: new MemoryStorage() }).profiles[0].settings)).toEqual(steps)
+	})
+
+	test('an invalid pipeline loses the step of an unknown operation, and an invalid parameter takes its default', () => {
+		const defaults = createOperation('backgroundNeutralization')
+		const [parameter] = Object.entries(defaults).find(([, value]) => typeof value === 'number')!
+		const stores = newStores()
+		const stored = [{ enabled: 'yes', operation: { ...defaults, [parameter]: 'x' } }, { enabled: true, operation: { type: 'bogus' } }, 7]
+		stores.local.setItem(
+			PROFILES_KEY,
+			JSON.stringify({
+				version: 24,
+				profiles: [
+					{ id: 'a', name: 'A', settings: { imageProcessing: stored } },
+					{ id: 'b', name: 'B', settings: { imageProcessing: 'no' } },
+				],
+			}),
+		)
+		const [first, second] = load(stores).profiles
+		expect(imageProcessingPipeline(first.settings)).toEqual([{ enabled: true, operation: defaults }])
+		expect(second.settings.imageProcessing).toBeUndefined()
 	})
 
 	test('a version 22 document has no save directory, and an invalid one is dropped', () => {

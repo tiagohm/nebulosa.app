@@ -9,6 +9,9 @@ import { CameraCaptures, createCaptureRoutes } from './captures'
 import { CloseApproachesService, createCloseApproachRoutes } from './closeapproaches'
 import { connections, createConnectionRoutes } from './connection'
 import { CoverCommands, createCoverRoutes } from './covers'
+import { createDarkLibraryWizardRoutes, DarkLibraryWizardSessions } from './darklibrarywizard'
+import { DarkLibraryWizardAnalyzer } from './darklibrarywizard.analysis'
+import { DarkPlanStore } from './darklibrarywizard.store'
 import { createDarvRoutes, DarvSessions } from './darv'
 import { DarvAnalyzer } from './darv.analysis'
 import { createDewHeaterRoutes, DewHeaterCommands } from './dewheaters'
@@ -325,6 +328,27 @@ export type {
 export type { DarvCaptureSettings, DarvEvent, DarvFinishRequest, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementTrails, DarvRequest, DarvSession, DarvSessionState, DarvSessionSummary, DarvSnapshot, DarvStartResponse } from './darv'
 export type { DarvMeasurementResult, DarvMeasurementStatus, DarvTrail } from './darv.analysis'
 export type {
+	DarkLibraryWizardAttempt,
+	DarkLibraryWizardCaptureSettings,
+	DarkLibraryWizardContinueRequest,
+	DarkLibraryWizardErrorCode,
+	DarkLibraryWizardEvent,
+	DarkLibraryWizardGroupRun,
+	DarkLibraryWizardGroupState,
+	DarkLibraryWizardNewRequest,
+	DarkLibraryWizardPendingStep,
+	DarkLibraryWizardPlans,
+	DarkLibraryWizardRequest,
+	DarkLibraryWizardResumeRequest,
+	DarkLibraryWizardSession,
+	DarkLibraryWizardSessionSummary,
+	DarkLibraryWizardSnapshot,
+	DarkLibraryWizardStartResponse,
+	DarkLibraryWizardState,
+} from './darklibrarywizard'
+export type { DarkFrameNote, DarkLightSuspicion, DarkPlaneMeasurement, DarkRejectionCode, DarkTemperatureTrace } from './darklibrarywizard.analysis'
+export type { DarkFrameRecord, DarkFrameVerdict, DarkGroup, DarkGroupProgress, DarkPlanCapture, DarkPlanDetail, DarkPlanStatus, DarkPlanSummary, DarkProtection, DarkThermalPolicy } from './darklibrarywizard.store'
+export type {
 	FlatWizardAttempt,
 	FlatWizardCaptureSettings,
 	FlatWizardContinueRequest,
@@ -528,6 +552,11 @@ const darv = new DarvSessions(connections.devices, (id) => connections.client(id
 // previewing and recording the frames in the capture frame registry, and measuring them in DN on a worker of their own.
 const flatWizard = new FlatWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, wheels.commander, flatPanels.commander, covers.commander, images, captureFrames, new FlatWizardAnalyzer(), publish)
 
+// Dark Library Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the
+// captures, cooling the cameras, moving the wheels, and driving the panels and covers with the commanders of their
+// commands, keeping their plans in files of their own, and measuring their frames in DN on a worker of their own.
+const darkLibraryWizard = new DarkLibraryWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, cameras.commander, wheels.commander, flatPanels.commander, covers.commander, images, captureFrames, new DarkLibraryWizardAnalyzer(), new DarkPlanStore(), publish)
+
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
 // guide output commands and previewing their frames in the image store and the capture frame registry.
 const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, publish)
@@ -604,6 +633,7 @@ export const routes = {
 	...createPointingActivationRoutes(pointingActivations),
 	...createDarvRoutes(darv),
 	...createFlatWizardRoutes(flatWizard),
+	...createDarkLibraryWizardRoutes(darkLibraryWizard),
 	...createGuidingRoutes(guiding),
 	...createTargetCenteringRoutes(targetCentering),
 	...createFileRoutes(),

@@ -7,7 +7,7 @@ import bunTailwindPlugin from './tailwind.plugin'
 // directory of the build (app/), and the workers are embedded outside of it, under a path nothing finds.
 const ROOT = join(import.meta.dir, '..')
 
-// Image, image processing, star detection, star profile, streak detection, DARV analysis, Flat Wizard measurement, guide frame, mount pointing fit, and solar eclipse map workers, bundled as extra entry points so
+// Image, image processing, star detection, star profile, streak detection, DARV analysis, Flat Wizard measurement, Dark Library Wizard measurement, guide frame, mount pointing fit, and solar eclipse map workers, bundled as extra entry points so
 // the executable embeds them transpiled with their imports. Inside the executable a worker is only found by its
 // path relative to the embedded root, never through `new URL(..., import.meta.url)`, which points at the
 // executable itself.
@@ -18,6 +18,7 @@ const STAR_PROFILE_WORKER = join(ROOT, 'api/src/starprofile.worker.ts')
 const STREAK_WORKER = join(ROOT, 'api/src/streaks.worker.ts')
 const DARV_WORKER = join(ROOT, 'api/src/darv.worker.ts')
 const FLATWIZARD_WORKER = join(ROOT, 'api/src/flatwizard.worker.ts')
+const DARKLIBRARY_WORKER = join(ROOT, 'api/src/darklibrarywizard.worker.ts')
 const MOUNTPOINTING_WORKER = join(ROOT, 'api/src/mountpointing.worker.ts')
 const GUIDING_WORKER = join(ROOT, 'api/src/guiding.worker.ts')
 const SOLARECLIPSE_WORKER = join(ROOT, 'api/src/solareclipses.worker.ts')
@@ -46,7 +47,7 @@ function defineString(value?: string) {
 }
 
 await build({
-	entrypoints: [join(import.meta.dir, 'src/main.ts'), IMAGE_WORKER, IMAGE_PROCESSING_WORKER, STAR_WORKER, STAR_PROFILE_WORKER, STREAK_WORKER, DARV_WORKER, FLATWIZARD_WORKER, GUIDING_WORKER, MOUNTPOINTING_WORKER, SOLARECLIPSE_WORKER],
+	entrypoints: [join(import.meta.dir, 'src/main.ts'), IMAGE_WORKER, IMAGE_PROCESSING_WORKER, STAR_WORKER, STAR_PROFILE_WORKER, STREAK_WORKER, DARV_WORKER, FLATWIZARD_WORKER, DARKLIBRARY_WORKER, GUIDING_WORKER, MOUNTPOINTING_WORKER, SOLARECLIPSE_WORKER],
 	root: ROOT,
 	// Syntax minification stays off: together with the React Compiler it drops the constants it inlines into the
 	// template literals of components and hooks, so `${MARGIN} ${width}` becomes `${width}` in the executable only.
@@ -63,6 +64,7 @@ await build({
 		'process.env.NEBULOSA_STREAK_WORKER': embeddedPath(STREAK_WORKER),
 		'process.env.NEBULOSA_DARV_WORKER': embeddedPath(DARV_WORKER),
 		'process.env.NEBULOSA_FLATWIZARD_WORKER': embeddedPath(FLATWIZARD_WORKER),
+		'process.env.NEBULOSA_DARKLIBRARY_WORKER': embeddedPath(DARKLIBRARY_WORKER),
 		'process.env.NEBULOSA_GUIDING_WORKER': embeddedPath(GUIDING_WORKER),
 		'process.env.NEBULOSA_MOUNTPOINTING_WORKER': embeddedPath(MOUNTPOINTING_WORKER),
 		'process.env.NEBULOSA_SOLARECLIPSE_WORKER': embeddedPath(SOLARECLIPSE_WORKER),

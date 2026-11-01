@@ -26,8 +26,8 @@ export interface CameraTemperatureRequest {
 
 // Thermal commands over the cameras of every open connection.
 export class CameraCommands {
-	// Commander driving the cooling of the cameras.
-	readonly #commander: CameraCommander
+	// Commander driving the cooling of the cameras, also used by the operations that cool a camera they hold.
+	readonly commander: CameraCommander
 
 	// Creates the commands over the device registry; client resolves an open connection id to its client and
 	// operations arbitrates every command against the captures.
@@ -36,7 +36,7 @@ export class CameraCommands {
 		readonly client: ClientResolver,
 		readonly operations: OperationRegistry,
 	) {
-		this.#commander = new CameraCommander(devices.cameras)
+		this.commander = new CameraCommander(devices.cameras)
 	}
 
 	// Switches the cooler. Responds 204 once sent (the new state arrives as a camera:capabilities event);
@@ -45,7 +45,7 @@ export class CameraCommands {
 		const camera = this.#available(connectionId, deviceId)
 		if (camera instanceof Response) return camera
 		if (!camera.hasCoolerControl) return unsupported('The camera cannot switch its cooler')
-		return await settle(this.#commander.cooler(this.operations.coordinator, camera, enabled), 'Switching the cooler')
+		return await settle(this.commander.cooler(this.operations.coordinator, camera, enabled), 'Switching the cooler')
 	}
 
 	// Sets the cooling target. Responds 204 once sent; 404, 409 disconnected or capturing, 422 when the
@@ -54,7 +54,7 @@ export class CameraCommands {
 		const camera = this.#available(connectionId, deviceId)
 		if (camera instanceof Response) return camera
 		if (!camera.canSetTemperature) return unsupported('The camera cannot set a target temperature')
-		return await settle(this.#commander.temperature(this.operations.coordinator, camera, value), 'Setting the target temperature')
+		return await settle(this.commander.temperature(this.operations.coordinator, camera, value), 'Setting the target temperature')
 	}
 
 	// Returns the connected camera with this id on an open connection, or the response refusing it: 404,

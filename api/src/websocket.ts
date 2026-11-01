@@ -4,6 +4,7 @@ import type { AutoFocusEvent } from './autofocus'
 import type { CaptureFrameEvent } from './captureframes'
 import type { CaptureEvent } from './captures'
 import type { ConnectionRegistryEvent } from './connection'
+import type { DarkLibraryWizardEvent } from './darklibrarywizard'
 import type { DarvEvent } from './darv'
 import type { DomeMotionEvent } from './domes'
 import type { ExternalToolEvent } from './externaltools'
@@ -50,6 +51,7 @@ export type ServerEvent =
 	| TargetCenteringEvent
 	| DarvEvent
 	| FlatWizardEvent
+	| DarkLibraryWizardEvent
 	| MountNudgeEvent
 	| MountRemoteControlEvent
 	| DomeMotionEvent

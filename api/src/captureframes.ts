@@ -76,11 +76,12 @@ export type CaptureFrameAvailability = 'memory' | 'file' | 'saving' | 'unavailab
 // - targetCentering: a Target Centering session, one frame per measurement; never saved.
 // - darv: a DARV measurement, one frame per measurement; never saved.
 // - flatWizard: a Flat Wizard session, a trial or a final frame; saved once its final frame was accepted and published.
+// - darkLibraryWizard: a Dark Library Wizard session, one frame per attempt; saved once it was accepted and published.
 // - guiding: a guiding session, the newest guide frame previewed; never saved.
-export type CaptureFrameOrigin = 'capture' | 'autofocus' | 'tppa' | 'mountPointing' | 'targetCentering' | 'darv' | 'flatWizard' | 'guiding'
+export type CaptureFrameOrigin = 'capture' | 'autofocus' | 'tppa' | 'mountPointing' | 'targetCentering' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'guiding'
 
 // Origins a frame read from the file can have: the operations whose frames are saved.
-const SAVED_ORIGINS: ReadonlySet<string> = new Set<CaptureFrameOrigin>(['capture', 'flatWizard'])
+const SAVED_ORIGINS: ReadonlySet<string> = new Set<CaptureFrameOrigin>(['capture', 'flatWizard', 'darkLibraryWizard'])
 
 // Why a frame cannot be opened:
 // - expired: it was only previewed and its document was closed.

@@ -44,6 +44,7 @@ export type OperationKind =
 	| 'mount.targetCentering'
 	| 'mount.darv'
 	| 'camera.flatWizard'
+	| 'camera.darkLibraryWizard'
 	| 'camera.guiding'
 	| 'guideOutput.guiding'
 	| 'indi.propertyWrite'

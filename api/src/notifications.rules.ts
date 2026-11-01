@@ -2,6 +2,7 @@ import type { OperationFailureReason } from 'nebulosa/src/devices/orchestration/
 import type { AutoFocusSessionSummary } from './autofocus'
 import type { CaptureSession } from './captures'
 import type { ConnectRequest, ConnectionStatus } from './connection'
+import type { DarkLibraryWizardSessionSummary } from './darklibrarywizard'
 import type { DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingEventRecord, GuidingSessionSummary } from './guiding'
@@ -24,7 +25,7 @@ import type { ServerEvent } from './websocket'
 export type NotificationLevel = 'info' | 'success' | 'warning' | 'error'
 
 // Camera tool a notification can open, named as the Images workspace names it.
-export type NotificationCameraTool = 'camera-acquisition' | 'auto-focus' | 'guiding' | 'tppa' | 'pointing-model-builder' | 'target-centering' | 'darv' | 'flat-wizard'
+export type NotificationCameraTool = 'camera-acquisition' | 'auto-focus' | 'guiding' | 'tppa' | 'pointing-model-builder' | 'target-centering' | 'darv' | 'flat-wizard' | 'dark-library-wizard'
 
 // Context a notification can open in the UI; opening it never commands a device.
 export type NotificationTarget =
@@ -47,7 +48,7 @@ export type NotificationTarget =
 
 // What a notification is about.
 export interface NotificationSource {
-	// Service that reported the occurrence: connection, capture, autofocus, tppa, flatWizard, guiding, darv, or operation.
+	// Service that reported the occurrence: connection, capture, autofocus, tppa, flatWizard, darkLibraryWizard, guiding, darv, or operation.
 	readonly kind: string
 	// Id of the connection involved; absent for an application-wide notification.
 	readonly connectionId?: string
@@ -175,6 +176,8 @@ export class NotificationClassifier {
 				return this.#targetCentering(event.session)
 			case 'flatWizard:updated':
 				return this.#flatWizard(event.session)
+			case 'darkLibraryWizard:updated':
+				return this.#darkLibraryWizard(event.session)
 			case 'guiding:updated':
 				return this.#guiding(event.session)
 			case 'guiding:event':
@@ -275,6 +278,28 @@ export class NotificationClassifier {
 			return [{ key: `targetCentering:${sessionId}`, level: 'warning', code: 'targetCentering.guidingNotRestored', title: 'Guiding not restored', message: `The position of ${mountName} was verified, but guiding was not restored.`, source, target }]
 		if (state === 'completed' && positionVerified) return [{ key: `targetCentering:${sessionId}`, level: 'success', code: 'targetCentering.completed', title: 'Target Centering completed', message: `The position of ${mountName} was verified.`, source, target }]
 		return []
+	}
+
+	// Reports a Dark Library Wizard waiting for the operator, leaving a device in an unintended state, and its outcome.
+	#darkLibraryWizard(session: DarkLibraryWizardSessionSummary): NotificationDraft[] {
+		const { sessionId, camera, cameraName, state, pending, reason, cleanupWarnings } = session
+		const source = this.#source('darkLibraryWizard', camera.connectionId, camera.deviceId, session.operationId, sessionId)
+		const target = cameraTool(camera.connectionId, camera.deviceId, 'dark-library-wizard')
+		const drafts: NotificationDraft[] = []
+
+		if (pending) {
+			const message = pending.kind === 'suspectedLight' ? `A dark frame of ${cameraName} may show external light. Decide in the Dark Library Wizard.` : `Confirm the light protection of ${cameraName} in the Dark Library Wizard.`
+			drafts.push({ key: `dark.step:${pending.stepId}`, level: 'warning', code: 'darkLibraryWizard.actionRequired', title: 'Dark Library Wizard needs you', message, source, target })
+		}
+
+		if (cleanupWarnings.length > 0)
+			drafts.push({ key: `dark.cleanup:${sessionId}`, level: 'warning', code: 'darkLibraryWizard.cleanupWarning', title: 'Dark Library Wizard left a device changed', message: `Check the panel, wheel, and cover of ${cameraName}: the Dark Library Wizard could not restore them.`, source, target })
+
+		if (state === 'completed') drafts.push({ key: `dark:${sessionId}`, level: 'success', code: 'darkLibraryWizard.completed', title: 'Dark Library Wizard completed', message: `Darks of ${cameraName} were captured.`, source, target })
+		else if (state === 'failed' && !this.#quiet(camera.connectionId, reason))
+			drafts.push({ key: `dark:${sessionId}`, level: 'error', code: 'darkLibraryWizard.failed', title: 'Dark Library Wizard failed', message: `Dark Library Wizard of ${cameraName} failed: ${failureText(reason, session.error)}.`, source, target })
+
+		return drafts
 	}
 
 	// Reports a Flat Wizard waiting for a manual step, leaving a device in an unintended state, and its outcome.

@@ -26,7 +26,7 @@ import { TppaTool } from './TppaTool'
 // a tool never starts or stops an operation. This registry is the only place Images tools are declared.
 
 // Contextual tools of the Images workspace, in selector order: the image tools, then the camera operations.
-export const IMAGE_TOOLS = ['inspector', 'plate-solver', 'star-detection', 'star-profile', 'streak-detection', 'annotation', 'image-processing', 'camera-acquisition', 'auto-focus', 'mount-nudge', 'guiding', 'darv', 'tppa', 'pointing-model-builder', 'target-centering', 'flat-wizard'] as const
+export const IMAGE_TOOLS = ['inspector', 'plate-solver', 'star-detection', 'star-profile', 'streak-detection', 'annotation', 'image-processing', 'camera-acquisition', 'auto-focus', 'mount-nudge', 'guiding', 'darv', 'tppa', 'pointing-model-builder', 'target-centering', 'flat-wizard', 'dark-library-wizard'] as const
 
 // Identifier of an Images contextual tool.
 export type ImageToolId = (typeof IMAGE_TOOLS)[number]
@@ -101,6 +101,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'pointing-model-builder': { id: 'pointing-model-builder', label: 'Pointing Model Builder', panelTitle: 'Pointing Model Builder', category: 'camera', panel: PointingModelBuilderTool },
 	'target-centering': { id: 'target-centering', label: 'Target Centering', panelTitle: 'Target Centering', category: 'camera', panel: TargetCenteringTool },
 	'flat-wizard': { id: 'flat-wizard', label: 'Flat Wizard', panelTitle: 'Flat Wizard', category: 'camera', panel: FlatWizardTool },
+	'dark-library-wizard': { id: 'dark-library-wizard', label: 'Dark Library Wizard', panelTitle: 'Dark Library Wizard', category: 'camera' },
 }
 
 // Returns the category heading a tool is listed under in the selector.

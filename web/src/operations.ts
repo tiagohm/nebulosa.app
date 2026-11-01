@@ -47,6 +47,7 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, readonly [IconName
 	'mount.tppa': ['mount', 'TPPA'],
 	'mount.darv': ['mount', 'DARV'],
 	'camera.flatWizard': ['camera', 'Flat Wizard'],
+	'camera.darkLibraryWizard': ['camera', 'Dark Library Wizard'],
 	'camera.guiding': ['camera', 'Guiding'],
 	'guideOutput.guiding': ['guideOutput', 'Corrections'],
 	'indi.propertyWrite': ['success', 'INDI property change'],

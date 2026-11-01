@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { AutoFocusSessionSummary } from './autofocus'
 import type { CaptureSession } from './captures'
+import type { DarkLibraryWizardSessionSummary } from './darklibrarywizard'
 import type { DarvMeasurement, DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingSessionSummary } from './guiding'
@@ -29,6 +30,10 @@ function targetCentering(session: Partial<TargetCenteringSessionSummary>): Serve
 	return { type: 'targetCentering:updated', session: { sessionId: 'c1', operationId: 'o6', camera, cameraName: 'CCD', mount, mountName: 'Mount', state: 'running', positionVerified: false, ...session } as TargetCenteringSessionSummary }
 }
 
+function darkLibraryWizard(session: Partial<DarkLibraryWizardSessionSummary>): ServerEvent {
+	return { type: 'darkLibraryWizard:updated', session: { sessionId: 'd1', operationId: 'o5', camera, cameraName: 'CCD', state: 'exposing', cleanupWarnings: [], ...session } as DarkLibraryWizardSessionSummary }
+}
+
 function flatWizard(session: Partial<FlatWizardSessionSummary>): ServerEvent {
 	return { type: 'flatWizard:updated', session: { sessionId: 'f1', operationId: 'o4', camera, cameraName: 'CCD', state: 'exposing', ...session } as FlatWizardSessionSummary }
 }
@@ -46,6 +51,18 @@ function operation(record: Partial<OperationRecord>): ServerEvent {
 }
 
 const open: ServerEvent = { type: 'connection:open', connection: { type: 'INDI', host: 'pi', port: 7624, id: 'c' } }
+
+test('a Dark Library Wizard reports what needs the operator, what it left changed, and its outcome, never its telemetry', () => {
+	const classifier = new NotificationClassifier(() => undefined)
+	expect(classifier.classify(darkLibraryWizard({ state: 'stabilizing', temperature: -10 }))).toEqual([])
+	expect(classifier.classify(darkLibraryWizard({ state: 'cancelled', reason: 'aborted' }))).toEqual([])
+	expect(classifier.classify(darkLibraryWizard({ state: 'waitingForProtection', pending: { stepId: 'x', kind: 'protection', verified: [], asserted: ['cap'] } }))).toEqual([
+		expect.objectContaining({ key: 'dark.step:x', level: 'warning', code: 'darkLibraryWizard.actionRequired', target: expect.objectContaining({ tool: 'dark-library-wizard' }) }),
+	])
+	expect(classifier.classify(darkLibraryWizard({ state: 'waitingForDecision', pending: { stepId: 'y', kind: 'suspectedLight', group: 0, suspicions: ['saturation'] } }))[0].message).toContain('external light')
+	expect(classifier.classify(darkLibraryWizard({ state: 'completed', cleanupWarnings: ['cover'] })).map((draft) => draft.code)).toEqual(['darkLibraryWizard.cleanupWarning', 'darkLibraryWizard.completed'])
+	expect(classifier.classify(darkLibraryWizard({ state: 'failed', reason: 'alert' }))[0]).toMatchObject({ key: 'dark:d1', code: 'darkLibraryWizard.failed' })
+})
 
 test('reports completed and failed captures once per session key', () => {
 	const classifier = new NotificationClassifier()
@@ -132,7 +149,7 @@ test('reports failures of the listed device operations only', () => {
 	expect(classifier.classify(operation({ state: 'succeeded', reason: undefined }))).toEqual([])
 	expect(classifier.classify(operation({ reason: 'aborted' }))).toEqual([])
 
-	for (const kind of ['camera.capture', 'focuser.autofocus', 'mount.tppa', 'mount.darv', 'camera.flatWizard', 'camera.guiding', 'guideOutput.guiding', 'mount.nudge', 'guideOutput.pulse', 'indi.propertyWrite'] as const) {
+	for (const kind of ['camera.capture', 'focuser.autofocus', 'mount.tppa', 'mount.darv', 'camera.flatWizard', 'camera.darkLibraryWizard', 'camera.guiding', 'guideOutput.guiding', 'mount.nudge', 'guideOutput.pulse', 'indi.propertyWrite'] as const) {
 		expect(classifier.classify(operation({ kind }))).toEqual([])
 	}
 })

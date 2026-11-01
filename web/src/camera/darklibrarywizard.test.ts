@@ -12,10 +12,9 @@ import {
 	darkLibraryWizardRunning,
 	type DarkLibraryWizardRuntime,
 	darkPlanForm,
-	expandDarkMatrix,
+	duplicateDarkGroup,
 	handleDarkLibraryWizardEvent,
 	loadDarkPlans,
-	parseDarkValues,
 	pauseDarkLibraryWizard,
 	refreshDarkLibraryWizard,
 	resumeDarkLibraryWizard,
@@ -62,21 +61,22 @@ function server(answers: Readonly<Record<string, unknown>> = {}) {
 	return { request, calls }
 }
 
-test('a list a person typed gives its numbers once, in order', () => {
-	expect(parseDarkValues('60, 120 180;300,, x 60')).toEqual([60, 120, 180, 300])
-	expect(parseDarkValues('-10 -20')).toEqual([-10, -20])
-	expect(parseDarkValues('')).toEqual([])
+test('a duplicated group goes right below its original', () => {
+	const groups = [
+		{ exposure: 60, gain: 0, count: 5 },
+		{ exposure: 120, gain: 0, temperature: -10, count: 3 },
+	]
+	expect(duplicateDarkGroup(groups, 0)).toEqual([groups[0], groups[0], groups[1]])
+	expect(duplicateDarkGroup(groups, 1)).toEqual([groups[0], groups[1], groups[1]])
+	expect(groups).toHaveLength(2)
 })
 
-test('a matrix adds every combination after the rows, repeating none', () => {
-	const groups = expandDarkMatrix([{ exposure: 60, gain: 0, temperature: -10, count: 5 }], [60, 120], [0, 100], [-10], 30)
-	expect(groups.map(({ exposure, gain, temperature, count }) => [exposure, gain, temperature, count])).toEqual([
-		[60, 0, -10, 5],
-		[120, 0, -10, 30],
-		[60, 100, -10, 30],
-		[120, 100, -10, 30],
-	])
-	expect(expandDarkMatrix([], [60], [0], [], 1)).toEqual([{ exposure: 60, gain: 0, count: 1 }])
+test('a copy blocks the start until one of its settings changes', () => {
+	const [group] = DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS.groups
+	const groups = duplicateDarkGroup([group], 0)
+	const settings = { ...DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS, groups }
+	expect(darkLibraryWizardBlocker(ONLY_CAMERA, settings, undefined, CAPABILITIES)).toBe('Group 2 repeats another one.')
+	expect(darkLibraryWizardBlocker(ONLY_CAMERA, { ...settings, groups: [group, { ...group, gain: 100 }] }, undefined, CAPABILITIES)).toBeUndefined()
 })
 
 test('the estimate counts frames, exposure, and the raw size of the binned frame', () => {

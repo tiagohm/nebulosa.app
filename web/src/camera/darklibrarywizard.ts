@@ -126,32 +126,15 @@ export interface DarkLibraryWizardEstimate {
 	readonly bytes?: number
 }
 
-// Returns the numbers of a list a person typed, separated by commas or spaces, in order and without repetitions.
-export function parseDarkValues(text: string): number[] {
-	const values = text.split(/[\s,;]+/).flatMap((token) => (token ? Number(token) : []))
-	return Array.from(new Set(values.filter((value) => Number.isFinite(value))))
-}
-
 // Returns whether two groups would take the same frames.
 function sameGroup(a: DarkGroup, b: DarkGroup) {
 	return a.exposure === b.exposure && a.gain === b.gain && a.temperature === b.temperature
 }
 
-// Returns the groups of a matrix after the existing ones: every exposure at every gain and temperature (or uncontrolled
-// when there is none), in that order, without repeating a group that exists. The result is only rows of the form.
-export function expandDarkMatrix(existing: readonly DarkGroup[], exposures: readonly number[], gains: readonly number[], temperatures: readonly number[], count: number): DarkGroup[] {
-	const groups = [...existing]
-
-	for (const temperature of temperatures.length > 0 ? temperatures : [undefined]) {
-		for (const gain of gains) {
-			for (const exposure of exposures) {
-				const group: DarkGroup = { exposure, gain, ...(temperature !== undefined && { temperature }), count }
-				if (!groups.some((known) => sameGroup(known, group))) groups.push(group)
-			}
-		}
-	}
-
-	return groups
+// Returns the groups with a copy of one of them right below it. A copy repeats its original, which blocks the start until
+// one of its settings changes.
+export function duplicateDarkGroup(groups: readonly DarkGroup[], index: number): DarkGroup[] {
+	return groups.toSpliced(index + 1, 0, groups[index])
 }
 
 // Returns the size of the plan of a form: the frames of every group, and their exposure and raw size, which ignore

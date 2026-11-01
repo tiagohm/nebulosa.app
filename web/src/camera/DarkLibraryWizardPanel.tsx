@@ -1,4 +1,4 @@
-import type { CaptureSnoop, DarkGroup, DarkLibraryWizardGroupRun, DarkLibraryWizardPendingStep, DarkLibraryWizardSessionSummary, DarkPlanSummary, DeviceSummary } from 'api'
+import type { CameraCapabilities, CaptureSnoop, DarkGroup, DarkLibraryWizardGroupRun, DarkLibraryWizardPendingStep, DarkLibraryWizardSessionSummary, DarkPlanSummary, DeviceSummary } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -32,19 +32,19 @@ import {
 	darkLibraryWizardRunning,
 	darkLibraryWizardRuntime,
 	darkPlanForm,
-	expandDarkMatrix,
+	duplicateDarkGroup,
 	loadDarkPlan,
 	loadDarkPlans,
-	parseDarkValues,
 	pauseDarkLibraryWizard,
 	resumeDarkLibraryWizard,
 	startDarkLibraryWizard,
 	stopDarkLibraryWizard,
 } from './darklibrarywizard'
+import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress, formatExposure } from './FrameProgress'
 
 // Contextual panel sections of Dark Library Wizard, a camera operation of the Images camera tabs: the equipment of the tab's
-// camera, the capture plan (one row per group, which the matrix builder only fills in), how the light is blocked, the
+// camera, the capture plan (one row per group), how the light is blocked, the
 // thermal protocol, the output and its limits, the session in progress with its Continue, Pause, Resume, and Stop
 // commands, and the plans of this camera with their recovery. Frames take the offset, binning, and readout mode of Camera
 // Acquisition, but never its exposure time or gain, which each group sets. The form is the camera's, kept in the profile;
@@ -199,9 +199,11 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 						group={group}
 						count={groups.length}
 						temperature={capabilities === undefined || capabilities.canSetTemperature}
+						exposure={capabilities?.exposure}
 						disabled={locked}
 						onChange={(patch) => updateGroup(index, patch)}
 						onMove={(offset) => moveGroup(index, offset)}
+						onDuplicate={() => update({ groups: duplicateDarkGroup(settings.groups, index) })}
 						onRemove={() => update({ groups: settings.groups.filter((_, i) => i !== index) })}
 					/>
 				))}
@@ -219,7 +221,6 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				</dl>
 				<Notice>Estimates only: downloads, cooling, and rejected frames add to them. Groups of one temperature run together.</Notice>
 			</CollapsibleSection>
-			<MatrixBuilder disabled={locked} onAdd={(exposures, gains, temperatures, count) => update({ groups: expandDarkMatrix(settings.groups, exposures, gains, temperatures, count) })} />
 			<CollapsibleSection id="images.dark-library-wizard.protection" title="Light Protection">
 				<Checkbox label="Use Dark Filter" checked={settings.useDarkFilter} disabled={locked || !wheelAssigned} onChange={(useDarkFilter) => update({ useDarkFilter })} />
 				{settings.useDarkFilter && wheelState && (
@@ -323,27 +324,32 @@ interface GroupFormProps {
 	readonly count: number
 	// Whether a target temperature can be set.
 	readonly temperature: boolean
+	// Exposure range the camera accepts, in seconds, when known.
+	readonly exposure?: CameraCapabilities['exposure']
 	// Whether the form is locked.
 	readonly disabled: boolean
 	// Applies changed fields.
 	readonly onChange: (patch: Partial<DarkGroup>) => void
 	// Moves the group by a number of rows.
 	readonly onMove: (offset: number) => void
+	// Adds a copy of the group below it.
+	readonly onDuplicate: () => void
 	// Removes the group.
 	readonly onRemove: () => void
 }
 
 // Fields of one group.
-function GroupForm({ index, group, count, temperature, disabled, onChange, onMove, onRemove }: GroupFormProps) {
+function GroupForm({ index, group, count, temperature, exposure, disabled, onChange, onMove, onDuplicate, onRemove }: GroupFormProps) {
 	return (
 		<fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 border-t border-line-200 p-0 pt-2 first:border-t-0 first:pt-0">
 			<div className="flex items-center gap-1">
 				<p className="m-0 flex-1 truncate text-ink-100">{`Group ${index + 1}`}</p>
 				{index > 0 && <IconButton icon="arrow" label={`Move group ${index + 1} up`} className="size-[38px]" disabled={disabled} onClick={() => onMove(-1)} />}
 				{index < count - 1 && <IconButton icon="arrow" label={`Move group ${index + 1} down`} className="size-[38px] rotate-180" disabled={disabled} onClick={() => onMove(1)} />}
+				{count < DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS && <IconButton icon="duplicate" label={`Duplicate group ${index + 1}`} className="size-[38px]" disabled={disabled} onClick={onDuplicate} />}
 				{count > 1 && <IconButton icon="close" label={`Remove group ${index + 1}`} className="size-[38px]" disabled={disabled} onClick={onRemove} />}
 			</div>
-			<NumberInput label="Exposure" value={group.exposure} min={0.001} step={1} suffix="s" disabled={disabled} onChange={(exposure) => onChange({ exposure })} />
+			<ExposureTimeInput value={group.exposure} exposure={exposure} disabled={disabled} onChange={(value) => onChange({ exposure: value })} />
 			<div className="grid grid-cols-2 gap-2">
 				<NumberInput label="Gain" value={group.gain} min={0} disabled={disabled} onChange={(gain) => onChange({ gain })} />
 				<NumberInput label="Frames" value={group.count} min={1} max={DARK_LIBRARY_WIZARD_MAXIMUM_COUNT} disabled={disabled} onChange={(frames) => onChange({ count: frames })} />
@@ -351,37 +357,6 @@ function GroupForm({ index, group, count, temperature, disabled, onChange, onMov
 			{temperature && <Checkbox label="Target Temperature" checked={group.temperature !== undefined} disabled={disabled} onChange={(set) => onChange({ temperature: set ? 0 : undefined })} />}
 			{group.temperature !== undefined && <NumberInput label="Temperature" value={group.temperature} min={-60} max={40} step={1} suffix="°C" disabled={disabled} onChange={(value) => onChange({ temperature: value })} />}
 		</fieldset>
-	)
-}
-
-interface MatrixBuilderProps {
-	// Whether the form is locked.
-	readonly disabled: boolean
-	// Adds the groups of a matrix.
-	readonly onAdd: (exposures: readonly number[], gains: readonly number[], temperatures: readonly number[], count: number) => void
-}
-
-// Adds every exposure at every gain and temperature to the rows, so a matrix need not be typed one row at a time. Its values
-// are only a draft: the rows are the plan.
-function MatrixBuilder({ disabled, onAdd }: MatrixBuilderProps) {
-	const [exposures, setExposures] = useState('60, 120, 180, 300')
-	const [gains, setGains] = useState('0')
-	const [temperatures, setTemperatures] = useState('')
-	const [count, setCount] = useState(30)
-	const parsedExposures = parseDarkValues(exposures).filter((value) => value > 0)
-	const parsedGains = parseDarkValues(gains)
-
-	return (
-		<CollapsibleSection id="images.dark-library-wizard.matrix" title="Add a Matrix">
-			<TextInput label="Exposures (s)" value={exposures} disabled={disabled} onChange={(e) => setExposures(e.target.value)} />
-			<TextInput label="Gains" value={gains} disabled={disabled} onChange={(e) => setGains(e.target.value)} />
-			<TextInput label="Temperatures (°C)" placeholder="Uncontrolled" value={temperatures} disabled={disabled} onChange={(e) => setTemperatures(e.target.value)} />
-			<NumberInput label="Frames per Group" value={count} min={1} max={DARK_LIBRARY_WIZARD_MAXIMUM_COUNT} disabled={disabled} onChange={setCount} />
-			<Button variant="secondary" className="self-start" disabled={disabled || parsedExposures.length === 0 || parsedGains.length === 0} onClick={() => onAdd(parsedExposures, parsedGains, parseDarkValues(temperatures), count)}>
-				Add Groups
-			</Button>
-			<Notice>A starting point, not a recommendation: match the exposures, gains, and temperatures of your lights.</Notice>
-		</CollapsibleSection>
 	)
 }
 

@@ -1,4 +1,4 @@
-import { type AboutInfo, createAboutRoutes, flushStores, identifyJplClient, routes, startEarthOrientation, websocket } from 'api'
+import { type AboutInfo, createAboutRoutes, flushStores, identifyJplClient, routes, startCalibrationLibrary, startEarthOrientation, websocket } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
 
@@ -28,6 +28,9 @@ identifyJplClient(version)
 
 // The first request already reads the same Earth orientation data as every later one.
 await startEarthOrientation()
+
+// Masters queued before the server stopped resume without anyone opening the tool.
+void startCalibrationLibrary()
 
 // HTTP server listening on APP_HOST (default localhost) and APP_PORT (default 7000).
 const server = Bun.serve({

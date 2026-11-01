@@ -1,6 +1,7 @@
 import type { ServerWebSocket, WebSocketHandler } from 'bun'
 import type { AnnotationEvent } from './annotations'
 import type { AutoFocusEvent } from './autofocus'
+import type { CalibrationLibraryEvent } from './calibrationlibrary'
 import type { CaptureFrameEvent } from './captureframes'
 import type { CaptureEvent } from './captures'
 import type { ConnectionRegistryEvent } from './connection'
@@ -52,6 +53,7 @@ export type ServerEvent =
 	| DarvEvent
 	| FlatWizardEvent
 	| DarkLibraryWizardEvent
+	| CalibrationLibraryEvent
 	| MountNudgeEvent
 	| MountRemoteControlEvent
 	| DomeMotionEvent

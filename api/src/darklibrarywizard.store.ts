@@ -138,6 +138,11 @@ export interface DarkCapturePlan {
 	readonly thermal: DarkThermalPolicy
 	// Rejected frames allowed per group before the session fails.
 	readonly maximumRejections: number
+	// What the frames are for; absent is an ordinary dark. A dark-flat is the same light-blocked capture at the exposure
+	// of a flat, and a driver may write it as a plain DARK.
+	readonly purpose?: 'darkFlat'
+	// Whether the Calibration Library should build the masters of the complete groups once the acquisition ends.
+	readonly generateMasters?: boolean
 }
 
 // Outcome of an examined frame:

@@ -3,6 +3,8 @@ import { AstronomicalTimeService, createAstronomicalTimeRoutes } from './astrono
 import { EarthOrientationData, installEarthOrientation } from './astronomicaltime.eop'
 import { AstroWeatherService, createAstroWeatherRoutes } from './astroweather'
 import { AutoFocusSessions, createAutoFocusRoutes } from './autofocus'
+import { CalibrationLibrary, createCalibrationLibraryRoutes } from './calibrationlibrary'
+import { CalibrationLibraryStore } from './calibrationlibrary.store'
 import { CameraCommands, createCameraRoutes } from './cameras'
 import { CaptureFrameRegistry, createCaptureFrameRoutes, DEFAULT_CAPTURE_FRAMES_FILE } from './captureframes'
 import { CameraCaptures, createCaptureRoutes } from './captures'
@@ -65,6 +67,28 @@ export type { AstronomicalSample, SevenTimerClass } from './astroweather.seventi
 export type { EarthOrientationCoverage, EarthOrientationSource, EarthOrientationStatus } from './astronomicaltime.eop'
 export type { AutoFocusCaptureSettings, AutoFocusEvent, AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusStartResponse, AutoFocusState, AutoFocusVerification, FocusMeasurement } from './autofocus'
 export type { FocusCurve, FocusCurveHyperbola, FocusCurveParabola, FocusCurveSeries, FocusCurveSeriesKind, FocusCurveTrendLines } from './autofocus.curve'
+export type {
+	CalibrationGroupDetail,
+	CalibrationGroupSummary,
+	CalibrationLibraryErrorCode,
+	CalibrationLibraryEvent,
+	CalibrationLibrarySnapshot,
+	CalibrationMasterDetail,
+	CalibrationMasterSummary,
+	FlatFrameRegistration,
+	ImportCandidate,
+	ImportCommit,
+	ImportRequest,
+	MasterRequest,
+	MasterRequestResult,
+	RecipeValidation,
+	ResolvePreview,
+	StateCounts,
+} from './calibrationlibrary'
+export type { CalibrationKind, CalibrationMetadata, CalibrationRecipe, CalibrationTarget, CompatibilityFinding, EvidenceLevel, Evidenced, FindingCode, FindingSeverity, GroupReadiness, MasterReference, MatchVerdict, OverridableField } from './calibrationlibrary.compatibility'
+export type { CalibrationJobErrorCode, CalibrationJobState, CalibrationJobSummary, CalibrationJobType } from './calibrationlibrary.jobs'
+export type { CalibrationMaster, CalibrationMasterDiagnostics, CalibrationSource, CalibrationSourceSummary, MasterCalibrationState, Page, ProductStatus, SourceFormat, SourceOrigin, SourceStatus } from './calibrationlibrary.store'
+export type { IntegrationProgress } from './calibrationlibrary.analysis'
 export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'
 export type { CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureOutputMode, CapturePhase, CaptureRequest, CaptureSession, CaptureSettings, CaptureSnapshot, CaptureSnoop, CaptureStartResponse } from './captures'
 export type {
@@ -547,6 +571,13 @@ const pointingActivations = new PointingActivations(connections.devices, (id) =>
 // taking their frames with the capturer of the captures, and analyzing them on a worker of their own.
 const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, new DarvAnalyzer(images), publish)
 
+// Plans of the Dark Library Wizard. Reconciliation at load claims every running plan, so the process keeps a single store,
+// and the Calibration Library reads the same one.
+const darkPlans = new DarkPlanStore()
+
+// Calibration frames and masters, which need no connection and hold no device; automatic masters wait for the camera operations.
+const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(), darkPlans, publish, () => operations.running().some(({ kind }) => kind.startsWith('camera.')))
+
 // Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
 // moving the wheels, driving the panels, and closing and opening the covers with the commanders of their commands,
 // previewing and recording the frames in the capture frame registry, and measuring them in DN on a worker of their own.
@@ -555,7 +586,7 @@ const flatWizard = new FlatWizardSessions(connections.devices, (id) => connectio
 // Dark Library Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the
 // captures, cooling the cameras, moving the wheels, and driving the panels and covers with the commanders of their
 // commands, keeping their plans in files of their own, and measuring their frames in DN on a worker of their own.
-const darkLibraryWizard = new DarkLibraryWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, cameras.commander, wheels.commander, flatPanels.commander, covers.commander, images, captureFrames, new DarkLibraryWizardAnalyzer(), new DarkPlanStore(), publish)
+const darkLibraryWizard = new DarkLibraryWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, cameras.commander, wheels.commander, flatPanels.commander, covers.commander, images, captureFrames, new DarkLibraryWizardAnalyzer(), darkPlans, publish)
 
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
 // guide output commands and previewing their frames in the image store and the capture frame registry.
@@ -591,6 +622,12 @@ const astronomicalTime = new AstronomicalTimeService(earthOrientation)
 export async function startEarthOrientation() {
 	await earthOrientation.prepare()
 	installEarthOrientation(earthOrientation)
+}
+
+// Opens the Calibration Library, so its queued masters resume before anyone opens the tool. Called by the app before it serves;
+// a test that only imports this module opens no file. Never rejects: a request opens it again and reports the failure.
+export async function startCalibrationLibrary() {
+	await calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))
 }
 
 // Names the running version to JPL, as its fair-use policy asks of automated clients. Called by the app before it serves,
@@ -634,6 +671,7 @@ export const routes = {
 	...createDarvRoutes(darv),
 	...createFlatWizardRoutes(flatWizard),
 	...createDarkLibraryWizardRoutes(darkLibraryWizard),
+	...createCalibrationLibraryRoutes(calibrationLibrary),
 	...createGuidingRoutes(guiding),
 	...createTargetCenteringRoutes(targetCentering),
 	...createFileRoutes(),

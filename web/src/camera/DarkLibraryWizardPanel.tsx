@@ -82,9 +82,9 @@ function formatDuration(seconds: number) {
 	return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`
 }
 
-// Returns the label of a group.
+// Returns the label of a group, short enough for a row of the panel; a group without a target names no temperature.
 function groupLabel({ exposure, gain, temperature }: Pick<DarkGroup, 'exposure' | 'gain' | 'temperature'>) {
-	return `${formatExposure(exposure)}, gain ${gain}, ${temperature === undefined ? 'uncontrolled' : `${temperature} °C`}`
+	return `${formatExposure(exposure)}, gain ${gain}${temperature === undefined ? '' : `, ${temperature} °C`}`
 }
 
 // Returns the groups a running session applied, to show while it runs.
@@ -246,7 +246,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 					<Row label="Sensor">{capabilities?.temperature === undefined ? 'Not reported' : `${capabilities.temperature.toFixed(1)} °C`}</Row>
 					<Row label="Cooler">{capabilities?.cooler === undefined ? 'None' : `${capabilities.cooler.enabled === false ? 'Off' : 'On'}, ${Math.round(capabilities.cooler.power)} %`}</Row>
 				</dl>
-				<div className="grid grid-cols-3 gap-2">
+				<div className="flex flex-col gap-2">
 					<NumberInput label="Tolerance" value={settings.tolerance} min={0.1} max={5} step={0.1} suffix="°C" disabled={locked} onChange={(tolerance) => update({ tolerance })} />
 					<NumberInput label="Hold" value={settings.hold} min={0} max={3600} suffix="s" disabled={locked} onChange={(hold) => update({ hold })} />
 					<NumberInput label="Timeout" value={settings.timeout} min={1} max={14400} suffix="s" disabled={locked} onChange={(timeout) => update({ timeout })} />
@@ -336,15 +336,15 @@ interface GroupFormProps {
 // Fields of one group.
 function GroupForm({ index, group, count, temperature, disabled, onChange, onMove, onRemove }: GroupFormProps) {
 	return (
-		<fieldset className="m-0 flex flex-col gap-2 border-0 border-t border-line-200 p-0 pt-2 first:border-t-0 first:pt-0">
+		<fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 border-t border-line-200 p-0 pt-2 first:border-t-0 first:pt-0">
 			<div className="flex items-center gap-1">
-				<p className="m-0 flex-1 truncate text-ink-100">{`${index + 1}. ${groupLabel(group)}`}</p>
+				<p className="m-0 flex-1 truncate text-ink-100">{`Group ${index + 1}`}</p>
 				{index > 0 && <IconButton icon="arrow" label={`Move group ${index + 1} up`} className="size-[38px]" disabled={disabled} onClick={() => onMove(-1)} />}
 				{index < count - 1 && <IconButton icon="arrow" label={`Move group ${index + 1} down`} className="size-[38px] rotate-180" disabled={disabled} onClick={() => onMove(1)} />}
 				{count > 1 && <IconButton icon="close" label={`Remove group ${index + 1}`} className="size-[38px]" disabled={disabled} onClick={onRemove} />}
 			</div>
-			<div className="grid grid-cols-3 gap-2">
-				<NumberInput label="Exposure" value={group.exposure} min={0.001} step={1} suffix="s" disabled={disabled} onChange={(exposure) => onChange({ exposure })} />
+			<NumberInput label="Exposure" value={group.exposure} min={0.001} step={1} suffix="s" disabled={disabled} onChange={(exposure) => onChange({ exposure })} />
+			<div className="grid grid-cols-2 gap-2">
 				<NumberInput label="Gain" value={group.gain} min={0} disabled={disabled} onChange={(gain) => onChange({ gain })} />
 				<NumberInput label="Frames" value={group.count} min={1} max={DARK_LIBRARY_WIZARD_MAXIMUM_COUNT} disabled={disabled} onChange={(frames) => onChange({ count: frames })} />
 			</div>
@@ -513,13 +513,13 @@ function PlanCard({ plan, busy, onComplete, onFork }: PlanCardProps) {
 					{warning}
 				</Notice>
 			))}
-			<div className="flex gap-2">
+			<div className="flex flex-col gap-2">
 				{plan.missing > 0 && !active && (
-					<Button className="flex-1" disabled={busy} onClick={onComplete}>
+					<Button disabled={busy} onClick={onComplete}>
 						Complete Missing Frames
 					</Button>
 				)}
-				<Button variant="secondary" className="flex-1" disabled={busy} onClick={onFork}>
+				<Button variant="secondary" disabled={busy} onClick={onFork}>
 					Use as New Plan
 				</Button>
 			</div>

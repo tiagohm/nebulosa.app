@@ -40,15 +40,16 @@ async function waitUntil(condition: () => boolean, timeout = 30000) {
 const PEDESTAL = 1000
 
 // Analyzer standing for the worker: measures a noise-free synthetic flat whose median is PEDESTAL plus rate times
-// the exposure (rate in DN per second, from the frame context), and records the bytes of every file it was given,
-// which the capture really wrote into the staging directory.
-function fakeAnalyzer(rate: (context: FlatFrameContext) => number, finals: (context: FlatFrameContext) => Partial<{ readonly nonFinite: boolean }> = () => ({})) {
+// the exposure (rate in DN per second, from the frame context) up to the ceiling of the sensor, and records the bytes
+// of every file it was given, which the capture really wrote into the staging directory.
+function fakeAnalyzer(rate: (context: FlatFrameContext) => number, finals: (context: FlatFrameContext) => Partial<{ readonly nonFinite: boolean }> = () => ({}), ceiling = 65535) {
 	const calls: { path: string; context: FlatFrameContext; sample: boolean; bytes: Buffer }[] = []
 
 	const analyzer = {
 		measure: (path: string, context: FlatFrameContext, options: FlatMeasurementOptions, sample: boolean): Promise<FlatFrameMeasurement> => {
 			calls.push({ path, context, sample, bytes: readFileSync(path) })
-			const image = generateSyntheticFlatImage({ width: 32, height: 24, bias: PEDESTAL, signal: rate(context) * context.exposure!, vignetting: 0, lowerClip: 0, upperClip: 65535, quantizationStep: 1 })
+			// The file still stores 16 bits whatever the ceiling of the sensor is.
+			const image = { ...generateSyntheticFlatImage({ width: 32, height: 24, bias: PEDESTAL, signal: rate(context) * context.exposure!, vignetting: 0, lowerClip: 0, upperClip: ceiling, quantizationStep: 1 }), digitalRange: [0, 65535] as const }
 			if (sample && finals(context).nonFinite) image.raw.fill(Number.NaN, 0, 32)
 			const frame = { ...context, image }
 			if (!sample) return Promise.resolve({ analysis: analyzeFlat({ frame }, { ...options, maps: 'none' }) })
@@ -81,7 +82,7 @@ function request(directory: string, patch: Partial<FlatWizardRequest> = {}): Fla
 	}
 }
 
-async function setup(rate: (context: FlatFrameContext) => number = () => 100000, finals?: (context: FlatFrameContext) => Partial<{ readonly nonFinite: boolean }>) {
+async function setup(rate: (context: FlatFrameContext) => number = () => 100000, finals?: (context: FlatFrameContext) => Partial<{ readonly nonFinite: boolean }>, ceiling?: number) {
 	const manager = new ConnectionManager()
 	disposables.push(manager)
 	const { id } = await manager.connect({ type: 'SIMULATOR' })
@@ -107,7 +108,7 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	disposables.push(panels)
 	const covers = new CoverCommands(manager.devices, (connectionId) => manager.client(connectionId), operations)
 	disposables.push(covers)
-	const measurement = fakeAnalyzer(rate, finals)
+	const measurement = fakeAnalyzer(rate, finals, ceiling)
 	const events: FlatWizardEvent[] = []
 	const flatWizard = new FlatWizardSessions(
 		manager.devices,
@@ -347,6 +348,41 @@ describe('Flat Wizard sessions', () => {
 		expect(summary()!.filters[0].state).toBe('failed')
 		expect(readdirSync(directory)).toEqual([])
 		expect(released()).toBeTrue()
+	})
+
+	test('a sensor saturating below the storage range is left by shortening the exposure', async () => {
+		// A left-aligned 14-bit ADC tops out at 65532 DN: nothing reaches 65535, so no sample counts as clipped.
+		const { id, cameraId, flatWizard, directory, summary, ended, session } = await setup(() => 200000, undefined, 65532)
+		const { sessionId } = await start(flatWizard, id, cameraId, request(directory, { effectiveClip: undefined, filters: [filter({ count: 1, initialExposure: 1 })] }))
+
+		await waitUntil(() => summary()?.pending !== undefined)
+		expect(flatWizard.continue(sessionId, { stepId: summary()!.pending!.stepId }).status).toBe(204)
+		await waitUntil(ended, 60000)
+
+		expect(summary()).toMatchObject({ state: 'completed' })
+		expect(summary()!.filters[0]).toMatchObject({ exposure: 0.125, trials: 4, accepted: 1 })
+		// 1 s and 0.5 s sit at the ceiling, and 0.25 s is real signal the flat pair cannot be extrapolated to.
+		const { attempts } = await session(sessionId)
+		expect(attempts.map((attempt) => [attempt.kind, attempt.exposure, attempt.level])).toEqual([
+			['trial', 1, 65532],
+			['trial', 0.5, 65532],
+			['trial', 0.25, 51000],
+			['trial', 0.125, 26000],
+			['final', 0.125, 26000],
+		])
+	})
+
+	test('a level that stays flat at the minimum exposure fails with an explanation', async () => {
+		const { id, cameraId, flatWizard, directory, summary, ended } = await setup(() => 10_000_000, undefined, 65532)
+		await start(flatWizard, id, cameraId, request(directory, { effectiveClip: undefined, filters: [filter({ initialExposure: 0.02, minimumExposure: 0.01 })] }))
+
+		await waitUntil(() => summary()?.pending !== undefined)
+		expect(flatWizard.continue(summary()!.sessionId, { stepId: summary()!.pending!.stepId }).status).toBe(204)
+		await waitUntil(ended, 60000)
+
+		expect(summary()).toMatchObject({ state: 'failed', reason: 'unexpectedState' })
+		expect(summary()!.error).toContain('saturates even at the minimum exposure')
+		expect(summary()!.filters[0].trials).toBe(2)
 	})
 
 	test('too many rejected final frames fail the group without publishing them', async () => {

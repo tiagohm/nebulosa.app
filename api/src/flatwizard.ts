@@ -35,7 +35,8 @@ import type { OperationDevice, OperationRegistry } from './operations'
 // flatWizard). Trial frames of the exposure search and rejected final frames are deleted after measurement; an
 // accepted final frame is published by hard-linking its original bytes to a new name that never overwrites an
 // existing file, and recorded under that name among the saved frames of the capture frame registry. The levels are observed DN: without a bias reference the pedestal is unknown, so an out-of-target
-// first trial is followed by a second distinct one before the toolkit's affine or interpolated estimate is used.
+// first trial is followed by a second distinct one before the toolkit's affine or interpolated estimate is used, and
+// levels above the target that the estimate cannot explain are taken as saturation and answered with shorter exposures.
 // A filter is selected by moving the assigned wheel, or by the operator, who confirms each manual step with its
 // step id; the light comes from the assigned panel at a fixed brightness, or from a manual source the operator
 // confirms. An assigned dust cover is closed before the first frame. A light the session switched on is switched off
@@ -624,13 +625,15 @@ export class FlatWizardSessions {
 	// Searches the exposure that puts the brightest plane inside the target with trial frames that are never kept.
 	// Observed levels carry an unknown pedestal, so a single out-of-target observation is followed by a second
 	// distinct exposure (twice or half the first, within the bounds) instead of a proportional guess; the toolkit's
-	// estimate then interpolates or fits the response. A clipped trial is no observation and halves the exposure.
+	// estimate then interpolates or fits the response. A clipped trial is no observation and halves the exposure. So
+	// does a level above the target that no model explains: a sensor can top out below the storage range, where no
+	// sample counts as clipped, so the longer exposures are dropped as saturated rather than failing the search.
 	async #calibrate(session: Session, context: OperationContext, { camera, panel }: SessionDevices, index: number, staging: string): Promise<OperationResult<{ readonly exposure: number; readonly plane: FlatPlane }>> {
 		const { request } = session.summary
 		const filter = request.filters[index]
 		const { name } = session.summary.filters[index]
 		const [minimum, maximum] = [filter.minimumExposure, filter.maximumExposure]
-		const observations: FlatExposureObservation[] = []
+		let observations: FlatExposureObservation[] = []
 		const tried: number[] = []
 		let exposure = clamp(filter.initialExposure, minimum, maximum)
 		let plane: FlatPlane | undefined
@@ -671,7 +674,12 @@ export class FlatWizardSessions {
 				if (estimate.status === 'accepted') return successfulOperationResult({ exposure, plane: plane! })
 				if (estimate.status === 'invalid') {
 					// A single observation cannot separate the light from the pedestal: a second distinct exposure can.
-					if (observations.length > 1 || !estimate.diagnostics.some((diagnostic) => diagnostic.code === 'insufficientSamples')) return failedOperationResult('unexpectedState', `The exposure of ${name} cannot be estimated: ${estimate.diagnostics.map((diagnostic) => diagnostic.message).join('; ')}`)
+					if (observations.length > 1 || !estimate.diagnostics.some((diagnostic) => diagnostic.code === 'insufficientSamples')) {
+						if (level! <= filter.targetRange[1]) return failedOperationResult('unexpectedState', `The exposure of ${name} cannot be estimated: ${estimate.diagnostics.map((diagnostic) => diagnostic.message).join('; ')}`)
+						if (exposure <= minimum) return failedOperationResult('unexpectedState', `${name} saturates even at the minimum exposure of ${minimum} s; dim the light`)
+						observations = observations.filter((observation) => observation.exposure <= exposure)
+					}
+
 					next = clamp(level! < filter.targetRange[0] ? exposure * 2 : exposure / 2, minimum, maximum)
 				} else {
 					next = estimate.recommendedExposure

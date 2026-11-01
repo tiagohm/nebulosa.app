@@ -2,6 +2,7 @@ import type { CameraCapabilities, CapturePhase, CaptureSession, CoverState, Devi
 import { formatDEC, formatRA, normalizeAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import type { AutoFocusRuntime } from '../../camera/autofocus'
 import { type CaptureRuntime, cameraKey, captureRunning, frameProgress } from '../../camera/capture'
+import type { DarkLibraryWizardRuntime } from '../../camera/darklibrarywizard'
 import type { DarvRuntime } from '../../camera/darv'
 import type { FlatWizardRuntime } from '../../camera/flatwizard'
 import { GUIDING_STATE_LABELS, type GuidingRuntime, guidingRunning } from '../../camera/guiding'
@@ -597,7 +598,7 @@ export interface InterruptibleSession {
 }
 
 // Tool whose session is ended to interrupt its operation.
-export type InterruptibleTool = 'autoFocus' | 'tppa' | 'darv' | 'flatWizard' | 'targetCentering' | 'mountPointing' | 'guiding'
+export type InterruptibleTool = 'autoFocus' | 'tppa' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'targetCentering' | 'mountPointing' | 'guiding'
 
 // The one command that interrupts an operation: the stop of a device, the abort of a capture, or the end of a session.
 export type Interruption = { readonly type: 'device'; readonly device: InterruptibleDevice; readonly deviceId: string } | { readonly type: 'capture'; readonly camera: SessionCamera; readonly abort: boolean } | { readonly type: 'session'; readonly tool: InterruptibleTool; readonly session: InterruptibleSession }
@@ -615,6 +616,7 @@ export interface InterruptionInput {
 	readonly tppa: Pick<TppaRuntime, 'sessions'>
 	readonly darv: Pick<DarvRuntime, 'sessions'>
 	readonly flatWizard: Pick<FlatWizardRuntime, 'sessions'>
+	readonly darkLibraryWizard: Pick<DarkLibraryWizardRuntime, 'sessions'>
 	readonly targetCentering: Pick<TargetCenteringRuntime, 'sessions'>
 	readonly mountPointing: Pick<MountPointingRuntime, 'sessions'>
 }
@@ -660,6 +662,8 @@ export function operationInterruption(operation: OperationRecord, input: Interru
 			return sessionInterruption('tppa', input.tppa.sessions, operationId)
 		case 'camera.flatWizard':
 			return sessionInterruption('flatWizard', input.flatWizard.sessions, operationId)
+		case 'camera.darkLibraryWizard':
+			return sessionInterruption('darkLibraryWizard', input.darkLibraryWizard.sessions, operationId)
 		case 'mount.targetCentering':
 			return sessionInterruption('targetCentering', input.targetCentering.sessions, operationId)
 		case 'mount.pointingModel':

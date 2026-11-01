@@ -1,4 +1,20 @@
-import type { AnnotationBodies, ImageProcessingOperation, AutoFocusRequest, CaptureRequest, CloseApproachBody, DisplaySettings, FlatWizardFilter, GuidingClientSettings, GuidingStartRequest, MountRemoteProtocol, MountRemoteStartRequest, PlateSolveRequest, StarDetectionRequest, StreakDetectorSettings } from 'api'
+import type {
+	AnnotationBodies,
+	ImageProcessingOperation,
+	AutoFocusRequest,
+	CaptureRequest,
+	CloseApproachBody,
+	DarkGroup,
+	DisplaySettings,
+	FlatWizardFilter,
+	GuidingClientSettings,
+	GuidingStartRequest,
+	MountRemoteProtocol,
+	MountRemoteStartRequest,
+	PlateSolveRequest,
+	StarDetectionRequest,
+	StreakDetectorSettings,
+} from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { AnnotationDensity, AnnotationLayers } from '../images/images'
 import type { ImageAstrometrySettings } from '../platesolving/preferences'
@@ -360,6 +376,8 @@ export interface CameraSettings {
 	darv?: DarvSettings
 	// Flat Wizard form.
 	flatWizard?: FlatWizardSettings
+	// Dark Library Wizard form.
+	darkLibraryWizard?: DarkLibraryWizardSettings
 	// Guiding form.
 	guiding?: GuidingSettings
 	// Display settings applied last to the frames of the camera in its Images tab, which its tab starts with.
@@ -607,6 +625,70 @@ export const DEFAULT_FLAT_WIZARD_EFFECTIVE_CLIP = 65000
 
 // Flat Wizard form of a camera that has none yet: one luminance group, a 2 s settle, and the default limits.
 export const DEFAULT_FLAT_WIZARD_SETTINGS: FlatWizardSettings = { filters: [DEFAULT_FLAT_WIZARD_FILTER], settleTime: 2, maximumTrials: 8, maximumRejections: 5 }
+
+// Dark Library Wizard form of one physical camera: the groups of the next plan and how it protects the sensor. The offset,
+// binning, and readout mode come from Camera Acquisition; the wheel, panel, and cover are those of the setup. A plan keeps
+// its own copy of all this, so editing the form never changes a plan, and no progress of a plan is kept here.
+export interface DarkLibraryWizardSettings {
+	// Groups of frames, in acquisition order; exposures in seconds, gains in driver units, temperatures in degrees Celsius.
+	groups: readonly DarkGroup[]
+	// Whether frames take the whole sensor instead of the subframe of Camera Acquisition.
+	fullSensor: boolean
+	// Whether the wheel moves to a dark slot.
+	useDarkFilter: boolean
+	// Dark slot of the wheel, 0-based.
+	darkSlot: number
+	// Whether the dust cover closes.
+	closeCover: boolean
+	// Whether the flat panel light is switched off.
+	panelOff: boolean
+	// Whether the operator confirms a manual opaque cap.
+	manualCap: boolean
+	// Whether a suspicion of light on the first frame of a group stops for a decision.
+	verifyFirstFrame: boolean
+	// Largest distance from a target temperature, in degrees Celsius; positive.
+	tolerance: number
+	// Time the sensor must stay inside the tolerance, in seconds.
+	hold: number
+	// Longest wait for a stable temperature, in seconds.
+	timeout: number
+	// Absolute server directory the frames are saved under; absent uses the server's default captures directory.
+	directory?: string
+	// Rejected frames allowed per group, in [0, DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS].
+	maximumRejections: number
+}
+
+// Most groups of a plan. A matrix grows fast, and each group is a directory and a thermal stage of a run.
+export const DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS = 64
+
+// Most accepted frames requested per group.
+export const DARK_LIBRARY_WIZARD_MAXIMUM_COUNT = 500
+
+// Most accepted frames of a plan, which keeps a mistyped matrix from filling a disk.
+export const DARK_LIBRARY_WIZARD_MAXIMUM_FRAMES = 20000
+
+// Most rejected frames allowed per group.
+export const DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS = 100
+
+// Group a new row of the Dark Library Wizard form starts with.
+export const DEFAULT_DARK_LIBRARY_WIZARD_GROUP: DarkGroup = { exposure: 60, gain: 0, count: 30 }
+
+// Dark Library Wizard form of a camera that has none yet: common exposures of 30 frames at one gain, protected by a manual
+// cap, since no device may be assigned. Tolerance, hold, and timeout are provisional defaults of ±0.5 °C, 2 min, and 30 min.
+export const DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS: DarkLibraryWizardSettings = {
+	groups: [60, 120, 180, 300].map((exposure) => ({ exposure, gain: DEFAULT_DARK_LIBRARY_WIZARD_GROUP.gain, count: DEFAULT_DARK_LIBRARY_WIZARD_GROUP.count })),
+	fullSensor: true,
+	useDarkFilter: false,
+	darkSlot: 0,
+	closeCover: false,
+	panelOff: false,
+	manualCap: true,
+	verifyFirstFrame: true,
+	tolerance: 0.5,
+	hold: 120,
+	timeout: 1800,
+	maximumRejections: 5,
+}
 
 // Settle a guiding command waits for: the guide error must stay within a distance for a time, before a timeout.
 export interface GuidingSettleSettings {

@@ -112,6 +112,7 @@ describe('abort of an operation', () => {
 			tppa: tool({ 'A:c1': session }),
 			darv: tool(),
 			flatWizard: tool(),
+			darkLibraryWizard: tool(),
 			targetCentering: tool(),
 			mountPointing: tool(),
 		}

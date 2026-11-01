@@ -3,6 +3,7 @@ import { AnnotationPanel } from './AnnotationPanel'
 import { AutoFocusTool } from './AutoFocusTool'
 import { CameraAcquisitionTool } from './CameraAcquisitionTool'
 import type { CameraOperationContext } from './cameracontext'
+import { DarkLibraryWizardTool } from './DarkLibraryWizardTool'
 import { DarvTool } from './DarvTool'
 import { FlatWizardTool } from './FlatWizardTool'
 import { GuidingTool } from './GuidingTool'
@@ -101,7 +102,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	'pointing-model-builder': { id: 'pointing-model-builder', label: 'Pointing Model Builder', panelTitle: 'Pointing Model Builder', category: 'camera', panel: PointingModelBuilderTool },
 	'target-centering': { id: 'target-centering', label: 'Target Centering', panelTitle: 'Target Centering', category: 'camera', panel: TargetCenteringTool },
 	'flat-wizard': { id: 'flat-wizard', label: 'Flat Wizard', panelTitle: 'Flat Wizard', category: 'camera', panel: FlatWizardTool },
-	'dark-library-wizard': { id: 'dark-library-wizard', label: 'Dark Library Wizard', panelTitle: 'Dark Library Wizard', category: 'camera' },
+	'dark-library-wizard': { id: 'dark-library-wizard', label: 'Dark Library Wizard', panelTitle: 'Dark Library Wizard', category: 'camera', panel: DarkLibraryWizardTool },
 }
 
 // Returns the category heading a tool is listed under in the selector.

@@ -4,6 +4,7 @@ import type { Ref } from 'react'
 import { useSnapshot } from 'valtio'
 import { autoFocusRuntime } from '../../camera/autofocus'
 import { captureRuntime } from '../../camera/capture'
+import { darkLibraryWizardRuntime } from '../../camera/darklibrarywizard'
 import { darvRuntime } from '../../camera/darv'
 import { flatWizardRuntime } from '../../camera/flatwizard'
 import { guidingRuntime } from '../../camera/guiding'
@@ -54,6 +55,7 @@ const ABORT_STORES: OperationAbortStores = {
 	tppa: tppaRuntime,
 	darv: darvRuntime,
 	flatWizard: flatWizardRuntime,
+	darkLibraryWizard: darkLibraryWizardRuntime,
 	targetCentering: targetCenteringRuntime,
 	mountPointing: mountPointingRuntime,
 }
@@ -68,10 +70,11 @@ export function useOperationAbortable() {
 	const tppa = useSnapshot(tppaRuntime)
 	const darv = useSnapshot(darvRuntime)
 	const flatWizard = useSnapshot(flatWizardRuntime)
+	const darkLibraryWizard = useSnapshot(darkLibraryWizardRuntime)
 	const targetCentering = useSnapshot(targetCenteringRuntime)
 	const mountPointing = useSnapshot(mountPointingRuntime)
 
-	return (operation: OperationRecord) => operationInterruption(operation, { link, control, captures, guiding, autoFocus, tppa, darv, flatWizard, targetCentering, mountPointing }) !== undefined
+	return (operation: OperationRecord) => operationInterruption(operation, { link, control, captures, guiding, autoFocus, tppa, darv, flatWizard, darkLibraryWizard, targetCentering, mountPointing }) !== undefined
 }
 
 interface ServerLinkItemProps {

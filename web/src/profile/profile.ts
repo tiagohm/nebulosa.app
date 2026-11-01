@@ -51,6 +51,8 @@ import {
 	DEFAULT_DARV_SETTINGS,
 	type DarvSettings,
 	DEFAULT_FLAT_WIZARD_SETTINGS,
+	type DarkLibraryWizardSettings,
+	DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS,
 	type FlatWizardSettings,
 	DEFAULT_GUIDING_SETTINGS,
 	type GuidingSettings,
@@ -483,6 +485,17 @@ export function flatWizardSettings(settings: Pick<ProfileSettings, 'cameras'>, c
 // when given.
 export function setFlatWizardSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<FlatWizardSettings>) {
 	setCameraForm(state, camera, 'flatWizard', flatWizardSettings(activeProfile(state).settings, camera), patch)
+}
+
+// Returns the Dark Library Wizard form of a camera: the one edited last, or the defaults.
+export function darkLibraryWizardSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<DarkLibraryWizardSettings> {
+	return cameraSettings(settings, camera)?.darkLibraryWizard ?? DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS
+}
+
+// Replaces fields of the Dark Library Wizard form of a camera in the active profile. The groups are replaced as a whole when
+// given.
+export function setDarkLibraryWizardSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<DarkLibraryWizardSettings>) {
+	setCameraForm(state, camera, 'darkLibraryWizard', darkLibraryWizardSettings(activeProfile(state).settings, camera), patch)
 }
 
 // Returns the guiding form of a camera: the one edited last, or the defaults.

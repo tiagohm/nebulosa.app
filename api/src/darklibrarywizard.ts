@@ -1110,7 +1110,8 @@ export class DarkLibraryWizardSessions implements Disposable {
 		const group = session.plan.groups[index]
 		const staging = join(group.directory, STAGING_DIRECTORY)
 		const sequence = this.#sequence(session, index)
-		const name = `${sequence}-${session.summary.sessionId}.fit`
+		// A sequence number is never reused in a group, and a short name leaves room under the path limit of Windows.
+		const name = `${sequence}.fit`
 		const staged = join(staging, name)
 		const { tolerance } = session.plan.thermal
 

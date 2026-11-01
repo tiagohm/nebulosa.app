@@ -1,5 +1,6 @@
 import { type AutoFocusRuntime, stopAutoFocus } from '../../camera/autofocus'
 import { abortCapture, type CaptureRuntime, cameraKey, stopCapture } from '../../camera/capture'
+import { type DarkLibraryWizardRuntime, stopDarkLibraryWizard } from '../../camera/darklibrarywizard'
 import { abortDarv, type DarvRuntime } from '../../camera/darv'
 import { type FlatWizardRuntime, stopFlatWizard } from '../../camera/flatwizard'
 import { type GuidingRuntime, stopGuidingSession } from '../../camera/guiding'
@@ -63,6 +64,7 @@ export interface OperationAbortStores extends MountAbortStores {
 	readonly tppa: TppaRuntime
 	readonly darv: DarvRuntime
 	readonly flatWizard: FlatWizardRuntime
+	readonly darkLibraryWizard: DarkLibraryWizardRuntime
 	readonly targetCentering: TargetCenteringRuntime
 	readonly mountPointing: MountPointingRuntime
 }
@@ -101,6 +103,9 @@ async function interrupt(interruption: Interruption, stores: OperationAbortStore
 		case 'flatWizard':
 			await stopFlatWizard(stores.flatWizard, session, request)
 			return stores.flatWizard.errors[key]
+		case 'darkLibraryWizard':
+			await stopDarkLibraryWizard(stores.darkLibraryWizard, session, request)
+			return stores.darkLibraryWizard.errors[key]
 		case 'targetCentering':
 			await stopTargetCentering(stores.targetCentering, session, request)
 			return stores.targetCentering.errors[key]

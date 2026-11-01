@@ -484,7 +484,7 @@ describe('interruption of an operation', () => {
 		const control = newControlRuntime()
 		control.watched = 'A'
 		Object.assign(control.states, states)
-		return { link: 'online', control, captures: empty, guiding: empty, autoFocus: empty, tppa: empty, darv: empty, flatWizard: empty, targetCentering: empty, mountPointing: empty } as Parameters<typeof operationInterruption>[1]
+		return { link: 'online', control, captures: empty, guiding: empty, autoFocus: empty, tppa: empty, darv: empty, flatWizard: empty, darkLibraryWizard: empty, targetCentering: empty, mountPointing: empty } as Parameters<typeof operationInterruption>[1]
 	}
 
 	test('a motion stops its device, when the driver reports it can', () => {

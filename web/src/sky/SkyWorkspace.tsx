@@ -3,8 +3,8 @@ import { type ReactNode, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { imagesState } from '../images/images'
-import { activeProfile, profileState, setPanelOpen, setSkyTimeBarVisible } from '../profile/profile'
-import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
+import { activeProfile, profileState, setSkyTimeBarVisible } from '../profile/profile'
+import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import type { CoordinateSystem } from './celestial/celestial'
@@ -44,6 +44,7 @@ export function SkyWorkspace() {
 	const settings = activeProfile(profiles).settings.sky
 	const { observer, display, framing } = settings
 	const sky = useSnapshot(skyState)
+	const panelState = useWorkspacePanel('sky')
 	const clock = useSnapshot(skyClock)
 	const { status, error, coordinateHidden } = useSnapshot(planetariumState)
 	const coordinateSystem: CoordinateSystem = observer ? 'horizontal' : 'equatorial'
@@ -124,13 +125,18 @@ export function SkyWorkspace() {
 	// Shows a view in the panel, opening the panel.
 	function openPanel(view: SkyPanelView) {
 		skyState.panel = view
-		setPanelOpen(profileState, 'sky', true)
+		panelState.setOpen(true)
 	}
 
 	// Shows a settings view, or returns to the Object Inspector when it is already shown.
 	function togglePanel(view: SkyPanelView) {
-		if (sky.panel === view && activeProfile(profileState).settings.panels.sky !== false) skyState.panel = 'inspector'
+		if (panelShows(view)) skyState.panel = 'inspector'
 		else openPanel(view)
+	}
+
+	// Whether a view is on screen: selected, and in a panel that is shown.
+	function panelShows(view: SkyPanelView) {
+		return panelState.open && sky.panel === view
 	}
 
 	const location = observer ? `${observer.name ? `${observer.name} · ` : ''}${observer.latitude.toFixed(4)}°, ${observer.longitude.toFixed(4)}°` : 'No location'
@@ -144,11 +150,11 @@ export function SkyWorkspace() {
 	}
 
 	return (
-		<WorkspaceLayout workspace="sky" title="Sky" context={<span className="truncate text-xs text-ink-300 max-sm:hidden">{context}</span>} panel={panels[sky.panel]()}>
+		<WorkspaceLayout workspace="sky" title="Sky" context={<span className="truncate text-xs text-ink-300 max-sm:hidden">{context}</span>} panel={panels[sky.panel]()} panelState={panelState}>
 			<div className="flex h-full flex-col bg-base-000">
-				<div className="flex h-11 flex-none items-center gap-2 border-b border-line-100 bg-base-100 px-2">
+				<div className="flex flex-none items-center gap-2 border-b border-line-100 bg-base-100 px-2 max-sm:flex-wrap max-sm:gap-y-1 max-sm:py-1 sm:h-11">
 					<SkySearch onSelect={handleSearchSelect} />
-					<div className="ml-auto flex flex-none items-center gap-1">
+					<div className="ml-auto flex flex-none items-center gap-1 max-sm:w-full">
 						<IconButton icon="mount" label={mountCenter ? 'Center on Mount' : 'Center on Mount (the mount position is shown in real time only, while connected)'} disabled={!mountCenter} onClick={() => mountCenter && map.centerOn(mountCenter)} />
 						<IconButton
 							icon="reticle"
@@ -163,10 +169,10 @@ export function SkyWorkspace() {
 						{footprint && <IconButton icon="images" label={`${handoffs.footprintHidden ? 'Show' : 'Hide'} the footprint of ${footprint.name}`} pressed={!handoffs.footprintHidden} onClick={() => toggleImageFootprint(skyImageState)} />}
 						{handoffs.intent?.mark && <IconButton icon="pin" label={`Clear the mark of ${handoffs.intent.label}`} onClick={() => clearSkyCoordinate(skyImageState)} />}
 						<IconButton icon="clock" label="Time Bar" pressed={settings.timeBar === true} onClick={() => setSkyTimeBarVisible(profileState, settings.timeBar !== true)} />
-						<IconButton icon="frame" label="Framing" pressed={sky.panel === 'framing'} onClick={() => togglePanel('framing')} />
-						<IconButton icon="layers" label="Display" pressed={sky.panel === 'display'} onClick={() => togglePanel('display')} />
-						<Button variant="secondary" onClick={() => togglePanel('observer')} className="max-w-56 truncate">
-							{observer ? (observer.name ?? 'Location') : 'Set Location'}
+						<IconButton icon="frame" label="Framing" pressed={panelShows('framing')} onClick={() => togglePanel('framing')} />
+						<IconButton icon="layers" label="Display" pressed={panelShows('display')} onClick={() => togglePanel('display')} />
+						<Button variant="secondary" onClick={() => togglePanel('observer')} className="max-w-56 max-sm:ml-auto max-sm:min-w-0">
+							<span className="truncate">{observer ? (observer.name ?? 'Location') : 'Set Location'}</span>
 						</Button>
 					</div>
 				</div>

@@ -10,7 +10,8 @@ import { useMediaQuery, WIDE_SCREEN } from './useMediaQuery'
 // camera tabs), a header with the title, the workspace's context controls (such as the Images tool selector)
 // and actions, the main content, and the collapsible contextual panel. On
 // wide screens the panel's visibility is a preference of the active profile, kept per workspace; on
-// narrow screens it is a drawer that starts closed and is never persisted.
+// narrow screens it is a drawer that starts closed and is never persisted. A workspace whose own controls
+// show the panel holds that state itself with useWorkspacePanel.
 
 // Contextual panel content of a workspace.
 export interface WorkspacePanel {
@@ -18,6 +19,31 @@ export interface WorkspacePanel {
 	readonly title: string
 	// Controls of the current context.
 	readonly content: ReactNode
+}
+
+// Visibility of the contextual panel of a workspace.
+export interface WorkspacePanelState {
+	// Whether the panel is a docked column (wide screen) rather than a drawer.
+	readonly docked: boolean
+	// Whether the panel is shown.
+	readonly open: boolean
+	// Shows or hides the panel: the profile preference while docked, the drawer otherwise.
+	readonly setOpen: (open: boolean) => void
+}
+
+// Returns the visibility of a workspace's contextual panel. The drawer's state lives in the calling component.
+export function useWorkspacePanel(workspace: WorkspaceId): WorkspacePanelState {
+	const docked = useMediaQuery(WIDE_SCREEN)
+	const profiles = useSnapshot(profileState)
+	const [drawerOpen, setDrawerOpen] = useState(false)
+	const open = docked ? panelOpen(activeProfile(profiles).settings, workspace) : drawerOpen
+
+	function setOpen(value: boolean) {
+		if (docked) setPanelOpen(profileState, workspace, value)
+		else setDrawerOpen(value)
+	}
+
+	return { docked, open, setOpen }
 }
 
 export interface WorkspaceLayoutProps {
@@ -31,6 +57,8 @@ export interface WorkspaceLayoutProps {
 	readonly actions?: ReactNode
 	// Contextual panel; absent when the workspace has none.
 	readonly panel?: WorkspacePanel
+	// Visibility of the panel when the workspace's own controls also change it; the layout keeps its own otherwise.
+	readonly panelState?: WorkspacePanelState
 	// Tabs shown above the header, the content, and the panel, selecting the context all of them show.
 	readonly tabs?: ReactNode
 	// Main content; fills the remaining space and manages its own scrolling.
@@ -38,16 +66,9 @@ export interface WorkspaceLayoutProps {
 }
 
 // Frame of a workspace.
-export function WorkspaceLayout({ workspace, title, context, actions, panel, tabs, children }: WorkspaceLayoutProps) {
-	const docked = useMediaQuery(WIDE_SCREEN)
-	const profiles = useSnapshot(profileState)
-	const [drawerOpen, setDrawerOpen] = useState(false)
-	const open = docked ? panelOpen(activeProfile(profiles).settings, workspace) : drawerOpen
-
-	function setOpen(value: boolean) {
-		if (docked) setPanelOpen(profileState, workspace, value)
-		else setDrawerOpen(value)
-	}
+export function WorkspaceLayout({ workspace, title, context, actions, panel, panelState, tabs, children }: WorkspaceLayoutProps) {
+	const ownPanelState = useWorkspacePanel(workspace)
+	const { docked, open, setOpen } = panelState ?? ownPanelState
 
 	// Clips rather than hides its overflow: a hidden box can still be scrolled by script or by focus, and the closed
 	// drawer waiting beside it would then pull the workspace sideways.

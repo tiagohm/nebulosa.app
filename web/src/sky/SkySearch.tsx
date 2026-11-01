@@ -168,7 +168,7 @@ export function SkySearch({ onSelect }: SkySearchProps) {
 	const nothing = localStatus === 'done' && local.length === 0 && remote.status !== 'loading' && !(remote.status === 'done' && remote.response.kind !== 'notFound')
 
 	return (
-		<div className="relative w-full max-w-96 min-w-0">
+		<div className="relative w-full max-w-96 min-w-0 max-sm:max-w-none">
 			<input
 				ref={inputRef}
 				type="search"

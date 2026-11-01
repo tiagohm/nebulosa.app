@@ -1,5 +1,5 @@
 import type { ExternalToolCheckStatus, ExternalToolConfigStatus, ExternalToolState } from 'api'
-import { tv } from 'tailwind-variants'
+import { StatusBadge, type StatusTone, TONE_TEXT } from '../ui/StatusBadge'
 
 // Status badges of an external program: the state of its saved settings and the outcome of its check,
 // kept apart because a configured program is not necessarily available. The text label always
@@ -24,54 +24,20 @@ export const CHECK_LABELS: Readonly<Record<CheckDisplay, string>> = {
 	failed: 'Test Failed',
 }
 
-// Tone of a badge.
-type Tone = 'muted' | 'neutral' | 'active' | 'success' | 'danger'
-
 // Tone of each state of the saved settings.
-const CONFIG_TONES: Readonly<Record<ExternalToolConfigStatus, Tone>> = { notConfigured: 'muted', configured: 'neutral', invalid: 'danger' }
+const CONFIG_TONES: Readonly<Record<ExternalToolConfigStatus, StatusTone>> = { notConfigured: 'muted', configured: 'neutral', invalid: 'danger' }
 
 // Tone of each state of a check.
-const CHECK_TONES: Readonly<Record<CheckDisplay, Tone>> = { notTested: 'muted', checking: 'active', available: 'success', unavailable: 'danger', failed: 'danger' }
-
-// Text color of each tone, for list items.
-export const TONE_TEXT: Readonly<Record<Tone, string>> = { muted: 'text-ink-300', neutral: 'text-ink-200', active: 'text-accent', success: 'text-success', danger: 'text-danger' }
-
-// Styles of a status badge for each tone.
-const badge = tv({
-	slots: {
-		root: 'inline-flex h-6 flex-none items-center gap-1.5 rounded-full border px-2.5 text-xs leading-none whitespace-nowrap',
-		dot: 'size-1.5 rounded-full',
-	},
-	variants: {
-		tone: {
-			muted: { root: 'border-dashed border-line-100 text-ink-300', dot: 'hidden' },
-			neutral: { root: 'border-line-100 text-ink-200', dot: 'border border-ink-200' },
-			active: { root: 'border-accent/50 text-accent', dot: 'animate-pulse bg-accent' },
-			success: { root: 'border-success/50 text-success', dot: 'bg-success' },
-			danger: { root: 'border-danger/60 text-danger', dot: 'bg-danger' },
-		},
-	},
-})
-
-// Badge of a tone and label.
-function Badge({ tone, label }: { readonly tone: Tone; readonly label: string }) {
-	const { root, dot } = badge({ tone })
-	return (
-		<span className={root()}>
-			<span className={dot()} />
-			{label}
-		</span>
-	)
-}
+const CHECK_TONES: Readonly<Record<CheckDisplay, StatusTone>> = { notTested: 'muted', checking: 'active', available: 'success', unavailable: 'danger', failed: 'danger' }
 
 // Badge of the state of the saved settings.
 export function ConfigBadge({ status }: { readonly status: ExternalToolConfigStatus }) {
-	return <Badge tone={CONFIG_TONES[status]} label={CONFIG_LABELS[status]} />
+	return <StatusBadge tone={CONFIG_TONES[status]} label={CONFIG_LABELS[status]} />
 }
 
 // Badge of the state of a check.
 export function CheckBadge({ status }: { readonly status: CheckDisplay }) {
-	return <Badge tone={CHECK_TONES[status]} label={CHECK_LABELS[status]} />
+	return <StatusBadge tone={CHECK_TONES[status]} label={CHECK_LABELS[status]} />
 }
 
 // One-line summary of a program for its list item: the state of the settings until they are saved, then

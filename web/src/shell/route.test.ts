@@ -24,6 +24,13 @@ describe('parse', () => {
 		expect(routePath({ workspace: 'equipment', device: 'abc123' })).toBe('/equipment/abc123')
 	})
 
+	test('reads the group of the Calibration Library and writes it back', () => {
+		expect(parseRoute('/tools/calibration-library/abc')).toEqual({ workspace: 'tools', tool: 'calibration-library', group: 'abc' })
+		expect(routePath({ workspace: 'tools', tool: 'calibration-library', group: 'abc' })).toBe('/tools/calibration-library/abc')
+		expect(parseRoute('/tools/calibration-library')).toEqual({ workspace: 'tools', tool: 'calibration-library' })
+		expect(parseRoute('/tools/calculator/abc')).toEqual({ workspace: 'tools', tool: 'calculator' })
+	})
+
 	test('reads the eclipse of the Solar and Lunar Eclipse Maps, and no id for other tools', () => {
 		expect(parseRoute('/tools/solar-eclipse-map/1786556760000')).toEqual({ workspace: 'tools', tool: 'solar-eclipse-map', eclipse: '1786556760000' })
 		expect(parseRoute('/tools/solar-eclipse-map')).toEqual({ workspace: 'tools', tool: 'solar-eclipse-map' })

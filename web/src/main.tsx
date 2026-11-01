@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { subscribe as subscribeState } from 'valtio'
 import { annotationsState, handleAnnotationsEvent, refreshAnnotations } from './annotations/annotations'
 import { App } from './App'
+import { calibrationLibraryRuntime, handleCalibrationLibraryEvent, refreshCalibrationLibrary } from './calibrationlibrary/calibrationlibrary'
 import { autoFocusRuntime, handleAutoFocusEvent, refreshAutoFocus } from './camera/autofocus'
 import { captureRuntime, handleCaptureEvent, refreshCaptures } from './camera/capture'
 import { darkLibraryWizardRuntime, handleDarkLibraryWizardEvent, refreshDarkLibraryWizard } from './camera/darklibrarywizard'
@@ -88,6 +89,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleDarvEvent(darvRuntime, event), refresh: () => refreshDarv(darvRuntime) },
 	{ handle: (event) => handleFlatWizardEvent(flatWizardRuntime, event), refresh: () => refreshFlatWizard(flatWizardRuntime) },
 	{ handle: (event) => handleDarkLibraryWizardEvent(darkLibraryWizardRuntime, event), refresh: () => refreshDarkLibraryWizard(darkLibraryWizardRuntime) },
+	{ handle: (event) => handleCalibrationLibraryEvent(calibrationLibraryRuntime, event), refresh: () => refreshCalibrationLibrary(calibrationLibraryRuntime) },
 	{ handle: (event) => handleGuidingEvent(guidingRuntime, event), refresh: () => refreshGuiding(guidingRuntime) },
 	{ handle: (event) => handleExternalToolEvent(externalToolsState, event), refresh: () => refreshExternalTools(externalToolsState) },
 	{ handle: (event) => handleStarsEvent(starsState, event), refresh: () => refreshStars(starsState) },

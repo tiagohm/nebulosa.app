@@ -37,8 +37,8 @@ let tokens = 0
 function request(directory: string, patch: Partial<DarkLibraryWizardNewRequest> = {}): DarkLibraryWizardNewRequest {
 	return {
 		token: `token-${tokens++}`,
-		capture: { offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 64, height: 64, frameFormat: '' },
-		groups: [{ exposure: 0.01, gain: 0, count: 2 }],
+		capture: { gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 64, height: 64, frameFormat: '' },
+		groups: [{ exposure: 0.01, count: 2 }],
 		protection: { closeCover: false, panelOff: false, manualCap: true, verifyFirstFrame: true },
 		thermal: { tolerance: 0.5, hold: 0, timeout: 30 },
 		maximumRejections: 2,
@@ -153,12 +153,12 @@ function filesOf(directory: string) {
 }
 
 describe('plan helpers', () => {
-	const capture = { offset: 10, binX: 2, binY: 2, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: 'RAW16' }
+	const capture = { gain: 100, offset: 10, binX: 2, binY: 2, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: 'RAW16' }
 
 	test('a group key tells apart exact values and an uncontrolled temperature', () => {
-		const key = (exposure: number, gain: number, temperature?: number) => darkGroupKey({ exposure, gain, temperature }, capture, 'camera')
-		expect(key(60, 100, -10)).toBe(key(60, 100, -10))
-		expect(new Set([key(60, 100, -10), key(60.0001, 100, -10), key(60, 101, -10), key(60, 100, -10.1), key(60, 100)]).size).toBe(5)
+		const key = (exposure: number, temperature?: number, gain = capture.gain) => darkGroupKey({ exposure, temperature }, { ...capture, gain }, 'camera')
+		expect(key(60, -10)).toBe(key(60, -10))
+		expect(new Set([key(60, -10), key(60.0001, -10), key(60, -10, 101), key(60, -10.1), key(60)]).size).toBe(5)
 	})
 
 	test('groups of one temperature run together, in the order they were asked for', () => {
@@ -296,7 +296,7 @@ describe('Dark Library Wizard sessions', () => {
 
 	test('a stop during an exposure cleans up, and the plan can complete what is missing', async () => {
 		const { id, cameraId, wizard, directory, summary, confirm, store, released } = await setup()
-		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 30, gain: 0, count: 1 }] }))
+		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 30, count: 1 }] }))
 		await confirm(sessionId)
 		await waitUntil(() => summary()?.state === 'exposing')
 		expect((await wizard.stop(sessionId)).status).toBe(204)
@@ -308,7 +308,7 @@ describe('Dark Library Wizard sessions', () => {
 
 	test('a pause takes effect after the frame, keeps the devices, and asks for the protection again', async () => {
 		const { id, cameraId, wizard, directory, camera, operations, summary, ended, confirm, store } = await setup()
-		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, gain: 0, count: 3 }] }))
+		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, count: 3 }] }))
 		expect(wizard.pause(sessionId).status).toBe(204)
 		expect(wizard.pause(sessionId).status).toBe(204)
 		await confirm(sessionId)
@@ -328,7 +328,7 @@ describe('Dark Library Wizard sessions', () => {
 
 	test('a device that leaves its verified state stops the frames until it returns', async () => {
 		const { id, cameraId, wizard, directory, summary, ended, confirm, operations, wheel, wheelDevice, pending, client } = await setup()
-		const { sessionId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, gain: 0, count: 2 }], protection: { darkFilter: { slot: 2 }, closeCover: false, panelOff: false, manualCap: false, verifyFirstFrame: true }, wheel: wheelDevice }))
+		const { sessionId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, count: 2 }], protection: { darkFilter: { slot: 2 }, closeCover: false, panelOff: false, manualCap: false, verifyFirstFrame: true }, wheel: wheelDevice }))
 		await pending()
 		expect(wizard.pause(sessionId).status).toBe(204)
 		await confirm(sessionId)
@@ -382,7 +382,7 @@ describe('Dark Library Wizard sessions', () => {
 	test('without first-frame verification one suspicion is only recorded, and two in a row stop', async () => {
 		const { id, cameraId, wizard, directory, summary, confirm, pending } = await setup(flooded)
 		const protection = { closeCover: false, panelOff: false, manualCap: true, verifyFirstFrame: false }
-		const { sessionId } = await start(wizard, id, cameraId, request(directory, { protection, groups: [{ exposure: 0.01, gain: 0, count: 3 }] }))
+		const { sessionId } = await start(wizard, id, cameraId, request(directory, { protection, groups: [{ exposure: 0.01, count: 3 }] }))
 		await confirm(sessionId)
 		expect(await pending()).toMatchObject({ kind: 'suspectedLight' })
 		expect(summary()?.groups[0]).toMatchObject({ acceptedWithWarnings: 1, attempted: 2 })
@@ -415,7 +415,7 @@ describe('Dark Library Wizard sessions', () => {
 	test('a target is commanded once and waits for the reported temperature', async () => {
 		const { id, cameraId, wizard, directory, camera, summary, ended, confirm, events, store } = await setup()
 		const target = Math.round(camera.temperature) - 2
-		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, gain: 0, count: 1, temperature: target }], thermal: { tolerance: 0.5, hold: 0.2, timeout: 60 } }))
+		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, count: 1, temperature: target }], thermal: { tolerance: 0.5, hold: 0.2, timeout: 60 } }))
 		await confirm(sessionId)
 		await waitUntil(ended, 60000)
 
@@ -430,7 +430,7 @@ describe('Dark Library Wizard sessions', () => {
 
 	test('a target the sensor does not reach in time fails, and the plan stays', async () => {
 		const { id, cameraId, wizard, directory, camera, summary, ended, confirm, store } = await setup()
-		const { sessionId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, gain: 0, count: 1, temperature: camera.temperature - 40 }], thermal: { tolerance: 0.5, hold: 1, timeout: 0.5 } }))
+		const { sessionId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, count: 1, temperature: camera.temperature - 40 }], thermal: { tolerance: 0.5, hold: 1, timeout: 0.5 } }))
 		await confirm(sessionId)
 		await waitUntil(ended, 60000)
 		expect(summary()).toMatchObject({ state: 'failed', code: 'temperatureTimeout', reason: 'timeout' })
@@ -466,7 +466,7 @@ describe('completing a plan', () => {
 			if (frame === 1) pause()
 			return measurement
 		})
-		const { sessionId, planId } = await start(first.wizard, first.id, first.cameraId, request(first.directory, { groups: [{ exposure: 0.01, gain: 0, count: 3 }] }))
+		const { sessionId, planId } = await start(first.wizard, first.id, first.cameraId, request(first.directory, { groups: [{ exposure: 0.01, count: 3 }] }))
 		pause = () => first.wizard.pause(sessionId)
 		await first.confirm(sessionId)
 		await waitUntil(() => first.summary()?.state === 'paused')
@@ -520,7 +520,7 @@ describe('completing a plan', () => {
 
 	test('a resume is refused on another device, and a plan cannot run twice', async () => {
 		const first = await setup()
-		const { sessionId, planId } = await start(first.wizard, first.id, first.cameraId, request(first.directory, { groups: [{ exposure: 0.01, gain: 0, count: 2 }], protection: { darkFilter: { slot: 1 }, closeCover: false, panelOff: false, manualCap: false, verifyFirstFrame: true }, wheel: first.wheelDevice }))
+		const { sessionId, planId } = await start(first.wizard, first.id, first.cameraId, request(first.directory, { groups: [{ exposure: 0.01, count: 2 }], protection: { darkFilter: { slot: 1 }, closeCover: false, panelOff: false, manualCap: false, verifyFirstFrame: true }, wheel: first.wheelDevice }))
 		await first.pending()
 		const twice = await first.wizard.start(first.id, first.cameraId, { token: `token-${tokens++}`, resumePlanId: planId })
 		expect(twice.status).toBe(409)

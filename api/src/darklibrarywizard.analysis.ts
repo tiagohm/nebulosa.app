@@ -121,7 +121,7 @@ export interface DarkFrameBaseline {
 	readonly frames: readonly (readonly DarkPlaneMeasurement[])[]
 	// Size of the first accepted frame of the group, which every other must share.
 	readonly size?: { readonly width: number; readonly height: number }
-	// Median level per plane of a shorter exposure of the plan at the same gain, offset, binning, and temperature.
+	// Median level per plane of a shorter exposure of the plan at the same temperature.
 	readonly shorter?: { readonly exposure: number; readonly levels: Readonly<Partial<Record<FlatPlane, number>>> }
 }
 

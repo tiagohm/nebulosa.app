@@ -32,8 +32,10 @@ export const REJECTED_DIRECTORY = 'rejected'
 // Directory of the frames of a group being acquired.
 export const STAGING_DIRECTORY = '.staging'
 
-// Camera settings shared by every frame of a plan; each group adds its exposure, gain, and temperature.
+// Camera settings shared by every frame of a plan; each group adds its exposure and temperature.
 export interface DarkPlanCapture {
+	// Gain, in driver units.
+	readonly gain: number
 	// Offset, in driver units.
 	readonly offset: number
 	// Binning factors.
@@ -54,8 +56,6 @@ export interface DarkPlanCapture {
 export interface DarkGroup {
 	// Exposure, in seconds; positive.
 	readonly exposure: number
-	// Gain, in driver units.
-	readonly gain: number
 	// Target sensor temperature, in degrees Celsius; absent when the temperature is not controlled.
 	readonly temperature?: number
 	// Accepted frames required; at least 1.
@@ -368,7 +368,7 @@ export function darkGroupProgress(plan: Pick<DarkCapturePlan, 'groups'>, frames:
 function summaryOf(loaded: LoadedPlan): DarkPlanSummary {
 	const { plan, status, reason, updatedAt, frames, lost, cleanupWarnings } = loaded
 	const progress = darkGroupProgress(plan, frames, lost)
-	const groups = plan.groups.map(({ exposure, gain, temperature, count }, index) => ({ exposure, gain, ...(temperature !== undefined && { temperature }), count, ...progress[index] }))
+	const groups = plan.groups.map(({ exposure, temperature, count }, index) => ({ exposure, ...(temperature !== undefined && { temperature }), count, ...progress[index] }))
 	return { planId: plan.planId, createdAt: plan.createdAt, updatedAt, status, ...(reason !== undefined && { reason }), groups, missing: progress.reduce((total, group) => total + group.missing, 0), cleanupWarnings }
 }
 

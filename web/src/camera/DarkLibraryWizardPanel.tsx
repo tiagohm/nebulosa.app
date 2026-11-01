@@ -27,6 +27,7 @@ import {
 	DARK_PLAN_STATUS_LABELS,
 	DARK_SUSPICION_LABELS,
 	darkLibraryWizardBlocker,
+	darkLibraryWizardCapture,
 	darkLibraryWizardEstimate,
 	darkLibraryWizardRequest,
 	darkLibraryWizardRunning,
@@ -46,8 +47,8 @@ import { FrameProgress, formatExposure } from './FrameProgress'
 // Contextual panel sections of Dark Library Wizard, a camera operation of the Images camera tabs: the equipment of the tab's
 // camera, the capture plan (one row per group), how the light is blocked, the
 // thermal protocol, the output and its limits, the session in progress with its Continue, Pause, Resume, and Stop
-// commands, and the plans of this camera with their recovery. Frames take the offset, binning, and readout mode of Camera
-// Acquisition, but never its exposure time or gain, which each group sets. The form is the camera's, kept in the profile;
+// commands, and the plans of this camera with their recovery. Frames take the gain, offset, binning, subframe, and readout
+// mode of Camera Acquisition, but never its exposure time, which each group sets. The form is the camera's, kept in the profile;
 // while a session runs the plan shows what the session applied. Sessions and plans are the server's, shown here whichever
 // tab started them, and keep running when the panel unmounts. A step is confirmed only by its button. This view recovers
 // the plans the wizard made; it does not browse, import, or match calibration frames.
@@ -79,17 +80,17 @@ function formatBytes(bytes: number) {
 // Formats a duration in seconds for an estimate, in hours and minutes.
 function formatDuration(seconds: number) {
 	const minutes = Math.round(seconds / 60)
-	return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`
+	return minutes < 60 ? `${minutes} min ${Math.round(seconds % 60)} s` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`
 }
 
 // Returns the label of a group, short enough for a row of the panel; a group without a target names no temperature.
-function groupLabel({ exposure, gain, temperature }: Pick<DarkGroup, 'exposure' | 'gain' | 'temperature'>) {
-	return `${formatExposure(exposure)}, gain ${gain}${temperature === undefined ? '' : `, ${temperature} °C`}`
+function groupLabel({ exposure, temperature }: Pick<DarkGroup, 'exposure' | 'temperature'>) {
+	return `${formatExposure(exposure)}${temperature === undefined ? '' : `, ${temperature} °C`}`
 }
 
 // Returns the groups a running session applied, to show while it runs.
 function appliedGroups({ groups }: Pick<DarkLibraryWizardSessionSummary, 'groups'>): DarkGroup[] {
-	return groups.map(({ exposure, gain, temperature, count }) => ({ exposure, gain, ...(temperature !== undefined && { temperature }), count }))
+	return groups.map(({ exposure, temperature, count }) => ({ exposure, ...(temperature !== undefined && { temperature }), count }))
 }
 
 // Dark Library Wizard panel sections of a camera.
@@ -123,7 +124,8 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 		...(coverAssigned && { cover: roleAvailability('COVER', cover, operations, coverState && !coverState.canPark ? 'The cover cannot be opened and closed.' : undefined) }),
 	}
 	const blocker = running ? undefined : darkLibraryWizardBlocker(availabilities, settings, wheelState, capabilities)
-	const estimate = darkLibraryWizardEstimate({ groups, fullSensor: settings.fullSensor }, exposure, capabilities)
+	const capture = running && session ? session.capture : darkLibraryWizardCapture(exposure, capabilities)
+	const estimate = darkLibraryWizardEstimate(groups, capture, capabilities)
 	const connectionId = device?.connectionId
 	const deviceId = device?.id
 
@@ -189,7 +191,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 					</Button>
 				)}
 				{wheel === undefined && <Notice>The camera has no role in the equipment setup, so only a manual cap can block the light.</Notice>}
-				<Notice>Frames are raw DARK frames with the offset, binning, and readout mode of Camera Acquisition; each group sets its exposure and gain.</Notice>
+				<Notice>Frames are raw DARK frames with the gain, offset, binning, subframe, and readout mode of Camera Acquisition; each group sets its exposure.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.dark-library-wizard.plan" title="Capture Plan">
 				{groups.map((group, index) => (
@@ -212,12 +214,11 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 						Add Group
 					</Button>
 				)}
-				<Checkbox label="Full Sensor" checked={settings.fullSensor} disabled={locked} onChange={(fullSensor) => update({ fullSensor })} />
-				{!settings.fullSensor && <Notice>Darks of a subframe only calibrate lights of that same subframe.</Notice>}
+				{capture.subframe && <Notice>Darks of a subframe only calibrate lights of that same subframe.</Notice>}
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
 					<Row label="Frames">{estimate.frames}</Row>
 					<Row label="Exposure">{`at least ${formatDuration(estimate.exposure)}`}</Row>
-					{estimate.bytes !== undefined && <Row label="Disk Space">{`about ${formatBytes(estimate.bytes)}`}</Row>}
+					{estimate.bytes !== undefined && <Row label="Disk Space">{`~ ${formatBytes(estimate.bytes[0])} (mono) to ${formatBytes(estimate.bytes[1])}`}</Row>}
 				</dl>
 				<Notice>Estimates only: downloads, cooling, and rejected frames add to them. Groups of one temperature run together.</Notice>
 			</CollapsibleSection>
@@ -350,10 +351,7 @@ function GroupForm({ index, group, count, temperature, exposure, disabled, onCha
 				{count > 1 && <IconButton icon="close" label={`Remove group ${index + 1}`} className="size-[38px]" disabled={disabled} onClick={onRemove} />}
 			</div>
 			<ExposureTimeInput value={group.exposure} exposure={exposure} disabled={disabled} onChange={(value) => onChange({ exposure: value })} />
-			<div className="grid grid-cols-2 gap-2">
-				<NumberInput label="Gain" value={group.gain} min={0} disabled={disabled} onChange={(gain) => onChange({ gain })} />
-				<NumberInput label="Frames" value={group.count} min={1} max={DARK_LIBRARY_WIZARD_MAXIMUM_COUNT} disabled={disabled} onChange={(frames) => onChange({ count: frames })} />
-			</div>
+			<NumberInput label="Frames" value={group.count} min={1} max={DARK_LIBRARY_WIZARD_MAXIMUM_COUNT} disabled={disabled} onChange={(frames) => onChange({ count: frames })} />
 			{temperature && <Checkbox label="Target Temperature" checked={group.temperature !== undefined} disabled={disabled} onChange={(set) => onChange({ temperature: set ? 0 : undefined })} />}
 			{group.temperature !== undefined && <NumberInput label="Temperature" value={group.temperature} min={-60} max={40} step={1} suffix="°C" disabled={disabled} onChange={(value) => onChange({ temperature: value })} />}
 		</fieldset>

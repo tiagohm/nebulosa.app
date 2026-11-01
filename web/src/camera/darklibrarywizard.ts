@@ -2,6 +2,7 @@ import type {
 	CameraCapabilities,
 	CaptureSnoop,
 	DarkGroup,
+	DarkLibraryWizardCaptureSettings,
 	DarkLibraryWizardNewRequest,
 	DarkLibraryWizardPlans,
 	DarkLibraryWizardRequest,
@@ -54,10 +55,13 @@ export const darkLibraryWizardRuntime = proxy<DarkLibraryWizardRuntime>({ sessio
 // Counter of snapshot refreshes; a response is applied only if no later refresh started.
 let generation = 0
 
-// Bytes of the header of a FITS file, the two blocks a driver usually writes.
-const FITS_HEADER_SIZE = 5760
+// Size of a FITS block, in bytes: the header and the data of a file are each padded to a whole number of blocks.
+const FITS_BLOCK_SIZE = 2880
 
-// Bytes per sample of the estimate: drivers write 16-bit integers for the sensors this estimates.
+// Blocks of the header of a frame: the most drivers usually need, and one more than the simulator writes.
+const FITS_HEADER_BLOCKS = 2
+
+// Bytes per sample of the estimate: the 16-bit integers drivers write for the sensors this estimates.
 const BYTES_PER_SAMPLE = 2
 
 // Label of each session state.
@@ -122,13 +126,13 @@ export interface DarkLibraryWizardEstimate {
 	readonly frames: number
 	// Time exposing those frames, in seconds; downloads, cooling, and retries come on top.
 	readonly exposure: number
-	// Raw size of those frames, in bytes; absent while the sensor is unknown.
-	readonly bytes?: number
+	// Min/max raw size of those files, in bytes; absent while the sensor is unknown.
+	readonly bytes?: readonly [min: number, max: number]
 }
 
 // Returns whether two groups would take the same frames.
 function sameGroup(a: DarkGroup, b: DarkGroup) {
-	return a.exposure === b.exposure && a.gain === b.gain && a.temperature === b.temperature
+	return a.exposure === b.exposure && a.temperature === b.temperature
 }
 
 // Returns the groups with a copy of one of them right below it. A copy repeats its original, which blocks the start until
@@ -137,29 +141,38 @@ export function duplicateDarkGroup(groups: readonly DarkGroup[], index: number):
 	return groups.toSpliced(index + 1, 0, groups[index])
 }
 
-// Returns the size of the plan of a form: the frames of every group, and their exposure and raw size, which ignore
-// downloads, cooling, and rejected frames. fullSensor ignores the subframe of the camera settings.
-export function darkLibraryWizardEstimate({ groups, fullSensor }: Pick<DarkLibraryWizardSettings, 'groups' | 'fullSensor'>, exposure: Readonly<CameraExposureSettings>, capabilities?: CameraCapabilities): DarkLibraryWizardEstimate {
+// Returns the size of a plan: the frames of every group, their exposure, and the size of their files, which ignores
+// downloads, cooling, and rejected frames. A frame has the size a capture of these settings gets: the subframe when
+// there is one, else the whole sensor, in unbinned pixels, each side divided by its binning and rounded up, since drivers
+// round either way and an estimate of disk space must not fall short. Each file holds the padded header and data of a
+// FITS image; a readout mode named RGB stores three channels.
+export function darkLibraryWizardEstimate(groups: readonly DarkGroup[], capture: Readonly<DarkLibraryWizardCaptureSettings>, capabilities?: CameraCapabilities): DarkLibraryWizardEstimate {
 	const frames = groups.reduce((total, group) => total + group.count, 0)
 	const seconds = groups.reduce((total, group) => total + group.count * group.exposure, 0)
-	const sensor = capabilities?.sensor
-	const subframe = !fullSensor && exposure.subframe
-	const width = subframe ? exposure.width : sensor?.width
-	const height = subframe ? exposure.height : sensor?.height
+	const width = capture.subframe ? capture.width : capabilities?.sensor?.width
+	const height = capture.subframe ? capture.height : capabilities?.sensor?.height
 	if (!width || !height) return { frames, exposure: seconds }
-	return { frames, exposure: seconds, bytes: frames * (FITS_HEADER_SIZE + Math.floor(width / exposure.binX) * Math.floor(height / exposure.binY) * BYTES_PER_SAMPLE) }
+
+	const data = Math.ceil(width / capture.binX) * Math.ceil(height / capture.binY) * BYTES_PER_SAMPLE
+	const minBytes = frames * (FITS_HEADER_BLOCKS + Math.ceil(data / FITS_BLOCK_SIZE)) * FITS_BLOCK_SIZE
+	const maxBytes = frames * (FITS_HEADER_BLOCKS + Math.ceil((data * 3) / FITS_BLOCK_SIZE)) * FITS_BLOCK_SIZE
+
+	return { frames, exposure: seconds, bytes: [minBytes, maxBytes] }
 }
 
-// Builds the start request of the form of a camera. Offset, binning, and readout mode come from Camera Acquisition, fitted
-// to the camera's capabilities as a capture is, and its exposure time never applies. The gain of each group is fitted
-// the same way. Only the devices the protection selected are sent.
-export function darkLibraryWizardRequest(settings: Readonly<DarkLibraryWizardSettings>, exposure: Readonly<CameraExposureSettings>, { wheel, panel, cover }: DarkLibraryWizardEquipment, snoop: CaptureSnoop, capabilities?: CameraCapabilities): Omit<DarkLibraryWizardNewRequest, 'token'> {
-	const { exposureTime: _, gain: _gain, ...fitted } = fitExposure(exposure, capabilities)
-	const capture = settings.fullSensor ? { ...fitted, subframe: false, x: 0, y: 0, width: 0, height: 0 } : fitted
+// Returns the camera settings a plan takes from Camera Acquisition, fitted to the camera's capabilities as a capture is:
+// everything but its exposure time, which each group sets.
+export function darkLibraryWizardCapture(exposure: Readonly<CameraExposureSettings>, capabilities?: CameraCapabilities): DarkLibraryWizardCaptureSettings {
+	const { exposureTime: _, ...capture } = fitExposure(exposure, capabilities)
+	return capture
+}
 
+// Builds the start request of the form of a camera, with the camera settings of Camera Acquisition. Only the devices the
+// protection selected are sent.
+export function darkLibraryWizardRequest(settings: Readonly<DarkLibraryWizardSettings>, exposure: Readonly<CameraExposureSettings>, { wheel, panel, cover }: DarkLibraryWizardEquipment, snoop: CaptureSnoop, capabilities?: CameraCapabilities): Omit<DarkLibraryWizardNewRequest, 'token'> {
 	return {
-		capture,
-		groups: settings.groups.map((group) => ({ ...group, gain: fitExposure({ ...exposure, gain: group.gain }, capabilities).gain })),
+		capture: darkLibraryWizardCapture(exposure, capabilities),
+		groups: settings.groups,
 		protection: { ...(settings.useDarkFilter && { darkFilter: { slot: settings.darkSlot } }), closeCover: settings.closeCover, panelOff: settings.panelOff, manualCap: settings.manualCap, verifyFirstFrame: settings.verifyFirstFrame },
 		thermal: { tolerance: settings.tolerance, hold: settings.hold, timeout: settings.timeout },
 		maximumRejections: settings.maximumRejections,
@@ -200,14 +213,14 @@ export function darkLibraryWizardBlocker({ camera, wheel, panel, cover }: DarkLi
 	return undefined
 }
 
-// Returns the form values a plan was made with, which start a new plan.
+// Returns the form values a plan was made with, which start a new plan. Its camera settings stay out: they are Camera
+// Acquisition's, and a new plan takes the ones in force.
 export function darkPlanForm({ plan }: Pick<DarkPlanDetail, 'plan'>): Partial<DarkLibraryWizardSettings> {
-	const { protection, thermal, groups, maximumRejections, capture, directory } = plan
+	const { protection, thermal, groups, maximumRejections, directory } = plan
 	const { darkFilter, closeCover, panelOff, manualCap, verifyFirstFrame } = protection
 
 	return {
-		groups: groups.map(({ exposure, gain, temperature, count }) => ({ exposure, gain, temperature, count })),
-		fullSensor: !capture.subframe,
+		groups: groups.map(({ exposure, temperature, count }) => ({ exposure, temperature, count })),
 		useDarkFilter: darkFilter !== undefined,
 		...(darkFilter && { darkSlot: darkFilter.slot }),
 		closeCover,

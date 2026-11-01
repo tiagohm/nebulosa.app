@@ -626,14 +626,13 @@ export const DEFAULT_FLAT_WIZARD_EFFECTIVE_CLIP = 65000
 // Flat Wizard form of a camera that has none yet: one luminance group, a 2 s settle, and the default limits.
 export const DEFAULT_FLAT_WIZARD_SETTINGS: FlatWizardSettings = { filters: [DEFAULT_FLAT_WIZARD_FILTER], settleTime: 2, maximumTrials: 8, maximumRejections: 5 }
 
-// Dark Library Wizard form of one physical camera: the groups of the next plan and how it protects the sensor. The offset,
-// binning, and readout mode come from Camera Acquisition; the wheel, panel, and cover are those of the setup. A plan keeps
-// its own copy of all this, so editing the form never changes a plan, and no progress of a plan is kept here.
+// Dark Library Wizard form of one physical camera: the groups of the next plan and how it protects the sensor. The gain,
+// offset, binning, subframe, and readout mode come from Camera Acquisition; the wheel, panel, and cover are those of the
+// setup. A plan keeps its own copy of all this, so editing the form never changes a plan, and no progress of a plan is
+// kept here.
 export interface DarkLibraryWizardSettings {
-	// Groups of frames, in acquisition order; exposures in seconds, gains in driver units, temperatures in degrees Celsius.
+	// Groups of frames, in acquisition order; exposures in seconds, temperatures in degrees Celsius.
 	groups: readonly DarkGroup[]
-	// Whether frames take the whole sensor instead of the subframe of Camera Acquisition.
-	fullSensor: boolean
 	// Whether the wheel moves to a dark slot.
 	useDarkFilter: boolean
 	// Dark slot of the wheel, 0-based.
@@ -671,13 +670,12 @@ export const DARK_LIBRARY_WIZARD_MAXIMUM_FRAMES = 20000
 export const DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS = 100
 
 // Group a new row of the Dark Library Wizard form starts with.
-export const DEFAULT_DARK_LIBRARY_WIZARD_GROUP: DarkGroup = { exposure: 60, gain: 0, count: 30 }
+export const DEFAULT_DARK_LIBRARY_WIZARD_GROUP: DarkGroup = { exposure: 60, count: 30 }
 
-// Dark Library Wizard form of a camera that has none yet: common exposures of 30 frames at one gain, protected by a manual
+// Dark Library Wizard form of a camera that has none yet: common exposures of 30 frames, protected by a manual
 // cap, since no device may be assigned. Tolerance, hold, and timeout are provisional defaults of ±0.5 °C, 2 min, and 30 min.
 export const DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS: DarkLibraryWizardSettings = {
-	groups: [60, 120, 180, 300].map((exposure) => ({ exposure, gain: DEFAULT_DARK_LIBRARY_WIZARD_GROUP.gain, count: DEFAULT_DARK_LIBRARY_WIZARD_GROUP.count })),
-	fullSensor: true,
+	groups: [60, 120, 180, 300].map((exposure) => ({ exposure, count: DEFAULT_DARK_LIBRARY_WIZARD_GROUP.count })),
 	useDarkFilter: false,
 	darkSlot: 0,
 	closeCover: false,

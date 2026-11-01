@@ -7,6 +7,7 @@ import {
 	completeDarkPlan,
 	continueDarkLibraryWizard,
 	darkLibraryWizardBlocker,
+	darkLibraryWizardCapture,
 	darkLibraryWizardEstimate,
 	darkLibraryWizardRequest,
 	darkLibraryWizardRunning,
@@ -36,6 +37,7 @@ const CAPABILITIES = {
 	exposure: { min: 0.001, max: 3600 },
 	gain: { min: 0, max: 100 },
 	offset: { min: 0, max: 100 },
+	bin: { x: 4, y: 4 },
 	sensor: { width: 1000, height: 500, pixelSize: 3.76 },
 	subframe: { width: 1000, height: 500 },
 	canSetTemperature: true,
@@ -63,8 +65,8 @@ function server(answers: Readonly<Record<string, unknown>> = {}) {
 
 test('a duplicated group goes right below its original', () => {
 	const groups = [
-		{ exposure: 60, gain: 0, count: 5 },
-		{ exposure: 120, gain: 0, temperature: -10, count: 3 },
+		{ exposure: 60, count: 5 },
+		{ exposure: 120, temperature: -10, count: 3 },
 	]
 	expect(duplicateDarkGroup(groups, 0)).toEqual([groups[0], groups[0], groups[1]])
 	expect(duplicateDarkGroup(groups, 1)).toEqual([groups[0], groups[1], groups[1]])
@@ -76,32 +78,62 @@ test('a copy blocks the start until one of its settings changes', () => {
 	const groups = duplicateDarkGroup([group], 0)
 	const settings = { ...DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS, groups }
 	expect(darkLibraryWizardBlocker(ONLY_CAMERA, settings, undefined, CAPABILITIES)).toBe('Group 2 repeats another one.')
-	expect(darkLibraryWizardBlocker(ONLY_CAMERA, { ...settings, groups: [group, { ...group, gain: 100 }] }, undefined, CAPABILITIES)).toBeUndefined()
+	expect(darkLibraryWizardBlocker(ONLY_CAMERA, { ...settings, groups: [group, { ...group, temperature: -10 }] }, undefined, CAPABILITIES)).toBeUndefined()
 })
 
-test('the estimate counts frames, exposure, and the raw size of the binned frame', () => {
+test('the estimate counts the frames, their exposure, and the size of their files', () => {
 	const groups = [
-		{ exposure: 60, gain: 0, count: 10 },
-		{ exposure: 300, gain: 0, count: 2 },
+		{ exposure: 60, count: 10 },
+		{ exposure: 300, count: 2 },
 	]
-	const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, binX: 2, binY: 2 }
-	expect(darkLibraryWizardEstimate({ groups, fullSensor: true }, exposure, CAPABILITIES)).toEqual({ frames: 12, exposure: 1200, bytes: 12 * (5760 + 500 * 250 * 2) })
-	expect(darkLibraryWizardEstimate({ groups, fullSensor: false }, { ...exposure, subframe: true, width: 100, height: 100 }, CAPABILITIES).bytes).toBe(12 * (5760 + 50 * 50 * 2))
-	expect(darkLibraryWizardEstimate({ groups, fullSensor: true }, exposure)).toEqual({ frames: 12, exposure: 1200 })
+	const capture = darkLibraryWizardCapture({ ...DEFAULT_EXPOSURE_SETTINGS, binX: 2, binY: 2 }, CAPABILITIES)
+	const bytes = (channels: number) => 12 * (2 + Math.ceil((500 * 250 * 2 * channels) / 2880)) * 2880
+	expect(darkLibraryWizardEstimate(groups, capture, CAPABILITIES)).toEqual({ frames: 12, exposure: 1200, bytes: [bytes(1), bytes(3)] })
+	expect(darkLibraryWizardEstimate(groups, capture)).toEqual({ frames: 12, exposure: 1200 })
 })
 
-test('a request takes the settings of the camera, drops its exposure and subframe, and sends only what was selected', () => {
-	const settings: DarkLibraryWizardSettings = { ...DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS, groups: [{ exposure: 60, gain: 500, count: 3 }], useDarkFilter: true, darkSlot: 4, directory: '/darks' }
+test('the estimate takes the settings a capture gets, not the ones typed', () => {
+	const groups = [{ exposure: 1, count: 1 }]
+	const size = (patch: Partial<typeof DEFAULT_EXPOSURE_SETTINGS>) => darkLibraryWizardEstimate(groups, darkLibraryWizardCapture({ ...DEFAULT_EXPOSURE_SETTINGS, ...patch }, CAPABILITIES), CAPABILITIES).bytes
+	const bytes = (data: number, channels: number) => (2 + Math.ceil((data * channels) / 2880)) * 2880
+	const file = (data: number) => [bytes(data, 1), bytes(data, 3)] as const
+
+	expect(size({ subframe: true, x: 0, y: 0, width: 101, height: 64, binX: 2, binY: 2 })).toEqual(file(51 * 32 * 2))
+	// A subframe wider than the sensor is clamped, and one without a size is the whole sensor.
+	expect(size({ subframe: true, x: 0, y: 0, width: 5000, height: 100 })).toEqual(file(1000 * 100 * 2))
+	expect(size({ subframe: true, width: 0, height: 0 })).toEqual(file(1000 * 500 * 2))
+	// A binning the camera does not have is clamped.
+	expect(size({ binX: 8, binY: 8 })).toEqual(file(250 * 125 * 2))
+})
+
+test('the estimate is one header block above the files the simulator camera writes', () => {
+	const capabilities = { ...CAPABILITIES, bin: { x: 4, y: 4 }, sensor: { width: 1280, height: 1024, pixelSize: 3.76 }, subframe: { width: 1280, height: 1024 }, frameFormats: [{ name: 'RGB', label: 'RGB' }] }
+	const bytes = (patch: Partial<typeof DEFAULT_EXPOSURE_SETTINGS>) => darkLibraryWizardEstimate([{ exposure: 1, count: 1 }], darkLibraryWizardCapture({ ...DEFAULT_EXPOSURE_SETTINGS, ...patch }, capabilities), capabilities).bytes
+
+	// Sizes in bytes of the files the simulator wrote for these settings.
+	expect(bytes({})).toEqual([2629440, 7871040])
+	expect(bytes({ binX: 2, binY: 2 })).toEqual([659520 + 2880, 1972800])
+	expect(bytes({ binX: 3, binY: 3 })).toEqual([296640 + 2880, 884160])
+	expect(bytes({ binX: 4, binY: 2 })).toEqual([331200 + 2880, 990720])
+	expect(bytes({ subframe: true, x: 10, y: 20, width: 256, height: 128 })).toEqual([69120 + 2880, 204480])
+	expect(bytes({ subframe: true, x: 10, y: 20, width: 256, height: 128, binX: 2, binY: 2 })).toEqual([20160 + 2880, 57600])
+	expect(bytes({ subframe: true, width: 101, height: 65, binX: 2, binY: 2 })).toEqual([8640 + 2880, 17280])
+	expect(bytes({ frameFormat: 'RGB' })).toEqual([2629440, 7871040])
+	expect(bytes({ subframe: true, x: 10, y: 20, width: 256, height: 128, binX: 2, binY: 2, frameFormat: 'RGB' })).toEqual([23040, 57600])
+	expect(bytes({ subframe: true, x: 0, y: 0, width: 99999, height: 100, frameFormat: 'RGB' })).toEqual([262080, 771840 + 2880])
+})
+
+test('a request takes every camera setting of Camera Acquisition but its exposure, and sends only what was selected', () => {
+	const groups = [{ exposure: 60, count: 3 }]
+	const settings: DarkLibraryWizardSettings = { ...DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS, groups, useDarkFilter: true, darkSlot: 4, directory: '/darks' }
 	const wheel = { connectionId: 'c', deviceId: 'wheel' }
 	const panel = { connectionId: 'c', deviceId: 'panel' }
-	const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, offset: 20, gain: 7, exposureTime: 123, subframe: true, width: 100, height: 100 }
+	const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, offset: 20, gain: 500, binX: 2, binY: 2, exposureTime: 123, subframe: true, x: 10, y: 20, width: 100, height: 100 }
 	const request = darkLibraryWizardRequest(settings, exposure, { wheel, panel }, {}, CAPABILITIES)
 
-	expect(request).toMatchObject({ capture: { offset: 20, subframe: false, width: 0, height: 0 }, groups: [{ exposure: 60, gain: 100, count: 3 }], protection: { darkFilter: { slot: 4 }, panelOff: false, manualCap: true }, wheel, directory: '/darks', maximumRejections: 5 })
+	expect(request).toMatchObject({ capture: { gain: 100, offset: 20, binX: 2, binY: 2, subframe: true, x: 10, y: 20, width: 100, height: 100 }, groups, protection: { darkFilter: { slot: 4 }, panelOff: false, manualCap: true }, wheel, directory: '/darks', maximumRejections: 5 })
 	expect(request.capture).not.toHaveProperty('exposureTime')
-	expect(request.capture).not.toHaveProperty('gain')
 	expect(request.panel).toBeUndefined()
-	expect(darkLibraryWizardRequest({ ...settings, fullSensor: false }, exposure, {}, {}, CAPABILITIES).capture).toMatchObject({ subframe: true, width: 100, height: 100 })
 })
 
 test('a start is blocked by what it selected and cannot use, never by what it did not select', () => {
@@ -118,24 +150,24 @@ test('a start is blocked by what it selected and cannot use, never by what it di
 	expect(blocker({}, { camera: READY, wheel: BUSY, cover: BUSY, panel: BUSY })).toBeUndefined()
 	expect(blocker({ useDarkFilter: true, darkSlot: 7 }, { camera: READY, wheel: READY }, { count: 7 })).toBe('The wheel has no slot 8.')
 	expect(blocker({ groups: [] })).toBe('Add a group of frames.')
-	expect(blocker({ groups: [{ exposure: 7200, gain: 0, count: 1 }] })).toContain('outside what the camera accepts')
+	expect(blocker({ groups: [{ exposure: 7200, count: 1 }] })).toContain('outside what the camera accepts')
 	expect(
 		blocker({
 			groups: [
-				{ exposure: 1, gain: 0, count: 1 },
-				{ exposure: 1, gain: 0, count: 2 },
+				{ exposure: 1, count: 1 },
+				{ exposure: 1, count: 2 },
 			],
 		}),
 	).toBe('Group 2 repeats another one.')
-	expect(blocker({ groups: Array.from({ length: DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS + 1 }, (_, exposure) => ({ exposure: exposure + 1, gain: 0, count: 1 })) })).toContain('at most 64 groups')
-	expect(blocker({ groups: Array.from({ length: 41 }, (_, exposure) => ({ exposure: exposure + 1, gain: 0, count: 500 })) })).toContain('at most 20000 frames')
-	expect(blocker({ groups: [{ exposure: 1, gain: 0, temperature: -10, count: 1 }] }, undefined, undefined, { ...CAPABILITIES, canSetTemperature: false })).toContain('target temperature')
+	expect(blocker({ groups: Array.from({ length: DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS + 1 }, (_, exposure) => ({ exposure: exposure + 1, count: 1 })) })).toContain('at most 64 groups')
+	expect(blocker({ groups: Array.from({ length: 41 }, (_, exposure) => ({ exposure: exposure + 1, count: 500 })) })).toContain('at most 20000 frames')
+	expect(blocker({ groups: [{ exposure: 1, temperature: -10, count: 1 }] }, undefined, undefined, { ...CAPABILITIES, canSetTemperature: false })).toContain('target temperature')
 })
 
 test('a plan fills the form with its settings', () => {
 	const form = darkPlanForm({
 		plan: {
-			groups: [{ exposure: 60, gain: 1, temperature: -10, count: 5, groupId: 'g', key: 'k', directory: '/x' }],
+			groups: [{ exposure: 60, temperature: -10, count: 5, groupId: 'g', key: 'k', directory: '/x' }],
 			protection: { darkFilter: { slot: 3 }, closeCover: true, panelOff: false, manualCap: false, verifyFirstFrame: false },
 			thermal: { tolerance: 1, hold: 2, timeout: 3 },
 			maximumRejections: 4,
@@ -143,7 +175,7 @@ test('a plan fills the form with its settings', () => {
 			directory: '/darks',
 		},
 	} as unknown as Pick<DarkPlanDetail, 'plan'>)
-	expect(form).toEqual({ groups: [{ exposure: 60, gain: 1, temperature: -10, count: 5 }], fullSensor: false, useDarkFilter: true, darkSlot: 3, closeCover: true, panelOff: false, manualCap: false, verifyFirstFrame: false, tolerance: 1, hold: 2, timeout: 3, directory: '/darks', maximumRejections: 4 })
+	expect(form).toEqual({ groups: [{ exposure: 60, temperature: -10, count: 5 }], useDarkFilter: true, darkSlot: 3, closeCover: true, panelOff: false, manualCap: false, verifyFirstFrame: false, tolerance: 1, hold: 2, timeout: 3, directory: '/darks', maximumRejections: 4 })
 })
 
 test('a session runs until it ended', () => {

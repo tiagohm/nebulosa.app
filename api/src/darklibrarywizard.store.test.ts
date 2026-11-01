@@ -12,7 +12,7 @@ afterAll(() => rmSync(root, { recursive: true, force: true }))
 function fixture() {
 	const base = mkdtempSync(join(root, 'plan-'))
 	const directory = join(base, 'plans')
-	const groups = ['a', 'b'].map((groupId, index) => ({ groupId, key: groupId, directory: join(base, groupId), exposure: 60, gain: 100, count: index === 0 ? 2 : 1 }))
+	const groups = ['a', 'b'].map((groupId, index) => ({ groupId, key: groupId, directory: join(base, groupId), exposure: 60, count: index === 0 ? 2 : 1 }))
 	for (const group of groups) mkdirSync(join(group.directory, STAGING_DIRECTORY), { recursive: true })
 
 	const plan: DarkCapturePlan = {
@@ -21,7 +21,7 @@ function fixture() {
 		createdAt: 1,
 		camera: { hardwareId: 'camera', name: 'Camera', driver: { executable: 'x', version: '1' } },
 		directory: base,
-		capture: { offset: 0, binX: 1, binY: 1, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '' },
+		capture: { gain: 0, offset: 0, binX: 1, binY: 1, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '' },
 		groups,
 		protection: { closeCover: false, panelOff: false, manualCap: true, verifyFirstFrame: true },
 		thermal: { tolerance: 0.5, hold: 120, timeout: 1800 },

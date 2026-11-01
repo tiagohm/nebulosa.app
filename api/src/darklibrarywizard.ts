@@ -84,7 +84,7 @@ import type { OperationDevice, OperationProgressReporter, OperationRegistry } fr
 // cannot start new work: each device is taken again only if no other operation took it first, and what cannot be
 // restored is reported. Durations are seconds, instants Unix milliseconds, temperatures degrees Celsius.
 
-// Camera settings of a plan's frames, without the exposure, gain, and temperature of each group.
+// Camera settings of a plan's frames, without the exposure and temperature of each group.
 export type DarkLibraryWizardCaptureSettings = DarkPlanCapture
 
 // Equipment a session uses, by exact ids; each is needed only when the protection selected it.
@@ -428,9 +428,9 @@ function selected<W, P, C>({ darkFilter, panelOff, closeCover }: DarkProtection,
 
 // Returns the exact identity of the settings of a group's frames. Two groups are the same only when their exact values
 // are: a rounded label never merges them.
-export function darkGroupKey(group: Pick<DarkGroup, 'exposure' | 'gain' | 'temperature'>, capture: DarkPlanCapture, hardwareId: string) {
-	const { offset, binX, binY, subframe, x, y, width, height, frameFormat } = capture
-	return JSON.stringify(['DARK', hardwareId, group.exposure, group.gain, offset, binX, binY, subframe ? [x, y, width, height] : 'full', frameFormat, group.temperature ?? 'uncontrolled'])
+export function darkGroupKey(group: Pick<DarkGroup, 'exposure' | 'temperature'>, capture: DarkPlanCapture, hardwareId: string) {
+	const { gain, offset, binX, binY, subframe, x, y, width, height, frameFormat } = capture
+	return JSON.stringify(['DARK', hardwareId, group.exposure, gain, offset, binX, binY, subframe ? [x, y, width, height] : 'full', frameFormat, group.temperature ?? 'uncontrolled'])
 }
 
 // Orders groups so those at one temperature run together, which avoids needless cooler changes: temperatures keep the
@@ -441,7 +441,7 @@ export function orderDarkGroups<T extends Pick<DarkGroup, 'temperature'>>(groups
 }
 
 // Returns the directory of a group under the directory of its plan, readable and unique by its position.
-function groupDirectory({ exposure, gain, temperature }: DarkGroup, index: number) {
+function groupDirectory({ exposure, temperature }: DarkGroup, gain: number, index: number) {
 	return sanitizeFileName(`${String(index + 1).padStart(2, '0')}_${exposure}s_gain${gain}_${temperature === undefined ? 'uncontrolled' : `${temperature}C`}`)
 }
 
@@ -643,12 +643,11 @@ export class DarkLibraryWizardSessions implements Disposable {
 		const { protection, capture, thermal, maximumRejections } = request
 		const groups = orderDarkGroups(request.groups).map((group, index): DarkPlanGroup => ({
 			exposure: group.exposure,
-			gain: group.gain,
 			temperature: group.temperature,
 			count: group.count,
 			groupId: crypto.randomUUID(),
 			key: darkGroupKey(group, capture, hardwareId),
-			directory: join(root, groupDirectory(group, index)),
+			directory: join(root, groupDirectory(group, capture.gain, index)),
 		}))
 		const device = (entry: Device) => ({ hardwareId: resourceKey(entry), name: entry.name })
 
@@ -722,11 +721,10 @@ export class DarkLibraryWizardSessions implements Disposable {
 			if (frame.header && !sizes.has(index)) sizes.set(index, { width: frame.header.width, height: frame.header.height })
 		}
 
-		const groupRuns = groups.map(({ groupId, exposure, gain, temperature, count }, index): DarkLibraryWizardGroupRun => {
+		const groupRuns = groups.map(({ groupId, exposure, temperature, count }, index): DarkLibraryWizardGroupRun => {
 			const known = progress?.[index]
 			return {
 				exposure,
-				gain,
 				temperature,
 				count,
 				groupId,
@@ -1188,8 +1186,8 @@ export class DarkLibraryWizardSessions implements Disposable {
 
 	// Returns what a frame of a group was requested with.
 	#expectation({ plan }: Session, index: number): DarkFrameExpectation {
-		const { exposure, gain } = plan.groups[index]
-		const { offset, binX, binY } = plan.capture
+		const { exposure } = plan.groups[index]
+		const { gain, offset, binX, binY } = plan.capture
 		return { exposure, gain, offset, binX, binY, ...expectedFrameSize(plan.capture, plan.camera.sensor) }
 	}
 
@@ -1200,7 +1198,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		const group = groups[index]
 		const reference = groups
 			.map((candidate, position) => ({ candidate, position }))
-			.filter(({ candidate, position }) => position !== index && candidate.exposure < group.exposure && candidate.gain === group.gain && candidate.temperature === group.temperature && session.accepted.has(position))
+			.filter(({ candidate, position }) => position !== index && candidate.exposure < group.exposure && candidate.temperature === group.temperature && session.accepted.has(position))
 			.sort((a, b) => b.candidate.exposure - a.candidate.exposure)[0]
 
 		return { frames: session.accepted.get(index) ?? [], size: session.sizes.get(index), ...(reference && { shorter: { exposure: reference.candidate.exposure, levels: medianLevels(session.accepted.get(reference.position)!) } }) }
@@ -1337,10 +1335,10 @@ export class DarkLibraryWizardSessions implements Disposable {
 		}
 	}
 
-	// Builds the capture request of one frame: a DARK frame of the plan's camera settings at the group's exposure and gain,
+	// Builds the capture request of one frame: a DARK frame of the plan's camera settings at the group's exposure,
 	// written uncompressed as FITS to name inside staging, with the devices snooped into its header.
 	#captureRequest(session: Session, camera: Camera, index: number, staging: string, name: string): CameraCaptureStart {
-		const { exposure, gain } = session.plan.groups[index]
+		const { exposure } = session.plan.groups[index]
 		const { snoop } = session
 		const { wheel } = session.summary
 		const snoopWheel = wheel && wheel.connectionId === session.summary.camera.connectionId ? wheel.deviceId : snoop?.wheel
@@ -1348,7 +1346,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return {
 			...structuredClone(DEFAULT_CAMERA_CAPTURE_START),
 			...session.plan.capture,
-			gain,
 			exposureTime: exposure,
 			exposureTimeUnit: 'second',
 			frameType: 'DARK',

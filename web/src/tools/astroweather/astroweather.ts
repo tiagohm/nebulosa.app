@@ -82,6 +82,8 @@ export interface AstroWeatherState {
 	forecastError?: string
 	// Night shown.
 	night?: AstroWeatherNight
+	// Start of the current night, the first one offered, Unix milliseconds.
+	currentNightStart?: number
 	// Whether a night is being computed.
 	nightLoading: boolean
 	// Why the night could not be read.
@@ -138,17 +140,24 @@ export async function loadForecast(state: AstroWeatherState, site: AstroWeatherS
 	}
 }
 
-// Computes the night of a site containing an instant. Answers of an older request are discarded.
-export async function loadNight(state: AstroWeatherState, site: AstroWeatherSite, time: number, io: EclipseIo = browserEclipseIo) {
+// Reads the night of a site containing an instant.
+function readNight(site: AstroWeatherSite, time: number, signal: AbortSignal, io: EclipseIo) {
+	const body: AstroWeatherNightRequest = { observer: { latitude: site.latitude, longitude: site.longitude, elevation: site.elevation }, timeZone: site.timeZone, time }
+	return fetchJson<AstroWeatherNight>(io, '/api/astro-weather/night', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal })
+}
+
+// Shows the night a reader answers, marking it as the current night when `current` is set. Answers of an older request are
+// discarded.
+async function showNight(state: AstroWeatherState, read: (signal: AbortSignal) => Promise<AstroWeatherNight>, current: boolean) {
 	const request = nightGuard.begin()
 	state.nightLoading = true
 	state.nightError = undefined
 
 	try {
-		const body: AstroWeatherNightRequest = { observer: { latitude: site.latitude, longitude: site.longitude, elevation: site.elevation }, timeZone: site.timeZone, time }
-		const night = await fetchJson<AstroWeatherNight>(io, '/api/astro-weather/night', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: request.signal })
+		const night = await read(request.signal)
 		if (!request.current()) return
 		state.night = night
+		if (current) state.currentNightStart = night.sun.start
 		state.cursor = undefined
 		state.nightLoading = false
 	} catch (error) {
@@ -156,6 +165,30 @@ export async function loadNight(state: AstroWeatherState, site: AstroWeatherSite
 		state.nightError = errorMessage(error)
 		state.nightLoading = false
 	}
+}
+
+// Computes the night of a site containing an instant.
+export function loadNight(state: AstroWeatherState, site: AstroWeatherSite, time: number, io: EclipseIo = browserEclipseIo) {
+	return showNight(state, (signal) => readNight(site, time, signal, io), false)
+}
+
+// Computes the current night of a site: the one containing now, or the next one once the display window of that one has ended,
+// since a night runs until the upper transit of the next day but has nothing left to show after the morning.
+export function loadCurrentNight(state: AstroWeatherState, site: AstroWeatherSite, io: EclipseIo = browserEclipseIo) {
+	return showNight(
+		state,
+		async (signal) => {
+			const now = io.time()
+			const night = await readNight(site, now, signal, io)
+			return now < night.display.end ? night : readNight(site, night.sun.end, signal, io)
+		},
+		true,
+	)
+}
+
+// Whether the display window of a night has ended.
+export function nightEnded(night: AstroWeatherNight, now: number) {
+	return now >= night.display.end
 }
 
 // Takes the active profile: another profile goes back to its own Sky observer, forgetting the place and zone chosen here.
@@ -168,7 +201,7 @@ export function followProfile(state: AstroWeatherState, profileId: string) {
 	state.profileId = profileId
 }
 
-// Starts showing a site: another site forgets the values of the one before at once and shows the night of now, and the same
+// Starts showing a site: another site forgets the values of the one before at once and shows the current night, and the same
 // site reads its forecast again only when it is old. Returns a function that cancels what is in progress.
 export function followSite(state: AstroWeatherState, site: AstroWeatherSite, io: EclipseIo = browserEclipseIo): () => void {
 	const key = siteKey(site)
@@ -178,6 +211,7 @@ export function followSite(state: AstroWeatherState, site: AstroWeatherSite, io:
 		state.forecast = undefined
 		state.forecastError = undefined
 		state.night = undefined
+		state.currentNightStart = undefined
 		state.nightError = undefined
 		state.cursor = undefined
 	}
@@ -185,7 +219,7 @@ export function followSite(state: AstroWeatherState, site: AstroWeatherSite, io:
 	const now = io.time()
 	const fetchedAt = state.forecast?.generatedAt
 	if (fetchedAt === undefined || now - fetchedAt >= FORECAST_REFRESH_MS) void loadForecast(state, site, io)
-	if (!state.night || now >= state.night.sun.end) void loadNight(state, site, now, io)
+	if (!state.night || nightEnded(state.night, now)) void loadCurrentNight(state, site, io)
 
 	return () => {
 		forecastGuard.cancel()
@@ -201,9 +235,10 @@ export function stepNight(state: AstroWeatherState, site: AstroWeatherSite, dire
 	if (night) return loadNight(state, site, direction < 0 ? night.sun.start - 1 : night.sun.end, io)
 }
 
-// Whether the night shown has begun, so the one before it has passed and has no forecast worth showing.
-export function firstNight(night: AstroWeatherNight, now: number) {
-	return night.sun.start <= now
+// Whether the night before the one shown has passed and has no forecast worth showing: the night shown has begun, or is the
+// current night, which starts later than now from the end of the morning window to the upper transit of the Sun.
+export function firstNight(night: AstroWeatherNight, now: number, currentNightStart = now) {
+	return night.sun.start <= Math.max(now, currentNightStart)
 }
 
 // Whether the forecast has anything for the night after the one shown.

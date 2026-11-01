@@ -12,7 +12,7 @@ import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { type EclipsePlace, observerPlace } from '../eclipse/eclipse'
 import { DISPLAY_TIME_ZONES, LocationSection, Note } from '../eclipse/EclipsePanelParts'
-import { type AstroWeatherState, astroWeatherState, EMPTY_FORECAST, effectiveSite, firstNight, followProfile, followSite, formatClock, hasNextNight, loadForecast, MODE_LABELS, OUTLOOK_LABELS, siteKey, stepNight } from './astroweather'
+import { type AstroWeatherState, astroWeatherState, EMPTY_FORECAST, effectiveSite, firstNight, followProfile, followSite, formatClock, hasNextNight, loadCurrentNight, loadForecast, MODE_LABELS, nightEnded, OUTLOOK_LABELS, siteKey, stepNight } from './astroweather'
 import { AstronomicalConditions, SkyConditions, Sources, WeatherConditions } from './ForecastDetails'
 import { ForecastSummary, reasonsText } from './ForecastSummary'
 import { ForecastTimeline } from './ForecastTimeline'
@@ -66,6 +66,11 @@ export function AstroWeather() {
 		return () => clearInterval(timer)
 	}, [])
 
+	// Moves on when the night shown ends with the tool open; asks for no forecast.
+	useEffect(() => {
+		if (site && night && nightEnded(night, now)) void loadCurrentNight(astroWeatherState, site)
+	}, [night, now])
+
 	const shown = forecast ?? EMPTY_FORECAST
 	const evaluation = useMemo(() => night && evaluateNight(shown, night, mode, now), [shown, night, mode, now])
 	const firstHour = evaluation
@@ -118,7 +123,7 @@ export function AstroWeather() {
 	}
 
 	const coordinates = `${site.latitude.toFixed(4)}°, ${site.longitude.toFixed(4)}°`
-	const back = night && firstNight(night, now)
+	const back = night && firstNight(night, now, state.currentNightStart)
 	const forward = night && hasNextNight(night, forecast)
 
 	return (
@@ -134,7 +139,7 @@ export function AstroWeather() {
 							<p className="m-0 mt-1 text-xs font-medium text-ink-200">Forecast — not live observations</p>
 						</div>
 						<div className="flex items-center gap-1">
-							<IconButton icon="stepBack" label={back ? 'This night has already begun' : 'Previous night'} disabled={!night || back} onClick={() => void stepNight(astroWeatherState, site, -1)} />
+							<IconButton icon="stepBack" label={back ? 'The previous night has passed' : 'Previous night'} disabled={!night || back} onClick={() => void stepNight(astroWeatherState, site, -1)} />
 							<span className="min-w-36 text-center text-[13px] text-ink-100">{night ? `Night of ${night.sun.localDate}` : 'Computing the night…'}</span>
 							<IconButton icon="stepForward" label={forward ? 'Next night' : 'The forecast ends here'} disabled={!forward} onClick={() => void stepNight(astroWeatherState, site, 1)} />
 						</div>

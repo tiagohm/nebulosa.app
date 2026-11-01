@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { AstroWeatherForecast, AstroWeatherNight } from 'api'
 import { proxy } from 'valtio'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { type AstroWeatherState, coverage, effectiveSite, firstNight, followProfile, followSite, formatClock, formatLength, hasNextNight, loadForecast, loadNight, skyBands, stepNight } from './astroweather'
+import { type AstroWeatherState, coverage, effectiveSite, firstNight, followProfile, followSite, formatClock, formatLength, hasNextNight, loadCurrentNight, loadForecast, loadNight, nightEnded, skyBands, stepNight } from './astroweather'
 
 const SITE = { latitude: -22.4, longitude: -45.45, elevation: 850, timeZone: 'America/Sao_Paulo' }
 const OTHER = { ...SITE, latitude: 10 }
@@ -117,13 +117,41 @@ describe('requests', () => {
 		const { io, urls } = answering()
 		followSite(state, SITE, io)
 		await Bun.sleep(0)
-		state.night = { ...NIGHT, sun: { ...NIGHT.sun, end: NOW } }
+		state.night = { ...NIGHT, display: { ...NIGHT.display, end: NOW } }
 		urls.length = 0
 
 		followSite(state, SITE, io)
 		await Bun.sleep(0)
 		expect(urls).toEqual(['/api/astro-weather/night'])
-		expect(state.night?.sun.end).toBe(NIGHT.sun.end)
+		expect(state.night?.display.end).toBe(NIGHT.display.end)
+	})
+
+	test('after the morning window the current night is the next one, before the Sun reaches its transit', async () => {
+		const state = newState()
+		const next = { ...NIGHT, sun: { ...NIGHT.sun, localDate: '2026-11-01', start: NIGHT.sun.end, end: NIGHT.sun.end + 24 * HOUR }, display: { start: NIGHT.display.start + 24 * HOUR, end: NIGHT.display.end + 24 * HOUR } }
+		const times: number[] = []
+		const io: EclipseIo = {
+			time: () => NIGHT.display.end + HOUR,
+			fetch: (_, init) => {
+				const { time } = JSON.parse(init!.body as string)
+				times.push(time)
+				return Promise.resolve(Response.json(time < NIGHT.sun.end ? NIGHT : next))
+			},
+		}
+
+		await loadCurrentNight(state, SITE, io)
+		expect(times).toEqual([NIGHT.display.end + HOUR, NIGHT.sun.end])
+		expect(state.night?.sun.localDate).toBe('2026-11-01')
+		expect(firstNight(state.night!, io.time(), state.currentNightStart)).toBeTrue()
+		expect(firstNight(state.night!, io.time())).toBeFalse()
+	})
+
+	test('stepping leaves the current night where it is', async () => {
+		const state = newState()
+		const { io } = answering()
+		state.currentNightStart = NOW - 24 * HOUR
+		await loadNight(state, SITE, NOW, io)
+		expect(state.currentNightStart).toBe(NOW - 24 * HOUR)
 	})
 
 	test('stepping a night computes it and reads no forecast', async () => {
@@ -200,6 +228,8 @@ describe('coverage', () => {
 	test('limits the nights offered', () => {
 		expect(firstNight(NIGHT, NOW)).toBeTrue()
 		expect(firstNight(NIGHT, NIGHT.sun.start - 1)).toBeFalse()
+		expect(nightEnded(NIGHT, NIGHT.display.end - 1)).toBeFalse()
+		expect(nightEnded(NIGHT, NIGHT.display.end)).toBeTrue()
 		expect(hasNextNight(NIGHT, FORECAST)).toBeTrue()
 		expect(hasNextNight({ ...NIGHT, sun: { ...NIGHT.sun, end: NOW + 200 * HOUR } }, FORECAST)).toBeFalse()
 		expect(hasNextNight(NIGHT, undefined)).toBeFalse()

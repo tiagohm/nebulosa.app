@@ -158,13 +158,17 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 					{greatest && <Datum label="Greatest eclipse">{formatEclipseTime(greatest.time, timeZone)}</Datum>}
 					{greatest && <Datum label="Greatest eclipse at">{formatGeoPoint(greatest)}</Datum>}
 					{duration?.centralDuration !== undefined && <Datum label="Greatest duration">{formatDuration(duration.centralDuration)}</Datum>}
-					{greatest?.pathWidth !== undefined && <Datum label="Path width">{greatest.pathWidth.toFixed(1)} km</Datum>}
+					{greatest?.pathWidth !== undefined && <Datum label="Path width at greatest">{greatest.pathWidth.toFixed(1)} km</Datum>}
 					{local?.details.maximalMagnitude !== undefined && <Datum label="Magnitude here">{local.details.maximalMagnitude.toFixed(4)}</Datum>}
 					{local?.details.moonSunDiameterRatio !== undefined && <Datum label="Moon/Sun diameter">{local.details.moonSunDiameterRatio.toFixed(4)}</Datum>}
 					{local?.details.partialPhaseDuration !== undefined && <Datum label="Eclipse here (C1–C4)">{formatDuration(local.details.partialPhaseDuration)}</Datum>}
 					{local?.details.centralPhaseDuration !== undefined && <Datum label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatDuration(local.details.centralPhaseDuration)}</Datum>}
+					{local?.details.pathWidthKm !== undefined && <Datum label="Path width here">{Math.round(local.details.pathWidthKm)} km</Datum>}
 					{local?.details.shadowPathWidthKm !== undefined && <Datum label="Shadow chord here">{Math.round(local.details.shadowPathWidthKm)} km</Datum>}
-					<Note>Magnitude is the fraction of the Sun's diameter covered by the Moon, not of its area.</Note>
+					<Note>
+						Magnitude is the fraction of the Sun's diameter covered by the Moon, not of its area. Path width is the distance between the limits of totality or annularity, across the central line. Shadow chord is the narrowest width of the shadow at one instant, which is smaller at a low Sun. Contacts assume
+						a smooth lunar limb and are good to about 5 s; the mountains of the limb matter most near the limits of the path.
+					</Note>
 				</PanelSection>
 			)}
 			{map && (

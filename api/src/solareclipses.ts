@@ -1,5 +1,4 @@
 import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
-import { sunMoonPosition } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import {
 	computeLocalSolarEclipseCircumstances,
 	computeLocalSolarEclipseViewGeometry,
@@ -15,7 +14,7 @@ import {
 import type { PolynomialBesselianElements } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
-import { type EclipseDirection, type EclipseLocation, eclipseNotFound, locationParams, yieldEventLoop } from './eclipses'
+import { type EclipseDirection, type EclipseLocation, eclipseNotFound, eclipseSunMoon, locationParams, yieldEventLoop } from './eclipses'
 import { errorResponse } from './http'
 import { LruCache } from './lrucache'
 import { findSolarEclipse, resolveSolarEclipse, type SolarEclipseMap, type SolarEclipseSummary, solarEclipseElements, solarEclipseId, solarEclipseSummary } from './solareclipses.map'
@@ -84,8 +83,10 @@ export interface LocalSolarEclipseVisibility {
 	}
 }
 
-// Magnitude, ratio, durations in seconds, and the width in kilometers of the central shadow's chord through the
-// place (not the width of the path on the central line); each is absent when the place lacks it.
+// Magnitude, ratio, durations in seconds, and two widths in kilometers, each absent when the place lacks it: the width
+// of the path through the place, between the limits of the central phase and across the central line, and the
+// shadow's chord through it, the narrowest width of the shadow on the ground at the local maximum. At a low Sun the
+// path can be several times wider than the chord.
 export type LocalSolarEclipseDetails = LocalSolarEclipseCircumstances['details']
 
 // Presentation of the Local View: the Sun and the Moon as seen from a place at a contact.
@@ -120,7 +121,7 @@ export interface LocalSolarEclipse {
 	readonly location: EclipseLocation
 	// Visibility.
 	readonly visibility: LocalSolarEclipseVisibility
-	// Magnitude, ratio, durations, and shadow chord.
+	// Magnitude, ratio, durations, path width, and shadow chord.
 	readonly details: LocalSolarEclipseDetails
 	// Contacts the place has, in chronological order.
 	readonly events: readonly LocalSolarEclipseContact[]
@@ -162,7 +163,7 @@ const DEFAULT_VIEW_OPTIONS: SolarEclipseViewOptions = { event: 'MAX', orientatio
 
 // Returns the toolkit's circumstances of an eclipse for a place, from its elements, on the 0° horizon.
 function circumstances(pbe: PolynomialBesselianElements, { longitude, latitude }: EclipseLocation) {
-	return computeLocalSolarEclipseCircumstances(pbe, deg(longitude), deg(latitude), { sunMoonPosition, horizonAltitude: 0 })
+	return computeLocalSolarEclipseCircumstances(pbe, deg(longitude), deg(latitude), { sunMoonPosition: eclipseSunMoon(pbe.maximumTime), horizonAltitude: 0 })
 }
 
 // Returns the circumstances of an eclipse from a place, with its Local View drawn as view asks.

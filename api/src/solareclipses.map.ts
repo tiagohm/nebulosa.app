@@ -1,10 +1,11 @@
 import { nearestSolarEclipse, type SolarEclipse, type SolarEclipseType } from 'nebulosa/src/astronomy/bodies/sun'
-import { type EclipseGeoPoint, geoPolylinesToSvgPathData, sunMoonPosition } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
+import { type EclipseGeoPoint, geoPolylinesToSvgPathData } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import { computeGreatestDurationCircumstances, computeGreatestEclipseCircumstances, type SolarEclipseExtremeCircumstances } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
-import { computePolynomialBesselianElements, computeSolarEclipseMapGeometry, type HybridEclipseKind, type PolynomialBesselianElements, type SolarEclipseContactPoints, solarAltitudeAtPoint, solarEclipseMapToSvgPaths, splitCentralLineByKind } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
+import { computePolynomialBesselianElements, computeSolarEclipseMapGeometry, refineSolarEclipse, type HybridEclipseKind, type PolynomialBesselianElements, type SolarEclipseContactPoints, solarAltitudeAtPoint, solarEclipseMapToSvgPaths, splitCentralLineByKind } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { timeAtJulianDay, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { toDeg } from 'nebulosa/src/math/units/angle'
-import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, ID_SEARCH_MARGIN, MAP_PRECISION } from './eclipses'
+import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, eclipseSunMoon, findRefinedEclipse, ID_SEARCH_MARGIN, MAP_PRECISION, type RefinedEclipseSearch } from './eclipses'
+import { LruCache } from './lrucache'
 
 // Solar eclipses and their global maps, the pure part of the solar eclipse routes (solareclipses.ts) shared with
 // the map worker (solareclipses.worker.ts): stepping through the toolkit's solar eclipses, naming them by id, the
@@ -96,11 +97,19 @@ export function solarEclipseId(eclipse: SolarEclipse): string {
 	return `${timeToUnixMillis(eclipse.maximalTime)}`
 }
 
+// Search of the solar eclipses: the toolkit's series, with the greatest eclipse taken from the Besselian elements.
+const SEARCH: RefinedEclipseSearch<SolarEclipse> = {
+	// The greatest eclipse is up to a millisecond after its id, so the instant is moved by one millisecond away from it.
+	nearest: (time, next) => nearestSolarEclipse(timeUnix((time + (next ? 1 : -1)) / 1000), next),
+	refine: (candidate) => refineSolarEclipse(candidate, eclipseSunMoon(candidate.maximalTime)),
+	instant: (eclipse) => timeToUnixMillis(eclipse.maximalTime),
+	cache: new LruCache(128),
+}
+
 // Returns the eclipse nearest an instant in a direction: the next one has an id later than time, the previous one an
 // id earlier than it, so stepping from an id never returns the same eclipse. time is in Unix milliseconds.
 export function findSolarEclipse(time: number, direction: EclipseDirection): SolarEclipse {
-	// The greatest eclipse is up to a millisecond after its id, so the instant is moved by one millisecond away from it.
-	return direction === 'next' ? nearestSolarEclipse(timeUnix((time + 1) / 1000), true) : nearestSolarEclipse(timeUnix((time - 1) / 1000), false)
+	return findRefinedEclipse(SEARCH, time, direction)
 }
 
 // Returns the eclipse an id names, or undefined when it names none.
@@ -117,7 +126,7 @@ export function solarEclipseSummary(eclipse: SolarEclipse): SolarEclipseSummary 
 // Returns the polynomial Besselian elements of an eclipse, fitted on the ephemeris every solar eclipse
 // computation of the API uses, so the map and the local circumstances agree.
 export function solarEclipseElements(eclipse: SolarEclipse): PolynomialBesselianElements {
-	return computePolynomialBesselianElements(eclipse.maximalTime, sunMoonPosition)
+	return computePolynomialBesselianElements(eclipse.maximalTime, eclipseSunMoon(eclipse.maximalTime))
 }
 
 // Returns the Unix milliseconds of a Julian Day on the time scale of the elements (TT).

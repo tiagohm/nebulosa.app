@@ -1,5 +1,4 @@
 import { type LunarEclipse, type LunarEclipseType, nearestLunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
-import { sunMoonPosition } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import {
 	computeLocalLunarEclipseCircumstances,
 	computeLocalLunarEclipseViewGeometry,
@@ -10,10 +9,10 @@ import {
 	type LocalLunarViewHandedness,
 	type LocalLunarViewOrientationMode,
 } from 'nebulosa/src/astronomy/events/eclipse/lunar/local'
-import { computeLunarEclipseMapGeometry, type LunarEclipseContactKind, lunarEclipseEvents, lunarEclipseMapToSvgPaths } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
+import { computeLunarEclipseMapGeometry, type LunarEclipseContactKind, lunarEclipseEvents, lunarEclipseMapToSvgPaths, refineLunarEclipse } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
 import { timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
-import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, eclipseNotFound, ID_SEARCH_MARGIN, locationParams, MAP_PRECISION, yieldEventLoop } from './eclipses'
+import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, eclipseNotFound, eclipseSunMoon, findRefinedEclipse, ID_SEARCH_MARGIN, locationParams, MAP_PRECISION, type RefinedEclipseSearch, yieldEventLoop } from './eclipses'
 import { errorResponse } from './http'
 import { LruCache } from './lrucache'
 
@@ -165,11 +164,24 @@ function eclipseId(eclipse: LunarEclipse): string {
 	return `${timeToUnixMillis(eclipse.maximalTime)}`
 }
 
+// Penumbral magnitude below zero down to which a series result is still a candidate: the series misses the faintest
+// penumbral eclipses, and the geometry of the refinement rejects the candidates that are none.
+const SERIES_PENUMBRAL_MARGIN = 0.02
+
+// Search of the lunar eclipses: the toolkit's series, with its instants, type, and magnitude taken from the geometry
+// of the Moon and the Earth's shadow.
+const SEARCH: RefinedEclipseSearch<LunarEclipse> = {
+	// The greatest eclipse is up to a millisecond after its id, so the instant is moved by one millisecond away from it.
+	nearest: (time, next) => nearestLunarEclipse(timeUnix((time + (next ? 1 : -1)) / 1000), next, SERIES_PENUMBRAL_MARGIN),
+	refine: (candidate) => refineLunarEclipse(candidate, eclipseSunMoon(candidate.maximalTime)),
+	instant: (eclipse) => timeToUnixMillis(eclipse.maximalTime),
+	cache: new LruCache(128),
+}
+
 // Returns the eclipse nearest an instant in a direction: the next one has an id later than time, the previous one an
 // id earlier than it, so stepping from an id never returns the same eclipse. time is in Unix milliseconds.
 export function findLunarEclipse(time: number, direction: EclipseDirection): LunarEclipse {
-	// The greatest eclipse is up to a millisecond after its id, so the instant is moved by one millisecond away from it.
-	return direction === 'next' ? nearestLunarEclipse(timeUnix((time + 1) / 1000), true) : nearestLunarEclipse(timeUnix((time - 1) / 1000), false)
+	return findRefinedEclipse(SEARCH, time, direction)
 }
 
 // Returns the eclipse an id names, or undefined when it names none.
@@ -197,7 +209,7 @@ function contactPaths(paths: Readonly<Record<LunarEclipseContactKind, string>>):
 
 // Returns the global map of an eclipse.
 export function lunarEclipseMap(eclipse: LunarEclipse): LunarEclipseMap {
-	const geometry = computeLunarEclipseMapGeometry(eclipse, sunMoonPosition)
+	const geometry = computeLunarEclipseMapGeometry(eclipse, eclipseSunMoon(eclipse.maximalTime))
 	const lines = lunarEclipseMapToSvgPaths(geometry, DEGREE_PLANE, { precision: MAP_PRECISION })
 	const fills = lunarEclipseMapToSvgPaths(geometry, DEGREE_PLANE, { fill: true, fillRegion: 'aboveHorizon', precision: MAP_PRECISION })
 	const events = geometry.events.map((event) => ({ kind: event.kind, time: timeToUnixMillis(event.time), sublunar: { longitude: toDeg(event.sublunar.x), latitude: toDeg(event.sublunar.y) } }))
@@ -206,7 +218,7 @@ export function lunarEclipseMap(eclipse: LunarEclipse): LunarEclipseMap {
 
 // Returns the toolkit's circumstances of an eclipse for a place, with altitudeSamples samples of the Moon's altitude.
 function circumstances(eclipse: LunarEclipse, { longitude, latitude }: EclipseLocation, altitudeSamples?: number) {
-	return computeLocalLunarEclipseCircumstances(eclipse, deg(longitude), deg(latitude), sunMoonPosition, { altitudeSamples })
+	return computeLocalLunarEclipseCircumstances(eclipse, deg(longitude), deg(latitude), eclipseSunMoon(eclipse.maximalTime), { altitudeSamples })
 }
 
 // Returns the circumstances of an eclipse from a place, with its Local View drawn as view asks.

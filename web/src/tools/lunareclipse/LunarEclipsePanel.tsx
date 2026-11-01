@@ -61,7 +61,7 @@ export function LunarEclipsePanel({ observer }: LunarEclipsePanelProps) {
 							</Button>
 						</>
 					)}
-					<Note>Visible means the Moon's center at or above the 0° horizon, without refraction.</Note>
+					<Note>Visible means the Moon's center at or above the 0° horizon, without refraction. Partial and total contacts are computed to about 5 s and penumbral ones to about 30 s, and the edges of the Earth's shadow are too diffuse to see them that sharply.</Note>
 				</PanelSection>
 			)}
 			{eclipse && (

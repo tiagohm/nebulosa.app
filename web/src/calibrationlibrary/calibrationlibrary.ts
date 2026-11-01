@@ -69,6 +69,19 @@ export function jobEnded(job: Pick<CalibrationJobSummary, 'state'>) {
 	return ENDED_STATES.has(job.state)
 }
 
+// Returns the latest master job of each group of a plan, newest first.
+export function planMasterJobs(jobs: Readonly<Record<string, CalibrationJobSummary>>, planId: string) {
+	const latest = new Map<string, CalibrationJobSummary>()
+
+	for (const job of Object.values(jobs)) {
+		if (job.planId !== planId || job.groupId === undefined) continue
+		const known = latest.get(job.groupId)
+		if (!known || known.createdAt < job.createdAt) latest.set(job.groupId, job)
+	}
+
+	return Array.from(latest.values()).toSorted((a, b) => b.createdAt - a.createdAt)
+}
+
 // Replaces what a new server process makes meaningless.
 function adoptEpoch(state: CalibrationLibraryRuntime, epoch: string) {
 	if (state.summary && state.summary.epoch !== epoch) {
@@ -82,7 +95,7 @@ function applySummary(state: CalibrationLibraryRuntime, summary: CalibrationLibr
 	adoptEpoch(state, summary.epoch)
 	if (state.summary && state.summary.revision > summary.revision) return
 	state.summary = summary
-	for (const job of summary.activeJobs) state.jobs[job.jobId] = job
+	for (const job of [...summary.recentJobs, ...summary.activeJobs]) state.jobs[job.jobId] = job
 	state.changes++
 }
 

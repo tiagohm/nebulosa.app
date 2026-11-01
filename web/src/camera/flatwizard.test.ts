@@ -1,9 +1,9 @@
-import { expect, test } from 'bun:test'
-import type { FlatWizardSession, FlatWizardSessionSummary } from 'api'
+import { describe, expect, test } from 'bun:test'
+import type { FlatWizardFilterRun, FlatWizardSession, FlatWizardSessionSummary } from 'api'
 import { proxy } from 'valtio'
 import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_FLAT_WIZARD_FILTER, DEFAULT_FLAT_WIZARD_SETTINGS, type FlatWizardSettings } from '../profile/schema'
 import { cameraKey } from './capture'
-import { continueFlatWizard, flatWizardBlocker, flatWizardFilterName, flatWizardRequest, flatWizardRunning, type FlatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard, startFlatWizard, stopFlatWizard } from './flatwizard'
+import { continueFlatWizard, darkFlatGroups, flatWizardBlocker, flatWizardFilterName, flatWizardRequest, flatWizardRunning, type FlatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard, startFlatWizard, stopFlatWizard } from './flatwizard'
 
 function newState() {
 	return proxy<FlatWizardRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
@@ -151,4 +151,19 @@ test('a filter is named as the wheel names its slot, or by its 1-based slot numb
 	expect(flatWizardFilterName(['Luminance', ' ', 'Red'], 1)).toBe('Filter 2')
 	expect(flatWizardFilterName(['Luminance'], 4)).toBe('Filter 5')
 	expect(flatWizardFilterName(undefined, 2)).toBe('Filter 3')
+})
+
+describe('dark-flats', () => {
+	const run = (patch: Partial<FlatWizardFilterRun>) => ({ exposure: 2, accepted: 3, required: 3, ...patch }) as FlatWizardFilterRun
+
+	test('one group per exposure saved, with the largest count asked at it', () => {
+		expect(darkFlatGroups({ filters: [run({ exposure: 2, required: 3 }), run({ exposure: 2, required: 5 }), run({ exposure: 0.5 })] })).toEqual([
+			{ exposure: 0.5, count: 3 },
+			{ exposure: 2, count: 5 },
+		])
+	})
+
+	test('a filter that saved nothing asks for nothing', () => {
+		expect(darkFlatGroups({ filters: [run({ accepted: 0 }), run({ exposure: undefined })] })).toEqual([])
+	})
 })

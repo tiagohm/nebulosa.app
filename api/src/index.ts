@@ -581,12 +581,42 @@ const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(),
 // Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
 // moving the wheels, driving the panels, and closing and opening the covers with the commanders of their commands,
 // previewing and recording the frames in the capture frame registry, and measuring them in DN on a worker of their own.
-const flatWizard = new FlatWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, wheels.commander, flatPanels.commander, covers.commander, images, captureFrames, new FlatWizardAnalyzer(), publish)
+const flatWizard = new FlatWizardSessions(
+	connections.devices,
+	(id) => connections.client(id),
+	operations,
+	captures.capturer,
+	wheels.commander,
+	flatPanels.commander,
+	covers.commander,
+	images,
+	captureFrames,
+	new FlatWizardAnalyzer(),
+	publish,
+	undefined,
+	(frame) => void calibrationLibrary.registerFlat(frame).catch((error: unknown) => console.error('A flat could not be registered', error)),
+)
 
 // Dark Library Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the
 // captures, cooling the cameras, moving the wheels, and driving the panels and covers with the commanders of their
 // commands, keeping their plans in files of their own, and measuring their frames in DN on a worker of their own.
-const darkLibraryWizard = new DarkLibraryWizardSessions(connections.devices, (id) => connections.client(id), operations, captures.capturer, cameras.commander, wheels.commander, flatPanels.commander, covers.commander, images, captureFrames, new DarkLibraryWizardAnalyzer(), darkPlans, publish)
+const darkLibraryWizard = new DarkLibraryWizardSessions(
+	connections.devices,
+	(id) => connections.client(id),
+	operations,
+	captures.capturer,
+	cameras.commander,
+	wheels.commander,
+	flatPanels.commander,
+	covers.commander,
+	images,
+	captureFrames,
+	new DarkLibraryWizardAnalyzer(),
+	darkPlans,
+	publish,
+	undefined,
+	(planId) => void calibrationLibrary.planEnded(planId).catch((error: unknown) => console.error('The calibration library could not read a plan', error)),
+)
 
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
 // guide output commands and previewing their frames in the image store and the capture frame registry.

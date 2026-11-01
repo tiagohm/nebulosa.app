@@ -1,5 +1,6 @@
 import type { OperationFailureReason } from 'nebulosa/src/devices/orchestration/operation'
 import type { AutoFocusSessionSummary } from './autofocus'
+import type { CalibrationJobSummary } from './calibrationlibrary.jobs'
 import type { CaptureSession } from './captures'
 import type { ConnectRequest, ConnectionStatus } from './connection'
 import type { DarkLibraryWizardSessionSummary } from './darklibrarywizard'
@@ -39,6 +40,13 @@ export type NotificationTarget =
 			readonly tool: NotificationCameraTool
 	  }
 	| {
+			readonly kind: 'tool'
+			// Tool of the Tools workspace to open.
+			readonly tool: 'calibration-library'
+			// Group it shows.
+			readonly group?: string
+	  }
+	| {
 			readonly kind: 'equipment'
 			// Id of the open connection that provides the device.
 			readonly connectionId: string
@@ -48,7 +56,7 @@ export type NotificationTarget =
 
 // What a notification is about.
 export interface NotificationSource {
-	// Service that reported the occurrence: connection, capture, autofocus, tppa, flatWizard, darkLibraryWizard, guiding, darv, or operation.
+	// Service that reported the occurrence: connection, capture, autofocus, tppa, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, or operation.
 	readonly kind: string
 	// Id of the connection involved; absent for an application-wide notification.
 	readonly connectionId?: string
@@ -178,6 +186,8 @@ export class NotificationClassifier {
 				return this.#flatWizard(event.session)
 			case 'darkLibraryWizard:updated':
 				return this.#darkLibraryWizard(event.session)
+			case 'calibrationLibrary:jobUpdated':
+				return this.#calibrationJob(event.job)
 			case 'guiding:updated':
 				return this.#guiding(event.session)
 			case 'guiding:event':
@@ -189,6 +199,23 @@ export class NotificationClassifier {
 			default:
 				return []
 		}
+	}
+
+	// Reports how a master ended: a failure always, and a success only for a master no one is looking at, a wizard's.
+	#calibrationJob({ jobId, type, state, automatic, groupId, updatedAt }: CalibrationJobSummary): NotificationDraft[] {
+		if (type !== 'master' || (state !== 'failed' && (state !== 'completed' || !automatic))) return []
+		const failed = state === 'failed'
+		return [
+			{
+				key: `calibration:${jobId}:${updatedAt}`,
+				level: failed ? 'error' : 'success',
+				code: failed ? 'calibrationLibrary.failed' : 'calibrationLibrary.completed',
+				title: failed ? 'Master not built' : 'Master built',
+				message: failed ? 'The Calibration Library explains why, and can retry it.' : 'A master of the Dark Library Wizard is ready in the Calibration Library.',
+				source: { kind: 'calibrationLibrary' },
+				target: { kind: 'tool', tool: 'calibration-library', group: groupId },
+			},
+		]
 	}
 
 	// Remembers the endpoint of a connection that opened; its sessions fail loudly again.

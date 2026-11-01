@@ -54,6 +54,9 @@ import { errorCode } from './util'
 // Rows of a page unless a request asks otherwise.
 const DEFAULT_PAGE_SIZE = 50
 
+// Latest jobs a snapshot looks at for the ones of the wizards.
+const RECENT_JOBS = 50
+
 // Files checked at once when refreshing what is on the disk.
 const REFRESH_CONCURRENCY = 32
 
@@ -108,6 +111,8 @@ export interface CalibrationLibrarySnapshot {
 	readonly cameras: readonly string[]
 	// Jobs still working.
 	readonly activeJobs: readonly CalibrationJobSummary[]
+	// Latest jobs of the wizards, so a reloaded tab still shows how their masters ended.
+	readonly recentJobs: readonly CalibrationJobSummary[]
 }
 
 // What lists and events show of a revision.
@@ -536,7 +541,7 @@ export class CalibrationLibrary {
 
 	// Builds the snapshot.
 	snapshot(): CalibrationLibrarySnapshot {
-		const empty = { frames: {}, framesByKind: {}, masters: {}, mastersByKind: {}, cameras: [], activeJobs: [] }
+		const empty = { frames: {}, framesByKind: {}, masters: {}, mastersByKind: {}, cameras: [], activeJobs: [], recentJobs: [] }
 		if (this.store.newerVersion) return { epoch: this.#epoch, revision: this.#revision, unavailable: true, ...empty }
 
 		const { sources, masters, cameras } = this.store.counts()
@@ -556,7 +561,11 @@ export class CalibrationLibrary {
 		}
 
 		const activeJobs = this.store.jobsIn(ACTIVE_JOB_STATES).map(jobSummary)
-		return { epoch: this.#epoch, revision: this.#revision, unavailable: false, frames, framesByKind, masters: mastersByState, mastersByKind, cameras, activeJobs }
+		const recentJobs = this.store
+			.jobs(0, RECENT_JOBS)
+			.items.filter(({ automatic }) => automatic)
+			.map(jobSummary)
+		return { epoch: this.#epoch, revision: this.#revision, unavailable: false, frames, framesByKind, masters: mastersByState, mastersByKind, cameras, activeJobs, recentJobs }
 	}
 
 	// Publishes a change of the catalog.
@@ -757,7 +766,7 @@ export class CalibrationLibrary {
 	}
 
 	// Starts a master over an open catalog.
-	#requestMaster(request: MasterRequest, automatic: boolean): MasterRequestResult {
+	#requestMaster(request: MasterRequest, automatic: boolean, planId?: string): MasterRequestResult {
 		if (request.token !== undefined) {
 			const job = this.store.jobByToken(request.token)
 			if (job?.build) return { jobId: job.jobId, masterId: job.build.masterId, revision: job.revision, state: job.state }
@@ -788,7 +797,7 @@ export class CalibrationLibrary {
 			token: request.token,
 			fingerprint,
 			progress: NO_PROGRESS,
-			build: this.#build(kind, groupId, key, sources, validation.recipe, validation.findings, correction, dependencies, request),
+			build: { ...this.#build(kind, groupId, key, sources, validation.recipe, validation.findings, correction, dependencies, request), planId },
 		}
 		this.jobs.enqueue(job)
 		return { jobId: job.jobId, masterId: groupId, state: job.state }
@@ -827,8 +836,8 @@ export class CalibrationLibrary {
 
 		for (const { path, bytes, mtimeMillis } of build.frames) {
 			const info = await stat(path).catch(() => undefined)
-			if (!info) throw new IntegrationError('sourceMissing', `A frame is missing: ${path}`)
-			if (info.size !== bytes || info.mtimeMs !== mtimeMillis) throw new IntegrationError('sourceChanged', `A frame changed: ${path}`)
+			if (!info) throw new IntegrationError('sourceMissing', `A frame is missing: ${fileNameOf(path)}`)
+			if (info.size !== bytes || info.mtimeMs !== mtimeMillis) throw new IntegrationError('sourceChanged', `A frame changed: ${fileNameOf(path)}`)
 		}
 
 		if (build.correction && !(await stat(this.#masterFile(build.correction)).catch(() => undefined))) throw new IntegrationError('sourceMissing', 'The correction master is not available')
@@ -866,7 +875,7 @@ export class CalibrationLibrary {
 			await mkdir(join(this.store.productsDirectory, build.masterId), { recursive: true })
 			await rename(product, this.store.revisionDirectory(build.masterId, revision))
 		} catch (error) {
-			throw Object.assign(new Error(`The master could not be published: ${Error.isError(error) ? error.message : String(error)}`), { code: 'publicationFailed' })
+			throw Object.assign(new Error(`The master could not be published (${errorCode(error) ?? 'unexpected error'})`), { code: 'publicationFailed' })
 		}
 
 		this.store.putMaster(master)
@@ -1006,7 +1015,7 @@ export class CalibrationLibrary {
 			this.#saveImport(current, { state: 'completed', scan: { ...current.scan!, found: candidates.length, bytes, truncated } })
 		} catch (error) {
 			if (signal.aborted) this.#saveImport(current, { state: 'cancelled' })
-			else this.#saveImport(current, { state: 'failed', code: 'processingFailed', error: Error.isError(error) ? error.message : String(error) })
+			else this.#saveImport(current, { state: 'failed', code: 'processingFailed', error: `The directory could not be read (${errorCode(error) ?? 'unexpected error'})` })
 		} finally {
 			this.#scans.delete(job.jobId)
 		}
@@ -1123,7 +1132,7 @@ export class CalibrationLibrary {
 			if (reviews.length > 0) continue
 
 			try {
-				this.#requestMaster({ sourceIds: sources.map(({ sourceId }) => sourceId), acknowledged: true }, true)
+				this.#requestMaster({ sourceIds: sources.map(({ sourceId }) => sourceId), acknowledged: true }, true, planId)
 			} catch {
 				continue
 			}

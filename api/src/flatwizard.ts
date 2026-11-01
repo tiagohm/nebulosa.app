@@ -16,6 +16,7 @@ import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { clamp } from 'nebulosa/src/math/numerical/math'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
+import type { FlatFrameRegistration } from './calibrationlibrary'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureSettings, type CaptureSnoop, DEFAULT_CAPTURES_DIR, exposureProgressListener, frameName, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
@@ -382,6 +383,7 @@ export class FlatWizardSessions {
 		readonly analyzer: Pick<FlatWizardAnalyzer, 'measure'>,
 		readonly listener: FlatWizardListener,
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
+		readonly framePublished: (frame: FlatFrameRegistration) => void = () => undefined,
 	) {}
 
 	// Returns the latest session of every camera.
@@ -744,6 +746,7 @@ export class FlatWizardSessions {
 
 			const { sessionId, camera: device } = session.summary
 			this.frames.published({ sessionId, generation, ...device, cameraName, time, frameType: 'FLAT', path: join(directory, file) }, 'flatWizard')
+			this.framePublished({ path: join(directory, file), sessionId, cameraId: resourceKey(camera), cameraName, filter: name })
 			accepted.push({ file, sample: sample! })
 			this.#record(session, { ...record, frameId: captureFrameId(sessionId, generation), verdict, file })
 			this.#patch(session, index, { accepted: run.accepted + 1, files: [...run.files, file] })

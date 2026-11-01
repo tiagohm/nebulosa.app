@@ -433,6 +433,7 @@ describe('masters', () => {
 		const job = await settled(library, jobId!)
 		expect(job.state).toBe('failed')
 		expect(job.code).toBe('sourceChanged')
+		expect(job.error).toBe('A frame changed: 1.fit')
 		expect((await library.masters({}, 0, 10)).total).toBe(0)
 	})
 

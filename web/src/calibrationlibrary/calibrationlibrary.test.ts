@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import type { CalibrationJobSummary, CalibrationLibrarySnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { buildMaster, type CalibrationLibraryRuntime, handleCalibrationLibraryEvent, jobEnded, loadCalibrationGroups, refreshCalibrationLibrary } from './calibrationlibrary'
+import { buildMaster, type CalibrationLibraryRuntime, handleCalibrationLibraryEvent, jobEnded, loadCalibrationGroups, planMasterJobs, refreshCalibrationLibrary } from './calibrationlibrary'
 
 function runtime() {
 	return proxy<CalibrationLibraryRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
 }
 
 function snapshot(epoch: string, revision: number, activeJobs: readonly CalibrationJobSummary[] = []): CalibrationLibrarySnapshot {
-	return { epoch, revision, unavailable: false, frames: {}, framesByKind: {}, masters: {}, mastersByKind: {}, cameras: [], activeJobs }
+	return { epoch, revision, unavailable: false, frames: {}, framesByKind: {}, masters: {}, mastersByKind: {}, cameras: [], activeJobs, recentJobs: [] }
 }
 
 function job(jobId: string, state: CalibrationJobSummary['state'], updatedAt: number): CalibrationJobSummary {
@@ -53,6 +53,15 @@ describe('events', () => {
 		const state = runtime()
 		handleCalibrationLibraryEvent(state, { type: 'connection:close' } as unknown as ServerEvent)
 		expect(state.changes).toBe(0)
+	})
+})
+
+describe('plans', () => {
+	test('shows the latest job of each group of a plan', () => {
+		const older = { ...job('a', 'failed', 1), planId: 'p', groupId: 'g', createdAt: 1 }
+		const newer = { ...job('b', 'completed', 2), planId: 'p', groupId: 'g', createdAt: 2 }
+		const other = { ...job('c', 'queued', 3), planId: 'q', groupId: 'g' }
+		expect(planMasterJobs({ a: older, b: newer, c: other }, 'p')).toEqual([newer])
 	})
 })
 

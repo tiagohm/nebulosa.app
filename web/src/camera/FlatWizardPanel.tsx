@@ -9,10 +9,13 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
+import { cameraTabKey } from '../images/cameratabs'
+import { imagesState, selectImageTool } from '../images/images'
 import { operationsState } from '../operations'
-import { activeProfile, exposureSettings, flatWizardSettings, profileState, setFlatWizardSettings } from '../profile/profile'
+import { activeProfile, exposureSettings, flatWizardSettings, profileState, setDarkLibraryWizardSettings, setFlatWizardSettings } from '../profile/profile'
 import { type CameraIdentity, DEFAULT_FLAT_WIZARD_EFFECTIVE_CLIP, DEFAULT_FLAT_WIZARD_FILTER, FLAT_WIZARD_MAXIMUM_COUNT, FLAT_WIZARD_MAXIMUM_EXPOSURE, FLAT_WIZARD_MAXIMUM_FILTERS, FLAT_WIZARD_MAXIMUM_REJECTIONS, FLAT_WIZARD_MAXIMUM_TRIALS, type FlatWizardSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
+import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { IconButton } from '../ui/IconButton'
@@ -20,7 +23,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { cameraKey } from './capture'
-import { continueFlatWizard, flatWizardFilterName, FLAT_WIZARD_DIAGNOSTIC_LABELS, FLAT_WIZARD_FILTER_STATE_LABELS, FLAT_WIZARD_STATE_LABELS, FLAT_WIZARD_VERDICT_LABELS, flatWizardBlocker, flatWizardRequest, flatWizardRunning, flatWizardRuntime, startFlatWizard, stopFlatWizard } from './flatwizard'
+import { continueFlatWizard, darkFlatGroups, flatWizardFilterName, FLAT_WIZARD_DIAGNOSTIC_LABELS, FLAT_WIZARD_FILTER_STATE_LABELS, FLAT_WIZARD_STATE_LABELS, FLAT_WIZARD_VERDICT_LABELS, flatWizardBlocker, flatWizardRequest, flatWizardRunning, flatWizardRuntime, startFlatWizard, stopFlatWizard } from './flatwizard'
 import { FrameProgress, formatExposure } from './FrameProgress'
 
 // Contextual panel sections of Flat Wizard, a camera operation of the Images camera tabs: the equipment it uses (the
@@ -86,6 +89,14 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 	// Updates fields of the camera's Flat Wizard form.
 	function update(patch: Partial<FlatWizardSettings>) {
 		setFlatWizardSettings(profileState, identity, patch)
+	}
+
+	// Fills the Dark Library Wizard with the exposures these flats took, for the operator to review. Moves nothing.
+	function prepareDarkFlats() {
+		if (!device || !session) return
+		const groups = darkFlatGroups(session)
+		setDarkLibraryWizardSettings(profileState, identity, { purpose: 'darkFlat', groups })
+		selectImageTool(imagesState, cameraTabKey(device.connectionId, device.id), 'dark-library-wizard')
 	}
 
 	// Updates fields of one filter group.
@@ -167,7 +178,7 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 				<Notice>The target applies to the brightest plane of the frame; the other planes of a color sensor are only checked for clipping.</Notice>
 			</CollapsibleSection>
 			{session && <Progress session={session} pending={pending} />}
-			{session && <Results session={session} />}
+			{session && <Results onPrepareDarkFlats={prepareDarkFlats} session={session} />}
 			<CollapsibleSection id="images.flat-wizard.controls" title="Controls">
 				{running ? (
 					<Button variant="secondary" disabled={pending || session?.state === 'stopping'} onClick={() => void stopFlatWizard(flatWizardRuntime, session!)}>
@@ -312,8 +323,11 @@ function Progress({ session, pending }: ProgressProps) {
 	)
 }
 
-// Outcome of every filter group: the exposure, the counts, the stability of the saved frames, and the cleanup.
-function Results({ session }: { readonly session: FlatWizardSessionSummary }) {
+// Outcome of every filter group: the exposure, the counts, the stability of the saved frames, and the cleanup. Masters are
+// built in the Calibration Library, and dark-flats are a plan of the Dark Library Wizard the operator reviews and starts.
+function Results({ session, onPrepareDarkFlats }: { readonly session: FlatWizardSessionSummary; readonly onPrepareDarkFlats: () => void }) {
+	const saved = session.filters.some((run) => run.accepted > 0)
+
 	return (
 		<CollapsibleSection id="images.flat-wizard.results" title="Results">
 			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
@@ -327,6 +341,16 @@ function Results({ session }: { readonly session: FlatWizardSessionSummary }) {
 				<FilterNotes key={index} run={run} />
 			))}
 			{session.cleanupWarning && <Notice error>{session.cleanupWarning}</Notice>}
+			{saved && !flatWizardRunning(session) && (
+				<div className="flex flex-col gap-2">
+					<Button variant="secondary" onClick={onPrepareDarkFlats}>
+						Prepare Matching Dark Flats
+					</Button>
+					<Button variant="secondary" onClick={() => navigate(routeState, { workspace: 'tools', tool: 'calibration-library' })}>
+						Open in Calibration Library
+					</Button>
+				</div>
+			)}
 		</CollapsibleSection>
 	)
 }

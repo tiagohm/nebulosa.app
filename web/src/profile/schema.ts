@@ -655,6 +655,10 @@ export interface DarkLibraryWizardSettings {
 	directory?: string
 	// Rejected frames allowed per group, in [0, DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS].
 	maximumRejections: number
+	// Whether the frames are dark-flats for the flats of the same exposure; absent takes ordinary darks.
+	purpose?: 'darkFlat'
+	// Whether the Calibration Library builds the masters of complete groups after the acquisition; absent is off.
+	generateMasters?: boolean
 }
 
 // Most groups of a plan. A matrix grows fast, and each group is a directory and a thermal stage of a run.

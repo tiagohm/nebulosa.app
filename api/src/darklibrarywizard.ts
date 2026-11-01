@@ -58,7 +58,8 @@ import type { OperationDevice, OperationProgressReporter, OperationRegistry } fr
 // after group, until each group has its accepted frames. A plan is immutable and durable (darklibrarywizard.store.ts); a
 // session is what works on it, one `camera.darkLibraryWizard` operation of the process-wide registry holding the camera
 // and the wheel, panel, and cover its protection selected from start to end, including while it is paused or waits for
-// the operator. Nothing here is a calibration library: masters, reuse, and browsing are not this service's.
+// the operator. It only acquires: a plan may be for dark-flats and may ask for masters, but masters, reuse, and browsing are
+// the Calibration Library's, which hears of the end of a plan and can fail without touching it.
 //
 // Protection is prepared in a safe order: the panel light off first, so a cover never moves with it on, then the wheel
 // at the dark slot, then the cover closed, each confirmed by the state the device reports, never by the command. What
@@ -115,6 +116,10 @@ export interface DarkLibraryWizardNewRequest extends CommandRequest, DarkLibrary
 	readonly maximumRejections: number
 	// Absolute directory of the server the frames are saved under; DEFAULT_CAPTURES_DIR when absent.
 	readonly directory?: string
+	// What the frames are for; absent is an ordinary dark.
+	readonly purpose?: 'darkFlat'
+	// Whether the Calibration Library builds the masters of the complete groups once the acquisition ends.
+	readonly generateMasters?: boolean
 }
 
 // Body of the same route that completes the missing frames of a plan, with the settings the plan recorded.
@@ -512,6 +517,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		readonly store: DarkPlanStore,
 		readonly listener: DarkLibraryWizardListener,
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
+		readonly planEnded: (planId: string) => void = () => undefined,
 	) {
 		devices.thermometers.addHandler(this.#thermometers)
 	}
@@ -664,6 +670,8 @@ export class DarkLibraryWizardSessions implements Disposable {
 				capture,
 				groups,
 				protection,
+				...(request.purpose && { purpose: request.purpose }),
+				...(request.generateMasters && { generateMasters: true }),
 				thermal,
 				maximumRejections,
 			},
@@ -1416,6 +1424,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		else this.#update(session, { state: 'failed', groups, pending: undefined, pauseRequested: false, reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt: Date.now() })
 
 		session.ended.resolve()
+		this.planEnded(session.plan.planId)
 	}
 
 	// Remembers the stable code of a failure for clients, and returns the failure.

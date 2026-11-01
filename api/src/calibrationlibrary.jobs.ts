@@ -50,6 +50,8 @@ export interface MasterBuild {
 	readonly acknowledged: readonly CompatibilityFinding[]
 	// Whether fewer frames than the plan required were accepted on purpose.
 	readonly partial: boolean
+	// Plan a wizard asked for this master from.
+	readonly planId?: string
 }
 
 // What an import job scans.
@@ -118,6 +120,8 @@ export interface CalibrationJobSummary {
 	readonly kind?: CalibrationKind
 	readonly groupId?: string
 	readonly frames?: number
+	// Plan a wizard asked for this master from.
+	readonly planId?: string
 	// Progress of a master job.
 	readonly progress: IntegrationProgress
 	// Files found by an import job, and frames committed.
@@ -146,7 +150,27 @@ const STAGING_REMOVAL_DELAY = 200
 // Removes the server paths of a job.
 export function jobSummary(job: CalibrationJob): CalibrationJobSummary {
 	const { jobId, type, state, createdAt, updatedAt, automatic, build, scan, progress, error, code, masterId, revision } = job
-	return { jobId, type, state, createdAt, updatedAt, automatic, kind: build?.kind, groupId: build?.groupId, frames: build?.frames.length, progress, found: scan?.found, bytes: scan?.bytes, truncated: scan?.truncated, committed: scan?.committed, error, code, masterId: masterId ?? build?.masterId, revision }
+	return {
+		jobId,
+		type,
+		state,
+		createdAt,
+		updatedAt,
+		automatic,
+		kind: build?.kind,
+		groupId: build?.groupId,
+		frames: build?.frames.length,
+		planId: build?.planId,
+		progress,
+		found: scan?.found,
+		bytes: scan?.bytes,
+		truncated: scan?.truncated,
+		committed: scan?.committed,
+		error,
+		code,
+		masterId: masterId ?? build?.masterId,
+		revision,
+	}
 }
 
 // Runs an integration; the Master integrator, or a stand-in in tests.

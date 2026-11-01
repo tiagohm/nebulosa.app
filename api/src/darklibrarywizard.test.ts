@@ -80,7 +80,24 @@ async function setup(edit: Parameters<typeof analyzer>[0] = (measurement) => mea
 	disposables.push(covers)
 	const events: DarkLibraryWizardEvent[] = []
 	const store = new DarkPlanStore(plans)
-	const wizard = new DarkLibraryWizardSessions(manager.devices, resolve, operations, captures.capturer, cameras.commander, wheels.commander, panels.commander, covers.commander, images, frames, analyzer(edit), store, (event) => events.push(event))
+	const endedPlans: string[] = []
+	const wizard = new DarkLibraryWizardSessions(
+		manager.devices,
+		resolve,
+		operations,
+		captures.capturer,
+		cameras.commander,
+		wheels.commander,
+		panels.commander,
+		covers.commander,
+		images,
+		frames,
+		analyzer(edit),
+		store,
+		(event) => events.push(event),
+		undefined,
+		(planId) => endedPlans.push(planId),
+	)
 	disposables.push(wizard)
 
 	const devices = manager.devices.list(client)
@@ -108,6 +125,7 @@ async function setup(edit: Parameters<typeof analyzer>[0] = (measurement) => mea
 	const confirm = async (sessionId: string) => expect(wizard.continue(sessionId, { stepId: (await pending()).stepId }).status).toBe(204)
 
 	return {
+		endedPlans,
 		id,
 		manager,
 		client,
@@ -205,6 +223,29 @@ describe('Dark Library Wizard sessions', () => {
 		expect(page.frames[0]).toMatchObject({ origin: 'darkLibraryWizard', frameType: 'DARK' })
 		expect(camera.frameType).toBe('DARK')
 		expect(summary()?.lastAttempt).toMatchObject({ verdict: 'accepted', frameId: `${sessionId}:2` })
+	})
+
+	test('a plan records what its frames are for and asks for masters, and hears of its end after its journal', async () => {
+		const { id, cameraId, wizard, directory, confirm, ended, store, endedPlans } = await setup()
+		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { purpose: 'darkFlat', generateMasters: true }))
+		await confirm(sessionId)
+		await waitUntil(ended, 60000)
+		await waitUntil(() => endedPlans.length > 0)
+
+		expect(endedPlans).toEqual([planId])
+		expect(await store.plan(planId)).toMatchObject({ version: 1, purpose: 'darkFlat', generateMasters: true })
+		expect(await store.detail(planId, 10)).toMatchObject({ status: 'completed', missing: 0 })
+	})
+
+	test('an ordinary plan stays as it was', async () => {
+		const { id, cameraId, wizard, directory, confirm, ended, store } = await setup()
+		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory))
+		await confirm(sessionId)
+		await waitUntil(ended, 60000)
+
+		const plan = await store.plan(planId)
+		expect(plan?.purpose).toBeUndefined()
+		expect(plan?.generateMasters).toBeUndefined()
 	})
 
 	test('a repeated token answers the same session, even while the first request is prepared', async () => {

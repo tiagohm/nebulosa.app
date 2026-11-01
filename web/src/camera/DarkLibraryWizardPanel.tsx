@@ -2,6 +2,7 @@ import type { CameraCapabilities, CaptureSnoop, DarkGroup, DarkLibraryWizardGrou
 import { cn } from 'cn'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { calibrationLibraryRuntime, planMasterJobs } from '../calibrationlibrary/calibrationlibrary'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { Notice } from '../equipment-control/parts'
@@ -13,11 +14,14 @@ import { operationsState } from '../operations'
 import { activeProfile, darkLibraryWizardSettings, exposureSettings, profileState, setDarkLibraryWizardSettings } from '../profile/profile'
 import { type CameraIdentity, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS, DEFAULT_DARK_LIBRARY_WIZARD_GROUP, type DarkLibraryWizardSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
+import { navigate, routeState } from '../shell/route'
+import { JOB_STATE_LABELS, JOB_STATE_TONES } from '../tools/calibrationlibrary/library'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { IconButton } from '../ui/IconButton'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
+import { StatusBadge } from '../ui/StatusBadge'
 import { TextInput } from '../ui/TextInput'
 import { cameraKey } from './capture'
 import {
@@ -51,7 +55,8 @@ import { FrameProgress, formatExposure } from './FrameProgress'
 // mode of Camera Acquisition, but never its exposure time, which each group sets. The form is the camera's, kept in the profile;
 // while a session runs the plan shows what the session applied. Sessions and plans are the server's, shown here whichever
 // tab started them, and keep running when the panel unmounts. A step is confirmed only by its button. This view recovers
-// the plans the wizard made; it does not browse, import, or match calibration frames.
+// the plans the wizard made, may ask for their masters, and links to them; browsing, importing, and building are the
+// Calibration Library's.
 
 // Camera a Dark Library Wizard panel acquires with, the devices of its setup, and the forms it edits.
 export interface DarkLibraryWizardTarget {
@@ -266,6 +271,15 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 					<IconButton icon="folder" label="Choose directory" className="size-[38px]" disabled={locked} onClick={() => setChoosingDirectory(true)} />
 				</div>
 				<NumberInput label="Rejections per Group" value={settings.maximumRejections} min={0} max={DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS} disabled={locked} onChange={(maximumRejections) => update({ maximumRejections })} />
+				<Checkbox label="Generate masters after acquisition" checked={settings.generateMasters === true} disabled={locked} onChange={(generateMasters) => update({ generateMasters: generateMasters || undefined })} />
+				{settings.purpose === 'darkFlat' && (
+					<>
+						<Notice>These frames are dark-flats: light-blocked frames at the exposure of your flats, recorded as such in the plan.</Notice>
+						<Button variant="secondary" disabled={locked} onClick={() => update({ purpose: undefined })}>
+							Take Ordinary Darks
+						</Button>
+					</>
+				)}
 				<Notice>Frames are saved raw under darks/&lt;camera&gt;/&lt;plan&gt;/&lt;group&gt;, never replacing a file. Rejected frames are kept in a rejected directory and do not count.</Notice>
 			</CollapsibleSection>
 			{session && <Progress session={session} pending={pending} />}
@@ -469,6 +483,7 @@ interface PlanCardProps {
 // One plan of the camera: its progress, and how to recover it. Completing never changes its settings or its saved frames.
 function PlanCard({ plan, busy, onComplete, onFork }: PlanCardProps) {
 	const active = plan.status === 'running' || plan.status === 'paused'
+	const jobs = planMasterJobs(useSnapshot(calibrationLibraryRuntime).jobs, plan.planId)
 
 	return (
 		<div className="flex flex-col gap-1 border-0 border-t border-line-200 pt-2 first:border-t-0 first:pt-0">
@@ -485,6 +500,14 @@ function PlanCard({ plan, busy, onComplete, onFork }: PlanCardProps) {
 				<Notice key={warning} error>
 					{warning}
 				</Notice>
+			))}
+			{jobs.map((job) => (
+				<div key={job.jobId} className="flex items-center gap-2">
+					<StatusBadge tone={JOB_STATE_TONES[job.state]} label={`Master ${JOB_STATE_LABELS[job.state]}`} />
+					<Button variant="secondary" onClick={() => navigate(routeState, { workspace: 'tools', tool: 'calibration-library', group: job.groupId })}>
+						Open in Calibration Library
+					</Button>
+				</div>
 			))}
 			<div className="flex flex-col gap-2">
 				{plan.missing > 0 && !active && (

@@ -31,6 +31,7 @@ export interface NotificationTargetView {
 // Whether a target can be opened now: its camera tab is open, or its device is one of the watched connection.
 export function targetAvailable(target: NotificationTarget | undefined, view: NotificationTargetView): target is NotificationTarget {
 	if (!target) return false
+	if (target.kind === 'tool') return true
 	if (target.kind === 'cameraTool') return view.documents.some((document) => document.key === cameraTabKey(target.connectionId, target.deviceId))
 	return view.devices.some((device) => device.id === target.deviceId && device.connectionId === target.connectionId)
 }
@@ -39,7 +40,9 @@ export function targetAvailable(target: NotificationTarget | undefined, view: No
 export function openNotificationTarget(target: NotificationTarget | undefined, context: NotificationTargetContext): boolean {
 	if (!targetAvailable(target, { documents: context.images.documents, devices: context.devices })) return false
 
-	if (target.kind === 'cameraTool') {
+	if (target.kind === 'tool') {
+		navigate(context.route, { workspace: 'tools', tool: target.tool, group: target.group }, context.history)
+	} else if (target.kind === 'cameraTool') {
 		const key = cameraTabKey(target.connectionId, target.deviceId)
 		selectImage(context.images, key)
 		selectImageTool(context.images, key, target.tool)

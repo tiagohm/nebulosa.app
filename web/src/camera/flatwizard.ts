@@ -1,4 +1,4 @@
-import type { CameraCapabilities, CaptureSnoop, FlatWizardCaptureSettings, FlatWizardFilterState, FlatWizardRequest, FlatWizardSession, FlatWizardSessionSummary, FlatWizardSnapshot, FlatWizardState, FlatWizardVerdict, OperationDevice, ServerEvent, WheelState } from 'api'
+import type { CameraCapabilities, CaptureSnoop, DarkGroup, FlatWizardCaptureSettings, FlatWizardFilterState, FlatWizardRequest, FlatWizardSession, FlatWizardSessionSummary, FlatWizardSnapshot, FlatWizardState, FlatWizardVerdict, OperationDevice, ServerEvent, WheelState } from 'api'
 import { nanoid } from 'nanoid'
 import type { FlatDiagnosticCode } from 'nebulosa/src/imaging/analysis/flat/types'
 import { proxy } from 'valtio'
@@ -71,6 +71,18 @@ export const FLAT_WIZARD_DIAGNOSTIC_LABELS: Readonly<Partial<Record<FlatDiagnost
 	sequenceVariation: 'The frames vary more than expected.',
 	sequenceOutlier: 'A frame stands apart from the others.',
 	sequenceMetadataUnknown: 'Missing metadata prevents proving the frames homogeneous.',
+}
+
+// Returns one dark-flat group per exposure a session saved flats at, with as many frames as its largest filter group
+// asked for at that exposure. A dark-flat matches the exposure of its flats, whatever their filter was.
+export function darkFlatGroups(session: Pick<FlatWizardSessionSummary, 'filters'>): DarkGroup[] {
+	const counts = new Map<number, number>()
+
+	for (const { exposure, accepted, required } of session.filters) {
+		if (exposure !== undefined && accepted > 0) counts.set(exposure, Math.max(counts.get(exposure) ?? 0, required))
+	}
+
+	return Array.from(counts, ([exposure, count]) => ({ exposure, count })).toSorted((a, b) => a.exposure - b.exposure)
 }
 
 // Returns whether a session is running: it has not ended.

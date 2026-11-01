@@ -14,7 +14,7 @@ import { errorCode, isRecord, writeAtomically } from './util'
 // session of the process runs, so whatever was running then belongs to a process that ended: its plan becomes
 // interrupted, and what its staging directories hold is quarantined, never deleted. Nothing here resumes a device.
 // The frames themselves live in the output directory of the plan, and a file that cannot be used costs only its plan.
-// This is the ledger of what the wizard acquired, not a calibration library. Times are Unix milliseconds, exposures
+// This is the ledger of what the wizard acquired; the Calibration Library reads it and never writes it. Times are Unix milliseconds, exposures
 // seconds, temperatures degrees Celsius. Plans never hold pixels, and server paths never leave through events.
 
 // Directory the plans are persisted in when none is given.

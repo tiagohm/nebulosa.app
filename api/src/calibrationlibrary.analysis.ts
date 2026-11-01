@@ -1,5 +1,5 @@
 import { mkdir, open, rm, stat } from 'fs/promises'
-import { extname, join } from 'path'
+import { basename, extname, join } from 'path'
 import { readImageFromFits, readImageFromXisf } from 'nebulosa/src/imaging/model/image'
 import type { ImageRawType } from 'nebulosa/src/imaging/model/types'
 import { CalibrationPlaneLevels, calibrationPlane, calibrationPlaneCount, type CalibrationPlaneLevel, createCalibrationIntegrationDiagnostics, divideCalibrationPlanes, effectiveCalibrationCombination, integrateCalibrationRows, subtractCalibrationRows } from 'nebulosa/src/imaging/processing/calibration.integration'
@@ -288,8 +288,8 @@ async function openFrames(request: MasterWorkerRequest, report: (framesValidated
 	for (let index = 0; index < frames.length; index++) {
 		const { path, bytes, mtimeMillis } = frames[index]
 		const info = await stat(path).catch(() => undefined)
-		if (!info) throw new IntegrationError('sourceMissing', `A frame is missing: ${path}`)
-		if (info.size !== bytes || info.mtimeMs !== mtimeMillis) throw new IntegrationError('sourceChanged', `A frame changed: ${path}`)
+		if (!info) throw new IntegrationError('sourceMissing', `A frame is missing: ${basename(path)}`)
+		if (info.size !== bytes || info.mtimeMs !== mtimeMillis) throw new IntegrationError('sourceChanged', `A frame changed: ${basename(path)}`)
 
 		let frameLayout: FrameLayout
 
@@ -312,7 +312,7 @@ async function openFrames(request: MasterWorkerRequest, report: (framesValidated
 		}
 
 		layout ??= frameLayout
-		if (frameLayout.width !== layout.width || frameLayout.height !== layout.height || frameLayout.channels !== layout.channels || frameLayout.bitpix !== layout.bitpix || frameLayout.cfa !== layout.cfa) throw new IntegrationError('incompatibleFrames', `A frame has other samples than the first: ${path}`)
+		if (frameLayout.width !== layout.width || frameLayout.height !== layout.height || frameLayout.channels !== layout.channels || frameLayout.bitpix !== layout.bitpix || frameLayout.cfa !== layout.cfa) throw new IntegrationError('incompatibleFrames', `A frame has other samples than the first: ${basename(path)}`)
 
 		digests.push(await fileDigest(path))
 		report(index + 1)

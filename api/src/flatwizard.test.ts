@@ -8,6 +8,7 @@ import { analyzeFlat } from 'nebulosa/src/imaging/analysis/flat/flat'
 import { measureFlatSequenceFrame } from 'nebulosa/src/imaging/analysis/flat/sequence'
 import type { FlatAnalysis } from 'nebulosa/src/imaging/analysis/flat/types'
 import { generateSyntheticFlatImage } from 'nebulosa/src/imaging/synthetic/flat'
+import type { FlatFrameRegistration } from './calibrationlibrary'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures } from './captures'
 import { ConnectionManager } from './connection'
@@ -110,6 +111,7 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	disposables.push(covers)
 	const measurement = fakeAnalyzer(rate, finals, ceiling)
 	const events: FlatWizardEvent[] = []
+	const published: FlatFrameRegistration[] = []
 	const flatWizard = new FlatWizardSessions(
 		manager.devices,
 		(connectionId) => manager.client(connectionId),
@@ -122,6 +124,8 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 		frames,
 		measurement.analyzer,
 		(event) => events.push(event),
+		undefined,
+		(frame) => published.push(frame),
 	)
 
 	const devices = manager.devices.list(client)
@@ -149,6 +153,7 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	const session = async (sessionId: string) => (await flatWizard.session(sessionId).json()) as FlatWizardSession
 
 	return {
+		published,
 		id,
 		operations,
 		captures,
@@ -181,6 +186,19 @@ async function start(flatWizard: FlatWizardSessions, connectionId: string, camer
 }
 
 describe('Flat Wizard sessions', () => {
+	test('every published frame reaches the library with its filter and camera', async () => {
+		const { id, cameraId, flatWizard, directory, summary, ended, published } = await setup()
+		const { sessionId } = await start(flatWizard, id, cameraId, request(directory))
+		await waitUntil(() => summary()?.pending !== undefined)
+		expect(flatWizard.continue(sessionId, { stepId: summary()!.pending!.stepId }).status).toBe(204)
+		await waitUntil(ended, 60000)
+
+		expect(published).toHaveLength(3)
+		expect(published[0]).toMatchObject({ sessionId, filter: summary()!.filters[0].name })
+		expect(published[0].cameraId).toBeString()
+		expect(existsSync(published[0].path)).toBeTrue()
+	})
+
 	test('a manual run waits for the operator, searches the exposure with two observations, and publishes the original frames', async () => {
 		const { id, cameraId, flatWizard, frames, measurement, directory, summary, ended, released, session } = await setup()
 		const { sessionId } = await start(flatWizard, id, cameraId, request(directory))

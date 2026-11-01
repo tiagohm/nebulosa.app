@@ -180,6 +180,8 @@ export function darkLibraryWizardRequest(settings: Readonly<DarkLibraryWizardSet
 		...(settings.panelOff && panel && { panel }),
 		...(settings.closeCover && cover && { cover }),
 		...(settings.directory && { directory: settings.directory }),
+		...(settings.purpose && { purpose: settings.purpose }),
+		...(settings.generateMasters && { generateMasters: true }),
 		snoop,
 	}
 }
@@ -216,7 +218,7 @@ export function darkLibraryWizardBlocker({ camera, wheel, panel, cover }: DarkLi
 // Returns the form values a plan was made with, which start a new plan. Its camera settings stay out: they are Camera
 // Acquisition's, and a new plan takes the ones in force.
 export function darkPlanForm({ plan }: Pick<DarkPlanDetail, 'plan'>): Partial<DarkLibraryWizardSettings> {
-	const { protection, thermal, groups, maximumRejections, directory } = plan
+	const { protection, thermal, groups, maximumRejections, directory, purpose, generateMasters } = plan
 	const { darkFilter, closeCover, panelOff, manualCap, verifyFirstFrame } = protection
 
 	return {
@@ -232,6 +234,8 @@ export function darkPlanForm({ plan }: Pick<DarkPlanDetail, 'plan'>): Partial<Da
 		timeout: thermal.timeout,
 		directory,
 		maximumRejections,
+		purpose,
+		generateMasters,
 	}
 }
 

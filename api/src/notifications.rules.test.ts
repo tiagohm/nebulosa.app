@@ -1,5 +1,6 @@
-import { expect, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import type { AutoFocusSessionSummary } from './autofocus'
+import type { CalibrationJobSummary } from './calibrationlibrary.jobs'
 import type { CaptureSession } from './captures'
 import type { DarkLibraryWizardSessionSummary } from './darklibrarywizard'
 import type { DarvMeasurement, DarvSessionSummary } from './darv'
@@ -198,4 +199,23 @@ test('an output file that already exists is named without its directory, and oth
 	expect(failureText('commandFailed', 'Unable to save C:\\captures\\flat.fit: EACCES')).toBe('a command failed')
 	expect(failureText('commandFailed', undefined)).toBe('a command failed')
 	expect(failureText('disconnected', 'socket closed')).toBe('a device disconnected')
+})
+
+describe('calibration library', () => {
+	const job = { jobId: 'j', type: 'master', createdAt: 1, updatedAt: 2, groupId: 'g', progress: { framesValidated: 0, rowsCombined: 0, rowsTotal: 0, bytesWritten: 0 } } as const
+	const classify = (patch: Partial<CalibrationJobSummary> & Pick<CalibrationJobSummary, 'state' | 'automatic'>) => new NotificationClassifier(() => undefined).classify({ type: 'calibrationLibrary:jobUpdated', epoch: 'e', revision: 1, job: { ...job, ...patch } })
+
+	test('a failed master is an error that opens its group', () => {
+		expect(classify({ state: 'failed', automatic: false, error: 'Boom' })).toMatchObject([{ level: 'error', code: 'calibrationLibrary.failed', target: { kind: 'tool', tool: 'calibration-library', group: 'g' } }])
+	})
+
+	test('a master of a wizard is announced, and one a person asked for is not', () => {
+		expect(classify({ state: 'completed', automatic: true })).toMatchObject([{ level: 'success', code: 'calibrationLibrary.completed' }])
+		expect(classify({ state: 'completed', automatic: false })).toEqual([])
+		expect(classify({ state: 'integrating', automatic: true })).toEqual([])
+	})
+
+	test('an import is quiet', () => {
+		expect(classify({ type: 'import', state: 'failed', automatic: false })).toEqual([])
+	})
 })

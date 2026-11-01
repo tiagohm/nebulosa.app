@@ -4,7 +4,7 @@ import type { CaptureSession } from './captures'
 import type { DarvMeasurement, DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingSessionSummary } from './guiding'
-import { NotificationClassifier } from './notifications.rules'
+import { failureText, NotificationClassifier } from './notifications.rules'
 import type { OperationRecord } from './operations'
 import type { TargetCenteringSessionSummary } from './targetcentering'
 import type { TppaSessionSummary } from './tppa'
@@ -173,4 +173,12 @@ test('high-frequency device events give nothing', () => {
 	const classifier = new NotificationClassifier()
 	expect(classifier.classify({ type: 'device:updated', connectionId: 'c', id: 'cam', connected: true })).toEqual([])
 	expect(classifier.classify({ type: 'device:removed', connectionId: 'c', id: 'cam' })).toEqual([])
+})
+
+test('an output file that already exists is named without its directory, and other causes stay fixed text', () => {
+	expect(failureText('commandFailed', 'the output file "C:\\captures\\M31\\A-0001.fit" already exists')).toBe('the output file "A-0001.fit" already exists; change the file name template')
+	expect(failureText('commandFailed', 'the output file "/home/me/A-0001.fit" already exists')).toBe('the output file "A-0001.fit" already exists; change the file name template')
+	expect(failureText('commandFailed', 'Unable to save C:\\captures\\flat.fit: EACCES')).toBe('a command failed')
+	expect(failureText('commandFailed', undefined)).toBe('a command failed')
+	expect(failureText('disconnected', 'socket closed')).toBe('a device disconnected')
 })

@@ -53,3 +53,12 @@ test('abbreviate greek letters', () => {
 	expect(abbreviateGreekLetter('α Cen')).toBe('Alp Cen')
 	expect(abbreviateGreekLetter('Omega Centauri')).toBe('Omega Centauri')
 })
+
+test('reads a Bayer or Flamsteed designation with the genitive of its constellation, or the abbreviation of SIMBAD', () => {
+	expect(parseDesignationQuery('Alpha Centauri')).toEqual(parseDesignationQuery('Alp Cen'))
+	expect(parseDesignationQuery('Sigma Octantis')).toEqual(parseDesignationQuery('Sig Oct'))
+	expect(parseDesignationQuery('Alpha Canis Majoris')).toEqual(parseDesignationQuery('Alp CMa'))
+	expect(parseDesignationQuery('Alpha Centauri').length).toBeGreaterThan(0)
+	expect(parseDesignationQuery('alf Ori')).toEqual(parseDesignationQuery('Alp Ori'))
+	expect(parseDesignationQuery('58 Orionis')).toEqual(parseDesignationQuery('58 Ori'))
+})

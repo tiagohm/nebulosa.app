@@ -16,8 +16,9 @@ import type { ServerEvent } from './websocket'
 // notification; every other event, including telemetry, frames, and progress, gives none. Each draft carries a
 // key naming the occurrence it reports (a session outcome, a manual step, an operation, a close), so the
 // notification service creates one record per occurrence however often the same state is published. The text
-// is built from fixed templates, device names, and fixed descriptions of the failure reasons; the error text of
-// a session or driver is never copied into a notification.
+// is built from fixed templates, device names, and fixed descriptions of the failure reasons. The error text of
+// a session or driver can hold server paths and is not copied into a notification; a cause the operator can fix
+// is recognized and described instead (failureText).
 
 // Severity of a notification.
 export type NotificationLevel = 'info' | 'success' | 'warning' | 'error'
@@ -217,7 +218,7 @@ export class NotificationClassifier {
 		const base = { key: `capture:${sessionId}`, source: this.#source('capture', connectionId, deviceId, session.operationId, sessionId), target: cameraTool(connectionId, deviceId, 'camera-acquisition') }
 
 		if (phase === 'completed') return [{ ...base, level: 'success', code: 'capture.completed', title: 'Capture completed', message: `${cameraName} captured ${session.captured} ${session.captured === 1 ? 'frame' : 'frames'}.` }]
-		if (phase === 'failed' && !this.#quiet(connectionId, reason)) return [{ ...base, level: 'error', code: 'capture.failed', title: 'Capture failed', message: `Capture with ${cameraName} failed: ${reasonText(reason)}.` }]
+		if (phase === 'failed' && !this.#quiet(connectionId, reason)) return [{ ...base, level: 'error', code: 'capture.failed', title: 'Capture failed', message: `Capture with ${cameraName} failed: ${failureText(reason, session.error)}.` }]
 		return []
 	}
 
@@ -231,7 +232,7 @@ export class NotificationClassifier {
 			return [{ ...base, level: 'success', code: 'autofocus.completed', title: 'Auto Focus completed', message: `${focuserName} was focused${position}.` }]
 		}
 
-		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ ...base, level: 'error', code: 'autofocus.failed', title: 'Auto Focus failed', message: `Auto Focus of ${focuserName} failed: ${reasonText(reason)}.` }]
+		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ ...base, level: 'error', code: 'autofocus.failed', title: 'Auto Focus failed', message: `Auto Focus of ${focuserName} failed: ${failureText(reason, session.error)}.` }]
 		return []
 	}
 
@@ -242,7 +243,7 @@ export class NotificationClassifier {
 		const target = cameraTool(camera.connectionId, camera.deviceId, 'tppa')
 
 		if (state === 'readyToRefine') return [{ key: `tppa.ready:${sessionId}`, level: 'info', code: 'tppa.readyToRefine', title: 'TPPA ready to refine', message: `The polar error of ${mountName} was estimated; adjust the mount while TPPA refines it.`, source, target }]
-		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ key: `tppa:${sessionId}`, level: 'error', code: 'tppa.failed', title: 'TPPA failed', message: `TPPA with ${mountName} failed: ${reasonText(reason)}.`, source, target }]
+		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ key: `tppa:${sessionId}`, level: 'error', code: 'tppa.failed', title: 'TPPA failed', message: `TPPA with ${mountName} failed: ${failureText(reason, session.error)}.`, source, target }]
 		return []
 	}
 
@@ -291,7 +292,7 @@ export class NotificationClassifier {
 		if (session.cleanupWarning) drafts.push({ key: `flat.cleanup:${sessionId}`, level: 'warning', code: 'flatWizard.cleanupWarning', title: 'Flat Wizard left a device on', message: `Check the panel and cover of ${cameraName}: the Flat Wizard could not restore them.`, source, target })
 
 		if (state === 'completed') drafts.push({ key: `flat:${sessionId}`, level: 'success', code: 'flatWizard.completed', title: 'Flat Wizard completed', message: `Flats of ${cameraName} were captured.`, source, target })
-		else if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) drafts.push({ key: `flat:${sessionId}`, level: 'error', code: 'flatWizard.failed', title: 'Flat Wizard failed', message: `Flat Wizard of ${cameraName} failed: ${reasonText(reason)}.`, source, target })
+		else if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) drafts.push({ key: `flat:${sessionId}`, level: 'error', code: 'flatWizard.failed', title: 'Flat Wizard failed', message: `Flat Wizard of ${cameraName} failed: ${failureText(reason, session.error)}.`, source, target })
 
 		return drafts
 	}
@@ -310,7 +311,7 @@ export class NotificationClassifier {
 		if (!failure || this.#quiet(camera.connectionId, failure.reason)) return []
 
 		const source = this.#source('guiding', camera.connectionId, camera.deviceId, session.operationId, sessionId)
-		return [{ key: `guiding:${sessionId}`, level: 'error', code: 'guiding.failed', title: 'Guiding stopped', message: `Guiding with ${cameraName} stopped: ${reasonText(failure.reason)}.`, source, target: cameraTool(camera.connectionId, camera.deviceId, 'guiding') }]
+		return [{ key: `guiding:${sessionId}`, level: 'error', code: 'guiding.failed', title: 'Guiding stopped', message: `Guiding with ${cameraName} stopped: ${failureText(failure.reason, failure.error)}.`, source, target: cameraTool(camera.connectionId, camera.deviceId, 'guiding') }]
 	}
 
 	// Reports a completed calibration of an active guiding session.
@@ -387,6 +388,17 @@ function cameraTool(connectionId: string, deviceId: string, tool: NotificationCa
 // Description of a failure reason, a generic one when absent.
 function reasonText(reason: OperationFailureReason | undefined) {
 	return reason ? REASON_TEXT[reason] : 'an error occurred'
+}
+
+// Error of a capture whose output file already exists, with the name of the file as group 1.
+const OUTPUT_FILE_EXISTS = /the output file "(?:[^"]*[\\/])?([^"\\/]+)" already exists/
+
+// Describes why a session failed, completing the same sentence as reasonText. An output file that already exists
+// is named, without its directory, with the way past it, since the operator can fix it from the notification;
+// any other failure reads as its reason.
+export function failureText(reason: OperationFailureReason | undefined, error: string | undefined) {
+	const file = reason === 'commandFailed' && error ? OUTPUT_FILE_EXISTS.exec(error)?.[1] : undefined
+	return file ? `the output file "${file}" already exists; change the file name template` : reasonText(reason)
 }
 
 // Text with its first letter in upper case.

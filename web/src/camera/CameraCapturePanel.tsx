@@ -280,7 +280,7 @@ function LastFrame({ frame }: LastFrameProps) {
 	const { acquisition } = frame
 	const file = fileState(frame)
 	const rows: [string, string, boolean?][] = [
-		['Frame', `#${frame.generation} · ${frame.frameType}`],
+		['Frame of session', `#${frame.generation} · ${frame.frameType}`],
 		['File', FILE_STATE_LABELS[file], file === 'failed'],
 		['Dimensions', `${frame.width} × ${frame.height}${frame.channels === 3 ? ' RGB' : frame.cfa ? ` ${frame.cfa}` : ''}`],
 	]

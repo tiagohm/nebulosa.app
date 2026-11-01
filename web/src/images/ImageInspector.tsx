@@ -212,7 +212,7 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 						<Property label="Result">{drift?.result ? (drift.result.driftMagnitude !== undefined ? `${drift.result.driftMagnitude.toFixed(3)} px/s` : DARV_STATUS_LABELS[drift.result.status]) : MISSING}</Property>
 					</>
 				)}
-				<Property label="Frame">#{frame.generation}</Property>
+				<Property label="Frame of session">#{frame.generation}</Property>
 				<Property label="Frame type">{frame.frameType}</Property>
 				<Property label="Captured (UTC)">{formatDate(new Date(frame.time).toISOString())}</Property>
 				<Property label="Frame ID">

@@ -224,7 +224,7 @@ export function SkySearch({ onSelect }: SkySearchProps) {
 					})}
 					{localStatus === 'loading' && local.length === 0 && <p className="m-0 px-3 py-2 text-xs text-ink-300">Searching…</p>}
 					{localStatus === 'error' && <p className="m-0 px-3 py-2 text-xs text-danger">The local search failed.</p>}
-					{nothing && <p className="m-0 px-3 py-2 text-xs text-ink-300">No objects match “{text}”.</p>}
+					{nothing && <p className="m-0 px-3 py-2 text-xs text-ink-300">No objects match “{text}”. The catalog holds stars to magnitude 8.</p>}
 				</div>
 			)}
 		</div>

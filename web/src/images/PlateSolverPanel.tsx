@@ -13,7 +13,7 @@ import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSo
 import { cancelPlateSolve, effectivePlateSolveRequest, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolveSettings, plateSolvingState, PROVIDER_LABELS, runPlateSolve, solutionOptions, STAGE_LABELS } from '../platesolving/platesolving'
 import { type AstrometryGridSettings, COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, type CoordinateFormat, GRID_COLORS, GRID_OPACITY_RANGE, type GridColor, ORIENTATION_MODES, type OrientationMode } from '../platesolving/preferences'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
-import { wcsFrame } from '../platesolving/wcs'
+import { fitsToViewer, imageTopPositionAngle, wcsFrame } from '../platesolving/wcs'
 import { activeProfile, cameraPlateSolving, imageAstrometrySettings, imagePlateSolving, profileState, setCameraPlateSolving, setImageAstrometrySettings, setImagePlateSolving } from '../profile/profile'
 import type { CameraIdentity } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -229,6 +229,7 @@ interface SolutionProps {
 // Centre, scale, orientation, and field of the solution shown.
 function Solution({ job, result, solution, fromHeader, resultError }: SolutionProps) {
 	const noSolution = job?.summary?.outcome === 'noSolution'
+	const topAngle = solution && imageTopPositionAngle(solution, fitsToViewer(Number(solution.CRPIX1), Number(solution.CRPIX2)))
 
 	return (
 		<CollapsibleSection id="images.plate-solver.solution" title="Solution">
@@ -238,7 +239,7 @@ function Solution({ job, result, solution, fromHeader, resultError }: SolutionPr
 					<Property label={`RA (${wcsFrame(solution)})`}>{formatRightAscension(solution.rightAscension)}</Property>
 					<Property label={`Dec (${wcsFrame(solution)})`}>{formatDeclination(solution.declination)}</Property>
 					<Property label="Pixel Scale">{toArcsec(solution.scale).toFixed(3)} ″/px</Property>
-					<Property label="Rotation">{toDeg(solution.orientation).toFixed(2)}°</Property>
+					<Property label="PA of Image Top">{topAngle === undefined ? MISSING : `${toDeg(topAngle).toFixed(2)}°`}</Property>
 					<Property label="Parity">{solution.parity === 'NORMAL' ? 'Normal' : 'Flipped'}</Property>
 					<Property label="Field of View">
 						{toArcmin(solution.width).toFixed(1)}′ × {toArcmin(solution.height).toFixed(1)}′
@@ -337,7 +338,7 @@ function Solutions({ documentKey, imageId, selected }: SolutionsProps) {
 		if (option === 'latest') return 'Latest solve'
 		if (option === 'header') return 'Image header'
 		const job = state.jobs[option]
-		return `${PROVIDER_LABELS[job.request.provider]} ${job.request.strategy} · ${new Date(job.queuedAt).toLocaleTimeString()}${job.summary?.outcome === 'noSolution' ? ' · no solution' : ''}`
+		return `${PROVIDER_LABELS[job.request.provider]} ${job.request.strategy} · ${new Date(job.queuedAt).toLocaleTimeString('en-GB')}${job.summary?.outcome === 'noSolution' ? ' · no solution' : ''}`
 	}
 
 	return (

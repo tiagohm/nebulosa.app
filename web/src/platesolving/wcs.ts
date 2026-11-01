@@ -128,6 +128,16 @@ export function skyDirections(solution: FitsHeader, point: Point): SkyDirections
 	return { ...(north && { north }), ...(east && { east }) }
 }
 
+// Returns the position angle of the top edge of the image as the viewer draws it, at a point: the direction of −Y, in
+// radians from north through east, [0, 2π). It is what Sky Framing calls the rotation, so an angle read here frames the
+// same field there. Undefined when the directions of the sky cannot be projected.
+export function imageTopPositionAngle(solution: FitsHeader, point: Point): number | undefined {
+	const { north, east } = skyDirections(solution, point)
+	if (!north || !east) return undefined
+	const angle = Math.atan2(-east.y, -north.y)
+	return angle < 0 ? angle + 2 * Math.PI : angle
+}
+
 // Returns the viewer point `angle` radians along the great circle that leaves a sky position (an equatorial unit vector)
 // along a unit vector tangent to the sphere there, or undefined behind the tangent plane.
 function pointAlong(solution: FitsHeader, position: UnitVector, tangent: UnitVector, angle: number): Point | undefined {

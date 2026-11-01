@@ -53,8 +53,8 @@ const timeFormatters = new Map<string, Intl.DateTimeFormat>()
 
 // Returns an instant (Unix milliseconds) as its date and time to the second in a time zone (empty for the
 // browser's), with the zone's name, such as "Sep 16, 1997, 18:47:11 UTC", so a time past midnight shows its day.
-export function formatEclipseTime(time: number, timeZone: string, locale?: string): string {
-	const key = `${locale ?? ''}|${timeZone}`
+export function formatEclipseTime(time: number, timeZone: string, locale: string = 'en-US'): string {
+	const key = `${locale}|${timeZone}`
 	let formatter = timeFormatters.get(key)
 
 	if (!formatter) {

@@ -150,7 +150,7 @@ interface FrameCardProps {
 function FrameCard({ card, selected, focusable, loading, error, restored, newer, onSelect }: FrameCardProps) {
 	const { frame } = card
 	const unavailable = frame ? frameUnavailableReason(frame) : undefined
-	const label = card.kind === 'latest' ? (restored ? 'Latest saved' : 'Latest') : `#${card.frame.generation}`
+	const label = card.kind === 'latest' ? (restored ? 'Latest saved' : 'Latest') : `#${card.frame.sequence}`
 	const state = unavailable ?? (error ? 'Error' : loading ? 'Loading…' : frame ? undefined : 'No frame yet')
 
 	return (
@@ -172,7 +172,7 @@ function FrameCard({ card, selected, focusable, loading, error, restored, newer,
 			</span>
 			<span className="flex items-baseline justify-between gap-1 text-ink-100">
 				<span className="truncate">{label}</span>
-				{card.kind === 'latest' && frame && <span className="text-ink-300">#{frame.generation}</span>}
+				{card.kind === 'latest' && frame && <span className="text-ink-300">#{frame.sequence}</span>}
 			</span>
 			<span className="flex items-baseline justify-between gap-1 text-ink-300">
 				<span>{frame ? timeOf(frame.time) : '—'}</span>

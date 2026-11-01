@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { arcsec, deg, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
-import { fitsToViewer, isotropicPixelScaleAt, pixelScaleAt, pointAt, skyAt, skyDirections, skyOffset, viewerToFits, wcsFrame } from './wcs'
+import { fitsToViewer, imageTopPositionAngle, isotropicPixelScaleAt, pixelScaleAt, pointAt, skyAt, skyDirections, skyOffset, viewerToFits, wcsFrame } from './wcs'
 
 // A TAN solution of a 200×100 image centred at its CRPIX, scale s degrees per pixel, rotated by angle (degrees) and
 // mirrored when flipped. Standard orientation (angle 0, not flipped) has east towards -X and north towards +Y.
@@ -21,6 +21,26 @@ function expected(header: FitsHeader, sky: readonly [number, number]) {
 	const length = Math.hypot(x, y)
 	return { x: x / length, y: y / length }
 }
+
+describe('position angle of the image top', () => {
+	test('is the sky direction of −Y, for a normal or a flipped image', () => {
+		for (const flipped of [false, true]) {
+			for (const angle of [0, 31, 123, 250]) {
+				const header = solution(40, 12, { angle, flipped })
+				const top = [-(header.CD1_2 as number), -(header.CD2_2 as number)] as const
+				const expectedAngle = Math.atan2(top[0], top[1])
+				const difference = imageTopPositionAngle(header, { x: 100, y: 50 })! - expectedAngle
+				expect(Math.abs(Math.atan2(Math.sin(difference), Math.cos(difference)))).toBeLessThan(1e-6)
+			}
+		}
+	})
+
+	test('stays within a full turn', () => {
+		const angle = imageTopPositionAngle(solution(40, 12, { angle: 123 }), { x: 100, y: 50 })!
+		expect(angle).toBeGreaterThanOrEqual(0)
+		expect(angle).toBeLessThan(2 * Math.PI)
+	})
+})
 
 describe('pixel convention', () => {
 	test('FITS pixel centres are half a pixel inside the viewer', () => {

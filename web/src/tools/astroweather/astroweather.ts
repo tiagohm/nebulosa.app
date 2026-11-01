@@ -261,8 +261,8 @@ const clockFormatters = new Map<string, Intl.DateTimeFormat>()
 
 // Returns the time of day of an instant in a time zone, optionally with the zone's name, whose offset tells apart an hour the
 // clocks repeat.
-export function formatClock(time: number, timeZone: string, named = false, locale?: string) {
-	const key = `${locale ?? ''}|${timeZone}|${named}`
+export function formatClock(time: number, timeZone: string, named = false, locale: string = 'en-US') {
+	const key = `${locale}|${timeZone}|${named}`
 	let formatter = clockFormatters.get(key)
 
 	if (!formatter) {

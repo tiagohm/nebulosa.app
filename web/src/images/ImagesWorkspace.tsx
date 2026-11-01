@@ -432,7 +432,7 @@ function CameraControls({ document, framesShown, onToggleFrames, reticle, onTogg
 			<span className="h-5 w-px bg-line-100" />
 			<span title={camera.error} className={cn('px-1 text-xs', camera.error ? 'text-danger' : following ? 'text-success' : 'text-accent')}>
 				{restored ? 'Latest saved' : SELECTION_LABELS[camera.selection.kind]}
-				{camera.shown && ` · #${camera.shown.frame.generation}`}
+				{camera.shown && ` · #${camera.shown.frame.sequence}`}
 			</span>
 			{!following && <IconButton icon="skipToEnd" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />}
 			<IconButton icon="images" label={framesShown ? 'Hide frames and focus curve' : 'Show frames and focus curve'} pressed={framesShown} onClick={onToggleFrames} />

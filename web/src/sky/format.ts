@@ -50,7 +50,7 @@ export function formatMagnitude(magnitude: number) {
 
 // Formats an instant (Unix milliseconds) as a local time with its time zone: "14:23 GMT-3". A time on
 // another day than `reference` also shows the date.
-export function formatLocalTime(time: number, reference: number = time, locale?: string, timeZone?: string) {
+export function formatLocalTime(time: number, reference: number = time, locale: string = 'en-US', timeZone?: string) {
 	const sameDay = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
 	const options: Intl.DateTimeFormatOptions = { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short' }
 	if (sameDay.format(time) !== sameDay.format(reference)) Object.assign(options, { month: 'short', day: 'numeric' })

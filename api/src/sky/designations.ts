@@ -258,6 +258,16 @@ const GREEK_LETTERS: readonly (readonly [string, string])[] = [
 const BAYER_LETTERS = new Map<string, string>()
 
 for (const [, abbreviation] of GREEK_LETTERS) BAYER_LETTERS.set(abbreviation.toLowerCase(), abbreviation)
+
+// The abbreviations of SIMBAD that differ from those of HYG.
+for (const [simbad, abbreviation] of [
+	['alf', 'Alp'],
+	['tet', 'The'],
+	['ksi', 'Xi'],
+]) {
+	BAYER_LETTERS.set(simbad, abbreviation)
+}
+
 for (const [name, abbreviation] of [
 	['alpha', 'Alp'],
 	['beta', 'Bet'],
@@ -276,8 +286,8 @@ for (const [name, abbreviation] of [
 ] as const)
 	BAYER_LETTERS.set(name, abbreviation)
 
-// Constellation by lowercase IAU abbreviation, such as "cma" → "CMA".
-const CONSTELLATIONS_BY_IAU = new Map<string, Constellation>(CONSTELLATION_LIST.map((c) => [CONSTELLATIONS[c].iau.toLowerCase(), c]))
+// Constellation by lowercase IAU abbreviation or genitive, such as "cma" or "canis majoris" → "CMA".
+const CONSTELLATIONS_BY_IAU = new Map<string, Constellation>(CONSTELLATION_LIST.flatMap((c) => [[CONSTELLATIONS[c].iau.toLowerCase(), c] as const, [CONSTELLATIONS[c].genitive.toLowerCase(), c] as const]))
 
 // Query keyword of a catalog, matched case-insensitively at the start of a query.
 interface CatalogKeyword {
@@ -370,17 +380,17 @@ export function parseDesignationQuery(query: string): ParsedDesignation[] {
 	return result
 }
 
-// Reads a Flamsteed ("58 Ori") or Bayer ("Alp CMa", "α CMa", "alpha CMa", "Pi1 Ori", "Pi-1 Ori")
-// designation followed by a constellation's IAU abbreviation; undefined for anything else.
+// Reads a Flamsteed ("58 Ori") or Bayer ("Alp CMa", "α CMa", "alpha CMa", "alf CMa", "Pi1 Ori", "Pi-1 Ori")
+// designation followed by a constellation's IAU abbreviation or genitive ("Alpha Centauri"); undefined for anything else.
 function parseStellarDesignation(text: string): ParsedDesignation | undefined {
-	const flamsteed = /^(\d+) ([A-Za-z]{3})$/.exec(text)
+	const flamsteed = /^(\d+) ([A-Za-z]{3,}(?: [A-Za-z]+)?)$/.exec(text)
 
 	if (flamsteed) {
 		const constellation = CONSTELLATIONS_BY_IAU.get(flamsteed[2].toLowerCase())
 		return constellation && { type: CATALOG.FLAMSTEED, name: flamsteed[1], constellation }
 	}
 
-	const match = /^([^\d\s-]+)[\s-]?(\d)? ([A-Za-z]{3})$/.exec(text)
+	const match = /^([^\d\s-]+)[\s-]?(\d)? ([A-Za-z]{3,}(?: [A-Za-z]+)?)$/.exec(text)
 	if (!match) return undefined
 
 	const constellation = CONSTELLATIONS_BY_IAU.get(match[3].toLowerCase())

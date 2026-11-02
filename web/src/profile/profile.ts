@@ -247,6 +247,15 @@ export function setLastSaveDirectory(state: ProfileState, directory: string) {
 	profile.settings.lastSaveDirectory = directory
 }
 
+// Returns the object parent holds at key, creating an empty one first. It is read back through parent, so in a valtio
+// store it is the proxy: an object created inside a literal that was just assigned to a proxy, as `(a[b] ??= {})[c] ??= {}`
+// creates the one at c, is never wrapped, and changing it later notifies no subscriber, the workspace synchronization
+// included.
+export function nestedObject<T extends object>(parent: Partial<Record<string, T>>, key: string): T {
+	parent[key] ??= {} as T
+	return parent[key]
+}
+
 // Returns the identity of a camera of a profile's saved connection, or undefined when the profile has no connection
 // selected or there is no camera.
 export function profileCamera(profile: Pick<Profile, 'connectionId'>, deviceId: string | undefined): CameraIdentity | undefined {
@@ -263,7 +272,7 @@ function cameraSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: Came
 function setCameraForm<K extends keyof CameraSettings>(state: ProfileState, camera: CameraIdentity | undefined, form: K, current: Readonly<NonNullable<CameraSettings[K]>>, patch: Partial<NonNullable<CameraSettings[K]>>) {
 	if (!camera) return
 	const profile = activeProfile(state)
-	const settings = ((profile.settings.cameras[camera.connectionId] ??= {})[camera.deviceId] ??= {})
+	const settings = nestedObject(nestedObject(profile.settings.cameras, camera.connectionId), camera.deviceId)
 	settings[form] = JSON.parse(JSON.stringify({ ...current, ...patch })) as CameraSettings[K]
 }
 
@@ -746,8 +755,8 @@ export function mountRemoteBinding(settings: Pick<ProfileSettings, 'mountRemoteC
 export function setMountRemoteBinding(state: ProfileState, mount: CameraIdentity | undefined, protocol: MountRemoteProtocol, binding: MountRemoteBinding) {
 	if (!mount) return
 	const profile = activeProfile(state)
-	const mounts = ((profile.settings.mountRemoteControl ??= {})[mount.connectionId] ??= {})
-	;(mounts[mount.deviceId] ??= {})[protocol] = { host: binding.host, port: binding.port }
+	profile.settings.mountRemoteControl ??= {}
+	nestedObject(nestedObject(profile.settings.mountRemoteControl, mount.connectionId), mount.deviceId)[protocol] = { host: binding.host, port: binding.port }
 }
 
 // Marks notifications as read in the active profile, which the synchronization adds to what the server keeps for it.

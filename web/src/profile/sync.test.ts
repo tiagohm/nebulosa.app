@@ -2,7 +2,24 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import type { ProfileRecord, WorkspaceSnapshot } from 'api'
 import { proxy, snapshot } from 'valtio'
 import { type ConnectionState, removeConnection, saveConnection } from '../connection/connection'
-import { assignDevice, createProfile, deleteFramingReference, dismissNotifications, markNotificationsRead, deleteProfile, forgetConnection, type ProfileState, saveFramingReference, selectConnection, setExposureSettings, setFramingVisible, setPanelOpen, setSkyObserver, setTelescopeOptics } from './profile'
+import {
+	assignDevice,
+	createProfile,
+	deleteFramingReference,
+	dismissNotifications,
+	markNotificationsRead,
+	deleteProfile,
+	forgetConnection,
+	type ProfileState,
+	saveFramingReference,
+	selectConnection,
+	setExposureSettings,
+	setFramingVisible,
+	setMountRemoteBinding,
+	setPanelOpen,
+	setSkyObserver,
+	setTelescopeOptics,
+} from './profile'
 import { PROFILE_SETTINGS_VERSION } from './schema'
 import { WorkspaceSync, type WorkspaceSyncState } from './sync'
 
@@ -129,6 +146,46 @@ describe('writes', () => {
 		setFramingVisible(profiles, false)
 		await settle(sync)
 		expect(sent).toHaveLength(1)
+	})
+
+	test('camera forms and bindings are written on every edit, whether the server or the tab created them', async () => {
+		const workspace: WorkspaceSnapshot = {
+			connections: [{ id: 'c1', name: 'Simulator', type: 'SIMULATOR', host: '', port: 7624, revision: 1 }],
+			profiles: [
+				record('p1', {
+					connectionId: 'c1',
+					cameras: { c1: { cam: { exposure: { version: PROFILE_SETTINGS_VERSION, value: { exposureTime: 5 }, revision: 2 } } } },
+					mountBindings: { c1: { mount: { lx200: { host: '0.0.0.0', port: 4030 } } } },
+				}),
+			],
+		}
+		const { profiles, sync, sent } = setup(workspace)
+		await sync.refresh()
+		const written = () => sent.map(({ path, body }) => `${path} ${JSON.stringify(body)}`)
+
+		for (const exposureTime of [7, 8]) {
+			setExposureSettings(profiles, { connectionId: 'c1', deviceId: 'cam' }, { exposureTime })
+			await settle(sync)
+		}
+
+		for (const exposureTime of [1, 2]) {
+			setExposureSettings(profiles, { connectionId: 'c1', deviceId: 'other' }, { exposureTime })
+			await settle(sync)
+		}
+
+		for (const port of [5000, 5001]) {
+			setMountRemoteBinding(profiles, { connectionId: 'c1', deviceId: 'mount' }, 'lx200', { host: '0.0.0.0', port })
+			await settle(sync)
+		}
+
+		expect(written()).toEqual([
+			'/api/profiles/p1/cameras/c1/cam/exposure {"version":1,"value":{"exposureTime":7},"revision":2}',
+			'/api/profiles/p1/cameras/c1/cam/exposure {"version":1,"value":{"exposureTime":8},"revision":3}',
+			'/api/profiles/p1/cameras/c1/other/exposure {"version":1,"value":{"exposureTime":1,"gain":0,"offset":0,"binX":1,"binY":1,"subframe":false,"x":0,"y":0,"width":0,"height":0,"frameFormat":""},"revision":0}',
+			'/api/profiles/p1/cameras/c1/other/exposure {"version":1,"value":{"exposureTime":2,"gain":0,"offset":0,"binX":1,"binY":1,"subframe":false,"x":0,"y":0,"width":0,"height":0,"frameFormat":""},"revision":1}',
+			'/api/profiles/p1/mount-bindings/c1/mount/lx200 {"host":"0.0.0.0","port":5000}',
+			'/api/profiles/p1/mount-bindings/c1/mount/lx200 {"host":"0.0.0.0","port":5001}',
+		])
 	})
 
 	test('a new connection is saved before the profile that works with it and its equipment', async () => {

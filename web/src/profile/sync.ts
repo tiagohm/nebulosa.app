@@ -2,7 +2,7 @@ import type { MountRemoteProtocol, ProfileCameraForm, ProfilePreferenceKey, Prof
 import { proxy, snapshot, subscribe } from 'valtio'
 import type { Connection, ConnectionState } from '../connection/connection'
 import { jsonInit } from '../http'
-import { newProfile, type ProfileState } from './profile'
+import { nestedObject, newProfile, type ProfileState } from './profile'
 import { type CameraSettings, type FramingReference, type MountRemoteBinding, type Profile, PROFILE_SETTINGS_VERSION, type ProfileSettings, type SkyFramingSettings, type SkySettings } from './schema'
 
 // Synchronization of the workspace (the saved connections and the profiles) with the server, which keeps it for every
@@ -583,8 +583,8 @@ export class WorkspaceSync {
 			const [connectionId, deviceId, protocol] = JSON.parse(binding) as [string, string, MountRemoteProtocol]
 			if (this.#busy(unitKey({ kind: 'binding', profileId, connectionId, deviceId, protocol }))) continue
 			const stored = record.mountBindings[connectionId]?.[deviceId]?.[protocol]
-			const mounts = (settings.mountRemoteControl ??= {})
-			const protocols = ((mounts[connectionId] ??= {})[deviceId] ??= {})
+			settings.mountRemoteControl ??= {}
+			const protocols = nestedObject(nestedObject(settings.mountRemoteControl, connectionId), deviceId)
 			if (stored) protocols[protocol] = { host: stored.host, port: stored.port } satisfies MountRemoteBinding
 			else delete protocols[protocol]
 		}
@@ -634,6 +634,6 @@ export class WorkspaceSync {
 			return
 		}
 
-		Object.assign(((cameras[unit.connectionId] ??= {})[unit.deviceId] ??= {}), { [form]: structuredClone(value) })
+		Object.assign(nestedObject(nestedObject(cameras, unit.connectionId), unit.deviceId), { [form]: structuredClone(value) })
 	}
 }

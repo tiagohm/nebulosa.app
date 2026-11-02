@@ -3,7 +3,7 @@ import { cn } from 'cn'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 // oxfmt-ignore
-import { buildMaster, CALIBRATION_PAGE_SIZE, calibrationLibraryRuntime, cancelCalibrationImport, commitCalibrationImport, deleteCalibrationGroup, deleteCalibrationMaster, deleteCalibrationSource, excludeCalibrationSource, jobEnded, latestGroupJob, loadCalibrationGroup, loadCalibrationGroups, loadCalibrationMaster, loadCalibrationMasters, loadCalibrationSource, loadCalibrationSources, loadImportCandidates, overrideCalibrationSource, preferMaster, refreshCalibrationFiles, startCalibrationImport, validateRecipe } from '../../calibrationlibrary/calibrationlibrary'
+import { buildMaster, CALIBRATION_PAGE_SIZE, calibrationLibraryRuntime, cancelCalibrationImport, commitCalibrationImport, deleteCalibrationGroup, deleteCalibrationMaster, deleteCalibrationSource, excludeCalibrationSource, jobEnded, latestGroupJob, loadCalibrationGroup, loadCalibrationGroups, loadCalibrationMaster, loadCalibrationMasters, loadCalibrationSource, loadCalibrationSources, loadFlatCorrections, loadImportCandidates, overrideCalibrationSource, preferMaster, refreshCalibrationFiles, startCalibrationImport, validateRecipe } from '../../calibrationlibrary/calibrationlibrary'
 import { Actions, ConfirmButton, Notice } from '../../equipment-control/parts'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { imagesState, openImage } from '../../images/images'
@@ -420,8 +420,8 @@ function BuildForm({ groupId, kind }: { readonly groupId: string; readonly kind:
 		if (kind !== 'flat') return
 		let current = true
 
-		void Promise.all(['darkFlat', 'bias'].map(async (each) => ((await (await fetch(`/api/calibration-library/masters?kind=${each}&limit=100`)).json()) as Page<CalibrationMasterSummary>).items)).then((lists) => {
-			if (current) setCorrections(lists.flat())
+		void loadFlatCorrections().then((masters) => {
+			if (current) setCorrections(masters)
 		})
 
 		return () => {

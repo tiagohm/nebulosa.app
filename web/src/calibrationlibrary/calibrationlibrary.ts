@@ -171,6 +171,18 @@ export function loadCalibrationMasters(state: CalibrationLibraryRuntime, filter:
 	})
 }
 
+// Kinds of the masters that can correct a flat.
+const FLAT_CORRECTION_KINDS = ['darkFlat', 'bias'] as const
+
+// Most masters of each kind offered to correct a flat.
+const FLAT_CORRECTIONS_LIMIT = 100
+
+// Fetches the masters that can correct a flat, dark-flats first, then biases; a kind that cannot be fetched offers none.
+export async function loadFlatCorrections(request: typeof fetch = fetch): Promise<CalibrationMasterSummary[]> {
+	const pages = await Promise.all(FLAT_CORRECTION_KINDS.map((kind) => fetchJson<Page<CalibrationMasterSummary>>(`${BASE_URL}/masters?kind=${kind}&limit=${FLAT_CORRECTIONS_LIMIT}`, request)))
+	return pages.flatMap((page) => page?.items ?? [])
+}
+
 // Fetches a group and its frames; one the server does not know is forgotten.
 export async function loadCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string | undefined, request: typeof fetch = fetch) {
 	state.group = groupId === undefined ? undefined : await fetchJson<CalibrationGroupDetail>(`${BASE_URL}/groups/${encodeURIComponent(groupId)}`, request)

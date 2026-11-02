@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { CalibrationJobSummary, CalibrationLibrarySnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { buildMaster, type CalibrationLibraryRuntime, handleCalibrationLibraryEvent, jobEnded, latestGroupJob, loadCalibrationGroups, refreshCalibrationLibrary } from './calibrationlibrary'
+import { buildMaster, type CalibrationLibraryRuntime, handleCalibrationLibraryEvent, jobEnded, latestGroupJob, loadCalibrationGroups, loadFlatCorrections, refreshCalibrationLibrary } from './calibrationlibrary'
 
 function runtime() {
 	return proxy<CalibrationLibraryRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
@@ -90,6 +90,18 @@ describe('requests', () => {
 		resolvers[0](Response.json({ items: [], total: 1 }))
 		await Promise.all([first, second])
 		expect(state.groups?.total).toBe(2)
+	})
+
+	test('the corrections of a flat are the dark-flats then the biases, and a kind that fails offers none', async () => {
+		const urls: string[] = []
+		const request = ((url: string) => {
+			urls.push(url)
+			return Promise.resolve(url.includes('kind=bias') ? Response.json({ error: 'Busy', code: 'busy' }, { status: 503 }) : Response.json({ items: [{ masterId: 'df', revision: 1 }], total: 1 }))
+		}) as unknown as typeof fetch
+
+		expect(await loadFlatCorrections(request)).toEqual([{ masterId: 'df', revision: 1 }] as never)
+		expect(urls).toEqual(['/api/calibration-library/masters?kind=darkFlat&limit=100', '/api/calibration-library/masters?kind=bias&limit=100'])
+		expect(await loadFlatCorrections((() => Promise.reject(new Error('offline'))) as unknown as typeof fetch)).toEqual([])
 	})
 
 	test('a refused master leaves its reason', async () => {

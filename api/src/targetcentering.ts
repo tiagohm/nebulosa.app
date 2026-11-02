@@ -16,6 +16,7 @@ import { toMeter } from 'nebulosa/src/math/units/distance'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureTime, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
 import { type CenteringCorrection, type CenteringFrame, type CenteringMeasurement, type CenteringObserver, type CenteringOptions, type CenteringStep, type CenteringTarget, centerTarget } from 'nebulosa/src/observation/mount/centering'
+import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
 import { busy, type ClientResolver, type CommandErrorCode, type CommandRequest, connectedDevice, notFound, unsupported } from './commands'
@@ -326,10 +327,8 @@ function appendWarning(warnings: readonly string[], warning: string) {
 
 // Target Centering sessions of the cameras of the open connections.
 export class TargetCenteringSessions {
-	// Latest session of each camera, by camera resource key.
-	readonly #sessions = new Map<string, Session>()
-	// Session of each operation a command token started, so a repeated start answers it.
-	readonly #byOperation = new Map<string, Session>()
+	// Latest session of each camera, and the session each start token started.
+	readonly #sessions: CameraSessionRegistry<TargetCenteringSessionSummary, Session>
 
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every session,
 	// mounts sends the first slew and judges each motion, commander runs the corrections and the tracking (the one of the mount
@@ -350,16 +349,18 @@ export class TargetCenteringSessions {
 		readonly guiding: TargetCenteringGuiding,
 		readonly listener: TargetCenteringListener,
 		readonly auxiliaryDir: string = tmpdir(),
-	) {}
+	) {
+		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'targetCentering:updated', session }))
+	}
 
 	// Returns the latest session of every camera.
 	snapshot(): TargetCenteringSnapshot {
-		return { sessions: Array.from(this.#sessions.values(), (session) => session.summary) }
+		return { sessions: this.#sessions.summaries() }
 	}
 
 	// Responds with the complete record of a session, or 404 when it is not the latest of its camera.
 	session(sessionId: string): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		return session ? Response.json({ ...session.summary, solutions: Object.fromEntries(session.solutions) } satisfies TargetCenteringSession) : notFound('Session')
 	}
 
@@ -369,14 +370,14 @@ export class TargetCenteringSessions {
 	// guiding may pulse the mount; and 422 when the plate solver is not configured, the mount cannot serve the mode, or the
 	// target is below the horizon of the site the mount reports.
 	async start(connectionId: string, deviceId: string, request: TargetCenteringRequest): Promise<Response> {
-		const repeated = this.#repeated(request.token)
+		const repeated = this.#sessions.repeated(request.token)
 		if (repeated) return this.#accepted(repeated)
 
 		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
 		const preparation = await this.plateSolving.prepare(request.solving)
 		if (!preparation) return unsupported('The plate solver is not configured; set it up in Settings → External Tools')
 
-		const raced = this.#repeated(request.token)
+		const raced = this.#sessions.repeated(request.token)
 		if (raced) return this.#accepted(raced)
 
 		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
@@ -403,7 +404,7 @@ export class TargetCenteringSessions {
 		if (!this.operations.available(camera) || (runs.length === 0 && !this.operations.available(mount))) return busy()
 
 		const key = resourceKey(camera)
-		const previous = this.#sessions.get(key)
+		const previous = this.#sessions.of(key)
 		if (previous && previous.summary.endedAt === undefined) return errorResponse('The camera has a centering session that did not end', 409, 'busy')
 
 		const { token, ...settings } = request
@@ -438,17 +439,13 @@ export class TargetCenteringSessions {
 			suspensions: [],
 		}
 
-		if (previous) this.#byOperation.delete(previous.summary.operationId)
-		this.#sessions.set(key, session)
-
 		const record = this.operations.run('mount.targetCentering', [session.summary.camera, session.summary.mount], token, () => {
 			const handle = this.#run(session)
 			session.handle = handle
 			return handle.result
 		})
 
-		this.#byOperation.set(record.operationId, session)
-		this.#update(session, { operationId: record.operationId })
+		this.#sessions.adopt(key, session, record.operationId)
 		void session.handle!.result.then((result) => this.#operationEnded(session, result))
 		return this.#accepted(session)
 	}
@@ -456,13 +453,13 @@ export class TargetCenteringSessions {
 	// Stops a session. Answers at once, because a camera may stay held for minutes while its frame arrives; the end arrives as an
 	// event. A blocked session is dismissed. Responds 202, also when it already ended, and 404 for an unknown session.
 	stop(sessionId: string): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session) return notFound('Session')
 
 		if (session.summary.state === 'blocked') this.#finish(session, 'cancelled', false)
 		else if (session.summary.endedAt === undefined) {
 			session.intent = 'stop'
-			this.#update(session, { state: 'stopping', step: undefined, exposure: undefined })
+			this.#sessions.update(session, { state: 'stopping', step: undefined, exposure: undefined })
 			void session.handle?.cancel('aborted')
 			session.restoring?.abort()
 		}
@@ -485,7 +482,7 @@ export class TargetCenteringSessions {
 	// Stops the guiding the session found, keeping what it stopped so it is restored whatever comes next.
 	async #stopGuiding(session: Session): Promise<OperationResult<void>> {
 		for (const sessionId of session.guidingRuns) {
-			this.#update(session, { state: 'running', step: 'stoppingGuiding' })
+			this.#sessions.update(session, { state: 'running', step: 'stoppingGuiding' })
 			const stopped = await this.guiding.suspendForMotion(sessionId)
 			if (!stopped.ok) return stopped
 			session.suspensions.push(stopped.value)
@@ -500,14 +497,14 @@ export class TargetCenteringSessions {
 
 		const restoring = new AbortController()
 		session.restoring = restoring
-		this.#update(session, { state: session.intent === 'stop' ? 'stopping' : 'running', step: 'restoringGuiding', exposure: undefined })
+		this.#sessions.update(session, { state: session.intent === 'stop' ? 'stopping' : 'running', step: 'restoringGuiding', exposure: undefined })
 
 		const outcomes: GuidingRestoration[] = []
 		for (const suspension of session.suspensions) outcomes.push(await this.guiding.restoreAfterMotion(suspension, restoring.signal))
 
 		session.restoring = undefined
 		const guidingRestoration = outcomes.find((outcome) => outcome === 'failed') ?? outcomes.find((outcome) => outcome === 'externallyChanged') ?? 'restored'
-		this.#update(session, { guidingRestoration })
+		this.#sessions.update(session, { guidingRestoration })
 		if (guidingRestoration === 'failed') this.#warn(session, 'Guiding could not be restored; start it again in Images → Guiding.')
 		else if (guidingRestoration === 'externallyChanged') this.#warn(session, 'Guiding was changed during the session, so it was left as it is.')
 	}
@@ -522,7 +519,7 @@ export class TargetCenteringSessions {
 			if (mode !== 'verifyOnly' && !mount.tracking) {
 				const started = await this.commander.setTracking(context, mount, true)
 				if (!started.ok) return started
-				this.#update(session, { trackingStarted: true })
+				this.#sessions.update(session, { trackingStarted: true })
 			}
 
 			if (this.#slews(session)) {
@@ -571,21 +568,21 @@ export class TargetCenteringSessions {
 		const { mount, observer } = session
 		const { rightAscension, declination } = session.summary.request.target
 
-		this.#update(session, { state: 'running', step: 'slewing' })
+		this.#sessions.update(session, { state: 'running', step: 'slewing' })
 
 		const sent = await this.mounts.goToWithin(context, mount, j2000Target(rightAscension, declination), observer, { timeout: SLEW_TIMEOUT })
 
 		if (sent.status === 'refused') {
-			this.#update(session, { refusal: refusalOf(sent.code) })
+			this.#sessions.update(session, { refusal: refusalOf(sent.code) })
 			return failedOperationResult('commandFailed', sent.error)
 		}
 
-		if (sent.correction) this.#update(session, { model: sent.correction })
+		if (sent.correction) this.#sessions.update(session, { model: sent.correction })
 		if (!sent.result.ok) return sent.result
 
 		session.commanded = true
 		session.pierSide = mount.pierSide
-		this.#update(session, { step: 'settling' })
+		this.#sessions.update(session, { step: 'settling' })
 		return await abortableDelay(session.summary.request.settleDelay * 1000, context.signal)
 	}
 
@@ -613,11 +610,11 @@ export class TargetCenteringSessions {
 	#observer(session: Session): CenteringObserver {
 		return {
 			step: (step, attempt) => {
-				if (step === 'exposing') this.#update(session, { state: 'running', step, attempts: [...session.summary.attempts, { attempt }] })
-				else this.#update(session, { step, exposure: undefined })
+				if (step === 'exposing') this.#sessions.update(session, { state: 'running', step, attempts: [...session.summary.attempts, { attempt }] })
+				else this.#sessions.update(session, { step, exposure: undefined })
 			},
 			measured: (measurement) => this.#measured(session, measurement),
-			captureListener: exposureProgressListener((exposure) => this.#update(session, { exposure })),
+			captureListener: exposureProgressListener((exposure) => this.#sessions.update(session, { exposure })),
 			beforeCorrection: (correction) => this.#beforeCorrection(session, correction),
 		}
 	}
@@ -632,7 +629,7 @@ export class TargetCenteringSessions {
 
 		session.solutions.set(attempt, solution)
 		this.#updateAttempt(session, attempt, { outcome: 'solved', solved: { rightAscension: solution.rightAscension, declination: solution.declination }, separation, dx, dy })
-		this.#update(session, { finalSeparation: separation })
+		this.#sessions.update(session, { finalSeparation: separation })
 	}
 
 	// Decides whether a correction may go, and records it when it does. Returns why it may not.
@@ -641,7 +638,7 @@ export class TargetCenteringSessions {
 		const { maximumCorrection } = session.summary.request
 
 		const refuse = (refusal: TargetCenteringRefusal, error: string) => {
-			this.#update(session, { refusal })
+			this.#sessions.update(session, { refusal })
 			return error
 		}
 
@@ -713,7 +710,7 @@ export class TargetCenteringSessions {
 
 		if (!result.ok && mount.connected && !isDeviceQuiescent(mount)) {
 			const guidingRestoration = session.suspensions.length > 0 ? 'failed' : 'notNeeded'
-			return this.#update(session, { state: 'blocked', step: undefined, exposure: undefined, guidingRestoration, reason: result.reason, error: `${mount.name} could not be confirmed stopped` })
+			return this.#sessions.update(session, { state: 'blocked', step: undefined, exposure: undefined, guidingRestoration, reason: result.reason, error: `${mount.name} could not be confirmed stopped` })
 		}
 
 		await this.#restoreGuiding(session)
@@ -724,7 +721,7 @@ export class TargetCenteringSessions {
 
 		if (session.summary.trackingStarted) {
 			const stopped = !mount.tracking || (mount.connected && this.operations.available(mount) && (await this.commander.setTracking(this.operations.coordinator, mount, false)).ok)
-			if (stopped) this.#update(session, { trackingStopped: true })
+			if (stopped) this.#sessions.update(session, { trackingStopped: true })
 			else this.#warn(session, `The tracking of ${mount.name} that the session started was left on.`)
 		}
 
@@ -735,13 +732,7 @@ export class TargetCenteringSessions {
 	#finish(session: Session, state: Extract<TargetCenteringState, 'completed' | 'failed' | 'cancelled'>, positionVerified: boolean, failure?: Pick<TargetCenteringSessionSummary, 'reason' | 'error'>) {
 		const { guidingRestoration } = session.summary
 		const readyForImaging = positionVerified && (guidingRestoration === 'notNeeded' || guidingRestoration === 'restored')
-		this.#update(session, { state, step: undefined, exposure: undefined, positionVerified, readyForImaging, endedAt: Date.now(), ...failure })
-	}
-
-	// Returns the session of a token already used.
-	#repeated(token: string) {
-		const known = this.operations.started(token)
-		return known && this.#byOperation.get(known.operationId)
+		this.#sessions.update(session, { state, step: undefined, exposure: undefined, positionVerified, readyForImaging, endedAt: Date.now(), ...failure })
 	}
 
 	// Responds that a session was accepted.
@@ -751,24 +742,12 @@ export class TargetCenteringSessions {
 
 	// Records a warning of a session.
 	#warn(session: Session, warning: string) {
-		this.#update(session, { warnings: appendWarning(session.summary.warnings, warning) })
-	}
-
-	// Returns the latest session with this id.
-	#find(sessionId: string): Session | undefined {
-		for (const session of this.#sessions.values()) if (session.summary.sessionId === sessionId) return session
-		return undefined
+		this.#sessions.update(session, { warnings: appendWarning(session.summary.warnings, warning) })
 	}
 
 	// Replaces fields of one attempt of a session.
 	#updateAttempt(session: Session, attempt: number, patch: Partial<TargetCenteringAttempt>) {
-		this.#update(session, { attempts: session.summary.attempts.map((each) => (each.attempt === attempt ? { ...each, ...patch } : each)) })
-	}
-
-	// Publishes a changed session with the next revision.
-	#update(session: Session, patch: Partial<TargetCenteringSessionSummary>) {
-		session.summary = { ...session.summary, ...patch, revision: session.summary.revision + 1 }
-		this.listener({ type: 'targetCentering:updated', session: session.summary })
+		this.#sessions.update(session, { attempts: session.summary.attempts.map((each) => (each.attempt === attempt ? { ...each, ...patch } : each)) })
 	}
 }
 

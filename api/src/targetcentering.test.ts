@@ -472,6 +472,8 @@ describe('target centering sessions', () => {
 		const steps = events.map((event) => event.session.step)
 		expect(steps.indexOf('stoppingGuiding')).toBeLessThan(steps.indexOf('slewing'))
 		expect(steps.lastIndexOf('restoringGuiding')).toBeGreaterThan(steps.lastIndexOf('solving'))
+		// The guiding is stopped as the operation starts, and that change is published with the operation it belongs to.
+		expect(events.every((event) => event.session.operationId !== '')).toBeTrue()
 	})
 
 	test('a position verified with guiding that did not come back is not ready for imaging', async () => {

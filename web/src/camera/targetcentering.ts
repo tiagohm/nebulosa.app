@@ -1,12 +1,13 @@
-import type { CameraCapabilities, MountState, ServerEvent, TargetCenteringGuidingRestoration, TargetCenteringMode, TargetCenteringRequest, TargetCenteringSession, TargetCenteringSessionSummary, TargetCenteringSnapshot, TargetCenteringState, TargetCenteringStep } from 'api'
+import type { CameraCapabilities, MountState, ServerEvent, TargetCenteringGuidingRestoration, TargetCenteringMode, TargetCenteringRequest, TargetCenteringSession, TargetCenteringSessionSummary, TargetCenteringState, TargetCenteringStep } from 'api'
 import { nanoid } from 'nanoid'
 import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit, responseError } from '../http'
+import { deviceUrl } from '../http'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, TargetCenteringSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
+import { applySession, type CameraSessionKind, type CameraSessionRecords, loadSessionRecord, refreshSessionRecords, sendSessionCommand } from './sessions'
 
 // Target Centering sessions as this tab knows them. The server owns every session, whichever tab started it, and every
 // motion, exposure, and solve of it, so this store only mirrors it: the summary of the latest session of each camera arrives
@@ -28,24 +29,21 @@ export interface TargetCenteringDraft {
 }
 
 // Target Centering state of the tab.
-export interface TargetCenteringRuntime {
-	// Latest session of each camera, by camera key (cameraKey).
-	sessions: Record<string, TargetCenteringSessionSummary>
-	// Complete record of each session fetched so far, by session id.
-	details: Record<string, TargetCenteringSession>
+export interface TargetCenteringRuntime extends CameraSessionRecords<TargetCenteringSessionSummary, TargetCenteringSession> {
 	// Target being edited for each camera, by camera key.
 	drafts: Record<string, TargetCenteringDraft>
-	// Cameras with a command of this tab waiting for the server.
-	pending: Record<string, boolean>
-	// Why this tab's last command to a camera failed; cleared by its next command.
-	errors: Record<string, string>
 }
 
 // Target Centering state of the tab.
 export const targetCenteringRuntime = proxy<TargetCenteringRuntime>({ sessions: {}, details: {}, drafts: {}, pending: {}, errors: {} })
 
-// Refreshes of the sessions, by camera key.
-const refreshes = new SnapshotRefreshes()
+// How the sessions are mirrored (sessions.ts): the complete record is fetched again when the summary reports a new
+// solution or an end.
+const TARGET_CENTERING_SESSIONS: CameraSessionKind<TargetCenteringSessionSummary, TargetCenteringSession> = {
+	url: '/api/target-centering',
+	refreshes: new SnapshotRefreshes(),
+	stale: (session, _, details) => !details || solvedCount(details) !== solvedCount(session) || (session.endedAt !== undefined && details.endedAt === undefined),
+}
 
 // Label of each session state.
 export const TARGET_CENTERING_STATE_LABELS: Readonly<Record<TargetCenteringState, string>> = {
@@ -153,85 +151,29 @@ export function bullseyeRing(distance: number): number {
 	return BULLSEYE_STEPS.find((step) => step * BULLSEYE_RINGS >= distance) ?? BULLSEYE_STEPS.at(-1)!
 }
 
-// Fetches the complete record of a session; a record older than the one known (a late response) never replaces it, and a
-// session the server no longer keeps is forgotten.
-export async function loadTargetCenteringSession(state: TargetCenteringRuntime, sessionId: string, request: typeof fetch = fetch) {
-	try {
-		const response = await request(`/api/target-centering/${encodeURIComponent(sessionId)}`)
-
-		if (response.status === 404) {
-			delete state.details[sessionId]
-			return
-		}
-
-		if (!response.ok) return
-		const session = (await response.json()) as TargetCenteringSession
-		const known = state.details[sessionId]
-		if (!known || session.revision > known.revision) state.details[sessionId] = session
-	} catch {
-		// The server is unreachable; the next socket open refreshes the sessions.
-	}
+// Returns the number of attempts of a session that were solved.
+function solvedCount({ attempts }: Pick<TargetCenteringSessionSummary, 'attempts'>) {
+	return attempts.filter(({ outcome }) => outcome === 'solved').length
 }
 
-// Applies a Target Centering event; any other event is ignored. A session older than the one known for its camera, or an
-// earlier revision of the same one, never replaces it. The complete record is fetched again when the summary reports a new
-// solution or an end.
+// Fetches the complete record of a session (loadSessionRecord).
+export function loadTargetCenteringSession(state: TargetCenteringRuntime, sessionId: string, request: typeof fetch = fetch) {
+	return loadSessionRecord(state, TARGET_CENTERING_SESSIONS, sessionId, request)
+}
+
+// Applies a Target Centering event (applySession); any other event is ignored.
 export function handleTargetCenteringEvent(state: TargetCenteringRuntime, event: ServerEvent, request: typeof fetch = fetch) {
-	if (event.type !== 'targetCentering:updated') return
-
-	const { session } = event
-	const key = cameraKey(session.camera.connectionId, session.camera.deviceId)
-	const known = state.sessions[key]
-	if (known && known.sessionId !== session.sessionId && known.startedAt > session.startedAt) return
-	if (known?.sessionId === session.sessionId && known.revision >= session.revision) return
-
-	refreshes.updated(key)
-	state.sessions[key] = session
-	if (known?.sessionId !== session.sessionId) for (const id of Object.keys(state.details)) if (id !== session.sessionId) delete state.details[id]
-
-	const details = state.details[session.sessionId]
-	const solved = (each: Pick<TargetCenteringSessionSummary, 'attempts'>) => each.attempts.filter(({ outcome }) => outcome === 'solved').length
-	if (!details || solved(details) !== solved(session) || (session.endedAt !== undefined && details.endedAt === undefined)) void loadTargetCenteringSession(state, session.sessionId, request)
+	if (event.type === 'targetCentering:updated') applySession(state, TARGET_CENTERING_SESSIONS, event.session, request)
 }
 
-// Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, leaving what an event
-// changed meanwhile, and fetches their complete records.
-export async function refreshTargetCentering(state: TargetCenteringRuntime, request: typeof fetch = fetch) {
-	const token = refreshes.start()
-
-	try {
-		const response = await request('/api/target-centering')
-		if (!response.ok || !refreshes.current(token)) return
-		const snapshot = (await response.json()) as TargetCenteringSnapshot
-		if (!refreshes.current(token)) return
-
-		state.sessions = refreshes.merge(state.sessions, snapshot.sessions, ({ camera }) => cameraKey(camera.connectionId, camera.deviceId))
-		const kept = Object.values(state.sessions).map(({ sessionId }) => sessionId)
-		for (const id of Object.keys(state.details)) if (!kept.includes(id)) delete state.details[id]
-		for (const id of kept) void loadTargetCenteringSession(state, id, request)
-	} catch {
-		// The server is unreachable; the next socket open refreshes the sessions.
-	} finally {
-		refreshes.end(token)
-	}
+// Replaces the sessions with the server's snapshot and fetches their complete records (refreshSessionRecords).
+export function refreshTargetCentering(state: TargetCenteringRuntime, request: typeof fetch = fetch) {
+	return refreshSessionRecords(state, TARGET_CENTERING_SESSIONS, request)
 }
 
-// Sends a command of a camera and records its failure. When the server cannot be reached, the command may still have been
-// applied, so the snapshot is fetched again instead of assuming nothing happened.
-async function command(state: TargetCenteringRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
-	if (state.pending[key]) return
-	state.pending[key] = true
-	delete state.errors[key]
-
-	try {
-		const response = await request(url, jsonInit('POST', body))
-		if (!response.ok) state.errors[key] = await responseError(response)
-	} catch {
-		state.errors[key] = 'Unable to reach the server.'
-		await refreshTargetCentering(state, request)
-	} finally {
-		delete state.pending[key]
-	}
+// Sends a command of a camera (sendSessionCommand).
+function command(state: TargetCenteringRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
+	return sendSessionCommand(state, key, url, body, () => refreshTargetCentering(state, request), request)
 }
 
 // Starts a session with a camera; its progress arrives as events.

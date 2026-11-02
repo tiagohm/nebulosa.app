@@ -1,8 +1,7 @@
-import type { CameraCapabilities, CaptureSnoop, DarkGroup, DarkLibraryWizardGroupRun, DarkLibraryWizardPendingStep, DarkLibraryWizardSessionSummary, DarkPlanSummary, DeviceSummary } from 'api'
+import type { CameraCapabilities, CaptureSnoop, DarkGroup, DarkLibraryWizardGroupRun, DarkLibraryWizardPendingStep, DarkLibraryWizardSessionSummary, DeviceSummary } from 'api'
 import { cn } from 'cn'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { calibrationLibraryRuntime, planMasterJobs } from '../calibrationlibrary/calibrationlibrary'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { Notice } from '../equipment-control/parts'
@@ -14,32 +13,25 @@ import { operationsState } from '../operations'
 import { activeProfile, darkLibraryWizardSettings, exposureSettings, profileState, setDarkLibraryWizardSettings } from '../profile/profile'
 import { type CameraIdentity, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS, DEFAULT_DARK_LIBRARY_WIZARD_GROUP, type DarkLibraryWizardSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
-import { navigate, routeState } from '../shell/route'
-import { JOB_STATE_LABELS, JOB_STATE_TONES } from '../tools/calibrationlibrary/library'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { IconButton } from '../ui/IconButton'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
-import { StatusBadge } from '../ui/StatusBadge'
 import { TextInput } from '../ui/TextInput'
 import { cameraKey } from './capture'
 import {
-	completeDarkPlan,
 	continueDarkLibraryWizard,
 	DARK_LIBRARY_WIZARD_STATE_LABELS,
-	DARK_PLAN_STATUS_LABELS,
 	DARK_SUSPICION_LABELS,
 	darkLibraryWizardBlocker,
 	darkLibraryWizardCapture,
 	darkLibraryWizardEstimate,
 	darkLibraryWizardRequest,
 	darkLibraryWizardRunning,
+	darkLibraryWizardWarning,
 	darkLibraryWizardRuntime,
-	darkPlanForm,
 	duplicateDarkGroup,
-	loadDarkPlan,
-	loadDarkPlans,
 	pauseDarkLibraryWizard,
 	resumeDarkLibraryWizard,
 	startDarkLibraryWizard,
@@ -50,13 +42,13 @@ import { FrameProgress, formatExposure } from './FrameProgress'
 
 // Contextual panel sections of Dark Library Wizard, a camera operation of the Images camera tabs: the equipment of the tab's
 // camera, the capture plan (one row per group), how the light is blocked, the
-// thermal protocol, the output and its limits, the session in progress with its Continue, Pause, Resume, and Stop
-// commands, and the plans of this camera with their recovery. Frames take the gain, offset, binning, subframe, and readout
-// mode of Camera Acquisition, but never its exposure time, which each group sets. The form is the camera's, kept in the profile;
-// while a session runs the plan shows what the session applied. Sessions and plans are the server's, shown here whichever
-// tab started them, and keep running when the panel unmounts. A step is confirmed only by its button. This view recovers
-// the plans the wizard made, may ask for their masters, and links to them; browsing, importing, and building are the
-// Calibration Library's.
+// thermal protocol, the output and its limits, and the session in progress with its Continue, Pause, Resume, and Stop
+// commands. Frames take the gain, offset, binning, subframe, and readout mode of Camera Acquisition, but never its exposure
+// time, which each group sets. The form is the camera's, kept in the profile; while a session runs the plan shows what the
+// session applied. Sessions are the server's, shown here whichever tab started them, and keep running when the panel
+// unmounts. Start asks for no confirmation: a warning above it says what no device verifies, and a later step is confirmed
+// only by its button. Every start makes a new plan, which is never listed or reused here; a plan may ask for its masters,
+// and browsing, importing, and building them are the Calibration Library's.
 
 // Camera a Dark Library Wizard panel acquires with, the devices of its setup, and the forms it edits.
 export interface DarkLibraryWizardTarget {
@@ -113,7 +105,6 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 	const running = darkLibraryWizardRunning(session)
 	const pending = key !== undefined && runtime.pending[key] === true
 	const error = key ? runtime.errors[key] : undefined
-	const plans = key ? runtime.plans[key] : undefined
 	const locked = running || pending
 	const groups = running && session ? appliedGroups(session) : settings.groups
 	const wheelAssigned = wheel !== undefined && wheel.status !== 'notSelected'
@@ -131,13 +122,8 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 	const blocker = running ? undefined : darkLibraryWizardBlocker(availabilities, settings, wheelState, capabilities)
 	const capture = running && session ? session.capture : darkLibraryWizardCapture(exposure, capabilities)
 	const estimate = darkLibraryWizardEstimate(groups, capture, capabilities)
-	const connectionId = device?.connectionId
-	const deviceId = device?.id
 	const sensorTemperature = capabilities?.temperature === undefined ? undefined : `${capabilities.temperature.toFixed(1)} °C`
-
-	useEffect(() => {
-		if (connectionId !== undefined && deviceId !== undefined) void loadDarkPlans(darkLibraryWizardRuntime, connectionId, deviceId)
-	}, [connectionId, deviceId])
+	const warning = darkLibraryWizardWarning(settings)
 
 	// Updates fields of the camera's form.
 	function update(patch: Partial<DarkLibraryWizardSettings>) {
@@ -168,16 +154,6 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 
 	function start() {
 		if (device) void startDarkLibraryWizard(darkLibraryWizardRuntime, device.connectionId, device.id, darkLibraryWizardRequest(settings, exposure, equipment(), snoop, capabilities))
-	}
-
-	function complete(planId: string) {
-		if (device) void completeDarkPlan(darkLibraryWizardRuntime, device.connectionId, device.id, { resumePlanId: planId, ...equipment(), snoop })
-	}
-
-	// Loads the settings of a plan into the form, for a new plan: a plan itself never changes.
-	async function fork(planId: string) {
-		const detail = await loadDarkPlan(planId)
-		if (detail) update(darkPlanForm(detail))
 	}
 
 	return (
@@ -301,21 +277,17 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 						</Button>
 					</div>
 				) : (
-					<Button disabled={blocker !== undefined || pending || device === undefined} onClick={start}>
-						Start
-					</Button>
+					<>
+						{warning && <p className="m-0 text-xs leading-4 text-warning">{warning}</p>}
+						<Button disabled={blocker !== undefined || pending || device === undefined} onClick={start}>
+							Start
+						</Button>
+					</>
 				)}
 				{blocker && <Notice>{blocker}</Notice>}
 				{running && <Notice>{session?.pauseRequested ? 'A paused session keeps its devices, so other operations stay blocked until Resume or Stop.' : 'Pausing waits for the current frame and keeps every device held. Stopping aborts the exposure in flight; the frames already saved stay.'}</Notice>}
 				{error && <Notice error>{error}</Notice>}
 			</CollapsibleSection>
-			{plans && plans.length > 0 && (
-				<CollapsibleSection id="images.dark-library-wizard.plans" title="Plans of This Camera">
-					{plans.map((plan) => (
-						<PlanCard key={plan.planId} plan={plan} busy={running || pending} onComplete={() => complete(plan.planId)} onFork={() => void fork(plan.planId)} />
-					))}
-				</CollapsibleSection>
-			)}
 			<FileExplorerModal
 				open={choosingDirectory}
 				mode="directory"
@@ -437,18 +409,6 @@ interface StepPromptProps extends ProgressProps {
 function StepPrompt({ session, step, pending }: StepPromptProps) {
 	const confirm = () => void continueDarkLibraryWizard(darkLibraryWizardRuntime, session, step.stepId)
 
-	if (step.kind === 'protection') {
-		return (
-			<>
-				{step.verified.length > 0 && <Notice>{`Verified by the devices: ${step.verified.join('; ')}.`}</Notice>}
-				<Notice>{`Confirm yourself: ${step.asserted.join('; ')}.`}</Notice>
-				<Button disabled={pending} onClick={confirm}>
-					Continue
-				</Button>
-			</>
-		)
-	}
-
 	if (step.kind === 'protectionLost') {
 		return (
 			<>
@@ -467,60 +427,6 @@ function StepPrompt({ session, step, pending }: StepPromptProps) {
 				Continue Despite Warning
 			</Button>
 		</>
-	)
-}
-
-interface PlanCardProps {
-	// Plan shown.
-	readonly plan: DarkPlanSummary
-	// Whether a session or a command keeps the plan from starting.
-	readonly busy: boolean
-	// Completes its missing frames.
-	readonly onComplete: () => void
-	// Loads its settings into the form.
-	readonly onFork: () => void
-}
-
-// One plan of the camera: its progress, and how to recover it. Completing never changes its settings or its saved frames.
-function PlanCard({ plan, busy, onComplete, onFork }: PlanCardProps) {
-	const active = plan.status === 'running' || plan.status === 'paused'
-	const jobs = planMasterJobs(useSnapshot(calibrationLibraryRuntime).jobs, plan.planId)
-
-	return (
-		<div className="flex flex-col gap-1 border-0 border-t border-line-200 pt-2 first:border-t-0 first:pt-0">
-			<p className="m-0 text-ink-100">{`${new Date(plan.createdAt).toLocaleString()}, ${DARK_PLAN_STATUS_LABELS[plan.status]}`}</p>
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				{plan.groups.map((group) => (
-					<Row key={group.groupId} label={groupLabel(group)}>
-						{`${group.accepted + group.acceptedWithWarnings}/${group.required}${group.rejected + group.incomplete + group.lost > 0 ? `, ${group.rejected + group.incomplete + group.lost} not counted` : ''}`}
-					</Row>
-				))}
-			</dl>
-			{plan.reason && <Notice>{plan.reason}</Notice>}
-			{plan.cleanupWarnings.map((warning) => (
-				<Notice key={warning} error>
-					{warning}
-				</Notice>
-			))}
-			{jobs.map((job) => (
-				<div key={job.jobId} className="flex items-center gap-2">
-					<StatusBadge tone={JOB_STATE_TONES[job.state]} label={`Master ${JOB_STATE_LABELS[job.state]}`} />
-					<Button variant="secondary" onClick={() => navigate(routeState, { workspace: 'tools', tool: 'calibration-library', group: job.groupId })}>
-						Open in Calibration Library
-					</Button>
-				</div>
-			))}
-			<div className="flex flex-col gap-2">
-				{plan.missing > 0 && !active && (
-					<Button disabled={busy} onClick={onComplete}>
-						Complete Missing Frames
-					</Button>
-				)}
-				<Button variant="secondary" disabled={busy} onClick={onFork}>
-					Use as New Plan
-				</Button>
-			</div>
-		</div>
 	)
 }
 

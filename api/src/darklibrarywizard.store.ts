@@ -1,7 +1,7 @@
 import { mkdir, open, readdir, readFile, stat, truncate } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
-import { type DarkFrameAssessment, type DarkFrameHeader, type DarkPlaneMeasurement, type DarkTemperatureTrace, readDarkFrameHeader } from './darklibrarywizard.analysis'
+import type { DarkFrameAssessment, DarkFrameHeader, DarkPlaneMeasurement, DarkTemperatureTrace } from './darklibrarywizard.analysis'
 import { publishFrame } from './flatwizard'
 import { errorCode, isRecord, writeAtomically } from './util'
 
@@ -22,9 +22,6 @@ export const DEFAULT_DARK_PLANS_DIRECTORY = join(homedir(), 'Nebulosa', 'dark-li
 
 // Version of the plan and journal formats written by this version.
 export const DARK_PLAN_VERSION = 1
-
-// Files verified at the same time.
-const VERIFICATION_CONCURRENCY = 8
 
 // Directory of the frames of a group that do not count.
 export const REJECTED_DIRECTORY = 'rejected'
@@ -198,7 +195,7 @@ export type DarkJournalRecord =
 	| { readonly type: 'committed'; readonly frameId: string; readonly at: number }
 	// A frame that does not count was quarantined as path.
 	| { readonly type: 'rejected'; readonly frame: DarkFrameRecord }
-	// A committed frame no longer verifies and stopped counting.
+	// A committed frame stopped counting; only journals of earlier versions, which verified plans to resume them, hold it.
 	| { readonly type: 'lost'; readonly frameId: string; readonly at: number; readonly reason: string }
 	// What the latest session could not restore.
 	| { readonly type: 'cleanup'; readonly at: number; readonly warnings: readonly string[] }
@@ -616,42 +613,5 @@ export class DarkPlanStore {
 				await this.#write(loaded, { type: 'rejected', frame })
 			}
 		}
-	}
-
-	// Verifies the frames of a plan that count, a few files at a time: each must exist with the size it was examined at,
-	// hold a FITS image, and agree with the header it was examined with. One that does not stops counting, with the
-	// reason recorded. Resolves the plan's counts. Throws when the result cannot be recorded.
-	async verify(planId: string): Promise<readonly DarkGroupProgress[] | undefined> {
-		const loaded = await this.#find(planId)
-		if (!loaded) return undefined
-
-		const pending = loaded.frames.filter((frame) => counts(loaded, frame))
-		const check = async (frame: DarkFrameRecord) => {
-			const reason = await frameFault(frame)
-			if (reason) await this.#write(loaded, { type: 'lost', frameId: frame.frameId, at: Date.now(), reason })
-		}
-
-		await Promise.all(
-			Array.from({ length: VERIFICATION_CONCURRENCY }, async () => {
-				for (let frame = pending.shift(); frame; frame = pending.shift()) await check(frame)
-			}),
-		)
-
-		return darkGroupProgress(loaded.plan, loaded.frames, loaded.lost)
-	}
-}
-
-// Returns why a saved frame can no longer be counted, or undefined when it still verifies.
-async function frameFault({ path, size, header }: DarkFrameRecord): Promise<string | undefined> {
-	const file = await stat(path).catch(() => undefined)
-	if (!file) return 'The file is missing'
-	if (file.size !== size) return `The file has ${file.size} bytes instead of ${size}`
-
-	try {
-		const found = await readDarkFrameHeader(path)
-		if (header && (found.width !== header.width || found.height !== header.height || found.exposure !== header.exposure || found.gain !== header.gain || found.offset !== header.offset)) return 'The header no longer matches the frame that was examined'
-		return undefined
-	} catch (error) {
-		return `The file cannot be read: ${Error.isError(error) ? error.message : String(error)}`
 	}
 }

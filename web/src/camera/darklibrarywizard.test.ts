@@ -1,21 +1,19 @@
 import { expect, test } from 'bun:test'
-import type { CameraCapabilities, DarkLibraryWizardSessionSummary, DarkPlanDetail, DarkPlanSummary, ServerEvent } from 'api'
+import type { CameraCapabilities, DarkLibraryWizardSessionSummary, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, type DarkLibraryWizardSettings } from '../profile/schema'
 import { cameraKey } from './capture'
 import {
-	completeDarkPlan,
 	continueDarkLibraryWizard,
 	darkLibraryWizardBlocker,
 	darkLibraryWizardCapture,
 	darkLibraryWizardEstimate,
 	darkLibraryWizardRequest,
 	darkLibraryWizardRunning,
+	darkLibraryWizardWarning,
 	type DarkLibraryWizardRuntime,
-	darkPlanForm,
 	duplicateDarkGroup,
 	handleDarkLibraryWizardEvent,
-	loadDarkPlans,
 	pauseDarkLibraryWizard,
 	refreshDarkLibraryWizard,
 	resumeDarkLibraryWizard,
@@ -24,7 +22,7 @@ import {
 } from './darklibrarywizard'
 
 function newState() {
-	return proxy<DarkLibraryWizardRuntime>({ sessions: {}, details: {}, plans: {}, pending: {}, errors: {} })
+	return proxy<DarkLibraryWizardRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
 }
 
 const READY = { status: 'ready' } as const
@@ -164,18 +162,13 @@ test('a start is blocked by what it selected and cannot use, never by what it di
 	expect(blocker({ groups: [{ exposure: 1, temperature: -10, count: 1 }] }, undefined, undefined, { ...CAPABILITIES, canSetTemperature: false })).toContain('target temperature')
 })
 
-test('a plan fills the form with its settings', () => {
-	const form = darkPlanForm({
-		plan: {
-			groups: [{ exposure: 60, temperature: -10, count: 5, groupId: 'g', key: 'k', directory: '/x' }],
-			protection: { darkFilter: { slot: 3 }, closeCover: true, panelOff: false, manualCap: false, verifyFirstFrame: false },
-			thermal: { tolerance: 1, hold: 2, timeout: 3 },
-			maximumRejections: 4,
-			capture: { subframe: true },
-			directory: '/darks',
-		},
-	} as unknown as Pick<DarkPlanDetail, 'plan'>)
-	expect(form).toEqual({ groups: [{ exposure: 60, temperature: -10, count: 5 }], useDarkFilter: true, darkSlot: 3, closeCover: true, panelOff: false, manualCap: false, verifyFirstFrame: false, tolerance: 1, hold: 2, timeout: 3, directory: '/darks', maximumRejections: 4 })
+test('the warning above Start names what no device verifies', () => {
+	const protection = { manualCap: false, useDarkFilter: false, darkSlot: 0, panelOff: false, closeCover: false }
+	expect(darkLibraryWizardWarning({ ...protection, manualCap: true })).toBe('Before starting, make sure that an opaque cap covers the optical path.')
+	expect(darkLibraryWizardWarning({ ...protection, manualCap: true, useDarkFilter: true, darkSlot: 2 })).toBe('Before starting, make sure that an opaque cap covers the optical path and the filter at slot 3 is opaque.')
+	expect(darkLibraryWizardWarning({ ...protection, panelOff: true })).toContain('the unlit flat panel blocks the outside light')
+	expect(darkLibraryWizardWarning({ ...protection, panelOff: true, closeCover: true })).toBeUndefined()
+	expect(darkLibraryWizardWarning({ ...protection, closeCover: true })).toBeUndefined()
 })
 
 test('a session runs until it ended', () => {
@@ -200,30 +193,14 @@ test('a late event never replaces a newer state', () => {
 	expect(state.sessions[KEY].revision).toBe(5)
 })
 
-test('the plans of a camera are fetched when a session starts and ends, not on every event', async () => {
-	const state = newState()
-	const plans: DarkPlanSummary[] = [{ planId: 'p1' } as DarkPlanSummary]
-	const { request, calls } = server({ '/api/dark-library-wizard/plans': { plans }, '/api/dark-library-wizard/s1': summary() })
-	const planCalls = () => calls.filter(({ url }) => url.includes('/plans')).length
-
-	handleDarkLibraryWizardEvent(state, { type: 'darkLibraryWizard:updated', session: summary() }, request)
-	handleDarkLibraryWizardEvent(state, { type: 'darkLibraryWizard:updated', session: summary({ revision: 2 }) }, request)
-	expect(planCalls()).toBe(1)
-	handleDarkLibraryWizardEvent(state, { type: 'darkLibraryWizard:updated', session: summary({ revision: 3, endedAt: 9 }) }, request)
-	expect(planCalls()).toBe(2)
-
-	await loadDarkPlans(state, 'c', 'cam', request)
-	expect(state.plans[KEY]).toEqual(plans)
-})
-
-test('a snapshot replaces the sessions, and fetches their records and plans', async () => {
+test('a snapshot replaces the sessions, and fetches their records', async () => {
 	const state = newState()
 	state.sessions.gone = summary({ sessionId: 'gone' })
 	const session = summary()
-	const { request, calls } = server({ '/api/dark-library-wizard/plans': { plans: [] }, '/api/dark-library-wizard/s1': { ...session, attempts: [] }, '/api/dark-library-wizard': { sessions: [session] } })
+	const { request, calls } = server({ '/api/dark-library-wizard/s1': { ...session, attempts: [] }, '/api/dark-library-wizard': { sessions: [session] } })
 	await refreshDarkLibraryWizard(state, request)
 	expect(Object.keys(state.sessions)).toEqual([KEY])
-	expect(calls.map(({ url }) => url)).toContain('/api/dark-library-wizard/plans?connectionId=c&deviceId=cam')
+	expect(calls.map(({ url }) => url)).toContain('/api/dark-library-wizard/s1')
 })
 
 test('commands address the exact camera and session, with a token and the step id', async () => {
@@ -232,7 +209,6 @@ test('commands address the exact camera and session, with a token and the step i
 	const session = summary()
 
 	await startDarkLibraryWizard(state, 'c', 'cam', { maximumRejections: 1 } as never, request)
-	await completeDarkPlan(state, 'c', 'cam', { resumePlanId: 'p1' }, request)
 	await continueDarkLibraryWizard(state, session, 'step', request)
 	await pauseDarkLibraryWizard(state, session, request)
 	await resumeDarkLibraryWizard(state, session, request)
@@ -240,9 +216,8 @@ test('commands address the exact camera and session, with a token and the step i
 
 	expect(calls[0].url).toEndWith('/dark-library-wizard')
 	expect(calls[0].body).toMatchObject({ maximumRejections: 1, token: expect.any(String) })
-	expect(calls[1].body).toMatchObject({ resumePlanId: 'p1', token: expect.any(String) })
-	expect(calls.slice(2).map(({ url }) => url)).toEqual(['continue', 'pause', 'resume', 'stop'].map((action) => `/api/dark-library-wizard/s1/${action}`))
-	expect(calls[2].body).toEqual({ stepId: 'step' })
+	expect(calls.slice(1).map(({ url }) => url)).toEqual(['continue', 'pause', 'resume', 'stop'].map((action) => `/api/dark-library-wizard/s1/${action}`))
+	expect(calls[1].body).toEqual({ stepId: 'step' })
 	expect(state.pending).toEqual({})
 })
 

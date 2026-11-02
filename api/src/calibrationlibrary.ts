@@ -50,7 +50,7 @@ import { errorCode } from './util'
 // were made of them. It needs no camera and claims no device: frames come from the Dark Library plans through their store,
 // from what the Flat Wizard publishes, and from directories an operator imports, always by reference and never modified.
 // Masters are immutable revisions built by jobs that survive the tab and the server. A wizard may ask for a master, through
-// the same path as a person. Only an operator deletes: a group with the files of its frames, or one revision of a master.
+// the same path as a person. Only an operator deletes: a frame or a group with their files, or one revision of a master.
 // Applying a master to a light is outside this service: it only explains which masters would match.
 
 // Rows of a page unless a request asks otherwise.
@@ -694,7 +694,20 @@ export class CalibrationLibrary {
 		const { sources } = this.store.group(groupId)
 		if (sources.length === 0) throw new LibraryError('Unknown group', 404, 'notFound')
 		if (this.store.jobsIn(ACTIVE_JOB_STATES).some(({ build }) => build?.groupId === groupId)) throw new LibraryError('A master of this group is being built', 409, 'jobConflict')
+		return await this.#deleteSources(sources)
+	}
 
+	// Deletes one frame: its file, wherever it is, and the frame from the library. Masters made with it stay. Throws when the
+	// frame is unknown, a master being built uses it, or its file could not be deleted.
+	async deleteSource(sourceId: string) {
+		const source = await this.source(sourceId)
+		if (this.store.jobsIn(ACTIVE_JOB_STATES).some(({ build }) => build?.frames.some((frame) => frame.sourceId === sourceId))) throw new LibraryError('A master being built uses this frame', 409, 'jobConflict')
+		return await this.#deleteSources([source])
+	}
+
+	// Deletes the files of frames and forgets the frames whose file went away, journaled so a rebuilt catalog keeps them out.
+	// Returns how many went away; throws deleteFailed after forgetting the others when a file could not be deleted.
+	async #deleteSources(sources: readonly CalibrationSource[]) {
 		const removed: string[] = []
 		const failures = new Set<string>()
 
@@ -1263,6 +1276,7 @@ export function createCalibrationLibraryRoutes(library: CalibrationLibrary) {
 		},
 		'/api/calibration-library/sources/:sourceId': {
 			GET: ({ params }) => answer(() => library.source(params.sourceId)),
+			DELETE: ({ params }) => answer(() => library.deleteSource(params.sourceId)),
 		},
 		'/api/calibration-library/sources/:sourceId/overrides': {
 			POST: async (request) => {

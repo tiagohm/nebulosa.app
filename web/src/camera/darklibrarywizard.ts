@@ -1,24 +1,4 @@
-import type {
-	CameraCapabilities,
-	CaptureSnoop,
-	DarkGroup,
-	DarkLibraryWizardCaptureSettings,
-	DarkLibraryWizardNewRequest,
-	DarkLibraryWizardPlans,
-	DarkLibraryWizardRequest,
-	DarkLibraryWizardResumeRequest,
-	DarkLibraryWizardSession,
-	DarkLibraryWizardSessionSummary,
-	DarkLibraryWizardSnapshot,
-	DarkLibraryWizardState,
-	DarkLightSuspicion,
-	DarkPlanDetail,
-	DarkPlanStatus,
-	DarkPlanSummary,
-	OperationDevice,
-	ServerEvent,
-	WheelState,
-} from 'api'
+import type { CameraCapabilities, CaptureSnoop, DarkGroup, DarkLibraryWizardCaptureSettings, DarkLibraryWizardRequest, DarkLibraryWizardSession, DarkLibraryWizardSessionSummary, DarkLibraryWizardSnapshot, DarkLibraryWizardState, DarkLightSuspicion, OperationDevice, ServerEvent, WheelState } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
@@ -26,10 +6,10 @@ import { deviceUrl, jsonInit, responseError } from '../http'
 import { type CameraExposureSettings, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WIZARD_MAXIMUM_FRAMES, DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, type DarkLibraryWizardSettings } from '../profile/schema'
 import { cameraKey, fitExposure } from './capture'
 
-// Dark Library Wizard sessions and plans as this tab knows them. The server owns every session, whichever tab started
-// it, and every plan, so this store only mirrors them: the summary of the latest session of each camera arrives with
-// every darkLibraryWizard:updated event and, on every socket (re)open, with the snapshot; the plans of a camera are
-// fetched when its panel shows them and when one of its sessions ends. Summaries are ordered by their revision, so a
+// Dark Library Wizard sessions as this tab knows them. The server owns every session, whichever tab started it, so this
+// store only mirrors them: the summary of the latest session of each camera arrives with every darkLibraryWizard:updated
+// event and, on every socket (re)open, with the snapshot. Plans are the server's record of what was acquired, which the
+// Calibration Library reads; a tab neither lists nor reuses them. Summaries are ordered by their revision, so a
 // late event never replaces a newer state. Devices are addressed by their exact ids, never by role. A start carries a
 // token, so a retried request answers the session of the first one; a step is confirmed with the step id the server
 // published, so a stale or repeated confirmation never skips a later step. Durations are seconds, temperatures degrees
@@ -41,8 +21,6 @@ export interface DarkLibraryWizardRuntime {
 	sessions: Record<string, DarkLibraryWizardSessionSummary>
 	// Complete record of each session fetched so far, by session id.
 	details: Record<string, DarkLibraryWizardSession>
-	// Plans of each camera, newest first, by camera key.
-	plans: Record<string, readonly DarkPlanSummary[]>
 	// Cameras with a command of this tab waiting for the server.
 	pending: Record<string, boolean>
 	// Why this tab's last command to a camera failed; cleared by its next command.
@@ -50,7 +28,7 @@ export interface DarkLibraryWizardRuntime {
 }
 
 // Dark Library Wizard state of the tab.
-export const darkLibraryWizardRuntime = proxy<DarkLibraryWizardRuntime>({ sessions: {}, details: {}, plans: {}, pending: {}, errors: {} })
+export const darkLibraryWizardRuntime = proxy<DarkLibraryWizardRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
 
 // Counter of snapshot refreshes; a response is applied only if no later refresh started.
 let generation = 0
@@ -84,9 +62,6 @@ export const DARK_LIBRARY_WIZARD_STATE_LABELS: Readonly<Record<DarkLibraryWizard
 	cancelled: 'Stopped',
 	failed: 'Failed',
 }
-
-// Label of each plan status.
-export const DARK_PLAN_STATUS_LABELS: Readonly<Record<DarkPlanStatus, string>> = { running: 'Running', paused: 'Paused', interrupted: 'Interrupted', completed: 'Completed', stopped: 'Stopped', failed: 'Failed' }
 
 // Explanation of each suspicion of light. None of them proves it.
 export const DARK_SUSPICION_LABELS: Readonly<Record<DarkLightSuspicion, string>> = {
@@ -169,7 +144,7 @@ export function darkLibraryWizardCapture(exposure: Readonly<CameraExposureSettin
 
 // Builds the start request of the form of a camera, with the camera settings of Camera Acquisition. Only the devices the
 // protection selected are sent.
-export function darkLibraryWizardRequest(settings: Readonly<DarkLibraryWizardSettings>, exposure: Readonly<CameraExposureSettings>, { wheel, panel, cover }: DarkLibraryWizardEquipment, snoop: CaptureSnoop, capabilities?: CameraCapabilities): Omit<DarkLibraryWizardNewRequest, 'token'> {
+export function darkLibraryWizardRequest(settings: Readonly<DarkLibraryWizardSettings>, exposure: Readonly<CameraExposureSettings>, { wheel, panel, cover }: DarkLibraryWizardEquipment, snoop: CaptureSnoop, capabilities?: CameraCapabilities): Omit<DarkLibraryWizardRequest, 'token'> {
 	return {
 		capture: darkLibraryWizardCapture(exposure, capabilities),
 		groups: settings.groups,
@@ -215,28 +190,14 @@ export function darkLibraryWizardBlocker({ camera, wheel, panel, cover }: DarkLi
 	return undefined
 }
 
-// Returns the form values a plan was made with, which start a new plan. Its camera settings stay out: they are Camera
-// Acquisition's, and a new plan takes the ones in force.
-export function darkPlanForm({ plan }: Pick<DarkPlanDetail, 'plan'>): Partial<DarkLibraryWizardSettings> {
-	const { protection, thermal, groups, maximumRejections, directory, purpose, generateMasters } = plan
-	const { darkFilter, closeCover, panelOff, manualCap, verifyFirstFrame } = protection
+// Returns the warning shown above Start for what no device can verify, or undefined when the devices verify everything.
+// Starting is the operator's assertion of it: a manual cap, the opacity of the filter at the dark slot (a slot's name
+// proves nothing), and, when the panel is the only barrier, that an unlit panel really blocks the light.
+export function darkLibraryWizardWarning({ manualCap, useDarkFilter, darkSlot, panelOff, closeCover }: Pick<DarkLibraryWizardSettings, 'manualCap' | 'useDarkFilter' | 'darkSlot' | 'panelOff' | 'closeCover'>): string | undefined {
+	const asserted = [...(manualCap ? ['an opaque cap covers the optical path'] : []), ...(useDarkFilter ? [`the filter at slot ${darkSlot + 1} is opaque`] : []), ...(panelOff && !closeCover && !manualCap && !useDarkFilter ? ['the unlit flat panel blocks the outside light'] : [])]
 
-	return {
-		groups: groups.map(({ exposure, temperature, count }) => ({ exposure, temperature, count })),
-		useDarkFilter: darkFilter !== undefined,
-		...(darkFilter && { darkSlot: darkFilter.slot }),
-		closeCover,
-		panelOff,
-		manualCap,
-		verifyFirstFrame,
-		tolerance: thermal.tolerance,
-		hold: thermal.hold,
-		timeout: thermal.timeout,
-		directory,
-		maximumRejections,
-		purpose,
-		generateMasters,
-	}
+	if (asserted.length === 0) return undefined
+	return `Before starting, make sure that ${asserted.length === 1 ? asserted[0] : `${asserted.slice(0, -1).join(', ')} and ${asserted.at(-1)}`}.`
 }
 
 // Fetches the complete record of a session; a record older than the one known (a late response) never replaces it, and a
@@ -259,29 +220,9 @@ export async function loadDarkLibraryWizardSession(state: DarkLibraryWizardRunti
 	}
 }
 
-// Fetches the plans of a camera. A failure keeps the plans known.
-export async function loadDarkPlans(state: DarkLibraryWizardRuntime, connectionId: string, deviceId: string, request: typeof fetch = fetch) {
-	try {
-		const response = await request(`/api/dark-library-wizard/plans?connectionId=${encodeURIComponent(connectionId)}&deviceId=${encodeURIComponent(deviceId)}`)
-		if (response.ok) state.plans[cameraKey(connectionId, deviceId)] = ((await response.json()) as DarkLibraryWizardPlans).plans
-	} catch {
-		// The server is unreachable; the next socket open refreshes the plans.
-	}
-}
-
-// Fetches the complete record of a plan, or undefined when it cannot be read.
-export async function loadDarkPlan(planId: string, request: typeof fetch = fetch): Promise<DarkPlanDetail | undefined> {
-	try {
-		const response = await request(`/api/dark-library-wizard/plans/${encodeURIComponent(planId)}`)
-		return response.ok ? ((await response.json()) as DarkPlanDetail) : undefined
-	} catch {
-		return undefined
-	}
-}
-
 // Applies a Dark Library Wizard event; any other event is ignored. A session older than the one known for its camera, or
 // an earlier revision of the same one, never replaces it. The complete record is fetched again when the summary reports
-// a new exposure or the end of the session, and the plans of the camera when it starts or ends.
+// a new exposure, a new session, or its end.
 export function handleDarkLibraryWizardEvent(state: DarkLibraryWizardRuntime, event: ServerEvent, request: typeof fetch = fetch) {
 	if (event.type !== 'darkLibraryWizard:updated') return
 
@@ -297,12 +238,11 @@ export function handleDarkLibraryWizardEvent(state: DarkLibraryWizardRuntime, ev
 
 	const started = known?.sessionId !== session.sessionId
 	const ended = known?.endedAt !== session.endedAt
-	if (started || ended) void loadDarkPlans(state, connectionId, deviceId, request)
 	if (started || ended || known?.lastAttempt?.index !== session.lastAttempt?.index) void loadDarkLibraryWizardSession(state, session.sessionId, request)
 }
 
 // Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, and fetches their
-// complete records and the plans of their cameras. A response is dropped when another refresh started meanwhile.
+// complete records. A response is dropped when another refresh started meanwhile.
 export async function refreshDarkLibraryWizard(state: DarkLibraryWizardRuntime, request: typeof fetch = fetch) {
 	const current = ++generation
 
@@ -316,10 +256,7 @@ export async function refreshDarkLibraryWizard(state: DarkLibraryWizardRuntime, 
 		for (const session of snapshot.sessions) state.sessions[cameraKey(session.camera.connectionId, session.camera.deviceId)] = session
 		for (const id of Object.keys(state.details)) if (!snapshot.sessions.some((session) => session.sessionId === id)) delete state.details[id]
 
-		for (const session of snapshot.sessions) {
-			void loadDarkLibraryWizardSession(state, session.sessionId, request)
-			void loadDarkPlans(state, session.camera.connectionId, session.camera.deviceId, request)
-		}
+		for (const session of snapshot.sessions) void loadDarkLibraryWizardSession(state, session.sessionId, request)
 	} catch {
 		// The server is unreachable; the next socket open refreshes the sessions.
 	}
@@ -343,19 +280,9 @@ async function command(state: DarkLibraryWizardRuntime, key: string, url: string
 	}
 }
 
-// Sends the start of a session.
-function start(state: DarkLibraryWizardRuntime, connectionId: string, deviceId: string, body: DarkLibraryWizardRequest, request: typeof fetch) {
-	return command(state, cameraKey(connectionId, deviceId), deviceUrl(connectionId, 'camera', deviceId, 'dark-library-wizard'), body, request)
-}
-
 // Starts a session on a new plan; progress arrives as events.
-export function startDarkLibraryWizard(state: DarkLibraryWizardRuntime, connectionId: string, deviceId: string, body: Omit<DarkLibraryWizardNewRequest, 'token'>, request: typeof fetch = fetch) {
-	return start(state, connectionId, deviceId, { ...body, token: nanoid() }, request)
-}
-
-// Starts a session on the missing frames of a plan, which the server checks again before any device moves.
-export function completeDarkPlan(state: DarkLibraryWizardRuntime, connectionId: string, deviceId: string, body: Omit<DarkLibraryWizardResumeRequest, 'token'>, request: typeof fetch = fetch) {
-	return start(state, connectionId, deviceId, { ...body, token: nanoid() }, request)
+export function startDarkLibraryWizard(state: DarkLibraryWizardRuntime, connectionId: string, deviceId: string, body: Omit<DarkLibraryWizardRequest, 'token'>, request: typeof fetch = fetch) {
+	return command(state, cameraKey(connectionId, deviceId), deviceUrl(connectionId, 'camera', deviceId, 'dark-library-wizard'), { ...body, token: nanoid() } satisfies DarkLibraryWizardRequest, request)
 }
 
 // Sends a command of a session.

@@ -31,23 +31,7 @@ import {
 	type DarkTemperatureTrace,
 	startTemperatureTrace,
 } from './darklibrarywizard.analysis'
-import {
-	DARK_PLAN_VERSION,
-	type DarkCapturePlan,
-	type DarkFrameRecord,
-	type DarkFrameVerdict,
-	type DarkGroup,
-	type DarkGroupProgress,
-	type DarkPlanCapture,
-	type DarkPlanDetail,
-	type DarkPlanGroup,
-	type DarkPlanStore,
-	type DarkPlanSummary,
-	type DarkProtection,
-	type DarkThermalPolicy,
-	REJECTED_DIRECTORY,
-	STAGING_DIRECTORY,
-} from './darklibrarywizard.store'
+import { DARK_PLAN_VERSION, type DarkCapturePlan, type DarkFrameRecord, type DarkFrameVerdict, type DarkGroup, type DarkGroupProgress, type DarkPlanCapture, type DarkPlanGroup, type DarkPlanStore, type DarkProtection, type DarkThermalPolicy, REJECTED_DIRECTORY, STAGING_DIRECTORY } from './darklibrarywizard.store'
 import type { DeviceRegistry } from './devices'
 import { publishFrame } from './flatwizard'
 import { errorResponse } from './http'
@@ -55,7 +39,8 @@ import type { ImageStore } from './images'
 import type { OperationDevice, OperationProgressReporter, OperationRegistry } from './operations'
 
 // Dark Library Wizard service: one server-owned session per camera that acquires the DARK frames of a capture plan, group
-// after group, until each group has its accepted frames. A plan is immutable and durable (darklibrarywizard.store.ts); a
+// after group, until each group has its accepted frames. A plan is immutable and durable (darklibrarywizard.store.ts), the
+// record the Calibration Library indexes; it is never listed, completed, or reused, and every start makes a new one. A
 // session is what works on it, one `camera.darkLibraryWizard` operation of the process-wide registry holding the camera
 // and the wheel, panel, and cover its protection selected from start to end, including while it is paused or waits for
 // the operator. It only acquires: a plan may be for dark-flats and may ask for masters, but masters, reuse, and browsing are
@@ -63,9 +48,10 @@ import type { OperationDevice, OperationProgressReporter, OperationRegistry } fr
 //
 // Protection is prepared in a safe order: the panel light off first, so a cover never moves with it on, then the wheel
 // at the dark slot, then the cover closed, each confirmed by the state the device reports, never by the command. What
-// hardware cannot verify is asserted by the operator in a step confirmed by its step id: the manual cap, the opacity of
-// a filter (a slot's name proves nothing), and an unlit panel as the only barrier. The verified state is read again
-// synchronously right before every exposure, through the capturer's beforeExposure hook, and a change waits for the operator.
+// hardware cannot verify is the operator's to ensure before starting, which the panel warns about: the manual cap, the
+// opacity of a filter (a slot's name proves nothing), and an unlit panel as the only barrier. A start, or a resume, is that
+// assertion, so no step asks for it. The verified state is read again synchronously right before every exposure, through
+// the capturer's beforeExposure hook, and a change waits for the operator.
 //
 // Temperature is the sensor's, as reported. A command is only dispatched, so a group with a target waits until readings
 // stay inside the tolerance for the hold time. Drivers report only changes, so a silent sensor holds its last reading;
@@ -100,10 +86,8 @@ export interface DarkLibraryWizardEquipment {
 	readonly snoop?: CaptureSnoop
 }
 
-// Body of POST /api/connections/:id/cameras/:deviceId/dark-library-wizard that creates a plan.
-export interface DarkLibraryWizardNewRequest extends CommandRequest, DarkLibraryWizardEquipment {
-	// Id of the plan to continue, absent for a new one.
-	readonly resumePlanId?: undefined
+// Body of POST /api/connections/:id/cameras/:deviceId/dark-library-wizard, which creates a plan.
+export interface DarkLibraryWizardRequest extends CommandRequest, DarkLibraryWizardEquipment {
 	// Camera settings of every frame.
 	readonly capture: DarkLibraryWizardCaptureSettings
 	// Groups to acquire; at least one.
@@ -122,19 +106,10 @@ export interface DarkLibraryWizardNewRequest extends CommandRequest, DarkLibrary
 	readonly generateMasters?: boolean
 }
 
-// Body of the same route that completes the missing frames of a plan, with the settings the plan recorded.
-export interface DarkLibraryWizardResumeRequest extends CommandRequest, DarkLibraryWizardEquipment {
-	// Id of the plan to continue.
-	readonly resumePlanId: string
-}
-
-// Body of POST /api/connections/:id/cameras/:deviceId/dark-library-wizard.
-export type DarkLibraryWizardRequest = DarkLibraryWizardNewRequest | DarkLibraryWizardResumeRequest
-
 // What a session is doing:
 // - preparing: acquiring the devices.
 // - disablingPanel, movingDarkFilter, closingCover: the protection is being applied, in that order.
-// - waitingForProtection: waiting for the operator to confirm what hardware cannot verify, or a lost protection.
+// - waitingForProtection: waiting for the operator to restore a lost protection.
 // - cooling: the target was commanded and the sensor is outside the tolerance.
 // - stabilizing: the sensor is inside the tolerance for the hold time.
 // - exposing, measuring, publishing: a frame is being taken, examined, and saved.
@@ -162,8 +137,6 @@ export type DarkLibraryWizardErrorCode =
 	| 'staleStep'
 	| 'notPaused'
 	| 'notRunning'
-	| 'planMismatch'
-	| 'planComplete'
 	| 'manifestUnavailable'
 	| 'publicationFailed'
 	| 'verificationFailed'
@@ -204,13 +177,9 @@ export interface DarkLibraryWizardAttempt extends DarkFrameAssessment {
 }
 
 // Manual step a session waits for.
-// - protection: the operator asserts what hardware cannot verify (asserted), knowing what it verified (verified).
 // - protectionLost: a device left the state it was verified in (message), and must return to it.
 // - suspectedLight: a frame raised suspicions and waits for a decision.
-export type DarkLibraryWizardPendingStep =
-	| { readonly stepId: string; readonly kind: 'protection'; readonly verified: readonly string[]; readonly asserted: readonly string[] }
-	| { readonly stepId: string; readonly kind: 'protectionLost'; readonly message: string }
-	| { readonly stepId: string; readonly kind: 'suspectedLight'; readonly group: number; readonly suspicions: readonly DarkLightSuspicion[] }
+export type DarkLibraryWizardPendingStep = { readonly stepId: string; readonly kind: 'protectionLost'; readonly message: string } | { readonly stepId: string; readonly kind: 'suspectedLight'; readonly group: number; readonly suspicions: readonly DarkLightSuspicion[] }
 
 // Session record published to clients.
 export interface DarkLibraryWizardSessionSummary {
@@ -281,12 +250,6 @@ export interface DarkLibraryWizardSnapshot {
 	readonly sessions: readonly DarkLibraryWizardSessionSummary[]
 }
 
-// Response of GET /api/dark-library-wizard/plans.
-export interface DarkLibraryWizardPlans {
-	// Plans of the camera, newest first; at most MAXIMUM_LISTED_PLANS.
-	readonly plans: readonly DarkPlanSummary[]
-}
-
 // Response of an accepted start.
 export interface DarkLibraryWizardStartResponse {
 	// Id of the session, repeated by its darkLibraryWizard:updated events.
@@ -311,12 +274,6 @@ export type DarkLibraryWizardListener = (event: DarkLibraryWizardEvent) => void
 
 // Exposures kept in the detail of a session, the latest ones.
 const MAXIMUM_ATTEMPTS = 200
-
-// Plans a camera lists, the newest ones.
-const MAXIMUM_LISTED_PLANS = 50
-
-// Frame records a plan's detail returns, the latest ones.
-const MAXIMUM_LISTED_FRAMES = 500
 
 // Interval between readings of the sensor temperature, in milliseconds. The value read stands between driver updates.
 const TEMPERATURE_POLL = 1000
@@ -408,17 +365,6 @@ interface TemperatureActivity {
 	readonly alert: boolean
 }
 
-// What a start already knows about a plan.
-interface PreparedPlan {
-	readonly plan: DarkCapturePlan
-	// Counts of each group, for a plan with frames.
-	readonly progress?: readonly DarkGroupProgress[]
-	// Frames of the plan, for a plan with frames.
-	readonly frames?: readonly DarkFrameRecord[]
-	// Frames of the plan that stopped verifying.
-	readonly lost?: ReadonlyMap<string, string>
-}
-
 // Returns the part of the temperature of an exposure that is worth keeping, without its monotonic instant.
 function temperatureRecord(trace: DarkTemperatureTrace | undefined) {
 	if (!trace) return {}
@@ -481,8 +427,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 	readonly #byOperation = new Map<string, Session>()
 	// Starts still being prepared, by token, so a request repeated meanwhile answers the same start.
 	readonly #starting = new Map<string, Promise<Response>>()
-	// Plans a session works on, or a start is preparing to.
-	readonly #activePlans = new Set<string>()
 	// Thermometer activity of each camera.
 	readonly #temperatures = new Map<Thermometer, TemperatureActivity>()
 
@@ -538,24 +482,10 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return session ? Response.json({ ...session.summary, attempts: session.attempts } satisfies DarkLibraryWizardSession) : errorResponse('Dark Library Wizard session not found', 404, 'notFound')
 	}
 
-	// Responds with the plans of a physical camera, newest first, or 404 when the camera is not known.
-	async plans(connectionId: string, deviceId: string): Promise<Response> {
-		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
-		if (camera instanceof Response) return camera
-		const hardwareId = resourceKey(camera)
-		return Response.json({ plans: await this.store.list((plan) => plan.camera.hardwareId === hardwareId, MAXIMUM_LISTED_PLANS) } satisfies DarkLibraryWizardPlans)
-	}
-
-	// Responds with the complete record of a plan and its latest frames, or 404.
-	async plan(planId: string): Promise<Response> {
-		const detail: DarkPlanDetail | undefined = await this.store.detail(planId, MAXIMUM_LISTED_FRAMES)
-		return detail ? Response.json(detail) : errorResponse('Dark plan not found', 404, 'notFound')
-	}
-
-	// Starts a session, on a new plan or on the missing frames of a named one, replacing the ended session of the camera.
-	// Responds 202 with DarkLibraryWizardStartResponse once accepted, and a repeated token answers its session even while
-	// the first request is still being prepared; progress and outcome arrive as darkLibraryWizard:updated and
-	// operation:updated events. Nothing commands a device before the plan is durable, and resuming never starts by itself.
+	// Starts a session on a new plan, replacing the ended session of the camera. Responds 202 with
+	// DarkLibraryWizardStartResponse once accepted, and a repeated token answers its session even while the first request
+	// is still being prepared; progress and outcome arrive as darkLibraryWizard:updated and operation:updated events.
+	// Nothing commands a device before the plan is durable.
 	start(connectionId: string, deviceId: string, request: DarkLibraryWizardRequest): Promise<Response> {
 		const { token } = request
 		const known = this.operations.started(token)
@@ -585,64 +515,50 @@ export class DarkLibraryWizardSessions implements Disposable {
 		const previous = this.#sessions.get(key)
 		if (previous && previous.summary.endedAt === undefined) return errorResponse('A Dark Library Wizard session is running on this camera', 409, 'alreadyRunning')
 
-		const planId = request.resumePlanId ?? crypto.randomUUID()
-		if (this.#activePlans.has(planId)) return errorResponse('A session is already working on this plan', 409, 'alreadyRunning')
 		const offered: SessionDevices = { camera, wheel, panel, cover }
-		this.#activePlans.add(planId)
-		let adopted = false
+		const plan = this.#newPlan(crypto.randomUUID(), request, offered)
+		const { protection } = plan
+		const refused = usable(plan, offered)
+		if (refused) return refused
+
+		const devices: SessionDevices = { camera, ...selected(protection, offered) }
+		const equipment = selected(protection, request)
+		const free = () => this.operations.available(camera) && [devices.wheel, devices.panel, devices.cover].every((device) => !device || this.operations.available(device))
+		if (!free()) return busy()
+
+		const session = this.#session(key, plan, connectionId, deviceId, equipment, request.snoop, devices)
 
 		try {
-			const prepared = request.resumePlanId === undefined ? this.#newPlan(planId, request, offered) : await this.#resumedPlan(request.resumePlanId, offered)
-			if (prepared instanceof Response) return prepared
-
-			const { plan } = prepared
-			const { protection } = plan
-			const refused = usable(plan, offered)
-			if (refused) return refused
-
-			const devices: SessionDevices = { camera, ...selected(protection, offered) }
-			const equipment = selected(protection, request)
-			const free = () => this.operations.available(camera) && [devices.wheel, devices.panel, devices.cover].every((device) => !device || this.operations.available(device))
-			if (!free()) return busy()
-
-			const session = this.#session(key, prepared, connectionId, deviceId, equipment, request.snoop, devices)
-
-			try {
-				if (request.resumePlanId === undefined) await this.store.create(plan, session.summary.sessionId)
-				else await this.store.append(plan.planId, { type: 'status', at: Date.now(), status: 'running', sessionId: session.summary.sessionId })
-			} catch (error) {
-				return errorResponse(`Unable to record the plan: ${Error.isError(error) ? error.message : String(error)}`, 503, 'manifestUnavailable')
-			}
-
-			// The plan was written while nothing held the devices: the arbiter has the last word.
-			if (!free()) {
-				await this.#recordQuietly(plan, { type: 'status', at: Date.now(), status: 'stopped', reason: 'The devices were taken before the session started' })
-				return busy()
-			}
-
-			const held: OperationDevice[] = [{ connectionId, deviceId }, ...[equipment.wheel, equipment.panel, equipment.cover].filter((device) => device !== undefined)]
-
-			const record = this.operations.run('camera.darkLibraryWizard', held, request.token, (report) => {
-				session.report = report
-				session.handle = this.#run(session, devices)
-				return session.handle.result
-			})
-
-			if (previous) this.#byOperation.delete(previous.summary.operationId)
-			this.#sessions.set(key, session)
-			this.#byOperation.set(record.operationId, session)
-			this.#update(session, { operationId: record.operationId })
-
-			adopted = true
-			void session.handle!.result.then((result) => this.#ended(session, devices, result))
-			return startResponse(session)
-		} finally {
-			if (!adopted) this.#activePlans.delete(planId)
+			await this.store.create(plan, session.summary.sessionId)
+		} catch (error) {
+			return errorResponse(`Unable to record the plan: ${Error.isError(error) ? error.message : String(error)}`, 503, 'manifestUnavailable')
 		}
+
+		// The plan was written while nothing held the devices: the arbiter has the last word.
+		if (!free()) {
+			await this.#recordQuietly(plan, { type: 'status', at: Date.now(), status: 'stopped', reason: 'The devices were taken before the session started' })
+			return busy()
+		}
+
+		const held: OperationDevice[] = [{ connectionId, deviceId }, ...[equipment.wheel, equipment.panel, equipment.cover].filter((device) => device !== undefined)]
+
+		const record = this.operations.run('camera.darkLibraryWizard', held, request.token, (report) => {
+			session.report = report
+			session.handle = this.#run(session, devices)
+			return session.handle.result
+		})
+
+		if (previous) this.#byOperation.delete(previous.summary.operationId)
+		this.#sessions.set(key, session)
+		this.#byOperation.set(record.operationId, session)
+		this.#update(session, { operationId: record.operationId })
+
+		void session.handle!.result.then((result) => this.#ended(session, devices, result))
+		return startResponse(session)
 	}
 
-	// Builds the plan of a new request; the groups run in the order that groups their temperatures.
-	#newPlan(planId: string, request: DarkLibraryWizardNewRequest, { camera, wheel, panel, cover }: SessionDevices): PreparedPlan {
+	// Builds the plan of a request; the groups run in the order that groups their temperatures.
+	#newPlan(planId: string, request: DarkLibraryWizardRequest, { camera, wheel, panel, cover }: SessionDevices): DarkCapturePlan {
 		const directory = request.directory || this.capturesDir
 		const hardwareId = resourceKey(camera)
 		const root = join(directory, 'darks', sanitizeFileName(camera.name) || 'camera', planId)
@@ -658,96 +574,43 @@ export class DarkLibraryWizardSessions implements Disposable {
 		const device = (entry: Device) => ({ hardwareId: resourceKey(entry), name: entry.name })
 
 		return {
-			plan: {
-				version: DARK_PLAN_VERSION,
-				planId,
-				createdAt: Date.now(),
-				camera: { hardwareId, name: camera.name, driver: { executable: camera.driver.executable, version: camera.driver.version }, sensor: sensorOf(camera) },
-				...(protection.darkFilter && wheel && { wheel: { ...device(wheel), slotName: slotName(wheel, protection.darkFilter.slot) } }),
-				...(protection.panelOff && panel && { panel: device(panel) }),
-				...(protection.closeCover && cover && { cover: device(cover) }),
-				directory,
-				capture,
-				groups,
-				protection,
-				...(request.purpose && { purpose: request.purpose }),
-				...(request.generateMasters && { generateMasters: true }),
-				thermal,
-				maximumRejections,
-			},
+			version: DARK_PLAN_VERSION,
+			planId,
+			createdAt: Date.now(),
+			camera: { hardwareId, name: camera.name, driver: { executable: camera.driver.executable, version: camera.driver.version }, sensor: sensorOf(camera) },
+			...(protection.darkFilter && wheel && { wheel: { ...device(wheel), slotName: slotName(wheel, protection.darkFilter.slot) } }),
+			...(protection.panelOff && panel && { panel: device(panel) }),
+			...(protection.closeCover && cover && { cover: device(cover) }),
+			directory,
+			capture,
+			groups,
+			protection,
+			...(request.purpose && { purpose: request.purpose }),
+			...(request.generateMasters && { generateMasters: true }),
+			thermal,
+			maximumRejections,
 		}
 	}
 
-	// Loads the plan a resume names and checks that it can still run here, as it was: the same physical camera and sensor,
-	// the same devices, the same dark slot. What the plan's frames need is verified from their files, so a frame that
-	// was lost is acquired again. Responds with the refusal otherwise; a mismatch is a new plan's job.
-	async #resumedPlan(planId: string, { camera, wheel, panel, cover }: SessionDevices): Promise<PreparedPlan | Response> {
-		const plan = await this.store.plan(planId)
-		if (!plan) return errorResponse('Dark plan not found', 404, 'notFound')
-
-		const mismatch = (message: string) => errorResponse(message, 409, 'planMismatch')
-		if (plan.camera.hardwareId !== resourceKey(camera)) return mismatch('The plan belongs to another camera')
-
-		const sensor = sensorOf(camera)
-		if (plan.camera.sensor && sensor && (plan.camera.sensor.width !== sensor.width || plan.camera.sensor.height !== sensor.height)) return mismatch('The sensor of the camera changed since the plan was made')
-		if (plan.wheel && (!wheel || plan.wheel.hardwareId !== resourceKey(wheel))) return mismatch('The filter wheel changed since the plan was made')
-		if (plan.wheel && wheel && plan.protection.darkFilter && slotName(wheel, plan.protection.darkFilter.slot) !== plan.wheel.slotName) return mismatch('The dark slot of the wheel changed since the plan was made')
-		if (plan.panel && (!panel || plan.panel.hardwareId !== resourceKey(panel))) return mismatch('The flat panel changed since the plan was made')
-		if (plan.cover && (!cover || plan.cover.hardwareId !== resourceKey(cover))) return mismatch('The cover changed since the plan was made')
-
-		try {
-			const progress = await this.store.verify(planId)
-			if (!progress) return errorResponse('Dark plan not found', 404, 'notFound')
-			if (progress.every((group) => group.missing === 0)) return errorResponse('The plan has no missing frames', 409, 'planComplete')
-			return { plan, progress, ...(await this.store.frames(planId)) }
-		} catch (error) {
-			return errorResponse(`Unable to record the verification of the plan: ${Error.isError(error) ? error.message : String(error)}`, 503, 'manifestUnavailable')
-		}
-	}
-
-	// Creates the record of a session on a plan, with what its frames already count: their levels and size are the baseline
-	// of the frames still missing, and their sequence numbers are never used again.
-	#session(
-		key: string,
-		{ plan, progress, frames = [], lost }: PreparedPlan,
-		connectionId: string,
-		deviceId: string,
-		{ wheel, panel, cover }: Pick<DarkLibraryWizardEquipment, 'wheel' | 'panel' | 'cover'>,
-		snoop: CaptureSnoop | undefined,
-		{ camera, wheel: wheelDevice, panel: panelDevice, cover: coverDevice }: SessionDevices,
-	): Session {
+	// Creates the record of a session on a new plan, with nothing acquired yet.
+	#session(key: string, plan: DarkCapturePlan, connectionId: string, deviceId: string, { wheel, panel, cover }: Pick<DarkLibraryWizardEquipment, 'wheel' | 'panel' | 'cover'>, snoop: CaptureSnoop | undefined, { camera, wheel: wheelDevice, panel: panelDevice, cover: coverDevice }: SessionDevices): Session {
 		const { protection, capture, thermal, maximumRejections, groups } = plan
-		const accepted = new Map<number, (readonly DarkPlaneMeasurement[])[]>()
-		const sizes = new Map<number, { readonly width: number; readonly height: number }>()
-		const sequences = new Map<number, number>()
-
-		for (const frame of frames) {
-			const index = groups.findIndex((group) => group.groupId === frame.groupId)
-			sequences.set(index, Math.max(sequences.get(index) ?? 0, frame.sequence))
-			if ((frame.verdict !== 'accepted' && frame.verdict !== 'acceptedWithWarnings') || lost?.has(frame.frameId)) continue
-			accepted.set(index, [...(accepted.get(index) ?? []), frame.planes])
-			if (frame.header && !sizes.has(index)) sizes.set(index, { width: frame.header.width, height: frame.header.height })
-		}
-
-		const groupRuns = groups.map(({ groupId, exposure, temperature, count }, index): DarkLibraryWizardGroupRun => {
-			const known = progress?.[index]
-			return {
-				exposure,
-				temperature,
-				count,
-				groupId,
-				required: count,
-				accepted: known?.accepted ?? 0,
-				acceptedWithWarnings: known?.acceptedWithWarnings ?? 0,
-				rejected: known?.rejected ?? 0,
-				incomplete: known?.incomplete ?? 0,
-				lost: known?.lost ?? 0,
-				missing: known?.missing ?? count,
-				state: known?.missing === 0 ? 'completed' : 'pending',
-				attempted: 0,
-				failedTransfer: 0,
-			}
-		})
+		const groupRuns = groups.map(({ groupId, exposure, temperature, count }): DarkLibraryWizardGroupRun => ({
+			exposure,
+			temperature,
+			count,
+			groupId,
+			required: count,
+			accepted: 0,
+			acceptedWithWarnings: 0,
+			rejected: 0,
+			incomplete: 0,
+			lost: 0,
+			missing: count,
+			state: 'pending',
+			attempted: 0,
+			failedTransfer: 0,
+		}))
 
 		return {
 			key,
@@ -780,9 +643,9 @@ export class DarkLibraryWizardSessions implements Disposable {
 			coverClosed: false,
 			exposures: 0,
 			suspicious: 0,
-			accepted,
-			sizes,
-			sequences,
+			accepted: new Map(),
+			sizes: new Map(),
+			sequences: new Map(),
 			ended: Promise.withResolvers(),
 		}
 	}
@@ -842,11 +705,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 			const prepared = await this.#protect(session, context, devices)
 			if (!prepared.ok) return prepared
 
-			const confirmed = await this.#confirmProtection(session, context, devices)
-			if (!confirmed.ok) return confirmed
-
 			for (let index = 0; index < session.plan.groups.length; index++) {
-				if (session.summary.groups[index].missing === 0) continue
 				const result = await this.#group(session, context, devices, index)
 				if (!result.ok) return this.#failGroup(session, index, result)
 			}
@@ -883,20 +742,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return successfulOperationResult(undefined)
 	}
 
-	// Asks the operator to assert what hardware cannot verify: a manual cap, the opacity of the filter at the dark slot, and,
-	// when the panel is the only barrier, that an unlit panel really blocks the light. A closed cover needs no assertion.
-	async #confirmProtection(session: Session, context: OperationContext, { panel, wheel, cover }: SessionDevices): Promise<OperationResult<void>> {
-		const { darkFilter, panelOff, closeCover, manualCap } = session.plan.protection
-		const verified = [...(panelOff && panel ? [`${panel.name} light is off`] : []), ...(darkFilter && wheel ? [`${wheel.name} is at slot ${darkFilter.slot + 1}`] : []), ...(closeCover && cover ? [`${cover.name} is closed`] : [])]
-		const asserted = [
-			...(manualCap ? ['The optical path is covered by an opaque cap'] : []),
-			...(darkFilter && wheel ? [`${slotName(wheel, darkFilter.slot)} at slot ${darkFilter.slot + 1} is opaque`] : []),
-			...(panelOff && panel && !(closeCover && cover) && !manualCap && !darkFilter ? ['The unlit panel blocks the outside light'] : []),
-		]
-		if (asserted.length === 0) return successfulOperationResult(undefined)
-		return await this.#gate(session, context, 'waitingForProtection', (stepId) => ({ stepId, kind: 'protection', verified, asserted }))
-	}
-
 	// Waits for the operator to confirm a manual step, published with a fresh step id.
 	async #gate(session: Session, context: OperationContext, state: DarkLibraryWizardState, step: (stepId: string) => DarkLibraryWizardPendingStep): Promise<OperationResult<void>> {
 		const { signal } = context
@@ -918,9 +763,9 @@ export class DarkLibraryWizardSessions implements Disposable {
 		}
 	}
 
-	// Waits between frames while a pause is asked for, holding every device. Afterwards anything may have changed, so the
-	// operator asserts the protection again and the temperature is confirmed again.
-	async #pausePoint(session: Session, context: OperationContext, devices: SessionDevices): Promise<OperationResult<void>> {
+	// Waits between frames while a pause is asked for, holding every device. Afterwards anything may have changed: Resume is
+	// the operator's assertion of the protection, and the temperature is confirmed again.
+	async #pausePoint(session: Session, context: OperationContext): Promise<OperationResult<void>> {
 		if (!session.summary.pauseRequested) return successfulOperationResult(undefined)
 
 		const { signal } = context
@@ -945,9 +790,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		}
 
 		session.stable = undefined
-		const running = await this.#record(session, { type: 'status', at: Date.now(), status: 'running', sessionId: session.summary.sessionId })
-		if (!running.ok) return running
-		return await this.#confirmProtection(session, context, devices)
+		return await this.#record(session, { type: 'status', at: Date.now(), status: 'running', sessionId: session.summary.sessionId })
 	}
 
 	// Returns what no longer stands of the verified protection, or undefined when everything does. Read synchronously, so
@@ -1036,7 +879,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		while (session.summary.groups[index].missing > 0) {
 			if (rejections > session.plan.maximumRejections) return this.#failWith(session, 'verificationFailed', failedOperationResult('unexpectedState', `${rejections} frames of ${group.exposure} s were rejected; check the camera and its settings`))
 
-			const paused = await this.#pausePoint(session, context, devices)
+			const paused = await this.#pausePoint(session, context)
 			if (!paused.ok) return paused
 
 			const restored = await this.#restoreProtection(session, context, devices)
@@ -1416,7 +1259,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 		if (warnings.length > 0) await this.#recordQuietly(session.plan, { type: 'cleanup', at, warnings })
 		await this.#recordQuietly(session.plan, { type: 'status', at, status: result.ok ? 'completed' : result.reason === 'aborted' ? 'stopped' : 'failed', sessionId, ...(!result.ok && result.reason !== 'aborted' && { reason: result.error ?? result.reason }) })
 
-		this.#activePlans.delete(session.plan.planId)
 		if (warnings.length > 0) this.#update(session, { cleanupWarnings: warnings })
 
 		if (result.ok) this.#update(session, { state: 'completed', groups, pending: undefined, pauseRequested: false, endedAt: Date.now() })
@@ -1499,23 +1341,12 @@ function usable(plan: DarkCapturePlan, { camera, wheel, panel, cover }: SessionD
 	return undefined
 }
 
-// Routes of the Dark Library Wizard sessions and plans.
+// Routes of the Dark Library Wizard sessions.
 export function createDarkLibraryWizardRoutes(wizard: DarkLibraryWizardSessions) {
 	return {
 		'/api/dark-library-wizard': {
 			// The latest Dark Library Wizard session of every camera, started by any tab.
 			GET: () => Response.json(wizard.snapshot()),
-		},
-		'/api/dark-library-wizard/plans': {
-			// The plans of a physical camera, with their progress; this is no library of unrelated frames.
-			GET: (req) => {
-				const { searchParams } = new URL(req.url)
-				return wizard.plans(searchParams.get('connectionId') ?? '', searchParams.get('deviceId') ?? '')
-			},
-		},
-		'/api/dark-library-wizard/plans/:planId': {
-			// A plan with its specification, progress, and latest frames.
-			GET: (req) => wizard.plan(req.params.planId),
 		},
 		'/api/dark-library-wizard/:sessionId': {
 			// A session with its latest exposures; 404 when it is not the latest of its camera.
@@ -1538,7 +1369,7 @@ export function createDarkLibraryWizardRoutes(wizard: DarkLibraryWizardSessions)
 			POST: (req) => wizard.stop(req.params.sessionId),
 		},
 		'/api/connections/:id/cameras/:deviceId/dark-library-wizard': {
-			// Starts a session on a new plan or on the missing frames of one; progress arrives as darkLibraryWizard:updated events.
+			// Starts a session on a new plan; progress arrives as darkLibraryWizard:updated events.
 			POST: async (req) => wizard.start(req.params.id, req.params.deviceId, (await req.json()) as DarkLibraryWizardRequest),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>

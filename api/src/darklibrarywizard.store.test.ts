@@ -161,21 +161,6 @@ describe('plan store', () => {
 		expect(await again.unavailable()).toEqual([{ planId: 'plan', reason: 'corrupt' }])
 	})
 
-	test('a frame that no longer verifies stops counting, with its reason', async () => {
-		const { plan, groups, store } = fixture()
-		await store.create(plan, 'session')
-		await commit(store, frame(groups[0], 1))
-		const gone = frame(groups[0], 2)
-		await commit(store, gone)
-		rmSync(gone.path)
-
-		const progress = await store.verify('plan')
-		expect(progress?.[0]).toMatchObject({ accepted: 0, lost: 2, missing: 2 })
-		const detail = await store.detail('plan', 10)
-		expect(detail?.lost[gone.frameId]).toBe('The file is missing')
-		expect(detail?.lost[frame(groups[0], 1).frameId]).toContain('cannot be read')
-	})
-
 	test('a record that cannot be written leaves the plan unchanged', async () => {
 		const { plan, groups, directory, store, journal } = fixture()
 		await store.create(plan, 'session')

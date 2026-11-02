@@ -542,13 +542,32 @@ describe('masters', () => {
 		expect((await reopened.library.groups({}, 0, 50)).total).toBe(0)
 	})
 
-	test('a group being built cannot be deleted', async () => {
+	test('a group or a frame being built cannot be deleted', async () => {
 		const blocked = blockedIntegrator()
 		const { library, plans, base } = open(blocked)
 		await plan(plans, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		await library.requestMaster({ groupId: group.groupId })
 		expect(library.deleteGroup(group.groupId)).rejects.toThrow('being built')
+		const [frame] = (await library.sources({}, 0, 1)).items
+		expect(library.deleteSource(frame.sourceId)).rejects.toThrow('uses this frame')
+	})
+
+	test('deleting a frame removes its file and the frame, and survives a rebuild', async () => {
+		const { library, plans, base } = open(local)
+		await plan(plans, base, 3)
+		const [frame] = (await library.sources({}, 0, 1)).items
+
+		expect(await library.deleteSource(frame.sourceId)).toEqual({ deleted: 1 })
+		expect(readdirSync(join(base, 'frames')).filter((name) => name.endsWith('.fit'))).toHaveLength(2)
+		expect((await library.sources({}, 0, 50)).total).toBe(2)
+		expect(library.deleteSource(frame.sourceId)).rejects.toThrow('Unknown frame')
+
+		library.close()
+		libraries.length = 0
+		for (const name of readdirSync(join(base, 'library'))) if (name.startsWith('catalog.')) rmSync(join(base, 'library', name))
+		const reopened = open(local, undefined, base)
+		expect((await reopened.library.sources({}, 0, 50)).total).toBe(2)
 	})
 
 	test('a preferred revision is a pointer', async () => {

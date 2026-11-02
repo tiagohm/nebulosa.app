@@ -1,13 +1,13 @@
 import { afterAll, afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
-import { dirname, join } from 'path'
+import { join } from 'path'
 import { CameraCommands } from './cameras'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures } from './captures'
 import { ConnectionManager } from './connection'
 import { CoverCommands } from './covers'
-import { type DarkLibraryWizardEvent, type DarkLibraryWizardNewRequest, type DarkLibraryWizardResumeRequest, type DarkLibraryWizardSession, DarkLibraryWizardSessions, darkGroupKey, expectedFrameSize, orderDarkGroups } from './darklibrarywizard'
+import { type DarkLibraryWizardEvent, type DarkLibraryWizardRequest, type DarkLibraryWizardSession, DarkLibraryWizardSessions, darkGroupKey, expectedFrameSize, orderDarkGroups } from './darklibrarywizard'
 import { type DarkFrameMeasurement, measureDarkFile } from './darklibrarywizard.analysis'
 import { DarkPlanStore, STAGING_DIRECTORY } from './darklibrarywizard.store'
 import { FlatPanelCommands } from './flatpanels'
@@ -34,7 +34,7 @@ async function waitUntil(condition: () => boolean, timeout = 30000) {
 
 let tokens = 0
 
-function request(directory: string, patch: Partial<DarkLibraryWizardNewRequest> = {}): DarkLibraryWizardNewRequest {
+function request(directory: string, patch: Partial<DarkLibraryWizardRequest> = {}): DarkLibraryWizardRequest {
 	return {
 		token: `token-${tokens++}`,
 		capture: { gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 64, height: 64, frameFormat: '' },
@@ -157,7 +157,7 @@ async function setup(edit: Parameters<typeof analyzer>[0] = (measurement) => mea
 }
 
 // Starts a session and returns its ids.
-async function start(wizard: DarkLibraryWizardSessions, connectionId: string, cameraId: string, body: DarkLibraryWizardNewRequest | DarkLibraryWizardResumeRequest) {
+async function start(wizard: DarkLibraryWizardSessions, connectionId: string, cameraId: string, body: DarkLibraryWizardRequest) {
 	const response = await wizard.start(connectionId, cameraId, body)
 	expect(response.status).toBe(202)
 	return (await response.json()) as { sessionId: string; operationId: string; planId: string }
@@ -192,16 +192,16 @@ describe('plan helpers', () => {
 })
 
 describe('Dark Library Wizard sessions', () => {
-	test('a manual run waits for the operator, and saves its frames byte for byte', async () => {
-		const { id, cameraId, wizard, frames, directory, summary, ended, released, confirm, pending, camera, store } = await setup()
+	test('a manual run asks for no confirmation, and saves its frames byte for byte', async () => {
+		const { id, cameraId, wizard, frames, directory, summary, ended, released, camera, store } = await setup()
 		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory))
-
-		expect(await pending()).toMatchObject({ kind: 'protection', verified: [], asserted: ['The optical path is covered by an opaque cap'] })
-		expect(summary()?.state).toBe('waitingForProtection')
 		expect(wizard.continue(sessionId, { stepId: 'stale' }).status).toBe(409)
-		await confirm(sessionId)
 
 		await waitUntil(ended, 60000)
+		expect(summary()?.state).not.toBe('waitingForProtection')
+		expect(wizard.session(sessionId).status).toBe(200)
+		expect(((await wizard.session(sessionId).json()) as DarkLibraryWizardSession).attempts).toHaveLength(2)
+		expect(wizard.session('unknown').status).toBe(404)
 		expect(summary()).toMatchObject({ state: 'completed', planId, groups: [{ state: 'completed', accepted: 2, missing: 0, attempted: 2 }] })
 		await waitUntil(released)
 
@@ -228,7 +228,6 @@ describe('Dark Library Wizard sessions', () => {
 	test('a plan records what its frames are for and asks for masters, and hears of its end after its journal', async () => {
 		const { id, cameraId, wizard, directory, confirm, ended, store, endedPlans } = await setup()
 		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { purpose: 'darkFlat', generateMasters: true }))
-		await confirm(sessionId)
 		await waitUntil(ended, 60000)
 		await waitUntil(() => endedPlans.length > 0)
 
@@ -240,7 +239,6 @@ describe('Dark Library Wizard sessions', () => {
 	test('an ordinary plan stays as it was', async () => {
 		const { id, cameraId, wizard, directory, confirm, ended, store } = await setup()
 		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory))
-		await confirm(sessionId)
 		await waitUntil(ended, 60000)
 
 		const plan = await store.plan(planId)
@@ -256,25 +254,23 @@ describe('Dark Library Wizard sessions', () => {
 		expect(first.status).toBe(202)
 		expect(await second.json()).toEqual(started as never)
 		expect(((await (await wizard.start(id, cameraId, body)).json()) as { sessionId: string }).sessionId).toBe(started.sessionId)
-		await confirm(started.sessionId)
 		await waitUntil(ended, 60000)
 	})
 
 	test('every protection is applied in order, verified, restored, and left off', async () => {
-		const { id, cameraId, wizard, directory, wheel, panel, cover, panels, operations, wheelDevice, panelDevice, coverDevice, events, summary, ended, confirm, pending } = await setup()
+		const { id, cameraId, wizard, directory, wheel, panel, cover, panels, operations, wheelDevice, panelDevice, coverDevice, events, summary, ended } = await setup()
 		expect(await panels.commander.enable(operations.coordinator, panel)).toMatchObject({ ok: true })
-		const body = request(directory, { protection: { darkFilter: { slot: 2 }, closeCover: true, panelOff: true, manualCap: false, verifyFirstFrame: true }, wheel: wheelDevice, panel: panelDevice, cover: coverDevice })
-		const { sessionId } = await start(wizard, id, cameraId, body)
+		const body = request(directory, { groups: [{ exposure: 1, count: 1 }], protection: { darkFilter: { slot: 2 }, closeCover: true, panelOff: true, manualCap: false, verifyFirstFrame: true }, wheel: wheelDevice, panel: panelDevice, cover: coverDevice })
+		await start(wizard, id, cameraId, body)
 
-		expect(await pending()).toMatchObject({ kind: 'protection', verified: [expect.any(String), expect.any(String), expect.any(String)], asserted: [expect.stringContaining('opaque')] })
+		await waitUntil(() => summary()?.state === 'exposing')
 		expect(panel.enabled).toBeFalse()
 		expect(wheel.position).toBe(2)
 		expect(cover.parked).toBeTrue()
 
 		const order = events.map((event) => event.session.state).filter((state, index, all) => state !== all[index - 1])
-		expect(order.slice(0, 4)).toEqual(['disablingPanel', 'movingDarkFilter', 'closingCover', 'waitingForProtection'])
+		expect(order.slice(0, 3)).toEqual(['disablingPanel', 'movingDarkFilter', 'closingCover'])
 
-		await confirm(sessionId)
 		await waitUntil(ended, 60000)
 		expect(summary()).toMatchObject({ state: 'completed', cleanupWarnings: [] })
 		expect(panel.enabled).toBeFalse()
@@ -282,7 +278,7 @@ describe('Dark Library Wizard sessions', () => {
 		expect(cover.parked).toBeFalse()
 	})
 
-	test('a closed cover needs no assertion, and one found closed stays closed', async () => {
+	test('a cover found closed stays closed', async () => {
 		const { id, cameraId, wizard, directory, cover, covers, operations, coverDevice, summary, ended } = await setup()
 		expect(await covers.commander.park(operations.coordinator, cover)).toMatchObject({ ok: true })
 		await start(wizard, id, cameraId, request(directory, { protection: { closeCover: true, panelOff: false, manualCap: false, verifyFirstFrame: true }, cover: coverDevice }))
@@ -291,18 +287,10 @@ describe('Dark Library Wizard sessions', () => {
 		expect(cover.parked).toBeTrue()
 	})
 
-	test('an unlit panel alone is asserted, never taken for a barrier', async () => {
-		const { id, cameraId, wizard, directory, panelDevice, pending, confirm, ended } = await setup()
-		const { sessionId } = await start(wizard, id, cameraId, request(directory, { protection: { closeCover: false, panelOff: true, manualCap: false, verifyFirstFrame: true }, panel: panelDevice }))
-		expect(await pending()).toMatchObject({ kind: 'protection', asserted: ['The unlit panel blocks the outside light'] })
-		await confirm(sessionId)
-		await waitUntil(ended, 60000)
-	})
-
 	test('what the protection did not select stays free', async () => {
-		const { id, cameraId, wizard, directory, wheel, operations, wheelDevice, pending, summary, wizard: service } = await setup()
-		const { sessionId } = await start(wizard, id, cameraId, request(directory, { wheel: wheelDevice }))
-		await pending()
+		const { id, cameraId, wizard, directory, wheel, operations, wheelDevice, summary, wizard: service } = await setup()
+		const { sessionId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 30, count: 1 }], wheel: wheelDevice }))
+		await waitUntil(() => summary()?.state === 'exposing')
 		expect(operations.available(wheel)).toBeTrue()
 		expect(summary()?.wheel).toBeUndefined()
 		expect((await service.stop(sessionId)).status).toBe(204)
@@ -326,19 +314,17 @@ describe('Dark Library Wizard sessions', () => {
 	})
 
 	test('a busy camera and a running session are refused', async () => {
-		const { id, cameraId, wizard, directory, pending } = await setup()
-		const { sessionId } = await start(wizard, id, cameraId, request(directory))
-		await pending()
+		const { id, cameraId, wizard, directory } = await setup()
+		const { sessionId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 30, count: 1 }] }))
 		const again = await wizard.start(id, cameraId, request(directory))
 		expect(again.status).toBe(409)
 		expect(await again.json()).toMatchObject({ code: 'alreadyRunning' })
 		await wizard.stop(sessionId)
 	})
 
-	test('a stop during an exposure cleans up, and the plan can complete what is missing', async () => {
-		const { id, cameraId, wizard, directory, summary, confirm, store, released } = await setup()
+	test('a stop during an exposure cleans up, and the plan records what is missing', async () => {
+		const { id, cameraId, wizard, directory, summary, store, released } = await setup()
 		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 30, count: 1 }] }))
-		await confirm(sessionId)
 		await waitUntil(() => summary()?.state === 'exposing')
 		expect((await wizard.stop(sessionId)).status).toBe(204)
 		expect(summary()).toMatchObject({ state: 'cancelled', groups: [{ state: 'cancelled', accepted: 0, missing: 1 }] })
@@ -347,21 +333,19 @@ describe('Dark Library Wizard sessions', () => {
 		await waitUntil(released)
 	})
 
-	test('a pause takes effect after the frame, keeps the devices, and asks for the protection again', async () => {
-		const { id, cameraId, wizard, directory, camera, operations, summary, ended, confirm, store } = await setup()
+	test('a pause takes effect between frames, keeps the devices, and a resume continues at once', async () => {
+		const { id, cameraId, wizard, directory, camera, operations, summary, ended, store } = await setup()
 		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, count: 3 }] }))
 		expect(wizard.pause(sessionId).status).toBe(204)
 		expect(wizard.pause(sessionId).status).toBe(204)
-		await confirm(sessionId)
 
 		await waitUntil(() => summary()?.state === 'paused')
-		expect(summary()).toMatchObject({ pauseRequested: true, groups: [{ accepted: 0 }] })
+		expect(summary()).toMatchObject({ pauseRequested: true })
 		expect(operations.available(camera)).toBeFalse()
 		expect((await store.list())[0].status).toBe('paused')
 
 		expect(wizard.resume(sessionId).status).toBe(204)
 		expect(wizard.resume(sessionId).status).toBe(409)
-		await confirm(sessionId)
 		await waitUntil(ended, 60000)
 		expect(summary()).toMatchObject({ state: 'completed', pauseRequested: false, groups: [{ accepted: 3 }] })
 		expect((await store.list())[0]).toMatchObject({ planId, status: 'completed' })
@@ -370,9 +354,7 @@ describe('Dark Library Wizard sessions', () => {
 	test('a device that leaves its verified state stops the frames until it returns', async () => {
 		const { id, cameraId, wizard, directory, summary, ended, confirm, operations, wheel, wheelDevice, pending, client } = await setup()
 		const { sessionId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, count: 2 }], protection: { darkFilter: { slot: 2 }, closeCover: false, panelOff: false, manualCap: false, verifyFirstFrame: true }, wheel: wheelDevice }))
-		await pending()
 		expect(wizard.pause(sessionId).status).toBe(204)
-		await confirm(sessionId)
 		await waitUntil(() => summary()?.state === 'paused')
 
 		// Something outside this application moved the wheel.
@@ -380,7 +362,6 @@ describe('Dark Library Wizard sessions', () => {
 		await waitUntil(() => wheel.position === 0 && !wheel.moving)
 
 		expect(wizard.resume(sessionId).status).toBe(204)
-		await confirm(sessionId)
 		expect(await pending()).toMatchObject({ kind: 'protectionLost', message: expect.stringContaining('dark slot') })
 		await confirm(sessionId)
 		expect(await pending()).toMatchObject({ kind: 'protectionLost' })
@@ -393,7 +374,6 @@ describe('Dark Library Wizard sessions', () => {
 	test('a suspicion on the first frame waits for a decision, and continuing keeps the warning', async () => {
 		const { id, cameraId, wizard, directory, summary, ended, confirm, pending, store } = await setup((measurement, frame) => (frame === 1 ? flooded(measurement) : measurement))
 		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory))
-		await confirm(sessionId)
 		expect(await pending()).toMatchObject({ kind: 'suspectedLight', group: 0, suspicions: ['saturation'] })
 		expect(summary()?.state).toBe('waitingForDecision')
 		await confirm(sessionId)
@@ -408,7 +388,6 @@ describe('Dark Library Wizard sessions', () => {
 	test('stopping at a suspicion quarantines the frame, which never counts', async () => {
 		const { id, cameraId, wizard, directory, summary, confirm, pending, store } = await setup(flooded)
 		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory))
-		await confirm(sessionId)
 		await pending()
 		expect(summary()?.groups[0].attempted).toBe(1)
 		await wizard.stop(sessionId)
@@ -424,7 +403,6 @@ describe('Dark Library Wizard sessions', () => {
 		const { id, cameraId, wizard, directory, summary, confirm, pending } = await setup(flooded)
 		const protection = { closeCover: false, panelOff: false, manualCap: true, verifyFirstFrame: false }
 		const { sessionId } = await start(wizard, id, cameraId, request(directory, { protection, groups: [{ exposure: 0.01, count: 3 }] }))
-		await confirm(sessionId)
 		expect(await pending()).toMatchObject({ kind: 'suspectedLight' })
 		expect(summary()?.groups[0]).toMatchObject({ acceptedWithWarnings: 1, attempted: 2 })
 		await wizard.stop(sessionId)
@@ -433,7 +411,6 @@ describe('Dark Library Wizard sessions', () => {
 	test('a rejected frame is kept and retried within its budget', async () => {
 		const { id, cameraId, wizard, directory, summary, ended, confirm, store } = await setup((measurement, frame) => (frame === 2 ? { ...measurement, header: { ...measurement.header, frameType: 'Light Frame' } } : measurement))
 		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory))
-		await confirm(sessionId)
 		await waitUntil(ended, 60000)
 
 		expect(summary()).toMatchObject({ state: 'completed', groups: [{ accepted: 2, rejected: 1, attempted: 3 }] })
@@ -445,7 +422,6 @@ describe('Dark Library Wizard sessions', () => {
 	test('an unreadable frame is quarantined like any other rejection, and the budget ends the session', async () => {
 		const { id, cameraId, wizard, directory, summary, ended, confirm, store } = await setup(() => Promise.reject(new Error('broken')))
 		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { maximumRejections: 1 }))
-		await confirm(sessionId)
 		await waitUntil(ended, 60000)
 
 		expect(summary()).toMatchObject({ state: 'failed', code: 'verificationFailed', groups: [{ state: 'failed', rejected: 2, accepted: 0 }] })
@@ -457,7 +433,6 @@ describe('Dark Library Wizard sessions', () => {
 		const { id, cameraId, wizard, directory, camera, summary, ended, confirm, events, store } = await setup()
 		const target = Math.round(camera.temperature) - 2
 		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, count: 1, temperature: target }], thermal: { tolerance: 0.5, hold: 0.2, timeout: 60 } }))
-		await confirm(sessionId)
 		await waitUntil(ended, 60000)
 
 		expect(summary()).toMatchObject({ state: 'completed' })
@@ -472,16 +447,15 @@ describe('Dark Library Wizard sessions', () => {
 	test('a target the sensor does not reach in time fails, and the plan stays', async () => {
 		const { id, cameraId, wizard, directory, camera, summary, ended, confirm, store } = await setup()
 		const { sessionId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 0.01, count: 1, temperature: camera.temperature - 40 }], thermal: { tolerance: 0.5, hold: 1, timeout: 0.5 } }))
-		await confirm(sessionId)
 		await waitUntil(ended, 60000)
 		expect(summary()).toMatchObject({ state: 'failed', code: 'temperatureTimeout', reason: 'timeout' })
 		expect((await store.list())[0]).toMatchObject({ status: 'failed', missing: 1 })
 	})
 
 	test('a disconnection ends the session, and what it held is reported rather than restored', async () => {
-		const { id, cameraId, wizard, directory, summary, ended, pending, manager, client, cover, coverDevice } = await setup()
-		await start(wizard, id, cameraId, request(directory, { protection: { closeCover: true, panelOff: false, manualCap: true, verifyFirstFrame: true }, cover: coverDevice }))
-		await pending()
+		const { id, cameraId, wizard, directory, summary, ended, manager, client, cover, coverDevice } = await setup()
+		await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 30, count: 1 }], protection: { closeCover: true, panelOff: false, manualCap: true, verifyFirstFrame: true }, cover: coverDevice }))
+		await waitUntil(() => summary()?.state === 'exposing')
 		manager.devices.switch(client, cover.id, false)
 		await waitUntil(ended, 30000)
 		expect(summary()?.endedAt).toBeDefined()
@@ -489,95 +463,12 @@ describe('Dark Library Wizard sessions', () => {
 	})
 
 	test('a failure to record the plan ends the session and counts nothing', async () => {
-		const { id, cameraId, wizard, directory, summary, ended, confirm, plans } = await setup()
-		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory))
+		const { id, cameraId, wizard, directory, summary, ended, plans } = await setup()
+		const { planId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 1, count: 2 }] }))
 		rmSync(join(plans, `${planId}.journal.jsonl`))
 		mkdirSync(join(plans, `${planId}.journal.jsonl`))
-		await confirm(sessionId)
 		await waitUntil(ended, 60000)
 		expect(summary()).toMatchObject({ state: 'failed', code: 'manifestUnavailable', groups: [{ accepted: 0 }] })
 		rmSync(join(plans, `${planId}.journal.jsonl`), { recursive: true })
-	})
-})
-
-describe('completing a plan', () => {
-	test('a later server completes only what is missing, never overwriting a frame', async () => {
-		let pause = () => {}
-		const first = await setup((measurement, frame) => {
-			if (frame === 1) pause()
-			return measurement
-		})
-		const { sessionId, planId } = await start(first.wizard, first.id, first.cameraId, request(first.directory, { groups: [{ exposure: 0.01, count: 3 }] }))
-		pause = () => first.wizard.pause(sessionId)
-		await first.confirm(sessionId)
-		await waitUntil(() => first.summary()?.state === 'paused')
-		expect(first.summary()?.groups[0]).toMatchObject({ accepted: 1, missing: 2 })
-		await first.wizard.stop(sessionId)
-		const before = (await first.store.detail(planId, 10))!
-		const [saved] = before.frames
-		const original = readFileSync(saved.path)
-
-		const later = await setup(undefined, first.plans)
-		expect((await later.store.list())[0]).toMatchObject({ planId, status: 'stopped', missing: 2 })
-		const resumed = await start(later.wizard, later.id, later.cameraId, { token: `token-${tokens++}`, resumePlanId: planId })
-		expect(resumed.planId).toBe(planId)
-		expect(later.summary()?.groups[0]).toMatchObject({ accepted: 1, missing: 2 })
-		await later.confirm(resumed.sessionId)
-		await waitUntil(later.ended, 60000)
-		expect(later.summary()).toMatchObject({ state: 'completed', groups: [{ accepted: 3, missing: 0, attempted: 2 }] })
-
-		const after = (await later.store.detail(planId, 10))!
-		expect(after).toMatchObject({ status: 'completed', missing: 0 })
-		expect(filesOf(after.plan.groups[0].directory).files).toHaveLength(3)
-		expect(after.frames.map((frame) => frame.sequence)).toEqual([1, 2, 3])
-		expect(readFileSync(saved.path).equals(original)).toBeTrue()
-
-		const again = await later.wizard.start(later.id, later.cameraId, { token: `token-${tokens++}`, resumePlanId: planId })
-		expect(again.status).toBe(409)
-		expect(await again.json()).toMatchObject({ code: 'planComplete' })
-	})
-
-	test('a frame that disappeared is taken again, under a new number', async () => {
-		const { id, cameraId, wizard, directory, confirm, ended, store, plans, summary } = await setup()
-		const { sessionId, planId } = await start(wizard, id, cameraId, request(directory))
-		await confirm(sessionId)
-		await waitUntil(ended, 60000)
-		const { frames } = (await store.detail(planId, 10))!
-		rmSync(frames[0].path)
-
-		const later = await setup(undefined, plans)
-		const resumed = await start(later.wizard, later.id, later.cameraId, { token: `token-${tokens++}`, resumePlanId: planId })
-		expect(later.summary()?.groups[0]).toMatchObject({ accepted: 1, lost: 1, missing: 1 })
-		await later.confirm(resumed.sessionId)
-		await waitUntil(later.ended, 60000)
-		expect(later.summary()).toMatchObject({ state: 'completed', groups: [{ accepted: 2, missing: 0 }] })
-
-		const after = (await later.store.detail(planId, 10))!
-		expect(after.frames.map((frame) => frame.sequence)).toEqual([1, 2, 3])
-		expect(after.lost[frames[0].frameId]).toBe('The file is missing')
-		expect(summary()?.state).toBe('completed')
-		expect(dirname(after.frames[2].path)).toBe(after.plan.groups[0].directory)
-	})
-
-	test('a resume is refused on another device, and a plan cannot run twice', async () => {
-		const first = await setup()
-		const { sessionId, planId } = await start(first.wizard, first.id, first.cameraId, request(first.directory, { groups: [{ exposure: 0.01, count: 2 }], protection: { darkFilter: { slot: 1 }, closeCover: false, panelOff: false, manualCap: false, verifyFirstFrame: true }, wheel: first.wheelDevice }))
-		await first.pending()
-		const twice = await first.wizard.start(first.id, first.cameraId, { token: `token-${tokens++}`, resumePlanId: planId })
-		expect(twice.status).toBe(409)
-		await first.wizard.stop(sessionId)
-
-		const unknown = await first.wizard.start(first.id, first.cameraId, { token: `token-${tokens++}`, resumePlanId: 'unknown' })
-		expect(unknown.status).toBe(404)
-
-		const withoutWheel = await first.wizard.start(first.id, first.cameraId, { token: `token-${tokens++}`, resumePlanId: planId })
-		expect(withoutWheel.status).toBe(409)
-		expect(await withoutWheel.json()).toMatchObject({ code: 'planMismatch' })
-		expect((await first.wizard.plan(planId)).status).toBe(200)
-		expect((await first.wizard.plan('unknown')).status).toBe(404)
-		expect((await first.wizard.plans(first.id, first.cameraId)).status).toBe(200)
-		expect(((await (await first.wizard.plans(first.id, first.cameraId)).json()) as { plans: unknown[] }).plans).toHaveLength(1)
-		expect(first.wizard.session(sessionId).status).toBe(200)
-		expect(((await first.wizard.session(sessionId).json()) as DarkLibraryWizardSession).attempts).toEqual([])
 	})
 })

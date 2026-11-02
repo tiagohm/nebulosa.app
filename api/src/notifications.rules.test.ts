@@ -57,7 +57,7 @@ test('a Dark Library Wizard reports what needs the operator, what it left change
 	const classifier = new NotificationClassifier(() => undefined)
 	expect(classifier.classify(darkLibraryWizard({ state: 'stabilizing', temperature: -10 }))).toEqual([])
 	expect(classifier.classify(darkLibraryWizard({ state: 'cancelled', reason: 'aborted' }))).toEqual([])
-	expect(classifier.classify(darkLibraryWizard({ state: 'waitingForProtection', pending: { stepId: 'x', kind: 'protection', verified: [], asserted: ['cap'] } }))).toEqual([
+	expect(classifier.classify(darkLibraryWizard({ state: 'waitingForProtection', pending: { stepId: 'x', kind: 'protectionLost', message: 'Wheel left the dark slot' } }))).toEqual([
 		expect.objectContaining({ key: 'dark.step:x', level: 'warning', code: 'darkLibraryWizard.actionRequired', target: expect.objectContaining({ tool: 'dark-library-wizard' }) }),
 	])
 	expect(classifier.classify(darkLibraryWizard({ state: 'waitingForDecision', pending: { stepId: 'y', kind: 'suspectedLight', group: 0, suspicions: ['saturation'] } }))[0].message).toContain('external light')

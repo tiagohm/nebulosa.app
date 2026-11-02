@@ -3,7 +3,7 @@ import { cn } from 'cn'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 // oxfmt-ignore
-import { buildMaster, CALIBRATION_PAGE_SIZE, calibrationLibraryRuntime, cancelCalibrationImport, commitCalibrationImport, deleteCalibrationGroup, deleteCalibrationMaster, excludeCalibrationSource, jobEnded, latestGroupJob, loadCalibrationGroup, loadCalibrationGroups, loadCalibrationMaster, loadCalibrationMasters, loadCalibrationSource, loadCalibrationSources, loadImportCandidates, overrideCalibrationSource, preferMaster, refreshCalibrationFiles, startCalibrationImport, validateRecipe } from '../../calibrationlibrary/calibrationlibrary'
+import { buildMaster, CALIBRATION_PAGE_SIZE, calibrationLibraryRuntime, cancelCalibrationImport, commitCalibrationImport, deleteCalibrationGroup, deleteCalibrationMaster, deleteCalibrationSource, excludeCalibrationSource, jobEnded, latestGroupJob, loadCalibrationGroup, loadCalibrationGroups, loadCalibrationMaster, loadCalibrationMasters, loadCalibrationSource, loadCalibrationSources, loadImportCandidates, overrideCalibrationSource, preferMaster, refreshCalibrationFiles, startCalibrationImport, validateRecipe } from '../../calibrationlibrary/calibrationlibrary'
 import { Actions, ConfirmButton, Notice, Readout } from '../../equipment-control/parts'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { imagesState, openImage } from '../../images/images'
@@ -24,7 +24,7 @@ import { bytesText, CALIBRATION_KINDS, cameraFilterLabels, cameraText, coverage,
 // Calibration Library tool: what calibration frames exist, what can be combined and why not, and which masters were made. It
 // works with no camera and starts no exposure; every capture stays in Images. State lives on the server, so a reload, another
 // tab, or a wizard show the same builds. A master is built from the group it belongs to, whose form follows its build, and a
-// change makes a new revision. Deleting, after a confirmation, takes a group with the files of its frames, or one revision.
+// change makes a new revision. Deleting, after a confirmation, takes a frame or a group with their files, or one revision.
 
 // Fields of the recipe form.
 interface RecipeForm {
@@ -315,7 +315,7 @@ function MastersView({ selection, onSelect }: { readonly selection?: Selection; 
 function SelectionPanel({ selection, onGroup, onDeleted }: { readonly selection: Selection; readonly onGroup: (groupId: string) => void; readonly onDeleted: () => void }) {
 	if (selection.type === 'group') return <GroupPanel onDeleted={onDeleted} />
 	if (selection.type === 'master') return <MasterPanel onGroup={onGroup} onDeleted={onDeleted} />
-	return <SourcePanel />
+	return <SourcePanel onDeleted={onDeleted} />
 }
 
 // Opens a file of the server in Images.
@@ -549,12 +549,16 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 	)
 }
 
-// Frame, with how each value is known, and what an operator may state about it.
-function SourcePanel() {
-	const { source: snapshot } = useSnapshot(calibrationLibraryRuntime)
+// Frame, with how each value is known, what an operator may state about it, and its deletion, whose failure the review shows.
+function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
+	const { source: snapshot, pending } = useSnapshot(calibrationLibraryRuntime)
 	const source = snapshot
 	if (!source) return <p className="m-0 p-4 text-xs text-ink-300">Loading…</p>
 	const { metadata } = source
+
+	async function remove(sourceId: string) {
+		if (await deleteCalibrationSource(calibrationLibraryRuntime, sourceId)) onDeleted()
+	}
 
 	return (
 		<>
@@ -567,6 +571,9 @@ function SourcePanel() {
 					<Button disabled={source.status === 'missing'} onClick={() => openInImages(source.path)}>
 						Open in Images
 					</Button>
+					<ConfirmButton title="Delete this frame?" message="Its file is deleted from the disk, wherever it is, and the frame leaves the library. Masters made with it stay." confirmLabel="Delete" disabled={pending[`source:${source.sourceId}`] === true} onConfirm={() => void remove(source.sourceId)}>
+						Delete
+					</ConfirmButton>
 				</Actions>
 				<Readout label="Size">{bytesText(source.bytes)}</Readout>
 				<Readout label="Image">{`${metadata.width}×${metadata.height}×${metadata.channels}, BITPIX ${metadata.bitpix}${metadata.cfa ? `, ${metadata.cfa}` : ''}`}</Readout>

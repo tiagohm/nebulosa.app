@@ -359,11 +359,8 @@ export type {
 	DarkLibraryWizardEvent,
 	DarkLibraryWizardGroupRun,
 	DarkLibraryWizardGroupState,
-	DarkLibraryWizardNewRequest,
 	DarkLibraryWizardPendingStep,
-	DarkLibraryWizardPlans,
 	DarkLibraryWizardRequest,
-	DarkLibraryWizardResumeRequest,
 	DarkLibraryWizardSession,
 	DarkLibraryWizardSessionSummary,
 	DarkLibraryWizardSnapshot,
@@ -371,7 +368,7 @@ export type {
 	DarkLibraryWizardState,
 } from './darklibrarywizard'
 export type { DarkFrameNote, DarkLightSuspicion, DarkPlaneMeasurement, DarkRejectionCode, DarkTemperatureTrace } from './darklibrarywizard.analysis'
-export type { DarkFrameRecord, DarkFrameVerdict, DarkGroup, DarkGroupProgress, DarkPlanCapture, DarkPlanDetail, DarkPlanStatus, DarkPlanSummary, DarkProtection, DarkThermalPolicy } from './darklibrarywizard.store'
+export type { DarkFrameRecord, DarkFrameVerdict, DarkGroup, DarkGroupProgress, DarkPlanCapture, DarkProtection, DarkThermalPolicy } from './darklibrarywizard.store'
 export type {
 	FlatWizardAttempt,
 	FlatWizardCaptureSettings,

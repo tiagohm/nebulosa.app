@@ -6,7 +6,7 @@ import { jsonInit, responseError } from '../http'
 
 // The Calibration Library as this tab knows it. The server owns every frame, master, and job, so this store only mirrors
 // them: a snapshot on every socket (re)open and on every change event, jobs as they change (which no list shows: a group
-// follows its own build, and a wizard its plan), and pages and details fetched
+// follows its own build), and pages and details fetched
 // when a view asks. A new epoch means a new server process, whose counters start over; a snapshot older than one applied is
 // dropped, and a page that arrives after a newer request is ignored. Nothing here decides whether frames are compatible:
 // the tool shows the reasons the server gives. The store lives outside the tool because the wizards of the camera tabs show
@@ -67,19 +67,6 @@ const ENDED_STATES: ReadonlySet<CalibrationJobSummary['state']> = new Set(['comp
 // Returns whether a job ended.
 export function jobEnded(job: Pick<CalibrationJobSummary, 'state'>) {
 	return ENDED_STATES.has(job.state)
-}
-
-// Returns the latest master job of each group of a plan, newest first.
-export function planMasterJobs(jobs: Readonly<Record<string, CalibrationJobSummary>>, planId: string) {
-	const latest = new Map<string, CalibrationJobSummary>()
-
-	for (const job of Object.values(jobs)) {
-		if (job.planId !== planId || job.groupId === undefined) continue
-		const known = latest.get(job.groupId)
-		if (!known || known.createdAt < job.createdAt) latest.set(job.groupId, job)
-	}
-
-	return Array.from(latest.values()).toSorted((a, b) => b.createdAt - a.createdAt)
 }
 
 // Returns the latest master job of a group this tab knows, undefined when none.
@@ -245,6 +232,11 @@ export function preferMaster(state: CalibrationLibraryRuntime, masterId: string,
 // Deletes a revision and its file.
 export function deleteCalibrationMaster(state: CalibrationLibraryRuntime, masterId: string, revision: number, request: typeof fetch = fetch) {
 	return command(state, `master:${masterId}`, `${BASE_URL}/masters/${encodeURIComponent(masterId)}/revisions/${revision}`, { method: 'DELETE' }, request)
+}
+
+// Deletes a frame with its file.
+export function deleteCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, request: typeof fetch = fetch) {
+	return command<{ readonly deleted: number }>(state, `source:${sourceId}`, `${BASE_URL}/sources/${encodeURIComponent(sourceId)}`, { method: 'DELETE' }, request)
 }
 
 // Deletes a group with the files of its frames.

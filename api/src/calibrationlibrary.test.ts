@@ -280,6 +280,7 @@ describe('restart', () => {
 		writeFileSync(join(directory, MASTER_FILE), 'not the master')
 
 		const reopened = open(local, undefined, base)
+		await reopened.library.ready()
 		expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
 		expect(existsSync(directory)).toBeFalse()
 		const [orphan] = readdirSync(join(base, 'library', 'orphaned'))
@@ -293,6 +294,7 @@ describe('restart', () => {
 		interrupt(store, 'deleting')
 
 		const reopened = open(local, undefined, base)
+		await reopened.library.ready()
 		expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
 		expect(existsSync(directory)).toBeFalse()
 		expect(store.hasRevision(masterId, 1)).toBeFalse()

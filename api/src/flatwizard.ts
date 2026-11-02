@@ -17,6 +17,7 @@ import { clamp } from 'nebulosa/src/math/numerical/math'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
 import type { FlatFrameRegistration } from './calibrationlibrary'
+import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureSettings, type CaptureSnoop, DEFAULT_CAPTURES_DIR, exposureProgressListener, frameName, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
@@ -331,8 +332,6 @@ const FILENAME_TEMPLATE = '{date}_{time}_{camera}_{type}_{filter}_{seq}'
 
 // A session while its service knows it.
 interface Session {
-	// Resource key of the camera the session is registered under.
-	readonly key: string
 	summary: FlatWizardSessionSummary
 	attempts: FlatWizardAttempt[]
 	// Operation holding the devices; absent only before it started.
@@ -360,10 +359,8 @@ interface SessionDevices {
 
 // Flat Wizard sessions of the cameras of every open connection.
 export class FlatWizardSessions {
-	// Latest session of each camera, by camera resource key.
-	readonly #sessions = new Map<string, Session>()
-	// Session of each operation a command token started, so a repeated request answers it.
-	readonly #byOperation = new Map<string, Session>()
+	// Latest session of each camera, and the session each start token started.
+	readonly #sessions: CameraSessionRegistry<FlatWizardSessionSummary, Session>
 
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, capturer takes the frames (the one of the capture service), wheels, panels, and covers drive the
@@ -384,16 +381,18 @@ export class FlatWizardSessions {
 		readonly listener: FlatWizardListener,
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
 		readonly framePublished: (frame: FlatFrameRegistration) => void = () => undefined,
-	) {}
+	) {
+		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'flatWizard:updated', session }))
+	}
 
 	// Returns the latest session of every camera.
 	snapshot(): FlatWizardSnapshot {
-		return { sessions: Array.from(this.#sessions.values(), (session) => session.summary) }
+		return { sessions: this.#sessions.summaries() }
 	}
 
 	// Responds with a complete session, or 404 when it is not the latest of its camera.
 	session(sessionId: string): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		return session ? Response.json({ ...session.summary, attempts: session.attempts } satisfies FlatWizardSession) : errorResponse('Flat Wizard session not found', 404, 'notFound')
 	}
 
@@ -402,8 +401,7 @@ export class FlatWizardSessions {
 	// operation:updated events. Responds 404 for an unknown camera, wheel, or panel, and 409 when one is
 	// disconnected or held by another operation, or the camera's session is running.
 	start(connectionId: string, deviceId: string, { token, ...request }: FlatWizardRequest): Response {
-		const known = this.operations.started(token)
-		const repeated = known && this.#byOperation.get(known.operationId)
+		const repeated = this.#sessions.repeated(token)
 		if (repeated) return Response.json({ sessionId: repeated.summary.sessionId, operationId: repeated.summary.operationId } satisfies FlatWizardStartResponse, { status: 202 })
 
 		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
@@ -417,14 +415,13 @@ export class FlatWizardSessions {
 		if (cover && !cover.canPark) return unsupported('The cover cannot be opened and closed')
 
 		const key = resourceKey(camera)
-		const previous = this.#sessions.get(key)
+		const previous = this.#sessions.of(key)
 		if (previous && previous.summary.endedAt === undefined) return errorResponse('A Flat Wizard session is running on this camera', 409, 'busy')
 		if (!this.operations.available(camera) || [wheel, panel, cover].some((device) => device && !this.operations.available(device))) return busy()
 
 		const devices: SessionDevices = { camera, wheel, panel, cover }
 		const held: OperationDevice[] = [{ connectionId, deviceId }, ...[request.wheel, request.panel, request.cover].filter((device) => device !== undefined)]
 		const session: Session = {
-			key,
 			summary: {
 				sessionId: crypto.randomUUID(),
 				operationId: '',
@@ -455,10 +452,7 @@ export class FlatWizardSessions {
 			return session.handle.result
 		})
 
-		if (previous) this.#byOperation.delete(previous.summary.operationId)
-		this.#sessions.set(key, session)
-		this.#byOperation.set(record.operationId, session)
-		this.#update(session, { operationId: record.operationId })
+		this.#sessions.adopt(key, session, record.operationId)
 
 		void session.handle!.result.then((result) => this.#ended(session, devices, result))
 		return Response.json({ sessionId: session.summary.sessionId, operationId: record.operationId } satisfies FlatWizardStartResponse, { status: 202 })
@@ -467,7 +461,7 @@ export class FlatWizardSessions {
 	// Confirms the manual step a session waits for. Responds 204, 404 when the session is unknown, and 409 when it
 	// waits for no step or for another one, so a stale or repeated confirmation never skips a later step.
 	continue(sessionId: string, { stepId }: FlatWizardContinueRequest): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session) return errorResponse('Flat Wizard session not found', 404, 'notFound')
 		if (session.gate?.stepId !== stepId) return errorResponse('The Flat Wizard session is not waiting for this step', 409, 'staleStep')
 
@@ -480,7 +474,7 @@ export class FlatWizardSessions {
 	// light the session switched on was switched off. Responds 204, 404 when the session is unknown, and 409 when it
 	// already ended.
 	async stop(sessionId: string): Promise<Response> {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session) return errorResponse('Flat Wizard session not found', 404, 'notFound')
 		if (session.summary.endedAt !== undefined) return errorResponse('The Flat Wizard session already ended', 409, 'notRunning')
 
@@ -885,12 +879,6 @@ export class FlatWizardSessions {
 		this.#update(session, { lastAttempt: attempt })
 	}
 
-	// Returns the latest session with this id.
-	#find(sessionId: string): Session | undefined {
-		for (const session of this.#sessions.values()) if (session.summary.sessionId === sessionId) return session
-		return undefined
-	}
-
 	// Changes a filter group of a session and publishes the session.
 	#patch(session: Session, index: number, patch: Partial<FlatWizardFilterRun>) {
 		this.#update(session, { filters: session.summary.filters.map((filter, i) => (i === index ? { ...filter, ...patch } : filter)) })
@@ -901,8 +889,7 @@ export class FlatWizardSessions {
 	#update(session: Session, patch: Partial<FlatWizardSessionSummary>) {
 		// A stop request keeps the session stopping until it ended, whatever step was running.
 		const state = session.summary.state === 'stopping' && patch.state !== undefined && !TERMINAL_STATES.has(patch.state) ? 'stopping' : (patch.state ?? session.summary.state)
-		session.summary = { ...session.summary, ...patch, state, revision: session.summary.revision + 1 }
-		if (this.#sessions.get(session.key) === session) this.listener({ type: 'flatWizard:updated', session: session.summary })
+		this.#sessions.replace(session, { ...session.summary, ...patch, state })
 	}
 }
 

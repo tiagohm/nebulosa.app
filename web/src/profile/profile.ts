@@ -1,6 +1,6 @@
 import type { AnnotationBodies, DisplaySettings, MountRemoteProtocol, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import { nanoid } from 'nanoid'
-import { proxy, snapshot, subscribe } from 'valtio'
+import { proxy, snapshot } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
 import type { AnnotationLayers } from '../images/images'
 import { type AstrometryGridSettings, DEFAULT_IMAGE_ASTROMETRY, type ImageAstrometrySettings } from '../platesolving/preferences'
@@ -9,7 +9,6 @@ import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
 import { DEFAULT_STAR_PROFILE_SETTINGS, type StarProfileSettings } from '../stars/starprofile.settings'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
-import { isRecord, parseJson, readText, type Stores, writeText } from '../storage'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
 	type AstronomicalClockPreferences,
@@ -30,16 +29,13 @@ import {
 	type StatusChipRole,
 	DEFAULT_AUTO_FOCUS_SETTINGS,
 	DEFAULT_EXPOSURE_SETTINGS,
-	DEFAULT_PROFILE_NAME,
 	defaultSettings,
 	type Profile,
 	type ProfileSettings,
-	PROFILES_VERSION,
 	type AstroWeatherPreferences,
 	type CloseApproachPreferences,
 	DEFAULT_ASTRO_WEATHER_PREFERENCES,
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
-	type ProfilesStorage,
 	type SkyFramingSettings,
 	type SkyObserverSettings,
 	DEFAULT_TPPA_SETTINGS,
@@ -65,95 +61,27 @@ import {
 	type TargetCenteringSettings,
 } from './schema'
 
-// Profiles of the browser and the profile active in this tab, and the actions that change them. Profiles are a
-// versioned collection (schema.ts) in localStorage, shared by every tab with last-write-wins semantics; a document of
-// another version is discarded, never migrated, and one of the current version is trusted as written. The active
-// profile id is kept per tab in sessionStorage, and also as the browser's last selection so that new tabs open it.
-
-// localStorage key of the persisted ProfilesStorage.
-export const PROFILES_KEY = 'nebulosa:profiles'
-
-// sessionStorage key of the profile active in the tab.
-export const ACTIVE_PROFILE_KEY = 'nebulosa:activeProfileId'
-
-// localStorage key of the profile selected last in any tab, opened by new tabs.
-export const LAST_PROFILE_KEY = 'nebulosa:lastProfileId'
+// Profiles of the workspace and the profile active in this tab, and the actions that change them. Profiles belong to the
+// server (sync.ts), which shares them with every tab and browser; the actions here change the tab at once, and the
+// synchronization writes what changed. Fields of ProfileSettings that are tab memory (schema.ts) are never written. The
+// active profile is the tab's own, in memory: a tab opens on the first profile.
 
 // Profile store of the tab.
 export interface ProfileState {
-	// Profiles in display order; never empty once loaded.
+	// Profiles in display order; never empty once the workspace was loaded.
 	profiles: Profile[]
 	// Id of the profile active in this tab.
 	activeId: string
 	// Whether the profile management modal is shown.
 	open: boolean
-	// Message of the last failed write to storage, cleared by the next successful one.
-	error?: string
 }
 
-// Profile store of the tab, empty until loadProfiles runs.
+// Profile store of the tab, empty until the workspace is loaded.
 export const profileState = proxy<ProfileState>({ profiles: [], activeId: '', open: false })
 
-// Returns a new profile with default preferences, no connection, and an empty setup.
-export function newProfile(name: string, now = new Date().toISOString()): Profile {
-	return { id: nanoid(), name, equipment: {}, settings: defaultSettings(), createdAt: now, updatedAt: now }
-}
-
-// Writes the profile collection. Records a failure in state.error and returns false.
-function writeProfiles(state: ProfileState, stores: Stores, profiles: readonly Profile[]): boolean {
-	const data: ProfilesStorage = { version: PROFILES_VERSION, profiles }
-	const ok = writeText(stores.local, PROFILES_KEY, JSON.stringify(data))
-	state.error = ok ? undefined : 'Unable to save profiles: browser storage is unavailable or full.'
-	return ok
-}
-
-// Returns the profiles of a stored document, or undefined for one that is not of the current version.
-function storedProfiles(data: unknown): Profile[] | undefined {
-	return isRecord(data) && data.version === PROFILES_VERSION && Array.isArray(data.profiles) ? (data.profiles as Profile[]) : undefined
-}
-
-// Loads the profiles into state and restores the tab's active profile: this tab's last profile, then
-// the browser's last selection, then the first profile. Creates and stores a Default profile when
-// nothing is stored. A stored document that cannot be read is left untouched until the next change,
-// and a Default profile is used meanwhile.
-export function loadProfiles(state: ProfileState, stores: Stores) {
-	const now = new Date().toISOString()
-	const text = readText(stores.local, PROFILES_KEY)
-	let profiles = text === undefined ? undefined : storedProfiles(parseJson(text))
-
-	if (!profiles?.length) {
-		profiles = [newProfile(DEFAULT_PROFILE_NAME, now)]
-		if (text === undefined) writeProfiles(state, stores, profiles)
-	}
-
-	const exists = (id: string | undefined) => id !== undefined && profiles.some((p) => p.id === id)
-	const session = readText(stores.session, ACTIVE_PROFILE_KEY)
-	const last = readText(stores.local, LAST_PROFILE_KEY)
-
-	state.profiles = profiles
-	state.activeId = exists(session) ? session! : exists(last) ? last! : profiles[0].id
-	writeText(stores.session, ACTIVE_PROFILE_KEY, state.activeId)
-}
-
-// Persists every later change of state: the profile collection to localStorage, and the active profile
-// to this tab's sessionStorage and as the browser's last selection. Returns a function that stops it.
-export function persistProfiles(state: ProfileState, stores: Stores): () => void {
-	let { profiles, activeId } = snapshot(state)
-
-	return subscribe(state, () => {
-		const current = snapshot(state)
-
-		if (current.profiles !== profiles) {
-			profiles = current.profiles
-			writeProfiles(state, stores, current.profiles)
-		}
-
-		if (current.activeId !== activeId) {
-			activeId = current.activeId
-			writeText(stores.session, ACTIVE_PROFILE_KEY, activeId)
-			writeText(stores.local, LAST_PROFILE_KEY, activeId)
-		}
-	})
+// Returns a new profile with default preferences, no connection, and an empty setup, under a new id.
+export function newProfile(name: string, id: string = nanoid()): Profile {
+	return { id, name, equipment: {}, settings: defaultSettings() }
 }
 
 // Returns the profile active in the tab, of the state or of a snapshot of it. The state must be loaded.
@@ -165,11 +93,6 @@ export function activeProfile<P extends Pick<Profile, 'id'>>(state: { readonly p
 // empty when none is selected.
 export function activeSetup(profile: { readonly connectionId?: string; readonly equipment: { readonly [connectionId: string]: Readonly<EquipmentSetup> } }): Readonly<EquipmentSetup> {
 	return (profile.connectionId && profile.equipment[profile.connectionId]) || {}
-}
-
-// Marks a profile as changed now.
-function touch(profile: Profile) {
-	profile.updatedAt = new Date().toISOString()
 }
 
 // Makes a profile active in the tab. Ignored for an unknown id.
@@ -192,7 +115,6 @@ export function renameProfile(state: ProfileState, id: string, name: string): bo
 	const profile = state.profiles.find((p) => p.id === id)
 	if (!trimmed || !profile) return false
 	profile.name = trimmed
-	touch(profile)
 	return true
 }
 
@@ -203,8 +125,7 @@ export function duplicateProfile(state: ProfileState, id: string): Profile | und
 	if (index < 0) return undefined
 
 	const source = structuredClone(snapshot(state).profiles[index]) as Profile
-	const now = new Date().toISOString()
-	const copy: Profile = { ...source, id: nanoid(), name: `${source.name} (copy)`, createdAt: now, updatedAt: now }
+	const copy: Profile = { ...source, id: nanoid(), name: `${source.name} (copy)` }
 	state.profiles.splice(index + 1, 0, copy)
 	return copy
 }
@@ -225,7 +146,6 @@ export function selectConnection(state: ProfileState, connectionId: string | und
 	if (profile.connectionId === connectionId) return
 	if (connectionId) profile.connectionId = connectionId
 	else delete profile.connectionId
-	touch(profile)
 }
 
 // Result of an assignment: ok, no connection selected, or the role that already holds the device and
@@ -249,7 +169,6 @@ export function assignDevice(state: ProfileState, role: EquipmentRole, device: D
 		delete setup[role]
 	}
 
-	touch(profile)
 	return { ok: true }
 }
 
@@ -259,17 +178,12 @@ export function rememberDeviceNames(state: ProfileState, devices: readonly Devic
 	const profile = activeProfile(state)
 	const setup = profile.connectionId ? profile.equipment[profile.connectionId] : undefined
 	if (!setup) return
-	let changed = false
 
 	for (const [role, assignment] of Object.entries(setup)) {
 		if (!isEquipmentRole(role) || !assignment || assignment.name) continue
 		const device = devices.find((d) => d.id === assignment.id)
-		if (!device) continue
-		setup[role] = { id: device.id, name: device.name }
-		changed = true
+		if (device) setup[role] = { id: device.id, name: device.name }
 	}
-
-	if (changed) touch(profile)
 }
 
 // Whether the contextual panel of a workspace is expanded in a profile's settings or a snapshot of them.
@@ -283,7 +197,6 @@ export function setPanelOpen(state: ProfileState, workspace: WorkspaceId, open: 
 	const profile = activeProfile(state)
 	if (panelOpen(profile.settings, workspace) === open) return
 	profile.settings.panels[workspace] = open
-	touch(profile)
 }
 
 // Remembers in the active profile the server directory an image was opened from.
@@ -291,7 +204,6 @@ export function setLastImageDirectory(state: ProfileState, directory: string) {
 	const profile = activeProfile(state)
 	if (profile.settings.lastImageDirectory === directory) return
 	profile.settings.lastImageDirectory = directory
-	touch(profile)
 }
 
 // Returns how Annotation of a profile draws and what it searches.
@@ -304,7 +216,6 @@ export function setAnnotationPreferences(state: ProfileState, { layers, bodies, 
 	const profile = activeProfile(state)
 	const current = annotationPreferences(profile.settings)
 	profile.settings.imageAnnotation = { ...current, ...patch, layers: { ...current.layers, ...layers }, bodies: { ...current.bodies, ...bodies } }
-	touch(profile)
 }
 
 // Returns the plate solving settings a profile shares between the documents outside a camera tab.
@@ -316,7 +227,6 @@ export function imagePlateSolving(settings: Pick<ProfileSettings, 'imagePlateSol
 export function setImagePlateSolving(state: ProfileState, plateSolving: Readonly<CameraPlateSolvingSettings>) {
 	const profile = activeProfile(state)
 	profile.settings.imagePlateSolving = plateSolving
-	touch(profile)
 }
 
 // Returns the Image Processing pipeline of a profile, which every document opened next starts with.
@@ -328,7 +238,6 @@ export function imageProcessingPipeline(settings: Pick<ProfileSettings, 'imagePr
 export function setImageProcessingPipeline(state: ProfileState, steps: readonly ImageProcessingPresetStep[]) {
 	const profile = activeProfile(state)
 	profile.settings.imageProcessing = steps
-	touch(profile)
 }
 
 // Remembers in the active profile the server directory an image was saved to.
@@ -336,7 +245,6 @@ export function setLastSaveDirectory(state: ProfileState, directory: string) {
 	const profile = activeProfile(state)
 	if (profile.settings.lastSaveDirectory === directory) return
 	profile.settings.lastSaveDirectory = directory
-	touch(profile)
 }
 
 // Returns the identity of a camera of a profile's saved connection, or undefined when the profile has no connection
@@ -357,7 +265,6 @@ function setCameraForm<K extends keyof CameraSettings>(state: ProfileState, came
 	const profile = activeProfile(state)
 	const settings = ((profile.settings.cameras[camera.connectionId] ??= {})[camera.deviceId] ??= {})
 	settings[form] = JSON.parse(JSON.stringify({ ...current, ...patch })) as CameraSettings[K]
-	touch(profile)
 }
 
 // Returns the exposure and camera settings of a camera: the ones edited last, or the defaults.
@@ -444,7 +351,6 @@ export function saveFramingReference(state: ProfileState, framing: Pick<FramingR
 	if (!name || saved.length >= FRAMING_REFERENCES_MAXIMUM) return undefined
 	const reference: FramingReference = { ...framing, id: nanoid(), name, createdAt: now, updatedAt: now }
 	profile.settings.framingReferences = [...saved, reference]
-	touch(profile)
 	return reference
 }
 
@@ -453,8 +359,9 @@ export function renameFramingReference(state: ProfileState, id: string, name: st
 	const profile = activeProfile(state)
 	const trimmed = name.trim()
 	if (!trimmed || !profile.settings.framingReferences?.some((framing) => framing.id === id)) return false
-	profile.settings.framingReferences = profile.settings.framingReferences.map((framing) => (framing.id === id ? { ...framing, name: trimmed, updatedAt: now } : framing))
-	touch(profile)
+	const framing = profile.settings.framingReferences.find((saved) => saved.id === id)!
+	framing.name = trimmed
+	framing.updatedAt = now
 	return true
 }
 
@@ -463,7 +370,6 @@ export function deleteFramingReference(state: ProfileState, id: string) {
 	const profile = activeProfile(state)
 	if (!profile.settings.framingReferences?.some((framing) => framing.id === id)) return
 	profile.settings.framingReferences = profile.settings.framingReferences.filter((framing) => framing.id !== id)
-	touch(profile)
 }
 
 // Returns the DARV form of a camera: the one edited last, or the defaults.
@@ -524,7 +430,6 @@ export function setImageDisplaySettings(state: ProfileState, camera: CameraIdent
 
 	const profile = activeProfile(state)
 	profile.settings.imageDisplay = JSON.parse(JSON.stringify(settings)) as DisplaySettings
-	touch(profile)
 }
 
 // Returns the star detection request of a profile: the one edited last, or the defaults.
@@ -537,7 +442,6 @@ export function starDetectionSettings(settings: Pick<ProfileSettings, 'starDetec
 export function setStarDetectionSettings(state: ProfileState, request: StarDetectionRequest) {
 	const profile = activeProfile(state)
 	profile.settings.starDetection = JSON.parse(JSON.stringify(request)) as StarDetectionRequest
-	touch(profile)
 }
 
 // Returns the streak detector settings of a profile: the ones edited last, or the defaults.
@@ -550,7 +454,6 @@ export function streakDetectionSettings(settings: Pick<ProfileSettings, 'streakD
 export function setStreakDetectionSettings(state: ProfileState, settings: StreakDetectorSettings) {
 	const profile = activeProfile(state)
 	profile.settings.streakDetection = { ...settings }
-	touch(profile)
 }
 
 // Returns the appearance of the astrometric aids of solved images of a profile: the one edited last, or the default.
@@ -567,7 +470,6 @@ export function starProfileSettings(settings: Pick<ProfileSettings, 'starProfile
 export function setStarProfileSettings(state: ProfileState, patch: Partial<StarProfileSettings>) {
 	const profile = activeProfile(state)
 	profile.settings.starProfile = { ...starProfileSettings(profile.settings), ...patch }
-	touch(profile)
 }
 
 // Returns what the status bar clock of a profile shows.
@@ -581,7 +483,6 @@ export function setAstronomicalClockPreferences(state: ProfileState, patch: Part
 	const profile = activeProfile(state)
 	const clock = { ...astronomicalClockPreferences(profile.settings), ...patch }
 	profile.settings.statusBar = { ...profile.settings.statusBar, astronomicalClock: clock.secondary === clock.primary ? { ...clock, secondary: 'none' } : clock }
-	touch(profile)
 }
 
 // Returns what the status bar shows for the device of a role of a profile.
@@ -596,7 +497,6 @@ export function setStatusChipPreferences(state: ProfileState, role: StatusChipRo
 	const chip = { ...statusChipPreferences(profile.settings, role), ...patch }
 	const fields = (STATUS_CHIP_FIELDS[role] as readonly StatusChipField[]).filter((field) => chip.fields.includes(field))
 	profile.settings.statusBar = { astronomicalClock: astronomicalClockPreferences(profile.settings), chips: { ...profile.settings.statusBar?.chips, [role]: { ...chip, fields } } }
-	touch(profile)
 }
 
 // Returns the preferences of the Close Approaches tool of a profile.
@@ -608,7 +508,6 @@ export function closeApproachPreferences(settings: Pick<ProfileSettings, 'closeA
 export function setCloseApproachPreferences(state: ProfileState, patch: Partial<CloseApproachPreferences>) {
 	const profile = activeProfile(state)
 	profile.settings.closeApproaches = { ...closeApproachPreferences(profile.settings), ...patch }
-	touch(profile)
 }
 
 // Returns the preferences of the Astro Weather tool of a profile.
@@ -620,7 +519,6 @@ export function astroWeatherPreferences(settings: Pick<ProfileSettings, 'astroWe
 export function setAstroWeatherPreferences(state: ProfileState, patch: Partial<AstroWeatherPreferences>) {
 	const profile = activeProfile(state)
 	profile.settings.astroWeather = { ...astroWeatherPreferences(profile.settings), ...patch }
-	touch(profile)
 }
 
 // Changes the appearance of the astrometric aids of solved images of the active profile: the coordinates, grid, and
@@ -629,7 +527,6 @@ export function setImageAstrometrySettings(state: ProfileState, patch: Partial<O
 	const profile = activeProfile(state)
 	const current = imageAstrometrySettings(profile.settings)
 	profile.settings.imageAstrometry = { ...current, ...patch, coordinates: { ...current.coordinates, ...patch.coordinates }, grid: { ...current.grid, ...patch.grid } }
-	touch(profile)
 }
 
 // Lowest elevation accepted for an observer in meters (below the Dead Sea shore, -430 m).
@@ -649,9 +546,9 @@ function isKnownTimeZone(timeZone: string) {
 
 // Returns a valid observer, or undefined for anything out of range or incomplete.
 export function normalizeSkyObserver(value: unknown): SkyObserverSettings | undefined {
-	if (!isRecord(value)) return undefined
+	if (typeof value !== 'object' || value === null) return undefined
 
-	const { latitude, longitude, elevation, name, timeZone } = value
+	const { latitude, longitude, elevation, name, timeZone } = value as Record<string, unknown>
 	if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90) return undefined
 	if (typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return undefined
 	if (typeof elevation !== 'number' || !Number.isFinite(elevation) || elevation < MIN_OBSERVER_ELEVATION || elevation > MAX_OBSERVER_ELEVATION) return undefined
@@ -675,7 +572,6 @@ export function setSkyObserver(state: ProfileState, observer: SkyObserverSetting
 	if (observer === undefined) {
 		if (!profile.settings.sky.observer) return true
 		delete profile.settings.sky.observer
-		touch(profile)
 		return true
 	}
 
@@ -684,7 +580,6 @@ export function setSkyObserver(state: ProfileState, observer: SkyObserverSetting
 	const current = profile.settings.sky.observer
 	if (current && current.latitude === normalized.latitude && current.longitude === normalized.longitude && current.elevation === normalized.elevation && current.name === normalized.name && current.timeZone === normalized.timeZone) return true
 	profile.settings.sky.observer = normalized
-	touch(profile)
 	return true
 }
 
@@ -694,7 +589,6 @@ export function setSkyTimeBarVisible(state: ProfileState, visible: boolean) {
 	if ((sky.timeBar === true) === visible) return
 	if (visible) sky.timeBar = true
 	else delete sky.timeBar
-	touch(activeProfile(state))
 }
 
 // Shows or hides a star map layer in the active profile.
@@ -703,7 +597,6 @@ export function setSkyLayerVisible(state: ProfileState, layer: SkyLayerId, visib
 	const display = (profile.settings.sky.display ??= { layers: {} })
 	if (display.layers[layer] === visible) return
 	display.layers[layer] = visible
-	touch(profile)
 }
 
 // Sets the faintest star magnitude the star map draws in the active profile, kept within
@@ -714,7 +607,6 @@ export function setSkyMagnitudeLimit(state: ProfileState, limit: number) {
 	const value = Math.min(MAP_STAR_MAGNITUDE_LIMIT, Math.max(MIN_MAGNITUDE_LIMIT, limit))
 	if (display.magnitudeLimit === value) return
 	display.magnitudeLimit = value
-	touch(profile)
 }
 
 // Copies optics, which may be a store proxy or snapshot, into a plain object.
@@ -738,7 +630,6 @@ export function createOpticalPreset(state: ProfileState, name: string, optics: O
 	framing.presets = [...framing.presets, preset]
 	framing.activePresetId = preset.id
 	framing.visible = true
-	touch(profile)
 	return preset
 }
 
@@ -751,7 +642,6 @@ export function updateOpticalPreset(state: ProfileState, id: string, changes: { 
 	if (!framing || !current) return false
 	const updated: OpticalPreset = { id, name: changes.name?.trim() || current.name, optics: changes.optics ? copyOptics(changes.optics) : current.optics }
 	framing.presets = framing.presets.map((preset) => (preset.id === id ? updated : preset))
-	touch(profile)
 	return true
 }
 
@@ -768,7 +658,6 @@ export function deleteOpticalPreset(state: ProfileState, id: string) {
 	if (!framing?.presets.some((preset) => preset.id === id)) return
 	framing.presets = framing.presets.filter((preset) => preset.id !== id)
 	if (framing.activePresetId === id) framing.activePresetId = framing.presets[0]?.id
-	touch(profile)
 }
 
 // Selects the preset drawn in the active profile.
@@ -777,7 +666,6 @@ export function selectOpticalPreset(state: ProfileState, id: string) {
 	const framing = profile.settings.sky.framing
 	if (!framing?.presets.some((preset) => preset.id === id) || framing.activePresetId === id) return
 	framing.activePresetId = id
-	touch(profile)
 }
 
 // Shows or hides the field of view in the active profile.
@@ -786,7 +674,6 @@ export function setFramingVisible(state: ProfileState, visible: boolean) {
 	const framing = framingOf(profile)
 	if (framing.visible === visible) return
 	framing.visible = visible
-	touch(profile)
 }
 
 // Chooses where the drawn field of view comes from in the active profile.
@@ -795,7 +682,6 @@ export function setFramingSource(state: ProfileState, source: 'custom' | 'equipm
 	const framing = framingOf(profile)
 	if ((framing.source ?? 'custom') === source) return
 	framing.source = source
-	touch(profile)
 }
 
 // Chooses the sensor of the Equipment Setup field of view in the active profile.
@@ -804,7 +690,6 @@ export function setSensorSource(state: ProfileState, source: SensorSource) {
 	const framing = framingOf(profile)
 	if ((framing.sensorSource ?? 'MAIN_CAMERA') === source) return
 	framing.sensorSource = source
-	touch(profile)
 }
 
 // Replaces the manual sensor of the Equipment Setup field of view in the active profile; it only
@@ -812,7 +697,6 @@ export function setSensorSource(state: ProfileState, source: SensorSource) {
 export function setManualSensor(state: ProfileState, sensor: SensorGeometry) {
 	const profile = activeProfile(state)
 	framingOf(profile).manualSensor = { ...sensor }
-	touch(profile)
 }
 
 // Sets the position angle in degrees of the Equipment Setup field of view in the active profile,
@@ -823,7 +707,6 @@ export function setEquipmentRotation(state: ProfileState, rotation: number) {
 	const value = normalizeDegrees(rotation)
 	if (framing.equipmentRotation === value) return
 	framing.equipmentRotation = value
-	touch(profile)
 }
 
 // Replaces the telescope optics of the active profile's Equipment Setup; planning data only, never sent
@@ -831,7 +714,6 @@ export function setEquipmentRotation(state: ProfileState, rotation: number) {
 export function setTelescopeOptics(state: ProfileState, optics: TelescopeOptics) {
 	const profile = activeProfile(state)
 	profile.settings.telescope = { focalLength: optics.focalLength, focalMultiplier: optics.focalMultiplier, aperture: optics.aperture }
-	touch(profile)
 }
 
 // Replaces the guide telescope optics of the active profile's Equipment Setup, which guiding takes its pixel scale and
@@ -839,7 +721,6 @@ export function setTelescopeOptics(state: ProfileState, optics: TelescopeOptics)
 export function setGuideTelescopeOptics(state: ProfileState, optics: TelescopeOptics) {
 	const profile = activeProfile(state)
 	profile.settings.guideTelescope = { focalLength: optics.focalLength, focalMultiplier: optics.focalMultiplier, aperture: optics.aperture }
-	touch(profile)
 }
 
 // Forgets a removed saved connection in every profile: profiles that selected it lose their selection,
@@ -851,7 +732,6 @@ export function forgetConnection(state: ProfileState, connectionId: string) {
 		if (!selected && !used) continue
 		if (selected) delete profile.connectionId
 		delete profile.equipment[connectionId]
-		touch(profile)
 	}
 }
 
@@ -868,7 +748,6 @@ export function setMountRemoteBinding(state: ProfileState, mount: CameraIdentity
 	const profile = activeProfile(state)
 	const mounts = ((profile.settings.mountRemoteControl ??= {})[mount.connectionId] ??= {})
 	;(mounts[mount.deviceId] ??= {})[protocol] = { host: binding.host, port: binding.port }
-	touch(profile)
 }
 
 // Marks notifications as read in the active profile. Reading never changes the server history.
@@ -878,7 +757,6 @@ export function markNotificationsRead(state: ProfileState, ids: readonly string[
 	const unread = Array.from(new Set(ids)).filter((id) => !preferences.readIds.includes(id))
 	if (unread.length === 0) return
 	preferences.readIds = [...preferences.readIds, ...unread].slice(-MAX_NOTIFICATION_IDS)
-	touch(profile)
 }
 
 // Hides notifications from the lists of the active profile, marking them as read. The server history keeps them.
@@ -890,7 +768,6 @@ export function dismissNotifications(state: ProfileState, ids: readonly string[]
 	const listed = Array.from(new Set(ids)).filter((id) => !preferences.dismissedIds.includes(id))
 	if (listed.length === 0) return
 	preferences.dismissedIds = [...preferences.dismissedIds, ...listed].slice(-MAX_NOTIFICATION_IDS)
-	touch(profile)
 }
 
 // Drops from every profile the read and dismissed ids of notifications the server history no longer retains.

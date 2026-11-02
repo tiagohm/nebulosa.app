@@ -54,6 +54,7 @@ import { createTargetCenteringRoutes, TargetCenteringSessions } from './targetce
 import { createTppaRoutes, TppaSessions } from './tppa'
 import { broadcast, listenClients, listenSockets, type ServerEvent, type WebSocketData, websocket } from './websocket'
 import { createWheelRoutes, WheelCommands } from './wheels'
+import { createWorkspaceRoutes, Workspace } from './workspace'
 
 // HTTP routes and the WebSocket handler of the backend, mounted by the app server.
 
@@ -455,11 +456,15 @@ export type { GuidingProfileCut, GuidingStarProfile } from './guidingprofile'
 export type { NotificationCreatedEvent, NotificationRecord, NotificationSnapshot } from './notifications'
 export type { NotificationCameraTool, NotificationLevel, NotificationSource, NotificationTarget } from './notifications.rules'
 export type { ClientMessage, ServerEvent } from './websocket'
+export type { ProfileCameraForm, ProfilePreferenceKey, ProfileRecord, ProfileSaveRequest, SavedConnection, SavedConnectionSaveRequest, WorkspaceDevice, WorkspaceErrorCode, WorkspaceEvent, WorkspaceFramingReference, WorkspaceMountBinding, WorkspaceSnapshot, WorkspaceValue, WorkspaceValueSaveRequest } from './workspace'
 export { websocket }
 
 // Operational database of the server, opened by the app before it serves; a test that only imports this module opens
 // nothing.
 const database = new AppDatabase(DEFAULT_DATABASE_FILE)
+
+// Saved connections and profiles of the operators, shared by every tab and browser.
+const workspace = new Workspace(database, broadcast)
 
 // History of the notifications, created from the events of the connections, the operations, and the sessions; its
 // own notification:created events are broadcast directly, so they are never classified again.
@@ -647,11 +652,12 @@ const earthOrientation = new EarthOrientationData()
 // Conversions of the Astronomical Time Converter and the real-time reference of the status bar clock.
 const astronomicalTime = new AstronomicalTimeService(earthOrientation)
 
-// Opens the operational database and brings its schema up to date, before anything is served. Throws an Error saying why
-// it cannot be opened (another server uses it, the file is not a database, or its schema is newer than this server
-// knows), leaving the file as it is; the app then stops.
+// Opens the operational database and brings its schema up to date, before anything is served, and creates the Default
+// profile when it has none. Throws an Error saying why it cannot be opened (another server uses it, the file is not a
+// database, or its schema is newer than this server knows), leaving the file as it is; the app then stops.
 export function startDatabase() {
 	database.open()
+	workspace.ensureProfile()
 }
 
 // Closes the operational database, for a server about to stop.
@@ -722,6 +728,7 @@ export const routes = {
 	...createImageRoutes(images),
 	...createImageProcessingRoutes(imageProcessing),
 	...createExternalToolsRoutes(externalTools),
+	...createWorkspaceRoutes(workspace),
 	...createStarDetectionRoutes(stars),
 	...createStarProfileRoutes(starProfiles),
 	...createPlateSolvingRoutes(plateSolving),

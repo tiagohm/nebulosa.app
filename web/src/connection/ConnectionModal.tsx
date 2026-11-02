@@ -29,7 +29,7 @@ function connectionDescription(connection: Connection, inProfile: boolean, conne
 // Connections modal, shown while connectionState.open is true. The form on the left saves a new
 // connection or the one being edited; the list on the right acts on the highlighted connection.
 export function ConnectionModal() {
-	const { open, connections, selected, servers, loading, errors, storageError } = useSnapshot(connectionState)
+	const { open, connections, selected, servers, loading, errors } = useSnapshot(connectionState)
 	// Failure of the highlighted connection's last connect or disconnect.
 	const error = selected === undefined ? undefined : errors[selected]
 	const profiles = useSnapshot(profileState)
@@ -171,7 +171,6 @@ export function ConnectionModal() {
 							</Button>
 						</div>
 						{error && <p className="m-0 basis-full text-[13px] leading-5 text-danger">{error}</p>}
-						{storageError && <p className="m-0 basis-full text-[13px] leading-5 text-danger">{storageError}</p>}
 					</div>
 				</div>
 			</div>

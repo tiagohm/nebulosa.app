@@ -5,6 +5,7 @@ import { useSnapshot } from 'valtio'
 import { deviceState } from '../equipment/equipment'
 import { imagesState } from '../images/images'
 import { markNotificationsRead, profileState } from '../profile/profile'
+import { workspaceSyncState } from '../profile/sync'
 import { routeState } from '../shell/route'
 import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
@@ -20,7 +21,8 @@ import { useNotificationScope } from './useNotificationScope'
 //
 // Above them, a toast of the tab itself reports a lost server: shown once the event socket stayed closed for
 // LOST_GRACE, so a quick restart shows nothing, and replaced by a short reconnected toast when it opens again. It is
-// never part of the server history, which cannot report the loss of its own server.
+// never part of the server history, which cannot report the loss of its own server. A toast of the tab also says why a
+// change of the workspace (a profile or a saved connection) was not saved as made, until closed.
 
 // Time a toast stays, in milliseconds, by severity; info notifications never become toasts.
 const TOAST_DURATION: Readonly<Record<NotificationLevel, number>> = { info: 2000, success: 2000, warning: 4000, error: 5000 }
@@ -71,6 +73,7 @@ function useServerToast(): readonly [ServerToast | undefined, () => void] {
 // Host of the toasts, mounted once by the application shell.
 export function NotificationToasts() {
 	const [serverToast, closeServerToast] = useServerToast()
+	const { message: workspaceMessage } = useSnapshot(workspaceSyncState)
 	const { toasts } = useSnapshot(notificationsState)
 	const { connection, preferences } = useNotificationScope()
 	const shown = toasts.filter((toast) => inScope(toast, connection) && !preferences?.dismissedIds.includes(toast.id))
@@ -81,7 +84,7 @@ export function NotificationToasts() {
 		}
 	}, [toasts, connection, preferences])
 
-	if (shown.length === 0 && !serverToast) return null
+	if (shown.length === 0 && !serverToast && !workspaceMessage) return null
 
 	return (
 		<div className="pointer-events-none fixed right-4 bottom-10 z-40 flex w-[min(360px,calc(100vw-32px))] flex-col gap-2">
@@ -93,6 +96,16 @@ export function NotificationToasts() {
 						<span className="text-xs leading-4 wrap-break-word text-ink-200">{serverToast === 'lost' ? 'Lost contact with the Nebulosa server; reconnecting…' : 'Contact with the Nebulosa server was restored.'}</span>
 					</div>
 					<IconButton icon="close" label="Close" onClick={closeServerToast} />
+				</div>
+			)}
+			{workspaceMessage && (
+				<div className="pointer-events-auto box-border flex items-start gap-2.5 rounded-md border border-l-4 border-line-100 border-l-accent bg-base-200 py-2.5 pr-1.5 pl-3 text-ink-100 shadow-[0_12px_32px_rgb(0_0_0/0.45)]">
+					<Icon name="warning" className="mt-px size-[18px] text-accent" />
+					<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+						<span className="truncate text-[13px] leading-5 font-semibold">Workspace not saved as changed</span>
+						<span className="text-xs leading-4 wrap-break-word text-ink-200">{workspaceMessage}</span>
+					</div>
+					<IconButton icon="close" label="Close" onClick={() => (workspaceSyncState.message = undefined)} />
 				</div>
 			)}
 			{shown.map((toast) => (

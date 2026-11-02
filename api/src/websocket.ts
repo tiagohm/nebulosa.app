@@ -26,6 +26,7 @@ import type { StarDetectionEvent } from './stars'
 import type { StreakDetectionEvent } from './streaks'
 import type { TargetCenteringEvent } from './targetcentering'
 import type { TppaEvent } from './tppa'
+import type { WorkspaceEvent } from './workspace'
 
 // WebSocket endpoint that pushes server events to every open browser tab. A tab names itself with the client id
 // it opens the socket with (/api/ws?client=<id>), the same for every socket it reopens, so services can keep
@@ -58,6 +59,7 @@ export type ServerEvent =
 	| MountRemoteControlEvent
 	| DomeMotionEvent
 	| ExternalToolEvent
+	| WorkspaceEvent
 	| StarDetectionEvent
 	| StreakDetectionEvent
 	| PlateSolvingEvent

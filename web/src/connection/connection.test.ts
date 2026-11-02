@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { proxy } from 'valtio'
-import { MemoryStorage } from '../storage.memory'
-import { connect, CONNECTIONS_KEY, type ConnectionState, disconnect, handleConnectionEvent, highlightConnection, loadConnections, persistConnections, removeConnection, saveConnection, SELECTED_CONNECTION_KEY, serverOf } from './connection'
+import { connect, type ConnectionState, disconnect, handleConnectionEvent, highlightConnection, removeConnection, saveConnection, serverOf } from './connection'
 
 function newState(): ConnectionState {
 	return { open: true, connections: [], servers: [], errors: {} }
@@ -71,78 +70,6 @@ describe('highlight connection', () => {
 		highlightConnection(state, undefined)
 		highlightConnection(state, 'gone')
 		expect(state.selected).toBe(a.id)
-	})
-})
-
-describe('persistence', () => {
-	test('restores saved connections and skips unreadable entries', () => {
-		const storage = new MemoryStorage()
-		storage.setItem(CONNECTIONS_KEY, JSON.stringify([{ id: 'a', name: 'A', host: 'h', port: 1, type: 'INDI' }, { id: 'b' }, 42, { id: 'a', name: 'dup', type: 'SIMULATOR' }]))
-		const state = newState()
-
-		loadConnections(state, storage)
-
-		expect(state.connections).toEqual([{ id: 'a', name: 'A', host: 'h', port: 1, type: 'INDI' }])
-		expect(state.selected).toBe('a')
-	})
-
-	test('loads invalid JSON as empty without overwriting it', () => {
-		const storage = new MemoryStorage()
-		storage.setItem(CONNECTIONS_KEY, '{not json')
-		const state = proxy(newState())
-
-		loadConnections(state, storage)
-		persistConnections(state, storage)
-
-		expect(state.connections).toBeEmpty()
-		expect(storage.getItem(CONNECTIONS_KEY)).toBe('{not json')
-	})
-
-	test('restores the last highlighted connection, or the first when it no longer exists', () => {
-		const storage = new MemoryStorage()
-		storage.setItem(
-			CONNECTIONS_KEY,
-			JSON.stringify([
-				{ id: 'a', name: 'A', type: 'SIMULATOR' },
-				{ id: 'b', name: 'B', type: 'SIMULATOR' },
-			]),
-		)
-		storage.setItem(SELECTED_CONNECTION_KEY, 'b')
-		const state = newState()
-
-		loadConnections(state, storage)
-		expect(state.selected).toBe('b')
-
-		storage.setItem(SELECTED_CONNECTION_KEY, 'gone')
-		loadConnections(state, storage)
-		expect(state.selected).toBe('a')
-	})
-
-	test('writes the highlighted connection', async () => {
-		const storage = new MemoryStorage()
-		const state = proxy(newState())
-		loadConnections(state, storage)
-		persistConnections(state, storage)
-
-		const saved = saveConnection(state, { name: 'Sim', host: '', port: 7624, type: 'SIMULATOR' })!
-		await Bun.sleep(0)
-		expect(storage.getItem(SELECTED_CONNECTION_KEY)).toBe(saved.id)
-
-		removeConnection(state, saved.id)
-		await Bun.sleep(0)
-		expect(storage.getItem(SELECTED_CONNECTION_KEY)).toBe('')
-	})
-
-	test('writes later changes', async () => {
-		const storage = new MemoryStorage()
-		const state = proxy(newState())
-		loadConnections(state, storage)
-		persistConnections(state, storage)
-
-		const saved = saveConnection(state, { name: 'Sim', host: '', port: 7624, type: 'SIMULATOR' })!
-		await Bun.sleep(0)
-
-		expect(JSON.parse(storage.getItem(CONNECTIONS_KEY)!)).toEqual([saved])
 	})
 })
 

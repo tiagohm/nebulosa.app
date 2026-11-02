@@ -1,21 +1,15 @@
 import type { ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
-import { proxy, snapshot, subscribe } from 'valtio'
+import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../http'
-import { isRecord, parseJson, readText, writeText } from '../storage'
 
-// Saved connections of the browser and the connections the server holds open. Saved connections are
-// persisted in localStorage and shared by every profile and tab; which one a tab works with is the
-// active profile's selection. The open connections mirror the server, which shares them between tabs.
+// Saved connections of the workspace and the connections the server holds open. Saved connections belong to the server
+// (sync.ts of the profiles) and are shared by every profile, tab, and browser; the actions here change the tab at once,
+// and the synchronization writes what changed. Which one a tab works with is the active profile's selection. The open
+// connections mirror the server, which shares them between tabs.
 
 // Default TCP port of a new connection: the standard INDI server port.
 export const DEFAULT_PORT = 7624
-
-// localStorage key of the saved connections.
-export const CONNECTIONS_KEY = 'nebulosa:connections'
-
-// localStorage key of the id of the saved connection last highlighted in the modal's list.
-export const SELECTED_CONNECTION_KEY = 'nebulosa:selectedConnectionId'
 
 // Editable fields of a saved connection. Host and port are ignored for simulator connections.
 export interface ConnectionInput extends Omit<RemoteConnectRequest, 'type'> {
@@ -25,7 +19,7 @@ export interface ConnectionInput extends Omit<RemoteConnectRequest, 'type'> {
 	readonly type: ConnectionType
 }
 
-// Connection saved in the browser.
+// Connection saved in the workspace.
 export interface Connection extends ConnectionInput {
 	// Unique id of the saved entry, generated on first save and kept across edits.
 	readonly id: string
@@ -45,7 +39,7 @@ export interface ConnectionState {
 	open: boolean
 	// Saved connections, in insertion order.
 	connections: Connection[]
-	// Id of the saved connection highlighted in the modal's list.
+	// Id of the saved connection highlighted in the modal's list; tab memory.
 	selected?: string
 	// Connections the server holds open, for any tab.
 	servers: ConnectionStatus[]
@@ -54,59 +48,10 @@ export interface ConnectionState {
 	// Message of the last failed connect or disconnect of each saved connection, by saved connection id;
 	// cleared by its next attempt, an edit, or the server opening it for any tab.
 	errors: Record<string, string>
-	// Message of the last failed write of the saved connections to storage.
-	storageError?: string
 }
 
 // Connection state of the tab, starting closed with no saved connections.
 export const connectionState = proxy<ConnectionState>({ open: false, connections: [], servers: [], errors: {} })
-
-// Restores a persisted connection. Returns undefined when it lacks an id, name, or type.
-function normalizeConnection(value: unknown): Connection | undefined {
-	if (!isRecord(value)) return undefined
-	const { id, name, host, port, type } = value
-	if (typeof id !== 'string' || typeof name !== 'string' || (type !== 'INDI' && type !== 'ALPACA' && type !== 'SIMULATOR')) return undefined
-	return { id, name, host: typeof host === 'string' ? host : '', port: typeof port === 'number' ? port : DEFAULT_PORT, type }
-}
-
-// Loads the saved connections into state and highlights the one last highlighted, or the first when it
-// no longer exists. Unreadable entries are skipped; an unreadable list loads as empty and is left
-// untouched until the next change.
-export function loadConnections(state: ConnectionState, storage: Storage) {
-	const text = readText(storage, CONNECTIONS_KEY)
-	const data = text === undefined ? undefined : parseJson(text)
-	const connections: Connection[] = []
-
-	if (Array.isArray(data)) {
-		for (const value of data) {
-			const connection = normalizeConnection(value)
-			if (connection && !connections.some((c) => c.id === connection.id)) connections.push(connection)
-		}
-	}
-
-	const selected = readText(storage, SELECTED_CONNECTION_KEY)
-	state.connections = connections
-	state.selected = connections.some((c) => c.id === selected) ? selected : connections[0]?.id
-}
-
-// Persists every later change of the saved connections and of the highlighted one. Returns a function
-// that stops it.
-export function persistConnections(state: ConnectionState, storage: Storage): () => void {
-	let { connections, selected } = snapshot(state)
-
-	return subscribe(state, () => {
-		const current = snapshot(state)
-
-		if (current.selected !== selected) {
-			selected = current.selected
-			writeText(storage, SELECTED_CONNECTION_KEY, selected ?? '')
-		}
-
-		if (current.connections === connections) return
-		connections = current.connections
-		state.storageError = writeText(storage, CONNECTIONS_KEY, JSON.stringify(connections)) ? undefined : 'Unable to save connections: browser storage is unavailable or full.'
-	})
-}
 
 // Highlights the given saved connection, such as the one the active profile works with; the current
 // highlight stays when it is absent or no longer saved.

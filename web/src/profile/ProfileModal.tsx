@@ -12,7 +12,7 @@ import { createProfile, deleteProfile, duplicateProfile, profileState, renamePro
 // Profiles modal, shown while profileState.open is true. The form on the left creates a profile or
 // renames the one being edited; the list on the right acts on the highlighted profile.
 export function ProfileModal() {
-	const { open, profiles, activeId, error } = useSnapshot(profileState)
+	const { open, profiles, activeId } = useSnapshot(profileState)
 	const [name, setName] = useState('')
 	// Id of the profile loaded into the form by Rename.
 	const [editing, setEditing] = useState<string>()
@@ -135,10 +135,11 @@ export function ProfileModal() {
 							</div>
 						</div>
 						{confirming && selected && <p className="m-0 text-[13px] leading-5 text-ink-200">Delete “{selected.name}”? Its connection selection and equipment setup are removed; saved connections and devices are not affected.</p>}
-						{error && <p className="m-0 text-[13px] leading-5 text-danger">{error}</p>}
 					</div>
 				</div>
-				<p className="m-0 rounded-md border border-line-100 bg-base-100 px-4 py-3 text-[13px] leading-5 text-ink-200">Profiles are stored locally in this browser. Editing the same profile in multiple tabs may overwrite changes. Avoid editing the same profile simultaneously.</p>
+				<p className="m-0 rounded-md border border-line-100 bg-base-100 px-4 py-3 text-[13px] leading-5 text-ink-200">
+					Profiles are kept by the Nebulosa server and shared by every tab and browser. When two tabs change the same setting, the change saved first wins and the other tab shows it. Which profile is active belongs to this tab only.
+				</p>
 			</div>
 		</Modal>
 	)

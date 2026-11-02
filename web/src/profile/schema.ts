@@ -23,26 +23,27 @@ import type { SkyDisplaySettings } from '../sky/display'
 import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } from '../sky/framing'
 import type { StarProfileSettings } from '../stars/starprofile.settings'
 
-// Persisted format of the profiles: what a profile holds, the defaults of its preferences and camera forms, and the
-// version of the format. Profiles hold selections and preferences only, never operational device state.
+// What a profile holds, the defaults of its preferences and camera forms, and the version of the shape of the values the
+// server keeps for them. Profiles hold selections and preferences only, never operational device state. Some fields are
+// tab memory: they live with the profile in the tab and are never written to the server, so a reload starts them over.
 
-// Current version of the persisted format. A document of any other version is discarded, never migrated, so a change to
-// the shape of what is stored only raises this number; an added optional field, which reads as its default, does not.
-export const PROFILES_VERSION = 24
-
-// Name of the profile created when none is stored.
-export const DEFAULT_PROFILE_NAME = 'Default'
+// Version of the shape of the preferences and camera forms the server keeps (sync.ts). A value of any other version is
+// read as absent, never migrated, so a change to the shape of what is kept only raises this number; an added optional
+// field, which reads as its default, does not.
+export const PROFILE_SETTINGS_VERSION = 1
 
 // Application preferences that belong to a profile. Each preference is added here, with its default in
-// defaultSettings when it is not optional.
+// defaultSettings when it is not optional, and either kept by the server (PREFERENCES and the camera forms of sync.ts) or
+// marked as tab memory.
 export interface ProfileSettings {
 	// Whether the contextual panel of each workspace is expanded on wide screens; an absent workspace
-	// shows it expanded. Narrow screens open the panel as a drawer that is never persisted.
+	// shows it expanded. Narrow screens open the panel as a drawer. Tab memory.
 	panels: Partial<Record<WorkspaceId, boolean>>
 	// Server directory an image was opened from last, where the file explorer starts; absent before the
-	// first image is opened.
+	// first image is opened. Tab memory.
 	lastImageDirectory?: string
 	// Server directory an image of Images was saved to last, where the save dialog starts; absent before the first save.
+	// Tab memory.
 	lastSaveDirectory?: string
 	// Forms of each physical camera edited so far, by saved connection id, then device id.
 	cameras: Record<string, Record<string, CameraSettings>>
@@ -63,8 +64,8 @@ export interface ProfileSettings {
 	// Plate solving settings shared by every document outside a camera tab, each of which keeps its own hints; absent until
 	// edited, and then DEFAULT_CAMERA_PLATE_SOLVING holds. A camera tab uses those of its camera (CameraSettings plateSolving).
 	imagePlateSolving?: CameraPlateSolvingSettings
-	// Image Processing pipeline edited last, which every document opened next starts with; absent until edited. Jobs and
-	// their outputs are never stored.
+	// Image Processing pipeline edited last, which every document opened next starts with; absent until edited. Tab
+	// memory; jobs and their outputs are never stored.
 	imageProcessing?: readonly ImageProcessingPresetStep[]
 	// Display settings applied last in Images to a file or derived image, which every image opened next starts with;
 	// absent until the first one is applied. Camera frames use those of their camera (CameraSettings display).
@@ -90,11 +91,11 @@ export interface ProfileSettings {
 	// Preferences of the status bar; absent until edited, and then DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES and
 	// DEFAULT_STATUS_CHIPS hold.
 	statusBar?: StatusBarPreferences
-	// Preferences of the Close Approaches tool; absent until edited, and then DEFAULT_CLOSE_APPROACH_PREFERENCES holds. The
-	// results, the selection, and the dates of a search are never stored.
+	// Preferences of the Close Approaches tool; absent until edited, and then DEFAULT_CLOSE_APPROACH_PREFERENCES holds. Tab
+	// memory, like the results, the selection, and the dates of a search.
 	closeApproaches?: CloseApproachPreferences
-	// Preferences of the Astro Weather tool; absent until edited, and then DEFAULT_ASTRO_WEATHER_PREFERENCES holds. Forecasts,
-	// sites typed in, and the night shown are never stored.
+	// Preferences of the Astro Weather tool; absent until edited, and then DEFAULT_ASTRO_WEATHER_PREFERENCES holds. Tab
+	// memory, like the forecasts, the sites typed in, and the night shown.
 	astroWeather?: AstroWeatherPreferences
 }
 
@@ -306,7 +307,7 @@ export interface SkySettings {
 	display?: SkyDisplaySettings
 	// Field of view drawn around the selection; absent until the user creates a preset.
 	framing?: SkyFramingSettings
-	// Whether the time bar of the simulation clock is shown under the star map; absent hides it.
+	// Whether the time bar of the simulation clock is shown under the star map; absent hides it. Tab memory.
 	timeBar?: boolean
 }
 
@@ -315,13 +316,13 @@ export interface SkySettings {
 export interface SkyFramingSettings {
 	// Presets in display order.
 	presets: readonly OpticalPreset[]
-	// Id of the preset drawn; absent when there is none.
+	// Id of the preset drawn; absent when there is none. Tab memory.
 	activePresetId?: string
-	// Whether the field of view is drawn on the map.
+	// Whether the field of view is drawn on the map. Tab memory.
 	visible: boolean
-	// Where the drawn field comes from: a custom preset, or the Equipment Setup; absent means custom.
+	// Where the drawn field comes from: a custom preset, or the Equipment Setup; absent means custom. Tab memory.
 	source?: 'custom' | 'equipment'
-	// Sensor of the Equipment Setup source; absent means the main camera.
+	// Sensor of the Equipment Setup source; absent means the main camera. Tab memory.
 	sensorSource?: SensorSource
 	// Sensor entered for the Equipment Setup source when sensorSource is manual, to simulate a camera.
 	manualSensor?: SensorGeometry
@@ -803,18 +804,6 @@ export interface Profile {
 	equipment: Record<string, EquipmentSetup>
 	// Preferences of the profile.
 	settings: ProfileSettings
-	// Creation time, ISO 8601.
-	readonly createdAt: string
-	// Time of the last change, ISO 8601.
-	updatedAt: string
-}
-
-// Persisted form of the profile collection.
-export interface ProfilesStorage {
-	// Format version, PROFILES_VERSION when written by this code.
-	readonly version: number
-	// Profiles in display order.
-	readonly profiles: readonly Profile[]
 }
 
 // Returns the default preferences of a new profile.

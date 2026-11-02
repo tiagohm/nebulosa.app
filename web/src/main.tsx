@@ -14,7 +14,7 @@ import { guidingRuntime, handleGuidingEvent, refreshGuiding } from './camera/gui
 import { handleNudgeEvent, nudgeRuntime, refreshNudges } from './camera/nudge'
 import { handleTargetCenteringEvent, refreshTargetCentering, targetCenteringRuntime } from './camera/targetcentering'
 import { handleTppaEvent, refreshTppa, tppaRuntime } from './camera/tppa'
-import { connectionState, handleConnectionEvent, loadConnections, persistConnections, refreshServers } from './connection/connection'
+import { connectionState, handleConnectionEvent, refreshServers } from './connection/connection'
 import { controlRuntime, handleControlEvent, refreshStates } from './equipment-control/control'
 import { domeMotionRuntime, handleDomeMotionEvent, refreshDomeMotions } from './equipment-control/domeMotion'
 import { focuserBacklashRuntime, handleFocuserBacklashEvent, refreshFocuserBacklash } from './equipment-control/focuserBacklash'
@@ -29,22 +29,22 @@ import { handleMountPointingEvent, mountPointingRuntime, refreshMountPointing } 
 import { handleNotificationEvent, notificationsState, refreshNotifications, setServerLink } from './notifications/notifications'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
-import { loadProfiles, persistProfiles, profileState, pruneNotificationPreferences } from './profile/profile'
+import { profileState, pruneNotificationPreferences } from './profile/profile'
+import { WorkspaceSync } from './profile/sync'
+import { WorkspaceGate } from './profile/WorkspaceGate'
 import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
 import { routeState, watchHistory } from './shell/route'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
-import { browserStores } from './storage'
 import { handleStreaksEvent, refreshStreaks, streaksState } from './streaks/streaks'
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
 
-// Entry point of the browser bundle: restores the persisted stores and the URL route before the first
-// render, starts persisting them, and keeps the server state current through the event socket. Under HMR the module
-// re-runs on every update: the React root is reused and the previous run's subscriptions are released.
+// Entry point of the browser bundle: restores the URL route, reads the workspace (saved connections and profiles) from
+// the server, which the shell waits for, writes back what the tab changes in it, and keeps the server state current
+// through the event socket. Under HMR the module re-runs on every update: the React root is reused and the previous
+// run's subscriptions are released.
 
-const stores = browserStores()
-
-loadConnections(connectionState, stores.local)
-loadProfiles(profileState, stores)
+// Synchronization of the saved connections and the profiles of the tab with the server.
+const workspace = new WorkspaceSync(connectionState, profileState)
 
 // Gives the Images workspace a camera tab for each connected camera of the watched connection, and removes the tabs of
 // the others.
@@ -68,6 +68,7 @@ interface ServerStore {
 // tabs of Images show and shows their selections again; a refresh of the notifications then drops from the profiles the
 // read and dismissed states of notifications the server no longer retains.
 const SERVER_STORES: readonly ServerStore[] = [
+	{ handle: (event) => workspace.handle(event), refresh: () => workspace.refresh() },
 	{ handle: (event) => handleConnectionEvent(connectionState, event), refresh: () => refreshServers(connectionState) },
 	{ handle: (event) => handleDeviceEvent(deviceState, event), refresh: () => refreshDevices(deviceState) },
 	{ handle: (event) => handleIndiDirectoryEvent(indiDirectory, event), refresh: () => refreshIndiDirectory(indiDirectory) },
@@ -104,8 +105,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 // Functions that stop this run's persistence and event subscriptions.
 const stops = [
 	subscribeState(deviceState, syncCameraTabs),
-	persistConnections(connectionState, stores.local),
-	persistProfiles(profileState, stores),
+	workspace.start(),
 	watchHistory(routeState),
 	confirmUnsavedOnUnload(imagesState),
 	releaseLeasesOnHide(imagesState),
@@ -119,6 +119,9 @@ const stops = [
 	onClose(() => setServerLink(notificationsState, 'offline')),
 ]
 
+// The workspace is read at once, before the socket opens, so the shell shows as soon as the server answers.
+void workspace.refresh()
+
 import.meta.hot.accept()
 import.meta.hot.dispose(() => {
 	for (const stop of stops) stop()
@@ -130,7 +133,9 @@ function start() {
 
 	root.render(
 		<StrictMode>
-			<App />
+			<WorkspaceGate>
+				<App />
+			</WorkspaceGate>
 		</StrictMode>,
 	)
 }

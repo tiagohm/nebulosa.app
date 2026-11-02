@@ -1,4 +1,3 @@
-import { homedir } from 'os'
 import { basename, join } from 'path'
 import { formatTemporal, TIMEZONE } from 'nebulosa/src/astronomy/time/temporal'
 import { type Camera, type CameraTransferFormat, CLIENT, type Client } from 'nebulosa/src/devices/indi/device'
@@ -9,6 +8,7 @@ import { type CameraCaptureHandle, CameraCapturer, type CameraFramePathRequest, 
 import type { CameraCaptureListener } from 'nebulosa/src/observation/capture/reporter'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START } from 'nebulosa/src/observation/capture/types'
 import type { CaptureFrameRegistry } from './captureframes'
+import { DEFAULT_DATA_DIRECTORY } from './database'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
@@ -38,7 +38,7 @@ import type { OperationRegistry } from './operations'
 // Images workspace shows, and Auto Focus measures its own frames.
 
 // Directory saved frames go into when a request names none, and the published path of previewed frames.
-export const DEFAULT_CAPTURES_DIR = join(homedir(), 'Nebulosa', 'captures')
+export const DEFAULT_CAPTURES_DIR = join(DEFAULT_DATA_DIRECTORY, 'captures')
 
 // Filename template of saved frames when a request names none.
 export const DEFAULT_FILENAME_TEMPLATE = '{date}_{time}_{camera}_{type}_{seq}'

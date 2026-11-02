@@ -1,8 +1,8 @@
 import { stat } from 'fs/promises'
-import { homedir } from 'os'
 import { join } from 'path'
 import { IersA, IersAB, IersB } from 'nebulosa/src/astronomy/time/iers'
 import { type Time, TIME_PROVIDERS, type TimeProviders } from 'nebulosa/src/astronomy/time/time'
+import { DEFAULT_DATA_DIRECTORY } from './database'
 import { errorCode, writeAtomically } from './util'
 
 // Earth orientation data of the application: IERS tables kept apart from the shared `iersab` of the toolkit, whose lookups
@@ -13,7 +13,7 @@ import { errorCode, writeAtomically } from './util'
 // when it has none.
 
 // Directory of the cached tables.
-export const DEFAULT_IERS_DIRECTORY = join(homedir(), 'Nebulosa', 'iers')
+export const DEFAULT_IERS_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'iers')
 
 // Age from which a cached table is refreshed, in milliseconds (7 days, the publication cycle of IERS Bulletin A).
 const REFRESH_AGE_MS = 7 * 86_400_000

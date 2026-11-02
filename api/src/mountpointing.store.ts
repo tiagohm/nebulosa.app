@@ -1,10 +1,10 @@
 import { readdir, readFile, rm } from 'fs/promises'
-import { homedir } from 'os'
 import { join } from 'path'
 import type { PierSide } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { FittedPointingModel, PointingFitOptions } from 'nebulosa/src/observation/mount/pointing'
 import type { PointingPlanPattern, PointingWaypoint } from 'nebulosa/src/observation/mount/pointing.plan'
+import { DEFAULT_DATA_DIRECTORY } from './database'
 import type { PointingFitStrategy, PointingGate, PointingOfflineMetrics, PointingSampleResidual } from './mountpointing.fit'
 import type { EquatorialPosition, PointingSite } from './mountpointing.frames'
 import { errorCode, isRecord, writeAtomically } from './util'
@@ -19,7 +19,7 @@ import { errorCode, isRecord, writeAtomically } from './util'
 // Unix milliseconds, and elevations meters.
 
 // Directory the models are persisted in when none is given.
-export const DEFAULT_POINTING_MODELS_DIRECTORY = join(homedir(), 'Nebulosa', 'pointing-models')
+export const DEFAULT_POINTING_MODELS_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'pointing-models')
 
 // Version of the model file format written by this version.
 const POINTING_MODEL_VERSION = 1

@@ -16,6 +16,7 @@ import { DarkLibraryWizardAnalyzer } from './darklibrarywizard.analysis'
 import { DarkPlanStore } from './darklibrarywizard.store'
 import { createDarvRoutes, DarvSessions } from './darv'
 import { DarvAnalyzer } from './darv.analysis'
+import { AppDatabase, DEFAULT_DATABASE_FILE } from './database'
 import { createDewHeaterRoutes, DewHeaterCommands } from './dewheaters'
 import { createDomeRoutes, DomeCommands } from './domes'
 import { createExternalToolsRoutes, DEFAULT_SETTINGS_FILE, ExternalToolsStore } from './externaltools'
@@ -456,6 +457,10 @@ export type { NotificationCameraTool, NotificationLevel, NotificationSource, Not
 export type { ClientMessage, ServerEvent } from './websocket'
 export { websocket }
 
+// Operational database of the server, opened by the app before it serves; a test that only imports this module opens
+// nothing.
+const database = new AppDatabase(DEFAULT_DATABASE_FILE)
+
 // History of the notifications, created from the events of the connections, the operations, and the sessions; its
 // own notification:created events are broadcast directly, so they are never classified again.
 const notifications = new NotificationService(broadcast, {
@@ -641,6 +646,18 @@ const earthOrientation = new EarthOrientationData()
 
 // Conversions of the Astronomical Time Converter and the real-time reference of the status bar clock.
 const astronomicalTime = new AstronomicalTimeService(earthOrientation)
+
+// Opens the operational database and brings its schema up to date, before anything is served. Throws an Error saying why
+// it cannot be opened (another server uses it, the file is not a database, or its schema is newer than this server
+// knows), leaving the file as it is; the app then stops.
+export function startDatabase() {
+	database.open()
+}
+
+// Closes the operational database, for a server about to stop.
+export function closeDatabase() {
+	database.close()
+}
 
 // Reads the cached Earth orientation tables and makes them the default of the toolkit, so the Sky, the mounts, and the pointing
 // models read the same UT1 as the converter, and starts a refresh of old tables, so they are kept current even if nothing ever

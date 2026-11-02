@@ -1,7 +1,7 @@
 import { mkdir, open, readdir, readFile, stat, truncate } from 'fs/promises'
-import { homedir } from 'os'
 import { join } from 'path'
 import type { DarkFrameAssessment, DarkFrameHeader, DarkPlaneMeasurement, DarkTemperatureTrace } from './darklibrarywizard.analysis'
+import { DEFAULT_DATA_DIRECTORY } from './database'
 import { publishFrame } from './flatwizard'
 import { errorCode, isRecord, writeAtomically } from './util'
 
@@ -18,7 +18,7 @@ import { errorCode, isRecord, writeAtomically } from './util'
 // seconds, temperatures degrees Celsius. Plans never hold pixels, and server paths never leave through events.
 
 // Directory the plans are persisted in when none is given.
-export const DEFAULT_DARK_PLANS_DIRECTORY = join(homedir(), 'Nebulosa', 'dark-library', 'plans')
+export const DEFAULT_DARK_PLANS_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'dark-library', 'plans')
 
 // Version of the plan and journal formats written by this version.
 export const DARK_PLAN_VERSION = 1

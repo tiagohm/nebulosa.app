@@ -1,9 +1,9 @@
 import { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync, rmSync } from 'fs'
 import { mkdir, open, readdir, readFile, rm } from 'fs/promises'
-import { homedir } from 'os'
 import { join } from 'path'
 import type { CalibrationKind, CalibrationMetadata, CalibrationRecipe, CompatibilityFinding, MasterReference, OverridableField } from './calibrationlibrary.compatibility'
+import { DEFAULT_DATA_DIRECTORY } from './database'
 import { errorCode, isRecord, writeAtomically } from './util'
 
 // Persistence of the Calibration Library, in three layers with different duties. Masters are immutable directories with
@@ -22,7 +22,7 @@ const CATALOG_VERSION = 3
 export const MANIFEST_VERSION = 1
 
 // Default directory of the library.
-export const DEFAULT_CALIBRATION_LIBRARY_DIRECTORY = join(homedir(), 'Nebulosa', 'calibration-library')
+export const DEFAULT_CALIBRATION_LIBRARY_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'calibration-library')
 
 // Most rows one listing returns.
 export const MAX_PAGE_SIZE = 200

@@ -1,7 +1,7 @@
 import { readFile } from 'fs/promises'
-import { homedir } from 'os'
 import { join } from 'path'
 import type { BacklashCompensationMode } from 'nebulosa/src/observation/focus/backlash'
+import { DEFAULT_DATA_DIRECTORY } from './database'
 import { errorCode, isRecord, writeAtomically } from './util'
 
 // Backlash compensation settings of every physical focuser, persisted in a versioned JSON file of the server.
@@ -47,7 +47,7 @@ interface LoadedFocusers {
 export type FocuserBacklashSaveOutcome = { readonly status: 'saved'; readonly settings: StoredFocuserBacklash } | { readonly status: 'conflict'; readonly settings: StoredFocuserBacklash } | { readonly status: 'newerVersion' }
 
 // File the focuser settings are persisted in when none is given.
-export const DEFAULT_FOCUSERS_FILE = join(homedir(), 'Nebulosa', 'focusers.json')
+export const DEFAULT_FOCUSERS_FILE = join(DEFAULT_DATA_DIRECTORY, 'focusers.json')
 
 // Version of the focuser settings file format written by this version.
 const FOCUSERS_VERSION = 1

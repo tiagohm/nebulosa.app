@@ -5,3 +5,5 @@ plugins = ["./app/tailwind.plugin.ts"]
 
 [test]
 pathIgnorePatterns = "core/**"
+# Points the data directory of the server to a temporary directory of each test process.
+preload = ["./api/src/test.preload.ts"]

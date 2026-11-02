@@ -1,9 +1,9 @@
 import { readFileSync } from 'fs'
 import { stat } from 'fs/promises'
-import { homedir } from 'os'
 import { basename, join } from 'path'
 import type { CaptureFileState, CaptureFrame, CaptureSettings } from './captures'
 import type { ConnectionRegistryEvent } from './connection'
+import { DEFAULT_DATA_DIRECTORY } from './database'
 import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 import { errorCode, isRecord, writeAtomically } from './util'
@@ -40,7 +40,7 @@ import { errorCode, isRecord, writeAtomically } from './util'
 // mixed previewed-only and saved frames, is read keeping its saved frames only. No directory is ever scanned.
 
 // File the registry is persisted in when none is given.
-export const DEFAULT_CAPTURE_FRAMES_FILE = join(homedir(), 'Nebulosa', 'capture-frames.json')
+export const DEFAULT_CAPTURE_FRAMES_FILE = join(DEFAULT_DATA_DIRECTORY, 'capture-frames.json')
 
 // Version of the registry file format written by this version. Version 3 records the origin of each saved frame.
 const CAPTURE_FRAMES_VERSION = 3

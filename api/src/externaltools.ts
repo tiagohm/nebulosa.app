@@ -1,8 +1,8 @@
 import { constants } from 'fs'
 import { access, readFile, stat } from 'fs/promises'
-import { homedir } from 'os'
 import { isAbsolute, join, resolve } from 'path'
 import { login, NOVA_ASTROMETRY_NET_URL } from 'nebulosa/src/astrometry/solvers/astrometrynet'
+import { DEFAULT_DATA_DIRECTORY } from './database'
 import { errorResponse } from './http'
 import { errorCode, isRecord, writeAtomically } from './util'
 
@@ -209,7 +209,7 @@ export const EXTERNAL_TOOLS: readonly ExternalToolDefinition[] = [
 ]
 
 // File the settings are persisted in when none is given.
-export const DEFAULT_SETTINGS_FILE = join(homedir(), 'Nebulosa', 'settings.json')
+export const DEFAULT_SETTINGS_FILE = join(DEFAULT_DATA_DIRECTORY, 'settings.json')
 
 // Version of the settings file format written by this version. The fields of the programs added since version 1
 // (config, endpoint, session) are optional, so a version 1 file is read as is.

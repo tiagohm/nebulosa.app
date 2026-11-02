@@ -1,10 +1,11 @@
-import { type AboutInfo, createAboutRoutes, flushStores, identifyJplClient, routes, startCalibrationLibrary, startEarthOrientation, websocket } from 'api'
+import { type AboutInfo, closeDatabase, createAboutRoutes, flushStores, identifyJplClient, routes, startCalibrationLibrary, startDatabase, startEarthOrientation, websocket } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
 
 // Entry point of the application: serves the API routes, the /api/ws WebSocket, and the web UI from a
-// single Bun server. Every path the API does not handle falls back to the UI's HTML entry point. A stop signal ends
-// the process only after the persisted stores wrote their pending changes; a second signal ends it at once.
+// single Bun server. Every path the API does not handle falls back to the UI's HTML entry point. A server whose
+// operational database cannot be opened stops before serving. A stop signal ends the process only after the persisted
+// stores wrote their pending changes and the database was closed; a second signal ends it at once.
 
 // Whether the server runs in development mode (HMR and the browser console); false when NODE_ENV is production.
 const development = process.env.NODE_ENV !== 'production'
@@ -23,6 +24,14 @@ const ABOUT: AboutInfo = {
 
 // Signals that stop the server: Ctrl+C, a service manager, and a closed terminal or console window.
 const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
+
+// A server that cannot keep its records never starts, and says why.
+try {
+	startDatabase()
+} catch (error) {
+	console.error(Error.isError(error) ? error.message : error)
+	process.exit(1)
+}
 
 identifyJplClient(version)
 
@@ -48,7 +57,14 @@ const server = Bun.serve({
 // Each signal is handled once, replacing the handler of the previous hot reload.
 for (const signal of STOP_SIGNALS) {
 	process.removeAllListeners(signal)
-	process.once(signal, () => void flushStores().then(() => process.exit(0)))
+	process.once(
+		signal,
+		() =>
+			void flushStores().then(() => {
+				closeDatabase()
+				process.exit(0)
+			}),
+	)
 }
 
 console.info(`Nebulosa is running at ${server.url}`)

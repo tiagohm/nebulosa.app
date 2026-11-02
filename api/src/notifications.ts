@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs'
-import { homedir } from 'os'
 import { join } from 'path'
+import { DEFAULT_DATA_DIRECTORY } from './database'
 import { NotificationClassifier, type NotificationDraft, type NotificationLevel, type NotificationSource, type NotificationTarget } from './notifications.rules'
 import { errorCode, isRecord, writeAtomically } from './util'
 import type { ServerEvent } from './websocket'
@@ -68,7 +68,7 @@ interface StoredNotification extends NotificationRecord {
 }
 
 // File the history is persisted in when none is given.
-export const DEFAULT_NOTIFICATIONS_FILE = join(homedir(), 'Nebulosa', 'notifications.json')
+export const DEFAULT_NOTIFICATIONS_FILE = join(DEFAULT_DATA_DIRECTORY, 'notifications.json')
 
 // Version of the history file format written by this version.
 const NOTIFICATIONS_VERSION = 1

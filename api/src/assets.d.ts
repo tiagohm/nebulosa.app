@@ -6,3 +6,10 @@ declare module '*.db' {
 	const db: import('bun:sqlite').Database
 	export default db
 }
+
+// SQL statements imported with `{ type: 'text' }`, embedded in the executable.
+declare module '*.sql' {
+	// Text of the file.
+	const text: string
+	export default text
+}

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { CaptureFrameSummary, CaptureSourceSummary, DisplaySettings, ServerEvent } from 'api'
 import { proxy, ref } from 'valtio'
 import { cameraTabKey, connectionCameraTab, handleCapturedFrame, holdCameraFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseCameraFrame, selectCameraFrame } from './cameratabs'
-import { type CaptureFramesState, frameLabel, frameUnavailableReason, handleCaptureFramesEvent, loadOlderFrames, loadRecentFrames, refreshCaptureFrames } from './captureframes'
+import { type CaptureFramesState, frameUnavailableReason, handleCaptureFramesEvent, loadOlderFrames, loadRecentFrames, refreshCaptureFrames } from './captureframes'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
 import { addStep } from './imageprocessing'
 import { addMeasurement, applyDisplay, DEFAULT_IMAGE_TOOL_PREFERENCES, setAstrometryTarget, closeImage, type ImageSource, type ImagesIo, type ImagesState, isClosable, setImageView } from './images'
@@ -604,9 +604,7 @@ describe('frame registry mirror', () => {
 		expect(state.next['conn:cam']).toBe('2')
 	})
 
-	test('labels and reasons', () => {
-		expect(frameLabel(frame(12))).toBe('Camera · Frame 0012')
-		expect(frameLabel(frame(12, { fileName: 'm42_0012.fit' }))).toBe('m42_0012.fit')
+	test('reasons', () => {
 		expect(frameUnavailableReason(frame(1))).toBeUndefined()
 		expect(frameUnavailableReason(frame(1, { availability: 'unavailable', reason: 'fileMissing' }))).toBe('Saved file missing')
 	})

@@ -16,9 +16,6 @@ import type { RoleDevice } from './useEquipment'
 // that can never run it, such as an alt-az mount for a polar alignment), or the role state that prevents use.
 export type RoleAvailability = { readonly status: 'ready' } | { readonly status: 'busy'; readonly operations: readonly OperationRecord[]; readonly message: string } | { readonly status: 'unsupported'; readonly message: string } | { readonly status: Exclude<RoleStatus, 'connected'>; readonly message: string }
 
-// Existing flow that resolves an unavailable role: opening Connections or Equipment Setup.
-export type RoleFix = 'connections' | 'equipment'
-
 // Returns why a device, named by label (a role, or "camera"), in a status cannot be used, or undefined when it is
 // connected.
 function deviceProblem(label: string, status: RoleStatus): string | undefined {
@@ -58,21 +55,4 @@ export function deviceAvailability(label: string, { device, status }: Pick<RoleD
 	if (running.length > 0) return { status: 'busy', operations: running, message: `The ${label} is busy.` }
 
 	return { status: 'ready' }
-}
-
-// Returns the flow that resolves an availability, or undefined when there is nothing to fix there:
-// ready, busy (the operation must end), or a connection change in progress. An unsupported device is fixed by
-// assigning another one in Equipment Setup.
-export function availabilityFix(availability: RoleAvailability): RoleFix | undefined {
-	switch (availability.status) {
-		case 'ready':
-		case 'busy':
-		case 'connecting':
-		case 'disconnecting':
-			return undefined
-		case 'unavailable':
-			return 'connections'
-		default:
-			return 'equipment'
-	}
 }

@@ -210,15 +210,6 @@ export function measureDarkImage(image: DigitalImage): DarkFrameMeasurement {
 	return { header: darkFrameHeader(image.header), planes }
 }
 
-// Reads the header of a saved frame. Throws when the file cannot be opened or holds no FITS image.
-export async function readDarkFrameHeader(path: string): Promise<DarkFrameHeader> {
-	await using source = fileHandleSource(await open(path, 'r'))
-	const fits = await readFits(source)
-	const hdu = fits?.hdus.find((candidate) => uncompressedWidthKeyword(candidate.header, 0) > 0)
-	if (!hdu) throw new Error('The frame is not a FITS image')
-	return darkFrameHeader(hdu.header)
-}
-
 // Reads a FITS file in digital numbers, with the precision its BITPIX needs, and measures it. Throws when the file
 // cannot be opened or holds no readable FITS image.
 export async function measureDarkFile(path: string): Promise<DarkFrameMeasurement> {

@@ -49,9 +49,6 @@ export const MAX_SCALE = 32
 // Scale factor of one zoom-in step; zoom-out divides by it.
 export const ZOOM_STEP = 1.25
 
-// Identity transform, used before the viewport is measured.
-export const IDENTITY: ViewTransform = { scale: 1, x: 0, y: 0 }
-
 // Restricts a scale to [MIN_SCALE, MAX_SCALE].
 export function clampScale(scale: number): number {
 	return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale))

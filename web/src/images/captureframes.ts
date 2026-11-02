@@ -228,11 +228,6 @@ export function connectionLabel(connectionId: string, servers: readonly Connecti
 	return server.type === 'SIMULATOR' ? 'Simulator' : `${server.host}:${server.port}`
 }
 
-// Returns the name of a frame for people: its file name, or its camera and number when it was only previewed.
-export function frameLabel(frame: Pick<CaptureFrameSummary, 'fileName' | 'cameraName' | 'generation'>): string {
-	return frame.fileName ?? `${frame.cameraName} · Frame ${String(frame.generation).padStart(4, '0')}`
-}
-
 // Returns why a frame cannot be opened, for people; undefined when it can.
 export function frameUnavailableReason(frame: Pick<CaptureFrameSummary, 'availability' | 'reason'>): string | undefined {
 	if (frame.availability === 'memory' || frame.availability === 'file') return undefined

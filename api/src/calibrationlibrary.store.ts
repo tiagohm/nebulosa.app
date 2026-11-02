@@ -10,14 +10,14 @@ import { errorCode, isRecord, writeAtomically } from './util'
 
 // Persistence of the Calibration Library, in three layers with different duties. Masters are immutable directories with
 // their FITS file and a manifest that explains them without any index. Facts only an operator or a wizard can state
-// (imported frames, registered flats, overrides, exclusions, preferred revisions) go to a synced journal. catalog.sqlite
+// (imported frames, registered flats, overrides, exclusions, preferred revisions, deletions) go to a synced journal. catalog.sqlite
 // is a derived index of both and of the Dark Library plans, plus the job queue, so it can be deleted at any time: a
 // different schema version discards and rebuilds it, and there are no migrations. Only a newer version is left alone,
 // because older code must not destroy what newer code wrote. Calibration frames are referenced, never copied here
 // unless an import asks for it, and nothing in this file touches a frame, a plan, or a journal of the Dark Library.
 
 // Version of the schema of the catalog. A change rebuilds the catalog from the journal, the manifests, and the plans.
-const CATALOG_VERSION = 1
+const CATALOG_VERSION = 2
 
 // Version of the format of the manifests and of the journal.
 export const MANIFEST_VERSION = 1
@@ -205,6 +205,10 @@ export type CalibrationJournalRecord =
 	| { readonly type: 'exclusion'; readonly at: number; readonly sourceId: string; readonly reason?: string }
 	// The revision an operator prefers.
 	| { readonly type: 'preferred'; readonly at: number; readonly masterId: string; readonly revision: number }
+	// A frame an operator deleted with its file.
+	| { readonly type: 'removal'; readonly at: number; readonly sourceId: string }
+	// A revision an operator deleted with its directory; its number is never used again.
+	| { readonly type: 'masterRemoval'; readonly at: number; readonly masterId: string; readonly revision: number }
 
 // Camera with frames in the library.
 export interface CalibrationCamera {
@@ -271,6 +275,7 @@ CREATE INDEX sources_filter ON sources (kind, camera, status);
 CREATE TABLE masters (master_id TEXT NOT NULL, revision INTEGER NOT NULL, kind TEXT NOT NULL, camera TEXT NOT NULL, filter TEXT NOT NULL, status TEXT NOT NULL, fingerprint TEXT NOT NULL, created_at INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (master_id, revision));
 CREATE INDEX masters_fingerprint ON masters (fingerprint);
 CREATE TABLE preferred (master_id TEXT PRIMARY KEY, revision INTEGER NOT NULL);
+CREATE TABLE removed_masters (master_id TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY (master_id, revision));
 CREATE TABLE jobs (job_id TEXT PRIMARY KEY, state TEXT NOT NULL, fingerprint TEXT, token TEXT, created_at INTEGER NOT NULL, data TEXT NOT NULL);
 CREATE INDEX jobs_state ON jobs (state);
 CREATE INDEX jobs_token ON jobs (token);
@@ -444,6 +449,14 @@ export class CalibrationLibraryStore {
 		})()
 	}
 
+	// Forgets frames in one transaction.
+	removeSources(sourceIds: readonly string[]) {
+		const statement = this.#db.query('DELETE FROM sources WHERE source_id = ?')
+		this.#db.transaction(() => {
+			for (const sourceId of sourceIds) statement.run(sourceId)
+		})()
+	}
+
 	// Returns a frame.
 	source(sourceId: string) {
 		const row = this.#db.query('SELECT data FROM sources WHERE source_id = ?').get(sourceId) as DataRow | null
@@ -511,9 +524,18 @@ export class CalibrationLibraryStore {
 		return row ? (JSON.parse(row.data) as CalibrationMaster) : undefined
 	}
 
-	// Returns the highest revision of a master, 0 before the first.
+	// Returns the highest revision a master ever had, deleted ones included, 0 before the first.
 	latestRevision(masterId: string) {
-		return (this.#db.query('SELECT MAX(revision) AS revision FROM masters WHERE master_id = ?').get(masterId) as { readonly revision: number | null }).revision ?? 0
+		return (this.#db.query('SELECT MAX(revision) AS revision FROM (SELECT revision FROM masters WHERE master_id = ?1 UNION ALL SELECT revision FROM removed_masters WHERE master_id = ?1)').get(masterId) as { readonly revision: number | null }).revision ?? 0
+	}
+
+	// Forgets a revision, and its preference, keeping its number taken.
+	removeMaster(masterId: string, revision: number) {
+		this.#db.transaction(() => {
+			this.#db.query('DELETE FROM masters WHERE master_id = ? AND revision = ?').run(masterId, revision)
+			this.#db.query('DELETE FROM preferred WHERE master_id = ? AND revision = ?').run(masterId, revision)
+			this.#db.query('INSERT OR IGNORE INTO removed_masters (master_id, revision) VALUES (?, ?)').run(masterId, revision)
+		})()
 	}
 
 	// Lists revisions newest first, by page.

@@ -5,7 +5,8 @@ import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../http'
 
 // The Calibration Library as this tab knows it. The server owns every frame, master, and job, so this store only mirrors
-// them: a snapshot on every socket (re)open and on every change event, jobs as they change, and pages and details fetched
+// them: a snapshot on every socket (re)open and on every change event, jobs as they change (which no list shows: a group
+// follows its own build, and a wizard its plan), and pages and details fetched
 // when a view asks. A new epoch means a new server process, whose counters start over; a snapshot older than one applied is
 // dropped, and a page that arrives after a newer request is ignored. Nothing here decides whether frames are compatible:
 // the tool shows the reasons the server gives. The store lives outside the tool because the wizards of the camera tabs show
@@ -35,7 +36,6 @@ export interface CalibrationLibraryRuntime {
 	groups?: Page<CalibrationGroupSummary>
 	sources?: Page<CalibrationSourceSummary>
 	masters?: Page<CalibrationMasterSummary>
-	jobHistory?: Page<CalibrationJobSummary>
 	// Group shown in detail, and its revision shown.
 	group?: CalibrationGroupDetail
 	master?: CalibrationMasterDetail
@@ -80,6 +80,17 @@ export function planMasterJobs(jobs: Readonly<Record<string, CalibrationJobSumma
 	}
 
 	return Array.from(latest.values()).toSorted((a, b) => b.createdAt - a.createdAt)
+}
+
+// Returns the latest master job of a group this tab knows, undefined when none.
+export function latestGroupJob(jobs: Readonly<Record<string, CalibrationJobSummary>>, groupId: string) {
+	let latest: CalibrationJobSummary | undefined
+
+	for (const job of Object.values(jobs)) {
+		if (job.type === 'master' && job.groupId === groupId && (!latest || latest.createdAt < job.createdAt)) latest = job
+	}
+
+	return latest
 }
 
 // Replaces what a new server process makes meaningless.
@@ -173,13 +184,6 @@ export function loadCalibrationMasters(state: CalibrationLibraryRuntime, filter:
 	})
 }
 
-// Fetches a page of jobs.
-export function loadCalibrationJobs(state: CalibrationLibraryRuntime, page: number, request: typeof fetch = fetch) {
-	return loadPage(state, 'jobHistory', `${BASE_URL}/jobs?${query({}, page)}`, request, (jobs) => {
-		state.jobHistory = jobs as Page<CalibrationJobSummary>
-	})
-}
-
 // Fetches a group and its frames; one the server does not know is forgotten.
 export async function loadCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string | undefined, request: typeof fetch = fetch) {
 	state.group = groupId === undefined ? undefined : await fetchJson<CalibrationGroupDetail>(`${BASE_URL}/groups/${encodeURIComponent(groupId)}`, request)
@@ -238,14 +242,19 @@ export function preferMaster(state: CalibrationLibraryRuntime, masterId: string,
 	return command(state, `master:${masterId}`, `${BASE_URL}/masters/${encodeURIComponent(masterId)}/preferred`, jsonInit('POST', { revision }), request)
 }
 
-// Cancels a job.
-export function cancelCalibrationJob(state: CalibrationLibraryRuntime, jobId: string, request: typeof fetch = fetch) {
-	return command(state, `job:${jobId}`, `${BASE_URL}/jobs/${encodeURIComponent(jobId)}/cancel`, jsonInit('POST'), request)
+// Deletes a revision and its file.
+export function deleteCalibrationMaster(state: CalibrationLibraryRuntime, masterId: string, revision: number, request: typeof fetch = fetch) {
+	return command(state, `master:${masterId}`, `${BASE_URL}/masters/${encodeURIComponent(masterId)}/revisions/${revision}`, { method: 'DELETE' }, request)
 }
 
-// Queues a failed or interrupted job again.
-export function retryCalibrationJob(state: CalibrationLibraryRuntime, jobId: string, request: typeof fetch = fetch) {
-	return command(state, `job:${jobId}`, `${BASE_URL}/jobs/${encodeURIComponent(jobId)}/retry`, jsonInit('POST'), request)
+// Deletes a group with the files of its frames.
+export function deleteCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string, request: typeof fetch = fetch) {
+	return command<{ readonly deleted: number }>(state, `delete:${groupId}`, `${BASE_URL}/groups/${encodeURIComponent(groupId)}`, { method: 'DELETE' }, request)
+}
+
+// Cancels the scan of an import.
+export function cancelCalibrationImport(state: CalibrationLibraryRuntime, jobId: string, request: typeof fetch = fetch) {
+	return command(state, `import:${jobId}`, `${BASE_URL}/imports/${encodeURIComponent(jobId)}/cancel`, jsonInit('POST'), request)
 }
 
 // Starts scanning a directory of the server; its progress arrives as events.

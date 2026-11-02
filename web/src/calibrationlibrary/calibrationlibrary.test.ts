@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { CalibrationJobSummary, CalibrationLibrarySnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { buildMaster, type CalibrationLibraryRuntime, handleCalibrationLibraryEvent, jobEnded, loadCalibrationGroups, planMasterJobs, refreshCalibrationLibrary } from './calibrationlibrary'
+import { buildMaster, type CalibrationLibraryRuntime, handleCalibrationLibraryEvent, jobEnded, latestGroupJob, loadCalibrationGroups, planMasterJobs, refreshCalibrationLibrary } from './calibrationlibrary'
 
 function runtime() {
 	return proxy<CalibrationLibraryRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
@@ -62,6 +62,17 @@ describe('plans', () => {
 		const newer = { ...job('b', 'completed', 2), planId: 'p', groupId: 'g', createdAt: 2 }
 		const other = { ...job('c', 'queued', 3), planId: 'q', groupId: 'g' }
 		expect(planMasterJobs({ a: older, b: newer, c: other }, 'p')).toEqual([newer])
+	})
+})
+
+describe('groups', () => {
+	test('follows the latest master job of a group, and never an import', () => {
+		const older = { ...job('a', 'failed', 1), groupId: 'g', createdAt: 1 }
+		const newer = { ...job('b', 'integrating', 2), groupId: 'g', createdAt: 2 }
+		const other = { ...job('c', 'queued', 3), groupId: 'h', createdAt: 3 }
+		const scan = { ...job('d', 'validating', 4), type: 'import' as const, createdAt: 4 }
+		expect(latestGroupJob({ a: older, b: newer, c: other, d: scan }, 'g')).toBe(newer)
+		expect(latestGroupJob({ c: other }, 'g')).toBeUndefined()
 	})
 })
 

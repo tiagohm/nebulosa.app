@@ -5,13 +5,13 @@ import type { StatusTone } from '../../ui/StatusBadge'
 // Pure, so none of it needs a tab. Nothing here judges a frame; every state and reason is the server's.
 
 // Sections of the tool, in control order.
-export const LIBRARY_SECTIONS = ['library', 'frames', 'masters', 'jobs'] as const
+export const LIBRARY_SECTIONS = ['library', 'frames', 'masters'] as const
 
 // Section of the tool.
 export type LibrarySection = (typeof LIBRARY_SECTIONS)[number]
 
 // Label of each section.
-export const SECTION_LABELS: Readonly<Record<LibrarySection, string>> = { library: 'Library', frames: 'Frames', masters: 'Masters', jobs: 'Jobs' }
+export const SECTION_LABELS: Readonly<Record<LibrarySection, string>> = { library: 'Library', frames: 'Frames', masters: 'Masters' }
 
 // Roles, in control order.
 export const CALIBRATION_KINDS: readonly CalibrationKind[] = ['dark', 'bias', 'darkFlat', 'flat']

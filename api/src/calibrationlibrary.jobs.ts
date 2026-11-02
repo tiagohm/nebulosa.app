@@ -5,7 +5,7 @@ import type { CalibrationLibraryStore } from './calibrationlibrary.store'
 
 // Durable queue of the master jobs of the Calibration Library. A job is written before a request is answered, with the
 // exact frames it saw, so it survives a closed tab and a restart: a queued job runs after a restart, while a job that was
-// working becomes interrupted and waits for an explicit retry. One master integrates at a time. An automatic job waits
+// working becomes interrupted, keeps nothing, and a new request builds it again. One master integrates at a time. An automatic job waits
 // while a device operation runs, so a wizard's masters never compete with an acquisition, and it holds no device itself.
 // A request that repeats a fingerprint meets the job already doing it.
 
@@ -216,8 +216,8 @@ export class CalibrationJobs {
 		return next
 	}
 
-	// Brings the jobs of a previous process back: work in progress becomes interrupted, staging nobody owns goes away, and
-	// the queue resumes. A job that published right before the crash is completed, because its product is the proof.
+	// Brings the jobs of a previous process back: work in progress becomes interrupted, staging of every job not queued goes
+	// away, and the queue resumes. A job that published right before the crash is completed, because its product is the proof.
 	async recover() {
 		for (const job of this.store.jobsIn(['validating', 'integrating', 'publishing'])) {
 			const master = job.fingerprint === undefined ? undefined : this.store.masterByFingerprint(job.fingerprint)
@@ -225,7 +225,7 @@ export class CalibrationJobs {
 			else this.#save(job, { state: 'interrupted', error: 'The server stopped while this job was working' })
 		}
 
-		const queued = this.store.jobsIn(['queued', 'interrupted'])
+		const queued = this.store.jobsIn(['queued'])
 		await this.store.removeOrphanStaging(new Set(queued.map(({ jobId }) => jobId)))
 		this.pump()
 	}
@@ -235,32 +235,6 @@ export class CalibrationJobs {
 		this.store.putJob(job)
 		this.host.updated(job)
 		this.pump()
-	}
-
-	// Cancels a job that has not ended, and returns it, or undefined when it cannot be cancelled. Staged work is discarded.
-	async cancel(jobId: string) {
-		const job = this.store.job(jobId)
-		if (!job || !ACTIVE_JOB_STATES.includes(job.state)) return undefined
-		const running = this.#running?.jobId === jobId
-		const cancelled = this.#save(job, { state: 'cancelled' })
-
-		// A running job removes its own staging once its worker is gone, which holds files open until then.
-		if (running) this.#running!.controller.abort(new DOMException('Cancelled', 'AbortError'))
-		else await rm(this.store.stagingDirectory(jobId), { recursive: true, force: true })
-
-		this.pump()
-		return cancelled
-	}
-
-	// Queues a failed or interrupted job again, from the start and with the frames it saw. Returns it, or undefined when it
-	// cannot be retried.
-	async retry(jobId: string) {
-		const job = this.store.job(jobId)
-		if (!job?.build || (job.state !== 'failed' && job.state !== 'interrupted')) return undefined
-		await rm(this.store.stagingDirectory(jobId), { recursive: true, force: true })
-		const queued = this.#save(job, { state: 'queued', progress: NO_PROGRESS, error: undefined, code: undefined })
-		this.pump()
-		return queued
 	}
 
 	// Stops the job running and any wait, for a server that ends or a test.

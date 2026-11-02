@@ -211,7 +211,7 @@ export class NotificationClassifier {
 				level: failed ? 'error' : 'success',
 				code: failed ? 'calibrationLibrary.failed' : 'calibrationLibrary.completed',
 				title: failed ? 'Master not built' : 'Master built',
-				message: failed ? 'The Calibration Library explains why, and can retry it.' : 'A master of the Dark Library Wizard is ready in the Calibration Library.',
+				message: failed ? 'The Calibration Library explains why; build it again from its group.' : 'A master of the Dark Library Wizard is ready in the Calibration Library.',
 				source: { kind: 'calibrationLibrary' },
 				target: { kind: 'tool', tool: 'calibration-library', group: groupId },
 			},

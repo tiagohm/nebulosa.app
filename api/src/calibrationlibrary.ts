@@ -1,5 +1,5 @@
 import { constants } from 'fs'
-import { copyFile, mkdir, rename, stat } from 'fs/promises'
+import { copyFile, mkdir, rename, rm, rmdir, stat } from 'fs/promises'
 import { join, relative } from 'path'
 import { type IntegrationProgress, type IntegrationResult, IntegrationError, masterHeader, MasterIntegrator, type MasterWorkerRequest } from './calibrationlibrary.analysis'
 import {
@@ -50,7 +50,8 @@ import { errorCode } from './util'
 // were made of them. It needs no camera and claims no device: frames come from the Dark Library plans through their store,
 // from what the Flat Wizard publishes, and from directories an operator imports, always by reference and never modified.
 // Masters are immutable revisions built by jobs that survive the tab and the server. A wizard may ask for a master, through
-// the same path as a person. Applying a master to a light is outside this service: it only explains which masters would match.
+// the same path as a person. Only an operator deletes: a group with the files of its frames, or one revision of a master.
+// Applying a master to a light is outside this service: it only explains which masters would match.
 
 // Rows of a page unless a request asks otherwise.
 const DEFAULT_PAGE_SIZE = 50
@@ -79,6 +80,8 @@ export type CalibrationLibraryErrorCode =
 	| 'notFound'
 	| 'verifiedMetadata'
 	| 'importFailed'
+	| 'masterInUse'
+	| 'deleteFailed'
 
 // Failure of a request, with its status and stable code.
 class LibraryError extends Error {
@@ -441,6 +444,12 @@ export class CalibrationLibrary {
 			}
 			case 'preferred':
 				this.store.setPreferred(record.masterId, record.revision)
+				return
+			case 'removal':
+				this.store.removeSources([record.sourceId])
+				return
+			case 'masterRemoval':
+				this.store.removeMaster(record.masterId, record.revision)
 		}
 	}
 
@@ -675,6 +684,36 @@ export class CalibrationLibrary {
 		const group = this.store.group(groupId)
 		if (group.sources.length === 0) throw new LibraryError('Unknown group', 404, 'notFound')
 		return { ...this.#describeGroup(group), sources: group.sources.map(sourceSummary) }
+	}
+
+	// Deletes a group: the file of every frame, wherever it is, and the frames from the library. Its masters stay, since they
+	// are products of their own. A frame whose file cannot be deleted stays in the library. Returns how many frames went away.
+	// Throws when the group is unknown, a master of it is being built, or a file could not be deleted.
+	async deleteGroup(groupId: string) {
+		await this.#usable()
+		const { sources } = this.store.group(groupId)
+		if (sources.length === 0) throw new LibraryError('Unknown group', 404, 'notFound')
+		if (this.store.jobsIn(ACTIVE_JOB_STATES).some(({ build }) => build?.groupId === groupId)) throw new LibraryError('A master of this group is being built', 409, 'jobConflict')
+
+		const removed: string[] = []
+		const failures = new Set<string>()
+
+		for (const { sourceId, path } of sources) {
+			try {
+				await rm(path, { force: true })
+				removed.push(sourceId)
+			} catch (error) {
+				failures.add(errorCode(error) ?? 'unexpected error')
+			}
+		}
+
+		const at = Date.now()
+		await this.store.append(removed.map((sourceId) => ({ type: 'removal', at, sourceId })))
+		this.store.removeSources(removed)
+		this.#changed()
+
+		if (failures.size > 0) throw new LibraryError(`${sources.length - removed.length} frames could not be deleted (${[...failures].join(', ')})`, 500, 'deleteFailed')
+		return { deleted: removed.length }
 	}
 
 	// Resolves the frames of a request.
@@ -924,11 +963,28 @@ export class CalibrationLibrary {
 		return { ...master, preferred: true }
 	}
 
-	// Lists jobs, newest first.
-	async listJobs(offset: number, limit: number): Promise<Page<CalibrationJobSummary>> {
-		await this.#usable()
-		const { items, total } = this.store.jobs(offset, limit)
-		return { items: items.map(jobSummary), total }
+	// Deletes one revision with its directory. Its number is never used again, and a revision another master depends on, or a
+	// master being built depends on, cannot go. Throws when unknown, in use, or its directory could not be deleted.
+	async deleteMaster(masterId: string, revision: number) {
+		await this.master(masterId, revision)
+		const used = (reference: Pick<MasterReference, 'masterId' | 'revision'> | undefined) => reference?.masterId === masterId && reference.revision === revision
+		if (this.store.allMasters().some(({ dependencies }) => dependencies.some(used))) throw new LibraryError('A master flat was corrected by this master; delete that flat first', 409, 'masterInUse')
+		if (this.store.jobsIn(ACTIVE_JOB_STATES).some(({ build }) => used(build?.correction))) throw new LibraryError('A master flat being built is corrected by this master', 409, 'masterInUse')
+
+		try {
+			await rm(this.store.revisionDirectory(masterId, revision), { recursive: true, force: true })
+		} catch (error) {
+			throw new LibraryError(`The master could not be deleted (${errorCode(error) ?? 'unexpected error'})`, 500, 'deleteFailed')
+		}
+
+		// The directory of the master goes too once its last revision did.
+		await rmdir(join(this.store.productsDirectory, masterId)).catch(() => undefined)
+
+		const record: CalibrationJournalRecord = { type: 'masterRemoval', at: Date.now(), masterId, revision }
+		await this.store.append([record])
+		this.#apply(record)
+		this.#changed()
+		return { masterId, revision }
 	}
 
 	// Returns a job. Throws when unknown.
@@ -939,27 +995,13 @@ export class CalibrationLibrary {
 		return jobSummary(job)
 	}
 
-	// Cancels a job. Throws when it already ended.
-	async cancel(jobId: string) {
-		const scan = this.#scans.get(jobId)
+	// Cancels the scan of an import. Throws when it already ended.
+	async cancelImport(jobId: string) {
 		const summary = await this.job(jobId)
-
-		if (scan) {
-			scan.abort(new DOMException('Cancelled', 'AbortError'))
-			return summary
-		}
-
-		const job = await this.jobs.cancel(jobId)
-		if (!job) throw new LibraryError('This job has ended', 409, 'jobConflict')
-		return jobSummary(job)
-	}
-
-	// Retries a failed or interrupted job. Throws when it cannot.
-	async retry(jobId: string) {
-		await this.job(jobId)
-		const job = await this.jobs.retry(jobId)
-		if (!job) throw new LibraryError('Only a failed or interrupted master can be retried', 409, 'jobConflict')
-		return jobSummary(job)
+		const scan = this.#scans.get(jobId)
+		if (!scan) throw new LibraryError('This import has ended', 409, 'jobConflict')
+		scan.abort(new DOMException('Cancelled', 'AbortError'))
+		return summary
 	}
 
 	// Starts scanning a directory. The scan keeps running after this returns, reports through its job, and leaves candidates to review.
@@ -1246,6 +1288,9 @@ export function createCalibrationLibraryRoutes(library: CalibrationLibrary) {
 				return answer(() => library.importCandidates(request.params.jobId, offset, limit))
 			},
 		},
+		'/api/calibration-library/imports/:jobId/cancel': {
+			POST: ({ params }) => answer(() => library.cancelImport(params.jobId)),
+		},
 		'/api/calibration-library/imports/:jobId/commit': {
 			POST: async (request) => {
 				const body = (await request.json()) as ImportCommit
@@ -1260,6 +1305,7 @@ export function createCalibrationLibraryRoutes(library: CalibrationLibrary) {
 		},
 		'/api/calibration-library/groups/:groupId': {
 			GET: ({ params }) => answer(() => library.group(params.groupId)),
+			DELETE: ({ params }) => answer(() => library.deleteGroup(params.groupId)),
 		},
 		'/api/calibration-library/recipes/validate': {
 			POST: async (request) => {
@@ -1286,27 +1332,13 @@ export function createCalibrationLibraryRoutes(library: CalibrationLibrary) {
 		},
 		'/api/calibration-library/masters/:masterId/revisions/:revision': {
 			GET: ({ params }) => answer(() => library.master(params.masterId, Number(params.revision))),
+			DELETE: ({ params }) => answer(() => library.deleteMaster(params.masterId, Number(params.revision))),
 		},
 		'/api/calibration-library/masters/:masterId/preferred': {
 			POST: async (request) => {
 				const { revision } = (await request.json()) as { readonly revision: number }
 				return answer(() => library.prefer(request.params.masterId, revision))
 			},
-		},
-		'/api/calibration-library/jobs': {
-			GET: (request) => {
-				const { offset, limit } = pageOf(request)
-				return answer(() => library.listJobs(offset, limit))
-			},
-		},
-		'/api/calibration-library/jobs/:jobId': {
-			GET: ({ params }) => answer(() => library.job(params.jobId)),
-		},
-		'/api/calibration-library/jobs/:jobId/cancel': {
-			POST: ({ params }) => answer(() => library.cancel(params.jobId)),
-		},
-		'/api/calibration-library/jobs/:jobId/retry': {
-			POST: ({ params }) => answer(() => library.retry(params.jobId)),
 		},
 		'/api/calibration-library/resolve-preview': {
 			POST: async (request) => {

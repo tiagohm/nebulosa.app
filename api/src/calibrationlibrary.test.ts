@@ -438,7 +438,7 @@ describe('masters', () => {
 		expect((await library.masters({}, 0, 10)).total).toBe(0)
 	})
 
-	test('a failed job can be retried, and its failure stays in the job', async () => {
+	test('a failed master keeps its failure in the job, and a new request builds it', async () => {
 		let attempts = 0
 		const flaky: Integrator = {
 			integrate: (request, onProgress) => {
@@ -453,8 +453,9 @@ describe('masters', () => {
 		const { jobId } = await library.requestMaster({ groupId: group.groupId })
 		expect((await settled(library, jobId!)).error).toBe('Boom')
 
-		await library.retry(jobId!)
-		expect((await settled(library, jobId!)).state).toBe('completed')
+		const again = await library.requestMaster({ groupId: group.groupId })
+		expect(again.jobId).not.toBe(jobId)
+		expect((await settled(library, again.jobId!)).state).toBe('completed')
 	})
 
 	test('a job that was working when the server stopped is interrupted, never published', async () => {
@@ -471,9 +472,10 @@ describe('masters', () => {
 		await reopened.library.ready()
 		expect((await reopened.library.job(jobId!)).state).toBe('interrupted')
 		expect((await reopened.library.masters({}, 0, 10)).total).toBe(0)
+		expect(readdirSync(join(base, 'library', 'staging'))).toEqual([])
 
-		await reopened.library.retry(jobId!)
-		expect((await settled(reopened.library, jobId!)).state).toBe('completed')
+		const again = await reopened.library.requestMaster({ groupId: group.groupId })
+		expect((await settled(reopened.library, again.jobId!)).state).toBe('completed')
 	})
 
 	test('a queued job resumes after a restart', async () => {
@@ -491,18 +493,62 @@ describe('masters', () => {
 		expect((await settled(reopened.library, jobId!)).state).toBe('completed')
 	})
 
-	test('cancels a job and removes its staging', async () => {
+	test('deleting a revision removes its directory, its preference, and never reuses its number', async () => {
+		const { library, plans, base } = open(local)
+		await plan(plans, base, 3)
+		const [group] = (await library.groups({}, 0, 50)).items
+		const first = await library.requestMaster({ groupId: group.groupId })
+		await settled(library, first.jobId!)
+		await library.prefer(first.masterId, 1)
+		const directory = join(base, 'library', 'products', first.masterId)
+
+		await library.deleteMaster(first.masterId, 1)
+		expect(readdirSync(join(base, 'library', 'products'))).toEqual([])
+		expect((await library.masters({}, 0, 10)).total).toBe(0)
+		expect(library.master(first.masterId, 1)).rejects.toThrow('Unknown master')
+
+		const second = await library.requestMaster({ groupId: group.groupId })
+		await settled(library, second.jobId!)
+		const [master] = (await library.masters({}, 0, 10)).items
+		expect(master.revision).toBe(2)
+		expect(master.preferred).toBeFalse()
+		expect(readdirSync(directory)).toEqual(['v0002'])
+
+		library.close()
+		libraries.length = 0
+		for (const name of readdirSync(join(base, 'library'))) if (name.startsWith('catalog.')) rmSync(join(base, 'library', name))
+		const reopened = open(local, undefined, base)
+		expect((await reopened.library.masters({}, 0, 10)).items.map(({ revision }) => revision)).toEqual([2])
+		expect(reopened.store.latestRevision(first.masterId)).toBe(2)
+	})
+
+	test('deleting a group removes its files and frames, keeps its masters, and survives a rebuild', async () => {
+		const { library, plans, base } = open(local)
+		await plan(plans, base, 3)
+		const [group] = (await library.groups({}, 0, 50)).items
+		const { jobId, masterId } = await library.requestMaster({ groupId: group.groupId })
+		await settled(library, jobId!)
+
+		expect(await library.deleteGroup(group.groupId)).toEqual({ deleted: 3 })
+		expect(readdirSync(join(base, 'frames')).filter((name) => name.endsWith('.fit'))).toEqual([])
+		expect((await library.groups({}, 0, 50)).total).toBe(0)
+		expect((await library.master(masterId, 1)).status).not.toBe('unavailable')
+		expect(library.deleteGroup(group.groupId)).rejects.toThrow('Unknown group')
+
+		library.close()
+		libraries.length = 0
+		for (const name of readdirSync(join(base, 'library'))) if (name.startsWith('catalog.')) rmSync(join(base, 'library', name))
+		const reopened = open(local, undefined, base)
+		expect((await reopened.library.groups({}, 0, 50)).total).toBe(0)
+	})
+
+	test('a group being built cannot be deleted', async () => {
 		const blocked = blockedIntegrator()
 		const { library, plans, base } = open(blocked)
 		await plan(plans, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
-		const { jobId } = await library.requestMaster({ groupId: group.groupId })
-		await Bun.sleep(30)
-
-		expect((await library.cancel(jobId!)).state).toBe('cancelled')
-		await Bun.sleep(30)
-		expect(readdirSync(join(base, 'library', 'staging'))).toEqual([])
-		expect(library.cancel(jobId!)).rejects.toThrow('has ended')
+		await library.requestMaster({ groupId: group.groupId })
+		expect(library.deleteGroup(group.groupId)).rejects.toThrow('being built')
 	})
 
 	test('a preferred revision is a pointer', async () => {
@@ -549,7 +595,7 @@ describe('automatic masters', () => {
 		await library.planEnded('plan')
 
 		const { items } = await library.masters({}, 0, 10)
-		const started = (await library.listJobs(0, 10)).items
+		const started = library.store.jobs(0, 10).items
 		expect(started[0].automatic).toBeTrue()
 		await settled(library, started[0].jobId)
 		expect(items.length + (await library.masters({}, 0, 10)).total).toBe(1)
@@ -559,21 +605,21 @@ describe('automatic masters', () => {
 		const { library, plans, base } = open(local)
 		await plan(plans, base, 2, 3, { generateMasters: true })
 		await library.planEnded('plan')
-		expect((await library.listJobs(0, 10)).total).toBe(0)
+		expect(library.store.jobs(0, 10).total).toBe(0)
 	})
 
 	test('a plan that did not ask starts nothing', async () => {
 		const { library, plans, base } = open(local)
 		await plan(plans, base, 3)
 		await library.planEnded('plan')
-		expect((await library.listJobs(0, 10)).total).toBe(0)
+		expect(library.store.jobs(0, 10).total).toBe(0)
 	})
 
 	test('a master that ended while the server was down is started on the next open, once', async () => {
 		const { library, plans, base } = open(local)
 		await plan(plans, base, 3, 3, { generateMasters: true })
 		await library.ready()
-		const [job] = (await library.listJobs(0, 10)).items
+		const [job] = library.store.jobs(0, 10).items
 		expect(job.automatic).toBeTrue()
 		await settled(library, job.jobId)
 		library.close()
@@ -581,7 +627,7 @@ describe('automatic masters', () => {
 
 		const reopened = open(local, undefined, base)
 		await reopened.library.ready()
-		expect((await reopened.library.listJobs(0, 10)).total).toBe(1)
+		expect(reopened.library.store.jobs(0, 10).total).toBe(1)
 	})
 
 	test('an automatic job waits for camera operations, and a manual one does not', async () => {
@@ -646,6 +692,7 @@ describe('flats', () => {
 		expect(master.calibrationState).toBe('calibratedNormalized')
 		expect(master.units).toBe('dimensionless')
 		expect(master.dependencies[0].masterId).toBe(correction.masterId)
+		expect(library.deleteMaster(correction.masterId, correction.revision)).rejects.toThrow('delete that flat first')
 
 		const image = await readMaster(master.path)
 		expect(image.metadata.bitpix).toBe(-32)

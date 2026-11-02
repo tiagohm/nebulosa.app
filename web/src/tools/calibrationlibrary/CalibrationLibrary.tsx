@@ -1,10 +1,10 @@
-import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationKind, CalibrationMasterDetail, CalibrationMasterSummary, CalibrationSource, CalibrationSourceSummary, CompatibilityFinding, Evidenced, ImportCandidate, MasterRequest, OverridableField, Page, RecipeValidation } from 'api'
+import type { CalibrationGroupSummary, CalibrationKind, CalibrationMasterDetail, CalibrationMasterSummary, CalibrationSource, CalibrationSourceSummary, CompatibilityFinding, Evidenced, ImportCandidate, MasterRequest, OverridableField, Page, RecipeValidation } from 'api'
 import { cn } from 'cn'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 // oxfmt-ignore
-import { buildMaster, CALIBRATION_PAGE_SIZE, calibrationLibraryRuntime, cancelCalibrationJob, commitCalibrationImport, excludeCalibrationSource, jobEnded, loadCalibrationGroup, loadCalibrationGroups, loadCalibrationJobs, loadCalibrationMaster, loadCalibrationMasters, loadCalibrationSource, loadCalibrationSources, loadImportCandidates, overrideCalibrationSource, preferMaster, refreshCalibrationFiles, retryCalibrationJob, startCalibrationImport, validateRecipe } from '../../calibrationlibrary/calibrationlibrary'
-import { Actions, Notice, Readout } from '../../equipment-control/parts'
+import { buildMaster, CALIBRATION_PAGE_SIZE, calibrationLibraryRuntime, cancelCalibrationImport, commitCalibrationImport, deleteCalibrationGroup, deleteCalibrationMaster, excludeCalibrationSource, jobEnded, latestGroupJob, loadCalibrationGroup, loadCalibrationGroups, loadCalibrationMaster, loadCalibrationMasters, loadCalibrationSource, loadCalibrationSources, loadImportCandidates, overrideCalibrationSource, preferMaster, refreshCalibrationFiles, startCalibrationImport, validateRecipe } from '../../calibrationlibrary/calibrationlibrary'
+import { Actions, ConfirmButton, Notice, Readout } from '../../equipment-control/parts'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { imagesState, openImage } from '../../images/images'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
@@ -19,12 +19,12 @@ import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 // oxfmt-ignore
-import { bytesText, CALIBRATION_KINDS, cameraFilterLabels, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, JOB_STATE_LABELS, JOB_STATE_TONES, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
+import { bytesText, CALIBRATION_KINDS, cameraFilterLabels, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
 
-// Calibration Library tool: what calibration frames exist, what can be combined and why not, which masters were made, and the
-// jobs making them. It works with no camera and starts no exposure; every capture stays in Images. State lives on the server,
-// so a reload, another tab, or a wizard show the same jobs. A master is built from the group it belongs to, a change makes a new
-// revision, and this tool never deletes anything.
+// Calibration Library tool: what calibration frames exist, what can be combined and why not, and which masters were made. It
+// works with no camera and starts no exposure; every capture stays in Images. State lives on the server, so a reload, another
+// tab, or a wizard show the same builds. A master is built from the group it belongs to, whose form follows its build, and a
+// change makes a new revision. Deleting, after a confirmation, takes a group with the files of its frames, or one revision.
 
 // Fields of the recipe form.
 interface RecipeForm {
@@ -44,8 +44,8 @@ interface RecipeForm {
 // Starting recipe of a group.
 const DEFAULT_FORM: RecipeForm = { method: 'sigmaClip', sigmaLow: 3, sigmaHigh: 3, maxIterations: 5, correction: '', acknowledged: false }
 
-// Choice of the group, revision, frame, or job shown in the panel.
-type Selection = { readonly type: 'group'; readonly groupId: string } | { readonly type: 'master'; readonly masterId: string; readonly revision: number } | { readonly type: 'source'; readonly sourceId: string } | { readonly type: 'job'; readonly jobId: string }
+// Choice of the group, revision, or frame shown in the panel.
+type Selection = { readonly type: 'group'; readonly groupId: string } | { readonly type: 'master'; readonly masterId: string; readonly revision: number } | { readonly type: 'source'; readonly sourceId: string }
 
 // Calibration Library tool.
 export function CalibrationLibrary() {
@@ -81,8 +81,7 @@ export function CalibrationLibrary() {
 		const state = calibrationLibraryRuntime
 		if (section === 'library') void loadCalibrationGroups(state, filter, page)
 		else if (section === 'frames') void loadCalibrationSources(state, filter, page)
-		else if (section === 'masters') void loadCalibrationMasters(state, filter, page)
-		else void loadCalibrationJobs(state, page)
+		else void loadCalibrationMasters(state, filter, page)
 	}, [section, kind, camera, search, page, runtime.changes])
 
 	// Fetches what the panel shows, again whenever the server reports a change.
@@ -105,6 +104,12 @@ export function CalibrationLibrary() {
 		navigate(routeState, { workspace: 'tools', tool: 'calibration-library', group: groupId })
 	}
 
+	// Forgets what was deleted, and the link to its group.
+	function deselect() {
+		setSelection(undefined)
+		if (linked !== undefined) navigate(routeState, { workspace: 'tools', tool: 'calibration-library' })
+	}
+
 	async function chooseDirectory(path: string) {
 		setImporting(false)
 		const job = await startCalibrationImport(calibrationLibraryRuntime, path, true)
@@ -114,7 +119,7 @@ export function CalibrationLibrary() {
 	const cameraList = runtime.summary?.cameras ?? []
 	const cameras = ['', ...cameraList.map(({ id }) => id)]
 	const cameraLabels = cameraFilterLabels(cameraList)
-	const panel = selection && <SelectionPanel selection={selection} onGroup={selectGroup} />
+	const panel = selection && <SelectionPanel selection={selection} onGroup={selectGroup} onDeleted={deselect} />
 
 	const actions = (
 		<Actions>
@@ -133,14 +138,13 @@ export function CalibrationLibrary() {
 				{runtime.errors.refresh && <Notice error>{runtime.errors.refresh}</Notice>}
 				<div className="flex flex-wrap items-end gap-3">
 					<SegmentedControl options={LIBRARY_SECTIONS} value={section} format={(option) => SECTION_LABELS[option]} onChange={change(setSection)} />
-					{section !== 'jobs' && <Select label="Frame Type" className="w-36" options={KIND_FILTERS} value={kind} format={(option) => (option === 'all' ? 'All Types' : KIND_LABELS[option])} onChange={change(setKind)} />}
-					{section !== 'jobs' && <Select label="Camera" className="w-52" options={cameras} value={camera} format={(option) => (option ? (cameraLabels.get(option) ?? option) : 'All Cameras')} onChange={change(setCamera)} />}
+					<Select label="Frame Type" className="w-36" options={KIND_FILTERS} value={kind} format={(option) => (option === 'all' ? 'All Types' : KIND_LABELS[option])} onChange={change(setKind)} />
+					<Select label="Camera" className="w-52" options={cameras} value={camera} format={(option) => (option ? (cameraLabels.get(option) ?? option) : 'All Cameras')} onChange={change(setCamera)} />
 					{section === 'frames' && <TextInput label="Search" className="w-52" value={search} onChange={(event) => change(setSearch)(event.target.value)} />}
 				</div>
 				{section === 'library' && <GroupsView selected={selection?.type === 'group' ? selection.groupId : undefined} onSelect={selectGroup} />}
 				{section === 'frames' && <FramesView selected={selection?.type === 'source' ? selection.sourceId : undefined} onSelect={(sourceId) => select({ type: 'source', sourceId })} />}
 				{section === 'masters' && <MastersView selection={selection} onSelect={(masterId, revision) => select({ type: 'master', masterId, revision })} />}
-				{section === 'jobs' && <JobsView selected={selection?.type === 'job' ? selection.jobId : undefined} onSelect={(jobId) => select({ type: 'job', jobId })} />}
 				<Pager page={page} total={pageTotal(section)} loading={runtime.loading} onPage={setPage} />
 			</div>
 			<FileExplorerModal open={importing} title="Import Calibration Frames" mode="directory" onChoose={(path) => void chooseDirectory(path)} onClose={() => setImporting(false)} />
@@ -151,8 +155,8 @@ export function CalibrationLibrary() {
 
 // Rows of the list a section shows.
 function pageTotal(section: LibrarySection) {
-	const { groups, sources, masters, jobHistory } = calibrationLibraryRuntime
-	return (section === 'library' ? groups : section === 'frames' ? sources : section === 'masters' ? masters : jobHistory)?.total ?? 0
+	const { groups, sources, masters } = calibrationLibraryRuntime
+	return (section === 'library' ? groups : section === 'frames' ? sources : masters)?.total ?? 0
 }
 
 // Previous and next page of a list, shown only when there is more than one.
@@ -307,63 +311,17 @@ function MastersView({ selection, onSelect }: { readonly selection?: Selection; 
 	)
 }
 
-// Live jobs over the page of the server.
-function JobsView({ selected, onSelect }: { readonly selected?: string; readonly onSelect: (jobId: string) => void }) {
-	const { jobHistory, jobs } = useSnapshot(calibrationLibraryRuntime)
-	const items = ((jobHistory?.items ?? []) as readonly CalibrationJobSummary[]).map((job) => jobs[job.jobId] ?? job)
-
-	if (items.length === 0) return <EmptyState title="No jobs" description="Builds and imports appear here, and keep running when this tab closes." />
-
-	return (
-		<Table headers={['Job', 'Requested', 'Frames', 'Progress', 'State', '']}>
-			{items.map((job) => (
-				<Row key={job.jobId} selected={job.jobId === selected} onClick={() => onSelect(job.jobId)}>
-					<Cell>{job.type === 'import' ? `Import · ${job.found ?? 0} files` : `${job.kind ? KIND_LABELS[job.kind] : 'Master'}${job.automatic ? ' · Automatic' : ''}`}</Cell>
-					<Cell>{new Date(job.createdAt).toLocaleString()}</Cell>
-					<Cell>{job.frames ?? '—'}</Cell>
-					<Cell>{jobEnded(job) ? (job.error ?? '—') : `${Math.round(jobFraction(job) * 100)}%`}</Cell>
-					<Cell>
-						<StatusBadge tone={JOB_STATE_TONES[job.state]} label={JOB_STATE_LABELS[job.state]} />
-					</Cell>
-					<Cell>
-						<JobActions job={job} />
-					</Cell>
-				</Row>
-			))}
-		</Table>
-	)
+// Panel of what is selected; onDeleted runs once what it shows was deleted.
+function SelectionPanel({ selection, onGroup, onDeleted }: { readonly selection: Selection; readonly onGroup: (groupId: string) => void; readonly onDeleted: () => void }) {
+	if (selection.type === 'group') return <GroupPanel onDeleted={onDeleted} />
+	if (selection.type === 'master') return <MasterPanel onGroup={onGroup} onDeleted={onDeleted} />
+	return <SourcePanel />
 }
 
-// Cancel of a job working, and retry of one that failed.
-function JobActions({ job }: { readonly job: CalibrationJobSummary }) {
-	const { pending } = useSnapshot(calibrationLibraryRuntime)
-	const busy = pending[`job:${job.jobId}`] === true
-
-	if (!jobEnded(job)) {
-		return (
-			<Button variant="secondary" disabled={busy} onClick={() => void cancelCalibrationJob(calibrationLibraryRuntime, job.jobId)}>
-				Cancel
-			</Button>
-		)
-	}
-
-	if (job.type === 'master' && (job.state === 'failed' || job.state === 'interrupted')) {
-		return (
-			<Button variant="secondary" disabled={busy} onClick={() => void retryCalibrationJob(calibrationLibraryRuntime, job.jobId)}>
-				Retry
-			</Button>
-		)
-	}
-
-	return null
-}
-
-// Panel of what is selected.
-function SelectionPanel({ selection, onGroup }: { readonly selection: Selection; readonly onGroup: (groupId: string) => void }) {
-	if (selection.type === 'group') return <GroupPanel />
-	if (selection.type === 'master') return <MasterPanel onGroup={onGroup} />
-	if (selection.type === 'source') return <SourcePanel />
-	return <JobPanel jobId={selection.jobId} />
+// Opens a file of the server in Images.
+function openInImages(path: string) {
+	void openImage(imagesState, path)
+	navigate(routeState, { workspace: 'images' })
 }
 
 // Explained reasons, the worst first.
@@ -384,10 +342,18 @@ function Findings({ findings }: { readonly findings: readonly CompatibilityFindi
 	)
 }
 
-// Group, why it is in its state, and its build form.
-function GroupPanel() {
-	const { group } = useSnapshot(calibrationLibraryRuntime)
+// Group, why it is in its state, its build form, and its deletion.
+function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
+	const { group, jobs, pending, errors } = useSnapshot(calibrationLibraryRuntime)
 	if (!group) return <p className="m-0 p-4 text-xs text-ink-300">Loading…</p>
+
+	const key = `delete:${group.groupId}`
+	const job = latestGroupJob(jobs, group.groupId)
+	const building = job !== undefined && !jobEnded(job)
+
+	async function remove(groupId: string) {
+		if (await deleteCalibrationGroup(calibrationLibraryRuntime, groupId)) onDeleted()
+	}
 
 	return (
 		<>
@@ -397,6 +363,12 @@ function GroupPanel() {
 				<Readout label="Settings">{settingsText(group.metadata)}</Readout>
 				<Readout label="Frames">{group.required === undefined ? `${group.usable} usable of ${group.total}` : `${group.usable} usable, ${group.required} planned`}</Readout>
 				<Findings findings={group.findings} />
+				{errors[key] && <Notice error>{errors[key]}</Notice>}
+				<Actions>
+					<ConfirmButton title="Delete this group?" message={`The files of its ${group.total} frames are deleted from the disk, wherever they are, and leave the library. Its masters stay.`} confirmLabel="Delete" disabled={building || pending[key] === true} onConfirm={() => void remove(group.groupId)}>
+						Delete Group
+					</ConfirmButton>
+				</Actions>
 			</CollapsibleSection>
 			<CollapsibleSection id="calibration.build" title="Build Master">
 				<BuildForm key={group.groupId} groupId={group.groupId} kind={group.kind} />
@@ -417,7 +389,7 @@ function GroupPanel() {
 
 // Recipe of a master, which the server explains as it changes.
 function BuildForm({ groupId, kind }: { readonly groupId: string; readonly kind: CalibrationKind }) {
-	const { pending, errors, masters, changes } = useSnapshot(calibrationLibraryRuntime)
+	const { pending, errors, masters, changes, jobs } = useSnapshot(calibrationLibraryRuntime)
 	const [form, setForm] = useState<RecipeForm>(DEFAULT_FORM)
 	const [validation, setValidation] = useState<RecipeValidation>()
 	const [corrections, setCorrections] = useState<readonly CalibrationMasterSummary[]>([])
@@ -465,6 +437,11 @@ function BuildForm({ groupId, kind }: { readonly groupId: string; readonly kind:
 	}
 
 	const reason = validation?.findings.find(({ severity }) => severity === 'blocker')?.message
+	// The latest build of the group, wherever it was asked for, keeps the button busy until it ends and explains a failure.
+	const job = latestGroupJob(jobs, groupId)
+	const building = job !== undefined && !jobEnded(job)
+	const requesting = pending[key] === true
+	const failure = job?.state === 'failed' || job?.state === 'interrupted' ? job.error : undefined
 
 	return (
 		<>
@@ -482,8 +459,10 @@ function BuildForm({ groupId, kind }: { readonly groupId: string; readonly kind:
 			{validation !== undefined && validation.spillBytes > 0 && <Notice>{`Needs about ${bytesText(validation.spillBytes)} of temporary disk.`}</Notice>}
 			{validation?.existing && <Notice>{`This exact recipe is already v${validation.existing.revision}.`}</Notice>}
 			{errors[key] && <Notice error>{errors[key]}</Notice>}
-			<Button disabled={!validation?.valid || validation.existing !== undefined || pending[key] === true} title={reason} onClick={() => void buildMaster(calibrationLibraryRuntime, key, request())}>
-				Build Master
+			{failure && !building && <Notice error>{`The last build failed: ${failure}`}</Notice>}
+			<Button disabled={building || requesting || !validation?.valid || validation.existing !== undefined} title={reason} onClick={() => void buildMaster(calibrationLibraryRuntime, key, request())}>
+				{(building || requesting) && <span className="size-3.5 flex-none animate-spin rounded-full border-2 border-current border-t-transparent" />}
+				{building ? (job.state === 'queued' ? 'Queued' : `Building ${Math.round(jobFraction(job) * 100)}%`) : requesting ? 'Building' : 'Build Master'}
 			</Button>
 		</>
 	)
@@ -494,8 +473,8 @@ function EvidencedReadout({ label, value, format = String }: { readonly label: s
 	return <Readout label={label}>{value.value === undefined ? 'Unknown' : `${format(value.value)} · ${EVIDENCE_LABELS[value.evidence]}`}</Readout>
 }
 
-// Revision, what went in, and how to use it.
-function MasterPanel({ onGroup }: { readonly onGroup: (groupId: string) => void }) {
+// Revision, what went in, how to use it, and its deletion.
+function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: string) => void; readonly onDeleted: () => void }) {
 	const { master: snapshot, pending, errors } = useSnapshot(calibrationLibraryRuntime)
 	const master = snapshot
 	if (!master) return <p className="m-0 p-4 text-xs text-ink-300">Loading…</p>
@@ -503,10 +482,8 @@ function MasterPanel({ onGroup }: { readonly onGroup: (groupId: string) => void 
 	const key = `master:${master.masterId}`
 	const { diagnostics } = master
 
-	function open() {
-		if (!master) return
-		void openImage(imagesState, master.path)
-		navigate(routeState, { workspace: 'images' })
+	async function remove(masterId: string, revision: number) {
+		if (await deleteCalibrationMaster(calibrationLibraryRuntime, masterId, revision)) onDeleted()
 	}
 
 	return (
@@ -516,7 +493,7 @@ function MasterPanel({ onGroup }: { readonly onGroup: (groupId: string) => void 
 				<Readout label="Contents">{`${master.calibrationState} · ${master.units}`}</Readout>
 				<Notice>{master.usage}</Notice>
 				<Actions>
-					<Button disabled={master.status === 'unavailable'} onClick={open}>
+					<Button disabled={master.status === 'unavailable'} onClick={() => openInImages(master.path)}>
 						Open in Images
 					</Button>
 					<Button variant="secondary" disabled={master.preferred || master.status === 'unavailable' || pending[key] === true} onClick={() => void preferMaster(calibrationLibraryRuntime, master.masterId, master.revision)}>
@@ -525,6 +502,15 @@ function MasterPanel({ onGroup }: { readonly onGroup: (groupId: string) => void 
 					<Button variant="secondary" onClick={() => onGroup(master.groupId)}>
 						Open Group
 					</Button>
+					<ConfirmButton
+						title={`Delete v${master.revision}?`}
+						message="Its file and manifest are deleted from the disk, and its number is never used again. A master that was corrected by it must be deleted first."
+						confirmLabel="Delete"
+						disabled={pending[key] === true}
+						onConfirm={() => void remove(master.masterId, master.revision)}
+					>
+						Delete
+					</ConfirmButton>
 				</Actions>
 				{errors[key] && <Notice error>{errors[key]}</Notice>}
 			</CollapsibleSection>
@@ -577,6 +563,11 @@ function SourcePanel() {
 				<Readout label="Path">
 					<span className="break-all">{source.path}</span>
 				</Readout>
+				<Actions>
+					<Button disabled={source.status === 'missing'} onClick={() => openInImages(source.path)}>
+						Open in Images
+					</Button>
+				</Actions>
 				<Readout label="Size">{bytesText(source.bytes)}</Readout>
 				<Readout label="Image">{`${metadata.width}×${metadata.height}×${metadata.channels}, BITPIX ${metadata.bitpix}${metadata.cfa ? `, ${metadata.cfa}` : ''}`}</Readout>
 				<EvidencedReadout label="Camera" value={metadata.cameraId} />
@@ -638,24 +629,6 @@ function ReviewForm({ source }: { readonly source: CalibrationSource }) {
 	)
 }
 
-// Job, with why it ended.
-function JobPanel({ jobId }: { readonly jobId: string }) {
-	const { jobs, jobHistory } = useSnapshot(calibrationLibraryRuntime)
-	const job = (jobs[jobId] ?? jobHistory?.items.find((each) => each.jobId === jobId)) as CalibrationJobSummary | undefined
-	if (!job) return null
-
-	return (
-		<CollapsibleSection id="calibration.job" title="Job">
-			<StatusBadge tone={JOB_STATE_TONES[job.state]} label={JOB_STATE_LABELS[job.state]} />
-			<Readout label="Frames Checked">{job.progress.framesValidated}</Readout>
-			<Readout label="Rows">{`${job.progress.rowsCombined} of ${job.progress.rowsTotal}`}</Readout>
-			<Readout label="Written">{bytesText(job.progress.bytesWritten)}</Readout>
-			{job.error && <Notice error>{job.error}</Notice>}
-			<JobActions job={job} />
-		</CollapsibleSection>
-	)
-}
-
 // Review of what an import found: nothing enters the library until it is committed.
 function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onClose: () => void }) {
 	const { jobs, pending, errors } = useSnapshot(calibrationLibraryRuntime)
@@ -688,7 +661,7 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 				{!ended && (
 					<div className="flex items-center gap-3">
 						<Notice>{`Reading headers · ${job?.found ?? 0} files · ${bytesText(job?.bytes ?? 0)}`}</Notice>
-						<Button variant="secondary" onClick={() => void cancelCalibrationJob(calibrationLibraryRuntime, jobId)}>
+						<Button variant="secondary" onClick={() => void cancelCalibrationImport(calibrationLibraryRuntime, jobId)}>
 							Cancel
 						</Button>
 					</div>

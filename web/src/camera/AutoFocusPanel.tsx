@@ -1,6 +1,5 @@
 import type { AutoFocusSessionSummary, CaptureSnoop, DeviceSummary } from 'api'
 import { cn } from 'cn'
-import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, deviceStateOf, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -16,10 +15,12 @@ import { useAstapConfigured } from '../stars/StarRequestControls'
 import { PROVIDER_LABELS } from '../stars/stars'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataList, DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { useNow } from '../useNow'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusBlocker, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
+import { CameraSummary } from './CameraSummary'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
@@ -28,7 +29,7 @@ import { FrameProgress } from './FrameProgress'
 // device linked to Equipment Control, the routine the server's
 // runner follows (exposure time, fitting, step size, positions per side, and the advanced settings collapsed), and the
 // state of the running or last session with its Run and Stop commands. Frames are taken with the exposure time of this
-// form and the camera's camera settings, edited only in Camera Acquisition, and measured with the profile's star
+// form and the camera's camera settings, edited only in Camera Acquisition and shown under the exposure time, and measured with the profile's star
 // detection request, edited in Images → Star Detection. The camera is the panel's target and the focuser the one
 // associated with it; a camera without a focuser says how to associate one. The filter wheel, when assigned, is
 // shown and never moved. The forms are the camera's, kept in the profile; the session is the server's, shown here
@@ -91,19 +92,19 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 	return (
 		<>
 			<CollapsibleSection id="images.auto-focus.equipment" title="Equipment">
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Camera">
+				<DataList>
+					<DataRow label="Camera">
 						<DeviceLink device={device} fallback="—" />
-					</Row>
-					<Row label="Focuser">
+					</DataRow>
+					<DataRow label="Focuser">
 						<DeviceLink device={focuserDevice} fallback="Not assigned" />
-					</Row>
+					</DataRow>
 					{wheel.device && (
-						<Row label="Filter Wheel">
+						<DataRow label="Filter Wheel">
 							<DeviceLink device={wheel.device} fallback="—" />
-						</Row>
+						</DataRow>
 					)}
-				</dl>
+				</DataList>
 				{!focuser && !running && (
 					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
 						Equipment Setup
@@ -117,6 +118,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 					Each frame is measured by the median HFD of its accepted stars (Multi-Star) with the Star Detection settings (<span className="text-accent">{PROVIDER_LABELS[detection.detector.provider]}</span> detector) and shown as the latest frame of the camera; frames are kept in memory only.
 				</p>
 				<ExposureTimeInput value={settings.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
+				<CameraSummary exposure={running && session ? session.request.capture : exposure} capabilities={capabilities} />
 				<Select label="Curve Fitting" options={FITTING_MODES} value={settings.fittingMode} format={(mode) => FITTING_MODE_LABELS[mode]} disabled={locked} onChange={(fittingMode) => update({ fittingMode })} />
 				<NumberInput label="Step Size" value={stepSize} min={1} max={focuserState ? Math.max(1, focuserState.position.max - focuserState.position.min) : undefined} suffix="steps" disabled={locked} onChange={(value) => update({ stepSize: value })} />
 				<NumberInput label="Positions per Side" value={settings.initialOffsetSteps} min={1} max={50} disabled={locked} onChange={(initialOffsetSteps) => update({ initialOffsetSteps })} />
@@ -178,34 +180,24 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 			</p>
 			{(session.state === 'exposing' || session.state === 'verifying') && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <p className="m-0 text-xs leading-4 text-danger">{session.error}</p>}
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				<Row label="Focuser">{position === undefined ? '—' : `${position}${moving ? ' (moving)' : ''}`}</Row>
-				{session.initialPosition !== undefined && <Row label="Start Position">{session.initialPosition}</Row>}
-				<Row label="Samples">{session.measurementCount}</Row>
-				{last && <Row label="Last HFD">{last.hfd === undefined ? `— at ${last.requestedPosition}` : `${last.hfd.toFixed(2)} px at ${last.requestedPosition}`}</Row>}
-				{last && <Row label="Stars">{`${last.acceptedCount} / ${last.detectedCount}`}</Row>}
-				<Row label="Estimated Best">{session.estimatedPosition ?? '—'}</Row>
-				{session.estimatedHfd !== undefined && <Row label="Fitted HFD">{`${session.estimatedHfd.toFixed(2)} px`}</Row>}
-				<Row label="Final Position">{session.finalPosition ?? '—'}</Row>
-				<Row label="Verification">{session.verification === 'measured' && session.verifiedHfd !== undefined ? `${session.verifiedHfd.toFixed(2)} px measured` : session.verification === 'pending' ? 'Pending' : VERIFICATION_LABELS[session.verification]}</Row>
-				<Row label="Elapsed">{formatElapsed(((session.endedAt ?? now) - session.startedAt) / 1000)}</Row>
-			</dl>
+			<DataList>
+				<DataRow label="Focuser">{position === undefined ? '—' : `${position}${moving ? ' (moving)' : ''}`}</DataRow>
+				{session.initialPosition !== undefined && <DataRow label="Start Position">{session.initialPosition}</DataRow>}
+				<DataRow label="Samples">{session.measurementCount}</DataRow>
+				{last && <DataRow label="Last HFD">{last.hfd === undefined ? `— at ${last.requestedPosition}` : `${last.hfd.toFixed(2)} px at ${last.requestedPosition}`}</DataRow>}
+				{last && <DataRow label="Stars">{`${last.acceptedCount} / ${last.detectedCount}`}</DataRow>}
+				<DataRow label="Estimated Best">{session.estimatedPosition ?? '—'}</DataRow>
+				{session.estimatedHfd !== undefined && <DataRow label="Fitted HFD">{`${session.estimatedHfd.toFixed(2)} px`}</DataRow>}
+				<DataRow label="Final Position">{session.finalPosition ?? '—'}</DataRow>
+				<DataRow label="Verification">{session.verification === 'measured' && session.verifiedHfd !== undefined ? `${session.verifiedHfd.toFixed(2)} px measured` : session.verification === 'pending' ? 'Pending' : VERIFICATION_LABELS[session.verification]}</DataRow>
+				<DataRow label="Elapsed">{formatElapsed(((session.endedAt ?? now) - session.startedAt) / 1000)}</DataRow>
+			</DataList>
 			{last && last.warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{last.warnings.join(' ')}</p>}
 			{session.verificationError && <p className="m-0 text-xs leading-4 text-ink-300">{session.verificationError}</p>}
 			{session.state === 'cancelled' && (
 				<p className="m-0 text-xs leading-4 text-ink-300">{session.restored ? 'The focuser was moved back to the start position.' : session.restored === false ? 'The focuser could not be moved back to the start position and was left where it stood.' : 'The focuser was left where the stop found it.'}</p>
 			)}
 		</>
-	)
-}
-
-// Label and value of a row.
-function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="contents">
-			<dt className="text-ink-300">{label}</dt>
-			<dd className="m-0 min-w-0 truncate text-right tabular-nums">{children}</dd>
-		</div>
 	)
 }
 

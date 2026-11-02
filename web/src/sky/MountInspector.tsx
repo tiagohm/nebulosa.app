@@ -1,10 +1,10 @@
-import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import type { SkyObserverSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
+import { DataRow } from '../ui/DataRow'
 import { skyClock } from './clock'
 import { formatDeclination, formatDegrees, formatRightAscension } from './format'
 import { horizontalOf, mountPoint, mountRuntime, mountView } from './mount'
@@ -21,16 +21,6 @@ export interface MountInspectorProps {
 	readonly observer?: SkyObserverSettings
 	// Opens the framing settings, which draw the field of view around the selection.
 	readonly onShowFraming: () => void
-}
-
-// Label and value of one datum.
-function Datum({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-ink-300">{label}</span>
-			<span className="min-w-0 text-right font-mono text-[13px] text-ink-100">{children}</span>
-		</div>
-	)
 }
 
 // Motion state of a mount, as one line.
@@ -64,13 +54,13 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 			<CollapsibleSection id="sky.position" title="Position" summary={state ? motionOf(state) : undefined}>
 				{point && state ? (
 					<>
-						<Datum label="State">{motionOf(state)}</Datum>
-						<Datum label="RA (of date)">{formatRightAscension(point.rightAscension)}</Datum>
-						<Datum label="Dec (of date)">{formatDeclination(point.declination)}</Datum>
+						<DataRow label="State">{motionOf(state)}</DataRow>
+						<DataRow label="RA (of date)">{formatRightAscension(point.rightAscension)}</DataRow>
+						<DataRow label="Dec (of date)">{formatDeclination(point.declination)}</DataRow>
 						{horizontal && (
 							<>
-								<Datum label="Altitude">{formatDeclination(horizontal.altitude)}</Datum>
-								<Datum label="Azimuth">{formatDegrees(horizontal.azimuth)}</Datum>
+								<DataRow label="Altitude">{formatDeclination(horizontal.altitude)}</DataRow>
+								<DataRow label="Azimuth">{formatDegrees(horizontal.azimuth)}</DataRow>
 							</>
 						)}
 						<p className="m-0 text-xs leading-4 text-ink-300">As reported by the mount now{horizontal ? '; altitude is geometric, for the profile observer' : ''}.</p>

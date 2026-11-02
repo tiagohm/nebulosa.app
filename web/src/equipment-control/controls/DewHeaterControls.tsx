@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
+import { DataRow } from '../../ui/DataRow'
 import { Slider } from '../../ui/Slider'
 import { controlRuntime, deviceStateOf, sendCommand } from '../control'
-import { Actions, type InterfaceProps, Notice, Readout } from '../parts'
+import { Actions, type InterfaceProps, Notice } from '../parts'
 
 // Controls of a dew heater: its duty cycle as reported, and a pending duty cycle sent only with Apply, so
 // dragging the slider never sends a stream of commands.
@@ -33,7 +34,7 @@ export function DewHeaterControls({ device }: InterfaceProps) {
 
 	return (
 		<PanelSection title="Dew Heater">
-			<Readout label="Duty cycle">{`${dutyCycle.value} of ${dutyCycle.min}–${dutyCycle.max}`}</Readout>
+			<DataRow label="Duty cycle">{`${dutyCycle.value} of ${dutyCycle.min}–${dutyCycle.max}`}</DataRow>
 			<Slider label="Duty cycle" value={value} min={dutyCycle.min} max={dutyCycle.max} step={step} onChange={setPending} />
 			<Actions>
 				{pending !== undefined && (

@@ -5,6 +5,7 @@ import { imagesState, selectImageTool } from '../images/images'
 import type { CameraPlateSolvingSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
+import { DataList, DataRow } from '../ui/DataRow'
 import { useSolverConfigured } from './PlateSolveControls'
 import { PROVIDER_LABELS } from './platesolving'
 
@@ -27,14 +28,11 @@ export function CameraPlateSolvingSection({ id, device, solving }: CameraPlateSo
 
 	return (
 		<CollapsibleSection id={id} title="Plate Solving" summary={PROVIDER_LABELS[solving.provider]} defaultOpen={false}>
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				<dt className="text-ink-300">Solver</dt>
-				<dd className="m-0 min-w-0 truncate text-right">{PROVIDER_LABELS[solving.provider]}</dd>
-				<dt className="text-ink-300">Strategy</dt>
-				<dd className="m-0 min-w-0 truncate text-right">{solving.strategy === 'blind' ? 'Blind' : 'Assisted'}</dd>
-				<dt className="text-ink-300">Downsample</dt>
-				<dd className="m-0 min-w-0 truncate text-right tabular-nums">{solving.downsample ?? 'Automatic'}</dd>
-			</dl>
+			<DataList>
+				<DataRow label="Solver">{PROVIDER_LABELS[solving.provider]}</DataRow>
+				<DataRow label="Strategy">{solving.strategy === 'blind' ? 'Blind' : 'Assisted'}</DataRow>
+				<DataRow label="Downsample">{solving.downsample ?? 'Automatic'}</DataRow>
+			</DataList>
 			{!configured && <Notice error>{PROVIDER_LABELS[solving.provider]} is not configured.</Notice>}
 			{device && (
 				<Button variant="secondary" className="self-start" onClick={() => selectImageTool(imagesState, cameraTabKey(device.connectionId, device.id), 'plate-solver')}>

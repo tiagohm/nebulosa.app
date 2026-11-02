@@ -10,10 +10,11 @@ import { formatDeclination, formatDegrees, formatRightAscension } from '../../sk
 import { horizontalOf } from '../../sky/mount'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { DataRow } from '../../ui/DataRow'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
-import { Actions, ConfirmButton, type InterfaceProps, Notice, Readout } from '../parts'
+import { Actions, ConfirmButton, type InterfaceProps, Notice } from '../parts'
 
 // Controls of a mount: where it points, a coordinate to go to, flip to, or sync on, tracking and its rate,
 // the manual-motion speed, park and home, and the site and clock it uses. Every value shown is the one the
@@ -85,16 +86,16 @@ export function MountControls({ device }: InterfaceProps) {
 	return (
 		<>
 			<PanelSection title="Mount">
-				<Readout label="State">{motionOf(mount)}</Readout>
-				<Readout label="RA (JNow)">{formatRightAscension(mount.rightAscension)}</Readout>
-				<Readout label="Dec (JNow)">{formatDeclination(mount.declination)}</Readout>
+				<DataRow label="State">{motionOf(mount)}</DataRow>
+				<DataRow label="RA (JNow)">{formatRightAscension(mount.rightAscension)}</DataRow>
+				<DataRow label="Dec (JNow)">{formatDeclination(mount.declination)}</DataRow>
 				{horizontal && (
 					<>
-						<Readout label="Altitude">{formatDeclination(horizontal.altitude)}</Readout>
-						<Readout label="Azimuth">{formatDegrees(horizontal.azimuth)}</Readout>
+						<DataRow label="Altitude">{formatDeclination(horizontal.altitude)}</DataRow>
+						<DataRow label="Azimuth">{formatDegrees(horizontal.azimuth)}</DataRow>
 					</>
 				)}
-				{mount.hasPierSide && <Readout label="Pier side">{PIER_SIDE_LABELS[mount.pierSide]}</Readout>}
+				{mount.hasPierSide && <DataRow label="Pier side">{PIER_SIDE_LABELS[mount.pierSide]}</DataRow>}
 				<Notice>{horizontal ? 'Altitude and azimuth are geometric, for the profile observer.' : 'Set an observer in the Sky workspace to see altitude and azimuth.'}</Notice>
 				{moving && mount.canAbort && (
 					<Actions>
@@ -121,7 +122,7 @@ export function MountControls({ device }: InterfaceProps) {
 			)}
 			{(mount.canPark || mount.canHome || mount.canFindHome || mount.canSetHome || mount.canSetPark) && (
 				<PanelSection title="Park & Home">
-					<Readout label="Parked">{mount.parked ? 'Yes' : mount.parking ? 'Parking' : 'No'}</Readout>
+					<DataRow label="Parked">{mount.parked ? 'Yes' : mount.parking ? 'Parking' : 'No'}</DataRow>
 					<Actions>
 						{mount.canPark &&
 							(mount.parked ? (
@@ -157,10 +158,10 @@ export function MountControls({ device }: InterfaceProps) {
 				</PanelSection>
 			)}
 			<PanelSection title="Site & Time">
-				<Readout label="Latitude">{formatDeclination(mount.site.latitude)}</Readout>
-				<Readout label="Longitude">{formatDeclination(mount.site.longitude)}</Readout>
-				<Readout label="Elevation">{`${mount.site.elevation.toFixed(0)} m`}</Readout>
-				<Readout label="Time (UTC)">{mount.time.utc > 0 ? new Date(mount.time.utc).toISOString().replace('T', ' ').slice(0, 19) : 'Not reported'}</Readout>
+				<DataRow label="Latitude">{formatDeclination(mount.site.latitude)}</DataRow>
+				<DataRow label="Longitude">{formatDeclination(mount.site.longitude)}</DataRow>
+				<DataRow label="Elevation">{`${mount.site.elevation.toFixed(0)} m`}</DataRow>
+				<DataRow label="Time (UTC)">{mount.time.utc > 0 ? new Date(mount.time.utc).toISOString().replace('T', ' ').slice(0, 19) : 'Not reported'}</DataRow>
 				<Actions>
 					{observer && (
 						<ConfirmButton

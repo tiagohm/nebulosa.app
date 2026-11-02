@@ -10,6 +10,7 @@ import type { RoleDevice } from '../equipment/useEquipment'
 import { operationsState, runningOn } from '../operations'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
+import { DataList, DataRow } from '../ui/DataRow'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/Select'
 import { cameraKey, captureRunning, captureRuntime } from './capture'
@@ -88,16 +89,14 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 	return (
 		<>
 			<CollapsibleSection id="images.mount-nudge.equipment" title="Equipment">
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<dt className="text-ink-300">Camera</dt>
-					<dd className="m-0 min-w-0 truncate text-right">
+				<DataList>
+					<DataRow label="Camera">
 						<DeviceLink device={camera} fallback="—" />
-					</dd>
-					<dt className="text-ink-300">Mount</dt>
-					<dd className="m-0 min-w-0 truncate text-right">
+					</DataRow>
+					<DataRow label="Mount">
 						<DeviceLink device={device} fallback={mount.status === 'notSelected' ? 'None selected' : 'Unavailable'} />
-					</dd>
-				</dl>
+					</DataRow>
+				</DataList>
 				{mount.status === 'notSelected' && (
 					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
 						Equipment Setup
@@ -139,14 +138,13 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 				<p className="m-0 text-xs leading-4 text-ink-300">Hold a direction to move; release to stop. Directions follow the mount axes, not the image.</p>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.mount-nudge.movement-status" title="Movement Status">
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<dt className="text-ink-300">Movement</dt>
-					<dd className={cn('m-0 text-right', runtime.error && !press && 'text-danger')}>{movementStatus(press, blocker, nudgeRunning(session) && session?.token !== press?.token, runtime.error !== undefined)}</dd>
-					<dt className="text-ink-300">Slew Rate</dt>
-					<dd className="m-0 truncate text-right">{slewRate?.label || slewRate?.name || 'Driver default'}</dd>
-					<dt className="text-ink-300">Camera</dt>
-					<dd className="m-0 text-right">{cameraStatus(cameraSession)}</dd>
-				</dl>
+				<DataList>
+					<DataRow label="Movement" tone={runtime.error && !press ? 'danger' : undefined}>
+						{movementStatus(press, blocker, nudgeRunning(session) && session?.token !== press?.token, runtime.error !== undefined)}
+					</DataRow>
+					<DataRow label="Slew Rate">{slewRate?.label || slewRate?.name || 'Driver default'}</DataRow>
+					<DataRow label="Camera">{cameraStatus(cameraSession)}</DataRow>
+				</DataList>
 				{blocker && !press && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
 				{runtime.error && <p className="m-0 text-xs leading-4 text-danger">{runtime.error}</p>}
 			</CollapsibleSection>

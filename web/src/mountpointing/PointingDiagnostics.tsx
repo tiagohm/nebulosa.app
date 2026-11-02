@@ -2,6 +2,7 @@ import type { PointingModelDetail, PointingRevision, PointingSampleRecord } from
 import { toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import type { ReactNode } from 'react'
 import { formatDeclination, formatRightAscension } from '../sky/format'
+import { DataList, DataRow } from '../ui/DataRow'
 import { errorDistribution, rejectionReasons } from './skymap'
 
 // Figures of a run, shared by Images and Tools: the measures of a revision with the ones on unseen sky told apart, the
@@ -83,31 +84,23 @@ export function PointingSampleInspector({ sample, revision }: { readonly sample:
 	const residual = revision?.residuals.find((each) => each.id === sample.id)
 
 	return (
-		<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
-			<dt className="text-ink-300">Point</dt>
-			<dd className="m-0 text-right tabular-nums">{`${sample.waypoint + 1}, attempt ${sample.attempt}${sample.role === 'heldOut' ? ', withheld' : ''}`}</dd>
-			<dt className="text-ink-300">Taken</dt>
-			<dd className="m-0 text-right tabular-nums">{new Date(sample.time).toISOString().slice(0, 19).replace('T', ' ')}</dd>
-			<dt className="text-ink-300">Command</dt>
-			<dd className="m-0 text-right tabular-nums">{`${formatRightAscension(sample.command.rightAscension)} ${formatDeclination(sample.command.declination)}`}</dd>
-			<dt className="text-ink-300">Solved</dt>
-			<dd className="m-0 text-right tabular-nums">{sample.solved ? `${formatRightAscension(sample.solved.rightAscension)} ${formatDeclination(sample.solved.declination)}` : MISSING}</dd>
-			<dt className="text-ink-300">Pier Side</dt>
-			<dd className="m-0 text-right">{sample.pierSide}</dd>
-			<dt className="text-ink-300">Scale</dt>
-			<dd className="m-0 text-right tabular-nums">{sample.scale === undefined ? MISSING : `${toArcsec(sample.scale).toFixed(3)} ″/px`}</dd>
-			<dt className="text-ink-300">Rotation</dt>
-			<dd className="m-0 text-right tabular-nums">{sample.orientation === undefined ? MISSING : `${toDeg(sample.orientation).toFixed(2)}°`}</dd>
-			<dt className="text-ink-300">Error</dt>
-			<dd className="m-0 text-right tabular-nums">{residual ? `${formatArcsec(residual.rawDx)} E, ${formatArcsec(residual.rawDy)} N` : MISSING}</dd>
-			<dt className="text-ink-300">Left by Model</dt>
-			<dd className="m-0 text-right tabular-nums">{residual ? `${formatArcsec(residual.dx)} E, ${formatArcsec(residual.dy)} N` : MISSING}</dd>
+		<DataList>
+			<DataRow label="Point">{`${sample.waypoint + 1}, attempt ${sample.attempt}${sample.role === 'heldOut' ? ', withheld' : ''}`}</DataRow>
+			<DataRow label="Taken">{new Date(sample.time).toISOString().slice(0, 19).replace('T', ' ')}</DataRow>
+			<DataRow label="Command">{`${formatRightAscension(sample.command.rightAscension)} ${formatDeclination(sample.command.declination)}`}</DataRow>
+			<DataRow label="Solved">{sample.solved ? `${formatRightAscension(sample.solved.rightAscension)} ${formatDeclination(sample.solved.declination)}` : MISSING}</DataRow>
+			<DataRow label="Pier Side">{sample.pierSide}</DataRow>
+			<DataRow label="Scale">{sample.scale === undefined ? MISSING : `${toArcsec(sample.scale).toFixed(3)} ″/px`}</DataRow>
+			<DataRow label="Rotation">{sample.orientation === undefined ? MISSING : `${toDeg(sample.orientation).toFixed(2)}°`}</DataRow>
+			<DataRow label="Error">{residual ? `${formatArcsec(residual.rawDx)} E, ${formatArcsec(residual.rawDy)} N` : MISSING}</DataRow>
+			<DataRow label="Left by Model">{residual ? `${formatArcsec(residual.dx)} E, ${formatArcsec(residual.dy)} N` : MISSING}</DataRow>
 			{sample.reason && (
 				<>
-					<dt className="text-ink-300">Rejected</dt>
-					<dd className="m-0 text-right text-danger">{sample.reason}</dd>
+					<DataRow label="Rejected" tone="danger">
+						{sample.reason}
+					</DataRow>
 				</>
 			)}
-		</dl>
+		</DataList>
 	)
 }

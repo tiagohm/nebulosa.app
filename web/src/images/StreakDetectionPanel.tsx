@@ -2,7 +2,6 @@ import type { ImageInfo, StreakDetectionJob, StreakDetectionRequest, StreakDetec
 import type { StreakClassification } from 'nebulosa/src/imaging/analysis/streak/classification.types'
 import type { Streak } from 'nebulosa/src/imaging/analysis/streak/types'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
-import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { isActive } from '../analysis'
 import { Actions, Notice } from '../equipment-control/parts'
@@ -15,6 +14,7 @@ import { CLASS_LABELS, cancelStreakDetection, clampStreakSettings, DEFAULT_STREA
 import { useStreakResult } from '../streaks/useStreakResult'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataRow } from '../ui/DataRow'
 import { List, ListItem } from '../ui/List'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
@@ -240,12 +240,12 @@ function Analysis({ documentKey, imageId, request, job, streaks, solutionAvailab
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job ? (
 				<>
-					<Property label="Status">{STATE_LABELS[job.state]}</Property>
-					<Property label="Elapsed">{formatSeconds(elapsedOf(job, now))}</Property>
-					<Property label="WCS">{job.context.wcs ? WCS_LABELS[job.context.wcs] : 'None'}</Property>
-					<Property label="Stars">{job.context.starCount ?? 'None'}</Property>
-					<Property label="Exposure">{job.context.exposure === undefined ? MISSING : `${job.context.exposure} s`}</Property>
-					<Property label="Observation">{job.context.date ?? MISSING}</Property>
+					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
+					<DataRow label="Elapsed">{formatSeconds(elapsedOf(job, now))}</DataRow>
+					<DataRow label="WCS">{job.context.wcs ? WCS_LABELS[job.context.wcs] : 'None'}</DataRow>
+					<DataRow label="Stars">{job.context.starCount ?? 'None'}</DataRow>
+					<DataRow label="Exposure">{job.context.exposure === undefined ? MISSING : `${job.context.exposure} s`}</DataRow>
+					<DataRow label="Observation">{job.context.date ?? MISSING}</DataRow>
 					{job.error && <Notice error>{job.error}</Notice>}
 					{changed && <Notice>The settings or the context changed since this detection; run it again to apply them.</Notice>}
 				</>
@@ -277,9 +277,9 @@ function Results({ job, result, resultError, selected, onSelect }: ResultsProps)
 		<CollapsibleSection id="images.streak-detection.results" title="Results">
 			{summary ? (
 				<>
-					<Property label="Detected streaks">{summary.detectedCount}</Property>
-					<Property label="Classified">{summary.classified ? 'Yes' : 'No'}</Property>
-					<Property label="Duration">{formatSeconds(summary.elapsed)}</Property>
+					<DataRow label="Detected streaks">{summary.detectedCount}</DataRow>
+					<DataRow label="Classified">{summary.classified ? 'Yes' : 'No'}</DataRow>
+					<DataRow label="Duration">{formatSeconds(summary.elapsed)}</DataRow>
 					{result?.warnings.map((warning) => (
 						<Notice key={warning}>{warning}</Notice>
 					))}
@@ -312,23 +312,23 @@ function SelectedStreak({ streak, classification }: SelectedStreakProps) {
 		<CollapsibleSection id="images.streak-detection.selected-streak" title="Selected Streak">
 			{streak ? (
 				<>
-					<Property label="Start">{formatPoint(streak.start)}</Property>
-					<Property label="End">{formatPoint(streak.end)}</Property>
-					<Property label="Center">{formatPoint(streak.center)}</Property>
-					<Property label="Length">{streak.length.toFixed(1)} px</Property>
-					<Property label="Width (FWHM)">{streak.width.toFixed(2)} px</Property>
-					<Property label="Angle">{toDeg(streak.angle).toFixed(2)}°</Property>
-					<Property label="SNR">{streak.snr === undefined ? MISSING : streak.snr.toFixed(1)}</Property>
-					<Property label="Linearity">{streak.linearity.toFixed(3)}</Property>
-					<Property label="RMS residual">{streak.rmsResidual.toFixed(2)} px</Property>
-					<Property label="Coverage">{(streak.coverage * 100).toFixed(0)}%</Property>
-					<Property label="Support">{streak.supportPixels} px</Property>
-					<Property label="Cut by the border">{streak.clippedAtBorder ? 'Yes' : 'No'}</Property>
-					<Property label="Flux">{formatSignal(streak.flux)}</Property>
-					<Property label="Mean signal">{formatSignal(streak.meanSignal)}</Property>
-					<Property label="Peak signal">{formatSignal(streak.peakSignal)}</Property>
-					<Property label="Saturated">{streak.saturationFraction === undefined ? MISSING : `${(streak.saturationFraction * 100).toFixed(1)}%`}</Property>
-					<Property label="Detector confidence">{streak.confidence.toFixed(2)}</Property>
+					<DataRow label="Start">{formatPoint(streak.start)}</DataRow>
+					<DataRow label="End">{formatPoint(streak.end)}</DataRow>
+					<DataRow label="Center">{formatPoint(streak.center)}</DataRow>
+					<DataRow label="Length">{streak.length.toFixed(1)} px</DataRow>
+					<DataRow label="Width (FWHM)">{streak.width.toFixed(2)} px</DataRow>
+					<DataRow label="Angle">{toDeg(streak.angle).toFixed(2)}°</DataRow>
+					<DataRow label="SNR">{streak.snr === undefined ? MISSING : streak.snr.toFixed(1)}</DataRow>
+					<DataRow label="Linearity">{streak.linearity.toFixed(3)}</DataRow>
+					<DataRow label="RMS residual">{streak.rmsResidual.toFixed(2)} px</DataRow>
+					<DataRow label="Coverage">{(streak.coverage * 100).toFixed(0)}%</DataRow>
+					<DataRow label="Support">{streak.supportPixels} px</DataRow>
+					<DataRow label="Cut by the border">{streak.clippedAtBorder ? 'Yes' : 'No'}</DataRow>
+					<DataRow label="Flux">{formatSignal(streak.flux)}</DataRow>
+					<DataRow label="Mean signal">{formatSignal(streak.meanSignal)}</DataRow>
+					<DataRow label="Peak signal">{formatSignal(streak.peakSignal)}</DataRow>
+					<DataRow label="Saturated">{streak.saturationFraction === undefined ? MISSING : `${(streak.saturationFraction * 100).toFixed(1)}%`}</DataRow>
+					<DataRow label="Detector confidence">{streak.confidence.toFixed(2)}</DataRow>
 					<Classification classification={classification} />
 				</>
 			) : (
@@ -340,50 +340,33 @@ function SelectedStreak({ streak, classification }: SelectedStreakProps) {
 
 // Class of a streak, its evidence score, the alternatives, and the evidence that voted.
 function Classification({ classification }: { readonly classification?: StreakClassification }) {
-	if (!classification) return <Property label="Class">{MISSING}</Property>
+	if (!classification) return <DataRow label="Class">{MISSING}</DataRow>
 
 	return (
 		<>
 			<span className="text-xs text-ink-300 uppercase">Classification:</span>
 			<Notice>The evidence score is an uncalibrated weight of the evidence available in this image, not a probability; Unknown means the evidence does not single out a class.</Notice>
-			<Property label="Class">{CLASS_LABELS[classification.class]}</Property>
-			<Property label="Evidence score">{classification.confidence.toFixed(2)}</Property>
+			<DataRow label="Class">{CLASS_LABELS[classification.class]}</DataRow>
+			<DataRow label="Evidence score">{classification.confidence.toFixed(2)}</DataRow>
 			{classification.alternatives.length > 0 && (
 				<>
 					{classification.alternatives.map((alternative) => (
-						<Property key={alternative.class} label={CLASS_LABELS[alternative.class]}>
+						<DataRow key={alternative.class} label={CLASS_LABELS[alternative.class]}>
 							{alternative.score.toFixed(2)}
-						</Property>
+						</DataRow>
 					))}
 				</>
 			)}
 			{classification.evidence.length > 0 && (
 				<>
 					{classification.evidence.map((evidence, index) => (
-						<Property key={index} label={evidence.description ?? evidence.kind}>
+						<DataRow key={index} label={evidence.description ?? evidence.kind}>
 							{evidence.score.toFixed(2)}
-						</Property>
+						</DataRow>
 					))}
 				</>
 			)}
 		</>
-	)
-}
-
-interface PropertyProps {
-	// Property name.
-	readonly label: string
-	// Property value.
-	readonly children: ReactNode
-}
-
-// Name and value of a property. A long name wraps; the value keeps its width, so the values stay aligned on the right.
-function Property({ label, children }: PropertyProps) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="min-w-0 text-xs wrap-break-word text-ink-300">{label}</span>
-			<span className="flex-[min-content] text-right text-ink-100 tabular-nums">{children}</span>
-		</div>
 	)
 }
 

@@ -2,25 +2,15 @@ import type { SkyEvents, SkyPosition } from 'api'
 import type { ReactNode } from 'react'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
+import { DataRow } from '../ui/DataRow'
 import { formatDeclination, formatDegrees, formatLocalTime, formatRightAscension, formatSolarSystemDistance } from './format'
 import type { SkySelection } from './sky'
 
-// Parts shared by the Object Inspector and the Sun and Moon Inspectors: a labeled datum, a muted note, the collapsible
+// Parts shared by the Object Inspector and the Sun and Moon Inspectors: a muted note, the collapsible
 // Position section with its provider and instant, and the Visibility section of the observer's rise, transit, and set.
 
 // Description of each fallback reason.
 const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 'Horizons cannot be reached', breakerOpen: 'Horizons failed repeatedly and is paused' } as const
-
-// Label and value of one datum, on one line while both fit; a value that does not fit goes below its label, and a label
-// wider than the panel, such as an SBDB title, wraps.
-export function Datum({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="flex flex-wrap items-baseline justify-between gap-x-3">
-			<span className="min-w-0 text-ink-300">{label}</span>
-			<span className="ml-auto min-w-0 text-right font-mono text-[13px] wrap-break-word text-ink-100">{children}</span>
-		</div>
-	)
-}
 
 // Muted note under a section.
 export function Note({ children, danger }: { readonly children: ReactNode; readonly danger?: boolean }) {
@@ -36,18 +26,18 @@ function PositionData({ selection, timeZone, children }: { readonly selection: S
 		<>
 			{position ? (
 				<>
-					<Datum label="Constellation">{position.constellationName ?? position.constellation}</Datum>
-					<Datum label="RA (of date)">{formatRightAscension(position.rightAscension)}</Datum>
-					<Datum label="Dec (of date)">{formatDeclination(position.declination)}</Datum>
+					<DataRow label="Constellation">{position.constellationName ?? position.constellation}</DataRow>
+					<DataRow label="RA (of date)">{formatRightAscension(position.rightAscension)}</DataRow>
+					<DataRow label="Dec (of date)">{formatDeclination(position.declination)}</DataRow>
 					{selection.ref.kind !== 'catalog' && (
 						<>
-							<Datum label="RA (J2000)">{formatRightAscension(position.rightAscensionJ2000)}</Datum>
-							<Datum label="Dec (J2000)">{formatDeclination(position.declinationJ2000)}</Datum>
+							<DataRow label="RA (J2000)">{formatRightAscension(position.rightAscensionJ2000)}</DataRow>
+							<DataRow label="Dec (J2000)">{formatDeclination(position.declinationJ2000)}</DataRow>
 						</>
 					)}
-					{position.distance !== undefined && <Datum label="Distance">{formatSolarSystemDistance(position.distance)}</Datum>}
-					{position.illuminated !== undefined && selection.ref.kind !== 'catalog' && <Datum label="Illuminated">{(position.illuminated * 100).toFixed(1)}%</Datum>}
-					{position.elongation !== undefined && !(selection.ref.kind === 'body' && selection.ref.code === '10') && selection.ref.kind !== 'catalog' && <Datum label="Solar elongation">{formatDegrees(position.elongation)}</Datum>}
+					{position.distance !== undefined && <DataRow label="Distance">{formatSolarSystemDistance(position.distance)}</DataRow>}
+					{position.illuminated !== undefined && selection.ref.kind !== 'catalog' && <DataRow label="Illuminated">{(position.illuminated * 100).toFixed(1)}%</DataRow>}
+					{position.elongation !== undefined && !(selection.ref.kind === 'body' && selection.ref.code === '10') && selection.ref.kind !== 'catalog' && <DataRow label="Solar elongation">{formatDegrees(position.elongation)}</DataRow>}
 					{children}
 					<Note>{positionNote(position, selection.ref.kind === 'constellation', timeZone)}</Note>
 				</>
@@ -95,19 +85,19 @@ export function ObserverSection({ position, events, hasObserver, onSetObserver, 
 
 	return (
 		<CollapsibleSection id="sky.visibility" title="Visibility" summary={`Altitude ${formatDeclination(position.altitude)}`}>
-			<Datum label="Altitude">{formatDeclination(position.altitude)}</Datum>
+			<DataRow label="Altitude">{formatDeclination(position.altitude)}</DataRow>
 			{position.altitude < 0 && <Note>Below the horizon at this instant, so the map does not show it.</Note>}
-			<Datum label="Azimuth">{formatDegrees(position.azimuth)}</Datum>
-			{events?.state === 'circumpolar' && <Datum label="Rise and set">Circumpolar</Datum>}
-			{events?.state === 'belowHorizon' && <Datum label="Rise and set">Below the horizon all day</Datum>}
-			{events?.rise !== undefined && <Datum label="Rise">{formatLocalTime(events.rise, position.time, undefined, timeZone)}</Datum>}
+			<DataRow label="Azimuth">{formatDegrees(position.azimuth)}</DataRow>
+			{events?.state === 'circumpolar' && <DataRow label="Rise and set">Circumpolar</DataRow>}
+			{events?.state === 'belowHorizon' && <DataRow label="Rise and set">Below the horizon all day</DataRow>}
+			{events?.rise !== undefined && <DataRow label="Rise">{formatLocalTime(events.rise, position.time, undefined, timeZone)}</DataRow>}
 			{events?.transit !== undefined && (
-				<Datum label="Transit">
+				<DataRow label="Transit">
 					{formatLocalTime(events.transit, position.time, undefined, timeZone)}
 					{events.transitAltitude !== undefined && ` · ${formatDeclination(events.transitAltitude)}`}
-				</Datum>
+				</DataRow>
 			)}
-			{events?.set !== undefined && <Datum label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</Datum>}
+			{events?.set !== undefined && <DataRow label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</DataRow>}
 			<Note>Refracted altitude. Rise and set are at the standard horizon (34′ of refraction), and the transit is on the meridian: the ones nearest the instant, within 12 hours{isSolarSystem ? ', from the local model' : ''}.</Note>
 		</CollapsibleSection>
 	)

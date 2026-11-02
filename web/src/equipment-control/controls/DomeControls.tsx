@@ -5,10 +5,11 @@ import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { DataRow } from '../../ui/DataRow'
 import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
 import { type DomeDirection, domeMotionRuntime, pressDomeMotion, releaseDomeMotion } from '../domeMotion'
-import { Actions, ConfirmButton, type InterfaceProps, Notice, Readout } from '../parts'
+import { Actions, ConfirmButton, type InterfaceProps, Notice } from '../parts'
 
 // Controls of a dome: its reported azimuth, shutter, park, home, and slaving, a slew to an azimuth or by an
 // angle, the shutter altitude, press-and-hold manual rotation, a stop, and its configuration (sync, park
@@ -60,11 +61,11 @@ export function DomeControls({ device }: InterfaceProps) {
 	return (
 		<>
 			<PanelSection title="Dome">
-				<Readout label="State">{motionOf(dome)}</Readout>
-				<Readout label="Azimuth">{`${degrees(dome.azimuth.value).toFixed(1)}°`}</Readout>
-				{dome.canSetAltitude && <Readout label="Shutter altitude">{`${degrees(dome.altitude.value).toFixed(1)}°`}</Readout>}
-				{dome.hasShutter && <Readout label="Shutter">{SHUTTER_LABELS[dome.shutterState]}</Readout>}
-				{dome.canSlave && <Readout label="Slaving">{dome.slaved ? 'Following the mount' : 'Off'}</Readout>}
+				<DataRow label="State">{motionOf(dome)}</DataRow>
+				<DataRow label="Azimuth">{`${degrees(dome.azimuth.value).toFixed(1)}°`}</DataRow>
+				{dome.canSetAltitude && <DataRow label="Shutter altitude">{`${degrees(dome.altitude.value).toFixed(1)}°`}</DataRow>}
+				{dome.hasShutter && <DataRow label="Shutter">{SHUTTER_LABELS[dome.shutterState]}</DataRow>}
+				{dome.canSlave && <DataRow label="Slaving">{dome.slaved ? 'Following the mount' : 'Off'}</DataRow>}
 				{moving && dome.canAbort && (
 					<Actions>
 						<Button onClick={() => void stopCommand(controlRuntime, { type: 'dome', deviceId: device.id, action: 'stop' })}>Abort</Button>
@@ -177,10 +178,10 @@ export function DomeControls({ device }: InterfaceProps) {
 			)}
 			{dome.measurements && (
 				<PanelSection title="Geometry">
-					<Readout label="Radius">{`${dome.measurements.radius} m`}</Readout>
-					<Readout label="Shutter width">{`${dome.measurements.shutterWidth} m`}</Readout>
-					<Readout label="Mount offset N / E / Up">{`${dome.measurements.northDisplacement} / ${dome.measurements.eastDisplacement} / ${dome.measurements.upDisplacement} m`}</Readout>
-					<Readout label="OTA offset">{`${dome.measurements.otaOffset} m · ${dome.measurements.otaSide.toLowerCase()}`}</Readout>
+					<DataRow label="Radius">{`${dome.measurements.radius} m`}</DataRow>
+					<DataRow label="Shutter width">{`${dome.measurements.shutterWidth} m`}</DataRow>
+					<DataRow label="Mount offset N / E / Up">{`${dome.measurements.northDisplacement} / ${dome.measurements.eastDisplacement} / ${dome.measurements.upDisplacement} m`}</DataRow>
+					<DataRow label="OTA offset">{`${dome.measurements.otaOffset} m · ${dome.measurements.otaSide.toLowerCase()}`}</DataRow>
 				</PanelSection>
 			)}
 		</>

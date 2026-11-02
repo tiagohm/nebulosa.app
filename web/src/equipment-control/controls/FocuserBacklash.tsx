@@ -4,10 +4,11 @@ import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { DataRow } from '../../ui/DataRow'
 import { NumberInput } from '../../ui/NumberInput'
 import { Select } from '../../ui/Select'
 import { focuserBacklashKey, focuserBacklashRuntime, loadFocuserBacklash, saveFocuserBacklash } from '../focuserBacklash'
-import { Actions, Notice, Readout } from '../parts'
+import { Actions, Notice } from '../parts'
 
 // Backlash compensation of a focuser: whether it is enabled, its mode and its amounts in steps, edited as a
 // draft and applied at once. The server applies the saved compensation to every positioning move of the
@@ -70,8 +71,8 @@ export function FocuserBacklash({ focuser }: FocuserBacklashProps) {
 
 	return (
 		<PanelSection title="Backlash Compensation">
-			<Readout label="Status">{status}</Readout>
-			{saved.enabled && saved.mode === 'ABSOLUTE' && backlash.offset !== 0 && <Readout label="Offset">{`${backlash.offset} steps`}</Readout>}
+			<DataRow label="Status">{status}</DataRow>
+			{saved.enabled && saved.mode === 'ABSOLUTE' && backlash.offset !== 0 && <DataRow label="Offset">{`${backlash.offset} steps`}</DataRow>}
 			{!supported && <Notice>This focuser cannot move to a position, so its moves cannot be compensated.</Notice>}
 			<Checkbox label="Enabled" checked={edited.enabled} disabled={apply.status === 'saving'} onChange={(enabled) => edit({ enabled })} />
 			<Select label="Mode" options={MODES} value={edited.mode} format={(mode) => MODE_LABELS[mode]} disabled={apply.status === 'saving'} onChange={(mode) => edit({ mode })} />

@@ -1,8 +1,9 @@
 import type { SolarDailyState, SolarTwilightCrossings, SunLocalDay } from 'api'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatDuration } from '../../tools/eclipse/eclipse'
+import { DataRow } from '../../ui/DataRow'
 import { formatLocalTime } from '../format'
-import { Datum, Note } from '../InspectorParts'
+import { Note } from '../InspectorParts'
 
 // Twilight section of the Sun Inspector: the dawn and dusk of civil, nautical, and astronomical twilight on the
 // observer's civil date, and the astronomical night that begins that evening. A limit the Sun never reaches that day
@@ -73,7 +74,7 @@ export function TwilightSection({ day, hasObserver, timeZone }: { readonly day?:
 							</div>
 						))}
 					</div>
-					<Datum label="Astronomical night">{astronomicalNight(day)}</Datum>
+					<DataRow label="Astronomical night">{astronomicalNight(day)}</DataRow>
 					{astronomicalNightSpan(day, timeZone) && <p className="m-0 text-right font-mono text-xs text-ink-200">{astronomicalNightSpan(day, timeZone)}</p>}
 					<Note>Geometric altitude of the Sun&apos;s center at −6°, −12°, and −18° on {day.localDate}, from the local model.</Note>
 				</>

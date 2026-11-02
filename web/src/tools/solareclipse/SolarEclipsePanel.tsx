@@ -6,11 +6,12 @@ import { PanelSection } from '../../shell/ContextualPanel'
 import { BROWSER_TIME_ZONE } from '../../sky/clock'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { formatGeoPoint } from '../../ui/worldmap.geometry'
 import { displayTimeZone, type EclipsePlace, formatDuration, formatEclipseTime } from '../eclipse/eclipse'
-import { Datum, DISPLAY_TIME_ZONES, LocationSection, Note } from '../eclipse/EclipsePanelParts'
+import { DISPLAY_TIME_ZONES, LocationSection, Note } from '../eclipse/EclipsePanelParts'
 import { GlobalPointIcon } from './GlobalPointMarker'
 import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectPlace, selectPoint, setViewSettings, solarEclipseState } from './solareclipse'
 import { SolarEclipseLocalView } from './SolarEclipseLocalView'
@@ -71,12 +72,12 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 			{selected && (
 				<div className="flex flex-col gap-1.5 border-t border-line-100 px-2 py-2">
 					<Note>{info.description}</Note>
-					<Datum label="Position">{formatGeoPoint(point)}</Datum>
-					{point.sunAltitude !== undefined && <Datum label="Sun altitude">{point.sunAltitude.toFixed(1)}°</Datum>}
-					{extreme && <Datum label="Sun azimuth">{extreme.sunAzimuth.toFixed(1)}°</Datum>}
-					{extreme?.kind && <Datum label="Central phase">{extreme.kind === 'annular' ? 'Annular' : 'Total'}</Datum>}
-					{extreme?.centralDuration !== undefined && <Datum label="Central duration">{formatDuration(extreme.centralDuration)}</Datum>}
-					{extreme?.pathWidth !== undefined && <Datum label="Path width">{extreme.pathWidth.toFixed(1)} km</Datum>}
+					<DataRow label="Position">{formatGeoPoint(point)}</DataRow>
+					{point.sunAltitude !== undefined && <DataRow label="Sun altitude">{point.sunAltitude.toFixed(1)}°</DataRow>}
+					{extreme && <DataRow label="Sun azimuth">{extreme.sunAzimuth.toFixed(1)}°</DataRow>}
+					{extreme?.kind && <DataRow label="Central phase">{extreme.kind === 'annular' ? 'Annular' : 'Total'}</DataRow>}
+					{extreme?.centralDuration !== undefined && <DataRow label="Central duration">{formatDuration(extreme.centralDuration)}</DataRow>}
+					{extreme?.pathWidth !== undefined && <DataRow label="Path width">{extreme.pathWidth.toFixed(1)} km</DataRow>}
 					<Button variant="secondary" className="self-start" onClick={() => choosePlace({ source: 'map', longitude: point.longitude, latitude: point.latitude })}>
 						Use as Location
 					</Button>
@@ -102,7 +103,7 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 			{place && (
 				<PanelSection title="Visibility">
 					{visibility && <p className="m-0 font-medium text-ink-100">{visibility.text}</p>}
-					{visibility && visibility.hasCentralPhase && <Datum label="Central phase here">{visibility.centralPhaseKind === 'annular' ? 'Annular' : 'Total'}</Datum>}
+					{visibility && visibility.hasCentralPhase && <DataRow label="Central phase here">{visibility.centralPhaseKind === 'annular' ? 'Annular' : 'Total'}</DataRow>}
 					{visibility && visibility.hasGeometricEclipse && !visibility.hasCentralPhase && <Note>Only a partial eclipse reaches this place.</Note>}
 					{visibility?.kind === 'partialOnlyVisible' && visibility.hasCentralPhase && <Note>The {central} phase happens with the Sun below the horizon; only the partial phase is visible.</Note>}
 					{visibility && visibility.hasObservableEclipse && visibility.sunMotion !== 'none' && <Note>The Sun is {visibility.sunMotion === 'rising' ? 'climbing' : 'descending'} during the eclipse.</Note>}
@@ -152,19 +153,19 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 			)}
 			{eclipse && (
 				<PanelSection title="Details">
-					<Datum label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</Datum>
-					<Datum label="Magnitude">{eclipse.magnitude.toFixed(4)}</Datum>
-					<Datum label="Gamma">{eclipse.gamma.toFixed(4)}</Datum>
-					{greatest && <Datum label="Greatest eclipse">{formatEclipseTime(greatest.time, timeZone)}</Datum>}
-					{greatest && <Datum label="Greatest eclipse at">{formatGeoPoint(greatest)}</Datum>}
-					{duration?.centralDuration !== undefined && <Datum label="Greatest duration">{formatDuration(duration.centralDuration)}</Datum>}
-					{greatest?.pathWidth !== undefined && <Datum label="Path width at greatest">{greatest.pathWidth.toFixed(1)} km</Datum>}
-					{local?.details.maximalMagnitude !== undefined && <Datum label="Magnitude here">{local.details.maximalMagnitude.toFixed(4)}</Datum>}
-					{local?.details.moonSunDiameterRatio !== undefined && <Datum label="Moon/Sun diameter">{local.details.moonSunDiameterRatio.toFixed(4)}</Datum>}
-					{local?.details.partialPhaseDuration !== undefined && <Datum label="Eclipse here (C1–C4)">{formatDuration(local.details.partialPhaseDuration)}</Datum>}
-					{local?.details.centralPhaseDuration !== undefined && <Datum label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatDuration(local.details.centralPhaseDuration)}</Datum>}
-					{local?.details.pathWidthKm !== undefined && <Datum label="Path width here">{Math.round(local.details.pathWidthKm)} km</Datum>}
-					{local?.details.shadowPathWidthKm !== undefined && <Datum label="Shadow chord here">{Math.round(local.details.shadowPathWidthKm)} km</Datum>}
+					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
+					<DataRow label="Magnitude">{eclipse.magnitude.toFixed(4)}</DataRow>
+					<DataRow label="Gamma">{eclipse.gamma.toFixed(4)}</DataRow>
+					{greatest && <DataRow label="Greatest eclipse">{formatEclipseTime(greatest.time, timeZone)}</DataRow>}
+					{greatest && <DataRow label="Greatest eclipse at">{formatGeoPoint(greatest)}</DataRow>}
+					{duration?.centralDuration !== undefined && <DataRow label="Greatest duration">{formatDuration(duration.centralDuration)}</DataRow>}
+					{greatest?.pathWidth !== undefined && <DataRow label="Path width at greatest">{greatest.pathWidth.toFixed(1)} km</DataRow>}
+					{local?.details.maximalMagnitude !== undefined && <DataRow label="Magnitude here">{local.details.maximalMagnitude.toFixed(4)}</DataRow>}
+					{local?.details.moonSunDiameterRatio !== undefined && <DataRow label="Moon/Sun diameter">{local.details.moonSunDiameterRatio.toFixed(4)}</DataRow>}
+					{local?.details.partialPhaseDuration !== undefined && <DataRow label="Eclipse here (C1–C4)">{formatDuration(local.details.partialPhaseDuration)}</DataRow>}
+					{local?.details.centralPhaseDuration !== undefined && <DataRow label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatDuration(local.details.centralPhaseDuration)}</DataRow>}
+					{local?.details.pathWidthKm !== undefined && <DataRow label="Path width here">{Math.round(local.details.pathWidthKm)} km</DataRow>}
+					{local?.details.shadowPathWidthKm !== undefined && <DataRow label="Shadow chord here">{Math.round(local.details.shadowPathWidthKm)} km</DataRow>}
 					<Note>
 						Magnitude is the fraction of the Sun's diameter covered by the Moon, not of its area. Path width is the distance between the limits of totality or annularity, across the central line. Shadow chord is the narrowest width of the shadow at one instant, which is smaller at a low Sun. Contacts assume
 						a smooth lunar limb and are good to about 5 s; the mountains of the limb matter most near the limits of the path.

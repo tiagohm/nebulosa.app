@@ -14,9 +14,9 @@ import { measuredStar, reinspectStar, starProfileOf } from '../stars/starprofile
 import { FLAG_LABELS, formatFlux, formatLevel, formatNumber, formatSignal, formatWidth } from '../stars/starprofile.format'
 import { MAXIMUM_RADIUS_RANGE, MINIMUM_SNR_RANGE, sameMeasurement, SEARCH_RADIUS_RANGE, STAR_PROFILE_MODELS, type StarProfileSettings } from '../stars/starprofile.settings'
 import { StarProfilePlot, type StarProfileSeries } from '../stars/StarProfilePlot'
-import { StarProfileRow as Row } from '../stars/StarProfileRow'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataList, DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { clearStarProfile, type ImageStarProfileState, imagesState, imageUnavailableReason, isMosaic } from './images'
@@ -111,8 +111,8 @@ function Selection({ documentKey, state, star, settings, unavailable, hidden }: 
 			{unavailable ? <Notice>{unavailable}</Notice> : hidden ? <Notice>The overlays are hidden: show them to select a star.</Notice> : !state && <Notice>Click a star in the image to measure it. It needs no star detection first.</Notice>}
 			{state && (
 				<>
-					<Property label="Point">{`${state.request.x.toFixed(1)}, ${state.request.y.toFixed(1)} px`}</Property>
-					{star && <Property label="Centroid">{`${star.profile.x.toFixed(2)}, ${star.profile.y.toFixed(2)} px`}</Property>}
+					<DataRow label="Point">{`${state.request.x.toFixed(1)}, ${state.request.y.toFixed(1)} px`}</DataRow>
+					{star && <DataRow label="Centroid">{`${star.profile.x.toFixed(2)}, ${star.profile.y.toFixed(2)} px`}</DataRow>}
 					<Actions>
 						<Button disabled={measuring} onClick={() => void reinspectStar(imagesState, documentKey, settings)}>
 							Analyze Star
@@ -184,24 +184,24 @@ function Measurement({ imageId, star, settings, selected }: MeasurementProps) {
 				<Notice>{`${horizontal.offsets.length} × ${vertical.offsets.length} samples through the centre pixel, in pixels from the centroid, above the background; peak ${formatSignal(profile.peak, conversion)}. The half peak is not the FWHM of the star.`}</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.star-profile.measurements" title="Measurements">
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="HFD">{formatWidth(profile.hfd, pixelScale)}</Row>
-					<Row label="HFR">{formatWidth(hfr, pixelScale)}</Row>
-					<Row label="FWHM">{formatWidth(profile.fwhm, pixelScale)}</Row>
-					<Row label="FWHM Major">{formatWidth(profile.major, pixelScale)}</Row>
-					<Row label="FWHM Minor">{formatWidth(profile.minor, pixelScale)}</Row>
-					<Row label="Eccentricity">{formatNumber(profile.eccentricity, 3)}</Row>
-					<Row label="Elongation">{formatNumber(profile.elongation, 3)}</Row>
-					<Row label="Orientation">{profile.theta === undefined ? '—' : `${((profile.theta * 180) / Math.PI).toFixed(1)}°`}</Row>
-					<Row label="Peak">{formatSignal(profile.peak, conversion)}</Row>
-					<Row label="Flux">{formatFlux(profile.flux, conversion)}</Row>
-					<Row label="Background">{formatLevel(profile.background, conversion)}</Row>
-					<Row label="Noise (σ)">{formatSignal(profile.deviation, conversion)}</Row>
-					<Row label="SNR">{formatNumber(profile.snr, 1)}</Row>
-					<Row label="Quality">{profile.quality.toFixed(2)}</Row>
-					<Row label="Model">{MODEL_LABELS[profile.model]}</Row>
+				<DataList>
+					<DataRow label="HFD">{formatWidth(profile.hfd, pixelScale)}</DataRow>
+					<DataRow label="HFR">{formatWidth(hfr, pixelScale)}</DataRow>
+					<DataRow label="FWHM">{formatWidth(profile.fwhm, pixelScale)}</DataRow>
+					<DataRow label="FWHM Major">{formatWidth(profile.major, pixelScale)}</DataRow>
+					<DataRow label="FWHM Minor">{formatWidth(profile.minor, pixelScale)}</DataRow>
+					<DataRow label="Eccentricity">{formatNumber(profile.eccentricity, 3)}</DataRow>
+					<DataRow label="Elongation">{formatNumber(profile.elongation, 3)}</DataRow>
+					<DataRow label="Orientation">{profile.theta === undefined ? '—' : `${((profile.theta * 180) / Math.PI).toFixed(1)}°`}</DataRow>
+					<DataRow label="Peak">{formatSignal(profile.peak, conversion)}</DataRow>
+					<DataRow label="Flux">{formatFlux(profile.flux, conversion)}</DataRow>
+					<DataRow label="Background">{formatLevel(profile.background, conversion)}</DataRow>
+					<DataRow label="Noise (σ)">{formatSignal(profile.deviation, conversion)}</DataRow>
+					<DataRow label="SNR">{formatNumber(profile.snr, 1)}</DataRow>
+					<DataRow label="Quality">{profile.quality.toFixed(2)}</DataRow>
+					<DataRow label="Model">{MODEL_LABELS[profile.model]}</DataRow>
 					{moffat && <FitRows fit={moffat} conversion={conversion} />}
-				</dl>
+				</DataList>
 				<Notice>The SNR is estimated from the local background, not from a noise model of the camera.</Notice>
 			</CollapsibleSection>
 		</>
@@ -231,10 +231,10 @@ interface FitRowsProps {
 function FitRows({ fit, conversion }: FitRowsProps) {
 	return (
 		<>
-			<Row label="Moffat β">{fit.beta.toFixed(2)}</Row>
-			<Row label="Moffat α Major / Minor">{`${fit.alphaMajor.toFixed(2)} / ${fit.alphaMinor.toFixed(2)} px`}</Row>
-			<Row label="Fit RMS">{formatSignal(fit.rms, conversion)}</Row>
-			<Row label="Fit iterations">{fit.iterations}</Row>
+			<DataRow label="Moffat β">{fit.beta.toFixed(2)}</DataRow>
+			<DataRow label="Moffat α Major / Minor">{`${fit.alphaMajor.toFixed(2)} / ${fit.alphaMinor.toFixed(2)} px`}</DataRow>
+			<DataRow label="Fit RMS">{formatSignal(fit.rms, conversion)}</DataRow>
+			<DataRow label="Fit iterations">{fit.iterations}</DataRow>
 		</>
 	)
 }
@@ -252,23 +252,6 @@ function Headline({ label, children }: HeadlineProps) {
 		<div className="min-w-0 rounded-md border border-line-100 bg-base-100 px-2 py-1">
 			<div className="truncate text-xs text-ink-300">{label}</div>
 			<div className="text-sm text-ink-100 tabular-nums">{children}</div>
-		</div>
-	)
-}
-
-interface PropertyProps {
-	// Property name.
-	readonly label: string
-	// Property value.
-	readonly children: ReactNode
-}
-
-// Name and value of a property.
-function Property({ label, children }: PropertyProps) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-xs text-ink-300">{label}</span>
-			<span className="min-w-0 text-right text-ink-100 tabular-nums">{children}</span>
 		</div>
 	)
 }

@@ -1,6 +1,6 @@
 import type { CaptureSnoop, DeviceSummary, FlatWizardFilter, FlatWizardFilterRun, FlatWizardSessionSummary, WheelState } from 'api'
 import { cn } from 'cn'
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -18,6 +18,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataList, DataRow } from '../ui/DataRow'
 import { IconButton } from '../ui/IconButton'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
@@ -117,14 +118,14 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 	return (
 		<>
 			<CollapsibleSection id="images.flat-wizard.equipment" title="Equipment">
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Camera">
+				<DataList>
+					<DataRow label="Camera">
 						<DeviceLink device={device} fallback="—" />
-					</Row>
-					<Row label="Filter Wheel">{wheelAssigned ? <DeviceLink device={wheel.device} fallback="—" /> : 'Manual'}</Row>
-					<Row label="Flat Panel">{panelAssigned ? <DeviceLink device={flatPanel.device} fallback="—" /> : 'Manual'}</Row>
-					<Row label="Cover">{coverAssigned ? <DeviceLink device={cover.device} fallback="—" /> : 'Not used'}</Row>
-				</dl>
+					</DataRow>
+					<DataRow label="Filter Wheel">{wheelAssigned ? <DeviceLink device={wheel.device} fallback="—" /> : 'Manual'}</DataRow>
+					<DataRow label="Flat Panel">{panelAssigned ? <DeviceLink device={flatPanel.device} fallback="—" /> : 'Manual'}</DataRow>
+					<DataRow label="Cover">{coverAssigned ? <DeviceLink device={cover.device} fallback="—" /> : 'Not used'}</DataRow>
+				</DataList>
 				{!running && wheelAvailability && wheelAvailability.status !== 'ready' && <Notice>{wheelAvailability.message}</Notice>}
 				{!running && panelAvailability && panelAvailability.status !== 'ready' && <Notice>{panelAvailability.message}</Notice>}
 				{!running && coverAvailability && coverAvailability.status !== 'ready' && <Notice>{coverAvailability.message}</Notice>}
@@ -305,18 +306,18 @@ function Progress({ session, pending }: ProgressProps) {
 					</Button>
 				</>
 			)}
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				{run && <Row label="Filter">{`${run.name} (${session.filter + 1} of ${session.filters.length})`}</Row>}
-				{run && <Row label="Step">{FLAT_WIZARD_FILTER_STATE_LABELS[run.state]}</Row>}
-				{run?.exposure !== undefined ? <Row label="Exposure">{formatExposure(run.exposure)}</Row> : run?.candidateExposure !== undefined && <Row label="Trying">{formatExposure(run.candidateExposure)}</Row>}
-				{run && <Row label="Accepted">{`${run.accepted} of ${run.required}`}</Row>}
-				{attempt && <Row label="Last Frame">{`${FLAT_WIZARD_VERDICT_LABELS[attempt.verdict]}, ${formatExposure(attempt.exposure)}`}</Row>}
+			<DataList>
+				{run && <DataRow label="Filter">{`${run.name} (${session.filter + 1} of ${session.filters.length})`}</DataRow>}
+				{run && <DataRow label="Step">{FLAT_WIZARD_FILTER_STATE_LABELS[run.state]}</DataRow>}
+				{run?.exposure !== undefined ? <DataRow label="Exposure">{formatExposure(run.exposure)}</DataRow> : run?.candidateExposure !== undefined && <DataRow label="Trying">{formatExposure(run.candidateExposure)}</DataRow>}
+				{run && <DataRow label="Accepted">{`${run.accepted} of ${run.required}`}</DataRow>}
+				{attempt && <DataRow label="Last Frame">{`${FLAT_WIZARD_VERDICT_LABELS[attempt.verdict]}, ${formatExposure(attempt.exposure)}`}</DataRow>}
 				{attempt?.planes.map((plane) => (
-					<Row key={plane.plane} label={`Level ${plane.plane}`}>
+					<DataRow key={plane.plane} label={`Level ${plane.plane}`}>
 						{plane.median === undefined ? '—' : `${Math.round(plane.median)} DN${plane.upperClipping === 'present' ? ', clipped' : ''}`}
-					</Row>
+					</DataRow>
 				))}
-			</dl>
+			</DataList>
 			{notes.length > 0 && <Notice>{notes.join(' ')}</Notice>}
 			{session.previewError && <Notice>{session.previewError}</Notice>}
 		</CollapsibleSection>
@@ -330,13 +331,13 @@ function Results({ session, onPrepareDarkFlats }: { readonly session: FlatWizard
 
 	return (
 		<CollapsibleSection id="images.flat-wizard.results" title="Results">
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+			<DataList>
 				{session.filters.map((run, index) => (
-					<Row key={index} label={run.name}>
+					<DataRow key={index} label={run.name}>
 						{run.state === 'pending' ? FLAT_WIZARD_FILTER_STATE_LABELS.pending : `${run.accepted}/${run.required} saved${run.rejected + run.inconclusive > 0 ? `, ${run.rejected + run.inconclusive} discarded` : ''}${run.exposure !== undefined ? ` at ${formatExposure(run.exposure)}` : ''}`}
-					</Row>
+					</DataRow>
 				))}
-			</dl>
+			</DataList>
 			{session.filters.map((run, index) => (
 				<FilterNotes key={index} run={run} />
 			))}
@@ -365,14 +366,4 @@ function FilterNotes({ run }: { readonly run: FlatWizardFilterRun }) {
 	const notes = sequence.reasons.flatMap((reason) => FLAT_WIZARD_DIAGNOSTIC_LABELS[reason] ?? [])
 	const verdict = sequence.verdict === 'accepted' ? 'stable' : sequence.verdict === 'rejected' ? 'unstable' : 'not proven stable'
 	return <Notice error={sequence.verdict === 'rejected'}>{`${run.name}: ${verdict}.${sequence.outliers.length > 0 ? ` Outliers: ${sequence.outliers.join(', ')}.` : ''}${notes.length > 0 ? ` ${notes.join(' ')}` : ''}`}</Notice>
-}
-
-// Label and value of a row.
-function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="contents">
-			<dt className="text-ink-300">{label}</dt>
-			<dd className="m-0 min-w-0 truncate text-right tabular-nums">{children}</dd>
-		</div>
-	)
 }

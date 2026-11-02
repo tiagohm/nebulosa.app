@@ -2,8 +2,9 @@ import type { IndiSwitchProperty } from 'api'
 import { useState } from 'react'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { DataRow } from '../../ui/DataRow'
 import { Select } from '../../ui/Select'
-import { Actions, Readout } from '../parts'
+import { Actions } from '../parts'
 import { indiView, writeIndiVector } from './indi'
 import { labelOf } from './indi.format'
 import { useAppliedWrite, useWriting } from './IndiWriteStatus'
@@ -26,9 +27,9 @@ export function SwitchVectorEditor({ vector }: SwitchVectorEditorProps) {
 		return (
 			<div className="flex flex-col gap-1">
 				{vector.elementNames.map((name) => (
-					<Readout key={name} label={labelOf(vector.elements[name])}>
+					<DataRow key={name} label={labelOf(vector.elements[name])}>
 						{vector.elements[name].value ? 'On' : 'Off'}
-					</Readout>
+					</DataRow>
 				))}
 			</div>
 		)

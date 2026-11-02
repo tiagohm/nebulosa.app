@@ -1,6 +1,6 @@
 import type { CameraCapabilities, CaptureSnoop, DarkGroup, DarkLibraryWizardGroupRun, DarkLibraryWizardPendingStep, DarkLibraryWizardSessionSummary, DeviceSummary } from 'api'
 import { cn } from 'cn'
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -15,6 +15,7 @@ import { type CameraIdentity, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WI
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataList, DataRow } from '../ui/DataRow'
 import { IconButton } from '../ui/IconButton'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
@@ -159,14 +160,14 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 	return (
 		<>
 			<CollapsibleSection id="images.dark-library-wizard.equipment" title="Equipment">
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Camera">
+				<DataList>
+					<DataRow label="Camera">
 						<DeviceLink device={device} fallback="—" />
-					</Row>
-					<Row label="Filter Wheel">{wheelAssigned ? <DeviceLink device={wheel.device} fallback="—" /> : 'Not assigned'}</Row>
-					<Row label="Flat Panel">{panelAssigned ? <DeviceLink device={flatPanel.device} fallback="—" /> : 'Not assigned'}</Row>
-					<Row label="Cover">{coverAssigned ? <DeviceLink device={cover.device} fallback="—" /> : 'Not assigned'}</Row>
-				</dl>
+					</DataRow>
+					<DataRow label="Filter Wheel">{wheelAssigned ? <DeviceLink device={wheel.device} fallback="—" /> : 'Not assigned'}</DataRow>
+					<DataRow label="Flat Panel">{panelAssigned ? <DeviceLink device={flatPanel.device} fallback="—" /> : 'Not assigned'}</DataRow>
+					<DataRow label="Cover">{coverAssigned ? <DeviceLink device={cover.device} fallback="—" /> : 'Not assigned'}</DataRow>
+				</DataList>
 				{!running && (!wheelAssigned || !panelAssigned || !coverAssigned) && wheel !== undefined && (
 					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
 						Equipment Setup
@@ -197,11 +198,11 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 					</Button>
 				)}
 				{capture.subframe && <Notice>Darks of a subframe only calibrate lights of that same subframe.</Notice>}
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Frames">{estimate.frames}</Row>
-					<Row label="Exposure">{`at least ${formatDuration(estimate.exposure)}`}</Row>
-					{estimate.bytes !== undefined && <Row label="Disk Space">{`~ ${formatBytes(estimate.bytes[0])} (mono) to ${formatBytes(estimate.bytes[1])}`}</Row>}
-				</dl>
+				<DataList>
+					<DataRow label="Frames">{estimate.frames}</DataRow>
+					<DataRow label="Exposure">{`at least ${formatDuration(estimate.exposure)}`}</DataRow>
+					{estimate.bytes !== undefined && <DataRow label="Disk Space">{`~ ${formatBytes(estimate.bytes[0])} (mono) to ${formatBytes(estimate.bytes[1])}`}</DataRow>}
+				</DataList>
 				<Notice>Estimates only: downloads, cooling, and rejected frames add to them. Groups of one temperature run together.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.dark-library-wizard.protection" title="Light Protection">
@@ -226,10 +227,10 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				<Notice>Every frame is checked, and the first one of a group can stop for your decision. Even so, no image proves that no light reached the sensor.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.dark-library-wizard.thermal" title="Thermal Control" summary={sensorTemperature} defaultOpen={false}>
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Sensor">{sensorTemperature ?? 'Not reported'}</Row>
-					<Row label="Cooler">{capabilities?.cooler === undefined ? 'None' : `${capabilities.cooler.enabled === false ? 'Off' : 'On'}, ${Math.round(capabilities.cooler.power)} %`}</Row>
-				</dl>
+				<DataList>
+					<DataRow label="Sensor">{sensorTemperature ?? 'Not reported'}</DataRow>
+					<DataRow label="Cooler">{capabilities?.cooler === undefined ? 'None' : `${capabilities.cooler.enabled === false ? 'Off' : 'On'}, ${Math.round(capabilities.cooler.power)} %`}</DataRow>
+				</DataList>
 				<div className="flex flex-col gap-2">
 					<NumberInput label="Tolerance" value={settings.tolerance} min={0.1} max={5} step={0.1} suffix="°C" disabled={locked} onChange={(tolerance) => update({ tolerance })} />
 					<NumberInput label="Hold" value={settings.hold} min={0} max={3600} suffix="s" disabled={locked} onChange={(hold) => update({ hold })} />
@@ -367,22 +368,22 @@ function Progress({ session, pending }: ProgressProps) {
 			{session.pauseRequested && session.state !== 'paused' && <Notice>Pausing after the current frame.</Notice>}
 			{failed && session.error && <Notice error>{session.error}</Notice>}
 			{session.pending && <StepPrompt session={session} step={session.pending} pending={pending} />}
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				{run && <Row label="Group">{`${groupLabel(run)} (${session.group + 1} of ${session.groups.length})`}</Row>}
-				{session.temperature !== undefined && <Row label="Sensor">{`${session.temperature.toFixed(1)} °C`}</Row>}
-				{attempt?.verdict && <Row label="Last Frame">{attempt.verdict === 'acceptedWithWarnings' ? 'Accepted with warnings' : attempt.verdict === 'accepted' ? 'Accepted' : 'Rejected'}</Row>}
+			<DataList>
+				{run && <DataRow label="Group">{`${groupLabel(run)} (${session.group + 1} of ${session.groups.length})`}</DataRow>}
+				{session.temperature !== undefined && <DataRow label="Sensor">{`${session.temperature.toFixed(1)} °C`}</DataRow>}
+				{attempt?.verdict && <DataRow label="Last Frame">{attempt.verdict === 'acceptedWithWarnings' ? 'Accepted with warnings' : attempt.verdict === 'accepted' ? 'Accepted' : 'Rejected'}</DataRow>}
 				{attempt?.planes.map((plane) => (
-					<Row key={plane.plane} label={`Level ${plane.plane}`}>
+					<DataRow key={plane.plane} label={`Level ${plane.plane}`}>
 						{plane.median === undefined ? '—' : `${Math.round(plane.median)} DN`}
-					</Row>
+					</DataRow>
 				))}
-				{running && remaining > 0 && <Row label="Exposure Left">{`at least ${formatDuration(remaining)}`}</Row>}
-			</dl>
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+				{running && remaining > 0 && <DataRow label="Exposure Left">{`at least ${formatDuration(remaining)}`}</DataRow>}
+			</DataList>
+			<DataList>
 				{session.groups.map((group) => (
 					<GroupProgress key={group.groupId} group={group} />
 				))}
-			</dl>
+			</DataList>
 			{session.previewError && <Notice>{session.previewError}</Notice>}
 			{session.cleanupWarnings.map((warning) => (
 				<Notice key={warning} error>
@@ -397,7 +398,7 @@ function Progress({ session, pending }: ProgressProps) {
 function GroupProgress({ group }: { readonly group: DarkLibraryWizardGroupRun }) {
 	const done = group.accepted + group.acceptedWithWarnings
 	const notes = [group.acceptedWithWarnings > 0 && `${group.acceptedWithWarnings} with warnings`, group.rejected > 0 && `${group.rejected} rejected`, group.failedTransfer > 0 && `${group.failedTransfer} failed`].filter(Boolean).join(', ')
-	return <Row label={groupLabel(group)}>{`${done}/${group.required}${notes ? `, ${notes}` : ''}`}</Row>
+	return <DataRow label={groupLabel(group)}>{`${done}/${group.required}${notes ? `, ${notes}` : ''}`}</DataRow>
 }
 
 interface StepPromptProps extends ProgressProps {
@@ -427,15 +428,5 @@ function StepPrompt({ session, step, pending }: StepPromptProps) {
 				Continue Despite Warning
 			</Button>
 		</>
-	)
-}
-
-// Label and value of a row.
-function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="contents">
-			<dt className="text-ink-300">{label}</dt>
-			<dd className="m-0 min-w-0 truncate text-right tabular-nums">{children}</dd>
-		</div>
 	)
 }

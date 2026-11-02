@@ -1,6 +1,7 @@
 import type { FWHMSamplingKind } from 'nebulosa/src/astronomy/formulas'
+import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { CalculatorLayout, type CalculatorViewProps, Datum, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
 import { DIFFRACTION_EXAMPLE, type DiffractionDraft, diffraction, diffractionFromOptics, SAMPLING_EXAMPLE, type SamplingDraft, type SamplingMode, sampling, samplingFromOptics } from './sampling'
 import { formatFixed } from './values'
 
@@ -46,8 +47,8 @@ export function SamplingCalculator({ entry, onChange, context }: CalculatorViewP
 					{({ fwhmPixels, kind, seeing, recommendedFocalLength }) => (
 						<>
 							<Primary label="Stellar FWHM">{formatFixed(fwhmPixels, 2)} px</Primary>
-							<Datum label="Sampling">{SAMPLING_KIND_LABELS[kind]}</Datum>
-							{draft.mode === 'fwhm' && <Datum label="Seeing">{formatFixed(seeing, 2)}″</Datum>}
+							<DataRow label="Sampling">{SAMPLING_KIND_LABELS[kind]}</DataRow>
+							{draft.mode === 'fwhm' && <DataRow label="Seeing">{formatFixed(seeing, 2)}″</DataRow>}
 							<OptionalDatum label="Focal length for the target" outcome={recommendedFocalLength} hint="Enter the pixel size and a target FWHM.">
 								{(focalLength) => `${formatFixed(focalLength, 0)} mm`}
 							</OptionalDatum>
@@ -96,8 +97,8 @@ export function DiffractionCalculator({ entry, onChange, context }: CalculatorVi
 					{({ airyDisk, airyDiskPixels, criticalFocusZone }) => (
 						<>
 							<Primary label="Airy disk">{formatFixed(airyDisk, 2)} µm</Primary>
-							<Datum label="Airy disk on the sensor">{airyDiskPixels === undefined ? <span className="font-sans text-xs text-ink-300">Enter the pixel size.</span> : `${formatFixed(airyDiskPixels, 2)} px`}</Datum>
-							<Datum label="Critical focus zone">{formatFixed(criticalFocusZone, 1)} µm</Datum>
+							<DataRow label="Airy disk on the sensor">{airyDiskPixels === undefined ? <span className="font-sans text-xs text-ink-300">Enter the pixel size.</span> : `${formatFixed(airyDiskPixels, 2)} px`}</DataRow>
+							<DataRow label="Critical focus zone">{formatFixed(criticalFocusZone, 1)} µm</DataRow>
 						</>
 					)}
 				</OutcomeView>

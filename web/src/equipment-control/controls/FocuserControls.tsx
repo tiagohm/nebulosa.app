@@ -3,10 +3,11 @@ import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { DataRow } from '../../ui/DataRow'
 import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
 import { focuserBacklashKey, focuserBacklashRuntime } from '../focuserBacklash'
-import { Actions, ConfirmButton, type InterfaceProps, Notice, Readout } from '../parts'
+import { Actions, ConfirmButton, type InterfaceProps, Notice } from '../parts'
 import { FocuserBacklash } from './FocuserBacklash'
 
 // Controls of a focuser: its position and temperature, a move to a position, a move by a number of steps
@@ -39,10 +40,10 @@ export function FocuserControls({ device }: InterfaceProps) {
 	return (
 		<>
 			<PanelSection title="Focuser">
-				<Readout label="Position">{`${logical} of ${position.min}–${position.max} steps`}</Readout>
-				{offset !== 0 && <Readout label="Reported position">{`${position.value} steps`}</Readout>}
-				<Readout label="State">{focuser.moving ? 'Moving' : 'Idle'}</Readout>
-				{focuser.temperature !== undefined && <Readout label="Temperature">{`${focuser.temperature.toFixed(1)} °C`}</Readout>}
+				<DataRow label="Position">{`${logical} of ${position.min}–${position.max} steps`}</DataRow>
+				{offset !== 0 && <DataRow label="Reported position">{`${position.value} steps`}</DataRow>}
+				<DataRow label="State">{focuser.moving ? 'Moving' : 'Idle'}</DataRow>
+				{focuser.temperature !== undefined && <DataRow label="Temperature">{`${focuser.temperature.toFixed(1)} °C`}</DataRow>}
 				{focuser.moving && focuser.canAbort && (
 					<Actions>
 						<Button onClick={() => void stopCommand(controlRuntime, { type: 'focuser', deviceId: device.id, action: 'stop' })}>Stop</Button>

@@ -4,7 +4,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { FLAG_LABELS, formatNumber, formatWidth } from '../stars/starprofile.format'
 import { consecutiveOffsets } from '../stars/starprofile.plot'
 import { StarProfilePlot } from '../stars/StarProfilePlot'
-import { StarProfileRow as Row } from '../stars/StarProfileRow'
+import { DataList, DataRow } from '../ui/DataRow'
 
 // Star Profile section of the Guiding panel: the horizontal and vertical cuts through the guide star of the latest
 // measured frame, plotted above its half maximum, and every measurement of its profile (position, quality, SNR, flux,
@@ -39,26 +39,26 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 				<span className="whitespace-nowrap text-success">— Vertical</span>
 				<span className="whitespace-nowrap">- - Half maximum</span>
 			</p>
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				<Row label="Frame">{`#${star.frameId}`}</Row>
-				<Row label="Position (px)">{`${star.x.toFixed(1)}, ${star.y.toFixed(1)}`}</Row>
-				<Row label="Valid">
+			<DataList>
+				<DataRow label="Frame">{`#${star.frameId}`}</DataRow>
+				<DataRow label="Position (px)">{`${star.x.toFixed(1)}, ${star.y.toFixed(1)}`}</DataRow>
+				<DataRow label="Valid">
 					<span className={star.valid ? 'text-success' : 'text-danger'}>{star.valid ? 'Yes' : 'No'}</span>
-				</Row>
-				<Row label="Quality">{star.quality.toFixed(2)}</Row>
-				<Row label="SNR">{formatNumber(star.snr, 1)}</Row>
-				<Row label="Flux">{formatIntensity(star.flux, star.adu)}</Row>
-				<Row label="Peak">{formatIntensity(star.peak, star.adu)}</Row>
-				<Row label="Background">{formatIntensity(star.background, star.adu)}</Row>
-				<Row label="Noise (σ)">{formatIntensity(star.deviation, star.adu)}</Row>
-				<Row label="HFD">{formatWidth(star.hfd, pixelScale)}</Row>
-				<Row label="FWHM">{formatWidth(star.fwhm, pixelScale)}</Row>
-				<Row label="FWHM Major / Minor">{star.major === undefined || star.minor === undefined ? '—' : `${star.major.toFixed(2)} / ${star.minor.toFixed(2)} px`}</Row>
-				<Row label="Eccentricity">{formatNumber(star.eccentricity, 3)}</Row>
-				<Row label="Elongation">{formatNumber(star.elongation, 3)}</Row>
-				<Row label="Orientation">{star.theta === undefined ? '—' : `${((star.theta * 180) / Math.PI).toFixed(1)}°`}</Row>
-				<Row label="Model">{star.model === 'moffat' ? 'Moffat' : 'Moments'}</Row>
-			</dl>
+				</DataRow>
+				<DataRow label="Quality">{star.quality.toFixed(2)}</DataRow>
+				<DataRow label="SNR">{formatNumber(star.snr, 1)}</DataRow>
+				<DataRow label="Flux">{formatIntensity(star.flux, star.adu)}</DataRow>
+				<DataRow label="Peak">{formatIntensity(star.peak, star.adu)}</DataRow>
+				<DataRow label="Background">{formatIntensity(star.background, star.adu)}</DataRow>
+				<DataRow label="Noise (σ)">{formatIntensity(star.deviation, star.adu)}</DataRow>
+				<DataRow label="HFD">{formatWidth(star.hfd, pixelScale)}</DataRow>
+				<DataRow label="FWHM">{formatWidth(star.fwhm, pixelScale)}</DataRow>
+				<DataRow label="FWHM Major / Minor">{star.major === undefined || star.minor === undefined ? '—' : `${star.major.toFixed(2)} / ${star.minor.toFixed(2)} px`}</DataRow>
+				<DataRow label="Eccentricity">{formatNumber(star.eccentricity, 3)}</DataRow>
+				<DataRow label="Elongation">{formatNumber(star.elongation, 3)}</DataRow>
+				<DataRow label="Orientation">{star.theta === undefined ? '—' : `${((star.theta * 180) / Math.PI).toFixed(1)}°`}</DataRow>
+				<DataRow label="Model">{star.model === 'moffat' ? 'Moffat' : 'Moments'}</DataRow>
+			</DataList>
 			{star.flags.length > 0 && <Notice>{star.flags.map((flag) => FLAG_LABELS[flag]).join(', ')}.</Notice>}
 			{stale && <Notice>The latest frame was not measured; this is the star of frame #{star.frameId}.</Notice>}
 		</CollapsibleSection>

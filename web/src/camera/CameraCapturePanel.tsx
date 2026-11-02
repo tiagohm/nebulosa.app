@@ -1,5 +1,4 @@
 import type { CameraCapabilities, CaptureFrame, CaptureOutputMode, CaptureRequest, CaptureSession, CaptureSnoop, DeviceSummary } from 'api'
-import { cn } from 'cn'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -13,6 +12,7 @@ import { acquisitionSettings, activeProfile, exposureSettings, profileState, set
 import type { CameraAcquisitionSettings, CameraExposureSettings, CameraIdentity } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
+import { DataList, DataRow } from '../ui/DataRow'
 import { IconButton } from '../ui/IconButton'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
@@ -248,12 +248,10 @@ function CaptureState({ session }: CaptureStateProps) {
 		<CollapsibleSection id="images.camera-acquisition.status" title={running ? 'Acquisition Status' : 'Last Acquisition'}>
 			<p className={failed ? 'm-0 text-danger' : 'm-0 text-ink-100'}>{captureStatus(session)}</p>
 			{running && <div className="h-1 overflow-hidden rounded-full bg-base-300">{progress === undefined ? <div className="h-full w-1/3 animate-pulse bg-accent/60" /> : <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${Math.min(100, progress)}%` }} />}</div>}
-			<dl className="m-0 grid grid-cols-2 gap-x-3 gap-y-1">
-				<dt className="text-ink-300">{captureCount(session)}</dt>
-				<dd className="m-0 text-right tabular-nums">{session.request.output.mode === 'preview-save' ? `Saved ${session.saved}` : 'Not Saved'}</dd>
-				<dt className="text-ink-300">Elapsed</dt>
-				<dd className="m-0 text-right tabular-nums">{formatElapsed(captureElapsed(session, now))}</dd>
-			</dl>
+			<DataList>
+				<DataRow label={captureCount(session)}>{session.request.output.mode === 'preview-save' ? `Saved ${session.saved}` : 'Not Saved'}</DataRow>
+				<DataRow label="Elapsed">{formatElapsed(captureElapsed(session, now))}</DataRow>
+			</DataList>
 			{session.phase === 'failed' && session.captured > 0 && (
 				<p className="m-0 text-xs leading-4 text-ink-300">
 					The capture did not complete: {session.captured} frames taken, {session.saved} saved.
@@ -302,14 +300,13 @@ function LastFrame({ frame }: LastFrameProps) {
 
 	return (
 		<CollapsibleSection id="images.camera-acquisition.last-frame" title="Last Frame">
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+			<DataList>
 				{rows.map(([label, value, danger]) => (
-					<div key={label} className="contents">
-						<dt className="text-ink-300">{label}</dt>
-						<dd className={cn('m-0 min-w-0 truncate text-right tabular-nums', danger && 'text-danger')}>{value}</dd>
-					</div>
+					<DataRow key={label} label={label} tone={danger ? 'danger' : undefined}>
+						{value}
+					</DataRow>
 				))}
-			</dl>
+			</DataList>
 			{frame.path && (
 				<p className="m-0 truncate font-mono text-xs leading-4 text-ink-300" title={frame.path}>
 					{frame.path}

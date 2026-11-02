@@ -5,7 +5,7 @@ import { Button, type ButtonProps } from '../ui/Button'
 import { Modal } from '../ui/Modal'
 import type { ActivityTone } from './groups'
 
-// Small building blocks shared by the Equipment Control panels: a labeled reading, a command button that
+// Small building blocks shared by the Equipment Control panels: a command button that
 // asks for confirmation first, the tone of an activity, and the description of an operation outcome.
 
 // Text color of each activity tone.
@@ -26,23 +26,6 @@ export const FAILURE_REASONS: Readonly<Record<NonNullable<OperationRecord['reaso
 	alert: 'the driver reported an error',
 	commandFailed: 'the command could not be confirmed',
 	unexpectedState: 'the device refused it in its current state',
-}
-
-export interface ReadoutProps {
-	// Name of the reading.
-	readonly label: string
-	// Value as reported by the device, with its unit.
-	readonly children: ReactNode
-}
-
-// Label and value of one reading reported by a device.
-export function Readout({ label, children }: ReadoutProps) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-ink-300">{label}</span>
-			<span className="min-w-0 text-right font-mono text-[13px] break-all text-ink-100">{children}</span>
-		</div>
-	)
 }
 
 export interface ConfirmButtonProps extends Omit<ButtonProps, 'onClick'> {

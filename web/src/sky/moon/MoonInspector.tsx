@@ -4,8 +4,9 @@ import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { PanelSection } from '../../shell/ContextualPanel'
+import { DataRow } from '../../ui/DataRow'
 import { formatAngularSize, formatMagnitude } from '../format'
-import { Datum, Note, ObserverSection, PositionSection } from '../InspectorParts'
+import { Note, ObserverSection, PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
 import type { SkySelection } from '../sky'
 import { moonState, refreshMoonAlmanac, refreshMoonEclipse } from './moon'
@@ -67,12 +68,12 @@ export function MoonInspector({ selection, observer, onSetObserver, timeZone, on
 			<PanelSection title="Object">
 				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{selection.name}</p>
 				<p className="m-0 text-ink-300">Natural Satellite</p>
-				{position?.magnitude !== undefined && <Datum label="Magnitude">{formatMagnitude(position.magnitude)}</Datum>}
+				{position?.magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(position.magnitude)}</DataRow>}
 				<MoonImage time={time} observer={place} />
 				<ObjectActions target={MOON} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
 			</PanelSection>
 			<PositionSection selection={selection} timeZone={timeZone}>
-				{position?.distance !== undefined && <Datum label="Angular diameter">{formatAngularSize(moonAngularDiameter(position.distance))}</Datum>}
+				{position?.distance !== undefined && <DataRow label="Angular diameter">{formatAngularSize(moonAngularDiameter(position.distance))}</DataRow>}
 			</PositionSection>
 			{position && <ObserverSection position={position} events={events} hasObserver={!!observer} onSetObserver={onSetObserver} isSolarSystem timeZone={timeZone} />}
 			<MoonPhasesSection phases={almanac.value?.phases} timeZone={timeZone} />

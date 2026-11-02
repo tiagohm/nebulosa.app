@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Button } from '../../ui/Button'
+import { DataRow } from '../../ui/DataRow'
 import { TextInput } from '../../ui/TextInput'
-import { Actions, Notice, Readout } from '../parts'
+import { Actions, Notice } from '../parts'
 import { indiView, writeIndiVector } from './indi'
 import { changedOnDevice, draftElements, editDraft, type IndiValueProperty, reportedTexts, type ValueDraft } from './indi.draft'
 import { labelOf, numberText, rangeText } from './indi.format'
@@ -28,9 +29,9 @@ export function ValueVectorEditor({ vector }: ValueVectorEditorProps) {
 		return (
 			<div className="flex flex-col gap-1">
 				{vector.elementNames.map((name) => (
-					<Readout key={name} label={labelOf(vector.elements[name])}>
+					<DataRow key={name} label={labelOf(vector.elements[name])}>
 						{vector.type === 'NUMBER' ? numberText(vector.elements[name]) : vector.elements[name].value || '—'}
-					</Readout>
+					</DataRow>
 				))}
 			</div>
 		)

@@ -7,6 +7,7 @@ import { profileState, setImageProcessingPipeline } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
+import { DataRow } from '../ui/DataRow'
 import { Icon } from '../ui/Icon'
 import { Select } from '../ui/Select'
 import { useNow } from '../useNow'
@@ -110,13 +111,13 @@ function ImageSection({ document, job }: ImageSectionProps) {
 
 	return (
 		<CollapsibleSection id="images.image-processing.image" title="Image">
-			<Property label="Name">{document.name}</Property>
+			<DataRow label="Name">{document.name}</DataRow>
 			{info ? (
 				<>
-					<Property label="Size">
+					<DataRow label="Size">
 						{info.width} × {info.height} px
-					</Property>
-					<Property label="Layout">{imageKind(info)}</Property>
+					</DataRow>
+					<DataRow label="Layout">{imageKind(info)}</DataRow>
 				</>
 			) : (
 				<Notice>{imageUnavailableReason(document)} The pipeline can be edited meanwhile.</Notice>
@@ -323,9 +324,9 @@ function RunSection({ document, draft, job, active, enabledCount, blocker, claim
 
 	return (
 		<CollapsibleSection id="images.image-processing.run" title="Run">
-			<Property label="Steps">
+			<DataRow label="Steps">
 				{enabledCount} of {draft.steps.length} enabled
-			</Property>
+			</DataRow>
 			<Actions>
 				<Button disabled={blocker !== undefined} title={blocker} onClick={() => void runProcessing(imageProcessingState, imagesState, document.key)}>
 					Run Pipeline
@@ -346,13 +347,13 @@ function RunSection({ document, draft, job, active, enabledCount, blocker, claim
 			{draft.submitError && draft.submitErrorStepId === undefined && <Notice error>{draft.submitError}</Notice>}
 			{job && (
 				<>
-					<Property label="Status">{active && stopping === job.jobId ? 'Stopping…' : STATE_LABELS[job.state]}</Property>
+					<DataRow label="Status">{active && stopping === job.jobId ? 'Stopping…' : STATE_LABELS[job.state]}</DataRow>
 					{stepping && job.currentStepIndex !== undefined && (
-						<Property label="Step">
+						<DataRow label="Step">
 							{job.currentStepIndex + 1} of {job.steps.length} · {operationLabel(stepping.operation.type)}
-						</Property>
+						</DataRow>
 					)}
-					{job.startedAt !== undefined && <Property label="Elapsed">{formatSeconds((job.endedAt ?? now) - job.startedAt)}</Property>}
+					{job.startedAt !== undefined && <DataRow label="Elapsed">{formatSeconds((job.endedAt ?? now) - job.startedAt)}</DataRow>}
 					{job.error && <Notice error>{job.errorStepId === undefined ? job.error : `${stepName(job, job.errorStepId)}: ${job.error}`}</Notice>}
 					{job.state === 'completed' && !claimError && <Notice>The result opened as a new unsaved image; the source is unchanged.</Notice>}
 					{claimError && <Notice error>{claimError}</Notice>}
@@ -378,23 +379,6 @@ function RunSection({ document, draft, job, active, enabledCount, blocker, claim
 function stepName(job: ImageProcessingJob, stepId: string): string {
 	const index = job.steps.findIndex((step) => step.id === stepId)
 	return index < 0 ? 'A step' : `Step ${index + 1} (${operationLabel(job.steps[index].operation.type)})`
-}
-
-interface PropertyProps {
-	// Name of the property.
-	readonly label: string
-	// Its value.
-	readonly children: React.ReactNode
-}
-
-// Name and value of a property.
-function Property({ label, children }: PropertyProps) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-xs text-ink-300">{label}</span>
-			<span className="min-w-0 truncate text-right text-ink-100 tabular-nums">{children}</span>
-		</div>
-	)
 }
 
 // Returns a duration in milliseconds as seconds with one decimal.

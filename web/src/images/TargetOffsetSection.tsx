@@ -1,5 +1,5 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, Notice } from '../equipment-control/parts'
 import { type CoordinateStyle, formatAngularSize, formatDeclinationAs, formatPositionAngle, formatRightAscensionAs, formatSignedAngle, MISSING } from '../platesolving/coordinates'
@@ -9,6 +9,7 @@ import { wcsFrame } from '../platesolving/wcs'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { skyState } from '../sky/sky'
 import { Button } from '../ui/Button'
+import { DataRow } from '../ui/DataRow'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { type ImageAstrometryState, imagesState, setAstrometryTarget } from './images'
@@ -81,19 +82,19 @@ export function TargetOffsetSection({ documentKey, solution, image, astrometry, 
 							Use Sky Selection
 						</Button>
 					</Actions>
-					{target?.source === 'sky' && <Property label="Object">{target.name}</Property>}
+					{target?.source === 'sky' && <DataRow label="Object">{target.name}</DataRow>}
 					<Notice>Catalog position at J2000, epoch J2000.0; proper motion is not applied.</Notice>
 				</>
 			)}
 			{target && (
 				<div className="flex flex-col gap-2 border-t border-line-100 pt-2">
-					<Property label={`Target RA (${frame})`}>{position ? formatRightAscensionAs(position[0], style) : MISSING}</Property>
-					<Property label={`Target Dec (${frame})`}>{position ? formatDeclinationAs(position[1], style) : MISSING}</Property>
-					<Property label="Separation">{values ? formatAngularSize(values.offset.separation) : MISSING}</Property>
-					<Property label="Position angle">{formatPositionAngle(values?.offset.positionAngle)}</Property>
-					<Property label="East offset">{values?.offset.east === undefined ? MISSING : formatSignedAngle(values.offset.east)}</Property>
-					<Property label="North offset">{values?.offset.north === undefined ? MISSING : formatSignedAngle(values.offset.north)}</Property>
-					<Property label="In the image">{values ? (values.pixel ? `x ${values.pixel.x.toFixed(1)} y ${values.pixel.y.toFixed(1)}` : 'Outside the image') : MISSING}</Property>
+					<DataRow label={`Target RA (${frame})`}>{position ? formatRightAscensionAs(position[0], style) : MISSING}</DataRow>
+					<DataRow label={`Target Dec (${frame})`}>{position ? formatDeclinationAs(position[1], style) : MISSING}</DataRow>
+					<DataRow label="Separation">{values ? formatAngularSize(values.offset.separation) : MISSING}</DataRow>
+					<DataRow label="Position angle">{formatPositionAngle(values?.offset.positionAngle)}</DataRow>
+					<DataRow label="East offset">{values?.offset.east === undefined ? MISSING : formatSignedAngle(values.offset.east)}</DataRow>
+					<DataRow label="North offset">{values?.offset.north === undefined ? MISSING : formatSignedAngle(values.offset.north)}</DataRow>
+					<DataRow label="In the image">{values ? (values.pixel ? `x ${values.pixel.x.toFixed(1)} y ${values.pixel.y.toFixed(1)}` : 'Outside the image') : MISSING}</DataRow>
 					{!values && <Notice>{solution ? 'The target or the centre of the image cannot be located with the solution shown.' : 'Target Offset needs a solution of this image.'}</Notice>}
 					<Actions>
 						<Button variant="secondary" onClick={() => choose(undefined)}>
@@ -111,21 +112,4 @@ export function TargetOffsetSection({ documentKey, solution, image, astrometry, 
 function markerName(markers: readonly AstrometricMarker[], id: string): string {
 	const index = markers.findIndex((marker) => marker.id === id)
 	return markers[index]?.label ?? `M${index + 1}`
-}
-
-interface PropertyProps {
-	// Property name.
-	readonly label: string
-	// Property value.
-	readonly children: ReactNode
-}
-
-// Name and value of a property.
-function Property({ label, children }: PropertyProps) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-xs text-ink-300">{label}</span>
-			<span className="min-w-0 text-right text-ink-100 tabular-nums">{children}</span>
-		</div>
-	)
 }

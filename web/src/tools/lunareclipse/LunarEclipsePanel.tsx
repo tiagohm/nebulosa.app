@@ -6,10 +6,11 @@ import { PanelSection } from '../../shell/ContextualPanel'
 import { BROWSER_TIME_ZONE } from '../../sky/clock'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { displayTimeZone, type EclipsePlace, formatDuration, formatEclipseTime } from '../eclipse/eclipse'
-import { Datum, DISPLAY_TIME_ZONES, LocationSection, Note } from '../eclipse/EclipsePanelParts'
+import { DISPLAY_TIME_ZONES, LocationSection, Note } from '../eclipse/EclipsePanelParts'
 import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, loadLocal, lunarEclipseState, phaseDurations, selectEvent, selectPlace, setViewSettings } from './lunareclipse'
 import { LunarEclipseLocalView } from './LunarEclipseLocalView'
 
@@ -98,17 +99,17 @@ export function LunarEclipsePanel({ observer }: LunarEclipsePanelProps) {
 			)}
 			{eclipse && durations && (
 				<PanelSection title="Details">
-					<Datum label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</Datum>
-					<Datum label={eclipse.type === 'PENUMBRAL' ? 'Penumbral magnitude' : 'Umbral magnitude'}>{eclipse.magnitude.toFixed(4)}</Datum>
-					{local && eclipse.type !== 'PENUMBRAL' && <Datum label="Penumbral magnitude">{local.details.maximalPenumbralMagnitude.toFixed(4)}</Datum>}
-					{durations.penumbral !== undefined && <Datum label="Penumbral phase">{formatDuration(durations.penumbral)}</Datum>}
-					{durations.partial !== undefined && <Datum label="Partial phase">{formatDuration(durations.partial)}</Datum>}
-					{durations.total !== undefined && <Datum label="Totality">{formatDuration(durations.total)}</Datum>}
-					{local && <Datum label="Observable here">{formatDuration(local.details.observableDuration)}</Datum>}
+					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
+					<DataRow label={eclipse.type === 'PENUMBRAL' ? 'Penumbral magnitude' : 'Umbral magnitude'}>{eclipse.magnitude.toFixed(4)}</DataRow>
+					{local && eclipse.type !== 'PENUMBRAL' && <DataRow label="Penumbral magnitude">{local.details.maximalPenumbralMagnitude.toFixed(4)}</DataRow>}
+					{durations.penumbral !== undefined && <DataRow label="Penumbral phase">{formatDuration(durations.penumbral)}</DataRow>}
+					{durations.partial !== undefined && <DataRow label="Partial phase">{formatDuration(durations.partial)}</DataRow>}
+					{durations.total !== undefined && <DataRow label="Totality">{formatDuration(durations.total)}</DataRow>}
+					{local && <DataRow label="Observable here">{formatDuration(local.details.observableDuration)}</DataRow>}
 					{selectedLocal && (
-						<Datum label={`P / Z at ${selectedEvent}`}>
+						<DataRow label={`P / Z at ${selectedEvent}`}>
 							{selectedLocal.positionAngle.toFixed(1)}° / {selectedLocal.zenithAngle.toFixed(1)}°
-						</Datum>
+						</DataRow>
 					)}
 				</PanelSection>
 			)}

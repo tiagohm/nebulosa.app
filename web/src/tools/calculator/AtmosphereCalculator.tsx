@@ -1,6 +1,7 @@
+import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { AIRMASS_EXAMPLE, type AirmassDraft, airmass, DEW_EXAMPLE, type DewDraft, type DewMode, dew } from './atmosphere'
-import { CalculatorLayout, type CalculatorViewProps, Datum, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
 import { formatFixed } from './values'
 
 // Views of the Atmosphere & Conditions calculators: Airmass & Visibility Effects and Dew Conditions.
@@ -42,8 +43,8 @@ export function AirmassCalculator({ entry, onChange, context }: CalculatorViewPr
 					{(value) => (
 						<>
 							<Primary label="Airmass">{formatFixed(value.airmass, 3)}</Primary>
-							{value.extinction !== undefined && <Datum label="Extinction">{formatFixed(value.extinction, 2)} mag</Datum>}
-							<Datum label="Refraction">{formatFixed(value.refraction, 2)}′</Datum>
+							{value.extinction !== undefined && <DataRow label="Extinction">{formatFixed(value.extinction, 2)} mag</DataRow>}
+							<DataRow label="Refraction">{formatFixed(value.refraction, 2)}′</DataRow>
 						</>
 					)}
 				</OutcomeView>
@@ -96,8 +97,8 @@ export function DewCalculator({ entry, onChange, context }: CalculatorViewProps<
 						value.mode === 'dew' ? (
 							<>
 								<Primary label="Dew point">{formatFixed(value.dewPoint, 1)} °C</Primary>
-								<Datum label="Margin to the dew point">{formatFixed(value.margin, 1)} °C</Datum>
-								<Datum label="Dew risk (heuristic)">{formatFixed(value.risk * 100, 0)} %</Datum>
+								<DataRow label="Margin to the dew point">{formatFixed(value.margin, 1)} °C</DataRow>
+								<DataRow label="Dew risk (heuristic)">{formatFixed(value.risk * 100, 0)} %</DataRow>
 							</>
 						) : value.mode === 'humidity' ? (
 							<Primary label="Relative humidity">{formatFixed(value.humidity, 1)} %</Primary>

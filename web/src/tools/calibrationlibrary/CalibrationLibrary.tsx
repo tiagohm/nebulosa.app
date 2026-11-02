@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 // oxfmt-ignore
 import { buildMaster, CALIBRATION_PAGE_SIZE, calibrationLibraryRuntime, cancelCalibrationImport, commitCalibrationImport, deleteCalibrationGroup, deleteCalibrationMaster, deleteCalibrationSource, excludeCalibrationSource, jobEnded, latestGroupJob, loadCalibrationGroup, loadCalibrationGroups, loadCalibrationMaster, loadCalibrationMasters, loadCalibrationSource, loadCalibrationSources, loadImportCandidates, overrideCalibrationSource, preferMaster, refreshCalibrationFiles, startCalibrationImport, validateRecipe } from '../../calibrationlibrary/calibrationlibrary'
-import { Actions, ConfirmButton, Notice, Readout } from '../../equipment-control/parts'
+import { Actions, ConfirmButton, Notice } from '../../equipment-control/parts'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { imagesState, openImage } from '../../images/images'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
@@ -20,6 +20,7 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 // oxfmt-ignore
 import { bytesText, CALIBRATION_KINDS, cameraFilterLabels, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
+import { DataRow } from '../../ui/DataRow'
 
 // Calibration Library tool: what calibration frames exist, what can be combined and why not, and which masters were made. It
 // works with no camera and starts no exposure; every capture stays in Images. State lives on the server, so a reload, another
@@ -358,9 +359,9 @@ function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
 		<>
 			<CollapsibleSection id="calibration.group" title={`${KIND_LABELS[group.kind]} · ${groupTitle(group)}`}>
 				<StatusBadge tone={READINESS_TONES[group.readiness]} label={READINESS_LABELS[group.readiness]} />
-				<Readout label="Camera">{cameraText(group.metadata)}</Readout>
-				<Readout label="Settings">{settingsText(group.metadata)}</Readout>
-				<Readout label="Frames">{group.required === undefined ? `${group.usable} usable of ${group.total}` : `${group.usable} usable, ${group.required} planned`}</Readout>
+				<DataRow label="Camera">{cameraText(group.metadata)}</DataRow>
+				<DataRow label="Settings">{settingsText(group.metadata)}</DataRow>
+				<DataRow label="Frames">{group.required === undefined ? `${group.usable} usable of ${group.total}` : `${group.usable} usable, ${group.required} planned`}</DataRow>
 				<Findings findings={group.findings} />
 				{errors[key] && <Notice error>{errors[key]}</Notice>}
 				<Actions>
@@ -469,7 +470,7 @@ function BuildForm({ groupId, kind }: { readonly groupId: string; readonly kind:
 
 // Value with how it is known.
 function EvidencedReadout({ label, value, format = String }: { readonly label: string; readonly value: Evidenced<string | number>; readonly format?: (value: string | number) => string }) {
-	return <Readout label={label}>{value.value === undefined ? 'Unknown' : `${format(value.value)} · ${EVIDENCE_LABELS[value.evidence]}`}</Readout>
+	return <DataRow label={label}>{value.value === undefined ? 'Unknown' : `${format(value.value)} · ${EVIDENCE_LABELS[value.evidence]}`}</DataRow>
 }
 
 // Revision, what went in, how to use it, and its deletion.
@@ -489,7 +490,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 		<>
 			<CollapsibleSection id="calibration.master" title={`${KIND_LABELS[master.kind]} v${master.revision}`}>
 				<StatusBadge tone={PRODUCT_STATUS_TONES[master.status]} label={PRODUCT_STATUS_LABELS[master.status]} />
-				<Readout label="Contents">{`${master.calibrationState} · ${master.units}`}</Readout>
+				<DataRow label="Contents">{`${master.calibrationState} · ${master.units}`}</DataRow>
 				<Notice>{master.usage}</Notice>
 				<Actions>
 					<Button disabled={master.status === 'unavailable'} onClick={() => openInImages(master.path)}>
@@ -514,13 +515,13 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 				{errors[key] && <Notice error>{errors[key]}</Notice>}
 			</CollapsibleSection>
 			<CollapsibleSection id="calibration.diagnostics" title="Integration">
-				<Readout label="Frames">{`${diagnostics.integratedFrames} of ${diagnostics.requestedFrames}`}</Readout>
-				<Readout label="Method">{METHOD_LABELS[diagnostics.method]}</Readout>
-				<Readout label="Rejected Samples">{`${diagnostics.rejectedLow} low, ${diagnostics.rejectedHigh} high`}</Readout>
-				{diagnostics.hotPixels !== undefined && <Readout label="Hot Pixels">{diagnostics.hotPixels}</Readout>}
-				{diagnostics.invalidResponsePixels !== undefined && <Readout label="Invalid Response">{diagnostics.invalidResponsePixels}</Readout>}
+				<DataRow label="Frames">{`${diagnostics.integratedFrames} of ${diagnostics.requestedFrames}`}</DataRow>
+				<DataRow label="Method">{METHOD_LABELS[diagnostics.method]}</DataRow>
+				<DataRow label="Rejected Samples">{`${diagnostics.rejectedLow} low, ${diagnostics.rejectedHigh} high`}</DataRow>
+				{diagnostics.hotPixels !== undefined && <DataRow label="Hot Pixels">{diagnostics.hotPixels}</DataRow>}
+				{diagnostics.invalidResponsePixels !== undefined && <DataRow label="Invalid Response">{diagnostics.invalidResponsePixels}</DataRow>}
 				{diagnostics.planes.map(({ plane, median, sigma }) => (
-					<Readout key={plane} label={`Plane ${plane + 1}`}>{`${median.toFixed(master.units === 'DN' ? 1 : 4)} ± ${sigma.toFixed(master.units === 'DN' ? 1 : 4)}`}</Readout>
+					<DataRow key={plane} label={`Plane ${plane + 1}`}>{`${median.toFixed(master.units === 'DN' ? 1 : 4)} ± ${sigma.toFixed(master.units === 'DN' ? 1 : 4)}`}</DataRow>
 				))}
 				{diagnostics.lowSampleCount && <Notice>Fewer frames than recommended.</Notice>}
 				{diagnostics.excludedFrames?.map(({ sourceId, reason }) => (
@@ -532,12 +533,12 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 			</CollapsibleSection>
 			<CollapsibleSection id="calibration.lineage" title="Provenance" defaultOpen={false}>
 				{master.dependencies.map(({ masterId, revision }) => (
-					<Readout key={masterId} label="Corrected by">{`${masterId.slice(0, 8)} v${revision}`}</Readout>
+					<DataRow key={masterId} label="Corrected by">{`${masterId.slice(0, 8)} v${revision}`}</DataRow>
 				))}
-				<Readout label="Published">{new Date(master.createdAt).toLocaleString()}</Readout>
-				<Readout label="SHA-256">
+				<DataRow label="Published">{new Date(master.createdAt).toLocaleString()}</DataRow>
+				<DataRow label="SHA-256">
 					<span className="break-all">{master.contentDigest}</span>
-				</Readout>
+				</DataRow>
 				{master.sourceNames.map((name) => (
 					<p key={name} className="m-0 text-xs text-ink-300">
 						{name}
@@ -563,9 +564,9 @@ function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 		<>
 			<CollapsibleSection id="calibration.source" title="Frame">
 				<StatusBadge tone={SOURCE_STATUS_TONES[source.status]} label={SOURCE_STATUS_LABELS[source.status]} />
-				<Readout label="Path">
+				<DataRow label="Path">
 					<span className="break-all">{source.path}</span>
-				</Readout>
+				</DataRow>
 				<Actions>
 					<Button disabled={source.status === 'missing'} onClick={() => openInImages(source.path)}>
 						Open in Images
@@ -574,8 +575,8 @@ function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 						Delete
 					</ConfirmButton>
 				</Actions>
-				<Readout label="Size">{bytesText(source.bytes)}</Readout>
-				<Readout label="Image">{`${metadata.width}×${metadata.height}×${metadata.channels}, BITPIX ${metadata.bitpix}${metadata.cfa ? `, ${metadata.cfa}` : ''}`}</Readout>
+				<DataRow label="Size">{bytesText(source.bytes)}</DataRow>
+				<DataRow label="Image">{`${metadata.width}×${metadata.height}×${metadata.channels}, BITPIX ${metadata.bitpix}${metadata.cfa ? `, ${metadata.cfa}` : ''}`}</DataRow>
 				<EvidencedReadout label="Camera" value={metadata.cameraId} />
 				<EvidencedReadout label="Exposure" value={metadata.exposure} format={(value) => `${Number(value) / 1000000} s`} />
 				<EvidencedReadout label="Target" value={metadata.setTemperature} format={(value) => `${value} °C`} />

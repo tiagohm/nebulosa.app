@@ -1,5 +1,4 @@
 import type { CaptureFrameOrigin, CaptureFrameSummary, ImageAcquisition, ImageInfo, ImageProvenance, RenderResult, StarDetectionOrigin } from 'api'
-import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { autoFocusFrameFocus, autoFocusRuntime } from '../camera/autofocus'
 import { DARV_AXIS_LABELS, DARV_DIRECTION_LABELS, DARV_STATUS_LABELS, darvFrameMeasurement, darvRuntime } from '../camera/darv'
@@ -11,6 +10,7 @@ import { EmptyState } from '../shell/WorkspaceLayout'
 import { type ImageQualityStatus, imageQuality } from '../stars/quality'
 import { PROVIDER_LABELS, starsState } from '../stars/stars'
 import { Button } from '../ui/Button'
+import { DataRow } from '../ui/DataRow'
 import type { CameraFrameSelection } from './cameratabs'
 import { connectionLabel, frameUnavailableReason } from './captureframes'
 import { operationLabel, operationSummary } from './imageprocessing.catalog'
@@ -67,9 +67,9 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 	return (
 		<>
 			<CollapsibleSection id="images.inspector.properties" title="Properties">
-				<Property label="Name">{document.name}</Property>
+				<DataRow label="Name">{document.name}</DataRow>
 				{!document.camera && (
-					<Property label="Folder">
+					<DataRow label="Folder">
 						{path ? (
 							<span title={path} className="block truncate">
 								{directoryOf(path)}
@@ -77,15 +77,15 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 						) : (
 							<span className="text-accent">Not saved</span>
 						)}
-					</Property>
+					</DataRow>
 				)}
 				{info ? (
 					<>
-						<Property label="Format">{info.origin === 'derived' ? 'Derived' : info.format.toUpperCase()}</Property>
-						<Property label="Size">
+						<DataRow label="Format">{info.origin === 'derived' ? 'Derived' : info.format.toUpperCase()}</DataRow>
+						<DataRow label="Size">
 							{info.width} × {info.height} px
-						</Property>
-						<Property label="Channels">{info.channels === 3 ? 'RGB' : info.bayer ? `Mono (CFA ${info.bayer})` : 'Mono'}</Property>
+						</DataRow>
+						<DataRow label="Channels">{info.channels === 3 ? 'RGB' : info.bayer ? `Mono (CFA ${info.bayer})` : 'Mono'}</DataRow>
 					</>
 				) : (
 					<p className="m-0 text-ink-300">{document.status === 'loading' ? 'Opening…' : 'Unavailable'}</p>
@@ -104,13 +104,6 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 	)
 }
 
-interface PropertyProps {
-	// Property name.
-	readonly label: string
-	// Property value.
-	readonly children: ReactNode
-}
-
 // Returns the folder of a server path, without its file name; the path itself when it has no folder.
 function directoryOf(path: string): string {
 	const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
@@ -120,16 +113,6 @@ function directoryOf(path: string): string {
 // Returns an ISO 8601 UTC date-time as "YYYY-MM-DD hh:mm:ss", in UTC.
 function formatDate(date: string): string {
 	return date.slice(0, 19).replace('T', ' ')
-}
-
-// Name and value of a property.
-function Property({ label, children }: PropertyProps) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-xs text-ink-300">{label}</span>
-			<span className="min-w-0 text-right text-ink-100 tabular-nums">{children}</span>
-		</div>
-	)
 }
 
 // Labels of the states of the write of a frame's file.
@@ -170,68 +153,68 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 	return (
 		<>
 			<CollapsibleSection id="images.inspector.capture" title="Capture">
-				<Property label="Camera">{frame.cameraName}</Property>
-				<Property label="Connection">{connectionLabel(frame.connectionId, connections.servers, connections.connections)}</Property>
-				<Property label="Origin">{ORIGIN_LABELS[frame.origin]}</Property>
+				<DataRow label="Camera">{frame.cameraName}</DataRow>
+				<DataRow label="Connection">{connectionLabel(frame.connectionId, connections.servers, connections.connections)}</DataRow>
+				<DataRow label="Origin">{ORIGIN_LABELS[frame.origin]}</DataRow>
 				{frame.origin === 'autofocus' && (
 					<>
-						<Property label="Auto Focus session">
+						<DataRow label="Auto Focus session">
 							<span title={frame.sessionId} className="block truncate">
 								{frame.sessionId}
 							</span>
-						</Property>
-						<Property label="Measurement">{focus?.verification ? 'Verification' : `#${frame.generation}`}</Property>
-						<Property label="Focuser position">{focus ? `${focus.position} steps` : MISSING}</Property>
+						</DataRow>
+						<DataRow label="Measurement">{focus?.verification ? 'Verification' : `#${frame.generation}`}</DataRow>
+						<DataRow label="Focuser position">{focus ? `${focus.position} steps` : MISSING}</DataRow>
 					</>
 				)}
 				{frame.origin === 'tppa' && (
 					<>
-						<Property label="TPPA session">
+						<DataRow label="TPPA session">
 							<span title={frame.sessionId} className="block truncate">
 								{frame.sessionId}
 							</span>
-						</Property>
-						<Property label="Step">{role ? (role.point !== undefined ? `Point ${role.point}/3` : role.refinement ? 'Refinement' : 'Rejected candidate') : MISSING}</Property>
+						</DataRow>
+						<DataRow label="Step">{role ? (role.point !== undefined ? `Point ${role.point}/3` : role.refinement ? 'Refinement' : 'Rejected candidate') : MISSING}</DataRow>
 					</>
 				)}
 				{frame.origin === 'mountPointing' && (
-					<Property label="Pointing session">
+					<DataRow label="Pointing session">
 						<span title={frame.sessionId} className="block truncate">
 							{frame.sessionId}
 						</span>
-					</Property>
+					</DataRow>
 				)}
 				{frame.origin === 'darv' && (
 					<>
-						<Property label="DARV session">
+						<DataRow label="DARV session">
 							<span title={frame.sessionId} className="block truncate">
 								{frame.sessionId}
 							</span>
-						</Property>
-						<Property label="Measurement">{drift ? `${DARV_AXIS_LABELS[drift.request.axis]}, ${DARV_DIRECTION_LABELS[drift.request.direction]} first, ${drift.request.legDuration} s legs` : MISSING}</Property>
-						<Property label="Result">{drift?.result ? (drift.result.driftMagnitude !== undefined ? `${drift.result.driftMagnitude.toFixed(3)} px/s` : DARV_STATUS_LABELS[drift.result.status]) : MISSING}</Property>
+						</DataRow>
+						<DataRow label="Measurement">{drift ? `${DARV_AXIS_LABELS[drift.request.axis]}, ${DARV_DIRECTION_LABELS[drift.request.direction]} first, ${drift.request.legDuration} s legs` : MISSING}</DataRow>
+						<DataRow label="Result">{drift?.result ? (drift.result.driftMagnitude !== undefined ? `${drift.result.driftMagnitude.toFixed(3)} px/s` : DARV_STATUS_LABELS[drift.result.status]) : MISSING}</DataRow>
 					</>
 				)}
-				<Property label="Frame of session">#{frame.generation}</Property>
-				<Property label="Frame type">{frame.frameType}</Property>
-				<Property label="Captured (UTC)">{formatDate(new Date(frame.time).toISOString())}</Property>
-				<Property label="Frame ID">
+				<DataRow label="Frame of session">#{frame.generation}</DataRow>
+				<DataRow label="Frame type">{frame.frameType}</DataRow>
+				<DataRow label="Captured (UTC)">{formatDate(new Date(frame.time).toISOString())}</DataRow>
+				<DataRow label="Frame ID">
 					<span title={frame.frameId} className="block truncate">
 						{frame.frameId}
 					</span>
-				</Property>
-				<Property label="Shown as">{SELECTION_LABELS[selection]}</Property>
+				</DataRow>
+				<DataRow label="Shown as">{SELECTION_LABELS[selection]}</DataRow>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.inspector.storage" title="Storage">
-				<Property label="State">{frame.file ? FILE_STATE_LABELS[frame.file] : 'Temporary (preview only)'}</Property>
+				<DataRow label="State">{frame.file ? FILE_STATE_LABELS[frame.file] : 'Temporary (preview only)'}</DataRow>
 				{frame.fileName && (
-					<Property label="File">
+					<DataRow label="File">
 						<span title={frame.fileName} className="block truncate">
 							{frame.fileName}
 						</span>
-					</Property>
+					</DataRow>
 				)}
-				<Property label="Availability">{unavailable ? <span className="text-danger">{unavailable}</span> : frame.availability === 'memory' ? 'In memory' : 'Saved file'}</Property>
+				<DataRow label="Availability">{unavailable ? <span className="text-danger">{unavailable}</span> : frame.availability === 'memory' ? 'In memory' : 'Saved file'}</DataRow>
 			</CollapsibleSection>
 		</>
 	)
@@ -257,11 +240,11 @@ function Quality({ imageId }: QualityProps) {
 
 	return (
 		<CollapsibleSection id="images.inspector.quality" title="Quality">
-			<Property label="State">{quality.status === 'failed' ? <span className="text-danger">{QUALITY_LABELS.failed}</span> : QUALITY_LABELS[quality.status]}</Property>
-			{measured && <Property label="HFD (px)">{quality.hfdPx === undefined ? MISSING : quality.hfdPx.toFixed(2)}</Property>}
-			{measured && <Property label="Stars (accepted / detected)">{`${quality.acceptedStars ?? 0} / ${quality.detectedStars ?? 0}`}</Property>}
-			{quality.provider && <Property label="Detector">{PROVIDER_LABELS[quality.provider]}</Property>}
-			{quality.origin && <Property label="Measured by">{MEASURED_BY_LABELS[quality.origin]}</Property>}
+			<DataRow label="State">{quality.status === 'failed' ? <span className="text-danger">{QUALITY_LABELS.failed}</span> : QUALITY_LABELS[quality.status]}</DataRow>
+			{measured && <DataRow label="HFD (px)">{quality.hfdPx === undefined ? MISSING : quality.hfdPx.toFixed(2)}</DataRow>}
+			{measured && <DataRow label="Stars (accepted / detected)">{`${quality.acceptedStars ?? 0} / ${quality.detectedStars ?? 0}`}</DataRow>}
+			{quality.provider && <DataRow label="Detector">{PROVIDER_LABELS[quality.provider]}</DataRow>}
+			{quality.origin && <DataRow label="Measured by">{MEASURED_BY_LABELS[quality.origin]}</DataRow>}
 			{quality.error && <p className="m-0 text-xs leading-4 text-danger">{quality.error}</p>}
 			{quality.status === 'not-measured' && <p className="m-0 text-xs leading-4 text-ink-300">Run Star Detection to measure the HFD of this image.</p>}
 		</CollapsibleSection>
@@ -281,9 +264,9 @@ function Acquisition({ info }: InfoProps) {
 				const value = format(info.acquisition)
 
 				return (
-					<Property key={label} label={label}>
+					<DataRow key={label} label={label}>
 						{value ? value : <span className="text-ink-300">{MISSING}</span>}
-					</Property>
+					</DataRow>
 				)
 			})}
 		</CollapsibleSection>
@@ -302,8 +285,8 @@ interface DerivationProps {
 function Derivation({ document, provenance }: DerivationProps) {
 	return (
 		<CollapsibleSection id="images.inspector.derived-image" title="Derived Image">
-			<Property label="Source">{provenance.sourceName}</Property>
-			<Property label="Created (UTC)">{formatDate(provenance.createdAt)}</Property>
+			<DataRow label="Source">{provenance.sourceName}</DataRow>
+			<DataRow label="Created (UTC)">{formatDate(provenance.createdAt)}</DataRow>
 			<ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs">
 				{provenance.steps.map(({ id, operation }, i) => (
 					<li key={id} className="flex min-w-0 gap-2">
@@ -315,7 +298,7 @@ function Derivation({ document, provenance }: DerivationProps) {
 					</li>
 				))}
 			</ol>
-			<Property label="State">{document.unsaved ? <span className="text-accent">Unsaved</span> : 'Saved'}</Property>
+			<DataRow label="State">{document.unsaved ? <span className="text-accent">Unsaved</span> : 'Saved'}</DataRow>
 		</CollapsibleSection>
 	)
 }
@@ -329,12 +312,12 @@ interface AppliedDisplayProps {
 function AppliedDisplay({ result }: AppliedDisplayProps) {
 	return (
 		<CollapsibleSection id="images.inspector.applied-display" title="Applied Display" defaultOpen={false}>
-			<Property label="Debayer">{result.cfa ?? 'Off'}</Property>
-			<Property label="Channels">{result.channels === 3 ? 'RGB' : 'Mono'}</Property>
+			<DataRow label="Debayer">{result.cfa ?? 'Off'}</DataRow>
+			<DataRow label="Channels">{result.channels === 3 ? 'RGB' : 'Mono'}</DataRow>
 			{result.stretch.map((stretch, i) => (
-				<Property key={i} label={`Stretch${result.stretch.length === 3 ? ` ${CHANNEL_NAMES[i]}` : ''}`}>
+				<DataRow key={i} label={`Stretch${result.stretch.length === 3 ? ` ${CHANNEL_NAMES[i]}` : ''}`}>
 					{stretch.shadow.toFixed(4)} - {stretch.highlight.toFixed(4)} | {stretch.midtone.toFixed(4)}
-				</Property>
+				</DataRow>
 			))}
 		</CollapsibleSection>
 	)

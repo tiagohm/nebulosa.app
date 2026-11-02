@@ -2,6 +2,7 @@ import { cn } from 'cn'
 import { type ReactNode, useState } from 'react'
 import type { OpticalConfiguration } from '../../sky/framing'
 import { Button } from '../../ui/Button'
+import { DataRow } from '../../ui/DataRow'
 import { Field, InputSuffix, inputClassName, suffixPadding } from '../../ui/Field'
 import { Select } from '../../ui/Select'
 import { type DraftEntry, importOptics, isOriginCurrent, type OpticsSourceId, opticsSources, type SourceContext, sourceGroup, sourceLabel } from './sources'
@@ -106,16 +107,6 @@ export function Primary({ label, children }: { readonly label: string; readonly 
 	)
 }
 
-// Label and value of a secondary result.
-export function Datum({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="flex items-baseline justify-between gap-3 text-[13px] leading-5">
-			<span className="flex-none text-ink-300">{label}</span>
-			<span className="min-w-0 text-right font-mono text-ink-100">{children}</span>
-		</div>
-	)
-}
-
 // Results of an outcome: rendered by children when ready, otherwise the explanation of what is missing or wrong.
 export function OutcomeView<T>({ outcome, children }: { readonly outcome: Outcome<T>; readonly children: (value: T) => ReactNode }) {
 	if (outcome.status === 'ready') return <div className="flex flex-col gap-2">{children(outcome.value)}</div>
@@ -124,14 +115,14 @@ export function OutcomeView<T>({ outcome, children }: { readonly outcome: Outcom
 
 // Secondary result that depends on optional fields: hint while they are empty, then the value or why it is missing.
 export function OptionalDatum<T>({ label, outcome, hint, children }: { readonly label: string; readonly outcome: OptionalOutcome<T>; readonly hint?: string; readonly children: (value: T) => ReactNode }) {
-	if (outcome?.status === 'ready') return <Datum label={label}>{children(outcome.value)}</Datum>
+	if (outcome?.status === 'ready') return <DataRow label={label}>{children(outcome.value)}</DataRow>
 	const message = outcome ? outcomeMessage(outcome) : hint
 	if (!message) return null
 
 	return (
-		<Datum label={label}>
+		<DataRow label={label}>
 			<span className={cn('font-sans text-xs', outcome?.status === 'invalid' ? 'text-danger' : 'text-ink-300')}>{message}</span>
-		</Datum>
+		</DataRow>
 	)
 }
 

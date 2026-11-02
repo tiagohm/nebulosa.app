@@ -1,7 +1,8 @@
 import type { MoonAppearance } from 'api'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { DataRow } from '../../ui/DataRow'
 import { formatAngularSize, formatDegrees, formatLocalTime } from '../format'
-import { Datum, Note } from '../InspectorParts'
+import { Note } from '../InspectorParts'
 import { formatKilometers } from './MoonApsidesSection'
 
 // Lunar Physical Data section of the Moon Inspector: the Moon's age and lunation, distance, libration, the Sun's
@@ -19,18 +20,18 @@ export function MoonPhysicalSection({ appearance, time, timeZone }: { readonly a
 		<CollapsibleSection id="sky.physical" title="Lunar Physical Data" summary={appearance && `Age ${appearance.ageDays.toFixed(1)} d · Lunation ${appearance.lunation}`} defaultOpen={false}>
 			{appearance && time !== undefined ? (
 				<>
-					<Datum label="Age">{appearance.ageDays.toFixed(2)} d</Datum>
-					<Datum label="Lunation">{appearance.lunation}</Datum>
-					<Datum label="Distance">{formatKilometers(appearance.distanceKm)}</Datum>
-					<Datum label="Apparent diameter">{formatAngularSize(appearance.angularDiameter)}</Datum>
-					<Datum label="Libration in longitude">{formatSelenographic(appearance.subObserver.longitude, 'E', 'W')}</Datum>
-					<Datum label="Libration in latitude">{formatSelenographic(appearance.subObserver.latitude, 'N', 'S')}</Datum>
-					<Datum label="Sun's colongitude">{formatDegrees(appearance.colongitude)}</Datum>
-					<Datum label="Sub-solar latitude">{formatSelenographic(appearance.subSolar.latitude, 'N', 'S')}</Datum>
-					<Datum label="Pole position angle">{formatDegrees(appearance.poleAngle)}</Datum>
-					<Datum label="Bright limb angle">{formatDegrees(appearance.brightLimbAngle)}</Datum>
-					<Datum label="Horizontal parallax">{formatAngularSize(appearance.horizontalParallax)}</Datum>
-					{appearance.parallacticAngle !== undefined && <Datum label="Parallactic angle">{formatDegrees(appearance.parallacticAngle)}</Datum>}
+					<DataRow label="Age">{appearance.ageDays.toFixed(2)} d</DataRow>
+					<DataRow label="Lunation">{appearance.lunation}</DataRow>
+					<DataRow label="Distance">{formatKilometers(appearance.distanceKm)}</DataRow>
+					<DataRow label="Apparent diameter">{formatAngularSize(appearance.angularDiameter)}</DataRow>
+					<DataRow label="Libration in longitude">{formatSelenographic(appearance.subObserver.longitude, 'E', 'W')}</DataRow>
+					<DataRow label="Libration in latitude">{formatSelenographic(appearance.subObserver.latitude, 'N', 'S')}</DataRow>
+					<DataRow label="Sun's colongitude">{formatDegrees(appearance.colongitude)}</DataRow>
+					<DataRow label="Sub-solar latitude">{formatSelenographic(appearance.subSolar.latitude, 'N', 'S')}</DataRow>
+					<DataRow label="Pole position angle">{formatDegrees(appearance.poleAngle)}</DataRow>
+					<DataRow label="Bright limb angle">{formatDegrees(appearance.brightLimbAngle)}</DataRow>
+					<DataRow label="Horizontal parallax">{formatAngularSize(appearance.horizontalParallax)}</DataRow>
+					{appearance.parallacticAngle !== undefined && <DataRow label="Parallactic angle">{formatDegrees(appearance.parallacticAngle)}</DataRow>}
 					<Note>
 						At {formatLocalTime(time, Date.now(), undefined, timeZone)}, {appearance.center === 'topocentric' ? 'from the observer' : "from the Earth's center"}, from the local model. The libration is the selenographic point at the disk&apos;s center; position angles are from celestial north through east.
 						The age counts from the previous geocentric new Moon.

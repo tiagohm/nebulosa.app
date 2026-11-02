@@ -15,6 +15,7 @@ import { navigate, routeState } from '../../shell/route'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { DataList, DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
@@ -182,18 +183,15 @@ function ModelPanel({ summary }: { readonly summary: PointingModelSummary }) {
 		<>
 			<CollapsibleSection id="tools.mount-pointing-model.model" title="Model">
 				<TextInput label="Name" value={label} onChange={(event) => setLabel(event.target.value)} />
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-					<dt className="text-ink-300">Mount</dt>
-					<dd className="m-0 truncate text-right">{summary.mount.name}</dd>
-					<dt className="text-ink-300">Camera</dt>
-					<dd className="m-0 truncate text-right">{summary.optics.cameraName}</dd>
-					<dt className="text-ink-300">Image Scale</dt>
-					<dd className="m-0 text-right tabular-nums">{summary.optics.scale === undefined ? '—' : `${formatArcsec(summary.optics.scale)}/px`}</dd>
-					<dt className="text-ink-300">Origin</dt>
-					<dd className="m-0 text-right">{summary.origin === 'import' ? 'Imported' : 'Measured'}</dd>
-					<dt className="text-ink-300">Acquisition</dt>
-					<dd className="m-0 text-right capitalize">{summary.acquisition.state}</dd>
-				</dl>
+				<DataList>
+					<DataRow label="Mount">{summary.mount.name}</DataRow>
+					<DataRow label="Camera">{summary.optics.cameraName}</DataRow>
+					<DataRow label="Image Scale">{summary.optics.scale === undefined ? '—' : `${formatArcsec(summary.optics.scale)}/px`}</DataRow>
+					<DataRow label="Origin">{summary.origin === 'import' ? 'Imported' : 'Measured'}</DataRow>
+					<DataRow label="Acquisition">
+						<span className="capitalize">{summary.acquisition.state}</span>
+					</DataRow>
+				</DataList>
 				{summary.origin === 'import' && <Notice>An imported model cannot prove the mount and the optics it was measured on.</Notice>}
 				<Actions>
 					<Button variant="secondary" disabled={pending || label.trim() === '' || label === summary.label} onClick={() => void patchPointingModel(mountPointingRuntime, modelId, { expectedRevision: fileRevision, label: label.trim() })}>
@@ -232,14 +230,13 @@ function ModelPanel({ summary }: { readonly summary: PointingModelSummary }) {
 			</CollapsibleSection>
 			<CollapsibleSection id="tools.mount-pointing-model.validation" title="Validation" summary={revision ? GATE_LABELS[revision.gate] : 'Not fitted'}>
 				{revision ? (
-					<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-						<dt className="text-ink-300">Revision</dt>
-						<dd className="m-0 text-right tabular-nums">{`${model?.revisions.length}, ${FIT_STRATEGY_LABELS[revision.fitted.strategy]}`}</dd>
-						<dt className="text-ink-300">Offline Quality</dt>
-						<dd className={cn('m-0 text-right', revision.gate === 'passed' ? 'text-success' : 'text-danger')}>{GATE_LABELS[revision.gate]}</dd>
-						<dt className="text-ink-300">Withheld Samples</dt>
-						<dd className="m-0 text-right tabular-nums">{revision.offline.heldOutCount}</dd>
-					</dl>
+					<DataList>
+						<DataRow label="Revision">{`${model?.revisions.length}, ${FIT_STRATEGY_LABELS[revision.fitted.strategy]}`}</DataRow>
+						<DataRow label="Offline Quality" tone={revision.gate === 'passed' ? 'success' : 'danger'}>
+							{GATE_LABELS[revision.gate]}
+						</DataRow>
+						<DataRow label="Withheld Samples">{revision.offline.heldOutCount}</DataRow>
+					</DataList>
 				) : (
 					<Notice>The model has no fit yet.</Notice>
 				)}
@@ -277,18 +274,17 @@ function SoftwareCorrection({ summary, revision, pending }: SoftwareCorrectionPr
 	return (
 		<CollapsibleSection id="tools.mount-pointing-model.software-correction" title="Software Correction" summary={activation ? (activation.state === 'active' ? 'Active' : 'Suspended') : 'Inactive'}>
 			{activation ? (
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-					<dt className="text-ink-300">State</dt>
-					<dd className={cn('m-0 text-right', activation.state === 'active' ? 'text-success' : 'text-danger')}>{activation.state === 'active' ? 'Correcting GoTos' : 'Suspended'}</dd>
-					<dt className="text-ink-300">Model</dt>
-					<dd className="m-0 truncate text-right">{activation.label}</dd>
+				<DataList>
+					<DataRow label="State" tone={activation.state === 'active' ? 'success' : 'danger'}>
+						{activation.state === 'active' ? 'Correcting GoTos' : 'Suspended'}
+					</DataRow>
+					<DataRow label="Model">{activation.label}</DataRow>
 					{activation.last && (
 						<>
-							<dt className="text-ink-300">Latest GoTo</dt>
-							<dd className="m-0 text-right">{activation.last.refused ? 'Refused' : 'Corrected'}</dd>
+							<DataRow label="Latest GoTo">{activation.last.refused ? 'Refused' : 'Corrected'}</DataRow>
 						</>
 					)}
-				</dl>
+				</DataList>
 			) : (
 				<Notice>No model corrects the GoTos of this mount.</Notice>
 			)}

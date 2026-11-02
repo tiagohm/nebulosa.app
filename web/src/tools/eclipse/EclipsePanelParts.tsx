@@ -3,10 +3,11 @@ import type { SkyObserverSettings } from '../../profile/schema'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { TIME_ZONES } from '../../sky/clock'
 import { Button } from '../../ui/Button'
+import { DataRow } from '../../ui/DataRow'
 import { TextInput } from '../../ui/TextInput'
 import { type EclipsePlace, observerPlace } from './eclipse'
 
-// Pieces of the Local Circumstances panels of the eclipse map tools: a labeled datum, a muted note, and the
+// Pieces of the Local Circumstances panels of the eclipse map tools: a muted note and the
 // Location section, where the place is the Sky observer, a click on the map, or coordinates typed in. Nothing here
 // changes the profile.
 
@@ -15,16 +16,6 @@ export const DISPLAY_TIME_ZONES = ['UTC', ...TIME_ZONES.filter((zone) => zone !=
 
 // Names of the sources of a place.
 const PLACE_SOURCES = { observer: 'Sky observer', map: 'Map selection', manual: 'Coordinates entered' } as const
-
-// Label and value of one datum.
-export function Datum({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-ink-300">{label}</span>
-			<span className="min-w-0 text-right font-mono text-[13px] wrap-break-word text-ink-100">{children}</span>
-		</div>
-	)
-}
 
 // Muted note under a section.
 export function Note({ children, danger }: { readonly children: ReactNode; readonly danger?: boolean }) {
@@ -102,9 +93,9 @@ export function LocationSection({ place, observer, onSelect }: LocationSectionPr
 		<PanelSection title="Location">
 			{place ? (
 				<>
-					<Datum label="Source">{place.source === 'observer' && place.name ? place.name : PLACE_SOURCES[place.source]}</Datum>
-					<Datum label="Latitude">{place.latitude.toFixed(4)}°</Datum>
-					<Datum label="Longitude">{place.longitude.toFixed(4)}°</Datum>
+					<DataRow label="Source">{place.source === 'observer' && place.name ? place.name : PLACE_SOURCES[place.source]}</DataRow>
+					<DataRow label="Latitude">{place.latitude.toFixed(4)}°</DataRow>
+					<DataRow label="Longitude">{place.longitude.toFixed(4)}°</DataRow>
 				</>
 			) : (
 				<Note>Select a location on the map, or enter its coordinates.</Note>

@@ -1,7 +1,7 @@
 import type { PlateSolveHint, PlateSolveJob, PlateSolveRequest, PlateSolveResult } from 'api'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
-import { type ReactNode, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { isActive } from '../analysis'
 import { controlRuntime, sendCommand, watchedDeviceState } from '../equipment-control/control'
@@ -23,6 +23,7 @@ import { imageFootprint, showFootprintInSky, skyImageState } from '../sky/footpr
 import { formatDeclination, formatRightAscension } from '../sky/format'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
@@ -198,12 +199,12 @@ function Execution({ documentKey, imageId, request, job, submitError, unavailabl
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job ? (
 				<>
-					<Property label="Status">{STATE_LABELS[job.state]}</Property>
-					{job.state === 'running' && job.stage && <Property label="Step">{STAGE_LABELS[job.stage]}</Property>}
-					<Property label="Solver">{PROVIDER_LABELS[job.request.provider]}</Property>
-					<Property label="Elapsed">{formatSeconds(elapsedOf(job, now))}</Property>
-					{job.remote?.submissionId !== undefined && <Property label="Remote submission">{job.remote.submissionId}</Property>}
-					{job.remote?.jobId !== undefined && <Property label="Remote job">{job.remote.jobId}</Property>}
+					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
+					{job.state === 'running' && job.stage && <DataRow label="Step">{STAGE_LABELS[job.stage]}</DataRow>}
+					<DataRow label="Solver">{PROVIDER_LABELS[job.request.provider]}</DataRow>
+					<DataRow label="Elapsed">{formatSeconds(elapsedOf(job, now))}</DataRow>
+					{job.remote?.submissionId !== undefined && <DataRow label="Remote submission">{job.remote.submissionId}</DataRow>}
+					{job.remote?.jobId !== undefined && <DataRow label="Remote job">{job.remote.jobId}</DataRow>}
 					{job.error && <Notice error>{job.error}</Notice>}
 				</>
 			) : (
@@ -235,16 +236,16 @@ function Solution({ job, result, solution, fromHeader, resultError }: SolutionPr
 		<CollapsibleSection id="images.plate-solver.solution" title="Solution">
 			{solution ? (
 				<>
-					<Property label="Source">{fromHeader ? 'Image header' : PROVIDER_LABELS[result?.request.provider ?? 'astap']}</Property>
-					<Property label={`RA (${wcsFrame(solution)})`}>{formatRightAscension(solution.rightAscension)}</Property>
-					<Property label={`Dec (${wcsFrame(solution)})`}>{formatDeclination(solution.declination)}</Property>
-					<Property label="Pixel Scale">{toArcsec(solution.scale).toFixed(3)} ″/px</Property>
-					<Property label="PA of Image Top">{topAngle === undefined ? MISSING : `${toDeg(topAngle).toFixed(2)}°`}</Property>
-					<Property label="Parity">{solution.parity === 'NORMAL' ? 'Normal' : 'Flipped'}</Property>
-					<Property label="Field of View">
+					<DataRow label="Source">{fromHeader ? 'Image header' : PROVIDER_LABELS[result?.request.provider ?? 'astap']}</DataRow>
+					<DataRow label={`RA (${wcsFrame(solution)})`}>{formatRightAscension(solution.rightAscension)}</DataRow>
+					<DataRow label={`Dec (${wcsFrame(solution)})`}>{formatDeclination(solution.declination)}</DataRow>
+					<DataRow label="Pixel Scale">{toArcsec(solution.scale).toFixed(3)} ″/px</DataRow>
+					<DataRow label="PA of Image Top">{topAngle === undefined ? MISSING : `${toDeg(topAngle).toFixed(2)}°`}</DataRow>
+					<DataRow label="Parity">{solution.parity === 'NORMAL' ? 'Normal' : 'Flipped'}</DataRow>
+					<DataRow label="Field of View">
 						{toArcmin(solution.width).toFixed(1)}′ × {toArcmin(solution.height).toFixed(1)}′
-					</Property>
-					<Property label="Projection">{String(solution.CTYPE1 ?? MISSING).trim()}</Property>
+					</DataRow>
+					<DataRow label="Projection">{String(solution.CTYPE1 ?? MISSING).trim()}</DataRow>
 				</>
 			) : (
 				<Notice error={!!resultError}>{resultError ?? (noSolution ? 'The search ended without a solution.' : job && isActive(job) ? 'Solving…' : 'No solution.')}</Notice>
@@ -260,12 +261,12 @@ function SolverDetails({ result }: { readonly result: PlateSolveResult }) {
 
 	return (
 		<CollapsibleSection id="images.plate-solver.solver-details" title="Solver Details" summary={formatSeconds(result.elapsed)} defaultOpen={false}>
-			<Property label="Strategy">{result.request.strategy === 'blind' ? 'Blind' : 'Assisted'}</Property>
-			<Property label="Center hint">{hints.rightAscension && hints.declination ? `${formatRightAscension(hints.rightAscension.value)} ${formatDeclination(hints.declination.value)} (${SOURCE_LABELS[hints.rightAscension.source]})` : 'None'}</Property>
-			<Property label="Radius hint">{hints.radius ? `${toDeg(hints.radius.value).toFixed(1)}° (${SOURCE_LABELS[hints.radius.source]})` : 'None'}</Property>
-			<Property label="Scale hint">{hints.scale ? `${toArcsec(hints.scale.value).toFixed(3)} ″/px (${SOURCE_LABELS[hints.scale.source]})` : 'None'}</Property>
-			<Property label="Duration">{formatSeconds(result.elapsed)}</Property>
-			<Property label="Waited">{formatSeconds(result.queueTime)}</Property>
+			<DataRow label="Strategy">{result.request.strategy === 'blind' ? 'Blind' : 'Assisted'}</DataRow>
+			<DataRow label="Center hint">{hints.rightAscension && hints.declination ? `${formatRightAscension(hints.rightAscension.value)} ${formatDeclination(hints.declination.value)} (${SOURCE_LABELS[hints.rightAscension.source]})` : 'None'}</DataRow>
+			<DataRow label="Radius hint">{hints.radius ? `${toDeg(hints.radius.value).toFixed(1)}° (${SOURCE_LABELS[hints.radius.source]})` : 'None'}</DataRow>
+			<DataRow label="Scale hint">{hints.scale ? `${toArcsec(hints.scale.value).toFixed(3)} ″/px (${SOURCE_LABELS[hints.scale.source]})` : 'None'}</DataRow>
+			<DataRow label="Duration">{formatSeconds(result.elapsed)}</DataRow>
+			<DataRow label="Waited">{formatSeconds(result.queueTime)}</DataRow>
 			{result.warnings.map((warning) => (
 				<Notice key={warning}>{warning}</Notice>
 			))}
@@ -346,23 +347,6 @@ function Solutions({ documentKey, imageId, selected }: SolutionsProps) {
 			<Select options={options} value={selected ?? 'latest'} format={label} onChange={(option) => selectPlateSolution(imagesState, documentKey, option === 'latest' ? undefined : option)} />
 			<Notice>A new solve never replaces the solution chosen here; the original file is never changed.</Notice>
 		</CollapsibleSection>
-	)
-}
-
-interface PropertyProps {
-	// Property name.
-	readonly label: string
-	// Property value.
-	readonly children: ReactNode
-}
-
-// Name and value of a property.
-function Property({ label, children }: PropertyProps) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-xs text-ink-300">{label}</span>
-			<span className="min-w-0 text-right text-ink-100 tabular-nums">{children}</span>
-		</div>
 	)
 }
 

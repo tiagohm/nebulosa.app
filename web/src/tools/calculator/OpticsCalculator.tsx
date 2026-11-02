@@ -1,7 +1,8 @@
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import { formatAngularSize } from '../../sky/format'
+import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { CalculatorLayout, type CalculatorViewProps, Datum, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
 import { IMAGING_SETUP_EXAMPLE, type ImagingSetupDraft, imagingSetup, imagingSetupFromOptics, MOSAIC_EXAMPLE, type MosaicDraft, mosaic, mosaicFromOptics, type SensorKind } from './optics'
 import { formatFixed } from './values'
 
@@ -60,16 +61,16 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 							<Primary label="Field of view">
 								{formatAngularSize(framing.width)} × {formatAngularSize(framing.height)}
 							</Primary>
-							<Datum label="Field (degrees)">
+							<DataRow label="Field (degrees)">
 								{formatDegrees(framing.width)} × {formatDegrees(framing.height)}
-							</Datum>
-							<Datum label="Diagonal">{formatDegrees(diagonal)}</Datum>
-							<Datum label="Image scale">{framing.scale === undefined ? <span className="font-sans text-xs text-ink-300">Needs the pixel size: enter the sensor by resolution.</span> : `${formatFixed(framing.scale, 2)}″/px`}</Datum>
-							<Datum label="Effective focal length">{formatFixed(framing.effectiveFocalLength, 0)} mm</Datum>
-							<Datum label="Focal ratio">{framing.focalRatio === undefined ? <span className="font-sans text-xs text-ink-300">Needs the aperture.</span> : `f/${formatFixed(framing.focalRatio, 1)}`}</Datum>
-							<Datum label="Sensor">
+							</DataRow>
+							<DataRow label="Diagonal">{formatDegrees(diagonal)}</DataRow>
+							<DataRow label="Image scale">{framing.scale === undefined ? <span className="font-sans text-xs text-ink-300">Needs the pixel size: enter the sensor by resolution.</span> : `${formatFixed(framing.scale, 2)}″/px`}</DataRow>
+							<DataRow label="Effective focal length">{formatFixed(framing.effectiveFocalLength, 0)} mm</DataRow>
+							<DataRow label="Focal ratio">{framing.focalRatio === undefined ? <span className="font-sans text-xs text-ink-300">Needs the aperture.</span> : `f/${formatFixed(framing.focalRatio, 1)}`}</DataRow>
+							<DataRow label="Sensor">
 								{formatFixed(framing.sensorWidth, 2)} × {formatFixed(framing.sensorHeight, 2)} mm
-							</Datum>
+							</DataRow>
 						</>
 					)}
 				</OutcomeView>
@@ -117,9 +118,9 @@ export function MosaicCalculator({ entry, onChange, context }: CalculatorViewPro
 					{({ columns, rows, panels }) => (
 						<>
 							<Primary label="Panels">{panels}</Primary>
-							<Datum label="Grid">
+							<DataRow label="Grid">
 								{columns} × {rows}
-							</Datum>
+							</DataRow>
 						</>
 					)}
 				</OutcomeView>

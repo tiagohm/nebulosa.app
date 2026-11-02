@@ -1,9 +1,10 @@
 import type { ExternalToolCheck, ExternalToolConfig, ExternalToolState } from 'api'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { useEffect, useState } from 'react'
-import { Actions, Notice, Readout } from '../equipment-control/parts'
+import { Actions, Notice } from '../equipment-control/parts'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
+import { DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { TextInput } from '../ui/TextInput'
 import { CAPABILITY_LABELS, checkMatches, externalToolsState, sameConfig, saveExternalTool, signInExternalTool, signOutExternalTool, testExternalTool } from './externaltools'
@@ -39,13 +40,13 @@ function CheckDiagnostics({ check }: { readonly check: ExternalToolCheck }) {
 		<details className="text-[13px] leading-5 text-ink-200">
 			<summary className="cursor-pointer text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase select-none">Diagnostics</summary>
 			<div className="mt-2 flex flex-col gap-1">
-				{check.config.endpoint === undefined ? <Readout label="Executable path">{check.config.executable || '—'}</Readout> : <Readout label="Endpoint">{check.config.endpoint || 'Default'}</Readout>}
-				{check.config.config !== undefined && <Readout label="Configuration file">{check.config.config || 'Default'}</Readout>}
-				<Readout label="Resolved path">{check.resolvedPath ?? '—'}</Readout>
-				<Readout label="Version">{check.version ?? 'Unknown'}</Readout>
-				<Readout label="Checked at">{formatTemporal(check.checkedAt, undefined, true)}</Readout>
-				<Readout label="Duration">{check.duration.toFixed(1)} ms</Readout>
-				<Readout label="Code">{check.code}</Readout>
+				{check.config.endpoint === undefined ? <DataRow label="Executable path">{check.config.executable || '—'}</DataRow> : <DataRow label="Endpoint">{check.config.endpoint || 'Default'}</DataRow>}
+				{check.config.config !== undefined && <DataRow label="Configuration file">{check.config.config || 'Default'}</DataRow>}
+				<DataRow label="Resolved path">{check.resolvedPath ?? '—'}</DataRow>
+				<DataRow label="Version">{check.version ?? 'Unknown'}</DataRow>
+				<DataRow label="Checked at">{formatTemporal(check.checkedAt, undefined, true)}</DataRow>
+				<DataRow label="Duration">{check.duration.toFixed(1)} ms</DataRow>
+				<DataRow label="Code">{check.code}</DataRow>
 			</div>
 		</details>
 	)
@@ -69,7 +70,7 @@ function SignIn({ tool, disabled }: { readonly tool: ExternalToolState; readonly
 
 	return (
 		<PanelSection title="Account">
-			<Readout label="Session">{tool.signedIn ? 'Signed in' : 'Signed out'}</Readout>
+			<DataRow label="Session">{tool.signedIn ? 'Signed in' : 'Signed out'}</DataRow>
 			{tool.signedIn ? (
 				<Actions>
 					<Button variant="secondary" disabled={busy} onClick={() => void change(false)}>
@@ -225,8 +226,8 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 				) : (
 					<Notice>{testing ? 'Checking on the server…' : staleTest ? 'The last test checked other values. Test again to check the current ones.' : 'Not tested. Test checks the settings on the server without saving them.'}</Notice>
 				)}
-				<Readout label="Capabilities">{tool.capabilities.map((capability) => CAPABILITY_LABELS[capability]).join(', ')}</Readout>
-				<Readout label="Revision">{tool.revision}</Readout>
+				<DataRow label="Capabilities">{tool.capabilities.map((capability) => CAPABILITY_LABELS[capability]).join(', ')}</DataRow>
+				<DataRow label="Revision">{tool.revision}</DataRow>
 			</PanelSection>
 		</div>
 	)

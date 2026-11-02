@@ -3,9 +3,10 @@ import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
+import { DataRow } from '../../ui/DataRow'
 import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
-import { Actions, type InterfaceProps, Notice, Readout } from '../parts'
+import { Actions, type InterfaceProps, Notice } from '../parts'
 
 // Controls of a guide output: single timed pulses along the driver's motion vectors, the guide rates, and
 // a stop of the pulses in progress. A pulse holds the physical device behind the output, so it is refused
@@ -36,7 +37,7 @@ export function GuideOutputControls({ device }: InterfaceProps) {
 
 	return (
 		<PanelSection title="Guide Output">
-			<Readout label="State">{output.pulsing ? `Pulsing${output.pulsingNS ? ' N/S' : ''}${output.pulsingWE ? ' W/E' : ''}` : 'Idle'}</Readout>
+			<DataRow label="State">{output.pulsing ? `Pulsing${output.pulsingNS ? ' N/S' : ''}${output.pulsingWE ? ' W/E' : ''}` : 'Idle'}</DataRow>
 			{output.canPulseGuide ? (
 				<>
 					<NumberInput label="Pulse duration" value={duration} min={1} max={MAX_DURATION} step={100} suffix="ms" onChange={setDuration} />
@@ -54,7 +55,7 @@ export function GuideOutputControls({ device }: InterfaceProps) {
 			)}
 			{output.hasGuideRate && (
 				<>
-					<Readout label="Guide rate">{`RA ${output.guideRate.rightAscension.toFixed(2)}× · Dec ${output.guideRate.declination.toFixed(2)}×`}</Readout>
+					<DataRow label="Guide rate">{`RA ${output.guideRate.rightAscension.toFixed(2)}× · Dec ${output.guideRate.declination.toFixed(2)}×`}</DataRow>
 					{output.canSetGuideRate && (
 						<>
 							<div className="grid grid-cols-2 gap-2">

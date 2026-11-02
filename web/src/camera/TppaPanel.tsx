@@ -1,7 +1,6 @@
 import type { DeviceSummary, TppaAlignment, TppaSession, TppaSessionSummary } from 'api'
 import { cn } from 'cn'
 import { toArcmin, toDeg } from 'nebulosa/src/math/units/angle'
-import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -17,9 +16,11 @@ import { type CameraIdentity, TPPA_MAXIMUM_ROTATION, TPPA_MINIMUM_ROTATION, type
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataList, DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
+import { CameraSummary } from './CameraSummary'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
@@ -29,7 +30,7 @@ import { startTppa, startTppaRefinement, stopTppa, stopTppaRefinement, TPPA_DIRE
 // alignment settings (exposure time, RA direction, slew-rate preset of the mount, rotation between poses, settle and
 // refinement delays), the plate solving settings it applies, the three poses and their geometry, the polar error, and
 // the Start, Refine, Pause, and Stop commands. Frames are taken with the exposure time of this form and the camera's
-// camera settings, edited only in Camera Acquisition, and solved with the camera's plate solving settings, edited only
+// camera settings, edited only in Camera Acquisition and shown under the exposure time, and solved with the camera's plate solving settings, edited only
 // in Images → Plate Solver. The camera is the panel's target and the mount the MOUNT of the active equipment setup; a missing or unsuitable mount
 // says why. The forms are the camera's, kept in the profile, and stay locked showing the values applied while a
 // session runs; the session is the server's, shown here whichever tab started it, and keeps running when the panel
@@ -88,14 +89,14 @@ export function TppaSections({ device, availability, mount, settings: identity }
 	return (
 		<>
 			<CollapsibleSection id="images.tppa.equipment" title="Equipment">
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Camera">
+				<DataList>
+					<DataRow label="Camera">
 						<DeviceLink device={device} fallback="—" />
-					</Row>
-					<Row label="Mount">
+					</DataRow>
+					<DataRow label="Mount">
 						<DeviceLink device={mount.device} fallback="Not assigned" />
-					</Row>
-				</dl>
+					</DataRow>
+				</DataList>
 				{!running && mountAvailability.status !== 'ready' && <p className="m-0 text-xs leading-4 text-ink-300">{mountAvailability.message}</p>}
 				{!running && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && (
 					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
@@ -106,6 +107,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 			</CollapsibleSection>
 			<CollapsibleSection id="images.tppa.alignment-settings" title="Alignment Settings">
 				<ExposureTimeInput value={shown.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
+				<CameraSummary exposure={running && session ? session.request.capture : exposure} capabilities={capabilities} />
 				<SegmentedControl label="RA Direction" options={TPPA_DIRECTIONS} value={shown.direction} format={(direction) => TPPA_DIRECTION_LABELS[direction]} disabled={locked} onChange={(direction) => update({ direction })} />
 				{slewRates.length > 0 ? (
 					<Select label="Slew Rate" options={slewRates.map((rate) => rate.name)} value={slewRate ?? slewRates[0].name} format={(name) => slewRates.find((rate) => rate.name === name)?.label.trim() || name} disabled={locked} onChange={(name) => update({ slewRate: name })} />
@@ -175,20 +177,20 @@ function Measurements({ session, details }: MeasurementsProps) {
 
 	return (
 		<CollapsibleSection id="images.tppa.measurements" title="Measurements">
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+			<DataList>
 				{([1, 2, 3] as const).map((n) => {
 					const pose = points.find((p) => p.point === n)
 					const attempt = n > 1 ? attempts.find((a) => a.point === n && a.accepted) : undefined
 					return (
-						<Row key={n} label={`Point ${n}/3`}>
+						<DataRow key={n} label={`Point ${n}/3`}>
 							{pose ? (attempt ? `${formatDegrees(attempt.rotation)} rotated` : 'Solved') : session.point === n && tppaRunning(session) ? TPPA_STATE_LABELS[session.state] : '—'}
-						</Row>
+						</DataRow>
 					)
 				})}
-				<Row label="Frames">{session.frameCount}</Row>
-				{geometry && <Row label="Total Rotation">{formatDegrees(geometry.rotation13)}</Row>}
-				{geometry && <Row label="Geometry">{`${geometry.acceptable ? 'Good' : 'Rejected'} (Q ${geometry.quality.toFixed(3)})`}</Row>}
-			</dl>
+				<DataRow label="Frames">{session.frameCount}</DataRow>
+				{geometry && <DataRow label="Total Rotation">{formatDegrees(geometry.rotation13)}</DataRow>}
+				{geometry && <DataRow label="Geometry">{`${geometry.acceptable ? 'Good' : 'Rejected'} (Q ${geometry.quality.toFixed(3)})`}</DataRow>}
+			</DataList>
 			{rejected && !session.geometry && (
 				<p className="m-0 text-xs leading-4 text-ink-300">
 					Last candidate: {formatDegrees(rejected.rotation)}, {rejected.reason === 'insufficientRotation' ? 'moving further' : rejected.reason}.
@@ -213,15 +215,15 @@ function PolarError({ alignment, details }: PolarErrorProps) {
 
 	return (
 		<CollapsibleSection id="images.tppa.polar-alignment" title="Polar Alignment">
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				<Row label="Total Error">
+			<DataList>
+				<DataRow label="Total Error">
 					<span className={cn(toArcmin(alignment.totalError) <= 1 && 'text-success')}>{formatArcmin(alignment.totalError, false)}</span>
-				</Row>
-				<Row label="Azimuth Error">{formatArcmin(alignment.azimuthError)}</Row>
-				<Row label="Altitude Error">{formatArcmin(alignment.altitudeError)}</Row>
-				{alignment.stage === 'refinement' && <Row label="Last Adjustment">{`Az ${formatArcmin(alignment.azimuthAdjustment)} · Alt ${formatArcmin(alignment.altitudeAdjustment)}`}</Row>}
-				<Row label="Estimate">{alignment.stage === 'acquisition' ? 'Initial (three points)' : `Refined, frame #${alignment.frame}`}</Row>
-			</dl>
+				</DataRow>
+				<DataRow label="Azimuth Error">{formatArcmin(alignment.azimuthError)}</DataRow>
+				<DataRow label="Altitude Error">{formatArcmin(alignment.altitudeError)}</DataRow>
+				{alignment.stage === 'refinement' && <DataRow label="Last Adjustment">{`Az ${formatArcmin(alignment.azimuthAdjustment)} · Alt ${formatArcmin(alignment.altitudeAdjustment)}`}</DataRow>}
+				<DataRow label="Estimate">{alignment.stage === 'acquisition' ? 'Initial (three points)' : `Refined, frame #${alignment.frame}`}</DataRow>
+			</DataList>
 			{overlay?.failure && <p className="m-0 text-xs leading-4 text-ink-300">The correction guide could not be drawn ({overlay.failure}).</p>}
 			{warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">Guide: {warnings.join(', ')}.</p>}
 		</CollapsibleSection>
@@ -248,16 +250,6 @@ function SessionState({ session }: { readonly session: TppaSessionSummary }) {
 			{session.trackingStopped === true && <p className="m-0 text-xs leading-4 text-ink-300">The tracking started for the session was stopped.</p>}
 			{session.warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{session.warnings.at(-1)}</p>}
 		</>
-	)
-}
-
-// Label and value of a row.
-function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="contents">
-			<dt className="text-ink-300">{label}</dt>
-			<dd className="m-0 min-w-0 truncate text-right tabular-nums">{children}</dd>
-		</div>
 	)
 }
 

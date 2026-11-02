@@ -6,9 +6,10 @@ import { collapsibleSections, sectionOpen } from '../../shell/collapsible'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
 import { formatDeclination, formatDegrees, formatLocalTime, formatMagnitude, formatRightAscension, formatSolarSystemDistance } from '../../sky/format'
-import { Datum, Note } from '../../sky/InspectorParts'
+import { Note } from '../../sky/InspectorParts'
 import { skyState } from '../../sky/sky'
 import { Button } from '../../ui/Button'
+import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { closeApproachesState, formatApproachTime, loadCloseApproachObservability, OBSERVABILITY_INSTANTS, type ObservabilityInstant, showInSky } from './closeapproaches'
 
@@ -92,20 +93,20 @@ export function CloseApproachObservability({ body, time, observer, timeZone }: S
 			)}
 			{position && (
 				<>
-					<Datum label={`At (${timeZone})`}>{formatApproachTime(position.time, timeZone)}</Datum>
-					{position.altitude !== undefined && <Datum label="Altitude">{formatDeclination(position.altitude)}</Datum>}
+					<DataRow label={`At (${timeZone})`}>{formatApproachTime(position.time, timeZone)}</DataRow>
+					{position.altitude !== undefined && <DataRow label="Altitude">{formatDeclination(position.altitude)}</DataRow>}
 					{position.altitude !== undefined && position.altitude < 0 && <Note>Below the horizon at this instant.</Note>}
-					{position.azimuth !== undefined && <Datum label="Azimuth">{formatDegrees(position.azimuth)}</Datum>}
-					<Datum label="RA (of date)">{formatRightAscension(position.rightAscension)}</Datum>
-					<Datum label="Dec (of date)">{formatDeclination(position.declination)}</Datum>
-					<Datum label="Constellation">{position.constellationName ?? position.constellation}</Datum>
-					{position.magnitude !== undefined && <Datum label="Apparent magnitude">{formatMagnitude(position.magnitude)}</Datum>}
-					{position.distance !== undefined && <Datum label="Distance">{formatSolarSystemDistance(position.distance)}</Datum>}
-					{events?.state === 'circumpolar' && <Datum label="Rise and set">Circumpolar</Datum>}
-					{events?.state === 'belowHorizon' && <Datum label="Rise and set">Below the horizon all day</Datum>}
-					{events?.rise !== undefined && <Datum label="Rise">{formatLocalTime(events.rise, position.time, undefined, timeZone)}</Datum>}
-					{events?.transit !== undefined && <Datum label="Transit">{formatLocalTime(events.transit, position.time, undefined, timeZone)}</Datum>}
-					{events?.set !== undefined && <Datum label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</Datum>}
+					{position.azimuth !== undefined && <DataRow label="Azimuth">{formatDegrees(position.azimuth)}</DataRow>}
+					<DataRow label="RA (of date)">{formatRightAscension(position.rightAscension)}</DataRow>
+					<DataRow label="Dec (of date)">{formatDeclination(position.declination)}</DataRow>
+					<DataRow label="Constellation">{position.constellationName ?? position.constellation}</DataRow>
+					{position.magnitude !== undefined && <DataRow label="Apparent magnitude">{formatMagnitude(position.magnitude)}</DataRow>}
+					{position.distance !== undefined && <DataRow label="Distance">{formatSolarSystemDistance(position.distance)}</DataRow>}
+					{events?.state === 'circumpolar' && <DataRow label="Rise and set">Circumpolar</DataRow>}
+					{events?.state === 'belowHorizon' && <DataRow label="Rise and set">Below the horizon all day</DataRow>}
+					{events?.rise !== undefined && <DataRow label="Rise">{formatLocalTime(events.rise, position.time, undefined, timeZone)}</DataRow>}
+					{events?.transit !== undefined && <DataRow label="Transit">{formatLocalTime(events.transit, position.time, undefined, timeZone)}</DataRow>}
+					{events?.set !== undefined && <DataRow label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</DataRow>}
 					<Note>
 						Apparent {position.center} place from {position.source === 'horizons' ? 'JPL Horizons' : position.fallbackReason ? `the local model (${FALLBACK_REASONS[position.fallbackReason]})` : 'the local model'}.
 					</Note>

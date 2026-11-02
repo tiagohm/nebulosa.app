@@ -1,4 +1,5 @@
-import { CalculatorLayout, type CalculatorViewProps, Datum, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
+import { DataRow } from '../../ui/DataRow'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
 import { formatFixed } from './values'
 import { APERTURE_COMPARISON_EXAMPLE, type ApertureComparisonDraft, type ApertureSide, apertureComparison, EYEPIECE_EXAMPLE, type EyepieceDraft, eyepiece, eyepieceFromOptics, type LightGrasp } from './visual'
 
@@ -42,12 +43,12 @@ export function EyepieceCalculator({ entry, onChange, context }: CalculatorViewP
 					{(view) => (
 						<>
 							<Primary label="Magnification">×{formatFixed(view.magnification, 0)}</Primary>
-							<Datum label="Exit pupil">{formatFixed(view.exitPupil, 2)} mm</Datum>
-							{view.trueField !== undefined && <Datum label="True field (apparent field)">{formatFixed(view.trueField, 2)}°</Datum>}
-							{view.fieldStopTrueField !== undefined && <Datum label="True field (field stop)">{formatFixed(view.fieldStopTrueField, 2)}°</Datum>}
-							<Datum label="Dawes limit">{formatFixed(view.dawes, 2)}″</Datum>
-							<Datum label="Rayleigh limit">{formatFixed(view.rayleigh, 2)}″</Datum>
-							<Datum label="Limiting magnitude">{formatFixed(view.limitingMagnitude, 1)}</Datum>
+							<DataRow label="Exit pupil">{formatFixed(view.exitPupil, 2)} mm</DataRow>
+							{view.trueField !== undefined && <DataRow label="True field (apparent field)">{formatFixed(view.trueField, 2)}°</DataRow>}
+							{view.fieldStopTrueField !== undefined && <DataRow label="True field (field stop)">{formatFixed(view.fieldStopTrueField, 2)}°</DataRow>}
+							<DataRow label="Dawes limit">{formatFixed(view.dawes, 2)}″</DataRow>
+							<DataRow label="Rayleigh limit">{formatFixed(view.rayleigh, 2)}″</DataRow>
+							<DataRow label="Limiting magnitude">{formatFixed(view.limitingMagnitude, 1)}</DataRow>
 						</>
 					)}
 				</OutcomeView>
@@ -91,15 +92,15 @@ export function ApertureComparisonCalculator({ entry, onChange, context }: Calcu
 					{({ clear, collecting, sides }) => (
 						<>
 							<Primary label="Light grasp of the apertures">{formatLightGrasp(clear)}</Primary>
-							{collecting && <Datum label="With obstructions">{formatLightGrasp(collecting)}</Datum>}
+							{collecting && <DataRow label="With obstructions">{formatLightGrasp(collecting)}</DataRow>}
 							{APERTURE_SIDES.map((side) => {
 								const { obstruction, effectiveAperture } = sides[side]
 
 								return (
 									obstruction !== undefined && (
-										<Datum key={side} label={`${side}: obstruction, equivalent clear aperture`}>
+										<DataRow key={side} label={`${side}: obstruction, equivalent clear aperture`}>
 											{formatFixed(obstruction, 0)} %, {formatFixed(effectiveAperture, 1)} mm
-										</Datum>
+										</DataRow>
 									)
 								)
 							})}

@@ -22,10 +22,11 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { skyState } from '../sky/sky'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataList, DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { CameraSummary, SummaryRow as Row } from './CameraSummary'
+import { CameraSummary } from './CameraSummary'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
@@ -140,6 +141,22 @@ export function TargetCenteringSections({ device, availability, mount, settings:
 
 	return (
 		<>
+			<CollapsibleSection id="images.target-centering.equipment" title="Equipment">
+				<DataList>
+					<DataRow label="Camera">
+						<DeviceLink device={device} fallback="—" />
+					</DataRow>
+					<DataRow label="Mount">
+						<DeviceLink device={mount.device} fallback="Not assigned" />
+					</DataRow>
+				</DataList>
+				{!running && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
+				{!running && mountAvailability.status === 'notSelected' && (
+					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
+						Equipment Setup
+					</Button>
+				)}
+			</CollapsibleSection>
 			<CollapsibleSection id="images.target-centering.target" title="Target" summary={shownTarget?.label}>
 				{references.length > 0 && <Select label="Saved Framing" options={['', ...references.map((reference) => reference.id)]} value={framing?.id ?? ''} format={(id) => references.find((reference) => reference.id === id)?.name ?? 'None'} disabled={locked} onChange={load} />}
 				<AngleField label="RA (J2000)" hour value={shownTarget?.rightAscension} placeholder="Such as 10h 45m 03s" disabled={locked} onChange={(rightAscension) => edit({ rightAscension, declination: draft?.declination })} />
@@ -185,21 +202,7 @@ export function TargetCenteringSections({ device, availability, mount, settings:
 				<Checkbox label="Search the whole sky after an assisted solve finds nothing" checked={shown.blindRetry} disabled={locked} onChange={(blindRetry) => update({ blindRetry })} />
 				<Checkbox label="Stop guiding for the motion and restore it after, recalibrating" checked={shown.coordinateGuiding} disabled={locked} onChange={(coordinateGuiding) => update({ coordinateGuiding })} />
 			</CollapsibleSection>
-			<CollapsibleSection id="images.target-centering.equipment" title="Acquisition & Equipment">
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Camera">
-						<DeviceLink device={device} fallback="—" />
-					</Row>
-					<Row label="Mount">
-						<DeviceLink device={mount.device} fallback="Not assigned" />
-					</Row>
-				</dl>
-				{!running && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
-				{!running && mountAvailability.status === 'notSelected' && (
-					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
+			<CollapsibleSection id="images.target-centering.acquisition" title="Acquisition">
 				<ExposureTimeInput value={shown.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
 				<CameraSummary exposure={running && session ? session.request.capture : exposure} capabilities={capabilities} />
 				<p className="m-0 text-xs leading-4 text-ink-300">Frames are temporary LIGHT frames, shown as the latest frame of the camera and never saved.</p>
@@ -264,14 +267,14 @@ function SessionState({ session }: { readonly session: TargetCenteringSessionSum
 				{TARGET_CENTERING_STATE_LABELS[state]}
 				{step && ` · ${TARGET_CENTERING_STEP_LABELS[step]}`}
 			</p>
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				<Row label="Frame">{`${attempts.length} of ${request.maximumFrames}`}</Row>
-				<Row label="Distance">{finalSeparation === undefined ? MISSING : formatAngularSize(finalSeparation)}</Row>
-				{ended && verdict && <Row label="Latest Frame">{verdict === 'within' ? 'Within tolerance' : 'Outside tolerance'}</Row>}
-				{ended && <Row label="Position">{positionVerified ? 'Verified' : 'Not verified'}</Row>}
-				{guidingRestoration !== 'notNeeded' && <Row label="Guiding">{TARGET_CENTERING_GUIDING_LABELS[guidingRestoration]}</Row>}
-				{ended && <Row label="Ready for Imaging">{readyForImaging ? 'Yes' : 'No'}</Row>}
-			</dl>
+			<DataList>
+				<DataRow label="Frame">{`${attempts.length} of ${request.maximumFrames}`}</DataRow>
+				<DataRow label="Distance">{finalSeparation === undefined ? MISSING : formatAngularSize(finalSeparation)}</DataRow>
+				{ended && verdict && <DataRow label="Latest Frame">{verdict === 'within' ? 'Within tolerance' : 'Outside tolerance'}</DataRow>}
+				{ended && <DataRow label="Position">{positionVerified ? 'Verified' : 'Not verified'}</DataRow>}
+				{guidingRestoration !== 'notNeeded' && <DataRow label="Guiding">{TARGET_CENTERING_GUIDING_LABELS[guidingRestoration]}</DataRow>}
+				{ended && <DataRow label="Ready for Imaging">{readyForImaging ? 'Yes' : 'No'}</DataRow>}
+			</DataList>
 			{step === 'exposing' && <FrameProgress exposure={exposure} />}
 			{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
 			{warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{warnings.at(-1)}</p>}
@@ -306,10 +309,10 @@ function Diagnostics({ session: { attempts, model, request, provider } }: { read
 					))}
 				</tbody>
 			</table>
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				<Row label="Solver">{provider}</Row>
-				<Row label="Pointing Model">{model ? model.revisionId : 'None applied'}</Row>
-			</dl>
+			<DataList>
+				<DataRow label="Solver">{provider}</DataRow>
+				<DataRow label="Pointing Model">{model ? model.revisionId : 'None applied'}</DataRow>
+			</DataList>
 			<Notice>Offsets are those of the solved center from the target, on the sky: they are not turned with the image.</Notice>
 		</CollapsibleSection>
 	)

@@ -6,6 +6,7 @@ import { type AstrometricMarker, type AstrometrySelection, circleValues, distanc
 import { skyAt, wcsFrame } from '../platesolving/wcs'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
+import { DataRow } from '../ui/DataRow'
 import { List, ListItem } from '../ui/List'
 import { TextInput } from '../ui/TextInput'
 import { pixelAt } from '../viewer/transform'
@@ -159,12 +160,12 @@ function MeasurementValues({ solution, measurement, style }: MeasurementValuesPr
 
 		return (
 			<>
-				<Property label="Width (centre line)">{centerLines ? formatAngularSize(centerLines.width) : MISSING}</Property>
-				<Property label="Height (centre line)">{centerLines ? formatAngularSize(centerLines.height) : MISSING}</Property>
-				<Property label="Top · bottom">{sides ? `${formatAngularSize(sides.top)} · ${formatAngularSize(sides.bottom)}` : MISSING}</Property>
-				<Property label="Left · right">{sides ? `${formatAngularSize(sides.left)} · ${formatAngularSize(sides.right)}` : MISSING}</Property>
-				<Property label="Diagonals">{diagonals ? `${formatAngularSize(diagonals[0])} · ${formatAngularSize(diagonals[1])}` : MISSING}</Property>
-				<Property label="Size">{`${pixels.width.toFixed(1)} × ${pixels.height.toFixed(1)} px`}</Property>
+				<DataRow label="Width (centre line)">{centerLines ? formatAngularSize(centerLines.width) : MISSING}</DataRow>
+				<DataRow label="Height (centre line)">{centerLines ? formatAngularSize(centerLines.height) : MISSING}</DataRow>
+				<DataRow label="Top · bottom">{sides ? `${formatAngularSize(sides.top)} · ${formatAngularSize(sides.bottom)}` : MISSING}</DataRow>
+				<DataRow label="Left · right">{sides ? `${formatAngularSize(sides.left)} · ${formatAngularSize(sides.right)}` : MISSING}</DataRow>
+				<DataRow label="Diagonals">{diagonals ? `${formatAngularSize(diagonals[0])} · ${formatAngularSize(diagonals[1])}` : MISSING}</DataRow>
+				<DataRow label="Size">{`${pixels.width.toFixed(1)} × ${pixels.height.toFixed(1)} px`}</DataRow>
 				{!sides && <Notice>A corner of this rectangle cannot be located with the solution shown.</Notice>}
 				<Notice>The rectangle follows the rows and columns of the image, not right ascension and declination; its sides are measured along great circles between its corners.</Notice>
 			</>
@@ -177,10 +178,10 @@ function MeasurementValues({ solution, measurement, style }: MeasurementValuesPr
 
 		return (
 			<>
-				<Property label="Radius">{radius === undefined ? MISSING : formatAngularSize(radius)}</Property>
-				<Property label="Diameter">{radius === undefined ? MISSING : formatAngularSize(2 * radius)}</Property>
-				<Property label={`Centre (${frame})`}>{center ? `${formatRightAscensionAs(center[0], style)} ${formatDeclinationAs(center[1], style)}` : MISSING}</Property>
-				<Property label="Radius to the rim point">{`${pixels.toFixed(1)} px`}</Property>
+				<DataRow label="Radius">{radius === undefined ? MISSING : formatAngularSize(radius)}</DataRow>
+				<DataRow label="Diameter">{radius === undefined ? MISSING : formatAngularSize(2 * radius)}</DataRow>
+				<DataRow label={`Centre (${frame})`}>{center ? `${formatRightAscensionAs(center[0], style)} ${formatDeclinationAs(center[1], style)}` : MISSING}</DataRow>
+				<DataRow label="Radius to the rim point">{`${pixels.toFixed(1)} px`}</DataRow>
 				{radius === undefined && <Notice>The centre or rim of this circle cannot be located with the solution shown.</Notice>}
 				<Notice>A circle of constant angular radius on the sky; drawn through the WCS, it may look elliptical.</Notice>
 			</>
@@ -191,13 +192,13 @@ function MeasurementValues({ solution, measurement, style }: MeasurementValuesPr
 
 	return (
 		<>
-			<Property label="Separation">{offset ? formatAngularSize(offset.separation) : MISSING}</Property>
-			<Property label="Position angle">{formatPositionAngle(offset?.positionAngle)}</Property>
-			<Property label="ΔRA">{offset ? formatSignedAngle(offset.rightAscension) : MISSING}</Property>
-			<Property label="ΔDec">{offset ? formatSignedAngle(offset.declination) : MISSING}</Property>
-			<Property label="East offset">{offset?.east === undefined ? MISSING : formatSignedAngle(offset.east)}</Property>
-			<Property label="North offset">{offset?.north === undefined ? MISSING : formatSignedAngle(offset.north)}</Property>
-			<Property label="Length">{`${pixels.toFixed(1)} px`}</Property>
+			<DataRow label="Separation">{offset ? formatAngularSize(offset.separation) : MISSING}</DataRow>
+			<DataRow label="Position angle">{formatPositionAngle(offset?.positionAngle)}</DataRow>
+			<DataRow label="ΔRA">{offset ? formatSignedAngle(offset.rightAscension) : MISSING}</DataRow>
+			<DataRow label="ΔDec">{offset ? formatSignedAngle(offset.declination) : MISSING}</DataRow>
+			<DataRow label="East offset">{offset?.east === undefined ? MISSING : formatSignedAngle(offset.east)}</DataRow>
+			<DataRow label="North offset">{offset?.north === undefined ? MISSING : formatSignedAngle(offset.north)}</DataRow>
+			<DataRow label="Length">{`${pixels.toFixed(1)} px`}</DataRow>
 			{!offset && <Notice>An end of this distance cannot be located with the solution shown.</Notice>}
 			<Notice>ΔRA is a difference of right ascension, not an angle on the sky; east and north are the offsets of the end on the plane tangent at the start.</Notice>
 		</>
@@ -225,9 +226,9 @@ function MarkerValues({ solution, marker, image, style, name }: MarkerValuesProp
 
 	return (
 		<>
-			<Property label={`RA${frame}`}>{sky ? formatRightAscensionAs(sky[0], style) : MISSING}</Property>
-			<Property label={`Dec${frame}`}>{sky ? formatDeclinationAs(sky[1], style) : MISSING}</Property>
-			<Property label="Pixel (x, y from 0)">{pixel ? formatPixel(pixel) : MISSING}</Property>
+			<DataRow label={`RA${frame}`}>{sky ? formatRightAscensionAs(sky[0], style) : MISSING}</DataRow>
+			<DataRow label={`Dec${frame}`}>{sky ? formatDeclinationAs(sky[1], style) : MISSING}</DataRow>
+			<DataRow label="Pixel (x, y from 0)">{pixel ? formatPixel(pixel) : MISSING}</DataRow>
 			<Actions>
 				<Button variant="secondary" disabled={!sky} title={sky ? undefined : 'The solution cannot locate this marker.'} onClick={() => sky && openInSky(sky, name)}>
 					Open in Sky
@@ -261,21 +262,4 @@ function summaryOf(solution: PlateSolution, measurement: Measurement): string {
 
 	const { offset } = distanceValues(solution, measurement)
 	return offset ? `${formatAngularSize(offset.separation)} · PA ${formatPositionAngle(offset.positionAngle)}` : MISSING
-}
-
-interface PropertyProps {
-	// Property name.
-	readonly label: string
-	// Property value.
-	readonly children: ReactNode
-}
-
-// Name and value of a property.
-function Property({ label, children }: PropertyProps) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-xs text-ink-300">{label}</span>
-			<span className="min-w-0 text-right text-ink-100 tabular-nums">{children}</span>
-		</div>
-	)
 }

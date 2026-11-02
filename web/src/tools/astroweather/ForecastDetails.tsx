@@ -1,7 +1,8 @@
 import type { AstronomicalSample, AstroWeatherForecast, AstroWeatherNight, MeteorologySample, SolarTwilightCrossings } from 'api'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { DataRow } from '../../ui/DataRow'
 import { formatEclipseTime } from '../eclipse/eclipse'
-import { Datum, Note } from '../eclipse/EclipsePanelParts'
+import { Note } from '../eclipse/EclipsePanelParts'
 import { formatClock, formatLength, SEEING_BANDS, TRANSPARENCY_BANDS } from './astroweather'
 import { PROVIDER_NAMES } from './ForecastSummary'
 import type { OutlookSegment } from './observing'
@@ -21,10 +22,10 @@ function compassPoint(degrees: number) {
 // One value of the forecast, left out when unknown.
 function Value({ label, value, unit = '' }: { readonly label: string; readonly value: number | string | undefined; readonly unit?: string }) {
 	return value === undefined ? undefined : (
-		<Datum label={label}>
+		<DataRow label={label}>
 			{value}
 			{unit}
-		</Datum>
+		</DataRow>
 	)
 }
 
@@ -102,25 +103,25 @@ export function AstronomicalConditions({ night, timeZone }: AstronomicalConditio
 
 	return (
 		<CollapsibleSection id="astroWeather.astronomy" title="Astronomical Conditions">
-			<Datum label="Sunset">{crossingText(sun.sunset, { state: sun.daylight }, timeZone)}</Datum>
-			<Datum label="Civil dusk">{crossingText(sun.civil.dusk, sun.civil, timeZone)}</Datum>
-			<Datum label="Nautical dusk">{crossingText(sun.nautical.dusk, sun.nautical, timeZone)}</Datum>
-			<Datum label="Astronomical dusk">{crossingText(sun.astronomical.dusk, sun.astronomical, timeZone)}</Datum>
-			<Datum label="Astronomical dawn">{crossingText(sun.astronomical.dawn, sun.astronomical, timeZone)}</Datum>
-			<Datum label="Nautical dawn">{crossingText(sun.nautical.dawn, sun.nautical, timeZone)}</Datum>
-			<Datum label="Civil dawn">{crossingText(sun.civil.dawn, sun.civil, timeZone)}</Datum>
-			<Datum label="Sunrise">{crossingText(sun.sunrise, { state: sun.daylight }, timeZone)}</Datum>
+			<DataRow label="Sunset">{crossingText(sun.sunset, { state: sun.daylight }, timeZone)}</DataRow>
+			<DataRow label="Civil dusk">{crossingText(sun.civil.dusk, sun.civil, timeZone)}</DataRow>
+			<DataRow label="Nautical dusk">{crossingText(sun.nautical.dusk, sun.nautical, timeZone)}</DataRow>
+			<DataRow label="Astronomical dusk">{crossingText(sun.astronomical.dusk, sun.astronomical, timeZone)}</DataRow>
+			<DataRow label="Astronomical dawn">{crossingText(sun.astronomical.dawn, sun.astronomical, timeZone)}</DataRow>
+			<DataRow label="Nautical dawn">{crossingText(sun.nautical.dawn, sun.nautical, timeZone)}</DataRow>
+			<DataRow label="Civil dawn">{crossingText(sun.civil.dawn, sun.civil, timeZone)}</DataRow>
+			<DataRow label="Sunrise">{crossingText(sun.sunrise, { state: sun.daylight }, timeZone)}</DataRow>
 			{sun.darkness.map((span) => (
-				<Datum key={span.start} label="Darkness">
+				<DataRow key={span.start} label="Darkness">
 					{formatLength(span)}
-				</Datum>
+				</DataRow>
 			))}
 			{sun.darkness.length === 0 && <Note>The Sun does not reach −18° this night, so there is no astronomical darkness.</Note>}
-			<Datum label="Moon lit">{(moon.illuminatedFraction * 100).toFixed(0)}%</Datum>
+			<DataRow label="Moon lit">{(moon.illuminatedFraction * 100).toFixed(0)}%</DataRow>
 			{moon.above.map((span) => (
-				<Datum key={span.start} label="Moon up">
+				<DataRow key={span.start} label="Moon up">
 					{formatClock(span.start, timeZone)}–{formatClock(span.end, timeZone)}
-				</Datum>
+				</DataRow>
 			))}
 			{moon.above.length === 0 && <Note>The Moon stays below the horizon during this night.</Note>}
 			<Note>How much the Moon matters depends on the target and filter, neither of which is known here. Times are the Sun's and the Moon's, computed locally for this site.</Note>
@@ -155,10 +156,10 @@ export function Sources({ forecast, localDate, timeZone }: SourcesProps) {
 		<CollapsibleSection id="astroWeather.sources" title="Sources" defaultOpen={false} summary={localDate}>
 			{forecast && (
 				<>
-					<Datum label={`${PROVIDER_NAMES.openMeteo} read`}>{readAt(forecast.meteorology.source, timeZone)}</Datum>
+					<DataRow label={`${PROVIDER_NAMES.openMeteo} read`}>{readAt(forecast.meteorology.source, timeZone)}</DataRow>
 					<Value label="Covers to" value={lastSample(forecast.meteorology.samples, timeZone)} />
 					<Value label="Model height" value={forecast.meteorology.grid?.elevation} unit=" m" />
-					<Datum label={`${PROVIDER_NAMES.sevenTimer} read`}>{readAt(forecast.astronomy.source, timeZone)}</Datum>
+					<DataRow label={`${PROVIDER_NAMES.sevenTimer} read`}>{readAt(forecast.astronomy.source, timeZone)}</DataRow>
 					<Value label="Model run" value={forecast.astronomy.source.modelRunAt && formatClock(forecast.astronomy.source.modelRunAt, timeZone, true)} />
 					<Value label="Covers to" value={lastSample(forecast.astronomy.samples, timeZone)} />
 				</>

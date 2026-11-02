@@ -38,9 +38,10 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataList, DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
-import { CameraSummary, SummaryRow as Row } from './CameraSummary'
+import { CameraSummary } from './CameraSummary'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
@@ -130,15 +131,15 @@ export function PointingModelBuilderSections({ device, availability, role, mount
 	return (
 		<>
 			<CollapsibleSection id="images.pointing-model-builder.equipment" title="Equipment">
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Camera">
+				<DataList>
+					<DataRow label="Camera">
 						<DeviceLink device={device} fallback="—" />
-					</Row>
-					<Row label="Mount">
+					</DataRow>
+					<DataRow label="Mount">
 						<DeviceLink device={mount.device} fallback="Not assigned" />
-					</Row>
-					<Row label="Site">{formatSite(mountState)}</Row>
-				</dl>
+					</DataRow>
+					<DataRow label="Site">{formatSite(mountState)}</DataRow>
+				</DataList>
 				{!running && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
 				{!running && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported' || role !== 'MAIN_CAMERA') && (
 					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
@@ -244,12 +245,12 @@ function SessionState({ session }: { readonly session: MountPointingSessionSumma
 				{MOUNT_POINTING_STATE_LABELS[state]}
 				{step && ` · ${MOUNT_POINTING_STEP_LABELS[step]}`}
 			</p>
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				{waypoint !== undefined && <Row label="Point">{`${waypoint + 1} of ${plannedCount}`}</Row>}
-				<Row label="Accepted">{`${acceptedCount} of ${plannedCount}`}</Row>
-				<Row label="Rejected">{rejectedCount}</Row>
-				<Row label="Skipped">{skippedCount}</Row>
-			</dl>
+			<DataList>
+				{waypoint !== undefined && <DataRow label="Point">{`${waypoint + 1} of ${plannedCount}`}</DataRow>}
+				<DataRow label="Accepted">{`${acceptedCount} of ${plannedCount}`}</DataRow>
+				<DataRow label="Rejected">{rejectedCount}</DataRow>
+				<DataRow label="Skipped">{skippedCount}</DataRow>
+			</DataList>
 			{step === 'exposing' && <FrameProgress exposure={exposure} />}
 			{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
 			{warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{warnings.at(-1)}</p>}
@@ -277,14 +278,14 @@ function Results({ model, verifying, locked, onVerify }: ResultsProps) {
 
 	return (
 		<CollapsibleSection id="images.pointing-model-builder.results" title="Results">
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				<Row label="Raw RMS">{formatArcsec(offline?.rawRms)}</Row>
-				<Row label="Fit Residual RMS">{formatArcsec(offline?.trainingRms)}</Row>
-				<Row label="Leave-One-Out RMS">{formatArcsec(offline?.looRms)}</Row>
-				<Row label="Withheld RMS">{formatArcsec(offline?.heldOutRms)}</Row>
-				<Row label="Offline Quality">{latest ? (latest.gate === 'passed' ? 'Passed' : latest.gate === 'failed' ? 'Failed' : 'Unusable') : 'Not fitted'}</Row>
-				<Row label="Verified on the Sky">{latest?.verified ? 'Yes' : 'No'}</Row>
-			</dl>
+			<DataList>
+				<DataRow label="Raw RMS">{formatArcsec(offline?.rawRms)}</DataRow>
+				<DataRow label="Fit Residual RMS">{formatArcsec(offline?.trainingRms)}</DataRow>
+				<DataRow label="Leave-One-Out RMS">{formatArcsec(offline?.looRms)}</DataRow>
+				<DataRow label="Withheld RMS">{formatArcsec(offline?.heldOutRms)}</DataRow>
+				<DataRow label="Offline Quality">{latest ? (latest.gate === 'passed' ? 'Passed' : latest.gate === 'failed' ? 'Failed' : 'Unusable') : 'Not fitted'}</DataRow>
+				<DataRow label="Verified on the Sky">{latest?.verified ? 'Yes' : 'No'}</DataRow>
+			</DataList>
 			<Notice>The fit residual says little about the rest of the sky; the withheld RMS comes from samples the fit never saw.</Notice>
 			{latest?.gate === 'passed' && (
 				<ConfirmButton

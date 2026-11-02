@@ -3,8 +3,9 @@ import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { CLOSE_APPROACH_BODIES, type CloseApproachDistanceDisplay } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { Datum, Note } from '../../sky/InspectorParts'
+import { Note } from '../../sky/InspectorParts'
 import { Button } from '../../ui/Button'
+import { DataRow } from '../../ui/DataRow'
 import { Select } from '../../ui/Select'
 import {
 	BODY_NAMES,
@@ -53,7 +54,7 @@ function publishedText({ value, sigma, units }: MinorBodyPublishedValue) {
 function PublishedValues({ values }: { readonly values: readonly MinorBodyPublishedValue[] }) {
 	return values.map((value) => (
 		<div key={value.name}>
-			<Datum label={value.title}>{publishedText(value)}</Datum>
+			<DataRow label={value.title}>{publishedText(value)}</DataRow>
 			{value.notes && <Note>{value.notes}</Note>}
 			{value.reference && <Note>{value.reference}</Note>}
 		</div>
@@ -62,7 +63,7 @@ function PublishedValues({ values }: { readonly values: readonly MinorBodyPublis
 
 // Datum shown only when there is a value.
 function OptionalDatum({ label, children }: { readonly label: string; readonly children?: ReactNode }) {
-	return children === undefined || children === '' ? null : <Datum label={label}>{children}</Datum>
+	return children === undefined || children === '' ? null : <DataRow label={label}>{children}</DataRow>
 }
 
 interface EncounterProps {
@@ -91,10 +92,10 @@ function Overview({ approach, timeZone, distanceDisplay, body, children }: Encou
 					{[`SPK-ID ${body.spkId}`, body.neo && 'NEO', body.pha && 'PHA'].filter(Boolean).join(' · ')}
 				</p>
 			)}
-			<Datum label="Nominal distance">{formatDistance(distance, distanceDisplay)}</Datum>
+			<DataRow label="Nominal distance">{formatDistance(distance, distanceDisplay)}</DataRow>
 			<OptionalDatum label="3σ range">{formatDistanceRange(distanceMin, distanceMax, distanceDisplay)}</OptionalDatum>
-			<Datum label="Vrel">{formatVelocity(relativeVelocity)}</Datum>
-			<Datum label={`Time (${timeZone})`}>{formatApproachTime(time, timeZone)}</Datum>
+			<DataRow label="Vrel">{formatVelocity(relativeVelocity)}</DataRow>
+			<DataRow label={`Time (${timeZone})`}>{formatApproachTime(time, timeZone)}</DataRow>
 			{children}
 		</CollapsibleSection>
 	)
@@ -106,13 +107,13 @@ function ApproachSection({ approach }: { readonly approach: CloseApproach }) {
 
 	return (
 		<CollapsibleSection id="closeapproaches.approach" title="Close Approach">
-			<Datum label="Target">{bodyName(body)}</Datum>
-			<Datum label="JD (TDB)">{jd}</Datum>
-			<Datum label="Calendar (TDB)">{calendarDate}</Datum>
+			<DataRow label="Target">{bodyName(body)}</DataRow>
+			<DataRow label="JD (TDB)">{jd}</DataRow>
+			<DataRow label="Calendar (TDB)">{calendarDate}</DataRow>
 			<OptionalDatum label="Time 3σ">{timeUncertainty}</OptionalDatum>
-			<Datum label="Vrel">{formatVelocity(relativeVelocity)}</Datum>
+			<DataRow label="Vrel">{formatVelocity(relativeVelocity)}</DataRow>
 			<OptionalDatum label="Vinf">{infiniteVelocity === undefined ? undefined : formatVelocity(infiniteVelocity)}</OptionalDatum>
-			<Datum label="Orbit solution">{orbitId}</Datum>
+			<DataRow label="Orbit solution">{orbitId}</DataRow>
 			<OptionalDatum label="Absolute magnitude H">{absoluteMagnitude?.toFixed(2)}</OptionalDatum>
 			<OptionalDatum label="Diameter (1σ)">{diameter === undefined ? undefined : formatDiameter(diameter, diameterSigma)}</OptionalDatum>
 			<Note>{RANGE_NOTE}</Note>
@@ -125,11 +126,11 @@ function ApproachSection({ approach }: { readonly approach: CloseApproach }) {
 function OrbitSection({ details: { orbit } }: { readonly details: MinorBodyDetails }) {
 	return (
 		<CollapsibleSection id="closeapproaches.orbit" title="Orbit" summary={`Solution ${orbit.orbitId}`} defaultOpen={false}>
-			<Datum label="Solution">{orbit.orbitId}</Datum>
-			<Datum label="Solved">{orbit.solutionDate}</Datum>
-			<Datum label="Epoch (TDB)">{orbit.epochCalendar}</Datum>
-			<Datum label="Epoch JD (TDB)">{orbit.epoch}</Datum>
-			<Datum label="Frame">{orbit.equinox}</Datum>
+			<DataRow label="Solution">{orbit.orbitId}</DataRow>
+			<DataRow label="Solved">{orbit.solutionDate}</DataRow>
+			<DataRow label="Epoch (TDB)">{orbit.epochCalendar}</DataRow>
+			<DataRow label="Epoch JD (TDB)">{orbit.epoch}</DataRow>
+			<DataRow label="Frame">{orbit.equinox}</DataRow>
 			<PublishedValues values={orbit.elements} />
 			<PublishedValues values={orbit.model} />
 			<OptionalDatum label="Earth MOID">{orbit.moid && `${orbit.moid} au`}</OptionalDatum>
@@ -168,19 +169,19 @@ function ObservationsSection({ details }: { readonly details: MinorBodyDetails }
 			<OptionalDatum label="By">{discovery?.who}</OptionalDatum>
 			{discovery?.narrative && <Note>{discovery.narrative}</Note>}
 			{discovery?.citation && <Note>{discovery.citation}</Note>}
-			{alternateDesignations.length > 0 && <Datum label="Also">{alternateDesignations.join(', ')}</Datum>}
-			<Datum label="First observation">{orbit.firstObservation}</Datum>
-			<Datum label="Last observation">{orbit.lastObservation}</Datum>
+			{alternateDesignations.length > 0 && <DataRow label="Also">{alternateDesignations.join(', ')}</DataRow>}
+			<DataRow label="First observation">{orbit.firstObservation}</DataRow>
+			<DataRow label="Last observation">{orbit.lastObservation}</DataRow>
 			<OptionalDatum label="Data arc">{orbit.dataArc && `${orbit.dataArc} days`}</OptionalDatum>
-			<Datum label="Observations">{orbit.observations}</Datum>
+			<DataRow label="Observations">{orbit.observations}</DataRow>
 			<OptionalDatum label="Radar delay">{orbit.delayObservations}</OptionalDatum>
 			<OptionalDatum label="Radar Doppler">{orbit.dopplerObservations}</OptionalDatum>
 			{satellites.map((satellite) => (
-				<Datum key={satellite.name} label={satellite.confirmed ? 'Satellite' : 'Unconfirmed satellite'}>
+				<DataRow key={satellite.name} label={satellite.confirmed ? 'Satellite' : 'Unconfirmed satellite'}>
 					{satellite.name}
-				</Datum>
+				</DataRow>
 			))}
-			{alternateOrbits.length > 0 && <Datum label="Earlier solutions">{alternateOrbits.map((e) => e.orbitId).join(', ')}</Datum>}
+			{alternateOrbits.length > 0 && <DataRow label="Earlier solutions">{alternateOrbits.map((e) => e.orbitId).join(', ')}</DataRow>}
 			{radar.length > 0 && (
 				<>
 					<p className="m-0 text-ink-300">Radar astrometry</p>

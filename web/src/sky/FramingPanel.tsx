@@ -8,6 +8,7 @@ import type { SkyFramingSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
@@ -53,16 +54,6 @@ const SENSOR_KINDS: readonly SensorKind[] = ['pixels', 'physical']
 // Pixel size in micrometers given to a sensor entered by its size when it is switched to pixels: a common
 // CMOS pixel, adjusted afterwards by the user.
 const CONVERTED_PIXEL_SIZE = 3.76
-
-// Label and value of one computed datum.
-function Datum({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-ink-300">{label}</span>
-			<span className="min-w-0 text-right font-mono text-[13px] text-ink-100">{children}</span>
-		</div>
-	)
-}
 
 // Muted explanation under a section.
 function Note({ children, danger }: { readonly children: ReactNode; readonly danger?: boolean }) {
@@ -194,10 +185,10 @@ function EquipmentSource({ framing, telescope, guideTelescope, hasTarget }: Pick
 					</>
 				) : reported ? (
 					<>
-						<Datum label="Resolution">
+						<DataRow label="Resolution">
 							{reported.width} × {reported.height} px
-						</Datum>
-						<Datum label="Pixel size">{reported.pixelSize.toFixed(2)} µm</Datum>
+						</DataRow>
+						<DataRow label="Pixel size">{reported.pixelSize.toFixed(2)} µm</DataRow>
 						<Note>Reported by the {sensorSourceName(sensorSource)} device at full frame.</Note>
 					</>
 				) : (
@@ -261,18 +252,18 @@ function FramingResult({ optics, missingCamera, onRotate }: { readonly optics: R
 		<PanelSection title="Framing">
 			{isFraming(framing) ? (
 				<>
-					<Datum label="Field">
+					<DataRow label="Field">
 						{formatAngularSize(framing.width)} × {formatAngularSize(framing.height)}
-					</Datum>
-					<Datum label="Field (degrees)">
+					</DataRow>
+					<DataRow label="Field (degrees)">
 						{toDeg(framing.width).toFixed(3)}° × {toDeg(framing.height).toFixed(3)}°
-					</Datum>
-					{framing.scale !== undefined && <Datum label="Image scale">{framing.scale.toFixed(2)}″/px</Datum>}
-					<Datum label="Effective focal length">{framing.effectiveFocalLength.toFixed(0)} mm</Datum>
-					<Datum label="Sensor">
+					</DataRow>
+					{framing.scale !== undefined && <DataRow label="Image scale">{framing.scale.toFixed(2)}″/px</DataRow>}
+					<DataRow label="Effective focal length">{framing.effectiveFocalLength.toFixed(0)} mm</DataRow>
+					<DataRow label="Sensor">
 						{framing.sensorWidth.toFixed(2)} × {framing.sensorHeight.toFixed(2)} mm
-					</Datum>
-					{framing.focalRatio !== undefined && <Datum label="Focal ratio">f/{framing.focalRatio.toFixed(1)}</Datum>}
+					</DataRow>
+					{framing.focalRatio !== undefined && <DataRow label="Focal ratio">f/{framing.focalRatio.toFixed(1)}</DataRow>}
 				</>
 			) : (
 				<Note danger>To compute the field, enter: {missing.join(', ')}.</Note>

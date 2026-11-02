@@ -1,6 +1,5 @@
 import type { CaptureSnoop, DeviceSummary, GuidingCommand, GuidingSessionSummary } from 'api'
 import { cn } from 'cn'
-import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -16,9 +15,11 @@ import { useAstapConfigured } from '../stars/StarRequestControls'
 import { PROVIDER_LABELS } from '../stars/stars'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataList, DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
+import { CameraSummary } from './CameraSummary'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
@@ -57,9 +58,9 @@ import { StarProfileSection } from './GuidingStarProfile'
 // stop looping, select or clear the star, start and stop guiding, pause (corrections only, or the exposures too),
 // resume, dither, and clear the calibration. The camera is the panel's target and the guide output the GUIDE_OUTPUT of
 // the setup, which only the Guide Camera has; a missing or unsuitable one says why. The frames take the camera
-// settings of Camera Acquisition without its exposure time, and their stars are detected with the detector of the
-// profile's Star Detection (built-in or ASTAP) and its settings, as Auto Focus does; the guide telescope of the Equipment
-// Setup gives the pixel scale and the calibration step. The form is the camera's, kept in
+// settings of Camera Acquisition without its exposure time, shown under the guide exposure, and their stars are
+// detected with the detector of the profile's Star Detection (built-in or ASTAP) and its settings, as Auto Focus does;
+// the guide telescope of the Equipment Setup gives the pixel scale and the calibration step. The form is the camera's, kept in
 // the profile; while a session runs, only its exposure changes it, and the other settings are locked showing the form.
 // The session is the server's, shown here whichever tab started it, and keeps running when the panel unmounts; a click
 // on its current frame selects the star nearest it. Pixel values are guide-camera pixels, pulses milliseconds.
@@ -141,14 +142,14 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 	return (
 		<>
 			<CollapsibleSection id="images.guiding.equipment" title="Equipment">
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Camera">
+				<DataList>
+					<DataRow label="Camera">
 						<DeviceLink device={device} fallback="—" />
-					</Row>
-					<Row label="Guide Output">{guideOutput ? <DeviceLink device={guideOutput.device} fallback="Not assigned" /> : 'Guide Camera only'}</Row>
-					<Row label="Guide Focal Length">{focalLength !== undefined ? `${Number(focalLength.toFixed(1))} mm` : 'Not set'}</Row>
-					{session?.pixelScale !== undefined && <Row label="Pixel Scale">{`${session.pixelScale.toFixed(2)}"/px`}</Row>}
-				</dl>
+					</DataRow>
+					<DataRow label="Guide Output">{guideOutput ? <DeviceLink device={guideOutput.device} fallback="Not assigned" /> : 'Guide Camera only'}</DataRow>
+					<DataRow label="Guide Focal Length">{focalLength !== undefined ? `${Number(focalLength.toFixed(1))} mm` : 'Not set'}</DataRow>
+					{session?.pixelScale !== undefined && <DataRow label="Pixel Scale">{`${session.pixelScale.toFixed(2)}"/px`}</DataRow>}
+				</DataList>
 				{!running && outputAvailability && outputAvailability.status !== 'ready' && outputAvailability.status !== 'busy' && <Notice>{outputAvailability.message}</Notice>}
 				{!running && focalLength === undefined && <Notice>Enter the Guide Telescope in Equipment Setup for the pixel scale of the RMS in arcseconds and the calibration step.</Notice>}
 				{!running && (!guideOutput || focalLength === undefined || outputAvailability?.status === 'notSelected' || outputAvailability?.status === 'unsupported') && (
@@ -166,6 +167,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 			{session?.star && <StarProfileSection star={session.star} pixelScale={session.pixelScale} frameId={session.frame?.frameId} />}
 			<CollapsibleSection id="images.guiding.exposure-and-tracking" title="Exposure and Tracking">
 				<ExposureTimeInput value={settings.exposureTime} exposure={guidingExposureRange(capabilities?.exposure)} disabled={pending} onChange={changeExposure} />
+				<CameraSummary exposure={exposure} capabilities={capabilities} />
 				<SegmentedControl label="Tracking" options={['singleStar', 'multiStar'] as const} value={settings.trackingMode} format={(mode) => TRACKING_LABELS[mode]} disabled={running || pending} onChange={(trackingMode) => update({ trackingMode })} />
 				<NumberInput label="Search Region" value={settings.searchRegion} min={GUIDING_MINIMUM_SEARCH_REGION} max={GUIDING_MAXIMUM_SEARCH_REGION} step={4} suffix="px" disabled={running || pending} onChange={(searchRegion) => update({ searchRegion: Math.round(searchRegion) })} />
 				<Checkbox label="Sticky lock position" checked={settings.stickyLockPosition} disabled={running || pending} onChange={(stickyLockPosition) => update({ stickyLockPosition })} />
@@ -173,7 +175,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 			</CollapsibleSection>
 			<CollapsibleSection id="images.guiding.calibration" title="Calibration" defaultOpen={false}>
 				<Checkbox label="Calibrate again on every start" checked={settings.recalibrate} disabled={pending} onChange={(recalibrate) => update({ recalibrate })} />
-				<div className="flex items-end gap-2">
+				<div className="flex flex-col gap-2">
 					<NumberInput label="Calibration Step" value={settings.calibrationPulse} min={GUIDING_MINIMUM_PULSE} max={GUIDING_MAXIMUM_PULSE} step={50} suffix="ms" disabled={running || pending} onChange={(calibrationPulse) => update({ calibrationPulse })} className="flex-1" />
 					<Button variant="secondary" disabled={running || pending || calibrationPulse === undefined} title={calculateBlocker ?? (calibrationPulse === undefined ? undefined : `${calibrationPulse} ms`)} onClick={() => calibrationPulse !== undefined && update({ calibrationPulse })}>
 						Calculate
@@ -293,48 +295,38 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 	return (
 		<CollapsibleSection id="images.guiding.session" title="Session">
 			{session.active && <FrameProgress exposure={session.exposureProgress} />}
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				<Row label="State">
+			<DataList>
+				<DataRow label="State">
 					<span className={cn(session.state === 'lostLock' && 'text-danger', session.state === 'guiding' && 'text-success')}>{session.active ? GUIDING_STATE_LABELS[session.state] : session.lost ? 'Lost' : 'Stopped'}</span>
-				</Row>
-				{session.state === 'calibrating' && session.calibrating && <Row label="Step">{GUIDING_CALIBRATION_PHASE_LABELS[session.calibrating.phase]}</Row>}
-				{session.settling && <Row label="Settling">{session.dithering ? 'After a dither' : 'Yes'}</Row>}
-				{session.lockPosition && <Row label="Lock (px)">{`${session.lockPosition[0].toFixed(1)}, ${session.lockPosition[1].toFixed(1)}`}</Row>}
+				</DataRow>
+				{session.state === 'calibrating' && session.calibrating && <DataRow label="Step">{GUIDING_CALIBRATION_PHASE_LABELS[session.calibrating.phase]}</DataRow>}
+				{session.settling && <DataRow label="Settling">{session.dithering ? 'After a dither' : 'Yes'}</DataRow>}
+				{session.lockPosition && <DataRow label="Lock (px)">{`${session.lockPosition[0].toFixed(1)}, ${session.lockPosition[1].toFixed(1)}`}</DataRow>}
 				{calibration && (
 					<>
-						<Row label="RA Rate">{`${formatRate(calibration.raRate)} at ${formatAngle(calibration.raAngle)}`}</Row>
-						<Row label="DEC Rate">{`${formatRate(calibration.decRate)} at ${formatAngle(calibration.decAngle)}`}</Row>
-						{calibration.backlash > 0 && <Row label="DEC Backlash">{`${Math.round(calibration.backlash)} ms`}</Row>}
+						<DataRow label="RA Rate">{`${formatRate(calibration.raRate)} at ${formatAngle(calibration.raAngle)}`}</DataRow>
+						<DataRow label="DEC Rate">{`${formatRate(calibration.decRate)} at ${formatAngle(calibration.decAngle)}`}</DataRow>
+						{calibration.backlash > 0 && <DataRow label="DEC Backlash">{`${Math.round(calibration.backlash)} ms`}</DataRow>}
 					</>
 				)}
 				{rms && rms.samples > 0 && (
 					<>
-						<Row label="RMS RA">{formatError(rms.ra, pixelScale)}</Row>
-						<Row label="RMS DEC">{formatError(rms.dec, pixelScale)}</Row>
-						<Row label="RMS Total">{`${formatError(rms.total, pixelScale)} (${rms.samples})`}</Row>
+						<DataRow label="RMS RA">{formatError(rms.ra, pixelScale)}</DataRow>
+						<DataRow label="RMS DEC">{formatError(rms.dec, pixelScale)}</DataRow>
+						<DataRow label="RMS Total">{`${formatError(rms.total, pixelScale)} (${rms.samples})`}</DataRow>
 					</>
 				)}
 				{command && (
-					<Row label={COMMAND_LABELS[command.command]}>
+					<DataRow label={COMMAND_LABELS[command.command]}>
 						<span className={cn(command.state === 'failed' && 'text-danger', command.state === 'succeeded' && 'text-success')}>{command.state === 'running' ? 'Running' : command.state === 'succeeded' ? 'Done' : 'Failed'}</span>
-					</Row>
+					</DataRow>
 				)}
-			</dl>
+			</DataList>
 			{session.state === 'calibrating' && session.calibrating && <CalibrationProgress progress={session.calibrating} />}
 			{command?.state === 'failed' && command.error && <Notice error>{command.error}</Notice>}
 			{calibration && calibration.warnings.length > 0 && <Notice>{calibration.warnings.join(' ')}</Notice>}
 			{session.failure && <Notice error>{session.failure.error ?? `The session ended: ${session.failure.reason}.`}</Notice>}
 		</CollapsibleSection>
-	)
-}
-
-// Label and value of a row.
-function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="contents">
-			<dt className="text-ink-300">{label}</dt>
-			<dd className="m-0 min-w-0 text-right wrap-break-word tabular-nums">{children}</dd>
-		</div>
 	)
 }
 

@@ -1,6 +1,6 @@
 import type { AnnotationBodyLayer, AnnotationCenter, AnnotationImageContext, AnnotationJob, AnnotationKind, AnnotationLayer, AnnotationObject, AnnotationRequest, AnnotationResult, AnnotationSite, AnnotationSiteSource, ImageInfo, MinorBody } from 'api'
 import { toArcsec } from 'nebulosa/src/math/units/angle'
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { isActive } from '../analysis'
 import { isAnnotationShown } from '../annotations/AnnotationOverlay'
@@ -17,6 +17,7 @@ import type { SkySelectionRef } from '../sky/objects'
 import { selectSkyObject, skyState } from '../sky/sky'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataRow } from '../ui/DataRow'
 import { List, ListItem } from '../ui/List'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
@@ -210,11 +211,11 @@ function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, s
 
 	return (
 		<CollapsibleSection id="images.annotation.source-and-status" title="Source & Status">
-			<Property label="WCS">{request.plateSolveJobId !== undefined ? 'Plate solution shown' : wcsAvailable ? 'Image header' : 'None'}</Property>
-			<Property label="Observation (UTC)">{observation ? formatUtc(observation.time) : context ? TIME_ORIGIN_LABELS.now : MISSING}</Property>
-			{observation && <Property label="Time from">{`${TIME_ORIGIN_LABELS[observation.origin]}${observation.approximate ? ' (approximate)' : ''}`}</Property>}
-			<Property label="Seen from">{context?.site ? formatSite(context.site) : context ? 'Center of the Earth' : MISSING}</Property>
-			{context?.site && <Property label="Site from">{SITE_SOURCE_LABELS[context.site.source]}</Property>}
+			<DataRow label="WCS">{request.plateSolveJobId !== undefined ? 'Plate solution shown' : wcsAvailable ? 'Image header' : 'None'}</DataRow>
+			<DataRow label="Observation (UTC)">{observation ? formatUtc(observation.time) : context ? TIME_ORIGIN_LABELS.now : MISSING}</DataRow>
+			{observation && <DataRow label="Time from">{`${TIME_ORIGIN_LABELS[observation.origin]}${observation.approximate ? ' (approximate)' : ''}`}</DataRow>}
+			<DataRow label="Seen from">{context?.site ? formatSite(context.site) : context ? 'Center of the Earth' : MISSING}</DataRow>
+			{context?.site && <DataRow label="Site from">{SITE_SOURCE_LABELS[context.site.source]}</DataRow>}
 			<Actions>
 				<Button
 					disabled={active || imageId === undefined || unavailable !== undefined || !wcsAvailable}
@@ -236,8 +237,8 @@ function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, s
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job ? (
 				<>
-					<Property label="Status">{STATE_LABELS[job.state]}</Property>
-					<Property label="Elapsed">{formatSeconds(elapsedOf(job, now))}</Property>
+					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
+					<DataRow label="Elapsed">{formatSeconds(elapsedOf(job, now))}</DataRow>
 					{job.error && <Notice error>{job.error}</Notice>}
 					{changed && <Notice>The WCS or the magnitude limit changed since this analysis; run it again to apply them.</Notice>}
 				</>
@@ -290,7 +291,7 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 			{BODY_LAYERS.map(([layer]) => (
 				<Checkbox key={layer} label={LAYER_LABELS[layer]} checked={bodies[layer]} onChange={(listed) => onBodiesChange({ [layer]: listed })} />
 			))}
-			{observation && <Property label="Positions">{CENTER_LABELS[observation.center]}</Property>}
+			{observation && <DataRow label="Positions">{CENTER_LABELS[observation.center]}</DataRow>}
 			<Actions>
 				<Button
 					disabled={active || unavailable !== undefined || !wcsAvailable || !observation || !chosen}
@@ -311,13 +312,13 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job && (
 				<>
-					<Property label="Status">{STATE_LABELS[job.state]}</Property>
-					<Property label="Elapsed">{formatSeconds(elapsedOf(job, now))}</Property>
+					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
+					<DataRow label="Elapsed">{formatSeconds(elapsedOf(job, now))}</DataRow>
 					{job.summary &&
 						BODY_LAYERS.map(([layer]) => (
-							<Property key={layer} label={LAYER_LABELS[layer]}>
+							<DataRow key={layer} label={LAYER_LABELS[layer]}>
 								{job.summary!.counts[layer]}
-							</Property>
+							</DataRow>
 						))}
 					{job.error && <Notice error>{job.error}</Notice>}
 					{changed && <Notice>The WCS or the groups changed since this search; run it again to apply them.</Notice>}
@@ -375,11 +376,11 @@ function Objects({ job, objects, warnings, resultError, annotation, selected, on
 				<>
 					{summary &&
 						LOCAL_LAYERS.map((layer) => (
-							<Property key={layer} label={LAYER_LABELS[layer]}>
+							<DataRow key={layer} label={LAYER_LABELS[layer]}>
 								{summary.counts[layer]}
-							</Property>
+							</DataRow>
 						))}
-					{summary && <Property label="Duration">{formatSeconds(summary.elapsed)}</Property>}
+					{summary && <DataRow label="Duration">{formatSeconds(summary.elapsed)}</DataRow>}
 					{warnings?.map((warning) => (
 						<Notice key={warning}>{warning}</Notice>
 					))}
@@ -427,16 +428,16 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 		<CollapsibleSection id="images.annotation.selected-object" title="Selected Object">
 			{object ? (
 				<>
-					<Property label="Name">{object.name}</Property>
+					<DataRow label="Name">{object.name}</DataRow>
 					{object.designations.length > 0 && <p className="text-xs wrap-break-word text-ink-300">{object.designations.slice(0, 6).join(' · ')}</p>}
-					<Property label="Type">{object.typeName}</Property>
-					<Property label="Magnitude">{object.magnitude === undefined ? MISSING : formatMagnitude(object.magnitude)}</Property>
-					<Property label="Right ascension (J2000)">{formatRightAscension(object.rightAscension)}</Property>
-					<Property label="Declination (J2000)">{formatDeclination(object.declination)}</Property>
-					{object.majorAxis !== undefined && <Property label="Size">{object.minorAxis === undefined ? formatAngularSize(object.majorAxis) : `${formatAngularSize(object.majorAxis)} × ${formatAngularSize(object.minorAxis)}`}</Property>}
-					{object.orientation !== undefined && <Property label="Position angle">{formatDegrees(object.orientation)}</Property>}
-					{object.positionError !== undefined && <Property label="Position uncertainty">{formatUncertainty(object.positionError)}</Property>}
-					{object.center && <Property label="Position">{CENTER_LABELS[object.center]}</Property>}
+					<DataRow label="Type">{object.typeName}</DataRow>
+					<DataRow label="Magnitude">{object.magnitude === undefined ? MISSING : formatMagnitude(object.magnitude)}</DataRow>
+					<DataRow label="Right ascension (J2000)">{formatRightAscension(object.rightAscension)}</DataRow>
+					<DataRow label="Declination (J2000)">{formatDeclination(object.declination)}</DataRow>
+					{object.majorAxis !== undefined && <DataRow label="Size">{object.minorAxis === undefined ? formatAngularSize(object.majorAxis) : `${formatAngularSize(object.majorAxis)} × ${formatAngularSize(object.minorAxis)}`}</DataRow>}
+					{object.orientation !== undefined && <DataRow label="Position angle">{formatDegrees(object.orientation)}</DataRow>}
+					{object.positionError !== undefined && <DataRow label="Position uncertainty">{formatUncertainty(object.positionError)}</DataRow>}
+					{object.center && <DataRow label="Position">{CENTER_LABELS[object.center]}</DataRow>}
 					{object.ref ? (
 						<Button variant="secondary" className="self-start" onClick={() => openInSky(object.ref!, object.name)}>
 							Open in Sky
@@ -455,23 +456,6 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 				<Notice>Click a marker in the image or an object in the list to inspect it.</Notice>
 			)}
 		</CollapsibleSection>
-	)
-}
-
-interface PropertyProps {
-	// Property name.
-	readonly label: string
-	// Property value.
-	readonly children: ReactNode
-}
-
-// Name and value of a property. A long name wraps; the value keeps its width, so the values stay aligned on the right.
-function Property({ label, children }: PropertyProps) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="min-w-0 text-xs wrap-break-word text-ink-300">{label}</span>
-			<span className="flex-[min-content] text-right text-ink-100 tabular-nums">{children}</span>
-		</div>
 	)
 }
 

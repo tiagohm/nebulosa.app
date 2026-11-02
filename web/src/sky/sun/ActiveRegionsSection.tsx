@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatEclipseTime } from '../../tools/eclipse/eclipse'
-import { Datum, Note } from '../InspectorParts'
+import { DataRow } from '../../ui/DataRow'
+import { Note } from '../InspectorParts'
 import { sunState } from './sun'
 
 // Active regions of the latest NOAA SWPC report in the Sun Inspector: one row per region with its location, spot
@@ -42,15 +43,15 @@ function RegionRow({ region, selected, onSelect }: { readonly region: SolarActiv
 			</button>
 			{selected && (
 				<div className="flex flex-col gap-1 px-1.5 pt-1 pb-2">
-					{region.area !== undefined && <Datum label="Area">{region.area} MSH</Datum>}
-					{region.mcintoshClass && <Datum label="McIntosh class">{region.mcintoshClass}</Datum>}
-					{region.magneticClass && <Datum label="Magnetic class">{region.magneticClass}</Datum>}
+					{region.area !== undefined && <DataRow label="Area">{region.area} MSH</DataRow>}
+					{region.mcintoshClass && <DataRow label="McIntosh class">{region.mcintoshClass}</DataRow>}
+					{region.magneticClass && <DataRow label="Magnetic class">{region.magneticClass}</DataRow>}
 					{region.latitude !== undefined && region.longitude !== undefined && (
-						<Datum label="Heliographic">
+						<DataRow label="Heliographic">
 							{Math.abs(region.latitude)}° {region.latitude < 0 ? 'S' : 'N'}, {Math.abs(region.longitude)}° {region.longitude < 0 ? 'W' : 'E'}
-						</Datum>
+						</DataRow>
 					)}
-					{region.carringtonLongitude !== undefined && <Datum label="Carrington longitude">{region.carringtonLongitude}°</Datum>}
+					{region.carringtonLongitude !== undefined && <DataRow label="Carrington longitude">{region.carringtonLongitude}°</DataRow>}
 				</div>
 			)}
 		</li>

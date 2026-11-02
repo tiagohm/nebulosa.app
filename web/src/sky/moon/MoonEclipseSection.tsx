@@ -4,7 +4,8 @@ import { navigate, routeState } from '../../shell/route'
 import { formatEclipseTime, utcDate } from '../../tools/eclipse/eclipse'
 import { ECLIPSE_TYPE_NAMES } from '../../tools/lunareclipse/lunareclipse'
 import { Button } from '../../ui/Button'
-import { Datum, Note } from '../InspectorParts'
+import { DataRow } from '../../ui/DataRow'
+import { Note } from '../InspectorParts'
 import { moonState } from './moon'
 
 // Next Lunar Eclipse section of the Moon Inspector: the first lunar eclipse after the instant the Sky shows, its type,
@@ -21,10 +22,10 @@ export function MoonEclipseSection({ hasObserver, timeZone }: { readonly hasObse
 		<CollapsibleSection id="sky.eclipse" title="Next Lunar Eclipse" summary={summary} defaultOpen={false}>
 			{eclipse ? (
 				<>
-					<Datum label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</Datum>
-					<Datum label="Greatest eclipse">{formatEclipseTime(eclipse.maximum, timeZone ?? '')}</Datum>
-					<Datum label="Magnitude">{eclipse.magnitude.toFixed(3)}</Datum>
-					{value.local ? <Datum label="From here">{value.local.visibility.text}</Datum> : !hasObserver && <Note>Set the observer&apos;s location to see whether it is visible from there.</Note>}
+					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
+					<DataRow label="Greatest eclipse">{formatEclipseTime(eclipse.maximum, timeZone ?? '')}</DataRow>
+					<DataRow label="Magnitude">{eclipse.magnitude.toFixed(3)}</DataRow>
+					{value.local ? <DataRow label="From here">{value.local.visibility.text}</DataRow> : !hasObserver && <Note>Set the observer&apos;s location to see whether it is visible from there.</Note>}
 					<div>
 						<Button variant="secondary" onClick={() => navigate(routeState, { workspace: 'tools', tool: 'lunar-eclipse-map', eclipse: eclipse.id })}>
 							View Lunar Eclipse Map

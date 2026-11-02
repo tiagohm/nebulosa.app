@@ -1,8 +1,9 @@
 import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
+import { DataRow } from '../../ui/DataRow'
 import { controlRuntime, deviceStateOf, startCommand, stopCommand } from '../control'
-import { Actions, type InterfaceProps, Notice, Readout } from '../parts'
+import { Actions, type InterfaceProps, Notice } from '../parts'
 
 // Controls of a dust cover: whether it stands open or closed as it reports, open and close, and a stop of
 // a motion in progress. A request to open is shown as moving until the cover reports standing open.
@@ -19,7 +20,7 @@ export function CoverControls({ device }: InterfaceProps) {
 
 	return (
 		<PanelSection title="Cover">
-			<Readout label="State">{cover.parking ? 'Moving' : cover.parked ? 'Closed' : 'Open'}</Readout>
+			<DataRow label="State">{cover.parking ? 'Moving' : cover.parked ? 'Closed' : 'Open'}</DataRow>
 			{cover.canPark ? (
 				<Actions>
 					<Button variant="secondary" disabled={busy || cover.parking || !cover.parked} onClick={() => move('open')}>

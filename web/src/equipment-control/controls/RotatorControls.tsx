@@ -3,9 +3,10 @@ import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { DataRow } from '../../ui/DataRow'
 import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
-import { Actions, ConfirmButton, type InterfaceProps, Notice, Readout } from '../parts'
+import { Actions, ConfirmButton, type InterfaceProps, Notice } from '../parts'
 
 // Controls of a field rotator: its reported mechanical angle and range, a move to an angle or by an angle,
 // a move home, a stop, a sync of the angle, and the rotation direction. The mechanical angle is not the
@@ -32,9 +33,9 @@ export function RotatorControls({ device }: InterfaceProps) {
 
 	return (
 		<PanelSection title="Rotator">
-			<Readout label="Mechanical angle">{`${angle.value.toFixed(2)}°`}</Readout>
-			<Readout label="Range">{`${angle.min}° to ${angle.max}°`}</Readout>
-			<Readout label="State">{rotator.moving ? 'Moving' : 'Idle'}</Readout>
+			<DataRow label="Mechanical angle">{`${angle.value.toFixed(2)}°`}</DataRow>
+			<DataRow label="Range">{`${angle.min}° to ${angle.max}°`}</DataRow>
+			<DataRow label="State">{rotator.moving ? 'Moving' : 'Idle'}</DataRow>
 			{rotator.moving && rotator.canAbort && (
 				<Actions>
 					<Button onClick={() => void stopCommand(controlRuntime, { type: 'rotator', deviceId: device.id, action: 'stop' })}>Stop</Button>

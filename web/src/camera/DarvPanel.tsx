@@ -1,7 +1,6 @@
 import type { DarvMeasurement, DarvSessionSummary, DeviceSummary } from 'api'
 import { cn } from 'cn'
 import { darvExposureTime } from 'nebulosa/src/observation/alignment/darv'
-import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -15,6 +14,7 @@ import { type CameraIdentity, DARV_MAXIMUM_LEG_DURATION, DARV_MINIMUM_LEG_DURATI
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataList, DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
@@ -112,15 +112,15 @@ export function DarvSections({ device, availability, mount, settings: identity }
 	return (
 		<>
 			<CollapsibleSection id="images.darv.equipment" title="Equipment">
-				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Camera">
+				<DataList>
+					<DataRow label="Camera">
 						<DeviceLink device={device} fallback="—" />
-					</Row>
-					<Row label="Mount">
+					</DataRow>
+					<DataRow label="Mount">
 						<DeviceLink device={mount.device} fallback="Not assigned" />
-					</Row>
-					<Row label="Exposure">{`${darvExposureTime(shown.legDuration)} s`}</Row>
-				</dl>
+					</DataRow>
+					<DataRow label="Exposure">{`${darvExposureTime(shown.legDuration)} s`}</DataRow>
+				</DataList>
 				{!measuring && mountAvailability.status !== 'ready' && <p className="m-0 text-xs leading-4 text-ink-300">{mountAvailability.message}</p>}
 				{!measuring && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && (
 					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
@@ -189,18 +189,18 @@ function Result({ session, measurement }: ResultProps) {
 
 	return (
 		<CollapsibleSection id="images.darv.measurement" title={`Measurement #${measurement.generation}`}>
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-				<Row label="State">{DARV_STATE_LABELS[measurement.state]}</Row>
-				{result && <Row label="Result">{DARV_STATUS_LABELS[result.status]}</Row>}
-				{result?.driftMagnitude !== undefined && <Row label="Separation Drift">{formatDrift(result.driftMagnitude)}</Row>}
-				{result && <Row label="Trails">{`${result.usableCount} of ${result.trailCount} usable`}</Row>}
-				{result && result.trailCount > 0 && <Row label="Fit Quality">{`${Math.round(result.confidence * 100)}%`}</Row>}
+			<DataList>
+				<DataRow label="State">{DARV_STATE_LABELS[measurement.state]}</DataRow>
+				{result && <DataRow label="Result">{DARV_STATUS_LABELS[result.status]}</DataRow>}
+				{result?.driftMagnitude !== undefined && <DataRow label="Separation Drift">{formatDrift(result.driftMagnitude)}</DataRow>}
+				{result && <DataRow label="Trails">{`${result.usableCount} of ${result.trailCount} usable`}</DataRow>}
+				{result && result.trailCount > 0 && <DataRow label="Fit Quality">{`${Math.round(result.confidence * 100)}%`}</DataRow>}
 				{previous?.result?.driftMagnitude !== undefined && result?.driftMagnitude !== undefined && (
-					<Row label={`Since #${previous.generation}`}>
+					<DataRow label={`Since #${previous.generation}`}>
 						<span className={cn(result.driftMagnitude < previous.result.driftMagnitude && 'text-success')}>{`${formatDrift(previous.result.driftMagnitude)} → ${formatDrift(result.driftMagnitude)}`}</span>
-					</Row>
+					</DataRow>
 				)}
-			</dl>
+			</DataList>
 			{result?.status === 'limited' && <p className="m-0 text-xs leading-4 text-ink-300">The trails could not be measured fully; judge the separation on the frame.</p>}
 			{notes.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{notes.join(' ')}</p>}
 			<p className="m-0 text-xs leading-4 text-ink-300">The drift is how fast the return trail separates from the outbound one, across the RA motion; it is not a polar error.</p>
@@ -212,13 +212,13 @@ function Result({ session, measurement }: ResultProps) {
 function History({ measurements }: { readonly measurements: readonly DarvMeasurement[] }) {
 	return (
 		<CollapsibleSection id="images.darv.history" title="History" summary={`${measurements.length} measurements`} defaultOpen={false}>
-			<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+			<DataList>
 				{measurements.toReversed().map((measurement) => (
-					<Row key={measurement.generation} label={`#${measurement.generation} ${DARV_AXIS_LABELS[measurement.request.axis]}, ${measurement.request.legDuration} s`}>
+					<DataRow key={measurement.generation} label={`#${measurement.generation} ${DARV_AXIS_LABELS[measurement.request.axis]}, ${measurement.request.legDuration} s`}>
 						{measurement.result?.driftMagnitude !== undefined ? formatDrift(measurement.result.driftMagnitude) : measurement.result ? DARV_STATUS_LABELS[measurement.result.status] : DARV_STATE_LABELS[measurement.state]}
-					</Row>
+					</DataRow>
 				))}
-			</dl>
+			</DataList>
 		</CollapsibleSection>
 	)
 }
@@ -268,16 +268,6 @@ function MeasurementProgress({ measurement }: { readonly measurement: DarvMeasur
 				<span>{step !== undefined ? `Step ${step} of ${DARV_PHASES.length}` : ''}</span>
 				{elapsed !== undefined && <span>{`${Math.floor(elapsed)} / ${measurement.exposure} s · ${Math.ceil(measurement.exposure - elapsed)} s left`}</span>}
 			</p>
-		</div>
-	)
-}
-
-// Label and value of a row.
-function Row({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-	return (
-		<div className="contents">
-			<dt className="text-ink-300">{label}</dt>
-			<dd className="m-0 min-w-0 truncate text-right tabular-nums">{children}</dd>
 		</div>
 	)
 }

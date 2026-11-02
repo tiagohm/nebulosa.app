@@ -5,8 +5,9 @@ import type { SkyObserverSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
+import { DataRow } from '../ui/DataRow'
 import { formatAngularSize, formatDeclination, formatDegrees, formatLocalTime, formatMagnitude, formatRightAscension, formatStellarDistance } from './format'
-import { Datum, Note, ObserverSection, PositionSection } from './InspectorParts'
+import { Note, ObserverSection, PositionSection } from './InspectorParts'
 import { MoonInspector } from './moon/MoonInspector'
 import { MountInspector } from './MountInspector'
 import { ObjectActions } from './ObjectActions'
@@ -62,7 +63,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{selection.name}</p>
 				<p className="m-0 text-ink-300">{typeOf(selection)}</p>
 				{designations.length > 0 && <p className="m-0 text-xs leading-5 text-ink-200">{designations.join(' · ')}</p>}
-				{magnitude !== undefined && <Datum label="Magnitude">{formatMagnitude(magnitude)}</Datum>}
+				{magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(magnitude)}</DataRow>}
 				{selection.detailsError && <Note danger>Details unavailable: {selection.detailsError}</Note>}
 				<ObjectActions target={selection.ref} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
 			</PanelSection>
@@ -90,23 +91,23 @@ function CatalogSection({ catalog }: { readonly catalog: SkyCatalogObject }) {
 
 	return (
 		<CollapsibleSection id="sky.catalog" title="Catalog" summary={catalog.classification} defaultOpen={false}>
-			{catalog.bv !== undefined && <Datum label="B−V">{catalog.bv.toFixed(2)}</Datum>}
-			{catalog.classification && <Datum label={star ? 'Spectral type' : 'Morphology'}>{catalog.classification}</Datum>}
+			{catalog.bv !== undefined && <DataRow label="B−V">{catalog.bv.toFixed(2)}</DataRow>}
+			{catalog.classification && <DataRow label={star ? 'Spectral type' : 'Morphology'}>{catalog.classification}</DataRow>}
 			{catalog.majorAxis !== undefined && (
-				<Datum label="Size">
+				<DataRow label="Size">
 					{formatAngularSize(catalog.majorAxis)}
 					{catalog.minorAxis !== undefined && ` × ${formatAngularSize(catalog.minorAxis)}`}
-				</Datum>
+				</DataRow>
 			)}
-			{catalog.orientation !== undefined && catalog.majorAxis !== undefined && <Datum label="Position angle">{formatDegrees(catalog.orientation)}</Datum>}
-			{catalog.distance !== undefined && <Datum label="Distance">{formatStellarDistance(catalog.distance)}</Datum>}
+			{catalog.orientation !== undefined && catalog.majorAxis !== undefined && <DataRow label="Position angle">{formatDegrees(catalog.orientation)}</DataRow>}
+			{catalog.distance !== undefined && <DataRow label="Distance">{formatStellarDistance(catalog.distance)}</DataRow>}
 			{pm && (
-				<Datum label="Proper motion">
+				<DataRow label="Proper motion">
 					{toMas(catalog.pmRA * Math.cos(catalog.declination)).toFixed(2)}, {toMas(catalog.pmDEC).toFixed(2)} mas/yr
-				</Datum>
+				</DataRow>
 			)}
-			<Datum label="RA (J2000)">{formatRightAscension(catalog.rightAscension)}</Datum>
-			<Datum label="Dec (J2000)">{formatDeclination(catalog.declination)}</Datum>
+			<DataRow label="RA (J2000)">{formatRightAscension(catalog.rightAscension)}</DataRow>
+			<DataRow label="Dec (J2000)">{formatDeclination(catalog.declination)}</DataRow>
 			{pm && <Note>Proper motion is μα·cos δ and μδ. Catalog coordinates are for epoch J2000.</Note>}
 		</CollapsibleSection>
 	)
@@ -118,13 +119,13 @@ function MinorBodySection({ body }: { readonly body: MinorBody }) {
 
 	return (
 		<CollapsibleSection id="sky.smallBody" title="Small Body" summary={`SPK-ID ${body.spkId}`} defaultOpen={false}>
-			<Datum label="SPK-ID">{body.spkId}</Datum>
-			{body.neo && <Datum label="Near-Earth object">{body.pha ? 'Yes, potentially hazardous' : 'Yes'}</Datum>}
+			<DataRow label="SPK-ID">{body.spkId}</DataRow>
+			{body.neo && <DataRow label="Near-Earth object">{body.pha ? 'Yes, potentially hazardous' : 'Yes'}</DataRow>}
 			{parameters.map((e) => (
-				<Datum key={e.name} label={parameterTitle(e.title)}>
+				<DataRow key={e.name} label={parameterTitle(e.title)}>
 					{parameterValue(e.value)}
 					{e.units && ` ${e.units}`}
-				</Datum>
+				</DataRow>
 			))}
 			<Note>
 				Orbit solution {body.solutionDate}

@@ -3,9 +3,10 @@ import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { DataRow } from '../../ui/DataRow'
 import { Slider } from '../../ui/Slider'
 import { controlRuntime, deviceStateOf, sendCommand } from '../control'
-import { Actions, type InterfaceProps, Notice, Readout } from '../parts'
+import { Actions, type InterfaceProps, Notice } from '../parts'
 
 // Controls of a flat panel: its light switch and brightness as the panel reports them. The slider and its
 // number field only change a pending brightness, sent once with Apply Brightness, so dragging never sends a
@@ -27,8 +28,8 @@ export function FlatPanelControls({ device }: InterfaceProps) {
 
 	return (
 		<PanelSection title="Flat Panel">
-			<Readout label="Light">{panel.enabled ? 'On' : 'Off'}</Readout>
-			<Readout label="Brightness">{`${intensity.value} of ${intensity.min}–${intensity.max}`}</Readout>
+			<DataRow label="Light">{panel.enabled ? 'On' : 'Off'}</DataRow>
+			<DataRow label="Brightness">{`${intensity.value} of ${intensity.min}–${intensity.max}`}</DataRow>
 			<Checkbox label="Light on" checked={panel.enabled} disabled={busy} onChange={(enabled) => void sendCommand(controlRuntime, { type: 'flatPanel', deviceId: device.id, action: 'light', label: enabled ? 'Light on' : 'Light off', body: { enabled } })} />
 			{intensity.max > intensity.min && (
 				<>

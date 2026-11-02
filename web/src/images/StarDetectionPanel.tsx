@@ -1,6 +1,6 @@
 import type { StarDetectionJob, StarDetectionRequest, StarDetectionResult } from 'api'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
-import { type ReactNode, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { isActive } from '../analysis'
 import { Actions, Notice } from '../equipment-control/parts'
@@ -12,6 +12,7 @@ import { cancelDetection, PROVIDER_LABELS, runDetection, sameRequest, starsState
 import { useStarResult } from '../stars/useStarResult'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { DataRow } from '../ui/DataRow'
 import { useNow } from '../useNow'
 import { holdCameraFrame } from './cameratabs'
 import { type ImageStarsState, imagesState, imageUnavailableReason, setStarMarkers } from './images'
@@ -143,8 +144,8 @@ function Analysis({ documentKey, imageId, request, job, submitError, unavailable
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job ? (
 				<>
-					<Property label="Status">{STATE_LABELS[job.state]}</Property>
-					<Property label="Elapsed">{formatSeconds(elapsedOf(job, now))}</Property>
+					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
+					<DataRow label="Elapsed">{formatSeconds(elapsedOf(job, now))}</DataRow>
 					{job.error && <Notice error>{job.error}</Notice>}
 					{changed && <Notice>The settings changed since this detection; run it again to apply them.</Notice>}
 				</>
@@ -172,11 +173,11 @@ function Results({ job, result, resultError }: ResultsProps) {
 		<CollapsibleSection id="images.star-detection.results" title="Results">
 			{summary ? (
 				<>
-					<Property label="Detector">{PROVIDER_LABELS[job.request.detector.provider]}</Property>
-					<Property label="Detected stars">{summary.detectedCount}</Property>
-					<Property label="Accepted stars">{summary.acceptedCount}</Property>
-					<Property label="Aggregate HFD">{summary.measurement === 'ok' && summary.aggregateHfd !== undefined ? `${summary.aggregateHfd.toFixed(2)} px` : MISSING}</Property>
-					<Property label="Duration">{formatSeconds(summary.elapsed)}</Property>
+					<DataRow label="Detector">{PROVIDER_LABELS[job.request.detector.provider]}</DataRow>
+					<DataRow label="Detected stars">{summary.detectedCount}</DataRow>
+					<DataRow label="Accepted stars">{summary.acceptedCount}</DataRow>
+					<DataRow label="Aggregate HFD">{summary.measurement === 'ok' && summary.aggregateHfd !== undefined ? `${summary.aggregateHfd.toFixed(2)} px` : MISSING}</DataRow>
+					<DataRow label="Duration">{formatSeconds(summary.elapsed)}</DataRow>
 					{summary.measurement === 'noStars' && <Notice>No stars were detected in this image.</Notice>}
 					{summary.measurement === 'unavailable' && <Notice>Too few stars were accepted for an aggregate HFD.</Notice>}
 					{result?.warnings.map((warning) => (
@@ -197,33 +198,16 @@ function SelectedStar({ star }: { readonly star?: DetectedStar }) {
 		<CollapsibleSection id="images.star-detection.selected-star" title="Selected Star">
 			{star ? (
 				<>
-					<Property label="X">{star.x.toFixed(2)} px</Property>
-					<Property label="Y">{star.y.toFixed(2)} px</Property>
-					<Property label="HFD">{star.hfd.toFixed(2)} px</Property>
-					<Property label="SNR">{star.snr.toFixed(1)}</Property>
-					<Property label="Flux">{formatFlux(star.flux)}</Property>
+					<DataRow label="X">{star.x.toFixed(2)} px</DataRow>
+					<DataRow label="Y">{star.y.toFixed(2)} px</DataRow>
+					<DataRow label="HFD">{star.hfd.toFixed(2)} px</DataRow>
+					<DataRow label="SNR">{star.snr.toFixed(1)}</DataRow>
+					<DataRow label="Flux">{formatFlux(star.flux)}</DataRow>
 				</>
 			) : (
 				<Notice>No star selected.</Notice>
 			)}
 		</CollapsibleSection>
-	)
-}
-
-interface PropertyProps {
-	// Property name.
-	readonly label: string
-	// Property value.
-	readonly children: ReactNode
-}
-
-// Name and value of a property.
-function Property({ label, children }: PropertyProps) {
-	return (
-		<div className="flex items-baseline justify-between gap-3">
-			<span className="flex-none text-xs text-ink-300">{label}</span>
-			<span className="min-w-0 text-right text-ink-100 tabular-nums">{children}</span>
-		</div>
 	)
 }
 

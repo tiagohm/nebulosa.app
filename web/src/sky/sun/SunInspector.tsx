@@ -7,9 +7,10 @@ import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { formatDuration } from '../../tools/eclipse/eclipse'
 import { Button } from '../../ui/Button'
+import { DataRow } from '../../ui/DataRow'
 import { BROWSER_TIME_ZONE } from '../clock'
 import { formatAngularSize, formatDeclination, formatDegrees, formatLocalTime, formatMagnitude } from '../format'
-import { Datum, Note, PositionSection } from '../InspectorParts'
+import { Note, PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
 import type { SkySelection } from '../sky'
 import { ActiveRegionsSection } from './ActiveRegionsSection'
@@ -73,20 +74,20 @@ function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone
 				</>
 			) : (
 				<>
-					{position?.altitude !== undefined && <Datum label="Altitude">{formatDeclination(position.altitude)}</Datum>}
-					{position?.azimuth !== undefined && <Datum label="Azimuth">{formatDegrees(position.azimuth)}</Datum>}
+					{position?.altitude !== undefined && <DataRow label="Altitude">{formatDeclination(position.altitude)}</DataRow>}
+					{position?.azimuth !== undefined && <DataRow label="Azimuth">{formatDegrees(position.azimuth)}</DataRow>}
 					{day ? (
 						<>
-							{daylightState(day) && <Datum label="Day">{daylightState(day)}</Datum>}
-							{(day.sunrise !== undefined || day.daylight === 'partial') && <Datum label="Sunrise">{day.sunrise !== undefined ? formatLocalTime(day.sunrise, day.start, undefined, timeZone) : 'None this day'}</Datum>}
+							{daylightState(day) && <DataRow label="Day">{daylightState(day)}</DataRow>}
+							{(day.sunrise !== undefined || day.daylight === 'partial') && <DataRow label="Sunrise">{day.sunrise !== undefined ? formatLocalTime(day.sunrise, day.start, undefined, timeZone) : 'None this day'}</DataRow>}
 							{day.transit !== undefined && (
-								<Datum label="Transit">
+								<DataRow label="Transit">
 									{formatLocalTime(day.transit, day.start, undefined, timeZone)}
 									{day.transitAltitude !== undefined && ` · ${formatDeclination(day.transitAltitude)}`}
-								</Datum>
+								</DataRow>
 							)}
-							{(day.sunset !== undefined || day.daylight === 'partial') && <Datum label="Sunset">{day.sunset !== undefined ? formatLocalTime(day.sunset, day.start, undefined, timeZone) : 'None this day'}</Datum>}
-							{day.daylightSeconds !== undefined && <Datum label="Daylight">{formatDuration(day.daylightSeconds)}</Datum>}
+							{(day.sunset !== undefined || day.daylight === 'partial') && <DataRow label="Sunset">{day.sunset !== undefined ? formatLocalTime(day.sunset, day.start, undefined, timeZone) : 'None this day'}</DataRow>}
+							{day.daylightSeconds !== undefined && <DataRow label="Daylight">{formatDuration(day.daylightSeconds)}</DataRow>}
 							<Note>Refracted altitude at the instant. Sunrise, transit, and sunset of {day.localDate}: the upper limb at the horizon with standard refraction (the center at −50′, geometric), from the local model.</Note>
 						</>
 					) : (
@@ -134,13 +135,13 @@ export function SunInspector({ selection, observer, onSetObserver, timeZone, onS
 			<PanelSection title="Object">
 				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{selection.name}</p>
 				<p className="m-0 text-ink-300">Star</p>
-				{position?.magnitude !== undefined && <Datum label="Magnitude">{formatMagnitude(position.magnitude)}</Datum>}
+				{position?.magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(position.magnitude)}</DataRow>}
 				<SolarImage />
 				<ObjectActions target={SUN} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
 			</PanelSection>
 			<ActiveRegionsSection />
 			<PositionSection selection={selection} timeZone={timeZone}>
-				{position?.distance !== undefined && <Datum label="Angular diameter">{formatAngularSize(sunAngularDiameter(position.distance))}</Datum>}
+				{position?.distance !== undefined && <DataRow label="Angular diameter">{formatAngularSize(sunAngularDiameter(position.distance))}</DataRow>}
 			</PositionSection>
 			<VisibilitySection position={position} day={day} hasObserver={!!observer} onSetObserver={onSetObserver} timeZone={timeZone} />
 			<TwilightSection day={day} hasObserver={!!observer} timeZone={timeZone} />

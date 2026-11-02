@@ -1,8 +1,9 @@
 import type { MoonApsisEvent } from 'api'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatEclipseTime } from '../../tools/eclipse/eclipse'
+import { DataRow } from '../../ui/DataRow'
 import { formatAngularSize } from '../format'
-import { Datum, Note } from '../InspectorParts'
+import { Note } from '../InspectorParts'
 
 // Perigee & Apogee section of the Moon Inspector: the next perigee and apogee after the instant the Sky shows, in time
 // order, with the Moon's geocentric distance and apparent diameter there; never the observer's distance.
@@ -25,8 +26,8 @@ export function MoonApsidesSection({ apsides, timeZone }: { readonly apsides?: r
 						<div key={e.kind} className="flex flex-col gap-1">
 							<span className="text-ink-100">{APSIS_NAMES[e.kind]}</span>
 							<span className="font-mono text-[13px] text-ink-200">{formatEclipseTime(e.time, timeZone ?? '')}</span>
-							<Datum label="Distance">{formatKilometers(e.distanceKm)}</Datum>
-							<Datum label="Apparent diameter">{formatAngularSize(e.angularDiameter)}</Datum>
+							<DataRow label="Distance">{formatKilometers(e.distanceKm)}</DataRow>
+							<DataRow label="Apparent diameter">{formatAngularSize(e.angularDiameter)}</DataRow>
 						</div>
 					))}
 					<Note>Geocentric distance of the Moon&apos;s center, from the local model (Meeus).</Note>

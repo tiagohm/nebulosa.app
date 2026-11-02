@@ -1,5 +1,6 @@
+import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { CalculatorLayout, type CalculatorViewProps, Datum, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
 import { EXPOSURE_PLAN_EXAMPLE, type ExposurePlanDraft, exposurePlan, type PlanMode, STAR_TRAIL_EXAMPLE, type StarTrailDraft, starTrail, starTrailFromOptics } from './exposure'
 import { formatDuration, formatFixed } from './values'
 
@@ -35,9 +36,9 @@ export function ExposurePlannerCalculator({ entry, onChange, context }: Calculat
 					{({ frames, total, snrGain, magnitudeGain }) => (
 						<>
 							{draft.mode === 'count' ? <Primary label="Total integration">{formatDuration(total)}</Primary> : <Primary label="Frames needed">{frames}</Primary>}
-							{draft.mode === 'time' && <Datum label="Total integration">{formatDuration(total)}</Datum>}
-							<Datum label="Stacking SNR gain">×{formatFixed(snrGain, 2)}</Datum>
-							<Datum label="Stacking depth gain">{formatFixed(magnitudeGain, 2)} mag</Datum>
+							{draft.mode === 'time' && <DataRow label="Total integration">{formatDuration(total)}</DataRow>}
+							<DataRow label="Stacking SNR gain">×{formatFixed(snrGain, 2)}</DataRow>
+							<DataRow label="Stacking depth gain">{formatFixed(magnitudeGain, 2)} mag</DataRow>
 						</>
 					)}
 				</OutcomeView>

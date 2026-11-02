@@ -25,7 +25,7 @@ import { WcsAidsOverlay } from '../platesolving/WcsAidsOverlay'
 import { WcsCursorStatus } from '../platesolving/WcsCursorStatus'
 import { WcsGridOverlay } from '../platesolving/WcsGridOverlay'
 import { WcsOverlay } from '../platesolving/WcsOverlay'
-import { activeProfile, imageAstrometrySettings, profileState, setLastImageDirectory, starProfileSettings } from '../profile/profile'
+import { activeProfile, cameraFramesShown, imageAstrometrySettings, profileState, setCameraFramesShown, setLastImageDirectory, starProfileSettings } from '../profile/profile'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { StarOverlay } from '../stars/StarOverlay'
 import { inspectStar, starProfileOf } from '../stars/starprofile'
@@ -124,7 +124,7 @@ export function ImagesWorkspace() {
 	const profiles = useSnapshot(profileState)
 	const [choosing, setChoosing] = useState(false)
 	// Whether camera tabs show their bottom area (frames carousel or Focus Curve); collapsing it keeps the selection.
-	const [framesShown, setFramesShown] = useState(true)
+	const framesShown = cameraFramesShown(activeProfile(profiles).settings)
 	// View of the bottom area of each camera tab, by document key; the frames carousel when absent.
 	const [bottomViews, setBottomViews] = useState<Readonly<Record<string, BottomView>>>({})
 	// Camera tabs whose viewer draws the central reticle, by document key; a presentation choice of the tab only.
@@ -230,7 +230,7 @@ export function ImagesWorkspace() {
 									<SaveImagePopover document={document} view={view} onSaveToServer={(format) => setSaving({ key: document.key, closeAfter: false, format })} />
 									<span className="mx-1 h-5 w-px bg-line-100" />
 									{solution && <Select options={ASTROMETRY_MODES} value={mode} format={(option) => MODE_LABELS[option]} disabled={!!picking || overlaysHidden} onChange={(next) => setModes((current) => ({ ...current, [document.key]: next }))} className="w-36 max-sm:w-28" />}
-									{document.camera && <CameraControls document={document} framesShown={framesShown} onToggleFrames={() => setFramesShown(!framesShown)} reticle={reticle} onToggleReticle={() => setReticles({ ...reticles, [document.key]: !reticle })} />}
+									{document.camera && <CameraControls document={document} framesShown={framesShown} onToggleFrames={() => setCameraFramesShown(profileState, !framesShown)} reticle={reticle} onToggleReticle={() => setReticles({ ...reticles, [document.key]: !reticle })} />}
 								</>
 							)
 						}

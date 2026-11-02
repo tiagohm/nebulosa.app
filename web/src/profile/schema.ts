@@ -64,6 +64,9 @@ export interface ProfileSettings {
 	// Plate solving settings shared by every document outside a camera tab, each of which keeps its own hints; absent until
 	// edited, and then DEFAULT_CAMERA_PLATE_SOLVING holds. A camera tab uses those of its camera (CameraSettings plateSolving).
 	imagePlateSolving?: CameraPlateSolvingSettings
+	// Whether the camera tabs of Images hide their bottom area (the frames carousel or the Focus Curve); absent shows it.
+	// View state.
+	framesHidden?: boolean
 	// Image Processing pipeline edited last, which every document opened next starts with; absent until edited. Tab
 	// memory; jobs and their outputs are never stored.
 	imageProcessing?: readonly ImageProcessingPresetStep[]
@@ -504,7 +507,7 @@ export const POINTING_MODEL_PRESETS = [
 export const DEFAULT_POINTING_MODEL_SETTINGS: PointingModelSettings = { exposureTime: 5, pattern: 'goldenSpiral', count: 30, minimumAltitude: 25, meridianAvoidance: 5, settleDelay: 2, stopTracking: true }
 
 // Target Centering form of one physical camera. The frames take the camera settings of the camera, which this form never
-// holds, and its solver settings; the target being edited is tab memory, and only a saved framing lasts.
+// holds, and its solver settings; the target being edited is kept for the tab only (view.ts), and only a saved framing lasts.
 export interface TargetCenteringSettings {
 	// Exposure of each frame, in seconds; > 0.
 	exposureTime: number

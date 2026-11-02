@@ -92,7 +92,7 @@ export function TargetCenteringSections({ device, availability, mount, settings:
 	const error = key ? runtime.errors[key] : undefined
 	const locked = running || pending
 	const framing = references.find((reference) => reference.id === settings.framingId)
-	// A framing stays selected across reloads, while the target being typed is tab memory.
+	// A framing stays selected across reloads, and the target being typed across reloads of the tab.
 	const draft: TargetCenteringDraft | undefined = (key ? runtime.drafts[key] : undefined) ?? (framing && { rightAscension: framing.rightAscension, declination: framing.declination, label: framing.name })
 	// While running, the panel shows the target and the values the session applied.
 	const shownTarget: TargetCenteringDraft | undefined = running && session ? session.request.target : draft

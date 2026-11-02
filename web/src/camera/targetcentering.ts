@@ -14,7 +14,8 @@ import { cameraKey, fitExposure } from './capture'
 // the solution of each attempt, is fetched when a summary reports a new solution or an end. Summaries are ordered by their
 // revision, and a snapshot leaves what an event changed during its fetch. Cameras and mounts are addressed by their exact
 // connection and device ids, never by role. A start carries a token, so a retried request answers the session of the first
-// one instead of starting another. The target being edited is tab memory: a saved framing is what lasts, in the profile.
+// one instead of starting another. The target being edited is kept for the tab across its reloads (centeringTargetsEntry of
+// profile/view.ts); a saved framing is what lasts, in the profile.
 
 // J2000 target being edited for a camera, in radians.
 export interface TargetCenteringDraft {

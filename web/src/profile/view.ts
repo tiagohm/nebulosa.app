@@ -1,14 +1,20 @@
 import { subscribe } from 'valtio'
+import type { TargetCenteringRuntime } from '../camera/targetcentering'
+import type { ImagesState } from '../images/images'
+import type { ImageToolId } from '../images/tools'
+import type { CollapsibleSections } from '../shell/collapsible'
 import type { ProfileState } from './profile'
 import type { ProfileSettings, SkyFramingSettings } from './schema'
 import { type WorkspaceSyncState, workspaceSyncState } from './sync'
 
 // View state of the tab: the fields of a profile the server never keeps (panels, last directories, the time bar, which
-// framing is drawn, the Image Processing pipeline, the preferences of Close Approaches and Astro Weather) and which profile
-// is active. VIEW_STORAGE says, for each one, the browser storage areas it is kept in: sessionStorage keeps it for this
-// tab across its reloads, localStorage for every tab of the browser across its restarts, and a field kept in both is read
-// from the first area that holds it and written to all of them. Each area holds one document per profile, written
-// whenever a field kept there changes, and removed with its profile. A document of another VIEW_VERSION, or that cannot
+// framing is drawn, the bottom area of the camera tabs, the Image Processing pipeline, the preferences of Close
+// Approaches and Astro Weather), which profile is active, and the view entries kept outside the profiles (which panel
+// sections are expanded, the tool of each camera tab, the target being typed for each camera in Target Centering).
+// VIEW_STORAGE says, for each one, the browser storage areas it is kept in: sessionStorage keeps it for this tab across
+// its reloads, localStorage for every tab of the browser across its restarts, and one kept in both is read from the first
+// area that holds it and written to all of them. Each area holds one document per profile, written whenever a field kept
+// there changes, and removed with its profile, and one document per view entry. A document of another VIEW_VERSION, or that cannot
 // be read, is ignored and replaced; nothing is migrated. A storage that cannot be used (a private window, blocked site
 // data, a full quota) leaves the field in memory only. The server, other browsers, and the workspace synchronization never
 // see any of it.
@@ -45,7 +51,7 @@ interface ViewField {
 type FramingView = Pick<SkyFramingSettings, 'activePresetId' | 'visible' | 'source' | 'sensorSource'>
 
 // Field of the view kept as an optional field of ProfileSettings.
-function setting(key: 'lastImageDirectory' | 'lastSaveDirectory' | 'imageProcessing' | 'closeApproaches' | 'astroWeather'): ViewField {
+function setting(key: 'lastImageDirectory' | 'lastSaveDirectory' | 'framesHidden' | 'imageProcessing' | 'closeApproaches' | 'astroWeather'): ViewField {
 	return {
 		get: (settings) => settings[key],
 		set: (settings, value) => Object.assign(settings, { [key]: value }),
@@ -60,6 +66,7 @@ const VIEW_FIELDS = {
 	},
 	lastImageDirectory: setting('lastImageDirectory'),
 	lastSaveDirectory: setting('lastSaveDirectory'),
+	framesHidden: setting('framesHidden'),
 	imageProcessing: setting('imageProcessing'),
 	closeApproaches: setting('closeApproaches'),
 	astroWeather: setting('astroWeather'),
@@ -85,20 +92,29 @@ export type ViewFieldKey = keyof typeof VIEW_FIELDS
 // Fields of the view in a fixed order.
 const VIEW_FIELD_KEYS = Object.keys(VIEW_FIELDS) as ViewFieldKey[]
 
-// Storage areas of each field of the view and of the active profile, in the order they are read; every one listed is
-// written. An empty list keeps the field in the memory of the page only.
-export const VIEW_STORAGE: Readonly<Record<ViewFieldKey | 'activeProfile', readonly ViewStorageArea[]>> = {
+// View state kept outside the profiles, each under one key of browser storage (ViewEntry).
+export type ViewEntryName = 'sections' | 'cameraTools' | 'centeringTargets'
+
+// Storage areas of each field of the view, of the active profile, and of each view entry, in the order they are read;
+// every one listed is written. An empty list keeps it in the memory of the page only.
+export const VIEW_STORAGE: Readonly<Record<ViewFieldKey | ViewEntryName | 'activeProfile', readonly ViewStorageArea[]>> = {
 	// This tab's profile, across its reloads; a new tab opens on the profile used last in the browser.
 	activeProfile: ['session', 'local'],
 	panels: ['local'],
 	lastImageDirectory: ['local'],
 	lastSaveDirectory: ['local'],
+	framesHidden: ['local'],
 	imageProcessing: ['local'],
 	closeApproaches: ['local'],
 	astroWeather: ['local'],
 	// Whether the simulation clock is shown belongs to what this tab is doing.
 	skyTimeBar: ['session'],
 	skyFraming: ['local'],
+	// How the operator arranged the panels, wherever a section appears.
+	sections: ['local'],
+	// What this tab was doing with each camera.
+	cameraTools: ['session'],
+	centeringTargets: ['session'],
 }
 
 // Document of the view of a profile in one storage area.
@@ -262,5 +278,145 @@ export class ViewPersistence {
 		}
 
 		if (activeId) for (const area of VIEW_STORAGE.activeProfile) this.#write(area, ACTIVE_PROFILE_KEY, activeId)
+	}
+}
+
+// State of the tab kept outside the profiles, under one key of browser storage.
+export interface ViewEntry {
+	// Name of the entry in VIEW_STORAGE, which is also its key in browser storage.
+	readonly name: ViewEntryName
+	// Store whose changes are written.
+	readonly store: object
+	// Gives the store what storage held, once, when the entry starts.
+	readonly restore: (value: unknown) => void
+	// Applies what was restored to what appeared in the store since; called on every change, before value.
+	readonly apply?: () => void
+	// What is written, read from the store; undefined removes it.
+	readonly value: () => unknown
+}
+
+// Document of a view entry in one storage area.
+interface ViewEntryDocument {
+	// VIEW_VERSION it was written with.
+	readonly version: number
+	// What the entry wrote.
+	readonly value: unknown
+}
+
+// Keeps view entries in browser storage, as VIEW_STORAGE says: each one is restored from the first area that holds it,
+// then written to all of them on every change of its store. Returns a function that stops it.
+export function keepViewEntries(entries: readonly ViewEntry[], storages: ViewStorages = browserStorages()): () => void {
+	const written = new Map<string, string | null>()
+
+	const read = (area: ViewStorageArea, key: string) => {
+		try {
+			const text = storages[area]?.getItem(key) ?? null
+			written.set(`${area}:${key}`, text)
+			if (text === null) return undefined
+			const document = JSON.parse(text) as ViewEntryDocument
+			return document.version === VIEW_VERSION ? document : undefined
+		} catch {
+			return undefined
+		}
+	}
+
+	const write = (area: ViewStorageArea, key: string, text: string | null) => {
+		const id = `${area}:${key}`
+		if (written.get(id) === text) return
+
+		try {
+			const storage = storages[area]
+			if (!storage) return
+			if (text === null) storage.removeItem(key)
+			else storage.setItem(key, text)
+			written.set(id, text)
+		} catch {
+			// A full quota or blocked storage leaves the entry in memory only.
+		}
+	}
+
+	const stops = entries.map((entry) => {
+		const key = `${PREFIX}${entry.name}`
+		const areas = VIEW_STORAGE[entry.name]
+
+		for (const area of areas) {
+			const document = read(area, key)
+
+			if (document) {
+				entry.restore(structuredClone(document.value))
+				break
+			}
+		}
+
+		const changed = () => {
+			entry.apply?.()
+			const value = entry.value()
+			const text = value === undefined ? null : JSON.stringify({ version: VIEW_VERSION, value } satisfies ViewEntryDocument)
+			for (const area of areas) write(area, key, text)
+		}
+
+		changed()
+		return subscribe(entry.store, changed)
+	})
+
+	return () => {
+		for (const stop of stops) stop()
+	}
+}
+
+// Keeps which panel sections the operator expanded or collapsed.
+export function sectionsEntry(sections: CollapsibleSections): ViewEntry {
+	return {
+		name: 'sections',
+		store: sections,
+		restore: (value) => {
+			// A section toggled in this page before the restore keeps its state.
+			for (const [id, open] of Object.entries(value as CollapsibleSections)) sections[id] ??= open
+		},
+		value: () => (Object.keys(sections).length > 0 ? sections : undefined),
+	}
+}
+
+// Keeps the tool each camera tab shows, by camera tab key, and gives it back to the tab of a camera that connects. The
+// tool of a camera without a tab now is kept for its return.
+export function cameraToolsEntry(images: ImagesState): ViewEntry {
+	const remembered: Record<string, ImageToolId> = {}
+	// Camera tabs given their tool back, so a later choice is never overridden.
+	const restored = new Set<string>()
+
+	return {
+		name: 'cameraTools',
+		store: images,
+		restore: (value) => Object.assign(remembered, value),
+		apply: () => {
+			for (const { key, camera } of images.documents) {
+				if (!camera || restored.has(key)) continue
+				restored.add(key)
+				const context = images.tools[key]
+				const tool = remembered[key]
+				if (context && tool) context.tool = tool
+			}
+		},
+		value: () => {
+			for (const { key, camera } of images.documents) {
+				const context = images.tools[key]
+				if (camera && context) remembered[key] = context.tool
+			}
+
+			return Object.keys(remembered).length > 0 ? remembered : undefined
+		},
+	}
+}
+
+// Keeps the target being typed in Target Centering for each camera, by camera key.
+export function centeringTargetsEntry(runtime: TargetCenteringRuntime): ViewEntry {
+	return {
+		name: 'centeringTargets',
+		store: runtime,
+		restore: (value) => {
+			// A target typed in this page before the restore is kept.
+			for (const [key, draft] of Object.entries(value as TargetCenteringRuntime['drafts'])) runtime.drafts[key] ??= draft
+		},
+		value: () => (Object.keys(runtime.drafts).length > 0 ? runtime.drafts : undefined),
 	}
 }

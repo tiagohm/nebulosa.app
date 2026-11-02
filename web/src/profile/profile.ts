@@ -199,6 +199,19 @@ export function setPanelOpen(state: ProfileState, workspace: WorkspaceId, open: 
 	profile.settings.panels[workspace] = open
 }
 
+// Returns whether the camera tabs of Images show their bottom area (the frames carousel or the Focus Curve).
+export function cameraFramesShown(settings: Pick<ProfileSettings, 'framesHidden'>): boolean {
+	return settings.framesHidden !== true
+}
+
+// Shows or hides the bottom area of the camera tabs in the active profile; shown is kept as the absent default.
+export function setCameraFramesShown(state: ProfileState, shown: boolean) {
+	const settings = activeProfile(state).settings
+	if (cameraFramesShown(settings) === shown) return
+	if (shown) delete settings.framesHidden
+	else settings.framesHidden = true
+}
+
 // Remembers in the active profile the server directory an image was opened from.
 export function setLastImageDirectory(state: ProfileState, directory: string) {
 	const profile = activeProfile(state)

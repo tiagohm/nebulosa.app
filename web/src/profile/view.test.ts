@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { ProfileRecord, WorkspaceSnapshot } from 'api'
 import { proxy, snapshot } from 'valtio'
+import type { TargetCenteringRuntime } from '../camera/targetcentering'
 import type { ConnectionState } from '../connection/connection'
-import { deleteProfile, type ProfileState, selectProfile, setImageProcessingPipeline, setLastImageDirectory, setPanelOpen, setSkyTimeBarVisible } from './profile'
+import type { ImagesState } from '../images/images'
+import type { CollapsibleSections } from '../shell/collapsible'
+import { deleteProfile, type ProfileState, selectProfile, setCameraFramesShown, setImageProcessingPipeline, setLastImageDirectory, setPanelOpen, setSkyTimeBarVisible } from './profile'
 import { PROFILE_SETTINGS_VERSION } from './schema'
 import { WorkspaceSync, type WorkspaceSyncState } from './sync'
-import { ViewPersistence, type ViewStorages } from './view'
+import { cameraToolsEntry, centeringTargetsEntry, keepViewEntries, sectionsEntry, ViewPersistence, type ViewStorages } from './view'
 
 // Storage area of a browser, in memory.
 class MemoryStorage {
@@ -83,13 +86,14 @@ describe('view state', () => {
 		setLastImageDirectory(before.profiles, '/data/frames')
 		setImageProcessingPipeline(before.profiles, [{ enabled: true, operation: { type: 'invert' } } as never])
 		setSkyTimeBarVisible(before.profiles, true)
+		setCameraFramesShown(before.profiles, false)
 		await settle(before.sync)
 		expect(before.sent).toEqual([])
 
 		// A reload of the same tab keeps its session.
 		const reloaded = await tab(first)
 		expect(reloaded.profiles.activeId).toBe('p2')
-		expect(snapshot(reloaded.profiles).profiles[1].settings).toMatchObject({ panels: { images: false }, lastImageDirectory: '/data/frames', imageProcessing: [{ enabled: true, operation: { type: 'invert' } }], sky: { timeBar: true } })
+		expect(snapshot(reloaded.profiles).profiles[1].settings).toMatchObject({ panels: { images: false }, lastImageDirectory: '/data/frames', framesHidden: true, imageProcessing: [{ enabled: true, operation: { type: 'invert' } }], sky: { timeBar: true } })
 		expect(reloaded.profiles.profiles[0].settings.panels).toEqual({})
 
 		// A new tab of the same browser keeps what is local, and starts on the profile used last.
@@ -158,5 +162,77 @@ describe('view state', () => {
 		setPanelOpen(profiles, 'images', false)
 		await settle(sync)
 		expect(profiles.profiles[0].settings.panels).toEqual({ images: false })
+	})
+})
+
+describe('view entries', () => {
+	// Camera tab of an Images state, showing tool.
+	function cameraTab(images: ImagesState, key: string, tool = 'inspector') {
+		images.documents.push({ key, camera: { selection: { kind: 'latest' } } } as never)
+		images.tools[key] = { tool } as never
+	}
+
+	test('expanded sections come back in every tab of the browser, and a section toggled before keeps its state', async () => {
+		const local = new MemoryStorage()
+		const sections = proxy<CollapsibleSections>({})
+		stops.push(keepViewEntries([sectionsEntry(sections)], { local, session: new MemoryStorage() }))
+		sections['sky.position'] = false
+		sections['images.inspector.storage'] = true
+		await Bun.sleep(0)
+
+		const other = proxy<CollapsibleSections>({ 'sky.position': true })
+		stops.push(keepViewEntries([sectionsEntry(other)], { local, session: new MemoryStorage() }))
+		expect(snapshot(other)).toEqual({ 'sky.position': true, 'images.inspector.storage': true })
+	})
+
+	test('a camera tab gets back the tool it showed in this tab, and only once', async () => {
+		const session = new MemoryStorage()
+		const before = proxy<ImagesState>({ documents: [], views: {}, tools: {} })
+		stops.push(keepViewEntries([cameraToolsEntry(before)], { local: new MemoryStorage(), session }))
+		cameraTab(before, 'camera:c1:main')
+		await Bun.sleep(0)
+		before.tools['camera:c1:main'].tool = 'camera-acquisition'
+		cameraTab(before, 'camera:c1:guide', 'guiding')
+		await Bun.sleep(0)
+
+		// The guide camera is not connected after the reload; its tool is kept for its return.
+		const after = proxy<ImagesState>({ documents: [], views: {}, tools: {} })
+		stops.push(keepViewEntries([cameraToolsEntry(after)], { local: new MemoryStorage(), session }))
+		cameraTab(after, 'camera:c1:main')
+		await Bun.sleep(0)
+		expect(after.tools['camera:c1:main'].tool).toBe('camera-acquisition')
+		expect(JSON.parse(session.getItem('nebulosa:cameraTools')!).value).toEqual({ 'camera:c1:main': 'camera-acquisition', 'camera:c1:guide': 'guiding' })
+
+		after.tools['camera:c1:main'].tool = 'auto-focus'
+		await Bun.sleep(0)
+		expect(after.tools['camera:c1:main'].tool).toBe('auto-focus')
+
+		cameraTab(after, 'camera:c1:guide')
+		await Bun.sleep(0)
+		expect(after.tools['camera:c1:guide'].tool).toBe('guiding')
+	})
+
+	test('the target typed for a camera comes back in the same tab only, and another version is ignored', async () => {
+		const session = new MemoryStorage()
+		const runtime = () => proxy<TargetCenteringRuntime>({ sessions: {}, details: {}, drafts: {}, pending: {}, errors: {} })
+		const before = runtime()
+		stops.push(keepViewEntries([centeringTargetsEntry(before)], { local: new MemoryStorage(), session }))
+		before.drafts['c1:main'] = { rightAscension: 1.5, declination: -0.2, label: 'M 42' }
+		await Bun.sleep(0)
+
+		const reloaded = runtime()
+		stops.push(keepViewEntries([centeringTargetsEntry(reloaded)], { local: new MemoryStorage(), session }))
+		expect(snapshot(reloaded).drafts).toEqual({ 'c1:main': { rightAscension: 1.5, declination: -0.2, label: 'M 42' } })
+
+		const newTab = runtime()
+		stops.push(keepViewEntries([centeringTargetsEntry(newTab)], { local: new MemoryStorage(), session: new MemoryStorage() }))
+		expect(snapshot(newTab).drafts).toEqual({})
+
+		const old = new MemoryStorage()
+		old.setItem('nebulosa:centeringTargets', JSON.stringify({ version: 99, value: { 'c1:main': {} } }))
+		const ignored = runtime()
+		stops.push(keepViewEntries([centeringTargetsEntry(ignored)], { local: new MemoryStorage(), session: old }))
+		expect(snapshot(ignored).drafts).toEqual({})
+		expect(old.getItem('nebulosa:centeringTargets')).toBeNull()
 	})
 })

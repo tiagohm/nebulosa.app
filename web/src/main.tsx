@@ -31,9 +31,10 @@ import { handleOperationEvent, operationsState, refreshOperations } from './oper
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
 import { profileState, pruneNotificationPreferences } from './profile/profile'
 import { WorkspaceSync } from './profile/sync'
-import { ViewPersistence } from './profile/view'
+import { cameraToolsEntry, centeringTargetsEntry, keepViewEntries, sectionsEntry, ViewPersistence } from './profile/view'
 import { WorkspaceGate } from './profile/WorkspaceGate'
 import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
+import { collapsibleSections } from './shell/collapsible'
 import { routeState, watchHistory } from './shell/route'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
 import { handleStreaksEvent, refreshStreaks, streaksState } from './streaks/streaks'
@@ -108,6 +109,7 @@ const stops = [
 	subscribeState(deviceState, syncCameraTabs),
 	workspace.start(),
 	new ViewPersistence(profileState).start(),
+	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime)]),
 	watchHistory(routeState),
 	confirmUnsavedOnUnload(imagesState),
 	releaseLeasesOnHide(imagesState),

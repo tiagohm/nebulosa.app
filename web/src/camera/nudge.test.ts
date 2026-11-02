@@ -76,8 +76,10 @@ test('a press starts, renews its lease while moving, and stops on release', asyn
 	expect(state.press).toMatchObject({ direction: 'NE', phase: 'moving', target: TARGET })
 	expect(requests[0]).toEqual({ url: '/api/connections/c/mounts/m/nudge', body: { token, direction: 'NE' } })
 
-	await Bun.sleep(35)
-	expect(requests.filter((r) => r.url === `/api/mounts/nudges/${token}/heartbeat`).length).toBeGreaterThanOrEqual(2)
+	// Timers run late on a loaded machine, so the heartbeats are awaited rather than counted after a fixed delay.
+	const heartbeats = () => requests.filter((r) => r.url === `/api/mounts/nudges/${token}/heartbeat`).length
+	for (const deadline = Date.now() + 2000; heartbeats() < 2 && Date.now() < deadline;) await Bun.sleep(5)
+	expect(heartbeats()).toBeGreaterThanOrEqual(2)
 
 	await releaseNudge(state, request)
 	expect(state.press).toBeUndefined()

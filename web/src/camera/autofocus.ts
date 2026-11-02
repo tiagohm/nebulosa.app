@@ -1,12 +1,13 @@
-import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusState, AutoFocusVerification, CameraCapabilities, CaptureSnoop, ServerEvent, StarDetectionRequest } from 'api'
+import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusState, AutoFocusVerification, CameraCapabilities, CaptureSnoop, ServerEvent, StarDetectionRequest } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit, responseError } from '../http'
+import { deviceUrl } from '../http'
 import type { AutoFocusSettings, CameraExposureSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { DEFAULT_APERTURE_RADIUS } from '../stars/stars'
 import { cameraKey, fitExposure } from './capture'
+import { applySession, type CameraSessionKind, type CameraSessionRecords, loadSessionRecord, refreshSessionRecords, sendSessionCommand } from './sessions'
 
 // Auto Focus sessions as this tab knows them. The server owns every session, whichever tab started it, so
 // this store only mirrors it: the compact summary of the latest session of each camera arrives with every
@@ -16,22 +17,20 @@ import { cameraKey, fitExposure } from './capture'
 // carries a token, so a retried request answers the session of the first one instead of starting another.
 
 // Auto Focus state of the tab.
-export interface AutoFocusRuntime {
-	// Latest session of each camera, by camera key (cameraKey).
-	sessions: Record<string, AutoFocusSessionSummary>
-	// Complete record of each session fetched so far, by session id.
-	details: Record<string, AutoFocusSession>
-	// Cameras with a start or stop of this tab waiting for the server.
-	pending: Record<string, boolean>
-	// Why this tab's last command to a camera failed; cleared by its next command.
-	errors: Record<string, string>
-}
+export type AutoFocusRuntime = CameraSessionRecords<AutoFocusSessionSummary, AutoFocusSession>
 
 // Auto Focus state of the tab.
 export const autoFocusRuntime = proxy<AutoFocusRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
 
-// Refreshes of the snapshot, ordered against the session events applied meanwhile, by camera key.
-const refreshes = new SnapshotRefreshes()
+// How the sessions are mirrored (sessions.ts): the complete record is fetched again when the summary reports
+// a new measurement, a best focus, or an end. Its sessions count no revision, so a record with more
+// measurements, another state, or an end is the newer one.
+const AUTO_FOCUS_SESSIONS: CameraSessionKind<AutoFocusSessionSummary, AutoFocusSession> = {
+	url: '/api/autofocus',
+	refreshes: new SnapshotRefreshes(),
+	stale: (session, _, details) => !details || details.measurements.length !== session.measurementCount || details.estimatedPosition !== session.estimatedPosition || (session.endedAt !== undefined && details.endedAt === undefined),
+	newer: (loaded, known) => loaded.measurements.length > known.measurements.length || (loaded.endedAt !== undefined && known.endedAt === undefined) || loaded.state !== known.state,
+}
 
 // Label of each session state.
 export const AUTO_FOCUS_STATE_LABELS: Readonly<Record<AutoFocusState, string>> = {
@@ -143,84 +142,24 @@ export function autoFocusRequest(
 	}
 }
 
-// Fetches the complete record of a session; a record with fewer measurements than the one known, as a late
-// response can be, never replaces it, and a session the server no longer keeps is forgotten.
-export async function loadAutoFocusSession(state: AutoFocusRuntime, sessionId: string, request: typeof fetch = fetch) {
-	try {
-		const response = await request(`/api/autofocus/${encodeURIComponent(sessionId)}`)
-
-		if (response.status === 404) {
-			delete state.details[sessionId]
-			return
-		}
-
-		if (!response.ok) return
-		const session = (await response.json()) as AutoFocusSession
-		const known = state.details[sessionId]
-		if (!known || session.measurements.length > known.measurements.length || (session.endedAt !== undefined && known.endedAt === undefined) || session.state !== known.state) state.details[sessionId] = session
-	} catch {
-		// The server is unreachable; the next socket open refreshes the sessions.
-	}
+// Fetches the complete record of a session (loadSessionRecord).
+export function loadAutoFocusSession(state: AutoFocusRuntime, sessionId: string, request: typeof fetch = fetch) {
+	return loadSessionRecord(state, AUTO_FOCUS_SESSIONS, sessionId, request)
 }
 
-// Applies an Auto Focus event; any other event is ignored. A session older than the one known for its camera
-// never replaces it. The complete record is fetched again when the summary reports a new measurement, a
-// best focus, or an end.
+// Applies a Auto Focus event (applySession); any other event is ignored.
 export function handleAutoFocusEvent(state: AutoFocusRuntime, event: ServerEvent, request: typeof fetch = fetch) {
-	if (event.type !== 'autofocus:updated') return
-
-	const { session } = event
-	const key = cameraKey(session.camera.connectionId, session.camera.deviceId)
-	const known = state.sessions[key]
-	if (known && known.sessionId !== session.sessionId && known.startedAt > session.startedAt) return
-
-	refreshes.updated(key)
-	state.sessions[key] = session
-	if (known?.sessionId !== session.sessionId) for (const id of Object.keys(state.details)) if (id !== session.sessionId) delete state.details[id]
-
-	const details = state.details[session.sessionId]
-	if (!details || details.measurements.length !== session.measurementCount || details.estimatedPosition !== session.estimatedPosition || (session.endedAt !== undefined && details.endedAt === undefined)) void loadAutoFocusSession(state, session.sessionId, request)
+	if (event.type === 'autofocus:updated') applySession(state, AUTO_FOCUS_SESSIONS, event.session, request)
 }
 
-// Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, leaving what an
-// event changed meanwhile, so a session that ended during the request is never shown running again, and fetches their
-// complete records. A response is dropped when another refresh started meanwhile.
-export async function refreshAutoFocus(state: AutoFocusRuntime, request: typeof fetch = fetch) {
-	const token = refreshes.start()
-
-	try {
-		const response = await request('/api/autofocus')
-		if (!response.ok || !refreshes.current(token)) return
-		const snapshot = (await response.json()) as AutoFocusSnapshot
-		if (!refreshes.current(token)) return
-
-		state.sessions = refreshes.merge(state.sessions, snapshot.sessions, ({ camera }) => cameraKey(camera.connectionId, camera.deviceId))
-		const kept = Object.values(state.sessions).map(({ sessionId }) => sessionId)
-		for (const id of Object.keys(state.details)) if (!kept.includes(id)) delete state.details[id]
-		for (const id of kept) void loadAutoFocusSession(state, id, request)
-	} catch {
-		// The server is unreachable; the next socket open refreshes the sessions.
-	} finally {
-		refreshes.end(token)
-	}
+// Replaces the sessions with the server's snapshot and fetches their complete records (refreshSessionRecords).
+export function refreshAutoFocus(state: AutoFocusRuntime, request: typeof fetch = fetch) {
+	return refreshSessionRecords(state, AUTO_FOCUS_SESSIONS, request)
 }
 
-// Sends a command of a camera and records its failure. When the server cannot be reached, the command may
-// still have been applied, so the snapshot is fetched again instead of assuming nothing happened.
-async function command(state: AutoFocusRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
-	if (state.pending[key]) return
-	state.pending[key] = true
-	delete state.errors[key]
-
-	try {
-		const response = await request(url, jsonInit('POST', body))
-		if (!response.ok) state.errors[key] = await responseError(response)
-	} catch {
-		state.errors[key] = 'Unable to reach the server.'
-		await refreshAutoFocus(state, request)
-	} finally {
-		delete state.pending[key]
-	}
+// Sends a command of a camera (sendSessionCommand).
+function command(state: AutoFocusRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
+	return sendSessionCommand(state, key, url, body, () => refreshAutoFocus(state, request), request)
 }
 
 // Starts an Auto Focus with a camera; its progress arrives as events.

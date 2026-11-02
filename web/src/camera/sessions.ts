@@ -25,6 +25,8 @@ export interface CameraSessionSummary {
 
 // Fields of the complete record of a session the mirror reads.
 export interface CameraSessionRecord {
+	// Id of the session.
+	readonly sessionId: string
 	// Number of the latest change of the session the record holds; absent for a kind that does not count them.
 	readonly revision?: number
 }

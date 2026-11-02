@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { PI } from 'nebulosa/src/core/constants'
 import { DEFAULT_STREAK_DETECTION_OPTIONS, type Streak } from 'nebulosa/src/imaging/analysis/streak/types'
+import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import { ImageStore } from './images'
 import { PlateSolvingService, type PlateSolveResult } from './platesolving'
@@ -83,7 +84,7 @@ function writeStreakField({ streak = true, cfa, extra = [] }: { streak?: boolean
 // Creates a service over its own image store and plate solving and star detection services, recording its events.
 function setup(options?: StreakDetectionServiceOptions) {
 	const images = new ImageStore()
-	const tools = new ExternalToolsStore(join(root, `settings-${files++}`, 'settings.json'))
+	const tools = new ExternalToolsStore(AppDatabase.memory())
 	const plateSolving = new PlateSolvingService(images, tools, () => {})
 	const stars = new StarDetectionService(images, tools, () => {})
 	const events: StreakDetectionEvent[] = []

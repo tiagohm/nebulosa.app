@@ -10,6 +10,7 @@ import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { annotationCacheKey, type AnnotationEvent, type AnnotationImageContext, type AnnotationJob, type AnnotationRequest, AnnotationService, type AnnotationServiceOptions, type AnnotationSky, createAnnotationRoutes, type SolarSystemSearch, solarSystemSearchUnavailable, observationContext } from './annotations'
+import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import { ImageStore } from './images'
 import { PlateSolvingService, type PlateSolveResult } from './platesolving'
@@ -95,7 +96,7 @@ function sky(times: (number | undefined)[] = []): AnnotationSky {
 // Creates a service over its own image store and a real plate solving service, recording its events.
 function setup(annotationSky: AnnotationSky = sky(), options?: AnnotationServiceOptions) {
 	const images = new ImageStore()
-	const tools = new ExternalToolsStore(join(root, `settings-${files++}`, 'settings.json'))
+	const tools = new ExternalToolsStore(AppDatabase.memory())
 	const plateSolving = new PlateSolvingService(images, tools, () => {})
 	const events: AnnotationEvent[] = []
 	const service = new AnnotationService(images, plateSolving, annotationSky, (event) => events.push(event), options)
@@ -264,7 +265,7 @@ describe('service', () => {
 		const images = new ImageStore()
 		const info = await images.open(writeImage())
 		const header = await images.open(writeImage(wcs()))
-		const solution = new PlateSolvingService(images, new ExternalToolsStore(join(root, `settings-${files++}`, 'settings.json')), () => {}).solutions(header.id)!.header!
+		const solution = new PlateSolvingService(images, new ExternalToolsStore(AppDatabase.memory()), () => {}).solutions(header.id)!.header!
 		const results: Record<string, PlateSolveResult> = {
 			solved: { jobId: 'solved', imageId: info.id, solution } as unknown as PlateSolveResult,
 			other: { jobId: 'other', imageId: 'another', solution } as unknown as PlateSolveResult,

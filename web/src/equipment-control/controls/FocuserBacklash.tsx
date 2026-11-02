@@ -92,7 +92,6 @@ export function FocuserBacklash({ focuser }: FocuserBacklashProps) {
 			{dirty && <Notice>{focuser.moving ? 'Unsaved changes. The move in progress keeps the applied settings.' : 'Unsaved changes. Moves use the applied settings.'}</Notice>}
 			{apply.status === 'conflict' && <Notice error>Another tab changed these settings; the form shows them now.</Notice>}
 			{apply.status === 'error' && <Notice error>{`Save failed: ${apply.error}`}</Notice>}
-			{backlash.error && <Notice error>{`Invalid configuration file: ${backlash.error}. Moves are not compensated.`}</Notice>}
 			{focuser.backlashEnabled && (saved.enabled ? <Notice error>{`The driver compensates the backlash itself (${focuser.backlash.value} steps), so compensated moves are refused. Turn one of them off.`}</Notice> : <Notice>{`The driver compensates the backlash itself (${focuser.backlash.value} steps).`}</Notice>)}
 			<Notice>Backlash compensation is applied automatically to supported focuser positioning commands across Nebulosa.</Notice>
 		</PanelSection>

@@ -145,19 +145,15 @@ export class OperationRegistry implements Disposable {
 
 	// Starts and tracks the operation of a command identified by a token the client generated for one
 	// request, so a request repeated after a lost response, a retry, or a double submission never commands
-	// the device twice: a token already seen returns the record of its operation without calling start. start
-	// receives a reporter publishing the progress of the operation while it runs.
+	// the device twice: a token already seen returns the record of its operation without calling start. start is
+	// called once the operation is published as running, and receives a reporter publishing the progress of the
+	// operation while it runs, from its first synchronous step on.
 	run(kind: OperationKind, devices: readonly OperationDevice[], token: string, start: (report: OperationProgressReporter) => Promise<OperationResult<unknown>>): OperationRecord {
 		const known = this.#tokens.get(token)
 		if (known) return known
 
 		const operationId = crypto.randomUUID()
-		const record = this.#track(
-			operationId,
-			kind,
-			devices,
-			start((progress) => this.#progress(operationId, progress)),
-		)
+		const record = this.#track(operationId, kind, devices, () => start((progress) => this.#progress(operationId, progress)))
 		this.#tokens.set(token, record)
 		if (this.#tokens.size > MAX_TOKENS) this.#tokens.delete(this.#tokens.keys().next().value!)
 		return record
@@ -167,16 +163,17 @@ export class OperationRegistry implements Disposable {
 	// result settles; a rejected result fails with reason commandFailed. Returns the running record, whose
 	// id names the operation in every later event.
 	track(kind: OperationKind, devices: readonly OperationDevice[], result: Promise<OperationResult<unknown>>): OperationRecord {
-		return this.#track(crypto.randomUUID(), kind, devices, result)
+		return this.#track(crypto.randomUUID(), kind, devices, () => result)
 	}
 
-	// Publishes the operation operationId as running and as finished once result settles.
-	#track(operationId: string, kind: OperationKind, devices: readonly OperationDevice[], result: Promise<OperationResult<unknown>>): OperationRecord {
+	// Publishes the operation operationId as running, then starts it with start, and publishes it as finished once the
+	// result settles; a start that throws fails it with reason commandFailed.
+	#track(operationId: string, kind: OperationKind, devices: readonly OperationDevice[], start: () => Promise<OperationResult<unknown>>): OperationRecord {
 		const record: OperationRecord = { operationId, kind, devices, state: 'running', startedAt: Date.now() }
 		this.#running.set(record.operationId, record)
 		this.listener({ type: 'operation:updated', operation: record })
 
-		void result.then(
+		void Promise.try(start).then(
 			(outcome) => this.#finish(outcome.ok ? { ...record, state: 'succeeded' } : { ...record, state: 'failed', reason: outcome.reason, error: outcome.error }),
 			(error: unknown) => this.#finish({ ...record, state: 'failed', reason: 'commandFailed', error: Error.isError(error) ? error.message : undefined }),
 		)
@@ -184,7 +181,7 @@ export class OperationRegistry implements Disposable {
 		return record
 	}
 
-	// Publishes the progress of a running operation; ignored before it is tracked and once it finished.
+	// Publishes the progress of a running operation; ignored once it finished.
 	#progress(operationId: string, progress: OperationProgress) {
 		const record = this.#running.get(operationId)
 		if (!record) return

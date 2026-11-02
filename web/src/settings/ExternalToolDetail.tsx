@@ -12,7 +12,7 @@ import { type CheckDisplay, CheckBadge, ConfigBadge } from './ExternalToolStatus
 // Settings of one external program or web service: the settings it takes (its executable path on the server,
 // the configuration file passed to it, or the endpoint of the service) and the default time limit of a run,
 // edited as a local draft that only Save sends to the server. A web service is signed in to with an API key typed
-// here, sent once to the server and never kept in the draft or the browser; only whether a session is saved is
+// here, sent once to the server and never kept in the draft or the browser; only whether the server holds a session is
 // shown. Test checks the draft on the server's
 // filesystem without saving it, and its result is shown only while the draft still has the values it
 // checked. Saved settings changed by another tab replace an unchanged draft; an edited draft is kept and
@@ -84,7 +84,7 @@ function SignIn({ tool, disabled }: { readonly tool: ExternalToolState; readonly
 							{busy ? 'Signing In…' : 'Sign In'}
 						</Button>
 					</Actions>
-					<Notice>The key is sent once to the service through the server and never stored; only the session the service returns is saved on the server. Images solved with this service are uploaded to it.</Notice>
+					<Notice>The key is sent once to the service through the server and never stored; the session the service returns is kept in the memory of the server only, so a restart of the server signs out. Images solved with this service are uploaded to it.</Notice>
 				</>
 			)}
 			{disabled && !tool.signedIn && <Notice>Save or reset the changes first: signing in uses the saved endpoint.</Notice>}
@@ -165,11 +165,6 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 					<CheckBadge status={checkStatus} />
 				</div>
 			</header>
-			{tool.error && (
-				<div className="border-b border-line-100 px-4 py-2">
-					<Notice error>{tool.error}. Saving replaces it with these settings, unless it was written by a newer version.</Notice>
-				</div>
-			)}
 			{outdated && (
 				<div className="flex flex-wrap items-center gap-3 border-b border-line-100 px-4 py-2">
 					<Notice error>These settings were saved elsewhere since you started editing. Reload them to continue; your changes will be discarded.</Notice>
@@ -224,7 +219,7 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 				{check ? (
 					<>
 						<Notice error={check.status !== 'available'}>{check.message}</Notice>
-						<Notice>{tool.session ? 'Test checks the endpoint and the saved session without contacting the service.' : `Test checks the files on the server only; it does not start ${tool.name} nor analyze an image.`}</Notice>
+						<Notice>{tool.session ? 'Test checks the endpoint and the session of the server without contacting the service.' : `Test checks the files on the server only; it does not start ${tool.name} nor analyze an image.`}</Notice>
 						<CheckDiagnostics check={check} />
 					</>
 				) : (

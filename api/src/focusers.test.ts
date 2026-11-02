@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import type { CommandAccepted } from './commands'
 import { ConnectionManager } from './connection'
+import { AppDatabase } from './database'
 import { type FocuserBacklashConfig, FocuserBacklashStore } from './focuserbacklash'
 import { type FocuserBacklashEvent, type FocuserBacklashState, FocuserCommands } from './focusers'
 import { type OperationEvent, OperationRegistry } from './operations'
@@ -38,7 +39,7 @@ async function setup() {
 		manager.devices,
 		(connectionId) => manager.client(connectionId),
 		operations,
-		new FocuserBacklashStore(join(directory, 'focusers.json')),
+		new FocuserBacklashStore(AppDatabase.memory()),
 		(event) => backlashEvents.push(event),
 	)
 	disposables.push(commands)
@@ -111,8 +112,8 @@ test('refuses unknown and disconnected focusers', async () => {
 
 // Saves the backlash compensation of the focuser from its current revision and returns its new state.
 async function saveBacklash(commands: FocuserCommands, id: string, focuserId: string, config: FocuserBacklashConfig) {
-	const { revision } = (await (await commands.backlashState(id, focuserId)).json()) as FocuserBacklashState
-	const response = await commands.saveBacklash(id, focuserId, { config, revision })
+	const { revision } = (await commands.backlashState(id, focuserId).json()) as FocuserBacklashState
+	const response = commands.saveBacklash(id, focuserId, { config, revision })
 	expect(response.status).toBe(200)
 	return (await response.json()) as FocuserBacklashState
 }

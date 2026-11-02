@@ -71,8 +71,6 @@ export interface FocuserBacklashState {
 	readonly revision: number
 	// ABSOLUTE mode offset, in steps: the reported position minus the logical one; 0 in any other case.
 	readonly offset: number
-	// Why the settings file cannot be used; the defaults are then applied.
-	readonly error?: string
 }
 
 // Body of PUT /api/connections/:id/focusers/:deviceId/backlash.
@@ -174,7 +172,7 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 		const delta = direction === 'IN' ? -steps : steps
 
 		return startCommand(this.operations, 'focuser.move', connectionId, focuser, request, async (report) => {
-			const settings = await this.#settings(connectionId, focuser)
+			const settings = this.#settings(connectionId, focuser)
 			if (settings) return await this.#compensated(coordinator, focuser, settings, () => this.#logicalPosition(focuser) + delta, undefined, report)
 			if (focuser.canRelativeMove) return direction === 'IN' ? await this.#commander.moveIn(coordinator, focuser, steps) : await this.#commander.moveOut(coordinator, focuser, steps)
 			return await this.#commander.moveTo(coordinator, focuser, focuser.position.value + delta)
@@ -213,26 +211,24 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	}
 
 	// Responds with the backlash compensation of a focuser, connected or not, or 404.
-	async backlashState(connectionId: string, deviceId: string): Promise<Response> {
+	backlashState(connectionId: string, deviceId: string): Response {
 		const focuser = findDevice(this, connectionId, 'focuser', deviceId)
 		if (!focuser) return notFound('Focuser')
-		return Response.json(await this.#backlashState(connectionId, focuser))
+		return Response.json(this.#backlashState(connectionId, focuser))
 	}
 
 	// Saves the backlash compensation of a focuser, connected or not, and responds with its new state; a move
 	// in progress keeps the settings it started with, and the memory of the compensator is forgotten. 404, 409
-	// with the current state when another revision was saved since, 409 when the settings file was written by
-	// a newer version, and 500 when the file cannot be written.
-	async saveBacklash(connectionId: string, deviceId: string, { config, revision }: FocuserBacklashSaveRequest): Promise<Response> {
+	// with the current state when another revision was saved since, and 500 when the database cannot be written.
+	saveBacklash(connectionId: string, deviceId: string, { config, revision }: FocuserBacklashSaveRequest): Response {
 		const focuser = findDevice(this, connectionId, 'focuser', deviceId)
 		if (!focuser) return notFound('Focuser')
 
 		try {
-			const outcome = await this.backlash.save(connectionId, deviceId, config, revision)
-			if (outcome.status === 'newerVersion') return errorResponse('The focuser settings file was written by a newer version of Nebulosa', 409, 'newerVersion')
-			if (outcome.status === 'conflict') return errorResponse('The settings were changed by another client', 409, 'conflict', { backlash: await this.#backlashState(connectionId, focuser) })
+			const outcome = this.backlash.save(connectionId, deviceId, config, revision)
+			if (outcome.status === 'conflict') return errorResponse('The settings were changed by another client', 409, 'conflict', { backlash: this.#backlashState(connectionId, focuser) })
 			this.#compensations.delete(focuser)
-			const backlash = await this.#backlashState(connectionId, focuser)
+			const backlash = this.#backlashState(connectionId, focuser)
 			this.listener?.({ type: 'focuserBacklash:updated', backlash })
 			return Response.json(backlash)
 		} catch (error) {
@@ -247,8 +243,8 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	}
 
 	// Saved compensation of a focuser when its moves are compensated: enabled and with absolute positioning.
-	async #settings(connectionId: string, focuser: Focuser): Promise<StoredFocuserBacklash | undefined> {
-		const { settings } = await this.backlash.get(connectionId, focuser.id)
+	#settings(connectionId: string, focuser: Focuser): StoredFocuserBacklash | undefined {
+		const settings = this.backlash.get(connectionId, focuser.id)
 		return settings.enabled && focuser.canAbsoluteMove ? settings : undefined
 	}
 
@@ -256,7 +252,7 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	async #position(scope: OperationScope, focuser: Focuser, target: () => number, options?: FocuserCommandOptions, report?: OperationProgressReporter): Promise<OperationResult<void>> {
 		const connectionId = this.devices.connectionOf(focuser)
 		if (!connectionId || !focuser.connected) return failedOperationResult('disconnected')
-		const settings = await this.#settings(connectionId, focuser)
+		const settings = this.#settings(connectionId, focuser)
 		if (settings) return await this.#compensated(scope, focuser, settings, target, options, report)
 		this.#forget(focuser)
 		return await this.#commander.moveTo(scope, focuser, target(), options)
@@ -337,18 +333,13 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	#publish(focuser: Focuser) {
 		const connectionId = this.devices.connectionOf(focuser)
 		if (!connectionId || !this.listener) return
-		const { listener } = this
-		void this.#backlashState(connectionId, focuser).then(
-			(backlash) => listener({ type: 'focuserBacklash:updated', backlash }),
-			() => undefined,
-		)
+		this.listener({ type: 'focuserBacklash:updated', backlash: this.#backlashState(connectionId, focuser) })
 	}
 
 	// Compensation state of a focuser.
-	async #backlashState(connectionId: string, focuser: Focuser): Promise<FocuserBacklashState> {
-		const { settings, error } = await this.backlash.get(connectionId, focuser.id)
-		const { enabled, mode, backlashIn, backlashOut, revision } = settings
-		return { connectionId, deviceId: focuser.id, config: { enabled, mode, backlashIn, backlashOut }, revision, offset: this.#offset(focuser), ...(error && { error }) }
+	#backlashState(connectionId: string, focuser: Focuser): FocuserBacklashState {
+		const { enabled, mode, backlashIn, backlashOut, revision } = this.backlash.get(connectionId, focuser.id)
+		return { connectionId, deviceId: focuser.id, config: { enabled, mode, backlashIn, backlashOut }, revision, offset: this.#offset(focuser) }
 	}
 }
 

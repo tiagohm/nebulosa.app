@@ -1,23 +1,23 @@
 import { constants } from 'fs'
-import { access, readFile, stat } from 'fs/promises'
-import { isAbsolute, join, resolve } from 'path'
+import { access, stat } from 'fs/promises'
+import { isAbsolute, resolve } from 'path'
 import { login, NOVA_ASTROMETRY_NET_URL } from 'nebulosa/src/astrometry/solvers/astrometrynet'
-import { DEFAULT_DATA_DIRECTORY } from './database'
+import type { AppDatabase } from './database'
 import { errorResponse } from './http'
-import { errorCode, isRecord, writeAtomically } from './util'
+import { errorCode } from './util'
 
 // Server-side settings of the external programs and services the backend uses: ASTAP, the local solve-field
 // of astrometry.net, and the nova.astrometry.net web service. Each one is registered here with the capabilities
 // its adapters provide and the settings it takes; nothing else can be configured, and no route runs an
 // arbitrary command. Settings belong to the server instance (not to a browser, profile, or workspace), are
-// persisted in a versioned JSON file of the server, and are applied to the next runs without a restart. A test
+// persisted in the operational database, and are applied to the next runs without a restart. A test
 // checks the executable (and the configuration file) on the server's filesystem only: it never starts the
 // program, so it proves neither that the program runs nor that it analyzes images correctly. A web service is
-// signed in to with its API key, which is sent once to the service and never stored: only the session the
-// service returns is saved, reused by the runs, and removed by signing out; clients only learn whether a
-// session is saved. Any client that can reach the API can change and test these settings, like every other route.
+// signed in to with its API key, which is sent once to the service and never stored: the session the service
+// returns is kept in the memory of the server only, reused by the runs until signing out or a restart; clients only
+// learn whether there is one. Any client that can reach the API can change and test these settings, like every other route.
 
-// Identifier of a supported external program; also its key in the settings file and its route segment.
+// Identifier of a supported external program; also its key in the database and its route segment.
 export type ExternalToolId = 'astap' | 'astrometryLocal' | 'nova'
 
 // Capability an adapter of an external program provides to the services that use it.
@@ -72,8 +72,8 @@ export interface ResolvedExternalTool extends ExternalToolConfig {
 	readonly session?: string
 }
 
-// State of the saved settings: none saved, saved, or unusable because the settings file cannot be read.
-export type ExternalToolConfigStatus = 'notConfigured' | 'configured' | 'invalid'
+// State of the saved settings: not configured (no executable, or a web service not signed in to), or configured.
+export type ExternalToolConfigStatus = 'notConfigured' | 'configured'
 
 // Outcome of a check: the executable can be run, is not where the settings point, or cannot be run.
 export type ExternalToolCheckStatus = 'available' | 'unavailable' | 'failed'
@@ -88,7 +88,7 @@ export type ExternalToolCheckStatus = 'available' | 'unavailable' | 'failed'
 // - inaccessible: the path cannot be inspected, such as a directory the server may not read.
 // - configMissing: the configuration file does not exist or is not a file.
 // - invalidEndpoint: the endpoint of a web service is not an http(s) URL.
-// - signedOut: no session of the web service is saved.
+// - signedOut: the server holds no session of the web service.
 export type ExternalToolCheckCode = 'ok' | 'empty' | 'missing' | 'notFile' | 'notExecutable' | 'inaccessible' | 'configMissing' | 'invalidEndpoint' | 'signedOut'
 
 // Result of checking the executable of a configuration on the server's filesystem.
@@ -121,10 +121,8 @@ export interface ExternalToolState extends ExternalToolDefinition {
 	readonly revision: number
 	// Latest check of the saved settings since the server started; absent when not tested.
 	readonly lastCheck?: ExternalToolCheck
-	// Whether a session of the web service is saved; absent for a program.
+	// Whether the server holds a session of the web service; absent for a program.
 	readonly signedIn?: boolean
-	// Why the settings file cannot be used, when status is invalid.
-	readonly error?: string
 }
 
 // Body of a request signing in to a web service.
@@ -134,14 +132,13 @@ export interface ExternalToolLoginRequest {
 }
 
 // Outcome of signing in or out: the new state, a refusal of the service (its message), an unreachable service,
-// a program that is not a web service, or a settings file written by a newer version.
+// or a program that is not a web service.
 export type ExternalToolLoginOutcome =
 	| { readonly status: 'signedIn'; readonly tool: ExternalToolState }
 	| { readonly status: 'signedOut'; readonly tool: ExternalToolState }
 	| { readonly status: 'refused'; readonly error: string }
 	| { readonly status: 'unreachable'; readonly error: string }
 	| { readonly status: 'notService' }
-	| { readonly status: 'newerVersion' }
 
 // Body of a request saving the settings of an external program.
 export interface ExternalToolSaveRequest {
@@ -167,9 +164,8 @@ export interface ExternalToolEvent {
 // Receiver of external program events.
 export type ExternalToolListener = (event: ExternalToolEvent) => void
 
-// Outcome of a save: saved, refused because another revision was saved since, or refused because the
-// settings file was written by a newer version, which is never overwritten.
-export type ExternalToolSaveOutcome = { readonly status: 'saved'; readonly tool: ExternalToolState } | { readonly status: 'conflict'; readonly tool: ExternalToolState } | { readonly status: 'newerVersion' }
+// Outcome of a save: saved, or refused because another revision was saved since.
+export type ExternalToolSaveOutcome = { readonly status: 'saved'; readonly tool: ExternalToolState } | { readonly status: 'conflict'; readonly tool: ExternalToolState }
 
 // Default time limit of a run, in milliseconds: 5 minutes, as ASTAP's adapters use when given none.
 export const DEFAULT_EXTERNAL_TOOL_TIMEOUT = 300000
@@ -208,29 +204,19 @@ export const EXTERNAL_TOOLS: readonly ExternalToolDefinition[] = [
 	},
 ]
 
-// File the settings are persisted in when none is given.
-export const DEFAULT_SETTINGS_FILE = join(DEFAULT_DATA_DIRECTORY, 'settings.json')
-
-// Version of the settings file format written by this version. The fields of the programs added since version 1
-// (config, endpoint, session) are optional, so a version 1 file is read as is.
-const SETTINGS_VERSION = 1
-
-// Saved settings of a program, as kept in memory and in the settings file.
+// Saved settings of a program.
 interface StoredTool extends ExternalToolConfig {
-	// Revision of the settings, increased by every save, sign-in, and sign-out.
+	// Revision of the settings, increased by every save, sign-in, and sign-out; 0 when never saved.
 	readonly revision: number
-	// Session token of a web service signed in to.
-	readonly session?: string
 }
 
-// Settings read from the settings file.
-interface LoadedSettings {
-	// Settings of every supported program; the defaults for those not in the file.
-	readonly tools: ReadonlyMap<ExternalToolId, StoredTool>
-	// Why the file cannot be used; absent when it was read or does not exist.
-	readonly error?: string
-	// Whether the file was written by a newer version, so it must not be overwritten.
-	readonly newer?: boolean
+// Row of a program in external_tool_settings.
+interface ToolRow {
+	readonly executable: string
+	readonly timeout: number
+	readonly config: string | null
+	readonly endpoint: string | null
+	readonly revision: number
 }
 
 // Whether value names a supported external program.
@@ -255,28 +241,6 @@ function configOf(id: ExternalToolId, { executable, timeout, config, endpoint }:
 	return { executable: fields.includes('executable') ? executable : '', timeout, ...(fields.includes('config') && { config: config ?? '' }), ...(fields.includes('endpoint') && { endpoint: endpoint ?? '' }) }
 }
 
-// Returns the settings of every supported program before anything is saved.
-function defaultTools(): Map<ExternalToolId, StoredTool> {
-	return new Map(EXTERNAL_TOOLS.map((tool) => [tool.id, { ...configOf(tool.id, { executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT }), revision: 0 }]))
-}
-
-// Reads the stored settings of a program from the settings file, whose content is not trusted: a path, an
-// endpoint, or a session that is not a string becomes empty (no session), a timeout that is not an integer within
-// the program's limits becomes the default, and a revision that is not a non-negative integer becomes 0.
-function normalizeTool(id: ExternalToolId, value: unknown): StoredTool {
-	const { timeoutLimits } = definition(id)
-	const entry = isRecord(value) ? value : {}
-	const { executable, timeout, config, endpoint, session, revision } = entry
-	const text = (field: unknown) => (typeof field === 'string' ? field : '')
-	const stored = configOf(id, {
-		executable: text(executable),
-		timeout: Number.isInteger(timeout) && (timeout as number) >= timeoutLimits.min && (timeout as number) <= timeoutLimits.max ? (timeout as number) : DEFAULT_EXTERNAL_TOOL_TIMEOUT,
-		config: text(config),
-		endpoint: text(endpoint),
-	})
-	return { ...stored, revision: Number.isInteger(revision) && (revision as number) >= 0 ? (revision as number) : 0, ...(definition(id).session && typeof session === 'string' && session && { session }) }
-}
-
 // Returns the base URL of a web service: the endpoint without a trailing slash, or the public nova endpoint when
 // it is empty. Undefined when it is not an http(s) URL.
 export function serviceUrl(endpoint: string | undefined): string | undefined {
@@ -288,29 +252,6 @@ export function serviceUrl(endpoint: string | undefined): string | undefined {
 	} catch {
 		return undefined
 	}
-}
-
-// Parses the content of the settings file. Content that is not a settings document is reported as an
-// error; a document of a newer version is read as far as it is understood and marked as newer.
-export function parseSettings(text: string): LoadedSettings {
-	let data: unknown
-
-	try {
-		data = JSON.parse(text)
-	} catch {
-		return { tools: defaultTools(), error: 'The settings file is not valid JSON' }
-	}
-
-	if (!isRecord(data) || !isRecord(data.tools) || !Number.isInteger(data.version)) return { tools: defaultTools(), error: 'The settings file is not a Nebulosa settings document' }
-
-	const tools = new Map(EXTERNAL_TOOLS.map((tool) => [tool.id, normalizeTool(tool.id, (data.tools as Record<string, unknown>)[tool.id])]))
-	if ((data.version as number) > SETTINGS_VERSION) return { tools, error: 'The settings file was written by a newer version of Nebulosa', newer: true }
-	return { tools }
-}
-
-// Returns the content of the settings file for the settings of every program.
-function serializeSettings(tools: ReadonlyMap<ExternalToolId, StoredTool>) {
-	return `${JSON.stringify({ version: SETTINGS_VERSION, tools: Object.fromEntries(tools) }, undefined, '\t')}\n`
 }
 
 // Outcome of inspecting an executable, before timing is added.
@@ -350,12 +291,12 @@ export async function inspectExecutable(executable: string): Promise<Inspection>
 }
 
 // Inspects the settings of a program without running it: its executable, then its configuration file when one is
-// set (resolved against the server's working directory), or, for a web service, its endpoint and saved session.
+// set (resolved against the server's working directory), or, for a web service, its endpoint and whether the server holds a session.
 async function inspectTool(id: ExternalToolId, config: ExternalToolConfig, signedIn: boolean): Promise<Inspection> {
 	if (definition(id).session) {
 		if (!serviceUrl(config.endpoint)) return { status: 'failed', code: 'invalidEndpoint', message: 'The endpoint is not an http or https URL.' }
 		if (!signedIn) return { status: 'unavailable', code: 'signedOut', message: 'Not signed in. Sign in with the API key of your account.' }
-		return { status: 'available', code: 'ok', message: 'A session is saved. The service was not contacted, so the session may have expired.' }
+		return { status: 'available', code: 'ok', message: 'Signed in. The service was not contacted, so the session may have expired.' }
 	}
 
 	const inspection = await inspectExecutable(config.executable)
@@ -370,93 +311,95 @@ async function inspectTool(id: ExternalToolId, config: ExternalToolConfig, signe
 	return { status: 'unavailable', code: 'configMissing', resolvedPath: inspection.resolvedPath, message: 'No configuration file exists at this path on the server.' }
 }
 
-// Settings of the supported external programs, persisted in a JSON file of the server. The file is read
-// on first use, so creating the store has no side effect. Saves are applied one at a time; a save made
-// from an outdated revision is refused, so concurrent clients never overwrite each other silently. The
-// latest check of each program's saved settings is kept in memory only. Every change is published to the
-// listener.
+// Settings of the supported external programs, persisted in the operational database. Changes are applied one at a
+// time, so a save waits for a sign-in in progress; a save made from an outdated revision is refused, so concurrent
+// clients never overwrite each other silently. The sessions of the web services and the latest check of each
+// program's saved settings are kept in memory only, so a restart signs out of every service. Every change is
+// published to the listener.
 export class ExternalToolsStore {
-	// Settings read from the file, once the first read started.
-	#loaded?: Promise<LoadedSettings>
 	// Latest check of the saved settings of each program.
 	readonly #checks = new Map<ExternalToolId, ExternalToolCheck>()
-	// Tail of the saves in progress, which run one at a time.
+	// Session token of each web service signed in to.
+	readonly #sessions = new Map<ExternalToolId, string>()
+	// Tail of the changes in progress, which run one at a time.
 	#queue: Promise<unknown> = Promise.resolve()
 
-	// Creates the store of the settings file at file, publishing changes to listener.
+	// Creates the store of the settings in database, publishing changes to listener.
 	constructor(
-		readonly file: string = DEFAULT_SETTINGS_FILE,
+		readonly database: AppDatabase,
 		readonly listener?: ExternalToolListener,
 	) {}
 
-	// Returns the settings read from the file, reading it on the first call. A missing file gives the defaults.
-	#load(): Promise<LoadedSettings> {
-		return (this.#loaded ??= readFile(this.file, 'utf-8').then(parseSettings, (error: unknown) => {
-			const code = errorCode(error)
-			return code === 'ENOTDIR' || code === 'ENOENT' ? { tools: defaultTools() } : { tools: defaultTools(), error: 'The settings file cannot be read' }
-		}))
+	// Returns the saved settings of a program, the defaults when never saved.
+	#tool(id: ExternalToolId): StoredTool {
+		const row = this.database.db.query<ToolRow, [string]>('SELECT executable, timeout, config, endpoint, revision FROM external_tool_settings WHERE tool_id = ?').get(id)
+		if (!row) return { ...configOf(id, { executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT }), revision: 0 }
+		const { executable, timeout, config, endpoint, revision } = row
+		return { ...configOf(id, { executable, timeout, config: config ?? undefined, endpoint: endpoint ?? undefined }), revision }
 	}
 
-	// Returns the state of a program from loaded settings. A web service is configured once signed in, a program
-	// once its executable is set.
-	#state(id: ExternalToolId, { tools, error }: LoadedSettings): ExternalToolState {
-		const { revision, session, ...config } = tools.get(id)!
+	// Saves the settings of a program under revision. Throws when the database cannot be written.
+	#write(id: ExternalToolId, { executable, timeout, config, endpoint }: ExternalToolConfig, revision: number) {
+		this.database.db
+			.query(
+				'INSERT INTO external_tool_settings (tool_id, executable, timeout, config, endpoint, revision, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (tool_id) DO UPDATE SET executable = excluded.executable, timeout = excluded.timeout, config = excluded.config, endpoint = excluded.endpoint, revision = excluded.revision, updated_at = excluded.updated_at',
+			)
+			.run(id, executable, timeout, config ?? null, endpoint ?? null, revision, Date.now())
+	}
+
+	// Returns the state of a program. A web service is configured once signed in, a program once its executable is set.
+	#state(id: ExternalToolId): ExternalToolState {
+		const { revision, ...config } = this.#tool(id)
 		const tool = definition(id)
 		const lastCheck = this.#checks.get(id)
-		const status = error ? 'invalid' : (tool.session ? session : config.executable) ? 'configured' : 'notConfigured'
-		return { ...tool, status, config, revision, ...(lastCheck && { lastCheck }), ...(tool.session && { signedIn: !!session }), ...(error && { error }) }
+		const signedIn = this.#sessions.has(id)
+		const status = (tool.session ? signedIn : config.executable) ? 'configured' : 'notConfigured'
+		return { ...tool, status, config, revision, ...(lastCheck && { lastCheck }), ...(tool.session && { signedIn }) }
 	}
 
 	// Publishes the state of a program.
-	#publish(id: ExternalToolId, settings: LoadedSettings) {
-		const tool = this.#state(id, settings)
+	#publish(id: ExternalToolId) {
+		const tool = this.#state(id)
 		this.listener?.({ type: 'externalTool:updated', tool })
 		return tool
 	}
 
 	// Returns the state of every supported program, in display order.
-	async list(): Promise<ExternalToolState[]> {
-		const settings = await this.#load()
-		return EXTERNAL_TOOLS.map((tool) => this.#state(tool.id, settings))
+	list(): Promise<ExternalToolState[]> {
+		return Promise.resolve(EXTERNAL_TOOLS.map((tool) => this.#state(tool.id)))
 	}
 
 	// Returns the state of a program.
-	async get(id: ExternalToolId): Promise<ExternalToolState> {
-		return this.#state(id, await this.#load())
+	get(id: ExternalToolId): Promise<ExternalToolState> {
+		return Promise.resolve(this.#state(id))
 	}
 
-	// Saves the settings of a program edited from revision, replacing an unreadable settings file. A check
-	// of other settings stops being the program's latest one, and a web service whose endpoint changed is signed
-	// out, since its session belongs to the former one. Throws when the file cannot be written; the saved settings
-	// are then unchanged.
+	// Saves the settings of a program edited from revision. A check of other settings stops being the program's latest
+	// one, and a web service whose endpoint changed is signed out, since its session belongs to the former one. Throws
+	// when the database cannot be written; the saved settings are then unchanged.
 	save(id: ExternalToolId, config: ExternalToolConfig, revision: number): Promise<ExternalToolSaveOutcome> {
-		return this.#serialized(async (): Promise<ExternalToolSaveOutcome> => {
-			const settings = await this.#load()
-			if (settings.newer) return { status: 'newerVersion' }
-
-			const current = settings.tools.get(id)!
-			if (revision !== current.revision) return { status: 'conflict', tool: this.#state(id, settings) }
+		return this.#serialized((): ExternalToolSaveOutcome => {
+			const current = this.#tool(id)
+			if (revision !== current.revision) return { status: 'conflict', tool: this.#state(id) }
 
 			const next = configOf(id, config)
-			const session = current.session && (current.endpoint ?? '') === (next.endpoint ?? '') ? current.session : undefined
-			const saved = await this.#write(settings, id, { ...next, revision: current.revision + 1, ...(session && { session }) })
+			this.#write(id, next, current.revision + 1)
+			const signedOut = this.#sessions.has(id) && (current.endpoint ?? '') !== (next.endpoint ?? '')
+			if (signedOut) this.#sessions.delete(id)
 			const check = this.#checks.get(id)
-			if (check && (!sameConfig(check.config, next) || session !== current.session)) this.#checks.delete(id)
-			return { status: 'saved', tool: this.#publish(id, saved) }
+			if (check && (!sameConfig(check.config, next) || signedOut)) this.#checks.delete(id)
+			return { status: 'saved', tool: this.#publish(id) }
 		})
 	}
 
-	// Signs in to a web service at its saved endpoint with apiKey, and saves only the session the service returns;
-	// the key itself is never stored nor logged. A refused key or an unreachable service leaves the settings
-	// unchanged. Throws when the file cannot be written.
+	// Signs in to a web service at its saved endpoint with apiKey, and keeps only the session the service returns, in
+	// memory; the key itself is never stored nor logged. A refused key or an unreachable service leaves the settings
+	// unchanged. Throws when the database cannot be written.
 	login(id: ExternalToolId, apiKey: string): Promise<ExternalToolLoginOutcome> {
 		return this.#serialized(async (): Promise<ExternalToolLoginOutcome> => {
 			if (!definition(id).session) return { status: 'notService' }
 
-			const settings = await this.#load()
-			if (settings.newer) return { status: 'newerVersion' }
-
-			const current = settings.tools.get(id)!
+			const current = this.#tool(id)
 			const apiUrl = serviceUrl(current.endpoint)
 			if (!apiUrl) return { status: 'refused', error: 'The saved endpoint is not an http or https URL' }
 
@@ -471,71 +414,58 @@ export class ExternalToolsStore {
 				return { status: 'unreachable', error: 'Unable to reach the service' }
 			}
 
-			const saved = await this.#write(settings, id, { ...current, revision: current.revision + 1, session })
+			this.#write(id, current, current.revision + 1)
+			this.#sessions.set(id, session)
 			this.#checks.delete(id)
-			return { status: 'signedIn', tool: this.#publish(id, saved) }
+			return { status: 'signedIn', tool: this.#publish(id) }
 		})
 	}
 
-	// Signs out of a web service: removes its saved session. Throws when the file cannot be written.
+	// Signs out of a web service: forgets its session. Throws when the database cannot be written.
 	logout(id: ExternalToolId): Promise<ExternalToolLoginOutcome> {
-		return this.#serialized(async (): Promise<ExternalToolLoginOutcome> => {
+		return this.#serialized((): ExternalToolLoginOutcome => {
 			if (!definition(id).session) return { status: 'notService' }
 
-			const settings = await this.#load()
-			if (settings.newer) return { status: 'newerVersion' }
-
-			const { session: _, ...current } = settings.tools.get(id)!
-			const saved = await this.#write(settings, id, { ...current, revision: current.revision + 1 })
+			const current = this.#tool(id)
+			this.#write(id, current, current.revision + 1)
+			this.#sessions.delete(id)
 			this.#checks.delete(id)
-			return { status: 'signedOut', tool: this.#publish(id, saved) }
+			return { status: 'signedOut', tool: this.#publish(id) }
 		})
 	}
 
 	// Checks settings of a program on the server's filesystem without saving them (for a web service, its endpoint
-	// and whether a session is saved). When they are the program's saved settings at the end of the check, the
-	// result becomes its latest check.
+	// and whether it is signed in to). When they are the program's saved settings at the end of the check, the result
+	// becomes its latest check.
 	async check(id: ExternalToolId, config: ExternalToolConfig): Promise<ExternalToolCheck> {
 		const start = performance.now()
 		const checked = configOf(id, config)
-		const before = await this.#load()
-		const inspection = await inspectTool(id, checked, !before.error && !!before.tools.get(id)!.session)
+		const inspection = await inspectTool(id, checked, this.#sessions.has(id))
 		const check: ExternalToolCheck = { ...inspection, config: checked, checkedAt: Date.now(), duration: performance.now() - start }
 
-		const settings = await this.#load()
-
-		if (!settings.error && sameConfig(settings.tools.get(id)!, checked)) {
+		if (sameConfig(this.#tool(id), checked)) {
 			this.#checks.set(id, check)
-			this.#publish(id, settings)
+			this.#publish(id)
 		}
 
 		return check
 	}
 
 	// Returns the settings a run of a program uses, or undefined when the program is not configured (a web service
-	// not signed in to) or the settings file cannot be used. A service resolves them once when an operation starts
-	// and keeps the returned snapshot for the whole operation, so a later save applies to the next operations only.
-	async resolve(id: ExternalToolId): Promise<Readonly<ResolvedExternalTool> | undefined> {
-		const { tools, error } = await this.#load()
-		const { revision: _, ...tool } = tools.get(id)!
-		if (error || !(definition(id).session ? tool.session : tool.executable)) return undefined
-		return Object.freeze(tool)
+	// not signed in to). A service resolves them once when an operation starts and keeps the returned snapshot for the
+	// whole operation, so a later save applies to the next operations only.
+	resolve(id: ExternalToolId): Promise<Readonly<ResolvedExternalTool> | undefined> {
+		const { revision: _, ...tool } = this.#tool(id)
+		const session = this.#sessions.get(id)
+		if (!(definition(id).session ? session : tool.executable)) return Promise.resolve(undefined)
+		return Promise.resolve(Object.freeze({ ...tool, ...(session && { session }) }))
 	}
 
 	// Runs a change of the settings after the ones in progress, one at a time.
-	#serialized<T>(change: () => Promise<T>): Promise<T> {
+	#serialized<T>(change: () => T | Promise<T>): Promise<T> {
 		const run = this.#queue.then(change)
 		this.#queue = run.catch(() => undefined)
 		return run
-	}
-
-	// Writes the settings with those of one program replaced, and makes them the loaded ones.
-	async #write(settings: LoadedSettings, id: ExternalToolId, tool: StoredTool): Promise<LoadedSettings> {
-		const tools = new Map(settings.tools).set(id, tool)
-		await writeAtomically(this.file, serializeSettings(tools))
-		const saved: LoadedSettings = { tools }
-		this.#loaded = Promise.resolve(saved)
-		return saved
 	}
 }
 
@@ -555,8 +485,7 @@ export function createExternalToolsRoutes(store: ExternalToolsStore) {
 			// State of a program; 404 when it is not supported.
 			GET: async (req) => (isExternalToolId(req.params.id) ? Response.json(await store.get(req.params.id)) : toolNotFound()),
 			// Saves the settings of a program (ExternalToolSaveRequest) and responds with its new state. 409
-			// with the current state when another revision was saved since, 409 when the settings file was
-			// written by a newer version, and 500 when the file cannot be written.
+			// with the current state when another revision was saved since, and 500 when the database cannot be written.
 			PUT: async (req) => {
 				const { id } = req.params
 				if (!isExternalToolId(id)) return toolNotFound()
@@ -565,7 +494,6 @@ export function createExternalToolsRoutes(store: ExternalToolsStore) {
 				try {
 					const outcome = await store.save(id, config, revision)
 					if (outcome.status === 'conflict') return errorResponse('The settings were changed by another client', 409, 'conflict', { tool: outcome.tool })
-					if (outcome.status === 'newerVersion') return errorResponse('The settings file was written by a newer version of Nebulosa', 409, 'newerVersion')
 					return Response.json(outcome.tool)
 				} catch (error) {
 					return errorResponse(`Unable to write the settings: ${Error.isError(error) ? error.message : String(error)}`, 500, 'writeFailed')
@@ -607,7 +535,6 @@ async function loginResponse(change: () => Promise<ExternalToolLoginOutcome>): P
 	try {
 		const outcome = await change()
 		if (outcome.status === 'notService') return toolNotFound()
-		if (outcome.status === 'newerVersion') return errorResponse('The settings file was written by a newer version of Nebulosa', 409, 'newerVersion')
 		if (outcome.status === 'refused') return errorResponse(outcome.error, 422, 'refused')
 		if (outcome.status === 'unreachable') return errorResponse(outcome.error, 502, 'unreachable')
 		return Response.json(outcome.tool)

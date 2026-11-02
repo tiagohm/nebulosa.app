@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync }
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
+import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import type { ApiError } from './http'
 import { ImageStore } from './images'
@@ -92,7 +93,7 @@ function fakeAstap(csv: readonly string[], sleep = 0, exitCode = 0) {
 // Creates a service over its own image store and settings file, recording its events.
 function setup() {
 	const images = new ImageStore()
-	const tools = new ExternalToolsStore(join(root, `settings-${files++}`, 'settings.json'))
+	const tools = new ExternalToolsStore(AppDatabase.memory())
 	const events: StarDetectionEvent[] = []
 	const service = new StarDetectionService(images, tools, (event) => events.push(event))
 	return { images, tools, service, events }

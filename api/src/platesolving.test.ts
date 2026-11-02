@@ -6,6 +6,7 @@ import { pixelScale } from 'nebulosa/src/astronomy/formulas'
 import { readFits } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSource } from 'nebulosa/src/io/io'
 import { arcsec, deg, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
+import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import { ImageStore } from './images'
 import { createPlateSolvingRoutes, plateSolveCacheKey, type PlateSolutions, type PlateSolveJob, type PlateSolveRequest, type PlateSolvingEvent, PlateSolvingService, validatedSolution } from './platesolving'
@@ -158,7 +159,7 @@ function fakeNova({ upload = { status: 'success', subid: 3 }, job = 'success', w
 // Creates a service over its own image store and settings file, recording its events. Nova is polled every 10 ms.
 function setup() {
 	const images = new ImageStore()
-	const tools = new ExternalToolsStore(join(root, `settings-${files++}`, 'settings.json'))
+	const tools = new ExternalToolsStore(AppDatabase.memory())
 	const events: PlateSolvingEvent[] = []
 	const service = new PlateSolvingService(images, tools, (event) => events.push(event), { novaPollInterval: 10 })
 	return { images, tools, service, events }

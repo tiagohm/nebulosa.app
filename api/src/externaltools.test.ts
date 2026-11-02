@@ -1,8 +1,9 @@
 import { afterAll, describe, expect, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { createExternalToolsRoutes, DEFAULT_EXTERNAL_TOOL_TIMEOUT, EXTERNAL_TOOLS, type ExternalToolCheck, type ExternalToolEvent, type ExternalToolState, ExternalToolsStore, inspectExecutable, parseSettings } from './externaltools'
+import { AppDatabase } from './database'
+import { createExternalToolsRoutes, DEFAULT_EXTERNAL_TOOL_TIMEOUT, EXTERNAL_TOOLS, type ExternalToolCheck, type ExternalToolEvent, type ExternalToolState, ExternalToolsStore, inspectExecutable } from './externaltools'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-external-tools-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -11,9 +12,14 @@ const WINDOWS = process.platform === 'win32'
 
 let files = 0
 
-// Returns a settings file path of a fresh directory.
-function settingsFile() {
-	return join(root, `settings-${files++}`, 'settings.json')
+// Returns a database file path of a fresh directory.
+function databaseFile() {
+	return join(root, `database-${files++}`, 'nebulosa.sqlite')
+}
+
+// Rows of the saved settings, as the database holds them.
+function rows(database: AppDatabase) {
+	return database.db.query('SELECT * FROM external_tool_settings ORDER BY tool_id').all()
 }
 
 // Creates a file the server may execute.
@@ -24,10 +30,10 @@ function executable(name: string) {
 	return path
 }
 
-// Creates a store over a fresh settings file, recording its events.
-function store(file = settingsFile()) {
+// Creates a store over a fresh database in memory, recording its events.
+function store(database = AppDatabase.memory()) {
 	const events: ExternalToolEvent[] = []
-	return { store: new ExternalToolsStore(file, (event) => events.push(event)), events, file }
+	return { store: new ExternalToolsStore(database, (event) => events.push(event)), events, database }
 }
 
 type Handler = (req: Request) => Promise<Response>
@@ -70,16 +76,21 @@ describe('catalog', () => {
 
 describe('persistence', () => {
 	test('saved settings survive a restart', async () => {
-		const { store: first, events, file } = store()
+		const file = databaseFile()
+		const database = new AppDatabase(file)
+		const { store: first, events } = store(database)
 		const path = executable('astap one')
 		const outcome = await first.save('astap', { executable: path, timeout: 60000 }, 0)
 
 		expect(outcome).toMatchObject({ status: 'saved', tool: { status: 'configured', revision: 1, config: { executable: path, timeout: 60000 } } })
 		expect(events).toHaveLength(1)
+		database.close()
 
-		const second = new ExternalToolsStore(file)
+		const reopened = new AppDatabase(file)
+		const second = new ExternalToolsStore(reopened)
 		expect(await second.get('astap')).toMatchObject({ status: 'configured', revision: 1, config: { executable: path, timeout: 60000 } })
-		expect(JSON.parse(readFileSync(file, 'utf-8')).tools.astap).toEqual({ executable: path, timeout: 60000, revision: 1 })
+		expect(rows(reopened)).toEqual([{ tool_id: 'astap', executable: path, timeout: 60000, config: null, endpoint: null, revision: 1, updated_at: expect.any(Number) }])
+		reopened.close()
 	})
 
 	test('a save from an outdated revision is refused', async () => {
@@ -92,46 +103,14 @@ describe('persistence', () => {
 		expect(await b.json()).toMatchObject({ code: 'conflict', tool: { revision: 1, config } })
 	})
 
-	test('a corrupt file is reported and kept until saved', async () => {
-		const file = settingsFile()
-		mkdirSync(join(file, '..'), { recursive: true })
-		writeFileSync(file, '{ not json')
-		const { store: corrupt } = store(file)
-
-		expect(await corrupt.get('astap')).toMatchObject({ status: 'invalid', error: 'The settings file is not valid JSON' })
-		expect(await corrupt.resolve('astap')).toBeUndefined()
-		expect(readFileSync(file, 'utf-8')).toBe('{ not json')
-
-		expect(await corrupt.save('astap', { executable: 'astap', timeout: 5000 }, 0)).toMatchObject({ status: 'saved', tool: { status: 'configured', revision: 1 } })
-	})
-
-	test('a file of a newer version is never overwritten', async () => {
-		const file = settingsFile()
-		mkdirSync(join(file, '..'), { recursive: true })
-		writeFileSync(file, JSON.stringify({ version: 99, tools: { astap: { executable: 'astap', timeout: 5000, revision: 3 } } }))
-		const { store: newer } = store(file)
-
-		expect(await newer.get('astap')).toMatchObject({ status: 'invalid', revision: 3 })
-		expect(await newer.save('astap', { executable: 'other', timeout: 5000 }, 3)).toEqual({ status: 'newerVersion' })
-		expect(JSON.parse(readFileSync(file, 'utf-8')).version).toBe(99)
-	})
-
-	test('values out of the file are normalized', () => {
-		const { tools } = parseSettings(JSON.stringify({ version: 1, tools: { astap: { executable: 42, timeout: 0, revision: -1 } } }))
-		expect(tools.get('astap')).toEqual({ executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT, revision: 0 })
-		expect(parseSettings(JSON.stringify({ version: 1, tools: { astap: { executable: 'astap', timeout: 2.5, revision: 1 } } })).tools.get('astap')?.timeout).toBe(DEFAULT_EXTERNAL_TOOL_TIMEOUT)
-		expect(parseSettings(JSON.stringify({ version: 1, tools: { astap: { executable: 'astap', timeout: 7200000, revision: 1 } } })).tools.get('astap')?.timeout).toBe(DEFAULT_EXTERNAL_TOOL_TIMEOUT)
-		expect(parseSettings('[]').error).toBe('The settings file is not a Nebulosa settings document')
-	})
-
-	test('a file that cannot be written is 500 and changes nothing', async () => {
-		const blocker = join(root, 'blocker')
-		writeFileSync(blocker, '')
-		const { store: blocked } = store(join(blocker, 'settings.json'))
+	test('a database that cannot be written is 500 and changes nothing', async () => {
+		const { store: blocked, database } = store()
+		database.db.run('PRAGMA query_only = ON')
 		const routes = createExternalToolsRoutes(blocked)
 		const response = await call(routes, '/api/settings/external-tools/:id', 'PUT', 'astap', { config: { executable: 'astap', timeout: 5000 }, revision: 0 })
 
 		expect(response.status).toBe(500)
+		expect(await response.json()).toMatchObject({ code: 'writeFailed' })
 		expect(await blocked.get('astap')).toMatchObject({ status: 'notConfigured', revision: 0 })
 	})
 })
@@ -179,7 +158,7 @@ describe('executable check', () => {
 
 describe('test configuration', () => {
 	test('testing never saves, and an unsaved draft is not the latest check', async () => {
-		const { store: tools, events, file } = store()
+		const { store: tools, events, database } = store()
 		const routes = createExternalToolsRoutes(tools)
 		const response = await call(routes, '/api/settings/external-tools/:id/test', 'POST', 'astap', { config: { executable: executable('draft'), timeout: 5000 } })
 		const check = (await response.json()) as ExternalToolCheck
@@ -187,7 +166,7 @@ describe('test configuration', () => {
 		expect(response.status).toBe(200)
 		expect(check).toMatchObject({ status: 'available', config: { timeout: 5000 }, checkedAt: expect.any(Number), duration: expect.any(Number) })
 		expect(check.version).toBeUndefined()
-		expect(await Bun.file(file).exists()).toBeFalse()
+		expect(rows(database)).toEqual([])
 		expect((await tools.get('astap')).lastCheck).toBeUndefined()
 		expect(events).toHaveLength(0)
 	})
@@ -277,9 +256,9 @@ describe('nova', () => {
 		return { server, logins, endpoint: server.url.origin }
 	}
 
-	test('signs in with the API key and saves only the session', async () => {
+	test('signs in with the API key and keeps the session in memory only', async () => {
 		using service = nova().server
-		const { store: tools, events, file } = store()
+		const { store: tools, events, database } = store()
 		const endpoint = service.url.origin
 		await tools.save('nova', { executable: '', timeout: 60000, endpoint }, 0)
 
@@ -289,12 +268,17 @@ describe('nova', () => {
 		expect(JSON.stringify(events)).not.toContain('session-1')
 		expect(JSON.stringify(await tools.list())).not.toContain('session-1')
 
-		const saved = readFileSync(file, 'utf-8')
-		expect(saved).toContain('session-1')
+		const saved = JSON.stringify(rows(database))
+		expect(saved).not.toContain('session-1')
 		expect(saved).not.toContain('good')
 
 		expect(await tools.resolve('nova')).toEqual({ executable: '', timeout: 60000, endpoint, session: 'session-1' })
 		expect(await tools.check('nova', { executable: '', timeout: 60000, endpoint })).toMatchObject({ status: 'available', code: 'ok' })
+
+		// A restart keeps the settings and signs out.
+		const restarted = new ExternalToolsStore(database)
+		expect(await restarted.get('nova')).toMatchObject({ status: 'notConfigured', signedIn: false, revision: 2, config: { endpoint } })
+		expect(await restarted.resolve('nova')).toBeUndefined()
 	})
 
 	test('keeps the settings when the service refuses the key', async () => {
@@ -355,12 +339,5 @@ describe('nova', () => {
 		await tools.save('nova', { executable: '', timeout: 60000, endpoint: 'ftp://example.com' }, 0)
 		expect(await tools.login('nova', 'good')).toMatchObject({ status: 'refused' })
 		expect(await tools.check('nova', { executable: '', timeout: 60000, endpoint: 'ftp://example.com' })).toMatchObject({ status: 'failed', code: 'invalidEndpoint' })
-	})
-
-	test('ignores a session stored for a program', () => {
-		const { tools } = parseSettings(JSON.stringify({ version: 1, tools: { astap: { executable: '/opt/astap', timeout: 60000, revision: 1, session: 'x' }, nova: { timeout: 60000, endpoint: 7, session: 'y', revision: 1 } } }))
-
-		expect(tools.get('astap')).toEqual({ executable: '/opt/astap', timeout: 60000, revision: 1 })
-		expect(tools.get('nova')).toEqual({ executable: '', timeout: 60000, endpoint: '', revision: 1, session: 'y' })
 	})
 })

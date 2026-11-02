@@ -19,12 +19,12 @@ import { DarvAnalyzer } from './darv.analysis'
 import { AppDatabase, DEFAULT_DATABASE_FILE } from './database'
 import { createDewHeaterRoutes, DewHeaterCommands } from './dewheaters'
 import { createDomeRoutes, DomeCommands } from './domes'
-import { createExternalToolsRoutes, DEFAULT_SETTINGS_FILE, ExternalToolsStore } from './externaltools'
+import { createExternalToolsRoutes, ExternalToolsStore } from './externaltools'
 import { createFileRoutes } from './files'
 import { createFlatPanelRoutes, FlatPanelCommands } from './flatpanels'
 import { createFlatWizardRoutes, FlatWizardSessions } from './flatwizard'
 import { FlatWizardAnalyzer } from './flatwizard.analysis'
-import { DEFAULT_FOCUSERS_FILE, FocuserBacklashStore } from './focuserbacklash'
+import { FocuserBacklashStore } from './focuserbacklash'
 import { createFocuserRoutes, FocuserCommands } from './focusers'
 import { createGuideOutputRoutes, GuideOutputCommands } from './guideoutputs'
 import { createGuidingRoutes, GuidingSessions } from './guiding'
@@ -496,7 +496,7 @@ const guideOutputs = new GuideOutputCommands(connections.devices, (id) => connec
 
 // Focuser, filter wheel, and rotator commands over the devices of the open connections; focuser moves apply the
 // backlash compensation saved for each focuser.
-const focusers = new FocuserCommands(connections.devices, (id) => connections.client(id), operations, new FocuserBacklashStore(DEFAULT_FOCUSERS_FILE), broadcast)
+const focusers = new FocuserCommands(connections.devices, (id) => connections.client(id), operations, new FocuserBacklashStore(database), broadcast)
 const wheels = new WheelCommands(connections.devices, (id) => connections.client(id), operations)
 const rotators = new RotatorCommands(connections.devices, (id) => connections.client(id), operations)
 
@@ -517,7 +517,7 @@ const indi = new IndiPropertyService(connections.devices, (id) => connections.cl
 listenSockets(indi)
 
 // Settings of the external programs, such as ASTAP, read by the services that run them.
-const externalTools = new ExternalToolsStore(DEFAULT_SETTINGS_FILE, broadcast)
+const externalTools = new ExternalToolsStore(database, broadcast)
 
 // Star detection of the image documents, shared by the Images workspace and the captures.
 const stars = new StarDetectionService(images, externalTools, broadcast)

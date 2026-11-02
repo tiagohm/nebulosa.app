@@ -9,6 +9,7 @@ import { type AutoFocusEvent, type AutoFocusRequest, type AutoFocusSession, Auto
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureRequest } from './captures'
 import { ConnectionManager } from './connection'
+import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import { FocuserBacklashStore } from './focuserbacklash'
 import { FocuserCommands } from './focusers'
@@ -84,7 +85,7 @@ async function setup() {
 	const operations = new OperationRegistry(manager.devices, (event) => operationEvents.push(event))
 	disposables.push(operations)
 	const images = new ImageStore()
-	const tools = new ExternalToolsStore(join(mkdtempSync(join(root, 'settings-')), 'settings.json'))
+	const tools = new ExternalToolsStore(AppDatabase.memory())
 	const stars = new StarDetectionService(images, tools, () => {})
 	const capturesDir = mkdtempSync(join(root, 'captures-'))
 	const frameEvents: CaptureFrameEvent[] = []
@@ -100,7 +101,7 @@ async function setup() {
 		capturesDir,
 	)
 	disposables.push(captures)
-	const focusers = new FocuserCommands(manager.devices, (connectionId) => manager.client(connectionId), operations, new FocuserBacklashStore(join(mkdtempSync(join(root, 'focusers-')), 'focusers.json')))
+	const focusers = new FocuserCommands(manager.devices, (connectionId) => manager.client(connectionId), operations, new FocuserBacklashStore(AppDatabase.memory()))
 	disposables.push(focusers)
 	const events: AutoFocusEvent[] = []
 	const auxiliaryDir = mkdtempSync(join(root, 'auxiliary-'))

@@ -7,6 +7,7 @@ import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationDiagnostics }
 import type { StarTracker } from 'nebulosa/src/observation/guiding/tracker.star'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
 import { ConnectionManager } from './connection'
+import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import { calibrationProgressOf, GUIDING_REGION_RADIUS, GUIDING_REGION_STARS, type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest, guidingRegions } from './guiding'
 import { ImageStore } from './images'
@@ -58,7 +59,7 @@ async function setup() {
 		images,
 		frames,
 		// A settings file of its own, where ASTAP is not configured.
-		new ExternalToolsStore(join(mkdtempSync(join(root, 'tools-')), 'tools.json')),
+		new ExternalToolsStore(AppDatabase.memory()),
 		(event) => events.push(event),
 	)
 	disposables.push(guiding)

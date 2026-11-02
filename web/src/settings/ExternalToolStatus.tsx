@@ -12,7 +12,6 @@ export type CheckDisplay = ExternalToolCheckStatus | 'notTested' | 'checking'
 export const CONFIG_LABELS: Readonly<Record<ExternalToolConfigStatus, string>> = {
 	notConfigured: 'Not Configured',
 	configured: 'Configured',
-	invalid: 'Invalid Configuration',
 }
 
 // Label of each state of a check.
@@ -25,7 +24,7 @@ export const CHECK_LABELS: Readonly<Record<CheckDisplay, string>> = {
 }
 
 // Tone of each state of the saved settings.
-const CONFIG_TONES: Readonly<Record<ExternalToolConfigStatus, StatusTone>> = { notConfigured: 'muted', configured: 'neutral', invalid: 'danger' }
+const CONFIG_TONES: Readonly<Record<ExternalToolConfigStatus, StatusTone>> = { notConfigured: 'muted', configured: 'neutral' }
 
 // Tone of each state of a check.
 const CHECK_TONES: Readonly<Record<CheckDisplay, StatusTone>> = { notTested: 'muted', checking: 'active', available: 'success', unavailable: 'danger', failed: 'danger' }

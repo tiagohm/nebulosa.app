@@ -2,8 +2,9 @@ import { expect, test } from 'bun:test'
 import { join } from 'path'
 
 // Operational state lives only in the database of api/src/database. These guards fail when a source file starts writing
-// state another way: an atomic file write, an appended journal, a database of its own, or browser storage. A new use that
-// is not operational state, such as a file of an external provider, joins the allowlist with the reason.
+// state another way: an atomic file write, an appended journal, a database of its own, or browser storage beyond the view
+// state of web/src/profile/view.ts. A new use that is not operational state, such as a file of an external provider, joins
+// the allowlist with the reason.
 
 const ROOT = join(import.meta.dir, '..', '..')
 
@@ -47,7 +48,8 @@ test('no source writes operational state outside the database', async () => {
 	}
 })
 
-test('the web keeps nothing in browser storage', async () => {
+test('the web keeps only the view state of the tab in browser storage', async () => {
 	const web = (await sources()).filter(({ path }) => path.startsWith('web/'))
-	expect(web.filter(({ text }) => /\b(localStorage|sessionStorage|indexedDB)\b/.test(text)).map(({ path }) => path)).toEqual([])
+	// The view state of the tab (panels, last directories, the active profile, …), never operational state.
+	expect(web.filter(({ text }) => /\b(localStorage|sessionStorage|indexedDB)\b/.test(text)).map(({ path }) => path)).toEqual(['web/src/profile/view.ts'])
 })

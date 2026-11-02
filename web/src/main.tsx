@@ -31,6 +31,7 @@ import { handleOperationEvent, operationsState, refreshOperations } from './oper
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
 import { profileState, pruneNotificationPreferences } from './profile/profile'
 import { WorkspaceSync } from './profile/sync'
+import { ViewPersistence } from './profile/view'
 import { WorkspaceGate } from './profile/WorkspaceGate'
 import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
 import { routeState, watchHistory } from './shell/route'
@@ -39,9 +40,9 @@ import { handleStreaksEvent, refreshStreaks, streaksState } from './streaks/stre
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
 
 // Entry point of the browser bundle: restores the URL route, reads the workspace (saved connections and profiles) from
-// the server, which the shell waits for, writes back what the tab changes in it, and keeps the server state current
-// through the event socket. Under HMR the module re-runs on every update: the React root is reused and the previous
-// run's subscriptions are released.
+// the server, which the shell waits for, writes back what the tab changes in it, keeps the view state of the tab in
+// browser storage (profile/view.ts), and keeps the server state current through the event socket. Under HMR the module
+// re-runs on every update: the React root is reused and the previous run's subscriptions are released.
 
 // Synchronization of the saved connections and the profiles of the tab with the server.
 const workspace = new WorkspaceSync(connectionState, profileState)
@@ -106,6 +107,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 const stops = [
 	subscribeState(deviceState, syncCameraTabs),
 	workspace.start(),
+	new ViewPersistence(profileState).start(),
 	watchHistory(routeState),
 	confirmUnsavedOnUnload(imagesState),
 	releaseLeasesOnHide(imagesState),

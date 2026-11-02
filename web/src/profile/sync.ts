@@ -13,7 +13,7 @@ import { type CameraSettings, type FramingReference, type MountRemoteBinding, ty
 // moment after the latest change and one request at a time. A unit with a revision is written from the revision it was
 // edited from; when another tab saved it first the server refuses it, and the tab shows what the server kept and says
 // so. The others are written as they are, the last write winning. What the server publishes applies to every unit the
-// tab is not writing. Tab memory fields of ProfileSettings are never compared nor written.
+// tab is not writing. View state fields of ProfileSettings (view.ts) are never compared nor written.
 
 // Delay after the latest change before the changes are written, in milliseconds, so an edit typed key by key is written once.
 export const WRITE_DELAY = 400
@@ -88,7 +88,7 @@ function skySetting(key: keyof Pick<SkySettings, 'observer' | 'display'>): Prefe
 	}
 }
 
-// Fields of the framing kept by the server; which preset is drawn, and whether and where from, are tab memory.
+// Fields of the framing kept by the server; which preset is drawn, and whether and where from, are view state.
 type KeptFraming = Pick<SkyFramingSettings, 'presets' | 'manualSensor' | 'equipmentRotation'>
 
 // Every preference the server keeps, and where it lives in the settings of a profile.

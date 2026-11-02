@@ -25,7 +25,7 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 
 // What a profile holds, the defaults of its preferences and camera forms, and the version of the shape of the values the
 // server keeps for them. Profiles hold selections and preferences only, never operational device state. Some fields are
-// tab memory: they live with the profile in the tab and are never written to the server, so a reload starts them over.
+// view state: never written to the server, they are kept in browser storage as VIEW_STORAGE of view.ts says.
 
 // Version of the shape of the preferences and camera forms the server keeps (sync.ts). A value of any other version is
 // read as absent, never migrated, so a change to the shape of what is kept only raises this number; an added optional
@@ -34,16 +34,16 @@ export const PROFILE_SETTINGS_VERSION = 1
 
 // Application preferences that belong to a profile. Each preference is added here, with its default in
 // defaultSettings when it is not optional, and either kept by the server (PREFERENCES and the camera forms of sync.ts) or
-// marked as tab memory.
+// marked as view state and added to VIEW_FIELDS of view.ts.
 export interface ProfileSettings {
 	// Whether the contextual panel of each workspace is expanded on wide screens; an absent workspace
-	// shows it expanded. Narrow screens open the panel as a drawer. Tab memory.
+	// shows it expanded. Narrow screens open the panel as a drawer. View state.
 	panels: Partial<Record<WorkspaceId, boolean>>
 	// Server directory an image was opened from last, where the file explorer starts; absent before the
-	// first image is opened. Tab memory.
+	// first image is opened. View state.
 	lastImageDirectory?: string
 	// Server directory an image of Images was saved to last, where the save dialog starts; absent before the first save.
-	// Tab memory.
+	// View state.
 	lastSaveDirectory?: string
 	// Forms of each physical camera edited so far, by saved connection id, then device id.
 	cameras: Record<string, Record<string, CameraSettings>>
@@ -307,7 +307,7 @@ export interface SkySettings {
 	display?: SkyDisplaySettings
 	// Field of view drawn around the selection; absent until the user creates a preset.
 	framing?: SkyFramingSettings
-	// Whether the time bar of the simulation clock is shown under the star map; absent hides it. Tab memory.
+	// Whether the time bar of the simulation clock is shown under the star map; absent hides it. View state.
 	timeBar?: boolean
 }
 
@@ -316,13 +316,13 @@ export interface SkySettings {
 export interface SkyFramingSettings {
 	// Presets in display order.
 	presets: readonly OpticalPreset[]
-	// Id of the preset drawn; absent when there is none. Tab memory.
+	// Id of the preset drawn; absent when there is none. View state.
 	activePresetId?: string
-	// Whether the field of view is drawn on the map. Tab memory.
+	// Whether the field of view is drawn on the map. View state.
 	visible: boolean
-	// Where the drawn field comes from: a custom preset, or the Equipment Setup; absent means custom. Tab memory.
+	// Where the drawn field comes from: a custom preset, or the Equipment Setup; absent means custom. View state.
 	source?: 'custom' | 'equipment'
-	// Sensor of the Equipment Setup source; absent means the main camera. Tab memory.
+	// Sensor of the Equipment Setup source; absent means the main camera. View state.
 	sensorSource?: SensorSource
 	// Sensor entered for the Equipment Setup source when sensorSource is manual, to simulate a camera.
 	manualSensor?: SensorGeometry

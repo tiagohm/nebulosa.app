@@ -63,7 +63,7 @@ import {
 
 // Profiles of the workspace and the profile active in this tab, and the actions that change them. Profiles belong to the
 // server (sync.ts), which shares them with every tab and browser; the actions here change the tab at once, and the
-// synchronization writes what changed. Fields of ProfileSettings that are tab memory (schema.ts) are never written. The
+// synchronization writes what changed. Fields of ProfileSettings that are view state (schema.ts) are never written to the server; view.ts keeps them in the browser. The
 // active profile is the tab's own, in memory: a tab opens on the first profile.
 
 // Profile store of the tab.

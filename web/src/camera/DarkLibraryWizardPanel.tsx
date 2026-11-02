@@ -133,6 +133,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 	const estimate = darkLibraryWizardEstimate(groups, capture, capabilities)
 	const connectionId = device?.connectionId
 	const deviceId = device?.id
+	const sensorTemperature = capabilities?.temperature === undefined ? undefined : `${capabilities.temperature.toFixed(1)} °C`
 
 	useEffect(() => {
 		if (connectionId !== undefined && deviceId !== undefined) void loadDarkPlans(darkLibraryWizardRuntime, connectionId, deviceId)
@@ -198,7 +199,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				{wheel === undefined && <Notice>The camera has no role in the equipment setup, so only a manual cap can block the light.</Notice>}
 				<Notice>Frames are raw DARK frames with the gain, offset, binning, subframe, and readout mode of Camera Acquisition; each group sets its exposure.</Notice>
 			</CollapsibleSection>
-			<CollapsibleSection id="images.dark-library-wizard.plan" title="Capture Plan">
+			<CollapsibleSection id="images.dark-library-wizard.plan" summary={`${groups.length} groups`} title="Capture Plan">
 				{groups.map((group, index) => (
 					<GroupForm
 						key={index}
@@ -248,9 +249,9 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				{settings.closeCover && <Notice>The cover opens again when the session ends, unless it was already closed. Mind the sun in an unattended daytime session.</Notice>}
 				<Notice>Every frame is checked, and the first one of a group can stop for your decision. Even so, no image proves that no light reached the sensor.</Notice>
 			</CollapsibleSection>
-			<CollapsibleSection id="images.dark-library-wizard.thermal" title="Thermal Control">
+			<CollapsibleSection id="images.dark-library-wizard.thermal" title="Thermal Control" summary={sensorTemperature} defaultOpen={false}>
 				<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-					<Row label="Sensor">{capabilities?.temperature === undefined ? 'Not reported' : `${capabilities.temperature.toFixed(1)} °C`}</Row>
+					<Row label="Sensor">{sensorTemperature ?? 'Not reported'}</Row>
 					<Row label="Cooler">{capabilities?.cooler === undefined ? 'None' : `${capabilities.cooler.enabled === false ? 'Off' : 'On'}, ${Math.round(capabilities.cooler.power)} %`}</Row>
 				</dl>
 				<div className="flex flex-col gap-2">
@@ -356,7 +357,7 @@ interface GroupFormProps {
 // Fields of one group.
 function GroupForm({ index, group, count, temperature, exposure, disabled, onChange, onMove, onDuplicate, onRemove }: GroupFormProps) {
 	return (
-		<fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 border-t border-line-200 p-0 pt-2 first:border-t-0 first:pt-0">
+		<fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 border-t border-line-100 border-dashed p-0 pt-2 first:border-t-0 first:pt-0">
 			<div className="flex items-center gap-1">
 				<p className="m-0 flex-1 truncate text-ink-100">{`Group ${index + 1}`}</p>
 				{index > 0 && <IconButton icon="arrow" label={`Move group ${index + 1} up`} className="size-[38px]" disabled={disabled} onClick={() => onMove(-1)} />}

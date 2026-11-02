@@ -19,7 +19,7 @@ import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 // oxfmt-ignore
-import { bytesText, CALIBRATION_KINDS, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, JOB_STATE_LABELS, JOB_STATE_TONES, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
+import { bytesText, CALIBRATION_KINDS, cameraFilterLabels, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, JOB_STATE_LABELS, JOB_STATE_TONES, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
 
 // Calibration Library tool: what calibration frames exist, what can be combined and why not, which masters were made, and the
 // jobs making them. It works with no camera and starts no exposure; every capture stays in Images. State lives on the server,
@@ -111,7 +111,9 @@ export function CalibrationLibrary() {
 		if (job) setImportJob(job.jobId)
 	}
 
-	const cameras = ['', ...(runtime.summary?.cameras ?? [])]
+	const cameraList = runtime.summary?.cameras ?? []
+	const cameras = ['', ...cameraList.map(({ id }) => id)]
+	const cameraLabels = cameraFilterLabels(cameraList)
 	const panel = selection && <SelectionPanel selection={selection} onGroup={selectGroup} />
 
 	const actions = (
@@ -132,7 +134,7 @@ export function CalibrationLibrary() {
 				<div className="flex flex-wrap items-end gap-3">
 					<SegmentedControl options={LIBRARY_SECTIONS} value={section} format={(option) => SECTION_LABELS[option]} onChange={change(setSection)} />
 					{section !== 'jobs' && <Select label="Frame Type" className="w-36" options={KIND_FILTERS} value={kind} format={(option) => (option === 'all' ? 'All Types' : KIND_LABELS[option])} onChange={change(setKind)} />}
-					{section !== 'jobs' && <Select label="Camera" className="w-52" options={cameras} value={camera} format={(option) => option || 'All Cameras'} onChange={change(setCamera)} />}
+					{section !== 'jobs' && <Select label="Camera" className="w-52" options={cameras} value={camera} format={(option) => (option ? (cameraLabels.get(option) ?? option) : 'All Cameras')} onChange={change(setCamera)} />}
 					{section === 'frames' && <TextInput label="Search" className="w-52" value={search} onChange={(event) => change(setSearch)(event.target.value)} />}
 				</div>
 				{section === 'library' && <GroupsView selected={selection?.type === 'group' ? selection.groupId : undefined} onSelect={selectGroup} />}

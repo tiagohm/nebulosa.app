@@ -28,6 +28,7 @@ import { darkPlanSource, type FileInspection, inspectFile, makeSource, regrouped
 import {
 	type CalibrationJournalRecord,
 	CalibrationLibraryStore,
+	type CalibrationCamera,
 	type CalibrationMaster,
 	type CalibrationSource,
 	type CalibrationSourceSummary,
@@ -107,8 +108,8 @@ export interface CalibrationLibrarySnapshot {
 	// Masters by state, and by role.
 	readonly masters: StateCounts
 	readonly mastersByKind: StateCounts
-	// Hardware ids of the cameras with frames.
-	readonly cameras: readonly string[]
+	// Cameras with frames, by name.
+	readonly cameras: readonly CalibrationCamera[]
 	// Jobs still working.
 	readonly activeJobs: readonly CalibrationJobSummary[]
 	// Latest jobs of the wizards, so a reloaded tab still shows how their masters ended.

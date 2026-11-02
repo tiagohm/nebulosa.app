@@ -206,6 +206,14 @@ export type CalibrationJournalRecord =
 	// The revision an operator prefers.
 	| { readonly type: 'preferred'; readonly at: number; readonly masterId: string; readonly revision: number }
 
+// Camera with frames in the library.
+export interface CalibrationCamera {
+	// Hardware id.
+	readonly id: string
+	// Name of the camera; null when no frame recorded one.
+	readonly name: string | null
+}
+
 // Filters of a listing of frames.
 export interface SourceFilter {
 	// Role.
@@ -480,8 +488,8 @@ export class CalibrationLibraryStore {
 	counts() {
 		const sources = this.#db.query('SELECT kind, status, COUNT(*) AS count FROM sources GROUP BY kind, status').all() as { readonly kind: CalibrationKind; readonly status: SourceStatus; readonly count: number }[]
 		const masters = this.#db.query('SELECT kind, status, COUNT(*) AS count FROM masters GROUP BY kind, status').all() as { readonly kind: CalibrationKind; readonly status: ProductStatus; readonly count: number }[]
-		const cameras = this.#db.query("SELECT DISTINCT camera FROM sources WHERE camera <> '' ORDER BY camera").all() as { readonly camera: string }[]
-		return { sources, masters, cameras: cameras.map(({ camera }) => camera) }
+		const cameras = this.#db.query("SELECT camera AS id, MAX(json_extract(data, '$.metadata.cameraName')) AS name FROM sources WHERE camera <> '' GROUP BY camera ORDER BY name, camera").all() as CalibrationCamera[]
+		return { sources, masters, cameras }
 	}
 
 	// Records a published revision.

@@ -164,6 +164,7 @@ describe('plans', () => {
 		expect(items[0].metadata.exposure).toEqual({ value: 60000000, evidence: 'verified' })
 		expect(items[0].metadata.setTemperature).toEqual({ value: -10, evidence: 'planDeclared' })
 		expect(items[0].readiness).toBe('ready')
+		expect(library.snapshot().cameras).toEqual([{ id: 'camera', name: 'Camera' }])
 		expect(hashes(join(base, 'plans'))).toEqual(before)
 		expect(hashes(join(base, 'frames'))).toEqual(framesBefore)
 	})

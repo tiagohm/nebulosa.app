@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CalibrationGroupSummary, CalibrationMetadata } from 'api'
-import { bytesText, coverage, exposureText, groupTitle, jobFraction, overrideIsText, temperatureText } from './library'
+import { bytesText, cameraFilterLabels, coverage, exposureText, groupTitle, jobFraction, overrideIsText, temperatureText } from './library'
 
 const unknown = { evidence: 'unknown' } as const
 const verified = <T>(value: T) => ({ value, evidence: 'verified' }) as const
@@ -71,6 +71,22 @@ describe('coverage', () => {
 		expect(rows[0].kinds.dark).toEqual({ groups: 2, masters: 1 })
 		expect(rows[0].kinds.bias).toEqual({ groups: 1, masters: 0 })
 		expect(rows[1].kinds.flat.groups).toBe(1)
+	})
+})
+
+describe('camera filter', () => {
+	test('shows names, tells equal names apart, and falls back to the id', () => {
+		const labels = cameraFilterLabels([
+			{ id: 'abcdef123', name: 'ASI294' },
+			{ id: 'fedcba321', name: 'ASI294' },
+			{ id: 'other', name: 'Simulator' },
+			{ id: 'nameless', name: null },
+		])
+
+		expect(labels.get('abcdef123')).toBe('ASI294 · abcdef')
+		expect(labels.get('fedcba321')).toBe('ASI294 · fedcba')
+		expect(labels.get('other')).toBe('Simulator')
+		expect(labels.get('nameless')).toBe('nameless')
 	})
 })
 

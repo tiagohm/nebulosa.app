@@ -1,4 +1,4 @@
-import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
+import type { CalibrationCamera, CalibrationGroupSummary, CalibrationJobSummary, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // What the Calibration Library tool shows of what the server decided: labels, tones, and the coverage of a page of groups.
@@ -152,6 +152,14 @@ export function coverage(groups: readonly CalibrationGroupSummary[]): readonly C
 export function jobFraction({ progress, frames }: Pick<CalibrationJobSummary, 'progress' | 'frames'>) {
 	if (progress.rowsTotal > 0) return Math.min(1, progress.rowsCombined / progress.rowsTotal)
 	return frames ? Math.min(1, progress.framesValidated / frames) : 0
+}
+
+// Returns the text of each camera of the filter, by hardware id: its name, with the start of its id when another camera has the
+// same name, as the same model reached through two connections does, and its id when it has no name.
+export function cameraFilterLabels(cameras: readonly CalibrationCamera[]) {
+	const names = new Map<string, number>()
+	for (const { name } of cameras) if (name !== null) names.set(name, (names.get(name) ?? 0) + 1)
+	return new Map(cameras.map(({ id, name }) => [id, name === null ? id : (names.get(name) ?? 0) > 1 ? `${name} · ${id.slice(0, 6)}` : name]))
 }
 
 // Text of a size in bytes.

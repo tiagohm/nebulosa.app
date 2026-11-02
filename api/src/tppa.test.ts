@@ -302,4 +302,16 @@ describe('TPPA sessions', () => {
 		await waitUntil(ended)
 		expect(summary()!.revision).toBeGreaterThan(1)
 	})
+
+	test('a repeated token answers the same session, even while the first request is prepared', async () => {
+		const { id, cameraId, tppa, mountDevice, ended } = await setup()
+		const body = request(mountDevice)
+		const [first, second] = await Promise.all([tppa.start(id, cameraId, body), tppa.start(id, cameraId, body)])
+
+		expect([first.status, second.status]).toEqual([202, 202])
+		const started = (await first.json()) as { sessionId: string }
+		expect(await second.json()).toEqual(started as never)
+		await tppa.stop(started.sessionId)
+		await waitUntil(ended)
+	})
 })

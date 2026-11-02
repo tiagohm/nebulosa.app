@@ -340,11 +340,15 @@ export class TppaSessions {
 	// rate, no site, parked, or not tracking and unable to switch tracking).
 	async start(connectionId: string, deviceId: string, request: TppaRequest): Promise<Response> {
 		const repeated = this.#sessions.repeated(request.token)
-		if (repeated) return Response.json({ sessionId: repeated.summary.sessionId, operationId: repeated.summary.operationId } satisfies TppaStartResponse, { status: 202 })
+		if (repeated) return accepted(repeated)
 
 		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
 		const preparation = await this.plateSolving.prepare(request.solving)
 		if (!preparation) return unsupported('The plate solver is not configured; set it up in Settings → External Tools')
+
+		// The same request, sent twice, may have started its session while this one was prepared.
+		const raced = this.#sessions.repeated(request.token)
+		if (raced) return accepted(raced)
 
 		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
 		if (camera instanceof Response) return camera
@@ -388,7 +392,7 @@ export class TppaSessions {
 		this.#sessions.adopt(resourceKey(camera), session, record.operationId)
 
 		void session.handle!.result.then((result) => this.#ended(session, result))
-		return Response.json({ sessionId: session.summary.sessionId, operationId: record.operationId } satisfies TppaStartResponse, { status: 202 })
+		return accepted(session)
 	}
 
 	// Stops a session: the motion, exposure, or solve in progress is cancelled (the mount is stopped) and nothing more
@@ -699,6 +703,11 @@ function mountRefusal(mount: Mount, slewRate: string) {
 // Returns the warnings with one more, keeping the latest MAXIMUM_WARNINGS.
 function appendWarning(warnings: readonly string[], warning: string) {
 	return [...warnings, warning].slice(-MAXIMUM_WARNINGS)
+}
+
+// Responds that a session was accepted, with its id and the id of its operation.
+function accepted({ summary: { sessionId, operationId } }: Session) {
+	return Response.json({ sessionId, operationId } satisfies TppaStartResponse, { status: 202 })
 }
 
 // Routes of the TPPA sessions.

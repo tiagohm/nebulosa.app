@@ -1,13 +1,8 @@
 import { mkdir, open, rename, rm } from 'fs/promises'
 import { dirname } from 'path'
 
-// Helpers shared by the stores that persist server settings in JSON files of the server: atomic writes,
-// filesystem error codes, and the shape check every untrusted document starts with.
-
-// Whether value is a non-null, non-array object.
-export function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
+// Filesystem helpers of the server: atomic writes of the files it keeps from external providers, such as the IERS
+// tables, and filesystem error codes. Operational state lives in the database, never in files written here.
 
 // Replaces a file so it never appears partially written: the content is written to a temporary file next
 // to it, readable and writable by the server's user only, synced to the disk, then renamed over it, so a crash or

@@ -234,6 +234,21 @@ describe('refresh', () => {
 		expect(state.events.s1.map((item) => item.sequence)).toEqual([400, 401])
 	})
 
+	test('leaves a session an event ended during its request, and keeps its history', async () => {
+		const state = newState()
+		const snapshot = Promise.withResolvers<Response>()
+		const { request } = fakeFetch((url) => (url === '/api/guiding' ? snapshot.promise : Response.json({ items: [], truncated: false })))
+
+		const refreshing = refreshGuiding(state, request)
+		handleGuidingEvent(state, { type: 'guiding:updated', session: summary({ active: false, state: 'stopped', endedAt: 5000, revision: 2 }) }, request)
+		handleGuidingEvent(state, { type: 'guiding:event', sessionId: 's1', record: record(1) }, request)
+		snapshot.resolve(Response.json({ sessions: [] }))
+		await refreshing
+
+		expect(state.sessions[KEY].endedAt).toBe(5000)
+		expect(state.events.s1.map((item) => item.sequence)).toEqual([1])
+	})
+
 	test('a session the server no longer keeps is forgotten', async () => {
 		const state = newState()
 		handleGuidingEvent(state, { type: 'guiding:updated', session: summary() }, NO_FETCH)

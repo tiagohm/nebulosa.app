@@ -41,4 +41,13 @@ export class SnapshotRefreshes {
 	changed(key: string): boolean {
 		return this.#updated.has(key)
 	}
+
+	// Returns the records of a snapshot by the key keyOf gives each one, keeping instead the known record of every key an
+	// event changed since the latest refresh started, whether or not the snapshot lists it.
+	merge<T>(known: Readonly<Record<string, T>>, snapshot: readonly T[], keyOf: (record: T) => string): Record<string, T> {
+		const records: Record<string, T> = {}
+		for (const record of snapshot) records[keyOf(record)] = record
+		for (const key of Object.keys(known)) if (this.changed(key)) records[key] = known[key]
+		return records
+	}
 }

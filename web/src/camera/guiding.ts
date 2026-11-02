@@ -5,6 +5,7 @@ import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
 import { type CameraExposureSettings, GUIDING_MAXIMUM_EXPOSURE, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_EXPOSURE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
+import { SnapshotRefreshes } from '../refresh'
 import type { TelescopeOptics } from '../sky/framing'
 import { cameraKey, fitExposure } from './capture'
 
@@ -56,8 +57,8 @@ export interface GuidingRuntime {
 // Guiding state of the tab.
 export const guidingRuntime = proxy<GuidingRuntime>({ sessions: {}, events: {}, telemetry: {}, frames: {}, pending: {}, errors: {} })
 
-// Counter of snapshot refreshes; a response is applied only if no later refresh started.
-let generation = 0
+// Refreshes of the snapshot, ordered against the session events applied meanwhile, by camera key.
+const refreshes = new SnapshotRefreshes()
 
 // Label of each guider state.
 export const GUIDING_STATE_LABELS: Readonly<Record<GuidingSessionSummary['state'], string>> = {
@@ -335,6 +336,7 @@ export function handleGuidingEvent(state: GuidingRuntime, event: ServerEvent, re
 			if (known && known.sessionId !== session.sessionId && known.startedAt > session.startedAt) return
 			if (known?.sessionId === session.sessionId && known.revision >= session.revision) return
 
+			refreshes.updated(key)
 			state.sessions[key] = session
 
 			if (known?.sessionId !== session.sessionId) {
@@ -358,25 +360,27 @@ export function handleGuidingEvent(state: GuidingRuntime, event: ServerEvent, re
 	}
 }
 
-// Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, forgets the
-// history of the sessions it no longer lists, and fetches the events and telemetry missed meanwhile. A response is
-// dropped when another refresh started meanwhile.
+// Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, leaving what an
+// event changed meanwhile, so a session that ended during the request is never shown running again, forgets the history
+// of the sessions no longer kept, and fetches the events and telemetry missed meanwhile. A response is dropped when
+// another refresh started meanwhile.
 export async function refreshGuiding(state: GuidingRuntime, request: typeof fetch = fetch) {
-	const current = ++generation
+	const token = refreshes.start()
 
 	try {
 		const response = await request('/api/guiding')
-		if (!response.ok || current !== generation) return
+		if (!response.ok || !refreshes.current(token)) return
 		const snapshot = (await response.json()) as GuidingSnapshot
-		if (current !== generation) return
+		if (!refreshes.current(token)) return
 
-		state.sessions = {}
-		for (const session of snapshot.sessions) state.sessions[cameraKey(session.camera.connectionId, session.camera.deviceId)] = session
-		const listed = new Set(snapshot.sessions.map((session) => session.sessionId))
-		for (const id of new Set([...Object.keys(state.events), ...Object.keys(state.telemetry), ...Object.keys(state.frames)])) if (!listed.has(id)) forgetSession(state, id)
-		await Promise.all(snapshot.sessions.map((session) => loadGuidingHistory(state, session.sessionId, request)))
+		state.sessions = refreshes.merge(state.sessions, snapshot.sessions, ({ camera }) => cameraKey(camera.connectionId, camera.deviceId))
+		const kept = new Set(Object.values(state.sessions).map(({ sessionId }) => sessionId))
+		for (const id of new Set([...Object.keys(state.events), ...Object.keys(state.telemetry), ...Object.keys(state.frames)])) if (!kept.has(id)) forgetSession(state, id)
+		await Promise.all(Array.from(kept, (id) => loadGuidingHistory(state, id, request)))
 	} catch {
 		// The server is unreachable; the next socket open refreshes the sessions.
+	} finally {
+		refreshes.end(token)
 	}
 }
 

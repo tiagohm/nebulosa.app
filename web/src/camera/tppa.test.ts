@@ -136,6 +136,19 @@ test('a newer session forgets the record of the previous one, and the snapshot r
 	expect(state.details.s2?.sessionId).toBe('s2')
 })
 
+test('the snapshot leaves a session an event ended during its request', async () => {
+	const state = newState()
+	const snapshot = Promise.withResolvers<Response>()
+	const { request } = fakeFetch((url) => (url === '/api/tppa' ? snapshot.promise : Response.json(details({ state: 'completed', endedAt: 5000, revision: 2 }))))
+
+	const refreshing = refreshTppa(state, request)
+	handleTppaEvent(state, { type: 'tppa:updated', session: summary({ state: 'completed', endedAt: 5000, revision: 2 }) }, request)
+	snapshot.resolve(Response.json({ sessions: [summary()] }))
+	await refreshing
+
+	expect(state.sessions[cameraKey('c', 'cam')].endedAt).toBe(5000)
+})
+
 test('a start carries a fresh token and records a refusal; a pause names its session', async () => {
 	const state = newState()
 	const { request, requests } = fakeFetch((url) => (url.endsWith('/tppa') ? Response.json({ error: 'The mount is not tracking', code: 'unsupported' }, { status: 422 }) : new Response(null, { status: 204 })))

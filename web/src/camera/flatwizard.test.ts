@@ -111,6 +111,19 @@ test('an older session of the camera never replaces a newer one, and a newer one
 	expect(state.sessions[KEY].sessionId).toBe('s2')
 })
 
+test('the snapshot leaves a session an event ended during its request', async () => {
+	const state = newState()
+	const snapshot = Promise.withResolvers<Response>()
+	const { request } = fakeFetch((url) => (url === '/api/flat-wizard' ? snapshot.promise : Response.json(details({ state: 'completed', endedAt: 5000, revision: 2 }))))
+
+	const refreshing = refreshFlatWizard(state, request)
+	handleFlatWizardEvent(state, { type: 'flatWizard:updated', session: summary({ state: 'completed', endedAt: 5000, revision: 2 }) }, request)
+	snapshot.resolve(Response.json({ sessions: [summary()] }))
+	await refreshing
+
+	expect(state.sessions[KEY].endedAt).toBe(5000)
+})
+
 test('the snapshot replaces the sessions, and a late snapshot is dropped', async () => {
 	const state = newState()
 	const late = Promise.withResolvers<Response>()

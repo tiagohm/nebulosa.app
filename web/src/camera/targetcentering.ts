@@ -205,16 +205,8 @@ export async function refreshTargetCentering(state: TargetCenteringRuntime, requ
 		const snapshot = (await response.json()) as TargetCenteringSnapshot
 		if (!refreshes.current(token)) return
 
-		const sessions: Record<string, TargetCenteringSessionSummary> = {}
-		for (const [key, session] of Object.entries(state.sessions)) if (refreshes.changed(key)) sessions[key] = session
-
-		for (const session of snapshot.sessions) {
-			const key = cameraKey(session.camera.connectionId, session.camera.deviceId)
-			if (!refreshes.changed(key)) sessions[key] = session
-		}
-
-		state.sessions = sessions
-		const kept = Object.values(sessions).map(({ sessionId }) => sessionId)
+		state.sessions = refreshes.merge(state.sessions, snapshot.sessions, ({ camera }) => cameraKey(camera.connectionId, camera.deviceId))
+		const kept = Object.values(state.sessions).map(({ sessionId }) => sessionId)
 		for (const id of Object.keys(state.details)) if (!kept.includes(id)) delete state.details[id]
 		for (const id of kept) void loadTargetCenteringSession(state, id, request)
 	} catch {

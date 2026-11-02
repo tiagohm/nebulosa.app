@@ -203,6 +203,20 @@ test('a snapshot replaces the sessions, and fetches their records', async () => 
 	expect(calls.map(({ url }) => url)).toContain('/api/dark-library-wizard/s1')
 })
 
+test('a snapshot leaves a session an event ended during its request', async () => {
+	const state = newState()
+	const snapshot = Promise.withResolvers<Response>()
+	const ended = summary({ state: 'completed', endedAt: 5000, revision: 2 })
+	const request = ((url: string) => (url === '/api/dark-library-wizard' ? snapshot.promise : Promise.resolve(Response.json({ ...ended, attempts: [] })))) as typeof fetch
+
+	const refreshing = refreshDarkLibraryWizard(state, request)
+	handleDarkLibraryWizardEvent(state, { type: 'darkLibraryWizard:updated', session: ended }, request)
+	snapshot.resolve(Response.json({ sessions: [summary()] }))
+	await refreshing
+
+	expect(state.sessions[KEY].endedAt).toBe(5000)
+})
+
 test('commands address the exact camera and session, with a token and the step id', async () => {
 	const state = newState()
 	const { request, calls } = server()

@@ -80,8 +80,8 @@ export async function refreshCaptures(state: CaptureRuntime, request: typeof fet
 		const snapshot = (await response.json()) as CaptureSnapshot
 		if (!sessionRefreshes.current(sessionToken)) return
 
-		state.sessions = replaced(state.sessions, snapshot.sessions, sessionRefreshes)
-		state.frames = replaced(state.frames, snapshot.frames, frameRefreshes)
+		state.sessions = sessionRefreshes.merge(state.sessions, snapshot.sessions, recordKey)
+		state.frames = frameRefreshes.merge(state.frames, snapshot.frames, recordKey)
 	} catch {
 		// The server is unreachable; the next socket open refreshes the captures.
 	} finally {
@@ -90,13 +90,9 @@ export async function refreshCaptures(state: CaptureRuntime, request: typeof fet
 	}
 }
 
-// Returns the records of a snapshot by camera key, keeping instead the known record of every camera an event changed
-// during the refresh, whether or not the snapshot lists it.
-function replaced<T extends { readonly connectionId: string; readonly deviceId: string }>(known: Readonly<Record<string, T>>, snapshot: readonly T[], refreshes: SnapshotRefreshes): Record<string, T> {
-	const records: Record<string, T> = {}
-	for (const record of snapshot) records[cameraKey(record.connectionId, record.deviceId)] = record
-	for (const key of Object.keys(known)) if (refreshes.changed(key)) records[key] = known[key]
-	return records
+// Returns the camera key of a session or frame of the snapshot.
+function recordKey({ connectionId, deviceId }: { readonly connectionId: string; readonly deviceId: string }) {
+	return cameraKey(connectionId, deviceId)
 }
 
 // Sends a command to a camera's capture route and records its failure. When the server cannot be reached,

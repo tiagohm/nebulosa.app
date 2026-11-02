@@ -88,6 +88,19 @@ test('the snapshot replaces the sessions after a reconnection', async () => {
 	expect(state.details.s1?.state).toBe('completed')
 })
 
+test('the snapshot leaves a session an event ended during its request', async () => {
+	const state = newState()
+	const snapshot = Promise.withResolvers<Response>()
+	const { request } = fakeFetch((url) => (url === '/api/autofocus' ? snapshot.promise : Response.json(details({ state: 'completed', endedAt: 5000 }))))
+
+	const refreshing = refreshAutoFocus(state, request)
+	handleAutoFocusEvent(state, { type: 'autofocus:updated', session: summary({ state: 'completed', endedAt: 5000 }) }, request)
+	snapshot.resolve(Response.json({ sessions: [summary()] }))
+	await refreshing
+
+	expect(state.sessions[cameraKey('c', 'cam')].endedAt).toBe(5000)
+})
+
 test('a start carries a fresh token and records a refusal; a stop names its session', async () => {
 	const state = newState()
 	const { request, requests } = fakeFetch((url) => (url.endsWith('/autofocus') ? Response.json({ error: 'The device is busy', code: 'busy' }, { status: 409 }) : new Response(null, { status: 204 })))

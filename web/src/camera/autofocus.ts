@@ -4,6 +4,7 @@ import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
 import type { AutoFocusSettings, CameraExposureSettings } from '../profile/schema'
+import { SnapshotRefreshes } from '../refresh'
 import { DEFAULT_APERTURE_RADIUS } from '../stars/stars'
 import { cameraKey, fitExposure } from './capture'
 
@@ -29,8 +30,8 @@ export interface AutoFocusRuntime {
 // Auto Focus state of the tab.
 export const autoFocusRuntime = proxy<AutoFocusRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
 
-// Counter of snapshot refreshes; a response is applied only if no later refresh started.
-let generation = 0
+// Refreshes of the snapshot, ordered against the session events applied meanwhile, by camera key.
+const refreshes = new SnapshotRefreshes()
 
 // Label of each session state.
 export const AUTO_FOCUS_STATE_LABELS: Readonly<Record<AutoFocusState, string>> = {
@@ -173,6 +174,7 @@ export function handleAutoFocusEvent(state: AutoFocusRuntime, event: ServerEvent
 	const known = state.sessions[key]
 	if (known && known.sessionId !== session.sessionId && known.startedAt > session.startedAt) return
 
+	refreshes.updated(key)
 	state.sessions[key] = session
 	if (known?.sessionId !== session.sessionId) for (const id of Object.keys(state.details)) if (id !== session.sessionId) delete state.details[id]
 
@@ -180,23 +182,26 @@ export function handleAutoFocusEvent(state: AutoFocusRuntime, event: ServerEvent
 	if (!details || details.measurements.length !== session.measurementCount || details.estimatedPosition !== session.estimatedPosition || (session.endedAt !== undefined && details.endedAt === undefined)) void loadAutoFocusSession(state, session.sessionId, request)
 }
 
-// Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, and
-// fetches their complete records. A response is dropped when another refresh started meanwhile.
+// Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, leaving what an
+// event changed meanwhile, so a session that ended during the request is never shown running again, and fetches their
+// complete records. A response is dropped when another refresh started meanwhile.
 export async function refreshAutoFocus(state: AutoFocusRuntime, request: typeof fetch = fetch) {
-	const current = ++generation
+	const token = refreshes.start()
 
 	try {
 		const response = await request('/api/autofocus')
-		if (!response.ok || current !== generation) return
+		if (!response.ok || !refreshes.current(token)) return
 		const snapshot = (await response.json()) as AutoFocusSnapshot
-		if (current !== generation) return
+		if (!refreshes.current(token)) return
 
-		state.sessions = {}
-		for (const session of snapshot.sessions) state.sessions[cameraKey(session.camera.connectionId, session.camera.deviceId)] = session
-		for (const id of Object.keys(state.details)) if (!snapshot.sessions.some((session) => session.sessionId === id)) delete state.details[id]
-		for (const session of snapshot.sessions) void loadAutoFocusSession(state, session.sessionId, request)
+		state.sessions = refreshes.merge(state.sessions, snapshot.sessions, ({ camera }) => cameraKey(camera.connectionId, camera.deviceId))
+		const kept = Object.values(state.sessions).map(({ sessionId }) => sessionId)
+		for (const id of Object.keys(state.details)) if (!kept.includes(id)) delete state.details[id]
+		for (const id of kept) void loadAutoFocusSession(state, id, request)
 	} catch {
 		// The server is unreachable; the next socket open refreshes the sessions.
+	} finally {
+		refreshes.end(token)
 	}
 }
 

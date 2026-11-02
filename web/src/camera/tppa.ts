@@ -5,6 +5,7 @@ import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit, responseError } from '../http'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, TppaSettings } from '../profile/schema'
+import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
 
 // TPPA sessions as this tab knows them. The server owns every session, whichever tab started it, and every motion,
@@ -30,8 +31,8 @@ export interface TppaRuntime {
 // TPPA state of the tab.
 export const tppaRuntime = proxy<TppaRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
 
-// Counter of snapshot refreshes; a response is applied only if no later refresh started.
-let generation = 0
+// Refreshes of the snapshot, ordered against the session events applied meanwhile, by camera key.
+const refreshes = new SnapshotRefreshes()
 
 // Label of each session state.
 export const TPPA_STATE_LABELS: Readonly<Record<TppaState, string>> = {
@@ -164,6 +165,7 @@ export function handleTppaEvent(state: TppaRuntime, event: ServerEvent, request:
 	if (known && known.sessionId !== session.sessionId && known.startedAt > session.startedAt) return
 	if (known?.sessionId === session.sessionId && known.revision >= session.revision) return
 
+	refreshes.updated(key)
 	state.sessions[key] = session
 	if (known?.sessionId !== session.sessionId) for (const id of Object.keys(state.details)) if (id !== session.sessionId) delete state.details[id]
 
@@ -172,23 +174,26 @@ export function handleTppaEvent(state: TppaRuntime, event: ServerEvent, request:
 		void loadTppaSession(state, session.sessionId, request)
 }
 
-// Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, and fetches
-// their complete records. A response is dropped when another refresh started meanwhile.
+// Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, leaving what an
+// event changed meanwhile, so a session that ended during the request is never shown running again, and fetches their
+// complete records. A response is dropped when another refresh started meanwhile.
 export async function refreshTppa(state: TppaRuntime, request: typeof fetch = fetch) {
-	const current = ++generation
+	const token = refreshes.start()
 
 	try {
 		const response = await request('/api/tppa')
-		if (!response.ok || current !== generation) return
+		if (!response.ok || !refreshes.current(token)) return
 		const snapshot = (await response.json()) as TppaSnapshot
-		if (current !== generation) return
+		if (!refreshes.current(token)) return
 
-		state.sessions = {}
-		for (const session of snapshot.sessions) state.sessions[cameraKey(session.camera.connectionId, session.camera.deviceId)] = session
-		for (const id of Object.keys(state.details)) if (!snapshot.sessions.some((session) => session.sessionId === id)) delete state.details[id]
-		for (const session of snapshot.sessions) void loadTppaSession(state, session.sessionId, request)
+		state.sessions = refreshes.merge(state.sessions, snapshot.sessions, ({ camera }) => cameraKey(camera.connectionId, camera.deviceId))
+		const kept = Object.values(state.sessions).map(({ sessionId }) => sessionId)
+		for (const id of Object.keys(state.details)) if (!kept.includes(id)) delete state.details[id]
+		for (const id of kept) void loadTppaSession(state, id, request)
 	} catch {
 		// The server is unreachable; the next socket open refreshes the sessions.
+	} finally {
+		refreshes.end(token)
 	}
 }
 

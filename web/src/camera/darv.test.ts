@@ -121,6 +121,19 @@ test('events are ordered by revision and fetch the record when a measurement was
 	expect(requests).toHaveLength(2)
 })
 
+test('the snapshot leaves a session an event ended during its request', async () => {
+	const state = newState()
+	const snapshot = Promise.withResolvers<Response>()
+	const { request } = fakeFetch((url) => (url === '/api/darv' ? snapshot.promise : Response.json(details({ endedAt: 5000, revision: 2 }))))
+
+	const refreshing = refreshDarv(state, request)
+	handleDarvEvent(state, { type: 'darv:updated', session: summary({ endedAt: 5000, revision: 2 }) }, request)
+	snapshot.resolve(Response.json({ sessions: [summary()] }))
+	await refreshing
+
+	expect(state.sessions[cameraKey('c', 'cam')].endedAt).toBe(5000)
+})
+
 test('the snapshot replaces the sessions and drops the records of sessions gone', async () => {
 	const state = newState()
 	state.details.old = details({ sessionId: 'old' })

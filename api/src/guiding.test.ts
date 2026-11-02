@@ -46,7 +46,7 @@ async function setup() {
 	disposables.push(operations)
 	const images = new ImageStore()
 	const frameEvents: CaptureFrameEvent[] = []
-	const frames = new CaptureFrameRegistry(images, (event) => frameEvents.push(event), { file: join(mkdtempSync(join(root, 'frames-')), 'capture-frames.json') })
+	const frames = new CaptureFrameRegistry(images, (event) => frameEvents.push(event), { database: AppDatabase.memory() })
 	disposables.push(frames)
 	const commander = new GuideOutputCommander(manager.devices.guideOutputs, operations.arbiter)
 	disposables.push(commander)

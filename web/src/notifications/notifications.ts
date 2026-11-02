@@ -6,7 +6,7 @@ import type { NotificationPreferences } from '../profile/schema'
 // Notification history of the server as this tab knows it. The server owns the history and the same records reach
 // every tab: this store mirrors it from notification:created events and, on every socket (re)open, from the whole
 // retained history, keeping the events that arrived while that request was in flight. Which records are read or
-// dismissed belongs to the active profile (ProfileSettings.notifications), never to this store or to the server.
+// dismissed belongs to the active profile (ProfileSettings.notifications), which the server keeps for every tab of it.
 // Only notifications that arrive live after the first synchronization become toasts, so a reload or a reconnect
 // never replays them. The store also follows the event socket itself, so the tab can tell when it lost the server,
 // which no server notification can report.

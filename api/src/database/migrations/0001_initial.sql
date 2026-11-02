@@ -111,7 +111,7 @@ CREATE TABLE profile_equipment (
 CREATE TABLE profile_preferences (
 	profile_id TEXT NOT NULL REFERENCES profiles (id) ON DELETE CASCADE,
 	-- Preference (ProfilePreferenceKey).
-	key TEXT NOT NULL CHECK (key IN ('telescope', 'guideTelescope', 'skyObserver', 'skyDisplay', 'skyFraming', 'starDetection', 'starProfile', 'streakDetection', 'imageAnnotation', 'imagePlateSolving', 'imageDisplay', 'imageAstrometry', 'statusBar', 'notifications')),
+	key TEXT NOT NULL CHECK (key IN ('telescope', 'guideTelescope', 'skyObserver', 'skyDisplay', 'skyFraming', 'starDetection', 'starProfile', 'streakDetection', 'imageAnnotation', 'imagePlateSolving', 'imageDisplay', 'imageAstrometry', 'statusBar')),
 	-- Version of the shape of the value.
 	version INTEGER NOT NULL,
 	-- Value; null when reset to its default.
@@ -172,3 +172,93 @@ CREATE TABLE framing_references (
 ) STRICT;
 
 CREATE INDEX framing_references_profile ON framing_references (profile_id);
+
+-- Notification history of the server (NotificationService): at most 500 records younger than 30 days, the oldest
+-- deleted first. The sequence orders them and is never used again.
+CREATE TABLE notifications (
+	-- Order of creation.
+	sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+	-- Id of the notification, published to clients.
+	id TEXT NOT NULL UNIQUE,
+	-- Identity of the occurrence it reports, so one occurrence is notified once; never published.
+	key TEXT NOT NULL UNIQUE,
+	-- When it was created, Unix milliseconds (UTC).
+	created_at INTEGER NOT NULL,
+	-- Severity.
+	level TEXT NOT NULL CHECK (level IN ('info', 'success', 'warning', 'error')),
+	-- Stable code of the occurrence, such as capture.completed.
+	code TEXT NOT NULL,
+	-- Title and explanation meant for people.
+	title TEXT NOT NULL,
+	message TEXT NOT NULL,
+	-- What it is about (NotificationSource), and the context the UI may open (NotificationTarget) or NULL.
+	source TEXT NOT NULL CHECK (json_valid(source)),
+	target TEXT CHECK (target IS NULL OR json_valid(target))
+) STRICT;
+
+CREATE INDEX notifications_created ON notifications (created_at);
+
+-- Notifications a profile read or dismissed, deleted with the notification or the profile.
+CREATE TABLE profile_notification_state (
+	profile_id TEXT NOT NULL REFERENCES profiles (id) ON DELETE CASCADE,
+	notification_id TEXT NOT NULL REFERENCES notifications (id) ON DELETE CASCADE,
+	-- When it was read and dismissed, Unix milliseconds (UTC); dismissed_at is NULL while listed.
+	read_at INTEGER NOT NULL,
+	dismissed_at INTEGER,
+	PRIMARY KEY (profile_id, notification_id)
+) STRICT;
+
+-- Saved frames of every camera (CaptureFrameRegistry): one row per frame whose file was written, kept until deleted,
+-- whatever the Images workspace shows of them. Never pixels; previewed-only frames are never written.
+CREATE TABLE capture_frames (
+	-- Identity of the frame: its session id and generation.
+	frame_id TEXT PRIMARY KEY,
+	-- Order of the frame among every frame of the registry.
+	sequence INTEGER NOT NULL UNIQUE,
+	-- Camera: id of its connection, exact device id, and driver-reported name.
+	connection_id TEXT NOT NULL,
+	device_id TEXT NOT NULL,
+	camera_name TEXT NOT NULL,
+	-- Operation that took it (CaptureFrameOrigin).
+	origin TEXT NOT NULL,
+	-- Session that took it, and the number of the frame in it from 1.
+	session_id TEXT NOT NULL,
+	generation INTEGER NOT NULL,
+	-- When its exposure was commanded, Unix milliseconds (UTC).
+	time INTEGER NOT NULL,
+	-- Frame type the capture requested.
+	frame_type TEXT NOT NULL,
+	-- Width and height in pixels, number of channels, FITS BITPIX, and CFA pattern; NULL when never decoded.
+	width INTEGER,
+	height INTEGER,
+	channels INTEGER,
+	bitpix INTEGER,
+	cfa TEXT,
+	-- Acquisition data read from the header (ImageAcquisition); NULL when never decoded.
+	acquisition TEXT CHECK (acquisition IS NULL OR json_valid(acquisition)),
+	-- Absolute path of the saved file; never sent to clients.
+	path TEXT NOT NULL
+) STRICT;
+
+CREATE INDEX capture_frames_camera ON capture_frames (connection_id, device_id, sequence);
+
+-- Device operations of the server (OperationRecorder): when each started and how it ended, for 90 days and at most
+-- 10000 rows. An operation still running when the server stopped is interrupted. Never the error text, which may hold
+-- server paths.
+CREATE TABLE operation_runs (
+	-- Id of the operation.
+	operation_id TEXT PRIMARY KEY,
+	-- Kind of operation (OperationKind).
+	kind TEXT NOT NULL,
+	-- Devices it held, with their names when it started: [{ connectionId, deviceId, name }].
+	devices TEXT NOT NULL CHECK (json_valid(devices)),
+	-- Outcome; running until it ends.
+	state TEXT NOT NULL CHECK (state IN ('running', 'succeeded', 'failed', 'interrupted')),
+	-- Why it failed (OperationFailureReason); NULL otherwise.
+	reason TEXT,
+	-- When it started and ended, Unix milliseconds (UTC); ended_at is NULL while running.
+	started_at INTEGER NOT NULL,
+	ended_at INTEGER
+) STRICT;
+
+CREATE INDEX operation_runs_started ON operation_runs (started_at);

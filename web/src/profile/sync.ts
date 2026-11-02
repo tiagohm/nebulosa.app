@@ -8,7 +8,8 @@ import { type CameraSettings, type FramingReference, type MountRemoteBinding, ty
 // Synchronization of the workspace (the saved connections and the profiles) with the server, which keeps it for every
 // tab and browser. The tab changes its stores at once, as before; this module compares what the tab holds with what the
 // server last confirmed, unit by unit (a saved connection, the name and connection of a profile, an equipment setup, a
-// preference, a camera form, a Mount Remote Control binding, a saved framing), and writes each unit that changed, a
+// preference, a camera form, a Mount Remote Control binding, a saved framing, the notifications it read or
+// dismissed), and writes each unit that changed, a
 // moment after the latest change and one request at a time. A unit with a revision is written from the revision it was
 // edited from; when another tab saved it first the server refuses it, and the tab shows what the server kept and says
 // so. The others are written as they are, the last write winning. What the server publishes applies to every unit the
@@ -43,6 +44,7 @@ type Unit =
 	| { readonly kind: 'camera'; readonly profileId: string; readonly connectionId: string; readonly deviceId: string; readonly form: ProfileCameraForm }
 	| { readonly kind: 'binding'; readonly profileId: string; readonly connectionId: string; readonly deviceId: string; readonly protocol: MountRemoteProtocol }
 	| { readonly kind: 'framing'; readonly profileId: string; readonly framingId: string }
+	| { readonly kind: 'notifications'; readonly profileId: string }
 
 // A unit the tab holds and its value, as written to the server.
 interface LocalUnit {
@@ -113,7 +115,6 @@ const PREFERENCES: Readonly<Record<ProfilePreferenceKey, PreferenceField>> = {
 	imageDisplay: setting('imageDisplay'),
 	imageAstrometry: setting('imageAstrometry'),
 	statusBar: setting('statusBar'),
-	notifications: setting('notifications'),
 }
 
 // Preferences the server keeps, in a fixed order.
@@ -178,6 +179,7 @@ function localUnits(connections: readonly Connection[], profiles: readonly Profi
 		}
 
 		for (const { id: framingId, ...framing } of settings.framingReferences ?? []) add({ kind: 'framing', profileId, framingId }, framing)
+		add({ kind: 'notifications', profileId }, settings.notifications)
 	}
 
 	return units
@@ -202,6 +204,8 @@ function unitPath(unit: Unit): string {
 			return `/api/profiles/${e(unit.profileId)}/mount-bindings/${e(unit.connectionId)}/${e(unit.deviceId)}/${unit.protocol}`
 		case 'framing':
 			return `/api/profiles/${e(unit.profileId)}/framing-references/${e(unit.framingId)}`
+		case 'notifications':
+			return `/api/profiles/${e(unit.profileId)}/notifications`
 	}
 }
 
@@ -595,6 +599,11 @@ export class WorkspaceSync {
 		const created = local.filter(({ id }) => busy(id) && !record.framings.some((framing) => framing.id === id))
 		const framings = [...kept, ...created]
 		if (framings.length > 0 || settings.framingReferences) settings.framingReferences = framings
+
+		if (!this.#busy(unitKey({ kind: 'notifications', profileId }))) {
+			const { readIds, dismissedIds } = record.notifications
+			settings.notifications = readIds.length > 0 || dismissedIds.length > 0 ? { readIds: [...readIds], dismissedIds: [...dismissedIds] } : undefined
+		}
 	}
 
 	// Applies a preference or a camera form of the server, or its absence, unless the tab is changing it (or force) or

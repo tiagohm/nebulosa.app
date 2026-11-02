@@ -1,11 +1,11 @@
-import { type AboutInfo, closeDatabase, createAboutRoutes, flushStores, identifyJplClient, routes, startCalibrationLibrary, startDatabase, startEarthOrientation, websocket } from 'api'
+import { type AboutInfo, closeDatabase, createAboutRoutes, identifyJplClient, routes, startCalibrationLibrary, startDatabase, startEarthOrientation, websocket } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
 
 // Entry point of the application: serves the API routes, the /api/ws WebSocket, and the web UI from a
 // single Bun server. Every path the API does not handle falls back to the UI's HTML entry point. A server whose
-// operational database cannot be opened stops before serving. A stop signal ends the process only after the persisted
-// stores wrote their pending changes and the database was closed; a second signal ends it at once.
+// operational database cannot be opened stops before serving. A stop signal ends the process once the database was
+// closed, which writes its WAL back into the file.
 
 // Whether the server runs in development mode (HMR and the browser console); false when NODE_ENV is production.
 const development = process.env.NODE_ENV !== 'production'
@@ -57,14 +57,10 @@ const server = Bun.serve({
 // Each signal is handled once, replacing the handler of the previous hot reload.
 for (const signal of STOP_SIGNALS) {
 	process.removeAllListeners(signal)
-	process.once(
-		signal,
-		() =>
-			void flushStores().then(() => {
-				closeDatabase()
-				process.exit(0)
-			}),
-	)
+	process.once(signal, () => {
+		closeDatabase()
+		process.exit(0)
+	})
 }
 
 console.info(`Nebulosa is running at ${server.url}`)

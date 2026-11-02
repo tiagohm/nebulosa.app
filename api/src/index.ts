@@ -6,7 +6,7 @@ import { AutoFocusSessions, createAutoFocusRoutes } from './autofocus'
 import { CalibrationLibrary, createCalibrationLibraryRoutes } from './calibrationlibrary'
 import { CalibrationLibraryStore } from './calibrationlibrary.store'
 import { CameraCommands, createCameraRoutes } from './cameras'
-import { CaptureFrameRegistry, createCaptureFrameRoutes, DEFAULT_CAPTURE_FRAMES_FILE } from './captureframes'
+import { CaptureFrameRegistry, createCaptureFrameRoutes } from './captureframes'
 import { CameraCaptures, createCaptureRoutes } from './captures'
 import { CloseApproachesService, createCloseApproachRoutes } from './closeapproaches'
 import { connections, createConnectionRoutes } from './connection'
@@ -40,8 +40,9 @@ import { createMountPointingRoutes, MountPointingSessions } from './mountpointin
 import { PointingModelStore } from './mountpointing.store'
 import { createMountRemoteControlRoutes, MountRemoteControlService } from './mountremotecontrol'
 import { createMountRoutes, MountCommands } from './mounts'
-import { createNotificationRoutes, DEFAULT_NOTIFICATIONS_FILE, NotificationService } from './notifications'
+import { createNotificationRoutes, NotificationService } from './notifications'
 import { NotificationClassifier } from './notifications.rules'
+import { createOperationHistoryRoutes, OperationRecorder } from './operationhistory'
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
@@ -249,6 +250,7 @@ export type {
 } from './mounts'
 export type { MountRemoteClient, MountRemoteControlEvent, MountRemoteErrorCode, MountRemoteKey, MountRemoteProtocol, MountRemoteServer, MountRemoteSnapshot, MountRemoteStartRequest } from './mountremotecontrol'
 export type { OperationDevice, OperationEvent, OperationKind, OperationProgress, OperationRecord, OperationState } from './operations'
+export type { OperationHistoryPage, OperationRun, OperationRunDevice, OperationRunState } from './operationhistory'
 export type { RotatorMoveByRequest, RotatorMoveToRequest, RotatorReverseRequest, RotatorSyncRequest } from './rotators'
 export type { WheelMoveRequest, WheelNamesRequest } from './wheels'
 export type {
@@ -456,7 +458,23 @@ export type { GuidingProfileCut, GuidingStarProfile } from './guidingprofile'
 export type { NotificationCreatedEvent, NotificationRecord, NotificationSnapshot } from './notifications'
 export type { NotificationCameraTool, NotificationLevel, NotificationSource, NotificationTarget } from './notifications.rules'
 export type { ClientMessage, ServerEvent } from './websocket'
-export type { ProfileCameraForm, ProfilePreferenceKey, ProfileRecord, ProfileSaveRequest, SavedConnection, SavedConnectionSaveRequest, WorkspaceDevice, WorkspaceErrorCode, WorkspaceEvent, WorkspaceFramingReference, WorkspaceMountBinding, WorkspaceSnapshot, WorkspaceValue, WorkspaceValueSaveRequest } from './workspace'
+export type {
+	ProfileCameraForm,
+	ProfilePreferenceKey,
+	ProfileRecord,
+	ProfileSaveRequest,
+	SavedConnection,
+	SavedConnectionSaveRequest,
+	WorkspaceDevice,
+	WorkspaceErrorCode,
+	WorkspaceEvent,
+	WorkspaceFramingReference,
+	WorkspaceMountBinding,
+	WorkspaceNotificationState,
+	WorkspaceSnapshot,
+	WorkspaceValue,
+	WorkspaceValueSaveRequest,
+} from './workspace'
 export { websocket }
 
 // Operational database of the server, opened by the app before it serves; a test that only imports this module opens
@@ -466,17 +484,23 @@ const database = new AppDatabase(DEFAULT_DATABASE_FILE)
 // Saved connections and profiles of the operators, shared by every tab and browser.
 const workspace = new Workspace(database, broadcast)
 
+// Name of a device of an open connection, or undefined.
+function deviceName(connectionId: string, deviceId: string) {
+	return connections.devices.get(connections.client(connectionId), deviceId)?.name
+}
+
 // History of the notifications, created from the events of the connections, the operations, and the sessions; its
 // own notification:created events are broadcast directly, so they are never classified again.
-const notifications = new NotificationService(broadcast, {
-	file: DEFAULT_NOTIFICATIONS_FILE,
-	classifier: new NotificationClassifier((connectionId, deviceId) => connections.devices.get(connections.client(connectionId), deviceId)?.name),
-})
+const notifications = new NotificationService(broadcast, { database, classifier: new NotificationClassifier(deviceName) })
 
-// Broadcasts an event of the connections, the operations, or the sessions, then hands it to the notification history, so
-// a tab sees a change before the notification about it.
+// History of the device operations: when each one started and how it ended.
+const operationHistory = new OperationRecorder(database, deviceName)
+
+// Broadcasts an event of the connections, the operations, or the sessions, then hands it to the operation history and
+// the notification history, so a tab sees a change before the notification about it.
 function publish(event: ServerEvent) {
 	broadcast(event)
+	operationHistory.consume(event)
 	notifications.consume(event)
 }
 
@@ -543,7 +567,7 @@ const imageProcessing = new ImageProcessingService(images, broadcast)
 // Index of the captured frames of every camera, holding their documents for the Images workspace; the leases of a tab
 // follow its event sockets, and cameras are republished when their connection state changes.
 const captureFrames = new CaptureFrameRegistry(images, broadcast, {
-	file: DEFAULT_CAPTURE_FRAMES_FILE,
+	database,
 	connected: (connectionId, deviceId) => {
 		const client = connections.client(connectionId)
 		return !!client && !!connections.devices.camera(client, deviceId)?.connected
@@ -652,12 +676,13 @@ const earthOrientation = new EarthOrientationData()
 // Conversions of the Astronomical Time Converter and the real-time reference of the status bar clock.
 const astronomicalTime = new AstronomicalTimeService(earthOrientation)
 
-// Opens the operational database and brings its schema up to date, before anything is served, and creates the Default
-// profile when it has none. Throws an Error saying why it cannot be opened (another server uses it, the file is not a
+// Opens the operational database and brings its schema up to date, before anything is served, creates the Default
+// profile when it has none, and records the operations a previous run left running as interrupted. Throws an Error saying why it cannot be opened (another server uses it, the file is not a
 // database, or its schema is newer than this server knows), leaving the file as it is; the app then stops.
 export function startDatabase() {
 	database.open()
 	workspace.ensureProfile()
+	operationHistory.interruptRunning()
 }
 
 // Closes the operational database, for a server about to stop.
@@ -686,18 +711,13 @@ export function identifyJplClient(version: string) {
 	ssdRequests.identify(version)
 }
 
-// Writes the changes the persisted stores still hold in memory, for a server about to stop. Resolves once they are
-// written or failed to be; never rejects.
-export async function flushStores() {
-	await Promise.all([captureFrames.flush(), notifications.flush()])
-}
-
 // Bun.serve routes under /api/.
 export const routes = {
 	'/api/health': {
 		GET: () => Response.json({ status: 'ok' }),
 	},
 	...createOperationRoutes(operations),
+	...createOperationHistoryRoutes(operationHistory),
 	...createNotificationRoutes(notifications),
 	...createConnectionRoutes(connections),
 	...createIndiRoutes(indi),

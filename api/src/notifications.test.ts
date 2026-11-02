@@ -1,19 +1,16 @@
 import { afterAll, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { AppDatabase } from './database'
 import { createNotificationRoutes, MAX_NOTIFICATIONS, NOTIFICATION_RETENTION, type NotificationCreatedEvent, NotificationService } from './notifications'
 import type { NotificationDraft } from './notifications.rules'
 import type { ServerEvent } from './websocket'
+import { Workspace } from './workspace'
 
 const directory = mkdtempSync(join(tmpdir(), 'nebulosa-notifications-'))
-let files = 0
 
 afterAll(() => rmSync(directory, { recursive: true, force: true }))
-
-function newFile() {
-	return join(directory, `notifications-${++files}.json`)
-}
 
 // Classifier turning every operation:updated event into the draft keyed by its operation id.
 const classifier = {
@@ -24,14 +21,14 @@ function event(id: string): ServerEvent {
 	return { type: 'operation:updated', operation: { operationId: id, kind: 'mount.goto', devices: [], state: 'failed', startedAt: 0 } }
 }
 
-function newService(file = newFile(), now = () => 1000) {
+function newService(database = AppDatabase.memory(), now = () => 1000) {
 	const events: NotificationCreatedEvent[] = []
-	const service = new NotificationService((e) => events.push(e), { file, now, classifier })
-	return { service, events, file }
+	const service = new NotificationService((e) => events.push(e), { database, now, classifier })
+	return { service, events, database }
 }
 
-test('creates one record per occurrence and publishes it', async () => {
-	const { service, events, file } = newService()
+test('creates one record per occurrence and publishes it once committed', () => {
+	const { service, events, database } = newService()
 	service.consume({ type: 'connection:close', id: 'c', cause: 'requested' })
 	service.consume(event('a'))
 	service.consume(event('a'))
@@ -41,29 +38,28 @@ test('creates one record per occurrence and publishes it', async () => {
 	expect(notification).toEqual({ id: expect.any(String), sequence: 1, createdAt: 1000, level: 'error', code: 'test.failed', title: 'Failed', message: 'Operation a failed.', source: { kind: 'operation', connectionId: 'c' } })
 	expect(notification).not.toHaveProperty('key')
 	expect(service.snapshot()).toEqual({ items: [notification] })
-
-	await service.flush()
-	const stored = JSON.parse(readFileSync(file, 'utf-8'))
-	expect(stored).toEqual({ version: 1, nextSequence: 2, records: [{ ...notification, key: 'a' }] })
+	expect(database.db.query('SELECT id, key FROM notifications').all()).toEqual([{ id: notification.id, key: 'a' }])
 })
 
-test('lists the newest first and survives a restart without duplicating', async () => {
-	const { service, file } = newService()
-	service.consume(event('a'))
-	service.consume(event('b'))
-	await service.flush()
+test('lists the newest first and survives a restart without duplicating', () => {
+	const file = join(directory, 'restart', 'nebulosa.sqlite')
+	const first = newService(new AppDatabase(file))
+	first.service.consume(event('a'))
+	first.service.consume(event('b'))
+	first.database.close()
 
-	const restarted = newService(file)
+	const restarted = newService(new AppDatabase(file))
 	expect(restarted.service.snapshot().items.map((n) => n.message)).toEqual(['Operation b failed.', 'Operation a failed.'])
 
 	restarted.service.consume(event('a'))
 	restarted.service.consume(event('c'))
 	expect(restarted.events.map((e) => e.notification.sequence)).toEqual([3])
+	restarted.database.close()
 })
 
 test('keeps at most MAX_NOTIFICATIONS records younger than the retention', () => {
 	let now = 0
-	const { service } = newService(newFile(), () => now)
+	const { service } = newService(AppDatabase.memory(), () => now)
 
 	for (let i = 0; i < MAX_NOTIFICATIONS + 2; i++) service.consume(event(`n${i}`))
 	const items = service.snapshot().items
@@ -74,59 +70,38 @@ test('keeps at most MAX_NOTIFICATIONS records younger than the retention', () =>
 	service.consume(event('late'))
 	expect(service.snapshot().items.map((n) => n.message)).toEqual(['Operation late failed.'])
 
-	// A forgotten occurrence may be notified again.
+	// A deleted occurrence may be notified again, under a sequence never used before.
 	service.consume(event('n10'))
-	expect(service.snapshot().items).toHaveLength(2)
+	expect(service.snapshot().items.map((n) => n.sequence)).toEqual([MAX_NOTIFICATIONS + 4, MAX_NOTIFICATIONS + 3])
 })
 
-test('never overwrites a file of a newer version', async () => {
-	const file = newFile()
-	const text = JSON.stringify({ version: 2, nextSequence: 5, records: [{ id: 'x', key: 'old', sequence: 4, createdAt: 900, level: 'info', code: 'future', title: 'T', message: 'M', source: { kind: 'future' } }], extra: true })
-	writeFileSync(file, text)
+test('the read state of a profile goes with its notification', () => {
+	let now = 0
+	const { service, database } = newService(AppDatabase.memory(), () => now)
+	const workspace = new Workspace(database)
+	workspace.ensureProfile()
+	const profileId = workspace.snapshot().profiles[0].id
 
-	const { service } = newService(file)
 	service.consume(event('a'))
-	await service.flush()
+	service.consume(event('b'))
+	const [b, a] = service.snapshot().items.map(({ id }) => id)
+	workspace.saveNotificationState(profileId, { readIds: [a, b, 'unknown'], dismissedIds: [a] })
+	workspace.saveNotificationState(profileId, { readIds: [], dismissedIds: [] })
+	expect(workspace.profile(profileId)!.notifications).toEqual({ readIds: [a, b], dismissedIds: [a] })
 
-	expect(readFileSync(file, 'utf-8')).toBe(text)
-	expect(service.snapshot().items.map((n) => n.sequence)).toEqual([5, 4])
+	now = NOTIFICATION_RETENTION + 1
+	service.consume(event('late'))
+	expect(workspace.profile(profileId)!.notifications).toEqual({ readIds: [], dismissedIds: [] })
+	expect(database.db.query('SELECT count(*) AS count FROM profile_notification_state').get()).toEqual({ count: 0 })
 })
 
-test('starts empty from a malformed file and drops invalid records', () => {
-	const malformed = newFile()
-	writeFileSync(malformed, '{ not json')
-	expect(newService(malformed).service.snapshot()).toEqual({ items: [] })
+test('a record that cannot be written is not published and never throws', () => {
+	const { service, events, database } = newService()
+	database.db.run('PRAGMA query_only = ON')
 
-	const partial = newFile()
-	writeFileSync(partial, JSON.stringify({ version: 1, nextSequence: 3, records: [{ id: 'x' }, { id: 'y', key: 'k', sequence: 2, createdAt: 900, level: 'loud', code: 'c', title: 't', message: 'm', source: { kind: 's' } }] }))
-	const { service, events } = newService(partial)
+	expect(() => service.consume(event('a'))).not.toThrow()
+	expect(events).toEqual([])
 	expect(service.snapshot()).toEqual({ items: [] })
-
-	service.consume(event('a'))
-	expect(events[0].notification.sequence).toBe(3)
-})
-
-test('keeps the records in memory when the file cannot be written', async () => {
-	const blocker = newFile()
-	mkdirSync(blocker)
-	const { service, events } = newService(join(blocker, 'inside', 'notifications.json'))
-	writeFileSync(join(blocker, 'inside'), 'a file where a directory is expected')
-
-	service.consume(event('a'))
-	await service.flush()
-
-	expect(events).toHaveLength(1)
-	expect(service.snapshot().items).toHaveLength(1)
-})
-
-test('coalesces the changes made during a write into the final state', async () => {
-	const { service, file } = newService()
-	for (let i = 0; i < 20; i++) service.consume(event(`n${i}`))
-	await service.flush()
-
-	const stored = JSON.parse(readFileSync(file, 'utf-8'))
-	expect(stored.records).toHaveLength(20)
-	expect(stored.nextSequence).toBe(21)
 })
 
 test('a failing classifier or listener never throws into the publisher', () => {
@@ -135,7 +110,7 @@ test('a failing classifier or listener never throws into the publisher', () => {
 			throw new Error('socket gone')
 		},
 		{
-			file: newFile(),
+			database: AppDatabase.memory(),
 			classifier: {
 				classify: (e) => {
 					if (e.type === 'device:updated') throw new Error('bad event')

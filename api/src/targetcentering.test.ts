@@ -16,6 +16,7 @@ import { applyPointingOffset } from 'nebulosa/src/observation/mount/pointing'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures } from './captures'
 import { ConnectionManager } from './connection'
+import { AppDatabase } from './database'
 import type { GuidingRestoration, GuidingSessionSummary, GuidingSuspension } from './guiding'
 import { ImageStore } from './images'
 import type { MountCorrectionPlan, MountCorrections } from './mountpointing.corrections'
@@ -98,7 +99,7 @@ async function setup(corrections?: Pick<MountCorrections, 'plan' | 'suspend' | '
 	const operations = new OperationRegistry(manager.devices, () => {})
 	disposables.push(operations)
 	const images = new ImageStore()
-	const frames = new CaptureFrameRegistry(images, () => {}, { file: join(mkdtempSync(join(root, 'frames-')), 'capture-frames.json') })
+	const frames = new CaptureFrameRegistry(images, () => {}, { database: AppDatabase.memory() })
 	disposables.push(frames)
 	const captures = new CameraCaptures(
 		manager.devices,

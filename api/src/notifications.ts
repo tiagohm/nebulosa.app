@@ -1,20 +1,17 @@
-import { readFileSync } from 'fs'
-import { join } from 'path'
-import { DEFAULT_DATA_DIRECTORY } from './database'
+import type { AppDatabase } from './database'
 import { NotificationClassifier, type NotificationDraft, type NotificationLevel, type NotificationSource, type NotificationTarget } from './notifications.rules'
-import { errorCode, isRecord, writeAtomically } from './util'
 import type { ServerEvent } from './websocket'
 
 // History of the notifications of the server: facts about operations that ended, failed, or wait for someone,
 // never their state. The composition hands every server event to consume after broadcasting it; the classifier
-// picks the few transitions worth a notification, and each new occurrence becomes an immutable record,
-// published as notification:created and kept in a versioned JSON file of the server. The history is the same
-// for every tab: which records a profile has read or dismissed is kept by the browser, never here.
+// picks the few transitions worth a notification, and each new occurrence becomes an immutable record, a row of
+// the operational database, published as notification:created once committed. The history is the same for every
+// tab; which records a profile has read or dismissed belongs to the profile (profile_notification_state, Workspace).
 //
-// At most MAX_NOTIFICATIONS records younger than NOTIFICATION_RETENTION are kept. Each change is written at once,
-// one write at a time, the changes made during a write coalesced into the next one, so a crash loses at most the
-// records of the write in progress. Classifying, storing, and publishing never throw into the service that
-// published the event, and never wait for the file.
+// At most MAX_NOTIFICATIONS records younger than NOTIFICATION_RETENTION are kept: the older ones are deleted with the
+// read states of every profile in the transaction that creates a record. Classifying, storing, and publishing never
+// throw into the service that published the event; a record that cannot be written is reported on the console and
+// not published.
 
 // Notification as published to clients.
 export interface NotificationRecord {
@@ -53,30 +50,18 @@ export type NotificationListener = (event: NotificationCreatedEvent) => void
 
 // Options of the notification service.
 export interface NotificationServiceOptions {
-	// File the history is persisted in; DEFAULT_NOTIFICATIONS_FILE when absent.
-	readonly file?: string
+	// Operational database the history is kept in.
+	readonly database: AppDatabase
 	// Current instant, Unix milliseconds (UTC).
 	readonly now?: () => number
 	// Classifier of the events; a NotificationClassifier naming no devices when absent.
 	readonly classifier?: Pick<NotificationClassifier, 'classify'>
 }
 
-// Record as kept in the file, with the key of the occurrence it reports.
-interface StoredNotification extends NotificationRecord {
-	// Identity of the occurrence; never published.
-	readonly key: string
-}
-
-// File the history is persisted in when none is given.
-export const DEFAULT_NOTIFICATIONS_FILE = join(DEFAULT_DATA_DIRECTORY, 'notifications.json')
-
-// Version of the history file format written by this version.
-const NOTIFICATIONS_VERSION = 1
-
-// Notifications kept; the oldest are forgotten first.
+// Notifications kept; the oldest are deleted first.
 export const MAX_NOTIFICATIONS = 500
 
-// Age after which a notification is forgotten, in milliseconds (30 days).
+// Age after which a notification is deleted, in milliseconds (30 days).
 export const NOTIFICATION_RETENTION = 30 * 24 * 60 * 60 * 1000
 
 // Longest title kept, in characters.
@@ -85,66 +70,44 @@ const MAX_TITLE_LENGTH = 80
 // Longest message kept, in characters.
 const MAX_MESSAGE_LENGTH = 240
 
-// Severities a stored record may have.
-const LEVELS: ReadonlySet<unknown> = new Set<NotificationLevel>(['info', 'success', 'warning', 'error'])
-
-// Whether a value read from the file, which is not trusted, is a stored notification.
-function isStoredNotification(value: unknown): value is StoredNotification {
-	if (!isRecord(value)) return false
-	const { id, key, sequence, createdAt, level, code, title, message, source, target } = value
-	return (
-		typeof id === 'string' &&
-		typeof key === 'string' &&
-		Number.isInteger(sequence) &&
-		Number.isFinite(createdAt) &&
-		LEVELS.has(level) &&
-		typeof code === 'string' &&
-		typeof title === 'string' &&
-		typeof message === 'string' &&
-		isRecord(source) &&
-		typeof source.kind === 'string' &&
-		(target === undefined || isRecord(target))
-	)
-}
-
-// Record as published, without its key.
-function publicRecord({ key, ...record }: StoredNotification): NotificationRecord {
-	return record
-}
-
 // Text cut to at most length characters, ending with an ellipsis when cut.
 function truncate(text: string, length: number) {
 	return text.length <= length ? text : `${text.slice(0, length - 1)}…`
 }
 
-// History of the notifications, created from the server events. The file is read on first use, so creating the
-// service has no side effect.
+// Row of notifications.
+interface NotificationRow {
+	readonly sequence: number
+	readonly id: string
+	readonly created_at: number
+	readonly level: NotificationLevel
+	readonly code: string
+	readonly title: string
+	readonly message: string
+	readonly source: string
+	readonly target: string | null
+}
+
+// Returns the record of a row.
+function rowRecord({ sequence, id, created_at, level, code, title, message, source, target }: NotificationRow): NotificationRecord {
+	return { id, sequence, createdAt: created_at, level, code, title, message, source: JSON.parse(source) as NotificationSource, ...(target !== null && { target: JSON.parse(target) as NotificationTarget }) }
+}
+
+// History of the notifications, created from the server events, in the operational database.
 export class NotificationService {
-	// File the history is persisted in.
-	readonly file: string
+	// Operational database the history is kept in.
+	readonly database: AppDatabase
 	// Current instant, Unix milliseconds (UTC).
 	readonly #now: () => number
 	// Classifier of the events.
 	readonly #classifier: Pick<NotificationClassifier, 'classify'>
-	// Retained records, oldest first, once read.
-	#records?: StoredNotification[]
-	// Keys of the retained records.
-	readonly #keys = new Set<string>()
-	// Sequence of the latest record created.
-	#sequence = 0
-	// Whether the file was written by a newer version, so it is never overwritten.
-	#newer = false
-	// Tail of the writes, which run one at a time.
-	#queue: Promise<void> = Promise.resolve()
-	// Whether a write is queued and not started yet; it writes the history as it is when it starts.
-	#queued = false
 
 	// Creates the service, publishing every created notification to listener synchronously.
 	constructor(
 		readonly listener: NotificationListener,
-		{ file = DEFAULT_NOTIFICATIONS_FILE, now = Date.now, classifier = new NotificationClassifier() }: NotificationServiceOptions = {},
+		{ database, now = Date.now, classifier = new NotificationClassifier() }: NotificationServiceOptions,
 	) {
-		this.file = file
+		this.database = database
 		this.#now = now
 		this.#classifier = classifier
 	}
@@ -165,89 +128,41 @@ export class NotificationService {
 
 	// Returns the retained history, newest first.
 	snapshot(): NotificationSnapshot {
-		return { items: this.#prune().map(publicRecord).toReversed() }
+		const rows = this.database.db.query<NotificationRow, [number, number]>('SELECT sequence, id, created_at, level, code, title, message, source, target FROM notifications WHERE created_at >= ? ORDER BY sequence DESC LIMIT ?').all(this.#now() - NOTIFICATION_RETENTION, MAX_NOTIFICATIONS)
+		return { items: rows.map(rowRecord) }
 	}
 
-	// Resolves once the changes made so far are written, or failed to be; never rejects.
-	flush(): Promise<void> {
-		return this.#queue
-	}
-
-	// Creates, stores, and publishes the notification of a draft, unless its occurrence was already notified.
-	#create(draft: NotificationDraft) {
-		const records = this.#load()
-		if (this.#keys.has(draft.key)) return
-
-		const { key, level, code, title, message, source, target } = draft
-		const record: StoredNotification = { id: crypto.randomUUID(), sequence: ++this.#sequence, createdAt: this.#now(), level, code, title: truncate(title, MAX_TITLE_LENGTH), message: truncate(message, MAX_MESSAGE_LENGTH), source, ...(target && { target }), key }
-		records.push(record)
-		this.#keys.add(key)
-		this.#prune()
-		this.#save()
+	// Creates and publishes the notification of a draft, unless its occurrence was already notified, deleting in the same
+	// transaction what the history no longer retains.
+	#create({ key, level, code, title, message, source, target }: NotificationDraft) {
+		const now = this.#now()
+		let record: NotificationRecord | undefined
 
 		try {
-			this.listener({ type: 'notification:created', notification: publicRecord(record) })
+			record = this.database.write(() => {
+				const { db } = this.database
+				if (db.query('SELECT 1 FROM notifications WHERE key = ?').get(key)) return undefined
+				const id = crypto.randomUUID()
+				const inserted = db
+					.query<NotificationRow, [string, string, number, string, string, string, string, string, string | null]>(
+						'INSERT INTO notifications (id, key, created_at, level, code, title, message, source, target) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (key) DO NOTHING RETURNING sequence, id, created_at, level, code, title, message, source, target',
+					)
+					.get(id, key, now, level, code, truncate(title, MAX_TITLE_LENGTH), truncate(message, MAX_MESSAGE_LENGTH), JSON.stringify(source), target ? JSON.stringify(target) : null)
+				db.query('DELETE FROM notifications WHERE created_at < ? OR sequence <= (SELECT sequence FROM notifications ORDER BY sequence DESC LIMIT 1 OFFSET ?)').run(now - NOTIFICATION_RETENTION, MAX_NOTIFICATIONS)
+				return inserted ? rowRecord(inserted) : undefined
+			})
+		} catch (error) {
+			console.warn('notifications: a notification cannot be recorded', error)
+			return
+		}
+
+		if (!record) return
+
+		try {
+			this.listener({ type: 'notification:created', notification: record })
 		} catch (error) {
 			console.warn('notifications: a notification cannot be published', error)
 		}
-	}
-
-	// Returns the retained records, reading the file on first use. A missing or unreadable file gives an empty
-	// history; a file of a newer version is read as far as it is understood and never overwritten.
-	#load(): StoredNotification[] {
-		if (this.#records) return this.#records
-
-		let records: StoredNotification[] = []
-
-		try {
-			const data: unknown = JSON.parse(readFileSync(this.file, 'utf-8'))
-
-			if (isRecord(data) && Number.isInteger(data.version) && Array.isArray(data.records)) {
-				records = data.records.filter(isStoredNotification).sort((a, b) => a.sequence - b.sequence)
-				this.#sequence = Math.max(Number.isInteger(data.nextSequence) ? (data.nextSequence as number) - 1 : 0, records.at(-1)?.sequence ?? 0)
-				this.#newer = (data.version as number) > NOTIFICATIONS_VERSION
-				if (this.#newer) console.warn('notifications: the history file was written by a newer version of Nebulosa and will not be overwritten')
-			} else {
-				console.warn('notifications: the history file is not a Nebulosa notification history')
-			}
-		} catch (error) {
-			const code = errorCode(error)
-			if (code !== 'ENOENT' && code !== 'ENOTDIR') console.warn('notifications: the history file cannot be read', error)
-		}
-
-		this.#records = records
-		for (const record of records) this.#keys.add(record.key)
-		this.#prune()
-		return records
-	}
-
-	// Forgets the records older than the retention and beyond the limit. Returns the retained records.
-	#prune(): StoredNotification[] {
-		const records = this.#load()
-		const cutoff = this.#now() - NOTIFICATION_RETENTION
-		let first = Math.max(0, records.length - MAX_NOTIFICATIONS)
-		while (first < records.length && records[first].createdAt < cutoff) first++
-		if (first === 0) return records
-
-		for (const record of records.splice(0, first)) this.#keys.delete(record.key)
-		return records
-	}
-
-	// Queues a write of the history, unless one is already queued, which then writes this change too.
-	#save() {
-		if (this.#newer || this.#queued) return
-		this.#queued = true
-
-		this.#queue = this.#queue.then(async () => {
-			this.#queued = false
-			const text = `${JSON.stringify({ version: NOTIFICATIONS_VERSION, nextSequence: this.#sequence + 1, records: this.#records }, undefined, '\t')}\n`
-
-			try {
-				await writeAtomically(this.file, text)
-			} catch (error) {
-				console.warn('notifications: the history file cannot be written', error)
-			}
-		})
 	}
 }
 
@@ -255,7 +170,7 @@ export class NotificationService {
 export function createNotificationRoutes(notifications: NotificationService) {
 	return {
 		'/api/notifications': {
-			// The retained history, newest first; read and dismissed states are kept by each browser profile.
+			// The retained history, newest first; read and dismissed states belong to each profile (GET /api/workspace).
 			GET: () => Response.json(notifications.snapshot()),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>

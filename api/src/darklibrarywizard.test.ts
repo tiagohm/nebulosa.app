@@ -10,6 +10,7 @@ import { CoverCommands } from './covers'
 import { type DarkLibraryWizardEvent, type DarkLibraryWizardRequest, type DarkLibraryWizardSession, DarkLibraryWizardSessions, darkGroupKey, expectedFrameSize, orderDarkGroups } from './darklibrarywizard'
 import { type DarkFrameMeasurement, measureDarkFile } from './darklibrarywizard.analysis'
 import { DarkPlanStore, STAGING_DIRECTORY } from './darklibrarywizard.store'
+import { AppDatabase } from './database'
 import { FlatPanelCommands } from './flatpanels'
 import { ImageStore } from './images'
 import { OperationRegistry } from './operations'
@@ -66,7 +67,7 @@ async function setup(edit: Parameters<typeof analyzer>[0] = (measurement) => mea
 	const operations = new OperationRegistry(manager.devices, () => {})
 	disposables.push(operations)
 	const images = new ImageStore()
-	const frames = new CaptureFrameRegistry(images, () => {}, { file: join(mkdtempSync(join(root, 'frames-')), 'capture-frames.json') })
+	const frames = new CaptureFrameRegistry(images, () => {}, { database: AppDatabase.memory() })
 	disposables.push(frames)
 	const resolve = (connectionId: string) => manager.client(connectionId)
 	const captures = new CameraCaptures(manager.devices, resolve, operations, images, frames, () => {}, mkdtempSync(join(root, 'captures-')))

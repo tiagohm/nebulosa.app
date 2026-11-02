@@ -89,7 +89,7 @@ async function setup() {
 	const stars = new StarDetectionService(images, tools, () => {})
 	const capturesDir = mkdtempSync(join(root, 'captures-'))
 	const frameEvents: CaptureFrameEvent[] = []
-	const frames = new CaptureFrameRegistry(images, (event) => frameEvents.push(event), { file: join(mkdtempSync(join(root, 'frames-')), 'capture-frames.json') })
+	const frames = new CaptureFrameRegistry(images, (event) => frameEvents.push(event), { database: AppDatabase.memory() })
 	disposables.push(frames)
 	const captures = new CameraCaptures(
 		manager.devices,

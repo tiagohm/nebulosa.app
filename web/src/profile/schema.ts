@@ -83,7 +83,7 @@ export interface ProfileSettings {
 	// stops, or rebinds a listener.
 	mountRemoteControl?: Record<string, Record<string, Partial<Record<MountRemoteProtocol, MountRemoteBinding>>>>
 	// Notifications of the server history the profile read or dismissed; absent until the first one is read. The server
-	// keeps one history for every browser, so these states are the profile's own and are never sent back.
+	// keeps one history for every profile and these states for each one (profile_notification_state), which only grow.
 	notifications?: NotificationPreferences
 	// Appearance of the astrometric aids of solved images in Images (coordinates, grid, crosshair, scale bar, orientation);
 	// absent until edited, and then DEFAULT_IMAGE_ASTROMETRY holds. Whether a document shows its grid is the document's.

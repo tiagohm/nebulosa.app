@@ -16,6 +16,7 @@ import { CameraCaptures, type CaptureRequest } from './captures'
 import { ConnectionManager } from './connection'
 import { type DarvEvent, type DarvMeasurementRequest, type DarvRequest, type DarvSession, DarvSessions } from './darv'
 import { type DarvAnalysis, darvAnalysis, DarvAnalyzer } from './darv.analysis'
+import { AppDatabase } from './database'
 import { ImageStore } from './images'
 import { OperationRegistry } from './operations'
 
@@ -95,7 +96,7 @@ async function setup() {
 	const operations = new OperationRegistry(manager.devices, () => {})
 	disposables.push(operations)
 	const images = new ImageStore()
-	const frames = new CaptureFrameRegistry(images, () => {}, { file: join(mkdtempSync(join(root, 'frames-')), 'capture-frames.json') })
+	const frames = new CaptureFrameRegistry(images, () => {}, { database: AppDatabase.memory() })
 	disposables.push(frames)
 	const captures = new CameraCaptures(
 		manager.devices,

@@ -13,6 +13,7 @@ import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures } from './captures'
 import { ConnectionManager } from './connection'
 import { CoverCommands } from './covers'
+import { AppDatabase } from './database'
 import { FlatPanelCommands } from './flatpanels'
 import { type FlatWizardEvent, type FlatWizardFilter, type FlatWizardRequest, type FlatWizardSession, FlatWizardSessions, finalVerdict, filterName, publishFrame } from './flatwizard'
 import type { FlatFrameContext, FlatFrameMeasurement, FlatMeasurementOptions } from './flatwizard.analysis'
@@ -91,7 +92,7 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	const operations = new OperationRegistry(manager.devices, () => {})
 	disposables.push(operations)
 	const images = new ImageStore()
-	const frames = new CaptureFrameRegistry(images, () => {}, { file: join(mkdtempSync(join(root, 'frames-')), 'capture-frames.json') })
+	const frames = new CaptureFrameRegistry(images, () => {}, { database: AppDatabase.memory() })
 	disposables.push(frames)
 	const captures = new CameraCaptures(
 		manager.devices,

@@ -14,6 +14,7 @@ import { meter } from 'nebulosa/src/math/units/distance'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureRequest } from './captures'
 import { ConnectionManager } from './connection'
+import { AppDatabase } from './database'
 import { ImageStore } from './images'
 import { OperationRegistry } from './operations'
 import type { PlateSolveOrigin, PlateSolvePreparation, PlateSolveRequest, PlateSolveResult } from './platesolving'
@@ -95,7 +96,7 @@ async function setup() {
 	const operations = new OperationRegistry(manager.devices, () => {})
 	disposables.push(operations)
 	const images = new ImageStore()
-	const frames = new CaptureFrameRegistry(images, () => {}, { file: join(mkdtempSync(join(root, 'frames-')), 'capture-frames.json') })
+	const frames = new CaptureFrameRegistry(images, () => {}, { database: AppDatabase.memory() })
 	disposables.push(frames)
 	const captures = new CameraCaptures(
 		manager.devices,

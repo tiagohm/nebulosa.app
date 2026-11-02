@@ -1,9 +1,10 @@
 import { afterAll, afterEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { type CaptureFrameEvent, type CaptureFrameOrigin, CaptureFrameRegistry, type CaptureFrameRegistryOptions, FRAMES_PER_SOURCE, MAX_LEASED_FRAMES, MAX_SOURCES, parseCaptureFrames } from './captureframes'
+import { type CaptureFrameEvent, type CaptureFrameOrigin, CaptureFrameRegistry, type CaptureFrameRegistryOptions, FRAMES_PER_SOURCE, MAX_LEASED_FRAMES } from './captureframes'
 import type { CaptureFrame } from './captures'
+import { AppDatabase } from './database'
 import { ImageStore } from './images'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-capture-frames-'))
@@ -26,13 +27,12 @@ function fits(width = 8, height = 4) {
 	return new Uint8Array(Buffer.concat([header, Buffer.alloc(BLOCK)]))
 }
 
-let files = 0
-
-function setup(options: CaptureFrameRegistryOptions = {}) {
+// Creates a registry over a database in memory, or over the database of an earlier registry to restart it.
+function setup(options: Partial<CaptureFrameRegistryOptions> = {}) {
 	const images = new ImageStore()
 	const events: CaptureFrameEvent[] = []
-	const file = options.file ?? join(root, `registry-${files++}.json`)
-	const registry = new CaptureFrameRegistry(images, (event) => events.push(event), { connected: () => true, ...options, file })
+	const database = options.database ?? AppDatabase.memory()
+	const registry = new CaptureFrameRegistry(images, (event) => events.push(event), { connected: () => true, ...options, database })
 	disposables.push(registry)
 
 	// Decodes a frame of a camera and records it as previewed, as the capture service (or Auto Focus, by origin) does;
@@ -57,7 +57,7 @@ function setup(options: CaptureFrameRegistryOptions = {}) {
 		return info
 	}
 
-	return { images, events, registry, file, preview }
+	return { images, events, registry, database, preview }
 }
 
 describe('frames', () => {
@@ -182,13 +182,10 @@ describe('frames', () => {
 		expect((await registry.recent('b', 'camera')).latest).toMatchObject({ frameId: 'sb:1', availability: 'memory' })
 	})
 
-	test(`only ${MAX_SOURCES} cameras are remembered`, async () => {
+	test('every camera is remembered', async () => {
 		const { registry, preview } = setup()
-		for (let i = 0; i <= MAX_SOURCES; i++) await preview(1, { deviceId: `camera-${i}`, sessionId: `s${i}` })
-
-		const devices = registry.snapshot().sources.map((source) => source.deviceId)
-		expect(devices).toHaveLength(MAX_SOURCES)
-		expect(devices).not.toContain('camera-0')
+		for (let i = 0; i < 40; i++) await preview(1, { deviceId: `camera-${i}`, sessionId: `s${i}` })
+		expect(registry.snapshot().sources).toHaveLength(40)
 	})
 
 	test('a saved frame becomes available from its file once its document is closed', async () => {
@@ -405,13 +402,12 @@ describe('leases', () => {
 
 describe('persistence', () => {
 	test('saved frames survive a restart, without a latest frame; previewed-only ones do not', async () => {
-		const { registry, preview, file } = setup()
+		const { registry, preview, database } = setup()
 		const path = join(root, 'persisted-1.fits')
 		await preview(1, { path })
 		await preview(2)
-		await registry.flush()
 
-		const restarted = setup({ file })
+		const restarted = setup({ database })
 		const page = await restarted.registry.recent('connection', 'camera')
 		expect(page.latest).toBeUndefined()
 		expect(page.frames.map((frame) => [frame.frameId, frame.availability])).toEqual([['session:1', 'file']])
@@ -427,13 +423,12 @@ describe('persistence', () => {
 	})
 
 	test('a restart never brings back an Auto Focus frame, which offers the newest saved frame as Latest saved', async () => {
-		const { registry, preview, file } = setup()
+		const { registry, preview, database } = setup()
 		await preview(1, { path: join(root, 'restart-saved-1.fits') })
 		await preview(1, { sessionId: 'focus', origin: 'autofocus' })
-		await registry.flush()
-		expect(readFileSync(file, 'utf-8')).not.toContain('focus:1')
+		expect(database.db.query('SELECT frame_id FROM capture_frames').all()).toEqual([{ frame_id: 'session:1' }])
 
-		const restarted = setup({ file })
+		const restarted = setup({ database })
 		const page = await restarted.registry.recent('connection', 'camera')
 		expect(page.latest).toBeUndefined()
 		expect(await restarted.registry.frame('focus:1')).toBeUndefined()
@@ -441,76 +436,41 @@ describe('persistence', () => {
 		expect(restarted.registry.snapshot().sources[0]).toMatchObject({ latestFrameId: undefined, latestAvailableFrameId: 'session:1', latestRestored: true })
 	})
 
-	test('the file holds no document id nor previewed-only frame', async () => {
-		const { registry, preview, file } = setup()
+	test('the database holds no document id nor previewed-only frame', async () => {
+		const { preview, database } = setup()
 		const info = await preview(1)
 		await preview(2, { path: join(root, 'persisted-2.fits') })
-		await registry.flush()
 
-		const text = readFileSync(file, 'utf-8')
-		expect(text).not.toContain(info.id)
-		expect(JSON.parse(text)).toMatchObject({ version: 3, sources: [{ connectionId: 'connection', deviceId: 'camera', saved: [{ frameId: 'session:2', origin: 'capture' }] }] })
-		expect(text).not.toContain('session:1')
+		const rows = database.db.query('SELECT * FROM capture_frames').all()
+		expect(rows).toMatchObject([{ frame_id: 'session:2', origin: 'capture', connection_id: 'connection', device_id: 'camera', path: join(root, 'persisted-2.fits') }])
+		expect(JSON.stringify(rows)).not.toContain(info.id)
 	})
 
-	test('a version 1 file keeps its saved frames only', async () => {
-		const file = join(root, 'version-1.json')
-		const path = join(root, 'migrated.fits')
-		writeFileSync(path, fits())
-		const frame = (generation: number, extra: object = {}) => ({ frameId: `s:${generation}`, sequence: generation, sessionId: 's', generation, time: generation, frameType: 'LIGHT', ...extra })
-		const frames = [frame(1), frame(2, { path, file: 'saved' }), frame(3, { path, file: 'failed' }), frame(4, { path, file: 'saving' }), frame(5)]
-		writeFileSync(
-			file,
-			JSON.stringify({
-				version: 1,
-				sequence: 5,
-				sources: [
-					{ connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', frames },
-					{ connectionId: 'connection', deviceId: 'preview', cameraName: 'Preview', frames: [frame(6)] },
-				],
-			}),
-		)
+	test('every saved frame keeps its row, and a restart lists the newest of each camera', async () => {
+		const { preview, database } = setup()
+		for (let generation = 1; generation <= FRAMES_PER_SOURCE + 5; generation++) await preview(generation, { path: join(root, `history-${generation}.fits`) })
+		expect(database.db.query('SELECT count(*) AS count FROM capture_frames').get()).toEqual({ count: FRAMES_PER_SOURCE + 5 })
 
-		const { registry, preview } = setup({ file })
-		expect(registry.snapshot().sources.map((source) => source.deviceId)).toEqual(['camera'])
-		const page = await registry.recent('connection', 'camera')
-		expect(page.frames.map((f) => [f.frameId, f.file, f.availability])).toEqual([
-			['s:4', 'saved', 'file'],
-			['s:2', 'saved', 'file'],
-		])
-
-		await preview(1, { sessionId: 'next' })
-		expect((await registry.recent('connection', 'camera')).latest!.sequence).toBeGreaterThan(6)
-		await registry.flush()
-		expect(JSON.parse(readFileSync(file, 'utf-8'))).toMatchObject({
-			version: 3,
-			sources: [
-				{
-					saved: [
-						{ frameId: 's:2', origin: 'capture' },
-						{ frameId: 's:4', origin: 'capture' },
-					],
-				},
-			],
-		})
+		const restarted = setup({ database })
+		const page = await restarted.registry.recent('connection', 'camera')
+		expect(page.frames).toHaveLength(FRAMES_PER_SOURCE)
+		expect(page.frames[0].frameId).toBe(`session:${FRAMES_PER_SOURCE + 5}`)
+		expect(page.frames.at(-1)!.frameId).toBe('session:6')
 	})
 
-	test('a file of a newer version is read and never overwritten', async () => {
-		const file = join(root, 'newer.json')
-		const text = JSON.stringify({ version: 99, sequence: 5, sources: [{ connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', saved: [{ frameId: 's:1', sequence: 5, sessionId: 's', generation: 1, time: 0, frameType: 'LIGHT', path: join(root, 'newer.fits'), file: 'saved' }] }] })
-		writeFileSync(file, text)
-		const { registry, preview } = setup({ file })
-		await preview(1, { path: join(root, 'newer-2.fits') })
-		await registry.flush()
-
-		expect(readFileSync(file, 'utf-8')).toBe(text)
-		expect(registry.snapshot().sources[0].count).toBe(2)
+	test('a frame whose write failed after all loses its row', async () => {
+		const { registry, preview, database } = setup()
+		const path = join(root, 'failed-later.fits')
+		await preview(1, { path })
+		registry.written({ sessionId: 'session', generation: 1, connectionId: 'connection', deviceId: 'camera', time: 0, frameType: 'LIGHT', path, cameraName: 'Camera' }, 'failed')
+		expect(database.db.query('SELECT count(*) AS count FROM capture_frames').get()).toEqual({ count: 0 })
 	})
 
-	test('invalid content is read as empty, and invalid frames are skipped', () => {
-		expect(parseCaptureFrames('not json')).toEqual({ sources: [], sequence: 0 })
-		const { sources } = parseCaptureFrames(JSON.stringify({ version: 2, sources: [{ connectionId: 'c', deviceId: 'd', saved: [{ frameId: 'x' }, { frameId: 's:1', sequence: 1, sessionId: 's', generation: 1, time: 0, path: 'a.fits', file: 'saved' }] }] }))
-		expect(sources[0].saved.map((frame) => frame.frameId)).toEqual(['s:1'])
+	test('a row that cannot be written never fails the capture', async () => {
+		const { registry, preview, database } = setup()
+		database.db.run('PRAGMA query_only = ON')
+		await preview(1, { path: join(root, 'unwritable.fits') })
+		expect((await registry.recent('connection', 'camera')).frames.map((frame) => frame.frameId)).toEqual(['session:1'])
 	})
 })
 
@@ -545,24 +505,18 @@ describe('published frames', () => {
 		expect((await registry.recent('connection', 'camera')).frames).toMatchObject([{ frameId: 'flats:3', origin: 'flatWizard', availability: 'file' }])
 	})
 
-	test('the origin of a saved frame survives a restart, and a version 2 frame is a capture', async () => {
-		const { registry, preview, file } = setup()
+	test('the origin of a saved frame survives a restart', async () => {
+		const { registry, preview, database } = setup()
 		const path = join(root, 'origin-flat.fits')
 		await preview(1, { sessionId: 'flats', origin: 'flatWizard' })
 		writeFileSync(path, fits())
 		registry.published({ sessionId: 'flats', generation: 1, connectionId: 'connection', deviceId: 'camera', cameraName: 'Camera', time: 1, frameType: 'FLAT', path }, 'flatWizard')
 		await preview(2, { path: join(root, 'origin-capture.fits') })
-		await registry.flush()
 
-		const restarted = setup({ file })
+		const restarted = setup({ database })
 		expect((await restarted.registry.recent('connection', 'camera')).frames.map((frame) => [frame.frameId, frame.origin])).toEqual([
 			['session:2', 'capture'],
 			['flats:1', 'flatWizard'],
 		])
-
-		const legacy = parseCaptureFrames(JSON.stringify({ version: 2, sources: [{ connectionId: 'c', deviceId: 'd', saved: [{ frameId: 's:1', sequence: 1, sessionId: 's', generation: 1, time: 0, path: 'a.fits', file: 'saved' }] }] }))
-		expect(legacy.sources[0].saved[0].origin).toBe('capture')
-		const unknown = parseCaptureFrames(JSON.stringify({ version: 3, sources: [{ connectionId: 'c', deviceId: 'd', saved: [{ frameId: 's:1', origin: 'darv', sequence: 1, sessionId: 's', generation: 1, time: 0, path: 'a.fits', file: 'saved' }] }] }))
-		expect(unknown.sources[0].saved[0].origin).toBe('capture')
 	})
 })

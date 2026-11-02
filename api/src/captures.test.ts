@@ -6,6 +6,7 @@ import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureEvent, type CaptureFrame, type CaptureRequest, type CaptureSession, frameName, sanitizeFileName } from './captures'
 import { ConnectionManager } from './connection'
+import { AppDatabase } from './database'
 import type { CameraCapabilities } from './devices'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry } from './operations'
@@ -42,7 +43,7 @@ async function setup() {
 	disposables.push(operations)
 	const images = new ImageStore()
 	const frameEvents: CaptureFrameEvent[] = []
-	const frameRegistry = new CaptureFrameRegistry(images, (event) => frameEvents.push(event), { file: join(mkdtempSync(join(root, 'registry-')), 'capture-frames.json'), connected: () => true })
+	const frameRegistry = new CaptureFrameRegistry(images, (event) => frameEvents.push(event), { database: AppDatabase.memory(), connected: () => true })
 	disposables.push(frameRegistry)
 	const events: CaptureEvent[] = []
 	const captures = new CameraCaptures(

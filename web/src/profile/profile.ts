@@ -750,7 +750,8 @@ export function setMountRemoteBinding(state: ProfileState, mount: CameraIdentity
 	;(mounts[mount.deviceId] ??= {})[protocol] = { host: binding.host, port: binding.port }
 }
 
-// Marks notifications as read in the active profile. Reading never changes the server history.
+// Marks notifications as read in the active profile, which the synchronization adds to what the server keeps for it.
+// Reading never changes the server history.
 export function markNotificationsRead(state: ProfileState, ids: readonly string[]) {
 	const profile = activeProfile(state)
 	const preferences = (profile.settings.notifications ??= { readIds: [], dismissedIds: [] })
@@ -770,8 +771,8 @@ export function dismissNotifications(state: ProfileState, ids: readonly string[]
 	preferences.dismissedIds = [...preferences.dismissedIds, ...listed].slice(-MAX_NOTIFICATION_IDS)
 }
 
-// Drops from every profile the read and dismissed ids of notifications the server history no longer retains.
-// retained must be the whole history, never a part of it. Profiles are not marked as changed.
+// Drops from every profile the read and dismissed ids of notifications the server history no longer retains, which
+// the server already dropped with them. retained must be the whole history, never a part of it.
 export function pruneNotificationPreferences(state: ProfileState, retained: readonly string[]) {
 	const ids = new Set(retained)
 

@@ -41,7 +41,7 @@ test('a new database has one Default profile, and only one', async () => {
 
 	const snapshot = (await (await call(routes, '/api/workspace', 'GET')).json()) as WorkspaceSnapshot
 	expect(snapshot.connections).toEqual([])
-	expect(snapshot.profiles).toEqual([{ id: expect.any(String), name: DEFAULT_PROFILE_NAME, sortOrder: 0, revision: 1, createdAt: expect.any(Number), equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, framings: [] }])
+	expect(snapshot.profiles).toEqual([{ id: expect.any(String), name: DEFAULT_PROFILE_NAME, sortOrder: 0, revision: 1, createdAt: expect.any(Number), equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, framings: [], notifications: { readIds: [], dismissedIds: [] } }])
 })
 
 test('the workspace survives a restart', async () => {

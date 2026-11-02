@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import type { ProfileRecord, WorkspaceSnapshot } from 'api'
 import { proxy, snapshot } from 'valtio'
 import { type ConnectionState, removeConnection, saveConnection } from '../connection/connection'
-import { assignDevice, createProfile, deleteFramingReference, deleteProfile, forgetConnection, type ProfileState, saveFramingReference, selectConnection, setExposureSettings, setFramingVisible, setPanelOpen, setSkyObserver, setTelescopeOptics } from './profile'
+import { assignDevice, createProfile, deleteFramingReference, dismissNotifications, markNotificationsRead, deleteProfile, forgetConnection, type ProfileState, saveFramingReference, selectConnection, setExposureSettings, setFramingVisible, setPanelOpen, setSkyObserver, setTelescopeOptics } from './profile'
 import { PROFILE_SETTINGS_VERSION } from './schema'
 import { WorkspaceSync, type WorkspaceSyncState } from './sync'
 
@@ -15,7 +15,7 @@ interface Sent {
 
 // Profile record of the server with nothing kept.
 function record(id: string, patch: Partial<ProfileRecord> = {}): ProfileRecord {
-	return { id, name: id, sortOrder: 0, revision: 1, createdAt: 0, equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, framings: [], ...patch }
+	return { id, name: id, sortOrder: 0, revision: 1, createdAt: 0, equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, framings: [], notifications: { readIds: [], dismissedIds: [] }, ...patch }
 }
 
 const stops: (() => void)[] = []
@@ -186,6 +186,19 @@ describe('writes', () => {
 			{ method: 'PUT', path: `/api/profiles/${created.id}`, body: { name: 'Planetary', connectionId: null, sortOrder: 1, revision: 0 } },
 			{ method: 'PUT', path: `/api/profiles/${created.id}/framing-references/${framing.id}`, body: { name: 'Jupiter', rightAscension: 1, declination: 0.1, source: 'sky', createdAt: 5, updatedAt: 5 } },
 		])
+	})
+
+	test('the notifications a profile read or dismissed are written as they grow, and come back with the profile', async () => {
+		const { profiles, sync, sent } = setup()
+		await sync.refresh()
+
+		markNotificationsRead(profiles, ['n1'])
+		dismissNotifications(profiles, ['n2'])
+		await settle(sync)
+		expect(sent).toEqual([{ method: 'PUT', path: '/api/profiles/p1/notifications', body: { readIds: ['n1', 'n2'], dismissedIds: ['n2'] } }])
+
+		sync.handle({ type: 'profile:updated', profile: record('p1', { name: 'Default', notifications: { readIds: ['n1', 'n2', 'n3'], dismissedIds: ['n2'] } }) })
+		expect(snapshot(profiles).profiles[0].settings.notifications).toEqual({ readIds: ['n1', 'n2', 'n3'], dismissedIds: ['n2'] })
 	})
 
 	test('a change the server could not receive is written again', async () => {

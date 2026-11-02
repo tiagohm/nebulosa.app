@@ -385,9 +385,7 @@ export class TppaSessions {
 			return handle.result
 		})
 
-		this.#sessions.adopt(resourceKey(camera), session)
-		this.#sessions.track(record.operationId, session)
-		this.#sessions.update(session, { operationId: record.operationId })
+		this.#sessions.adopt(resourceKey(camera), session, record.operationId)
 
 		void session.handle!.result.then((result) => this.#ended(session, result))
 		return Response.json({ sessionId: session.summary.sessionId, operationId: record.operationId } satisfies TppaStartResponse, { status: 202 })

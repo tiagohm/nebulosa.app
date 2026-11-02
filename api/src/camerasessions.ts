@@ -65,18 +65,18 @@ export class CameraSessionRegistry<S extends CameraSessionFields, T extends Came
 		return known && this.#byOperation.get(known.operationId)
 	}
 
-	// Makes a session the latest of its camera, by its resource key, forgetting the operation of the one it replaces, whose
-	// later changes are then silent.
-	adopt(key: string, session: T) {
+	// Makes a session the latest of its camera, by its resource key, once the operation running it started: forgets the
+	// operation of the one it replaces, whose later changes are then silent, remembers operationId, so a repeated start
+	// token answers the session, and publishes the session with it. A service calls it right after starting the operation,
+	// in the same synchronous step, so the first summary of a session published already names its operation (what the
+	// start of the operation changed is published with it) and no repeated request can come in between.
+	adopt(key: string, session: T, operationId: string) {
 		const previous = this.#latest.get(key)
 		if (previous) this.#byOperation.delete(previous.summary.operationId)
 		this.#latest.set(key, session)
 		this.#keys.set(session, key)
-	}
-
-	// Remembers the operation a session runs under, so a repeated start token answers the session.
-	track(operationId: string, session: T) {
 		this.#byOperation.set(operationId, session)
+		this.replace(session, { ...session.summary, operationId })
 	}
 
 	// Whether a session is still the latest of its camera.

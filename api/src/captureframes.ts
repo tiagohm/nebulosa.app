@@ -36,11 +36,18 @@ import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 // later reported failed loses its row. After a restart no frame is in memory and no camera has a latest frame: the
 // newest FRAMES_PER_SOURCE saved frames of each camera are read again, each available when its file exists, with the
 // origin it was recorded with. No directory is ever scanned. A row that cannot be written is reported on the console
-// and never fails the capture that produced it.
+// and never fails the capture that produced it. Older saved frames are listed by pages read from the database, and kept
+// in memory once listed or opened, at most ARCHIVED_FRAMES per camera besides those with an open document.
 
 // Saved frames listed per camera, newest first; older ones stay in the database only. Also the number of transient
-// frames kept in memory per camera.
+// frames kept in memory per camera, and the size of a page of older saved frames a request does not size.
 export const FRAMES_PER_SOURCE = 20
+
+// Largest page of older saved frames.
+export const MAX_FRAME_PAGE = 200
+
+// Older saved frames kept in memory per camera once listed or opened, besides those with an open document.
+const ARCHIVED_FRAMES = 200
 
 // Documents kept open by leases besides the latest frame of each camera.
 export const MAX_LEASED_FRAMES = 16
@@ -196,7 +203,7 @@ export interface CaptureSourceSummary {
 	// Whether the camera has no latest frame since the server started, so latestAvailableFrameId, when present, is a
 	// saved frame of an earlier run rather than a preview still in memory.
 	readonly latestRestored: boolean
-	// Saved frames remembered, at most FRAMES_PER_SOURCE.
+	// Saved frames of the camera: every row the database keeps for it.
 	readonly count: number
 	// Revision of the latest change of the camera or one of its frames; a smaller one is older news.
 	readonly revision: number
@@ -219,7 +226,7 @@ export interface CaptureFramePage {
 	readonly latest?: CaptureFrameSummary
 	// Saved frames of the page, newest first.
 	readonly frames: readonly CaptureFrameSummary[]
-	// Opaque cursor of the next page; absent on the last one.
+	// Cursor of the page of older saved frames, passed as ?before=; absent on the last page.
 	readonly next?: string
 }
 
@@ -294,6 +301,10 @@ interface SourceEntry {
 	// Former latest frames that were not saved (previewed only, being saved, or failed), oldest first, at most
 	// FRAMES_PER_SOURCE; kept in memory only, never listed nor persisted.
 	readonly transient: FrameEntry[]
+	// Older saved frames read from the database for a page or a lookup, by frame id, in the order they were read.
+	readonly archived: Map<string, FrameEntry>
+	// Saved frames of the camera: every row the database keeps for it.
+	total: number
 	// Revision of the latest change.
 	revision: number
 }
@@ -444,12 +455,18 @@ export class CaptureFrameRegistry implements Disposable {
 		const { db } = this.database
 		const rows = db.query<FrameRow, [number]>('SELECT * FROM (SELECT *, row_number() OVER (PARTITION BY connection_id, device_id ORDER BY sequence DESC) AS rank FROM capture_frames) WHERE rank <= ? ORDER BY sequence').all(FRAMES_PER_SOURCE)
 		this.#counter = db.query<{ sequence: number | null }, []>('SELECT max(sequence) AS sequence FROM capture_frames').get()?.sequence ?? 0
+		const totals = new Map(
+			db
+				.query<{ connection_id: string; device_id: string; total: number }, []>('SELECT connection_id, device_id, count(*) AS total FROM capture_frames GROUP BY connection_id, device_id')
+				.all()
+				.map((row) => [sourceKey(row.connection_id, row.device_id), row.total]),
+		)
 		this.#sources = new Map()
 
 		for (const row of rows) {
 			const frame = rowFrame(row)
 			const key = sourceKey(frame.connectionId, frame.deviceId)
-			const source = this.#sources.get(key) ?? { connectionId: frame.connectionId, deviceId: frame.deviceId, cameraName: frame.cameraName, saved: [], transient: [], revision: 0 }
+			const source: SourceEntry = this.#sources.get(key) ?? { connectionId: frame.connectionId, deviceId: frame.deviceId, cameraName: frame.cameraName, saved: [], transient: [], archived: new Map(), total: totals.get(key) ?? 0, revision: 0 }
 			source.saved.push(frame)
 			source.cameraName = frame.cameraName
 			source.revision = frame.sequence
@@ -459,9 +476,9 @@ export class CaptureFrameRegistry implements Disposable {
 		return this.#sources
 	}
 
-	// Returns every frame of a camera once: its latest, saved, and transient frames.
+	// Returns every frame of a camera in memory once: its latest, saved, transient, and archived frames.
 	#frames(source: SourceEntry): FrameEntry[] {
-		const frames = [...source.saved, ...source.transient]
+		const frames = [...source.saved, ...source.transient, ...source.archived.values()]
 		if (source.latest && !frames.includes(source.latest)) frames.push(source.latest)
 		return frames
 	}
@@ -472,15 +489,42 @@ export class CaptureFrameRegistry implements Disposable {
 		return { epoch: this.epoch, limit: FRAMES_PER_SOURCE, sources }
 	}
 
-	// Returns the latest frame of a camera and its saved frames, newest first, checking that the saved files of the
-	// frames not in memory still exist; an empty page for a camera without frames, which may simply not have taken
-	// any yet. The cursor is reserved for later pages; there is only one.
-	async recent(connectionId: string, deviceId: string): Promise<CaptureFramePage> {
+	// Returns a page of the saved frames of a camera, newest first, checking that the saved files of the frames not in
+	// memory still exist; an empty page for a camera without frames, which may simply not have taken any yet. Without
+	// before, the page holds the latest frame and the saved frames the registry remembers; with it, at most limit saved
+	// frames (FRAMES_PER_SOURCE when absent, at most MAX_FRAME_PAGE) whose sequence is lower, read from the database.
+	// next is the cursor of the following page while older saved frames remain.
+	async recent(connectionId: string, deviceId: string, before?: number, limit: number = FRAMES_PER_SOURCE): Promise<CaptureFramePage> {
 		const source = this.#load().get(sourceKey(connectionId, deviceId))
 		if (!source) return { frames: [] }
-		await Promise.all(source.saved.map((frame) => this.#check(source, frame)))
-		const frames = source.saved.toReversed().map((frame) => this.#summary(frame))
-		return source.latest ? { latest: this.#summary(source.latest), frames } : { frames }
+
+		if (before === undefined) {
+			await Promise.all(source.saved.map((frame) => this.#check(source, frame)))
+			const frames = source.saved.toReversed().map((frame) => this.#summary(frame))
+			const oldest = source.saved[0]
+			const next = oldest && source.total > source.saved.length ? String(oldest.sequence) : undefined
+			return { ...(source.latest && { latest: this.#summary(source.latest) }), frames, ...(next !== undefined && { next }) }
+		}
+
+		const size = Math.min(Math.max(1, Math.trunc(limit)), MAX_FRAME_PAGE)
+		const rows = this.database.db.query<FrameRow, [string, string, number, number]>('SELECT * FROM capture_frames WHERE connection_id = ? AND device_id = ? AND sequence < ? ORDER BY sequence DESC LIMIT ?').all(connectionId, deviceId, before, size + 1)
+		const known = new Map(this.#frames(source).map((frame) => [frame.frameId, frame]))
+		const frames = rows.slice(0, size).map((row) => known.get(row.frame_id) ?? this.#archive(source, rowFrame(row)))
+		await Promise.all(frames.map((frame) => this.#check(source, frame)))
+		return { frames: frames.map((frame) => this.#summary(frame)), ...(rows.length > size && { next: String(frames.at(-1)!.sequence) }) }
+	}
+
+	// Keeps an older saved frame of a camera in memory, forgetting the earliest read ones without an open document beyond
+	// ARCHIVED_FRAMES. Returns the frame.
+	#archive(source: SourceEntry, frame: FrameEntry): FrameEntry {
+		source.archived.set(frame.frameId, frame)
+
+		for (const [frameId, archived] of source.archived) {
+			if (source.archived.size <= ARCHIVED_FRAMES) break
+			if (archived.imageId === undefined && archived !== frame) source.archived.delete(frameId)
+		}
+
+		return frame
 	}
 
 	// Returns a frame, or undefined for an unknown one.
@@ -697,7 +741,7 @@ export class CaptureFrameRegistry implements Disposable {
 		let source = sources.get(key)
 
 		if (!source) {
-			source = { connectionId, deviceId, cameraName, saved: [], transient: [], revision: 0 }
+			source = { connectionId, deviceId, cameraName, saved: [], transient: [], archived: new Map(), total: 0, revision: 0 }
 			sources.set(key, source)
 		}
 
@@ -715,14 +759,18 @@ export class CaptureFrameRegistry implements Disposable {
 		if (source.saved.length > FRAMES_PER_SOURCE) source.saved.splice(0, source.saved.length - FRAMES_PER_SOURCE)
 	}
 
-	// Finds a frame by id: a latest, saved, or transient frame.
+	// Finds a frame by id: a frame in memory, or an older saved frame of the database, which is then kept in memory.
 	#find(frameId: string): { readonly source: SourceEntry; readonly frame: FrameEntry } | undefined {
-		for (const source of this.#load().values()) {
+		const sources = this.#load()
+
+		for (const source of sources.values()) {
 			const frame = this.#frames(source).find((entry) => entry.frameId === frameId)
 			if (frame) return { source, frame }
 		}
 
-		return undefined
+		const row = this.database.db.query<FrameRow, [string]>('SELECT * FROM capture_frames WHERE frame_id = ?').get(frameId)
+		const source = row ? sources.get(sourceKey(row.connection_id, row.device_id)) : undefined
+		return row && source ? { source, frame: this.#archive(source, rowFrame(row)) } : undefined
 	}
 
 	// Checks that the saved file of a frame not in memory exists, publishing a change of the outcome. Returns
@@ -783,15 +831,16 @@ export class CaptureFrameRegistry implements Disposable {
 
 	// Writes the row of a changed frame, then publishes it with its camera.
 	#changed(source: SourceEntry, frame: FrameEntry) {
-		this.#persist(frame)
+		this.#persist(source, frame)
 		frame.revision = ++this.#counter
 		source.revision = frame.revision
 		this.listener({ type: 'captureFrame:updated', frame: this.#summary(frame), source: this.#sourceSummary(source) })
 	}
 
-	// Writes the row of a saved frame when it changed, or deletes the row of a frame no longer saved. A failure is
-	// reported on the console and never reaches the capture that produced the frame.
-	#persist(frame: FrameEntry) {
+	// Writes the row of a saved frame of source when it changed, or deletes the row of a frame no longer saved, and
+	// counts the saved frames of source again. A failure is reported on the console and never reaches the capture that
+	// produced the frame.
+	#persist(source: SourceEntry, frame: FrameEntry) {
 		const saved = frame.file === 'saved' && frame.path !== undefined
 		const values = saved ? rowValues(frame) : undefined
 		const encoded = values?.join('\u0000')
@@ -802,6 +851,7 @@ export class CaptureFrameRegistry implements Disposable {
 				this.database.db.query('INSERT OR REPLACE INTO capture_frames (frame_id, sequence, connection_id, device_id, camera_name, origin, session_id, generation, time, frame_type, width, height, channels, bitpix, cfa, acquisition, path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(...values)
 			else this.database.db.query('DELETE FROM capture_frames WHERE frame_id = ?').run(frame.frameId)
 			frame.persisted = encoded
+			source.total = this.database.db.query<{ total: number }, [string, string]>('SELECT count(*) AS total FROM capture_frames WHERE connection_id = ? AND device_id = ?').get(source.connectionId, source.deviceId)!.total
 		} catch (error) {
 			console.warn('capture frames: a saved frame cannot be recorded', error)
 		}
@@ -824,13 +874,13 @@ export class CaptureFrameRegistry implements Disposable {
 
 	// Returns a camera as published.
 	#sourceSummary(source: SourceEntry): CaptureSourceSummary {
-		const { connectionId, deviceId, cameraName, latest, saved, revision } = source
+		const { connectionId, deviceId, cameraName, latest, saved, total, revision } = source
 		const isAvailable = (frame: FrameEntry) => {
 			const { availability } = this.#availability(frame)
 			return availability === 'memory' || availability === 'file'
 		}
 		const available = latest && isAvailable(latest) ? latest : saved.findLast(isAvailable)
-		return { connectionId, deviceId, cameraName, connected: this.#connected(connectionId, deviceId), latestFrameId: latest?.frameId, latestAvailableFrameId: available?.frameId, latestRestored: !latest, count: saved.length, revision }
+		return { connectionId, deviceId, cameraName, connected: this.#connected(connectionId, deviceId), latestFrameId: latest?.frameId, latestAvailableFrameId: available?.frameId, latestRestored: !latest, count: total, revision }
 	}
 
 	// Stops following the image store and cancels the pending releases; leases are forgotten.
@@ -860,8 +910,14 @@ export function createCaptureFrameRoutes(registry: CaptureFrameRegistry) {
 			GET: () => Response.json(registry.snapshot()),
 		},
 		'/api/capture-frames/sources/:connectionId/:deviceId': {
-			// Latest frame and saved frames of a camera, newest first (CaptureFramePage); empty for a camera without frames.
-			GET: async (req) => Response.json(await registry.recent(req.params.connectionId, req.params.deviceId)),
+			// A page of the saved frames of a camera, newest first (CaptureFramePage), with its latest frame on the first one;
+			// ?before= the next cursor of the previous page, &limit= its size. Empty for a camera without frames.
+			GET: async (req) => {
+				const { searchParams } = new URL(req.url)
+				const before = searchParams.get('before')
+				const limit = searchParams.get('limit')
+				return Response.json(await registry.recent(req.params.connectionId, req.params.deviceId, before === null ? undefined : Number(before), limit === null ? undefined : Number(limit)))
+			},
 		},
 		'/api/capture-frames/frames/:frameId': {
 			// A frame; 404 when unknown or forgotten.

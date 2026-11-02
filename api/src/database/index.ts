@@ -27,8 +27,12 @@ const OPEN_CONNECTIONS = ((globalThis as unknown as Record<symbol, Map<string, D
 export class AppDatabase {
 	#db?: Database
 
-	// file is the path of the database, or ':memory:' for one that lives in memory only.
-	constructor(readonly file: string) {}
+	// file is the path of the database, or ':memory:' for one that lives in memory only; exclusive keeps every other
+	// process off the file while it is open (openConnection), which production asks for.
+	constructor(
+		readonly file: string,
+		readonly exclusive = true,
+	) {}
 
 	// A database that lives in memory only, for tests.
 	static memory() {
@@ -48,7 +52,7 @@ export class AppDatabase {
 		if (this.#db) return this.#db
 
 		const shared = this.file !== MEMORY_DATABASE
-		let db = (shared && OPEN_CONNECTIONS.get(this.file)) || openConnection(this.file)
+		let db = (shared && OPEN_CONNECTIONS.get(this.file)) || openConnection(this.file, this.exclusive)
 		OPEN_CONNECTIONS.delete(this.file)
 
 		try {
@@ -59,7 +63,7 @@ export class AppDatabase {
 
 			console.warn(`The schema of ${this.file} changed; the database was deleted and created again`)
 			removeDatabaseFiles(this.file)
-			db = openConnection(this.file)
+			db = openConnection(this.file, this.exclusive)
 			migrate(db, MIGRATIONS)
 		}
 

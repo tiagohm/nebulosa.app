@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { CaptureFrameSummary, CaptureSourceSummary, DisplaySettings, ServerEvent } from 'api'
 import { proxy, ref } from 'valtio'
 import { cameraTabKey, connectionCameraTab, handleCapturedFrame, holdCameraFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseCameraFrame, selectCameraFrame } from './cameratabs'
-import { type CaptureFramesState, frameLabel, frameUnavailableReason, handleCaptureFramesEvent, loadRecentFrames, refreshCaptureFrames } from './captureframes'
+import { type CaptureFramesState, frameLabel, frameUnavailableReason, handleCaptureFramesEvent, loadOlderFrames, loadRecentFrames, refreshCaptureFrames } from './captureframes'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
 import { addStep } from './imageprocessing'
 import { addMeasurement, applyDisplay, DEFAULT_IMAGE_TOOL_PREFERENCES, setAstrometryTarget, closeImage, type ImageSource, type ImagesIo, type ImagesState, isClosable, setImageView } from './images'
@@ -513,7 +513,7 @@ describe('leases', () => {
 
 describe('frame registry mirror', () => {
 	function newFrames() {
-		return proxy<CaptureFramesState>({ limit: 3, sources: {}, latest: {}, frames: { 'conn:cam': [] }, loading: {}, errors: {}, loaded: true })
+		return proxy<CaptureFramesState>({ limit: 3, sources: {}, latest: {}, frames: { 'conn:cam': [] }, next: {}, extended: {}, loading: {}, errors: {}, loaded: true })
 	}
 
 	test('keeps the newest saved frames first, within the limit; previewed-only frames are only the latest', () => {
@@ -567,6 +567,41 @@ describe('frame registry mirror', () => {
 		await loading
 		expect(state.frames['conn:cam'].map((f) => f.frameId)).toEqual(['s:7', 's:3'])
 		expect(state.latest['conn:cam'].frameId).toBe('s:7')
+	})
+
+	test('older saved frames come a page at a time, and are kept whole once fetched', async () => {
+		const state = newFrames()
+		const requested: string[] = []
+		const pages: Record<string, unknown> = {
+			'/api/capture-frames/sources/conn/cam': { frames: [5, 4, 3].map((n) => frame(n, { file: 'saved' })), next: '3' },
+			'/api/capture-frames/sources/conn/cam?before=3': { frames: [2].map((n) => frame(n, { file: 'saved' })), next: '2' },
+			'/api/capture-frames/sources/conn/cam?before=2': { frames: [1].map((n) => frame(n, { file: 'saved' })) },
+		}
+		const request = ((path: string) => {
+			requested.push(path)
+			return Promise.resolve(Response.json(pages[path]))
+		}) as typeof fetch
+
+		await loadRecentFrames(state, 'conn', 'cam', request)
+		expect(state.next['conn:cam']).toBe('3')
+
+		await loadOlderFrames(state, 'conn', 'cam', request)
+		await loadOlderFrames(state, 'conn', 'cam', request)
+		await loadOlderFrames(state, 'conn', 'cam', request)
+		expect(state.frames['conn:cam'].map((f) => f.frameId)).toEqual(['s:5', 's:4', 's:3', 's:2', 's:1'])
+		expect(state.next['conn:cam']).toBeUndefined()
+		expect(requested).toHaveLength(3)
+
+		// A new frame keeps every frame fetched.
+		handleCaptureFramesEvent(state, event(frame(6, { file: 'saved' })))
+		expect(state.frames['conn:cam']).toHaveLength(6)
+	})
+
+	test('a frame that pushes one out of the first page makes it the cursor of the older ones', () => {
+		const state = newFrames()
+		for (const generation of [1, 2, 3, 4]) handleCaptureFramesEvent(state, event(frame(generation, { file: 'saved' })))
+		expect(state.frames['conn:cam'].map((f) => f.frameId)).toEqual(['s:4', 's:3', 's:2'])
+		expect(state.next['conn:cam']).toBe('2')
 	})
 
 	test('labels and reasons', () => {

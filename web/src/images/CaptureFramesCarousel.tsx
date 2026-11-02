@@ -5,7 +5,7 @@ import { useSnapshot } from 'valtio'
 import { Icon } from '../ui/Icon'
 import { moveIndex } from '../ui/navigation'
 import { type CameraFrameSelection, selectCameraFrame } from './cameratabs'
-import { captureFramesState, frameSourceKey, frameUnavailableReason, loadRecentFrames } from './captureframes'
+import { captureFramesState, frameSourceKey, frameUnavailableReason, loadOlderFrames, loadRecentFrames } from './captureframes'
 import { type ImageDocument, imagesState } from './images'
 
 // Capture frames carousel of a camera tab, below the viewer: the Latest card first, the dynamic reference to the latest
@@ -13,7 +13,7 @@ import { type ImageDocument, imagesState } from './images'
 // a card selects what the tab shows; it only opens and renders the frame, and never runs an analysis. Cards show
 // metadata only (no pixels are loaded for them), with a reserved area for a future thumbnail. Arrow keys, Home, and
 // End move between cards, and Enter or Space selects one. The saved frames of the camera are fetched when its tab is
-// shown.
+// shown, and its older saved frames a page at a time by the Older Frames card at the end of the strip.
 
 interface CaptureFramesCarouselProps {
 	// Camera tab.
@@ -114,6 +114,7 @@ export function CaptureFramesCarousel({ document, title }: CaptureFramesCarousel
 						onSelect={() => choose(index)}
 					/>
 				))}
+				{frames.next[key] !== undefined && <OlderFramesCard loading={frames.loading[key] === true} onLoad={() => void loadOlderFrames(captureFramesState, source.connectionId, source.deviceId)} />}
 			</div>
 		</div>
 	)
@@ -182,6 +183,29 @@ function FrameCard({ card, selected, focusable, loading, error, restored, newer,
 				<span className={cn('truncate', error || unavailable ? 'text-danger' : 'text-ink-300')}>{state}</span>
 				{frame?.file === 'saved' && <Icon name="save" className="size-3.5 text-ink-300" />}
 			</span>
+		</button>
+	)
+}
+
+interface OlderFramesCardProps {
+	// Whether frames of the camera are being fetched.
+	readonly loading: boolean
+	// Fetches the next page of older saved frames.
+	readonly onLoad: () => void
+}
+
+// Card at the end of the strip that fetches the next page of older saved frames, while the camera has some.
+function OlderFramesCard({ loading, onLoad }: OlderFramesCardProps) {
+	return (
+		<button
+			type="button"
+			disabled={loading}
+			title="Show older saved frames"
+			onClick={onLoad}
+			className="flex h-36 w-28 flex-none cursor-pointer flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-line-100 bg-base-000 p-1.5 font-mono text-[11px] text-ink-300 hover:border-line-200 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-60"
+		>
+			<Icon name="images" className="size-5" />
+			<span>{loading ? 'Loading…' : 'Older frames'}</span>
 		</button>
 	)
 }

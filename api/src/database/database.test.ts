@@ -111,6 +111,21 @@ test('a file that is not a database stops the opening and is left as it is', () 
 	expect(readFileSync(file, 'utf-8')).toBe(text)
 })
 
+test('without the exclusive lock, another process reads and writes the file beside the server', () => {
+	const file = databaseFile()
+	const server = openConnection(file, false)
+	server.run('CREATE TABLE notes (text TEXT) STRICT')
+	server.run("INSERT INTO notes VALUES ('server')")
+
+	const browser = openConnection(file, false)
+	expect(browser.query('SELECT text FROM notes').all()).toEqual([{ text: 'server' }])
+	browser.run("INSERT INTO notes VALUES ('browser')")
+	expect(server.query('SELECT text FROM notes ORDER BY text').all()).toEqual([{ text: 'browser' }, { text: 'server' }])
+
+	browser.close()
+	server.close()
+})
+
 test('a second server on the same file is refused until the first one closes', () => {
 	const file = databaseFile()
 	const first = open(file)

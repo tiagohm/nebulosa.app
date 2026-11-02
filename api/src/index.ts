@@ -477,9 +477,14 @@ export type {
 } from './workspace'
 export { websocket }
 
+// Whether the operational database is locked against every other process while the server runs: in production only,
+// so a second server on the same data directory is refused, while in development a database browser can read and write it
+// beside the server.
+const EXCLUSIVE_DATABASE = process.env.NODE_ENV === 'production'
+
 // Operational database of the server, opened by the app before it serves; a test that only imports this module opens
 // nothing.
-const database = new AppDatabase(DEFAULT_DATABASE_FILE)
+const database = new AppDatabase(DEFAULT_DATABASE_FILE, EXCLUSIVE_DATABASE)
 
 // Saved connections and profiles of the operators, shared by every tab and browser.
 const workspace = new Workspace(database, broadcast)

@@ -2,7 +2,7 @@ import { afterAll, afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { type CaptureFrameEvent, type CaptureFrameOrigin, CaptureFrameRegistry, type CaptureFrameRegistryOptions, FRAMES_PER_SOURCE, MAX_LEASED_FRAMES } from './captureframes'
+import { type CaptureFrameEvent, type CaptureFrameOrigin, type CaptureFramePage, CaptureFrameRegistry, type CaptureFrameRegistryOptions, createCaptureFrameRoutes, FRAMES_PER_SOURCE, MAX_LEASED_FRAMES } from './captureframes'
 import type { CaptureFrame } from './captures'
 import { AppDatabase } from './database'
 import { ImageStore } from './images'
@@ -111,17 +111,41 @@ describe('frames', () => {
 		])
 	})
 
-	test(`only the latest ${FRAMES_PER_SOURCE} saved frames of a camera are remembered, and a previewed-only latest takes none of them`, async () => {
+	test(`the latest ${FRAMES_PER_SOURCE} saved frames of a camera come first, older ones by pages, and a previewed-only latest takes none of them`, async () => {
 		const { registry, preview } = setup()
 		for (let generation = 1; generation <= FRAMES_PER_SOURCE + 3; generation++) await preview(generation, { path: join(root, `limit-${generation}.fits`) })
 		await preview(FRAMES_PER_SOURCE + 4)
 
-		const { latest, frames } = await registry.recent('connection', 'camera')
+		const { latest, frames, next } = await registry.recent('connection', 'camera')
 		expect(latest?.frameId).toBe(`session:${FRAMES_PER_SOURCE + 4}`)
 		expect(frames).toHaveLength(FRAMES_PER_SOURCE)
 		expect(frames[0].frameId).toBe(`session:${FRAMES_PER_SOURCE + 3}`)
 		expect(frames.at(-1)!.frameId).toBe('session:4')
-		expect(registry.snapshot().sources[0].count).toBe(FRAMES_PER_SOURCE)
+		expect(next).toBe(String(frames.at(-1)!.sequence))
+		expect(registry.snapshot().sources[0].count).toBe(FRAMES_PER_SOURCE + 3)
+
+		const first = await registry.recent('connection', 'camera', Number(next), 2)
+		expect(first.latest).toBeUndefined()
+		expect(first.frames.map(({ frameId }) => frameId)).toEqual(['session:3', 'session:2'])
+		const last = await registry.recent('connection', 'camera', Number(first.next), 2)
+		expect(last.frames.map(({ frameId }) => frameId)).toEqual(['session:1'])
+		expect(last.next).toBeUndefined()
+
+		const route = createCaptureFrameRoutes(registry)['/api/capture-frames/sources/:connectionId/:deviceId']
+		const request = Object.assign(new Request(`http://localhost/api/capture-frames/sources/connection/camera?before=${next}&limit=3`), { params: { connectionId: 'connection', deviceId: 'camera' } })
+		const page = (await (await route.GET(request as never)).json()) as CaptureFramePage
+		expect(page.frames.map(({ frameId }) => frameId)).toEqual(['session:3', 'session:2', 'session:1'])
+		expect(page.next).toBeUndefined()
+	})
+
+	test('an older saved frame is found after a restart, though no page listed it', async () => {
+		const { preview, database } = setup()
+		for (let generation = 1; generation <= FRAMES_PER_SOURCE + 2; generation++) await preview(generation, { path: join(root, `older-${generation}.fits`) })
+
+		const restarted = setup({ database })
+		expect(restarted.registry.snapshot().sources[0].count).toBe(FRAMES_PER_SOURCE + 2)
+		expect(await restarted.registry.frame('session:1')).toMatchObject({ frameId: 'session:1', file: 'saved', fileName: 'older-1.fits' })
+		expect(await restarted.registry.frame('gone:1')).toBeUndefined()
 	})
 
 	test('an Auto Focus frame becomes the latest frame of its camera, is never saved, and closes the previous one', async () => {

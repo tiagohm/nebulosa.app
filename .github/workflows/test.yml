@@ -90,4 +90,4 @@ jobs:
                   if [[ -n "$TEST_BASE_REF" ]] && git cat-file -e "${TEST_BASE_REF}^{commit}" 2>/dev/null; then
                       args+=("--changed=$TEST_BASE_REF")
                   fi
-                  bun test --bail --timeout 30000 --parallel --pass-with-no-tests "${args[@]}" --timings timings.json
+                  bun test --timeout 30000 --parallel --pass-with-no-tests "${args[@]}" --timings timings.json

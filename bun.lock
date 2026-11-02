@@ -63,6 +63,9 @@
   "trustedDependencies": [
     "nebulosa",
   ],
+  "overrides": {
+    "bun-types": "canary",
+  },
   "packages": {
     "@jridgewell/gen-mapping": ["@jridgewell/gen-mapping@0.3.13", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0", "@jridgewell/trace-mapping": "^0.3.24" } }, "sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA=="],
 
@@ -116,7 +119,7 @@
 
     "bin": ["bin@workspace:bin"],
 
-    "bun-types": ["bun-types@1.4.4", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-yjrJh5oGX7mMPKGd19YXyIjmEuj4G4zNC30bs7PM9Az7NQ3ndF3j6hbeRdvJTRQEhJ/FYQwW0a2moweEi2hMxQ=="],
+    "bun-types": ["bun-types@1.4.4-canary.20261102T141345", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-LpvN7vmNL8G+5quxr/v516ZiMU40h23C8D31Hm57/fpL3uC/OP49lc9EEe8Y+Rp6Yag8UwmT61jhhbBzIJbJYg=="],
 
     "cn": ["cn@0.4.0", "", { "bin": { "cn": "bin/cn.mjs" } }, "sha512-qOAeUhPwPzBxx6jaeQdo646XIKliKHc2j1ZF7Ngb1o0pJZKH5gq8FkA0aVdUdPFUDXNXyUCXpCtoJISo6dhizg=="],
 

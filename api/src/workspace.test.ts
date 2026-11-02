@@ -181,9 +181,9 @@ test('deleting a profile deletes everything it keeps', async () => {
 	expect(database.db.query('SELECT id FROM profiles').all()).toEqual([{ id: profileId }])
 })
 
-test('events are published only after a write commits', () => {
+test('events are published only after a write commits', async () => {
 	const { database, routes, events, profileId } = setup()
 	database.db.run('PRAGMA query_only = ON')
-	expect(Promise.resolve(call(routes, '/api/profiles/:id', 'PUT', { id: profileId }, { name: 'X', connectionId: null, sortOrder: 0, revision: 1 }))).rejects.toThrow()
+	await expect(Promise.resolve(call(routes, '/api/profiles/:id', 'PUT', { id: profileId }, { name: 'X', connectionId: null, sortOrder: 0, revision: 1 }))).rejects.toThrow()
 	expect(events).toEqual([])
 })

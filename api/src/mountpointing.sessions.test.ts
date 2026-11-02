@@ -285,7 +285,7 @@ describe('mount pointing sessions', () => {
 		const model = (await store.get(modelId))!
 		expect(model.acquisition.state).toBe('stopped')
 		expect(model.samples.length).toBe(summary()!.acceptedCount)
-		expect(sessions.resume(sessionId, { token: `token-${tokens++}` })).resolves.toMatchObject({ status: 404 })
+		await expect(sessions.resume(sessionId, { token: `token-${tokens++}` })).resolves.toMatchObject({ status: 404 })
 	})
 
 	test('a stop during a stalled solve ends at once, and a paused session stops without an operation', async () => {

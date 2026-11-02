@@ -19,13 +19,13 @@ test('an atomic write creates the directory, replaces the file, and leaves no te
 	expect(readdirSync(directory)).toEqual(['settings.json'])
 })
 
-test('a failed atomic write keeps what was there and removes its temporary file', () => {
+test('a failed atomic write keeps what was there and removes its temporary file', async () => {
 	const directory = join(root, 'failure')
 	const target = join(directory, 'taken')
 	mkdirSync(target, { recursive: true })
 	writeFileSync(join(target, 'kept'), 'kept')
 
-	expect(writeAtomically(target, 'text')).rejects.toThrow()
+	await expect(writeAtomically(target, 'text')).rejects.toThrow()
 	expect(readdirSync(directory)).toEqual(['taken'])
 	expect(readFileSync(join(target, 'kept'), 'utf-8')).toBe('kept')
 })

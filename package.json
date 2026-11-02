@@ -22,6 +22,9 @@
 	"devDependencies": {
 		"@types/bun": "latest"
 	},
+	"overrides": {
+		"bun-types": "canary"
+	},
 	"trustedDependencies": [
 		"nebulosa"
 	]

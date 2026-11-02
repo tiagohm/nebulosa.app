@@ -363,9 +363,9 @@ describe('DARV analysis', () => {
 		expect(result.diagnostics).toContain('noStreaks')
 		expect(result.diagnostics).not.toContain('invalidTiming')
 
-		expect(analyzer.analyze('released', timing, 'WEST', new AbortController().signal)).rejects.toThrow('released')
+		await expect(analyzer.analyze('released', timing, 'WEST', new AbortController().signal)).rejects.toThrow('released')
 		const aborted = new AbortController()
 		aborted.abort(new Error('aborted'))
-		expect(analyzer.analyze('frame', timing, 'WEST', aborted.signal)).rejects.toThrow('aborted')
+		await expect(analyzer.analyze('frame', timing, 'WEST', aborted.signal)).rejects.toThrow('aborted')
 	})
 })

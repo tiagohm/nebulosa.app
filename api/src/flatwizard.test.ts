@@ -476,7 +476,7 @@ describe('Flat Wizard frames', () => {
 		expect(existsSync(staged)).toBeFalse()
 
 		writeFileSync(staged, 'other')
-		expect(publishFrame(staged, path)).rejects.toThrow()
+		await expect(publishFrame(staged, path)).rejects.toThrow()
 		expect(readFileSync(path, 'utf8')).toBe('original')
 		expect(existsSync(staged)).toBeTrue()
 	})

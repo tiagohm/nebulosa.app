@@ -102,12 +102,12 @@ test('a sample, revision, or verification written once is never changed nor remo
 	await store.create(model())
 	await store.update('m1', (each) => ({ ...each, revisions: [{ ...revision(), verifications: [verification('v1')] }] }))
 
-	expect(store.update('m1', (each) => ({ ...each, samples: [{ ...each.samples[0], status: 'rejected' }, each.samples[1]] }))).rejects.toThrow('samples')
-	expect(store.update('m1', (each) => ({ ...each, samples: each.samples.slice(1) }))).rejects.toThrow('samples')
-	expect(store.update('m1', (each) => ({ ...each, revisions: [{ ...each.revisions[0], gate: 'passed' }] }))).rejects.toThrow('revisions')
-	expect(store.update('m1', (each) => ({ ...each, revisions: [] }))).rejects.toThrow('revisions')
-	expect(store.update('m1', (each) => ({ ...each, revisions: [{ ...each.revisions[0], verifications: [] }] }))).rejects.toThrow('verifications')
-	expect(store.update('m1', (each) => ({ ...each, label: 'Other', samples: [...each.samples, sample('c')], revisions: [{ ...each.revisions[0], gate: 'passed' }] }))).rejects.toThrow('revisions')
+	await expect(store.update('m1', (each) => ({ ...each, samples: [{ ...each.samples[0], status: 'rejected' }, each.samples[1]] }))).rejects.toThrow('samples')
+	await expect(store.update('m1', (each) => ({ ...each, samples: each.samples.slice(1) }))).rejects.toThrow('samples')
+	await expect(store.update('m1', (each) => ({ ...each, revisions: [{ ...each.revisions[0], gate: 'passed' }] }))).rejects.toThrow('revisions')
+	await expect(store.update('m1', (each) => ({ ...each, revisions: [] }))).rejects.toThrow('revisions')
+	await expect(store.update('m1', (each) => ({ ...each, revisions: [{ ...each.revisions[0], verifications: [] }] }))).rejects.toThrow('verifications')
+	await expect(store.update('m1', (each) => ({ ...each, label: 'Other', samples: [...each.samples, sample('c')], revisions: [{ ...each.revisions[0], gate: 'passed' }] }))).rejects.toThrow('revisions')
 
 	const current = (await store.get('m1'))!
 	expect(current).toMatchObject({ revision: 2, label: 'Model', samples: [{ status: 'accepted' }, { id: 'b' }], revisions: [{ gate: 'failed', verifications: [{ verificationId: 'v1' }] }] })

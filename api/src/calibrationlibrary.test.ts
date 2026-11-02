@@ -180,7 +180,7 @@ describe('plans', () => {
 		const [group] = (await library.groups({}, 0, 50)).items
 		expect(group.readiness).toBe('incomplete')
 
-		expect(library.requestMaster({ groupId: group.groupId })).rejects.toThrow('provisional')
+		await expect(library.requestMaster({ groupId: group.groupId })).rejects.toThrow('provisional')
 
 		const { jobId } = await library.requestMaster({ groupId: group.groupId, acknowledged: true })
 		expect((await settled(library, jobId!)).state).toBe('completed')
@@ -267,7 +267,7 @@ describe('restart', () => {
 		rmSync(directory, { recursive: true })
 
 		const reopened = open(local, undefined, base)
-		expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
+		await expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
 		const again = await reopened.library.requestMaster({ groupId: group.groupId })
 		await settled(reopened.library, again.jobId!)
 		expect((await reopened.library.masters({}, 0, 10)).items.map(({ revision }) => revision)).toEqual([2])
@@ -280,8 +280,7 @@ describe('restart', () => {
 		writeFileSync(join(directory, MASTER_FILE), 'not the master')
 
 		const reopened = open(local, undefined, base)
-		await reopened.library.ready()
-		expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
+		await expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
 		expect(existsSync(directory)).toBeFalse()
 		const [orphan] = readdirSync(join(base, 'library', 'orphaned'))
 		expect(orphan.startsWith(`${masterId}-v0001-`)).toBeTrue()
@@ -294,8 +293,7 @@ describe('restart', () => {
 		interrupt(store, 'deleting')
 
 		const reopened = open(local, undefined, base)
-		await reopened.library.ready()
-		expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
+		await expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
 		expect(existsSync(directory)).toBeFalse()
 		expect(store.hasRevision(masterId, 1)).toBeFalse()
 	})
@@ -389,7 +387,7 @@ describe('imports', () => {
 		expect(source.kind).toBe('bias')
 		expect(source.warnings[0]).toContain('Zero exposure session')
 
-		expect(library.override(source.sourceId, 'gain', 5, 'No')).rejects.toThrow('cannot be replaced')
+		await expect(library.override(source.sourceId, 'gain', 5, 'No')).rejects.toThrow('cannot be replaced')
 
 		const overridden = await library.override(source.sourceId, 'offset', 10, 'Known setup')
 		expect(overridden.metadata.offset).toEqual({ value: 10, evidence: 'operatorDeclared' })
@@ -416,7 +414,7 @@ describe('imports', () => {
 		await writeFrame(join(folder, 'a.fit'), () => 100, { IMAGETYP: 'Bias Frame' })
 		const job = await imported(library, folder)
 		await library.commitImport(job.jobId, {})
-		expect(library.commitImport(job.jobId, {})).rejects.toThrow('cannot be committed')
+		await expect(library.commitImport(job.jobId, {})).rejects.toThrow('cannot be committed')
 	})
 })
 
@@ -494,7 +492,7 @@ describe('masters', () => {
 		const validation = await library.validate({ sourceIds })
 		expect(validation.valid).toBeFalse()
 		expect(validation.findings.find(({ field }) => field === 'exposure')?.severity).toBe('blocker')
-		expect(library.requestMaster({ sourceIds, acknowledged: true })).rejects.toThrow('Camera is known for some frames')
+		await expect(library.requestMaster({ sourceIds, acknowledged: true })).rejects.toThrow('Camera is known for some frames')
 	})
 
 	test('a frame changed after the request stops the job and publishes nothing', async () => {
@@ -560,7 +558,7 @@ describe('masters', () => {
 
 		const reopened = open(local, undefined, base)
 		await reopened.library.ready()
-		expect(reopened.library.job(jobId!)).rejects.toThrow('Unknown job')
+		await expect(reopened.library.job(jobId!)).rejects.toThrow('Unknown job')
 		expect((await reopened.library.masters({}, 0, 10)).total).toBe(0)
 		expect(existsSync(join(base, 'library', 'staging'))).toBeFalse()
 
@@ -579,7 +577,7 @@ describe('masters', () => {
 
 		const reopened = open(local, undefined, base)
 		await reopened.library.ready()
-		expect(reopened.library.job(queued.jobId)).rejects.toThrow('Unknown job')
+		await expect(reopened.library.job(queued.jobId)).rejects.toThrow('Unknown job')
 		const [again] = reopened.library.jobs.latest(10)
 		expect((await settled(reopened.library, again.jobId)).state).toBe('completed')
 	})
@@ -596,7 +594,7 @@ describe('masters', () => {
 		await library.deleteMaster(first.masterId, 1)
 		expect(readdirSync(join(base, 'library', 'products'))).toEqual([])
 		expect((await library.masters({}, 0, 10)).total).toBe(0)
-		expect(library.master(first.masterId, 1)).rejects.toThrow('Unknown master')
+		await expect(library.master(first.masterId, 1)).rejects.toThrow('Unknown master')
 
 		const second = await library.requestMaster({ groupId: group.groupId })
 		await settled(library, second.jobId!)
@@ -623,7 +621,7 @@ describe('masters', () => {
 		expect(readdirSync(join(base, 'frames')).filter((name) => name.endsWith('.fit'))).toEqual([])
 		expect((await library.groups({}, 0, 50)).total).toBe(0)
 		expect((await library.master(masterId, 1)).status).not.toBe('unavailable')
-		expect(library.deleteGroup(group.groupId)).rejects.toThrow('Unknown group')
+		await expect(library.deleteGroup(group.groupId)).rejects.toThrow('Unknown group')
 
 		library.close()
 		libraries.length = 0
@@ -637,9 +635,9 @@ describe('masters', () => {
 		await plan(plans, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		await library.requestMaster({ groupId: group.groupId })
-		expect(library.deleteGroup(group.groupId)).rejects.toThrow('being built')
+		await expect(library.deleteGroup(group.groupId)).rejects.toThrow('being built')
 		const [frame] = (await library.sources({}, 0, 1)).items
-		expect(library.deleteSource(frame.sourceId)).rejects.toThrow('uses this frame')
+		await expect(library.deleteSource(frame.sourceId)).rejects.toThrow('uses this frame')
 	})
 
 	test('deleting a frame removes its file and the frame, and survives a restart', async () => {
@@ -650,7 +648,7 @@ describe('masters', () => {
 		expect(await library.deleteSource(frame.sourceId)).toEqual({ deleted: 1 })
 		expect(readdirSync(join(base, 'frames')).filter((name) => name.endsWith('.fit'))).toHaveLength(2)
 		expect((await library.sources({}, 0, 50)).total).toBe(2)
-		expect(library.deleteSource(frame.sourceId)).rejects.toThrow('Unknown frame')
+		await expect(library.deleteSource(frame.sourceId)).rejects.toThrow('Unknown frame')
 
 		library.close()
 		libraries.length = 0
@@ -785,7 +783,7 @@ describe('flats', () => {
 		const validation = await library.validate({ groupId: flat.groupId })
 		expect(validation.valid).toBeFalse()
 		expect(validation.findings.map(({ code }) => code)).toContain('invalidFlatCorrection')
-		expect(library.requestMaster({ groupId: flat.groupId })).rejects.toThrow('needs a master')
+		await expect(library.requestMaster({ groupId: flat.groupId })).rejects.toThrow('needs a master')
 	})
 
 	test('a calibrated normalized master keeps structure, drops pedestal, and depends on its correction', async () => {
@@ -800,7 +798,7 @@ describe('flats', () => {
 		expect(master.calibrationState).toBe('calibratedNormalized')
 		expect(master.units).toBe('dimensionless')
 		expect(master.dependencies[0].masterId).toBe(correction.masterId)
-		expect(library.deleteMaster(correction.masterId, correction.revision)).rejects.toThrow('delete that flat first')
+		await expect(library.deleteMaster(correction.masterId, correction.revision)).rejects.toThrow('delete that flat first')
 		expect(() => store.discardRevision(correction.masterId, correction.revision)).toThrow('FOREIGN KEY')
 
 		const image = await readMaster(master.path)
@@ -878,7 +876,7 @@ describe('integration on files', () => {
 		const staging = join(folder, 'staging')
 		mkdirSync(staging)
 
-		expect(integrateMaster({ jobId: 'j', kind: 'bias', frames, recipe: { method: 'mean', sigmaLow: 3, sigmaHigh: 3, maxIterations: 5 }, staging, header: {}, memoryBudget: 1 << 20 }, () => undefined)).rejects.toThrow('other samples')
+		await expect(integrateMaster({ jobId: 'j', kind: 'bias', frames, recipe: { method: 'mean', sigmaLow: 3, sigmaHigh: 3, maxIterations: 5 }, staging, header: {}, memoryBudget: 1 << 20 }, () => undefined)).rejects.toThrow('other samples')
 	})
 })
 

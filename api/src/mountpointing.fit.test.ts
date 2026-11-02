@@ -125,6 +125,6 @@ test('a fit is cancelled by its signal, and the next one still runs', async () =
 	const cancelled = fitter.fit(request(samples(40), 'auto'), controller.signal)
 	controller.abort(new Error('stopped'))
 
-	expect(cancelled).rejects.toThrow('stopped')
+	await expect(cancelled).rejects.toThrow('stopped')
 	expect((await fitter.fit(request(samples(30)))).fitted.usable).toBeTrue()
 })

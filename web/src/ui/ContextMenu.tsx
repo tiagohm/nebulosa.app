@@ -101,7 +101,7 @@ export function ContextMenu({ at, title, items, status, onClose }: ContextMenuPr
 			style={{ left: position?.left ?? at.x, top: position?.top ?? at.y, visibility: position ? 'visible' : 'hidden' }}
 			className="fixed z-40 box-border flex max-w-[calc(100vw-16px)] min-w-56 flex-col rounded-md border border-line-100 bg-base-200 py-1 text-sm shadow-[0_12px_32px_rgb(0_0_0/0.45)]"
 		>
-			{title && <div className="truncate border-b border-line-100 px-3 pt-1 pb-1.5 font-mono text-[11px] text-ink-300 tabular-nums">{title}</div>}
+			{title && <div className="truncate border-b border-line-100 px-3 pt-1 pb-1.5 font-mono text-xs text-ink-300 tabular-nums">{title}</div>}
 			{items.map((item) => (
 				<button
 					key={item.label}

@@ -245,7 +245,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 
 	return (
 		<>
-			<svg width={width} height={height} tabIndex={0} onClick={onClick} onKeyDown={onKeyDown} className="block cursor-pointer text-[10px] outline-none focus-visible:outline-2 focus-visible:outline-accent">
+			<svg width={width} height={height} tabIndex={0} onClick={onClick} onKeyDown={onKeyDown} className="block cursor-pointer text-xs outline-none focus-visible:outline-2 focus-visible:outline-accent">
 				<title>Forecast timeline of the night: use the arrow keys to choose an hour</title>
 				{skyBands(night).map((band) => (
 					<rect key={band.start} x={scale.x(band.start)} y={AXIS_HEIGHT} width={Math.max(0, scale.x(band.end) - scale.x(band.start))} height={height - AXIS_HEIGHT} fill={SKY_FILLS[band.band]}>
@@ -330,10 +330,10 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 				{now > display.start && now < display.end && <line x1={scale.x(now)} x2={scale.x(now)} y1={AXIS_HEIGHT} y2={height} stroke="var(--color-ink-100)" strokeDasharray="1 3" />}
 				{selected && <rect x={scale.x(selected.start)} y={AXIS_HEIGHT} width={Math.max(1, scale.x(selected.end) - scale.x(selected.start) - MARK_GAP)} height={height - AXIS_HEIGHT} fill="none" stroke="var(--color-ink-100)" strokeOpacity={0.7} pointerEvents="none" />}
 			</svg>
-			<p className="m-0 mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] leading-4 text-ink-300">
+			<p className="m-0 mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-4 text-ink-300">
 				{(['day', 'twilight', 'dark'] as const).map((band) => (
 					<span key={band} className="inline-flex items-center gap-1.5">
-						<span className="inline-block size-2.5 rounded-[2px] border border-line-200" style={{ background: SKY_FILLS[band] }} />
+						<span className="inline-block size-2.5 rounded-xs border border-line-200" style={{ background: SKY_FILLS[band] }} />
 						{SKY_LABELS[band]}
 					</span>
 				))}

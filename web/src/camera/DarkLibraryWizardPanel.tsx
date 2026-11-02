@@ -20,6 +20,7 @@ import { IconButton } from '../ui/IconButton'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
+import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import {
 	continueDarkLibraryWizard,
@@ -176,6 +177,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				{wheel === undefined && <Notice>The camera has no role in the equipment setup, so only a manual cap can block the light.</Notice>}
 				<Notice>Frames are raw DARK frames with the gain, offset, binning, subframe, and readout mode of Camera Acquisition; each group sets its exposure.</Notice>
 			</CollapsibleSection>
+			<CameraAcquisitionSection id="images.dark-library-wizard.acquisition" device={device} exposure={capture} capabilities={capabilities} description="Frames are raw DARK frames taken with the camera settings of Camera Acquisition; each group of the Capture Plan sets its exposure." />
 			<CollapsibleSection id="images.dark-library-wizard.plan" summary={`${groups.length} groups`} title="Capture Plan">
 				{groups.map((group, index) => (
 					<GroupForm
@@ -246,7 +248,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 			<CollapsibleSection id="images.dark-library-wizard.output" title="Output & Quality">
 				<div className="flex items-end gap-1">
 					<TextInput label="Server Directory" className="flex-1" placeholder="~/Nebulosa/captures" value={settings.directory ?? ''} disabled={locked} onChange={(e) => update({ directory: e.target.value.trim() || undefined })} />
-					<IconButton icon="folder" label="Choose directory" className="size-[38px]" disabled={locked} onClick={() => setChoosingDirectory(true)} />
+					<IconButton icon="folder" label="Choose directory" className="size-11" disabled={locked} onClick={() => setChoosingDirectory(true)} />
 				</div>
 				<NumberInput label="Rejections per Group" value={settings.maximumRejections} min={0} max={DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS} disabled={locked} onChange={(maximumRejections) => update({ maximumRejections })} />
 				<Checkbox label="Generate masters after acquisition" checked={settings.generateMasters === true} disabled={locked} onChange={(generateMasters) => update({ generateMasters: generateMasters || undefined })} />
@@ -330,13 +332,13 @@ interface GroupFormProps {
 // Fields of one group.
 function GroupForm({ index, group, count, temperature, exposure, disabled, onChange, onMove, onDuplicate, onRemove }: GroupFormProps) {
 	return (
-		<fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 border-t border-line-100 border-dashed p-0 pt-2 first:border-t-0 first:pt-0">
+		<fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 border-t border-line-100 border-dashed p-0 pt-2 not-first:mt-2 mb-1 first:border-t-0 first:pt-0">
 			<div className="flex items-center gap-1">
 				<p className="m-0 flex-1 truncate text-ink-100">{`Group ${index + 1}`}</p>
-				{index > 0 && <IconButton icon="arrow" label={`Move group ${index + 1} up`} className="size-[38px]" disabled={disabled} onClick={() => onMove(-1)} />}
-				{index < count - 1 && <IconButton icon="arrow" label={`Move group ${index + 1} down`} className="size-[38px] rotate-180" disabled={disabled} onClick={() => onMove(1)} />}
-				{count < DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS && <IconButton icon="duplicate" label={`Duplicate group ${index + 1}`} className="size-[38px]" disabled={disabled} onClick={onDuplicate} />}
-				{count > 1 && <IconButton icon="close" label={`Remove group ${index + 1}`} className="size-[38px]" disabled={disabled} onClick={onRemove} />}
+				{index > 0 && <IconButton icon="arrow" label={`Move group ${index + 1} up`} className="size-11" disabled={disabled} onClick={() => onMove(-1)} />}
+				{index < count - 1 && <IconButton icon="arrow" label={`Move group ${index + 1} down`} className="size-11 rotate-180" disabled={disabled} onClick={() => onMove(1)} />}
+				{count < DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS && <IconButton icon="duplicate" label={`Duplicate group ${index + 1}`} className="size-11" disabled={disabled} onClick={onDuplicate} />}
+				{count > 1 && <IconButton icon="close" label={`Remove group ${index + 1}`} className="size-11" disabled={disabled} onClick={onRemove} />}
 			</div>
 			<ExposureTimeInput value={group.exposure} exposure={exposure} disabled={disabled} onChange={(value) => onChange({ exposure: value })} />
 			<NumberInput label="Frames" value={group.count} min={1} max={DARK_LIBRARY_WIZARD_MAXIMUM_COUNT} disabled={disabled} onChange={(frames) => onChange({ count: frames })} />

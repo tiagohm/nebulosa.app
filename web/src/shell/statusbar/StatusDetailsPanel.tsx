@@ -338,7 +338,7 @@ interface SectionProps {
 function Section({ title, children }: SectionProps) {
 	return (
 		<section className="flex flex-col gap-1">
-			<h4 className="m-0 text-[10px] font-semibold tracking-wide text-ink-300 uppercase">{title}</h4>
+			<h4 className="m-0 text-xs font-semibold tracking-wide text-ink-300 uppercase">{title}</h4>
 			{children}
 		</section>
 	)

@@ -117,7 +117,7 @@ export function EmptyState({ title, description, action }: EmptyStateProps) {
 	return (
 		<div className="flex w-full h-full flex-col items-center justify-center gap-3 p-6 text-center">
 			<p className="m-0 text-sm font-medium text-ink-100">{title}</p>
-			{description && <p className="m-0 max-w-sm text-[13px] leading-5 text-ink-300">{description}</p>}
+			{description && <p className="m-0 max-w-sm text-sm leading-5 text-ink-300">{description}</p>}
 			{action}
 		</div>
 	)

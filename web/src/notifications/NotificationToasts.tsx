@@ -90,24 +90,24 @@ export function NotificationToasts() {
 		<div className="pointer-events-none fixed right-4 bottom-10 z-40 flex w-[min(360px,calc(100vw-32px))] flex-col gap-2">
 			{serverToast && (
 				<div className={cn('pointer-events-auto box-border flex items-start gap-2.5 rounded-md border border-l-4 border-line-100 bg-base-200 py-2.5 pr-1.5 pl-3 text-ink-100 shadow-[0_12px_32px_rgb(0_0_0/0.45)]', serverToast === 'lost' ? 'border-l-accent' : 'border-l-success')}>
-					<Icon name={serverToast === 'lost' ? 'warning' : 'success'} className={cn('mt-px size-[18px]', serverToast === 'lost' ? 'text-accent' : 'text-success')} />
+					<Icon name={serverToast === 'lost' ? 'warning' : 'success'} className={cn('mt-px size-5', serverToast === 'lost' ? 'text-accent' : 'text-success')} />
 					<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-						<span className="truncate text-[13px] leading-5 font-semibold">{serverToast === 'lost' ? 'Server unreachable' : 'Server reconnected'}</span>
+						<span className="truncate text-sm leading-5 font-semibold">{serverToast === 'lost' ? 'Server unreachable' : 'Server reconnected'}</span>
 						<span className="text-xs leading-4 wrap-break-word text-ink-200">{serverToast === 'lost' ? 'Lost contact with the Nebulosa server; reconnecting…' : 'Contact with the Nebulosa server was restored.'}</span>
 					</div>
 					<IconButton icon="close" label="Close" onClick={closeServerToast} />
 				</div>
 			)}
-			{workspaceMessage && (
+			{/* {workspaceMessage && (
 				<div className="pointer-events-auto box-border flex items-start gap-2.5 rounded-md border border-l-4 border-line-100 border-l-accent bg-base-200 py-2.5 pr-1.5 pl-3 text-ink-100 shadow-[0_12px_32px_rgb(0_0_0/0.45)]">
-					<Icon name="warning" className="mt-px size-[18px] text-accent" />
+					<Icon name="warning" className="mt-px size-5 text-accent" />
 					<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-						<span className="truncate text-[13px] leading-5 font-semibold">Workspace not saved as changed</span>
+						<span className="truncate text-sm leading-5 font-semibold">Workspace not saved as changed</span>
 						<span className="text-xs leading-4 wrap-break-word text-ink-200">{workspaceMessage}</span>
 					</div>
 					<IconButton icon="close" label="Close" onClick={() => (workspaceSyncState.message = undefined)} />
 				</div>
-			)}
+			)} */}
 			{shown.map((toast) => (
 				<Toast key={toast.id} record={toast} />
 			))}
@@ -142,9 +142,9 @@ function Toast({ record }: ToastProps) {
 				record.level === 'error' ? 'border-l-danger' : record.level === 'warning' ? 'border-l-accent' : 'border-l-success',
 			)}
 		>
-			<Icon name={record.level} className={cn('mt-px size-[18px]', LEVEL_ICON_CLASS[record.level])} />
+			<Icon name={record.level} className={cn('mt-px size-5', LEVEL_ICON_CLASS[record.level])} />
 			<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-				<span className="truncate text-[13px] leading-5 font-semibold">{record.title}</span>
+				<span className="truncate text-sm leading-5 font-semibold">{record.title}</span>
 				<span className="text-xs leading-4 wrap-break-word text-ink-200">{record.message}</span>
 				{targetAvailable(record.target, { documents, devices }) && (
 					<button type="button" onClick={view} className="mt-1 cursor-pointer self-start rounded-sm border-0 bg-transparent p-0 text-xs font-medium text-accent hover:text-accent-hover focus-visible:outline-2 focus-visible:outline-accent">

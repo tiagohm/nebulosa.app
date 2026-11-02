@@ -349,7 +349,7 @@ export function ImagesWorkspace() {
 				}}
 			/>
 			<Modal open={!!closingDocument} onClose={() => setClosing(undefined)} title="Close unsaved image?" className="max-w-md">
-				<p className="m-0 text-[13px]">{closingDocument?.name} exists only in memory. Closing it discards it.</p>
+				<p className="m-0 text-sm">{closingDocument?.name} exists only in memory. Closing it discards it.</p>
 				<div className="mt-5 flex flex-wrap justify-end gap-2">
 					<Button variant="secondary" onClick={() => setClosing(undefined)}>
 						Cancel
@@ -522,7 +522,7 @@ function CameraBottom({ document, view: chosen, onView }: CameraBottomProps) {
 					key={option}
 					type="button"
 					onClick={() => onView(option)}
-					className={cn('cursor-pointer border-0 bg-transparent p-0 font-mono text-[11px] tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', option === view ? 'text-accent' : 'text-ink-300 hover:text-ink-100')}
+					className={cn('cursor-pointer border-0 bg-transparent p-0 font-mono text-xs tracking-wide uppercase focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', option === view ? 'text-accent' : 'text-ink-300 hover:text-ink-100')}
 				>
 					{BOTTOM_VIEW_LABELS[option]}
 				</button>
@@ -534,7 +534,7 @@ function CameraBottom({ document, view: chosen, onView }: CameraBottomProps) {
 
 	return (
 		<div className="flex-none border-t border-line-100 bg-base-100">
-			<div className="flex items-center justify-between px-3 pt-1.5 font-mono text-[11px] tracking-wide text-ink-300 uppercase">
+			<div className="flex items-center justify-between px-3 pt-1.5 font-mono text-xs tracking-wide text-ink-300 uppercase">
 				{views}
 				<span>{view === 'pointing' && pointing ? MOUNT_POINTING_STATE_LABELS[pointing.state] : view === 'guiding' && guiding ? (guiding.active ? GUIDING_STATE_LABELS[guiding.state] : 'Stopped') : session && AUTO_FOCUS_STATE_LABELS[session.state]}</span>
 			</div>

@@ -11,7 +11,7 @@ const TOOL_STATUS_LABELS: Readonly<Record<ToolStatus, string>> = {
 
 // Styles of the badge by status.
 const statusBadge = tv({
-	base: 'flex-none rounded-full border px-2 py-px text-[10px] leading-4 font-medium tracking-[0.04em] uppercase',
+	base: 'flex-none rounded-full border px-2 py-px text-xs leading-4 font-medium tracking-[0.04em] uppercase',
 	variants: {
 		status: {
 			available: 'border-success/40 text-success',

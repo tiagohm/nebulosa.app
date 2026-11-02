@@ -477,11 +477,11 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 					<IconButton icon="fit" label="Whole map (0)" onClick={() => controller.animate(WORLD_MAP_HOME)} />
 				</div>
 			)}
-			<p ref={(failure) => void (controller.failure = failure)} hidden className="pointer-events-none absolute inset-x-0 top-1/2 m-0 -translate-y-1/2 text-center text-[13px] text-danger">
+			<p ref={(failure) => void (controller.failure = failure)} hidden className="pointer-events-none absolute inset-x-0 top-1/2 m-0 -translate-y-1/2 text-center text-sm text-danger">
 				The world map could not be drawn.
 			</p>
 			{coordinates && (
-				<span ref={readoutRef} className="pointer-events-none absolute bottom-2 left-2 rounded-sm bg-base-100/90 px-2 py-0.5 text-[11px] leading-4 whitespace-pre text-ink-200 tabular-nums">
+				<span ref={readoutRef} className="pointer-events-none absolute bottom-2 left-2 rounded-sm bg-base-100/90 px-2 py-0.5 text-xs leading-4 whitespace-pre text-ink-200 tabular-nums">
 					—
 				</span>
 			)}

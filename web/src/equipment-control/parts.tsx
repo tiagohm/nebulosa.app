@@ -48,7 +48,7 @@ export function ConfirmButton({ title, message, confirmLabel, onConfirm, size = 
 		<>
 			<Button size={size} variant={variant} {...props} onClick={() => setOpen(true)} />
 			<Modal open={open} onClose={() => setOpen(false)} title={title} className="max-w-md">
-				<div className="m-0 text-[13px] leading-5 text-ink-200">{message}</div>
+				<div className="m-0 text-sm leading-5 text-ink-200">{message}</div>
 				<div className="mt-5 flex justify-end gap-2">
 					<Button variant="secondary" onClick={() => setOpen(false)}>
 						Cancel

@@ -30,7 +30,7 @@ export interface IconButtonProps extends Omit<ComponentProps<'button'>, 'childre
 export function IconButton({ icon, label, pressed, className, type = 'button', ...props }: IconButtonProps) {
 	return (
 		<button type={type} title={label} className={iconButton({ pressed, className })} {...props}>
-			<Icon name={icon} className="size-[18px]" />
+			<Icon name={icon} className="size-5" />
 			<span className="sr-only">{label}</span>
 		</button>
 	)

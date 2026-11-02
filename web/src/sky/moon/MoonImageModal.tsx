@@ -174,11 +174,7 @@ export function MoonImageModal({ open, onClose, almanac }: { readonly open: bool
 							<ul className="m-0 flex max-h-56 list-none flex-col overflow-y-auto p-0">
 								{matches.map(({ feature, visible }) => (
 									<li key={feature.id}>
-										<button
-											type="button"
-											onClick={() => focus(feature.id)}
-											className="flex w-full cursor-pointer items-baseline justify-between gap-2 rounded-sm border-0 bg-transparent px-2 py-1 text-left text-[13px] text-ink-100 hover:bg-base-300 focus-visible:outline-2 focus-visible:outline-accent"
-										>
+										<button type="button" onClick={() => focus(feature.id)} className="flex w-full cursor-pointer items-baseline justify-between gap-2 rounded-sm border-0 bg-transparent px-2 py-1 text-left text-sm text-ink-100 hover:bg-base-300 focus-visible:outline-2 focus-visible:outline-accent">
 											<span className="truncate">{feature.name}</span>
 											<span className="flex-none text-xs text-ink-300">{visible ? feature.descriptor.split(',')[0] : 'Not visible now'}</span>
 										</button>

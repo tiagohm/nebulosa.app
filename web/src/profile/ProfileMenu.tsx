@@ -29,7 +29,7 @@ export function ProfileMenu() {
 					<>
 						<span className="flex size-7 items-center justify-center rounded-full bg-accent-subtle text-xs font-semibold text-accent">{initials(active.name)}</span>
 						<span className="max-w-40 truncate max-sm:hidden">{active.name}</span>
-						<span className="-mt-1 size-[7px] rotate-45 border-r-[1.5px] border-b-[1.5px] border-ink-300" />
+						<span className="-mt-1 size-2 rotate-45 border-r-[1.5px] border-b-[1.5px] border-ink-300" />
 					</>
 				}
 			>

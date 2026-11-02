@@ -134,10 +134,10 @@ export function ProfileModal() {
 								)}
 							</div>
 						</div>
-						{confirming && selected && <p className="m-0 text-[13px] leading-5 text-ink-200">Delete “{selected.name}”? Its connection selection and equipment setup are removed; saved connections and devices are not affected.</p>}
+						{confirming && selected && <p className="m-0 text-sm leading-5 text-ink-200">Delete “{selected.name}”? Its connection selection and equipment setup are removed; saved connections and devices are not affected.</p>}
 					</div>
 				</div>
-				<p className="m-0 rounded-md border border-line-100 bg-base-100 px-4 py-3 text-[13px] leading-5 text-ink-200">
+				<p className="m-0 rounded-md border border-line-100 bg-base-100 px-4 py-3 text-sm leading-5 text-ink-200">
 					Profiles are kept by the Nebulosa server and shared by every tab and browser. When two tabs change the same setting, the change saved first wins and the other tab shows it. Which profile is active belongs to this tab only.
 				</p>
 			</div>

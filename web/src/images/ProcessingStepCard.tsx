@@ -76,7 +76,7 @@ export function ProcessingStepCard({ step, index, count, expanded, dragging, err
 				</label>
 				<button type="button" onClick={onToggleExpanded} title={expanded ? 'Collapse' : 'Expand'} className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-sm border-0 bg-transparent px-1 py-0.5 text-left hover:bg-base-300 focus-visible:outline-2 focus-visible:outline-accent">
 					<span className="flex min-w-0 flex-1 flex-col">
-						<span className="truncate text-[13px] text-ink-100">
+						<span className="truncate text-sm text-ink-100">
 							<span className="text-ink-300 tabular-nums">{index + 1}.</span> {label}
 							{running && <span className="text-accent"> · running</span>}
 						</span>

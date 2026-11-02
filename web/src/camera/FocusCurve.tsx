@@ -108,7 +108,7 @@ function Chart({ session, bounds, width }: ChartProps) {
 	const yTicks = ticks(bounds.y[0], bounds.y[1], 4)
 
 	return (
-		<svg width={width} height={HEIGHT} className="block text-[10px]">
+		<svg width={width} height={HEIGHT} className="block text-xs">
 			<title>Focus curve: HFD over focuser position</title>
 			{yTicks.map((y) => (
 				<g key={`y${y}`}>

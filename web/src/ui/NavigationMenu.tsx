@@ -323,7 +323,7 @@ export function MenuItem({ onSelect, disabled = false, checked, children }: Menu
 				onKeyDown={(e) => handleItemKeyDown(e, nav, level)}
 				className={itemClassName}
 			>
-				{checked !== undefined && <span className={cn('relative h-5 flex-[0_0_16px]', checked && "after:absolute after:top-1 after:left-[5px] after:h-3 after:w-1 after:rotate-45 after:border-r-2 after:border-b-2 after:border-accent after:content-['']")} />}
+				{checked !== undefined && <span className={cn('relative h-5 flex-[0_0_16px]', checked && "after:absolute after:top-1 after:left-2 after:h-3 after:w-1 after:rotate-45 after:border-r-2 after:border-b-2 after:border-accent after:content-['']")} />}
 				<span className={cn('min-w-0 flex-1', checked && 'text-accent')}>{children}</span>
 			</button>
 		</li>
@@ -391,7 +391,7 @@ export function SubMenu({ id, label, children }: SubMenuProps) {
 				className={cn(itemClassName, open && 'bg-base-300')}
 			>
 				<span className="min-w-0 flex-1">{label}</span>
-				<span className="ml-4 size-[7px] rotate-45 border-t-[1.5px] border-r-[1.5px] border-ink-300" />
+				<span className="ml-4 size-2 rotate-45 border-t-[1.5px] border-r-[1.5px] border-ink-300" />
 			</button>
 			<MenuLevelContext.Provider value={{ depth: level.depth + 1, rootId: level.rootId, close }}>
 				<ul ref={listRef} hidden={!open} className={cn(listClassName, '-top-1 left-[calc(100%+4px)]')}>

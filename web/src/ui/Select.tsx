@@ -212,7 +212,7 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 								onClick={() => choose(index)}
 								className={cn('flex items-start gap-2 rounded-sm py-2 pr-3 pl-2', reason ? 'cursor-not-allowed text-ink-300' : 'cursor-pointer', index === active && 'bg-base-300', !reason && (index === selectedIndex ? 'text-accent' : 'text-ink-100'))}
 							>
-								<span className={cn('relative h-5 flex-[0_0_16px]', index === selectedIndex && "after:absolute after:top-1 after:left-[5px] after:h-3 after:w-1 after:rotate-45 after:border-r-2 after:border-b-2 after:border-accent after:content-['']")} />
+								<span className={cn('relative h-5 flex-[0_0_16px]', index === selectedIndex && "after:absolute after:top-1 after:left-2 after:h-3 after:w-1 after:rotate-45 after:border-r-2 after:border-b-2 after:border-accent after:content-['']")} />
 								<span className="flex min-w-0 flex-col">
 									<span>{format(option)}</span>
 									{reason && <span className="text-xs leading-4">{reason}</span>}

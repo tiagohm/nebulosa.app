@@ -152,7 +152,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 					<>
 						<div className="flex items-end gap-1">
 							<TextInput label="Server Directory" className="flex-1" placeholder="~/Nebulosa/captures" value={settings.output.directory ?? ''} disabled={locked} onChange={(e) => updateOutput({ directory: e.target.value.trim() || undefined })} />
-							<IconButton icon="folder" label="Choose directory" className="size-[38px]" disabled={locked} onClick={() => setChoosingDirectory(true)} />
+							<IconButton icon="folder" label="Choose directory" className="size-11" disabled={locked} onClick={() => setChoosingDirectory(true)} />
 						</div>
 						<TextInput label="Filename Template" placeholder="{date}_{time}_{camera}_{type}_{seq}" value={settings.output.filenameTemplate ?? ''} disabled={locked} onChange={(e) => updateOutput({ filenameTemplate: e.target.value || undefined })} />
 						<details className="text-xs leading-4">

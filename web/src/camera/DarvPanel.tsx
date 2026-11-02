@@ -19,6 +19,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { useNow } from '../useNow'
+import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import {
 	abortDarv,
@@ -119,7 +120,6 @@ export function DarvSections({ device, availability, mount, settings: identity }
 					<DataRow label="Mount">
 						<DeviceLink device={mount.device} fallback="Not assigned" />
 					</DataRow>
-					<DataRow label="Exposure">{`${darvExposureTime(shown.legDuration)} s`}</DataRow>
 				</DataList>
 				{!measuring && mountAvailability.status !== 'ready' && <p className="m-0 text-xs leading-4 text-ink-300">{mountAvailability.message}</p>}
 				{!measuring && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && (
@@ -127,9 +127,17 @@ export function DarvSections({ device, availability, mount, settings: identity }
 						Equipment Setup
 					</Button>
 				)}
-				<p className="m-0 text-xs leading-4 text-ink-300">The frame is a LIGHT taken with the camera settings of Camera Acquisition; its exposure covers both legs and a few seconds of margin, and is shown as the latest frame of the camera, kept in memory only.</p>
 			</CollapsibleSection>
-			<CollapsibleSection id="images.darv.measurement-settings" title="Measurement Settings">
+			<CameraAcquisitionSection
+				id="images.darv.acquisition"
+				device={device}
+				exposure={exposure}
+				capabilities={capabilities}
+				description="The frame is a LIGHT taken with the camera settings of Camera Acquisition; its exposure covers both legs and a few seconds of margin, and is shown as the latest frame of the camera, kept in memory only."
+			>
+				<DataRow label="Exposure">{`${darvExposureTime(shown.legDuration)} s`}</DataRow>
+			</CameraAcquisitionSection>
+			<CollapsibleSection id="images.darv.measurement" title="Measurement">
 				<SegmentedControl label="Axis" options={DARV_AXES} value={shown.axis} format={(axis) => DARV_AXIS_LABELS[axis]} disabled={locked} onChange={(axis) => update({ axis })} />
 				<SegmentedControl label="First Motion" options={DARV_DIRECTIONS} value={shown.direction} format={(direction) => DARV_DIRECTION_LABELS[direction]} disabled={locked} onChange={(direction) => update({ direction })} />
 				{slewRates.length > 0 ? (

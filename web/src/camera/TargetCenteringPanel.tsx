@@ -9,8 +9,6 @@ import { Actions, ConfirmButton, Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { cameraTabKey } from '../images/cameratabs'
-import { imagesState, selectImageTool } from '../images/images'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
 import { type CoordinateStyle, formatAngularSize, formatDeclinationAs, formatRightAscensionAs, formatSignedAngle, MISSING } from '../platesolving/coordinates'
@@ -26,7 +24,7 @@ import { DataList, DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { CameraSummary } from './CameraSummary'
+import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
@@ -202,17 +200,20 @@ export function TargetCenteringSections({ device, availability, mount, settings:
 				<Checkbox label="Search the whole sky after an assisted solve finds nothing" checked={shown.blindRetry} disabled={locked} onChange={(blindRetry) => update({ blindRetry })} />
 				<Checkbox label="Stop guiding for the motion and restore it after, recalibrating" checked={shown.coordinateGuiding} disabled={locked} onChange={(coordinateGuiding) => update({ coordinateGuiding })} />
 			</CollapsibleSection>
-			<CollapsibleSection id="images.target-centering.acquisition" title="Acquisition">
+			<CameraAcquisitionSection id="images.target-centering.acquisition" device={device} exposure={running && session ? session.request.capture : exposure} capabilities={capabilities} description="Frames are temporary LIGHT frames, shown as the latest frame of the camera and never saved.">
 				<ExposureTimeInput value={shown.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
-				<CameraSummary exposure={running && session ? session.request.capture : exposure} capabilities={capabilities} />
-				<p className="m-0 text-xs leading-4 text-ink-300">Frames are temporary LIGHT frames, shown as the latest frame of the camera and never saved.</p>
-				{device && (
-					<Button variant="secondary" className="self-start" onClick={() => selectImageTool(imagesState, cameraTabKey(device.connectionId, device.id), 'camera-acquisition')}>
-						Open Acquisition
-					</Button>
+			</CameraAcquisitionSection>
+			<CameraPlateSolvingSection
+				id="images.target-centering.plate-solving"
+				device={device}
+				solving={running && session ? session.request.solving : solving}
+				description={(solver, assisted) => (
+					<>
+						Each frame is solved with the Plate Solving settings ({solver} solver, {assisted ? 'searched around the position in its header, then around the target once the mount was sent there' : 'searched over the whole sky'}); the offset of the solution from the target gives the next correction.
+						{assisted && shown.blindRetry && ' A frame left unsolved is searched again over the whole sky.'}
+					</>
 				)}
-			</CollapsibleSection>
-			<CameraPlateSolvingSection id="images.target-centering.plate-solving" device={device} solving={running && session ? session.request.solving : solving} />
+			/>
 			<CollapsibleSection id="images.target-centering.session" title="Session">
 				{session && <SessionState session={session} />}
 				{running ? (

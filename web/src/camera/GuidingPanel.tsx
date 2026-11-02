@@ -11,15 +11,15 @@ import { operationsState } from '../operations'
 import { activeProfile, exposureSettings, guidingSettings, profileState, setGuidingSettings, starDetectionSettings } from '../profile/profile'
 import { type CameraIdentity, GUIDING_MAXIMUM_PULSE, GUIDING_MAXIMUM_SEARCH_REGION, GUIDING_MINIMUM_PULSE, GUIDING_MINIMUM_SEARCH_REGION, type GuidingDitherMode, type GuidingSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
+import { CameraStarDetectionSection } from '../stars/CameraStarDetectionSection'
 import { useAstapConfigured } from '../stars/StarRequestControls'
-import { PROVIDER_LABELS } from '../stars/stars'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataList, DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
-import { CameraSummary } from './CameraSummary'
+import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
@@ -157,17 +157,24 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 						Equipment Setup
 					</Button>
 				)}
-				<Notice>The guide frames are LIGHTs taken with the camera settings of Camera Acquisition, shown as the latest frame of the camera and never saved.</Notice>
-				<Notice>
-					Stars are detected with the Star Detection settings (<span className="text-accent">{PROVIDER_LABELS[detection.provider]}</span> detector), chosen when looping starts; the guider accepts those of 5 sigma or more.
-					{detection.provider === 'astap' && ' ASTAP runs as a separate program on every frame, about half a second on a full frame.'}
-				</Notice>
 			</CollapsibleSection>
 			{session && <SessionState session={session} />}
 			{session?.star && <StarProfileSection star={session.star} pixelScale={session.pixelScale} frameId={session.frame?.frameId} />}
-			<CollapsibleSection id="images.guiding.exposure-and-tracking" title="Exposure and Tracking">
+			<CameraAcquisitionSection id="images.guiding.acquisition" device={device} exposure={exposure} capabilities={capabilities} description="The guide frames are LIGHTs taken with the camera settings of Camera Acquisition, shown as the latest frame of the camera and never saved.">
 				<ExposureTimeInput value={settings.exposureTime} exposure={guidingExposureRange(capabilities?.exposure)} disabled={pending} onChange={changeExposure} />
-				<CameraSummary exposure={exposure} capabilities={capabilities} />
+			</CameraAcquisitionSection>
+			<CameraStarDetectionSection
+				id="images.guiding.star-detection"
+				device={device}
+				provider={detection.provider}
+				description={(detector) => (
+					<>
+						Stars are detected with the Star Detection settings ({detector} detector), chosen when looping starts; the guider accepts those of 5 sigma or more.
+						{detection.provider === 'astap' && ' ASTAP runs as a separate program on every frame, about half a second on a full frame.'}
+					</>
+				)}
+			/>
+			<CollapsibleSection id="images.guiding.tracking" title="Tracking">
 				<SegmentedControl label="Tracking" options={['singleStar', 'multiStar'] as const} value={settings.trackingMode} format={(mode) => TRACKING_LABELS[mode]} disabled={running || pending} onChange={(trackingMode) => update({ trackingMode })} />
 				<NumberInput label="Search Region" value={settings.searchRegion} min={GUIDING_MINIMUM_SEARCH_REGION} max={GUIDING_MAXIMUM_SEARCH_REGION} step={4} suffix="px" disabled={running || pending} onChange={(searchRegion) => update({ searchRegion: Math.round(searchRegion) })} />
 				<Checkbox label="Sticky lock position" checked={settings.stickyLockPosition} disabled={running || pending} onChange={(stickyLockPosition) => update({ stickyLockPosition })} />

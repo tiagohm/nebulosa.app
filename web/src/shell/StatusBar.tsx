@@ -190,7 +190,7 @@ export function StatusBar() {
 	const hidden = fitted?.hidden ?? 0
 
 	return (
-		<footer ref={footerRef} className="relative flex h-7 flex-none items-center gap-3 overflow-hidden border-t border-line-100 bg-base-000 px-4 text-[11px] leading-4 whitespace-nowrap text-ink-200">
+		<footer ref={footerRef} className="relative flex h-7 flex-none items-center gap-3 overflow-hidden border-t border-line-100 bg-base-000 px-4 text-xs leading-4 whitespace-nowrap text-ink-200">
 			<div ref={measureRef} className="pointer-events-none invisible absolute top-0 left-0 flex">
 				{chips.map((chip) => (
 					<span key={chip.id} data-chip={chip.id} className="flex">

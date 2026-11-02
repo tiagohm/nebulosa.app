@@ -147,7 +147,7 @@ export function AbortButton({ id, label }: AbortButtonProps) {
 			type="button"
 			title={`Abort ${label}`}
 			onClick={() => void abortOperation(id, ABORT_STORES)}
-			className="flex-none cursor-pointer rounded-sm border border-danger bg-transparent px-1.5 py-0 font-mono text-[11px] leading-4 text-danger transition-colors duration-150 hover:bg-danger hover:text-base-000 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
+			className="flex-none cursor-pointer rounded-sm border border-danger bg-transparent px-1.5 py-0 font-mono text-xs leading-4 text-danger transition-colors duration-150 hover:bg-danger hover:text-base-000 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent"
 		>
 			Abort
 		</button>

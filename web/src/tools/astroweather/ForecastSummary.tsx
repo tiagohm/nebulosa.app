@@ -38,9 +38,9 @@ function rainText({ precipitationChance, precipitation }: NightFacts) {
 function Fact({ label, value, note }: { readonly label: string; readonly value: string | undefined; readonly note?: string }) {
 	return (
 		<div className="min-w-0 rounded-sm border border-line-100 px-3 py-2">
-			<p className="m-0 text-[11px] leading-4 tracking-[0.04em] text-ink-300">{label}</p>
+			<p className="m-0 text-xs leading-4 tracking-[0.04em] text-ink-300">{label}</p>
 			<p className="m-0 text-sm wrap-break-word text-ink-100">{value ?? 'Unavailable'}</p>
-			{note && <p className="m-0 text-[11px] leading-4 text-ink-300">{note}</p>}
+			{note && <p className="m-0 text-xs leading-4 text-ink-300">{note}</p>}
 		</div>
 	)
 }
@@ -96,11 +96,11 @@ export function ForecastSummary({ forecast, loaded, night, evaluation, mode, tim
 					<Icon name={mark.icon} className={`size-5 flex-none ${mark.className}`} />
 					{OUTLOOK_LABELS[outlook]} for {MODE_LABELS[mode]}
 				</p>
-				{why && <p className="m-0 text-[13px] leading-5 text-ink-200">{why}.</p>}
-				{outlook !== weather && <p className="m-0 text-[13px] leading-5 text-ink-200">Weather alone: {OUTLOOK_LABELS[weather]}.</p>}
-				{best && <p className="m-0 text-[13px] leading-5 text-ink-100">Best window: {span(best)}</p>}
-				{!best && block && <p className="m-0 text-[13px] leading-5 text-ink-200">{BLOCK_LABELS[block]}</p>}
-				{marginal && <p className="m-0 text-[13px] leading-5 text-ink-200">Longest marginal window: {span(marginal)}</p>}
+				{why && <p className="m-0 text-sm leading-5 text-ink-200">{why}.</p>}
+				{outlook !== weather && <p className="m-0 text-sm leading-5 text-ink-200">Weather alone: {OUTLOOK_LABELS[weather]}.</p>}
+				{best && <p className="m-0 text-sm leading-5 text-ink-100">Best window: {span(best)}</p>}
+				{!best && block && <p className="m-0 text-sm leading-5 text-ink-200">{BLOCK_LABELS[block]}</p>}
+				{marginal && <p className="m-0 text-sm leading-5 text-ink-200">Longest marginal window: {span(marginal)}</p>}
 			</div>
 			<div className="grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-6">
 				<Fact label="Total cloud" value={rangeText(facts.cloudCover, '%')} />

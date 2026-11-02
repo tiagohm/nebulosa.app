@@ -70,7 +70,7 @@ function ResultRow({ label, value, input }: ResultRowProps) {
 	return (
 		<div className="flex min-h-8 items-center gap-2">
 			<span className="w-28 flex-none text-ink-300 max-sm:w-20">{label}</span>
-			<span className="min-w-0 flex-1 font-mono text-[13px] wrap-anywhere text-ink-100 tabular-nums">{value}</span>
+			<span className="min-w-0 flex-1 font-mono text-sm wrap-anywhere text-ink-100 tabular-nums">{value}</span>
 			{input && <IconButton icon="stepBack" label={`Use ${label} as the input`} onClick={() => takeAsInput(astronomicalTimeState, input.format, input.scale, value)} />}
 			<IconButton icon={copied ? 'success' : 'duplicate'} label={`Copy ${label}`} onClick={() => void copy()} />
 		</div>

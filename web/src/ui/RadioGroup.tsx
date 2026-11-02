@@ -27,7 +27,7 @@ export function RadioGroup<T extends string>({ label, options, value, onChange, 
 		<Field label={label} className={className}>
 			<div className="flex justify-center flex-wrap gap-x-4 gap-y-1">
 				{options.map((option) => (
-					<label key={option} className="flex cursor-pointer items-center gap-2 text-[13px] text-ink-200 select-none has-disabled:cursor-not-allowed has-disabled:text-ink-300">
+					<label key={option} className="flex cursor-pointer items-center gap-2 text-sm text-ink-200 select-none has-disabled:cursor-not-allowed has-disabled:text-ink-300">
 						<input type="radio" name={name} value={option} checked={option === value} disabled={disabled} onChange={() => onChange(option)} className="m-0 size-3.5 cursor-pointer accent-accent disabled:cursor-not-allowed" />
 						{format(option)}
 					</label>

@@ -123,7 +123,7 @@ function Chart({ samples, events, pixelScale, width }: ChartProps) {
 	const lines = (value: (sample: GuidingTelemetrySample) => number) => guidingSegments(samples, value).map((segment) => segment.map(([index, y]) => `${sx(index)},${sy(y)}`).join(' '))
 
 	return (
-		<svg width={width} height={HEIGHT} className="block text-[10px]">
+		<svg width={width} height={HEIGHT} className="block text-xs">
 			<title>{`Guiding graph: RA and DEC errors (${unit}) and corrections (ms) of the latest guide steps`}</title>
 			{yTicks.map((y) => (
 				<g key={`y${y}`}>

@@ -181,7 +181,7 @@ export function SkySearch({ onSelect }: SkySearchProps) {
 				onFocus={() => setOpen(true)}
 				onBlur={() => setOpen(false)}
 				onKeyDown={handleKeyDown}
-				className={cn(inputClassName, 'h-9.5 py-1 font-sans text-[13px]')}
+				className={cn(inputClassName, 'h-9.5 py-1 font-sans text-sm')}
 			/>
 			{showList && (
 				<div onMouseDown={(e) => e.preventDefault()} className="absolute top-full right-0 left-0 z-30 mt-1 max-h-[min(28rem,70vh)] overflow-y-auto rounded-sm border border-line-100 bg-base-200 py-1 shadow-[0_8px_32px_rgb(0_0_0/0.5)]">
@@ -192,7 +192,7 @@ export function SkySearch({ onSelect }: SkySearchProps) {
 
 						return (
 							<div key={section} className="py-1">
-								<p className="m-0 px-3 pb-1 text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase">{section}</p>
+								<p className="m-0 px-3 pb-1 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">{section}</p>
 								{entries.map(({ item, index }) => (
 									<button
 										key={item.kind === 'result' ? `${item.section}:${JSON.stringify(item.result.ref)}` : `refine:${item.designation}`}
@@ -204,14 +204,14 @@ export function SkySearch({ onSelect }: SkySearchProps) {
 										{item.kind === 'result' ? (
 											<>
 												<span className="min-w-0 flex-1">
-													<span className="block truncate text-[13px] text-ink-100">{item.result.name}</span>
+													<span className="block truncate text-sm text-ink-100">{item.result.name}</span>
 													<span className="block truncate text-xs text-ink-300">{[item.result.typeName, ...item.result.designations].join(' · ')}</span>
 												</span>
 												{item.result.magnitude !== undefined && <span className="flex-none font-mono text-xs text-ink-300">{formatMagnitude(item.result.magnitude)}</span>}
 												{item.result.constellation && <span className="w-8 flex-none text-right text-xs text-ink-300">{item.result.constellation}</span>}
 											</>
 										) : (
-											<span className="min-w-0 flex-1 truncate text-[13px] text-ink-200">
+											<span className="min-w-0 flex-1 truncate text-sm text-ink-200">
 												{item.name} <span className="text-xs text-ink-300">— refine</span>
 											</span>
 										)}

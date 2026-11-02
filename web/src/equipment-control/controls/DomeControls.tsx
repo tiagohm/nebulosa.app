@@ -270,7 +270,7 @@ function RotationButton({ direction, label, connectionId, deviceId, held, disabl
 			onLostPointerCapture={release}
 			onContextMenu={(event) => event.preventDefault()}
 			className={cn(
-				'flex h-11 cursor-pointer touch-none items-center justify-center rounded-md border border-line-200 bg-transparent font-mono text-[13px] font-medium text-ink-100 transition-colors duration-150 select-none hover:border-ink-300 hover:bg-base-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:border-line-100 disabled:text-ink-300 disabled:hover:bg-transparent',
+				'flex h-11 cursor-pointer touch-none items-center justify-center rounded-md border border-line-200 bg-transparent font-mono text-sm font-medium text-ink-100 transition-colors duration-150 select-none hover:border-ink-300 hover:bg-base-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:border-line-100 disabled:text-ink-300 disabled:hover:bg-transparent',
 				held && 'border-accent bg-accent-subtle text-accent hover:border-accent hover:bg-accent-subtle',
 			)}
 		>

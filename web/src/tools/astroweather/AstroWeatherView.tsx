@@ -140,7 +140,7 @@ export function AstroWeather() {
 						</div>
 						<div className="flex items-center gap-1">
 							<IconButton icon="stepBack" label={back ? 'The previous night has passed' : 'Previous night'} disabled={!night || back} onClick={() => void stepNight(astroWeatherState, site, -1)} />
-							<span className="min-w-36 text-center text-[13px] text-ink-100">{night ? `Night of ${night.sun.localDate}` : 'Computing the night…'}</span>
+							<span className="min-w-36 text-center text-sm text-ink-100">{night ? `Night of ${night.sun.localDate}` : 'Computing the night…'}</span>
 							<IconButton icon="stepForward" label={forward ? 'Next night' : 'The forecast ends here'} disabled={!forward} onClick={() => void stepNight(astroWeatherState, site, 1)} />
 						</div>
 						<SegmentedControl options={ASTRO_WEATHER_MODES} value={mode} format={(value: AstroWeatherMode) => MODE_LABELS[value]} onChange={(value) => setAstroWeatherPreferences(profileState, { mode: value })} />
@@ -156,7 +156,7 @@ export function AstroWeather() {
 							<div>
 								<ForecastTimeline forecast={shown} night={night} evaluation={evaluation} timeZone={timeZone} cursor={index} onCursor={(i) => (astroWeatherState.cursor = evaluation.segments[i].start)} now={now} />
 								{hour && (
-									<p className="m-0 mt-2 text-[13px] leading-5 text-ink-200">
+									<p className="m-0 mt-2 text-sm leading-5 text-ink-200">
 										<span className="text-ink-100">
 											{formatClock(hour.start, timeZone)}–{formatClock(hour.end, timeZone, true)}: {OUTLOOK_LABELS[hour.outlook]}
 										</span>

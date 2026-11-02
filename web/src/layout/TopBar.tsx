@@ -23,7 +23,7 @@ export function TopBar() {
 			<div className="flex min-w-0 items-center gap-4">
 				<div className="flex flex-none items-center gap-2">
 					<img src={logo} alt="" className="size-7" />
-					<span className="text-lg leading-[26px] font-semibold max-sm:hidden">Nebulosa</span>
+					<span className="text-lg leading-8 font-semibold max-sm:hidden">Nebulosa</span>
 				</div>
 				<NavigationMenu>
 					<Menu id="management" label="Management">

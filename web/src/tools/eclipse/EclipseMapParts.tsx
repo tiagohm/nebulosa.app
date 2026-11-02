@@ -19,7 +19,7 @@ export interface EclipseHeadingProps {
 // Heading of the eclipse shown: its type and date on one line, or on two below the sm breakpoint.
 export function EclipseHeading({ type, date, fallback }: EclipseHeadingProps) {
 	return (
-		<span className="flex min-w-0 flex-col text-[13px] leading-4 font-medium text-ink-100 sm:flex-row sm:gap-1">
+		<span className="flex min-w-0 flex-col text-sm leading-4 font-medium text-ink-100 sm:flex-row sm:gap-1">
 			{type && date ? (
 				<>
 					<span className="min-w-0 truncate">{type}</span>

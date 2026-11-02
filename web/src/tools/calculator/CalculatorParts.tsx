@@ -26,7 +26,7 @@ export interface CalculatorViewProps<D> {
 export function Card({ title, children }: { readonly title: string; readonly children: ReactNode }) {
 	return (
 		<section className="flex min-w-0 flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4">
-			<h2 className="m-0 text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h2>
+			<h2 className="m-0 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h2>
 			{children}
 		</section>
 	)
@@ -130,15 +130,15 @@ export function OptionalDatum<T>({ label, outcome, hint, children }: { readonly 
 export function FormulaNotes({ children }: { readonly children: ReactNode }) {
 	return (
 		<details className="rounded-sm border border-line-100 bg-base-100">
-			<summary className="cursor-pointer px-4 py-3 text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase select-none hover:text-ink-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">Formula & assumptions</summary>
-			<div className="flex flex-col gap-2 border-t border-line-100 px-4 py-3 text-[13px] leading-5 text-ink-200">{children}</div>
+			<summary className="cursor-pointer px-4 py-3 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase select-none hover:text-ink-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">Formula & assumptions</summary>
+			<div className="flex flex-col gap-2 border-t border-line-100 px-4 py-3 text-sm leading-5 text-ink-200">{children}</div>
 		</details>
 	)
 }
 
 // Equation of a model, in monospace.
 export function Formula({ children }: { readonly children: ReactNode }) {
-	return <code className="block font-mono text-[13px] whitespace-pre-wrap text-ink-100">{children}</code>
+	return <code className="block font-mono text-sm whitespace-pre-wrap text-ink-100">{children}</code>
 }
 
 // Props of the draft bar.

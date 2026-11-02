@@ -10,5 +10,5 @@ export function WorkspaceGate({ children }: { readonly children: ReactNode }) {
 	const { loaded } = useSnapshot(workspaceSyncState)
 	if (loaded) return children
 
-	return <div className="flex h-dvh items-center justify-center bg-base-100 text-[13px] leading-5 text-ink-300">Connecting to the Nebulosa server…</div>
+	return <div className="flex h-dvh items-center justify-center bg-base-100 text-sm leading-5 text-ink-300">Connecting to the Nebulosa server…</div>
 }

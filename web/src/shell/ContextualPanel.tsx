@@ -81,8 +81,8 @@ export function PlannedControls({ items }: PlannedControlsProps) {
 export function PanelSection({ title, children }: PanelSectionProps) {
 	return (
 		<section className="border-b border-line-100 px-4 py-3 last:border-b-0">
-			<h3 className="m-0 mb-2 text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h3>
-			<div className="flex flex-col gap-2 text-[13px] leading-5 text-ink-200">{children}</div>
+			<h3 className="m-0 mb-2 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h3>
+			<div className="flex flex-col gap-2 text-sm leading-5 text-ink-200">{children}</div>
 		</section>
 	)
 }

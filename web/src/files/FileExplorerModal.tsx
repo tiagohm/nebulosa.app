@@ -143,9 +143,9 @@ export function FileExplorerModal({ open, title, mode = 'open', defaultName = ''
 			</form>
 			<div className="mt-3 h-[min(26rem,calc(100dvh-16rem))] min-h-32 overflow-y-auto overscroll-contain rounded-sm border border-line-100 bg-base-100">
 				{error ? (
-					<p className="m-0 p-6 text-center text-[13px] text-danger">{error}</p>
+					<p className="m-0 p-6 text-center text-sm text-danger">{error}</p>
 				) : listing && entries.length === 0 ? (
-					<p className="m-0 p-6 text-center text-[13px] text-ink-300">{loading ? 'Loading…' : choosingDirectory ? 'No folders here.' : 'No folders or images here.'}</p>
+					<p className="m-0 p-6 text-center text-sm text-ink-300">{loading ? 'Loading…' : choosingDirectory ? 'No folders here.' : 'No folders or images here.'}</p>
 				) : (
 					<ul ref={listRef} tabIndex={0} onKeyDown={handleListKeyDown} className={cn('m-0 list-none p-1 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', loading && 'opacity-60')}>
 						{entries.map((entry) => (
@@ -155,7 +155,7 @@ export function FileExplorerModal({ open, title, mode = 'open', defaultName = ''
 									tabIndex={-1}
 									onClick={() => select(entry)}
 									onDoubleClick={() => activate(entry)}
-									className={cn('flex w-full cursor-pointer items-center gap-3 rounded-sm border-0 px-2 py-1.5 text-left font-mono text-[13px] leading-5', entry.path === selected ? 'bg-accent-subtle text-accent' : 'bg-transparent text-ink-100 hover:bg-base-300')}
+									className={cn('flex w-full cursor-pointer items-center gap-3 rounded-sm border-0 px-2 py-1.5 text-left font-mono text-sm leading-5', entry.path === selected ? 'bg-accent-subtle text-accent' : 'bg-transparent text-ink-100 hover:bg-base-300')}
 								>
 									<Icon name={entry.directory ? 'folder' : 'file'} className={cn('size-4', entry.directory ? 'text-ink-200' : 'text-ink-300')} />
 									<span className="min-w-0 flex-1 truncate">{entry.name}</span>
@@ -174,13 +174,13 @@ export function FileExplorerModal({ open, title, mode = 'open', defaultName = ''
 						if (fileName && saveDirectory && !busy) onChoose(joinPath(saveDirectory, fileName), saveDirectory)
 					}}
 				>
-					<label className="flex-none text-[13px] text-ink-300">File name</label>
+					<label className="flex-none text-sm text-ink-300">File name</label>
 					<input value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} data-autofocus className={inputClassName} />
 				</form>
 			)}
-			{message && <p className="m-0 mt-3 text-[13px] text-danger">{message}</p>}
+			{message && <p className="m-0 mt-3 text-sm text-danger">{message}</p>}
 			<div className="mt-4 flex items-center justify-end gap-2">
-				<span className="mr-auto min-w-0 truncate text-[13px] text-ink-300">{choosingDirectory ? (chosenDirectory ?? 'Choose a folder') : saving ? (saveDirectory ? `Saving in ${saveDirectory}` : 'Choose a folder') : chosen ? chosen.name : 'Choose an image file'}</span>
+				<span className="mr-auto min-w-0 truncate text-sm text-ink-300">{choosingDirectory ? (chosenDirectory ?? 'Choose a folder') : saving ? (saveDirectory ? `Saving in ${saveDirectory}` : 'Choose a folder') : chosen ? chosen.name : 'Choose an image file'}</span>
 				<Button variant="secondary" onClick={onClose}>
 					Cancel
 				</Button>

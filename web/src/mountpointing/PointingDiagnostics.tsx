@@ -21,7 +21,7 @@ export function formatArcsec(angle: number | undefined | null) {
 function Measure({ label, children }: { readonly label: string; readonly children: ReactNode }) {
 	return (
 		<div className="min-w-0">
-			<dt className="truncate text-[11px] text-ink-300">{label}</dt>
+			<dt className="truncate text-xs text-ink-300">{label}</dt>
 			<dd className="m-0 truncate text-ink-100 tabular-nums">{children}</dd>
 		</div>
 	)

@@ -85,7 +85,7 @@ function CalculatorBody({ profile }: { readonly profile: Readonly<Pick<Profile, 
 			<div className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
 				<div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-4">
 					<Select label="Calculator" className="sm:w-72 sm:flex-none" options={CALCULATOR_IDS} value={selected} onChange={setSelected} format={(id) => calculatorDefinition(id).label} group={(id) => CATEGORY_LABELS[calculatorDefinition(id).category]} />
-					<p className="m-0 text-[13px] leading-5 text-ink-300 sm:pb-2">{definition.description}</p>
+					<p className="m-0 text-sm leading-5 text-ink-300 sm:pb-2">{definition.description}</p>
 				</div>
 				{selected === 'imaging-setup' && <ImagingSetupCalculator {...bind('imaging-setup')} />}
 				{selected === 'mosaic' && <MosaicCalculator {...bind('mosaic')} />}

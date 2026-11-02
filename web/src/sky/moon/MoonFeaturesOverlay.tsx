@@ -30,7 +30,7 @@ export function MoonFeaturesOverlay({ viewport, markers, selected, onSelect }: M
 					<circle cx={x} cy={y} r={2.5} className="fill-amber-200 stroke-black/70" strokeWidth={1} />
 					{feature.id === selected && <circle cx={x} cy={y} r={8} className="fill-none stroke-accent" strokeWidth={2} />}
 					{labeled && (
-						<text x={labelLeft ? x - 6 : x + 6} y={y} textAnchor={labelLeft ? 'end' : 'start'} dominantBaseline="middle" className={cn('fill-amber-50 stroke-black/80 text-[11px]', feature.id === selected && 'fill-accent font-semibold')} strokeWidth={3} paintOrder="stroke">
+						<text x={labelLeft ? x - 6 : x + 6} y={y} textAnchor={labelLeft ? 'end' : 'start'} dominantBaseline="middle" className={cn('fill-amber-50 stroke-black/80 text-xs', feature.id === selected && 'fill-accent font-semibold')} strokeWidth={3} paintOrder="stroke">
 							{feature.name}
 						</text>
 					)}

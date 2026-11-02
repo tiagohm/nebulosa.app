@@ -59,16 +59,16 @@ export function PointingMap({ model, residuals, vectors, current, selected, onSe
 			))}
 			<line x1={-RADIUS} x2={RADIUS} className="stroke-line-100" strokeWidth={0.5} />
 			<line y1={-RADIUS} y2={RADIUS} className="stroke-line-100" strokeWidth={0.5} />
-			<text x={0} y={-RADIUS - 4} textAnchor="middle" className="fill-ink-300 text-[8px]">
+			<text x={0} y={-RADIUS - 4} textAnchor="middle" className="fill-ink-300 text-xs">
 				N
 			</text>
-			<text x={RADIUS + 4} y={3} className="fill-ink-300 text-[8px]">
+			<text x={RADIUS + 4} y={3} className="fill-ink-300 text-xs">
 				E
 			</text>
-			<text x={0} y={RADIUS + 10} textAnchor="middle" className="fill-ink-300 text-[8px]">
+			<text x={0} y={RADIUS + 10} textAnchor="middle" className="fill-ink-300 text-xs">
 				S
 			</text>
-			<text x={-RADIUS - 4} y={3} textAnchor="end" className="fill-ink-300 text-[8px]">
+			<text x={-RADIUS - 4} y={3} textAnchor="end" className="fill-ink-300 text-xs">
 				W
 			</text>
 			{vectors !== 'none' &&

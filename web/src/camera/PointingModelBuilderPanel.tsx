@@ -10,8 +10,6 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { deviceState } from '../equipment/equipment'
 import type { CameraRole } from '../equipment/roles'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { cameraTabKey } from '../images/cameratabs'
-import { imagesState, selectImageTool } from '../images/images'
 import {
 	MOUNT_POINTING_STATE_LABELS,
 	MOUNT_POINTING_STEP_LABELS,
@@ -41,7 +39,7 @@ import { Checkbox } from '../ui/Checkbox'
 import { DataList, DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
-import { CameraSummary } from './CameraSummary'
+import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
@@ -148,22 +146,24 @@ export function PointingModelBuilderSections({ device, availability, role, mount
 				)}
 				{!running && unknownType && <Checkbox label="This mount is equatorial" checked={confirmed} onChange={setConfirmed} />}
 			</CollapsibleSection>
-			<CollapsibleSection id="images.pointing-model-builder.camera-settings" title="Camera Settings">
+			<CameraAcquisitionSection id="images.pointing-model-builder.acquisition" device={device} exposure={running && session ? session.request.capture : exposure} capabilities={capabilities} description="Frames are temporary LIGHT frames, shown as the latest frame of the camera and never saved.">
 				<ExposureTimeInput value={shown.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
-				<CameraSummary exposure={running && session ? session.request.capture : exposure} capabilities={capabilities} />
-				<p className="m-0 text-xs leading-4 text-ink-300">Frames are temporary LIGHT frames, shown as the latest frame of the camera and never saved.</p>
-				{device && (
-					<Button variant="secondary" className="self-start" onClick={() => selectImageTool(imagesState, cameraTabKey(device.connectionId, device.id), 'camera-acquisition')}>
-						Open Acquisition
-					</Button>
+			</CameraAcquisitionSection>
+			<CameraPlateSolvingSection
+				id="images.pointing-model-builder.plate-solving"
+				device={device}
+				solving={running && session ? session.request.solving : solving}
+				description={(solver, assisted) => (
+					<>
+						Each frame is solved with the Plate Solving settings ({solver} solver, {assisted ? 'searched around the position its point was commanded to' : 'searched over the whole sky'}); the solution and the position the mount reports make the sample of that point.
+					</>
 				)}
-			</CollapsibleSection>
-			<CameraPlateSolvingSection id="images.pointing-model-builder.plate-solving" device={device} solving={running && session ? session.request.solving : solving} />
+			/>
 			<CollapsibleSection id="images.pointing-model-builder.point-generation" title="Point Generation">
 				<SegmentedControl label="Pattern" options={PATTERNS} value={shown.pattern} format={(pattern) => PATTERN_LABELS[pattern]} disabled={locked} onChange={(pattern) => update({ pattern })} />
-				<div className="flex flex-wrap gap-1">
+				<div className="flex flex-wrap justify-center gap-1 mt-1">
 					{POINTING_MODEL_PRESETS.map(({ label, count }) => (
-						<Button key={label} variant={shown.count === count ? 'primary' : 'secondary'} disabled={locked} onClick={() => update({ count })}>
+						<Button className="flex-1" key={label} variant={shown.count === count ? 'primary' : 'secondary'} disabled={locked} onClick={() => update({ count })}>
 							{label}
 						</Button>
 					))}

@@ -62,7 +62,7 @@ function EclipseOverlay({ map, layers, selectedPoint }: EclipseOverlayProps) {
 						<GlobalPointMarker kind={point.kind} />
 						<title>{`${point.kind} · ${GLOBAL_POINTS[point.kind].name}`}</title>
 						{layers.labels && (
-							<text x={8} y={4 + rows[i] * LABEL_ROW_HEIGHT} strokeWidth={3} strokeLinejoin="round" className={cn('stroke-base-000 font-mono text-[10px] font-semibold [paint-order:stroke]', point.kind === selectedPoint ? 'fill-accent' : 'fill-ink-100')}>
+							<text x={8} y={4 + rows[i] * LABEL_ROW_HEIGHT} strokeWidth={3} strokeLinejoin="round" className={cn('stroke-base-000 font-mono text-xs font-semibold [paint-order:stroke]', point.kind === selectedPoint ? 'fill-accent' : 'fill-ink-100')}>
 								{point.kind}
 							</text>
 						)}
@@ -189,7 +189,7 @@ export function SolarEclipseMap() {
 							<LegendItem layer="penumbralLimits" label="Limits of the partial eclipse" swatch={<LineSwatch />} checked={layers.penumbralLimits} />
 							{map.paths.riseSet && <LegendItem layer="riseSet" label="Eclipse at sunrise or sunset" swatch={<LineSwatch dashed />} checked={layers.riseSet} />}
 							<LegendItem layer="points" label="Global points (see the panel)" swatch={<GlobalPointIcon kind="MAX" />} checked={layers.points} />
-							<LegendItem layer="labels" label="Names of the points" swatch={<span className="font-mono text-[10px] font-semibold text-ink-100">P1</span>} checked={layers.labels} />
+							<LegendItem layer="labels" label="Names of the points" swatch={<span className="font-mono text-xs font-semibold text-ink-100">P1</span>} checked={layers.labels} />
 						</EclipseMapLegend>
 					)}
 					{loading && <p className="pointer-events-none absolute top-3 left-3 m-0 text-xs text-ink-300">Computing the eclipse…</p>}

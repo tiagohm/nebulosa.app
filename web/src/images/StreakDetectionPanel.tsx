@@ -92,7 +92,7 @@ function StreakDetection({ documentKey, info, view, unavailable }: StreakDetecti
 
 	return (
 		<>
-			<CollapsibleSection id="images.streak-detection.detection-settings" title="Detection Settings" defaultOpen={false}>
+			<CollapsibleSection id="images.streak-detection.detection" title="Detection" defaultOpen={false}>
 				<DetectionSettings settings={settings} cfa={cfa} onChange={edit} />
 			</CollapsibleSection>
 			<CollapsibleSection id="images.streak-detection.advanced-settings" title="Advanced Settings" defaultOpen={false}>

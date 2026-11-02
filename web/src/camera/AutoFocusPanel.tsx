@@ -11,8 +11,8 @@ import { operationsState } from '../operations'
 import { activeProfile, autoFocusSettings, exposureSettings, profileState, setAutoFocusSettings, starDetectionSettings } from '../profile/profile'
 import type { AutoFocusSettings, CameraIdentity } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
+import { CameraStarDetectionSection } from '../stars/CameraStarDetectionSection'
 import { useAstapConfigured } from '../stars/StarRequestControls'
-import { PROVIDER_LABELS } from '../stars/stars'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataList, DataRow } from '../ui/DataRow'
@@ -20,7 +20,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { useNow } from '../useNow'
 import { AUTO_FOCUS_STATE_LABELS, autoFocusBlocker, autoFocusRequest, autoFocusRunning, autoFocusRuntime, defaultStepSize, FITTING_MODE_LABELS, FITTING_MODES, startAutoFocus, stopAutoFocus, VERIFICATION_LABELS } from './autofocus'
-import { CameraSummary } from './CameraSummary'
+import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
@@ -111,14 +111,27 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 					</Button>
 				)}
 			</CollapsibleSection>
-			<CollapsibleSection id="images.auto-focus.focus-routine" title="Focus Routine">
-				{wheel.device && <p className="m-0 text-xs leading-4 text-ink-300">Filter: {filter ?? 'unknown'} — the Auto Focus measures through the current filter and never changes it.</p>}
-				<p className="m-0 text-xs leading-4 text-ink-300">Frames are LIGHT, taken with the exposure time below and the camera settings of Camera Acquisition.</p>
-				<p className="m-0 text-xs leading-4 text-ink-300">
-					Each frame is measured by the median HFD of its accepted stars (Multi-Star) with the Star Detection settings (<span className="text-accent">{PROVIDER_LABELS[detection.detector.provider]}</span> detector) and shown as the latest frame of the camera; frames are kept in memory only.
-				</p>
+			<CameraAcquisitionSection
+				id="images.auto-focus.acquisition"
+				device={device}
+				exposure={running && session ? session.request.capture : exposure}
+				capabilities={capabilities}
+				description={
+					<>
+						Frames are LIGHT, taken with the exposure time above and the camera settings of Camera Acquisition.
+						{wheel.device && ` Filter: ${filter ?? 'unknown'} — the Auto Focus measures through the current filter and never changes it.`}
+					</>
+				}
+			>
 				<ExposureTimeInput value={settings.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
-				<CameraSummary exposure={running && session ? session.request.capture : exposure} capabilities={capabilities} />
+			</CameraAcquisitionSection>
+			<CameraStarDetectionSection
+				id="images.auto-focus.star-detection"
+				device={device}
+				provider={running && session ? session.request.detection.detector.provider : detection.detector.provider}
+				description={(detector) => <>Each frame is measured by the median HFD of its accepted stars (Multi-Star) with the Star Detection settings ({detector} detector) and shown as the latest frame of the camera; frames are kept in memory only.</>}
+			/>
+			<CollapsibleSection id="images.auto-focus.algorithm" summary={FITTING_MODE_LABELS[settings.fittingMode]} title="Algorithm">
 				<Select label="Curve Fitting" options={FITTING_MODES} value={settings.fittingMode} format={(mode) => FITTING_MODE_LABELS[mode]} disabled={locked} onChange={(fittingMode) => update({ fittingMode })} />
 				<NumberInput label="Step Size" value={stepSize} min={1} max={focuserState ? Math.max(1, focuserState.position.max - focuserState.position.min) : undefined} suffix="steps" disabled={locked} onChange={(value) => update({ stepSize: value })} />
 				<NumberInput label="Positions per Side" value={settings.initialOffsetSteps} min={1} max={50} disabled={locked} onChange={(initialOffsetSteps) => update({ initialOffsetSteps })} />

@@ -37,8 +37,8 @@ interface Base {
 // Diagnostics of a check, collapsed by default.
 function CheckDiagnostics({ check }: { readonly check: ExternalToolCheck }) {
 	return (
-		<details className="text-[13px] leading-5 text-ink-200">
-			<summary className="cursor-pointer text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase select-none">Diagnostics</summary>
+		<details className="text-sm leading-5 text-ink-200">
+			<summary className="cursor-pointer text-xs font-medium tracking-[0.08em] text-ink-300 uppercase select-none">Diagnostics</summary>
 			<div className="mt-2 flex flex-col gap-1">
 				{check.config.endpoint === undefined ? <DataRow label="Executable path">{check.config.executable || '—'}</DataRow> : <DataRow label="Endpoint">{check.config.endpoint || 'Default'}</DataRow>}
 				{check.config.config !== undefined && <DataRow label="Configuration file">{check.config.config || 'Default'}</DataRow>}
@@ -158,7 +158,7 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 		<div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
 			<header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line-100 px-4 py-3">
 				<div className="flex min-w-0 flex-1 basis-60 flex-col">
-					<h2 className="m-0 truncate text-[15px] leading-[22px] font-medium text-ink-100">{tool.name}</h2>
+					<h2 className="m-0 truncate text-md leading-6 font-medium text-ink-100">{tool.name}</h2>
 					<p className="m-0 text-xs text-ink-300">{tool.description}</p>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">

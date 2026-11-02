@@ -96,7 +96,7 @@ export function CaptureFramesCarousel({ document, title }: CaptureFramesCarousel
 
 	return (
 		<div className="flex-none border-t border-line-100 bg-base-100">
-			<div className="flex items-center justify-between px-3 pt-1.5 font-mono text-[11px] tracking-wide text-ink-300 uppercase">
+			<div className="flex items-center justify-between px-3 pt-1.5 font-mono text-xs tracking-wide text-ink-300 uppercase">
 				{title ?? <span>Captured Frames</span>}
 				<span>{summary?.count ?? saved.length} saved</span>
 			</div>
@@ -163,13 +163,13 @@ function FrameCard({ card, selected, focusable, loading, error, restored, newer,
 			title={[frame ? frameTooltip(frame) : 'No captured image available', error].filter(Boolean).join('\n')}
 			onClick={onSelect}
 			className={cn(
-				'flex h-36 w-36 flex-none cursor-pointer flex-col gap-1 rounded-sm border bg-base-000 p-1.5 text-left font-mono text-[11px] text-ink-200 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60',
+				'flex h-36 w-36 flex-none cursor-pointer flex-col gap-1 rounded-sm border bg-base-000 p-1.5 text-left font-mono text-xs text-ink-200 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60',
 				selected ? 'border-accent ring-1 ring-accent' : 'border-line-100 hover:border-line-200',
 			)}
 		>
 			<span className="relative flex min-h-0 flex-1 items-center justify-center rounded-xs bg-base-200 text-ink-300">
 				<Icon name={card.kind === 'latest' ? 'camera' : 'images'} className="size-5" />
-				{newer && <span className="absolute top-1 right-1 rounded-xs bg-accent px-1 text-[10px] text-on-accent">New</span>}
+				{newer && <span className="absolute top-1 right-1 rounded-xs bg-accent px-1 text-xs text-on-accent">New</span>}
 			</span>
 			<span className="flex items-baseline justify-between gap-1 text-ink-100">
 				<span className="truncate">{label}</span>
@@ -202,7 +202,7 @@ function OlderFramesCard({ loading, onLoad }: OlderFramesCardProps) {
 			disabled={loading}
 			title="Show older saved frames"
 			onClick={onLoad}
-			className="flex h-36 w-28 flex-none cursor-pointer flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-line-100 bg-base-000 p-1.5 font-mono text-[11px] text-ink-300 hover:border-line-200 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-60"
+			className="flex h-36 w-28 flex-none cursor-pointer flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-line-100 bg-base-000 p-1.5 font-mono text-xs text-ink-300 hover:border-line-200 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-wait disabled:opacity-60"
 		>
 			<Icon name="images" className="size-5" />
 			<span>{loading ? 'Loading…' : 'Older frames'}</span>

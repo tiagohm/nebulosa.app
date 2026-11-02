@@ -86,7 +86,7 @@ export function NotificationButton({ className }: NotificationButtonProps) {
 		<span ref={rootRef} className="flex flex-none">
 			<button ref={buttonRef} type="button" title="Notifications" className={cn(className, open && 'bg-base-300 text-ink-100')} onClick={() => (open ? setPlacement(undefined) : show())}>
 				<Icon name="bell" />
-				{count > 0 && <span className="absolute top-0.5 right-0.5 box-border flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] leading-none font-semibold text-on-accent tabular-nums">{count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : count}</span>}
+				{count > 0 && <span className="absolute top-0.5 right-0.5 box-border flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs leading-none font-semibold text-on-accent tabular-nums">{count > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : count}</span>}
 				<span className="sr-only">{count > 0 ? `${count} unread` : 'No unread notifications'}</span>
 			</button>
 			{placement && <NotificationPanel top={placement.top} right={placement.right} width={placement.width} onClose={() => setPlacement(undefined)} />}

@@ -41,7 +41,7 @@ function InterfaceDiagnostics({ device }: { readonly device: DeviceSummary }) {
 			<DataRow label="Capabilities">{capabilities.length > 0 ? capabilities.map(([key, value]) => `${key}: ${value ? 'yes' : 'no'}`).join(', ') : state ? 'none declared' : 'not reported yet'}</DataRow>
 			<DataRow label="Operations">{running.length > 0 ? running.map((operation) => `${operation.kind} (${operation.operationId})`).join(', ') : 'none'}</DataRow>
 			<DataRow label="Last error">{control.errors[device.id] ?? runtime.errors[device.id] ?? 'none'}</DataRow>
-			{state && <pre className="m-0 max-h-60 overflow-auto rounded-sm bg-base-200 p-2 font-mono text-[11px] leading-4 whitespace-pre-wrap text-ink-200">{JSON.stringify(state, undefined, 2)}</pre>}
+			{state && <pre className="m-0 max-h-60 overflow-auto rounded-sm bg-base-200 p-2 font-mono text-xs leading-4 whitespace-pre-wrap text-ink-200">{JSON.stringify(state, undefined, 2)}</pre>}
 		</div>
 	)
 }
@@ -49,8 +49,8 @@ function InterfaceDiagnostics({ device }: { readonly device: DeviceSummary }) {
 // Collapsible diagnostics of a device.
 export function DeviceDiagnostics({ group }: DeviceDiagnosticsProps) {
 	return (
-		<details className="border-b border-line-100 px-4 py-3 text-[13px] leading-5 text-ink-200">
-			<summary className="cursor-pointer text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase select-none">Diagnostics</summary>
+		<details className="border-b border-line-100 px-4 py-3 text-sm leading-5 text-ink-200">
+			<summary className="cursor-pointer text-xs font-medium tracking-[0.08em] text-ink-300 uppercase select-none">Diagnostics</summary>
 			<div className="mt-2 flex flex-col gap-2">
 				{group.devices.map((device) => (
 					<InterfaceDiagnostics key={device.id} device={device} />

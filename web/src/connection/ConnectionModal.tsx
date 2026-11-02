@@ -170,7 +170,7 @@ export function ConnectionModal() {
 								Remove
 							</Button>
 						</div>
-						{error && <p className="m-0 basis-full text-[13px] leading-5 text-danger">{error}</p>}
+						{error && <p className="m-0 basis-full text-sm leading-5 text-danger">{error}</p>}
 					</div>
 				</div>
 			</div>

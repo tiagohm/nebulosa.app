@@ -65,7 +65,7 @@ export function HoverTooltip({ celestial, names }: HoverTooltipProps) {
 		<div ref={tooltipRef} hidden={!label} className="pointer-events-none absolute top-0 left-0 z-10 max-w-64 rounded-sm border border-line-100 bg-base-200 px-2 py-1.5 shadow-[0_4px_16px_rgb(0_0_0/0.4)]">
 			{label && (
 				<>
-					<p className="m-0 truncate text-[13px] font-medium text-ink-100">{label.name}</p>
+					<p className="m-0 truncate text-sm font-medium text-ink-100">{label.name}</p>
 					<p className="m-0 text-xs text-ink-300">
 						{label.typeName}
 						{label.magnitude !== undefined && label.magnitude < 99 && <span className="font-mono"> · mag {formatMagnitude(label.magnitude)}</span>}

@@ -338,7 +338,7 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 				)}
 				{!image && <div className="absolute inset-0">{error ? <ViewerMessage tone="error">{error}</ViewerMessage> : loading ? <ViewerMessage>Loading image…</ViewerMessage> : empty}</div>}
 			</div>
-			<div className="flex h-6 flex-none items-center gap-4 overflow-hidden border-t border-line-100 bg-base-100 px-3 text-[11px] leading-4 whitespace-nowrap text-ink-300 tabular-nums">
+			<div className="flex h-6 flex-none items-center gap-4 overflow-hidden border-t border-line-100 bg-base-100 px-3 text-xs leading-4 whitespace-nowrap text-ink-300 tabular-nums">
 				{image ? (
 					<>
 						<span>
@@ -388,5 +388,5 @@ interface ViewerMessageProps {
 
 // Centered message in the viewport.
 function ViewerMessage({ tone = 'neutral', children }: ViewerMessageProps) {
-	return <p className={tone === 'error' ? 'm-0 flex h-full items-center justify-center p-6 text-center text-[13px] text-danger' : 'm-0 flex h-full items-center justify-center p-6 text-center text-[13px] text-ink-300'}>{children}</p>
+	return <p className={tone === 'error' ? 'm-0 flex h-full items-center justify-center p-6 text-center text-sm text-danger' : 'm-0 flex h-full items-center justify-center p-6 text-center text-sm text-ink-300'}>{children}</p>
 }

@@ -31,7 +31,7 @@ export interface DataRowProps extends VariantProps<typeof value> {
 // Label and value of one datum.
 export function DataRow({ label, tone, children }: DataRowProps) {
 	return (
-		<div className="flex flex-wrap items-baseline justify-between gap-x-3 text-[13px] leading-5">
+		<div className="flex flex-wrap items-baseline justify-between gap-x-3 text-sm leading-5">
 			<span className="min-w-0 wrap-break-word text-ink-300">{label}</span>
 			<span className={value({ tone })}>{children}</span>
 		</div>
@@ -40,5 +40,5 @@ export function DataRow({ label, tone, children }: DataRowProps) {
 
 // Consecutive rows, spaced as the rows of a section.
 export function DataList({ children }: { readonly children: ReactNode }) {
-	return <div className="flex flex-col gap-2">{children}</div>
+	return <div className="flex flex-col gap-0">{children}</div>
 }

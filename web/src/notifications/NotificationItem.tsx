@@ -52,14 +52,14 @@ export function NotificationItem({ record, unread, available, now, onChoose, onD
 				onKeyDown={onKeyDown}
 				className="flex min-w-0 flex-1 cursor-pointer gap-2.5 rounded-sm border-0 bg-transparent px-2 py-2.5 my-1 text-left text-ink-100 transition-colors duration-150 hover:bg-base-300 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
 			>
-				<Icon name={record.level} className={cn('mt-px size-[18px]', LEVEL_ICON_CLASS[record.level])} />
+				<Icon name={record.level} className={cn('mt-px size-5', LEVEL_ICON_CLASS[record.level])} />
 				<span className="flex min-w-0 flex-1 flex-col gap-0.5">
 					<span className="flex items-center gap-2">
-						<span className={cn('min-w-0 flex-1 truncate text-[13px] leading-5', unread ? 'font-semibold' : 'font-medium text-ink-200')}>{record.title}</span>
+						<span className={cn('min-w-0 flex-1 truncate text-sm leading-5', unread ? 'font-semibold' : 'font-medium text-ink-200')}>{record.title}</span>
 						{unread && <span title="Unread" className="size-2 flex-none rounded-full bg-accent" />}
 					</span>
 					<span className="text-xs leading-4 wrap-break-word text-ink-200">{record.message}</span>
-					<span className="text-[11px] leading-4 text-ink-300">
+					<span className="text-xs leading-4 text-ink-300">
 						{LEVEL_TEXT[record.level]} · {notificationAge(record.createdAt, now)}
 						{record.target && !available && ' · Context unavailable'}
 					</span>

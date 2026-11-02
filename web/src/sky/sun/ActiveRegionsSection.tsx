@@ -34,7 +34,7 @@ function RegionRow({ region, selected, onSelect }: { readonly region: SolarActiv
 				type="button"
 				onClick={onSelect}
 				title={selected ? 'Hide the details' : 'Show the details'}
-				className={cn('flex w-full cursor-pointer flex-wrap items-baseline gap-x-3 rounded-sm border-0 bg-transparent px-1.5 py-1 text-left font-mono text-[13px] text-ink-100 hover:bg-base-300 focus-visible:outline-2 focus-visible:outline-accent', selected && 'bg-accent-subtle')}
+				className={cn('flex w-full cursor-pointer flex-wrap items-baseline gap-x-3 rounded-sm border-0 bg-transparent px-1.5 py-1 text-left font-mono text-sm text-ink-100 hover:bg-base-300 focus-visible:outline-2 focus-visible:outline-accent', selected && 'bg-accent-subtle')}
 			>
 				<span className="font-semibold">{region.id}</span>
 				{region.location && <span>{region.location}</span>}

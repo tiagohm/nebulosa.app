@@ -12,16 +12,16 @@ interface CameraSummaryProps {
 }
 
 // The camera settings Camera Acquisition owns, shown only.
-export function CameraSummary({ exposure: { gain, offset, binX, binY, subframe, width, height, frameFormat }, capabilities }: CameraSummaryProps) {
-	const format = capabilities?.frameFormats.find((each) => each.name === frameFormat)?.label ?? (frameFormat || 'Default')
+export function CameraSummary({ exposure: { gain, offset, binX, binY, subframe, width, height, x, y, frameFormat }, capabilities }: CameraSummaryProps) {
+	const format = capabilities?.frameFormats.find((each) => each.name === frameFormat)?.label ?? (frameFormat || capabilities?.frameFormat || 'Default')
 
 	return (
 		<DataList>
 			<DataRow label="Gain">{gain}</DataRow>
 			<DataRow label="Offset">{offset}</DataRow>
-			<DataRow label="Binning">{`${binX} × ${binY}`}</DataRow>
-			<DataRow label="Frame">{subframe ? `${width} × ${height}` : 'Full sensor'}</DataRow>
-			<DataRow label="Format">{format}</DataRow>
+			<DataRow label="Binning">{`${binX} x ${binY}`}</DataRow>
+			<DataRow label="Frame">{subframe ? `${x} ${y} ${width} ${height}` : 'Full sensor'}</DataRow>
+			<DataRow label="Readout Mode">{format}</DataRow>
 		</DataList>
 	)
 }

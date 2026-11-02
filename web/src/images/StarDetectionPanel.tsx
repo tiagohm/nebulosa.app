@@ -76,7 +76,7 @@ function StarDetection({ documentKey, imageId, stars, unavailable }: StarDetecti
 			<CollapsibleSection id="images.star-detection.detector" title="Detector">
 				<DetectorControls request={request} onChange={edit} />
 			</CollapsibleSection>
-			<CollapsibleSection id="images.star-detection.detection-settings" title="Detection Settings" defaultOpen={false}>
+			<CollapsibleSection id="images.star-detection.detection" title="Detection" defaultOpen={false}>
 				<DetectorSettingsControls request={request} onChange={edit} />
 			</CollapsibleSection>
 			<CollapsibleSection id="images.star-detection.acceptance" title="Acceptance" defaultOpen={false}>

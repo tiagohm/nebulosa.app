@@ -20,7 +20,7 @@ import { DataList, DataRow } from '../ui/DataRow'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
-import { CameraSummary } from './CameraSummary'
+import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
@@ -103,11 +103,17 @@ export function TppaSections({ device, availability, mount, settings: identity }
 						Equipment Setup
 					</Button>
 				)}
-				<p className="m-0 text-xs leading-4 text-ink-300">Frames are LIGHT, taken with the exposure time of the Alignment Settings and the camera settings of Camera Acquisition, and shown as the latest frame of the camera; they are kept in memory only.</p>
 			</CollapsibleSection>
-			<CollapsibleSection id="images.tppa.alignment-settings" title="Alignment Settings">
+			<CameraAcquisitionSection
+				id="images.tppa.acquisition"
+				device={device}
+				exposure={running && session ? session.request.capture : exposure}
+				capabilities={capabilities}
+				description="Frames are LIGHT, taken with the exposure time above and the camera settings of Camera Acquisition, and shown as the latest frame of the camera; they are kept in memory only."
+			>
 				<ExposureTimeInput value={shown.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
-				<CameraSummary exposure={running && session ? session.request.capture : exposure} capabilities={capabilities} />
+			</CameraAcquisitionSection>
+			<CollapsibleSection id="images.tppa.alignment" title="Alignment">
 				<SegmentedControl label="RA Direction" options={TPPA_DIRECTIONS} value={shown.direction} format={(direction) => TPPA_DIRECTION_LABELS[direction]} disabled={locked} onChange={(direction) => update({ direction })} />
 				{slewRates.length > 0 ? (
 					<Select label="Slew Rate" options={slewRates.map((rate) => rate.name)} value={slewRate ?? slewRates[0].name} format={(name) => slewRates.find((rate) => rate.name === name)?.label.trim() || name} disabled={locked} onChange={(name) => update({ slewRate: name })} />
@@ -122,7 +128,16 @@ export function TppaSections({ device, availability, mount, settings: identity }
 					The mount rotates in RA only, towards the {TPPA_DIRECTION_LABELS[shown.direction].toLowerCase()}, about {2 * shown.rotation}° in all; make sure it is clear to move. Rotation is measured by plate solving, never assumed from the motion time.
 				</Notice>
 			</CollapsibleSection>
-			<CameraPlateSolvingSection id="images.tppa.plate-solver" device={device} solving={running && session ? session.request.solving : solving} />
+			<CameraPlateSolvingSection
+				id="images.tppa.plate-solver"
+				device={device}
+				solving={running && session ? session.request.solving : solving}
+				description={(solver, assisted) => (
+					<>
+						Each frame is solved with the Plate Solving settings ({solver} solver, {assisted ? 'searched around the mount position snooped into its header' : 'searched over the whole sky'}); the rotation between the three points and the polar error are measured from the solutions.
+					</>
+				)}
+			/>
 			{session && <Measurements session={session} details={details} />}
 			{session?.alignment && <PolarError alignment={session.alignment} details={details} />}
 			<CollapsibleSection id="images.tppa.controls" title="Controls">

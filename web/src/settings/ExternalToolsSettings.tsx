@@ -77,7 +77,7 @@ export function ExternalToolsSettings({ tool }: ExternalToolsSettingsProps) {
 			)}
 			<div className="relative flex min-h-0 flex-1 flex-col">{body()}</div>
 			<Modal open={pending !== undefined} onClose={() => setPending(undefined)} title="Discard unsaved changes?" className="max-w-md">
-				<p className="m-0 text-[13px] leading-5 text-ink-200">The changes to {selected?.name} were not saved. Showing another external tool discards them.</p>
+				<p className="m-0 text-sm leading-5 text-ink-200">The changes to {selected?.name} were not saved. Showing another external tool discards them.</p>
 				<div className="mt-5 flex justify-end gap-2">
 					<Button variant="secondary" onClick={() => setPending(undefined)}>
 						Keep Editing

@@ -91,11 +91,11 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 			{mount && runtime.slew && <SlewStatus targetName={runtime.slew.targetName} operation={progress} />}
 			{mount && runtime.error && <p className="m-0 text-xs leading-4 text-danger">{runtime.error}</p>}
 			<Modal open={!!preview} onClose={() => setPreview(undefined)} title="Slew to object?" className="max-w-md">
-				<p className="m-0 text-[13px]">
+				<p className="m-0 text-sm">
 					Slew <strong className="text-ink-100">{mount?.name || 'the mount'}</strong> to <strong className="text-ink-100">{targetName}</strong>.
 				</p>
 				<p className="mt-2 mb-0 text-xs leading-5 text-ink-300">The server resolves the object at the current real time, not at the time simulated in the Sky, and refuses targets below the horizon.</p>
-				<div className="mt-3 text-[13px]">
+				<div className="mt-3 text-sm">
 					{preview?.status === 'loading' && <p className="m-0 text-ink-300">Locating the object now…</p>}
 					{preview?.status === 'error' && <p className="m-0 text-danger">The current position is unavailable: {preview.error}</p>}
 					{preview?.status === 'ready' && (

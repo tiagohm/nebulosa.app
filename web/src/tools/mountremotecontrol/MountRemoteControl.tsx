@@ -49,7 +49,7 @@ export function MountRemoteControl() {
 		<WorkspaceLayout workspace="tools" title="Mount Remote Control">
 			<div className="h-full overflow-y-auto bg-base-000">
 				<div className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
-					<div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px] leading-5">
+					<div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm leading-5">
 						<span className="text-ink-300">Mount</span>
 						<span className="min-w-0 truncate text-ink-100">
 							<DeviceLink device={device} fallback={mount.status === 'notSelected' ? 'None selected' : 'Unavailable'} />
@@ -144,14 +144,14 @@ function ClientList({ server }: { readonly server?: MountRemoteServer }) {
 
 	return (
 		<div className="flex flex-col gap-2 border-t border-line-100 pt-3">
-			<h3 className="m-0 text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase">Clients ({clients.length})</h3>
+			<h3 className="m-0 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">Clients ({clients.length})</h3>
 			{server && clients.length > 0 ? (
 				<ul className="m-0 flex list-none flex-col gap-1 p-0">
 					{clients.map((client) => {
 						const disconnecting = state.disconnecting[clientKey(remoteKey(server.connectionId, server.deviceId, server.protocol), client.id)]
 
 						return (
-							<li key={client.id} className="flex items-center justify-between gap-3 text-[13px] leading-5">
+							<li key={client.id} className="flex items-center justify-between gap-3 text-sm leading-5">
 								<span className="min-w-0 truncate font-mono text-ink-100">{formatEndpoint(client.ip, client.port)}</span>
 								<Button variant="secondary" disabled={disconnecting} onClick={() => void disconnectRemoteClient(mountRemoteControlState, server, client.id)}>
 									{disconnecting ? 'Disconnecting…' : 'Disconnect'}

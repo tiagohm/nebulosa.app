@@ -92,8 +92,8 @@ export function EquipmentModal() {
 								</Button>
 							</Notice>
 						)}
-						{connectionError && !serverOpen && <p className="m-0 text-[13px] leading-5 text-danger">{connectionError}</p>}
-						{serverOpen && runtime.loading && <p className="m-0 text-[13px] leading-5 text-ink-300">Loading devices…</p>}
+						{connectionError && !serverOpen && <p className="m-0 text-sm leading-5 text-danger">{connectionError}</p>}
+						{serverOpen && runtime.loading && <p className="m-0 text-sm leading-5 text-ink-300">Loading devices…</p>}
 						<div className="flex justify-end gap-2">
 							<Button variant="primary" disabled={!serverOpen || !canConnectAll} onClick={() => void switchSetup(deviceState, setup, true)}>
 								Connect all
@@ -185,7 +185,7 @@ interface NoticeProps {
 function Notice({ text, children }: NoticeProps) {
 	return (
 		<div className="flex flex-wrap items-center gap-4 rounded-md border border-line-100 bg-base-100 px-4 py-3">
-			<p className="m-0 min-w-0 flex-[1_1_280px] text-[13px] leading-5 text-ink-200">{text}</p>
+			<p className="m-0 min-w-0 flex-[1_1_280px] text-sm leading-5 text-ink-200">{text}</p>
 			{children}
 		</div>
 	)

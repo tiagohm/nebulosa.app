@@ -23,6 +23,7 @@ import { IconButton } from '../ui/IconButton'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
+import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { continueFlatWizard, darkFlatGroups, flatWizardFilterName, FLAT_WIZARD_DIAGNOSTIC_LABELS, FLAT_WIZARD_FILTER_STATE_LABELS, FLAT_WIZARD_STATE_LABELS, FLAT_WIZARD_VERDICT_LABELS, flatWizardBlocker, flatWizardRequest, flatWizardRunning, flatWizardRuntime, startFlatWizard, stopFlatWizard } from './flatwizard'
 import { FrameProgress, formatExposure } from './FrameProgress'
@@ -136,12 +137,18 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 					</Button>
 				)}
 				{wheel === undefined && <Notice>The camera has no role in the equipment setup, so you change the filters and the light yourself and confirm each step; the cover is left as it is.</Notice>}
-				<Notice>Frames are FLAT frames taken with the camera settings of Camera Acquisition; the wizard searches their exposure. Levels are the original digital numbers (DN) of each file, not the stretched view.</Notice>
 			</CollapsibleSection>
+			<CameraAcquisitionSection
+				id="images.flat-wizard.acquisition"
+				device={device}
+				exposure={running && session ? session.request.capture : exposure}
+				capabilities={capabilities}
+				description="Frames are FLAT frames taken with the camera settings of Camera Acquisition; the wizard searches their exposure. Levels are the original digital numbers (DN) of each file, not the stretched view."
+			/>
 			<CollapsibleSection id="images.flat-wizard.settings" title="Settings">
 				<div className="flex items-end gap-1">
 					<TextInput label="Server Directory" className="flex-1" placeholder="~/Nebulosa/captures" value={shown.directory ?? ''} disabled={locked} onChange={(e) => update({ directory: e.target.value.trim() || undefined })} />
-					<IconButton icon="folder" label="Choose directory" className="size-[38px]" disabled={locked} onClick={() => setChoosingDirectory(true)} />
+					<IconButton icon="folder" label="Choose directory" className="size-11" disabled={locked} onClick={() => setChoosingDirectory(true)} />
 				</div>
 				<Checkbox label="Known Effective Clipping" checked={shown.effectiveClip !== undefined} disabled={locked} onChange={(known) => update({ effectiveClip: known ? DEFAULT_FLAT_WIZARD_EFFECTIVE_CLIP : undefined })} />
 				{shown.effectiveClip !== undefined && <NumberInput label="Effective Clipping" value={shown.effectiveClip} min={1} step={1} suffix="DN" disabled={locked} onChange={(effectiveClip) => update({ effectiveClip })} />}
@@ -252,7 +259,7 @@ function FilterForm({ index, filter, wheel, brightness, removable, disabled, onC
 		<fieldset className="m-0 flex flex-col gap-2 border-0 border-t border-line-200 p-0 pt-2 first:border-t-0 first:pt-0">
 			<div className="flex items-center gap-1">
 				<p className="m-0 flex-1 truncate text-ink-100">{`${index + 1}. ${flatWizardFilterName(wheel?.names, filter.slot)}`}</p>
-				{removable && <IconButton icon="close" label={`Remove filter ${index + 1}`} className="size-[38px]" disabled={disabled} onClick={onRemove} />}
+				{removable && <IconButton icon="close" label={`Remove filter ${index + 1}`} className="size-11" disabled={disabled} onClick={onRemove} />}
 			</div>
 			{slots ? (
 				<Select label="Wheel Slot" options={slots} value={String(filter.slot)} format={(value) => `${Number(value) + 1}: ${flatWizardFilterName(wheel?.names, Number(value))}`} disabled={disabled} onChange={(value) => onChange({ slot: Number(value) })} />

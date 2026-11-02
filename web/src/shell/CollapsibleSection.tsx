@@ -30,10 +30,10 @@ export function CollapsibleSection({ id, title, summary, defaultOpen = true, chi
 		<details open={open} onToggle={(e) => e.currentTarget.open !== open && setSectionOpen(collapsibleSections, id, e.currentTarget.open)} className="border-b border-line-100 px-4 py-3 last:border-b-0">
 			<summary className="flex cursor-pointer list-none items-center gap-2 select-none focus-visible:outline-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
 				<Icon name="stepForward" className={cn('size-3.5 flex-none text-ink-300 transition-transform duration-150 motion-reduce:transition-none', open && 'rotate-90')} />
-				<h3 className="m-0 flex-none text-[11px] font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h3>
+				<h3 className="m-0 flex-none text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h3>
 				{!open && summary && <span className="ml-auto min-w-0 truncate text-xs text-ink-200">{summary}</span>}
 			</summary>
-			<div className="mt-2 flex flex-col gap-2 text-[13px] leading-5 text-ink-200">{children}</div>
+			<div className="mt-2 flex flex-col gap-1 text-sm leading-5 text-ink-200">{children}</div>
 		</details>
 	)
 }

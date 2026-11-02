@@ -61,9 +61,9 @@ function RailButton({ label, icon, active, onClick }: RailButtonProps) {
 				active ? 'bg-accent-subtle text-accent' : 'bg-transparent text-ink-300 hover:bg-base-300 hover:text-ink-100',
 			)}
 		>
-			{active && <span className="absolute top-2 bottom-2 -left-1 w-[3px] rounded-full bg-accent" />}
+			{active && <span className="absolute top-2 bottom-2 -left-1 w-1 rounded-full bg-accent" />}
 			<Icon name={icon} />
-			<span className={cn('text-[10px] leading-3', active && 'font-semibold')}>{label}</span>
+			<span className={cn('text-xs leading-3', active && 'font-semibold')}>{label}</span>
 		</button>
 	)
 }

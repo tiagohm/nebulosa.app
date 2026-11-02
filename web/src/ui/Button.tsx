@@ -10,7 +10,7 @@ const button = tv({
 			ghost: 'bg-transparent text-accent hover:bg-accent-subtle',
 		},
 		size: {
-			sm: 'rounded-sm px-3 py-1 text-[13px] leading-5',
+			sm: 'rounded-sm px-3 py-1 text-sm leading-5',
 			md: 'rounded-md px-4 py-2 text-sm leading-5',
 		},
 	},

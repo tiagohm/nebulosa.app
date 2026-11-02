@@ -12,6 +12,7 @@ import { type CameraCaptureTime, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/sr
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
 import { type AutoFocusCaptureOptions, type AutoFocusRunEvent, type AutoFocusRunResult, autoFocusCaptureRequest, runAutoFocus } from 'nebulosa/src/observation/focus/autofocus.runner'
 import { type FocusCurve, focusCurve } from './autofocus.curve'
+import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, type CaptureSnoop, exposureProgressListener, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
@@ -179,6 +180,8 @@ export interface AutoFocusSessionSummary {
 	readonly startedAt: number
 	// Instant the session ended, Unix milliseconds (UTC).
 	readonly endedAt?: number
+	// Number of the latest change of the session, from 0, increasing with every published summary.
+	readonly revision: number
 }
 
 // Complete session record: the summary with every measurement and the fitted curve.
@@ -241,10 +244,8 @@ interface FrameMeasurement {
 
 // Auto Focus sessions of the cameras of every open connection.
 export class AutoFocusSessions {
-	// Latest session of each camera, by camera resource key.
-	readonly #sessions = new Map<string, Session>()
-	// Session of each operation a command token started, so a repeated start answers it.
-	readonly #byOperation = new Map<string, Session>()
+	// Latest session of each camera, and the session each start token started.
+	readonly #sessions: CameraSessionRegistry<AutoFocusSessionSummary, Session>
 
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes
 	// every session, capturer takes the frames (the one of the capture service), mover moves the focusers with
@@ -262,16 +263,18 @@ export class AutoFocusSessions {
 		readonly stars: StarDetectionService,
 		readonly listener: AutoFocusListener,
 		readonly auxiliaryDir: string = tmpdir(),
-	) {}
+	) {
+		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'autofocus:updated', session }))
+	}
 
 	// Returns the latest session of every camera.
 	snapshot(): AutoFocusSnapshot {
-		return { sessions: Array.from(this.#sessions.values(), (session) => session.summary) }
+		return { sessions: this.#sessions.summaries() }
 	}
 
 	// Responds with a complete session, or 404 when it is not the latest of its camera.
 	session(sessionId: string): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		return session ? Response.json(this.#complete(session)) : errorResponse('Auto Focus session not found', 404, 'notFound')
 	}
 
@@ -280,13 +283,16 @@ export class AutoFocusSessions {
 	// an unknown camera or focuser, 409 when either is disconnected or held by another operation, and 422 when the
 	// focuser cannot move to absolute positions or the detector is ASTAP and it is not configured.
 	async start(connectionId: string, deviceId: string, request: AutoFocusRequest): Promise<Response> {
-		const known = this.operations.started(request.token)
-		const repeated = known && this.#byOperation.get(known.operationId)
-		if (repeated) return Response.json({ sessionId: repeated.summary.sessionId, operationId: repeated.summary.operationId } satisfies AutoFocusStartResponse, { status: 202 })
+		const repeated = this.#sessions.repeated(request.token)
+		if (repeated) return accepted(repeated)
 
 		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
 		const preparation = await this.stars.prepare(request.detection)
 		if (!preparation) return unsupported('ASTAP is not configured; set it up in Settings → External Tools or measure with the built-in detector')
+
+		// The same request, sent twice, may have started its session while this one was prepared.
+		const raced = this.#sessions.repeated(request.token)
+		if (raced) return accepted(raced)
 
 		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
 		if (camera instanceof Response) return camera
@@ -311,6 +317,7 @@ export class AutoFocusSessions {
 				measurementCount: 0,
 				verification: 'pending',
 				startedAt: Date.now(),
+				revision: 0,
 			},
 			measurements: [],
 			focuser,
@@ -323,15 +330,10 @@ export class AutoFocusSessions {
 			return handle.result
 		})
 
-		const key = resourceKey(camera)
-		const previous = this.#sessions.get(key)
-		if (previous) this.#forget(previous)
-		this.#sessions.set(key, session)
-		this.#byOperation.set(record.operationId, session)
-		this.#update(session, { operationId: record.operationId })
+		this.#sessions.adopt(resourceKey(camera), session, record.operationId)
 
 		void session.handle!.result.then((result) => this.#ended(session, result))
-		return Response.json({ sessionId: session.summary.sessionId, operationId: record.operationId } satisfies AutoFocusStartResponse, { status: 202 })
+		return accepted(session)
 	}
 
 	// Stops a session: the move, exposure or detection in progress is cancelled and nothing more is commanded. When the
@@ -339,11 +341,11 @@ export class AutoFocusSessions {
 	// cancels it where it stands. Resolves once the operation released the devices. Responds 204, and 404 when the
 	// session is unknown or already ended.
 	async stop(sessionId: string): Promise<Response> {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session?.handle || session.summary.endedAt !== undefined) return errorResponse('No Auto Focus session is running with this id', 404, 'notFound')
 
 		const first = ++session.stops === 1
-		if (first && session.summary.state !== 'stopping') this.#update(session, { state: 'stopping', target: undefined })
+		if (first && session.summary.state !== 'stopping') this.#sessions.update(session, { state: 'stopping', target: undefined })
 		await session.handle.cancel('aborted')
 		// Only a later stop cancels the move back the first one started once the operation ended.
 		if (!first) await session.restore?.cancel('aborted')
@@ -389,7 +391,7 @@ export class AutoFocusSessions {
 
 				if (!result.ok) return result
 
-				this.#update(session, { finalPosition: this.mover.position(focuser), estimatedPosition: result.value.position, estimatedHfd: Number.isFinite(result.value.hfd) ? result.value.hfd : undefined })
+				this.#sessions.update(session, { finalPosition: this.mover.position(focuser), estimatedPosition: result.value.position, estimatedHfd: Number.isFinite(result.value.hfd) ? result.value.hfd : undefined })
 				await this.#verify(session, context, camera, focuser, capture, join(directory, 'autofocus-verification.fit'), measure)
 				return successfulOperationResult(result.value)
 			} finally {
@@ -408,7 +410,7 @@ export class AutoFocusSessions {
 			moveTo: async (scope, focuser, position, options) => {
 				const moved = await mover.moveTo(scope, focuser, position, options)
 				if (!moved.ok || !(settleDelay > 0)) return moved
-				this.#update(session, { state: 'settling' })
+				this.#sessions.update(session, { state: 'settling' })
 				return await scope.start<void>('autofocusSettle', [], (context) => abortableDelay(settleDelay * 1000, context.signal)).result
 			},
 		}
@@ -422,15 +424,15 @@ export class AutoFocusSessions {
 			case 'move': {
 				// The runner reads the start position just before its first move.
 				const initialPosition = session.summary.initialPosition ?? this.mover.position(focuser)
-				this.#update(session, { state: event.purpose === 'sample' ? 'moving' : event.purpose === 'best' ? 'applying' : 'restoring', target: event.target, initialPosition })
+				this.#sessions.update(session, { state: event.purpose === 'sample' ? 'moving' : event.purpose === 'best' ? 'applying' : 'restoring', target: event.target, initialPosition })
 				break
 			}
 			case 'expose':
 				session.frame = { capture: event.capture, requestedPosition: event.position, observedPosition: this.mover.position(focuser), time: Date.now() }
-				this.#update(session, { state: 'exposing', target: undefined })
+				this.#sessions.update(session, { state: 'exposing', target: undefined })
 				break
 			case 'measure':
-				this.#update(session, { state: 'measuring', exposure: undefined })
+				this.#sessions.update(session, { state: 'measuring', exposure: undefined })
 				break
 			case 'sample': {
 				const frame = session.frame
@@ -447,7 +449,7 @@ export class AutoFocusSessions {
 				session.frame = undefined
 				session.measurements.push(measurement)
 				session.curve = focusCurve(event.autoFocus, session.summary.request.fittingMode)
-				this.#update(session, { measurementCount: session.measurements.length, lastMeasurement: measurement })
+				this.#sessions.update(session, { measurementCount: session.measurements.length, lastMeasurement: measurement })
 				break
 			}
 		}
@@ -491,15 +493,15 @@ export class AutoFocusSessions {
 	// Takes and measures one frame at the best focus inside the operation of the session and records its HFD.
 	// Its failure never fails the session, whose focuser already stands at the best focus.
 	async #verify(session: Session, context: OperationContext, camera: Camera, focuser: Focuser, capture: AutoFocusCaptureOptions, path: string, measure: (path: string, signal: AbortSignal) => Promise<FrameMeasurement>) {
-		this.#update(session, { state: 'verifying', target: undefined })
+		this.#sessions.update(session, { state: 'verifying', target: undefined })
 		session.frame = { capture: session.measurements.length + 1, requestedPosition: this.mover.position(focuser), observedPosition: this.mover.position(focuser), time: Date.now() }
 
 		try {
 			const captured = await this.capturer.start(context, camera, autoFocusCaptureRequest(capture, path, focuser), { clock: SYSTEM_CAMERA_CAPTURE_CLOCK, listener: this.#exposureProgress(session) }).result
-			this.#update(session, { exposure: undefined })
+			this.#sessions.update(session, { exposure: undefined })
 
 			if (!captured.ok) {
-				if (!context.signal.aborted) this.#update(session, { verification: 'failed', verificationError: captured.error ?? `The frame could not be taken (${captured.reason})` })
+				if (!context.signal.aborted) this.#sessions.update(session, { verification: 'failed', verificationError: captured.error ?? `The frame could not be taken (${captured.reason})` })
 				return
 			}
 
@@ -509,14 +511,14 @@ export class AutoFocusSessions {
 			try {
 				measured = await measure(path, signal)
 			} catch {
-				if (!context.signal.aborted) this.#update(session, { verification: 'failed', verificationError: `The measurement did not finish in ${session.summary.request.measureTimeout} s` })
+				if (!context.signal.aborted) this.#sessions.update(session, { verification: 'failed', verificationError: `The measurement did not finish in ${session.summary.request.measureTimeout} s` })
 				return
 			}
 
 			const image = measured.imageId !== undefined ? { verificationImageId: measured.imageId } : {}
-			if (measured.hfd !== undefined) this.#update(session, { verification: 'measured', verifiedHfd: measured.hfd, ...image })
-			else if (measured.measured) this.#update(session, { verification: 'noStars', ...image })
-			else this.#update(session, { verification: 'failed', verificationError: measured.detail.warnings.join(' ') || 'The HFD could not be measured', ...image })
+			if (measured.hfd !== undefined) this.#sessions.update(session, { verification: 'measured', verifiedHfd: measured.hfd, ...image })
+			else if (measured.measured) this.#sessions.update(session, { verification: 'noStars', ...image })
+			else this.#sessions.update(session, { verification: 'failed', verificationError: measured.detail.warnings.join(' ') || 'The HFD could not be measured', ...image })
 		} finally {
 			session.frame = undefined
 			await unlink(path).catch(() => undefined)
@@ -525,7 +527,7 @@ export class AutoFocusSessions {
 
 	// Follows the progress of the frame being exposed.
 	#exposureProgress(session: Session) {
-		return exposureProgressListener((exposure) => this.#update(session, { exposure }))
+		return exposureProgressListener((exposure) => this.#sessions.update(session, { exposure }))
 	}
 
 	// Records the end of a session from the result of its operation; a session the stop route stopped first moves the
@@ -537,14 +539,14 @@ export class AutoFocusSessions {
 
 		if (!result.ok && result.reason === 'aborted' && session.stops === 1 && summary.request.restoreOnStop && summary.initialPosition !== undefined) {
 			const restored = await this.#restore(session, summary.initialPosition)
-			this.#update(session, { state: 'cancelled', target: undefined, exposure: undefined, verification, restored, endedAt: Date.now() })
+			this.#sessions.update(session, { state: 'cancelled', target: undefined, exposure: undefined, verification, restored, endedAt: Date.now() })
 			return
 		}
 
 		const endedAt = Date.now()
-		if (result.ok) this.#update(session, { state: 'completed', target: undefined, exposure: undefined, verification, endedAt })
-		else if (result.reason === 'aborted') this.#update(session, { state: 'cancelled', target: undefined, exposure: undefined, verification, endedAt })
-		else this.#update(session, { state: 'failed', target: undefined, exposure: undefined, verification, reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt })
+		if (result.ok) this.#sessions.update(session, { state: 'completed', target: undefined, exposure: undefined, verification, endedAt })
+		else if (result.reason === 'aborted') this.#sessions.update(session, { state: 'cancelled', target: undefined, exposure: undefined, verification, endedAt })
+		else this.#sessions.update(session, { state: 'failed', target: undefined, exposure: undefined, verification, reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt })
 	}
 
 	// Moves the focuser of a stopped session back to position (steps) with its backlash compensation and resolves
@@ -555,7 +557,7 @@ export class AutoFocusSessions {
 		if (this.mover.position(focuser) === position) return true
 		if (!focuser.connected || !this.operations.available(focuser)) return false
 
-		this.#update(session, { state: 'restoring', target: position, exposure: undefined })
+		this.#sessions.update(session, { state: 'restoring', target: position, exposure: undefined })
 		const restore = this.operations.coordinator.start<void>('autofocusRestore', [{ key: resourceKey(focuser), device: focuser }], (context) => this.mover.moveTo(context, focuser, position))
 		session.restore = restore
 
@@ -566,28 +568,15 @@ export class AutoFocusSessions {
 		}
 	}
 
-	// Forgets a session replaced by a newer one of its camera; its latest frame stays with the registry.
-	#forget(session: Session) {
-		this.#byOperation.delete(session.summary.operationId)
-	}
-
-	// Returns the latest session with this id.
-	#find(sessionId: string): Session | undefined {
-		for (const session of this.#sessions.values()) if (session.summary.sessionId === sessionId) return session
-		return undefined
-	}
-
 	// Returns the complete record of a session.
 	#complete(session: Session): AutoFocusSession {
 		return { ...session.summary, measurements: session.measurements, ...(session.curve && { curve: session.curve }) }
 	}
+}
 
-	// Publishes a changed session; a session replaced by a newer one of its camera changes silently.
-	#update(session: Session, patch: Partial<AutoFocusSessionSummary>) {
-		session.summary = { ...session.summary, ...patch }
-		const latest = Array.from(this.#sessions.values()).includes(session)
-		if (latest) this.listener({ type: 'autofocus:updated', session: session.summary })
-	}
+// Responds that a session was accepted, with its id and the id of its operation.
+function accepted({ summary: { sessionId, operationId } }: Session) {
+	return Response.json({ sessionId, operationId } satisfies AutoFocusStartResponse, { status: 202 })
 }
 
 // Routes of the Auto Focus sessions.

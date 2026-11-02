@@ -23,13 +23,11 @@ export type AutoFocusRuntime = CameraSessionRecords<AutoFocusSessionSummary, Aut
 export const autoFocusRuntime = proxy<AutoFocusRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
 
 // How the sessions are mirrored (sessions.ts): the complete record is fetched again when the summary reports
-// a new measurement, a best focus, or an end. Its sessions count no revision, so a record with more
-// measurements, another state, or an end is the newer one.
+// a new measurement, a best focus, or an end.
 const AUTO_FOCUS_SESSIONS: CameraSessionKind<AutoFocusSessionSummary, AutoFocusSession> = {
 	url: '/api/autofocus',
 	refreshes: new SnapshotRefreshes(),
 	stale: (session, _, details) => !details || details.measurements.length !== session.measurementCount || details.estimatedPosition !== session.estimatedPosition || (session.endedAt !== undefined && details.endedAt === undefined),
-	newer: (loaded, known) => loaded.measurements.length > known.measurements.length || (loaded.endedAt !== undefined && known.endedAt === undefined) || loaded.state !== known.state,
 }
 
 // Label of each session state.

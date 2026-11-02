@@ -348,6 +348,22 @@ describe('sessions', () => {
 		expect(summary()!.state).toBe('cancelled')
 	})
 
+	test('a repeated token answers the same session, even while the first request is prepared, and summaries count their revisions', async () => {
+		const { id, cameraId, autoFocus, focuserDevice, ended, summary, events } = await setup()
+		const body = slow(focuserDevice)
+		const [first, second] = await Promise.all([autoFocus.start(id, cameraId, body), autoFocus.start(id, cameraId, body)])
+
+		expect([first.status, second.status]).toEqual([202, 202])
+		const started = (await first.json()) as { sessionId: string }
+		expect(await second.json()).toEqual(started as never)
+		await autoFocus.stop(started.sessionId)
+		await waitUntil(ended)
+
+		const revisions = events.map((event) => event.session.revision)
+		expect(revisions).toEqual(revisions.toSorted((a, b) => a - b))
+		expect(summary()!.revision).toBe(revisions.at(-1)!)
+	})
+
 	test('ASTAP without its executable configured is refused before anything starts', async () => {
 		const { id, cameraId, autoFocus, focuserDevice, events } = await setup()
 		const response = await autoFocus.start(id, cameraId, request(focuserDevice, { detection: { detector: { provider: 'astap', maxStars: 0, minSNR: 10 }, acceptance: DEFAULT_STAR_ACCEPTANCE } }))

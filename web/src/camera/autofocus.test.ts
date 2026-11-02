@@ -3,7 +3,7 @@ import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, Camer
 import { proxy } from 'valtio'
 import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_AUTO_FOCUS_SETTINGS } from '../profile/schema'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
-import { autoFocusBlocker, autoFocusFrameFocus, autoFocusRequest, autoFocusRunning, type AutoFocusRuntime, defaultStepSize, handleAutoFocusEvent, loadAutoFocusSession, refreshAutoFocus, NO_FOCUSER, startAutoFocus, stopAutoFocus } from './autofocus'
+import { autoFocusBlocker, autoFocusFrameFocus, autoFocusRequest, autoFocusRunning, type AutoFocusRuntime, defaultStepSize, handleAutoFocusEvent, refreshAutoFocus, NO_FOCUSER, startAutoFocus, stopAutoFocus } from './autofocus'
 import { cameraKey } from './capture'
 import { curveBounds, ticks } from './FocusCurve'
 
@@ -27,6 +27,7 @@ function summary(patch: Partial<AutoFocusSessionSummary> = {}): AutoFocusSession
 		measurementCount: 0,
 		verification: 'pending',
 		startedAt: 1000,
+		revision: 1,
 		...patch,
 	}
 }
@@ -48,10 +49,12 @@ function fakeFetch(handler: (url: string, init?: RequestInit) => Response | Prom
 test('mirrors the latest session of each camera and fetches its record when a measurement arrives', async () => {
 	const state = newState()
 	const key = cameraKey('c', 'cam')
-	const { request, requests } = fakeFetch(() => Response.json(details({ measurementCount: 1, measurements: [{ capture: 1, requestedPosition: 100, observedPosition: 100, hfd: 3, detectedCount: 9, acceptedCount: 8, elapsed: 5, warnings: [], time: 2 }] })))
+	const { request, requests } = fakeFetch(() => Response.json(details({ measurementCount: 1, revision: 2, measurements: [{ capture: 1, requestedPosition: 100, observedPosition: 100, hfd: 3, detectedCount: 9, acceptedCount: 8, elapsed: 5, warnings: [], time: 2 }] })))
 
 	handleAutoFocusEvent(state, { type: 'autofocus:updated', session: summary() }, request)
-	handleAutoFocusEvent(state, { type: 'autofocus:updated', session: summary({ measurementCount: 1 }) }, request)
+	handleAutoFocusEvent(state, { type: 'autofocus:updated', session: summary({ measurementCount: 1, revision: 2 }) }, request)
+	// A late event of an earlier revision never replaces the newer one.
+	handleAutoFocusEvent(state, { type: 'autofocus:updated', session: summary({ revision: 1 }) }, request)
 	await Bun.sleep(0)
 
 	expect(state.sessions[key]?.measurementCount).toBe(1)
@@ -63,18 +66,6 @@ test('mirrors the latest session of each camera and fetches its record when a me
 	expect(state.sessions[key]?.sessionId).toBe('s1')
 	expect(autoFocusRunning(state.sessions[key])).toBeTrue()
 	expect(autoFocusRunning(summary({ endedAt: 3000 }))).toBeFalse()
-})
-
-test('a late record with fewer measurements never replaces the known one, and an end does', async () => {
-	const state = newState()
-	const measurement = { capture: 1, requestedPosition: 100, observedPosition: 100, hfd: 3, detectedCount: 9, acceptedCount: 8, elapsed: 5, warnings: [], time: 2 }
-	state.details.s1 = details({ measurements: [measurement, { ...measurement, capture: 2 }] })
-
-	await loadAutoFocusSession(state, 's1', fakeFetch(() => Response.json(details({ measurements: [measurement] }))).request)
-	expect(state.details.s1.measurements).toHaveLength(2)
-
-	await loadAutoFocusSession(state, 's1', fakeFetch(() => Response.json(details({ state: 'completed', endedAt: 5000, measurements: [measurement, { ...measurement, capture: 2 }] }))).request)
-	expect(state.details.s1.endedAt).toBe(5000)
 })
 
 test('a newer session forgets the record of the previous one', () => {

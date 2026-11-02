@@ -2,7 +2,8 @@ import type { DomeMotionSession, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { deviceUrl } from '../http'
-import { followPress, type Press, type PressHolder, pressRunning, reconcilePress, releasePress, startPress } from '../press'
+import { followPress, type Press, refreshPressSessions, releasePress, type SessionHolder, startPress } from '../press'
+import { SnapshotRefreshes } from '../refresh'
 
 // Manual rotation of domes from this tab: the rotation sessions the server reports, started by any tab,
 // and the one press this tab holds, through the lease handling shared with the mount nudge (press.ts).
@@ -23,10 +24,7 @@ export interface DomePress extends Press {
 }
 
 // Manual rotation runtime of the tab.
-export interface DomeMotionRuntime extends PressHolder<DomePress> {
-	// Latest session of each dome, by connection id and device id, running or ended, started by any tab.
-	sessions: Record<string, DomeMotionSession>
-}
+export type DomeMotionRuntime = SessionHolder<DomePress, DomeMotionSession>
 
 // Manual rotation runtime of the tab.
 export const domeMotionRuntime = proxy<DomeMotionRuntime>({ sessions: {} })
@@ -34,8 +32,8 @@ export const domeMotionRuntime = proxy<DomeMotionRuntime>({ sessions: {} })
 // Message kept when a stop cannot reach the server.
 const UNREACHABLE = 'The server cannot be reached; the dome stops by itself once its lease expires'
 
-// Counter of session fetches; a response is applied only if no later fetch started.
-let generation = 0
+// Refreshes of the running sessions, ordered against the session events applied meanwhile, by dome key.
+const refreshes = new SnapshotRefreshes()
 
 // Returns the key of a dome: its connection id and exact device id.
 export function domeKey(connectionId: string, deviceId: string) {
@@ -78,25 +76,16 @@ export function handleDomeMotionEvent(runtime: DomeMotionRuntime, event: ServerE
 	const known = runtime.sessions[key]
 
 	// An event of an older session of the dome never replaces a newer one.
-	if (!known || known.token === session.token || session.startedAt >= known.startedAt) runtime.sessions[key] = session
+	if (!known || known.token === session.token || session.startedAt >= known.startedAt) {
+		runtime.sessions[key] = session
+		refreshes.updated(key)
+	}
+
 	followPress(runtime, session, domeMotionEndProblem)
 }
 
-// Replaces the running sessions with the server's list, which may have changed while the socket was
-// closed, and forgets a press of this tab the server no longer runs.
-export async function refreshDomeMotions(runtime: DomeMotionRuntime, request: typeof fetch = fetch) {
-	const current = ++generation
-
-	try {
-		const response = await request('/api/domes/motions')
-		if (!response.ok || current !== generation) return
-		const running = (await response.json()) as DomeMotionSession[]
-		if (current !== generation) return
-
-		for (const [key, session] of Object.entries(runtime.sessions)) if (pressRunning(session)) delete runtime.sessions[key]
-		for (const session of running) runtime.sessions[domeKey(session.connectionId, session.deviceId)] = session
-		reconcilePress(runtime, running)
-	} catch {
-		// The server is unreachable; the next socket open refreshes the sessions.
-	}
+// Replaces the running sessions with the server's list, which may have changed while the socket was closed, leaving
+// what an event changed meanwhile, and forgets a press of this tab that no longer runs (refreshPressSessions).
+export function refreshDomeMotions(runtime: DomeMotionRuntime, request: typeof fetch = fetch) {
+	return refreshPressSessions(runtime, '/api/domes/motions', ({ connectionId, deviceId }: DomeMotionSession) => domeKey(connectionId, deviceId), refreshes, request)
 }

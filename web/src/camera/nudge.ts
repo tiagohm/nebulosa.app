@@ -2,7 +2,8 @@ import type { MountNudgeDirection, MountNudgeSession, MountState, ServerEvent } 
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { deviceUrl, jsonInit, responseError } from '../http'
-import { followPress, type Press, pressRunning, reconcilePress, releasePress, startPress, stopPress } from '../press'
+import { followPress, type Press, pressRunning, refreshPressSessions, releasePress, startPress, stopPress } from '../press'
+import { SnapshotRefreshes } from '../refresh'
 
 // Mount Nudge runtime of the tab, over the press handling shared with the dome (press.ts): the mount the active
 // profile assigns to the MOUNT role, whose real state is the one the control runtime mirrors, the nudge sessions the
@@ -49,8 +50,8 @@ export const nudgeRuntime = proxy<NudgeRuntime>({ sessions: {}, sending: false }
 // Message kept when a stop cannot reach the server.
 const UNREACHABLE = 'The server cannot be reached; the mount stops by itself once its lease expires'
 
-// Counter of session fetches; a response is applied only if no later fetch started.
-let sessionsGeneration = 0
+// Refreshes of the running sessions, ordered against the session events applied meanwhile, by mount key.
+const refreshes = new SnapshotRefreshes()
 
 // Display name of each direction.
 export const NUDGE_DIRECTION_LABELS: Readonly<Record<MountNudgeDirection, string>> = {
@@ -121,25 +122,10 @@ export function watchNudgeMount(runtime: NudgeRuntime, target: NudgeTarget | und
 	runtime.error = undefined
 }
 
-// Replaces the running sessions with the server's list, which may have changed while the socket was
-// closed. A press of this tab that the server no longer runs has ended, so it is forgotten; one still
-// waiting for its start response is kept, since that response decides it.
-export async function refreshNudges(runtime: NudgeRuntime, request: typeof fetch = fetch) {
-	const current = ++sessionsGeneration
-
-	try {
-		const response = await request('/api/mounts/nudges')
-		if (!response.ok || current !== sessionsGeneration) return
-		const running = (await response.json()) as MountNudgeSession[]
-		if (current !== sessionsGeneration) return
-
-		for (const [key, session] of Object.entries(runtime.sessions)) if (nudgeRunning(session)) delete runtime.sessions[key]
-		for (const session of running) runtime.sessions[nudgeKey(session.connectionId, session.deviceId)] = session
-
-		reconcilePress(runtime, running)
-	} catch {
-		// The server is unreachable; the next socket open refreshes the sessions.
-	}
+// Replaces the running sessions with the server's list, which may have changed while the socket was closed, leaving
+// what an event changed meanwhile, and forgets a press of this tab that no longer runs (refreshPressSessions).
+export function refreshNudges(runtime: NudgeRuntime, request: typeof fetch = fetch) {
+	return refreshPressSessions(runtime, '/api/mounts/nudges', ({ connectionId, deviceId }: MountNudgeSession) => nudgeKey(connectionId, deviceId), refreshes, request)
 }
 
 // Applies a nudge session event; any other event is ignored. A session event of another press than this tab's only
@@ -153,7 +139,10 @@ export function handleNudgeEvent(runtime: NudgeRuntime, event: ServerEvent) {
 	const known = runtime.sessions[key]
 
 	// An event of an older session of the mount never replaces a newer one.
-	if (!known || known.token === session.token || session.startedAt >= known.startedAt) runtime.sessions[key] = session
+	if (!known || known.token === session.token || session.startedAt >= known.startedAt) {
+		runtime.sessions[key] = session
+		refreshes.updated(key)
+	}
 
 	followPress(runtime, session, nudgeEndProblem)
 }

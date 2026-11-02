@@ -1,5 +1,6 @@
 import type { LeasedSession } from 'api'
 import { jsonInit, responseError } from './http'
+import type { SnapshotRefreshes } from './refresh'
 
 // Client side of a manual motion held by a lease (the mount nudge and the manual rotation of a dome): the
 // one press a tab holds, its heartbeats, and its release. The server owns every session and stops it when
@@ -26,6 +27,12 @@ export interface PressHolder<P extends Press> {
 	press?: P
 	// Why this tab's latest command failed, or how its latest press ended abnormally; cleared by the next one.
 	error?: string
+}
+
+// Store of the sessions of one kind of leased motion, started by any tab, and of the one press of this tab.
+export interface SessionHolder<P extends Press, S extends LeasedSession> extends PressHolder<P> {
+	// Latest session of each device, by device key, running or ended.
+	sessions: Record<string, S>
 }
 
 // Response of an accepted press: the session and the interval of the heartbeats, in milliseconds.
@@ -147,9 +154,32 @@ export function followPress<P extends Press, S extends LeasedSession>(holder: Pr
 	}
 }
 
-// Forgets the press of this tab when the server's list of running sessions no longer has it; a press
-// still waiting for its start response is kept, since that response decides it.
-export function reconcilePress<P extends Press>(holder: PressHolder<P>, running: readonly Pick<LeasedSession, 'token'>[]) {
-	const press = holder.press
-	if (press && press.phase !== 'starting' && !running.some((session) => session.token === press.token)) forgetPress(holder, press.token)
+// Replaces the running sessions of a holder with the server's list at url, which may have changed while the socket was
+// closed, leaving the devices whose events refreshes recorded during the request as those events set them, so a session
+// that ended meanwhile is never shown running again. keyOf returns the device key of a session. A press of this tab
+// that then no longer runs has ended, so it is forgotten; one still waiting for its start response is kept, since that
+// response decides it. A response is dropped when another refresh of refreshes started meanwhile.
+export async function refreshPressSessions<P extends Press, S extends LeasedSession>(holder: SessionHolder<P, S>, url: string, keyOf: (session: S) => string, refreshes: SnapshotRefreshes, request: typeof fetch = fetch) {
+	const token = refreshes.start()
+
+	try {
+		const response = await request(url)
+		if (!response.ok || !refreshes.current(token)) return
+		const running = (await response.json()) as S[]
+		if (!refreshes.current(token)) return
+
+		for (const [key, session] of Object.entries(holder.sessions)) if (pressRunning(session) && !refreshes.changed(key)) delete holder.sessions[key]
+
+		for (const session of running) {
+			const key = keyOf(session)
+			if (!refreshes.changed(key)) holder.sessions[key] = session
+		}
+
+		const press = holder.press
+		if (press && press.phase !== 'starting' && !Object.values(holder.sessions).some((session) => session.token === press.token && pressRunning(session))) forgetPress(holder, press.token)
+	} catch {
+		// The server is unreachable; the next socket open refreshes the sessions.
+	} finally {
+		refreshes.end(token)
+	}
 }

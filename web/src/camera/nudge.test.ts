@@ -156,6 +156,19 @@ test('a socket reopen never restores a press the server no longer runs', async (
 	expect(state.sessions).toEqual({})
 })
 
+test('a socket reopen leaves a nudge an event ended during its request', async () => {
+	const state = newState()
+	const snapshot = Promise.withResolvers<Response>()
+	const request = (() => snapshot.promise) as unknown as typeof fetch
+
+	const refreshing = refreshNudges(state, request)
+	handleNudgeEvent(state, { type: 'mount:nudge', session: session({ phase: 'stopped', stopConfirmed: true, endedAt: 2000 }) })
+	snapshot.resolve(Response.json([session()]))
+	await refreshing
+
+	expect(state.sessions[nudgeKey('c', 'm')]?.phase).toBe('stopped')
+})
+
 test('STOP ends this tab press and the nudge another tab runs on the mount', async () => {
 	const state = newState()
 	state.sessions[nudgeKey('c', 'm')] = session({ token: 'other-tab' })

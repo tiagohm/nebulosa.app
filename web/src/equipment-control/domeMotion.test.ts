@@ -65,3 +65,17 @@ test('a socket reopen forgets a press the server no longer runs', async () => {
 	expect(runtime.press).toBeUndefined()
 	expect(runtime.sessions).toEqual({})
 })
+
+test('a socket reopen keeps a press whose start event arrived during its request', async () => {
+	const runtime = proxy<DomeMotionRuntime>({ sessions: {}, press: { token: 't', connectionId: 'c', deviceId: 'd', direction: 'CLOCKWISE', phase: 'moving' } })
+	const snapshot = Promise.withResolvers<Response>()
+	const request = (() => snapshot.promise) as unknown as typeof fetch
+
+	const refreshing = refreshDomeMotions(runtime, request)
+	handleDomeMotionEvent(runtime, { type: 'dome:motion', session: session() })
+	snapshot.resolve(Response.json([]))
+	await refreshing
+
+	expect(runtime.press?.token).toBe('t')
+	expect(runtime.sessions[domeKey('c', 'd')]?.phase).toBe('moving')
+})

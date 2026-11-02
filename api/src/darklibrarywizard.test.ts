@@ -59,7 +59,7 @@ function flooded(measurement: DarkFrameMeasurement): DarkFrameMeasurement {
 	return { ...measurement, planes: measurement.planes.map((plane) => ({ ...plane, clipped: 0.5 })) }
 }
 
-async function setup(edit: Parameters<typeof analyzer>[0] = (measurement) => measurement, plans = join(mkdtempSync(join(root, 'plans-')), 'plans')) {
+async function setup(edit: Parameters<typeof analyzer>[0] = (measurement) => measurement) {
 	const manager = new ConnectionManager()
 	disposables.push(manager)
 	const { id } = await manager.connect({ type: 'SIMULATOR' })
@@ -80,7 +80,7 @@ async function setup(edit: Parameters<typeof analyzer>[0] = (measurement) => mea
 	const covers = new CoverCommands(manager.devices, resolve, operations)
 	disposables.push(covers)
 	const events: DarkLibraryWizardEvent[] = []
-	const store = new DarkPlanStore(plans)
+	const store = new DarkPlanStore(AppDatabase.memory())
 	const endedPlans: string[] = []
 	const wizard = new DarkLibraryWizardSessions(
 		manager.devices,
@@ -148,7 +148,6 @@ async function setup(edit: Parameters<typeof analyzer>[0] = (measurement) => mea
 		cover,
 		coverDevice: { connectionId: id, deviceId: coverId },
 		directory: mkdtempSync(join(root, 'darks-')),
-		plans,
 		summary,
 		ended,
 		released,
@@ -233,7 +232,7 @@ describe('Dark Library Wizard sessions', () => {
 		await waitUntil(() => endedPlans.length > 0)
 
 		expect(endedPlans).toEqual([planId])
-		expect(await store.plan(planId)).toMatchObject({ version: 1, purpose: 'darkFlat', generateMasters: true })
+		expect(await store.plan(planId)).toMatchObject({ purpose: 'darkFlat', generateMasters: true })
 		expect(await store.detail(planId, 10)).toMatchObject({ status: 'completed', missing: 0 })
 	})
 
@@ -464,12 +463,10 @@ describe('Dark Library Wizard sessions', () => {
 	})
 
 	test('a failure to record the plan ends the session and counts nothing', async () => {
-		const { id, cameraId, wizard, directory, summary, ended, plans } = await setup()
-		const { planId } = await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 1, count: 2 }] }))
-		rmSync(join(plans, `${planId}.journal.jsonl`))
-		mkdirSync(join(plans, `${planId}.journal.jsonl`))
+		const { id, cameraId, wizard, directory, summary, ended, store } = await setup()
+		await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 1, count: 2 }] }))
+		store.database.db.run('PRAGMA query_only = ON')
 		await waitUntil(ended, 60000)
 		expect(summary()).toMatchObject({ state: 'failed', code: 'manifestUnavailable', groups: [{ accepted: 0 }] })
-		rmSync(join(plans, `${planId}.journal.jsonl`), { recursive: true })
 	})
 })

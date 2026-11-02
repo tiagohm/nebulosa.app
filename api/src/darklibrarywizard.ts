@@ -31,7 +31,7 @@ import {
 	type DarkTemperatureTrace,
 	startTemperatureTrace,
 } from './darklibrarywizard.analysis'
-import { DARK_PLAN_VERSION, type DarkCapturePlan, type DarkFrameRecord, type DarkFrameVerdict, type DarkGroup, type DarkGroupProgress, type DarkPlanCapture, type DarkPlanGroup, type DarkPlanStore, type DarkProtection, type DarkThermalPolicy, REJECTED_DIRECTORY, STAGING_DIRECTORY } from './darklibrarywizard.store'
+import { type DarkCapturePlan, type DarkFrameRecord, type DarkFrameVerdict, type DarkGroup, type DarkGroupProgress, type DarkPlanCapture, type DarkPlanGroup, type DarkPlanStore, type DarkProtection, type DarkThermalPolicy, REJECTED_DIRECTORY, STAGING_DIRECTORY } from './darklibrarywizard.store'
 import type { DeviceRegistry } from './devices'
 import { publishFrame } from './flatwizard'
 import { errorResponse } from './http'
@@ -63,7 +63,7 @@ import type { OperationDevice, OperationProgressReporter, OperationRegistry } fr
 // directory of its group and never counts. A suspicion of light never rejects a frame, because only the operator can say
 // whether the protection failed: on the first frame of a group, and on two suspicious frames in a row, the session waits for
 // a decision. Continuing records the frame as accepted with warnings; stopping quarantines it. An accepted frame is
-// journaled, published without ever replacing a file, and only then committed, so it counts once. Raw pixels are never modified.
+// recorded, published without ever replacing a file, and only then committed, so it counts once. Raw pixels are never modified.
 //
 // Pausing takes effect between frames and keeps every device held, since releasing them would let the protection be
 // undone unnoticed. Stopping cancels the operation at once: the exposure in flight is lost and published files stay.
@@ -574,7 +574,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 		const device = (entry: Device) => ({ hardwareId: resourceKey(entry), name: entry.name })
 
 		return {
-			version: DARK_PLAN_VERSION,
 			planId,
 			createdAt: Date.now(),
 			camera: { hardwareId, name: camera.name, driver: { executable: camera.driver.executable, version: camera.driver.version }, sensor: sensorOf(camera) },
@@ -605,7 +604,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 			acceptedWithWarnings: 0,
 			rejected: 0,
 			incomplete: 0,
-			lost: 0,
 			missing: count,
 			state: 'pending',
 			attempted: 0,
@@ -1078,7 +1076,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return successfulOperationResult(undefined)
 	}
 
-	// Saves an accepted frame: journaled first, then published without replacing anything, then committed, so it counts only
+	// Saves an accepted frame: recorded first, then published without replacing anything, then committed, so it counts only
 	// once the file and the record both exist. A failure leaves the frame uncounted.
 	async #save(session: Session, index: number, frame: ExaminedFrame, acknowledged: boolean): Promise<OperationResult<void>> {
 		const group = session.plan.groups[index]
@@ -1146,7 +1144,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		this.#update(session, { lastAttempt: attempt })
 	}
 
-	// Appends a record to the journal of the plan. A record that cannot be written ends the session: it would otherwise run
+	// Records a change of the plan. A record that cannot be written ends the session: it would otherwise run
 	// on with frames that cannot be recovered.
 	async #record(session: Session, record: Parameters<DarkPlanStore['append']>[1]): Promise<OperationResult<void>> {
 		try {
@@ -1157,7 +1155,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		}
 	}
 
-	// Appends a record for an outcome nothing depends on anymore, reporting a failure only in the log.
+	// Records a change for an outcome nothing depends on anymore, reporting a failure only in the log.
 	async #recordQuietly(plan: DarkCapturePlan, record: Parameters<DarkPlanStore['append']>[1]) {
 		try {
 			await this.store.append(plan.planId, record)

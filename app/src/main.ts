@@ -1,4 +1,4 @@
-import { type AboutInfo, closeDatabase, createAboutRoutes, identifyJplClient, routes, startCalibrationLibrary, startDatabase, startEarthOrientation, websocket } from 'api'
+import { type AboutInfo, closeDatabase, createAboutRoutes, identifyJplClient, routes, startDatabase, startEarthOrientation, startStores, websocket } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
 
@@ -38,8 +38,9 @@ identifyJplClient(version)
 // The first request already reads the same Earth orientation data as every later one.
 await startEarthOrientation()
 
-// Masters queued before the server stopped resume without anyone opening the tool.
-void startCalibrationLibrary()
+// No session ever works on a Dark Library plan a previous run left behind, and masters queued before the server stopped
+// resume without anyone opening the tool.
+await startStores()
 
 // HTTP server listening on APP_HOST (default localhost) and APP_PORT (default 7000).
 const server = Bun.serve({

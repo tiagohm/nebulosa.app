@@ -604,7 +604,7 @@ const darv = new DarvSessions(connections.devices, (id) => connections.client(id
 
 // Plans of the Dark Library Wizard. Reconciliation at load claims every running plan, so the process keeps a single store,
 // and the Calibration Library reads the same one.
-const darkPlans = new DarkPlanStore()
+const darkPlans = new DarkPlanStore(database)
 
 // Calibration frames and masters, which need no connection and hold no device; automatic masters wait for the camera operations.
 const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(), darkPlans, publish, () => operations.running().some(({ kind }) => kind.startsWith('camera.')))
@@ -701,10 +701,14 @@ export async function startEarthOrientation() {
 	installEarthOrientation(earthOrientation)
 }
 
-// Opens the Calibration Library, so the masters the wizards asked for are queued before anyone opens the tool. Called by the app before it serves;
-// a test that only imports this module opens no file. Never rejects: a request opens it again and reports the failure.
-export async function startCalibrationLibrary() {
-	await calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))
+// Reconciles the Dark Library Wizard plans a previous run left behind with their files, so no session of this process
+// ever works on one, then opens the Calibration Library in the background, so the masters the wizards asked for are
+// queued before anyone opens the tool. Called by the app after startDatabase and before it serves; a test that only
+// imports this module opens no file. Never rejects: a plan that cannot be reconciled is reported and tried again on the
+// next start, and a request opens the library again and reports its failure.
+export async function startStores() {
+	await darkPlans.reconcile()
+	void calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))
 }
 
 // Names the running version to JPL, as its fair-use policy asks of automated clients. Called by the app before it serves,

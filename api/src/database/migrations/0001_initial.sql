@@ -332,3 +332,82 @@ CREATE TABLE pointing_verifications (
 	UNIQUE (model_id, revision_id, position),
 	FOREIGN KEY (model_id, revision_id) REFERENCES pointing_revisions (model_id, revision_id) ON DELETE CASCADE
 ) STRICT;
+
+-- Plans of the Dark Library Wizard (DarkPlanStore): the immutable specification of each plan, the state of its latest
+-- session, and every frame it published or quarantined. A frame counts only once committed: it is recorded as
+-- publishing before its file is linked, and a plan left with such a frame, or running or paused, is reconciled from the
+-- files when the server starts. The frames themselves are files of the output directory. Kept until deleted by hand.
+CREATE TABLE dark_plans (
+	-- Id of the plan.
+	plan_id TEXT PRIMARY KEY,
+	-- When it was created, Unix milliseconds (UTC).
+	created_at INTEGER NOT NULL,
+	-- Absolute directory the frames are saved under.
+	directory TEXT NOT NULL,
+	-- What the frames are for: NULL for an ordinary dark.
+	purpose TEXT CHECK (purpose IS NULL OR purpose = 'darkFlat'),
+	-- Whether the Calibration Library builds the masters of the complete groups once the acquisition ends (0 or 1).
+	generate_masters INTEGER NOT NULL CHECK (generate_masters IN (0, 1)),
+	-- The rest of the specification: camera, protection devices, capture settings, protection, thermal protocol, and
+	-- rejections allowed per group (DarkCapturePlan without its id, creation, directory, groups, purpose, and masters).
+	spec TEXT NOT NULL CHECK (json_valid(spec)),
+	-- State of the acquisition, why the latest session ended (NULL when nothing says), and the session and operation
+	-- recorded last (NULL before any).
+	status TEXT NOT NULL CHECK (status IN ('running', 'paused', 'interrupted', 'completed', 'stopped', 'failed')),
+	status_reason TEXT,
+	session_id TEXT,
+	operation_id TEXT,
+	-- What the latest session could not restore: [text].
+	cleanup_warnings TEXT NOT NULL CHECK (json_valid(cleanup_warnings)),
+	-- When the state, the frames that count, or the cleanup warnings last changed, Unix milliseconds (UTC).
+	updated_at INTEGER NOT NULL
+) STRICT;
+
+-- Groups of a plan, in acquisition order.
+CREATE TABLE dark_groups (
+	plan_id TEXT NOT NULL REFERENCES dark_plans (plan_id) ON DELETE CASCADE,
+	-- Id of the group, unique in the plan.
+	group_id TEXT NOT NULL,
+	-- Order of the group in the plan, from 0.
+	position INTEGER NOT NULL,
+	-- Exact identity of the settings of its frames (darkGroupKey).
+	key TEXT NOT NULL,
+	-- Exposure in seconds, and target sensor temperature in degrees Celsius (NULL when not controlled).
+	exposure REAL NOT NULL,
+	temperature REAL,
+	-- Accepted frames required; at least 1.
+	count INTEGER NOT NULL,
+	-- Absolute directory of its frames.
+	directory TEXT NOT NULL,
+	PRIMARY KEY (plan_id, group_id),
+	UNIQUE (plan_id, position)
+) STRICT;
+
+-- Frames of a plan: being published, committed, or quarantined in the rejected directory of their group.
+CREATE TABLE dark_frames (
+	plan_id TEXT NOT NULL,
+	-- Id of the frame, unique in the plan.
+	frame_id TEXT NOT NULL,
+	group_id TEXT NOT NULL,
+	-- Number of the frame among the files of its group, from 1, never reused.
+	sequence INTEGER NOT NULL,
+	-- publishing until its file is linked; committed counts; rejected never counts.
+	state TEXT NOT NULL CHECK (state IN ('publishing', 'committed', 'rejected')),
+	-- Order in which the frame was committed or rejected within its plan, from 1; NULL while publishing.
+	position INTEGER,
+	-- Outcome of its examination (DarkFrameVerdict).
+	verdict TEXT NOT NULL CHECK (verdict IN ('accepted', 'acceptedWithWarnings', 'rejected', 'incomplete')),
+	-- Absolute path of its file, and the one it was staged at while it could still be there (NULL otherwise).
+	path TEXT NOT NULL,
+	staged_path TEXT,
+	-- Size of its file in bytes, and when its exposure started, Unix milliseconds (UTC).
+	size INTEGER NOT NULL,
+	time INTEGER NOT NULL,
+	-- What its examination measured (DarkFrameAssessment with its planes, header, temperature trace, acknowledgement,
+	-- and the reason it never was examined).
+	assessment TEXT NOT NULL CHECK (json_valid(assessment)),
+	PRIMARY KEY (plan_id, frame_id),
+	UNIQUE (plan_id, group_id, sequence),
+	UNIQUE (plan_id, position),
+	FOREIGN KEY (plan_id, group_id) REFERENCES dark_groups (plan_id, group_id) ON DELETE CASCADE
+) STRICT;

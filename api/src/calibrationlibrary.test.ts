@@ -11,6 +11,7 @@ import { integrateMaster, IntegrationError, type IntegrationFrame, type Integrat
 import type { Integrator } from './calibrationlibrary.jobs'
 import { CalibrationLibraryStore, MANIFEST_FILE, MASTER_FILE } from './calibrationlibrary.store'
 import { type DarkCapturePlan, type DarkFrameRecord, DarkPlanStore, STAGING_DIRECTORY } from './darklibrarywizard.store'
+import { AppDatabase } from './database'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-calibration-test-'))
 const libraries: CalibrationLibrary[] = []
@@ -49,10 +50,15 @@ function directory(name: string) {
 	return path
 }
 
+// Database of the plans of each directory, kept so a library opened again reads the same plans.
+const databases = new Map<string, AppDatabase>()
+
 // A library in a directory of its own, over a plan store of its own.
 function open(integrator?: Integrator, busy?: () => boolean, base = directory('library')) {
 	const events: CalibrationLibraryEvent[] = []
-	const plans = new DarkPlanStore(join(base, 'plans'))
+	const database = databases.get(base) ?? AppDatabase.memory()
+	databases.set(base, database)
+	const plans = new DarkPlanStore(database)
 	const store = new CalibrationLibraryStore(join(base, 'library'))
 	const library = new CalibrationLibrary(store, plans, (event) => events.push(event), busy, integrator)
 	libraries.push(library)
@@ -92,7 +98,6 @@ async function plan(plans: DarkPlanStore, base: string, frames: number, required
 	mkdirSync(join(group.directory, STAGING_DIRECTORY), { recursive: true })
 
 	const dark: DarkCapturePlan = {
-		version: 1,
 		planId: 'plan',
 		createdAt: 1,
 		camera: { hardwareId: 'camera', name: 'Camera', driver: { executable: 'x', version: '1' } },
@@ -153,7 +158,7 @@ describe('plans', () => {
 	test('indexes accepted frames without changing a plan, and groups them with their exact settings', async () => {
 		const { library, plans, base } = open(local)
 		await plan(plans, base, 3, 3)
-		const before = hashes(join(base, 'plans'))
+		const before = await plans.detail('plan', 100)
 		const framesBefore = hashes(join(base, 'frames'))
 
 		const { items, total } = await library.groups({}, 0, 50)
@@ -165,7 +170,7 @@ describe('plans', () => {
 		expect(items[0].metadata.setTemperature).toEqual({ value: -10, evidence: 'planDeclared' })
 		expect(items[0].readiness).toBe('ready')
 		expect(library.snapshot().cameras).toEqual([{ id: 'camera', name: 'Camera' }])
-		expect(hashes(join(base, 'plans'))).toEqual(before)
+		expect(await plans.detail('plan', 100)).toEqual(before)
 		expect(hashes(join(base, 'frames'))).toEqual(framesBefore)
 	})
 
@@ -198,7 +203,6 @@ describe('plans', () => {
 
 		await library.refresh()
 		expect((await library.groups({}, 0, 50)).items[0].readiness).toBe('missingFiles')
-		expect((await plans.frames('plan'))!.lost.size).toBe(0)
 
 		renameSync(`${path}.away`, path)
 		await library.refresh()

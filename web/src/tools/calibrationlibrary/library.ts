@@ -41,7 +41,7 @@ export const SOURCE_STATUS_TONES: Readonly<Record<SourceStatus, StatusTone>> = {
 export const ORIGIN_LABELS: Readonly<Record<SourceOrigin, string>> = { darkPlan: 'Dark Library', flatWizard: 'Flat Wizard', import: 'Imported' }
 
 // Label of each state of a master.
-export const PRODUCT_STATUS_LABELS: Readonly<Record<ProductStatus, string>> = { ready: 'Ready', warning: 'Needs Review', stale: 'Stale', unavailable: 'Unavailable' }
+export const PRODUCT_STATUS_LABELS: Readonly<Record<ProductStatus, string>> = { ready: 'Ready', warning: 'Warnings', stale: 'Stale', unavailable: 'Unavailable' }
 
 // Tone of each state of a master.
 export const PRODUCT_STATUS_TONES: Readonly<Record<ProductStatus, StatusTone>> = { ready: 'success', warning: 'warning', stale: 'warning', unavailable: 'danger' }

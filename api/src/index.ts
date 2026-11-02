@@ -697,6 +697,17 @@ export function closeDatabase() {
 	database.close()
 }
 
+// Longest wait for the running operations to stop before the server exits, in milliseconds: within the 5 s Windows gives
+// a console window that is being closed, leaving time to close the database.
+const STOP_TIMEOUT = 3000
+
+// Cancels every running device operation and waits, at most STOP_TIMEOUT, for each one to stop what it commanded, so a
+// server about to exit never leaves a device moving, such as a mount under a held nudge, whose driver keeps the motion
+// once the connection closes. Called by the app before it closes the database; never rejects.
+export function stopOperations() {
+	return operations.stop(STOP_TIMEOUT)
+}
+
 // Reads the cached Earth orientation tables and makes them the default of the toolkit, so the Sky, the mounts, and the pointing
 // models read the same UT1 as the converter, and starts a refresh of old tables, so they are kept current even if nothing ever
 // opens the converter or the clock. Called by the app before it serves; a test that only imports this module keeps the empty

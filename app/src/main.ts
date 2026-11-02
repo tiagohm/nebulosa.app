@@ -1,11 +1,11 @@
-import { type AboutInfo, closeDatabase, createAboutRoutes, identifyJplClient, routes, startDatabase, startEarthOrientation, startStores, websocket } from 'api'
+import { type AboutInfo, closeDatabase, createAboutRoutes, identifyJplClient, routes, startDatabase, startEarthOrientation, startStores, stopOperations, websocket } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
 
 // Entry point of the application: serves the API routes, the /api/ws WebSocket, and the web UI from a
 // single Bun server. Every path the API does not handle falls back to the UI's HTML entry point. A server whose
-// operational database cannot be opened stops before serving. A stop signal ends the process once the database was
-// closed, which writes its WAL back into the file.
+// operational database cannot be opened stops before serving. A stop signal ends the process once the running device
+// operations were stopped and the database was closed, which writes its WAL back into the file.
 
 // Whether the server runs in development mode (HMR and the browser console); false when NODE_ENV is production.
 const development = process.env.NODE_ENV !== 'production'
@@ -55,13 +55,18 @@ const server = Bun.serve({
 	websocket,
 })
 
-// Each signal is handled once, replacing the handler of the previous hot reload.
+// Stops the device work still running, so no device is left moving, then closes the database and ends the process.
+async function stop() {
+	await stopOperations()
+	closeDatabase()
+	process.exit(0)
+}
+
+// Each signal is handled once, replacing the handler of the previous hot reload; a second one while the operations stop
+// ends the process at once, as the default handler does.
 for (const signal of STOP_SIGNALS) {
 	process.removeAllListeners(signal)
-	process.once(signal, () => {
-		closeDatabase()
-		process.exit(0)
-	})
+	process.once(signal, () => void stop())
 }
 
 console.info(`Nebulosa is running at ${server.url}`)

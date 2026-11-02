@@ -56,6 +56,33 @@ test('one device is granted to one operation at a time, whichever service starts
 	expect(operations.arbiter.availability(resourceKey(mount))).toBe('available')
 })
 
+test('a stop cancels every operation and waits for its cleanup, but never longer than its timeout', async () => {
+	const { operations, mount } = await setup()
+	const stopped = Promise.withResolvers<void>()
+
+	// Holds the mount until aborted, then takes cleanup time to stop it.
+	const slow = operations.coordinator.start('test.slow', [{ key: resourceKey(mount), device: mount }], async (context: OperationContext) => {
+		const aborted = Promise.withResolvers<void>()
+		context.signal.addEventListener('abort', () => aborted.resolve(), { once: true })
+		await aborted.promise
+		await stopped.promise
+		return successfulOperationResult(undefined)
+	})
+
+	const start = performance.now()
+	await operations.stop(50)
+	expect(performance.now() - start).toBeGreaterThanOrEqual(45)
+	expect(operations.arbiter.availability(resourceKey(mount))).not.toBe('available')
+
+	stopped.resolve()
+	expect(await slow.result).toMatchObject({ ok: false, reason: 'aborted' })
+
+	const quick = hold(operations, mount)
+	await operations.stop(10000)
+	expect(await quick.result).toMatchObject({ ok: false, reason: 'aborted' })
+	expect(operations.arbiter.availability(resourceKey(mount))).toBe('available')
+})
+
 test('lists running operations and publishes their outcome', async () => {
 	const { id, operations, events, mount, mountId } = await setup()
 

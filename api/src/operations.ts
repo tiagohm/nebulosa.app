@@ -196,6 +196,22 @@ export class OperationRegistry implements Disposable {
 		this.listener({ type: 'operation:updated', operation: record })
 	}
 
+	// Cancels every running operation and resolves once each one finished its cleanup, which stops what it commanded (a
+	// held motion, a slew, an exposure), or once timeout milliseconds passed, whichever comes first, so a cleanup that
+	// never ends cannot hold its caller. Never rejects.
+	async stop(timeout: number): Promise<void> {
+		const { promise, resolve } = Promise.withResolvers<void>()
+		const timer = setTimeout(resolve, timeout)
+
+		void this.coordinator.cancelAll().then(resolve, (error: unknown) => {
+			console.error('The running operations could not be stopped', error)
+			resolve()
+		})
+
+		await promise
+		clearTimeout(timer)
+	}
+
 	// Cancels every running operation and stops following the devices.
 	[Symbol.dispose]() {
 		void this.coordinator.cancelAll()

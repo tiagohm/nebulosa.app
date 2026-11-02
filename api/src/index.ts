@@ -607,7 +607,7 @@ const darv = new DarvSessions(connections.devices, (id) => connections.client(id
 const darkPlans = new DarkPlanStore(database)
 
 // Calibration frames and masters, which need no connection and hold no device; automatic masters wait for the camera operations.
-const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(), darkPlans, publish, () => operations.running().some(({ kind }) => kind.startsWith('camera.')))
+const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(database), darkPlans, publish, () => operations.running().some(({ kind }) => kind.startsWith('camera.')))
 
 // Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
 // moving the wheels, driving the panels, and closing and opening the covers with the commanders of their commands,

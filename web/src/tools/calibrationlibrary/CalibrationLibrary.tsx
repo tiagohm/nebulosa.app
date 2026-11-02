@@ -133,7 +133,6 @@ export function CalibrationLibrary() {
 	return (
 		<WorkspaceLayout workspace="tools" title="Calibration Library" actions={actions} panelState={panelState} panel={panel ? { title: 'Details', content: panel } : undefined}>
 			<div className="flex h-full flex-col gap-3 overflow-y-auto bg-base-000 p-3">
-				{runtime.summary?.unavailable && <Notice error>A newer version of Nebulosa owns this catalog. It was left as it is.</Notice>}
 				{runtime.errors.import && <Notice error>{runtime.errors.import}</Notice>}
 				{runtime.errors.refresh && <Notice error>{runtime.errors.refresh}</Notice>}
 				<div className="flex flex-wrap items-end gap-3">
@@ -504,7 +503,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 					</Button>
 					<ConfirmButton
 						title={`Delete v${master.revision}?`}
-						message="Its file and manifest are deleted from the disk, and its number is never used again. A master that was corrected by it must be deleted first."
+						message="Its file is deleted from the disk, and its number is never used again. A master that was corrected by it must be deleted first."
 						confirmLabel="Delete"
 						disabled={pending[key] === true}
 						onConfirm={() => void remove(master.masterId, master.revision)}

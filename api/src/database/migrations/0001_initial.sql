@@ -411,3 +411,122 @@ CREATE TABLE dark_frames (
 	UNIQUE (plan_id, position),
 	FOREIGN KEY (plan_id, group_id) REFERENCES dark_groups (plan_id, group_id) ON DELETE CASCADE
 ) STRICT;
+
+-- Frames of the Calibration Library (CalibrationLibraryStore), by reference: frames of the Dark Library plans, frames
+-- the Flat Wizard published, and imported files. What an operator declared (an override, a role, an exclusion) is the
+-- current state of the row. Kept until an operator deletes the frame with its file.
+CREATE TABLE calibration_sources (
+	-- Stable id, derived from its path.
+	source_id TEXT PRIMARY KEY,
+	-- Id of its group, and its compatibility key.
+	group_id TEXT NOT NULL,
+	key TEXT NOT NULL,
+	-- Role (CalibrationKind).
+	kind TEXT NOT NULL,
+	-- Hardware id of its camera; empty when unknown.
+	camera_id TEXT NOT NULL,
+	-- State of its file.
+	status TEXT NOT NULL CHECK (status IN ('available', 'missing', 'changed', 'corrupt')),
+	-- Name of its file in lower case, for ordering and search.
+	name TEXT NOT NULL,
+	-- Where it came from, and the plan, session, or import it came from (NULL when none).
+	origin TEXT NOT NULL CHECK (origin IN ('darkPlan', 'flatWizard', 'import')),
+	origin_id TEXT,
+	-- Absolute path and format of its file; never published in an event or a list.
+	path TEXT NOT NULL,
+	format TEXT NOT NULL CHECK (format IN ('fits', 'xisf')),
+	-- Size in bytes and modification time in Unix milliseconds of its file when indexed, and its SHA-256 once a job read
+	-- it at that size and time (NULL before).
+	bytes INTEGER NOT NULL,
+	mtime_ms REAL NOT NULL,
+	digest TEXT,
+	-- Why an operator left it out of masters; NULL when included.
+	excluded_reason TEXT,
+	-- Frames its plan required in its group; NULL without a plan.
+	required INTEGER,
+	-- Whether a master can read it at all (0 or 1).
+	supported INTEGER NOT NULL CHECK (supported IN (0, 1)),
+	-- What is known about it, each value with its evidence (CalibrationMetadata), and what should be said about it: [text].
+	metadata TEXT NOT NULL CHECK (json_valid(metadata)),
+	warnings TEXT NOT NULL CHECK (json_valid(warnings))
+) STRICT;
+
+CREATE INDEX calibration_sources_group ON calibration_sources (group_id);
+CREATE INDEX calibration_sources_filter ON calibration_sources (kind, camera_id, status);
+
+-- Masters of the Calibration Library: the highest revision each one ever had, so a number is never used again, even
+-- after its revision was deleted or a crash interrupted its publication.
+CREATE TABLE calibration_masters (
+	master_id TEXT PRIMARY KEY,
+	last_revision INTEGER NOT NULL
+) STRICT;
+
+-- Revisions of the masters. A revision is publishing from the moment its number is taken until its directory is in
+-- products/, and deleting from the moment an operator deletes it until its directory is gone; the start reconciles both
+-- from the disk. Only published revisions are listed. Its FITS file is products/<masterId>/vNNNN/master.fit.
+CREATE TABLE calibration_revisions (
+	master_id TEXT NOT NULL REFERENCES calibration_masters (master_id),
+	-- Revision, from 1.
+	revision INTEGER NOT NULL,
+	publication TEXT NOT NULL CHECK (publication IN ('publishing', 'published', 'deleting')),
+	-- State now, and the one it was published with, which it returns to when what made it unavailable or stale is gone.
+	status TEXT NOT NULL CHECK (status IN ('ready', 'warning', 'stale', 'unavailable')),
+	published_status TEXT NOT NULL CHECK (published_status IN ('ready', 'warning')),
+	-- Role, camera hardware id and filter name (empty when unknown), id and compatibility key of its group.
+	kind TEXT NOT NULL,
+	camera_id TEXT NOT NULL,
+	filter TEXT NOT NULL,
+	group_id TEXT NOT NULL,
+	key TEXT NOT NULL,
+	-- Identity of its inputs and recipe, which a repeated request answers with.
+	fingerprint TEXT NOT NULL,
+	-- When it was published, Unix milliseconds (UTC).
+	created_at INTEGER NOT NULL,
+	-- SHA-256 and size in bytes of its FITS file.
+	content_digest TEXT NOT NULL,
+	bytes INTEGER NOT NULL,
+	-- The rest of the master (CalibrationMaster): what its pixels contain, units, usage, full scale in DN, recipe,
+	-- metadata, diagnostics, and what an operator accepted.
+	master TEXT NOT NULL CHECK (json_valid(master)),
+	PRIMARY KEY (master_id, revision)
+) STRICT;
+
+CREATE INDEX calibration_revisions_fingerprint ON calibration_revisions (fingerprint);
+
+-- Frames of a revision, in integration order, with what the job read; a frame deleted later stays named here.
+CREATE TABLE calibration_revision_sources (
+	master_id TEXT NOT NULL,
+	revision INTEGER NOT NULL,
+	-- Order of the frame in the integration, from 0.
+	position INTEGER NOT NULL,
+	source_id TEXT NOT NULL,
+	-- SHA-256 of the frame as the job read it, and the name of its file.
+	digest TEXT NOT NULL,
+	name TEXT NOT NULL,
+	PRIMARY KEY (master_id, revision, position),
+	FOREIGN KEY (master_id, revision) REFERENCES calibration_revisions (master_id, revision) ON DELETE CASCADE
+) STRICT;
+
+-- Masters a revision was corrected with. A revision another one depends on cannot be deleted.
+CREATE TABLE calibration_revision_dependencies (
+	master_id TEXT NOT NULL,
+	revision INTEGER NOT NULL,
+	-- Order of the dependency, from 0.
+	position INTEGER NOT NULL,
+	dependency_master_id TEXT NOT NULL,
+	dependency_revision INTEGER NOT NULL,
+	-- SHA-256 of the FITS file of the dependency when it was used.
+	digest TEXT NOT NULL,
+	PRIMARY KEY (master_id, revision, position),
+	FOREIGN KEY (master_id, revision) REFERENCES calibration_revisions (master_id, revision) ON DELETE CASCADE,
+	FOREIGN KEY (dependency_master_id, dependency_revision) REFERENCES calibration_revisions (master_id, revision) ON DELETE RESTRICT
+) STRICT;
+
+CREATE INDEX calibration_revision_dependencies_target ON calibration_revision_dependencies (dependency_master_id, dependency_revision);
+
+-- The revision an operator prefers for each master; it goes with that revision.
+CREATE TABLE calibration_preferred (
+	master_id TEXT PRIMARY KEY,
+	revision INTEGER NOT NULL,
+	FOREIGN KEY (master_id, revision) REFERENCES calibration_revisions (master_id, revision) ON DELETE CASCADE
+) STRICT;

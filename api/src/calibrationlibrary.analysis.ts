@@ -221,8 +221,8 @@ async function spillFrame(path: string, spill: string): Promise<FrameLayout & { 
 	return { width, height, channels, bitpix, cfa: bayer, precision }
 }
 
-// Returns the SHA-256 of a file, streamed.
-async function fileDigest(path: string) {
+// Returns the SHA-256 of a file, streamed, as lower-case hex.
+export async function fileDigest(path: string) {
 	const hasher = new Bun.CryptoHasher('sha256')
 	for await (const chunk of Bun.file(path).stream()) hasher.update(chunk)
 	return hasher.digest('hex')
@@ -235,7 +235,7 @@ function masterFileHeader(layout: FrameLayout, header: FitsHeader, bitpix: -32 |
 }
 
 // Builds the descriptive header of a master from its metadata: only what is known and true, and types a viewer or another
-// program can read. The manifest next to it holds everything else. CALSTAT marks what a calibrated flat already had removed.
+// program can read. Its revision in the library holds everything else. CALSTAT marks what a calibrated flat already had removed.
 export function masterHeader(kind: CalibrationKind, metadata: CalibrationMetadata, frames: number, units: 'DN' | 'dimensionless', correction?: 'bias' | 'darkFlat'): FitsHeader {
 	const provenance: FitsProvenanceFields = {
 		instrument: metadata.cameraName,
@@ -264,7 +264,7 @@ export function masterHeader(kind: CalibrationKind, metadata: CalibrationMetadat
 	if (metadata.bayerOffsetY !== undefined) header.YBAYROFF = metadata.bayerOffsetY
 	if (metadata.originX !== undefined) header.XORGSUBF = metadata.originX
 	if (metadata.originY !== undefined) header.YORGSUBF = metadata.originY
-	header.HISTORY = `Calibration master of ${frames} frames; manifest.json holds its recipe and provenance`
+	header.HISTORY = `Calibration master of ${frames} frames; the Nebulosa calibration library holds its recipe and provenance`
 
 	for (const key of Object.keys(header)) if (header[key] === undefined) delete header[key]
 	return header
@@ -368,7 +368,7 @@ async function combineFrames(
 	return diagnostics
 }
 
-// Summarizes the toolkit's diagnostics for a manifest.
+// Summarizes the toolkit's diagnostics for the record of a revision.
 function integrationDiagnostics(request: MasterWorkerRequest, frames: number, diagnostics: ReturnType<typeof createCalibrationIntegrationDiagnostics>, planes: readonly MasterPlaneDiagnostics[], extra: Partial<CalibrationMasterDiagnostics>): CalibrationMasterDiagnostics {
 	return {
 		requestedFrames: request.frames.length,

@@ -1,27 +1,20 @@
-import { Database } from 'bun:sqlite'
-import { existsSync, mkdirSync, rmSync } from 'fs'
-import { mkdir, open, readdir, readFile, rm } from 'fs/promises'
+import { mkdir, readdir, rm } from 'fs/promises'
 import { join } from 'path'
-import type { CalibrationKind, CalibrationMetadata, CalibrationRecipe, CompatibilityFinding, MasterReference, OverridableField } from './calibrationlibrary.compatibility'
-import { DEFAULT_DATA_DIRECTORY } from './database'
-import { errorCode, isRecord, writeAtomically } from './util'
+import type { CalibrationKind, CalibrationMetadata, CalibrationRecipe, CompatibilityFinding, MasterReference } from './calibrationlibrary.compatibility'
+import { type AppDatabase, DEFAULT_DATA_DIRECTORY } from './database'
+import { errorCode } from './util'
 
-// Persistence of the Calibration Library, in three layers with different duties. Masters are immutable directories with
-// their FITS file and a manifest that explains them without any index. Facts only an operator or a wizard can state
-// (imported frames, registered flats, overrides, exclusions, preferred revisions, deletions) go to a synced journal. catalog.sqlite
-// is a derived index of both and of the Dark Library plans, so it can be deleted at any time: a different schema version
-// discards and rebuilds it, and there are no migrations. Only a newer version is left alone, because older code must not
-// destroy what newer code wrote. Jobs and what an import found live in memory and are never written; staging holds only the
-// work of a running build. Calibration frames are referenced, never copied here unless an import asks for it, and nothing
-// in this file touches a frame, a plan, or a journal of the Dark Library.
+// Persistence of the Calibration Library. The frames it indexes, what an operator declared about them, and every revision of
+// every master are rows of the operational database; each master FITS file is products/<masterId>/vNNNN/master.fit, whose
+// row says everything else about it. A revision is publishing from the moment its number is taken until its directory is
+// in products/, and deleting from the moment an operator deletes it until its directory is gone, so a crash between the
+// two halves is reconciled from the disk on the next start; a number is never used again. Jobs and what an import found
+// live in memory and are never written; staging holds only the work of a running build. Calibration frames are
+// referenced, never copied here unless an import asks for it, and nothing in this file touches a frame or a plan of the
+// Dark Library. Every read and write is synchronous and short; a caller that changes many rows passes them together, so
+// one transaction covers them.
 
-// Version of the schema of the catalog. A change rebuilds the catalog from the journal, the manifests, and the plans.
-const CATALOG_VERSION = 3
-
-// Version of the format of the manifests and of the journal.
-export const MANIFEST_VERSION = 1
-
-// Default directory of the library.
+// Default directory of the products, staging, and copies of the library.
 export const DEFAULT_CALIBRATION_LIBRARY_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'calibration-library')
 
 // Most rows one listing returns.
@@ -90,7 +83,7 @@ export type CalibrationSourceSummary = Omit<CalibrationSource, 'path'> & {
 // State of a master revision:
 // - ready: its file is there, as it was published.
 // - warning: published with something an operator accepted.
-// - stale: a dependency or a source changed after it was published; it still is what its manifest says.
+// - stale: a dependency or a source changed after it was published; it still is what its row says.
 // - unavailable: its file is not there, or does not match.
 export type ProductStatus = 'ready' | 'warning' | 'stale' | 'unavailable'
 
@@ -152,7 +145,7 @@ export interface CalibrationMaster {
 	// Sources, with their digests, in integration order.
 	readonly sourceIds: readonly string[]
 	readonly sourceDigests: readonly string[]
-	// File names of the sources, so a manifest explains itself without the catalog.
+	// File names of the sources, so a revision still names a frame deleted since.
 	readonly sourceNames: readonly string[]
 	// Masters it depends on.
 	readonly dependencies: readonly MasterReference[]
@@ -180,34 +173,11 @@ export interface CalibrationMaster {
 	readonly status: ProductStatus
 }
 
-// Manifest next to a master, which holds the whole master record.
-export interface MasterManifest extends CalibrationMaster {
-	// Version of the format.
-	readonly version: number
-}
-
 // Name of the FITS file of a revision.
 export const MASTER_FILE = 'master.fit'
 
-// Name of the manifest of a revision.
-export const MANIFEST_FILE = 'manifest.json'
-
-// Record of the journal of the library. Each one states a fact nothing else can recover.
-export type CalibrationJournalRecord =
-	// A frame of a wizard or an import, with what was known about it then.
-	| { readonly type: 'source'; readonly at: number; readonly source: CalibrationSource }
-	// An audited value of a frame.
-	| { readonly type: 'override'; readonly at: number; readonly sourceId: string; readonly field: OverridableField; readonly value: string | number; readonly reason: string }
-	// An audited role of a frame.
-	| { readonly type: 'classification'; readonly at: number; readonly sourceId: string; readonly kind: CalibrationKind; readonly reason: string }
-	// A frame an operator left out, or brought back when reason is absent.
-	| { readonly type: 'exclusion'; readonly at: number; readonly sourceId: string; readonly reason?: string }
-	// The revision an operator prefers.
-	| { readonly type: 'preferred'; readonly at: number; readonly masterId: string; readonly revision: number }
-	// A frame an operator deleted with its file.
-	| { readonly type: 'removal'; readonly at: number; readonly sourceId: string }
-	// A revision an operator deleted with its directory; its number is never used again.
-	| { readonly type: 'masterRemoval'; readonly at: number; readonly masterId: string; readonly revision: number }
+// Publication state of a revision row: publishing until its directory is in products/, deleting until it is gone.
+export type RevisionPublication = 'publishing' | 'published' | 'deleting'
 
 // Camera with frames in the library.
 export interface CalibrationCamera {
@@ -261,21 +231,13 @@ export interface StoredGroup {
 	readonly sources: readonly CalibrationSource[]
 }
 
-// Row of a stored document.
-interface DataRow {
-	readonly data: string
+// Revision whose publication or deletion a crash may have interrupted.
+export interface PendingRevision {
+	// The revision as it was recorded.
+	readonly master: CalibrationMaster
+	// Which half is unfinished.
+	readonly publication: Exclude<RevisionPublication, 'published'>
 }
-
-// Schema of the catalog. Each table keeps its record as JSON, with only what queries filter on as columns.
-const CATALOG_SCHEMA = `
-CREATE TABLE sources (source_id TEXT PRIMARY KEY, group_id TEXT NOT NULL, kind TEXT NOT NULL, camera TEXT NOT NULL, status TEXT NOT NULL, name TEXT NOT NULL, data TEXT NOT NULL);
-CREATE INDEX sources_group ON sources (group_id);
-CREATE INDEX sources_filter ON sources (kind, camera, status);
-CREATE TABLE masters (master_id TEXT NOT NULL, revision INTEGER NOT NULL, kind TEXT NOT NULL, camera TEXT NOT NULL, filter TEXT NOT NULL, status TEXT NOT NULL, fingerprint TEXT NOT NULL, created_at INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY (master_id, revision));
-CREATE INDEX masters_fingerprint ON masters (fingerprint);
-CREATE TABLE preferred (master_id TEXT PRIMARY KEY, revision INTEGER NOT NULL);
-CREATE TABLE removed_masters (master_id TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY (master_id, revision));
-`
 
 // Returns the part of a path after its last separator, for either platform.
 export function fileNameOf(path: string) {
@@ -287,48 +249,105 @@ export function sourceSummary({ path, ...source }: CalibrationSource): Calibrati
 	return { ...source, name: fileNameOf(path) }
 }
 
-// Parses a journal, leaving out a last line a crash tore; an unreadable line elsewhere is lost on its own.
-export function parseCalibrationJournal(text: string): CalibrationJournalRecord[] {
-	const records: CalibrationJournalRecord[] = []
-
-	for (const line of text.split('\n')) {
-		if (line.length === 0) continue
-
-		try {
-			const record: unknown = JSON.parse(line)
-			if (isRecord(record) && typeof record.type === 'string') records.push(record as unknown as CalibrationJournalRecord)
-		} catch {
-			continue
-		}
-	}
-
-	return records
+// Row of calibration_sources.
+interface SourceRow {
+	readonly source_id: string
+	readonly group_id: string
+	readonly key: string
+	readonly kind: CalibrationKind
+	readonly status: SourceStatus
+	readonly origin: SourceOrigin
+	readonly origin_id: string | null
+	readonly path: string
+	readonly format: SourceFormat
+	readonly bytes: number
+	readonly mtime_ms: number
+	readonly digest: string | null
+	readonly excluded_reason: string | null
+	readonly required: number | null
+	readonly supported: number
+	readonly metadata: string
+	readonly warnings: string
 }
 
-// Files of the library, and its catalog. Every read and write of the catalog is synchronous and short; a caller that
-// changes many rows passes them together, so one transaction covers them.
+// Columns of calibration_sources read into a CalibrationSource.
+const SOURCE_COLUMNS = 'source_id, group_id, key, kind, status, origin, origin_id, path, format, bytes, mtime_ms, digest, excluded_reason, required, supported, metadata, warnings'
+
+// Returns the frame of a row.
+function rowSource(row: SourceRow): CalibrationSource {
+	return {
+		sourceId: row.source_id,
+		origin: row.origin,
+		...(row.origin_id !== null && { originId: row.origin_id }),
+		kind: row.kind,
+		path: row.path,
+		format: row.format,
+		bytes: row.bytes,
+		mtimeMillis: row.mtime_ms,
+		...(row.digest !== null && { digest: row.digest }),
+		metadata: JSON.parse(row.metadata) as CalibrationMetadata,
+		warnings: JSON.parse(row.warnings) as string[],
+		status: row.status,
+		...(row.excluded_reason !== null && { excluded: row.excluded_reason }),
+		...(row.required !== null && { required: row.required }),
+		supported: row.supported === 1,
+		key: row.key,
+		groupId: row.group_id,
+	}
+}
+
+// What calibration_revisions keeps of a master as JSON.
+type MasterContent = Pick<CalibrationMaster, 'calibrationState' | 'units' | 'usage' | 'fullScaleDn' | 'recipe' | 'metadata' | 'diagnostics' | 'acknowledged'>
+
+// Row of calibration_revisions.
+interface RevisionRow {
+	readonly master_id: string
+	readonly revision: number
+	readonly publication: RevisionPublication
+	readonly status: ProductStatus
+	readonly kind: CalibrationKind
+	readonly group_id: string
+	readonly key: string
+	readonly fingerprint: string
+	readonly created_at: number
+	readonly content_digest: string
+	readonly bytes: number
+	readonly master: string
+}
+
+// Columns of calibration_revisions read into a CalibrationMaster.
+const REVISION_COLUMNS = 'master_id, revision, publication, status, kind, group_id, key, fingerprint, created_at, content_digest, bytes, master'
+
+// Row of calibration_revision_sources.
+interface RevisionSourceRow {
+	readonly source_id: string
+	readonly digest: string
+	readonly name: string
+}
+
+// Row of calibration_revision_dependencies.
+interface RevisionDependencyRow {
+	readonly dependency_master_id: string
+	readonly dependency_revision: number
+	readonly digest: string
+}
+
+// Frames and masters of the library in the operational database, and the directories of its files.
 export class CalibrationLibraryStore {
-	// Open catalog.
-	#database?: Database
-	// Whether a newer version wrote the catalog.
-	#newer = false
-
-	// Creates the store of a directory, opening nothing until open.
-	constructor(readonly directory: string = DEFAULT_CALIBRATION_LIBRARY_DIRECTORY) {}
-
-	// Directory of the catalog file.
-	get #catalogFile() {
-		return join(this.directory, 'catalog.sqlite')
-	}
-
-	// Journal of the operator's facts.
-	get #journalFile() {
-		return join(this.directory, 'journal.jsonl')
-	}
+	// Creates the store of the rows of database and the files under directory.
+	constructor(
+		readonly database: AppDatabase,
+		readonly directory: string = DEFAULT_CALIBRATION_LIBRARY_DIRECTORY,
+	) {}
 
 	// Directory of every master.
 	get productsDirectory() {
 		return join(this.directory, 'products')
+	}
+
+	// Directory the revision directories without a row are moved to; nothing is ever deleted from it.
+	get orphanedDirectory() {
+		return join(this.directory, 'orphaned')
 	}
 
 	// Directory of the work of a job, on the filesystem of the products so publishing is a rename.
@@ -346,116 +365,54 @@ export class CalibrationLibraryStore {
 		return join(this.productsDirectory, masterId, `v${String(revision).padStart(4, '0')}`)
 	}
 
-	// Whether a newer version owns the catalog, which then stays closed and untouched.
-	get newerVersion() {
-		return this.#newer
-	}
-
-	// The open catalog. Throws before open.
-	get #db() {
-		if (!this.#database) throw new Error('The calibration library is not open')
-		return this.#database
-	}
-
-	// Opens the catalog and returns whether it starts empty and must be rebuilt: a new one, or one of another version.
-	// A file that is not a database is replaced, because everything in it can be derived again.
-	open() {
-		if (this.#database) return false
-		mkdirSync(this.directory, { recursive: true })
-		const existed = existsSync(this.#catalogFile)
-
-		let database: Database
-
-		try {
-			database = this.#connect()
-			const version = (database.query('PRAGMA user_version').get() as { readonly user_version: number }).user_version
-
-			if (version > CATALOG_VERSION) {
-				database.close()
-				this.#newer = true
-				return false
-			}
-
-			if (existed && version === CATALOG_VERSION) {
-				this.#database = database
-				return false
-			}
-
-			database.close()
-		} catch (error) {
-			if (errorCode(error) === 'EBUSY') throw error
-		}
-
-		this.#remove()
-		database = this.#connect()
-		database.run(CATALOG_SCHEMA)
-		database.run(`PRAGMA user_version = ${CATALOG_VERSION}`)
-		this.#database = database
-		return true
-	}
-
-	// Opens the database file with a write-ahead log, so reads never wait for a long batch.
-	#connect() {
-		const database = new Database(this.#catalogFile, { create: true, strict: true })
-		database.run('PRAGMA journal_mode = WAL')
-		database.run('PRAGMA synchronous = NORMAL')
-		return database
-	}
-
-	// Deletes the files of the catalog.
-	#remove() {
-		for (const suffix of ['', '-wal', '-shm']) rmSync(`${this.#catalogFile}${suffix}`, { force: true })
-	}
-
-	// Closes the catalog, which releases its files.
-	close() {
-		this.#database?.close()
-		this.#database = undefined
-	}
-
-	// Reads the journal; a missing file is an empty one.
-	async journal() {
-		try {
-			return parseCalibrationJournal(await readFile(this.#journalFile, 'utf8'))
-		} catch (error) {
-			if (errorCode(error) === 'ENOENT') return []
-			throw error
-		}
-	}
-
-	// Appends records to the journal, synced to the disk. Throws when they cannot be written; the caller then changes nothing.
-	async append(records: readonly CalibrationJournalRecord[]) {
-		if (records.length === 0) return
-		const handle = await open(this.#journalFile, 'a')
-
-		try {
-			await handle.appendFile(records.map((record) => `${JSON.stringify(record)}\n`).join(''))
-			await handle.sync()
-		} finally {
-			await handle.close()
-		}
-	}
-
 	// Writes frames in one transaction.
 	putSources(sources: readonly CalibrationSource[]) {
-		const statement = this.#db.query('INSERT OR REPLACE INTO sources (source_id, group_id, kind, camera, status, name, data) VALUES (?, ?, ?, ?, ?, ?, ?)')
-		this.#db.transaction(() => {
-			for (const source of sources) statement.run(source.sourceId, source.groupId, source.kind, source.metadata.cameraId.value ?? '', source.status, fileNameOf(source.path).toLowerCase(), JSON.stringify(source))
-		})()
+		if (sources.length === 0) return
+		this.database.write(() => this.#putSources(sources))
+	}
+
+	// Writes frames in the transaction of the caller.
+	#putSources(sources: readonly CalibrationSource[]) {
+		const statement = this.database.db.query(`INSERT OR REPLACE INTO calibration_sources (${SOURCE_COLUMNS}, camera_id, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+
+		for (const source of sources) {
+			statement.run(
+				source.sourceId,
+				source.groupId,
+				source.key,
+				source.kind,
+				source.status,
+				source.origin,
+				source.originId ?? null,
+				source.path,
+				source.format,
+				source.bytes,
+				source.mtimeMillis,
+				source.digest ?? null,
+				source.excluded ?? null,
+				source.required ?? null,
+				source.supported ? 1 : 0,
+				JSON.stringify(source.metadata),
+				JSON.stringify(source.warnings),
+				source.metadata.cameraId.value ?? '',
+				fileNameOf(source.path).toLowerCase(),
+			)
+		}
 	}
 
 	// Forgets frames in one transaction.
 	removeSources(sourceIds: readonly string[]) {
-		const statement = this.#db.query('DELETE FROM sources WHERE source_id = ?')
-		this.#db.transaction(() => {
+		if (sourceIds.length === 0) return
+		this.database.write(() => {
+			const statement = this.database.db.query('DELETE FROM calibration_sources WHERE source_id = ?')
 			for (const sourceId of sourceIds) statement.run(sourceId)
-		})()
+		})
 	}
 
 	// Returns a frame.
 	source(sourceId: string) {
-		const row = this.#db.query('SELECT data FROM sources WHERE source_id = ?').get(sourceId) as DataRow | null
-		return row ? (JSON.parse(row.data) as CalibrationSource) : undefined
+		const row = this.database.db.query<SourceRow, [string]>(`SELECT ${SOURCE_COLUMNS} FROM calibration_sources WHERE source_id = ?`).get(sourceId)
+		return row ? rowSource(row) : undefined
 	}
 
 	// Returns frames by id, in the order given, leaving out unknown ids.
@@ -463,79 +420,94 @@ export class CalibrationLibraryStore {
 		return sourceIds.flatMap((sourceId) => this.source(sourceId) ?? [])
 	}
 
-	// Lists every frame of an origin, for refreshes.
+	// Lists every frame of an origin, or every frame, for refreshes.
 	sourcesOf(origin?: SourceOrigin) {
-		const rows = this.#db.query('SELECT data FROM sources').all() as DataRow[]
-		const sources = rows.map((row) => JSON.parse(row.data) as CalibrationSource)
-		return origin === undefined ? sources : sources.filter((source) => source.origin === origin)
+		const { db } = this.database
+		const rows = origin === undefined ? db.query<SourceRow, []>(`SELECT ${SOURCE_COLUMNS} FROM calibration_sources`).all() : db.query<SourceRow, [string]>(`SELECT ${SOURCE_COLUMNS} FROM calibration_sources WHERE origin = ?`).all(origin)
+		return rows.map(rowSource)
 	}
 
-	// Lists frames newest name first within a filter, by page.
+	// Lists frames by file name within a filter, by page.
 	sources(filter: SourceFilter, offset: number, limit: number): Page<CalibrationSource> {
 		const { where, values } = sourceWhere(filter)
-		const { total } = this.#db.query(`SELECT COUNT(*) AS total FROM sources ${where}`).get(...values) as { readonly total: number }
-		const rows = this.#db.query(`SELECT data FROM sources ${where} ORDER BY name LIMIT ? OFFSET ?`).all(...values, Math.min(limit, MAX_PAGE_SIZE), offset) as DataRow[]
-		return { items: rows.map((row) => JSON.parse(row.data) as CalibrationSource), total }
+		const { db } = this.database
+		const { total } = db.query<{ total: number }, string[]>(`SELECT COUNT(*) AS total FROM calibration_sources ${where}`).get(...values)!
+		const rows = db.query<SourceRow, (string | number)[]>(`SELECT ${SOURCE_COLUMNS} FROM calibration_sources ${where} ORDER BY name LIMIT ? OFFSET ?`).all(...values, Math.min(limit, MAX_PAGE_SIZE), offset)
+		return { items: rows.map(rowSource), total }
 	}
 
 	// Lists groups by page, each with all its frames.
 	groups(filter: SourceFilter, offset: number, limit: number): Page<StoredGroup> {
 		const { where, values } = sourceWhere(filter)
-		const { total } = this.#db.query(`SELECT COUNT(DISTINCT group_id) AS total FROM sources ${where}`).get(...values) as { readonly total: number }
-		const rows = this.#db.query(`SELECT DISTINCT group_id FROM sources ${where} ORDER BY kind, camera, group_id LIMIT ? OFFSET ?`).all(...values, Math.min(limit, MAX_PAGE_SIZE), offset) as { readonly group_id: string }[]
+		const { db } = this.database
+		const { total } = db.query<{ total: number }, string[]>(`SELECT COUNT(DISTINCT group_id) AS total FROM calibration_sources ${where}`).get(...values)!
+		const rows = db.query<{ group_id: string }, (string | number)[]>(`SELECT DISTINCT group_id FROM calibration_sources ${where} ORDER BY kind, camera_id, group_id LIMIT ? OFFSET ?`).all(...values, Math.min(limit, MAX_PAGE_SIZE), offset)
 		return { items: rows.map((row) => this.group(row.group_id)), total }
 	}
 
 	// Returns a group with all its frames; an unknown group has none.
 	group(groupId: string): StoredGroup {
-		const rows = this.#db.query('SELECT data FROM sources WHERE group_id = ? ORDER BY name').all(groupId) as DataRow[]
-		return { groupId, sources: rows.map((row) => JSON.parse(row.data) as CalibrationSource) }
+		const rows = this.database.db.query<SourceRow, [string]>(`SELECT ${SOURCE_COLUMNS} FROM calibration_sources WHERE group_id = ? ORDER BY name`).all(groupId)
+		return { groupId, sources: rows.map(rowSource) }
 	}
 
-	// Counts frames and masters by state, and lists the values the filters of the tool can take.
+	// Counts frames and published masters by state, and lists the cameras the filters of the tool can take.
 	counts() {
-		const sources = this.#db.query('SELECT kind, status, COUNT(*) AS count FROM sources GROUP BY kind, status').all() as { readonly kind: CalibrationKind; readonly status: SourceStatus; readonly count: number }[]
-		const masters = this.#db.query('SELECT kind, status, COUNT(*) AS count FROM masters GROUP BY kind, status').all() as { readonly kind: CalibrationKind; readonly status: ProductStatus; readonly count: number }[]
-		const cameras = this.#db.query("SELECT camera AS id, MAX(json_extract(data, '$.metadata.cameraName')) AS name FROM sources WHERE camera <> '' GROUP BY camera ORDER BY name, camera").all() as CalibrationCamera[]
+		const { db } = this.database
+		const sources = db.query<{ kind: CalibrationKind; status: SourceStatus; count: number }, []>('SELECT kind, status, COUNT(*) AS count FROM calibration_sources GROUP BY kind, status').all()
+		const masters = db.query<{ kind: CalibrationKind; status: ProductStatus; count: number }, []>("SELECT kind, status, COUNT(*) AS count FROM calibration_revisions WHERE publication = 'published' GROUP BY kind, status").all()
+		const cameras = db.query<CalibrationCamera, []>("SELECT camera_id AS id, MAX(json_extract(metadata, '$.cameraName')) AS name FROM calibration_sources WHERE camera_id <> '' GROUP BY camera_id ORDER BY name, camera_id").all()
 		return { sources, masters, cameras }
 	}
 
-	// Records a published revision.
-	putMaster(master: CalibrationMaster) {
-		this.#db
-			.query('INSERT OR REPLACE INTO masters (master_id, revision, kind, camera, filter, status, fingerprint, created_at, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-			.run(master.masterId, master.revision, master.kind, master.metadata.cameraId.value ?? '', master.metadata.filter.value ?? '', master.status, master.fingerprint, master.createdAt, JSON.stringify(master))
+	// Returns the master of a revision row, with its frames and dependencies.
+	#master(row: RevisionRow): CalibrationMaster {
+		const { db } = this.database
+		const sources = db.query<RevisionSourceRow, [string, number]>('SELECT source_id, digest, name FROM calibration_revision_sources WHERE master_id = ? AND revision = ? ORDER BY position').all(row.master_id, row.revision)
+		const dependencies = db.query<RevisionDependencyRow, [string, number]>('SELECT dependency_master_id, dependency_revision, digest FROM calibration_revision_dependencies WHERE master_id = ? AND revision = ? ORDER BY position').all(row.master_id, row.revision)
+		const content = JSON.parse(row.master) as MasterContent
+
+		return {
+			masterId: row.master_id,
+			revision: row.revision,
+			kind: row.kind,
+			calibrationState: content.calibrationState,
+			units: content.units,
+			usage: content.usage,
+			fullScaleDn: content.fullScaleDn,
+			sourceIds: sources.map(({ source_id }) => source_id),
+			sourceDigests: sources.map(({ digest }) => digest),
+			sourceNames: sources.map(({ name }) => name),
+			dependencies: dependencies.map(({ dependency_master_id, dependency_revision, digest }) => ({ masterId: dependency_master_id, revision: dependency_revision, digest })),
+			recipe: content.recipe,
+			fingerprint: row.fingerprint,
+			metadata: content.metadata,
+			key: row.key,
+			groupId: row.group_id,
+			diagnostics: content.diagnostics,
+			acknowledged: content.acknowledged,
+			contentDigest: row.content_digest,
+			bytes: row.bytes,
+			createdAt: row.created_at,
+			status: row.status,
+		}
 	}
 
-	// Returns a revision.
+	// Returns a published revision.
 	master(masterId: string, revision: number) {
-		const row = this.#db.query('SELECT data FROM masters WHERE master_id = ? AND revision = ?').get(masterId, revision) as DataRow | null
-		return row ? (JSON.parse(row.data) as CalibrationMaster) : undefined
+		const row = this.database.db.query<RevisionRow, [string, number]>(`SELECT ${REVISION_COLUMNS} FROM calibration_revisions WHERE master_id = ? AND revision = ? AND publication = 'published'`).get(masterId, revision)
+		return row ? this.#master(row) : undefined
 	}
 
 	// Returns the published revision with a fingerprint, which a repeated request answers with.
 	masterByFingerprint(fingerprint: string) {
-		const row = this.#db.query('SELECT data FROM masters WHERE fingerprint = ? ORDER BY revision DESC').get(fingerprint) as DataRow | null
-		return row ? (JSON.parse(row.data) as CalibrationMaster) : undefined
+		const row = this.database.db.query<RevisionRow, [string]>(`SELECT ${REVISION_COLUMNS} FROM calibration_revisions WHERE fingerprint = ? AND publication = 'published' ORDER BY revision DESC`).get(fingerprint)
+		return row ? this.#master(row) : undefined
 	}
 
-	// Returns the highest revision a master ever had, deleted ones included, 0 before the first.
-	latestRevision(masterId: string) {
-		return (this.#db.query('SELECT MAX(revision) AS revision FROM (SELECT revision FROM masters WHERE master_id = ?1 UNION ALL SELECT revision FROM removed_masters WHERE master_id = ?1)').get(masterId) as { readonly revision: number | null }).revision ?? 0
-	}
-
-	// Forgets a revision, and its preference, keeping its number taken.
-	removeMaster(masterId: string, revision: number) {
-		this.#db.transaction(() => {
-			this.#db.query('DELETE FROM masters WHERE master_id = ? AND revision = ?').run(masterId, revision)
-			this.#db.query('DELETE FROM preferred WHERE master_id = ? AND revision = ?').run(masterId, revision)
-			this.#db.query('INSERT OR IGNORE INTO removed_masters (master_id, revision) VALUES (?, ?)').run(masterId, revision)
-		})()
-	}
-
-	// Lists revisions newest first, by page.
+	// Lists published revisions newest first, by page.
 	masters(filter: MasterFilter, offset: number, limit: number): Page<CalibrationMaster> {
-		const clauses: string[] = []
+		const clauses = ["publication = 'published'"]
 		const values: string[] = []
 
 		function add(clause: string, value: string) {
@@ -544,54 +516,131 @@ export class CalibrationLibraryStore {
 		}
 
 		if (filter.kind !== undefined) add('kind = ?', filter.kind)
-		if (filter.camera !== undefined) add('camera = ?', filter.camera)
+		if (filter.camera !== undefined) add('camera_id = ?', filter.camera)
 		if (filter.filter !== undefined) add('filter = ?', filter.filter)
 		if (filter.status !== undefined) add('status = ?', filter.status)
 		if (filter.masterId !== undefined) add('master_id = ?', filter.masterId)
 
-		const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : ''
-		const { total } = this.#db.query(`SELECT COUNT(*) AS total FROM masters ${where}`).get(...values) as { readonly total: number }
-		const rows = this.#db.query(`SELECT data FROM masters ${where} ORDER BY created_at DESC, revision DESC LIMIT ? OFFSET ?`).all(...values, Math.min(limit, MAX_PAGE_SIZE), offset) as DataRow[]
-		return { items: rows.map((row) => JSON.parse(row.data) as CalibrationMaster), total }
+		const where = `WHERE ${clauses.join(' AND ')}`
+		const { db } = this.database
+		const { total } = db.query<{ total: number }, string[]>(`SELECT COUNT(*) AS total FROM calibration_revisions ${where}`).get(...values)!
+		const rows = db.query<RevisionRow, (string | number)[]>(`SELECT ${REVISION_COLUMNS} FROM calibration_revisions ${where} ORDER BY created_at DESC, revision DESC LIMIT ? OFFSET ?`).all(...values, Math.min(limit, MAX_PAGE_SIZE), offset)
+		return { items: rows.map((row) => this.#master(row)), total }
 	}
 
-	// Lists every revision, for reconciliation.
+	// Lists every published revision, for reconciliation.
 	allMasters() {
-		const rows = this.#db.query('SELECT data FROM masters').all() as DataRow[]
-		return rows.map((row) => JSON.parse(row.data) as CalibrationMaster)
+		return this.database.db
+			.query<RevisionRow, []>(`SELECT ${REVISION_COLUMNS} FROM calibration_revisions WHERE publication = 'published'`)
+			.all()
+			.map((row) => this.#master(row))
+	}
+
+	// Lists the revisions whose publication or deletion did not finish.
+	pending(): PendingRevision[] {
+		return this.database.db
+			.query<RevisionRow, []>(`SELECT ${REVISION_COLUMNS} FROM calibration_revisions WHERE publication <> 'published'`)
+			.all()
+			.map((row) => ({ master: this.#master(row), publication: row.publication as PendingRevision['publication'] }))
+	}
+
+	// Returns whether a row exists for a revision, whatever its publication.
+	hasRevision(masterId: string, revision: number) {
+		return this.database.db.query('SELECT 1 FROM calibration_revisions WHERE master_id = ? AND revision = ?').get(masterId, revision) !== null
+	}
+
+	// Takes the next revision number of a master, never used before, and records the revision as publishing. Returns it
+	// with its number.
+	beginPublication(master: Omit<CalibrationMaster, 'revision'>): CalibrationMaster {
+		return this.database.write(() => {
+			const { db } = this.database
+			const { revision } = db.query<{ revision: number }, [string]>('INSERT INTO calibration_masters (master_id, last_revision) VALUES (?, 1) ON CONFLICT (master_id) DO UPDATE SET last_revision = last_revision + 1 RETURNING last_revision AS revision').get(master.masterId)!
+			const published: CalibrationMaster = { ...master, revision }
+			const { calibrationState, units, usage, fullScaleDn, recipe, metadata, diagnostics, acknowledged } = published
+			const content: MasterContent = { calibrationState, units, usage, fullScaleDn, recipe, metadata, diagnostics, acknowledged }
+			const status = published.status === 'warning' ? 'warning' : 'ready'
+
+			db.query("INSERT INTO calibration_revisions (master_id, revision, publication, status, published_status, kind, camera_id, filter, group_id, key, fingerprint, created_at, content_digest, bytes, master) VALUES (?, ?, 'publishing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+				master.masterId,
+				revision,
+				status,
+				status,
+				master.kind,
+				metadata.cameraId.value ?? '',
+				metadata.filter.value ?? '',
+				master.groupId,
+				master.key,
+				master.fingerprint,
+				master.createdAt,
+				master.contentDigest,
+				master.bytes,
+				JSON.stringify(content),
+			)
+
+			const source = db.query('INSERT INTO calibration_revision_sources (master_id, revision, position, source_id, digest, name) VALUES (?, ?, ?, ?, ?, ?)')
+			for (const [position, sourceId] of master.sourceIds.entries()) source.run(master.masterId, revision, position, sourceId, master.sourceDigests[position], master.sourceNames[position])
+			const dependency = db.query('INSERT INTO calibration_revision_dependencies (master_id, revision, position, dependency_master_id, dependency_revision, digest) VALUES (?, ?, ?, ?, ?, ?)')
+			for (const [position, reference] of master.dependencies.entries()) dependency.run(master.masterId, revision, position, reference.masterId, reference.revision, reference.digest)
+
+			return published
+		})
+	}
+
+	// Makes a revision whose directory is in products/ published, and records the digests its job read on its frames.
+	completePublication(masterId: string, revision: number, sources: readonly CalibrationSource[]) {
+		this.database.write(() => {
+			this.database.db.query("UPDATE calibration_revisions SET publication = 'published' WHERE master_id = ? AND revision = ?").run(masterId, revision)
+			this.#putSources(sources)
+		})
+	}
+
+	// Forgets a revision whose publication failed or whose deletion finished, with its preference; its number stays taken.
+	discardRevision(masterId: string, revision: number) {
+		this.database.write(() => this.database.db.query('DELETE FROM calibration_revisions WHERE master_id = ? AND revision = ?').run(masterId, revision))
+	}
+
+	// Returns whether another revision was corrected with a revision.
+	isDependency(masterId: string, revision: number) {
+		return this.database.db.query('SELECT 1 FROM calibration_revision_dependencies WHERE dependency_master_id = ? AND dependency_revision = ?').get(masterId, revision) !== null
+	}
+
+	// Records that the directory of a published revision is being deleted, which hides it, or that it was not after all.
+	setDeleting(masterId: string, revision: number, deleting: boolean) {
+		this.database.write(() => this.database.db.query('UPDATE calibration_revisions SET publication = ? WHERE master_id = ? AND revision = ?').run(deleting ? 'deleting' : 'published', masterId, revision))
+	}
+
+	// Changes the state of revisions in one transaction: unavailable, stale, or what they were published with.
+	setStatuses(changes: readonly { readonly masterId: string; readonly revision: number; readonly status: ProductStatus | 'published' }[]) {
+		if (changes.length === 0) return
+		this.database.write(() => {
+			const statement = this.database.db.query("UPDATE calibration_revisions SET status = CASE WHEN ?1 = 'published' THEN published_status ELSE ?1 END WHERE master_id = ?2 AND revision = ?3")
+			for (const { masterId, revision, status } of changes) statement.run(status, masterId, revision)
+		})
 	}
 
 	// Makes a revision the preferred one of its master.
 	setPreferred(masterId: string, revision: number) {
-		this.#db.query('INSERT OR REPLACE INTO preferred (master_id, revision) VALUES (?, ?)').run(masterId, revision)
+		this.database.write(() => this.database.db.query('INSERT OR REPLACE INTO calibration_preferred (master_id, revision) VALUES (?, ?)').run(masterId, revision))
 	}
 
 	// Returns the preferred revision of a master.
 	preferred(masterId: string) {
-		return (this.#db.query('SELECT revision FROM preferred WHERE master_id = ?').get(masterId) as { readonly revision: number } | null)?.revision
+		return this.database.db.query<{ revision: number }, [string]>('SELECT revision FROM calibration_preferred WHERE master_id = ?').get(masterId)?.revision
 	}
 
-	// Reads every manifest on disk, leaving out unreadable ones, which stay where they are. Used to rebuild and reconcile.
-	async manifests() {
-		const manifests: MasterManifest[] = []
+	// Lists the revision directories under products/, as master id and revision number; a directory whose name is not a
+	// revision is left out.
+	async productDirectories() {
+		const directories: { readonly masterId: string; readonly revision: number; readonly name: string }[] = []
 
 		for (const masterId of await directoryNames(this.productsDirectory)) {
-			for (const revision of await directoryNames(join(this.productsDirectory, masterId))) {
-				try {
-					const manifest: unknown = JSON.parse(await readFile(join(this.productsDirectory, masterId, revision, MANIFEST_FILE), 'utf8'))
-					if (isRecord(manifest) && typeof manifest.version === 'number' && manifest.version <= MANIFEST_VERSION) manifests.push(manifest as unknown as MasterManifest)
-				} catch {
-					continue
-				}
+			for (const name of await directoryNames(join(this.productsDirectory, masterId))) {
+				const revision = /^v(\d+)$/.exec(name)?.[1]
+				directories.push({ masterId, revision: revision === undefined ? 0 : Number(revision), name })
 			}
 		}
 
-		return manifests
-	}
-
-	// Writes the immutable manifest of a revision into its staged directory.
-	async writeManifest(directory: string, master: CalibrationMaster) {
-		await writeAtomically(join(directory, MANIFEST_FILE), `${JSON.stringify({ version: MANIFEST_VERSION, ...master } satisfies MasterManifest, null, '\t')}\n`)
+		return directories
 	}
 
 	// Removes every staged work, which no job of a new process owns.
@@ -618,7 +667,7 @@ function sourceWhere(filter: SourceFilter) {
 	}
 
 	if (filter.kind !== undefined) add('kind = ?', filter.kind)
-	if (filter.camera !== undefined) add('camera = ?', filter.camera)
+	if (filter.camera !== undefined) add('camera_id = ?', filter.camera)
 	if (filter.status !== undefined) add('status = ?', filter.status)
 	if (filter.groupId !== undefined) add('group_id = ?', filter.groupId)
 	if (filter.search !== undefined) add('name LIKE ?', `%${filter.search.toLowerCase()}%`)

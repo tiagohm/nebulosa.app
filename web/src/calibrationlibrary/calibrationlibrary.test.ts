@@ -8,7 +8,7 @@ function runtime() {
 }
 
 function snapshot(epoch: string, revision: number, activeJobs: readonly CalibrationJobSummary[] = []): CalibrationLibrarySnapshot {
-	return { epoch, revision, unavailable: false, frames: {}, framesByKind: {}, masters: {}, mastersByKind: {}, cameras: [], activeJobs, recentJobs: [] }
+	return { epoch, revision, frames: {}, framesByKind: {}, masters: {}, mastersByKind: {}, cameras: [], activeJobs, recentJobs: [] }
 }
 
 function job(jobId: string, state: CalibrationJobSummary['state'], updatedAt: number): CalibrationJobSummary {

@@ -9,7 +9,7 @@ import { bufferSink, bufferSource } from 'nebulosa/src/io/io'
 import { CalibrationLibrary, type CalibrationLibraryEvent } from './calibrationlibrary'
 import { integrateMaster, IntegrationError, type IntegrationFrame, type IntegrationProgress, type MasterWorkerRequest } from './calibrationlibrary.analysis'
 import type { Integrator } from './calibrationlibrary.jobs'
-import { CalibrationLibraryStore, MANIFEST_FILE, MASTER_FILE } from './calibrationlibrary.store'
+import { CalibrationLibraryStore, MASTER_FILE } from './calibrationlibrary.store'
 import { type DarkCapturePlan, type DarkFrameRecord, DarkPlanStore, STAGING_DIRECTORY } from './darklibrarywizard.store'
 import { AppDatabase } from './database'
 
@@ -50,16 +50,16 @@ function directory(name: string) {
 	return path
 }
 
-// Database of the plans of each directory, kept so a library opened again reads the same plans.
+// Database of each directory, kept so a library opened again reads the same plans, frames, and masters.
 const databases = new Map<string, AppDatabase>()
 
-// A library in a directory of its own, over a plan store of its own.
+// A library in a directory of its own, over a database of its own.
 function open(integrator?: Integrator, busy?: () => boolean, base = directory('library')) {
 	const events: CalibrationLibraryEvent[] = []
 	const database = databases.get(base) ?? AppDatabase.memory()
 	databases.set(base, database)
 	const plans = new DarkPlanStore(database)
-	const store = new CalibrationLibraryStore(join(base, 'library'))
+	const store = new CalibrationLibraryStore(database, join(base, 'library'))
 	const library = new CalibrationLibrary(store, plans, (event) => events.push(event), busy, integrator)
 	libraries.push(library)
 	return { library, plans, store, events, base }
@@ -210,8 +210,28 @@ describe('plans', () => {
 	})
 })
 
-describe('catalog', () => {
-	test('is rebuilt from plans, journal, and manifests when it is deleted', async () => {
+// Closes the libraries opened so far, as a stopped server does.
+function stop() {
+	for (const library of libraries.splice(0)) library.close()
+}
+
+// Builds the master of a plan of 3 frames and returns it with its library.
+async function published() {
+	const opened = open(local)
+	await plan(opened.plans, opened.base, 3)
+	const [group] = (await opened.library.groups({}, 0, 50)).items
+	const { jobId, masterId } = await opened.library.requestMaster({ groupId: group.groupId })
+	await settled(opened.library, jobId!)
+	return { ...opened, group, masterId, directory: opened.store.revisionDirectory(masterId, 1) }
+}
+
+// Changes the publication of every revision, as a crash in the middle of one leaves it.
+function interrupt(store: CalibrationLibraryStore, publication: 'publishing' | 'deleting') {
+	store.database.db.run(`UPDATE calibration_revisions SET publication = '${publication}'`)
+}
+
+describe('restart', () => {
+	test('keeps what an operator declared and every master', async () => {
 		const opened = open(local)
 		const { library, plans, base, store } = opened
 		await plan(plans, base, 3)
@@ -221,10 +241,7 @@ describe('catalog', () => {
 		await library.prefer(masterId, 1)
 		const source = store.sourcesOf()[0]
 		await library.exclude(source.sourceId, 'Satellite')
-		library.close()
-		libraries.length = 0
-
-		for (const name of readdirSync(join(base, 'library'))) if (name.startsWith('catalog.')) rmSync(join(base, 'library', name))
+		stop()
 
 		const reopened = open(local, undefined, base)
 		const master = await reopened.library.master(masterId, 1)
@@ -233,21 +250,87 @@ describe('catalog', () => {
 		expect((await reopened.library.source(source.sourceId)).excluded).toBe('Satellite')
 	})
 
-	test('leaves a catalog of a newer version alone', async () => {
+	test('a crash after the rename and before the commit publishes the revision', async () => {
+		const { store, base, masterId } = await published()
+		stop()
+		interrupt(store, 'publishing')
+
+		const reopened = open(local, undefined, base)
+		expect((await reopened.library.master(masterId, 1)).revision).toBe(1)
+		expect((await reopened.library.masters({}, 0, 10)).total).toBe(1)
+	})
+
+	test('a crash before the rename forgets the revision and never uses its number again', async () => {
+		const { store, base, masterId, directory, group } = await published()
+		stop()
+		interrupt(store, 'publishing')
+		rmSync(directory, { recursive: true })
+
+		const reopened = open(local, undefined, base)
+		expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
+		const again = await reopened.library.requestMaster({ groupId: group.groupId })
+		await settled(reopened.library, again.jobId!)
+		expect((await reopened.library.masters({}, 0, 10)).items.map(({ revision }) => revision)).toEqual([2])
+	})
+
+	test('a published file that is not the recorded one is never adopted, and moves to orphaned', async () => {
+		const { store, base, masterId, directory } = await published()
+		stop()
+		interrupt(store, 'publishing')
+		writeFileSync(join(directory, MASTER_FILE), 'not the master')
+
+		const reopened = open(local, undefined, base)
+		expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
+		expect(existsSync(directory)).toBeFalse()
+		const [orphan] = readdirSync(join(base, 'library', 'orphaned'))
+		expect(orphan.startsWith(`${masterId}-v0001-`)).toBeTrue()
+		expect(readFileSync(join(base, 'library', 'orphaned', orphan, MASTER_FILE), 'utf8')).toBe('not the master')
+	})
+
+	test('a crash while deleting finishes the deletion', async () => {
+		const { store, base, masterId, directory } = await published()
+		stop()
+		interrupt(store, 'deleting')
+
+		const reopened = open(local, undefined, base)
+		expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
+		expect(existsSync(directory)).toBeFalse()
+		expect(store.hasRevision(masterId, 1)).toBeFalse()
+	})
+
+	test('a revision directory without a row moves to orphaned, never adopted nor deleted', async () => {
 		const { library, base } = open(local)
 		await library.ready()
-		library.close()
-		libraries.length = 0
-
-		const { Database } = await import('bun:sqlite')
-		const database = new Database(join(base, 'library', 'catalog.sqlite'))
-		database.run('PRAGMA user_version = 99')
-		database.close()
+		stop()
+		const directory = join(base, 'library', 'products', 'unknown', 'v0003')
+		mkdirSync(directory, { recursive: true })
+		writeFileSync(join(directory, MASTER_FILE), 'kept')
 
 		const reopened = open(local, undefined, base)
 		await reopened.library.ready()
-		expect(reopened.library.snapshot().unavailable).toBeTrue()
-		expect(reopened.library.sources({}, 0, 10)).rejects.toThrow('newer version')
+		expect(existsSync(directory)).toBeFalse()
+		const [orphan] = readdirSync(join(base, 'library', 'orphaned'))
+		expect(orphan.startsWith('unknown-v0003-')).toBeTrue()
+		expect((await reopened.library.masters({}, 0, 10)).total).toBe(0)
+	})
+
+	test('a master whose file went away is unavailable, and ready again once it is back', async () => {
+		const { store, base, masterId, directory } = await published()
+		stop()
+		renameSync(join(directory, MASTER_FILE), join(base, MASTER_FILE))
+		expect((await open(local, undefined, base).library.master(masterId, 1)).status).toBe('unavailable')
+		expect((await libraries[0].masters({ status: 'unavailable' }, 0, 10)).total).toBe(1)
+
+		stop()
+		renameSync(join(base, MASTER_FILE), join(directory, MASTER_FILE))
+		expect((await open(local, undefined, base).library.master(masterId, 1)).status).toBe('warning')
+		expect(store.allMasters()).toHaveLength(1)
+	})
+
+	test('writes no catalog, journal, or manifest', async () => {
+		const { base, directory } = await published()
+		expect(readdirSync(join(base, 'library')).toSorted()).toEqual(['products', 'staging'])
+		expect(readdirSync(directory)).toEqual([MASTER_FILE])
 	})
 })
 
@@ -364,8 +447,8 @@ describe('masters', () => {
 		expect(image.header.EXPTIME).toBe(60)
 		expect(image.header.BZERO).toBeUndefined()
 
-		const manifest = JSON.parse(readFileSync(join(store.revisionDirectory(masterId, 1), MANIFEST_FILE), 'utf8'))
-		expect(manifest.contentDigest).toBe(master.contentDigest)
+		expect(readdirSync(store.revisionDirectory(masterId, 1))).toEqual([MASTER_FILE])
+		expect(master.contentDigest).toMatch(/^[0-9a-f]{64}$/)
 		expect(hashes(join(base, 'frames'))).toEqual(before)
 		expect(readdirSync(join(base, 'library', 'staging'))).toEqual([])
 	})
@@ -522,13 +605,12 @@ describe('masters', () => {
 
 		library.close()
 		libraries.length = 0
-		for (const name of readdirSync(join(base, 'library'))) if (name.startsWith('catalog.')) rmSync(join(base, 'library', name))
 		const reopened = open(local, undefined, base)
 		expect((await reopened.library.masters({}, 0, 10)).items.map(({ revision }) => revision)).toEqual([2])
-		expect(reopened.store.latestRevision(first.masterId)).toBe(2)
+		expect(reopened.store.database.db.query('SELECT last_revision FROM calibration_masters WHERE master_id = ?').get(first.masterId)).toEqual({ last_revision: 2 })
 	})
 
-	test('deleting a group removes its files and frames, keeps its masters, and survives a rebuild', async () => {
+	test('deleting a group removes its files and frames, keeps its masters, and survives a restart', async () => {
 		const { library, plans, base } = open(local)
 		await plan(plans, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
@@ -543,7 +625,6 @@ describe('masters', () => {
 
 		library.close()
 		libraries.length = 0
-		for (const name of readdirSync(join(base, 'library'))) if (name.startsWith('catalog.')) rmSync(join(base, 'library', name))
 		const reopened = open(local, undefined, base)
 		expect((await reopened.library.groups({}, 0, 50)).total).toBe(0)
 	})
@@ -559,7 +640,7 @@ describe('masters', () => {
 		expect(library.deleteSource(frame.sourceId)).rejects.toThrow('uses this frame')
 	})
 
-	test('deleting a frame removes its file and the frame, and survives a rebuild', async () => {
+	test('deleting a frame removes its file and the frame, and survives a restart', async () => {
 		const { library, plans, base } = open(local)
 		await plan(plans, base, 3)
 		const [frame] = (await library.sources({}, 0, 1)).items
@@ -571,7 +652,6 @@ describe('masters', () => {
 
 		library.close()
 		libraries.length = 0
-		for (const name of readdirSync(join(base, 'library'))) if (name.startsWith('catalog.')) rmSync(join(base, 'library', name))
 		const reopened = open(local, undefined, base)
 		expect((await reopened.library.sources({}, 0, 50)).total).toBe(2)
 	})
@@ -707,7 +787,7 @@ describe('flats', () => {
 	})
 
 	test('a calibrated normalized master keeps structure, drops pedestal, and depends on its correction', async () => {
-		const { library, plans, base } = open(local)
+		const { library, plans, base, store } = open(local)
 		const { flat, correction } = await prepared(library, plans, base, 1000)
 
 		const { jobId, masterId } = await library.requestMaster({ groupId: flat.groupId, correction, acknowledged: true })
@@ -719,6 +799,7 @@ describe('flats', () => {
 		expect(master.units).toBe('dimensionless')
 		expect(master.dependencies[0].masterId).toBe(correction.masterId)
 		expect(library.deleteMaster(correction.masterId, correction.revision)).rejects.toThrow('delete that flat first')
+		expect(() => store.discardRevision(correction.masterId, correction.revision)).toThrow('FOREIGN KEY')
 
 		const image = await readMaster(master.path)
 		expect(image.metadata.bitpix).toBe(-32)

@@ -1,7 +1,7 @@
 import { constants } from 'fs'
 import { copyFile, mkdir, rename, rm, rmdir, stat } from 'fs/promises'
 import { join, relative } from 'path'
-import { type IntegrationProgress, type IntegrationResult, IntegrationError, masterHeader, MasterIntegrator, type MasterWorkerRequest } from './calibrationlibrary.analysis'
+import { fileDigest, type IntegrationProgress, type IntegrationResult, IntegrationError, masterHeader, MasterIntegrator, type MasterWorkerRequest } from './calibrationlibrary.analysis'
 import {
 	type CalibrationKind,
 	type CalibrationMetadata,
@@ -26,8 +26,7 @@ import {
 import { ACTIVE_JOB_STATES, type CalibrationJob, CalibrationJobs, type CalibrationJobSummary, type Integrator, jobSummary, type MasterBuild, NO_PROGRESS } from './calibrationlibrary.jobs'
 import { darkPlanSource, type FileInspection, inspectFile, makeSource, regrouped, type ScanCandidate, scanDirectory } from './calibrationlibrary.sources'
 import {
-	type CalibrationJournalRecord,
-	CalibrationLibraryStore,
+	type CalibrationLibraryStore,
 	type CalibrationCamera,
 	type CalibrationMaster,
 	type CalibrationSource,
@@ -38,6 +37,7 @@ import {
 	type MasterCalibrationState,
 	type MasterFilter,
 	type Page,
+	type ProductStatus,
 	type SourceFilter,
 	type SourceStatus,
 	sourceSummary,
@@ -50,7 +50,8 @@ import { errorCode } from './util'
 // Calibration Library: the single owner of what calibration frames exist, whether they can be combined, and which masters
 // were made of them. It needs no camera and claims no device: frames come from the Dark Library plans through their store,
 // from what the Flat Wizard publishes, and from directories an operator imports, always by reference and never modified.
-// Masters are immutable revisions built by jobs that live in memory: they survive the tab, never the server. A wizard may ask for a master, through
+// Masters are immutable revisions built by jobs that live in memory: they survive the tab, never the server. What it indexes
+// and publishes is kept by CalibrationLibraryStore in the operational database. A wizard may ask for a master, through
 // the same path as a person. Only an operator deletes: a frame or a group with their files, or one revision of a master.
 // Applying a master to a light is outside this service: it only explains which masters would match.
 
@@ -77,7 +78,6 @@ export type CalibrationLibraryErrorCode =
 	| 'processingFailed'
 	| 'publicationFailed'
 	| 'productUnavailable'
-	| 'newerVersion'
 	| 'notFound'
 	| 'verifiedMetadata'
 	| 'importFailed'
@@ -104,8 +104,6 @@ export interface CalibrationLibrarySnapshot {
 	readonly epoch: string
 	// Monotonic change counter of this process.
 	readonly revision: number
-	// Whether a newer version owns the catalog.
-	readonly unavailable: boolean
 	// Frames by state, and by role.
 	readonly frames: StateCounts
 	readonly framesByKind: StateCounts
@@ -158,7 +156,7 @@ export interface CalibrationMasterDetail extends CalibrationMaster {
 
 // Event of the library.
 export type CalibrationLibraryEvent =
-	// Anything of the catalog changed.
+	// Anything of the library changed.
 	| { readonly type: 'calibrationLibrary:changed'; readonly revision: number; readonly summary: CalibrationLibrarySnapshot }
 	// A job changed.
 	| { readonly type: 'calibrationLibrary:jobUpdated'; readonly epoch: string; readonly revision: number; readonly job: CalibrationJobSummary }
@@ -357,13 +355,13 @@ function masterSummary(master: CalibrationMaster, preferred: number | undefined)
 	return { masterId, revision, kind, calibrationState, units, metadata, frames: sourceIds.length, method: recipe.method, preferred: preferred === revision, createdAt, status, groupId, dependencies }
 }
 
-// The service. Work waits for the first open of the catalog, so importing this module touches no file.
+// The service. Work waits for the first open of the library, so importing this module touches no file.
 export class CalibrationLibrary {
 	// Id of this process.
 	readonly #epoch = crypto.randomUUID()
 	// Change counter.
 	#revision = 0
-	// First open of the catalog and the reconciliation after it.
+	// First open of the library and the reconciliation after it.
 	#opened?: Promise<void>
 	// Import scans running, by job.
 	readonly #scans = new Map<string, AbortController>()
@@ -387,8 +385,8 @@ export class CalibrationLibrary {
 		})
 	}
 
-	// Opens the catalog once, rebuilding what can be derived, and brings it in line with the disk. Fails nothing that a retry
-	// could fix: a request after a failure opens it again.
+	// Opens the library once and brings it in line with the disk. Fails nothing that a retry could fix: a request after a
+	// failure opens it again.
 	ready() {
 		this.#opened ??= this.#open().catch((error: unknown) => {
 			this.#opened = undefined
@@ -397,13 +395,10 @@ export class CalibrationLibrary {
 		return this.#opened
 	}
 
-	// Opens the catalog and resumes the jobs.
+	// Finishes what a crash interrupted, indexes the plans, checks the masters, and resumes the jobs.
 	async #open() {
-		const rebuild = this.store.open()
-		if (this.store.newerVersion) return
-
+		await this.#recoverMasters()
 		await this.#indexPlans()
-		if (rebuild) await this.#replay()
 		await this.#reconcileMasters()
 		await this.jobs.start()
 		await this.#refreshFiles()
@@ -411,70 +406,75 @@ export class CalibrationLibrary {
 		this.#changed()
 	}
 
-	// Throws when a newer version owns the catalog.
+	// Waits until the library is open.
 	async #usable() {
 		await this.ready()
-		if (this.store.newerVersion) throw new LibraryError('A newer version of Nebulosa owns the calibration catalog', 409, 'newerVersion')
 	}
 
-	// Applies the journal to an empty catalog. Frames of plans were indexed first, so overrides find them.
-	async #replay() {
-		for (const record of await this.store.journal()) this.#apply(record)
-	}
+	// Finishes what a crash interrupted, from the disk: a revision being published becomes published when its directory
+	// holds the file it recorded, and is forgotten otherwise, its number staying taken; a revision being deleted loses its
+	// directory and its row. A revision directory without a row is moved to orphaned/ and reported, never adopted nor
+	// deleted. What cannot be finished is reported and tried again on the next start.
+	async #recoverMasters() {
+		for (const { master, publication } of this.store.pending()) {
+			const { masterId, revision } = master
 
-	// Applies a journal record to the catalog.
-	#apply(record: CalibrationJournalRecord) {
-		switch (record.type) {
-			case 'source':
-				this.store.putSources([record.source])
-				return
-			case 'override': {
-				const source = this.store.source(record.sourceId)
-				if (source) this.store.putSources([regrouped(source, source.kind, { ...source.metadata, [record.field]: { value: record.value, evidence: 'operatorDeclared' } })])
-				return
+			try {
+				if (publication === 'deleting') {
+					await rm(this.store.revisionDirectory(masterId, revision), { recursive: true, force: true })
+					this.store.discardRevision(masterId, revision)
+					await rmdir(join(this.store.productsDirectory, masterId)).catch(() => undefined)
+				} else if (await this.#intact(master)) {
+					this.store.completePublication(masterId, revision, this.#withDigests(master))
+				} else {
+					this.store.discardRevision(masterId, revision)
+				}
+			} catch (error) {
+				console.error('calibration library: unable to finish revision', masterId, revision, error)
 			}
-			case 'classification': {
-				const source = this.store.source(record.sourceId)
-				if (source) this.store.putSources([regrouped(source, record.kind, source.metadata)])
-				return
+		}
+
+		for (const { masterId, revision, name } of await this.store.productDirectories()) {
+			if (revision > 0 && this.store.hasRevision(masterId, revision)) continue
+			const target = join(this.store.orphanedDirectory, `${masterId}-${name}-${crypto.randomUUID()}`)
+
+			try {
+				await mkdir(this.store.orphanedDirectory, { recursive: true })
+				await rename(join(this.store.productsDirectory, masterId, name), target)
+				console.warn(`calibration library: ${masterId}/${name} has no record and was moved to ${target}`)
+			} catch (error) {
+				console.error('calibration library: unable to move an orphaned revision', masterId, name, error)
 			}
-			case 'exclusion': {
-				const source = this.store.source(record.sourceId)
-				if (source) this.store.putSources([{ ...source, excluded: record.reason }])
-				return
-			}
-			case 'preferred':
-				this.store.setPreferred(record.masterId, record.revision)
-				return
-			case 'removal':
-				this.store.removeSources([record.sourceId])
-				return
-			case 'masterRemoval':
-				this.store.removeMaster(record.masterId, record.revision)
 		}
 	}
 
-	// Adopts every manifest the catalog does not know, and marks revisions whose file went away or whose dependency did.
-	// A manifest found here means a crash came after a publish and before its row.
+	// Returns whether the file of a revision is the one it recorded, by size and SHA-256.
+	async #intact(master: CalibrationMaster) {
+		const file = this.#masterFile(master)
+		const info = await stat(file).catch(() => undefined)
+		return info?.size === master.bytes && (await fileDigest(file)) === master.contentDigest
+	}
+
+	// Marks a revision unavailable while its file is missing or of another size, stale while a revision it depends on is
+	// unavailable, and gives it back the state it was published with once neither holds.
 	async #reconcileMasters() {
-		for (const manifest of await this.store.manifests()) {
-			const { version: _, ...master } = manifest
-			if (!this.store.master(master.masterId, master.revision)) this.store.putMaster(master)
-		}
-
 		const masters = this.store.allMasters()
 		const unavailable = new Set<string>()
 
 		for (const master of masters) {
 			const info = await stat(this.#masterFile(master)).catch(() => undefined)
-			const status = info?.size === master.bytes ? master.status : 'unavailable'
-			if (status === 'unavailable') unavailable.add(`${master.masterId}:${master.revision}`)
-			if (status !== master.status) this.store.putMaster({ ...master, status })
+			if (info?.size !== master.bytes) unavailable.add(`${master.masterId}:${master.revision}`)
 		}
 
-		for (const master of masters) {
-			if (master.status !== 'unavailable' && master.dependencies.some(({ masterId, revision }) => unavailable.has(`${masterId}:${revision}`))) this.store.putMaster({ ...master, status: 'stale' })
+		const changes: { masterId: string; revision: number; status: 'unavailable' | 'stale' | 'published' }[] = []
+
+		for (const { masterId, revision, status, dependencies } of masters) {
+			const next = unavailable.has(`${masterId}:${revision}`) ? 'unavailable' : dependencies.some((dependency) => unavailable.has(`${dependency.masterId}:${dependency.revision}`)) ? 'stale' : 'published'
+			const current = status === 'unavailable' || status === 'stale' ? status : 'published'
+			if (next !== current) changes.push({ masterId, revision, status: next })
 		}
+
+		this.store.setStatuses(changes)
 	}
 
 	// Path of the FITS file of a revision.
@@ -552,9 +552,6 @@ export class CalibrationLibrary {
 
 	// Builds the snapshot.
 	snapshot(): CalibrationLibrarySnapshot {
-		const empty = { frames: {}, framesByKind: {}, masters: {}, mastersByKind: {}, cameras: [], activeJobs: [], recentJobs: [] }
-		if (this.store.newerVersion) return { epoch: this.#epoch, revision: this.#revision, unavailable: true, ...empty }
-
 		const { sources, masters, cameras } = this.store.counts()
 		const frames: Record<string, number> = {}
 		const framesByKind: Record<string, number> = {}
@@ -576,10 +573,10 @@ export class CalibrationLibrary {
 			.latest(RECENT_JOBS)
 			.filter(({ automatic }) => automatic)
 			.map(jobSummary)
-		return { epoch: this.#epoch, revision: this.#revision, unavailable: false, frames, framesByKind, masters: mastersByState, mastersByKind, cameras, activeJobs, recentJobs }
+		return { epoch: this.#epoch, revision: this.#revision, frames, framesByKind, masters: mastersByState, mastersByKind, cameras, activeJobs, recentJobs }
 	}
 
-	// Publishes a change of the catalog.
+	// Publishes a change of the library.
 	#changed() {
 		const revision = ++this.#revision
 		this.listener({ type: 'calibrationLibrary:changed', revision, summary: this.snapshot() })
@@ -605,7 +602,7 @@ export class CalibrationLibrary {
 		return source
 	}
 
-	// Records a value of a frame that was unknown, with the reason, and regroups it. A value the file or a plan states cannot
+	// Records a value of a frame that was unknown, and regroups it; the reason is for the operator alone. A value the file or a plan states cannot
 	// be replaced: a conflict with a measurement is an incompatibility, not an edit. Throws LibraryError.
 	async override(sourceId: string, field: OverridableField, value: string | number, reason: string) {
 		const source = await this.source(sourceId)
@@ -614,19 +611,15 @@ export class CalibrationLibrary {
 		const { evidence } = source.metadata[field] as Evidenced<unknown>
 		if (evidence === 'verified' || evidence === 'planDeclared') throw new LibraryError(`${field} is ${evidence} and cannot be replaced`, 409, 'verifiedMetadata')
 
-		const record: CalibrationJournalRecord = { type: 'override', at: Date.now(), sourceId, field, value, reason }
-		await this.store.append([record])
-		this.#apply(record)
+		this.store.putSources([regrouped(source, source.kind, { ...source.metadata, [field]: { value, evidence: 'operatorDeclared' } })])
 		this.#changed()
 		return sourceSummary(this.store.source(sourceId)!)
 	}
 
 	// Leaves a frame out of masters, with the reason, or brings it back when reason is absent.
 	async exclude(sourceId: string, reason: string | undefined) {
-		await this.source(sourceId)
-		const record: CalibrationJournalRecord = { type: 'exclusion', at: Date.now(), sourceId, reason }
-		await this.store.append([record])
-		this.#apply(record)
+		const source = await this.source(sourceId)
+		this.store.putSources([{ ...source, excluded: reason }])
 		this.#changed()
 		return sourceSummary(this.store.source(sourceId)!)
 	}
@@ -706,7 +699,7 @@ export class CalibrationLibrary {
 		return await this.#deleteSources([source])
 	}
 
-	// Deletes the files of frames and forgets the frames whose file went away, journaled so a rebuilt catalog keeps them out.
+	// Deletes the files of frames and forgets the frames whose file went away.
 	// Returns how many went away; throws deleteFailed after forgetting the others when a file could not be deleted.
 	async #deleteSources(sources: readonly CalibrationSource[]) {
 		const removed: string[] = []
@@ -721,8 +714,6 @@ export class CalibrationLibrary {
 			}
 		}
 
-		const at = Date.now()
-		await this.store.append(removed.map((sourceId) => ({ type: 'removal', at, sourceId })))
 		this.store.removeSources(removed)
 		this.#changed()
 
@@ -819,7 +810,7 @@ export class CalibrationLibrary {
 		return this.#requestMaster(request, automatic)
 	}
 
-	// Starts a master over an open catalog.
+	// Starts a master over an open library.
 	#requestMaster(request: MasterRequest, automatic: boolean, planId?: string): MasterRequestResult {
 		if (request.token !== undefined) {
 			const job = this.jobs.byToken(request.token)
@@ -882,9 +873,10 @@ export class CalibrationLibrary {
 		return { jobId: job.jobId, kind: build.kind, frames: build.frames, recipe: build.recipe, correction, staging, header: masterHeader(build.kind, build.metadata, build.frames.length, units, build.correction?.kind), memoryBudget: this.jobs.memoryBudget }
 	}
 
-	// Makes a staged product visible. The frames are compared with what the job saw, the manifest goes next to the master, and the
-	// rename publishes both at once; only then does the catalog say ready. A crash between them leaves a manifest the next start
-	// adopts. Throws with a stable code, leaving what is published untouched.
+	// Makes a staged product visible. The frames are compared with what the job saw, the next revision number is taken and the
+	// revision recorded as publishing, the rename moves its directory into products/, and only then is it published. A crash
+	// between them is finished on the next start from what the directory holds. Throws with a stable code, leaving what is
+	// published untouched; a number taken is never used again.
 	async #publish(job: CalibrationJob, result: IntegrationResult, staging: string) {
 		const build = job.build!
 
@@ -896,12 +888,10 @@ export class CalibrationLibrary {
 
 		if (build.correction && !(await stat(this.#masterFile(build.correction)).catch(() => undefined))) throw new IntegrationError('sourceMissing', 'The correction master is not available')
 
-		const revision = this.store.latestRevision(build.masterId) + 1
 		const warned = build.acknowledged.length > 0 || build.partial || result.diagnostics.lowSampleCount
 
-		const master: CalibrationMaster = {
+		const recorded: Omit<CalibrationMaster, 'revision'> = {
 			masterId: build.masterId,
-			revision,
 			kind: build.kind,
 			...masterContent(build.kind),
 			fullScaleDn: result.fullScale,
@@ -923,17 +913,31 @@ export class CalibrationLibrary {
 		}
 
 		const product = join(staging, 'product')
+		const failed = (error: unknown) => Object.assign(new Error(`The master could not be published (${errorCode(error) ?? (Error.isError(error) ? error.message : 'unexpected error')})`), { code: 'publicationFailed' })
+		let master: CalibrationMaster
 
 		try {
-			await this.store.writeManifest(product, master)
+			master = this.store.beginPublication(recorded)
+		} catch (error) {
+			throw failed(error)
+		}
+
+		const { revision } = master
+
+		try {
 			await mkdir(join(this.store.productsDirectory, build.masterId), { recursive: true })
 			await rename(product, this.store.revisionDirectory(build.masterId, revision))
 		} catch (error) {
-			throw Object.assign(new Error(`The master could not be published (${errorCode(error) ?? 'unexpected error'})`), { code: 'publicationFailed' })
+			try {
+				this.store.discardRevision(build.masterId, revision)
+			} catch (discardError) {
+				console.error('calibration library: unable to forget an unpublished revision', build.masterId, revision, discardError)
+			}
+
+			throw failed(error)
 		}
 
-		this.store.putMaster(master)
-		this.store.putSources(this.#withDigests(master))
+		this.store.completePublication(build.masterId, revision, this.#withDigests(master))
 		this.listener({ type: 'calibrationLibrary:masterUpdated', epoch: this.#epoch, revision: ++this.#revision, master: masterSummary(master, this.store.preferred(master.masterId)) })
 		this.#changed()
 		return revision
@@ -970,33 +974,33 @@ export class CalibrationLibrary {
 	async prefer(masterId: string, revision: number) {
 		const master = await this.master(masterId, revision)
 		if (master.status === 'unavailable') throw new LibraryError('The file of this master is not available', 409, 'productUnavailable')
-		const record: CalibrationJournalRecord = { type: 'preferred', at: Date.now(), masterId, revision }
-		await this.store.append([record])
-		this.#apply(record)
+		this.store.setPreferred(masterId, revision)
 		this.#changed()
 		return { ...master, preferred: true }
 	}
 
 	// Deletes one revision with its directory. Its number is never used again, and a revision another master depends on, or a
-	// master being built depends on, cannot go. Throws when unknown, in use, or its directory could not be deleted.
+	// master being built depends on, cannot go. The revision is recorded as deleting before its directory goes, so a crash
+	// between them is finished on the next start. Throws when unknown, in use, or its directory could not be deleted, which
+	// leaves it published.
 	async deleteMaster(masterId: string, revision: number) {
 		await this.master(masterId, revision)
 		const used = (reference: Pick<MasterReference, 'masterId' | 'revision'> | undefined) => reference?.masterId === masterId && reference.revision === revision
-		if (this.store.allMasters().some(({ dependencies }) => dependencies.some(used))) throw new LibraryError('A master flat was corrected by this master; delete that flat first', 409, 'masterInUse')
+		if (this.store.isDependency(masterId, revision)) throw new LibraryError('A master flat was corrected by this master; delete that flat first', 409, 'masterInUse')
 		if (this.jobs.inStates(ACTIVE_JOB_STATES).some(({ build }) => used(build?.correction))) throw new LibraryError('A master flat being built is corrected by this master', 409, 'masterInUse')
+
+		this.store.setDeleting(masterId, revision, true)
 
 		try {
 			await rm(this.store.revisionDirectory(masterId, revision), { recursive: true, force: true })
 		} catch (error) {
+			this.store.setDeleting(masterId, revision, false)
 			throw new LibraryError(`The master could not be deleted (${errorCode(error) ?? 'unexpected error'})`, 500, 'deleteFailed')
 		}
 
+		this.store.discardRevision(masterId, revision)
 		// The directory of the master goes too once its last revision did.
 		await rmdir(join(this.store.productsDirectory, masterId)).catch(() => undefined)
-
-		const record: CalibrationJournalRecord = { type: 'masterRemoval', at: Date.now(), masterId, revision }
-		await this.store.append([record])
-		this.#apply(record)
 		this.#changed()
 		return { masterId, revision }
 	}
@@ -1096,9 +1100,7 @@ export class CalibrationLibrary {
 		if (job.type !== 'import' || job.state !== 'completed' || job.scan?.committed !== undefined) throw new LibraryError('This import cannot be committed', 409, 'jobConflict')
 
 		const chosen = paths && new Set(paths)
-		const records: CalibrationJournalRecord[] = []
 		const sources: CalibrationSource[] = []
-		const at = Date.now()
 
 		for (const candidate of job.candidates ?? []) {
 			if (chosen && !chosen.has(candidate.path)) continue
@@ -1126,11 +1128,8 @@ export class CalibrationLibrary {
 
 			const source = makeSource('import', jobId, kind, path, candidate.format, bytes, mtimeMillis, candidate.metadata, warnings, { supported: candidate.metadata.bitpix !== 64 })
 			sources.push(source)
-			records.push({ type: 'source', at, source })
-			if (classification) records.push({ type: 'classification', at, sourceId: source.sourceId, kind, reason: classification.reason })
 		}
 
-		await this.store.append(records)
 		this.store.putSources(sources)
 		this.#saveImport(job, { candidates: undefined, scan: { ...job.scan!, committed: sources.length } })
 		this.#changed()
@@ -1146,7 +1145,6 @@ export class CalibrationLibrary {
 
 		const metadata: CalibrationMetadata = { ...inspection.metadata, cameraId: { value: cameraId, evidence: 'planDeclared' }, cameraName, filter: inspection.metadata.filter.value === undefined && filter !== undefined ? { value: filter, evidence: 'planDeclared' } : inspection.metadata.filter }
 		const source = makeSource('flatWizard', sessionId, 'flat', path, inspection.format, info.size, info.mtimeMs, metadata, inspection.warnings)
-		await this.store.append([{ type: 'source', at: Date.now(), source }])
 		this.store.putSources([source])
 		this.#changed()
 	}
@@ -1206,11 +1204,10 @@ export class CalibrationLibrary {
 		return { candidates, missingKinds: kinds.filter((kind) => !candidates.some((candidate) => candidate.kind === kind && candidate.verdict === 'compatible')) }
 	}
 
-	// Stops the running job and closes the catalog.
+	// Stops the running job and the scans.
 	close() {
 		this.jobs.stop()
 		for (const scan of this.#scans.values()) scan.abort(new DOMException('Stopped', 'AbortError'))
-		this.store.close()
 	}
 }
 
@@ -1328,7 +1325,13 @@ export function createCalibrationLibraryRoutes(library: CalibrationLibrary) {
 		'/api/calibration-library/masters': {
 			GET: (request) => {
 				const { searchParams, offset, limit } = pageOf(request)
-				const filter: MasterFilter = { kind: (searchParams.get('kind') as CalibrationKind | null) ?? undefined, camera: searchParams.get('camera') ?? undefined, filter: searchParams.get('filter') ?? undefined, masterId: searchParams.get('masterId') ?? undefined }
+				const filter: MasterFilter = {
+					kind: (searchParams.get('kind') as CalibrationKind | null) ?? undefined,
+					camera: searchParams.get('camera') ?? undefined,
+					filter: searchParams.get('filter') ?? undefined,
+					status: (searchParams.get('status') as ProductStatus | null) ?? undefined,
+					masterId: searchParams.get('masterId') ?? undefined,
+				}
 				return answer(() => library.masters(filter, offset, limit))
 			},
 			POST: async (request) => {

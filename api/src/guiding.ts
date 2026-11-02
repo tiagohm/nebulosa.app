@@ -19,6 +19,7 @@ import type { GuiderState, GuidingEvent } from 'nebulosa/src/observation/guiding
 import type { GuidingSettle } from 'nebulosa/src/observation/guiding/session'
 import { InteractiveGuidingSession, type GuidingPauseMode } from 'nebulosa/src/observation/guiding/session.interactive'
 import { enrichGuideStars, type GuideStar, type GuidingMode, StarTracker, starTrackingOf } from 'nebulosa/src/observation/guiding/tracker.star'
+import { CameraSessionRegistry } from './camerasessions'
 import type { CaptureFrameRegistry } from './captureframes'
 import type { CaptureFrame, CaptureSettings, CaptureSnoop } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, failureResponse, notFound, unsupported } from './commands'
@@ -541,12 +542,10 @@ export function guidingRegions(session: Pick<Session, 'builtin' | 'tracker' | 's
 
 // Guiding sessions of the cameras of every open connection.
 export class GuidingSessions implements Disposable {
-	// Latest session of each guide camera, by camera resource key.
-	readonly #sessions = new Map<string, Session>()
+	// Latest session of each guide camera, and the session each start token started.
+	readonly #sessions: CameraSessionRegistry<GuidingSessionSummary, Session>
 	// Holds that keep the guide outputs of a connection from starting, by connection id.
 	readonly #holds = new Map<string, number>()
-	// Session of each operation a start token started, so a repeated start answers it.
-	readonly #byOperation = new Map<string, Session>()
 
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, guideOutputs is the commander the pulses are dispatched through, images receives the previewed frames,
@@ -561,28 +560,30 @@ export class GuidingSessions implements Disposable {
 		readonly frames: CaptureFrameRegistry,
 		readonly tools: ExternalToolsStore,
 		readonly listener: GuidingListener,
-	) {}
+	) {
+		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'guiding:updated', session }))
+	}
 
 	// Returns the latest session of every guide camera.
 	snapshot(): GuidingSnapshot {
-		return { sessions: Array.from(this.#sessions.values(), (session) => session.summary) }
+		return { sessions: this.#sessions.summaries() }
 	}
 
 	// Responds with a session, or 404 when it is not the latest of its camera.
 	session(sessionId: string): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		return session ? Response.json(session.summary) : this.#notFound()
 	}
 
 	// Responds with the control events after `after`, at most MAX_EVENTS.
 	events(sessionId: string, after: number): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		return session ? Response.json(page(session.events, (record) => record.sequence, after)) : this.#notFound()
 	}
 
 	// Responds with the telemetry samples after `after`, at most MAX_TELEMETRY.
 	telemetry(sessionId: string, after: number): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		return session ? Response.json(page(session.telemetry, (sample) => sample.cursor, after)) : this.#notFound()
 	}
 
@@ -597,8 +598,7 @@ export class GuidingSessions implements Disposable {
 		// The built-in detection the worker runs; ASTAP runs here, on the decoded file.
 		const builtin = detection?.provider === 'astap' ? undefined : detection === undefined ? {} : { maxStars: detection.maxStars, minSNR: detection.minSNR, searchRegion: detection.searchRegion, ...(detection.maximumRadius !== undefined && { maximumRadius: detection.maximumRadius }) }
 
-		const known = this.operations.started(request.token)
-		const repeated = known && this.#byOperation.get(known.operationId)
+		const repeated = this.#sessions.repeated(request.token)
 		if (repeated) return Response.json({ sessionId: repeated.summary.sessionId, operationId: repeated.summary.operationId } satisfies GuidingStartResponse, { status: 202 })
 
 		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
@@ -692,12 +692,7 @@ export class GuidingSessions implements Disposable {
 			return await session.ended.promise
 		})
 
-		const key = resourceKey(camera)
-		const previous = this.#sessions.get(key)
-		if (previous) this.#byOperation.delete(previous.summary.operationId)
-		this.#sessions.set(key, session)
-		this.#byOperation.set(record.operationId, session)
-		this.#update(session, { operationId: record.operationId })
+		this.#sessions.adopt(resourceKey(camera), session, record.operationId)
 
 		return Response.json({ sessionId: session.summary.sessionId, operationId: record.operationId } satisfies GuidingStartResponse, { status: 202 })
 	}
@@ -788,13 +783,13 @@ export class GuidingSessions implements Disposable {
 	// Returns the sessions that may send pulses through a guide output of a connection, which may be the mount itself or the ST4
 	// port of a camera wired to it; only the operator knows which mount that port moves, so any of the connection counts.
 	runsOn(connectionId: string): readonly GuidingSessionSummary[] {
-		return Array.from(this.#sessions.values(), ({ summary }) => summary).filter(({ active, guideOutputHeld, guideOutput }) => active && guideOutputHeld && guideOutput.connectionId === connectionId)
+		return this.#sessions.summaries().filter(({ active, guideOutputHeld, guideOutput }) => active && guideOutputHeld && guideOutput.connectionId === connectionId)
 	}
 
 	// Stops the corrections of a session for a motion of another service, keeping its loop and calibration, and resolves once the
 	// guide output was released, with what restoreAfterMotion needs; a failure leaves the output as it stands.
 	async suspendForMotion(sessionId: string): Promise<OperationResult<GuidingSuspension>> {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session?.summary.active) return failedOperationResult('unexpectedState', 'The guiding session ended')
 
 		const commandId = crypto.randomUUID()
@@ -810,7 +805,7 @@ export class GuidingSessions implements Disposable {
 	// after a slew, and the calibration does not follow the declination, so the best star of a frame taken after the motion is
 	// selected and the guider recalibrates. Resolves how that went, without rejecting. An abort stops waiting and stops guiding.
 	async restoreAfterMotion({ sessionId, commandId, settle }: GuidingSuspension, signal: AbortSignal): Promise<GuidingRestoration> {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session?.summary.active || session.summary.guideOutputHeld || session.summary.command?.commandId !== commandId) return 'externallyChanged'
 
 		const cleared = session.interactive.clearTarget()
@@ -873,7 +868,7 @@ export class GuidingSessions implements Disposable {
 
 	// Stops every session.
 	[Symbol.dispose]() {
-		for (const session of this.#sessions.values()) {
+		for (const session of this.#sessions.sessions()) {
 			if (!session.summary.active) continue
 			void session.interactive.stop(this.operations.coordinator).then(() => this.#end(session, successfulOperationResult(undefined)))
 		}
@@ -1115,15 +1110,9 @@ export class GuidingSessions implements Disposable {
 
 	// Returns the latest session with this id that still lives, or the response refusing it.
 	#active(sessionId: string): Session | Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session || session.summary.endedAt !== undefined) return errorResponse('No guiding session is running with this id', 404, 'notFound')
 		return session
-	}
-
-	// Returns the latest session with this id.
-	#find(sessionId: string): Session | undefined {
-		for (const session of this.#sessions.values()) if (session.summary.sessionId === sessionId) return session
-		return undefined
 	}
 
 	#notFound() {
@@ -1143,8 +1132,7 @@ export class GuidingSessions implements Disposable {
 		}
 
 		if (!changed) return
-		session.summary = { ...current, ...patch, revision: current.revision + 1 }
-		if (this.#sessions.get(resourceKey(session.camera)) === session) this.listener({ type: 'guiding:updated', session: session.summary })
+		this.#sessions.replace(session, { ...current, ...patch })
 	}
 }
 

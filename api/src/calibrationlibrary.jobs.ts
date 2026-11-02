@@ -1,22 +1,22 @@
 import { rm } from 'fs/promises'
+import type { ImportCandidate } from './calibrationlibrary'
 import { DEFAULT_MEMORY_BUDGET, type IntegrationErrorCode, type IntegrationFrame, type IntegrationProgress, type IntegrationResult, type MasterWorkerRequest } from './calibrationlibrary.analysis'
 import type { CalibrationKind, CalibrationMetadata, CalibrationRecipe, CompatibilityFinding, MasterReference } from './calibrationlibrary.compatibility'
 import type { CalibrationLibraryStore } from './calibrationlibrary.store'
 
-// Durable queue of the master jobs of the Calibration Library. A job is written before a request is answered, with the
-// exact frames it saw, so it survives a closed tab and a restart: a queued job runs after a restart, while a job that was
-// working becomes interrupted, keeps nothing, and a new request builds it again. One master integrates at a time. An automatic job waits
-// while a device operation runs, so a wizard's masters never compete with an acquisition, and it holds no device itself.
-// A request that repeats a fingerprint meets the job already doing it.
+// Jobs of the Calibration Library: the master builds and the import scans of this process, kept in memory only. A job
+// outlives the tab that asked for it, never the server: nothing of it is written but the staging of a running build, which
+// the next start removes, and a master a wizard asked for is asked again at that start. One master integrates at a time.
+// An automatic job waits while a device operation runs, so a wizard's masters never compete with an acquisition, and it
+// holds no device itself. A request that repeats a fingerprint meets the job already doing it.
 
 // State of a job:
-// - queued: written, not started.
+// - queued: waiting for the worker.
 // - validating: checking its frames.
 // - integrating: combining rows.
 // - publishing: making its product visible.
 // - completed, failed, cancelled: ended.
-// - interrupted: the process ended while it worked; nothing of it was published.
-export type CalibrationJobState = 'queued' | 'validating' | 'integrating' | 'publishing' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+export type CalibrationJobState = 'queued' | 'validating' | 'integrating' | 'publishing' | 'completed' | 'failed' | 'cancelled'
 
 // States of a job that still has work to do.
 export const ACTIVE_JOB_STATES: readonly CalibrationJobState[] = ['queued', 'validating', 'integrating', 'publishing']
@@ -72,7 +72,7 @@ export interface ImportScan {
 	readonly committed?: number
 }
 
-// Durable job.
+// Job of this process, kept in memory.
 export interface CalibrationJob {
 	// Id of the job.
 	readonly jobId: string
@@ -93,6 +93,8 @@ export interface CalibrationJob {
 	readonly build?: MasterBuild
 	// Scan of an import job.
 	readonly scan?: ImportScan
+	// Files an import job found, with their paths, until it is committed.
+	readonly candidates?: readonly ImportCandidate[]
 	// Progress of a master job.
 	readonly progress: IntegrationProgress
 	// Why it failed, with a stable code.
@@ -139,6 +141,9 @@ export interface CalibrationJobSummary {
 
 // Empty progress of a new job.
 export const NO_PROGRESS: IntegrationProgress = { framesValidated: 0, rowsCombined: 0, rowsTotal: 0, bytesWritten: 0 }
+
+// Ended jobs kept for the snapshot and the tabs; older ended ones are forgotten.
+const MAXIMUM_ENDED_JOBS = 100
 
 // Time between checks whether an automatic job may start, in milliseconds.
 const AUTOMATIC_RETRY_DELAY = 15000
@@ -191,8 +196,10 @@ export interface JobHost {
 	readonly updated: (job: CalibrationJob) => void
 }
 
-// The queue. Every state change is written before it is published.
+// The jobs of this process and the queue of the masters. Every change is published as it is recorded.
 export class CalibrationJobs {
+	// Every job known, in the order they were created.
+	readonly #jobs = new Map<string, CalibrationJob>()
 	// Job on the worker, with what stops it.
 	#running?: { readonly jobId: string; readonly controller: AbortController }
 	// Next check of the automatic jobs.
@@ -200,7 +207,7 @@ export class CalibrationJobs {
 	// Whether the queue was stopped, which starts nothing more.
 	#stopped = false
 
-	// Creates the queue, which runs nothing until recover.
+	// Creates the queue, which runs nothing until start.
 	constructor(
 		readonly store: CalibrationLibraryStore,
 		readonly integrator: Integrator,
@@ -208,32 +215,57 @@ export class CalibrationJobs {
 		readonly memoryBudget: number = DEFAULT_MEMORY_BUDGET,
 	) {}
 
-	// Writes a job and publishes it.
+	// Returns a job, or undefined when this process does not know it.
+	get(jobId: string) {
+		return this.#jobs.get(jobId)
+	}
+
+	// Returns the job a request token created.
+	byToken(token: string) {
+		return this.#jobs.values().find((job) => job.token === token)
+	}
+
+	// Lists jobs in some states, oldest first.
+	inStates(states: readonly CalibrationJobState[]) {
+		return this.#jobs
+			.values()
+			.filter(({ state }) => states.includes(state))
+			.toArray()
+	}
+
+	// Lists the latest jobs, newest first.
+	latest(limit: number) {
+		return this.#jobs.values().toArray().toReversed().slice(0, limit)
+	}
+
+	// Records a job and publishes it. Ended jobs past MAXIMUM_ENDED_JOBS are forgotten, oldest first.
+	save(job: CalibrationJob) {
+		this.#jobs.set(job.jobId, job)
+		this.host.updated(job)
+
+		const ended = this.#jobs
+			.values()
+			.filter(({ state }) => !ACTIVE_JOB_STATES.includes(state))
+			.toArray()
+		for (const { jobId } of ended.slice(0, Math.max(0, ended.length - MAXIMUM_ENDED_JOBS))) this.#jobs.delete(jobId)
+	}
+
+	// Applies a change to a job, records it, and publishes it.
 	#save(job: CalibrationJob, patch: Partial<CalibrationJob>) {
 		const next = { ...job, ...patch, updatedAt: Date.now() }
-		this.store.putJob(next)
-		this.host.updated(next)
+		this.save(next)
 		return next
 	}
 
-	// Brings the jobs of a previous process back: work in progress becomes interrupted, staging of every job not queued goes
-	// away, and the queue resumes. A job that published right before the crash is completed, because its product is the proof.
-	async recover() {
-		for (const job of this.store.jobsIn(['validating', 'integrating', 'publishing'])) {
-			const master = job.fingerprint === undefined ? undefined : this.store.masterByFingerprint(job.fingerprint)
-			if (master) this.#save(job, { state: 'completed', masterId: master.masterId, revision: master.revision })
-			else this.#save(job, { state: 'interrupted', error: 'The server stopped while this job was working' })
-		}
-
-		const queued = this.store.jobsIn(['queued'])
-		await this.store.removeOrphanStaging(new Set(queued.map(({ jobId }) => jobId)))
+	// Removes the staging a previous process left, since none of its jobs survived it, and starts the queue.
+	async start() {
+		await this.store.removeStaging()
 		this.pump()
 	}
 
 	// Adds a job and starts the queue.
 	enqueue(job: CalibrationJob) {
-		this.store.putJob(job)
-		this.host.updated(job)
+		this.save(job)
 		this.pump()
 	}
 
@@ -249,7 +281,7 @@ export class CalibrationJobs {
 	pump() {
 		if (this.#running || this.#stopped) return
 
-		const queued = this.store.jobsIn(['queued']).filter(({ type }) => type === 'master')
+		const queued = this.inStates(['queued']).filter(({ type }) => type === 'master')
 		const job = queued.find(({ automatic }) => !automatic || !this.host.busy())
 
 		if (!job) {

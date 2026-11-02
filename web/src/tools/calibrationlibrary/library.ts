@@ -46,12 +46,6 @@ export const PRODUCT_STATUS_LABELS: Readonly<Record<ProductStatus, string>> = { 
 // Tone of each state of a master.
 export const PRODUCT_STATUS_TONES: Readonly<Record<ProductStatus, StatusTone>> = { ready: 'success', warning: 'warning', stale: 'warning', unavailable: 'danger' }
 
-// Label of each state of a job.
-export const JOB_STATE_LABELS: Readonly<Record<CalibrationJobSummary['state'], string>> = { queued: 'Queued', validating: 'Validating', integrating: 'Building', publishing: 'Publishing', completed: 'Ready', failed: 'Failed', cancelled: 'Cancelled', interrupted: 'Interrupted' }
-
-// Tone of each state of a job.
-export const JOB_STATE_TONES: Readonly<Record<CalibrationJobSummary['state'], StatusTone>> = { queued: 'neutral', validating: 'active', integrating: 'active', publishing: 'active', completed: 'success', failed: 'danger', cancelled: 'muted', interrupted: 'warning' }
-
 // Label of each way of knowing a value.
 export const EVIDENCE_LABELS: Readonly<Record<EvidenceLevel, string>> = { verified: 'From the file', planDeclared: 'From the plan', operatorDeclared: 'Declared by an operator', unknown: 'Unknown' }
 

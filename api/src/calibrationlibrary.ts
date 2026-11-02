@@ -34,6 +34,7 @@ import {
 	type CalibrationSourceSummary,
 	fileNameOf,
 	MASTER_FILE,
+	MAX_PAGE_SIZE,
 	type MasterCalibrationState,
 	type MasterFilter,
 	type Page,
@@ -49,7 +50,7 @@ import { errorCode } from './util'
 // Calibration Library: the single owner of what calibration frames exist, whether they can be combined, and which masters
 // were made of them. It needs no camera and claims no device: frames come from the Dark Library plans through their store,
 // from what the Flat Wizard publishes, and from directories an operator imports, always by reference and never modified.
-// Masters are immutable revisions built by jobs that survive the tab and the server. A wizard may ask for a master, through
+// Masters are immutable revisions built by jobs that live in memory: they survive the tab, never the server. A wizard may ask for a master, through
 // the same path as a person. Only an operator deletes: a frame or a group with their files, or one revision of a master.
 // Applying a master to a light is outside this service: it only explains which masters would match.
 
@@ -404,7 +405,7 @@ export class CalibrationLibrary {
 		await this.#indexPlans()
 		if (rebuild) await this.#replay()
 		await this.#reconcileMasters()
-		await this.jobs.recover()
+		await this.jobs.start()
 		await this.#refreshFiles()
 		await this.#generatePending()
 		this.#changed()
@@ -570,10 +571,10 @@ export class CalibrationLibrary {
 			mastersByKind[kind] = (mastersByKind[kind] ?? 0) + count
 		}
 
-		const activeJobs = this.store.jobsIn(ACTIVE_JOB_STATES).map(jobSummary)
-		const recentJobs = this.store
-			.jobs(0, RECENT_JOBS)
-			.items.filter(({ automatic }) => automatic)
+		const activeJobs = this.jobs.inStates(ACTIVE_JOB_STATES).map(jobSummary)
+		const recentJobs = this.jobs
+			.latest(RECENT_JOBS)
+			.filter(({ automatic }) => automatic)
 			.map(jobSummary)
 		return { epoch: this.#epoch, revision: this.#revision, unavailable: false, frames, framesByKind, masters: mastersByState, mastersByKind, cameras, activeJobs, recentJobs }
 	}
@@ -693,7 +694,7 @@ export class CalibrationLibrary {
 		await this.#usable()
 		const { sources } = this.store.group(groupId)
 		if (sources.length === 0) throw new LibraryError('Unknown group', 404, 'notFound')
-		if (this.store.jobsIn(ACTIVE_JOB_STATES).some(({ build }) => build?.groupId === groupId)) throw new LibraryError('A master of this group is being built', 409, 'jobConflict')
+		if (this.jobs.inStates(ACTIVE_JOB_STATES).some(({ build }) => build?.groupId === groupId)) throw new LibraryError('A master of this group is being built', 409, 'jobConflict')
 		return await this.#deleteSources(sources)
 	}
 
@@ -701,7 +702,7 @@ export class CalibrationLibrary {
 	// frame is unknown, a master being built uses it, or its file could not be deleted.
 	async deleteSource(sourceId: string) {
 		const source = await this.source(sourceId)
-		if (this.store.jobsIn(ACTIVE_JOB_STATES).some(({ build }) => build?.frames.some((frame) => frame.sourceId === sourceId))) throw new LibraryError('A master being built uses this frame', 409, 'jobConflict')
+		if (this.jobs.inStates(ACTIVE_JOB_STATES).some(({ build }) => build?.frames.some((frame) => frame.sourceId === sourceId))) throw new LibraryError('A master being built uses this frame', 409, 'jobConflict')
 		return await this.#deleteSources([source])
 	}
 
@@ -811,7 +812,7 @@ export class CalibrationLibrary {
 	}
 
 	// Starts a master, or answers with what already does it: a repeated token meets its job, an identical recipe its product or
-	// its running job. The job is durable before this returns. Throws LibraryError when frames cannot be combined or something
+	// its running job. The job is queued before this returns. Throws LibraryError when frames cannot be combined or something
 	// was not accepted.
 	async requestMaster(request: MasterRequest, automatic = false): Promise<MasterRequestResult> {
 		await this.#usable()
@@ -821,7 +822,7 @@ export class CalibrationLibrary {
 	// Starts a master over an open catalog.
 	#requestMaster(request: MasterRequest, automatic: boolean, planId?: string): MasterRequestResult {
 		if (request.token !== undefined) {
-			const job = this.store.jobByToken(request.token)
+			const job = this.jobs.byToken(request.token)
 			if (job?.build) return { jobId: job.jobId, masterId: job.build.masterId, revision: job.revision, state: job.state }
 		}
 
@@ -829,7 +830,7 @@ export class CalibrationLibrary {
 
 		if (validation.existing) return { ...validation.existing, state: 'completed' }
 
-		const active = this.store.jobsIn(ACTIVE_JOB_STATES).find((job) => job.fingerprint === fingerprint)
+		const active = this.jobs.inStates(ACTIVE_JOB_STATES).find((job) => job.fingerprint === fingerprint)
 		if (active?.build) return { jobId: active.jobId, masterId: active.build.masterId, state: active.state }
 
 		if (!validation.valid) {
@@ -982,7 +983,7 @@ export class CalibrationLibrary {
 		await this.master(masterId, revision)
 		const used = (reference: Pick<MasterReference, 'masterId' | 'revision'> | undefined) => reference?.masterId === masterId && reference.revision === revision
 		if (this.store.allMasters().some(({ dependencies }) => dependencies.some(used))) throw new LibraryError('A master flat was corrected by this master; delete that flat first', 409, 'masterInUse')
-		if (this.store.jobsIn(ACTIVE_JOB_STATES).some(({ build }) => used(build?.correction))) throw new LibraryError('A master flat being built is corrected by this master', 409, 'masterInUse')
+		if (this.jobs.inStates(ACTIVE_JOB_STATES).some(({ build }) => used(build?.correction))) throw new LibraryError('A master flat being built is corrected by this master', 409, 'masterInUse')
 
 		try {
 			await rm(this.store.revisionDirectory(masterId, revision), { recursive: true, force: true })
@@ -1000,12 +1001,17 @@ export class CalibrationLibrary {
 		return { masterId, revision }
 	}
 
-	// Returns a job. Throws when unknown.
+	// Returns a job of this process. Throws when unknown, as every job of a previous process is.
 	async job(jobId: string) {
+		return jobSummary(await this.#job(jobId))
+	}
+
+	// Returns a job of this process with what only the server sees. Throws when unknown.
+	async #job(jobId: string) {
 		await this.#usable()
-		const job = this.store.job(jobId)
+		const job = this.jobs.get(jobId)
 		if (!job) throw new LibraryError('Unknown job', 404, 'notFound')
-		return jobSummary(job)
+		return job
 	}
 
 	// Cancels the scan of an import. Throws when it already ended.
@@ -1026,8 +1032,7 @@ export class CalibrationLibrary {
 		const now = Date.now()
 		const scan = { path, recursive, depth, found: 0, bytes: 0, truncated: false }
 		const job: CalibrationJob = { jobId: crypto.randomUUID(), type: 'import', state: 'validating', createdAt: now, updatedAt: now, automatic: false, progress: NO_PROGRESS, scan }
-		this.store.putJob(job)
-		this.#jobUpdated(job)
+		this.jobs.save(job)
 
 		const controller = new AbortController()
 		this.#scans.set(job.jobId, controller)
@@ -1038,8 +1043,7 @@ export class CalibrationLibrary {
 	// Saves a change of an import job and publishes it.
 	#saveImport(job: CalibrationJob, patch: Partial<CalibrationJob>) {
 		const next = { ...job, ...patch, updatedAt: Date.now() }
-		this.store.putJob(next)
-		this.#jobUpdated(next)
+		this.jobs.save(next)
 		return next
 	}
 
@@ -1062,13 +1066,9 @@ export class CalibrationLibrary {
 				},
 			})
 
-			this.store.putCandidates(
-				job.jobId,
-				candidates.map((candidate) => this.#candidate(path, candidate)),
-			)
 			let bytes = 0
 			for (const candidate of candidates) bytes += candidate.bytes
-			this.#saveImport(current, { state: 'completed', scan: { ...current.scan!, found: candidates.length, bytes, truncated } })
+			this.#saveImport(current, { state: 'completed', candidates: candidates.map((candidate) => this.#candidate(path, candidate)), scan: { ...current.scan!, found: candidates.length, bytes, truncated } })
 		} catch (error) {
 			if (signal.aborted) this.#saveImport(current, { state: 'cancelled' })
 			else this.#saveImport(current, { state: 'failed', code: 'processingFailed', error: `The directory could not be read (${errorCode(error) ?? 'unexpected error'})` })
@@ -1085,15 +1085,14 @@ export class CalibrationLibrary {
 
 	// Lists what an import found. Paths are shown because the operator named their directory.
 	async importCandidates(jobId: string, offset: number, limit: number): Promise<Page<ImportCandidate>> {
-		await this.job(jobId)
-		return this.store.candidates(jobId, offset, limit)
+		const candidates = (await this.#job(jobId)).candidates ?? []
+		return { items: candidates.slice(offset, offset + Math.min(limit, MAX_PAGE_SIZE)), total: candidates.length }
 	}
 
 	// Adds reviewed files to the library. A role comes from the file or from an audited classification, never from a name; a file
 	// with neither stays out, as does a light or a master. Copies leave the original where it is. Returns how many frames entered.
 	async commitImport(jobId: string, { paths, classifications = {}, copy = false }: ImportCommit) {
-		await this.job(jobId)
-		const job = this.store.job(jobId)!
+		const job = await this.#job(jobId)
 		if (job.type !== 'import' || job.state !== 'completed' || job.scan?.committed !== undefined) throw new LibraryError('This import cannot be committed', 409, 'jobConflict')
 
 		const chosen = paths && new Set(paths)
@@ -1101,7 +1100,7 @@ export class CalibrationLibrary {
 		const sources: CalibrationSource[] = []
 		const at = Date.now()
 
-		for (const candidate of this.store.allCandidates(jobId)) {
+		for (const candidate of job.candidates ?? []) {
 			if (chosen && !chosen.has(candidate.path)) continue
 			const classification = classifications[candidate.path]
 			const kind = classification?.kind ?? candidate.kind
@@ -1133,8 +1132,7 @@ export class CalibrationLibrary {
 
 		await this.store.append(records)
 		this.store.putSources(sources)
-		this.store.dropCandidates(jobId)
-		this.#saveImport(job, { scan: { ...job.scan!, committed: sources.length } })
+		this.#saveImport(job, { candidates: undefined, scan: { ...job.scan!, committed: sources.length } })
 		this.#changed()
 		return { committed: sources.length }
 	}

@@ -3,21 +3,20 @@ import { existsSync, mkdirSync, rmSync } from 'fs'
 import { mkdir, open, readdir, readFile, rm } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
-import type { ImportCandidate } from './calibrationlibrary'
 import type { CalibrationKind, CalibrationMetadata, CalibrationRecipe, CompatibilityFinding, MasterReference, OverridableField } from './calibrationlibrary.compatibility'
-import type { CalibrationJob } from './calibrationlibrary.jobs'
 import { errorCode, isRecord, writeAtomically } from './util'
 
 // Persistence of the Calibration Library, in three layers with different duties. Masters are immutable directories with
 // their FITS file and a manifest that explains them without any index. Facts only an operator or a wizard can state
 // (imported frames, registered flats, overrides, exclusions, preferred revisions, deletions) go to a synced journal. catalog.sqlite
-// is a derived index of both and of the Dark Library plans, plus the job queue, so it can be deleted at any time: a
-// different schema version discards and rebuilds it, and there are no migrations. Only a newer version is left alone,
-// because older code must not destroy what newer code wrote. Calibration frames are referenced, never copied here
-// unless an import asks for it, and nothing in this file touches a frame, a plan, or a journal of the Dark Library.
+// is a derived index of both and of the Dark Library plans, so it can be deleted at any time: a different schema version
+// discards and rebuilds it, and there are no migrations. Only a newer version is left alone, because older code must not
+// destroy what newer code wrote. Jobs and what an import found live in memory and are never written; staging holds only the
+// work of a running build. Calibration frames are referenced, never copied here unless an import asks for it, and nothing
+// in this file touches a frame, a plan, or a journal of the Dark Library.
 
 // Version of the schema of the catalog. A change rebuilds the catalog from the journal, the manifests, and the plans.
-const CATALOG_VERSION = 2
+const CATALOG_VERSION = 3
 
 // Version of the format of the manifests and of the journal.
 export const MANIFEST_VERSION = 1
@@ -276,10 +275,6 @@ CREATE TABLE masters (master_id TEXT NOT NULL, revision INTEGER NOT NULL, kind T
 CREATE INDEX masters_fingerprint ON masters (fingerprint);
 CREATE TABLE preferred (master_id TEXT PRIMARY KEY, revision INTEGER NOT NULL);
 CREATE TABLE removed_masters (master_id TEXT NOT NULL, revision INTEGER NOT NULL, PRIMARY KEY (master_id, revision));
-CREATE TABLE jobs (job_id TEXT PRIMARY KEY, state TEXT NOT NULL, fingerprint TEXT, token TEXT, created_at INTEGER NOT NULL, data TEXT NOT NULL);
-CREATE INDEX jobs_state ON jobs (state);
-CREATE INDEX jobs_token ON jobs (token);
-CREATE TABLE candidates (job_id TEXT NOT NULL, position INTEGER NOT NULL, path TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (job_id, position));
 `
 
 // Returns the part of a path after its last separator, for either platform.
@@ -576,63 +571,6 @@ export class CalibrationLibraryStore {
 		return (this.#db.query('SELECT revision FROM preferred WHERE master_id = ?').get(masterId) as { readonly revision: number } | null)?.revision
 	}
 
-	// Writes a job.
-	putJob(job: CalibrationJob) {
-		this.#db.query('INSERT OR REPLACE INTO jobs (job_id, state, fingerprint, token, created_at, data) VALUES (?, ?, ?, ?, ?, ?)').run(job.jobId, job.state, job.fingerprint ?? null, job.token ?? null, job.createdAt, JSON.stringify(job))
-	}
-
-	// Returns a job.
-	job(jobId: string) {
-		const row = this.#db.query('SELECT data FROM jobs WHERE job_id = ?').get(jobId) as DataRow | null
-		return row ? (JSON.parse(row.data) as CalibrationJob) : undefined
-	}
-
-	// Returns the job a request token created.
-	jobByToken(token: string) {
-		const row = this.#db.query('SELECT data FROM jobs WHERE token = ?').get(token) as DataRow | null
-		return row ? (JSON.parse(row.data) as CalibrationJob) : undefined
-	}
-
-	// Lists jobs in some states, oldest first.
-	jobsIn(states: readonly string[]) {
-		const rows = this.#db.query(`SELECT data FROM jobs WHERE state IN (${states.map(() => '?').join(', ')}) ORDER BY created_at`).all(...states) as DataRow[]
-		return rows.map((row) => JSON.parse(row.data) as CalibrationJob)
-	}
-
-	// Lists jobs newest first, by page.
-	jobs(offset: number, limit: number): Page<CalibrationJob> {
-		const { total } = this.#db.query('SELECT COUNT(*) AS total FROM jobs').get() as { readonly total: number }
-		const rows = this.#db.query('SELECT data FROM jobs ORDER BY created_at DESC LIMIT ? OFFSET ?').all(Math.min(limit, MAX_PAGE_SIZE), offset) as DataRow[]
-		return { items: rows.map((row) => JSON.parse(row.data) as CalibrationJob), total }
-	}
-
-	// Replaces the files found by an import.
-	putCandidates(jobId: string, candidates: readonly ImportCandidate[]) {
-		const statement = this.#db.query('INSERT INTO candidates (job_id, position, path, data) VALUES (?, ?, ?, ?)')
-		this.#db.transaction(() => {
-			this.#db.query('DELETE FROM candidates WHERE job_id = ?').run(jobId)
-			for (const [position, candidate] of candidates.entries()) statement.run(jobId, position, candidate.path, JSON.stringify(candidate))
-		})()
-	}
-
-	// Lists files found by an import, by page.
-	candidates(jobId: string, offset: number, limit: number): Page<ImportCandidate> {
-		const { total } = this.#db.query('SELECT COUNT(*) AS total FROM candidates WHERE job_id = ?').get(jobId) as { readonly total: number }
-		const rows = this.#db.query('SELECT data FROM candidates WHERE job_id = ? ORDER BY position LIMIT ? OFFSET ?').all(jobId, Math.min(limit, MAX_PAGE_SIZE), offset) as DataRow[]
-		return { items: rows.map((row) => JSON.parse(row.data) as ImportCandidate), total }
-	}
-
-	// Returns every file an import found.
-	allCandidates(jobId: string) {
-		const rows = this.#db.query('SELECT data FROM candidates WHERE job_id = ? ORDER BY position').all(jobId) as DataRow[]
-		return rows.map((row) => JSON.parse(row.data) as ImportCandidate)
-	}
-
-	// Forgets the files an import found, once it was committed or cancelled.
-	dropCandidates(jobId: string) {
-		this.#db.query('DELETE FROM candidates WHERE job_id = ?').run(jobId)
-	}
-
 	// Reads every manifest on disk, leaving out unreadable ones, which stay where they are. Used to rebuild and reconcile.
 	async manifests() {
 		const manifests: MasterManifest[] = []
@@ -656,18 +594,9 @@ export class CalibrationLibraryStore {
 		await writeAtomically(join(directory, MANIFEST_FILE), `${JSON.stringify({ version: MANIFEST_VERSION, ...master } satisfies MasterManifest, null, '\t')}\n`)
 	}
 
-	// Removes staged work no job owns, and returns how many directories went away.
-	async removeOrphanStaging(active: ReadonlySet<string>) {
-		const staging = join(this.directory, 'staging')
-		let removed = 0
-
-		for (const jobId of await directoryNames(staging)) {
-			if (active.has(jobId)) continue
-			await rm(join(staging, jobId), { recursive: true, force: true })
-			removed++
-		}
-
-		return removed
+	// Removes every staged work, which no job of a new process owns.
+	async removeStaging() {
+		await rm(join(this.directory, 'staging'), { recursive: true, force: true })
 	}
 
 	// Creates the staging directory of a job.

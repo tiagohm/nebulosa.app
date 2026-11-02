@@ -45,7 +45,7 @@ describe('events', () => {
 		expect(state.changes).toBe(0)
 		handleCalibrationLibraryEvent(state, { type: 'calibrationLibrary:jobUpdated', epoch: 'a', revision: 2, job: job('j', 'completed', 2) })
 		expect(state.changes).toBe(1)
-		expect(jobEnded(job('j', 'interrupted', 1))).toBeTrue()
+		expect(jobEnded(job('j', 'failed', 1))).toBeTrue()
 		expect(jobEnded(job('j', 'publishing', 1))).toBeFalse()
 	})
 

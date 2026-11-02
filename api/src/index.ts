@@ -651,7 +651,7 @@ export async function startEarthOrientation() {
 	installEarthOrientation(earthOrientation)
 }
 
-// Opens the Calibration Library, so its queued masters resume before anyone opens the tool. Called by the app before it serves;
+// Opens the Calibration Library, so the masters the wizards asked for are queued before anyone opens the tool. Called by the app before it serves;
 // a test that only imports this module opens no file. Never rejects: a request opens it again and reports the failure.
 export async function startCalibrationLibrary() {
 	await calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))

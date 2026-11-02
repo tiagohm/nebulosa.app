@@ -62,7 +62,7 @@ export const CALIBRATION_PAGE_SIZE = 50
 const requests: Record<string, number> = {}
 
 // States of a job with nothing left to do.
-const ENDED_STATES: ReadonlySet<CalibrationJobSummary['state']> = new Set(['completed', 'failed', 'cancelled', 'interrupted'])
+const ENDED_STATES: ReadonlySet<CalibrationJobSummary['state']> = new Set(['completed', 'failed', 'cancelled'])
 
 // Returns whether a job ended.
 export function jobEnded(job: Pick<CalibrationJobSummary, 'state'>) {

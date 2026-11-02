@@ -1,5 +1,5 @@
 import { afterAll, afterEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { readImageFromFits } from 'nebulosa/src/imaging/model/image'
@@ -458,39 +458,41 @@ describe('masters', () => {
 		expect((await settled(library, again.jobId!)).state).toBe('completed')
 	})
 
-	test('a job that was working when the server stopped is interrupted, never published', async () => {
+	test('a job that was working when the server stopped is forgotten with its staging, never published', async () => {
 		const blocked = blockedIntegrator()
 		const { library, plans, base } = open(blocked)
 		await plan(plans, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		const { jobId } = await library.requestMaster({ groupId: group.groupId })
 		await Bun.sleep(30)
+		expect(existsSync(join(base, 'library', 'staging', jobId!))).toBeTrue()
 		library.close()
 		libraries.length = 0
 
 		const reopened = open(local, undefined, base)
 		await reopened.library.ready()
-		expect((await reopened.library.job(jobId!)).state).toBe('interrupted')
+		expect(reopened.library.job(jobId!)).rejects.toThrow('Unknown job')
 		expect((await reopened.library.masters({}, 0, 10)).total).toBe(0)
-		expect(readdirSync(join(base, 'library', 'staging'))).toEqual([])
+		expect(existsSync(join(base, 'library', 'staging'))).toBeFalse()
 
 		const again = await reopened.library.requestMaster({ groupId: group.groupId })
 		expect((await settled(reopened.library, again.jobId!)).state).toBe('completed')
 	})
 
-	test('a queued job resumes after a restart', async () => {
+	test('a queued master a wizard asked for is asked again at the next start, and the old job is forgotten', async () => {
 		const { library, plans, base } = open(local, () => true)
-		const dark = await plan(plans, base, 3)
-		expect(dark.planId).toBe('plan')
-		const [group] = (await library.groups({}, 0, 50)).items
-		const { jobId } = await library.requestMaster({ groupId: group.groupId }, true)
-		expect((await library.job(jobId!)).state).toBe('queued')
+		await plan(plans, base, 3, 3, { generateMasters: true })
+		await library.ready()
+		const [queued] = library.jobs.latest(10)
+		expect(queued).toMatchObject({ state: 'queued', automatic: true })
 		library.close()
 		libraries.length = 0
 
 		const reopened = open(local, undefined, base)
 		await reopened.library.ready()
-		expect((await settled(reopened.library, jobId!)).state).toBe('completed')
+		expect(reopened.library.job(queued.jobId)).rejects.toThrow('Unknown job')
+		const [again] = reopened.library.jobs.latest(10)
+		expect((await settled(reopened.library, again.jobId)).state).toBe('completed')
 	})
 
 	test('deleting a revision removes its directory, its preference, and never reuses its number', async () => {
@@ -614,7 +616,7 @@ describe('automatic masters', () => {
 		await library.planEnded('plan')
 
 		const { items } = await library.masters({}, 0, 10)
-		const started = library.store.jobs(0, 10).items
+		const started = library.jobs.latest(10)
 		expect(started[0].automatic).toBeTrue()
 		await settled(library, started[0].jobId)
 		expect(items.length + (await library.masters({}, 0, 10)).total).toBe(1)
@@ -624,21 +626,21 @@ describe('automatic masters', () => {
 		const { library, plans, base } = open(local)
 		await plan(plans, base, 2, 3, { generateMasters: true })
 		await library.planEnded('plan')
-		expect(library.store.jobs(0, 10).total).toBe(0)
+		expect(library.jobs.latest(10)).toHaveLength(0)
 	})
 
 	test('a plan that did not ask starts nothing', async () => {
 		const { library, plans, base } = open(local)
 		await plan(plans, base, 3)
 		await library.planEnded('plan')
-		expect(library.store.jobs(0, 10).total).toBe(0)
+		expect(library.jobs.latest(10)).toHaveLength(0)
 	})
 
-	test('a master that ended while the server was down is started on the next open, once', async () => {
+	test('a plan that ended while the server was down gets its masters at the next open, once', async () => {
 		const { library, plans, base } = open(local)
 		await plan(plans, base, 3, 3, { generateMasters: true })
 		await library.ready()
-		const [job] = library.store.jobs(0, 10).items
+		const [job] = library.jobs.latest(10)
 		expect(job.automatic).toBeTrue()
 		await settled(library, job.jobId)
 		library.close()
@@ -646,7 +648,8 @@ describe('automatic masters', () => {
 
 		const reopened = open(local, undefined, base)
 		await reopened.library.ready()
-		expect(reopened.library.store.jobs(0, 10).total).toBe(1)
+		expect(reopened.library.jobs.latest(10)).toHaveLength(0)
+		expect((await reopened.library.masters({}, 0, 10)).total).toBe(1)
 	})
 
 	test('an automatic job waits for camera operations, and a manual one does not', async () => {

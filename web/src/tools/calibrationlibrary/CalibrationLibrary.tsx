@@ -441,7 +441,7 @@ function BuildForm({ groupId, kind }: { readonly groupId: string; readonly kind:
 	const job = latestGroupJob(jobs, groupId)
 	const building = job !== undefined && !jobEnded(job)
 	const requesting = pending[key] === true
-	const failure = job?.state === 'failed' || job?.state === 'interrupted' ? job.error : undefined
+	const failure = job?.state === 'failed' ? job.error : undefined
 
 	return (
 		<>

@@ -1,12 +1,13 @@
-import type { CameraCapabilities, CaptureSnoop, DarkGroup, FlatWizardCaptureSettings, FlatWizardFilterState, FlatWizardRequest, FlatWizardSession, FlatWizardSessionSummary, FlatWizardSnapshot, FlatWizardState, FlatWizardVerdict, OperationDevice, ServerEvent, WheelState } from 'api'
+import type { CameraCapabilities, CaptureSnoop, DarkGroup, FlatWizardCaptureSettings, FlatWizardFilterState, FlatWizardRequest, FlatWizardSession, FlatWizardSessionSummary, FlatWizardState, FlatWizardVerdict, OperationDevice, ServerEvent, WheelState } from 'api'
 import { nanoid } from 'nanoid'
 import type { FlatDiagnosticCode } from 'nebulosa/src/imaging/analysis/flat/types'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit, responseError } from '../http'
+import { deviceUrl } from '../http'
 import type { CameraExposureSettings, FlatWizardSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
+import { applySession, type CameraSessionKind, type CameraSessionRecords, loadSessionRecord, refreshSessionRecords, sendSessionCommand } from './sessions'
 
 // Flat Wizard sessions as this tab knows them. The server owns every session, whichever tab started it, and every
 // filter change, exposure, measurement, and saved file of it, so this store only mirrors it: the summary of the latest
@@ -18,22 +19,18 @@ import { cameraKey, fitExposure } from './capture'
 // confirmation never skips a later step.
 
 // Flat Wizard state of the tab.
-export interface FlatWizardRuntime {
-	// Latest session of each camera, by camera key (cameraKey).
-	sessions: Record<string, FlatWizardSessionSummary>
-	// Complete record of each session fetched so far, by session id.
-	details: Record<string, FlatWizardSession>
-	// Cameras with a command of this tab waiting for the server.
-	pending: Record<string, boolean>
-	// Why this tab's last command to a camera failed; cleared by its next command.
-	errors: Record<string, string>
-}
+export type FlatWizardRuntime = CameraSessionRecords<FlatWizardSessionSummary, FlatWizardSession>
 
 // Flat Wizard state of the tab.
 export const flatWizardRuntime = proxy<FlatWizardRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
 
-// Refreshes of the snapshot, ordered against the session events applied meanwhile, by camera key.
-const refreshes = new SnapshotRefreshes()
+// How the sessions are mirrored (sessions.ts): the complete record is fetched again when the summary reports
+// a new session, a new exposure, or its end.
+const FLAT_WIZARD_SESSIONS: CameraSessionKind<FlatWizardSessionSummary, FlatWizardSession> = {
+	url: '/api/flat-wizard',
+	refreshes: new SnapshotRefreshes(),
+	stale: (session, known) => known?.sessionId !== session.sessionId || known.lastAttempt?.index !== session.lastAttempt?.index || known.endedAt !== session.endedAt,
+}
 
 // Label of each session state.
 export const FLAT_WIZARD_STATE_LABELS: Readonly<Record<FlatWizardState, string>> = {
@@ -150,85 +147,24 @@ export function flatWizardBlocker(camera: RoleAvailability, wheel: RoleAvailabil
 	return undefined
 }
 
-// Fetches the complete record of a session; a record older than the one known (a late response) never replaces it,
-// and a session the server no longer keeps is forgotten.
-export async function loadFlatWizardSession(state: FlatWizardRuntime, sessionId: string, request: typeof fetch = fetch) {
-	try {
-		const response = await request(`/api/flat-wizard/${encodeURIComponent(sessionId)}`)
-
-		if (response.status === 404) {
-			delete state.details[sessionId]
-			return
-		}
-
-		if (!response.ok) return
-		const session = (await response.json()) as FlatWizardSession
-		const known = state.details[sessionId]
-		if (!known || session.revision > known.revision) state.details[sessionId] = session
-	} catch {
-		// The server is unreachable; the next socket open refreshes the sessions.
-	}
+// Fetches the complete record of a session (loadSessionRecord).
+export function loadFlatWizardSession(state: FlatWizardRuntime, sessionId: string, request: typeof fetch = fetch) {
+	return loadSessionRecord(state, FLAT_WIZARD_SESSIONS, sessionId, request)
 }
 
-// Applies a Flat Wizard event; any other event is ignored. A session older than the one known for its camera, or an
-// earlier revision of the same one, never replaces it. The complete record is fetched again when the summary reports
-// a new exposure or the end of the session.
+// Applies a Flat Wizard event (applySession); any other event is ignored.
 export function handleFlatWizardEvent(state: FlatWizardRuntime, event: ServerEvent, request: typeof fetch = fetch) {
-	if (event.type !== 'flatWizard:updated') return
-
-	const { session } = event
-	const key = cameraKey(session.camera.connectionId, session.camera.deviceId)
-	const known = state.sessions[key]
-	if (known && known.sessionId !== session.sessionId && known.startedAt > session.startedAt) return
-	if (known?.sessionId === session.sessionId && known.revision >= session.revision) return
-
-	refreshes.updated(key)
-	state.sessions[key] = session
-	if (known?.sessionId !== session.sessionId) for (const id of Object.keys(state.details)) if (id !== session.sessionId) delete state.details[id]
-
-	const changed = known?.sessionId !== session.sessionId || known.lastAttempt?.index !== session.lastAttempt?.index || known.endedAt !== session.endedAt
-	if (changed) void loadFlatWizardSession(state, session.sessionId, request)
+	if (event.type === 'flatWizard:updated') applySession(state, FLAT_WIZARD_SESSIONS, event.session, request)
 }
 
-// Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, leaving what an
-// event changed meanwhile, so a session that ended during the request is never shown running again, and fetches their
-// complete records. A response is dropped when another refresh started meanwhile.
-export async function refreshFlatWizard(state: FlatWizardRuntime, request: typeof fetch = fetch) {
-	const token = refreshes.start()
-
-	try {
-		const response = await request('/api/flat-wizard')
-		if (!response.ok || !refreshes.current(token)) return
-		const snapshot = (await response.json()) as FlatWizardSnapshot
-		if (!refreshes.current(token)) return
-
-		state.sessions = refreshes.merge(state.sessions, snapshot.sessions, ({ camera }) => cameraKey(camera.connectionId, camera.deviceId))
-		const kept = Object.values(state.sessions).map(({ sessionId }) => sessionId)
-		for (const id of Object.keys(state.details)) if (!kept.includes(id)) delete state.details[id]
-		for (const id of kept) void loadFlatWizardSession(state, id, request)
-	} catch {
-		// The server is unreachable; the next socket open refreshes the sessions.
-	} finally {
-		refreshes.end(token)
-	}
+// Replaces the sessions with the server's snapshot and fetches their complete records (refreshSessionRecords).
+export function refreshFlatWizard(state: FlatWizardRuntime, request: typeof fetch = fetch) {
+	return refreshSessionRecords(state, FLAT_WIZARD_SESSIONS, request)
 }
 
-// Sends a command of a camera and records its failure. When the server cannot be reached, the command may still have
-// been applied, so the snapshot is fetched again instead of assuming nothing happened.
-async function command(state: FlatWizardRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
-	if (state.pending[key]) return
-	state.pending[key] = true
-	delete state.errors[key]
-
-	try {
-		const response = await request(url, jsonInit('POST', body))
-		if (!response.ok) state.errors[key] = await responseError(response)
-	} catch {
-		state.errors[key] = 'Unable to reach the server.'
-		await refreshFlatWizard(state, request)
-	} finally {
-		delete state.pending[key]
-	}
+// Sends a command of a camera (sendSessionCommand).
+function command(state: FlatWizardRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
+	return sendSessionCommand(state, key, url, body, () => refreshFlatWizard(state, request), request)
 }
 
 // Starts a Flat Wizard session with a camera; progress arrives as events.

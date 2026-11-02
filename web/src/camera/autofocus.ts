@@ -2,7 +2,7 @@ import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoF
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl } from '../http'
+import { deviceUrl, jsonInit } from '../http'
 import type { AutoFocusSettings, CameraExposureSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { DEFAULT_APERTURE_RADIUS } from '../stars/stars'
@@ -159,7 +159,7 @@ export function refreshAutoFocus(state: AutoFocusRuntime, request: typeof fetch 
 
 // Sends a command of a camera (sendSessionCommand).
 function command(state: AutoFocusRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
-	return sendSessionCommand(state, key, url, body, () => refreshAutoFocus(state, request), request)
+	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshAutoFocus(state, request), request)
 }
 
 // Starts an Auto Focus with a camera; its progress arrives as events.

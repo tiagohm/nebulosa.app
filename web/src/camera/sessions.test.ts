@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { proxy } from 'valtio'
+import { jsonInit } from '../http'
 import { SnapshotRefreshes } from '../refresh'
 import { acceptSession, applySession, type CameraSessionKind, type CameraSessionRecords, type CameraSessionSummary, loadSessionRecord, refreshSessionRecords, sendSessionCommand, sessionKey } from './sessions'
 
@@ -152,14 +153,14 @@ describe('commands', () => {
 		const { request } = fakeFetch(() => answer.promise)
 		const refresh = () => Promise.resolve()
 
-		const sending = sendSessionCommand(state, KEY, '/api/start', { token: 't' }, refresh, request)
+		const sending = sendSessionCommand(state, KEY, '/api/start', jsonInit('POST', { token: 't' }), refresh, request)
 		expect(state.pending[KEY]).toBeTrue()
-		expect(await sendSessionCommand(state, KEY, '/api/start', undefined, refresh, request)).toBeUndefined()
+		expect(await sendSessionCommand(state, KEY, '/api/start', jsonInit('POST'), refresh, request)).toBeUndefined()
 		answer.resolve(Response.json({ sessionId: 's1' }, { status: 202 }))
 		expect(((await (await sending)!.json()) as { sessionId: string }).sessionId).toBe('s1')
 		expect(state.pending[KEY]).toBeUndefined()
 
-		await sendSessionCommand(state, KEY, '/api/start', undefined, refresh, fakeFetch(() => Response.json({ error: 'The camera is busy', code: 'busy' }, { status: 409 })).request)
+		await sendSessionCommand(state, KEY, '/api/start', jsonInit('POST'), refresh, fakeFetch(() => Response.json({ error: 'The camera is busy', code: 'busy' }, { status: 409 })).request)
 		expect(state.errors[KEY]).toBe('The camera is busy')
 	})
 
@@ -167,7 +168,7 @@ describe('commands', () => {
 		const state = newState()
 		let refreshed = 0
 
-		const response = await sendSessionCommand(state, KEY, '/api/start', undefined, () => Promise.resolve(refreshed++), (() => Promise.reject(new Error('offline'))) as unknown as typeof fetch)
+		const response = await sendSessionCommand(state, KEY, '/api/start', jsonInit('POST'), () => Promise.resolve(refreshed++), (() => Promise.reject(new Error('offline'))) as unknown as typeof fetch)
 		expect(response).toBeUndefined()
 		expect(refreshed).toBe(1)
 		expect(state.errors[KEY]).toBe('Unable to reach the server.')

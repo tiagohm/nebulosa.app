@@ -5,6 +5,7 @@ import { DEG2RAD } from 'nebulosa/src/core/constants'
 import type { PointingPlan } from 'nebulosa/src/observation/mount/pointing.plan'
 import { proxy } from 'valtio'
 import { cameraKey, fitExposure } from '../camera/capture'
+import { sendSessionCommand } from '../camera/sessions'
 import type { RoleAvailability } from '../equipment/availability'
 import type { CameraRole } from '../equipment/roles'
 import { deviceUrl, jsonInit, responseError } from '../http'
@@ -296,22 +297,9 @@ async function refreshModels(state: MountPointingRuntime, request: typeof fetch)
 	}
 }
 
-// Sends a command on a model and records its failure. When the server cannot be reached, the command may still have been
-// applied, so the snapshot is fetched again instead of assuming nothing happened.
-async function command(state: MountPointingRuntime, modelId: string, url: string, init: RequestInit, request: typeof fetch) {
-	if (state.pending[modelId]) return
-	state.pending[modelId] = true
-	delete state.errors[modelId]
-
-	try {
-		const response = await request(url, init)
-		if (!response.ok) state.errors[modelId] = await responseError(response)
-	} catch {
-		state.errors[modelId] = 'Unable to reach the server.'
-		await refreshMountPointing(state, request)
-	} finally {
-		delete state.pending[modelId]
-	}
+// Sends a command of a model or a camera, by its id or camera key (sendSessionCommand).
+function command(state: MountPointingRuntime, key: string, url: string, init: RequestInit, request: typeof fetch) {
+	return sendSessionCommand(state, key, url, init, () => refreshMountPointing(state, request), request)
 }
 
 // Starts a pointing session with a camera; its progress arrives as events.

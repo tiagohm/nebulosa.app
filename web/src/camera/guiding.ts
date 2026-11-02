@@ -3,7 +3,7 @@ import type { CameraCapabilities, CaptureSnoop, StarDetectionSettings, GuidingCa
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl } from '../http'
+import { deviceUrl, jsonInit } from '../http'
 import { type CameraExposureSettings, GUIDING_MAXIMUM_EXPOSURE, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_EXPOSURE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import type { TelescopeOptics } from '../sky/framing'
@@ -359,7 +359,7 @@ export function refreshGuiding(state: GuidingRuntime, request: typeof fetch = fe
 
 // Sends a command of a camera (sendSessionCommand); resolves to the response body of an accepted command, or undefined.
 async function command(state: GuidingRuntime, key: string, url: string, body: unknown, request: typeof fetch): Promise<unknown> {
-	const response = await sendSessionCommand(state, key, url, body, () => refreshGuiding(state, request), request)
+	const response = await sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshGuiding(state, request), request)
 	return response && response.status !== 204 ? await response.json() : undefined
 }
 

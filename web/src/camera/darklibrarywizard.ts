@@ -2,7 +2,7 @@ import type { CameraCapabilities, CaptureSnoop, DarkGroup, DarkLibraryWizardCapt
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl } from '../http'
+import { deviceUrl, jsonInit } from '../http'
 import { type CameraExposureSettings, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WIZARD_MAXIMUM_FRAMES, DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, type DarkLibraryWizardSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
@@ -215,7 +215,7 @@ export function refreshDarkLibraryWizard(state: DarkLibraryWizardRuntime, reques
 
 // Sends a command of a camera (sendSessionCommand).
 function command(state: DarkLibraryWizardRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
-	return sendSessionCommand(state, key, url, body, () => refreshDarkLibraryWizard(state, request), request)
+	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshDarkLibraryWizard(state, request), request)
 }
 
 // Starts a session on a new plan; progress arrives as events.

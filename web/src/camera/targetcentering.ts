@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl } from '../http'
+import { deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, TargetCenteringSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
@@ -173,7 +173,7 @@ export function refreshTargetCentering(state: TargetCenteringRuntime, request: t
 
 // Sends a command of a camera (sendSessionCommand).
 function command(state: TargetCenteringRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
-	return sendSessionCommand(state, key, url, body, () => refreshTargetCentering(state, request), request)
+	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshTargetCentering(state, request), request)
 }
 
 // Starts a session with a camera; its progress arrives as events.

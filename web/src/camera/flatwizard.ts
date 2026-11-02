@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import type { FlatDiagnosticCode } from 'nebulosa/src/imaging/analysis/flat/types'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl } from '../http'
+import { deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, FlatWizardSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
@@ -164,7 +164,7 @@ export function refreshFlatWizard(state: FlatWizardRuntime, request: typeof fetc
 
 // Sends a command of a camera (sendSessionCommand).
 function command(state: FlatWizardRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
-	return sendSessionCommand(state, key, url, body, () => refreshFlatWizard(state, request), request)
+	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshFlatWizard(state, request), request)
 }
 
 // Starts a Flat Wizard session with a camera; progress arrives as events.

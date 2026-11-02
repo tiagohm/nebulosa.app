@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import type { DarvAnalysisFailureReason } from 'nebulosa/src/observation/alignment/darv.analysis'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl } from '../http'
+import { deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, DarvSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
@@ -192,7 +192,7 @@ export function refreshDarv(state: DarvRuntime, request: typeof fetch = fetch) {
 
 // Sends a command of a camera (sendSessionCommand).
 function command(state: DarvRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
-	return sendSessionCommand(state, key, url, body, () => refreshDarv(state, request), request)
+	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshDarv(state, request), request)
 }
 
 // Starts a DARV session with a camera and a mount, and its first measurement; progress arrives as events.

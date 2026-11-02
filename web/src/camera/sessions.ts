@@ -1,4 +1,4 @@
-import { jsonInit, responseError } from '../http'
+import { responseError } from '../http'
 import type { SnapshotRefreshes } from '../refresh'
 import { cameraKey } from './capture'
 
@@ -155,17 +155,17 @@ export function refreshSessionRecords<S extends CameraSessionSummary, D extends 
 	})
 }
 
-// Posts a command of the camera key with body, ignored while another command of the camera waits for the server, and
-// records its refusal. When the server cannot be reached, the command may still have been applied, so refresh fetches
-// the snapshot again instead of assuming nothing happened. Resolves to the response of an accepted command, whose body
-// is left unread, or undefined.
-export async function sendSessionCommand(state: Pick<CameraSessions<CameraSessionSummary>, 'pending' | 'errors'>, key: string, url: string, body: unknown, refresh: () => Promise<unknown>, request: typeof fetch): Promise<Response | undefined> {
+// Sends a command of what key names (a camera, by camera key, or a mount pointing model, by its id), ignored while another
+// command of it waits for the server, and records its refusal under key. When the server cannot be reached, the command
+// may still have been applied, so refresh fetches the snapshot again instead of assuming nothing happened. Resolves to
+// the response of an accepted command, whose body is left unread, or undefined.
+export async function sendSessionCommand(state: Pick<CameraSessions<CameraSessionSummary>, 'pending' | 'errors'>, key: string, url: string, init: RequestInit, refresh: () => Promise<unknown>, request: typeof fetch): Promise<Response | undefined> {
 	if (state.pending[key]) return undefined
 	state.pending[key] = true
 	delete state.errors[key]
 
 	try {
-		const response = await request(url, jsonInit('POST', body))
+		const response = await request(url, init)
 		if (response.ok) return response
 		state.errors[key] = await responseError(response)
 		return undefined

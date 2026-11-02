@@ -4,7 +4,9 @@ import type { OperationRegistry } from './operations'
 // Library Wizard, Guiding): the latest session of each camera, which the snapshot lists and the routes of a session id
 // find, the session each operation started, so a repeated start token answers it, and the publication of a changed
 // summary with the next revision, only while the session is still the latest of its camera, so a session replaced by a
-// newer one changes silently. What a session holds, runs, and answers belongs to its service.
+// newer one changes silently. What a session holds, runs, and answers belongs to its service. It serves the sessions run
+// by one operation each; DARV, whose session runs an operation per measurement, and the mount pointing sessions, which
+// outlive their pauses without one and run an operation per stretch of work, keep their own.
 
 // Summary fields of every session the registry keeps.
 export interface CameraSessionFields {

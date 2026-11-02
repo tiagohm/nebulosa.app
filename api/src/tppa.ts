@@ -20,6 +20,7 @@ import type { PolarAlignmentDirection } from 'nebulosa/src/observation/alignment
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureTime, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
 import type { CenteringCaptureOptions } from 'nebulosa/src/observation/mount/centering'
+import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
@@ -298,10 +299,8 @@ interface Session {
 
 // TPPA sessions of the cameras of every open connection.
 export class TppaSessions {
-	// Latest session of each camera, by camera resource key.
-	readonly #sessions = new Map<string, Session>()
-	// Session of each operation a command token started, so a repeated start answers it.
-	readonly #byOperation = new Map<string, Session>()
+	// Latest session of each camera, and the session each start token started.
+	readonly #sessions: CameraSessionRegistry<TppaSessionSummary, Session>
 
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, commander rotates the mounts (the one of the mount commands), capturer takes the frames (the one of the
@@ -319,16 +318,18 @@ export class TppaSessions {
 		readonly plateSolving: Pick<PlateSolvingService, 'prepare' | 'solve'>,
 		readonly listener: TppaListener,
 		readonly auxiliaryDir: string = tmpdir(),
-	) {}
+	) {
+		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'tppa:updated', session }))
+	}
 
 	// Returns the latest session of every camera.
 	snapshot(): TppaSnapshot {
-		return { sessions: Array.from(this.#sessions.values(), (session) => session.summary) }
+		return { sessions: this.#sessions.summaries() }
 	}
 
 	// Responds with a complete session, or 404 when it is not the latest of its camera.
 	session(sessionId: string): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		return session ? Response.json(this.#complete(session)) : errorResponse('TPPA session not found', 404, 'notFound')
 	}
 
@@ -338,8 +339,7 @@ export class TppaSessions {
 	// configured or the mount cannot run a polar alignment (not equatorial, no west-east motion or abort, no such slew
 	// rate, no site, parked, or not tracking and unable to switch tracking).
 	async start(connectionId: string, deviceId: string, request: TppaRequest): Promise<Response> {
-		const known = this.operations.started(request.token)
-		const repeated = known && this.#byOperation.get(known.operationId)
+		const repeated = this.#sessions.repeated(request.token)
 		if (repeated) return Response.json({ sessionId: repeated.summary.sessionId, operationId: repeated.summary.operationId } satisfies TppaStartResponse, { status: 202 })
 
 		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
@@ -385,12 +385,9 @@ export class TppaSessions {
 			return handle.result
 		})
 
-		const key = resourceKey(camera)
-		const previous = this.#sessions.get(key)
-		if (previous) this.#forget(previous)
-		this.#sessions.set(key, session)
-		this.#byOperation.set(record.operationId, session)
-		this.#update(session, { operationId: record.operationId })
+		this.#sessions.adopt(resourceKey(camera), session)
+		this.#sessions.track(record.operationId, session)
+		this.#sessions.update(session, { operationId: record.operationId })
 
 		void session.handle!.result.then((result) => this.#ended(session, result))
 		return Response.json({ sessionId: session.summary.sessionId, operationId: record.operationId } satisfies TppaStartResponse, { status: 202 })
@@ -400,10 +397,10 @@ export class TppaSessions {
 	// is commanded. Resolves once the operation released the devices. Responds 204, and 404 when the session is
 	// unknown or already ended.
 	async stop(sessionId: string): Promise<Response> {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session?.handle || session.summary.endedAt !== undefined) return errorResponse('No TPPA session is running with this id', 404, 'notFound')
 
-		if (session.summary.state !== 'stopping') this.#update(session, { state: 'stopping' })
+		if (session.summary.state !== 'stopping') this.#sessions.update(session, { state: 'stopping' })
 		await session.handle.cancel('aborted')
 		return new Response(null, { status: 204 })
 	}
@@ -411,7 +408,7 @@ export class TppaSessions {
 	// Starts or resumes the refinement of a session that has an estimate. Responds 204, 404 when the session is
 	// unknown or ended, and 409 when it is not waiting for the refinement.
 	startRefinement(sessionId: string): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session || session.summary.endedAt !== undefined) return errorResponse('No TPPA session is running with this id', 404, 'notFound')
 		if (!session.resume) return errorResponse('The TPPA session is not waiting for the refinement', 409, 'busy')
 
@@ -422,7 +419,7 @@ export class TppaSessions {
 	// Pauses the refinement of a session; the frame in progress is cancelled and the devices stay held. Resolves once
 	// it stopped. Responds 204, 404 when the session is unknown or ended, and 409 when it is not refining.
 	async stopRefinement(sessionId: string): Promise<Response> {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session || session.summary.endedAt !== undefined) return errorResponse('No TPPA session is running with this id', 404, 'notFound')
 		if (!session.refinement) return errorResponse('The TPPA session is not refining', 409, 'busy')
 
@@ -446,7 +443,7 @@ export class TppaSessions {
 				if (!mount.tracking) {
 					const started = await this.commander.setTracking(context, mount, true)
 					if (!started.ok) return started
-					this.#update(session, { trackingStarted: true })
+					this.#sessions.update(session, { trackingStarted: true })
 				}
 
 				const { request } = session.summary
@@ -455,7 +452,7 @@ export class TppaSessions {
 				const services: ThreePointPolarAlignmentServices = {
 					mountCommander: this.commander,
 					cameraCapturer: this.capturer,
-					captureListener: exposureProgressListener((exposure) => this.#update(session, { exposure })),
+					captureListener: exposureProgressListener((exposure) => this.#sessions.update(session, { exposure })),
 					solver: (frame, signal) => this.#solve(session, frame, preparation, signal),
 					auxiliaryPath: (stage, index) => join(directory, `tppa-${stage}-${index}.fit`),
 					clock: { ...SYSTEM_CAMERA_CAPTURE_CLOCK, delay: abortableDelay },
@@ -486,7 +483,7 @@ export class TppaSessions {
 
 				const { alignment, pierSide } = acquired.value
 				const refinement = { capture, delay: request.refinementDelay, maximumFailures: MAXIMUM_REFINEMENT_FAILURES, maximumShift: MAXIMUM_REFINEMENT_SHIFT, solveTimeout: SOLVE_TIMEOUT, abortGrace: SOLVE_ABORT_GRACE }
-				this.#update(session, { state: 'readyToRefine', point: undefined })
+				this.#sessions.update(session, { state: 'readyToRefine', point: undefined })
 
 				while (true) {
 					if (!(await this.#refinementRequested(session, context.signal))) return failedOperationResult('aborted')
@@ -494,13 +491,13 @@ export class TppaSessions {
 					const from = session.last!
 					const handle = context.start<void>('tppaRefinement', [], (child) => refineThreePointPolarAlignment(child, mount, camera, alignment, from, pierSide, refinement, services, session.summary.frameCount + 1))
 					session.refinement = handle
-					this.#update(session, { state: 'refining' })
+					this.#sessions.update(session, { state: 'refining' })
 					const result = await handle.result
 					session.refinement = undefined
 
 					if (context.signal.aborted) return failedOperationResult('aborted')
 					if (result.ok || result.reason !== 'aborted') return result.ok ? successfulOperationResult(undefined) : result
-					this.#update(session, { state: 'refinementPaused', exposure: undefined })
+					this.#sessions.update(session, { state: 'refinementPaused', exposure: undefined })
 				}
 			} finally {
 				await rm(directory, { recursive: true, force: true })
@@ -533,7 +530,7 @@ export class TppaSessions {
 		const { camera, cameraName, sessionId } = session.summary
 		const current = session.frame
 		const number = current?.number ?? session.summary.frameCount
-		this.#update(session, { exposure: undefined })
+		this.#sessions.update(session, { exposure: undefined })
 		this.#phase(session, 'solving')
 
 		try {
@@ -562,15 +559,15 @@ export class TppaSessions {
 
 		switch (event.type) {
 			case 'slewRate':
-				this.#update(session, { previousSlewRate: event.previous })
+				this.#sessions.update(session, { previousSlewRate: event.previous })
 				break
 			case 'move':
-				this.#update(session, { state: 'moving', point: event.point })
+				this.#sessions.update(session, { state: 'moving', point: event.point })
 				break
 			case 'capture': {
 				const number = session.summary.frameCount + 1
 				session.frame = { number, point: event.point, time: Date.now() }
-				this.#update(session, { frameCount: number, ...(event.point !== undefined && { point: event.point }) })
+				this.#sessions.update(session, { frameCount: number, ...(event.point !== undefined && { point: event.point }) })
 				this.#phase(session, 'capturing')
 				break
 			}
@@ -589,7 +586,7 @@ export class TppaSessions {
 					...(!classification.accepted && { reason: classification.reason }),
 				}
 				session.attempts.push(attempt)
-				this.#update(session, {})
+				this.#sessions.update(session, {})
 				break
 			}
 			case 'accepted': {
@@ -605,11 +602,11 @@ export class TppaSessions {
 				session.points.push(pose)
 				session.last = event.sample
 				if (event.point === 3) session.reference = { rightAscension: event.solution.rightAscension, declination: event.solution.declination }
-				this.#update(session, { pointCount: session.points.length })
+				this.#sessions.update(session, { pointCount: session.points.length })
 				break
 			}
 			case 'geometry':
-				this.#update(session, { geometry: event.quality })
+				this.#sessions.update(session, { geometry: event.quality })
 				break
 			case 'result':
 				this.#estimated(session, event.stage, event.result, event.solution, event.sample)
@@ -640,12 +637,12 @@ export class TppaSessions {
 		session.last = sample
 		session.overlay = { frame: number, ...(frame?.imageId !== undefined && { imageId: frame.imageId }), ...(computed.success ? { geometry: computed.overlay } : { failure: computed.reason }) }
 		if (stage === 'acquisition') session.initialAlignment = alignment
-		this.#update(session, { alignment, ...(stage === 'refinement' && { refinementCount: session.summary.refinementCount + 1 }) })
+		this.#sessions.update(session, { alignment, ...(stage === 'refinement' && { refinementCount: session.summary.refinementCount + 1 }) })
 	}
 
 	// Reports the step of the acquisition a session is in; the refinement stays refining throughout its frames.
 	#phase(session: Session, state: Extract<TppaState, 'capturing' | 'solving'>) {
-		if (!session.refinement && session.summary.state !== state) this.#update(session, { state })
+		if (!session.refinement && session.summary.state !== state) this.#sessions.update(session, { state })
 	}
 
 	// Records the end of a session from the result of its operation, then restores the slew rate it replaced and stops
@@ -655,9 +652,9 @@ export class TppaSessions {
 		const endedAt = Date.now()
 		const estimated = session.summary.alignment !== undefined
 
-		if (result.ok || (result.reason === 'aborted' && estimated)) this.#update(session, { state: 'completed', exposure: undefined, endedAt })
-		else if (result.reason === 'aborted') this.#update(session, { state: 'cancelled', exposure: undefined, endedAt })
-		else this.#update(session, { state: 'failed', exposure: undefined, reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt })
+		if (result.ok || (result.reason === 'aborted' && estimated)) this.#sessions.update(session, { state: 'completed', exposure: undefined, endedAt })
+		else if (result.reason === 'aborted') this.#sessions.update(session, { state: 'cancelled', exposure: undefined, endedAt })
+		else this.#sessions.update(session, { state: 'failed', exposure: undefined, reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt })
 
 		const previous = session.summary.previousSlewRate
 		const { mount } = session
@@ -666,44 +663,25 @@ export class TppaSessions {
 		// it first, or a disconnection, leaves the mount as the session left it.
 		if (previous !== undefined && mount.slewRate !== previous) {
 			const restored = mount.connected && this.operations.available(mount) ? await this.commander.setSlewRate(this.operations.coordinator, mount, previous) : undefined
-			if (restored?.ok) this.#update(session, { slewRateRestored: true })
-			else this.#update(session, { slewRateRestored: false, warnings: appendWarning(session.summary.warnings, `The slew rate of ${mount.name} was left at ${mount.slewRate ?? 'an unknown preset'} instead of ${previous}.`) })
+			if (restored?.ok) this.#sessions.update(session, { slewRateRestored: true })
+			else this.#sessions.update(session, { slewRateRestored: false, warnings: appendWarning(session.summary.warnings, `The slew rate of ${mount.name} was left at ${mount.slewRate ?? 'an unknown preset'} instead of ${previous}.`) })
 		}
 
 		if (session.summary.trackingStarted && session.summary.request.stopTracking) {
 			const stopped = !mount.tracking || (mount.connected && this.operations.available(mount) && (await this.commander.setTracking(this.operations.coordinator, mount, false)).ok)
-			if (stopped) this.#update(session, { trackingStopped: true })
-			else this.#update(session, { trackingStopped: false, warnings: appendWarning(session.summary.warnings, `The tracking of ${mount.name} that the session started was left on.`) })
+			if (stopped) this.#sessions.update(session, { trackingStopped: true })
+			else this.#sessions.update(session, { trackingStopped: false, warnings: appendWarning(session.summary.warnings, `The tracking of ${mount.name} that the session started was left on.`) })
 		}
 	}
 
 	// Records a warning of a session.
 	#warn(session: Session, warning: string) {
-		this.#update(session, { warnings: appendWarning(session.summary.warnings, warning) })
-	}
-
-	// Forgets a session replaced by a newer one of its camera; its latest frame stays with the registry.
-	#forget(session: Session) {
-		this.#byOperation.delete(session.summary.operationId)
-	}
-
-	// Returns the latest session with this id.
-	#find(sessionId: string): Session | undefined {
-		for (const session of this.#sessions.values()) if (session.summary.sessionId === sessionId) return session
-		return undefined
+		this.#sessions.update(session, { warnings: appendWarning(session.summary.warnings, warning) })
 	}
 
 	// Returns the complete record of a session.
 	#complete(session: Session): TppaSession {
 		return { ...session.summary, points: session.points, attempts: session.attempts, ...(session.initialAlignment && { initialAlignment: session.initialAlignment }), ...(session.overlay && { overlay: session.overlay }) }
-	}
-
-	// Publishes a changed session with the next revision; a session replaced by a newer one of its camera changes
-	// silently.
-	#update(session: Session, patch: Partial<TppaSessionSummary>) {
-		session.summary = { ...session.summary, ...patch, revision: session.summary.revision + 1 }
-		const latest = Array.from(this.#sessions.values()).includes(session)
-		if (latest) this.listener({ type: 'tppa:updated', session: session.summary })
 	}
 }
 

@@ -11,20 +11,20 @@ test('downloads a body with its last modification', async () => {
 	expect(lastModified).toBe(Date.UTC(2026, 9, 28, 11, 40, 6))
 })
 
-test('refuses error statuses, wrong types, large bodies, and network failures', async () => {
+test('refuses error statuses, wrong types, large bodies, and network failures', () => {
 	const url = 'https://example.org/a.jpg'
-	await expect(fetchUpstream(respond('missing', { status: 404 }), url, 'image/jpeg', 1000, 10)).rejects.toBeInstanceOf(UpstreamUnavailableError)
-	await expect(fetchUpstream(respond('<html>', { headers: { 'Content-Type': 'text/html' } }), url, 'image/jpeg', 1000, 10)).rejects.toBeInstanceOf(UpstreamUnavailableError)
-	await expect(fetchUpstream(respond(new Uint8Array(11)), url, 'image/jpeg', 1000, 10)).rejects.toBeInstanceOf(UpstreamUnavailableError)
-	await expect(fetchUpstream(() => Promise.reject(new TypeError('offline')), url, 'image/jpeg', 1000, 10)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	expect(fetchUpstream(respond('missing', { status: 404 }), url, 'image/jpeg', 1000, 10)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	expect(fetchUpstream(respond('<html>', { headers: { 'Content-Type': 'text/html' } }), url, 'image/jpeg', 1000, 10)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	expect(fetchUpstream(respond(new Uint8Array(11)), url, 'image/jpeg', 1000, 10)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	expect(fetchUpstream(() => Promise.reject(new TypeError('offline')), url, 'image/jpeg', 1000, 10)).rejects.toBeInstanceOf(UpstreamUnavailableError)
 })
 
-test('a slow source times out', async () => {
+test('a slow source times out', () => {
 	const slow: UpstreamFetch = (_, { signal }) =>
 		new Promise((_, reject) => {
 			signal.addEventListener('abort', () => reject(new Error('aborted')))
 		})
-	await expect(fetchUpstream(slow, 'https://example.org/a.jpg', 'image/jpeg', 10, 10)).rejects.toThrow('timed out')
+	expect(fetchUpstream(slow, 'https://example.org/a.jpg', 'image/jpeg', 10, 10)).rejects.toThrow('timed out')
 })
 
 test('values are fresh for the time to live and shared while loading', async () => {
@@ -84,22 +84,22 @@ test('a value older than the stale limit is no longer answered', async () => {
 	expect((await cache.get('k', load)).stale).toBeTrue()
 
 	now = 10_000
-	await expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
 })
 
-test('a remembered failure is repeated for a minute without downloading', async () => {
+test('a remembered failure is repeated for a minute without downloading', () => {
 	let now = 0
 	let loads = 0
 	const cache = new RemoteCache<number>(1000, () => now, { rememberFailure: true })
 	const load = () => (++loads, Promise.reject(new UpstreamUnavailableError('down')))
 
-	await expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
 	now = 59_999
-	await expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
 	expect(loads).toBe(1)
 
 	now = 60_000
-	await expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	expect(cache.get('k', load)).rejects.toBeInstanceOf(UpstreamUnavailableError)
 	expect(loads).toBe(2)
 })
 
@@ -110,7 +110,7 @@ test('a failed download answers the last value as stale, or rejects without one'
 	const cache = new RemoteCache<number>(1000, () => now)
 	const load = () => (++loads, fail ? Promise.reject(new UpstreamUnavailableError('down')) : Promise.resolve(loads))
 
-	await expect(cache.get('empty', () => Promise.reject(new UpstreamUnavailableError('down')))).rejects.toBeInstanceOf(UpstreamUnavailableError)
+	expect(cache.get('empty', () => Promise.reject(new UpstreamUnavailableError('down')))).rejects.toBeInstanceOf(UpstreamUnavailableError)
 
 	await cache.get('k', load)
 	fail = true

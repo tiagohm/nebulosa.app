@@ -173,14 +173,14 @@ describe('plan store', () => {
 		const { plan, groups, database, store } = fixture()
 		await store.create(plan, 'session')
 		database.db.run('PRAGMA query_only = ON')
-		await expect(store.append('plan', { type: 'publishing', frame: frame(groups[0], 1) })).rejects.toThrow()
-		await expect(store.append('plan', { type: 'status', at: 9, status: 'stopped' })).rejects.toThrow()
+		expect(store.append('plan', { type: 'publishing', frame: frame(groups[0], 1) })).rejects.toThrow()
+		expect(store.append('plan', { type: 'status', at: 9, status: 'stopped' })).rejects.toThrow()
 		expect(await store.detail('plan', 10)).toMatchObject({ status: 'running', frames: [], frameCount: 0 })
 	})
 
 	test('a plan that cannot be written leaves nothing of it', async () => {
 		const { plan, database, store } = fixture()
-		await expect(store.create({ ...plan, groups: [plan.groups[0], plan.groups[0]] }, 'session')).rejects.toThrow()
+		expect(store.create({ ...plan, groups: [plan.groups[0], plan.groups[0]] }, 'session')).rejects.toThrow()
 		expect(await store.list()).toEqual([])
 		expect(database.db.query('SELECT count(*) AS count FROM dark_groups').get()).toEqual({ count: 0 })
 	})
@@ -189,8 +189,8 @@ describe('plan store', () => {
 		const { plan, groups, store } = fixture()
 		await store.create(plan, 'session')
 		await commit(store, frame(groups[0], 1))
-		await expect(store.append('plan', { type: 'rejected', frame: frame(groups[0], 1, { frameId: 'other', verdict: 'rejected' }) })).rejects.toThrow()
-		await expect(store.append('gone', { type: 'status', at: 1, status: 'stopped' })).rejects.toThrow('Unknown dark plan')
+		expect(store.append('plan', { type: 'rejected', frame: frame(groups[0], 1, { frameId: 'other', verdict: 'rejected' }) })).rejects.toThrow()
+		expect(store.append('gone', { type: 'status', at: 1, status: 'stopped' })).rejects.toThrow('Unknown dark plan')
 	})
 
 	test('a detail holds the latest frames in the order they were recorded', async () => {

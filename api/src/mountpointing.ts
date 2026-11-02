@@ -2,11 +2,11 @@ import type { PointingFitOptions } from 'nebulosa/src/observation/mount/pointing
 import { notFound } from './commands'
 import { errorResponse } from './http'
 import type { PointingFitSample, PointingFitStrategy, PointingModelFitter } from './mountpointing.fit'
-import { exportPointingModel, type PointingModelExport, type PointingModelFile, pointingModelImportRefusal, type PointingModelStore, type PointingModelSummary, pointingModelSummary, type PointingRevision, type PointingSampleRecord, type UnavailablePointingModel } from './mountpointing.store'
+import { exportPointingModel, type PointingModelExport, type PointingModelFile, pointingModelImportRefusal, type PointingModelStore, type PointingModelSummary, pointingModelSummary, type PointingRevision, type PointingSampleRecord } from './mountpointing.store'
 
 // Model library of the mount pointing models: listing, editing, importing, exporting, and fitting. It owns no device and
-// runs no operation, so it works without a camera or a connection. Every change of a model is a new revision of its
-// file: a refit or an exclusion adds a revision and never edits one, and a request made from an outdated file is refused
+// runs no operation, so it works without a camera or a connection. Every change of a model raises its revision:
+// a refit or an exclusion adds a fit revision and never edits one, and a request made from an outdated model is refused
 // with the current model, so two tabs never overwrite each other. A fit runs on the fit worker and answers at once; its
 // outcome arrives as an event. Events are ordered by a sequence per process, so a mirror drops a snapshot older than an
 // event it applied. A model has no draft on the server: a draft is the form of a tab until it asks for a fit.
@@ -21,7 +21,7 @@ export interface PointingFitState {
 
 // Body of POST /api/mount-pointing/models/:modelId/fit.
 export interface PointingFitModelRequest {
-	// Revision of the file the request was made from.
+	// Revision of the model the request was made from.
 	readonly expectedRevision: number
 	// Strategy asked for.
 	readonly strategy: PointingFitStrategy
@@ -33,7 +33,7 @@ export interface PointingFitModelRequest {
 
 // Body of PATCH /api/mount-pointing/models/:modelId.
 export interface PointingModelPatch {
-	// Revision of the file the request was made from.
+	// Revision of the model the request was made from.
 	readonly expectedRevision: number
 	// New name.
 	readonly label?: string
@@ -46,10 +46,8 @@ export type PointingModelDetail = PointingModelFile
 
 // Snapshot of the model library.
 export interface PointingModelsSnapshot {
-	// Usable models, newest first.
+	// Models, newest first.
 	readonly models: readonly PointingModelSummary[]
-	// Files that cannot be used.
-	readonly unavailable: readonly UnavailablePointingModel[]
 	// Fits running or failed, by model id.
 	readonly fits: Readonly<Record<string, PointingFitState>>
 	// Sequence of the latest event when the snapshot was taken.
@@ -126,8 +124,8 @@ export class PointingModels {
 
 	// Returns the summaries of the library.
 	async snapshot(): Promise<PointingModelsSnapshot> {
-		const { models, unavailable } = await this.store.list()
-		return { models: models.map(pointingModelSummary), unavailable, fits: Object.fromEntries(this.#fits), sequence: this.#sequence }
+		const { models } = await this.store.list()
+		return { models: models.map(pointingModelSummary), fits: Object.fromEntries(this.#fits), sequence: this.#sequence }
 	}
 
 	// Responds with a model and its samples and revisions, or 404.
@@ -265,7 +263,7 @@ export class PointingModels {
 export function createPointingModelRoutes(models: PointingModels) {
 	return {
 		'/api/mount-pointing/models': {
-			// The models, with the files that cannot be used and the fits running.
+			// The models and the fits running.
 			GET: async () => Response.json(await models.snapshot()),
 			// Creates a model from an exchange document, fitted again from its samples.
 			POST: async (req) => models.import((await req.json()) as PointingModelExport),

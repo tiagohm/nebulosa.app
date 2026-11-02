@@ -262,3 +262,73 @@ CREATE TABLE operation_runs (
 ) STRICT;
 
 CREATE INDEX operation_runs_started ON operation_runs (started_at);
+
+-- Mount pointing models (PointingModelStore): what was measured for each model and every fit of it, never pixels nor
+-- whether a revision is active, which lives in server memory. Samples, revisions, and verifications are immutable once
+-- written: a refit or an exclusion adds a revision. Kept until the operator deletes the model.
+CREATE TABLE pointing_models (
+	-- Id of the model.
+	model_id TEXT PRIMARY KEY,
+	-- Revision of the model, raised by every save; a save from another revision is refused.
+	revision INTEGER NOT NULL,
+	-- Name the operator reads, and their notes; notes is NULL when there are none.
+	label TEXT NOT NULL,
+	notes TEXT,
+	-- Where the samples came from.
+	origin TEXT NOT NULL CHECK (origin IN ('session', 'import')),
+	-- Physical mount (PointingMountIdentity), site (PointingSite), optical evidence (PointingOpticsFingerprint), and plan
+	-- of the acquisition (PointingPlanRecord); angles in radians, elevations in meters.
+	mount TEXT NOT NULL CHECK (json_valid(mount)),
+	site TEXT NOT NULL CHECK (json_valid(site)),
+	optics TEXT NOT NULL CHECK (json_valid(optics)),
+	plan TEXT NOT NULL CHECK (json_valid(plan)),
+	-- Latest acquisition of the samples: its session and state. A running or paused one is interrupted at start.
+	acquisition_session_id TEXT NOT NULL,
+	acquisition_state TEXT NOT NULL CHECK (acquisition_state IN ('running', 'paused', 'interrupted', 'completed', 'stopped')),
+	-- When it was created, last saved, and when a revision of it was last active (NULL when never), Unix milliseconds
+	-- (UTC).
+	created_at INTEGER NOT NULL,
+	updated_at INTEGER NOT NULL,
+	last_active_at INTEGER
+) STRICT;
+
+-- Attempts at the waypoints of a model, in the order they were taken.
+CREATE TABLE pointing_samples (
+	model_id TEXT NOT NULL REFERENCES pointing_models (model_id) ON DELETE CASCADE,
+	-- Id of the attempt, unique in the model.
+	sample_id TEXT NOT NULL,
+	-- Order of the attempt in the model, from 0.
+	position INTEGER NOT NULL,
+	-- The attempt (PointingSampleRecord); angles in radians, times in Unix milliseconds.
+	record TEXT NOT NULL CHECK (json_valid(record)),
+	PRIMARY KEY (model_id, sample_id),
+	UNIQUE (model_id, position)
+) STRICT;
+
+-- Fits of a model, in the order they were made.
+CREATE TABLE pointing_revisions (
+	model_id TEXT NOT NULL REFERENCES pointing_models (model_id) ON DELETE CASCADE,
+	-- Id of the revision.
+	revision_id TEXT NOT NULL,
+	-- Order of the fit in the model, from 0.
+	position INTEGER NOT NULL,
+	-- The fit (PointingRevision without its verifications); a coefficient that is not finite is null.
+	record TEXT NOT NULL CHECK (json_valid(record)),
+	PRIMARY KEY (model_id, revision_id),
+	UNIQUE (model_id, position)
+) STRICT;
+
+-- Physical verifications of a revision, in the order they ended.
+CREATE TABLE pointing_verifications (
+	model_id TEXT NOT NULL,
+	revision_id TEXT NOT NULL,
+	-- Id of the verification.
+	verification_id TEXT NOT NULL,
+	-- Order of the verification in its revision, from 0.
+	position INTEGER NOT NULL,
+	-- The verification (PointingVerification); RMS distances in radians.
+	record TEXT NOT NULL CHECK (json_valid(record)),
+	PRIMARY KEY (model_id, revision_id, verification_id),
+	UNIQUE (model_id, revision_id, position),
+	FOREIGN KEY (model_id, revision_id) REFERENCES pointing_revisions (model_id, revision_id) ON DELETE CASCADE
+) STRICT;

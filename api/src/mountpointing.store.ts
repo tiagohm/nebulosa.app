@@ -1,28 +1,19 @@
-import { readdir, readFile, rm } from 'fs/promises'
-import { join } from 'path'
 import type { PierSide } from 'nebulosa/src/devices/indi/device'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { FittedPointingModel, PointingFitOptions } from 'nebulosa/src/observation/mount/pointing'
 import type { PointingPlanPattern, PointingWaypoint } from 'nebulosa/src/observation/mount/pointing.plan'
-import { DEFAULT_DATA_DIRECTORY } from './database'
+import type { AppDatabase } from './database'
 import type { PointingFitStrategy, PointingGate, PointingOfflineMetrics, PointingSampleResidual } from './mountpointing.fit'
 import type { EquatorialPosition, PointingSite } from './mountpointing.frames'
-import { errorCode, isRecord, writeAtomically } from './util'
 
-// Durable records of the mount pointing models: one versioned JSON file per model under ~/Nebulosa/pointing-models, with
-// its samples and revisions inline, since a file is the unit writeAtomically replaces. There is no index: the directory
-// is read once, on first use, and a file that cannot be used costs only itself, listed as unavailable and never
-// overwritten, so a corrupt record never takes the library down. Samples and revisions are immutable: a refit or an
-// exclusion adds a revision, so nothing edits a revision that is active. Saves of a model run one at a time and a save
-// from an outdated revision is refused, so two tabs never overwrite each other. A file never holds pixels, and never
-// says a model is active: activation lives in server memory and does not survive a restart. Angles are radians, times
-// Unix milliseconds, and elevations meters.
-
-// Directory the models are persisted in when none is given.
-export const DEFAULT_POINTING_MODELS_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'pointing-models')
-
-// Version of the model file format written by this version.
-const POINTING_MODEL_VERSION = 1
+// Durable records of the mount pointing models, in the operational database: the header of each model in pointing_models,
+// and its samples, revisions, and verifications in rows of their own, in order. Samples, revisions, and verifications are
+// immutable: a refit or an exclusion adds a revision, so nothing edits a revision that is active, and a save that would
+// change or remove a row already written is a programming error and throws. A save from an outdated revision is refused,
+// so two tabs never overwrite each other. Every save is one synchronous transaction, so saves never interleave. Nothing
+// holds pixels, nor says a model is active: activation lives in server memory and does not survive a restart, and an
+// acquisition a stopped server left running or paused is recorded as interrupted when it starts again. Angles are
+// radians, times Unix milliseconds, and elevations meters.
 
 // Version of the exchange format of an export.
 const POINTING_MODEL_EXPORT_VERSION = 1
@@ -162,11 +153,9 @@ export interface PointingVerification {
 
 // A model and everything measured for it.
 export interface PointingModelFile {
-	// Version of the file format.
-	readonly version: number
 	// Id of the model.
 	readonly modelId: string
-	// Revision of the file, raised by every save.
+	// Revision of the model, raised by every save.
 	readonly revision: number
 	// Name the operator reads.
 	readonly label: string
@@ -182,7 +171,7 @@ export interface PointingModelFile {
 	readonly origin: 'session' | 'import'
 	// When the model was created.
 	readonly createdAt: number
-	// When the file was last saved.
+	// When the model was last saved.
 	readonly updatedAt: number
 	// When a revision of it was last active. Shown only: nothing activates from it.
 	readonly lastActiveAt?: number
@@ -200,7 +189,7 @@ export interface PointingModelFile {
 export interface PointingModelSummary {
 	// Id of the model.
 	readonly modelId: string
-	// Revision of the file.
+	// Revision of the model.
 	readonly revision: number
 	// Name the operator reads.
 	readonly label: string
@@ -216,7 +205,7 @@ export interface PointingModelSummary {
 	readonly origin: PointingModelFile['origin']
 	// When the model was created.
 	readonly createdAt: number
-	// When the file was last saved.
+	// When the model was last saved.
 	readonly updatedAt: number
 	// When a revision of it was last active.
 	readonly lastActiveAt?: number
@@ -232,14 +221,6 @@ export interface PointingModelSummary {
 	readonly revisionCount: number
 	// Latest revision, without its model and residuals.
 	readonly latest?: Pick<PointingRevision, 'revisionId' | 'createdAt' | 'request' | 'offline' | 'gate'> & { readonly strategy: FittedPointingModel['strategy']; readonly verified: boolean }
-}
-
-// A model file that cannot be used; it stays on the disk as it is.
-export interface UnavailablePointingModel {
-	// Name of the file, without its extension.
-	readonly modelId: string
-	// Why it cannot be used: not a model document, or written by a newer version.
-	readonly reason: 'corrupt' | 'newerVersion'
 }
 
 // Exchange format of a model: what was measured and how it was fitted. It holds no coefficients and no verdict, so an
@@ -267,41 +248,8 @@ export interface PointingModelExport {
 	readonly fit?: Pick<PointingRevision, 'request' | 'options' | 'sampleIds' | 'heldOutIds'>
 }
 
-// Outcome of a save: saved, refused because another revision was saved since, or refused because the model is gone or
-// its file cannot be used.
+// Outcome of a save: saved, refused because another revision was saved since, or refused because the model is gone.
 export type PointingModelSaveOutcome = { readonly status: 'saved'; readonly model: PointingModelFile } | { readonly status: 'conflict'; readonly model: PointingModelFile } | { readonly status: 'notFound' }
-
-// Models read from the directory.
-interface LoadedPointingModels {
-	// Usable models, by id.
-	readonly models: Map<string, PointingModelFile>
-	// Files that cannot be used, by id.
-	readonly unavailable: Map<string, UnavailablePointingModel>
-}
-
-// Returns the file of a model.
-function modelFile(directory: string, modelId: string) {
-	return join(directory, `${modelId}.json`)
-}
-
-// Reads a model file, whose content is only checked for its version and its shape at the top: the server wrote it, and
-// writes are atomic. A session that did not end is left interrupted. Returns the reason when it cannot be used.
-export function parsePointingModel(text: string): PointingModelFile | UnavailablePointingModel['reason'] {
-	let data: unknown
-
-	try {
-		data = JSON.parse(text)
-	} catch {
-		return 'corrupt'
-	}
-
-	if (!isRecord(data) || !Number.isInteger(data.version) || typeof data.modelId !== 'string' || !Array.isArray(data.samples) || !Array.isArray(data.revisions) || !isRecord(data.acquisition)) return 'corrupt'
-	if ((data.version as number) > POINTING_MODEL_VERSION) return 'newerVersion'
-
-	const model = data as unknown as PointingModelFile
-	const { state } = model.acquisition
-	return state === 'running' || state === 'paused' ? { ...model, acquisition: { ...model.acquisition, state: 'interrupted' } } : model
-}
 
 // Returns what a listing shows of a model.
 export function pointingModelSummary(model: Readonly<PointingModelFile>): PointingModelSummary {
@@ -358,117 +306,174 @@ export function pointingModelImportRefusal(document: PointingModelExport) {
 	return undefined
 }
 
-// Mount pointing models, each persisted in a file of its own. The directory is read on first use, so creating the store
-// has no side effect.
+// Row of pointing_models.
+interface PointingModelRow {
+	readonly model_id: string
+	readonly revision: number
+	readonly label: string
+	readonly notes: string | null
+	readonly origin: PointingModelFile['origin']
+	readonly mount: string
+	readonly site: string
+	readonly optics: string
+	readonly plan: string
+	readonly acquisition_session_id: string
+	readonly acquisition_state: PointingAcquisitionState
+	readonly created_at: number
+	readonly updated_at: number
+	readonly last_active_at: number | null
+}
+
+// Row of pointing_samples, pointing_revisions, or pointing_verifications, as a model reads them.
+interface PointingRecordRow {
+	readonly record: string
+}
+
+// Row of pointing_verifications, with the revision it verifies.
+interface PointingVerificationRow extends PointingRecordRow {
+	readonly revision_id: string
+}
+
+// Columns of pointing_models, in the order of headerValues.
+const HEADER_COLUMNS = 'model_id, revision, label, notes, origin, mount, site, optics, plan, acquisition_session_id, acquisition_state, created_at, updated_at, last_active_at'
+
+// Returns the values of the header of a model, in the order of HEADER_COLUMNS.
+function headerValues({ modelId, revision, label, notes, origin, mount, site, optics, plan, acquisition, createdAt, updatedAt, lastActiveAt }: Readonly<PointingModelFile>) {
+	return [modelId, revision, label, notes ?? null, origin, JSON.stringify(mount), JSON.stringify(site), JSON.stringify(optics), JSON.stringify(plan), acquisition.sessionId, acquisition.state, createdAt, updatedAt, lastActiveAt ?? null] as const
+}
+
+// Returns the record of a revision as its row keeps it, without its verifications.
+function revisionRecord({ verifications, ...revision }: PointingRevision) {
+	return revision
+}
+
+// Returns the items of next that previous did not have, throwing when next changed or removed one of them, compared by
+// identity first and then by the JSON copy of what record keeps of them. name names the items for the error.
+function appended<T>(previous: readonly T[], next: readonly T[], name: string, record: (item: T) => unknown = (item) => item) {
+	if (next.length < previous.length || previous.some((item, index) => item !== next[index] && JSON.stringify(record(item)) !== JSON.stringify(record(next[index])))) throw new Error(`The ${name} of a pointing model cannot be changed`)
+	return next.slice(previous.length)
+}
+
+// Mount pointing models in the operational database. Methods answer promises, so a caller never depends on a save being
+// synchronous, but each one runs in a single transaction and rejects when it cannot be written, leaving the model as it was.
 export class PointingModelStore {
-	// Models read from the directory, once the first read started.
-	#loaded?: Promise<LoadedPointingModels>
-	// Tail of the saves in progress of each model, which run one at a time.
-	readonly #queues = new Map<string, Promise<unknown>>()
+	// Creates the store of the models in database.
+	constructor(readonly database: AppDatabase) {}
 
-	// Creates the store of the files in directory.
-	constructor(readonly directory: string = DEFAULT_POINTING_MODELS_DIRECTORY) {}
+	// Records the acquisitions a previous run of the server left running or paused as interrupted, without raising the
+	// revision of their models. Returns how many were. Called once, before anything is served.
+	interruptRunning() {
+		return this.database.write(() => this.database.db.query("UPDATE pointing_models SET acquisition_state = 'interrupted' WHERE acquisition_state IN ('running', 'paused')").run().changes)
+	}
 
-	// Reads every file of the directory. A missing directory gives no models.
-	async #read(): Promise<LoadedPointingModels> {
-		const models = new Map<string, PointingModelFile>()
-		const unavailable = new Map<string, UnavailablePointingModel>()
-		let files: string[]
+	// Reads a model with its samples, revisions, and verifications.
+	#read(row: PointingModelRow): PointingModelFile {
+		const { db } = this.database
+		const verifications = new Map<string, PointingVerification[]>()
 
-		try {
-			files = await readdir(this.directory)
-		} catch (error) {
-			const code = errorCode(error)
-			if (code === 'ENOENT' || code === 'ENOTDIR') return { models, unavailable }
-			throw error
+		for (const { revision_id, record } of db.query<PointingVerificationRow, [string]>('SELECT revision_id, record FROM pointing_verifications WHERE model_id = ? ORDER BY revision_id, position').all(row.model_id)) {
+			const list = verifications.get(revision_id)
+			if (list) list.push(JSON.parse(record) as PointingVerification)
+			else verifications.set(revision_id, [JSON.parse(record) as PointingVerification])
 		}
 
-		for (const file of files) {
-			if (!file.endsWith('.json')) continue
+		const samples = db.query<PointingRecordRow, [string]>('SELECT record FROM pointing_samples WHERE model_id = ? ORDER BY position').all(row.model_id)
+		const revisions = db.query<PointingRecordRow, [string]>('SELECT record FROM pointing_revisions WHERE model_id = ? ORDER BY position').all(row.model_id)
 
-			const modelId = file.slice(0, -5)
-			let parsed: PointingModelFile | UnavailablePointingModel['reason']
-
-			try {
-				parsed = parsePointingModel(await readFile(join(this.directory, file), 'utf-8'))
-			} catch {
-				parsed = 'corrupt'
-			}
-
-			if (typeof parsed === 'string') unavailable.set(modelId, { modelId, reason: parsed })
-			else models.set(modelId, parsed)
+		return {
+			modelId: row.model_id,
+			revision: row.revision,
+			label: row.label,
+			...(row.notes !== null && { notes: row.notes }),
+			mount: JSON.parse(row.mount) as PointingMountIdentity,
+			site: JSON.parse(row.site) as PointingSite,
+			optics: JSON.parse(row.optics) as PointingOpticsFingerprint,
+			origin: row.origin,
+			createdAt: row.created_at,
+			updatedAt: row.updated_at,
+			...(row.last_active_at !== null && { lastActiveAt: row.last_active_at }),
+			plan: JSON.parse(row.plan) as PointingPlanRecord,
+			acquisition: { sessionId: row.acquisition_session_id, state: row.acquisition_state },
+			samples: samples.map(({ record }) => JSON.parse(record) as PointingSampleRecord),
+			revisions: revisions.map(({ record }) => {
+				const revision = JSON.parse(record) as PointingRevision
+				return Object.assign(revision, { verifications: verifications.get(revision.revisionId) ?? [] })
+			}),
 		}
-
-		return { models, unavailable }
 	}
 
-	// Returns the models, reading the directory on the first call.
-	#load(): Promise<LoadedPointingModels> {
-		return (this.#loaded ??= this.#read())
+	// Returns a model, or undefined when there is none.
+	#get(modelId: string) {
+		const row = this.database.db.query<PointingModelRow, [string]>(`SELECT ${HEADER_COLUMNS} FROM pointing_models WHERE model_id = ?`).get(modelId)
+		return row ? this.#read(row) : undefined
 	}
 
-	// Runs a save of a model after the ones in progress.
-	#enqueue<T>(modelId: string, save: () => Promise<T>): Promise<T> {
-		const run = (this.#queues.get(modelId) ?? Promise.resolve()).then(save)
-		this.#queues.set(
-			modelId,
-			run.catch(() => undefined),
-		)
-		return run
+	// Writes the rows of model that previous did not have; previous is undefined for a new model.
+	#writeRecords(model: Readonly<PointingModelFile>, previous?: Readonly<PointingModelFile>) {
+		const { db } = this.database
+		const sample = db.query('INSERT INTO pointing_samples (model_id, sample_id, position, record) VALUES (?, ?, ?, ?)')
+		const revision = db.query('INSERT INTO pointing_revisions (model_id, revision_id, position, record) VALUES (?, ?, ?, ?)')
+		const verification = db.query('INSERT INTO pointing_verifications (model_id, revision_id, verification_id, position, record) VALUES (?, ?, ?, ?, ?)')
+		const samplesBefore = previous?.samples ?? []
+		const revisionsBefore = previous?.revisions ?? []
+
+		for (const [index, each] of appended(samplesBefore, model.samples, 'samples').entries()) sample.run(model.modelId, each.id, samplesBefore.length + index, JSON.stringify(each))
+		appended(revisionsBefore, model.revisions, 'revisions', revisionRecord)
+
+		for (const [index, each] of model.revisions.entries()) {
+			if (index >= revisionsBefore.length) revision.run(model.modelId, each.revisionId, index, JSON.stringify(revisionRecord(each)))
+			const verificationsBefore = revisionsBefore[index]?.verifications ?? []
+			for (const [position, added] of appended(verificationsBefore, each.verifications, 'verifications').entries()) verification.run(model.modelId, each.revisionId, added.verificationId, verificationsBefore.length + position, JSON.stringify(added))
+		}
 	}
 
-	// Returns every usable model, newest first, and the files that cannot be used.
-	async list(): Promise<{ readonly models: readonly PointingModelFile[]; readonly unavailable: readonly UnavailablePointingModel[] }> {
-		const { models, unavailable } = await this.#load()
-		return { models: [...models.values()].sort((a, b) => b.createdAt - a.createdAt || a.modelId.localeCompare(b.modelId)), unavailable: [...unavailable.values()] }
-	}
-
-	// Returns a model, or undefined when there is none or its file cannot be used.
-	async get(modelId: string): Promise<PointingModelFile | undefined> {
-		return (await this.#load()).models.get(modelId)
-	}
-
-	// Creates a model. Throws when the file cannot be written; the store is then unchanged.
-	async create(model: Omit<PointingModelFile, 'version' | 'revision' | 'updatedAt'>): Promise<PointingModelFile> {
-		const created: PointingModelFile = { ...model, version: POINTING_MODEL_VERSION, revision: 1, updatedAt: Date.now() }
-
-		return await this.#enqueue(model.modelId, async () => {
-			await writeAtomically(modelFile(this.directory, model.modelId), serializePointingModel(created))
-			;(await this.#load()).models.set(model.modelId, created)
-			return created
+	// Returns every model, newest first.
+	list(): Promise<{ readonly models: readonly PointingModelFile[] }> {
+		return Promise.try(() => {
+			const rows = this.database.db.query<PointingModelRow, []>(`SELECT ${HEADER_COLUMNS} FROM pointing_models ORDER BY created_at DESC, model_id`).all()
+			return { models: rows.map((row) => this.#read(row)) }
 		})
+	}
+
+	// Returns a model, or undefined when there is none.
+	get(modelId: string): Promise<PointingModelFile | undefined> {
+		return Promise.try(() => this.#get(modelId))
+	}
+
+	// Creates a model. Rejects when it cannot be written; the store is then unchanged.
+	create(model: Omit<PointingModelFile, 'revision' | 'updatedAt'>): Promise<PointingModelFile> {
+		return Promise.try(() =>
+			this.database.write(() => {
+				const created: PointingModelFile = { ...model, revision: 1, updatedAt: Date.now() }
+				this.database.db.query(`INSERT INTO pointing_models (${HEADER_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(...headerValues(created))
+				this.#writeRecords(created)
+				return created
+			}),
+		)
 	}
 
 	// Saves a change of a model, returned by change from the current one. A save with an expected revision is refused
-	// when another one was saved since; the sessions, which own the model while they run, need none. Throws when the
-	// file cannot be written; the model is then unchanged.
+	// when another one was saved since; the sessions, which own the model while they run, need none. Rejects when it
+	// cannot be written, or when change edited or removed a sample, revision, or verification; the model is then
+	// unchanged.
 	update(modelId: string, change: (model: PointingModelFile) => PointingModelFile, expectedRevision?: number): Promise<PointingModelSaveOutcome> {
-		return this.#enqueue(modelId, async (): Promise<PointingModelSaveOutcome> => {
-			const { models } = await this.#load()
-			const current = models.get(modelId)
-			if (!current) return { status: 'notFound' }
-			if (expectedRevision !== undefined && expectedRevision !== current.revision) return { status: 'conflict', model: current }
+		return Promise.try(() =>
+			this.database.write((): PointingModelSaveOutcome => {
+				const current = this.#get(modelId)
+				if (!current) return { status: 'notFound' }
+				if (expectedRevision !== undefined && expectedRevision !== current.revision) return { status: 'conflict', model: current }
 
-			const model: PointingModelFile = { ...change(current), version: POINTING_MODEL_VERSION, revision: current.revision + 1, updatedAt: Date.now() }
-			await writeAtomically(modelFile(this.directory, modelId), serializePointingModel(model))
-			models.set(modelId, model)
-			return { status: 'saved', model }
-		})
+				const model: PointingModelFile = { ...change(current), modelId, revision: current.revision + 1, updatedAt: Date.now() }
+				const [, ...values] = headerValues(model)
+				this.database.db.query('UPDATE pointing_models SET revision = ?, label = ?, notes = ?, origin = ?, mount = ?, site = ?, optics = ?, plan = ?, acquisition_session_id = ?, acquisition_state = ?, created_at = ?, updated_at = ?, last_active_at = ? WHERE model_id = ?').run(...values, modelId)
+				this.#writeRecords(model, current)
+				return { status: 'saved', model }
+			}),
+		)
 	}
 
-	// Deletes a model and its file. Resolves whether it existed.
+	// Deletes a model with its samples, revisions, and verifications. Resolves whether it existed.
 	delete(modelId: string): Promise<boolean> {
-		return this.#enqueue(modelId, async () => {
-			const { models } = await this.#load()
-			if (!models.has(modelId)) return false
-			await rm(modelFile(this.directory, modelId), { force: true })
-			models.delete(modelId)
-			return true
-		})
+		return Promise.try(() => this.database.write(() => this.database.db.query('DELETE FROM pointing_models WHERE model_id = ?').run(modelId).changes > 0))
 	}
-}
-
-// Returns the content of a model file. A JSON copy holds a condition number that is not finite as null.
-function serializePointingModel(model: Readonly<PointingModelFile>) {
-	return `${JSON.stringify(model)}\n`
 }

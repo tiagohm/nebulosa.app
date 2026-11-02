@@ -1,5 +1,5 @@
 // oxfmt-ignore
-import type { CameraCapabilities, MountPointingVerifyRequest, PointingActivateRequest, PointingActivation, PointingActivationsSnapshot, MountPointingRequest, MountPointingSessionSummary, MountPointingSnapshot, MountPointingState, MountPointingStep, MountState, PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelExport, PointingModelPatch, PointingModelsSnapshot, PointingModelSummary, ServerEvent, UnavailablePointingModel } from 'api'
+import type { CameraCapabilities, MountPointingVerifyRequest, PointingActivateRequest, PointingActivation, PointingActivationsSnapshot, MountPointingRequest, MountPointingSessionSummary, MountPointingSnapshot, MountPointingState, MountPointingStep, MountState, PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelExport, PointingModelPatch, PointingModelsSnapshot, PointingModelSummary, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import type { PointingPlan } from 'nebulosa/src/observation/mount/pointing.plan'
@@ -13,17 +13,15 @@ import { SnapshotRefreshes } from '../refresh'
 
 // Mount pointing models as this tab knows them. The server owns every model, fit, and activation, so this store only
 // mirrors them: the summary of every model arrives with the mountPointing events and, on every socket (re)open, with the
-// snapshot; the samples and revisions of a model are fetched when it is opened, and again when its file changes. Events
+// snapshot; the samples and revisions of a model are fetched when it is opened, and again when it changes. Events
 // carry a sequence and a refresh leaves what an event changed meanwhile, so a late snapshot never takes a model back, and
-// nothing here decides whether a model is valid or active. The revision of the file goes with every edit, so the server
+// nothing here decides whether a model is valid or active. The revision of the model goes with every edit, so the server
 // refuses an edit made from an outdated model instead of losing another tab's.
 
 // Mount pointing state of the tab.
 export interface MountPointingRuntime {
-	// Summary of every usable model, by model id.
+	// Summary of every model, by model id.
 	models: Record<string, PointingModelSummary>
-	// Files that cannot be used.
-	unavailable: readonly UnavailablePointingModel[]
 	// Fits running or failed, by model id.
 	fits: Record<string, PointingFitState>
 	// Complete record of the models opened, by model id.
@@ -47,7 +45,7 @@ export interface MountPointingRuntime {
 }
 
 // Mount pointing state of the tab.
-export const mountPointingRuntime = proxy<MountPointingRuntime>({ models: {}, unavailable: [], fits: {}, details: {}, activations: {}, activationSequence: 0, sessions: {}, plans: {}, sequence: 0, pending: {}, errors: {} })
+export const mountPointingRuntime = proxy<MountPointingRuntime>({ models: {}, fits: {}, details: {}, activations: {}, activationSequence: 0, sessions: {}, plans: {}, sequence: 0, pending: {}, errors: {} })
 
 // Refreshes of the models, ordered against the events applied meanwhile.
 const refreshes = new SnapshotRefreshes()
@@ -289,7 +287,6 @@ async function refreshModels(state: MountPointingRuntime, request: typeof fetch)
 		for (const model of snapshot.models) if (!refreshes.changed(model.modelId)) state.models[model.modelId] = model
 		for (const [modelId, fit] of Object.entries(snapshot.fits)) if (!refreshes.changed(modelId)) state.fits[modelId] = fit
 
-		state.unavailable = snapshot.unavailable
 		state.sequence = Math.max(state.sequence, snapshot.sequence)
 		for (const modelId of Object.keys(state.details)) void loadPointingModel(state, modelId, request)
 	} catch {

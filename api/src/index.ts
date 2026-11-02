@@ -435,7 +435,7 @@ export type {
 	MountPointingState,
 	MountPointingStep,
 } from './mountpointing.sessions'
-export type { PointingAcquisitionState, PointingModelExport, PointingModelFile, PointingModelSummary, PointingMountIdentity, PointingOpticsFingerprint, PointingPlanRecord, PointingRevision, PointingSampleRecord, PointingVerification, UnavailablePointingModel } from './mountpointing.store'
+export type { PointingAcquisitionState, PointingModelExport, PointingModelFile, PointingModelSummary, PointingMountIdentity, PointingOpticsFingerprint, PointingPlanRecord, PointingRevision, PointingSampleRecord, PointingVerification } from './mountpointing.store'
 export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
 export type {
 	TargetCenteringAttempt,
@@ -588,7 +588,7 @@ const autoFocus = new AutoFocusSessions(connections.devices, (id) => connections
 const tppa = new TppaSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, publish)
 
 // Mount pointing models, persisted under the home of the server and fitted on a worker of their own.
-const pointingModels = new PointingModels(new PointingModelStore(), new PointingModelFitter(), publish)
+const pointingModels = new PointingModels(new PointingModelStore(database), new PointingModelFitter(), publish)
 
 // Mount pointing sessions of the cameras of the open connections, slewing the mounts with the commander of the mount
 // commands, so no model corrects them, taking their frames with the capturer of the captures, and solving them with the
@@ -677,12 +677,14 @@ const earthOrientation = new EarthOrientationData()
 const astronomicalTime = new AstronomicalTimeService(earthOrientation)
 
 // Opens the operational database and brings its schema up to date, before anything is served, creates the Default
-// profile when it has none, and records the operations a previous run left running as interrupted. Throws an Error saying why it cannot be opened (another server uses it, the file is not a
-// database, or its schema is newer than this server knows), leaving the file as it is; the app then stops.
+// profile when it has none, and records the operations and the pointing model acquisitions a previous run left running
+// as interrupted; nothing resumes them. Throws an Error saying why it cannot be opened (another server uses it, the file
+// is not a database, or its schema is newer than this server knows), leaving the file as it is; the app then stops.
 export function startDatabase() {
 	database.open()
 	workspace.ensureProfile()
 	operationHistory.interruptRunning()
+	pointingModels.store.interruptRunning()
 }
 
 // Closes the operational database, for a server about to stop.

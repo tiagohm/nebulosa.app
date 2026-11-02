@@ -127,7 +127,7 @@ async function setup() {
 	const solving = fakeSolver(images)
 	const fits: PointingFitRequest[] = []
 	const fitting = { real: false }
-	const store = new PointingModelStore(mkdtempSync(join(root, 'models-')))
+	const store = new PointingModelStore(AppDatabase.memory())
 	const modelEvents: PointingModelEvent[] = []
 	const fitter = {
 		fit: (fit: PointingFitRequest) => {
@@ -539,8 +539,8 @@ describe('mount pointing sessions', () => {
 		expect((await sessions.verify(modelId, { ...body, revisionId: 'gone' })).status).toBe(404)
 		expect((await sessions.verify('gone', body)).status).toBe(404)
 
-		await store.update(modelId, (model) => ({ ...model, mount: { ...model.mount, hardwareId: 'other' }, revisions: [{ ...model.revisions[0], gate: 'passed' }] }))
-		expect((await sessions.verify(modelId, { ...body, token: `token-${tokens++}` })).status).toBe(409)
+		await store.update(modelId, (model) => ({ ...model, mount: { ...model.mount, hardwareId: 'other' }, revisions: [...model.revisions, { ...model.revisions[0], revisionId: 'passed', gate: 'passed' }] }))
+		expect((await sessions.verify(modelId, { ...body, token: `token-${tokens++}`, revisionId: 'passed' })).status).toBe(409)
 	})
 
 	test('a preview commands nothing and answers the plan of the site of the mount', async () => {

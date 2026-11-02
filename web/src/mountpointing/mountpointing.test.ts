@@ -22,7 +22,7 @@ import {
 } from './mountpointing'
 
 function runtime(): MountPointingRuntime {
-	return proxy<MountPointingRuntime>({ models: {}, unavailable: [], fits: {}, details: {}, activations: {}, activationSequence: 0, sessions: {}, plans: {}, sequence: 0, pending: {}, errors: {} })
+	return proxy<MountPointingRuntime>({ models: {}, fits: {}, details: {}, activations: {}, activationSequence: 0, sessions: {}, plans: {}, sequence: 0, pending: {}, errors: {} })
 }
 
 function summary(patch: Partial<PointingModelSummary> = {}): PointingModelSummary {
@@ -37,7 +37,7 @@ function json(body: unknown, status = 200) {
 	return Promise.resolve(Response.json(body, { status }))
 }
 
-const snapshot = (patch: Partial<PointingModelsSnapshot> = {}): PointingModelsSnapshot => ({ models: [], unavailable: [], fits: {}, sequence: 0, ...patch })
+const snapshot = (patch: Partial<PointingModelsSnapshot> = {}): PointingModelsSnapshot => ({ models: [], fits: {}, sequence: 0, ...patch })
 
 const ignore = (() => json({})) as unknown as typeof fetch
 
@@ -109,12 +109,11 @@ test('a snapshot replaces the models but leaves what an event changed during the
 	const refresh = refreshMountPointing(state, (() => promise) as unknown as typeof fetch)
 
 	handleMountPointingEvent(state, updated(2, { modelId: 'late', label: 'Event' }), ignore)
-	resolve(Response.json(snapshot({ models: [summary({ modelId: 'late', label: 'Snapshot' }), summary({ modelId: 'other' })], unavailable: [{ modelId: 'bad', reason: 'corrupt' }], sequence: 1 })))
+	resolve(Response.json(snapshot({ models: [summary({ modelId: 'late', label: 'Snapshot' }), summary({ modelId: 'other' })], sequence: 1 })))
 	await refresh
 
 	expect(Object.keys(state.models).sort()).toEqual(['late', 'other'])
 	expect(state.models.late.label).toBe('Event')
-	expect(state.unavailable).toEqual([{ modelId: 'bad', reason: 'corrupt' }])
 	expect(state.sequence).toBe(2)
 })
 

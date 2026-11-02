@@ -23,7 +23,7 @@ import { buildTarget, DEFAULT_FIT_FORM, FIT_STRATEGIES, FIT_STRATEGY_LABELS, typ
 // Mount Pointing Model tool: the library of the models of the MOUNT of the active equipment setup. It lists and inspects
 // models, refits them with other options or without some samples, and imports, exports, renames, and deletes them, without
 // any camera tab. A refit always adds a revision: a revision that was fitted never changes. The form is a draft of this tab
-// until Fit asks for a revision, and every request carries the revision of the file it was made from. The model and every
+// until Fit asks for a revision, and every request carries the revision of the model it was made from. The model and every
 // verdict are the server's. Build New Model is the only way from here to the Images workspace, and acquisition happens
 // there: this tool starts no exposure and moves no mount.
 
@@ -96,7 +96,6 @@ export function MountPointingModel() {
 				</div>
 				{'reason' in target && <Notice>{target.reason}</Notice>}
 				{importError && <Notice error>{importError}</Notice>}
-				{runtime.unavailable.length > 0 && <Notice error>{`${runtime.unavailable.length} model file(s) cannot be used: ${runtime.unavailable.map((each) => `${each.modelId} (${each.reason === 'newerVersion' ? 'newer version' : 'corrupt'})`).join(', ')}.`}</Notice>}
 				{models.length === 0 ? (
 					<EmptyState title="No models" description="Build a model from the Main Camera, or import one." />
 				) : (

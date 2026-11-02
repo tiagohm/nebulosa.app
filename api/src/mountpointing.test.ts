@@ -1,29 +1,17 @@
-import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { mkdtemp, rm } from 'fs/promises'
-import { tmpdir } from 'os'
-import { join } from 'path'
+import { expect, test } from 'bun:test'
 import { arcsec, deg } from 'nebulosa/src/math/units/angle'
 import type { FittedPointingModel } from 'nebulosa/src/observation/mount/pointing'
+import { AppDatabase } from './database'
 import { MINIMUM_FIT_SAMPLES, type PointingModelEvent, PointingModels, type PointingModelsSnapshot } from './mountpointing'
 import type { PointingFitRequest, PointingFitResult } from './mountpointing.fit'
 import { type PointingModelExport, type PointingModelFile, PointingModelStore, type PointingModelSummary, type PointingSampleRecord } from './mountpointing.store'
-
-let directory: string
-
-beforeEach(async () => {
-	directory = await mkdtemp(join(tmpdir(), 'nebulosa-pointing-models-'))
-})
-
-afterEach(async () => {
-	await rm(directory, { recursive: true, force: true })
-})
 
 function sample(id: string, role: PointingSampleRecord['role'] = 'training', status: PointingSampleRecord['status'] = 'accepted'): PointingSampleRecord {
 	const position = { rightAscension: 1, declination: 0.5 }
 	return { id, waypoint: 0, attempt: 1, sessionId: 's', role, status, time: 1000, commandedAt: 900, command: position, solved: { ...position, declination: position.declination + arcsec(60) }, pierSide: 'EAST' }
 }
 
-function record(samples: readonly PointingSampleRecord[] = [sample('a'), sample('b'), sample('h', 'heldOut'), sample('x', 'training', 'rejected')]): Omit<PointingModelFile, 'version' | 'revision' | 'updatedAt'> {
+function record(samples: readonly PointingSampleRecord[] = [sample('a'), sample('b'), sample('h', 'heldOut'), sample('x', 'training', 'rejected')]): Omit<PointingModelFile, 'revision' | 'updatedAt'> {
 	return {
 		modelId: 'm1',
 		label: 'Model',
@@ -66,7 +54,7 @@ function fakeFitter() {
 }
 
 async function setup(samples?: readonly PointingSampleRecord[]) {
-	const store = new PointingModelStore(directory)
+	const store = new PointingModelStore(AppDatabase.memory())
 	const fitter = fakeFitter()
 	const events: PointingModelEvent[] = []
 	const models = new PointingModels(store, fitter, (event) => events.push(event))
@@ -174,7 +162,7 @@ test('a run is fitted by itself only with enough samples', async () => {
 	expect(few.fitter.requests).toHaveLength(0)
 
 	const samples = Array.from({ length: MINIMUM_FIT_SAMPLES }, (_, index) => sample(`s${index}`))
-	const enough = new PointingModels(new PointingModelStore(directory), fakeFitter(), () => {})
+	const enough = new PointingModels(few.store, fakeFitter(), () => {})
 	const fitter = enough.fitter as ReturnType<typeof fakeFitter>
 	enough.fitAfterRun({ ...few.created, samples })
 	await until(fitter.waiting)

@@ -14,6 +14,7 @@ import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { medianOf } from 'nebulosa/src/math/numerical/statistics'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
+import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureSnoop, DEFAULT_CAPTURES_DIR, exposureProgressListener, frameName, sanitizeFileName, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
@@ -290,8 +291,6 @@ const FILENAME_TEMPLATE = '{date}_{time}_{camera}_{type}_{seq}'
 
 // A session while its service knows it.
 interface Session {
-	// Resource key of the camera the session is registered under.
-	readonly key: string
 	// Plan the session works on.
 	readonly plan: DarkCapturePlan
 	// Devices snooped into the frame headers.
@@ -421,10 +420,8 @@ function failedWith(result: OperationResult<unknown> & { readonly ok: false }, m
 
 // Dark Library Wizard sessions of the cameras of every open connection.
 export class DarkLibraryWizardSessions implements Disposable {
-	// Latest session of each camera, by camera resource key.
-	readonly #sessions = new Map<string, Session>()
-	// Session of each operation a command token started, so a repeated request answers it.
-	readonly #byOperation = new Map<string, Session>()
+	// Latest session of each camera, and the session each start token started.
+	readonly #sessions: CameraSessionRegistry<DarkLibraryWizardSessionSummary, Session>
 	// Starts still being prepared, by token, so a request repeated meanwhile answers the same start.
 	readonly #starting = new Map<string, Promise<Response>>()
 	// Thermometer activity of each camera.
@@ -463,6 +460,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
 		readonly planEnded: (planId: string) => void = () => undefined,
 	) {
+		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'darkLibraryWizard:updated', session }))
 		devices.thermometers.addHandler(this.#thermometers)
 	}
 
@@ -473,12 +471,12 @@ export class DarkLibraryWizardSessions implements Disposable {
 
 	// Returns the latest session of every camera.
 	snapshot(): DarkLibraryWizardSnapshot {
-		return { sessions: Array.from(this.#sessions.values(), (session) => session.summary) }
+		return { sessions: this.#sessions.summaries() }
 	}
 
 	// Responds with a complete session, or 404 when it is not the latest of its camera.
 	session(sessionId: string): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		return session ? Response.json({ ...session.summary, attempts: session.attempts } satisfies DarkLibraryWizardSession) : errorResponse('Dark Library Wizard session not found', 404, 'notFound')
 	}
 
@@ -488,8 +486,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 	// Nothing commands a device before the plan is durable.
 	start(connectionId: string, deviceId: string, request: DarkLibraryWizardRequest): Promise<Response> {
 		const { token } = request
-		const known = this.operations.started(token)
-		const repeated = known && this.#byOperation.get(known.operationId)
+		const repeated = this.#sessions.repeated(token)
 		if (repeated) return Promise.resolve(startResponse(repeated))
 
 		const starting = this.#starting.get(token)
@@ -512,7 +509,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		if (cover instanceof Response) return cover
 
 		const key = resourceKey(camera)
-		const previous = this.#sessions.get(key)
+		const previous = this.#sessions.of(key)
 		if (previous && previous.summary.endedAt === undefined) return errorResponse('A Dark Library Wizard session is running on this camera', 409, 'alreadyRunning')
 
 		const offered: SessionDevices = { camera, wheel, panel, cover }
@@ -526,7 +523,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		const free = () => this.operations.available(camera) && [devices.wheel, devices.panel, devices.cover].every((device) => !device || this.operations.available(device))
 		if (!free()) return busy()
 
-		const session = this.#session(key, plan, connectionId, deviceId, equipment, request.snoop, devices)
+		const session = this.#session(plan, connectionId, deviceId, equipment, request.snoop, devices)
 
 		try {
 			await this.store.create(plan, session.summary.sessionId)
@@ -548,10 +545,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 			return session.handle.result
 		})
 
-		if (previous) this.#byOperation.delete(previous.summary.operationId)
-		this.#sessions.set(key, session)
-		this.#byOperation.set(record.operationId, session)
-		this.#update(session, { operationId: record.operationId })
+		this.#sessions.adopt(key, session, record.operationId)
 
 		void session.handle!.result.then((result) => this.#ended(session, devices, result))
 		return startResponse(session)
@@ -592,7 +586,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 	}
 
 	// Creates the record of a session on a new plan, with nothing acquired yet.
-	#session(key: string, plan: DarkCapturePlan, connectionId: string, deviceId: string, { wheel, panel, cover }: Pick<DarkLibraryWizardEquipment, 'wheel' | 'panel' | 'cover'>, snoop: CaptureSnoop | undefined, { camera, wheel: wheelDevice, panel: panelDevice, cover: coverDevice }: SessionDevices): Session {
+	#session(plan: DarkCapturePlan, connectionId: string, deviceId: string, { wheel, panel, cover }: Pick<DarkLibraryWizardEquipment, 'wheel' | 'panel' | 'cover'>, snoop: CaptureSnoop | undefined, { camera, wheel: wheelDevice, panel: panelDevice, cover: coverDevice }: SessionDevices): Session {
 		const { protection, capture, thermal, maximumRejections, groups } = plan
 		const groupRuns = groups.map(({ groupId, exposure, temperature, count }): DarkLibraryWizardGroupRun => ({
 			exposure,
@@ -611,7 +605,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 		}))
 
 		return {
-			key,
 			plan,
 			snoop,
 			summary: {
@@ -651,7 +644,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 	// Confirms the manual step a session waits for. Responds 204, 404 when the session is unknown, and 409 when it waits
 	// for no step or for another one, so a stale or repeated confirmation never skips a later step.
 	continue(sessionId: string, { stepId }: DarkLibraryWizardContinueRequest): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session) return errorResponse('Dark Library Wizard session not found', 404, 'notFound')
 		if (session.gate?.stepId !== stepId) return errorResponse('The Dark Library Wizard session is not waiting for this step', 409, 'staleStep')
 
@@ -662,7 +655,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 	// Asks a running session to pause after the current frame, keeping every device held. Responds 204, repeated requests
 	// included; 404 when the session is unknown; and 409 when it already ended.
 	pause(sessionId: string): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session) return errorResponse('Dark Library Wizard session not found', 404, 'notFound')
 		if (session.summary.endedAt !== undefined) return errorResponse('The Dark Library Wizard session already ended', 409, 'notRunning')
 		if (!session.summary.pauseRequested) this.#update(session, { pauseRequested: true })
@@ -672,7 +665,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 	// Resumes a paused session, or withdraws a pause that has not taken effect. The protection and the temperature are
 	// checked again before the next frame. Responds 204, 404 when the session is unknown, and 409 when it is not pausing.
 	resume(sessionId: string): Response {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session) return errorResponse('Dark Library Wizard session not found', 404, 'notFound')
 		if (!session.summary.pauseRequested || session.summary.endedAt !== undefined) return errorResponse('The Dark Library Wizard session is not paused', 409, 'notPaused')
 		this.#update(session, { pauseRequested: false })
@@ -684,7 +677,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 	// manual step is abandoned, and published files stay. Resolves once the devices were released and what the session
 	// changed was restored. Responds 204, 404 when the session is unknown, and 409 when it already ended.
 	async stop(sessionId: string): Promise<Response> {
-		const session = this.#find(sessionId)
+		const session = this.#sessions.find(sessionId)
 		if (!session) return errorResponse('Dark Library Wizard session not found', 404, 'notFound')
 		if (session.summary.endedAt !== undefined) return errorResponse('The Dark Library Wizard session already ended', 409, 'notRunning')
 
@@ -1279,12 +1272,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return result
 	}
 
-	// Returns the latest session with this id.
-	#find(sessionId: string): Session | undefined {
-		for (const session of this.#sessions.values()) if (session.summary.sessionId === sessionId) return session
-		return undefined
-	}
-
 	// Changes a group of a session and publishes the session.
 	#patch(session: Session, index: number, patch: Partial<DarkLibraryWizardGroupRun>) {
 		this.#update(session, { groups: session.summary.groups.map((group, i) => (i === index ? { ...group, ...patch } : group)) })
@@ -1294,8 +1281,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 	#update(session: Session, patch: Partial<DarkLibraryWizardSessionSummary>) {
 		// A stop request keeps the session stopping until its cleanup starts, whatever step was running.
 		const state = session.summary.state === 'stopping' && patch.state !== undefined && !AFTER_STOPPING.has(patch.state) ? 'stopping' : (patch.state ?? session.summary.state)
-		session.summary = { ...session.summary, ...patch, state, revision: session.summary.revision + 1 }
-		if (this.#sessions.get(session.key) === session) this.listener({ type: 'darkLibraryWizard:updated', session: session.summary })
+		this.#sessions.replace(session, { ...session.summary, ...patch, state })
 	}
 }
 

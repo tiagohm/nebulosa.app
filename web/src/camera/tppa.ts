@@ -1,12 +1,13 @@
-import type { CameraCapabilities, MountState, ServerEvent, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaState } from 'api'
+import type { CameraCapabilities, MountState, ServerEvent, TppaRequest, TppaSession, TppaSessionSummary, TppaState } from 'api'
 import { nanoid } from 'nanoid'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit, responseError } from '../http'
+import { deviceUrl } from '../http'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, TppaSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
+import { applySession, type CameraSessionKind, type CameraSessionRecords, loadSessionRecord, refreshSessionRecords, sendSessionCommand } from './sessions'
 
 // TPPA sessions as this tab knows them. The server owns every session, whichever tab started it, and every motion,
 // exposure, and solve of it, so this store only mirrors it: the compact summary of the latest session of each camera
@@ -17,22 +18,18 @@ import { cameraKey, fitExposure } from './capture'
 // so a retried request answers the session of the first one instead of starting another.
 
 // TPPA state of the tab.
-export interface TppaRuntime {
-	// Latest session of each camera, by camera key (cameraKey).
-	sessions: Record<string, TppaSessionSummary>
-	// Complete record of each session fetched so far, by session id.
-	details: Record<string, TppaSession>
-	// Cameras with a command of this tab waiting for the server.
-	pending: Record<string, boolean>
-	// Why this tab's last command to a camera failed; cleared by its next command.
-	errors: Record<string, string>
-}
+export type TppaRuntime = CameraSessionRecords<TppaSessionSummary, TppaSession>
 
 // TPPA state of the tab.
 export const tppaRuntime = proxy<TppaRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
 
-// Refreshes of the snapshot, ordered against the session events applied meanwhile, by camera key.
-const refreshes = new SnapshotRefreshes()
+// How the sessions are mirrored (sessions.ts): the complete record is fetched again when the summary reports
+// a new frame, pose, or estimate, or an end.
+const TPPA_SESSIONS: CameraSessionKind<TppaSessionSummary, TppaSession> = {
+	url: '/api/tppa',
+	refreshes: new SnapshotRefreshes(),
+	stale: (session, _, details) => !details || details.frameCount !== session.frameCount || details.pointCount !== session.pointCount || details.alignment?.frame !== session.alignment?.frame || details.refinementCount !== session.refinementCount || (session.endedAt !== undefined && details.endedAt === undefined),
+}
 
 // Label of each session state.
 export const TPPA_STATE_LABELS: Readonly<Record<TppaState, string>> = {
@@ -133,86 +130,24 @@ export function tppaFrameRole(session: Pick<TppaSession, 'sessionId' | 'points' 
 	return undefined
 }
 
-// Fetches the complete record of a session; a record older than the one known (a late response) never replaces it,
-// and a session the server no longer keeps is forgotten.
-export async function loadTppaSession(state: TppaRuntime, sessionId: string, request: typeof fetch = fetch) {
-	try {
-		const response = await request(`/api/tppa/${encodeURIComponent(sessionId)}`)
-
-		if (response.status === 404) {
-			delete state.details[sessionId]
-			return
-		}
-
-		if (!response.ok) return
-		const session = (await response.json()) as TppaSession
-		const known = state.details[sessionId]
-		if (!known || session.revision > known.revision) state.details[sessionId] = session
-	} catch {
-		// The server is unreachable; the next socket open refreshes the sessions.
-	}
+// Fetches the complete record of a session (loadSessionRecord).
+export function loadTppaSession(state: TppaRuntime, sessionId: string, request: typeof fetch = fetch) {
+	return loadSessionRecord(state, TPPA_SESSIONS, sessionId, request)
 }
 
-// Applies a TPPA event; any other event is ignored. A session older than the one known for its camera, or an earlier
-// revision of the same one, never replaces it. The complete record is fetched again when the summary reports a new
-// frame, pose, or estimate, or an end.
+// Applies a TPPA event (applySession); any other event is ignored.
 export function handleTppaEvent(state: TppaRuntime, event: ServerEvent, request: typeof fetch = fetch) {
-	if (event.type !== 'tppa:updated') return
-
-	const { session } = event
-	const key = cameraKey(session.camera.connectionId, session.camera.deviceId)
-	const known = state.sessions[key]
-	if (known && known.sessionId !== session.sessionId && known.startedAt > session.startedAt) return
-	if (known?.sessionId === session.sessionId && known.revision >= session.revision) return
-
-	refreshes.updated(key)
-	state.sessions[key] = session
-	if (known?.sessionId !== session.sessionId) for (const id of Object.keys(state.details)) if (id !== session.sessionId) delete state.details[id]
-
-	const details = state.details[session.sessionId]
-	if (!details || details.frameCount !== session.frameCount || details.pointCount !== session.pointCount || details.alignment?.frame !== session.alignment?.frame || details.refinementCount !== session.refinementCount || (session.endedAt !== undefined && details.endedAt === undefined))
-		void loadTppaSession(state, session.sessionId, request)
+	if (event.type === 'tppa:updated') applySession(state, TPPA_SESSIONS, event.session, request)
 }
 
-// Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, leaving what an
-// event changed meanwhile, so a session that ended during the request is never shown running again, and fetches their
-// complete records. A response is dropped when another refresh started meanwhile.
-export async function refreshTppa(state: TppaRuntime, request: typeof fetch = fetch) {
-	const token = refreshes.start()
-
-	try {
-		const response = await request('/api/tppa')
-		if (!response.ok || !refreshes.current(token)) return
-		const snapshot = (await response.json()) as TppaSnapshot
-		if (!refreshes.current(token)) return
-
-		state.sessions = refreshes.merge(state.sessions, snapshot.sessions, ({ camera }) => cameraKey(camera.connectionId, camera.deviceId))
-		const kept = Object.values(state.sessions).map(({ sessionId }) => sessionId)
-		for (const id of Object.keys(state.details)) if (!kept.includes(id)) delete state.details[id]
-		for (const id of kept) void loadTppaSession(state, id, request)
-	} catch {
-		// The server is unreachable; the next socket open refreshes the sessions.
-	} finally {
-		refreshes.end(token)
-	}
+// Replaces the sessions with the server's snapshot and fetches their complete records (refreshSessionRecords).
+export function refreshTppa(state: TppaRuntime, request: typeof fetch = fetch) {
+	return refreshSessionRecords(state, TPPA_SESSIONS, request)
 }
 
-// Sends a command of a camera and records its failure. When the server cannot be reached, the command may still have
-// been applied, so the snapshot is fetched again instead of assuming nothing happened.
-async function command(state: TppaRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
-	if (state.pending[key]) return
-	state.pending[key] = true
-	delete state.errors[key]
-
-	try {
-		const response = await request(url, jsonInit('POST', body))
-		if (!response.ok) state.errors[key] = await responseError(response)
-	} catch {
-		state.errors[key] = 'Unable to reach the server.'
-		await refreshTppa(state, request)
-	} finally {
-		delete state.pending[key]
-	}
+// Sends a command of a camera (sendSessionCommand).
+function command(state: TppaRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
+	return sendSessionCommand(state, key, url, body, () => refreshTppa(state, request), request)
 }
 
 // Starts a TPPA with a camera; its progress arrives as events.

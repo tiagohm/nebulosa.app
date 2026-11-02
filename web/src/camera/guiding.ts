@@ -1,13 +1,14 @@
 // oxfmt-ignore
-import type { CameraCapabilities, CaptureSnoop, StarDetectionSettings, GuidingCalibrationProgress, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingSnapshot, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
+import type { CameraCapabilities, CaptureSnoop, StarDetectionSettings, GuidingCalibrationProgress, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit, responseError } from '../http'
+import { deviceUrl } from '../http'
 import { type CameraExposureSettings, GUIDING_MAXIMUM_EXPOSURE, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_EXPOSURE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import type { TelescopeOptics } from '../sky/framing'
 import { cameraKey, fitExposure } from './capture'
+import { acceptSession, type CameraSessions, type CameraSessionSource, refreshSessions, sendSessionCommand } from './sessions'
 
 // Guiding sessions as this tab knows them. The server owns every session, whichever tab started it, and every exposure,
 // calibration, correction, and settle of it, so this store only mirrors it: the summary of the latest session of each
@@ -39,26 +40,21 @@ export interface GuidingFrame {
 }
 
 // Guiding state of the tab.
-export interface GuidingRuntime {
-	// Latest session of each guide camera, by camera key (cameraKey).
-	sessions: Record<string, GuidingSessionSummary>
+export interface GuidingRuntime extends CameraSessions<GuidingSessionSummary> {
 	// Control events of each session known, by session id, in sequence order, at most GUIDING_EVENTS_KEPT.
 	events: Record<string, GuidingEventRecord[]>
 	// Telemetry samples of each session known, by session id, in cursor order, at most GUIDING_TELEMETRY_KEPT.
 	telemetry: Record<string, GuidingTelemetrySample[]>
 	// Latest previewed frame of each session known, by session id.
 	frames: Record<string, GuidingFrame>
-	// Cameras with a command of this tab waiting for the server.
-	pending: Record<string, boolean>
-	// Why this tab's last command to a camera failed; cleared by its next command.
-	errors: Record<string, string>
 }
 
 // Guiding state of the tab.
 export const guidingRuntime = proxy<GuidingRuntime>({ sessions: {}, events: {}, telemetry: {}, frames: {}, pending: {}, errors: {} })
 
-// Refreshes of the snapshot, ordered against the session events applied meanwhile, by camera key.
-const refreshes = new SnapshotRefreshes()
+// Where the sessions are read and the refreshes of their snapshot (sessions.ts); a session keeps its history instead of a
+// complete record.
+const GUIDING_SESSIONS: CameraSessionSource = { url: '/api/guiding', refreshes: new SnapshotRefreshes() }
 
 // Label of each guider state.
 export const GUIDING_STATE_LABELS: Readonly<Record<GuidingSessionSummary['state'], string>> = {
@@ -331,19 +327,10 @@ export function handleGuidingEvent(state: GuidingRuntime, event: ServerEvent, re
 	switch (event.type) {
 		case 'guiding:updated': {
 			const { session } = event
-			const key = cameraKey(session.camera.connectionId, session.camera.deviceId)
-			const known = state.sessions[key]
-			if (known && known.sessionId !== session.sessionId && known.startedAt > session.startedAt) return
-			if (known?.sessionId === session.sessionId && known.revision >= session.revision) return
-
-			refreshes.updated(key)
-			state.sessions[key] = session
-
-			if (known?.sessionId !== session.sessionId) {
-				if (known) forgetSession(state, known.sessionId)
-				if (session.eventSequence > 0 || session.telemetryCursor > 0) void loadGuidingHistory(state, session.sessionId, request)
-			}
-
+			const accepted = acceptSession(state, GUIDING_SESSIONS.refreshes, session)
+			if (!accepted || accepted.known?.sessionId === session.sessionId) return
+			if (accepted.known) forgetSession(state, accepted.known.sessionId)
+			if (session.eventSequence > 0 || session.telemetryCursor > 0) void loadGuidingHistory(state, session.sessionId, request)
 			return
 		}
 		case 'guiding:event':
@@ -360,54 +347,20 @@ export function handleGuidingEvent(state: GuidingRuntime, event: ServerEvent, re
 	}
 }
 
-// Replaces the sessions with the server's snapshot, which may have changed while the socket was closed, leaving what an
-// event changed meanwhile, so a session that ended during the request is never shown running again, forgets the history
-// of the sessions no longer kept, and fetches the events and telemetry missed meanwhile. A response is dropped when
-// another refresh started meanwhile.
-export async function refreshGuiding(state: GuidingRuntime, request: typeof fetch = fetch) {
-	const token = refreshes.start()
-
-	try {
-		const response = await request('/api/guiding')
-		if (!response.ok || !refreshes.current(token)) return
-		const snapshot = (await response.json()) as GuidingSnapshot
-		if (!refreshes.current(token)) return
-
-		state.sessions = refreshes.merge(state.sessions, snapshot.sessions, ({ camera }) => cameraKey(camera.connectionId, camera.deviceId))
-		const kept = new Set(Object.values(state.sessions).map(({ sessionId }) => sessionId))
+// Replaces the sessions with the server's snapshot (refreshSessions), forgets the history of the sessions no longer
+// kept, and fetches the events and telemetry missed meanwhile.
+export function refreshGuiding(state: GuidingRuntime, request: typeof fetch = fetch) {
+	return refreshSessions(state, GUIDING_SESSIONS, request, async (sessionIds) => {
+		const kept = new Set(sessionIds)
 		for (const id of new Set([...Object.keys(state.events), ...Object.keys(state.telemetry), ...Object.keys(state.frames)])) if (!kept.has(id)) forgetSession(state, id)
-		await Promise.all(Array.from(kept, (id) => loadGuidingHistory(state, id, request)))
-	} catch {
-		// The server is unreachable; the next socket open refreshes the sessions.
-	} finally {
-		refreshes.end(token)
-	}
+		await Promise.all(sessionIds.map((id) => loadGuidingHistory(state, id, request)))
+	})
 }
 
-// Sends a command of a camera and records its failure; resolves to the response body of an accepted command, or
-// undefined. When the server cannot be reached, the command may still have been applied, so the snapshot is fetched
-// again instead of assuming nothing happened.
+// Sends a command of a camera (sendSessionCommand); resolves to the response body of an accepted command, or undefined.
 async function command(state: GuidingRuntime, key: string, url: string, body: unknown, request: typeof fetch): Promise<unknown> {
-	if (state.pending[key]) return undefined
-	state.pending[key] = true
-	delete state.errors[key]
-
-	try {
-		const response = await request(url, jsonInit('POST', body))
-
-		if (!response.ok) {
-			state.errors[key] = await responseError(response)
-			return undefined
-		}
-
-		return response.status === 204 ? undefined : await response.json()
-	} catch {
-		state.errors[key] = 'Unable to reach the server.'
-		await refreshGuiding(state, request)
-		return undefined
-	} finally {
-		delete state.pending[key]
-	}
+	const response = await sendSessionCommand(state, key, url, body, () => refreshGuiding(state, request), request)
+	return response && response.status !== 204 ? await response.json() : undefined
 }
 
 // Session a command addresses.

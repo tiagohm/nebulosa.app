@@ -83,6 +83,7 @@ Run every command from the repository root.
 Runtime and build notes:
 
 - The server reads `APP_HOST` (default `localhost`) and `APP_PORT` (default `7000`). `NODE_ENV=production` disables HMR and the development console. `NEBULOSA_HOME` (default `~/Nebulosa`) is the data directory: the operational database `nebulosa.sqlite`, captures, the calibration library, and the IERS tables. In production (`bun start` and the executable) only one server can use a data directory at a time; `bun dev` leaves the database open to other processes, such as a database browser.
+- `bun dev` enables React Fast Refresh only when `react-refresh/runtime` resolves from the repository root. The isolated install keeps `react` inside `web/node_modules`, so `react-refresh` is a root `devDependency`. Without it, the HMR runtime only rebinds imports, and a component held by a module-level registry (such as `TOOL_DEFINITIONS`) keeps rendering its old version until the page is reloaded.
 - `bun compile` inlines `APP_*` variables present at build time and forces `NODE_ENV=production`. The executable loads `.env` but not `bunfig.toml`.
 - Tailwind runs through `app/tailwind.plugin.ts`: registered in the root `bunfig.toml` under `[serve.static]` for `bun dev` and `bun start`, and passed directly to `Bun.build` in `app/build.ts`. Keep both paths working when changing either one.
 - `web/src/index.css` scans `web/` through `@import 'tailwindcss' source('..')`. Add a `@source` directive if classes ever live outside `web/`.

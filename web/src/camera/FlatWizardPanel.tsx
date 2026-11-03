@@ -163,6 +163,8 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 					<NumberInput label="Rejections" value={shown.maximumRejections} min={0} max={FLAT_WIZARD_MAXIMUM_REJECTIONS} disabled={locked} onChange={(maximumRejections) => update({ maximumRejections })} />
 				</div>
 				<Notice>Trial frames search the exposure of each filter and are never saved; rejected frames are deleted, and a filter fails beyond these limits. Existing files are never replaced.</Notice>
+				<Checkbox label="Generate masters after acquisition" checked={shown.generateMasters === true} disabled={locked} onChange={(generateMasters) => update({ generateMasters: generateMasters || undefined })} />
+				{shown.generateMasters === true && <Notice>Each filter that completes becomes a master flat in the Calibration Library, corrected by the only master dark-flat, or else the only master bias, that matches its frames. Without one, or with several to choose from, its flats wait there for you.</Notice>}
 			</CollapsibleSection>
 			<CollapsibleSection id="images.flat-wizard.filters" title="Filters">
 				{shown.filters.map((filter, index) => (
@@ -226,8 +228,8 @@ function nextFilter(filters: readonly FlatWizardFilter[], slots: number | undefi
 
 // Returns the form values a session applied, to show while it runs.
 function appliedSettings({ request }: Pick<FlatWizardSessionSummary, 'request'>): FlatWizardSettings {
-	const { filters, settleTime, directory, effectiveClip, maximumTrials, maximumRejections } = request
-	return { filters: [...filters], settleTime, directory, effectiveClip, maximumTrials, maximumRejections }
+	const { filters, settleTime, directory, effectiveClip, maximumTrials, maximumRejections, generateMasters } = request
+	return { filters: [...filters], settleTime, directory, effectiveClip, maximumTrials, maximumRejections, generateMasters }
 }
 
 interface FilterFormProps {

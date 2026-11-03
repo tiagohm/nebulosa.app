@@ -322,11 +322,6 @@ export function removeStackingFrame(state: ImageStackingRuntime, sourceId: strin
 	return command(state, `frame:${sourceId}`, `${BASE_URL}/frames/${encodeURIComponent(sourceId)}`, { method: 'DELETE' }, request)
 }
 
-// Merges the lights of a filter key into the group of another.
-export function mergeStackingFilter(state: ImageStackingRuntime, projectId: string, filterKey: string, targetKey: string, request: typeof fetch = fetch) {
-	return command<StackingFilterGroup[]>(state, `alias:${filterKey}`, `${projectUrl(projectId)}/aliases`, jsonInit('POST', { filterKey, targetKey }), request)
-}
-
 // Records what an operator decides about a cohort: its camera, or its calibration.
 export function updateStackingCohort(state: ImageStackingRuntime, projectId: string, cohortId: string, patch: StackingCohortPatch, request: typeof fetch = fetch) {
 	return command<StackingCohort>(state, `cohort:${cohortId}`, `${projectUrl(projectId)}/cohorts/${encodeURIComponent(cohortId)}`, jsonInit('PATCH', patch), request)
@@ -375,9 +370,4 @@ export function cancelStackingComposition(state: ImageStackingRuntime, jobId: st
 // Deletes a composite with its file; its masters stay.
 export function deleteStackingComposite(state: ImageStackingRuntime, compositeId: string, request: typeof fetch = fetch) {
 	return command(state, `composite:${compositeId}`, `${BASE_URL}/composites/${encodeURIComponent(compositeId)}`, { method: 'DELETE' }, request)
-}
-
-// Separates a merged filter key again.
-export function separateStackingFilter(state: ImageStackingRuntime, projectId: string, filterKey: string, request: typeof fetch = fetch) {
-	return command<StackingFilterGroup[]>(state, `alias:${filterKey}`, `${projectUrl(projectId)}/aliases/${encodeURIComponent(filterKey)}`, { method: 'DELETE' }, request)
 }

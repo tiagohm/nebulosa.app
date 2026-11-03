@@ -96,10 +96,10 @@ describe('requests', () => {
 		const urls: string[] = []
 		const request = ((url: string) => {
 			urls.push(url)
-			return Promise.resolve(url.includes('kind=bias') ? Response.json({ error: 'Busy', code: 'busy' }, { status: 503 }) : Response.json({ items: [{ masterId: 'df', revision: 1 }], total: 1 }))
+			return Promise.resolve(url.includes('kind=bias') ? Response.json({ error: 'Busy', code: 'busy' }, { status: 503 }) : Response.json({ items: [{ masterId: 1 }], total: 1 }))
 		}) as unknown as typeof fetch
 
-		expect(await loadFlatCorrections(request)).toEqual([{ masterId: 'df', revision: 1 }] as never)
+		expect(await loadFlatCorrections(request)).toEqual([{ masterId: 1 }] as never)
 		expect(urls).toEqual(['/api/calibration-library/masters?kind=darkFlat&limit=100', '/api/calibration-library/masters?kind=bias&limit=100'])
 		expect(await loadFlatCorrections((() => Promise.reject(new Error('offline'))) as unknown as typeof fetch)).toEqual([])
 	})

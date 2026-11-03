@@ -2,7 +2,8 @@
 // of those facts must agree before frames can be combined, and what a group of them is ready for. Everything here is
 // pure, so the policy can be read and tested apart from files and jobs. Exposures are integer microseconds, because
 // comparing canonical integers never merges 179.9 s with 180 s by a rounded label; temperatures are degrees Celsius.
-// Unknown is never a wildcard: it stays visible, asks for a review, and never agrees with a known value.
+// Unknown is never a wildcard between frames: it stays visible, asks for a review, and never agrees with a known value.
+// Nothing identifies a physical camera: frames of the same settings and geometry combine whatever camera took them.
 
 // Role of a calibration frame or master.
 export type CalibrationKind = 'dark' | 'bias' | 'darkFlat' | 'flat'
@@ -10,7 +11,7 @@ export type CalibrationKind = 'dark' | 'bias' | 'darkFlat' | 'flat'
 // How a value is known:
 // - verified: read from the metadata of the file.
 // - planDeclared: recorded by an immutable capture plan, for what a driver leaves out of its files.
-// - operatorDeclared: an audited override, which never becomes a measurement.
+// - operatorDeclared: an override an operator declared, which never becomes a measurement.
 // - unknown: nothing says.
 export type EvidenceLevel = 'verified' | 'planDeclared' | 'operatorDeclared' | 'unknown'
 
@@ -24,9 +25,7 @@ export interface Evidenced<T> {
 
 // What is known about a frame or master. Sample geometry is always read from the file.
 export interface CalibrationMetadata {
-	// Camera hardware id, as the capture plans use it; a model name in a header never fills it.
-	readonly cameraId: Evidenced<string>
-	// Name of the camera, shown to people and never matched across a known hardware id.
+	// Name of the camera, shown to people and never compared.
 	readonly cameraName?: string
 	// Exposure, in integer microseconds.
 	readonly exposure: Evidenced<number>
@@ -65,10 +64,10 @@ export interface CalibrationMetadata {
 	readonly bayerOffsetY?: number
 }
 
-// Fields an audited override can set, each only while its value is unknown.
-export const OVERRIDABLE_FIELDS = ['cameraId', 'exposure', 'setTemperature', 'sensorTemperature', 'gain', 'offset', 'binX', 'binY', 'readoutMode', 'filter', 'telescope', 'focalLength'] as const satisfies readonly (keyof CalibrationMetadata)[]
+// Fields an override can set, each only while its value is unknown.
+export const OVERRIDABLE_FIELDS = ['exposure', 'setTemperature', 'sensorTemperature', 'gain', 'offset', 'binX', 'binY', 'readoutMode', 'filter', 'telescope', 'focalLength'] as const satisfies readonly (keyof CalibrationMetadata)[]
 
-// Field an audited override can set.
+// Field an override can set.
 export type OverridableField = (typeof OVERRIDABLE_FIELDS)[number]
 
 // How much a finding stops:
@@ -101,7 +100,7 @@ export interface CompatibilityFinding {
 // - notSupported: no frame can be read by the integrator.
 export type GroupReadiness = 'ready' | 'needsReview' | 'incomplete' | 'incompatible' | 'missingFiles' | 'notSupported'
 
-// Combination settings of a master, part of its identity.
+// Combination settings of a master.
 export interface CalibrationRecipe {
 	// How samples are combined.
 	readonly method: 'sigmaClip' | 'median' | 'mean'
@@ -112,21 +111,16 @@ export interface CalibrationRecipe {
 	readonly maxIterations: number
 }
 
-// Immutable reference to one revision of a master.
+// Immutable reference to a master.
 export interface MasterReference {
-	// Id of the master.
-	readonly masterId: string
-	// Revision of the master.
-	readonly revision: number
+	// Id of the master, incremental and never reused.
+	readonly masterId: number
 	// SHA-256 of its FITS file.
 	readonly digest: string
 }
 
 // Version of the compatibility policy. A change regroups frames and makes other masters, never older ones wrong.
 export const COMPATIBILITY_VERSION = 1
-
-// Version of the integration algorithm, part of the identity of a recipe.
-export const INTEGRATION_ALGORITHM_VERSION = 1
 
 // Default combination of a master: 3 sigma on both sides, which keeps almost all Gaussian samples and removes impulses.
 export const DEFAULT_RECIPE: CalibrationRecipe = { method: 'sigmaClip', sigmaLow: 3, sigmaHigh: 3, maxIterations: 5 }
@@ -152,11 +146,9 @@ interface CompatibilityField {
 	readonly unknown?: FindingSeverity
 }
 
-// Properties every kind shares: identity, sample geometry, and the operating point of the sensor. A subframe origin an
-// old file leaves out stays unknown, and only a known different origin separates frames.
+// Properties every kind shares: sample geometry and the operating point of the sensor. A subframe origin an old file
+// leaves out stays unknown, and only a known different origin separates frames.
 const SENSOR_FIELDS: readonly CompatibilityField[] = [
-	{ name: 'cameraId', label: 'Camera', read: ({ cameraId }) => cameraId.value, unknown: 'review' },
-	{ name: 'instrument', label: 'Camera name', read: ({ cameraId, cameraName }) => (cameraId.value === undefined ? cameraName : undefined) },
 	{ name: 'size', label: 'Image size', read: ({ width, height, channels }) => `${width}x${height}x${channels}` },
 	{ name: 'bitpix', label: 'Sample format', read: ({ bitpix }) => bitpix },
 	{ name: 'origin', label: 'Subframe origin', read: ({ originX, originY }) => (originX === undefined && originY === undefined ? undefined : `${originX ?? 0},${originY ?? 0}`) },
@@ -215,21 +207,6 @@ export function compatibilityKey(kind: CalibrationKind, metadata: CalibrationMet
 // Returns the identity of a master or group of frames sharing a compatibility key.
 export function groupIdOf(key: string) {
 	return stableId(key)
-}
-
-// Serializes the identity of a product: what went in, how it was combined, and what corrected it. Equal fingerprints
-// return the same product; any other input, setting, algorithm, or dependency makes a new revision. Inputs are named by
-// their source id, size, and modification time, which a job compares again right before publishing.
-export function recipeFingerprint(key: string, inputs: readonly string[], recipe: CalibrationRecipe, dependencies: readonly MasterReference[]) {
-	const canonical = {
-		algorithm: INTEGRATION_ALGORITHM_VERSION,
-		key,
-		inputs: inputs.toSorted(),
-		recipe: { method: recipe.method, sigmaLow: recipe.sigmaLow, sigmaHigh: recipe.sigmaHigh, maxIterations: recipe.maxIterations },
-		dependencies: dependencies.map(({ masterId, revision, digest }) => `${masterId}:${revision}:${digest}`).toSorted(),
-	}
-
-	return sha256(JSON.stringify(canonical))
 }
 
 // Explains why frames of a kind can or cannot be combined. Every known difference blocks, unknown properties follow
@@ -300,10 +277,9 @@ export function flatCorrectionMismatch(kind: 'bias' | 'darkFlat', master: Calibr
 	return undefined
 }
 
-// Light, or another target, described for a metadata-only preview of which masters could calibrate it.
+// Light, or another target, described for a metadata-only preview of which masters could calibrate it. An absent value
+// is unknown.
 export interface CalibrationTarget {
-	// Camera hardware id.
-	readonly cameraId?: string
 	// Image size in pixels and channels per pixel.
 	readonly width: number
 	readonly height: number
@@ -326,39 +302,24 @@ export interface CalibrationTarget {
 	readonly filter?: string
 }
 
-// Verdict of one master for a target.
-export type MatchVerdict = 'compatible' | 'reviewRequired' | 'incompatible'
-
-// Explains whether a master matches a target exactly. There is no closest match: any known difference is incompatible,
-// and anything either side does not know asks for a review, because unknown never matches. Temperature uses the spread
-// limit of a group, and a bias ignores exposure and temperature.
-export function matchMaster(kind: CalibrationKind, master: CalibrationMetadata, target: CalibrationTarget): { readonly verdict: MatchVerdict; readonly reasons: readonly string[] } {
-	const conflicts: string[] = []
-	const unknowns: string[] = []
-
-	function compare(label: string, ours: string | number | undefined, theirs: string | number | undefined) {
-		if (ours === undefined || theirs === undefined) unknowns.push(`${label} is unknown`)
-		else if (ours !== theirs) conflicts.push(`${label}: ${ours} differs from ${theirs}`)
+// Returns whether a master can calibrate a target, from metadata alone: every property both sides know must agree, and
+// what either side does not know never refuses a master, since the operator chooses among those listed. There is no
+// closest match. A dark must be within the temperature spread limit of the target, a flat must share its filter, and a
+// bias ignores exposure and temperature.
+export function matchesTarget(kind: CalibrationKind, master: CalibrationMetadata, target: CalibrationTarget) {
+	function agrees(ours: string | number | undefined, theirs: string | number | undefined) {
+		return ours === undefined || theirs === undefined || ours === theirs
 	}
 
-	compare('Camera', master.cameraId.value, target.cameraId)
-	compare('Image size', `${master.width}x${master.height}x${master.channels}`, `${target.width}x${target.height}x${target.channels}`)
-	if (master.cfa !== target.cfa) conflicts.push(`CFA pattern: ${master.cfa ?? 'none'} differs from ${target.cfa ?? 'none'}`)
-	compare('Binning', master.binX.value === undefined ? undefined : `${master.binX.value}x${master.binY.value}`, target.binX === undefined ? undefined : `${target.binX}x${target.binY ?? target.binX}`)
-	compare('Gain', master.gain.value, target.gain)
-	compare('Offset', master.offset.value, target.offset)
-	compare('Readout mode', master.readoutMode.value, target.readoutMode)
+	if (master.width !== target.width || master.height !== target.height || master.channels !== target.channels || master.cfa !== target.cfa) return false
+	if (!agrees(master.binX.value === undefined ? undefined : `${master.binX.value}x${master.binY.value ?? master.binX.value}`, target.binX === undefined ? undefined : `${target.binX}x${target.binY ?? target.binX}`)) return false
+	if (!agrees(master.gain.value, target.gain) || !agrees(master.offset.value, target.offset) || !agrees(master.readoutMode.value, target.readoutMode)) return false
 
 	if (kind === 'dark') {
-		compare('Exposure', master.exposure.value, target.exposure === undefined ? undefined : Math.round(target.exposure * 1000000))
+		if (!agrees(master.exposure.value, target.exposure === undefined ? undefined : Math.round(target.exposure * 1000000))) return false
 		const temperature = master.setTemperature.value ?? master.sensorTemperature.value
-
-		if (temperature === undefined || target.temperature === undefined) unknowns.push('Temperature is unknown')
-		else if (Math.abs(temperature - target.temperature) > TEMPERATURE_SPREAD_LIMIT) conflicts.push(`Temperature: ${temperature} °C differs from ${target.temperature} °C`)
+		if (temperature !== undefined && target.temperature !== undefined && Math.abs(temperature - target.temperature) > TEMPERATURE_SPREAD_LIMIT) return false
 	}
 
-	if (kind === 'flat') compare('Filter', master.filter.value, target.filter)
-
-	if (conflicts.length > 0) return { verdict: 'incompatible', reasons: conflicts }
-	return { verdict: unknowns.length > 0 ? 'reviewRequired' : 'compatible', reasons: unknowns }
+	return kind !== 'flat' || agrees(master.filter.value, target.filter)
 }

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { ImageStackingSnapshot, StackingJobSummary } from 'api'
 import { proxy } from 'valtio'
-import { cancelStackingRun, framesQuery, handleImageStackingEvent, type ImageStackingRuntime, jobEnded, loadStackingPreflight, startStackingRun, loadStackingFrames, loadStackingProject, refreshImageStacking, separateStackingFilter, startStackingAnalysis, updateStackingCohort, updateStackingFrame } from './projects'
+import { cancelStackingRun, framesQuery, handleImageStackingEvent, type ImageStackingRuntime, jobEnded, loadStackingPreflight, startStackingRun, loadStackingFrames, loadStackingProject, refreshImageStacking, startStackingAnalysis, updateStackingCohort, updateStackingFrame } from './projects'
 
 function runtime() {
 	return proxy<ImageStackingRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
@@ -102,13 +102,13 @@ describe('requests', () => {
 	test('cohort decisions and analyses reach their routes, and an analysis runs until it ends', async () => {
 		const state = runtime()
 		const { request, calls } = fakeFetch({ '/api/image-stacking/projects/p/cohorts/c%201': { cohortId: 'c 1' }, '/api/image-stacking/projects/p/analyses': { jobId: 'j' } })
-		await updateStackingCohort(state, 'p', 'c 1', { calibration: { kind: 'none', reason: 'No flats yet' } }, request)
+		await updateStackingCohort(state, 'p', 'c 1', { calibration: { dark: { masterId: 4, digest: 'd' } } }, request)
 		await startStackingAnalysis(state, 'p', request)
 		expect(calls.map(({ url, init }) => [url, init?.method])).toEqual([
 			['/api/image-stacking/projects/p/cohorts/c%201', 'PATCH'],
 			['/api/image-stacking/projects/p/analyses', 'POST'],
 		])
-		expect(JSON.parse(calls[0].init!.body as string)).toEqual({ calibration: { kind: 'none', reason: 'No flats yet' } })
+		expect(JSON.parse(calls[0].init!.body as string)).toEqual({ calibration: { dark: { masterId: 4, digest: 'd' } } })
 		expect([jobEnded({ state: 'analyzing' }), jobEnded({ state: 'scanning' }), jobEnded({ state: 'cancelled' })]).toEqual([false, false, true])
 	})
 
@@ -131,15 +131,11 @@ describe('requests', () => {
 		expect(state.loading).toBeFalse()
 	})
 
-	test('a refused command keeps its reason by key, and an encoded filter key reaches its route', async () => {
+	test('a refused command keeps its reason by key', async () => {
 		const state = runtime()
 		const refused = fakeFetch({ '/api/image-stacking/frames/f': { error: 'Only a filter the header does not name can be declared', code: 'verifiedMetadata' } }, 409)
-		expect(await updateStackingFrame(state, 'f', { filter: { value: 'Ha', reason: 'x' } }, refused.request)).toBeUndefined()
+		expect(await updateStackingFrame(state, 'f', { filter: 'Ha' }, refused.request)).toBeUndefined()
 		expect(state.errors['frame:f']).toContain('does not name')
-		expect(JSON.parse(refused.calls[0].init!.body as string)).toEqual({ filter: { value: 'Ha', reason: 'x' } })
-
-		const { request, calls } = fakeFetch({ '/api/image-stacking/projects/p/aliases/': [] })
-		expect(await separateStackingFilter(state, 'p', 'h alpha', request)).toEqual([])
-		expect(calls[0]).toMatchObject({ url: '/api/image-stacking/projects/p/aliases/h%20alpha', init: { method: 'DELETE' } })
+		expect(JSON.parse(refused.calls[0].init!.body as string)).toEqual({ filter: 'Ha' })
 	})
 })

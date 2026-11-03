@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { StackingImportCandidate } from 'api'
-import { candidateText, candidateUsable, cohortText, memoryText, runGroupText, committedCounts, groupLabel, keyText, integrationText, masterText, metricText, registrationText, selectionFields, selectionOf } from './format'
+import { ALL_CANDIDATES, candidateChecked, candidateText, candidateUsable, cohortText, NO_CANDIDATES, withCandidate, memoryText, runGroupText, committedCounts, integrationText, masterText, metricText, registrationText, selectionFields, selectionOf } from './format'
 
 function candidate(path: string, patch: Partial<StackingImportCandidate> = {}): StackingImportCandidate {
 	return { path, name: path, bytes: 1, mtimeMillis: 1, format: 'fits', role: 'light', warnings: [], known: false, ...patch }
@@ -32,9 +32,10 @@ describe('planning', () => {
 		expect(registrationText({ success: true, transform: { transform, inverseTransform: transform, summary } })).toBe('5.0, -3.0 px · 1.00° · 0.12 px rms')
 		expect(registrationText({ success: false, reason: 'match-failed' })).toBe('Failed: match-failed')
 		expect(registrationText(undefined)).toBe('—')
-		expect(masterText({ kind: 'dark', masterId: '0123456789abcdef', revision: 2, preferred: true })).toBe('Dark 01234567 · revision 2 · preferred')
-		expect(cohortText({ groupName: 'Ha', target: { width: 1, height: 1, channels: 1, exposure: 300 }, frames: 1 })).toBe('Ha · 300 s · 1 frame')
-		expect(cohortText({ groupName: 'Ha', target: { width: 1, height: 1, channels: 1 }, frames: 2 })).toBe('Ha · unknown exposure · 2 frames')
+		expect(masterText({ masterId: 12, createdAt: 0, frames: 30, status: 'warning' })).toMatch(/^#12 · .+ · 30 frames · warnings$/)
+		expect(masterText({ masterId: 3, createdAt: 0, frames: 1, status: 'ready' })).toMatch(/^#3 · .+ · 1 frame$/)
+		expect(cohortText({ groupKey: 'Ha', target: { width: 1, height: 1, channels: 1, exposure: 300 }, frames: 1 })).toBe('Ha · 300 s · 1 frame')
+		expect(cohortText({ groupKey: 'Ha', target: { width: 1, height: 1, channels: 1 }, frames: 2 })).toBe('Ha · unknown exposure · 2 frames')
 	})
 })
 
@@ -43,16 +44,24 @@ describe('format', () => {
 		expect(integrationText(0)).toBe('0 min 0 s')
 		expect(integrationText(905)).toBe('15 min 5 s')
 		expect(integrationText(3600 * 2 + 15 * 60 + 20)).toBe('2 h 15 min')
-		expect(groupLabel('', 'whatever')).toBe('Unassigned')
-		expect(groupLabel('ha', 'Ha')).toBe('Ha')
 	})
 
 	test('candidates explain why they stay out, and the commit counts what enters', () => {
 		const items = [candidate('a'), candidate('b', { role: 'unclassified' }), candidate('c', { role: 'unclassified' }), candidate('d', { rejected: 'A dark frame, not a light frame', role: undefined }), candidate('e', { known: true }), candidate('f', { error: 'Broken', role: undefined })]
 		expect(items.map(candidateText)).toEqual(['Light', 'Unclassified', 'Unclassified', 'A dark frame, not a light frame', 'Already in this project', 'Broken'])
 		expect(items.map(candidateUsable)).toEqual([true, true, true, false, false, false])
-		expect(committedCounts({ lights: 1, unclassified: 2 }, 1)).toEqual({ lights: 2, unclassified: 1 })
-		expect(committedCounts({}, 0)).toEqual({ lights: 0, unclassified: 0 })
-		expect([keyText(['H Alpha', 'H-ALPHA'], 'h alpha'), keyText([], 'h alpha'), keyText(undefined, 'ha')]).toEqual(['H Alpha, H-ALPHA', 'h alpha', 'ha'])
+		expect(committedCounts({ lights: 1, unclassified: 2 }, ALL_CANDIDATES, 1)).toEqual({ lights: 2, unclassified: 1 })
+		expect(committedCounts({}, ALL_CANDIDATES, 0)).toEqual({ lights: 0, unclassified: 0 })
+	})
+
+	test('a selection checks every candidate but its exceptions, or only them, across pages', () => {
+		const skipping = withCandidate(withCandidate(ALL_CANDIDATES, 'a', 'light', false), 'b', 'unclassified', false)
+		expect([candidateChecked(skipping, 'a'), candidateChecked(skipping, 'b'), candidateChecked(skipping, 'z')]).toEqual([false, false, true])
+		expect(committedCounts({ lights: 5, unclassified: 2 }, skipping, 0)).toEqual({ lights: 4, unclassified: 1 })
+		expect(withCandidate(skipping, 'a', 'light', true).except.has('a')).toBeFalse()
+
+		const naming = withCandidate(withCandidate(NO_CANDIDATES, 'a', 'light', true), 'b', 'unclassified', true)
+		expect([candidateChecked(naming, 'a'), candidateChecked(naming, 'z')]).toEqual([true, false])
+		expect(committedCounts({ lights: 5, unclassified: 2 }, naming, 1)).toEqual({ lights: 2, unclassified: 0 })
 	})
 })

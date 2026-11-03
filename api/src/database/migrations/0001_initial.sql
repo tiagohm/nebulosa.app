@@ -333,86 +333,7 @@ CREATE TABLE pointing_verifications (
 	FOREIGN KEY (model_id, revision_id) REFERENCES pointing_revisions (model_id, revision_id) ON DELETE CASCADE
 ) STRICT;
 
--- Plans of the Dark Library Wizard (DarkPlanStore): the immutable specification of each plan, the state of its latest
--- session, and every frame it published or quarantined. A frame counts only once committed: it is recorded as
--- publishing before its file is linked, and a plan left with such a frame, or running or paused, is reconciled from the
--- files when the server starts. The frames themselves are files of the output directory. Kept until deleted by hand.
-CREATE TABLE dark_plans (
-	-- Id of the plan.
-	plan_id TEXT PRIMARY KEY,
-	-- When it was created, Unix milliseconds (UTC).
-	created_at INTEGER NOT NULL,
-	-- Absolute directory the frames are saved under.
-	directory TEXT NOT NULL,
-	-- What the frames are for: NULL for an ordinary dark.
-	purpose TEXT CHECK (purpose IS NULL OR purpose = 'darkFlat'),
-	-- Whether the Calibration Library builds the masters of the complete groups once the acquisition ends (0 or 1).
-	generate_masters INTEGER NOT NULL CHECK (generate_masters IN (0, 1)),
-	-- The rest of the specification: camera, protection devices, capture settings, protection, thermal protocol, and
-	-- rejections allowed per group (DarkCapturePlan without its id, creation, directory, groups, purpose, and masters).
-	spec TEXT NOT NULL CHECK (json_valid(spec)),
-	-- State of the acquisition, why the latest session ended (NULL when nothing says), and the session and operation
-	-- recorded last (NULL before any).
-	status TEXT NOT NULL CHECK (status IN ('running', 'paused', 'interrupted', 'completed', 'stopped', 'failed')),
-	status_reason TEXT,
-	session_id TEXT,
-	operation_id TEXT,
-	-- What the latest session could not restore: [text].
-	cleanup_warnings TEXT NOT NULL CHECK (json_valid(cleanup_warnings)),
-	-- When the state, the frames that count, or the cleanup warnings last changed, Unix milliseconds (UTC).
-	updated_at INTEGER NOT NULL
-) STRICT;
-
--- Groups of a plan, in acquisition order.
-CREATE TABLE dark_groups (
-	plan_id TEXT NOT NULL REFERENCES dark_plans (plan_id) ON DELETE CASCADE,
-	-- Id of the group, unique in the plan.
-	group_id TEXT NOT NULL,
-	-- Order of the group in the plan, from 0.
-	position INTEGER NOT NULL,
-	-- Exact identity of the settings of its frames (darkGroupKey).
-	key TEXT NOT NULL,
-	-- Exposure in seconds, and target sensor temperature in degrees Celsius (NULL when not controlled).
-	exposure REAL NOT NULL,
-	temperature REAL,
-	-- Accepted frames required; at least 1.
-	count INTEGER NOT NULL,
-	-- Absolute directory of its frames.
-	directory TEXT NOT NULL,
-	PRIMARY KEY (plan_id, group_id),
-	UNIQUE (plan_id, position)
-) STRICT;
-
--- Frames of a plan: being published, committed, or quarantined in the rejected directory of their group.
-CREATE TABLE dark_frames (
-	plan_id TEXT NOT NULL,
-	-- Id of the frame, unique in the plan.
-	frame_id TEXT NOT NULL,
-	group_id TEXT NOT NULL,
-	-- Number of the frame among the files of its group, from 1, never reused.
-	sequence INTEGER NOT NULL,
-	-- publishing until its file is linked; committed counts; rejected never counts.
-	state TEXT NOT NULL CHECK (state IN ('publishing', 'committed', 'rejected')),
-	-- Order in which the frame was committed or rejected within its plan, from 1; NULL while publishing.
-	position INTEGER,
-	-- Outcome of its examination (DarkFrameVerdict).
-	verdict TEXT NOT NULL CHECK (verdict IN ('accepted', 'acceptedWithWarnings', 'rejected', 'incomplete')),
-	-- Absolute path of its file, and the one it was staged at while it could still be there (NULL otherwise).
-	path TEXT NOT NULL,
-	staged_path TEXT,
-	-- Size of its file in bytes, and when its exposure started, Unix milliseconds (UTC).
-	size INTEGER NOT NULL,
-	time INTEGER NOT NULL,
-	-- What its examination measured (DarkFrameAssessment with its planes, header, temperature trace, acknowledgement,
-	-- and the reason it never was examined).
-	assessment TEXT NOT NULL CHECK (json_valid(assessment)),
-	PRIMARY KEY (plan_id, frame_id),
-	UNIQUE (plan_id, group_id, sequence),
-	UNIQUE (plan_id, position),
-	FOREIGN KEY (plan_id, group_id) REFERENCES dark_groups (plan_id, group_id) ON DELETE CASCADE
-) STRICT;
-
--- Frames of the Calibration Library (CalibrationLibraryStore), by reference: frames of the Dark Library plans, frames
+-- Frames of the Calibration Library (CalibrationLibraryStore), by reference: frames the Dark Library Wizard and
 -- the Flat Wizard published, and imported files. What an operator declared (an override, a role, an exclusion) is the
 -- current state of the row. Kept until an operator deletes the frame with its file.
 CREATE TABLE calibration_sources (
@@ -423,8 +344,8 @@ CREATE TABLE calibration_sources (
 	key TEXT NOT NULL,
 	-- Role (CalibrationKind).
 	kind TEXT NOT NULL,
-	-- Hardware id of its camera; empty when unknown.
-	camera_id TEXT NOT NULL,
+	-- Name of its camera; empty when unknown.
+	camera_name TEXT NOT NULL,
 	-- State of its file.
 	status TEXT NOT NULL CHECK (status IN ('available', 'missing', 'changed', 'corrupt')),
 	-- Name of its file in lower case, for ordering and search.
@@ -440,8 +361,8 @@ CREATE TABLE calibration_sources (
 	bytes INTEGER NOT NULL,
 	mtime_ms REAL NOT NULL,
 	digest TEXT,
-	-- Why an operator left it out of masters; NULL when included.
-	excluded_reason TEXT,
+	-- Whether it is left out of masters, by an operator or by its plan (0 or 1).
+	excluded INTEGER NOT NULL CHECK (excluded IN (0, 1)),
 	-- Frames its plan required in its group; NULL without a plan.
 	required INTEGER,
 	-- Whether a master can read it at all (0 or 1).
@@ -452,34 +373,25 @@ CREATE TABLE calibration_sources (
 ) STRICT;
 
 CREATE INDEX calibration_sources_group ON calibration_sources (group_id);
-CREATE INDEX calibration_sources_filter ON calibration_sources (kind, camera_id, status);
+CREATE INDEX calibration_sources_filter ON calibration_sources (kind, camera_name, status);
 
--- Masters of the Calibration Library: the highest revision each one ever had, so a number is never used again, even
--- after its revision was deleted or a crash interrupted its publication.
+-- Masters of the Calibration Library, one row per build: a build never replaces another, and its id is never used again
+-- (AUTOINCREMENT), even after its master was deleted or a crash interrupted its publication. A master is publishing from
+-- the moment its id is taken until its directory is in products/, and deleting from the moment an operator deletes it
+-- until its directory is gone; the start reconciles both from the disk. Only published masters are listed. Its FITS file
+-- is products/<masterId>/master.fit.
 CREATE TABLE calibration_masters (
-	master_id TEXT PRIMARY KEY,
-	last_revision INTEGER NOT NULL
-) STRICT;
-
--- Revisions of the masters. A revision is publishing from the moment its number is taken until its directory is in
--- products/, and deleting from the moment an operator deletes it until its directory is gone; the start reconciles both
--- from the disk. Only published revisions are listed. Its FITS file is products/<masterId>/vNNNN/master.fit.
-CREATE TABLE calibration_revisions (
-	master_id TEXT NOT NULL REFERENCES calibration_masters (master_id),
-	-- Revision, from 1.
-	revision INTEGER NOT NULL,
+	master_id INTEGER PRIMARY KEY AUTOINCREMENT,
 	publication TEXT NOT NULL CHECK (publication IN ('publishing', 'published', 'deleting')),
 	-- State now, and the one it was published with, which it returns to when what made it unavailable or stale is gone.
 	status TEXT NOT NULL CHECK (status IN ('ready', 'warning', 'stale', 'unavailable')),
 	published_status TEXT NOT NULL CHECK (published_status IN ('ready', 'warning')),
-	-- Role, camera hardware id and filter name (empty when unknown), id and compatibility key of its group.
+	-- Role, camera name and filter name (empty when unknown), id and compatibility key of the group of its frames.
 	kind TEXT NOT NULL,
-	camera_id TEXT NOT NULL,
+	camera_name TEXT NOT NULL,
 	filter TEXT NOT NULL,
 	group_id TEXT NOT NULL,
 	key TEXT NOT NULL,
-	-- Identity of its inputs and recipe, which a repeated request answers with.
-	fingerprint TEXT NOT NULL,
 	-- When it was published, Unix milliseconds (UTC).
 	created_at INTEGER NOT NULL,
 	-- SHA-256 and size in bytes of its FITS file.
@@ -487,49 +399,35 @@ CREATE TABLE calibration_revisions (
 	bytes INTEGER NOT NULL,
 	-- The rest of the master (CalibrationMaster): what its pixels contain, units, usage, full scale in DN, recipe,
 	-- metadata, diagnostics, and what an operator accepted.
-	master TEXT NOT NULL CHECK (json_valid(master)),
-	PRIMARY KEY (master_id, revision)
+	master TEXT NOT NULL CHECK (json_valid(master))
 ) STRICT;
 
-CREATE INDEX calibration_revisions_fingerprint ON calibration_revisions (fingerprint);
+CREATE INDEX calibration_masters_group ON calibration_masters (group_id);
 
--- Frames of a revision, in integration order, with what the job read; a frame deleted later stays named here.
-CREATE TABLE calibration_revision_sources (
-	master_id TEXT NOT NULL,
-	revision INTEGER NOT NULL,
+-- Frames of a master, in integration order, with what the job read; a frame deleted later stays named here.
+CREATE TABLE calibration_master_sources (
+	master_id INTEGER NOT NULL REFERENCES calibration_masters (master_id) ON DELETE CASCADE,
 	-- Order of the frame in the integration, from 0.
 	position INTEGER NOT NULL,
 	source_id TEXT NOT NULL,
 	-- SHA-256 of the frame as the job read it, and the name of its file.
 	digest TEXT NOT NULL,
 	name TEXT NOT NULL,
-	PRIMARY KEY (master_id, revision, position),
-	FOREIGN KEY (master_id, revision) REFERENCES calibration_revisions (master_id, revision) ON DELETE CASCADE
+	PRIMARY KEY (master_id, position)
 ) STRICT;
 
--- Masters a revision was corrected with. A revision another one depends on cannot be deleted.
-CREATE TABLE calibration_revision_dependencies (
-	master_id TEXT NOT NULL,
-	revision INTEGER NOT NULL,
+-- Masters a master was corrected with. A master another one depends on cannot be deleted.
+CREATE TABLE calibration_master_dependencies (
+	master_id INTEGER NOT NULL REFERENCES calibration_masters (master_id) ON DELETE CASCADE,
 	-- Order of the dependency, from 0.
 	position INTEGER NOT NULL,
-	dependency_master_id TEXT NOT NULL,
-	dependency_revision INTEGER NOT NULL,
+	dependency_master_id INTEGER NOT NULL REFERENCES calibration_masters (master_id) ON DELETE RESTRICT,
 	-- SHA-256 of the FITS file of the dependency when it was used.
 	digest TEXT NOT NULL,
-	PRIMARY KEY (master_id, revision, position),
-	FOREIGN KEY (master_id, revision) REFERENCES calibration_revisions (master_id, revision) ON DELETE CASCADE,
-	FOREIGN KEY (dependency_master_id, dependency_revision) REFERENCES calibration_revisions (master_id, revision) ON DELETE RESTRICT
+	PRIMARY KEY (master_id, position)
 ) STRICT;
 
-CREATE INDEX calibration_revision_dependencies_target ON calibration_revision_dependencies (dependency_master_id, dependency_revision);
-
--- The revision an operator prefers for each master; it goes with that revision.
-CREATE TABLE calibration_preferred (
-	master_id TEXT PRIMARY KEY,
-	revision INTEGER NOT NULL,
-	FOREIGN KEY (master_id, revision) REFERENCES calibration_revisions (master_id, revision) ON DELETE CASCADE
-) STRICT;
+CREATE INDEX calibration_master_dependencies_target ON calibration_master_dependencies (dependency_master_id);
 
 -- Projects of Image Stacking (ImageStackingStore): one intended target or field, the light frames chosen for it, and
 -- what an operator decided about them. Kept until an operator deletes the project; its frames stay on the disk.
@@ -540,7 +438,7 @@ CREATE TABLE stack_projects (
 	name TEXT NOT NULL,
 	-- Revision of its header, increased by every rename; >= 1.
 	revision INTEGER NOT NULL CHECK (revision > 0),
-	-- When it was created and last changed (its header, frames, or filter aliases), Unix milliseconds (UTC).
+	-- When it was created and last changed (its header or frames), Unix milliseconds (UTC).
 	created_at INTEGER NOT NULL,
 	updated_at INTEGER NOT NULL,
 	-- Choices of an operator (StackingSettings): the pinned project reference group, the pinned reference frame of each
@@ -573,7 +471,7 @@ CREATE TABLE stack_sources (
 	status TEXT NOT NULL CHECK (status IN ('available', 'missing', 'changed', 'corrupt')),
 	-- Role: a light, or a frame whose header says no role and waits for an operator.
 	role TEXT NOT NULL CHECK (role IN ('light', 'unclassified')),
-	-- Canonical key of its filter (empty when unknown), before the aliases of the project.
+	-- Its filter: the name its header writes, trimmed, or the one an operator declared; None when neither names one.
 	filter_key TEXT NOT NULL,
 	-- Key of the acquisition settings calibration masters must match.
 	cohort_key TEXT NOT NULL,
@@ -581,8 +479,8 @@ CREATE TABLE stack_sources (
 	object TEXT NOT NULL,
 	-- Start of its exposure, Unix milliseconds (UTC); NULL when the header does not say.
 	observed_at INTEGER,
-	-- Why an operator left it out of stacks; NULL when included.
-	excluded_reason TEXT,
+	-- Whether an operator left it out of stacks (1) or not (0).
+	excluded INTEGER NOT NULL CHECK (excluded IN (0, 1)),
 	-- What is known about it, each value with its evidence (CalibrationMetadata), and what should be said about it: [text].
 	metadata TEXT NOT NULL CHECK (json_valid(metadata)),
 	warnings TEXT NOT NULL CHECK (json_valid(warnings)),
@@ -594,16 +492,6 @@ CREATE TABLE stack_sources (
 
 CREATE INDEX stack_sources_project ON stack_sources (project_id, filter_key, name);
 
--- Filters an operator merged in a project: frames whose canonical filter key is filter_key belong to the group of
--- target_key. A target is never itself merged into another key.
-CREATE TABLE stack_filter_aliases (
-	project_id TEXT NOT NULL REFERENCES stack_projects (project_id) ON DELETE CASCADE,
-	-- Canonical key merged, and the key of the group it joins.
-	filter_key TEXT NOT NULL,
-	target_key TEXT NOT NULL,
-	PRIMARY KEY (project_id, filter_key)
-) STRICT;
-
 -- Calibration decisions of a project, one per cohort: the lights of one filter group sharing their acquisition settings.
 -- A cohort whose frames are gone keeps its row until its project goes, so its decision returns with them.
 CREATE TABLE stack_cohorts (
@@ -613,11 +501,7 @@ CREATE TABLE stack_cohorts (
 	-- Key of its filter group, and of its acquisition settings.
 	group_key TEXT NOT NULL,
 	cohort_key TEXT NOT NULL,
-	-- Hardware id of the camera an operator declared, and why; NULL when undeclared.
-	camera_id TEXT,
-	camera_reason TEXT,
-	-- Calibration chosen (StackingCalibration): pinned master revisions with their SHA-256, or none with a reason; NULL
-	-- while undecided.
+	-- Masters chosen to calibrate it (StackingCalibration), each by id with its SHA-256; NULL while none is.
 	calibration TEXT CHECK (calibration IS NULL OR json_valid(calibration)),
 	PRIMARY KEY (project_id, cohort_id)
 ) STRICT;

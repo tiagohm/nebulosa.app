@@ -13,7 +13,6 @@ import { connections, createConnectionRoutes } from './connection'
 import { CoverCommands, createCoverRoutes } from './covers'
 import { createDarkLibraryWizardRoutes, DarkLibraryWizardSessions } from './darklibrarywizard'
 import { DarkLibraryWizardAnalyzer } from './darklibrarywizard.analysis'
-import { DarkPlanStore } from './darklibrarywizard.store'
 import { createDarvRoutes, DarvSessions } from './darv'
 import { DarvAnalyzer } from './darv.analysis'
 import { AppDatabase, DEFAULT_DATABASE_FILE } from './database'
@@ -90,9 +89,9 @@ export type {
 	ResolvePreview,
 	StateCounts,
 } from './calibrationlibrary'
-export type { CalibrationKind, CalibrationMetadata, CalibrationRecipe, CalibrationTarget, CompatibilityFinding, EvidenceLevel, Evidenced, FindingCode, FindingSeverity, GroupReadiness, MasterReference, MatchVerdict, OverridableField } from './calibrationlibrary.compatibility'
+export type { CalibrationKind, CalibrationMetadata, CalibrationRecipe, CalibrationTarget, CompatibilityFinding, EvidenceLevel, Evidenced, FindingCode, FindingSeverity, GroupReadiness, MasterReference, OverridableField } from './calibrationlibrary.compatibility'
 export type { CalibrationJobErrorCode, CalibrationJobState, CalibrationJobSummary, CalibrationJobType } from './calibrationlibrary.jobs'
-export type { CalibrationCamera, CalibrationMaster, CalibrationMasterDiagnostics, CalibrationSource, CalibrationSourceSummary, MasterCalibrationState, Page, ProductStatus, SourceFormat, SourceOrigin, SourceStatus } from './calibrationlibrary.store'
+export type { CalibrationMaster, CalibrationMasterDiagnostics, CalibrationSource, CalibrationSourceSummary, MasterCalibrationState, Page, ProductStatus, SourceFormat, SourceOrigin, SourceStatus } from './calibrationlibrary.store'
 export type { IntegrationProgress } from './calibrationlibrary.analysis'
 export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'
 export type { CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureOutputMode, CapturePhase, CaptureRequest, CaptureSession, CaptureSettings, CaptureSnapshot, CaptureSnoop, CaptureStartResponse } from './captures'
@@ -393,7 +392,7 @@ export type {
 export type { IntegrationPlan } from './imagestacking.integration'
 export type { StackingRole } from './imagestacking.sources'
 // oxfmt-ignore
-export type { StackingCalibration, StackingCohortDecision, StackingComposite, StackingCompositeDiagnostics, StackingComposition, StackingCompositionLuminance, StackingCompositionSource, StackingFilterAlias, StackingFrameAnalysis, StackingFrameNormalization, StackingProduct, StackingProductDiagnostics, StackingProductSource, StackingProject, StackingProjectAnalysis, StackingRecipe, StackingRegistration, StackingRun, StackingRunGroup, StackingRunState, StackingSettings, StackingSourceSummary } from './imagestacking.store'
+export type { StackingCalibration, StackingCohortDecision, StackingComposite, StackingCompositeDiagnostics, StackingComposition, StackingCompositionLuminance, StackingCompositionSource, StackingFrameAnalysis, StackingFrameNormalization, StackingProduct, StackingProductDiagnostics, StackingProductSource, StackingProject, StackingProjectAnalysis, StackingRecipe, StackingRegistration, StackingRun, StackingRunGroup, StackingRunState, StackingSettings, StackingSourceSummary } from './imagestacking.store'
 export type { DarvCaptureSettings, DarvEvent, DarvFinishRequest, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementTrails, DarvRequest, DarvSession, DarvSessionState, DarvSessionSummary, DarvSnapshot, DarvStartResponse } from './darv'
 export type { DarvMeasurementResult, DarvMeasurementStatus, DarvTrail } from './darv.analysis'
 export type {
@@ -413,7 +412,7 @@ export type {
 	DarkLibraryWizardState,
 } from './darklibrarywizard'
 export type { DarkFrameNote, DarkLightSuspicion, DarkPlaneMeasurement, DarkRejectionCode, DarkTemperatureTrace } from './darklibrarywizard.analysis'
-export type { DarkFrameRecord, DarkFrameVerdict, DarkGroup, DarkGroupProgress, DarkPlanCapture, DarkProtection, DarkThermalPolicy } from './darklibrarywizard.store'
+export type { DarkFrameRecord, DarkFrameVerdict, DarkGroup, DarkGroupProgress, DarkPlanCapture, DarkProtection, DarkThermalPolicy } from './darklibrarywizard.plan'
 export type {
 	FlatWizardAttempt,
 	FlatWizardCaptureSettings,
@@ -648,12 +647,8 @@ const pointingActivations = new PointingActivations(connections.devices, (id) =>
 // taking their frames with the capturer of the captures, and analyzing them on a worker of their own.
 const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, new DarvAnalyzer(images), publish)
 
-// Plans of the Dark Library Wizard. Reconciliation at load claims every running plan, so the process keeps a single store,
-// and the Calibration Library reads the same one.
-const darkPlans = new DarkPlanStore(database)
-
 // Calibration frames and masters, which need no connection and hold no device; automatic masters wait for the camera operations.
-const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(database), darkPlans, publish, () => operations.running().some(({ kind }) => kind.startsWith('camera.')))
+const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(database), publish, () => operations.running().some(({ kind }) => kind.startsWith('camera.')))
 
 // Projects of light frames for Image Stacking, which need no connection and hold no device. Imports never read the
 // directories of Nebulosa: its stacks and the Calibration Library.
@@ -676,11 +671,12 @@ const flatWizard = new FlatWizardSessions(
 	publish,
 	undefined,
 	(frame) => void calibrationLibrary.registerFlat(frame).catch((error: unknown) => console.error('A flat could not be registered', error)),
+	(ended) => void calibrationLibrary.flatSessionEnded(ended).catch((error: unknown) => console.error('The calibration library could not build the flats of a session', error)),
 )
 
 // Dark Library Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the
 // captures, cooling the cameras, moving the wheels, and driving the panels and covers with the commanders of their
-// commands, keeping their plans in files of their own, and measuring their frames in DN on a worker of their own.
+// commands, measuring their frames in DN on a worker of their own, and handing the darks they publish to the Calibration Library.
 const darkLibraryWizard = new DarkLibraryWizardSessions(
 	connections.devices,
 	(id) => connections.client(id),
@@ -693,10 +689,10 @@ const darkLibraryWizard = new DarkLibraryWizardSessions(
 	images,
 	captureFrames,
 	new DarkLibraryWizardAnalyzer(),
-	darkPlans,
 	publish,
 	undefined,
-	(planId) => void calibrationLibrary.planEnded(planId).catch((error: unknown) => console.error('The calibration library could not read a plan', error)),
+	(frame) => void calibrationLibrary.registerDark(frame).catch((error: unknown) => console.error('A dark could not be registered', error)),
+	(plan) => void calibrationLibrary.darkSessionEnded(plan).catch((error: unknown) => console.error('The calibration library could not build the darks of a session', error)),
 )
 
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
@@ -762,13 +758,10 @@ export async function startEarthOrientation() {
 	installEarthOrientation(earthOrientation)
 }
 
-// Reconciles the Dark Library Wizard plans a previous run left behind with their files, so no session of this process
-// ever works on one, then opens the Calibration Library in the background, so the masters the wizards asked for are
-// queued before anyone opens the tool. Called by the app after startDatabase and before it serves; a test that only
-// imports this module opens no file. Never rejects: a plan that cannot be reconciled is reported and tried again on the
-// next start, and a request opens the library again and reports its failure.
-export async function startStores() {
-	await darkPlans.reconcile()
+// Opens the Calibration Library and the projects of Image Stacking in the background, so what a crash left of their
+// products is finished before anyone opens the tools. Called by the app after startDatabase and before it serves; a test
+// that only imports this module opens no file. Never rejects: a request opens them again and reports its failure.
+export function startStores() {
 	void calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))
 	void imageStacking.ready().catch((error: unknown) => console.error('The image stacking projects could not be opened', error))
 }

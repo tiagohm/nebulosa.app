@@ -3,9 +3,10 @@ import { type CalibrationMetadata, stableId } from './calibrationlibrary.compati
 import type { FileInspection } from './calibrationlibrary.sources'
 
 // What Image Stacking knows about light frames from their headers, never their pixels: their role, the physical filter
-// they were taken through, and the acquisition settings that decide which calibration masters fit them. The filter is a
-// source identity compared by a canonical key; synonyms such as Ha and H-alpha are only suggested, never merged. The
-// target named by OBJECT is a hint shown to the operator. Nothing is inferred from a file or directory name.
+// they were taken through, and the acquisition settings that decide which calibration masters fit them. The filter is
+// exactly the name its header writes, trimmed, never classified, so names spelled differently are different filters,
+// and a header that names none means no filter (None). The target named by OBJECT is a hint shown to the operator.
+// Nothing is inferred from a file or directory name.
 
 // Role of a frame in a project:
 // - light: a light frame by its header or by an operator's declaration.
@@ -15,32 +16,12 @@ export type StackingRole = 'light' | 'unclassified'
 // Version of the acquisition key. A change regroups cohorts, never the frames of a filter.
 export const COHORT_KEY_VERSION = 1
 
-// Families of filter names an operator is likely to mean as one filter, by their canonical keys. Used only to suggest
-// a merge, which the operator decides.
-const FILTER_SYNONYMS: readonly (readonly string[])[] = [
-	['ha', 'h-alpha', 'halpha', 'h alpha', 'hα', 'h_alpha', 'h-a'],
-	['oiii', 'o3', 'o-iii', 'o iii', '[oiii]', 'o_iii'],
-	['sii', 's2', 's-ii', 's ii', '[sii]', 's_ii'],
-	['l', 'lum', 'luminance', 'clear'],
-	['r', 'red'],
-	['g', 'green'],
-	['b', 'blue'],
-]
+// Filter of the frames whose header names none, or a blank one.
+export const NO_FILTER = 'None'
 
-// Synonym family of each canonical key.
-const SYNONYM_FAMILY = new Map(FILTER_SYNONYMS.flatMap((family, index) => family.map((key) => [key, index] as const)))
-
-// Returns the canonical key of a filter name: Unicode-normalized (NFKC), trimmed, with inner whitespace collapsed, and
-// lower case, so that only spelling variants of one name compare equal. An absent or blank name is the empty key.
+// Returns the filter of a frame: the name its header writes, trimmed, or NO_FILTER when it is absent or blank.
 export function filterKeyOf(name: string | undefined) {
-	return name === undefined ? '' : name.normalize('NFKC').trim().replaceAll(/\s+/g, ' ').toLowerCase()
-}
-
-// Returns whether two different canonical keys belong to the same family of synonyms.
-export function filterSynonyms(a: string, b: string) {
-	if (a === b || a === '' || b === '') return false
-	const family = SYNONYM_FAMILY.get(a)
-	return family !== undefined && family === SYNONYM_FAMILY.get(b)
+	return name?.trim() || NO_FILTER
 }
 
 // Serializes the acquisition settings that one set of calibration masters must match: camera name, geometry, sample type,

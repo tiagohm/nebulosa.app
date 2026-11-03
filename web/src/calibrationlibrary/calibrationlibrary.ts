@@ -16,7 +16,7 @@ import { jsonInit, responseError } from '../http'
 export interface CalibrationFilter {
 	// Role.
 	readonly kind?: CalibrationKind
-	// Camera hardware id.
+	// Camera name.
 	readonly camera?: string
 	// State of the file, for frames.
 	readonly status?: SourceStatus
@@ -36,7 +36,7 @@ export interface CalibrationLibraryRuntime {
 	groups?: Page<CalibrationGroupSummary>
 	sources?: Page<CalibrationSourceSummary>
 	masters?: Page<CalibrationMasterSummary>
-	// Group shown in detail, and its revision shown.
+	// Group shown in detail, and the master shown.
 	group?: CalibrationGroupDetail
 	master?: CalibrationMasterDetail
 	// Frame shown in detail, with its path.
@@ -188,9 +188,9 @@ export async function loadCalibrationGroup(state: CalibrationLibraryRuntime, gro
 	state.group = groupId === undefined ? undefined : await fetchJson<CalibrationGroupDetail>(`${BASE_URL}/groups/${encodeURIComponent(groupId)}`, request)
 }
 
-// Fetches a revision; absent clears it.
-export async function loadCalibrationMaster(state: CalibrationLibraryRuntime, reference: { readonly masterId: string; readonly revision: number } | undefined, request: typeof fetch = fetch) {
-	state.master = reference && (await fetchJson<CalibrationMasterDetail>(`${BASE_URL}/masters/${encodeURIComponent(reference.masterId)}/revisions/${reference.revision}`, request))
+// Fetches a master; absent clears it.
+export async function loadCalibrationMaster(state: CalibrationLibraryRuntime, masterId: number | undefined, request: typeof fetch = fetch) {
+	state.master = masterId === undefined ? undefined : await fetchJson<CalibrationMasterDetail>(`${BASE_URL}/masters/${masterId}`, request)
 }
 
 // Fetches a frame; absent clears it.
@@ -231,19 +231,14 @@ export async function validateRecipe(body: MasterRequest, request: typeof fetch 
 	}
 }
 
-// Requests a master, and its token keeps a retried request from starting another; its progress arrives as events.
+// Requests a new master, and its token keeps a retried request from starting another; its progress arrives as events.
 export function buildMaster(state: CalibrationLibraryRuntime, key: string, body: MasterRequest, request: typeof fetch = fetch) {
 	return command<MasterRequestResult>(state, key, `${BASE_URL}/masters`, jsonInit('POST', { ...body, token: nanoid() } satisfies MasterRequest), request)
 }
 
-// Makes a revision the preferred one.
-export function preferMaster(state: CalibrationLibraryRuntime, masterId: string, revision: number, request: typeof fetch = fetch) {
-	return command(state, `master:${masterId}`, `${BASE_URL}/masters/${encodeURIComponent(masterId)}/preferred`, jsonInit('POST', { revision }), request)
-}
-
-// Deletes a revision and its file.
-export function deleteCalibrationMaster(state: CalibrationLibraryRuntime, masterId: string, revision: number, request: typeof fetch = fetch) {
-	return command(state, `master:${masterId}`, `${BASE_URL}/masters/${encodeURIComponent(masterId)}/revisions/${revision}`, { method: 'DELETE' }, request)
+// Deletes a master and its file.
+export function deleteCalibrationMaster(state: CalibrationLibraryRuntime, masterId: number, request: typeof fetch = fetch) {
+	return command(state, `master:${masterId}`, `${BASE_URL}/masters/${masterId}`, { method: 'DELETE' }, request)
 }
 
 // Deletes a frame with its file.
@@ -262,8 +257,8 @@ export function cancelCalibrationImport(state: CalibrationLibraryRuntime, jobId:
 }
 
 // Starts scanning a directory of the server; its progress arrives as events.
-export function startCalibrationImport(state: CalibrationLibraryRuntime, path: string, recursive: boolean, request: typeof fetch = fetch) {
-	return command<CalibrationJobSummary>(state, 'import', `${BASE_URL}/imports`, jsonInit('POST', { path, recursive }), request)
+export function startCalibrationImport(state: CalibrationLibraryRuntime, paths: readonly string[], recursive: boolean, request: typeof fetch = fetch) {
+	return command<CalibrationJobSummary>(state, 'import', `${BASE_URL}/imports`, jsonInit('POST', { paths, recursive }), request)
 }
 
 // Fetches what an import found.
@@ -276,14 +271,14 @@ export function commitCalibrationImport(state: CalibrationLibraryRuntime, jobId:
 	return command<{ readonly committed: number }>(state, 'import', `${BASE_URL}/imports/${encodeURIComponent(jobId)}/commit`, jsonInit('POST', body), request)
 }
 
-// Declares a value a frame does not state, with the reason.
-export function overrideCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, field: OverridableField, value: string | number, reason: string, request: typeof fetch = fetch) {
-	return command(state, `source:${sourceId}`, `${BASE_URL}/sources/${encodeURIComponent(sourceId)}/overrides`, jsonInit('POST', { field, value, reason }), request)
+// Declares a value a frame does not state.
+export function overrideCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, field: OverridableField, value: string | number, request: typeof fetch = fetch) {
+	return command(state, `source:${sourceId}`, `${BASE_URL}/sources/${encodeURIComponent(sourceId)}/overrides`, jsonInit('POST', { field, value }), request)
 }
 
-// Leaves a frame out of masters, or brings it back without a reason.
-export function excludeCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, reason: string | undefined, request: typeof fetch = fetch) {
-	return command(state, `source:${sourceId}`, `${BASE_URL}/sources/${encodeURIComponent(sourceId)}/exclusion`, jsonInit('POST', { reason }), request)
+// Leaves a frame out of masters, or brings it back.
+export function excludeCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, excluded: boolean, request: typeof fetch = fetch) {
+	return command(state, `source:${sourceId}`, `${BASE_URL}/sources/${encodeURIComponent(sourceId)}/exclusion`, jsonInit('POST', { excluded }), request)
 }
 
 // Compares every indexed file with the disk.

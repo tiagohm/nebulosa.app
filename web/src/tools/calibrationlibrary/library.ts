@@ -1,4 +1,4 @@
-import type { CalibrationCamera, CalibrationGroupSummary, CalibrationJobSummary, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
+import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationMaster, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // What the Calibration Library tool shows of what the server decided: labels, tones, and the coverage of a page of groups.
@@ -57,7 +57,6 @@ export const METHOD_LABELS: Readonly<Record<CalibrationRecipe['method'], string>
 
 // Fields that can be declared, in control order, with their labels.
 export const OVERRIDE_LABELS: Readonly<Record<OverridableField, string>> = {
-	cameraId: 'Camera Id',
 	exposure: 'Exposure (µs)',
 	setTemperature: 'Target Temperature (°C)',
 	sensorTemperature: 'Sensor Temperature (°C)',
@@ -73,7 +72,7 @@ export const OVERRIDE_LABELS: Readonly<Record<OverridableField, string>> = {
 
 // Whether a field holds text rather than a number.
 export function overrideIsText(field: OverridableField) {
-	return field === 'cameraId' || field === 'readoutMode' || field === 'filter' || field === 'telescope'
+	return field === 'readoutMode' || field === 'filter' || field === 'telescope'
 }
 
 // Text of a value, a dash when unknown.
@@ -104,9 +103,26 @@ export function groupTitle({ kind, metadata }: Pick<CalibrationGroupSummary, 'ki
 	return `${exposureText(metadata)} · ${temperatureText(metadata)}`
 }
 
-// Name of the camera of a set of frames.
-export function cameraText({ cameraId, cameraName }: Pick<CalibrationMetadata, 'cameraId' | 'cameraName'>) {
-	return cameraName ?? cameraId.value ?? 'Unassigned'
+// Name of the camera of a set of frames, as their headers give it.
+export function cameraText({ cameraName }: Pick<CalibrationMetadata, 'cameraName'>) {
+	return cameraName ?? 'Unknown camera'
+}
+
+// Name of a master: its id and when it was published, in local time, which tell apart masters of the same frames.
+export function masterName({ masterId, createdAt }: { readonly masterId: number; readonly createdAt: number }) {
+	return `#${masterId} · ${new Date(createdAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}`
+}
+
+// Explains the state of a master, in the words shown under its badge: why its file cannot be used, why it is stale, and
+// what it was published with that makes it carry warnings (too few frames, and what an operator accepted when building
+// it). Empty for a ready master.
+export function masterWarnings({ status, diagnostics, acknowledged }: Pick<CalibrationMaster, 'status' | 'diagnostics' | 'acknowledged'>) {
+	const warnings: string[] = []
+	if (status === 'unavailable') warnings.push('Its file is missing, or is no longer the one published.')
+	if (status === 'stale') warnings.push('A master it was corrected with is unavailable.')
+	if (diagnostics.lowSampleCount) warnings.push(`Only ${diagnostics.integratedFrames === 1 ? '1 frame was' : `${diagnostics.integratedFrames} frames were`} integrated, fewer than recommended, so its noise and rejection are less reliable.`)
+	for (const { message } of acknowledged) warnings.push(`Accepted when built: ${message}.`)
+	return warnings
 }
 
 // One row of coverage: a camera and operating point, and what exists of each role.
@@ -127,7 +143,7 @@ export function coverage(groups: readonly CalibrationGroupSummary[]): readonly C
 	for (const { kind, metadata, masters } of groups) {
 		const camera = cameraText(metadata)
 		const settings = settingsText(metadata)
-		const key = `${metadata.cameraId.value ?? camera}|${settings}|${metadata.width}x${metadata.height}`
+		const key = `${camera}|${settings}|${metadata.width}x${metadata.height}`
 		let row = rows.get(key)
 
 		if (!row) {
@@ -146,14 +162,6 @@ export function coverage(groups: readonly CalibrationGroupSummary[]): readonly C
 export function jobFraction({ progress, frames }: Pick<CalibrationJobSummary, 'progress' | 'frames'>) {
 	if (progress.rowsTotal > 0) return Math.min(1, progress.rowsCombined / progress.rowsTotal)
 	return frames ? Math.min(1, progress.framesValidated / frames) : 0
-}
-
-// Returns the text of each camera of the filter, by hardware id: its name, with the start of its id when another camera has the
-// same name, as the same model reached through two connections does, and its id when it has no name.
-export function cameraFilterLabels(cameras: readonly CalibrationCamera[]) {
-	const names = new Map<string, number>()
-	for (const { name } of cameras) if (name !== null) names.set(name, (names.get(name) ?? 0) + 1)
-	return new Map(cameras.map(({ id, name }) => [id, name === null ? id : (names.get(name) ?? 0) > 1 ? `${name} · ${id.slice(0, 6)}` : name]))
 }
 
 // Text of a size in bytes.

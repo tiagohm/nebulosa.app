@@ -123,6 +123,7 @@ export function flatWizardRequest(settings: Readonly<FlatWizardSettings>, exposu
 		maximumTrials: settings.maximumTrials,
 		maximumRejections: settings.maximumRejections,
 		snoop,
+		...(settings.generateMasters && { generateMasters: true }),
 	}
 }
 

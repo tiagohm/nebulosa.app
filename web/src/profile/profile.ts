@@ -260,6 +260,20 @@ export function setLastSaveDirectory(state: ProfileState, directory: string) {
 	profile.settings.lastSaveDirectory = directory
 }
 
+// Remembers in the active profile the server directory listed when directories or files were added to a stacking import.
+export function setLastStackingDirectory(state: ProfileState, directory: string) {
+	const profile = activeProfile(state)
+	if (profile.settings.lastStackingDirectory === directory) return
+	profile.settings.lastStackingDirectory = directory
+}
+
+// Remembers in the active profile the server directory listed when directories or files were added to a library import.
+export function setLastCalibrationDirectory(state: ProfileState, directory: string) {
+	const profile = activeProfile(state)
+	if (profile.settings.lastCalibrationDirectory === directory) return
+	profile.settings.lastCalibrationDirectory = directory
+}
+
 // Returns the object parent holds at key, creating an empty one first. It is read back through parent, so in a valtio
 // store it is the proxy: an object created inside a literal that was just assigned to a proxy, as `(a[b] ??= {})[c] ??= {}`
 // creates the one at c, is never wrapped, and changing it later notifies no subscriber, the workspace synchronization

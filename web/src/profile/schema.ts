@@ -45,6 +45,12 @@ export interface ProfileSettings {
 	// Server directory an image of Images was saved to last, where the save dialog starts; absent before the first save.
 	// View state.
 	lastSaveDirectory?: string
+	// Server directory listed last when directories or files were added to an Image Stacking import, where both choosers
+	// start; absent before the first one is added. View state.
+	lastStackingDirectory?: string
+	// Server directory listed last when directories or files were added to a Calibration Library import, where both
+	// choosers start; absent before the first one is added. View state.
+	lastCalibrationDirectory?: string
 	// Forms of each physical camera edited so far, by saved connection id, then device id.
 	cameras: Record<string, Record<string, CameraSettings>>
 	// Targets saved to recover a framing, at most FRAMING_REFERENCES_MAXIMUM; absent until one is saved.
@@ -602,6 +608,8 @@ export interface FlatWizardSettings {
 	maximumTrials: number
 	// Rejected or inconclusive final frames allowed per filter, in [0, FLAT_WIZARD_MAXIMUM_REJECTIONS].
 	maximumRejections: number
+	// Whether the Calibration Library builds a master flat of each completed filter after the acquisition; absent is off.
+	generateMasters?: boolean
 }
 
 // Most filter groups a Flat Wizard form keeps.

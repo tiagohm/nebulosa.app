@@ -1,6 +1,7 @@
 // oxfmt-ignore
 import type { StackingJobSummary, StackingCohort, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingProductStatus, StackingRecipe, StackingRegistration, StackingRole, StackingRunGroup, StackingRunState, StackingSettings } from 'api'
 import type { StatusTone } from '../../ui/StatusBadge'
+import { masterName } from '../calibrationlibrary/library'
 
 // Presentation helpers of Image Stacking: labels and texts of what the server answers, which candidates of an import a
 // commit would add, and the settings a threshold form describes. Nothing here decides a role, a filter, a calibration, or
@@ -25,11 +26,6 @@ export function integrationText(seconds: number) {
 	return `${Math.floor(total / 3600)} h ${Math.floor((total % 3600) / 60)} min`
 }
 
-// Text of a group key: its name, or Unassigned for the lights without a filter.
-export function groupLabel(key: string, name: string) {
-	return key === '' ? 'Unassigned' : name
-}
-
 // What a candidate of an import is, for its review.
 export function candidateText(candidate: StackingImportCandidate) {
 	if (candidate.error !== undefined) return candidate.error
@@ -43,14 +39,46 @@ export function candidateUsable(candidate: StackingImportCandidate) {
 	return candidate.error === undefined && candidate.rejected === undefined && !candidate.known && candidate.role !== undefined
 }
 
-// Counts the frames a commit adds from the counts of its import, with `declared` unclassified files declared lights.
-export function committedCounts(job: Pick<StackingJobSummary, 'lights' | 'unclassified'>, declared: number) {
-	return { lights: (job.lights ?? 0) + declared, unclassified: Math.max(0, (job.unclassified ?? 0) - declared) }
+// Candidates of an import checked for its commit, across every page of its review.
+export interface ImportSelection {
+	// Whether a candidate is checked unless it is in `except`; when false, only those in `except` are.
+	readonly all: boolean
+	// Role of each usable candidate checked the other way, by path.
+	readonly except: ReadonlyMap<string, StackingRole>
 }
 
-// Text of a merged filter key: the names its files write, or the key when none is known.
-export function keyText(names: readonly string[] | undefined, key: string) {
-	return names && names.length > 0 ? names.join(', ') : key
+// Every usable candidate checked, as a review starts.
+export const ALL_CANDIDATES: ImportSelection = { all: true, except: new Map() }
+
+// No candidate checked.
+export const NO_CANDIDATES: ImportSelection = { all: false, except: new Map() }
+
+// Returns whether a candidate of an import is checked.
+export function candidateChecked(selection: ImportSelection, path: string) {
+	return selection.all !== selection.except.has(path)
+}
+
+// Returns a selection with a usable candidate, of a role, checked or unchecked.
+export function withCandidate(selection: ImportSelection, path: string, role: StackingRole, checked: boolean): ImportSelection {
+	const except = new Map(selection.except)
+	if (checked === selection.all) except.delete(path)
+	else except.set(path, role)
+	return { all: selection.all, except }
+}
+
+// Counts the frames a commit adds from the counts of its import and the candidates checked, with `declared` checked
+// unclassified files declared lights.
+export function committedCounts(job: Pick<StackingJobSummary, 'lights' | 'unclassified'>, selection: ImportSelection, declared: number) {
+	let lights = selection.all ? (job.lights ?? 0) : 0
+	let unclassified = selection.all ? (job.unclassified ?? 0) : 0
+
+	for (const role of selection.except.values()) {
+		const change = selection.all ? -1 : 1
+		if (role === 'light') lights += change
+		else unclassified += change
+	}
+
+	return { lights: Math.max(0, lights) + declared, unclassified: Math.max(0, unclassified - declared) }
 }
 
 // Kinds of master a light is calibrated with, in the order they are shown.
@@ -128,20 +156,16 @@ export function registrationText(registration: StackingRegistration | undefined)
 	return `${translationX.toFixed(1)}, ${translationY.toFixed(1)} px · ${((rotation * 180) / Math.PI).toFixed(2)}° · ${rmsError.toFixed(2)} px rms`
 }
 
-// Text of a master revision offered to a cohort.
-export function masterText(candidate: Pick<StackingMasterCandidate, 'kind' | 'masterId' | 'revision' | 'preferred'>) {
-	return `${LIGHT_MASTER_LABELS[candidate.kind]} ${candidate.masterId.slice(0, 8)} · revision ${candidate.revision}${candidate.preferred ? ' · preferred' : ''}`
-}
-
-// Key of a master revision in a choice list.
-export function masterKey(reference: { readonly masterId: string; readonly revision: number }) {
-	return `${reference.masterId}:${reference.revision}`
+// Text of a master offered to a cohort: its id, when it was published, the frames it integrated, and whether it carries
+// warnings.
+export function masterText(candidate: Pick<StackingMasterCandidate, 'masterId' | 'createdAt' | 'frames' | 'status'>) {
+	return `${masterName(candidate)} · ${candidate.frames === 1 ? '1 frame' : `${candidate.frames} frames`}${candidate.status === 'warning' ? ' · warnings' : ''}`
 }
 
 // Title of a cohort: its filter, exposure, and frames.
-export function cohortText(cohort: Pick<StackingCohort, 'groupName' | 'target' | 'frames'>) {
+export function cohortText(cohort: Pick<StackingCohort, 'groupKey' | 'target' | 'frames'>) {
 	const exposure = cohort.target.exposure === undefined ? 'unknown exposure' : `${cohort.target.exposure} s`
-	return `${cohort.groupName} · ${exposure} · ${cohort.frames === 1 ? '1 frame' : `${cohort.frames} frames`}`
+	return `${cohort.groupKey} · ${exposure} · ${cohort.frames === 1 ? '1 frame' : `${cohort.frames} frames`}`
 }
 
 // Combination methods, in the order they are offered.

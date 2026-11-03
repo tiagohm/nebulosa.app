@@ -16,7 +16,7 @@ import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { clamp } from 'nebulosa/src/math/numerical/math'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
-import type { FlatFrameRegistration } from './calibrationlibrary'
+import type { FlatFrameRegistration, FlatSessionEnd } from './calibrationlibrary'
 import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureSettings, type CaptureSnoop, DEFAULT_CAPTURES_DIR, exposureProgressListener, frameName, snoopedDevices } from './captures'
@@ -43,8 +43,9 @@ import type { OperationDevice, OperationRegistry } from './operations'
 // step id; the light comes from the assigned panel at a fixed brightness, or from a manual source the operator
 // confirms. An assigned dust cover is closed before the first frame. A light the session switched on is switched off
 // once it ended, and then a cover it closed is opened again. Stopping cancels the operation at once:
-// the exposure in flight is lost, and files already published stay. Durations are seconds, instants Unix
-// milliseconds, levels DN. Records live in memory, the latest session per camera.
+// the exposure in flight is lost, and files already published stay. A session that asked for masters hands the
+// frames of every filter it completed to the Calibration Library once it ended, however it ended. Durations are
+// seconds, instants Unix milliseconds, levels DN. Records live in memory, the latest session per camera.
 
 // Camera settings applied to every frame; the exposure is the wizard's own and the frame type is always FLAT.
 export type FlatWizardCaptureSettings = Pick<CaptureSettings, 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
@@ -94,6 +95,8 @@ export interface FlatWizardRequest extends CommandRequest {
 	readonly maximumRejections: number
 	// Devices snooped into the frame headers; the assigned wheel is always snooped.
 	readonly snoop?: CaptureSnoop
+	// Whether the Calibration Library builds a master flat of each completed filter once the session ended; absent is off.
+	readonly generateMasters?: boolean
 }
 
 // What a session is doing:
@@ -381,6 +384,7 @@ export class FlatWizardSessions {
 		readonly listener: FlatWizardListener,
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
 		readonly framePublished: (frame: FlatFrameRegistration) => void = () => undefined,
+		readonly sessionEnded: (ended: FlatSessionEnd) => void = () => undefined,
 	) {
 		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'flatWizard:updated', session }))
 	}
@@ -740,7 +744,7 @@ export class FlatWizardSessions {
 
 			const { sessionId, camera: device } = session.summary
 			this.frames.published({ sessionId, generation, ...device, cameraName, time, frameType: 'FLAT', path: join(directory, file) }, 'flatWizard')
-			this.framePublished({ path: join(directory, file), sessionId, cameraId: resourceKey(camera), cameraName, filter: name })
+			this.framePublished({ path: join(directory, file), sessionId, cameraName, filter: name })
 			accepted.push({ file, sample: sample! })
 			this.#record(session, { ...record, frameId: captureFrameId(sessionId, generation), verdict, file })
 			this.#patch(session, index, { accepted: run.accepted + 1, files: [...run.files, file] })
@@ -861,6 +865,14 @@ export class FlatWizardSessions {
 		if (result.ok) this.#update(session, { state: 'completed', filters, pending: undefined, endedAt: Date.now() })
 		else if (result.reason === 'aborted') this.#update(session, { state: 'cancelled', filters, pending: undefined, endedAt: Date.now() })
 		else this.#update(session, { state: 'failed', filters, pending: undefined, reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt: Date.now() })
+
+		const { request, sessionId } = session.summary
+
+		if (request.generateMasters) {
+			const directory = request.directory || this.capturesDir
+			const groups = filters.filter(({ state }) => state === 'completed').map(({ name, files }) => ({ filter: name, paths: files.map((file) => join(directory, file)) }))
+			if (groups.length > 0) this.sessionEnded({ sessionId, groups })
+		}
 
 		session.ended.resolve()
 	}

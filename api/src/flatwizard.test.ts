@@ -8,7 +8,7 @@ import { analyzeFlat } from 'nebulosa/src/imaging/analysis/flat/flat'
 import { measureFlatSequenceFrame } from 'nebulosa/src/imaging/analysis/flat/sequence'
 import type { FlatAnalysis } from 'nebulosa/src/imaging/analysis/flat/types'
 import { generateSyntheticFlatImage } from 'nebulosa/src/imaging/synthetic/flat'
-import type { FlatFrameRegistration } from './calibrationlibrary'
+import type { FlatFrameRegistration, FlatSessionEnd } from './calibrationlibrary'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures } from './captures'
 import { ConnectionManager } from './connection'
@@ -113,6 +113,7 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	const measurement = fakeAnalyzer(rate, finals, ceiling)
 	const events: FlatWizardEvent[] = []
 	const published: FlatFrameRegistration[] = []
+	const endings: FlatSessionEnd[] = []
 	const flatWizard = new FlatWizardSessions(
 		manager.devices,
 		(connectionId) => manager.client(connectionId),
@@ -127,6 +128,7 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 		(event) => events.push(event),
 		undefined,
 		(frame) => published.push(frame),
+		(ended) => endings.push(ended),
 	)
 
 	const devices = manager.devices.list(client)
@@ -155,6 +157,7 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 
 	return {
 		published,
+		endings,
 		id,
 		operations,
 		captures,
@@ -196,8 +199,24 @@ describe('Flat Wizard sessions', () => {
 
 		expect(published).toHaveLength(3)
 		expect(published[0]).toMatchObject({ sessionId, filter: summary()!.filters[0].name })
-		expect(published[0].cameraId).toBeString()
+		expect(published[0].cameraName).toBeString()
 		expect(existsSync(published[0].path)).toBeTrue()
+	})
+
+	test('a session that asked for masters hands its completed filters to the library once it ended, and one that did not, none', async () => {
+		const { id, cameraId, flatWizard, directory, summary, ended, published, endings } = await setup()
+		const { sessionId } = await start(flatWizard, id, cameraId, request(directory, { generateMasters: true }))
+		await waitUntil(() => summary()?.pending !== undefined)
+		expect(flatWizard.continue(sessionId, { stepId: summary()!.pending!.stepId }).status).toBe(204)
+		await waitUntil(ended, 60000)
+
+		expect(endings).toEqual([{ sessionId, groups: [{ filter: summary()!.filters[0].name, paths: published.map(({ path }) => path) }] }])
+
+		const second = await start(flatWizard, id, cameraId, request(directory))
+		await waitUntil(() => summary()?.sessionId === second.sessionId && summary()?.pending !== undefined)
+		expect(flatWizard.continue(second.sessionId, { stepId: summary()!.pending!.stepId }).status).toBe(204)
+		await waitUntil(() => summary()?.sessionId === second.sessionId && ended(), 60000)
+		expect(endings).toHaveLength(1)
 	})
 
 	test('a manual run waits for the operator, searches the exposure with two observations, and publishes the original frames', async () => {

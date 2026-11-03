@@ -1,4 +1,3 @@
-import type { Stats } from 'fs'
 import { open, readdir, realpath, stat } from 'fs/promises'
 import { extname, join, resolve } from 'path'
 import { fileHandleSource } from 'nebulosa/src/io/file'
@@ -8,7 +7,7 @@ import { cfaPatternKeyword, numericKeyword, uncompressedBitpixKeyword, uncompres
 import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
 import { type CalibrationKind, type CalibrationMetadata, compatibilityKey, type Evidenced, groupIdOf, stableId } from './calibrationlibrary.compatibility'
 import type { CalibrationSource, SourceFormat, SourceOrigin } from './calibrationlibrary.store'
-import { type DarkCapturePlan, type DarkFrameRecord, type DarkPlanGroup, REJECTED_DIRECTORY, STAGING_DIRECTORY } from './darklibrarywizard.store'
+import { type DarkCapturePlan, type DarkFrameRecord, type DarkPlanGroup, REJECTED_DIRECTORY, STAGING_DIRECTORY } from './darklibrarywizard.plan'
 import { imageAcquisition } from './images'
 
 // What the Calibration Library knows about files: reading their headers, never their pixels; describing a frame of a
@@ -78,7 +77,7 @@ export function digitalFullScale(bitpix: number) {
 	return bitpix > 0 ? 2 ** bitpix - 1 : 65535
 }
 
-// Describes a header: nothing here is inferred from a file name, and a model name never becomes a hardware id.
+// Describes a header: nothing here is inferred from a file name.
 export function inspectHeader(header: FitsHeader, format: SourceFormat, rowAddressable: boolean, imageType?: string): FileInspection {
 	const provenance = readFitsProvenance(imageType === undefined ? header : { ...header, IMAGETYP: header.IMAGETYP ?? imageType })
 	const acquisition = imageAcquisition(header)
@@ -90,7 +89,6 @@ export function inspectHeader(header: FitsHeader, format: SourceFormat, rowAddre
 	const origin = (key: string) => (typeof header[key] === 'number' ? numericKeyword(header, key, 0) : undefined)
 
 	const metadata: CalibrationMetadata = {
-		cameraId: { evidence: 'unknown' },
 		cameraName: provenance.instrument,
 		exposure: verified(acquisition.exposure === undefined ? undefined : exposureMicroseconds(acquisition.exposure)),
 		setTemperature: verified(provenance.setTemperature),
@@ -149,7 +147,7 @@ export function makeSource(
 ): CalibrationSource {
 	const canonical = process.platform === 'win32' ? path.toLowerCase() : path
 	const key = compatibilityKey(kind, metadata)
-	return { sourceId: stableId(canonical), origin, originId, kind, path, format, bytes, mtimeMillis, metadata, warnings, status: 'available', supported: true, key, groupId: groupIdOf(key), ...patch }
+	return { sourceId: stableId(canonical), origin, originId, kind, path, format, bytes, mtimeMillis, metadata, warnings, status: 'available', supported: true, excluded: false, key, groupId: groupIdOf(key), ...patch }
 }
 
 // Returns a frame with another role or metadata, in the group they put it in.
@@ -158,7 +156,7 @@ export function regrouped(source: CalibrationSource, kind: CalibrationKind, meta
 	return { ...source, kind, metadata, key, groupId: groupIdOf(key) }
 }
 
-// Describes a frame of a plan: the plan names the camera and the exact settings, the header verifies them, and the file
+// Describes a frame of a plan: the plan names the exact settings, the header verifies them, and the file
 // gives the sample geometry. Readings of the plan's trace say what the temperature really was. Warnings keep what the
 // wizard said about the frame. Returns undefined for a frame that does not count.
 export function darkPlanSource(plan: DarkCapturePlan, group: DarkPlanGroup, frame: DarkFrameRecord, inspection: FileInspection, bytes: number, mtimeMillis: number): CalibrationSource | undefined {
@@ -170,7 +168,6 @@ export function darkPlanSource(plan: DarkCapturePlan, group: DarkPlanGroup, fram
 
 	const metadata: CalibrationMetadata = {
 		...inspection.metadata,
-		cameraId: { value: camera.hardwareId, evidence: 'planDeclared' },
 		cameraName: camera.name,
 		exposure: fromPlan(exposureMicroseconds(group.exposure), header?.exposure),
 		setTemperature: group.temperature === undefined ? { evidence: 'unknown' } : { value: group.temperature, evidence: 'planDeclared' },
@@ -185,12 +182,14 @@ export function darkPlanSource(plan: DarkCapturePlan, group: DarkPlanGroup, fram
 	const warnings = [...inspection.warnings, ...frame.suspicions.map((suspicion) => `Suspicion of light: ${suspicion}`), ...frame.notes.map((note) => `Not verified: ${note}`)]
 	const accepted = frame.verdict === 'accepted' || frame.acknowledged === true
 	const kind = plan.purpose ?? 'dark'
-	return makeSource('darkPlan', `${plan.planId}/${frame.groupId}/${frame.frameId}`, kind, frame.path, inspection.format, bytes, mtimeMillis, metadata, warnings, { required: group.count, excluded: accepted ? undefined : 'Light suspected and not acknowledged' })
+	return makeSource('darkPlan', `${plan.planId}/${frame.groupId}/${frame.frameId}`, kind, frame.path, inspection.format, bytes, mtimeMillis, metadata, warnings, { required: group.count, excluded: !accepted })
 }
 
-// Returns the identity of a file of known status: device:inode, or its real path where inodes are not reported.
-export async function fileIdentity(path: string, info: Pick<Stats, 'dev' | 'ino'>) {
-	return info.ino ? `${info.dev}:${info.ino}` : await realpath(path)
+// Returns the identity of a file: device:inode, or its real path where inodes are not reported. The inode is read as a
+// bigint, since a 64-bit one, as an NTFS file id is, loses its low digits as a number and two files would share it.
+export async function fileIdentity(path: string) {
+	const { dev, ino } = await stat(path, { bigint: true })
+	return ino ? `${dev}:${ino}` : await realpath(path)
 }
 
 // Options of a scan.
@@ -280,7 +279,7 @@ export async function scanDirectory({ path, recursive, depth = DEFAULT_SCAN_DEPT
 			const info = await stat(child).catch(() => undefined)
 			if (!info?.isFile()) continue
 
-			const identity = await fileIdentity(child, info)
+			const identity = await fileIdentity(child)
 			if (known.has(identity)) continue
 			known.add(identity)
 

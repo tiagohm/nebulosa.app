@@ -6,9 +6,9 @@ import type { CalibrationLibraryStore } from './calibrationlibrary.store'
 
 // Jobs of the Calibration Library: the master builds and the import scans of this process, kept in memory only. A job
 // outlives the tab that asked for it, never the server: nothing of it is written but the staging of a running build, which
-// the next start removes, and a master a wizard asked for is asked again at that start. One master integrates at a time.
-// An automatic job waits while a device operation runs, so a wizard's masters never compete with an acquisition, and it
-// holds no device itself. A request that repeats a fingerprint meets the job already doing it.
+// the next start removes, and a master a wizard asked for is forgotten with it. One master integrates at a time. An
+// automatic job waits while a device operation runs, so a wizard's masters never compete with an acquisition, and it
+// holds no device itself. Every job that completes publishes a new master, whatever was built before.
 
 // State of a job:
 // - queued: waiting for the worker.
@@ -29,8 +29,6 @@ export type CalibrationJobErrorCode = IntegrationErrorCode | 'publicationFailed'
 
 // What a master job must build, frozen when it was requested.
 export interface MasterBuild {
-	// Master it adds a revision to.
-	readonly masterId: string
 	// Role.
 	readonly kind: CalibrationKind
 	// Group, and its compatibility key.
@@ -56,8 +54,8 @@ export interface MasterBuild {
 
 // What an import job scans.
 export interface ImportScan {
-	// Directory.
-	readonly path: string
+	// Directories and files scanned, in order.
+	readonly paths: readonly string[]
 	// Whether it enters subdirectories.
 	readonly recursive: boolean
 	// Deepest directory.
@@ -87,8 +85,6 @@ export interface CalibrationJob {
 	readonly automatic: boolean
 	// Token of the request that created it.
 	readonly token?: string
-	// Fingerprint of the product of a master job.
-	readonly fingerprint?: string
 	// Build of a master job.
 	readonly build?: MasterBuild
 	// Scan of an import job.
@@ -100,9 +96,8 @@ export interface CalibrationJob {
 	// Why it failed, with a stable code.
 	readonly error?: string
 	readonly code?: CalibrationJobErrorCode
-	// Revision it published.
-	readonly masterId?: string
-	readonly revision?: number
+	// Master it published.
+	readonly masterId?: number
 }
 
 // What lists and events show of a job: no paths.
@@ -134,9 +129,8 @@ export interface CalibrationJobSummary {
 	// Why it failed, with a stable code.
 	readonly error?: string
 	readonly code?: CalibrationJobErrorCode
-	// Master it adds to, and the revision it published.
-	readonly masterId?: string
-	readonly revision?: number
+	// Master it published.
+	readonly masterId?: number
 }
 
 // Empty progress of a new job.
@@ -154,7 +148,7 @@ const STAGING_REMOVAL_DELAY = 200
 
 // Removes the server paths of a job.
 export function jobSummary(job: CalibrationJob): CalibrationJobSummary {
-	const { jobId, type, state, createdAt, updatedAt, automatic, build, scan, progress, error, code, masterId, revision } = job
+	const { jobId, type, state, createdAt, updatedAt, automatic, build, scan, progress, error, code, masterId } = job
 	return {
 		jobId,
 		type,
@@ -173,8 +167,7 @@ export function jobSummary(job: CalibrationJob): CalibrationJobSummary {
 		committed: scan?.committed,
 		error,
 		code,
-		masterId: masterId ?? build?.masterId,
-		revision,
+		masterId,
 	}
 }
 
@@ -188,7 +181,7 @@ export interface Integrator {
 export interface JobHost {
 	// Builds the header and destination of a job.
 	readonly request: (job: CalibrationJob, staging: string) => MasterWorkerRequest
-	// Revalidates a job and makes its staged product visible, returning its revision. Throws when it cannot.
+	// Revalidates a job and makes its staged product visible, returning the id of its master. Throws when it cannot.
 	readonly publish: (job: CalibrationJob, result: IntegrationResult, staging: string) => Promise<number>
 	// Whether a device operation is running, which holds automatic jobs back.
 	readonly busy: () => boolean
@@ -322,9 +315,9 @@ export class CalibrationJobs {
 
 			signal.throwIfAborted()
 			job = this.#save(job, { state: 'publishing' })
-			const revision = await this.host.publish(job, result, staging)
+			const masterId = await this.host.publish(job, result, staging)
 			await rm(staging, { recursive: true, force: true })
-			this.#save(job, { state: 'completed', masterId: job.build?.masterId, revision })
+			this.#save(job, { state: 'completed', masterId })
 		} catch (error) {
 			if (!signal.aborted) {
 				const code = (error as { readonly code?: CalibrationJobErrorCode }).code

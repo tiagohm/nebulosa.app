@@ -10,7 +10,7 @@ import { CalibrationLibrary, type CalibrationLibraryEvent } from './calibrationl
 import { integrateMaster, IntegrationError, type IntegrationFrame, type IntegrationProgress, type MasterWorkerRequest } from './calibrationlibrary.analysis'
 import type { Integrator } from './calibrationlibrary.jobs'
 import { CalibrationLibraryStore, MASTER_FILE } from './calibrationlibrary.store'
-import { type DarkCapturePlan, type DarkFrameRecord, DarkPlanStore, STAGING_DIRECTORY } from './darklibrarywizard.store'
+import { type DarkCapturePlan, type DarkFrameRecord, STAGING_DIRECTORY } from './darklibrarywizard.plan'
 import { AppDatabase } from './database'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-calibration-test-'))
@@ -50,7 +50,7 @@ function directory(name: string) {
 	return path
 }
 
-// Database of each directory, kept so a library opened again reads the same plans, frames, and masters.
+// Database of each directory, kept so a library opened again reads the same frames and masters.
 const databases = new Map<string, AppDatabase>()
 
 // A library in a directory of its own, over a database of its own.
@@ -58,11 +58,10 @@ function open(integrator?: Integrator, busy?: () => boolean, base = directory('l
 	const events: CalibrationLibraryEvent[] = []
 	const database = databases.get(base) ?? AppDatabase.memory()
 	databases.set(base, database)
-	const plans = new DarkPlanStore(database)
 	const store = new CalibrationLibraryStore(database, join(base, 'library'))
-	const library = new CalibrationLibrary(store, plans, (event) => events.push(event), busy, integrator)
+	const library = new CalibrationLibrary(store, (event) => events.push(event), busy, integrator)
 	libraries.push(library)
-	return { library, plans, store, events, base }
+	return { library, store, events, base }
 }
 
 // Runs integrations in this thread, so tests stay deterministic and need no worker.
@@ -92,8 +91,16 @@ async function settled(library: CalibrationLibrary, jobId: string) {
 	throw new Error('The job never ended')
 }
 
-// Writes a complete plan with `frames` accepted dark frames in its store.
-async function plan(plans: DarkPlanStore, base: string, frames: number, required = frames, patch: Partial<DarkCapturePlan> = {}) {
+// Requests a master, waits for its job, and returns the id of what it published.
+async function built(library: CalibrationLibrary, request: Parameters<CalibrationLibrary['requestMaster']>[0]) {
+	const { jobId } = await library.requestMaster(request)
+	const job = await settled(library, jobId)
+	expect(job.state).toBe('completed')
+	return job.masterId!
+}
+
+// Writes `frames` accepted dark frames of a plan and registers them in a library, as its session publishes them.
+async function plan(library: CalibrationLibrary, base: string, frames: number, required = frames, patch: Partial<DarkCapturePlan> = {}) {
 	const group = { groupId: 'g', key: 'g', directory: join(base, 'frames'), exposure: 60, temperature: -10, count: required }
 	mkdirSync(join(group.directory, STAGING_DIRECTORY), { recursive: true })
 
@@ -110,7 +117,6 @@ async function plan(plans: DarkPlanStore, base: string, frames: number, required
 		...patch,
 	}
 
-	await plans.create(dark, 'session')
 	const random = noise(7)
 
 	for (let sequence = 1; sequence <= frames; sequence++) {
@@ -129,11 +135,9 @@ async function plan(plans: DarkPlanStore, base: string, frames: number, required
 			notes: [],
 			header: { frameType: 'Dark Frame', exposure: 60, gain: 100, offset: 50, width: WIDTH, height: HEIGHT, binning: { x: 1, y: 1 } },
 		}
-		await plans.append('plan', { type: 'publishing', frame })
-		await plans.append('plan', { type: 'committed', frameId: frame.frameId, at: sequence })
+		await library.registerDark({ plan: dark, groupId: 'g', frame })
 	}
 
-	await plans.append('plan', { type: 'status', at: 100, status: 'completed' })
 	return dark
 }
 
@@ -154,11 +158,10 @@ async function readMaster(path: string) {
 	return (await readImageFromFits(fits!, source, { sampleScale: 'digital', raw: 64 }))!
 }
 
-describe('plans', () => {
-	test('indexes accepted frames without changing a plan, and groups them with their exact settings', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 3, 3)
-		const before = await plans.detail('plan', 100)
+describe('darks', () => {
+	test('registers accepted frames without changing them, and groups them with their exact settings', async () => {
+		const { library, base } = open(local)
+		await plan(library, base, 3, 3)
 		const framesBefore = hashes(join(base, 'frames'))
 
 		const { items, total } = await library.groups({}, 0, 50)
@@ -169,34 +172,33 @@ describe('plans', () => {
 		expect(items[0].metadata.exposure).toEqual({ value: 60000000, evidence: 'verified' })
 		expect(items[0].metadata.setTemperature).toEqual({ value: -10, evidence: 'planDeclared' })
 		expect(items[0].readiness).toBe('ready')
-		expect(library.snapshot().cameras).toEqual([{ id: 'camera', name: 'Camera' }])
-		expect(await plans.detail('plan', 100)).toEqual(before)
+		expect(library.snapshot().cameras).toEqual(['Camera'])
 		expect(hashes(join(base, 'frames'))).toEqual(framesBefore)
 	})
 
 	test('a group short of its plan is incomplete, and a master of it is a provisional decision', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 2, 3)
+		const { library, base } = open(local)
+		await plan(library, base, 2, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		expect(group.readiness).toBe('incomplete')
 
 		await expect(library.requestMaster({ groupId: group.groupId })).rejects.toThrow('provisional')
 
 		const { jobId } = await library.requestMaster({ groupId: group.groupId, acknowledged: true })
-		expect((await settled(library, jobId!)).state).toBe('completed')
+		expect((await settled(library, jobId)).state).toBe('completed')
 		const [master] = (await library.masters({}, 0, 10)).items
 		expect(master.status).toBe('warning')
 	})
 
 	test('a dark-flat plan stays apart from darks', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 2, 2, { purpose: 'darkFlat' })
+		const { library, base } = open(local)
+		await plan(library, base, 2, 2, { purpose: 'darkFlat' })
 		expect((await library.groups({}, 0, 50)).items[0].kind).toBe('darkFlat')
 	})
 
-	test('a missing file comes back, because the plan is never told it was lost', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 2)
+	test('a missing file comes back once it is there again', async () => {
+		const { library, base } = open(local)
+		await plan(library, base, 2)
 		await library.ready()
 		const path = join(base, 'frames', '1.fit')
 		renameSync(path, `${path}.away`)
@@ -218,59 +220,55 @@ function stop() {
 // Builds the master of a plan of 3 frames and returns it with its library.
 async function published() {
 	const opened = open(local)
-	await plan(opened.plans, opened.base, 3)
+	await plan(opened.library, opened.base, 3)
 	const [group] = (await opened.library.groups({}, 0, 50)).items
-	const { jobId, masterId } = await opened.library.requestMaster({ groupId: group.groupId })
-	await settled(opened.library, jobId!)
-	return { ...opened, group, masterId, directory: opened.store.revisionDirectory(masterId, 1) }
+	const masterId = await built(opened.library, { groupId: group.groupId })
+	return { ...opened, group, masterId, directory: opened.store.masterDirectory(masterId) }
 }
 
-// Changes the publication of every revision, as a crash in the middle of one leaves it.
+// Changes the publication of every master, as a crash in the middle of one leaves it.
 function interrupt(store: CalibrationLibraryStore, publication: 'publishing' | 'deleting') {
-	store.database.db.run(`UPDATE calibration_revisions SET publication = '${publication}'`)
+	store.database.db.run(`UPDATE calibration_masters SET publication = '${publication}'`)
 }
 
 describe('restart', () => {
 	test('keeps what an operator declared and every master', async () => {
 		const opened = open(local)
-		const { library, plans, base, store } = opened
-		await plan(plans, base, 3)
+		const { library, base, store } = opened
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
-		const { jobId, masterId } = await library.requestMaster({ groupId: group.groupId })
-		await settled(library, jobId!)
-		await library.prefer(masterId, 1)
+		const masterId = await built(library, { groupId: group.groupId })
 		const source = store.sourcesOf()[0]
-		await library.exclude(source.sourceId, 'Satellite')
+		await library.exclude(source.sourceId, true)
 		stop()
 
 		const reopened = open(local, undefined, base)
-		const master = await reopened.library.master(masterId, 1)
-		expect(master.preferred).toBeTrue()
+		const master = await reopened.library.master(masterId)
 		expect(master.status).toBe('warning')
-		expect((await reopened.library.source(source.sourceId)).excluded).toBe('Satellite')
+		expect((await reopened.library.source(source.sourceId)).excluded).toBeTrue()
 	})
 
-	test('a crash after the rename and before the commit publishes the revision', async () => {
+	test('a crash after the rename and before the commit publishes the master', async () => {
 		const { store, base, masterId } = await published()
 		stop()
 		interrupt(store, 'publishing')
 
 		const reopened = open(local, undefined, base)
-		expect((await reopened.library.master(masterId, 1)).revision).toBe(1)
+		expect((await reopened.library.master(masterId)).masterId).toBe(masterId)
 		expect((await reopened.library.masters({}, 0, 10)).total).toBe(1)
 	})
 
-	test('a crash before the rename forgets the revision and never uses its number again', async () => {
+	test('a crash before the rename forgets the master and never uses its id again', async () => {
 		const { store, base, masterId, directory, group } = await published()
 		stop()
 		interrupt(store, 'publishing')
 		rmSync(directory, { recursive: true })
 
 		const reopened = open(local, undefined, base)
-		await expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
-		const again = await reopened.library.requestMaster({ groupId: group.groupId })
-		await settled(reopened.library, again.jobId!)
-		expect((await reopened.library.masters({}, 0, 10)).items.map(({ revision }) => revision)).toEqual([2])
+		await expect(reopened.library.master(masterId)).rejects.toThrow('Unknown master')
+		const again = await built(reopened.library, { groupId: group.groupId })
+		expect(again).toBe(masterId + 1)
+		expect((await reopened.library.masters({}, 0, 10)).items.map((master) => master.masterId)).toEqual([again])
 	})
 
 	test('a published file that is not the recorded one is never adopted, and moves to orphaned', async () => {
@@ -280,10 +278,10 @@ describe('restart', () => {
 		writeFileSync(join(directory, MASTER_FILE), 'not the master')
 
 		const reopened = open(local, undefined, base)
-		await expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
+		await expect(reopened.library.master(masterId)).rejects.toThrow('Unknown master')
 		expect(existsSync(directory)).toBeFalse()
 		const [orphan] = readdirSync(join(base, 'library', 'orphaned'))
-		expect(orphan.startsWith(`${masterId}-v0001-`)).toBeTrue()
+		expect(orphan.startsWith(`${masterId}-`)).toBeTrue()
 		expect(readFileSync(join(base, 'library', 'orphaned', orphan, MASTER_FILE), 'utf8')).toBe('not the master')
 	})
 
@@ -293,16 +291,16 @@ describe('restart', () => {
 		interrupt(store, 'deleting')
 
 		const reopened = open(local, undefined, base)
-		await expect(reopened.library.master(masterId, 1)).rejects.toThrow('Unknown master')
+		await expect(reopened.library.master(masterId)).rejects.toThrow('Unknown master')
 		expect(existsSync(directory)).toBeFalse()
-		expect(store.hasRevision(masterId, 1)).toBeFalse()
+		expect(store.hasMaster(masterId)).toBeFalse()
 	})
 
-	test('a revision directory without a row moves to orphaned, never adopted nor deleted', async () => {
+	test('a master directory without a row moves to orphaned, never adopted nor deleted', async () => {
 		const { library, base } = open(local)
 		await library.ready()
 		stop()
-		const directory = join(base, 'library', 'products', 'unknown', 'v0003')
+		const directory = join(base, 'library', 'products', '7')
 		mkdirSync(directory, { recursive: true })
 		writeFileSync(join(directory, MASTER_FILE), 'kept')
 
@@ -310,7 +308,7 @@ describe('restart', () => {
 		await reopened.library.ready()
 		expect(existsSync(directory)).toBeFalse()
 		const [orphan] = readdirSync(join(base, 'library', 'orphaned'))
-		expect(orphan.startsWith('unknown-v0003-')).toBeTrue()
+		expect(orphan.startsWith('7-')).toBeTrue()
 		expect((await reopened.library.masters({}, 0, 10)).total).toBe(0)
 	})
 
@@ -318,12 +316,12 @@ describe('restart', () => {
 		const { store, base, masterId, directory } = await published()
 		stop()
 		renameSync(join(directory, MASTER_FILE), join(base, MASTER_FILE))
-		expect((await open(local, undefined, base).library.master(masterId, 1)).status).toBe('unavailable')
+		expect((await open(local, undefined, base).library.master(masterId)).status).toBe('unavailable')
 		expect((await libraries[0].masters({ status: 'unavailable' }, 0, 10)).total).toBe(1)
 
 		stop()
 		renameSync(join(base, MASTER_FILE), join(directory, MASTER_FILE))
-		expect((await open(local, undefined, base).library.master(masterId, 1)).status).toBe('warning')
+		expect((await open(local, undefined, base).library.master(masterId)).status).toBe('warning')
 		expect(store.allMasters()).toHaveLength(1)
 	})
 
@@ -336,7 +334,7 @@ describe('restart', () => {
 
 describe('imports', () => {
 	async function imported(library: CalibrationLibrary, path: string) {
-		const job = await library.startImport({ path, recursive: true })
+		const job = await library.startImport({ paths: [path], recursive: true })
 		return settled(library, job.jobId)
 	}
 
@@ -370,26 +368,47 @@ describe('imports', () => {
 
 		const [group] = (await library.groups({}, 0, 50)).items
 		expect(group.total).toBe(2)
-		expect(group.readiness).toBe('needsReview')
-		expect(group.findings.map(({ field }) => field)).toContain('cameraId')
+		expect(group.readiness).toBe('ready')
+		expect(group.metadata.cameraName).toBe('Model')
 	})
 
-	test('a role can be declared with its reason, and what a file states cannot be replaced', async () => {
+	test('scans directories and single files together, finds a file once, and refuses a path it cannot read', async () => {
+		const { library } = open(local)
+		const folder = directory('import')
+		const other = directory('single')
+		const keywords = { GAIN: 0, IMAGETYP: 'Bias Frame' }
+		await writeFrame(join(folder, 'a.fit'), () => 100, keywords)
+		const single = join(other, 'b.fit')
+		await writeFrame(single, () => 100, keywords)
+
+		const job = await settled(library, (await library.startImport({ paths: [folder, single, join(folder, 'a.fit')] })).jobId)
+		expect(job.found).toBe(2)
+		const { items } = await library.importCandidates(job.jobId, 0, 50)
+		expect(items.map(({ name, kind }) => [name, kind])).toEqual([
+			['a.fit', 'bias'],
+			['b.fit', 'bias'],
+		])
+		expect((await library.commitImport(job.jobId, {})).committed).toBe(2)
+
+		await expect(library.startImport({ paths: [join(other, 'missing.fit')] })).rejects.toThrow('missing.fit cannot be read')
+	})
+
+	test('a role can be declared, and what a file states cannot be replaced', async () => {
 		const { library, store } = open(local)
 		const folder = directory('import')
 		await writeFrame(join(folder, 'a.fit'), () => 100, { GAIN: 0 })
 		const job = await imported(library, folder)
 		const { items } = await library.importCandidates(job.jobId, 0, 50)
 
-		await library.commitImport(job.jobId, { classifications: { [items[0].path]: { kind: 'bias', reason: 'Zero exposure session' } } })
+		await library.commitImport(job.jobId, { classifications: { [items[0].path]: 'bias' } })
 
 		const [source] = store.sourcesOf()
 		expect(source.kind).toBe('bias')
-		expect(source.warnings[0]).toContain('Zero exposure session')
+		expect(source.warnings[0]).toBe('Role declared by an operator')
 
-		await expect(library.override(source.sourceId, 'gain', 5, 'No')).rejects.toThrow('cannot be replaced')
+		await expect(library.override(source.sourceId, 'gain', 5)).rejects.toThrow('cannot be replaced')
 
-		const overridden = await library.override(source.sourceId, 'offset', 10, 'Known setup')
+		const overridden = await library.override(source.sourceId, 'offset', 10)
 		expect(overridden.metadata.offset).toEqual({ value: 10, evidence: 'operatorDeclared' })
 		expect(overridden.groupId).not.toBe(source.groupId)
 	})
@@ -420,16 +439,12 @@ describe('imports', () => {
 
 describe('masters', () => {
 	test('publishes an immutable product that reads back in digital numbers with a truthful header', async () => {
-		const { library, plans, base, store } = open(local)
-		await plan(plans, base, 5)
+		const { library, base, store } = open(local)
+		await plan(library, base, 5)
 		const before = hashes(join(base, 'frames'))
 		const [group] = (await library.groups({}, 0, 50)).items
-		const { jobId, masterId } = await library.requestMaster({ groupId: group.groupId, acknowledged: true })
-		const job = await settled(library, jobId!)
-		expect(job.state).toBe('completed')
-		expect(job.revision).toBe(1)
-
-		const master = await library.master(masterId, 1)
+		const masterId = await built(library, { groupId: group.groupId, acknowledged: true })
+		const master = await library.master(masterId)
 		expect(master.calibrationState).toBe('rawBiasIncluded')
 		expect(master.units).toBe('DN')
 		expect(master.sourceDigests).toHaveLength(5)
@@ -447,52 +462,48 @@ describe('masters', () => {
 		expect(image.header.EXPTIME).toBe(60)
 		expect(image.header.BZERO).toBeUndefined()
 
-		expect(readdirSync(store.revisionDirectory(masterId, 1))).toEqual([MASTER_FILE])
+		expect(readdirSync(store.masterDirectory(masterId))).toEqual([MASTER_FILE])
 		expect(master.contentDigest).toMatch(/^[0-9a-f]{64}$/)
 		expect(hashes(join(base, 'frames'))).toEqual(before)
 		expect(readdirSync(join(base, 'library', 'staging'))).toEqual([])
 	})
 
-	test('an equal request returns the product, and new parameters make a new revision', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 3)
+	test('every request builds a new master with the next id, even of the same frames and recipe', async () => {
+		const { library, base } = open(local)
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
-		const first = await library.requestMaster({ groupId: group.groupId })
-		await settled(library, first.jobId!)
+		const first = await built(library, { groupId: group.groupId })
+		const second = await built(library, { groupId: group.groupId })
 
-		const repeated = await library.requestMaster({ groupId: group.groupId })
-		expect(repeated).toEqual({ masterId: first.masterId, revision: 1, state: 'completed' })
-
-		const other = await library.requestMaster({ groupId: group.groupId, recipe: { method: 'median' } })
-		const job = await settled(library, other.jobId!)
-		expect(job.revision).toBe(2)
-		expect((await library.masters({ masterId: first.masterId }, 0, 10)).total).toBe(2)
+		expect(second).toBe(first + 1)
+		expect((await library.masters({ groupId: group.groupId }, 0, 10)).items.map(({ masterId }) => masterId)).toEqual([second, first])
+		expect((await library.group(group.groupId)).masters.map(({ masterId }) => masterId)).toEqual([second, first])
 	})
 
 	test('concurrent identical requests make one job, and a token its own job once', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 3)
+		const { library, base } = open(local)
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		const [a, b] = await Promise.all([library.requestMaster({ groupId: group.groupId, token: 't' }), library.requestMaster({ groupId: group.groupId, token: 't' })])
 		expect(a.jobId).toBe(b.jobId)
-		await settled(library, a.jobId!)
+		await settled(library, a.jobId)
 		expect((await library.masters({}, 0, 10)).total).toBe(1)
 	})
 
 	test('refuses incompatible frames with an explanation', async () => {
-		const { library, plans, base, store } = open(local)
-		await plan(plans, base, 2)
+		const { library, base, store } = open(local)
+		await plan(library, base, 2)
 		await library.ready()
 		const folder = directory('import')
 		await writeFrame(join(folder, 'other.fit'), () => 100, { IMAGETYP: 'Dark Frame', EXPTIME: 30 })
-		const job = await settled(library, (await library.startImport({ path: folder })).jobId)
+		const job = await settled(library, (await library.startImport({ paths: [folder] })).jobId)
 		await library.commitImport(job.jobId, {})
 		const sourceIds = store.sourcesOf().map(({ sourceId }) => sourceId)
 
 		const validation = await library.validate({ sourceIds })
 		expect(validation.valid).toBeFalse()
 		expect(validation.findings.find(({ field }) => field === 'exposure')?.severity).toBe('blocker')
-		await expect(library.requestMaster({ sourceIds, acknowledged: true })).rejects.toThrow('Camera is known for some frames')
+		await expect(library.requestMaster({ sourceIds, acknowledged: true })).rejects.toThrow('known for some frames')
 	})
 
 	test('a frame changed after the request stops the job and publishes nothing', async () => {
@@ -508,8 +519,8 @@ describe('masters', () => {
 			},
 		}
 
-		const { library, plans, base } = open(delayed)
-		await plan(plans, base, 3)
+		const { library, base } = open(delayed)
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		const { jobId } = await library.requestMaster({ groupId: group.groupId })
 		await Bun.sleep(150)
@@ -518,7 +529,7 @@ describe('masters', () => {
 		writeFileSync(path, Buffer.concat([readFileSync(path), Buffer.alloc(2880)]))
 		release()
 
-		const job = await settled(library, jobId!)
+		const job = await settled(library, jobId)
 		expect(job.state).toBe('failed')
 		expect(job.code).toBe('sourceChanged')
 		expect(job.error).toBe('A frame changed: 1.fit')
@@ -534,93 +545,69 @@ describe('masters', () => {
 			},
 		}
 
-		const { library, plans, base } = open(flaky)
-		await plan(plans, base, 3)
+		const { library, base } = open(flaky)
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		const { jobId } = await library.requestMaster({ groupId: group.groupId })
-		expect((await settled(library, jobId!)).error).toBe('Boom')
+		expect((await settled(library, jobId)).error).toBe('Boom')
 
 		const again = await library.requestMaster({ groupId: group.groupId })
 		expect(again.jobId).not.toBe(jobId)
-		expect((await settled(library, again.jobId!)).state).toBe('completed')
+		expect((await settled(library, again.jobId)).state).toBe('completed')
 	})
 
 	test('a job that was working when the server stopped is forgotten with its staging, never published', async () => {
 		const blocked = blockedIntegrator()
-		const { library, plans, base } = open(blocked)
-		await plan(plans, base, 3)
+		const { library, base } = open(blocked)
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		const { jobId } = await library.requestMaster({ groupId: group.groupId })
 		await Bun.sleep(30)
-		expect(existsSync(join(base, 'library', 'staging', jobId!))).toBeTrue()
+		expect(existsSync(join(base, 'library', 'staging', jobId))).toBeTrue()
 		library.close()
 		libraries.length = 0
 
 		const reopened = open(local, undefined, base)
 		await reopened.library.ready()
-		await expect(reopened.library.job(jobId!)).rejects.toThrow('Unknown job')
+		await expect(reopened.library.job(jobId)).rejects.toThrow('Unknown job')
 		expect((await reopened.library.masters({}, 0, 10)).total).toBe(0)
 		expect(existsSync(join(base, 'library', 'staging'))).toBeFalse()
 
 		const again = await reopened.library.requestMaster({ groupId: group.groupId })
-		expect((await settled(reopened.library, again.jobId!)).state).toBe('completed')
-	})
-
-	test('a queued master a wizard asked for is asked again at the next start, and the old job is forgotten', async () => {
-		const { library, plans, base } = open(local, () => true)
-		await plan(plans, base, 3, 3, { generateMasters: true })
-		await library.ready()
-		const [queued] = library.jobs.latest(10)
-		expect(queued).toMatchObject({ state: 'queued', automatic: true })
-		library.close()
-		libraries.length = 0
-
-		const reopened = open(local, undefined, base)
-		await reopened.library.ready()
-		await expect(reopened.library.job(queued.jobId)).rejects.toThrow('Unknown job')
-		const [again] = reopened.library.jobs.latest(10)
 		expect((await settled(reopened.library, again.jobId)).state).toBe('completed')
 	})
 
-	test('deleting a revision removes its directory, its preference, and never reuses its number', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 3)
+	test('deleting a master removes its directory and never reuses its id', async () => {
+		const { library, base } = open(local)
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
-		const first = await library.requestMaster({ groupId: group.groupId })
-		await settled(library, first.jobId!)
-		await library.prefer(first.masterId, 1)
-		const directory = join(base, 'library', 'products', first.masterId)
+		const first = await built(library, { groupId: group.groupId })
 
-		await library.deleteMaster(first.masterId, 1)
+		await library.deleteMaster(first)
 		expect(readdirSync(join(base, 'library', 'products'))).toEqual([])
 		expect((await library.masters({}, 0, 10)).total).toBe(0)
-		await expect(library.master(first.masterId, 1)).rejects.toThrow('Unknown master')
+		await expect(library.master(first)).rejects.toThrow('Unknown master')
 
-		const second = await library.requestMaster({ groupId: group.groupId })
-		await settled(library, second.jobId!)
-		const [master] = (await library.masters({}, 0, 10)).items
-		expect(master.revision).toBe(2)
-		expect(master.preferred).toBeFalse()
-		expect(readdirSync(directory)).toEqual(['v0002'])
+		const second = await built(library, { groupId: group.groupId })
+		expect(second).toBe(first + 1)
+		expect(readdirSync(join(base, 'library', 'products'))).toEqual([String(second)])
 
 		library.close()
 		libraries.length = 0
 		const reopened = open(local, undefined, base)
-		expect((await reopened.library.masters({}, 0, 10)).items.map(({ revision }) => revision)).toEqual([2])
-		expect(reopened.store.database.db.query('SELECT last_revision FROM calibration_masters WHERE master_id = ?').get(first.masterId)).toEqual({ last_revision: 2 })
+		expect((await reopened.library.masters({}, 0, 10)).items.map(({ masterId }) => masterId)).toEqual([second])
 	})
 
 	test('deleting a group removes its files and frames, keeps its masters, and survives a restart', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 3)
+		const { library, base } = open(local)
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
-		const { jobId, masterId } = await library.requestMaster({ groupId: group.groupId })
-		await settled(library, jobId!)
+		const masterId = await built(library, { groupId: group.groupId })
 
 		expect(await library.deleteGroup(group.groupId)).toEqual({ deleted: 3 })
 		expect(readdirSync(join(base, 'frames')).filter((name) => name.endsWith('.fit'))).toEqual([])
 		expect((await library.groups({}, 0, 50)).total).toBe(0)
-		expect((await library.master(masterId, 1)).status).not.toBe('unavailable')
+		expect((await library.master(masterId)).status).not.toBe('unavailable')
 		await expect(library.deleteGroup(group.groupId)).rejects.toThrow('Unknown group')
 
 		library.close()
@@ -631,8 +618,8 @@ describe('masters', () => {
 
 	test('a group or a frame being built cannot be deleted', async () => {
 		const blocked = blockedIntegrator()
-		const { library, plans, base } = open(blocked)
-		await plan(plans, base, 3)
+		const { library, base } = open(blocked)
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		await library.requestMaster({ groupId: group.groupId })
 		await expect(library.deleteGroup(group.groupId)).rejects.toThrow('being built')
@@ -641,8 +628,8 @@ describe('masters', () => {
 	})
 
 	test('deleting a frame removes its file and the frame, and survives a restart', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 3)
+		const { library, base } = open(local)
+		await plan(library, base, 3)
 		const [frame] = (await library.sources({}, 0, 1)).items
 
 		expect(await library.deleteSource(frame.sourceId)).toEqual({ deleted: 1 })
@@ -656,25 +643,12 @@ describe('masters', () => {
 		expect((await reopened.library.sources({}, 0, 50)).total).toBe(2)
 	})
 
-	test('a preferred revision is a pointer', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 3)
-		const [group] = (await library.groups({}, 0, 50)).items
-		const { jobId, masterId } = await library.requestMaster({ groupId: group.groupId })
-		await settled(library, jobId!)
-		const file = (await library.master(masterId, 1)).path
-		const before = readFileSync(file)
-
-		expect((await library.prefer(masterId, 1)).preferred).toBeTrue()
-		expect(readFileSync(file).equals(before)).toBeTrue()
-	})
-
 	test('events carry no server path', async () => {
-		const { library, plans, base, events } = open(local)
-		await plan(plans, base, 3)
+		const { library, base, events } = open(local)
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		const { jobId } = await library.requestMaster({ groupId: group.groupId })
-		await settled(library, jobId!)
+		await settled(library, jobId)
 
 		expect(events.map(({ type }) => type)).toContain('calibrationLibrary:masterUpdated')
 		expect(JSON.stringify(events)).not.toContain(join(base, 'frames').replaceAll('\\', '\\\\'))
@@ -683,21 +657,18 @@ describe('masters', () => {
 
 describe('worker', () => {
 	test('integrates on a worker of its own', async () => {
-		const { library, plans, base } = open()
-		await plan(plans, base, 3)
+		const { library, base } = open()
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
-		const { jobId, masterId } = await library.requestMaster({ groupId: group.groupId })
-
-		expect((await settled(library, jobId!)).state).toBe('completed')
-		expect((await library.master(masterId, 1)).sourceDigests).toHaveLength(3)
+		const masterId = await built(library, { groupId: group.groupId })
+		expect((await library.master(masterId)).sourceDigests).toHaveLength(3)
 	})
 })
 
 describe('automatic masters', () => {
-	test('a plan that asked for masters gets them once it ends, and only complete groups', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 3, 3, { generateMasters: true })
-		await library.planEnded('plan')
+	test('a plan that asked for masters gets them once its session ended, and only complete groups', async () => {
+		const { library, base } = open(local)
+		await library.darkSessionEnded(await plan(library, base, 3, 3, { generateMasters: true }))
 
 		const { items } = await library.masters({}, 0, 10)
 		const started = library.jobs.latest(10)
@@ -707,47 +678,29 @@ describe('automatic masters', () => {
 	})
 
 	test('a plan short of frames starts nothing', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 2, 3, { generateMasters: true })
-		await library.planEnded('plan')
+		const { library, base } = open(local)
+		await library.darkSessionEnded(await plan(library, base, 2, 3, { generateMasters: true }))
 		expect(library.jobs.latest(10)).toHaveLength(0)
 	})
 
 	test('a plan that did not ask starts nothing', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 3)
-		await library.planEnded('plan')
+		const { library, base } = open(local)
+		await library.darkSessionEnded(await plan(library, base, 3))
 		expect(library.jobs.latest(10)).toHaveLength(0)
-	})
-
-	test('a plan that ended while the server was down gets its masters at the next open, once', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 3, 3, { generateMasters: true })
-		await library.ready()
-		const [job] = library.jobs.latest(10)
-		expect(job.automatic).toBeTrue()
-		await settled(library, job.jobId)
-		library.close()
-		libraries.length = 0
-
-		const reopened = open(local, undefined, base)
-		await reopened.library.ready()
-		expect(reopened.library.jobs.latest(10)).toHaveLength(0)
-		expect((await reopened.library.masters({}, 0, 10)).total).toBe(1)
 	})
 
 	test('an automatic job waits for camera operations, and a manual one does not', async () => {
 		let busy = true
-		const { library, plans, base } = open(local, () => busy)
-		await plan(plans, base, 3)
+		const { library, base } = open(local, () => busy)
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
 		const automatic = await library.requestMaster({ groupId: group.groupId, token: 'a' }, true)
 		await Bun.sleep(30)
-		expect((await library.job(automatic.jobId!)).state).toBe('queued')
+		expect((await library.job(automatic.jobId)).state).toBe('queued')
 
 		busy = false
 		library.jobs.pump()
-		expect((await settled(library, automatic.jobId!)).state).toBe('completed')
+		expect((await settled(library, automatic.jobId)).state).toBe('completed')
 	})
 })
 
@@ -756,28 +709,54 @@ describe('flats', () => {
 	const response = (x: number, y: number) => (x === 5 && y === 5 ? 0.7 : 1) * (1 - 0.01 * x)
 
 	// A master dark-flat at the exposure of the flats, and flats of different brightness, all registered.
-	async function prepared(library: CalibrationLibrary, plans: DarkPlanStore, base: string, pedestal: number) {
-		await plan(plans, base, 3, 3, { purpose: 'darkFlat', groups: [{ groupId: 'g', key: 'g', directory: join(base, 'frames'), exposure: 2, temperature: -10, count: 3 }] })
+	async function prepared(library: CalibrationLibrary, base: string, pedestal: number) {
+		await plan(library, base, 3, 3, { purpose: 'darkFlat', groups: [{ groupId: 'g', key: 'g', directory: join(base, 'frames'), exposure: 2, temperature: -10, count: 3 }] })
 		const [darkFlat] = (await library.groups({ kind: 'darkFlat' }, 0, 50)).items
-		const correction = await library.requestMaster({ groupId: darkFlat.groupId })
-		await settled(library, correction.jobId!)
+		const correction = await built(library, { groupId: darkFlat.groupId })
 
 		const folder = directory('flats')
 
 		for (let frame = 0; frame < 4; frame++) {
 			const path = await writeFrame(join(folder, `${frame}.fit`), (x, y) => pedestal + (20000 + frame * 2000) * response(x, y), flatKeywords)
-			await library.registerFlat({ path, sessionId: 's', cameraId: 'camera', cameraName: 'Camera' })
+			await library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
 		}
 
 		const [flat] = (await library.groups({ kind: 'flat' }, 0, 50)).items
-		return { flat, correction: { masterId: correction.masterId, revision: 1 } }
+		return { flat, correction }
 	}
+
+	test('a session that asked for masters builds each completed filter with the newest matching correction', async () => {
+		const { library, base, store } = open(local)
+		const { correction } = await prepared(library, base, 1000)
+		const paths = store.sourcesOf('flatWizard').map(({ path }) => path)
+
+		await library.flatSessionEnded({ sessionId: 's', groups: [{ filter: 'L', paths }] })
+		const job = library.jobs.latest(10).find(({ automatic }) => automatic)
+		expect(job).toBeDefined()
+		await settled(library, job!.jobId)
+
+		const { items } = await library.masters({ kind: 'flat' }, 0, 10)
+		expect(items).toHaveLength(1)
+		expect((await library.master(items[0].masterId)).dependencies[0].masterId).toBe(correction)
+	})
+
+	test('a session waits for its last flat, and builds nothing without a correction or with a frame missing', async () => {
+		const { library, store } = open(local)
+		const folder = directory('flats')
+		const paths = await Promise.all([0, 1].map((frame) => writeFrame(join(folder, `${frame}.fit`), () => 20000, flatKeywords)))
+		for (const path of paths) void library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
+
+		await library.flatSessionEnded({ sessionId: 's', groups: [{ filter: 'L', paths: [...paths, join(folder, 'missing.fit')] }] })
+		expect(store.sourcesOf('flatWizard')).toHaveLength(2)
+		await library.flatSessionEnded({ sessionId: 's', groups: [{ filter: 'L', paths }] })
+		expect(library.jobs.latest(10)).toHaveLength(0)
+	})
 
 	test('a flat without a correction never becomes a master', async () => {
 		const { library } = open(local)
 		const folder = directory('flats')
 		const path = await writeFrame(join(folder, 'a.fit'), () => 20000, flatKeywords)
-		await library.registerFlat({ path, sessionId: 's', cameraId: 'camera', cameraName: 'Camera' })
+		await library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
 		const [flat] = (await library.groups({ kind: 'flat' }, 0, 50)).items
 
 		const validation = await library.validate({ groupId: flat.groupId })
@@ -787,19 +766,16 @@ describe('flats', () => {
 	})
 
 	test('a calibrated normalized master keeps structure, drops pedestal, and depends on its correction', async () => {
-		const { library, plans, base, store } = open(local)
-		const { flat, correction } = await prepared(library, plans, base, 1000)
+		const { library, base, store } = open(local)
+		const { flat, correction } = await prepared(library, base, 1000)
 
-		const { jobId, masterId } = await library.requestMaster({ groupId: flat.groupId, correction, acknowledged: true })
-		const job = await settled(library, jobId!)
-		expect(job.error).toBeUndefined()
-
-		const master = await library.master(masterId, 1)
+		const masterId = await built(library, { groupId: flat.groupId, correction, acknowledged: true })
+		const master = await library.master(masterId)
 		expect(master.calibrationState).toBe('calibratedNormalized')
 		expect(master.units).toBe('dimensionless')
-		expect(master.dependencies[0].masterId).toBe(correction.masterId)
-		await expect(library.deleteMaster(correction.masterId, correction.revision)).rejects.toThrow('delete that flat first')
-		expect(() => store.discardRevision(correction.masterId, correction.revision)).toThrow('FOREIGN KEY')
+		expect(master.dependencies[0].masterId).toBe(correction)
+		await expect(library.deleteMaster(correction)).rejects.toThrow('delete that flat first')
+		expect(() => store.discardMaster(correction)).toThrow('FOREIGN KEY')
 
 		const image = await readMaster(master.path)
 		expect(image.metadata.bitpix).toBe(-32)
@@ -811,11 +787,11 @@ describe('flats', () => {
 	})
 
 	test('a correction with another operating point is refused', async () => {
-		const { library, plans, base } = open(local)
-		const { flat, correction } = await prepared(library, plans, base, 1000)
+		const { library, base } = open(local)
+		const { flat, correction } = await prepared(library, base, 1000)
 		const folder = directory('bias')
 		const path = await writeFrame(join(folder, 'other.fit'), () => 20000, { ...flatKeywords, GAIN: 0 })
-		await library.registerFlat({ path, sessionId: 's', cameraId: 'camera', cameraName: 'Camera' })
+		await library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
 		const other = (await library.groups({ kind: 'flat' }, 0, 50)).items.find(({ groupId }) => groupId !== flat.groupId)!
 
 		const validation = await library.validate({ groupId: other.groupId, correction })
@@ -823,15 +799,13 @@ describe('flats', () => {
 	})
 
 	test('a saturated flat is left out and the master says so', async () => {
-		const { library, plans, base } = open(local)
-		const { flat, correction } = await prepared(library, plans, base, 1000)
+		const { library, base } = open(local)
+		const { flat, correction } = await prepared(library, base, 1000)
 		const path = await writeFrame(join(directory('flats'), 'hot.fit'), () => 65000, flatKeywords)
-		await library.registerFlat({ path, sessionId: 's', cameraId: 'camera', cameraName: 'Camera' })
+		await library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
 
-		const { jobId, masterId } = await library.requestMaster({ groupId: flat.groupId, correction, acknowledged: true })
-		await settled(library, jobId!)
-
-		const { diagnostics } = await library.master(masterId, 1)
+		const masterId = await built(library, { groupId: flat.groupId, correction, acknowledged: true })
+		const { diagnostics } = await library.master(masterId)
 		expect(diagnostics.integratedFrames).toBe(4)
 		expect(diagnostics.excludedFrames?.[0].reason).toContain('saturation')
 	})
@@ -881,39 +855,41 @@ describe('integration on files', () => {
 })
 
 describe('resolve preview', () => {
-	test('explains matches from metadata alone', async () => {
-		const { library, plans, base } = open(local)
-		await plan(plans, base, 3)
+	test('lists the masters that match from metadata alone, newest first', async () => {
+		const { library, base } = open(local)
+		await plan(library, base, 3)
 		const [group] = (await library.groups({}, 0, 50)).items
-		const { jobId } = await library.requestMaster({ groupId: group.groupId })
-		await settled(library, jobId!)
+		const first = await built(library, { groupId: group.groupId })
+		const second = await built(library, { groupId: group.groupId })
 
-		const exact = await library.resolvePreview({ cameraId: 'camera', width: WIDTH, height: HEIGHT, channels: 1, binX: 1, binY: 1, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 60, temperature: -10 })
-		expect(exact.candidates[0].verdict).toBe('compatible')
-		expect(exact.missingKinds).toEqual(['bias', 'flat'])
+		const exact = await library.resolvePreview({ width: WIDTH, height: HEIGHT, channels: 1, binX: 1, binY: 1, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 60, temperature: -10 })
+		expect(exact.candidates.map(({ masterId }) => masterId)).toEqual([second, first])
 
-		const other = await library.resolvePreview({ cameraId: 'camera', width: WIDTH, height: HEIGHT, channels: 1, binX: 1, binY: 1, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 59, temperature: -10 })
-		expect(other.candidates[0].verdict).toBe('incompatible')
+		const unknown = await library.resolvePreview({ width: WIDTH, height: HEIGHT, channels: 1 })
+		expect(unknown.candidates).toHaveLength(2)
+
+		const other = await library.resolvePreview({ width: WIDTH, height: HEIGHT, channels: 1, binX: 1, binY: 1, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 59, temperature: -10 })
+		expect(other.candidates).toEqual([])
 	})
 })
 
 describe('pins', () => {
-	test('a pinned revision resolves only with its content, and a lease keeps it from deletion', async () => {
+	test('a chosen master resolves only with its content, and a lease keeps it from deletion', async () => {
 		const { library, masterId } = await published()
-		const master = await library.master(masterId, 1)
-		const pin = { masterId, revision: 1, digest: master.contentDigest }
+		const master = await library.master(masterId)
+		const pin = { masterId, digest: master.contentDigest }
 		expect((await library.pinnedMaster(pin))?.path).toBe(master.path)
 		expect(await library.pinnedMaster({ ...pin, digest: '0'.repeat(64) })).toBeUndefined()
 
 		const release = library.lease([pin])
 		const other = library.lease([pin])
-		await expect(library.deleteMaster(masterId, 1)).rejects.toThrow('Image Stacking')
+		await expect(library.deleteMaster(masterId)).rejects.toThrow('Image Stacking')
 		release()
 		release()
-		await expect(library.deleteMaster(masterId, 1)).rejects.toThrow('Image Stacking')
+		await expect(library.deleteMaster(masterId)).rejects.toThrow('Image Stacking')
 		other()
 
-		await library.deleteMaster(masterId, 1)
+		await library.deleteMaster(masterId)
 		expect(await library.pinnedMaster(pin)).toBeUndefined()
 	})
 })

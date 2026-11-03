@@ -14,7 +14,8 @@ export interface ModalProps {
 }
 
 // Native modal <dialog>: the browser handles the focus trap, Esc and focus restore.
-// The dialog fills the viewport and scrolls, so the panel inside it can grow freely.
+// The dialog fills the viewport and scrolls, so the panel inside it can grow freely. It wraps its text whatever the
+// element it is declared in, such as a table cell that does not wrap.
 export function Modal({ open, onClose, title, className, fit = false, children }: ModalProps) {
 	const dialogRef = useRef<HTMLDialogElement>(null)
 	// A click only closes when it both starts and ends on the backdrop.
@@ -43,7 +44,7 @@ export function Modal({ open, onClose, title, className, fit = false, children }
 				pressedOnBackdrop.current = e.target === e.currentTarget
 			}}
 			onClick={(e) => pressedOnBackdrop.current && e.target === e.currentTarget && onClose()}
-			className="fixed inset-0 m-0 box-border size-full max-h-none max-w-none overflow-y-auto overscroll-contain border-0 bg-[rgb(10_10_9/0.72)] p-6 font-mono text-ink-100 opacity-100 backdrop-blur-xs transition-opacity duration-150 backdrop:bg-transparent open:flex max-sm:items-end max-sm:p-2 starting:open:opacity-0 motion-reduce:transition-none"
+			className="fixed inset-0 m-0 box-border size-full max-h-none max-w-none overflow-y-auto overscroll-contain border-0 bg-[rgb(10_10_9/0.72)] p-6 font-mono whitespace-normal text-ink-100 opacity-100 backdrop-blur-xs transition-opacity duration-150 backdrop:bg-transparent open:flex max-sm:items-end max-sm:p-2 starting:open:opacity-0 motion-reduce:transition-none"
 		>
 			<section className={cn('relative m-auto box-border flex w-full flex-col rounded-xl border border-line-100 bg-base-200 shadow-[0_24px_64px_rgb(0_0_0/0.55)] transition-transform duration-150 max-sm:mb-0 starting:translate-y-2 starting:scale-98 motion-reduce:transition-none', fit && 'max-h-full', className)}>
 				<header className="flex items-start gap-4 px-6 pt-6">

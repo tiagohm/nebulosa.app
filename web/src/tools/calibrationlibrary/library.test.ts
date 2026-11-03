@@ -1,13 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import type { CalibrationGroupSummary, CalibrationMetadata } from 'api'
-import { bytesText, cameraFilterLabels, coverage, exposureText, groupTitle, jobFraction, overrideIsText, temperatureText } from './library'
+import { bytesText, cameraText, coverage, exposureText, groupTitle, jobFraction, masterName, masterWarnings, overrideIsText, temperatureText } from './library'
 
 const unknown = { evidence: 'unknown' } as const
 const verified = <T>(value: T) => ({ value, evidence: 'verified' }) as const
 
 function metadata(patch: Partial<CalibrationMetadata> = {}): CalibrationMetadata {
 	return {
-		cameraId: verified('camera'),
 		cameraName: 'Camera',
 		exposure: verified(180000000),
 		setTemperature: verified(-10),
@@ -64,7 +63,7 @@ describe('text', () => {
 
 describe('coverage', () => {
 	test('shows what exists for each operating point, and an unavailable master does not count', () => {
-		const master = { masterId: 'm', revision: 1, kind: 'dark', calibrationState: 'rawBiasIncluded', units: 'DN', metadata: metadata(), frames: 1, method: 'mean', preferred: false, createdAt: 1, status: 'ready', groupId: 'g', dependencies: [] } as const
+		const master = { masterId: 1, kind: 'dark', calibrationState: 'rawBiasIncluded', units: 'DN', metadata: metadata(), frames: 1, method: 'mean', createdAt: 1, status: 'ready', groupId: 'g', dependencies: [], contentDigest: 'd' } as const
 		const rows = coverage([group('dark', { masters: [master] }), group('dark', { masters: [{ ...master, status: 'unavailable' }] }), group('bias'), group('flat', { metadata: metadata({ gain: verified(0) }) })])
 
 		expect(rows).toHaveLength(2)
@@ -74,19 +73,25 @@ describe('coverage', () => {
 	})
 })
 
-describe('camera filter', () => {
-	test('shows names, tells equal names apart, and falls back to the id', () => {
-		const labels = cameraFilterLabels([
-			{ id: 'abcdef123', name: 'ASI294' },
-			{ id: 'fedcba321', name: 'ASI294' },
-			{ id: 'other', name: 'Simulator' },
-			{ id: 'nameless', name: null },
-		])
+describe('master warnings', () => {
+	const diagnostics = { requestedFrames: 3, integratedFrames: 3, method: 'sigmaClip', lowSampleCount: false, rejectedLow: 0, rejectedHigh: 0, nonFinite: 0, clipLimited: 0, rejectedPerFrame: [], planes: [] } as const
 
-		expect(labels.get('abcdef123')).toBe('ASI294 · abcdef')
-		expect(labels.get('fedcba321')).toBe('ASI294 · fedcba')
-		expect(labels.get('other')).toBe('Simulator')
-		expect(labels.get('nameless')).toBe('nameless')
+	test('say what a master was published with, and why it cannot be used', () => {
+		expect(masterWarnings({ status: 'ready', diagnostics, acknowledged: [] })).toEqual([])
+		expect(masterWarnings({ status: 'warning', diagnostics: { ...diagnostics, lowSampleCount: true }, acknowledged: [{ field: 'gain', code: 'unknownMetadata', severity: 'review', message: 'Gain is unknown' }] })).toEqual([
+			'Only 3 frames were integrated, fewer than recommended, so its noise and rejection are less reliable.',
+			'Accepted when built: Gain is unknown.',
+		])
+		expect(masterWarnings({ status: 'unavailable', diagnostics, acknowledged: [] })).toEqual(['Its file is missing, or is no longer the one published.'])
+		expect(masterWarnings({ status: 'stale', diagnostics, acknowledged: [] })).toEqual(['A master it was corrected with is unavailable.'])
+	})
+})
+
+describe('names', () => {
+	test('a camera is named by its headers, and a master by its id and date', () => {
+		expect(cameraText(metadata())).toBe('Camera')
+		expect(cameraText(metadata({ cameraName: undefined }))).toBe('Unknown camera')
+		expect(masterName({ masterId: 12, createdAt: Date.UTC(2026, 10, 3, 21, 4) })).toStartWith('#12 · ')
 	})
 })
 

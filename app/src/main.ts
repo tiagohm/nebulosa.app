@@ -38,9 +38,8 @@ identifyJplClient(version)
 // The first request already reads the same Earth orientation data as every later one.
 await startEarthOrientation()
 
-// No session ever works on a Dark Library plan a previous run left behind, and masters queued before the server stopped
-// resume without anyone opening the tool.
-await startStores()
+// What a crash left of the products of the Calibration Library and Image Stacking is finished without anyone opening them.
+startStores()
 
 // HTTP server listening on APP_HOST (default localhost) and APP_PORT (default 7000).
 const server = Bun.serve({

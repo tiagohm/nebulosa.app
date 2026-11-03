@@ -1,4 +1,4 @@
-import { mkdir, stat } from 'fs/promises'
+import { mkdir, readdir, stat } from 'fs/promises'
 import { join } from 'path'
 import { TIMEZONE } from 'nebulosa/src/astronomy/time/temporal'
 import type { CameraCommander } from 'nebulosa/src/devices/commanders/camera'
@@ -14,6 +14,7 @@ import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { medianOf } from 'nebulosa/src/math/numerical/statistics'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
+import type { DarkFrameRegistration } from './calibrationlibrary'
 import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureSnoop, DEFAULT_CAPTURES_DIR, exposureProgressListener, frameName, sanitizeFileName, snoopedDevices } from './captures'
@@ -32,7 +33,7 @@ import {
 	type DarkTemperatureTrace,
 	startTemperatureTrace,
 } from './darklibrarywizard.analysis'
-import { type DarkCapturePlan, type DarkFrameRecord, type DarkFrameVerdict, type DarkGroup, type DarkGroupProgress, type DarkPlanCapture, type DarkPlanGroup, type DarkPlanStore, type DarkProtection, type DarkThermalPolicy, REJECTED_DIRECTORY, STAGING_DIRECTORY } from './darklibrarywizard.store'
+import { type DarkCapturePlan, type DarkFrameRecord, type DarkFrameVerdict, type DarkGroup, type DarkGroupProgress, type DarkPlanCapture, type DarkPlanGroup, type DarkProtection, type DarkThermalPolicy, REJECTED_DIRECTORY, STAGING_DIRECTORY } from './darklibrarywizard.plan'
 import type { DeviceRegistry } from './devices'
 import { publishFrame } from './flatwizard'
 import { errorResponse } from './http'
@@ -40,12 +41,13 @@ import type { ImageStore } from './images'
 import type { OperationDevice, OperationProgressReporter, OperationRegistry } from './operations'
 
 // Dark Library Wizard service: one server-owned session per camera that acquires the DARK frames of a capture plan, group
-// after group, until each group has its accepted frames. A plan is immutable and durable (darklibrarywizard.store.ts), the
-// record the Calibration Library indexes; it is never listed, completed, or reused, and every start makes a new one. A
-// session is what works on it, one `camera.darkLibraryWizard` operation of the process-wide registry holding the camera
-// and the wheel, panel, and cover its protection selected from start to end, including while it is paused or waits for
-// the operator. It only acquires: a plan may be for dark-flats and may ask for masters, but masters, reuse, and browsing are
-// the Calibration Library's, which hears of the end of a plan and can fail without touching it.
+// after group, until each group has its accepted frames. A plan is immutable and lives in the memory of its session
+// (darklibrarywizard.plan.ts); it is never listed, completed, or reused, and every start makes a new one. A session is what
+// works on it, one `camera.darkLibraryWizard` operation of the process-wide registry holding the camera and the wheel,
+// panel, and cover its protection selected from start to end, including while it is paused or waits for the operator. It
+// only acquires: a plan may be for dark-flats and may ask for masters, but masters, reuse, and browsing are the Calibration
+// Library's, which receives every accepted frame as it is published and the plan once its session ended, and can fail
+// without touching it. Nothing is kept to resume: a session the server did not finish is acquired again.
 //
 // Protection is prepared in a safe order: the panel light off first, so a cover never moves with it on, then the wheel
 // at the dark slot, then the cover closed, each confirmed by the state the device reports, never by the command. What
@@ -64,7 +66,7 @@ import type { OperationDevice, OperationProgressReporter, OperationRegistry } fr
 // directory of its group and never counts. A suspicion of light never rejects a frame, because only the operator can say
 // whether the protection failed: on the first frame of a group, and on two suspicious frames in a row, the session waits for
 // a decision. Continuing records the frame as accepted with warnings; stopping quarantines it. An accepted frame is
-// recorded, published without ever replacing a file, and only then committed, so it counts once. Raw pixels are never modified.
+// published without ever replacing a file, and only then counts. Raw pixels are never modified.
 //
 // Pausing takes effect between frames and keeps every device held, since releasing them would let the protection be
 // undone unnoticed. Stopping cancels the operation at once: the exposure in flight is lost and published files stay.
@@ -138,7 +140,6 @@ export type DarkLibraryWizardErrorCode =
 	| 'staleStep'
 	| 'notPaused'
 	| 'notRunning'
-	| 'manifestUnavailable'
 	| 'publicationFailed'
 	| 'verificationFailed'
 
@@ -422,8 +423,6 @@ function failedWith(result: OperationResult<unknown> & { readonly ok: false }, m
 export class DarkLibraryWizardSessions implements Disposable {
 	// Latest session of each camera, and the session each start token started.
 	readonly #sessions: CameraSessionRegistry<DarkLibraryWizardSessionSummary, Session>
-	// Starts still being prepared, by token, so a request repeated meanwhile answers the same start.
-	readonly #starting = new Map<string, Promise<Response>>()
 	// Thermometer activity of each camera.
 	readonly #temperatures = new Map<Thermometer, TemperatureActivity>()
 
@@ -441,8 +440,9 @@ export class DarkLibraryWizardSessions implements Disposable {
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, capturer takes the frames (the one of the capture service), cameras, wheels, panels, and covers drive the
 	// devices (the commanders of their commands), images receives the previews, frames records them and the published
-	// frames, analyzer measures the frames in DN, store keeps the plans, and listener receives every session change
-	// synchronously. capturesDir is the default output directory.
+	// frames, analyzer measures the frames in DN, and listener receives every session change synchronously. capturesDir is
+	// the default output directory, framePublished receives every accepted frame once it was published, and sessionEnded the
+	// plan of an ended session that asked for masters.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -455,10 +455,10 @@ export class DarkLibraryWizardSessions implements Disposable {
 		readonly images: ImageStore,
 		readonly frames: CaptureFrameRegistry,
 		readonly analyzer: Pick<DarkLibraryWizardAnalyzer, 'measure'>,
-		readonly store: DarkPlanStore,
 		readonly listener: DarkLibraryWizardListener,
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
-		readonly planEnded: (planId: string) => void = () => undefined,
+		readonly framePublished: (frame: DarkFrameRegistration) => void = () => undefined,
+		readonly sessionEnded: (plan: DarkCapturePlan) => void = () => undefined,
 	) {
 		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'darkLibraryWizard:updated', session }))
 		devices.thermometers.addHandler(this.#thermometers)
@@ -481,24 +481,15 @@ export class DarkLibraryWizardSessions implements Disposable {
 	}
 
 	// Starts a session on a new plan, replacing the ended session of the camera. Responds 202 with
-	// DarkLibraryWizardStartResponse once accepted, and a repeated token answers its session even while the first request
-	// is still being prepared; progress and outcome arrive as darkLibraryWizard:updated and operation:updated events.
-	// Nothing commands a device before the plan is durable.
-	start(connectionId: string, deviceId: string, request: DarkLibraryWizardRequest): Promise<Response> {
-		const { token } = request
-		const repeated = this.#sessions.repeated(token)
-		if (repeated) return Promise.resolve(startResponse(repeated))
-
-		const starting = this.#starting.get(token)
-		if (starting) return starting.then((response) => response.clone())
-
-		const started = this.#start(connectionId, deviceId, request).finally(() => this.#starting.delete(token))
-		this.#starting.set(token, started)
-		return started.then((response) => response.clone())
+	// DarkLibraryWizardStartResponse once accepted, and a repeated token answers its session; progress and outcome arrive
+	// as darkLibraryWizard:updated and operation:updated events.
+	start(connectionId: string, deviceId: string, request: DarkLibraryWizardRequest): Response {
+		const repeated = this.#sessions.repeated(request.token)
+		return repeated ? startResponse(repeated) : this.#start(connectionId, deviceId, request)
 	}
 
 	// Checks everything a start depends on and starts the session; see start.
-	async #start(connectionId: string, deviceId: string, request: DarkLibraryWizardRequest): Promise<Response> {
+	#start(connectionId: string, deviceId: string, request: DarkLibraryWizardRequest): Response {
 		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
 		if (camera instanceof Response) return camera
 		const wheel = request.wheel && connectedDevice(this, request.wheel.connectionId, 'wheel', request.wheel.deviceId, 'Filter wheel')
@@ -524,19 +515,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 		if (!free()) return busy()
 
 		const session = this.#session(plan, connectionId, deviceId, equipment, request.snoop, devices)
-
-		try {
-			await this.store.create(plan, session.summary.sessionId)
-		} catch (error) {
-			return errorResponse(`Unable to record the plan: ${Error.isError(error) ? error.message : String(error)}`, 503, 'manifestUnavailable')
-		}
-
-		// The plan was written while nothing held the devices: the arbiter has the last word.
-		if (!free()) {
-			await this.#recordQuietly(plan, { type: 'status', at: Date.now(), status: 'stopped', reason: 'The devices were taken before the session started' })
-			return busy()
-		}
-
 		const held: OperationDevice[] = [{ connectionId, deviceId }, ...[equipment.wheel, equipment.panel, equipment.cover].filter((device) => device !== undefined)]
 
 		const record = this.operations.run('camera.darkLibraryWizard', held, request.token, (report) => {
@@ -762,9 +740,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 		const { signal } = context
 		if (signal.aborted) return failedOperationResult(abortReason(signal))
 
-		const journaled = await this.#record(session, { type: 'status', at: Date.now(), status: 'paused', sessionId: session.summary.sessionId })
-		if (!journaled.ok) return journaled
-
 		const { promise, resolve } = Promise.withResolvers<OperationResult<void>>()
 		const onAbort = () => resolve(failedOperationResult(abortReason(signal)))
 		signal.addEventListener('abort', onAbort, { once: true })
@@ -781,7 +756,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		}
 
 		session.stable = undefined
-		return await this.#record(session, { type: 'status', at: Date.now(), status: 'running', sessionId: session.summary.sessionId })
+		return successfulOperationResult(undefined)
 	}
 
 	// Returns what no longer stands of the verified protection, or undefined when everything does. Read synchronously, so
@@ -1046,19 +1021,15 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return { frames: session.accepted.get(index) ?? [], size: session.sizes.get(index), ...(reference && { shorter: { exposure: reference.candidate.exposure, levels: medianLevels(session.accepted.get(reference.position)!) } }) }
 	}
 
-	// Quarantines a frame that does not count. The file is kept, marked with a record; failing to do so ends the session.
+	// Quarantines a frame that does not count. The file is kept; failing to do so ends the session.
 	async #reject(session: Session, index: number, frame: ExaminedFrame): Promise<OperationResult<void>> {
 		const group = session.plan.groups[index]
 		const rejected = join(group.directory, REJECTED_DIRECTORY)
 		this.#update(session, { state: 'publishing' })
 
 		try {
-			const { size } = await stat(frame.staged)
 			await mkdir(rejected, { recursive: true })
-			const path = join(rejected, this.#fileName(session, frame))
-			await publishFrame(frame.staged, path)
-			const journaled = await this.#record(session, { type: 'rejected', frame: this.#frameRecord(session, index, frame, path, size, 'rejected') })
-			if (!journaled.ok) return journaled
+			await publishFrame(frame.staged, join(rejected, this.#fileName(session, frame)))
 		} catch (error) {
 			return this.#failWith(session, 'publicationFailed', failedOperationResult('commandFailed', `Unable to keep a rejected frame: ${Error.isError(error) ? error.message : String(error)}`))
 		}
@@ -1069,8 +1040,8 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return successfulOperationResult(undefined)
 	}
 
-	// Saves an accepted frame: recorded first, then published without replacing anything, then committed, so it counts only
-	// once the file and the record both exist. A failure leaves the frame uncounted.
+	// Saves an accepted frame: published without replacing anything, and only then counted and handed to the Calibration
+	// Library. A failure leaves the frame uncounted.
 	async #save(session: Session, index: number, frame: ExaminedFrame, acknowledged: boolean): Promise<OperationResult<void>> {
 		const group = session.plan.groups[index]
 		const { assessment, measurement, time, generation, staged } = frame
@@ -1080,22 +1051,19 @@ export class DarkLibraryWizardSessions implements Disposable {
 		const path = join(group.directory, name)
 		this.#update(session, { state: 'publishing' })
 
+		let record: DarkFrameRecord
+
 		try {
 			const { size } = await stat(staged)
-			const record = { ...this.#frameRecord(session, index, frame, path, size, verdict), staged, ...(acknowledged && { acknowledged }) }
-			const journaled = await this.#record(session, { type: 'publishing', frame: record })
-			if (!journaled.ok) return journaled
-
+			record = { ...this.#frameRecord(session, index, frame, path, size, verdict), ...(acknowledged && { acknowledged }) }
 			await publishFrame(staged, path)
-
-			const committed = await this.#record(session, { type: 'committed', frameId: record.frameId, at: Date.now() })
-			if (!committed.ok) return committed
 		} catch (error) {
 			return this.#failWith(session, 'publicationFailed', failedOperationResult('commandFailed', `Unable to save ${name}: ${Error.isError(error) ? error.message : String(error)}`))
 		}
 
 		const { sessionId, camera: device, cameraName } = session.summary
 		this.frames.published({ sessionId, generation, ...device, cameraName, time, frameType: 'DARK', path }, 'darkLibraryWizard')
+		this.framePublished({ plan: session.plan, groupId: group.groupId, frame: record })
 
 		const accepted = session.accepted.get(index) ?? []
 		accepted.push(measurement.planes)
@@ -1113,7 +1081,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return `${frameName(FILENAME_TEMPLATE, { camera: cameraName, type: 'DARK', time, generation: sequence, timezoneOffset: TIMEZONE })}.fit`
 	}
 
-	// Returns the durable record of a frame.
+	// Returns the record of a frame.
 	#frameRecord(session: Session, index: number, { sequence, time, measurement, assessment, trace }: ExaminedFrame, path: string, size: number, verdict: DarkFrameVerdict): DarkFrameRecord {
 		return { frameId: crypto.randomUUID(), groupId: session.plan.groups[index].groupId, sequence, path, size, time, verdict, planes: measurement.planes, header: measurement.header, ...assessment, ...temperatureRecord(trace) }
 	}
@@ -1135,26 +1103,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 		session.attempts.push(attempt)
 		if (session.attempts.length > MAXIMUM_ATTEMPTS) session.attempts.shift()
 		this.#update(session, { lastAttempt: attempt })
-	}
-
-	// Records a change of the plan. A record that cannot be written ends the session: it would otherwise run
-	// on with frames that cannot be recovered.
-	async #record(session: Session, record: Parameters<DarkPlanStore['append']>[1]): Promise<OperationResult<void>> {
-		try {
-			await this.store.append(session.plan.planId, record)
-			return successfulOperationResult(undefined)
-		} catch (error) {
-			return this.#failWith(session, 'manifestUnavailable', failedOperationResult('commandFailed', `Unable to record the plan: ${Error.isError(error) ? error.message : String(error)}`))
-		}
-	}
-
-	// Records a change for an outcome nothing depends on anymore, reporting a failure only in the log.
-	async #recordQuietly(plan: DarkCapturePlan, record: Parameters<DarkPlanStore['append']>[1]) {
-		try {
-			await this.store.append(plan.planId, record)
-		} catch (error) {
-			console.error('unable to record the dark plan', plan.planId, error)
-		}
 	}
 
 	// Decodes a frame from its staging file into the image store and records it as the latest frame of its camera (origin
@@ -1204,8 +1152,8 @@ export class DarkLibraryWizardSessions implements Disposable {
 		}
 	}
 
-	// Records the end of a session: quarantines what its staging directories hold, restores what it changed in a safe
-	// order, then publishes its outcome. The panel stays off whatever it was, the wheel returns while the path is still
+	// Ends a session: quarantines what its staging directories hold, restores what it changed in a safe order, publishes
+	// its outcome, and hands its plan to the Calibration Library when it asked for masters. The panel stays off whatever it was, the wheel returns while the path is still
 	// closed, and the cover opens last and only with the panel known to be off. The cooler is never touched. Every step
 	// runs whatever the others did; what could not be done is reported in cleanupWarnings.
 	async #ended(session: Session, { panel, wheel, cover }: SessionDevices, result: OperationResult<void>) {
@@ -1213,7 +1161,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		this.#update(session, { state: 'restoring', exposure: undefined, pending: undefined })
 
 		try {
-			await this.store.quarantineStaging(session.plan.planId)
+			await this.#quarantine(session)
 		} catch (error) {
 			warnings.push(`Unexamined frames could not be quarantined: ${Error.isError(error) ? error.message : String(error)}`)
 		}
@@ -1244,11 +1192,6 @@ export class DarkLibraryWizardSessions implements Disposable {
 		}
 
 		const groups = session.summary.groups.map((group) => (group.state === 'acquiring' ? { ...group, state: 'cancelled' as const } : group))
-		const at = Date.now()
-		const { sessionId } = session.summary
-
-		if (warnings.length > 0) await this.#recordQuietly(session.plan, { type: 'cleanup', at, warnings })
-		await this.#recordQuietly(session.plan, { type: 'status', at, status: result.ok ? 'completed' : result.reason === 'aborted' ? 'stopped' : 'failed', sessionId, ...(!result.ok && result.reason !== 'aborted' && { reason: result.error ?? result.reason }) })
 
 		if (warnings.length > 0) this.#update(session, { cleanupWarnings: warnings })
 
@@ -1257,7 +1200,21 @@ export class DarkLibraryWizardSessions implements Disposable {
 		else this.#update(session, { state: 'failed', groups, pending: undefined, pauseRequested: false, reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt: Date.now() })
 
 		session.ended.resolve()
-		this.planEnded(session.plan.planId)
+		if (session.plan.generateMasters) this.sessionEnded(session.plan)
+	}
+
+	// Moves whatever the staging directories of a session hold into their rejected directories: the session examined none
+	// of it, so it must neither count nor vanish.
+	async #quarantine({ plan }: Session) {
+		for (const group of plan.groups) {
+			const staging = join(group.directory, STAGING_DIRECTORY)
+			const files = await readdir(staging).catch(() => [] as string[])
+			if (files.length === 0) continue
+
+			const rejected = join(group.directory, REJECTED_DIRECTORY)
+			await mkdir(rejected, { recursive: true })
+			for (const file of files) await publishFrame(join(staging, file), join(rejected, `incomplete_${crypto.randomUUID()}.fit`))
+		}
 	}
 
 	// Remembers the stable code of a failure for clients, and returns the failure.

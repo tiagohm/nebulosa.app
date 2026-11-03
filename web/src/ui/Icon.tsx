@@ -67,6 +67,7 @@ export const ICONS = {
 	plus: 'M12 5v14M5 12h14',
 	duplicate: 'M9 9h11v11H9zM15 9V4H4v11h5',
 	trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
+	edit: 'M4 20v-4L15 5l4 4L8 20zM13 7l4 4',
 } as const satisfies Readonly<Record<string, string>>
 
 // Name of an icon in ICONS.

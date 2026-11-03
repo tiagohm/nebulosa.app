@@ -51,7 +51,7 @@ interface ViewField {
 type FramingView = Pick<SkyFramingSettings, 'activePresetId' | 'visible' | 'source' | 'sensorSource'>
 
 // Field of the view kept as an optional field of ProfileSettings.
-function setting(key: 'lastImageDirectory' | 'lastSaveDirectory' | 'framesHidden' | 'imageProcessing' | 'closeApproaches' | 'astroWeather'): ViewField {
+function setting(key: 'lastImageDirectory' | 'lastSaveDirectory' | 'lastStackingDirectory' | 'lastCalibrationDirectory' | 'framesHidden' | 'imageProcessing' | 'closeApproaches' | 'astroWeather'): ViewField {
 	return {
 		get: (settings) => settings[key],
 		set: (settings, value) => Object.assign(settings, { [key]: value }),
@@ -66,6 +66,8 @@ const VIEW_FIELDS = {
 	},
 	lastImageDirectory: setting('lastImageDirectory'),
 	lastSaveDirectory: setting('lastSaveDirectory'),
+	lastStackingDirectory: setting('lastStackingDirectory'),
+	lastCalibrationDirectory: setting('lastCalibrationDirectory'),
 	framesHidden: setting('framesHidden'),
 	imageProcessing: setting('imageProcessing'),
 	closeApproaches: setting('closeApproaches'),
@@ -103,6 +105,8 @@ export const VIEW_STORAGE: Readonly<Record<ViewFieldKey | ViewEntryName | 'activ
 	panels: ['local'],
 	lastImageDirectory: ['local'],
 	lastSaveDirectory: ['local'],
+	lastStackingDirectory: ['local'],
+	lastCalibrationDirectory: ['local'],
 	framesHidden: ['local'],
 	imageProcessing: ['local'],
 	closeApproaches: ['local'],

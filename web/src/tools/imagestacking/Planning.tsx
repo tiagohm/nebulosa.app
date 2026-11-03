@@ -1,4 +1,4 @@
-import type { MasterReference, StackingCohort, StackingFilterGroup, StackingFrameSummary, StackingJobSummary, StackingProjectDetail, StackingSettings, StackingValidation } from 'api'
+import type { StackingCalibration, StackingCohort, StackingFilterGroup, StackingFrameSummary, StackingJobSummary, StackingProjectDetail, StackingSettings, StackingValidation } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, Notice } from '../../equipment-control/parts'
@@ -9,13 +9,13 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import { bytesText } from '../calibrationlibrary/library'
 // oxfmt-ignore
-import { cohortText, LIGHT_MASTER_KINDS, LIGHT_MASTER_LABELS, type LightMaster, masterKey, masterText, metricText, registrationText, REJECTION_LABELS, selectionFields, selectionOf, SEVERITY_LABELS, SEVERITY_TONES, THRESHOLDS } from './format'
+import { cohortText, LIGHT_MASTER_KINDS, LIGHT_MASTER_LABELS, type LightMaster, masterText, metricText, registrationText, REJECTION_LABELS, selectionFields, selectionOf, SEVERITY_LABELS, SEVERITY_TONES, THRESHOLDS } from './format'
 import { cancelStackingAnalysis, imageStackingRuntime, jobEnded, startStackingAnalysis, updateStackingCohort, updateStackingSettings } from './projects'
 import { Cell, Row, Table } from './Table'
 
 // Calibration and quality of an Image Stacking project. Calibration lists its cohorts, the lights of one filter that share
-// their acquisition settings, where an operator declares their camera and pins compatible masters of the Calibration
-// Library or decides, with a reason, not to calibrate them. Quality starts the analysis that measures and registers every
+// their acquisition settings, where an operator chooses each master among those of the Calibration Library that match
+// them; a cohort with none chosen is not calibrated. Quality starts the analysis that measures and registers every
 // frame, edits the reference pins and thresholds, and shows what the server found; what blocks a stack comes from its
 // validation, never from this view.
 
@@ -28,51 +28,30 @@ export function CalibrationView({ projectId }: { readonly projectId: string }) {
 
 	return (
 		<>
-			<p className="m-0 text-xs text-ink-300">Frames are calibrated with the exact master revisions pinned here. Only revisions the Calibration Library finds compatible can be pinned, and a camera unknown to the headers must be declared for any to match.</p>
+			<p className="m-0 text-xs text-ink-300">Each list holds the masters of the Calibration Library that match the settings of these frames, newest first. A dark already holds the bias, so a bias is chosen only without one.</p>
 			{items.map((cohort) => (
-				<CohortCard key={`${cohort.cohortId}:${cohort.cameraId ?? ''}:${JSON.stringify(cohort.calibration ?? null)}`} projectId={projectId} cohort={cohort} />
+				<CohortCard key={cohort.cohortId} projectId={projectId} cohort={cohort} />
 			))}
 		</>
 	)
 }
 
-// Returns the master choices a cohort starts from: its pins, or what the library suggests.
-function initialChoices(cohort: StackingCohort) {
-	const pins: Partial<Record<LightMaster, MasterReference>> = cohort.calibration?.kind === 'masters' ? cohort.calibration : cohort.calibration ? {} : cohort.suggested
-	const choices: Partial<Record<LightMaster, string>> = {}
-	for (const kind of LIGHT_MASTER_KINDS) if (pins[kind]) choices[kind] = masterKey(pins[kind])
-	return choices
-}
-
-// Camera, masters, and decision of one cohort.
+// Masters of one cohort, each chosen from those that match it; a choice is saved as soon as it changes.
 function CohortCard({ projectId, cohort }: { readonly projectId: string; readonly cohort: StackingCohort }) {
 	const { pending, errors } = useSnapshot(imageStackingRuntime)
-	const [camera, setCamera] = useState(cohort.cameraId ?? '')
-	const [cameraReason, setCameraReason] = useState(cohort.cameraReason ?? '')
-	const [choices, setChoices] = useState(() => initialChoices(cohort))
-	const [reason, setReason] = useState(cohort.calibration?.kind === 'none' ? cohort.calibration.reason : '')
 	const key = `cohort:${cohort.cohortId}`
 	const busy = pending[key] === true
 	const { target } = cohort
-	const suggested = LIGHT_MASTER_KINDS.some((kind) => cohort.suggested[kind])
-	const chosen = LIGHT_MASTER_KINDS.some((kind) => choices[kind])
+	const calibration: StackingCalibration = cohort.calibration ?? {}
 
-	function update(patch: Parameters<typeof updateStackingCohort>[3]) {
-		void updateStackingCohort(imageStackingRuntime, projectId, cohort.cohortId, patch)
+	// Saves the choice with the master of a kind replaced, or removed for an empty option.
+	function choose(kind: LightMaster, option: string) {
+		const candidate = cohort.candidates.find((item) => item.kind === kind && String(item.masterId) === option)
+		const next: StackingCalibration = { ...calibration, [kind]: candidate && { masterId: candidate.masterId, digest: candidate.digest } }
+		void updateStackingCohort(imageStackingRuntime, projectId, cohort.cohortId, { calibration: next })
 	}
 
-	function pin() {
-		const calibration: { kind: 'masters' } & Partial<Record<LightMaster, MasterReference>> = { kind: 'masters' }
-
-		for (const kind of LIGHT_MASTER_KINDS) {
-			const candidate = cohort.candidates.find((item) => item.kind === kind && masterKey(item) === choices[kind])
-			if (candidate) calibration[kind] = { masterId: candidate.masterId, revision: candidate.revision, digest: candidate.digest }
-		}
-
-		update({ calibration })
-	}
-
-	const decided = cohort.calibration === undefined ? { tone: 'danger' as const, label: 'Undecided' } : cohort.calibration.kind === 'none' ? { tone: 'warning' as const, label: 'Not Calibrated' } : { tone: 'success' as const, label: 'Masters Pinned' }
+	const calibrated = (calibration.dark || calibration.bias) && calibration.flat ? { tone: 'success' as const, label: 'Calibrated' } : calibration.dark || calibration.bias || calibration.flat ? { tone: 'warning' as const, label: 'Partially Calibrated' } : { tone: 'muted' as const, label: 'Not Calibrated' }
 	const settings = [
 		`${target.width}×${target.height}×${target.channels}`,
 		target.cfa,
@@ -87,69 +66,31 @@ function CohortCard({ projectId, cohort }: { readonly projectId: string; readonl
 		<div className="flex flex-col gap-2 rounded-md border border-line-100 p-3">
 			<div className="flex flex-wrap items-center gap-2">
 				<span className="text-sm text-ink-100">{cohortText(cohort)}</span>
-				<StatusBadge tone={decided.tone} label={decided.label} />
+				<StatusBadge tone={calibrated.tone} label={calibrated.label} />
 			</div>
 			<p className="m-0 text-xs text-ink-300 tabular-nums">{[cohort.cameraName ?? 'Unknown camera', ...settings.filter((item) => item !== undefined)].join(' · ')}</p>
 			<div className="flex flex-wrap items-end gap-3">
-				<TextInput label="Camera ID" className="w-48" value={camera} onChange={(event) => setCamera(event.target.value)} />
-				<TextInput label="How it is known" className="w-64" value={cameraReason} onChange={(event) => setCameraReason(event.target.value)} />
-				<Button variant="secondary" disabled={!camera.trim() || !cameraReason || busy || (camera.trim() === cohort.cameraId && cameraReason === cohort.cameraReason)} onClick={() => update({ camera: { id: camera, reason: cameraReason } })}>
-					Declare Camera
-				</Button>
-				{cohort.cameraId !== undefined && (
-					<Button variant="secondary" disabled={busy} onClick={() => update({ camera: null })}>
-						Forget Camera
-					</Button>
-				)}
-			</div>
-			{cohort.candidates.length === 0 && (
-				<Notice>
-					{cohort.reviewCandidates > 0
-						? `${cohort.reviewCandidates} masters of the library match these frames only if what they do not know is settled. Declare the camera that took them.`
-						: 'No master of the library matches these frames. Build their masters in the Calibration Library, or decide they are not calibrated.'}
-				</Notice>
-			)}
-			{cohort.candidates.length > 0 && (
-				<>
-					<div className="flex flex-wrap items-end gap-3">
-						{LIGHT_MASTER_KINDS.map((kind) => (
-							<Select
-								key={kind}
-								label={LIGHT_MASTER_LABELS[kind]}
-								className="w-72"
-								options={['', ...cohort.candidates.filter((item) => item.kind === kind).map(masterKey)]}
-								value={choices[kind] ?? ''}
-								format={(option) => {
-									const candidate = cohort.candidates.find((item) => item.kind === kind && masterKey(item) === option)
-									return candidate ? masterText(candidate) : 'None'
-								}}
-								onChange={(value) => setChoices({ ...choices, [kind]: value || undefined })}
-							/>
-						))}
-					</div>
-					{choices.dark && choices.bias && <Notice>A dark already holds the bias pedestal, so the bias is not applied with it.</Notice>}
-					<Actions>
-						<Button disabled={!chosen || busy} onClick={pin}>
-							Pin Masters
-						</Button>
-						{suggested && (
-							<Button variant="secondary" disabled={busy} onClick={() => update({ calibration: { kind: 'masters', ...cohort.suggested } })}>
-								Use Suggested
-							</Button>
-						)}
-					</Actions>
-				</>
-			)}
-			<div className="flex flex-wrap items-end gap-3">
-				<TextInput label="Why not calibrate" className="w-80" value={reason} onChange={(event) => setReason(event.target.value)} />
-				<Button variant="secondary" disabled={!reason || busy} onClick={() => update({ calibration: { kind: 'none', reason } })}>
-					No Calibration
-				</Button>
-				{cohort.calibration !== undefined && (
-					<Button variant="secondary" disabled={busy} onClick={() => update({ calibration: null })}>
-						Decide Again
-					</Button>
-				)}
+				{LIGHT_MASTER_KINDS.map((kind) => {
+					const candidates = cohort.candidates.filter((item) => item.kind === kind)
+					const chosen = calibration[kind]
+					const disabled = busy || (kind === 'bias' && calibration.dark !== undefined)
+
+					return (
+						<Select
+							key={kind}
+							label={LIGHT_MASTER_LABELS[kind]}
+							className="w-72"
+							options={['', ...candidates.map(({ masterId }) => String(masterId))]}
+							value={chosen ? String(chosen.masterId) : ''}
+							disabled={disabled}
+							format={(option) => {
+								const candidate = candidates.find(({ masterId }) => String(masterId) === option)
+								return candidate ? masterText(candidate) : candidates.length === 0 ? 'None matches' : 'None'
+							}}
+							onChange={(option) => choose(kind, option)}
+						/>
+					)
+				})}
 			</div>
 			{errors[key] && <Notice error>{errors[key]}</Notice>}
 		</div>
@@ -186,7 +127,7 @@ export function QualityView({ projectId, group, onGroup, selected, onSelect }: {
 	const { project, validation, groups, jobs, pending, errors } = useSnapshot(imageStackingRuntime)
 	const job = latestAnalysis(jobs, projectId)
 	const running = job !== undefined && !jobEnded(job)
-	const filters = ((groups ?? []) as readonly StackingFilterGroup[]).filter((item) => item.key !== '')
+	const filters = (groups ?? []) as readonly StackingFilterGroup[]
 
 	return (
 		<>
@@ -200,7 +141,7 @@ export function QualityView({ projectId, group, onGroup, selected, onSelect }: {
 						</Button>
 					</>
 				) : (
-					<Button disabled={pending.analysis === true} onClick={() => void startStackingAnalysis(imageStackingRuntime, projectId)}>
+					<Button disabled={validation?.findings.some((e) => e.severity === 'blocker') || pending.analysis === true} onClick={() => void startStackingAnalysis(imageStackingRuntime, projectId)}>
 						Analyze
 					</Button>
 				)}
@@ -211,7 +152,7 @@ export function QualityView({ projectId, group, onGroup, selected, onSelect }: {
 			{project && <SettingsForm key={JSON.stringify(project.settings)} project={project} groups={filters} />}
 			{filters.length > 0 && group !== undefined && (
 				<>
-					<Select label="Filter" className="w-44" options={filters.map((item) => item.key)} value={group} format={(key) => filters.find((item) => item.key === key)?.name ?? key} onChange={onGroup} />
+					<Select label="Filter" className="w-44" options={filters.map((item) => item.key)} value={group} onChange={onGroup} />
 					<QualityTable projectId={projectId} group={group} selected={selected} onSelect={onSelect} />
 				</>
 			)}
@@ -233,7 +174,7 @@ function SettingsForm({ project, groups }: { readonly project: StackingProjectDe
 	return (
 		<div className="flex flex-col gap-2">
 			<div className="flex flex-wrap items-end gap-3">
-				<Select label="Project Reference" className="w-44" options={['', ...groups.map((item) => item.key)]} value={referenceGroup} format={(key) => (key === '' ? 'Automatic' : (groups.find((item) => item.key === key)?.name ?? key))} onChange={setReferenceGroup} />
+				<Select label="Project Reference" className="w-44" options={['', ...groups.map((item) => item.key)]} value={referenceGroup} format={(key) => (key === '' ? 'Automatic' : key)} onChange={setReferenceGroup} />
 				{THRESHOLDS.map(({ key, label, unit }) => (
 					<TextInput key={key} label={unit ? `${label} (${unit})` : label} className="w-36" value={fields[key] ?? ''} onChange={(event) => setFields({ ...fields, [key]: event.target.value })} />
 				))}

@@ -56,6 +56,8 @@ test('the request takes the camera settings without the exposure, the slot alway
 	expect(manual.filters[0].brightness).toBeUndefined()
 	expect(manual).toMatchObject({ directory: '/flats', effectiveClip: 60000, snoop: { mount: 'm' } })
 	expect('wheel' in manual || 'panel' in manual || 'cover' in manual).toBeFalse()
+	expect('generateMasters' in manual).toBeFalse()
+	expect(flatWizardRequest({ ...settings, generateMasters: true }, exposure, {}, {}).generateMasters).toBeTrue()
 
 	const cover = { connectionId: 'c', deviceId: 'cv' }
 	const assigned = flatWizardRequest(settings, exposure, { wheel, panel, cover }, {})

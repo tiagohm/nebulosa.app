@@ -1,6 +1,6 @@
 import { constants } from 'fs'
-import { copyFile, mkdir, rename, rm, rmdir, stat } from 'fs/promises'
-import { join, relative } from 'path'
+import { copyFile, mkdir, rename, rm, stat } from 'fs/promises'
+import { basename, join, relative } from 'path'
 import { fileDigest, type IntegrationProgress, type IntegrationResult, IntegrationError, masterHeader, MasterIntegrator, type MasterWorkerRequest } from './calibrationlibrary.analysis'
 import {
 	type CalibrationKind,
@@ -14,20 +14,17 @@ import {
 	flatCorrectionMismatch,
 	groupReadiness,
 	type GroupReadiness,
-	matchMaster,
+	matchesTarget,
 	type MasterReference,
-	type MatchVerdict,
 	type OverridableField,
 	OVERRIDABLE_FIELDS,
 	RECOMMENDED_FRAMES,
-	recipeFingerprint,
 	stableId,
 } from './calibrationlibrary.compatibility'
 import { ACTIVE_JOB_STATES, type CalibrationJob, CalibrationJobs, type CalibrationJobSummary, type Integrator, jobSummary, type MasterBuild, NO_PROGRESS } from './calibrationlibrary.jobs'
-import { darkPlanSource, type FileInspection, inspectFile, makeSource, regrouped, type ScanCandidate, scanDirectory } from './calibrationlibrary.sources'
+import { darkPlanSource, type FileInspection, fileIdentity, inspectFile, makeSource, regrouped, type ScanCandidate, scanDirectory } from './calibrationlibrary.sources'
 import {
 	type CalibrationLibraryStore,
-	type CalibrationCamera,
 	type CalibrationMaster,
 	type CalibrationSource,
 	type CalibrationSourceSummary,
@@ -43,17 +40,18 @@ import {
 	sourceSummary,
 	type StoredGroup,
 } from './calibrationlibrary.store'
-import type { DarkCapturePlan, DarkPlanStore } from './darklibrarywizard.store'
+import type { DarkCapturePlan, DarkFrameRecord } from './darklibrarywizard.plan'
 import { errorResponse } from './http'
 import { errorCode } from './util'
 
 // Calibration Library: the single owner of what calibration frames exist, whether they can be combined, and which masters
-// were made of them. It needs no camera and claims no device: frames come from the Dark Library plans through their store,
-// from what the Flat Wizard publishes, and from directories an operator imports, always by reference and never modified.
-// Masters are immutable revisions built by jobs that live in memory: they survive the tab, never the server. What it indexes
-// and publishes is kept by CalibrationLibraryStore in the operational database. A wizard may ask for a master, through
-// the same path as a person. Only an operator deletes: a frame or a group with their files, or one revision of a master.
-// Applying a master to a light is outside this service: it only explains which masters would match.
+// were made of them. It needs no camera and claims no device: frames come from what the Dark Library Wizard and the Flat
+// Wizard publish, and from directories an operator imports, always by reference and never modified.
+// Every build publishes a new immutable master with an incremental id, however many there already are of the same frames;
+// jobs live in memory: they survive the tab, never the server. What it indexes and publishes is kept by
+// CalibrationLibraryStore in the operational database. A wizard may ask for a master, through the same path as a person.
+// Only an operator deletes: a frame or a group with their files, or one master. Applying a master to a light is outside
+// this service: it only lists which masters match.
 
 // Rows of a page unless a request asks otherwise.
 const DEFAULT_PAGE_SIZE = 50
@@ -110,19 +108,18 @@ export interface CalibrationLibrarySnapshot {
 	// Masters by state, and by role.
 	readonly masters: StateCounts
 	readonly mastersByKind: StateCounts
-	// Cameras with frames, by name.
-	readonly cameras: readonly CalibrationCamera[]
+	// Names of the cameras of the frames, sorted.
+	readonly cameras: readonly string[]
 	// Jobs still working.
 	readonly activeJobs: readonly CalibrationJobSummary[]
 	// Latest jobs of the wizards, so a reloaded tab still shows how their masters ended.
 	readonly recentJobs: readonly CalibrationJobSummary[]
 }
 
-// What lists and events show of a revision.
+// What lists and events show of a master.
 export interface CalibrationMasterSummary {
-	// Master and revision.
-	readonly masterId: string
-	readonly revision: number
+	// Id of the master, incremental and never reused.
+	readonly masterId: number
 	// Role.
 	readonly kind: CalibrationKind
 	// What its pixels contain, and their units.
@@ -134,8 +131,6 @@ export interface CalibrationMasterSummary {
 	readonly frames: number
 	// How they were combined.
 	readonly method: CalibrationRecipe['method']
-	// Whether it is the preferred revision.
-	readonly preferred: boolean
 	// When it was published.
 	readonly createdAt: number
 	// State.
@@ -144,14 +139,14 @@ export interface CalibrationMasterSummary {
 	readonly groupId: string
 	// Masters it depends on.
 	readonly dependencies: readonly MasterReference[]
+	// SHA-256 of its FITS file, which a reference holds.
+	readonly contentDigest: string
 }
 
-// A revision with what is only for one who asks: its path, for opening it in Images.
+// A master with what is only for one who asks: its path, for opening it in Images.
 export interface CalibrationMasterDetail extends CalibrationMaster {
 	// Absolute path of its FITS file.
 	readonly path: string
-	// Whether it is the preferred revision.
-	readonly preferred: boolean
 }
 
 // Event of the library.
@@ -160,12 +155,12 @@ export type CalibrationLibraryEvent =
 	| { readonly type: 'calibrationLibrary:changed'; readonly revision: number; readonly summary: CalibrationLibrarySnapshot }
 	// A job changed.
 	| { readonly type: 'calibrationLibrary:jobUpdated'; readonly epoch: string; readonly revision: number; readonly job: CalibrationJobSummary }
-	// A revision was published.
+	// A master was published.
 	| { readonly type: 'calibrationLibrary:masterUpdated'; readonly epoch: string; readonly revision: number; readonly master: CalibrationMasterSummary }
 
 // Explained group of frames.
 export interface CalibrationGroupSummary {
-	// Id of the group, which is also the id of its master.
+	// Id of the group.
 	readonly groupId: string
 	// Role.
 	readonly kind: CalibrationKind
@@ -184,7 +179,7 @@ export interface CalibrationGroupSummary {
 	readonly readiness: GroupReadiness
 	// Why.
 	readonly findings: readonly CompatibilityFinding[]
-	// Revisions of its master, newest first.
+	// Latest masters of its frames, newest first.
 	readonly masters: readonly CalibrationMasterSummary[]
 }
 
@@ -202,8 +197,8 @@ export interface MasterRequest {
 	readonly sourceIds?: readonly string[]
 	// Combination, over the defaults.
 	readonly recipe?: Partial<CalibrationRecipe>
-	// Master that corrects a flat.
-	readonly correction?: { readonly masterId: string; readonly revision: number }
+	// Id of the master that corrects a flat.
+	readonly correction?: number
 	// Whether the operator accepts everything that asks for a review, including an incomplete group.
 	readonly acknowledged?: boolean
 	// Token of the request, so a repeated one meets the same job.
@@ -226,26 +221,20 @@ export interface RecipeValidation {
 	readonly needsAcknowledgement: boolean
 	// Largest disk a job may need beyond the master, in bytes, for files it must spill.
 	readonly spillBytes: number
-	// Published revision of an identical request.
-	readonly existing?: { readonly masterId: string; readonly revision: number }
 }
 
 // Answer of a master request.
 export interface MasterRequestResult {
-	// Job doing it; absent when the product already exists.
-	readonly jobId?: string
-	// Master it makes.
-	readonly masterId: string
-	// Revision, when it exists.
-	readonly revision?: number
-	// State of the job, or completed.
+	// Job doing it, whose summary names the master once published.
+	readonly jobId: string
+	// State of the job.
 	readonly state: CalibrationJob['state']
 }
 
 // A request to import a directory.
 export interface ImportRequest {
-	// Directory on the server.
-	readonly path: string
+	// Directories and files on the server.
+	readonly paths: readonly string[]
 	// Whether to enter subdirectories.
 	readonly recursive?: boolean
 	// Deepest directory.
@@ -282,19 +271,16 @@ export interface ImportCandidate {
 export interface ImportCommit {
 	// Files to add; all the recognized ones when absent.
 	readonly paths?: readonly string[]
-	// Roles an operator declares, by path, with the reason.
-	readonly classifications?: Readonly<Record<string, { readonly kind: CalibrationKind; readonly reason: string }>>
+	// Roles an operator declares, by path.
+	readonly classifications?: Readonly<Record<string, CalibrationKind>>
 	// Whether to copy the files into the library instead of referencing them.
 	readonly copy?: boolean
 }
 
-// Candidates of a metadata-only preview for a target.
+// Masters a metadata-only preview finds for a target.
 export interface ResolvePreview {
-	// One row per master considered, with what pins it: its revision, the SHA-256 of its file, its state, and whether
-	// it is the preferred revision of its master.
-	readonly candidates: readonly { readonly masterId: string; readonly revision: number; readonly kind: CalibrationKind; readonly contentDigest: string; readonly status: ProductStatus; readonly preferred: boolean; readonly verdict: MatchVerdict; readonly reasons: readonly string[] }[]
-	// Kinds with no compatible master.
-	readonly missingKinds: readonly CalibrationKind[]
+	// Masters that match it and can be read, newest first.
+	readonly candidates: readonly CalibrationMasterSummary[]
 }
 
 // A frame the Flat Wizard published.
@@ -303,16 +289,33 @@ export interface FlatFrameRegistration {
 	readonly path: string
 	// Session it came from.
 	readonly sessionId: string
-	// Hardware id and name of the camera.
-	readonly cameraId: string
+	// Name of the camera.
 	readonly cameraName: string
 	// Name of the filter in the beam, which a file taken without a wheel leaves out.
 	readonly filter?: string
 }
 
+// Frame the Dark Library Wizard published, with the plan and the record it was taken under.
+export interface DarkFrameRegistration {
+	// Plan of the session that took it.
+	readonly plan: DarkCapturePlan
+	// Group of the plan it belongs to.
+	readonly groupId: string
+	// What the session examined and decided about it.
+	readonly frame: DarkFrameRecord
+}
+
+// Filters a Flat Wizard session that asked for masters completed, once it ended.
+export interface FlatSessionEnd {
+	// Session that published the frames.
+	readonly sessionId: string
+	// Each completed filter, by its name, with the absolute paths of every frame it published.
+	readonly groups: readonly { readonly filter: string; readonly paths: readonly string[] }[]
+}
+
 // Whether a frame can enter a master.
 function usable(source: CalibrationSource) {
-	return source.status === 'available' && source.supported && source.excluded === undefined
+	return source.status === 'available' && source.supported && !source.excluded
 }
 
 // Returns what a master contains by its role.
@@ -345,15 +348,10 @@ function requiredFrames(sources: readonly CalibrationSource[]) {
 	return required
 }
 
-// Returns the stable identity of the file state of a frame.
-function frameIdentity({ sourceId, bytes, mtimeMillis }: CalibrationSource) {
-	return `${sourceId}:${bytes}:${mtimeMillis}`
-}
-
-// Returns what a list shows of a revision.
-function masterSummary(master: CalibrationMaster, preferred: number | undefined): CalibrationMasterSummary {
-	const { masterId, revision, kind, calibrationState, units, metadata, recipe, createdAt, status, groupId, dependencies, sourceIds } = master
-	return { masterId, revision, kind, calibrationState, units, metadata, frames: sourceIds.length, method: recipe.method, preferred: preferred === revision, createdAt, status, groupId, dependencies }
+// Returns what a list shows of a master.
+function masterSummary(master: CalibrationMaster): CalibrationMasterSummary {
+	const { masterId, kind, calibrationState, units, metadata, recipe, createdAt, status, groupId, dependencies, sourceIds, contentDigest } = master
+	return { masterId, kind, calibrationState, units, metadata, frames: sourceIds.length, method: recipe.method, createdAt, status, groupId, dependencies, contentDigest }
 }
 
 // The service. Work waits for the first open of the library, so importing this module touches no file.
@@ -366,16 +364,19 @@ export class CalibrationLibrary {
 	#opened?: Promise<void>
 	// Import scans running, by job.
 	readonly #scans = new Map<string, AbortController>()
-	// Revisions another tool is reading, by masterId:revision, with how many holders.
-	readonly #leases = new Map<string, number>()
+	// Masters another tool is reading, by id, with how many holders.
+	readonly #leases = new Map<number, number>()
+	// Last registration of a flat of each Flat Wizard session, so the end of a session waits for its frames.
+	readonly #flatRegistrations = new Map<string, Promise<void>>()
+	// Last registration of a dark of each Dark Library plan, so the end of a session waits for its frames.
+	readonly #darkRegistrations = new Map<string, Promise<void>>()
 	// Queue of the master jobs.
 	readonly jobs: CalibrationJobs
 
-	// Creates the service. plans is the one store of the Dark Library, read and never changed; listener receives every change
-	// synchronously; busy says whether a camera operation is running, which holds automatic jobs back.
+	// Creates the service. listener receives every change synchronously; busy says whether a camera operation is running,
+	// which holds automatic jobs back.
 	constructor(
 		readonly store: CalibrationLibraryStore,
-		readonly plans: DarkPlanStore,
 		readonly listener: (event: CalibrationLibraryEvent) => void,
 		readonly busy: () => boolean = () => false,
 		integrator: Integrator = new MasterIntegrator(),
@@ -398,14 +399,12 @@ export class CalibrationLibrary {
 		return this.#opened
 	}
 
-	// Finishes what a crash interrupted, indexes the plans, checks the masters, and resumes the jobs.
+	// Finishes what a crash interrupted, checks the masters, and resumes the jobs.
 	async #open() {
 		await this.#recoverMasters()
-		await this.#indexPlans()
 		await this.#reconcileMasters()
 		await this.jobs.start()
 		await this.#refreshFiles()
-		await this.#generatePending()
 		this.#changed()
 	}
 
@@ -414,112 +413,74 @@ export class CalibrationLibrary {
 		await this.ready()
 	}
 
-	// Finishes what a crash interrupted, from the disk: a revision being published becomes published when its directory
-	// holds the file it recorded, and is forgotten otherwise, its number staying taken; a revision being deleted loses its
-	// directory and its row. A revision directory without a row is moved to orphaned/ and reported, never adopted nor
-	// deleted. What cannot be finished is reported and tried again on the next start.
+	// Finishes what a crash interrupted, from the disk: a master being published becomes published when its directory holds
+	// the file it recorded, and is forgotten otherwise, its id staying taken; a master being deleted loses its directory and
+	// its row. A master directory without a row is moved to orphaned/ and reported, never adopted nor deleted. What cannot
+	// be finished is reported and tried again on the next start.
 	async #recoverMasters() {
 		for (const { master, publication } of this.store.pending()) {
-			const { masterId, revision } = master
+			const { masterId } = master
 
 			try {
 				if (publication === 'deleting') {
-					await rm(this.store.revisionDirectory(masterId, revision), { recursive: true, force: true })
-					this.store.discardRevision(masterId, revision)
-					await rmdir(join(this.store.productsDirectory, masterId)).catch(() => undefined)
+					await rm(this.store.masterDirectory(masterId), { recursive: true, force: true })
+					this.store.discardMaster(masterId)
 				} else if (await this.#intact(master)) {
-					this.store.completePublication(masterId, revision, this.#withDigests(master))
+					this.store.completePublication(masterId, this.#withDigests(master))
 				} else {
-					this.store.discardRevision(masterId, revision)
+					this.store.discardMaster(masterId)
 				}
 			} catch (error) {
-				console.error('calibration library: unable to finish revision', masterId, revision, error)
+				console.error('calibration library: unable to finish master', masterId, error)
 			}
 		}
 
-		for (const { masterId, revision, name } of await this.store.productDirectories()) {
-			if (revision > 0 && this.store.hasRevision(masterId, revision)) continue
-			const target = join(this.store.orphanedDirectory, `${masterId}-${name}-${crypto.randomUUID()}`)
+		for (const { masterId, name } of await this.store.productDirectories()) {
+			if (masterId !== undefined && this.store.hasMaster(masterId)) continue
+			const target = join(this.store.orphanedDirectory, `${name}-${crypto.randomUUID()}`)
 
 			try {
 				await mkdir(this.store.orphanedDirectory, { recursive: true })
-				await rename(join(this.store.productsDirectory, masterId, name), target)
-				console.warn(`calibration library: ${masterId}/${name} has no record and was moved to ${target}`)
+				await rename(join(this.store.productsDirectory, name), target)
+				console.warn(`calibration library: ${name} has no record and was moved to ${target}`)
 			} catch (error) {
-				console.error('calibration library: unable to move an orphaned revision', masterId, name, error)
+				console.error('calibration library: unable to move an orphaned master', name, error)
 			}
 		}
 	}
 
-	// Returns whether the file of a revision is the one it recorded, by size and SHA-256.
+	// Returns whether the file of a master is the one it recorded, by size and SHA-256.
 	async #intact(master: CalibrationMaster) {
-		const file = this.#masterFile(master)
+		const file = this.#masterFile(master.masterId)
 		const info = await stat(file).catch(() => undefined)
 		return info?.size === master.bytes && (await fileDigest(file)) === master.contentDigest
 	}
 
-	// Marks a revision unavailable while its file is missing or of another size, stale while a revision it depends on is
+	// Marks a master unavailable while its file is missing or of another size, stale while a master it depends on is
 	// unavailable, and gives it back the state it was published with once neither holds.
 	async #reconcileMasters() {
 		const masters = this.store.allMasters()
-		const unavailable = new Set<string>()
+		const unavailable = new Set<number>()
 
 		for (const master of masters) {
-			const info = await stat(this.#masterFile(master)).catch(() => undefined)
-			if (info?.size !== master.bytes) unavailable.add(`${master.masterId}:${master.revision}`)
+			const info = await stat(this.#masterFile(master.masterId)).catch(() => undefined)
+			if (info?.size !== master.bytes) unavailable.add(master.masterId)
 		}
 
-		const changes: { masterId: string; revision: number; status: 'unavailable' | 'stale' | 'published' }[] = []
+		const changes: { masterId: number; status: 'unavailable' | 'stale' | 'published' }[] = []
 
-		for (const { masterId, revision, status, dependencies } of masters) {
-			const next = unavailable.has(`${masterId}:${revision}`) ? 'unavailable' : dependencies.some((dependency) => unavailable.has(`${dependency.masterId}:${dependency.revision}`)) ? 'stale' : 'published'
+		for (const { masterId, status, dependencies } of masters) {
+			const next = unavailable.has(masterId) ? 'unavailable' : dependencies.some((dependency) => unavailable.has(dependency.masterId)) ? 'stale' : 'published'
 			const current = status === 'unavailable' || status === 'stale' ? status : 'published'
-			if (next !== current) changes.push({ masterId, revision, status: next })
+			if (next !== current) changes.push({ masterId, status: next })
 		}
 
 		this.store.setStatuses(changes)
 	}
 
-	// Path of the FITS file of a revision.
-	#masterFile({ masterId, revision }: Pick<CalibrationMaster, 'masterId' | 'revision'>) {
-		return join(this.store.revisionDirectory(masterId, revision), MASTER_FILE)
-	}
-
-	// Indexes the frames of the plans the library does not know. A plan a session works on waits until it ends.
-	async #indexPlans(onlyPlanId?: string) {
-		const summaries = await this.plans.list(onlyPlanId === undefined ? undefined : ({ planId }) => planId === onlyPlanId)
-
-		for (const { planId, status } of summaries) {
-			if (status === 'running' || status === 'paused') continue
-			const plan = await this.plans.plan(planId)
-			const frames = await this.plans.frames(planId)
-			if (!plan || !frames) continue
-
-			const added: CalibrationSource[] = []
-
-			for (const frame of frames.frames) {
-				const group = plan.groups.find(({ groupId }) => groupId === frame.groupId)
-				if (!group || (frame.verdict !== 'accepted' && frame.verdict !== 'acceptedWithWarnings')) continue
-
-				const known = this.store.source(makeKnownId(frame.path))
-				if (known) continue
-
-				const info = await stat(frame.path).catch(() => undefined)
-				let inspection: FileInspection | undefined
-
-				try {
-					inspection = info && (await inspectFile(frame.path))
-				} catch {
-					inspection = undefined
-				}
-
-				if (!inspection || !info) continue
-				const source = darkPlanSource(plan, group, frame, inspection, info.size, info.mtimeMs)
-				if (source) added.push({ ...source, supported: inspection.metadata.bitpix !== 64 })
-			}
-
-			if (added.length > 0) this.store.putSources(added)
-		}
+	// Path of the FITS file of a master.
+	#masterFile(masterId: number) {
+		return join(this.store.masterDirectory(masterId), MASTER_FILE)
 	}
 
 	// Compares every indexed file with the disk, which can bring a missing file back. Returns whether anything changed.
@@ -544,10 +505,9 @@ export class CalibrationLibrary {
 		return changed.length > 0
 	}
 
-	// Re-reads plans and files on request.
+	// Compares the files with the disk on request.
 	async refresh() {
 		await this.#usable()
-		await this.#indexPlans()
 		await this.#refreshFiles()
 		this.#changed()
 		return this.snapshot()
@@ -605,9 +565,9 @@ export class CalibrationLibrary {
 		return source
 	}
 
-	// Records a value of a frame that was unknown, and regroups it; the reason is for the operator alone. A value the file or a plan states cannot
+	// Records a value of a frame that was unknown, and regroups it. A value the file or a plan states cannot
 	// be replaced: a conflict with a measurement is an incompatibility, not an edit. Throws LibraryError.
-	async override(sourceId: string, field: OverridableField, value: string | number, reason: string) {
+	async override(sourceId: string, field: OverridableField, value: string | number) {
 		const source = await this.source(sourceId)
 		if (!OVERRIDABLE_FIELDS.includes(field)) throw new LibraryError(`${field} cannot be declared`, 409, 'verifiedMetadata')
 
@@ -619,17 +579,17 @@ export class CalibrationLibrary {
 		return sourceSummary(this.store.source(sourceId)!)
 	}
 
-	// Leaves a frame out of masters, with the reason, or brings it back when reason is absent.
-	async exclude(sourceId: string, reason: string | undefined) {
+	// Leaves a frame out of masters, or brings it back.
+	async exclude(sourceId: string, excluded: boolean) {
 		const source = await this.source(sourceId)
-		this.store.putSources([{ ...source, excluded: reason }])
+		this.store.putSources([{ ...source, excluded }])
 		this.#changed()
 		return sourceSummary(this.store.source(sourceId)!)
 	}
 
 	// Explains a group.
 	#describeGroup({ groupId, sources }: StoredGroup): CalibrationGroupSummary {
-		const included = sources.filter((source) => source.excluded === undefined)
+		const included = sources.filter((source) => !source.excluded)
 		const candidates = included.filter(usable)
 		const compared = candidates.length > 0 ? candidates : sources
 		const findings = compareFrames(
@@ -643,8 +603,7 @@ export class CalibrationLibrary {
 		if (candidates.length > 0 && candidates.length < RECOMMENDED_FRAMES) findings.push({ field: 'frames', code: 'lowSampleCount', severity: 'notice', message: `${candidates.length} frames; ${RECOMMENDED_FRAMES} are recommended` })
 		if (warned > 0) findings.push({ field: 'frames', code: 'warnedFrames', severity: 'notice', message: `${warned} frames carry warnings` })
 
-		const preferred = this.store.preferred(groupId)
-		const masters = this.store.masters({ masterId: groupId }, 0, 20).items.map((master) => masterSummary(master, preferred))
+		const masters = this.store.masters({ groupId }, 0, 20).items.map(masterSummary)
 		const metadata = mergedMetadata(compared.map(({ metadata }) => metadata))
 		return {
 			groupId,
@@ -745,8 +704,8 @@ export class CalibrationLibrary {
 		const gone = sources.filter(({ status }) => status !== 'available').length
 		if (gone > 0) findings.push({ field: 'frames', code: 'sourceMissing', severity: 'blocker', message: `${gone} frames are missing or changed` })
 
-		const excluded = sources.filter(({ excluded }) => excluded !== undefined).length
-		if (excluded > 0) findings.push({ field: 'frames', code: 'incompatibleFrames', severity: 'blocker', message: `${excluded} frames were left out by an operator` })
+		const excluded = sources.filter(({ excluded }) => excluded).length
+		if (excluded > 0) findings.push({ field: 'frames', code: 'incompatibleFrames', severity: 'blocker', message: `${excluded} frames are left out` })
 
 		const unsupported = sources.filter(({ supported }) => !supported).length
 		if (unsupported > 0) findings.push({ field: 'frames', code: 'incompatibleFrames', severity: 'blocker', message: `${unsupported} frames have a sample format the integrator cannot read` })
@@ -768,8 +727,7 @@ export class CalibrationLibrary {
 		}
 
 		if (kind === 'flat') {
-			const reference = request.correction
-			correction = reference && this.store.master(reference.masterId, reference.revision)
+			correction = request.correction === undefined ? undefined : this.store.master(request.correction)
 
 			if (!correction) {
 				findings.push({ field: 'correction', code: 'invalidFlatCorrection', severity: 'blocker', message: 'A master flat needs a master dark-flat or master bias; without one the flats stay uncalibrated' })
@@ -787,16 +745,13 @@ export class CalibrationLibrary {
 			}
 		}
 
-		const dependencies: MasterReference[] = correction ? [{ masterId: correction.masterId, revision: correction.revision, digest: correction.contentDigest }] : []
-		const key = sources[0]?.key
-		const fingerprint = key === undefined ? undefined : recipeFingerprint(key, sources.map(frameIdentity), recipe, dependencies)
-		const existing = fingerprint === undefined ? undefined : this.store.masterByFingerprint(fingerprint)
+		const dependencies: MasterReference[] = correction ? [{ masterId: correction.masterId, digest: correction.contentDigest }] : []
 		const blocked = findings.some(({ severity }) => severity === 'blocker')
 		const needsAcknowledgement = findings.some(({ severity }) => severity === 'review')
 		let spillBytes = 0
 		for (const { format, bytes } of sources) if (format === 'xisf') spillBytes += bytes
-		const validation: RecipeValidation = { valid: !blocked && (!needsAcknowledgement || request.acknowledged === true), kind, groupId: sources[0]?.groupId, frames: sources.length, recipe, findings, needsAcknowledgement, spillBytes, existing: existing && { masterId: existing.masterId, revision: existing.revision } }
-		return { validation, sources, correction, dependencies, fingerprint }
+		const validation: RecipeValidation = { valid: !blocked && (!needsAcknowledgement || request.acknowledged === true), kind, groupId: sources[0]?.groupId, frames: sources.length, recipe, findings, needsAcknowledgement, spillBytes }
+		return { validation, sources, correction, dependencies }
 	}
 
 	// Explains a request without starting anything.
@@ -805,9 +760,8 @@ export class CalibrationLibrary {
 		return this.#validate(request).validation
 	}
 
-	// Starts a master, or answers with what already does it: a repeated token meets its job, an identical recipe its product or
-	// its running job. The job is queued before this returns. Throws LibraryError when frames cannot be combined or something
-	// was not accepted.
+	// Starts a new master, whatever was built before of the same frames; only a repeated token meets the job it started. The
+	// job is queued before this returns. Throws LibraryError when frames cannot be combined or something was not accepted.
 	async requestMaster(request: MasterRequest, automatic = false): Promise<MasterRequestResult> {
 		await this.#usable()
 		return this.#requestMaster(request, automatic)
@@ -817,15 +771,10 @@ export class CalibrationLibrary {
 	#requestMaster(request: MasterRequest, automatic: boolean, planId?: string): MasterRequestResult {
 		if (request.token !== undefined) {
 			const job = this.jobs.byToken(request.token)
-			if (job?.build) return { jobId: job.jobId, masterId: job.build.masterId, revision: job.revision, state: job.state }
+			if (job?.build) return { jobId: job.jobId, state: job.state }
 		}
 
-		const { validation, sources, correction, dependencies, fingerprint } = this.#validate(request)
-
-		if (validation.existing) return { ...validation.existing, state: 'completed' }
-
-		const active = this.jobs.inStates(ACTIVE_JOB_STATES).find((job) => job.fingerprint === fingerprint)
-		if (active?.build) return { jobId: active.jobId, masterId: active.build.masterId, state: active.state }
+		const { validation, sources, correction, dependencies } = this.#validate(request)
 
 		if (!validation.valid) {
 			const blocker = validation.findings.find(({ severity }) => severity === 'blocker')
@@ -843,18 +792,16 @@ export class CalibrationLibrary {
 			updatedAt: now,
 			automatic,
 			token: request.token,
-			fingerprint,
 			progress: NO_PROGRESS,
 			build: { ...this.#build(kind, groupId, key, sources, validation.recipe, validation.findings, correction, dependencies, request), planId },
 		}
 		this.jobs.enqueue(job)
-		return { jobId: job.jobId, masterId: groupId, state: job.state }
+		return { jobId: job.jobId, state: job.state }
 	}
 
-	// Freezes what a job builds. A master of a subset keeps the identity of its group: it is another revision of it.
+	// Freezes what a job builds. A master of a subset still belongs to the group of its frames.
 	#build(kind: CalibrationKind, groupId: string, key: string, sources: readonly CalibrationSource[], recipe: CalibrationRecipe, findings: readonly CompatibilityFinding[], correction: CalibrationMaster | undefined, dependencies: readonly MasterReference[], request: MasterRequest): MasterBuild {
 		return {
-			masterId: groupId,
 			kind,
 			groupId,
 			key,
@@ -872,14 +819,14 @@ export class CalibrationLibrary {
 	#workerRequest(job: CalibrationJob, staging: string): MasterWorkerRequest {
 		const build = job.build!
 		const { units } = masterContent(build.kind)
-		const correction = build.correction && this.#masterFile(build.correction)
+		const correction = build.correction && this.#masterFile(build.correction.masterId)
 		return { jobId: job.jobId, kind: build.kind, frames: build.frames, recipe: build.recipe, correction, staging, header: masterHeader(build.kind, build.metadata, build.frames.length, units, build.correction?.kind), memoryBudget: this.jobs.memoryBudget }
 	}
 
-	// Makes a staged product visible. The frames are compared with what the job saw, the next revision number is taken and the
-	// revision recorded as publishing, the rename moves its directory into products/, and only then is it published. A crash
-	// between them is finished on the next start from what the directory holds. Throws with a stable code, leaving what is
-	// published untouched; a number taken is never used again.
+	// Makes a staged product visible as a new master. The frames are compared with what the job saw, the next id is taken and
+	// the master recorded as publishing, the rename moves its directory into products/, and only then is it published. A crash
+	// between them is finished on the next start from what the directory holds. Returns the id. Throws with a stable code,
+	// leaving what is published untouched; an id taken is never used again.
 	async #publish(job: CalibrationJob, result: IntegrationResult, staging: string) {
 		const build = job.build!
 
@@ -889,21 +836,19 @@ export class CalibrationLibrary {
 			if (info.size !== bytes || info.mtimeMs !== mtimeMillis) throw new IntegrationError('sourceChanged', `A frame changed: ${fileNameOf(path)}`)
 		}
 
-		if (build.correction && !(await stat(this.#masterFile(build.correction)).catch(() => undefined))) throw new IntegrationError('sourceMissing', 'The correction master is not available')
+		if (build.correction && !(await stat(this.#masterFile(build.correction.masterId)).catch(() => undefined))) throw new IntegrationError('sourceMissing', 'The correction master is not available')
 
 		const warned = build.acknowledged.length > 0 || build.partial || result.diagnostics.lowSampleCount
 
-		const recorded: Omit<CalibrationMaster, 'revision'> = {
-			masterId: build.masterId,
+		const recorded: Omit<CalibrationMaster, 'masterId'> = {
 			kind: build.kind,
 			...masterContent(build.kind),
 			fullScaleDn: result.fullScale,
 			sourceIds: build.frames.map(({ sourceId }) => sourceId),
 			sourceDigests: result.digests,
 			sourceNames: build.frameNames,
-			dependencies: build.correction ? [{ masterId: build.correction.masterId, revision: build.correction.revision, digest: build.correction.digest }] : [],
+			dependencies: build.correction ? [{ masterId: build.correction.masterId, digest: build.correction.digest }] : [],
 			recipe: build.recipe,
-			fingerprint: job.fingerprint!,
 			metadata: build.metadata,
 			key: build.key,
 			groupId: build.groupId,
@@ -925,25 +870,25 @@ export class CalibrationLibrary {
 			throw failed(error)
 		}
 
-		const { revision } = master
+		const { masterId } = master
 
 		try {
-			await mkdir(join(this.store.productsDirectory, build.masterId), { recursive: true })
-			await rename(product, this.store.revisionDirectory(build.masterId, revision))
+			await mkdir(this.store.productsDirectory, { recursive: true })
+			await rename(product, this.store.masterDirectory(masterId))
 		} catch (error) {
 			try {
-				this.store.discardRevision(build.masterId, revision)
+				this.store.discardMaster(masterId)
 			} catch (discardError) {
-				console.error('calibration library: unable to forget an unpublished revision', build.masterId, revision, discardError)
+				console.error('calibration library: unable to forget an unpublished master', masterId, discardError)
 			}
 
 			throw failed(error)
 		}
 
-		this.store.completePublication(build.masterId, revision, this.#withDigests(master))
-		this.listener({ type: 'calibrationLibrary:masterUpdated', epoch: this.#epoch, revision: ++this.#revision, master: masterSummary(master, this.store.preferred(master.masterId)) })
+		this.store.completePublication(masterId, this.#withDigests(master))
+		this.listener({ type: 'calibrationLibrary:masterUpdated', epoch: this.#epoch, revision: ++this.#revision, master: masterSummary(master) })
 		this.#changed()
-		return revision
+		return masterId
 	}
 
 	// Returns the frames of a master with the digests its job read.
@@ -958,55 +903,43 @@ export class CalibrationLibrary {
 		return sources
 	}
 
-	// Lists revisions, newest first.
+	// Lists masters, newest first.
 	async masters(filter: MasterFilter, offset: number, limit: number): Promise<Page<CalibrationMasterSummary>> {
 		await this.#usable()
 		const { items, total } = this.store.masters(filter, offset, limit)
-		return { items: items.map((master) => masterSummary(master, this.store.preferred(master.masterId))), total }
+		return { items: items.map(masterSummary), total }
 	}
 
-	// Returns a revision with everything about it. Throws when unknown.
-	async master(masterId: string, revision: number): Promise<CalibrationMasterDetail> {
+	// Returns a master with everything about it. Throws when unknown.
+	async master(masterId: number): Promise<CalibrationMasterDetail> {
 		await this.#usable()
-		const master = this.store.master(masterId, revision)
+		const master = this.store.master(masterId)
 		if (!master) throw new LibraryError('Unknown master', 404, 'notFound')
-		return { ...master, path: this.#masterFile(master), preferred: this.store.preferred(masterId) === revision }
+		return { ...master, path: this.#masterFile(masterId) }
 	}
 
-	// Makes a revision the preferred one. It changes a pointer and no data. Throws when unknown or not usable.
-	async prefer(masterId: string, revision: number) {
-		const master = await this.master(masterId, revision)
-		if (master.status === 'unavailable') throw new LibraryError('The file of this master is not available', 409, 'productUnavailable')
-		this.store.setPreferred(masterId, revision)
-		this.#changed()
-		return { ...master, preferred: true }
-	}
+	// Deletes one master with its directory. Its id is never used again, and a master another master depends on, or a master
+	// being built depends on, cannot go. The master is recorded as deleting before its directory goes, so a crash between
+	// them is finished on the next start. Throws when unknown, in use, or its directory could not be deleted, which leaves it
+	// published.
+	async deleteMaster(masterId: number) {
+		await this.master(masterId)
+		if (this.store.isDependency(masterId)) throw new LibraryError('A master flat was corrected by this master; delete that flat first', 409, 'masterInUse')
+		if (this.jobs.inStates(ACTIVE_JOB_STATES).some(({ build }) => build?.correction?.masterId === masterId)) throw new LibraryError('A master flat being built is corrected by this master', 409, 'masterInUse')
+		if (this.#leases.has(masterId)) throw new LibraryError('A job of Image Stacking is reading this master', 409, 'masterInUse')
 
-	// Deletes one revision with its directory. Its number is never used again, and a revision another master depends on, or a
-	// master being built depends on, cannot go. The revision is recorded as deleting before its directory goes, so a crash
-	// between them is finished on the next start. Throws when unknown, in use, or its directory could not be deleted, which
-	// leaves it published.
-	async deleteMaster(masterId: string, revision: number) {
-		await this.master(masterId, revision)
-		const used = (reference: Pick<MasterReference, 'masterId' | 'revision'> | undefined) => reference?.masterId === masterId && reference.revision === revision
-		if (this.store.isDependency(masterId, revision)) throw new LibraryError('A master flat was corrected by this master; delete that flat first', 409, 'masterInUse')
-		if (this.jobs.inStates(ACTIVE_JOB_STATES).some(({ build }) => used(build?.correction))) throw new LibraryError('A master flat being built is corrected by this master', 409, 'masterInUse')
-		if (this.#leases.has(`${masterId}:${revision}`)) throw new LibraryError('A job of Image Stacking is reading this master', 409, 'masterInUse')
-
-		this.store.setDeleting(masterId, revision, true)
+		this.store.setDeleting(masterId, true)
 
 		try {
-			await rm(this.store.revisionDirectory(masterId, revision), { recursive: true, force: true })
+			await rm(this.store.masterDirectory(masterId), { recursive: true, force: true })
 		} catch (error) {
-			this.store.setDeleting(masterId, revision, false)
+			this.store.setDeleting(masterId, false)
 			throw new LibraryError(`The master could not be deleted (${errorCode(error) ?? 'unexpected error'})`, 500, 'deleteFailed')
 		}
 
-		this.store.discardRevision(masterId, revision)
-		// The directory of the master goes too once its last revision did.
-		await rmdir(join(this.store.productsDirectory, masterId)).catch(() => undefined)
+		this.store.discardMaster(masterId)
 		this.#changed()
-		return { masterId, revision }
+		return { masterId }
 	}
 
 	// Returns a job of this process. Throws when unknown, as every job of a previous process is.
@@ -1031,14 +964,17 @@ export class CalibrationLibrary {
 		return summary
 	}
 
-	// Starts scanning a directory. The scan keeps running after this returns, reports through its job, and leaves candidates to review.
-	async startImport({ path, recursive = true, depth }: ImportRequest) {
+	// Starts scanning directories and single files. The scan keeps running after this returns, reports through its job, and
+	// leaves candidates to review. Throws when a path cannot be read.
+	async startImport({ paths, recursive = true, depth }: ImportRequest) {
 		await this.#usable()
-		const info = await stat(path).catch(() => undefined)
-		if (!info?.isDirectory()) throw new LibraryError('The directory cannot be read', 404, 'notFound')
+
+		for (const path of paths) {
+			if (!(await stat(path).catch(() => undefined))) throw new LibraryError(`${basename(path)} cannot be read`, 404, 'notFound')
+		}
 
 		const now = Date.now()
-		const scan = { path, recursive, depth, found: 0, bytes: 0, truncated: false }
+		const scan = { paths, recursive, depth, found: 0, bytes: 0, truncated: false }
 		const job: CalibrationJob = { jobId: crypto.randomUUID(), type: 'import', state: 'validating', createdAt: now, updatedAt: now, automatic: false, progress: NO_PROGRESS, scan }
 		this.jobs.save(job)
 
@@ -1055,49 +991,75 @@ export class CalibrationLibrary {
 		return next
 	}
 
-	// Runs a scan to its end; a failure ends in its job.
+	// Runs a scan to its end, path after path; a file reached through two paths or two names is found once. A failure ends
+	// in its job.
 	async #scan(job: CalibrationJob, signal: AbortSignal) {
-		const { path, recursive, depth } = job.scan!
+		const { paths, recursive, depth } = job.scan!
 		let current = job
 		let reported = 0
+		const candidates: ImportCandidate[] = []
+		const seen = new Set<string>()
+		let truncated = false
+		let bytes = 0
+
+		// Adds a file once, whichever path found it first.
+		const add = (root: string, candidate: ScanCandidate) => {
+			if (seen.has(candidate.identity)) return
+			seen.add(candidate.identity)
+			candidates.push(this.#candidate(root, candidate))
+			bytes += candidate.bytes
+		}
 
 		try {
-			const { candidates, truncated } = await scanDirectory({
-				path,
-				recursive,
-				depth,
-				signal,
-				progress: (found, bytes) => {
-					if (found - reported < 100) return
-					reported = found
-					current = this.#saveImport(current, { scan: { ...current.scan!, found, bytes } })
-				},
-			})
+			for (const root of paths) {
+				const info = await stat(root)
 
-			let bytes = 0
-			for (const candidate of candidates) bytes += candidate.bytes
-			this.#saveImport(current, { state: 'completed', candidates: candidates.map((candidate) => this.#candidate(path, candidate)), scan: { ...current.scan!, found: candidates.length, bytes, truncated } })
+				if (info.isDirectory()) {
+					const scan = await scanDirectory({
+						path: root,
+						recursive,
+						depth,
+						signal,
+						progress: (found, size) => {
+							if (candidates.length + found - reported < 100) return
+							reported = candidates.length + found
+							current = this.#saveImport(current, { scan: { ...current.scan!, found: reported, bytes: bytes + size } })
+						},
+					})
+
+					truncated ||= scan.truncated
+					for (const candidate of scan.candidates) add(root, candidate)
+				} else {
+					signal.throwIfAborted()
+					const identity = await fileIdentity(root)
+					const inspection = await inspectFile(root).catch((error: unknown) => (Error.isError(error) ? error.message : String(error)))
+					const base = { path: root, bytes: info.size, mtimeMillis: info.mtimeMs, identity }
+					add(root, typeof inspection === 'string' ? { ...base, error: inspection } : inspection ? { ...base, inspection } : { ...base, error: 'The file holds no image' })
+				}
+			}
+
+			this.#saveImport(current, { state: 'completed', candidates, scan: { ...current.scan!, found: candidates.length, bytes, truncated } })
 		} catch (error) {
 			if (signal.aborted) this.#saveImport(current, { state: 'cancelled' })
-			else this.#saveImport(current, { state: 'failed', code: 'processingFailed', error: `The directory could not be read (${errorCode(error) ?? 'unexpected error'})` })
+			else this.#saveImport(current, { state: 'failed', code: 'processingFailed', error: `The files could not be read (${errorCode(error) ?? 'unexpected error'})` })
 		} finally {
 			this.#scans.delete(job.jobId)
 		}
 	}
 
-	// Describes a scanned file for review.
+	// Describes a scanned file for review, named under the directory chosen, or by its own name when it was chosen itself.
 	#candidate(root: string, { path, bytes, mtimeMillis, inspection, error }: ScanCandidate): ImportCandidate {
 		const known = this.store.source(makeKnownId(path)) !== undefined
-		return { path, name: relative(root, path), bytes, mtimeMillis, format: inspection?.format, kind: inspection?.kind, rejectedRole: inspection?.rejectedRole, metadata: inspection?.metadata, warnings: inspection?.warnings ?? [], error, known }
+		return { path, name: path === root ? basename(path) : relative(root, path), bytes, mtimeMillis, format: inspection?.format, kind: inspection?.kind, rejectedRole: inspection?.rejectedRole, metadata: inspection?.metadata, warnings: inspection?.warnings ?? [], error, known }
 	}
 
-	// Lists what an import found. Paths are shown because the operator named their directory.
+	// Lists what an import found. Paths are shown because the operator chose where to look.
 	async importCandidates(jobId: string, offset: number, limit: number): Promise<Page<ImportCandidate>> {
 		const candidates = (await this.#job(jobId)).candidates ?? []
 		return { items: candidates.slice(offset, offset + Math.min(limit, MAX_PAGE_SIZE)), total: candidates.length }
 	}
 
-	// Adds reviewed files to the library. A role comes from the file or from an audited classification, never from a name; a file
+	// Adds reviewed files to the library. A role comes from the file or from an operator, never from a name; a file
 	// with neither stays out, as does a light or a master. Copies leave the original where it is. Returns how many frames entered.
 	async commitImport(jobId: string, { paths, classifications = {}, copy = false }: ImportCommit) {
 		const job = await this.#job(jobId)
@@ -1108,13 +1070,13 @@ export class CalibrationLibrary {
 
 		for (const candidate of job.candidates ?? []) {
 			if (chosen && !chosen.has(candidate.path)) continue
-			const classification = classifications[candidate.path]
-			const kind = classification?.kind ?? candidate.kind
+			const declared = classifications[candidate.path]
+			const kind = declared ?? candidate.kind
 			if (kind === undefined || candidate.known || candidate.error !== undefined || candidate.rejectedRole !== undefined || !candidate.metadata || !candidate.format) continue
 
 			const warnings = [...candidate.warnings]
-			if (classification) warnings.push(`Role declared by an operator: ${classification.reason}`)
-			if (classification && candidate.kind !== undefined && candidate.kind !== kind) warnings.push(`The file says ${candidate.kind}`)
+			if (declared) warnings.push('Role declared by an operator')
+			if (declared && candidate.kind !== undefined && candidate.kind !== kind) warnings.push(`The file says ${candidate.kind}`)
 
 			let path = candidate.path
 			let { bytes, mtimeMillis } = candidate
@@ -1140,41 +1102,110 @@ export class CalibrationLibrary {
 		return { committed: sources.length }
 	}
 
-	// Registers a frame the Flat Wizard published, as it is on the disk. What a file taken without a wheel leaves out comes from the
-	// session, as declared by its plan. Failures are the caller's to swallow: a flat that cannot be indexed stays on the disk.
-	async registerFlat({ path, sessionId, cameraId, cameraName, filter }: FlatFrameRegistration) {
+	// Registers a frame the Flat Wizard published, as it is on the disk, after the frames of its session registered before. What a
+	// file taken without a wheel leaves out comes from the session, as declared by its plan. Failures are the caller's to swallow:
+	// a flat that cannot be indexed stays on the disk.
+	registerFlat(frame: FlatFrameRegistration) {
+		const registered = (this.#flatRegistrations.get(frame.sessionId) ?? Promise.resolve()).then(() => this.#registerFlat(frame))
+		this.#flatRegistrations.set(
+			frame.sessionId,
+			registered.catch(() => undefined),
+		)
+		return registered
+	}
+
+	// Indexes one published flat.
+	async #registerFlat({ path, sessionId, cameraName, filter }: FlatFrameRegistration) {
 		await this.#usable()
 		const [inspection, info] = await Promise.all([inspectFile(path), stat(path)])
 		if (!inspection) return
 
-		const metadata: CalibrationMetadata = { ...inspection.metadata, cameraId: { value: cameraId, evidence: 'planDeclared' }, cameraName, filter: inspection.metadata.filter.value === undefined && filter !== undefined ? { value: filter, evidence: 'planDeclared' } : inspection.metadata.filter }
+		const metadata: CalibrationMetadata = { ...inspection.metadata, cameraName: inspection.metadata.cameraName ?? cameraName, filter: inspection.metadata.filter.value === undefined && filter !== undefined ? { value: filter, evidence: 'planDeclared' } : inspection.metadata.filter }
 		const source = makeSource('flatWizard', sessionId, 'flat', path, inspection.format, info.size, info.mtimeMs, metadata, inspection.warnings)
 		this.store.putSources([source])
 		this.#changed()
 	}
 
-	// Indexes a plan whose acquisition ended and starts the masters it asked for. A master that cannot start never touches the plan
-	// or the session; the group shows why.
-	async planEnded(planId: string) {
+	// Starts a master flat of each filter a Flat Wizard session completed, once its frames are registered. A filter is built from
+	// its own frames alone, only when every one of them can enter a master and nothing but the temperature asks for a review, with
+	// the correction automaticCorrection finds; otherwise its flats stay, and building one is a person's decision. A master that
+	// cannot start never touches the session; the group shows why. Jobs live in memory, so a restart before a build forgets it.
+	async flatSessionEnded({ sessionId, groups }: FlatSessionEnd) {
+		await this.#flatRegistrations.get(sessionId)
+		this.#flatRegistrations.delete(sessionId)
 		await this.#usable()
-		await this.#indexPlans(planId)
-		await this.#generate(planId)
+
+		for (const { paths } of groups) {
+			const sources = paths.flatMap((path) => this.store.source(makeKnownId(path)) ?? [])
+			if (sources.length === 0 || sources.length < paths.length || !sources.every(usable)) continue
+
+			const metadata = sources.map((source) => source.metadata)
+			const reviews = compareFrames('flat', metadata).filter(({ severity, field }) => severity === 'review' && field !== 'temperature')
+			const correction = this.#automaticCorrection(metadata)
+			if (reviews.length > 0 || !correction) continue
+
+			try {
+				this.#requestMaster({ sourceIds: sources.map(({ sourceId }) => sourceId), correction, acknowledged: true }, true)
+			} catch {
+				continue
+			}
+		}
+
 		this.#changed()
 	}
 
-	// Starts the masters of the plans that asked for them and ended while the server was down. Idempotent, so it can run on every start.
-	async #generatePending() {
-		for (const { planId, status } of await this.plans.list(({ generateMasters }) => generateMasters === true)) {
-			if (status !== 'running' && status !== 'paused') await this.#generate(planId)
+	// Returns the id of the master that corrects an automatic master flat of these frames: the newest master dark-flat that
+	// matches them, or, when no dark-flat does, the newest master bias that does. Undefined when none matches. A master that
+	// is stale or unavailable is never chosen.
+	#automaticCorrection(flats: readonly CalibrationMetadata[]) {
+		const masters = this.store.allMasters().filter(({ status }) => status !== 'stale' && status !== 'unavailable')
+
+		for (const kind of ['darkFlat', 'bias'] as const) {
+			const match = masters.find((master) => master.kind === kind && flatCorrectionMismatch(kind, master.metadata, flats) === undefined)
+			if (match) return match.masterId
 		}
+
+		return undefined
 	}
 
-	// Requests one master per complete group of a plan, from that group's frames alone. An incomplete group is never built on its own:
-	// it stays a state of the group, and a provisional master is a person's decision. Only an unknown temperature is accepted
-	// here, since a plan without a target or a thermometer records exactly that and the master says so.
-	async #generate(planId: string) {
-		const plan = await this.plans.plan(planId)
-		if (!plan?.generateMasters) return
+	// Registers a dark the Dark Library Wizard published, after the frames of its plan registered before. Failures are the
+	// caller's to swallow: a dark that cannot be indexed stays on the disk.
+	registerDark(registration: DarkFrameRegistration) {
+		const { planId } = registration.plan
+		const registered = (this.#darkRegistrations.get(planId) ?? Promise.resolve()).then(() => this.#registerDark(registration))
+		this.#darkRegistrations.set(
+			planId,
+			registered.catch(() => undefined),
+		)
+		return registered
+	}
+
+	// Indexes one published dark with what its plan declares about it.
+	async #registerDark({ plan, groupId, frame }: DarkFrameRegistration) {
+		await this.#usable()
+		const group = plan.groups.find((candidate) => candidate.groupId === groupId)
+		if (!group || this.store.source(makeKnownId(frame.path))) return
+
+		const [inspection, info] = await Promise.all([inspectFile(frame.path), stat(frame.path)])
+		if (!inspection) return
+
+		const source = darkPlanSource(plan, group, frame, inspection, info.size, info.mtimeMs)
+		if (!source) return
+		this.store.putSources([{ ...source, supported: inspection.metadata.bitpix !== 64 }])
+		this.#changed()
+	}
+
+	// Starts one master per complete group of a plan whose session ended, once its frames are registered, from that group's
+	// frames alone. An incomplete group is never built on its own: it stays a state of the group, and a provisional master is a
+	// person's decision. Only an unknown temperature is accepted here, since a plan without a target or a thermometer records
+	// exactly that and the master says so. A master that cannot start never touches the session; the group shows why. Jobs
+	// live in memory, so a restart before a build forgets it.
+	async darkSessionEnded(plan: DarkCapturePlan) {
+		const { planId } = plan
+		await this.#darkRegistrations.get(planId)
+		this.#darkRegistrations.delete(planId)
+		await this.#usable()
+		if (!plan.generateMasters) return
 
 		for (const group of plan.groups) {
 			const prefix = `${planId}/${group.groupId}/`
@@ -1193,35 +1224,35 @@ export class CalibrationLibrary {
 				continue
 			}
 		}
+
+		this.#changed()
 	}
 
-	// Explains which masters match a target, from metadata alone. Nothing is chosen for it.
+	// Lists the masters that match a target, from metadata alone, newest first; a master that cannot be read, being
+	// unavailable or stale, is left out. Nothing is chosen for it.
 	async resolvePreview(target: CalibrationTarget): Promise<ResolvePreview> {
 		await this.#usable()
-		const candidates: ResolvePreview['candidates'][number][] = []
-
-		for (const { masterId, revision, kind, metadata, status, contentDigest } of this.store.allMasters()) {
-			if (status !== 'unavailable') candidates.push({ masterId, revision, kind, contentDigest, status, preferred: this.store.preferred(masterId) === revision, ...matchMaster(kind, metadata, target) })
-		}
-
-		const kinds: readonly CalibrationKind[] = ['dark', 'bias', 'flat']
-		return { candidates, missingKinds: kinds.filter((kind) => !candidates.some((candidate) => candidate.kind === kind && candidate.verdict === 'compatible')) }
+		const candidates = this.store
+			.allMasters()
+			.filter(({ kind, metadata, status }) => status !== 'unavailable' && status !== 'stale' && matchesTarget(kind, metadata, target))
+			.map(masterSummary)
+		return { candidates }
 	}
 
-	// Returns a published revision with the path of its file when its content is the one pinned, so a calibrator never
-	// reads another master under the same name. Returns undefined for an unknown revision, another content, or a file
-	// that is unavailable or depends on an unavailable master.
+	// Returns a published master with the path of its file when its content is the one referenced, so a calibrator never
+	// reads another file under the same id. Returns undefined for an unknown master, another content, or a file that is
+	// unavailable or depends on an unavailable master.
 	async pinnedMaster(reference: MasterReference): Promise<CalibrationMasterDetail | undefined> {
 		await this.#usable()
-		const master = this.store.master(reference.masterId, reference.revision)
+		const master = this.store.master(reference.masterId)
 		if (!master || master.contentDigest !== reference.digest || master.status === 'unavailable' || master.status === 'stale') return undefined
-		return { ...master, path: this.#masterFile(master), preferred: this.store.preferred(master.masterId) === master.revision }
+		return { ...master, path: this.#masterFile(master.masterId) }
 	}
 
-	// Holds revisions while another tool reads their files, so none of them can be deleted meanwhile. Returns the
-	// function that releases them, which is safe to call more than once.
-	lease(references: readonly Pick<MasterReference, 'masterId' | 'revision'>[]) {
-		const keys = references.map(({ masterId, revision }) => `${masterId}:${revision}`)
+	// Holds masters while another tool reads their files, so none of them can be deleted meanwhile. Returns the function
+	// that releases them, which is safe to call more than once.
+	lease(references: readonly Pick<MasterReference, 'masterId'>[]) {
+		const keys = references.map(({ masterId }) => masterId)
 		for (const key of keys) this.#leases.set(key, (this.#leases.get(key) ?? 0) + 1)
 		let released = false
 
@@ -1308,14 +1339,14 @@ export function createCalibrationLibraryRoutes(library: CalibrationLibrary) {
 		},
 		'/api/calibration-library/sources/:sourceId/overrides': {
 			POST: async (request) => {
-				const { field, value, reason } = (await request.json()) as { readonly field: OverridableField; readonly value: string | number; readonly reason: string }
-				return answer(() => library.override(request.params.sourceId, field, value, reason))
+				const { field, value } = (await request.json()) as { readonly field: OverridableField; readonly value: string | number }
+				return answer(() => library.override(request.params.sourceId, field, value))
 			},
 		},
 		'/api/calibration-library/sources/:sourceId/exclusion': {
 			POST: async (request) => {
-				const { reason } = (await request.json()) as { readonly reason?: string }
-				return answer(() => library.exclude(request.params.sourceId, reason))
+				const { excluded } = (await request.json()) as { readonly excluded: boolean }
+				return answer(() => library.exclude(request.params.sourceId, excluded))
 			},
 		},
 		'/api/calibration-library/imports': {
@@ -1363,30 +1394,18 @@ export function createCalibrationLibraryRoutes(library: CalibrationLibrary) {
 					camera: searchParams.get('camera') ?? undefined,
 					filter: searchParams.get('filter') ?? undefined,
 					status: (searchParams.get('status') as ProductStatus | null) ?? undefined,
-					masterId: searchParams.get('masterId') ?? undefined,
+					groupId: searchParams.get('groupId') ?? undefined,
 				}
 				return answer(() => library.masters(filter, offset, limit))
 			},
 			POST: async (request) => {
 				const body = (await request.json()) as MasterRequest
-
-				try {
-					const result = await library.requestMaster(body)
-					return Response.json(result, { status: result.jobId === undefined ? 200 : 202 })
-				} catch (error) {
-					return failure(error)
-				}
+				return answer(() => library.requestMaster(body), 202)
 			},
 		},
-		'/api/calibration-library/masters/:masterId/revisions/:revision': {
-			GET: ({ params }) => answer(() => library.master(params.masterId, Number(params.revision))),
-			DELETE: ({ params }) => answer(() => library.deleteMaster(params.masterId, Number(params.revision))),
-		},
-		'/api/calibration-library/masters/:masterId/preferred': {
-			POST: async (request) => {
-				const { revision } = (await request.json()) as { readonly revision: number }
-				return answer(() => library.prefer(request.params.masterId, revision))
-			},
+		'/api/calibration-library/masters/:masterId': {
+			GET: ({ params }) => answer(() => library.master(Number(params.masterId))),
+			DELETE: ({ params }) => answer(() => library.deleteMaster(Number(params.masterId))),
 		},
 		'/api/calibration-library/resolve-preview': {
 			POST: async (request) => {

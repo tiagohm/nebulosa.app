@@ -58,6 +58,8 @@ import {
 	setFramingVisible,
 	setLastImageDirectory,
 	setLastSaveDirectory,
+	setLastCalibrationDirectory,
+	setLastStackingDirectory,
 	annotationPreferences,
 	cameraPlateSolving,
 	imagePlateSolving,
@@ -261,6 +263,20 @@ describe('settings', () => {
 		expect(settings.lastSaveDirectory).toBe('/out/processed')
 		expect(settings.lastImageDirectory).toBe('/data/m31')
 		expect(createProfile(state, 'Other')?.settings.lastSaveDirectory).toBeUndefined()
+	})
+
+	test('remembers the last directory of a stacking import per profile', () => {
+		const state = load()
+		setLastStackingDirectory(state, '/data/lights')
+		expect(state.profiles[0].settings.lastStackingDirectory).toBe('/data/lights')
+		expect(createProfile(state, 'Other')?.settings.lastStackingDirectory).toBeUndefined()
+	})
+
+	test('remembers the last directory of a library import apart from the stacking one', () => {
+		const state = load()
+		setLastStackingDirectory(state, '/data/lights')
+		setLastCalibrationDirectory(state, '/data/darks')
+		expect(state.profiles[0].settings).toMatchObject({ lastStackingDirectory: '/data/lights', lastCalibrationDirectory: '/data/darks' })
 	})
 
 	test('Annotation is kept per profile, merging its groups', () => {

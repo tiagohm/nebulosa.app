@@ -1,3 +1,4 @@
+import { cn, type ClassValue } from 'cn'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import type { IconName } from './Icon'
 import { IconButton } from './IconButton'
@@ -29,6 +30,8 @@ export interface PopoverProps {
 	readonly disabled?: boolean
 	// Controls of the panel, mounted only while it is open.
 	readonly children: ReactNode
+	// Classes of the root, merged after its own.
+	readonly className?: ClassValue
 }
 
 // Position of the panel in the viewport, in CSS pixels.
@@ -40,7 +43,7 @@ interface PanelPosition {
 }
 
 // Icon button with a floating panel.
-export function Popover({ icon, label, open, onOpenChange, disabled = false, children }: PopoverProps) {
+export function Popover({ icon, label, open, onOpenChange, disabled = false, children, className }: PopoverProps) {
 	const rootRef = useRef<HTMLSpanElement>(null)
 	const [position, setPosition] = useState<PanelPosition>()
 
@@ -86,7 +89,7 @@ export function Popover({ icon, label, open, onOpenChange, disabled = false, chi
 	}, [open, onOpenChange])
 
 	return (
-		<span ref={rootRef} className="flex flex-none">
+		<span ref={rootRef} className={cn('flex flex-none', className)}>
 			<IconButton icon={icon} label={label} pressed={open} disabled={disabled} onClick={() => (open ? onOpenChange(false) : show())} />
 			{open && position && (
 				<div style={{ top: position.top, left: position.left }} className="min-w-fit fixed z-30 box-border flex max-w-[calc(100vw-32px)] flex-col gap-2 rounded-md border border-line-100 bg-base-200 p-3 text-sm shadow-[0_12px_32px_rgb(0_0_0/0.45)]">

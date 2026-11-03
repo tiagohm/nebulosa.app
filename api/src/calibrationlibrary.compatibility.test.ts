@@ -1,12 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { type CalibrationMetadata, compareFrames, compatibilityKey, DEFAULT_RECIPE, flatCorrectionMismatch, groupReadiness, matchMaster, recipeFingerprint } from './calibrationlibrary.compatibility'
+import { type CalibrationMetadata, compareFrames, compatibilityKey, flatCorrectionMismatch, groupReadiness, matchesTarget } from './calibrationlibrary.compatibility'
 
 const unknown = { evidence: 'unknown' } as const
 const verified = <T>(value: T) => ({ value, evidence: 'verified' }) as const
 
 function metadata(patch: Partial<CalibrationMetadata> = {}): CalibrationMetadata {
 	return {
-		cameraId: verified('camera'),
 		exposure: verified(180000000),
 		setTemperature: verified(-10),
 		sensorTemperature: verified(-10.1),
@@ -30,7 +29,7 @@ describe('keys', () => {
 	test('every physical property separates frames', () => {
 		const base = compatibilityKey('dark', metadata())
 
-		for (const patch of [{ gain: verified(101) }, { offset: verified(51) }, { binX: verified(2) }, { readoutMode: verified('RAW8') }, { originX: 16 }, { cfa: 'RGGB' }, { bitpix: 8 }, { width: 999 }, { exposure: verified(179900000) }, { setTemperature: verified(-5) }, { cameraId: verified('other') }]) {
+		for (const patch of [{ gain: verified(101) }, { offset: verified(51) }, { binX: verified(2) }, { readoutMode: verified('RAW8') }, { originX: 16 }, { cfa: 'RGGB' }, { bitpix: 8 }, { width: 999 }, { exposure: verified(179900000) }, { setTemperature: verified(-5) }]) {
 			expect(compatibilityKey('dark', metadata(patch))).not.toBe(base)
 		}
 	})
@@ -44,8 +43,7 @@ describe('keys', () => {
 		expect(compatibilityKey('flat', metadata({ filter: verified('L') }))).not.toBe(compatibilityKey('flat', metadata({ filter: verified('R') })))
 	})
 
-	test('a camera name separates unassigned frames without identifying them', () => {
-		expect(compatibilityKey('dark', metadata({ cameraId: unknown, cameraName: 'A' }))).not.toBe(compatibilityKey('dark', metadata({ cameraId: unknown, cameraName: 'B' })))
+	test('frames of the same settings combine whatever camera took them', () => {
 		expect(compatibilityKey('dark', metadata({ cameraName: 'A' }))).toBe(compatibilityKey('dark', metadata({ cameraName: 'B' })))
 	})
 })
@@ -61,6 +59,10 @@ describe('findings', () => {
 		const findings = compareFrames('dark', [metadata({ gain: unknown }), metadata({ gain: unknown })])
 		expect(findings).toContainEqual({ field: 'gain', code: 'unknownMetadata', severity: 'review', message: 'Gain is unknown' })
 		expect(groupReadiness(findings, 2, 0, undefined, true)).toBe('needsReview')
+	})
+
+	test('frames of known settings have nothing to review', () => {
+		expect(compareFrames('dark', [metadata(), metadata()]).filter(({ severity }) => severity !== 'notice')).toEqual([])
 	})
 
 	test('known and unknown values of the same field block', () => {
@@ -99,16 +101,6 @@ describe('readiness', () => {
 	})
 })
 
-describe('fingerprints', () => {
-	test('inputs in another order are the same recipe, and any change is another', () => {
-		const a = recipeFingerprint('key', ['a', 'b'], DEFAULT_RECIPE, [])
-		expect(recipeFingerprint('key', ['b', 'a'], DEFAULT_RECIPE, [])).toBe(a)
-		expect(recipeFingerprint('key', ['a'], DEFAULT_RECIPE, [])).not.toBe(a)
-		expect(recipeFingerprint('key', ['a', 'b'], { ...DEFAULT_RECIPE, sigmaHigh: 4 }, [])).not.toBe(a)
-		expect(recipeFingerprint('key', ['a', 'b'], DEFAULT_RECIPE, [{ masterId: 'm', revision: 1, digest: 'd' }])).not.toBe(a)
-	})
-})
-
 describe('flat corrections', () => {
 	test('a dark-flat needs the exposure of the flats and ignores their filter', () => {
 		const flat = metadata({ exposure: verified(2000000), filter: verified('L') })
@@ -120,21 +112,23 @@ describe('flat corrections', () => {
 })
 
 describe('matching', () => {
-	const target = { cameraId: 'camera', width: 1000, height: 700, channels: 1, binX: 4, binY: 4, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 180, temperature: -10 }
+	const target = { width: 1000, height: 700, channels: 1, binX: 4, binY: 4, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 180, temperature: -10 }
 
 	test('an exact master matches, and there is no closest match', () => {
-		expect(matchMaster('dark', metadata(), target).verdict).toBe('compatible')
-		expect(matchMaster('dark', metadata(), { ...target, exposure: 179.9 }).verdict).toBe('incompatible')
-		expect(matchMaster('dark', metadata(), { ...target, temperature: -5 }).verdict).toBe('incompatible')
+		expect(matchesTarget('dark', metadata(), target)).toBe(true)
+		expect(matchesTarget('dark', metadata(), { ...target, exposure: 179.9 })).toBe(false)
+		expect(matchesTarget('dark', metadata(), { ...target, temperature: -5 })).toBe(false)
+		expect(matchesTarget('dark', metadata(), { ...target, width: 999 })).toBe(false)
 	})
 
-	test('unknown never matches', () => {
-		const { verdict, reasons } = matchMaster('dark', metadata({ gain: unknown }), target)
-		expect(verdict).toBe('reviewRequired')
-		expect(reasons).toEqual(['Gain is unknown'])
+	test('what either side does not know never refuses a master', () => {
+		expect(matchesTarget('dark', metadata({ gain: unknown }), target)).toBe(true)
+		expect(matchesTarget('dark', metadata(), { width: 1000, height: 700, channels: 1 })).toBe(true)
 	})
 
-	test('a bias ignores exposure', () => {
-		expect(matchMaster('bias', metadata({ exposure: verified(0) }), target).verdict).toBe('compatible')
+	test('a bias ignores exposure, and a flat needs the filter of the target', () => {
+		expect(matchesTarget('bias', metadata({ exposure: verified(0) }), target)).toBe(true)
+		expect(matchesTarget('flat', metadata({ filter: verified('L') }), { ...target, filter: 'R' })).toBe(false)
+		expect(matchesTarget('flat', metadata({ filter: verified('L') }), { ...target, filter: 'L' })).toBe(true)
 	})
 })

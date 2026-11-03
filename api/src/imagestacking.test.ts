@@ -12,7 +12,7 @@ import { createImageStackingRoutes, filterGroups, ImageStacking, type ImageStack
 import { type AnalysisMeasurement, type AnalysisWorkerRequest, type FrameAnalyzer, readDigital, registerInThread, StackingAnalyzer } from './imagestacking.analysis'
 import { type FrameCompositor, StackingCompositor } from './imagestacking.composition'
 import { type FrameIntegrator, integrationPlan } from './imagestacking.integration'
-import { cohortKeyOf, filterKeyOf, filterSynonyms, isWithin, lightRoleOf } from './imagestacking.sources'
+import { cohortKeyOf, filterKeyOf, isWithin, lightRoleOf } from './imagestacking.sources'
 import { COMPOSITE_FILE, ImageStackingStore, PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingComposition, type StackingProduct, type StackingSourceFacts, type StackingStar } from './imagestacking.store'
 
 const SKIP = process.env.RUN_ALL_TESTS !== 'true'
@@ -65,19 +65,38 @@ function directory(name: string) {
 	return mkdtempSync(join(root, `${name}-`))
 }
 
-// A library offering a preferred dark and flat to frames of the declared camera, and asking a review otherwise. Pins
-// resolve while their master is available; leases are counted.
+// Ids of the masters of the fake library.
+const DARK = 1
+const FLAT = 2
+
+// What chooses each master of the fake library.
+const DARK_PIN = { masterId: DARK, digest: 'dark-digest' }
+const FLAT_PIN = { masterId: FLAT, digest: 'flat-digest' }
+
+// A library whose dark matches frames of 300 s and whose flat matches any frame. Chosen masters resolve while they are
+// available; leases are counted.
 function masters() {
-	const available = new Set(['dark', 'flat'])
+	const available = new Set([DARK, FLAT])
 	const leases = { held: 0, taken: 0 }
-	const candidate = (kind: 'dark' | 'flat', verdict: 'compatible' | 'reviewRequired') => ({ masterId: kind, revision: 1, kind, contentDigest: `${kind}-digest`, status: 'ready' as const, preferred: true, verdict, reasons: [] })
+	const name = (masterId: number) => (masterId === DARK ? 'dark' : 'flat')
+	const candidate = (masterId: number): ResolvePreview['candidates'][number] => ({
+		masterId,
+		kind: name(masterId),
+		calibrationState: 'rawBiasIncluded',
+		units: 'DN',
+		metadata: metadata(),
+		frames: 30,
+		method: 'sigmaClip',
+		createdAt: masterId,
+		status: 'ready',
+		groupId: 'g',
+		dependencies: [],
+		contentDigest: `${name(masterId)}-digest`,
+	})
 
 	const library: StackingMasters = {
-		resolvePreview: (target): Promise<ResolvePreview> => {
-			const verdict = target.cameraId === 'camera' ? 'compatible' : 'reviewRequired'
-			return Promise.resolve({ candidates: [candidate('dark', verdict), candidate('flat', verdict)], missingKinds: [] })
-		},
-		pinnedMaster: ({ masterId }) => Promise.resolve(available.has(masterId) ? { path: join(root, `${masterId}.fit`), units: masterId === 'flat' ? 'dimensionless' : 'DN', fullScaleDn: 65535 } : undefined),
+		resolvePreview: (target): Promise<ResolvePreview> => Promise.resolve({ candidates: [...(target.exposure === 300 ? [candidate(DARK)] : []), candidate(FLAT)] }),
+		pinnedMaster: ({ masterId }) => Promise.resolve(available.has(masterId) ? { path: join(root, `${name(masterId)}.fit`), units: masterId === FLAT ? 'dimensionless' : 'DN', fullScaleDn: 65535 } : undefined),
 		lease: () => {
 			leases.held++
 			leases.taken++
@@ -154,7 +173,7 @@ async function settled(stacking: ImageStacking, jobId: string) {
 }
 
 // Imports paths into a project and commits everything usable.
-async function importAll(stacking: ImageStacking, projectId: string, paths: readonly string[], lights?: Record<string, { readonly reason: string }>) {
+async function importAll(stacking: ImageStacking, projectId: string, paths: readonly string[], lights?: readonly string[]) {
 	const job = await stacking.startImport(projectId, { paths })
 	expect((await settled(stacking, job.jobId)).state).toBe('completed')
 	return stacking.commitImport(job.jobId, { lights })
@@ -168,21 +187,16 @@ function contents(path: string) {
 // Metadata with every value unknown but the ones given.
 function metadata(patch: Partial<CalibrationMetadata> = {}): CalibrationMetadata {
 	const unknown = { evidence: 'unknown' } as const
-	return { cameraId: unknown, exposure: unknown, setTemperature: unknown, sensorTemperature: unknown, gain: unknown, offset: unknown, binX: unknown, binY: unknown, readoutMode: unknown, filter: unknown, telescope: unknown, focalLength: unknown, width: 10, height: 10, channels: 1, bitpix: 16, ...patch }
+	return { exposure: unknown, setTemperature: unknown, sensorTemperature: unknown, gain: unknown, offset: unknown, binX: unknown, binY: unknown, readoutMode: unknown, filter: unknown, telescope: unknown, focalLength: unknown, width: 10, height: 10, channels: 1, bitpix: 16, ...patch }
 }
 
 describe('light frame facts', () => {
-	test('filter keys compare spelling variants only, and synonyms are suggested apart', () => {
-		expect(filterKeyOf('  Ha ')).toBe('ha')
-		expect(filterKeyOf('H Alpha')).toBe('h alpha')
-		expect(filterKeyOf('ＯＩＩＩ')).toBe('oiii')
-		expect(filterKeyOf(undefined)).toBe('')
-		expect(filterKeyOf('   ')).toBe('')
-		expect(filterSynonyms('ha', 'h-alpha')).toBeTrue()
-		expect(filterSynonyms('hα', 'ha')).toBeTrue()
-		expect(filterSynonyms('ha', 'oiii')).toBeFalse()
-		expect(filterSynonyms('ha', 'ha')).toBeFalse()
-		expect(filterSynonyms('', 'ha')).toBeFalse()
+	test('a filter is the name its header writes, only trimmed, and None when it names none', () => {
+		expect(filterKeyOf('  Ha ')).toBe('Ha')
+		expect(filterKeyOf('ha')).toBe('ha')
+		expect(filterKeyOf('H  Alpha')).toBe('H  Alpha')
+		expect(filterKeyOf(undefined)).toBe('None')
+		expect(filterKeyOf('   ')).toBe('None')
 	})
 
 	test('cohorts separate acquisition settings and keep unknown values apart', () => {
@@ -209,22 +223,16 @@ describe('light frame facts', () => {
 })
 
 describe('filter groups', () => {
-	const fact = (filterKey: string, patch: Partial<StackingSourceFacts> = {}): StackingSourceFacts => ({ role: 'light', status: 'available', filterKey, filterName: filterKey.toUpperCase(), cohortKey: 'c', object: 'M31', exposure: 60000000, excluded: false, ...patch })
+	const fact = (filterKey: string, patch: Partial<StackingSourceFacts> = {}): StackingSourceFacts => ({ role: 'light', status: 'available', filterKey, cohortKey: 'c', object: 'M31', exposure: 60000000, excluded: false, ...patch })
 
-	test('aliases merge keys, the usable lights count toward exposure, and unassigned comes last', () => {
-		const groups = filterGroups([fact('ha'), fact('h-alpha', { filterName: 'H-alpha' }), fact('ha', { excluded: true }), fact('ha', { status: 'missing' }), fact('oiii', { cohortKey: 'd' }), fact('', { filterName: undefined }), fact('ha', { role: 'unclassified' })], [{ filterKey: 'h-alpha', targetKey: 'ha' }])
-		expect(groups.map((group) => group.key)).toEqual(['ha', 'oiii', ''])
-		const [ha, oiii, unassigned] = groups
-		expect(ha).toMatchObject({ name: 'HA', filterKeys: ['h-alpha', 'ha'], names: ['H-alpha', 'HA'], frames: 4, usable: 2, unavailable: 1, exposure: 120, cohorts: 1, objects: ['M31'] })
-		expect(ha.keyNames).toEqual({ ha: ['HA'], 'h-alpha': ['H-alpha'] })
+	test('every filter is its own group, and the usable lights count toward exposure', () => {
+		const groups = filterGroups([fact('Ha'), fact('H-alpha'), fact('Ha', { excluded: true }), fact('Ha', { status: 'missing' }), fact('OIII', { cohortKey: 'd' }), fact('None'), fact('Ha', { role: 'unclassified' })])
+		expect(groups.map((group) => group.key)).toEqual(['H-alpha', 'Ha', 'None', 'OIII'])
+		const [hAlpha, ha, none, oiii] = groups
+		expect(ha).toMatchObject({ frames: 3, usable: 1, unavailable: 1, exposure: 60, cohorts: 1, objects: ['M31'] })
+		expect(hAlpha.frames).toBe(1)
 		expect(oiii.cohorts).toBe(1)
-		expect(unassigned).toMatchObject({ name: 'Unassigned', frames: 1 })
-	})
-
-	test('synonyms are suggested, never merged', () => {
-		const groups = filterGroups([fact('ha'), fact('h-alpha')], [])
-		expect(groups).toHaveLength(2)
-		expect(groups.find((group) => group.key === 'ha')?.suggestion).toBe('h-alpha')
+		expect(none).toMatchObject({ frames: 1, usable: 1 })
 	})
 })
 
@@ -268,25 +276,41 @@ describe('image stacking projects', () => {
 		expect(events.some((event) => event.type === 'imageStacking:changed' && JSON.stringify(event).includes(folder))).toBeFalse()
 
 		const summary = await stacking.project(project.projectId)
-		expect(summary).toMatchObject({ frames: 4, lights: 3, unclassified: 1, filters: 3, unassigned: 0, exposure: 900, objects: ['NGC 7000'] })
+		expect(summary).toMatchObject({ frames: 4, lights: 3, unclassified: 1, filters: 3, exposure: 900, objects: ['NGC 7000'] })
 
 		// The same files again are already known, so nothing enters twice.
 		expect(await importAll(stacking, project.projectId, [folder])).toEqual({ committed: 0 })
 		await expect(stacking.commitImport(job.jobId, {})).rejects.toThrow('cannot be committed')
 	})
 
-	test('single files can be imported, and unclassified files declared lights with a reason', async () => {
+	test('single files can be imported, and unclassified files declared lights', async () => {
 		const { stacking } = open()
 		const folder = directory('single')
 		const mystery = await writeFrame(join(folder, 'mystery.fit'), { FILTER: 'L', EXPTIME: 60 })
 		const project = await stacking.createProject({ name: 'M31' })
 
-		expect(await importAll(stacking, project.projectId, [mystery], { [mystery]: { reason: 'Taken as lights by the session log' } })).toEqual({ committed: 1 })
+		expect(await importAll(stacking, project.projectId, [mystery], [mystery])).toEqual({ committed: 1 })
 		const [frame] = (await stacking.frames(project.projectId, {}, 0, 50)).items
 		expect(frame.role).toBe('light')
-		expect(frame.warnings.at(-1)).toContain('session log')
+		expect(frame.warnings.at(-1)).toBe('Declared a light by an operator')
 		expect(frame).not.toHaveProperty('path')
 		expect((await stacking.frame(frame.sourceId)).path).toBe(mystery)
+	})
+
+	test('a commit leaves out the candidates it skips, or adds only those it names', async () => {
+		const { stacking } = open()
+		const folder = directory('chosen')
+		const [a, b, c] = await Promise.all(['a.fit', 'b.fit', 'c.fit'].map((name) => writeFrame(join(folder, name), light('L'))))
+		const project = await stacking.createProject({ name: 'Chosen' })
+
+		const skipping = await stacking.startImport(project.projectId, { paths: [folder] })
+		await settled(stacking, skipping.jobId)
+		expect(await stacking.commitImport(skipping.jobId, { skipped: [b] })).toEqual({ committed: 2 })
+
+		const naming = await stacking.startImport(project.projectId, { paths: [a, b, c] })
+		await settled(stacking, naming.jobId)
+		expect(await stacking.commitImport(naming.jobId, { paths: [b] })).toEqual({ committed: 1 })
+		expect((await stacking.frames(project.projectId, {}, 0, 50)).items.map((frame) => frame.name).sort()).toEqual(['a.fit', 'b.fit', 'c.fit'])
 	})
 
 	test('directories of Nebulosa and missing paths are refused', async () => {
@@ -298,9 +322,9 @@ describe('image stacking projects', () => {
 		await expect(stacking.startImport('unknown', { paths: [root] })).rejects.toThrow('Unknown project')
 	})
 
-	test('filters are declared only when unknown, merged by alias, and listed by group', async () => {
+	test('filters are declared only when unknown, and listed by group as their headers write them', async () => {
 		const { stacking } = open()
-		const folder = directory('aliases')
+		const folder = directory('filters')
 		await writeFrame(join(folder, 'a.fit'), light('Ha'))
 		await writeFrame(join(folder, 'b.fit'), light('H-alpha'))
 		await writeFrame(join(folder, 'c.fit'), light('OIII'))
@@ -308,44 +332,22 @@ describe('image stacking projects', () => {
 		const project = await stacking.createProject({ name: 'Veil' })
 		await importAll(stacking, project.projectId, [folder])
 
-		const unassigned = (await stacking.frames(project.projectId, { group: '' }, 0, 50)).items
-		expect(unassigned.map((frame) => frame.name)).toEqual(['d.fit'])
-		const [verified] = (await stacking.frames(project.projectId, { group: 'ha' }, 0, 50)).items
-		await expect(stacking.updateFrame(verified.sourceId, { filter: { value: 'OIII', reason: 'No' } })).rejects.toThrow('does not name')
+		const none = (await stacking.frames(project.projectId, { group: 'None' }, 0, 50)).items
+		expect(none.map((frame) => frame.name)).toEqual(['d.fit'])
+		const [verified] = (await stacking.frames(project.projectId, { group: 'Ha' }, 0, 50)).items
+		await expect(stacking.updateFrame(verified.sourceId, { filter: 'OIII' })).rejects.toThrow('does not name')
 
-		const declared = await stacking.updateFrame(unassigned[0].sourceId, { filter: { value: ' OIII ', reason: 'Wheel slot 3 all night' } })
+		const declared = await stacking.updateFrame(none[0].sourceId, { filter: ' OIII ' })
 		expect(declared.metadata.filter).toEqual({ value: 'OIII', evidence: 'operatorDeclared' })
-		expect(declared.filterKey).toBe('oiii')
+		expect(declared.filterKey).toBe('OIII')
 
-		let groups = await stacking.groups(project.projectId)
-		expect(groups.map((group) => [group.key, group.frames, group.suggestion])).toEqual([
-			['h-alpha', 1, 'ha'],
-			['ha', 1, 'h-alpha'],
-			['oiii', 2, undefined],
-		])
-
-		groups = await stacking.setAlias(project.projectId, { filterKey: 'h-alpha', targetKey: 'ha' })
+		const groups = await stacking.groups(project.projectId)
 		expect(groups.map((group) => [group.key, group.frames])).toEqual([
-			['ha', 2],
-			['oiii', 2],
+			['H-alpha', 1],
+			['Ha', 1],
+			['OIII', 2],
 		])
-		expect((await stacking.frames(project.projectId, { group: 'ha' }, 0, 50)).total).toBe(2)
-		expect((await stacking.frames(project.projectId, { group: 'h-alpha' }, 0, 50)).total).toBe(0)
-
-		// Merging the target elsewhere carries what was merged into it.
-		await stacking.setAlias(project.projectId, { filterKey: 'ha', targetKey: 'oiii' })
-		expect((await stacking.project(project.projectId)).aliases).toEqual([
-			{ filterKey: 'h-alpha', targetKey: 'oiii' },
-			{ filterKey: 'ha', targetKey: 'oiii' },
-		])
-		await expect(stacking.setAlias(project.projectId, { filterKey: 'oiii', targetKey: 'ha' })).rejects.toThrow('into itself')
-		await expect(stacking.setAlias(project.projectId, { filterKey: 'sii', targetKey: 'ha' })).rejects.toThrow('must name lights')
-
-		groups = await stacking.removeAlias(project.projectId, 'ha')
-		expect(groups.map((group) => [group.key, group.frames])).toEqual([
-			['ha', 1],
-			['oiii', 3],
-		])
+		expect((await stacking.frames(project.projectId, { group: 'H-alpha' }, 0, 50)).total).toBe(1)
 	})
 
 	test('frames are left out and back, taken out of the project, and compared with the disk', async () => {
@@ -358,9 +360,9 @@ describe('image stacking projects', () => {
 		await importAll(stacking, project.projectId, [folder])
 		const ids = Object.fromEntries((await stacking.frames(project.projectId, {}, 0, 50)).items.map((frame) => [frame.name, frame.sourceId]))
 
-		expect((await stacking.updateFrame(ids['a.fit'], { excluded: 'Clouds' })).excluded).toBe('Clouds')
+		expect((await stacking.updateFrame(ids['a.fit'], { excluded: true })).excluded).toBe(true)
 		expect((await stacking.frames(project.projectId, { included: false }, 0, 50)).total).toBe(1)
-		expect((await stacking.updateFrame(ids['a.fit'], { excluded: null })).excluded).toBeUndefined()
+		expect((await stacking.updateFrame(ids['a.fit'], { excluded: false })).excluded).toBeUndefined()
 
 		rmSync(moved)
 		writeFileSync(edited, 'changed')
@@ -427,42 +429,36 @@ describe('calibration and registration planning', () => {
 		}
 	}
 
-	// Decides both cohorts: Ha pinned to the suggested masters under the declared camera, OIII not calibrated.
+	// Calibrates Ha with its dark and flat, and leaves OIII uncalibrated.
 	async function decide(stacking: ImageStacking, projectId: string) {
 		const [ha, oiii] = await stacking.cohorts(projectId)
-		const declared = await stacking.updateCohort(projectId, ha.cohortId, { camera: { id: 'camera', reason: 'The only camera of this rig' } })
-		await stacking.updateCohort(projectId, ha.cohortId, { calibration: { kind: 'masters', ...declared.suggested } })
-		await stacking.updateCohort(projectId, oiii.cohortId, { calibration: { kind: 'none', reason: 'No flats through OIII yet' } })
-		return { ha: declared, oiii }
+		return { ha: await stacking.updateCohort(projectId, ha.cohortId, { calibration: { dark: DARK_PIN, flat: FLAT_PIN } }), oiii }
 	}
 
-	test('cohorts are calibrated only with revisions compatible under the declared camera', async () => {
+	test('cohorts are calibrated with the masters chosen among those that match them', async () => {
 		const { stacking } = open()
 		const { projectId } = await project(stacking)
 		const [ha, oiii] = await stacking.cohorts(projectId)
-		expect([ha.groupName, ha.frames, ha.target.exposure, oiii.groupName, oiii.frames, oiii.target.exposure]).toEqual(['Ha', 3, 300, 'OIII', 2, 600])
-		expect(ha.candidates).toEqual([])
-		expect(ha.reviewCandidates).toBe(2)
-		await expect(stacking.updateCohort(projectId, ha.cohortId, { calibration: { kind: 'masters', dark: { masterId: 'dark', revision: 1, digest: 'dark-digest' } } })).rejects.toThrow('not a compatible revision')
+		expect([ha.groupKey, ha.frames, ha.target.exposure, oiii.groupKey, oiii.frames, oiii.target.exposure]).toEqual(['Ha', 3, 300, 'OIII', 2, 600])
+		expect(ha.candidates.map(({ kind, masterId, digest }) => [kind, masterId, digest])).toEqual([
+			['dark', DARK, 'dark-digest'],
+			['flat', FLAT, 'flat-digest'],
+		])
+		expect(oiii.candidates.map(({ kind }) => kind)).toEqual(['flat'])
+		await expect(stacking.updateCohort(projectId, oiii.cohortId, { calibration: { dark: DARK_PIN } })).rejects.toThrow('does not match')
+		await expect(stacking.updateCohort(projectId, ha.cohortId, { calibration: { dark: { ...DARK_PIN, digest: 'other' } } })).rejects.toThrow('does not match')
 
-		const declared = await stacking.updateCohort(projectId, ha.cohortId, { camera: { id: 'camera', reason: 'The only camera of this rig' } })
-		expect(declared).toMatchObject({ cameraId: 'camera', cameraReason: 'The only camera of this rig' })
-		expect(declared.suggested).toEqual({ dark: { masterId: 'dark', revision: 1, digest: 'dark-digest' }, flat: { masterId: 'flat', revision: 1, digest: 'flat-digest' } })
-		await expect(stacking.updateCohort(projectId, ha.cohortId, { calibration: { kind: 'masters', dark: { masterId: 'dark', revision: 1, digest: 'other' } } })).rejects.toThrow('not a compatible revision')
-		await expect(stacking.updateCohort(projectId, ha.cohortId, { calibration: { kind: 'masters' } })).rejects.toThrow('at least one master')
+		const chosen = await stacking.updateCohort(projectId, ha.cohortId, { calibration: { dark: DARK_PIN, flat: FLAT_PIN, bias: { masterId: 9, digest: 'bias-digest' } } })
+		expect(chosen.calibration).toEqual({ dark: DARK_PIN, flat: FLAT_PIN })
+		expect((await stacking.updateCohort(projectId, oiii.cohortId, { calibration: {} })).calibration).toBeUndefined()
 
-		const pinned = await stacking.updateCohort(projectId, ha.cohortId, { calibration: { kind: 'masters', ...declared.suggested } })
-		expect(pinned.calibration).toEqual({ kind: 'masters', ...declared.suggested })
-		await expect(stacking.startAnalysis(projectId)).rejects.toThrow('OIII frames are calibrated')
-
-		await stacking.updateCohort(projectId, oiii.cohortId, { calibration: { kind: 'none', reason: 'No flats through OIII yet' } })
 		const { findings, ready, samples, memoryBytes } = await stacking.validate(projectId)
 		expect(ready).toBeFalse()
 		expect(findings.map(({ severity, code, groupKey }) => [severity, code, groupKey])).toEqual([
-			['review', 'cameraUndeclared', 'oiii'],
-			['review', 'noCalibration', 'oiii'],
-			['blocker', 'analysisStale', 'ha'],
-			['blocker', 'analysisStale', 'oiii'],
+			['warning', 'partialCalibration', 'OIII'],
+			['warning', 'partialCalibration', 'OIII'],
+			['blocker', 'analysisStale', 'Ha'],
+			['blocker', 'analysisStale', 'OIII'],
 		])
 		expect([samples, memoryBytes]).toEqual([WIDTH * HEIGHT, WIDTH * HEIGHT * 26])
 	})
@@ -482,8 +478,8 @@ describe('calibration and registration planning', () => {
 		expect(requests[0].calibrations[ha.cohortId]).toEqual({ dark: { path: join(root, 'dark.fit'), fullScale: 65535 }, flat: { path: join(root, 'flat.fit'), fullScale: 1 } })
 
 		const { analysis } = await stacking.project(projectId)
-		expect(analysis?.groups.ha.referenceSourceId).toBe(ids.ha1)
-		expect(analysis?.groups.oiii.toProject?.success).toBeTrue()
+		expect(analysis?.groups.Ha.referenceSourceId).toBe(ids.ha1)
+		expect(analysis?.groups.OIII.toProject?.success).toBeTrue()
 		const frames = (await stacking.frames(projectId, {}, 0, 50)).items
 		expect(frames.every((frame) => frame.analysis?.registration?.success && !frame.stale && !('stars' in frame.analysis))).toBeTrue()
 		const shifted = frames.find((frame) => frame.sourceId === ids.ha0)?.analysis?.registration
@@ -494,26 +490,26 @@ describe('calibration and registration planning', () => {
 		expect(await settled(stacking, again.jobId)).toMatchObject({ state: 'completed', found: 0 })
 		expect(requests).toHaveLength(1)
 
-		await stacking.updateSettings(projectId, { references: { ha: ids.ha2 }, selection: { minMedianSNR: 50 } })
+		await stacking.updateSettings(projectId, { references: { Ha: ids.ha2 }, selection: { minMedianSNR: 50 } })
 		const moved = await stacking.validate(projectId)
-		expect(moved.findings.find((finding) => finding.groupKey === 'ha')).toMatchObject({ severity: 'blocker', code: 'analysisStale' })
+		expect(moved.findings.find((finding) => finding.groupKey === 'Ha')).toMatchObject({ severity: 'blocker', code: 'analysisStale' })
 		await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)
-		expect((await stacking.project(projectId)).analysis?.groups.ha.referenceSourceId).toBe(ids.ha2)
+		expect((await stacking.project(projectId)).analysis?.groups.Ha.referenceSourceId).toBe(ids.ha2)
 		expect((await stacking.validate(projectId)).findings.filter((finding) => finding.code === 'belowThresholds' || finding.code === 'noLights').map(({ code, groupKey }) => [code, groupKey])).toEqual([
-			['belowThresholds', 'ha'],
-			['noLights', 'ha'],
-			['belowThresholds', 'oiii'],
-			['noLights', 'oiii'],
+			['belowThresholds', 'Ha'],
+			['noLights', 'Ha'],
+			['belowThresholds', 'OIII'],
+			['noLights', 'OIII'],
 		])
 		expect((await stacking.frames(projectId, {}, 0, 50)).items[0].rejected).toEqual(['median-snr-too-low'])
 
-		await stacking.updateCohort(projectId, ha.cohortId, { calibration: { kind: 'masters', flat: ha.suggested.flat } })
+		await stacking.updateCohort(projectId, ha.cohortId, { calibration: { flat: FLAT_PIN } })
 		const stale = (await stacking.validate(projectId)).findings.find((finding) => finding.code === 'analysisStale')
-		expect([stale?.groupKey, stale?.sourceIds?.toSorted()]).toEqual(['ha', [ids.ha0, ids.ha1, ids.ha2].sort()])
-		expect((await stacking.frames(projectId, { group: 'ha' }, 0, 50)).items.every((frame) => frame.stale)).toBeTrue()
+		expect([stale?.groupKey, stale?.sourceIds?.toSorted()]).toEqual(['Ha', [ids.ha0, ids.ha1, ids.ha2].sort()])
+		expect((await stacking.frames(projectId, { group: 'Ha' }, 0, 50)).items.every((frame) => frame.stale)).toBeTrue()
 
-		library.available.delete('flat')
-		await expect(stacking.startAnalysis(projectId)).rejects.toThrow('no longer available as pinned')
+		library.available.delete(FLAT)
+		await expect(stacking.startAnalysis(projectId)).rejects.toThrow('no longer available')
 		expect((await stacking.validate(projectId)).findings.some((finding) => finding.code === 'masterUnavailable')).toBeTrue()
 	})
 
@@ -522,13 +518,13 @@ describe('calibration and registration planning', () => {
 		const { stacking } = open(masters().library, fake)
 		const { projectId } = await project(stacking)
 		await decide(stacking, projectId)
-		await stacking.updateSettings(projectId, { referenceGroup: 'ha', references: {}, selection: {} })
+		await stacking.updateSettings(projectId, { referenceGroup: 'Ha', references: {}, selection: {} })
 		await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)
 
 		const { analysis } = await stacking.project(projectId)
-		expect([analysis?.referenceGroup, analysis?.groups.ha.toProject?.success, analysis?.groups.oiii.toProject?.success]).toEqual(['ha', true, false])
+		expect([analysis?.referenceGroup, analysis?.groups.Ha.toProject?.success, analysis?.groups.OIII.toProject?.success]).toEqual(['Ha', true, false])
 		const blockers = (await stacking.validate(projectId)).findings.filter((finding) => finding.severity === 'blocker')
-		expect(blockers.map(({ code, groupKey }) => [code, groupKey])).toEqual([['registrationFailed', 'oiii']])
+		expect(blockers.map(({ code, groupKey }) => [code, groupKey])).toEqual([['registrationFailed', 'OIII']])
 	})
 
 	test('a cancelled run keeps the masters it published, and no analysis starts while it works', async () => {
@@ -622,8 +618,6 @@ describe('integration and publication', () => {
 
 		const { projectId } = await stacking.createProject({ name: 'Field' })
 		await importAll(stacking, projectId, [folder])
-		const [cohort] = await stacking.cohorts(projectId)
-		await stacking.updateCohort(projectId, cohort.cohortId, { calibration: { kind: 'none', reason: 'Synthetic frames' } })
 		expect(await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)).toMatchObject({ state: 'completed', failures: 0 })
 		return { projectId, folder }
 	}
@@ -655,7 +649,7 @@ describe('integration and publication', () => {
 		expect(readdirSync(join(managed, 'staging'), { recursive: true }).length).toBe(0)
 
 		const again = await stacking.startRun(projectId, { token: 'second', recipe: { method: 'sigma-clip' } })
-		expect(again.run).toMatchObject({ state: 'completed', groups: [{ groupKey: 'l', productId: product.productId, reused: true }] })
+		expect(again.run).toMatchObject({ state: 'completed', groups: [{ groupKey: 'L', productId: product.productId, reused: true }] })
 
 		const online = await stacking.startRun(projectId, { token: 'third', recipe: { method: 'average' } })
 		await settled(stacking, online.run.runId)
@@ -676,7 +670,7 @@ describe('integration and publication', () => {
 		const { stacking } = open()
 		const { projectId } = await analyzed(stacking)
 		const tight = await stacking.preflight(projectId, { recipe: { method: 'sigma-clip' }, memoryBudget: 1024 })
-		expect(tight.groups).toMatchObject([{ groupKey: 'l', frames: 3, plan: { mode: 'spill', fits: false } }])
+		expect(tight.groups).toMatchObject([{ groupKey: 'L', frames: 3, plan: { mode: 'spill', fits: false } }])
 		expect(tight.problems[0]).toContain('of memory')
 		await expect(stacking.startRun(projectId, { token: 't', recipe: { method: 'sigma-clip' }, memoryBudget: 1024 })).rejects.toThrow('of memory')
 		expect(await stacking.runs(projectId)).toEqual([])
@@ -709,7 +703,7 @@ describe('integration and publication', () => {
 				productId,
 				projectId,
 				runId: 'run',
-				groupKey: 'l',
+				groupKey: 'L',
 				name: 'L',
 				fingerprint: productId,
 				createdAt: 1,
@@ -813,8 +807,6 @@ describe('scale', () => {
 		const first = new ImageStacking(store, () => undefined, masters().library, [managed])
 		const { projectId } = await first.createProject({ name: 'Scale' })
 		expect(await importAll(first, projectId, [folder])).toEqual({ committed: frames })
-		const [cohort] = await first.cohorts(projectId)
-		await first.updateCohort(projectId, cohort.cohortId, { calibration: { kind: 'none', reason: 'Synthetic frames' } })
 		expect(await settled(first, (await first.startAnalysis(projectId)).jobId)).toMatchObject({ state: 'completed', measured: frames, failures: 0, registered: frames, registrationTotal: frames })
 		expect((await first.validate(projectId)).ready).toBeTrue()
 
@@ -828,7 +820,7 @@ describe('scale', () => {
 		expect(await settled(first, cancelled.run.runId)).toMatchObject({ state: 'cancelled' })
 
 		const second = new ImageStacking(store, () => undefined, masters().library, [managed])
-		expect((await second.runs(projectId))[0]).toMatchObject({ state: 'cancelled', groups: [{ groupKey: 'l', frames }] })
+		expect((await second.runs(projectId))[0]).toMatchObject({ state: 'cancelled', groups: [{ groupKey: 'L', frames }] })
 		expect(await second.products(projectId)).toEqual([])
 		expect(readdirSync(managed)).not.toContain('staging')
 
@@ -889,7 +881,6 @@ describe('composition', () => {
 
 		const { projectId } = await stacking.createProject({ name: 'Mix' })
 		await importAll(stacking, projectId, [folder])
-		for (const cohort of await stacking.cohorts(projectId)) await stacking.updateCohort(projectId, cohort.cohortId, { calibration: { kind: 'none', reason: 'Synthetic frames' } })
 		await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)
 		expect(await settled(stacking, (await stacking.startRun(projectId, { token: 'masters', recipe: { method: 'average', minimumCoverage: 1 } })).run.runId)).toMatchObject({ state: 'completed', published: 2 })
 		const products = await stacking.products(projectId)
@@ -1045,7 +1036,7 @@ describe('image stacking routes', () => {
 		return handler(request)
 	}
 
-	test('projects, frames, and aliases answer through their routes with stable codes', async () => {
+	test('projects and frames answer through their routes with stable codes', async () => {
 		const { stacking } = open()
 		const routes = createImageStackingRoutes(stacking)
 		const folder = directory('routes')
@@ -1062,12 +1053,8 @@ describe('image stacking routes', () => {
 		await settled(stacking, jobId)
 		expect((await call(routes, '/api/image-stacking/imports/:jobId/commit', 'POST', { jobId }, {})).status).toBe(200)
 
-		const frames = await call(routes, '/api/image-stacking/projects/:projectId/frames', 'GET', { projectId }, undefined, '?group=h%20alpha&limit=10')
+		const frames = await call(routes, '/api/image-stacking/projects/:projectId/frames', 'GET', { projectId }, undefined, '?group=H%20Alpha&limit=10')
 		expect(((await frames.json()) as { total: number }).total).toBe(1)
-
-		expect((await call(routes, '/api/image-stacking/projects/:projectId/aliases', 'POST', { projectId }, { filterKey: 'h alpha', targetKey: 'ha' })).status).toBe(200)
-		const separated = await call(routes, '/api/image-stacking/projects/:projectId/aliases/:filterKey', 'DELETE', { projectId, filterKey: 'h alpha' })
-		expect(((await separated.json()) as unknown[]).length).toBe(2)
 
 		const missing = await call(routes, '/api/image-stacking/projects/:projectId', 'GET', { projectId: 'unknown' })
 		expect(missing.status).toBe(404)

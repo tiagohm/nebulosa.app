@@ -18,6 +18,7 @@ import { Checkbox } from '../ui/Checkbox'
 import { DataList, DataRow } from '../ui/DataRow'
 import { IconButton } from '../ui/IconButton'
 import { NumberInput } from '../ui/NumberInput'
+import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { CameraAcquisitionSection } from './CameraAcquisitionSection'
@@ -43,7 +44,7 @@ import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress, formatExposure } from './FrameProgress'
 
 // Contextual panel sections of Dark Library Wizard, a camera operation of the Images camera tabs: the equipment of the tab's
-// camera, the capture plan (one row per group), how the light is blocked, the
+// camera, the capture plan (whether it takes darks or dark-flats, and one row per group), how the light is blocked, the
 // thermal protocol, the output and its limits, and the session in progress with its Continue, Pause, Resume, and Stop
 // commands. Frames take the gain, offset, binning, subframe, and readout mode of Camera Acquisition, but never its exposure
 // time, which each group sets. The form is the camera's, kept in the profile; while a session runs the plan shows what the
@@ -70,6 +71,15 @@ export interface DarkLibraryWizardTarget {
 	// Devices snooped into the frame headers.
 	readonly snoop: CaptureSnoop
 }
+
+// Kinds of frame a plan takes: ordinary darks, or dark-flats for flats of the same exposure.
+const DARK_FRAME_TYPES = ['dark', 'darkFlat'] as const
+
+// Kind of frame a plan takes.
+type DarkFrameType = (typeof DARK_FRAME_TYPES)[number]
+
+// Label of each kind of frame.
+const DARK_FRAME_TYPE_LABELS: Readonly<Record<DarkFrameType, string>> = { dark: 'Dark', darkFlat: 'Dark-Flat' }
 
 // Formats a size in bytes for an estimate.
 function formatBytes(bytes: number) {
@@ -175,10 +185,16 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 					</Button>
 				)}
 				{wheel === undefined && <Notice>The camera has no role in the equipment setup, so only a manual cap can block the light.</Notice>}
-				<Notice>Frames are raw DARK frames with the gain, offset, binning, subframe, and readout mode of Camera Acquisition; each group sets its exposure.</Notice>
+				<Notice>The cover closes before the first frame and opens again when the session ends, unless it was already closed.</Notice>
 			</CollapsibleSection>
 			<CameraAcquisitionSection id="images.dark-library-wizard.acquisition" device={device} exposure={capture} capabilities={capabilities} description="Frames are raw DARK frames taken with the camera settings of Camera Acquisition; each group of the Capture Plan sets its exposure." />
 			<CollapsibleSection id="images.dark-library-wizard.plan" summary={`${groups.length} groups`} title="Capture Plan">
+				<SegmentedControl label="Frame Type" options={DARK_FRAME_TYPES} value={settings.purpose ?? 'dark'} format={(type) => DARK_FRAME_TYPE_LABELS[type]} disabled={locked} onChange={(type) => update({ purpose: type === 'darkFlat' ? 'darkFlat' : undefined })} />
+				<Notice>
+					{settings.purpose === 'darkFlat'
+						? 'Dark-flats are light-blocked frames at the exposures of your flats, which they calibrate; give each group the exposure of a filter of the Flat Wizard. The plan records them as dark-flats.'
+						: 'Darks are light-blocked frames at the exposures and temperatures of your lights, which they calibrate.'}
+				</Notice>
 				{groups.map((group, index) => (
 					<GroupForm
 						key={index}
@@ -252,14 +268,6 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				</div>
 				<NumberInput label="Rejections per Group" value={settings.maximumRejections} min={0} max={DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS} disabled={locked} onChange={(maximumRejections) => update({ maximumRejections })} />
 				<Checkbox label="Generate masters after acquisition" checked={settings.generateMasters === true} disabled={locked} onChange={(generateMasters) => update({ generateMasters: generateMasters || undefined })} />
-				{settings.purpose === 'darkFlat' && (
-					<>
-						<Notice>These frames are dark-flats: light-blocked frames at the exposure of your flats, recorded as such in the plan.</Notice>
-						<Button variant="secondary" disabled={locked} onClick={() => update({ purpose: undefined })}>
-							Take Ordinary Darks
-						</Button>
-					</>
-				)}
 				<Notice>Frames are saved raw under darks/&lt;camera&gt;/&lt;plan&gt;/&lt;group&gt;, never replacing a file. Rejected frames are kept in a rejected directory and do not count.</Notice>
 			</CollapsibleSection>
 			{session && <Progress session={session} pending={pending} />}

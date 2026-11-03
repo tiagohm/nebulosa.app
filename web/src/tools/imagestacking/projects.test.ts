@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { ImageStackingSnapshot, StackingJobSummary } from 'api'
 import { proxy } from 'valtio'
-import { framesQuery, handleImageStackingEvent, type ImageStackingRuntime, jobEnded, loadStackingFrames, loadStackingProject, refreshImageStacking, separateStackingFilter, startStackingAnalysis, updateStackingCohort, updateStackingFrame } from './projects'
+import { cancelStackingRun, framesQuery, handleImageStackingEvent, type ImageStackingRuntime, jobEnded, loadStackingPreflight, startStackingRun, loadStackingFrames, loadStackingProject, refreshImageStacking, separateStackingFilter, startStackingAnalysis, updateStackingCohort, updateStackingFrame } from './projects'
 
 function runtime() {
 	return proxy<ImageStackingRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
@@ -62,16 +62,33 @@ describe('requests', () => {
 		expect(framesQuery({ group: '', included: false, search: 'm31' }, 0)).toBe('offset=0&limit=50&group=&included=false&search=m31')
 	})
 
-	test('a project, its groups, cohorts, and validation are fetched together, and absent clears them', async () => {
+	test('a project, its groups, cohorts, validation, products, and runs are fetched together, and absent clears them', async () => {
 		const state = runtime()
 		const base = '/api/image-stacking/projects/p%201'
-		const { request, calls } = fakeFetch({ [base + '/groups']: [{ key: 'ha' }], [base + '/cohorts']: [{ cohortId: 'c' }], [base + '/validation']: { findings: [], ready: true, samples: 0, memoryBytes: 0 }, [base]: { projectId: 'p 1' } })
+		const { request, calls } = fakeFetch({ [base + '/groups']: [{ key: 'ha' }], [base + '/cohorts']: [{ cohortId: 'c' }], [base + '/validation']: { findings: [], ready: true, samples: 0, memoryBytes: 0 }, [base + '/products']: [{ productId: 'm' }], [base + '/runs']: [], [base]: { projectId: 'p 1' } })
 		await loadStackingProject(state, 'p 1', request)
-		expect(calls.map(({ url }) => url)).toEqual([base, base + '/groups', base + '/cohorts', base + '/validation'])
+		expect(calls.map(({ url }) => url)).toEqual([base, base + '/groups', base + '/cohorts', base + '/validation', base + '/products', base + '/runs'])
 		expect(state.project?.projectId).toBe('p 1')
-		expect([state.groups?.length, state.cohorts?.length, state.validation?.ready]).toEqual([1, 1, true])
+		expect([state.groups?.length, state.cohorts?.length, state.validation?.ready, state.products?.length, state.runs?.length]).toEqual([1, 1, true, 1, 0])
 		await loadStackingProject(state, undefined, request)
-		expect([state.project, state.groups, state.cohorts, state.validation]).toEqual([undefined, undefined, undefined, undefined])
+		expect([state.project, state.groups, state.cohorts, state.validation, state.products, state.runs]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined])
+	})
+
+	test('runs keep their token, a preflight that fails keeps the last answer, and a run is followed until it ends', async () => {
+		const state = runtime()
+		const { request, calls } = fakeFetch({ '/api/image-stacking/projects/p/runs': { run: { runId: 'r' } }, '/api/image-stacking/projects/p/preflight': { groups: [], problems: ['x'] }, '/api/image-stacking/runs/r/cancel': {} })
+		await startStackingRun(state, 'p', { token: 'once', recipe: { method: 'median' } }, request)
+		await loadStackingPreflight(state, 'p', { recipe: { method: 'median' } }, request)
+		await cancelStackingRun(state, 'r', request)
+		expect(calls.map(({ url, init }) => [url, init?.method, typeof init?.body === 'string' ? JSON.parse(init.body) : undefined])).toEqual([
+			['/api/image-stacking/projects/p/runs', 'POST', { token: 'once', recipe: { method: 'median' } }],
+			['/api/image-stacking/projects/p/preflight', 'POST', { recipe: { method: 'median' } }],
+			['/api/image-stacking/runs/r/cancel', 'POST', undefined],
+		])
+		expect(state.preflight?.problems).toEqual(['x'])
+		await loadStackingPreflight(state, 'p', {}, fakeFetch({}).request)
+		expect(state.preflight?.problems).toEqual(['x'])
+		expect([jobEnded({ state: 'integrating' }), jobEnded({ state: 'completed' })]).toEqual([false, true])
 	})
 
 	test('cohort decisions and analyses reach their routes, and an analysis runs until it ends', async () => {

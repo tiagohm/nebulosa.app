@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from 'bun:test'
-import { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs'
+import { linkSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { basename, join } from 'path'
 import type { SubframeQualityMetrics } from 'nebulosa/src/imaging/processing/subframe.selector'
@@ -9,9 +9,10 @@ import type { ResolvePreview } from './calibrationlibrary'
 import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
 import { AppDatabase } from './database'
 import { createImageStackingRoutes, filterGroups, ImageStacking, type ImageStackingEvent, type StackingMasters } from './imagestacking'
-import { type AnalysisMeasurement, type AnalysisWorkerRequest, type FrameAnalyzer, StackingAnalyzer } from './imagestacking.analysis'
+import { type AnalysisMeasurement, type AnalysisWorkerRequest, type FrameAnalyzer, readDigital, StackingAnalyzer } from './imagestacking.analysis'
+import { type FrameIntegrator, integrationPlan } from './imagestacking.integration'
 import { cohortKeyOf, filterKeyOf, filterSynonyms, isWithin, lightRoleOf } from './imagestacking.sources'
-import { ImageStackingStore, type StackingSourceFacts, type StackingStar } from './imagestacking.store'
+import { ImageStackingStore, PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingProduct, type StackingSourceFacts, type StackingStar } from './imagestacking.store'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-stacking-test-'))
 
@@ -25,6 +26,27 @@ async function writeFrame(path: string, keywords: FitsHeader = {}) {
 	const header: FitsHeader = { SIMPLE: true, BITPIX: 16, NAXIS: 2, NAXIS1: WIDTH, NAXIS2: HEIGHT, BZERO: 32768, BSCALE: 1, ...keywords }
 	const raw = new Float64Array(WIDTH * HEIGHT).fill(0.1)
 	const buffer = Buffer.alloc(8 * 2880 + WIDTH * HEIGHT * 2)
+	const sink = bufferSink(buffer)
+	await writeFits(sink, [{ header, raw }], { type: false })
+	writeFileSync(path, buffer.subarray(0, sink.position))
+	return path
+}
+
+// Writes a 16-bit light of 96 × 96 pixels with Gaussian stars at the given centers over a flat sky.
+async function writeStars(path: string, stars: readonly (readonly [number, number])[], keywords: FitsHeader = {}) {
+	const size = 96
+	const raw = new Float64Array(size * size)
+
+	for (let y = 0; y < size; y++) {
+		for (let x = 0; x < size; x++) {
+			let value = 0.05 + ((x * 7 + y * 13) % 5) * 0.0004
+			for (const [cx, cy] of stars) value += 0.5 * Math.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (2 * 1.5 ** 2))
+			raw[y * size + x] = value
+		}
+	}
+
+	const header: FitsHeader = { SIMPLE: true, BITPIX: 16, NAXIS: 2, NAXIS1: size, NAXIS2: size, BZERO: 32768, BSCALE: 1, IMAGETYP: 'Light Frame', ...keywords }
+	const buffer = Buffer.alloc(8 * 2880 + size * size * 2)
 	const sink = bufferSink(buffer)
 	await writeFits(sink, [{ header, raw }], { type: false })
 	writeFileSync(path, buffer.subarray(0, sink.position))
@@ -109,10 +131,10 @@ function analyzer(measurements: Record<string, AnalysisMeasurement>, during: () 
 }
 
 // A service over a database and a managed directory of its own.
-function open(library: StackingMasters = masters().library, frameAnalyzer?: FrameAnalyzer) {
+function open(library: StackingMasters = masters().library, frameAnalyzer?: FrameAnalyzer, frameIntegrator?: FrameIntegrator) {
 	const events: ImageStackingEvent[] = []
 	const managed = directory('managed')
-	const stacking = new ImageStacking(new ImageStackingStore(AppDatabase.memory(), managed), (event) => events.push(event), library, [managed], frameAnalyzer)
+	const stacking = new ImageStacking(new ImageStackingStore(AppDatabase.memory(), managed), (event) => events.push(event), library, [managed], frameAnalyzer, frameIntegrator)
 	return { stacking, events, managed }
 }
 
@@ -120,7 +142,7 @@ function open(library: StackingMasters = masters().library, frameAnalyzer?: Fram
 async function settled(stacking: ImageStacking, jobId: string) {
 	for (let attempt = 0; attempt < 500; attempt++) {
 		const job = await stacking.job(jobId)
-		if (job.state !== 'scanning' && job.state !== 'analyzing') return job
+		if (job.state !== 'scanning' && job.state !== 'analyzing' && job.state !== 'integrating') return job
 		await Bun.sleep(10)
 	}
 
@@ -502,6 +524,40 @@ describe('calibration and registration planning', () => {
 		expect(blockers.map(({ code, groupKey }) => [code, groupKey])).toEqual([['registrationFailed', 'oiii']])
 	})
 
+	test('a cancelled run keeps the masters it published, and no analysis starts while it works', async () => {
+		const { fake } = analyzer(measurements())
+
+		const slow: FrameIntegrator = {
+			integrate: async (request, handlers, signal) => {
+				const [group] = request.groups
+				const directory = join(group.staging, 'product')
+				mkdirSync(directory, { recursive: true })
+				writeFileSync(join(directory, PRODUCT_MASTER_FILE), 'master')
+				writeFileSync(join(directory, PRODUCT_COVERAGE_FILE), 'coverage')
+				handlers.onStaged({ group: group.key, directory, contentDigest: 'm', bytes: 6, coverageDigest: 'c', coverageBytes: 8, channels: 1, diagnostics: { mode: 'online', coverageThreshold: 1, coveredPixels: 48, normalization: [] } })
+				const aborted = Promise.withResolvers<void>()
+				signal.addEventListener('abort', () => aborted.resolve(), { once: true })
+				await aborted.promise
+				signal.throwIfAborted()
+			},
+		}
+
+		const { stacking } = open(masters().library, fake, slow)
+		const { projectId } = await project(stacking)
+		await decide(stacking, projectId)
+		await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)
+		const { run } = await stacking.startRun(projectId, { token: 'cancel' })
+		await expect(stacking.startAnalysis(projectId)).rejects.toThrow('Another analysis or integration')
+		await Bun.sleep(20)
+		stacking.cancel(run.runId)
+		expect(await settled(stacking, run.runId)).toMatchObject({ state: 'cancelled', published: 1 })
+
+		const [saved] = await stacking.runs(projectId)
+		expect(saved.state).toBe('cancelled')
+		expect(saved.groups.map((group) => group.productId !== undefined)).toEqual([true, false])
+		expect((await stacking.products(projectId)).map((product) => product.groupKey)).toEqual([saved.groups[0].groupKey])
+	})
+
 	test('an analysis is refused while another runs and can be cancelled, keeping what it measured', async () => {
 		const slow: FrameAnalyzer = {
 			analyze: async (request, onMeasured, signal) => {
@@ -524,28 +580,166 @@ describe('calibration and registration planning', () => {
 	})
 })
 
-describe('frame measurement', () => {
-	// Writes a 16-bit light of Gaussian stars at the given centers over a flat sky.
-	async function writeStars(path: string, stars: readonly (readonly [number, number])[]) {
-		const size = 96
-		const raw = new Float64Array(size * size)
+describe('integration and publication', () => {
+	// Stars of the field of the integration tests.
+	const STARS = [
+		[20, 20],
+		[70, 25],
+		[30, 70],
+		[75, 75],
+		[50, 48],
+		[15, 50],
+		[82, 50],
+		[48, 12],
+		[60, 62],
+		[35, 38],
+	] as const
 
-		for (let y = 0; y < size; y++) {
-			for (let x = 0; x < size; x++) {
-				let value = 0.05 + ((x * 7 + y * 13) % 5) * 0.0004
-				for (const [cx, cy] of stars) value += 0.5 * Math.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (2 * 1.5 ** 2))
-				raw[y * size + x] = value
+	// A project of three L frames of one field shifted by a few pixels, imported, not calibrated, and analyzed.
+	async function analyzed(stacking: ImageStacking) {
+		const folder = directory('integrate')
+		const shifts = [
+			[0, 0],
+			[3, -2],
+			[-2, 4],
+		] as const
+
+		for (const [index, [dx, dy]] of shifts.entries()) {
+			await writeStars(
+				join(folder, `l${index}.fit`),
+				STARS.map(([x, y]) => [x + dx, y + dy] as const),
+				light('L', { DATE_OBS: undefined, 'DATE-OBS': `2026-10-0${index + 1}T22:00:00` }),
+			)
+		}
+
+		const { projectId } = await stacking.createProject({ name: 'Field' })
+		await importAll(stacking, projectId, [folder])
+		const [cohort] = await stacking.cohorts(projectId)
+		await stacking.updateCohort(projectId, cohort.cohortId, { calibration: { kind: 'none', reason: 'Synthetic frames' } })
+		expect(await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)).toMatchObject({ state: 'completed', failures: 0 })
+		return { projectId, folder }
+	}
+
+	test('a run integrates on the worker, publishes a master on the project grid, and reuses it for the same inputs', async () => {
+		const { stacking, managed } = open()
+		const { projectId, folder } = await analyzed(stacking)
+
+		const started = await stacking.startRun(projectId, { token: 'first', recipe: { method: 'sigma-clip' } })
+		expect(started.job).toMatchObject({ type: 'integration', state: 'integrating', found: 3 })
+		expect(await settled(stacking, started.run.runId)).toMatchObject({ state: 'completed', measured: 3, published: 1 })
+		expect((await stacking.startRun(projectId, { token: 'first' })).run.runId).toBe(started.run.runId)
+
+		const [product] = await stacking.products(projectId)
+		expect(product).toMatchObject({ status: 'ready', name: 'L', width: 96, height: 96, channels: 1, frames: 3, exposure: 900 })
+		expect(product.diagnostics).toMatchObject({ mode: 'spill', coverageThreshold: 2 })
+		expect(product.diagnostics.normalization.map(({ scales }) => scales.length)).toEqual([1, 1, 1])
+		const detail = await stacking.product(product.productId)
+		expect(detail.path).toBe(join(managed, 'products', product.productId, PRODUCT_MASTER_FILE))
+		expect(detail.sources).toHaveLength(3)
+
+		const master = await readDigital(detail.path)
+		const coverage = await readDigital(detail.coveragePath)
+		expect([master.metadata.width, master.metadata.height, master.header.NCOMBINE, master.header.IMAGETYP]).toEqual([96, 96, 3, 'Master Light'])
+		let finite = 0
+		for (let i = 0; i < master.raw.length; i++) if (Number.isFinite(master.raw[i])) finite++
+		expect(finite).toBe(product.diagnostics.coveredPixels)
+		expect(Math.max(...coverage.raw)).toBe(3)
+		expect(readdirSync(join(managed, 'staging'), { recursive: true }).length).toBe(0)
+
+		const again = await stacking.startRun(projectId, { token: 'second', recipe: { method: 'sigma-clip' } })
+		expect(again.run).toMatchObject({ state: 'completed', groups: [{ groupKey: 'l', productId: product.productId, reused: true }] })
+
+		const online = await stacking.startRun(projectId, { token: 'third', recipe: { method: 'average' } })
+		await settled(stacking, online.run.runId)
+		const products = await stacking.products(projectId)
+		expect(products.map((item) => item.diagnostics.mode)).toEqual(['online', 'spill'])
+
+		const changed = join(folder, 'l1.fit')
+		utimesSync(changed, new Date(), new Date(Date.now() + 60000))
+		await stacking.refresh(projectId)
+		expect((await stacking.products(projectId)).map((item) => item.status)).toEqual(['stale', 'stale'])
+		expect((await stacking.products(projectId))[0].staleReasons).toEqual(['A frame it integrated is missing or changed'])
+
+		await stacking.deleteProduct(product.productId)
+		expect(readdirSync(join(managed, 'products'))).toEqual([products[0].productId])
+	})
+
+	test('preflight reports what does not fit, and a run is refused until it does', async () => {
+		const { stacking } = open()
+		const { projectId } = await analyzed(stacking)
+		const tight = await stacking.preflight(projectId, { recipe: { method: 'sigma-clip' }, memoryBudget: 1024 })
+		expect(tight.groups).toMatchObject([{ groupKey: 'l', frames: 3, plan: { mode: 'spill', fits: false } }])
+		expect(tight.problems[0]).toContain('of memory')
+		await expect(stacking.startRun(projectId, { token: 't', recipe: { method: 'sigma-clip' }, memoryBudget: 1024 })).rejects.toThrow('of memory')
+		expect(await stacking.runs(projectId)).toEqual([])
+		expect((await stacking.preflight(projectId, {})).problems).toEqual([])
+	})
+
+	test('plans of large stacks stay in safe integers and strips fit the budget', () => {
+		const plan = integrationPlan(9576, 6388, 3, 1000, 'sigma-clip', 2 * 1024 ** 3)
+		expect([plan.memoryBytes, plan.diskBytes].every(Number.isSafeInteger)).toBeTrue()
+		expect(plan.stripRows).toBe(Math.floor((2 * 1024 ** 3 - 9576 * 6388 * 4) / (9576 * (1000 * 5 + 4))))
+		expect(plan.diskBytes).toBe(1000 * 9576 * 6388 * 13)
+		expect(integrationPlan(100, 100, 1, 10, 'average', 1e6)).toMatchObject({ mode: 'online', diskBytes: 0, fits: true })
+		expect(integrationPlan(100, 100, 1, 10, 'median', 100)).toMatchObject({ stripRows: 0, fits: false })
+	})
+
+	test('the next start finishes interrupted publications and runs, and sets aside unknown directories', async () => {
+		const database = AppDatabase.memory()
+		const managed = directory('recover')
+		const store = new ImageStackingStore(database, managed)
+		const first = new ImageStacking(store, () => undefined, masters().library, [managed])
+		const { projectId } = await first.createProject({ name: 'Crash' })
+
+		const product = (productId: string, contents: string): StackingProduct => {
+			const directory = join(managed, 'products', productId)
+			mkdirSync(directory, { recursive: true })
+			writeFileSync(join(directory, PRODUCT_MASTER_FILE), contents)
+			writeFileSync(join(directory, PRODUCT_COVERAGE_FILE), 'coverage')
+			const digest = new Bun.CryptoHasher('sha256').update('intact').digest('hex')
+			return {
+				productId,
+				projectId,
+				runId: 'run',
+				groupKey: 'l',
+				name: 'L',
+				fingerprint: productId,
+				createdAt: 1,
+				contentDigest: digest,
+				bytes: 6,
+				coverageDigest: 'x',
+				coverageBytes: 8,
+				width: 1,
+				height: 1,
+				channels: 1,
+				referenceSourceId: 's',
+				frames: 1,
+				exposure: 1,
+				recipe: { method: 'average', weighting: 'none', normalization: 'none', interpolation: 'bilinear', minimumCoverage: 1, sigmaLower: 3, sigmaUpper: 3 },
+				calibration: {},
+				diagnostics: { mode: 'online', coverageThreshold: 1, coveredPixels: 1, normalization: [] },
 			}
 		}
 
-		const header: FitsHeader = { SIMPLE: true, BITPIX: 16, NAXIS: 2, NAXIS1: size, NAXIS2: size, BZERO: 32768, BSCALE: 1, IMAGETYP: 'Light Frame' }
-		const buffer = Buffer.alloc(8 * 2880 + size * size * 2)
-		const sink = bufferSink(buffer)
-		await writeFits(sink, [{ header, raw }], { type: false })
-		writeFileSync(path, buffer.subarray(0, sink.position))
-		return path
-	}
+		store.beginProduct(product('intact', 'intact'), [])
+		store.beginProduct(product('broken', 'broken'), [])
+		store.beginProduct(product('deleted', 'intact'), [])
+		store.setPublication('deleted', 'deleting')
+		mkdirSync(join(managed, 'products', 'unknown'), { recursive: true })
+		mkdirSync(join(managed, 'staging', 'old'), { recursive: true })
+		store.putRun({ runId: 'run', projectId, token: 't', state: 'running', createdAt: 1, recipe: product('x', 'x').recipe, groups: [] })
+		rmSync(join(managed, 'products', 'x'), { recursive: true })
 
+		const second = new ImageStacking(store, () => undefined, masters().library, [managed])
+		expect((await second.products(projectId)).map(({ productId, status }) => [productId, status])).toEqual([['intact', 'ready']])
+		expect(readdirSync(join(managed, 'products'))).toEqual(['intact'])
+		expect(readdirSync(join(managed, 'orphaned'))[0]).toStartWith('unknown-')
+		expect(readdirSync(managed)).not.toContain('staging')
+		expect((await second.runs(projectId))[0].state).toBe('interrupted')
+	})
+})
+
+describe('frame measurement', () => {
 	test('the worker measures calibrated frames and reports each, without stopping at one that changed', async () => {
 		const folder = directory('measure')
 		const stars = [

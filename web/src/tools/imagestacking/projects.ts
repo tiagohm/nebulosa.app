@@ -1,11 +1,12 @@
 // oxfmt-ignore
-import type { ImageStackingSnapshot, Page, ServerEvent, SourceStatus, StackingCohort, StackingCohortPatch, StackingFilterGroup, StackingFrameSummary, StackingImportCandidate, StackingImportCommit, StackingJobSummary, StackingProjectDetail, StackingRole, StackingSettings, StackingSourceDetail, StackingSourcePatch, StackingValidation } from 'api'
+import type { ImageStackingSnapshot, Page, ServerEvent, SourceStatus, StackingCohort, StackingCohortPatch, StackingFilterGroup, StackingFrameSummary, StackingImportCandidate, StackingImportCommit, StackingJobSummary, StackingPreflight, StackingProductDetail, StackingProductSummary, StackingProjectDetail, StackingRole, StackingRun, StackingRunRequest, StackingSettings, StackingSourceDetail, StackingSourcePatch, StackingValidation } from 'api'
 import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../../http'
 
 // Image Stacking as this tab knows it. The server owns every project, frame, and job, so this store only mirrors them: a
 // snapshot on every socket (re)open and on every change event, jobs as they change, and the project, its groups, its
-// cohorts, its validation, and a page of its frames fetched when the view asks. A new epoch means a new server process, whose counters start over; a
+// cohorts, its validation, its products and runs, what a run would do, and a page of its frames fetched when the view
+// asks. A new epoch means a new server process, whose counters start over; a
 // snapshot older than one applied is dropped, and a response that arrives after a newer request of its kind is ignored.
 // Nothing here decides a role, a filter, a group, or a calibration: the tool shows what the server answers.
 
@@ -36,6 +37,10 @@ export interface ImageStackingRuntime {
 	groups?: StackingFilterGroup[]
 	cohorts?: StackingCohort[]
 	validation?: StackingValidation
+	// Masters of the project shown and its latest runs, newest first, and what a run would do with the recipe shown.
+	products?: StackingProductSummary[]
+	runs?: StackingRun[]
+	preflight?: StackingPreflight
 	frames?: Page<StackingFrameSummary>
 	// Frame shown in detail, with its path.
 	frame?: StackingSourceDetail
@@ -61,7 +66,7 @@ const requests: Record<string, number> = {}
 
 // Returns whether a job ended.
 export function jobEnded(job: Pick<StackingJobSummary, 'state'>) {
-	return job.state !== 'scanning' && job.state !== 'analyzing'
+	return job.state !== 'scanning' && job.state !== 'analyzing' && job.state !== 'integrating'
 }
 
 // Replaces what a new server process makes meaningless.
@@ -136,28 +141,52 @@ function projectUrl(projectId: string) {
 	return `${BASE_URL}/projects/${encodeURIComponent(projectId)}`
 }
 
-// Fetches a project with its filter groups, cohorts, and validation; absent, or one the server does not know, clears them.
+// Fetches a project with its filter groups, cohorts, validation, products, and runs; absent, or one the server does not
+// know, clears them.
 export async function loadStackingProject(state: ImageStackingRuntime, projectId: string | undefined, request: typeof fetch = fetch) {
 	if (projectId === undefined) {
-		for (const key of ['project', 'groups', 'cohorts', 'validation']) requests[key] = (requests[key] ?? 0) + 1
+		for (const key of ['project', 'groups', 'cohorts', 'validation', 'products', 'runs']) requests[key] = (requests[key] ?? 0) + 1
 		state.project = undefined
 		state.groups = undefined
 		state.cohorts = undefined
 		state.validation = undefined
+		state.products = undefined
+		state.runs = undefined
 		return
 	}
 
 	const url = projectUrl(projectId)
-	const [project, groups, cohorts, validation] = await Promise.all([
+	const [project, groups, cohorts, validation, products, runs] = await Promise.all([
 		latest('project', fetchJson<StackingProjectDetail>(url, request)),
 		latest('groups', fetchJson<StackingFilterGroup[]>(`${url}/groups`, request)),
 		latest('cohorts', fetchJson<StackingCohort[]>(`${url}/cohorts`, request)),
 		latest('validation', fetchJson<StackingValidation>(`${url}/validation`, request)),
+		latest('products', fetchJson<StackingProductSummary[]>(`${url}/products`, request)),
+		latest('runs', fetchJson<StackingRun[]>(`${url}/runs`, request)),
 	])
 	if (project) state.project = project.value
 	if (groups) state.groups = groups.value
 	if (cohorts) state.cohorts = cohorts.value
 	if (validation) state.validation = validation.value
+	if (products) state.products = products.value
+	if (runs) state.runs = runs.value
+}
+
+// Fetches what a run of a project would do with a recipe; a failure leaves the last answer.
+export async function loadStackingPreflight(state: ImageStackingRuntime, projectId: string, body: Omit<StackingRunRequest, 'token'>, request: typeof fetch = fetch) {
+	const answer = await latest(
+		'preflight',
+		request(`${projectUrl(projectId)}/preflight`, jsonInit('POST', body)).then(
+			async (response) => (response.ok ? ((await response.json()) as StackingPreflight) : undefined),
+			() => undefined,
+		),
+	)
+	if (answer?.value) state.preflight = answer.value
+}
+
+// Fetches a product with the paths of its files.
+export function loadStackingProduct(productId: string, request: typeof fetch = fetch) {
+	return fetchJson<StackingProductDetail>(`${BASE_URL}/products/${encodeURIComponent(productId)}`, request)
 }
 
 // Fetches a page of frames of a project.
@@ -277,6 +306,21 @@ export function startStackingAnalysis(state: ImageStackingRuntime, projectId: st
 // Cancels an analysis; what it measured stays.
 export function cancelStackingAnalysis(state: ImageStackingRuntime, jobId: string, request: typeof fetch = fetch) {
 	return command(state, `analysis:${jobId}`, `${BASE_URL}/analyses/${encodeURIComponent(jobId)}/cancel`, jsonInit('POST'), request)
+}
+
+// Starts integrating a project; its progress arrives as events. The token makes a repeated request answer the same run.
+export function startStackingRun(state: ImageStackingRuntime, projectId: string, body: StackingRunRequest, request: typeof fetch = fetch) {
+	return command<{ readonly run: StackingRun; readonly job?: StackingJobSummary }>(state, 'run', `${projectUrl(projectId)}/runs`, jsonInit('POST', body), request)
+}
+
+// Cancels a run; the masters it published stay.
+export function cancelStackingRun(state: ImageStackingRuntime, runId: string, request: typeof fetch = fetch) {
+	return command(state, `run:${runId}`, `${BASE_URL}/runs/${encodeURIComponent(runId)}/cancel`, jsonInit('POST'), request)
+}
+
+// Deletes a product with its files.
+export function deleteStackingProduct(state: ImageStackingRuntime, productId: string, request: typeof fetch = fetch) {
+	return command(state, `product:${productId}`, `${BASE_URL}/products/${encodeURIComponent(productId)}`, { method: 'DELETE' }, request)
 }
 
 // Separates a merged filter key again.

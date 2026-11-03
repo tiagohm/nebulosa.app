@@ -621,3 +621,66 @@ CREATE TABLE stack_cohorts (
 	calibration TEXT CHECK (calibration IS NULL OR json_valid(calibration)),
 	PRIMARY KEY (project_id, cohort_id)
 ) STRICT;
+
+-- Integrations of a project, in the order they were asked for. A run interrupted by the end of the process is marked so
+-- on the next start; what it published stays.
+CREATE TABLE stack_runs (
+	run_id TEXT PRIMARY KEY,
+	project_id TEXT NOT NULL REFERENCES stack_projects (project_id) ON DELETE CASCADE,
+	-- Key the request was sent with, so a repeated request answers the same run.
+	token TEXT NOT NULL,
+	-- running, completed (every group published or reused), failed, cancelled, or interrupted.
+	state TEXT NOT NULL CHECK (state IN ('running', 'completed', 'failed', 'cancelled', 'interrupted')),
+	-- When it was asked for and when it ended, Unix milliseconds (UTC); ended_at is NULL while running.
+	created_at INTEGER NOT NULL,
+	ended_at INTEGER,
+	-- How frames are combined (StackingRecipe).
+	recipe TEXT NOT NULL CHECK (json_valid(recipe)),
+	-- Outcome of each filter group (StackingRunGroup[]): the product it published or reused, or why it failed.
+	groups TEXT NOT NULL CHECK (json_valid(groups)),
+	-- Why it failed as a whole; NULL otherwise.
+	error TEXT,
+	UNIQUE (project_id, token)
+) STRICT;
+
+CREATE INDEX stack_runs_project ON stack_runs (project_id, created_at);
+
+-- Linear masters of a project, one per filter group and integration, immutable once published: master.fit and
+-- coverage.fit in products/<product_id>/ under the directory of Image Stacking. A product is publishing from the moment
+-- its row is written until its directory is in products/, and deleting from the moment it is deleted until its directory
+-- is gone, so a crash between the two halves is finished from the disk on the next start.
+CREATE TABLE stack_products (
+	product_id TEXT PRIMARY KEY,
+	project_id TEXT NOT NULL REFERENCES stack_projects (project_id) ON DELETE CASCADE,
+	-- Run that integrated it.
+	run_id TEXT NOT NULL,
+	publication TEXT NOT NULL CHECK (publication IN ('publishing', 'published', 'deleting')),
+	-- Filter group, by key, and its name when integrated.
+	group_key TEXT NOT NULL,
+	name TEXT NOT NULL,
+	-- Identity of its inputs (StackingProduct.fingerprint): an equal one is reused instead of integrated again.
+	fingerprint TEXT NOT NULL,
+	-- When it was published, Unix milliseconds (UTC).
+	created_at INTEGER NOT NULL,
+	-- SHA-256 and size, in bytes, of master.fit and coverage.fit.
+	content_digest TEXT NOT NULL,
+	bytes INTEGER NOT NULL CHECK (bytes > 0),
+	coverage_digest TEXT NOT NULL,
+	coverage_bytes INTEGER NOT NULL CHECK (coverage_bytes > 0),
+	-- Everything else about it (StackingProduct): grid, frames, exposure, recipe, calibration pins, and diagnostics.
+	product TEXT NOT NULL CHECK (json_valid(product))
+) STRICT;
+
+CREATE INDEX stack_products_project ON stack_products (project_id, created_at);
+CREATE INDEX stack_products_fingerprint ON stack_products (project_id, fingerprint);
+
+-- Light frames a product integrated, with the SHA-256 and weight each had. A frame later removed from its project or
+-- changed leaves the product stale, never deleted.
+CREATE TABLE stack_product_sources (
+	product_id TEXT NOT NULL REFERENCES stack_products (product_id) ON DELETE CASCADE,
+	source_id TEXT NOT NULL,
+	digest TEXT NOT NULL,
+	-- Combination weight, positive.
+	weight REAL NOT NULL CHECK (weight > 0),
+	PRIMARY KEY (product_id, source_id)
+) STRICT;

@@ -36,7 +36,7 @@ const DETECTED_STARS = 500
 const DETECTION_MIN_SNR = 5
 
 // Stars a reference needs at least to be preferred by its quality.
-const REFERENCE_MIN_STARS = 10
+export const REFERENCE_MIN_STARS = 10
 
 // Smallest number of matched stars of an accepted registration.
 const REGISTRATION_MIN_INLIERS = 6
@@ -101,8 +101,15 @@ export interface FrameAnalyzer {
 	readonly analyze: (request: AnalysisWorkerRequest, onMeasured: (sourceId: string, measurement: AnalysisMeasurement) => void, signal: AbortSignal) => Promise<void>
 }
 
+// Masters of a cohort read in the normalized scale of its lights.
+export interface CohortMasters {
+	readonly dark?: Image
+	readonly flat?: Image
+	readonly bias?: Image
+}
+
 // Reads the first image of a FITS or XISF file in digital numbers, in single precision.
-async function readDigital(path: string): Promise<DigitalImage> {
+export async function readDigital(path: string): Promise<DigitalImage> {
 	await using source = fileHandleSource(await open(path, 'r'))
 
 	if (extname(path).toLowerCase() === '.xisf') {
@@ -124,6 +131,12 @@ async function readMaster(master: AnalysisMaster) {
 	return calibrationMasterImage(await readDigital(master.path), master.fullScale)
 }
 
+// Reads the masters of a cohort; none without a calibration. Throws when a file cannot be read.
+export async function readCohortMasters(calibration: AnalysisCalibration | undefined): Promise<CohortMasters> {
+	if (!calibration) return {}
+	return { dark: calibration.dark && (await readMaster(calibration.dark)), flat: calibration.flat && (await readMaster(calibration.flat)), bias: calibration.bias && (await readMaster(calibration.bias)) }
+}
+
 // Keeps the brightest stars, rounded to what registration can use.
 function keptStars(stars: readonly DetectedStar[]): StackingStar[] {
 	const kept: StackingStar[] = []
@@ -131,8 +144,9 @@ function keptStars(stars: readonly DetectedStar[]): StackingStar[] {
 	return kept
 }
 
-// Calibrates a light read in digital numbers with the masters of its cohort, which must share its geometry.
-function calibrateLight(light: DigitalImage, masters: { readonly dark?: Image; readonly flat?: Image; readonly bias?: Image }) {
+// Calibrates a light read in digital numbers with the masters of its cohort, which must share its geometry. A pixel
+// whose flat is not usable is left uncorrected, for the caller to mask.
+export function calibrateLight(light: DigitalImage, masters: CohortMasters) {
 	const image = calibrationMasterImage(light, digitalFullScale(light.metadata.bitpix))
 	if (!masters.dark && !masters.flat && !masters.bias) return image
 	return calibrate(image, { dark: masters.dark, flat: masters.flat, bias: masters.dark ? undefined : masters.bias, darkScaling: 'none', flatRepresentation: 'calibratedNormalized', invalidFlat: 'passthrough' })
@@ -142,22 +156,18 @@ function calibrateLight(light: DigitalImage, masters: { readonly dark?: Image; r
 // the others go on; masters that cannot be read fail every frame of their cohort. Stops between frames when aborted.
 export async function measureFrames(request: AnalysisWorkerRequest, report: (sourceId: string, measurement: AnalysisMeasurement) => void, signal?: AbortSignal) {
 	let cohort: string | undefined
-	let masters: { readonly dark?: Image; readonly flat?: Image; readonly bias?: Image; readonly error?: string } = {}
+	let masters: CohortMasters & { readonly error?: string } = {}
 
 	for (const frame of request.frames) {
 		signal?.throwIfAborted()
 
 		if (frame.cohortId !== cohort) {
 			cohort = frame.cohortId
-			masters = {}
-			const calibration = request.calibrations[cohort]
 
-			if (calibration) {
-				try {
-					masters = { dark: calibration.dark && (await readMaster(calibration.dark)), flat: calibration.flat && (await readMaster(calibration.flat)), bias: calibration.bias && (await readMaster(calibration.bias)) }
-				} catch {
-					masters = { error: 'A pinned master could not be read' }
-				}
+			try {
+				masters = await readCohortMasters(request.calibrations[cohort])
+			} catch {
+				masters = { error: 'A pinned master could not be read' }
 			}
 		}
 
@@ -353,7 +363,7 @@ export class StackingAnalyzer implements FrameAnalyzer {
 		watch()
 
 		try {
-			worker.postMessage(request, [])
+			worker.postMessage({ ...request, mode: 'analyze' }, [])
 			await promise
 		} finally {
 			clearTimeout(timer)

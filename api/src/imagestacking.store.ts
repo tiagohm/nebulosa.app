@@ -1,5 +1,8 @@
+import { readdir, rm } from 'fs/promises'
 import { join } from 'path'
-import type { ImageRegistrationTransform } from 'nebulosa/src/imaging/processing/registration'
+import type { GlobalNormalizationMode } from 'nebulosa/src/imaging/processing/normalization'
+import type { ImageInterpolationMode, ImageRegistrationTransform } from 'nebulosa/src/imaging/processing/registration'
+import type { StackingCombinationMethod, StackingWeightingMode } from 'nebulosa/src/imaging/processing/stacker'
 import type { SubframeQualityMetrics, SubframeSelectionOptions } from 'nebulosa/src/imaging/processing/subframe.selector'
 import type { CalibrationMetadata, MasterReference } from './calibrationlibrary.compatibility'
 import { fileNameOf, MAX_PAGE_SIZE, type Page, type SourceFormat, type SourceStatus } from './calibrationlibrary.store'
@@ -9,8 +12,10 @@ import type { StackingRole } from './imagestacking.sources'
 // Persistence of Image Stacking. Projects with the choices of an operator, the light frames chosen for them with what an
 // operator declared and what the latest analysis measured about each, the filter aliases, and the calibration decision of
 // each cohort are rows of the operational database; the frames themselves stay where they are. Filter groups are not
-// stored: a group is the frames whose canonical filter key, after the aliases of the project, is equal. Every read and
-// write is synchronous and short.
+// stored: a group is the frames whose canonical filter key, after the aliases of the project, is equal. Runs and the
+// products they published are rows too, and each product is a directory of products/ under the directory of Image
+// Stacking, next to staging/ (the work of a running integration) and orphaned/ (directories found without a row). Every
+// read and write of a row is synchronous and short.
 
 // Default directory of the products and staging of Image Stacking, which an import never reads.
 export const DEFAULT_IMAGE_STACKING_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'image-stacking')
@@ -87,6 +92,134 @@ export interface StackingCohortDecision {
 	// Calibration chosen; absent while undecided.
 	readonly calibration?: StackingCalibration
 }
+
+// How the frames of a filter group are integrated.
+export interface StackingRecipe {
+	// Combination of the samples of a pixel.
+	readonly method: StackingCombinationMethod
+	// Weight of each frame from its measured quality.
+	readonly weighting: StackingWeightingMode
+	// Photometric match of each frame to the reference of its group, or none.
+	readonly normalization: 'none' | GlobalNormalizationMode
+	// Resampling kernel of the warp onto the project grid.
+	readonly interpolation: ImageInterpolationMode
+	// Fraction of the integrated frames that must cover a pixel for it to hold data, in (0, 1].
+	readonly minimumCoverage: number
+	// Rejection limits of the sigma-clipping methods, in robust standard deviations.
+	readonly sigmaLower: number
+	readonly sigmaUpper: number
+}
+
+// Recipe of a new integration: weighted sigma clipping of frames weighted by quality and matched by background and
+// scale, kept where half of them cover a pixel.
+export const DEFAULT_STACKING_RECIPE: StackingRecipe = { method: 'weighted-sigma-clip', weighting: 'quality', normalization: 'background-scale', interpolation: 'bilinear', minimumCoverage: 0.5, sigmaLower: 3, sigmaUpper: 3 }
+
+// State of a run:
+// - running: integrating; interrupted when the process ends meanwhile.
+// - completed: every group published or reused.
+// - failed, cancelled: ended early; the groups published before stay.
+export type StackingRunState = 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
+
+// Outcome of one filter group of a run.
+export interface StackingRunGroup {
+	// Key and name of the group.
+	readonly groupKey: string
+	readonly name: string
+	// Frames it integrates.
+	readonly frames: number
+	// Product published, or an equal one reused.
+	readonly productId?: string
+	readonly reused?: boolean
+	// Why it failed.
+	readonly error?: string
+}
+
+// An integration of a project.
+export interface StackingRun {
+	readonly runId: string
+	readonly projectId: string
+	// Key of the request, so a repeated request answers the same run.
+	readonly token: string
+	readonly state: StackingRunState
+	// When it was asked for and ended, Unix milliseconds (UTC).
+	readonly createdAt: number
+	readonly endedAt?: number
+	readonly recipe: StackingRecipe
+	readonly groups: readonly StackingRunGroup[]
+	// Why it failed as a whole.
+	readonly error?: string
+}
+
+// Normalization of one integrated frame: `normalized = scale * value + offset` per channel.
+export interface StackingFrameNormalization {
+	readonly sourceId: string
+	readonly scales: readonly number[]
+	readonly offsets: readonly number[]
+}
+
+// Evidence of an integration.
+export interface StackingProductDiagnostics {
+	// How the samples were kept: accumulated in memory, or spilled to disk and combined in strips of rows.
+	readonly mode: 'online' | 'spill'
+	// Frames that must cover a pixel for it to hold data, and the pixels that hold data.
+	readonly coverageThreshold: number
+	readonly coveredPixels: number
+	// Rows of a strip when spilled.
+	readonly stripRows?: number
+	// Normalization of each frame, in integration order.
+	readonly normalization: readonly StackingFrameNormalization[]
+}
+
+// A linear master of one filter group: master.fit, in Float32 with NaN where no frame covers a pixel, and coverage.fit,
+// the number of frames that covered each pixel. Both are on the project grid, never cropped, so masters of every filter
+// of a project align pixel for pixel.
+export interface StackingProduct {
+	readonly productId: string
+	readonly projectId: string
+	// Run that integrated it.
+	readonly runId: string
+	// Filter group, by key, and its name when integrated.
+	readonly groupKey: string
+	readonly name: string
+	// Identity of its inputs: frames with their digests, weights, and transforms, calibration pins, grid, and recipe.
+	readonly fingerprint: string
+	// When it was published, Unix milliseconds (UTC).
+	readonly createdAt: number
+	// SHA-256 and size, in bytes, of master.fit and coverage.fit.
+	readonly contentDigest: string
+	readonly bytes: number
+	readonly coverageDigest: string
+	readonly coverageBytes: number
+	// Project grid, in pixels, and channels per pixel (3 for a debayered color sensor).
+	readonly width: number
+	readonly height: number
+	readonly channels: number
+	// Frame whose pixels the grid is, the reference of the project.
+	readonly referenceSourceId: string
+	// Frames integrated, and the sum of their exposures, in seconds.
+	readonly frames: number
+	readonly exposure: number
+	readonly recipe: StackingRecipe
+	// Calibration of each cohort integrated, by cohort id.
+	readonly calibration: Readonly<Record<string, StackingCalibration>>
+	readonly diagnostics: StackingProductDiagnostics
+}
+
+// A frame a product integrated, with the SHA-256 and weight it had.
+export interface StackingProductSource {
+	readonly sourceId: string
+	readonly digest: string
+	readonly weight: number
+}
+
+// Publication state of a product row: publishing until its directory is in products/, deleting until it is gone.
+export type StackingProductPublication = 'publishing' | 'published' | 'deleting'
+
+// Name of the image file of a product.
+export const PRODUCT_MASTER_FILE = 'master.fit'
+
+// Name of the coverage file of a product.
+export const PRODUCT_COVERAGE_FILE = 'coverage.fit'
 
 // A project.
 export interface StackingProject {
@@ -309,6 +442,37 @@ function sourceWhere(projectId: string, filter: StackingSourceFilter) {
 	return { where: `WHERE ${clauses.join(' AND ')}`, values }
 }
 
+// Row of stack_runs.
+interface RunRow {
+	readonly run_id: string
+	readonly project_id: string
+	readonly token: string
+	readonly state: StackingRunState
+	readonly created_at: number
+	readonly ended_at: number | null
+	readonly recipe: string
+	readonly groups: string
+	readonly error: string | null
+}
+
+// Columns of stack_runs.
+const RUN_COLUMNS = 'run_id, project_id, token, state, created_at, ended_at, recipe, groups, error'
+
+// Returns the run of a row.
+function rowRun(row: RunRow): StackingRun {
+	return {
+		runId: row.run_id,
+		projectId: row.project_id,
+		token: row.token,
+		state: row.state,
+		createdAt: row.created_at,
+		...(row.ended_at !== null && { endedAt: row.ended_at }),
+		recipe: JSON.parse(row.recipe) as StackingRecipe,
+		groups: JSON.parse(row.groups) as StackingRunGroup[],
+		...(row.error !== null && { error: row.error }),
+	}
+}
+
 // Projects and their frames in the operational database.
 export class ImageStackingStore {
 	// Creates the store of the rows of database and the files under directory.
@@ -316,6 +480,143 @@ export class ImageStackingStore {
 		readonly database: AppDatabase,
 		readonly directory: string = DEFAULT_IMAGE_STACKING_DIRECTORY,
 	) {}
+
+	// Directory of the published products.
+	get productsDirectory() {
+		return join(this.directory, 'products')
+	}
+
+	// Directory of products/ entries found without a row.
+	get orphanedDirectory() {
+		return join(this.directory, 'orphaned')
+	}
+
+	// Directory of a product.
+	productDirectory(productId: string) {
+		return join(this.productsDirectory, productId)
+	}
+
+	// Directory of the work of a run, on the filesystem of the products so publishing is a rename.
+	stagingDirectory(runId: string) {
+		return join(this.directory, 'staging', runId)
+	}
+
+	// Removes the work of every run, which only a running run owns.
+	async clearStaging() {
+		await rm(join(this.directory, 'staging'), { recursive: true, force: true })
+	}
+
+	// Lists the names of the directories of products/.
+	async productDirectories() {
+		const entries = await readdir(this.productsDirectory, { withFileTypes: true }).catch(() => [])
+		return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+	}
+
+	// Lists the latest runs of a project, newest first.
+	runs(projectId: string, limit: number) {
+		return this.database.db.query<RunRow, [string, number]>(`SELECT ${RUN_COLUMNS} FROM stack_runs WHERE project_id = ? ORDER BY created_at DESC, run_id LIMIT ?`).all(projectId, limit).map(rowRun)
+	}
+
+	// Returns a run.
+	run(runId: string) {
+		const row = this.database.db.query<RunRow, [string]>(`SELECT ${RUN_COLUMNS} FROM stack_runs WHERE run_id = ?`).get(runId)
+		return row ? rowRun(row) : undefined
+	}
+
+	// Returns the run of a project asked for with a token.
+	runByToken(projectId: string, token: string) {
+		const row = this.database.db.query<RunRow, [string, string]>(`SELECT ${RUN_COLUMNS} FROM stack_runs WHERE project_id = ? AND token = ?`).get(projectId, token)
+		return row ? rowRun(row) : undefined
+	}
+
+	// Writes a run.
+	putRun(run: StackingRun) {
+		this.database.write(() => {
+			this.database.db
+				.query(`INSERT INTO stack_runs (${RUN_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (run_id) DO UPDATE SET state = excluded.state, ended_at = excluded.ended_at, groups = excluded.groups, error = excluded.error`)
+				.run(run.runId, run.projectId, run.token, run.state, run.createdAt, run.endedAt ?? null, JSON.stringify(run.recipe), JSON.stringify(run.groups), run.error ?? null)
+		})
+	}
+
+	// Marks every running run interrupted at `now`, as the end of a process leaves them. Returns how many.
+	interruptRuns(now: number) {
+		let changes = 0
+		this.database.write(() => {
+			changes = this.database.db.query("UPDATE stack_runs SET state = 'interrupted', ended_at = ? WHERE state = 'running'").run(now).changes
+		})
+		return changes
+	}
+
+	// Lists the published products of a project, newest first.
+	products(projectId: string) {
+		return this.database.db
+			.query<{ product: string }, [string]>("SELECT product FROM stack_products WHERE project_id = ? AND publication = 'published' ORDER BY created_at DESC, product_id")
+			.all(projectId)
+			.map((row) => JSON.parse(row.product) as StackingProduct)
+	}
+
+	// Returns a published product.
+	product(productId: string) {
+		const row = this.database.db.query<{ product: string }, [string]>("SELECT product FROM stack_products WHERE product_id = ? AND publication = 'published'").get(productId)
+		return row ? (JSON.parse(row.product) as StackingProduct) : undefined
+	}
+
+	// Returns the published product of a project with a fingerprint, the newest when there are several.
+	productByFingerprint(projectId: string, fingerprint: string) {
+		const row = this.database.db.query<{ product: string }, [string, string]>("SELECT product FROM stack_products WHERE project_id = ? AND fingerprint = ? AND publication = 'published' ORDER BY created_at DESC LIMIT 1").get(projectId, fingerprint)
+		return row ? (JSON.parse(row.product) as StackingProduct) : undefined
+	}
+
+	// Lists the frames a product integrated.
+	productSources(productId: string): StackingProductSource[] {
+		return this.database.db.query<StackingProductSource, [string]>('SELECT source_id AS sourceId, digest, weight FROM stack_product_sources WHERE product_id = ? ORDER BY rowid').all(productId)
+	}
+
+	// Lists the products whose publication or deletion a crash interrupted.
+	pendingProducts() {
+		return this.database.db
+			.query<{ product: string; publication: StackingProductPublication }, []>("SELECT product, publication FROM stack_products WHERE publication <> 'published'")
+			.all()
+			.map((row) => ({ product: JSON.parse(row.product) as StackingProduct, publication: row.publication }))
+	}
+
+	// Returns whether a product row exists, in any publication state.
+	hasProduct(productId: string) {
+		return this.database.db.query<{ found: number }, [string]>('SELECT 1 AS found FROM stack_products WHERE product_id = ?').get(productId) !== null
+	}
+
+	// Records a product as publishing, with its frames, in one transaction.
+	beginProduct(product: StackingProduct, sources: readonly StackingProductSource[]) {
+		this.database.write(() => {
+			const { db } = this.database
+			db.query("INSERT INTO stack_products (product_id, project_id, run_id, publication, group_key, name, fingerprint, created_at, content_digest, bytes, coverage_digest, coverage_bytes, product) VALUES (?, ?, ?, 'publishing', ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+				product.productId,
+				product.projectId,
+				product.runId,
+				product.groupKey,
+				product.name,
+				product.fingerprint,
+				product.createdAt,
+				product.contentDigest,
+				product.bytes,
+				product.coverageDigest,
+				product.coverageBytes,
+				JSON.stringify(product),
+			)
+			const statement = db.query('INSERT INTO stack_product_sources (product_id, source_id, digest, weight) VALUES (?, ?, ?, ?)')
+			for (const source of sources) statement.run(product.productId, source.sourceId, source.digest, source.weight)
+		})
+	}
+
+	// Changes the publication state of a product.
+	setPublication(productId: string, publication: StackingProductPublication) {
+		this.database.write(() => this.database.db.query('UPDATE stack_products SET publication = ? WHERE product_id = ?').run(publication, productId))
+	}
+
+	// Forgets a product and its frames.
+	discardProduct(productId: string) {
+		this.database.write(() => this.database.db.query('DELETE FROM stack_products WHERE product_id = ?').run(productId))
+	}
 
 	// Lists every project, the latest changed first.
 	projects() {

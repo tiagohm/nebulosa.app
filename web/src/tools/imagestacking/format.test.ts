@@ -1,10 +1,22 @@
 import { describe, expect, test } from 'bun:test'
 import type { StackingImportCandidate } from 'api'
-import { candidateText, candidateUsable, cohortText, committedCounts, groupLabel, integrationText, masterText, metricText, registrationText, selectionFields, selectionOf } from './format'
+import { candidateText, candidateUsable, cohortText, memoryText, runGroupText, committedCounts, groupLabel, integrationText, masterText, metricText, registrationText, selectionFields, selectionOf } from './format'
 
 function candidate(path: string, patch: Partial<StackingImportCandidate> = {}): StackingImportCandidate {
 	return { path, name: path, bytes: 1, mtimeMillis: 1, format: 'fits', role: 'light', warnings: [], known: false, ...patch }
 }
+
+describe('integration', () => {
+	test('run outcomes and sizes read in words', () => {
+		expect([runGroupText({ groupKey: 'l', name: 'L', frames: 3, productId: 'p', reused: true }), runGroupText({ groupKey: 'l', name: 'L', frames: 3, productId: 'p' }), runGroupText({ groupKey: 'l', name: 'L', frames: 3, error: 'A frame changed' }), runGroupText({ groupKey: 'l', name: 'L', frames: 3 })]).toEqual([
+			'L: reused',
+			'L: published',
+			'L: A frame changed',
+			'L: not integrated',
+		])
+		expect([memoryText(1), memoryText(300 * 1024 ** 2), memoryText(3 * 1024 ** 3)]).toEqual(['1 MiB', '300 MiB', '3.0 GiB'])
+	})
+})
 
 describe('planning', () => {
 	test('thresholds read from blank or unreadable fields set nothing, and come back as written', () => {

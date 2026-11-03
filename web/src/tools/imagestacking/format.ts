@@ -1,4 +1,5 @@
-import type { StackingCohort, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingRegistration, StackingRole, StackingSettings } from 'api'
+// oxfmt-ignore
+import type { StackingCohort, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingProductStatus, StackingRecipe, StackingRegistration, StackingRole, StackingRunGroup, StackingRunState, StackingSettings } from 'api'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Presentation helpers of Image Stacking: labels and texts of what the server answers, which candidates of an import a
@@ -6,13 +7,13 @@ import type { StatusTone } from '../../ui/StatusBadge'
 // whether a frame is stacked; the server does.
 
 // Sections of the tool.
-export const STACKING_SECTIONS = ['filters', 'frames', 'calibration', 'quality'] as const
+export const STACKING_SECTIONS = ['filters', 'frames', 'calibration', 'quality', 'integration', 'results'] as const
 
 // Section of the tool.
 export type StackingSection = (typeof STACKING_SECTIONS)[number]
 
 // Label of each section.
-export const SECTION_LABELS: Readonly<Record<StackingSection, string>> = { filters: 'Filters', frames: 'Frames', calibration: 'Calibration', quality: 'Quality' }
+export const SECTION_LABELS: Readonly<Record<StackingSection, string>> = { filters: 'Filters', frames: 'Frames', calibration: 'Calibration', quality: 'Quality', integration: 'Integration', results: 'Results' }
 
 // Label of each role.
 export const ROLE_LABELS: Readonly<Record<StackingRole, string>> = { light: 'Light', unclassified: 'Unclassified' }
@@ -145,4 +146,56 @@ export function masterKey(reference: { readonly masterId: string; readonly revis
 export function cohortText(cohort: Pick<StackingCohort, 'groupName' | 'target' | 'frames'>) {
 	const exposure = cohort.target.exposure === undefined ? 'unknown exposure' : `${cohort.target.exposure} s`
 	return `${cohort.groupName} · ${exposure} · ${cohort.frames === 1 ? '1 frame' : `${cohort.frames} frames`}`
+}
+
+// Combination methods, in the order they are offered.
+export const METHODS = ['weighted-sigma-clip', 'sigma-clip', 'winsorized-mean', 'percentile-clip-average', 'min-max-average', 'median', 'weighted-average', 'average', 'sum'] as const satisfies readonly StackingRecipe['method'][]
+
+// Label of each combination method.
+export const METHOD_LABELS: Readonly<Record<StackingRecipe['method'], string>> = {
+	'weighted-sigma-clip': 'Weighted Sigma Clip',
+	'sigma-clip': 'Sigma Clip',
+	'winsorized-mean': 'Winsorized Mean',
+	'percentile-clip-average': 'Percentile Clip',
+	'min-max-average': 'Min/Max Rejection',
+	median: 'Median',
+	'weighted-average': 'Weighted Average',
+	average: 'Average',
+	sum: 'Sum',
+}
+
+// Methods whose rejection limits are set in standard deviations.
+export const SIGMA_METHODS: ReadonlySet<StackingRecipe['method']> = new Set(['weighted-sigma-clip', 'sigma-clip'])
+
+// Weighting modes and their labels.
+export const WEIGHTINGS = ['quality', 'snr', 'inverse-hfd', 'stars', 'none'] as const satisfies readonly StackingRecipe['weighting'][]
+export const WEIGHTING_LABELS: Readonly<Record<StackingRecipe['weighting'], string>> = { quality: 'Quality', snr: 'SNR', 'inverse-hfd': 'Sharpness', stars: 'Star Count', none: 'Equal' }
+
+// Normalization modes and their labels.
+export const NORMALIZATIONS = ['background-scale', 'percentile', 'scale', 'none'] as const satisfies readonly StackingRecipe['normalization'][]
+export const NORMALIZATION_LABELS: Readonly<Record<StackingRecipe['normalization'], string>> = { 'background-scale': 'Background and Scale', percentile: 'Percentile', scale: 'Scale', none: 'None' }
+
+// Interpolation kernels and their labels.
+export const INTERPOLATIONS = ['bilinear', 'bicubic', 'nearest'] as const satisfies readonly StackingRecipe['interpolation'][]
+export const INTERPOLATION_LABELS: Readonly<Record<StackingRecipe['interpolation'], string>> = { bilinear: 'Bilinear', bicubic: 'Bicubic', nearest: 'Nearest' }
+
+// Tone and label of each state of a product.
+export const PRODUCT_TONES: Readonly<Record<StackingProductStatus, StatusTone>> = { ready: 'success', stale: 'warning', unavailable: 'danger' }
+export const PRODUCT_LABELS: Readonly<Record<StackingProductStatus, string>> = { ready: 'Ready', stale: 'Stale', unavailable: 'Unavailable' }
+
+// Tone and label of each state of a run.
+export const RUN_TONES: Readonly<Record<StackingRunState, StatusTone>> = { running: 'active', completed: 'success', failed: 'danger', cancelled: 'muted', interrupted: 'warning' }
+export const RUN_LABELS: Readonly<Record<StackingRunState, string>> = { running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled', interrupted: 'Interrupted' }
+
+// Text of the outcome of one group of a run.
+export function runGroupText(group: StackingRunGroup) {
+	if (group.reused) return `${group.name}: reused`
+	if (group.productId !== undefined) return `${group.name}: published`
+	if (group.error !== undefined) return `${group.name}: ${group.error}`
+	return `${group.name}: not integrated`
+}
+
+// Text of a size in bytes, in MiB or GiB.
+export function memoryText(bytes: number) {
+	return bytes < 1024 ** 3 ? `${Math.ceil(bytes / 1024 ** 2)} MiB` : `${(bytes / 1024 ** 3).toFixed(1)} GiB`
 }

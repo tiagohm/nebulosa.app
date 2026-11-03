@@ -373,14 +373,22 @@ export type {
 	StackingJobState,
 	StackingJobSummary,
 	StackingMasterCandidate,
+	StackingPreflight,
+	StackingPreflightGroup,
+	StackingProductDetail,
+	StackingProductStatus,
+	StackingProductSummary,
 	StackingProjectDetail,
 	StackingProjectSummary,
 	StackingSourceDetail,
+	StackingRunRequest,
 	StackingSourcePatch,
 	StackingValidation,
 } from './imagestacking'
+export type { IntegrationPlan } from './imagestacking.integration'
 export type { StackingRole } from './imagestacking.sources'
-export type { StackingCalibration, StackingCohortDecision, StackingFilterAlias, StackingFrameAnalysis, StackingProject, StackingProjectAnalysis, StackingRegistration, StackingSettings, StackingSourceSummary } from './imagestacking.store'
+// oxfmt-ignore
+export type { StackingCalibration, StackingCohortDecision, StackingFilterAlias, StackingFrameAnalysis, StackingFrameNormalization, StackingProduct, StackingProductDiagnostics, StackingProductSource, StackingProject, StackingProjectAnalysis, StackingRecipe, StackingRegistration, StackingRun, StackingRunGroup, StackingRunState, StackingSettings, StackingSourceSummary } from './imagestacking.store'
 export type { DarvCaptureSettings, DarvEvent, DarvFinishRequest, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementTrails, DarvRequest, DarvSession, DarvSessionState, DarvSessionSummary, DarvSnapshot, DarvStartResponse } from './darv'
 export type { DarvMeasurementResult, DarvMeasurementStatus, DarvTrail } from './darv.analysis'
 export type {

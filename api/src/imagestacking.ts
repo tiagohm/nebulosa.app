@@ -1,16 +1,21 @@
-import { stat } from 'fs/promises'
-import { basename, relative } from 'path'
+import { mkdir, rename, rm, stat, statfs } from 'fs/promises'
+import { basename, join, relative } from 'path'
+import { composeRegistrationTransforms } from 'nebulosa/src/imaging/processing/registration'
+import { frameWeight } from 'nebulosa/src/imaging/processing/stacking.combination'
 import { type SubframeRejectionReason, subframeRejectionReasons } from 'nebulosa/src/imaging/processing/subframe.selector'
 import { medianOf } from 'nebulosa/src/math/numerical/statistics'
 import type { CalibrationMasterDetail, ResolvePreview } from './calibrationlibrary'
+import { fileDigest } from './calibrationlibrary.analysis'
 import { type CalibrationKind, type CalibrationMetadata, type CalibrationTarget, type MasterReference, stableId } from './calibrationlibrary.compatibility'
 import { fileIdentity, type FileInspection, inspectFile, scanDirectory } from './calibrationlibrary.sources'
 import { MAX_PAGE_SIZE, type Page, type ProductStatus, type SourceFormat, type SourceStatus } from './calibrationlibrary.store'
 import { errorResponse } from './http'
-import { ANALYSIS_VERSION, type AnalysisCalibration, type AnalysisFrame, type FrameAnalyzer, registerProject, type RegistrationFrame, type RegistrationGroup, StackingAnalyzer } from './imagestacking.analysis'
+import { ANALYSIS_VERSION, type AnalysisCalibration, type AnalysisFrame, type FrameAnalyzer, REFERENCE_MIN_STARS, registerProject, type RegistrationFrame, type RegistrationGroup, StackingAnalyzer } from './imagestacking.analysis'
+// oxfmt-ignore
+import { DEFAULT_STACK_MEMORY_BUDGET, type FrameIntegrator, INTEGRATION_VERSION, type IntegrationFrame, type IntegrationPlan, integrationPlan, type IntegrationWorkerRequest, productHeader, StackingIntegrator, type StagedProduct } from './imagestacking.integration'
 import { cohortKeyOf, filterKeyOf, filterSynonyms, isWithin, lightRoleOf, type StackingRole, stackingSourceId } from './imagestacking.sources'
 // oxfmt-ignore
-import { DEFAULT_STACKING_SETTINGS, type ImageStackingStore, type StackingCalibration, type StackingCohortDecision, type StackingFilterAlias, type StackingFrameAnalysis, type StackingProject, type StackingProjectAnalysis, type StackingSettings, type StackingSource, type StackingSourceFacts, type StackingSourceFilter, type StackingSourceSummary, stackingSourceSummary } from './imagestacking.store'
+import { DEFAULT_STACKING_RECIPE, DEFAULT_STACKING_SETTINGS, type ImageStackingStore, PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingCalibration, type StackingProduct, type StackingProductSource, type StackingRecipe, type StackingRun, type StackingRunGroup, type StackingCohortDecision, type StackingFilterAlias, type StackingFrameAnalysis, type StackingProject, type StackingProjectAnalysis, type StackingSettings, type StackingSource, type StackingSourceFacts, type StackingSourceFilter, type StackingSourceSummary, stackingSourceSummary } from './imagestacking.store'
 import { errorCode } from './util'
 
 // Image Stacking: projects of light frames saved on the server, grouped by the physical filter they were taken through,
@@ -23,8 +28,11 @@ import { errorCode } from './util'
 // revisions of the Calibration Library, or decides with a reason not to calibrate. An analysis measures every frame
 // calibrated as it will be stacked and registers the stars of each group onto its reference and each group reference onto
 // the project reference; a measurement stays valid while its file and the pins of its cohort do. Validation lists what
-// blocks a stack, what an operator must accept, and what is only worth knowing. Projects, frames, decisions, and
-// measurements are rows of the operational database; jobs live in memory and end with the process.
+// blocks a stack, what an operator must accept, and what is only worth knowing. A run integrates every filter group that
+// nothing blocks into an immutable linear master on the project grid, published one group at a time as it ends, so a
+// cancelled run keeps what it published, and reuses a published master whose inputs are the same. Projects, frames,
+// decisions, measurements, runs, and products are rows of the operational database; products are directories of
+// products/, and jobs live in memory and end with the process.
 
 // Default page size of the lists.
 const DEFAULT_PAGE_SIZE = 50
@@ -59,7 +67,7 @@ export interface StackingMasters {
 }
 
 // Stable code of a failed request.
-export type ImageStackingErrorCode = 'notFound' | 'conflict' | 'jobConflict' | 'managedPath' | 'verifiedMetadata' | 'invalidAlias' | 'calibrationUndecided' | 'masterUnavailable' | 'incompatibleMaster' | 'processingFailed'
+export type ImageStackingErrorCode = 'notFound' | 'conflict' | 'jobConflict' | 'managedPath' | 'verifiedMetadata' | 'invalidAlias' | 'calibrationUndecided' | 'masterUnavailable' | 'incompatibleMaster' | 'notReady' | 'insufficientMemory' | 'insufficientSpace' | 'processingFailed'
 
 // Failure of a request, with its status and stable code.
 class StackingError extends Error {
@@ -201,12 +209,96 @@ export interface StackingFrameSummary extends StackingSourceSummary {
 // State of a job:
 // - scanning: reading headers.
 // - analyzing: measuring and registering frames.
+// - integrating: integrating and publishing filter groups.
 // - completed: did what it could; an import waits for its review.
-// - failed, cancelled: ended early; an analysis keeps what it measured.
-export type StackingJobState = 'scanning' | 'analyzing' | 'completed' | 'failed' | 'cancelled'
+// - failed, cancelled: ended early; an analysis keeps what it measured, and a run what it published.
+export type StackingJobState = 'scanning' | 'analyzing' | 'integrating' | 'completed' | 'failed' | 'cancelled'
 
 // States of a job still working.
-const ACTIVE_JOB_STATES: ReadonlySet<StackingJobState> = new Set(['scanning', 'analyzing'])
+const ACTIVE_JOB_STATES: ReadonlySet<StackingJobState> = new Set(['scanning', 'analyzing', 'integrating'])
+
+// Request of a run.
+export interface StackingRunRequest {
+	// Key of the request, so sending it again answers the same run instead of starting another.
+	readonly token: string
+	// Changes to the default recipe.
+	readonly recipe?: Partial<StackingRecipe>
+	// Keys of the filter groups to integrate; every group nothing blocks when absent.
+	readonly groups?: readonly string[]
+	// Memory of the integration, in bytes; 2 GiB when absent.
+	readonly memoryBudget?: number
+}
+
+// What a run of one filter group would do.
+export interface StackingPreflightGroup {
+	readonly groupKey: string
+	readonly name: string
+	// Frames it integrates, and their exposure, in seconds.
+	readonly frames: number
+	readonly exposure: number
+	// Published master with the same inputs, reused instead of integrated.
+	readonly reusedProductId?: string
+	// How it integrates within the memory budget.
+	readonly plan: IntegrationPlan
+}
+
+// What a run would do, and what stops it.
+export interface StackingPreflight {
+	readonly recipe: StackingRecipe
+	// Memory of the integration and free space of the staging disk, in bytes.
+	readonly memoryBudget: number
+	readonly freeBytes: number
+	readonly groups: readonly StackingPreflightGroup[]
+	// Why it cannot start, in words; empty when it can.
+	readonly problems: readonly string[]
+}
+
+// State of a product now:
+// - ready: its files and inputs are what it integrated.
+// - stale: a frame or a pinned master changed or went away since; the file is still the one published.
+// - unavailable: its file is missing or of another size.
+export type StackingProductStatus = 'ready' | 'stale' | 'unavailable'
+
+// A product with its state.
+export interface StackingProductSummary extends StackingProduct {
+	readonly status: StackingProductStatus
+	// Why it is stale.
+	readonly staleReasons?: readonly string[]
+}
+
+// A product with what is only for one who asks: the paths of its files, to open them in Images, and its frames.
+export interface StackingProductDetail extends StackingProductSummary {
+	readonly path: string
+	readonly coveragePath: string
+	readonly sources: readonly StackingProductSource[]
+}
+
+// How a run integrates one filter group, with what its publication checks again.
+interface GroupPlan extends StackingPreflightGroup {
+	readonly frames: number
+	// Frames in integration order, the reference of the group first, with the sources a product records.
+	readonly integration: readonly IntegrationFrame[]
+	readonly sources: readonly StackingProductSource[]
+	// Header of the master and identity of its inputs.
+	readonly header: IntegrationWorkerRequest['groups'][number]['header']
+	readonly fingerprint: string
+	// Calibration of each cohort integrated, by cohort id.
+	readonly calibration: Readonly<Record<string, StackingCalibration>>
+}
+
+// Plan of a run: the preflight with what starting it needs.
+interface RunPlan extends StackingPreflight {
+	readonly groups: readonly GroupPlan[]
+	// Project grid, in pixels, and its reference frame.
+	readonly width: number
+	readonly height: number
+	readonly referenceSourceId: string
+	// Masters of each cohort integrated, by cohort id, and their pins, which the run leases.
+	readonly calibrations: Readonly<Record<string, AnalysisCalibration>>
+	readonly pins: readonly MasterReference[]
+	// Code of the first problem.
+	readonly code?: ImageStackingErrorCode
+}
 
 // What lists and events show of a job: no paths.
 export interface StackingJobSummary {
@@ -214,7 +306,7 @@ export interface StackingJobSummary {
 	// Project it works for.
 	readonly projectId: string
 	// What it does.
-	readonly type: 'import' | 'analysis'
+	readonly type: 'import' | 'analysis' | 'integration'
 	readonly state: StackingJobState
 	// When it was requested, and last changed, Unix milliseconds (UTC).
 	readonly createdAt: number
@@ -222,9 +314,14 @@ export interface StackingJobSummary {
 	// Files found, or frames to measure, and their total size, in bytes.
 	readonly found: number
 	readonly bytes: number
-	// Frames an analysis measured so far, and those that could not be.
+	// Frames an analysis measured or a run read so far, and those an analysis could not measure.
 	readonly measured?: number
 	readonly failures?: number
+	// Name of the filter group a run integrates, the rows it combined of the total, and the masters it published.
+	readonly group?: string
+	readonly rowsCombined?: number
+	readonly rowsTotal?: number
+	readonly published?: number
 	// Whether the limit on files stopped a scan.
 	readonly truncated: boolean
 	// Frames that entered the project once committed.
@@ -497,24 +594,29 @@ export class ImageStacking {
 	readonly #scans = new Map<string, AbortController>()
 
 	// Creates the service. listener receives every change synchronously; masters is the Calibration Library; managed lists
-	// the directories whose files belong to the application, which an import never reads; analyzer measures frames.
+	// the directories whose files belong to the application, which an import never reads; analyzer measures frames and
+	// integrator integrates them.
 	constructor(
 		readonly store: ImageStackingStore,
 		readonly listener: (event: ImageStackingEvent) => void,
 		readonly masters: StackingMasters,
 		readonly managed: readonly string[] = [store.directory],
 		readonly analyzer: FrameAnalyzer = new StackingAnalyzer(),
+		readonly integrator: FrameIntegrator = new StackingIntegrator(),
 	) {}
 
-	// Compares the frames with the disk once. A failure leaves the next request to try again.
+	// Finishes what the end of the last process interrupted and compares the frames with the disk, once. A failure leaves
+	// the next request to try again.
 	ready() {
-		this.#opened ??= this.#refreshFiles().then(
-			() => this.#changed(),
-			(error: unknown) => {
-				this.#opened = undefined
-				throw error
-			},
-		)
+		this.#opened ??= this.#recoverProducts()
+			.then(() => this.#refreshFiles())
+			.then(
+				() => this.#changed(),
+				(error: unknown) => {
+					this.#opened = undefined
+					throw error
+				},
+			)
 		return this.#opened
 	}
 
@@ -608,13 +710,18 @@ export class ImageStacking {
 		return this.project(projectId)
 	}
 
-	// Deletes a project and stops its scans and analyses; its frames stay on the disk.
+	// Deletes a project with its products and stops its jobs; its frames stay on the disk.
 	async deleteProject(projectId: string) {
 		await this.ready()
 		this.#project(projectId)
 
 		for (const job of this.#jobs.values()) {
 			if (job.projectId === projectId) this.#scans.get(job.jobId)?.abort(new DOMException('Project deleted', 'AbortError'))
+		}
+
+		for (const { productId } of this.store.products(projectId)) {
+			this.store.setPublication(productId, 'deleting')
+			await rm(this.store.productDirectory(productId), { recursive: true, force: true })
 		}
 
 		this.store.deleteProject(projectId)
@@ -812,7 +919,7 @@ export class ImageStacking {
 	async startAnalysis(projectId: string) {
 		await this.ready()
 		this.#project(projectId)
-		if ([...this.#jobs.values()].some((job) => job.type === 'analysis' && job.state === 'analyzing')) throw new StackingError('Another analysis is running', 409, 'jobConflict')
+		this.#ensureIdle()
 
 		const cohorts = await this.#cohorts(projectId)
 		if (cohorts.length === 0) throw new StackingError('No included light with an available file belongs to a filter group', 409, 'conflict')
@@ -920,6 +1027,389 @@ export class ImageStacking {
 
 		this.store.setAnalyses(updates)
 		this.store.setProjectAnalysis(projectId, outcome.project)
+	}
+
+	// Throws while an analysis or a run works, since both read and write the measurements of frames.
+	#ensureIdle() {
+		if ([...this.#jobs.values()].some((job) => (job.type === 'analysis' || job.type === 'integration') && ACTIVE_JOB_STATES.has(job.state))) throw new StackingError('Another analysis or integration is running', 409, 'jobConflict')
+	}
+
+	// Finishes what a crash interrupted, from the disk: a product being published becomes published when its directory holds
+	// the files it recorded, and is forgotten otherwise; a product being deleted loses its directory and its row. A product
+	// directory without a row is moved to orphaned/ and reported, never adopted nor deleted. Runs still running were
+	// interrupted, and staging holds nothing anyone owns. What cannot be finished is reported and tried again next start.
+	async #recoverProducts() {
+		for (const { product, publication } of this.store.pendingProducts()) {
+			const { productId } = product
+
+			try {
+				if (publication === 'publishing' && (await this.#intact(product))) {
+					this.store.setPublication(productId, 'published')
+				} else {
+					await rm(this.store.productDirectory(productId), { recursive: true, force: true })
+					this.store.discardProduct(productId)
+				}
+			} catch (error) {
+				console.error('image stacking: unable to finish product', productId, error)
+			}
+		}
+
+		for (const name of await this.store.productDirectories()) {
+			if (this.store.hasProduct(name)) continue
+			const target = join(this.store.orphanedDirectory, `${name}-${crypto.randomUUID()}`)
+
+			try {
+				await mkdir(this.store.orphanedDirectory, { recursive: true })
+				await rename(this.store.productDirectory(name), target)
+				console.warn(`image stacking: ${name} has no record and was moved to ${target}`)
+			} catch (error) {
+				console.error('image stacking: unable to move an orphaned product', name, error)
+			}
+		}
+
+		this.store.interruptRuns(Date.now())
+		await this.store.clearStaging()
+	}
+
+	// Returns whether the files of a product are the ones it recorded: the master by size and SHA-256, its coverage by size.
+	async #intact(product: StackingProduct) {
+		const directory = this.store.productDirectory(product.productId)
+		const master = await stat(join(directory, PRODUCT_MASTER_FILE)).catch(() => undefined)
+		const coverage = await stat(join(directory, PRODUCT_COVERAGE_FILE)).catch(() => undefined)
+		return master?.size === product.bytes && coverage?.size === product.coverageBytes && (await fileDigest(join(directory, PRODUCT_MASTER_FILE))) === product.contentDigest
+	}
+
+	// Describes a product now: unavailable while a file is missing or of another size, stale while a frame it integrated
+	// left the project, is not available, or was measured with another SHA-256, or while a pinned master is no longer
+	// available as pinned.
+	async #productSummary(product: StackingProduct): Promise<StackingProductSummary> {
+		const directory = this.store.productDirectory(product.productId)
+		const master = await stat(join(directory, PRODUCT_MASTER_FILE)).catch(() => undefined)
+		const coverage = await stat(join(directory, PRODUCT_COVERAGE_FILE)).catch(() => undefined)
+		if (master?.size !== product.bytes || coverage?.size !== product.coverageBytes) return { ...product, status: 'unavailable' }
+		const reasons = new Set<string>()
+
+		for (const { sourceId, digest } of this.store.productSources(product.productId)) {
+			const source = this.store.source(sourceId)
+			if (!source) reasons.add('A frame it integrated left the project')
+			else if (source.status !== 'available') reasons.add('A frame it integrated is missing or changed')
+			else if (source.analysis?.digest !== undefined && source.analysis.digest !== digest) reasons.add('A frame it integrated was measured with other content')
+		}
+
+		for (const calibration of Object.values(product.calibration)) {
+			for (const [, pin] of pinsOf(calibration)) if (!(await this.masters.pinnedMaster(pin))) reasons.add('A master it was calibrated with is no longer available as pinned')
+		}
+
+		return reasons.size === 0 ? { ...product, status: 'ready' } : { ...product, status: 'stale', staleReasons: [...reasons] }
+	}
+
+	// Lists the products of a project, newest first, with their state.
+	async products(projectId: string) {
+		await this.ready()
+		this.#project(projectId)
+		const products: StackingProductSummary[] = []
+		for (const product of this.store.products(projectId)) products.push(await this.#productSummary(product))
+		return products
+	}
+
+	// Returns a product with the paths of its files and its frames. Throws when unknown.
+	async product(productId: string): Promise<StackingProductDetail> {
+		await this.ready()
+		const product = this.store.product(productId)
+		if (!product) throw new StackingError('Unknown product', 404, 'notFound')
+		const directory = this.store.productDirectory(productId)
+		return { ...(await this.#productSummary(product)), path: join(directory, PRODUCT_MASTER_FILE), coveragePath: join(directory, PRODUCT_COVERAGE_FILE), sources: this.store.productSources(productId) }
+	}
+
+	// Deletes a product with its directory. It is recorded as deleting before its directory goes, so a crash between them
+	// is finished on the next start.
+	async deleteProduct(productId: string) {
+		await this.ready()
+		if (!this.store.product(productId)) throw new StackingError('Unknown product', 404, 'notFound')
+		this.store.setPublication(productId, 'deleting')
+		await rm(this.store.productDirectory(productId), { recursive: true, force: true })
+		this.store.discardProduct(productId)
+		this.#changed()
+		return { deleted: productId }
+	}
+
+	// Lists the latest runs of a project, newest first.
+	async runs(projectId: string) {
+		await this.ready()
+		this.#project(projectId)
+		return this.store.runs(projectId, KEPT_JOBS)
+	}
+
+	// Plans a run: every filter group nothing blocks, or those asked for, with the frames that stay in after the analysis
+	// and the thresholds, the reference of each group first, each with the transform from the project grid to its pixels
+	// and its weight; a published master with the same inputs is reused. Reports what stops it: a blocker of validation,
+	// a group that does not fit the memory budget, or a spill larger than the free space of the staging disk.
+	async #planRun(project: StackingProject, request: Omit<StackingRunRequest, 'token'>): Promise<RunPlan> {
+		const { projectId, analysis, settings } = project
+		const recipe: StackingRecipe = { ...DEFAULT_STACKING_RECIPE, ...request.recipe }
+		const memoryBudget = request.memoryBudget ?? DEFAULT_STACK_MEMORY_BUDGET
+		await mkdir(this.store.directory, { recursive: true })
+		const { bavail, bsize } = await statfs(this.store.directory)
+		const freeBytes = bavail * bsize
+		const problems: string[] = []
+		let code: ImageStackingErrorCode | undefined
+		const problem = (message: string, problemCode: ImageStackingErrorCode) => {
+			problems.push(message)
+			code ??= problemCode
+		}
+
+		for (const finding of (await this.validate(projectId)).findings) if (finding.severity === 'blocker') problem(finding.message, 'notReady')
+		const reference = analysis?.referenceSourceId === undefined ? undefined : this.store.source(analysis.referenceSourceId)
+		const empty = { recipe, memoryBudget, freeBytes, groups: [], width: 0, height: 0, referenceSourceId: '', calibrations: {}, pins: [] }
+		if (!analysis || !reference) return { ...empty, problems: problems.length > 0 ? problems : ['Analyze the project first'], code: code ?? 'notReady' }
+
+		const { width, height } = reference.metadata
+		const cohorts = await this.#cohorts(projectId)
+		const calibrations: Record<string, AnalysisCalibration> = {}
+		const pins: MasterReference[] = []
+		const groups: GroupPlan[] = []
+		const keys = [...new Set(cohorts.map((cohort) => cohort.groupKey))].filter((key) => request.groups === undefined || request.groups.includes(key))
+
+		for (const key of keys) {
+			const outcome = analysis.groups[key]
+			const toProject = outcome?.toProject
+			if (!outcome?.referenceSourceId || !toProject?.success) continue
+			const members = cohorts.filter((cohort) => cohort.groupKey === key)
+			const frames: { source: StackingSource; cohortId: string; inverse: IntegrationFrame['inverse'] }[] = []
+
+			for (const cohort of members) {
+				for (const source of cohort.sources) {
+					const measured = source.analysis
+					if (measured?.fingerprint !== analysisFingerprint(source, cohort.calibration) || !measured.quality || !measured.digest || !measured.registration?.success) continue
+					if (subframeRejectionReasons(measured.quality, settings.selection).length > 0) continue
+					const composed = composeRegistrationTransforms(measured.registration.transform, toProject.transform)
+					if (composed) frames.push({ source, cohortId: cohort.cohortId, inverse: composed.inverseTransform })
+				}
+			}
+
+			if (frames.length === 0) continue
+			frames.sort((a, b) => (a.source.sourceId === outcome.referenceSourceId ? -1 : b.source.sourceId === outcome.referenceSourceId ? 1 : (a.source.observedAt ?? 0) - (b.source.observedAt ?? 0) || a.source.sourceId.localeCompare(b.source.sourceId)))
+			if (frames[0].source.sourceId !== outcome.referenceSourceId) continue
+
+			const name = members[0].groupName
+			const calibration: Record<string, StackingCalibration> = {}
+			const integration: IntegrationFrame[] = []
+			const sources: StackingProductSource[] = []
+			const exposures = new Set<number>()
+			let exposure = 0
+
+			for (const { source, cohortId, inverse } of frames) {
+				const weight = frameWeight(1, source.analysis!.quality!, recipe.weighting, settings.selection.minStars ?? REFERENCE_MIN_STARS)
+				integration.push({ sourceId: source.sourceId, path: source.path, bytes: source.bytes, mtimeMillis: source.mtimeMillis, cohortId, inverse, weight })
+				sources.push({ sourceId: source.sourceId, digest: source.analysis!.digest!, weight })
+				const seconds = (source.metadata.exposure.value ?? 0) / 1000000
+				exposures.add(seconds)
+				exposure += seconds
+				calibration[cohortId] = members.find((cohort) => cohort.cohortId === cohortId)!.calibration!
+			}
+
+			const metadata = frames[0].source.metadata
+			const channels = frames.some(({ source }) => source.metadata.cfa !== undefined) ? 3 : metadata.channels
+			const objects = [...new Set(frames.flatMap(({ source }) => source.object ?? []))]
+			const fingerprint = stableId(JSON.stringify({ version: INTEGRATION_VERSION, key, grid: [width, height, reference.sourceId], frames: integration.map(({ sourceId, weight, inverse }, index) => [sourceId, sources[index].digest, weight, inverse]), calibration, recipe }))
+			const published = this.store.productByFingerprint(projectId, fingerprint)
+			const reused = published && (await this.#productSummary(published)).status === 'ready' ? published : undefined
+			const plan = integrationPlan(width, height, channels, frames.length, recipe.method, memoryBudget)
+			if (!reused && !plan.fits) problem(`${name} needs about ${Math.ceil(plan.memoryBytes / 1024 ** 2)} MiB of memory; raise the memory budget or choose an average`, 'insufficientMemory')
+			if (!reused && plan.diskBytes > freeBytes) problem(`${name} spills about ${Math.ceil(plan.diskBytes / 1024 ** 2)} MiB to a disk with ${Math.floor(freeBytes / 1024 ** 2)} MiB free`, 'insufficientSpace')
+
+			if (!reused) {
+				for (const [cohortId, cohortCalibration] of Object.entries(calibration)) {
+					if (calibrations[cohortId]) continue
+					const masters: { -readonly [K in keyof AnalysisCalibration]: AnalysisCalibration[K] } = {}
+
+					for (const [kind, pin] of pinsOf(cohortCalibration)) {
+						const master = await this.masters.pinnedMaster(pin)
+						if (!master) problem(`A ${kind} pinned for the ${name} frames is no longer available as pinned`, 'masterUnavailable')
+						else masters[kind] = { path: master.path, fullScale: master.units === 'dimensionless' ? 1 : master.fullScaleDn }
+						pins.push(pin)
+					}
+
+					calibrations[cohortId] = masters
+				}
+			}
+
+			const header = productHeader(metadata, name, frames.length, { each: exposures.size === 1 ? [...exposures][0] : undefined, total: exposure }, objects.length === 1 ? objects[0] : undefined)
+			groups.push({ groupKey: key, name, frames: frames.length, exposure, ...(reused && { reusedProductId: reused.productId }), plan, integration, sources, header, fingerprint, calibration })
+		}
+
+		if (groups.length === 0 && problems.length === 0) problem('No filter group has a frame to integrate', 'notReady')
+		return { recipe, memoryBudget, freeBytes, groups, problems, width, height, referenceSourceId: reference.sourceId, calibrations, pins, code }
+	}
+
+	// Answers what a run of a project would do, without starting it.
+	async preflight(projectId: string, request: Omit<StackingRunRequest, 'token'>): Promise<StackingPreflight> {
+		await this.ready()
+		const { recipe, memoryBudget, freeBytes, groups, problems } = await this.#planRun(this.#project(projectId), request)
+		const summaries: StackingPreflightGroup[] = []
+		for (const { groupKey, name, frames, exposure, reusedProductId, plan } of groups) summaries.push({ groupKey, name, frames, exposure, ...(reusedProductId !== undefined && { reusedProductId }), plan })
+		return { recipe, memoryBudget, freeBytes, groups: summaries, problems }
+	}
+
+	// Starts integrating a project. A request sent again with its token answers the run it started. Refuses while another
+	// analysis or run works, and while preflight reports a problem. Groups already published with the same inputs are
+	// reused; the others are integrated on the worker, and each is published as soon as it is staged. The pinned masters
+	// are leased until the run ends.
+	async startRun(projectId: string, request: StackingRunRequest) {
+		await this.ready()
+		const project = this.#project(projectId)
+		const known = this.store.runByToken(projectId, request.token)
+		if (known) return { run: known }
+		this.#ensureIdle()
+
+		const plan = await this.#planRun(project, request)
+		if (plan.problems.length > 0) throw new StackingError(plan.problems[0], 409, plan.code ?? 'notReady')
+
+		const now = Date.now()
+		const runId = crypto.randomUUID()
+		const groups: StackingRunGroup[] = plan.groups.map(({ groupKey, name, frames, reusedProductId }) => ({ groupKey, name, frames, ...(reusedProductId !== undefined && { productId: reusedProductId, reused: true }) }))
+		const run: StackingRun = { runId, projectId, token: request.token, state: 'running', createdAt: now, recipe: plan.recipe, groups }
+		const pending = plan.groups.filter((group) => group.reusedProductId === undefined)
+		this.store.putRun(run)
+		const job = this.#saveJob({ jobId: runId, projectId, type: 'integration', state: 'integrating', createdAt: now, updatedAt: now, found: pending.reduce((sum, group) => sum + group.frames, 0), bytes: 0, truncated: false, measured: 0, published: 0 })
+
+		if (pending.length === 0) {
+			this.store.putRun({ ...run, state: 'completed', endedAt: Date.now() })
+			const ended = this.#saveJob(job, { state: 'completed' })
+			this.#changed()
+			return { run: this.store.run(runId)!, job: jobSummary(ended) }
+		}
+
+		const staging = this.store.stagingDirectory(runId)
+		const work: IntegrationWorkerRequest = {
+			jobId: runId,
+			width: plan.width,
+			height: plan.height,
+			groups: pending.map((group, index) => ({ key: group.groupKey, frames: group.integration, header: group.header, staging: join(staging, String(index)) })),
+			calibrations: plan.calibrations,
+			recipe: plan.recipe,
+			memoryBudget: plan.memoryBudget,
+		}
+
+		const controller = new AbortController()
+		this.#scans.set(runId, controller)
+		const release = this.masters.lease(plan.pins)
+		void this.#integrate(job, run, plan, work, controller.signal).finally(release)
+		return { run, job: jobSummary(job) }
+	}
+
+	// Runs an integration to its end, publishing each staged group in order; a failure ends in the run and its job, and
+	// the groups published before stay.
+	async #integrate(job: StackingJob, run: StackingRun, plan: RunPlan, request: IntegrationWorkerRequest, signal: AbortSignal) {
+		const byKey = new Map(plan.groups.map((group) => [group.groupKey, group]))
+		const offsets = new Map<string, number>()
+		let offset = 0
+		let current = job
+		let state = run
+		let published = 0
+		let publishing = Promise.resolve()
+
+		for (const group of request.groups) {
+			offsets.set(group.key, offset)
+			offset += group.frames.length
+		}
+
+		const outcome = (groupKey: string, patch: Partial<StackingRunGroup>) => {
+			state = { ...state, groups: state.groups.map((group) => (group.groupKey === groupKey ? { ...group, ...patch } : group)) }
+			this.store.putRun(state)
+		}
+
+		const handlers = {
+			onProgress: ({ group, frames, rowsCombined, rowsTotal }: { group: string; frames: number; rowsCombined: number; rowsTotal: number }) => {
+				current = this.#saveJob(current, { group: byKey.get(group)?.name, measured: (offsets.get(group) ?? 0) + frames, rowsCombined, rowsTotal })
+			},
+			onStaged: (staged: StagedProduct) => {
+				const group = byKey.get(staged.group)!
+				// Publications run one after another; each one's failure stays in its group.
+				publishing = publishing
+					.then(async () => {
+						outcome(group.groupKey, { productId: await this.#publishProduct(run, plan, group, staged) })
+						current = this.#saveJob(current, { published: ++published })
+					})
+					.catch((error: unknown) => outcome(group.groupKey, { error: Error.isError(error) ? error.message : 'The master could not be published' }))
+			},
+			onGroupFailed: (group: string, error: string) => outcome(group, { error }),
+		}
+
+		let error: string | undefined
+
+		try {
+			await this.integrator.integrate(request, handlers, signal)
+		} catch (failure) {
+			if (!signal.aborted) error = Error.isError(failure) ? failure.message : 'The integration failed'
+		} finally {
+			await publishing
+			this.#scans.delete(run.runId)
+			await rm(this.store.stagingDirectory(run.runId), { recursive: true, force: true }).catch(() => undefined)
+		}
+
+		const complete = state.groups.every((group) => group.productId !== undefined)
+		const ended = signal.aborted ? 'cancelled' : error === undefined && complete ? 'completed' : 'failed'
+		const failed = error ?? (ended === 'failed' ? 'A filter group could not be integrated' : undefined)
+		state = { ...state, state: ended, endedAt: Date.now(), ...(failed !== undefined && { error: failed }) }
+		if (this.store.project(run.projectId)) this.store.putRun(state)
+		this.#saveJob(current, { state: ended, ...(failed !== undefined && { code: 'processingFailed' as const, error: failed }) })
+		this.#changed()
+	}
+
+	// Makes a staged master visible: its frames and pinned masters are compared with what the run planned, the product is
+	// recorded as publishing, the rename moves its directory into products/, and only then is it published. A crash between
+	// them is finished on the next start from what the directory holds. Returns the product id; throws with a message that
+	// holds no path, leaving what is published untouched.
+	async #publishProduct(run: StackingRun, plan: RunPlan, group: GroupPlan, staged: StagedProduct) {
+		for (const frame of group.integration) {
+			const info = await stat(frame.path).catch(() => undefined)
+			if (info?.size !== frame.bytes || info.mtimeMs !== frame.mtimeMillis) throw new Error('A frame changed while it was integrated')
+		}
+
+		for (const calibration of Object.values(group.calibration)) {
+			for (const [, pin] of pinsOf(calibration)) if (!(await this.masters.pinnedMaster(pin))) throw new Error('A pinned master changed while it was integrated')
+		}
+
+		if (!this.store.project(run.projectId)) throw new Error('The project was deleted')
+		const productId = crypto.randomUUID()
+
+		const product: StackingProduct = {
+			productId,
+			projectId: run.projectId,
+			runId: run.runId,
+			groupKey: group.groupKey,
+			name: group.name,
+			fingerprint: group.fingerprint,
+			createdAt: Date.now(),
+			contentDigest: staged.contentDigest,
+			bytes: staged.bytes,
+			coverageDigest: staged.coverageDigest,
+			coverageBytes: staged.coverageBytes,
+			width: plan.width,
+			height: plan.height,
+			channels: staged.channels,
+			referenceSourceId: plan.referenceSourceId,
+			frames: group.frames,
+			exposure: group.exposure,
+			recipe: plan.recipe,
+			calibration: group.calibration,
+			diagnostics: staged.diagnostics,
+		}
+
+		this.store.beginProduct(product, group.sources)
+
+		try {
+			await mkdir(this.store.productsDirectory, { recursive: true })
+			await rename(staged.directory, this.store.productDirectory(productId))
+		} catch {
+			this.store.discardProduct(productId)
+			throw new Error('The master could not be published')
+		}
+
+		this.store.setPublication(productId, 'published')
+		this.#changed()
+		return productId
 	}
 
 	// Lists what blocks a stack of a project, what an operator must accept, and what is worth knowing, with the memory a
@@ -1402,6 +1892,29 @@ export function createImageStackingRoutes(stacking: ImageStacking) {
 		},
 		'/api/image-stacking/imports/:jobId/cancel': {
 			POST: ({ params }) => answer(() => stacking.cancel(params.jobId)),
+		},
+		'/api/image-stacking/projects/:projectId/preflight': {
+			POST: async (request) => {
+				const body = (await request.json()) as Omit<StackingRunRequest, 'token'>
+				return answer(() => stacking.preflight(request.params.projectId, body))
+			},
+		},
+		'/api/image-stacking/projects/:projectId/runs': {
+			GET: ({ params }) => answer(() => stacking.runs(params.projectId)),
+			POST: async (request) => {
+				const body = (await request.json()) as StackingRunRequest
+				return answer(() => stacking.startRun(request.params.projectId, body), 202)
+			},
+		},
+		'/api/image-stacking/projects/:projectId/products': {
+			GET: ({ params }) => answer(() => stacking.products(params.projectId)),
+		},
+		'/api/image-stacking/products/:productId': {
+			GET: ({ params }) => answer(() => stacking.product(params.productId)),
+			DELETE: ({ params }) => answer(() => stacking.deleteProduct(params.productId)),
+		},
+		'/api/image-stacking/runs/:runId/cancel': {
+			POST: ({ params }) => answer(() => stacking.cancel(params.runId)),
 		},
 		'/api/image-stacking/analyses/:jobId/cancel': {
 			POST: ({ params }) => answer(() => stacking.cancel(params.jobId)),

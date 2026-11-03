@@ -18,6 +18,7 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import { bytesText, EVIDENCE_LABELS, exposureText, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES } from '../calibrationlibrary/library'
 import { candidateText, candidateUsable, committedCounts, groupLabel, integrationText, metricText, registrationText, ROLE_LABELS, SECTION_LABELS, STACKING_SECTIONS, type StackingSection } from './format'
+import { IntegrationView, ResultsView } from './Integration'
 import { CalibrationView, QualityView } from './Planning'
 // oxfmt-ignore
 import { cancelStackingImport, commitStackingImport, createStackingProject, deleteStackingProject, imageStackingRuntime, jobEnded, loadStackingCandidates, loadStackingFrame, loadStackingFrames, loadStackingProject, mergeStackingFilter, refreshStackingProject, removeStackingFrame, renameStackingProject, separateStackingFilter, STACKING_PAGE_SIZE, type StackingFrameFilter, startStackingImport, updateStackingFrame } from './projects'
@@ -164,6 +165,8 @@ export function ImageStacking() {
 					</>
 				)}
 				{project && section === 'calibration' && <CalibrationView projectId={project.projectId} />}
+				{project && section === 'integration' && <IntegrationView projectId={project.projectId} />}
+				{project && section === 'results' && <ResultsView />}
 				{project && section === 'quality' && (
 					<>
 						<QualityView projectId={project.projectId} group={qualityKey} onGroup={change(setQualityGroup)} selected={selected} onSelect={selectFrame} />

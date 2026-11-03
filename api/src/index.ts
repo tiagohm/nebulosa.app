@@ -4,7 +4,7 @@ import { EarthOrientationData, installEarthOrientation } from './astronomicaltim
 import { AstroWeatherService, createAstroWeatherRoutes } from './astroweather'
 import { AutoFocusSessions, createAutoFocusRoutes } from './autofocus'
 import { CalibrationLibrary, createCalibrationLibraryRoutes } from './calibrationlibrary'
-import { CalibrationLibraryStore } from './calibrationlibrary.store'
+import { CalibrationLibraryStore, DEFAULT_CALIBRATION_LIBRARY_DIRECTORY } from './calibrationlibrary.store'
 import { CameraCommands, createCameraRoutes } from './cameras'
 import { CaptureFrameRegistry, createCaptureFrameRoutes } from './captureframes'
 import { CameraCaptures, createCaptureRoutes } from './captures'
@@ -31,6 +31,8 @@ import { createGuidingRoutes, GuidingSessions } from './guiding'
 import { errorResponse } from './http'
 import { createImageProcessingRoutes, ImageProcessingService } from './imageprocessing'
 import { createImageRoutes, images } from './images'
+import { createImageStackingRoutes, ImageStacking } from './imagestacking'
+import { DEFAULT_IMAGE_STACKING_DIRECTORY, ImageStackingStore } from './imagestacking.store'
 import { createIndiRoutes, IndiPropertyService } from './indi'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
 import { createPointingModelRoutes, PointingModels } from './mountpointing'
@@ -353,6 +355,23 @@ export type {
 	MultiscaleOperation,
 	PlainOperation,
 } from './imageprocessing'
+export type {
+	ImageStackingErrorCode,
+	ImageStackingEvent,
+	ImageStackingSnapshot,
+	StackingFilterGroup,
+	StackingImportCandidate,
+	StackingImportCommit,
+	StackingImportRequest,
+	StackingJobState,
+	StackingJobSummary,
+	StackingProjectDetail,
+	StackingProjectSummary,
+	StackingSourceDetail,
+	StackingSourcePatch,
+} from './imagestacking'
+export type { StackingRole } from './imagestacking.sources'
+export type { StackingFilterAlias, StackingProject, StackingSourceSummary } from './imagestacking.store'
 export type { DarvCaptureSettings, DarvEvent, DarvFinishRequest, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementTrails, DarvRequest, DarvSession, DarvSessionState, DarvSessionSummary, DarvSnapshot, DarvStartResponse } from './darv'
 export type { DarvMeasurementResult, DarvMeasurementStatus, DarvTrail } from './darv.analysis'
 export type {
@@ -614,6 +633,10 @@ const darkPlans = new DarkPlanStore(database)
 // Calibration frames and masters, which need no connection and hold no device; automatic masters wait for the camera operations.
 const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(database), darkPlans, publish, () => operations.running().some(({ kind }) => kind.startsWith('camera.')))
 
+// Projects of light frames for Image Stacking, which need no connection and hold no device. Imports never read the
+// directories of Nebulosa: its stacks and the Calibration Library.
+const imageStacking = new ImageStacking(new ImageStackingStore(database), publish, [DEFAULT_IMAGE_STACKING_DIRECTORY, DEFAULT_CALIBRATION_LIBRARY_DIRECTORY])
+
 // Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
 // moving the wheels, driving the panels, and closing and opening the covers with the commanders of their commands,
 // previewing and recording the frames in the capture frame registry, and measuring them in DN on a worker of their own.
@@ -725,6 +748,7 @@ export async function startEarthOrientation() {
 export async function startStores() {
 	await darkPlans.reconcile()
 	void calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))
+	void imageStacking.ready().catch((error: unknown) => console.error('The image stacking projects could not be opened', error))
 }
 
 // Names the running version to JPL, as its fair-use policy asks of automated clients. Called by the app before it serves,
@@ -764,6 +788,7 @@ export const routes = {
 	...createFlatWizardRoutes(flatWizard),
 	...createDarkLibraryWizardRoutes(darkLibraryWizard),
 	...createCalibrationLibraryRoutes(calibrationLibrary),
+	...createImageStackingRoutes(imageStacking),
 	...createGuidingRoutes(guiding),
 	...createTargetCenteringRoutes(targetCentering),
 	...createFileRoutes(),

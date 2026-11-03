@@ -31,6 +31,13 @@ describe('parse', () => {
 		expect(parseRoute('/tools/calculator/abc')).toEqual({ workspace: 'tools', tool: 'calculator' })
 	})
 
+	test('reads the project of Image Stacking and writes it back', () => {
+		expect(parseRoute('/tools/image-stacking/p%201')).toEqual({ workspace: 'tools', tool: 'image-stacking', project: 'p 1' })
+		expect(routePath({ workspace: 'tools', tool: 'image-stacking', project: 'p 1' })).toBe('/tools/image-stacking/p%201')
+		expect(parseRoute('/tools/image-stacking')).toEqual({ workspace: 'tools', tool: 'image-stacking' })
+		expect(routePath({ workspace: 'tools', tool: 'calculator', project: 'p' })).toBe('/tools/calculator')
+	})
+
 	test('reads the eclipse of the Solar and Lunar Eclipse Maps, and no id for other tools', () => {
 		expect(parseRoute('/tools/solar-eclipse-map/1786556760000')).toEqual({ workspace: 'tools', tool: 'solar-eclipse-map', eclipse: '1786556760000' })
 		expect(parseRoute('/tools/solar-eclipse-map')).toEqual({ workspace: 'tools', tool: 'solar-eclipse-map' })

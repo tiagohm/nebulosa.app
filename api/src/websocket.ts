@@ -13,6 +13,7 @@ import type { FlatWizardEvent } from './flatwizard'
 import type { FocuserBacklashEvent } from './focusers'
 import type { GuidingServerEvent } from './guiding'
 import type { ImageProcessingEvent } from './imageprocessing'
+import type { ImageStackingEvent } from './imagestacking'
 import type { IndiClientMessage, IndiServerEvent } from './indi'
 import type { PointingModelEvent } from './mountpointing'
 import type { PointingActivationEvent } from './mountpointing.corrections'
@@ -55,6 +56,7 @@ export type ServerEvent =
 	| FlatWizardEvent
 	| DarkLibraryWizardEvent
 	| CalibrationLibraryEvent
+	| ImageStackingEvent
 	| MountNudgeEvent
 	| MountRemoteControlEvent
 	| DomeMotionEvent

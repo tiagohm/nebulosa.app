@@ -1,3 +1,4 @@
+import type { Stats } from 'fs'
 import { open, readdir, realpath, stat } from 'fs/promises'
 import { extname, join, resolve } from 'path'
 import { fileHandleSource } from 'nebulosa/src/io/file'
@@ -66,6 +67,10 @@ export interface FileInspection {
 	readonly warnings: readonly string[]
 	// Full scale of its samples, in digital numbers.
 	readonly fullScale: number
+	// Target the header names (OBJECT), a hint that never proves where the frame points.
+	readonly object?: string
+	// Start of the exposure the header gives, Unix milliseconds (UTC).
+	readonly observedAt?: number
 }
 
 // Returns the digital full scale of samples of a BITPIX; floats declare none and assume 16 bits.
@@ -109,7 +114,8 @@ export function inspectHeader(header: FitsHeader, format: SourceFormat, rowAddre
 		bayerOffsetY: origin('YBAYROFF'),
 	}
 
-	return { format, rowAddressable, kind, rejectedRole, metadata, warnings, fullScale: digitalFullScale(bitpix) }
+	const observedAt = acquisition.date === undefined ? undefined : Date.parse(acquisition.date)
+	return { format, rowAddressable, kind, rejectedRole, metadata, warnings, fullScale: digitalFullScale(bitpix), object: acquisition.object, observedAt }
 }
 
 // Reads the header of a FITS or XISF file. Returns undefined when it holds no image. Throws when it cannot be opened.
@@ -182,6 +188,11 @@ export function darkPlanSource(plan: DarkCapturePlan, group: DarkPlanGroup, fram
 	return makeSource('darkPlan', `${plan.planId}/${frame.groupId}/${frame.frameId}`, kind, frame.path, inspection.format, bytes, mtimeMillis, metadata, warnings, { required: group.count, excluded: accepted ? undefined : 'Light suspected and not acknowledged' })
 }
 
+// Returns the identity of a file of known status: device:inode, or its real path where inodes are not reported.
+export async function fileIdentity(path: string, info: Pick<Stats, 'dev' | 'ino'>) {
+	return info.ino ? `${info.dev}:${info.ino}` : await realpath(path)
+}
+
 // Options of a scan.
 export interface ScanOptions {
 	// Directory to scan.
@@ -204,6 +215,9 @@ export interface ScanCandidate {
 	readonly bytes: number
 	// Modification time, in milliseconds since the epoch.
 	readonly mtimeMillis: number
+	// Identity of the file on its device (device:inode), or its real path where inodes are not reported, the same for
+	// every name of one file.
+	readonly identity: string
 	// Header of the file; absent when it could not be read.
 	readonly inspection?: FileInspection
 	// Why it could not be read.
@@ -225,7 +239,7 @@ export async function scanDirectory({ path, recursive, depth = DEFAULT_SCAN_DEPT
 	const root = resolve(path)
 	const visited = new Set<string>()
 	const known = new Set<string>()
-	const found: { readonly path: string; readonly bytes: number; readonly mtimeMillis: number }[] = []
+	const found: { readonly path: string; readonly bytes: number; readonly mtimeMillis: number; readonly identity: string }[] = []
 	let bytes = 0
 	let truncated = false
 
@@ -266,7 +280,7 @@ export async function scanDirectory({ path, recursive, depth = DEFAULT_SCAN_DEPT
 			const info = await stat(child).catch(() => undefined)
 			if (!info?.isFile()) continue
 
-			const identity = info.ino ? `${info.dev}:${info.ino}` : await realpath(child)
+			const identity = await fileIdentity(child, info)
 			if (known.has(identity)) continue
 			known.add(identity)
 
@@ -275,7 +289,7 @@ export async function scanDirectory({ path, recursive, depth = DEFAULT_SCAN_DEPT
 				return
 			}
 
-			found.push({ path: child, bytes: info.size, mtimeMillis: info.mtimeMs })
+			found.push({ path: child, bytes: info.size, mtimeMillis: info.mtimeMs, identity })
 			bytes += info.size
 			progress?.(found.length, bytes)
 		}

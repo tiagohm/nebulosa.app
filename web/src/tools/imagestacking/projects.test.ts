@@ -1,0 +1,107 @@
+import { describe, expect, test } from 'bun:test'
+import type { ImageStackingSnapshot, StackingJobSummary } from 'api'
+import { proxy } from 'valtio'
+import { framesQuery, handleImageStackingEvent, type ImageStackingRuntime, loadStackingFrames, loadStackingProject, refreshImageStacking, separateStackingFilter, updateStackingFrame } from './projects'
+
+function runtime() {
+	return proxy<ImageStackingRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
+}
+
+function snapshot(epoch: string, revision: number, jobs: readonly StackingJobSummary[] = []): ImageStackingSnapshot {
+	return { epoch, revision, projects: [], jobs }
+}
+
+function job(jobId: string, state: StackingJobSummary['state'], updatedAt: number): StackingJobSummary {
+	return { jobId, projectId: 'p', type: 'import', state, createdAt: 1, updatedAt, found: 0, bytes: 0, truncated: false }
+}
+
+// A fetch answering JSON by URL prefix, the longest first, recording every call.
+function fakeFetch(answers: Record<string, unknown>, status = 200) {
+	const calls: { readonly url: string; readonly init?: RequestInit }[] = []
+	const prefixes = Object.keys(answers).toSorted((a, b) => b.length - a.length)
+	const request = ((url: string, init?: RequestInit) => {
+		calls.push({ url, init })
+		const prefix = prefixes.find((candidate) => url.startsWith(candidate))
+		return Promise.resolve(prefix === undefined ? Response.json({ error: 'Unknown', code: 'notFound' }, { status: 404 }) : Response.json(answers[prefix], { status }))
+	}) as typeof fetch
+	return { request, calls }
+}
+
+describe('events', () => {
+	test('a snapshot older than the one applied is dropped, and a new process replaces everything', () => {
+		const state = runtime()
+		handleImageStackingEvent(state, { type: 'imageStacking:changed', revision: 5, snapshot: snapshot('a', 5, [job('old', 'scanning', 1)]) })
+		handleImageStackingEvent(state, { type: 'imageStacking:changed', revision: 4, snapshot: snapshot('a', 4) })
+		expect(state.snapshot?.revision).toBe(5)
+		expect(state.changes).toBe(1)
+
+		handleImageStackingEvent(state, { type: 'imageStacking:changed', revision: 1, snapshot: snapshot('b', 1) })
+		expect(state.snapshot?.epoch).toBe('b')
+		expect(state.jobs.old).toBeUndefined()
+	})
+
+	test('a late job event never takes a job back', () => {
+		const state = runtime()
+		handleImageStackingEvent(state, { type: 'imageStacking:jobUpdated', epoch: 'a', revision: 2, job: job('j', 'completed', 20) })
+		handleImageStackingEvent(state, { type: 'imageStacking:jobUpdated', epoch: 'a', revision: 1, job: job('j', 'scanning', 10) })
+		expect(state.jobs.j.state).toBe('completed')
+	})
+
+	test('the snapshot is fetched, and an unreachable server leaves what is known', async () => {
+		const state = runtime()
+		await refreshImageStacking(state, fakeFetch({ '/api/image-stacking': snapshot('a', 3) }).request)
+		expect(state.snapshot?.revision).toBe(3)
+		await refreshImageStacking(state, (() => Promise.reject(new Error('offline'))) as unknown as typeof fetch)
+		expect(state.snapshot?.revision).toBe(3)
+	})
+})
+
+describe('requests', () => {
+	test('the frames query names the empty group explicitly and leaves absent filters out', () => {
+		expect(framesQuery({}, 2)).toBe('offset=100&limit=50')
+		expect(framesQuery({ group: '', included: false, search: 'm31' }, 0)).toBe('offset=0&limit=50&group=&included=false&search=m31')
+	})
+
+	test('a project and its groups are fetched together, and absent clears them', async () => {
+		const state = runtime()
+		const { request, calls } = fakeFetch({ '/api/image-stacking/projects/p%201/groups': [{ key: 'ha' }], '/api/image-stacking/projects/p%201': { projectId: 'p 1' } })
+		await loadStackingProject(state, 'p 1', request)
+		expect(calls.map(({ url }) => url)).toEqual(['/api/image-stacking/projects/p%201', '/api/image-stacking/projects/p%201/groups'])
+		expect(state.project?.projectId).toBe('p 1')
+		expect(state.groups).toHaveLength(1)
+		await loadStackingProject(state, undefined, request)
+		expect(state.project).toBeUndefined()
+		expect(state.groups).toBeUndefined()
+	})
+
+	test('a page that arrives after a newer request is dropped', async () => {
+		const state = runtime()
+		const { promise, resolve } = Promise.withResolvers<Response>()
+		let first = true
+		const request = (() => {
+			if (first) {
+				first = false
+				return promise
+			}
+			return Promise.resolve(Response.json({ items: [], total: 2 }))
+		}) as unknown as typeof fetch
+		const slow = loadStackingFrames(state, 'p', { group: 'ha' }, 0, request)
+		await loadStackingFrames(state, 'p', { group: 'oiii' }, 0, request)
+		resolve(Response.json({ items: [], total: 1 }))
+		await slow
+		expect(state.frames?.total).toBe(2)
+		expect(state.loading).toBeFalse()
+	})
+
+	test('a refused command keeps its reason by key, and an encoded filter key reaches its route', async () => {
+		const state = runtime()
+		const refused = fakeFetch({ '/api/image-stacking/frames/f': { error: 'Only a filter the header does not name can be declared', code: 'verifiedMetadata' } }, 409)
+		expect(await updateStackingFrame(state, 'f', { filter: { value: 'Ha', reason: 'x' } }, refused.request)).toBeUndefined()
+		expect(state.errors['frame:f']).toContain('does not name')
+		expect(JSON.parse(refused.calls[0].init!.body as string)).toEqual({ filter: { value: 'Ha', reason: 'x' } })
+
+		const { request, calls } = fakeFetch({ '/api/image-stacking/projects/p/aliases/': [] })
+		expect(await separateStackingFilter(state, 'p', 'h alpha', request)).toEqual([])
+		expect(calls[0]).toMatchObject({ url: '/api/image-stacking/projects/p/aliases/h%20alpha', init: { method: 'DELETE' } })
+	})
+})

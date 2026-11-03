@@ -38,6 +38,7 @@ import { collapsibleSections } from './shell/collapsible'
 import { routeState, watchHistory } from './shell/route'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
 import { handleStreaksEvent, refreshStreaks, streaksState } from './streaks/streaks'
+import { handleImageStackingEvent, imageStackingRuntime, refreshImageStacking } from './tools/imagestacking/projects'
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
 
 // Entry point of the browser bundle: restores the URL route, reads the workspace (saved connections and profiles) from
@@ -93,6 +94,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleFlatWizardEvent(flatWizardRuntime, event), refresh: () => refreshFlatWizard(flatWizardRuntime) },
 	{ handle: (event) => handleDarkLibraryWizardEvent(darkLibraryWizardRuntime, event), refresh: () => refreshDarkLibraryWizard(darkLibraryWizardRuntime) },
 	{ handle: (event) => handleCalibrationLibraryEvent(calibrationLibraryRuntime, event), refresh: () => refreshCalibrationLibrary(calibrationLibraryRuntime) },
+	{ handle: (event) => handleImageStackingEvent(imageStackingRuntime, event), refresh: () => refreshImageStacking(imageStackingRuntime) },
 	{ handle: (event) => handleGuidingEvent(guidingRuntime, event), refresh: () => refreshGuiding(guidingRuntime) },
 	{ handle: (event) => handleExternalToolEvent(externalToolsState, event), refresh: () => refreshExternalTools(externalToolsState) },
 	{ handle: (event) => handleStarsEvent(starsState, event), refresh: () => refreshStars(starsState) },

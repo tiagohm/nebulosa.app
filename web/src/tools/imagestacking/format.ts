@@ -1,5 +1,5 @@
 // oxfmt-ignore
-import type { StackingCohort, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingProductStatus, StackingRecipe, StackingRegistration, StackingRole, StackingRunGroup, StackingRunState, StackingSettings } from 'api'
+import type { StackingJobSummary, StackingCohort, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingProductStatus, StackingRecipe, StackingRegistration, StackingRole, StackingRunGroup, StackingRunState, StackingSettings } from 'api'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Presentation helpers of Image Stacking: labels and texts of what the server answers, which candidates of an import a
@@ -43,18 +43,14 @@ export function candidateUsable(candidate: StackingImportCandidate) {
 	return candidate.error === undefined && candidate.rejected === undefined && !candidate.known && candidate.role !== undefined
 }
 
-// Counts the candidates a commit adds: lights, and unclassified files either declared lights or kept unclassified.
-export function committedCounts(candidates: readonly StackingImportCandidate[], declared: ReadonlySet<string>) {
-	let lights = 0
-	let unclassified = 0
+// Counts the frames a commit adds from the counts of its import, with `declared` unclassified files declared lights.
+export function committedCounts(job: Pick<StackingJobSummary, 'lights' | 'unclassified'>, declared: number) {
+	return { lights: (job.lights ?? 0) + declared, unclassified: Math.max(0, (job.unclassified ?? 0) - declared) }
+}
 
-	for (const candidate of candidates) {
-		if (!candidateUsable(candidate)) continue
-		if (candidate.role === 'light' || declared.has(candidate.path)) lights++
-		else unclassified++
-	}
-
-	return { lights, unclassified }
+// Text of a merged filter key: the names its files write, or the key when none is known.
+export function keyText(names: readonly string[] | undefined, key: string) {
+	return names && names.length > 0 ? names.join(', ') : key
 }
 
 // Kinds of master a light is calibrated with, in the order they are shown.

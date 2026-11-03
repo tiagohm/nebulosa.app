@@ -18,9 +18,10 @@ import type { StackingFrameAnalysis, StackingProjectAnalysis, StackingRegistrati
 // Analysis of the light frames of a stacking project. Measuring runs on a worker of its own (`imagestacking.worker.ts`):
 // one frame at a time it hashes the file, reads it in digital numbers, calibrates it with the pinned masters of its
 // cohort, detects its stars, and measures its quality, so memory stays one frame and one set of masters whatever the
-// number of frames. Registration needs only the stars, so it runs on the server once every frame is measured: each
-// filter group registers onto its reference frame, and each group reference onto the project reference, so every frame
-// can later be resampled once onto one grid. Files are only read.
+// number of frames. Registration needs only the stars, which the server reads back once every frame is measured, and
+// runs on the same worker, since matching a frame costs tens of milliseconds: each filter group registers onto its
+// reference frame, and each group reference onto the project reference, so every frame can later be resampled once onto
+// one grid. Files are only read.
 
 // Version of the measurement, part of the fingerprint of an analysis; a change measures every frame again.
 export const ANALYSIS_VERSION = 1
@@ -88,7 +89,23 @@ export interface AnalysisWorkerRequest {
 export type AnalysisMeasurement = Pick<StackingFrameAnalysis, 'digest' | 'quality' | 'stars' | 'error'>
 
 // Response of the analysis worker.
-export type AnalysisWorkerResponse = { readonly jobId: string; readonly status: 'measured'; readonly sourceId: string; readonly measurement: AnalysisMeasurement } | { readonly jobId: string; readonly status: 'finished' } | { readonly jobId: string; readonly status: 'failed'; readonly error: string }
+export type AnalysisWorkerResponse =
+	| { readonly jobId: string; readonly status: 'measured'; readonly sourceId: string; readonly measurement: AnalysisMeasurement }
+	| { readonly jobId: string; readonly status: 'registering'; readonly registered: number; readonly total: number }
+	| { readonly jobId: string; readonly status: 'registered'; readonly registration: ProjectRegistration }
+	| { readonly jobId: string; readonly status: 'finished' }
+	| { readonly jobId: string; readonly status: 'failed'; readonly error: string }
+
+// Request to register the measured frames of a project.
+export interface RegistrationWorkerRequest {
+	// Id of the job, echoed by every response.
+	readonly jobId: string
+	readonly groups: readonly RegistrationGroup[]
+	// Group whose reference an operator pinned as the project reference.
+	readonly referenceGroup?: string
+	// Time of the outcome, Unix milliseconds (UTC).
+	readonly now: number
+}
 
 // Worker thread of an analysis. `unref` is a Bun extension that the DOM Worker type lacks.
 type AnalysisWorker = Worker & Pick<Bun.Worker, 'unref'>
@@ -96,9 +113,16 @@ type AnalysisWorker = Worker & Pick<Bun.Worker, 'unref'>
 // Starts an analysis worker; injectable so tests can observe its lifecycle.
 export type AnalysisWorkerFactory = () => AnalysisWorker
 
-// Measures frames, reporting each one as it ends; tests replace the worker with an in-thread analyzer.
+// Measures frames, reporting each one as it ends, and registers them, reporting how many; tests replace the worker with
+// an in-thread analyzer.
 export interface FrameAnalyzer {
 	readonly analyze: (request: AnalysisWorkerRequest, onMeasured: (sourceId: string, measurement: AnalysisMeasurement) => void, signal: AbortSignal) => Promise<void>
+	readonly register: (request: RegistrationWorkerRequest, onProgress: (registered: number, total: number) => void, signal: AbortSignal) => Promise<ProjectRegistration>
+}
+
+// Registers in the calling thread; for tests, and for a caller that is itself a worker.
+export function registerInThread(request: RegistrationWorkerRequest, onProgress: (registered: number, total: number) => void = () => undefined) {
+	return Promise.resolve(registerProject(request.groups, request.referenceGroup, request.now, onProgress))
 }
 
 // Masters of a cohort read in the normalized scale of its lights.
@@ -261,16 +285,19 @@ function groupReference(group: RegistrationGroup) {
 // Registers every measured frame onto the reference of its group, and every group reference onto the project
 // reference: the reference of the pinned group, or the group reference with the most stars. A group whose reference
 // does not register onto the project reference fails alone; the transform of a frame onto the project grid is later the
-// composition of both. `now` is the time of the outcome, Unix milliseconds.
-export function registerProject(groups: readonly RegistrationGroup[], referenceGroup: string | undefined, now: number): ProjectRegistration {
+// composition of both. `now` is the time of the outcome, Unix milliseconds; `onProgress` hears each frame registered.
+export function registerProject(groups: readonly RegistrationGroup[], referenceGroup: string | undefined, now: number, onProgress?: (registered: number, total: number) => void): ProjectRegistration {
 	const frames = new Map<string, StackingRegistration>()
 	const references = new Map<string, RegistrationFrame | undefined>()
+	const total = groups.reduce((sum, group) => sum + group.frames.length, 0)
+	let registered = 0
 
 	for (const group of groups) {
 		const reference = groupReference(group)
 		references.set(group.key, reference)
 
 		for (const frame of group.frames) {
+			onProgress?.(++registered, total)
 			if (!frame.analysis.quality) continue
 			if (!reference) frames.set(frame.sourceId, { success: false, reason: 'no-reference' })
 			else if (frame.sourceId === reference.sourceId) frames.set(frame.sourceId, identity(reference.analysis))
@@ -327,12 +354,12 @@ export class StackingAnalyzer implements FrameAnalyzer {
 		readonly stallTimeout: number = ANALYSIS_STALL_TIMEOUT,
 	) {}
 
-	// Measures the frames of a request on a worker until it ends. Aborting the signal terminates the worker at once.
-	// Rejects with an Error, or with the reason of the signal.
-	async analyze(request: AnalysisWorkerRequest, onMeasured: (sourceId: string, measurement: AnalysisMeasurement) => void, signal: AbortSignal) {
+	// Runs a request of a mode on a worker until it answers. Every message resets the stall timer; aborting the signal
+	// terminates the worker at once. Rejects with an Error, or with the reason of the signal.
+	async #run<T>(message: { readonly jobId: string; readonly mode: 'analyze' | 'register' }, signal: AbortSignal, handle: (response: AnalysisWorkerResponse) => { readonly value: T } | undefined): Promise<T> {
 		signal.throwIfAborted()
 		const worker = this.startWorker()
-		const { promise, resolve, reject } = Promise.withResolvers<void>()
+		const { promise, resolve, reject } = Promise.withResolvers<T>()
 		let timer: Timer | undefined
 
 		const watch = () => {
@@ -342,16 +369,11 @@ export class StackingAnalyzer implements FrameAnalyzer {
 		}
 
 		const onMessage = ({ data }: MessageEvent<AnalysisWorkerResponse>) => {
-			if (data.jobId !== request.jobId) return
-
-			if (data.status === 'measured') {
-				watch()
-				onMeasured(data.sourceId, data.measurement)
-			} else if (data.status === 'finished') {
-				resolve()
-			} else {
-				reject(new Error(data.error))
-			}
+			if (data.jobId !== message.jobId) return
+			watch()
+			if (data.status === 'failed') return reject(new Error(data.error))
+			const answer = handle(data)
+			if (answer) resolve(answer.value)
 		}
 
 		const onError = (event: ErrorEvent) => reject(new Error(event.message || 'The analysis worker failed'))
@@ -363,8 +385,8 @@ export class StackingAnalyzer implements FrameAnalyzer {
 		watch()
 
 		try {
-			worker.postMessage({ ...request, mode: 'analyze' }, [])
-			await promise
+			worker.postMessage(message, [])
+			return await promise
 		} finally {
 			clearTimeout(timer)
 			signal.removeEventListener('abort', onAbort)
@@ -372,5 +394,21 @@ export class StackingAnalyzer implements FrameAnalyzer {
 			worker.removeEventListener('error', onError)
 			worker.terminate()
 		}
+	}
+
+	// Measures the frames of a request on a worker until it ends.
+	analyze(request: AnalysisWorkerRequest, onMeasured: (sourceId: string, measurement: AnalysisMeasurement) => void, signal: AbortSignal) {
+		return this.#run<undefined>({ ...request, mode: 'analyze' }, signal, (response) => {
+			if (response.status === 'measured') onMeasured(response.sourceId, response.measurement)
+			return response.status === 'finished' ? { value: undefined } : undefined
+		})
+	}
+
+	// Registers the measured frames of a project on a worker.
+	register(request: RegistrationWorkerRequest, onProgress: (registered: number, total: number) => void, signal: AbortSignal) {
+		return this.#run<ProjectRegistration>({ ...request, mode: 'register' }, signal, (response) => {
+			if (response.status === 'registering') onProgress(response.registered, response.total)
+			return response.status === 'registered' ? { value: response.registration } : undefined
+		})
 	}
 }

@@ -232,13 +232,16 @@ async function verifyImage(path: string, width: number, height: number, channels
 	return { digest: await fileDigest(path), bytes: (await stat(path)).size }
 }
 
-// Reads `length` bytes of a spill file at an offset into `output`.
-async function readSpill(path: string, output: Uint8Array, offset: number) {
+// Reads ranges of a spill file, each at its offset into its output, through one handle. The file is opened per strip, so
+// a stack of thousands of frames holds no file open between strips.
+async function readSpill(path: string, ranges: readonly (readonly [output: Uint8Array, offset: number])[]) {
 	const handle = await open(path, 'r')
 
 	try {
-		const { bytesRead } = await handle.read(output, 0, output.byteLength, offset)
-		if (bytesRead !== output.byteLength) throw new IntegrationGroupError('A spill file ended early')
+		for (const [output, offset] of ranges) {
+			const { bytesRead } = await handle.read(output, 0, output.byteLength, offset)
+			if (bytesRead !== output.byteLength) throw new IntegrationGroupError('A spill file ended early')
+		}
 	} finally {
 		await handle.close()
 	}
@@ -383,8 +386,10 @@ export async function integrateGroup(request: IntegrationWorkerRequest, group: I
 
 				for (let index = 0; index < frames; index++) {
 					const path = join(spill, `${index}.raw`)
-					await readSpill(path, new Uint8Array(samples[index].buffer, 0, count * 4), (channel * pixels + start) * 4)
-					await readSpill(path, validity[index].subarray(0, count), channels * pixels * 4 + start)
+					await readSpill(path, [
+						[new Uint8Array(samples[index].buffer, 0, count * 4), (channel * pixels + start) * 4],
+						[validity[index].subarray(0, count), channels * pixels * 4 + start],
+					])
 					stripFrames.push({ raw: samples[index], valid: validity[index], weight: group.frames[index].weight })
 				}
 

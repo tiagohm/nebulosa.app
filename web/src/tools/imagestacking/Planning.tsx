@@ -194,7 +194,7 @@ export function QualityView({ projectId, group, onGroup, selected, onSelect }: {
 			<div className="flex flex-wrap items-center gap-3">
 				{running ? (
 					<>
-						<Notice>{`Measuring frames · ${job.measured ?? 0} of ${job.found} · ${job.failures ?? 0} not measured`}</Notice>
+						<Notice>{job.registrationTotal !== undefined ? `Registering frames · ${job.registered ?? 0} of ${job.registrationTotal}` : `Measuring frames · ${job.measured ?? 0} of ${job.found} · ${job.failures ?? 0} not measured`}</Notice>
 						<Button variant="secondary" disabled={pending[`analysis:${job.jobId}`] === true} onClick={() => void cancelStackingAnalysis(imageStackingRuntime, job.jobId)}>
 							Cancel
 						</Button>

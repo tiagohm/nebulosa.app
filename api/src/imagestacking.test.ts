@@ -9,11 +9,13 @@ import type { ResolvePreview } from './calibrationlibrary'
 import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
 import { AppDatabase } from './database'
 import { createImageStackingRoutes, filterGroups, ImageStacking, type ImageStackingEvent, type StackingMasters } from './imagestacking'
-import { type AnalysisMeasurement, type AnalysisWorkerRequest, type FrameAnalyzer, readDigital, StackingAnalyzer } from './imagestacking.analysis'
+import { type AnalysisMeasurement, type AnalysisWorkerRequest, type FrameAnalyzer, readDigital, registerInThread, StackingAnalyzer } from './imagestacking.analysis'
 import { type FrameCompositor, StackingCompositor } from './imagestacking.composition'
 import { type FrameIntegrator, integrationPlan } from './imagestacking.integration'
 import { cohortKeyOf, filterKeyOf, filterSynonyms, isWithin, lightRoleOf } from './imagestacking.sources'
 import { COMPOSITE_FILE, ImageStackingStore, PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingComposition, type StackingProduct, type StackingSourceFacts, type StackingStar } from './imagestacking.store'
+
+const SKIP = process.env.RUN_ALL_TESTS !== 'true'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-stacking-test-'))
 
@@ -126,6 +128,7 @@ function analyzer(measurements: Record<string, AnalysisMeasurement>, during: () 
 			for (const frame of request.frames) onMeasured(frame.sourceId, measurements[basename(frame.path)] ?? { error: 'The frame could not be measured' })
 			return Promise.resolve()
 		},
+		register: registerInThread,
 	}
 
 	return { fake, requests }
@@ -213,6 +216,7 @@ describe('filter groups', () => {
 		expect(groups.map((group) => group.key)).toEqual(['ha', 'oiii', ''])
 		const [ha, oiii, unassigned] = groups
 		expect(ha).toMatchObject({ name: 'HA', filterKeys: ['h-alpha', 'ha'], names: ['H-alpha', 'HA'], frames: 4, usable: 2, unavailable: 1, exposure: 120, cohorts: 1, objects: ['M31'] })
+		expect(ha.keyNames).toEqual({ ha: ['HA'], 'h-alpha': ['H-alpha'] })
 		expect(oiii.cohorts).toBe(1)
 		expect(unassigned).toMatchObject({ name: 'Unassigned', frames: 1 })
 	})
@@ -246,6 +250,8 @@ describe('image stacking projects', () => {
 		const ended = await settled(stacking, job.jobId)
 		expect(ended.state).toBe('completed')
 		expect(ended.found).toBe(6)
+		expect([ended.lights, ended.unclassified]).toEqual([3, 1])
+		expect(stacking.importCandidates(job.jobId, 4, 2)).toMatchObject({ total: 6, items: [{}, {}] })
 
 		const { items } = stacking.importCandidates(job.jobId, 0, 50)
 		const byName = Object.fromEntries(items.map((item) => [item.name, item]))
@@ -568,6 +574,7 @@ describe('calibration and registration planning', () => {
 				await aborted.promise
 				signal.throwIfAborted()
 			},
+			register: registerInThread,
 		}
 
 		const { stacking } = open(masters().library, slow)
@@ -748,6 +755,94 @@ describe('integration and publication', () => {
 		expect(readdirSync(join(managed, 'composites'))).toEqual(['mixed'])
 		expect(readdirSync(join(managed, 'orphaned')).some((name) => name.startsWith('stray-'))).toBeTrue()
 		await expect(second.deleteProduct('intact')).rejects.toThrow('delete the composite first')
+	})
+})
+
+describe('scale', () => {
+	// Writes a 16-bit light of 48 × 48 pixels with Gaussian stars at the given centers over a noisy sky.
+	async function writeSmall(path: string, stars: readonly (readonly [number, number])[], seed: number) {
+		const size = 48
+		const raw = new Float64Array(size * size)
+		const next = random(seed)
+
+		for (let y = 0; y < size; y++) {
+			for (let x = 0; x < size; x++) {
+				let value = 0.05 + next() * 0.002
+				for (const [cx, cy] of stars) value += 0.4 * Math.exp(-((x - cx) ** 2 + (y - cy) ** 2) / (2 * 1.3 ** 2))
+				raw[y * size + x] = value
+			}
+		}
+
+		const header: FitsHeader = { SIMPLE: true, BITPIX: 16, NAXIS: 2, NAXIS1: size, NAXIS2: size, BZERO: 32768, BSCALE: 1, ...light('L', { EXPTIME: 60 }) }
+		const buffer = Buffer.alloc(4 * 2880 + size * size * 2)
+		const sink = bufferSink(buffer)
+		await writeFits(sink, [{ header, raw }], { type: false })
+		writeFileSync(path, buffer.subarray(0, sink.position))
+	}
+
+	test.skipIf(SKIP)('hundreds of frames integrate in strips of one row as in one strip, and a cancelled run leaves nothing to the next process', async () => {
+		const frames = 200
+		const folder = directory('scale')
+		const field = [
+			[8, 8],
+			[36, 10],
+			[14, 34],
+			[38, 38],
+			[24, 22],
+			[10, 22],
+			[40, 24],
+			[22, 6],
+			[30, 30],
+			[18, 16],
+		] as const
+		const next = random(5)
+
+		for (let index = 0; index < frames; index++) {
+			const dx = Math.round(next() * 4 - 2)
+			const dy = Math.round(next() * 4 - 2)
+			await writeSmall(
+				join(folder, `l${index}.fit`),
+				field.map(([x, y]) => [x + dx, y + dy] as const),
+				index + 1,
+			)
+		}
+
+		const database = AppDatabase.memory()
+		const managed = directory('scale-managed')
+		const store = new ImageStackingStore(database, managed)
+		const first = new ImageStacking(store, () => undefined, masters().library, [managed])
+		const { projectId } = await first.createProject({ name: 'Scale' })
+		expect(await importAll(first, projectId, [folder])).toEqual({ committed: frames })
+		const [cohort] = await first.cohorts(projectId)
+		await first.updateCohort(projectId, cohort.cohortId, { calibration: { kind: 'none', reason: 'Synthetic frames' } })
+		expect(await settled(first, (await first.startAnalysis(projectId)).jobId)).toMatchObject({ state: 'completed', measured: frames, failures: 0, registered: frames, registrationTotal: frames })
+		expect((await first.validate(projectId)).ready).toBeTrue()
+
+		const recipe = { method: 'sigma-clip' as const, minimumCoverage: 0.9 }
+		const tight = await first.preflight(projectId, { recipe, memoryBudget: 100000 })
+		expect(tight.groups[0].plan).toMatchObject({ mode: 'spill', stripRows: 1, fits: true })
+
+		const cancelled = await first.startRun(projectId, { token: 'cancel', recipe, memoryBudget: 100000 })
+		while ((await first.job(cancelled.run.runId)).measured === 0) await Bun.sleep(5)
+		first.cancel(cancelled.run.runId)
+		expect(await settled(first, cancelled.run.runId)).toMatchObject({ state: 'cancelled' })
+
+		const second = new ImageStacking(store, () => undefined, masters().library, [managed])
+		expect((await second.runs(projectId))[0]).toMatchObject({ state: 'cancelled', groups: [{ groupKey: 'l', frames }] })
+		expect(await second.products(projectId)).toEqual([])
+		expect(readdirSync(managed)).not.toContain('staging')
+
+		const strips = await second.startRun(projectId, { token: 'strips', recipe, memoryBudget: 100000 })
+		expect(await settled(second, strips.run.runId)).toMatchObject({ state: 'completed', measured: frames, published: 1 })
+		const [narrow] = await second.products(projectId)
+		expect(narrow.diagnostics).toMatchObject({ mode: 'spill', stripRows: 1 })
+		await second.deleteProduct(narrow.productId)
+
+		const whole = await second.startRun(projectId, { token: 'whole', recipe })
+		await settled(second, whole.run.runId)
+		const [wide] = await second.products(projectId)
+		expect(wide.diagnostics.stripRows).toBe(48)
+		expect(wide.contentDigest).toBe(narrow.contentDigest)
 	})
 })
 

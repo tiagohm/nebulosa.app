@@ -11,7 +11,7 @@ import { type CalibrationKind, type CalibrationMetadata, type CalibrationTarget,
 import { fileIdentity, type FileInspection, inspectFile, scanDirectory } from './calibrationlibrary.sources'
 import { MAX_PAGE_SIZE, type Page, type ProductStatus, type SourceFormat, type SourceStatus } from './calibrationlibrary.store'
 import { errorResponse } from './http'
-import { ANALYSIS_VERSION, type AnalysisCalibration, type AnalysisFrame, type FrameAnalyzer, REFERENCE_MIN_STARS, registerProject, type RegistrationFrame, type RegistrationGroup, StackingAnalyzer } from './imagestacking.analysis'
+import { ANALYSIS_VERSION, type AnalysisCalibration, type AnalysisFrame, type FrameAnalyzer, REFERENCE_MIN_STARS, type RegistrationFrame, type RegistrationGroup, StackingAnalyzer } from './imagestacking.analysis'
 // oxfmt-ignore
 import { DEFAULT_STACK_MEMORY_BUDGET, type FrameIntegrator, INTEGRATION_VERSION, type IntegrationFrame, type IntegrationPlan, integrationPlan, type IntegrationWorkerRequest, productHeader, StackingIntegrator, type StagedProduct } from './imagestacking.integration'
 import { cohortKeyOf, filterKeyOf, filterSynonyms, isWithin, lightRoleOf, type StackingRole, stackingSourceId } from './imagestacking.sources'
@@ -49,6 +49,22 @@ const KEPT_JOBS = 50
 
 // Files found between two progress events of a scan.
 const PROGRESS_STEP = 100
+
+// Shortest time between two progress events of a long step (rows of a strip, frames registered), in milliseconds; a
+// change of phase and the last step are always published.
+const PROGRESS_INTERVAL = 250
+
+// Returns a gate that lets a progress step through at most every PROGRESS_INTERVAL milliseconds, or when `force` says so.
+function progressGate() {
+	let last = 0
+
+	return (force: boolean) => {
+		const now = performance.now()
+		if (!force && now - last < PROGRESS_INTERVAL) return false
+		last = now
+		return true
+	}
+}
 
 // Bytes of memory a stack needs per pixel of the project grid and channel: the source frame, its calibration masters, the
 // warped frame, its validity, and the normalization reference, in single precision. A planning estimate, not a bound.
@@ -123,6 +139,8 @@ export interface StackingFilterGroup {
 	readonly objects: readonly string[]
 	// Key of another group whose name is a known synonym of this one, offered as a merge.
 	readonly suggestion?: string
+	// Names written for each canonical key the group holds, so a merge can be shown as its files spell it.
+	readonly keyNames: Readonly<Record<string, readonly string[]>>
 }
 
 // A project with its aliases and the outcome of its latest registration.
@@ -353,6 +371,9 @@ export interface StackingJobSummary {
 	// Frames an analysis measured or a run read so far, and those an analysis could not measure.
 	readonly measured?: number
 	readonly failures?: number
+	// Frames an analysis registered so far, of the total it registers.
+	readonly registered?: number
+	readonly registrationTotal?: number
 	// Name of the filter group a run integrates, the rows it or a composition combined of the total, and the masters it
 	// published.
 	readonly group?: string
@@ -363,6 +384,9 @@ export interface StackingJobSummary {
 	readonly truncated: boolean
 	// Frames that entered the project once committed.
 	readonly committed?: number
+	// Candidates of a completed import that a commit adds: lights, and files whose header names no role.
+	readonly lights?: number
+	readonly unclassified?: number
 	// Why it failed, with a stable code.
 	readonly error?: string
 	readonly code?: ImageStackingErrorCode
@@ -462,6 +486,11 @@ interface CohortFrames {
 
 // A cohort with its usable lights.
 type CohortState = StackingCohort & { readonly sources: readonly StackingSource[] }
+
+// Returns whether a candidate of an import can enter its project: read, a light or unclassified, and not already in it.
+function isAddable(candidate: StackingImportCandidate): candidate is StackingImportCandidate & Required<Pick<StackingImportCandidate, 'role' | 'metadata' | 'format'>> {
+	return candidate.error === undefined && candidate.rejected === undefined && candidate.role !== undefined && candidate.metadata !== undefined && candidate.format !== undefined && !candidate.known
+}
 
 // Returns what lists and events show of a job.
 function jobSummary({ candidates: _, ...summary }: StackingJob): StackingJobSummary {
@@ -587,6 +616,7 @@ export function filterGroups(facts: readonly StackingSourceFacts[], aliases: rea
 			exposure,
 			cohorts: new Set(usable.map((fact) => fact.cohortKey)).size,
 			objects: [...new Set(members.flatMap((fact) => fact.object || []))].sort(),
+			keyNames: Object.fromEntries([...new Set(members.map((fact) => fact.filterKey))].map((filterKey) => [filterKey, [...new Set(members.flatMap((fact) => (fact.filterKey === filterKey && fact.filterName !== undefined ? fact.filterName : [])))].sort()])),
 		})
 	}
 
@@ -1030,7 +1060,11 @@ export class ImageStacking {
 			}
 
 			signal.throwIfAborted()
-			this.#register(job.projectId)
+			const gate = progressGate()
+
+			await this.#register(job.projectId, signal, (registered, registrationTotal) => {
+				if (gate(registered === registrationTotal)) current = this.#saveJob(current, { registered, registrationTotal })
+			})
 			this.#saveJob(current, { state: 'completed' })
 		} catch (error) {
 			if (signal.aborted) this.#saveJob(current, { state: 'cancelled' })
@@ -1041,8 +1075,9 @@ export class ImageStacking {
 		}
 	}
 
-	// Registers the frames of a project whose measurement is current, and saves each transform and the project outcome.
-	#register(projectId: string) {
+	// Registers the frames of a project whose measurement is current on the worker, and saves each transform and the
+	// project outcome. `onProgress` hears the frames registered of the total.
+	async #register(projectId: string, signal: AbortSignal, onProgress: (registered: number, total: number) => void) {
 		const project = this.store.project(projectId)
 		if (!project) return
 		const decisions = new Map(this.store.cohorts(projectId).map((decision) => [decision.cohortId, decision]))
@@ -1062,7 +1097,8 @@ export class ImageStacking {
 
 		const input: RegistrationGroup[] = []
 		for (const [key, frames] of groups) input.push({ key, frames, reference: project.settings.references[key] })
-		const outcome = registerProject(input, project.settings.referenceGroup, Date.now())
+		const outcome = await this.analyzer.register({ jobId: crypto.randomUUID(), groups: input, ...(project.settings.referenceGroup !== undefined && { referenceGroup: project.settings.referenceGroup }), now: Date.now() }, onProgress, signal)
+		if (!this.store.project(projectId)) return
 		const updates: { sourceId: string; analysis: StackingFrameAnalysis }[] = []
 
 		for (const { frames } of input) {
@@ -1336,7 +1372,15 @@ export class ImageStacking {
 		let current = job
 
 		try {
-			const image = await this.compositor.compose(request, ({ rows, rowsTotal }) => (current = this.#saveJob(current, { rowsCombined: rows, rowsTotal })), signal)
+			const gate = progressGate()
+
+			const image = await this.compositor.compose(
+				request,
+				({ rows, rowsTotal }) => {
+					if (gate(rows === rowsTotal)) current = this.#saveJob(current, { rowsCombined: rows, rowsTotal })
+				},
+				signal,
+			)
 			if (!this.store.project(job.projectId)) throw new Error('The project was deleted')
 			const compositeId = crypto.randomUUID()
 			const composite: StackingComposite = { compositeId, projectId: job.projectId, fingerprint, createdAt: Date.now(), contentDigest: image.contentDigest, bytes: image.bytes, width: image.width, height: image.height, left: image.left, top: image.top, composition, diagnostics: image.diagnostics }
@@ -1581,6 +1625,7 @@ export class ImageStacking {
 		let state = run
 		let published = 0
 		let publishing = Promise.resolve()
+		const gate = progressGate()
 
 		for (const group of request.groups) {
 			offsets.set(group.key, offset)
@@ -1594,7 +1639,8 @@ export class ImageStacking {
 
 		const handlers = {
 			onProgress: ({ group, frames, rowsCombined, rowsTotal }: { group: string; frames: number; rowsCombined: number; rowsTotal: number }) => {
-				current = this.#saveJob(current, { group: byKey.get(group)?.name, measured: (offsets.get(group) ?? 0) + frames, rowsCombined, rowsTotal })
+				const measured = (offsets.get(group) ?? 0) + frames
+				if (gate(measured !== current.measured || rowsCombined === rowsTotal)) current = this.#saveJob(current, { group: byKey.get(group)?.name, measured, rowsCombined, rowsTotal })
 			},
 			onStaged: (staged: StagedProduct) => {
 				const group = byKey.get(staged.group)!
@@ -1937,7 +1983,9 @@ export class ImageStacking {
 				bytes = candidates.reduce((sum, candidate) => sum + candidate.bytes, 0)
 			}
 
-			this.#saveJob(current, { state: 'completed', found, bytes, truncated, candidates })
+			const addable = candidates.filter((candidate) => isAddable(candidate))
+			const lights = addable.filter((candidate) => candidate.role === 'light').length
+			this.#saveJob(current, { state: 'completed', found, bytes, truncated, candidates, lights, unclassified: addable.length - lights })
 		} catch (error) {
 			if (signal.aborted) this.#saveJob(current, { state: 'cancelled' })
 			else this.#saveJob(current, { state: 'failed', code: 'processingFailed', error: `The files could not be read (${errorCode(error) ?? 'unexpected error'})` })
@@ -2008,8 +2056,7 @@ export class ImageStacking {
 
 		for (const candidate of job.candidates ?? []) {
 			if (chosen && !chosen.has(candidate.path)) continue
-			if (candidate.error !== undefined || candidate.rejected !== undefined || candidate.role === undefined || !candidate.metadata || !candidate.format) continue
-			if (identities.has(candidate.identity) || this.store.hasIdentity(job.projectId, candidate.identity)) continue
+			if (!isAddable(candidate) || identities.has(candidate.identity) || this.store.hasIdentity(job.projectId, candidate.identity)) continue
 			identities.add(candidate.identity)
 
 			const declared = candidate.role === 'unclassified' ? lights[candidate.path] : undefined

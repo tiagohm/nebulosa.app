@@ -18,7 +18,7 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import { bytesText, EVIDENCE_LABELS, exposureText, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES } from '../calibrationlibrary/library'
 import { CompositionView } from './Composition'
-import { candidateText, candidateUsable, committedCounts, groupLabel, integrationText, metricText, registrationText, ROLE_LABELS, SECTION_LABELS, STACKING_SECTIONS, type StackingSection } from './format'
+import { candidateText, candidateUsable, committedCounts, groupLabel, keyText, integrationText, metricText, registrationText, ROLE_LABELS, SECTION_LABELS, STACKING_SECTIONS, type StackingSection } from './format'
 import { IntegrationView, ResultsView } from './Integration'
 import { CalibrationView, QualityView } from './Planning'
 // oxfmt-ignore
@@ -119,14 +119,8 @@ export function ImageStacking() {
 	const groupKeys = ['*', ...groups.map((item) => item.key)]
 	const panel = selected && <FramePanel onRemoved={() => setSelected(undefined)} />
 
-	const actions = projectId !== undefined && (
-		<Actions>
-			<Button variant="secondary" disabled={runtime.pending.refresh === true} onClick={() => void refreshStackingProject(imageStackingRuntime, projectId)}>
-				Check Files
-			</Button>
-			<Button onClick={() => setImporting(true)}>Import Frames</Button>
-		</Actions>
-	)
+	// Only the import stays in the header, so the title and it fit a phone; Check Files sits by the project.
+	const actions = projectId !== undefined && <Button onClick={() => setImporting(true)}>Import Frames</Button>
 
 	return (
 		<WorkspaceLayout workspace="tools" title="Image Stacking" actions={actions} panelState={panelState} panel={panel ? { title: 'Frame', content: panel } : undefined}>
@@ -139,7 +133,14 @@ export function ImageStacking() {
 						<Button variant="secondary" onClick={() => setCreating(true)}>
 							New Project
 						</Button>
-						<SegmentedControl options={STACKING_SECTIONS} value={section} format={(option) => SECTION_LABELS[option]} onChange={change(setSection)} />
+						{projectId !== undefined && (
+							<Button variant="secondary" disabled={runtime.pending.refresh === true} onClick={() => void refreshStackingProject(imageStackingRuntime, projectId)}>
+								Check Files
+							</Button>
+						)}
+						<div className="max-w-full overflow-x-auto">
+							<SegmentedControl options={STACKING_SECTIONS} value={section} format={(option) => SECTION_LABELS[option]} onChange={change(setSection)} />
+						</div>
 					</div>
 				)}
 				{linked !== undefined && runtime.snapshot && !projects.some((item) => item.projectId === linked) && <Notice error>This project no longer exists.</Notice>}
@@ -304,7 +305,7 @@ function GroupsView({ projectId, onShow }: { readonly projectId: string; readonl
 									.filter((alias) => alias.targetKey === item.key)
 									.map((alias) => (
 										<Button key={alias.filterKey} variant="secondary" disabled={pending[`alias:${alias.filterKey}`] === true} onClick={() => void separateStackingFilter(imageStackingRuntime, projectId, alias.filterKey)}>
-											{`Separate ${alias.filterKey}`}
+											{`Separate ${keyText(item.keyNames[alias.filterKey], alias.filterKey)}`}
 										</Button>
 									))}
 							</div>
@@ -461,16 +462,30 @@ function ImportDialog({ projectId, onClose }: { readonly projectId: string; read
 	const [choosing, setChoosing] = useState<'directory' | 'open'>()
 	const [jobId, setJobId] = useState<string>()
 	const [page, setPage] = useState<Page<StackingImportCandidate>>()
+	const [pageIndex, setPageIndex] = useState(0)
+	const [loading, setLoading] = useState(false)
 	const [declared, setDeclared] = useState<ReadonlySet<string>>(new Set())
 	const [reason, setReason] = useState('')
 	const [committed, setCommitted] = useState<number>()
 	const job = jobId === undefined ? undefined : jobs[jobId]
 	const ended = job !== undefined && jobEnded(job)
 
-	// Fetches what was found once the scan ended.
+	// Fetches the page of what was found shown, once the scan ended; a late page of another index is dropped.
 	useEffect(() => {
-		if (jobId !== undefined && job?.state === 'completed' && !page) void loadStackingCandidates(jobId, 0).then(setPage)
-	}, [job?.state, jobId, page])
+		if (jobId === undefined || job?.state !== 'completed') return
+		let current = true
+		setLoading(true)
+
+		void loadStackingCandidates(jobId, pageIndex).then((found) => {
+			if (!current) return
+			setLoading(false)
+			if (found) setPage(found)
+		})
+
+		return () => {
+			current = false
+		}
+	}, [job?.state, jobId, pageIndex])
 
 	function add(path: string) {
 		setChoosing(undefined)
@@ -497,7 +512,7 @@ function ImportDialog({ projectId, onClose }: { readonly projectId: string; read
 	}
 
 	const items = page?.items ?? []
-	const counts = committedCounts(items, declared)
+	const counts = committedCounts(job ?? {}, declared.size)
 
 	return (
 		<Modal open title="Import Light Frames" fit className="w-full max-w-4xl" onClose={onClose}>
@@ -544,7 +559,7 @@ function ImportDialog({ projectId, onClose }: { readonly projectId: string; read
 				{committed !== undefined && <Notice>{`${committed} frames entered the project.`}</Notice>}
 				{page && committed === undefined && (
 					<>
-						<Notice>{`${page.total} files found: ${counts.lights} lights and ${counts.unclassified} unclassified files will be added.${page.total > items.length ? ` Only the first ${items.length} are listed.` : ''}`}</Notice>
+						<Notice>{`${page.total} files found: ${counts.lights} lights and ${counts.unclassified} unclassified files will be added. Declared lights are kept across pages.`}</Notice>
 						<Table headers={['File', 'Found', 'Filter', 'Exposure', 'Target', 'Declare Light']}>
 							{items.map((candidate) => (
 								<Row key={candidate.path}>
@@ -557,6 +572,7 @@ function ImportDialog({ projectId, onClose }: { readonly projectId: string; read
 								</Row>
 							))}
 						</Table>
+						<Pager page={pageIndex} total={page.total} loading={loading} onPage={setPageIndex} />
 						{declared.size > 0 && <TextInput label="Why these are lights" value={reason} onChange={(event) => setReason(event.target.value)} />}
 						{errors.import && <Notice error>{errors.import}</Notice>}
 						<Actions>

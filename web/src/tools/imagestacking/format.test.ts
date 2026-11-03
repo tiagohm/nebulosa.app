@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { StackingImportCandidate } from 'api'
-import { candidateText, candidateUsable, cohortText, memoryText, runGroupText, committedCounts, groupLabel, integrationText, masterText, metricText, registrationText, selectionFields, selectionOf } from './format'
+import { candidateText, candidateUsable, cohortText, memoryText, runGroupText, committedCounts, groupLabel, keyText, integrationText, masterText, metricText, registrationText, selectionFields, selectionOf } from './format'
 
 function candidate(path: string, patch: Partial<StackingImportCandidate> = {}): StackingImportCandidate {
 	return { path, name: path, bytes: 1, mtimeMillis: 1, format: 'fits', role: 'light', warnings: [], known: false, ...patch }
@@ -51,6 +51,8 @@ describe('format', () => {
 		const items = [candidate('a'), candidate('b', { role: 'unclassified' }), candidate('c', { role: 'unclassified' }), candidate('d', { rejected: 'A dark frame, not a light frame', role: undefined }), candidate('e', { known: true }), candidate('f', { error: 'Broken', role: undefined })]
 		expect(items.map(candidateText)).toEqual(['Light', 'Unclassified', 'Unclassified', 'A dark frame, not a light frame', 'Already in this project', 'Broken'])
 		expect(items.map(candidateUsable)).toEqual([true, true, true, false, false, false])
-		expect(committedCounts(items, new Set(['b', 'd']))).toEqual({ lights: 2, unclassified: 1 })
+		expect(committedCounts({ lights: 1, unclassified: 2 }, 1)).toEqual({ lights: 2, unclassified: 1 })
+		expect(committedCounts({}, 0)).toEqual({ lights: 0, unclassified: 0 })
+		expect([keyText(['H Alpha', 'H-ALPHA'], 'h alpha'), keyText([], 'h alpha'), keyText(undefined, 'ha')]).toEqual(['H Alpha, H-ALPHA', 'h alpha', 'ha'])
 	})
 })

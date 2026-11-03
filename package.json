@@ -17,7 +17,7 @@
 		"fmt": "bun fmt --disable-nested-config",
 		"make:catalog": "bun run bin/src/sky.catalog.ts",
 		"make:moon": "bun run bin/src/moon.assets.ts",
-		"test:timings": "bun test --timings timings.json --update-timings"
+		"test:timings": "RUN_ALL_TESTS=true bun test --timings timings.json --update-timings --timeout 30000"
 	},
 	"devDependencies": {
 		"@types/bun": "latest"

@@ -1,3 +1,4 @@
+import { join } from 'path'
 import type { DarkFrameAssessment, DarkFrameHeader, DarkPlaneMeasurement, DarkTemperatureTrace } from './darklibrarywizard.analysis'
 
 // Capture plan of the Dark Library Wizard: what a session acquires, the record of each frame it examined, and the
@@ -5,11 +6,25 @@ import type { DarkFrameAssessment, DarkFrameHeader, DarkPlaneMeasurement, DarkTe
 // frame as it is published and the plan once the session ended, and nothing is kept to resume. Times are Unix
 // milliseconds, exposures seconds, temperatures degrees Celsius.
 
-// Directory of the frames of a group that do not count.
+// Directory, under the directory of a plan, that holds the frames of every plan, whatever its camera or group.
+export const DARKS_DIRECTORY = 'darks'
+
+// Directory, under the darks directory, of the frames that do not count.
 export const REJECTED_DIRECTORY = 'rejected'
 
-// Directory of the frames of a group being acquired.
+// Directory, under the darks directory, of the frames being acquired: one directory per plan, named by its id, so sessions
+// of several cameras never share a staged file.
 export const STAGING_DIRECTORY = '.staging'
+
+// Returns the directory every frame of a plan is saved in.
+export function darksDirectory({ directory }: Pick<DarkCapturePlan, 'directory'>) {
+	return join(directory, DARKS_DIRECTORY)
+}
+
+// Returns the staging directory of a plan.
+export function stagingDirectory(plan: Pick<DarkCapturePlan, 'directory' | 'planId'>) {
+	return join(darksDirectory(plan), STAGING_DIRECTORY, plan.planId)
+}
 
 // Camera settings shared by every frame of a plan; each group adds its exposure and temperature.
 export interface DarkPlanCapture {
@@ -47,8 +62,6 @@ export interface DarkPlanGroup extends DarkGroup {
 	readonly groupId: string
 	// Exact identity of the settings of its frames (darkGroupKey).
 	readonly key: string
-	// Absolute directory of its frames.
-	readonly directory: string
 }
 
 // Light protection of a plan: any combination of the mechanisms, each one verified or asserted.
@@ -103,7 +116,7 @@ export interface DarkCapturePlan {
 	}
 	readonly panel?: DarkPlanDevice
 	readonly cover?: DarkPlanDevice
-	// Absolute directory the frames are saved under.
+	// Absolute directory whose darks directory holds the frames.
 	readonly directory: string
 	// Camera settings of every frame.
 	readonly capture: DarkPlanCapture

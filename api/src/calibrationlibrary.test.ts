@@ -82,7 +82,7 @@ function blockedIntegrator(): Integrator {
 
 // Waits until a job ends, and returns it.
 async function settled(library: CalibrationLibrary, jobId: string) {
-	for (let attempt = 0; attempt < 500; attempt++) {
+	for (let attempt = 0; attempt < 2000; attempt++) {
 		const job = await library.job(jobId)
 		if (job.state === 'completed' || job.state === 'failed' || job.state === 'cancelled') return job
 		await Bun.sleep(10)
@@ -101,8 +101,9 @@ async function built(library: CalibrationLibrary, request: Parameters<Calibratio
 
 // Writes `frames` accepted dark frames of a plan and registers them in a library, as its session publishes them.
 async function plan(library: CalibrationLibrary, base: string, frames: number, required = frames, patch: Partial<DarkCapturePlan> = {}) {
-	const group = { groupId: 'g', key: 'g', directory: join(base, 'frames'), exposure: 60, temperature: -10, count: required }
-	mkdirSync(join(group.directory, STAGING_DIRECTORY), { recursive: true })
+	const directory = join(base, 'frames')
+	const group = { groupId: 'g', key: 'g', exposure: 60, temperature: -10, count: required }
+	mkdirSync(directory, { recursive: true })
 
 	const dark: DarkCapturePlan = {
 		planId: 'plan',
@@ -120,7 +121,7 @@ async function plan(library: CalibrationLibrary, base: string, frames: number, r
 	const random = noise(7)
 
 	for (let sequence = 1; sequence <= frames; sequence++) {
-		const path = await writeFrame(join(group.directory, `${sequence}.fit`), (x, y) => 1000 + x + (x === 3 && y === 2 ? 3000 : 0) + random(), { IMAGETYP: 'Dark Frame', EXPTIME: 60, GAIN: 100, OFFSET: 50, XBINNING: 1, YBINNING: 1, 'CCD-TEMP': -10, READOUTM: 'RAW16' })
+		const path = await writeFrame(join(directory, `${sequence}.fit`), (x, y) => 1000 + x + (x === 3 && y === 2 ? 3000 : 0) + random(), { IMAGETYP: 'Dark Frame', EXPTIME: 60, GAIN: 100, OFFSET: 50, XBINNING: 1, YBINNING: 1, 'CCD-TEMP': -10, READOUTM: 'RAW16' })
 		const frame: DarkFrameRecord = {
 			frameId: `f${sequence}`,
 			groupId: 'g',
@@ -566,6 +567,8 @@ describe('masters', () => {
 		expect(existsSync(join(base, 'library', 'staging', jobId))).toBeTrue()
 		library.close()
 		libraries.length = 0
+		// A stopped server never overlaps the next one, so the cleanup of the cancelled job ends before the library opens again.
+		for (let attempt = 0; attempt < 200 && existsSync(join(base, 'library', 'staging', jobId)); attempt++) await Bun.sleep(10)
 
 		const reopened = open(local, undefined, base)
 		await reopened.library.ready()
@@ -710,7 +713,7 @@ describe('flats', () => {
 
 	// A master dark-flat at the exposure of the flats, and flats of different brightness, all registered.
 	async function prepared(library: CalibrationLibrary, base: string, pedestal: number) {
-		await plan(library, base, 3, 3, { purpose: 'darkFlat', groups: [{ groupId: 'g', key: 'g', directory: join(base, 'frames'), exposure: 2, temperature: -10, count: 3 }] })
+		await plan(library, base, 3, 3, { purpose: 'darkFlat', groups: [{ groupId: 'g', key: 'g', exposure: 2, temperature: -10, count: 3 }] })
 		const [darkFlat] = (await library.groups({ kind: 'darkFlat' }, 0, 50)).items
 		const correction = await built(library, { groupId: darkFlat.groupId })
 

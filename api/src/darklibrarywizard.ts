@@ -1,4 +1,4 @@
-import { mkdir, readdir, stat } from 'fs/promises'
+import { mkdir, readdir, rmdir, stat } from 'fs/promises'
 import { join } from 'path'
 import { TIMEZONE } from 'nebulosa/src/astronomy/time/temporal'
 import type { CameraCommander } from 'nebulosa/src/devices/commanders/camera'
@@ -17,7 +17,7 @@ import { type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE
 import type { DarkFrameRegistration } from './calibrationlibrary'
 import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
-import { type CaptureSnoop, DEFAULT_CAPTURES_DIR, exposureProgressListener, frameName, sanitizeFileName, snoopedDevices } from './captures'
+import { type CaptureSnoop, DEFAULT_CAPTURES_DIR, exposureProgressListener, frameName, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
 import {
 	advanceTemperatureTrace,
@@ -33,7 +33,7 @@ import {
 	type DarkTemperatureTrace,
 	startTemperatureTrace,
 } from './darklibrarywizard.analysis'
-import { type DarkCapturePlan, type DarkFrameRecord, type DarkFrameVerdict, type DarkGroup, type DarkGroupProgress, type DarkPlanCapture, type DarkPlanGroup, type DarkProtection, type DarkThermalPolicy, REJECTED_DIRECTORY, STAGING_DIRECTORY } from './darklibrarywizard.plan'
+import { type DarkCapturePlan, type DarkFrameRecord, type DarkFrameVerdict, type DarkGroup, type DarkGroupProgress, type DarkPlanCapture, type DarkPlanGroup, type DarkProtection, type DarkThermalPolicy, darksDirectory, REJECTED_DIRECTORY, stagingDirectory } from './darklibrarywizard.plan'
 import type { DeviceRegistry } from './devices'
 import { publishFrame } from './flatwizard'
 import { errorResponse } from './http'
@@ -61,9 +61,9 @@ import type { OperationDevice, OperationProgressReporter, OperationRegistry } fr
 // silence is recorded as the age of the reading and fails nothing. The cooler is switched on when it can be, and is never
 // switched off, warmed, or given back a setpoint: thermal state after a session is the operator's.
 //
-// Every exposure goes through the shared camera capturer into the staging directory of its group, is measured in the DN
+// Every exposure goes through the shared camera capturer into the staging directory of its plan, is measured in the DN
 // of the file by the analyzer, and is decided by assessDarkFrame. A proven failure is quarantined in the rejected
-// directory of its group and never counts. A suspicion of light never rejects a frame, because only the operator can say
+// directory of darks/ and never counts. A suspicion of light never rejects a frame, because only the operator can say
 // whether the protection failed: on the first frame of a group, and on two suspicious frames in a row, the session waits for
 // a decision. Continuing records the frame as accepted with warnings; stopping quarantines it. An accepted frame is
 // published without ever replacing a file, and only then counts. Raw pixels are never modified.
@@ -391,11 +391,6 @@ export function orderDarkGroups<T extends Pick<DarkGroup, 'temperature'>>(groups
 	return temperatures.flatMap((temperature) => groups.filter((group) => group.temperature === temperature))
 }
 
-// Returns the directory of a group under the directory of its plan, readable and unique by its position.
-function groupDirectory({ exposure, temperature }: DarkGroup, gain: number, index: number) {
-	return sanitizeFileName(`${String(index + 1).padStart(2, '0')}_${exposure}s_gain${gain}_${temperature === undefined ? 'uncontrolled' : `${temperature}C`}`)
-}
-
 // Returns the size a frame must have, in output pixels, or undefined while the sensor is unknown.
 export function expectedFrameSize({ subframe, width, height, binX, binY }: DarkPlanCapture, sensor: DarkCapturePlan['camera']['sensor']) {
 	if (subframe) return { width: Math.floor(width / binX), height: Math.floor(height / binY) }
@@ -533,15 +528,13 @@ export class DarkLibraryWizardSessions implements Disposable {
 	#newPlan(planId: string, request: DarkLibraryWizardRequest, { camera, wheel, panel, cover }: SessionDevices): DarkCapturePlan {
 		const directory = request.directory || this.capturesDir
 		const hardwareId = resourceKey(camera)
-		const root = join(directory, 'darks', sanitizeFileName(camera.name) || 'camera', planId)
 		const { protection, capture, thermal, maximumRejections } = request
-		const groups = orderDarkGroups(request.groups).map((group, index): DarkPlanGroup => ({
+		const groups = orderDarkGroups(request.groups).map((group): DarkPlanGroup => ({
 			exposure: group.exposure,
 			temperature: group.temperature,
 			count: group.count,
 			groupId: crypto.randomUUID(),
 			key: darkGroupKey(group, capture, hardwareId),
-			directory: join(root, groupDirectory(group, capture.gain, index)),
 		}))
 		const device = (entry: Device) => ({ hardwareId: resourceKey(entry), name: entry.name })
 
@@ -918,15 +911,15 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return confirmed.ok ? successfulOperationResult(true) : confirmed
 	}
 
-	// Exposes one frame into the staging directory of its group and measures it in DN. The protection and the temperature
+	// Exposes one frame into the staging directory of its plan and measures it in DN. The protection and the temperature
 	// are read again right before the exposure is dispatched; a refusal returns to the loop, which takes care of them.
 	async #take(session: Session, context: OperationContext, devices: SessionDevices, index: number): Promise<OperationResult<FrameOutcome>> {
 		const { camera } = devices
 		const group = session.plan.groups[index]
-		const staging = join(group.directory, STAGING_DIRECTORY)
+		const staging = stagingDirectory(session.plan)
 		const sequence = this.#sequence(session, index)
-		// A sequence number is never reused in a group, and a short name leaves room under the path limit of Windows.
-		const name = `${sequence}.fit`
+		// A sequence number is never reused in a group, so the position of the group and the sequence never repeat in a plan.
+		const name = `${index + 1}_${sequence}.fit`
 		const staged = join(staging, name)
 		const { tolerance } = session.plan.thermal
 
@@ -1023,13 +1016,12 @@ export class DarkLibraryWizardSessions implements Disposable {
 
 	// Quarantines a frame that does not count. The file is kept; failing to do so ends the session.
 	async #reject(session: Session, index: number, frame: ExaminedFrame): Promise<OperationResult<void>> {
-		const group = session.plan.groups[index]
-		const rejected = join(group.directory, REJECTED_DIRECTORY)
+		const rejected = join(darksDirectory(session.plan), REJECTED_DIRECTORY)
 		this.#update(session, { state: 'publishing' })
 
 		try {
 			await mkdir(rejected, { recursive: true })
-			await publishFrame(frame.staged, join(rejected, this.#fileName(session, frame)))
+			await publishFrame(frame.staged, join(rejected, this.#fileName(session, index, frame)))
 		} catch (error) {
 			return this.#failWith(session, 'publicationFailed', failedOperationResult('commandFailed', `Unable to keep a rejected frame: ${Error.isError(error) ? error.message : String(error)}`))
 		}
@@ -1047,8 +1039,8 @@ export class DarkLibraryWizardSessions implements Disposable {
 		const { assessment, measurement, time, generation, staged } = frame
 		const warned = assessment.suspicions.length > 0 || assessment.notes.includes('temperatureTransient')
 		const verdict: DarkFrameVerdict = warned ? 'acceptedWithWarnings' : 'accepted'
-		const name = this.#fileName(session, frame)
-		const path = join(group.directory, name)
+		const name = this.#fileName(session, index, frame)
+		const path = join(darksDirectory(session.plan), name)
 		this.#update(session, { state: 'publishing' })
 
 		let record: DarkFrameRecord
@@ -1076,9 +1068,12 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return successfulOperationResult(undefined)
 	}
 
-	// Returns the name of a frame's file.
-	#fileName({ summary: { cameraName } }: Session, { time, sequence }: Pick<ExaminedFrame, 'time' | 'sequence'>) {
-		return `${frameName(FILENAME_TEMPLATE, { camera: cameraName, type: 'DARK', time, generation: sequence, timezoneOffset: TIMEZONE })}.fit`
+	// Returns the name of a frame's file: when it was taken, its camera, its role with the exposure and target temperature of
+	// its group, and its sequence, so frames of every plan can share one directory and still say what they are.
+	#fileName({ summary: { cameraName }, plan }: Session, index: number, { time, sequence }: Pick<ExaminedFrame, 'time' | 'sequence'>) {
+		const { exposure, temperature } = plan.groups[index]
+		const type = `${plan.purpose === 'darkFlat' ? 'DARKFLAT' : 'DARK'}_${exposure}s${temperature === undefined ? '' : `_${temperature}C`}`
+		return `${frameName(FILENAME_TEMPLATE, { camera: cameraName, type, time, generation: sequence, timezoneOffset: TIMEZONE })}.fit`
 	}
 
 	// Returns the record of a frame.
@@ -1203,18 +1198,19 @@ export class DarkLibraryWizardSessions implements Disposable {
 		if (session.plan.generateMasters) this.sessionEnded(session.plan)
 	}
 
-	// Moves whatever the staging directories of a session hold into their rejected directories: the session examined none
-	// of it, so it must neither count nor vanish.
+	// Moves whatever the staging directory of a session holds into the rejected directory: the session examined none of it,
+	// so it must neither count nor vanish. The staging directory of the session goes once it is empty.
 	async #quarantine({ plan }: Session) {
-		for (const group of plan.groups) {
-			const staging = join(group.directory, STAGING_DIRECTORY)
-			const files = await readdir(staging).catch(() => [] as string[])
-			if (files.length === 0) continue
+		const staging = stagingDirectory(plan)
+		const files = await readdir(staging).catch(() => [] as string[])
 
-			const rejected = join(group.directory, REJECTED_DIRECTORY)
+		if (files.length > 0) {
+			const rejected = join(darksDirectory(plan), REJECTED_DIRECTORY)
 			await mkdir(rejected, { recursive: true })
 			for (const file of files) await publishFrame(join(staging, file), join(rejected, `incomplete_${crypto.randomUUID()}.fit`))
 		}
+
+		await rmdir(staging).catch(() => undefined)
 	}
 
 	// Remembers the stable code of a failure for clients, and returns the failure.

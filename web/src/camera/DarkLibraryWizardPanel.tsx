@@ -268,7 +268,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				</div>
 				<NumberInput label="Rejections per Group" value={settings.maximumRejections} min={0} max={DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS} disabled={locked} onChange={(maximumRejections) => update({ maximumRejections })} />
 				<Checkbox label="Generate masters after acquisition" checked={settings.generateMasters === true} disabled={locked} onChange={(generateMasters) => update({ generateMasters: generateMasters || undefined })} />
-				<Notice>Frames are saved raw under darks/&lt;camera&gt;/&lt;plan&gt;/&lt;group&gt;, never replacing a file. Rejected frames are kept in a rejected directory and do not count.</Notice>
+				<Notice>Frames are saved raw in darks/, named by date, camera, exposure, and temperature, never replacing a file. Rejected frames are kept in darks/rejected and do not count.</Notice>
 			</CollapsibleSection>
 			{session && <Progress session={session} pending={pending} />}
 			<CollapsibleSection id="images.dark-library-wizard.controls" title="Controls">

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
-import { join } from 'path'
+import { basename, dirname, join } from 'path'
 import type { DarkFrameRegistration } from './calibrationlibrary'
 import { CameraCommands } from './cameras'
 import { CaptureFrameRegistry } from './captureframes'
@@ -164,14 +164,7 @@ async function start(wizard: DarkLibraryWizardSessions, connectionId: string, ca
 	return (await response.json()) as { sessionId: string; operationId: string; planId: string }
 }
 
-// Returns the directory of the only group of a plan saved under directory.
-function groupDirectoryOf(directory: string, planId: string) {
-	const [camera] = readdirSync(join(directory, 'darks'))
-	const plan = join(directory, 'darks', camera, planId)
-	return join(plan, readdirSync(plan)[0])
-}
-
-// Returns the published and rejected files of a group directory.
+// Returns the published and rejected files of a darks directory.
 function filesOf(directory: string) {
 	const files = readdirSync(directory).filter((file) => file.endsWith('.fit'))
 	const rejected = join(directory, 'rejected')
@@ -216,10 +209,11 @@ describe('Dark Library Wizard sessions', () => {
 		expect(published).toHaveLength(2)
 		const group = published[0].plan.groups[0]
 		expect(published[0]).toMatchObject({ plan: { planId }, groupId: group.groupId })
-		expect(group.directory.startsWith(join(directory, 'darks'))).toBeTrue()
-		expect(existsSync(join(group.directory, STAGING_DIRECTORY))).toBeTrue()
-		expect(readdirSync(join(group.directory, STAGING_DIRECTORY))).toEqual([])
-		expect(filesOf(group.directory).files).toHaveLength(2)
+		const darks = join(directory, 'darks')
+		expect(dirname(published[0].frame.path)).toBe(darks)
+		expect(basename(published[0].frame.path)).toMatch(/^\d{4}-\d{2}-\d{2}_[\d-]+_.+_DARK_\d+(\.\d+)?s(_-?\d+(\.\d+)?C)?_0001\.fit$/)
+		expect(readdirSync(join(darks, STAGING_DIRECTORY))).toEqual([])
+		expect(filesOf(darks).files).toHaveLength(2)
 
 		const { frame: record } = published[0]
 		expect(record).toMatchObject({ verdict: 'accepted', header: { frameType: 'Dark Frame', width: 64, height: 64 } })
@@ -397,7 +391,7 @@ describe('Dark Library Wizard sessions', () => {
 
 		expect(summary()?.groups[0]).toMatchObject({ accepted: 0, missing: 2 })
 		expect(published).toEqual([])
-		const { files, rejected } = filesOf(groupDirectoryOf(directory, planId))
+		const { files, rejected } = filesOf(join(directory, 'darks'))
 		expect(files).toEqual([])
 		expect(rejected).toHaveLength(1)
 	})
@@ -417,7 +411,7 @@ describe('Dark Library Wizard sessions', () => {
 		await waitUntil(ended, 60000)
 
 		expect(summary()).toMatchObject({ state: 'completed', groups: [{ accepted: 2, rejected: 1, attempted: 3 }] })
-		expect(filesOf(groupDirectoryOf(directory, planId))).toMatchObject({ files: [expect.any(String), expect.any(String)], rejected: [expect.any(String)] })
+		expect(filesOf(join(directory, 'darks'))).toMatchObject({ files: [expect.any(String), expect.any(String)], rejected: [expect.any(String)] })
 		expect(events.some(({ session }) => session.lastAttempt?.verdict === 'rejected' && session.lastAttempt.rejections.includes('frameTypeMismatch'))).toBeTrue()
 	})
 
@@ -428,7 +422,7 @@ describe('Dark Library Wizard sessions', () => {
 
 		expect(summary()).toMatchObject({ state: 'failed', code: 'verificationFailed', groups: [{ state: 'failed', rejected: 2, accepted: 0 }] })
 		expect(summary()?.lastAttempt).toMatchObject({ verdict: 'rejected', rejections: ['unreadable'] })
-		expect(filesOf(groupDirectoryOf(directory, planId)).rejected).toHaveLength(2)
+		expect(filesOf(join(directory, 'darks')).rejected).toHaveLength(2)
 	})
 
 	test('a target is commanded once and waits for the reported temperature', async () => {

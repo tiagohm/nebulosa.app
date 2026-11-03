@@ -1,12 +1,12 @@
 // oxfmt-ignore
-import type { ImageStackingSnapshot, Page, ServerEvent, SourceStatus, StackingCohort, StackingCohortPatch, StackingFilterGroup, StackingFrameSummary, StackingImportCandidate, StackingImportCommit, StackingJobSummary, StackingPreflight, StackingProductDetail, StackingProductSummary, StackingProjectDetail, StackingRole, StackingRun, StackingRunRequest, StackingSettings, StackingSourceDetail, StackingSourcePatch, StackingValidation } from 'api'
+import type { ImageStackingSnapshot, Page, ServerEvent, SourceStatus, StackingCohort, StackingCohortPatch, StackingCompositeDetail, StackingCompositeSummary, StackingComposition, StackingCompositionValidation, StackingFilterGroup, StackingFrameSummary, StackingImportCandidate, StackingImportCommit, StackingJobSummary, StackingPreflight, StackingProductDetail, StackingProductSummary, StackingProjectDetail, StackingRole, StackingRun, StackingRunRequest, StackingSettings, StackingSourceDetail, StackingSourcePatch, StackingValidation } from 'api'
 import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../../http'
 
 // Image Stacking as this tab knows it. The server owns every project, frame, and job, so this store only mirrors them: a
 // snapshot on every socket (re)open and on every change event, jobs as they change, and the project, its groups, its
-// cohorts, its validation, its products and runs, what a run would do, and a page of its frames fetched when the view
-// asks. A new epoch means a new server process, whose counters start over; a
+// cohorts, its validation, its products, composites, and runs, what a run or a composition would do, and a page of its
+// frames fetched when the view asks. A new epoch means a new server process, whose counters start over; a
 // snapshot older than one applied is dropped, and a response that arrives after a newer request of its kind is ignored.
 // Nothing here decides a role, a filter, a group, or a calibration: the tool shows what the server answers.
 
@@ -41,6 +41,9 @@ export interface ImageStackingRuntime {
 	products?: StackingProductSummary[]
 	runs?: StackingRun[]
 	preflight?: StackingPreflight
+	// Composites of the project shown, newest first, and the validation of the composition shown.
+	composites?: StackingCompositeSummary[]
+	composition?: StackingCompositionValidation
 	frames?: Page<StackingFrameSummary>
 	// Frame shown in detail, with its path.
 	frame?: StackingSourceDetail
@@ -66,7 +69,7 @@ const requests: Record<string, number> = {}
 
 // Returns whether a job ended.
 export function jobEnded(job: Pick<StackingJobSummary, 'state'>) {
-	return job.state !== 'scanning' && job.state !== 'analyzing' && job.state !== 'integrating'
+	return job.state !== 'scanning' && job.state !== 'analyzing' && job.state !== 'integrating' && job.state !== 'composing'
 }
 
 // Replaces what a new server process makes meaningless.
@@ -145,24 +148,26 @@ function projectUrl(projectId: string) {
 // know, clears them.
 export async function loadStackingProject(state: ImageStackingRuntime, projectId: string | undefined, request: typeof fetch = fetch) {
 	if (projectId === undefined) {
-		for (const key of ['project', 'groups', 'cohorts', 'validation', 'products', 'runs']) requests[key] = (requests[key] ?? 0) + 1
+		for (const key of ['project', 'groups', 'cohorts', 'validation', 'products', 'runs', 'composites']) requests[key] = (requests[key] ?? 0) + 1
 		state.project = undefined
 		state.groups = undefined
 		state.cohorts = undefined
 		state.validation = undefined
 		state.products = undefined
 		state.runs = undefined
+		state.composites = undefined
 		return
 	}
 
 	const url = projectUrl(projectId)
-	const [project, groups, cohorts, validation, products, runs] = await Promise.all([
+	const [project, groups, cohorts, validation, products, runs, composites] = await Promise.all([
 		latest('project', fetchJson<StackingProjectDetail>(url, request)),
 		latest('groups', fetchJson<StackingFilterGroup[]>(`${url}/groups`, request)),
 		latest('cohorts', fetchJson<StackingCohort[]>(`${url}/cohorts`, request)),
 		latest('validation', fetchJson<StackingValidation>(`${url}/validation`, request)),
 		latest('products', fetchJson<StackingProductSummary[]>(`${url}/products`, request)),
 		latest('runs', fetchJson<StackingRun[]>(`${url}/runs`, request)),
+		latest('composites', fetchJson<StackingCompositeSummary[]>(`${url}/composites`, request)),
 	])
 	if (project) state.project = project.value
 	if (groups) state.groups = groups.value
@@ -170,6 +175,40 @@ export async function loadStackingProject(state: ImageStackingRuntime, projectId
 	if (validation) state.validation = validation.value
 	if (products) state.products = products.value
 	if (runs) state.runs = runs.value
+	if (composites) state.composites = composites.value
+}
+
+// Fetches what a composition of a project would do; absent clears it, and a failure leaves the last answer.
+export async function loadCompositionValidation(state: ImageStackingRuntime, projectId: string, composition: StackingComposition | undefined, request: typeof fetch = fetch) {
+	if (!composition) {
+		requests.composition = (requests.composition ?? 0) + 1
+		state.composition = undefined
+		return
+	}
+
+	const answer = await latest(
+		'composition',
+		request(`${projectUrl(projectId)}/compositions/validate`, jsonInit('POST', composition)).then(
+			async (response) => (response.ok ? ((await response.json()) as StackingCompositionValidation) : undefined),
+			() => undefined,
+		),
+	)
+	if (answer?.value) state.composition = answer.value
+}
+
+// Fetches the preview of a composition as a JPEG, or undefined when it was refused, superseded, or aborted.
+export async function loadCompositionPreview(projectId: string, composition: StackingComposition, signal?: AbortSignal, request: typeof fetch = fetch) {
+	try {
+		const response = await request(`${projectUrl(projectId)}/compositions/preview`, jsonInit('POST', composition, signal))
+		return response.ok ? await response.blob() : undefined
+	} catch {
+		return undefined
+	}
+}
+
+// Fetches a composite with the path of its file.
+export function loadStackingComposite(compositeId: string, request: typeof fetch = fetch) {
+	return fetchJson<StackingCompositeDetail>(`${BASE_URL}/composites/${encodeURIComponent(compositeId)}`, request)
 }
 
 // Fetches what a run of a project would do with a recipe; a failure leaves the last answer.
@@ -321,6 +360,21 @@ export function cancelStackingRun(state: ImageStackingRuntime, runId: string, re
 // Deletes a product with its files.
 export function deleteStackingProduct(state: ImageStackingRuntime, productId: string, request: typeof fetch = fetch) {
 	return command(state, `product:${productId}`, `${BASE_URL}/products/${encodeURIComponent(productId)}`, { method: 'DELETE' }, request)
+}
+
+// Starts composing a composition; its progress arrives as events, or the published composite with its inputs answers.
+export function startStackingComposition(state: ImageStackingRuntime, projectId: string, composition: StackingComposition, request: typeof fetch = fetch) {
+	return command<{ readonly job?: StackingJobSummary; readonly composite?: StackingCompositeSummary; readonly reused?: boolean }>(state, 'compose', `${projectUrl(projectId)}/compositions`, jsonInit('POST', composition), request)
+}
+
+// Cancels a composition.
+export function cancelStackingComposition(state: ImageStackingRuntime, jobId: string, request: typeof fetch = fetch) {
+	return command(state, `compose:${jobId}`, `${BASE_URL}/compositions/${encodeURIComponent(jobId)}/cancel`, jsonInit('POST'), request)
+}
+
+// Deletes a composite with its file; its masters stay.
+export function deleteStackingComposite(state: ImageStackingRuntime, compositeId: string, request: typeof fetch = fetch) {
+	return command(state, `composite:${compositeId}`, `${BASE_URL}/composites/${encodeURIComponent(compositeId)}`, { method: 'DELETE' }, request)
 }
 
 // Separates a merged filter key again.

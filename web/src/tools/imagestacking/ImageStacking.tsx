@@ -17,6 +17,7 @@ import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import { bytesText, EVIDENCE_LABELS, exposureText, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES } from '../calibrationlibrary/library'
+import { CompositionView } from './Composition'
 import { candidateText, candidateUsable, committedCounts, groupLabel, integrationText, metricText, registrationText, ROLE_LABELS, SECTION_LABELS, STACKING_SECTIONS, type StackingSection } from './format'
 import { IntegrationView, ResultsView } from './Integration'
 import { CalibrationView, QualityView } from './Planning'
@@ -167,6 +168,7 @@ export function ImageStacking() {
 				{project && section === 'calibration' && <CalibrationView projectId={project.projectId} />}
 				{project && section === 'integration' && <IntegrationView projectId={project.projectId} />}
 				{project && section === 'results' && <ResultsView />}
+				{project && section === 'composition' && <CompositionView projectId={project.projectId} />}
 				{project && section === 'quality' && (
 					<>
 						<QualityView projectId={project.projectId} group={qualityKey} onGroup={change(setQualityGroup)} selected={selected} onSelect={selectFrame} />

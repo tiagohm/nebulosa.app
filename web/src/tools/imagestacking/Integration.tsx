@@ -83,7 +83,7 @@ export function IntegrationView({ projectId }: { readonly projectId: string }) {
 				Every filter is calibrated, registered onto the project grid, normalized to the reference of its filter, and combined into a linear master. Pixels covered by fewer frames than the minimum coverage hold no data. A filter whose inputs did not change reuses its master.
 			</p>
 			{plan && plan.groups.length > 0 && (
-				<Table headers={['Filter', 'Frames', 'Exposure', 'Samples', 'Memory', 'Spill', 'Plan']}>
+				<Table className="shrink-0" headers={['Filter', 'Frames', 'Exposure', 'Samples', 'Memory', 'Spill', 'Plan']}>
 					{plan.groups.map((group) => (
 						<Row key={group.groupKey}>
 							<Cell>{group.name}</Cell>
@@ -141,7 +141,7 @@ export function ResultsView() {
 			{items.length === 0 ? (
 				<EmptyState title="No masters" description="Integrate the project to publish a linear master of each filter." />
 			) : (
-				<Table headers={['Filter', 'Frames', 'Exposure', 'Size', 'Grid', 'Published', 'State', '']}>
+				<Table className="shrink-0" headers={['Filter', 'Frames', 'Exposure', 'Size', 'Grid', 'Published', 'State', '']}>
 					{items.map((product) => (
 						<Row key={product.productId}>
 							<Cell>{product.name}</Cell>
@@ -187,7 +187,7 @@ export function ResultsView() {
 					: [],
 			)}
 			{history.length > 0 && (
-				<Table headers={['Run', 'State', 'Filters', 'Combination']}>
+				<Table className="shrink-0" headers={['Run', 'State', 'Filters', 'Combination']}>
 					{history.map((run) => (
 						<Row key={run.runId}>
 							<Cell>{new Date(run.createdAt).toISOString().slice(0, 16).replace('T', ' ')}</Cell>

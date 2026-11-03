@@ -684,3 +684,33 @@ CREATE TABLE stack_product_sources (
 	weight REAL NOT NULL CHECK (weight > 0),
 	PRIMARY KEY (product_id, source_id)
 ) STRICT;
+
+-- Color composites of a project, mixed from its linear masters and never from light frames, immutable once published:
+-- composite.fit in composites/<composite_id>/ under the directory of Image Stacking. A composite is publishing until its
+-- directory is in composites/, and deleting until it is gone, so a crash between the two halves is finished on start.
+CREATE TABLE stack_composites (
+	composite_id TEXT PRIMARY KEY,
+	project_id TEXT NOT NULL REFERENCES stack_projects (project_id) ON DELETE CASCADE,
+	publication TEXT NOT NULL CHECK (publication IN ('publishing', 'published', 'deleting')),
+	-- Identity of its inputs (StackingComposite.fingerprint): an equal one is reused instead of composed again.
+	fingerprint TEXT NOT NULL,
+	-- When it was published, Unix milliseconds (UTC).
+	created_at INTEGER NOT NULL,
+	-- SHA-256 and size, in bytes, of composite.fit.
+	content_digest TEXT NOT NULL,
+	bytes INTEGER NOT NULL CHECK (bytes > 0),
+	-- Everything else about it (StackingComposite): its composition, crop, and diagnostics.
+	composite TEXT NOT NULL CHECK (json_valid(composite))
+) STRICT;
+
+CREATE INDEX stack_composites_project ON stack_composites (project_id, created_at);
+
+-- Masters a composite was mixed from. A master stays while a composite depends on it: the reference is checked at the
+-- end of each statement, so deleting a project with both goes through and deleting only the master does not.
+CREATE TABLE stack_composite_sources (
+	composite_id TEXT NOT NULL REFERENCES stack_composites (composite_id) ON DELETE CASCADE,
+	product_id TEXT NOT NULL REFERENCES stack_products (product_id),
+	PRIMARY KEY (composite_id, product_id)
+) STRICT;
+
+CREATE INDEX stack_composite_sources_product ON stack_composite_sources (product_id);

@@ -1,16 +1,18 @@
 import { type AnalysisWorkerRequest, type AnalysisWorkerResponse, measureFrames } from './imagestacking.analysis'
+import { composeImage, CompositionError, type CompositionWorkerRequest, type CompositionWorkerResponse, previewImage, type PreviewWorkerRequest } from './imagestacking.composition'
 import { integrateGroups, type IntegrationWorkerRequest, type IntegrationWorkerResponse } from './imagestacking.integration'
 import { errorCode } from './util'
 
-// Worker thread of Image Stacking: measures the light frames of one analysis, or integrates the filter groups of one run,
-// so reading, calibrating, and combining hundreds of frames never blocks the event loop of the server. It only reads the
-// frames and writes inside the staging directory of its run. A failure it did not name becomes a code, because a
-// filesystem message holds paths, and job errors reach every tab.
+// Worker thread of Image Stacking: measures the light frames of one analysis, integrates the filter groups of one run,
+// composes one color composite of masters, or previews one, so reading, calibrating, and combining hundreds of frames
+// never blocks the event loop of the server. It only reads frames and masters and writes inside the staging directory of
+// its job. A failure it did not name becomes a code, because a filesystem message holds paths, and job errors reach every
+// tab.
 
 declare const self: Worker
 
 // Request of the worker, by mode.
-type StackingWorkerRequest = (AnalysisWorkerRequest & { readonly mode: 'analyze' }) | (IntegrationWorkerRequest & { readonly mode: 'integrate' })
+type StackingWorkerRequest = (AnalysisWorkerRequest & { readonly mode: 'analyze' }) | (IntegrationWorkerRequest & { readonly mode: 'integrate' }) | (CompositionWorkerRequest & { readonly mode: 'compose' }) | (PreviewWorkerRequest & { readonly mode: 'preview' })
 
 // Measures frames and posts each measurement and the outcome.
 async function analyze(request: AnalysisWorkerRequest): Promise<void> {
@@ -47,7 +49,24 @@ async function integrate(request: IntegrationWorkerRequest): Promise<void> {
 	post(response)
 }
 
+// Composes or previews and posts the progress and the outcome; a preview transfers its JPEG.
+async function compose(request: (CompositionWorkerRequest & { readonly mode: 'compose' }) | (PreviewWorkerRequest & { readonly mode: 'preview' })): Promise<void> {
+	const { jobId } = request
+	const post = (response: CompositionWorkerResponse, transfer: Transferable[] = []) => self.postMessage(response, transfer)
+
+	try {
+		if (request.mode === 'compose') {
+			post({ jobId, status: 'composed', image: await composeImage(request, (progress) => post({ jobId, status: 'progress', progress })) })
+		} else {
+			const jpeg = await previewImage(request)
+			post({ jobId, status: 'previewed', jpeg }, [jpeg.buffer])
+		}
+	} catch (error) {
+		post({ jobId, status: 'failed', error: error instanceof CompositionError ? error.message : `The composition failed (${errorCode(error) ?? 'unexpected error'})` })
+	}
+}
+
 self.addEventListener('message', (event: MessageEvent<StackingWorkerRequest>) => {
 	const request = event.data
-	void (request.mode === 'analyze' ? analyze(request) : integrate(request))
+	void (request.mode === 'analyze' ? analyze(request) : request.mode === 'integrate' ? integrate(request) : compose(request))
 })

@@ -1,5 +1,6 @@
 import { readdir, rm } from 'fs/promises'
 import { join } from 'path'
+import type { ChannelMix, CompositionCounters, LuminanceMatch, LuminanceMatchMode } from 'nebulosa/src/imaging/processing/channel.composition'
 import type { GlobalNormalizationMode } from 'nebulosa/src/imaging/processing/normalization'
 import type { ImageInterpolationMode, ImageRegistrationTransform } from 'nebulosa/src/imaging/processing/registration'
 import type { StackingCombinationMethod, StackingWeightingMode } from 'nebulosa/src/imaging/processing/stacker'
@@ -14,8 +15,8 @@ import type { StackingRole } from './imagestacking.sources'
 // each cohort are rows of the operational database; the frames themselves stay where they are. Filter groups are not
 // stored: a group is the frames whose canonical filter key, after the aliases of the project, is equal. Runs and the
 // products they published are rows too, and each product is a directory of products/ under the directory of Image
-// Stacking, next to staging/ (the work of a running integration) and orphaned/ (directories found without a row). Every
-// read and write of a row is synchronous and short.
+// Stacking, next to composites/ (the color composites mixed from them), staging/ (the work of a running integration or
+// composition), and orphaned/ (directories found without a row). Every read and write of a row is synchronous and short.
 
 // Default directory of the products and staging of Image Stacking, which an import never reads.
 export const DEFAULT_IMAGE_STACKING_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'image-stacking')
@@ -220,6 +221,67 @@ export const PRODUCT_MASTER_FILE = 'master.fit'
 
 // Name of the coverage file of a product.
 export const PRODUCT_COVERAGE_FILE = 'coverage.fit'
+
+// A plane of a master mixed into a composite, with the linear correction applied to it first.
+export interface StackingCompositionSource {
+	// Master it reads.
+	readonly productId: string
+	// Channel of the master, from 0; 0 for a mono master.
+	readonly plane: number
+	// Multiplier applied to every sample, finite and positive, and value added after it, in the units of the master.
+	readonly gain: number
+	readonly offset: number
+}
+
+// Luminance of a composite: a source blended into the luminance of the mixed color, keeping its channel ratios.
+export interface StackingCompositionLuminance {
+	// Index of the source in the composition.
+	readonly source: number
+	// Weight of the source in the target luminance, in [0, 1]; 0 leaves the color untouched.
+	readonly alpha: number
+	// Whether the source is matched to the mixed luminance by background and scale first.
+	readonly match: LuminanceMatchMode
+}
+
+// How masters are mixed into a color composite. A mix term names a source by its index, and its weight is unitless and
+// non-negative; each output channel is the weighted mean of its terms.
+export interface StackingComposition {
+	// Name of the preset it came from, such as SHO, or Custom.
+	readonly preset: string
+	readonly sources: readonly StackingCompositionSource[]
+	readonly mix: ChannelMix
+	readonly luminance?: StackingCompositionLuminance
+}
+
+// Evidence of a composition.
+export interface StackingCompositeDiagnostics extends CompositionCounters {
+	// Fitted luminance match; absent without a luminance.
+	readonly luminanceMatch?: LuminanceMatch
+}
+
+// A linear RGB composite: composite.fit, Float32 with NaN where a mixed master has no data, cropped to the box of the
+// pixels every mixed master covers.
+export interface StackingComposite {
+	readonly compositeId: string
+	readonly projectId: string
+	// Identity of its inputs: the content of each master it reads and its composition.
+	readonly fingerprint: string
+	// When it was published, Unix milliseconds (UTC).
+	readonly createdAt: number
+	// SHA-256 and size, in bytes, of composite.fit.
+	readonly contentDigest: string
+	readonly bytes: number
+	// Size, in pixels, and its origin on the project grid, zero-based with x right and y down.
+	readonly width: number
+	readonly height: number
+	readonly left: number
+	readonly top: number
+	readonly composition: StackingComposition
+	readonly diagnostics: StackingCompositeDiagnostics
+}
+
+// Name of the image file of a composite.
+export const COMPOSITE_FILE = 'composite.fit'
 
 // A project.
 export interface StackingProject {
@@ -496,6 +558,16 @@ export class ImageStackingStore {
 		return join(this.productsDirectory, productId)
 	}
 
+	// Directory of the published composites.
+	get compositesDirectory() {
+		return join(this.directory, 'composites')
+	}
+
+	// Directory of a composite.
+	compositeDirectory(compositeId: string) {
+		return join(this.compositesDirectory, compositeId)
+	}
+
 	// Directory of the work of a run, on the filesystem of the products so publishing is a rename.
 	stagingDirectory(runId: string) {
 		return join(this.directory, 'staging', runId)
@@ -506,10 +578,76 @@ export class ImageStackingStore {
 		await rm(join(this.directory, 'staging'), { recursive: true, force: true })
 	}
 
-	// Lists the names of the directories of products/.
-	async productDirectories() {
-		const entries = await readdir(this.productsDirectory, { withFileTypes: true }).catch(() => [])
+	// Lists the names of the directories of products/, or of composites/.
+	async productDirectories(composites = false) {
+		const entries = await readdir(composites ? this.compositesDirectory : this.productsDirectory, { withFileTypes: true }).catch(() => [])
 		return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+	}
+
+	// Lists the published composites of a project, newest first.
+	composites(projectId: string) {
+		return this.database.db
+			.query<{ composite: string }, [string]>("SELECT composite FROM stack_composites WHERE project_id = ? AND publication = 'published' ORDER BY created_at DESC, composite_id")
+			.all(projectId)
+			.map((row) => JSON.parse(row.composite) as StackingComposite)
+	}
+
+	// Returns a published composite.
+	composite(compositeId: string) {
+		const row = this.database.db.query<{ composite: string }, [string]>("SELECT composite FROM stack_composites WHERE composite_id = ? AND publication = 'published'").get(compositeId)
+		return row ? (JSON.parse(row.composite) as StackingComposite) : undefined
+	}
+
+	// Returns the published composite of a project with a fingerprint, the newest when there are several.
+	compositeByFingerprint(projectId: string, fingerprint: string) {
+		const row = this.database.db.query<{ composite: string }, [string, string]>("SELECT composite FROM stack_composites WHERE project_id = ? AND fingerprint = ? AND publication = 'published' ORDER BY created_at DESC LIMIT 1").get(projectId, fingerprint)
+		return row ? (JSON.parse(row.composite) as StackingComposite) : undefined
+	}
+
+	// Lists the composites whose publication or deletion a crash interrupted.
+	pendingComposites() {
+		return this.database.db
+			.query<{ composite: string; publication: StackingProductPublication }, []>("SELECT composite, publication FROM stack_composites WHERE publication <> 'published'")
+			.all()
+			.map((row) => ({ composite: JSON.parse(row.composite) as StackingComposite, publication: row.publication }))
+	}
+
+	// Returns whether a composite row exists, in any publication state.
+	hasComposite(compositeId: string) {
+		return this.database.db.query<{ found: number }, [string]>('SELECT 1 AS found FROM stack_composites WHERE composite_id = ?').get(compositeId) !== null
+	}
+
+	// Counts the composites that read a master.
+	compositesOf(productId: string) {
+		return this.database.db.query<{ count: number }, [string]>('SELECT COUNT(*) AS count FROM stack_composite_sources WHERE product_id = ?').get(productId)!.count
+	}
+
+	// Records a composite as publishing, with the masters it reads, in one transaction.
+	beginComposite(composite: StackingComposite) {
+		this.database.write(() => {
+			const { db } = this.database
+			db.query("INSERT INTO stack_composites (composite_id, project_id, publication, fingerprint, created_at, content_digest, bytes, composite) VALUES (?, ?, 'publishing', ?, ?, ?, ?, ?)").run(
+				composite.compositeId,
+				composite.projectId,
+				composite.fingerprint,
+				composite.createdAt,
+				composite.contentDigest,
+				composite.bytes,
+				JSON.stringify(composite),
+			)
+			const statement = db.query('INSERT OR IGNORE INTO stack_composite_sources (composite_id, product_id) VALUES (?, ?)')
+			for (const source of composite.composition.sources) statement.run(composite.compositeId, source.productId)
+		})
+	}
+
+	// Changes the publication state of a composite.
+	setCompositePublication(compositeId: string, publication: StackingProductPublication) {
+		this.database.write(() => this.database.db.query('UPDATE stack_composites SET publication = ? WHERE composite_id = ?').run(publication, compositeId))
+	}
+
+	// Forgets a composite.
+	discardComposite(compositeId: string) {
+		this.database.write(() => this.database.db.query('DELETE FROM stack_composites WHERE composite_id = ?').run(compositeId))
 	}
 
 	// Lists the latest runs of a project, newest first.

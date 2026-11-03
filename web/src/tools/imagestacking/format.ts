@@ -7,13 +7,13 @@ import type { StatusTone } from '../../ui/StatusBadge'
 // whether a frame is stacked; the server does.
 
 // Sections of the tool.
-export const STACKING_SECTIONS = ['filters', 'frames', 'calibration', 'quality', 'integration', 'results'] as const
+export const STACKING_SECTIONS = ['filters', 'frames', 'calibration', 'quality', 'integration', 'results', 'composition'] as const
 
 // Section of the tool.
 export type StackingSection = (typeof STACKING_SECTIONS)[number]
 
 // Label of each section.
-export const SECTION_LABELS: Readonly<Record<StackingSection, string>> = { filters: 'Filters', frames: 'Frames', calibration: 'Calibration', quality: 'Quality', integration: 'Integration', results: 'Results' }
+export const SECTION_LABELS: Readonly<Record<StackingSection, string>> = { filters: 'Filters', frames: 'Frames', calibration: 'Calibration', quality: 'Quality', integration: 'Integration', results: 'Results', composition: 'Color' }
 
 // Label of each role.
 export const ROLE_LABELS: Readonly<Record<StackingRole, string>> = { light: 'Light', unclassified: 'Unclassified' }

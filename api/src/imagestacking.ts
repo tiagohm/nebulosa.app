@@ -1,5 +1,6 @@
 import { mkdir, rename, rm, stat, statfs } from 'fs/promises'
 import { basename, join, relative } from 'path'
+import { type ChannelMixIssueCode, validateChannelMix } from 'nebulosa/src/imaging/processing/channel.composition'
 import { composeRegistrationTransforms } from 'nebulosa/src/imaging/processing/registration'
 import { frameWeight } from 'nebulosa/src/imaging/processing/stacking.combination'
 import { type SubframeRejectionReason, subframeRejectionReasons } from 'nebulosa/src/imaging/processing/subframe.selector'
@@ -15,7 +16,9 @@ import { ANALYSIS_VERSION, type AnalysisCalibration, type AnalysisFrame, type Fr
 import { DEFAULT_STACK_MEMORY_BUDGET, type FrameIntegrator, INTEGRATION_VERSION, type IntegrationFrame, type IntegrationPlan, integrationPlan, type IntegrationWorkerRequest, productHeader, StackingIntegrator, type StagedProduct } from './imagestacking.integration'
 import { cohortKeyOf, filterKeyOf, filterSynonyms, isWithin, lightRoleOf, type StackingRole, stackingSourceId } from './imagestacking.sources'
 // oxfmt-ignore
-import { DEFAULT_STACKING_RECIPE, DEFAULT_STACKING_SETTINGS, type ImageStackingStore, PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingCalibration, type StackingProduct, type StackingProductSource, type StackingRecipe, type StackingRun, type StackingRunGroup, type StackingCohortDecision, type StackingFilterAlias, type StackingFrameAnalysis, type StackingProject, type StackingProjectAnalysis, type StackingSettings, type StackingSource, type StackingSourceFacts, type StackingSourceFilter, type StackingSourceSummary, stackingSourceSummary } from './imagestacking.store'
+import { COMPOSITE_FILE, DEFAULT_STACKING_RECIPE, DEFAULT_STACKING_SETTINGS, type ImageStackingStore, PRODUCT_COVERAGE_FILE, type StackingComposite, type StackingComposition, PRODUCT_MASTER_FILE, type StackingCalibration, type StackingProduct, type StackingProductSource, type StackingRecipe, type StackingRun, type StackingRunGroup, type StackingCohortDecision, type StackingFilterAlias, type StackingFrameAnalysis, type StackingProject, type StackingProjectAnalysis, type StackingSettings, type StackingSource, type StackingSourceFacts, type StackingSourceFilter, type StackingSourceSummary, stackingSourceSummary } from './imagestacking.store'
+// oxfmt-ignore
+import { COMPOSITION_MEMORY_BUDGET, COMPOSITION_VERSION, type CompositionInput, type FrameCompositor, PREVIEW_SIZE, StackingCompositor } from './imagestacking.composition'
 import { errorCode } from './util'
 
 // Image Stacking: projects of light frames saved on the server, grouped by the physical filter they were taken through,
@@ -32,7 +35,8 @@ import { errorCode } from './util'
 // nothing blocks into an immutable linear master on the project grid, published one group at a time as it ends, so a
 // cancelled run keeps what it published, and reuses a published master whose inputs are the same. Projects, frames,
 // decisions, measurements, runs, and products are rows of the operational database; products are directories of
-// products/, and jobs live in memory and end with the process.
+// products/. A composition mixes masters of one grid into a linear color composite without reading a light frame; a
+// master stays while a composite reads it. Jobs live in memory and end with the process.
 
 // Default page size of the lists.
 const DEFAULT_PAGE_SIZE = 50
@@ -67,7 +71,7 @@ export interface StackingMasters {
 }
 
 // Stable code of a failed request.
-export type ImageStackingErrorCode = 'notFound' | 'conflict' | 'jobConflict' | 'managedPath' | 'verifiedMetadata' | 'invalidAlias' | 'calibrationUndecided' | 'masterUnavailable' | 'incompatibleMaster' | 'notReady' | 'insufficientMemory' | 'insufficientSpace' | 'processingFailed'
+export type ImageStackingErrorCode = 'notFound' | 'conflict' | 'jobConflict' | 'managedPath' | 'verifiedMetadata' | 'invalidAlias' | 'calibrationUndecided' | 'masterUnavailable' | 'incompatibleMaster' | 'notReady' | 'insufficientMemory' | 'insufficientSpace' | 'productInUse' | 'superseded' | 'processingFailed'
 
 // Failure of a request, with its status and stable code.
 class StackingError extends Error {
@@ -210,12 +214,44 @@ export interface StackingFrameSummary extends StackingSourceSummary {
 // - scanning: reading headers.
 // - analyzing: measuring and registering frames.
 // - integrating: integrating and publishing filter groups.
+// - composing: composing and publishing a composite.
 // - completed: did what it could; an import waits for its review.
 // - failed, cancelled: ended early; an analysis keeps what it measured, and a run what it published.
-export type StackingJobState = 'scanning' | 'analyzing' | 'integrating' | 'completed' | 'failed' | 'cancelled'
+export type StackingJobState = 'scanning' | 'analyzing' | 'integrating' | 'composing' | 'completed' | 'failed' | 'cancelled'
 
 // States of a job still working.
-const ACTIVE_JOB_STATES: ReadonlySet<StackingJobState> = new Set(['scanning', 'analyzing', 'integrating'])
+const ACTIVE_JOB_STATES: ReadonlySet<StackingJobState> = new Set(['scanning', 'analyzing', 'integrating', 'composing'])
+
+// Stable code of a problem of a composition.
+export type StackingCompositionIssueCode = ChannelMixIssueCode | 'unknownProduct' | 'otherGrid' | 'productUnavailable' | 'productStale' | 'invalidLuminance'
+
+// A problem of a composition: a blocker stops it, a warning is worth knowing.
+export interface StackingCompositionIssue {
+	readonly severity: 'blocker' | 'warning'
+	readonly code: StackingCompositionIssueCode
+	readonly message: string
+}
+
+// What a composition would do.
+export interface StackingCompositionValidation {
+	readonly issues: readonly StackingCompositionIssue[]
+	// Whether nothing blocks it.
+	readonly ready: boolean
+	// Identity of its inputs, and a published composite with the same one, reused instead of composed again.
+	readonly fingerprint: string
+	readonly reusedCompositeId?: string
+}
+
+// State of a composite now: as a product, stale while a master it mixes is stale.
+export interface StackingCompositeSummary extends StackingComposite {
+	readonly status: StackingProductStatus
+	readonly staleReasons?: readonly string[]
+}
+
+// A composite with the path of its file, to open it in Images.
+export interface StackingCompositeDetail extends StackingCompositeSummary {
+	readonly path: string
+}
 
 // Request of a run.
 export interface StackingRunRequest {
@@ -306,7 +342,7 @@ export interface StackingJobSummary {
 	// Project it works for.
 	readonly projectId: string
 	// What it does.
-	readonly type: 'import' | 'analysis' | 'integration'
+	readonly type: 'import' | 'analysis' | 'integration' | 'composition'
 	readonly state: StackingJobState
 	// When it was requested, and last changed, Unix milliseconds (UTC).
 	readonly createdAt: number
@@ -317,7 +353,8 @@ export interface StackingJobSummary {
 	// Frames an analysis measured or a run read so far, and those an analysis could not measure.
 	readonly measured?: number
 	readonly failures?: number
-	// Name of the filter group a run integrates, the rows it combined of the total, and the masters it published.
+	// Name of the filter group a run integrates, the rows it or a composition combined of the total, and the masters it
+	// published.
 	readonly group?: string
 	readonly rowsCombined?: number
 	readonly rowsTotal?: number
@@ -595,7 +632,7 @@ export class ImageStacking {
 
 	// Creates the service. listener receives every change synchronously; masters is the Calibration Library; managed lists
 	// the directories whose files belong to the application, which an import never reads; analyzer measures frames and
-	// integrator integrates them.
+	// integrator integrates them, and compositor mixes masters.
 	constructor(
 		readonly store: ImageStackingStore,
 		readonly listener: (event: ImageStackingEvent) => void,
@@ -603,7 +640,13 @@ export class ImageStacking {
 		readonly managed: readonly string[] = [store.directory],
 		readonly analyzer: FrameAnalyzer = new StackingAnalyzer(),
 		readonly integrator: FrameIntegrator = new StackingIntegrator(),
+		readonly compositor: FrameCompositor = new StackingCompositor(),
 	) {}
+
+	// Preview being computed, aborted by the next one.
+	#preview?: AbortController
+	// Masters a composition or a preview is reading, with how many readers.
+	readonly #reading = new Map<string, number>()
 
 	// Finishes what the end of the last process interrupted and compares the frames with the disk, once. A failure leaves
 	// the next request to try again.
@@ -717,6 +760,11 @@ export class ImageStacking {
 
 		for (const job of this.#jobs.values()) {
 			if (job.projectId === projectId) this.#scans.get(job.jobId)?.abort(new DOMException('Project deleted', 'AbortError'))
+		}
+
+		for (const { compositeId } of this.store.composites(projectId)) {
+			this.store.setCompositePublication(compositeId, 'deleting')
+			await rm(this.store.compositeDirectory(compositeId), { recursive: true, force: true })
 		}
 
 		for (const { productId } of this.store.products(projectId)) {
@@ -1034,8 +1082,8 @@ export class ImageStacking {
 		if ([...this.#jobs.values()].some((job) => (job.type === 'analysis' || job.type === 'integration') && ACTIVE_JOB_STATES.has(job.state))) throw new StackingError('Another analysis or integration is running', 409, 'jobConflict')
 	}
 
-	// Finishes what a crash interrupted, from the disk: a product being published becomes published when its directory holds
-	// the files it recorded, and is forgotten otherwise; a product being deleted loses its directory and its row. A product
+	// Finishes what a crash interrupted, from the disk: a product or composite being published becomes published when its
+	// directory holds the files it recorded, and is forgotten otherwise; one being deleted loses its directory and its row. A product
 	// directory without a row is moved to orphaned/ and reported, never adopted nor deleted. Runs still running were
 	// interrupted, and staging holds nothing anyone owns. What cannot be finished is reported and tried again next start.
 	async #recoverProducts() {
@@ -1054,16 +1102,34 @@ export class ImageStacking {
 			}
 		}
 
-		for (const name of await this.store.productDirectories()) {
-			if (this.store.hasProduct(name)) continue
-			const target = join(this.store.orphanedDirectory, `${name}-${crypto.randomUUID()}`)
+		for (const { composite, publication } of this.store.pendingComposites()) {
+			const { compositeId } = composite
+			const path = join(this.store.compositeDirectory(compositeId), COMPOSITE_FILE)
 
 			try {
-				await mkdir(this.store.orphanedDirectory, { recursive: true })
-				await rename(this.store.productDirectory(name), target)
-				console.warn(`image stacking: ${name} has no record and was moved to ${target}`)
+				if (publication === 'publishing' && (await stat(path).catch(() => undefined))?.size === composite.bytes && (await fileDigest(path)) === composite.contentDigest) {
+					this.store.setCompositePublication(compositeId, 'published')
+				} else {
+					await rm(this.store.compositeDirectory(compositeId), { recursive: true, force: true })
+					this.store.discardComposite(compositeId)
+				}
 			} catch (error) {
-				console.error('image stacking: unable to move an orphaned product', name, error)
+				console.error('image stacking: unable to finish composite', compositeId, error)
+			}
+		}
+
+		for (const composites of [false, true]) {
+			for (const name of await this.store.productDirectories(composites)) {
+				if (composites ? this.store.hasComposite(name) : this.store.hasProduct(name)) continue
+				const target = join(this.store.orphanedDirectory, `${name}-${crypto.randomUUID()}`)
+
+				try {
+					await mkdir(this.store.orphanedDirectory, { recursive: true })
+					await rename(composites ? this.store.compositeDirectory(name) : this.store.productDirectory(name), target)
+					console.warn(`image stacking: ${name} has no record and was moved to ${target}`)
+				} catch (error) {
+					console.error('image stacking: unable to move an orphaned product', name, error)
+				}
 			}
 		}
 
@@ -1126,11 +1192,218 @@ export class ImageStacking {
 	async deleteProduct(productId: string) {
 		await this.ready()
 		if (!this.store.product(productId)) throw new StackingError('Unknown product', 404, 'notFound')
+		if (this.store.compositesOf(productId) > 0 || this.#reading.has(productId)) throw new StackingError('A composite is mixed from this master; delete the composite first', 409, 'productInUse')
 		this.store.setPublication(productId, 'deleting')
 		await rm(this.store.productDirectory(productId), { recursive: true, force: true })
 		this.store.discardProduct(productId)
 		this.#changed()
 		return { deleted: productId }
+	}
+
+	// Checks a composition of masters of a project: every source must be a published master of the project with the plane
+	// named, every master on one grid and available, and the mix and luminance composable. A stale master is only a
+	// warning. Answers the fingerprint of the inputs and a published composite with the same one.
+	async validateComposition(projectId: string, composition: StackingComposition): Promise<StackingCompositionValidation> {
+		await this.ready()
+		this.#project(projectId)
+		const issues: StackingCompositionIssue[] = []
+		const products: StackingProductSummary[] = []
+
+		for (const [index, source] of composition.sources.entries()) {
+			const product = this.store.product(source.productId)
+
+			if (product?.projectId !== projectId) {
+				issues.push({ severity: 'blocker', code: 'unknownProduct', message: `Source ${index + 1} is not a master of this project` })
+				continue
+			}
+
+			const summary = await this.#productSummary(product)
+			products.push(summary)
+			if (source.plane >= product.channels) issues.push({ severity: 'blocker', code: 'unknownPlane', message: `${product.name} has no channel ${source.plane + 1}` })
+			if (summary.status === 'unavailable') issues.push({ severity: 'blocker', code: 'productUnavailable', message: `The master of ${product.name} is not available` })
+			if (summary.status === 'stale') issues.push({ severity: 'warning', code: 'productStale', message: `The master of ${product.name} is stale: ${summary.staleReasons?.join('; ')}` })
+		}
+
+		if (products.some((product) => product.width !== products[0].width || product.height !== products[0].height || product.referenceSourceId !== products[0].referenceSourceId)) {
+			issues.push({ severity: 'blocker', code: 'otherGrid', message: 'The masters are not on one grid; integrate them in one run of this project' })
+		}
+
+		for (const issue of validateChannelMix(composition.mix, composition.sources)) {
+			const channel = issue.channel === undefined ? '' : ` of ${issue.channel}`
+			const source = issue.plane === undefined ? '' : ` (source ${issue.plane + 1})`
+			const messages: Readonly<Record<ChannelMixIssueCode, string>> = {
+				emptyChannel: `The channel${channel} has no source with a positive weight`,
+				invalidWeight: `A weight${channel}${source} is not a finite non-negative number`,
+				unknownPlane: `A term${channel} names no source${source}`,
+				invalidGain: `The gain${source} must be positive`,
+				invalidOffset: `The offset${source} must be finite`,
+			}
+			issues.push({ severity: 'blocker', code: issue.code, message: messages[issue.code] })
+		}
+
+		const { luminance } = composition
+		if (luminance && (!Number.isInteger(luminance.source) || luminance.source < 0 || luminance.source >= composition.sources.length || !(luminance.alpha >= 0 && luminance.alpha <= 1)))
+			issues.push({ severity: 'blocker', code: 'invalidLuminance', message: 'The luminance must name a source and a weight between 0 and 1' })
+
+		const digests = composition.sources.map((source) => this.store.product(source.productId)?.contentDigest ?? '')
+		const fingerprint = stableId(JSON.stringify({ version: COMPOSITION_VERSION, composition: { ...composition, preset: undefined }, digests }))
+		const published = this.store.compositeByFingerprint(projectId, fingerprint)
+		const reused = published && (await this.#compositeSummary(published)).status === 'ready' ? published : undefined
+		return { issues, ready: !issues.some((issue) => issue.severity === 'blocker'), fingerprint, ...(reused && { reusedCompositeId: reused.compositeId }) }
+	}
+
+	// Returns what the worker reads of a composition: the grid and the file of each source. Throws while it is not ready.
+	async #compositionInput(projectId: string, composition: StackingComposition, jobId: string) {
+		const validation = await this.validateComposition(projectId, composition)
+		const blocker = validation.issues.find((issue) => issue.severity === 'blocker')
+		if (blocker) throw new StackingError(blocker.message, 409, 'notReady')
+		const products = composition.sources.map((source) => this.store.product(source.productId)!)
+		const planes = composition.sources.map((source) => ({ path: join(this.store.productDirectory(source.productId), PRODUCT_MASTER_FILE), plane: source.plane, gain: source.gain, offset: source.offset }))
+		const input: CompositionInput = { jobId, width: products[0].width, height: products[0].height, planes, mix: composition.mix, ...(composition.luminance && { luminance: composition.luminance }) }
+		return { validation, products, input }
+	}
+
+	// Holds masters while a composition or a preview reads them, so none of them can be deleted meanwhile. Returns the
+	// release, which is safe to call more than once.
+	#read(productIds: readonly string[]) {
+		for (const productId of productIds) this.#reading.set(productId, (this.#reading.get(productId) ?? 0) + 1)
+		let released = false
+
+		return () => {
+			if (released) return
+			released = true
+
+			for (const productId of productIds) {
+				const count = (this.#reading.get(productId) ?? 1) - 1
+				if (count > 0) this.#reading.set(productId, count)
+				else this.#reading.delete(productId)
+			}
+		}
+	}
+
+	// Previews a composition as a JPEG at most PREVIEW_SIZE pixels on its longest side. Only the latest preview is
+	// computed: a newer request aborts this one, which then answers 409 superseded.
+	async previewComposition(projectId: string, composition: StackingComposition) {
+		await this.ready()
+		const { products, input } = await this.#compositionInput(projectId, composition, crypto.randomUUID())
+		this.#preview?.abort(new DOMException('Superseded', 'AbortError'))
+		const controller = new AbortController()
+		this.#preview = controller
+		const release = this.#read(products.map((product) => product.productId))
+
+		try {
+			return await this.compositor.preview({ ...input, size: PREVIEW_SIZE }, controller.signal)
+		} catch (error) {
+			if (controller.signal.aborted) throw new StackingError('A newer preview was asked for', 409, 'superseded')
+			throw error
+		} finally {
+			release()
+			if (this.#preview === controller) this.#preview = undefined
+		}
+	}
+
+	// Starts composing a composition of a project, or answers the published composite with the same inputs. One
+	// composition runs at a time; its masters cannot be deleted until it ends.
+	async startComposition(projectId: string, composition: StackingComposition) {
+		await this.ready()
+		const project = this.#project(projectId)
+		if ([...this.#jobs.values()].some((job) => job.type === 'composition' && ACTIVE_JOB_STATES.has(job.state))) throw new StackingError('Another composition is running', 409, 'jobConflict')
+		const jobId = crypto.randomUUID()
+		const { validation, products, input } = await this.#compositionInput(projectId, composition, jobId)
+		if (validation.reusedCompositeId !== undefined) return { composite: await this.#compositeSummary(this.store.composite(validation.reusedCompositeId)!), reused: true }
+
+		const objects = [...new Set(this.store.facts(projectId).flatMap((fact) => (fact.role === 'light' && fact.object ? fact.object : [])))]
+		const channels = (['red', 'green', 'blue'] as const).map((channel) => `${channel[0].toUpperCase()} = ${composition.mix[channel].flatMap(({ plane, weight }) => (weight > 0 ? `${weight}·${products[plane].name}` : [])).join(' + ')}`)
+		const header = {
+			SOFTWARE: 'Nebulosa',
+			...(objects.length === 1 && { OBJECT: objects[0] }),
+			COLORSPC: 'linear RGB',
+			HISTORY: `Linear color composite (${composition.preset}) of the masters of ${project.name}: ${channels.join(', ')}${composition.luminance && composition.luminance.alpha > 0 ? `, luminance ${products[composition.luminance.source].name} at ${composition.luminance.alpha}` : ''}`,
+		}
+		const now = Date.now()
+		const job = this.#saveJob({ jobId, projectId, type: 'composition', state: 'composing', createdAt: now, updatedAt: now, found: products.length, bytes: 0, truncated: false, rowsCombined: 0, rowsTotal: input.height * 2 })
+		const controller = new AbortController()
+		this.#scans.set(jobId, controller)
+		const release = this.#read(products.map((product) => product.productId))
+		const staging = this.store.stagingDirectory(jobId)
+		void this.#compose(job, composition, validation.fingerprint, { ...input, header, staging, memoryBudget: COMPOSITION_MEMORY_BUDGET }, controller.signal).finally(release)
+		return { job: jobSummary(job) }
+	}
+
+	// Runs a composition to its end and publishes it like a product: recorded as publishing, renamed into composites/,
+	// then published; a failure ends in its job.
+	async #compose(job: StackingJob, composition: StackingComposition, fingerprint: string, request: Parameters<FrameCompositor['compose']>[0], signal: AbortSignal) {
+		let current = job
+
+		try {
+			const image = await this.compositor.compose(request, ({ rows, rowsTotal }) => (current = this.#saveJob(current, { rowsCombined: rows, rowsTotal })), signal)
+			if (!this.store.project(job.projectId)) throw new Error('The project was deleted')
+			const compositeId = crypto.randomUUID()
+			const composite: StackingComposite = { compositeId, projectId: job.projectId, fingerprint, createdAt: Date.now(), contentDigest: image.contentDigest, bytes: image.bytes, width: image.width, height: image.height, left: image.left, top: image.top, composition, diagnostics: image.diagnostics }
+			this.store.beginComposite(composite)
+
+			try {
+				await mkdir(this.store.compositesDirectory, { recursive: true })
+				await rename(image.directory, this.store.compositeDirectory(compositeId))
+			} catch {
+				this.store.discardComposite(compositeId)
+				throw new Error('The composite could not be published')
+			}
+
+			this.store.setCompositePublication(compositeId, 'published')
+			this.#saveJob(current, { state: 'completed', published: 1 })
+		} catch (error) {
+			if (signal.aborted) this.#saveJob(current, { state: 'cancelled' })
+			else this.#saveJob(current, { state: 'failed', code: 'processingFailed', error: Error.isError(error) ? error.message : 'The composition failed' })
+		} finally {
+			this.#scans.delete(job.jobId)
+			await rm(request.staging, { recursive: true, force: true }).catch(() => undefined)
+			this.#changed()
+		}
+	}
+
+	// Describes a composite now: unavailable while its file is missing or of another size, stale while a master it mixes
+	// is not ready.
+	async #compositeSummary(composite: StackingComposite): Promise<StackingCompositeSummary> {
+		const info = await stat(join(this.store.compositeDirectory(composite.compositeId), COMPOSITE_FILE)).catch(() => undefined)
+		if (info?.size !== composite.bytes) return { ...composite, status: 'unavailable' }
+		const reasons = new Set<string>()
+
+		for (const { productId } of composite.composition.sources) {
+			const product = this.store.product(productId)
+			if (!product) reasons.add('A master it mixes is gone')
+			else if ((await this.#productSummary(product)).status !== 'ready') reasons.add(`The master of ${product.name} is not ready`)
+		}
+
+		return reasons.size === 0 ? { ...composite, status: 'ready' } : { ...composite, status: 'stale', staleReasons: [...reasons] }
+	}
+
+	// Lists the composites of a project, newest first, with their state.
+	async composites(projectId: string) {
+		await this.ready()
+		this.#project(projectId)
+		const composites: StackingCompositeSummary[] = []
+		for (const composite of this.store.composites(projectId)) composites.push(await this.#compositeSummary(composite))
+		return composites
+	}
+
+	// Returns a composite with the path of its file. Throws when unknown.
+	async composite(compositeId: string): Promise<StackingCompositeDetail> {
+		await this.ready()
+		const composite = this.store.composite(compositeId)
+		if (!composite) throw new StackingError('Unknown composite', 404, 'notFound')
+		return { ...(await this.#compositeSummary(composite)), path: join(this.store.compositeDirectory(compositeId), COMPOSITE_FILE) }
+	}
+
+	// Deletes a composite with its directory, recorded as deleting first; the masters it mixed stay.
+	async deleteComposite(compositeId: string) {
+		await this.ready()
+		if (!this.store.composite(compositeId)) throw new StackingError('Unknown composite', 404, 'notFound')
+		this.store.setCompositePublication(compositeId, 'deleting')
+		await rm(this.store.compositeDirectory(compositeId), { recursive: true, force: true })
+		this.store.discardComposite(compositeId)
+		this.#changed()
+		return { deleted: compositeId }
 	}
 
 	// Lists the latest runs of a project, newest first.
@@ -1912,6 +2185,39 @@ export function createImageStackingRoutes(stacking: ImageStacking) {
 		'/api/image-stacking/products/:productId': {
 			GET: ({ params }) => answer(() => stacking.product(params.productId)),
 			DELETE: ({ params }) => answer(() => stacking.deleteProduct(params.productId)),
+		},
+		'/api/image-stacking/projects/:projectId/compositions/validate': {
+			POST: async (request) => {
+				const body = (await request.json()) as StackingComposition
+				return answer(() => stacking.validateComposition(request.params.projectId, body))
+			},
+		},
+		'/api/image-stacking/projects/:projectId/compositions/preview': {
+			POST: async (request) => {
+				const body = (await request.json()) as StackingComposition
+
+				try {
+					return new Response(await stacking.previewComposition(request.params.projectId, body), { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store' } })
+				} catch (error) {
+					return failure(error)
+				}
+			},
+		},
+		'/api/image-stacking/projects/:projectId/compositions': {
+			POST: async (request) => {
+				const body = (await request.json()) as StackingComposition
+				return answer(() => stacking.startComposition(request.params.projectId, body), 202)
+			},
+		},
+		'/api/image-stacking/projects/:projectId/composites': {
+			GET: ({ params }) => answer(() => stacking.composites(params.projectId)),
+		},
+		'/api/image-stacking/composites/:compositeId': {
+			GET: ({ params }) => answer(() => stacking.composite(params.compositeId)),
+			DELETE: ({ params }) => answer(() => stacking.deleteComposite(params.compositeId)),
+		},
+		'/api/image-stacking/compositions/:jobId/cancel': {
+			POST: ({ params }) => answer(() => stacking.cancel(params.jobId)),
 		},
 		'/api/image-stacking/runs/:runId/cancel': {
 			POST: ({ params }) => answer(() => stacking.cancel(params.runId)),

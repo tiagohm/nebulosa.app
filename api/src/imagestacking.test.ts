@@ -10,9 +10,10 @@ import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
 import { AppDatabase } from './database'
 import { createImageStackingRoutes, filterGroups, ImageStacking, type ImageStackingEvent, type StackingMasters } from './imagestacking'
 import { type AnalysisMeasurement, type AnalysisWorkerRequest, type FrameAnalyzer, readDigital, StackingAnalyzer } from './imagestacking.analysis'
+import { type FrameCompositor, StackingCompositor } from './imagestacking.composition'
 import { type FrameIntegrator, integrationPlan } from './imagestacking.integration'
 import { cohortKeyOf, filterKeyOf, filterSynonyms, isWithin, lightRoleOf } from './imagestacking.sources'
-import { ImageStackingStore, PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingProduct, type StackingSourceFacts, type StackingStar } from './imagestacking.store'
+import { COMPOSITE_FILE, ImageStackingStore, PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingComposition, type StackingProduct, type StackingSourceFacts, type StackingStar } from './imagestacking.store'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-stacking-test-'))
 
@@ -131,10 +132,10 @@ function analyzer(measurements: Record<string, AnalysisMeasurement>, during: () 
 }
 
 // A service over a database and a managed directory of its own.
-function open(library: StackingMasters = masters().library, frameAnalyzer?: FrameAnalyzer, frameIntegrator?: FrameIntegrator) {
+function open(library: StackingMasters = masters().library, frameAnalyzer?: FrameAnalyzer, frameIntegrator?: FrameIntegrator, frameCompositor?: FrameCompositor) {
 	const events: ImageStackingEvent[] = []
 	const managed = directory('managed')
-	const stacking = new ImageStacking(new ImageStackingStore(AppDatabase.memory(), managed), (event) => events.push(event), library, [managed], frameAnalyzer, frameIntegrator)
+	const stacking = new ImageStacking(new ImageStackingStore(AppDatabase.memory(), managed), (event) => events.push(event), library, [managed], frameAnalyzer, frameIntegrator, frameCompositor)
 	return { stacking, events, managed }
 }
 
@@ -142,7 +143,7 @@ function open(library: StackingMasters = masters().library, frameAnalyzer?: Fram
 async function settled(stacking: ImageStacking, jobId: string) {
 	for (let attempt = 0; attempt < 500; attempt++) {
 		const job = await stacking.job(jobId)
-		if (job.state !== 'scanning' && job.state !== 'analyzing' && job.state !== 'integrating') return job
+		if (job.state !== 'scanning' && job.state !== 'analyzing' && job.state !== 'integrating' && job.state !== 'composing') return job
 		await Bun.sleep(10)
 	}
 
@@ -730,12 +731,175 @@ describe('integration and publication', () => {
 		store.putRun({ runId: 'run', projectId, token: 't', state: 'running', createdAt: 1, recipe: product('x', 'x').recipe, groups: [] })
 		rmSync(join(managed, 'products', 'x'), { recursive: true })
 
+		const compositeDirectory = join(managed, 'composites', 'mixed')
+		mkdirSync(compositeDirectory, { recursive: true })
+		writeFileSync(join(compositeDirectory, COMPOSITE_FILE), 'intact')
+		mkdirSync(join(managed, 'composites', 'stray'), { recursive: true })
+		const composition: StackingComposition = { preset: 'Custom', sources: [{ productId: 'intact', plane: 0, gain: 1, offset: 0 }], mix: { red: [{ plane: 0, weight: 1 }], green: [{ plane: 0, weight: 1 }], blue: [{ plane: 0, weight: 1 }] } }
+		store.beginComposite({ compositeId: 'mixed', projectId, fingerprint: 'f', createdAt: 1, contentDigest: new Bun.CryptoHasher('sha256').update('intact').digest('hex'), bytes: 6, width: 1, height: 1, left: 0, top: 0, composition, diagnostics: { valid: 1, unsupported: 0, nonFinite: 0, luminanceFallback: 0 } })
+
 		const second = new ImageStacking(store, () => undefined, masters().library, [managed])
 		expect((await second.products(projectId)).map(({ productId, status }) => [productId, status])).toEqual([['intact', 'ready']])
 		expect(readdirSync(join(managed, 'products'))).toEqual(['intact'])
-		expect(readdirSync(join(managed, 'orphaned'))[0]).toStartWith('unknown-')
+		expect(readdirSync(join(managed, 'orphaned')).some((name) => name.startsWith('unknown-'))).toBeTrue()
 		expect(readdirSync(managed)).not.toContain('staging')
 		expect((await second.runs(projectId))[0].state).toBe('interrupted')
+		expect((await second.composites(projectId)).map(({ compositeId, status }) => [compositeId, status])).toEqual([['mixed', 'ready']])
+		expect(readdirSync(join(managed, 'composites'))).toEqual(['mixed'])
+		expect(readdirSync(join(managed, 'orphaned')).some((name) => name.startsWith('stray-'))).toBeTrue()
+		await expect(second.deleteProduct('intact')).rejects.toThrow('delete the composite first')
+	})
+})
+
+describe('composition', () => {
+	// A project with Ha and OIII masters of one field, integrated by averaging on the worker.
+	async function masters2(stacking: ImageStacking) {
+		const folder = directory('compose')
+		const field = [
+			[20, 20],
+			[70, 25],
+			[30, 70],
+			[75, 75],
+			[50, 48],
+			[15, 50],
+			[82, 50],
+			[48, 12],
+			[60, 62],
+			[35, 38],
+		] as const
+
+		for (const [filter, shifts] of [
+			[
+				'Ha',
+				[
+					[0, 0],
+					[2, -3],
+				],
+			],
+			[
+				'OIII',
+				[
+					[-3, 2],
+					[4, 1],
+				],
+			],
+		] as const) {
+			for (const [index, [dx, dy]] of shifts.entries())
+				await writeStars(
+					join(folder, `${filter}${index}.fit`),
+					field.map(([x, y]) => [x + dx, y + dy] as const),
+					light(filter),
+				)
+		}
+
+		const { projectId } = await stacking.createProject({ name: 'Mix' })
+		await importAll(stacking, projectId, [folder])
+		for (const cohort of await stacking.cohorts(projectId)) await stacking.updateCohort(projectId, cohort.cohortId, { calibration: { kind: 'none', reason: 'Synthetic frames' } })
+		await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)
+		expect(await settled(stacking, (await stacking.startRun(projectId, { token: 'masters', recipe: { method: 'average', minimumCoverage: 1 } })).run.runId)).toMatchObject({ state: 'completed', published: 2 })
+		const products = await stacking.products(projectId)
+		return { projectId, ha: products.find((product) => product.name === 'Ha')!, oiii: products.find((product) => product.name === 'OIII')! }
+	}
+
+	// HOO of the masters: Ha in red, OIII in green and blue.
+	function hoo(ha: string, oiii: string): StackingComposition {
+		return {
+			preset: 'HOO',
+			sources: [
+				{ productId: ha, plane: 0, gain: 1, offset: 0 },
+				{ productId: oiii, plane: 0, gain: 1, offset: 0 },
+			],
+			mix: { red: [{ plane: 0, weight: 1 }], green: [{ plane: 1, weight: 1 }], blue: [{ plane: 1, weight: 1 }] },
+		}
+	}
+
+	test('a composition mixes masters into a cropped linear composite, reads no light frame, and keeps its masters', async () => {
+		const real = new StackingCompositor()
+		const read: string[] = []
+
+		const spy: FrameCompositor = {
+			compose: (request, onProgress, signal) => {
+				read.push(...request.planes.map((plane) => plane.path))
+				return real.compose(request, onProgress, signal)
+			},
+			preview: (request, signal) => {
+				read.push(...request.planes.map((plane) => plane.path))
+				return real.preview(request, signal)
+			},
+		}
+
+		const { stacking, managed } = open(masters().library, undefined, undefined, spy)
+		const { projectId, ha, oiii } = await masters2(stacking)
+		const composition = hoo(ha.productId, oiii.productId)
+
+		const unresolved = await stacking.validateComposition(projectId, { ...composition, sources: [composition.sources[0], { ...composition.sources[1], productId: 'missing' }], mix: { ...composition.mix, green: [] } })
+		expect(unresolved.ready).toBeFalse()
+		expect(unresolved.issues.map((issue) => issue.code)).toEqual(['unknownProduct', 'emptyChannel'])
+		await expect(stacking.startComposition(projectId, { ...composition, mix: { ...composition.mix, green: [] } })).rejects.toThrow('has no source')
+
+		const valid = await stacking.validateComposition(projectId, composition)
+		expect(valid).toMatchObject({ ready: true, issues: [] })
+		const jpeg = await stacking.previewComposition(projectId, composition)
+		expect([jpeg[0], jpeg[1]]).toEqual([0xff, 0xd8])
+
+		const started = await stacking.startComposition(projectId, composition)
+		expect(await settled(stacking, started.job!.jobId)).toMatchObject({ type: 'composition', state: 'completed', published: 1 })
+		const [composite] = await stacking.composites(projectId)
+		expect(composite).toMatchObject({ status: 'ready', fingerprint: valid.fingerprint })
+		expect(composite.width).toBeLessThan(96)
+		expect(read.every((path) => path.startsWith(join(managed, 'products')))).toBeTrue()
+
+		const detail = await stacking.composite(composite.compositeId)
+		const image = await readDigital(detail.path)
+		const red = await readDigital((await stacking.product(ha.productId)).path)
+		const green = await readDigital((await stacking.product(oiii.productId)).path)
+		expect([image.metadata.width, image.metadata.height, image.metadata.channels]).toEqual([composite.width, composite.height, 3])
+		const x = Math.trunc(composite.width / 2)
+		const y = Math.trunc(composite.height / 2)
+		const at = (composite.top + y) * 96 + composite.left + x
+		expect([image.raw[(y * composite.width + x) * 3], image.raw[(y * composite.width + x) * 3 + 1], image.raw[(y * composite.width + x) * 3 + 2]]).toEqual([red.raw[at], green.raw[at], green.raw[at]])
+
+		expect(await stacking.startComposition(projectId, composition)).toMatchObject({ reused: true, composite: { compositeId: composite.compositeId } })
+		await expect(stacking.deleteProduct(ha.productId)).rejects.toThrow('delete the composite first')
+
+		const lhoo: StackingComposition = { ...composition, preset: 'LHOO', luminance: { source: 0, alpha: 1, match: 'robustLinear' } }
+		await settled(stacking, (await stacking.startComposition(projectId, lhoo)).job!.jobId)
+		const blended = (await stacking.composites(projectId))[0]
+		expect(blended.composition.preset).toBe('LHOO')
+		expect(blended.diagnostics.luminanceMatch?.matched).toBeTrue()
+
+		for (const { compositeId } of await stacking.composites(projectId)) await stacking.deleteComposite(compositeId)
+		await stacking.deleteProduct(ha.productId)
+		expect((await stacking.products(projectId)).map((product) => product.name)).toEqual(['OIII'])
+	})
+
+	test('only the latest preview is computed, and an earlier one answers superseded', async () => {
+		const gate = Promise.withResolvers<void>()
+
+		const slow: FrameCompositor = {
+			compose: () => Promise.reject(new Error('unused')),
+			preview: async (_, signal) => {
+				const aborted = Promise.withResolvers<void>()
+				signal.addEventListener('abort', () => aborted.resolve(), { once: true })
+				await Promise.race([aborted.promise, gate.promise])
+				signal.throwIfAborted()
+				return new Uint8Array([0xff, 0xd8])
+			},
+		}
+
+		const { stacking } = open(masters().library, undefined, undefined, slow)
+		const { projectId, ha, oiii } = await masters2(stacking)
+		const composition = hoo(ha.productId, oiii.productId)
+		const first = stacking.previewComposition(projectId, composition).then(
+			() => 'computed',
+			(error: unknown) => (Error.isError(error) ? error.message : 'failed'),
+		)
+		await Bun.sleep(20)
+		const second = stacking.previewComposition(projectId, composition)
+		await Bun.sleep(20)
+		gate.resolve()
+		expect(await first).toBe('A newer preview was asked for')
+		expect(await second).toEqual(new Uint8Array([0xff, 0xd8]))
 	})
 })
 

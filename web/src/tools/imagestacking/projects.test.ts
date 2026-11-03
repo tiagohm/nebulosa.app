@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { ImageStackingSnapshot, StackingJobSummary } from 'api'
 import { proxy } from 'valtio'
-import { framesQuery, handleImageStackingEvent, type ImageStackingRuntime, loadStackingFrames, loadStackingProject, refreshImageStacking, separateStackingFilter, updateStackingFrame } from './projects'
+import { framesQuery, handleImageStackingEvent, type ImageStackingRuntime, jobEnded, loadStackingFrames, loadStackingProject, refreshImageStacking, separateStackingFilter, startStackingAnalysis, updateStackingCohort, updateStackingFrame } from './projects'
 
 function runtime() {
 	return proxy<ImageStackingRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
@@ -62,16 +62,29 @@ describe('requests', () => {
 		expect(framesQuery({ group: '', included: false, search: 'm31' }, 0)).toBe('offset=0&limit=50&group=&included=false&search=m31')
 	})
 
-	test('a project and its groups are fetched together, and absent clears them', async () => {
+	test('a project, its groups, cohorts, and validation are fetched together, and absent clears them', async () => {
 		const state = runtime()
-		const { request, calls } = fakeFetch({ '/api/image-stacking/projects/p%201/groups': [{ key: 'ha' }], '/api/image-stacking/projects/p%201': { projectId: 'p 1' } })
+		const base = '/api/image-stacking/projects/p%201'
+		const { request, calls } = fakeFetch({ [base + '/groups']: [{ key: 'ha' }], [base + '/cohorts']: [{ cohortId: 'c' }], [base + '/validation']: { findings: [], ready: true, samples: 0, memoryBytes: 0 }, [base]: { projectId: 'p 1' } })
 		await loadStackingProject(state, 'p 1', request)
-		expect(calls.map(({ url }) => url)).toEqual(['/api/image-stacking/projects/p%201', '/api/image-stacking/projects/p%201/groups'])
+		expect(calls.map(({ url }) => url)).toEqual([base, base + '/groups', base + '/cohorts', base + '/validation'])
 		expect(state.project?.projectId).toBe('p 1')
-		expect(state.groups).toHaveLength(1)
+		expect([state.groups?.length, state.cohorts?.length, state.validation?.ready]).toEqual([1, 1, true])
 		await loadStackingProject(state, undefined, request)
-		expect(state.project).toBeUndefined()
-		expect(state.groups).toBeUndefined()
+		expect([state.project, state.groups, state.cohorts, state.validation]).toEqual([undefined, undefined, undefined, undefined])
+	})
+
+	test('cohort decisions and analyses reach their routes, and an analysis runs until it ends', async () => {
+		const state = runtime()
+		const { request, calls } = fakeFetch({ '/api/image-stacking/projects/p/cohorts/c%201': { cohortId: 'c 1' }, '/api/image-stacking/projects/p/analyses': { jobId: 'j' } })
+		await updateStackingCohort(state, 'p', 'c 1', { calibration: { kind: 'none', reason: 'No flats yet' } }, request)
+		await startStackingAnalysis(state, 'p', request)
+		expect(calls.map(({ url, init }) => [url, init?.method])).toEqual([
+			['/api/image-stacking/projects/p/cohorts/c%201', 'PATCH'],
+			['/api/image-stacking/projects/p/analyses', 'POST'],
+		])
+		expect(JSON.parse(calls[0].init!.body as string)).toEqual({ calibration: { kind: 'none', reason: 'No flats yet' } })
+		expect([jobEnded({ state: 'analyzing' }), jobEnded({ state: 'scanning' }), jobEnded({ state: 'cancelled' })]).toEqual([false, false, true])
 	})
 
 	test('a page that arrives after a newer request is dropped', async () => {

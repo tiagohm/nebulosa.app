@@ -1,10 +1,30 @@
 import { describe, expect, test } from 'bun:test'
 import type { StackingImportCandidate } from 'api'
-import { candidateText, candidateUsable, committedCounts, groupLabel, integrationText } from './format'
+import { candidateText, candidateUsable, cohortText, committedCounts, groupLabel, integrationText, masterText, metricText, registrationText, selectionFields, selectionOf } from './format'
 
 function candidate(path: string, patch: Partial<StackingImportCandidate> = {}): StackingImportCandidate {
 	return { path, name: path, bytes: 1, mtimeMillis: 1, format: 'fits', role: 'light', warnings: [], known: false, ...patch }
 }
+
+describe('planning', () => {
+	test('thresholds read from blank or unreadable fields set nothing, and come back as written', () => {
+		const selection = selectionOf({ minStars: ' 20 ', minMedianSNR: '', maxMedianHFD: 'wide', maxBackground: '0.05' })
+		expect(selection).toEqual({ minStars: 20, maxBackground: 0.05 })
+		expect(selectionFields(selection)).toEqual({ minStars: '20', maxBackground: '0.05' })
+	})
+
+	test('measurements, registrations, masters, and cohorts read in words', () => {
+		expect([metricText(2.345), metricText(null), metricText(undefined), metricText(Infinity), metricText(0.12345, 4)]).toEqual(['2.35', '—', '—', '—', '0.1235'])
+		const summary = { model: 'similarity' as const, translationX: 5.04, translationY: -3, scaleX: 1, scaleY: 1, rotation: Math.PI / 180, shear: 0, mirrored: false, inlierCount: 30, rmsError: 0.123 }
+		const transform = { a: 1, b: 0, tx: 5, ty: -3, mirrored: false }
+		expect(registrationText({ success: true, transform: { transform, inverseTransform: transform, summary } })).toBe('5.0, -3.0 px · 1.00° · 0.12 px rms')
+		expect(registrationText({ success: false, reason: 'match-failed' })).toBe('Failed: match-failed')
+		expect(registrationText(undefined)).toBe('—')
+		expect(masterText({ kind: 'dark', masterId: '0123456789abcdef', revision: 2, preferred: true })).toBe('Dark 01234567 · revision 2 · preferred')
+		expect(cohortText({ groupName: 'Ha', target: { width: 1, height: 1, channels: 1, exposure: 300 }, frames: 1 })).toBe('Ha · 300 s · 1 frame')
+		expect(cohortText({ groupName: 'Ha', target: { width: 1, height: 1, channels: 1 }, frames: 2 })).toBe('Ha · unknown exposure · 2 frames')
+	})
+})
 
 describe('format', () => {
 	test('integration times read in minutes below an hour and in hours above', () => {

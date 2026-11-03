@@ -290,8 +290,9 @@ export interface ImportCommit {
 
 // Candidates of a metadata-only preview for a target.
 export interface ResolvePreview {
-	// One row per master considered.
-	readonly candidates: readonly { readonly masterId: string; readonly revision: number; readonly kind: CalibrationKind; readonly verdict: MatchVerdict; readonly reasons: readonly string[] }[]
+	// One row per master considered, with what pins it: its revision, the SHA-256 of its file, its state, and whether
+	// it is the preferred revision of its master.
+	readonly candidates: readonly { readonly masterId: string; readonly revision: number; readonly kind: CalibrationKind; readonly contentDigest: string; readonly status: ProductStatus; readonly preferred: boolean; readonly verdict: MatchVerdict; readonly reasons: readonly string[] }[]
 	// Kinds with no compatible master.
 	readonly missingKinds: readonly CalibrationKind[]
 }
@@ -365,6 +366,8 @@ export class CalibrationLibrary {
 	#opened?: Promise<void>
 	// Import scans running, by job.
 	readonly #scans = new Map<string, AbortController>()
+	// Revisions another tool is reading, by masterId:revision, with how many holders.
+	readonly #leases = new Map<string, number>()
 	// Queue of the master jobs.
 	readonly jobs: CalibrationJobs
 
@@ -988,6 +991,7 @@ export class CalibrationLibrary {
 		const used = (reference: Pick<MasterReference, 'masterId' | 'revision'> | undefined) => reference?.masterId === masterId && reference.revision === revision
 		if (this.store.isDependency(masterId, revision)) throw new LibraryError('A master flat was corrected by this master; delete that flat first', 409, 'masterInUse')
 		if (this.jobs.inStates(ACTIVE_JOB_STATES).some(({ build }) => used(build?.correction))) throw new LibraryError('A master flat being built is corrected by this master', 409, 'masterInUse')
+		if (this.#leases.has(`${masterId}:${revision}`)) throw new LibraryError('A job of Image Stacking is reading this master', 409, 'masterInUse')
 
 		this.store.setDeleting(masterId, revision, true)
 
@@ -1196,12 +1200,41 @@ export class CalibrationLibrary {
 		await this.#usable()
 		const candidates: ResolvePreview['candidates'][number][] = []
 
-		for (const { masterId, revision, kind, metadata, status } of this.store.allMasters()) {
-			if (status !== 'unavailable') candidates.push({ masterId, revision, kind, ...matchMaster(kind, metadata, target) })
+		for (const { masterId, revision, kind, metadata, status, contentDigest } of this.store.allMasters()) {
+			if (status !== 'unavailable') candidates.push({ masterId, revision, kind, contentDigest, status, preferred: this.store.preferred(masterId) === revision, ...matchMaster(kind, metadata, target) })
 		}
 
 		const kinds: readonly CalibrationKind[] = ['dark', 'bias', 'flat']
 		return { candidates, missingKinds: kinds.filter((kind) => !candidates.some((candidate) => candidate.kind === kind && candidate.verdict === 'compatible')) }
+	}
+
+	// Returns a published revision with the path of its file when its content is the one pinned, so a calibrator never
+	// reads another master under the same name. Returns undefined for an unknown revision, another content, or a file
+	// that is unavailable or depends on an unavailable master.
+	async pinnedMaster(reference: MasterReference): Promise<CalibrationMasterDetail | undefined> {
+		await this.#usable()
+		const master = this.store.master(reference.masterId, reference.revision)
+		if (!master || master.contentDigest !== reference.digest || master.status === 'unavailable' || master.status === 'stale') return undefined
+		return { ...master, path: this.#masterFile(master), preferred: this.store.preferred(master.masterId) === master.revision }
+	}
+
+	// Holds revisions while another tool reads their files, so none of them can be deleted meanwhile. Returns the
+	// function that releases them, which is safe to call more than once.
+	lease(references: readonly Pick<MasterReference, 'masterId' | 'revision'>[]) {
+		const keys = references.map(({ masterId, revision }) => `${masterId}:${revision}`)
+		for (const key of keys) this.#leases.set(key, (this.#leases.get(key) ?? 0) + 1)
+		let released = false
+
+		return () => {
+			if (released) return
+			released = true
+
+			for (const key of keys) {
+				const count = (this.#leases.get(key) ?? 1) - 1
+				if (count > 0) this.#leases.set(key, count)
+				else this.#leases.delete(key)
+			}
+		}
 	}
 
 	// Stops the running job and the scans.

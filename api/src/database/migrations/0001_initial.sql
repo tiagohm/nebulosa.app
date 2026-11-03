@@ -542,7 +542,13 @@ CREATE TABLE stack_projects (
 	revision INTEGER NOT NULL CHECK (revision > 0),
 	-- When it was created and last changed (its header, frames, or filter aliases), Unix milliseconds (UTC).
 	created_at INTEGER NOT NULL,
-	updated_at INTEGER NOT NULL
+	updated_at INTEGER NOT NULL,
+	-- Choices of an operator (StackingSettings): the pinned project reference group, the pinned reference frame of each
+	-- group, and the quality thresholds of the selection.
+	settings TEXT NOT NULL CHECK (json_valid(settings)),
+	-- Outcome of the latest registration (StackingProjectAnalysis): the reference of each group and its transform onto
+	-- the project reference; NULL before the first analysis.
+	analysis TEXT CHECK (analysis IS NULL OR json_valid(analysis))
 ) STRICT;
 
 -- Light frames of a project, by reference: files are never written, moved, or copied. One file joins a project once,
@@ -580,6 +586,9 @@ CREATE TABLE stack_sources (
 	-- What is known about it, each value with its evidence (CalibrationMetadata), and what should be said about it: [text].
 	metadata TEXT NOT NULL CHECK (json_valid(metadata)),
 	warnings TEXT NOT NULL CHECK (json_valid(warnings)),
+	-- What the latest analysis measured (StackingFrameAnalysis): its fingerprint, SHA-256, quality, brightest stars in
+	-- pixels, and transform onto the reference of its group; NULL before.
+	analysis TEXT CHECK (analysis IS NULL OR json_valid(analysis)),
 	UNIQUE (project_id, identity)
 ) STRICT;
 
@@ -593,4 +602,22 @@ CREATE TABLE stack_filter_aliases (
 	filter_key TEXT NOT NULL,
 	target_key TEXT NOT NULL,
 	PRIMARY KEY (project_id, filter_key)
+) STRICT;
+
+-- Calibration decisions of a project, one per cohort: the lights of one filter group sharing their acquisition settings.
+-- A cohort whose frames are gone keeps its row until its project goes, so its decision returns with them.
+CREATE TABLE stack_cohorts (
+	project_id TEXT NOT NULL REFERENCES stack_projects (project_id) ON DELETE CASCADE,
+	-- Id of the cohort, derived from its group key and acquisition key.
+	cohort_id TEXT NOT NULL,
+	-- Key of its filter group, and of its acquisition settings.
+	group_key TEXT NOT NULL,
+	cohort_key TEXT NOT NULL,
+	-- Hardware id of the camera an operator declared, and why; NULL when undeclared.
+	camera_id TEXT,
+	camera_reason TEXT,
+	-- Calibration chosen (StackingCalibration): pinned master revisions with their SHA-256, or none with a reason; NULL
+	-- while undecided.
+	calibration TEXT CHECK (calibration IS NULL OR json_valid(calibration)),
+	PRIMARY KEY (project_id, cohort_id)
 ) STRICT;

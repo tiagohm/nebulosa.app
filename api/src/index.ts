@@ -359,19 +359,28 @@ export type {
 	ImageStackingErrorCode,
 	ImageStackingEvent,
 	ImageStackingSnapshot,
+	LightMasterKind,
+	StackingCohort,
+	StackingCohortPatch,
 	StackingFilterGroup,
+	StackingFinding,
+	StackingFindingCode,
+	StackingFindingSeverity,
+	StackingFrameSummary,
 	StackingImportCandidate,
 	StackingImportCommit,
 	StackingImportRequest,
 	StackingJobState,
 	StackingJobSummary,
+	StackingMasterCandidate,
 	StackingProjectDetail,
 	StackingProjectSummary,
 	StackingSourceDetail,
 	StackingSourcePatch,
+	StackingValidation,
 } from './imagestacking'
 export type { StackingRole } from './imagestacking.sources'
-export type { StackingFilterAlias, StackingProject, StackingSourceSummary } from './imagestacking.store'
+export type { StackingCalibration, StackingCohortDecision, StackingFilterAlias, StackingFrameAnalysis, StackingProject, StackingProjectAnalysis, StackingRegistration, StackingSettings, StackingSourceSummary } from './imagestacking.store'
 export type { DarvCaptureSettings, DarvEvent, DarvFinishRequest, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementTrails, DarvRequest, DarvSession, DarvSessionState, DarvSessionSummary, DarvSnapshot, DarvStartResponse } from './darv'
 export type { DarvMeasurementResult, DarvMeasurementStatus, DarvTrail } from './darv.analysis'
 export type {
@@ -635,7 +644,7 @@ const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(da
 
 // Projects of light frames for Image Stacking, which need no connection and hold no device. Imports never read the
 // directories of Nebulosa: its stacks and the Calibration Library.
-const imageStacking = new ImageStacking(new ImageStackingStore(database), publish, [DEFAULT_IMAGE_STACKING_DIRECTORY, DEFAULT_CALIBRATION_LIBRARY_DIRECTORY])
+const imageStacking = new ImageStacking(new ImageStackingStore(database), publish, calibrationLibrary, [DEFAULT_IMAGE_STACKING_DIRECTORY, DEFAULT_CALIBRATION_LIBRARY_DIRECTORY])
 
 // Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
 // moving the wheels, driving the panels, and closing and opening the covers with the commanders of their commands,

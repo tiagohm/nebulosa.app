@@ -1,5 +1,4 @@
-import type { Evidenced, Page, StackingFilterGroup, StackingImportCandidate, StackingSourceDetail, StackingSourceSummary } from 'api'
-import { cn } from 'cn'
+import type { Evidenced, Page, StackingFilterGroup, StackingFrameSummary, StackingImportCandidate, StackingSourceDetail } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, ConfirmButton, Notice } from '../../equipment-control/parts'
@@ -18,14 +17,17 @@ import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import { bytesText, EVIDENCE_LABELS, exposureText, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES } from '../calibrationlibrary/library'
-import { candidateText, candidateUsable, committedCounts, groupLabel, integrationText, ROLE_LABELS, SECTION_LABELS, STACKING_SECTIONS, type StackingSection } from './format'
+import { candidateText, candidateUsable, committedCounts, groupLabel, integrationText, metricText, registrationText, ROLE_LABELS, SECTION_LABELS, STACKING_SECTIONS, type StackingSection } from './format'
+import { CalibrationView, QualityView } from './Planning'
 // oxfmt-ignore
 import { cancelStackingImport, commitStackingImport, createStackingProject, deleteStackingProject, imageStackingRuntime, jobEnded, loadStackingCandidates, loadStackingFrame, loadStackingFrames, loadStackingProject, mergeStackingFilter, refreshStackingProject, removeStackingFrame, renameStackingProject, separateStackingFilter, STACKING_PAGE_SIZE, type StackingFrameFilter, startStackingImport, updateStackingFrame } from './projects'
+import { Cell, Row, Table } from './Table'
 
 // Image Stacking tool: projects of light frames saved on the server, grouped by the filter they were taken through. It
 // works with no camera and starts no exposure. Frames enter a project through an import that is reviewed before it is
 // committed; what an operator declares about a frame (its role, its filter, its exclusion) always carries a reason, and
-// filters spelled differently stay apart until merged here. State lives on the server, so a reload or another tab shows
+// filters spelled differently stay apart until merged here. Calibration pins the masters of each cohort, and Quality
+// measures and registers every frame before a stack. State lives on the server, so a reload or another tab shows
 // the same projects; the project shown is part of the URL.
 
 // Group filter of the frames list: every frame, or one filter group by key.
@@ -58,10 +60,14 @@ export function ImageStacking() {
 	const [search, setSearch] = useState('')
 	const [page, setPage] = useState(0)
 	const [selected, setSelected] = useState<string>()
+	const [qualityGroup, setQualityGroup] = useState<string>()
 	const [creating, setCreating] = useState(false)
 	const [importing, setImporting] = useState(false)
 	const panelState = useWorkspacePanel('tools')
-	const filter: StackingFrameFilter = { group: group.all ? undefined : group.key, role: role === 'all' ? undefined : role, status: status === 'all' ? undefined : status, included: inclusion === 'all' ? undefined : inclusion === 'included', search: search || undefined }
+	const groups = (runtime.groups ?? []) as readonly StackingFilterGroup[]
+	const qualityKey = groups.some((item) => item.key === qualityGroup) ? qualityGroup : groups.find((item) => item.key !== '')?.key
+	const listed: StackingFrameFilter = { group: group.all ? undefined : group.key, role: role === 'all' ? undefined : role, status: status === 'all' ? undefined : status, included: inclusion === 'all' ? undefined : inclusion === 'included', search: search || undefined }
+	const filter: StackingFrameFilter = section === 'quality' ? { group: qualityKey, role: 'light', included: true } : listed
 
 	// Fetches the project and its groups, again whenever the server reports a change.
 	useEffect(() => {
@@ -70,8 +76,8 @@ export function ImageStacking() {
 
 	// Fetches the page of frames shown, again whenever the server reports a change.
 	useEffect(() => {
-		if (projectId !== undefined && section === 'frames') void loadStackingFrames(imageStackingRuntime, projectId, filter, page)
-	}, [projectId, section, group, role, status, inclusion, search, page, runtime.changes])
+		if (projectId !== undefined && (section === 'frames' || (section === 'quality' && qualityKey !== undefined))) void loadStackingFrames(imageStackingRuntime, projectId, filter, page)
+	}, [projectId, section, group, role, status, inclusion, search, qualityKey, page, runtime.changes])
 
 	// Fetches the frame of the panel, again whenever the server reports a change.
 	useEffect(() => {
@@ -82,6 +88,7 @@ export function ImageStacking() {
 	function showProject(next: string | undefined) {
 		setSelected(undefined)
 		setGroup({ all: true })
+		setQualityGroup(undefined)
 		setPage(0)
 		navigate(routeState, next === undefined ? { workspace: 'tools', tool: 'image-stacking' } : { workspace: 'tools', tool: 'image-stacking', project: next })
 	}
@@ -107,7 +114,6 @@ export function ImageStacking() {
 	}
 
 	const project = runtime.project?.projectId === projectId ? runtime.project : undefined
-	const groups = (runtime.groups ?? []) as readonly StackingFilterGroup[]
 	const groupKeys = ['*', ...groups.map((item) => item.key)]
 	const panel = selected && <FramePanel onRemoved={() => setSelected(undefined)} />
 
@@ -157,6 +163,13 @@ export function ImageStacking() {
 						<Pager page={page} total={runtime.frames?.total ?? 0} loading={runtime.loading} onPage={setPage} />
 					</>
 				)}
+				{project && section === 'calibration' && <CalibrationView projectId={project.projectId} />}
+				{project && section === 'quality' && (
+					<>
+						<QualityView projectId={project.projectId} group={qualityKey} onGroup={change(setQualityGroup)} selected={selected} onSelect={selectFrame} />
+						<Pager page={page} total={runtime.frames?.total ?? 0} loading={runtime.loading} onPage={setPage} />
+					</>
+				)}
 			</div>
 			{creating && (
 				<NewProject
@@ -188,40 +201,6 @@ function Pager({ page, total, loading, onPage }: { readonly page: number; readon
 			</Button>
 		</div>
 	)
-}
-
-// Table with a sticky header.
-function Table({ headers, children }: { readonly headers: readonly string[]; readonly children: React.ReactNode }) {
-	return (
-		<div className="min-h-0 overflow-auto rounded-md border border-line-100">
-			<table className="w-full border-collapse text-xs text-ink-200 tabular-nums">
-				<thead className="sticky top-0 z-1 bg-base-100">
-					<tr className="border-b border-line-100">
-						{headers.map((header) => (
-							<th key={header} className="px-2 py-1.5 text-left font-medium whitespace-nowrap text-ink-300">
-								{header}
-							</th>
-						))}
-					</tr>
-				</thead>
-				<tbody>{children}</tbody>
-			</table>
-		</div>
-	)
-}
-
-// Row that selects what it shows, when it can.
-function Row({ selected = false, onClick, children }: { readonly selected?: boolean; readonly onClick?: () => void; readonly children: React.ReactNode }) {
-	return (
-		<tr onClick={onClick} className={cn('border-b border-line-100 last:border-b-0', onClick && 'cursor-pointer hover:bg-base-200', selected && 'bg-accent-subtle')}>
-			{children}
-		</tr>
-	)
-}
-
-// Cell of a row.
-function Cell({ children, className }: { readonly children?: React.ReactNode; readonly className?: string }) {
-	return <td className={cn('px-2 py-1.5 whitespace-nowrap', className)}>{children}</td>
 }
 
 // Name of a new project, created on the server.
@@ -336,7 +315,7 @@ function GroupsView({ projectId, onShow }: { readonly projectId: string; readonl
 // Page of frames.
 function FramesView({ selected, onSelect }: { readonly selected?: string; readonly onSelect: (sourceId: string) => void }) {
 	const { frames } = useSnapshot(imageStackingRuntime)
-	const items = (frames?.items ?? []) as readonly StackingSourceSummary[]
+	const items = (frames?.items ?? []) as readonly StackingFrameSummary[]
 
 	if (items.length === 0) return <EmptyState title="No frames" description="Nothing matches these filters." />
 
@@ -406,6 +385,22 @@ function FramePanel({ onRemoved }: { readonly onRemoved: () => void }) {
 					<Notice key={warning}>{warning}</Notice>
 				))}
 			</CollapsibleSection>
+			{frame.analysis && (
+				<CollapsibleSection id="stacking.analysis" title="Analysis">
+					{frame.analysis.error !== undefined && <Notice error>{frame.analysis.error}</Notice>}
+					{frame.analysis.quality && (
+						<>
+							<DataRow label="Stars">{String(frame.analysis.quality.starCount)}</DataRow>
+							<DataRow label="SNR">{metricText(frame.analysis.quality.medianSNR, 1)}</DataRow>
+							<DataRow label="HFD">{`${metricText(frame.analysis.quality.medianHFD)} px`}</DataRow>
+							<DataRow label="Background">{metricText(frame.analysis.quality.estimatedBackground, 4)}</DataRow>
+							<DataRow label="Score">{metricText(frame.analysis.quality.normalizedScore)}</DataRow>
+						</>
+					)}
+					<DataRow label="Registration">{registrationText(frame.analysis.registration)}</DataRow>
+					<DataRow label="Measured">{new Date(frame.analysis.analyzedAt).toISOString().slice(0, 16).replace('T', ' ')}</DataRow>
+				</CollapsibleSection>
+			)}
 			<CollapsibleSection id="stacking.review" title="Review">
 				<ReviewForm key={frame.sourceId} frame={frame} />
 			</CollapsibleSection>

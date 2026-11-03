@@ -1,16 +1,92 @@
 import { join } from 'path'
-import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
+import type { ImageRegistrationTransform } from 'nebulosa/src/imaging/processing/registration'
+import type { SubframeQualityMetrics, SubframeSelectionOptions } from 'nebulosa/src/imaging/processing/subframe.selector'
+import type { CalibrationMetadata, MasterReference } from './calibrationlibrary.compatibility'
 import { fileNameOf, MAX_PAGE_SIZE, type Page, type SourceFormat, type SourceStatus } from './calibrationlibrary.store'
 import { type AppDatabase, DEFAULT_DATA_DIRECTORY } from './database'
 import type { StackingRole } from './imagestacking.sources'
 
-// Persistence of Image Stacking. Projects, the light frames chosen for them with what an operator declared about each,
-// and the filter aliases of a project are rows of the operational database; the frames themselves stay where they are.
-// Filter groups are not stored: a group is the frames whose canonical filter key, after the aliases of the project, is
-// equal. Every read and write is synchronous and short.
+// Persistence of Image Stacking. Projects with the choices of an operator, the light frames chosen for them with what an
+// operator declared and what the latest analysis measured about each, the filter aliases, and the calibration decision of
+// each cohort are rows of the operational database; the frames themselves stay where they are. Filter groups are not
+// stored: a group is the frames whose canonical filter key, after the aliases of the project, is equal. Every read and
+// write is synchronous and short.
 
 // Default directory of the products and staging of Image Stacking, which an import never reads.
 export const DEFAULT_IMAGE_STACKING_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'image-stacking')
+
+// Choices of an operator about a project.
+export interface StackingSettings {
+	// Key of the filter group whose reference is the project reference; absent for the automatic choice.
+	readonly referenceGroup?: string
+	// Reference frame of each filter group, by group key; a group absent here takes the best frame.
+	readonly references: Readonly<Record<string, string>>
+	// Quality thresholds of the selection; a frame failing one is left out of integration, never deleted.
+	readonly selection: Pick<SubframeSelectionOptions, 'minStars' | 'minMedianSNR' | 'maxMedianHFD' | 'maxMedianEccentricity' | 'maxBackground'>
+}
+
+// Settings of a new project: automatic references and no threshold.
+export const DEFAULT_STACKING_SETTINGS: StackingSettings = { references: {}, selection: {} }
+
+// Outcome of a star registration: the transform from a frame onto its reference, or why there is none.
+export type StackingRegistration = { readonly success: true; readonly transform: ImageRegistrationTransform } | { readonly success: false; readonly reason: string }
+
+// A star kept for registration, in pixels of its frame (zero-based centers, x right, y down).
+export interface StackingStar {
+	readonly x: number
+	readonly y: number
+	// Flux, in normalized units, and half-flux diameter, in pixels.
+	readonly flux: number
+	readonly hfd: number
+	// Signal-to-noise ratio.
+	readonly snr: number
+}
+
+// What the latest analysis measured of one frame.
+export interface StackingFrameAnalysis {
+	// Identity of the inputs measured: the file at its size and time, and the calibration of its cohort.
+	readonly fingerprint: string
+	// When it was measured, Unix milliseconds (UTC).
+	readonly analyzedAt: number
+	// SHA-256 of the file as it was read.
+	readonly digest?: string
+	// Quality of the calibrated frame.
+	readonly quality?: SubframeQualityMetrics
+	// Brightest stars, at most ANALYSIS_STARS.
+	readonly stars?: readonly StackingStar[]
+	// Why it could not be measured.
+	readonly error?: string
+	// Transform onto the reference frame of its group, from the latest registration.
+	readonly registration?: StackingRegistration
+}
+
+// Outcome of the latest registration of a project.
+export interface StackingProjectAnalysis {
+	// When it ended, Unix milliseconds (UTC).
+	readonly analyzedAt: number
+	// Group whose reference is the project reference, and that frame.
+	readonly referenceGroup?: string
+	readonly referenceSourceId?: string
+	// Reference frame of each group, and the transform of that frame onto the project reference, by group key.
+	readonly groups: Readonly<Record<string, { readonly referenceSourceId?: string; readonly toProject?: StackingRegistration }>>
+}
+
+// Calibration chosen for a cohort: pinned master revisions, any of which may be absent, or none at all with a reason.
+export type StackingCalibration = { readonly kind: 'masters'; readonly dark?: MasterReference; readonly flat?: MasterReference; readonly bias?: MasterReference } | { readonly kind: 'none'; readonly reason: string }
+
+// What an operator decided about a cohort.
+export interface StackingCohortDecision {
+	// Id of the cohort.
+	readonly cohortId: string
+	// Key of its filter group, and of its acquisition settings.
+	readonly groupKey: string
+	readonly cohortKey: string
+	// Hardware id of the camera an operator declared, and why.
+	readonly cameraId?: string
+	readonly cameraReason?: string
+	// Calibration chosen; absent while undecided.
+	readonly calibration?: StackingCalibration
+}
 
 // A project.
 export interface StackingProject {
@@ -23,6 +99,10 @@ export interface StackingProject {
 	// When it was created and last changed, Unix milliseconds (UTC).
 	readonly createdAt: number
 	readonly updatedAt: number
+	// Choices of an operator.
+	readonly settings: StackingSettings
+	// Outcome of the latest registration.
+	readonly analysis?: StackingProjectAnalysis
 }
 
 // Light frame of a project.
@@ -61,10 +141,12 @@ export interface StackingSource {
 	readonly metadata: CalibrationMetadata
 	// What should be said about it.
 	readonly warnings: readonly string[]
+	// What the latest analysis measured.
+	readonly analysis?: StackingFrameAnalysis
 }
 
-// What lists show of a frame: its file name instead of its path.
-export type StackingSourceSummary = Omit<StackingSource, 'path' | 'identity'> & { readonly name: string }
+// What lists show of a frame: its file name instead of its path, and its analysis without the stars.
+export type StackingSourceSummary = Omit<StackingSource, 'path' | 'identity' | 'analysis'> & { readonly name: string; readonly analysis?: Omit<StackingFrameAnalysis, 'stars'> }
 
 // Filters of a list of frames of a project.
 export interface StackingSourceFilter {
@@ -99,9 +181,11 @@ export interface StackingFilterAlias {
 	readonly targetKey: string
 }
 
-// Removes the server path and identity of a frame.
-export function stackingSourceSummary({ path, identity: _, ...source }: StackingSource): StackingSourceSummary {
-	return { ...source, name: fileNameOf(path) }
+// Removes the server path, identity, and stars of a frame.
+export function stackingSourceSummary({ path, identity: _, analysis, ...source }: StackingSource): StackingSourceSummary {
+	if (analysis === undefined) return { ...source, name: fileNameOf(path) }
+	const { stars: __, ...measured } = analysis
+	return { ...source, name: fileNameOf(path), analysis: measured }
 }
 
 // Row of stack_projects.
@@ -111,6 +195,21 @@ interface ProjectRow {
 	readonly revision: number
 	readonly created_at: number
 	readonly updated_at: number
+	readonly settings: string
+	readonly analysis: string | null
+}
+
+// Columns of stack_projects read into a StackingProject.
+const PROJECT_COLUMNS = 'project_id, name, revision, created_at, updated_at, settings, analysis'
+
+// Row of stack_cohorts.
+interface CohortRow {
+	readonly cohort_id: string
+	readonly group_key: string
+	readonly cohort_key: string
+	readonly camera_id: string | null
+	readonly camera_reason: string | null
+	readonly calibration: string | null
 }
 
 // Row of stack_sources.
@@ -132,14 +231,28 @@ interface SourceRow {
 	readonly excluded_reason: string | null
 	readonly metadata: string
 	readonly warnings: string
+	readonly analysis: string | null
 }
 
 // Columns of stack_sources read into a StackingSource.
-const SOURCE_COLUMNS = 'source_id, project_id, path, format, identity, bytes, mtime_ms, digest, status, role, filter_key, cohort_key, object, observed_at, excluded_reason, metadata, warnings'
+const SOURCE_COLUMNS = 'source_id, project_id, path, format, identity, bytes, mtime_ms, digest, status, role, filter_key, cohort_key, object, observed_at, excluded_reason, metadata, warnings, analysis'
 
 // Returns the project of a row.
 function rowProject(row: ProjectRow): StackingProject {
-	return { projectId: row.project_id, name: row.name, revision: row.revision, createdAt: row.created_at, updatedAt: row.updated_at }
+	const project: StackingProject = { projectId: row.project_id, name: row.name, revision: row.revision, createdAt: row.created_at, updatedAt: row.updated_at, settings: { ...DEFAULT_STACKING_SETTINGS, ...(JSON.parse(row.settings) as Partial<StackingSettings>) } }
+	return row.analysis === null ? project : { ...project, analysis: JSON.parse(row.analysis) as StackingProjectAnalysis }
+}
+
+// Returns the decision of a row.
+function rowCohort(row: CohortRow): StackingCohortDecision {
+	return {
+		cohortId: row.cohort_id,
+		groupKey: row.group_key,
+		cohortKey: row.cohort_key,
+		...(row.camera_id !== null && { cameraId: row.camera_id }),
+		...(row.camera_reason !== null && { cameraReason: row.camera_reason }),
+		...(row.calibration !== null && { calibration: JSON.parse(row.calibration) as StackingCalibration }),
+	}
 }
 
 // Returns the frame of a row.
@@ -162,6 +275,7 @@ function rowSource(row: SourceRow): StackingSource {
 		...(row.excluded_reason !== null && { excluded: row.excluded_reason }),
 		metadata: JSON.parse(row.metadata) as CalibrationMetadata,
 		warnings: JSON.parse(row.warnings) as string[],
+		...(row.analysis !== null && { analysis: JSON.parse(row.analysis) as StackingFrameAnalysis }),
 	}
 }
 
@@ -205,19 +319,22 @@ export class ImageStackingStore {
 
 	// Lists every project, the latest changed first.
 	projects() {
-		return this.database.db.query<ProjectRow, []>('SELECT project_id, name, revision, created_at, updated_at FROM stack_projects ORDER BY updated_at DESC, project_id').all().map(rowProject)
+		return this.database.db.query<ProjectRow, []>(`SELECT ${PROJECT_COLUMNS} FROM stack_projects ORDER BY updated_at DESC, project_id`).all().map(rowProject)
 	}
 
 	// Returns a project.
 	project(projectId: string) {
-		const row = this.database.db.query<ProjectRow, [string]>('SELECT project_id, name, revision, created_at, updated_at FROM stack_projects WHERE project_id = ?').get(projectId)
+		const row = this.database.db.query<ProjectRow, [string]>(`SELECT ${PROJECT_COLUMNS} FROM stack_projects WHERE project_id = ?`).get(projectId)
 		return row ? rowProject(row) : undefined
 	}
 
-	// Writes a project.
+	// Writes a project. An existing row is updated in place: replacing it would delete it first, and with it every row
+	// that cascades from it.
 	putProject(project: StackingProject) {
 		this.database.write(() => {
-			this.database.db.query('INSERT OR REPLACE INTO stack_projects (project_id, name, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(project.projectId, project.name, project.revision, project.createdAt, project.updatedAt)
+			this.database.db
+				.query(`INSERT INTO stack_projects (${PROJECT_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (project_id) DO UPDATE SET name = excluded.name, revision = excluded.revision, updated_at = excluded.updated_at, settings = excluded.settings, analysis = excluded.analysis`)
+				.run(project.projectId, project.name, project.revision, project.createdAt, project.updatedAt, JSON.stringify(project.settings), project.analysis === undefined ? null : JSON.stringify(project.analysis))
 		})
 	}
 
@@ -231,7 +348,7 @@ export class ImageStackingStore {
 	// Writes frames and marks their project changed at `now`, in one transaction.
 	putSources(projectId: string, sources: readonly StackingSource[], now: number) {
 		this.database.write(() => {
-			const statement = this.database.db.query(`INSERT OR REPLACE INTO stack_sources (${SOURCE_COLUMNS}, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			const statement = this.database.db.query(`INSERT OR REPLACE INTO stack_sources (${SOURCE_COLUMNS}, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 
 			for (const source of sources) {
 				statement.run(
@@ -252,6 +369,7 @@ export class ImageStackingStore {
 					source.excluded ?? null,
 					JSON.stringify(source.metadata),
 					JSON.stringify(source.warnings),
+					source.analysis === undefined ? null : JSON.stringify(source.analysis),
 					fileNameOf(source.path).toLowerCase(),
 				)
 			}
@@ -321,6 +439,37 @@ export class ImageStackingStore {
 			db.query('DELETE FROM stack_filter_aliases WHERE project_id = ?').run(projectId)
 			const statement = db.query('INSERT INTO stack_filter_aliases (project_id, filter_key, target_key) VALUES (?, ?, ?)')
 			for (const alias of aliases) statement.run(projectId, alias.filterKey, alias.targetKey)
+			this.#touch(projectId, now)
+		})
+	}
+
+	// Writes what analyses measured of frames, by source id, in one transaction; unknown frames are skipped.
+	setAnalyses(analyses: readonly { readonly sourceId: string; readonly analysis: StackingFrameAnalysis }[]) {
+		if (analyses.length === 0) return
+		this.database.write(() => {
+			const statement = this.database.db.query('UPDATE stack_sources SET analysis = ? WHERE source_id = ?')
+			for (const { sourceId, analysis } of analyses) statement.run(JSON.stringify(analysis), sourceId)
+		})
+	}
+
+	// Writes the outcome of a registration of a project.
+	setProjectAnalysis(projectId: string, analysis: StackingProjectAnalysis) {
+		this.database.write(() => {
+			this.database.db.query('UPDATE stack_projects SET analysis = ? WHERE project_id = ?').run(JSON.stringify(analysis), projectId)
+		})
+	}
+
+	// Lists the calibration decisions of a project.
+	cohorts(projectId: string) {
+		return this.database.db.query<CohortRow, [string]>('SELECT cohort_id, group_key, cohort_key, camera_id, camera_reason, calibration FROM stack_cohorts WHERE project_id = ?').all(projectId).map(rowCohort)
+	}
+
+	// Writes the decision of a cohort and marks its project changed at `now`.
+	putCohort(projectId: string, decision: StackingCohortDecision, now: number) {
+		this.database.write(() => {
+			this.database.db
+				.query('INSERT OR REPLACE INTO stack_cohorts (project_id, cohort_id, group_key, cohort_key, camera_id, camera_reason, calibration) VALUES (?, ?, ?, ?, ?, ?, ?)')
+				.run(projectId, decision.cohortId, decision.groupKey, decision.cohortKey, decision.cameraId ?? null, decision.cameraReason ?? null, decision.calibration === undefined ? null : JSON.stringify(decision.calibration))
 			this.#touch(projectId, now)
 		})
 	}

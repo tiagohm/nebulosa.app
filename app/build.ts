@@ -20,6 +20,7 @@ const DARV_WORKER = join(ROOT, 'api/src/darv.worker.ts')
 const FLATWIZARD_WORKER = join(ROOT, 'api/src/flatwizard.worker.ts')
 const DARKLIBRARY_WORKER = join(ROOT, 'api/src/darklibrarywizard.worker.ts')
 const CALIBRATION_WORKER = join(ROOT, 'api/src/calibrationlibrary.worker.ts')
+const IMAGESTACKING_WORKER = join(ROOT, 'api/src/imagestacking.worker.ts')
 const MOUNTPOINTING_WORKER = join(ROOT, 'api/src/mountpointing.worker.ts')
 const GUIDING_WORKER = join(ROOT, 'api/src/guiding.worker.ts')
 const SOLARECLIPSE_WORKER = join(ROOT, 'api/src/solareclipses.worker.ts')
@@ -48,7 +49,7 @@ function defineString(value?: string) {
 }
 
 await build({
-	entrypoints: [join(import.meta.dir, 'src/main.ts'), IMAGE_WORKER, IMAGE_PROCESSING_WORKER, STAR_WORKER, STAR_PROFILE_WORKER, STREAK_WORKER, DARV_WORKER, FLATWIZARD_WORKER, DARKLIBRARY_WORKER, CALIBRATION_WORKER, GUIDING_WORKER, MOUNTPOINTING_WORKER, SOLARECLIPSE_WORKER],
+	entrypoints: [join(import.meta.dir, 'src/main.ts'), IMAGE_WORKER, IMAGE_PROCESSING_WORKER, STAR_WORKER, STAR_PROFILE_WORKER, STREAK_WORKER, DARV_WORKER, FLATWIZARD_WORKER, DARKLIBRARY_WORKER, CALIBRATION_WORKER, IMAGESTACKING_WORKER, GUIDING_WORKER, MOUNTPOINTING_WORKER, SOLARECLIPSE_WORKER],
 	root: ROOT,
 	// Syntax minification stays off: together with the React Compiler it drops the constants it inlines into the
 	// template literals of components and hooks, so `${MARGIN} ${width}` becomes `${width}` in the executable only.
@@ -67,6 +68,7 @@ await build({
 		'process.env.NEBULOSA_FLATWIZARD_WORKER': embeddedPath(FLATWIZARD_WORKER),
 		'process.env.NEBULOSA_DARKLIBRARY_WORKER': embeddedPath(DARKLIBRARY_WORKER),
 		'process.env.NEBULOSA_CALIBRATION_WORKER': embeddedPath(CALIBRATION_WORKER),
+		'process.env.NEBULOSA_IMAGESTACKING_WORKER': embeddedPath(IMAGESTACKING_WORKER),
 		'process.env.NEBULOSA_GUIDING_WORKER': embeddedPath(GUIDING_WORKER),
 		'process.env.NEBULOSA_MOUNTPOINTING_WORKER': embeddedPath(MOUNTPOINTING_WORKER),
 		'process.env.NEBULOSA_SOLARECLIPSE_WORKER': embeddedPath(SOLARECLIPSE_WORKER),

@@ -896,3 +896,24 @@ describe('resolve preview', () => {
 		expect(other.candidates[0].verdict).toBe('incompatible')
 	})
 })
+
+describe('pins', () => {
+	test('a pinned revision resolves only with its content, and a lease keeps it from deletion', async () => {
+		const { library, masterId } = await published()
+		const master = await library.master(masterId, 1)
+		const pin = { masterId, revision: 1, digest: master.contentDigest }
+		expect((await library.pinnedMaster(pin))?.path).toBe(master.path)
+		expect(await library.pinnedMaster({ ...pin, digest: '0'.repeat(64) })).toBeUndefined()
+
+		const release = library.lease([pin])
+		const other = library.lease([pin])
+		await expect(library.deleteMaster(masterId, 1)).rejects.toThrow('Image Stacking')
+		release()
+		release()
+		await expect(library.deleteMaster(masterId, 1)).rejects.toThrow('Image Stacking')
+		other()
+
+		await library.deleteMaster(masterId, 1)
+		expect(await library.pinnedMaster(pin)).toBeUndefined()
+	})
+})

@@ -1,13 +1,13 @@
 // oxfmt-ignore
-import type { ImageStackingSnapshot, Page, ServerEvent, SourceStatus, StackingFilterGroup, StackingImportCandidate, StackingImportCommit, StackingJobSummary, StackingProjectDetail, StackingRole, StackingSourceDetail, StackingSourcePatch, StackingSourceSummary } from 'api'
+import type { ImageStackingSnapshot, Page, ServerEvent, SourceStatus, StackingCohort, StackingCohortPatch, StackingFilterGroup, StackingFrameSummary, StackingImportCandidate, StackingImportCommit, StackingJobSummary, StackingProjectDetail, StackingRole, StackingSettings, StackingSourceDetail, StackingSourcePatch, StackingValidation } from 'api'
 import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../../http'
 
 // Image Stacking as this tab knows it. The server owns every project, frame, and job, so this store only mirrors them: a
-// snapshot on every socket (re)open and on every change event, jobs as they change, and the project, its groups, and a
-// page of its frames fetched when the view asks. A new epoch means a new server process, whose counters start over; a
+// snapshot on every socket (re)open and on every change event, jobs as they change, and the project, its groups, its
+// cohorts, its validation, and a page of its frames fetched when the view asks. A new epoch means a new server process, whose counters start over; a
 // snapshot older than one applied is dropped, and a response that arrives after a newer request of its kind is ignored.
-// Nothing here decides a role, a filter, or a group: the tool shows what the server answers.
+// Nothing here decides a role, a filter, a group, or a calibration: the tool shows what the server answers.
 
 // Filters of the list of frames of a project.
 export interface StackingFrameFilter {
@@ -31,10 +31,12 @@ export interface ImageStackingRuntime {
 	jobs: Record<string, StackingJobSummary>
 	// Change counter, which a view watches to fetch what it shows again.
 	changes: number
-	// Project shown, its filter groups, and the page of its frames shown.
+	// Project shown, its filter groups, its cohorts, what blocks its stack, and the page of its frames shown.
 	project?: StackingProjectDetail
 	groups?: StackingFilterGroup[]
-	frames?: Page<StackingSourceSummary>
+	cohorts?: StackingCohort[]
+	validation?: StackingValidation
+	frames?: Page<StackingFrameSummary>
 	// Frame shown in detail, with its path.
 	frame?: StackingSourceDetail
 	// Whether a page of frames is on its way.
@@ -59,7 +61,7 @@ const requests: Record<string, number> = {}
 
 // Returns whether a job ended.
 export function jobEnded(job: Pick<StackingJobSummary, 'state'>) {
-	return job.state !== 'scanning'
+	return job.state !== 'scanning' && job.state !== 'analyzing'
 }
 
 // Replaces what a new server process makes meaningless.
@@ -134,25 +136,34 @@ function projectUrl(projectId: string) {
 	return `${BASE_URL}/projects/${encodeURIComponent(projectId)}`
 }
 
-// Fetches a project with its filter groups; absent, or one the server does not know, clears them.
+// Fetches a project with its filter groups, cohorts, and validation; absent, or one the server does not know, clears them.
 export async function loadStackingProject(state: ImageStackingRuntime, projectId: string | undefined, request: typeof fetch = fetch) {
 	if (projectId === undefined) {
-		requests.project = (requests.project ?? 0) + 1
-		requests.groups = (requests.groups ?? 0) + 1
+		for (const key of ['project', 'groups', 'cohorts', 'validation']) requests[key] = (requests[key] ?? 0) + 1
 		state.project = undefined
 		state.groups = undefined
+		state.cohorts = undefined
+		state.validation = undefined
 		return
 	}
 
-	const [project, groups] = await Promise.all([latest('project', fetchJson<StackingProjectDetail>(projectUrl(projectId), request)), latest('groups', fetchJson<StackingFilterGroup[]>(`${projectUrl(projectId)}/groups`, request))])
+	const url = projectUrl(projectId)
+	const [project, groups, cohorts, validation] = await Promise.all([
+		latest('project', fetchJson<StackingProjectDetail>(url, request)),
+		latest('groups', fetchJson<StackingFilterGroup[]>(`${url}/groups`, request)),
+		latest('cohorts', fetchJson<StackingCohort[]>(`${url}/cohorts`, request)),
+		latest('validation', fetchJson<StackingValidation>(`${url}/validation`, request)),
+	])
 	if (project) state.project = project.value
 	if (groups) state.groups = groups.value
+	if (cohorts) state.cohorts = cohorts.value
+	if (validation) state.validation = validation.value
 }
 
 // Fetches a page of frames of a project.
 export async function loadStackingFrames(state: ImageStackingRuntime, projectId: string, filter: StackingFrameFilter, page: number, request: typeof fetch = fetch) {
 	state.loading = true
-	const frames = await latest('frames', fetchJson<Page<StackingSourceSummary>>(`${projectUrl(projectId)}/frames?${framesQuery(filter, page)}`, request))
+	const frames = await latest('frames', fetchJson<Page<StackingFrameSummary>>(`${projectUrl(projectId)}/frames?${framesQuery(filter, page)}`, request))
 	if (!frames) return
 	state.loading = false
 	if (frames.value) state.frames = frames.value
@@ -246,6 +257,26 @@ export function removeStackingFrame(state: ImageStackingRuntime, sourceId: strin
 // Merges the lights of a filter key into the group of another.
 export function mergeStackingFilter(state: ImageStackingRuntime, projectId: string, filterKey: string, targetKey: string, request: typeof fetch = fetch) {
 	return command<StackingFilterGroup[]>(state, `alias:${filterKey}`, `${projectUrl(projectId)}/aliases`, jsonInit('POST', { filterKey, targetKey }), request)
+}
+
+// Records what an operator decides about a cohort: its camera, or its calibration.
+export function updateStackingCohort(state: ImageStackingRuntime, projectId: string, cohortId: string, patch: StackingCohortPatch, request: typeof fetch = fetch) {
+	return command<StackingCohort>(state, `cohort:${cohortId}`, `${projectUrl(projectId)}/cohorts/${encodeURIComponent(cohortId)}`, jsonInit('PATCH', patch), request)
+}
+
+// Replaces the reference pins and quality thresholds of a project.
+export function updateStackingSettings(state: ImageStackingRuntime, projectId: string, settings: StackingSettings, request: typeof fetch = fetch) {
+	return command<StackingProjectDetail>(state, 'settings', `${projectUrl(projectId)}/settings`, jsonInit('PUT', settings), request)
+}
+
+// Starts measuring and registering the frames of a project; its progress arrives as events.
+export function startStackingAnalysis(state: ImageStackingRuntime, projectId: string, request: typeof fetch = fetch) {
+	return command<StackingJobSummary>(state, 'analysis', `${projectUrl(projectId)}/analyses`, jsonInit('POST'), request)
+}
+
+// Cancels an analysis; what it measured stays.
+export function cancelStackingAnalysis(state: ImageStackingRuntime, jobId: string, request: typeof fetch = fetch) {
+	return command(state, `analysis:${jobId}`, `${BASE_URL}/analyses/${encodeURIComponent(jobId)}/cancel`, jsonInit('POST'), request)
 }
 
 // Separates a merged filter key again.

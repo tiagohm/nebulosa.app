@@ -22,14 +22,15 @@ import { PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingFrameNormaliza
 // (`imagestacking.worker.ts`), and the client of that worker. Each frame is read in digital numbers, calibrated with the
 // pinned masters of its cohort, debayered when it is a color mosaic, and resampled once onto the project grid through the
 // transform the server composed from its registration; pixels whose flat is not usable are masked instead of passing
-// uncorrected. Each frame is matched to the reference of its group, which comes first, and combined with its weight:
+// uncorrected. Each frame is matched to the reference of its group, which comes first, on a nearest-neighbour resampling
+// that keeps its noise as it is, and combined with its weight:
 // online methods accumulate in memory, and rejection methods spill every frame to the staging directory and combine it
 // in strips of rows that fit the memory budget. A master is never cropped: pixels covered by too few frames are NaN, and
 // every master of a project shares its grid. Files are only read, and everything written stays in the staging directory
 // of the run until the server publishes it.
 
 // Version of the integration, part of the fingerprint of a product; a change integrates every group again.
-export const INTEGRATION_VERSION = 1
+export const INTEGRATION_VERSION = 2
 
 // Default memory of one integration, in bytes.
 export const DEFAULT_STACK_MEMORY_BUDGET = 2 * 1024 ** 3
@@ -303,24 +304,29 @@ export async function integrateGroup(request: IntegrationWorkerRequest, group: I
 		}
 
 		const rejectionMask = flatMask?.length === image.metadata.pixelCount ? flatMask : undefined
-		warpImage(image, grid, frame.inverse, { interpolationMode: recipe.interpolation, outputRaw: warped, validityMask: valid, rejectionMask })
+		const identity: StackingFrameNormalization = { sourceId: frame.sourceId, scales: new Array<number>(channels).fill(1), offsets: new Array<number>(channels).fill(0) }
+		const normalized = recipe.normalization !== 'none'
+		let matched = identity
 
-		if (index === 0) {
+		// The match to the reference is measured on a nearest-neighbour resampling, which keeps the samples of the frame as
+		// they are: the interpolation of the recipe smooths their noise by an amount that depends on the subpixel phase of
+		// each frame, which the dispersion of a frame dominated by the sky would read as a gain of up to half again.
+		if (normalized) warpImage(image, grid, frame.inverse, { interpolationMode: 'nearest', outputRaw: warped, validityMask: valid, rejectionMask })
+
+		if (index === 0 && normalized) {
 			reference = Float32Array.from(warped)
 
 			for (let pixel = 0; pixel < pixels; pixel++) {
 				if (valid[pixel] !== 0) continue
 				for (let channel = 0; channel < channels; channel++) reference[pixel * channels + channel] = Number.NaN
 			}
-
-			normalization.push({ sourceId: frame.sourceId, scales: new Array<number>(channels).fill(1), offsets: new Array<number>(channels).fill(0) })
-		} else if (recipe.normalization === 'none') {
-			normalization.push({ sourceId: frame.sourceId, scales: new Array<number>(channels).fill(1), offsets: new Array<number>(channels).fill(0) })
-		} else {
-			const { scales, offsets } = broadcastNormalizationPlanes(solveGlobalNormalizationPlanes(warped, valid, reference, channels, width, height, recipe.normalization, 'per-channel'), channels)
-			applyGlobalNormalizationInPlace(warped, valid, channels, scales, offsets)
-			normalization.push({ sourceId: frame.sourceId, scales, offsets })
+		} else if (normalized) {
+			matched = { sourceId: frame.sourceId, ...broadcastNormalizationPlanes(solveGlobalNormalizationPlanes(warped, valid, reference, channels, width, height, recipe.normalization, 'per-channel'), channels) }
 		}
+
+		if (!normalized || recipe.interpolation !== 'nearest') warpImage(image, grid, frame.inverse, { interpolationMode: recipe.interpolation, outputRaw: warped, validityMask: valid, rejectionMask })
+		if (matched !== identity) applyGlobalNormalizationInPlace(warped, valid, channels, matched.scales, matched.offsets)
+		normalization.push(matched)
 
 		if (online) {
 			accumulateSamples(channels, warped, valid, sum, weightSum, coverage, recipe.method, frame.weight)

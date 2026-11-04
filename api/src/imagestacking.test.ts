@@ -11,7 +11,7 @@ import { AppDatabase } from './database'
 import { createImageStackingRoutes, filterGroups, ImageStacking, type ImageStackingEvent, type StackingMasters } from './imagestacking'
 import { type AnalysisMeasurement, type AnalysisWorkerRequest, type FrameAnalyzer, readDigital, registerInThread, StackingAnalyzer } from './imagestacking.analysis'
 import { type FrameCompositor, StackingCompositor } from './imagestacking.composition'
-import { type FrameIntegrator, integrationPlan } from './imagestacking.integration'
+import { type FrameIntegrator, integrateGroup, integrationPlan } from './imagestacking.integration'
 import { cohortKeyOf, filterKeyOf, isWithin, lightRoleOf } from './imagestacking.sources'
 import { COMPOSITE_FILE, ImageStackingStore, PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingComposition, type StackingProduct, type StackingSourceFacts, type StackingStar } from './imagestacking.store'
 
@@ -710,6 +710,45 @@ describe('integration and publication', () => {
 		expect(plan.diskBytes).toBe(1000 * 9576 * 6388 * 13)
 		expect(integrationPlan(100, 100, 1, 10, 'average', 1e6)).toMatchObject({ mode: 'online', diskBytes: 0, fits: true })
 		expect(integrationPlan(100, 100, 1, 10, 'median', 100)).toMatchObject({ stripRows: 0, fits: false })
+	})
+
+	test('a frame resampled at half a pixel matches a reference of the same sky with a unit scale', async () => {
+		const folder = directory('normalization')
+		const size = 64
+		let state = 12345
+
+		// Writes a sky of one level with independent, roughly Gaussian noise drawn from a deterministic generator.
+		async function sky(name: string) {
+			const raw = new Float64Array(size * size)
+
+			for (let i = 0; i < raw.length; i++) {
+				let noise = 0
+				for (let k = 0; k < 4; k++) noise += ((state = (state * 1103515245 + 12345) % 2147483648) / 2147483648 - 0.5) * 0.02
+				raw[i] = 0.1 + noise
+			}
+
+			const path = join(folder, name)
+			const buffer = Buffer.alloc(8 * 2880 + size * size * 2)
+			const sink = bufferSink(buffer)
+			await writeFits(sink, [{ header: { SIMPLE: true, BITPIX: 16, NAXIS: 2, NAXIS1: size, NAXIS2: size, BZERO: 32768, BSCALE: 1 }, raw }], { type: false })
+			writeFileSync(path, buffer.subarray(0, sink.position))
+			const { size: bytes, mtimeMs: mtimeMillis } = statSync(path)
+			return { path, bytes, mtimeMillis, cohortId: 'sky', weight: 1 }
+		}
+
+		const frames = [
+			{ sourceId: 'reference', ...(await sky('reference.fit')), inverse: { a: 1, b: 0, tx: 0, ty: 0, mirrored: false } },
+			{ sourceId: 'shifted', ...(await sky('shifted.fit')), inverse: { a: 1, b: 0, tx: 0.5, ty: 0.5, mirrored: false } },
+		]
+		const group = { key: 'L', frames, header: {}, staging: directory('normalization-staging') }
+		const recipe = { method: 'average', weighting: 'none', normalization: 'background-scale', interpolation: 'bilinear', minimumCoverage: 0.5, sigmaLower: 3, sigmaUpper: 3 } as const
+		const staged = await integrateGroup({ jobId: 'normalization', width: size, height: size, groups: [group], calibrations: {}, recipe, memoryBudget: 1024 ** 3 }, group, () => undefined)
+
+		// Bilinear resampling at half a pixel in both axes halves the noise of the shifted frame; read as a gain, it scaled the
+		// frame by about two.
+		const [scale] = staged.diagnostics.normalization[1].scales
+		expect(scale).toBeGreaterThan(0.9)
+		expect(scale).toBeLessThan(1.1)
 	})
 
 	test('the next start finishes interrupted publications and runs, and sets aside unknown directories', async () => {

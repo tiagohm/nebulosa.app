@@ -100,6 +100,10 @@ export interface ProfileSettings {
 	// Preferences of the status bar; absent until edited, and then DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES and
 	// DEFAULT_STATUS_CHIPS hold.
 	statusBar?: StatusBarPreferences
+	// NORAD catalog numbers (canonical decimal strings) of the artificial satellites marked as favorites, in the order they
+	// were marked, at most SATELLITE_FAVORITES_MAXIMUM; absent until the first one. A refresh of the satellite catalog never
+	// removes one, even when the catalog no longer lists it.
+	satelliteFavorites?: readonly string[]
 	// Preferences of the Close Approaches tool; absent until edited, and then DEFAULT_CLOSE_APPROACH_PREFERENCES holds. Tab
 	// memory, like the results, the selection, and the dates of a search.
 	closeApproaches?: CloseApproachPreferences
@@ -564,6 +568,9 @@ export interface FramingReference {
 
 // Most framings a profile keeps.
 export const FRAMING_REFERENCES_MAXIMUM = 128
+
+// Most artificial satellites a profile keeps as favorites.
+export const SATELLITE_FAVORITES_MAXIMUM = 500
 
 // DARV form of one physical camera: how the next drift alignment measurement moves the mount. The frame is taken
 // with the camera settings of the camera, which this form never holds, and with an exposure derived from the leg

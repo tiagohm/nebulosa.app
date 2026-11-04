@@ -1,12 +1,16 @@
+import { type Constellation, CONSTELLATIONS } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { satelliteLookAngles } from 'nebulosa/src/astronomy/events/satellite'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
+import { AU_KM } from 'nebulosa/src/core/constants'
 import { errorResponse } from './http'
 import { CELESTRAK_GROUPS, celestrakSourceKey } from './satellites.celestrak'
 import { normalizeImport, type RejectedRecord } from './satellites.elements'
 import { type SatelliteElementsRef, type SatelliteEphemeris, type SatelliteEphemerisTable, type SatelliteOrbitSummary, type SatellitePasses, type SatellitePosition, type SatelliteQuality, type SatelliteTrack, SATELLITE_LIMITS } from './satellites.ephemeris'
 import { MANUAL_SOURCE_KEY, type SatelliteElementKind, type SatelliteElementSet, type SatelliteObjectType, type SatelliteSearchPage, type SatelliteSourceState, type SatelliteStore, type SatelliteSummary } from './satellites.store'
 import { SatelliteRefreshError, type SatelliteRefreshErrorCode, type SatelliteSync } from './satellites.sync'
-import { geographic, type SkyObserver } from './sky/ephemeris'
+import { geographic, type SkyObserver, type SkyPosition } from './sky/ephemeris'
+import { SkySatelliteError, type SkySatellites } from './sky/routes'
+import type { SkySearchResult } from './sky/types'
 
 // Artificial Satellites service: the catalog search, the details of an object, the downloads of CelesTrak sources an
 // operator asks for, operator imports, and the predictions (position, passes, ephemeris, and the tracks the Sky map
@@ -410,6 +414,52 @@ export class SatelliteService {
 		if (error instanceof SatelliteError) return error
 		const quality = this.ephemeris.quality(elements, times, object.decayDate, true)
 		return new SatelliteError(`The elements of ${object.name} cannot be propagated to this time: ${error instanceof Error ? error.message : String(error)}`, 422, 'predictionUnreliable', { quality })
+	}
+}
+
+// Names of the SATCAT object types in Sky search results.
+const OBJECT_TYPE_NAMES: Readonly<Record<SatelliteObjectType, string>> = { payload: 'Payload', rocketBody: 'Rocket body', debris: 'Debris', unknown: 'Artificial satellite' }
+
+// Converts a satellite position to the Sky's: the RA/Dec of date and J2000, the refracted altitude the Sky shows, and the
+// distance in AU; no magnitude, illuminated fraction, or elongation.
+function skyPositionOf(position: SatellitePosition): SkyPosition {
+	const code = position.constellation as Constellation
+	return {
+		time: position.time,
+		source: 'local',
+		center: position.center,
+		rightAscension: position.rightAscension,
+		declination: position.declination,
+		rightAscensionJ2000: position.rightAscensionJ2000,
+		declinationJ2000: position.declinationJ2000,
+		azimuth: position.azimuth,
+		altitude: position.apparentAltitude,
+		distance: position.distanceKm / AU_KM,
+		constellation: code,
+		constellationName: CONSTELLATIONS[code]?.name,
+	}
+}
+
+// Satellites of the service as the Sky searches and locates them: search results with their `satellite` reference, and
+// positions in the Sky's form, a failure raised as the Sky's error with its status and code.
+export function satelliteSkyAdapter(service: SatelliteService): SkySatellites {
+	return {
+		search: (text, limit) =>
+			service.search({ text, limit }).items.map((item): SkySearchResult => ({
+				ref: { kind: 'satellite', noradId: item.noradId },
+				name: item.name,
+				designations: item.cosparId ? [`NORAD ${item.noradId}`, item.cosparId] : [`NORAD ${item.noradId}`],
+				category: 'satellite',
+				typeName: OBJECT_TYPE_NAMES[item.objectType ?? 'unknown'],
+			})),
+		position: (noradId, time, observer) => {
+			try {
+				return skyPositionOf(service.position(noradId, { time, observer }).position)
+			} catch (error) {
+				if (error instanceof SatelliteError) throw new SkySatelliteError(error.message, error.status, error.code)
+				throw error
+			}
+		},
 	}
 }
 

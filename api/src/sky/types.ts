@@ -18,9 +18,11 @@ export type SkyObjectRef =
 	| { readonly kind: 'minorBody'; readonly spkId: string; readonly designation: string }
 	// IAU constellation, by its upper-case code such as "ORI", located at its label.
 	| { readonly kind: 'constellation'; readonly code: string }
+	// Artificial satellite of the satellite catalog, by its NORAD catalog number as canonical decimal digits.
+	| { readonly kind: 'satellite'; readonly noradId: string }
 
 // Group an object belongs to in search results and in the inspector.
-export type SkyObjectCategory = 'star' | 'deepSky' | 'solarSystem' | 'minorBody' | 'constellation'
+export type SkyObjectCategory = 'star' | 'deepSky' | 'solarSystem' | 'minorBody' | 'constellation' | 'satellite'
 
 // Object matched by a search.
 export interface SkySearchResult {

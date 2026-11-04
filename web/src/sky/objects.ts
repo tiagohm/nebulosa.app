@@ -12,6 +12,9 @@ const BODY_ID_PREFIX = 'body:'
 // Prefix of the map id of a minor body, followed by its SPK-ID.
 const MINOR_ID_PREFIX = 'minor:'
 
+// Prefix of the map id of an artificial satellite, followed by its NORAD catalog number.
+export const SATELLITE_ID_PREFIX = 'satellite:'
+
 // Kind of the custom map shape marking the mount.
 export const MOUNT_SHAPE_TYPE = 'mount'
 
@@ -58,12 +61,13 @@ export interface MapNames {
 }
 
 // Returns the stable key of a selection reference: "catalog:32263", "body:499", "minor:20000001",
-// "constellation:ORI", or "mount:<connection id>:<device id>".
+// "constellation:ORI", "satellite:25544", or "mount:<connection id>:<device id>".
 export function refKey(ref: SkySelectionRef): string {
 	if (ref.kind === 'mount') return `mount:${ref.connectionId}:${ref.id}`
 	if (ref.kind === 'catalog') return `catalog:${ref.id}`
 	if (ref.kind === 'body') return `${BODY_ID_PREFIX}${ref.code}`
 	if (ref.kind === 'constellation') return `constellation:${ref.code}`
+	if (ref.kind === 'satellite') return `${SATELLITE_ID_PREFIX}${ref.noradId}`
 	return `${MINOR_ID_PREFIX}${ref.spkId}`
 }
 
@@ -85,6 +89,7 @@ export function refOfCelestialObject(object: CelestialObject, names: MapNames): 
 			const id = object.object.id
 			if (id.startsWith(BODY_ID_PREFIX)) return { kind: 'body', code: id.slice(BODY_ID_PREFIX.length) as Extract<SkyObjectRef, { kind: 'body' }>['code'] }
 			if (id.startsWith(MINOR_ID_PREFIX)) return { kind: 'minorBody', spkId: id.slice(MINOR_ID_PREFIX.length), designation: object.object.name ?? id }
+			if (id.startsWith(SATELLITE_ID_PREFIX)) return { kind: 'satellite', noradId: id.slice(SATELLITE_ID_PREFIX.length) }
 			return undefined
 		}
 		case 'constellationLabel': {

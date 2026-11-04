@@ -10,6 +10,8 @@ import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
 	mountRemoteBinding,
+	satelliteFavorites,
+	setSatelliteFavorite,
 	setMountRemoteBinding,
 	acquisitionSettings,
 	activeProfile,
@@ -116,6 +118,7 @@ import {
 	type FramingReference,
 	DEFAULT_ASTRO_WEATHER_PREFERENCES,
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
+	SATELLITE_FAVORITES_MAXIMUM,
 } from './schema'
 
 function dev(id: string) {
@@ -729,5 +732,31 @@ describe('mount remote control bindings', () => {
 		expect(mountRemoteBinding(settings(), { connectionId: 'c', deviceId: 'mount-2' }, 'lx200')).toEqual(DEFAULT_MOUNT_REMOTE_BINDINGS.lx200)
 
 		expect(state.profiles[0].settings.mountRemoteControl).toEqual({ c: { 'mount-1': { lx200: { host: '127.0.0.1', port: 4030 } } } })
+	})
+})
+
+describe('satellite favorites', () => {
+	test('are kept in the order they were marked, without repeats, and long NORAD ids stay strings', () => {
+		const state = load()
+		const settings = () => activeProfile(state).settings
+		expect(satelliteFavorites(settings())).toEqual([])
+
+		setSatelliteFavorite(state, '25544', true)
+		setSatelliteFavorite(state, '800000001', true)
+		setSatelliteFavorite(state, '25544', true)
+		expect(satelliteFavorites(settings())).toEqual(['800000001', '25544'])
+
+		setSatelliteFavorite(state, '800000001', false)
+		setSatelliteFavorite(state, '1', false)
+		expect(settings().satelliteFavorites).toEqual(['25544'])
+	})
+
+	test('keep the most recent ones within the limit', () => {
+		const state = load()
+		for (let i = 0; i <= SATELLITE_FAVORITES_MAXIMUM; i++) setSatelliteFavorite(state, `${i}`, true)
+		const favorites = satelliteFavorites(activeProfile(state).settings)
+		expect(favorites).toHaveLength(SATELLITE_FAVORITES_MAXIMUM)
+		expect(favorites[0]).toBe('1')
+		expect(favorites.at(-1)).toBe(`${SATELLITE_FAVORITES_MAXIMUM}`)
 	})
 })

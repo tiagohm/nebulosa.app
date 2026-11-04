@@ -115,6 +115,7 @@ const PREFERENCES: Readonly<Record<ProfilePreferenceKey, PreferenceField>> = {
 	imageDisplay: setting('imageDisplay'),
 	imageAstrometry: setting('imageAstrometry'),
 	statusBar: setting('statusBar'),
+	satelliteFavorites: setting('satelliteFavorites'),
 }
 
 // Preferences the server keeps, in a fixed order.

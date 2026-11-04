@@ -3,9 +3,9 @@ import { errorResponse } from '../http'
 import { SOLAR_SYSTEM_BODIES, searchSolarSystem } from './bodies'
 import { type ConstellationSource, catalogObject, DEFAULT_DEEP_SKY_MAGNITUDE_LIMIT, renderConstellations, renderDeepSky, renderStars, searchCatalog } from './catalog'
 import { constellationDetails, searchConstellations } from './constellations'
-import { type EphemerisTarget, EphemerisUnavailableError, HorizonsEphemerisError, type PositionRequest, type SkyEphemeris, type SkyPosition } from './ephemeris'
+import { type EphemerisTarget, EphemerisUnavailableError, HorizonsEphemerisError, type PositionRequest, type SkyEphemeris, type SkyObserver, type SkyPosition } from './ephemeris'
 import { type MinorBodies, SbdbUnavailableError } from './minorbodies'
-import type { SkyBodiesRequest, SkyBodyPosition, SkyObjectRef, SkyPositionRequest, SkyPositionResponse } from './types'
+import type { SkyBodiesRequest, SkyBodyPosition, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult } from './types'
 
 // HTTP routes of the sky API under /api/sky, built over the services they need so tests can pass an
 // in-memory catalog and mocked remote services. Search and catalog data are local and never wait on
@@ -21,7 +21,34 @@ export interface SkyServices {
 	readonly ephemeris: SkyEphemeris
 	// Minor body lookups.
 	readonly minorBodies: MinorBodies
+	// Artificial satellites of the satellite catalog; absent when the server has none.
+	readonly satellites?: SkySatellites
 }
+
+// Satellites of the satellite catalog, as the sky routes search and locate them. They have no rise, transit, or set, and
+// no ephemeris target of the Sky, so a mount never locates one.
+export interface SkySatellites {
+	// Satellites whose NORAD id, international designator, or name match a text, at most `limit`, from the local catalog.
+	readonly search: (text: string, limit: number) => readonly SkySearchResult[]
+	// Position of a satellite at an instant (Unix milliseconds) for an observer, or from the Earth's center. Throws
+	// SkySatelliteError.
+	readonly position: (noradId: string, time: number, observer?: SkyObserver) => SkyPosition
+}
+
+// Failure to locate a satellite, answered with its status and code: 404 notFound or noElements, 422 predictionUnreliable.
+export class SkySatelliteError extends Error {
+	// Creates the error.
+	constructor(
+		message: string,
+		readonly status: number,
+		readonly code: string,
+	) {
+		super(message)
+	}
+}
+
+// Most satellites a search lists, after the bodies and constellations and before the catalog.
+const SATELLITE_SEARCH_LIMIT = 5
 
 // Reads the `time` query parameter (Unix milliseconds); the current time when absent.
 function timeParam(params: URLSearchParams) {
@@ -34,6 +61,7 @@ function refKey(ref: SkyObjectRef) {
 	if (ref.kind === 'catalog') return `catalog:${ref.id}`
 	if (ref.kind === 'body') return `body:${ref.code}`
 	if (ref.kind === 'constellation') return `constellation:${ref.code}`
+	if (ref.kind === 'satellite') return `satellite:${ref.noradId}`
 	return `minor:${ref.spkId}`
 }
 
@@ -43,7 +71,8 @@ function refKey(ref: SkyObjectRef) {
 export type SkyLocator = (ref: SkyObjectRef, request: PositionRequest) => Promise<SkyPosition | undefined>
 
 // Resolves an object identity to an ephemeris target; undefined for an unknown catalog id or
-// constellation. A minor body whose elements cannot be read from SBDB is still resolved, for Horizons alone.
+// constellation. A minor body whose elements cannot be read from SBDB is still resolved, for Horizons alone. A satellite
+// has no ephemeris target.
 async function resolveTarget({ catalog, constellations, minorBodies }: SkyServices, ref: SkyObjectRef, signal?: AbortSignal): Promise<EphemerisTarget | undefined> {
 	if (ref.kind === 'catalog') {
 		const object = catalogObject(catalog, ref.id)
@@ -51,6 +80,7 @@ async function resolveTarget({ catalog, constellations, minorBodies }: SkyServic
 	}
 
 	if (ref.kind === 'body') return { type: 'body', code: ref.code }
+	if (ref.kind === 'satellite') return undefined
 
 	if (ref.kind === 'constellation') {
 		const constellation = constellationDetails(constellations, ref.code)
@@ -107,13 +137,14 @@ export function createSkyRoutes(services: SkyServices) {
 			},
 		},
 		'/api/sky/search': {
-			// Local search: solar-system bodies, constellations, then catalog designations and names; `limit` caps the catalog
-			// results.
+			// Local search: solar-system bodies, constellations, satellites of the satellite catalog, then catalog designations
+			// and names; `limit` caps the catalog results.
 			GET: (req: Request) => {
 				const params = new URL(req.url).searchParams
 				const query = params.get('q') ?? ''
 				const limit = params.get('limit')
-				return Response.json([...searchSolarSystem(query), ...searchConstellations(query), ...searchCatalog(catalog, query, limit ? +limit : undefined)])
+				const satellites = query.trim() && services.satellites ? services.satellites.search(query, SATELLITE_SEARCH_LIMIT) : []
+				return Response.json([...searchSolarSystem(query), ...searchConstellations(query), ...satellites, ...searchCatalog(catalog, query, limit ? +limit : undefined)])
 			},
 		},
 		'/api/sky/minorbodies/search': {
@@ -136,9 +167,22 @@ export function createSkyRoutes(services: SkyServices) {
 		},
 		'/api/sky/position': {
 			// Position of an object, with its events for an observer. 404 for an unknown catalog object, 502
-			// when Horizons rejects the target, and 503 when no provider can compute it.
+			// when Horizons rejects the target, and 503 when no provider can compute it. A satellite is located by the satellite catalog,
+			// without events: 404 notFound or noElements, 422 predictionUnreliable.
 			POST: async (req) => {
 				const { target: ref, time, observer, mode } = (await req.json()) as SkyPositionRequest
+
+				if (ref.kind === 'satellite') {
+					if (!services.satellites) return errorResponse('Satellite not found', 404, 'notFound')
+
+					try {
+						return Response.json({ position: services.satellites.position(ref.noradId, time, observer) } satisfies SkyPositionResponse)
+					} catch (error) {
+						if (error instanceof SkySatelliteError) return errorResponse(error.message, error.status, error.code)
+						throw error
+					}
+				}
+
 				const target = await resolveTarget(services, ref, req.signal)
 				if (!target) return errorResponse('Object not found', 404, 'notFound')
 

@@ -57,6 +57,7 @@ import {
 	MAX_NOTIFICATION_IDS,
 	DEFAULT_TARGET_CENTERING_SETTINGS,
 	FRAMING_REFERENCES_MAXIMUM,
+	SATELLITE_FAVORITES_MAXIMUM,
 	type FramingReference,
 	type TargetCenteringSettings,
 } from './schema'
@@ -544,6 +545,19 @@ export function closeApproachPreferences(settings: Pick<ProfileSettings, 'closeA
 export function setCloseApproachPreferences(state: ProfileState, patch: Partial<CloseApproachPreferences>) {
 	const profile = activeProfile(state)
 	profile.settings.closeApproaches = { ...closeApproachPreferences(profile.settings), ...patch }
+}
+
+// Returns the NORAD ids of the favorite satellites of a profile, in the order they were marked.
+export function satelliteFavorites(settings: Pick<ProfileSettings, 'satelliteFavorites'>): readonly string[] {
+	return settings.satelliteFavorites ?? []
+}
+
+// Marks or unmarks a satellite as a favorite of the active profile. A new favorite goes last; beyond
+// SATELLITE_FAVORITES_MAXIMUM the oldest are dropped.
+export function setSatelliteFavorite(state: ProfileState, noradId: string, favorite: boolean) {
+	const profile = activeProfile(state)
+	const others = satelliteFavorites(profile.settings).filter((id) => id !== noradId)
+	profile.settings.satelliteFavorites = favorite ? [...others, noradId].slice(-SATELLITE_FAVORITES_MAXIMUM) : others
 }
 
 // Returns the preferences of the Astro Weather tool of a profile.

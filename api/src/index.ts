@@ -47,11 +47,11 @@ import { createOperationHistoryRoutes, OperationRecorder } from './operationhist
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
-import { createSatelliteRoutes, SatelliteService } from './satellites'
+import { createSatelliteRoutes, SatelliteService, satelliteSkyAdapter } from './satellites'
 import { SatelliteEphemeris } from './satellites.ephemeris'
 import { SatelliteStore } from './satellites.store'
 import { SatelliteSync } from './satellites.sync'
-import { annotationSky, minorBodies, skyLocator, skyRoutes, ssdRequests } from './sky'
+import { annotationSky, createSkyApiRoutes, minorBodies, skyLocator, ssdRequests } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createStarProfileRoutes, StarProfileService } from './starprofile'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
@@ -903,7 +903,7 @@ export const routes = {
 	...createStreakDetectionRoutes(streaks),
 	...createAnnotationRoutes(annotations),
 	...createCaptureFrameRoutes(captureFrames),
-	...skyRoutes,
+	...createSkyApiRoutes(satelliteSkyAdapter(satellites)),
 	...createLunarEclipseRoutes(lunarEclipses),
 	...createSolarEclipseRoutes(solarEclipses),
 	...createCloseApproachRoutes(closeApproaches),

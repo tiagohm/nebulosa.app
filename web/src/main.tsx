@@ -34,6 +34,7 @@ import { activeProfile, activeSetup, profileState, pruneNotificationPreferences 
 import { WorkspaceSync } from './profile/sync'
 import { activeCameraTabEntry, cameraToolsEntry, centeringTargetsEntry, keepViewEntries, sectionsEntry, ViewPersistence } from './profile/view'
 import { WorkspaceGate } from './profile/WorkspaceGate'
+import { handleSatelliteEvent, refreshSatelliteCatalog, satelliteCatalogState } from './satellites/satellites'
 import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
 import { collapsibleSections } from './shell/collapsible'
 import { routeState, watchHistory } from './shell/route'
@@ -93,6 +94,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleCaptureEvent(captureRuntime, event), refresh: () => refreshCaptures(captureRuntime) },
 	{ handle: (event) => handleNudgeEvent(nudgeRuntime, event), refresh: () => refreshNudges(nudgeRuntime) },
 	{ handle: (event) => handleMountRemoteControlEvent(mountRemoteControlState, event), refresh: () => refreshMountRemoteControl(mountRemoteControlState) },
+	{ handle: (event) => handleSatelliteEvent(satelliteCatalogState, event), refresh: () => refreshSatelliteCatalog(satelliteCatalogState) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
 	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },
 	{ handle: (event) => handleMountPointingEvent(mountPointingRuntime, event), refresh: () => refreshMountPointing(mountPointingRuntime) },

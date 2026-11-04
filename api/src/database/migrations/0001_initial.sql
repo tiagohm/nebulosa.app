@@ -573,3 +573,108 @@ CREATE TABLE stack_composite_sources (
 ) STRICT;
 
 CREATE INDEX stack_composite_sources_product ON stack_composite_sources (product_id);
+
+-- Artificial satellites known to the server (SatelliteStore), shared by every profile: the identity of each object
+-- and the CelesTrak SATCAT metadata when it was read. An object without element sets is metadata only. Rows are kept
+-- when an object leaves a group; nothing is deleted by a refresh.
+CREATE TABLE satellite_objects (
+	-- NORAD catalog number as canonical decimal digits without leading zeros, of any length.
+	norad_id TEXT PRIMARY KEY CHECK (norad_id <> '' AND norad_id NOT GLOB '*[^0-9]*' AND (norad_id = '0' OR norad_id NOT GLOB '0*')),
+	-- Name of the object as published.
+	name TEXT NOT NULL,
+	-- Name in lower case without diacritics, for searching.
+	search_name TEXT NOT NULL,
+	-- International designator (COSPAR id) as published, such as 1998-067A; NULL when unknown.
+	cospar_id TEXT,
+	-- SATCAT object type; NULL when not read.
+	object_type TEXT CHECK (object_type IN ('payload', 'rocketBody', 'debris', 'unknown')),
+	-- SATCAT operational status code as published (+, -, P, B, S, X, D, ?); NULL when not read.
+	ops_status TEXT,
+	-- SATCAT owner or source code; NULL when not read.
+	owner TEXT,
+	-- Launch date (YYYY-MM-DD) as published; NULL when not read.
+	launch_date TEXT,
+	-- Decay date (YYYY-MM-DD) as published; NULL when not decayed or not read.
+	decay_date TEXT,
+	-- SATCAT orbit center code, such as EA for the Earth; NULL when not read.
+	orbit_center TEXT,
+	-- SATCAT orbit type code (ORB, LAN, IMP, DOC, R/T); NULL when not read.
+	orbit_type TEXT,
+	-- Published orbital period, in minutes; NULL when not published.
+	period_min REAL,
+	-- Published apogee and perigee heights, in kilometers; NULL when not published.
+	apogee_km REAL,
+	perigee_km REAL,
+	-- Source key of the SATCAT query the metadata came from, and when it was read, Unix milliseconds (UTC); NULL when
+	-- the metadata was never read.
+	metadata_source TEXT,
+	metadata_at INTEGER,
+	-- Element set chosen by an operator for the predictions; NULL to use GP elements, then imported ones.
+	element_source TEXT CHECK (element_source IN ('gp', 'manual'))
+) STRICT;
+
+CREATE INDEX satellite_objects_search_name ON satellite_objects (search_name);
+CREATE INDEX satellite_objects_cospar ON satellite_objects (cospar_id);
+CREATE INDEX satellite_objects_type ON satellite_objects (object_type);
+CREATE INDEX satellite_objects_status ON satellite_objects (ops_status);
+
+-- Mean element sets of each object, one per kind: the GP set of highest epoch among the GP queries that delivered the
+-- object, and the last set an operator imported. A set failing validation is never stored.
+CREATE TABLE satellite_element_sets (
+	norad_id TEXT NOT NULL REFERENCES satellite_objects (norad_id) ON DELETE CASCADE,
+	-- Kind of the set: GP from CelesTrak, or imported by an operator.
+	kind TEXT NOT NULL CHECK (kind IN ('gp', 'manual')),
+	-- Source key of the query or import that delivered the set, such as gp:GROUP:STATIONS.
+	source_key TEXT NOT NULL,
+	-- Epoch of the elements, Unix milliseconds (UTC).
+	epoch INTEGER NOT NULL,
+	-- The elements as a normalized OMM (CCSDS keywords, numeric values in their OMM units).
+	omm TEXT NOT NULL CHECK (json_valid(omm)),
+	-- SHA-256 of the normalized OMM, in lowercase hexadecimal: the identity of the elements in every prediction.
+	digest TEXT NOT NULL,
+	-- When the set was received, Unix milliseconds (UTC).
+	fetched_at INTEGER NOT NULL,
+	PRIMARY KEY (norad_id, kind)
+) STRICT;
+
+CREATE INDEX satellite_element_sets_epoch ON satellite_element_sets (epoch);
+
+-- Membership of objects in the groups of the sources (a CelesTrak group or catalog query, or the imports), replaced by
+-- each successful read of its source. A group is a membership, not a category: an object can be in many.
+CREATE TABLE satellite_memberships (
+	-- Source key of the group.
+	source_key TEXT NOT NULL,
+	norad_id TEXT NOT NULL REFERENCES satellite_objects (norad_id) ON DELETE CASCADE,
+	-- When the source last listed the object, Unix milliseconds (UTC).
+	confirmed_at INTEGER NOT NULL,
+	PRIMARY KEY (source_key, norad_id)
+) STRICT;
+
+CREATE INDEX satellite_memberships_object ON satellite_memberships (norad_id);
+
+-- Downloads of each CelesTrak query (SatelliteSync), kept across restarts so the fair-use intervals and blocks hold.
+CREATE TABLE satellite_sources (
+	-- Source key, such as gp:GROUP:STATIONS or satcat:CATNR:25544.
+	source_key TEXT PRIMARY KEY,
+	-- Dataset read: GP element sets or SATCAT metadata.
+	provider TEXT NOT NULL CHECK (provider IN ('gp', 'satcat')),
+	-- Query parameter and value, such as GROUP=STATIONS.
+	query TEXT NOT NULL,
+	-- When a download was last attempted and last succeeded, Unix milliseconds (UTC); NULL when never.
+	last_attempt_at INTEGER,
+	last_success_at INTEGER,
+	-- Earliest instant of the next download, Unix milliseconds (UTC): the fair-use interval after a success, or the
+	-- block after a failure.
+	next_allowed_at INTEGER NOT NULL,
+	-- Failed downloads since the last success; doubles the block after each.
+	failures INTEGER NOT NULL CHECK (failures >= 0),
+	-- HTTP status of the last failed download; NULL when it had none or the last download succeeded.
+	last_status INTEGER,
+	-- Why the last download failed; NULL when it succeeded.
+	last_error TEXT,
+	-- Objects of the last successful download, and the ones it left out because their elements failed validation.
+	record_count INTEGER,
+	rejected_count INTEGER,
+	-- Revision of the data, increased by every successful download; 0 when never downloaded.
+	revision INTEGER NOT NULL CHECK (revision >= 0)
+) STRICT;

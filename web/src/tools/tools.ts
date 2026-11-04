@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { ToolId } from '../shell/route'
 import type { IconName } from '../ui/Icon'
+import { ArtificialSatellites } from './artificialsatellites/ArtificialSatellitesView'
 import { AstronomicalTimeConverter } from './astronomicaltime/AstronomicalTimeConverter'
 import { AstroWeather } from './astroweather/AstroWeatherView'
 import { Calculator } from './calculator/Calculator'
@@ -43,6 +44,7 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 	'lunar-eclipse-map': { id: 'lunar-eclipse-map', label: 'Lunar Eclipse Map', description: 'Visibility and local circumstances of lunar eclipses.', icon: 'moon', view: LunarEclipseMap },
 	'close-approaches': { id: 'close-approaches', label: 'Close Approaches', description: 'Close encounters of asteroids and comets published by JPL, with the object behind each one.', icon: 'orbit', view: CloseApproaches },
 	'astro-weather': { id: 'astro-weather', label: 'Astro Weather', description: 'Whether a night is worth observing, and when, from free public forecasts and the local Sun and Moon.', icon: 'cloud', view: AstroWeather },
+	'artificial-satellites': { id: 'artificial-satellites', label: 'Artificial Satellites', description: 'Catalog, passes, and ephemerides of artificial satellites from CelesTrak orbital elements.', icon: 'orbit', view: ArtificialSatellites },
 	'calibration-library': { id: 'calibration-library', label: 'Calibration Library', description: 'Indexes calibration frames, explains what can be combined, and builds master darks, biases, dark-flats, and flats.', icon: 'layers', view: CalibrationLibrary },
 	'image-stacking': { id: 'image-stacking', label: 'Image Stacking', description: 'Groups saved light frames by filter, integrates them, and composes color from mono masters.', icon: 'stack', view: ImageStacking },
 	'mount-remote-control': { id: 'mount-remote-control', label: 'Mount Remote Control', description: 'Lets planetarium programs drive the mount over the LX200 and Stellarium protocols.', icon: 'mount', view: MountRemoteControl },

@@ -16,7 +16,7 @@ export const WORKSPACE_IDS = ['images', 'sky', 'tools'] as const
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 
 // Standalone tools of the Tools workspace; also the second path segment of a Tools route.
-export const TOOL_IDS = ['calculator', 'astronomical-time-converter', 'solar-eclipse-map', 'lunar-eclipse-map', 'close-approaches', 'astro-weather', 'calibration-library', 'image-stacking', 'mount-remote-control', 'mount-pointing-model', 'alpaca-server'] as const
+export const TOOL_IDS = ['calculator', 'astronomical-time-converter', 'solar-eclipse-map', 'lunar-eclipse-map', 'close-approaches', 'astro-weather', 'artificial-satellites', 'calibration-library', 'image-stacking', 'mount-remote-control', 'mount-pointing-model', 'alpaca-server'] as const
 
 // Identifier of a standalone tool.
 export type ToolId = (typeof TOOL_IDS)[number]
@@ -38,6 +38,9 @@ export interface ToolsRoute {
 	readonly group?: string
 	// Id of the project Image Stacking shows; absent for its own choice and for every other tool.
 	readonly project?: string
+	// NORAD catalog number of the satellite Artificial Satellites shows; absent for its own choice and for every other
+	// tool.
+	readonly satellite?: string
 }
 
 // View of a device in the Equipment Control page besides its controls: its INDI properties.
@@ -116,7 +119,7 @@ export function settingsSection(route: SettingsRoute): SettingsSectionId {
 
 // Returns the route of a URL path. An unknown workspace gives DEFAULT_ROUTE; an unknown tool opens the Tools
 // catalog; an unknown Settings section opens the first one; extra segments are ignored, but for the eclipse id of the
-// Solar and Lunar Eclipse Maps, the group of the Calibration Library, and the project of Image Stacking.
+// Solar and Lunar Eclipse Maps, the group of the Calibration Library, the project of Image Stacking, and the satellite of Artificial Satellites.
 export function parseRoute(pathname: string): Route {
 	const [workspace = '', first = '', second = ''] = pathname.split('/').filter(Boolean)
 	if (workspace === 'equipment') return first ? (second === 'indi' ? { workspace, device: first, view: second } : { workspace, device: first }) : { workspace }
@@ -131,6 +134,7 @@ export function parseRoute(pathname: string): Route {
 		if (!isToolId(first)) return { workspace }
 		if (first === 'calibration-library' && second) return { workspace, tool: first, group: decodeURIComponent(second) }
 		if (first === 'image-stacking' && second) return { workspace, tool: first, project: decodeURIComponent(second) }
+		if (first === 'artificial-satellites' && second) return { workspace, tool: first, satellite: decodeURIComponent(second) }
 		return ECLIPSE_MAP_TOOLS.has(first) && second ? { workspace, tool: first, eclipse: decodeURIComponent(second) } : { workspace, tool: first }
 	}
 
@@ -141,6 +145,7 @@ export function parseRoute(pathname: string): Route {
 export function routePath(route: Route): string {
 	if (route.workspace === 'tools' && route.tool === 'calibration-library' && route.group) return `/tools/${route.tool}/${encodeURIComponent(route.group)}`
 	if (route.workspace === 'tools' && route.tool === 'image-stacking' && route.project) return `/tools/${route.tool}/${encodeURIComponent(route.project)}`
+	if (route.workspace === 'tools' && route.tool === 'artificial-satellites' && route.satellite) return `/tools/${route.tool}/${encodeURIComponent(route.satellite)}`
 	if (route.workspace === 'tools' && route.tool) return ECLIPSE_MAP_TOOLS.has(route.tool) && route.eclipse ? `/tools/${route.tool}/${encodeURIComponent(route.eclipse)}` : `/tools/${route.tool}`
 	if (route.workspace === 'equipment') return route.device ? `/equipment/${encodeURIComponent(route.device)}${route.view ? `/${route.view}` : ''}` : '/equipment'
 	if (route.workspace === 'settings') {

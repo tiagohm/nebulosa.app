@@ -35,6 +35,10 @@ describe('parse', () => {
 		expect(parseRoute('/tools/image-stacking/p%201')).toEqual({ workspace: 'tools', tool: 'image-stacking', project: 'p 1' })
 		expect(routePath({ workspace: 'tools', tool: 'image-stacking', project: 'p 1' })).toBe('/tools/image-stacking/p%201')
 		expect(parseRoute('/tools/image-stacking')).toEqual({ workspace: 'tools', tool: 'image-stacking' })
+		expect(parseRoute('/tools/artificial-satellites/270001')).toEqual({ workspace: 'tools', tool: 'artificial-satellites', satellite: '270001' })
+		expect(routePath({ workspace: 'tools', tool: 'artificial-satellites', satellite: '800000001' })).toBe('/tools/artificial-satellites/800000001')
+		expect(parseRoute('/tools/artificial-satellites')).toEqual({ workspace: 'tools', tool: 'artificial-satellites' })
+		expect(parseRoute('/tools/close-approaches/25544')).toEqual({ workspace: 'tools', tool: 'close-approaches' })
 		expect(routePath({ workspace: 'tools', tool: 'calculator', project: 'p' })).toBe('/tools/calculator')
 	})
 

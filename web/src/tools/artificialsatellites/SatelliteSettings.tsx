@@ -33,7 +33,7 @@ function GroupRow({ group, now }: GroupRowProps) {
 	const waiting = group.gpAllowedAt > now
 
 	return (
-		<li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line-100 py-2 last:border-b-0">
+		<li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line-100 py-2 pe-1 last:border-b-0">
 			<span className="min-w-0 flex-1 basis-64">
 				<span className="text-ink-100">{group.label}</span>
 				{group.large && <span className="ml-2 text-xs text-warning">large</span>}
@@ -69,7 +69,7 @@ export function SatelliteSettings({ open, onClose }: SatelliteSettingsProps) {
 	const now = Date.now()
 
 	return (
-		<Modal open={open} onClose={onClose} title="Artificial Satellites Settings" className="max-w-[760px]" fit>
+		<Modal open={open} onClose={onClose} title="Settings" className="max-w-[760px]" fit>
 			<div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
 				<h3 className="m-0 text-sm font-semibold text-ink-100">CelesTrak Groups</h3>
 				<Note>

@@ -1,23 +1,24 @@
 import { useSnapshot } from 'valtio'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
+import { formatDeclination, formatRightAscension } from '../../sky/format'
 import { Button } from '../../ui/Button'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Note } from '../eclipse/EclipsePanelParts'
-import { artificialSatellitesState, degrees, downloadEphemerisCsv, ephemerisDraftError, ephemerisRowCount, formatDeclination, formatRightAscension, formatSatelliteTime, loadSatelliteEphemeris, MAX_EPHEMERIS_HOURS, SHADOW_LABELS } from './artificialsatellites'
+import { artificialSatellitesState, degrees, downloadEphemerisCsv, ephemerisDraftError, ephemerisRowCount, formatSatelliteTime, loadSatelliteEphemeris, MAX_EPHEMERIS_HOURS, SHADOW_LABELS } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
 // Ephemeris tab of Artificial Satellites: positions of the satellite selected sampled from now or from the Sky's time,
-// for the place or the Earth's center without one, with an export of the rows received as CSV. Positions are geometric:
+// for the Sky observer or the Earth's center without one, with an export of the rows received as CSV. Positions are geometric:
 // RA/Dec of date (the Sky's frame) and the altitude without refraction.
 
 // Ephemeris tab.
 export function SatelliteEphemeris({ observer }: { readonly observer?: SkyObserverSettings }) {
-	const { ephemerisDraft, ephemeris, ephemerisLoading, ephemerisError, selectedId, details, place } = useSnapshot(artificialSatellitesState)
+	const { ephemerisDraft, ephemeris, ephemerisLoading, ephemerisError, selectedId, details } = useSnapshot(artificialSatellitesState)
 	const draft = artificialSatellitesState.ephemerisDraft
 	const inputError = ephemerisDraftError(ephemerisDraft)
-	const timeZone = place?.source === 'observer' ? (place.timeZone ?? '') : 'UTC'
+	const timeZone = observer?.timeZone ?? ''
 	const name = details?.object.name ?? selectedId ?? 'satellite'
 	const rows = ephemeris?.rows ?? []
 
@@ -54,7 +55,7 @@ export function SatelliteEphemeris({ observer }: { readonly observer?: SkyObserv
 			{ephemeris && !ephemerisLoading && (
 				<div className="flex flex-col gap-2 px-4 py-3">
 					<div className="text-xs text-ink-300">
-						{name} · {place ? 'from the place' : "from the Earth's center"} · times {timeZone || 'of this browser'} · RA/Dec of date, geometric{ephemeris.truncated ? ' · more rows were left out' : ''}
+						{name} · {observer ? 'from the observer' : "from the Earth's center"} · times {timeZone || 'of this browser'} · RA/Dec of date, geometric{ephemeris.truncated ? ' · more rows were left out' : ''}
 					</div>
 					<div className="max-w-md">
 						<QualityRow quality={ephemeris.quality} />

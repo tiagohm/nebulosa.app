@@ -9,8 +9,7 @@ import { Button } from '../../ui/Button'
 import { IconButton } from '../../ui/IconButton'
 import { Popover } from '../../ui/Popover'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { observerPlace } from '../eclipse/eclipse'
-import { artificialSatellitesState, loadSatelliteDetails, loadSatellitePosition, SATELLITE_TAB_LABELS, SATELLITE_TABS, searchSatellites, selectSatellite } from './artificialsatellites'
+import { artificialSatellitesState, followSatelliteObserver, loadSatelliteDetails, loadSatellitePosition, POSITION_REFRESH_MS, SATELLITE_TAB_LABELS, SATELLITE_TABS, searchSatellites, selectSatellite } from './artificialsatellites'
 import { SatelliteCatalog } from './SatelliteCatalog'
 import { SatelliteDetailsPanel } from './SatelliteDetailsPanel'
 import { SatelliteEphemeris } from './SatelliteEphemeris'
@@ -19,9 +18,9 @@ import { SatellitePasses } from './SatellitePasses'
 import { SatelliteSettings } from './SatelliteSettings'
 
 // Artificial Satellites tool: the satellite catalog of the server (search, favorites of the profile), and the passes and
-// ephemeris of the satellite selected for a place. Its workspace actions hold the Import Elements popover and the
-// Settings of the tool, where the CelesTrak groups are downloaded on request or automatically. It commands no
-// device and changes the Sky only through Open in Sky. The details are the contextual panel on wide screens and take the
+// ephemeris of the satellite selected for the Sky observer, with its position now read again every 15 seconds. Its
+// workspace actions hold the Import Elements popover and the Settings of the tool, where the CelesTrak groups are
+// downloaded on request or automatically. It commands no device and changes the Sky only through Open in Sky. The details are the contextual panel on wide screens and take the
 // place of the content below them, as in Close Approaches.
 
 // Artificial Satellites tool.
@@ -38,11 +37,19 @@ export function ArtificialSatellites() {
 	const [importOpen, setImportOpen] = useState(false)
 	const [settingsOpen, setSettingsOpen] = useState(false)
 
-	// Takes the Sky observer as the place until one is chosen, and follows it while it is the place.
+	// Follows the Sky observer, which every prediction is for.
+	useEffect(() => followSatelliteObserver(artificialSatellitesState, observer), [observer?.latitude, observer?.longitude, observer?.elevation])
+
+	// Reads the position now of the satellite selected again every POSITION_REFRESH_MS while the page is shown, when it
+	// has elements to predict with.
 	useEffect(() => {
-		const { place } = artificialSatellitesState
-		if (observer && (!place || place.source === 'observer')) artificialSatellitesState.place = observerPlace(observer)
-	}, [observer?.latitude, observer?.longitude, observer?.elevation, observer?.timeZone])
+		if (!state.selectedId) return undefined
+		const timer = setInterval(() => {
+			if (document.hidden || !artificialSatellitesState.details?.elements) return
+			void loadSatellitePosition(artificialSatellitesState, activeProfile(profileState).settings.sky.observer)
+		}, POSITION_REFRESH_MS)
+		return () => clearInterval(timer)
+	}, [state.selectedId])
 
 	// Searches once, and again after every change of the catalog.
 	useEffect(() => void searchSatellites(artificialSatellitesState, favorites, artificialSatellitesState.offset), [revision])

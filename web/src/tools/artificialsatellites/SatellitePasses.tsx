@@ -11,10 +11,10 @@ import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { Note } from '../eclipse/EclipsePanelParts'
-import { artificialSatellitesState, degrees, formatSatelliteTime, loadSatellitePasses, MAX_PASS_DAYS, SHADOW_LABELS, showSatelliteInSky, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
+import { artificialSatellitesState, degrees, formatSatelliteTime, loadSatellitePasses, MAX_PASS_DAYS, openSkyObserver, SHADOW_LABELS, showSatelliteInSky, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
-// Passes tab of Artificial Satellites: the passes of the satellite selected above a minimum altitude over the place, in
+// Passes tab of Artificial Satellites: the passes of the satellite selected above a minimum altitude over the Sky observer, in
 // a window from now or from the Sky's time, each with the parts in which it can be seen (sunlit while the Sun is below
 // the twilight limit). A pass cut by the window says so instead of showing a rise or a set, and the culmination is the
 // highest point, not a meridian transit. The profile of the pass selected is drawn as altitude against time.
@@ -32,7 +32,7 @@ const TWILIGHTS = Object.keys(TWILIGHT_LIMITS) as TwilightLimit[]
 
 // Search form of the passes.
 function PassForm({ observer }: { readonly observer?: SkyObserverSettings }) {
-	const { passDraft, passesLoading, place, selectedId } = useSnapshot(artificialSatellitesState)
+	const { passDraft, passesLoading, selectedId } = useSnapshot(artificialSatellitesState)
 	const draft = artificialSatellitesState.passDraft
 
 	return (
@@ -50,7 +50,7 @@ function PassForm({ observer }: { readonly observer?: SkyObserverSettings }) {
 			<span className="flex h-9.5 items-center">
 				<Checkbox label="Daylight passes too" checked={passDraft.showAll} onChange={(value) => (draft.showAll = value)} />
 			</span>
-			<Button type="submit" className="ml-auto" disabled={passesLoading || !selectedId || !place} title={!selectedId ? 'Select a satellite in the catalog.' : !place ? 'Choose a place in the panel.' : undefined}>
+			<Button type="submit" className="ml-auto" disabled={passesLoading || !selectedId || !observer} title={!selectedId ? 'Select a satellite in the catalog.' : !observer ? 'Set the observer location in the Sky.' : undefined}>
 				Find Passes
 			</Button>
 		</form>
@@ -165,8 +165,8 @@ function PassRow({ pass, index, position, count, timeZone }: PassRowProps) {
 
 // Passes tab.
 export function SatellitePasses({ observer }: { readonly observer?: SkyObserverSettings }) {
-	const { passes, passesLoading, passesError, selectedPass, selectedId, details, place, passDraft } = useSnapshot(artificialSatellitesState)
-	const timeZone = place?.source === 'observer' ? (place.timeZone ?? '') : 'UTC'
+	const { passes, passesLoading, passesError, selectedPass, selectedId, details, passDraft } = useSnapshot(artificialSatellitesState)
+	const timeZone = observer?.timeZone ?? ''
 	const list = (passes?.passes ?? []).filter((pass) => passDraft.showAll || pass.visible.length > 0)
 	const shown = selectedPass === undefined ? undefined : passes?.passes[selectedPass]
 	const name = details?.object.name ?? selectedId ?? ''
@@ -175,7 +175,7 @@ export function SatellitePasses({ observer }: { readonly observer?: SkyObserverS
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto">
 			<PassForm observer={observer} />
 			{!selectedId && <EmptyState title="No satellite selected" description="Select a satellite in the catalog." />}
-			{selectedId && !place && <EmptyState title="No place" description="Choose a place in the panel, or set the Sky observer." />}
+			{selectedId && !observer && <EmptyState title="No observer" description="Passes are predicted for the observer of the Sky." action={<Button onClick={() => openSkyObserver()}>Set Observer</Button>} />}
 			{passesError && <EmptyState title="No passes could be predicted" description={passesError} />}
 			{passesLoading && <EmptyState title="Predicting passes" />}
 			{passes && !passesLoading && (
@@ -220,7 +220,7 @@ export function SatellitePasses({ observer }: { readonly observer?: SkyObserverS
 									View in Sky at the Highest Point
 								</Button>
 							</div>
-							<Note>Altitudes are geometric, without refraction; the curve joins the rise, the highest point, and the set. Visible parts are sunlit while the Sun is below the twilight limit at the place; whether the satellite is bright enough is not known.</Note>
+							<Note>Altitudes are geometric, without refraction; the curve joins the rise, the highest point, and the set. Visible parts are sunlit while the Sun is below the twilight limit at the observer; whether the satellite is bright enough is not known.</Note>
 						</div>
 					)}
 				</div>

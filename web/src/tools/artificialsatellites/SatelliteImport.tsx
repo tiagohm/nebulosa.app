@@ -13,8 +13,9 @@ export function SatelliteImport() {
 	const { importText, importing, importResult, importError } = useSnapshot(artificialSatellitesState)
 
 	return (
-		<div className="flex w-66 max-w-full flex-col gap-2">
-			<textarea className={cn(inputClassName, 'h-40 resize-y py-2 font-mono text-xs')} placeholder={'OMM JSON, or TLE sets:\nISS (ZARYA)\n1 25544U 98067A …\n2 25544  51.6415 …'} value={importText} onChange={(event) => (artificialSatellitesState.importText = event.target.value)} />
+		<div className="flex w-90 max-w-full flex-col gap-2">
+			<span className="m-0 text-xs leading-4 text-ink-200">OMM JSON, or TLE sets:</span>
+			<textarea className={cn(inputClassName, 'h-40 resize-y py-2 font-mono text-xs')} placeholder={'ISS (ZARYA)\n1 25544U 98067A …\n2 25544  51.6415 …'} value={importText} onChange={(event) => (artificialSatellitesState.importText = event.target.value)} />
 			<Button className="self-start" disabled={importing || !importText.trim()} onClick={() => void importSatelliteElements(artificialSatellitesState)}>
 				Import
 			</Button>

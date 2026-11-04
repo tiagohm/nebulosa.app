@@ -1,23 +1,26 @@
-import type { SatelliteDetails, SatelliteEphemerisResponse, SatelliteEphemerisRow, SatelliteImportResponse, SatellitePassesResponse, SatellitePosition, SatellitePositionResponse, SatelliteSearchPage, SkyObserver } from 'api'
+import type { SatelliteDetails, SatelliteEphemerisResponse, SatelliteEphemerisRow, SatelliteImportResponse, SatellitePassesResponse, SatellitePosition, SatellitePositionResponse, SatelliteSearchPage } from 'api'
 import { proxy } from 'valtio'
 import { fetchJson, jsonInit } from '../../http'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { navigate, type RouteState, routeState } from '../../shell/route'
-import { setSkyTime, type SkyClock, skyClock, skyTime } from '../../sky/clock'
+import { setSkyTime, SKY_REALTIME_TICK_MS, type SkyClock, skyClock, skyTime } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
-import { browserSkyIo, selectSkyObject, type SkyIo, type SkyState, skyState } from '../../sky/sky'
-import type { EclipsePlace } from '../eclipse/eclipse'
+import { apiObserver, browserSkyIo, selectSkyObject, type SkyIo, type SkyState, skyState } from '../../sky/sky'
 
 // State of the Artificial Satellites tool, tab-lived and never persisted: the catalog search, the satellite selected
-// with its details and position, the place and window of its passes and ephemeris, and an import being typed. The
-// catalog, its downloads, and every prediction are the server's; each kind of answer has a request guard of its own, so
-// an old answer never replaces a newer one, and nothing repeats by itself. Times are Unix milliseconds (UTC), angles
-// radians until they are formatted, and the place geodetic degrees. The profile's favorites and the Sky change only
+// with its details and position, the windows of its passes and ephemeris, and an import being typed. Every prediction
+// is for the Sky observer of the active profile, or the Earth's center without one. The catalog, its downloads, and
+// every prediction are the server's; each kind of answer has a request guard of its own, so an old answer never replaces
+// a newer one, and only the position now repeats by itself (POSITION_REFRESH_MS). Times are Unix milliseconds (UTC), and
+// angles radians until they are formatted. The profile's favorites and the Sky change only
 // through explicit actions.
 
 // Milliseconds per hour and per day.
 const HOUR_MS = 3_600_000
 const DAY_MS = 86_400_000
+
+// Interval between two readings of the position now, in milliseconds: the real-time tick of the Sky.
+export const POSITION_REFRESH_MS = SKY_REALTIME_TICK_MS
 
 // Rows of a page of the catalog.
 export const CATALOG_PAGE_SIZE = 50
@@ -98,8 +101,9 @@ export interface ArtificialSatellitesState {
 	detailsError?: string
 	position?: SatellitePositionResponse
 	positionError?: string
-	// Place of the predictions; absent until one is chosen or the Sky observer applies.
-	place?: EclipsePlace
+	// Latitude, longitude, and elevation of the observer the predictions shown were made for; empty for the Earth's
+	// center, absent before the first observer was seen.
+	observerKey?: string
 	// Pass search being edited, the latest answer, and its state.
 	passDraft: PassDraft
 	passes?: SatellitePassesResponse
@@ -170,13 +174,6 @@ function aborted(error: unknown) {
 	return error instanceof DOMException && error.name === 'AbortError'
 }
 
-// Observer of the API for a place, at sea level since a place typed in has no elevation; the Sky observer keeps its own.
-export function placeObserver(place: EclipsePlace | undefined, observer: SkyObserverSettings | undefined): SkyObserver | undefined {
-	if (!place) return undefined
-	if (place.source === 'observer' && observer) return { latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation }
-	return { latitude: place.latitude, longitude: place.longitude, elevation: 0 }
-}
-
 // Searches the catalog with the text, group, and favorites of the state, from `offset`. Favorites only with no favorite
 // answers an empty page without asking.
 export async function searchSatellites(state: ArtificialSatellitesState, favorites: readonly string[], offset = 0, io: ArtificialSatellitesIo = browserIo) {
@@ -208,7 +205,7 @@ export async function searchSatellites(state: ArtificialSatellitesState, favorit
 	state.searching = false
 }
 
-// Selects a satellite: reads its details and its position now for the place. Another satellite drops the passes and the
+// Selects a satellite: reads its details and its position now for the observer. Another satellite drops the passes and the
 // ephemeris of the previous one at once, so they are never shown as the new one's.
 export async function selectSatellite(state: ArtificialSatellitesState, noradId: string, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
 	if (state.selectedId !== noradId) {
@@ -245,7 +242,7 @@ export async function loadSatelliteDetails(state: ArtificialSatellitesState, io:
 	}
 }
 
-// Reads the position of the satellite selected at the real current time, for the place or the Earth's center.
+// Reads the position of the satellite selected at the real current time, for the observer or the Earth's center.
 export async function loadSatellitePosition(state: ArtificialSatellitesState, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
 	const noradId = state.selectedId
 	if (!noradId) return
@@ -253,7 +250,7 @@ export async function loadSatellitePosition(state: ArtificialSatellitesState, ob
 	state.positionError = undefined
 
 	try {
-		const position = await fetchJson<SatellitePositionResponse>(io, `/api/satellites/${encodeURIComponent(noradId)}/position`, jsonInit('POST', { time: io.now(), observer: placeObserver(state.place, observer) }, request.signal))
+		const position = await fetchJson<SatellitePositionResponse>(io, `/api/satellites/${encodeURIComponent(noradId)}/position`, jsonInit('POST', { time: io.now(), observer: apiObserver(observer) }, request.signal))
 		if (!request.current()) return
 		state.position = position
 	} catch (error) {
@@ -263,10 +260,15 @@ export async function loadSatellitePosition(state: ArtificialSatellitesState, ob
 	}
 }
 
-// Changes the place of the predictions: the position is read again, and the passes and ephemeris of another place are
-// dropped at once.
-export function selectSatellitePlace(state: ArtificialSatellitesState, place: EclipsePlace, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
-	state.place = place
+// Follows the Sky observer: when it differs from the one the predictions shown were made for, the position is read
+// again, and the passes and ephemeris of the previous observer are dropped at once. The first observer seen is only
+// recorded.
+export function followSatelliteObserver(state: ArtificialSatellitesState, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
+	const key = observer ? `${observer.latitude},${observer.longitude},${observer.elevation}` : ''
+	if (state.observerKey === key) return
+	const first = state.observerKey === undefined
+	state.observerKey = key
+	if (first) return
 	state.passes = undefined
 	state.selectedPass = undefined
 	state.ephemeris = undefined
@@ -280,9 +282,9 @@ function windowStart(start: SatelliteWindowStart, io: ArtificialSatellitesIo) {
 	return start === 'now' ? io.now() : io.skyTime()
 }
 
-// Searches the passes of the satellite selected over the place, with the draft. Needs a place.
+// Searches the passes of the satellite selected over the observer, with the draft. Needs an observer.
 export async function loadSatellitePasses(state: ArtificialSatellitesState, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
-	const site = placeObserver(state.place, observer)
+	const site = apiObserver(observer)
 	if (!state.selectedId || !site) return
 	const request = passesGuard.begin()
 	const { start, days, minAltitude, twilight } = state.passDraft
@@ -318,13 +320,13 @@ export function ephemerisDraftError(draft: EphemerisDraft) {
 	return undefined
 }
 
-// Computes the ephemeris of the satellite selected with the draft, for the place or the Earth's center.
+// Computes the ephemeris of the satellite selected with the draft, for the observer or the Earth's center.
 export async function loadSatelliteEphemeris(state: ArtificialSatellitesState, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
 	if (!state.selectedId || ephemerisDraftError(state.ephemerisDraft)) return
 	const request = ephemerisGuard.begin()
 	const { start, hours, stepSeconds } = state.ephemerisDraft
 	const from = windowStart(start, io)
-	const body = { start: from, end: from + hours * HOUR_MS, step: stepSeconds * 1000, observer: placeObserver(state.place, observer) }
+	const body = { start: from, end: from + hours * HOUR_MS, step: stepSeconds * 1000, observer: apiObserver(observer) }
 	state.ephemerisLoading = true
 	state.ephemerisError = undefined
 
@@ -398,6 +400,12 @@ export function showSatelliteInSky(noradId: string, name: string, observer: SkyO
 	navigate(handoff.route, { workspace: 'sky' }, handoff.history)
 }
 
+// Opens the Observer panel of the Sky, where the observer of every prediction of the tool is set.
+export function openSkyObserver(sky: SkyState = skyState, route: RouteState = routeState) {
+	sky.panel = 'observer'
+	navigate(route, { workspace: 'sky' })
+}
+
 // Opens the tool on a satellite: /tools/artificial-satellites/<noradId>.
 export function openArtificialSatellites(noradId: string, route: RouteState = routeState, history: Pick<History, 'pushState'> = window.history) {
 	navigate(route, { workspace: 'tools', tool: 'artificial-satellites', satellite: noradId }, history)
@@ -414,25 +422,6 @@ export function formatSatelliteTime(time: number, timeZone: string) {
 // Formats an angle in radians as degrees with a number of decimals.
 export function degrees(radians: number, decimals = 2) {
 	return `${((radians * 180) / Math.PI).toFixed(decimals)}°`
-}
-
-// Formats a right ascension in radians as hours, minutes, and seconds.
-export function formatRightAscension(radians: number) {
-	const hours = ((((radians * 12) / Math.PI) % 24) + 24) % 24
-	const h = Math.floor(hours)
-	const m = Math.floor((hours - h) * 60)
-	const s = ((hours - h) * 60 - m) * 60
-	return `${h}h ${`${m}`.padStart(2, '0')}m ${s.toFixed(1).padStart(4, '0')}s`
-}
-
-// Formats a declination in radians as degrees, minutes, and seconds.
-export function formatDeclination(radians: number) {
-	const sign = radians < 0 ? '−' : '+'
-	const value = Math.abs((radians * 180) / Math.PI)
-	const d = Math.floor(value)
-	const m = Math.floor((value - d) * 60)
-	const s = ((value - d) * 60 - m) * 60
-	return `${sign}${d}° ${`${m}`.padStart(2, '0')}′ ${s.toFixed(0).padStart(2, '0')}″`
 }
 
 // Formats an age in days, with its sign: elements older than the instant are a positive age.
@@ -461,7 +450,7 @@ const CSV_COLUMNS: readonly (readonly [string, (row: SatelliteEphemerisRow, time
 ]
 
 // Returns the rows of an ephemeris as CSV text (RFC 4180, comma-separated, CRLF lines), with a header. RA/Dec of date
-// are geometric topocentric (or geocentric without a place) on the true equator and equinox; J2000 is ICRS.
+// are geometric topocentric (or geocentric without an observer) on the true equator and equinox; J2000 is ICRS.
 export function ephemerisCsv(rows: readonly SatelliteEphemerisRow[], timeZone: string) {
 	const lines = [CSV_COLUMNS.map(([name]) => name).join(',')]
 	for (const row of rows) lines.push(CSV_COLUMNS.map(([, value]) => value(row, timeZone)).join(','))

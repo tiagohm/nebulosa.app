@@ -4,7 +4,7 @@ import { proxy } from 'valtio'
 import type { RouteState } from '../../shell/route'
 import type { SkyClock } from '../../sky/clock'
 import type { SkyState } from '../../sky/sky'
-import { type ArtificialSatellitesIo, type ArtificialSatellitesState, ephemerisCsv, ephemerisDraftError, initialArtificialSatellitesState, loadSatellitePasses, placeObserver, type SatelliteSkyHandoff, searchSatellites, selectSatellite, showSatelliteInSky } from './artificialsatellites'
+import { type ArtificialSatellitesIo, type ArtificialSatellitesState, ephemerisCsv, ephemerisDraftError, followSatelliteObserver, initialArtificialSatellitesState, loadSatellitePasses, type SatelliteSkyHandoff, searchSatellites, selectSatellite, showSatelliteInSky } from './artificialsatellites'
 
 const NOW = Date.UTC(2026, 10, 4, 12)
 const OBSERVER = { latitude: -23.5, longitude: -46.6, elevation: 760, timeZone: 'America/Sao_Paulo' }
@@ -61,7 +61,6 @@ test('an older search never replaces a newer one, and favorites are searched by 
 test('selecting another satellite drops the predictions of the previous one at once', async () => {
 	const tool = state()
 	const { io, calls } = deferredIo()
-	tool.place = { source: 'observer', latitude: OBSERVER.latitude, longitude: OBSERVER.longitude, timeZone: OBSERVER.timeZone }
 	tool.selectedId = '25544'
 	tool.passes = { passes: [], truncated: false } as never
 	tool.selectedPass = 0
@@ -81,12 +80,11 @@ test('a pass search sends its window and limits in radians, from the time chosen
 	const tool = state()
 	const { io, calls } = deferredIo()
 	tool.selectedId = '25544'
-	tool.place = { source: 'manual', latitude: 10, longitude: 20 }
 	tool.passDraft = { start: 'sky', days: 30, minAltitude: 10, twilight: 'nautical', showAll: true }
 	const search = loadSatellitePasses(tool, OBSERVER, io)
 	expect(calls[0].url).toBe('/api/satellites/25544/passes')
 	const body = calls[0].body as { observer: unknown; start: number; end: number; minAltitude: number; maxSunAltitude: number }
-	expect(body.observer).toEqual({ latitude: 10, longitude: 20, elevation: 0 })
+	expect(body.observer).toEqual({ latitude: -23.5, longitude: -46.6, elevation: 760 })
 	expect(body.start).toBe(NOW + 3_600_000)
 	expect(body.end - body.start).toBe(7 * 86_400_000)
 	expect(body.minAltitude).toBeCloseTo((10 * Math.PI) / 180, 12)
@@ -95,11 +93,28 @@ test('a pass search sends its window and limits in radians, from the time chosen
 	await search
 	expect(tool.selectedPass).toBe(0)
 
-	// Without a place nothing is asked.
-	tool.place = undefined
+	// Without an observer nothing is asked.
 	await loadSatellitePasses(tool, undefined, io)
 	expect(calls).toHaveLength(1)
-	expect(placeObserver(undefined, OBSERVER)).toBeUndefined()
+})
+
+test('another Sky observer drops the passes and the ephemeris and reads the position again', () => {
+	const tool = state()
+	const { io, calls } = deferredIo()
+	tool.selectedId = '25544'
+	tool.passes = { passes: [], truncated: false } as never
+	tool.selectedPass = 0
+
+	// The first observer seen, and the same one again, change nothing.
+	followSatelliteObserver(tool, OBSERVER, io)
+	followSatelliteObserver(tool, { ...OBSERVER }, io)
+	expect(tool.passes).toBeDefined()
+	expect(calls).toHaveLength(0)
+
+	followSatelliteObserver(tool, undefined, io)
+	expect(tool).toMatchObject({ passes: undefined, selectedPass: undefined, ephemeris: undefined, observerKey: '' })
+	expect(calls.map((call) => call.url)).toEqual(['/api/satellites/25544/position'])
+	expect(calls[0].body).toEqual({ time: NOW })
 })
 
 test('an ephemeris draft is checked before it is sent', () => {

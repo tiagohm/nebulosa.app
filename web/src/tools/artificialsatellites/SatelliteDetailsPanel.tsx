@@ -3,14 +3,15 @@ import { useSnapshot } from 'valtio'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { formatDeclination, formatRightAscension } from '../../sky/format'
 import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { LocationSection, Note } from '../eclipse/EclipsePanelParts'
-import { artificialSatellitesState, degrees, formatDeclination, formatElementAge, formatRightAscension, formatSatelliteTime, loadSatellitePosition, selectSatellitePlace, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
+import { Note } from '../eclipse/EclipsePanelParts'
+import { artificialSatellitesState, degrees, formatElementAge, formatSatelliteTime, openSkyObserver, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 
-// Contextual panel of Artificial Satellites: the satellite selected, its position now for the place, its orbit, and where
-// its elements come from. Every value is the server's; an absent one is left out, never shown as 0. Positions are
+// Contextual panel of Artificial Satellites: the satellite selected, its position now for the Sky observer (read again
+// every POSITION_REFRESH_MS), its orbit, and where its elements come from. Every value is the server's; an absent one is left out, never shown as 0. Positions are
 // geometric; the RA/Dec of date are those the Sky draws, J2000 is ICRS.
 
 // Names of the SATCAT object types.
@@ -40,7 +41,7 @@ export function QualityRow({ quality }: { readonly quality: SatelliteQuality }) 
 
 // Panel of the satellite selected.
 export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObserverSettings }) {
-	const { selectedId, details, detailsError, position, positionError, place } = useSnapshot(artificialSatellitesState)
+	const { selectedId, details, detailsError, position, positionError } = useSnapshot(artificialSatellitesState)
 	const profiles = useSnapshot(profileState)
 	const favorite = !!selectedId && satelliteFavorites(activeProfile(profiles).settings).includes(selectedId)
 	if (!selectedId) return null
@@ -50,7 +51,7 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 	const elements = details?.elements
 	const p = position?.position
 	const name = object?.name ?? selectedId
-	const timeZone = place?.source === 'observer' ? (place.timeZone ?? '') : 'UTC'
+	const timeZone = observer?.timeZone ?? ''
 
 	return (
 		<div className="flex flex-col">
@@ -88,7 +89,7 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 					{p && position && (
 						<DataList>
 							<DataRow label="Time">{formatSatelliteTime(p.time, timeZone)}</DataRow>
-							<DataRow label="Seen from">{p.center === 'topocentric' ? 'The place' : "The Earth's center"}</DataRow>
+							<DataRow label="Seen from">{p.center === 'topocentric' ? 'The observer' : "The Earth's center"}</DataRow>
 							{p.altitude !== undefined && <DataRow label="Altitude">{`${degrees(p.altitude)} (${p.altitude > 0 ? 'above' : 'below'} the horizon)`}</DataRow>}
 							{p.azimuth !== undefined && <DataRow label="Azimuth">{degrees(p.azimuth)}</DataRow>}
 							<DataRow label="RA (of date)">{formatRightAscension(p.rightAscension)}</DataRow>
@@ -102,9 +103,12 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 							<QualityRow quality={position.quality} />
 						</DataList>
 					)}
-					<Button variant="ghost" className="self-start" onClick={() => void loadSatellitePosition(artificialSatellitesState, observer)}>
-						Update
-					</Button>
+					<Note>{observer ? 'Read every 15 seconds for the observer of the Sky.' : "Read every 15 seconds from the Earth's center: set the observer location in the Sky to see the altitude and the passes."}</Note>
+					{!observer && (
+						<Button variant="ghost" className="self-start" onClick={() => openSkyObserver()}>
+							Set Observer
+						</Button>
+					)}
 				</CollapsibleSection>
 			)}
 
@@ -155,8 +159,6 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 					)}
 				</CollapsibleSection>
 			)}
-
-			<LocationSection place={place} observer={observer} onSelect={(next) => selectSatellitePlace(artificialSatellitesState, next, observer)} />
 		</div>
 	)
 }

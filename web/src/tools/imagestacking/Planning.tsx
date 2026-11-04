@@ -50,7 +50,16 @@ function CohortCard({ projectId, cohort }: { readonly projectId: string; readonl
 		void updateStackingCohort(imageStackingRuntime, projectId, cohort.cohortId, { calibration: next })
 	}
 
-	const calibrated = (calibration.dark || calibration.bias) && calibration.flat ? { tone: 'success' as const, label: 'Calibrated' } : calibration.dark || calibration.bias || calibration.flat ? { tone: 'warning' as const, label: 'Partially Calibrated' } : { tone: 'muted' as const, label: 'Not Calibrated' }
+	// A flat divides what is left once the pedestal is removed, so a flat alone cannot be stacked.
+	const flatWithoutPedestal = calibration.flat !== undefined && !calibration.dark && !calibration.bias
+	const calibrated =
+		(calibration.dark || calibration.bias) && calibration.flat
+			? { tone: 'success' as const, label: 'Calibrated' }
+			: flatWithoutPedestal
+				? { tone: 'danger' as const, label: 'Needs a Dark or Bias' }
+				: calibration.dark || calibration.bias
+					? { tone: 'warning' as const, label: 'Partially Calibrated' }
+					: { tone: 'muted' as const, label: 'Not Calibrated' }
 	const settings = [
 		`${target.width}×${target.height}×${target.channels}`,
 		target.cfa,
@@ -91,6 +100,7 @@ function CohortCard({ projectId, cohort }: { readonly projectId: string; readonl
 					)
 				})}
 			</div>
+			{flatWithoutPedestal && <Notice error>A flat needs a dark or a bias: divided by the flat, the pedestal of the lights would imprint its dust and vignetting inverted.</Notice>}
 			{errors[key] && <Notice error>{errors[key]}</Notice>}
 		</div>
 	)

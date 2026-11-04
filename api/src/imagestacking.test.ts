@@ -461,6 +461,11 @@ describe('calibration and registration planning', () => {
 			['blocker', 'analysisStale', 'OIII'],
 		])
 		expect([samples, memoryBytes]).toEqual([WIDTH * HEIGHT, WIDTH * HEIGHT * 26])
+
+		// A flat alone would divide the pedestal of the lights, so it blocks the stack instead of being a partial calibration.
+		await stacking.updateCohort(projectId, oiii.cohortId, { calibration: { flat: FLAT_PIN } })
+		const flatOnly = (await stacking.validate(projectId)).findings.filter((finding) => finding.groupKey === 'OIII' && finding.code !== 'analysisStale')
+		expect(flatOnly.map(({ severity, code }) => [severity, code])).toEqual([['blocker', 'flatWithoutPedestal']])
 	})
 
 	test('an analysis measures stale frames with leased masters, registers every group, and resumes', async () => {

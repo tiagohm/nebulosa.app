@@ -181,7 +181,7 @@ export interface StackingCohortPatch {
 export type StackingFindingSeverity = 'blocker' | 'review' | 'warning'
 
 // Stable code of a finding.
-export type StackingFindingCode = 'noLights' | 'multipleTargets' | 'multipleSetups' | 'partialCalibration' | 'masterUnavailable' | 'masterIncompatible' | 'analysisStale' | 'measurementFailed' | 'registrationFailed' | 'belowThresholds'
+export type StackingFindingCode = 'noLights' | 'multipleTargets' | 'multipleSetups' | 'partialCalibration' | 'flatWithoutPedestal' | 'masterUnavailable' | 'masterIncompatible' | 'analysisStale' | 'measurementFailed' | 'registrationFailed' | 'belowThresholds'
 
 // One thing validation found.
 export interface StackingFinding {
@@ -1665,7 +1665,12 @@ export class ImageStacking {
 			const where = { groupKey: cohort.groupKey, cohortId: cohort.cohortId }
 			const label = `${cohort.groupKey} frames${cohort.target.exposure === undefined ? '' : ` of ${cohort.target.exposure} s`}`
 			if (!cohort.calibration?.flat) findings.push({ severity: 'warning', code: 'partialCalibration', ...where, message: `The ${label} have no flat; vignetting and dust stay in the stack` })
-			if (!cohort.calibration?.dark && !cohort.calibration?.bias) findings.push({ severity: 'warning', code: 'partialCalibration', ...where, message: `The ${label} have no dark or bias; their pedestal stays in the stack` })
+			// A flat divides what is left once the pedestal is removed: dividing a pedestal by it imprints its dust and
+			// vignetting inverted, so a flat without a dark or a bias blocks the stack instead of being a partial calibration.
+			if (!cohort.calibration?.dark && !cohort.calibration?.bias) {
+				if (cohort.calibration?.flat) findings.push({ severity: 'blocker', code: 'flatWithoutPedestal', ...where, message: `The ${label} have a flat but no dark or bias; their pedestal divided by the flat would imprint its dust and vignetting inverted, so choose a dark or a bias` })
+				else findings.push({ severity: 'warning', code: 'partialCalibration', ...where, message: `The ${label} have no dark or bias; their pedestal stays in the stack` })
+			}
 
 			for (const [kind, pin] of pinsOf(cohort.calibration)) {
 				if (!(await this.masters.pinnedMaster(pin))) findings.push({ severity: 'blocker', code: 'masterUnavailable', ...where, message: `The ${kind} chosen for the ${label} is no longer available; choose another` })

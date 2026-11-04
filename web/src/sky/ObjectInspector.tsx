@@ -11,6 +11,7 @@ import { Note, ObserverSection, PositionSection } from './InspectorParts'
 import { MoonInspector } from './moon/MoonInspector'
 import { MountInspector } from './MountInspector'
 import { ObjectActions } from './ObjectActions'
+import { SatelliteInspector } from './satellite/SatelliteInspector'
 import { type SkySelection, skyState } from './sky'
 import { SunInspector } from './sun/SunInspector'
 
@@ -50,6 +51,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 
 	if (selection.ref.kind === 'mount') return <MountInspector mountRef={selection.ref} observer={observer} onShowFraming={onShowFraming} />
 	if (selection.ref.kind === 'body' && selection.ref.code === '10') return <SunInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} onShowFraming={onShowFraming} />
+	if (selection.ref.kind === 'satellite') return <SatelliteInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} />
 	if (selection.ref.kind === 'body' && selection.ref.code === '301') return <MoonInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} onShowFraming={onShowFraming} />
 
 	const hasObserver = !!observer

@@ -24,7 +24,7 @@ const REMOTE_MIN_LENGTH = 2
 const MAX_CANDIDATES = 8
 
 // Section of the result list.
-type SearchSection = 'Solar System' | 'Stars' | 'Deep Sky Objects' | 'Asteroids & Comets'
+type SearchSection = 'Solar System' | 'Artificial Satellites' | 'Stars' | 'Deep Sky Objects' | 'Asteroids & Comets'
 
 // Selectable entry of the result list: an object, or an SBDB candidate to search again.
 type SearchItem = { readonly kind: 'result'; readonly section: SearchSection; readonly result: SkySearchResult; readonly minorBody?: MinorBody } | { readonly kind: 'refine'; readonly section: SearchSection; readonly designation: string; readonly name: string }
@@ -36,11 +36,12 @@ type RemoteState = { readonly status: 'idle' | 'loading' } | { readonly status: 
 function sectionOf(result: SkySearchResult): SearchSection {
 	if (result.category === 'star') return 'Stars'
 	if (result.category === 'deepSky') return 'Deep Sky Objects'
+	if (result.category === 'satellite') return 'Artificial Satellites'
 	return 'Solar System'
 }
 
 // Order of the sections in the list.
-const SECTIONS: readonly SearchSection[] = ['Solar System', 'Stars', 'Deep Sky Objects', 'Asteroids & Comets']
+const SECTIONS: readonly SearchSection[] = ['Solar System', 'Artificial Satellites', 'Stars', 'Deep Sky Objects', 'Asteroids & Comets']
 
 // Builds the selectable entries of the list, in section order.
 function buildItems(local: readonly SkySearchResult[], remote: RemoteState): SearchItem[] {

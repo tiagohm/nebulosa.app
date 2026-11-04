@@ -81,6 +81,7 @@ export const DEFAULT_THEME: ThemeOptions = {
 		planetColor: RED,
 		asteroidColor: BROWN,
 		cometColor: LIME,
+		satelliteColor: CYAN,
 		labelColor: LIGHT_GREEN,
 	},
 	selectedObject: {

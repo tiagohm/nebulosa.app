@@ -3,10 +3,12 @@ import type { ResolvedReferenceLinesOptions } from './celestial/celestial'
 // What the star map shows: the layers the map really has that a user may turn on and off, and the
 // faintest stars drawn. Preferences are kept in the profile and applied to the map in place, so changing
 // them never recreates the map, reloads its data, or moves its view. Every moving body (Sun, Moon,
-// planets, asteroids, and comets) shares one layer of the map, so they are shown or hidden together.
+// planets, asteroids, and comets) shares one layer of the map, so they are shown or hidden together. The favorite
+// artificial satellites are a layer of their own, off by default, drawn on that map layer; the selected satellite is drawn
+// whatever it says.
 
 // Layer of the star map a user can show or hide.
-export type SkyLayerId = 'stars' | 'starLabels' | 'deepSky' | 'movingBodies' | 'constellations' | 'constellationBoundaries' | 'constellationLabels' | 'grid' | 'celestialEquator' | 'ecliptic' | 'localMeridian'
+export type SkyLayerId = 'stars' | 'starLabels' | 'deepSky' | 'movingBodies' | 'satellites' | 'constellations' | 'constellationBoundaries' | 'constellationLabels' | 'grid' | 'celestialEquator' | 'ecliptic' | 'localMeridian'
 
 // Display preferences of the star map.
 export interface SkyDisplaySettings {
@@ -41,12 +43,16 @@ export interface SkyDisplayTarget {
 	readonly setMagnitudeLimit: (limit: number) => void
 }
 
+// Layer of the favorite artificial satellites, drawn by the satellite layer of the map rather than a layer of Celestial.
+export const SATELLITES_LAYER: SkyLayerDefinition = { id: 'satellites', label: 'Favorite artificial satellites', visible: false }
+
 // Layers in display order, with their defaults (the map's look before preferences existed).
 export const SKY_LAYERS: readonly SkyLayerDefinition[] = [
 	{ id: 'stars', label: 'Stars', visible: true },
 	{ id: 'starLabels', label: 'Star names', visible: true },
 	{ id: 'deepSky', label: 'Deep-sky objects', visible: true },
 	{ id: 'movingBodies', label: 'Solar system, asteroids & comets', visible: true },
+	SATELLITES_LAYER,
 	{ id: 'constellations', label: 'Constellation lines', visible: true },
 	{ id: 'constellationBoundaries', label: 'Constellation boundaries', visible: false },
 	{ id: 'constellationLabels', label: 'Constellation names', visible: true },
@@ -55,6 +61,9 @@ export const SKY_LAYERS: readonly SkyLayerDefinition[] = [
 	{ id: 'ecliptic', label: 'Ecliptic', visible: true },
 	{ id: 'localMeridian', label: 'Local meridian', visible: true, localOnly: true },
 ]
+
+// Most satellites drawn at once, the selected one first: the most the server samples in one request.
+export const SATELLITE_TRACKS_LIMIT = 50
 
 // Faintest star magnitude downloaded for the map, and so the faintest that can be drawn; fainter stars
 // are still found by search.
@@ -82,6 +91,9 @@ export function applySkyDisplay(target: SkyDisplayTarget, display: Readonly<SkyD
 			case 'ecliptic':
 			case 'localMeridian':
 				target.setReferenceLineVisible(layer.id, visible)
+				break
+			case 'satellites':
+				// Applied through the satellites the map is given to draw.
 				break
 			default:
 				target.setLayerVisible(layer.id, visible)

@@ -11,6 +11,8 @@ import { type FramePoint, framePolygon, isFraming, type OpticalConfiguration, re
 import { type MountPoint, mountRuntime } from './mount'
 import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, type SkySelectionRef } from './objects'
 import { isRememberable, type RememberedObject, RememberedObjects, type RememberedShapeData, REMEMBERED_SHAPE_TYPE, rememberedOf, rememberedShapeId } from './remembered'
+import { skySatelliteState } from './satellite/satellite'
+import { SatelliteLayer, type SatelliteTargets } from './satellites.sky'
 import { createRequestGuard } from './selection'
 import { apiObserver, browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, type SkySelection, selectSkyObject, skyState } from './sky'
 
@@ -288,6 +290,7 @@ function categoryOf(object: CelestialObject, objectRef: SkySelectionRef): SkyObj
 	if (object.type === 'star') return 'star'
 	if (object.type === 'deepSky') return 'deepSky'
 	if (objectRef.kind === 'constellation') return 'constellation'
+	if (objectRef.kind === 'satellite') return 'satellite'
 	return objectRef.kind === 'body' ? 'solarSystem' : 'minorBody'
 }
 
@@ -343,6 +346,8 @@ export class Planetarium {
 	#settleTimer?: Timer
 	// Stops following the simulation clock; set while attached.
 	#unsubscribeClock?: VoidFunction
+	// Artificial satellites drawn on the map.
+	readonly #satellites: SatelliteLayer
 	#destroyed = false
 
 	// Creates the map of a kind of chart for an observer and starts loading its data.
@@ -351,6 +356,7 @@ export class Planetarium {
 		this.#host = document.createElement('div')
 		this.#host.className = 'absolute inset-0 touch-none overflow-hidden select-none'
 		this.celestial = new Celestial(this.#host, mapOptions(coordinateSystem))
+		this.#satellites = new SatelliteLayer(this.celestial, { time: () => this.time, rate: () => (skyClock.mode === 'fixed' ? 0 : skyClock.mode === 'playing' ? skyClock.rate : 1), centerOn: (point) => this.centerOn(point) })
 		this.setObserver(observer)
 
 		for (const [code, type, name] of BODY_TYPES) {
@@ -363,7 +369,14 @@ export class Planetarium {
 
 		this.#shownTime = this.time
 		this.celestial.setTime(this.#shownTime)
-		this.#unsubscribe = [this.celestial.on('selectionChange', ({ object }) => this.#handleClick(object)), this.celestial.on('updateEnd', ({ time }) => this.#updateEnded(time)), this.celestial.on('panStart', () => (mountRuntime.following = false))]
+		this.#unsubscribe = [
+			this.celestial.on('selectionChange', ({ object }) => this.#handleClick(object)),
+			this.celestial.on('updateEnd', ({ time }) => this.#updateEnded(time)),
+			this.celestial.on('panStart', () => {
+				mountRuntime.following = false
+				skySatelliteState.tracking = false
+			}),
+		]
 		this.load()
 	}
 
@@ -388,6 +401,7 @@ export class Planetarium {
 		this.#resizeObserver.observe(container)
 		this.#unsubscribeClock = subscribe(skyClock, () => this.#followClock())
 		this.#followClock()
+		this.#satellites.start()
 	}
 
 	// Removes the map from the page and stops following the clock; the map keeps its state.
@@ -396,6 +410,7 @@ export class Planetarium {
 		this.#resizeObserver = undefined
 		this.#unsubscribeClock?.()
 		this.#unsubscribeClock = undefined
+		this.#satellites.stop()
 		this.#stopClock()
 		this.#host.remove()
 	}
@@ -409,8 +424,15 @@ export class Planetarium {
 		this.#bodiesGuard.cancel()
 		this.#minorGuard.cancel()
 		this.#locateGuard.cancel()
+		this.#satellites.destroy()
 		this.#loadGuard.cancel()
 		this.celestial.destroy()
+	}
+
+	// Sets the artificial satellites drawn: the selected one and those the display shows, with whether the view follows
+	// the selected one and draws its track.
+	setSatellites(targets: SatelliteTargets) {
+		this.#satellites.set(targets)
 	}
 
 	// Loads the map data for the instant shown (downloaded once per tab and epoch), or retries after a

@@ -144,6 +144,7 @@ const MOVING_BODY_TYPE_NAMES: Readonly<Record<MovingBodyType, string>> = {
 	neptune: 'Planet',
 	asteroid: 'Minor Body',
 	comet: 'Comet',
+	satellite: 'Artificial Satellite',
 }
 
 // Returns the hover label of a picked object; undefined for objects without one (custom shapes other than

@@ -3,12 +3,14 @@ import { type ReactNode, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { imagesState } from '../images/images'
-import { activeProfile, profileState, setSkyTimeBarVisible } from '../profile/profile'
+import { activeProfile, profileState, satelliteFavorites, setSkyTimeBarVisible } from '../profile/profile'
+import { satelliteCatalogState } from '../satellites/satellites'
 import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import type { CoordinateSystem } from './celestial/celestial'
 import { skyClock } from './clock'
+import { isSkyLayerVisible, SATELLITE_TRACKS_LIMIT, SATELLITES_LAYER } from './display'
 import { DisplayPanel } from './DisplayPanel'
 import { clearImageFootprint, clearSkyCoordinate, skyImageState, toggleImageFootprint } from './footprint'
 import { equipmentOptics } from './framing'
@@ -18,6 +20,7 @@ import { mountPoint, mountRuntime, mountView, selectionPoint } from './mount'
 import { ObjectInspector } from './ObjectInspector'
 import { ObserverPanel } from './ObserverPanel'
 import { observerKey, planetarium, planetariumState } from './planetarium'
+import { skySatelliteState } from './satellite/satellite'
 import { liveSensors, sensorRuntime } from './sensors'
 import { changeSkyObserver, type SkyPanelView, selectSkyObject, skyState } from './sky'
 import { SkySearch } from './SkySearch'
@@ -70,6 +73,18 @@ export function SkyWorkspace() {
 	useEffect(() => {
 		map.applyDisplay(display)
 	}, [map, display])
+
+	// Draws the selected satellite, and the profile's favorites while the display shows them, following the catalog.
+	const favorites = satelliteFavorites(activeProfile(profiles).settings)
+	const showFavorites = isSkyLayerVisible(display, SATELLITES_LAYER)
+	const selectedSatellite = sky.selection?.ref.kind === 'satellite' ? sky.selection.ref.noradId : undefined
+	const { revision } = useSnapshot(satelliteCatalogState)
+	const { tracking, trail } = useSnapshot(skySatelliteState)
+	const satelliteIds = [...new Set([...(selectedSatellite ? [selectedSatellite] : []), ...(showFavorites ? favorites : [])])].slice(0, SATELLITE_TRACKS_LIMIT).join(',')
+
+	useEffect(() => {
+		map.setSatellites({ ids: satelliteIds ? satelliteIds.split(',') : [], selected: selectedSatellite, observer: activeProfile(profileState).settings.sky.observer, revision, tracking: tracking && !!selectedSatellite, trail })
+	}, [map, satelliteIds, selectedSatellite, key, revision, tracking, trail])
 
 	// Draws the field of view of the selected preset, or of the Equipment Setup, around the selection,
 	// following its position.

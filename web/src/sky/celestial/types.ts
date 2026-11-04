@@ -110,9 +110,9 @@ export interface DeepSkyObject extends EquatorialCoordinate {
 export type SolarSystemBody = 'sun' | 'moon' | 'mercury' | 'venus' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune'
 
 // Kind of moving body, which selects its symbol and color.
-export type MovingBodyType = SolarSystemBody | 'asteroid' | 'comet'
+export type MovingBodyType = SolarSystemBody | 'asteroid' | 'comet' | 'satellite'
 
-// Planet, asteroid, or comet with a caller-maintained position.
+// Planet, asteroid, comet, or artificial satellite with a caller-maintained position.
 export interface MovingBody {
 	// Unique identifier used to add, replace, and remove the body.
 	readonly id: string
@@ -215,6 +215,8 @@ export interface ThemeOptions {
 		asteroidColor: string
 		// Comet symbol color.
 		cometColor: string
+		// Artificial satellite symbol color.
+		satelliteColor: string
 		// Label color.
 		labelColor: string
 	}

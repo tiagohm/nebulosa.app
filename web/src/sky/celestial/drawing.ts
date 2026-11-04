@@ -337,8 +337,18 @@ export function drawDsoSymbol(ctx: CanvasRenderingContext2D, type: DeepSkyObject
 	}
 }
 
-// Draws a moving body symbol: a tailed circle for comets and a filled disc otherwise.
+// Draws a moving body symbol: a tailed circle for comets, a square with two solar panels for artificial satellites, and a
+// filled disc otherwise.
 export function drawMovingBodySymbol(ctx: CanvasRenderingContext2D, type: MovingBodyType, x: number, y: number) {
+	if (type === 'satellite') {
+		ctx.fillRect(x - 2.5, y - 2.5, 5, 5)
+		ctx.beginPath()
+		ctx.moveTo(x - 7, y)
+		ctx.lineTo(x + 7, y)
+		ctx.stroke()
+		return
+	}
+
 	if (type === 'comet') {
 		ctx.beginPath()
 		ctx.moveTo(x - 6, y + 3)
@@ -359,6 +369,7 @@ export function drawMovingBodySymbol(ctx: CanvasRenderingContext2D, type: Moving
 export function movingBodyColor(object: MovingBody, state: RenderState) {
 	if (object.type === 'comet') return state.theme.movingBodies.cometColor
 	if (object.type === 'asteroid') return state.theme.movingBodies.asteroidColor
+	if (object.type === 'satellite') return state.theme.movingBodies.satelliteColor
 	return state.theme.movingBodies.planetColor
 }
 

@@ -385,6 +385,7 @@ function Progress({ session, pending }: ProgressProps) {
 				))}
 				{running && remaining > 0 && <DataRow label="Exposure Left">{`at least ${darkLibraryWizardDuration(remaining)}`}</DataRow>}
 			</DataList>
+			<hr className="text-ink-300 border-dashed" />
 			<DataList>
 				{session.groups.map((group) => (
 					<GroupProgress key={group.groupId} group={group} />

@@ -164,7 +164,7 @@ interface OperationItemProps {
 // Icon, name, and progress of a running operation, followed by its Abort when it can be interrupted.
 export function OperationItem({ operation: { id, icon, label, detail, title, abortable }, online }: OperationItemProps) {
 	return (
-		<span title={online ? title : `Server offline: last known operation · ${title}`} className={cn('flex flex-none items-center gap-1', online ? 'text-accent' : 'text-ink-300')}>
+		<span title={online ? title : `Server offline: last known operation · ${title}`} className={cn('flex flex-none items-center gap-2', online ? 'text-accent' : 'text-ink-300')}>
 			<Icon name={icon} className="size-3.5 text-ink-300" />
 			{label}
 			{detail && <span className="tabular-nums">{detail}</span>}

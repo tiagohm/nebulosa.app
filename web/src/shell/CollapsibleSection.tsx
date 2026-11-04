@@ -33,7 +33,7 @@ export function CollapsibleSection({ id, title, summary, defaultOpen = true, chi
 				<h3 className="m-0 flex-none text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h3>
 				{!open && summary && <span className="ml-auto min-w-0 truncate text-xs text-ink-200">{summary}</span>}
 			</summary>
-			<div className="mt-2 flex flex-col gap-1 text-sm leading-5 text-ink-200">{children}</div>
+			<div className="mt-2 flex flex-col gap-2 text-sm leading-5 text-ink-200">{children}</div>
 		</details>
 	)
 }

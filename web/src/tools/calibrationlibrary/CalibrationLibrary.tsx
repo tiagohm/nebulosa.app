@@ -457,7 +457,7 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 			{validation !== undefined && validation.spillBytes > 0 && <Notice>{`Needs about ${bytesText(validation.spillBytes)} of temporary disk.`}</Notice>}
 			{errors[key] && <Notice error>{errors[key]}</Notice>}
 			{failure && !building && <Notice error>{`The last build failed: ${failure}`}</Notice>}
-			<Button className="mt-2" disabled={building || requesting || !validation?.valid} title={reason} onClick={() => void buildMaster(calibrationLibraryRuntime, key, request())}>
+			<Button disabled={building || requesting || !validation?.valid} title={reason} onClick={() => void buildMaster(calibrationLibraryRuntime, key, request())}>
 				{(building || requesting) && <span className="size-3.5 flex-none animate-spin rounded-full border-2 border-current border-t-transparent" />}
 				{building ? (job.state === 'queued' ? 'Queued' : `Building ${Math.round(jobFraction(job) * 100)}%`) : requesting ? 'Building' : 'Build Master'}
 			</Button>

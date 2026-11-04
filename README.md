@@ -31,3 +31,32 @@ Workspaces:
 - `app`: Bundles `api` and `web` into a single server and executable
 
 See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for the capability inventory, workspace responsibilities, and shared contracts.
+
+## Production
+
+After the setup above, build the standalone executable. It bundles the server, the web UI, the workers, and the catalogs into a single file for the platform it is built on: `.dist/nebulosa.exe` on Windows and `.dist/nebulosa` elsewhere.
+
+```sh
+bun compile
+```
+
+Run it and open the address it prints (`http://localhost:7000` by default):
+
+```sh
+./.dist/nebulosa
+./.dist/nebulosa --host 0.0.0.0 --port 8080
+```
+
+To run from source instead, without compiling, use `bun start`, which takes the same options (`bun start --port 8080`).
+
+| Option / variable     | Default      | Description                                                                                                       |
+| --------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `--host` / `APP_HOST` | `localhost`  | Host or IP address the server listens on; `0.0.0.0` accepts every network interface                               |
+| `--port` / `APP_PORT` | `7000`       | TCP port the server listens on                                                                                    |
+| `NEBULOSA_HOME`       | `~/Nebulosa` | Data directory: the database (`nebulosa.sqlite`), captures, calibration frames and masters, and stacking projects |
+
+The command-line options win over the environment variables. The executable also reads a `.env` file from the directory it is started in, and `APP_HOST` and `APP_PORT` present when it was compiled become its defaults.
+
+- Only one server can use a data directory at a time; give a second server its own `NEBULOSA_HOME`.
+- Stop it with Ctrl+C (or `SIGTERM` from a service manager): the device operations still running are stopped and the database is closed before it exits.
+- There is no authentication: any client that can reach the server can command the devices and browse the server's files. Keep it on `localhost`, or on a network you trust.

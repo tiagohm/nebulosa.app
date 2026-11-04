@@ -298,14 +298,18 @@ export interface CalibrationTarget {
 	readonly exposure?: number
 	// Sensor temperature, in degrees Celsius.
 	readonly temperature?: number
+	// Lowest and highest temperatures of the frames the target stands for, in degrees Celsius: a camera whose temperature
+	// drifts or oscillates took them over that range. Absent, the target is its temperature alone.
+	readonly temperatureRange?: readonly [minimum: number, maximum: number]
 	// Filter in the beam.
 	readonly filter?: string
 }
 
 // Returns whether a master can calibrate a target, from metadata alone: every property both sides know must agree, and
 // what either side does not know never refuses a master, since the operator chooses among those listed. There is no
-// closest match. A dark must be within the temperature spread limit of the target, a flat must share its filter, and a
-// bias ignores exposure and temperature.
+// closest match. A dark must be within the temperature spread limit of the temperatures of the target (of their range when
+// its frames vary, since a dark inside it differs from them no more than they differ from each other), a flat must share
+// its filter, and a bias ignores exposure and temperature.
 export function matchesTarget(kind: CalibrationKind, master: CalibrationMetadata, target: CalibrationTarget) {
 	function agrees(ours: string | number | undefined, theirs: string | number | undefined) {
 		return ours === undefined || theirs === undefined || ours === theirs
@@ -318,7 +322,8 @@ export function matchesTarget(kind: CalibrationKind, master: CalibrationMetadata
 	if (kind === 'dark') {
 		if (!agrees(master.exposure.value, target.exposure === undefined ? undefined : Math.round(target.exposure * 1000000))) return false
 		const temperature = master.setTemperature.value ?? master.sensorTemperature.value
-		if (temperature !== undefined && target.temperature !== undefined && Math.abs(temperature - target.temperature) > TEMPERATURE_SPREAD_LIMIT) return false
+		const range = target.temperatureRange ?? (target.temperature === undefined ? undefined : [target.temperature, target.temperature])
+		if (temperature !== undefined && range !== undefined && (temperature < range[0] - TEMPERATURE_SPREAD_LIMIT || temperature > range[1] + TEMPERATURE_SPREAD_LIMIT)) return false
 	}
 
 	return kind !== 'flat' || agrees(master.filter.value, target.filter)

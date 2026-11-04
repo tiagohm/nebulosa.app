@@ -121,6 +121,15 @@ describe('matching', () => {
 		expect(matchesTarget('dark', metadata(), { ...target, width: 999 })).toBe(false)
 	})
 
+	test('a dark matches anywhere within the temperatures of lights that vary, widened by the spread limit', () => {
+		// Lights of a camera oscillating between 19 and 20.4 °C, with a median of 19.7 °C.
+		const warm = { ...target, temperature: 19.7, temperatureRange: [19, 20.4] as const }
+		expect(matchesTarget('dark', metadata({ setTemperature: unknown, sensorTemperature: verified(18.2) }), warm)).toBe(true)
+		expect(matchesTarget('dark', metadata({ setTemperature: unknown, sensorTemperature: verified(21.3) }), warm)).toBe(true)
+		expect(matchesTarget('dark', metadata({ setTemperature: unknown, sensorTemperature: verified(17.9) }), warm)).toBe(false)
+		expect(matchesTarget('dark', metadata({ setTemperature: unknown, sensorTemperature: verified(18.2) }), { ...warm, temperatureRange: undefined })).toBe(false)
+	})
+
 	test('what either side does not know never refuses a master', () => {
 		expect(matchesTarget('dark', metadata({ gain: unknown }), target)).toBe(true)
 		expect(matchesTarget('dark', metadata(), { width: 1000, height: 700, channels: 1 })).toBe(true)

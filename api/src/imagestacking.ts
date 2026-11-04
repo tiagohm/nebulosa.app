@@ -517,7 +517,7 @@ function cohortTarget(sources: readonly StackingSource[]): CalibrationTarget {
 		...(metadata.offset.value !== undefined && { offset: metadata.offset.value }),
 		...(metadata.readoutMode.value !== undefined && { readoutMode: metadata.readoutMode.value }),
 		...(exposure !== undefined && { exposure: exposure / 1000000 }),
-		...(temperatures.length > 0 && { temperature: medianOf(temperatures) }),
+		...(temperatures.length > 0 && { temperature: medianOf(temperatures), temperatureRange: [temperatures[0], temperatures.at(-1) ?? temperatures[0]] }),
 		...(filter !== undefined && { filter }),
 	}
 }

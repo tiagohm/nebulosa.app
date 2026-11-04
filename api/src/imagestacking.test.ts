@@ -373,7 +373,7 @@ describe('image stacking projects', () => {
 
 		await stacking.removeFrame(ids['b.fit'])
 		expect((await stacking.project(project.projectId)).frames).toBe(2)
-		expect(readdirSync(folder)).toEqual(['a.fit', 'c.fit'])
+		expect(readdirSync(folder)).toContainAllValues(['a.fit', 'c.fit'])
 		expect(readFileSync(kept).length).toBeGreaterThan(0)
 	})
 

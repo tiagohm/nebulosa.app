@@ -73,21 +73,25 @@ export function ImageStacking() {
 	const qualityKey = groups.some((item) => item.key === qualityGroup) ? qualityGroup : groups[0]?.key
 	const listed: StackingFrameFilter = { group: group.all ? undefined : group.key, role: role === 'all' ? undefined : role, status: status === 'all' ? undefined : status, included: inclusion === 'all' ? undefined : inclusion === 'included', search: search || undefined }
 	const filter: StackingFrameFilter = section === 'quality' ? { group: qualityKey, role: 'light', included: true } : listed
+	// Frames the running analysis of the project has measured: each measurement is saved as it arrives but announced only
+	// as job progress, so the frames shown are fetched again as it grows.
+	let measured = 0
+	for (const job of Object.values(runtime.jobs)) if (job.type === 'analysis' && job.projectId === projectId && !jobEnded(job)) measured = job.measured ?? 0
 
 	// Fetches the project and its groups, again whenever the server reports a change.
 	useEffect(() => {
 		void loadStackingProject(imageStackingRuntime, projectId)
 	}, [projectId, runtime.changes])
 
-	// Fetches the page of frames shown, again whenever the server reports a change.
+	// Fetches the page of frames shown, again whenever the server reports a change or the analysis measures a frame.
 	useEffect(() => {
 		if (projectId !== undefined && (section === 'frames' || (section === 'quality' && qualityKey !== undefined))) void loadStackingFrames(imageStackingRuntime, projectId, filter, page)
-	}, [projectId, section, group, role, status, inclusion, search, qualityKey, page, runtime.changes])
+	}, [projectId, section, group, role, status, inclusion, search, qualityKey, page, runtime.changes, measured])
 
-	// Fetches the frame of the panel, again whenever the server reports a change.
+	// Fetches the frame of the panel, again whenever the server reports a change or the analysis measures a frame.
 	useEffect(() => {
 		void loadStackingFrame(imageStackingRuntime, selected)
-	}, [selected, runtime.changes])
+	}, [selected, runtime.changes, measured])
 
 	// Shows a project, forgetting the frame and filters of the previous one.
 	function showProject(next: string | undefined) {

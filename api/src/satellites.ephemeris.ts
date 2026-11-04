@@ -4,8 +4,8 @@ import { observerState } from 'nebulosa/src/astronomy/coordinates/correction'
 import { frameToFrame, ICRS, ITRS, TEME, TRUE_EQUATOR_AND_EQUINOX_OF_DATE } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
-import { type SatellitePassEvent, satelliteShadowState, type SatelliteShadowState, satelliteSubpoint, satelliteTrackingState, satelliteVisibleIntervals, type SatelliteWindowPass, satelliteWindowPasses } from 'nebulosa/src/astronomy/events/satellite'
-import type { GeographicPosition } from 'nebulosa/src/astronomy/observer/location'
+import { satelliteGroundFootprint, type SatellitePassEvent, satelliteShadowState, type SatelliteShadowState, satelliteSubpoint, satelliteTrackingState, satelliteVisibleIntervals, type SatelliteWindowPass, satelliteWindowPasses } from 'nebulosa/src/astronomy/events/satellite'
+import { type GeographicPosition, subpoint } from 'nebulosa/src/astronomy/observer/location'
 import { recordFromOMM, type SatRec, sgp4 } from 'nebulosa/src/astronomy/orbits/propagation/sgp4'
 import { type Time, timeShift, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, DAYSEC, ONE_SECOND, TAU } from 'nebulosa/src/core/constants'
@@ -18,7 +18,7 @@ import { apparentAltitude, geographic, type SkyObserver } from './sky/ephemeris'
 
 // Predictions of artificial satellites from their stored element sets, with the toolkit's SGP4 and frames only: one
 // instant (position, motion, illumination), passes over an observer with their sunlit and dark parts, sampled
-// ephemerides, and the sampled tracks the Sky interpolates. Every answer names the element set it came from (digest,
+// ephemerides, the tracks the Sky interpolates, and ground tracks. Every answer names the element set it came from (digest,
 // epoch, kind, source) and a quality judged from the age of the elements, the decay of the object, propagation errors,
 // and the Earth orientation data. SGP4 gives TEME states; positions are geometric (no light time, no aberration: a
 // satellite moves with the Earth, so the annual aberration of the stars does not apply to it, and the light time of a few
@@ -44,8 +44,21 @@ export const ELEMENT_AGE_LIMITS = { low: { caution: 3, unavailable: 14 }, high: 
 const LOW_ORBIT_PASS_STEP = 10 * ONE_SECOND
 const HIGH_ORBIT_PASS_STEP = 60 * ONE_SECOND
 
-// Largest number of passes, rows of an ephemeris, objects of a Sky series, and samples of a Sky series.
-export const SATELLITE_LIMITS = { passes: 200, ephemerisRows: 5000, seriesObjects: 50, seriesSamples: 20_000 } as const
+// Largest number of passes, rows of an ephemeris, objects of a Sky series, samples of a Sky series, and samples of a
+// ground track.
+export const SATELLITE_LIMITS = { passes: 200, ephemerisRows: 5000, seriesObjects: 50, seriesSamples: 20_000, groundTrackSamples: 5000 } as const
+
+// Largest span of a ground track, milliseconds: three days, the window of a few orbits of a geostationary satellite.
+export const GROUND_TRACK_MAX_MS = 3 * 86_400_000
+
+// Most orbits a ground track shows after its instant; one orbit is always shown before it.
+export const GROUND_TRACK_MAX_ORBITS = 5
+
+// Samples of a ground track per orbit, and the bounds of its step, milliseconds: about 30 s for the ISS, 5 minutes for a
+// geostationary satellite.
+const GROUND_TRACK_SAMPLES_PER_ORBIT = 180
+const GROUND_TRACK_MIN_STEP_MS = 10_000
+const GROUND_TRACK_MAX_STEP_MS = 300_000
 
 // Suitability of a prediction for use.
 export type SatelliteSuitability = 'usable' | 'caution' | 'unavailable'
@@ -224,6 +237,35 @@ export interface SatelliteTrack {
 	readonly altitude?: readonly number[]
 	// Whether the satellite is outside the Earth's umbra.
 	readonly sunlit: readonly boolean[]
+}
+
+// Sampled ground track of a satellite, in parallel arrays by sample.
+export interface SatelliteGroundTrack {
+	// Window, Unix milliseconds (UTC): one orbit before the instant asked for and the orbits asked for after it, at most
+	// GROUND_TRACK_MAX_MS in all.
+	readonly start: number
+	readonly end: number
+	// Step between samples, milliseconds.
+	readonly step: number
+	// Orbital period derived from the mean motion, minutes.
+	readonly periodMinutes: number
+	// Instants, Unix milliseconds (UTC), increasing; at most SATELLITE_LIMITS.groundTrackSamples.
+	readonly times: readonly number[]
+	// Geodetic latitude and east longitude of the point below the satellite, radians (longitude in (−π, π]).
+	readonly latitude: readonly number[]
+	readonly longitude: readonly number[]
+	// Height above the ellipsoid, km.
+	readonly heightKm: readonly number[]
+	// Geocentric half-angle of the region that sees the satellite above the horizon, radians: a spherical Earth with an
+	// ideal horizon, without terrain, refraction, or a minimum altitude.
+	readonly footprint: readonly number[]
+	// Illumination by the Sun: sunlit, in the Earth's penumbra, or in its umbra.
+	readonly shadow: readonly SatelliteShadowState[]
+	// Geodetic latitude and east longitude of the point below the Sun, radians (longitude in (−π, π]).
+	readonly sunLatitude: readonly number[]
+	readonly sunLongitude: readonly number[]
+	// Whether samples after the last one were left out.
+	readonly truncated: boolean
 }
 
 // Nodes of the interpolated Sun per day: one per hour. Linear interpolation between hourly VSOP87E positions departs
@@ -487,6 +529,50 @@ export class SatelliteEphemeris {
 		}
 
 		return { rows, truncated }
+	}
+
+	// Samples the ground track of a satellite around an instant (Unix milliseconds, UTC): one orbit before it and
+	// `orbits` (1 to GROUND_TRACK_MAX_ORBITS) after it, at most GROUND_TRACK_MAX_MS in all, every period/180 between 10 s
+	// and 5 minutes (whole seconds), at most SATELLITE_LIMITS.groundTrackSamples samples, letting the event loop run every
+	// EPHEMERIS_BATCH samples. Rejects with the abort reason when `signal` aborts, and when SGP4 fails or puts the
+	// satellite below the Earth's surface at a sample.
+	async groundTrack(elements: SatelliteElementSet, time: number, orbits: number, signal?: AbortSignal): Promise<SatelliteGroundTrack> {
+		const record = this.record(elements)
+		const periodMinutes = periodOf(record)
+		const period = periodMinutes * 60_000
+		const after = Math.max(1, Math.min(GROUND_TRACK_MAX_ORBITS, Math.round(orbits))) * period
+		const before = Math.min(period, GROUND_TRACK_MAX_MS / 2)
+		const start = Math.round(time - before)
+		const end = Math.round(time + Math.min(after, GROUND_TRACK_MAX_MS - before))
+		const step = Math.max(GROUND_TRACK_MIN_STEP_MS, Math.min(GROUND_TRACK_MAX_STEP_MS, Math.round(period / GROUND_TRACK_SAMPLES_PER_ORBIT / 1000) * 1000))
+		const count = Math.floor((end - start) / step) + 1
+		const truncated = count > SATELLITE_LIMITS.groundTrackSamples
+		const times: number[] = []
+		const latitude: number[] = []
+		const longitude: number[] = []
+		const heightKm: number[] = []
+		const footprint: number[] = []
+		const shadow: SatelliteShadowState[] = []
+		const sunLatitude: number[] = []
+		const sunLongitude: number[] = []
+
+		for (let i = 0; i < Math.min(count, SATELLITE_LIMITS.groundTrackSamples); i++) {
+			if (i > 0 && i % EPHEMERIS_BATCH === 0) await yieldToEventLoop(signal)
+			const at = start + i * step
+			const t = timeUnix(at / 1000, true)
+			const below = satelliteSubpoint(record, t)
+			const sun = subpoint(sunAt(t), t)
+			times.push(at)
+			latitude.push(below.latitude)
+			longitude.push(below.longitude)
+			heightKm.push(below.elevation * AU_KM)
+			footprint.push(satelliteGroundFootprint(record, t).halfAngle)
+			shadow.push(satelliteShadowState(record, sunAt, t))
+			sunLatitude.push(sun.latitude)
+			sunLongitude.push(sun.longitude)
+		}
+
+		return { start, end: truncated ? times.at(-1)! : end, step, periodMinutes, times, latitude, longitude, heightKm, footprint, shadow, sunLatitude, sunLongitude, truncated }
 	}
 
 	// Samples the track of a satellite for the Sky map every `step` milliseconds from `start` to `end` (Unix

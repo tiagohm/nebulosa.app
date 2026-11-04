@@ -265,6 +265,8 @@ export type {
 	SatelliteEphemerisRequest,
 	SatelliteEphemerisResponse,
 	SatelliteErrorCode,
+	SatelliteGroundTrackRequest,
+	SatelliteGroundTrackResponse,
 	SatelliteGroupStatus,
 	SatelliteImportRequest,
 	SatelliteImportResponse,
@@ -280,7 +282,7 @@ export type {
 	SatelliteTracksResponse,
 } from './satellites'
 export type { RejectedRecord, SatelliteRecordError } from './satellites.elements'
-export type { SatelliteElementsRef, SatelliteEphemerisRow, SatelliteOrbitSummary, SatellitePassPoint, SatellitePassPrediction, SatellitePosition, SatelliteQuality, SatelliteQualityReason, SatelliteSuitability, SatelliteTrack, SatelliteVisiblePart } from './satellites.ephemeris'
+export type { SatelliteElementsRef, SatelliteEphemerisRow, SatelliteGroundTrack, SatelliteOrbitSummary, SatellitePassPoint, SatellitePassPrediction, SatellitePosition, SatelliteQuality, SatelliteQualityReason, SatelliteSuitability, SatelliteTrack, SatelliteVisiblePart } from './satellites.ephemeris'
 export type { SatelliteCatalogMetadata, SatelliteElementKind, SatelliteObjectType, SatelliteProvider, SatelliteSearchPage, SatelliteSourceState, SatelliteSummary } from './satellites.store'
 export type { SatelliteRefreshErrorCode } from './satellites.sync'
 export type { WheelMoveRequest, WheelNamesRequest } from './wheels'

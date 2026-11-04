@@ -5,7 +5,7 @@ import { AU_KM } from 'nebulosa/src/core/constants'
 import { errorResponse } from './http'
 import { CELESTRAK_GROUPS, celestrakSourceKey, parseCelestrakSourceKey } from './satellites.celestrak'
 import { normalizeImport, type RejectedRecord } from './satellites.elements'
-import { type SatelliteElementsRef, type SatelliteEphemeris, type SatelliteEphemerisTable, type SatelliteOrbitSummary, type SatellitePasses, type SatellitePosition, type SatelliteQuality, type SatelliteTrack, SATELLITE_LIMITS } from './satellites.ephemeris'
+import { type SatelliteElementsRef, type SatelliteEphemeris, type SatelliteEphemerisTable, type SatelliteGroundTrack, type SatelliteOrbitSummary, type SatellitePasses, type SatellitePosition, type SatelliteQuality, type SatelliteTrack, SATELLITE_LIMITS } from './satellites.ephemeris'
 import { MANUAL_SOURCE_KEY, type SatelliteElementKind, type SatelliteElementSet, type SatelliteObjectType, type SatelliteSearchPage, type SatelliteSourceState, type SatelliteStore, type SatelliteSummary } from './satellites.store'
 import { SatelliteRefreshError, type SatelliteRefreshErrorCode, type SatelliteSync } from './satellites.sync'
 import { geographic, type SkyObserver, type SkyPosition } from './sky/ephemeris'
@@ -142,6 +142,20 @@ export interface SatelliteEphemerisRequest {
 
 // Answer of POST /api/satellites/:noradId/ephemeris.
 export interface SatelliteEphemerisResponse extends SatelliteEphemerisTable {
+	readonly elements: SatelliteElementsRef
+	readonly quality: SatelliteQuality
+}
+
+// Body of POST /api/satellites/:noradId/ground-track.
+export interface SatelliteGroundTrackRequest {
+	// Instant the window is placed around, Unix milliseconds (UTC).
+	readonly time: number
+	// Orbits shown after the instant, 1 to GROUND_TRACK_MAX_ORBITS; one orbit is shown before it.
+	readonly orbits: number
+}
+
+// Answer of POST /api/satellites/:noradId/ground-track.
+export interface SatelliteGroundTrackResponse extends SatelliteGroundTrack {
 	readonly elements: SatelliteElementsRef
 	readonly quality: SatelliteQuality
 }
@@ -362,6 +376,21 @@ export class SatelliteService {
 		}
 	}
 
+	// Samples the ground track of an object around an instant. Throws notFound, noElements, or predictionUnreliable when
+	// SGP4 fails; rejects with the abort reason when `signal` aborts.
+	async groundTrackOf(noradId: string, request: SatelliteGroundTrackRequest, signal?: AbortSignal): Promise<SatelliteGroundTrackResponse> {
+		const object = this.#object(noradId)
+		const elements = this.#elements(noradId)
+
+		try {
+			const track = await this.ephemeris.groundTrack(elements, request.time, request.orbits, signal)
+			return { ...track, elements: this.ephemeris.elementsRef(elements), quality: this.ephemeris.quality(elements, [track.start, track.end], object.decayDate) }
+		} catch (error) {
+			if (signal?.aborted) throw error
+			throw this.#unreliable(elements, [request.time], object, error)
+		}
+	}
+
 	// Samples the tracks of objects for the Sky map: the ids asked for, then the members of a group above the horizon,
 	// at most SATELLITE_LIMITS.seriesObjects objects and SATELLITE_LIMITS.seriesSamples samples in all. An object that
 	// cannot be sampled is answered with its code.
@@ -577,6 +606,11 @@ export function createSatelliteRoutes(service: SatelliteService) {
 			// Sampled ephemeris (SatelliteEphemerisRequest, SatelliteEphemerisResponse); 404 notFound or noElements, 422
 			// predictionUnreliable.
 			POST: (req) => handle(async () => Response.json((await service.ephemerisOf(noradIdOf(req), (await req.json()) as SatelliteEphemerisRequest, req.signal)) satisfies SatelliteEphemerisResponse)),
+		},
+		'/api/satellites/:noradId/ground-track': {
+			// Ground track around an instant (SatelliteGroundTrackRequest, SatelliteGroundTrackResponse); 404 notFound or
+			// noElements, 422 predictionUnreliable.
+			POST: (req) => handle(async () => Response.json((await service.groundTrackOf(noradIdOf(req), (await req.json()) as SatelliteGroundTrackRequest, req.signal)) satisfies SatelliteGroundTrackResponse)),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

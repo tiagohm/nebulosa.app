@@ -6,7 +6,7 @@ import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { meter } from 'nebulosa/src/math/units/distance'
 import type { EarthOrientationCoverage } from './astronomicaltime.eop'
 import { normalizeImport } from './satellites.elements'
-import { ELEMENT_AGE_LIMITS, SATELLITE_LIMITS, SatelliteEphemeris } from './satellites.ephemeris'
+import { ELEMENT_AGE_LIMITS, GROUND_TRACK_MAX_MS, SATELLITE_LIMITS, SatelliteEphemeris } from './satellites.ephemeris'
 import type { SatelliteElementSet } from './satellites.store'
 
 const DAY = 86_400_000
@@ -141,6 +141,63 @@ test('ephemeris rows and tracks are bounded and match the positions', async () =
 	expect(ephemeris.track(ISS, ISS.epoch, ISS.epoch + DAY, 1000, 100).times).toHaveLength(100)
 	expect(ephemeris.track(ISS, ISS.epoch, ISS.epoch + 60_000, 10_000, 100).altitude).toBeUndefined()
 	expect(SATELLITE_LIMITS.seriesObjects).toBe(50)
+})
+
+test('a ground track spans an orbit before the instant and the orbits after it, with the footprint and the Sun', async () => {
+	const ephemeris = new SatelliteEphemeris(covered)
+	const time = ISS.epoch
+	const track = await ephemeris.groundTrack(ISS, time, 2)
+	const period = track.periodMinutes * 60_000
+	expect(track.periodMinutes).toBeCloseTo(92.9, 0)
+	expect(track.step).toBe(31_000)
+	expect(track.start).toBe(Math.round(time - period))
+	expect(track.end).toBe(Math.round(time + 2 * period))
+	expect(track.truncated).toBeFalse()
+	expect(track.times).toHaveLength(Math.floor((track.end - track.start) / track.step) + 1)
+	for (const values of [track.latitude, track.longitude, track.heightKm, track.footprint, track.shadow, track.sunLatitude, track.sunLongitude]) expect(values).toHaveLength(track.times.length)
+
+	// The subpoint stays within the inclination and agrees with the position, longitudes in (−π, π].
+	expect(Math.max(...track.latitude.map(Math.abs)) / DEG2RAD).toBeLessThan(51.8)
+	expect(Math.max(...track.latitude.map(Math.abs)) / DEG2RAD).toBeGreaterThan(51)
+	expect(track.longitude.every((longitude) => longitude > -Math.PI && longitude <= Math.PI)).toBeTrue()
+	const position = ephemeris.position(ISS, track.times[100])
+	expect(track.latitude[100]).toBeCloseTo(position.subpointLatitude, 9)
+	expect(track.longitude[100]).toBeCloseTo(position.subpointLongitude, 9)
+	expect(track.heightKm[100]).toBeCloseTo(position.heightKm, 6)
+	expect(track.shadow[100]).toBe(position.shadow)
+
+	// About 420 km high, the ISS is seen up to about 20° from its subpoint, and it crosses the Earth's shadow every orbit.
+	expect(track.heightKm[0]).toBeGreaterThan(400)
+	expect(track.heightKm[0]).toBeLessThan(440)
+	expect(track.footprint[0] / DEG2RAD).toBeGreaterThan(19.5)
+	expect(track.footprint[0] / DEG2RAD).toBeLessThan(21)
+	expect(track.shadow).toContain('sunlit')
+	expect(track.shadow).toContain('umbra')
+
+	// The Sun stands over the solar declination of 19 August (about +12.6°), and over the meridian of the apparent solar
+	// noon: 15° west per hour after the apparent noon at Greenwich, 12:03.6 UTC (equation of time −3.6 min).
+	const hours = (track.times[0] % 86_400_000) / 3_600_000
+	expect(track.sunLatitude[0] / DEG2RAD).toBeCloseTo(12.6, 0)
+	expect(track.sunLongitude[0] / DEG2RAD).toBeCloseTo(-15 * (hours - 12) + 0.9, 0)
+})
+
+test('a ground track is bounded by its orbits and its span, and stops when cancelled', async () => {
+	const ephemeris = new SatelliteEphemeris(covered)
+	const iss = await ephemeris.groundTrack(ISS, ISS.epoch, 50)
+	expect(iss.end - ISS.epoch).toBe(Math.round(5 * iss.periodMinutes * 60_000))
+
+	// A geostationary satellite: an orbit before and two days after, every 5 minutes, over a fixed point of the equator.
+	const geo = await ephemeris.groundTrack(GEO, GEO.epoch, 3)
+	expect(geo.end - geo.start).toBe(GROUND_TRACK_MAX_MS)
+	expect(geo.step).toBe(300_000)
+	expect(geo.times.length).toBeLessThanOrEqual(SATELLITE_LIMITS.groundTrackSamples)
+	expect(Math.max(...geo.latitude.map(Math.abs)) / DEG2RAD).toBeLessThan(0.1)
+	expect((Math.max(...geo.longitude) - Math.min(...geo.longitude)) / DEG2RAD).toBeLessThan(0.5)
+	expect(geo.footprint[0] / DEG2RAD).toBeCloseTo(81.3, 0)
+
+	const controller = new AbortController()
+	controller.abort(new Error('superseded'))
+	await expect(ephemeris.groundTrack(ISS, ISS.epoch, 5, controller.signal)).rejects.toThrow('superseded')
 })
 
 test('quality follows the age of the elements, the decay, propagation, and the Earth orientation', () => {

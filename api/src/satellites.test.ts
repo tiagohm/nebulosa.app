@@ -1,7 +1,19 @@
 import { expect, test } from 'bun:test'
 import type { EarthOrientationCoverage } from './astronomicaltime.eop'
 import { AppDatabase } from './database'
-import { createSatelliteRoutes, type SatelliteDetails, type SatelliteImportResponse, type SatellitePassesResponse, type SatellitePositionResponse, type SatelliteRefreshResponse, SatelliteService, type SatellitesChangedEvent, type SatelliteSourcesSnapshot, type SatelliteTracksResponse } from './satellites'
+import {
+	createSatelliteRoutes,
+	type SatelliteDetails,
+	type SatelliteGroundTrackResponse,
+	type SatelliteImportResponse,
+	type SatellitePassesResponse,
+	type SatellitePositionResponse,
+	type SatelliteRefreshResponse,
+	SatelliteService,
+	type SatellitesChangedEvent,
+	type SatelliteSourcesSnapshot,
+	type SatelliteTracksResponse,
+} from './satellites'
 import { AUTO_DOWNLOAD_SCHEDULE, SatelliteAutoDownload } from './satellites.auto'
 import { SatelliteEphemeris } from './satellites.ephemeris'
 import { type SatelliteSearchPage, SatelliteStore } from './satellites.store'
@@ -128,6 +140,13 @@ test('imported elements predict positions, passes, and ephemerides', async () =>
 	const ephemeris = (await call(routes, '/api/satellites/:noradId/ephemeris', 'POST', { noradId: '25544' }, { start: ISS_EPOCH, end: ISS_EPOCH + 3_600_000, step: 600_000 })) as Reply<{ rows: unknown[]; truncated: boolean }>
 	expect(ephemeris.body.rows).toHaveLength(7)
 
+	const track = (await call(routes, '/api/satellites/:noradId/ground-track', 'POST', { noradId: '25544' }, { time: ISS_EPOCH, orbits: 1 })) as Reply<SatelliteGroundTrackResponse>
+	expect(track.body).toMatchObject({ step: 31_000, truncated: false, elements: { digest: details.body.elements!.digest }, quality: { suitability: 'usable' } })
+	expect(track.body.times[0]).toBe(track.body.start)
+	const late = (await call(routes, '/api/satellites/:noradId/ground-track', 'POST', { noradId: '25544' }, { time: ISS_EPOCH + 30 * DAY, orbits: 1 })) as Reply<SatelliteGroundTrackResponse>
+	expect(late.body.quality).toMatchObject({ suitability: 'unavailable', reasons: ['elementsOld'] })
+	expect((await call(routes, '/api/satellites/:noradId/ground-track', 'POST', { noradId: '1' }, { time: ISS_EPOCH, orbits: 1 })).status).toBe(404)
+
 	expect((await call(routes, '/api/satellites/:noradId', 'GET', { noradId: '1' })).status).toBe(404)
 	expect((await call(routes, '/api/satellites/:noradId/position', 'POST', { noradId: '1' }, { time: ISS_EPOCH })).status).toBe(404)
 })
@@ -139,6 +158,7 @@ test('a metadata-only object has details but no prediction', async () => {
 	const details = (await call(routes, '/api/satellites/:noradId', 'GET', { noradId: '5' })) as Reply<SatelliteDetails>
 	expect(details.body).toEqual({ object: expect.objectContaining({ noradId: '5', decayDate: '1970-01-01' }), elementSets: [] })
 	expect(((await call(routes, '/api/satellites/:noradId/position', 'POST', { noradId: '5' }, { time: 0 })) as Reply<{ code: string }>).body.code).toBe('noElements')
+	expect(((await call(routes, '/api/satellites/:noradId/ground-track', 'POST', { noradId: '5' }, { time: 0, orbits: 1 })) as Reply<{ code: string }>).body.code).toBe('noElements')
 })
 
 test('the element source can be switched back to GP', async () => {

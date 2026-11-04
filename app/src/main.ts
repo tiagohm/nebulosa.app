@@ -1,4 +1,4 @@
-import { type AboutInfo, closeDatabase, createAboutRoutes, identifyJplClient, routes, startDatabase, startEarthOrientation, startStores, stopOperations, websocket } from 'api'
+import { type AboutInfo, type ConnectRequest, closeDatabase, createAboutRoutes, identifyJplClient, reopenConnections, routes, startDatabase, startEarthOrientation, startStores, stopOperations, stopServer, websocket } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
 import { serverAddress } from './address'
@@ -6,7 +6,8 @@ import { serverAddress } from './address'
 // Entry point of the application: serves the API routes, the /api/ws WebSocket, and the web UI from a
 // single Bun server. Every path the API does not handle falls back to the UI's HTML entry point. A server whose
 // operational database cannot be opened stops before serving. A stop signal ends the process once the running device
-// operations were stopped and the database was closed, which writes its WAL back into the file.
+// operations were stopped and the database was closed, which writes its WAL back into the file. Under bun --hot, a change of
+// the server code evaluates this module again; the previous run is stopped first and its connections are opened again.
 
 // Whether the server runs in development mode (HMR and the browser console); false when NODE_ENV is production.
 const development = process.env.NODE_ENV !== 'production'
@@ -25,6 +26,21 @@ const ABOUT: AboutInfo = {
 
 // Signals that stop the server: Ctrl+C, a service manager, and a closed terminal or console window.
 const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
+
+// What a run of this module leaves for the next one under bun --hot, which keeps globalThis across evaluations.
+interface HotReloadState {
+	// Stops the run in place and resolves the connections it had open.
+	stop?: () => Promise<readonly ConnectRequest[]>
+}
+
+// Key of the hot reload state on globalThis, shared by every evaluation of this module.
+const HOT_RELOAD = Symbol.for('nebulosa.hotReload')
+
+// State of the hot reload: empty in the first run, and in production, which never evaluates this module twice.
+const hotReload = ((globalThis as { [HOT_RELOAD]?: HotReloadState })[HOT_RELOAD] ??= {})
+
+// The previous run still holds its connections, operations, listeners, and database, so it stops before this one opens them.
+const reopened = (await hotReload.stop?.()) ?? []
 
 // A server that cannot keep its records never starts, and says why.
 try {
@@ -71,5 +87,10 @@ for (const signal of STOP_SIGNALS) {
 	process.removeAllListeners(signal)
 	process.once(signal, () => void stop())
 }
+
+hotReload.stop = stopServer
+
+// The connections the previous run had open are opened again, so a change of the server code keeps the equipment connected.
+void reopenConnections(reopened)
 
 console.info(`Nebulosa is running at ${server.url}`)

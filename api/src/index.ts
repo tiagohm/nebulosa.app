@@ -9,7 +9,7 @@ import { CameraCommands, createCameraRoutes } from './cameras'
 import { CaptureFrameRegistry, createCaptureFrameRoutes } from './captureframes'
 import { CameraCaptures, createCaptureRoutes } from './captures'
 import { CloseApproachesService, createCloseApproachRoutes } from './closeapproaches'
-import { connections, createConnectionRoutes } from './connection'
+import { type ConnectionStatus, type ConnectRequest, connections, createConnectionRoutes } from './connection'
 import { CoverCommands, createCoverRoutes } from './covers'
 import { createDarkLibraryWizardRoutes, DarkLibraryWizardSessions } from './darklibrarywizard'
 import { DarkLibraryWizardAnalyzer } from './darklibrarywizard.analysis'
@@ -657,6 +657,9 @@ const imageStacking = new ImageStacking(new ImageStackingStore(database), publis
 // Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
 // moving the wheels, driving the panels, and closing and opening the covers with the commanders of their commands,
 // previewing and recording the frames in the capture frame registry, and measuring them in DN on a worker of their own.
+// Measures Flat Wizard frames in DN on a worker of its own.
+const flatWizardAnalyzer = new FlatWizardAnalyzer()
+
 const flatWizard = new FlatWizardSessions(
 	connections.devices,
 	(id) => connections.client(id),
@@ -667,7 +670,7 @@ const flatWizard = new FlatWizardSessions(
 	covers.commander,
 	images,
 	captureFrames,
-	new FlatWizardAnalyzer(),
+	flatWizardAnalyzer,
 	publish,
 	undefined,
 	(frame) => void calibrationLibrary.registerFlat(frame).catch((error: unknown) => console.error('A flat could not be registered', error)),
@@ -677,6 +680,8 @@ const flatWizard = new FlatWizardSessions(
 // Dark Library Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the
 // captures, cooling the cameras, moving the wheels, and driving the panels and covers with the commanders of their
 // commands, measuring their frames in DN on a worker of their own, and handing the darks they publish to the Calibration Library.
+const darkLibraryWizardAnalyzer = new DarkLibraryWizardAnalyzer()
+
 const darkLibraryWizard = new DarkLibraryWizardSessions(
 	connections.devices,
 	(id) => connections.client(id),
@@ -688,7 +693,7 @@ const darkLibraryWizard = new DarkLibraryWizardSessions(
 	covers.commander,
 	images,
 	captureFrames,
-	new DarkLibraryWizardAnalyzer(),
+	darkLibraryWizardAnalyzer,
 	publish,
 	undefined,
 	(frame) => void calibrationLibrary.registerDark(frame).catch((error: unknown) => console.error('A dark could not be registered', error)),
@@ -747,6 +752,47 @@ const STOP_TIMEOUT = 3000
 // once the connection closes. Called by the app before it closes the database; never rejects.
 export function stopOperations() {
 	return operations.stop(STOP_TIMEOUT)
+}
+
+// Services holding devices, sockets, listeners, timers, or workers, in the order a server stopping in place releases them:
+// the sessions and commands before the registries they use, the connections last.
+const RESOURCES: readonly Disposable[] = [guiding, darkLibraryWizard, darkLibraryWizardAnalyzer, flatWizardAnalyzer, captures, captureFrames, mountRemoteControl, indi, mounts, corrections, guideOutputs, focusers, wheels, rotators, covers, flatPanels, domes, solarEclipses, operations, connections]
+
+// Stops the server in place, as development does before a hot reload evaluates the server code again, which otherwise
+// leaves the previous run alive beside the new one: its connections to the devices, the operations commanding them, the
+// listeners on their ports, and the database. Cancels the running operations as stopOperations does, releases every
+// service, closes every connection and the database, and resolves the requests of the connections that were open, so
+// the next run can open them again. A service that fails to release is logged and the others still are. Never rejects.
+export async function stopServer(): Promise<ConnectRequest[]> {
+	const open = connections.list().map(connectRequestOf)
+	await stopOperations()
+
+	for (const resource of RESOURCES) {
+		try {
+			resource[Symbol.dispose]()
+		} catch (error) {
+			console.error('A service could not be released', error)
+		}
+	}
+
+	database.close()
+	return open
+}
+
+// Returns the request that opens a connection again: its endpoint, without its id.
+function connectRequestOf(status: ConnectionStatus): ConnectRequest {
+	return status.type === 'SIMULATOR' ? { type: 'SIMULATOR' } : { type: status.type, host: status.host, port: status.port }
+}
+
+// Opens again the connections a previous run of the server had open, one by one; one that cannot be opened is logged.
+export async function reopenConnections(requests: readonly ConnectRequest[]) {
+	for (const request of requests) {
+		try {
+			await connections.connect(request)
+		} catch (error) {
+			console.error(`The connection to ${request.type === 'SIMULATOR' ? 'the simulator' : `${request.host}:${request.port}`} could not be opened again`, Error.isError(error) ? error.message : error)
+		}
+	}
 }
 
 // Reads the cached Earth orientation tables and makes them the default of the toolkit, so the Sky, the mounts, and the pointing

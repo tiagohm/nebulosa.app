@@ -173,7 +173,7 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 						index={index}
 						filter={filter}
 						wheel={wheelState}
-						brightness={panelAssigned ? (panelState?.intensity ?? { min: 0, max: 0 }) : undefined}
+						brightness={panelAssigned ? (panelState?.intensity ?? { value: 0, min: 0, max: 0 }) : undefined}
 						removable={shown.filters.length > 1}
 						disabled={locked}
 						onChange={(patch) => updateFilter(index, patch)}
@@ -240,8 +240,9 @@ interface FilterFormProps {
 	// Slots and names the assigned wheel reports; absent without a wheel or while its state is unknown, when the slot
 	// is typed as a number.
 	readonly wheel?: Pick<WheelState, 'count' | 'names'>
-	// Brightness range of the assigned panel; absent without a panel.
-	readonly brightness?: { readonly min: number; readonly max: number }
+	// Brightness the assigned panel reports and its range, in driver units; absent without a panel. Setting the brightness
+	// starts from the reported one, since the maximum would most likely saturate the shortest exposure.
+	readonly brightness?: { readonly value: number; readonly min: number; readonly max: number }
 	// Whether the group can be removed.
 	readonly removable: boolean
 	// Whether the form is locked.
@@ -278,7 +279,7 @@ function FilterForm({ index, filter, wheel, brightness, removable, disabled, onC
 			</div>
 			{brightness && (
 				<>
-					<Checkbox label="Set Panel Brightness" checked={filter.brightness !== undefined} disabled={disabled} onChange={(set) => onChange({ brightness: set ? brightness.max : undefined })} />
+					<Checkbox label="Set Panel Brightness" checked={filter.brightness !== undefined} disabled={disabled} onChange={(set) => onChange({ brightness: set ? brightness.value : undefined })} />
 					{filter.brightness !== undefined && <NumberInput label="Brightness" value={filter.brightness} min={brightness.min} max={brightness.max > brightness.min ? brightness.max : undefined} disabled={disabled} onChange={(value) => onChange({ brightness: value })} />}
 				</>
 			)}

@@ -330,6 +330,12 @@ const SEQUENCE_OUTLIER_SIGMA = 5
 // Relative difference under which two exposures are the same, so the search cannot retry one forever.
 const SAME_EXPOSURE = 1e-6
 
+// Rounds an exposure in seconds to whole microseconds, the unit the Calibration Library compares exposures in, so
+// an estimated exposure is commanded, written, and matched by its dark-flats as one exact value with a short name.
+function wholeMicroseconds(exposure: number) {
+	return Math.round(exposure * 1e6) / 1e6
+}
+
 // Name of the published frames: the capture placeholders plus the filter name.
 const FILENAME_TEMPLATE = '{date}_{time}_{camera}_{type}_{filter}_{seq}'
 
@@ -693,6 +699,8 @@ export class FlatWizardSessions {
 					next = estimate.recommendedExposure
 				}
 			}
+
+			if (next !== undefined) next = wholeMicroseconds(next)
 
 			if (next === undefined || tried.some((value) => Math.abs(value - next) <= SAME_EXPOSURE * value)) {
 				if (estimate?.status === 'belowMinimum') return failedOperationResult('unexpectedState', `${name} is too bright: the target needs less than the minimum exposure of ${minimum} s`)

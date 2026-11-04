@@ -279,7 +279,8 @@ describe('Flat Wizard sessions', () => {
 		])
 		// R needed an affine estimate from two trials below its target: (25000 - 1000) / 50000 DN/s.
 		expect(summary()!.filters[0].exposure).toBe(0.2)
-		expect(summary()!.filters[1].exposure).toBeCloseTo(0.48, 9)
+		// The estimate is rounded to whole microseconds, so it is commanded and named as one exact value.
+		expect(summary()!.filters[1].exposure).toBe(0.48)
 		expect(summary()!.filters[0].sequence).toEqual({ status: 'notEvaluated', reason: 'At least three accepted frames are needed' })
 		expect(panel.enabled).toBeFalse()
 		expect(readdirSync(join(directory, 'flats'))).toHaveLength(2)

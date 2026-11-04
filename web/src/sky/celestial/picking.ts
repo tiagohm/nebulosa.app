@@ -1,5 +1,5 @@
 import { clamp } from 'nebulosa/src/math/numerical/math'
-import type { CelestialObject } from './types'
+import type { CelestialObject, MovingBodyType } from './types'
 
 // Screen-space picking for the star map: a fixed-grid spatial index over projected objects and the helpers
 // that relate pick results, picked objects, and the layers that own them. Positions are screen pixels.
@@ -175,12 +175,19 @@ export function pickMatchesObject(index: PickIndex | null, object: CelestialObje
 	}
 }
 
+// Returns the id of the layer that draws a moving body of a type: artificial satellites have a layer of their own, every
+// other moving body (Sun, Moon, planets, asteroids, comets) shares one.
+export function movingBodyLayerId(type: MovingBodyType) {
+	return type === 'satellite' ? 'satellites' : 'movingBodies'
+}
+
 // Returns whether a layer holds pickable objects.
 export function isPickableLayerId(layerId: string) {
 	switch (layerId) {
 		case 'stars':
 		case 'deepSky':
 		case 'movingBodies':
+		case 'satellites':
 		case 'constellationLabels':
 		case 'shapes':
 			return true
@@ -197,7 +204,7 @@ export function objectLayerId(object: CelestialObject) {
 		case 'deepSky':
 			return 'deepSky'
 		case 'movingBody':
-			return 'movingBodies'
+			return movingBodyLayerId(object.object.type)
 		case 'constellationLabel':
 			return 'constellationLabels'
 		case 'shape':

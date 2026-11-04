@@ -29,7 +29,7 @@ import {
 } from './drawing'
 import { angularDistance, applyViewTransform, isFiniteDiskProjection, isPointInsideViewportMargin, normalizeVector, writeBaseViewportBounds, writeRaDecUnitVector } from './geometry'
 import { DEFAULT_STAR_OPTIONS, DEFAULT_THEME, TRANSPARENT } from './options'
-import { sameObject } from './picking'
+import { movingBodyLayerId, sameObject } from './picking'
 import { meanObliquity } from './time'
 import type { CelestialObject, CelestialShape, ConstellationLine, MilkyWayRing, MilkyWayStep, MutableShapeRenderState, RenderState, ResolvedReferenceLineOptions, StarLayerOptions, ThemeOptions } from './types'
 import { isDeepSkyLabelVisible, isDeepSkyObjectVisible, isMovingBodyVisible, starLabelMagnitudeLimit, starSymbolMagnitudeLimit } from './visibility'
@@ -1166,17 +1166,13 @@ export class StarLayer extends InternalLayer {
 	}
 }
 
-// Planet, asteroid, and comet symbols and labels.
+// Symbols and labels of the moving bodies of one layer: `movingBodies` for the Sun, Moon, planets, asteroids, and
+// comets, `satellites` for the artificial satellites (movingBodyLayerId); it is created with one of these ids.
 export class MovingBodyLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly labelPoint = new Float32Array(2)
 
-	// Creates the moving body layer.
-	constructor() {
-		super('movingBodies', 60)
-	}
-
-	// Draws the visible moving bodies and their labels.
+	// Draws the visible moving bodies of the layer and their labels.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
 		ctx.font = skyLabelFont(state, 9)
 		ctx.textAlign = 'left'
@@ -1185,7 +1181,7 @@ export class MovingBodyLayer extends InternalLayer {
 		for (let i = 0; i < state.movingBodies.length; i++) {
 			const object = state.movingBodies[i]
 
-			if (!isMovingBodyVisible(object, state)) {
+			if (movingBodyLayerId(object.type) !== this.id || !isMovingBodyVisible(object, state)) {
 				continue
 			}
 

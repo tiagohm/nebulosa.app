@@ -7,11 +7,12 @@ import { interpolateTrack, type TrackWindow, trackWindow, windowServes } from '.
 import { createRequestGuard } from './selection'
 import { apiObserver } from './sky'
 
-// Artificial satellites on the Sky map: the satellites asked for (the selected one, and the favorites while the layer
-// shows them) drawn as moving bodies at the instant of the Sky clock, interpolated between the samples the server
-// computes for a window around that instant, the selected one's track drawn on request, and the view kept on it while
-// tracked. Only the samples of the window are requested, never the catalog, and never once per update: a new window
-// is asked for when the clock leaves the current one, the satellites or the observer change, or the catalog changes.
+// Artificial satellites on the Sky map: the satellites asked for (the selected one and the favorites, while the
+// satellites layer is shown) drawn as moving bodies of type `satellite`, which the `satellites` layer of the map draws,
+// at the instant of the Sky clock, interpolated between the samples the server computes for a window around that
+// instant, the selected one's track drawn on request, and the view kept on it while tracked. Only the samples of the
+// window are requested, never the catalog, and never once per update: a new window is asked for when the clock leaves
+// the current one, the satellites or the observer change, or the catalog changes.
 // Markers move about four times a second (once a second with reduced motion) while the page is shown: each move of a
 // moving body rebuilds the pick index of the map, so a per-frame update would cost more than the motion needs.
 

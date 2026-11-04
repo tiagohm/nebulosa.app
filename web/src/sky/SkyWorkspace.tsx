@@ -74,17 +74,18 @@ export function SkyWorkspace() {
 		map.applyDisplay(display)
 	}, [map, display])
 
-	// Draws the selected satellite, and the profile's favorites while the display shows them, following the catalog.
+	// Draws the selected satellite and the profile's favorites while the display shows satellites, following the catalog;
+	// nothing is sampled while the layer is hidden.
 	const favorites = satelliteFavorites(activeProfile(profiles).settings)
-	const showFavorites = isSkyLayerVisible(display, SATELLITES_LAYER)
+	const showSatellites = isSkyLayerVisible(display, SATELLITES_LAYER)
 	const selectedSatellite = sky.selection?.ref.kind === 'satellite' ? sky.selection.ref.noradId : undefined
 	const { revision } = useSnapshot(satelliteCatalogState)
 	const { tracking, trail } = useSnapshot(skySatelliteState)
-	const satelliteIds = [...new Set([...(selectedSatellite ? [selectedSatellite] : []), ...(showFavorites ? favorites : [])])].slice(0, SATELLITE_TRACKS_LIMIT).join(',')
+	const satelliteIds = showSatellites ? [...new Set([...(selectedSatellite ? [selectedSatellite] : []), ...favorites])].slice(0, SATELLITE_TRACKS_LIMIT).join(',') : ''
 
 	useEffect(() => {
-		map.setSatellites({ ids: satelliteIds ? satelliteIds.split(',') : [], selected: selectedSatellite, observer: activeProfile(profileState).settings.sky.observer, revision, tracking: tracking && !!selectedSatellite, trail })
-	}, [map, satelliteIds, selectedSatellite, key, revision, tracking, trail])
+		map.setSatellites({ ids: satelliteIds ? satelliteIds.split(',') : [], selected: selectedSatellite, observer: activeProfile(profileState).settings.sky.observer, revision, tracking: tracking && showSatellites && !!selectedSatellite, trail })
+	}, [map, satelliteIds, selectedSatellite, key, revision, tracking, trail, showSatellites])
 
 	// Draws the field of view of the selected preset, or of the Equipment Setup, around the selection,
 	// following its position.

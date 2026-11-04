@@ -21,16 +21,18 @@ test('defaults keep the map as it was', () => {
 	const { target, layers, lines, state } = fakeMap()
 	applySkyDisplay(target, undefined, true, 7)
 
-	expect(layers).toEqual({ stars: true, deepSky: true, movingBodies: true, constellations: true, constellationBoundaries: false, constellationLabels: true, grid: true })
+	expect(layers).toEqual({ stars: true, deepSky: true, movingBodies: true, satellites: true, constellations: true, constellationBoundaries: false, constellationLabels: true, grid: true })
 	expect(lines).toEqual({ celestialEquator: true, ecliptic: true, localMeridian: true })
 	expect(state).toEqual({ labels: true, magnitude: 7 })
 })
 
 test('preferences are applied, and the local meridian only on the local sky', () => {
 	const { target, layers, lines, state } = fakeMap()
-	applySkyDisplay(target, { layers: { deepSky: false, starLabels: false, ecliptic: false, constellationBoundaries: true }, magnitudeLimit: 4.5 }, false, 7)
+	applySkyDisplay(target, { layers: { deepSky: false, satellites: false, starLabels: false, ecliptic: false, constellationBoundaries: true }, magnitudeLimit: 4.5 }, false, 7)
 
 	expect(layers.deepSky).toBe(false)
+	expect(layers.satellites).toBe(false)
+	expect(layers.movingBodies).toBe(true)
 	expect(layers.constellationBoundaries).toBe(true)
 	expect(lines).toEqual({ celestialEquator: true, ecliptic: false, localMeridian: false })
 	expect(state).toEqual({ labels: false, magnitude: 4.5 })

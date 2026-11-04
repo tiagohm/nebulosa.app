@@ -3,9 +3,8 @@ import type { ResolvedReferenceLinesOptions } from './celestial/celestial'
 // What the star map shows: the layers the map really has that a user may turn on and off, and the
 // faintest stars drawn. Preferences are kept in the profile and applied to the map in place, so changing
 // them never recreates the map, reloads its data, or moves its view. Every moving body (Sun, Moon,
-// planets, asteroids, and comets) shares one layer of the map, so they are shown or hidden together. The favorite
-// artificial satellites are a layer of their own, off by default, drawn on that map layer; the selected satellite is drawn
-// whatever it says.
+// planets, asteroids, and comets) shares one layer of the map, so they are shown or hidden together. Artificial
+// satellites have a layer of their own: hidden, no satellite is drawn, neither the selected one nor the favorites.
 
 // Layer of the star map a user can show or hide.
 export type SkyLayerId = 'stars' | 'starLabels' | 'deepSky' | 'movingBodies' | 'satellites' | 'constellations' | 'constellationBoundaries' | 'constellationLabels' | 'grid' | 'celestialEquator' | 'ecliptic' | 'localMeridian'
@@ -43,8 +42,8 @@ export interface SkyDisplayTarget {
 	readonly setMagnitudeLimit: (limit: number) => void
 }
 
-// Layer of the favorite artificial satellites, drawn by the satellite layer of the map rather than a layer of Celestial.
-export const SATELLITES_LAYER: SkyLayerDefinition = { id: 'satellites', label: 'Favorite artificial satellites', visible: false }
+// Layer of the artificial satellites: the selected satellite and the profile's favorites.
+export const SATELLITES_LAYER: SkyLayerDefinition = { id: 'satellites', label: 'Artificial satellites', visible: true }
 
 // Layers in display order, with their defaults (the map's look before preferences existed).
 export const SKY_LAYERS: readonly SkyLayerDefinition[] = [
@@ -91,9 +90,6 @@ export function applySkyDisplay(target: SkyDisplayTarget, display: Readonly<SkyD
 			case 'ecliptic':
 			case 'localMeridian':
 				target.setReferenceLineVisible(layer.id, visible)
-				break
-			case 'satellites':
-				// Applied through the satellites the map is given to draw.
 				break
 			default:
 				target.setLayerVisible(layer.id, visible)

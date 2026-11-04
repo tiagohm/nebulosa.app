@@ -1,6 +1,7 @@
 import { DEG2RAD, PI, PIOVERTWO, TAU } from 'nebulosa/src/core/constants'
 import { type NumberArray, clamp } from 'nebulosa/src/math/numerical/math'
 import { applyViewTransform, HORIZON_EPSILON, isFiniteDiskProjection } from './geometry'
+import { movingBodyLayerId } from './picking'
 import type { CelestialObject, DeepSkyObject, MovingBody, MovingBodyType, RenderState } from './types'
 import { isDeepSkyObjectVisible, isStarVisibleAtZoom } from './visibility'
 
@@ -499,7 +500,7 @@ function isObjectLayerVisible(object: CelestialObject, state: RenderState) {
 		case 'deepSky':
 			return state.celestial.isLayerVisible('deepSky')
 		case 'movingBody':
-			return state.celestial.isLayerVisible('movingBodies')
+			return state.celestial.isLayerVisible(movingBodyLayerId(object.object.type))
 		case 'constellationLabel':
 			return state.celestial.isLayerVisible('constellationLabels')
 		case 'shape':

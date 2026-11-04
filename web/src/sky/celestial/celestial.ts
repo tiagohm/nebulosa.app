@@ -11,7 +11,7 @@ import { applyViewTransform, HORIZON_EPSILON, isFiniteDiskProjection, isFiniteNu
 import { anchoredTransform, beginGesture, type GestureAnchor, type GesturePointer, gestureTransform } from './gesture'
 import { BackgroundLayer, CONSTELLATION_LABEL_MIN_ZOOM, ConstellationBoundaryLayer, ConstellationLabelLayer, ConstellationLineLayer, DeepSkyObjectLayer, GridLayer, HorizonLayer, InteractionOverlayLayer, MilkyWayLayer, MovingBodyLayer, ReferenceLineLayer, ShapeLayer, StarLayer } from './layers'
 import { resolveOptions, validateObserver, validateProjection } from './options'
-import { FixedGridSpatialIndex, isPickableLayerId, objectLayerId, PICK_TYPE_CONSTELLATION_LABEL, PICK_TYPE_DSO, PICK_TYPE_MOVING_BODY, PICK_TYPE_SHAPE, PICK_TYPE_STAR, type PickIndex, pickMatchesObject, sameObject } from './picking'
+import { FixedGridSpatialIndex, isPickableLayerId, movingBodyLayerId, objectLayerId, PICK_TYPE_CONSTELLATION_LABEL, PICK_TYPE_DSO, PICK_TYPE_MOVING_BODY, PICK_TYPE_SHAPE, PICK_TYPE_STAR, type PickIndex, pickMatchesObject, sameObject } from './picking'
 import { CanvasRenderer } from './renderer'
 import { type CelestialTime, unixTimeOf } from './time'
 // oxfmt-ignore
@@ -47,13 +47,14 @@ const LAYER_CANVAS_GROUPS: Record<string, string> = {
 	deepSky: 'sky',
 	stars: 'stars',
 	movingBodies: 'dynamic',
+	satellites: 'dynamic',
 	constellationLabels: 'dynamic',
 	shapes: 'dynamic',
 	overlay: 'overlay',
 }
 
 // Layers whose content depends on time and observer and must redraw after an astronomical update.
-const ASTRONOMICAL_DIRTY_LAYER_IDS = ['grid', 'referenceLines', 'milkyWay', 'constellations', 'constellationBoundaries', 'constellationLabels', 'deepSky', 'stars', 'movingBodies', 'shapes'] as const
+const ASTRONOMICAL_DIRTY_LAYER_IDS = ['grid', 'referenceLines', 'milkyWay', 'constellations', 'constellationBoundaries', 'constellationLabels', 'deepSky', 'stars', 'movingBodies', 'satellites', 'shapes'] as const
 
 // Returns a wheel event's vertical delta in pixels, whatever its delta mode.
 function normalizedWheelDeltaY(event: WheelEvent) {
@@ -508,6 +509,7 @@ export class Celestial {
 		this.syncHoverMovingBodyObject()
 		this.rebuildPickingIndex()
 		this.#renderer.markDirty('movingBodies')
+		this.#renderer.markDirty('satellites')
 
 		if (id === undefined || (this.#selectedObject?.type === 'movingBody' && this.#selectedObject.object.id === id) || (this.#hoverObject?.type === 'movingBody' && this.#hoverObject.object.id === id)) {
 			this.#renderer.markDirty('overlay')
@@ -826,7 +828,8 @@ export class Celestial {
 			new ConstellationBoundaryLayer(),
 			new DeepSkyObjectLayer(),
 			new StarLayer(),
-			new MovingBodyLayer(),
+			new MovingBodyLayer('movingBodies', 60),
+			new MovingBodyLayer('satellites', 61),
 			new ConstellationLabelLayer(),
 			new ShapeLayer(),
 			new InteractionOverlayLayer(),
@@ -1299,17 +1302,15 @@ export class Celestial {
 			}
 		}
 
-		if (this.isLayerVisible('movingBodies')) {
-			for (let i = 0; i < this.#movingBodyList.length; i++) {
-				const object = this.#movingBodyList[i]
+		for (let i = 0; i < this.#movingBodyList.length; i++) {
+			const object = this.#movingBodyList[i]
 
-				if (object.visible === false || object.selectable === false || !isMovingBodyVisibleAtZoom(object, this.#transform.k)) {
-					continue
-				}
+			if (object.visible === false || object.selectable === false || !this.isLayerVisible(movingBodyLayerId(object.type)) || !isMovingBodyVisibleAtZoom(object, this.#transform.k)) {
+				continue
+			}
 
-				if (this.projectEquatorialToScreen(object.position.rightAscension, object.position.declination, this.#tempScreen)) {
-					this.#picking.add(PICK_TYPE_MOVING_BODY, i, this.#tempScreen[0], this.#tempScreen[1], movingBodyMagnitude(object))
-				}
+			if (this.projectEquatorialToScreen(object.position.rightAscension, object.position.declination, this.#tempScreen)) {
+				this.#picking.add(PICK_TYPE_MOVING_BODY, i, this.#tempScreen[0], this.#tempScreen[1], movingBodyMagnitude(object))
 			}
 		}
 

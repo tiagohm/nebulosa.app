@@ -112,6 +112,7 @@ const DEFAULT_LAYER_VISIBILITY: Record<string, boolean> = {
 	horizon: true,
 	deepSky: true,
 	movingBodies: true,
+	satellites: true,
 	shapes: true,
 	overlay: true,
 }

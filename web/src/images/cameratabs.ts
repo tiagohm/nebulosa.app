@@ -1,5 +1,6 @@
 import type { CaptureFrameOpened, CaptureFrameSummary, CaptureLeaseReconcileResponse, ServerEvent } from 'api'
 import { ref } from 'valtio'
+import type { CameraRole } from '../equipment/roles'
 import { clientId } from '../events'
 import { jsonInit, responseError } from '../http'
 import { adaptView } from '../viewer/transform'
@@ -52,6 +53,16 @@ export interface CameraTabSource {
 	readonly id: string
 	// Driver-reported camera name.
 	readonly name: string
+	// Role the camera fills in the active equipment setup; absent when it has none.
+	readonly role?: CameraRole
+}
+
+// Position of the tabs of each camera role: the Main Camera first, the Guide Camera next, and cameras without a role last.
+const CAMERA_TAB_RANK: Readonly<Record<CameraRole, number>> = { MAIN_CAMERA: 0, GUIDE_CAMERA: 1 }
+
+// Position of a camera tab among the camera tabs by the role of its camera.
+function cameraTabRank({ role }: CameraTabSource) {
+	return role === undefined ? 2 : CAMERA_TAB_RANK[role]
 }
 
 // View state and tool context of each camera tab removed with its camera, by document key; given back when the
@@ -100,11 +111,11 @@ function cameraTabNames(cameras: readonly CameraTabSource[]): Map<string, string
 // Makes the camera tabs match the connected cameras of the watched connection: a tab is added for each camera
 // without one, with the view state it had when its camera disconnected, and shows the latest frame of the camera
 // when frames knows one; the tab of a camera no longer listed is removed, releasing its lease, and its view state is
-// kept for its return. Camera tabs come first, ordered by camera name then id, never by the time of their frames;
-// the other documents keep their order. The active document changes only when it was removed, or when there was
+// kept for its return. Camera tabs come first, the Main Camera, then the Guide Camera, then the others by camera name
+// then id, never by the time of their frames; the other documents keep their order. The active document changes only when it was removed, or when there was
 // none.
 export function reconcileCameraTabs(state: ImagesState, cameras: readonly CameraTabSource[], frames: Pick<CaptureFramesState, 'sources'>, io: ImagesIo = browserIo, client: string = clientId) {
-	const sorted = cameras.toSorted((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+	const sorted = cameras.toSorted((a, b) => cameraTabRank(a) - cameraTabRank(b) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
 	const names = cameraTabNames(sorted)
 	const added: string[] = []
 

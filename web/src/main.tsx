@@ -20,8 +20,9 @@ import { domeMotionRuntime, handleDomeMotionEvent, refreshDomeMotions } from './
 import { focuserBacklashRuntime, handleFocuserBacklashEvent, refreshFocuserBacklash } from './equipment-control/focuserBacklash'
 import { handleIndiDirectoryEvent, indiDirectory, refreshIndiDirectory } from './equipment-control/indi/directory'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
+import { CAMERA_ROLES } from './equipment/roles'
 import { onClose, onOpen, subscribe } from './events'
-import { handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
+import { type CameraTabSource, handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
 import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessing } from './images/imageprocessing'
 import { confirmUnsavedOnUnload, imagesState } from './images/images'
@@ -29,7 +30,7 @@ import { handleMountPointingEvent, mountPointingRuntime, refreshMountPointing } 
 import { handleNotificationEvent, notificationsState, refreshNotifications, setServerLink } from './notifications/notifications'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
-import { profileState, pruneNotificationPreferences } from './profile/profile'
+import { activeProfile, activeSetup, profileState, pruneNotificationPreferences } from './profile/profile'
 import { WorkspaceSync } from './profile/sync'
 import { activeCameraTabEntry, cameraToolsEntry, centeringTargetsEntry, keepViewEntries, sectionsEntry, ViewPersistence } from './profile/view'
 import { WorkspaceGate } from './profile/WorkspaceGate'
@@ -49,10 +50,16 @@ import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRem
 // Synchronization of the saved connections and the profiles of the tab with the server.
 const workspace = new WorkspaceSync(connectionState, profileState)
 
-// Gives the Images workspace a camera tab for each connected camera of the watched connection, and removes the tabs of
-// the others.
+// Gives the Images workspace a camera tab for each connected camera of the watched connection, ordered by the role each
+// one fills in the equipment setup of the active profile (none before the workspace is read), and removes the tabs of the
+// others.
 function syncCameraTabs() {
-	const cameras = deviceState.devices.filter((device) => device.type === 'camera' && device.connected).map(({ connectionId, id, name }) => ({ connectionId, id, name }))
+	const profile = profileState.profiles.length > 0 ? activeProfile(profileState) : undefined
+	const setup = profile ? activeSetup(profile) : {}
+	const roleOf = (connectionId: string, id: string) => (connectionId === deviceState.watched ? CAMERA_ROLES.find((role) => setup[role]?.id === id) : undefined)
+
+	const cameras = deviceState.devices.filter((device) => device.type === 'camera' && device.connected).map(({ connectionId, id, name }): CameraTabSource => ({ connectionId, id, name, role: roleOf(connectionId, id) }))
+
 	reconcileCameraTabs(imagesState, cameras, captureFramesState)
 }
 
@@ -109,6 +116,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 // Functions that stop this run's persistence and event subscriptions.
 const stops = [
 	subscribeState(deviceState, syncCameraTabs),
+	subscribeState(profileState, syncCameraTabs),
 	workspace.start(),
 	new ViewPersistence(profileState).start(),
 	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), activeCameraTabEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime)]),

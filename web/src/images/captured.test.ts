@@ -158,6 +158,20 @@ describe('camera tabs', () => {
 		)
 
 		expect(state.documents.map((d) => d.name)).toEqual(['Guide · a', 'Guide · c', 'Main', 'm42.fits'])
+
+		// The setup gives the cameras their roles: the Main Camera comes first, the Guide Camera next, then the others.
+		reconcileCameraTabs(
+			state,
+			[
+				{ connectionId: 'conn', id: 'b', name: 'Main', role: 'MAIN_CAMERA' },
+				{ connectionId: 'conn', id: 'a', name: 'Guide' },
+				{ connectionId: 'conn', id: 'c', name: 'Guide', role: 'GUIDE_CAMERA' },
+			],
+			framesOf(),
+			io,
+			'page',
+		)
+		expect(state.documents.map((d) => d.name)).toEqual(['Main', 'Guide · c', 'Guide · a', 'm42.fits'])
 		expect(state.documents.map((d) => isClosable(d))).toEqual([false, false, false, true])
 	})
 

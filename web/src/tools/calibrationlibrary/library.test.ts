@@ -47,6 +47,8 @@ describe('text', () => {
 		expect(groupTitle(group('dark'))).toBe('180 s · -10 °C')
 		expect(groupTitle(group('bias'))).toBe('100×80')
 		expect(groupTitle(group('flat', { metadata: metadata({ filter: verified('L') }) }))).toBe('L · 180 s')
+		// A flat group may combine exposures; its title names their range instead of one of them.
+		expect(groupTitle(group('flat', { metadata: metadata({ filter: verified('L') }), exposures: [10000, 298523] }))).toBe('L · 0.01–0.298523 s')
 	})
 
 	test('sizes', () => {

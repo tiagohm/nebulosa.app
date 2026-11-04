@@ -755,6 +755,24 @@ describe('flats', () => {
 		expect(library.jobs.latest(10)).toHaveLength(0)
 	})
 
+	test('a flat group of several exposures names their range, and one of a single exposure none', async () => {
+		const { library } = open(local)
+		const folder = directory('flats')
+
+		for (const [frame, exposure] of [0.01, 0.298523, 0.298523].entries()) {
+			const path = await writeFrame(join(folder, `${frame}.fit`), () => 20000, { ...flatKeywords, EXPTIME: exposure })
+			await library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
+		}
+
+		const [flat] = (await library.groups({ kind: 'flat' }, 0, 50)).items
+		expect(flat.usable).toBe(3)
+		expect(flat.exposures).toEqual([10000, 298523])
+
+		const first = (await library.group(flat.groupId)).sources.find(({ metadata }) => metadata.exposure.value === 10000)!
+		await library.exclude(first.sourceId, true)
+		expect((await library.groups({ kind: 'flat' }, 0, 50)).items[0].exposures).toBeUndefined()
+	})
+
 	test('a flat without a correction never becomes a master', async () => {
 		const { library } = open(local)
 		const folder = directory('flats')

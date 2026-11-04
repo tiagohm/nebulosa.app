@@ -97,8 +97,8 @@ export function settingsText({ gain, offset, binX, binY, readoutMode }: Calibrat
 }
 
 // Text of what distinguishes a group among those of its role.
-export function groupTitle({ kind, metadata }: Pick<CalibrationGroupSummary, 'kind' | 'metadata'>) {
-	if (kind === 'flat') return `${metadata.filter.value ?? 'No filter'} · ${exposureText(metadata)}`
+export function groupTitle({ kind, metadata, exposures }: Pick<CalibrationGroupSummary, 'kind' | 'metadata' | 'exposures'>) {
+	if (kind === 'flat') return `${metadata.filter.value ?? 'No filter'} · ${exposures ? `${exposures[0] / 1000000}–${exposures[1] / 1000000} s` : exposureText(metadata)}`
 	if (kind === 'bias') return `${metadata.width}×${metadata.height}`
 	return `${exposureText(metadata)} · ${temperatureText(metadata)}`
 }

@@ -166,6 +166,9 @@ export interface CalibrationGroupSummary {
 	readonly kind: CalibrationKind
 	// What its frames share.
 	readonly metadata: CalibrationMetadata
+	// Shortest and longest exposure of the frames it compares, in integer microseconds, when they differ: a flat group
+	// combines frames of any exposure, which only a bias can correct together. Absent when they share one.
+	readonly exposures?: readonly [minimum: number, maximum: number]
 	// Frames, and those a master can use.
 	readonly total: number
 	readonly usable: number
@@ -339,6 +342,20 @@ function mergedMetadata(frames: readonly CalibrationMetadata[]): CalibrationMeta
 	let sum = 0
 	for (const reading of readings) sum += reading
 	return { ...frames[0], sensorTemperature: { value: Math.round((sum / readings.length) * 100) / 100, evidence: frames[0].sensorTemperature.evidence } }
+}
+
+// Returns the shortest and longest known exposure of frames, in integer microseconds, or undefined when they share one.
+function exposureRange(frames: readonly CalibrationMetadata[]): readonly [minimum: number, maximum: number] | undefined {
+	let minimum = Number.POSITIVE_INFINITY
+	let maximum = Number.NEGATIVE_INFINITY
+
+	for (const { exposure } of frames) {
+		if (exposure.value === undefined) continue
+		minimum = Math.min(minimum, exposure.value)
+		maximum = Math.max(maximum, exposure.value)
+	}
+
+	return minimum < maximum ? [minimum, maximum] : undefined
 }
 
 // Returns the most frames a plan required of these frames, 0 when none did.
@@ -605,10 +622,12 @@ export class CalibrationLibrary {
 
 		const masters = this.store.masters({ groupId }, 0, 20).items.map(masterSummary)
 		const metadata = mergedMetadata(compared.map(({ metadata }) => metadata))
+		const exposures = exposureRange(compared.map(({ metadata }) => metadata))
 		return {
 			groupId,
 			kind: sources[0].kind,
 			metadata,
+			...(exposures && { exposures }),
 			total: sources.length,
 			usable: candidates.length,
 			unavailable,

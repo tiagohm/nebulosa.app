@@ -56,6 +56,7 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 			{ name: 'SkyBoT', owner: 'LTE, Observatoire de Paris / CNRS (developed by IMCCE)', url: 'https://ssp.imcce.fr/webservices/skybot/', use: 'Solar system objects in the field of Image Annotation.', notice: 'This research has made use of LTE SkyBoT VO tool.' },
 			{ name: 'Solar Dynamics Observatory', owner: 'NASA', url: 'https://sdo.gsfc.nasa.gov/', use: 'Latest images of the Sun in the Sun Inspector.', notice: 'Courtesy of NASA/SDO and the AIA, EVE, and HMI science teams.' },
 			{ name: 'Space Weather Prediction Center', owner: 'NOAA', url: 'https://www.swpc.noaa.gov/', use: 'Active regions of the Sun in the Sun Inspector.' },
+			{ name: 'CelesTrak', owner: 'T.S. Kelso', url: 'https://celestrak.org/', use: 'Orbital elements (GP) and catalog data (SATCAT) of artificial satellites, downloaded on request under its usage policy.', notice: 'Data provided by CelesTrak (https://celestrak.org/usage-policy.php).' },
 			{ name: 'Earth orientation data', owner: 'IERS, with its USNO mirror', url: 'https://www.iers.org/', use: 'UT1 and polar motion of the whole server.' },
 			{ name: 'Nova Astrometry.net', owner: 'Astrometry.net', url: 'https://nova.astrometry.net/', use: 'Optional online plate solving, with your own account.' },
 		],

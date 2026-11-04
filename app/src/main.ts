@@ -1,4 +1,4 @@
-import { type AboutInfo, type ConnectRequest, closeDatabase, createAboutRoutes, identifyJplClient, reopenConnections, routes, startDatabase, startEarthOrientation, startStores, stopOperations, stopServer, websocket } from 'api'
+import { type AboutInfo, type ConnectRequest, closeDatabase, createAboutRoutes, identifyCelestrakClient, identifyJplClient, reopenConnections, routes, startDatabase, startEarthOrientation, startStores, stopOperations, stopServer, websocket } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
 import { serverAddress } from './address'
@@ -51,6 +51,7 @@ try {
 }
 
 identifyJplClient(version)
+identifyCelestrakClient(version)
 
 // The first request already reads the same Earth orientation data as every later one.
 await startEarthOrientation()

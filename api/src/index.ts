@@ -47,6 +47,10 @@ import { createOperationHistoryRoutes, OperationRecorder } from './operationhist
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
+import { createSatelliteRoutes, SatelliteService } from './satellites'
+import { SatelliteEphemeris } from './satellites.ephemeris'
+import { SatelliteStore } from './satellites.store'
+import { SatelliteSync } from './satellites.sync'
 import { annotationSky, minorBodies, skyLocator, skyRoutes, ssdRequests } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createStarProfileRoutes, StarProfileService } from './starprofile'
@@ -253,6 +257,30 @@ export type { MountRemoteClient, MountRemoteControlEvent, MountRemoteErrorCode, 
 export type { OperationDevice, OperationEvent, OperationKind, OperationProgress, OperationRecord, OperationState } from './operations'
 export type { OperationHistoryPage, OperationRun, OperationRunDevice, OperationRunState } from './operationhistory'
 export type { RotatorMoveByRequest, RotatorMoveToRequest, RotatorReverseRequest, RotatorSyncRequest } from './rotators'
+export type {
+	SatelliteDetails,
+	SatelliteElementSourceRequest,
+	SatelliteEphemerisRequest,
+	SatelliteEphemerisResponse,
+	SatelliteErrorCode,
+	SatelliteGroupStatus,
+	SatelliteImportRequest,
+	SatelliteImportResponse,
+	SatellitePassesRequest,
+	SatellitePassesResponse,
+	SatellitePositionRequest,
+	SatellitePositionResponse,
+	SatelliteRefreshResponse,
+	SatellitesChangedEvent,
+	SatelliteSourcesSnapshot,
+	SatelliteTrackEntry,
+	SatelliteTracksRequest,
+	SatelliteTracksResponse,
+} from './satellites'
+export type { RejectedRecord, SatelliteRecordError } from './satellites.elements'
+export type { SatelliteElementsRef, SatelliteEphemerisRow, SatelliteOrbitSummary, SatellitePassPoint, SatellitePassPrediction, SatellitePosition, SatelliteQuality, SatelliteQualityReason, SatelliteSuitability, SatelliteTrack, SatelliteVisiblePart } from './satellites.ephemeris'
+export type { SatelliteCatalogMetadata, SatelliteElementKind, SatelliteObjectType, SatelliteProvider, SatelliteSearchPage, SatelliteSourceState, SatelliteSummary } from './satellites.store'
+export type { SatelliteRefreshErrorCode } from './satellites.sync'
 export type { WheelMoveRequest, WheelNamesRequest } from './wheels'
 export type {
 	AstapStarDetectionSettings,
@@ -727,6 +755,12 @@ const earthOrientation = new EarthOrientationData()
 // Conversions of the Astronomical Time Converter and the real-time reference of the status bar clock.
 const astronomicalTime = new AstronomicalTimeService(earthOrientation)
 
+// Artificial satellite catalog of the operational database, its CelesTrak downloads under the provider's fair-use
+// rules, and the SGP4 predictions of the Artificial Satellites tool and the Sky.
+const satelliteStore = new SatelliteStore(database)
+const satelliteSync = new SatelliteSync(satelliteStore, () => satellites.changed())
+const satellites = new SatelliteService(satelliteStore, satelliteSync, new SatelliteEphemeris((utc) => earthOrientation.coverage(utc)), broadcast)
+
 // Opens the operational database and brings its schema up to date, before anything is served, creates the Default
 // profile when it has none, and records the operations and the pointing model acquisitions a previous run left running
 // as interrupted; nothing resumes them. Throws an Error saying why it cannot be opened (another server uses it, the file
@@ -818,6 +852,12 @@ export function identifyJplClient(version: string) {
 	ssdRequests.identify(version)
 }
 
+// Names the running version to CelesTrak in the User-Agent of the satellite catalog downloads. Called by the app before
+// it serves, like identifyJplClient.
+export function identifyCelestrakClient(version: string) {
+	satelliteSync.identify(version)
+}
+
 // Bun.serve routes under /api/.
 export const routes = {
 	'/api/health': {
@@ -869,6 +909,7 @@ export const routes = {
 	...createCloseApproachRoutes(closeApproaches),
 	...createAstroWeatherRoutes(astroWeather),
 	...createAstronomicalTimeRoutes(astronomicalTime),
+	...createSatelliteRoutes(satellites),
 	'/api/ws': {
 		// Upgrades to the event WebSocket, attaching the client id the tab names itself with; Bun sends the handshake
 		// response itself.

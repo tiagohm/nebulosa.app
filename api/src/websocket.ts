@@ -23,6 +23,7 @@ import type { MountNudgeEvent } from './mounts'
 import type { NotificationCreatedEvent } from './notifications'
 import type { OperationEvent } from './operations'
 import type { PlateSolvingEvent } from './platesolving'
+import type { SatellitesChangedEvent } from './satellites'
 import type { StarDetectionEvent } from './stars'
 import type { StreakDetectionEvent } from './streaks'
 import type { TargetCenteringEvent } from './targetcentering'
@@ -70,6 +71,7 @@ export type ServerEvent =
 	| FocuserBacklashEvent
 	| GuidingServerEvent
 	| NotificationCreatedEvent
+	| SatellitesChangedEvent
 	| IndiServerEvent
 
 // Any control message a tab sends over its socket.

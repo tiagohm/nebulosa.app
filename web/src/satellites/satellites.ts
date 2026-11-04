@@ -1,11 +1,12 @@
-import type { SatelliteRefreshResponse, SatelliteSourcesSnapshot, ServerEvent } from 'api'
+import type { SatelliteAutoDownloadRequest, SatelliteRefreshResponse, SatelliteSourcesSnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../http'
 
 // Mirror of the artificial satellite catalog of the server: the download state of its CelesTrak sources, fed by
-// GET /api/satellites/sources and the satellites:changed events, and the downloads this tab asks for. The catalog and
-// its fair-use rules are the server's; a download refused for its interval or a block only shows why. The revision of
-// the last change seen is what the views of the tool and the Sky watch to read their own data again.
+// GET /api/satellites/sources and the satellites:changed events, the downloads this tab asks for, and the choice of the
+// groups downloaded automatically. The catalog and its fair-use rules are the server's; a download refused for its
+// interval or a block only shows why. The revision of the last change seen is what the views of the tool and the Sky
+// watch to read their own data again.
 
 // Catalog sources known to the tab and the downloads in flight.
 export interface SatelliteCatalogState {
@@ -74,5 +75,30 @@ export async function downloadSatelliteSource(state: SatelliteCatalogState, sour
 		return false
 	} finally {
 		delete state.downloading[sourceKey]
+	}
+}
+
+// Asks the server to download a group automatically, or no longer: at the start of the server and every 6 hours, within
+// the fair-use interval of the group. Returns whether the server took the choice; a failure is kept in errors by the
+// source key of the group.
+export async function setSatelliteAutoDownload(state: SatelliteCatalogState, sourceKey: string, enabled: boolean, request: typeof fetch = fetch) {
+	delete state.errors[sourceKey]
+
+	try {
+		const response = await request(`/api/satellites/sources/${encodeURIComponent(sourceKey)}/auto-download`, jsonInit('PUT', { enabled } satisfies SatelliteAutoDownloadRequest))
+
+		if (!response.ok) {
+			state.errors[sourceKey] = await responseError(response)
+			return false
+		}
+
+		const snapshot = (await response.json()) as SatelliteSourcesSnapshot
+		++generation
+		state.snapshot = snapshot
+		state.revision = snapshot.revision
+		return true
+	} catch {
+		state.errors[sourceKey] = 'The server could not be reached'
+		return false
 	}
 }

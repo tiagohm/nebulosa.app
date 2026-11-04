@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import type { EarthOrientationCoverage } from './astronomicaltime.eop'
 import { AppDatabase } from './database'
 import { createSatelliteRoutes, type SatelliteDetails, type SatelliteImportResponse, type SatellitePassesResponse, type SatellitePositionResponse, type SatelliteRefreshResponse, SatelliteService, type SatellitesChangedEvent, type SatelliteSourcesSnapshot, type SatelliteTracksResponse } from './satellites'
+import { AUTO_DOWNLOAD_SCHEDULE, SatelliteAutoDownload } from './satellites.auto'
 import { SatelliteEphemeris } from './satellites.ephemeris'
 import { type SatelliteSearchPage, SatelliteStore } from './satellites.store'
 import { SatelliteSync } from './satellites.sync'
@@ -51,7 +52,7 @@ function setup(...bodies: unknown[][]) {
 	const store = new SatelliteStore(AppDatabase.memory())
 	const sync = new SatelliteSync(store, () => service.changed(), { fetch })
 	const service = new SatelliteService(store, sync, new SatelliteEphemeris((): EarthOrientationCoverage => ({ status: 'covered' })), (event) => events.push(event))
-	return { routes: createSatelliteRoutes(service), events, requests, store }
+	return { routes: createSatelliteRoutes(service), events, requests, store, service }
 }
 
 async function call(routes: Routes, path: keyof Routes, method: string, params: Record<string, string> = {}, body?: unknown, query = ''): Promise<Reply<unknown>> {
@@ -177,4 +178,45 @@ test('tracks sample the objects asked for, then the members of a group above the
 	const geocentric = (await call(routes, '/api/satellites/tracks', 'POST', {}, { ...request, observer: undefined })) as Reply<SatelliteTracksResponse>
 	expect(geocentric.body.tracks).toHaveLength(50)
 	expect(geocentric.body.tracks[2].noradId).toBe('1000')
+})
+
+test('groups turned on are downloaded at the start, never again inside their interval, and not after release', async () => {
+	const { routes, requests, service } = setup([gp(25544, 'ISS (ZARYA)')], [{ OBJECT_NAME: 'ISS (ZARYA)', OBJECT_ID: '1998-067A', NORAD_CAT_ID: 25544, OBJECT_TYPE: 'PAY' }], [gp(28654, 'NOAA 18')])
+
+	const missing = await call(routes, '/api/satellites/sources/:sourceKey/auto-download', 'PUT', { sourceKey: encodeURIComponent('gp:CATNR:25544') }, { enabled: true })
+	expect(missing.status).toBe(404)
+
+	for (const group of ['STATIONS', 'STARLINK']) {
+		const { status, body } = (await call(routes, '/api/satellites/sources/:sourceKey/auto-download', 'PUT', { sourceKey: encodeURIComponent(`gp:GROUP:${group}`) }, { enabled: true })) as Reply<SatelliteSourcesSnapshot>
+		expect(status).toBe(200)
+		expect(body.groups.find((entry) => entry.group === group)?.autoDownload).toBeTrue()
+	}
+
+	expect(requests).toHaveLength(0)
+
+	const jobs: { schedule: string; stopped: boolean; run: () => Promise<void> }[] = []
+	const auto = new SatelliteAutoDownload(service, {
+		schedule: (schedule, run) => {
+			const job = { schedule, stopped: false, run }
+			jobs.push(job)
+			return { stop: () => (job.stopped = true) }
+		},
+	})
+
+	auto.start()
+	auto.start()
+	await auto.run()
+	expect(jobs.map((job) => job.schedule)).toEqual([AUTO_DOWNLOAD_SCHEDULE])
+	// The SATCAT of a large group is never downloaded with its elements.
+	expect(requests.map((url) => new URL(url).search)).toEqual(['?GROUP=STATIONS&FORMAT=JSON', '?GROUP=STATIONS&FORMAT=JSON', '?GROUP=STARLINK&FORMAT=JSON'])
+	expect(service.search({ text: 'NOAA', limit: 10 }).total).toBe(1)
+
+	await jobs[0].run()
+	expect(requests).toHaveLength(3)
+
+	const off = (await call(routes, '/api/satellites/sources/:sourceKey/auto-download', 'PUT', { sourceKey: encodeURIComponent('gp:GROUP:STARLINK') }, { enabled: false })) as Reply<SatelliteSourcesSnapshot>
+	expect(off.body.groups.filter((entry) => entry.autoDownload).map((entry) => entry.group)).toEqual(['STATIONS'])
+
+	auto[Symbol.dispose]()
+	expect(jobs[0].stopped).toBeTrue()
 })

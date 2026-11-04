@@ -3,7 +3,7 @@ import type { AppDatabase } from './database'
 
 // Catalog of artificial satellites kept in the operational database: the identity and SATCAT metadata of each object,
 // its element sets (the latest GP set and the last imported one), the groups of the sources, and the download state of
-// each CelesTrak query. Shared by every profile. A download is published in one short transaction, so a failure never
+// each CelesTrak query, and the groups downloaded automatically. Shared by every profile. A download is published in one short transaction, so a failure never
 // leaves a partial catalog, and a source that fails keeps its previous rows. NORAD ids are canonical decimal strings.
 
 // Kind of an element set: GP from CelesTrak, or imported by an operator.
@@ -391,6 +391,21 @@ export class SatelliteStore {
 	// Writes the download state of a source, such as a failed attempt; the data of the source is unchanged.
 	saveSource(state: SatelliteSourceState) {
 		this.database.write(() => this.#saveSource(state))
+	}
+
+	// Returns the source keys of the groups downloaded automatically, in the order they were turned on.
+	autoDownloads(): string[] {
+		return this.database.db
+			.query<{ source_key: string }, []>('SELECT source_key FROM satellite_auto_downloads ORDER BY enabled_at, source_key')
+			.all()
+			.map((row) => row.source_key)
+	}
+
+	// Turns the automatic downloads of a group on or off; `at` is the instant, Unix milliseconds (UTC). Turning on a group
+	// already on keeps its first instant.
+	setAutoDownload(sourceKey: string, enabled: boolean, at: number) {
+		if (enabled) this.database.db.query('INSERT INTO satellite_auto_downloads (source_key, enabled_at) VALUES (?, ?) ON CONFLICT (source_key) DO NOTHING').run(sourceKey, at)
+		else this.database.db.query('DELETE FROM satellite_auto_downloads WHERE source_key = ?').run(sourceKey)
 	}
 
 	// Sets the element set an operator chose for an object; undefined restores GP, then imported. Returns false when the

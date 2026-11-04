@@ -3,7 +3,7 @@ import { satelliteLookAngles } from 'nebulosa/src/astronomy/events/satellite'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { errorResponse } from './http'
-import { CELESTRAK_GROUPS, celestrakSourceKey } from './satellites.celestrak'
+import { CELESTRAK_GROUPS, celestrakSourceKey, parseCelestrakSourceKey } from './satellites.celestrak'
 import { normalizeImport, type RejectedRecord } from './satellites.elements'
 import { type SatelliteElementsRef, type SatelliteEphemeris, type SatelliteEphemerisTable, type SatelliteOrbitSummary, type SatellitePasses, type SatellitePosition, type SatelliteQuality, type SatelliteTrack, SATELLITE_LIMITS } from './satellites.ephemeris'
 import { MANUAL_SOURCE_KEY, type SatelliteElementKind, type SatelliteElementSet, type SatelliteObjectType, type SatelliteSearchPage, type SatelliteSourceState, type SatelliteStore, type SatelliteSummary } from './satellites.store'
@@ -13,8 +13,8 @@ import { SkySatelliteError, type SkySatellites } from './sky/routes'
 import type { SkySearchResult } from './sky/types'
 
 // Artificial Satellites service: the catalog search, the details of an object, the downloads of CelesTrak sources an
-// operator asks for, operator imports, and the predictions (position, passes, ephemeris, and the tracks the Sky map
-// interpolates) of the element set each object uses. Predictions are read-only and stay in memory; the catalog is the
+// operator asks for and the choice of the groups downloaded automatically, operator imports, and the predictions
+// (position, passes, ephemeris, and the tracks the Sky map interpolates) of the element set each object uses. Predictions are read-only and stay in memory; the catalog is the
 // database's. After every change of the catalog `satellites:changed` carries a new revision, so tabs read their
 // snapshots again. Times are Unix milliseconds (UTC), angles radians, observers geodetic degrees and meters.
 
@@ -51,6 +51,8 @@ export interface SatelliteGroupStatus {
 	// Earliest instant of the next GP and SATCAT downloads, Unix milliseconds (UTC); 0 when allowed now.
 	readonly gpAllowedAt: number
 	readonly satcatAllowedAt: number
+	// Whether the group is downloaded automatically at the start of the server and every 6 hours.
+	readonly autoDownload: boolean
 }
 
 // Snapshot of the catalog sources (GET /api/satellites/sources).
@@ -73,6 +75,12 @@ export interface SatelliteRefreshResponse {
 	readonly results: readonly { readonly sourceKey: string; readonly records: number; readonly rejected: number }[]
 	// Sources after the downloads.
 	readonly snapshot: SatelliteSourcesSnapshot
+}
+
+// Body of PUT /api/satellites/sources/:sourceKey/auto-download.
+export interface SatelliteAutoDownloadRequest {
+	// Whether the group is downloaded automatically.
+	readonly enabled: boolean
 }
 
 // Details of an object (GET /api/satellites/:noradId).
@@ -222,6 +230,7 @@ export class SatelliteService {
 		const byKey = new Map(sources.map((source) => [source.sourceKey, source]))
 		const sizes = new Map(this.store.groups().map((group) => [group.sourceKey, group.members]))
 		const now = Date.now()
+		const automatic = new Set(this.store.autoDownloads())
 		const allowedAt = (key: string) => {
 			const next = this.sync.nextAllowedAt(key)
 			return next > now ? next : 0
@@ -230,7 +239,7 @@ export class SatelliteService {
 		const groups = CELESTRAK_GROUPS.map(({ group, label, ...rest }): SatelliteGroupStatus => {
 			const gp = celestrakSourceKey('gp', 'GROUP', group)
 			const satcat = celestrakSourceKey('satcat', 'GROUP', group)
-			return { group, label, large: 'large' in rest && rest.large, members: sizes.get(gp) ?? 0, gp: byKey.get(gp), satcat: byKey.get(satcat), gpAllowedAt: allowedAt(gp), satcatAllowedAt: allowedAt(satcat) }
+			return { group, label, large: 'large' in rest && rest.large, members: sizes.get(gp) ?? 0, gp: byKey.get(gp), satcat: byKey.get(satcat), gpAllowedAt: allowedAt(gp), satcatAllowedAt: allowedAt(satcat), autoDownload: automatic.has(gp) }
 		})
 
 		return { revision: this.#revision, groups, sources, imported: sizes.get(MANUAL_SOURCE_KEY) ?? 0, objects: this.store.search({ limit: 1 }).total }
@@ -258,6 +267,16 @@ export class SatelliteService {
 		}
 
 		return { results, snapshot: this.snapshot() }
+	}
+
+	// Turns the automatic downloads of an allowlisted group on or off, by the source key of its GP elements, and returns
+	// the snapshot. Throws notFound for any other key. Downloads nothing: the next run of SatelliteAutoDownload does.
+	setAutoDownload(sourceKey: string, enabled: boolean): SatelliteSourcesSnapshot {
+		const query = parseCelestrakSourceKey(sourceKey)
+		if (query?.provider !== 'gp' || query.type !== 'GROUP') throw new SatelliteError(`${sourceKey} is not a CelesTrak group`, 404, 'notFound')
+		this.store.setAutoDownload(query.sourceKey, enabled, Date.now())
+		this.changed()
+		return this.snapshot()
 	}
 
 	// Imports OMM JSON or TLE text as the element sets of their objects, which their predictions then use. Throws
@@ -518,6 +537,11 @@ export function createSatelliteRoutes(service: SatelliteService) {
 			// Downloads a source (SatelliteRefreshResponse); 404 notFound outside the allowlist, 409 sourceCooldown or
 			// sourceBlocked with `source`, 502 upstreamUnavailable or invalidResponse with `source`.
 			POST: (req) => handle(async () => Response.json((await service.refresh(decodeURIComponent(req.params.sourceKey))) satisfies SatelliteRefreshResponse)),
+		},
+		'/api/satellites/sources/:sourceKey/auto-download': {
+			// Turns the automatic downloads of a group on or off (SatelliteAutoDownloadRequest, SatelliteSourcesSnapshot);
+			// 404 notFound for a key that is not an allowlisted group.
+			PUT: (req) => handle(async () => Response.json(service.setAutoDownload(decodeURIComponent(req.params.sourceKey), ((await req.json()) as SatelliteAutoDownloadRequest).enabled) satisfies SatelliteSourcesSnapshot)),
 		},
 		'/api/satellites/import': {
 			// Imports OMM JSON or TLE text (SatelliteImportRequest, SatelliteImportResponse); 422 invalidImport.

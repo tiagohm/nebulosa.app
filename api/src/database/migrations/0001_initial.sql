@@ -678,3 +678,12 @@ CREATE TABLE satellite_sources (
 	-- Revision of the data, increased by every successful download; 0 when never downloaded.
 	revision INTEGER NOT NULL CHECK (revision >= 0)
 ) STRICT;
+
+-- CelesTrak groups an operator chose to download automatically (SatelliteAutoDownload): at the start of the server and
+-- every 6 hours, each within its fair-use interval. A row is the choice; deleting it turns the downloads off.
+CREATE TABLE satellite_auto_downloads (
+	-- Source key of the GP elements of the group, such as gp:GROUP:STATIONS.
+	source_key TEXT PRIMARY KEY CHECK (source_key LIKE 'gp:GROUP:%'),
+	-- When the operator turned the downloads on, Unix milliseconds (UTC).
+	enabled_at INTEGER NOT NULL
+) STRICT;

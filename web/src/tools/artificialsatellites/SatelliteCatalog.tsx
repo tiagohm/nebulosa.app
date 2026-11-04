@@ -3,22 +3,19 @@ import { cn } from 'cn'
 import type { KeyboardEvent } from 'react'
 import { useSnapshot } from 'valtio'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
-import { downloadSatelliteSource, satelliteCatalogState } from '../../satellites/satellites'
-import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { satelliteCatalogState } from '../../satellites/satellites'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
-import { inputClassName } from '../../ui/Field'
 import { IconButton } from '../../ui/IconButton'
 import { moveIndex } from '../../ui/navigation'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
-import { Note } from '../eclipse/EclipsePanelParts'
-import { artificialSatellitesState, CATALOG_PAGE_SIZE, formatSatelliteTime, importSatelliteElements, searchSatellites, selectSatellite } from './artificialsatellites'
+import { artificialSatellitesState, CATALOG_PAGE_SIZE, formatSatelliteTime, searchSatellites, selectSatellite } from './artificialsatellites'
 
-// Catalog tab of Artificial Satellites: the local search of the server's catalog (never CelesTrak), its groups with
-// their downloads, and imports of element sets. A download is the only action that reaches CelesTrak, made by the
-// server under its fair-use rules: a refused one shows the server's reason, never a spinner.
+// Catalog tab of Artificial Satellites: the local search of the server's catalog (never CelesTrak), its pages, and the
+// favorites of the profile. The groups and their downloads are in the Settings of the tool, the imports in the Import
+// Elements popover of its workspace actions.
 
 // Names of the SATCAT object types.
 const OBJECT_TYPE_NAMES = { payload: 'Payload', rocketBody: 'Rocket body', debris: 'Debris', unknown: 'Unknown' } as const
@@ -129,7 +126,7 @@ function Results() {
 
 	if (searchError) return <EmptyState title="The catalog could not be searched" description={searchError} action={<Button onClick={() => search(offset)}>Retry</Button>} />
 	if (!results) return <EmptyState title={searching ? 'Searching' : 'No search yet'} />
-	if (items.length === 0) return <EmptyState title={snapshot?.objects === 0 ? 'No catalog downloaded' : 'No satellite matches'} description={snapshot?.objects === 0 ? 'Download a group below, such as Space stations, or import element sets.' : 'Change the search, or download more groups below.'} />
+	if (items.length === 0) return <EmptyState title={snapshot?.objects === 0 ? 'No catalog downloaded' : 'No satellite matches'} description={snapshot?.objects === 0 ? 'Download a group in Settings, such as Space stations, or import element sets.' : 'Change the search, or download more groups in Settings.'} />
 
 	return (
 		<div className="flex min-h-80 flex-1 flex-col">
@@ -169,86 +166,12 @@ function Results() {
 	)
 }
 
-// State of the downloads of a group, in words.
-function groupStatus(group: SatelliteGroupStatus, now: number) {
-	const parts = [group.members > 0 ? `${group.members} objects` : 'Not downloaded']
-	if (group.gp?.lastSuccessAt) parts.push(`elements read ${formatSatelliteTime(group.gp.lastSuccessAt, '')}`)
-	if (group.gpAllowedAt > now) parts.push(`next download from ${formatSatelliteTime(group.gpAllowedAt, '')}`)
-	if (group.gp?.lastError) parts.push(`last failure: ${group.gp.lastError}`)
-	return parts.join(' · ')
-}
-
-// Groups of CelesTrak with their downloads.
-function Sources() {
-	const { snapshot, downloading, errors } = useSnapshot(satelliteCatalogState)
-	const now = Date.now()
-	if (!snapshot) return <Note>Reading the catalog sources…</Note>
-
-	return (
-		<div className="flex flex-col gap-2">
-			<Note>Groups are downloaded from CelesTrak only when you ask, at most once per update of its data (every 2 hours), and never by opening the Sky or this tool. Large groups take longer and their catalog data is not downloaded with them.</Note>
-			<ul className="m-0 flex list-none flex-col gap-1 p-0">
-				{snapshot.groups.map((group) => {
-					const key = `gp:GROUP:${group.group}`
-					const waiting = group.gpAllowedAt > now
-					return (
-						<li key={key} className="flex flex-wrap items-center justify-between gap-2 border-b border-line-100 py-1.5 last:border-b-0">
-							<span className="min-w-0">
-								<span className="text-ink-100">{group.label}</span>
-								{group.large && <span className="ml-2 text-xs text-warning">large</span>}
-								<span className="block text-xs text-ink-300">{groupStatus(group, now)}</span>
-								{errors[key] && <span className="block text-xs text-danger">{errors[key]}</span>}
-							</span>
-							<Button
-								variant="secondary"
-								size="sm"
-								disabled={key in downloading || waiting}
-								title={waiting ? `CelesTrak is not asked again before ${formatSatelliteTime(group.gpAllowedAt, '')}.` : 'Downloads the elements of the group from CelesTrak.'}
-								onClick={() => void downloadSatelliteSource(satelliteCatalogState, key)}
-							>
-								{key in downloading ? 'Downloading…' : group.members > 0 ? 'Refresh' : 'Download'}
-							</Button>
-						</li>
-					)
-				})}
-			</ul>
-		</div>
-	)
-}
-
-// Import of element sets typed or pasted.
-function Import() {
-	const { importText, importing, importResult, importError } = useSnapshot(artificialSatellitesState)
-
-	return (
-		<div className="flex flex-col gap-2">
-			<textarea className={cn(inputClassName, 'h-32 resize-y py-2 font-mono text-xs')} placeholder={'OMM JSON, or TLE sets:\nISS (ZARYA)\n1 25544U 98067A …\n2 25544  51.6415 …'} value={importText} onChange={(event) => (artificialSatellitesState.importText = event.target.value)} />
-			<Button className="self-start" disabled={importing || !importText.trim()} onClick={() => void importSatelliteElements(artificialSatellitesState)}>
-				Import
-			</Button>
-			{importError && <Note danger>{importError}</Note>}
-			{importResult && (
-				<Note>
-					{importResult.imported.length} imported{importResult.imported.length > 0 ? `: ${importResult.imported.map((entry) => entry.name).join(', ')}` : ''}.
-					{importResult.rejected.length > 0 && ` ${importResult.rejected.length} left out (${importResult.rejected.map((entry) => `${entry.noradId ?? `#${entry.index + 1}`}: ${entry.error}`).join(', ')}).`} Imported elements are used for their satellites until you choose GP elements again.
-				</Note>
-			)}
-		</div>
-	)
-}
-
 // Catalog tab.
 export function SatelliteCatalog() {
 	return (
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto">
 			<SearchForm />
 			<Results />
-			<CollapsibleSection id="satellites.sources" title="CelesTrak Groups">
-				<Sources />
-			</CollapsibleSection>
-			<CollapsibleSection id="satellites.import" title="Import Elements" defaultOpen={false}>
-				<Import />
-			</CollapsibleSection>
 		</div>
 	)
 }

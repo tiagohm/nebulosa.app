@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test'
 import type { SatelliteSourcesSnapshot } from 'api'
 import { proxy } from 'valtio'
-import { downloadSatelliteSource, handleSatelliteEvent, refreshSatelliteCatalog, type SatelliteCatalogState } from './satellites'
+import { downloadSatelliteSource, handleSatelliteEvent, refreshSatelliteCatalog, type SatelliteCatalogState, setSatelliteAutoDownload } from './satellites'
 
-function snapshot(revision: number, members = 0): SatelliteSourcesSnapshot {
-	return { revision, groups: [{ group: 'STATIONS', label: 'Space stations', large: false, members, gpAllowedAt: 0, satcatAllowedAt: 0 }], sources: [], imported: 0, objects: members }
+function snapshot(revision: number, members = 0, autoDownload = false): SatelliteSourcesSnapshot {
+	return { revision, groups: [{ group: 'STATIONS', label: 'Space stations', large: false, members, gpAllowedAt: 0, satcatAllowedAt: 0, autoDownload }], sources: [], imported: 0, objects: members }
 }
 
 function state() {
@@ -64,4 +64,25 @@ test('a download applies the snapshot it answers, and a refusal keeps the server
 	expect(await downloadSatelliteSource(catalog, 'gp:GROUP:STATIONS', offline as unknown as typeof fetch)).toBeFalse()
 	expect(catalog.errors['gp:GROUP:STATIONS']).toBe('The server could not be reached')
 	expect(catalog.downloading).toEqual({})
+})
+
+test('the automatic downloads of a group are asked of the server, and a refusal is kept by its key', async () => {
+	const catalog = state()
+	const requests: { url: string; init?: RequestInit }[] = []
+	let answer = Response.json(snapshot(4, 0, true))
+	const request = ((url: string, init?: RequestInit) => {
+		requests.push({ url, init })
+		return Promise.resolve(answer)
+	}) as typeof fetch
+
+	expect(await setSatelliteAutoDownload(catalog, 'gp:GROUP:STATIONS', true, request)).toBeTrue()
+	expect(requests[0].url).toBe('/api/satellites/sources/gp%3AGROUP%3ASTATIONS/auto-download')
+	expect(requests[0].init?.method).toBe('PUT')
+	expect(JSON.parse(requests[0].init?.body as string)).toEqual({ enabled: true })
+	expect(catalog.snapshot?.groups[0].autoDownload).toBeTrue()
+	expect(catalog.revision).toBe(4)
+
+	answer = Response.json({ error: 'gp:GROUP:NOPE is not a CelesTrak group', code: 'notFound' }, { status: 404 })
+	expect(await setSatelliteAutoDownload(catalog, 'gp:GROUP:NOPE', true, request)).toBeFalse()
+	expect(catalog.errors['gp:GROUP:NOPE']).toBe('gp:GROUP:NOPE is not a CelesTrak group')
 })

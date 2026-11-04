@@ -48,6 +48,7 @@ import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
 import { createSatelliteRoutes, SatelliteService, satelliteSkyAdapter } from './satellites'
+import { SatelliteAutoDownload } from './satellites.auto'
 import { SatelliteEphemeris } from './satellites.ephemeris'
 import { SatelliteStore } from './satellites.store'
 import { SatelliteSync } from './satellites.sync'
@@ -258,6 +259,7 @@ export type { OperationDevice, OperationEvent, OperationKind, OperationProgress,
 export type { OperationHistoryPage, OperationRun, OperationRunDevice, OperationRunState } from './operationhistory'
 export type { RotatorMoveByRequest, RotatorMoveToRequest, RotatorReverseRequest, RotatorSyncRequest } from './rotators'
 export type {
+	SatelliteAutoDownloadRequest,
 	SatelliteDetails,
 	SatelliteElementSourceRequest,
 	SatelliteEphemerisRequest,
@@ -760,6 +762,7 @@ const astronomicalTime = new AstronomicalTimeService(earthOrientation)
 const satelliteStore = new SatelliteStore(database)
 const satelliteSync = new SatelliteSync(satelliteStore, () => satellites.changed())
 const satellites = new SatelliteService(satelliteStore, satelliteSync, new SatelliteEphemeris((utc) => earthOrientation.coverage(utc)), broadcast)
+const satelliteAutoDownload = new SatelliteAutoDownload(satellites)
 
 // Opens the operational database and brings its schema up to date, before anything is served, creates the Default
 // profile when it has none, and records the operations and the pointing model acquisitions a previous run left running
@@ -790,7 +793,7 @@ export function stopOperations() {
 
 // Services holding devices, sockets, listeners, timers, or workers, in the order a server stopping in place releases them:
 // the sessions and commands before the registries they use, the connections last.
-const RESOURCES: readonly Disposable[] = [guiding, darkLibraryWizard, darkLibraryWizardAnalyzer, flatWizardAnalyzer, captures, captureFrames, mountRemoteControl, indi, mounts, corrections, guideOutputs, focusers, wheels, rotators, covers, flatPanels, domes, solarEclipses, operations, connections]
+const RESOURCES: readonly Disposable[] = [guiding, darkLibraryWizard, darkLibraryWizardAnalyzer, flatWizardAnalyzer, captures, captureFrames, mountRemoteControl, indi, mounts, corrections, guideOutputs, focusers, wheels, rotators, covers, flatPanels, domes, solarEclipses, satelliteAutoDownload, operations, connections]
 
 // Stops the server in place, as development does before a hot reload evaluates the server code again, which otherwise
 // leaves the previous run alive beside the new one: its connections to the devices, the operations commanding them, the
@@ -844,6 +847,13 @@ export async function startEarthOrientation() {
 export function startStores() {
 	void calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))
 	void imageStacking.ready().catch((error: unknown) => console.error('The image stacking projects could not be opened', error))
+}
+
+// Starts the automatic downloads of the CelesTrak groups an operator turned on: one run now, then every 6 hours, each
+// group within its fair-use interval. Called by the app after startDatabase and identifyCelestrakClient; a test that only
+// imports this module downloads nothing. Never rejects.
+export function startSatelliteDownloads() {
+	satelliteAutoDownload.start()
 }
 
 // Names the running version to JPL, as its fair-use policy asks of automated clients. Called by the app before it serves,

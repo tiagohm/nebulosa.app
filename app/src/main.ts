@@ -1,4 +1,4 @@
-import { type AboutInfo, type ConnectRequest, closeDatabase, createAboutRoutes, identifyCelestrakClient, identifyJplClient, reopenConnections, routes, startDatabase, startEarthOrientation, startStores, stopOperations, stopServer, websocket } from 'api'
+import { type AboutInfo, type ConnectRequest, closeDatabase, createAboutRoutes, identifyCelestrakClient, identifyJplClient, reopenConnections, startSatelliteDownloads, routes, startDatabase, startEarthOrientation, startStores, stopOperations, stopServer, websocket } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
 import { serverAddress } from './address'
@@ -58,6 +58,9 @@ await startEarthOrientation()
 
 // What a crash left of the products of the Calibration Library and Image Stacking is finished without anyone opening them.
 startStores()
+
+// The CelesTrak groups chosen for automatic downloads are read again when allowed, then every 6 hours.
+startSatelliteDownloads()
 
 // Host and port of the server: --host and --port, else APP_HOST and APP_PORT, else localhost and 7000 (serverAddress).
 const address = serverAddress(process.argv.slice(2), process.env)

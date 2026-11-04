@@ -162,9 +162,9 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 					<NumberInput label="Trial Frames" value={shown.maximumTrials} min={1} max={FLAT_WIZARD_MAXIMUM_TRIALS} disabled={locked} onChange={(maximumTrials) => update({ maximumTrials })} />
 					<NumberInput label="Rejections" value={shown.maximumRejections} min={0} max={FLAT_WIZARD_MAXIMUM_REJECTIONS} disabled={locked} onChange={(maximumRejections) => update({ maximumRejections })} />
 				</div>
-				<Notice>Trial frames search the exposure of each filter and are never saved; rejected frames are deleted, and a filter fails beyond these limits. Existing files are never replaced.</Notice>
+				<Notice>Accepted frames are saved in flats/ of this directory. Trial frames search the exposure of each filter and are never saved; rejected frames are deleted, and a filter fails beyond these limits. Existing files are never replaced.</Notice>
 				<Checkbox label="Generate masters after acquisition" checked={shown.generateMasters === true} disabled={locked} onChange={(generateMasters) => update({ generateMasters: generateMasters || undefined })} />
-				{shown.generateMasters === true && <Notice>Each filter that completes becomes a master flat in the Calibration Library, corrected by the only master dark-flat, or else the only master bias, that matches its frames. Without one, or with several to choose from, its flats wait there for you.</Notice>}
+				{shown.generateMasters === true && <Notice>Each filter that completes becomes a master flat in the Calibration Library, corrected by the newest master dark-flat, or else the newest master bias, that matches its frames. Without one, its flats wait there for you.</Notice>}
 			</CollapsibleSection>
 			<CollapsibleSection id="images.flat-wizard.filters" title="Filters">
 				{shown.filters.map((filter, index) => (

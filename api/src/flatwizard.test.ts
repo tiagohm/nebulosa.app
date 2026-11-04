@@ -245,10 +245,10 @@ describe('Flat Wizard sessions', () => {
 		])
 
 		// Only the accepted frames remain, byte for byte what was measured; the staging directory is gone.
-		expect(readdirSync(directory).toSorted()).toEqual(run.files.toSorted())
+		expect(readdirSync(join(directory, 'flats')).toSorted()).toEqual(run.files.toSorted())
 		expect(run.files.every((file) => file.includes('_FLAT_Filter 1_'))).toBeTrue()
 		const finals = measurement.calls.filter((call) => call.sample)
-		expect(finals.map((call) => readFileSync(join(directory, run.files[finals.indexOf(call)])).equals(call.bytes))).toEqual([true, true, true])
+		expect(finals.map((call) => readFileSync(join(directory, 'flats', run.files[finals.indexOf(call)])).equals(call.bytes))).toEqual([true, true, true])
 		expect(finals[0].context).toMatchObject({ exposure: 0.2, filter: 'Filter 1', illumination: { source: 'manual' } })
 
 		// Every exposure was previewed as a Flat Wizard frame; only the published ones are saved, under their final names.
@@ -282,7 +282,7 @@ describe('Flat Wizard sessions', () => {
 		expect(summary()!.filters[1].exposure).toBeCloseTo(0.48, 9)
 		expect(summary()!.filters[0].sequence).toEqual({ status: 'notEvaluated', reason: 'At least three accepted frames are needed' })
 		expect(panel.enabled).toBeFalse()
-		expect(readdirSync(directory)).toHaveLength(2)
+		expect(readdirSync(join(directory, 'flats'))).toHaveLength(2)
 		expect(released()).toBeTrue()
 	})
 
@@ -346,7 +346,7 @@ describe('Flat Wizard sessions', () => {
 		expect(summary()).toMatchObject({ state: 'cancelled' })
 		expect(summary()!.pending).toBeUndefined()
 		expect(summary()!.filters[0].state).toBe('cancelled')
-		expect(readdirSync(directory)).toEqual([])
+		expect(readdirSync(join(directory, 'flats'))).toEqual([])
 		expect(released()).toBeTrue()
 		expect(flatWizard.continue(sessionId, { stepId }).status).toBe(409)
 		expect((await flatWizard.stop(sessionId)).status).toBe(409)
@@ -367,7 +367,7 @@ describe('Flat Wizard sessions', () => {
 		expect(summary()).toMatchObject({ state: 'cancelled' })
 		const run = summary()!.filters[0]
 		expect(run.accepted).toBeGreaterThanOrEqual(1)
-		expect(readdirSync(directory).toSorted()).toEqual(run.files.toSorted())
+		expect(readdirSync(join(directory, 'flats')).toSorted()).toEqual(run.files.toSorted())
 		expect(panel.enabled).toBeFalse()
 		expect(released()).toBeTrue()
 	})
@@ -384,7 +384,7 @@ describe('Flat Wizard sessions', () => {
 		expect(summary()!.error).toContain('saturates even at the minimum exposure')
 		expect(summary()!.lastAttempt).toMatchObject({ kind: 'trial', exposure: 0.01, verdict: 'clipped' })
 		expect(summary()!.filters[0].state).toBe('failed')
-		expect(readdirSync(directory)).toEqual([])
+		expect(readdirSync(join(directory, 'flats'))).toEqual([])
 		expect(released()).toBeTrue()
 	})
 
@@ -435,7 +435,7 @@ describe('Flat Wizard sessions', () => {
 		expect(summary()!.filters[0]).toMatchObject({ state: 'failed', accepted: 0, rejected: 2 })
 		expect(summary()!.lastAttempt).toMatchObject({ kind: 'final', verdict: 'rejected' })
 		expect(summary()!.lastAttempt!.reasons).toContain('nonFiniteSamples')
-		expect(readdirSync(directory)).toEqual([])
+		expect(readdirSync(join(directory, 'flats'))).toEqual([])
 	})
 
 	test('an unknown clipping limit accepts frames inside the target and reports the missing evidence', async () => {

@@ -31,8 +31,8 @@ import type { OperationDevice, OperationRegistry } from './operations'
 // the brightest plane of a flat inside its target and then acquires the requested number of accepted FLAT frames
 // at that frozen exposure. The session is one `camera.flatWizard` operation of the process-wide registry holding the
 // camera, and the filter wheel, flat panel, and dust cover when they are used, from start to end, including while it
-// waits for the operator. Every exposure goes through the shared camera capturer into a staging directory inside the output
-// directory, and is measured in the digital numbers of the file by the Flat Wizard analyzer (never on the normalized
+// waits for the operator. Every exposure goes through the shared camera capturer into a staging directory inside flats/ of
+// the output directory, where accepted frames are saved, and is measured in the digital numbers of the file by the Flat Wizard analyzer (never on the normalized
 // viewer documents); each one is also decoded into the image store as the latest frame of its camera (origin
 // flatWizard). Trial frames of the exposure search and rejected final frames are deleted after measurement; an
 // accepted final frame is published by hard-linking its original bytes to a new name that never overwrites an
@@ -333,6 +333,14 @@ const SAME_EXPOSURE = 1e-6
 // Name of the published frames: the capture placeholders plus the filter name.
 const FILENAME_TEMPLATE = '{date}_{time}_{camera}_{type}_{filter}_{seq}'
 
+// Directory, under the output directory, every accepted flat is saved in, whatever its camera or filter.
+const FLATS_DIRECTORY = 'flats'
+
+// Returns the directory the flats of a request are saved in: flats/ of its output directory, or of the default one.
+function flatsDirectory(request: Pick<FlatWizardRequest, 'directory'>, capturesDir: string) {
+	return join(request.directory || capturesDir, FLATS_DIRECTORY)
+}
+
 // A session while its service knows it.
 interface Session {
 	summary: FlatWizardSessionSummary
@@ -495,8 +503,8 @@ export class FlatWizardSessions {
 
 		return this.operations.coordinator.start<void>('flatWizardSession', Array.from(resources.values()), async (context) => {
 			const { request, sessionId } = session.summary
-			const directory = request.directory || this.capturesDir
-			// Staging lives in the output directory, so publishing a frame is a link on the same file system.
+			const directory = flatsDirectory(request, this.capturesDir)
+			// Staging lives in the flats directory, so publishing a frame is a link on the same file system.
 			const staging = join(directory, `.flatwizard-${sessionId}`)
 
 			try {
@@ -869,7 +877,7 @@ export class FlatWizardSessions {
 		const { request, sessionId } = session.summary
 
 		if (request.generateMasters) {
-			const directory = request.directory || this.capturesDir
+			const directory = flatsDirectory(request, this.capturesDir)
 			const groups = filters.filter(({ state }) => state === 'completed').map(({ name, files }) => ({ filter: name, paths: files.map((file) => join(directory, file)) }))
 			if (groups.length > 0) this.sessionEnded({ sessionId, groups })
 		}

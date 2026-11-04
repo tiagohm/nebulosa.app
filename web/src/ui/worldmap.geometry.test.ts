@@ -12,6 +12,9 @@ import {
 	minWorldMapScale,
 	panWorldMap,
 	project,
+	smallCirclePoints,
+	smallCircleRegionPath,
+	splitAtAntimeridian,
 	unproject,
 	WORLD_MAP_HEIGHT,
 	WORLD_MAP_HOME,
@@ -94,6 +97,80 @@ describe('horizon', () => {
 		expect(day).toEndWith(`L${WORLD_MAP_WIDTH} 0L0 0Z`)
 		const southern = horizonRegionPath({ longitude: 0, latitude: -10 }, 'below')
 		expect(southern).toEndWith(`L${WORLD_MAP_WIDTH} 0L0 0Z`)
+	})
+})
+
+describe('antimeridian', () => {
+	test('a line that never crosses it stays one piece', () => {
+		const points = [
+			{ longitude: -10, latitude: 0 },
+			{ longitude: 10, latitude: 20 },
+		]
+		expect(splitAtAntimeridian(points)).toEqual([points])
+		expect(splitAtAntimeridian([])).toEqual([])
+	})
+
+	test('both pieces of a crossing meet at ±180°', () => {
+		const pieces = splitAtAntimeridian([
+			{ longitude: 170, latitude: 0 },
+			{ longitude: -170, latitude: 20 },
+			{ longitude: -160, latitude: 30 },
+			{ longitude: 175, latitude: 40 },
+		])
+		expect(pieces).toHaveLength(3)
+		expect(pieces[0]).toEqual([
+			{ longitude: 170, latitude: 0 },
+			{ longitude: 180, latitude: 10 },
+		])
+		expect(pieces[1][0]).toEqual({ longitude: -180, latitude: 10 })
+		expect(pieces[1].at(-1)!.longitude).toBe(-180)
+		expect(pieces[1].at(-1)!.latitude).toBeCloseTo(30 + (20 / 25) * 10, 9)
+		expect(pieces[2][0].longitude).toBe(180)
+		expect(pieces[2][1]).toEqual({ longitude: 175, latitude: 40 })
+	})
+})
+
+describe('small circle', () => {
+	test('a cap on the equator is closed and symmetric', () => {
+		const points = smallCirclePoints({ longitude: 0, latitude: 0 }, 20, 90)
+		expect(points).toHaveLength(5)
+		expect(points[0].latitude).toBeCloseTo(20, 9)
+		expect(points[0].longitude).toBeCloseTo(0, 9)
+		expect(points[1].longitude).toBeCloseTo(20, 9)
+		expect(points[2].latitude).toBeCloseTo(-20, 9)
+		expect(points[3].longitude).toBeCloseTo(-20, 9)
+		expect(points[4]).toEqual(points[0])
+		const region = smallCircleRegionPath({ longitude: 0, latitude: 0 }, 20)
+		expect(region).toStartWith('M')
+		expect(region).toEndWith('Z')
+		expect(region.match(/M/g)).toHaveLength(1)
+	})
+
+	test('a cap across the antimeridian is unwrapped', () => {
+		const region = smallCircleRegionPath({ longitude: 175, latitude: 0 }, 20, 90)
+		expect(region).toContain(`${Math.round(project(195, 0).x * 1000) / 1000} `)
+	})
+
+	test('a radius of 90° is the horizon of the center', () => {
+		const center = { longitude: 30, latitude: 23.44 }
+		for (const point of smallCirclePoints(center, 90, 7)) {
+			const expected = Math.atan(-Math.cos((point.longitude - center.longitude) * (Math.PI / 180)) / Math.tan(center.latitude * (Math.PI / 180))) * (180 / Math.PI)
+			expect(point.latitude).toBeCloseTo(expected, 6)
+		}
+	})
+
+	test('a cap holding a pole is closed along that edge of the map', () => {
+		// The boundary runs once around the globe, then along the pole's edge back to its start.
+		const closing = (path: string) => [...path.matchAll(/L([\d.-]+) ([\d.-]+)/g)].slice(-2).map((match) => ({ x: +match[1], y: +match[2] }))
+		const north = closing(smallCircleRegionPath({ longitude: 10, latitude: 80 }, 20))
+		expect(north.map((point) => point.y)).toEqual([0, 0])
+		expect(Math.abs(north[0].x - north[1].x)).toBeCloseTo(WORLD_MAP_WIDTH, 2)
+		const south = closing(smallCircleRegionPath({ longitude: 10, latitude: -80 }, 20))
+		expect(south.map((point) => point.y)).toEqual([WORLD_MAP_HEIGHT, WORLD_MAP_HEIGHT].map((y) => Math.round(y * 1000) / 1000))
+		expect(Math.abs(south[0].x - south[1].x)).toBeCloseTo(WORLD_MAP_WIDTH, 2)
+		// The lowest latitude of the northern cap is 60°, at the center's meridian.
+		const points = smallCirclePoints({ longitude: 10, latitude: 80 }, 20, 1)
+		expect(Math.min(...points.map((point) => point.latitude))).toBeCloseTo(60, 9)
 	})
 })
 

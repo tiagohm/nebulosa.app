@@ -3,7 +3,8 @@ import type { Point, Size, ViewTransform } from '../viewer/transform'
 
 // Geometry of the world map: the equirectangular projection of web/assets/world.map.svg between geographic
 // coordinates and map units, SVG path data of geographic lines and regions (eclipse paths, visibility
-// limits, the day and night hemispheres), and the zoom and pan of the map in a viewport. Map units are the
+// limits, the day and night hemispheres, small circles such as a satellite's footprint), and the zoom and pan of the map
+// in a viewport. Map units are the
 // pixels of the SVG's view box, with the origin at longitude −180°, latitude +90° (the top-left corner), x
 // growing east and y south. Geographic coordinates are in degrees, longitude east positive.
 
@@ -154,6 +155,72 @@ export function horizonRegionPath(subpoint: GeoPoint, side: HorizonSide, step: n
 	const pole = (side === 'above') === northAbove ? 90 : -90
 	const y = round(project(0, pole).y)
 	return `${geoPath(curve)}L${round(WORLD_MAP_WIDTH)} ${y}L0 ${y}Z`
+}
+
+// Returns the pieces of a line through geographic points (longitudes in [−180, 180]) cut where it crosses the
+// antimeridian, taking each step between consecutive points the shorter way around the globe. Both pieces of a crossing
+// get the point at ±180°, its latitude interpolated along the step, so a piece drawn with geoPath never leaves the map
+// and the pieces meet at its edges. A line of several turns around the globe, such as a satellite's ground track, gives
+// one piece per turn instead of one path unwrapped over several map widths.
+export function splitAtAntimeridian(points: readonly GeoPoint[]): GeoPoint[][] {
+	const pieces: GeoPoint[][] = []
+	let piece: GeoPoint[] = []
+
+	for (let i = 0; i < points.length; i++) {
+		const point = points[i]
+		const previous = points[i - 1]
+
+		if (previous && Math.abs(point.longitude - previous.longitude) > 180) {
+			const step = wrapLongitude(point.longitude - previous.longitude)
+			const edge = step > 0 ? 180 : -180
+			const latitude = previous.latitude + ((edge - previous.longitude) / step) * (point.latitude - previous.latitude)
+			piece.push({ longitude: edge, latitude })
+			pieces.push(piece)
+			piece = [{ longitude: -edge, latitude }]
+		}
+
+		piece.push(point)
+	}
+
+	if (piece.length > 0) pieces.push(piece)
+	return pieces
+}
+
+// Returns the points of the small circle at an angular distance of radius degrees, in (0, 180), from a center, by
+// bearing from north through east every step degrees, the first point repeated at the end. Longitudes stay within 180°
+// of the center's, so consecutive points are never a whole map apart. The sphere is the map's: geodetic coordinates are
+// taken as spherical ones.
+export function smallCirclePoints(center: GeoPoint, radius: number, step: number = 2): GeoPoint[] {
+	const latitude = center.latitude * DEG2RAD
+	const distance = radius * DEG2RAD
+	const count = Math.max(4, Math.ceil(360 / step))
+	const points = new Array<GeoPoint>(count + 1)
+
+	for (let i = 0; i <= count; i++) {
+		const bearing = ((i % count) * 2 * Math.PI) / count
+		const sinLatitude = Math.sin(latitude) * Math.cos(distance) + Math.cos(latitude) * Math.sin(distance) * Math.cos(bearing)
+		const pointLatitude = Math.asin(Math.max(-1, Math.min(1, sinLatitude)))
+		const deltaLongitude = Math.atan2(Math.sin(bearing) * Math.sin(distance) * Math.cos(latitude), Math.cos(distance) - Math.sin(latitude) * sinLatitude)
+		points[i] = { longitude: center.longitude + deltaLongitude * RAD2DEG, latitude: pointLatitude * RAD2DEG }
+	}
+
+	return points
+}
+
+// Returns the SVG path data, in map units, of the region within an angular distance of radius degrees, in (0, 180), of a
+// center (a spherical cap, such as the footprint of a satellite), its boundary every step degrees of bearing. A cap
+// without a pole is closed along its boundary, unwrapped across the antimeridian for a wrapping map. A cap holding a pole
+// runs once around the globe, so its boundary is closed along the map's edge at that pole, as horizonRegionPath does;
+// that region is meant for a wrapping map, whose copies draw the parts beyond one map width.
+export function smallCircleRegionPath(center: GeoPoint, radius: number, step: number = 2): string {
+	const points = smallCirclePoints(center, radius, step)
+	const pole = center.latitude + radius > 90 ? 90 : center.latitude - radius < -90 ? -90 : undefined
+	if (pole === undefined) return geoPath(points, { closed: true })
+
+	let longitude = points[0].longitude
+	for (let i = 1; i < points.length; i++) longitude += wrapLongitude(points[i].longitude - points[i - 1].longitude)
+	const y = round(project(0, pole).y)
+	return `${geoPath(points)}L${round(project(longitude, 0).x)} ${y}L${round(project(points[0].longitude, 0).x)} ${y}Z`
 }
 
 // Returns the SVG path data, in map units, of meridians and parallels every spacing degrees, the equator and

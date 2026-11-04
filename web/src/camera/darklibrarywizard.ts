@@ -5,7 +5,7 @@ import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit } from '../http'
 import { type CameraExposureSettings, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WIZARD_MAXIMUM_FRAMES, DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, type DarkLibraryWizardSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
-import { cameraKey, fitExposure } from './capture'
+import { cameraKey, fitExposure, frameProgress } from './capture'
 import { applySession, type CameraSessionKind, type CameraSessionRecords, loadSessionRecord, refreshSessionRecords, sendSessionCommand } from './sessions'
 
 // Dark Library Wizard sessions as this tab knows them. The server owns every session, whichever tab started it, so this
@@ -131,6 +131,24 @@ export function darkLibraryWizardEstimate(groups: readonly DarkGroup[], capture:
 	const maxBytes = frames * (FITS_HEADER_BLOCKS + Math.ceil((data * 3) / FITS_BLOCK_SIZE)) * FITS_BLOCK_SIZE
 
 	return { frames, exposure: seconds, bytes: [minBytes, maxBytes] }
+}
+
+// Exposure a session still has to take, in seconds: every missing frame of every group, less what the frame being exposed
+// already took.
+export function darkLibraryWizardExposureLeft({ groups, state, exposure }: Pick<DarkLibraryWizardSessionSummary, 'state' | 'exposure'> & { readonly groups: readonly Pick<DarkLibraryWizardSessionSummary['groups'][number], 'exposure' | 'missing'>[] }) {
+	const missing = groups.reduce((total, group) => total + group.missing * group.exposure, 0)
+	const elapsed = state === 'exposing' ? (frameProgress(exposure)?.elapsed ?? 0) : 0
+	return Math.max(0, missing - elapsed)
+}
+
+// Formats a duration in seconds for an estimate: seconds below a minute (hundredths below ten), minutes and seconds below an
+// hour, and hours and minutes above.
+export function darkLibraryWizardDuration(seconds: number) {
+	if (seconds < 60) return `${seconds < 10 ? Number(seconds.toFixed(2)) : Math.round(seconds)} s`
+	const total = Math.round(seconds)
+	if (total < 3600) return `${Math.floor(total / 60)} min ${total % 60} s`
+	const minutes = Math.round(seconds / 60)
+	return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
 }
 
 // Returns the camera settings a plan takes from Camera Acquisition, fitted to the camera's capabilities as a capture is:

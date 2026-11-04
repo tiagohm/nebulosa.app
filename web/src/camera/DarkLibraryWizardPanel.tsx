@@ -29,7 +29,9 @@ import {
 	DARK_SUSPICION_LABELS,
 	darkLibraryWizardBlocker,
 	darkLibraryWizardCapture,
+	darkLibraryWizardDuration,
 	darkLibraryWizardEstimate,
+	darkLibraryWizardExposureLeft,
 	darkLibraryWizardRequest,
 	darkLibraryWizardRunning,
 	darkLibraryWizardWarning,
@@ -84,12 +86,6 @@ const DARK_FRAME_TYPE_LABELS: Readonly<Record<DarkFrameType, string>> = { dark: 
 // Formats a size in bytes for an estimate.
 function formatBytes(bytes: number) {
 	return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`
-}
-
-// Formats a duration in seconds for an estimate, in hours and minutes.
-function formatDuration(seconds: number) {
-	const minutes = Math.round(seconds / 60)
-	return minutes < 60 ? `${minutes} min ${Math.round(seconds % 60)} s` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`
 }
 
 // Returns the label of a group, short enough for a row of the panel; a group without a target names no temperature.
@@ -218,7 +214,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				{capture.subframe && <Notice>Darks of a subframe only calibrate lights of that same subframe.</Notice>}
 				<DataList>
 					<DataRow label="Frames">{estimate.frames}</DataRow>
-					<DataRow label="Exposure">{`at least ${formatDuration(estimate.exposure)}`}</DataRow>
+					<DataRow label="Exposure">{`at least ${darkLibraryWizardDuration(estimate.exposure)}`}</DataRow>
 					{estimate.bytes !== undefined && <DataRow label="Disk Space">{`~ ${formatBytes(estimate.bytes[0])} (mono) to ${formatBytes(estimate.bytes[1])}`}</DataRow>}
 				</DataList>
 				<Notice>Estimates only: downloads, cooling, and rejected frames add to them. Groups of one temperature run together.</Notice>
@@ -368,7 +364,7 @@ function Progress({ session, pending }: ProgressProps) {
 	const run = session.groups[session.group] as DarkLibraryWizardGroupRun | undefined
 	const attempt = session.lastAttempt
 	const failed = session.state === 'failed'
-	const remaining = session.groups.reduce((total, group) => total + group.missing * group.exposure, 0)
+	const remaining = darkLibraryWizardExposureLeft(session)
 	const running = session.endedAt === undefined
 
 	return (
@@ -387,7 +383,7 @@ function Progress({ session, pending }: ProgressProps) {
 						{plane.median === undefined ? '—' : `${Math.round(plane.median)} DN`}
 					</DataRow>
 				))}
-				{running && remaining > 0 && <DataRow label="Exposure Left">{`at least ${formatDuration(remaining)}`}</DataRow>}
+				{running && remaining > 0 && <DataRow label="Exposure Left">{`at least ${darkLibraryWizardDuration(remaining)}`}</DataRow>}
 			</DataList>
 			<DataList>
 				{session.groups.map((group) => (

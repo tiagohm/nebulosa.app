@@ -9,19 +9,21 @@ import { Button } from '../../ui/Button'
 import { IconButton } from '../../ui/IconButton'
 import { Popover } from '../../ui/Popover'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { artificialSatellitesState, followSatelliteObserver, loadSatelliteDetails, loadSatellitePosition, POSITION_REFRESH_MS, SATELLITE_TAB_LABELS, SATELLITE_TABS, searchSatellites, selectSatellite } from './artificialsatellites'
+import { artificialSatellitesState, ensureSatelliteGroundTrack, followSatelliteObserver, loadSatelliteDetails, loadSatelliteGroundTrack, loadSatellitePosition, POSITION_REFRESH_MS, SATELLITE_TAB_LABELS, SATELLITE_TABS, searchSatellites, selectSatellite, tickSatelliteGroundTrack } from './artificialsatellites'
 import { SatelliteCatalog } from './SatelliteCatalog'
 import { SatelliteDetailsPanel } from './SatelliteDetailsPanel'
 import { SatelliteEphemeris } from './SatelliteEphemeris'
+import { SatelliteGroundTrack } from './SatelliteGroundTrack'
 import { SatelliteImport } from './SatelliteImport'
 import { SatellitePasses } from './SatellitePasses'
 import { SatelliteSettings } from './SatelliteSettings'
 
-// Artificial Satellites tool: the satellite catalog of the server (search, favorites of the profile), and the passes and
-// ephemeris of the satellite selected for the Sky observer, with its position now read again every 15 seconds. Its
-// workspace actions hold the Import Elements popover and the Settings of the tool, where the CelesTrak groups are
-// downloaded on request or automatically. It commands no device and changes the Sky only through Open in Sky. The details are the contextual panel on wide screens and take the
-// place of the content below them, as in Close Approaches.
+// Artificial Satellites tool: the satellite catalog of the server (search, favorites of the profile), the passes and
+// ephemeris of the satellite selected for the Sky observer, with its position now read again every 15 seconds, and its
+// ground track on the world map, which follows the real time on the same tick. Its workspace actions hold the Import
+// Elements popover and the Settings of the tool, where the CelesTrak groups are downloaded on request or automatically.
+// It commands no device and changes the Sky only through Open in Sky and Show in Sky. The details are the contextual
+// panel on wide screens and take the place of the content below them, as in Close Approaches.
 
 // Artificial Satellites tool.
 export function ArtificialSatellites() {
@@ -41,15 +43,19 @@ export function ArtificialSatellites() {
 	useEffect(() => followSatelliteObserver(artificialSatellitesState, observer), [observer?.latitude, observer?.longitude, observer?.elevation])
 
 	// Reads the position now of the satellite selected again every POSITION_REFRESH_MS while the page is shown, when it
-	// has elements to predict with.
+	// has elements to predict with, and advances a ground track shown that follows the real time.
 	useEffect(() => {
 		if (!state.selectedId) return undefined
 		const timer = setInterval(() => {
 			if (document.hidden || !artificialSatellitesState.details?.elements) return
 			void loadSatellitePosition(artificialSatellitesState, activeProfile(profileState).settings.sky.observer)
+			if (artificialSatellitesState.tab === 'groundTrack') tickSatelliteGroundTrack(artificialSatellitesState)
 		}, POSITION_REFRESH_MS)
 		return () => clearInterval(timer)
 	}, [state.selectedId])
+
+	// Reads the ground track when its view is shown for a satellite with elements and none was read.
+	useEffect(() => ensureSatelliteGroundTrack(artificialSatellitesState), [state.tab, state.selectedId, state.details, state.groundTrack])
 
 	// Searches once, and again after every change of the catalog.
 	useEffect(() => void searchSatellites(artificialSatellitesState, favorites, artificialSatellitesState.offset), [revision])
@@ -59,6 +65,7 @@ export function ArtificialSatellites() {
 		if (!revision) return
 		void loadSatelliteDetails(artificialSatellitesState)
 		void loadSatellitePosition(artificialSatellitesState, observer)
+		if (artificialSatellitesState.groundTrack) void loadSatelliteGroundTrack(artificialSatellitesState)
 	}, [revision])
 
 	// Selects the satellite the URL names.
@@ -67,7 +74,7 @@ export function ArtificialSatellites() {
 	}, [linked])
 
 	const panel = state.selectedId ? <SatelliteDetailsPanel observer={observer} /> : undefined
-	const content = state.tab === 'catalog' ? <SatelliteCatalog /> : state.tab === 'passes' ? <SatellitePasses observer={observer} /> : <SatelliteEphemeris observer={observer} />
+	const content = state.tab === 'catalog' ? <SatelliteCatalog /> : state.tab === 'passes' ? <SatellitePasses observer={observer} /> : state.tab === 'ephemeris' ? <SatelliteEphemeris observer={observer} /> : <SatelliteGroundTrack observer={observer} />
 	const tabs = <SegmentedControl options={SATELLITE_TABS} value={state.tab} format={(tab) => SATELLITE_TAB_LABELS[tab]} onChange={(tab) => (artificialSatellitesState.tab = tab)} />
 
 	const settingsModal = <SatelliteSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />

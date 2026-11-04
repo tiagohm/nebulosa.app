@@ -1,4 +1,4 @@
-import type { SatelliteDetails, SatelliteEphemerisResponse, SatelliteEphemerisRow, SatelliteImportResponse, SatellitePassesResponse, SatellitePosition, SatellitePositionResponse, SatelliteSearchPage } from 'api'
+import type { SatelliteDetails, SatelliteEphemerisResponse, SatelliteEphemerisRow, SatelliteGroundTrackResponse, SatelliteImportResponse, SatellitePassesResponse, SatellitePosition, SatellitePositionResponse, SatelliteSearchPage } from 'api'
 import { proxy } from 'valtio'
 import { fetchJson, jsonInit } from '../../http'
 import type { SkyObserverSettings } from '../../profile/schema'
@@ -8,10 +8,11 @@ import { createRequestGuard } from '../../sky/selection'
 import { apiObserver, browserSkyIo, selectSkyObject, type SkyIo, type SkyState, skyState } from '../../sky/sky'
 
 // State of the Artificial Satellites tool, tab-lived and never persisted: the catalog search, the satellite selected
-// with its details and position, the windows of its passes and ephemeris, and an import being typed. Every prediction
-// is for the Sky observer of the active profile, or the Earth's center without one. The catalog, its downloads, and
-// every prediction are the server's; each kind of answer has a request guard of its own, so an old answer never replaces
-// a newer one, and only the position now repeats by itself (POSITION_REFRESH_MS). Times are Unix milliseconds (UTC), and
+// with its details and position, the windows of its passes, ephemeris, and ground track, and an import being typed.
+// Every prediction is for the Sky observer of the active profile, or the Earth's center without one; the ground track
+// needs none. The catalog, its downloads, and every prediction are the server's; each kind of answer has a request guard
+// of its own, so an old answer never replaces a newer one, and only the position now (POSITION_REFRESH_MS) and a ground
+// track following the real time (once an orbit) repeat by themselves. Times are Unix milliseconds (UTC), and
 // angles radians until they are formatted. The profile's favorites and the Sky change only
 // through explicit actions.
 
@@ -32,14 +33,17 @@ export const MAX_PASS_DAYS = 7
 export const MAX_EPHEMERIS_HOURS = 72
 export const MAX_EPHEMERIS_ROWS = 5000
 
+// Most orbits a ground track shows after its instant: GROUND_TRACK_MAX_ORBITS of the server.
+export const MAX_GROUND_TRACK_ORBITS = 5
+
 // Views of the tool.
-export const SATELLITE_TABS = ['catalog', 'passes', 'ephemeris'] as const
+export const SATELLITE_TABS = ['catalog', 'passes', 'ephemeris', 'groundTrack'] as const
 
 // View of the tool.
 export type SatelliteTab = (typeof SATELLITE_TABS)[number]
 
 // Name of each view.
-export const SATELLITE_TAB_LABELS: Readonly<Record<SatelliteTab, string>> = { catalog: 'Catalog', passes: 'Passes', ephemeris: 'Ephemeris' }
+export const SATELLITE_TAB_LABELS: Readonly<Record<SatelliteTab, string>> = { catalog: 'Catalog', passes: 'Passes', ephemeris: 'Ephemeris', groundTrack: 'Ground Track' }
 
 // Start of a pass search or an ephemeris: the real current time, or the instant the Sky shows.
 export type SatelliteWindowStart = 'now' | 'sky'
@@ -75,6 +79,34 @@ export interface EphemerisDraft {
 	hours: number
 	// Step between rows, seconds, at least 1.
 	stepSeconds: number
+}
+
+// Ground track being edited.
+export interface GroundTrackDraft {
+	// Instant the window is placed around.
+	start: SatelliteWindowStart
+	// Orbits shown after the instant, 1 to MAX_GROUND_TRACK_ORBITS; one is shown before it.
+	orbits: number
+}
+
+// Instant a ground track was asked for.
+export interface GroundTrackAnchor {
+	// Whether it was the real current time, which the ground track then follows, or the instant of the Sky.
+	readonly start: SatelliteWindowStart
+	// Instant, Unix milliseconds (UTC).
+	readonly time: number
+}
+
+// Layers of the ground track map that can be hidden; the track and the satellite are always drawn.
+export interface GroundTrackLayers {
+	// Region that sees the satellite above the horizon.
+	footprint: boolean
+	// Night side of the Earth.
+	night: boolean
+	// Sky observer.
+	observer: boolean
+	// Parts of the track in the Earth's shadow drawn apart.
+	shadow: boolean
 }
 
 // Artificial Satellites state of the tab.
@@ -116,6 +148,19 @@ export interface ArtificialSatellitesState {
 	ephemeris?: SatelliteEphemerisResponse
 	ephemerisLoading: boolean
 	ephemerisError?: string
+	// Ground track being edited, the latest answer with the instant it was asked for, and its state.
+	groundTrackDraft: GroundTrackDraft
+	groundTrack?: SatelliteGroundTrackResponse
+	groundTrackAnchor?: GroundTrackAnchor
+	groundTrackLoading: boolean
+	groundTrackError?: string
+	// Instant chosen on the ground track, Unix milliseconds (UTC); absent to show the anchor, or the real current time
+	// when the ground track follows it.
+	groundTrackCursor?: number
+	// Real current time of the latest tick, Unix milliseconds, shown while the ground track follows it.
+	groundTrackNow?: number
+	// Layers shown on the ground track map.
+	groundTrackLayers: GroundTrackLayers
 	// Text of an import, the latest answer, and its state.
 	importText: string
 	importing: boolean
@@ -142,6 +187,7 @@ const detailsGuard = createRequestGuard()
 const positionGuard = createRequestGuard()
 const passesGuard = createRequestGuard()
 const ephemerisGuard = createRequestGuard()
+const groundTrackGuard = createRequestGuard()
 
 // Initial state of the tool.
 export function initialArtificialSatellitesState(): ArtificialSatellitesState {
@@ -156,6 +202,9 @@ export function initialArtificialSatellitesState(): ArtificialSatellitesState {
 		passesLoading: false,
 		ephemerisDraft: { start: 'now', hours: 2, stepSeconds: 60 },
 		ephemerisLoading: false,
+		groundTrackDraft: { start: 'now', orbits: 2 },
+		groundTrackLoading: false,
+		groundTrackLayers: { footprint: true, night: true, observer: true, shadow: true },
 		importText: '',
 		importing: false,
 	}
@@ -205,8 +254,8 @@ export async function searchSatellites(state: ArtificialSatellitesState, favorit
 	state.searching = false
 }
 
-// Selects a satellite: reads its details and its position now for the observer. Another satellite drops the passes and the
-// ephemeris of the previous one at once, so they are never shown as the new one's.
+// Selects a satellite: reads its details and its position now for the observer. Another satellite drops the passes, the
+// ephemeris, and the ground track of the previous one at once, so they are never shown as the new one's.
 export async function selectSatellite(state: ArtificialSatellitesState, noradId: string, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
 	if (state.selectedId !== noradId) {
 		state.selectedId = noradId
@@ -219,6 +268,7 @@ export async function selectSatellite(state: ArtificialSatellitesState, noradId:
 		state.ephemerisError = undefined
 		passesGuard.cancel()
 		ephemerisGuard.cancel()
+		dropGroundTrack(state)
 	}
 
 	await Promise.all([loadSatelliteDetails(state, io), loadSatellitePosition(state, observer, io)])
@@ -343,6 +393,69 @@ export async function loadSatelliteEphemeris(state: ArtificialSatellitesState, o
 	state.ephemerisLoading = false
 }
 
+// Drops the ground track shown and cancels the one being read.
+function dropGroundTrack(state: ArtificialSatellitesState) {
+	state.groundTrack = undefined
+	state.groundTrackAnchor = undefined
+	state.groundTrackError = undefined
+	state.groundTrackCursor = undefined
+	state.groundTrackLoading = false
+	groundTrackGuard.cancel()
+}
+
+// Reads the ground track of the satellite selected around the instant of the draft, with its orbits. The cursor goes
+// back to the anchor, or to the real current time when the ground track follows it.
+export async function loadSatelliteGroundTrack(state: ArtificialSatellitesState, io: ArtificialSatellitesIo = browserIo) {
+	const noradId = state.selectedId
+	if (!noradId) return
+	const request = groundTrackGuard.begin()
+	const { start, orbits } = state.groundTrackDraft
+	const anchor: GroundTrackAnchor = { start, time: windowStart(start, io) }
+	const body = { time: anchor.time, orbits: Math.min(Math.max(Math.round(orbits), 1), MAX_GROUND_TRACK_ORBITS) }
+	state.groundTrackLoading = true
+	state.groundTrackError = undefined
+
+	try {
+		const track = await fetchJson<SatelliteGroundTrackResponse>(io, `/api/satellites/${encodeURIComponent(noradId)}/ground-track`, jsonInit('POST', body, request.signal))
+		if (!request.current()) return
+		state.groundTrack = track
+		state.groundTrackAnchor = anchor
+		state.groundTrackCursor = undefined
+		state.groundTrackNow = anchor.time
+	} catch (error) {
+		if (!request.current() || aborted(error)) return
+		state.groundTrack = undefined
+		state.groundTrackAnchor = undefined
+		state.groundTrackError = messageOf(error)
+	}
+
+	state.groundTrackLoading = false
+}
+
+// Reads the ground track when the view shows it for a satellite with elements and none was read or is being read.
+export function ensureSatelliteGroundTrack(state: ArtificialSatellitesState, io: ArtificialSatellitesIo = browserIo) {
+	if (state.tab !== 'groundTrack' || !state.selectedId || !state.details?.elements || state.groundTrack || state.groundTrackLoading || state.groundTrackError) return
+	void loadSatelliteGroundTrack(state, io)
+}
+
+// Advances a ground track that follows the real current time to the instant of a tick, and reads it again once the
+// satellite has gone one orbit past the instant it was asked for. A chosen instant or a Sky time is left alone.
+export function tickSatelliteGroundTrack(state: ArtificialSatellitesState, io: ArtificialSatellitesIo = browserIo) {
+	const { groundTrack: track, groundTrackAnchor: anchor } = state
+	if (!track || anchor?.start !== 'now' || state.groundTrackCursor !== undefined || state.groundTrackLoading) return
+	const now = io.now()
+	state.groundTrackNow = now
+	if (now > anchor.time + track.periodMinutes * 60_000) void loadSatelliteGroundTrack(state, io)
+}
+
+// Instant the ground track shows, Unix milliseconds (UTC): the instant chosen, else the real current time of the latest
+// tick when it follows it, else its anchor; undefined without a ground track.
+export function groundTrackInstant(state: Pick<ArtificialSatellitesState, 'groundTrackAnchor' | 'groundTrackCursor' | 'groundTrackNow'>) {
+	const { groundTrackAnchor: anchor } = state
+	if (!anchor) return undefined
+	return state.groundTrackCursor ?? (anchor.start === 'now' ? (state.groundTrackNow ?? anchor.time) : anchor.time)
+}
+
 // Imports the text of the state as element sets; the objects imported can then be searched and predicted.
 export async function importSatelliteElements(state: ArtificialSatellitesState, io: ArtificialSatellitesIo = browserIo) {
 	if (!state.importText.trim() || state.importing) return
@@ -375,6 +488,7 @@ export async function setSatelliteElementSource(state: ArtificialSatellitesState
 
 	state.passes = undefined
 	state.ephemeris = undefined
+	dropGroundTrack(state)
 	await Promise.all([loadSatelliteDetails(state, io), loadSatellitePosition(state, observer, io)])
 }
 

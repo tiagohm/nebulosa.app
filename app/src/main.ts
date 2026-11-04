@@ -1,6 +1,7 @@
 import { type AboutInfo, closeDatabase, createAboutRoutes, identifyJplClient, routes, startDatabase, startEarthOrientation, startStores, stopOperations, websocket } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
+import { serverAddress } from './address'
 
 // Entry point of the application: serves the API routes, the /api/ws WebSocket, and the web UI from a
 // single Bun server. Every path the API does not handle falls back to the UI's HTML entry point. A server whose
@@ -41,10 +42,13 @@ await startEarthOrientation()
 // What a crash left of the products of the Calibration Library and Image Stacking is finished without anyone opening them.
 startStores()
 
-// HTTP server listening on APP_HOST (default localhost) and APP_PORT (default 7000).
+// Host and port of the server: --host and --port, else APP_HOST and APP_PORT, else localhost and 7000 (serverAddress).
+const address = serverAddress(process.argv.slice(2), process.env)
+
+// HTTP server listening on that address.
 const server = Bun.serve({
-	hostname: process.env.APP_HOST || 'localhost',
-	port: Number(process.env.APP_PORT) || 7000,
+	hostname: address.host,
+	port: address.port,
 	development: development && { hmr: true, console: true },
 	routes: {
 		...routes,

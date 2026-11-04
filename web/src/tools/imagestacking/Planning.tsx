@@ -7,17 +7,16 @@ import { Button } from '../../ui/Button'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
-import { bytesText } from '../calibrationlibrary/library'
 // oxfmt-ignore
-import { cohortText, LIGHT_MASTER_KINDS, LIGHT_MASTER_LABELS, type LightMaster, masterText, metricText, registrationText, REJECTION_LABELS, selectionFields, selectionOf, SEVERITY_LABELS, SEVERITY_TONES, THRESHOLDS } from './format'
+import { blocksAnalysis, cohortText, LIGHT_MASTER_KINDS, LIGHT_MASTER_LABELS, type LightMaster, masterText, metricText, registrationText, REJECTION_LABELS, selectionFields, selectionOf, SEVERITY_LABELS, SEVERITY_TONES, THRESHOLDS } from './format'
 import { cancelStackingAnalysis, imageStackingRuntime, jobEnded, startStackingAnalysis, updateStackingCohort, updateStackingSettings } from './projects'
 import { Cell, Row, Table } from './Table'
 
 // Calibration and quality of an Image Stacking project. Calibration lists its cohorts, the lights of one filter that share
 // their acquisition settings, where an operator chooses each master among those of the Calibration Library that match
 // them; a cohort with none chosen is not calibrated. Quality starts the analysis that measures and registers every
-// frame, edits the reference pins and thresholds, and shows what the server found; what blocks a stack comes from its
-// validation, never from this view.
+// frame, edits the reference pins and thresholds, and shows what the server found; only the blockers of its validation
+// that keep an analysis from starting are shown and disable Analyze, since what blocks a stack comes from Integration.
 
 // Cohorts of a project and their calibration.
 export function CalibrationView({ projectId }: { readonly projectId: string }) {
@@ -97,15 +96,15 @@ function CohortCard({ projectId, cohort }: { readonly projectId: string; readonl
 	)
 }
 
-// What the server found about a stack of the project.
+// What the server found about the project that matters to its analysis: the blockers that keep an analysis from starting,
+// and the reviews and notes about its frames. Blockers of a stack alone, such as a stale analysis, belong to Integration.
 function ValidationList({ validation }: { readonly validation: StackingValidation }) {
+	const findings = validation.findings.filter((finding) => finding.severity !== 'blocker' || blocksAnalysis(finding))
+	if (findings.length === 0) return null
+
 	return (
 		<div className="flex flex-col gap-1.5">
-			<div className="flex flex-wrap items-center gap-2">
-				<StatusBadge tone={validation.ready ? 'success' : 'danger'} label={validation.ready ? 'Ready to Stack' : 'Not Ready'} />
-				{validation.samples > 0 && <span className="text-xs text-ink-300 tabular-nums">{`About ${bytesText(validation.memoryBytes)} of memory for the largest frame`}</span>}
-			</div>
-			{validation.findings.map((finding) => (
+			{findings.map((finding) => (
 				<div key={`${finding.code}:${finding.groupKey ?? ''}:${finding.cohortId ?? ''}:${finding.message}`} className="flex items-start gap-2 text-xs text-ink-200">
 					<StatusBadge tone={SEVERITY_TONES[finding.severity]} label={SEVERITY_LABELS[finding.severity]} />
 					<span className="pt-1">{finding.message}</span>
@@ -141,7 +140,7 @@ export function QualityView({ projectId, group, onGroup, selected, onSelect }: {
 						</Button>
 					</>
 				) : (
-					<Button disabled={validation?.findings.some((e) => e.severity === 'blocker') || pending.analysis === true} onClick={() => void startStackingAnalysis(imageStackingRuntime, projectId)}>
+					<Button disabled={validation?.findings.some(blocksAnalysis) || pending.analysis === true} onClick={() => void startStackingAnalysis(imageStackingRuntime, projectId)}>
 						Analyze
 					</Button>
 				)}

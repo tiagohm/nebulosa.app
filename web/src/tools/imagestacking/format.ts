@@ -1,5 +1,5 @@
 // oxfmt-ignore
-import type { StackingJobSummary, StackingCohort, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingProductStatus, StackingRecipe, StackingRegistration, StackingRole, StackingRunGroup, StackingRunState, StackingSettings } from 'api'
+import type { StackingJobSummary, StackingCohort, StackingFinding, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingProductStatus, StackingRecipe, StackingRegistration, StackingRole, StackingRunGroup, StackingRunState, StackingSettings } from 'api'
 import type { StatusTone } from '../../ui/StatusBadge'
 import { masterName } from '../calibrationlibrary/library'
 
@@ -93,6 +93,13 @@ export const LIGHT_MASTER_LABELS: Readonly<Record<LightMaster, string>> = { dark
 // Tone and label of each severity of a finding.
 export const SEVERITY_TONES: Readonly<Record<StackingFindingSeverity, StatusTone>> = { blocker: 'danger', review: 'warning', warning: 'neutral' }
 export const SEVERITY_LABELS: Readonly<Record<StackingFindingSeverity, string>> = { blocker: 'Blocker', review: 'Review', warning: 'Note' }
+
+// Whether a finding of the validation also keeps an analysis from starting, as the server refuses one: no included light
+// with an available file at all (the project-wide noLights, without a group), or a chosen master that is no longer
+// available. Every other blocker, such as a stale analysis or a group left without frames, only blocks a stack.
+export function blocksAnalysis(finding: StackingFinding) {
+	return finding.severity === 'blocker' && ((finding.code === 'noLights' && finding.groupKey === undefined) || finding.code === 'masterUnavailable')
+}
 
 // Label of each quality threshold a frame can fail.
 export const REJECTION_LABELS: Readonly<Record<NonNullable<StackingFrameSummary['rejected']>[number], string>> = {

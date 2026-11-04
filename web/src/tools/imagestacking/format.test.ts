@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import type { StackingImportCandidate } from 'api'
-import { ALL_CANDIDATES, candidateChecked, candidateText, candidateUsable, cohortText, NO_CANDIDATES, withCandidate, memoryText, runGroupText, committedCounts, integrationText, masterText, metricText, registrationText, selectionFields, selectionOf } from './format'
+import type { StackingFinding, StackingImportCandidate } from 'api'
+import { ALL_CANDIDATES, blocksAnalysis, candidateChecked, candidateText, candidateUsable, cohortText, NO_CANDIDATES, withCandidate, memoryText, runGroupText, committedCounts, integrationText, masterText, metricText, registrationText, selectionFields, selectionOf } from './format'
 
 function candidate(path: string, patch: Partial<StackingImportCandidate> = {}): StackingImportCandidate {
 	return { path, name: path, bytes: 1, mtimeMillis: 1, format: 'fits', role: 'light', warnings: [], known: false, ...patch }
@@ -64,4 +64,16 @@ describe('format', () => {
 		expect([candidateChecked(naming, 'a'), candidateChecked(naming, 'z')]).toEqual([true, false])
 		expect(committedCounts({ lights: 5, unclassified: 2 }, naming, 1)).toEqual({ lights: 2, unclassified: 0 })
 	})
+})
+
+test('only a project without lights or a gone master blocks an analysis', () => {
+	const finding = (severity: StackingFinding['severity'], code: StackingFinding['code'], groupKey?: string): StackingFinding => ({ severity, code, groupKey, message: '' })
+
+	expect(blocksAnalysis(finding('blocker', 'noLights'))).toBe(true)
+	expect(blocksAnalysis(finding('blocker', 'masterUnavailable', 'Ha'))).toBe(true)
+	expect(blocksAnalysis(finding('blocker', 'noLights', 'Ha'))).toBe(false)
+	expect(blocksAnalysis(finding('blocker', 'analysisStale', 'Ha'))).toBe(false)
+	expect(blocksAnalysis(finding('blocker', 'masterIncompatible', 'Ha'))).toBe(false)
+	expect(blocksAnalysis(finding('blocker', 'registrationFailed', 'Ha'))).toBe(false)
+	expect(blocksAnalysis(finding('warning', 'partialCalibration', 'Ha'))).toBe(false)
 })

@@ -136,7 +136,7 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 						Equipment Setup
 					</Button>
 				)}
-				{wheel === undefined && <Notice>The camera has no role in the equipment setup, so you change the filters and the light yourself and confirm each step; the cover is left as it is.</Notice>}
+				{wheel === undefined && <Notice>Only the Main Camera of the equipment setup uses its filter wheel, flat panel, and cover, so for this camera you change the filters and the light yourself and confirm each step; the cover is left as it is.</Notice>}
 			</CollapsibleSection>
 			<CameraAcquisitionSection
 				id="images.flat-wizard.acquisition"

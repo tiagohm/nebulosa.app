@@ -38,13 +38,16 @@ describe('camera operation context', () => {
 		expect(context.guideOutput).toBeUndefined()
 	})
 
-	test('the Guide Camera shares the mount and gets the guide output, but has no focuser', () => {
+	test('the Guide Camera shares the mount and gets the guide output, but none of what the Main Camera looks through', () => {
 		const context = cameraOperationContext(tab('guide'), PROFILE, RUNTIME)!
 		expect(context.role).toBe('GUIDE_CAMERA')
 		expect(context.focuser).toBeUndefined()
+		expect(context.wheel).toBeUndefined()
+		expect(context.flatPanel).toBeUndefined()
+		expect(context.cover).toBeUndefined()
 		expect(context.guideOutput).toMatchObject({ device: { id: 'st4' }, serverId: 'conn', status: 'connected' })
 		expect(context.mount.status).toBe('connected')
-		expect(context.snoop.mount).toBe('mount')
+		expect(context.snoop).toEqual({ mount: 'mount' })
 	})
 
 	test('a camera without a role has no focuser, snoops nothing, and still reaches the mount of its connection', () => {
@@ -57,15 +60,13 @@ describe('camera operation context', () => {
 		expect(context.mount).toMatchObject({ device: { id: 'mount' }, status: 'connected' })
 	})
 
-	test('a camera with a role gets the wheel and the flat panel of the setup, an unassigned one reported as such, and a camera without a role gets neither', () => {
+	test('the Main Camera gets the wheel and the flat panel of the setup, an unassigned one reported as such, and a camera without a role gets neither', () => {
 		const panelRuntime = { ...RUNTIME, devices: [...RUNTIME.devices, device('panel', 'flatPanel')] }
-		const guide = cameraOperationContext(tab('guide'), { connectionId: 'saved', equipment: { saved: { ...SETUP, FLAT_PANEL: { id: 'panel', name: 'panel' } } } }, panelRuntime)!
-		expect(guide.wheel).toMatchObject({ device: { id: 'wheel' }, status: 'connected' })
-		expect(guide.flatPanel).toMatchObject({ device: { id: 'panel' }, status: 'connected' })
-		expect(guide.cover).toEqual({ device: undefined, serverId: 'conn', status: 'notSelected' })
-
-		const main = cameraOperationContext(tab('main'), PROFILE, RUNTIME)!
-		expect(main.flatPanel).toEqual({ device: undefined, serverId: 'conn', status: 'notSelected' })
+		const main = cameraOperationContext(tab('main'), { connectionId: 'saved', equipment: { saved: { ...SETUP, FLAT_PANEL: { id: 'panel', name: 'panel' } } } }, panelRuntime)!
+		expect(main.wheel).toMatchObject({ device: { id: 'wheel' }, status: 'connected' })
+		expect(main.flatPanel).toMatchObject({ device: { id: 'panel' }, status: 'connected' })
+		expect(main.cover).toEqual({ device: undefined, serverId: 'conn', status: 'notSelected' })
+		expect(cameraOperationContext(tab('main'), PROFILE, RUNTIME)!.flatPanel).toEqual({ device: undefined, serverId: 'conn', status: 'notSelected' })
 
 		const spare = cameraOperationContext(tab('spare'), PROFILE, RUNTIME)!
 		expect(spare.wheel).toBeUndefined()

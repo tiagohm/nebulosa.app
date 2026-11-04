@@ -180,7 +180,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 						Equipment Setup
 					</Button>
 				)}
-				{wheel === undefined && <Notice>The camera has no role in the equipment setup, so only a manual cap can block the light.</Notice>}
+				{wheel === undefined && <Notice>Only the Main Camera of the equipment setup uses its filter wheel, flat panel, and cover, so for this camera only a manual cap can block the light.</Notice>}
 				<Notice>The cover closes before the first frame and opens again when the session ends, unless it was already closed.</Notice>
 			</CollapsibleSection>
 			<CameraAcquisitionSection id="images.dark-library-wizard.acquisition" device={device} exposure={capture} capabilities={capabilities} description="Frames are raw DARK frames taken with the camera settings of Camera Acquisition; each group of the Capture Plan sets its exposure." />

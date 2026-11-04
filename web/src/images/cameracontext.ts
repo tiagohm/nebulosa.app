@@ -10,11 +10,12 @@ import type { ImageDocument } from './images'
 
 // Equipment a camera tab's operations command: the physical camera of the tab, and the focuser, mount, guide output,
 // filter wheel, flat panel, and cover of the active profile's equipment setup associated with it. The setup assigns flat roles per
-// connection, with no optical train, so the association is a fixed rule: the focuser belongs to the Main Camera, and
-// only that camera's Auto Focus moves it; the mount is shared by every camera of the connection, since a nudge holds
-// only the mount; the guide output belongs to the Guide Camera, and only that camera guides; the wheel, the panel, and the cover belong to any camera with a role, and never to one without,
-// which takes its flats with manual filters and light and leaves the cover as it is. A camera without a role has no
-// focuser and snoops nothing into its headers. The forms of the camera are those of the physical camera in the active
+// connection, with no optical train, so the association is a fixed rule: the focuser, the filter wheel, the flat panel,
+// and the cover belong to the Main Camera, which looks through them, and only its operations move them; the mount is
+// shared by every camera of the connection, since a nudge holds only the mount; the guide output belongs to the Guide
+// Camera, and only that camera guides. Any other camera takes its flats with manual filters and light and leaves the
+// cover as it is. The Main Camera snoops the devices of the setup into its headers, the Guide Camera only the mount, and a
+// camera without a role nothing. The forms of the camera are those of the physical camera in the active
 // profile. An operation keeps the devices it started with; changing tab or profile never redirects it.
 
 // Equipment of the operations of a camera tab.
@@ -36,17 +37,17 @@ export interface CameraOperationContext {
 	// Guide output guiding pulses: the GUIDE_OUTPUT of the setup when the camera is its Guide Camera; absent otherwise,
 	// meaning the camera cannot guide.
 	readonly guideOutput?: RoleDevice
-	// Filter wheel Flat Wizard moves: the FILTER_WHEEL of the setup when the camera has a role; absent otherwise,
+	// Filter wheel Flat Wizard moves: the FILTER_WHEEL of the setup when the camera is its Main Camera; absent otherwise,
 	// meaning every filter change is manual.
 	readonly wheel?: RoleDevice
-	// Flat panel Flat Wizard lights the frames with: the FLAT_PANEL of the setup when the camera has a role; absent
-	// otherwise, meaning the light is manual.
+	// Flat panel Flat Wizard lights the frames with: the FLAT_PANEL of the setup when the camera is its Main Camera;
+	// absent otherwise, meaning the light is manual.
 	readonly flatPanel?: RoleDevice
-	// Dust cover Flat Wizard closes before its frames: the COVER of the setup when the camera has a role; absent otherwise,
-	// meaning the cover is left as it is.
+	// Dust cover Flat Wizard closes before its frames: the COVER of the setup when the camera is its Main Camera; absent
+	// otherwise, meaning the cover is left as it is.
 	readonly cover?: RoleDevice
-	// Devices snooped into the headers of the camera's frames: those of the setup when the camera has a role, none
-	// otherwise.
+	// Devices snooped into the headers of the camera's frames: those of the setup for the Main Camera, the mount alone for
+	// the Guide Camera, none for a camera without a role.
 	readonly snoop: CaptureSnoop
 }
 
@@ -65,11 +66,11 @@ export function cameraOperationContext(document: Pick<ImageDocument, 'source'> |
 	const device = resolve('MAIN_CAMERA', { MAIN_CAMERA: { id: deviceId, name: '' } })
 	const role = watched ? CAMERA_ROLES.find((role) => setup[role]?.id === deviceId) : undefined
 	const settings = watched ? profileCamera(profile, deviceId) : undefined
-	const context: CameraOperationContext = { camera, device, ...(settings && { settings }), mount: resolve('MOUNT'), snoop: role ? captureSnoop(setup) : {} }
+	const context: CameraOperationContext = { camera, device, ...(settings && { settings }), mount: resolve('MOUNT'), snoop: {} }
 
-	if (!role) return context
-	const flats = { wheel: resolve('FILTER_WHEEL'), flatPanel: resolve('FLAT_PANEL'), cover: resolve('COVER') }
-	return role === 'MAIN_CAMERA' ? { ...context, role, focuser: resolve('FOCUSER'), ...flats } : { ...context, role, guideOutput: resolve('GUIDE_OUTPUT'), ...flats }
+	if (role === 'MAIN_CAMERA') return { ...context, role, snoop: captureSnoop(setup), focuser: resolve('FOCUSER'), wheel: resolve('FILTER_WHEEL'), flatPanel: resolve('FLAT_PANEL'), cover: resolve('COVER') }
+	if (role === 'GUIDE_CAMERA') return { ...context, role, snoop: { mount: setup.MOUNT?.id }, guideOutput: resolve('GUIDE_OUTPUT') }
+	return context
 }
 
 // Resolves the equipment of the camera tab of a document for the active profile, following its setup and the watched

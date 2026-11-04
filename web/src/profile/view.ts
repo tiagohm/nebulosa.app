@@ -10,7 +10,8 @@ import { type WorkspaceSyncState, workspaceSyncState } from './sync'
 // View state of the tab: the fields of a profile the server never keeps (panels, last directories, the time bar, which
 // framing is drawn, the bottom area of the camera tabs, the Image Processing pipeline, the preferences of Close
 // Approaches and Astro Weather), which profile is active, and the view entries kept outside the profiles (which panel
-// sections are expanded, the tool of each camera tab, the target being typed for each camera in Target Centering).
+// sections are expanded, the tool of each camera tab, the camera tab selected last, the target being typed for each camera
+// in Target Centering).
 // VIEW_STORAGE says, for each one, the browser storage areas it is kept in: sessionStorage keeps it for this tab across
 // its reloads, localStorage for every tab of the browser across its restarts, and one kept in both is read from the first
 // area that holds it and written to all of them. Each area holds one document per profile, written whenever a field kept
@@ -95,7 +96,7 @@ export type ViewFieldKey = keyof typeof VIEW_FIELDS
 const VIEW_FIELD_KEYS = Object.keys(VIEW_FIELDS) as ViewFieldKey[]
 
 // View state kept outside the profiles, each under one key of browser storage (ViewEntry).
-export type ViewEntryName = 'sections' | 'cameraTools' | 'centeringTargets'
+export type ViewEntryName = 'sections' | 'cameraTools' | 'activeCameraTab' | 'centeringTargets'
 
 // Storage areas of each field of the view, of the active profile, and of each view entry, in the order they are read;
 // every one listed is written. An empty list keeps it in the memory of the page only.
@@ -116,8 +117,9 @@ export const VIEW_STORAGE: Readonly<Record<ViewFieldKey | ViewEntryName | 'activ
 	skyFraming: ['local'],
 	// How the operator arranged the panels, wherever a section appears.
 	sections: ['local'],
-	// What this tab was doing with each camera.
+	// What this tab was doing with each camera, and which camera it was showing.
 	cameraTools: ['session'],
+	activeCameraTab: ['session'],
 	centeringTargets: ['session'],
 }
 
@@ -408,6 +410,44 @@ export function cameraToolsEntry(images: ImagesState): ViewEntry {
 			}
 
 			return Object.keys(remembered).length > 0 ? remembered : undefined
+		},
+	}
+}
+
+// Keeps the camera tab selected last, by camera tab key, and selects it again once its camera has a tab after a reload,
+// since the tabs come back in the order of their names and the first one is shown. Until then a camera tab the workspace
+// showed by itself never replaces it, but one the operator selects does, and so does any later selection; a file
+// document selected meanwhile leaves it as it is.
+export function activeCameraTabEntry(images: ImagesState): ViewEntry {
+	let remembered: string | undefined
+	// Whether the remembered tab is still to be selected again.
+	let restoring = false
+	// Tab the workspace showed by itself while the remembered one had not appeared yet.
+	let automatic: string | undefined
+
+	return {
+		name: 'activeCameraTab',
+		store: images,
+		restore: (value) => {
+			if (typeof value !== 'string') return
+			remembered = value
+			restoring = true
+		},
+		apply: () => {
+			if (!restoring) return
+
+			if (images.documents.some(({ key, camera }) => camera && key === remembered)) {
+				images.activeKey = remembered
+				restoring = false
+			} else if (images.activeKey !== undefined) {
+				automatic ??= images.activeKey
+				if (images.activeKey !== automatic) restoring = false
+			}
+		},
+		value: () => {
+			const active = images.documents.find(({ key }) => key === images.activeKey)
+			if (!restoring && active?.camera) remembered = active.key
+			return remembered
 		},
 	}
 }

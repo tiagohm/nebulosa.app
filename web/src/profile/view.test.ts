@@ -8,7 +8,7 @@ import type { CollapsibleSections } from '../shell/collapsible'
 import { deleteProfile, type ProfileState, selectProfile, setCameraFramesShown, setImageProcessingPipeline, setLastImageDirectory, setPanelOpen, setSkyTimeBarVisible } from './profile'
 import { PROFILE_SETTINGS_VERSION } from './schema'
 import { WorkspaceSync, type WorkspaceSyncState } from './sync'
-import { cameraToolsEntry, centeringTargetsEntry, keepViewEntries, sectionsEntry, ViewPersistence, type ViewStorages } from './view'
+import { activeCameraTabEntry, cameraToolsEntry, centeringTargetsEntry, keepViewEntries, sectionsEntry, ViewPersistence, type ViewStorages } from './view'
 
 // Storage area of a browser, in memory.
 class MemoryStorage {
@@ -210,6 +210,53 @@ describe('view entries', () => {
 		cameraTab(after, 'camera:c1:guide')
 		await Bun.sleep(0)
 		expect(after.tools['camera:c1:guide'].tool).toBe('guiding')
+	})
+
+	test('the camera tab selected last is selected again once its camera has a tab, not the first one shown', async () => {
+		const session = new MemoryStorage()
+		const before = proxy<ImagesState>({ documents: [], views: {}, tools: {} })
+		stops.push(keepViewEntries([activeCameraTabEntry(before)], { local: new MemoryStorage(), session }))
+		cameraTab(before, 'camera:c1:guide')
+		cameraTab(before, 'camera:c1:main')
+		before.activeKey = 'camera:c1:main'
+		await Bun.sleep(0)
+		before.documents.push({ key: 'file' } as never)
+		before.activeKey = 'file'
+		await Bun.sleep(0)
+		expect(JSON.parse(session.getItem('nebulosa:activeCameraTab')!).value).toBe('camera:c1:main')
+
+		// After the reload the guide camera has its tab first, and the workspace shows it.
+		const after = proxy<ImagesState>({ documents: [], views: {}, tools: {} })
+		stops.push(keepViewEntries([activeCameraTabEntry(after)], { local: new MemoryStorage(), session }))
+		cameraTab(after, 'camera:c1:guide')
+		after.activeKey = 'camera:c1:guide'
+		await Bun.sleep(0)
+		expect(JSON.parse(session.getItem('nebulosa:activeCameraTab')!).value).toBe('camera:c1:main')
+		cameraTab(after, 'camera:c1:main')
+		await Bun.sleep(0)
+		expect(after.activeKey).toBe('camera:c1:main')
+
+		after.activeKey = 'camera:c1:guide'
+		await Bun.sleep(0)
+		expect(after.activeKey).toBe('camera:c1:guide')
+		expect(JSON.parse(session.getItem('nebulosa:activeCameraTab')!).value).toBe('camera:c1:guide')
+	})
+
+	test('a camera tab the operator selects before the remembered one appears replaces it', async () => {
+		const session = new MemoryStorage()
+		session.setItem('nebulosa:activeCameraTab', JSON.stringify({ version: 1, value: 'camera:c1:main' }))
+		const images = proxy<ImagesState>({ documents: [], views: {}, tools: {} })
+		stops.push(keepViewEntries([activeCameraTabEntry(images)], { local: new MemoryStorage(), session }))
+		cameraTab(images, 'camera:c1:guide')
+		cameraTab(images, 'camera:c1:other')
+		images.activeKey = 'camera:c1:guide'
+		await Bun.sleep(0)
+		images.activeKey = 'camera:c1:other'
+		await Bun.sleep(0)
+		cameraTab(images, 'camera:c1:main')
+		await Bun.sleep(0)
+		expect(images.activeKey).toBe('camera:c1:other')
+		expect(JSON.parse(session.getItem('nebulosa:activeCameraTab')!).value).toBe('camera:c1:other')
 	})
 
 	test('the target typed for a camera comes back in the same tab only, and another version is ignored', async () => {

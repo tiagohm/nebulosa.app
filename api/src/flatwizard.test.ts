@@ -250,6 +250,8 @@ describe('Flat Wizard sessions', () => {
 		const finals = measurement.calls.filter((call) => call.sample)
 		expect(finals.map((call) => readFileSync(join(directory, 'flats', run.files[finals.indexOf(call)])).equals(call.bytes))).toEqual([true, true, true])
 		expect(finals[0].context).toMatchObject({ exposure: 0.2, filter: 'Filter 1', illumination: { source: 'manual' } })
+		// The session declares the readout mode and subframe origin it commanded, which headers may leave out.
+		expect(finals.every((call) => call.context.operatingPoint?.readoutMode !== undefined && call.context.operatingPoint.sensorOrigin?.join() === '0,0')).toBeTrue()
 
 		// Every exposure was previewed as a Flat Wizard frame; only the published ones are saved, under their final names.
 		expect(record.attempts.map((attempt) => attempt.frameId)).toEqual([1, 2, 3, 4, 5].map((generation) => `${sessionId}:${generation}`))

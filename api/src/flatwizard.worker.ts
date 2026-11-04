@@ -2,6 +2,7 @@ import { open } from 'fs/promises'
 import { analyzeFlat } from 'nebulosa/src/imaging/analysis/flat/flat'
 import { measureFlatSequenceFrame } from 'nebulosa/src/imaging/analysis/flat/sequence'
 import { readImageFromFits } from 'nebulosa/src/imaging/model/image'
+import type { DigitalImage } from 'nebulosa/src/imaging/model/types'
 import { fileHandleSource } from 'nebulosa/src/io/file'
 import { readFits } from 'nebulosa/src/io/formats/fits/fits'
 import { uncompressedBitpixKeyword } from 'nebulosa/src/io/formats/fits/util'
@@ -29,9 +30,18 @@ async function readDigitalFits(path: string) {
 	return image
 }
 
-// Measures the frame of a request; a final frame also keeps its temporal sample.
+// Returns the output bit depth of an image read from FITS: its BITPIX when it stores integers, undefined for floats.
+function outputBitDepth(image: DigitalImage) {
+	const bitpix = uncompressedBitpixKeyword(image.header, 0)
+	return Number.isInteger(bitpix) && bitpix > 0 ? bitpix : undefined
+}
+
+// Measures the frame of a request; a final frame also keeps its temporal sample. The output bit depth of the file
+// joins the operating point the session declared, so frames of one session can be proven to share it.
 async function measure({ path, context, options, sample }: FlatWorkerRequest): Promise<FlatFrameMeasurement> {
-	const frame = { ...context, image: await readDigitalFits(path) }
+	const image = await readDigitalFits(path)
+	const bitDepth = context.operatingPoint?.bitDepth ?? outputBitDepth(image)
+	const frame = { ...context, image, ...(bitDepth !== undefined && { operatingPoint: { ...context.operatingPoint, bitDepth } }) }
 
 	if (sample) {
 		const measured = measureFlatSequenceFrame({ frame }, { analysis: options })

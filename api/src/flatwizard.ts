@@ -12,6 +12,7 @@ import { type ResourceRequest, resourceKey } from 'nebulosa/src/devices/orchestr
 import { estimateFlatExposure } from 'nebulosa/src/imaging/analysis/flat/exposure'
 import { finalizeFlatSequence, type FlatSequenceSample } from 'nebulosa/src/imaging/analysis/flat/sequence'
 import type { FlatAnalysis, FlatDiagnosticCode, FlatExposureEstimate, FlatExposureObservation, FlatPlane, FlatSequencePlaneAnalysis } from 'nebulosa/src/imaging/analysis/flat/types'
+import type { SensorOperatingPoint } from 'nebulosa/src/imaging/analysis/sensor/types'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { clamp } from 'nebulosa/src/math/numerical/math'
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
@@ -334,6 +335,15 @@ const SAME_EXPOSURE = 1e-6
 // an estimated exposure is commanded, written, and matched by its dark-flats as one exact value with a short name.
 function wholeMicroseconds(exposure: number) {
 	return Math.round(exposure * 1e6) / 1e6
+}
+
+// Returns what a session commanded that the header of a frame may not say: the readout mode (the frame format of the
+// request, or the one the camera keeps when the request names none) and the origin of the subframe in unbinned pixels,
+// the corner of the sensor without one. Every frame of a session shares them, which lets its sequence be proven
+// homogeneous; the bit depth is added by the analyzer from the file.
+function operatingPointOf(capture: FlatWizardCaptureSettings, camera: Pick<Camera, 'frameFormat'>): SensorOperatingPoint {
+	const readoutMode = capture.frameFormat || camera.frameFormat
+	return { ...(readoutMode && { readoutMode }), sensorOrigin: capture.subframe ? [capture.x, capture.y] : [0, 0] }
 }
 
 // Name of the published frames: the capture placeholders plus the filter name.
@@ -796,7 +806,7 @@ export class FlatWizardSessions {
 		const time = captured.value.frames[0]?.exposureStartedAt ?? Date.now()
 		const generation = ++session.exposures
 		const frameId = await this.#preview(session, join(staging, name), name, generation, time)
-		const frame: FlatFrameContext = { id, exposure, timestamp: time, filter: filterLabel, illumination: panel ? { source: panel.name, brightness: panel.intensity.value } : { source: 'manual' } }
+		const frame: FlatFrameContext = { id, exposure, timestamp: time, filter: filterLabel, illumination: panel ? { source: panel.name, brightness: panel.intensity.value } : { source: 'manual' }, operatingPoint: operatingPointOf(request.capture, camera) }
 		this.#update(session, { state: 'measuring' })
 
 		try {

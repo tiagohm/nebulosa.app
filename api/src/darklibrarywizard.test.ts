@@ -8,7 +8,7 @@ import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures } from './captures'
 import { ConnectionManager } from './connection'
 import { CoverCommands } from './covers'
-import { type DarkLibraryWizardEvent, type DarkLibraryWizardRequest, type DarkLibraryWizardSession, DarkLibraryWizardSessions, darkGroupKey, expectedFrameSize, orderDarkGroups } from './darklibrarywizard'
+import { type DarkLibraryWizardEvent, type DarkLibraryWizardRequest, type DarkLibraryWizardSession, DarkLibraryWizardSessions, darkFrameType, darkGroupKey, expectedFrameSize, orderDarkGroups } from './darklibrarywizard'
 import { type DarkFrameMeasurement, measureDarkFile } from './darklibrarywizard.analysis'
 import { type DarkCapturePlan, STAGING_DIRECTORY } from './darklibrarywizard.plan'
 import { AppDatabase } from './database'
@@ -183,6 +183,13 @@ describe('plan helpers', () => {
 	test('groups of one temperature run together, in the order they were asked for', () => {
 		const groups = [{ temperature: -10, exposure: 1 }, { temperature: 0, exposure: 2 }, { temperature: -10, exposure: 3 }, { exposure: 4 }, { temperature: 0, exposure: 5 }]
 		expect(orderDarkGroups(groups).map((group) => group.exposure)).toEqual([1, 3, 2, 5, 4])
+	})
+
+	test('a file name writes the target temperature, or else the one measured, rounded', () => {
+		expect(darkFrameType(undefined, { exposure: 300, temperature: -10 }, -9.6)).toBe('DARK_300s_-10C')
+		expect(darkFrameType('darkFlat', { exposure: 2 }, 23.4)).toBe('DARKFLAT_2s_23C')
+		expect(darkFrameType(undefined, { exposure: 60 }, -0.4)).toBe('DARK_60s_0C')
+		expect(darkFrameType(undefined, { exposure: 60 }, undefined)).toBe('DARK_60s')
 	})
 
 	test('the expected size follows the binning of the sensor or the subframe', () => {

@@ -391,6 +391,15 @@ export function orderDarkGroups<T extends Pick<DarkGroup, 'temperature'>>(groups
 	return temperatures.flatMap((temperature) => groups.filter((group) => group.temperature === temperature))
 }
 
+// Returns the role of a dark as its file name writes it: DARK or DARKFLAT, the exposure of its group in seconds, and the
+// target temperature of its group, or, without a target, the sensor temperature measured during the frame (the reading
+// when the exposure started, else the one of its header), rounded to whole degrees Celsius. A frame with neither names no
+// temperature.
+export function darkFrameType(purpose: DarkCapturePlan['purpose'], { exposure, temperature }: Pick<DarkGroup, 'exposure' | 'temperature'>, measured: number | undefined) {
+	const degrees = temperature ?? (measured === undefined ? undefined : Math.round(measured) || 0)
+	return `${purpose === 'darkFlat' ? 'DARKFLAT' : 'DARK'}_${exposure}s${degrees === undefined ? '' : `_${degrees}C`}`
+}
+
 // Returns the size a frame must have, in output pixels, or undefined while the sensor is unknown.
 export function expectedFrameSize({ subframe, width, height, binX, binY }: DarkPlanCapture, sensor: DarkCapturePlan['camera']['sensor']) {
 	if (subframe) return { width: Math.floor(width / binX), height: Math.floor(height / binY) }
@@ -1068,11 +1077,10 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return successfulOperationResult(undefined)
 	}
 
-	// Returns the name of a frame's file: when it was taken, its camera, its role with the exposure and target temperature of
-	// its group, and its sequence, so frames of every plan can share one directory and still say what they are.
-	#fileName({ summary: { cameraName }, plan }: Session, index: number, { time, sequence }: Pick<ExaminedFrame, 'time' | 'sequence'>) {
-		const { exposure, temperature } = plan.groups[index]
-		const type = `${plan.purpose === 'darkFlat' ? 'DARKFLAT' : 'DARK'}_${exposure}s${temperature === undefined ? '' : `_${temperature}C`}`
+	// Returns the name of a frame's file: when it was taken, its camera, its role with its exposure and temperature
+	// (darkFrameType), and its sequence, so frames of every plan can share one directory and still say what they are.
+	#fileName({ summary: { cameraName }, plan }: Session, index: number, { time, sequence, trace, measurement }: Pick<ExaminedFrame, 'time' | 'sequence' | 'trace' | 'measurement'>) {
+		const type = darkFrameType(plan.purpose, plan.groups[index], trace?.start ?? measurement.header.temperature)
 		return `${frameName(FILENAME_TEMPLATE, { camera: cameraName, type, time, generation: sequence, timezoneOffset: TIMEZONE })}.fit`
 	}
 

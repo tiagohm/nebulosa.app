@@ -451,7 +451,7 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 					<NumberInput label="Passes" value={form.maxIterations} min={1} max={20} onChange={(maxIterations) => edit({ maxIterations })} />
 				</div>
 			)}
-			{kind === 'flat' && <Select label="Correction" options={options} value={form.correction} format={correctionLabel} onChange={(correction) => edit({ correction })} />}
+			{kind === 'flat' && <Select label="Correction" className="min-w-0" options={options} value={form.correction} format={correctionLabel} onChange={(correction) => edit({ correction })} />}
 			{added.length > 0 && <Findings findings={added} />}
 			{validation?.needsAcknowledgement && <Checkbox label="I reviewed the warnings and accept them" checked={form.acknowledged} onChange={(acknowledged) => edit({ acknowledged })} />}
 			{validation !== undefined && validation.spillBytes > 0 && <Notice>{`Needs about ${bytesText(validation.spillBytes)} of temporary disk.`}</Notice>}

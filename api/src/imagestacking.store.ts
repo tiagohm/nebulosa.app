@@ -13,8 +13,8 @@ import type { StackingRole } from './imagestacking.sources'
 // Persistence of Image Stacking. Projects with the choices of an operator, the light frames chosen for them with what an
 // operator declared and what the latest analysis measured about each, and the calibration decision of each cohort are rows
 // of the operational database; the frames themselves stay where they are. Filter groups are not stored: a group is the
-// frames whose filter is equal. Runs and the
-// products they published are rows too, and each product is a directory of products/ under the directory of Image
+// frames whose filter is equal. The
+// products the integrations published are rows too, and each product is a directory of products/ under the directory of Image
 // Stacking, next to composites/ (the color composites mixed from them), staging/ (the work of a running integration or
 // composition), and orphaned/ (directories found without a row). Every read and write of a row is synchronous and short.
 
@@ -120,42 +120,6 @@ export interface StackingRecipe {
 // scale, kept where half of them cover a pixel.
 export const DEFAULT_STACKING_RECIPE: StackingRecipe = { method: 'weighted-sigma-clip', weighting: 'quality', normalization: 'background-scale', interpolation: 'bilinear', minimumCoverage: 0.5, sigmaLower: 3, sigmaUpper: 3 }
 
-// State of a run:
-// - running: integrating; interrupted when the process ends meanwhile.
-// - completed: every group published or reused.
-// - failed, cancelled: ended early; the groups published before stay.
-export type StackingRunState = 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
-
-// Outcome of one filter group of a run.
-export interface StackingRunGroup {
-	// Key and name of the group.
-	readonly groupKey: string
-	readonly name: string
-	// Frames it integrates.
-	readonly frames: number
-	// Product published, or an equal one reused.
-	readonly productId?: string
-	readonly reused?: boolean
-	// Why it failed.
-	readonly error?: string
-}
-
-// An integration of a project.
-export interface StackingRun {
-	readonly runId: string
-	readonly projectId: string
-	// Key of the request, so a repeated request answers the same run.
-	readonly token: string
-	readonly state: StackingRunState
-	// When it was asked for and ended, Unix milliseconds (UTC).
-	readonly createdAt: number
-	readonly endedAt?: number
-	readonly recipe: StackingRecipe
-	readonly groups: readonly StackingRunGroup[]
-	// Why it failed as a whole.
-	readonly error?: string
-}
-
 // Normalization of one integrated frame: `normalized = scale * value + offset` per channel.
 export interface StackingFrameNormalization {
 	readonly sourceId: string
@@ -182,8 +146,6 @@ export interface StackingProductDiagnostics {
 export interface StackingProduct {
 	readonly productId: string
 	readonly projectId: string
-	// Run that integrated it.
-	readonly runId: string
 	// Filter group, by key, and its name when integrated.
 	readonly groupKey: string
 	readonly name: string
@@ -498,37 +460,6 @@ function sourceWhere(projectId: string, filter: StackingSourceFilter) {
 	return { where: `WHERE ${clauses.join(' AND ')}`, values }
 }
 
-// Row of stack_runs.
-interface RunRow {
-	readonly run_id: string
-	readonly project_id: string
-	readonly token: string
-	readonly state: StackingRunState
-	readonly created_at: number
-	readonly ended_at: number | null
-	readonly recipe: string
-	readonly groups: string
-	readonly error: string | null
-}
-
-// Columns of stack_runs.
-const RUN_COLUMNS = 'run_id, project_id, token, state, created_at, ended_at, recipe, groups, error'
-
-// Returns the run of a row.
-function rowRun(row: RunRow): StackingRun {
-	return {
-		runId: row.run_id,
-		projectId: row.project_id,
-		token: row.token,
-		state: row.state,
-		createdAt: row.created_at,
-		...(row.ended_at !== null && { endedAt: row.ended_at }),
-		recipe: JSON.parse(row.recipe) as StackingRecipe,
-		groups: JSON.parse(row.groups) as StackingRunGroup[],
-		...(row.error !== null && { error: row.error }),
-	}
-}
-
 // Projects and their frames in the operational database.
 export class ImageStackingStore {
 	// Creates the store of the rows of database and the files under directory.
@@ -644,41 +575,6 @@ export class ImageStackingStore {
 		this.database.write(() => this.database.db.query('DELETE FROM stack_composites WHERE composite_id = ?').run(compositeId))
 	}
 
-	// Lists the latest runs of a project, newest first.
-	runs(projectId: string, limit: number) {
-		return this.database.db.query<RunRow, [string, number]>(`SELECT ${RUN_COLUMNS} FROM stack_runs WHERE project_id = ? ORDER BY created_at DESC, run_id LIMIT ?`).all(projectId, limit).map(rowRun)
-	}
-
-	// Returns a run.
-	run(runId: string) {
-		const row = this.database.db.query<RunRow, [string]>(`SELECT ${RUN_COLUMNS} FROM stack_runs WHERE run_id = ?`).get(runId)
-		return row ? rowRun(row) : undefined
-	}
-
-	// Returns the run of a project asked for with a token.
-	runByToken(projectId: string, token: string) {
-		const row = this.database.db.query<RunRow, [string, string]>(`SELECT ${RUN_COLUMNS} FROM stack_runs WHERE project_id = ? AND token = ?`).get(projectId, token)
-		return row ? rowRun(row) : undefined
-	}
-
-	// Writes a run.
-	putRun(run: StackingRun) {
-		this.database.write(() => {
-			this.database.db
-				.query(`INSERT INTO stack_runs (${RUN_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (run_id) DO UPDATE SET state = excluded.state, ended_at = excluded.ended_at, groups = excluded.groups, error = excluded.error`)
-				.run(run.runId, run.projectId, run.token, run.state, run.createdAt, run.endedAt ?? null, JSON.stringify(run.recipe), JSON.stringify(run.groups), run.error ?? null)
-		})
-	}
-
-	// Marks every running run interrupted at `now`, as the end of a process leaves them. Returns how many.
-	interruptRuns(now: number) {
-		let changes = 0
-		this.database.write(() => {
-			changes = this.database.db.query("UPDATE stack_runs SET state = 'interrupted', ended_at = ? WHERE state = 'running'").run(now).changes
-		})
-		return changes
-	}
-
 	// Lists the published products of a project, newest first.
 	products(projectId: string) {
 		return this.database.db
@@ -721,10 +617,9 @@ export class ImageStackingStore {
 	beginProduct(product: StackingProduct, sources: readonly StackingProductSource[]) {
 		this.database.write(() => {
 			const { db } = this.database
-			db.query("INSERT INTO stack_products (product_id, project_id, run_id, publication, group_key, name, fingerprint, created_at, content_digest, bytes, coverage_digest, coverage_bytes, product) VALUES (?, ?, ?, 'publishing', ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
+			db.query("INSERT INTO stack_products (product_id, project_id, publication, group_key, name, fingerprint, created_at, content_digest, bytes, coverage_digest, coverage_bytes, product) VALUES (?, ?, 'publishing', ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
 				product.productId,
 				product.projectId,
-				product.runId,
 				product.groupKey,
 				product.name,
 				product.fingerprint,

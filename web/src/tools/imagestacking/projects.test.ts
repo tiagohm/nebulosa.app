@@ -62,7 +62,7 @@ describe('requests', () => {
 		expect(framesQuery({ group: '', included: false, search: 'm31' }, 0)).toBe('offset=0&limit=50&group=&included=false&search=m31')
 	})
 
-	test('a project, its groups, cohorts, validation, products, runs, and composites are fetched together, and absent clears them', async () => {
+	test('a project, its groups, cohorts, validation, products, and composites are fetched together, and absent clears them', async () => {
 		const state = runtime()
 		const base = '/api/image-stacking/projects/p%201'
 		const { request, calls } = fakeFetch({
@@ -70,21 +70,20 @@ describe('requests', () => {
 			[base + '/cohorts']: [{ cohortId: 'c' }],
 			[base + '/validation']: { findings: [], ready: true, samples: 0, memoryBytes: 0 },
 			[base + '/products']: [{ productId: 'm' }],
-			[base + '/runs']: [],
 			[base + '/composites']: [{ compositeId: 'c' }],
 			[base]: { projectId: 'p 1' },
 		})
 		await loadStackingProject(state, 'p 1', request)
-		expect(calls.map(({ url }) => url)).toEqual([base, base + '/groups', base + '/cohorts', base + '/validation', base + '/products', base + '/runs', base + '/composites'])
+		expect(calls.map(({ url }) => url)).toEqual([base, base + '/groups', base + '/cohorts', base + '/validation', base + '/products', base + '/composites'])
 		expect(state.project?.projectId).toBe('p 1')
-		expect([state.groups?.length, state.cohorts?.length, state.validation?.ready, state.products?.length, state.runs?.length, state.composites?.length]).toEqual([1, 1, true, 1, 0, 1])
+		expect([state.groups?.length, state.cohorts?.length, state.validation?.ready, state.products?.length, state.composites?.length]).toEqual([1, 1, true, 1, 1])
 		await loadStackingProject(state, undefined, request)
-		expect([state.project, state.groups, state.cohorts, state.validation, state.products, state.runs, state.composites]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined, undefined])
+		expect([state.project, state.groups, state.cohorts, state.validation, state.products, state.composites]).toEqual([undefined, undefined, undefined, undefined, undefined, undefined])
 	})
 
 	test('runs keep their token, a preflight that fails keeps the last answer, and a run is followed until it ends', async () => {
 		const state = runtime()
-		const { request, calls } = fakeFetch({ '/api/image-stacking/projects/p/runs': { run: { runId: 'r' } }, '/api/image-stacking/projects/p/preflight': { groups: [], problems: ['x'] }, '/api/image-stacking/runs/r/cancel': {} })
+		const { request, calls } = fakeFetch({ '/api/image-stacking/projects/p/runs': { jobId: 'r' }, '/api/image-stacking/projects/p/preflight': { groups: [], problems: ['x'] }, '/api/image-stacking/runs/r/cancel': {} })
 		await startStackingRun(state, 'p', { token: 'once', recipe: { method: 'median' } }, request)
 		await loadStackingPreflight(state, 'p', { recipe: { method: 'median' } }, request)
 		await cancelStackingRun(state, 'r', request)

@@ -1,5 +1,5 @@
 // oxfmt-ignore
-import type { StackingJobSummary, StackingCohort, StackingFinding, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingProductStatus, StackingRecipe, StackingRegistration, StackingRole, StackingRunGroup, StackingRunState, StackingSettings } from 'api'
+import type { StackingJobSummary, StackingCohort, StackingFinding, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingProductStatus, StackingRecipe, StackingRegistration, StackingRole, StackingSettings } from 'api'
 import type { StatusTone } from '../../ui/StatusBadge'
 import { masterName } from '../calibrationlibrary/library'
 
@@ -204,18 +204,6 @@ export const INTERPOLATION_LABELS: Readonly<Record<StackingRecipe['interpolation
 // Tone and label of each state of a product.
 export const PRODUCT_TONES: Readonly<Record<StackingProductStatus, StatusTone>> = { ready: 'success', stale: 'warning', unavailable: 'danger' }
 export const PRODUCT_LABELS: Readonly<Record<StackingProductStatus, string>> = { ready: 'Ready', stale: 'Stale', unavailable: 'Unavailable' }
-
-// Tone and label of each state of a run.
-export const RUN_TONES: Readonly<Record<StackingRunState, StatusTone>> = { running: 'active', completed: 'success', failed: 'danger', cancelled: 'muted', interrupted: 'warning' }
-export const RUN_LABELS: Readonly<Record<StackingRunState, string>> = { running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled', interrupted: 'Interrupted' }
-
-// Text of the outcome of one group of a run.
-export function runGroupText(group: StackingRunGroup) {
-	if (group.reused) return `${group.name}: reused`
-	if (group.productId !== undefined) return `${group.name}: published`
-	if (group.error !== undefined) return `${group.name}: ${group.error}`
-	return `${group.name}: not integrated`
-}
 
 // Text of a size in bytes, in MiB or GiB.
 export function memoryText(bytes: number) {

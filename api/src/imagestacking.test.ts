@@ -549,16 +549,40 @@ describe('calibration and registration planning', () => {
 		const { projectId } = await project(stacking)
 		await decide(stacking, projectId)
 		await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)
-		const { run } = await stacking.startRun(projectId, { token: 'cancel' })
+		const run = await stacking.startRun(projectId, { token: 'cancel' })
 		await expect(stacking.startAnalysis(projectId)).rejects.toThrow('Another analysis or integration')
 		await Bun.sleep(20)
-		stacking.cancel(run.runId)
-		expect(await settled(stacking, run.runId)).toMatchObject({ state: 'cancelled', published: 1 })
+		stacking.cancel(run.jobId)
+		expect(await settled(stacking, run.jobId)).toMatchObject({ state: 'cancelled', published: 1 })
+		expect(await stacking.products(projectId)).toHaveLength(1)
+	})
 
-		const [saved] = await stacking.runs(projectId)
-		expect(saved.state).toBe('cancelled')
-		expect(saved.groups.map((group) => group.productId !== undefined)).toEqual([true, false])
-		expect((await stacking.products(projectId)).map((product) => product.groupKey)).toEqual([saved.groups[0].groupKey])
+	test('a run whose filter group fails names the group and why in its job', async () => {
+		const { fake } = analyzer(measurements())
+
+		const failing: FrameIntegrator = {
+			integrate: (request, handlers) => {
+				const [published, failed] = request.groups
+				const directory = join(published.staging, 'product')
+				mkdirSync(directory, { recursive: true })
+				writeFileSync(join(directory, PRODUCT_MASTER_FILE), 'master')
+				writeFileSync(join(directory, PRODUCT_COVERAGE_FILE), 'coverage')
+				handlers.onStaged({ group: published.key, directory, contentDigest: 'm', bytes: 6, coverageDigest: 'c', coverageBytes: 8, channels: 1, diagnostics: { mode: 'online', coverageThreshold: 1, coveredPixels: 48, normalization: [] } })
+				handlers.onGroupFailed(failed.key, 'No pixel is covered')
+				return Promise.resolve()
+			},
+		}
+
+		const { stacking } = open(masters().library, fake, failing)
+		const { projectId } = await project(stacking)
+		await decide(stacking, projectId)
+		await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)
+		const run = await stacking.startRun(projectId, { token: 'fail' })
+		const ended = await settled(stacking, run.jobId)
+		const [product] = await stacking.products(projectId)
+		expect(ended).toMatchObject({ state: 'failed', code: 'processingFailed', published: 1 })
+		expect(ended.error).toMatch(/^\w+: No pixel is covered$/)
+		expect(ended.error).not.toStartWith(product.name)
 	})
 
 	test('an analysis is refused while another runs and can be cancelled, keeping what it measured', async () => {
@@ -627,9 +651,10 @@ describe('integration and publication', () => {
 		const { projectId, folder } = await analyzed(stacking)
 
 		const started = await stacking.startRun(projectId, { token: 'first', recipe: { method: 'sigma-clip' } })
-		expect(started.job).toMatchObject({ type: 'integration', state: 'integrating', found: 3 })
-		expect(await settled(stacking, started.run.runId)).toMatchObject({ state: 'completed', measured: 3, published: 1 })
-		expect((await stacking.startRun(projectId, { token: 'first' })).run.runId).toBe(started.run.runId)
+		expect(started).toMatchObject({ type: 'integration', state: 'integrating', found: 3 })
+		expect(started).not.toHaveProperty('token')
+		expect(await settled(stacking, started.jobId)).toMatchObject({ state: 'completed', measured: 3, published: 1 })
+		expect((await stacking.startRun(projectId, { token: 'first' })).jobId).toBe(started.jobId)
 
 		const [product] = await stacking.products(projectId)
 		expect(product).toMatchObject({ status: 'ready', name: 'L', width: 96, height: 96, channels: 1, frames: 3, exposure: 900 })
@@ -649,10 +674,11 @@ describe('integration and publication', () => {
 		expect(readdirSync(join(managed, 'staging'), { recursive: true }).length).toBe(0)
 
 		const again = await stacking.startRun(projectId, { token: 'second', recipe: { method: 'sigma-clip' } })
-		expect(again.run).toMatchObject({ state: 'completed', groups: [{ groupKey: 'L', productId: product.productId, reused: true }] })
+		expect(again).toMatchObject({ state: 'completed', found: 0, published: 0 })
+		expect((await stacking.products(projectId)).map((item) => item.productId)).toEqual([product.productId])
 
 		const online = await stacking.startRun(projectId, { token: 'third', recipe: { method: 'average' } })
-		await settled(stacking, online.run.runId)
+		await settled(stacking, online.jobId)
 		const products = await stacking.products(projectId)
 		expect(products.map((item) => item.diagnostics.mode)).toEqual(['online', 'spill'])
 
@@ -673,7 +699,7 @@ describe('integration and publication', () => {
 		expect(tight.groups).toMatchObject([{ groupKey: 'L', frames: 3, plan: { mode: 'spill', fits: false } }])
 		expect(tight.problems[0]).toContain('of memory')
 		await expect(stacking.startRun(projectId, { token: 't', recipe: { method: 'sigma-clip' }, memoryBudget: 1024 })).rejects.toThrow('of memory')
-		expect(await stacking.runs(projectId)).toEqual([])
+		expect(await stacking.products(projectId)).toEqual([])
 		expect((await stacking.preflight(projectId, {})).problems).toEqual([])
 	})
 
@@ -702,7 +728,6 @@ describe('integration and publication', () => {
 			return {
 				productId,
 				projectId,
-				runId: 'run',
 				groupKey: 'L',
 				name: 'L',
 				fingerprint: productId,
@@ -729,8 +754,6 @@ describe('integration and publication', () => {
 		store.setPublication('deleted', 'deleting')
 		mkdirSync(join(managed, 'products', 'unknown'), { recursive: true })
 		mkdirSync(join(managed, 'staging', 'old'), { recursive: true })
-		store.putRun({ runId: 'run', projectId, token: 't', state: 'running', createdAt: 1, recipe: product('x', 'x').recipe, groups: [] })
-		rmSync(join(managed, 'products', 'x'), { recursive: true })
 
 		const compositeDirectory = join(managed, 'composites', 'mixed')
 		mkdirSync(compositeDirectory, { recursive: true })
@@ -744,7 +767,6 @@ describe('integration and publication', () => {
 		expect(readdirSync(join(managed, 'products'))).toEqual(['intact'])
 		expect(readdirSync(join(managed, 'orphaned')).some((name) => name.startsWith('unknown-'))).toBeTrue()
 		expect(readdirSync(managed)).not.toContain('staging')
-		expect((await second.runs(projectId))[0].state).toBe('interrupted')
 		expect((await second.composites(projectId)).map(({ compositeId, status }) => [compositeId, status])).toEqual([['mixed', 'ready']])
 		expect(readdirSync(join(managed, 'composites'))).toEqual(['mixed'])
 		expect(readdirSync(join(managed, 'orphaned')).some((name) => name.startsWith('stray-'))).toBeTrue()
@@ -815,23 +837,22 @@ describe('scale', () => {
 		expect(tight.groups[0].plan).toMatchObject({ mode: 'spill', stripRows: 1, fits: true })
 
 		const cancelled = await first.startRun(projectId, { token: 'cancel', recipe, memoryBudget: 100000 })
-		while ((await first.job(cancelled.run.runId)).measured === 0) await Bun.sleep(5)
-		first.cancel(cancelled.run.runId)
-		expect(await settled(first, cancelled.run.runId)).toMatchObject({ state: 'cancelled' })
+		while ((await first.job(cancelled.jobId)).measured === 0) await Bun.sleep(5)
+		first.cancel(cancelled.jobId)
+		expect(await settled(first, cancelled.jobId)).toMatchObject({ state: 'cancelled' })
 
 		const second = new ImageStacking(store, () => undefined, masters().library, [managed])
-		expect((await second.runs(projectId))[0]).toMatchObject({ state: 'cancelled', groups: [{ groupKey: 'L', frames }] })
 		expect(await second.products(projectId)).toEqual([])
 		expect(readdirSync(managed)).not.toContain('staging')
 
 		const strips = await second.startRun(projectId, { token: 'strips', recipe, memoryBudget: 100000 })
-		expect(await settled(second, strips.run.runId)).toMatchObject({ state: 'completed', measured: frames, published: 1 })
+		expect(await settled(second, strips.jobId)).toMatchObject({ state: 'completed', measured: frames, published: 1 })
 		const [narrow] = await second.products(projectId)
 		expect(narrow.diagnostics).toMatchObject({ mode: 'spill', stripRows: 1 })
 		await second.deleteProduct(narrow.productId)
 
 		const whole = await second.startRun(projectId, { token: 'whole', recipe })
-		await settled(second, whole.run.runId)
+		await settled(second, whole.jobId)
 		const [wide] = await second.products(projectId)
 		expect(wide.diagnostics.stripRows).toBe(48)
 		expect(wide.contentDigest).toBe(narrow.contentDigest)
@@ -882,7 +903,7 @@ describe('composition', () => {
 		const { projectId } = await stacking.createProject({ name: 'Mix' })
 		await importAll(stacking, projectId, [folder])
 		await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)
-		expect(await settled(stacking, (await stacking.startRun(projectId, { token: 'masters', recipe: { method: 'average', minimumCoverage: 1 } })).run.runId)).toMatchObject({ state: 'completed', published: 2 })
+		expect(await settled(stacking, (await stacking.startRun(projectId, { token: 'masters', recipe: { method: 'average', minimumCoverage: 1 } })).jobId)).toMatchObject({ state: 'completed', published: 2 })
 		const products = await stacking.products(projectId)
 		return { projectId, ha: products.find((product) => product.name === 'Ha')!, oiii: products.find((product) => product.name === 'OIII')! }
 	}

@@ -1,5 +1,5 @@
 // oxfmt-ignore
-import type { ImageStackingSnapshot, Page, ServerEvent, SourceStatus, StackingCohort, StackingCohortPatch, StackingCompositeDetail, StackingCompositeSummary, StackingComposition, StackingCompositionValidation, StackingFilterGroup, StackingFrameSummary, StackingImportCandidate, StackingImportCommit, StackingJobSummary, StackingPreflight, StackingProductDetail, StackingProductSummary, StackingProjectDetail, StackingRole, StackingRun, StackingRunRequest, StackingSettings, StackingSourceDetail, StackingSourcePatch, StackingValidation } from 'api'
+import type { ImageStackingSnapshot, Page, ServerEvent, SourceStatus, StackingCohort, StackingCohortPatch, StackingCompositeDetail, StackingCompositeSummary, StackingComposition, StackingCompositionValidation, StackingFilterGroup, StackingFrameSummary, StackingImportCandidate, StackingImportCommit, StackingJobSummary, StackingPreflight, StackingProductDetail, StackingProductSummary, StackingProjectDetail, StackingRole, StackingRunRequest, StackingSettings, StackingSourceDetail, StackingSourcePatch, StackingValidation } from 'api'
 import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../../http'
 
@@ -37,9 +37,8 @@ export interface ImageStackingRuntime {
 	groups?: StackingFilterGroup[]
 	cohorts?: StackingCohort[]
 	validation?: StackingValidation
-	// Masters of the project shown and its latest runs, newest first, and what a run would do with the recipe shown.
+	// Masters of the project shown, newest first, and what a run would do with the recipe shown.
 	products?: StackingProductSummary[]
-	runs?: StackingRun[]
 	preflight?: StackingPreflight
 	// Composites of the project shown, newest first, and the validation of the composition shown.
 	composites?: StackingCompositeSummary[]
@@ -148,25 +147,23 @@ function projectUrl(projectId: string) {
 // know, clears them.
 export async function loadStackingProject(state: ImageStackingRuntime, projectId: string | undefined, request: typeof fetch = fetch) {
 	if (projectId === undefined) {
-		for (const key of ['project', 'groups', 'cohorts', 'validation', 'products', 'runs', 'composites']) requests[key] = (requests[key] ?? 0) + 1
+		for (const key of ['project', 'groups', 'cohorts', 'validation', 'products', 'composites']) requests[key] = (requests[key] ?? 0) + 1
 		state.project = undefined
 		state.groups = undefined
 		state.cohorts = undefined
 		state.validation = undefined
 		state.products = undefined
-		state.runs = undefined
 		state.composites = undefined
 		return
 	}
 
 	const url = projectUrl(projectId)
-	const [project, groups, cohorts, validation, products, runs, composites] = await Promise.all([
+	const [project, groups, cohorts, validation, products, composites] = await Promise.all([
 		latest('project', fetchJson<StackingProjectDetail>(url, request)),
 		latest('groups', fetchJson<StackingFilterGroup[]>(`${url}/groups`, request)),
 		latest('cohorts', fetchJson<StackingCohort[]>(`${url}/cohorts`, request)),
 		latest('validation', fetchJson<StackingValidation>(`${url}/validation`, request)),
 		latest('products', fetchJson<StackingProductSummary[]>(`${url}/products`, request)),
-		latest('runs', fetchJson<StackingRun[]>(`${url}/runs`, request)),
 		latest('composites', fetchJson<StackingCompositeSummary[]>(`${url}/composites`, request)),
 	])
 	if (project) state.project = project.value
@@ -174,7 +171,6 @@ export async function loadStackingProject(state: ImageStackingRuntime, projectId
 	if (cohorts) state.cohorts = cohorts.value
 	if (validation) state.validation = validation.value
 	if (products) state.products = products.value
-	if (runs) state.runs = runs.value
 	if (composites) state.composites = composites.value
 }
 
@@ -342,9 +338,9 @@ export function cancelStackingAnalysis(state: ImageStackingRuntime, jobId: strin
 	return command(state, `analysis:${jobId}`, `${BASE_URL}/analyses/${encodeURIComponent(jobId)}/cancel`, jsonInit('POST'), request)
 }
 
-// Starts integrating a project; its progress arrives as events. The token makes a repeated request answer the same run.
+// Starts integrating a project and answers its job; its progress arrives as events. The token makes a repeated request answer the same job.
 export function startStackingRun(state: ImageStackingRuntime, projectId: string, body: StackingRunRequest, request: typeof fetch = fetch) {
-	return command<{ readonly run: StackingRun; readonly job?: StackingJobSummary }>(state, 'run', `${projectUrl(projectId)}/runs`, jsonInit('POST', body), request)
+	return command<StackingJobSummary>(state, 'run', `${projectUrl(projectId)}/runs`, jsonInit('POST', body), request)
 }
 
 // Cancels a run; the masters it published stay.

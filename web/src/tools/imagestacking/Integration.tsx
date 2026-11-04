@@ -1,4 +1,4 @@
-import type { StackingJobSummary, StackingProductSummary, StackingRecipe, StackingRun } from 'api'
+import type { StackingJobSummary, StackingProductSummary, StackingRecipe } from 'api'
 import { nanoid } from 'nanoid'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -12,15 +12,15 @@ import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { bytesText } from '../calibrationlibrary/library'
 // oxfmt-ignore
-import { integrationText, INTERPOLATION_LABELS, INTERPOLATIONS, memoryText, METHOD_LABELS, METHODS, NORMALIZATION_LABELS, NORMALIZATIONS, PRODUCT_LABELS, PRODUCT_TONES, RUN_LABELS, RUN_TONES, runGroupText, SIGMA_METHODS, WEIGHTING_LABELS, WEIGHTINGS } from './format'
+import { integrationText, INTERPOLATION_LABELS, INTERPOLATIONS, memoryText, METHOD_LABELS, METHODS, NORMALIZATION_LABELS, NORMALIZATIONS, PRODUCT_LABELS, PRODUCT_TONES, SIGMA_METHODS, WEIGHTING_LABELS, WEIGHTINGS } from './format'
 // oxfmt-ignore
 import { cancelStackingRun, deleteStackingProduct, imageStackingRuntime, jobEnded, loadStackingPreflight, loadStackingProduct, startStackingRun } from './projects'
 import { Cell, Row, Table } from './Table'
 
 // Integration and results of an Image Stacking project. Integration edits the recipe, shows what a run would do with it
 // (frames, memory, spill, reuse) as the server answers, starts and cancels runs, and follows the one working. Results
-// lists the masters of the project with their state, opens them or their coverage in Images, deletes them, and lists the
-// runs. The server decides what is integrated, reused, or refused; this view never computes it.
+// lists the masters of the project with their state, opens them or their coverage in Images, and deletes them; runs are
+// not kept, so a failed or cancelled one is only reported while it is the job shown. The server decides what is integrated, reused, or refused; this view never computes it.
 
 // Recipe a new view starts from, the default of the server.
 const DEFAULT_RECIPE: StackingRecipe = { method: 'weighted-sigma-clip', weighting: 'quality', normalization: 'background-scale', interpolation: 'bilinear', minimumCoverage: 0.5, sigmaLower: 3, sigmaUpper: 3 }
@@ -126,11 +126,10 @@ export function IntegrationView({ projectId }: { readonly projectId: string }) {
 	)
 }
 
-// Masters of the project and its runs.
+// Masters of the project.
 export function ResultsView() {
-	const { products, runs, pending, errors } = useSnapshot(imageStackingRuntime)
+	const { products, pending, errors } = useSnapshot(imageStackingRuntime)
 	const items = (products ?? []) as readonly StackingProductSummary[]
-	const history = (runs ?? []) as readonly StackingRun[]
 
 	async function open(productId: string, coverage: boolean) {
 		const detail = await loadStackingProduct(productId)
@@ -186,20 +185,6 @@ export function ResultsView() {
 							</Notice>,
 						]
 					: [],
-			)}
-			{history.length > 0 && (
-				<Table className="shrink-0" headers={['Run', 'State', 'Filters', 'Combination']}>
-					{history.map((run) => (
-						<Row key={run.runId}>
-							<Cell>{new Date(run.createdAt).toISOString().slice(0, 16).replace('T', ' ')}</Cell>
-							<Cell>
-								<StatusBadge tone={RUN_TONES[run.state]} label={RUN_LABELS[run.state]} />
-							</Cell>
-							<Cell className="whitespace-normal">{run.groups.map(runGroupText).join(' · ') || '—'}</Cell>
-							<Cell>{METHOD_LABELS[run.recipe.method]}</Cell>
-						</Row>
-					))}
-				</Table>
 			)}
 		</>
 	)

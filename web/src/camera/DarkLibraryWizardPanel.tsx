@@ -38,6 +38,8 @@ import {
 	darkLibraryWizardRuntime,
 	duplicateDarkGroup,
 	pauseDarkLibraryWizard,
+	proposedDarkSlot,
+	proposedDarkTemperature,
 	resumeDarkLibraryWizard,
 	startDarkLibraryWizard,
 	stopDarkLibraryWizard,
@@ -198,6 +200,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 						group={group}
 						count={groups.length}
 						temperature={capabilities === undefined || capabilities.canSetTemperature}
+						sensorTemperature={capabilities?.temperature}
 						exposure={capabilities?.exposure}
 						disabled={locked}
 						onChange={(patch) => updateGroup(index, patch)}
@@ -220,7 +223,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				<Notice>Estimates only: downloads, cooling, and rejected frames add to them. Groups of one temperature run together.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.dark-library-wizard.protection" title="Light Protection">
-				<Checkbox label="Use Dark Filter" checked={settings.useDarkFilter} disabled={locked || !wheelAssigned} onChange={(useDarkFilter) => update({ useDarkFilter })} />
+				<Checkbox label="Use Dark Filter" checked={settings.useDarkFilter} disabled={locked || !wheelAssigned} onChange={(useDarkFilter) => update({ useDarkFilter, ...(useDarkFilter && wheelState && { darkSlot: proposedDarkSlot(wheelState.names, settings.darkSlot) }) })} />
 				{settings.useDarkFilter && wheelState && (
 					<Select
 						label="Dark Slot"
@@ -319,6 +322,8 @@ interface GroupFormProps {
 	readonly count: number
 	// Whether a target temperature can be set.
 	readonly temperature: boolean
+	// Temperature the sensor reports, in °C, when known; turning a target on proposes it in whole degrees rounded down.
+	readonly sensorTemperature?: number
 	// Exposure range the camera accepts, in seconds, when known.
 	readonly exposure?: CameraCapabilities['exposure']
 	// Whether the form is locked.
@@ -334,7 +339,7 @@ interface GroupFormProps {
 }
 
 // Fields of one group.
-function GroupForm({ index, group, count, temperature, exposure, disabled, onChange, onMove, onDuplicate, onRemove }: GroupFormProps) {
+function GroupForm({ index, group, count, temperature, sensorTemperature, exposure, disabled, onChange, onMove, onDuplicate, onRemove }: GroupFormProps) {
 	return (
 		<fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 border-t border-line-100 border-dashed p-0 pt-2 not-first:mt-2 mb-1 first:border-t-0 first:pt-0">
 			<div className="flex items-center gap-1">
@@ -346,7 +351,7 @@ function GroupForm({ index, group, count, temperature, exposure, disabled, onCha
 			</div>
 			<ExposureTimeInput value={group.exposure} exposure={exposure} disabled={disabled} onChange={(value) => onChange({ exposure: value })} />
 			<NumberInput label="Frames" value={group.count} min={1} max={DARK_LIBRARY_WIZARD_MAXIMUM_COUNT} disabled={disabled} onChange={(frames) => onChange({ count: frames })} />
-			{temperature && <Checkbox label="Target Temperature" checked={group.temperature !== undefined} disabled={disabled} onChange={(set) => onChange({ temperature: set ? 0 : undefined })} />}
+			{temperature && <Checkbox label="Target Temperature" checked={group.temperature !== undefined} disabled={disabled} onChange={(set) => onChange({ temperature: set ? proposedDarkTemperature(sensorTemperature) : undefined })} />}
 			{group.temperature !== undefined && <NumberInput label="Temperature" value={group.temperature} min={-60} max={40} step={1} suffix="°C" disabled={disabled} onChange={(value) => onChange({ temperature: value })} />}
 		</fieldset>
 	)

@@ -17,6 +17,8 @@ import {
 	duplicateDarkGroup,
 	handleDarkLibraryWizardEvent,
 	pauseDarkLibraryWizard,
+	proposedDarkSlot,
+	proposedDarkTemperature,
 	refreshDarkLibraryWizard,
 	resumeDarkLibraryWizard,
 	startDarkLibraryWizard,
@@ -171,6 +173,20 @@ test('the warning above Start names what no device verifies', () => {
 	expect(darkLibraryWizardWarning({ ...protection, panelOff: true })).toContain('the unlit flat panel blocks the outside light')
 	expect(darkLibraryWizardWarning({ ...protection, panelOff: true, closeCover: true })).toBeUndefined()
 	expect(darkLibraryWizardWarning({ ...protection, closeCover: true })).toBeUndefined()
+})
+
+test('the dark filter proposes a slot named as opaque, keeping one already named so', () => {
+	const names = ['L', 'R', 'G', 'B', 'Ha', 'SII', 'OIII', 'Dark']
+	expect(proposedDarkSlot(names, 0)).toBe(7)
+	expect(proposedDarkSlot(['Blank', 'L', 'Opaque'], 2)).toBe(2)
+	expect(proposedDarkSlot(['L', 'Darkness'], 1)).toBe(1)
+	expect(proposedDarkSlot(['L', 'R'], 1)).toBe(1)
+})
+
+test('a target proposes the sensor temperature rounded down, so a cooler can reach it', () => {
+	expect(proposedDarkTemperature(19.7)).toBe(19)
+	expect(proposedDarkTemperature(-9.6)).toBe(-10)
+	expect(proposedDarkTemperature(undefined)).toBe(0)
 })
 
 test('a session runs until it ended', () => {

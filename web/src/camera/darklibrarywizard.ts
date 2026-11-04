@@ -206,6 +206,23 @@ export function darkLibraryWizardBlocker({ camera, wheel, panel, cover }: DarkLi
 	return undefined
 }
 
+// Name of a filter that says its slot blocks the light: dark, opaque, blank, or block, in any case.
+const OPAQUE_FILTER_NAME = /\b(dark|opaque|blank|block(ed|er)?)\b/i
+
+// Returns the 0-based slot proposed when the dark filter is turned on: the current slot when its name says it blocks the
+// light, else the first slot whose name does, else the current one. A name only proposes; the operator confirms it.
+export function proposedDarkSlot(names: readonly string[], current: number) {
+	if (OPAQUE_FILTER_NAME.test(names[current] ?? '')) return current
+	const slot = names.findIndex((name) => OPAQUE_FILTER_NAME.test(name))
+	return slot >= 0 ? slot : current
+}
+
+// Returns the target, in °C, proposed when a group takes one: the sensor temperature in whole degrees rounded down, so
+// a cooler, which can only cool, reaches it, or 0 °C when the camera reports no temperature.
+export function proposedDarkTemperature(sensor: number | undefined) {
+	return sensor === undefined || !Number.isFinite(sensor) ? 0 : Math.floor(sensor)
+}
+
 // Returns the warning shown above Start for what no device can verify, or undefined when the devices verify everything.
 // Starting is the operator's assertion of it: a manual cap, the opacity of the filter at the dark slot (a slot's name
 // proves nothing), and, when the panel is the only barrier, that an unlit panel really blocks the light.

@@ -1,4 +1,5 @@
 import type { StackingJobSummary, StackingProductSummary, StackingRecipe, StackingRun } from 'api'
+import { nanoid } from 'nanoid'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, ConfirmButton, Notice } from '../../equipment-control/parts'
@@ -111,7 +112,7 @@ export function IntegrationView({ projectId }: { readonly projectId: string }) {
 				</div>
 			) : (
 				<Actions>
-					<Button disabled={!plan || plan.problems.length > 0 || current || pending.run === true} onClick={() => void startStackingRun(imageStackingRuntime, projectId, { token: crypto.randomUUID(), recipe, memoryBudget })}>
+					<Button disabled={!plan || plan.problems.length > 0 || current || pending.run === true} onClick={() => void startStackingRun(imageStackingRuntime, projectId, { token: nanoid(), recipe, memoryBudget })}>
 						Integrate
 					</Button>
 					{plan && plan.groups.length > 0 && current && <Notice>Every filter already has a master of these frames and recipe.</Notice>}

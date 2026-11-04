@@ -118,36 +118,31 @@ export const REJECTION_LABELS: Readonly<Record<NonNullable<StackingFrameSummary[
 	'normalized-score-too-low': 'Score too low',
 }
 
-// Quality thresholds an operator edits, with their labels and units.
+// Quality thresholds an operator edits, with their labels, units, the step of their field, and their largest value
+// (eccentricity is 0 to 1, and the background is a fraction of the full scale). No threshold is meaningful at 0, which
+// stands for none: a minimum of 0 rejects nothing, and a maximum of 0 would reject every frame.
 export const THRESHOLDS = [
-	{ key: 'minStars', label: 'Minimum Stars', unit: '' },
-	{ key: 'minMedianSNR', label: 'Minimum SNR', unit: '' },
-	{ key: 'maxMedianHFD', label: 'Maximum HFD', unit: 'px' },
-	{ key: 'maxMedianEccentricity', label: 'Maximum Eccentricity', unit: '' },
-	{ key: 'maxBackground', label: 'Maximum Background', unit: '' },
-] as const satisfies readonly { readonly key: keyof StackingSettings['selection']; readonly label: string; readonly unit: string }[]
+	{ key: 'minStars', label: 'Minimum Stars', unit: '', step: 1 },
+	{ key: 'minMedianSNR', label: 'Minimum SNR', unit: '', step: 0.5 },
+	{ key: 'maxMedianHFD', label: 'Maximum HFD', unit: 'px', step: 0.1 },
+	{ key: 'maxMedianEccentricity', label: 'Maximum Eccentricity', unit: '', step: 0.01, max: 1 },
+	{ key: 'maxBackground', label: 'Maximum Background', unit: '', step: 0.001, max: 1 },
+] as const satisfies readonly { readonly key: keyof StackingSettings['selection']; readonly label: string; readonly unit: string; readonly step: number; readonly max?: number }[]
 
 // Threshold an operator edits.
 export type ThresholdKey = (typeof THRESHOLDS)[number]['key']
 
-// Returns the thresholds written in a form: a blank or unreadable field sets none.
-export function selectionOf(fields: Readonly<Partial<Record<ThresholdKey, string>>>): StackingSettings['selection'] {
+// Returns the thresholds of a form: a field at 0 or below sets none.
+export function selectionOf(fields: Readonly<Record<ThresholdKey, number>>): StackingSettings['selection'] {
 	const selection: Partial<Record<ThresholdKey, number>> = {}
-
-	for (const { key } of THRESHOLDS) {
-		const text = fields[key]?.trim()
-		const value = text ? Number(text) : Number.NaN
-		if (Number.isFinite(value)) selection[key] = value
-	}
-
+	for (const { key } of THRESHOLDS) if (fields[key] > 0) selection[key] = fields[key]
 	return selection
 }
 
-// Returns the form fields of thresholds.
-export function selectionFields(selection: StackingSettings['selection']): Partial<Record<ThresholdKey, string>> {
-	const fields: Partial<Record<ThresholdKey, string>> = {}
-	for (const { key } of THRESHOLDS) if (selection[key] !== undefined) fields[key] = String(selection[key])
-	return fields
+// Returns the form fields of thresholds, 0 for a threshold not set.
+export function selectionFields(selection: StackingSettings['selection']): Record<ThresholdKey, number> {
+	const { minStars = 0, minMedianSNR = 0, maxMedianHFD = 0, maxMedianEccentricity = 0, maxBackground = 0 } = selection
+	return { minStars, minMedianSNR, maxMedianHFD, maxMedianEccentricity, maxBackground }
 }
 
 // Text of a measured value with a precision; a missing or unbounded value is a dash. JSON writes Infinity as null.

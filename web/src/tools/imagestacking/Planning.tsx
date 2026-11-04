@@ -4,9 +4,9 @@ import { useSnapshot } from 'valtio'
 import { Actions, Notice } from '../../equipment-control/parts'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
+import { NumberInput } from '../../ui/NumberInput'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
-import { TextInput } from '../../ui/TextInput'
 // oxfmt-ignore
 import { blocksAnalysis, cohortText, LIGHT_MASTER_KINDS, LIGHT_MASTER_LABELS, type LightMaster, masterText, metricText, registrationText, REJECTION_LABELS, selectionFields, selectionOf, SEVERITY_LABELS, SEVERITY_TONES, THRESHOLDS } from './format'
 import { cancelStackingAnalysis, imageStackingRuntime, jobEnded, startStackingAnalysis, updateStackingCohort, updateStackingSettings } from './projects'
@@ -174,15 +174,25 @@ function SettingsForm({ project, groups }: { readonly project: StackingProjectDe
 		<div className="flex flex-col gap-2">
 			<div className="flex flex-wrap items-end gap-3">
 				<Select label="Project Reference" className="w-44" options={['', ...groups.map((item) => item.key)]} value={referenceGroup} format={(key) => (key === '' ? 'Automatic' : key)} onChange={setReferenceGroup} />
-				{THRESHOLDS.map(({ key, label, unit }) => (
-					<TextInput key={key} label={unit ? `${label} (${unit})` : label} className="w-36" value={fields[key] ?? ''} onChange={(event) => setFields({ ...fields, [key]: event.target.value })} />
+				{THRESHOLDS.map((threshold) => (
+					<NumberInput
+						key={threshold.key}
+						label={threshold.label}
+						className="w-44 min-w-0"
+						value={fields[threshold.key]}
+						min={0}
+						max={'max' in threshold ? threshold.max : undefined}
+						step={threshold.step}
+						suffix={threshold.unit || undefined}
+						onChange={(value) => setFields({ ...fields, [threshold.key]: value })}
+					/>
 				))}
 				<Button variant="secondary" disabled={pending.settings === true} onClick={save}>
 					Save Settings
 				</Button>
 			</div>
 			{errors.settings && <Notice error>{errors.settings}</Notice>}
-			<p className="m-0 text-xs text-ink-300">Frames failing a threshold stay in the project and out of the stack. A blank threshold checks nothing. Every filter registers onto the reference of the project reference filter.</p>
+			<p className="m-0 text-xs text-ink-300">Frames failing a threshold stay in the project and out of the stack. A threshold of 0 checks nothing. Every filter registers onto the reference of the project reference filter.</p>
 		</div>
 	)
 }

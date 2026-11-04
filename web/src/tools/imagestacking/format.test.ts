@@ -19,10 +19,10 @@ describe('integration', () => {
 })
 
 describe('planning', () => {
-	test('thresholds read from blank or unreadable fields set nothing, and come back as written', () => {
-		const selection = selectionOf({ minStars: ' 20 ', minMedianSNR: '', maxMedianHFD: 'wide', maxBackground: '0.05' })
+	test('thresholds at zero set nothing, and come back as zero', () => {
+		const selection = selectionOf({ minStars: 20, minMedianSNR: 0, maxMedianHFD: 0, maxMedianEccentricity: 0, maxBackground: 0.05 })
 		expect(selection).toEqual({ minStars: 20, maxBackground: 0.05 })
-		expect(selectionFields(selection)).toEqual({ minStars: '20', maxBackground: '0.05' })
+		expect(selectionFields(selection)).toEqual({ minStars: 20, minMedianSNR: 0, maxMedianHFD: 0, maxMedianEccentricity: 0, maxBackground: 0.05 })
 	})
 
 	test('measurements, registrations, masters, and cohorts read in words', () => {

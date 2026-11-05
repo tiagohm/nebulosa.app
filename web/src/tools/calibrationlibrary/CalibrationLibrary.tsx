@@ -21,7 +21,7 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 // oxfmt-ignore
 import { bytesText, CALIBRATION_KINDS, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, masterName, masterWarnings, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
-import { MISSING } from '../../format'
+import { MISSING, formatPercent } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataRow } from '../../ui/DataRow'
@@ -472,7 +472,7 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 			{failure && !building && <Notice error>{`The last build failed: ${failure}`}</Notice>}
 			<Button disabled={building || requesting || !validation?.valid} title={reason} onClick={() => void buildMaster(calibrationLibraryRuntime, key, request())}>
 				{(building || requesting) && <span className="size-3.5 flex-none animate-spin rounded-full border-2 border-current border-t-transparent" />}
-				{building ? (job.state === 'queued' ? 'Queued' : `Building ${Math.round(jobFraction(job) * 100)}%`) : requesting ? 'Building' : 'Build Master'}
+				{building ? (job.state === 'queued' ? 'Queued' : `Building ${formatPercent(jobFraction(job))}`) : requesting ? 'Building' : 'Build Master'}
 			</Button>
 		</>
 	)

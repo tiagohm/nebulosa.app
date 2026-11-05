@@ -1,10 +1,9 @@
 import type { CaptureSnoop, DeviceSummary, GuidingCommand, GuidingSessionSummary } from 'api'
-import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
-import { deviceState } from '../equipment/equipment'
+import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { formatDegrees, formatPixelLength } from '../format'
 import { operationsState } from '../operations'
@@ -153,11 +152,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				</DataList>
 				{!running && outputAvailability && outputAvailability.status !== 'ready' && outputAvailability.status !== 'busy' && <Notice>{outputAvailability.message}</Notice>}
 				{!running && focalLength === undefined && <Notice>Enter the Guide Telescope in Equipment Setup for the pixel scale of the RMS in arcseconds and the calibration step.</Notice>}
-				{!running && (!guideOutput || focalLength === undefined || outputAvailability?.status === 'notSelected' || outputAvailability?.status === 'unsupported') && (
-					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
+				{!running && (!guideOutput || focalLength === undefined || outputAvailability?.status === 'notSelected' || outputAvailability?.status === 'unsupported') && <EquipmentSetupButton />}
 			</CollapsibleSection>
 			{session && <SessionState session={session} />}
 			{session?.star && <StarProfileSection star={session.star} pixelScale={session.pixelScale} frameId={session.frame?.frameId} />}

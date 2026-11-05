@@ -3,7 +3,8 @@ import { cn } from 'cn'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { DeviceLink } from '../../equipment-control/DeviceLink'
-import { deviceState, type RoleStatus } from '../../equipment/equipment'
+import type { RoleStatus } from '../../equipment/equipment'
+import { EquipmentSetupButton } from '../../equipment/EquipmentSetupButton'
 import { useRoleDevice } from '../../equipment/useEquipment'
 import { activeProfile, mountRemoteBinding, profileCamera, profileState, setMountRemoteBinding } from '../../profile/profile'
 import { type CameraIdentity, MOUNT_REMOTE_PROTOCOLS } from '../../profile/schema'
@@ -56,11 +57,7 @@ export function MountRemoteControl() {
 							<DeviceLink device={device} fallback={mount.status === 'notSelected' ? 'None selected' : 'Unavailable'} />
 						</span>
 						{blocker && <span className="text-ink-300">{blocker}</span>}
-						{mount.status === 'notSelected' && (
-							<Button variant="secondary" onClick={() => (deviceState.open = true)}>
-								Equipment Setup
-							</Button>
-						)}
+						{mount.status === 'notSelected' && <EquipmentSetupButton />}
 					</div>
 					<div className="grid gap-4 md:grid-cols-2">
 						{MOUNT_REMOTE_PROTOCOLS.map((protocol) => (

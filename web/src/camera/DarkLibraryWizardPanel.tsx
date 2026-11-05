@@ -1,14 +1,13 @@
 import type { CameraCapabilities, CaptureSnoop, DarkGroup, DarkLibraryWizardGroupRun, DarkLibraryWizardPendingStep, DarkLibraryWizardSessionSummary, DeviceSummary } from 'api'
-import { cn } from 'cn'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
-import { deviceState } from '../equipment/equipment'
+import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
-import { MISSING, formatTemperature } from '../format'
+import { MISSING, formatTemperature, formatPercent } from '../format'
 import { operationsState } from '../operations'
 import { activeProfile, darkLibraryWizardSettings, exposureSettings, profileState, setDarkLibraryWizardSettings } from '../profile/profile'
 import { type CameraIdentity, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS, DEFAULT_DARK_LIBRARY_WIZARD_GROUP, type DarkLibraryWizardSettings } from '../profile/schema'
@@ -47,6 +46,7 @@ import {
 } from './darklibrarywizard'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress, formatExposure } from './FrameProgress'
+import { SessionStateText } from './SessionStateText'
 
 // Contextual panel sections of Dark Library Wizard, a camera operation of the Images camera tabs: the equipment of the tab's
 // camera, the capture plan (whether it takes darks or dark-flats, and one row per group), how the light is blocked, the
@@ -178,11 +178,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 					<DataRow label="Flat Panel">{panelAssigned ? <DeviceLink device={flatPanel.device} /> : 'Not assigned'}</DataRow>
 					<DataRow label="Cover">{coverAssigned ? <DeviceLink device={cover.device} /> : 'Not assigned'}</DataRow>
 				</DataList>
-				{!running && (!wheelAssigned || !panelAssigned || !coverAssigned) && wheel !== undefined && (
-					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
+				{!running && (!wheelAssigned || !panelAssigned || !coverAssigned) && wheel !== undefined && <EquipmentSetupButton />}
 				{wheel === undefined && <Notice>Only the Main Camera of the equipment setup uses its filter wheel, flat panel, and cover, so for this camera only a manual cap can block the light.</Notice>}
 				<Notice>The cover closes before the first frame and opens again when the session ends, unless it was already closed.</Notice>
 			</CollapsibleSection>
@@ -247,7 +243,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 			<CollapsibleSection id="images.dark-library-wizard.thermal" title="Thermal Control" summary={sensorTemperature} defaultOpen={false}>
 				<DataList>
 					<DataRow label="Sensor">{sensorTemperature ?? 'Not reported'}</DataRow>
-					<DataRow label="Cooler">{capabilities?.cooler === undefined ? 'None' : `${capabilities.cooler.enabled === false ? 'Off' : 'On'}, ${Math.round(capabilities.cooler.power)} %`}</DataRow>
+					<DataRow label="Cooler">{capabilities?.cooler === undefined ? 'None' : `${capabilities.cooler.enabled === false ? 'Off' : 'On'}, ${formatPercent(capabilities.cooler.power / 100)}`}</DataRow>
 				</DataList>
 				<div className="flex flex-col gap-2">
 					<NumberInput label="Tolerance" value={settings.tolerance} min={0.1} max={5} step={0.1} suffix="°C" disabled={locked} onChange={(tolerance) => update({ tolerance })} />
@@ -375,7 +371,7 @@ function Progress({ session, pending }: ProgressProps) {
 
 	return (
 		<CollapsibleSection id="images.dark-library-wizard.session" title="Session">
-			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{DARK_LIBRARY_WIZARD_STATE_LABELS[session.state]}</p>
+			<SessionStateText failed={failed}>{DARK_LIBRARY_WIZARD_STATE_LABELS[session.state]}</SessionStateText>
 			{session.state === 'exposing' && <FrameProgress exposure={session.exposure} />}
 			{session.pauseRequested && session.state !== 'paused' && <Notice>Pausing after the current frame.</Notice>}
 			{failed && session.error && <Notice error>{session.error}</Notice>}

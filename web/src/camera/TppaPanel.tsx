@@ -1,11 +1,10 @@
 import type { DeviceSummary, TppaAlignment, TppaSession, TppaSessionSummary } from 'api'
-import { cn } from 'cn'
 import { toArcmin, toDeg } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
-import { deviceState } from '../equipment/equipment'
+import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { formatArcmin, formatSignedArcmin, formatDegrees, MISSING } from '../format'
 import { operationsState } from '../operations'
@@ -25,6 +24,7 @@ import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
+import { SessionStateText } from './SessionStateText'
 import { startTppa, startTppaRefinement, stopTppa, stopTppaRefinement, TPPA_DIRECTION_LABELS, TPPA_DIRECTIONS, TPPA_STATE_LABELS, tppaBlocker, tppaMountSupport, tppaRequest, tppaRunning, tppaRuntime, tppaSlewRate } from './tppa'
 
 // Contextual panel sections of TPPA, a camera operation of the Images camera tabs: the equipment it uses, the
@@ -99,11 +99,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 					</DataRow>
 				</DataList>
 				{!running && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
-				{!running && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && (
-					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
+				{!running && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && <EquipmentSetupButton />}
 			</CollapsibleSection>
 			<CameraAcquisitionSection
 				id="images.tppa.acquisition"
@@ -254,7 +250,7 @@ function SessionState({ session }: { readonly session: TppaSessionSummary }) {
 
 	return (
 		<>
-			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{TPPA_STATE_LABELS[session.state]}</p>
+			<SessionStateText failed={failed}>{TPPA_STATE_LABELS[session.state]}</SessionStateText>
 			{(session.state === 'capturing' || session.state === 'refining') && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <Notice error>{session.error}</Notice>}
 			{session.slewRateRestored === true && session.previousSlewRate && <Notice>The slew rate was restored to {session.previousSlewRate}.</Notice>}

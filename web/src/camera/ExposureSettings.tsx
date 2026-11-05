@@ -1,7 +1,7 @@
 import type { CameraCapabilities, DeviceSummary } from 'api'
 import type { ReactNode } from 'react'
 import { DeviceLink } from '../equipment-control/DeviceLink'
-import { formatTemperature } from '../format'
+import { formatTemperature, formatPercent } from '../format'
 import type { CameraExposureSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
@@ -83,7 +83,7 @@ export function CameraSettings({ device, settings, capabilities, disabled, onCha
 
 	const { gain, offset, bin, subframe, frameFormats, temperature, cooler } = capabilities
 	const formats = frameFormats.map((format) => format.name)
-	const sensor = [temperature !== undefined && `Sensor ${formatTemperature(temperature)}`, cooler && `Cooler ${cooler.enabled === false ? 'off' : `${Math.round(cooler.power)} %`}`].filter(Boolean).join(' · ')
+	const sensor = [temperature !== undefined && `Sensor ${formatTemperature(temperature)}`, cooler && `Cooler ${cooler.enabled === false ? 'off' : formatPercent(cooler.power / 100)}`].filter(Boolean).join(' · ')
 
 	return (
 		<CollapsibleSection id="images.camera-acquisition.camera" title="Camera" summary={sensor || device?.name} defaultOpen={false}>

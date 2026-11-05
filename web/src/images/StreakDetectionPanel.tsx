@@ -4,7 +4,7 @@ import type { Streak } from 'nebulosa/src/imaging/analysis/streak/types'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { isActive } from '../analysis'
-import { formatDuration, MISSING, formatSignificant, formatDegrees } from '../format'
+import { formatDuration, MISSING, formatSignificant, formatDegrees, formatPercent } from '../format'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState, setStreakDetectionSettings, streakDetectionSettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -320,13 +320,13 @@ function SelectedStreak({ streak, classification }: SelectedStreakProps) {
 					<DataRow label="SNR">{streak.snr === undefined ? MISSING : streak.snr.toFixed(1)}</DataRow>
 					<DataRow label="Linearity">{streak.linearity.toFixed(3)}</DataRow>
 					<DataRow label="RMS residual">{streak.rmsResidual.toFixed(2)} px</DataRow>
-					<DataRow label="Coverage">{(streak.coverage * 100).toFixed(0)}%</DataRow>
+					<DataRow label="Coverage">{formatPercent(streak.coverage)}</DataRow>
 					<DataRow label="Support">{streak.supportPixels} px</DataRow>
 					<DataRow label="Cut by the border">{streak.clippedAtBorder ? 'Yes' : 'No'}</DataRow>
 					<DataRow label="Flux">{formatSignificant(streak.flux)}</DataRow>
 					<DataRow label="Mean signal">{formatSignificant(streak.meanSignal)}</DataRow>
 					<DataRow label="Peak signal">{formatSignificant(streak.peakSignal)}</DataRow>
-					<DataRow label="Saturated">{streak.saturationFraction === undefined ? MISSING : `${(streak.saturationFraction * 100).toFixed(1)}%`}</DataRow>
+					<DataRow label="Saturated">{streak.saturationFraction === undefined ? MISSING : formatPercent(streak.saturationFraction, 1)}</DataRow>
 					<DataRow label="Detector confidence">{streak.confidence.toFixed(2)}</DataRow>
 					<Classification classification={classification} />
 				</>

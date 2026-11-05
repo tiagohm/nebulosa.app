@@ -298,7 +298,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 						const value = byTime.get(hour.start)?.cloudCover
 						return value === undefined ? undefined : value / 100
 					}}
-					title={(hour) => `${hourLabel(hour)}: ${byTime.get(hour.start)?.cloudCover} % total cloud`}
+					title={(hour) => `${hourLabel(hour)}: ${byTime.get(hour.start)?.cloudCover}% total cloud`}
 				/>
 				<Tiles samples={forecast.astronomy.samples} value={(sample) => sample.seeing} title={(_, code) => `seeing class ${code}`} row="Seeing" night={night} scale={scale} timeZone={timeZone} />
 				<Tiles samples={forecast.astronomy.samples} value={(sample) => sample.transparency} title={(_, code) => `transparency class ${code}`} row="Transparency" night={night} scale={scale} timeZone={timeZone} />
@@ -310,7 +310,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 						const value = byTime.get(hour.end)?.precipitationProbability
 						return value === undefined ? undefined : value / 100
 					}}
-					title={(hour) => `${hourLabel(hour)}: ${byTime.get(hour.end)?.precipitationProbability} % chance of precipitation`}
+					title={(hour) => `${hourLabel(hour)}: ${byTime.get(hour.end)?.precipitationProbability}% chance of precipitation`}
 				/>
 				<Bars
 					hours={segments}

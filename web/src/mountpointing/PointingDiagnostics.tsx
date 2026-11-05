@@ -1,6 +1,6 @@
 import type { PointingModelDetail, PointingRevision, PointingSampleRecord } from 'api'
 import type { ReactNode } from 'react'
-import { MISSING, formatArcsec } from '../format'
+import { MISSING, formatArcsec, formatPercent } from '../format'
 import { formatPixelScale, formatPositionAngle } from '../platesolving/coordinates'
 import { formatDeclination, formatRightAscension } from '../sky/format'
 import { DataList, DataRow } from '../ui/DataRow'
@@ -54,7 +54,7 @@ export function PointingDiagnostics({ model, revision }: { readonly model: Pick<
 				<Measure label="Withheld Median">{formatArcsec(withheld.median)}</Measure>
 				<Measure label="East Side">{perSide?.EAST ?? MISSING}</Measure>
 				<Measure label="West Side">{perSide?.WEST ?? MISSING}</Measure>
-				<Measure label="Sky Coverage">{diagnostics ? `${(diagnostics.skyCoverage.skyCoverageRatio * 100).toFixed(0)}%` : MISSING}</Measure>
+				<Measure label="Sky Coverage">{diagnostics ? formatPercent(diagnostics.skyCoverage.skyCoverageRatio) : MISSING}</Measure>
 			</dl>
 			{reasons.length > 0 && (
 				<ul className="m-0 list-none p-0 text-ink-300">

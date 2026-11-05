@@ -1,4 +1,4 @@
-import { formatFixed } from '../../format'
+import { formatFixed, formatPercent } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
@@ -99,10 +99,10 @@ export function DewCalculator({ entry, onChange, context }: CalculatorViewProps<
 							<>
 								<Primary label="Dew point">{formatFixed(value.dewPoint, 1)} °C</Primary>
 								<DataRow label="Margin to the dew point">{formatFixed(value.margin, 1)} °C</DataRow>
-								<DataRow label="Dew risk (heuristic)">{formatFixed(value.risk * 100, 0)} %</DataRow>
+								<DataRow label="Dew risk (heuristic)">{formatPercent(value.risk)}</DataRow>
 							</>
 						) : value.mode === 'humidity' ? (
-							<Primary label="Relative humidity">{formatFixed(value.humidity, 1)} %</Primary>
+							<Primary label="Relative humidity">{formatPercent(value.humidity / 100, 1)}</Primary>
 						) : (
 							<Primary label="Frost point">{formatFixed(value.frostPoint, 1)} °C</Primary>
 						)

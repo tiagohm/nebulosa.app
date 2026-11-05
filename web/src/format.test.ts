@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { arcmin, arcsec, deg } from 'nebulosa/src/math/units/angle'
-import { formatArcmin, formatArcsec, formatClockDuration, formatDegrees, formatDuration, formatFixed, formatGeographic, formatPixelLength, formatSigned, formatSignedArcmin, formatSignificant, formatTemperature, MISSING } from './format'
+import { formatArcmin, formatArcsec, formatClockDuration, formatDegrees, formatDuration, formatFixed, formatGeographic, formatPercent, formatPixelLength, formatSigned, formatSignedArcmin, formatSignificant, formatTemperature, MISSING } from './format'
 
 describe('numbers', () => {
 	test('fixed decimals never show a negative zero nor a non-finite number', () => {
@@ -17,6 +17,13 @@ describe('numbers', () => {
 		expect(formatSigned(-0.04, 1)).toBe('0.0')
 		expect(formatSigned(0, 1)).toBe('0.0')
 		expect(formatSigned(Number.NaN, 1)).toBe(MISSING)
+	})
+
+	test('percentages of a fraction', () => {
+		expect(formatPercent(0.57)).toBe('57%')
+		expect(formatPercent(0.9994, 1)).toBe('99.9%')
+		expect(formatPercent(-0.0001)).toBe('0%')
+		expect(formatPercent(Number.NaN)).toBe(MISSING)
 	})
 
 	test('wide-range measurements keep four significant digits', () => {

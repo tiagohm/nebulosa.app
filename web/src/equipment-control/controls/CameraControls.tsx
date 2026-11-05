@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatTemperature } from '../../format'
+import { formatTemperature, formatPercent } from '../../format'
 import { deviceBusy, operationsState } from '../../operations'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Actions } from '../../ui/Actions'
@@ -46,7 +46,7 @@ export function CameraControls({ device }: InterfaceProps) {
 			{(camera.temperature !== undefined || camera.cooler || camera.canSetTemperature) && (
 				<PanelSection title="Cooling">
 					{camera.temperature !== undefined && <DataRow label="Sensor temperature">{formatTemperature(camera.temperature)}</DataRow>}
-					{camera.cooler && <DataRow label="Cooler power">{`${camera.cooler.power.toFixed(0)} %`}</DataRow>}
+					{camera.cooler && <DataRow label="Cooler power">{formatPercent(camera.cooler.power / 100)}</DataRow>}
 					{camera.cooler?.enabled !== undefined && (
 						<Checkbox label="Cooler on" checked={camera.cooler.enabled} disabled={busy || capturing} onChange={(enabled) => void sendCommand(controlRuntime, { type: 'camera', deviceId: device.id, action: 'cooler', label: enabled ? 'Cooler on' : 'Cooler off', body: { enabled } })} />
 					)}

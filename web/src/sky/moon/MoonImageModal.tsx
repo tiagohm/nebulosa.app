@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import moon4k from '../../../assets/moon/moon.4k.jpg'
 import moonFeatures from '../../../assets/moon/moon.features.json.gz' with { type: 'file' }
+import { formatPercent } from '../../format'
 import { Checkbox } from '../../ui/Checkbox'
 import { IconButton } from '../../ui/IconButton'
 import { Modal } from '../../ui/Modal'
@@ -189,7 +190,7 @@ export function MoonImageModal({ open, onClose, almanac }: { readonly open: bool
 							<Notice>{all ? 'Click a marker or search a name to see its details. Zoom in to see smaller features.' : features.error ? `The feature names are unavailable: ${features.error}` : 'Loading the feature names…'}</Notice>
 						)}
 						<Notice>
-							{MOON_PHASE_NAMES[appearance.phase]} · {(appearance.illuminatedFraction * 100).toFixed(1)}% illuminated · {moonOrientationCaption(almanac, up)}.
+							{MOON_PHASE_NAMES[appearance.phase]} · {formatPercent(appearance.illuminatedFraction, 1)} illuminated · {moonOrientationCaption(almanac, up)}.
 						</Notice>
 						<Notice>
 							{MOON_IMAGE_CREDIT} {FEATURE_CREDIT}

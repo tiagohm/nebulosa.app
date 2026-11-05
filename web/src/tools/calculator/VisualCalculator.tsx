@@ -1,4 +1,4 @@
-import { formatFixed } from '../../format'
+import { formatFixed, formatPercent } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary } from './CalculatorParts'
@@ -100,7 +100,7 @@ export function ApertureComparisonCalculator({ entry, onChange, context }: Calcu
 								return (
 									obstruction !== undefined && (
 										<DataRow key={side} label={`${side}: obstruction, equivalent clear aperture`}>
-											{formatFixed(obstruction, 0)} %, {formatFixed(effectiveAperture, 1)} mm
+											{formatPercent(obstruction / 100)}, {formatFixed(effectiveAperture, 1)} mm
 										</DataRow>
 									)
 								)

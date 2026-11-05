@@ -1,12 +1,11 @@
 import type { DeviceSummary, TargetCenteringMode, TargetCenteringSessionSummary } from 'api'
-import { cn } from 'cn'
 import { normalizeAngle, toArcsec } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
-import { deviceState } from '../equipment/equipment'
+import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { MISSING } from '../format'
 import { operationsState } from '../operations'
@@ -31,6 +30,7 @@ import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
+import { SessionStateText } from './SessionStateText'
 import {
 	startTargetCentering,
 	stopTargetCentering,
@@ -152,11 +152,7 @@ export function TargetCenteringSections({ device, availability, mount, settings:
 					</DataRow>
 				</DataList>
 				{!running && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
-				{!running && mountAvailability.status === 'notSelected' && (
-					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
+				{!running && mountAvailability.status === 'notSelected' && <EquipmentSetupButton />}
 			</CollapsibleSection>
 			<CollapsibleSection id="images.target-centering.target" title="Target" summary={shownTarget?.label}>
 				{references.length > 0 && <Select label="Saved Framing" options={['', ...references.map((reference) => reference.id)]} value={framing?.id ?? ''} format={(id) => references.find((reference) => reference.id === id)?.name ?? 'None'} disabled={locked} onChange={load} />}
@@ -267,10 +263,10 @@ function SessionState({ session }: { readonly session: TargetCenteringSessionSum
 
 	return (
 		<>
-			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>
+			<SessionStateText failed={failed}>
 				{TARGET_CENTERING_STATE_LABELS[state]}
 				{step && ` · ${TARGET_CENTERING_STEP_LABELS[step]}`}
-			</p>
+			</SessionStateText>
 			<DataList>
 				<DataRow label="Frame">{`${attempts.length} of ${request.maximumFrames}`}</DataRow>
 				<DataRow label="Distance">{finalSeparation === undefined ? MISSING : formatAngularSize(finalSeparation)}</DataRow>

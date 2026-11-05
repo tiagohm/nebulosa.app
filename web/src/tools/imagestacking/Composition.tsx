@@ -14,6 +14,7 @@ import { PRODUCT_LABELS, PRODUCT_TONES } from './format'
 import { COMPOSITION_PRESETS, CUSTOM_PRESET, resolvePreset, weightOf, withoutSource, withWeight } from './presets'
 // oxfmt-ignore
 import { cancelStackingComposition, deleteStackingComposite, imageStackingRuntime, jobEnded, loadCompositionPreview, loadCompositionValidation, loadStackingComposite, startStackingComposition } from './projects'
+import { formatPercent } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { Notice } from '../../ui/Notice'
@@ -208,7 +209,7 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 					/>
 					{composition.luminance && (
 						<>
-							<Slider label={`Luminance weight ${Math.round(composition.luminance.alpha * 100)}%`} className="w-56" value={composition.luminance.alpha} min={0} max={1} step={0.05} onChange={(alpha) => edit({ ...composition, luminance: { ...composition.luminance!, alpha } })} />
+							<Slider label={`Luminance weight ${formatPercent(composition.luminance.alpha)}`} className="w-56" value={composition.luminance.alpha} min={0} max={1} step={0.05} onChange={(alpha) => edit({ ...composition, luminance: { ...composition.luminance!, alpha } })} />
 							<Select
 								label="Match"
 								className="w-44"

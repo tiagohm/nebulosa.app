@@ -5,8 +5,9 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
-import { deviceState } from '../equipment/equipment'
+import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
+import { formatPercent } from '../format'
 import { operationsState } from '../operations'
 import { activeProfile, darvSettings, exposureSettings, profileState, setDarvSettings } from '../profile/profile'
 import { type CameraIdentity, DARV_MAXIMUM_LEG_DURATION, DARV_MINIMUM_LEG_DURATION, type DarvSettings } from '../profile/schema'
@@ -45,6 +46,7 @@ import {
 	repeatDarv,
 	startDarv,
 } from './darv'
+import { SessionStateText } from './SessionStateText'
 
 // Contextual panel sections of DARV, a camera operation of the Images camera tabs: the equipment it uses, the
 // measurement settings (adjusted axis, RA direction, slew-rate preset of the mount, leg duration; the exposure is
@@ -122,11 +124,7 @@ export function DarvSections({ device, availability, mount, settings: identity }
 					</DataRow>
 				</DataList>
 				{!measuring && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
-				{!measuring && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && (
-					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
+				{!measuring && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && <EquipmentSetupButton />}
 			</CollapsibleSection>
 			<CameraAcquisitionSection
 				id="images.darv.acquisition"
@@ -202,7 +200,7 @@ function Result({ session, measurement }: ResultProps) {
 				{result && <DataRow label="Result">{DARV_STATUS_LABELS[result.status]}</DataRow>}
 				{result?.driftMagnitude !== undefined && <DataRow label="Separation Drift">{formatDrift(result.driftMagnitude)}</DataRow>}
 				{result && <DataRow label="Trails">{`${result.usableCount} of ${result.trailCount} usable`}</DataRow>}
-				{result && result.trailCount > 0 && <DataRow label="Fit Quality">{`${Math.round(result.confidence * 100)}%`}</DataRow>}
+				{result && result.trailCount > 0 && <DataRow label="Fit Quality">{formatPercent(result.confidence)}</DataRow>}
 				{previous?.result?.driftMagnitude !== undefined && result?.driftMagnitude !== undefined && (
 					<DataRow label={`Since #${previous.generation}`}>
 						<span className={cn(result.driftMagnitude < previous.result.driftMagnitude && 'text-success')}>{`${formatDrift(previous.result.driftMagnitude)} → ${formatDrift(result.driftMagnitude)}`}</span>
@@ -251,7 +249,7 @@ function MeasurementState({ measurement }: { readonly measurement: DarvMeasureme
 
 	return (
 		<>
-			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{DARV_STATE_LABELS[measurement.state]}</p>
+			<SessionStateText failed={failed}>{DARV_STATE_LABELS[measurement.state]}</SessionStateText>
 			{failed && measurement.error && <Notice error>{measurement.error}</Notice>}
 			{measurement.slewRateRestored === false && measurement.previousSlewRate && <Notice>The slew rate could not be restored to {measurement.previousSlewRate}.</Notice>}
 		</>

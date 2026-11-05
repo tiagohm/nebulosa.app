@@ -1,7 +1,7 @@
 import { toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 
 // Display formats shared by every screen for quantities that are not tied to one feature: fixed and signed numbers,
-// angles in degrees, arcminutes, and arcseconds, geographic positions, temperatures, lengths in pixels with their sky size, durations,
+// percentages, angles in degrees, arcminutes, and arcseconds, geographic positions, temperatures, lengths in pixels with their sky size, durations,
 // elapsed clocks, and measurements of a wide dynamic range. Each takes the value in its computational unit (radians,
 // seconds, °C, pixels) and returns text only, so a value is never rounded before it is used elsewhere. The decimals are
 // a presentation choice, never a claim of accuracy; a value that rounds to zero never shows a minus sign, and a value
@@ -53,6 +53,12 @@ export function formatSignedArcmin(angle: number, digits: number = 1) {
 // Returns an angle in radians as arcseconds with `digits` decimals (1 by default), or MISSING when it is absent: "12.3″".
 export function formatArcsec(angle: number | undefined | null, digits: number = 1) {
 	return angle === undefined || angle === null ? MISSING : withUnit(formatFixed(toArcsec(angle), digits), '″')
+}
+
+// Returns a fraction in [0, 1] as a percentage with `digits` decimals (0 by default), with no space before the sign:
+// "57%", "99.9%".
+export function formatPercent(fraction: number, digits: number = 0) {
+	return withUnit(formatFixed(fraction * 100, digits), '%')
 }
 
 // Returns a latitude and a longitude in degrees with their hemispheres, east longitudes positive, with `digits` decimals

@@ -5,11 +5,10 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { roleAvailability } from '../equipment/availability'
-import { deviceState } from '../equipment/equipment'
+import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { operationsState, runningOn } from '../operations'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
-import { Button } from '../ui/Button'
 import { DataList, DataRow } from '../ui/DataRow'
 import { Icon } from '../ui/Icon'
 import { Notice } from '../ui/Notice'
@@ -98,11 +97,7 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 						<DeviceLink device={device} fallback={mount.status === 'notSelected' ? 'None selected' : 'Unavailable'} />
 					</DataRow>
 				</DataList>
-				{mount.status === 'notSelected' && (
-					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
+				{mount.status === 'notSelected' && <EquipmentSetupButton />}
 			</CollapsibleSection>
 			<CollapsibleSection id="images.mount-nudge.manual-movement" title="Manual Movement">
 				{slewRates.length > 0 ? (

@@ -1,4 +1,5 @@
 import type { AstronomicalSample, AstroWeatherForecast, AstroWeatherNight, MeteorologySample, SolarTwilightCrossings } from 'api'
+import { formatPercent } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
@@ -117,7 +118,7 @@ export function AstronomicalConditions({ night, timeZone }: AstronomicalConditio
 				</DataRow>
 			))}
 			{sun.darkness.length === 0 && <Notice>The Sun does not reach −18° this night, so there is no astronomical darkness.</Notice>}
-			<DataRow label="Moon lit">{(moon.illuminatedFraction * 100).toFixed(0)}%</DataRow>
+			<DataRow label="Moon lit">{formatPercent(moon.illuminatedFraction)}</DataRow>
 			{moon.above.map((span) => (
 				<DataRow key={span.start} label="Moon up">
 					{formatClock(span.start, timeZone)}–{formatClock(span.end, timeZone)}

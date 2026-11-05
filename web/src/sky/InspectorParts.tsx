@@ -1,6 +1,6 @@
 import type { SkyEvents, SkyPosition } from 'api'
 import type { ReactNode } from 'react'
-import { formatDegrees } from '../format'
+import { formatDegrees, formatPercent } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
@@ -33,7 +33,7 @@ function PositionData({ selection, timeZone, children }: { readonly selection: S
 						</>
 					)}
 					{position.distance !== undefined && <DataRow label="Distance">{formatSolarSystemDistance(position.distance)}</DataRow>}
-					{position.illuminated !== undefined && selection.ref.kind !== 'catalog' && <DataRow label="Illuminated">{(position.illuminated * 100).toFixed(1)}%</DataRow>}
+					{position.illuminated !== undefined && selection.ref.kind !== 'catalog' && <DataRow label="Illuminated">{formatPercent(position.illuminated, 1)}</DataRow>}
 					{position.elongation !== undefined && !(selection.ref.kind === 'body' && selection.ref.code === '10') && selection.ref.kind !== 'catalog' && <DataRow label="Solar elongation">{formatDegrees(position.elongation)}</DataRow>}
 					{children}
 					<Notice>{positionNote(position, selection.ref.kind === 'constellation', timeZone)}</Notice>

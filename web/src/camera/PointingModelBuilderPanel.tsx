@@ -1,12 +1,11 @@
 import type { DeviceSummary, MountPointingSessionSummary, MountState, PointingModelSummary } from 'api'
-import { cn } from 'cn'
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
-import { deviceState } from '../equipment/equipment'
+import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { CameraRole } from '../equipment/roles'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { MISSING, formatArcsec, formatGeographic } from '../format'
@@ -45,6 +44,7 @@ import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
+import { SessionStateText } from './SessionStateText'
 
 // Contextual panel sections of the Pointing Model Builder, a camera operation of the Images camera tabs: the equipment
 // it uses, the camera and plate solving settings it applies, the sky it samples, the session, and what the run measured.
@@ -138,11 +138,7 @@ export function PointingModelBuilderSections({ device, availability, role, mount
 					<DataRow label="Site">{formatSite(mountState)}</DataRow>
 				</DataList>
 				{!running && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
-				{!running && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported' || role !== 'MAIN_CAMERA') && (
-					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
+				{!running && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported' || role !== 'MAIN_CAMERA') && <EquipmentSetupButton />}
 				{!running && unknownType && <Checkbox label="This mount is equatorial" checked={confirmed} onChange={setConfirmed} />}
 			</CollapsibleSection>
 			<CameraAcquisitionSection id="images.pointing-model-builder.acquisition" device={device} exposure={running && session ? session.request.capture : exposure} capabilities={capabilities} description="Frames are temporary LIGHT frames, shown as the latest frame of the camera and never saved.">
@@ -240,10 +236,10 @@ function SessionState({ session }: { readonly session: MountPointingSessionSumma
 
 	return (
 		<>
-			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>
+			<SessionStateText failed={failed}>
 				{MOUNT_POINTING_STATE_LABELS[state]}
 				{step && ` · ${MOUNT_POINTING_STEP_LABELS[step]}`}
-			</p>
+			</SessionStateText>
 			<DataList>
 				{waypoint !== undefined && <DataRow label="Point">{`${waypoint + 1} of ${plannedCount}`}</DataRow>}
 				<DataRow label="Accepted">{`${acceptedCount} of ${plannedCount}`}</DataRow>

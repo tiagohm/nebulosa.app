@@ -1,10 +1,9 @@
 import type { AutoFocusSessionSummary, CaptureSnoop, DeviceSummary } from 'api'
-import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, deviceStateOf, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
-import { deviceState } from '../equipment/equipment'
+import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import { type RoleDevice, useRoleDevice } from '../equipment/useEquipment'
 import { formatClockDuration, MISSING } from '../format'
 import { operationsState } from '../operations'
@@ -25,6 +24,7 @@ import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
+import { SessionStateText } from './SessionStateText'
 
 // Contextual panel sections of Auto Focus, a camera operation of the Images camera tabs: the equipment it uses, each
 // device linked to Equipment Control, the routine the server's
@@ -106,11 +106,7 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 						</DataRow>
 					)}
 				</DataList>
-				{!focuser && !running && (
-					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
+				{!focuser && !running && <EquipmentSetupButton />}
 			</CollapsibleSection>
 			<CameraAcquisitionSection
 				id="images.auto-focus.acquisition"
@@ -188,10 +184,10 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 
 	return (
 		<>
-			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>
+			<SessionStateText failed={failed}>
 				{AUTO_FOCUS_STATE_LABELS[session.state]}
 				{session.target !== undefined && running && ` — ${session.target}`}
-			</p>
+			</SessionStateText>
 			{(session.state === 'exposing' || session.state === 'verifying') && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <Notice error>{session.error}</Notice>}
 			<DataList>

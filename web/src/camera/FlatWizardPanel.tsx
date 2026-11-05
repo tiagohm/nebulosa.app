@@ -1,11 +1,10 @@
 import type { CaptureSnoop, DeviceSummary, FlatWizardFilter, FlatWizardFilterRun, FlatWizardSessionSummary, WheelState } from 'api'
-import { cn } from 'cn'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
-import { deviceState } from '../equipment/equipment'
+import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { MISSING } from '../format'
@@ -28,6 +27,7 @@ import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { continueFlatWizard, darkFlatGroups, flatWizardFilterName, FLAT_WIZARD_DIAGNOSTIC_LABELS, FLAT_WIZARD_FILTER_STATE_LABELS, FLAT_WIZARD_STATE_LABELS, FLAT_WIZARD_VERDICT_LABELS, flatWizardBlocker, flatWizardRequest, flatWizardRunning, flatWizardRuntime, startFlatWizard, stopFlatWizard } from './flatwizard'
 import { FrameProgress, formatExposure } from './FrameProgress'
+import { SessionStateText } from './SessionStateText'
 
 // Contextual panel sections of Flat Wizard, a camera operation of the Images camera tabs: the equipment it uses (the
 // tab's camera, and the filter wheel, flat panel, and cover of the setup when the camera has a role, else manual
@@ -132,11 +132,7 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 				{!running && panelAvailability && panelAvailability.status !== 'ready' && <Notice>{panelAvailability.message}</Notice>}
 				{!running && coverAvailability && coverAvailability.status !== 'ready' && <Notice>{coverAvailability.message}</Notice>}
 				{coverAssigned && <Notice>The cover closes before the first frame and opens again when the session ends, unless it was already closed.</Notice>}
-				{!running && (!wheelAssigned || !panelAssigned || !coverAssigned || coverAvailability?.status === 'unsupported') && wheel !== undefined && (
-					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
-						Equipment Setup
-					</Button>
-				)}
+				{!running && (!wheelAssigned || !panelAssigned || !coverAssigned || coverAvailability?.status === 'unsupported') && wheel !== undefined && <EquipmentSetupButton />}
 				{wheel === undefined && <Notice>Only the Main Camera of the equipment setup uses its filter wheel, flat panel, and cover, so for this camera you change the filters and the light yourself and confirm each step; the cover is left as it is.</Notice>}
 			</CollapsibleSection>
 			<CameraAcquisitionSection
@@ -306,7 +302,7 @@ function Progress({ session, pending }: ProgressProps) {
 
 	return (
 		<CollapsibleSection id="images.flat-wizard.progress" title="Progress">
-			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{FLAT_WIZARD_STATE_LABELS[session.state]}</p>
+			<SessionStateText failed={failed}>{FLAT_WIZARD_STATE_LABELS[session.state]}</SessionStateText>
 			{session.state === 'exposing' && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <Notice error>{session.error}</Notice>}
 			{step && (

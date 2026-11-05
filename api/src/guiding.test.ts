@@ -3,6 +3,8 @@ import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
+import { type OperationContext, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationDiagnostics } from 'nebulosa/src/observation/guiding/calibrator'
 import type { StarTracker } from 'nebulosa/src/observation/guiding/tracker.star'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
@@ -11,7 +13,7 @@ import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import { calibrationProgressOf, GUIDING_REGION_RADIUS, GUIDING_REGION_STARS, type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest, guidingRegions } from './guiding'
 import { ImageStore } from './images'
-import { type OperationEvent, OperationRegistry } from './operations'
+import { type OperationEvent, OperationRegistry, type ToolInvocation } from './operations'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-guiding-test-'))
 const disposables: Disposable[] = []
@@ -376,5 +378,85 @@ describe('detection regions', () => {
 		expect(guidingRegions({ builtin: true, tracker: tracker(true), summary: { ...held, guideOutputHeld: false } })).toBeUndefined()
 		expect(guidingRegions({ builtin: true, tracker: tracker(false), summary: held })).toBeUndefined()
 		expect(guidingRegions({ builtin: false, tracker: tracker(true), summary: held })).toBeUndefined()
+	})
+})
+
+describe('composition', () => {
+	// Reserves the guide camera and the mount behind the guide output for a caller composing tools, released after the test.
+	function reserve(context: Setup) {
+		const owner = { id: 'composition', kind: 'test' }
+		const guideOutput = context.manager.devices.device(context.client, 'guideOutput', context.guideOutputId)!
+		const devices = [context.camera, context.mount, guideOutput]
+		const reserved = context.operations.arbiter.reserve(
+			owner,
+			devices.map((device) => ({ key: resourceKey(device), device })),
+		)
+		if (!reserved.ok) throw new Error('the devices could not be reserved')
+		disposables.push({ [Symbol.dispose]: () => reserved.reservation.release() })
+		return { owner, invocation: { reservation: reserved.reservation } }
+	}
+
+	// Admits a session under an invocation and waits until it loops.
+	async function admit(context: Setup, invocation: ToolInvocation) {
+		const admitted = await context.guiding.admit(context.id, context.cameraId, request(context), invocation)
+		if (!admitted.ok) throw new Error(admitted.error)
+		await waitUntil(() => context.summary()?.active === true)
+		return admitted
+	}
+
+	test('a session admitted under a reservation guides inside it, and each command answers its own outcome', async () => {
+		const context = await setup()
+		const { invocation } = reserve(context)
+
+		expect((await context.guiding.start(context.id, context.cameraId, request(context))).status).toBe(409)
+		const { sessionId } = await admit(context, invocation)
+		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
+
+		const body = { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }
+		const started = context.guiding.admitStartGuiding(sessionId, body)
+		if (!started.ok) throw new Error(started.error)
+		expect(context.guiding.admitStartGuiding(sessionId, body)).toMatchObject({ ok: true, commandId: started.commandId, repeated: true })
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+		expect(context.running('guideOutput.guiding')).toHaveLength(1)
+		expect(context.operations.admits(context.mount)).toBeFalse()
+
+		// The stop replaces the start in the record, while each command still answers its own outcome.
+		const stopped = context.guiding.admitStopGuiding(sessionId, { token: `token-${tokens++}` })
+		if (!stopped.ok) throw new Error(stopped.error)
+		expect(await stopped.settled).toEqual({ commandId: stopped.commandId, command: 'stopGuiding', state: 'succeeded' })
+		expect(await started.settled).toMatchObject({ commandId: started.commandId, command: 'startGuiding', state: 'failed' })
+		expect(context.summary()?.command).toMatchObject({ commandId: stopped.commandId, state: 'succeeded' })
+		await waitUntil(() => context.running('guideOutput.guiding').length === 0)
+		expect(context.operations.arbiter.availability(resourceKey(context.mount))).toBe('reserved')
+
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		expect(context.operations.arbiter.availability(resourceKey(context.camera))).toBe('reserved')
+		expect(context.guiding.admitStopGuiding(sessionId, { token: 'ended' })).toMatchObject({ ok: false, status: 404 })
+	})
+
+	test('a drain of the reservation preserving the root of guiding keeps it looping, and its cancellation ends it', async () => {
+		const context = await setup()
+		const { owner, invocation } = reserve(context)
+		const admitted = await admit(context, invocation)
+		const root = context.guiding.rootOf(admitted.sessionId)
+		expect(root).toBeString()
+
+		const held = context.operations.scope(invocation).start('test.hold', [{ key: resourceKey(context.mount), device: context.mount }], (operation: OperationContext) => {
+			const { promise, resolve } = Promise.withResolvers<OperationResult<undefined>>()
+			operation.signal.addEventListener('abort', () => resolve(successfulOperationResult(undefined)))
+			return promise
+		})
+
+		await context.operations.coordinator.drainByReservationOwner(owner, 'aborted', root)
+		expect(await held.result).toMatchObject({ ok: false, reason: 'aborted' })
+		const frame = context.summary()!.frame?.frameId ?? 0
+		await waitUntil(() => (context.summary()?.frame?.frameId ?? 0) > frame)
+		expect(context.summary()).toMatchObject({ active: true })
+
+		await context.operations.coordinator.cancelByReservationOwner(owner)
+		const ended = await admitted.ended
+		expect(ended).toMatchObject({ sessionId: admitted.sessionId, active: false })
+		expect(ended.endedAt).toBeNumber()
+		expect(context.operations.arbiter.availability(resourceKey(context.camera))).toBe('reserved')
 	})
 })

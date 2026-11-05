@@ -6,7 +6,7 @@ import type { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guide
 import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
 import type { BlobEncoding } from 'nebulosa/src/devices/indi/types'
-import { failedOperationResult, type OperationFailureReason, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { failedOperationResult, type OperationFailureReason, type OperationResult, type OperationScope, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { abortableDelay } from 'nebulosa/src/devices/orchestration/operation.wait'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { Image } from 'nebulosa/src/imaging/model/types'
@@ -22,14 +22,14 @@ import { enrichGuideStars, type GuideStar, type GuidingMode, StarTracker, starTr
 import { CameraSessionRegistry } from './camerasessions'
 import type { CaptureFrameRegistry } from './captureframes'
 import type { CaptureFrame, CaptureSettings, CaptureSnoop } from './captures'
-import { busy, type ClientResolver, type CommandRequest, connectedDevice, failureResponse, notFound, unsupported } from './commands'
+import { type ClientResolver, type CommandRefusal, type CommandRequest, failureResponse, notFound, refusal, refusalResponse, resolveConnected } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { ExternalToolsStore, ResolvedExternalTool } from './externaltools'
 import type { GuideRegions } from './guideregions'
 import { guideStarProfile, type GuidingStarProfile } from './guidingprofile'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
-import type { OperationDevice, OperationRegistry } from './operations'
+import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
 import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './stars'
 
 // Guiding service: one native guiding session per guide camera, from its first looped exposure to its stop, built on the
@@ -52,6 +52,13 @@ import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './star
 // a device; its record is kept in memory until the next session of the same camera. Exposures are milliseconds,
 // positions and distances guide-image pixels from the top-left of the full frame, pulse durations milliseconds, dither
 // angles radians, settle tolerances guide pixels and settle times seconds.
+//
+// A service composing tools inside the process admits a session (admit) under the ToolInvocation of the reservation it
+// holds: the root of the session and every run, command, and stop of it then acquire inside the reservation, through
+// its token scope, the toolkit's exception for a root a service keeps of its own; whoever commands the session (that
+// caller or a tab) commands it there. Each durable command is admitted too (admitStartGuiding, admitDither, ...), with
+// the outcome of that exact command, which the single command of the record cannot keep once a newer one replaced it.
+// rootOf names the root a drain of the reservation preserves so guiding outlives the interruption of the other work.
 
 // Sensor settings of the guide exposures, sent once when the session starts. The frame type is always LIGHT.
 export type GuidingCameraSettings = Pick<CaptureSettings, 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
@@ -355,6 +362,37 @@ export interface GuidingCommandAccepted {
 	readonly commandId: string
 }
 
+// Session admitted inside the process: its identity and its end.
+export interface GuidingAdmitted {
+	readonly ok: true
+	// Id of the session, repeated by its guiding events.
+	readonly sessionId: string
+	// Id of the camera.guiding operation holding the guide camera.
+	readonly operationId: string
+	// Whether the token had already started the session, which this request did not start again.
+	readonly repeated: boolean
+	// Final summary once the session ended, by its stop or the loss of a device. Never rejects.
+	readonly ended: Promise<GuidingSessionSummary>
+}
+
+// Outcome of asking for a session inside the process: the session admitted, or why it was refused.
+export type GuidingAdmission = GuidingAdmitted | CommandRefusal
+
+// Durable command admitted inside the process: its identity and its outcome.
+export interface GuidingCommandAdmitted {
+	readonly ok: true
+	// Id of the command, as its route answers it.
+	readonly commandId: string
+	// Whether the token had already started the command, which this request did not start again.
+	readonly repeated: boolean
+	// Outcome of this command once it settled (a dither once settled, a stop once the guide output was proven at rest),
+	// whatever command the record shows by then. Never rejects.
+	readonly settled: Promise<GuidingCommandStatus>
+}
+
+// Outcome of asking for a durable command inside the process: the command admitted, or why it was refused.
+export type GuidingCommandAdmission = GuidingCommandAdmitted | CommandRefusal
+
 // Notifications of the guiding sessions.
 export type GuidingServerEvent =
 	| { readonly type: 'guiding:updated'; readonly session: GuidingSessionSummary }
@@ -493,9 +531,14 @@ interface Session {
 	// Measured RA and DEC errors of the RMS window, in pixels.
 	readonly errors: (readonly [number, number])[]
 	// Commands each remembered token started.
-	readonly tokens: Map<string, string>
+	readonly tokens: Map<string, GuidingCommandAdmitted>
 	// Ends the camera.guiding record once the session ended.
 	readonly ended: PromiseWithResolvers<OperationResult<void>>
+	// Resolved with the final summary once the session ended.
+	readonly closed: PromiseWithResolvers<GuidingSessionSummary>
+	// Scope the root, the runs, and the commands of the session acquire with: the coordinator, or the token scope of the
+	// reservation a caller composing tools admitted it under.
+	readonly scope: OperationScope
 	// Ends the guideOutput.guiding record of the open run.
 	run?: { readonly id: string; readonly ended: PromiseWithResolvers<OperationResult<void>> }
 	preview: { decoding: boolean; next?: PendingPreview }
@@ -592,21 +635,32 @@ export class GuidingSessions implements Disposable {
 	// unknown camera or guide output, 409 when either is disconnected or the camera is held by another operation, and
 	// 422 when the guide output cannot pulse guide or the request detects the stars with ASTAP while it is not configured.
 	async start(connectionId: string, deviceId: string, request: GuidingStartRequest): Promise<Response> {
+		const admitted = await this.admit(connectionId, deviceId, request)
+		return admitted.ok ? Response.json({ sessionId: admitted.sessionId, operationId: admitted.operationId } satisfies GuidingStartResponse, { status: 202 }) : refusalResponse(admitted)
+	}
+
+	// Admits a session, under the reservation of invocation when given (which must then hold the guide camera and the
+	// guide output), and returns its identity and end, or why it was refused, as start answers it. A repeated token
+	// answers the session it started, while it is remembered.
+	async admit(connectionId: string, deviceId: string, request: GuidingStartRequest, invocation?: ToolInvocation): Promise<GuidingAdmission> {
 		const detection = request.detection
 		const tool = detection?.provider === 'astap' ? await this.tools.resolve('astap') : undefined
-		if (detection?.provider === 'astap' && !tool) return unsupported('ASTAP is not configured, so it cannot detect the guide stars')
+		if (detection?.provider === 'astap' && !tool) return refusal('ASTAP is not configured, so it cannot detect the guide stars', 422, 'unsupported')
 		// The built-in detection the worker runs; ASTAP runs here, on the decoded file.
 		const builtin = detection?.provider === 'astap' ? undefined : detection === undefined ? {} : { maxStars: detection.maxStars, minSNR: detection.minSNR, searchRegion: detection.searchRegion, ...(detection.maximumRadius !== undefined && { maximumRadius: detection.maximumRadius }) }
 
 		const repeated = this.#sessions.repeated(request.token)
-		if (repeated) return Response.json({ sessionId: repeated.summary.sessionId, operationId: repeated.summary.operationId } satisfies GuidingStartResponse, { status: 202 })
+		if (repeated) return admitted(repeated, true)
 
-		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
-		if (camera instanceof Response) return camera
-		const guideOutput = connectedDevice(this, request.guideOutput.connectionId, 'guideOutput', request.guideOutput.deviceId, 'Guide output')
-		if (guideOutput instanceof Response) return guideOutput
-		if (!guideOutput.canPulseGuide) return unsupported(`${guideOutput.name} cannot pulse guide, which guiding needs`)
-		if (!this.operations.available(camera)) return busy()
+		const resolvedCamera = resolveConnected(this, connectionId, 'camera', deviceId, 'Camera')
+		if (!resolvedCamera.ok) return resolvedCamera
+		const resolvedOutput = resolveConnected(this, request.guideOutput.connectionId, 'guideOutput', request.guideOutput.deviceId, 'Guide output')
+		if (!resolvedOutput.ok) return resolvedOutput
+		const camera = resolvedCamera.device
+		const guideOutput = resolvedOutput.device
+		if (!guideOutput.canPulseGuide) return refusal(`${guideOutput.name} cannot pulse guide, which guiding needs`, 422, 'unsupported')
+		// A manual session takes the guide output only while guiding; one inside a reservation must find it reserved too.
+		if (!this.operations.admits(camera, invocation) || (invocation && !this.operations.admits(guideOutput, invocation))) return refusal('The device is busy', 409, 'busy')
 
 		const detections = new WeakMap<Image, readonly GuideStar[]>()
 		const files = new WeakMap<Image, Uint8Array<ArrayBuffer>>()
@@ -662,6 +716,8 @@ export class GuidingSessions implements Disposable {
 			errors: [],
 			tokens: new Map(),
 			ended: Promise.withResolvers(),
+			closed: Promise.withResolvers(),
+			scope: this.operations.scope(invocation),
 			preview: { decoding: false },
 			ending: false,
 			calibrations: 0,
@@ -686,7 +742,7 @@ export class GuidingSessions implements Disposable {
 		const record = this.operations.run('camera.guiding', [cameraDevice], request.token, async () => {
 			this.#snoop(connectionId, camera, request.snoop)
 			const configuration = { ...request.camera, frameType: 'LIGHT', transferFormat: 'FITS', compressed: false } as const
-			const looped = await interactive.startLoop(this.operations.coordinator, { exposure: request.exposure, camera: configuration })
+			const looped = await interactive.startLoop(session.scope, { exposure: request.exposure, camera: configuration })
 			this.#sync(session)
 			if (!looped.ok) this.#end(session, looped)
 			return await session.ended.promise
@@ -694,7 +750,7 @@ export class GuidingSessions implements Disposable {
 
 		this.#sessions.adopt(resourceKey(camera), session, record.operationId)
 
-		return Response.json({ sessionId: session.summary.sessionId, operationId: record.operationId } satisfies GuidingStartResponse, { status: 202 })
+		return admitted(session, false)
 	}
 
 	// Tells the driver of the guide camera which devices of its connection to stamp into the frame headers. The devices
@@ -710,31 +766,64 @@ export class GuidingSessions implements Disposable {
 	}
 
 	// Starts calibrating or guiding the selected (or best) star. Responds 202 with the command id.
-	startGuiding(sessionId: string, { token, recalibrate, settle }: GuidingStartGuidingRequest): Response {
-		return this.#command(sessionId, token, 'startGuiding', (session) => {
-			session.settle = settle
-			return session.interactive.startGuiding(this.operations.coordinator, this.operations.coordinator, { recalibrate, settle })
-		})
+	startGuiding(sessionId: string, request: GuidingStartGuidingRequest): Response {
+		return commandResponse(this.admitStartGuiding(sessionId, request))
 	}
 
 	// Stops the corrections and keeps looping, freeing the guide output. Responds 202 with the command id.
-	stopGuiding(sessionId: string, { token }: CommandRequest): Response {
-		return this.#command(sessionId, token, 'stopGuiding', (session) => session.interactive.stopGuiding(this.operations.coordinator))
+	stopGuiding(sessionId: string, request: CommandRequest): Response {
+		return commandResponse(this.admitStopGuiding(sessionId, request))
 	}
 
 	// Pauses the corrections, or the exposures too. Responds 202 with the command id.
-	pause(sessionId: string, { token, mode }: GuidingPauseRequest): Response {
-		return this.#command(sessionId, token, 'pause', (session) => session.interactive.pause(this.operations.coordinator, mode))
+	pause(sessionId: string, request: GuidingPauseRequest): Response {
+		return commandResponse(this.admitPause(sessionId, request))
 	}
 
 	// Resumes guiding after a pause. Responds 202 with the command id.
-	resume(sessionId: string, { token, settle }: GuidingResumeRequest): Response {
-		return this.#command(sessionId, token, 'resume', (session) => session.interactive.resume(this.operations.coordinator, settle))
+	resume(sessionId: string, request: GuidingResumeRequest): Response {
+		return commandResponse(this.admitResume(sessionId, request))
 	}
 
 	// Dithers and waits for the guided settle. Responds 202 with the command id.
-	dither(sessionId: string, { token, amount, raOnly, settle }: GuidingDitherRequest): Response {
-		return this.#command(sessionId, token, 'dither', (session) => session.interactive.dither(this.operations.coordinator, { amount, raOnly, settle: { kind: 'guided', ...settle } }))
+	dither(sessionId: string, request: GuidingDitherRequest): Response {
+		return commandResponse(this.admitDither(sessionId, request))
+	}
+
+	// Admits Start Guiding (see startGuiding) and returns the command with its outcome, or its refusal.
+	admitStartGuiding(sessionId: string, { token, recalibrate, settle }: GuidingStartGuidingRequest): GuidingCommandAdmission {
+		return this.#command(sessionId, token, 'startGuiding', (session) => {
+			session.settle = settle
+			return session.interactive.startGuiding(session.scope, session.scope, { recalibrate, settle })
+		})
+	}
+
+	// Admits Stop Guiding (see stopGuiding) and returns the command with its outcome, or its refusal.
+	admitStopGuiding(sessionId: string, { token }: CommandRequest): GuidingCommandAdmission {
+		return this.#command(sessionId, token, 'stopGuiding', (session) => session.interactive.stopGuiding(session.scope))
+	}
+
+	// Admits a pause (see pause) and returns the command with its outcome, or its refusal.
+	admitPause(sessionId: string, { token, mode }: GuidingPauseRequest): GuidingCommandAdmission {
+		return this.#command(sessionId, token, 'pause', (session) => session.interactive.pause(session.scope, mode))
+	}
+
+	// Admits a resume (see resume) and returns the command with its outcome, or its refusal.
+	admitResume(sessionId: string, { token, settle }: GuidingResumeRequest): GuidingCommandAdmission {
+		return this.#command(sessionId, token, 'resume', (session) => session.interactive.resume(session.scope, settle))
+	}
+
+	// Admits a dither (see dither) and returns the command with its outcome once settled, or its refusal.
+	admitDither(sessionId: string, { token, amount, raOnly, settle }: GuidingDitherRequest): GuidingCommandAdmission {
+		return this.#command(sessionId, token, 'dither', (session) => session.interactive.dither(session.scope, { amount, raOnly, settle: { kind: 'guided', ...settle } }))
+	}
+
+	// Returns the id of the root operation of a living session, which holds its guide camera, or undefined: the root a
+	// caller holding the reservation of the session preserves when it drains the reservation (drainByReservationOwner),
+	// so the session outlives the interruption of the other work.
+	rootOf(sessionId: string): string | undefined {
+		const session = this.#living(sessionId)
+		return session && this.operations.arbiter.snapshot(resourceKey(session.camera)).owner?.id
 	}
 
 	// Selects the target. Responds with its lock position, 404, or 422 when no star could be selected.
@@ -775,7 +864,7 @@ export class GuidingSessions implements Disposable {
 	async stop(sessionId: string): Promise<Response> {
 		const session = this.#active(sessionId)
 		if (session instanceof Response) return session
-		const stopped = await session.interactive.stop(this.operations.coordinator)
+		const stopped = await session.interactive.stop(session.scope)
 		this.#end(session, successfulOperationResult(undefined))
 		return stopped.ok ? new Response(null, { status: 204 }) : failureResponse(stopped, 'Stopping the guiding')
 	}
@@ -795,7 +884,7 @@ export class GuidingSessions implements Disposable {
 		const commandId = crypto.randomUUID()
 		this.#update(session, { command: { commandId, command: 'stopGuiding', state: 'running' } })
 
-		const stopped = await this.#settle(session, commandId, 'stopGuiding', session.interactive.stopGuiding(this.operations.coordinator))
+		const stopped = await this.#settle(session, commandId, 'stopGuiding', session.interactive.stopGuiding(session.scope))
 		if (!stopped.ok) return stopped
 		if (session.summary.guideOutputHeld) return failedOperationResult('unexpectedState', 'The guide output was not released')
 		return successfulOperationResult({ sessionId, commandId, settle: session.settle ?? RESTORE_SETTLE })
@@ -818,7 +907,7 @@ export class GuidingSessions implements Disposable {
 
 		const restoring = crypto.randomUUID()
 		this.#update(session, { command: { commandId: restoring, command: 'startGuiding', state: 'running' } })
-		const started = this.#settle(session, restoring, 'startGuiding', session.interactive.startGuiding(this.operations.coordinator, this.operations.coordinator, { recalibrate: true, settle }))
+		const started = this.#settle(session, restoring, 'startGuiding', session.interactive.startGuiding(session.scope, session.scope, { recalibrate: true, settle }))
 		const { promise: aborted, resolve } = Promise.withResolvers<undefined>()
 		signal.addEventListener('abort', () => resolve(undefined), { once: true })
 		if (signal.aborted) resolve(undefined)
@@ -826,7 +915,7 @@ export class GuidingSessions implements Disposable {
 		const result = await Promise.race([started, aborted])
 
 		if (!result) {
-			await session.interactive.stopGuiding(this.operations.coordinator)
+			await session.interactive.stopGuiding(session.scope)
 			this.#sync(session)
 			return 'failed'
 		}
@@ -870,28 +959,29 @@ export class GuidingSessions implements Disposable {
 	[Symbol.dispose]() {
 		for (const session of this.#sessions.sessions()) {
 			if (!session.summary.active) continue
-			void session.interactive.stop(this.operations.coordinator).then(() => this.#end(session, successfulOperationResult(undefined)))
+			void session.interactive.stop(session.scope).then(() => this.#end(session, successfulOperationResult(undefined)))
 		}
 	}
 
-	// Runs a durable command of a living session and responds 202 with its id; a repeated token answers its first
-	// command. Its outcome arrives as the command of the session record.
-	#command(sessionId: string, token: string, command: GuidingCommand, run: (session: Session) => Promise<OperationResult<unknown>>): Response {
-		const session = this.#active(sessionId)
-		if (session instanceof Response) return session
-		if (HELD_COMMANDS.has(command) && this.#holds.has(session.summary.guideOutput.connectionId)) return errorResponse('Target Centering is moving the mount', 409, 'busy')
+	// Runs a durable command of a living session and returns it with its outcome, or its refusal; a repeated token answers
+	// its first command. Its outcome also arrives as the command of the session record, while no newer command replaced it.
+	#command(sessionId: string, token: string, command: GuidingCommand, run: (session: Session) => Promise<OperationResult<unknown>>): GuidingCommandAdmission {
+		const session = this.#living(sessionId)
+		if (!session) return refusal('No guiding session is running with this id', 404, 'notFound')
+		if (HELD_COMMANDS.has(command) && this.#holds.has(session.summary.guideOutput.connectionId)) return refusal('Target Centering is moving the mount', 409, 'busy')
 
 		const known = session.tokens.get(token)
-		if (known) return Response.json({ commandId: known } satisfies GuidingCommandAccepted, { status: 202 })
+		if (known) return { ...known, repeated: true }
 
 		const commandId = crypto.randomUUID()
-		session.tokens.set(token, commandId)
-		if (session.tokens.size > MAX_TOKENS) session.tokens.delete(session.tokens.keys().next().value!)
 		this.#update(session, { command: { commandId, command, state: 'running' } })
 
-		void this.#settle(session, commandId, command, run(session))
+		const settled = this.#settle(session, commandId, command, run(session)).then((result): GuidingCommandStatus => (result.ok ? { commandId, command, state: 'succeeded' } : { commandId, command, state: 'failed', reason: result.reason, ...(result.error !== undefined && { error: result.error }) }))
+		const admitted: GuidingCommandAdmitted = { ok: true, commandId, repeated: false, settled }
+		session.tokens.set(token, admitted)
+		if (session.tokens.size > MAX_TOKENS) session.tokens.delete(session.tokens.keys().next().value!)
 		this.#sync(session)
-		return Response.json({ commandId } satisfies GuidingCommandAccepted, { status: 202 })
+		return admitted
 	}
 
 	// Records the outcome of a durable command once it settles, unless a newer command replaced it in the record.
@@ -1088,6 +1178,7 @@ export class GuidingSessions implements Disposable {
 		session.run = undefined
 		this.#update(session, { active: false, guideOutputHeld: false, pulsesAdmitted: false, runOperationId: undefined, exposureProgress: undefined, ...(failure && { failure }), endedAt: Date.now() })
 		session.ended.resolve(result)
+		session.closed.resolve(session.summary)
 	}
 
 	// Detects the stars of a decoded guide frame with ASTAP, from its FITS file written to the session directory, and
@@ -1110,9 +1201,13 @@ export class GuidingSessions implements Disposable {
 
 	// Returns the latest session with this id that still lives, or the response refusing it.
 	#active(sessionId: string): Session | Response {
+		return this.#living(sessionId) ?? errorResponse('No guiding session is running with this id', 404, 'notFound')
+	}
+
+	// Returns the latest session with this id that still lives, if any.
+	#living(sessionId: string): Session | undefined {
 		const session = this.#sessions.find(sessionId)
-		if (!session || session.summary.endedAt !== undefined) return errorResponse('No guiding session is running with this id', 404, 'notFound')
-		return session
+		return session && session.summary.endedAt === undefined ? session : undefined
 	}
 
 	#notFound() {
@@ -1298,4 +1393,14 @@ export function createGuidingRoutes(guiding: GuidingSessions) {
 			POST: (req) => guiding.stop(req.params.sessionId),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>
+}
+
+// Returns the admission of a session: its ids, whether a repeated token answered it, and its end.
+function admitted({ summary: { sessionId, operationId }, closed }: Session, repeated: boolean): GuidingAdmitted {
+	return { ok: true, sessionId, operationId, repeated, ended: closed.promise }
+}
+
+// Responds to a durable command: 202 with its id, or with its refusal.
+function commandResponse(admitted: GuidingCommandAdmission): Response {
+	return admitted.ok ? Response.json({ commandId: admitted.commandId } satisfies GuidingCommandAccepted, { status: 202 }) : refusalResponse(admitted)
 }

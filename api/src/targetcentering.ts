@@ -468,7 +468,7 @@ export class TargetCenteringSessions {
 			solutions: new Map(),
 			commanded: false,
 			pierSide: mount.pierSide,
-			guidingHold: this.guiding.hold(request.mount.connectionId),
+			guidingHold: this.guiding.hold(request.mount.connectionId, 'Target Centering'),
 			guidingRuns: runs.map(({ sessionId }) => sessionId),
 			suspensions: [],
 			invocation,

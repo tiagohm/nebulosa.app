@@ -255,14 +255,18 @@ describe('guiding', () => {
 		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
 		expect(context.guiding.runsOn(context.id)).toBeEmpty()
 
-		const hold = context.guiding.hold(context.id)
+		const hold = context.guiding.hold(context.id, 'Target Centering')
+		const other = context.guiding.hold(context.id, 'Camera Acquisition')
 		const refused = context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE })
 		expect(refused.status).toBe(409)
-		expect(((await refused.json()) as { code: string }).code).toBe('busy')
+		expect((await refused.json()) as object).toEqual({ error: 'Target Centering is moving the mount', code: 'busy' })
 		expect(context.summary()?.active).toBeTrue()
 
+		// Each hold releases its own holder once, and guiding starts only when none is left.
 		hold[Symbol.dispose]()
 		hold[Symbol.dispose]()
+		expect((await context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).json()) as object).toEqual({ error: 'Camera Acquisition is moving the mount', code: 'busy' })
+		other[Symbol.dispose]()
 		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
 		await waitUntil(() => context.summary()?.guideOutputHeld === true)
 		expect(context.guiding.runsOn(context.id).map((run) => run.sessionId)).toEqual([sessionId])
@@ -270,6 +274,36 @@ describe('guiding', () => {
 
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
 		expect(context.guiding.runsOn(context.id)).toBeEmpty()
+	})
+
+	test('a dither claim gives the dither commands of a session to its claimant only', async () => {
+		const context = await setup()
+		const { sessionId } = await start(context)
+		const dither = { amount: { unit: 'guidePixel', value: 5 }, raOnly: false, settle: SETTLE } as const
+
+		expect(context.guiding.claimDither('unknown', 'Camera Acquisition')).toMatchObject({ ok: false, status: 404, code: 'notFound' })
+		expect(context.guiding.summaryOf(sessionId)?.sessionId).toBe(sessionId)
+		expect(context.guiding.summaryOf('unknown')).toBeUndefined()
+
+		const claim = context.guiding.claimDither(sessionId, 'Camera Acquisition')
+		if (!claim.ok) throw new Error(claim.error)
+		expect(context.guiding.claimDither(sessionId, 'Sequencer')).toMatchObject({ ok: false, status: 409, code: 'busy' })
+		expect(context.guiding.admitDither(sessionId, { token: `token-${tokens++}`, ...dither })).toMatchObject({ ok: false, status: 409, code: 'busy', error: 'Camera Acquisition is dithering with this guiding session' })
+
+		// The claimant's dither is admitted, and refused by the guider that is not guiding.
+		const admitted = claim.admitDither({ token: `token-${tokens++}`, ...dither })
+		if (!admitted.ok) throw new Error(admitted.error)
+		expect(await admitted.settled).toMatchObject({ command: 'dither', state: 'failed' })
+
+		claim[Symbol.dispose]()
+		claim[Symbol.dispose]()
+		const manual = context.guiding.admitDither(sessionId, { token: `token-${tokens++}`, ...dither })
+		expect(manual.ok).toBeTrue()
+		if (manual.ok) await manual.settled
+		expect(context.guiding.claimDither(sessionId, 'Sequencer').ok).toBeTrue()
+
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		expect(context.guiding.summaryOf(sessionId)).toBeUndefined()
 	})
 
 	test('a run suspended for a motion frees the mount and keeps looping, then starts again from a star of a new frame', async () => {

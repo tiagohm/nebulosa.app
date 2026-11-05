@@ -393,6 +393,20 @@ export interface GuidingCommandAdmitted {
 // Outcome of asking for a durable command inside the process: the command admitted, or why it was refused.
 export type GuidingCommandAdmission = GuidingCommandAdmitted | CommandRefusal
 
+// Dither commands of a session given to one claimant inside the process (see GuidingSessions.claimDither). Never
+// serialized; disposing it gives the dither commands back.
+export interface GuidingDitherClaim extends Disposable {
+	readonly ok: true
+	// Admits a dither of the claimed session, as admitDither does.
+	readonly admitDither: (request: GuidingDitherRequest) => GuidingCommandAdmission
+}
+
+// Identity of the claimant of the dither commands of a session; compared by object.
+interface DitherClaimOwner {
+	// Feature that claimed them, meant for people, such as "Camera Acquisition".
+	readonly holder: string
+}
+
 // Notifications of the guiding sessions.
 export type GuidingServerEvent =
 	| { readonly type: 'guiding:updated'; readonly session: GuidingSessionSummary }
@@ -562,6 +576,8 @@ interface Session {
 	readonly calibrator: Readonly<GuidingCalibrationConfig>
 	// Settle of the latest Start Guiding, which guiding restored after a motion takes again.
 	settle?: GuidingSettle
+	// Claimant of the dither commands, while one holds them.
+	claim?: DitherClaimOwner
 }
 
 // Returns the regions the built-in detection of a session's next frame is limited to, or undefined for the whole frame:
@@ -587,8 +603,9 @@ export function guidingRegions(session: Pick<Session, 'builtin' | 'tracker' | 's
 export class GuidingSessions implements Disposable {
 	// Latest session of each guide camera, and the session each start token started.
 	readonly #sessions: CameraSessionRegistry<GuidingSessionSummary, Session>
-	// Holds that keep the guide outputs of a connection from starting, by connection id.
-	readonly #holds = new Map<string, number>()
+	// Holds that keep the guide outputs of a connection from starting, by connection id: the name of the holder of each
+	// hold, in the order they were taken.
+	readonly #holds = new Map<string, string[]>()
 
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, guideOutputs is the commander the pulses are dispatched through, images receives the previewed frames,
@@ -814,8 +831,13 @@ export class GuidingSessions implements Disposable {
 	}
 
 	// Admits a dither (see dither) and returns the command with its outcome once settled, or its refusal.
-	admitDither(sessionId: string, { token, amount, raOnly, settle }: GuidingDitherRequest): GuidingCommandAdmission {
-		return this.#command(sessionId, token, 'dither', (session) => session.interactive.dither(session.scope, { amount, raOnly, settle: { kind: 'guided', ...settle } }))
+	admitDither(sessionId: string, request: GuidingDitherRequest): GuidingCommandAdmission {
+		return this.#dither(sessionId, request)
+	}
+
+	// Admits a dither on behalf of claim (see claimDither), or of nobody.
+	#dither(sessionId: string, { token, amount, raOnly, settle }: GuidingDitherRequest, claim?: DitherClaimOwner): GuidingCommandAdmission {
+		return this.#command(sessionId, token, 'dither', (session) => session.interactive.dither(session.scope, { amount, raOnly, settle: { kind: 'guided', ...settle } }), claim)
 	}
 
 	// Returns the id of the root operation of a living session, which holds its guide camera, or undefined: the root a
@@ -938,21 +960,50 @@ export class GuidingSessions implements Disposable {
 		return true
 	}
 
-	// Keeps every guide output of a connection from starting to guide until the result is disposed. Looping, which sends no
-	// pulse, goes on. Disposing twice releases once.
-	hold(connectionId: string): Disposable {
-		this.#holds.set(connectionId, (this.#holds.get(connectionId) ?? 0) + 1)
+	// Keeps every guide output of a connection from starting to guide until the result is disposed: Start Guiding, resume
+	// and dither are refused as busy, naming holder (a feature name meant for people, such as "Target Centering") as the
+	// one moving the mount. Looping, which sends no pulse, goes on. Disposing twice releases once.
+	hold(connectionId: string, holder: string): Disposable {
+		this.#holds.set(connectionId, [...(this.#holds.get(connectionId) ?? []), holder])
 		let held = true
 
 		return {
 			[Symbol.dispose]: () => {
 				if (!held) return
 				held = false
-				const count = this.#holds.get(connectionId)! - 1
-				if (count === 0) this.#holds.delete(connectionId)
-				else this.#holds.set(connectionId, count)
+				const holders = this.#holds.get(connectionId)!
+				const remaining = holders.toSpliced(holders.indexOf(holder), 1)
+				if (remaining.length === 0) this.#holds.delete(connectionId)
+				else this.#holds.set(connectionId, remaining)
 			},
 		}
+	}
+
+	// Gives the dither commands of a living session to one claimant until the claim is disposed: while claimed, a dither
+	// admitted without the claim (the manual route, another claimant) is refused as busy, naming holder (a feature name
+	// meant for people), and so is a second claim. Corrections, pause, resume and stop are untouched. Returns the claim,
+	// whose admitDither is the only one admitted meanwhile, or 404 for a session that is unknown or ended. Disposing twice
+	// releases once; a dither already admitted keeps running to its own settle.
+	claimDither(sessionId: string, holder: string): GuidingDitherClaim | CommandRefusal {
+		const session = this.#living(sessionId)
+		if (!session) return refusal('No guiding session is running with this id', 404, 'notFound')
+		if (session.claim) return refusal(`${session.claim.holder} is dithering with this guiding session`, 409, 'busy')
+
+		const owner = { holder }
+		session.claim = owner
+
+		return {
+			ok: true,
+			admitDither: (request) => this.#dither(sessionId, request, owner),
+			[Symbol.dispose]: () => {
+				if (session.claim === owner) session.claim = undefined
+			},
+		}
+	}
+
+	// Returns the record of a session that still lives, or undefined when it is unknown or ended.
+	summaryOf(sessionId: string): GuidingSessionSummary | undefined {
+		return this.#living(sessionId)?.summary
 	}
 
 	// Stops every session.
@@ -965,10 +1016,13 @@ export class GuidingSessions implements Disposable {
 
 	// Runs a durable command of a living session and returns it with its outcome, or its refusal; a repeated token answers
 	// its first command. Its outcome also arrives as the command of the session record, while no newer command replaced it.
-	#command(sessionId: string, token: string, command: GuidingCommand, run: (session: Session) => Promise<OperationResult<unknown>>): GuidingCommandAdmission {
+	// A dither of a claimed session is admitted only with its claim.
+	#command(sessionId: string, token: string, command: GuidingCommand, run: (session: Session) => Promise<OperationResult<unknown>>, claim?: DitherClaimOwner): GuidingCommandAdmission {
 		const session = this.#living(sessionId)
 		if (!session) return refusal('No guiding session is running with this id', 404, 'notFound')
-		if (HELD_COMMANDS.has(command) && this.#holds.has(session.summary.guideOutput.connectionId)) return refusal('Target Centering is moving the mount', 409, 'busy')
+		const holders = this.#holds.get(session.summary.guideOutput.connectionId)
+		if (HELD_COMMANDS.has(command) && holders) return refusal(`${holders[0]} is moving the mount`, 409, 'busy')
+		if (command === 'dither' && session.claim && session.claim !== claim) return refusal(`${session.claim.holder} is dithering with this guiding session`, 409, 'busy')
 
 		const known = session.tokens.get(token)
 		if (known) return { ...known, repeated: true }

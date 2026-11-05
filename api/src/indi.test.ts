@@ -96,7 +96,7 @@ function fakeSocket() {
 	return { socket, events, congest: (amount: number) => (buffered = amount) }
 }
 
-async function setup(options?: IndiPropertyServiceOptions) {
+async function setup(options?: IndiPropertyServiceOptions, corrections?: ConstructorParameters<typeof IndiPropertyService>[5]) {
 	const indi = listenIndi()
 	const manager = new ConnectionManager()
 	disposables.push(manager)
@@ -110,6 +110,7 @@ async function setup(options?: IndiPropertyServiceOptions) {
 		operations,
 		(event) => broadcasts.push(event),
 		{ valueInterval: 40, writeGrace: 100, ...options },
+		corrections,
 	)
 	disposables.push(service)
 	// The final record of an operation, once it finished.
@@ -491,6 +492,26 @@ describe('write', () => {
 
 		expect([status, body.code]).toEqual([409, 'busy'])
 		expect(indi.commands('DELAY')).toBeEmpty()
+	})
+
+	test('only an admitted write of a model-sensitive vector suspends the pointing model', async () => {
+		const suspended: string[] = []
+		const { indi, service, operations, outcome, id, relay } = await setup(undefined, { suspendHardware: (hardwareId) => void suspended.push(hardwareId) })
+		indi.push('<defTextVector device="Relay" name="TIME_UTC" group="Site" state="Idle" perm="rw" timeout="0"><defText name="UTC">2026-01-01T00:00:00</defText><defText name="OFFSET">0</defText></defTextVector>')
+		await until(() => relay.properties.TIME_UTC !== undefined)
+		const request = () => ({ baseRevision: relay.properties.TIME_UTC.revision, elements: { UTC: '2026-01-01T01:00:00', OFFSET: '0' } })
+
+		hold(operations, relay.hardwareId)
+		const refused = await write(service, id, relay.hardwareId, 'TIME_UTC', request())
+		expect([refused.status, refused.body.code]).toEqual([409, 'busy'])
+		expect(suspended).toBeEmpty()
+
+		disposables.pop()![Symbol.dispose]()
+		await until(() => operations.arbiter.availability(relay.hardwareId) === 'available')
+		const admitted = await write(service, id, relay.hardwareId, 'TIME_UTC', request())
+		expect(admitted.status).toBe(202)
+		expect(suspended).toEqual([relay.hardwareId])
+		await outcome(admitted.body.operationId!)
 	})
 
 	test('a device that is not connected is written without holding it', async () => {

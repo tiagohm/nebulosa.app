@@ -329,20 +329,22 @@ export class IndiPropertyService implements SocketListener, Disposable {
 		const elements = writtenElements(property, request.elements)
 		if (typeof elements === 'string') return errorResponse(elements, 422, 'invalidParameter')
 
-		// A vector written by hand can sync a mount, or send it a site, without anything here seeing it.
+		// Nothing can hold a device that is not connected, and its settings must be writable before it connects.
+		const connected = device.connected === true
+		if (connected && this.operations.arbiter.availability(device.hardwareId) !== 'available') return busy()
+
+		// A vector written by hand can sync a mount, or send it a site, without anything here seeing it; only an
+		// admitted write reaches the device, so a refused one leaves the model in force.
 		if (MODEL_SENSITIVE_VECTORS.has(name)) this.corrections?.suspendHardware(hardwareId, `${name} was written by hand`)
 
 		// The managed interface of the physical device, when one exists, ties the hold to its lifecycle.
 		const managed: Device | undefined = this.devices.get(client, device.hardwareId)
 		const operationDevice = { connectionId, deviceId: managed?.id ?? device.hardwareId }
 
-		// Nothing can hold a device that is not connected, and its settings must be writable before it connects.
-		if (device.connected !== true) {
+		if (!connected) {
 			const { operationId } = this.operations.run('indi.propertyWrite', [operationDevice], request.token, () => this.#dispatch(client, device, property, elements))
 			return Response.json({ operationId } satisfies CommandAccepted, { status: 202 })
 		}
-
-		if (this.operations.arbiter.availability(device.hardwareId) !== 'available') return busy()
 
 		const { operationId } = this.operations.run('indi.propertyWrite', [operationDevice], request.token, () => this.operations.coordinator.start('indi.propertyWrite', [{ key: device.hardwareId, device: managed }], ({ signal }) => this.#dispatch(client, device, property, elements, signal)).result)
 		return Response.json({ operationId } satisfies CommandAccepted, { status: 202 })

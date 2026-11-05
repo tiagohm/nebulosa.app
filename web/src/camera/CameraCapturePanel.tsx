@@ -17,6 +17,7 @@ import { DataList, DataRow } from '../ui/DataRow'
 import { IconButton } from '../ui/IconButton'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
+import { ProgressBar } from '../ui/ProgressBar'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
@@ -249,7 +250,7 @@ function CaptureState({ session }: CaptureStateProps) {
 	return (
 		<CollapsibleSection id="images.camera-acquisition.status" title={running ? 'Acquisition Status' : 'Last Acquisition'}>
 			<p className={failed ? 'm-0 text-danger' : 'm-0 text-ink-100'}>{captureStatus(session)}</p>
-			{running && <div className="h-1 overflow-hidden rounded-full bg-base-300">{progress === undefined ? <div className="h-full w-1/3 animate-pulse bg-accent/60" /> : <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${Math.min(100, progress)}%` }} />}</div>}
+			{running && <ProgressBar fraction={progress === undefined ? undefined : progress / 100} />}
 			<DataList>
 				<DataRow label={captureCount(session)}>{session.request.output.mode === 'preview-save' ? `Saved ${session.saved}` : 'Not Saved'}</DataRow>
 				<DataRow label="Elapsed">{formatClockDuration(captureElapsed(session, now))}</DataRow>

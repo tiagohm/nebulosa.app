@@ -17,6 +17,7 @@ import { Checkbox } from '../ui/Checkbox'
 import { DataList, DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
+import { ProgressBar } from '../ui/ProgressBar'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { useNow } from '../useNow'
@@ -270,7 +271,7 @@ function MeasurementProgress({ measurement }: { readonly measurement: DarvMeasur
 
 	return (
 		<div className="flex flex-col gap-1">
-			<div className="h-1 overflow-hidden rounded-full bg-base-300">{fraction === undefined ? <div className="h-full w-1/3 animate-pulse bg-accent/60" /> : <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${fraction * 100}%` }} />}</div>
+			<ProgressBar fraction={fraction} />
 			<p className="m-0 flex justify-between text-xs leading-4 text-ink-300 tabular-nums">
 				<span>{step !== undefined ? `Step ${step} of ${DARV_PHASES.length}` : ''}</span>
 				{elapsed !== undefined && <span>{`${Math.floor(elapsed)} / ${measurement.exposure} s · ${Math.ceil(measurement.exposure - elapsed)} s left`}</span>}

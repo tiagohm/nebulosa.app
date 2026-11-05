@@ -2,6 +2,7 @@ import type { GuidingCalibrationProgress } from 'api'
 import { cn } from 'cn'
 import { MISSING } from '../format'
 import { Notice } from '../ui/Notice'
+import { ProgressBar } from '../ui/ProgressBar'
 
 // Progress of a running guiding calibration in the Session section of the Guiding panel: one bar per leg (the RA move,
 // the RA return to the start, the DEC move past the backlash, and the DEC return to the start once solved) with its
@@ -87,9 +88,7 @@ function Leg({ label, state, fraction, detail }: LegProps) {
 				<span className={cn('text-ink-300', state === 'active' && 'text-accent', state === 'done' && 'text-success')}>{label}</span>
 				<span className="text-right text-ink-200">{detail}</span>
 			</p>
-			<div className="h-1 overflow-hidden rounded-full bg-base-300">
-				<div className={cn('h-full transition-[width] duration-200', state === 'done' ? 'bg-success' : 'bg-accent')} style={{ width: `${fraction * 100}%` }} />
-			</div>
+			<ProgressBar fraction={fraction} tone={state === 'done' ? 'success' : 'accent'} />
 		</div>
 	)
 }

@@ -8,7 +8,8 @@ import { useMediaQuery, WIDE_SCREEN } from './useMediaQuery'
 
 // Common frame of every workspace: optional tabs spanning the whole workspace (such as the Images document and
 // camera tabs), a header with the title, the workspace's context controls (such as the Images tool selector)
-// and actions, the main content, and the collapsible contextual panel. On
+// and actions, which wrap to a line of their own when they do not fit beside the title, the main content, and the
+// collapsible contextual panel. On
 // wide screens the panel's visibility is a preference of the active profile, kept per workspace; on
 // narrow screens it is a drawer that starts closed and is never persisted. A workspace whose own controls
 // show the panel holds that state itself with useWorkspacePanel.
@@ -75,10 +76,10 @@ export function WorkspaceLayout({ workspace, title, context, actions, panel, pan
 	const frame = (
 		<section className="relative flex min-h-0 min-w-0 flex-1 overflow-clip">
 			<div className="flex min-w-0 flex-1 flex-col">
-				<header className="flex h-12 flex-none items-center gap-3 border-b border-line-100 bg-base-100 px-4">
+				<header className="flex min-h-12 flex-none flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-100 bg-base-100 px-4 py-1">
 					<h1 className="m-0 flex-none text-sm font-semibold text-ink-100">{title}</h1>
 					{context && <div className="flex min-w-0 items-center gap-2">{context}</div>}
-					<div className="ml-auto flex flex-none items-center gap-1">
+					<div className="ml-auto flex flex-wrap items-center justify-end gap-1">
 						{actions}
 						{panel && <IconButton icon="panel" label={open ? 'Hide panel' : 'Show panel'} pressed={open} onClick={() => setOpen(!open)} />}
 					</div>

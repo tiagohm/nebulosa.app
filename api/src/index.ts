@@ -18,6 +18,7 @@ import { DarvAnalyzer } from './darv.analysis'
 import { AppDatabase, DEFAULT_DATABASE_FILE } from './database'
 import { createDewHeaterRoutes, DewHeaterCommands } from './dewheaters'
 import { createDomeRoutes, DomeCommands } from './domes'
+import { ServerEventDispatcher } from './events'
 import { createExternalToolsRoutes, ExternalToolsStore } from './externaltools'
 import { createFileRoutes } from './files'
 import { createFlatPanelRoutes, FlatPanelCommands } from './flatpanels'
@@ -635,12 +636,17 @@ const notifications = new NotificationService(broadcast, { database, classifier:
 // History of the device operations: when each one started and how it ended.
 const operationHistory = new OperationRecorder(database, deviceName)
 
-// Broadcasts an event of the connections, the operations, or the sessions, then hands it to the operation history and
-// the notification history, so a tab sees a change before the notification about it.
+// Fan-out of the events of the connections, the operations, and the sessions: the broadcast first, then the operation
+// history and the notification history, so a tab sees a change before the notification about it; a service of the process
+// observing the others subscribes after them.
+const events = new ServerEventDispatcher()
+events.subscribe(broadcast)
+events.subscribe((event) => operationHistory.consume(event))
+events.subscribe((event) => notifications.consume(event))
+
+// Publishes an event of the connections, the operations, or the sessions to every subscriber of events.
 function publish(event: ServerEvent) {
-	broadcast(event)
-	operationHistory.consume(event)
-	notifications.consume(event)
+	events.publish(event)
 }
 
 connections.listen(publish)

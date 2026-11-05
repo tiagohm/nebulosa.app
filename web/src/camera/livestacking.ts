@@ -90,7 +90,7 @@ export const LIVE_NORMALIZATION_LABELS: Readonly<Record<LiveStackingRecipe['norm
 export const LIVE_INTERPOLATION_LABELS: Readonly<Record<LiveStackingRecipe['interpolation'], string>> = { bilinear: 'Bilinear', bicubic: 'Bicubic', nearest: 'Nearest' }
 
 // Label of what a session does with a filter without masters.
-export const LIVE_FALLBACK_LABELS: Readonly<Record<LiveStackingCalibration['otherwise'], string>> = { uncalibrated: 'Stack uncalibrated', skip: 'Skip its frames' }
+export const LIVE_FALLBACK_LABELS: Readonly<Record<LiveStackingCalibration['otherwise'], string>> = { uncalibrated: 'Uncalibrated', skip: 'Skip' }
 
 // Forgets what a new server process makes meaningless.
 function adoptEpoch(state: LiveStackingRuntime, epoch: string) {
@@ -259,6 +259,36 @@ export async function loadLiveProduct(productId: string, request: typeof fetch =
 	} catch {
 		return undefined
 	}
+}
+
+// Filter group of the frames whose header names no filter, as the server and Image Stacking name it.
+export const NO_FILTER = 'None'
+
+// Returns the filters a wheel offers: the names of its slots, trimmed, without blanks or repeats, in slot order. A
+// slot the driver does not name has no filter its frames could record.
+export function wheelFilterNames(names: readonly string[], count: number): string[] {
+	const filters: string[] = []
+
+	for (const name of names.slice(0, count)) {
+		const trimmed = name.trim()
+		if (trimmed && !filters.includes(trimmed)) filters.push(trimmed)
+	}
+
+	return filters
+}
+
+// Returns the filters whose masters a calibration form shows, sorted: those it chose masters for, and None when the
+// camera has no connected filter wheel (wheelNames absent), since its frames then have no filter.
+export function calibrationFilters(calibration: Pick<LiveStackingCalibration, 'filters'>, wheelNames: readonly string[] | undefined): string[] {
+	const filters = new Set(Object.keys(calibration.filters))
+	if (wheelNames === undefined) filters.add(NO_FILTER)
+	return [...filters].sort()
+}
+
+// Returns a calibration without the masters of a filter, whose frames then follow what is done with other filters.
+export function removeFilterCalibration(calibration: LiveStackingCalibration, filter: string): LiveStackingCalibration {
+	const { [filter]: _, ...filters } = calibration.filters
+	return { ...calibration, filters }
 }
 
 // Most masters of each kind offered for a filter.

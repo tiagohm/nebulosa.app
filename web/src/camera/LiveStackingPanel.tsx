@@ -1,6 +1,7 @@
 import type { CalibrationMasterSummary, LiveMasterKind, LiveStackingCohort, LiveStackingComposition, LiveStackingFrame, LiveStackingRecipe, LiveStackingSession } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { Actions, Notice } from '../equipment-control/parts'
 import { formatSize } from '../files/files'
@@ -19,8 +20,8 @@ import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { StatusBadge, type StatusTone } from '../ui/StatusBadge'
-import { TextInput } from '../ui/TextInput'
 import {
+	calibrationFilters,
 	cameraLiveSession,
 	closeLiveSession,
 	LIVE_FALLBACK_LABELS,
@@ -37,9 +38,12 @@ import {
 	livePresets,
 	loadLiveFrames,
 	loadLiveMasters,
+	NO_FILTER,
+	removeFilterCalibration,
 	saveLiveStack,
 	setLiveCalibration,
 	startLiveStacking,
+	wheelFilterNames,
 } from './livestacking'
 
 // Contextual panel sections of Live Stacking, a camera operation of the Images camera tabs: the session of the tab's
@@ -294,15 +298,23 @@ interface FormProps {
 	readonly settings: Readonly<LiveStackingSettings>
 }
 
-// Masters chosen per filter, exactly as the headers name it, and what is done with the frames of other filters. The
-// Calibration Library lists masters but never chooses one; the server checks each choice against every frame.
+// Masters chosen per filter, exactly as the headers name it, and what is done with the frames of other filters. With
+// the filter wheel of the setup connected (only the Main Camera has one), a filter is chosen among the names of its
+// slots; without one, the frames have no filter and take the masters of None, as the Calibration Library lists a flat
+// without filter. Each filter is a section of its own and can be removed. The Calibration Library lists masters but
+// never chooses one; the server checks each choice against every frame.
 function CalibrationSection({ camera, session, settings }: FormProps) {
 	const runtime = useSnapshot(liveStackingRuntime)
+	const control = useSnapshot(controlRuntime)
 	const [masters, setMasters] = useState<Readonly<Record<LiveMasterKind, readonly CalibrationMasterSummary[]>>>({ dark: [], flat: [], bias: [] })
-	const [filter, setFilter] = useState('')
 	const { calibration } = settings
 	const sessionKey = session ? `session:${session.sessionId}` : ''
-	const filters = [...new Set([...Object.keys(calibration.filters), ...(session?.cohorts.map((cohort) => cohort.filter) ?? [])])].sort()
+	const wheel = camera.wheel?.device?.connected ? watchedDeviceState(control, 'wheel', camera.wheel.device) : undefined
+	const wheelNames = wheel ? wheelFilterNames(wheel.names, wheel.count) : undefined
+	const filters = calibrationFilters(calibration, wheelNames)
+	const addable = wheelNames?.filter((name) => !filters.includes(name)) ?? []
+	const [filter, setFilter] = useState<string>()
+	const chosenFilter = filter !== undefined && addable.includes(filter) ? filter : addable[0]
 	const cameraName = session?.cameraName ?? camera.device.device?.name
 
 	useEffect(() => {
@@ -325,16 +337,28 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 		update({ ...calibration, filters: { ...calibration.filters, [name]: current } })
 	}
 
-	// Masters of a kind offered for a filter: those of this camera, and for a flat those of the filter.
+	// Masters of a kind offered for a filter: those of this camera, and for a flat those of the filter, or those without
+	// a filter for frames that have none.
 	const offered = (kind: LiveMasterKind, name: string) =>
-		masters[kind].filter((master) => (master.metadata.cameraName === undefined || cameraName === undefined || master.metadata.cameraName === cameraName) && (kind !== 'flat' || master.metadata.filter.value === undefined || master.metadata.filter.value.trim() === name))
+		masters[kind].filter((master) => {
+			if (master.metadata.cameraName !== undefined && cameraName !== undefined && master.metadata.cameraName !== cameraName) return false
+			if (kind !== 'flat') return true
+			const flatFilter = master.metadata.filter.value?.trim()
+			return name === NO_FILTER ? !flatFilter : flatFilter === undefined || flatFilter === '' || flatFilter === name
+		})
+
+	// Summary of the masters chosen for a filter.
+	const chosenSummary = (name: string) => {
+		const chosen = calibration.filters[name]
+		const kinds = MASTER_KINDS.filter((kind) => chosen?.[kind] !== undefined).map((kind) => MASTER_LABELS[kind])
+		return kinds.length > 0 ? kinds.join(' · ') : 'Uncalibrated'
+	}
 
 	return (
 		<CollapsibleSection id="images.liveStacking.calibration" title="Calibration" summary={`${Object.keys(calibration.filters).length} filters`} defaultOpen={false}>
-			{filters.length === 0 && <Notice>Add the filters to calibrate, exactly as their headers name them, before their frames arrive.</Notice>}
+			{wheelNames ? <Notice>Choose the filters of the wheel to calibrate before their frames arrive.</Notice> : <Notice>Without a connected filter wheel the frames have no filter, so they take the masters of {NO_FILTER}.</Notice>}
 			{filters.map((name) => (
-				<div key={name} className="flex flex-col gap-2 border-l border-line-200 pl-2">
-					<p className="m-0 text-xs text-ink-200">{name}</p>
+				<CollapsibleSection key={name} id={`images.liveStacking.calibration.filter.${name}`} title={name === NO_FILTER ? 'No filter' : name} summary={chosenSummary(name)}>
 					{MASTER_KINDS.map((kind) => {
 						const options = [NO_MASTER, ...offered(kind, name).map((master) => String(master.masterId))]
 						const chosen = calibration.filters[name]?.[kind]
@@ -346,21 +370,31 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 						}
 						return <Select key={kind} label={MASTER_LABELS[kind]} options={options} value={value} format={format} onChange={(option) => choose(name, kind, option)} />
 					})}
-				</div>
+					{calibration.filters[name] && (
+						<Actions>
+							<Button variant="secondary" onClick={() => update(removeFilterCalibration(calibration, name))}>
+								Remove
+							</Button>
+						</Actions>
+					)}
+				</CollapsibleSection>
 			))}
-			<div className="flex items-end gap-2">
-				<TextInput label="Filter" value={filter} onChange={(event) => setFilter(event.currentTarget.value)} className="flex-1" />
-				<Button
-					variant="secondary"
-					disabled={!filter.trim() || filters.includes(filter.trim())}
-					onClick={() => {
-						update({ ...calibration, filters: { ...calibration.filters, [filter.trim()]: {} } })
-						setFilter('')
-					}}
-				>
-					Add
-				</Button>
-			</div>
+			{wheelNames && (
+				<div className="flex items-end gap-2">
+					<Select label="Filter" options={addable.length > 0 ? addable : ['']} value={chosenFilter ?? ''} format={(option) => option || 'Every filter is added'} disabled={addable.length === 0} onChange={setFilter} className="flex-1" />
+					<Button
+						variant="secondary"
+						disabled={chosenFilter === undefined}
+						onClick={() => {
+							if (chosenFilter === undefined) return
+							update({ ...calibration, filters: { ...calibration.filters, [chosenFilter]: {} } })
+							setFilter(undefined)
+						}}
+					>
+						Add
+					</Button>
+				</div>
+			)}
 			<SegmentedControl label="Other filters" options={['uncalibrated', 'skip'] as const} value={calibration.otherwise} format={(option) => LIVE_FALLBACK_LABELS[option]} onChange={(otherwise) => update({ ...calibration, otherwise })} />
 			{session && liveSessionActive(session) && (
 				<>

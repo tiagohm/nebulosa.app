@@ -3,7 +3,7 @@ import type { LiveStackingCohort, LiveStackingSession, LiveStackingSnapshot } fr
 import { proxy } from 'valtio'
 import { DEFAULT_LIVE_STACKING_SETTINGS } from '../profile/schema'
 import { COMPOSITION_PRESETS } from '../tools/imagestacking/presets'
-import { cameraLiveSession, handleLiveStackingEvent, type LiveStackingRuntime, liveSessionActive, refreshLiveStacking, resolveLivePreset, startLiveStacking } from './livestacking'
+import { calibrationFilters, cameraLiveSession, handleLiveStackingEvent, type LiveStackingRuntime, liveSessionActive, NO_FILTER, refreshLiveStacking, removeFilterCalibration, resolveLivePreset, startLiveStacking, wheelFilterNames } from './livestacking'
 
 // A session of camera c1/cam with fields replaced.
 function session(revision: number, patch: Partial<LiveStackingSession> = {}): LiveStackingSession {
@@ -97,5 +97,14 @@ describe('live stacking store', () => {
 			},
 		})
 		expect(resolveLivePreset(hoo, cohorts, 'f2')).toEqual({ missing: ['Ha'] })
+	})
+
+	test('the filters of a calibration come from the wheel, or are None without one, and each can be removed', () => {
+		expect(wheelFilterNames([' L ', 'Ha', '', 'Ha', 'OIII', 'SII'], 5)).toEqual(['L', 'Ha', 'OIII'])
+		const calibration = { filters: { Ha: { dark: { masterId: 1, digest: 'a' } }, OIII: {} }, otherwise: 'skip' } as const
+		expect(calibrationFilters(calibration, ['L', 'Ha'])).toEqual(['Ha', 'OIII'])
+		expect(calibrationFilters(calibration, undefined)).toEqual(['Ha', NO_FILTER, 'OIII'])
+		expect(calibrationFilters({ filters: {} }, undefined)).toEqual([NO_FILTER])
+		expect(removeFilterCalibration(calibration, 'Ha')).toEqual({ filters: { OIII: {} }, otherwise: 'skip' })
 	})
 })

@@ -37,6 +37,7 @@ import { createIndiRoutes, IndiPropertyService } from './indi'
 import { createLiveStackingRoutes, LiveStacking } from './livestacking'
 import { LiveStackingStore } from './livestacking.store'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
+import { createMeridianFlipRoutes, MeridianFlipService } from './meridianflip'
 import { createPointingModelRoutes, PointingModels } from './mountpointing'
 import { createPointingActivationRoutes, MountCorrections, PointingActivations } from './mountpointing.corrections'
 import { PointingModelFitter } from './mountpointing.fit'
@@ -275,6 +276,26 @@ export type {
 	MountTrackingRequest,
 	MountTrackModeRequest,
 } from './mounts'
+export type {
+	MeridianAvailability,
+	MeridianExposureAssessment,
+	MeridianExposureRequest,
+	MeridianFlipErrorCode,
+	MeridianFlipEvent,
+	MeridianFlipKey,
+	MeridianFlipMonitor,
+	MeridianFlipSettings,
+	MeridianFlipSettingsRequest,
+	MeridianFlipSnapshot,
+	MeridianFlipTransition,
+	MeridianMechanicalAssessment,
+	MeridianMonitorReason,
+	MeridianMountView,
+	MeridianTiming,
+	MeridianTimingPhase,
+	MeridianTimingQuality,
+	MeridianTransitionKind,
+} from './meridianflip'
 export type { MountRemoteClient, MountRemoteControlEvent, MountRemoteErrorCode, MountRemoteKey, MountRemoteProtocol, MountRemoteServer, MountRemoteSnapshot, MountRemoteStartRequest } from './mountremotecontrol'
 export type { OperationDevice, OperationEvent, OperationKind, OperationProgress, OperationRecord, OperationState } from './operations'
 export type { OperationHistoryPage, OperationRun, OperationRunDevice, OperationRunState } from './operationhistory'
@@ -667,6 +688,11 @@ const mounts = new MountCommands(connections.devices, (id) => connections.client
 const mountRemoteControl = new MountRemoteControlService(connections.devices, (id) => connections.client(id), mounts, operations, broadcast)
 connections.listen((event) => mountRemoteControl.deviceChanged(event))
 
+// Meridian Flip Monitors of the mounts of the open connections: they observe the mount telemetry and the motion
+// operations through the dispatcher, after its other subscribers, and command nothing.
+const meridianFlip = new MeridianFlipService(connections.devices, (id) => connections.client(id), operations, publish)
+events.subscribe((event) => meridianFlip.consume(event))
+
 // Pulse guiding of the guide outputs of the open connections.
 const guideOutputs = new GuideOutputCommands(connections.devices, (id) => connections.client(id), operations)
 
@@ -878,6 +904,7 @@ const RESOURCES: readonly Disposable[] = [
 	captures,
 	captureFrames,
 	mountRemoteControl,
+	meridianFlip,
 	indi,
 	mounts,
 	corrections,
@@ -982,6 +1009,7 @@ export const routes = {
 	...createIndiRoutes(indi),
 	...createMountRoutes(mounts),
 	...createMountRemoteControlRoutes(mountRemoteControl),
+	...createMeridianFlipRoutes(meridianFlip),
 	...createGuideOutputRoutes(guideOutputs),
 	...createFocuserRoutes(focusers),
 	...createWheelRoutes(wheels),

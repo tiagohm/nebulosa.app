@@ -281,6 +281,32 @@ describe('guiding', () => {
 		expect(context.guiding.runsOn(guideOutput)).toBeEmpty()
 	})
 
+	test('guiding through the ST4 port of a camera holds the mount the setup says it drives', async () => {
+		const context = await setup()
+		const { manager, client, id, cameraId, mount, operations } = context
+		// The ST4 port of another camera: the camera guiding is exposing, which keeps its own device unavailable.
+		const otherId = manager.devices.list(client).find((device) => device.type === 'camera' && device.id !== cameraId)!.id
+		manager.devices.switch(client, otherId, true)
+		const other = manager.devices.camera(client, otherId)!
+		await waitUntil(() => other.connected && manager.devices.list(client).some((device) => device.type === 'guideOutput' && device.hardwareId === other.hardwareId))
+		const st4 = { connectionId: id, deviceId: manager.devices.list(client).find((device) => device.type === 'guideOutput' && device.hardwareId === other.hardwareId)!.id }
+		await waitUntil(() => manager.devices.device(client, 'guideOutput', st4.deviceId)!.canPulseGuide && operations.available(other))
+		const mountDevice = { connectionId: id, deviceId: context.mountId }
+		const { sessionId } = await start(context, { guideOutput: st4, mount: mountDevice })
+		expect(context.summary()).toMatchObject({ guideOutput: st4, mount: mountDevice })
+		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
+		expect(operations.available(mount)).toBeTrue()
+
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+		// The mount shares no device with the camera, and still nothing else moves it while guiding.
+		expect(operations.available(mount)).toBeFalse()
+		expect(context.running('guideOutput.guiding').map((operation) => operation.devices)).toEqual([[st4, mountDevice]])
+
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		expect(operations.available(mount)).toBeTrue()
+	})
+
 	test('a dither claim gives the dither commands of a session to its claimant only', async () => {
 		const context = await setup()
 		const { sessionId } = await start(context)

@@ -35,7 +35,9 @@ import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './star
 // Guiding service: one native guiding session per guide camera, from its first looped exposure to its stop, built on the
 // toolkit's InteractiveGuidingSession over a GuiderClient of its own. The session's root operation holds the guide
 // camera and is published as camera.guiding; while guiding, its run also holds the guide output (the mount or camera
-// behind it) and is published as guideOutput.guiding, so manual pulses, nudges and slews are refused only then. The
+// behind it) and the mount it drives, the MOUNT of the Equipment Setup the request names, atomically, and is published as
+// guideOutput.guiding, so manual pulses, nudges and slews of that mount are refused only then, even when the guide output
+// is the ST4 port of a camera, which shares no device with the mount. The
 // service never decides a guiding state: it only forwards commands to the session, publishes its snapshot, its native
 // events and its per-frame telemetry, and previews its frames.
 //
@@ -72,6 +74,9 @@ export type GuidingClientSettings = Pick<GuiderClientOptions, 'ditherMode' | 'se
 export interface GuidingStartRequest extends CommandRequest {
 	// Guide output the session guides with, by its exact connection and device ids.
 	readonly guideOutput: OperationDevice
+	// Mount the guide output drives (the MOUNT of the Equipment Setup), held with the guide output while guiding; absent
+	// when the setup has none.
+	readonly mount?: OperationDevice
 	// Guide exposure, in milliseconds.
 	readonly exposure: number
 	// Sensor settings of the guide exposures.
@@ -241,6 +246,8 @@ export interface GuidingSessionSummary {
 	readonly cameraName: string
 	readonly guideOutput: OperationDevice
 	readonly guideOutputName: string
+	// Mount the guide output drives, held with it while guiding; absent when the request named none.
+	readonly mount?: OperationDevice
 	// Increases whenever the record changes.
 	readonly revision: number
 	// Whether the session lives.
@@ -678,11 +685,15 @@ export class GuidingSessions implements Disposable {
 		if (!resolvedCamera.ok) return resolvedCamera
 		const resolvedOutput = resolveConnected(this, request.guideOutput.connectionId, 'guideOutput', request.guideOutput.deviceId, 'Guide output')
 		if (!resolvedOutput.ok) return resolvedOutput
+		const resolvedMount = request.mount && resolveConnected(this, request.mount.connectionId, 'mount', request.mount.deviceId, 'Mount')
+		if (resolvedMount && !resolvedMount.ok) return resolvedMount
 		const camera = resolvedCamera.device
 		const guideOutput = resolvedOutput.device
+		const mount = resolvedMount?.device
 		if (!guideOutput.canPulseGuide) return refusal(`${guideOutput.name} cannot pulse guide, which guiding needs`, 422, 'unsupported')
-		// A manual session takes the guide output only while guiding; one inside a reservation must find it reserved too.
-		if (!this.operations.admits(camera, invocation) || (invocation && !this.operations.admits(guideOutput, invocation))) return refusal('The device is busy', 409, 'busy')
+		// A manual session takes the guide output and the mount only while guiding; one inside a reservation must find them reserved too.
+		const run = mount ? [guideOutput, mount] : [guideOutput]
+		if (!this.operations.admits(camera, invocation) || (invocation && !run.every((device) => this.operations.admits(device, invocation)))) return refusal('The device is busy', 409, 'busy')
 
 		const detections = new WeakMap<Image, readonly GuideStar[]>()
 		const files = new WeakMap<Image, Uint8Array<ArrayBuffer>>()
@@ -701,7 +712,7 @@ export class GuidingSessions implements Disposable {
 			calibrator: request.calibration,
 			guider: request.guider,
 		})
-		const interactive = new InteractiveGuidingSession(client, camera, guideOutput, this.guideOutputs, { connect: request.optics })
+		const interactive = new InteractiveGuidingSession(client, camera, guideOutput, this.guideOutputs, { connect: request.optics, mount })
 		const cameraDevice = { connectionId, deviceId }
 
 		const session: Session = {
@@ -712,6 +723,7 @@ export class GuidingSessions implements Disposable {
 				cameraName: camera.name,
 				guideOutput: request.guideOutput,
 				guideOutputName: guideOutput.name,
+				...(request.mount && { mount: request.mount }),
 				revision: 0,
 				active: false,
 				lost: false,
@@ -1210,7 +1222,7 @@ export class GuidingSessions implements Disposable {
 		if (session.run === undefined && snapshot.runId !== undefined) {
 			const ended = Promise.withResolvers<OperationResult<void>>()
 			session.run = { id: snapshot.runId, ended }
-			const record = this.operations.track('guideOutput.guiding', [session.summary.guideOutput], ended.promise)
+			const record = this.operations.track('guideOutput.guiding', session.summary.mount ? [session.summary.guideOutput, session.summary.mount] : [session.summary.guideOutput], ended.promise)
 			this.#update(session, { runOperationId: record.operationId })
 		}
 

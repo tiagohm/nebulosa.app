@@ -1,6 +1,7 @@
 import type { GuidePulseRequest } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { activeProfile, activeSetup, profileState } from '../../profile/profile'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
@@ -11,8 +12,9 @@ import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand }
 import type { InterfaceProps } from '../parts'
 
 // Controls of a guide output: single timed pulses along the driver's motion vectors, the guide rates, and
-// a stop of the pulses in progress. A pulse holds the physical device behind the output, so it is refused
-// while a slew, a nudge, or a capture holds the same mount or camera.
+// a stop of the pulses in progress. A pulse holds the physical device behind the output and, for the GUIDE_OUTPUT of the
+// active profile's Equipment Setup, the MOUNT it drives, so it is refused while a slew, a nudge, or a capture holds the
+// same mount or camera.
 
 // Directions in display order, with their labels.
 const DIRECTIONS: readonly (readonly [GuidePulseRequest['direction'], string])[] = [
@@ -36,6 +38,9 @@ export function GuideOutputControls({ device }: InterfaceProps) {
 	const [rates, setRates] = useState<{ readonly rightAscension: number; readonly declination: number }>()
 	const busy = control.pending[device.id] !== undefined
 	const shown = rates ?? output.guideRate
+	const setup = activeSetup(activeProfile(useSnapshot(profileState)))
+	// The setup says which mount its guide output drives; a guide output it does not assign drives none it knows of.
+	const mount = setup.GUIDE_OUTPUT?.id === device.id && setup.MOUNT ? { connectionId: device.connectionId, deviceId: setup.MOUNT.id } : undefined
 
 	return (
 		<PanelSection title="Guide Output">
@@ -45,7 +50,7 @@ export function GuideOutputControls({ device }: InterfaceProps) {
 					<NumberInput label="Pulse duration" value={duration} min={1} max={MAX_DURATION} step={100} suffix="ms" onChange={setDuration} />
 					<Actions>
 						{DIRECTIONS.map(([direction, label]) => (
-							<Button key={direction} variant="secondary" disabled={busy || output.pulsing} onClick={() => void startCommand(controlRuntime, { type: 'guideOutput', deviceId: device.id, action: 'pulse', label: `Pulse ${label}`, body: { direction, duration } })}>
+							<Button key={direction} variant="secondary" disabled={busy || output.pulsing} onClick={() => void startCommand(controlRuntime, { type: 'guideOutput', deviceId: device.id, action: 'pulse', label: `Pulse ${label}`, body: { direction, duration, ...(mount && { mount }) } })}>
 								{label}
 							</Button>
 						))}

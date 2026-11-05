@@ -79,3 +79,37 @@ test('refuses unknown outputs, including the one of a mount that disconnected', 
 	await waitUntil(() => !mount.connected)
 	expect(commands.pulse(id, outputId, { token: 't', direction: 'NORTH', duration: 10 }).status).toBe(404)
 })
+
+test('a pulse through the ST4 port of a camera also holds the mount the setup says it drives', async () => {
+	const { id, client, manager, commands, operations, events, mount } = await setup()
+	const cameraId = manager.devices.list(client).find((d) => d.type === 'camera')!.id
+	manager.devices.switch(client, cameraId, true)
+	const camera = manager.devices.camera(client, cameraId)!
+	await waitUntil(() => camera.connected && manager.devices.list(client).some((d) => d.type === 'guideOutput' && d.hardwareId === camera.hardwareId))
+	const st4Id = manager.devices.list(client).find((d) => d.type === 'guideOutput' && d.hardwareId === camera.hardwareId)!.id
+	const st4 = manager.devices.device(client, 'guideOutput', st4Id)!
+	await waitUntil(() => st4.canPulseGuide && operations.available(camera))
+	const mountDevice = { connectionId: id, deviceId: mount.id }
+
+	const response = commands.pulse(id, st4Id, { token: 'st4', direction: 'NORTH', duration: 500, mount: mountDevice })
+	expect(response.status).toBe(202)
+	const { operationId } = (await response.json()) as CommandAccepted
+	// The mount shares no device with the camera, and still nothing else moves it during the pulse.
+	expect(operations.available(mount)).toBeFalse()
+	expect(operations.available(camera)).toBeFalse()
+	expect(commands.pulse(id, st4Id, { token: 'st4', direction: 'NORTH', duration: 500, mount: mountDevice }).status).toBe(202)
+
+	await waitUntil(() => events.some((event) => event.operation.operationId === operationId && event.operation.state !== 'running'))
+	expect(events.findLast((event) => event.operation.operationId === operationId)?.operation).toMatchObject({ kind: 'guideOutput.pulse', state: 'succeeded', devices: [{ connectionId: id, deviceId: st4Id }, mountDevice] })
+	await waitUntil(() => operations.available(mount) && operations.available(camera))
+
+	// A pulse is refused while the mount it drives is busy, and for a mount that is not there.
+	const hold = operations.coordinator.start('test.hold', [{ key: resourceKey(mount), device: mount }], (context) => {
+		const { promise, resolve } = Promise.withResolvers<{ readonly ok: true; readonly value: undefined }>()
+		context.signal.addEventListener('abort', () => resolve({ ok: true, value: undefined }))
+		return promise
+	})
+	expect(commands.pulse(id, st4Id, { token: 'held', direction: 'NORTH', duration: 100, mount: mountDevice }).status).toBe(409)
+	await hold.cancel()
+	expect(commands.pulse(id, st4Id, { token: 'gone', direction: 'NORTH', duration: 100, mount: { connectionId: id, deviceId: 'missing' } }).status).toBe(404)
+})

@@ -84,18 +84,18 @@ const NO_FETCH = fakeFetch(() => new Response(null, { status: 500 })).request
 describe('requests', () => {
 	test('the start takes the camera settings without their exposure, the guide exposure in ms, and the controller of the form', () => {
 		const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 30, gain: 120, binX: 2, binY: 2 }
-		const request = guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, exposureTime: 1.5, trackingMode: 'multiStar', aggressivenessRA: 0.4 }, exposure, OUTPUT, {}, DEFAULT_BUILTIN_SETTINGS, undefined)
+		const request = guidingRequest({ ...DEFAULT_GUIDING_SETTINGS, exposureTime: 1.5, trackingMode: 'multiStar', aggressivenessRA: 0.4 }, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_BUILTIN_SETTINGS, undefined)
 		expect('exposureTime' in request.camera).toBeFalse()
 		expect(request).toMatchObject({ guideOutput: OUTPUT, exposure: 1500, trackingMode: 'multiStar', camera: { gain: 120, binX: 2, binY: 2 }, calibration: { raPulse: 650, decPulse: 650 }, guider: { aggressivenessRA: 0.4, aggressivenessDEC: 0.65, maxPulseMsRA: 2000, maxPulseMsDEC: 2500 } })
 		expect('optics' in request).toBeFalse()
 		expect(request.client).toEqual({ ditherMode: 'random', searchRegion: 64, stickyLockPosition: false, fastRecenter: true, reverseDecOutputAfterMeridianFlip: false })
-		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, exposure, OUTPUT, {}, DEFAULT_BUILTIN_SETTINGS, 240).optics).toEqual({ focalLength: 240 })
+		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_BUILTIN_SETTINGS, 240).optics).toEqual({ focalLength: 240 })
 	})
 
 	test('the start sends the star detector of the profile, without its acceptance', () => {
 		const astap = { provider: 'astap', maxStars: 50, minSNR: 10 } as const
-		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, OUTPUT, {}, astap, undefined).detection).toEqual(astap)
-		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, OUTPUT, {}, DEFAULT_BUILTIN_SETTINGS, undefined).detection).toEqual(DEFAULT_BUILTIN_SETTINGS)
+		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, astap, undefined).detection).toEqual(astap)
+		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, DEFAULT_BUILTIN_SETTINGS, undefined).detection).toEqual(DEFAULT_BUILTIN_SETTINGS)
 		expect(guidingBlocker(READY, READY, DEFAULT_GUIDING_SETTINGS, true)).toBe('ASTAP is not configured.')
 	})
 
@@ -106,7 +106,10 @@ describe('requests', () => {
 	})
 
 	test('the start snoops the devices it is given', () => {
-		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, OUTPUT, { mount: 'm' }, DEFAULT_BUILTIN_SETTINGS, undefined).snoop).toEqual({ mount: 'm' })
+		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, { mount: 'm' }, DEFAULT_BUILTIN_SETTINGS, undefined).snoop).toEqual({ mount: 'm' })
+		// The mount the guide output drives is held while guiding, and none is sent without one in the setup.
+		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT, mount: { connectionId: 'c', deviceId: 'm' } }, {}, DEFAULT_BUILTIN_SETTINGS, undefined).mount).toEqual({ connectionId: 'c', deviceId: 'm' })
+		expect('mount' in guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, DEFAULT_BUILTIN_SETTINGS, undefined)).toBeFalse()
 	})
 
 	test('the guide focal length is the focal length of the guide telescope times its reducer or Barlow, unknown while not set', () => {
@@ -263,7 +266,7 @@ describe('refresh', () => {
 describe('commands', () => {
 	test('a start posts a tokened request to the camera route; a failure is recorded per camera', async () => {
 		const state = newState()
-		const body = guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, OUTPUT, {}, DEFAULT_BUILTIN_SETTINGS, undefined)
+		const body = guidingRequest(DEFAULT_GUIDING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, { guideOutput: OUTPUT }, {}, DEFAULT_BUILTIN_SETTINGS, undefined)
 		const accepted = fakeFetch(() => Response.json({ sessionId: 's1', operationId: 'o1' }, { status: 202 }))
 		expect(await startGuidingSession(state, 'c', 'guide', body, accepted.request)).toEqual({ sessionId: 's1', operationId: 'o1' })
 		expect(accepted.requests[0].url).toBe('/api/connections/c/cameras/guide/guiding')

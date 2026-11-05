@@ -83,17 +83,27 @@ export function guidingExposureRange(exposure: CameraCapabilities['exposure'] | 
 	return { min: Math.max(GUIDING_MINIMUM_EXPOSURE, exposure?.min ?? 0), max: Math.min(GUIDING_MAXIMUM_EXPOSURE, exposure?.max ?? GUIDING_MAXIMUM_EXPOSURE) }
 }
 
-// Builds the start request of the guiding form of a camera: the guide exposures in milliseconds, the camera settings
+// Builds the start request of the guiding form of a camera, guiding through the GUIDE_OUTPUT of the Equipment Setup and
+// holding the MOUNT it drives while guiding (absent when the setup has none): the guide exposures in milliseconds, the camera settings
 // of the camera fitted to its capabilities as a capture is (never its exposure time), the controller, the calibration
 // and the client settings (dither pattern, search square, sticky lock, DEC reversal after a flip) of the form, the
 // devices snooped into the frame headers, and the star detector of the profile's Star Detection with its settings (its
 // acceptance criteria are not sent: the tracker filters the stars). The effective focal length of the guide optics, in
 // mm (see guideFocalLength), is sent only when known.
-export function guidingRequest(settings: Readonly<GuidingSettings>, exposure: Readonly<CameraExposureSettings>, guideOutput: OperationDevice, snoop: CaptureSnoop, detection: Readonly<StarDetectionSettings>, focalLength: number | undefined, capabilities?: CameraCapabilities): Omit<GuidingStartRequest, 'token'> {
+export function guidingRequest(
+	settings: Readonly<GuidingSettings>,
+	exposure: Readonly<CameraExposureSettings>,
+	{ guideOutput, mount }: { readonly guideOutput: OperationDevice; readonly mount?: OperationDevice },
+	snoop: CaptureSnoop,
+	detection: Readonly<StarDetectionSettings>,
+	focalLength: number | undefined,
+	capabilities?: CameraCapabilities,
+): Omit<GuidingStartRequest, 'token'> {
 	const { exposureTime: _, ...camera } = fitExposure(exposure, capabilities)
 
 	return {
 		guideOutput,
+		...(mount && { mount }),
 		exposure: Math.round(settings.exposureTime * 1000),
 		camera,
 		trackingMode: settings.trackingMode,

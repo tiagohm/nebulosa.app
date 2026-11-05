@@ -1,13 +1,16 @@
 import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import type { GuideDirection, GuideOutput } from 'nebulosa/src/devices/indi/device'
-import { type ClientResolver, type CommandRequest, disconnected, findDevice, notFound, settle, startCommand, unsupported } from './commands'
+import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { admissionResponse, busy, type ClientResolver, type CommandRequest, disconnected, findDevice, notFound, settle, startCommand, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
-import type { OperationRegistry } from './operations'
+import type { OperationDevice, OperationRegistry } from './operations'
 
 // Manual pulse guiding of the guide outputs of every open connection: a standalone guider, or the
 // pulse-guide interface of a mount or a camera. A pulse runs as a guideOutput.pulse operation holding the
-// physical device, so it is refused while a slew, a nudge, or a capture holds the same mount or camera, and
-// resolves only once the device reports the pulse ended. Stopping zeroes the pulses of this output only;
+// physical device and, when the request names it, the mount the guide output drives (the MOUNT of the Equipment Setup
+// whose GUIDE_OUTPUT it is), atomically, so it is refused while a slew, a nudge, or a capture holds the same mount or
+// camera, even when the guide output is the ST4 port of a camera that shares no device with the mount, and resolves
+// only once the device reports the pulse ended. Stopping zeroes the pulses of this output only;
 // it never cancels another operation of the device behind it.
 
 // Every guide direction, for stopping all pulses at once.
@@ -19,6 +22,9 @@ export interface GuidePulseRequest extends CommandRequest {
 	readonly direction: GuideDirection
 	// Duration of the pulse in milliseconds.
 	readonly duration: number
+	// Mount the guide output drives (the MOUNT of the Equipment Setup whose GUIDE_OUTPUT it is), held with it for the
+	// pulse; absent for a guide output the setup does not assign.
+	readonly mount?: OperationDevice
 }
 
 // Body of POST /api/connections/:id/guide-outputs/:deviceId/guide-rate.
@@ -56,13 +62,26 @@ export class GuideOutputCommands implements Disposable {
 		return state ? Response.json(state) : notFound('Guide output')
 	}
 
-	// Starts a pulse. Responds 202 with the operation id; 404 for an unknown output, 409 when it is
-	// disconnected or the device behind it is busy, 422 when it cannot pulse.
+	// Starts a pulse. Responds 202 with the operation id; 404 for an unknown output or mount, 409 when either is
+	// disconnected or the device behind either is busy, 422 when the output cannot pulse.
 	pulse(connectionId: string, deviceId: string, request: GuidePulseRequest): Response {
 		const output = this.#connected(connectionId, deviceId)
 		if (output instanceof Response) return output
 		if (!output.canPulseGuide) return unsupported('The guide output cannot pulse')
-		return startCommand(this.operations, 'guideOutput.pulse', connectionId, output, request, () => this.#commander.pulse(this.operations.coordinator, output, request.direction, request.duration))
+		if (!request.mount) return startCommand(this.operations, 'guideOutput.pulse', connectionId, output, request, () => this.#commander.pulse(this.operations.coordinator, output, request.direction, request.duration))
+
+		const mount = findDevice(this, request.mount.connectionId, 'mount', request.mount.deviceId)
+		if (!mount) return notFound('Mount')
+		if (!mount.connected) return disconnected('Mount')
+
+		const known = this.operations.repeated(request.token)
+		if (known) return admissionResponse({ ok: true, admission: known })
+		if (!this.operations.available(output) || !this.operations.available(mount)) return busy()
+
+		// The root takes both at once, and the pulse acquires the guide output again inside it.
+		const resources = [output, mount].map((device) => ({ key: resourceKey(device), device }))
+		const pulse = () => this.operations.coordinator.start('guidePulse', resources, (context) => this.#commander.pulse(context, output, request.direction, request.duration)).result
+		return admissionResponse({ ok: true, admission: this.operations.admit('guideOutput.pulse', [{ connectionId, deviceId }, request.mount], request.token, pulse) })
 	}
 
 	// Sets the guide rates. Responds 204 once the driver reports it, 504 when it never does (the new rates arrive as a guideOutput:updated event); 404,

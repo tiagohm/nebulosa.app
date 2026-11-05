@@ -138,7 +138,12 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 
 	function start() {
 		if (!device || !guideOutput?.device) return
-		void startGuidingSession(guidingRuntime, device.connectionId, device.id, guidingRequest(settings, exposure, { connectionId: guideOutput.device.connectionId, deviceId: guideOutput.device.id }, snoop, detection, focalLength, capabilities))
+		void startGuidingSession(
+			guidingRuntime,
+			device.connectionId,
+			device.id,
+			guidingRequest(settings, exposure, { guideOutput: { connectionId: guideOutput.device.connectionId, deviceId: guideOutput.device.id }, ...(mount.device && { mount: { connectionId: mount.device.connectionId, deviceId: mount.device.id } }) }, snoop, detection, focalLength, capabilities),
+		)
 	}
 
 	return (

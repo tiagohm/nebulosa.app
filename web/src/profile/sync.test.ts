@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import type { ProfileRecord, WorkspaceSnapshot } from 'api'
 import { proxy, snapshot } from 'valtio'
 import { type ConnectionState, removeConnection, saveConnection } from '../connection/connection'
+import { forgetSite, removeSite, saveSite, selectSite, type SiteState } from '../location/site'
 import {
 	assignDevice,
 	createProfile,
@@ -42,13 +43,14 @@ afterEach(() => {
 })
 
 // Workspace of a new database: its Default profile.
-const NEW_WORKSPACE: WorkspaceSnapshot = { connections: [], profiles: [record('p1', { name: 'Default' })] }
+const NEW_WORKSPACE: WorkspaceSnapshot = { connections: [], sites: [], profiles: [record('p1', { name: 'Default' })] }
 
 // Creates the stores of a tab and its synchronization over a fake server holding workspace, recording what the tab
 // sent. answer replaces the answer of the server to a write.
 function setup(workspace = NEW_WORKSPACE, answer?: (sent: Sent) => Response | undefined) {
 	const connections = proxy<ConnectionState>({ open: false, connections: [], servers: [], errors: {} })
 	const profiles = proxy<ProfileState>({ profiles: [], activeId: '', open: false })
+	const sites = proxy<SiteState>({ sites: [] })
 	const status = proxy<WorkspaceSyncState>({ loaded: false })
 	const sent: Sent[] = []
 
@@ -64,10 +66,13 @@ function setup(workspace = NEW_WORKSPACE, answer?: (sent: Sent) => Response | un
 		return Promise.resolve(new Response(undefined, { status: 204 }))
 	}) as typeof fetch
 
-	const sync = new WorkspaceSync(connections, profiles, status, request, 0)
+	const sync = new WorkspaceSync(connections, profiles, sites, status, request, 0)
 	stops.push(sync.start())
-	return { connections, profiles, status, sync, sent }
+	return { connections, profiles, sites, status, sync, sent }
 }
+
+// Fields of a site in São Paulo.
+const HOME = { name: 'Home', latitude: -23.5475, longitude: -46.63611, elevation: 760, timeZone: 'America/Sao_Paulo' }
 
 // Lets the stores notify the synchronization, then writes what it found.
 async function settle(sync: WorkspaceSync) {
@@ -79,6 +84,7 @@ describe('loading', () => {
 	test('the workspace of the server becomes the tab, on the first profile', async () => {
 		const workspace: WorkspaceSnapshot = {
 			connections: [{ id: 'c1', name: 'Simulator', type: 'SIMULATOR', host: '', port: 7624, revision: 2 }],
+			sites: [],
 			profiles: [
 				record('p1', {
 					connectionId: 'c1',
@@ -110,7 +116,7 @@ describe('loading', () => {
 	})
 
 	test('a value of another version of its shape is read as absent', async () => {
-		const { profiles, sync } = setup({ connections: [], profiles: [record('p1', { preferences: { telescope: { version: PROFILE_SETTINGS_VERSION + 1, value: { focalLength: 1 }, revision: 4 } } })] })
+		const { profiles, sync } = setup({ connections: [], sites: [], profiles: [record('p1', { preferences: { telescope: { version: PROFILE_SETTINGS_VERSION + 1, value: { focalLength: 1 }, revision: 4 } } })] })
 		await sync.refresh()
 		expect(profiles.profiles[0].settings.telescope).toBeUndefined()
 	})
@@ -151,6 +157,7 @@ describe('writes', () => {
 	test('camera forms and bindings are written on every edit, whether the server or the tab created them', async () => {
 		const workspace: WorkspaceSnapshot = {
 			connections: [{ id: 'c1', name: 'Simulator', type: 'SIMULATOR', host: '', port: 7624, revision: 1 }],
+			sites: [],
 			profiles: [
 				record('p1', {
 					connectionId: 'c1',
@@ -200,12 +207,13 @@ describe('writes', () => {
 
 		expect(sent.map(({ method, path }) => `${method} ${path}`)).toEqual([`PUT /api/saved-connections/${saved.id}`, 'PUT /api/profiles/p1', `PUT /api/profiles/p1/equipment/${saved.id}`, `PUT /api/profiles/p1/cameras/${saved.id}/cam/exposure`])
 		expect(sent[0].body).toEqual({ name: 'Simulator', type: 'SIMULATOR', host: '', port: 7624, revision: 0 })
-		expect(sent[1].body).toEqual({ name: 'Default', connectionId: saved.id, sortOrder: 0, revision: 1 })
+		expect(sent[1].body).toEqual({ name: 'Default', connectionId: saved.id, activeSiteId: null, sortOrder: 0, revision: 1 })
 	})
 
 	test('deletions and resets reach the server, and what went with a connection is not written', async () => {
 		const workspace: WorkspaceSnapshot = {
 			connections: [{ id: 'c1', name: 'Simulator', type: 'SIMULATOR', host: '', port: 7624, revision: 1 }],
+			sites: [],
 			profiles: [
 				record('p1', {
 					connectionId: 'c1',
@@ -240,7 +248,7 @@ describe('writes', () => {
 		await settle(sync)
 
 		expect(sent).toEqual([
-			{ method: 'PUT', path: `/api/profiles/${created.id}`, body: { name: 'Planetary', connectionId: null, sortOrder: 1, revision: 0 } },
+			{ method: 'PUT', path: `/api/profiles/${created.id}`, body: { name: 'Planetary', connectionId: null, activeSiteId: null, sortOrder: 1, revision: 0 } },
 			{ method: 'PUT', path: `/api/profiles/${created.id}/framing-references/${framing.id}`, body: { name: 'Jupiter', rightAscension: 1, declination: 0.1, source: 'sky', createdAt: 5, updatedAt: 5 } },
 		])
 	})
@@ -309,7 +317,7 @@ describe('other tabs', () => {
 	})
 
 	test('a profile another tab deleted goes, and the tab works with the first one', async () => {
-		const { profiles, sync } = setup({ connections: [], profiles: [record('p1'), record('p2', { sortOrder: 1 })] })
+		const { profiles, sync } = setup({ connections: [], sites: [], profiles: [record('p1'), record('p2', { sortOrder: 1 })] })
 		await sync.refresh()
 		profiles.activeId = 'p2'
 
@@ -329,5 +337,73 @@ describe('other tabs', () => {
 
 		await sync.flush()
 		expect(sent[0].body).toMatchObject({ value: { focalLength: 400 }, revision: 0 })
+	})
+})
+
+describe('observing sites', () => {
+	test('a new site is saved before the profile that observes from it', async () => {
+		const { profiles, sites, sync, sent } = setup()
+		await sync.refresh()
+
+		const site = saveSite(sites, HOME)!
+		selectSite(profiles, sites, site.id)
+		await settle(sync)
+
+		expect(sent).toEqual([
+			{ method: 'PUT', path: `/api/observing-sites/${site.id}`, body: { ...HOME, revision: 0 } },
+			{ method: 'PUT', path: '/api/profiles/p1', body: { name: 'Default', connectionId: null, activeSiteId: site.id, sortOrder: 0, revision: 1 } },
+		])
+	})
+
+	test('a deleted site is deleted after the profiles that observed from it are cleared', async () => {
+		const { profiles, sites, sync, sent } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], profiles: [record('p1', { activeSiteId: 's1' })] })
+		await sync.refresh()
+		expect(profiles.profiles[0].activeSiteId).toBe('s1')
+
+		removeSite(sites, 's1')
+		forgetSite(profiles, 's1')
+		await settle(sync)
+
+		expect(sent.map(({ method, path }) => `${method} ${path}`)).toEqual(['PUT /api/profiles/p1', 'DELETE /api/observing-sites/s1'])
+		expect(sent[0].body).toMatchObject({ activeSiteId: null })
+	})
+
+	test('a conflict on a site shows what the server kept', async () => {
+		const { sites, status, sync } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], profiles: [record('p1')] }, ({ path }) =>
+			path === '/api/observing-sites/s1' ? Response.json({ error: 'It was changed by another tab', code: 'conflict', site: { id: 's1', ...HOME, name: 'Observatory', revision: 4 } }, { status: 409 }) : undefined,
+		)
+		await sync.refresh()
+
+		saveSite(sites, { ...HOME, name: 'Backyard' }, 's1')
+		await settle(sync)
+
+		expect(sites.sites).toEqual([{ id: 's1', ...HOME, name: 'Observatory' }])
+		expect(status.message).toContain('Another tab changed this first')
+	})
+
+	test('site events apply, never older than what the tab knows, and a removed one goes', async () => {
+		const { sites, sync, sent } = setup()
+		await sync.refresh()
+
+		sync.handle({ type: 'observingSite:updated', site: { id: 's1', ...HOME, revision: 2 } })
+		sync.handle({ type: 'observingSite:updated', site: { id: 's1', ...HOME, name: 'Older', revision: 1 } })
+		expect(sites.sites).toEqual([{ id: 's1', ...HOME }])
+
+		sync.handle({ type: 'observingSite:removed', id: 's1' })
+		expect(sites.sites).toEqual([])
+
+		await settle(sync)
+		expect(sent).toEqual([])
+	})
+
+	test('the active site of a profile follows the server', async () => {
+		const { profiles, sync } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], profiles: [record('p1')] })
+		await sync.refresh()
+
+		sync.handle({ type: 'profile:updated', profile: record('p1', { activeSiteId: 's1', revision: 2 }) })
+		expect(profiles.profiles[0].activeSiteId).toBe('s1')
+
+		sync.handle({ type: 'profile:updated', profile: record('p1', { revision: 3 }) })
+		expect(profiles.profiles[0].activeSiteId).toBeUndefined()
 	})
 })

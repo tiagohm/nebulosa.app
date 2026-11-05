@@ -1,16 +1,17 @@
-import type { MountRemoteProtocol, ProfileCameraForm, ProfilePreferenceKey, ProfileRecord, SavedConnection, ServerEvent, WorkspaceSnapshot, WorkspaceValue } from 'api'
+import type { MountRemoteProtocol, ObservingSite as SavedObservingSite, ProfileCameraForm, ProfilePreferenceKey, ProfileRecord, SavedConnection, ServerEvent, WorkspaceSnapshot, WorkspaceValue } from 'api'
 import { proxy, snapshot, subscribe } from 'valtio'
 import type { Connection, ConnectionState } from '../connection/connection'
 import { jsonInit } from '../http'
+import { type ObservingSite, siteState, type SiteState } from '../location/site'
 import { nestedObject, newProfile, type ProfileState } from './profile'
 import { type CameraSettings, type FramingReference, type MountRemoteBinding, type Profile, PROFILE_SETTINGS_VERSION, type ProfileSettings, type SkyFramingSettings, type SkySettings } from './schema'
 
-// Synchronization of the workspace (the saved connections and the profiles) with the server, which keeps it for every
-// tab and browser. The tab changes its stores at once, as before; this module compares what the tab holds with what the
-// server last confirmed, unit by unit (a saved connection, the name and connection of a profile, an equipment setup, a
-// preference, a camera form, a Mount Remote Control binding, a saved framing, the notifications it read or
-// dismissed), and writes each unit that changed, a
-// moment after the latest change and one request at a time. A unit with a revision is written from the revision it was
+// Synchronization of the workspace (the saved connections, the observing sites, and the profiles) with the server, which
+// keeps it for every tab and browser. The tab changes its stores at once, as before; this module compares what the tab
+// holds with what the server last confirmed, unit by unit (a saved connection, an observing site, the name, connection,
+// and active site of a profile, an equipment setup, a preference, a camera form, a Mount Remote Control binding, a saved
+// framing, the notifications it read or dismissed), and writes each unit that changed, a moment after the latest change
+// and one request at a time. A unit with a revision is written from the revision it was
 // edited from; when another tab saved it first the server refuses it, and the tab shows what the server kept and says
 // so. The others are written as they are, the last write winning. What the server publishes applies to every unit the
 // tab is not writing. View state fields of ProfileSettings (view.ts) are never compared nor written.
@@ -38,6 +39,7 @@ export const workspaceSyncState = proxy<WorkspaceSyncState>({ loaded: false })
 // One thing the server keeps for the workspace, written by one request.
 type Unit =
 	| { readonly kind: 'connection'; readonly connectionId: string }
+	| { readonly kind: 'site'; readonly siteId: string }
 	| { readonly kind: 'profile'; readonly profileId: string }
 	| { readonly kind: 'equipment'; readonly profileId: string; readonly connectionId: string }
 	| { readonly kind: 'preference'; readonly profileId: string; readonly key: ProfilePreferenceKey }
@@ -53,10 +55,10 @@ interface LocalUnit {
 }
 
 // Kinds of unit written from their revision.
-const REVISIONED = new Set<Unit['kind']>(['connection', 'profile', 'preference', 'camera'])
+const REVISIONED = new Set<Unit['kind']>(['connection', 'site', 'profile', 'preference', 'camera'])
 
 // Kinds of unit deleted on the server when the tab removes them.
-const DELETABLE = new Set<Unit['kind']>(['connection', 'profile', 'framing'])
+const DELETABLE = new Set<Unit['kind']>(['connection', 'site', 'profile', 'framing'])
 
 // Kinds of unit reset to their default (written as null) when the tab removes them.
 const RESETTABLE = new Set<Unit['kind']>(['preference', 'camera'])
@@ -116,6 +118,7 @@ const PREFERENCES: Readonly<Record<ProfilePreferenceKey, PreferenceField>> = {
 	imageAstrometry: setting('imageAstrometry'),
 	statusBar: setting('statusBar'),
 	satelliteFavorites: setting('satelliteFavorites'),
+	dateTime: setting('dateTime'),
 }
 
 // Preferences the server keeps, in a fixed order.
@@ -148,13 +151,18 @@ function connectionUnit(connectionId: string): Unit {
 	return { kind: 'connection', connectionId }
 }
 
-// Name, connection, and position unit of a profile.
+// Observing site unit of an id.
+function siteUnit(siteId: string): Unit {
+	return { kind: 'site', siteId }
+}
+
+// Name, connection, active site, and position unit of a profile.
 function profileUnit(profileId: string): Unit {
 	return { kind: 'profile', profileId }
 }
 
 // Returns every unit the tab holds, with the value each one would be written with.
-function localUnits(connections: readonly Connection[], profiles: readonly Profile[]): Map<string, LocalUnit> {
+function localUnits(connections: readonly Connection[], sites: readonly ObservingSite[], profiles: readonly Profile[]): Map<string, LocalUnit> {
 	const units = new Map<string, LocalUnit>()
 
 	const add = (unit: Unit, value: unknown) => {
@@ -162,9 +170,10 @@ function localUnits(connections: readonly Connection[], profiles: readonly Profi
 	}
 
 	for (const { id, name, type, host, port } of connections) add(connectionUnit(id), { name, type, host, port })
+	for (const { id, name, latitude, longitude, elevation, timeZone } of sites) add(siteUnit(id), { name, latitude, longitude, elevation, timeZone })
 
-	for (const [sortOrder, { id: profileId, name, connectionId, equipment, settings }] of profiles.entries()) {
-		add(profileUnit(profileId), { name, connectionId: connectionId ?? null, sortOrder })
+	for (const [sortOrder, { id: profileId, name, connectionId, activeSiteId, equipment, settings }] of profiles.entries()) {
+		add(profileUnit(profileId), { name, connectionId: connectionId ?? null, activeSiteId: activeSiteId ?? null, sortOrder })
 		for (const [connectionId, setup] of Object.entries(equipment)) add({ kind: 'equipment', profileId, connectionId }, setup)
 		for (const key of PREFERENCE_KEYS) add({ kind: 'preference', profileId, key }, PREFERENCES[key].get(settings))
 
@@ -194,6 +203,8 @@ function unitPath(unit: Unit): string {
 	switch (unit.kind) {
 		case 'connection':
 			return `/api/saved-connections/${e(unit.connectionId)}`
+		case 'site':
+			return `/api/observing-sites/${e(unit.siteId)}`
 		case 'profile':
 			return `/api/profiles/${e(unit.profileId)}`
 		case 'equipment':
@@ -215,6 +226,7 @@ function unitPath(unit: Unit): string {
 function unitBody(unit: Unit, value: unknown, revision: number): unknown {
 	switch (unit.kind) {
 		case 'connection':
+		case 'site':
 		case 'profile':
 			return { ...(value as object), revision }
 		case 'equipment':
@@ -227,16 +239,17 @@ function unitBody(unit: Unit, value: unknown, revision: number): unknown {
 	}
 }
 
-// Order in which units are written: what others refer to is created first and deleted last.
+// Order in which units are written: what others refer to (saved connections and observing sites) is created first and
+// deleted last.
 function writeOrder(unit: Unit, deleting: boolean) {
 	if (deleting) return unit.kind === 'framing' ? 3 : unit.kind === 'profile' ? 4 : 5
-	return unit.kind === 'connection' ? 0 : unit.kind === 'profile' ? 1 : 2
+	return unit.kind === 'connection' || unit.kind === 'site' ? 0 : unit.kind === 'profile' ? 1 : 2
 }
 
-// Profile and saved connection a unit belongs to, whose deletion takes it along; none for a saved connection or a
-// profile itself.
+// Profile and saved connection a unit belongs to, whose deletion takes it along; none for a saved connection, an
+// observing site, or a profile itself.
 function ownersOf(unit: Unit): { readonly profileId?: string; readonly connectionId?: string } {
-	if (unit.kind === 'connection' || unit.kind === 'profile') return {}
+	if (unit.kind === 'connection' || unit.kind === 'site' || unit.kind === 'profile') return {}
 	return { profileId: unit.profileId, connectionId: 'connectionId' in unit ? unit.connectionId : undefined }
 }
 
@@ -250,11 +263,13 @@ interface RefusedBody {
 	readonly error?: string
 	readonly code?: string
 	readonly connection?: SavedConnection | null
+	readonly site?: SavedObservingSite | null
 	readonly profile?: ProfileRecord | null
 	readonly value?: WorkspaceValue | null
 }
 
-// Synchronizes the saved connections of connections and the profiles of profiles with the server, through request.
+// Synchronizes the saved connections of connections, the observing sites of sites, and the profiles of profiles with the
+// server, through request.
 export class WorkspaceSync {
 	// Value of each unit as the server last confirmed it, encoded, by unit key.
 	readonly #synced = new Map<string, { readonly unit: Unit; readonly encoded: string }>()
@@ -273,11 +288,12 @@ export class WorkspaceSync {
 	// Number of completed writes, so a snapshot read across a write is read again.
 	#writes = 0
 
-	// connections and profiles are the stores of the tab, status what it shows, request the fetch of the server, and
-	// delay the time after the latest change before writing, in milliseconds.
+	// connections, profiles, and sites are the stores of the tab, status what it shows, request the fetch of the server,
+	// and delay the time after the latest change before writing, in milliseconds.
 	constructor(
 		readonly connections: ConnectionState,
 		readonly profiles: ProfileState,
+		readonly sites: SiteState = siteState,
 		readonly status: WorkspaceSyncState = workspaceSyncState,
 		readonly request: typeof fetch = fetch,
 		readonly delay: number = WRITE_DELAY,
@@ -286,7 +302,7 @@ export class WorkspaceSync {
 	// Starts comparing and writing the changes of the tab, writing what is left when the page is hidden. Returns a
 	// function that stops it.
 	start(): () => void {
-		const stops = [subscribe(this.connections, () => this.#scan()), subscribe(this.profiles, () => this.#scan())]
+		const stops = [subscribe(this.connections, () => this.#scan()), subscribe(this.sites, () => this.#scan()), subscribe(this.profiles, () => this.#scan())]
 		const hide = () => void this.flush()
 		globalThis.addEventListener?.('pagehide', hide)
 
@@ -325,7 +341,7 @@ export class WorkspaceSync {
 		return false
 	}
 
-	// Applies an event of the server: a saved connection or a profile another tab, or this one, changed.
+	// Applies an event of the server: a saved connection, an observing site, or a profile another tab, or this one, changed.
 	handle(event: ServerEvent) {
 		if (!this.status.loaded) return
 
@@ -334,6 +350,10 @@ export class WorkspaceSync {
 				return this.#reconcile(undefined, () => this.#applyConnection(event.connection.id, event.connection))
 			case 'savedConnection:removed':
 				return this.#reconcile(undefined, () => this.#applyConnection(event.id, undefined))
+			case 'observingSite:updated':
+				return this.#reconcile(undefined, () => this.#applySite(event.site.id, event.site))
+			case 'observingSite:removed':
+				return this.#reconcile(undefined, () => this.#applySite(event.id, undefined))
 			case 'profile:updated':
 				return this.#reconcile(undefined, () => this.#applyProfile(event.profile))
 			case 'profile:removed':
@@ -356,7 +376,7 @@ export class WorkspaceSync {
 
 	// Units of the tab now.
 	#local() {
-		return localUnits(snapshot(this.connections).connections, snapshot(this.profiles).profiles)
+		return localUnits(snapshot(this.connections).connections, snapshot(this.sites).sites, snapshot(this.profiles).profiles)
 	}
 
 	// Marks the units whose value differs from what the server confirmed as changed, and schedules their write.
@@ -458,6 +478,7 @@ export class WorkspaceSync {
 		if (response.status === 409 && body?.code === 'conflict') {
 			this.#reconcile(key, () => {
 				if (unit.kind === 'connection') this.#applyConnection(unit.connectionId, body.connection ?? undefined, true)
+				else if (unit.kind === 'site') this.#applySite(unit.siteId, body.site ?? undefined, true)
 				else if (unit.kind === 'profile') body.profile ? this.#applyProfile(body.profile, true) : this.#removeProfile(unit.profileId, true)
 				else if (unit.kind === 'preference' || unit.kind === 'camera') this.#applyValue(unit, body.value ?? undefined, true)
 			})
@@ -496,12 +517,18 @@ export class WorkspaceSync {
 
 	// Applies a snapshot of the workspace: what it holds, in its order, and what it no longer holds goes, except what the
 	// tab is creating.
-	#applySnapshot({ connections, profiles }: WorkspaceSnapshot) {
+	#applySnapshot({ connections, sites, profiles }: WorkspaceSnapshot) {
 		for (const connection of connections) this.#applyConnection(connection.id, connection)
 		const savedConnections = new Set(connections.map(({ id }) => id))
 		for (const id of this.connections.connections.map((connection) => connection.id)) if (!savedConnections.has(id)) this.#applyConnection(id, undefined)
 		const connectionOrder = new Map(connections.map(({ id }, index) => [id, index]))
 		this.connections.connections = [...this.connections.connections].sort((a, b) => (connectionOrder.get(a.id) ?? Infinity) - (connectionOrder.get(b.id) ?? Infinity))
+
+		for (const site of sites) this.#applySite(site.id, site)
+		const savedSites = new Set(sites.map(({ id }) => id))
+		for (const id of this.sites.sites.map((site) => site.id)) if (!savedSites.has(id)) this.#applySite(id, undefined)
+		const siteOrder = new Map(sites.map(({ id }, index) => [id, index]))
+		this.sites.sites = [...this.sites.sites].sort((a, b) => (siteOrder.get(a.id) ?? Infinity) - (siteOrder.get(b.id) ?? Infinity))
 
 		for (const profile of profiles) this.#applyProfile(profile)
 		const savedProfiles = new Set(profiles.map(({ id }) => id))
@@ -530,6 +557,27 @@ export class WorkspaceSync {
 		else this.connections.connections.push({ id, name, type, host, port })
 	}
 
+	// Applies an observing site of the server, or its absence, unless the tab is changing it (or force). The profiles that
+	// observe from a removed site are cleared by the server, which publishes them.
+	#applySite(id: string, site: SavedObservingSite | undefined, force = false) {
+		const key = unitKey(siteUnit(id))
+		if (!force && this.#busy(key)) return
+		const index = this.sites.sites.findIndex((saved) => saved.id === id)
+
+		if (!site) {
+			this.#revisions.delete(key)
+			if (index >= 0) this.sites.sites.splice(index, 1)
+			return
+		}
+
+		const known = this.#revisions.get(key)
+		if (!force && known !== undefined && site.revision < known) return
+		this.#revisions.set(key, site.revision)
+		const { name, latitude, longitude, elevation, timeZone } = site
+		if (index >= 0) this.sites.sites[index] = { id, name, latitude, longitude, elevation, timeZone }
+		else this.sites.sites.push({ id, name, latitude, longitude, elevation, timeZone })
+	}
+
 	// Removes a profile the server no longer holds, unless the tab is creating or changing it (or force).
 	#removeProfile(id: string, force = false) {
 		if (!force && this.#busy(unitKey(profileUnit(id)))) return
@@ -538,7 +586,7 @@ export class WorkspaceSync {
 	}
 
 	// Applies a profile of the server to the tab, creating it when the tab does not know it, unit by unit, leaving alone
-	// the units the tab is changing; with force, its name and connection apply anyway.
+	// the units the tab is changing; with force, its name, connection, and active site apply anyway.
 	#applyProfile(record: ProfileRecord, force = false) {
 		let profile = this.profiles.profiles.find(({ id }) => id === record.id)
 
@@ -556,6 +604,8 @@ export class WorkspaceSync {
 			profile.name = record.name
 			if (record.connectionId) profile.connectionId = record.connectionId
 			else delete profile.connectionId
+			if (record.activeSiteId) profile.activeSiteId = record.activeSiteId
+			else delete profile.activeSiteId
 		}
 
 		for (const connectionId of new Set([...Object.keys(profile.equipment), ...Object.keys(record.equipment)])) {

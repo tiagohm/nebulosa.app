@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import { proxy, snapshot } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
 import type { AnnotationLayers } from '../images/images'
+import { isKnownTimeZone } from '../location/zone'
 import { type AstrometryGridSettings, DEFAULT_IMAGE_ASTROMETRY, type ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '../sky/display'
@@ -34,7 +35,9 @@ import {
 	type ProfileSettings,
 	type AstroWeatherPreferences,
 	type CloseApproachPreferences,
+	type DateTimePreferences,
 	DEFAULT_ASTRO_WEATHER_PREFERENCES,
+	DEFAULT_DATE_TIME_PREFERENCES,
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 	type SkyFramingSettings,
 	type SkyObserverSettings,
@@ -572,6 +575,17 @@ export function setSatelliteFavorite(state: ProfileState, noradId: string, favor
 	profile.settings.satelliteFavorites = favorite ? [...others, noradId].slice(-SATELLITE_FAVORITES_MAXIMUM) : others
 }
 
+// Returns how a profile shows civil times.
+export function dateTimePreferences(settings: Pick<ProfileSettings, 'dateTime'>): DateTimePreferences {
+	return settings.dateTime ?? DEFAULT_DATE_TIME_PREFERENCES
+}
+
+// Changes how the active profile shows civil times.
+export function setDateTimePreferences(state: ProfileState, patch: Partial<DateTimePreferences>) {
+	const profile = activeProfile(state)
+	profile.settings.dateTime = { ...dateTimePreferences(profile.settings), ...patch }
+}
+
 // Returns the preferences of the Astro Weather tool of a profile.
 export function astroWeatherPreferences(settings: Pick<ProfileSettings, 'astroWeather'>): AstroWeatherPreferences {
 	return settings.astroWeather ?? DEFAULT_ASTRO_WEATHER_PREFERENCES
@@ -596,15 +610,6 @@ const MIN_OBSERVER_ELEVATION = -500
 
 // Highest elevation accepted for an observer in meters (above Everest, 8849 m).
 const MAX_OBSERVER_ELEVATION = 9000
-
-// Whether a name is an IANA time zone the browser knows; an unknown one is dropped, using the browser's.
-function isKnownTimeZone(timeZone: string) {
-	try {
-		return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone !== ''
-	} catch {
-		return false
-	}
-}
 
 // Returns a valid observer, or undefined for anything out of range or incomplete.
 export function normalizeSkyObserver(value: unknown): SkyObserverSettings | undefined {

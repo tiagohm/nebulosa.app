@@ -102,6 +102,9 @@ export interface ProfileSettings {
 	// Preferences of the status bar; absent until edited, and then DEFAULT_ASTRONOMICAL_CLOCK_PREFERENCES and
 	// DEFAULT_STATUS_CHIPS hold.
 	statusBar?: StatusBarPreferences
+	// How civil times are shown (Settings → Date & Time); absent until edited, and then DEFAULT_DATE_TIME_PREFERENCES
+	// holds. Display only: it never changes an instant or a calculation.
+	dateTime?: DateTimePreferences
 	// NORAD catalog numbers (canonical decimal strings) of the artificial satellites marked as favorites, in the order they
 	// were marked, at most SATELLITE_FAVORITES_MAXIMUM; absent until the first one. A refresh of the satellite catalog never
 	// removes one, even when the catalog no longer lists it.
@@ -201,6 +204,22 @@ export interface CloseApproachPreferences {
 
 // Preferences of a profile that has not edited them: lunar distances, UTC, and the Earth within 10 LD.
 export const DEFAULT_CLOSE_APPROACH_PREFERENCES: CloseApproachPreferences = { distanceDisplay: 'LD', timeDisplay: 'utc', body: 'Earth', distanceMax: 10, distanceUnit: 'LD' }
+
+// Zones civil times can be shown in by default: the observing site's (the browser's when there is none), UTC, or the
+// browser's.
+export const DISPLAY_TIME_ZONE_MODES = ['site', 'utc', 'browser'] as const
+
+// Zone civil times are shown in by default.
+export type DisplayTimeZoneMode = (typeof DISPLAY_TIME_ZONE_MODES)[number]
+
+// How a profile shows civil times.
+export interface DateTimePreferences {
+	// Zone of the civil times every screen shows unless a tool overrides it.
+	readonly displayTimeZone: DisplayTimeZoneMode
+}
+
+// Preferences of a profile that has not edited them: times in the observing site's zone.
+export const DEFAULT_DATE_TIME_PREFERENCES: DateTimePreferences = { displayTimeZone: 'site' }
 
 // Readings the status bar clock can show: local apparent and mean sidereal time, Julian and Modified Julian Date in UTC,
 // and the UTC and local civil time. All of them are the real current time, never the Sky simulation clock.
@@ -836,6 +855,9 @@ export interface Profile {
 	name: string
 	// Id of the saved connection the profile works with; absent when none is selected.
 	connectionId?: string
+	// Id of the observing site (location/site.ts) the profile observes from; absent when none is selected, and then
+	// nothing assumes a place. Selecting one never commands a device.
+	activeSiteId?: string
 	// Equipment setup of each saved connection the profile has used, keyed by saved connection id. Only
 	// the setup of connectionId is active; the others are restored when that connection is selected again.
 	equipment: Record<string, EquipmentSetup>

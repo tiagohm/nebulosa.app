@@ -9,6 +9,7 @@ import { geodeticLocation, localSiderealTime } from 'nebulosa/src/astronomy/obse
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { isDeviceQuiescent } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 import { failedOperationResult, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { arcmin, arcsec, deg, hour, normalizeAngle, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
@@ -642,5 +643,57 @@ describe('target centering sessions', () => {
 		await ended()
 		expect(summary()).toMatchObject({ state: 'completed', positionVerified: true })
 		expect(toArcsec(summary().finalSeparation!)).toBeLessThan(30)
+	})
+})
+
+describe('composition', () => {
+	const GUIDING = { sessionId: 'g1', state: 'guiding' } as GuidingSessionSummary
+
+	// Reserves the camera and the mount of a setup for a caller composing tools, released after the test.
+	function reserve({ operations, camera, mount }: Awaited<ReturnType<typeof setup>>) {
+		const reserved = operations.arbiter.reserve(
+			{ id: 'composition', kind: 'test' },
+			[camera, mount].map((device) => ({ key: resourceKey(device), device })),
+		)
+		if (!reserved.ok) throw new Error('the devices could not be reserved')
+		disposables.push({ [Symbol.dispose]: () => reserved.reservation.release() })
+		return { reservation: reserved.reservation }
+	}
+
+	test('a session admitted under a reservation centers inside it, stopping and restoring guiding itself', async () => {
+		const context = await setup()
+		const { sessions, id, cameraId, request, guiding, operations, camera, mount } = context
+		const invocation = reserve(context)
+		guiding.runs = [GUIDING]
+
+		expect((await sessions.start(id, cameraId, request())).status).toBe(409)
+		const admitted = await sessions.admit(id, cameraId, request(), invocation)
+		if (!admitted.ok) throw new Error(admitted.error)
+
+		expect(await admitted.ended).toMatchObject({ sessionId: admitted.sessionId, state: 'completed', positionVerified: true, readyForImaging: true, guidingRestoration: 'restored' })
+		expect(guiding.calls.map((call) => call.split(':')[0])).toEqual(['suspend', 'restore'])
+		expect(guiding.released).toBe(guiding.holds)
+		expect(operations.arbiter.availability(resourceKey(camera))).toBe('reserved')
+		expect(operations.arbiter.availability(resourceKey(mount))).toBe('reserved')
+	})
+
+	test('a failed session under a reservation stops the tracking it started inside it, and a stop cancels the next one', async () => {
+		const context = await setup()
+		const { sessions, id, cameraId, request, commander, mount, solving, operations } = context
+		expect(await commander.setTracking(operations.coordinator, mount, false)).toMatchObject({ ok: true })
+		await waitUntil(() => !mount.tracking)
+		const invocation = reserve(context)
+		solving.control.error = new Error('no solver')
+
+		const failed = await sessions.admit(id, cameraId, request(), invocation)
+		if (!failed.ok) throw new Error(failed.error)
+		expect(await failed.ended).toMatchObject({ state: 'failed', trackingStarted: true, trackingStopped: true })
+		expect(mount.tracking).toBeFalse()
+
+		const stopped = await sessions.admit(id, cameraId, request({ capture: { ...request().capture, exposureTime: 5 } }), invocation)
+		if (!stopped.ok) throw new Error(stopped.error)
+		expect(sessions.interrupt(stopped.sessionId)).toBeTrue()
+		expect(await stopped.ended).toMatchObject({ state: 'cancelled' })
+		expect(sessions.interrupt('unknown')).toBeFalse()
 	})
 })

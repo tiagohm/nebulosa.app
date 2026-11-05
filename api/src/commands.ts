@@ -142,13 +142,13 @@ export async function stopResponse(operations: OperationRegistry, device: Device
 }
 
 // Why a command was refused before anything was sent, as a caller inside the process receives it; a route answers it
-// as { error, code } with status.
-export interface CommandRefusal {
+// as { error, code } with status. C is the set of codes, CommandErrorCode unless a service adds its own.
+export interface CommandRefusal<C extends string = CommandErrorCode> {
 	readonly ok: false
 	// HTTP status a route answers the refusal with.
 	readonly status: number
 	// Stable code of the refusal.
-	readonly code: CommandErrorCode
+	readonly code: C
 	// Message meant for people.
 	readonly error: string
 }
@@ -158,12 +158,12 @@ export interface CommandRefusal {
 export type CommandAdmission = { readonly ok: true; readonly admission: OperationAdmission } | CommandRefusal
 
 // Returns a refusal of a command.
-export function refusal(error: string, status: number, code: CommandErrorCode): CommandRefusal {
+export function refusal<C extends string = CommandErrorCode>(error: string, status: number, code: C): CommandRefusal<C> {
 	return { ok: false, status, code, error }
 }
 
 // Responds with a refusal of a command.
-export function refusalResponse({ error, status, code }: CommandRefusal): Response {
+export function refusalResponse({ error, status, code }: CommandRefusal<string>): Response {
 	return errorResponse(error, status, code)
 }
 

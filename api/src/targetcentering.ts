@@ -19,13 +19,13 @@ import { type CenteringCorrection, type CenteringFrame, type CenteringMeasuremen
 import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
-import { busy, type ClientResolver, type CommandErrorCode, type CommandRequest, connectedDevice, notFound, unsupported } from './commands'
+import { type ClientResolver, type CommandErrorCode, type CommandRefusal, type CommandRequest, notFound, refusal, refusalResponse, resolveConnected } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { GuidingRestoration, GuidingSessions, GuidingSuspension } from './guiding'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import type { MountCommands } from './mounts'
-import type { OperationDevice, OperationRegistry } from './operations'
+import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
 import { type PlateSolvePreparation, type PlateSolveRequest, PlateSolvingError, type PlateSolverProvider, type PlateSolvingService } from './platesolving'
 import type { SkyObserver } from './sky/ephemeris'
 
@@ -280,7 +280,29 @@ interface Session {
 	intent?: 'stop'
 	// Operation holding the devices, while one runs.
 	handle?: OperationHandle<boolean>
+	// Reservation the session runs inside, when a caller composing tools admitted it.
+	readonly invocation?: ToolInvocation
+	// Resolved with the final summary once the session ended.
+	readonly ended: PromiseWithResolvers<TargetCenteringSessionSummary>
 }
+
+// Session admitted inside the process: its identity and its end.
+export interface TargetCenteringAdmitted {
+	readonly ok: true
+	// Id of the session, repeated by its targetCentering:updated events.
+	readonly sessionId: string
+	// Id of the operation holding the camera and the mount.
+	readonly operationId: string
+	// Whether the token had already started the session, which this request did not start again.
+	readonly repeated: boolean
+	// Final summary once the session ended, after guiding was restored: completed (positionVerified and readyForImaging say
+	// what it reached), failed, or cancelled. A blocked session ends only once it is dismissed. Never rejects.
+	readonly ended: Promise<TargetCenteringSessionSummary>
+}
+
+// Outcome of asking for a session inside the process: the session admitted, or why it was refused (guidingActive when
+// guiding corrects the mount and the request does not coordinate with it).
+export type TargetCenteringAdmission = TargetCenteringAdmitted | CommandRefusal<CommandErrorCode | 'guidingActive'>
 
 // Guiding, as far as a session depends on it.
 export type TargetCenteringGuiding = Pick<GuidingSessions, 'runsOn' | 'hold' | 'suspendForMotion' | 'restoreAfterMotion'>
@@ -370,42 +392,54 @@ export class TargetCenteringSessions {
 	// guiding may pulse the mount; and 422 when the plate solver is not configured, the mount cannot serve the mode, or the
 	// target is below the horizon of the site the mount reports.
 	async start(connectionId: string, deviceId: string, request: TargetCenteringRequest): Promise<Response> {
+		const admitted = await this.admit(connectionId, deviceId, request)
+		return admitted.ok ? Response.json({ sessionId: admitted.sessionId, operationId: admitted.operationId } satisfies TargetCenteringStartResponse, { status: 202 }) : refusalResponse(admitted)
+	}
+
+	// Admits a session, under the reservation of invocation when given (which must then hold the camera and the mount), and
+	// returns its identity and end, or why it was refused, as start answers it. A repeated token answers the session it
+	// started, while it is remembered. The session stops and restores the guiding of the mount itself, as from a tab.
+	async admit(connectionId: string, deviceId: string, request: TargetCenteringRequest, invocation?: ToolInvocation): Promise<TargetCenteringAdmission> {
 		const repeated = this.#sessions.repeated(request.token)
-		if (repeated) return this.#accepted(repeated)
+		if (repeated) return admitted(repeated, true)
 
 		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
 		const preparation = await this.plateSolving.prepare(request.solving)
-		if (!preparation) return unsupported('The plate solver is not configured; set it up in Settings → External Tools')
+		if (!preparation) return refusal('The plate solver is not configured; set it up in Settings → External Tools', 422, 'unsupported')
 
 		const raced = this.#sessions.repeated(request.token)
-		if (raced) return this.#accepted(raced)
+		if (raced) return admitted(raced, true)
 
-		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
-		if (camera instanceof Response) return camera
-		const mount = connectedDevice(this, request.mount.connectionId, 'mount', request.mount.deviceId, 'Mount')
-		if (mount instanceof Response) return mount
+		const resolvedCamera = resolveConnected(this, connectionId, 'camera', deviceId, 'Camera')
+		if (!resolvedCamera.ok) return resolvedCamera
+		const resolvedMount = resolveConnected(this, request.mount.connectionId, 'mount', request.mount.deviceId, 'Mount')
+		if (!resolvedMount.ok) return resolvedMount
+		const camera = resolvedCamera.device
+		const mount = resolvedMount.device
 
 		const { mode, target } = request
 		const refused = mountRefusal(mount, mode)
-		if (refused) return unsupported(refused)
+		if (refused) return refusal(refused, 422, 'unsupported')
 
 		const observer = observerOf(mount)
 
 		if (mode !== 'verifyOnly') {
 			const below = this.mounts.refusal(mount, j2000Target(target.rightAscension, target.declination), observer)
-			if (below) return errorResponse(...below)
+			if (below) return refusal(...below)
 		}
 
 		// A run stopped by the session frees the mount, so a mount held by guiding alone is free enough here; anything else that
 		// took it meanwhile fails the session, which restores guiding all the same.
 		const runs = this.guiding.runsOn(request.mount.connectionId)
 		const stoppable = mode !== 'verifyOnly' && request.guiding === 'coordinate' && runs.every(({ state }) => state === 'guiding' || state === 'lostLock')
-		if (runs.length > 0 && !stoppable) return errorResponse(mode === 'verifyOnly' ? 'Guiding is correcting the mount; stop it before measuring' : 'Guiding is correcting the mount, or is paused or calibrating; stop it before centering', 409, 'guidingActive')
-		if (!this.operations.available(camera) || (runs.length === 0 && !this.operations.available(mount))) return busy()
+		if (runs.length > 0 && !stoppable) return refusal(mode === 'verifyOnly' ? 'Guiding is correcting the mount; stop it before measuring' : 'Guiding is correcting the mount, or is paused or calibrating; stop it before centering', 409, 'guidingActive')
+		// A mount guiding holds is taken once the session stopped guiding; inside a reservation, it must still be reserved by it.
+		const mountFree = runs.length === 0 ? this.operations.admits(mount, invocation) : !invocation || this.operations.reserves(mount, invocation)
+		if (!this.operations.admits(camera, invocation) || !mountFree) return refusal('The device is busy', 409, 'busy')
 
 		const key = resourceKey(camera)
 		const previous = this.#sessions.of(key)
-		if (previous && previous.summary.endedAt === undefined) return errorResponse('The camera has a centering session that did not end', 409, 'busy')
+		if (previous && previous.summary.endedAt === undefined) return refusal('The camera has a centering session that did not end', 409, 'busy')
 
 		const { token, ...settings } = request
 		const session: Session = {
@@ -437,6 +471,8 @@ export class TargetCenteringSessions {
 			guidingHold: this.guiding.hold(request.mount.connectionId),
 			guidingRuns: runs.map(({ sessionId }) => sessionId),
 			suspensions: [],
+			invocation,
+			ended: Promise.withResolvers(),
 		}
 
 		const record = this.operations.run('mount.targetCentering', [session.summary.camera, session.summary.mount], token, () => {
@@ -447,14 +483,20 @@ export class TargetCenteringSessions {
 
 		this.#sessions.adopt(key, session, record.operationId)
 		void session.handle!.result.then((result) => this.#operationEnded(session, result))
-		return this.#accepted(session)
+		return admitted(session, false)
 	}
 
 	// Stops a session. Answers at once, because a camera may stay held for minutes while its frame arrives; the end arrives as an
 	// event. A blocked session is dismissed. Responds 202, also when it already ended, and 404 for an unknown session.
 	stop(sessionId: string): Response {
+		return this.interrupt(sessionId) ? new Response(null, { status: 202 }) : notFound('Session')
+	}
+
+	// Stops a session as the stop route does, without waiting for its end, which ended resolves. Returns whether the session
+	// is known, the latest of its camera, whether or not it still ran.
+	interrupt(sessionId: string): boolean {
 		const session = this.#sessions.find(sessionId)
-		if (!session) return notFound('Session')
+		if (!session) return false
 
 		if (session.summary.state === 'blocked') this.#finish(session, 'cancelled', false)
 		else if (session.summary.endedAt === undefined) {
@@ -464,7 +506,7 @@ export class TargetCenteringSessions {
 			session.restoring?.abort()
 		}
 
-		return new Response(null, { status: 202 })
+		return true
 	}
 
 	// Runs a session: the root holds the camera and stops guiding, and its child then holds the mount for all the work. Resolves
@@ -472,7 +514,7 @@ export class TargetCenteringSessions {
 	#run(session: Session): OperationHandle<boolean> {
 		const { camera, mount } = session
 
-		return this.operations.coordinator.start<boolean>('targetCenteringSession', [{ key: resourceKey(camera), device: camera }], async (root) => {
+		return this.operations.scope(session.invocation).start<boolean>('targetCenteringSession', [{ key: resourceKey(camera), device: camera }], async (root) => {
 			const stopped = await this.#stopGuiding(session)
 			if (!stopped.ok) return stopped
 			return await root.start<boolean>('targetCenteringMotion', [{ key: resourceKey(mount), device: mount }], (context) => this.#work(session, context)).result
@@ -720,7 +762,7 @@ export class TargetCenteringSessions {
 		const failure = { reason: result.reason, ...(result.error !== undefined && { error: result.error }) }
 
 		if (session.summary.trackingStarted) {
-			const stopped = !mount.tracking || (mount.connected && this.operations.available(mount) && (await this.commander.setTracking(this.operations.coordinator, mount, false)).ok)
+			const stopped = !mount.tracking || (mount.connected && this.operations.admits(mount, session.invocation) && (await this.commander.setTracking(this.operations.scope(session.invocation), mount, false)).ok)
 			if (stopped) this.#sessions.update(session, { trackingStopped: true })
 			else this.#warn(session, `The tracking of ${mount.name} that the session started was left on.`)
 		}
@@ -733,11 +775,7 @@ export class TargetCenteringSessions {
 		const { guidingRestoration } = session.summary
 		const readyForImaging = positionVerified && (guidingRestoration === 'notNeeded' || guidingRestoration === 'restored')
 		this.#sessions.update(session, { state, step: undefined, exposure: undefined, positionVerified, readyForImaging, endedAt: Date.now(), ...failure })
-	}
-
-	// Responds that a session was accepted.
-	#accepted({ summary: { sessionId, operationId } }: Session) {
-		return Response.json({ sessionId, operationId } satisfies TargetCenteringStartResponse, { status: 202 })
+		session.ended.resolve(session.summary)
 	}
 
 	// Records a warning of a session.
@@ -749,6 +787,11 @@ export class TargetCenteringSessions {
 	#updateAttempt(session: Session, attempt: number, patch: Partial<TargetCenteringAttempt>) {
 		this.#sessions.update(session, { attempts: session.summary.attempts.map((each) => (each.attempt === attempt ? { ...each, ...patch } : each)) })
 	}
+}
+
+// Returns the admission of a session: its ids, whether a repeated token answered it, and its end.
+function admitted({ summary: { sessionId, operationId }, ended }: Session, repeated: boolean): TargetCenteringAdmitted {
+	return { ok: true, sessionId, operationId, repeated, ended: ended.promise }
 }
 
 // Routes of the Target Centering sessions.

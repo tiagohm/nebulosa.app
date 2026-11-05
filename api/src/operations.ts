@@ -164,8 +164,12 @@ export class OperationRegistry implements Disposable {
 	// holds it, so a tool never takes a device outside the reservation it was given.
 	admits(device: Device, invocation?: ToolInvocation) {
 		if (!invocation) return this.available(device)
-		const key = resourceKey(device)
-		return this.arbiter.availability(key) === 'reserved' && this.arbiter.reservationOwnerOf(key) === invocation.reservation.token.owner
+		return this.arbiter.availability(resourceKey(device)) === 'reserved' && this.reserves(device, invocation)
+	}
+
+	// Whether the reservation of an invocation holds a device, whatever operation of it holds the device now.
+	reserves(device: Device, invocation: ToolInvocation) {
+		return this.arbiter.reservationOwnerOf(resourceKey(device)) === invocation.reservation.token.owner
 	}
 
 	// Scope a tool starts its operations with: the process coordinator for a manual operation, or the scope of the

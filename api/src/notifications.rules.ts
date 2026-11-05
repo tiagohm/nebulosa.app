@@ -56,7 +56,7 @@ export type NotificationTarget =
 
 // What a notification is about.
 export interface NotificationSource {
-	// Service that reported the occurrence: connection, capture, autofocus, tppa, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, or operation.
+	// Service that reported the occurrence: connection, capture, autofocus, tppa, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, or operation.
 	readonly kind: string
 	// Id of the connection involved; absent for an application-wide notification.
 	readonly connectionId?: string

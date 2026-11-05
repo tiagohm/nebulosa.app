@@ -252,10 +252,10 @@ interface Stream {
 	timer?: Timer
 }
 
-// Publishes the directory and the property streams of the devices of every open connection.
 // Vectors of a mount whose write may invalidate the pointing model in force on it.
 const MODEL_SENSITIVE_VECTORS: ReadonlySet<string> = new Set(['ON_COORD_SET', 'EQUATORIAL_EOD_COORD', 'GEOGRAPHIC_COORD', 'TIME_UTC'])
 
+// Publishes the directory and the property streams of the devices of every open connection.
 export class IndiPropertyService implements SocketListener, Disposable {
 	// Streams with subscribers, by key.
 	readonly #streams = new Map<string, Stream>()

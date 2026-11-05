@@ -342,7 +342,7 @@ export class PlateSolvingService {
 		return metadata && resolvePlateSolveHints(strategy, metadata.header, metadata.acquisition, hints)
 	}
 
-	// Submits a solve of an open image with the manual priority, as origin (manual by default). An equivalent job still
+	// Submits a solve of an open image, queued in arrival order, as origin (manual by default). An equivalent job still
 	// waiting or running, or completed with its result kept, is answered instead of solving again. A preparation,
 	// resolved earlier by prepare, keeps the settings it captured instead of reading them again.
 	async submit(imageId: string, request: PlateSolveRequest | PlateSolvePreparation, origin: PlateSolveOrigin = MANUAL_ORIGIN): Promise<PlateSolveSubmitOutcome> {
@@ -364,7 +364,7 @@ export class PlateSolvingService {
 	}
 
 	// Solves an open image and resolves to the result once the job completed, for a consumer that needs the
-	// solution of one specific image, such as a TPPA frame: the job runs with the manual priority and is never
+	// solution of one specific image, such as a TPPA frame: the job is bound to that image and is never
 	// replaced by a newer frame. A completed job without solution resolves with `outcome: noSolution`. Aborting
 	// signal cancels the job. Throws PlateSolvingError when the job does not complete. A preparation keeps the
 	// provider settings of a whole session, as submit does; the provider never falls back to another.

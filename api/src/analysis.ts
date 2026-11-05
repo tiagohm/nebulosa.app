@@ -1,6 +1,7 @@
 import type { DocumentSize, ImageStore } from './images'
 
-// Scheduling shared by the analyses of image documents (star detection, plate solving): an in-memory queue of
+// Scheduling shared by the analyses of image documents (star detection, streak detection, annotation, plate solving,
+// and image processing): an in-memory queue of
 // jobs, each measuring one document of the image store, run in arrival order under a concurrency limit per provider.
 // At most MAX_QUEUED jobs wait. A job retains its image until it ends, so closing the document never pulls the pixels from under
 // it. Completed results are kept in memory, grouped by image, until their image is released or the bounded store

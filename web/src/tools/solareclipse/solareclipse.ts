@@ -74,7 +74,7 @@ export interface SolarEclipseState {
 	visibleOnly: boolean
 }
 
-// Initial state of the tool: every layer but the sunrise/sunset curves, which clutter the map, is shown.
+// Initial state of the tool: every layer, the sunrise/sunset curves included, is shown.
 export function initialSolarEclipseState(): SolarEclipseState {
 	return {
 		loading: false,

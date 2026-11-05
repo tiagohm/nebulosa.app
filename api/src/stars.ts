@@ -340,7 +340,7 @@ export class StarDetectionService {
 		return tool && { request, tool }
 	}
 
-	// Submits a detection of an open image with the manual priority, as origin (manual by default). An
+	// Submits a detection of an open image, queued in arrival order, as origin (manual by default). An
 	// equivalent completed detection of the same image is answered instead of running again (cached).
 	// A preparation, resolved earlier by prepare, keeps the ASTAP settings it captured instead of reading them again.
 	async submit(imageId: string, request: StarDetectionRequest | StarDetectionPreparation, origin: StarDetectionOrigin = MANUAL_ORIGIN): Promise<StarDetectionSubmitOutcome> {
@@ -358,8 +358,8 @@ export class StarDetectionService {
 	}
 
 	// Detects the stars of an open image and resolves to the result once the job completed, for a consumer
-	// that needs the measurement of one specific image, such as an Auto Focus step: the job runs with the
-	// manual priority and is never replaced by a newer frame. Aborting signal cancels the job. Throws
+	// that needs the measurement of one specific image, such as an Auto Focus step: the job is bound to that
+	// image and is never replaced by a newer frame. Aborting signal cancels the job. Throws
 	// StarDetectionError when the job does not complete. origin names the requester, manual by default; a
 	// preparation keeps the ASTAP settings of a whole session, as submit does.
 	async measure(imageId: string, request: StarDetectionRequest | StarDetectionPreparation, signal?: AbortSignal, origin?: StarDetectionOrigin): Promise<StarDetectionResult> {

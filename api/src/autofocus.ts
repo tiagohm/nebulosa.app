@@ -638,7 +638,7 @@ export function createAutoFocusRoutes(autoFocus: AutoFocusSessions) {
 			GET: (req) => autoFocus.session(req.params.sessionId),
 		},
 		'/api/autofocus/:sessionId/stop': {
-			// Stops an Auto Focus session where it stands, without moving the focuser back.
+			// Stops an Auto Focus session where it stands; the focuser moves back to its start position only when the request restores on stop.
 			POST: (req) => autoFocus.stop(req.params.sessionId),
 		},
 		'/api/connections/:id/cameras/:deviceId/autofocus': {

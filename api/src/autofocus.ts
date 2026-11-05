@@ -15,11 +15,11 @@ import { type FocusCurve, focusCurve } from './autofocus.curve'
 import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, type CaptureSnoop, exposureProgressListener, snoopedDevices } from './captures'
-import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
+import { type ClientResolver, type CommandRefusal, type CommandRequest, refusal, refusalResponse, resolveConnected } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
-import type { OperationDevice, OperationRegistry } from './operations'
+import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
 import { StarDetectionError, type StarDetectionPreparation, type StarDetectionRequest, type StarDetectionService, type StarDetectorProvider } from './stars'
 
 // Auto Focus service: runs the toolkit's runAutoFocus for one camera and one focuser inside a single operation of
@@ -43,6 +43,10 @@ import { StarDetectionError, type StarDetectionPreparation, type StarDetectionRe
 // being exposed is published as the driver reports it. Positions are focuser
 // steps, HFD is in pixels, request durations are seconds. Every frame snoops the focuser of the session and the
 // mount, filter wheel and rotator the request names into its header.
+//
+// A service composing tools inside the process admits a session (admit) under the ToolInvocation of the reservation it
+// holds: every operation of the session, the move back after a stop included, then runs inside that reservation, and the
+// caller awaits the final summary of the exact session it admitted.
 
 // Settings of the frames of a session; the exposure in seconds. The frame type is always LIGHT.
 export type AutoFocusCaptureSettings = Pick<CaptureSettings, 'exposureTime' | 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
@@ -205,6 +209,23 @@ export interface AutoFocusStartResponse {
 	readonly operationId: string
 }
 
+// Session admitted inside the process: its identity and its end.
+export interface AutoFocusAdmitted {
+	readonly ok: true
+	// Id of the session, repeated by its autofocus:updated events.
+	readonly sessionId: string
+	// Id of the operation holding the camera and the focuser.
+	readonly operationId: string
+	// Whether the token had already started the session, which this request did not start again.
+	readonly repeated: boolean
+	// Final summary once the session ended and released its devices, after the move back of a stop: completed, failed
+	// with its reason, or cancelled. Never rejects.
+	readonly ended: Promise<AutoFocusSessionSummary>
+}
+
+// Outcome of asking for a session inside the process: the session admitted, or why it was refused.
+export type AutoFocusAdmission = AutoFocusAdmitted | CommandRefusal
+
 // Notification published whenever a session changes.
 export type AutoFocusEvent = { readonly type: 'autofocus:updated'; readonly session: AutoFocusSessionSummary }
 
@@ -223,6 +244,10 @@ interface Session {
 	handle?: OperationHandle<AutoFocusRunResult>
 	// Focuser of the session, moved back to the start position after a stop.
 	readonly focuser: Focuser
+	// Reservation the session runs inside, when a caller composing tools admitted it.
+	readonly invocation?: ToolInvocation
+	// Resolved with the final summary once the session ended.
+	readonly ended: PromiseWithResolvers<AutoFocusSessionSummary>
 	// Stops the stop route received; only the first, never a disconnection or an Equipment Control stop, moves the
 	// focuser back, and a later one prevents or cancels that move.
 	stops: number
@@ -283,23 +308,33 @@ export class AutoFocusSessions {
 	// an unknown camera or focuser, 409 when either is disconnected or held by another operation, and 422 when the
 	// focuser cannot move to absolute positions or the detector is ASTAP and it is not configured.
 	async start(connectionId: string, deviceId: string, request: AutoFocusRequest): Promise<Response> {
+		const admitted = await this.admit(connectionId, deviceId, request)
+		return admitted.ok ? Response.json({ sessionId: admitted.sessionId, operationId: admitted.operationId } satisfies AutoFocusStartResponse, { status: 202 }) : refusalResponse(admitted)
+	}
+
+	// Admits a session, under the reservation of invocation when given (which must then hold the camera and the focuser),
+	// and returns its identity and end, or why it was refused, as start answers it. A repeated token answers the session
+	// it started, while it is remembered.
+	async admit(connectionId: string, deviceId: string, request: AutoFocusRequest, invocation?: ToolInvocation): Promise<AutoFocusAdmission> {
 		const repeated = this.#sessions.repeated(request.token)
-		if (repeated) return accepted(repeated)
+		if (repeated) return admitted(repeated, true)
 
 		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
 		const preparation = await this.stars.prepare(request.detection)
-		if (!preparation) return unsupported('ASTAP is not configured; set it up in Settings → External Tools or measure with the built-in detector')
+		if (!preparation) return refusal('ASTAP is not configured; set it up in Settings → External Tools or measure with the built-in detector', 422, 'unsupported')
 
 		// The same request, sent twice, may have started its session while this one was prepared.
 		const raced = this.#sessions.repeated(request.token)
-		if (raced) return accepted(raced)
+		if (raced) return admitted(raced, true)
 
-		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
-		if (camera instanceof Response) return camera
-		const focuser = connectedDevice(this, request.focuser.connectionId, 'focuser', request.focuser.deviceId, 'Focuser')
-		if (focuser instanceof Response) return focuser
-		if (!focuser.canAbsoluteMove) return unsupported(`${focuser.name} cannot move to absolute positions, which the Auto Focus needs`)
-		if (!this.operations.available(camera) || !this.operations.available(focuser)) return busy()
+		const resolvedCamera = resolveConnected(this, connectionId, 'camera', deviceId, 'Camera')
+		if (!resolvedCamera.ok) return resolvedCamera
+		const resolvedFocuser = resolveConnected(this, request.focuser.connectionId, 'focuser', request.focuser.deviceId, 'Focuser')
+		if (!resolvedFocuser.ok) return resolvedFocuser
+		const camera = resolvedCamera.device
+		const focuser = resolvedFocuser.device
+		if (!focuser.canAbsoluteMove) return refusal(`${focuser.name} cannot move to absolute positions, which the Auto Focus needs`, 422, 'unsupported')
+		if (!this.operations.admits(camera, invocation) || !this.operations.admits(focuser, invocation)) return refusal('The device is busy', 409, 'busy')
 
 		const { token, ...settings } = request
 		const cameraDevice = { connectionId, deviceId }
@@ -321,6 +356,8 @@ export class AutoFocusSessions {
 			},
 			measurements: [],
 			focuser,
+			invocation,
+			ended: Promise.withResolvers(),
 			stops: 0,
 		}
 
@@ -332,8 +369,11 @@ export class AutoFocusSessions {
 
 		this.#sessions.adopt(resourceKey(camera), session, record.operationId)
 
-		void session.handle!.result.then((result) => this.#ended(session, result))
-		return accepted(session)
+		void session.handle!.result.then(async (result) => {
+			await this.#ended(session, result)
+			session.ended.resolve(session.summary)
+		})
+		return admitted(session, false)
 	}
 
 	// Stops a session: the move, exposure or detection in progress is cancelled and nothing more is commanded. When the
@@ -341,15 +381,21 @@ export class AutoFocusSessions {
 	// cancels it where it stands. Resolves once the operation released the devices. Responds 204, and 404 when the
 	// session is unknown or already ended.
 	async stop(sessionId: string): Promise<Response> {
+		return (await this.interrupt(sessionId)) ? new Response(null, { status: 204 }) : errorResponse('No Auto Focus session is running with this id', 404, 'notFound')
+	}
+
+	// Stops a running session as the stop route does, resolving once its operation released the devices. Resolves whether
+	// it was running; an ended or unknown one is left as it is.
+	async interrupt(sessionId: string): Promise<boolean> {
 		const session = this.#sessions.find(sessionId)
-		if (!session?.handle || session.summary.endedAt !== undefined) return errorResponse('No Auto Focus session is running with this id', 404, 'notFound')
+		if (!session?.handle || session.summary.endedAt !== undefined) return false
 
 		const first = ++session.stops === 1
 		if (first && session.summary.state !== 'stopping') this.#sessions.update(session, { state: 'stopping', target: undefined })
 		await session.handle.cancel('aborted')
 		// Only a later stop cancels the move back the first one started once the operation ended.
 		if (!first) await session.restore?.cancel('aborted')
-		return new Response(null, { status: 204 })
+		return true
 	}
 
 	// Starts the operation of a session holding its camera and focuser, and runs the autofocus and its
@@ -358,7 +404,7 @@ export class AutoFocusSessions {
 		const resources: ResourceRequest[] = [{ key: resourceKey(camera), device: camera }]
 		if (resourceKey(focuser) !== resourceKey(camera)) resources.push({ key: resourceKey(focuser), device: focuser })
 
-		return this.operations.coordinator.start<AutoFocusRunResult>('autofocusSession', resources, async (context) => {
+		return this.operations.scope(session.invocation).start<AutoFocusRunResult>('autofocusSession', resources, async (context) => {
 			const directory = await mkdtemp(join(this.auxiliaryDir, 'nebulosa-autofocus-'))
 
 			try {
@@ -550,15 +596,16 @@ export class AutoFocusSessions {
 	}
 
 	// Moves the focuser of a stopped session back to position (steps) with its backlash compensation and resolves
-	// whether it got there. The operation released the focuser, so the move takes it again for itself; another
-	// operation that took it first, a disconnection, or another stop leaves it where it stands.
+	// whether it got there. The operation released the focuser, so the move takes it again for itself, inside the
+	// reservation of the session when it has one; another operation that took it first, a disconnection, another stop, or
+	// a reservation cancelled meanwhile leaves it where it stands.
 	async #restore(session: Session, position: number): Promise<boolean> {
 		const { focuser } = session
 		if (this.mover.position(focuser) === position) return true
-		if (!focuser.connected || !this.operations.available(focuser)) return false
+		if (!focuser.connected || !this.operations.admits(focuser, session.invocation)) return false
 
 		this.#sessions.update(session, { state: 'restoring', target: position, exposure: undefined })
-		const restore = this.operations.coordinator.start<void>('autofocusRestore', [{ key: resourceKey(focuser), device: focuser }], (context) => this.mover.moveTo(context, focuser, position))
+		const restore = this.operations.scope(session.invocation).start<void>('autofocusRestore', [{ key: resourceKey(focuser), device: focuser }], (context) => this.mover.moveTo(context, focuser, position))
 		session.restore = restore
 
 		try {
@@ -574,9 +621,9 @@ export class AutoFocusSessions {
 	}
 }
 
-// Responds that a session was accepted, with its id and the id of its operation.
-function accepted({ summary: { sessionId, operationId } }: Session) {
-	return Response.json({ sessionId, operationId } satisfies AutoFocusStartResponse, { status: 202 })
+// Returns the admission of a session: its ids, whether a repeated token answered it, and its end.
+function admitted({ summary: { sessionId, operationId }, ended }: Session, repeated: boolean): AutoFocusAdmitted {
+	return { ok: true, sessionId, operationId, repeated, ended: ended.promise }
 }
 
 // Routes of the Auto Focus sessions.

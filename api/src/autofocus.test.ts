@@ -2,6 +2,7 @@ import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, readdirSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import type { Device } from 'nebulosa/src/devices/indi/device'
 import { failedOperationResult, type OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
@@ -385,4 +386,70 @@ describe('sessions', () => {
 		await autoFocus.stop(sessionId)
 		await waitUntil(ended)
 	})
+})
+
+describe('composition', () => {
+	// Reserves the camera and the focuser of a setup for a caller composing tools, released after the test.
+	function reserve(operations: OperationRegistry, ...devices: readonly Device[]) {
+		const reserved = operations.arbiter.reserve(
+			{ id: 'composition', kind: 'test' },
+			devices.map((device) => ({ key: resourceKey(device), device })),
+		)
+		if (!reserved.ok) throw new Error('the devices could not be reserved')
+		disposables.push({ [Symbol.dispose]: () => reserved.reservation.release() })
+		return { reservation: reserved.reservation }
+	}
+
+	test('a session admitted under a reservation runs and restores inside it, while manual operations stay refused', async () => {
+		const { id, cameraId, autoFocus, focuserDevice, focuser, camera, operations, summary } = await setup()
+		const invocation = reserve(operations, camera, focuser)
+		const body = { ...slow(focuserDevice), restoreOnStop: true }
+
+		expect((await autoFocus.start(id, cameraId, request(focuserDevice))).status).toBe(409)
+		const admitted = await autoFocus.admit(id, cameraId, body, invocation)
+		if (!admitted.ok) throw new Error(admitted.error)
+		await waitUntil(() => summary()?.state === 'exposing' && summary()?.exposure !== undefined)
+		expect(focuser.position.value).not.toBe(START)
+
+		expect(await autoFocus.interrupt(admitted.sessionId)).toBeTrue()
+		expect(await admitted.ended).toMatchObject({ sessionId: admitted.sessionId, state: 'cancelled', restored: true })
+		expect(focuser.position.value).toBe(START)
+		expect(operations.arbiter.availability(resourceKey(camera))).toBe('reserved')
+		expect(operations.arbiter.availability(resourceKey(focuser))).toBe('reserved')
+		expect(await autoFocus.interrupt(admitted.sessionId)).toBeFalse()
+	})
+
+	test('a repeated token answers the session it started after a newer session of the camera replaced it', async () => {
+		const { id, cameraId, autoFocus, focuserDevice, summary } = await setup()
+		const first = slow(focuserDevice)
+
+		const a = await autoFocus.admit(id, cameraId, first)
+		if (!a.ok) throw new Error(a.error)
+		await autoFocus.interrupt(a.sessionId)
+		await a.ended
+
+		const b = await autoFocus.admit(id, cameraId, slow(focuserDevice))
+		if (!b.ok) throw new Error(b.error)
+		expect(await autoFocus.admit(id, cameraId, first)).toMatchObject({ ok: true, sessionId: a.sessionId, operationId: a.operationId, repeated: true })
+		expect((await autoFocus.start(id, cameraId, first)).status).toBe(202)
+		expect(summary()?.sessionId).toBe(b.sessionId)
+
+		await autoFocus.interrupt(b.sessionId)
+		expect(await b.ended).toMatchObject({ state: 'cancelled' })
+	})
+
+	test.skipIf(SKIP)(
+		'a session admitted under a reservation finds the best focus without a busy refusal of its own devices',
+		async () => {
+			const { id, cameraId, autoFocus, focuserDevice, focuser, camera, operations } = await setup()
+			const invocation = reserve(operations, camera, focuser)
+
+			const admitted = await autoFocus.admit(id, cameraId, request(focuserDevice), invocation)
+			if (!admitted.ok) throw new Error(admitted.error)
+			const ended = await admitted.ended
+			expect(ended).toMatchObject({ state: 'completed', verification: 'measured' })
+			expect(Math.abs(ended.estimatedPosition! - BEST_FOCUS)).toBeLessThanOrEqual(4500)
+		},
+		120000,
+	)
 })

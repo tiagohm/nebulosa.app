@@ -6,7 +6,12 @@ import type { OperationRegistry } from './operations'
 // summary with the next revision, only while the session is still the latest of its camera, so a session replaced by a
 // newer one changes silently. What a session holds, runs, and answers belongs to its service. It serves the sessions run
 // by one operation each; DARV, whose session runs an operation per measurement, and the mount pointing sessions, which
-// outlive their pauses without one and run an operation per stretch of work, keep their own.
+// outlive their pauses without one and run an operation per stretch of work, keep their own. A session a newer one
+// replaced stays known by its operation (see MAX_SESSIONS), so a start token repeated afterwards still answers it instead
+// of starting nothing under a new session.
+
+// Sessions remembered by operation once a newer one replaced them; the oldest are forgotten, as command tokens are.
+const MAX_SESSIONS = 256
 
 // Summary fields of every session the registry keeps.
 export interface CameraSessionFields {
@@ -30,7 +35,7 @@ export class CameraSessionRegistry<S extends CameraSessionFields, T extends Came
 	readonly #latest = new Map<string, T>()
 	// Camera resource key each session was adopted under.
 	readonly #keys = new WeakMap<T, string>()
-	// Session of each operation a start token started, while the session is the latest of its camera.
+	// Session of each operation a start token started, oldest first (see MAX_SESSIONS).
 	readonly #byOperation = new Map<string, T>()
 
 	// Creates the sessions of a service: operations knows the operation each start token started, and publish receives
@@ -61,23 +66,23 @@ export class CameraSessionRegistry<S extends CameraSessionFields, T extends Came
 		return undefined
 	}
 
-	// Returns the session a start token started, while it is the latest of its camera and the token is remembered.
+	// Returns the session a start token started, the latest of its camera or one a newer session replaced, while the
+	// token and the session are remembered.
 	repeated(token: string): T | undefined {
 		const known = this.operations.started(token)
 		return known && this.#byOperation.get(known.operationId)
 	}
 
-	// Makes a session the latest of its camera, by its resource key, once the operation running it started: forgets the
-	// operation of the one it replaces, whose later changes are then silent, remembers operationId, so a repeated start
-	// token answers the session, and publishes the session with it. A service calls it right after starting the operation,
+	// Makes a session the latest of its camera, by its resource key, once the operation running it started: the one it
+	// replaces changes silently from then on, operationId is remembered, so a repeated start token answers the session,
+	// and the session is published with it. A service calls it right after starting the operation,
 	// in the same synchronous step, so the first summary of a session published already names its operation (what the
 	// start of the operation changed is published with it) and no repeated request can come in between.
 	adopt(key: string, session: T, operationId: string) {
-		const previous = this.#latest.get(key)
-		if (previous) this.#byOperation.delete(previous.summary.operationId)
 		this.#latest.set(key, session)
 		this.#keys.set(session, key)
 		this.#byOperation.set(operationId, session)
+		if (this.#byOperation.size > MAX_SESSIONS) this.#byOperation.delete(this.#byOperation.keys().next().value!)
 		this.replace(session, { ...session.summary, operationId })
 	}
 

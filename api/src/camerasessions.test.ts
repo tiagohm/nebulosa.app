@@ -64,7 +64,7 @@ test('a session is published from its adoption on, with its operation and the ch
 	expect(published).toEqual([])
 })
 
-test('a repeated start token answers its session until a newer one replaces it', () => {
+test('a repeated start token answers its session, even once a newer one replaced it', () => {
 	const { sessions } = registry({ t1: 'o1', t2: 'o2' })
 	const first = session('s1')
 	sessions.adopt('cam', first, 'o1')
@@ -74,6 +74,7 @@ test('a repeated start token answers its session until a newer one replaces it',
 
 	const second = session('s2')
 	sessions.adopt('cam', second, 'o2')
-	expect(sessions.repeated('t1')).toBeUndefined()
+	expect(sessions.repeated('t1')).toBe(first)
 	expect(sessions.repeated('t2')).toBe(second)
+	expect(sessions.find('s1')).toBeUndefined()
 })

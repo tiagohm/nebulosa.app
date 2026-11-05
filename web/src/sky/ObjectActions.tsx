@@ -3,14 +3,14 @@ import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { formatDegrees } from '../format'
+import { type GeographicLocation, siteObserver } from '../location/site'
 import { operationsState } from '../operations'
-import type { SkyObserverSettings } from '../profile/schema'
 import { Button } from '../ui/Button'
 import { Modal, ModalActions } from '../ui/Modal'
 import { Notice } from '../ui/Notice'
 import { formatDeclination, formatRightAscension } from './format'
 import { mountRuntime, mountView, slewBlocker, slewMount, slewProgress, stopMount } from './mount'
-import { apiObserver, fetchSkyPosition } from './sky'
+import { fetchSkyPosition } from './sky'
 
 // Actions of the selected object in the Object section of the Object Inspector: Show Framing, and Slew to Object
 // while the profile's mount is connected. A slew points the mount at the object after an explicit confirmation,
@@ -24,7 +24,7 @@ export interface ObjectActionsProps {
 	// Display name of the object.
 	readonly targetName: string
 	// Observer of the active profile; slewing needs it to check the horizon.
-	readonly observer?: SkyObserverSettings
+	readonly observer?: GeographicLocation
 	// Opens the framing settings, which draw the field of view around the selection.
 	readonly onShowFraming: () => void
 }
@@ -59,7 +59,7 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 	function confirm() {
 		if (!observer) return
 		setPreview({ status: 'loading' })
-		fetchSkyPosition(target, Date.now(), apiObserver(observer), 'fast').then(
+		fetchSkyPosition(target, Date.now(), siteObserver(observer), 'fast').then(
 			({ position }) => setPreview({ status: 'ready', position }),
 			(error: unknown) => setPreview({ status: 'error', error: error instanceof Error ? error.message : 'Request failed' }),
 		)
@@ -68,7 +68,7 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 	// Sends the slew and closes the confirmation.
 	function slew() {
 		setPreview(undefined)
-		const current = apiObserver(observer)
+		const current = siteObserver(observer)
 		if (current) void slewMount(mountRuntime, target, targetName, current)
 	}
 

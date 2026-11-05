@@ -1,12 +1,28 @@
 import { expect, test } from 'bun:test'
-import { displayTimeZone, formatDuration, formatEclipseTime, utcDate, utcDateStart } from './eclipse'
+import { ACTIVE_TOOL_LOCATION, resolveToolLocation } from '../../location/site'
+import { DEFAULT_ZONE_OVERRIDE, resolveDisplayZone } from '../../location/zone'
+import { formatDuration, formatEclipseTime, mapLocation, samePlace, utcDate, utcDateStart } from './eclipse'
 
-test('shows times in the chosen zone, the observer zone, or UTC for a place on the map', () => {
-	expect(displayTimeZone({ place: { source: 'observer', longitude: 0, latitude: 0, timeZone: 'Asia/Tokyo' } })).toBe('Asia/Tokyo')
-	expect(displayTimeZone({ place: { source: 'observer', longitude: 0, latitude: 0 } })).toBe('')
-	expect(displayTimeZone({ place: { source: 'map', longitude: 0, latitude: 0 } })).toBe('UTC')
-	expect(displayTimeZone({ place: undefined })).toBe('UTC')
-	expect(displayTimeZone({ place: { source: 'map', longitude: 0, latitude: 0 }, timeZone: 'Europe/Lisbon' })).toBe('Europe/Lisbon')
+test('a click on the map keeps the zone of the coordinates entered before, or UTC after a site', () => {
+	expect(mapLocation(ACTIVE_TOOL_LOCATION, { longitude: 10, latitude: 20 })).toEqual({ mode: 'manual', latitude: 20, longitude: 10, elevation: 0, timeZone: 'UTC' })
+	expect(mapLocation({ mode: 'saved', siteId: 'a' }, { longitude: 10, latitude: 20 }).timeZone).toBe('UTC')
+	expect(mapLocation({ mode: 'manual', latitude: 0, longitude: 0, elevation: 500, timeZone: 'Asia/Tokyo' }, { longitude: 10, latitude: 20 })).toEqual({ mode: 'manual', latitude: 20, longitude: 10, elevation: 0, timeZone: 'Asia/Tokyo' })
+})
+
+test('the site zone of the times is the zone of the location clicked, never the active site', () => {
+	const sites = [{ id: 'home', name: 'Home', latitude: -23.5, longitude: -46.6, elevation: 760, timeZone: 'America/Sao_Paulo' }]
+	expect(resolveDisplayZone('site', DEFAULT_ZONE_OVERRIDE, resolveToolLocation(ACTIVE_TOOL_LOCATION, 'home', sites))).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
+
+	const clicked = mapLocation({ mode: 'manual', latitude: 0, longitude: 0, elevation: 0, timeZone: 'Asia/Tokyo' }, { longitude: 10, latitude: 20 })
+	expect(resolveDisplayZone('site', DEFAULT_ZONE_OVERRIDE, resolveToolLocation(clicked, 'home', sites))).toEqual({ zone: 'Asia/Tokyo', source: 'site' })
+	expect(resolveDisplayZone('site', DEFAULT_ZONE_OVERRIDE, resolveToolLocation(ACTIVE_TOOL_LOCATION, undefined, sites), 'Europe/Berlin')).toEqual({ zone: 'Europe/Berlin', source: 'browserFallback' })
+})
+
+test('places are the same for the same longitude and latitude', () => {
+	expect(samePlace(undefined, undefined)).toBe(true)
+	expect(samePlace({ longitude: 1, latitude: 2 }, { longitude: 1, latitude: 2 })).toBe(true)
+	expect(samePlace({ longitude: 1, latitude: 2 }, { longitude: 1, latitude: 3 })).toBe(false)
+	expect(samePlace({ longitude: 1, latitude: 2 }, undefined)).toBe(false)
 })
 
 test('formats contact times with their date and zone', () => {

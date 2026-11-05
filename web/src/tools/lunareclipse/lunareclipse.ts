@@ -1,16 +1,17 @@
 import type { EclipseDirection, LocalLunarEclipse, LocalLunarViewHandedness, LocalLunarViewOrientationMode, LunarEclipseContactKind, LunarEclipseMap, LunarEclipseSummary, LunarEclipseType } from 'api'
 import { proxy } from 'valtio'
 import { ApiResponseError, fetchJson } from '../../http'
-import type { SkyObserverSettings } from '../../profile/schema'
+import { ACTIVE_TOOL_LOCATION, type GeographicLocation, type ToolLocation } from '../../location/site'
+import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
 import { createRequestGuard } from '../../sky/selection'
-import { aborted, browserEclipseIo, type EclipseIo, type EclipsePlace, errorMessage, observerPlace, utcDateStart } from '../eclipse/eclipse'
+import { aborted, browserEclipseIo, type EclipseIo, type EclipsePlace, eclipsePlace, errorMessage, mapLocation, samePlace, utcDateStart } from '../eclipse/eclipse'
 
 // State of the Lunar Eclipse Map tool and its requests to /api/eclipses/lunar: the eclipse shown and its global
-// map, the contact highlighted, the place whose local circumstances are shown, and how they are presented. The
-// place follows eclipse.ts: it starts as the Sky observer of the active profile, and choosing another one on the
-// map or by hand never changes the profile. The state lives as long as the tab, so leaving and reopening the tool
-// keeps it; nothing is stored on the server. Times are Unix milliseconds (UTC), geographic positions degrees,
-// longitude east positive.
+// map, the contact highlighted, the location whose local circumstances are shown, how they are presented, and the
+// zone of the times. The location follows eclipse.ts: it is the active profile's site until another site,
+// coordinates, or a point of the map is chosen, which never changes the profile; choosing a zone asks for nothing.
+// The state lives as long as the tab, so leaving and reopening the tool keeps it; nothing is stored on the server.
+// Times are Unix milliseconds (UTC), geographic positions degrees, longitude east positive.
 
 // Presentation of the Local View.
 export interface LunarEclipseViewSettings {
@@ -36,7 +37,9 @@ export interface LunarEclipseState {
 	notice?: string
 	// Contact highlighted on the map and drawn in the Local View.
 	selectedEvent: LunarEclipseContactKind
-	// Place whose local circumstances are shown.
+	// Where the tool observes from; the active profile's site until another is chosen.
+	location: ToolLocation
+	// Coordinates of the location whose local circumstances are asked for, kept by syncPlace; absent without one.
 	place?: EclipsePlace
 	// Local circumstances of the eclipse shown from the place, once loaded.
 	local?: LocalLunarEclipse
@@ -46,16 +49,15 @@ export interface LunarEclipseState {
 	localError?: string
 	// Presentation of the Local View.
 	view: LunarEclipseViewSettings
-	// Time zone chosen for the times: UTC, an IANA zone, or empty for the browser's; undefined follows the place
-	// (see displayTimeZone).
-	timeZone?: string
+	// Zone the times are shown in, resolved with the location; it never changes a request.
+	zone: DisplayZoneOverride
 	// Whether stepping between eclipses skips those whose Moon stays below the place's horizon.
 	visibleOnly: boolean
 }
 
 // Initial state of the tool.
 export function initialLunarEclipseState(): LunarEclipseState {
-	return { loading: false, selectedEvent: 'MAX', localLoading: false, view: { orientation: 'zenith', handedness: 'eastRight', ghosts: true }, visibleOnly: false }
+	return { loading: false, selectedEvent: 'MAX', location: ACTIVE_TOOL_LOCATION, localLoading: false, view: { orientation: 'zenith', handedness: 'eastRight', ghosts: true }, zone: DEFAULT_ZONE_OVERRIDE, visibleOnly: false }
 }
 
 // Lunar Eclipse Map state of the tab.
@@ -173,10 +175,10 @@ export async function showLunarEclipse(state: LunarEclipseState, id: string, io:
 	}
 }
 
-// Opens the tool: on the first visit, takes the Sky observer as the place, when there is one, and shows the next
-// eclipse after now; later visits keep what was shown.
-export function openLunarEclipseMap(state: LunarEclipseState, observer: SkyObserverSettings | undefined, io: EclipseIo = browserEclipseIo) {
-	state.place ??= observer && observerPlace(observer)
+// Opens the tool: takes the place of location, the one state.location gives now, and on the first visit shows the
+// next eclipse after now; later visits keep what was shown, and the location chosen is never reset.
+export function openLunarEclipseMap(state: LunarEclipseState, location: GeographicLocation | undefined, io: EclipseIo = browserEclipseIo) {
+	void syncPlace(state, location, io)
 	if (!state.eclipse && !state.loading) void findEclipse(state, io.time(), 'next', io)
 }
 
@@ -208,11 +210,24 @@ export async function loadLocal(state: LunarEclipseState, io: EclipseIo = browse
 	}
 }
 
-// Shows a place's local circumstances; the profile's observer is never changed.
-export function selectPlace(state: LunarEclipseState, place: EclipsePlace, io: EclipseIo = browserEclipseIo) {
+// Takes the place of location, the one state.location gives now (undefined when it gives none), and asks for its
+// local circumstances; does nothing when its longitude and latitude are those asked for already, so a new elevation,
+// name, or zone of the same place asks for nothing.
+export function syncPlace(state: LunarEclipseState, location: GeographicLocation | undefined, io: EclipseIo = browserEclipseIo) {
+	const place = eclipsePlace(location)
+	if (samePlace(state.place, place)) return
 	state.place = place
 	state.local = undefined
+	state.localError = undefined
 	return loadLocal(state, io)
+}
+
+// Observes from a point clicked on the map (degrees, east positive): coordinates typed in, in the zone of the
+// coordinates before or UTC (see mapLocation). The profile is never changed.
+export function selectMapPlace(state: LunarEclipseState, point: EclipsePlace, io: EclipseIo = browserEclipseIo) {
+	const location = mapLocation(state.location, point)
+	state.location = location
+	return syncPlace(state, location, io)
 }
 
 // Highlights a contact on the map and draws it in the Local View; the global map is not loaded again.

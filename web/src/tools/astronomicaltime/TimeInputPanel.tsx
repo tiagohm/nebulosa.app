@@ -1,13 +1,32 @@
 import { useSnapshot } from 'valtio'
+import type { ResolvedLocation } from '../../location/site'
+import { TimeZoneSelect } from '../../location/TimeZoneSelect'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { BROWSER_TIME_ZONE } from '../../sky/clock'
 import { Button } from '../../ui/Button'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
-import { DISPLAY_TIME_ZONES } from '../eclipse/EclipsePanelParts'
-import { applyToSky, astronomicalTimeState, CALENDAR_READS, type CalendarRead, type ConverterMode, INPUT_FORMAT_EXAMPLES, INPUT_FORMAT_LABELS, INPUT_FORMATS, setCalendarRead, setConverterMode, setEntryText, setInputFormat, setInputScale, TIME_SCALE_NAMES, takeSkyTime } from './astronomicaltime'
+import {
+	applyToSky,
+	astronomicalTimeState,
+	CALENDAR_READS,
+	type CalendarRead,
+	chooseFold,
+	type ConverterMode,
+	foldIn,
+	INPUT_FORMAT_EXAMPLES,
+	INPUT_FORMAT_LABELS,
+	INPUT_FORMATS,
+	setCalendarRead,
+	setConverterMode,
+	setConverterZone,
+	setEntryText,
+	setInputFormat,
+	setInputScale,
+	TIME_SCALE_NAMES,
+	takeSkyTime,
+} from './astronomicaltime'
 
 // Input of the Astronomical Time Converter: the real current time or a custom instant in one of the forms the tool reads,
 // the time zone of the local calendar, and the two explicit exchanges with the simulation clock of the Sky. Keeping the
@@ -26,14 +45,17 @@ function calendarReadLabel(read: CalendarRead) {
 
 export interface TimeInputPanelProps {
 	// Time zone of the local calendar in force, an IANA name.
-	readonly timeZone: string
+	readonly zone: string
+	// Place the tool observes from, whose zone the Site choice takes; absent when it has none.
+	readonly location?: ResolvedLocation
 }
 
 // Input section of the tool.
-export function TimeInputPanel({ timeZone }: TimeInputPanelProps) {
-	const { mode, format, text, scale, read, fold, timeZone: chosenZone, result, inputError, ambiguous } = useSnapshot(astronomicalTimeState)
+export function TimeInputPanel({ zone, location }: TimeInputPanelProps) {
+	const { mode, format, text, scale, read, fold, zone: override, result, inputError, ambiguous } = useSnapshot(astronomicalTimeState)
 	const unixMillis = result?.civil.unixMillis
 	const custom = mode === 'custom'
+	const occurrence = foldIn(fold, zone)
 
 	return (
 		<CollapsibleSection id="tools.astronomicalTime.input" title="Instant">
@@ -47,23 +69,23 @@ export function TimeInputPanel({ timeZone }: TimeInputPanelProps) {
 					{inputError && <Notice error>{inputError}</Notice>}
 					{ambiguous && (
 						<>
-							<Notice>The clocks of {timeZone} show this reading twice. Choose one.</Notice>
+							<Notice>The clocks of {zone} show this reading twice. Choose one.</Notice>
 							<div className="grid grid-cols-2 gap-2">
-								<Button variant="secondary" onClick={() => (astronomicalTimeState.fold = 'earlier')}>
+								<Button variant="secondary" onClick={() => chooseFold(astronomicalTimeState, 'earlier', zone)}>
 									Earlier
 								</Button>
-								<Button variant="secondary" onClick={() => (astronomicalTimeState.fold = 'later')}>
+								<Button variant="secondary" onClick={() => chooseFold(astronomicalTimeState, 'later', zone)}>
 									Later
 								</Button>
 							</div>
 						</>
 					)}
-					{fold && <Notice>Reading the {fold} of the two occurrences.</Notice>}
+					{occurrence && <Notice>Reading the {occurrence} of the two occurrences.</Notice>}
 					{(format === 'julianEpoch' || format === 'besselianEpoch') && <Notice>Epochs are in TT.</Notice>}
 					{format === 'unix' && <Notice>Unix time counts UTC days of 86400 s, so it has no timescale and no leap seconds.</Notice>}
 				</>
 			)}
-			<Select label="Time Zone" options={DISPLAY_TIME_ZONES} value={chosenZone ?? timeZone} format={(zone) => zone || `Browser (${BROWSER_TIME_ZONE})`} onChange={(zone) => (astronomicalTimeState.timeZone = zone)} />
+			<TimeZoneSelect value={override} onChange={(value) => setConverterZone(astronomicalTimeState, value)} site={location} selectedSite={location !== undefined && location.source !== 'active'} />
 			<div className="flex flex-wrap gap-2">
 				<Button variant="secondary" title="Copies the instant the Sky shows into a custom instant" onClick={() => takeSkyTime(astronomicalTimeState)}>
 					Use Sky Time

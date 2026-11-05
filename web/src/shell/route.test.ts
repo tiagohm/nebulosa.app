@@ -75,11 +75,12 @@ describe('parse', () => {
 		expect(routePath({ workspace: 'settings', tool: 'astap' })).toBe('/settings/external-tools/astap')
 	})
 
-	test('reads the Observing Sites section and the site shown', () => {
+	test('reads the Observing Sites and Date & Time sections, and the site shown', () => {
 		expect(parseRoute('/settings/observing-sites')).toEqual({ workspace: 'settings', section: 'observing-sites' })
 		expect(parseRoute('/settings/observing-sites/a%20b/extra')).toEqual({ workspace: 'settings', section: 'observing-sites', site: 'a b' })
 		expect(routePath({ workspace: 'settings', section: 'observing-sites', site: 'a b' })).toBe('/settings/observing-sites/a%20b')
-		expect(routePath({ workspace: 'settings', section: 'status-bar', site: 'ignored' })).toBe('/settings/status-bar')
+		expect(parseRoute('/settings/date-time/extra')).toEqual({ workspace: 'settings', section: 'date-time' })
+		expect(routePath({ workspace: 'settings', section: 'date-time', site: 'ignored' })).toBe('/settings/date-time')
 	})
 
 	test('reads the About page', () => {

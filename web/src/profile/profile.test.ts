@@ -75,7 +75,8 @@ import {
 	setSkyLayerVisible,
 	setSkyTimeBarVisible,
 	setSkyMagnitudeLimit,
-	setSkyObserver,
+	setDateTimePreferences,
+	dateTimePreferences,
 	setStarDetectionSettings,
 	setStreakDetectionSettings,
 	setImageAstrometrySettings,
@@ -321,33 +322,15 @@ describe('settings', () => {
 })
 
 describe('sky settings', () => {
-	test('sets, validates, and clears the observer of the active profile', () => {
+	test('the display zone of civil times follows the site until changed, per profile', () => {
 		const state = load()
+		expect(dateTimePreferences(state.profiles[0].settings)).toEqual({ displayTimeZone: 'site' })
 
-		expect(setSkyObserver(state, { latitude: 100, longitude: 0, elevation: 0 })).toBe(false)
-		expect(setSkyObserver(state, { latitude: 0, longitude: -181, elevation: 0 })).toBe(false)
-		expect(setSkyObserver(state, { latitude: 0, longitude: 0, elevation: 10_000 })).toBe(false)
-		expect(state.profiles[0].settings.sky).toEqual({})
-
-		expect(setSkyObserver(state, { latitude: 51.4779, longitude: -0.0015, elevation: 46 })).toBe(true)
-		expect(state.profiles[0].settings.sky.observer).toEqual({ latitude: 51.4779, longitude: -0.0015, elevation: 46 })
+		setDateTimePreferences(state, { displayTimeZone: 'utc' })
+		expect(state.profiles[0].settings.dateTime).toEqual({ displayTimeZone: 'utc' })
 
 		const other = createProfile(state, 'Other')!
-		expect(other.settings.sky).toEqual({})
-
-		selectProfile(state, state.profiles[0].id)
-		setSkyObserver(state, undefined)
-		expect(state.profiles[0].settings.sky).toEqual({})
-	})
-
-	test('keeps a known time zone of the observer and drops an unknown one', () => {
-		const state = load()
-
-		setSkyObserver(state, { latitude: 10, longitude: 20, elevation: 30, timeZone: 'Asia/Tokyo' })
-		expect(state.profiles[0].settings.sky.observer?.timeZone).toBe('Asia/Tokyo')
-
-		setSkyObserver(state, { latitude: 10, longitude: 20, elevation: 30, timeZone: 'Mars/Olympus_Mons' })
-		expect(state.profiles[0].settings.sky.observer).toEqual({ latitude: 10, longitude: 20, elevation: 30 })
+		expect(dateTimePreferences(other.settings).displayTimeZone).toBe('site')
 	})
 
 	test('sets display preferences of the active profile', () => {
@@ -441,16 +424,17 @@ describe('sky settings', () => {
 		expect(copy.settings.sky.framing?.presets[0].name).toBe('Changed')
 	})
 
-	test('a duplicated profile keeps its own observer', () => {
+	test('a duplicated profile observes from the same site, and each one changes its own', () => {
 		const state = load()
-		setSkyObserver(state, { latitude: 10, longitude: 20, elevation: 30 })
+		state.profiles[0].activeSiteId = 'home'
 		const copy = duplicateProfile(state, state.profiles[0].id)!
+		expect(copy.activeSiteId).toBe('home')
 
 		selectProfile(state, copy.id)
-		setSkyObserver(state, { latitude: -10, longitude: -20, elevation: 0 })
+		delete activeProfile(state).activeSiteId
 
-		expect(state.profiles[0].settings.sky.observer).toEqual({ latitude: 10, longitude: 20, elevation: 30 })
-		expect(copy.settings.sky.observer).toEqual({ latitude: -10, longitude: -20, elevation: 0 })
+		expect(state.profiles[0].activeSiteId).toBe('home')
+		expect(copy.activeSiteId).toBeUndefined()
 	})
 })
 

@@ -3,24 +3,7 @@ import type { ProfileRecord, WorkspaceSnapshot } from 'api'
 import { proxy, snapshot } from 'valtio'
 import { type ConnectionState, removeConnection, saveConnection } from '../connection/connection'
 import { forgetSite, removeSite, saveSite, selectSite, type SiteState } from '../location/site'
-import {
-	assignDevice,
-	createProfile,
-	deleteFramingReference,
-	dismissNotifications,
-	markNotificationsRead,
-	deleteProfile,
-	forgetConnection,
-	type ProfileState,
-	saveFramingReference,
-	selectConnection,
-	setExposureSettings,
-	setFramingVisible,
-	setMountRemoteBinding,
-	setPanelOpen,
-	setSkyObserver,
-	setTelescopeOptics,
-} from './profile'
+import { assignDevice, createProfile, deleteFramingReference, dismissNotifications, markNotificationsRead, deleteProfile, forgetConnection, type ProfileState, saveFramingReference, selectConnection, setExposureSettings, setFramingVisible, setMountRemoteBinding, setPanelOpen, setTelescopeOptics } from './profile'
 import { PROFILE_SETTINGS_VERSION } from './schema'
 import { WorkspaceSync, type WorkspaceSyncState } from './sync'
 
@@ -217,7 +200,7 @@ describe('writes', () => {
 			profiles: [
 				record('p1', {
 					connectionId: 'c1',
-					preferences: { skyObserver: { version: PROFILE_SETTINGS_VERSION, value: { latitude: 1, longitude: 2, elevation: 3 }, revision: 2 } },
+					preferences: { dateTime: { version: PROFILE_SETTINGS_VERSION, value: { displayTimeZone: 'utc' }, revision: 2 } },
 					cameras: { c1: { cam: { exposure: { version: PROFILE_SETTINGS_VERSION, value: { exposureTime: 2 }, revision: 1 } } } },
 					framings: [{ id: 'f1', name: 'M 42', rightAscension: 1, declination: 0, source: 'manual', createdAt: 1, updatedAt: 1 }],
 				}),
@@ -227,14 +210,14 @@ describe('writes', () => {
 		const { connections, profiles, sync, sent } = setup(workspace)
 		await sync.refresh()
 
-		setSkyObserver(profiles, undefined)
+		delete profiles.profiles[0].settings.dateTime
 		deleteFramingReference(profiles, 'f1')
 		deleteProfile(profiles, 'p2')
 		removeConnection(connections, 'c1')
 		forgetConnection(profiles, 'c1')
 		await settle(sync)
 
-		expect(sent.map(({ method, path }) => `${method} ${path}`)).toEqual(['PUT /api/profiles/p1', 'PUT /api/profiles/p1/preferences/skyObserver', 'DELETE /api/profiles/p1/framing-references/f1', 'DELETE /api/profiles/p2', 'DELETE /api/saved-connections/c1'])
+		expect(sent.map(({ method, path }) => `${method} ${path}`)).toEqual(['PUT /api/profiles/p1', 'PUT /api/profiles/p1/preferences/dateTime', 'DELETE /api/profiles/p1/framing-references/f1', 'DELETE /api/profiles/p2', 'DELETE /api/saved-connections/c1'])
 		expect(sent[1].body).toEqual({ version: PROFILE_SETTINGS_VERSION, value: null, revision: 2 })
 	})
 

@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
-import type { SkyObserverSettings } from '../../profile/schema'
+import type { GeographicLocation } from '../../location/site'
 import { findNextSatellitePass, inspectSatellite, type SkySatelliteState } from './satellite'
 
-const OBSERVER = { latitude: -0.4, longitude: -0.8, elevation: 800 } as SkyObserverSettings
+const OBSERVER = { latitude: -0.4, longitude: -0.8, elevation: 800 } satisfies GeographicLocation
 
 function pass(start: number, startsBeforeWindow: boolean) {
 	const point = { time: start, altitude: 0, azimuth: 0 }

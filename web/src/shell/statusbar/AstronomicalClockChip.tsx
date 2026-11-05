@@ -34,7 +34,7 @@ interface AstronomicalClockChipProps {
 	readonly timeZone: string
 	// Whether times of day show seconds.
 	readonly showSeconds: boolean
-	// Name or coordinates of the observer; absent without one.
+	// Name of the observing site; absent without one.
 	readonly site?: string
 	// Whether this is the hidden copy the bar measures, which cannot be used.
 	readonly measure?: boolean

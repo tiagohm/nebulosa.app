@@ -1,7 +1,7 @@
 import type { LocalSolarEclipse, SkyObserver, SolarEclipseSummary, SunActiveRegionsResponse, SunAlmanacResponse, SunImageChannel, SunImageSize } from 'api'
 import { proxy } from 'valtio'
 import { fetchJson, jsonInit, responseError } from '../../http'
-import { zonedWallTime } from '../clock'
+import { zonedWallTime } from '../../location/zone'
 import { createRequestGuard } from '../selection'
 
 // State of the Sun Inspector and its requests: the solar almanac of the instant the Sky shows (the observer's day,

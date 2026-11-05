@@ -13,7 +13,7 @@ import { moonState } from './moon'
 // circumstances, never guessed from the type), and a link that opens exactly that eclipse in the Lunar Eclipse Map.
 
 // Next Lunar Eclipse section of the Moon Inspector.
-export function MoonEclipseSection({ hasObserver, timeZone }: { readonly hasObserver: boolean; readonly timeZone?: string }) {
+export function MoonEclipseSection({ hasObserver, timeZone }: { readonly hasObserver: boolean; readonly timeZone: string }) {
 	const { value, loading, error } = useSnapshot(moonState).eclipse
 	const eclipse = value?.eclipse
 	const summary = eclipse ? `${ECLIPSE_TYPE_NAMES[eclipse.type]} · ${utcDate(eclipse.maximum)}` : loading ? 'Searching…' : undefined
@@ -23,9 +23,9 @@ export function MoonEclipseSection({ hasObserver, timeZone }: { readonly hasObse
 			{eclipse ? (
 				<>
 					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
-					<DataRow label="Greatest eclipse">{formatEclipseTime(eclipse.maximum, timeZone ?? '')}</DataRow>
+					<DataRow label="Greatest eclipse">{formatEclipseTime(eclipse.maximum, timeZone)}</DataRow>
 					<DataRow label="Magnitude">{eclipse.magnitude.toFixed(3)}</DataRow>
-					{value.local ? <DataRow label="From here">{value.local.visibility.text}</DataRow> : !hasObserver && <Notice>Set the observer&apos;s location to see whether it is visible from there.</Notice>}
+					{value.local ? <DataRow label="From here">{value.local.visibility.text}</DataRow> : !hasObserver && <Notice>Select an observing site to see whether it is visible from there.</Notice>}
 					<div>
 						<Button variant="secondary" onClick={() => navigate(routeState, { workspace: 'tools', tool: 'lunar-eclipse-map', eclipse: eclipse.id })}>
 							View Lunar Eclipse Map

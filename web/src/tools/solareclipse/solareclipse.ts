@@ -1,17 +1,18 @@
 import type { EclipseDirection, LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipse, LocalViewHandedness, LocalViewOrientationMode, SolarEclipseExtreme, SolarEclipseMap, SolarEclipseMapPoint, SolarEclipsePointKind, SolarEclipseSummary, SolarEclipseType } from 'api'
 import { proxy } from 'valtio'
 import { ApiResponseError, fetchJson } from '../../http'
-import type { SkyObserverSettings } from '../../profile/schema'
+import { ACTIVE_TOOL_LOCATION, type GeographicLocation, type ToolLocation } from '../../location/site'
+import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
 import { createRequestGuard } from '../../sky/selection'
-import { aborted, browserEclipseIo, type EclipseIo, type EclipsePlace, errorMessage, observerPlace, utcDateStart } from '../eclipse/eclipse'
+import { aborted, browserEclipseIo, type EclipseIo, type EclipsePlace, eclipsePlace, errorMessage, mapLocation, samePlace, utcDateStart } from '../eclipse/eclipse'
 
 // State of the Solar Eclipse Map tool and its requests to /api/eclipses/solar: the eclipse shown and its global
-// map, the map layers shown, the place whose local circumstances are shown, the contact drawn in the Local View,
-// and how it is presented. The place follows eclipse.ts: it starts as the Sky observer of the active profile, and
-// choosing another one on the map or by hand never changes the profile. The global map does not depend on a
-// contact or a place, so neither asks for it again, and showing or hiding a layer asks for nothing. The state
-// lives as long as the tab, so leaving and reopening the tool keeps it; nothing is stored on the server. Times are
-// Unix milliseconds (UTC), geographic positions degrees, longitude east positive.
+// map, the map layers shown, the location whose local circumstances are shown, the contact drawn in the Local View,
+// how it is presented, and the zone of the times. The location follows eclipse.ts: it is the active profile's site
+// until another site, coordinates, or a point of the map is chosen, which never changes the profile. The global map
+// does not depend on a contact or a place, so neither asks for it again; showing or hiding a layer or choosing a
+// zone asks for nothing. The state lives as long as the tab, so leaving and reopening the tool keeps it; nothing is
+// stored on the server. Times are Unix milliseconds (UTC), geographic positions degrees, longitude east positive.
 
 // Presentation of the Local View.
 export interface SolarEclipseViewSettings {
@@ -57,7 +58,9 @@ export interface SolarEclipseState {
 	selectedPoint?: GlobalPointKind
 	// Contact drawn in the Local View.
 	selectedEvent: LocalEclipseContactKind
-	// Place whose local circumstances are shown.
+	// Where the tool observes from; the active profile's site until another is chosen.
+	location: ToolLocation
+	// Coordinates of the location whose local circumstances are asked for, kept by syncPlace; absent without one.
 	place?: EclipsePlace
 	// Local circumstances of the eclipse shown from the place, once loaded.
 	local?: LocalSolarEclipse
@@ -67,9 +70,8 @@ export interface SolarEclipseState {
 	localError?: string
 	// Presentation of the Local View.
 	view: SolarEclipseViewSettings
-	// Time zone chosen for the times: UTC, an IANA zone, or empty for the browser's; undefined follows the place
-	// (see displayTimeZone).
-	timeZone?: string
+	// Zone the times are shown in, resolved with the location; it never changes a request.
+	zone: DisplayZoneOverride
 	// Whether stepping between eclipses skips those whose Sun stays below the place's horizon.
 	visibleOnly: boolean
 }
@@ -80,8 +82,10 @@ export function initialSolarEclipseState(): SolarEclipseState {
 		loading: false,
 		layers: { centralLine: true, umbralLimits: true, penumbralLimits: true, riseSet: true, points: true, labels: true },
 		selectedEvent: 'MAX',
+		location: ACTIVE_TOOL_LOCATION,
 		localLoading: false,
 		view: { orientation: 'zenith', handedness: 'eastRight', ghosts: true },
+		zone: DEFAULT_ZONE_OVERRIDE,
 		visibleOnly: false,
 	}
 }
@@ -297,10 +301,10 @@ export async function showEclipse(state: SolarEclipseState, id: string, io: Ecli
 	}
 }
 
-// Opens the tool: on the first visit, takes the Sky observer as the place, when there is one, and shows the next
-// eclipse after now; later visits keep what was shown.
-export function openSolarEclipseMap(state: SolarEclipseState, observer: SkyObserverSettings | undefined, io: EclipseIo = browserEclipseIo) {
-	state.place ??= observer && observerPlace(observer)
+// Opens the tool: takes the place of location, the one state.location gives now, and on the first visit shows the
+// next eclipse after now; later visits keep what was shown, and the location chosen is never reset.
+export function openSolarEclipseMap(state: SolarEclipseState, location: GeographicLocation | undefined, io: EclipseIo = browserEclipseIo) {
+	void syncPlace(state, location, io)
 	if (!state.eclipse && !state.loading) void findEclipse(state, io.time(), 'next', io)
 }
 
@@ -332,11 +336,24 @@ export async function loadLocal(state: SolarEclipseState, io: EclipseIo = browse
 	}
 }
 
-// Shows a place's local circumstances; the profile's observer is never changed.
-export function selectPlace(state: SolarEclipseState, place: EclipsePlace, io: EclipseIo = browserEclipseIo) {
+// Takes the place of location, the one state.location gives now (undefined when it gives none), and asks for its
+// local circumstances; does nothing when its longitude and latitude are those asked for already, so a new elevation,
+// name, or zone of the same place asks for nothing.
+export function syncPlace(state: SolarEclipseState, location: GeographicLocation | undefined, io: EclipseIo = browserEclipseIo) {
+	const place = eclipsePlace(location)
+	if (samePlace(state.place, place)) return
 	state.place = place
 	state.local = undefined
+	state.localError = undefined
 	return loadLocal(state, io)
+}
+
+// Observes from a point clicked on the map or a global point chosen (degrees, east positive): coordinates typed in,
+// in the zone of the coordinates before or UTC (see mapLocation). The profile is never changed.
+export function selectMapPlace(state: SolarEclipseState, point: EclipsePlace, io: EclipseIo = browserEclipseIo) {
+	const location = mapLocation(state.location, point)
+	state.location = location
+	return syncPlace(state, location, io)
 }
 
 // Draws a contact in the Local View; the global map is not loaded again.

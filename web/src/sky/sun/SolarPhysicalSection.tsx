@@ -14,7 +14,7 @@ export function formatEquationOfTime(seconds: number) {
 }
 
 // Solar Physical Data section of the Sun Inspector; `time` is the instant of the data, Unix milliseconds.
-export function SolarPhysicalSection({ physical, time, timeZone }: { readonly physical?: SunPhysicalData; readonly time?: number; readonly timeZone?: string }) {
+export function SolarPhysicalSection({ physical, time, timeZone }: { readonly physical?: SunPhysicalData; readonly time?: number; readonly timeZone: string }) {
 	return (
 		<CollapsibleSection id="sky.physical" title="Solar Physical Data" summary={physical && `EoT ${formatEquationOfTime(physical.equationOfTimeSeconds)} · CR ${physical.carringtonRotation}`} defaultOpen={false}>
 			{physical && time !== undefined ? (

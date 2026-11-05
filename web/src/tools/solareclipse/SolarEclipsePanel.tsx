@@ -2,43 +2,31 @@ import type { LocalViewHandedness, LocalViewOrientationMode } from 'api'
 import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
 import { formatGeographic, formatKilometers, MISSING } from '../../format'
-import type { SkyObserverSettings } from '../../profile/schema'
+import { useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { PanelSection } from '../../shell/ContextualPanel'
-import { BROWSER_TIME_ZONE } from '../../sky/clock'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { Select } from '../../ui/Select'
-import { displayTimeZone, type EclipsePlace, formatDuration, formatEclipseTime } from '../eclipse/eclipse'
-import { DISPLAY_TIME_ZONES, LocationSection } from '../eclipse/EclipsePanelParts'
+import { formatDuration, formatEclipseTime } from '../eclipse/eclipse'
+import { EclipseLocationSection, EclipseZoneSelect } from '../eclipse/EclipsePanelParts'
 import { GlobalPointIcon } from './GlobalPointMarker'
-import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectPlace, selectPoint, setViewSettings, solarEclipseState } from './solareclipse'
+import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectMapPlace, selectPoint, setViewSettings, solarEclipseState } from './solareclipse'
 import { SolarEclipseLocalView } from './SolarEclipseLocalView'
 
-// Local Circumstances panel of the Solar Eclipse Map: the place (the shared Location section), the visibility of
-// the eclipse from it, its contacts in the time zone shown, the global and local details, and the Local View of
-// the selected contact, and the global points with the details of the one chosen. Contacts and durations a place
-// lacks are left out, never shown as zero, and the magnitude is a fraction of the solar diameter, not of its area.
-// Nothing here changes the profile.
-
-export interface SolarEclipsePanelProps {
-	// Sky observer of the active profile; absent when none is set.
-	readonly observer?: SkyObserverSettings
-}
+// Local Circumstances panel of the Solar Eclipse Map: the location (the shared Location section), the visibility of
+// the eclipse from it, its contacts in the zone shown (resolved with the location), the global and local details,
+// and the Local View of the selected contact, and the global points with the details of the one chosen. Contacts
+// and durations a place lacks are left out, never shown as zero, and the magnitude is a fraction of the solar
+// diameter, not of its area. Nothing here changes the profile or a site; the map component asks for the local
+// circumstances of the location chosen.
 
 // Orientations of the Local View, in display order.
 const ORIENTATIONS: readonly LocalViewOrientationMode[] = ['zenith', 'north']
 
 // Handedness of the Local View, in display order.
 const HANDEDNESS: readonly LocalViewHandedness[] = ['eastRight', 'eastLeft']
-
-// Shows a place chosen in the Location section; going back to the Sky observer also goes back to its time zone.
-function choosePlace(place: EclipsePlace) {
-	if (place.source === 'observer') solarEclipseState.timeZone = undefined
-	void selectPlace(solarEclipseState, place)
-}
 
 // Returns an angle in degrees to a tenth, or a dash when it is undefined.
 function angle(value: number | undefined) {
@@ -79,7 +67,7 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 					{extreme?.kind && <DataRow label="Central phase">{extreme.kind === 'annular' ? 'Annular' : 'Total'}</DataRow>}
 					{extreme?.centralDuration !== undefined && <DataRow label="Central duration">{formatDuration(extreme.centralDuration)}</DataRow>}
 					{extreme?.pathWidth !== undefined && <DataRow label="Path width">{formatKilometers(extreme.pathWidth, 1)}</DataRow>}
-					<Button variant="secondary" className="self-start" onClick={() => choosePlace({ source: 'map', longitude: point.longitude, latitude: point.latitude })}>
+					<Button variant="secondary" className="self-start" onClick={() => void selectMapPlace(solarEclipseState, { longitude: point.longitude, latitude: point.latitude })}>
 						Use as Location
 					</Button>
 				</div>
@@ -89,10 +77,12 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 }
 
 // Local Circumstances panel.
-export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
+export function SolarEclipsePanel() {
 	const state = useSnapshot(solarEclipseState)
 	const { eclipse, map, place, local, localLoading, localError, selectedEvent, selectedPoint, view } = state
-	const timeZone = displayTimeZone(state)
+	const location = useToolLocation(state.location)
+	const displayZone = useDisplayZone(location, state.zone)
+	const timeZone = displayZone.zone
 	const visibility = local?.visibility
 	const central = visibility?.centralPhaseKind === 'annular' ? 'annular' : 'total'
 	const greatest = map?.greatestEclipse
@@ -100,7 +90,7 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 
 	return (
 		<>
-			<LocationSection place={place} observer={observer} onSelect={choosePlace} />
+			<EclipseLocationSection value={state.location} location={location} onChange={(value) => (solarEclipseState.location = value)} />
 			{place && (
 				<PanelSection title="Visibility">
 					{visibility && <p className="m-0 font-medium text-ink-100">{visibility.text}</p>}
@@ -123,7 +113,7 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 			)}
 			{eclipse && (
 				<PanelSection title="Contacts">
-					<Select label="Time Zone" options={DISPLAY_TIME_ZONES} value={timeZone} onChange={(zone) => (solarEclipseState.timeZone = zone)} format={(zone) => zone || `Browser (${BROWSER_TIME_ZONE})`} />
+					<EclipseZoneSelect value={state.zone} zone={displayZone} location={location} selectedSite={state.location.mode !== 'active'} onChange={(zone) => (solarEclipseState.zone = zone)} />
 					{!place && <Notice>Select a location to see its contacts.</Notice>}
 					{local && local.events.length === 0 && <Notice>The eclipse does not reach this place.</Notice>}
 					{local?.events.map((event) => {

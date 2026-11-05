@@ -8,7 +8,7 @@ import { MOON_PHASE_NAMES } from './moon'
 // time order, with their date and time in the chosen time zone. They are geocentric events, the same for everyone.
 
 // Lunar Phases section of the Moon Inspector.
-export function MoonPhasesSection({ phases, timeZone }: { readonly phases?: readonly MoonPhaseEvent[]; readonly timeZone?: string }) {
+export function MoonPhasesSection({ phases, timeZone }: { readonly phases?: readonly MoonPhaseEvent[]; readonly timeZone: string }) {
 	return (
 		<CollapsibleSection id="sky.lunarPhases" title="Lunar Phases" summary={phases?.[0] && `Next: ${MOON_PHASE_NAMES[phases[0].kind]}`} defaultOpen={false}>
 			{phases ? (
@@ -17,7 +17,7 @@ export function MoonPhasesSection({ phases, timeZone }: { readonly phases?: read
 						{phases.map((e) => (
 							<li key={e.kind} className="flex flex-col">
 								<span className="text-ink-100">{MOON_PHASE_NAMES[e.kind]}</span>
-								<span className="font-mono text-sm text-ink-200">{formatEclipseTime(e.time, timeZone ?? '')}</span>
+								<span className="font-mono text-sm text-ink-200">{formatEclipseTime(e.time, timeZone)}</span>
 							</li>
 						))}
 					</ul>

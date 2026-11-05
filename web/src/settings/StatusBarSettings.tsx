@@ -1,11 +1,11 @@
 import { useSnapshot } from 'valtio'
 import { roleDefinition } from '../equipment/roles'
+import { openObservingSites } from '../location/site'
+import { useActiveSite } from '../location/useLocation'
 import { activeProfile, astronomicalClockPreferences, profileState, setAstronomicalClockPreferences, setStatusChipPreferences, statusChipPreferences } from '../profile/profile'
 import { ASTRONOMICAL_CLOCK_READINGS, type AstronomicalClockReading, STATUS_CHIP_FIELDS, type StatusChipField, type StatusChipRole } from '../profile/schema'
-import { navigate, routeState } from '../shell/route'
 import { ASTRONOMICAL_CLOCK_READING_LABELS } from '../shell/statusbar/astronomicalclock'
 import { CHIP_ROLES } from '../shell/statusbar/selectors'
-import { skyState } from '../sky/sky'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { Notice } from '../ui/Notice'
@@ -13,8 +13,8 @@ import { SectionHeading } from '../ui/SectionHeading'
 import { Select } from '../ui/Select'
 
 // Status Bar section of the Settings page: what the status bar of the active profile shows for each device and in its
-// clock. A change applies at once and belongs to the profile, so the bar itself shows the result. The time zone of the
-// clock is the Sky observer's, or the browser's; it has none of its own.
+// clock. A change applies at once and belongs to the profile, so the bar itself shows the result. The clock's civil time
+// is shown in the profile's display zone (Settings → Date & Time); it has no zone of its own.
 
 // Options of the secondary reading, in display order.
 const SECONDARY_READINGS: readonly (AstronomicalClockReading | 'none')[] = ['none', ...ASTRONOMICAL_CLOCK_READINGS]
@@ -65,7 +65,7 @@ function DeviceChipSettings({ role, settings }: DeviceChipSettingsProps) {
 export function StatusBarSettings() {
 	const settings = activeProfile(useSnapshot(profileState)).settings
 	const { enabled, primary, secondary, showSeconds } = astronomicalClockPreferences(settings)
-	const located = settings.sky.observer !== undefined
+	const located = useActiveSite() !== undefined
 	const sidereal = primary === 'last' || primary === 'lmst'
 
 	return (
@@ -93,16 +93,9 @@ export function StatusBarSettings() {
 				<Checkbox label="Show seconds in times of day" disabled={!enabled} checked={showSeconds} onChange={(value) => setAstronomicalClockPreferences(profileState, { showSeconds: value })} />
 				{sidereal && !located && (
 					<>
-						<Notice>This profile has no Sky observer, so the bar shows the Julian Date (UTC) until one is set.</Notice>
-						<Button
-							variant="secondary"
-							className="self-start"
-							onClick={() => {
-								skyState.panel = 'observer'
-								navigate(routeState, { workspace: 'sky' })
-							}}
-						>
-							Set Sky Observer
+						<Notice>This profile has no observing site, so the bar shows the Julian Date (UTC) until one is selected.</Notice>
+						<Button variant="secondary" className="self-start" onClick={() => openObservingSites()}>
+							Set Location
 						</Button>
 					</>
 				)}

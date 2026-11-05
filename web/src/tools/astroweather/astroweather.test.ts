@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { AstroWeatherForecast, AstroWeatherNight } from 'api'
 import { proxy } from 'valtio'
+import { ACTIVE_TOOL_LOCATION, resolveToolLocation } from '../../location/site'
+import { DEFAULT_ZONE_OVERRIDE, resolveDisplayZone } from '../../location/zone'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { type AstroWeatherState, coverage, effectiveSite, firstNight, followProfile, followSite, formatClock, formatLength, hasNextNight, loadCurrentNight, loadForecast, loadNight, nightEnded, skyBands, stepNight } from './astroweather'
+import { type AstroWeatherState, coverage, firstNight, followProfile, followSite, formatClock, formatLength, hasNextNight, loadCurrentNight, loadForecast, loadNight, nightEnded, siteKey, skyBands, stepNight } from './astroweather'
 
 const SITE = { latitude: -22.4, longitude: -45.45, elevation: 850, timeZone: 'America/Sao_Paulo' }
 const OTHER = { ...SITE, latitude: 10 }
@@ -34,8 +36,8 @@ const FORECAST = {
 	astronomy: { source: { provider: 'sevenTimer', state: 'fresh' }, cellDegrees: 0.1, samples: [] },
 } as unknown as AstroWeatherForecast
 
-function newState() {
-	return proxy<AstroWeatherState>({ forecastLoading: false, nightLoading: false })
+function newState(initial: Partial<AstroWeatherState> = {}) {
+	return proxy<AstroWeatherState>({ location: ACTIVE_TOOL_LOCATION, zone: DEFAULT_ZONE_OVERRIDE, forecastLoading: false, nightLoading: false, ...initial })
 }
 
 // IO whose requests wait until released, recorded in order.
@@ -58,33 +60,92 @@ function answering() {
 	return { io, urls }
 }
 
-describe('site', () => {
-	test('the Sky observer is the site, with its own zone or the browser one', () => {
-		expect(effectiveSite({}, { latitude: 1, longitude: 2, elevation: 3, name: 'Home', timeZone: 'Asia/Tokyo' })).toEqual({ latitude: 1, longitude: 2, elevation: 3, name: 'Home', timeZone: 'Asia/Tokyo' })
-		expect(effectiveSite({}, { latitude: 1, longitude: 2, elevation: 3 })?.timeZone).toBeTruthy()
-		expect(effectiveSite({}, undefined)).toBeUndefined()
+// Body of a night request.
+function nightBody(init: RequestInit | undefined) {
+	return JSON.parse(init!.body as string)
+}
+
+describe('location and zone', () => {
+	test('a display zone keys nothing and asks for nothing', async () => {
+		const state = newState()
+		const { io, urls } = answering()
+		followSite(state, SITE, io)
+		await Bun.sleep(0)
+		const key = state.siteKey
+		urls.length = 0
+
+		state.zone = { mode: 'utc' }
+		followSite(state, SITE, io)
+		state.zone = { mode: 'zone', zone: 'Asia/Tokyo' }
+		followSite(state, SITE, io)
+		await Bun.sleep(0)
+		expect(urls).toEqual([])
+		expect(state.siteKey).toBe(key)
+		expect(siteKey(SITE)).toBe(key!)
+		expect(state.night).toBeDefined()
+		expect(state.forecast).toBeDefined()
 	})
 
-	test('a place typed in is at sea level in UTC until a zone is chosen, whatever the observer', () => {
-		const place = { source: 'manual', latitude: 5, longitude: 6 } as const
-		const observer = { latitude: 1, longitude: 2, elevation: 3, timeZone: 'Asia/Tokyo' }
-		expect(effectiveSite({ place }, observer)).toEqual({ latitude: 5, longitude: 6, elevation: 0, timeZone: 'UTC' })
-		expect(effectiveSite({ place, timeZone: 'Asia/Kathmandu' }, observer)?.timeZone).toBe('Asia/Kathmandu')
+	test('the night is named in the zone of the location even when the times are shown in UTC', () => {
+		const state = newState()
+		state.zone = { mode: 'utc' }
+		expect(resolveDisplayZone('site', state.zone, SITE).zone).toBe('UTC')
+
+		const { io, calls } = deferred()
+		followSite(state, { ...SITE, name: 'Home' }, io)
+		expect(calls[0].url).toBe('/api/astro-weather/forecast?latitude=-22.4&longitude=-45.45')
+		expect(nightBody(calls[1].init)).toEqual({ observer: { latitude: -22.4, longitude: -45.45, elevation: 850 }, timeZone: 'America/Sao_Paulo', time: NOW })
+	})
+
+	test('a saved site other than the active one is used with its own zone', () => {
+		const sites = [
+			{ id: 'home', name: 'Home', latitude: 35.7, longitude: 139.7, elevation: 40, timeZone: 'Asia/Tokyo' },
+			{ id: 'dark', name: 'Dark Site', ...SITE },
+		]
+		const state = newState()
+		state.location = { mode: 'saved', siteId: 'dark' }
+		const location = resolveToolLocation(state.location, 'home', sites)!
+		expect(resolveDisplayZone('site', state.zone, location).zone).toBe('America/Sao_Paulo')
+
+		const { io, calls } = deferred()
+		followSite(state, location, io)
+		expect(calls[0].url).toBe('/api/astro-weather/forecast?latitude=-22.4&longitude=-45.45')
+		expect(nightBody(calls[1].init)).toMatchObject({ observer: { latitude: -22.4, longitude: -45.45, elevation: 850 }, timeZone: 'America/Sao_Paulo' })
+	})
+
+	test('coordinates entered keep their zone for the night when the times are shown in the browser zone', () => {
+		const state = newState()
+		state.location = { mode: 'manual', latitude: 5, longitude: 6, elevation: 120, timeZone: 'UTC' }
+		state.zone = { mode: 'browser' }
+		const location = resolveToolLocation(state.location, undefined, [])!
+		expect(resolveDisplayZone('site', state.zone, location, 'Europe/Berlin').zone).toBe('Europe/Berlin')
+
+		const { io, calls } = deferred()
+		followSite(state, location, io)
+		expect(nightBody(calls[1].init)).toMatchObject({ observer: { latitude: 5, longitude: 6, elevation: 120 }, timeZone: 'UTC' })
+	})
+
+	test('another zone of the location is another night, and clears the values', () => {
+		const state = newState()
+		const { io, calls } = deferred()
+		followSite(state, SITE, io)
+		state.night = NIGHT
+		followSite(state, { ...SITE, timeZone: 'UTC' }, io)
+		expect(state.night).toBeUndefined()
+		expect(nightBody(calls.at(-1)!.init).timeZone).toBe('UTC')
 	})
 })
 
 describe('profile', () => {
-	test('another profile forgets the place chosen and the same one keeps it', () => {
-		const state = newState()
-		state.place = { source: 'manual', latitude: 5, longitude: 6 }
-		state.timeZone = 'Asia/Tokyo'
+	test('another profile forgets the location and zone chosen and the same one keeps them', () => {
+		const state = newState({ location: { mode: 'manual', latitude: 5, longitude: 6, elevation: 0, timeZone: 'Asia/Tokyo' }, zone: { mode: 'utc' } })
 		followProfile(state, 'a')
 		followProfile(state, 'a')
-		expect(state.place).toBeDefined()
+		expect(state.location.mode).toBe('manual')
 
 		followProfile(state, 'b')
-		expect(state.place).toBeUndefined()
-		expect(state.timeZone).toBeUndefined()
+		expect(state.location).toEqual(ACTIVE_TOOL_LOCATION)
+		expect(state.zone).toEqual(DEFAULT_ZONE_OVERRIDE)
 	})
 })
 

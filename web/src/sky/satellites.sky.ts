@@ -1,11 +1,10 @@
 import type { SatelliteTrack, SatelliteTracksResponse } from 'api'
 import { jsonInit } from '../http'
-import type { SkyObserverSettings } from '../profile/schema'
+import { type GeographicLocation, siteObserver } from '../location/site'
 import type { Celestial, CelestialShape, MovingBody } from './celestial/celestial'
 import { refKey } from './objects'
 import { interpolateTrack, type TrackWindow, trackWindow, windowServes } from './satellites.track'
 import { createRequestGuard } from './selection'
-import { apiObserver } from './sky'
 
 // Artificial satellites on the Sky map: the satellites asked for (the selected one and the favorites, while the
 // satellites layer is shown) drawn as moving bodies of type `satellite`, which the `satellites` layer of the map draws,
@@ -30,7 +29,7 @@ export interface SatelliteTargets {
 	// NORAD id of the selected satellite; absent when another object or nothing is selected.
 	readonly selected?: string
 	// Observer of the profile; absent for geocentric positions.
-	readonly observer?: SkyObserverSettings
+	readonly observer?: GeographicLocation
 	// Revision of the satellite catalog, whose change asks for the samples again.
 	readonly revision: number
 	// Whether the view follows the selected satellite.
@@ -129,7 +128,7 @@ export class SatelliteLayer {
 		this.#loading = true
 
 		try {
-			const response = await this.fetch('/api/satellites/tracks', jsonInit('POST', { ids: this.#targets.ids, observer: apiObserver(this.#targets.observer), start: window.start, end: window.end, step: window.step }, request.signal))
+			const response = await this.fetch('/api/satellites/tracks', jsonInit('POST', { ids: this.#targets.ids, observer: siteObserver(this.#targets.observer), start: window.start, end: window.end, step: window.step }, request.signal))
 			if (!request.current() || !response.ok) return
 			const { tracks } = (await response.json()) as SatelliteTracksResponse
 			if (!request.current()) return

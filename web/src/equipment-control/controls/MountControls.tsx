@@ -4,6 +4,7 @@ import { useSnapshot } from 'valtio'
 import { formatDegrees, formatUtcDateTime } from '../../format'
 import { connectionCameraTab } from '../../images/cameratabs'
 import { imagesState, selectImage, selectImageTool } from '../../images/images'
+import { useActiveSite } from '../../location/useLocation'
 import { activeProfile, activeSetup, profileState } from '../../profile/profile'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { navigate, routeState } from '../../shell/route'
@@ -70,7 +71,7 @@ export function MountControls({ device }: InterfaceProps) {
 	const images = useSnapshot(imagesState)
 	const mount = deviceStateOf(control.states, 'mount', device.id)!
 	const profile = activeProfile(profiles)
-	const observer = profile.settings.sky.observer
+	const observer = useActiveSite()
 	const busy = control.pending[device.id] !== undefined
 	const moving = mount.slewing || mount.parking || mount.homing || mount.moving
 	const setup = activeSetup(profile)
@@ -100,7 +101,7 @@ export function MountControls({ device }: InterfaceProps) {
 					</>
 				)}
 				{mount.hasPierSide && <DataRow label="Pier side">{PIER_SIDE_LABELS[mount.pierSide]}</DataRow>}
-				<Notice>{horizontal ? 'Altitude and azimuth are geometric, for the profile observer.' : 'Set an observer in the Sky workspace to see altitude and azimuth.'}</Notice>
+				<Notice>{horizontal ? 'Altitude and azimuth are geometric, for the observing site of the profile.' : 'Select an observing site in the top bar to see altitude and azimuth.'}</Notice>
 				{moving && mount.canAbort && (
 					<Actions>
 						<Button onClick={() => void stopCommand(controlRuntime, { type: 'mount', deviceId: device.id, action: 'stop' })}>Abort Motion</Button>
@@ -169,13 +170,13 @@ export function MountControls({ device }: InterfaceProps) {
 				<Actions>
 					{observer && (
 						<ConfirmButton
-							title="Send the profile observer?"
-							message={`The mount will use latitude ${observer.latitude}°, longitude ${observer.longitude}°, and elevation ${observer.elevation} m for its own coordinate conversions.`}
+							title={`Send ${observer.name} to the mount?`}
+							message={`The mount will use latitude ${observer.latitude}°, longitude ${observer.longitude}°, and elevation ${observer.elevation} m of the active site for its own coordinate conversions. Selecting a site never sends it by itself.`}
 							confirmLabel="Send"
 							disabled={busy}
 							onConfirm={() => set('site', 'Send site', { site: { latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation } })}
 						>
-							Send Profile Observer
+							Send Active Site to Mount
 						</ConfirmButton>
 					)}
 					<ConfirmButton title="Send the computer clock?" message="The mount clock is set to the current time of this computer and its time zone offset." confirmLabel="Send" disabled={busy} onConfirm={() => set('time', 'Send time', { utc: Date.now(), offset: -new Date().getTimezoneOffset() })}>
@@ -274,7 +275,7 @@ function TargetSection({ mount, deviceId, busy, observer }: TargetSectionProps) 
 				)}
 			</Actions>
 			{mount.parked && <Notice>Unpark the mount to point it.</Notice>}
-			{!observer && (mount.canGoTo || mount.canFlip) && <Notice>Set an observer in the Sky workspace: a goto is refused below its horizon.</Notice>}
+			{!observer && (mount.canGoTo || mount.canFlip) && <Notice>Select an observing site in the top bar: a goto is refused below its horizon.</Notice>}
 			<Notice>Sexagesimal or decimal; right ascension in hours, every other component in degrees.</Notice>
 		</PanelSection>
 	)

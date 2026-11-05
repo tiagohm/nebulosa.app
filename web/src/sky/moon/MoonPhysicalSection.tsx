@@ -15,7 +15,7 @@ export function formatSelenographic(angle: number, positive: string, negative: s
 }
 
 // Lunar Physical Data section of the Moon Inspector; `time` is the instant of the data, Unix milliseconds.
-export function MoonPhysicalSection({ appearance, time, timeZone }: { readonly appearance?: MoonAppearance; readonly time?: number; readonly timeZone?: string }) {
+export function MoonPhysicalSection({ appearance, time, timeZone }: { readonly appearance?: MoonAppearance; readonly time?: number; readonly timeZone: string }) {
 	return (
 		<CollapsibleSection id="sky.physical" title="Lunar Physical Data" summary={appearance && `Age ${appearance.ageDays.toFixed(1)} d · Lunation ${appearance.lunation}`} defaultOpen={false}>
 			{appearance && time !== undefined ? (

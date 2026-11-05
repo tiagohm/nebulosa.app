@@ -2,7 +2,8 @@ import type { SolarEclipseMap as SolarEclipseMapData } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { activeProfile, profileState } from '../../profile/profile'
+import { locationKey } from '../../location/site'
+import { useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { redirect, routeState } from '../../shell/route'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
@@ -11,18 +12,18 @@ import { IconButton } from '../../ui/IconButton'
 import { TextInput } from '../../ui/TextInput'
 import { WorldMap, type WorldMapHandle, WorldMapSymbol } from '../../ui/WorldMap'
 import { DEGREE_PLANE_TRANSFORM } from '../../ui/worldmap.geometry'
-import { displayTimeZone, formatEclipseTime, utcDate } from '../eclipse/eclipse'
+import { formatEclipseTime, utcDate } from '../eclipse/eclipse'
 import { EclipseHeading, EclipseMapLegend } from '../eclipse/EclipseMapParts'
 import { GlobalPointIcon, GlobalPointMarker } from './GlobalPointMarker'
-import { ECLIPSE_TYPE_NAMES, findEclipseFrom, GLOBAL_POINTS, type GlobalPointKind, globalPoints, labelRows, limitName, nextEclipse, openSolarEclipseMap, previousEclipse, retryEclipse, type SolarEclipseLayers, selectPlace, setLayer, showEclipse, solarEclipseState } from './solareclipse'
+import { ECLIPSE_TYPE_NAMES, findEclipseFrom, GLOBAL_POINTS, type GlobalPointKind, globalPoints, labelRows, limitName, nextEclipse, openSolarEclipseMap, previousEclipse, retryEclipse, type SolarEclipseLayers, selectMapPlace, setLayer, showEclipse, solarEclipseState, syncPlace } from './solareclipse'
 import { SolarEclipsePanel } from './SolarEclipsePanel'
 
 // Solar Eclipse Map tool: steps through solar eclipses (previous, next, from a date, optionally only those
 // visible from the place), draws on the world map the central line (solid where total, dashed where annular), the
 // limits of the central and partial eclipse, the sunrise/sunset curves, and every global point (contacts P1 to
 // P4 and U1 to U4, central line ends C1 and C2, partial limit ends N1, N2, S1, and S2, greatest eclipse and
-// duration) with its name, and shows the local circumstances of the place clicked on the map in the contextual
-// panel. A global point is chosen in the panel, since a click on the map chooses the place; the map then rings
+// duration) with its name, and shows in the contextual panel the local circumstances of the tool's location: the
+// active site until another site, coordinates, or a point clicked on the map is chosen. A global point is chosen in the panel, since a click on the map chooses the place; the map then rings
 // it and centers on it. A URL that names an eclipse opens that one. Map paths come from the API on the degree plane and
 // are scaled to map units here; zooming, panning, and showing or hiding layers never ask the API for anything.
 
@@ -104,22 +105,28 @@ function LineSwatch({ dashed, accent, thick }: { readonly dashed?: boolean; read
 
 // Solar Eclipse Map tool.
 export function SolarEclipseMap() {
-	const profiles = useSnapshot(profileState)
-	const observer = activeProfile(profiles).settings.sky.observer
 	const state = useSnapshot(solarEclipseState)
 	const { eclipse, map, loading, error, notice, layers, place, visibleOnly, selectedPoint } = state
 	const [date, setDate] = useState('')
 	const mapRef = useRef<WorldMapHandle>(null)
-	const timeZone = displayTimeZone(state)
+	const location = useToolLocation(state.location)
+	const placeKey = locationKey(location)
+	const timeZone = useDisplayZone(location, state.zone).zone
 	const { route } = useSnapshot(routeState)
 	const linked = route.workspace === 'tools' ? route.eclipse : undefined
 
-	// Takes the Sky observer as the place and shows the eclipse the URL names, or the next eclipse on the first
+	// Takes the place of the tool's location and shows the eclipse the URL names, or the next eclipse on the first
 	// visit of the tab; a reload, back, or forward shows the eclipse of the URL again.
 	useEffect(() => {
 		if (linked) void showEclipse(solarEclipseState, linked)
-		openSolarEclipseMap(solarEclipseState, activeProfile(profileState).settings.sky.observer)
+		openSolarEclipseMap(solarEclipseState, location)
 	}, [linked])
+
+	// Asks for the local circumstances again when the place of the location changes, such as when the active site or
+	// one of its coordinates changes; syncPlace ignores a change of elevation alone.
+	useEffect(() => {
+		void syncPlace(solarEclipseState, location)
+	}, [placeKey])
 
 	// Centers the map on a global point when it is highlighted.
 	useEffect(() => {
@@ -148,7 +155,7 @@ export function SolarEclipseMap() {
 	}
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Solar Eclipse Map" context={<span className="truncate text-xs text-ink-300 max-sm:hidden">{eclipse ? title : ''}</span>} panel={{ title: 'Local Circumstances', content: <SolarEclipsePanel observer={observer} /> }}>
+		<WorkspaceLayout workspace="tools" title="Solar Eclipse Map" context={<span className="truncate text-xs text-ink-300 max-sm:hidden">{eclipse ? title : ''}</span>} panel={{ title: 'Local Circumstances', content: <SolarEclipsePanel /> }}>
 			<div className="flex h-full flex-col bg-base-000">
 				<div className="flex flex-none flex-wrap items-center gap-2 border-b border-line-100 bg-base-100 px-2 py-1.5">
 					<div className="flex min-w-0 items-center gap-1">
@@ -171,7 +178,7 @@ export function SolarEclipseMap() {
 					<Checkbox label="Visible here only" checked={visibleOnly} disabled={!place} onChange={(checked) => (solarEclipseState.visibleOnly = checked)} />
 				</div>
 				<div className="relative isolate min-h-0 flex-1">
-					<WorldMap ref={mapRef} className="size-full" selected={place} onSelect={(point) => void selectPlace(solarEclipseState, { source: 'map', longitude: point.longitude, latitude: point.latitude })}>
+					<WorldMap ref={mapRef} className="size-full" selected={place} onSelect={(point) => void selectMapPlace(solarEclipseState, { longitude: point.longitude, latitude: point.latitude })}>
 						{overlay}
 					</WorldMap>
 					{map && eclipse && (

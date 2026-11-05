@@ -3,14 +3,13 @@ import { SUN_RADIUS_AU } from 'nebulosa/src/core/constants'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDegrees } from '../../format'
-import type { SkyObserverSettings } from '../../profile/schema'
+import type { SiteLocation } from '../../location/site'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { formatDuration } from '../../tools/eclipse/eclipse'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-import { BROWSER_TIME_ZONE } from '../clock'
 import { formatApparentSize, formatDeclination, formatLocalTime, formatMagnitude } from '../format'
 import { PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
@@ -26,20 +25,20 @@ import { TwilightSection } from './TwilightSection'
 // Sun Inspector, the Object Inspector of the Sun: the latest SDO image right under its name, the NOAA active regions,
 // its position with the apparent angular diameter, its day for the observer (sunrise, transit, sunset, daylight) and
 // twilight, the next solar eclipse, the next seasons, and the equation of time and Carrington rotation. Three times are
-// kept apart: the position and the almanac follow the instant the Sky shows, the day is the observer's civil date of
-// that instant in its time zone, and the image and the regions are the latest real observations, dated by their
-// sources. The almanac and the eclipse are asked again only when their answers stop holding, never on every tick; the
+// kept apart: the position and the almanac follow the instant the Sky shows, the day is the site's civil date of
+// that instant in the site's own zone, whatever zone the times are shown in, and the image and the regions are the
+// latest real observations, dated by their sources. The almanac and the eclipse are asked again only when their answers stop holding, never on every tick; the
 // image and the report every 15 minutes while shown. No lunar data belongs here.
 
 export interface SunInspectorProps {
 	// Selection of the Sun.
 	readonly selection: SkySelection
-	// Observer of the active profile; absent when none is set.
-	readonly observer?: SkyObserverSettings
-	// Opens the observer settings.
+	// Observing site of the active profile; absent when it has none.
+	readonly observer?: SiteLocation
+	// Opens Settings → Observing Sites to choose or add a site.
 	readonly onSetObserver: () => void
-	// IANA time zone times are shown in; the browser's when absent.
-	readonly timeZone?: string
+	// IANA time zone times are shown in: the profile's display zone.
+	readonly timeZone: string
 	// Opens the framing settings.
 	readonly onShowFraming: () => void
 }
@@ -60,14 +59,14 @@ function daylightState(day: SunLocalDay) {
 }
 
 // Altitude, azimuth, and the observer's day; without an observer, an invitation to set one.
-function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone }: { readonly position?: SkyPosition; readonly day?: SunLocalDay; readonly hasObserver: boolean; readonly onSetObserver: () => void; readonly timeZone?: string }) {
+function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone }: { readonly position?: SkyPosition; readonly day?: SunLocalDay; readonly hasObserver: boolean; readonly onSetObserver: () => void; readonly timeZone: string }) {
 	const summary = day?.daylightSeconds !== undefined ? `Daylight ${formatDuration(day.daylightSeconds)}` : day && daylightState(day)
 
 	return (
 		<CollapsibleSection id="sky.visibility" title="Visibility" summary={summary}>
 			{!hasObserver ? (
 				<>
-					<p className="m-0 text-ink-300">Altitude, azimuth, sunrise, and sunset need the observer&apos;s location.</p>
+					<p className="m-0 text-ink-300">Altitude, azimuth, sunrise, and sunset need an observing site.</p>
 					<div>
 						<Button variant="secondary" onClick={onSetObserver}>
 							Set Location
@@ -106,7 +105,8 @@ export function SunInspector({ selection, observer, onSetObserver, timeZone, onS
 	const { almanac } = useSnapshot(sunState)
 	const { position } = selection
 	const time = position?.time ?? selection.requestedTime
-	const zone = timeZone || BROWSER_TIME_ZONE
+	// The local day is the civil date of the site, in its own zone, whatever zone the times are shown in.
+	const dayZone = observer?.timeZone ?? timeZone
 	const latitude = observer?.latitude
 	const longitude = observer?.longitude
 	const elevation = observer?.elevation
@@ -116,9 +116,9 @@ export function SunInspector({ selection, observer, onSetObserver, timeZone, onS
 	useEffect(() => {
 		if (time === undefined) return
 		const place = latitude === undefined || longitude === undefined || elevation === undefined ? undefined : { latitude, longitude, elevation }
-		void refreshSunAlmanac(sunState, time, place, zone)
+		void refreshSunAlmanac(sunState, time, place, dayZone)
 		void refreshSunEclipse(sunState, time, place)
-	}, [time, latitude, longitude, elevation, zone])
+	}, [time, latitude, longitude, elevation, dayZone])
 
 	// Downloads the latest image and active region report now and every 15 minutes while shown.
 	useEffect(() => {

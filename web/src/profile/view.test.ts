@@ -133,7 +133,7 @@ describe('view state', () => {
 
 		setLastImageDirectory(profiles, '/new')
 		await settle(sync)
-		expect(JSON.parse(local.getItem('nebulosa:view:p1')!)).toEqual({ version: 1, fields: { lastImageDirectory: '/new' } })
+		expect(JSON.parse(local.getItem('nebulosa:view:p1')!)).toEqual({ version: 2, fields: { lastImageDirectory: '/new' } })
 	})
 
 	test('the drawn framing applies to the presets the server kept, never creating a framing', async () => {
@@ -148,8 +148,8 @@ describe('view state', () => {
 			revision: 1,
 		}
 		const local = new MemoryStorage()
-		local.setItem('nebulosa:view:p1', JSON.stringify({ version: 1, fields: { skyFraming: { activePresetId: 'b', visible: true, source: 'custom' } } }))
-		local.setItem('nebulosa:view:p2', JSON.stringify({ version: 1, fields: { skyFraming: { activePresetId: 'gone', visible: true } } }))
+		local.setItem('nebulosa:view:p1', JSON.stringify({ version: 2, fields: { skyFraming: { activePresetId: 'b', visible: true, source: 'custom' } } }))
+		local.setItem('nebulosa:view:p2', JSON.stringify({ version: 2, fields: { skyFraming: { activePresetId: 'gone', visible: true } } }))
 		const { profiles, sync, sent } = await tab({ local, session: new MemoryStorage() }, { connections: [], sites: [], profiles: [record('p1', { preferences: { skyFraming: framing } }), record('p2', { sortOrder: 1 })] })
 
 		expect(snapshot(profiles).profiles[0].settings.sky.framing).toMatchObject({ activePresetId: 'b', visible: true, source: 'custom' })

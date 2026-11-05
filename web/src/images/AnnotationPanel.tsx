@@ -7,8 +7,9 @@ import { isAnnotationShown } from '../annotations/AnnotationOverlay'
 import { annotationKey, annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, resolveMinorBody, runAnnotation, sameAnnotationRequest } from '../annotations/annotations'
 import { useAnnotationContext, useAnnotationResult } from '../annotations/useAnnotationResult'
 import { formatDegrees, formatDuration, formatGeographic, formatUtcDateTime, MISSING } from '../format'
+import { useActiveSite } from '../location/useLocation'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
-import { activeProfile, profileState, setAnnotationPreferences } from '../profile/profile'
+import { profileState, setAnnotationPreferences } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -395,10 +396,10 @@ function Objects({ job, objects, warnings, resultError, annotation, selected, on
 // listed has no SPK-ID, so it is looked up in SBDB first and opens only when SBDB knows exactly one body by its
 // designation; a satellite other than the Moon is not known to the Sky workspace.
 function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
-	const profiles = useSnapshot(profileState)
 	// Why the SBDB lookup of the selected minor body failed, by object id, and the object being looked up.
 	const [lookup, setLookup] = useState<{ readonly id: string; readonly error?: string }>()
-	const observer = activeProfile(profiles).settings.sky.observer
+	// The Sky observes from the active profile's site; the image keeps the site of its own header.
+	const observer = useActiveSite()
 
 	// Selects an object in the Sky workspace and opens it; a satellite other than the Moon has no ref and never opens.
 	function openInSky(ref: SkySelectionRef, name: string, minorBody?: MinorBody) {

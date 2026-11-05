@@ -1,7 +1,8 @@
 import type { SatellitePassPrediction } from 'api'
 import { useSnapshot } from 'valtio'
 import { formatDegrees, formatKilometers } from '../../format'
-import type { SkyObserverSettings } from '../../profile/schema'
+import { type GeographicLocation, openObservingSites } from '../../location/site'
+import { type DisplayZone, describeDisplayZone } from '../../location/zone'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
@@ -10,13 +11,14 @@ import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
-import { artificialSatellitesState, formatSatelliteTime, loadSatellitePasses, MAX_PASS_DAYS, openSkyObserver, SHADOW_LABELS, showSatelliteInSky, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
+import { artificialSatellitesState, formatSatelliteTime, loadSatellitePasses, MAX_PASS_DAYS, SHADOW_LABELS, showSatelliteInSky, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
-// Passes tab of Artificial Satellites: the passes of the satellite selected above a minimum altitude over the Sky observer, in
-// a window from now or from the Sky's time, each with the parts in which it can be seen (sunlit while the Sun is below
-// the twilight limit). A pass cut by the window says so instead of showing a rise or a set, and the culmination is the
-// highest point, not a meridian transit. The profile of the pass selected is drawn as altitude against time.
+// Passes tab of Artificial Satellites: the passes of the satellite selected above a minimum altitude over the observing
+// site of the active profile, in a window from now or from the Sky's time, each with the parts in which it can be seen
+// (sunlit while the Sun is below the twilight limit), its times in the display zone. A pass cut by the window says so
+// instead of showing a rise or a set, and the culmination is the highest point, not a meridian transit. The profile of
+// the pass selected is drawn as altitude against time.
 
 // Width and height of the profile in its own units, and its margins.
 const WIDTH = 640
@@ -29,8 +31,8 @@ const PROFILE_POINTS = 64
 // Twilight limits offered.
 const TWILIGHTS = Object.keys(TWILIGHT_LIMITS) as TwilightLimit[]
 
-// Search form of the passes.
-function PassForm({ observer }: { readonly observer?: SkyObserverSettings }) {
+// Search form of the passes, for observer, the active profile's site (absent without one).
+function PassForm({ observer }: { readonly observer?: GeographicLocation }) {
 	const { passDraft, passesLoading, selectedId } = useSnapshot(artificialSatellitesState)
 	const draft = artificialSatellitesState.passDraft
 
@@ -49,7 +51,7 @@ function PassForm({ observer }: { readonly observer?: SkyObserverSettings }) {
 			<span className="flex h-9.5 items-center">
 				<Checkbox label="Daylight passes too" checked={passDraft.showAll} onChange={(value) => (draft.showAll = value)} />
 			</span>
-			<Button type="submit" className="ml-auto" disabled={passesLoading || !selectedId || !observer} title={!selectedId ? 'Select a satellite in the catalog.' : !observer ? 'Set the observer location in the Sky.' : undefined}>
+			<Button type="submit" className="ml-auto" disabled={passesLoading || !selectedId || !observer} title={!selectedId ? 'Select a satellite in the catalog.' : !observer ? 'Set the observing site of the profile.' : undefined}>
 				Find Passes
 			</Button>
 		</form>
@@ -125,10 +127,13 @@ const PASS_COLUMNS: readonly TableColumn[] = [
 	'Conditions',
 ]
 
+// Properties of the row of one pass.
 interface PassRowProps {
+	// Pass shown.
 	readonly pass: SatellitePassPrediction
 	// Index of the pass in the answer, which selects it.
 	readonly index: number
+	// IANA zone its times are shown in.
 	readonly timeZone: string
 }
 
@@ -159,10 +164,18 @@ function PassRow({ pass, index, timeZone }: PassRowProps) {
 	)
 }
 
+// Properties of the Passes tab.
+interface SatellitePassesProps {
+	// Observing site of the active profile, which every pass is for; absent without one.
+	readonly observer?: GeographicLocation
+	// Zone the times are shown in.
+	readonly zone: DisplayZone
+}
+
 // Passes tab.
-export function SatellitePasses({ observer }: { readonly observer?: SkyObserverSettings }) {
+export function SatellitePasses({ observer, zone }: SatellitePassesProps) {
 	const { passes, passesLoading, passesError, selectedPass, selectedId, details, passDraft } = useSnapshot(artificialSatellitesState)
-	const timeZone = observer?.timeZone ?? ''
+	const timeZone = zone.zone
 	const list = (passes?.passes ?? []).filter((pass) => passDraft.showAll || pass.visible.length > 0)
 	const shown = selectedPass === undefined ? undefined : passes?.passes[selectedPass]
 	const name = details?.object.name ?? selectedId ?? ''
@@ -171,13 +184,13 @@ export function SatellitePasses({ observer }: { readonly observer?: SkyObserverS
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto">
 			<PassForm observer={observer} />
 			{!selectedId && <EmptyState title="No satellite selected" description="Select a satellite in the catalog." />}
-			{selectedId && !observer && <EmptyState title="No observer" description="Passes are predicted for the observer of the Sky." action={<Button onClick={() => openSkyObserver()}>Set Observer</Button>} />}
+			{selectedId && !observer && <EmptyState title="No observing site" description="Passes are predicted for the observing site of the profile." action={<Button onClick={() => openObservingSites()}>Set Location</Button>} />}
 			{passesError && <EmptyState title="No passes could be predicted" description={passesError} />}
 			{passesLoading && <EmptyState title="Predicting passes" />}
 			{passes && !passesLoading && (
 				<div className="flex flex-col gap-3 px-4 py-3">
 					<div className="text-xs text-ink-300">
-						{name} · times {timeZone || 'of this browser'} · {passes.passes.length} passes{passes.truncated ? ' (more were left out)' : ''}
+						{name} · times {describeDisplayZone(zone)} · {passes.passes.length} passes{passes.truncated ? ' (more were left out)' : ''}
 					</div>
 					<div className="max-w-md">
 						<QualityRow quality={passes.quality} />
@@ -199,7 +212,7 @@ export function SatellitePasses({ observer }: { readonly observer?: SkyObserverS
 									View in Sky at the Highest Point
 								</Button>
 							</div>
-							<Notice>Altitudes are geometric, without refraction; the curve joins the rise, the highest point, and the set. Visible parts are sunlit while the Sun is below the twilight limit at the observer; whether the satellite is bright enough is not known.</Notice>
+							<Notice>Altitudes are geometric, without refraction; the curve joins the rise, the highest point, and the set. Visible parts are sunlit while the Sun is below the twilight limit at the site; whether the satellite is bright enough is not known.</Notice>
 						</div>
 					)}
 				</div>

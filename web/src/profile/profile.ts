@@ -3,7 +3,6 @@ import { nanoid } from 'nanoid'
 import { proxy, snapshot } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
 import type { AnnotationLayers } from '../images/images'
-import { isKnownTimeZone } from '../location/zone'
 import { type AstrometryGridSettings, DEFAULT_IMAGE_ASTROMETRY, type ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '../sky/display'
@@ -40,7 +39,6 @@ import {
 	DEFAULT_DATE_TIME_PREFERENCES,
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 	type SkyFramingSettings,
-	type SkyObserverSettings,
 	DEFAULT_TPPA_SETTINGS,
 	DEFAULT_POINTING_MODEL_SETTINGS,
 	type PointingModelSettings,
@@ -605,49 +603,9 @@ export function setImageAstrometrySettings(state: ProfileState, patch: Partial<O
 	profile.settings.imageAstrometry = { ...current, ...patch, coordinates: { ...current.coordinates, ...patch.coordinates }, grid: { ...current.grid, ...patch.grid } }
 }
 
-// Lowest elevation accepted for an observer in meters (below the Dead Sea shore, -430 m).
-const MIN_OBSERVER_ELEVATION = -500
-
-// Highest elevation accepted for an observer in meters (above Everest, 8849 m).
-const MAX_OBSERVER_ELEVATION = 9000
-
-// Returns a valid observer, or undefined for anything out of range or incomplete.
-export function normalizeSkyObserver(value: unknown): SkyObserverSettings | undefined {
-	if (typeof value !== 'object' || value === null) return undefined
-
-	const { latitude, longitude, elevation, name, timeZone } = value as Record<string, unknown>
-	if (typeof latitude !== 'number' || !Number.isFinite(latitude) || latitude < -90 || latitude > 90) return undefined
-	if (typeof longitude !== 'number' || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return undefined
-	if (typeof elevation !== 'number' || !Number.isFinite(elevation) || elevation < MIN_OBSERVER_ELEVATION || elevation > MAX_OBSERVER_ELEVATION) return undefined
-
-	const observer: SkyObserverSettings = { latitude, longitude, elevation }
-	if (typeof name === 'string' && name.trim()) observer.name = name.trim()
-	if (typeof timeZone === 'string' && isKnownTimeZone(timeZone)) observer.timeZone = timeZone
-	return observer
-}
-
 // Normalizes an angle in degrees to [0, 360).
 function normalizeDegrees(angle: number) {
 	return ((angle % 360) + 360) % 360
-}
-
-// Sets the Sky observer of the active profile, or clears it with undefined. Returns false, changing
-// nothing, for an observer out of range.
-export function setSkyObserver(state: ProfileState, observer: SkyObserverSettings | undefined): boolean {
-	const profile = activeProfile(state)
-
-	if (observer === undefined) {
-		if (!profile.settings.sky.observer) return true
-		delete profile.settings.sky.observer
-		return true
-	}
-
-	const normalized = normalizeSkyObserver(observer)
-	if (!normalized) return false
-	const current = profile.settings.sky.observer
-	if (current && current.latitude === normalized.latitude && current.longitude === normalized.longitude && current.elevation === normalized.elevation && current.name === normalized.name && current.timeZone === normalized.timeZone) return true
-	profile.settings.sky.observer = normalized
-	return true
 }
 
 // Shows or hides the Sky time bar in the active profile; hidden is kept as the absent default.

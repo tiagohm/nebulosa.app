@@ -1,7 +1,7 @@
 import type { MinorBody, MinorBodySearchResponse, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyEvents, SkyObjectCategory, SkyObjectRef, SkyObserver, SkyPosition, SkyPositionResponse, SkySearchResult, SkyStarData } from 'api'
 import { proxy } from 'valtio'
 import { fetchJson, jsonInit } from '../http'
-import type { SkyObserverSettings } from '../profile/schema'
+import { type GeographicLocation, siteObserver } from '../location/site'
 import { skyClock, skyTime } from './clock'
 import { MAP_STAR_MAGNITUDE_LIMIT } from './display'
 import { refKey, type SkySelectionRef } from './objects'
@@ -53,7 +53,7 @@ export interface SkySelection {
 }
 
 // Content of the contextual panel.
-export type SkyPanelView = 'inspector' | 'observer' | 'display' | 'framing'
+export type SkyPanelView = 'inspector' | 'display' | 'framing'
 
 // Sky workspace state of the tab.
 export interface SkyState {
@@ -132,11 +132,6 @@ const selectionGuard = createRequestGuard()
 // Latest map data download of the tab, started on the first visit to the workspace, with its instant.
 let mapData: { readonly time: number; readonly data: Promise<SkyMapData> } | undefined
 
-// Converts the profile's observer to the API's.
-export function apiObserver(observer: SkyObserverSettings | undefined): SkyObserver | undefined {
-	return observer && { latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation }
-}
-
 // Posts a JSON body to the API and returns the JSON answer.
 function postJson<T>(io: SkyIo, input: string, body: unknown, signal?: AbortSignal): Promise<T> {
 	return fetchJson<T>(io, input, jsonInit('POST', body, signal))
@@ -190,7 +185,7 @@ export function fetchSkyBodies(time: number, observer: SkyObserver | undefined, 
 
 // Selects an object and loads its details and position for an observer. Selecting the object already
 // selected only refreshes its position.
-export function selectSkyObject(state: SkyState, input: SkySelectionInput, observer: SkyObserverSettings | undefined, io: SkyIo = browserSkyIo) {
+export function selectSkyObject(state: SkyState, input: SkySelectionInput, observer: GeographicLocation | undefined, io: SkyIo = browserSkyIo) {
 	const key = refKey(input.ref)
 
 	if (state.selection?.key === key) {
@@ -215,7 +210,7 @@ export function clearSkySelection(state: SkyState) {
 // position, and the events show the same instant. Skips a selection still loading or whose latest request
 // was within the tolerance of the instant, so remounting the workspace, a fast clock, or a failing service
 // never piles up requests.
-export async function refreshSkySelection(state: SkyState, observer: SkyObserverSettings | undefined, options: SkyRefreshOptions = REALTIME_REFRESH, io: SkyIo = browserSkyIo, time: number = io.time()): Promise<void> {
+export async function refreshSkySelection(state: SkyState, observer: GeographicLocation | undefined, options: SkyRefreshOptions = REALTIME_REFRESH, io: SkyIo = browserSkyIo, time: number = io.time()): Promise<void> {
 	const selection = state.selection
 	if (!selection || selection.loading || (selection.requestedTime !== undefined && Math.abs(time - selection.requestedTime) <= options.tolerance)) return
 	await loadSelection(state, observer, io, false, options.mode, time)
@@ -223,7 +218,7 @@ export async function refreshSkySelection(state: SkyState, observer: SkyObserver
 
 // Recomputes the position of the selection for a new observer, first dropping the position and events
 // of the previous one so they are never shown as the new observer's.
-export function changeSkyObserver(state: SkyState, observer: SkyObserverSettings | undefined, io: SkyIo = browserSkyIo): Promise<void> {
+export function changeSkyObserver(state: SkyState, observer: GeographicLocation | undefined, io: SkyIo = browserSkyIo): Promise<void> {
 	if (state.selection) {
 		state.selection.position = undefined
 		state.selection.events = undefined
@@ -236,7 +231,7 @@ export function changeSkyObserver(state: SkyState, observer: SkyObserverSettings
 // shown) and, when `details` is true or they are missing, its catalog or minor body data. Responses are
 // applied only while the request is the latest one for the same object; the position and events of one
 // response always replace both, so they never show different instants.
-async function loadSelection(state: SkyState, observer: SkyObserverSettings | undefined, io: SkyIo, details: boolean, mode: 'fast' | 'accurate', time: number = io.time()) {
+async function loadSelection(state: SkyState, observer: GeographicLocation | undefined, io: SkyIo, details: boolean, mode: 'fast' | 'accurate', time: number = io.time()) {
 	const selection = state.selection
 	if (!selection) return
 
@@ -304,7 +299,7 @@ async function loadSelection(state: SkyState, observer: SkyObserverSettings | un
 	}
 
 	tasks.push(
-		fetchSkyPosition(ref, time, apiObserver(observer), mode, request.signal, io).then(
+		fetchSkyPosition(ref, time, siteObserver(observer), mode, request.signal, io).then(
 			({ position, events }) => {
 				if (!applies()) return
 				state.selection!.position = position

@@ -18,7 +18,7 @@ const NORTHERN_SEASONS: Readonly<Record<SolarSeasonKind, readonly [string, strin
 }
 
 // Seasons section of the Sun Inspector; latitude is the observer's in degrees, absent without one.
-export function SeasonsSection({ seasons, latitude, timeZone }: { readonly seasons?: readonly SolarSeasonEvent[]; readonly latitude?: number; readonly timeZone?: string }) {
+export function SeasonsSection({ seasons, latitude, timeZone }: { readonly seasons?: readonly SolarSeasonEvent[]; readonly latitude?: number; readonly timeZone: string }) {
 	const summary = seasons?.[0] && `Next: ${SEASON_NAMES[seasons[0].kind]}`
 
 	return (
@@ -32,7 +32,7 @@ export function SeasonsSection({ seasons, latitude, timeZone }: { readonly seaso
 									<span className="text-ink-100">{SEASON_NAMES[e.kind]}</span>
 									{latitude !== undefined && <span className="text-right text-xs text-ink-300">{NORTHERN_SEASONS[e.kind][latitude < 0 ? 1 : 0]} begins here</span>}
 								</span>
-								<span className="font-mono text-sm text-ink-200">{formatEclipseTime(e.time, timeZone ?? '')}</span>
+								<span className="font-mono text-sm text-ink-200">{formatEclipseTime(e.time, timeZone)}</span>
 							</li>
 						))}
 					</ul>

@@ -2,7 +2,8 @@ import type { SatelliteGroundTrack as SatelliteGroundTrackData } from 'api'
 import { useEffect, useMemo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatGeographic, formatKilometers } from '../../format'
-import type { SkyObserverSettings } from '../../profile/schema'
+import type { GeographicLocation } from '../../location/site'
+import type { DisplayZone } from '../../location/zone'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
@@ -17,8 +18,8 @@ import { type GroundTrackPoint, type GroundTrackShadow, groundTrackAt, groundTra
 // Ground Track tab of Artificial Satellites: the path of the point below the satellite selected on the world map, from
 // one orbit before an instant (the real current time, which it follows, or the Sky's) to the orbits asked for after it,
 // dashed before the instant and solid after it, fainter in the Earth's shadow, with the satellite, the region that sees
-// it above the horizon, the night side, and the Sky observer at the instant shown. A cursor chooses another instant of
-// the window, which Show in Sky opens in the Sky. The footprint is a spherical Earth with an ideal horizon. Zooming,
+// it above the horizon, the night side, and the observing site of the active profile at the instant shown, in the
+// display zone. A cursor chooses another instant of the window, which Show in Sky opens in the Sky. The footprint is a spherical Earth with an ideal horizon. Zooming,
 // panning, moving the cursor, and hiding a layer ask the server for nothing.
 
 // Stroke width, in screen pixels, and classes of the track by illumination.
@@ -35,7 +36,7 @@ interface GroundTrackOverlayProps {
 	readonly point?: GroundTrackPoint
 	// Layers shown.
 	readonly layers: GroundTrackLayers
-	// Sky observer, degrees; absent without one.
+	// Observing site of the active profile, degrees; absent without one.
 	readonly observer?: { readonly latitude: number; readonly longitude: number }
 }
 
@@ -68,12 +69,20 @@ function GroundTrackOverlay({ track, point, layers, observer }: GroundTrackOverl
 	)
 }
 
+// Properties of the Ground Track tab.
+interface SatelliteGroundTrackProps {
+	// Observing site of the active profile; absent without one.
+	readonly observer?: GeographicLocation
+	// Zone the instant shown is written in.
+	readonly zone: DisplayZone
+}
+
 // Ground Track tab.
-export function SatelliteGroundTrack({ observer }: { readonly observer?: SkyObserverSettings }) {
+export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackProps) {
 	const state = useSnapshot(artificialSatellitesState)
 	const { groundTrackDraft, groundTrack: track, groundTrackAnchor: anchor, groundTrackLoading: loading, groundTrackError: error, groundTrackCursor: cursor, groundTrackLayers: layers, selectedId, details } = state
 	const draft = artificialSatellitesState.groundTrackDraft
-	const timeZone = observer?.timeZone ?? ''
+	const timeZone = zone.zone
 	const name = details?.object.name ?? selectedId ?? 'satellite'
 	const instant = groundTrackInstant(state)
 	const point = track && instant !== undefined ? groundTrackAt(track, Math.min(Math.max(instant, track.start), track.times.at(-1)!)) : undefined
@@ -81,7 +90,7 @@ export function SatelliteGroundTrack({ observer }: { readonly observer?: SkyObse
 	const mapRef = useRef<WorldMapHandle>(null)
 	const centered = useRef<string>(undefined)
 
-	// The map layers are drawn again only when the track, the instant, the layers, or the observer change, never on zoom
+	// The map layers are drawn again only when the track, the instant, the layers, or the site change, never on zoom
 	// or pan.
 	const overlay = useMemo(() => track && <GroundTrackOverlay track={track} point={point} layers={layers} observer={site} />, [track, point?.time, layers, site?.latitude, site?.longitude])
 
@@ -126,7 +135,7 @@ export function SatelliteGroundTrack({ observer }: { readonly observer?: SkyObse
 						<Checkbox label="Fainter in the Earth's shadow" checked={layers.shadow} onChange={(checked) => (artificialSatellitesState.groundTrackLayers.shadow = checked)} />
 						<Checkbox label="Footprint (spherical Earth, ideal horizon)" checked={layers.footprint} onChange={(checked) => (artificialSatellitesState.groundTrackLayers.footprint = checked)} />
 						<Checkbox label="Night side" checked={layers.night} onChange={(checked) => (artificialSatellitesState.groundTrackLayers.night = checked)} />
-						<Checkbox label="Sky observer" checked={layers.observer} disabled={!site} onChange={(checked) => (artificialSatellitesState.groundTrackLayers.observer = checked)} />
+						<Checkbox label="Observing site" checked={layers.observer} disabled={!site} onChange={(checked) => (artificialSatellitesState.groundTrackLayers.observer = checked)} />
 					</EclipseMapLegend>
 				)}
 				{loading && <p className="pointer-events-none absolute top-3 left-3 m-0 rounded-sm bg-base-100/90 px-2 py-1 text-xs text-ink-200">Computing the ground track…</p>}
@@ -168,7 +177,7 @@ export function SatelliteGroundTrack({ observer }: { readonly observer?: SkyObse
 						<span className="font-mono text-ink-200 tabular-nums">{formatGeographic(point.subpoint.latitude, point.subpoint.longitude)}</span>
 						<span>Height {formatKilometers(point.heightKm)}</span>
 						<span>{SHADOW_LABELS[point.shadow]}</span>
-						{inside !== undefined && <span>{inside ? "Above the observer's horizon" : "Below the observer's horizon"}</span>}
+						{inside !== undefined && <span>{inside ? "Above the site's horizon" : "Below the site's horizon"}</span>}
 						<span>
 							Period {track.periodMinutes.toFixed(1)} min{track.truncated ? ' · later samples were left out' : ''}
 						</span>

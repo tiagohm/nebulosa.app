@@ -6,16 +6,15 @@ import { controlRuntime, watchedDeviceState } from '../equipment-control/control
 import { roleDevice } from '../equipment/equipment'
 import { roleDefinition } from '../equipment/roles'
 import { useActiveServerId, useWatchedDevices } from '../equipment/useEquipment'
+import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { notificationsState } from '../notifications/notifications'
 import { operationsState } from '../operations'
 import { activeProfile, activeSetup, astronomicalClockPreferences, profileState, statusChipPreferences } from '../profile/profile'
-import { BROWSER_TIME_ZONE } from '../sky/clock'
 import { Icon, type IconName } from '../ui/Icon'
 import { astronomicalClockRuntime, effectiveReadings, watchAstronomicalClock } from './statusbar/astronomicalclock'
 import { AstronomicalClockChip } from './statusbar/AstronomicalClockChip'
 // oxfmt-ignore
 import { activeCapture, activeGuiding, type BarOperation, barOperations, CHIP_ROLES, type ChipRole, type ChipValue, fitClocks, fitItems, fitOperations, MOUNT_MOTION_ID, mountAbortTarget, mountChip, mountMotionRunning, mountMoving, roleChip, type ScopedDevice, scopedDeviceErrors, scopedRunningOperations } from './statusbar/selectors'
-import { formatGeographic } from '../format'
 import { StatusDetails } from './statusbar/StatusDetailsPanel'
 import { OperationItem, ServerLinkItem, StatusChip, useOperationAbortable } from './statusbar/StatusItems'
 
@@ -103,11 +102,11 @@ export function StatusBar() {
 	const devices = useWatchedDevices()
 	const profile = activeProfile(profiles)
 	const setup = activeSetup(profile)
-	const observer = profile.settings.sky.observer
+	const observer = useActiveSite()
 	const clock = astronomicalClockPreferences(profile.settings)
 	const readings = effectiveReadings(clock, observer !== undefined)
-	const timeZone = observer?.timeZone ?? BROWSER_TIME_ZONE
-	const site = observer && (observer.name ?? formatGeographic(observer.latitude, observer.longitude))
+	const timeZone = useDisplayZone(observer).zone
+	const site = observer?.name
 	const mount = roleDevice(setup, 'MOUNT', devices)
 	const mainCamera = roleDevice(setup, 'MAIN_CAMERA', devices)
 	const running = scopedRunningOperations(known, serverId)
@@ -140,7 +139,7 @@ export function StatusBar() {
 	const [latitude, longitude, elevation] = [observer?.latitude, observer?.longitude, observer?.elevation]
 	const clockShown = clock.enabled
 
-	// Keeps the sample of the clock current while it is shown, for the observer of the profile; a socket that comes back
+	// Keeps the sample of the clock current while it is shown, for the observing site of the profile; a socket that comes back
 	// starts it again, since a server that was away may have restarted.
 	useEffect(() => {
 		if (!clockShown) return

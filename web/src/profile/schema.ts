@@ -19,6 +19,7 @@ import type {
 } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { AnnotationDensity, AnnotationLayers } from '../images/images'
+import type { DisplayZoneOverride } from '../location/zone'
 import type { ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
@@ -182,18 +183,14 @@ export const CLOSE_APPROACH_DISTANCE_DISPLAYS = ['LD', 'au', 'km'] as const
 // Unit a distance is shown in.
 export type CloseApproachDistanceDisplay = (typeof CLOSE_APPROACH_DISTANCE_DISPLAYS)[number]
 
-// How the times of the encounters are shown: UTC, or the civil zone of the Sky observer.
-export const CLOSE_APPROACH_TIME_DISPLAYS = ['utc', 'observer'] as const
-
-// How the times of the encounters are shown.
-export type CloseApproachTimeDisplay = (typeof CLOSE_APPROACH_TIME_DISPLAYS)[number]
-
 // Preferences of the Close Approaches tool: how values are shown, and what a new tab searches first.
 export interface CloseApproachPreferences {
 	// Unit of the distances shown.
 	readonly distanceDisplay: CloseApproachDistanceDisplay
-	// Zone of the times shown.
-	readonly timeDisplay: CloseApproachTimeDisplay
+	// Zone the times of the encounters are shown in, resolved by resolveDisplayZone against the active observing site:
+	// the profile's default (Settings → Date & Time), the site's, UTC, the browser's, or an IANA zone. Display only: it
+	// never changes an instant or a request.
+	readonly timeDisplay: DisplayZoneOverride
 	// Target body of the first search.
 	readonly body: CloseApproachBody
 	// Largest nominal distance of the first search, in `distanceUnit`, above 0.
@@ -202,8 +199,9 @@ export interface CloseApproachPreferences {
 	readonly distanceUnit: (typeof CLOSE_APPROACH_DISTANCE_UNITS)[number]
 }
 
-// Preferences of a profile that has not edited them: lunar distances, UTC, and the Earth within 10 LD.
-export const DEFAULT_CLOSE_APPROACH_PREFERENCES: CloseApproachPreferences = { distanceDisplay: 'LD', timeDisplay: 'utc', body: 'Earth', distanceMax: 10, distanceUnit: 'LD' }
+// Preferences of a profile that has not edited them: lunar distances, the profile's default zone, and the Earth within
+// 10 LD.
+export const DEFAULT_CLOSE_APPROACH_PREFERENCES: CloseApproachPreferences = { distanceDisplay: 'LD', timeDisplay: { mode: 'default' }, body: 'Earth', distanceMax: 10, distanceUnit: 'LD' }
 
 // Zones civil times can be shown in by default: the observing site's (the browser's when there is none), UTC, or the
 // browser's.
@@ -317,26 +315,8 @@ export const DEFAULT_MOUNT_REMOTE_BINDINGS: Readonly<Record<MountRemoteProtocol,
 	stellarium: { host: '0.0.0.0', port: 10001 },
 }
 
-// Location the Sky workspace observes from. Degrees and meters, entered manually; never assumed.
-export interface SkyObserverSettings {
-	// Name of the place, such as "Backyard"; absent when not named.
-	name?: string
-	// Geodetic latitude in degrees, north positive, [-90, 90].
-	latitude: number
-	// Geodetic longitude in degrees, east positive, [-180, 180].
-	longitude: number
-	// Height above the ellipsoid in meters, [-500, 9000].
-	elevation: number
-	// IANA time zone the Sky shows and enters times in, such as "America/Sao_Paulo"; absent uses the
-	// browser's. It never changes positions, only how instants are read.
-	timeZone?: string
-}
-
-// Sky preferences of a profile.
+// Sky preferences of a profile. Where the Sky observes from is the profile's observing site (Profile.activeSiteId).
 export interface SkySettings {
-	// Observer location; absent until the user sets one, and then the sky is shown without a horizon
-	// and positions are geocentric.
-	observer?: SkyObserverSettings
 	// What the star map shows; absent until the user changes a preference, and then every default holds.
 	display?: SkyDisplaySettings
 	// Field of view drawn around the selection; absent until the user creates a preset.

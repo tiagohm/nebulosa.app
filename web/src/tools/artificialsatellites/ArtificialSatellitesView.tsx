@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { activeSite, locationKey, siteState } from '../../location/site'
+import { useActiveSite, useDisplayZone } from '../../location/useLocation'
 import { activeProfile, profileState, satelliteFavorites } from '../../profile/profile'
 import { satelliteCatalogState } from '../../satellites/satellites'
 import { routeState } from '../../shell/route'
@@ -19,8 +21,9 @@ import { SatellitePasses } from './SatellitePasses'
 import { SatelliteSettings } from './SatelliteSettings'
 
 // Artificial Satellites tool: the satellite catalog of the server (search, favorites of the profile), the passes and
-// ephemeris of the satellite selected for the Sky observer, with its position now read again every 15 seconds, and its
-// ground track on the world map, which follows the real time on the same tick. Its workspace actions hold the Import
+// ephemeris of the satellite selected for the observing site of the active profile (the tool has no place of its own),
+// with its position now read again every 15 seconds, and its ground track on the world map, which follows the real
+// time on the same tick. Civil times are shown in the profile's display zone. Its workspace actions hold the Import
 // Elements popover and the Settings of the tool, where the CelesTrak groups are downloaded on request or automatically.
 // It commands no device and changes the Sky only through Open in Sky and Show in Sky. The details are the contextual
 // panel on wide screens and take the place of the content below them, as in Close Approaches.
@@ -32,15 +35,17 @@ export function ArtificialSatellites() {
 	const { revision } = useSnapshot(satelliteCatalogState)
 	const route = useSnapshot(routeState)
 	const { settings } = activeProfile(profiles)
-	const observer = settings.sky.observer
+	const observer = useActiveSite()
+	const zone = useDisplayZone(observer)
+	const observerKey = locationKey(observer)
 	const favorites = satelliteFavorites(settings)
 	const docked = useMediaQuery(WIDE_SCREEN)
 	const linked = route.route.workspace === 'tools' ? route.route.satellite : undefined
 	const [importOpen, setImportOpen] = useState(false)
 	const [settingsOpen, setSettingsOpen] = useState(false)
 
-	// Follows the Sky observer, which every prediction is for.
-	useEffect(() => followSatelliteObserver(artificialSatellitesState, observer), [observer?.latitude, observer?.longitude, observer?.elevation])
+	// Follows the place of the observing site, which every prediction is for; its name and zone never ask again.
+	useEffect(() => followSatelliteObserver(artificialSatellitesState, observer), [observerKey])
 
 	// Reads the position now of the satellite selected again every POSITION_REFRESH_MS while the page is shown, when it
 	// has elements to predict with, and advances a ground track shown that follows the real time.
@@ -48,7 +53,7 @@ export function ArtificialSatellites() {
 		if (!state.selectedId) return undefined
 		const timer = setInterval(() => {
 			if (document.hidden || !artificialSatellitesState.details?.elements) return
-			void loadSatellitePosition(artificialSatellitesState, activeProfile(profileState).settings.sky.observer)
+			void loadSatellitePosition(artificialSatellitesState, activeSite(activeProfile(profileState), siteState.sites))
 			if (artificialSatellitesState.tab === 'groundTrack') tickSatelliteGroundTrack(artificialSatellitesState)
 		}, POSITION_REFRESH_MS)
 		return () => clearInterval(timer)
@@ -73,8 +78,8 @@ export function ArtificialSatellites() {
 		if (linked && linked !== artificialSatellitesState.selectedId) void selectSatellite(artificialSatellitesState, linked, observer)
 	}, [linked])
 
-	const panel = state.selectedId ? <SatelliteDetailsPanel observer={observer} /> : undefined
-	const content = state.tab === 'catalog' ? <SatelliteCatalog /> : state.tab === 'passes' ? <SatellitePasses observer={observer} /> : state.tab === 'ephemeris' ? <SatelliteEphemeris observer={observer} /> : <SatelliteGroundTrack observer={observer} />
+	const panel = state.selectedId ? <SatelliteDetailsPanel observer={observer} zone={zone} /> : undefined
+	const content = state.tab === 'catalog' ? <SatelliteCatalog /> : state.tab === 'passes' ? <SatellitePasses observer={observer} zone={zone} /> : state.tab === 'ephemeris' ? <SatelliteEphemeris observer={observer} zone={zone} /> : <SatelliteGroundTrack observer={observer} zone={zone} />
 	const tabs = <SegmentedControl options={SATELLITE_TABS} value={state.tab} format={(tab) => SATELLITE_TAB_LABELS[tab]} onChange={(tab) => (artificialSatellitesState.tab = tab)} />
 
 	const settingsModal = <SatelliteSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />

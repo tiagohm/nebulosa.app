@@ -1,7 +1,7 @@
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { formatDegrees } from '../format'
-import type { SkyObserverSettings } from '../profile/schema'
+import type { GeographicLocation } from '../location/site'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
@@ -20,7 +20,7 @@ export interface MountInspectorProps {
 	// Identity of the selected mount.
 	readonly mountRef: MountRef
 	// Observer of the active profile, for altitude and azimuth.
-	readonly observer?: SkyObserverSettings
+	readonly observer?: GeographicLocation
 	// Opens the framing settings, which draw the field of view around the selection.
 	readonly onShowFraming: () => void
 }
@@ -65,7 +65,7 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 								<DataRow label="Azimuth">{formatDegrees(horizontal.azimuth)}</DataRow>
 							</>
 						)}
-						<Notice>As reported by the mount now{horizontal ? '; altitude is geometric, for the profile observer' : ''}.</Notice>
+						<Notice>As reported by the mount now{horizontal ? '; altitude is geometric, for the observing site of the profile' : ''}.</Notice>
 					</>
 				) : (
 					<p className="m-0 text-ink-300">{!same ? 'This mount is no longer the profile’s mount.' : clock.mode !== 'now' ? 'The mount position is shown in real time only.' : 'The mount is disconnected; its position is unknown.'}</p>

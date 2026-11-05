@@ -1,9 +1,8 @@
 import type { SatelliteDetails, SatellitePassesResponse, SatellitePassPrediction } from 'api'
 import { proxy } from 'valtio'
 import { fetchJson, jsonInit } from '../../http'
-import type { SkyObserverSettings } from '../../profile/schema'
+import { type GeographicLocation, siteObserver } from '../../location/site'
 import { createRequestGuard } from '../selection'
-import { apiObserver } from '../sky'
 
 // State of the Satellite Inspector of the Sky, tab memory: the details of the satellite selected, its next pass for the
 // Sky observer after the instant the Sky shows, and whether the map follows it and draws its track. The position is the
@@ -66,7 +65,7 @@ export async function inspectSatellite(state: SkySatelliteState, noradId: string
 }
 
 // Finds the next pass above the horizon for the observer within two days of an instant (Unix milliseconds).
-export async function findNextSatellitePass(state: SkySatelliteState, observer: SkyObserverSettings, time: number, fetch: Fetch = (input, init) => globalThis.fetch(input, init)) {
+export async function findNextSatellitePass(state: SkySatelliteState, observer: GeographicLocation, time: number, fetch: Fetch = (input, init) => globalThis.fetch(input, init)) {
 	const noradId = state.noradId
 	if (!noradId) return
 	const request = passGuard.begin()
@@ -74,7 +73,7 @@ export async function findNextSatellitePass(state: SkySatelliteState, observer: 
 	state.nextPassError = undefined
 
 	try {
-		const body = { observer: apiObserver(observer), start: time, end: time + NEXT_PASS_WINDOW_MS, minAltitude: 0, maxSunAltitude: CIVIL_TWILIGHT }
+		const body = { observer: siteObserver(observer), start: time, end: time + NEXT_PASS_WINDOW_MS, minAltitude: 0, maxSunAltitude: CIVIL_TWILIGHT }
 		const { passes } = await fetchJson<SatellitePassesResponse>({ fetch }, `/api/satellites/${encodeURIComponent(noradId)}/passes`, jsonInit('POST', body, request.signal))
 		if (!request.current()) return
 		// A pass already in progress is the current one; the next is the first that rises.

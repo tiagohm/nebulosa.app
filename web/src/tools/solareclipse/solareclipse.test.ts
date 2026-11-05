@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { SolarEclipseSummary } from 'api'
 import { proxy } from 'valtio'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { contactName, findEclipse, findEclipseFrom, globalPoints, initialSolarEclipseState, labelRows, limitName, nextEclipse, openSolarEclipseMap, selectEvent, selectPlace, selectPoint, setLayer, setViewSettings, showEclipse, type SolarEclipseState } from './solareclipse'
+import { contactName, findEclipse, findEclipseFrom, globalPoints, initialSolarEclipseState, labelRows, limitName, nextEclipse, openSolarEclipseMap, selectEvent, selectMapPlace, selectPoint, setLayer, setViewSettings, showEclipse, type SolarEclipseState, syncPlace } from './solareclipse'
 
 // Fake API whose responses are released by the test, in any order.
 function fakeApi() {
@@ -55,12 +55,14 @@ function newState(): SolarEclipseState {
 	return proxy<SolarEclipseState>(initialSolarEclipseState())
 }
 
-test('opens on the next eclipse after now, with the Sky observer as the place', async () => {
+test('opens on the next eclipse after now, from the active site', async () => {
 	const state = newState()
 	const { io, release } = fakeApi()
+	const home = { name: 'Home', latitude: -23.5, longitude: -46.6, elevation: 760, timeZone: 'America/Sao_Paulo' }
 
-	openSolarEclipseMap(state, { name: 'Home', latitude: -23.5, longitude: -46.6, elevation: 760, timeZone: 'America/Sao_Paulo' }, io)
-	expect(state.place).toEqual({ source: 'observer', longitude: -46.6, latitude: -23.5, name: 'Home', timeZone: 'America/Sao_Paulo' })
+	openSolarEclipseMap(state, home, io)
+	expect(state.location).toEqual({ mode: 'active' })
+	expect(state.place).toEqual({ longitude: -46.6, latitude: -23.5 })
 	expect(state.loading).toBe(true)
 
 	await release((url) => url === `/api/eclipses/solar?time=${Date.UTC(2026, 0, 1)}&direction=next`, A)
@@ -72,10 +74,12 @@ test('opens on the next eclipse after now, with the Sky observer as the place', 
 	expect(state.local?.eclipseId).toBe(A.id)
 	expect(state.loading).toBe(false)
 
-	// Opening again keeps what is shown.
+	// Opening again keeps what is shown, and a location chosen.
+	state.location = { mode: 'saved', siteId: 'other' }
 	const { io: again, requested } = fakeApi()
-	openSolarEclipseMap(state, undefined, again)
+	openSolarEclipseMap(state, home, again)
 	expect(requested).toEqual([])
+	expect(state.location).toEqual({ mode: 'saved', siteId: 'other' })
 })
 
 test('a late answer of a superseded search is discarded', async () => {
@@ -97,7 +101,7 @@ test('a linked eclipse replaces the one shown, with its local circumstances', as
 	const state = newState()
 	state.eclipse = A
 	state.map = mapOf(A)
-	state.place = { source: 'manual', longitude: 10, latitude: 20 }
+	state.place = { longitude: 10, latitude: 20 }
 	const { io, requested, release } = fakeApi()
 
 	void showEclipse(state, B.id, io)
@@ -144,7 +148,8 @@ test('a click on the map asks only for the local circumstances, and a contact or
 	state.map = mapOf(A)
 	const { io, requested, release } = fakeApi()
 
-	void selectPlace(state, { source: 'map', longitude: 10, latitude: 20 }, io)
+	void selectMapPlace(state, { longitude: 10, latitude: 20 }, io)
+	expect(state.location).toEqual({ mode: 'manual', latitude: 20, longitude: 10, elevation: 0, timeZone: 'UTC' })
 	expect(requested).toEqual([`/api/eclipses/solar/${A.id}/local?longitude=10&latitude=20&event=MAX&orientation=zenith&handedness=eastRight&ghosts=true`])
 
 	void selectEvent(state, 'C2', io)
@@ -165,7 +170,7 @@ test('a click on the map asks only for the local circumstances, and a contact or
 test('a visible-only search that finds nothing keeps the eclipse shown and says why', async () => {
 	const state = newState()
 	state.eclipse = A
-	state.place = { source: 'manual', longitude: 10, latitude: 80 }
+	state.place = { longitude: 10, latitude: 80 }
 	state.visibleOnly = true
 	const { io, release } = fakeApi()
 
@@ -176,6 +181,35 @@ test('a visible-only search that finds nothing keeps the eclipse shown and says 
 	expect(state.notice).toBe('No solar eclipse visible here within 48 eclipses')
 	expect(state.error).toBeUndefined()
 	expect(state.loading).toBe(false)
+})
+
+test('a new elevation, name, or zone of the same place, or a zone of the times, asks for nothing; a new place asks again', async () => {
+	const state = newState()
+	state.eclipse = A
+	state.map = mapOf(A)
+	const { io, requested, release } = fakeApi()
+
+	void syncPlace(state, { latitude: 20, longitude: 10, elevation: 0 }, io)
+	await release((url) => url.includes('longitude=10&latitude=20'), localOf(A, 10))
+	expect(requested.length).toBe(1)
+
+	state.location = { mode: 'manual', latitude: 20, longitude: 10, elevation: 500, timeZone: 'Asia/Tokyo' }
+	void syncPlace(state, { latitude: 20, longitude: 10, elevation: 500 }, io)
+	state.zone = { mode: 'zone', zone: 'Europe/Berlin' }
+	expect(requested.length).toBe(1)
+	expect(state.local?.location.longitude).toBe(10)
+
+	// A click keeps the zone of the coordinates entered.
+	void selectMapPlace(state, { longitude: 30, latitude: 20 }, io)
+	expect(state.location).toEqual({ mode: 'manual', latitude: 20, longitude: 30, elevation: 0, timeZone: 'Asia/Tokyo' })
+	expect(state.local).toBeUndefined()
+	expect(requested.at(-1)).toStartWith(`/api/eclipses/solar/${A.id}/local?longitude=30&latitude=20`)
+
+	// A location that gives no place, such as a deleted site, drops the request and the circumstances.
+	void syncPlace(state, undefined, io)
+	expect(state.place).toBeUndefined()
+	expect(state.localLoading).toBe(false)
+	expect(requested.length).toBe(2)
 })
 
 test('a failed map is reported as an error', async () => {

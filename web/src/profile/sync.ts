@@ -83,7 +83,7 @@ function setting(key: OptionalSetting): PreferenceField {
 }
 
 // Preference kept as an optional field of the Sky settings.
-function skySetting(key: keyof Pick<SkySettings, 'observer' | 'display'>): PreferenceField {
+function skySetting(key: keyof Pick<SkySettings, 'display'>): PreferenceField {
 	return {
 		get: (settings) => settings.sky[key],
 		set: (settings, value) => Object.assign(settings.sky, { [key]: value }),
@@ -97,7 +97,6 @@ type KeptFraming = Pick<SkyFramingSettings, 'presets' | 'manualSensor' | 'equipm
 const PREFERENCES: Readonly<Record<ProfilePreferenceKey, PreferenceField>> = {
 	telescope: setting('telescope'),
 	guideTelescope: setting('guideTelescope'),
-	skyObserver: skySetting('observer'),
 	skyDisplay: skySetting('display'),
 	skyFraming: {
 		get: ({ sky: { framing } }) => framing && ({ presets: framing.presets, manualSensor: framing.manualSensor, equipmentRotation: framing.equipmentRotation } satisfies KeptFraming),

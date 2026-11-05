@@ -1,108 +1,46 @@
-import { useState } from 'react'
-import type { SkyObserverSettings } from '../../profile/schema'
-import { PanelSection } from '../../shell/ContextualPanel'
-import { TIME_ZONES } from '../../sky/clock'
-import { Button } from '../../ui/Button'
-import { DataRow } from '../../ui/DataRow'
+import type { ResolvedLocation, ToolLocation } from '../../location/site'
+import { TimeZoneSelect } from '../../location/TimeZoneSelect'
+import { ToolLocationSection } from '../../location/ToolLocationSection'
+import { describeDisplayZone, type DisplayZone, type DisplayZoneOverride } from '../../location/zone'
 import { Notice } from '../../ui/Notice'
-import { TextInput } from '../../ui/TextInput'
-import { type EclipsePlace, observerPlace } from './eclipse'
 
-// Pieces of the Local Circumstances panels of the eclipse map tools: the time zones offered and the
-// Location section, where the place is the Sky observer, a click on the map, or coordinates typed in. Nothing here
-// changes the profile.
+// Pieces of the Local Circumstances panels of the eclipse map tools: the Location section, where the tool observes
+// from the active site, another saved site, or coordinates typed in or clicked on the map, and the selector of the
+// zone the times are shown in. Neither changes the profile, a site, or a request.
 
-// Time zones offered for the times: UTC, the browser's (empty), and every other IANA zone.
-export const DISPLAY_TIME_ZONES = ['UTC', ...TIME_ZONES.filter((zone) => zone !== 'UTC')]
-
-// Names of the sources of a place.
-const PLACE_SOURCES = { observer: 'Sky observer', map: 'Map selection', manual: 'Coordinates entered' } as const
-
-// Text of a coordinate field: the value in degrees to a ten-thousandth (about 11 m), or empty.
-function fieldText(value: number | undefined) {
-	return value === undefined ? '' : `${+value.toFixed(4)}`
+export interface EclipseLocationSectionProps {
+	// Location chosen for the tool.
+	readonly value: ToolLocation
+	// Place it gives; absent when there is none.
+	readonly location?: ResolvedLocation
+	// Receives the location chosen.
+	readonly onChange: (location: ToolLocation) => void
 }
 
-interface PlaceFormProps {
-	// Latitude shown when the form opens, in degrees.
-	readonly latitude?: number
-	// Longitude shown when the form opens, in degrees.
-	readonly longitude?: number
-	// Receives the place typed in once both coordinates are in range.
-	readonly onApply: (place: EclipsePlace) => void
+// Location section of an eclipse map; the elevation is not asked for, since the local circumstances ignore it.
+export function EclipseLocationSection({ value, location, onChange }: EclipseLocationSectionProps) {
+	return <ToolLocationSection value={value} location={location} onChange={onChange} hint={<Notice>A click on the map observes from that point, in the zone of the coordinates entered before, or UTC.</Notice>} />
 }
 
-// Coordinates of a place typed in, applied together.
-function PlaceForm({ latitude, longitude, onApply }: PlaceFormProps) {
-	const [latitudeText, setLatitudeText] = useState(fieldText(latitude))
-	const [longitudeText, setLongitudeText] = useState(fieldText(longitude))
-	const [error, setError] = useState<string>()
+export interface EclipseZoneSelectProps {
+	// Zone override of the tool.
+	readonly value: DisplayZoneOverride
+	// Zone the times are shown in, resolved from the override and the location.
+	readonly zone: DisplayZone
+	// Place the tool observes from; absent when there is none.
+	readonly location?: ResolvedLocation
+	// Whether the location is not the active profile's site.
+	readonly selectedSite: boolean
+	// Receives the override chosen.
+	readonly onChange: (value: DisplayZoneOverride) => void
+}
 
-	function apply() {
-		const lat = latitudeText.trim() === '' ? Number.NaN : +latitudeText
-		const lon = longitudeText.trim() === '' ? Number.NaN : +longitudeText
-
-		if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180)) {
-			setError('Latitude must be between −90° and 90°, and longitude between −180° and 180° (east positive).')
-			return
-		}
-
-		setError(undefined)
-		onApply({ source: 'manual', latitude: lat, longitude: lon })
-	}
-
+// Selector of the zone of the times, saying so when the browser's zone stands in for a location there is none of.
+export function EclipseZoneSelect({ value, zone, location, selectedSite, onChange }: EclipseZoneSelectProps) {
 	return (
-		<form
-			className="flex flex-col gap-2"
-			onSubmit={(e) => {
-				e.preventDefault()
-				apply()
-			}}
-		>
-			<div className="grid grid-cols-2 gap-2">
-				<TextInput label="Latitude" suffix="°" inputMode="decimal" value={latitudeText} onChange={(e) => setLatitudeText(e.target.value)} />
-				<TextInput label="Longitude" suffix="°" inputMode="decimal" value={longitudeText} onChange={(e) => setLongitudeText(e.target.value)} />
-			</div>
-			<Notice>Degrees, north and east positive.</Notice>
-			{error && <Notice error>{error}</Notice>}
-			<Button type="submit" variant="secondary" className="self-start">
-				Apply Coordinates
-			</Button>
-		</form>
-	)
-}
-
-export interface LocationSectionProps {
-	// Place shown, absent until one is chosen.
-	readonly place?: EclipsePlace
-	// Sky observer of the active profile; absent when none is set.
-	readonly observer?: SkyObserverSettings
-	// Receives the place chosen: coordinates typed in, or the Sky observer.
-	readonly onSelect: (place: EclipsePlace) => void
-}
-
-// Location section: the place shown, its coordinates to edit, and the Sky observer to go back to.
-export function LocationSection({ place, observer, onSelect }: LocationSectionProps) {
-	const placeKey = place ? `${place.source}:${place.latitude}:${place.longitude}` : 'none'
-
-	return (
-		<PanelSection title="Location">
-			{place ? (
-				<>
-					<DataRow label="Source">{place.source === 'observer' && place.name ? place.name : PLACE_SOURCES[place.source]}</DataRow>
-					<DataRow label="Latitude">{place.latitude.toFixed(4)}°</DataRow>
-					<DataRow label="Longitude">{place.longitude.toFixed(4)}°</DataRow>
-				</>
-			) : (
-				<Notice>Select a location on the map, or enter its coordinates.</Notice>
-			)}
-			<PlaceForm key={placeKey} latitude={place?.latitude} longitude={place?.longitude} onApply={onSelect} />
-			{observer && place?.source !== 'observer' && (
-				<Button variant="ghost" className="self-start" onClick={() => onSelect(observerPlace(observer))}>
-					Use Sky Observer
-				</Button>
-			)}
-			<Notice>Choosing a location here never changes the Sky observer of the profile.</Notice>
-		</PanelSection>
+		<>
+			<TimeZoneSelect value={value} site={location} selectedSite={selectedSite} onChange={onChange} />
+			{zone.source === 'browserFallback' && <Notice>Times are in {describeDisplayZone(zone)}: the tool has no location.</Notice>}
+		</>
 	)
 }

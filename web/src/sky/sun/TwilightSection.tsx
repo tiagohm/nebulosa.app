@@ -22,7 +22,7 @@ function stateText(state: SolarDailyState, depression: string) {
 }
 
 // Dawn and dusk cells of a twilight limit.
-function Crossings({ crossings, depression, day, timeZone }: { readonly crossings: SolarTwilightCrossings; readonly depression: string; readonly day: SunLocalDay; readonly timeZone?: string }) {
+function Crossings({ crossings, depression, day, timeZone }: { readonly crossings: SolarTwilightCrossings; readonly depression: string; readonly day: SunLocalDay; readonly timeZone: string }) {
 	if (crossings.dawn === undefined && crossings.dusk === undefined) return <span className="col-span-2 text-right text-ink-300">{stateText(crossings.state, depression)}</span>
 
 	return (
@@ -43,7 +43,7 @@ function astronomicalNight(day: SunLocalDay) {
 }
 
 // Says from when to when the astronomical night of a day lasts; undefined without a start.
-function astronomicalNightSpan(day: SunLocalDay, timeZone?: string) {
+function astronomicalNightSpan(day: SunLocalDay, timeZone: string) {
 	const { start, end } = day.astronomicalNight
 	if (start === undefined) return undefined
 	const from = formatLocalTime(start, day.start, undefined, timeZone)
@@ -51,7 +51,7 @@ function astronomicalNightSpan(day: SunLocalDay, timeZone?: string) {
 }
 
 // Twilight section of the Sun Inspector; without an observer it asks for the location.
-export function TwilightSection({ day, hasObserver, timeZone }: { readonly day?: SunLocalDay; readonly hasObserver: boolean; readonly timeZone?: string }) {
+export function TwilightSection({ day, hasObserver, timeZone }: { readonly day?: SunLocalDay; readonly hasObserver: boolean; readonly timeZone: string }) {
 	const dusk = day?.astronomical.dusk
 	const summary = dusk !== undefined && day ? `Astronomical dusk ${formatLocalTime(dusk, day.start, undefined, timeZone)}` : undefined
 

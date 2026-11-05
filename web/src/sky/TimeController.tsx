@@ -1,19 +1,21 @@
 import { cn } from 'cn'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { type WallTime, wallTimeToInstant, zonedWallTime, zoneShortName } from '../location/zone'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
-import { pauseSkyTime, playSkyTime, SKY_TIME_RATES, setSkyTime, setSkyTimeNow, skyClock, skyTime, stepSkyTime, type WallTime, zonedWallTime, zonedWallTimeToUtc } from './clock'
+import { pauseSkyTime, playSkyTime, SKY_TIME_RATES, setSkyTime, setSkyTimeNow, skyClock, skyTime, stepSkyTime } from './clock'
 
-// Time bar of the Sky workspace, below the star map: shows and edits the simulated instant in the
-// observer's time zone (or the browser's), returns to the real time, steps it, and plays it at a chosen
-// speed, forwards or backwards. Only this bar re-renders as the instant advances; the map follows the
-// clock on its own.
+// Time bar of the Sky workspace, below the star map: shows and edits the simulated instant in the profile's display zone,
+// returns to the real time, steps it, and plays it at a chosen speed, forwards or backwards. A date and time typed that
+// the clocks of the zone read twice shows the first of the two instants, and one they skip is refused, each saying so;
+// changing the zone only reads the same instant again. Only this bar re-renders as the instant advances; the map follows
+// the clock on its own.
 
 export interface TimeControllerProps {
-	// IANA time zone the instant is shown and entered in; the browser's when absent.
-	readonly timeZone?: string
+	// IANA time zone the instant is shown and entered in.
+	readonly timeZone: string
 }
 
 // Step sizes, by label, in milliseconds.
@@ -63,16 +65,13 @@ function timeValue(wall: WallTime) {
 	return `${pad(wall.hour)}:${pad(wall.minute)}:${pad(wall.second)}`
 }
 
-// Short name of a time zone at an instant, such as "GMT-3".
-function zoneName(time: number, timeZone?: string) {
-	return new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'short' }).formatToParts(time).find((part) => part.type === 'timeZoneName')?.value ?? ''
-}
-
 // Time bar of the Sky workspace.
 export function TimeController({ timeZone }: TimeControllerProps) {
 	const clock = useSnapshot(skyClock)
 	const [step, setStep] = useState<StepLabel>('1 hour')
 	const [, redraw] = useState(0)
+	// What the latest edit could not show exactly, until the next one.
+	const [notice, setNotice] = useState<string>()
 	const time = skyTime(clock, Date.now())
 	const wall = zonedWallTime(time, timeZone)
 	const playing = clock.mode === 'playing'
@@ -83,10 +82,20 @@ export function TimeController({ timeZone }: TimeControllerProps) {
 		return () => clearInterval(timer)
 	}, [clock.mode, playing])
 
-	// Shows the instant of an edited date or time; an empty or partial value is ignored.
+	// Shows the instant of an edited date or time; an empty or partial value is ignored. A reading the clocks repeat
+	// shows its first instant, and one they skip changes nothing; both say so.
 	function edit(next: Partial<WallTime>) {
 		if (Object.values(next).some((value) => !Number.isFinite(value))) return
-		setSkyTime(skyClock, zonedWallTimeToUtc({ ...wall, ...next }, timeZone))
+		const target = { ...wall, ...next }
+		const instant = wallTimeToInstant(target, timeZone)
+
+		if (instant.kind === 'nonexistent') {
+			setNotice(`${timeValue(target)} does not exist on ${dateValue(target)} in ${timeZone}: the clocks skip it.`)
+			return
+		}
+
+		setNotice(instant.kind === 'ambiguous' ? `${timeValue(target)} happens twice on ${dateValue(target)} in ${timeZone}: showing the first.` : undefined)
+		setSkyTime(skyClock, instant.kind === 'exact' ? instant.time : instant.earlier)
 	}
 
 	return (
@@ -114,11 +123,14 @@ export function TimeController({ timeZone }: TimeControllerProps) {
 				}}
 				className={inputClass}
 			/>
-			<span className="font-mono text-xs text-ink-300">{zoneName(time, timeZone)}</span>
+			<span className="font-mono text-xs text-ink-300" title={timeZone}>
+				{zoneShortName(timeZone, time)}
+			</span>
 			<IconButton icon="stepForward" label={`Forward ${step}`} onClick={() => stepSkyTime(skyClock, STEPS[step])} />
 			<Select options={STEP_LABELS} value={step} onChange={setStep} className="w-28" />
 			<IconButton icon={playing ? 'pause' : 'play'} label={playing ? 'Pause' : 'Play'} pressed={playing} onClick={() => (playing ? pauseSkyTime(skyClock) : playSkyTime(skyClock, clock.rate))} />
 			<Select options={RATE_OPTIONS} value={`${clock.rate}`} format={formatRate} onChange={(option) => (playing ? playSkyTime(skyClock, +option) : (skyClock.rate = +option))} className="w-32" />
+			{notice && <span className="text-xs text-warning">{notice}</span>}
 			<span className={cn('ml-auto rounded-sm px-2 py-0.5 text-xs font-medium', clock.mode === 'now' ? 'text-ink-300' : 'bg-accent-subtle text-accent')}>{clock.mode === 'now' ? 'Real time' : playing ? 'Simulating' : 'Simulated'}</span>
 		</div>
 	)

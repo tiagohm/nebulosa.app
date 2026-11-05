@@ -1,6 +1,7 @@
 import type { SatelliteGroupStatus, SatelliteSummary } from 'api'
 import { useSnapshot } from 'valtio'
 import { MISSING } from '../../format'
+import { activeSite, siteState } from '../../location/site'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
 import { satelliteCatalogState } from '../../satellites/satellites'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -68,7 +69,7 @@ interface SatelliteRowProps {
 function SatelliteRow({ satellite, favorite }: SatelliteRowProps) {
 	const { selectedId } = useSnapshot(artificialSatellitesState)
 	const { noradId, name, cosparId, objectType, elementKind, elementEpoch } = satellite
-	const select = () => void selectSatellite(artificialSatellitesState, noradId, activeProfile(profileState).settings.sky.observer)
+	const select = () => void selectSatellite(artificialSatellitesState, noradId, activeSite(activeProfile(profileState), siteState.sites))
 
 	return (
 		<Row selected={selectedId === noradId} onSelect={select}>

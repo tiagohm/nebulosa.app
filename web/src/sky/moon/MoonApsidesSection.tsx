@@ -13,7 +13,7 @@ import { formatApparentSize } from '../format'
 const APSIS_NAMES = { perigee: 'Perigee', apogee: 'Apogee' } as const
 
 // Perigee & Apogee section of the Moon Inspector.
-export function MoonApsidesSection({ apsides, timeZone }: { readonly apsides?: readonly MoonApsisEvent[]; readonly timeZone?: string }) {
+export function MoonApsidesSection({ apsides, timeZone }: { readonly apsides?: readonly MoonApsisEvent[]; readonly timeZone: string }) {
 	return (
 		<CollapsibleSection id="sky.lunarApsides" title="Perigee & Apogee" summary={apsides?.[0] && `Next: ${APSIS_NAMES[apsides[0].kind]}`} defaultOpen={false}>
 			{apsides ? (
@@ -21,7 +21,7 @@ export function MoonApsidesSection({ apsides, timeZone }: { readonly apsides?: r
 					{apsides.map((e) => (
 						<div key={e.kind} className="flex flex-col gap-1">
 							<span className="text-ink-100">{APSIS_NAMES[e.kind]}</span>
-							<span className="font-mono text-sm text-ink-200">{formatEclipseTime(e.time, timeZone ?? '')}</span>
+							<span className="font-mono text-sm text-ink-200">{formatEclipseTime(e.time, timeZone)}</span>
 							<DataRow label="Distance">{formatKilometers(e.distanceKm)}</DataRow>
 							<DataRow label="Apparent diameter">{formatApparentSize(e.angularDiameter)}</DataRow>
 						</div>

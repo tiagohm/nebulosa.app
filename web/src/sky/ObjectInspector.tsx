@@ -2,7 +2,7 @@ import type { MinorBody, SkyCatalogObject } from 'api'
 import { toMas } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { formatDegrees } from '../format'
-import type { SkyObserverSettings } from '../profile/schema'
+import type { SiteLocation } from '../location/site'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
 import { DataRow } from '../ui/DataRow'
@@ -28,12 +28,12 @@ import { SunInspector } from './sun/SunInspector'
 const MINOR_BODY_PARAMETERS = ['a', 'e', 'i', 'q', 'per', 'H', 'G', 'M1', 'diameter'] as const
 
 export interface ObjectInspectorProps {
-	// Observer of the active profile; absent when none is set.
-	readonly observer?: SkyObserverSettings
-	// Opens the observer settings.
+	// Observing site of the active profile; absent when it has none.
+	readonly observer?: SiteLocation
+	// Opens Settings → Observing Sites to choose or add a site.
 	readonly onSetObserver: () => void
-	// IANA time zone times are shown in; the browser's when absent.
-	readonly timeZone?: string
+	// IANA time zone times are shown in: the profile's display zone.
+	readonly timeZone: string
 	// Opens the framing settings, which draw the field of view around the selection.
 	readonly onShowFraming: () => void
 }

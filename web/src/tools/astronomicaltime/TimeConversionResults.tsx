@@ -2,6 +2,7 @@ import type { AstronomicalTimeResult, TimeScaleName } from 'api'
 import { formatAngle, formatHMS, toDeg } from 'nebulosa/src/math/units/angle'
 import { useEffect, useRef, useState } from 'react'
 import { copyText } from '../../clipboard'
+import { describeDisplayZone, type DisplayZone } from '../../location/zone'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { IconButton } from '../../ui/IconButton'
 import { Notice } from '../../ui/Notice'
@@ -80,14 +81,14 @@ function ResultRow({ label, value, input }: ResultRowProps) {
 export interface TimeConversionResultsProps {
 	// Answer of the server.
 	readonly result: AstronomicalTimeResult
-	// Time zone of the local calendar, an IANA name.
-	readonly timeZone: string
+	// Zone of the local calendar, and why it was chosen.
+	readonly zone: DisplayZone
 	// Whether the conversion has a location; without one there are no local sidereal times.
 	readonly located: boolean
 }
 
 // Results of a conversion.
-export function TimeConversionResults({ result, timeZone, located }: TimeConversionResultsProps) {
+export function TimeConversionResults({ result, zone, located }: TimeConversionResultsProps) {
 	const { civil, scales, sidereal, offsets, epochs, hourAngle, quality } = result
 
 	return (
@@ -96,7 +97,7 @@ export function TimeConversionResults({ result, timeZone, located }: TimeConvers
 				<ResultRow label="UTC" value={scales.UTC.calendar} />
 				<ResultRow label="Local" value={civil.local} />
 				<Notice>
-					{timeZone}, {formatOffset(civil.offsetSeconds)}. Calendars are proleptic Gregorian, with astronomical year numbering.
+					{describeDisplayZone(zone)}, {formatOffset(civil.offsetSeconds)}. Calendars are proleptic Gregorian, with astronomical year numbering.
 				</Notice>
 				{civil.unixMillis === undefined ? <Notice>This is an inserted leap second, which Unix time cannot represent.</Notice> : <ResultRow label="Unix" value={`${civil.unixMillis / 1000}`} input={{ format: 'unix', scale: 'UTC' }} />}
 			</CollapsibleSection>

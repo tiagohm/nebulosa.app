@@ -2,11 +2,12 @@ import type { CloseApproach, CloseApproachBody, CloseApproachFilters, CloseAppro
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
 import { fetchJson } from '../../http'
-import { type CloseApproachDistanceDisplay, type CloseApproachPreferences, type CloseApproachTimeDisplay, DEFAULT_CLOSE_APPROACH_PREFERENCES, type SkyObserverSettings } from '../../profile/schema'
+import { type GeographicLocation, locationKey, siteObserver } from '../../location/site'
+import { type CloseApproachDistanceDisplay, type CloseApproachPreferences, DEFAULT_CLOSE_APPROACH_PREFERENCES } from '../../profile/schema'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import { setSkyTime, type SkyClock, skyClock, skyTime } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
-import { apiObserver, browserSkyIo, fetchSkyPosition, type SkyIo, type SkyState, selectSkyObject, skyState } from '../../sky/sky'
+import { browserSkyIo, fetchSkyPosition, type SkyIo, type SkyState, selectSkyObject, skyState } from '../../sky/sky'
 
 // State of the Close Approaches tool, tab-lived and never sent anywhere: the filters being edited, those of the page
 // shown, the encounter selected, and the object behind it. The server reads JPL, which filters, sorts, and pages the
@@ -14,7 +15,8 @@ import { apiObserver, browserSkyIo, fetchSkyPosition, type SkyIo, type SkyState,
 // and object history are independent requests, each behind a guard of its own, so an old answer never replaces a newer
 // one. Distances are AU and times Unix milliseconds (UTC) until they are formatted; the dates of the filters are TDB
 // calendar days, as CAD reads them. The tool hands an object to the Sky only through explicit actions, and how its values
-// are shown belongs to the profile.
+// are shown belongs to the profile: the zone of its times (resolveDisplayZone against the active observing site) only
+// formats them, and never changes a request. Observability observes from the active site.
 
 // Kilometers per lunar distance, the JPL convention: a mean scale, not the Earth-Moon separation of any instant.
 const LUNAR_DISTANCE_KM = 384_400
@@ -433,16 +435,24 @@ export async function selectCloseApproach(state: CloseApproachesState, approach:
 	if (state.designation !== approach.designation || state.objectError) await loadCloseApproachObject(state, approach.designation, io)
 }
 
-// Reads the position of an object at the instant chosen, for the observer of the profile or the geocenter without one,
-// through the same route as the Sky. `approachTime` is the instant of the encounter, Unix milliseconds (UTC).
-export async function loadCloseApproachObservability(state: CloseApproachesState, body: Pick<MinorBody, 'spkId' | 'designation'>, approachTime: number, observer: SkyObserverSettings | undefined, io: CloseApproachesIo = browserIo) {
+// Returns the key of what the position of the Observability section depends on: the object, the instant of the
+// encounter (Unix milliseconds, UTC), the instant chosen, and the place of the site (locationKey), never its name or zone,
+// so only a change of these reads the position again.
+export function observabilityKey(spkId: string, approachTime: number, instant: ObservabilityInstant, site: GeographicLocation | undefined) {
+	return `${spkId}|${approachTime}|${instant}|${locationKey(site)}`
+}
+
+// Reads the position of an object at the instant chosen, for the active observing site of the profile or the geocenter
+// without one, through the same route as the Sky. `approachTime` is the instant of the encounter, Unix milliseconds (UTC);
+// only the place of `site` is sent.
+export async function loadCloseApproachObservability(state: CloseApproachesState, body: Pick<MinorBody, 'spkId' | 'designation'>, approachTime: number, site: GeographicLocation | undefined, io: CloseApproachesIo = browserIo) {
 	const request = observabilityGuard.begin()
 	const time = state.observabilityInstant === 'approach' ? approachTime : state.observabilityInstant === 'now' ? io.now() : io.skyTime()
 	state.observabilityLoading = true
 	state.observabilityError = undefined
 
 	try {
-		const position = await fetchSkyPosition({ kind: 'minorBody', spkId: body.spkId, designation: body.designation }, time, apiObserver(observer), 'accurate', request.signal, { fetch: io.fetch, time: io.skyTime })
+		const position = await fetchSkyPosition({ kind: 'minorBody', spkId: body.spkId, designation: body.designation }, time, siteObserver(site), 'accurate', request.signal, { fetch: io.fetch, time: io.skyTime })
 		if (!request.current()) return
 		state.observability = position
 	} catch (error) {
@@ -473,22 +483,17 @@ function browserHandoff(): SkyHandoff {
 	return { sky: skyState, clock: skyClock, route: routeState, io: browserSkyIo, history: window.history }
 }
 
-// Shows a body in the Sky workspace, selected through the Sky's own path. With `time` (Unix milliseconds, UTC) the
-// simulation clock moves there first, since the selection reads it; without it the clock is left alone. Neither the
-// observer nor any device changes. `body` may be a snapshot of a render, a frozen Proxy the Sky could not keep, so the Sky
-// receives a plain copy of its JSON.
-export function showInSky(body: MinorBody, observer: SkyObserverSettings | undefined, time?: number, handoff: SkyHandoff = browserHandoff()) {
+// Shows a body in the Sky workspace, selected through the Sky's own path from `site`, the active observing site of the
+// profile (undefined without one). With `time` (Unix milliseconds, UTC) the simulation clock moves there first, since the
+// selection reads it; without it the clock is left alone. Neither the site nor any device changes. `body` may be a
+// snapshot of a render, a frozen Proxy the Sky could not keep, so the Sky receives a plain copy of its JSON.
+export function showInSky(body: MinorBody, site: GeographicLocation | undefined, time?: number, handoff: SkyHandoff = browserHandoff()) {
 	if (time !== undefined) setSkyTime(handoff.clock, time)
-	selectSkyObject(handoff.sky, { ref: { kind: 'minorBody', spkId: body.spkId, designation: body.designation }, source: 'search', name: body.name, category: 'minorBody', minorBody: JSON.parse(JSON.stringify(body)) as MinorBody }, observer, handoff.io)
+	selectSkyObject(handoff.sky, { ref: { kind: 'minorBody', spkId: body.spkId, designation: body.designation }, source: 'search', name: body.name, category: 'minorBody', minorBody: JSON.parse(JSON.stringify(body)) as MinorBody }, site, handoff.io)
 	navigate(handoff.route, { workspace: 'sky' }, handoff.history)
 }
 
-// Returns the zone of the times shown: UTC, or the Sky observer's, without which the browser's.
-export function displayTimeZone(display: CloseApproachTimeDisplay, observerTimeZone: string | undefined, browserTimeZone: string) {
-	return display === 'utc' ? 'UTC' : observerTimeZone || browserTimeZone
-}
-
-// Returns a time as YYYY-MM-DD HH:mm:ss in a zone, from Unix milliseconds. The instant is the same in every zone.
+// Returns a time as YYYY-MM-DD HH:mm:ss in a zone (IANA), from Unix milliseconds. The instant is the same in every zone.
 export function formatApproachTime(time: number, timeZone: string) {
 	return new Intl.DateTimeFormat('sv-SE', { timeZone, dateStyle: 'short', timeStyle: 'medium' }).format(time)
 }

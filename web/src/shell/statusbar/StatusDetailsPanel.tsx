@@ -13,11 +13,11 @@ import { RoleStatusText } from '../../equipment/RoleStatusText'
 import { useActiveServerId, useRoleDevice, useWatchedDevices } from '../../equipment/useEquipment'
 import { formatGeographic } from '../../format'
 import { imagesState } from '../../images/images'
+import { useActiveSite, useDisplayZone } from '../../location/useLocation'
 import { notificationsState } from '../../notifications/notifications'
 import { openNotificationTarget, targetAvailable } from '../../notifications/target'
 import { OPERATION_LABELS, operationsState } from '../../operations'
 import { activeProfile, activeSetup, profileState } from '../../profile/profile'
-import { BROWSER_TIME_ZONE } from '../../sky/clock'
 import { openAstronomicalTimeConverter, qualityNotes } from '../../tools/astronomicaltime/astronomicaltime'
 import { Icon, type IconName } from '../../ui/Icon'
 import { SectionHeading } from '../../ui/SectionHeading'
@@ -214,10 +214,9 @@ interface AstronomicalTimeSectionProps {
 // Real current time in every form the clock shows, with the site, its accuracy, and the way to the converter.
 function AstronomicalTimeSection({ onNavigate }: AstronomicalTimeSectionProps) {
 	const now = useMonotonicNow()
-	const profiles = useSnapshot(profileState)
 	const { sample } = useSnapshot(astronomicalClockRuntime)
-	const observer = activeProfile(profiles).settings.sky.observer
-	const timeZone = observer?.timeZone ?? BROWSER_TIME_ZONE
+	const observer = useActiveSite()
+	const timeZone = useDisplayZone(observer).zone
 	const freshness = clockFreshness(sample, now)
 	const live = sample && freshness !== 'expired' ? liveClock(sample, now) : undefined
 	const approximate = clockApproximate(sample)
@@ -231,7 +230,7 @@ function AstronomicalTimeSection({ onNavigate }: AstronomicalTimeSectionProps) {
 					{label === 'Local' && ` · ${timeZone}`}
 				</Row>
 			))}
-			{observer ? <Row label="Site">{observer.name ?? formatGeographic(observer.latitude, observer.longitude)}</Row> : <p className="m-0 text-ink-300">Sidereal times need a Sky observer in this profile.</p>}
+			{observer ? <Row label="Site">{`${observer.name} · ${formatGeographic(observer.latitude, observer.longitude)}`}</Row> : <p className="m-0 text-ink-300">Sidereal times need an observing site in this profile.</p>}
 			{freshness === 'stale' && <p className="m-0 text-ink-300">Not updated recently: the server is not answering.</p>}
 			{sample &&
 				qualityNotes(sample.reference.quality).map((note) => (

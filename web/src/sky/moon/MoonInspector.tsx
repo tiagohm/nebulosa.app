@@ -2,7 +2,7 @@ import type { SkyObjectRef } from 'api'
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import type { SkyObserverSettings } from '../../profile/schema'
+import type { SiteLocation } from '../../location/site'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
@@ -26,12 +26,12 @@ import { MoonPhysicalSection } from './MoonPhysicalSection'
 export interface MoonInspectorProps {
 	// Selection of the Moon.
 	readonly selection: SkySelection
-	// Observer of the active profile; absent when none is set.
-	readonly observer?: SkyObserverSettings
-	// Opens the observer settings.
+	// Observing site of the active profile; absent when it has none.
+	readonly observer?: SiteLocation
+	// Opens Settings → Observing Sites to choose or add a site.
 	readonly onSetObserver: () => void
-	// IANA time zone times are shown in; the browser's when absent.
-	readonly timeZone?: string
+	// IANA time zone times are shown in: the profile's display zone.
+	readonly timeZone: string
 	// Opens the framing settings.
 	readonly onShowFraming: () => void
 }

@@ -1,24 +1,17 @@
-import type { SkyObserverSettings } from '../../profile/schema'
+import type { GeographicLocation, ToolLocation } from '../../location/site'
 
-// Place, time zone, and formatting rules shared by the Lunar and Solar Eclipse Map tools. The place starts as the
-// Sky observer of the active profile, and a place chosen on the map or by hand never changes the profile. Times
-// are Unix milliseconds (UTC), geographic positions degrees, longitude east positive.
+// Place and formatting rules shared by the Lunar and Solar Eclipse Map tools. Each tool observes from a ToolLocation
+// of its own (the active profile's site until another is chosen); a click on the map makes it coordinates typed in,
+// and nothing here changes the profile or a site. Local circumstances depend on the longitude and latitude of the
+// place alone, so a new elevation, name, or zone asks for nothing. Times are Unix milliseconds (UTC), geographic
+// positions degrees, longitude east positive.
 
-// Where the place shown comes from.
-export type EclipsePlaceSource = 'observer' | 'map' | 'manual'
-
-// Place whose local circumstances are shown.
+// Place whose local circumstances are asked for: the coordinates of the tool's location, as the requests send them.
 export interface EclipsePlace {
-	// Where it comes from.
-	readonly source: EclipsePlaceSource
 	// Longitude in degrees, east positive, [-180, 180].
 	readonly longitude: number
 	// Geodetic latitude in degrees, north positive, [-90, 90].
 	readonly latitude: number
-	// Name of the Sky observer, when it is the place.
-	readonly name?: string
-	// IANA time zone of the Sky observer, when it is the place and has one.
-	readonly timeZone?: string
 }
 
 // Browser services an eclipse tool uses, replaced in tests.
@@ -35,30 +28,34 @@ export const browserEclipseIo: EclipseIo = {
 	time: () => Date.now(),
 }
 
-// Returns the place of the Sky observer.
-export function observerPlace(observer: SkyObserverSettings): EclipsePlace {
-	return { source: 'observer', longitude: observer.longitude, latitude: observer.latitude, name: observer.name, timeZone: observer.timeZone }
+// Returns the place of a location, its longitude and latitude in degrees; undefined without one.
+export function eclipsePlace(location: GeographicLocation | undefined): EclipsePlace | undefined {
+	return location && { longitude: location.longitude, latitude: location.latitude }
 }
 
-// Returns the time zone the times are shown in: the one chosen (timeZone: UTC, an IANA zone, or empty for the
-// browser's); otherwise the Sky observer's for the observer (empty, the browser's, when it has none); otherwise
-// UTC, since a place on the map does not tell its civil time zone.
-export function displayTimeZone(state: { readonly timeZone?: string; readonly place?: EclipsePlace }): string {
-	if (state.timeZone !== undefined) return state.timeZone
-	return state.place?.source === 'observer' ? (state.place.timeZone ?? '') : 'UTC'
+// Whether two places, or their absence, are the same longitude and latitude.
+export function samePlace(a: EclipsePlace | undefined, b: EclipsePlace | undefined): boolean {
+	return a === b || (a !== undefined && b !== undefined && a.longitude === b.longitude && a.latitude === b.latitude)
+}
+
+// Returns the location a click on the map at a point (degrees, east positive) gives: coordinates typed in at 0 m,
+// in the zone of the coordinates typed in before, or UTC when the tool observed from a site, since a point on the map
+// does not tell its civil time zone.
+export function mapLocation(current: ToolLocation, point: EclipsePlace): Extract<ToolLocation, { mode: 'manual' }> {
+	return { mode: 'manual', latitude: point.latitude, longitude: point.longitude, elevation: 0, timeZone: current.mode === 'manual' ? current.timeZone : 'UTC' }
 }
 
 // Formatters of eclipse times by locale and time zone.
 const timeFormatters = new Map<string, Intl.DateTimeFormat>()
 
-// Returns an instant (Unix milliseconds) as its date and time to the second in a time zone (empty for the
-// browser's), with the zone's name, such as "Sep 16, 1997, 18:47:11 UTC", so a time past midnight shows its day.
+// Returns an instant (Unix milliseconds) as its date and time to the second in an IANA time zone, with the zone's
+// name, such as "Sep 16, 1997, 18:47:11 UTC", so a time past midnight shows its day.
 export function formatEclipseTime(time: number, timeZone: string, locale: string = 'en-US'): string {
 	const key = `${locale}|${timeZone}`
 	let formatter = timeFormatters.get(key)
 
 	if (!formatter) {
-		formatter = new Intl.DateTimeFormat(locale, { timeZone: timeZone || undefined, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: 'short' })
+		formatter = new Intl.DateTimeFormat(locale, { timeZone, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: 'short' })
 		timeFormatters.set(key, formatter)
 	}
 

@@ -1,7 +1,7 @@
 import type { SkyObjectCategory, SkyObjectRef, SkyPosition } from 'api'
 import { DEG2RAD, TAU } from 'nebulosa/src/core/constants'
 import { proxy, subscribe } from 'valtio'
-import type { SkyObserverSettings } from '../profile/schema'
+import { type GeographicLocation, locationKey, siteObserver } from '../location/site'
 import { Celestial, type CelestialObject, type CelestialOptions, type ConstellationLine, type CoordinateSystem, type MovingBody, type MovingBodyType, type RenderState, type SelectionTarget } from './celestial/celestial'
 import { SKY_REALTIME_TICK_MS, type SkyClockMode, skyClock, skyTime } from './clock'
 import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
@@ -14,7 +14,7 @@ import { isRememberable, type RememberedObject, RememberedObjects, type Remember
 import { skySatelliteState } from './satellite/satellite'
 import { SatelliteLayer, type SatelliteTargets } from './satellites.sky'
 import { createRequestGuard } from './selection'
-import { apiObserver, browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, type SkySelection, selectSkyObject, skyState } from './sky'
+import { browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, type SkySelection, selectSkyObject, skyState } from './sky'
 
 // The Sky workspace's star map, kept for the whole tab: the Celestial instance, its catalogs, the moving
 // bodies, and the selection highlight live here rather than in React, so leaving the workspace only
@@ -294,11 +294,6 @@ function categoryOf(object: CelestialObject, objectRef: SkySelectionRef): SkyObj
 	return objectRef.kind === 'body' ? 'solarSystem' : 'minorBody'
 }
 
-// Key that changes whenever the observer's location changes.
-export function observerKey(observer?: SkyObserverSettings) {
-	return observer ? `${observer.latitude},${observer.longitude},${observer.elevation}` : ''
-}
-
 // Star map of the tab.
 export class Planetarium {
 	// The Celestial map.
@@ -314,7 +309,7 @@ export class Planetarium {
 	readonly #loadGuard = createRequestGuard()
 	readonly #unsubscribe: VoidFunction[]
 	#names: MapNames = { typeNames: [], starDesignations: [], constellationCodes: new Map() }
-	#observer?: SkyObserverSettings
+	#observer?: GeographicLocation
 	// Second and observer of the body positions requested last, so repeated updates do not refetch them.
 	#bodiesKey = ''
 	// Whether body positions are being requested; updates meanwhile only record their instant.
@@ -351,7 +346,7 @@ export class Planetarium {
 	#destroyed = false
 
 	// Creates the map of a kind of chart for an observer and starts loading its data.
-	constructor(coordinateSystem: CoordinateSystem, observer?: SkyObserverSettings) {
+	constructor(coordinateSystem: CoordinateSystem, observer?: GeographicLocation) {
 		this.coordinateSystem = coordinateSystem
 		this.#host = document.createElement('div')
 		this.#host.className = 'absolute inset-0 touch-none overflow-hidden select-none'
@@ -463,7 +458,7 @@ export class Planetarium {
 	}
 
 	// Follows an observer: its location on the map and in the requests of bodies and selections.
-	setObserver(observer?: SkyObserverSettings) {
+	setObserver(observer?: GeographicLocation) {
 		this.#observer = observer
 		if (observer) this.celestial.setObserver({ latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation })
 		this.celestial.setLayerVisible('horizon', !!observer)
@@ -596,7 +591,7 @@ export class Planetarium {
 		const key = refKey(objectRef)
 
 		try {
-			const { position } = await fetchSkyPosition(objectRef, this.time, apiObserver(this.#observer), 'fast', request.signal)
+			const { position } = await fetchSkyPosition(objectRef, this.time, siteObserver(this.#observer), 'fast', request.signal)
 			const selection = skyState.selection
 			if (!request.current() || selection?.key !== key) return
 			this.#remember(selection, selection.position ?? position)
@@ -773,14 +768,14 @@ export class Planetarium {
 	// selection (which follows the Inspector's position of the same instant), for an instant. Updates of the
 	// same second and observer, such as those after loading data, reuse the positions requested for them.
 	async #updateMovingBodies(time: number) {
-		const key = `${Math.round(time / 1000)}|${observerKey(this.#observer)}`
+		const key = `${Math.round(time / 1000)}|${locationKey(this.#observer)}`
 		if (key === this.#bodiesKey) return
 
 		this.#bodiesKey = key
 		const request = this.#bodiesGuard.begin()
 
 		try {
-			const positions = await fetchSkyBodies(time, apiObserver(this.#observer), request.signal)
+			const positions = await fetchSkyBodies(time, siteObserver(this.#observer), request.signal)
 			if (!request.current()) return
 
 			for (const position of positions) {
@@ -806,7 +801,7 @@ export class Planetarium {
 		await Promise.all(
 			minorBodies.map(async (object) => {
 				try {
-					const { position } = await fetchSkyPosition(object.ref, time, apiObserver(this.#observer), 'fast', minorRequest.signal)
+					const { position } = await fetchSkyPosition(object.ref, time, siteObserver(this.#observer), 'fast', minorRequest.signal)
 					if (!minorRequest.current() || remembered.get(object.key) !== object || skyState.selection?.key === object.key) return
 					object.rightAscension = position.rightAscension
 					object.declination = position.declination
@@ -846,7 +841,7 @@ const remembered = new RememberedObjects()
 let current: Planetarium | undefined
 
 // Returns the tab's star map for a kind of chart, replacing the map of the other kind.
-export function planetarium(coordinateSystem: CoordinateSystem, observer?: SkyObserverSettings): Planetarium {
+export function planetarium(coordinateSystem: CoordinateSystem, observer?: GeographicLocation): Planetarium {
 	if (current?.coordinateSystem !== coordinateSystem) {
 		current?.destroy()
 		current = new Planetarium(coordinateSystem, observer)

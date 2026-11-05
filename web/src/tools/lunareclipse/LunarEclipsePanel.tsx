@@ -1,35 +1,23 @@
 import type { LocalLunarViewHandedness, LocalLunarViewOrientationMode } from 'api'
 import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
-import type { SkyObserverSettings } from '../../profile/schema'
+import { useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { PanelSection } from '../../shell/ContextualPanel'
-import { BROWSER_TIME_ZONE } from '../../sky/clock'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { Select } from '../../ui/Select'
-import { displayTimeZone, type EclipsePlace, formatDuration, formatEclipseTime } from '../eclipse/eclipse'
-import { DISPLAY_TIME_ZONES, LocationSection } from '../eclipse/EclipsePanelParts'
-import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, loadLocal, lunarEclipseState, phaseDurations, selectEvent, selectPlace, setViewSettings } from './lunareclipse'
+import { formatDuration, formatEclipseTime } from '../eclipse/eclipse'
+import { EclipseLocationSection, EclipseZoneSelect } from '../eclipse/EclipsePanelParts'
+import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, loadLocal, lunarEclipseState, phaseDurations, selectEvent, setViewSettings } from './lunareclipse'
 import { LunarEclipseLocalView } from './LunarEclipseLocalView'
 
-// Local Circumstances panel of the Lunar Eclipse Map: the place (the shared Location section), the visibility of
-// the eclipse from it, the contacts in the time zone shown, the magnitudes and durations, and the Local View. The
-// global contact times are shown even without a place or when the Moon is below its horizon. Nothing here changes
-// the profile.
-
-export interface LunarEclipsePanelProps {
-	// Sky observer of the active profile; absent when none is set.
-	readonly observer?: SkyObserverSettings
-}
-
-// Shows a place chosen in the Location section; going back to the Sky observer also goes back to its time zone.
-function choosePlace(place: EclipsePlace) {
-	if (place.source === 'observer') lunarEclipseState.timeZone = undefined
-	void selectPlace(lunarEclipseState, place)
-}
+// Local Circumstances panel of the Lunar Eclipse Map: the location (the shared Location section), the visibility of
+// the eclipse from it, the contacts in the zone shown (resolved with the location), the magnitudes and durations,
+// and the Local View. The global contact times are shown even without a place or when the Moon is below its
+// horizon. Nothing here changes the profile or a site; the map component asks for the local circumstances of the
+// location chosen.
 
 // Orientations of the Local View, in display order.
 const ORIENTATIONS: readonly LocalLunarViewOrientationMode[] = ['zenith', 'north']
@@ -38,17 +26,19 @@ const ORIENTATIONS: readonly LocalLunarViewOrientationMode[] = ['zenith', 'north
 const HANDEDNESS: readonly LocalLunarViewHandedness[] = ['eastRight', 'eastLeft']
 
 // Local Circumstances panel.
-export function LunarEclipsePanel({ observer }: LunarEclipsePanelProps) {
+export function LunarEclipsePanel() {
 	const state = useSnapshot(lunarEclipseState)
 	const { eclipse, place, local, localLoading, localError, selectedEvent, view } = state
-	const timeZone = displayTimeZone(state)
+	const location = useToolLocation(state.location)
+	const displayZone = useDisplayZone(location, state.zone)
+	const timeZone = displayZone.zone
 	const events = new Map(local?.events.map((event) => [event.kind, event]))
 	const selectedLocal = events.get(selectedEvent)
 	const durations = eclipse && phaseDurations(eclipse)
 
 	return (
 		<>
-			<LocationSection place={place} observer={observer} onSelect={choosePlace} />
+			<EclipseLocationSection value={state.location} location={location} onChange={(value) => (lunarEclipseState.location = value)} />
 			{place && (
 				<PanelSection title="Visibility">
 					{local && <p className="m-0 font-medium text-ink-100">{local.visibility.text}</p>}
@@ -68,7 +58,7 @@ export function LunarEclipsePanel({ observer }: LunarEclipsePanelProps) {
 			)}
 			{eclipse && (
 				<PanelSection title="Contacts">
-					<Select label="Time Zone" options={DISPLAY_TIME_ZONES} value={timeZone} onChange={(zone) => (lunarEclipseState.timeZone = zone)} format={(zone) => zone || `Browser (${BROWSER_TIME_ZONE})`} />
+					<EclipseZoneSelect value={state.zone} zone={displayZone} location={location} selectedSite={state.location.mode !== 'active'} onChange={(zone) => (lunarEclipseState.zone = zone)} />
 					{eclipse.contacts.map((contact) => {
 						const event = events.get(contact.kind)
 						const selected = contact.kind === selectedEvent

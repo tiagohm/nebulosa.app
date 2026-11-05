@@ -27,6 +27,38 @@ export interface ObservingSite extends ObservingSiteInput {
 	readonly id: string
 }
 
+// Place on the Earth an observer stands at, as the API takes it.
+export interface GeographicLocation {
+	// Geodetic latitude, in degrees, north positive, [-90, 90].
+	readonly latitude: number
+	// Geodetic longitude, in degrees, east positive, [-180, 180].
+	readonly longitude: number
+	// Height above the WGS84 ellipsoid, in meters.
+	readonly elevation: number
+}
+
+// Place a screen observes from, with the civil time zone that names its local days and nights: a saved site, or
+// coordinates typed in for one tool.
+export interface SiteLocation extends GeographicLocation {
+	// Name shown to people; absent for coordinates typed in.
+	readonly name?: string
+	// IANA time zone of the place's civil time.
+	readonly timeZone: string
+}
+
+// Where a tool observes from: the active profile's site, followed live; another saved site; or coordinates typed in for
+// the tool alone, with the zone chosen for them ('UTC' until one is). None of them changes the profile.
+export type ToolLocation = { readonly mode: 'active' } | { readonly mode: 'saved'; readonly siteId: string } | { readonly mode: 'manual'; readonly latitude: number; readonly longitude: number; readonly elevation: number; readonly timeZone: string }
+
+// The choice of a tool that follows the active profile's site.
+export const ACTIVE_TOOL_LOCATION: ToolLocation = { mode: 'active' }
+
+// Place a tool observes from, and which choice of ToolLocation gave it.
+export interface ResolvedLocation extends SiteLocation {
+	// Choice that gave it.
+	readonly source: ToolLocation['mode']
+}
+
 // Observing sites of the tab.
 export interface SiteState {
 	// Saved sites, in list order.
@@ -40,13 +72,17 @@ export const siteState = proxy<SiteState>({ sites: [] })
 // range, or a time zone the browser does not know.
 export function normalizeObservingSite(input: ObservingSiteInput): ObservingSiteInput | undefined {
 	const name = input.name.trim()
+	if (!name || !isValidLocation(input)) return undefined
 	const { latitude, longitude, elevation, timeZone } = input
-	if (!name) return undefined
-	if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return undefined
-	if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return undefined
-	if (!Number.isFinite(elevation) || elevation < MIN_SITE_ELEVATION || elevation > MAX_SITE_ELEVATION) return undefined
-	if (!isKnownTimeZone(timeZone)) return undefined
 	return { name, latitude, longitude, elevation, timeZone }
+}
+
+// Whether a place has its coordinates and elevation in range and a time zone the browser knows.
+export function isValidLocation({ latitude, longitude, elevation, timeZone }: Omit<SiteLocation, 'name'>): boolean {
+	if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return false
+	if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return false
+	if (!Number.isFinite(elevation) || elevation < MIN_SITE_ELEVATION || elevation > MAX_SITE_ELEVATION) return false
+	return isKnownTimeZone(timeZone)
 }
 
 // Adds a site, or replaces the one with id in place. Returns it, or undefined, changing nothing, for invalid fields.
@@ -82,6 +118,32 @@ export function selectSite(state: ProfileState, sites: SiteState, siteId: string
 // Returns the site a profile observes from, of the state or a snapshot of it; undefined when it has none.
 export function activeSite<S extends Pick<ObservingSite, 'id'>>(profile: Pick<Profile, 'activeSiteId'>, sites: readonly S[]): S | undefined {
 	return profile.activeSiteId === undefined ? undefined : sites.find((site) => site.id === profile.activeSiteId)
+}
+
+// Returns the place a tool observes from: the site of activeSiteId (the active profile's), the saved site chosen, or the
+// coordinates typed in; undefined when the profile has no site, or the saved site was deleted.
+export function resolveToolLocation(location: ToolLocation, activeSiteId: string | undefined, sites: readonly ObservingSite[]): ResolvedLocation | undefined {
+	if (location.mode === 'manual') {
+		const { latitude, longitude, elevation, timeZone } = location
+		return { source: 'manual', latitude, longitude, elevation, timeZone }
+	}
+
+	const id = location.mode === 'active' ? activeSiteId : location.siteId
+	const site = id === undefined ? undefined : sites.find((entry) => entry.id === id)
+	return site && { source: location.mode, name: site.name, latitude: site.latitude, longitude: site.longitude, elevation: site.elevation, timeZone: site.timeZone }
+}
+
+// Returns the place of a location as the API takes it, without its name and zone; undefined without one.
+export function siteObserver(location: GeographicLocation): GeographicLocation
+export function siteObserver(location: GeographicLocation | undefined): GeographicLocation | undefined
+export function siteObserver(location: GeographicLocation | undefined): GeographicLocation | undefined {
+	return location && { latitude: location.latitude, longitude: location.longitude, elevation: location.elevation }
+}
+
+// Key of the place of a location, empty without one: equal for equal coordinates and elevation, whatever the name or the
+// zone, so a request that depends on the place alone is made again only when the place changes.
+export function locationKey(location: GeographicLocation | undefined): string {
+	return location ? `${location.latitude},${location.longitude},${location.elevation}` : ''
 }
 
 // Reads a latitude or a longitude typed by a person, in degrees: decimal ("-23.5475") or sexagesimal ("23° 32′ 51″",

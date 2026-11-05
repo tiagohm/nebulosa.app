@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import type { CloseApproach, MinorBody } from 'api'
 import { proxy } from 'valtio'
+import { resolveDisplayZone } from '../../location/zone'
+import { type CloseApproachPreferences, DEFAULT_CLOSE_APPROACH_PREFERENCES } from '../../profile/schema'
 import type { RouteState } from '../../shell/route'
 import type { SkyClock } from '../../sky/clock'
 import type { SkyState } from '../../sky/sky'
 // oxfmt-ignore
-import { catalogUrl, clearCloseApproachSelection, type CloseApproachesIo, type CloseApproachesState, displayTimeZone, draftFilters, filterCloseApproachHistory, formatApproachTime, formatDiameter, formatDistance, formatDistanceRange, historyDates, initialCloseApproachesState, initialDraft, loadCloseApproaches, loadCloseApproachObservability, nextSort, openCloseApproaches, pageCloseApproaches, pageCount, periodDates, searchCloseApproaches, selectCloseApproach, setCloseApproachDate, setCloseApproachPeriod, showInSky, sortCloseApproaches } from './closeapproaches'
+import { catalogUrl, clearCloseApproachSelection, type CloseApproachesIo, type CloseApproachesState, draftFilters, filterCloseApproachHistory, formatApproachTime, formatDiameter, formatDistance, formatDistanceRange, historyDates, initialCloseApproachesState, initialDraft, loadCloseApproaches, loadCloseApproachObservability, nextSort, observabilityKey, openCloseApproaches, pageCloseApproaches, pageCount, periodDates, searchCloseApproaches, selectCloseApproach, setCloseApproachDate, setCloseApproachPeriod, showInSky, sortCloseApproaches } from './closeapproaches'
 
 // 2026-10-31T12:00:00Z.
 const NOW = Date.UTC(2026, 9, 31, 12)
@@ -93,7 +95,7 @@ describe('catalog', () => {
 	test('the first opening searches once, and returning keeps the result', async () => {
 		const state = newState()
 		const { io, urls } = fakeIo()
-		const preferences = { distanceDisplay: 'km', timeDisplay: 'utc', body: 'Moon', distanceMax: 2, distanceUnit: 'au' } as const
+		const preferences: CloseApproachPreferences = { distanceDisplay: 'km', timeDisplay: { mode: 'utc' }, body: 'Moon', distanceMax: 2, distanceUnit: 'au' }
 		await openCloseApproaches(state, preferences, io)
 		await openCloseApproaches(state, preferences, io)
 
@@ -301,7 +303,7 @@ describe('observability', () => {
 		return { io, bodies }
 	}
 
-	test('asks the route of the Sky for the object at the encounter, for the observer', async () => {
+	test('asks the route of the Sky for the object at the encounter, for the place of the site alone', async () => {
 		const state = newState()
 		const { io, bodies } = positionIo()
 		await loadCloseApproachObservability(state, BODY, 1234, OBSERVER, io)
@@ -322,7 +324,16 @@ describe('observability', () => {
 		expect(bodies.map((e) => e.time)).toEqual([NOW, SKY_TIME])
 	})
 
-	test('without an observer the position is geocentric', async () => {
+	test('is read again for a new place of the site, never for its name or zone', () => {
+		const key = observabilityKey(BODY.spkId, 1234, 'approach', OBSERVER)
+		const renamed = { ...OBSERVER, name: 'Renamed', timeZone: 'Asia/Tokyo' }
+		expect(observabilityKey(BODY.spkId, 1234, 'approach', renamed)).toBe(key)
+		expect(observabilityKey(BODY.spkId, 1234, 'approach', { ...OBSERVER, elevation: 851 })).not.toBe(key)
+		expect(observabilityKey(BODY.spkId, 1234, 'approach', undefined)).not.toBe(key)
+		expect(observabilityKey(BODY.spkId, 1234, 'now', OBSERVER)).not.toBe(key)
+	})
+
+	test('without a site the position is geocentric', async () => {
 		const state = newState()
 		const { io, bodies } = positionIo()
 		await loadCloseApproachObservability(state, BODY, 1234, undefined, io)
@@ -360,7 +371,7 @@ describe('handoff to the Sky', () => {
 
 	// Sky, clock, and route of a test, recording the instant the selection read.
 	function handoff() {
-		const sky = proxy<SkyState>({ panel: 'observer' })
+		const sky = proxy<SkyState>({ panel: 'display' })
 		const clock = proxy<SkyClock>({ mode: 'now', anchor: 0, startedAt: 0, rate: 1 })
 		const route = proxy<RouteState>({ route: { workspace: 'tools', tool: 'close-approaches' } })
 		const paths: unknown[] = []
@@ -369,7 +380,7 @@ describe('handoff to the Sky', () => {
 
 	test('Open in Sky selects the object and leaves the clock alone', () => {
 		const target = handoff()
-		showInSky(BODY, undefined, undefined, target)
+		showInSky(BODY, { latitude: -22, longitude: -45, elevation: 850 }, undefined, target)
 
 		expect(target.sky.selection).toMatchObject({ key: 'minor:20099942', name: '99942 Apophis', category: 'minorBody' })
 		expect(target.sky.panel).toBe('inspector')
@@ -406,10 +417,14 @@ describe('formats', () => {
 		expect(formatApproachTime(Date.UTC(2026, 2, 8, 7, 30), 'America/New_York')).toBe('2026-03-08 03:30:00')
 	})
 
-	test("the zone is UTC, the observer's, or the browser's without one", () => {
-		expect(displayTimeZone('utc', 'America/Sao_Paulo', 'Europe/Paris')).toBe('UTC')
-		expect(displayTimeZone('observer', 'America/Sao_Paulo', 'Europe/Paris')).toBe('America/Sao_Paulo')
-		expect(displayTimeZone('observer', undefined, 'Europe/Paris')).toBe('Europe/Paris')
+	test("the times follow the profile's default, the active site's zone, or the tool's choice, and say when no site stands behind them", () => {
+		const site = { timeZone: 'America/Sao_Paulo' }
+		const { timeDisplay } = DEFAULT_CLOSE_APPROACH_PREFERENCES
+		expect(resolveDisplayZone('site', timeDisplay, site, 'Europe/Paris')).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
+		expect(resolveDisplayZone('utc', timeDisplay, site, 'Europe/Paris')).toEqual({ zone: 'UTC', source: 'utc' })
+		expect(resolveDisplayZone('site', timeDisplay, undefined, 'Europe/Paris')).toEqual({ zone: 'Europe/Paris', source: 'browserFallback' })
+		expect(resolveDisplayZone('utc', { mode: 'site' }, site, 'Europe/Paris').zone).toBe('America/Sao_Paulo')
+		expect(resolveDisplayZone('site', { mode: 'zone', zone: 'Asia/Tokyo' }, site, 'Europe/Paris').zone).toBe('Asia/Tokyo')
 	})
 
 	test('a distance states its unit, the LD being 384400 km', () => {

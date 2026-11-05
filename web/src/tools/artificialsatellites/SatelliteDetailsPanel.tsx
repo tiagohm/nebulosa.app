@@ -1,19 +1,21 @@
 import type { SatelliteQuality } from 'api'
 import { useSnapshot } from 'valtio'
 import { formatDegrees, formatKilometers } from '../../format'
+import { type GeographicLocation, openObservingSites } from '../../location/site'
+import type { DisplayZone } from '../../location/zone'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
-import type { SkyObserverSettings } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
 import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { artificialSatellitesState, formatElementAge, formatSatelliteTime, openSkyObserver, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
+import { artificialSatellitesState, formatElementAge, formatSatelliteTime, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 
-// Contextual panel of Artificial Satellites: the satellite selected, its position now for the Sky observer (read again
-// every POSITION_REFRESH_MS), its orbit, and where its elements come from. Every value is the server's; an absent one is left out, never shown as 0. Positions are
-// geometric; the RA/Dec of date are those the Sky draws, J2000 is ICRS.
+// Contextual panel of Artificial Satellites: the satellite selected, its position now for the observing site of the
+// active profile (read again every POSITION_REFRESH_MS, its time in the display zone), its orbit, and where its elements
+// come from (their epoch in UTC). Every value is the server's; an absent one is left out, never shown as 0. Positions
+// are geometric; the RA/Dec of date are those the Sky draws, J2000 is ICRS.
 
 // Names of the SATCAT object types.
 const OBJECT_TYPE_NAMES = { payload: 'Payload', rocketBody: 'Rocket body', debris: 'Debris', unknown: 'Unknown' } as const
@@ -40,8 +42,16 @@ export function QualityRow({ quality }: { readonly quality: SatelliteQuality }) 
 	)
 }
 
+// Properties of the panel of the satellite selected.
+interface SatelliteDetailsPanelProps {
+	// Observing site of the active profile, which the position is for; absent for the Earth's center.
+	readonly observer?: GeographicLocation
+	// Zone the time of the position is shown in.
+	readonly zone: DisplayZone
+}
+
 // Panel of the satellite selected.
-export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObserverSettings }) {
+export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelProps) {
 	const { selectedId, details, detailsError, position, positionError } = useSnapshot(artificialSatellitesState)
 	const profiles = useSnapshot(profileState)
 	const favorite = !!selectedId && satelliteFavorites(activeProfile(profiles).settings).includes(selectedId)
@@ -52,7 +62,7 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 	const elements = details?.elements
 	const p = position?.position
 	const name = object?.name ?? selectedId
-	const timeZone = observer?.timeZone ?? ''
+	const timeZone = zone.zone
 
 	return (
 		<div className="flex flex-col">
@@ -90,7 +100,7 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 					{p && position && (
 						<DataList>
 							<DataRow label="Time">{formatSatelliteTime(p.time, timeZone)}</DataRow>
-							<DataRow label="Seen from">{p.center === 'topocentric' ? 'The observer' : "The Earth's center"}</DataRow>
+							<DataRow label="Seen from">{p.center === 'topocentric' ? 'The observing site' : "The Earth's center"}</DataRow>
 							{p.altitude !== undefined && <DataRow label="Altitude">{`${formatDegrees(p.altitude)} (${p.altitude > 0 ? 'above' : 'below'} the horizon)`}</DataRow>}
 							{p.azimuth !== undefined && <DataRow label="Azimuth">{formatDegrees(p.azimuth)}</DataRow>}
 							<DataRow label="RA (of date)">{formatRightAscension(p.rightAscension)}</DataRow>
@@ -104,10 +114,10 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 							<QualityRow quality={position.quality} />
 						</DataList>
 					)}
-					<Notice>{observer ? 'Read every 15 seconds for the observer of the Sky.' : "Read every 15 seconds from the Earth's center: set the observer location in the Sky to see the altitude and the passes."}</Notice>
+					<Notice>{observer ? 'Read every 15 seconds for the observing site of the profile.' : "Read every 15 seconds from the Earth's center: set the observing site of the profile to see the altitude and the passes."}</Notice>
 					{!observer && (
-						<Button variant="ghost" className="self-start" onClick={() => openSkyObserver()}>
-							Set Observer
+						<Button variant="ghost" className="self-start" onClick={() => openObservingSites()}>
+							Set Location
 						</Button>
 					)}
 				</CollapsibleSection>

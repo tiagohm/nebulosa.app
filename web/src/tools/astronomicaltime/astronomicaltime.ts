@@ -1,18 +1,21 @@
-import type { ApiError, AstronomicalTimeErrorCode, AstronomicalTimeInput, AstronomicalTimeQuality, AstronomicalTimeRequest, AstronomicalTimeResult, SkyObserver, TimeScaleName } from 'api'
+import type { ApiError, AstronomicalTimeErrorCode, AstronomicalTimeInput, AstronomicalTimeQuality, AstronomicalTimeRequest, AstronomicalTimeResult, TimeScaleName } from 'api'
 import { type Angle, parseAngle } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../../http'
-import type { SkyObserverSettings } from '../../profile/schema'
+import { ACTIVE_TOOL_LOCATION, type GeographicLocation, siteObserver, type ToolLocation } from '../../location/site'
+import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
 import { navigate, routeState, type RouteState } from '../../shell/route'
-import { BROWSER_TIME_ZONE, setSkyTime, skyClock, type SkyClock, skyTime } from '../../sky/clock'
+import { setSkyTime, skyClock, type SkyClock, skyTime } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
-import { aborted, type EclipsePlace, errorMessage } from '../eclipse/eclipse'
+import { aborted, errorMessage } from '../eclipse/eclipse'
 
 // State of the Astronomical Time Converter and its requests to /api/astronomical-time: the instant being read, the
-// location and time zone it is read for, and the answer of the server, which owns every astronomical value. This module
-// only reads what is typed into the fields of a request and says what is wrong with it; the server assumes valid fields.
-// The state lives as long as the tab, so leaving and reopening the tool keeps it, and nothing is persisted. The instant
-// here is independent of the Sky simulation clock: it is read from it or written to it only by an explicit action.
+// location it is read for (a ToolLocation, the active profile's observing site by default), the zone of its local
+// calendar (resolveDisplayZone of the tool's override against that location, always a real IANA zone, sent with every
+// request), and the answer of the server, which owns every astronomical value. This module only reads what is typed into
+// the fields of a request and says what is wrong with it; the server assumes valid fields. The state lives as long as the
+// tab, so leaving and reopening the tool keeps it, and nothing is persisted. The instant here is independent of the Sky
+// simulation clock: it is read from it or written to it only by an explicit action.
 
 // How the instant is decided: following the real current time, or as entered.
 export type ConverterMode = 'now' | 'custom'
@@ -26,6 +29,14 @@ export type CalendarRead = 'zone' | TimeScaleName
 // Occurrence of a local reading the clocks repeat.
 export type LocalFold = 'earlier' | 'later'
 
+// Occurrence chosen of a repeated local reading, and the zone whose clocks repeat it.
+export interface ChosenFold {
+	// Occurrence chosen.
+	readonly occurrence: LocalFold
+	// IANA zone it was chosen in; the choice says nothing of the readings of any other zone.
+	readonly timeZone: string
+}
+
 // State of the tool in the tab.
 export interface AstronomicalTimeState {
 	// How the instant is decided.
@@ -38,12 +49,12 @@ export interface AstronomicalTimeState {
 	scale: TimeScaleName
 	// What a calendar entry is read in.
 	read: CalendarRead
-	// Occurrence chosen of a repeated local reading.
-	fold?: LocalFold
-	// Time zone chosen: UTC, an IANA zone, or empty for the browser's; undefined follows the observer, then the browser.
-	timeZone?: string
-	// Location chosen for the tool alone; undefined follows the Sky observer of the active profile.
-	place?: EclipsePlace
+	// Occurrence chosen of a repeated local reading; a new entry, form, zone, or location forgets it.
+	fold?: ChosenFold
+	// Zone of the local calendar chosen for the tool alone, resolved against its location.
+	zone: DisplayZoneOverride
+	// Place the tool observes from: the active profile's site, another saved site, or coordinates typed in.
+	location: ToolLocation
 	// Text of the apparent right ascension of date of the hour angle, in hours.
 	rightAscension: string
 	// Answer for the current inputs.
@@ -131,7 +142,7 @@ export type ConversionRequest = { readonly request: AstronomicalTimeRequest } | 
 
 // Initial state of the tool.
 export function initialAstronomicalTimeState(): AstronomicalTimeState {
-	return { mode: 'now', format: 'calendar', text: '', scale: 'UTC', read: 'zone', rightAscension: '' }
+	return { mode: 'now', format: 'calendar', text: '', scale: 'UTC', read: 'zone', zone: DEFAULT_ZONE_OVERRIDE, location: ACTIVE_TOOL_LOCATION, rightAscension: '' }
 }
 
 // Astronomical Time Converter state of the tab.
@@ -139,17 +150,6 @@ export const astronomicalTimeState = proxy<AstronomicalTimeState>(initialAstrono
 
 // Requests of the conversion; new inputs supersede them.
 const conversionGuard = createRequestGuard()
-
-// Returns the time zone of the local calendar: the one chosen, otherwise the observer's, otherwise the browser's.
-export function effectiveTimeZone(state: Pick<AstronomicalTimeState, 'timeZone'>, observer: Pick<SkyObserverSettings, 'timeZone'> | undefined): string {
-	return state.timeZone || (state.timeZone === undefined && observer?.timeZone) || BROWSER_TIME_ZONE
-}
-
-// Returns the observer of the conversion: the location chosen for the tool at sea level, otherwise the Sky observer.
-export function effectiveObserver(state: Pick<AstronomicalTimeState, 'place'>, observer: SkyObserverSettings | undefined): SkyObserver | undefined {
-	if (state.place) return { latitude: state.place.latitude, longitude: state.place.longitude, elevation: 0 }
-	return observer && { latitude: observer.latitude, longitude: observer.longitude, elevation: observer.elevation }
-}
 
 // Returns the fields of a civil reading at the start of a text, or undefined when they name no calendar date and time.
 function civilFields(text: string): CivilFields | undefined {
@@ -174,9 +174,16 @@ function isoOffset(text: string): number | undefined {
 	return match[1] === '-' ? -minutes : minutes
 }
 
-// Returns the instant of a custom entry, or what is wrong with it. `timeZone` names the zone of a calendar entry.
+// Returns the occurrence chosen of a reading the clocks of a zone (IANA) repeat; undefined when none was chosen there.
+export function foldIn(fold: ChosenFold | undefined, timeZone: string): LocalFold | undefined {
+	return fold?.timeZone === timeZone ? fold.occurrence : undefined
+}
+
+// Returns the instant of a custom entry, or what is wrong with it. `timeZone` (IANA) names the zone of a calendar entry,
+// and only an occurrence chosen in that zone is sent.
 export function parseEntry(state: Pick<AstronomicalTimeState, 'format' | 'text' | 'scale' | 'read' | 'fold'>, timeZone: string): AstronomicalTimeInput | string {
-	const { format, scale, read, fold } = state
+	const { format, scale, read } = state
+	const fold = foldIn(state.fold, timeZone)
 	const text = state.text.trim()
 	if (!text) return `Enter a ${INPUT_FORMAT_LABELS[format]}.`
 
@@ -220,10 +227,11 @@ export function parseRightAscension(text: string): Angle | undefined {
 	return value !== undefined && value >= 0 && value <= 2 * Math.PI ? value : undefined
 }
 
-// Returns what the inputs ask of the server, or why they cannot be sent.
-export function conversionRequest(state: Omit<AstronomicalTimeState, 'result' | 'inputError' | 'error' | 'ambiguous'>, observerSettings: SkyObserverSettings | undefined): ConversionRequest {
-	const timeZone = effectiveTimeZone(state, observerSettings)
-	const observer = effectiveObserver(state, observerSettings)
+// Returns what the inputs ask of the server, or why they cannot be sent. location is the place the tool observes from,
+// undefined without one (its name and zone are never sent); timeZone is the IANA zone of the local calendar, as
+// resolveDisplayZone gives it, always sent, since the server does not know the browser's.
+export function conversionRequest(state: Omit<AstronomicalTimeState, 'result' | 'inputError' | 'error' | 'ambiguous'>, location: GeographicLocation | undefined, timeZone: string): ConversionRequest {
+	const observer = siteObserver(location)
 	const input = state.mode === 'now' ? ({ kind: 'now' } as const) : parseEntry(state, timeZone)
 	if (typeof input === 'string') return { error: input }
 
@@ -351,6 +359,24 @@ export function setCalendarRead(state: AstronomicalTimeState, read: CalendarRead
 	refreshEntry(state)
 }
 
+// Chooses an occurrence of a reading the clocks of a zone (IANA) repeat.
+export function chooseFold(state: AstronomicalTimeState, occurrence: LocalFold, timeZone: string) {
+	state.fold = { occurrence, timeZone }
+}
+
+// Changes the zone of the local calendar, which reads a calendar entry anew, so the occurrence chosen is forgotten.
+export function setConverterZone(state: AstronomicalTimeState, zone: DisplayZoneOverride) {
+	state.zone = zone
+	state.fold = undefined
+}
+
+// Changes where the tool observes from, for the tool alone: the profile and its site never change. Its zone may read a
+// calendar entry anew, so the occurrence chosen is forgotten.
+export function setConverterLocation(state: AstronomicalTimeState, location: ToolLocation) {
+	state.location = location
+	state.fold = undefined
+}
+
 // Replaces the text of the custom instant.
 export function setEntryText(state: AstronomicalTimeState, text: string) {
 	state.text = text
@@ -377,10 +403,10 @@ export function applyToSky(state: Pick<AstronomicalTimeState, 'result'>, clock: 
 	if (time !== undefined) setSkyTime(clock, time)
 }
 
-// Opens the tool on the real current time at the active profile's observer, whatever instant it held.
+// Opens the tool on the real current time at the active profile's observing site, whatever instant and location it held.
 export function openAstronomicalTimeConverter(state: AstronomicalTimeState = astronomicalTimeState, route: RouteState = routeState, history?: Pick<History, 'pushState'>) {
 	state.mode = 'now'
-	state.place = undefined
+	state.location = ACTIVE_TOOL_LOCATION
 	navigate(route, { workspace: 'tools', tool: 'astronomical-time-converter' }, history)
 }
 

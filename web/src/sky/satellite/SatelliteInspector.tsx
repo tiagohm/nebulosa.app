@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDegrees } from '../../format'
-import type { SkyObserverSettings } from '../../profile/schema'
+import type { SiteLocation } from '../../location/site'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { openArtificialSatellites } from '../../tools/artificialsatellites/artificialsatellites'
@@ -24,12 +24,12 @@ const OBJECT_TYPE_NAMES = { payload: 'Payload', rocketBody: 'Rocket body', debri
 export interface SatelliteInspectorProps {
 	// Selection of a satellite.
 	readonly selection: SkySelection
-	// Observer of the active profile; absent when none is set.
-	readonly observer?: SkyObserverSettings
-	// Opens the observer settings.
+	// Observing site of the active profile; absent when it has none.
+	readonly observer?: SiteLocation
+	// Opens Settings → Observing Sites to choose or add a site.
 	readonly onSetObserver: () => void
-	// IANA time zone times are shown in; the browser's when absent.
-	readonly timeZone?: string
+	// IANA time zone times are shown in: the profile's display zone.
+	readonly timeZone: string
 }
 
 // Satellite Inspector.
@@ -81,9 +81,9 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 			<CollapsibleSection id="sky.visibility" title="Visibility" summary={position?.altitude === undefined ? undefined : formatDegrees(position.altitude)}>
 				{!observer && (
 					<>
-						<Notice>Set the observer location to see the altitude and the passes of the satellite.</Notice>
+						<Notice>Select an observing site to see the altitude and the passes of the satellite.</Notice>
 						<Button variant="ghost" className="self-start" onClick={onSetObserver}>
-							Set Observer
+							Set Location
 						</Button>
 					</>
 				)}

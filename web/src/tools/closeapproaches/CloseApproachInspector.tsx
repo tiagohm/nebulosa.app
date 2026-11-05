@@ -2,6 +2,7 @@ import type { CloseApproach, CloseApproachBody, MinorBody, MinorBodyDetails, Min
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { MISSING } from '../../format'
+import { describeDisplayZone, type DisplayZone } from '../../location/zone'
 import { CLOSE_APPROACH_BODIES, type CloseApproachDistanceDisplay } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Button } from '../../ui/Button'
@@ -70,14 +71,14 @@ function OptionalDatum({ label, children }: { readonly label: string; readonly c
 interface EncounterProps {
 	// Encounter selected.
 	readonly approach: CloseApproach
-	// Zone of the times.
-	readonly timeZone: string
+	// Zone of the times, and why it was chosen.
+	readonly zone: DisplayZone
 	// Unit of the distances.
 	readonly distanceDisplay: CloseApproachDistanceDisplay
 }
 
 // Overview of the encounter and, once known, of the object.
-function Overview({ approach, timeZone, distanceDisplay, body, children }: EncounterProps & { readonly body?: MinorBody; readonly children?: ReactNode }) {
+function Overview({ approach, zone, distanceDisplay, body, children }: EncounterProps & { readonly body?: MinorBody; readonly children?: ReactNode }) {
 	const { distance, distanceMin, distanceMax, relativeVelocity, time, fullName, designation } = approach
 
 	return (
@@ -96,7 +97,8 @@ function Overview({ approach, timeZone, distanceDisplay, body, children }: Encou
 			<DataRow label="Nominal distance">{formatDistance(distance, distanceDisplay)}</DataRow>
 			<OptionalDatum label="3σ range">{formatDistanceRange(distanceMin, distanceMax, distanceDisplay)}</OptionalDatum>
 			<DataRow label="Vrel">{formatVelocity(relativeVelocity)}</DataRow>
-			<DataRow label={`Time (${timeZone})`}>{formatApproachTime(time, timeZone)}</DataRow>
+			<DataRow label="Time">{formatApproachTime(time, zone.zone)}</DataRow>
+			<DataRow label="Time zone">{describeDisplayZone(zone)}</DataRow>
 			{children}
 		</CollapsibleSection>
 	)
@@ -221,7 +223,7 @@ function VirtualImpactorsSection({ details: { virtualImpactors } }: { readonly d
 }
 
 // Other encounters of the object with any target, paged by JPL.
-function OtherApproachesSection({ timeZone, distanceDisplay }: Omit<EncounterProps, 'approach'>) {
+function OtherApproachesSection({ zone, distanceDisplay }: Omit<EncounterProps, 'approach'>) {
 	const { history, historyBody, historyWindow, historyPage, historyLoading, historyError, selected } = useSnapshot(closeApproachesState) as CloseApproachesState
 	const pages = history ? pageCount(history.total, history.pageSize) : 1
 
@@ -240,7 +242,7 @@ function OtherApproachesSection({ timeZone, distanceDisplay }: Omit<EncounterPro
 							onClick={() => void selectCloseApproach(closeApproachesState, approach)}
 							className={`flex w-full cursor-pointer items-baseline justify-between gap-2 rounded-sm border-0 px-1 py-0.5 text-left font-mono text-xs hover:bg-base-300 focus-visible:outline-2 focus-visible:outline-accent ${selected?.id === approach.id ? 'bg-accent-subtle text-accent' : 'bg-transparent text-ink-200'}`}
 						>
-							<span>{formatApproachTime(approach.time, timeZone).slice(0, 10)}</span>
+							<span>{formatApproachTime(approach.time, zone.zone).slice(0, 10)}</span>
 							<span>{bodyName(approach.body)}</span>
 							<span>{formatDistance(approach.distance, distanceDisplay)}</span>
 						</button>
@@ -266,13 +268,13 @@ function OtherApproachesSection({ timeZone, distanceDisplay }: Omit<EncounterPro
 
 // Inspector of the encounter selected: `actions` receives the body once known and adds to the first section, and
 // `observability` receives it after the sections of the object.
-export function CloseApproachInspector({ approach, timeZone, distanceDisplay, actions, observability }: EncounterProps & { readonly actions: (body: MinorBody) => ReactNode; readonly observability: (body: MinorBody) => ReactNode }) {
+export function CloseApproachInspector({ approach, zone, distanceDisplay, actions, observability }: EncounterProps & { readonly actions: (body: MinorBody) => ReactNode; readonly observability: (body: MinorBody) => ReactNode }) {
 	const { object, objectLoading, objectError, designation } = useSnapshot(closeApproachesState) as CloseApproachesState
 	const found = object?.kind === 'found' ? object : undefined
 
 	return (
 		<>
-			<Overview approach={approach} timeZone={timeZone} distanceDisplay={distanceDisplay} body={found?.body}>
+			<Overview approach={approach} zone={zone} distanceDisplay={distanceDisplay} body={found?.body}>
 				{found && actions(found.body)}
 				{objectLoading && <Notice>Reading the object from SBDB…</Notice>}
 				{objectError && <Notice error>Object details unavailable: {objectError}</Notice>}
@@ -300,11 +302,11 @@ export function CloseApproachInspector({ approach, timeZone, distanceDisplay, ac
 					<PhysicalSection details={found.details} />
 					<ObservationsSection details={found.details} />
 					<VirtualImpactorsSection details={found.details} />
-					<OtherApproachesSection timeZone={timeZone} distanceDisplay={distanceDisplay} />
+					<OtherApproachesSection zone={zone} distanceDisplay={distanceDisplay} />
 					{observability(found.body)}
 					<div className="px-4 py-3">
 						<Notice>
-							{found.details.source} {found.details.sourceVersion}, read {formatApproachTime(found.details.fetchedAt, timeZone)}.
+							{found.details.source} {found.details.sourceVersion}, read {formatApproachTime(found.details.fetchedAt, zone.zone)}.
 						</Notice>
 					</div>
 				</>

@@ -11,6 +11,7 @@ import {
 	ephemerisCsv,
 	ephemerisDraftError,
 	followSatelliteObserver,
+	formatSatelliteTime,
 	groundTrackInstant,
 	initialArtificialSatellitesState,
 	loadSatelliteGroundTrack,
@@ -23,7 +24,7 @@ import {
 } from './artificialsatellites'
 
 const NOW = Date.UTC(2026, 10, 4, 12)
-const OBSERVER = { latitude: -23.5, longitude: -46.6, elevation: 760, timeZone: 'America/Sao_Paulo' }
+const OBSERVER = { id: 'home', name: 'Home', latitude: -23.5, longitude: -46.6, elevation: 760, timeZone: 'America/Sao_Paulo' }
 
 interface Call {
 	readonly url: string
@@ -83,7 +84,7 @@ test('selecting another satellite drops the predictions of the previous one at o
 	const selection = selectSatellite(tool, '48274', OBSERVER, io)
 	expect(tool).toMatchObject({ selectedId: '48274', passes: undefined, selectedPass: undefined, ephemeris: undefined })
 	expect(calls.map((call) => call.url)).toEqual(['/api/satellites/48274', '/api/satellites/48274/position'])
-	// The position is asked for now, from the Sky observer with its elevation.
+	// The position is asked for now, from the observing site with its elevation, without its name or zone.
 	expect(calls[1].body).toEqual({ time: NOW, observer: { latitude: -23.5, longitude: -46.6, elevation: 760 } })
 	calls[0].resolve(Response.json({ object: { noradId: '48274', name: 'CSS', groups: [] }, elementSets: [] }))
 	calls[1].resolve(Response.json({ error: 'Satellite 48274 has no orbital elements', code: 'noElements' }, { status: 404 }))
@@ -109,28 +110,38 @@ test('a pass search sends its window and limits in radians, from the time chosen
 	await search
 	expect(tool.selectedPass).toBe(0)
 
-	// Without an observer nothing is asked.
+	// Without a site nothing is asked.
 	await loadSatellitePasses(tool, undefined, io)
 	expect(calls).toHaveLength(1)
 })
 
-test('another Sky observer drops the passes and the ephemeris and reads the position again', () => {
+test('another place of the observing site drops the passes and the ephemeris and reads the position again', () => {
 	const tool = state()
 	const { io, calls } = deferredIo()
 	tool.selectedId = '25544'
 	tool.passes = { passes: [], truncated: false } as never
 	tool.selectedPass = 0
 
-	// The first observer seen, and the same one again, change nothing.
+	// The first site seen, the same one again, and the same place renamed or in another zone change nothing.
 	followSatelliteObserver(tool, OBSERVER, io)
 	followSatelliteObserver(tool, { ...OBSERVER }, io)
+	const renamed = { ...OBSERVER, name: 'Backyard', timeZone: 'UTC' }
+	followSatelliteObserver(tool, renamed, io)
 	expect(tool.passes).toBeDefined()
+	expect(tool.observerKey).toBe('-23.5,-46.6,760')
 	expect(calls).toHaveLength(0)
+
+	// Another elevation is another place.
+	followSatelliteObserver(tool, { ...OBSERVER, elevation: 800 }, io)
+	expect(tool.passes).toBeUndefined()
+	expect(calls[0].body).toEqual({ time: NOW, observer: { latitude: -23.5, longitude: -46.6, elevation: 800 } })
+	tool.passes = { passes: [], truncated: false } as never
+	tool.selectedPass = 0
 
 	followSatelliteObserver(tool, undefined, io)
 	expect(tool).toMatchObject({ passes: undefined, selectedPass: undefined, ephemeris: undefined, observerKey: '' })
-	expect(calls.map((call) => call.url)).toEqual(['/api/satellites/25544/position'])
-	expect(calls[0].body).toEqual({ time: NOW })
+	expect(calls.map((call) => call.url)).toEqual(['/api/satellites/25544/position', '/api/satellites/25544/position'])
+	expect(calls[1].body).toEqual({ time: NOW })
 })
 
 test('an ephemeris draft is checked before it is sent', () => {
@@ -140,7 +151,7 @@ test('an ephemeris draft is checked before it is sent', () => {
 	expect(ephemerisDraftError({ start: 'now', hours: 72, stepSeconds: 10 })).toContain('rows')
 })
 
-test('the ephemeris export is CSV with units in the header and empty cells for absent values', () => {
+test('the ephemeris export is CSV with units in the header, its civil time in the zone it names, and empty cells for absent values', () => {
 	const row = {
 		time: Date.UTC(2026, 0, 1),
 		rightAscension: Math.PI,
@@ -158,9 +169,19 @@ test('the ephemeris export is CSV with units in the header and empty cells for a
 	} as SatelliteEphemerisRow
 	const csv = ephemerisCsv([row], 'UTC')
 	const [header, line, end] = csv.split('\r\n')
-	expect(header).toBe('time_utc,time_local,ra_of_date_deg,dec_of_date_deg,ra_j2000_deg,dec_j2000_deg,azimuth_deg,altitude_deg,distance_km,range_rate_km_s,subpoint_lat_deg,subpoint_lon_deg,height_km,shadow')
-	expect(line).toBe('2026-01-01T00:00:00.000Z,2026-01-01 00:00:00,180.000000,-45.000000,180.000000,-45.000000,,,1000.123,,0.0000,90.0000,420.000,sunlit')
+	expect(header).toBe('time_utc,time_civil,time_zone,ra_of_date_deg,dec_of_date_deg,ra_j2000_deg,dec_j2000_deg,azimuth_deg,altitude_deg,distance_km,range_rate_km_s,subpoint_lat_deg,subpoint_lon_deg,height_km,shadow')
+	expect(line).toBe('2026-01-01T00:00:00.000Z,2026-01-01 00:00:00,UTC,180.000000,-45.000000,180.000000,-45.000000,,,1000.123,,0.0000,90.0000,420.000,sunlit')
 	expect(end).toBe('')
+
+	// Another zone writes the same instant in its civil time and names it.
+	expect(ephemerisCsv([row], 'America/Sao_Paulo').split('\r\n')[1]).toStartWith('2026-01-01T00:00:00.000Z,2025-12-31 21:00:00,America/Sao_Paulo,180.000000,')
+})
+
+test('a satellite time is written in the IANA zone given', () => {
+	const time = Date.UTC(2026, 10, 4, 12, 30, 15)
+	expect(formatSatelliteTime(time, 'UTC')).toBe('2026-11-04 12:30:15')
+	expect(formatSatelliteTime(time, 'America/Sao_Paulo')).toBe('2026-11-04 09:30:15')
+	expect(formatSatelliteTime(time, 'Asia/Kathmandu')).toBe('2026-11-04 18:15:15')
 })
 
 // Ground track answered for an instant, of a 90-minute orbit.
@@ -268,15 +289,23 @@ test('a ground track is read when its view shows a satellite with elements', () 
 })
 
 test('Open in Sky selects the satellite and moves the clock only when asked', () => {
-	const sky = proxy<SkyState>({ panel: 'observer' })
+	const sky = proxy<SkyState>({ panel: 'display' })
 	const clock = proxy<SkyClock>({ mode: 'now', anchor: 0, startedAt: 0, rate: 1 })
 	const route = proxy<RouteState>({ route: { workspace: 'tools' } })
-	const handoff: SatelliteSkyHandoff = { sky, clock, route, io: { fetch: () => new Promise<Response>(() => {}), time: () => NOW }, history: { pushState: () => undefined } }
+	const bodies: unknown[] = []
+	const fetch = (_: string, init?: RequestInit) => {
+		if (init?.body) bodies.push(JSON.parse(init.body as string))
+		return new Promise<Response>(() => {})
+	}
+	const handoff: SatelliteSkyHandoff = { sky, clock, route, io: { fetch, time: () => NOW }, history: { pushState: () => undefined } }
 
 	showSatelliteInSky('25544', 'ISS (ZARYA)', OBSERVER, undefined, handoff)
 	expect(sky.selection).toMatchObject({ ref: { kind: 'satellite', noradId: '25544' }, key: 'satellite:25544', category: 'satellite', name: 'ISS (ZARYA)' })
+	expect(sky.panel).toBe('inspector')
 	expect(clock.mode).toBe('now')
 	expect(route.route.workspace).toBe('sky')
+	// The Sky predicts it for the active site, without its name or zone.
+	expect(bodies).toContainEqual(expect.objectContaining({ observer: { latitude: -23.5, longitude: -46.6, elevation: 760 } }))
 
 	showSatelliteInSky('25544', 'ISS (ZARYA)', OBSERVER, NOW, handoff)
 	expect(clock).toMatchObject({ mode: 'fixed', anchor: NOW })

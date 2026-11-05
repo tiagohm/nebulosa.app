@@ -1,20 +1,21 @@
 import type { SatelliteDetails, SatelliteEphemerisResponse, SatelliteEphemerisRow, SatelliteGroundTrackResponse, SatelliteImportResponse, SatellitePassesResponse, SatellitePosition, SatellitePositionResponse, SatelliteSearchPage } from 'api'
 import { proxy } from 'valtio'
 import { fetchJson, jsonInit } from '../../http'
-import type { SkyObserverSettings } from '../../profile/schema'
+import { type GeographicLocation, locationKey, siteObserver } from '../../location/site'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import { setSkyTime, SKY_REALTIME_TICK_MS, type SkyClock, skyClock, skyTime } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
-import { apiObserver, browserSkyIo, selectSkyObject, type SkyIo, type SkyState, skyState } from '../../sky/sky'
+import { browserSkyIo, selectSkyObject, type SkyIo, type SkyState, skyState } from '../../sky/sky'
 
 // State of the Artificial Satellites tool, tab-lived and never persisted: the catalog search, the satellite selected
 // with its details and position, the windows of its passes, ephemeris, and ground track, and an import being typed.
-// Every prediction is for the Sky observer of the active profile, or the Earth's center without one; the ground track
-// needs none. The catalog, its downloads, and every prediction are the server's; each kind of answer has a request guard
-// of its own, so an old answer never replaces a newer one, and only the position now (POSITION_REFRESH_MS) and a ground
-// track following the real time (once an orbit) repeat by themselves. Times are Unix milliseconds (UTC), and
-// angles radians until they are formatted. The profile's favorites and the Sky change only
-// through explicit actions.
+// Every prediction is for the observing site of the active profile, or the Earth's center without one; the tool has no
+// place of its own, and the ground track needs none. The catalog, its downloads, and every prediction are the server's;
+// each kind of answer has a request guard of its own, so an old answer never replaces a newer one, and only the
+// position now (POSITION_REFRESH_MS) and a ground track following the real time (once an orbit) repeat by themselves.
+// Times are Unix milliseconds (UTC), and angles radians until they are formatted; civil times are shown in the
+// profile's display zone, which only formats them, never asks for anything again. The profile's favorites and the Sky
+// change only through explicit actions.
 
 // Milliseconds per hour and per day.
 const HOUR_MS = 3_600_000
@@ -103,7 +104,7 @@ export interface GroundTrackLayers {
 	footprint: boolean
 	// Night side of the Earth.
 	night: boolean
-	// Sky observer.
+	// Observing site of the active profile.
 	observer: boolean
 	// Parts of the track in the Earth's shadow drawn apart.
 	shadow: boolean
@@ -133,8 +134,8 @@ export interface ArtificialSatellitesState {
 	detailsError?: string
 	position?: SatellitePositionResponse
 	positionError?: string
-	// Latitude, longitude, and elevation of the observer the predictions shown were made for; empty for the Earth's
-	// center, absent before the first observer was seen.
+	// Place (locationKey) of the site the predictions shown were made for: its latitude, longitude, and elevation, never
+	// its name or zone; empty for the Earth's center, absent before the first site was seen.
 	observerKey?: string
 	// Pass search being edited, the latest answer, and its state.
 	passDraft: PassDraft
@@ -254,9 +255,9 @@ export async function searchSatellites(state: ArtificialSatellitesState, favorit
 	state.searching = false
 }
 
-// Selects a satellite: reads its details and its position now for the observer. Another satellite drops the passes, the
-// ephemeris, and the ground track of the previous one at once, so they are never shown as the new one's.
-export async function selectSatellite(state: ArtificialSatellitesState, noradId: string, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
+// Selects a satellite: reads its details and its position now for the observing site. Another satellite drops the
+// passes, the ephemeris, and the ground track of the previous one at once, so they are never shown as the new one's.
+export async function selectSatellite(state: ArtificialSatellitesState, noradId: string, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
 	if (state.selectedId !== noradId) {
 		state.selectedId = noradId
 		state.details = undefined
@@ -292,15 +293,15 @@ export async function loadSatelliteDetails(state: ArtificialSatellitesState, io:
 	}
 }
 
-// Reads the position of the satellite selected at the real current time, for the observer or the Earth's center.
-export async function loadSatellitePosition(state: ArtificialSatellitesState, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
+// Reads the position of the satellite selected at the real current time, for the observing site or the Earth's center.
+export async function loadSatellitePosition(state: ArtificialSatellitesState, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
 	const noradId = state.selectedId
 	if (!noradId) return
 	const request = positionGuard.begin()
 	state.positionError = undefined
 
 	try {
-		const position = await fetchJson<SatellitePositionResponse>(io, `/api/satellites/${encodeURIComponent(noradId)}/position`, jsonInit('POST', { time: io.now(), observer: apiObserver(observer) }, request.signal))
+		const position = await fetchJson<SatellitePositionResponse>(io, `/api/satellites/${encodeURIComponent(noradId)}/position`, jsonInit('POST', { time: io.now(), observer: siteObserver(observer) }, request.signal))
 		if (!request.current()) return
 		state.position = position
 	} catch (error) {
@@ -310,11 +311,11 @@ export async function loadSatellitePosition(state: ArtificialSatellitesState, ob
 	}
 }
 
-// Follows the Sky observer: when it differs from the one the predictions shown were made for, the position is read
-// again, and the passes and ephemeris of the previous observer are dropped at once. The first observer seen is only
-// recorded.
-export function followSatelliteObserver(state: ArtificialSatellitesState, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
-	const key = observer ? `${observer.latitude},${observer.longitude},${observer.elevation}` : ''
+// Follows the observing site of the active profile: when its place differs from the one the predictions shown were made
+// for, the position is read again, and the passes and ephemeris of the previous place are dropped at once. Another name
+// or zone of the same place keeps them. The first site seen is only recorded.
+export function followSatelliteObserver(state: ArtificialSatellitesState, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
+	const key = locationKey(observer)
 	if (state.observerKey === key) return
 	const first = state.observerKey === undefined
 	state.observerKey = key
@@ -332,9 +333,9 @@ function windowStart(start: SatelliteWindowStart, io: ArtificialSatellitesIo) {
 	return start === 'now' ? io.now() : io.skyTime()
 }
 
-// Searches the passes of the satellite selected over the observer, with the draft. Needs an observer.
-export async function loadSatellitePasses(state: ArtificialSatellitesState, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
-	const site = apiObserver(observer)
+// Searches the passes of the satellite selected over the observing site, with the draft. Needs a site.
+export async function loadSatellitePasses(state: ArtificialSatellitesState, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
+	const site = siteObserver(observer)
 	if (!state.selectedId || !site) return
 	const request = passesGuard.begin()
 	const { start, days, minAltitude, twilight } = state.passDraft
@@ -370,13 +371,13 @@ export function ephemerisDraftError(draft: EphemerisDraft) {
 	return undefined
 }
 
-// Computes the ephemeris of the satellite selected with the draft, for the observer or the Earth's center.
-export async function loadSatelliteEphemeris(state: ArtificialSatellitesState, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
+// Computes the ephemeris of the satellite selected with the draft, for the observing site or the Earth's center.
+export async function loadSatelliteEphemeris(state: ArtificialSatellitesState, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
 	if (!state.selectedId || ephemerisDraftError(state.ephemerisDraft)) return
 	const request = ephemerisGuard.begin()
 	const { start, hours, stepSeconds } = state.ephemerisDraft
 	const from = windowStart(start, io)
-	const body = { start: from, end: from + hours * HOUR_MS, step: stepSeconds * 1000, observer: apiObserver(observer) }
+	const body = { start: from, end: from + hours * HOUR_MS, step: stepSeconds * 1000, observer: siteObserver(observer) }
 	state.ephemerisLoading = true
 	state.ephemerisError = undefined
 
@@ -474,7 +475,7 @@ export async function importSatelliteElements(state: ArtificialSatellitesState, 
 }
 
 // Sets the element set the predictions of the satellite selected use (null for GP, then imported), then reads it again.
-export async function setSatelliteElementSource(state: ArtificialSatellitesState, kind: 'gp' | 'manual' | null, observer: SkyObserverSettings | undefined, io: ArtificialSatellitesIo = browserIo) {
+export async function setSatelliteElementSource(state: ArtificialSatellitesState, kind: 'gp' | 'manual' | null, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
 	const noradId = state.selectedId
 	if (!noradId) return
 
@@ -506,18 +507,13 @@ function browserHandoff(): SatelliteSkyHandoff {
 	return { sky: skyState, clock: skyClock, route: routeState, io: browserSkyIo, history: window.history }
 }
 
-// Shows a satellite in the Sky workspace, selected through the Sky's own path. With `time` (Unix milliseconds) the
-// simulation clock moves there first; without it the clock is left alone. Neither the observer nor any device changes.
-export function showSatelliteInSky(noradId: string, name: string, observer: SkyObserverSettings | undefined, time?: number, handoff: SatelliteSkyHandoff = browserHandoff()) {
+// Shows a satellite in the Sky workspace, selected through the Sky's own path for observer: the active profile's site,
+// which the Sky observes from (undefined without one). With `time` (Unix milliseconds) the simulation clock moves there
+// first; without it the clock is left alone. Neither the site nor any device changes.
+export function showSatelliteInSky(noradId: string, name: string, observer: GeographicLocation | undefined, time?: number, handoff: SatelliteSkyHandoff = browserHandoff()) {
 	if (time !== undefined) setSkyTime(handoff.clock, time)
 	selectSkyObject(handoff.sky, { ref: { kind: 'satellite', noradId }, source: 'search', name, category: 'satellite' }, observer, handoff.io)
 	navigate(handoff.route, { workspace: 'sky' }, handoff.history)
-}
-
-// Opens the Observer panel of the Sky, where the observer of every prediction of the tool is set.
-export function openSkyObserver(sky: SkyState = skyState, route: RouteState = routeState) {
-	sky.panel = 'observer'
-	navigate(route, { workspace: 'sky' })
 }
 
 // Opens the tool on a satellite: /tools/artificial-satellites/<noradId>.
@@ -528,9 +524,9 @@ export function openArtificialSatellites(noradId: string, route: RouteState = ro
 // Name of each illumination state.
 export const SHADOW_LABELS: Readonly<Record<SatellitePosition['shadow'], string>> = { sunlit: 'Sunlit', penumbra: 'Penumbra', umbra: 'In shadow' }
 
-// Returns a time as YYYY-MM-DD HH:mm:ss in a zone (empty for the browser's), from Unix milliseconds.
+// Returns a time (Unix milliseconds) as YYYY-MM-DD HH:mm:ss in an IANA time zone.
 export function formatSatelliteTime(time: number, timeZone: string) {
-	return new Intl.DateTimeFormat('sv-SE', { timeZone: timeZone || undefined, dateStyle: 'short', timeStyle: 'medium' }).format(time)
+	return new Intl.DateTimeFormat('sv-SE', { timeZone, dateStyle: 'short', timeStyle: 'medium' }).format(time)
 }
 
 // Formats an age in days, with its sign: elements older than the instant are a positive age.
@@ -540,10 +536,12 @@ export function formatElementAge(days: number) {
 	return days < 0 ? `${text} before the epoch` : text
 }
 
-// Columns of the ephemeris export, with how each row gives them. Angles are degrees, distances km, rates km/s.
+// Columns of the ephemeris export, with how each row gives them: the instant in ISO 8601 UTC, then its civil time in the
+// display zone and the IANA name of that zone. Angles are degrees, distances km, rates km/s.
 const CSV_COLUMNS: readonly (readonly [string, (row: SatelliteEphemerisRow, timeZone: string) => string])[] = [
 	['time_utc', (row) => new Date(row.time).toISOString()],
-	['time_local', (row, timeZone) => formatSatelliteTime(row.time, timeZone)],
+	['time_civil', (row, timeZone) => formatSatelliteTime(row.time, timeZone)],
+	['time_zone', (_, timeZone) => timeZone],
 	['ra_of_date_deg', (row) => ((row.rightAscension * 180) / Math.PI).toFixed(6)],
 	['dec_of_date_deg', (row) => ((row.declination * 180) / Math.PI).toFixed(6)],
 	['ra_j2000_deg', (row) => ((row.rightAscensionJ2000 * 180) / Math.PI).toFixed(6)],
@@ -558,15 +556,16 @@ const CSV_COLUMNS: readonly (readonly [string, (row: SatelliteEphemerisRow, time
 	['shadow', (row) => row.shadow],
 ]
 
-// Returns the rows of an ephemeris as CSV text (RFC 4180, comma-separated, CRLF lines), with a header. RA/Dec of date
-// are geometric topocentric (or geocentric without an observer) on the true equator and equinox; J2000 is ICRS.
+// Returns the rows of an ephemeris as CSV text (RFC 4180, comma-separated, CRLF lines), with a header; civil times are
+// in timeZone, an IANA zone. RA/Dec of date are geometric topocentric (or geocentric without a site) on the true
+// equator and equinox; J2000 is ICRS.
 export function ephemerisCsv(rows: readonly SatelliteEphemerisRow[], timeZone: string) {
 	const lines = [CSV_COLUMNS.map(([name]) => name).join(',')]
 	for (const row of rows) lines.push(CSV_COLUMNS.map(([, value]) => value(row, timeZone)).join(','))
 	return `${lines.join('\r\n')}\r\n`
 }
 
-// Has the browser save an ephemeris as a CSV file.
+// Has the browser save an ephemeris as a CSV file, its civil times in timeZone (IANA).
 export function downloadEphemerisCsv(rows: readonly SatelliteEphemerisRow[], timeZone: string, name: string) {
 	const url = URL.createObjectURL(new Blob([ephemerisCsv(rows, timeZone)], { type: 'text/csv' }))
 	const link = document.createElement('a')

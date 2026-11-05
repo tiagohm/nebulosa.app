@@ -4,6 +4,8 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { formatGeographic } from '../format'
 import { imagesState } from '../images/images'
+import { activeSite, locationKey, openObservingSites, siteState } from '../location/site'
+import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { activeProfile, profileState, satelliteFavorites, setSkyTimeBarVisible } from '../profile/profile'
 import { satelliteCatalogState } from '../satellites/satellites'
 import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
@@ -19,8 +21,7 @@ import { FramingPanel } from './FramingPanel'
 import { HoverTooltip } from './HoverTooltip'
 import { mountPoint, mountRuntime, mountView, selectionPoint } from './mount'
 import { ObjectInspector } from './ObjectInspector'
-import { ObserverPanel } from './ObserverPanel'
-import { observerKey, planetarium, planetariumState } from './planetarium'
+import { planetarium, planetariumState } from './planetarium'
 import { skySatelliteState } from './satellite/satellite'
 import { liveSensors, sensorRuntime } from './sensors'
 import { changeSkyObserver, type SkyPanelView, selectSkyObject, skyState } from './sky'
@@ -32,28 +33,35 @@ import { TimeController } from './TimeController'
 // or equipment. It shows the map, a tooltip for the hovered object, the search, the Object Inspector of
 // the selection, which is the same whether it comes from a click or from the search (selecting never
 // moves the view), and the time bar of the simulation clock, hidden unless toggled on from the toolbar (a
-// profile preference). The contextual panel also holds the
-// observer, display (layers), and framing (field of view of custom optical presets or of the Equipment
-// Setup, drawn around the selection) settings. With an observer the map is the observer's local sky; without one it is an
-// equatorial chart of the whole sky. A solved image can send its footprint, drawn while its document shows that image,
+// profile preference). The contextual panel also holds the display (layers) and framing (field of view of custom optical
+// presets or of the Equipment Setup, drawn around the selection) settings. The Sky observes from the active profile's
+// observing site, chosen in the top bar: with one the map is its local sky; without one it is an equatorial chart of the
+// whole sky, never an assumed place. Times read in the profile's display zone, which changes no position. A solved image can send its footprint, drawn while its document shows that image,
 // and a coordinate to mark; the view is only panned to them, never reprojected, and the toolbar toggles the footprint
 // and clears the mark.
 
-// Observer the selection's position was last computed for; undefined before the workspace is first shown.
+// Place (locationKey) the selection's position was last computed for; undefined before the workspace is first shown.
 let appliedObserver: string | undefined
+
+// Returns the site the active profile observes from now, outside a render.
+function currentSite() {
+	return activeSite(activeProfile(profileState), siteState.sites)
+}
 
 // Sky workspace.
 export function SkyWorkspace() {
 	const profiles = useSnapshot(profileState)
 	const settings = activeProfile(profiles).settings.sky
-	const { observer, display, framing } = settings
+	const { display, framing } = settings
+	const observer = useActiveSite()
+	const displayZone = useDisplayZone(observer)
 	const sky = useSnapshot(skyState)
 	const panelState = useWorkspacePanel('sky')
 	const clock = useSnapshot(skyClock)
 	const { status, error, coordinateHidden } = useSnapshot(planetariumState)
 	const coordinateSystem: CoordinateSystem = observer ? 'horizontal' : 'equatorial'
-	const key = observerKey(observer)
-	const map = useMemo(() => planetarium(coordinateSystem, activeProfile(profileState).settings.sky.observer), [coordinateSystem])
+	const key = locationKey(observer)
+	const map = useMemo(() => planetarium(coordinateSystem, currentSite()), [coordinateSystem])
 	const selectionKey = sky.selection?.key
 	const control = useSnapshot(controlRuntime)
 	const mount = mountView(useSnapshot(mountRuntime), control)
@@ -62,9 +70,10 @@ export function SkyWorkspace() {
 	const mountCenter = mountPoint(mount, live)
 	const mountTarget = mount.target
 
-	// Follows the observer of the active profile: the map, and the selection's position when it changed.
+	// Follows the place of the active profile's site: the map, and the selection's position when it changed. A new name or
+	// zone of the same place reloads nothing.
 	useEffect(() => {
-		const current = activeProfile(profileState).settings.sky.observer
+		const current = currentSite()
 		map.setObserver(current)
 		if (appliedObserver !== undefined && appliedObserver !== key) void changeSkyObserver(skyState, current)
 		appliedObserver = key
@@ -85,7 +94,7 @@ export function SkyWorkspace() {
 	const satelliteIds = showSatellites ? [...new Set([...(selectedSatellite ? [selectedSatellite] : []), ...favorites])].slice(0, SATELLITE_TRACKS_LIMIT).join(',') : ''
 
 	useEffect(() => {
-		map.setSatellites({ ids: satelliteIds ? satelliteIds.split(',') : [], selected: selectedSatellite, observer: activeProfile(profileState).settings.sky.observer, revision, tracking: tracking && showSatellites && !!selectedSatellite, trail })
+		map.setSatellites({ ids: satelliteIds ? satelliteIds.split(',') : [], selected: selectedSatellite, observer: currentSite(), revision, tracking: tracking && showSatellites && !!selectedSatellite, trail })
 	}, [map, satelliteIds, selectedSatellite, key, revision, tracking, trail, showSatellites])
 
 	// Draws the field of view of the selected preset, or of the Equipment Setup, around the selection,
@@ -156,12 +165,11 @@ export function SkyWorkspace() {
 		return panelState.open && sky.panel === view
 	}
 
-	const location = observer ? `${observer.name ? `${observer.name} · ` : ''}${formatGeographic(observer.latitude, observer.longitude)}` : 'No location'
+	const location = observer ? `${observer.name} · ${formatGeographic(observer.latitude, observer.longitude)}` : 'No observing site'
 	const context = clock.mode === 'now' ? location : `${location} · Simulated time`
 
 	const panels: Record<SkyPanelView, () => { title: string; content: ReactNode }> = {
-		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector observer={observer} onSetObserver={() => openPanel('observer')} timeZone={observer?.timeZone} onShowFraming={() => openPanel('framing')} /> }),
-		observer: () => ({ title: 'Observer', content: <ObserverPanel key={key} observer={observer} onDone={() => (skyState.panel = 'inspector')} /> }),
+		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector observer={observer} onSetObserver={() => openObservingSites(observer?.id)} timeZone={displayZone.zone} onShowFraming={() => openPanel('framing')} /> }),
 		display: () => ({ title: 'Display', content: <DisplayPanel sky={settings} local={coordinateSystem === 'horizontal'} /> }),
 		framing: () => ({ title: 'Framing', content: <FramingPanel framing={framing} telescope={telescope} guideTelescope={guideTelescope} hasTarget={!!selectionCenter} /> }),
 	}
@@ -188,9 +196,6 @@ export function SkyWorkspace() {
 						<IconButton icon="clock" label="Time Bar" pressed={settings.timeBar === true} onClick={() => setSkyTimeBarVisible(profileState, settings.timeBar !== true)} />
 						<IconButton icon="frame" label="Framing" pressed={panelShows('framing')} onClick={() => togglePanel('framing')} />
 						<IconButton icon="layers" label="Display" pressed={panelShows('display')} onClick={() => togglePanel('display')} />
-						<Button variant="secondary" onClick={() => togglePanel('observer')} className="max-w-56 max-sm:ml-auto max-sm:min-w-0">
-							<span className="truncate">{observer ? (observer.name ?? 'Location') : 'Set Location'}</span>
-						</Button>
 					</div>
 				</div>
 				<div className="relative isolate min-h-0 flex-1">
@@ -216,7 +221,7 @@ export function SkyWorkspace() {
 						</div>
 					)}
 				</div>
-				{settings.timeBar === true && <TimeController timeZone={observer?.timeZone} />}
+				{settings.timeBar === true && <TimeController timeZone={displayZone.zone} />}
 			</div>
 		</WorkspaceLayout>
 	)

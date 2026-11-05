@@ -2,21 +2,19 @@ import type { MinorBody } from 'api'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDegrees } from '../../format'
-import type { SkyObserverSettings } from '../../profile/schema'
+import { type ObservingSite, openObservingSites } from '../../location/site'
 import { collapsibleSections, sectionOpen } from '../../shell/collapsible'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { navigate, routeState } from '../../shell/route'
 import { formatDeclination, formatLocalTime, formatMagnitude, formatRightAscension, formatSolarSystemDistance } from '../../sky/format'
-import { skyState } from '../../sky/sky'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { closeApproachesState, formatApproachTime, loadCloseApproachObservability, OBSERVABILITY_INSTANTS, type ObservabilityInstant, showInSky } from './closeapproaches'
+import { closeApproachesState, formatApproachTime, loadCloseApproachObservability, OBSERVABILITY_INSTANTS, type ObservabilityInstant, observabilityKey, showInSky } from './closeapproaches'
 
 // How the Close Approaches tool meets the Sky: the two explicit actions that show the object there, and the Observability
-// section, read through the route of the Sky only while it is open. Nothing here computes a position or changes the
-// observer or any device.
+// section, read through the route of the Sky only while it is open, from the active observing site of the profile. Nothing
+// here computes a position or changes the site or any device; the zone of the times only formats them.
 
 // Section identifier of Observability, which keys its expanded state.
 const OBSERVABILITY_SECTION = 'closeapproaches.observability'
@@ -30,56 +28,53 @@ const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 
 // Why the numbers of a close flyby are less certain than they read.
 const FLYBY_NOTE = 'Rise, transit, and set come from a two-body orbit, and Horizons positions are interpolated every 10 minutes, so both lose accuracy during a very close flyby.'
 
-// Opens the Observer panel of the Sky.
-function openObserver() {
-	skyState.panel = 'observer'
-	navigate(routeState, { workspace: 'sky' })
-}
-
 interface SkyActionsProps {
 	// Object of the encounter.
 	readonly body: MinorBody
 	// Instant of the encounter, Unix milliseconds (UTC).
 	readonly time: number
-	// Observer of the profile.
-	readonly observer?: SkyObserverSettings
+	// Active observing site of the profile; absent when it has none.
+	readonly site?: ObservingSite
 }
 
 // Actions that show the object in the Sky: one keeps the clock of the Sky, the other moves it to the encounter.
-export function CloseApproachSkyActions({ body, time, observer }: SkyActionsProps) {
+export function CloseApproachSkyActions({ body, time, site }: SkyActionsProps) {
 	return (
 		<div className="flex flex-wrap gap-2">
-			<Button variant="secondary" title="Selects the object in the Sky. Its clock does not change." onClick={() => showInSky(body, observer)}>
+			<Button variant="secondary" title="Selects the object in the Sky. Its clock does not change." onClick={() => showInSky(body, site)}>
 				Open in Sky
 			</Button>
-			<Button variant="secondary" title="Sets the clock of the Sky to the UTC instant of this encounter and selects the object." onClick={() => showInSky(body, observer, time)}>
+			<Button variant="secondary" title="Sets the clock of the Sky to the UTC instant of this encounter and selects the object." onClick={() => showInSky(body, site, time)}>
 				View in Sky at Approach Time
 			</Button>
 		</div>
 	)
 }
 
-// Sky position of the object at the instant chosen, read while the section is open.
-export function CloseApproachObservability({ body, time, observer, timeZone }: SkyActionsProps & { readonly timeZone: string }) {
+// Sky position of the object at the instant chosen, read while the section is open. timeZone (IANA) only formats its
+// times.
+export function CloseApproachObservability({ body, time, site, timeZone }: SkyActionsProps & { readonly timeZone: string }) {
 	const { observabilityInstant, observability, observabilityLoading, observabilityError } = useSnapshot(closeApproachesState)
 	const open = sectionOpen(useSnapshot(collapsibleSections), OBSERVABILITY_SECTION, false)
 	const position = observability?.position
 	const events = observability?.events
-	const load = () => void loadCloseApproachObservability(closeApproachesState, body, time, observer)
+	const load = () => void loadCloseApproachObservability(closeApproachesState, body, time, site)
+	const key = observabilityKey(body.spkId, time, observabilityInstant, site)
 
-	// Follows the object, the instant, and the observer while the section is open; the key holds what the request depends on.
+	// Follows the object, the instant, and the place of the site while the section is open; the key holds what the request
+	// depends on, never the zone of the times or the name of the site.
 	useEffect(() => {
 		if (open) load()
-	}, [open, body.spkId, time, observabilityInstant, observer?.latitude, observer?.longitude, observer?.elevation])
+	}, [open, key])
 
 	return (
-		<CollapsibleSection id={OBSERVABILITY_SECTION} title="Observability" summary={observer ? undefined : 'No observer'} defaultOpen={false}>
+		<CollapsibleSection id={OBSERVABILITY_SECTION} title="Observability" summary={site ? undefined : 'No observing site'} defaultOpen={false}>
 			<SegmentedControl label="Instant" options={OBSERVABILITY_INSTANTS} value={observabilityInstant} format={(value) => INSTANT_LABELS[value]} onChange={(value) => (closeApproachesState.observabilityInstant = value)} />
-			{!observer && (
+			{!site && (
 				<>
-					<Notice>Altitude, azimuth, rise, and set need the observer&apos;s location, so this position is geocentric.</Notice>
-					<Button variant="secondary" className="self-start" onClick={openObserver}>
-						Set Sky Observer
+					<Notice>Altitude, azimuth, rise, and set need an observing site, so this position is geocentric.</Notice>
+					<Button variant="secondary" className="self-start" onClick={() => openObservingSites()}>
+						Set Location
 					</Button>
 				</>
 			)}

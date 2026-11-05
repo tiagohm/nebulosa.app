@@ -58,7 +58,7 @@ export interface EquipmentRoute {
 }
 
 // Sections of the Settings page, in selector order; also the second path segment of a Settings route.
-export const SETTINGS_SECTION_IDS = ['external-tools', 'observing-sites', 'status-bar'] as const
+export const SETTINGS_SECTION_IDS = ['external-tools', 'observing-sites', 'date-time', 'status-bar'] as const
 
 // Identifier of a section of the Settings page.
 export type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number]

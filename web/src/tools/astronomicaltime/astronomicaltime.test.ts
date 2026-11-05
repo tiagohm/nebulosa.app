@@ -1,12 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import type { AstronomicalTimeRequest, AstronomicalTimeResult } from 'api'
 import { proxy } from 'valtio'
+import { resolveToolLocation } from '../../location/site'
+import { resolveDisplayZone } from '../../location/zone'
 import { routePath, type RouteState } from '../../shell/route'
 import { setSkyTime, skyClock, type SkyClock } from '../../sky/clock'
 // oxfmt-ignore
-import { applyToSky, type AstronomicalTimeState, conversionRequest, type ConverterIo, effectiveObserver, effectiveTimeZone, entryText, followConversion, initialAstronomicalTimeState, type InputFormat, openAstronomicalTimeConverter, parseEntry, parseRightAscension, qualityNotes, setConverterMode, setEntryText, setInputFormat, takeSkyTime } from './astronomicaltime'
+import { applyToSky, type AstronomicalTimeState, chooseFold, conversionRequest, type ConverterIo, entryText, followConversion, initialAstronomicalTimeState, type InputFormat, openAstronomicalTimeConverter, parseEntry, parseRightAscension, qualityNotes, setConverterLocation, setConverterMode, setConverterZone, setEntryText, setInputFormat, takeSkyTime } from './astronomicaltime'
 
-const OBSERVER = { latitude: -22, longitude: -45, elevation: 850, timeZone: 'America/Sao_Paulo' }
+const SITE = { id: 'home', name: 'Home', latitude: -22, longitude: -45, elevation: 850, timeZone: 'America/Sao_Paulo' }
 
 const RESULT = {
 	civil: { local: '2026-10-31T09:00:00.000', offsetSeconds: -10800, unixMillis: 1793448000000, leapSecond: false, leapSecondDay: false },
@@ -39,7 +41,11 @@ describe('entries', () => {
 	test('reads a calendar in the zone or in a timescale', () => {
 		expect(parseEntry(entry('calendar', '2026-10-31 21:30:15.5'), 'America/Sao_Paulo')).toEqual({ kind: 'calendar', year: 2026, month: 10, day: 31, hour: 21, minute: 30, second: 15.5, reference: { kind: 'zone', timeZone: 'America/Sao_Paulo', fold: undefined } })
 		expect(parseEntry({ ...entry('calendar', '2000-01-01T12:00'), read: 'TT' }, 'UTC')).toEqual({ kind: 'calendar', year: 2000, month: 1, day: 1, hour: 12, minute: 0, second: 0, reference: { kind: 'scale', scale: 'TT' } })
-		expect(parseEntry({ ...entry('calendar', '2026-11-01 01:30'), fold: 'later' }, 'America/New_York')).toMatchObject({ reference: { fold: 'later' } })
+		expect(parseEntry({ ...entry('calendar', '2026-11-01 01:30'), fold: { occurrence: 'later', timeZone: 'America/New_York' } }, 'America/New_York')).toMatchObject({ reference: { fold: 'later' } })
+	})
+
+	test('an occurrence chosen in one zone is never sent for another', () => {
+		expect(parseEntry({ ...entry('calendar', '2026-11-01 01:30'), fold: { occurrence: 'later', timeZone: 'America/New_York' } }, 'America/Chicago')).toMatchObject({ reference: { kind: 'zone', timeZone: 'America/Chicago', fold: undefined } })
 	})
 
 	test('refuses calendar dates that do not exist', () => {
@@ -87,26 +93,37 @@ describe('entries', () => {
 })
 
 describe('request', () => {
-	test('the zone chosen wins, then the observer, then the browser', () => {
-		expect(effectiveTimeZone({ timeZone: 'Asia/Tokyo' }, OBSERVER)).toBe('Asia/Tokyo')
-		expect(effectiveTimeZone({}, OBSERVER)).toBe('America/Sao_Paulo')
-		expect(effectiveTimeZone({ timeZone: '' }, OBSERVER)).toBe(new Intl.DateTimeFormat().resolvedOptions().timeZone)
-		expect(effectiveTimeZone({}, undefined)).toBe(new Intl.DateTimeFormat().resolvedOptions().timeZone)
+	test('the site zone is the zone of the location the tool uses, typed coordinates included', () => {
+		const state = initialAstronomicalTimeState()
+		const active = resolveToolLocation(state.location, SITE.id, [SITE])
+		expect(resolveDisplayZone('site', state.zone, active, 'Europe/Paris')).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
+		setConverterLocation(state, { mode: 'manual', latitude: 35, longitude: 139, elevation: 40, timeZone: 'Asia/Tokyo' })
+		const typed = resolveToolLocation(state.location, SITE.id, [SITE])
+		expect(resolveDisplayZone('site', state.zone, typed, 'Europe/Paris')).toEqual({ zone: 'Asia/Tokyo', source: 'site' })
+		expect(resolveDisplayZone('site', state.zone, undefined, 'Europe/Paris')).toEqual({ zone: 'Europe/Paris', source: 'browserFallback' })
+		setConverterZone(state, { mode: 'zone', zone: 'Asia/Kolkata' })
+		expect(resolveDisplayZone('site', state.zone, typed, 'Europe/Paris').zone).toBe('Asia/Kolkata')
 	})
 
-	test('a location of the tool replaces the observer and leaves the profile alone', () => {
-		expect(effectiveObserver({}, OBSERVER)).toEqual({ latitude: -22, longitude: -45, elevation: 850 })
-		expect(effectiveObserver({ place: { source: 'manual', latitude: 10, longitude: 20 } }, OBSERVER)).toEqual({ latitude: 10, longitude: 20, elevation: 0 })
-		expect(effectiveObserver({}, undefined)).toBeUndefined()
-	})
-
-	test('asks for the current time with the observer and the zone', () => {
-		expect(conversionRequest(initialAstronomicalTimeState(), OBSERVER)).toEqual({ request: { input: { kind: 'now' }, observer: { latitude: -22, longitude: -45, elevation: 850 }, timeZone: 'America/Sao_Paulo' } })
+	test('asks for the current time at the location, with its elevation, in the zone resolved', () => {
+		expect(conversionRequest(initialAstronomicalTimeState(), SITE, 'America/Sao_Paulo')).toEqual({ request: { input: { kind: 'now' }, observer: { latitude: -22, longitude: -45, elevation: 850 }, timeZone: 'America/Sao_Paulo' } })
+		expect(conversionRequest(initialAstronomicalTimeState(), undefined, 'UTC')).toEqual({ request: { input: { kind: 'now' }, observer: undefined, timeZone: 'UTC' } })
 	})
 
 	test('sends the right ascension only with a valid one', () => {
-		expect(conversionRequest({ ...initialAstronomicalTimeState(), rightAscension: '12' }, OBSERVER)).toMatchObject({ request: { rightAscension: Math.PI } })
-		expect(conversionRequest({ ...initialAstronomicalTimeState(), rightAscension: 'x' }, OBSERVER)).toHaveProperty('error')
+		expect(conversionRequest({ ...initialAstronomicalTimeState(), rightAscension: '12' }, SITE, 'UTC')).toMatchObject({ request: { rightAscension: Math.PI } })
+		expect(conversionRequest({ ...initialAstronomicalTimeState(), rightAscension: 'x' }, SITE, 'UTC')).toHaveProperty('error')
+	})
+
+	test('a new zone or location forgets the occurrence chosen', () => {
+		const state = initialAstronomicalTimeState()
+		chooseFold(state, 'later', 'America/New_York')
+		expect(state.fold).toEqual({ occurrence: 'later', timeZone: 'America/New_York' })
+		setConverterZone(state, { mode: 'zone', zone: 'America/Chicago' })
+		expect(state.fold).toBeUndefined()
+		chooseFold(state, 'earlier', 'America/Chicago')
+		setConverterLocation(state, { mode: 'saved', siteId: 'other' })
+		expect(state.fold).toBeUndefined()
 	})
 })
 
@@ -204,7 +221,7 @@ describe('entry text', () => {
 	})
 
 	test('an edit forgets the occurrence chosen', () => {
-		const state: AstronomicalTimeState = { ...initialAstronomicalTimeState(), fold: 'later' }
+		const state: AstronomicalTimeState = { ...initialAstronomicalTimeState(), fold: { occurrence: 'later', timeZone: 'America/New_York' } }
 		setEntryText(state, '2026-11-01 01:31')
 		expect(state.fold).toBeUndefined()
 	})
@@ -235,13 +252,13 @@ describe('Sky clock', () => {
 	})
 })
 
-test('opening from outside always shows the current time at the observer', () => {
-	const state: AstronomicalTimeState = { ...initialAstronomicalTimeState(), mode: 'custom', place: { source: 'manual', latitude: 1, longitude: 2 } }
+test('opening from outside always shows the current time at the active site', () => {
+	const state: AstronomicalTimeState = { ...initialAstronomicalTimeState(), mode: 'custom', location: { mode: 'manual', latitude: 1, longitude: 2, elevation: 0, timeZone: 'UTC' } }
 	const route: RouteState = { route: { workspace: 'images' } }
 	const paths: (string | URL | null | undefined)[] = []
 	openAstronomicalTimeConverter(state, route, { pushState: (_, __, path) => paths.push(path) })
 	expect(state.mode).toBe('now')
-	expect(state.place).toBeUndefined()
+	expect(state.location).toEqual({ mode: 'active' })
 	expect(paths).toEqual(['/tools/astronomical-time-converter'])
 	expect(routePath(route.route)).toBe('/tools/astronomical-time-converter')
 

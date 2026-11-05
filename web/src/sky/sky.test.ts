@@ -28,7 +28,7 @@ function fakeApi() {
 const position = (ra: number) => ({ time: 1_000, source: 'local', center: 'geocentric', rightAscension: ra, declination: 0, rightAscensionJ2000: ra, declinationJ2000: 0, constellation: 'ORI' })
 
 test('a late response of a previous selection is discarded', async () => {
-	const state = proxy<SkyState>({ panel: 'observer' })
+	const state = proxy<SkyState>({ panel: 'display' })
 	const { io, release } = fakeApi()
 
 	selectSkyObject(state, { ref: { kind: 'catalog', id: 1 }, source: 'map', name: 'A' }, undefined, io)

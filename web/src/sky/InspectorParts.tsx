@@ -16,7 +16,7 @@ const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 
 
 // Rows of the apparent coordinates of the selection, with their provider and instant; `children` adds rows before
 // the note.
-function PositionData({ selection, timeZone, children }: { readonly selection: SkySelection; readonly timeZone?: string; readonly children?: ReactNode }) {
+function PositionData({ selection, timeZone, children }: { readonly selection: SkySelection; readonly timeZone: string; readonly children?: ReactNode }) {
 	const { position, positionError, loading } = selection
 
 	return (
@@ -47,7 +47,7 @@ function PositionData({ selection, timeZone, children }: { readonly selection: S
 }
 
 // Apparent coordinates of the selection, with their provider and instant; `children` adds rows before the note.
-export function PositionSection({ selection, timeZone, children }: { readonly selection: SkySelection; readonly timeZone?: string; readonly children?: ReactNode }) {
+export function PositionSection({ selection, timeZone, children }: { readonly selection: SkySelection; readonly timeZone: string; readonly children?: ReactNode }) {
 	return (
 		<CollapsibleSection id="sky.position" title="Position" summary={selection.position && (selection.position.constellationName ?? selection.position.constellation)}>
 			<PositionData selection={selection} timeZone={timeZone}>
@@ -59,18 +59,18 @@ export function PositionSection({ selection, timeZone, children }: { readonly se
 
 // Describes how and when a position was computed; a constellation is located at its label, a fixed J2000
 // point near its center. Times are shown in a time zone, or in the browser's when absent.
-function positionNote(position: SkyPosition, constellation: boolean, timeZone?: string) {
+function positionNote(position: SkyPosition, constellation: boolean, timeZone: string) {
 	const source = position.source === 'horizons' ? 'JPL Horizons' : position.fallbackReason ? `local model (${FALLBACK_REASONS[position.fallbackReason]})` : 'local model'
 	const place = `Apparent ${position.center} place at ${formatLocalTime(position.time, Date.now(), undefined, timeZone)}, from ${source}.`
 	return constellation ? `${place} The position is the constellation label, a fixed J2000 point near its center.` : place
 }
 
 // Horizontal coordinates and events for the observer, or an invitation to set one.
-export function ObserverSection({ position, events, hasObserver, onSetObserver, isSolarSystem, timeZone }: { readonly position: SkyPosition; readonly events?: SkyEvents; readonly hasObserver: boolean; readonly onSetObserver: () => void; readonly isSolarSystem: boolean; readonly timeZone?: string }) {
+export function ObserverSection({ position, events, hasObserver, onSetObserver, isSolarSystem, timeZone }: { readonly position: SkyPosition; readonly events?: SkyEvents; readonly hasObserver: boolean; readonly onSetObserver: () => void; readonly isSolarSystem: boolean; readonly timeZone: string }) {
 	if (!hasObserver || position.altitude === undefined || position.azimuth === undefined) {
 		return (
 			<CollapsibleSection id="sky.visibility" title="Visibility">
-				<p className="m-0 text-ink-300">Altitude, azimuth, rise, and set need the observer&apos;s location.</p>
+				<p className="m-0 text-ink-300">Altitude, azimuth, rise, and set need an observing site.</p>
 				<div>
 					<Button variant="secondary" onClick={onSetObserver}>
 						Set Location

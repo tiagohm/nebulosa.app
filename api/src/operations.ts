@@ -1,7 +1,7 @@
 import type { Device } from 'nebulosa/src/devices/indi/device'
 import { DeviceLifecycle } from 'nebulosa/src/devices/orchestration/device.lifecycle'
-import { OperationCoordinator, type OperationFailureReason, type OperationResult } from 'nebulosa/src/devices/orchestration/operation'
-import { ResourceArbiter, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { OperationCoordinator, type OperationFailureReason, type OperationResult, type OperationScope } from 'nebulosa/src/devices/orchestration/operation'
+import { ResourceArbiter, type ResourceReservation, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { DeviceRegistry } from './devices'
 
 // Device operations of the whole server process. One resource arbiter grants each physical device to one
@@ -11,6 +11,9 @@ import type { DeviceRegistry } from './devices'
 // the running ones are listed for any tab that (re)connects, and every start and end is published as an
 // operation:updated event naming the exact connection and device ids involved, never a role. An operation
 // started for a command token is remembered by it, so a repeated request never commands a device twice.
+// A caller inside the process (a service composing tools) can run a tool under a reservation of the arbiter, passed
+// as a ToolInvocation: the tool then admits only the devices that reservation holds and runs under its scope, while
+// every other operation stays refused on them; and it can await the end of the exact operation it admitted.
 
 // Kind of operation, prefixed by the service that runs it.
 export type OperationKind =
@@ -94,6 +97,24 @@ export interface OperationRecord {
 	readonly progress?: OperationProgress
 }
 
+// Authorization under which a caller inside the process runs a tool: a reservation of the registry's arbiter that
+// holds every device the tool commands. Never serialized: it exists only in process memory, never in a request,
+// an event, or the database. A tool run without one is a manual operation, granted only devices nobody holds.
+export interface ToolInvocation {
+	// Reservation the tool runs inside, holding each device it commands.
+	readonly reservation: ResourceReservation
+}
+
+// Operation a command started, as its caller holds it.
+export interface OperationAdmission {
+	// Running record of the operation, published before its work started.
+	readonly record: OperationRecord
+	// Final record of the operation, succeeded or failed, once its result settled; never rejects.
+	readonly finished: Promise<OperationRecord>
+	// Whether the token had already started the operation, which this request did not start again.
+	readonly repeated: boolean
+}
+
 // Notification published when an operation starts, progresses, or ends.
 export type OperationEvent = { readonly type: 'operation:updated'; readonly operation: OperationRecord }
 
@@ -114,8 +135,8 @@ export class OperationRegistry implements Disposable {
 	readonly #lifecycle = new DeviceLifecycle(this.arbiter, this.coordinator)
 	// Operations still running, by id.
 	readonly #running = new Map<string, OperationRecord>()
-	// Running record of the operation each recent command token started, oldest first (see MAX_TOKENS).
-	readonly #tokens = new Map<string, OperationRecord>()
+	// Admission of the operation each recent command token started, oldest first (see MAX_TOKENS).
+	readonly #tokens = new Map<string, OperationAdmission>()
 	// Stops the lifecycle bridge following the registry's devices.
 	readonly #unobserve: VoidFunction
 
@@ -138,47 +159,73 @@ export class OperationRegistry implements Disposable {
 		return this.arbiter.availability(resourceKey(device)) === 'available'
 	}
 
+	// Whether a tool can be granted a device now: without an invocation, when the device is connected, at rest, and
+	// held by none (available); with one, when the device is reserved by the invocation's reservation and no operation
+	// holds it, so a tool never takes a device outside the reservation it was given.
+	admits(device: Device, invocation?: ToolInvocation) {
+		if (!invocation) return this.available(device)
+		const key = resourceKey(device)
+		return this.arbiter.availability(key) === 'reserved' && this.arbiter.reservationOwnerOf(key) === invocation.reservation.token.owner
+	}
+
+	// Scope a tool starts its operations with: the process coordinator for a manual operation, or the scope of the
+	// invocation's reservation, whose operations acquire the devices it holds.
+	scope(invocation?: ToolInvocation): OperationScope {
+		return invocation ? this.coordinator.reservedScope(invocation.reservation) : this.coordinator
+	}
+
 	// Returns the running record of the operation a command token started, while the token is remembered.
 	started(token: string): OperationRecord | undefined {
-		return this.#tokens.get(token)
+		return this.#tokens.get(token)?.record
+	}
+
+	// Returns the admission of the operation a command token started, marked repeated, while the token is remembered.
+	repeated(token: string): OperationAdmission | undefined {
+		const known = this.#tokens.get(token)
+		return known && { ...known, repeated: true }
 	}
 
 	// Starts and tracks the operation of a command identified by a token the client generated for one
 	// request, so a request repeated after a lost response, a retry, or a double submission never commands
-	// the device twice: a token already seen returns the record of its operation without calling start. start is
-	// called once the operation is published as running, and receives a reporter publishing the progress of the
-	// operation while it runs, from its first synchronous step on.
-	run(kind: OperationKind, devices: readonly OperationDevice[], token: string, start: (report: OperationProgressReporter) => Promise<OperationResult<unknown>>): OperationRecord {
-		const known = this.#tokens.get(token)
+	// the device twice: a token already seen returns the admission of its operation, marked repeated, without
+	// calling start. start is called once the operation is published as running, and receives a reporter
+	// publishing the progress of the operation while it runs, from its first synchronous step on.
+	admit(kind: OperationKind, devices: readonly OperationDevice[], token: string, start: (report: OperationProgressReporter) => Promise<OperationResult<unknown>>): OperationAdmission {
+		const known = this.repeated(token)
 		if (known) return known
 
 		const operationId = crypto.randomUUID()
-		const record = this.#track(operationId, kind, devices, () => start((progress) => this.#progress(operationId, progress)))
-		this.#tokens.set(token, record)
+		const admission = this.#track(operationId, kind, devices, () => start((progress) => this.#progress(operationId, progress)))
+		this.#tokens.set(token, admission)
 		if (this.#tokens.size > MAX_TOKENS) this.#tokens.delete(this.#tokens.keys().next().value!)
-		return record
+		return admission
+	}
+
+	// Starts the operation of a command identified by a token, as admit does, and returns its running record.
+	run(kind: OperationKind, devices: readonly OperationDevice[], token: string, start: (report: OperationProgressReporter) => Promise<OperationResult<unknown>>): OperationRecord {
+		return this.admit(kind, devices, token, start).record
 	}
 
 	// Publishes an operation of a kind holding devices as running, and as succeeded or failed once its
 	// result settles; a rejected result fails with reason commandFailed. Returns the running record, whose
 	// id names the operation in every later event.
 	track(kind: OperationKind, devices: readonly OperationDevice[], result: Promise<OperationResult<unknown>>): OperationRecord {
-		return this.#track(crypto.randomUUID(), kind, devices, () => result)
+		return this.#track(crypto.randomUUID(), kind, devices, () => result).record
 	}
 
 	// Publishes the operation operationId as running, then starts it with start, and publishes it as finished once the
-	// result settles; a start that throws fails it with reason commandFailed.
-	#track(operationId: string, kind: OperationKind, devices: readonly OperationDevice[], start: () => Promise<OperationResult<unknown>>): OperationRecord {
+	// result settles; a start that throws fails it with reason commandFailed. Returns its admission, not repeated.
+	#track(operationId: string, kind: OperationKind, devices: readonly OperationDevice[], start: () => Promise<OperationResult<unknown>>): OperationAdmission {
 		const record: OperationRecord = { operationId, kind, devices, state: 'running', startedAt: Date.now() }
 		this.#running.set(record.operationId, record)
 		this.listener({ type: 'operation:updated', operation: record })
 
-		void Promise.try(start).then(
+		const finished = Promise.try(start).then(
 			(outcome) => this.#finish(outcome.ok ? { ...record, state: 'succeeded' } : { ...record, state: 'failed', reason: outcome.reason, error: outcome.error }),
 			(error: unknown) => this.#finish({ ...record, state: 'failed', reason: 'commandFailed', error: Error.isError(error) ? error.message : undefined }),
 		)
 
-		return record
+		return { record, finished, repeated: false }
 	}
 
 	// Publishes the progress of a running operation; ignored once it finished.
@@ -190,10 +237,11 @@ export class OperationRegistry implements Disposable {
 		this.listener({ type: 'operation:updated', operation: updated })
 	}
 
-	// Forgets a finished operation and publishes its final record.
+	// Forgets a finished operation, publishes its final record, and returns it.
 	#finish(record: OperationRecord) {
 		this.#running.delete(record.operationId)
 		this.listener({ type: 'operation:updated', operation: record })
+		return record
 	}
 
 	// Cancels every running operation and resolves once each one finished its cleanup, which stops what it commanded (a

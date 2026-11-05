@@ -144,3 +144,51 @@ test('a repeated command token answers its first operation without starting anot
 	expect(operations.run('mount.slew', [], 'token', start)).toBe(first)
 	expect(starts).toBe(1)
 })
+
+test('an admission answers the end of its exact operation, and a repeated token answers the same one', async () => {
+	const { id, operations, mount, mountId } = await setup()
+	const handle = hold(operations, mount)
+
+	const first = operations.admit('mount.slew', [{ connectionId: id, deviceId: mountId }], 'token', () => handle.result)
+	const second = operations.admit('mount.slew', [{ connectionId: id, deviceId: mountId }], 'token', () => handle.result)
+
+	expect(first.repeated).toBeFalse()
+	expect(second).toMatchObject({ record: first.record, repeated: true })
+	expect(second.finished).toBe(first.finished)
+	expect(operations.repeated('other')).toBeUndefined()
+
+	await handle.cancel()
+	expect(await first.finished).toEqual({ ...first.record, state: 'failed', reason: 'aborted' })
+	expect(operations.repeated('token')?.record).toBe(first.record)
+})
+
+test('a reserved device is admitted only to its reservation, whose scope acquires it', async () => {
+	const { operations, mount } = await setup()
+	const key = resourceKey(mount)
+	const reserved = operations.arbiter.reserve({ id: 'run', kind: 'test' }, [{ key, device: mount }])
+	if (!reserved.ok) throw new Error('not reserved')
+	const other = operations.arbiter.reserve({ id: 'other', kind: 'test' }, [])
+	if (!other.ok) throw new Error('not reserved')
+	const invocation = { reservation: reserved.reservation }
+
+	expect(operations.admits(mount)).toBeFalse()
+	expect(operations.admits(mount, invocation)).toBeTrue()
+	expect(operations.admits(mount, { reservation: other.reservation })).toBeFalse()
+	expect(operations.scope()).toBe(operations.coordinator)
+
+	expect(await hold(operations, mount).result).toMatchObject({ ok: false, reason: 'busy' })
+
+	const owned = operations.scope(invocation).start('test.hold', [{ key, device: mount }], (context: OperationContext) => {
+		const { promise, resolve } = Promise.withResolvers<OperationResult<undefined>>()
+		context.signal.addEventListener('abort', () => resolve(successfulOperationResult(undefined)))
+		return promise
+	})
+
+	await waitUntil(() => operations.arbiter.availability(key) === 'leased')
+	expect(operations.admits(mount, invocation)).toBeFalse()
+
+	await owned.cancel()
+	expect(operations.arbiter.availability(key)).toBe('reserved')
+	reserved.reservation.release()
+	expect(operations.admits(mount)).toBeTrue()
+})

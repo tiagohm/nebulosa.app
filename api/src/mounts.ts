@@ -8,12 +8,12 @@ import type { OperationContext, OperationResult, OperationScope } from 'nebulosa
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import { type CommandErrorCode, type CommandRequest, disconnected, failureCode, findDevice, notFound, settle, startCommand, unsupported } from './commands'
+import { admissionResponse, admitCommand, type CommandAdmission, type CommandErrorCode, type CommandRequest, disconnected, failureCode, findDevice, notFound, refusal, resolveConnected, settle, startCommand, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import { DEFAULT_LEASE_OPTIONS, type LeasedMotion, LeasedMotions, type LeasedPhase, type LeasedSession, type LeasedStartResponse, type LeaseOptions, leasedFailureStatus } from './leases'
 import type { MountCorrectionPlan, MountCorrections } from './mountpointing.corrections'
-import type { OperationRegistry } from './operations'
+import type { OperationRegistry, ToolInvocation } from './operations'
 import { EphemerisUnavailableError, HorizonsEphemerisError, type SkyObserver, type SkyPosition } from './sky/ephemeris'
 import type { SkyLocator } from './sky/routes'
 import type { SkyObjectRef } from './sky/types'
@@ -26,7 +26,8 @@ import type { SkyObjectRef } from './sky/types'
 // commands.ts and are answered 202 with their operation id; settings are answered once applied. Mount Remote
 // Control (mountremotecontrol.ts) starts gotos and syncs without a request through goToNow and syncNow, which
 // refuse them exactly as the goto and sync routes do. An operation that holds the mount itself, such as Target Centering,
-// sends its own GoTo through goToWithin, with the same refusals and correction.
+// sends its own GoTo through goToWithin, with the same refusals and correction; a service composing tools admits a GoTo
+// operation of its own through admitGoTo, under the reservation it holds.
 //
 // A slew to an object resolves the object at the server's real current time, never at a simulated
 // instant, refuses targets below the observer's horizon, and runs
@@ -369,12 +370,39 @@ export class MountCommands implements Disposable {
 	// there: 404 unknown mount; 409 disconnected, parked, or busy; 422 when it cannot go to a target or the
 	// target is below the observer's horizon or not a valid coordinate.
 	goTo(connectionId: string, deviceId: string, request: MountGoToRequest): Response {
-		return this.#slewTo('mount.goto', connectionId, deviceId, request)
+		return admissionResponse(this.admitGoTo(connectionId, deviceId, request))
 	}
 
-	// Starts a meridian flip to a coordinate; answered like goTo, with 422 when the mount cannot flip.
+	// Admits a goto to a coordinate, under the invocation's reservation when given, with the refusals and the single
+	// correction of the model in force the goto route applies, and returns its operation, or its refusal (as goTo answers).
+	admitGoTo(connectionId: string, deviceId: string, request: MountGoToRequest, invocation?: ToolInvocation): CommandAdmission {
+		const resolved = resolveConnected(this, connectionId, 'mount', deviceId, 'Mount')
+		if (!resolved.ok) return resolved
+		const mount = resolved.device
+
+		const coordinate = targetCoordinate(request.target)
+		const refused = slewRefusal('mount.goto', mount, coordinate, request.observer)
+		if (refused) return refusal(...refused)
+
+		const planned = this.#planned(mount, coordinate)
+		if (planned.status === 'refused') return refusal(planned.error, 422, 'correctionRefused')
+		const below = planned.status === 'corrected' ? slewRefusal('mount.goto', mount, planned.target, request.observer) : undefined
+		if (below) return refusal(...below)
+
+		return admitCommand(this.operations, 'mount.goto', connectionId, mount, request, (scope) => this.#goTo(mount, planned, scope), invocation)
+	}
+
+	// Starts a meridian flip to a coordinate; answered like goTo, with 422 when the mount cannot flip. A flip is never
+	// corrected: its transition between pier sides was not proven safe, so it goes as asked.
 	flip(connectionId: string, deviceId: string, request: MountGoToRequest): Response {
-		return this.#slewTo('mount.flip', connectionId, deviceId, request)
+		const mount = this.#connected(connectionId, deviceId)
+		if (mount instanceof Response) return mount
+
+		const coordinate = targetCoordinate(request.target)
+		const refused = slewRefusal('mount.flip', mount, coordinate, request.observer)
+		if (refused) return errorResponse(...refused)
+
+		return startCommand(this.operations, 'mount.flip', connectionId, mount, request, () => this.#commander.flip(this.operations.coordinator, mount, coordinate))
 	}
 
 	// Redefines where the mount points. Responds 204 once applied, 404 unknown mount, 409 disconnected or
@@ -524,28 +552,6 @@ export class MountCommands implements Disposable {
 		})
 
 		return { ok: true }
-	}
-
-	// Starts a goto or a flip to a coordinate, refusing a target below the observer's horizon.
-	#slewTo(kind: 'mount.goto' | 'mount.flip', connectionId: string, deviceId: string, request: MountGoToRequest): Response {
-		const mount = this.#connected(connectionId, deviceId)
-		if (mount instanceof Response) return mount
-
-		const coordinate = targetCoordinate(request.target)
-		const refusal = slewRefusal(kind, mount, coordinate, request.observer)
-		if (refusal) return errorResponse(...refusal)
-
-		const { coordinator } = this.operations
-
-		// A flip is never corrected: its transition between pier sides was not proven safe, so it goes as asked.
-		if (kind === 'mount.flip') return startCommand(this.operations, kind, connectionId, mount, request, () => this.#commander.flip(coordinator, mount, coordinate))
-
-		const planned = this.#planned(mount, coordinate)
-		if (planned.status === 'refused') return errorResponse(planned.error, 422, 'correctionRefused')
-		const below = planned.status === 'corrected' ? slewRefusal(kind, mount, planned.target, request.observer) : undefined
-		if (below) return errorResponse(...below)
-
-		return startCommand(this.operations, kind, connectionId, mount, request, () => this.#goTo(mount, planned))
 	}
 
 	// Asks what a GoTo does with its target.

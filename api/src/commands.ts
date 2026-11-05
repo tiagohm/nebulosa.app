@@ -1,9 +1,9 @@
 import type { Client, Device } from 'nebulosa/src/devices/indi/device'
-import type { FailedOperationResult, OperationFailureReason, OperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import type { FailedOperationResult, OperationFailureReason, OperationResult, OperationScope } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { DeviceRegistry, ManagedDeviceMap, ManagedDeviceType } from './devices'
 import { type ApiError, errorResponse } from './http'
-import type { OperationKind, OperationProgressReporter, OperationRegistry } from './operations'
+import type { OperationAdmission, OperationKind, OperationProgressReporter, OperationRegistry, ToolInvocation } from './operations'
 
 // HTTP contract shared by the device command services. A command addresses one device of one open
 // connection by its exact id and answers in one of two ways:
@@ -14,7 +14,9 @@ import type { OperationKind, OperationProgressReporter, OperationRegistry } from
 //   operation:updated events from the real operation result, never assumed from the request.
 // Every durable request carries a token the tab generates for it, so a repeated request answers the
 // operation of the first one instead of commanding the device again. Every error is { error, code }, with
-// a code from a fixed set the client can rely on and a message meant for people.
+// a code from a fixed set the client can rely on and a message meant for people. A service composing commands inside
+// the process admits them instead (admitCommand), under a ToolInvocation when it holds a reservation, and receives the
+// operation it started, whose end it can await, or the refusal a route would answer.
 
 // Stable code of a refused or failed command:
 // - notFound: the connection is not open or has no such device.
@@ -118,10 +120,8 @@ export function findDevice<T extends ManagedDeviceType>({ devices, client }: Dev
 // response refusing it: 404 when there is none, 409 when it is disconnected. what names the device in the
 // messages, such as "Focuser".
 export function connectedDevice<T extends ManagedDeviceType>(context: DeviceContext, connectionId: string, type: T, deviceId: string, what: string): ManagedDeviceMap[T] | Response {
-	const device = findDevice(context, connectionId, type, deviceId)
-	if (!device) return notFound(what)
-	if (!device.connected) return disconnected(what)
-	return device
+	const resolved = resolveConnected(context, connectionId, type, deviceId, what)
+	return resolved.ok ? resolved.device : refusalResponse(resolved)
 }
 
 // Responds with the control state of a device of a managed type, or 404 when the connection is not open
@@ -141,14 +141,61 @@ export async function stopResponse(operations: OperationRegistry, device: Device
 	return result.ok ? new Response(null, { status: 204 }) : errorResponse(result.error ?? `The device did not stop (${result.reason})`, 409, failureCode(result.reason))
 }
 
-// Starts a durable command on a device and responds 202 with its operation id. A token already seen
-// answers its first operation without commanding again; otherwise a device that cannot be granted now is
-// refused as busy before anything is sent. start receives the progress reporter of the operation.
-export function startCommand(operations: OperationRegistry, kind: OperationKind, connectionId: string, device: Device, { token }: CommandRequest, start: (report: OperationProgressReporter) => Promise<OperationResult<unknown>>): Response {
-	const known = operations.started(token)
-	if (known) return Response.json({ operationId: known.operationId } satisfies CommandAccepted, { status: 202 })
-	if (!operations.available(device)) return busy()
+// Why a command was refused before anything was sent, as a caller inside the process receives it; a route answers it
+// as { error, code } with status.
+export interface CommandRefusal {
+	readonly ok: false
+	// HTTP status a route answers the refusal with.
+	readonly status: number
+	// Stable code of the refusal.
+	readonly code: CommandErrorCode
+	// Message meant for people.
+	readonly error: string
+}
 
-	const { operationId } = operations.run(kind, [{ connectionId, deviceId: device.id }], token, start)
-	return Response.json({ operationId } satisfies CommandAccepted, { status: 202 })
+// Outcome of asking for a durable command: the operation it started (or a repeated token started before), or why it
+// was refused.
+export type CommandAdmission = { readonly ok: true; readonly admission: OperationAdmission } | CommandRefusal
+
+// Returns a refusal of a command.
+export function refusal(error: string, status: number, code: CommandErrorCode): CommandRefusal {
+	return { ok: false, status, code, error }
+}
+
+// Responds with a refusal of a command.
+export function refusalResponse({ error, status, code }: CommandRefusal): Response {
+	return errorResponse(error, status, code)
+}
+
+// Responds to a durable command: 202 with the id of its operation, or with its refusal.
+export function admissionResponse(admitted: CommandAdmission): Response {
+	return admitted.ok ? Response.json({ operationId: admitted.admission.record.operationId } satisfies CommandAccepted, { status: 202 }) : refusalResponse(admitted)
+}
+
+// Resolves the connected device of a managed type with exactly this id on an open connection, or its refusal: 404 when
+// there is none, 409 when it is disconnected. what names the device in the messages, such as "Focuser".
+export function resolveConnected<T extends ManagedDeviceType>(context: DeviceContext, connectionId: string, type: T, deviceId: string, what: string): { readonly ok: true; readonly device: ManagedDeviceMap[T] } | CommandRefusal {
+	const device = findDevice(context, connectionId, type, deviceId)
+	if (!device) return refusal(`${what} not found`, 404, 'notFound')
+	if (!device.connected) return refusal(`The ${what.toLowerCase()} is disconnected`, 409, 'disconnected')
+	return { ok: true, device }
+}
+
+// Admits a durable command on a device. A token already seen answers its first operation without commanding again;
+// otherwise a device the operations cannot grant now (see OperationRegistry.admits) is refused as busy before anything
+// is sent. start receives the scope to command the device under, the invocation's reservation when given, and the
+// progress reporter of the operation.
+export function admitCommand(operations: OperationRegistry, kind: OperationKind, connectionId: string, device: Device, { token }: CommandRequest, start: (scope: OperationScope, report: OperationProgressReporter) => Promise<OperationResult<unknown>>, invocation?: ToolInvocation): CommandAdmission {
+	const known = operations.repeated(token)
+	if (known) return { ok: true, admission: known }
+	if (!operations.admits(device, invocation)) return refusal('The device is busy', 409, 'busy')
+
+	const scope = operations.scope(invocation)
+	return { ok: true, admission: operations.admit(kind, [{ connectionId, deviceId: device.id }], token, (report) => start(scope, report)) }
+}
+
+// Starts a durable command of a manual request on a device and responds 202 with its operation id, or with its refusal
+// (see admitCommand). start receives the progress reporter of the operation.
+export function startCommand(operations: OperationRegistry, kind: OperationKind, connectionId: string, device: Device, request: CommandRequest, start: (report: OperationProgressReporter) => Promise<OperationResult<unknown>>): Response {
+	return admissionResponse(admitCommand(operations, kind, connectionId, device, request, (_, report) => start(report)))
 }

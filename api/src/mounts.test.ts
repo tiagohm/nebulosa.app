@@ -130,7 +130,7 @@ async function setupCorrected(plan: MountCorrectionPlan | ((target: MountTargetC
 	)
 	disposables.push(commands)
 	const mount = await connectMount(manager, client, manager.devices.list(client).find((d) => d.type === 'mount')!.id)
-	return { commands, operations, mount, plans, observed }
+	return { id, commands, operations, mount, plans, observed }
 }
 
 // Target inside a scope holding the mount, a few degrees from where it stands, above the horizon of its zenith.
@@ -553,3 +553,19 @@ test('sends the site and the clock to the mount', async () => {
 	expect((await commands.setTime(id, mountId, { utc, offset: -180 })).status).toBe(204)
 	await waitUntil(() => Math.abs(mount.time.utc - utc) < 60000)
 })
+
+test('a GoTo admitted under a reservation keeps the refusals and the correction of the goto route', async () => {
+	const { id, commands, operations, mount } = await setupCorrected((target) => (target.type === 'JNOW' && Number(target.JNOW?.y) > 89 ? { status: 'refused', error: 'Too far from the samples' } : { status: 'uncorrected', target }))
+	const reserved = operations.arbiter.reserve({ id: 'run', kind: 'test' }, [{ key: resourceKey(mount), device: mount }])
+	if (!reserved.ok) throw new Error('not reserved')
+	const invocation = { reservation: reserved.reservation }
+	const target = currentTarget(mount, deg(1))
+
+	expect(commands.goTo(id, mount.id, { token: 'manual', target, observer: SITE_OBSERVER }).status).toBe(409)
+	expect(commands.admitGoTo(id, mount.id, { token: 'refused', target: { frame: 'JNOW', x: '0', y: '89.5' }, observer: SITE_OBSERVER }, invocation)).toMatchObject({ ok: false, status: 422, code: 'correctionRefused' })
+
+	const admitted = commands.admitGoTo(id, mount.id, { token: 'reserved', target, observer: SITE_OBSERVER }, invocation)
+	if (!admitted.ok) throw new Error(admitted.error)
+	expect(await admitted.admission.finished).toMatchObject({ kind: 'mount.goto', state: 'succeeded' })
+	reserved.reservation.release()
+}, 40000)

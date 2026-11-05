@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from 'bun:test'
+import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { CommandAccepted } from './commands'
 import { ConnectionManager } from './connection'
 import { type OperationEvent, OperationRegistry } from './operations'
@@ -61,3 +62,23 @@ test('refuses a slot the wheel does not have and renames the slots', async () =>
 	expect((await commands.setNames(id, wheelId, { names })).status).toBe(204)
 	await waitUntil(() => wheel.names[0] === 'F1')
 })
+
+test('a move under a reservation runs and ends while a manual move is refused', async () => {
+	const { id, commands, operations, wheel, wheelId } = await setup()
+	const reserved = operations.arbiter.reserve({ id: 'run', kind: 'test' }, [{ key: resourceKey(wheel), device: wheel }])
+	if (!reserved.ok) throw new Error('not reserved')
+	const invocation = { reservation: reserved.reservation }
+	const target = (wheel.position + 2) % wheel.count
+
+	expect(commands.move(id, wheelId, { token: 'manual', slot: target }).status).toBe(409)
+
+	const admitted = commands.admitMove(id, wheelId, { token: 'reserved', slot: target }, invocation)
+	if (!admitted.ok) throw new Error(admitted.error)
+	expect(commands.admitMove(id, wheelId, { token: 'reserved', slot: target }, invocation)).toMatchObject({ ok: true, admission: { record: admitted.admission.record, repeated: true } })
+	expect(commands.admitMove(id, wheelId, { token: 'second', slot: 0 }, invocation)).toMatchObject({ ok: false, status: 409, code: 'busy' })
+
+	expect(await admitted.admission.finished).toMatchObject({ kind: 'wheel.move', state: 'succeeded' })
+	expect(wheel.position).toBe(target)
+	expect(commands.admitMove(id, 'none', { token: 'none', slot: 0 }, invocation)).toMatchObject({ ok: false, status: 404, code: 'notFound' })
+	reserved.reservation.release()
+}, 40000)

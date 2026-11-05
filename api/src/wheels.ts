@@ -1,8 +1,7 @@
 import { WheelCommander } from 'nebulosa/src/devices/commanders/wheel'
-import { type ClientResolver, type CommandRequest, connectedDevice, settle, startCommand, stateResponse, unsupported } from './commands'
+import { admissionResponse, admitCommand, type ClientResolver, type CommandAdmission, type CommandRequest, connectedDevice, refusal, resolveConnected, settle, stateResponse, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
-import { errorResponse } from './http'
-import type { OperationRegistry } from './operations'
+import type { OperationRegistry, ToolInvocation } from './operations'
 
 // Filter wheel commands of every open connection, over the toolkit's WheelCommander: a change of slot and
 // the renaming of the slots. Slots are 0-based, as the device model publishes them; the INDI 1-based
@@ -51,10 +50,17 @@ export class WheelCommands implements Disposable {
 	// Starts a change to a slot. Responds 202 with the operation id; 404, 409 disconnected or busy, 422 for
 	// a slot the wheel does not have.
 	move(connectionId: string, deviceId: string, request: WheelMoveRequest): Response {
-		const wheel = connectedDevice(this, connectionId, 'wheel', deviceId, 'Filter wheel')
-		if (wheel instanceof Response) return wheel
-		if (!(Number.isInteger(request.slot) && request.slot >= 0 && request.slot < wheel.count)) return errorResponse('The wheel has no such slot', 422, 'invalidParameter')
-		return startCommand(this.operations, 'wheel.move', connectionId, wheel, request, () => this.#commander.moveTo(this.operations.coordinator, wheel, request.slot))
+		return admissionResponse(this.admitMove(connectionId, deviceId, request))
+	}
+
+	// Admits a change to a slot, under the invocation's reservation when given, and returns its operation, or its refusal:
+	// 404, 409 disconnected or busy, 422 for a slot the wheel does not have.
+	admitMove(connectionId: string, deviceId: string, request: WheelMoveRequest, invocation?: ToolInvocation): CommandAdmission {
+		const resolved = resolveConnected(this, connectionId, 'wheel', deviceId, 'Filter wheel')
+		if (!resolved.ok) return resolved
+		const wheel = resolved.device
+		if (!(Number.isInteger(request.slot) && request.slot >= 0 && request.slot < wheel.count)) return refusal('The wheel has no such slot', 422, 'invalidParameter')
+		return admitCommand(this.operations, 'wheel.move', connectionId, wheel, request, (scope) => this.#commander.moveTo(scope, wheel, request.slot), invocation)
 	}
 
 	// Renames the slots. Responds 204 once the driver reports it, 504 when it never does (the new names arrive as a wheel:updated event); 404, 409

@@ -172,7 +172,6 @@ describe('live stacking', () => {
 		])
 		expect(session.cohorts[0].acquisition).toMatchObject({ width: SIZE, height: SIZE, exposure: 60, gain: 100 })
 		expect(session.cohorts[0].exposure).toBe(300)
-		expect(stacking.frames(sessionId).frames).toHaveLength(7)
 	})
 
 	test('a saved frame is read only once its file is written, and a failed write or an ended capture fails it', async () => {
@@ -196,12 +195,6 @@ describe('live stacking', () => {
 		const { counters, capture } = stacking.session(sessionId)
 		expect(counters).toMatchObject({ received: 3, accepted: 1, deliveryFailed: 2, queued: 0 })
 		expect(capture).toEqual({ sessionId: 'cap', outputMode: 'preview-save', ended: true })
-		expect(
-			stacking
-				.frames(sessionId)
-				.frames.slice(0, 2)
-				.map((frame) => frame.reason),
-		).toEqual(['frameUnavailable', 'saveFailed'])
 	})
 
 	test('acquisition changes start other stacks, and a header that cannot be grouped is skipped', async () => {
@@ -222,12 +215,6 @@ describe('live stacking', () => {
 		await deliver(wheel, await fits(0, 0))
 		await deliver(captured('dark', 1), await fits(0, 0, { IMAGETYP: 'Dark Frame' }))
 		await waitUntil(() => stacking.session(sessionId).counters.skipped === 2)
-		expect(
-			stacking
-				.frames(sessionId)
-				.frames.slice(0, 2)
-				.map((frame) => frame.reason),
-		).toEqual(['notLight', 'unclassifiedFilter'])
 	})
 
 	test('frames of a filter without masters are skipped when asked, and chosen masters that no longer exist reject them', async () => {
@@ -239,7 +226,6 @@ describe('live stacking', () => {
 		await waitUntil(() => stacking.session(sessionId).counters.received === 2 && stacking.session(sessionId).counters.processing + stacking.session(sessionId).counters.queued === 0)
 
 		expect(stacking.session(sessionId).counters).toMatchObject({ skipped: 1, rejected: 1 })
-		expect(stacking.frames(sessionId).frames.map((frame) => frame.reason)).toEqual(['masterUnavailable', 'calibrationNotChosen'])
 	})
 
 	test('chosen masters are checked against each frame and leased while it is read', async () => {
@@ -251,10 +237,6 @@ describe('live stacking', () => {
 		await deliver(captured('cap', 2), await fits(0, 0, { FILTER: 'Ha' }))
 		await waitUntil(() => stacking.session(sessionId).counters.rejected === 2)
 
-		expect(stacking.frames(sessionId).frames.map((frame) => [frame.reason, frame.detail])).toEqual([
-			['masterUnreadable', 'A chosen master could not be read'],
-			['masterIncompatible', 'The dark chosen for OIII does not match the frame'],
-		])
 		expect(leases).toEqual(['1'])
 	})
 
@@ -336,7 +318,6 @@ describe('live stacking', () => {
 
 		const session = stacking.session(sessionId)
 		expect(session).toMatchObject({ state: 'failed', error: 'The live stacking worker crashed', counters: { received: 2, deliveryFailed: 2 } })
-		expect(stacking.frames(sessionId).frames.map((frame) => frame.reason)).toEqual(['sessionFailed', 'workerFailed'])
 		expect(() => stacking.reset(sessionId)).toThrow()
 	})
 

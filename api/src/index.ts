@@ -451,18 +451,12 @@ export type { StackingRole } from './imagestacking.sources'
 export type { StackingCalibration, StackingCohortDecision, StackingComposite, StackingCompositeDiagnostics, StackingComposition, StackingCompositionLuminance, StackingCompositionSource, StackingFrameAnalysis, StackingFrameNormalization, StackingProduct, StackingProductDiagnostics, StackingProductSource, StackingProject, StackingProjectAnalysis, StackingRecipe, StackingRegistration, StackingSettings, StackingSourceSummary } from './imagestacking.store'
 export type {
 	LiveCohortAcquisition,
-	LiveDeliveryFailure,
-	LiveFrameOutcome,
-	LiveRejection,
-	LiveSkipReason,
 	LiveStackingCapture,
 	LiveStackingCohort,
 	LiveStackingCounters,
 	LiveStackingErrorCode,
 	LiveStackingEvent,
 	LiveStackingFieldSummary,
-	LiveStackingFrame,
-	LiveStackingFramePage,
 	LiveStackingProductDetail,
 	LiveStackingSession,
 	LiveStackingSnapshot,
@@ -471,7 +465,7 @@ export type {
 	LiveStackingView,
 	LiveStackingViewTarget,
 } from './livestacking'
-export type { LiveCompositionSource, LiveExportTarget, LiveFrameMeasurement, LiveFrameRegistration, LiveRejectionReason, LiveStackingComposition, LiveStackingRecipe } from './livestacking.engine'
+export type { LiveCompositionSource, LiveExportTarget, LiveStackingComposition, LiveStackingRecipe } from './livestacking.engine'
 export type { LiveCalibrationFallback, LiveFilterCalibration, LiveMasterKind, LiveStackingCalibration } from './livestacking.groups'
 export type { LiveProductCohort, LiveStackingProduct } from './livestacking.store'
 export type { DarvCaptureSettings, DarvEvent, DarvFinishRequest, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementTrails, DarvRequest, DarvSession, DarvSessionState, DarvSessionSummary, DarvSnapshot, DarvStartResponse } from './darv'

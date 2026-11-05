@@ -20,10 +20,7 @@ import {
 	type LiveEngineOutcome,
 	LiveEngineError,
 	type LiveExportTarget,
-	type LiveFrameMeasurement,
-	type LiveFrameRegistration,
 	type LiveProcessorFactory,
-	type LiveRejectionReason,
 	type LiveSnapshot,
 	type LiveStackingComposition,
 	type LiveStackingProcessor,
@@ -43,8 +40,9 @@ import type { LiveProductCohort, LiveStackingProduct, LiveStackingStore } from '
 // frame sink of the capture service (captures.ts) and are accounted for one by one, from received to exactly one
 // outcome: accepted into one stack, rejected after it was read, skipped on purpose (paused, aborted, not a light, unknown
 // filter or metadata, no calibration chosen), or failed to be delivered (its file failed to be saved, the backlog limit,
-// the worker). Preview-only frames are copied once and queued in memory, at most MAX_PENDING_PAYLOADS per camera: the
-// capture waits before preparing its next exposure while the queue is full (never during an exposure), and is released by
+// the worker), and only counted: why each frame ended is not kept. Preview-only frames are copied once and queued in
+// memory, at most MAX_PENDING_PAYLOADS per camera: the capture waits before preparing its next exposure while the queue
+// is full (never during an exposure), and is released by
 // a stop, an abort, or a failure of either side. Saved frames queue only their path once their write succeeded, at most
 // MAX_SAVED_BACKLOG. Frames are integrated one at a time, in order, on the worker of the session, within a memory budget
 // shared by every session; nothing is ever evicted. The masters an operator chose for a filter are checked against each
@@ -68,8 +66,8 @@ import type { LiveProductCohort, LiveStackingProduct, LiveStackingStore } from '
 // MiB at 1 MP, 50 MiB at 26 MP), which count against the memory budget.
 export const MAX_PENDING_PAYLOADS = 2
 
-// Saved frames of a camera waiting to be integrated; beyond it a frame fails with backlogLimit. A queued saved frame holds
-// its path and record, never its pixels, so the limit bounds how far the stacks lag behind the capture rather than
+// Saved frames of a camera waiting to be integrated; beyond it a frame fails to be delivered. A queued saved frame holds
+// its path, never its pixels, so the limit bounds how far the stacks lag behind the capture rather than
 // memory: 1000 frames are 7.5 minutes of integration at 1 MP and 2.8 hours at 26 MP.
 export const MAX_SAVED_BACKLOG = 1000
 
@@ -82,9 +80,6 @@ export const MAX_SAVED_BACKLOG = 1000
 // it, so a full budget still fits a host of 8 GB.
 export const DEFAULT_LIVE_STACKING_MEMORY_BUDGET = 4 * 1024 ** 3
 
-// Frames whose outcome a session remembers, the newest first; older ones only count.
-export const FRAME_HISTORY = 500
-
 // Shortest time between two snapshots of one view, in milliseconds. A view is taken again only once a frame changed its
 // stacks, on the worker between two integrations: a snapshot of a mono stack takes 20 ms at 1 MP and 0.45 s at 26 MP, a
 // composition of two stacks with a luminance 0.13 s and 3.2 s. With frames of 1 MP every 0.45 s it keeps a view to at
@@ -93,9 +88,6 @@ export const SNAPSHOT_INTERVAL = 1500
 
 // Snapshot documents a session keeps open at most; the oldest is closed first.
 const MAX_VIEW_DOCUMENTS = 4
-
-// Largest page of frame outcomes.
-const MAX_FRAME_PAGE = 200
 
 // State of a session:
 // - waiting: it admits frames and none is being integrated.
@@ -106,17 +98,11 @@ const MAX_FRAME_PAGE = 200
 // - failed: its worker failed; its stacks are lost.
 export type LiveStackingState = 'waiting' | 'processing' | 'paused' | 'stopping' | 'stopped' | 'failed'
 
-// Why a frame was skipped on purpose, before it was integrated.
-export type LiveSkipReason = 'paused' | 'aborted' | 'notLight' | 'unclassifiedFilter' | 'unknownMetadata' | 'calibrationNotChosen'
+// Where a frame the session still knows is: admitted and waiting, being integrated, or held as a candidate of a new field.
+type FrameState = 'queued' | 'processing' | 'held'
 
-// Why a frame could not be delivered to the integration.
-export type LiveDeliveryFailure = 'saveFailed' | 'frameUnavailable' | 'backlogLimit' | 'workerFailed' | 'sessionFailed'
-
-// Why a frame was rejected after it was read: the engine's reasons, and chosen masters that cannot calibrate it.
-export type LiveRejection = LiveRejectionReason | 'masterUnavailable' | 'masterIncompatible'
-
-// Outcome of a frame; queued, processing, and held are not final.
-export type LiveFrameOutcome = 'queued' | 'processing' | 'held' | 'accepted' | 'rejected' | 'skipped' | 'deliveryFailed'
+// Final outcome of a frame, the counter it ends in.
+type FrameResult = 'accepted' | 'rejected' | 'skipped' | 'deliveryFailed'
 
 // Frame counts of a session. Every received frame is in exactly one of the others: received = queued + processing + held +
 // accepted + rejected + skipped + deliveryFailed.
@@ -131,35 +117,6 @@ export interface LiveStackingCounters {
 	readonly rejected: number
 	readonly skipped: number
 	readonly deliveryFailed: number
-}
-
-// What a session knows of one frame. Measurements and registration are present once it was read and accepted.
-export interface LiveStackingFrame {
-	// Order of arrival in the session, from 1.
-	readonly sequence: number
-	readonly frameId: string
-	readonly captureSessionId: string
-	readonly generation: number
-	// Instant its exposure was commanded, Unix milliseconds (UTC).
-	readonly time: number
-	readonly outputMode: CaptureOutputMode
-	readonly outcome: LiveFrameOutcome
-	readonly reason?: LiveRejection | LiveSkipReason | LiveDeliveryFailure
-	readonly detail?: string
-	// Filter group; absent until its header was read, or when unclassified.
-	readonly filter?: string
-	readonly fieldId?: string
-	readonly cohortId?: string
-	readonly measurement?: LiveFrameMeasurement
-	readonly registration?: LiveFrameRegistration
-	// Fraction of the field it covers, the weight it was integrated with, and the scale of its normalization.
-	readonly overlap?: number
-	readonly weight?: number
-	readonly scale?: number
-	// Sensor temperature its header records, in degrees Celsius.
-	readonly temperature?: number
-	// Time from its arrival to its outcome, in milliseconds.
-	readonly elapsed?: number
 }
 
 // Acquisition settings shared by the frames of a cohort, as their headers record them.
@@ -278,12 +235,6 @@ export interface LiveStackingView {
 	readonly frames: number
 }
 
-// A page of frame outcomes, newest first; next is the sequence to ask for the older ones with, absent on the last page.
-export interface LiveStackingFramePage {
-	readonly frames: readonly LiveStackingFrame[]
-	readonly next?: number
-}
-
 // A product with the paths of its files, to open them in Images.
 export interface LiveStackingProductDetail extends LiveStackingProduct {
 	readonly path: string
@@ -333,7 +284,13 @@ interface FrameRoute {
 
 // A frame while the session knows it.
 interface FrameEntry {
-	record: LiveStackingFrame
+	// Identity of the frame (capture session and generation), and the capture that took it.
+	readonly frameId: string
+	readonly captureSessionId: string
+	readonly outputMode: CaptureOutputMode
+	state: FrameState
+	// Sensor temperature its header records, in degrees Celsius, once read.
+	temperature?: number
 	// Bytes of a preview-only frame until they are handed to the worker.
 	bytes?: Uint8Array<ArrayBuffer>
 	// File of a saved frame, once written.
@@ -342,7 +299,6 @@ interface FrameEntry {
 	awaitingFile: boolean
 	// Whether its capture snooped a filter wheel, so a header without a filter means an unknown one.
 	readonly wheelSnooped: boolean
-	readonly arrivedAt: number
 	route?: FrameRoute
 }
 
@@ -365,8 +321,6 @@ interface Session {
 	readonly held: Map<string, FrameEntry>
 	// Frame being integrated.
 	current?: FrameEntry
-	// Remembered final outcomes, oldest first.
-	readonly history: LiveStackingFrame[]
 	// Highest generation received from each capture, so a frame is counted once.
 	readonly generations: Map<string, number>
 	readonly fields: LiveStackingFieldSummary[]
@@ -377,7 +331,6 @@ interface Session {
 	readonly waiters: Set<() => void>
 	readonly views: ViewDocument[]
 	readonly viewRequests: Map<string, Promise<LiveStackingView>>
-	sequence: number
 	pumping: boolean
 }
 
@@ -521,7 +474,6 @@ export class LiveStacking implements Disposable {
 			counters: emptyCounters(),
 			queue: [],
 			held: new Map(),
-			history: [],
 			generations: new Map(),
 			fields: [],
 			cohorts: new Map(),
@@ -529,7 +481,6 @@ export class LiveStacking implements Disposable {
 			waiters: new Set(),
 			views: [],
 			viewRequests: new Map(),
-			sequence: 0,
 			pumping: false,
 		}
 
@@ -573,14 +524,14 @@ export class LiveStacking implements Disposable {
 		const session = this.#session(sessionId)
 		if (session.phase === 'stopped' || session.phase === 'failed') return this.#summary(session)
 		session.phase = 'stopping'
-		for (const entry of session.queue.splice(0)) this.#finish(session, entry, { outcome: 'skipped', reason: 'aborted', detail: 'The session was aborted' })
+		for (const entry of session.queue.splice(0)) this.#finish(session, entry, 'skipped')
 		this.#release(session)
 		this.#publish(session)
 		void this.#pump(session)
 		return this.#summary(session)
 	}
 
-	// Discards the stacks, fields, and frame history of a session; frames already admitted go on into new stacks. Captures
+	// Discards the stacks and fields of a session; frames already admitted go on into new stacks. Captures
 	// and their files are never touched.
 	async reset(sessionId: string) {
 		const session = this.#session(sessionId)
@@ -590,7 +541,6 @@ export class LiveStacking implements Disposable {
 		session.fields.length = 0
 		session.cohorts.clear()
 		session.cohortMetadata.clear()
-		session.history.length = 0
 		this.#closeViews(session)
 		const inFlight = session.counters.queued + session.counters.processing + session.counters.held
 		session.counters = { ...emptyCounters(), received: inFlight, queued: session.counters.queued, processing: session.counters.processing, held: session.counters.held }
@@ -622,15 +572,6 @@ export class LiveStacking implements Disposable {
 		const session = this.#session(sessionId)
 		if (session.phase !== 'stopped' && session.phase !== 'failed') throw new LiveStackingError('Stop the session before closing it', 409, 'invalidState')
 		this.#close(session)
-	}
-
-	// Returns a page of the frame outcomes of a session, newest first, before a sequence.
-	frames(sessionId: string, before?: number, limit = 50): LiveStackingFramePage {
-		const session = this.#session(sessionId)
-		const all = [...session.history, ...Array.from(session.held.values(), (entry) => entry.record), ...(session.current ? [session.current.record] : []), ...session.queue.map((entry) => entry.record)].sort((a, b) => b.sequence - a.sequence)
-		const older = before === undefined ? all : all.filter((frame) => frame.sequence < before)
-		const page = older.slice(0, Math.min(MAX_FRAME_PAGE, Math.max(1, Math.trunc(limit))))
-		return { frames: page, ...(older.length > page.length && { next: page.at(-1)!.sequence }) }
 	}
 
 	// Returns a snapshot document of a view of a session, taken again when its stacks changed and the last one is older than
@@ -760,21 +701,20 @@ export class LiveStacking implements Disposable {
 
 		const outputMode = frame.request.output.mode
 		session.summary = { ...session.summary, capture: { sessionId: frame.sessionId, outputMode, ended: false } }
-		const record: LiveStackingFrame = { sequence: ++session.sequence, frameId: frame.frameId, captureSessionId: frame.sessionId, generation: frame.generation, time: frame.time, outputMode, outcome: 'queued' }
-		const entry: FrameEntry = { record, awaitingFile: outputMode === 'preview-save', wheelSnooped: !!frame.request.snoop?.wheel, arrivedAt: Date.now() }
+		const entry: FrameEntry = { frameId: frame.frameId, captureSessionId: frame.sessionId, outputMode, state: 'queued', awaitingFile: outputMode === 'preview-save', wheelSnooped: !!frame.request.snoop?.wheel }
 		session.counters.received++
 		session.counters.queued++
 
-		if (session.phase === 'failed') return this.#finish(session, entry, { outcome: 'deliveryFailed', reason: 'sessionFailed', detail: 'The session failed' })
-		if (session.phase === 'paused') return this.#finish(session, entry, { outcome: 'skipped', reason: 'paused', detail: 'The session was paused' })
+		if (session.phase === 'failed') return this.#finish(session, entry, 'deliveryFailed')
+		if (session.phase === 'paused') return this.#finish(session, entry, 'skipped')
 
 		if (outputMode === 'preview-only') {
-			if (!bytes) return this.#finish(session, entry, { outcome: 'deliveryFailed', reason: 'frameUnavailable', detail: 'The frame arrived without its pixels' })
+			if (!bytes) return this.#finish(session, entry, 'deliveryFailed')
 			// The gate keeps the queue within its limit; a frame beyond it arrived while the session could not hold the capture.
-			if (this.#pendingPayloads(session) > MAX_PENDING_PAYLOADS) return this.#finish(session, entry, { outcome: 'deliveryFailed', reason: 'backlogLimit', detail: 'Too many unsaved frames were waiting' })
+			if (this.#pendingPayloads(session) > MAX_PENDING_PAYLOADS) return this.#finish(session, entry, 'deliveryFailed')
 			entry.bytes = bytes
 		} else if (session.queue.length >= MAX_SAVED_BACKLOG) {
-			return this.#finish(session, entry, { outcome: 'deliveryFailed', reason: 'backlogLimit', detail: `More than ${MAX_SAVED_BACKLOG} saved frames were waiting` })
+			return this.#finish(session, entry, 'deliveryFailed')
 		}
 
 		session.queue.push(entry)
@@ -785,7 +725,7 @@ export class LiveStacking implements Disposable {
 	// The file of a saved frame was written: it can be integrated.
 	#saved(frameId: string, path: string) {
 		for (const session of this.#sessions.values()) {
-			const entry = session.queue.find((candidate) => candidate.record.frameId === frameId)
+			const entry = session.queue.find((candidate) => candidate.frameId === frameId)
 			if (!entry) continue
 			entry.path = path
 			entry.awaitingFile = false
@@ -797,10 +737,10 @@ export class LiveStacking implements Disposable {
 	// The file of a saved frame could not be written: it fails, never read from a partial file.
 	#saveFailed(frameId: string) {
 		for (const session of this.#sessions.values()) {
-			const index = session.queue.findIndex((candidate) => candidate.record.frameId === frameId)
+			const index = session.queue.findIndex((candidate) => candidate.frameId === frameId)
 			if (index < 0) continue
 			const [entry] = session.queue.splice(index, 1)
-			this.#finish(session, entry, { outcome: 'deliveryFailed', reason: 'saveFailed', detail: 'Its file could not be written' })
+			this.#finish(session, entry, 'deliveryFailed')
 			this.#publish(session)
 			void this.#pump(session)
 			return
@@ -812,9 +752,9 @@ export class LiveStacking implements Disposable {
 		const session = this.#cameraSession(connectionId, deviceId)
 		if (!session) return
 
-		for (const entry of session.queue.filter((candidate) => candidate.awaitingFile && candidate.record.captureSessionId === sessionId)) {
+		for (const entry of session.queue.filter((candidate) => candidate.awaitingFile && candidate.captureSessionId === sessionId)) {
 			session.queue.splice(session.queue.indexOf(entry), 1)
-			this.#finish(session, entry, { outcome: 'deliveryFailed', reason: 'frameUnavailable', detail: 'Its capture ended before its file was written' })
+			this.#finish(session, entry, 'deliveryFailed')
 		}
 
 		if (session.summary.capture?.sessionId === sessionId) session.summary = { ...session.summary, capture: { ...session.summary.capture, ended: true } }
@@ -855,7 +795,7 @@ export class LiveStacking implements Disposable {
 
 	// Preview-only frames of a session held in memory, the one being integrated included.
 	#pendingPayloads(session: Session) {
-		let count = session.current?.record.outputMode === 'preview-only' ? 1 : 0
+		let count = session.current?.outputMode === 'preview-only' ? 1 : 0
 		for (const entry of session.queue) if (entry.bytes) count++
 		return count
 	}
@@ -873,14 +813,14 @@ export class LiveStacking implements Disposable {
 				session.current = entry
 				session.counters.queued--
 				session.counters.processing++
-				entry.record = { ...entry.record, outcome: 'processing' }
+				entry.state = 'processing'
 				this.#publish(session)
 
 				try {
 					await this.#integrate(session, entry)
 				} catch (error) {
 					if (error instanceof LiveWorkerFailure) this.#fail(session, entry, error.message)
-					else this.#finish(session, entry, { outcome: 'deliveryFailed', reason: 'workerFailed', detail: Error.isError(error) ? error.message : String(error) }, true)
+					else this.#finish(session, entry, 'deliveryFailed', true)
 				} finally {
 					session.current = undefined
 					this.#release(session)
@@ -907,20 +847,19 @@ export class LiveStacking implements Disposable {
 			inspection = undefined
 		}
 
-		if (!inspection) return this.#finish(session, entry, { outcome: 'deliveryFailed', reason: 'frameUnavailable', detail: path ? 'Its file could not be read' : 'Its pixels could not be read' }, true)
-		if (inspection.kind !== undefined || inspection.rejectedRole === 'master') return this.#finish(session, entry, { outcome: 'skipped', reason: 'notLight', detail: 'Its header says it is not a light frame' }, true)
+		if (!inspection) return this.#finish(session, entry, 'deliveryFailed', true)
+		if (inspection.kind !== undefined || inspection.rejectedRole === 'master') return this.#finish(session, entry, 'skipped', true)
 
 		const { metadata } = inspection
 		const missing = missingMetadata(metadata)
-		if (missing) return this.#finish(session, entry, { outcome: 'skipped', reason: 'unknownMetadata', detail: missing }, true)
+		if (missing) return this.#finish(session, entry, 'skipped', true)
 
 		const filter = filterGroupOf(classifyFilter(metadata.filter.value, entry.wheelSnooped))
-		const temperature = metadata.sensorTemperature.value
-		entry.record = { ...entry.record, ...(filter !== undefined && { filter }), ...(temperature !== undefined && { temperature }) }
-		if (filter === undefined) return this.#finish(session, entry, { outcome: 'skipped', reason: 'unclassifiedFilter', detail: 'A filter wheel was snooped but the header names no filter' }, true)
+		entry.temperature = metadata.sensorTemperature.value
+		if (filter === undefined) return this.#finish(session, entry, 'skipped', true)
 
 		const chosen = filterCalibration(session.summary.calibration, filter)
-		if (!chosen && session.summary.calibration.otherwise === 'skip') return this.#finish(session, entry, { outcome: 'skipped', reason: 'calibrationNotChosen', detail: `No masters were chosen for ${filter}` }, true)
+		if (!chosen && session.summary.calibration.otherwise === 'skip') return this.#finish(session, entry, 'skipped', true)
 
 		const calibration: { -readonly [K in keyof AnalysisCalibration]: AnalysisCalibration[K] } = {}
 		const pins: MasterReference[] = []
@@ -930,8 +869,8 @@ export class LiveStacking implements Disposable {
 			const pin = chosen?.[kind]
 			if (!pin) continue
 			const master = await this.masters.pinnedMaster(pin)
-			if (!master) return this.#finish(session, entry, { outcome: 'rejected', reason: 'masterUnavailable', detail: `The ${kind} chosen for ${filter} is no longer available` }, true)
-			if (master.kind !== kind || !matchesTarget(kind, master.metadata, target)) return this.#finish(session, entry, { outcome: 'rejected', reason: 'masterIncompatible', detail: `The ${kind} chosen for ${filter} does not match the frame` }, true)
+			if (!master) return this.#finish(session, entry, 'rejected', true)
+			if (master.kind !== kind || !matchesTarget(kind, master.metadata, target)) return this.#finish(session, entry, 'rejected', true)
 			calibration[kind] = { path: master.path, fullScale: master.units === 'dimensionless' ? 1 : master.fullScaleDn }
 			pins.push(pin)
 		}
@@ -943,7 +882,7 @@ export class LiveStacking implements Disposable {
 		try {
 			const source = bytes ? ({ kind: 'bytes', bytes } as const) : ({ kind: 'file', path: path! } as const)
 			const budget = this.memoryBudget - (this.#memoryUsed() - session.summary.retainedBytes)
-			const result = await session.processor.integrate({ frameId: entry.record.frameId, source, segment, geometry: geometryKeyOf(metadata), ...(pins.length > 0 && { calibration }), budget })
+			const result = await session.processor.integrate({ frameId: entry.frameId, source, segment, geometry: geometryKeyOf(metadata), ...(pins.length > 0 && { calibration }), budget })
 			session.summary = { ...session.summary, retainedBytes: result.retainedBytes }
 			this.#settle(session, result.outcomes, entry)
 		} finally {
@@ -954,7 +893,7 @@ export class LiveStacking implements Disposable {
 	// Applies the outcomes of the engine: the frame being integrated, and the held candidates it settled.
 	#settle(session: Session, outcomes: readonly LiveEngineOutcome[], current?: FrameEntry) {
 		for (const outcome of outcomes) {
-			const entry = current?.record.frameId === outcome.frameId ? current : session.held.get(outcome.frameId)
+			const entry = current?.frameId === outcome.frameId ? current : session.held.get(outcome.frameId)
 			if (!entry) continue
 			const wasHeld = session.held.delete(outcome.frameId)
 
@@ -962,12 +901,12 @@ export class LiveStacking implements Disposable {
 				session.held.set(outcome.frameId, entry)
 				session.counters.processing--
 				session.counters.held++
-				entry.record = { ...entry.record, outcome: 'held', measurement: outcome.measurement }
+				entry.state = 'held'
 				continue
 			}
 
 			if (outcome.status === 'rejected') {
-				this.#finish(session, entry, { outcome: 'rejected', reason: outcome.reason, detail: outcome.detail, ...(outcome.measurement && { measurement: outcome.measurement }) }, !wasHeld)
+				this.#finish(session, entry, 'rejected', !wasHeld)
 				continue
 			}
 
@@ -979,8 +918,8 @@ export class LiveStacking implements Disposable {
 				session.summary = { ...session.summary, newFieldRequested: false }
 			}
 
-			this.#accept(session, outcome.cohortId, outcome.fieldId, route, entry.record.temperature)
-			this.#finish(session, entry, { outcome: 'accepted', fieldId: outcome.fieldId, cohortId: outcome.cohortId, measurement: outcome.measurement, registration: outcome.registration, overlap: outcome.overlap, weight: outcome.weight, scale: outcome.scale }, !wasHeld)
+			this.#accept(session, outcome.cohortId, outcome.fieldId, route, entry.temperature)
+			this.#finish(session, entry, 'accepted', !wasHeld)
 		}
 	}
 
@@ -1011,18 +950,15 @@ export class LiveStacking implements Disposable {
 		session.cohorts.set(cohortId, { ...cohort, accepted: cohort.accepted + 1, exposure: cohort.exposure + exposure, ...(range && { temperature: range }), updatedAt: now })
 	}
 
-	// Gives a frame its final outcome and moves it into the history. processing says it was being integrated, otherwise
-	// it was queued or held.
-	#finish(session: Session, entry: FrameEntry, patch: Partial<LiveStackingFrame> & Pick<LiveStackingFrame, 'outcome'>, processing = false) {
+	// Counts the final outcome of a frame and forgets it. processing says it was being integrated, otherwise it was queued or
+	// held.
+	#finish(session: Session, entry: FrameEntry, result: FrameResult, processing = false) {
 		if (processing) session.counters.processing--
-		else if (entry.record.outcome === 'held') session.counters.held--
+		else if (entry.state === 'held') session.counters.held--
 		else session.counters.queued--
 
 		entry.bytes = undefined
-		entry.record = { ...entry.record, ...patch, elapsed: Date.now() - entry.arrivedAt }
-		session.counters[patch.outcome === 'accepted' ? 'accepted' : patch.outcome === 'rejected' ? 'rejected' : patch.outcome === 'skipped' ? 'skipped' : 'deliveryFailed']++
-		session.history.push(entry.record)
-		if (session.history.length > FRAME_HISTORY) session.history.splice(0, session.history.length - FRAME_HISTORY)
+		session.counters[result]++
 		this.#publish(session)
 	}
 
@@ -1047,9 +983,9 @@ export class LiveStacking implements Disposable {
 	#fail(session: Session, current: FrameEntry | undefined, message: string) {
 		if (session.phase === 'failed') return
 		session.phase = 'failed'
-		if (current) this.#finish(session, current, { outcome: 'deliveryFailed', reason: 'workerFailed', detail: message }, true)
-		for (const entry of session.queue.splice(0)) this.#finish(session, entry, { outcome: 'deliveryFailed', reason: 'workerFailed', detail: message })
-		for (const entry of session.held.values()) this.#finish(session, entry, { outcome: 'deliveryFailed', reason: 'workerFailed', detail: message })
+		if (current) this.#finish(session, current, 'deliveryFailed', true)
+		for (const entry of session.queue.splice(0)) this.#finish(session, entry, 'deliveryFailed')
+		for (const entry of session.held.values()) this.#finish(session, entry, 'deliveryFailed')
 		session.held.clear()
 		session.summary = { ...session.summary, error: message, endedAt: Date.now(), retainedBytes: 0 }
 		session.processor[Symbol.dispose]()
@@ -1273,15 +1209,6 @@ export function createLiveStackingRoutes(stacking: LiveStacking) {
 		'/api/live-stacking/sessions/:sessionId/fields': { POST: (req) => answer(() => stacking.startNewField(req.params.sessionId)) },
 		'/api/live-stacking/sessions/:sessionId/calibration': {
 			PUT: (req) => answer(async () => stacking.setCalibration(req.params.sessionId, (await req.json()) as LiveStackingCalibration)),
-		},
-		'/api/live-stacking/sessions/:sessionId/frames': {
-			// Frame outcomes, newest first; ?before= the next cursor of the previous page, &limit=.
-			GET: (req) =>
-				answer(() => {
-					const { searchParams } = new URL(req.url)
-					const before = searchParams.get('before')
-					return stacking.frames(req.params.sessionId, before === null ? undefined : Number(before), Number(searchParams.get('limit')) || undefined)
-				}),
 		},
 		'/api/live-stacking/sessions/:sessionId/views': {
 			// A snapshot of a stack or a composition as a derived document of the image store.

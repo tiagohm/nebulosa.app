@@ -1,4 +1,4 @@
-import type { CalibrationMasterSummary, LiveMasterKind, LiveStackingCohort, LiveStackingComposition, LiveStackingFrame, LiveStackingRecipe, LiveStackingSession } from 'api'
+import type { CalibrationMasterSummary, LiveMasterKind, LiveStackingCohort, LiveStackingComposition, LiveStackingRecipe, LiveStackingSession } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
@@ -25,7 +25,6 @@ import {
 	cameraLiveSession,
 	closeLiveSession,
 	LIVE_FALLBACK_LABELS,
-	LIVE_FRAME_OUTCOME_LABELS,
 	LIVE_INTERPOLATION_LABELS,
 	LIVE_METHOD_LABELS,
 	LIVE_NORMALIZATION_LABELS,
@@ -36,7 +35,6 @@ import {
 	liveSessionCommand,
 	liveStackingRuntime,
 	livePresets,
-	loadLiveFrames,
 	loadLiveMasters,
 	NO_FILTER,
 	removeFilterCalibration,
@@ -49,7 +47,7 @@ import {
 // Contextual panel sections of Live Stacking, a camera operation of the Images camera tabs: the session of the tab's
 // camera (start, pause, resume, stop, abort, reset, a new field, close) with its frame counts, the stacks of its fields
 // by filter and acquisition settings, the masters chosen per filter, the integration recipe, which stack or color
-// composition the tab shows, and the latest frame outcomes. The session is the server's, shown here whichever tab
+// composition the tab shows. The session is the server's, shown here whichever tab
 // started it, and keeps running when the panel unmounts or the tab closes; it only ever reads the frames Camera
 // Acquisition takes, so the acquisition itself is set up in its own panel. The recipe and masters are the camera's form,
 // kept in the profile, and the recipe is locked while a session runs. What the tab shows is display only: stretching a
@@ -96,7 +94,6 @@ export function LiveStackingSections({ document, camera }: LiveStackingSectionsP
 			<CalibrationSection camera={camera} session={session} settings={settings} />
 			<IntegrationSection camera={camera} session={session} settings={settings} />
 			{session && <DisplaySection document={document} session={session} />}
-			{session && <DiagnosticsSection session={session} />}
 		</>
 	)
 }
@@ -501,6 +498,7 @@ function DisplaySection({ document, session }: SessionProps) {
 			{mode === 'stack' && shownCohort && (
 				<Select
 					label="Stack"
+					className="min-w-0"
 					options={session.cohorts.map((cohort) => cohort.cohortId)}
 					value={shownCohort}
 					format={(cohortId) => {
@@ -578,46 +576,6 @@ function DisplaySection({ document, session }: SessionProps) {
 					Open Acquisition
 				</Button>
 			</Actions>
-		</CollapsibleSection>
-	)
-}
-
-// Text of the reason or measurement of a frame outcome.
-function frameDetail(frame: LiveStackingFrame) {
-	if (frame.outcome === 'accepted' && frame.measurement) {
-		const { stars, hfd, snr } = frame.measurement
-		const registration = frame.registration ? ` · Δ ${frame.registration.dx.toFixed(1)}, ${frame.registration.dy.toFixed(1)} px` : ''
-		return `${stars} stars${hfd !== undefined ? ` · HFD ${hfd.toFixed(2)}` : ''}${snr !== undefined ? ` · SNR ${snr.toFixed(0)}` : ''}${registration}`
-	}
-
-	return frame.detail ?? frame.reason ?? ''
-}
-
-// Tone of each frame outcome.
-const OUTCOME_TONES: Readonly<Record<LiveStackingFrame['outcome'], 'default' | 'success' | 'danger'>> = { queued: 'default', processing: 'default', held: 'default', accepted: 'success', rejected: 'danger', skipped: 'default', deliveryFailed: 'danger' }
-
-// Latest frame outcomes of the session, newest first, fetched when the section opens and as the session changes.
-function DiagnosticsSection({ session }: { readonly session: LiveStackingSession }) {
-	const runtime = useSnapshot(liveStackingRuntime)
-	const frames = runtime.frames[session.sessionId] ?? []
-	const total = session.counters.received
-
-	useEffect(() => {
-		const timer = setTimeout(() => void loadLiveFrames(liveStackingRuntime, session.sessionId), 300)
-		return () => clearTimeout(timer)
-	}, [session.sessionId, total, session.counters.accepted, session.counters.rejected])
-
-	return (
-		<CollapsibleSection id="images.liveStacking.diagnostics" title="Diagnostics" summary={`${frames.length} recent frames`} defaultOpen={false}>
-			{frames.length === 0 && <Notice>No frame yet.</Notice>}
-			<DataList>
-				{frames.map((frame) => (
-					<DataRow key={frame.sequence} label={`#${frame.sequence} ${frame.filter ?? ''}`} tone={OUTCOME_TONES[frame.outcome]}>
-						{LIVE_FRAME_OUTCOME_LABELS[frame.outcome]}
-						{frameDetail(frame) && ` · ${frameDetail(frame)}`}
-					</DataRow>
-				))}
-			</DataList>
 		</CollapsibleSection>
 	)
 }

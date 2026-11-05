@@ -34,7 +34,7 @@ function cohort(cohortId: string, filter: string, fieldId = 'f1', updatedAt = 1,
 }
 
 function newRuntime() {
-	return proxy<LiveStackingRuntime>({ sessions: {}, memoryBudget: 0, memoryUsed: 0, frames: {}, pending: {}, errors: {} })
+	return proxy<LiveStackingRuntime>({ sessions: {}, memoryBudget: 0, memoryUsed: 0, pending: {}, errors: {} })
 }
 
 describe('live stacking store', () => {

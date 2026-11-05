@@ -1,20 +1,4 @@
-import type {
-	CalibrationMasterSummary,
-	LiveExportTarget,
-	LiveFrameOutcome,
-	LiveMasterKind,
-	LiveStackingCalibration,
-	LiveStackingCohort,
-	LiveStackingFrame,
-	LiveStackingFramePage,
-	LiveStackingProduct,
-	LiveStackingProductDetail,
-	LiveStackingRecipe,
-	LiveStackingSession,
-	LiveStackingSnapshot,
-	LiveStackingState,
-	ServerEvent,
-} from 'api'
+import type { CalibrationMasterSummary, LiveExportTarget, LiveMasterKind, LiveStackingCalibration, LiveStackingCohort, LiveStackingProduct, LiveStackingProductDetail, LiveStackingRecipe, LiveStackingSession, LiveStackingSnapshot, LiveStackingState, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { jsonInit, responseError } from '../http'
@@ -27,7 +11,7 @@ import { COMPOSITION_PRESETS, type CompositionPreset, presetSources } from '../t
 // snapshot on every socket (re)open. A session is addressed by its id and found by its exact camera (connection id +
 // device id), never by a role. Sessions are ordered by their revision, so a late event or snapshot never replaces a
 // newer state, and a new epoch (a restarted server) forgets them. Every start carries a token, so a retried request
-// answers the session of the first one. The frame outcomes and the saved stacks are fetched on demand.
+// answers the session of the first one. The saved stacks are fetched on demand.
 
 // Live Stacking state of the tab.
 export interface LiveStackingRuntime {
@@ -38,8 +22,6 @@ export interface LiveStackingRuntime {
 	// Memory budget of every session together, and what they use, in bytes.
 	memoryBudget: number
 	memoryUsed: number
-	// Latest page of frame outcomes of each session, newest first.
-	frames: Record<string, readonly LiveStackingFrame[]>
 	// Saved stacks, newest first; absent before they were fetched.
 	products?: readonly LiveStackingProduct[]
 	// Commands in flight and their failures, by command key.
@@ -48,7 +30,7 @@ export interface LiveStackingRuntime {
 }
 
 // Live Stacking state of the tab.
-export const liveStackingRuntime = proxy<LiveStackingRuntime>({ sessions: {}, memoryBudget: 0, memoryUsed: 0, frames: {}, pending: {}, errors: {} })
+export const liveStackingRuntime = proxy<LiveStackingRuntime>({ sessions: {}, memoryBudget: 0, memoryUsed: 0, pending: {}, errors: {} })
 
 // Base of the routes of Live Stacking.
 const BASE_URL = '/api/live-stacking'
@@ -64,17 +46,6 @@ export const LIVE_STACKING_STATE_LABELS: Readonly<Record<LiveStackingState, stri
 	stopping: 'Stopping',
 	stopped: 'Stopped',
 	failed: 'Failed',
-}
-
-// Label of each frame outcome.
-export const LIVE_FRAME_OUTCOME_LABELS: Readonly<Record<LiveFrameOutcome, string>> = {
-	queued: 'Queued',
-	processing: 'Integrating',
-	held: 'Held',
-	accepted: 'Accepted',
-	rejected: 'Rejected',
-	skipped: 'Skipped',
-	deliveryFailed: 'Not delivered',
 }
 
 // Label of each combination method.
@@ -97,7 +68,6 @@ function adoptEpoch(state: LiveStackingRuntime, epoch: string) {
 	if (state.epoch === epoch) return
 	state.epoch = epoch
 	state.sessions = {}
-	state.frames = {}
 }
 
 // Applies a session unless a newer revision of it is known.
@@ -117,7 +87,6 @@ export function handleLiveStackingEvent(state: LiveStackingRuntime, event: Serve
 		adoptEpoch(state, event.epoch)
 		refreshes.updated(event.sessionId)
 		delete state.sessions[event.sessionId]
-		delete state.frames[event.sessionId]
 	} else if (event.type === 'liveStacking:products') {
 		adoptEpoch(state, event.epoch)
 		if (state.products) void loadLiveProducts(state)
@@ -218,10 +187,7 @@ export async function setLiveCalibration(state: LiveStackingRuntime, sessionId: 
 export async function closeLiveSession(state: LiveStackingRuntime, sessionId: string, request: typeof fetch = fetch) {
 	const closed = await command<{ readonly closed: boolean }>(state, `session:${sessionId}`, `${BASE_URL}/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }, request)
 
-	if (closed) {
-		delete state.sessions[sessionId]
-		delete state.frames[sessionId]
-	}
+	if (closed) delete state.sessions[sessionId]
 
 	return closed
 }
@@ -229,16 +195,6 @@ export async function closeLiveSession(state: LiveStackingRuntime, sessionId: st
 // Saves a stack or a composition of a session as a product. Resolves the product with the paths of its files.
 export function saveLiveStack(state: LiveStackingRuntime, sessionId: string, target: LiveExportTarget, request: typeof fetch = fetch) {
 	return command<LiveStackingProductDetail>(state, `export:${sessionId}`, `${BASE_URL}/sessions/${encodeURIComponent(sessionId)}/exports`, jsonInit('POST', target), request)
-}
-
-// Fetches the latest frame outcomes of a session.
-export async function loadLiveFrames(state: LiveStackingRuntime, sessionId: string, limit = 50, request: typeof fetch = fetch) {
-	try {
-		const response = await request(`${BASE_URL}/sessions/${encodeURIComponent(sessionId)}/frames?limit=${limit}`)
-		if (response.ok) state.frames[sessionId] = ref(((await response.json()) as LiveStackingFramePage).frames)
-	} catch {
-		// The server is unreachable; the frames shown stay.
-	}
 }
 
 // Fetches the saved stacks.

@@ -64,12 +64,12 @@ describe('text', () => {
 })
 
 describe('coverage', () => {
-	test('shows what exists for each operating point, and an unavailable master does not count', () => {
+	test('shows what exists for each operating point, and an unavailable master or one of another role does not count', () => {
 		const master = { masterId: 1, kind: 'dark', calibrationState: 'rawBiasIncluded', units: 'DN', metadata: metadata(), frames: 1, method: 'mean', createdAt: 1, status: 'ready', groupId: 'g', dependencies: [], contentDigest: 'd' } as const
-		const rows = coverage([group('dark', { masters: [master] }), group('dark', { masters: [{ ...master, status: 'unavailable' }] }), group('bias'), group('flat', { metadata: metadata({ gain: verified(0) }) })])
+		const rows = coverage([group('dark', { masters: [master] }), group('dark', { masters: [{ ...master, status: 'unavailable' }] }), group('dark', { masters: [{ ...master, kind: 'darkFlat' }] }), group('bias'), group('flat', { metadata: metadata({ gain: verified(0) }) })])
 
 		expect(rows).toHaveLength(2)
-		expect(rows[0].kinds.dark).toEqual({ groups: 2, masters: 1 })
+		expect(rows[0].kinds.dark).toEqual({ groups: 3, masters: 1 })
 		expect(rows[0].kinds.bias).toEqual({ groups: 1, masters: 0 })
 		expect(rows[1].kinds.flat.groups).toBe(1)
 	})

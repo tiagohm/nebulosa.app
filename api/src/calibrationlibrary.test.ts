@@ -197,6 +197,22 @@ describe('darks', () => {
 		expect((await library.groups({}, 0, 50)).items[0].kind).toBe('darkFlat')
 	})
 
+	test('dark frames build a dark-flat when asked, and no other frames change their role', async () => {
+		const { library, base } = open(local)
+		await plan(library, base, 3)
+		const [group] = (await library.groups({}, 0, 50)).items
+
+		expect(await library.validate({ groupId: group.groupId, kind: 'darkFlat' })).toMatchObject({ valid: true, kind: 'darkFlat' })
+		const masterId = await built(library, { groupId: group.groupId, kind: 'darkFlat' })
+		expect(await library.master(masterId)).toMatchObject({ kind: 'darkFlat', groupId: group.groupId })
+		expect((await library.validate({ groupId: group.groupId })).kind).toBe('dark')
+
+		const other = open(local)
+		await plan(other.library, other.base, 3, 3, { purpose: 'darkFlat' })
+		const [darkFlats] = (await other.library.groups({}, 0, 50)).items
+		expect((await other.library.validate({ groupId: darkFlats.groupId, kind: 'dark' })).valid).toBeFalse()
+	})
+
 	test('a missing file comes back once it is there again', async () => {
 		const { library, base } = open(local)
 		await plan(library, base, 2)

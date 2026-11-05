@@ -32,6 +32,8 @@ import { DataRow } from '../../ui/DataRow'
 
 // Fields of the recipe form.
 interface RecipeForm {
+	// Role a master of dark frames is built as.
+	readonly kind: DarkMasterKind
 	// Combination.
 	readonly method: 'sigmaClip' | 'median' | 'mean'
 	// Rejection limits, in robust standard deviations.
@@ -46,7 +48,13 @@ interface RecipeForm {
 }
 
 // Starting recipe of a group.
-const DEFAULT_FORM: RecipeForm = { method: 'sigmaClip', sigmaLow: 3, sigmaHigh: 3, maxIterations: 5, correction: '', acknowledged: false }
+const DEFAULT_FORM: RecipeForm = { kind: 'dark', method: 'sigmaClip', sigmaLow: 3, sigmaHigh: 3, maxIterations: 5, correction: '', acknowledged: false }
+
+// Roles a master of dark frames can be built as: a dark, or a dark-flat of darks taken at the exposure of the flats.
+const DARK_MASTER_KINDS = ['dark', 'darkFlat'] as const satisfies readonly CalibrationKind[]
+
+// Role a master of dark frames is built as.
+type DarkMasterKind = (typeof DARK_MASTER_KINDS)[number]
 
 // Choice of the group, master, or frame shown in the panel.
 type Selection = { readonly type: 'group'; readonly groupId: string } | { readonly type: 'master'; readonly masterId: number } | { readonly type: 'source'; readonly sourceId: string }
@@ -396,7 +404,7 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 	const edit = (patch: Partial<RecipeForm>) => setForm({ ...form, ...patch })
 	void masters
 
-	const request = (): MasterRequest => ({ groupId, recipe: { method: form.method, sigmaLow: form.sigmaLow, sigmaHigh: form.sigmaHigh, maxIterations: form.maxIterations }, correction: form.correction ? Number(form.correction) : undefined, acknowledged: form.acknowledged })
+	const request = (): MasterRequest => ({ groupId, ...(kind === 'dark' && { kind: form.kind }), recipe: { method: form.method, sigmaLow: form.sigmaLow, sigmaHigh: form.sigmaHigh, maxIterations: form.maxIterations }, correction: form.correction ? Number(form.correction) : undefined, acknowledged: form.acknowledged })
 
 	// The server explains every change of the form, so the reasons shown are the ones Build would meet.
 	useEffect(() => {
@@ -443,6 +451,8 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 
 	return (
 		<>
+			{kind === 'dark' && <SegmentedControl label="Master" options={DARK_MASTER_KINDS} value={form.kind} format={(option) => KIND_LABELS[option]} onChange={(next) => edit({ kind: next })} />}
+			{kind === 'dark' && form.kind === 'darkFlat' && <Notice>A dark-flat corrects flats taken at its exposure, so build one only from darks taken at the exposure of your flats.</Notice>}
 			<Select label="Combination" options={RECIPE_METHODS} value={form.method} format={(option) => METHOD_LABELS[option]} onChange={(method) => edit({ method })} />
 			{form.method === 'sigmaClip' && (
 				<div className="flex flex-col gap-2">

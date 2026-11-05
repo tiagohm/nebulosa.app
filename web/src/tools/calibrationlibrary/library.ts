@@ -152,7 +152,7 @@ export function coverage(groups: readonly CalibrationGroupSummary[]): readonly C
 		}
 
 		row.kinds[kind].groups++
-		if (masters.some(({ status }) => status !== 'unavailable')) row.kinds[kind].masters++
+		if (masters.some((master) => master.kind === kind && master.status !== 'unavailable')) row.kinds[kind].masters++
 	}
 
 	return Array.from(rows.values())

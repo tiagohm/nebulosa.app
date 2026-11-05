@@ -202,6 +202,9 @@ export interface MasterRequest {
 	readonly recipe?: Partial<CalibrationRecipe>
 	// Id of the master that corrects a flat.
 	readonly correction?: number
+	// Role of a master of dark frames: a dark, or a dark-flat of darks taken at the exposure of the flats it corrects, which
+	// capture software often records as darks. Absent keeps the role of the frames; only dark frames can take another.
+	readonly kind?: 'dark' | 'darkFlat'
 	// Whether the operator accepts everything that asks for a review, including an incomplete group.
 	readonly acknowledged?: boolean
 	// Token of the request, so a repeated one meets the same job.
@@ -708,17 +711,20 @@ export class CalibrationLibrary {
 		return groupId === undefined ? [] : this.store.group(groupId).sources.filter(usable)
 	}
 
-	// Explains a request, writing nothing. A bias or dark-flat keeps the sensor scale; a flat needs its correction.
+	// Explains a request, writing nothing. A bias or dark-flat keeps the sensor scale; a flat needs its correction. Dark
+	// frames build the role the request asks for, a dark or a dark-flat.
 	#validate(request: MasterRequest) {
 		const recipe: CalibrationRecipe = { ...DEFAULT_RECIPE, ...request.recipe }
 		const sources = this.#requestedFrames(request)
 		const findings: CompatibilityFinding[] = []
 		const kinds = new Set(sources.map(({ kind }) => kind))
-		const kind = sources[0]?.kind
+		const frameKind = sources[0]?.kind
+		const kind = frameKind === 'dark' ? (request.kind ?? frameKind) : frameKind
 		let correction: CalibrationMaster | undefined
 
 		if (sources.length === 0) findings.push({ field: 'frames', code: 'insufficientFrames', severity: 'blocker', message: 'No frame can enter this master' })
 		if (kinds.size > 1) findings.push({ field: 'kind', code: 'incompatibleFrames', severity: 'blocker', message: `The frames have different roles: ${[...kinds].join(', ')}` })
+		if (request.kind !== undefined && frameKind !== undefined && frameKind !== 'dark' && request.kind !== frameKind) findings.push({ field: 'kind', code: 'incompatibleFrames', severity: 'blocker', message: 'Only dark frames can be built as a dark or a dark-flat' })
 
 		const gone = sources.filter(({ status }) => status !== 'available').length
 		if (gone > 0) findings.push({ field: 'frames', code: 'sourceMissing', severity: 'blocker', message: `${gone} frames are missing or changed` })
@@ -801,7 +807,8 @@ export class CalibrationLibrary {
 			throw new LibraryError(validation.findings.find(({ severity }) => severity === 'review')?.message ?? 'Something must be accepted first', 409, 'unknownMetadata')
 		}
 
-		const [{ kind, groupId, key }] = sources
+		const [{ groupId, key }] = sources
+		const kind = validation.kind!
 		const now = Date.now()
 		const job: CalibrationJob = {
 			jobId: crypto.randomUUID(),

@@ -50,7 +50,7 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 	'image-stacking': { id: 'image-stacking', label: 'Image Stacking', description: 'Groups saved light frames by filter, integrates them, and composes color from mono masters.', icon: 'stack', view: ImageStacking },
 	'mount-remote-control': { id: 'mount-remote-control', label: 'Mount Remote Control', description: 'Lets planetarium programs drive the mount over the LX200 and Stellarium protocols.', icon: 'mount', view: MountRemoteControl },
 	'mount-pointing-model': { id: 'mount-pointing-model', label: 'Mount Pointing Model', description: 'Inspects, refits, and validates the pointing models of the mount.', icon: 'mount', view: MountPointingModel },
-	'meridian-flip-monitor': { id: 'meridian-flip-monitor', label: 'Meridian Flip Monitor', description: 'Follows the tracked target through the meridian and reports when a flip may be needed, without moving the mount.', icon: 'compass', view: MeridianFlipMonitorView },
+	'meridian-flip-monitor': { id: 'meridian-flip-monitor', label: 'Meridian Flip Monitor', description: 'Follows the tracked target through the meridian and reports when a flip may be needed, without moving the mount.', icon: 'meridian', view: MeridianFlipMonitorView },
 	'alpaca-server': { id: 'alpaca-server', label: 'Alpaca Server', description: 'Publishes selected devices to ASCOM Alpaca clients on the network.', icon: 'server' },
 }
 

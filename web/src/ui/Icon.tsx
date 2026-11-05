@@ -36,6 +36,8 @@ export const ICONS = {
 	sliders: 'M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1M15 4v4M9 10v4M17 16v4',
 	calculator: 'M6 3h12v18H6zM9 7h6M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01',
 	compass: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M15.5 8.5l-2 5l-5 2l2-5z',
+	// The dashed meridian, a target east of it, and the arc it tracks across the meridian with its direction.
+	meridian: 'M12 3v2M12 8v2M12 13v2M12 18v3M7.5 9.2A9 9 0 0 1 21 17M19.3 15.3L21 17l1.7-1.7M5.6 9.1a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3',
 	folder: 'M3 6h6l2 2h10v11H3z',
 	file: 'M6 3h8l4 4v14H6zM14 3v4h4',
 	arrow: 'M12 19V5M6 11l6-6l6 6',

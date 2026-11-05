@@ -17,6 +17,7 @@ import {
 	formatPixelLength,
 	formatPixelPosition,
 	formatSigned,
+	formatSignedClockDuration,
 	formatSignedAngle,
 	formatSignedArcmin,
 	formatSignificant,
@@ -157,6 +158,15 @@ describe('time', () => {
 		expect(formatClockDuration(65.9)).toBe('1:05')
 		expect(formatClockDuration(3725)).toBe('1:02:05')
 		expect(formatClockDuration(-10)).toBe('0:00')
+	})
+
+	test('signed running clocks keep the sign of the time and none at zero', () => {
+		expect(formatSignedClockDuration(65.9)).toBe('+1:05')
+		expect(formatSignedClockDuration(-565)).toBe('−9:25')
+		expect(formatSignedClockDuration(-3725)).toBe('−1:02:05')
+		expect(formatSignedClockDuration(-0.4)).toBe('0:00')
+		expect(formatSignedClockDuration(0)).toBe('0:00')
+		expect(formatSignedClockDuration(Number.NaN)).toBe(MISSING)
 	})
 })
 

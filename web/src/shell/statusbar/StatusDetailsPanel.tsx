@@ -19,10 +19,12 @@ import { openNotificationTarget, targetAvailable } from '../../notifications/tar
 import { OPERATION_LABELS, operationsState } from '../../operations'
 import { activeProfile, activeSetup, profileState } from '../../profile/profile'
 import { openAstronomicalTimeConverter, qualityNotes } from '../../tools/astronomicaltime/astronomicaltime'
+import { meridianFlipHeadline, meridianFlipState, meridianFlipStatusText, monitorKey } from '../../tools/meridianflip/meridianflip'
 import { Icon, type IconName } from '../../ui/Icon'
 import { SectionHeading } from '../../ui/SectionHeading'
+import { TONE_TEXT } from '../../ui/StatusBadge'
 import { useNow } from '../../useNow'
-import { routeState } from '../route'
+import { navigate, routeState } from '../route'
 import { astronomicalClockRuntime, clockApproximate, clockFreshness, clockReadingText, liveClock } from './astronomicalclock'
 import { useMonotonicNow } from './AstronomicalClockChip'
 import { activeCapture, activeGuiding, capturePercent, type ChipSessions, connectionLabel, formatElapsed, guidingValue, otherOperations, progressText, roleDetailValue, scopedDeviceErrors, scopedRunningOperations, type ScopedDevice, serverLinkLabel, sessionOperationIds } from './selectors'
@@ -30,12 +32,12 @@ import { AbortButton, TONE_CLASSES, useOperationAbortable } from './StatusItems'
 
 // Details of the status bar: a button at its right end, showing how many items the bar left out, that opens a panel
 // above itself with everything the bar summarizes for the active profile's server connection — the server link and
-// the selected connection, every role with its device and what it reports, the running capture and guiding
-// sessions, every other running operation with its devices, elapsed time, and reported progress, each with its Abort,
-// the device failures, and the real-time clock, even when the bar has no room for it. The panel is placed in the
-// viewport (fixed), so the clipping bar never cuts it, and closes when the button is pressed again, on a press outside
-// both, on Escape (returning the focus to the button), when the window resizes, and after it opened a device or a
-// camera tab. Closing it, or anything it opens, never stops a session or an operation; only an Abort does.
+// the selected connection, every role with its device and what it reports, the running capture and guiding sessions
+// and the enabled Meridian Flip Monitor of the mount, every other running operation with its devices, elapsed time, and
+// reported progress, each with its Abort, the device failures, and the real-time clock, even when the bar has no room
+// for it. The panel is placed in the viewport (fixed), so the clipping bar never cuts it, and closes when the button is
+// pressed again, on a press outside both, on Escape (returning the focus to the button), when the window resizes, and
+// after it opened a device, a camera tab, or a tool. Closing it, or anything it opens, never stops a session or an operation; only an Abort does.
 
 // Width of the panel, in CSS pixels, when the viewport has room for it.
 const PANEL_WIDTH = 380
@@ -143,6 +145,9 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 	const devices = useWatchedDevices()
 	const mainCamera = useRoleDevice('MAIN_CAMERA').device
 	const guideCamera = useRoleDevice('GUIDE_CAMERA').device
+	const mount = useRoleDevice('MOUNT').device
+	const meridianFlip = useSnapshot(meridianFlipState)
+	const monitor = mount ? meridianFlip.monitors[monitorKey(mount.connectionId, mount.id)] : undefined
 	const capture = activeCapture(captures.sessions, mainCamera)
 	const session = activeGuiding(guiding.sessions, guideCamera)
 	const others = otherOperations(scopedRunningOperations(operations, serverId), sessionOperationIds(capture, session))
@@ -154,6 +159,12 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 	// Opens the camera tab of a session with one of its tools, when the tab is open.
 	function openCamera(target: NotificationTarget) {
 		if (openNotificationTarget(target, { images: imagesState, route: routeState, devices: devices.devices })) onClose()
+	}
+
+	// Opens the Meridian Flip Monitor tool.
+	function openMeridianFlip() {
+		navigate(routeState, { workspace: 'tools', tool: 'meridian-flip-monitor' })
+		onClose()
 	}
 
 	const captureTarget: NotificationTarget | undefined = mainCamera && { kind: 'cameraTool', connectionId: mainCamera.connectionId, deviceId: mainCamera.id, tool: 'camera-acquisition' }
@@ -169,7 +180,7 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 			<Section title="Equipment">
 				<EquipmentRows devices={devices} onNavigate={onClose} sessions={{ capture, guiding: session }} />
 			</Section>
-			{(capture !== undefined || session !== undefined) && (
+			{(capture !== undefined || session !== undefined || monitor !== undefined) && (
 				<Section title="Sessions">
 					{capture && (
 						<Row label="Capture">
@@ -185,6 +196,12 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 							{guidingValue(session).text !== GUIDING_STATE_LABELS[session.state] && ` · ${guidingValue(session).text}`}
 							{targetAvailable(guidingTarget, { documents, devices: devices.devices }) && <OpenButton onClick={() => openCamera(guidingTarget)} />}
 							{guidingOperation && abortable(guidingOperation) && <RowAbort id={guidingOperation.operationId} label="Guiding" />}
+						</Row>
+					)}
+					{monitor && (
+						<Row label="Meridian flip">
+							<span className={TONE_TEXT[meridianFlipHeadline(monitor)[1]]}>{meridianFlipStatusText(monitor, now)}</span>
+							<OpenButton label="Open tool" onClick={openMeridianFlip} />
 						</Row>
 					)}
 				</Section>
@@ -368,15 +385,17 @@ function Row({ icon, label, children }: RowProps) {
 }
 
 interface OpenButtonProps {
-	// Opens the camera tab.
+	// Text of the link; "Open in Images" by default.
+	readonly label?: string
+	// Opens what the row is about.
 	readonly onClick: () => void
 }
 
-// Link opening the camera tab of a session in Images.
-function OpenButton({ onClick }: OpenButtonProps) {
+// Link opening what a row is about: the camera tab of a session in Images, or a tool.
+function OpenButton({ label = 'Open in Images', onClick }: OpenButtonProps) {
 	return (
 		<button type="button" onClick={onClick} className="ml-2 cursor-pointer border-0 bg-transparent p-0 text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
-			Open in Images
+			{label}
 		</button>
 	)
 }

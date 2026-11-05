@@ -1,7 +1,9 @@
-import type { MeridianExposureAssessment, MeridianExposureRequest, MeridianFlipMonitor, MeridianFlipSettings, MeridianFlipSnapshot, MeridianFlipTransition, ServerEvent } from 'api'
+import type { MeridianAvailability, MeridianExposureAssessment, MeridianExposureRequest, MeridianFlipMonitor, MeridianFlipSettings, MeridianFlipSnapshot, MeridianFlipTransition, ServerEvent } from 'api'
 import { proxy } from 'valtio'
+import { formatSignedClockDuration } from '../../format'
 import { jsonInit, responseError } from '../../http'
 import { MERIDIAN_FLIP_MAXIMUM_SECONDS } from '../../profile/schema'
+import type { StatusTone } from '../../ui/StatusBadge'
 
 // Mirror of the Meridian Flip Monitors of the server, of every mount and connection, their recent transitions, and the
 // requests this tab sends to enable, disable, and update them. The monitors are the server's: this mirror is fed by
@@ -219,6 +221,36 @@ export async function assessMeridianExposure(connectionId: string, deviceId: str
 	} catch {
 		return { error: 'The server is unreachable.' }
 	}
+}
+
+// Text of each availability of a monitor.
+export const MERIDIAN_AVAILABILITY_LABELS: Readonly<Record<MeridianAvailability, string>> = {
+	waitingForMount: 'Waiting for the mount',
+	waitingForCoordinates: 'Waiting for coordinates',
+	idle: 'Idle',
+	repositioning: 'Repositioning',
+	settling: 'Settling',
+	monitoring: 'Monitoring',
+}
+
+// Headline of a monitor: its state in words and the tone it is shown with; Disabled without a monitor. Only a flip
+// candidate in or past the window is a warning or a danger, never a mount already on the expected side.
+export function meridianFlipHeadline(monitor: Pick<MeridianFlipMonitor, 'availability' | 'timing' | 'mechanical'> | undefined): readonly [string, StatusTone] {
+	if (!monitor) return ['Disabled', 'muted']
+	if (monitor.availability !== 'monitoring') return [MERIDIAN_AVAILABILITY_LABELS[monitor.availability], monitor.availability === 'waitingForMount' || monitor.availability === 'waitingForCoordinates' ? 'warning' : 'neutral']
+	const candidate = monitor.mechanical === 'flipCandidate'
+	if (monitor.timing.phase === 'pastDeadline') return candidate ? ['Deadline passed', 'danger'] : ['Past the window', 'neutral']
+	if (monitor.timing.phase === 'windowOpen') return candidate ? ['Flip window open', 'warning'] : ['Window open', 'neutral']
+	if (monitor.timing.phase === 'approaching') return ['Approaching', 'active']
+	return ['Monitoring', 'success']
+}
+
+// Short status of a monitor at instant now (Unix milliseconds), for the status bar: its headline and, while a forecast is
+// current, the wall-clock time relative to the transit, negative before it ("−9:25", "+6:10", formatSignedClockDuration).
+export function meridianFlipStatusText(monitor: Pick<MeridianFlipMonitor, 'availability' | 'timing' | 'mechanical' | 'sampledAt'>, now: number) {
+	const [label] = meridianFlipHeadline(monitor)
+	const seconds = monitor.availability === 'monitoring' ? secondsToTransit(monitor, now) : undefined
+	return seconds === undefined ? label : `${label} · ${formatSignedClockDuration(-seconds)}`
 }
 
 // Wall-clock seconds to the upper transit at instant now (Unix milliseconds), interpolated from the sample of a monitor,

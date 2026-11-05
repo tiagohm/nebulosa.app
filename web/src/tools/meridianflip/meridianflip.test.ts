@@ -2,7 +2,21 @@ import { describe, expect, test } from 'bun:test'
 import type { MeridianFlipEvent, MeridianFlipMonitor, MeridianFlipSnapshot, MeridianFlipTransition } from 'api'
 import { proxy } from 'valtio'
 import { DEFAULT_MERIDIAN_FLIP_SETTINGS, MERIDIAN_FLIP_MAXIMUM_SECONDS } from '../../profile/schema'
-import { applyMeridianFlipSnapshot, enableMeridianFlip, handleMeridianFlipEvent, loadMeridianFlipTransitions, MERIDIAN_FLIP_STALE_AFTER, type MeridianFlipState, monitorKey, normalizeMeridianFlipSettings, refreshMeridianFlip, secondsToTransit, updateMeridianFlipSettings } from './meridianflip'
+import {
+	applyMeridianFlipSnapshot,
+	enableMeridianFlip,
+	handleMeridianFlipEvent,
+	loadMeridianFlipTransitions,
+	MERIDIAN_FLIP_STALE_AFTER,
+	meridianFlipHeadline,
+	meridianFlipStatusText,
+	type MeridianFlipState,
+	monitorKey,
+	normalizeMeridianFlipSettings,
+	refreshMeridianFlip,
+	secondsToTransit,
+	updateMeridianFlipSettings,
+} from './meridianflip'
 
 function newState() {
 	return proxy<MeridianFlipState>({ revision: 0, monitors: {}, transitions: {}, pending: {}, errors: {} })
@@ -141,5 +155,23 @@ describe('countdown', () => {
 		expect(secondsToTransit(value, 11000)).toBe(590)
 		expect(secondsToTransit(value, 1000 + MERIDIAN_FLIP_STALE_AFTER + 1)).toBeUndefined()
 		expect(secondsToTransit({ ...value, timing: { phase: 'unavailable', quality: 'unavailable' } }, 1000)).toBeUndefined()
+	})
+})
+
+describe('status', () => {
+	test('names the state and its tone, warning only for a pending flip', () => {
+		expect(meridianFlipHeadline(undefined)).toEqual(['Disabled', 'muted'])
+		expect(meridianFlipHeadline(monitor(1, { availability: 'waitingForMount' }))).toEqual(['Waiting for the mount', 'warning'])
+		expect(meridianFlipHeadline(monitor(1, { timing: { phase: 'approaching', quality: 'valid' } }))).toEqual(['Approaching', 'active'])
+		expect(meridianFlipHeadline(monitor(1, { timing: { phase: 'windowOpen', quality: 'valid' }, mechanical: 'flipCandidate' }))).toEqual(['Flip window open', 'warning'])
+		expect(meridianFlipHeadline(monitor(1, { timing: { phase: 'windowOpen', quality: 'valid' }, mechanical: 'alreadyOnExpectedSide' }))).toEqual(['Window open', 'neutral'])
+		expect(meridianFlipHeadline(monitor(1, { timing: { phase: 'pastDeadline', quality: 'valid' }, mechanical: 'flipCandidate' }))).toEqual(['Deadline passed', 'danger'])
+	})
+
+	test('adds the time to or since the transit while monitoring a current forecast', () => {
+		expect(meridianFlipStatusText(monitor(1, { timing: { phase: 'approaching', quality: 'valid', secondsToTransit: 565 } }), 1000)).toBe('Approaching · T−9:25')
+		expect(meridianFlipStatusText(monitor(1, { timing: { phase: 'windowOpen', quality: 'valid', secondsToTransit: -370 }, mechanical: 'flipCandidate' }), 1000)).toBe('Flip window open · T+6:10')
+		expect(meridianFlipStatusText(monitor(1, { availability: 'idle', timing: { phase: 'unavailable', quality: 'unavailable' } }), 1000)).toBe('Idle')
+		expect(meridianFlipStatusText(monitor(1), 1000 + MERIDIAN_FLIP_STALE_AFTER + 1)).toBe('Monitoring')
 	})
 })

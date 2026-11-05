@@ -1,4 +1,4 @@
-import type { OperationRecord } from 'api'
+import type { MeridianFlipMonitor, OperationRecord } from 'api'
 import { cn } from 'cn'
 import type { Ref } from 'react'
 import { useSnapshot } from 'valtio'
@@ -17,14 +17,18 @@ import { mountPointingRuntime } from '../../mountpointing/mountpointing'
 import { notificationsState } from '../../notifications/notifications'
 import { operationsState } from '../../operations'
 import { profileState } from '../../profile/profile'
+import { meridianFlipHeadline, meridianFlipStatusText } from '../../tools/meridianflip/meridianflip'
 import { Icon, type IconName } from '../../ui/Icon'
+import { TONE_TEXT } from '../../ui/StatusBadge'
+import { useNow } from '../../useNow'
 import { navigate, routeState } from '../route'
 import { abortOperation, type OperationAbortStores } from './abort'
 import { type BarOperation, type ChipValue, operationInterruption, type ScopedDevice, serverLinkLabel, type StatusTone } from './selectors'
 
 // Items of the status bar, as small as they can be: the server link is an icon alone, each chip an icon and a short
-// reading, its name and full reading in its title, and each running operation its icon, name, and progress, followed by
-// its Abort. A chip with a device opens that exact device in Equipment Control.
+// reading, its name and full reading in its title, each running operation its icon, name, and progress, followed by
+// its Abort, and the enabled Meridian Flip Monitor of the profile's mount its icon and status. A chip with a device
+// opens that exact device in Equipment Control.
 
 // Text color of each status tone.
 export const TONE_CLASSES: Readonly<Record<StatusTone, string>> = {
@@ -129,6 +133,31 @@ export function StatusChip({ icon, label, value, device }: StatusChipProps) {
 	return (
 		<button type="button" title={`${title} · Open in Equipment Control`} onClick={() => navigate(routeState, { workspace: 'equipment', device: device.id })} className={cn(CHIP_CLASS, BUTTON_CLASS)}>
 			{content}
+		</button>
+	)
+}
+
+interface MeridianFlipItemProps {
+	// Enabled monitor of the profile's mount.
+	readonly monitor: MeridianFlipMonitor
+	// Name of the mount, read through the title.
+	readonly name?: string
+}
+
+// Meridian Flip Monitor of the profile's mount while it is enabled: its icon and short status in the tone of its headline,
+// with the time to or since the transit while it monitors, opening the tool. The countdown is only interpolated from the
+// server's sample.
+export function MeridianFlipItem({ monitor, name }: MeridianFlipItemProps) {
+	const now = useNow(monitor.availability === 'monitoring')
+	const [, tone] = meridianFlipHeadline(monitor)
+	const text = meridianFlipStatusText(monitor, now)
+	const title = `Meridian Flip Monitor${name ? ` of ${name}` : ''}: ${text}`
+
+	return (
+		<button type="button" data-fixed title={`${title} · Open the tool`} onClick={() => navigate(routeState, { workspace: 'tools', tool: 'meridian-flip-monitor' })} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
+			<Icon name="meridian" className="size-3.5 text-ink-300" />
+			<span className="sr-only">{title}</span>
+			<span className={cn('tabular-nums', TONE_TEXT[tone])}>{text}</span>
 		</button>
 	)
 }

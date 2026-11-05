@@ -1,4 +1,5 @@
-import type { DeviceSummary, MeridianAvailability, MeridianExposureAssessment, MeridianFlipMonitor, MeridianFlipSettings, MeridianMechanicalAssessment, MeridianMonitorReason, MeridianMountView, MeridianTimingPhase, MeridianTransitionKind } from 'api'
+import type { DeviceSummary, MeridianExposureAssessment, MeridianFlipMonitor, MeridianFlipSettings, MeridianMechanicalAssessment, MeridianMonitorReason, MeridianMountView, MeridianTimingPhase, MeridianTransitionKind } from 'api'
+import { cn } from 'cn'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { DeviceLink } from '../../equipment-control/DeviceLink'
@@ -14,10 +15,24 @@ import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
-import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
+import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { useNow } from '../../useNow'
-import { assessMeridianExposure, disableMeridianFlip, enableMeridianFlip, loadMeridianFlipTransitions, MERIDIAN_FLIP_MAXIMUM_SETTLE_SECONDS, meridianFlipState, monitorKey, normalizeMeridianFlipSettings, sameMeridianFlipSettings, secondsToTransit, updateMeridianFlipSettings } from './meridianflip'
+import {
+	assessMeridianExposure,
+	disableMeridianFlip,
+	enableMeridianFlip,
+	loadMeridianFlipTransitions,
+	MERIDIAN_AVAILABILITY_LABELS,
+	MERIDIAN_FLIP_MAXIMUM_SETTLE_SECONDS,
+	meridianFlipHeadline,
+	meridianFlipState,
+	monitorKey,
+	normalizeMeridianFlipSettings,
+	sameMeridianFlipSettings,
+	secondsToTransit,
+	updateMeridianFlipSettings,
+} from './meridianflip'
 
 // Meridian Flip Monitor tool: shows the server's monitor of the MOUNT of the active profile's Equipment Setup, where
 // its tracked target stands relative to the upper meridian and the preferred flip window, whether the pier side the
@@ -35,16 +50,6 @@ const BLOCKERS: Readonly<Record<Exclude<RoleStatus, 'connected'>, string>> = {
 	connecting: 'The assigned mount is connecting.',
 	disconnecting: 'The assigned mount is disconnecting.',
 	error: 'The assigned mount failed to connect.',
-}
-
-// Text of each availability.
-const AVAILABILITY: Readonly<Record<MeridianAvailability, string>> = {
-	waitingForMount: 'Waiting for the mount',
-	waitingForCoordinates: 'Waiting for coordinates',
-	idle: 'Idle',
-	repositioning: 'Repositioning',
-	settling: 'Settling',
-	monitoring: 'Monitoring',
 }
 
 // Text of each timing phase.
@@ -104,16 +109,25 @@ const PIER_SIDES: Readonly<Record<MeridianMountView['pierSide'], string>> = { EA
 // Text of each exposure decision.
 const DECISIONS: Readonly<Record<MeridianExposureAssessment['decision'], string>> = { allowed: 'Fits', defer: 'Defer', blocked: 'Does not fit', unknown: 'Unknown' }
 
-// Headline of a monitor: its state in words and its tone.
-function headline(monitor: MeridianFlipMonitor | undefined): readonly [string, StatusTone] {
-	if (!monitor) return ['Disabled', 'muted']
-	if (monitor.availability !== 'monitoring') return [AVAILABILITY[monitor.availability], monitor.availability === 'waitingForMount' || monitor.availability === 'waitingForCoordinates' ? 'warning' : 'neutral']
-	const candidate = monitor.mechanical === 'flipCandidate'
-	if (monitor.timing.phase === 'pastDeadline') return candidate ? ['Deadline passed', 'danger'] : ['Past the window', 'neutral']
-	if (monitor.timing.phase === 'windowOpen') return candidate ? ['Flip window open', 'warning'] : ['Window open', 'neutral']
-	if (monitor.timing.phase === 'approaching') return ['Approaching', 'active']
-	return ['Monitoring', 'success']
-}
+// Fill of each part of the timeline: the stretches of the bar and the marks of the transit and of now.
+const TIMELINE = {
+	outside: 'bg-base-200',
+	approach: 'bg-accent/40',
+	window: 'bg-warning/60',
+	closing: 'bg-danger/60',
+	transit: 'w-px bg-ink-200',
+	now: 'w-1 bg-ink-100',
+} as const
+
+// Legend of the timeline: the sample mark of each part and what it means.
+const TIMELINE_LEGEND: readonly { readonly mark: string; readonly label: string }[] = [
+	{ mark: cn('h-2 w-4 rounded-sm', TIMELINE.approach), label: 'Approach: early warning to window' },
+	{ mark: cn('h-2 w-4 rounded-sm', TIMELINE.window), label: 'Preferred flip window' },
+	{ mark: cn('h-2 w-4 rounded-sm', TIMELINE.closing), label: 'Window closing: deadline warning' },
+	{ mark: cn('h-2 w-4 rounded-sm border border-line-100', TIMELINE.outside), label: 'Outside the warning and the window' },
+	{ mark: cn('h-3', TIMELINE.transit), label: 'Upper transit' },
+	{ mark: cn('h-3', TIMELINE.now), label: 'Now' },
+]
 
 // Countdown to or since the transit: "in 4:05", "4:05 ago", or MISSING.
 function formatCountdown(seconds: number | undefined) {
@@ -135,7 +149,7 @@ export function MeridianFlipMonitorView() {
 	const error = key ? state.errors[key] : undefined
 	const saved = meridianFlipSettings(profile.settings, identity)
 	const [draft, setDraft] = useState<MeridianFlipSettings>(() => monitor?.settings ?? saved)
-	const [label, tone] = headline(monitor)
+	const [label, tone] = meridianFlipHeadline(monitor)
 
 	// The draft starts over from the settings of another mount, profile, or enablement.
 	const draftKey = `${profile.id}:${key}:${monitor?.monitorId}`
@@ -241,7 +255,7 @@ function ObservationPanel({ monitor }: { readonly monitor?: MeridianFlipMonitor 
 	return (
 		<Panel title="Observation">
 			<DataList>
-				<DataRow label="Status">{AVAILABILITY[monitor.availability]}</DataRow>
+				<DataRow label="Status">{MERIDIAN_AVAILABILITY_LABELS[monitor.availability]}</DataRow>
 				<DataRow label="Phase">{stale ? 'Stale' : PHASES[timing.phase]}</DataRow>
 				<DataRow label={timing.phase === 'unavailable' ? 'Hour angle (geometry only)' : 'Hour angle'}>{timing.hourAngle === undefined ? MISSING : formatHourAngle(timing.hourAngle)}</DataRow>
 				<DataRow label="Transit">{stale ? 'Stale' : formatCountdown(countdown)}</DataRow>
@@ -327,12 +341,12 @@ function TimelinePanel({ monitor }: { readonly monitor: MeridianFlipMonitor }) {
 	return (
 		<Panel title="Timeline">
 			<div className="relative h-8">
-				<div className="absolute inset-x-0 top-3 h-2 rounded-full bg-base-200" />
-				<div className="absolute top-3 h-2 bg-accent/40" style={{ left: position(warningAt), width: width(warningAt, windowOpensAt) }} />
-				<div className="absolute top-3 h-2 bg-warning/60" style={{ left: position(windowOpensAt), width: width(windowOpensAt, deadlineWarningAt) }} />
-				<div className="absolute top-3 h-2 bg-danger/60" style={{ left: position(deadlineWarningAt), width: width(deadlineWarningAt, windowClosesAt) }} />
-				<div className="absolute top-1 h-6 w-px bg-ink-200" style={{ left: position(transitAt) }} />
-				<div className="absolute top-0 h-8 w-0.5 bg-ink-100" style={{ left: position(now) }} />
+				<div className={cn('absolute inset-x-0 top-3 h-2 rounded-full', TIMELINE.outside)} />
+				<div className={cn('absolute top-3 h-2', TIMELINE.approach)} style={{ left: position(warningAt), width: width(warningAt, windowOpensAt) }} />
+				<div className={cn('absolute top-3 h-2', TIMELINE.window)} style={{ left: position(windowOpensAt), width: width(windowOpensAt, deadlineWarningAt) }} />
+				<div className={cn('absolute top-3 h-2', TIMELINE.closing)} style={{ left: position(deadlineWarningAt), width: width(deadlineWarningAt, windowClosesAt) }} />
+				<div className={cn('absolute top-1 h-6', TIMELINE.transit)} style={{ left: position(transitAt) }} />
+				<div className={cn('absolute top-0 h-8 -translate-x-6/12', TIMELINE.now)} style={{ left: position(now) }} />
 			</div>
 			<div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs leading-4 text-ink-300">
 				<span>Warning {formatUtcDateTime(warningAt)}</span>
@@ -340,7 +354,14 @@ function TimelinePanel({ monitor }: { readonly monitor: MeridianFlipMonitor }) {
 				<span>Window {formatUtcDateTime(windowOpensAt)}</span>
 				<span>Closes {formatUtcDateTime(windowClosesAt)}</span>
 			</div>
-			<p className="m-0 text-xs leading-4 text-ink-300">The thin line is the transit and the thick one is now; the colored stretches are the approach, the preferred window, and its last minutes.</p>
+			<ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-xs leading-4 text-ink-300">
+				{TIMELINE_LEGEND.map(({ mark, label }) => (
+					<li key={label} className="flex items-center gap-1.5">
+						<span className={cn('flex-none', mark)} />
+						{label}
+					</li>
+				))}
+			</ul>
 		</Panel>
 	)
 }

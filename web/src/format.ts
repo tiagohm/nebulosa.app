@@ -2,7 +2,7 @@ import { formatAngle, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/
 
 // Display formats shared by every screen for quantities that are not tied to one feature: fixed and signed numbers,
 // percentages, angles in degrees, arcminutes, and arcseconds, hour angles, geographic positions, temperatures, lengths in pixels
-// with their sky size, positions in an image, distances in kilometers, exposure times, durations, elapsed clocks, instants
+// with their sky size, positions in an image, distances in kilometers, exposure times, durations, elapsed and signed clocks, instants
 // in UTC, byte sizes, and measurements of a wide dynamic range.
 // Each takes the value in its computational unit (radians, seconds, °C, pixels, bytes) and returns text only, so a
 // value is never rounded before it is used elsewhere. The decimals are a presentation choice, never a claim of
@@ -141,6 +141,15 @@ export function formatClockDuration(seconds: number) {
 	const m = Math.floor(total / 60) % 60
 	const h = Math.floor(total / 3600)
 	return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
+}
+
+// Returns a signed time in seconds, such as one before or after an instant, as a running clock with its sign: "+4:05",
+// "−1:02:05", whole seconds truncated toward zero as formatClockDuration does, "0:00" without a sign when it truncates to
+// zero, or MISSING when it is not finite.
+export function formatSignedClockDuration(seconds: number) {
+	if (!Number.isFinite(seconds)) return MISSING
+	const text = formatClockDuration(Math.abs(seconds))
+	return Math.abs(seconds) < 1 ? text : `${seconds < 0 ? MINUS : '+'}${text}`
 }
 
 // Returns a measurement of a wide dynamic range, such as a flux or a signal, with four significant digits, in exponential

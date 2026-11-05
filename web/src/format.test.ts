@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { arcmin, arcsec, deg } from 'nebulosa/src/math/units/angle'
-import { formatArcmin, formatArcsec, formatClockDuration, formatDegrees, formatDuration, formatFixed, formatGeographic, formatPercent, formatPixelLength, formatSigned, formatSignedArcmin, formatSignificant, formatTemperature, MISSING } from './format'
+import { formatArcmin, formatArcsec, formatByteSize, formatClockDuration, formatDegrees, formatDuration, formatExposureTime, formatFixed, formatGeographic, formatPercent, formatPixelLength, formatSigned, formatSignedArcmin, formatSignificant, formatTemperature, MISSING } from './format'
 
 describe('numbers', () => {
 	test('fixed decimals never show a negative zero nor a non-finite number', () => {
@@ -71,6 +71,13 @@ describe('measurements', () => {
 		expect(formatTemperature(Number.NaN)).toBe(MISSING)
 	})
 
+	test('byte sizes in binary units', () => {
+		expect(formatByteSize(512)).toBe('512 B')
+		expect(formatByteSize(3.4 * 1024 ** 2)).toBe('3.4 MiB')
+		expect(formatByteSize(120 * 1024 ** 3)).toBe('120 GiB')
+		expect(formatByteSize(Number.NaN)).toBe(MISSING)
+	})
+
 	test('pixel lengths with their sky size when the scale is known', () => {
 		expect(formatPixelLength(2.314)).toBe('2.31 px')
 		expect(formatPixelLength(2.314, 1.5)).toBe('2.31 px (3.47″)')
@@ -86,6 +93,14 @@ describe('time', () => {
 		expect(formatDuration(36000)).toBe('10 h 00 min')
 		expect(formatDuration(3 * 3600 + 7 * 60 + 20)).toBe('3 h 07 min')
 		expect(formatDuration(Number.POSITIVE_INFINITY)).toBe(MISSING)
+	})
+
+	test('exposure times as set, without float noise', () => {
+		expect(formatExposureTime(0.0001)).toBe('0.0001 s')
+		expect(formatExposureTime(300)).toBe('300 s')
+		expect(formatExposureTime(0.1 + 0.2)).toBe('0.3 s')
+		expect(formatExposureTime(1_234_567 / 1_000_000)).toBe('1.23457 s')
+		expect(formatExposureTime(Number.NaN)).toBe(MISSING)
 	})
 
 	test('running clocks', () => {

@@ -5,7 +5,7 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import type { RoleAvailability } from '../equipment/availability'
 import { FileExplorerModal } from '../files/FileExplorerModal'
-import { formatClockDuration, formatTemperature } from '../format'
+import { formatClockDuration, formatTemperature, formatExposureTime } from '../format'
 import { cameraTabKey, releaseCameraFrame } from '../images/cameratabs'
 import { captureFramesState } from '../images/captureframes'
 import { imagesState } from '../images/images'
@@ -22,7 +22,7 @@ import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { useNow } from '../useNow'
 import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, startCapture, stopCapture } from './capture'
-import { CameraSettings, ExposureSection, formatSeconds } from './ExposureSettings'
+import { CameraSettings, ExposureSection } from './ExposureSettings'
 
 // Contextual panel sections of Camera Acquisition, the camera operation of the Images camera tabs: the exposure, the acquisition mode with its start and stop commands, the state of the running or last capture, the
 // less frequent camera settings, the output with a server directory chooser, and the latest frame, whose own state
@@ -283,7 +283,7 @@ function LastFrame({ frame }: LastFrameProps) {
 	]
 
 	if (acquisition.camera) rows.push(['Camera', acquisition.camera])
-	if (acquisition.exposure !== undefined) rows.push(['Exposure', `${formatSeconds(acquisition.exposure)} s`])
+	if (acquisition.exposure !== undefined) rows.push(['Exposure', formatExposureTime(acquisition.exposure)])
 	if (acquisition.gain !== undefined) rows.push(['Gain', String(acquisition.gain)])
 	if (acquisition.offset !== undefined) rows.push(['Offset', String(acquisition.offset)])
 	if (acquisition.binning) rows.push(['Binning', `${acquisition.binning.x} × ${acquisition.binning.y}`])

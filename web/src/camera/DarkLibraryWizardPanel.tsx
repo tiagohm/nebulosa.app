@@ -7,7 +7,7 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
-import { MISSING, formatTemperature, formatPercent } from '../format'
+import { MISSING, formatTemperature, formatPercent, formatByteSize, formatExposureTime } from '../format'
 import { operationsState } from '../operations'
 import { activeProfile, darkLibraryWizardSettings, exposureSettings, profileState, setDarkLibraryWizardSettings } from '../profile/profile'
 import { type CameraIdentity, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS, DEFAULT_DARK_LIBRARY_WIZARD_GROUP, type DarkLibraryWizardSettings } from '../profile/schema'
@@ -45,7 +45,7 @@ import {
 	stopDarkLibraryWizard,
 } from './darklibrarywizard'
 import { ExposureTimeInput } from './ExposureTimeInput'
-import { FrameProgress, formatExposure } from './FrameProgress'
+import { FrameProgress } from './FrameProgress'
 import { SessionStateText } from './SessionStateText'
 
 // Contextual panel sections of Dark Library Wizard, a camera operation of the Images camera tabs: the equipment of the tab's
@@ -86,14 +86,9 @@ type DarkFrameType = (typeof DARK_FRAME_TYPES)[number]
 // Label of each kind of frame.
 const DARK_FRAME_TYPE_LABELS: Readonly<Record<DarkFrameType, string>> = { dark: 'Dark', darkFlat: 'Dark-Flat' }
 
-// Formats a size in bytes for an estimate.
-function formatBytes(bytes: number) {
-	return bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`
-}
-
 // Returns the label of a group, short enough for a row of the panel; a group without a target names no temperature.
 function groupLabel({ exposure, temperature }: Pick<DarkGroup, 'exposure' | 'temperature'>) {
-	return `${formatExposure(exposure)}${temperature === undefined ? '' : `, ${temperature} °C`}`
+	return `${formatExposureTime(exposure)}${temperature === undefined ? '' : `, ${temperature} °C`}`
 }
 
 // Returns the groups a running session applied, to show while it runs.
@@ -215,7 +210,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				<DataList>
 					<DataRow label="Frames">{estimate.frames}</DataRow>
 					<DataRow label="Exposure">{`at least ${darkLibraryWizardDuration(estimate.exposure)}`}</DataRow>
-					{estimate.bytes !== undefined && <DataRow label="Disk Space">{`~ ${formatBytes(estimate.bytes[0])} (mono) to ${formatBytes(estimate.bytes[1])}`}</DataRow>}
+					{estimate.bytes !== undefined && <DataRow label="Disk Space">{`~ ${formatByteSize(estimate.bytes[0])} (mono) to ${formatByteSize(estimate.bytes[1])}`}</DataRow>}
 				</DataList>
 				<Notice>Estimates only: downloads, cooling, and rejected frames add to them. Groups of one temperature run together.</Notice>
 			</CollapsibleSection>

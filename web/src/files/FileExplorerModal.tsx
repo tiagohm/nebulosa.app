@@ -1,13 +1,14 @@
 import type { DirectoryListing, FileEntry } from 'api'
 import { cn } from 'cn'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { formatByteSize } from '../format'
 import { Button } from '../ui/Button'
 import { inputClassName } from '../ui/Field'
 import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import { moveIndex } from '../ui/navigation'
-import { fetchDirectory, formatSize, joinPath } from './files'
+import { fetchDirectory, joinPath } from './files'
 
 // Modal to choose a file on the server's filesystem, since the application may run on another machine
 // than the browser. It lists one directory at a time, filtered by extension; double click or Enter opens
@@ -204,7 +205,7 @@ export function FileExplorerModal(props: FileExplorerModalProps) {
 								>
 									<Icon name={entry.directory ? 'folder' : 'file'} className={cn('size-4', entry.directory ? 'text-ink-200' : 'text-ink-300')} />
 									<span className="min-w-0 flex-1 truncate">{entry.name}</span>
-									{entry.size !== undefined && <span className="flex-none text-xs text-ink-300 tabular-nums">{formatSize(entry.size)}</span>}
+									{entry.size !== undefined && <span className="flex-none text-xs text-ink-300 tabular-nums">{formatByteSize(entry.size)}</span>}
 								</button>
 							</li>
 						))}

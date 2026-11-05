@@ -1,7 +1,7 @@
 import type { CameraCapabilities, DeviceSummary } from 'api'
 import type { ReactNode } from 'react'
 import { DeviceLink } from '../equipment-control/DeviceLink'
-import { formatTemperature, formatPercent } from '../format'
+import { formatTemperature, formatPercent, formatExposureTime } from '../format'
 import type { CameraExposureSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
@@ -15,11 +15,6 @@ import { ExposureTimeInput } from './ExposureTimeInput'
 // with the range the camera supports, and the less frequent camera settings (gain, offset, binning, readout mode,
 // subframe) the other camera operations share. Editing them changes the next operation, never a running one, which
 // keeps the snapshot it started with. A control the camera does not report is not shown.
-
-// Formats a duration in seconds without float noise, such as 0.0001 or 3600.
-export function formatSeconds(value: number) {
-	return String(Number(value.toPrecision(6)))
-}
 
 interface ExposureSectionProps {
 	// Exposure and camera settings of the camera.
@@ -41,7 +36,7 @@ export function ExposureSection({ settings, capabilities, disabled, onChange, ch
 			<ExposureTimeInput value={settings.exposureTime} exposure={capabilities?.exposure} disabled={disabled} onChange={(exposureTime) => onChange({ exposureTime })} />
 			{capabilities?.exposure && (
 				<Notice>
-					{formatSeconds(capabilities.exposure.min)} – {formatSeconds(capabilities.exposure.max)} s supported by the camera.
+					{formatExposureTime(capabilities.exposure.min)} to {formatExposureTime(capabilities.exposure.max)} supported by the camera.
 				</Notice>
 			)}
 			{children}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatTemperature, formatPercent } from '../../format'
+import { formatTemperature, formatPercent, formatExposureTime } from '../../format'
 import { deviceBusy, operationsState } from '../../operations'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Actions } from '../../ui/Actions'
@@ -35,7 +35,7 @@ export function CameraControls({ device }: InterfaceProps) {
 			<PanelSection title="Camera">
 				<DataRow label="Model">{camera.name}</DataRow>
 				<DataRow label="Sensor">{sensor ? `${sensor.width} × ${sensor.height} px · ${sensor.pixelSize.toFixed(2)} µm` : 'Not reported'}</DataRow>
-				{camera.exposure && <DataRow label="Exposure">{`${camera.exposure.min} s to ${camera.exposure.max} s`}</DataRow>}
+				{camera.exposure && <DataRow label="Exposure">{`${formatExposureTime(camera.exposure.min)} to ${formatExposureTime(camera.exposure.max)}`}</DataRow>}
 				{camera.gain && <DataRow label="Gain">{`${camera.gain.min} to ${camera.gain.max}`}</DataRow>}
 				{camera.offset && <DataRow label="Offset">{`${camera.offset.min} to ${camera.offset.max}`}</DataRow>}
 				{camera.bin && <DataRow label="Binning">{`up to ${camera.bin.x} × ${camera.bin.y}`}</DataRow>}

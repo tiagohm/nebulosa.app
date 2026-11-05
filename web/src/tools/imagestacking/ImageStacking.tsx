@@ -19,12 +19,12 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import { bytesText, EVIDENCE_LABELS, exposureText, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES } from '../calibrationlibrary/library'
 import { CompositionView } from './Composition'
-import { ALL_CANDIDATES, candidateChecked, candidateText, candidateUsable, committedCounts, type ImportSelection, NO_CANDIDATES, withCandidate, integrationText, metricText, registrationText, ROLE_LABELS, SECTION_LABELS, STACKING_SECTIONS, type StackingSection } from './format'
+import { ALL_CANDIDATES, candidateChecked, candidateText, candidateUsable, committedCounts, type ImportSelection, NO_CANDIDATES, withCandidate, metricText, registrationText, ROLE_LABELS, SECTION_LABELS, STACKING_SECTIONS, type StackingSection } from './format'
 import { IntegrationView, ResultsView } from './Integration'
 import { CalibrationView, QualityView } from './Planning'
 // oxfmt-ignore
 import { cancelStackingImport, commitStackingImport, createStackingProject, deleteStackingProject, imageStackingRuntime, jobEnded, loadStackingCandidates, loadStackingFrame, loadStackingFrames, loadStackingProject, refreshStackingProject, removeStackingFrame, renameStackingProject, STACKING_PAGE_SIZE, type StackingFrameFilter, startStackingImport, updateStackingFrame } from './projects'
-import { MISSING } from '../../format'
+import { MISSING, formatExposureTime, formatDuration } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { Notice } from '../../ui/Notice'
@@ -289,7 +289,7 @@ function ProjectHeader() {
 
 	return (
 		<div className="flex flex-col gap-2">
-			<p className="m-0 text-xs text-ink-300 tabular-nums">{`${project.lights} lights in ${project.filters} filters · ${integrationText(project.exposure)} usable · ${project.unclassified} unclassified · ${project.excluded} left out · ${project.unavailable} unavailable`}</p>
+			<p className="m-0 text-xs text-ink-300 tabular-nums">{`${project.lights} lights in ${project.filters} filters · ${formatDuration(project.exposure)} usable · ${project.unclassified} unclassified · ${project.excluded} left out · ${project.unavailable} unavailable`}</p>
 			{project.objects.length > 1 && <Notice>{`The headers name ${project.objects.length} targets (${project.objects.join(', ')}). A project is one field: check that these frames belong together.`}</Notice>}
 		</div>
 	)
@@ -309,7 +309,7 @@ function GroupsView({ onShow }: { readonly onShow: (key: string) => void }) {
 					<Row key={item.key} onClick={() => onShow(item.key)}>
 						<Cell>{item.key}</Cell>
 						<Cell>{item.unavailable > 0 ? `${item.usable}/${item.frames} · ${item.unavailable} unavailable` : `${item.usable}/${item.frames}`}</Cell>
-						<Cell>{integrationText(item.exposure)}</Cell>
+						<Cell>{formatDuration(item.exposure)}</Cell>
 						<Cell className={item.cohorts > 1 ? 'text-warning' : undefined}>{item.cohorts === 1 ? 'One setup' : `${item.cohorts} setups`}</Cell>
 						<Cell>{item.objects.join(', ') || MISSING}</Cell>
 					</Row>
@@ -410,7 +410,7 @@ function FramePanel({ onRemoved }: { readonly onRemoved: () => void }) {
 				<EvidencedReadout label="Filter" value={metadata.filter} />
 				<DataRow label="Target">{frame.object ?? 'Unknown'}</DataRow>
 				<DataRow label="Camera">{metadata.cameraName ?? 'Unknown'}</DataRow>
-				<EvidencedReadout label="Exposure" value={metadata.exposure} format={(value) => `${Number(value) / 1000000} s`} />
+				<EvidencedReadout label="Exposure" value={metadata.exposure} format={(value) => formatExposureTime(Number(value) / 1000000)} />
 				<DataRow label="Settings">{settingsText(metadata)}</DataRow>
 				<EvidencedReadout label="Sensor" value={metadata.sensorTemperature} format={(value) => `${value} °C`} />
 				{frame.warnings.map((warning) => (

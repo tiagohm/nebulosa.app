@@ -11,10 +11,10 @@ import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { bytesText } from '../calibrationlibrary/library'
 // oxfmt-ignore
-import { integrationText, INTERPOLATION_LABELS, INTERPOLATIONS, memoryText, METHOD_LABELS, METHODS, NORMALIZATION_LABELS, NORMALIZATIONS, PRODUCT_LABELS, PRODUCT_TONES, SIGMA_METHODS, WEIGHTING_LABELS, WEIGHTINGS } from './format'
+import { INTERPOLATION_LABELS, INTERPOLATIONS, memoryText, METHOD_LABELS, METHODS, NORMALIZATION_LABELS, NORMALIZATIONS, PRODUCT_LABELS, PRODUCT_TONES, SIGMA_METHODS, WEIGHTING_LABELS, WEIGHTINGS } from './format'
 // oxfmt-ignore
 import { cancelStackingRun, deleteStackingProduct, imageStackingRuntime, jobEnded, loadStackingPreflight, loadStackingProduct, startStackingRun } from './projects'
-import { MISSING } from '../../format'
+import { MISSING, formatDuration } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { Notice } from '../../ui/Notice'
@@ -90,7 +90,7 @@ export function IntegrationView({ projectId }: { readonly projectId: string }) {
 						<Row key={group.groupKey}>
 							<Cell>{group.name}</Cell>
 							<Cell>{group.frames}</Cell>
-							<Cell>{integrationText(group.exposure)}</Cell>
+							<Cell>{formatDuration(group.exposure)}</Cell>
 							<Cell>{group.plan.mode === 'online' ? 'In memory' : `Strips of ${group.plan.stripRows} rows`}</Cell>
 							<Cell>{memoryText(group.plan.memoryBytes)}</Cell>
 							<Cell>{group.plan.diskBytes > 0 ? memoryText(group.plan.diskBytes) : MISSING}</Cell>
@@ -147,7 +147,7 @@ export function ResultsView() {
 						<Row key={product.productId}>
 							<Cell>{product.name}</Cell>
 							<Cell>{product.frames}</Cell>
-							<Cell>{integrationText(product.exposure)}</Cell>
+							<Cell>{formatDuration(product.exposure)}</Cell>
 							<Cell>{bytesText(product.bytes)}</Cell>
 							<Cell>{`${product.width}×${product.height}×${product.channels}`}</Cell>
 							<Cell>{new Date(product.createdAt).toISOString().slice(0, 16).replace('T', ' ')}</Cell>

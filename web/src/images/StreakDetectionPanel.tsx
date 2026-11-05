@@ -4,7 +4,7 @@ import type { Streak } from 'nebulosa/src/imaging/analysis/streak/types'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { isActive } from '../analysis'
-import { formatDuration, MISSING, formatSignificant, formatDegrees, formatPercent } from '../format'
+import { formatDuration, MISSING, formatSignificant, formatDegrees, formatPercent, formatExposureTime } from '../format'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState, setStreakDetectionSettings, streakDetectionSettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -243,7 +243,7 @@ function Analysis({ documentKey, imageId, request, job, streaks, solutionAvailab
 					<DataRow label="Elapsed">{formatDuration(elapsedOf(job, now) / 1000)}</DataRow>
 					<DataRow label="WCS">{job.context.wcs ? WCS_LABELS[job.context.wcs] : 'None'}</DataRow>
 					<DataRow label="Stars">{job.context.starCount ?? 'None'}</DataRow>
-					<DataRow label="Exposure">{job.context.exposure === undefined ? MISSING : `${job.context.exposure} s`}</DataRow>
+					<DataRow label="Exposure">{job.context.exposure === undefined ? MISSING : formatExposureTime(job.context.exposure)}</DataRow>
 					<DataRow label="Observation">{job.context.date ?? MISSING}</DataRow>
 					{job.error && <Notice error>{job.error}</Notice>}
 					{changed && <Notice>The settings or the context changed since this detection; run it again to apply them.</Notice>}

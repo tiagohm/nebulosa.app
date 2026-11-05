@@ -3,8 +3,7 @@ import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
-import { formatSize } from '../files/files'
-import { formatDuration } from '../format'
+import { formatDuration, formatExposureTime, formatByteSize } from '../format'
 import type { CameraOperationContext } from '../images/cameracontext'
 import { selectCameraFrame } from '../images/cameratabs'
 import { captureFramesState } from '../images/captureframes'
@@ -139,7 +138,7 @@ function SessionSection({ camera, session, settings }: SessionSectionProps) {
 						</DataRow>
 						<DataRow label="Integration">{formatDuration(exposure)}</DataRow>
 						<DataRow label="Memory">
-							{formatSize(session.retainedBytes + session.backlogBytes)} of {formatSize(runtime.memoryBudget)}
+							{formatByteSize(session.retainedBytes + session.backlogBytes)} of {formatByteSize(runtime.memoryBudget)}
 						</DataRow>
 						{session.newFieldRequested && <DataRow label="Field">The next good frame starts a new field</DataRow>}
 					</>
@@ -281,7 +280,9 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 						const format = (option: string) => {
 							if (option === NO_MASTER) return 'None'
 							const master = masters[kind].find((candidate) => String(candidate.masterId) === option)
-							return master ? `#${master.masterId} · ${master.frames} frames${master.metadata.exposure.value !== undefined ? ` · ${master.metadata.exposure.value / 1000000} s` : ''}${master.metadata.setTemperature.value !== undefined ? ` · ${master.metadata.setTemperature.value} °C` : ''}` : option
+							return master
+								? `#${master.masterId} · ${master.frames} frames${master.metadata.exposure.value !== undefined ? ` · ${formatExposureTime(master.metadata.exposure.value / 1000000)}` : ''}${master.metadata.setTemperature.value !== undefined ? ` · ${master.metadata.setTemperature.value} °C` : ''}`
+								: option
 						}
 						return <Select key={kind} label={LIVE_MASTER_LABELS[kind]} options={options} value={value} format={format} onChange={(option) => choose(name, kind, option)} />
 					})}

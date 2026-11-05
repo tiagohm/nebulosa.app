@@ -21,7 +21,7 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 // oxfmt-ignore
 import { bytesText, CALIBRATION_KINDS, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, masterName, masterWarnings, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
-import { MISSING, formatPercent } from '../../format'
+import { MISSING, formatPercent, formatExposureTime } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataRow } from '../../ui/DataRow'
@@ -585,7 +585,7 @@ function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 				<DataRow label="Size">{bytesText(source.bytes)}</DataRow>
 				<DataRow label="Image">{`${metadata.width}×${metadata.height}×${metadata.channels}, BITPIX ${metadata.bitpix}${metadata.cfa ? `, ${metadata.cfa}` : ''}`}</DataRow>
 				<DataRow label="Camera">{cameraText(metadata)}</DataRow>
-				<EvidencedReadout label="Exposure" value={metadata.exposure} format={(value) => `${Number(value) / 1000000} s`} />
+				<EvidencedReadout label="Exposure" value={metadata.exposure} format={(value) => formatExposureTime(Number(value) / 1000000)} />
 				<EvidencedReadout label="Target" value={metadata.setTemperature} format={(value) => `${value} °C`} />
 				<EvidencedReadout label="Sensor" value={metadata.sensorTemperature} format={(value) => `${value} °C`} />
 				<EvidencedReadout label="Gain" value={metadata.gain} />

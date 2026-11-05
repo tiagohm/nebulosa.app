@@ -1,12 +1,13 @@
 import { toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 
 // Display formats shared by every screen for quantities that are not tied to one feature: fixed and signed numbers,
-// percentages, angles in degrees, arcminutes, and arcseconds, geographic positions, temperatures, lengths in pixels with their sky size, durations,
-// elapsed clocks, and measurements of a wide dynamic range. Each takes the value in its computational unit (radians,
-// seconds, °C, pixels) and returns text only, so a value is never rounded before it is used elsewhere. The decimals are
-// a presentation choice, never a claim of accuracy; a value that rounds to zero never shows a minus sign, and a value
-// that is not finite is shown as MISSING, never as NaN or Infinity. Sky coordinates (right ascension, declination, and
-// sky distances) live in `sky/format.ts` and `platesolving/coordinates.ts`, which honour the profile's coordinate format.
+// percentages, angles in degrees, arcminutes, and arcseconds, geographic positions, temperatures, lengths in pixels
+// with their sky size, exposure times, durations, elapsed clocks, byte sizes, and measurements of a wide dynamic range.
+// Each takes the value in its computational unit (radians, seconds, °C, pixels, bytes) and returns text only, so a
+// value is never rounded before it is used elsewhere. The decimals are a presentation choice, never a claim of
+// accuracy; a value that rounds to zero never shows a minus sign, and a value that is not finite is shown as MISSING,
+// never as NaN or Infinity. Sky coordinates (right ascension, declination, and sky distances) live in `sky/format.ts`
+// and `platesolving/coordinates.ts`, which honour the profile's coordinate format.
 
 // Text of a value that is not available.
 export const MISSING = '—'
@@ -93,6 +94,12 @@ export function formatDuration(seconds: number) {
 	return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`
 }
 
+// Returns an exposure time set on a camera or recorded with a frame, in seconds, as entered: six significant digits at
+// most, so the float noise of a conversion never shows ("0.0001 s", "300 s"), or MISSING when it is not finite.
+export function formatExposureTime(seconds: number) {
+	return Number.isFinite(seconds) ? `${Number(seconds.toPrecision(6))} s` : MISSING
+}
+
 // Returns an elapsed time in seconds as a running clock, minutes and seconds below an hour ("4:05") and hours above
 // ("1:02:05"); whole seconds, a negative time shown as zero.
 export function formatClockDuration(seconds: number) {
@@ -109,4 +116,20 @@ export function formatSignificant(value: number) {
 	if (!Number.isFinite(value)) return MISSING
 	const size = Math.abs(value)
 	return value !== 0 && (size >= 1e5 || size < 1e-2) ? value.toExponential(3) : value.toPrecision(4)
+}
+
+// Returns a size in bytes in binary units, one decimal below 10 of a unit: "512 B", "3.4 MiB", "120 GiB".
+export function formatByteSize(bytes: number) {
+	if (!Number.isFinite(bytes)) return MISSING
+	if (bytes < 1024) return `${bytes} B`
+	const units = ['KiB', 'MiB', 'GiB', 'TiB']
+	let value = bytes / 1024
+	let unit = 0
+
+	while (value >= 1024 && unit < units.length - 1) {
+		value /= 1024
+		unit++
+	}
+
+	return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`
 }

@@ -6,6 +6,7 @@ import type { DarkLibraryWizardSessionSummary } from './darklibrarywizard'
 import type { DarvMeasurement, DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingSessionSummary } from './guiding'
+import type { MeridianFlipTransition } from './meridianflip'
 import { failureText, NotificationClassifier } from './notifications.rules'
 import type { OperationRecord } from './operations'
 import type { TargetCenteringSessionSummary } from './targetcentering'
@@ -217,5 +218,38 @@ describe('calibration library', () => {
 
 	test('an import is quiet', () => {
 		expect(classify({ type: 'import', state: 'failed', automatic: false })).toEqual([])
+	})
+})
+
+describe('meridian flip monitor', () => {
+	function transition(kind: MeridianFlipTransition['kind'], overrides: Partial<MeridianFlipTransition> = {}): ServerEvent {
+		return { type: 'meridianFlip:transition', epoch: 'e', transition: { transitionId: `t-${kind}`, kind, monitorId: 'm', connectionId: 'c', deviceId: 'mnt', contextId: 'x', episodeId: 'p', revision: 1, at: 0, phase: 'windowOpen', mechanical: 'flipCandidate', pierSide: 'WEST', ...overrides } }
+	}
+
+	const classifier = new NotificationClassifier((_, deviceId) => (deviceId === 'mnt' ? 'EQ6' : undefined))
+
+	test('warns once per episode when a flip may be needed and when its window ends', () => {
+		expect(classifier.classify(transition('flipCandidate'))).toMatchObject([{ key: 'meridianFlip:m:p:flipCandidate', level: 'warning', code: 'meridianFlip.candidate', target: { kind: 'tool', tool: 'meridian-flip-monitor' }, source: { kind: 'meridianFlip', connectionId: 'c', deviceId: 'mnt' } }])
+		expect(classifier.classify(transition('deadlineApproaching'))).toMatchObject([{ key: 'meridianFlip:m:p:deadlineApproaching', code: 'meridianFlip.deadlineApproaching' }])
+		expect(classifier.classify(transition('deadlinePassed', { phase: 'pastDeadline' }))).toMatchObject([{ key: 'meridianFlip:m:p:deadlinePassed', code: 'meridianFlip.deadlinePassed' }])
+		expect(classifier.classify(transition('flipCandidate'))[0].message).toContain('EQ6')
+	})
+
+	test('a lost mount warns only near the meridian, and observations stay quiet', () => {
+		expect(classifier.classify(transition('monitorUnavailable', { phase: 'approaching', contextId: undefined, episodeId: undefined }))).toMatchObject([{ key: 'meridianFlip:m:t-monitorUnavailable', code: 'meridianFlip.unavailable' }])
+		expect(classifier.classify(transition('monitorUnavailable', { phase: 'before' }))).toEqual([])
+
+		for (const kind of ['approaching', 'upperMeridianCrossed', 'windowOpened', 'pierSideChanged', 'externalFlipSuspected', 'targetChanged', 'monitorRecovered'] as const) {
+			expect(classifier.classify(transition(kind))).toEqual([])
+		}
+	})
+
+	test('every text fits its limits', () => {
+		for (const kind of ['flipCandidate', 'deadlineApproaching', 'deadlinePassed', 'monitorUnavailable'] as const) {
+			for (const draft of classifier.classify(transition(kind))) {
+				expect(draft.title.length).toBeLessThanOrEqual(80)
+				expect(draft.message.length).toBeLessThanOrEqual(240)
+			}
+		}
 	})
 })

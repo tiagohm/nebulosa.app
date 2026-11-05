@@ -7,6 +7,7 @@ import type { DarkLibraryWizardSessionSummary } from './darklibrarywizard'
 import type { DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingEventRecord, GuidingSessionSummary } from './guiding'
+import type { MeridianFlipTransition } from './meridianflip'
 import type { MountPointingSessionSummary } from './mountpointing.sessions'
 import type { OperationDevice, OperationKind, OperationRecord } from './operations'
 import type { TargetCenteringSessionSummary } from './targetcentering'
@@ -14,7 +15,7 @@ import type { TppaSessionSummary } from './tppa'
 import type { ServerEvent } from './websocket'
 
 // Deterministic classification of the server events into notification drafts. Only a few transitions of the
-// session services, the failures of a short list of device operations, and lost connections are worth a
+// session services and the Meridian Flip Monitors, the failures of a short list of device operations, and lost connections are worth a
 // notification; every other event, including telemetry, frames, and progress, gives none. Each draft carries a
 // key naming the occurrence it reports (a session outcome, a manual step, an operation, a close), so the
 // notification service creates one record per occurrence however often the same state is published. The text
@@ -42,8 +43,8 @@ export type NotificationTarget =
 	| {
 			readonly kind: 'tool'
 			// Tool of the Tools workspace to open.
-			readonly tool: 'calibration-library'
-			// Group it shows.
+			readonly tool: 'calibration-library' | 'meridian-flip-monitor'
+			// Group it shows, for the Calibration Library.
 			readonly group?: string
 	  }
 	| {
@@ -56,7 +57,7 @@ export type NotificationTarget =
 
 // What a notification is about.
 export interface NotificationSource {
-	// Service that reported the occurrence: connection, capture, autofocus, tppa, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, or operation.
+	// Service that reported the occurrence: connection, capture, autofocus, tppa, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, meridianFlip, or operation.
 	readonly kind: string
 	// Id of the connection involved; absent for an application-wide notification.
 	readonly connectionId?: string
@@ -196,6 +197,32 @@ export class NotificationClassifier {
 				return this.#darv(event.session)
 			case 'operation:updated':
 				return this.#operation(event.operation)
+			case 'meridianFlip:transition':
+				return this.#meridianFlip(event.transition)
+			default:
+				return []
+		}
+	}
+
+	// Warns about the transitions of a Meridian Flip Monitor an operator acts on: the preferred window reached with a
+	// flip candidate, its end nearing or passed with the candidate still pending (once per episode each), and the mount
+	// lost near the meridian. Never a verified flip, and never telemetry.
+	#meridianFlip(transition: MeridianFlipTransition): NotificationDraft[] {
+		const { kind, monitorId, episodeId, transitionId, connectionId, deviceId, phase } = transition
+		const name = this.deviceName(connectionId, deviceId) ?? 'The mount'
+		const source: NotificationSource = { kind: 'meridianFlip', connectionId, endpoint: this.#endpoints.get(connectionId), deviceId }
+		const base = { key: `meridianFlip:${monitorId}:${episodeId}:${kind}`, level: 'warning', source, target: { kind: 'tool', tool: 'meridian-flip-monitor' } } as const
+
+		switch (kind) {
+			case 'flipCandidate':
+				return [{ ...base, code: 'meridianFlip.candidate', title: 'Meridian flip may be needed', message: `${name} reached the preferred flip window and still reports the pier side it had before the meridian.` }]
+			case 'deadlineApproaching':
+				return [{ ...base, code: 'meridianFlip.deadlineApproaching', title: 'Meridian flip window closing', message: `The preferred flip window of ${name} closes soon and a flip may still be needed.` }]
+			case 'deadlinePassed':
+				return [{ ...base, code: 'meridianFlip.deadlinePassed', title: 'Meridian flip window closed', message: `The preferred flip window of ${name} closed and a flip may still be needed. The window is a timing preference, not a limit of the mount.` }]
+			case 'monitorUnavailable':
+				if (phase !== 'approaching' && phase !== 'windowOpen' && phase !== 'pastDeadline') return []
+				return [{ ...base, key: `meridianFlip:${monitorId}:${transitionId}`, code: 'meridianFlip.unavailable', title: 'Meridian flip monitor lost the mount', message: `${name} stopped reporting near the meridian; its pier side cannot be assessed until it does again.` }]
 			default:
 				return []
 		}

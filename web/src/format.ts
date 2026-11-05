@@ -78,13 +78,15 @@ export function formatSignedAngle(angle: number) {
 	return `${angle < 0 ? MINUS : '+'}${text}`
 }
 
+const DIGIT_REGEX = /[1-9]/
+
 // Returns a signed hour angle in radians, LAST − RA wrapped to ±12 h and positive west of the meridian, as sidereal hours,
 // minutes, and seconds with fractionDigits decimals (0 by default): "+01:02:03", "−00:30:00", "+00:00:00" when it rounds
 // to zero, or MISSING when it is not finite.
 export function formatHourAngle(angle: number, fractionDigits: number = 0) {
 	if (!Number.isFinite(angle)) return MISSING
 	const text = formatAngle(Math.abs(angle), { isHour: true, separators: ':', noSign: true, fractionDigits })
-	return `${angle < 0 && /[1-9]/.test(text) ? MINUS : '+'}${text}`
+	return `${angle < 0 && DIGIT_REGEX.test(text) ? MINUS : '+'}${text}`
 }
 
 // Returns a fraction in [0, 1] as a percentage with `digits` decimals (0 by default), with no space before the sign:

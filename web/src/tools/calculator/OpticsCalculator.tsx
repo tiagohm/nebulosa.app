@@ -1,5 +1,5 @@
 import { formatDegrees, formatFixed } from '../../format'
-import { formatAngularSize } from '../../sky/format'
+import { formatApparentSize } from '../../sky/format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
@@ -54,7 +54,7 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 					{({ framing, diagonal }) => (
 						<>
 							<Primary label="Field of view">
-								{formatAngularSize(framing.width)} × {formatAngularSize(framing.height)}
+								{formatApparentSize(framing.width)} × {formatApparentSize(framing.height)}
 							</Primary>
 							<DataRow label="Field (degrees)">
 								{formatDegrees(framing.width, 3)} × {formatDegrees(framing.height, 3)}

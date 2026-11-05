@@ -1,13 +1,16 @@
-import { formatDEC, formatRA, normalizeAngle, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
-import { MISSING, formatDegrees } from '../format'
+import { formatDEC, formatRA, normalizeAngle, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
+import { formatFixed, MISSING } from '../format'
 import type { Point } from '../viewer/transform'
 import type { CoordinateFormat } from './preferences'
 import type { WcsFrame } from './wcs'
 
 // Text of the astrometric values of a solved image, for display and for the clipboard: sky positions in the format and
-// decimals of the profile (sexagesimal through the toolkit's formatRA and formatDEC, or decimal degrees), angular
-// sizes in the unit that suits them, position angles, and zero-based pixels. The decimals are a presentation choice,
-// never a claim of accuracy. A missing value is written "—", never 0.
+// decimals of the profile (sexagesimal through the toolkit's formatRA and formatDEC, which carry a rounded 60 into the
+// next field, or decimal degrees), position angles, pixel scales, and zero-based pixels. Angular sizes and offsets are
+// written by `formatAngularSize` and `formatSignedAngle` of `format.ts`. The decimals are a presentation choice, never a
+// claim of accuracy. A missing or non-finite value is written MISSING, never 0 or NaN; a right ascension or position
+// angle that rounds up to a full turn reads 0, and a declination keeps its sign even when it rounds to zero, as in
+// sexagesimal, so a position just south of the equator still reads south.
 
 // How sky coordinates are written.
 export interface CoordinateStyle {
@@ -17,22 +20,34 @@ export interface CoordinateStyle {
 	readonly precision: number
 }
 
+// Returns an angle in radians as degrees in [0, 360) with `digits` decimals, wrapped after rounding: "0.00°", never
+// "360.00°".
+function fullTurnDegrees(angle: number, digits: number) {
+	const text = formatFixed(toDeg(normalizeAngle(angle)), digits)
+	if (text === MISSING) return MISSING
+	return `${Number(text) >= 360 ? formatFixed(0, digits) : text}°`
+}
+
 // Returns a right ascension in radians as hours, minutes, and seconds ("10 44 04.2"), or decimal degrees in [0, 360)
 // ("161.01758°").
 export function formatRightAscensionAs(rightAscension: number, style: CoordinateStyle): string {
-	if (style.format === 'decimal') return `${toDeg(normalizeAngle(rightAscension)).toFixed(style.precision + 4)}°`
+	if (!Number.isFinite(rightAscension)) return MISSING
+	if (style.format === 'decimal') return fullTurnDegrees(rightAscension, style.precision + 4)
 	return formatRA(normalizeAngle(rightAscension), style.precision === 0 ? false : style.precision)
 }
 
 // Returns a declination in radians as signed degrees, minutes, and seconds ("-59 36 07.1"), or signed decimal degrees
 // ("-59.60197°").
 export function formatDeclinationAs(declination: number, style: CoordinateStyle): string {
+	if (!Number.isFinite(declination)) return MISSING
 	if (style.format === 'decimal') return `${declination < 0 ? '-' : '+'}${Math.abs(toDeg(declination)).toFixed(style.precision + 4)}°`
 	return formatDEC(declination, style.precision === 0 ? false : style.precision)
 }
 
-// Returns a sky position in radians and its frame as one line for the clipboard: "10 44 04.2 -59 36 07.1 (ICRS)".
+// Returns a sky position in radians and its frame as one line for the clipboard: "10 44 04.2 -59 36 07.1 (ICRS)", or
+// MISSING when either coordinate is.
 export function formatSkyPosition([rightAscension, declination]: readonly [number, number], frame: WcsFrame, style: CoordinateStyle): string {
+	if (!Number.isFinite(rightAscension) || !Number.isFinite(declination)) return MISSING
 	return `${formatRightAscensionAs(rightAscension, style)} ${formatDeclinationAs(declination, style)} (${frame})`
 }
 
@@ -41,25 +56,14 @@ export function formatPixel(pixel: Point): string {
 	return `${pixel.x}, ${pixel.y}`
 }
 
-// Returns an angle in radians in the unit that suits it: arcseconds below 1′ ("12.34″"), arcminutes below 1°
-// ("12.34′"), degrees otherwise ("1.234°").
-export function formatAngularSize(angle: number): string {
-	if (angle < Math.PI / 10800) return `${toArcsec(angle).toFixed(2)}″`
-	if (angle < Math.PI / 180) return `${toArcmin(angle).toFixed(2)}′`
-	return `${toDeg(angle).toFixed(3)}°`
-}
-
-// Returns a signed angle in radians in the unit that suits its size, with its sign: "+12.34″", "−1.234°".
-export function formatSignedAngle(angle: number): string {
-	return `${angle < 0 ? '−' : '+'}${formatAngularSize(Math.abs(angle))}`
-}
-
-// Returns a position angle in radians as degrees from north through east ("123.45°"), or MISSING when undefined.
+// Returns a position angle in radians as degrees from north through east in [0, 360) ("123.45°"), or MISSING when
+// undefined.
 export function formatPositionAngle(angle: number | undefined): string {
-	return angle === undefined ? MISSING : formatDegrees(angle)
+	return angle === undefined ? MISSING : fullTurnDegrees(angle, 2)
 }
 
 // Returns a pixel scale in radians per pixel as arcseconds per pixel ("2.736″/px").
 export function formatPixelScale(scale: number): string {
-	return `${toArcsec(scale).toFixed(3)}″/px`
+	const text = formatFixed(toArcsec(scale), 3)
+	return text === MISSING ? MISSING : `${text}″/px`
 }

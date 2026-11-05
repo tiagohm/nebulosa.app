@@ -12,7 +12,7 @@ import { activeProfile, profileState, setAnnotationPreferences } from '../profil
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
-import { formatAngularSize, formatDeclination, formatMagnitude, formatRightAscension } from '../sky/format'
+import { formatApparentSize, formatDeclination, formatMagnitude, formatRightAscension } from '../sky/format'
 import type { SkySelectionRef } from '../sky/objects'
 import { selectSkyObject, skyState } from '../sky/sky'
 import { Actions } from '../ui/Actions'
@@ -430,7 +430,7 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 					<DataRow label="Magnitude">{object.magnitude === undefined ? MISSING : formatMagnitude(object.magnitude)}</DataRow>
 					<DataRow label="Right ascension (J2000)">{formatRightAscension(object.rightAscension)}</DataRow>
 					<DataRow label="Declination (J2000)">{formatDeclination(object.declination)}</DataRow>
-					{object.majorAxis !== undefined && <DataRow label="Size">{object.minorAxis === undefined ? formatAngularSize(object.majorAxis) : `${formatAngularSize(object.majorAxis)} × ${formatAngularSize(object.minorAxis)}`}</DataRow>}
+					{object.majorAxis !== undefined && <DataRow label="Size">{object.minorAxis === undefined ? formatApparentSize(object.majorAxis) : `${formatApparentSize(object.majorAxis)} × ${formatApparentSize(object.minorAxis)}`}</DataRow>}
 					{object.orientation !== undefined && <DataRow label="Position angle">{formatDegrees(object.orientation)}</DataRow>}
 					{object.positionError !== undefined && <DataRow label="Position uncertainty">{formatUncertainty(object.positionError)}</DataRow>}
 					{object.center && <DataRow label="Position">{CENTER_LABELS[object.center]}</DataRow>}

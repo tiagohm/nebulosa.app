@@ -6,7 +6,7 @@ import { Celestial, type CelestialObject, type CelestialOptions, type Constellat
 import { SKY_REALTIME_TICK_MS, type SkyClockMode, skyClock, skyTime } from './clock'
 import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
 import { type ImageFootprint, ofDateMatrix, outlineLabel, type ScreenPoint, type SkyCoordinateIntent, type SkyPoint, toDate } from './footprint'
-import { formatAngularSize } from './format'
+import { formatApparentSize } from './format'
 import { type FramePoint, framePolygon, isFraming, type OpticalConfiguration, resolveFraming } from './framing'
 import { type MountPoint, mountRuntime } from './mount'
 import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, type SkySelectionRef } from './objects'
@@ -482,7 +482,7 @@ export class Planetarium {
 		}
 
 		const outline = framePolygon(center, framing.width, framing.height, source.optics.rotation * DEG2RAD, FRAMING_EDGE_SAMPLES)
-		const label = `${source.name} · ${formatAngularSize(framing.width)} × ${formatAngularSize(framing.height)} · PA ${source.optics.rotation.toFixed(1)}°`
+		const label = `${source.name} · ${formatApparentSize(framing.width)} × ${formatApparentSize(framing.height)} · PA ${source.optics.rotation.toFixed(1)}°`
 		this.#framing = true
 		this.celestial.addShape({ id: FRAMING_SHAPE_ID, coordinate: { ...center }, selectable: false, render: (_, ctx, state) => drawFraming(ctx, state.state, outline, label) })
 	}

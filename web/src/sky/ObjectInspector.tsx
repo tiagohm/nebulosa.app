@@ -7,7 +7,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
-import { formatAngularSize, formatDeclination, formatMagnitude, formatRightAscension, formatStellarDistance } from './format'
+import { formatApparentSize, formatDeclination, formatMagnitude, formatRightAscension, formatStellarDistance } from './format'
 import { ObserverSection, PositionSection } from './InspectorParts'
 import { MoonInspector } from './moon/MoonInspector'
 import { MountInspector } from './MountInspector'
@@ -98,8 +98,8 @@ function CatalogSection({ catalog }: { readonly catalog: SkyCatalogObject }) {
 			{catalog.classification && <DataRow label={star ? 'Spectral type' : 'Morphology'}>{catalog.classification}</DataRow>}
 			{catalog.majorAxis !== undefined && (
 				<DataRow label="Size">
-					{formatAngularSize(catalog.majorAxis)}
-					{catalog.minorAxis !== undefined && ` × ${formatAngularSize(catalog.minorAxis)}`}
+					{formatApparentSize(catalog.majorAxis)}
+					{catalog.minorAxis !== undefined && ` × ${formatApparentSize(catalog.minorAxis)}`}
 				</DataRow>
 			)}
 			{catalog.orientation !== undefined && catalog.majorAxis !== undefined && <DataRow label="Position angle">{formatDegrees(catalog.orientation)}</DataRow>}

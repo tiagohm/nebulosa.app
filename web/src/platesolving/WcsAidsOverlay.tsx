@@ -1,9 +1,9 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { useMemo } from 'react'
+import { formatAngularSize } from '../format'
 import type { ViewerCursor } from '../viewer/ImageViewer'
 import type { OverlayView, Point, Size } from '../viewer/transform'
 import { cornerAnchor, scaleBar, visibleImage } from './aids'
-import { formatAngularSize } from './coordinates'
 import { skyDirections } from './wcs'
 
 // Passive astrometric aids of the solution of the image shown, over the shared image viewer: a crosshair through the
@@ -73,7 +73,7 @@ export function WcsAidsOverlay({ solution, image, view, cursor, crosshair, corne
 				<g stroke="var(--color-ink-100)" strokeWidth={1.5}>
 					<path d={`M${aids.bar.from.x} ${aids.bar.from.y - BAR_TICK * unit}V${aids.bar.from.y}H${aids.bar.to.x}V${aids.bar.to.y - BAR_TICK * unit}`} vectorEffect="non-scaling-stroke" />
 					<text x={(aids.bar.from.x + aids.bar.to.x) / 2} y={aids.bar.from.y - 4 * unit} textAnchor="middle" fill="var(--color-ink-100)" stroke="var(--color-base-000)" strokeOpacity={0.85} strokeWidth={3 * unit} paintOrder="stroke" fontSize={LABEL_SIZE * unit} className="font-mono tabular-nums">
-						{formatAngularSize(aids.bar.angle).replace(/\.00(?=[″′°])/, '')}
+						{formatAngularSize(aids.bar.angle).replace(/\.0+(?=[″′°])/, '')}
 					</text>
 				</g>
 			)}

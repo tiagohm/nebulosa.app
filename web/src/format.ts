@@ -56,6 +56,27 @@ export function formatArcsec(angle: number | undefined | null, digits: number = 
 	return angle === undefined || angle === null ? MISSING : withUnit(formatFixed(toArcsec(angle), digits), '″')
 }
 
+// Returns an angular size or separation in radians in the unit that suits it: arcseconds below 1′ ("12.34″"),
+// arcminutes below 1° ("12.34′"), degrees otherwise ("1.234°"). The unit is chosen after rounding, so 59.999″ reads
+// "1.00′" rather than "60.00″".
+export function formatAngularSize(angle: number) {
+	const arcsec = formatFixed(toArcsec(angle), 2)
+	if (arcsec === MISSING) return MISSING
+	if (Math.abs(Number(arcsec)) < 60) return `${arcsec}″`
+	const arcmin = formatFixed(toArcmin(angle), 2)
+	if (Math.abs(Number(arcmin)) < 60) return `${arcmin}′`
+	return `${formatFixed(toDeg(angle), 3)}°`
+}
+
+// Returns a signed angular offset in radians in the unit that suits its size, with its sign: "+12.34″", "−1.234°", or
+// "0.00″" when it rounds to zero.
+export function formatSignedAngle(angle: number) {
+	const text = formatAngularSize(Math.abs(angle))
+	// The size ends with its one-character unit sign (″, ′, or °).
+	if (text === MISSING || Number(text.slice(0, -1)) === 0) return text
+	return `${angle < 0 ? MINUS : '+'}${text}`
+}
+
 // Returns a fraction in [0, 1] as a percentage with `digits` decimals (0 by default), with no space before the sign:
 // "57%", "99.9%".
 export function formatPercent(fraction: number, digits: number = 0) {

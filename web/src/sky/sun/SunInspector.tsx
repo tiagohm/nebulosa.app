@@ -11,7 +11,7 @@ import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { BROWSER_TIME_ZONE } from '../clock'
-import { formatAngularSize, formatDeclination, formatLocalTime, formatMagnitude } from '../format'
+import { formatApparentSize, formatDeclination, formatLocalTime, formatMagnitude } from '../format'
 import { PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
 import type { SkySelection } from '../sky'
@@ -143,7 +143,7 @@ export function SunInspector({ selection, observer, onSetObserver, timeZone, onS
 			</PanelSection>
 			<ActiveRegionsSection />
 			<PositionSection selection={selection} timeZone={timeZone}>
-				{position?.distance !== undefined && <DataRow label="Angular diameter">{formatAngularSize(sunAngularDiameter(position.distance))}</DataRow>}
+				{position?.distance !== undefined && <DataRow label="Angular diameter">{formatApparentSize(sunAngularDiameter(position.distance))}</DataRow>}
 			</PositionSection>
 			<VisibilitySection position={position} day={day} hasObserver={!!observer} onSetObserver={onSetObserver} timeZone={timeZone} />
 			<TwilightSection day={day} hasObserver={!!observer} timeZone={timeZone} />

@@ -1,6 +1,6 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { useMemo } from 'react'
-import { formatAngularSize } from '../platesolving/coordinates'
+import { formatAngularSize } from '../format'
 import { type AstrometricMarker, type AstrometryTarget, targetOffset, targetPosition } from '../platesolving/measurement'
 import type { OverlayView, Size } from '../viewer/transform'
 

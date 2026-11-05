@@ -13,7 +13,7 @@ import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { formatAngularSize } from './format'
+import { formatApparentSize } from './format'
 import { DEFAULT_TELESCOPE, equipmentOptics, isFraming, type OpticalConfiguration, type OpticalPreset, resolveFraming, type SensorGeometry, type SensorSource, type TelescopeOptics, usesGuideTelescope } from './framing'
 import { liveSensors, sensorRuntime } from './sensors'
 
@@ -249,7 +249,7 @@ function FramingResult({ optics, missingCamera, onRotate }: { readonly optics: R
 			{isFraming(framing) ? (
 				<>
 					<DataRow label="Field">
-						{formatAngularSize(framing.width)} × {formatAngularSize(framing.height)}
+						{formatApparentSize(framing.width)} × {formatApparentSize(framing.height)}
 					</DataRow>
 					<DataRow label="Field (degrees)">
 						{toDeg(framing.width).toFixed(3)}° × {toDeg(framing.height).toFixed(3)}°

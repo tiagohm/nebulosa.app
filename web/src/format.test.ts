@@ -1,6 +1,25 @@
 import { describe, expect, test } from 'bun:test'
 import { arcmin, arcsec, deg } from 'nebulosa/src/math/units/angle'
-import { formatArcmin, formatArcsec, formatByteSize, formatClockDuration, formatDegrees, formatDuration, formatExposureTime, formatFixed, formatGeographic, formatPercent, formatPixelLength, formatSigned, formatSignedArcmin, formatSignificant, formatTemperature, MISSING } from './format'
+import {
+	formatAngularSize,
+	formatArcmin,
+	formatArcsec,
+	formatByteSize,
+	formatClockDuration,
+	formatDegrees,
+	formatDuration,
+	formatExposureTime,
+	formatFixed,
+	formatGeographic,
+	formatPercent,
+	formatPixelLength,
+	formatSigned,
+	formatSignedAngle,
+	formatSignedArcmin,
+	formatSignificant,
+	formatTemperature,
+	MISSING,
+} from './format'
 
 describe('numbers', () => {
 	test('fixed decimals never show a negative zero nor a non-finite number', () => {
@@ -61,6 +80,23 @@ describe('angles', () => {
 		expect(formatSignedArcmin(arcmin(2.04))).toBe('+2.0′')
 		expect(formatSignedArcmin(arcmin(-2.04))).toBe('−2.0′')
 		expect(formatSignedArcmin(arcmin(-0.04))).toBe('0.0′')
+	})
+
+	test('angular sizes use the unit that suits them, chosen after rounding', () => {
+		expect(formatAngularSize(arcsec(12.345))).toBe('12.35″')
+		expect(formatAngularSize(arcsec(754))).toBe('12.57′')
+		expect(formatAngularSize(deg(1.2346))).toBe('1.235°')
+		expect(formatAngularSize(arcsec(59.999))).toBe('1.00′')
+		expect(formatAngularSize(arcmin(59.9999))).toBe('1.000°')
+		expect(formatAngularSize(Number.NaN)).toBe(MISSING)
+	})
+
+	test('signed angular offsets carry their sign, except a rounded zero', () => {
+		expect(formatSignedAngle(-arcsec(3))).toBe('−3.00″')
+		expect(formatSignedAngle(arcmin(2))).toBe('+2.00′')
+		expect(formatSignedAngle(0)).toBe('0.00″')
+		expect(formatSignedAngle(-arcsec(0.001))).toBe('0.00″')
+		expect(formatSignedAngle(Number.NaN)).toBe(MISSING)
 	})
 })
 

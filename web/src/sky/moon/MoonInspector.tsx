@@ -6,7 +6,7 @@ import type { SkyObserverSettings } from '../../profile/schema'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-import { formatAngularSize, formatMagnitude } from '../format'
+import { formatApparentSize, formatMagnitude } from '../format'
 import { ObserverSection, PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
 import type { SkySelection } from '../sky'
@@ -74,7 +74,7 @@ export function MoonInspector({ selection, observer, onSetObserver, timeZone, on
 				<ObjectActions target={MOON} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
 			</PanelSection>
 			<PositionSection selection={selection} timeZone={timeZone}>
-				{position?.distance !== undefined && <DataRow label="Angular diameter">{formatAngularSize(moonAngularDiameter(position.distance))}</DataRow>}
+				{position?.distance !== undefined && <DataRow label="Angular diameter">{formatApparentSize(moonAngularDiameter(position.distance))}</DataRow>}
 			</PositionSection>
 			{position && <ObserverSection position={position} events={events} hasObserver={!!observer} onSetObserver={onSetObserver} isSolarSystem timeZone={timeZone} />}
 			<MoonPhasesSection phases={almanac.value?.phases} timeZone={timeZone} />

@@ -3,7 +3,7 @@ import { formatDegrees } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-import { formatAngularSize, formatLocalTime } from '../format'
+import { formatApparentSize, formatLocalTime } from '../format'
 import { formatKilometers } from './MoonApsidesSection'
 
 // Lunar Physical Data section of the Moon Inspector: the Moon's age and lunation, distance, libration, the Sun's
@@ -24,14 +24,14 @@ export function MoonPhysicalSection({ appearance, time, timeZone }: { readonly a
 					<DataRow label="Age">{appearance.ageDays.toFixed(2)} d</DataRow>
 					<DataRow label="Lunation">{appearance.lunation}</DataRow>
 					<DataRow label="Distance">{formatKilometers(appearance.distanceKm)}</DataRow>
-					<DataRow label="Apparent diameter">{formatAngularSize(appearance.angularDiameter)}</DataRow>
+					<DataRow label="Apparent diameter">{formatApparentSize(appearance.angularDiameter)}</DataRow>
 					<DataRow label="Libration in longitude">{formatSelenographic(appearance.subObserver.longitude, 'E', 'W')}</DataRow>
 					<DataRow label="Libration in latitude">{formatSelenographic(appearance.subObserver.latitude, 'N', 'S')}</DataRow>
 					<DataRow label="Sun's colongitude">{formatDegrees(appearance.colongitude)}</DataRow>
 					<DataRow label="Sub-solar latitude">{formatSelenographic(appearance.subSolar.latitude, 'N', 'S')}</DataRow>
 					<DataRow label="Pole position angle">{formatDegrees(appearance.poleAngle)}</DataRow>
 					<DataRow label="Bright limb angle">{formatDegrees(appearance.brightLimbAngle)}</DataRow>
-					<DataRow label="Horizontal parallax">{formatAngularSize(appearance.horizontalParallax)}</DataRow>
+					<DataRow label="Horizontal parallax">{formatApparentSize(appearance.horizontalParallax)}</DataRow>
 					{appearance.parallacticAngle !== undefined && <DataRow label="Parallactic angle">{formatDegrees(appearance.parallacticAngle)}</DataRow>}
 					<Notice>
 						At {formatLocalTime(time, Date.now(), undefined, timeZone)}, {appearance.center === 'topocentric' ? 'from the observer' : "from the Earth's center"}, from the local model. The libration is the selenographic point at the disk&apos;s center; position angles are from celestial north through east.

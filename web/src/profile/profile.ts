@@ -1,4 +1,4 @@
-import type { AnnotationBodies, DisplaySettings, MountRemoteProtocol, StarDetectionRequest, StreakDetectorSettings } from 'api'
+import type { AnnotationBodies, DisplaySettings, MeridianFlipSettings, MountRemoteProtocol, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
@@ -55,6 +55,7 @@ import {
 	type FlatWizardSettings,
 	DEFAULT_GUIDING_SETTINGS,
 	type GuidingSettings,
+	DEFAULT_MERIDIAN_FLIP_SETTINGS,
 	DEFAULT_MOUNT_REMOTE_BINDINGS,
 	type MountRemoteBinding,
 	MAX_NOTIFICATION_IDS,
@@ -773,6 +774,21 @@ export function setMountRemoteBinding(state: ProfileState, mount: CameraIdentity
 	const profile = activeProfile(state)
 	profile.settings.mountRemoteControl ??= {}
 	nestedObject(nestedObject(profile.settings.mountRemoteControl, mount.connectionId), mount.deviceId)[protocol] = { host: binding.host, port: binding.port }
+}
+
+// Returns the Meridian Flip Monitor settings of a mount: the ones applied last, or the defaults. mount is the saved
+// connection id and the mount id (profileCamera builds it for any device); absent gives the defaults.
+export function meridianFlipSettings(settings: Pick<ProfileSettings, 'meridianFlipMonitor'>, mount: CameraIdentity | undefined): Readonly<MeridianFlipSettings> {
+	return (mount && settings.meridianFlipMonitor?.[mount.connectionId]?.[mount.deviceId]) ?? DEFAULT_MERIDIAN_FLIP_SETTINGS
+}
+
+// Remembers the Meridian Flip Monitor settings of a mount in the active profile. It never enables, disables, or changes
+// a running monitor. Does nothing without a mount.
+export function setMeridianFlipSettings(state: ProfileState, mount: CameraIdentity | undefined, settings: MeridianFlipSettings) {
+	if (!mount) return
+	const profile = activeProfile(state)
+	profile.settings.meridianFlipMonitor ??= {}
+	nestedObject(profile.settings.meridianFlipMonitor, mount.connectionId)[mount.deviceId] = { ...settings }
 }
 
 // Marks notifications as read in the active profile, which the synchronization adds to what the server keeps for it.

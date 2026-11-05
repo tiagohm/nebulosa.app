@@ -9,8 +9,10 @@ import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
+	meridianFlipSettings,
 	mountRemoteBinding,
 	satelliteFavorites,
+	setMeridianFlipSettings,
 	setSatelliteFavorite,
 	setMountRemoteBinding,
 	acquisitionSettings,
@@ -112,6 +114,7 @@ import {
 	DEFAULT_FLAT_WIZARD_FILTER,
 	DEFAULT_FLAT_WIZARD_SETTINGS,
 	DEFAULT_GUIDING_SETTINGS,
+	DEFAULT_MERIDIAN_FLIP_SETTINGS,
 	DEFAULT_MOUNT_REMOTE_BINDINGS,
 	DEFAULT_TPPA_SETTINGS,
 	DEFAULT_TARGET_CENTERING_SETTINGS,
@@ -716,6 +719,25 @@ describe('mount remote control bindings', () => {
 		expect(mountRemoteBinding(settings(), { connectionId: 'c', deviceId: 'mount-2' }, 'lx200')).toEqual(DEFAULT_MOUNT_REMOTE_BINDINGS.lx200)
 
 		expect(state.profiles[0].settings.mountRemoteControl).toEqual({ c: { 'mount-1': { lx200: { host: '127.0.0.1', port: 4030 } } } })
+	})
+})
+
+describe('meridian flip monitor settings', () => {
+	test('start from the defaults and are remembered per saved connection and mount', () => {
+		const state = load()
+		const mount = { connectionId: 'c', deviceId: 'mount-1' }
+		const settings = () => activeProfile(state).settings
+
+		expect(meridianFlipSettings(settings(), mount)).toEqual(DEFAULT_MERIDIAN_FLIP_SETTINGS)
+		expect(meridianFlipSettings(settings(), undefined)).toEqual(DEFAULT_MERIDIAN_FLIP_SETTINGS)
+
+		const applied = { ...DEFAULT_MERIDIAN_FLIP_SETTINGS, minimumSeconds: 0, maximumSeconds: 1800 }
+		setMeridianFlipSettings(state, mount, applied)
+		setMeridianFlipSettings(state, undefined, DEFAULT_MERIDIAN_FLIP_SETTINGS)
+
+		expect(meridianFlipSettings(settings(), mount)).toEqual(applied)
+		expect(meridianFlipSettings(settings(), { connectionId: 'c', deviceId: 'mount-2' })).toEqual(DEFAULT_MERIDIAN_FLIP_SETTINGS)
+		expect(state.profiles[0].settings.meridianFlipMonitor).toEqual({ c: { 'mount-1': applied } })
 	})
 })
 

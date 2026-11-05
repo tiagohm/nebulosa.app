@@ -11,6 +11,7 @@ import type {
 	GuidingStartRequest,
 	LiveStackingCalibration,
 	LiveStackingRecipe,
+	MeridianFlipSettings,
 	MountRemoteProtocol,
 	MountRemoteStartRequest,
 	PlateSolveRequest,
@@ -94,6 +95,10 @@ export interface ProfileSettings {
 	// protocol; absent until edited, and then DEFAULT_MOUNT_REMOTE_BINDINGS holds. A preference only: it never starts,
 	// stops, or rebinds a listener.
 	mountRemoteControl?: Record<string, Record<string, Partial<Record<MountRemoteProtocol, MountRemoteBinding>>>>
+	// Settings each Meridian Flip Monitor was last applied with, by saved connection id, then mount id; absent until
+	// edited, and then DEFAULT_MERIDIAN_FLIP_SETTINGS holds. A preference only: it never enables, disables, or changes a
+	// running monitor, whose settings stay the ones it was enabled or updated with.
+	meridianFlipMonitor?: Record<string, Record<string, MeridianFlipSettings>>
 	// Notifications of the server history the profile read or dismissed; absent until the first one is read. The server
 	// keeps one history for every profile and these states for each one (profile_notification_state), which only grow.
 	notifications?: NotificationPreferences
@@ -314,6 +319,15 @@ export const DEFAULT_MOUNT_REMOTE_BINDINGS: Readonly<Record<MountRemoteProtocol,
 	lx200: { host: '0.0.0.0', port: 10002 },
 	stellarium: { host: '0.0.0.0', port: 10001 },
 }
+
+// Settings of a Meridian Flip Monitor before any were applied, the defaults of the server: warn 15 minutes before the
+// transit, a preferred window from 5 to 15 minutes after it, the deadline near 3 minutes before it closes, and 2 seconds
+// to settle. Wall-clock seconds.
+export const DEFAULT_MERIDIAN_FLIP_SETTINGS: MeridianFlipSettings = { earlyWarningSeconds: 900, minimumSeconds: 300, maximumSeconds: 900, deadlineWarningSeconds: 180, settleSeconds: 2 }
+
+// Largest early warning and window offset the server accepts, in wall-clock seconds: 6 sidereal hours
+// (MAXIMUM_OFFSET_SECONDS of the server).
+export const MERIDIAN_FLIP_MAXIMUM_SECONDS = 21541
 
 // Sky preferences of a profile. Where the Sky observes from is the profile's observing site (Profile.activeSiteId).
 export interface SkySettings {

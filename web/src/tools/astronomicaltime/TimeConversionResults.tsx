@@ -1,7 +1,8 @@
 import type { AstronomicalTimeResult, TimeScaleName } from 'api'
-import { formatAngle, formatHMS, toDeg } from 'nebulosa/src/math/units/angle'
+import { formatHMS, toDeg } from 'nebulosa/src/math/units/angle'
 import { useEffect, useRef, useState } from 'react'
 import { copyText } from '../../clipboard'
+import { formatHourAngle } from '../../format'
 import { describeDisplayZone, type DisplayZone } from '../../location/zone'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { IconButton } from '../../ui/IconButton'
@@ -33,11 +34,6 @@ function formatOffset(seconds: number) {
 // Formats a sidereal time as time and as degrees.
 function formatSidereal(angle: number) {
 	return `${formatHMS(angle, SIDEREAL_DIGITS)} (${toDeg(angle).toFixed(5)}°)`
-}
-
-// Formats a signed hour angle in hours, minutes, and seconds.
-function formatHourAngle(angle: number) {
-	return formatAngle(angle, { isHour: true, separators: ':', noSign: false, fractionDigits: SIDEREAL_DIGITS })
 }
 
 // Returns the side of the meridian of an hour angle: positive is west.
@@ -120,7 +116,7 @@ export function TimeConversionResults({ result, zone, located }: TimeConversionR
 			</CollapsibleSection>
 			{hourAngle !== undefined && (
 				<CollapsibleSection id="tools.astronomicalTime.hourAngleResult" title="Hour Angle">
-					<ResultRow label="HA" value={formatHourAngle(hourAngle)} />
+					<ResultRow label="HA" value={formatHourAngle(hourAngle, SIDEREAL_DIGITS)} />
 					<Notice>HA = LAST − RA, wrapped to ±12 h. {meridianSide(hourAngle)}.</Notice>
 				</CollapsibleSection>
 			)}

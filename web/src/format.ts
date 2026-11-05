@@ -1,7 +1,7 @@
-import { toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
+import { formatAngle, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 
 // Display formats shared by every screen for quantities that are not tied to one feature: fixed and signed numbers,
-// percentages, angles in degrees, arcminutes, and arcseconds, geographic positions, temperatures, lengths in pixels
+// percentages, angles in degrees, arcminutes, and arcseconds, hour angles, geographic positions, temperatures, lengths in pixels
 // with their sky size, positions in an image, distances in kilometers, exposure times, durations, elapsed clocks, instants
 // in UTC, byte sizes, and measurements of a wide dynamic range.
 // Each takes the value in its computational unit (radians, seconds, °C, pixels, bytes) and returns text only, so a
@@ -76,6 +76,15 @@ export function formatSignedAngle(angle: number) {
 	// The size ends with its one-character unit sign (″, ′, or °).
 	if (text === MISSING || Number(text.slice(0, -1)) === 0) return text
 	return `${angle < 0 ? MINUS : '+'}${text}`
+}
+
+// Returns a signed hour angle in radians, LAST − RA wrapped to ±12 h and positive west of the meridian, as sidereal hours,
+// minutes, and seconds with fractionDigits decimals (0 by default): "+01:02:03", "−00:30:00", "+00:00:00" when it rounds
+// to zero, or MISSING when it is not finite.
+export function formatHourAngle(angle: number, fractionDigits: number = 0) {
+	if (!Number.isFinite(angle)) return MISSING
+	const text = formatAngle(Math.abs(angle), { isHour: true, separators: ':', noSign: true, fractionDigits })
+	return `${angle < 0 && /[1-9]/.test(text) ? MINUS : '+'}${text}`
 }
 
 // Returns a fraction in [0, 1] as a percentage with `digits` decimals (0 by default), with no space before the sign:

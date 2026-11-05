@@ -42,6 +42,7 @@ import { routeState, watchHistory } from './shell/route'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
 import { handleStreaksEvent, refreshStreaks, streaksState } from './streaks/streaks'
 import { handleImageStackingEvent, imageStackingRuntime, refreshImageStacking } from './tools/imagestacking/projects'
+import { handleMeridianFlipEvent, meridianFlipState, refreshMeridianFlip } from './tools/meridianflip/meridianflip'
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
 
 // Entry point of the browser bundle: restores the URL route, reads the workspace (saved connections and profiles) from
@@ -95,6 +96,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleCaptureEvent(captureRuntime, event), refresh: () => refreshCaptures(captureRuntime) },
 	{ handle: (event) => handleNudgeEvent(nudgeRuntime, event), refresh: () => refreshNudges(nudgeRuntime) },
 	{ handle: (event) => handleMountRemoteControlEvent(mountRemoteControlState, event), refresh: () => refreshMountRemoteControl(mountRemoteControlState) },
+	{ handle: (event) => handleMeridianFlipEvent(meridianFlipState, event), refresh: () => refreshMeridianFlip(meridianFlipState) },
 	{ handle: (event) => handleSatelliteEvent(satelliteCatalogState, event), refresh: () => refreshSatelliteCatalog(satelliteCatalogState) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
 	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },

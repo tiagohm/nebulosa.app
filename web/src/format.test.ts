@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { arcmin, arcsec, deg } from 'nebulosa/src/math/units/angle'
+import { arcmin, arcsec, deg, hour } from 'nebulosa/src/math/units/angle'
 import {
 	formatAngularSize,
 	formatArcmin,
@@ -11,6 +11,7 @@ import {
 	formatExposureTime,
 	formatFixed,
 	formatGeographic,
+	formatHourAngle,
 	formatPercent,
 	formatKilometers,
 	formatPixelLength,
@@ -100,6 +101,15 @@ describe('angles', () => {
 		expect(formatSignedAngle(0)).toBe('0.00″')
 		expect(formatSignedAngle(-arcsec(0.001))).toBe('0.00″')
 		expect(formatSignedAngle(Number.NaN)).toBe(MISSING)
+	})
+
+	test('hour angles keep their sign, positive west, and never wrap to 24 h', () => {
+		expect(formatHourAngle(hour(-1))).toBe('−01:00:00')
+		expect(formatHourAngle(hour(1.5))).toBe('+01:30:00')
+		expect(formatHourAngle(hour(-11.999))).toBe('−11:59:56')
+		expect(formatHourAngle(-hour(0.00001))).toBe('+00:00:00')
+		expect(formatHourAngle(hour(-0.5), 3)).toBe('−00:30:00.000')
+		expect(formatHourAngle(Number.NaN)).toBe(MISSING)
 	})
 })
 

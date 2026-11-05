@@ -4,7 +4,7 @@ import { TOOL_DEFINITIONS, toolStatus } from './tools'
 
 describe('registry', () => {
 	test('lists only the standalone tools, each under its own id', () => {
-		expect(TOOL_IDS).toEqual(['calculator', 'astronomical-time-converter', 'solar-eclipse-map', 'lunar-eclipse-map', 'close-approaches', 'astro-weather', 'artificial-satellites', 'calibration-library', 'image-stacking', 'mount-remote-control', 'mount-pointing-model', 'alpaca-server'])
+		expect(TOOL_IDS).toEqual(['calculator', 'astronomical-time-converter', 'solar-eclipse-map', 'lunar-eclipse-map', 'close-approaches', 'astro-weather', 'artificial-satellites', 'calibration-library', 'image-stacking', 'mount-remote-control', 'mount-pointing-model', 'meridian-flip-monitor', 'alpaca-server'])
 		for (const id of TOOL_IDS) expect(TOOL_DEFINITIONS[id].id).toBe(id)
 	})
 
@@ -18,6 +18,7 @@ describe('registry', () => {
 		expect(toolStatus(TOOL_DEFINITIONS['astro-weather'])).toBe('available')
 		expect(toolStatus(TOOL_DEFINITIONS['artificial-satellites'])).toBe('available')
 		expect(toolStatus(TOOL_DEFINITIONS['mount-remote-control'])).toBe('available')
+		expect(toolStatus(TOOL_DEFINITIONS['meridian-flip-monitor'])).toBe('available')
 		expect(toolStatus({ view: () => null })).toBe('available')
 	})
 })

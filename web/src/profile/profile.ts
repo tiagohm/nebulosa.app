@@ -56,6 +56,10 @@ import {
 	DEFAULT_GUIDING_SETTINGS,
 	type GuidingSettings,
 	DEFAULT_MERIDIAN_FLIP_SETTINGS,
+	DEFAULT_DITHER_SETTINGS,
+	type CameraDitherSettings,
+	DEFAULT_MOUNT_DITHER_SETTINGS,
+	type MountDitherSettings,
 	DEFAULT_MOUNT_REMOTE_BINDINGS,
 	type MountRemoteBinding,
 	MAX_NOTIFICATION_IDS,
@@ -789,6 +793,32 @@ export function setMeridianFlipSettings(state: ProfileState, mount: CameraIdenti
 	const profile = activeProfile(state)
 	profile.settings.meridianFlipMonitor ??= {}
 	nestedObject(profile.settings.meridianFlipMonitor, mount.connectionId)[mount.deviceId] = { ...settings }
+}
+
+// Returns the dithering preferences of the Camera Acquisition form of a camera: the ones edited last, or the defaults.
+export function ditherSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<CameraDitherSettings> {
+	return acquisitionSettings(settings, camera).dither ?? DEFAULT_DITHER_SETTINGS
+}
+
+// Replaces fields of the dithering preferences of the Camera Acquisition form of a camera in the active profile.
+export function setDitherSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<CameraDitherSettings>) {
+	setAcquisitionSettings(state, camera, { dither: { ...ditherSettings(activeProfile(state).settings, camera), ...patch } })
+}
+
+// Returns the guide pulse settings of the Mount dithers of a mount: the ones edited last, or the defaults. mount is the
+// saved connection id and the mount id; absent gives the defaults.
+export function mountDitherSettings(settings: Pick<ProfileSettings, 'mountDither'>, mount: CameraIdentity | undefined): Readonly<MountDitherSettings> {
+	return (mount && settings.mountDither?.[mount.connectionId]?.[mount.deviceId]) ?? DEFAULT_MOUNT_DITHER_SETTINGS
+}
+
+// Replaces fields of the guide pulse settings of the Mount dithers of a mount in the active profile. A running capture
+// keeps the snapshot of its request. Does nothing without a mount.
+export function setMountDitherSettings(state: ProfileState, mount: CameraIdentity | undefined, patch: Partial<MountDitherSettings>) {
+	if (!mount) return
+	const profile = activeProfile(state)
+	const current = mountDitherSettings(profile.settings, mount)
+	profile.settings.mountDither ??= {}
+	nestedObject(profile.settings.mountDither, mount.connectionId)[mount.deviceId] = { ...current, ...patch }
 }
 
 // Marks notifications as read in the active profile, which the synchronization adds to what the server keeps for it.

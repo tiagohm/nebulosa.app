@@ -119,6 +119,7 @@ const PREFERENCES: Readonly<Record<ProfilePreferenceKey, PreferenceField>> = {
 	satelliteFavorites: setting('satelliteFavorites'),
 	dateTime: setting('dateTime'),
 	meridianFlipMonitor: setting('meridianFlipMonitor'),
+	mountDither: setting('mountDither'),
 }
 
 // Preferences the server keeps, in a fixed order.

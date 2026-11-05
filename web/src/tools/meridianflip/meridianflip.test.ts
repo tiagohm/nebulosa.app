@@ -169,8 +169,8 @@ describe('status', () => {
 	})
 
 	test('adds the time to or since the transit while monitoring a current forecast', () => {
-		expect(meridianFlipStatusText(monitor(1, { timing: { phase: 'approaching', quality: 'valid', secondsToTransit: 565 } }), 1000)).toBe('Approaching · T−9:25')
-		expect(meridianFlipStatusText(monitor(1, { timing: { phase: 'windowOpen', quality: 'valid', secondsToTransit: -370 }, mechanical: 'flipCandidate' }), 1000)).toBe('Flip window open · T+6:10')
+		expect(meridianFlipStatusText(monitor(1, { timing: { phase: 'approaching', quality: 'valid', secondsToTransit: 565 } }), 1000)).toBe('Approaching · −9:25')
+		expect(meridianFlipStatusText(monitor(1, { timing: { phase: 'windowOpen', quality: 'valid', secondsToTransit: -370 }, mechanical: 'flipCandidate' }), 1000)).toBe('Flip window open · +6:10')
 		expect(meridianFlipStatusText(monitor(1, { availability: 'idle', timing: { phase: 'unavailable', quality: 'unavailable' } }), 1000)).toBe('Idle')
 		expect(meridianFlipStatusText(monitor(1), 1000 + MERIDIAN_FLIP_STALE_AFTER + 1)).toBe('Monitoring')
 	})

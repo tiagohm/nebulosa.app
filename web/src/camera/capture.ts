@@ -1,10 +1,10 @@
-import type { CameraCapabilities, CaptureControlRequest, CaptureFrame, CaptureRequest, CaptureSession, CaptureSnapshot, CaptureSnoop, CaptureStartRequest, ServerEvent } from 'api'
+import type { CameraCapabilities, CaptureControlRequest, CaptureDither, CaptureFrame, CaptureRequest, CaptureSession, CaptureSnapshot, CaptureSnoop, CaptureStartRequest, GuidingSessionSummary, OperationDevice, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
 import { proxy } from 'valtio'
 import type { EquipmentSetup } from '../equipment/roles'
 import { deviceUrl, jsonInit, responseError } from '../http'
-import type { CameraAcquisitionSettings, CameraExposureSettings } from '../profile/schema'
+import type { CameraAcquisitionSettings, CameraDitherSettings, CameraExposureSettings, GuidingSettings, MountDitherSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 
 // Camera captures as this tab knows them. The server owns every capture, whichever tab started it, so this
@@ -170,6 +170,51 @@ export function captureRequest(exposure: Readonly<CameraExposureSettings>, acqui
 	const { exposureMode, count, delay, frameType, output } = acquisition
 	const format = output.format === 'XISF' && capabilities && !capabilities.transferFormats.includes('XISF') ? 'FITS' : output.format
 	return { ...fitExposure(exposure, capabilities), exposureMode, count, delay, frameType, output: { ...output, format } }
+}
+
+// What the dither of the next capture of a camera is built from: the camera's dithering preferences, and the setup's
+// guiding session, mount, and guide output with their own settings.
+export interface CaptureDitherInput {
+	// Acquisition mode and frame type of the next capture; only fixed and loop LIGHT captures dither.
+	readonly acquisition: Pick<CameraAcquisitionSettings, 'exposureMode' | 'frameType'>
+	// Dithering preferences of the camera.
+	readonly settings: Readonly<CameraDitherSettings>
+	// Latest guiding session of the setup's guide camera, running or ended, if any.
+	readonly guidingSession?: Pick<GuidingSessionSummary, 'sessionId' | 'active' | 'state' | 'cameraName'>
+	// Guiding form of the setup's guide camera, whose amount, RA only, and settle a Guided dither takes.
+	readonly guiding: Pick<GuidingSettings, 'ditherPixels' | 'ditherRaOnly' | 'settle'>
+	// Mount of the setup, by its exact connection and device ids.
+	readonly mount?: OperationDevice
+	// Guide output of the setup, which pulse dithers go through.
+	readonly guideOutput?: OperationDevice
+	// Guide pulse settings of the mount.
+	readonly mountSettings: Readonly<MountDitherSettings>
+}
+
+// Dither of the next capture of a camera: the snapshot its request carries, none when it does not dither, or why it
+// cannot start while it should dither.
+export type CaptureDitherOutcome = { readonly dither?: CaptureDither; readonly blocker?: undefined } | { readonly dither?: undefined; readonly blocker: string }
+
+// Builds the frozen dither snapshot of the next capture of a camera from its preferences and the setup, or why the
+// capture cannot dither now. A single exposure, a frame type other than LIGHT, or dithering turned off send none.
+export function captureDither({ acquisition, settings, guidingSession, guiding, mount, guideOutput, mountSettings }: CaptureDitherInput): CaptureDitherOutcome {
+	if (!settings.enabled || acquisition.exposureMode === 'single' || acquisition.frameType !== 'LIGHT') return {}
+	const { everyFrames } = settings
+
+	if (settings.method === 'guided') {
+		if (!guidingSession?.active) return { blocker: 'Start guiding with the Guide Camera to dither through it.' }
+		if (guidingSession.state !== 'guiding') return { blocker: `${guidingSession.cameraName} is not guiding.` }
+		return { dither: { method: 'guided', everyFrames, guidingSessionId: guidingSession.sessionId, amount: { unit: 'guidePixel', value: guiding.ditherPixels }, raOnly: guiding.ditherRaOnly, settle: { ...guiding.settle } } }
+	}
+
+	if (!mount) return { blocker: 'Assign a Mount in Equipment Setup to dither it.' }
+	const fields = { method: 'mount', everyFrames, mount, amount: settings.amount, raOnly: settings.raOnly, pattern: settings.pattern, settleTime: settings.settleTime } as const
+	if (settings.movement === 'slew') return { dither: { ...fields, movement: 'slew' } }
+
+	if (!guideOutput) return { blocker: 'Assign a Guide Output in Equipment Setup to dither by guide pulses.' }
+	const { rightAscensionDirection, declinationDirection, maxPulseDuration } = mountSettings
+	if (!rightAscensionDirection || !declinationDirection) return { blocker: 'Set the guide pulse directions of the mount to dither by guide pulses.' }
+	return { dither: { ...fields, movement: 'pulse', guideOutput, maxPulseDuration, rightAscensionDirection, declinationDirection } }
 }
 
 // Returns the devices every capture of a setup's cameras snoops into its frame headers: the mount, focuser, filter

@@ -23,6 +23,7 @@ import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { useNow } from '../useNow'
 import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, startCapture, stopCapture } from './capture'
+import { type DitherDevices, DitheringSection, useCaptureDither } from './DitheringSection'
 import { CameraSettings, ExposureSection } from './ExposureSettings'
 
 // Contextual panel sections of Camera Acquisition, the camera operation of the Images camera tabs: the exposure, the acquisition mode with its start and stop commands, the state of the running or last capture, the
@@ -76,10 +77,12 @@ export interface CameraAcquisitionTarget {
 	readonly settings?: CameraIdentity
 	// Devices snooped into the frame headers.
 	readonly snoop: CaptureSnoop
+	// Devices of the setup the dithers of the camera use; absent for a camera that is not the Main Camera, which never dithers.
+	readonly dither?: DitherDevices
 }
 
 // Camera Acquisition panel sections of a camera.
-export function CameraAcquisitionSections({ device, availability, settings: camera, snoop }: CameraAcquisitionTarget) {
+export function CameraAcquisitionSections({ device, availability, settings: camera, snoop, dither: ditherDevices }: CameraAcquisitionTarget) {
 	const profiles = useSnapshot(profileState)
 	const runtime = useSnapshot(captureRuntime)
 	const control = useSnapshot(controlRuntime)
@@ -95,6 +98,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 	const error = key ? runtime.errors[key] : undefined
 	const locked = running || pending
 	const [choosingDirectory, setChoosingDirectory] = useState(false)
+	const dither = useCaptureDither(camera, settings, ditherDevices)
 
 	// Updates fields of the camera's Camera Acquisition form.
 	function update(patch: Partial<CameraAcquisitionSettings>) {
@@ -114,7 +118,8 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 	// Starts the capture; once accepted, the camera tab stops holding a frame for analysis, so it shows what the capture takes.
 	async function start() {
 		if (!device || !key) return
-		await startCapture(captureRuntime, device.connectionId, device.id, { ...captureRequest(exposure, settings, capabilities), snoop })
+		if (dither.blocker) return
+		await startCapture(captureRuntime, device.connectionId, device.id, { ...captureRequest(exposure, settings, capabilities), snoop, ...(dither.dither && { dither: dither.dither }) })
 		if (!captureRuntime.errors[key]) await releaseCameraFrame(imagesState, cameraTabKey(device.connectionId, device.id), captureFramesState)
 	}
 
@@ -139,7 +144,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 					capabilities={capabilities}
 					mode={settings.exposureMode}
 					pending={pending}
-					startable={availability.status === 'ready' && device !== undefined}
+					startable={availability.status === 'ready' && device !== undefined && dither.blocker === undefined}
 					onStart={() => void start()}
 					onStop={() => device && session && void stopCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
 					onAbort={() => device && session && void abortCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
@@ -147,6 +152,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 				{availability.status !== 'ready' && !running && <Notice>{availability.message}</Notice>}
 				{error && <Notice error>{error}</Notice>}
 			</CollapsibleSection>
+			<DitheringSection camera={camera} acquisition={settings} devices={ditherDevices} session={session} running={running} locked={locked} outcome={dither} />
 			{session && <CaptureState session={session} />}
 			<CameraSettings device={device} settings={exposure} capabilities={capabilities} disabled={locked} onChange={updateExposure} />
 			<CollapsibleSection id="images.camera-acquisition.output" title="Output">
@@ -246,6 +252,7 @@ function CaptureState({ session }: CaptureStateProps) {
 	const now = useNow(running)
 
 	const progress = session.phase === 'exposing' ? session.exposure?.progress : session.phase === 'waiting' ? session.delay?.progress : undefined
+	const { dither } = session
 	const failed = session.phase === 'failed' || session.phase === 'aborted'
 
 	return (
@@ -255,7 +262,9 @@ function CaptureState({ session }: CaptureStateProps) {
 			<DataList>
 				<DataRow label={captureCount(session)}>{session.request.output.mode === 'preview-save' ? `Saved ${session.saved}` : 'Not Saved'}</DataRow>
 				<DataRow label="Elapsed">{formatClockDuration(captureElapsed(session, now))}</DataRow>
+				{dither && <DataRow label="Dithers">{String(dither.completed)}</DataRow>}
 			</DataList>
+			{dither?.error && <Notice error>{dither.error}</Notice>}
 			{session.phase === 'failed' && session.captured > 0 && (
 				<Notice>
 					The capture did not complete: {session.captured} frames taken, {session.saved} saved.

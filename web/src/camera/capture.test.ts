@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession } from 'api'
 import { proxy } from 'valtio'
-import { DEFAULT_ACQUISITION_SETTINGS, DEFAULT_EXPOSURE_SETTINGS } from '../profile/schema'
-import { cameraKey, captureCount, captureElapsed, captureRequest, fitExposure, frameProgress, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, handleCaptureEvent, refreshCaptures, startCapture, stopCapture } from './capture'
+import { DEFAULT_ACQUISITION_SETTINGS, DEFAULT_DITHER_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_GUIDING_SETTINGS, DEFAULT_MOUNT_DITHER_SETTINGS } from '../profile/schema'
+import { cameraKey, captureCount, captureDither, type CaptureDitherInput, captureElapsed, captureRequest, fitExposure, frameProgress, type CaptureRuntime, captureRunning, captureSnoop, captureStatus, fileState, handleCaptureEvent, refreshCaptures, startCapture, stopCapture } from './capture'
 import { convertExposure, exposureUnitOf, fromSeconds, toSeconds } from './ExposureTimeInput'
 
 function newState() {
@@ -10,7 +10,7 @@ function newState() {
 }
 
 // The request of the default forms.
-const DEFAULT_REQUEST: CaptureRequest = { ...DEFAULT_EXPOSURE_SETTINGS, ...DEFAULT_ACQUISITION_SETTINGS }
+const DEFAULT_REQUEST: CaptureRequest = captureRequest(DEFAULT_EXPOSURE_SETTINGS, DEFAULT_ACQUISITION_SETTINGS)
 
 function session(patch: Partial<CaptureSession> = {}): CaptureSession {
 	return { sessionId: 's1', operationId: 'o1', connectionId: 'c', deviceId: 'cam', cameraName: 'Camera', request: { ...DEFAULT_REQUEST, exposureTime: 5 }, phase: 'exposing', stopping: false, captured: 0, saved: 0, count: 1, startedAt: 1000, ...patch }
@@ -124,7 +124,7 @@ test('starts a capture once, reports a refusal, and refreshes after a lost respo
 
 test('composes the exposure settings and the acquisition form of a camera, fitted to its capabilities', () => {
 	const exposure = { ...DEFAULT_EXPOSURE_SETTINGS, exposureTime: 0.0001, gain: 500, binX: 8, binY: 8, subframe: true, x: 900, y: 0, width: 400, height: 200, frameFormat: 'RGB' }
-	const acquisition = { ...DEFAULT_ACQUISITION_SETTINGS, exposureMode: 'loop', delay: 3, frameType: 'FLAT', output: { mode: 'preview-save', format: 'XISF' } } as const
+	const acquisition = { exposureMode: 'loop', count: DEFAULT_ACQUISITION_SETTINGS.count, delay: 3, frameType: 'FLAT', output: { mode: 'preview-save', format: 'XISF' } } as const
 
 	expect(captureRequest(exposure, acquisition, CAPABILITIES)).toEqual({ ...exposure, ...acquisition, exposureTime: 0.0001, gain: 300, binX: 4, binY: 4, x: 600, frameFormat: '', output: { mode: 'preview-save', format: 'FITS' } })
 	expect(captureRequest({ ...exposure, exposureTime: 0.000001 }, acquisition, CAPABILITIES).exposureTime).toBe(0.00001)
@@ -187,4 +187,34 @@ test('the frame progress converts the driver countdown to seconds and a bounded 
 	expect(frameProgress({ elapsedTime: 2_500_000, remainingTime: 7_500_000, progress: 25 })).toEqual({ elapsed: 2.5, remaining: 7.5, fraction: 0.25 })
 	expect(frameProgress({ elapsedTime: 10_000_000, remainingTime: -1, progress: 104 })).toEqual({ elapsed: 10, remaining: 0, fraction: 1 })
 	expect(frameProgress({ elapsedTime: 0, remainingTime: 0, progress: Number.NaN })).toBeUndefined()
+})
+
+test('builds the frozen dither of the next capture from the preferences and the setup, or why it cannot start', () => {
+	const mount = { connectionId: 'c', deviceId: 'mount' }
+	const guideOutput = { connectionId: 'c', deviceId: 'st4' }
+	const input: CaptureDitherInput = {
+		acquisition: { exposureMode: 'fixed', frameType: 'LIGHT' },
+		settings: { ...DEFAULT_DITHER_SETTINGS, enabled: true },
+		guidingSession: { sessionId: 'g1', active: true, state: 'guiding', cameraName: 'Guide' },
+		guiding: DEFAULT_GUIDING_SETTINGS,
+		mount,
+		guideOutput,
+		mountSettings: { ...DEFAULT_MOUNT_DITHER_SETTINGS, rightAscensionDirection: 'EAST', declinationDirection: 'SOUTH' },
+	}
+
+	expect(captureDither(input)).toEqual({ dither: { method: 'guided', everyFrames: 3, guidingSessionId: 'g1', amount: { unit: 'guidePixel', value: 5 }, raOnly: false, settle: { pixels: 1.5, time: 10, timeout: 60 } } })
+	expect(captureDither({ ...input, guidingSession: { ...input.guidingSession!, state: 'calibrating' } })).toEqual({ blocker: 'Guide is not guiding.' })
+	expect(captureDither({ ...input, guidingSession: undefined }).blocker).toBeString()
+
+	// A single exposure, another frame type, or dithering turned off send none and block nothing.
+	expect(captureDither({ ...input, acquisition: { exposureMode: 'single', frameType: 'LIGHT' }, guidingSession: undefined })).toEqual({})
+	expect(captureDither({ ...input, acquisition: { exposureMode: 'loop', frameType: 'DARK' } })).toEqual({})
+	expect(captureDither({ ...input, settings: DEFAULT_DITHER_SETTINGS })).toEqual({})
+
+	const pulse = { ...input, settings: { ...input.settings, method: 'mount' } } as const
+	expect(captureDither(pulse)).toEqual({ dither: { method: 'mount', everyFrames: 3, mount, amount: 10, raOnly: false, pattern: 'random', settleTime: 5, movement: 'pulse', guideOutput, maxPulseDuration: 5000, rightAscensionDirection: 'EAST', declinationDirection: 'SOUTH' } })
+	expect(captureDither({ ...pulse, mountSettings: DEFAULT_MOUNT_DITHER_SETTINGS }).blocker).toContain('directions')
+	expect(captureDither({ ...pulse, guideOutput: undefined }).blocker).toContain('Guide Output')
+	expect(captureDither({ ...pulse, mount: undefined }).blocker).toContain('Mount')
+	expect(captureDither({ ...pulse, guideOutput: undefined, mountSettings: DEFAULT_MOUNT_DITHER_SETTINGS, settings: { ...pulse.settings, movement: 'slew' } })).toEqual({ dither: { method: 'mount', everyFrames: 3, mount, amount: 10, raOnly: false, pattern: 'random', settleTime: 5, movement: 'slew' } })
 })

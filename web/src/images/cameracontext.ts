@@ -1,6 +1,7 @@
 import type { CaptureSnoop, OperationDevice } from 'api'
 import { useSnapshot } from 'valtio'
 import { captureSnoop } from '../camera/capture'
+import type { DitherDevices } from '../camera/DitheringSection'
 import { type DeviceView, roleDevice, roleStatus } from '../equipment/equipment'
 import { CAMERA_ROLES, type CameraRole, type EquipmentRole, type EquipmentSetup } from '../equipment/roles'
 import { type RoleDevice, useWatchedDevices } from '../equipment/useEquipment'
@@ -49,6 +50,10 @@ export interface CameraOperationContext {
 	// Devices snooped into the headers of the camera's frames: those of the setup for the Main Camera, the mount alone for
 	// the Guide Camera, none for a camera without a role.
 	readonly snoop: CaptureSnoop
+	// Devices the dithers of Camera Acquisition use: the MOUNT, the GUIDE_CAMERA whose guiding session Guided dithers go
+	// through, and the GUIDE_OUTPUT pulse dithers go through, when the camera is the Main Camera; absent otherwise, meaning
+	// the camera never dithers.
+	readonly dither?: DitherDevices
 }
 
 // Resolves the equipment of the camera tab of a document from the active profile and the devices of the watched
@@ -68,7 +73,7 @@ export function cameraOperationContext(document: Pick<ImageDocument, 'source'> |
 	const settings = watched ? profileCamera(profile, deviceId) : undefined
 	const context: CameraOperationContext = { camera, device, ...(settings && { settings }), mount: resolve('MOUNT'), snoop: {} }
 
-	if (role === 'MAIN_CAMERA') return { ...context, role, snoop: captureSnoop(setup), focuser: resolve('FOCUSER'), wheel: resolve('FILTER_WHEEL'), flatPanel: resolve('FLAT_PANEL'), cover: resolve('COVER') }
+	if (role === 'MAIN_CAMERA') return { ...context, role, snoop: captureSnoop(setup), focuser: resolve('FOCUSER'), wheel: resolve('FILTER_WHEEL'), flatPanel: resolve('FLAT_PANEL'), cover: resolve('COVER'), dither: { mount: context.mount, guideCamera: resolve('GUIDE_CAMERA'), guideOutput: resolve('GUIDE_OUTPUT') } }
 	if (role === 'GUIDE_CAMERA') return { ...context, role, snoop: { mount: setup.MOUNT?.id }, guideOutput: resolve('GUIDE_OUTPUT') }
 	return context
 }

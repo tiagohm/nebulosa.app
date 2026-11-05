@@ -13,5 +13,5 @@ import type { ImageToolPanelProps } from './tools'
 export function CameraAcquisitionTool({ camera }: ImageToolPanelProps) {
 	const operations = useSnapshot(operationsState)
 	if (!camera) return <EmptyState title="No camera tab" description="Select a camera tab to take frames with its camera." />
-	return <CameraAcquisitionSections device={camera.device.device} availability={deviceAvailability('camera', camera.device, operations)} settings={camera.settings} snoop={camera.snoop} />
+	return <CameraAcquisitionSections device={camera.device.device} availability={deviceAvailability('camera', camera.device, operations)} settings={camera.settings} snoop={camera.snoop} dither={camera.dither} />
 }

@@ -137,7 +137,7 @@ CREATE TABLE profile_equipment (
 CREATE TABLE profile_preferences (
 	profile_id TEXT NOT NULL REFERENCES profiles (id) ON DELETE CASCADE,
 	-- Preference (ProfilePreferenceKey).
-	key TEXT NOT NULL CHECK (key IN ('telescope', 'guideTelescope', 'skyDisplay', 'skyFraming', 'starDetection', 'starProfile', 'streakDetection', 'imageAnnotation', 'imagePlateSolving', 'imageDisplay', 'imageAstrometry', 'statusBar', 'satelliteFavorites', 'dateTime', 'meridianFlipMonitor')),
+	key TEXT NOT NULL CHECK (key IN ('telescope', 'guideTelescope', 'skyDisplay', 'skyFraming', 'starDetection', 'starProfile', 'streakDetection', 'imageAnnotation', 'imagePlateSolving', 'imageDisplay', 'imageAstrometry', 'statusBar', 'satelliteFavorites', 'dateTime', 'meridianFlipMonitor', 'mountDither')),
 	-- Version of the shape of the value.
 	version INTEGER NOT NULL,
 	-- Value; null when reset to its default.

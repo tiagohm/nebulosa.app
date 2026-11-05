@@ -2,6 +2,7 @@ import type {
 	AnnotationBodies,
 	ImageProcessingOperation,
 	AutoFocusRequest,
+	CaptureDither,
 	CaptureRequest,
 	CloseApproachBody,
 	DarkGroup,
@@ -12,9 +13,11 @@ import type {
 	LiveStackingCalibration,
 	LiveStackingRecipe,
 	MeridianFlipSettings,
+	MountCaptureDither,
 	MountRemoteProtocol,
 	MountRemoteStartRequest,
 	PlateSolveRequest,
+	PulseCaptureDither,
 	StarDetectionRequest,
 	StreakDetectorSettings,
 } from 'api'
@@ -99,6 +102,9 @@ export interface ProfileSettings {
 	// edited, and then DEFAULT_MERIDIAN_FLIP_SETTINGS holds. A preference only: it never enables, disables, or changes a
 	// running monitor, whose settings stay the ones it was enabled or updated with.
 	meridianFlipMonitor?: Record<string, Record<string, MeridianFlipSettings>>
+	// Guide pulse settings of the Mount dithers of each mount, by saved connection id, then mount id; absent until edited,
+	// and then DEFAULT_MOUNT_DITHER_SETTINGS holds. A preference only: a running capture keeps the snapshot of its request.
+	mountDither?: Record<string, Record<string, MountDitherSettings>>
 	// Notifications of the server history the profile read or dismissed; absent until the first one is read. The server
 	// keeps one history for every profile and these states for each one (profile_notification_state), which only grow.
 	notifications?: NotificationPreferences
@@ -369,9 +375,66 @@ export type CameraExposureSettings = Pick<CaptureRequest, 'exposureTime' | 'gain
 // the whole sensor.
 export const DEFAULT_EXPOSURE_SETTINGS: CameraExposureSettings = { exposureTime: 1, gain: 0, offset: 0, binX: 1, binY: 1, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '' }
 
-// Camera Acquisition form of one physical camera besides its exposure: the acquisition mode, the frame type, and the
-// output the next capture starts with. Delay in seconds.
-export type CameraAcquisitionSettings = Pick<CaptureRequest, 'exposureMode' | 'count' | 'delay' | 'frameType' | 'output'>
+// Camera Acquisition form of one physical camera besides its exposure: the acquisition mode, the frame type, the output
+// the next capture starts with, and its dithering. Delay in seconds.
+export interface CameraAcquisitionSettings extends Pick<CaptureRequest, 'exposureMode' | 'count' | 'delay' | 'frameType' | 'output'> {
+	// Automatic dithering of the fixed and loop LIGHT captures; absent until edited, and then DEFAULT_DITHER_SETTINGS holds.
+	// Kept while a single exposure or another frame type is selected, which never dither.
+	dither?: CameraDitherSettings
+}
+
+// Dithering preferences of the Camera Acquisition form. A Guided dither takes its amount, RA only, and settle from the
+// Guiding form of the setup's guide camera, and pulses take their directions and limit from the mount (MountDitherSettings);
+// what a running capture uses is the snapshot of its request.
+export interface CameraDitherSettings {
+	// Whether the next fixed or loop LIGHT capture dithers.
+	enabled: boolean
+	// Frames taken between two dithers, an integer in [1, DITHER_MAXIMUM_EVERY_FRAMES].
+	everyFrames: number
+	// Whether the guiding session of the guide camera dithers, or the capture moves the unguided mount itself.
+	method: CaptureDither['method']
+	// How a Mount dither moves the mount: guide pulses, or a small GoTo.
+	movement: MountCaptureDither['movement']
+	// Size of each Mount dither on the sky, in arcseconds, in [DITHER_MINIMUM_AMOUNT, DITHER_MAXIMUM_AMOUNT].
+	amount: number
+	// Whether each Mount dither moves the RA axis only.
+	raOnly: boolean
+	// Pattern of the successive Mount dithers.
+	pattern: MountCaptureDither['pattern']
+	// Mechanical settle after each Mount dither, in seconds, in [0, DITHER_MAXIMUM_SETTLE].
+	settleTime: number
+}
+
+// Largest number of frames between two dithers of the form.
+export const DITHER_MAXIMUM_EVERY_FRAMES = 1000
+
+// Smallest Mount dither of the form, in arcseconds.
+export const DITHER_MINIMUM_AMOUNT = 0.1
+
+// Largest Mount dither of the form, in arcseconds (2 arcminutes).
+export const DITHER_MAXIMUM_AMOUNT = 120
+
+// Longest mechanical settle of the form, in seconds.
+export const DITHER_MAXIMUM_SETTLE = 120
+
+// Dithering of a camera that has none yet: off; when enabled, every 3 frames through the guiding session, or for a
+// Mount dither by guide pulses of 10″ at random on both axes followed by a 5 s settle.
+export const DEFAULT_DITHER_SETTINGS: CameraDitherSettings = { enabled: false, everyFrames: 3, method: 'guided', movement: 'pulse', amount: 10, raOnly: false, pattern: 'random', settleTime: 5 }
+
+// Guide pulse settings of the Mount dithers of one mount, which no calibration measures: the guide direction that moves
+// the mount toward a positive (east) right ascension and a positive (north) declination offset, as the operator declares
+// them, and the longest pulse of one axis in milliseconds. Pulse dithers are unavailable until the directions are set.
+export interface MountDitherSettings {
+	// Guide direction moving the mount toward a positive (east) right ascension offset; absent until declared.
+	rightAscensionDirection?: PulseCaptureDither['rightAscensionDirection']
+	// Guide direction moving the mount toward a positive (north) declination offset; absent until declared.
+	declinationDirection?: PulseCaptureDither['declinationDirection']
+	// Longest pulse of one axis, in milliseconds, in [GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE].
+	maxPulseDuration: number
+}
+
+// Guide pulse settings of a mount that has none yet: no declared direction and pulses of at most 5 s.
+export const DEFAULT_MOUNT_DITHER_SETTINGS: MountDitherSettings = { maxPulseDuration: 5000 }
 
 // Camera Acquisition form of a camera that has none yet: one light frame, previewed and saved in the server's default
 // directory with the server's default names, as FITS.

@@ -10,6 +10,10 @@ import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
 	meridianFlipSettings,
+	ditherSettings,
+	mountDitherSettings,
+	setDitherSettings,
+	setMountDitherSettings,
 	mountRemoteBinding,
 	satelliteFavorites,
 	setMeridianFlipSettings,
@@ -115,6 +119,8 @@ import {
 	DEFAULT_FLAT_WIZARD_SETTINGS,
 	DEFAULT_GUIDING_SETTINGS,
 	DEFAULT_MERIDIAN_FLIP_SETTINGS,
+	DEFAULT_DITHER_SETTINGS,
+	DEFAULT_MOUNT_DITHER_SETTINGS,
 	DEFAULT_MOUNT_REMOTE_BINDINGS,
 	DEFAULT_TPPA_SETTINGS,
 	DEFAULT_TARGET_CENTERING_SETTINGS,
@@ -738,6 +744,27 @@ describe('meridian flip monitor settings', () => {
 		expect(meridianFlipSettings(settings(), mount)).toEqual(applied)
 		expect(meridianFlipSettings(settings(), { connectionId: 'c', deviceId: 'mount-2' })).toEqual(DEFAULT_MERIDIAN_FLIP_SETTINGS)
 		expect(state.profiles[0].settings.meridianFlipMonitor).toEqual({ c: { 'mount-1': applied } })
+	})
+})
+
+describe('dithering settings', () => {
+	test('the camera keeps its dithering in its acquisition form, and each mount its guide pulse settings', () => {
+		const state = load()
+		const camera = { connectionId: 'c', deviceId: 'camera-1' }
+		const mount = { connectionId: 'c', deviceId: 'mount-1' }
+		const settings = () => activeProfile(state).settings
+
+		expect(ditherSettings(settings(), camera)).toEqual(DEFAULT_DITHER_SETTINGS)
+		setDitherSettings(state, camera, { enabled: true, method: 'mount' })
+		expect(ditherSettings(settings(), camera)).toEqual({ ...DEFAULT_DITHER_SETTINGS, enabled: true, method: 'mount' })
+		expect(acquisitionSettings(settings(), camera)).toMatchObject({ exposureMode: 'single', dither: { enabled: true, method: 'mount' } })
+
+		expect(mountDitherSettings(settings(), mount)).toEqual(DEFAULT_MOUNT_DITHER_SETTINGS)
+		setMountDitherSettings(state, mount, { rightAscensionDirection: 'WEST' })
+		setMountDitherSettings(state, mount, { declinationDirection: 'NORTH' })
+		setMountDitherSettings(state, undefined, { maxPulseDuration: 1 })
+		expect(state.profiles[0].settings.mountDither).toEqual({ c: { 'mount-1': { maxPulseDuration: 5000, rightAscensionDirection: 'WEST', declinationDirection: 'NORTH' } } })
+		expect(mountDitherSettings(settings(), { connectionId: 'c', deviceId: 'mount-2' })).toEqual(DEFAULT_MOUNT_DITHER_SETTINGS)
 	})
 })
 

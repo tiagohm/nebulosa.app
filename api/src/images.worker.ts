@@ -14,24 +14,7 @@ import { Bitpix, type FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSource } from 'nebulosa/src/io/io'
 import type { Sink } from 'nebulosa/src/io/types'
 import { luminanceImage, luminanceRegion, readImageFrom, sampleConversion } from './imagedecode'
-import {
-	cfaPattern,
-	DisplayError,
-	type DisplaySettings,
-	type ImageCapture,
-	type ImageFormat,
-	imageAcquisition,
-	type ImageInfo,
-	ImageOpenError,
-	type ImageProvenance,
-	type ImageWorkerRequest,
-	type ImageWorkerResponse,
-	type ProcessingProvenance,
-	type RenderRequest,
-	type RenderResult,
-	type SaveFormat,
-	type Stretch,
-} from './images'
+import { cfaPattern, DisplayError, type DisplaySettings, type ImageCapture, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type SaveFormat, type Stretch } from './images'
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
 // work on them: decoding FITS and XISF files and camera frames, the display pipeline, JPEG encoding, encoding
@@ -207,8 +190,9 @@ const STALE_DERIVED_KEYWORDS = ['BZERO', 'BSCALE', 'DATAMIN', 'DATAMAX', 'CSTRET
 const CFA_KEYWORDS = ['BAYERPAT', 'XBAYROFF', 'YBAYROFF'] as const
 
 // Returns the HISTORY lines of a derived image: its source and time, then each processing step applied, in order,
-// as its operation in JSON.
+// as its operation in JSON; for a live stack snapshot, the frames it integrates.
 function provenanceHistory(provenance: ImageProvenance): string[] {
+	if (provenance.kind === 'liveStacking') return [`Live stack snapshot by Nebulosa of ${provenance.frames} accepted frames at ${provenance.createdAt}`]
 	const derived = `Derived by Nebulosa from ${provenance.sourceName} at ${provenance.createdAt}`
 	const count = provenance.steps.length
 	return [derived, ...provenance.steps.map(({ operation }, i) => `Processing ${i + 1}/${count}: ${JSON.stringify(operation)}`)]
@@ -227,9 +211,10 @@ function derivedHeader(image: Image, provenance: ImageProvenance): FitsHeader {
 	return header
 }
 
-// Returns the name of a derived image: the source name without its extension, marked as processed.
-function derivedName(sourceName: string): string {
-	return `${sourceName.replace(/\.[^.]+$/, '')} — Processed`
+// Returns the name of a derived image: the source name without its extension, marked as processed, or as a live stack.
+function derivedName(provenance: ImageProvenance): string {
+	if (provenance.kind === 'liveStacking') return `${provenance.sourceName} — Live Stack`
+	return `${provenance.sourceName.replace(/\.[^.]+$/, '')} — Processed`
 }
 
 // Keeps an image computed from another document as a new derived document and returns its info: the
@@ -240,7 +225,7 @@ function addDerivedDocument(image: Image, provenance: ImageProvenance, cfa: CfaP
 	const { width, height, channels } = image.metadata
 	const pixelSizeInBytes = image.raw.BYTES_PER_ELEMENT
 	const derived: Image = { ...image, header, metadata: { ...image.metadata, bitpix: header.BITPIX as Bitpix, pixelSizeInBytes, strideInBytes: width * channels * pixelSizeInBytes } }
-	const name = derivedName(provenance.sourceName)
+	const name = derivedName(provenance)
 	const info: ImageInfo = { origin: 'derived', provenance, id: crypto.randomUUID(), name, width, height, channels, header, acquisition: imageAcquisition(header), ...(image.metadata.bayer && { bayer: image.metadata.bayer }), ...(cfa && { cfa }) }
 	documents.set(info.id, { name, image: derived, cfa, autoStretches: new Map() })
 	return info
@@ -249,7 +234,7 @@ function addDerivedDocument(image: Image, provenance: ImageProvenance, cfa: CfaP
 // Adopts the result of an image processing pipeline as a new derived document. Its metadata names the CFA
 // pattern at the image origin of a mosaic still mono, which processingImage made trusted and the steps kept
 // in phase (flips); a debayered or grayscale result names none.
-function adoptDocument(image: Image, provenance: ProcessingProvenance): ImageInfo {
+function adoptDocument(image: Image, provenance: ImageProvenance): ImageInfo {
 	return addDerivedDocument(image, provenance, image.metadata.channels === 1 ? image.metadata.bayer : undefined)
 }
 

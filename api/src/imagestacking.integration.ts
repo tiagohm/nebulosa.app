@@ -201,12 +201,12 @@ export function productHeader(metadata: CalibrationMetadata, name: string, frame
 }
 
 // Returns an empty image of the project grid, which a warp only reads the geometry of.
-function gridImage(width: number, height: number, channels: number): Image {
+export function gridImage(width: number, height: number, channels: number): Image {
 	return { header: {}, metadata: { width, height, channels, stride: width * channels, pixelCount: width * height, strideInBytes: width * channels * 4, pixelSizeInBytes: 4, bitpix: -32, bayer: undefined }, raw: new Float32Array(0) }
 }
 
 // Writes a Float32 image of planes, one whole channel after another, and returns its SHA-256 and size.
-async function writePlanes(path: string, width: number, height: number, channels: number, header: FitsHeader, planes: (write: (samples: Float32Array, count: number) => Promise<void>) => Promise<void>) {
+export async function writePlanes(path: string, width: number, height: number, channels: number, header: FitsHeader, planes: (write: (samples: Float32Array, count: number) => Promise<void>) => Promise<void>) {
 	const handle = await open(path, 'wx')
 
 	try {

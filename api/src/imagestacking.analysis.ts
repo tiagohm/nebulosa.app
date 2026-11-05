@@ -13,6 +13,7 @@ import { uncompressedWidthKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
 import { fileDigest } from './calibrationlibrary.analysis'
 import { digitalFullScale } from './calibrationlibrary.sources'
+import type { ImageSource } from './imagedecode'
 import type { StackingFrameAnalysis, StackingProjectAnalysis, StackingRegistration, StackingStar } from './imagestacking.store'
 
 // Analysis of the light frames of a stacking project. Measuring runs on a worker of its own (`imagestacking.worker.ts`):
@@ -135,8 +136,13 @@ export interface CohortMasters {
 // Reads the first image of a FITS or XISF file in digital numbers, in single precision.
 export async function readDigital(path: string): Promise<DigitalImage> {
 	await using source = fileHandleSource(await open(path, 'r'))
+	return await readDigitalFrom(source, extname(path).toLowerCase() === '.xisf')
+}
 
-	if (extname(path).toLowerCase() === '.xisf') {
+// Reads the first image of a FITS or XISF source, an open file or bytes in memory, in digital numbers, in single
+// precision. Throws when it holds no readable image.
+export async function readDigitalFrom(source: ImageSource, xisfFormat: boolean): Promise<DigitalImage> {
+	if (xisfFormat) {
 		const xisf = await readXisf(source)
 		const image = xisf?.images.length ? await readImageFromXisf(xisf, source, { sampleScale: 'digital', raw: 32 }) : undefined
 		if (image) return image

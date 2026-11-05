@@ -15,6 +15,7 @@ import type { GuidingServerEvent } from './guiding'
 import type { ImageProcessingEvent } from './imageprocessing'
 import type { ImageStackingEvent } from './imagestacking'
 import type { IndiClientMessage, IndiServerEvent } from './indi'
+import type { LiveStackingEvent } from './livestacking'
 import type { PointingModelEvent } from './mountpointing'
 import type { PointingActivationEvent } from './mountpointing.corrections'
 import type { MountPointingEvent } from './mountpointing.sessions'
@@ -58,6 +59,7 @@ export type ServerEvent =
 	| DarkLibraryWizardEvent
 	| CalibrationLibraryEvent
 	| ImageStackingEvent
+	| LiveStackingEvent
 	| MountNudgeEvent
 	| MountRemoteControlEvent
 	| DomeMotionEvent

@@ -281,23 +281,28 @@ interface DerivationProps {
 }
 
 // Provenance and persistence of a derived image: its source, when it was derived, the processing steps of the pipeline
-// that derived it, and whether it is saved (from the Save control of the viewer toolbar).
+// that derived it, or the frames of the live stack it is a snapshot of, and whether it is saved (from the Save control
+// of the viewer toolbar).
 function Derivation({ document, provenance }: DerivationProps) {
 	return (
 		<CollapsibleSection id="images.inspector.derived-image" title="Derived Image">
 			<DataRow label="Source">{provenance.sourceName}</DataRow>
 			<DataRow label="Created (UTC)">{formatDate(provenance.createdAt)}</DataRow>
-			<ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs">
-				{provenance.steps.map(({ id, operation }, i) => (
-					<li key={id} className="flex min-w-0 gap-2">
-						<span className="flex-none text-ink-300 tabular-nums">{i + 1}.</span>
-						<span className="min-w-0 truncate text-ink-100" title={operationSummary(operation)}>
-							{operationLabel(operation.type)}
-							<span className="text-ink-300"> · {operationSummary(operation)}</span>
-						</span>
-					</li>
-				))}
-			</ol>
+			{provenance.kind === 'liveStacking' ? (
+				<DataRow label="Live stack">{provenance.frames} accepted frames</DataRow>
+			) : (
+				<ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs">
+					{provenance.steps.map(({ id, operation }, i) => (
+						<li key={id} className="flex min-w-0 gap-2">
+							<span className="flex-none text-ink-300 tabular-nums">{i + 1}.</span>
+							<span className="min-w-0 truncate text-ink-100" title={operationSummary(operation)}>
+								{operationLabel(operation.type)}
+								<span className="text-ink-300"> · {operationSummary(operation)}</span>
+							</span>
+						</li>
+					))}
+				</ol>
+			)}
 			<DataRow label="State">{document.unsaved ? <span className="text-accent">Unsaved</span> : 'Saved'}</DataRow>
 		</CollapsibleSection>
 	)

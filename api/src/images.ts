@@ -53,8 +53,22 @@ export interface ProcessingProvenance extends ProvenanceSource {
 	readonly steps: readonly ImageProcessingStep[]
 }
 
-// Where a derived image comes from: the document and what was applied to it.
-export type ImageProvenance = ProcessingProvenance
+// A snapshot of a live stack: the linear integration of the frames a Live Stacking session accepted so far, or a color
+// composition of several of its stacks, held in memory until it is saved.
+export interface LiveStackingProvenance {
+	readonly kind: 'liveStacking'
+	// Id of the Live Stacking session.
+	readonly sessionId: string
+	// Name of what the snapshot shows, such as its filter, or the preset of a composition; it names the document.
+	readonly sourceName: string
+	// Accepted frames integrated, in total over the stacks it shows.
+	readonly frames: number
+	// When the snapshot was taken, as an ISO 8601 UTC date-time.
+	readonly createdAt: string
+}
+
+// Where a derived image comes from: the document and what was applied to it, or the live stack it is a snapshot of.
+export type ImageProvenance = ProcessingProvenance | LiveStackingProvenance
 
 // Camera frame an image document was decoded from, as the capture service received it.
 export interface ImageCapture {
@@ -332,7 +346,7 @@ export type ImageWorkerRequest =
 	| { readonly type: 'detectionImage'; readonly id: number; readonly document: string }
 	| { readonly type: 'detectionRegion'; readonly id: number; readonly document: string; readonly rect: ImageRect }
 	| { readonly type: 'processingImage'; readonly id: number; readonly document: string }
-	| { readonly type: 'adopt'; readonly id: number; readonly image: Image; readonly provenance: ProcessingProvenance }
+	| { readonly type: 'adopt'; readonly id: number; readonly image: Image; readonly provenance: ImageProvenance }
 	| { readonly type: 'cancel'; readonly id: number }
 	| { readonly type: 'close'; readonly document: string }
 
@@ -579,10 +593,10 @@ export class ImageStore {
 		throw responseError(response)
 	}
 
-	// Adopts the result of an image processing pipeline as a new derived document, with the floating-point header
-	// and the history of its provenance. The buffer of the image is transferred to the worker, so the
-	// caller must not use it afterwards.
-	async adopt(image: Image, provenance: ProcessingProvenance): Promise<ImageInfo> {
+	// Adopts the result of an image processing pipeline, or a live stack snapshot, as a new derived document, with the
+	// floating-point header and the history of its provenance. The buffer of the image is transferred to the worker, so
+	// the caller must not use it afterwards.
+	async adopt(image: Image, provenance: ImageProvenance): Promise<ImageInfo> {
 		const response = await this.#request({ type: 'adopt', id: this.#id++, image, provenance }, [image.raw.buffer])
 		if (response.status !== 'adopted') throw responseError(response)
 		this.#documents.set(response.info.id, documentRecord(response.info))

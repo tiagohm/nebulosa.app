@@ -687,3 +687,23 @@ CREATE TABLE satellite_auto_downloads (
 	-- When the operator turned the downloads on, Unix milliseconds (UTC).
 	enabled_at INTEGER NOT NULL
 ) STRICT;
+
+-- Linear stacks saved from Live Stacking sessions (LiveStackingStore): the session itself lives only in memory, so a
+-- saved stack keeps everything that explains it. Its files are under live-stacking/products/<product_id>/, published by
+-- a rename once complete.
+CREATE TABLE live_stack_products (
+	product_id TEXT PRIMARY KEY,
+	publication TEXT NOT NULL CHECK (publication IN ('publishing', 'published', 'deleting')),
+	-- Session it was saved from, and the exact camera of that session.
+	session_id TEXT NOT NULL,
+	connection_id TEXT NOT NULL,
+	device_id TEXT NOT NULL,
+	-- When it was saved, Unix milliseconds (UTC).
+	created_at INTEGER NOT NULL,
+	-- SHA-256 and size, in bytes, of stack.fit.
+	content_digest TEXT NOT NULL,
+	bytes INTEGER NOT NULL CHECK (bytes > 0),
+	-- Everything else about it (LiveStackingProduct): kind, name, grid, frames, exposure, recipe, cohorts and their
+	-- calibration, and the composition of a color stack.
+	product TEXT NOT NULL CHECK (json_valid(product))
+) STRICT;

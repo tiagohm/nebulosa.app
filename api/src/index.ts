@@ -33,6 +33,8 @@ import { createImageRoutes, images } from './images'
 import { createImageStackingRoutes, ImageStacking } from './imagestacking'
 import { DEFAULT_IMAGE_STACKING_DIRECTORY, ImageStackingStore } from './imagestacking.store'
 import { createIndiRoutes, IndiPropertyService } from './indi'
+import { createLiveStackingRoutes, LiveStacking } from './livestacking'
+import { LiveStackingStore } from './livestacking.store'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
 import { createPointingModelRoutes, PointingModels } from './mountpointing'
 import { createPointingActivationRoutes, MountCorrections, PointingActivations } from './mountpointing.corrections'
@@ -366,7 +368,29 @@ export type {
 	SkyStarData,
 	SolarSystemBodyCode,
 } from './sky/types'
-export type { Binning, DisplayDebayer, DisplayScnr, DisplaySettings, DisplayStretch, ImageAcquisition, ImageCapture, ImageFormat, ImageInfo, ImageOrigin, ImageProperties, ImageProvenance, ProcessingProvenance, RenderRequest, RenderResult, SampleConversion, SaveFormat, SaveRequest, SaveResult, Stretch } from './images'
+export type {
+	Binning,
+	DisplayDebayer,
+	DisplayScnr,
+	DisplaySettings,
+	DisplayStretch,
+	ImageAcquisition,
+	ImageCapture,
+	ImageFormat,
+	ImageInfo,
+	ImageOrigin,
+	ImageProperties,
+	ImageProvenance,
+	LiveStackingProvenance,
+	ProcessingProvenance,
+	RenderRequest,
+	RenderResult,
+	SampleConversion,
+	SaveFormat,
+	SaveRequest,
+	SaveResult,
+	Stretch,
+} from './images'
 export type {
 	ArcsinhStretchOperation,
 	BackgroundExtractionOperation,
@@ -425,6 +449,31 @@ export type { IntegrationPlan } from './imagestacking.integration'
 export type { StackingRole } from './imagestacking.sources'
 // oxfmt-ignore
 export type { StackingCalibration, StackingCohortDecision, StackingComposite, StackingCompositeDiagnostics, StackingComposition, StackingCompositionLuminance, StackingCompositionSource, StackingFrameAnalysis, StackingFrameNormalization, StackingProduct, StackingProductDiagnostics, StackingProductSource, StackingProject, StackingProjectAnalysis, StackingRecipe, StackingRegistration, StackingSettings, StackingSourceSummary } from './imagestacking.store'
+export type {
+	LiveCohortAcquisition,
+	LiveDeliveryFailure,
+	LiveFrameOutcome,
+	LiveRejection,
+	LiveSkipReason,
+	LiveStackingCapture,
+	LiveStackingCohort,
+	LiveStackingCounters,
+	LiveStackingErrorCode,
+	LiveStackingEvent,
+	LiveStackingFieldSummary,
+	LiveStackingFrame,
+	LiveStackingFramePage,
+	LiveStackingProductDetail,
+	LiveStackingSession,
+	LiveStackingSnapshot,
+	LiveStackingStartRequest,
+	LiveStackingState,
+	LiveStackingView,
+	LiveStackingViewTarget,
+} from './livestacking'
+export type { LiveCompositionSource, LiveExportTarget, LiveFrameMeasurement, LiveFrameRegistration, LiveRejectionReason, LiveStackingComposition, LiveStackingRecipe } from './livestacking.engine'
+export type { LiveCalibrationFallback, LiveFilterCalibration, LiveMasterKind, LiveStackingCalibration } from './livestacking.groups'
+export type { LiveProductCohort, LiveStackingProduct } from './livestacking.store'
 export type { DarvCaptureSettings, DarvEvent, DarvFinishRequest, DarvMeasurement, DarvMeasurementRequest, DarvMeasurementState, DarvMeasurementTrails, DarvRequest, DarvSession, DarvSessionState, DarvSessionSummary, DarvSnapshot, DarvStartResponse } from './darv'
 export type { DarvMeasurementResult, DarvMeasurementStatus, DarvTrail } from './darv.analysis'
 export type {
@@ -686,6 +735,10 @@ const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(da
 // directories of Nebulosa: its stacks and the Calibration Library.
 const imageStacking = new ImageStacking(new ImageStackingStore(database), publish, calibrationLibrary, [DEFAULT_IMAGE_STACKING_DIRECTORY, DEFAULT_CALIBRATION_LIBRARY_DIRECTORY])
 
+// Live Stacking sessions of the cameras of the open connections, fed every light frame of their captures by the capture
+// service, calibrated with the masters of the Calibration Library, and integrated on a worker of their own per session.
+const liveStacking = new LiveStacking(captures, connections.devices, (id) => connections.client(id), calibrationLibrary, images, new LiveStackingStore(database), publish)
+
 // Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
 // moving the wheels, driving the panels, and closing and opening the covers with the commanders of their commands,
 // previewing and recording the frames in the capture frame registry, and measuring them in DN on a worker of their own.
@@ -795,7 +848,30 @@ export function stopOperations() {
 
 // Services holding devices, sockets, listeners, timers, or workers, in the order a server stopping in place releases them:
 // the sessions and commands before the registries they use, the connections last.
-const RESOURCES: readonly Disposable[] = [guiding, darkLibraryWizard, darkLibraryWizardAnalyzer, flatWizardAnalyzer, captures, captureFrames, mountRemoteControl, indi, mounts, corrections, guideOutputs, focusers, wheels, rotators, covers, flatPanels, domes, solarEclipses, satelliteAutoDownload, operations, connections]
+const RESOURCES: readonly Disposable[] = [
+	liveStacking,
+	guiding,
+	darkLibraryWizard,
+	darkLibraryWizardAnalyzer,
+	flatWizardAnalyzer,
+	captures,
+	captureFrames,
+	mountRemoteControl,
+	indi,
+	mounts,
+	corrections,
+	guideOutputs,
+	focusers,
+	wheels,
+	rotators,
+	covers,
+	flatPanels,
+	domes,
+	solarEclipses,
+	satelliteAutoDownload,
+	operations,
+	connections,
+]
 
 // Stops the server in place, as development does before a hot reload evaluates the server code again, which otherwise
 // leaves the previous run alive beside the new one: its connections to the devices, the operations commanding them, the
@@ -849,6 +925,7 @@ export async function startEarthOrientation() {
 export function startStores() {
 	void calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))
 	void imageStacking.ready().catch((error: unknown) => console.error('The image stacking projects could not be opened', error))
+	void liveStacking.ready().catch((error: unknown) => console.error('The live stacking products could not be opened', error))
 }
 
 // Starts the automatic downloads of the CelesTrak groups an operator turned on: one run now, then every 6 hours, each
@@ -902,6 +979,7 @@ export const routes = {
 	...createDarkLibraryWizardRoutes(darkLibraryWizard),
 	...createCalibrationLibraryRoutes(calibrationLibrary),
 	...createImageStackingRoutes(imageStacking),
+	...createLiveStackingRoutes(liveStacking),
 	...createGuidingRoutes(guiding),
 	...createTargetCenteringRoutes(targetCentering),
 	...createFileRoutes(),

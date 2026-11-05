@@ -1,6 +1,7 @@
 import type { AstroWeatherForecast, AstroWeatherNight, AstroWeatherSource } from 'api'
 import type { AstroWeatherMode } from '../../profile/schema'
 import { Icon, type IconName } from '../../ui/Icon'
+import { Notice } from '../../ui/Notice'
 import { BLOCK_LABELS, coverage, formatClock, formatLength, MISSING_LABELS, MODE_LABELS, OUTLOOK_LABELS, REASON_LABELS } from './astroweather'
 import { type FactRange, type NightEvaluation, type NightFacts, nightFacts, type Outlook, type OutlookSegment } from './observing'
 
@@ -40,7 +41,7 @@ function Fact({ label, value, note }: { readonly label: string; readonly value: 
 		<div className="min-w-0 rounded-sm border border-line-100 px-3 py-2">
 			<p className="m-0 text-xs leading-4 tracking-[0.04em] text-ink-300">{label}</p>
 			<p className="m-0 text-sm wrap-break-word text-ink-100">{value ?? 'Unavailable'}</p>
-			{note && <p className="m-0 text-xs leading-4 text-ink-300">{note}</p>}
+			{note && <Notice>{note}</Notice>}
 		</div>
 	)
 }

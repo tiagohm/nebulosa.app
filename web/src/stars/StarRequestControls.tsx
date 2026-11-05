@@ -1,10 +1,10 @@
 import type { StarDetectionRequest } from 'api'
 import { useSnapshot } from 'valtio'
-import { Notice } from '../equipment-control/parts'
 import { externalToolsState } from '../settings/externaltools'
 import { summaryOf } from '../settings/ExternalToolStatus'
 import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { BUILTIN_STAR_LIMIT, DEFAULT_APERTURE_RADIUS, PROVIDER_LABELS, PROVIDERS, withAcceptance, withDetectorSettings, withProvider } from './stars'
@@ -47,10 +47,10 @@ function AstapAvailability() {
 
 	return (
 		<div className="flex flex-col gap-1">
-			<p className="m-0 text-xs leading-4 text-ink-300">
+			<Notice>
 				ASTAP: <span className={summary?.className}>{summary?.label ?? 'Loading…'}</span>
 				{astap?.lastCheck && astap.lastCheck.status !== 'available' && ` — ${astap.lastCheck.message}`}
-			</p>
+			</Notice>
 			<Button variant="ghost" className="self-start px-1" onClick={() => navigate(routeState, { workspace: 'settings', tool: 'astap' })}>
 				Settings → External Tools → ASTAP
 			</Button>

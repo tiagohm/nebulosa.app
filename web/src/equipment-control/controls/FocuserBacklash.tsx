@@ -2,13 +2,14 @@ import type { FocuserBacklashConfig, FocuserBacklashMode, FocuserState } from 'a
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { Select } from '../../ui/Select'
 import { focuserBacklashKey, focuserBacklashRuntime, loadFocuserBacklash, saveFocuserBacklash } from '../focuserBacklash'
-import { Actions, Notice } from '../parts'
 
 // Backlash compensation of a focuser: whether it is enabled, its mode and its amounts in steps, edited as a
 // draft and applied at once. The server applies the saved compensation to every positioning move of the

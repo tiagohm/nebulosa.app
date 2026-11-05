@@ -4,9 +4,9 @@ import type { SkyObserverSettings } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
 import { Button } from '../../ui/Button'
+import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { Note } from '../eclipse/EclipsePanelParts'
 import { artificialSatellitesState, downloadEphemerisCsv, ephemerisDraftError, ephemerisRowCount, formatSatelliteTime, loadSatelliteEphemeris, MAX_EPHEMERIS_HOURS, SHADOW_LABELS } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
@@ -47,7 +47,7 @@ export function SatelliteEphemeris({ observer }: { readonly observer?: SkyObserv
 			</form>
 			{inputError && (
 				<div className="px-4 pt-3">
-					<Note danger>{inputError}</Note>
+					<Notice error>{inputError}</Notice>
 				</div>
 			)}
 			{!selectedId && <EmptyState title="No satellite selected" description="Select a satellite in the catalog." />}

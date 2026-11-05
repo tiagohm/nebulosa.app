@@ -1,13 +1,14 @@
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { TIME_ZONES } from '../../sky/clock'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { TextInput } from '../../ui/TextInput'
 import { type EclipsePlace, observerPlace } from './eclipse'
 
-// Pieces of the Local Circumstances panels of the eclipse map tools: a muted note and the
+// Pieces of the Local Circumstances panels of the eclipse map tools: the time zones offered and the
 // Location section, where the place is the Sky observer, a click on the map, or coordinates typed in. Nothing here
 // changes the profile.
 
@@ -16,11 +17,6 @@ export const DISPLAY_TIME_ZONES = ['UTC', ...TIME_ZONES.filter((zone) => zone !=
 
 // Names of the sources of a place.
 const PLACE_SOURCES = { observer: 'Sky observer', map: 'Map selection', manual: 'Coordinates entered' } as const
-
-// Muted note under a section.
-export function Note({ children, danger }: { readonly children: ReactNode; readonly danger?: boolean }) {
-	return <p className={danger ? 'm-0 text-xs leading-4 text-danger' : 'm-0 text-xs leading-4 text-ink-300'}>{children}</p>
-}
 
 // Text of a coordinate field: the value in degrees to a ten-thousandth (about 11 m), or empty.
 function fieldText(value: number | undefined) {
@@ -67,8 +63,8 @@ function PlaceForm({ latitude, longitude, onApply }: PlaceFormProps) {
 				<TextInput label="Latitude" suffix="°" inputMode="decimal" value={latitudeText} onChange={(e) => setLatitudeText(e.target.value)} />
 				<TextInput label="Longitude" suffix="°" inputMode="decimal" value={longitudeText} onChange={(e) => setLongitudeText(e.target.value)} />
 			</div>
-			<Note>Degrees, north and east positive.</Note>
-			{error && <Note danger>{error}</Note>}
+			<Notice>Degrees, north and east positive.</Notice>
+			{error && <Notice error>{error}</Notice>}
 			<Button type="submit" variant="secondary" className="self-start">
 				Apply Coordinates
 			</Button>
@@ -98,7 +94,7 @@ export function LocationSection({ place, observer, onSelect }: LocationSectionPr
 					<DataRow label="Longitude">{place.longitude.toFixed(4)}°</DataRow>
 				</>
 			) : (
-				<Note>Select a location on the map, or enter its coordinates.</Note>
+				<Notice>Select a location on the map, or enter its coordinates.</Notice>
 			)}
 			<PlaceForm key={placeKey} latitude={place?.latitude} longitude={place?.longitude} onApply={onSelect} />
 			{observer && place?.source !== 'observer' && (
@@ -106,7 +102,7 @@ export function LocationSection({ place, observer, onSelect }: LocationSectionPr
 					Use Sky Observer
 				</Button>
 			)}
-			<Note>Choosing a location here never changes the Sky observer of the profile.</Note>
+			<Notice>Choosing a location here never changes the Sky observer of the profile.</Notice>
 		</PanelSection>
 	)
 }

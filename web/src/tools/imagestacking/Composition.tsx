@@ -1,7 +1,6 @@
 import type { StackingCompositeSummary, StackingComposition, StackingJobSummary, StackingProductSummary } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { Actions, ConfirmButton, Notice } from '../../equipment-control/parts'
 import { imagesState, openImage } from '../../images/images'
 import { navigate, routeState } from '../../shell/route'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -15,6 +14,9 @@ import { PRODUCT_LABELS, PRODUCT_TONES } from './format'
 import { COMPOSITION_PRESETS, CUSTOM_PRESET, resolvePreset, weightOf, withoutSource, withWeight } from './presets'
 // oxfmt-ignore
 import { cancelStackingComposition, deleteStackingComposite, imageStackingRuntime, jobEnded, loadCompositionPreview, loadCompositionValidation, loadStackingComposite, startStackingComposition } from './projects'
+import { Actions } from '../../ui/Actions'
+import { ConfirmButton } from '../../ui/ConfirmButton'
+import { Notice } from '../../ui/Notice'
 import { Cell, Row, Table } from './Table'
 
 // Color composition of an Image Stacking project: a preset or a hand-edited mix of its linear masters into RGB, with an
@@ -219,9 +221,7 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 					)}
 				</div>
 			)}
-			<p className="m-0 text-xs text-ink-300">
-				Each channel is the weighted mean of its masters after their gain. A luminance master replaces the luminance of the mix by its weight and keeps the color ratios. The composite stays linear and is cropped to the pixels every master covers; the preview alone is stretched.
-			</p>
+			<Notice>Each channel is the weighted mean of its masters after their gain. A luminance master replaces the luminance of the mix by its weight and keeps the color ratios. The composite stays linear and is cropped to the pixels every master covers; the preview alone is stretched.</Notice>
 			{validation?.issues.map((issue) => (
 				<Notice key={`${issue.code}:${issue.message}`} error={issue.severity === 'blocker'}>
 					{issue.message}

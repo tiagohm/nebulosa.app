@@ -7,9 +7,9 @@ import { PanelSection } from '../../shell/ContextualPanel'
 import { openArtificialSatellites } from '../../tools/artificialsatellites/artificialsatellites'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { skyClock, skyTime } from '../clock'
 import { formatDeclination, formatLocalTime, formatRightAscension } from '../format'
-import { Note } from '../InspectorParts'
 import type { SkySelection } from '../sky'
 import { findNextSatellitePass, inspectSatellite, skySatelliteState } from './satellite'
 
@@ -49,7 +49,7 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 				<p className="m-0 text-ink-300">{OBJECT_TYPE_NAMES[object?.objectType ?? 'unknown']}</p>
 				<p className="m-0 text-xs leading-5 text-ink-200">{[`NORAD ${noradId}`, object?.cosparId].filter(Boolean).join(' · ')}</p>
 				<DataRow label="Brightness">Unknown</DataRow>
-				{detailsError && <Note danger>Details unavailable: {detailsError}</Note>}
+				{detailsError && <Notice error>Details unavailable: {detailsError}</Notice>}
 				<div className="flex flex-wrap gap-2">
 					<Button variant={tracking ? 'primary' : 'secondary'} disabled={!position} title="Keeps the view on the satellite; panning the map stops it." onClick={() => (skySatelliteState.tracking = !tracking)}>
 						{tracking ? 'Stop Tracking' : 'Track on Sky'}
@@ -63,7 +63,7 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 				</div>
 			</PanelSection>
 			<CollapsibleSection id="sky.position" title="Position" summary={position?.constellationName ?? position?.constellation}>
-				{positionError && <Note danger>{positionError}</Note>}
+				{positionError && <Notice error>{positionError}</Notice>}
 				{position && (
 					<>
 						<DataRow label="RA (of date)">{formatRightAscension(position.rightAscension)}</DataRow>
@@ -72,16 +72,16 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 						<DataRow label="Dec (J2000)">{formatDeclination(position.declinationJ2000)}</DataRow>
 						{position.distance !== undefined && <DataRow label="Distance">{`${Math.round(position.distance * 149_597_870.7)} km`}</DataRow>}
 						{position.constellationName && <DataRow label="Constellation">{position.constellationName}</DataRow>}
-						<Note>
+						<Notice>
 							Geometric {position.center} place at {formatLocalTime(position.time, Date.now(), undefined, timeZone)}, from the orbital elements of the satellite catalog.
-						</Note>
+						</Notice>
 					</>
 				)}
 			</CollapsibleSection>
 			<CollapsibleSection id="sky.visibility" title="Visibility" summary={position?.altitude === undefined ? undefined : formatDegrees(position.altitude)}>
 				{!observer && (
 					<>
-						<Note>Set the observer location to see the altitude and the passes of the satellite.</Note>
+						<Notice>Set the observer location to see the altitude and the passes of the satellite.</Notice>
 						<Button variant="ghost" className="self-start" onClick={onSetObserver}>
 							Set Observer
 						</Button>
@@ -98,8 +98,8 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 						Show Next Pass
 					</Button>
 				)}
-				{nextPassError && <Note danger>{nextPassError}</Note>}
-				{nextPass === null && <Note>No pass above the horizon in the next two days.</Note>}
+				{nextPassError && <Notice error>{nextPassError}</Notice>}
+				{nextPass === null && <Notice>No pass above the horizon in the next two days.</Notice>}
 				{nextPass && (
 					<>
 						<DataRow label="Rises">{`${formatLocalTime(nextPass.start.time, Date.now(), undefined, timeZone)} · ${formatDegrees(nextPass.start.azimuth)}`}</DataRow>

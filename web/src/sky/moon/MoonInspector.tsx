@@ -5,8 +5,9 @@ import { useSnapshot } from 'valtio'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { formatAngularSize, formatMagnitude } from '../format'
-import { Note, ObserverSection, PositionSection } from '../InspectorParts'
+import { ObserverSection, PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
 import type { SkySelection } from '../sky'
 import { moonState, refreshMoonAlmanac, refreshMoonEclipse } from './moon'
@@ -82,7 +83,7 @@ export function MoonInspector({ selection, observer, onSetObserver, timeZone, on
 			<MoonPhysicalSection appearance={almanac.value?.appearance} time={almanac.value?.time} timeZone={timeZone} />
 			{almanac.error && (
 				<div className="px-4 py-3">
-					<Note danger>Almanac unavailable: {almanac.error}</Note>
+					<Notice error>Almanac unavailable: {almanac.error}</Notice>
 				</div>
 			)}
 		</>

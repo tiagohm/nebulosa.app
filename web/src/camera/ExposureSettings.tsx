@@ -6,6 +6,7 @@ import type { CameraExposureSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { ExposureTimeInput } from './ExposureTimeInput'
@@ -39,9 +40,9 @@ export function ExposureSection({ settings, capabilities, disabled, onChange, ch
 		<CollapsibleSection id="images.camera-acquisition.exposure" title="Exposure">
 			<ExposureTimeInput value={settings.exposureTime} exposure={capabilities?.exposure} disabled={disabled} onChange={(exposureTime) => onChange({ exposureTime })} />
 			{capabilities?.exposure && (
-				<p className="m-0 text-xs leading-4 text-ink-300">
+				<Notice>
 					{formatSeconds(capabilities.exposure.min)} – {formatSeconds(capabilities.exposure.max)} s supported by the camera.
-				</p>
+				</Notice>
 			)}
 			{children}
 		</CollapsibleSection>

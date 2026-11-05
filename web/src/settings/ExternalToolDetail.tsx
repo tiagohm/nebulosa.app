@@ -1,11 +1,12 @@
 import type { ExternalToolCheck, ExternalToolConfig, ExternalToolState } from 'api'
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { useEffect, useState } from 'react'
-import { Actions, Notice } from '../equipment-control/parts'
 import { MISSING } from '../format'
 import { PanelSection } from '../shell/ContextualPanel'
+import { Actions } from '../ui/Actions'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { TextInput } from '../ui/TextInput'
 import { CAPABILITY_LABELS, checkMatches, externalToolsState, sameConfig, saveExternalTool, signInExternalTool, signOutExternalTool, testExternalTool } from './externaltools'
@@ -160,7 +161,7 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 			<header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line-100 px-4 py-3">
 				<div className="flex min-w-0 flex-1 basis-60 flex-col">
 					<h2 className="m-0 truncate text-md leading-6 font-medium text-ink-100">{tool.name}</h2>
-					<p className="m-0 text-xs text-ink-300">{tool.description}</p>
+					<Notice>{tool.description}</Notice>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">
 					<ConfigBadge status={tool.status} />

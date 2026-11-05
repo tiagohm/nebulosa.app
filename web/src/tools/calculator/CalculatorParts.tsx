@@ -4,6 +4,7 @@ import type { OpticalConfiguration } from '../../sky/framing'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Field, InputSuffix, inputClassName, suffixPadding } from '../../ui/Field'
+import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { type DraftEntry, importOptics, isOriginCurrent, type OpticsSourceId, opticsSources, type SourceContext, sourceGroup, sourceLabel } from './sources'
 import { differs, type OptionalOutcome, type Outcome, outcomeMessage } from './values'
@@ -92,11 +93,6 @@ export function NumberField({ label, value, onChange, suffix, optional }: Number
 	)
 }
 
-// Muted explanation; in the danger color when it tells why an input cannot be used.
-export function Note({ children, danger }: { readonly children: ReactNode; readonly danger?: boolean }) {
-	return <p className={cn('m-0 text-xs leading-4', danger ? 'text-danger' : 'text-ink-300')}>{children}</p>
-}
-
 // Principal result, shown large.
 export function Primary({ label, children }: { readonly label: string; readonly children: ReactNode }) {
 	return (
@@ -110,7 +106,7 @@ export function Primary({ label, children }: { readonly label: string; readonly 
 // Results of an outcome: rendered by children when ready, otherwise the explanation of what is missing or wrong.
 export function OutcomeView<T>({ outcome, children }: { readonly outcome: Outcome<T>; readonly children: (value: T) => ReactNode }) {
 	if (outcome.status === 'ready') return <div className="flex flex-col gap-2">{children(outcome.value)}</div>
-	return <Note danger={outcome.status === 'invalid'}>{outcomeMessage(outcome)}</Note>
+	return <Notice error={outcome.status === 'invalid'}>{outcomeMessage(outcome)}</Notice>
 }
 
 // Secondary result that depends on optional fields: hint while they are empty, then the value or why it is missing.
@@ -121,7 +117,7 @@ export function OptionalDatum<T>({ label, outcome, hint, children }: { readonly 
 
 	return (
 		<DataRow label={label}>
-			<span className={cn('font-sans text-xs', outcome?.status === 'invalid' ? 'text-danger' : 'text-ink-300')}>{message}</span>
+			<span className={cn('text-xs', outcome?.status === 'invalid' ? 'text-danger' : 'text-ink-300')}>{message}</span>
 		</DataRow>
 	)
 }
@@ -180,7 +176,7 @@ export function DraftBar<D extends object>({ entry, onChange, context, example, 
 
 	return (
 		<Card title="Values">
-			<Note>{status}</Note>
+			<Notice>{status}</Notice>
 			{fromOptics && (
 				<div className="flex flex-wrap items-end gap-2">
 					<Select
@@ -201,7 +197,7 @@ export function DraftBar<D extends object>({ entry, onChange, context, example, 
 					</Button>
 				</div>
 			)}
-			{fromOptics && context.settings.presets.length === 0 && <Note>No optical presets yet: they are created in Sky → Framing.</Note>}
+			{fromOptics && context.settings.presets.length === 0 && <Notice>No optical presets yet: they are created in Sky → Framing.</Notice>}
 			<div>
 				<Button variant="ghost" disabled={!differs(entry.draft, example) && !entry.origin} onClick={() => onChange({ draft: example })}>
 					Reset to example

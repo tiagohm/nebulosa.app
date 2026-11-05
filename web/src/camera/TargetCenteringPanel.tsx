@@ -5,7 +5,6 @@ import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
-import { Actions, ConfirmButton, Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
@@ -19,9 +18,12 @@ import { activeProfile, cameraPlateSolving, deleteFramingReference, exposureSett
 import { type CameraIdentity, FRAMING_REFERENCES_MAXIMUM, TARGET_CENTERING_LIMITS, type TargetCenteringSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { skyState } from '../sky/sky'
+import { Actions } from '../ui/Actions'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { ConfirmButton } from '../ui/ConfirmButton'
 import { DataList, DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
@@ -170,7 +172,7 @@ export function TargetCenteringSections({ device, availability, mount, settings:
 						Use Sky Selection
 					</Button>
 				</Actions>
-				{shownTarget?.label && <p className="m-0 text-xs leading-4 text-ink-300">{shownTarget.label}</p>}
+				{shownTarget?.label && <Notice>{shownTarget.label}</Notice>}
 				<TextInput label="Framing Name" value={name} disabled={locked} onChange={(event) => setName(event.target.value)} />
 				<Actions>
 					<Button variant="secondary" disabled={!canSave} onClick={save}>
@@ -278,8 +280,8 @@ function SessionState({ session }: { readonly session: TargetCenteringSessionSum
 				{ended && <DataRow label="Ready for Imaging">{readyForImaging ? 'Yes' : 'No'}</DataRow>}
 			</DataList>
 			{step === 'exposing' && <FrameProgress exposure={exposure} />}
-			{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
-			{warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{warnings.at(-1)}</p>}
+			{error && <Notice error>{error}</Notice>}
+			{warnings.length > 0 && <Notice>{warnings.at(-1)}</Notice>}
 		</>
 	)
 }

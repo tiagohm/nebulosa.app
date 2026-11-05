@@ -9,6 +9,7 @@ import { activeProfile, mountRemoteBinding, profileCamera, profileState, setMoun
 import { type CameraIdentity, MOUNT_REMOTE_PROTOCOLS } from '../../profile/schema'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
+import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { TextInput } from '../../ui/TextInput'
 import { clientKey, disconnectRemoteClient, formatEndpoint, isLoopback, MOUNT_REMOTE_PROTOCOL_LABELS, mountRemoteControlState, remoteKey, startRemoteServer, stopRemoteServer } from './listeners'
@@ -66,10 +67,10 @@ export function MountRemoteControl() {
 							<ProtocolPanel key={`${profile.id}:${device?.connectionId}:${device?.id}:${protocol}`} protocol={protocol} device={device} identity={identity} blocker={blocker} />
 						))}
 					</div>
-					<p className="m-0 text-xs leading-4 text-ink-300">
+					<Notice>
 						Clients are not authenticated: anyone who can reach a listener can move the mount. A goto from a client runs as a mount operation and goes on if the client disconnects; its manual motion stops when it disconnects. An LX200 client may set the mount's site (latitude and longitude, such as a
 						phone's GPS position); time and slew rate commands are refused or ignored.
-					</p>
+					</Notice>
 				</div>
 			</div>
 		</WorkspaceLayout>
@@ -114,13 +115,13 @@ function ProtocolPanel({ protocol, device, identity, blocker }: ProtocolPanelPro
 				<h2 className="m-0 text-sm font-semibold text-ink-100">{label}</h2>
 				<span className={cn('text-xs font-medium', server ? 'text-success' : 'text-ink-300')}>{server ? 'Running' : 'Stopped'}</span>
 			</div>
-			<p className="m-0 text-xs leading-4 text-ink-300">{DESCRIPTIONS[protocol]}</p>
+			<Notice>{DESCRIPTIONS[protocol]}</Notice>
 			<div className="grid grid-cols-[minmax(0,1fr)_10rem] gap-3">
 				<TextInput label="Host" value={shownHost} disabled={!!server || !!pending} onChange={(event) => setHost(event.target.value)} spellCheck={false} />
 				<NumberInput label="Port" value={server?.port ?? port} min={1} max={65535} disabled={!!server || !!pending} onChange={setPort} />
 			</div>
 			{!isLoopback(shownHost) && <p className="m-0 text-xs leading-4 text-accent">Reachable from the network without authentication. Use 127.0.0.1 to accept only this computer.</p>}
-			{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
+			{error && <Notice error>{error}</Notice>}
 			<div className="flex">
 				{server ? (
 					<Button variant="secondary" disabled={!!pending} onClick={() => void stopRemoteServer(mountRemoteControlState, server.connectionId, server.deviceId, protocol)}>
@@ -161,7 +162,7 @@ function ClientList({ server }: { readonly server?: MountRemoteServer }) {
 					})}
 				</ul>
 			) : (
-				<p className="m-0 text-xs leading-4 text-ink-300">No clients connected</p>
+				<Notice>No clients connected</Notice>
 			)}
 		</div>
 	)

@@ -2,7 +2,7 @@ import type { Mat3 } from 'nebulosa/src/math/linear-algebra/mat3'
 import type { Vec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { formatGeographic } from '../../format'
 import { DataRow } from '../../ui/DataRow'
-import { Note } from '../InspectorParts'
+import { Notice } from '../../ui/Notice'
 import type { LunarFeature } from './moon.features'
 import { projectPoint } from './moon.geometry'
 
@@ -31,7 +31,7 @@ export function MoonFeatureDetails({ feature, view, sun }: { readonly feature: L
 			{feature.dimension !== undefined && <DataRow label={feature.elongated ? 'Length' : 'Diameter'}>≈ {feature.dimension < 10 ? feature.dimension.toFixed(1) : Math.round(feature.dimension)} km</DataRow>}
 			{feature.approvalYear !== undefined && <DataRow label="Approved">{feature.approvalYear}</DataRow>}
 			{feature.origin && <p className="m-0 text-sm text-ink-200">{feature.origin}</p>}
-			<Note>{featureState(feature, view, sun)}</Note>
+			<Notice>{featureState(feature, view, sun)}</Notice>
 			<a href={`${GAZETTEER_FEATURE_URL}${feature.id}`} target="_blank" rel="noreferrer" className="text-sm text-accent">
 				Gazetteer entry
 			</a>

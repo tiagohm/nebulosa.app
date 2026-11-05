@@ -3,7 +3,6 @@ import { cn } from 'cn'
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { DeviceLink } from '../../equipment-control/DeviceLink'
-import { Actions, ConfirmButton, Notice } from '../../equipment-control/parts'
 import { useRoleDevice } from '../../equipment/useEquipment'
 import { formatArcsec, MISSING } from '../../format'
 import { imagesState, selectImage, selectImageTool } from '../../images/images'
@@ -14,9 +13,12 @@ import { shownRevision } from '../../mountpointing/skymap'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataList, DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
@@ -138,7 +140,7 @@ function ModelView({ summary }: { readonly summary: PointingModelSummary }) {
 	const [vectors, setVectors] = useState<PointingMapVectors>('raw')
 	const [selected, setSelected] = useState<string>()
 
-	if (!model) return <p className="m-0 text-xs text-ink-300">Loading…</p>
+	if (!model) return <Notice>Loading…</Notice>
 
 	const revision = shownRevision(model)
 	const sample = model.samples.find((each) => each.id === selected)

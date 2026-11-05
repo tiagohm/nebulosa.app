@@ -2,9 +2,10 @@ import type { OperationRecord } from 'api'
 import { useSnapshot } from 'valtio'
 import { OPERATION_LABELS, operationsState, runningOn } from '../operations'
 import { PanelSection } from '../shell/ContextualPanel'
+import { Notice } from '../ui/Notice'
 import { controlRuntime } from './control'
 import type { DeviceGroup } from './groups'
-import { FAILURE_REASONS, Notice } from './parts'
+import { FAILURE_REASONS } from './parts'
 
 // Activity of a physical device: the operations holding any of its interfaces, whichever tab or service
 // started them, the command this tab has in flight, and the outcome of the last command this tab started,

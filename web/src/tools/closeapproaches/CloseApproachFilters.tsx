@@ -3,11 +3,11 @@ import { profileState, setCloseApproachPreferences } from '../../profile/profile
 import { CLOSE_APPROACH_BODIES, CLOSE_APPROACH_DISTANCE_UNITS } from '../../profile/schema'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
-import { Note } from '../eclipse/EclipsePanelParts'
 import { BODY_NAMES, CLOSE_APPROACH_PERIODS, closeApproachesState, loadCloseApproaches, MAXIMUM_WINDOW_DAYS, OBJECT_KIND_LABELS, OBJECT_KINDS, PERIOD_LABELS, searchCloseApproaches, setCloseApproachDate, setCloseApproachPeriod } from './closeapproaches'
 
 // Filters of the Close Approaches tool. They hold pending values until Search; Refresh asks JPL again for the page shown.
@@ -65,7 +65,7 @@ export function CloseApproachFilters() {
 					<Button type="submit">Search</Button>
 				</div>
 			</div>
-			{inputError && <Note danger>{inputError}</Note>}
+			{inputError && <Notice error>{inputError}</Notice>}
 		</form>
 	)
 }

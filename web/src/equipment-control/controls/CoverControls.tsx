@@ -1,9 +1,11 @@
 import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { controlRuntime, deviceStateOf, startCommand, stopCommand } from '../control'
-import { Actions, type InterfaceProps, Notice } from '../parts'
+import type { InterfaceProps } from '../parts'
 
 // Controls of a dust cover: whether it stands open or closed as it reports, open and close, and a stop of
 // a motion in progress. A request to open is shown as moving until the cover reports standing open.

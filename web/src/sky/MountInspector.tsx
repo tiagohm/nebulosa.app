@@ -6,6 +6,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 import { skyClock } from './clock'
 import { formatDeclination, formatRightAscension } from './format'
 import { horizontalOf, mountPoint, mountRuntime, mountView } from './mount'
@@ -64,7 +65,7 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 								<DataRow label="Azimuth">{formatDegrees(horizontal.azimuth)}</DataRow>
 							</>
 						)}
-						<p className="m-0 text-xs leading-4 text-ink-300">As reported by the mount now{horizontal ? '; altitude is geometric, for the profile observer' : ''}.</p>
+						<Notice>As reported by the mount now{horizontal ? '; altitude is geometric, for the profile observer' : ''}.</Notice>
 					</>
 				) : (
 					<p className="m-0 text-ink-300">{!same ? 'This mount is no longer the profile’s mount.' : clock.mode !== 'now' ? 'The mount position is shown in real time only.' : 'The mount is disconnected; its position is unknown.'}</p>

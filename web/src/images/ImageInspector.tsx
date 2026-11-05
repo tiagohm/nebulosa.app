@@ -13,6 +13,7 @@ import { type ImageQualityStatus, imageQuality } from '../stars/quality'
 import { PROVIDER_LABELS, starsState } from '../stars/stars'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 import type { CameraFrameSelection } from './cameratabs'
 import { connectionLabel, frameUnavailableReason } from './captureframes'
 import { operationLabel, operationSummary } from './imageprocessing.catalog'
@@ -244,8 +245,8 @@ function Quality({ imageId }: QualityProps) {
 			{measured && <DataRow label="Stars (accepted / detected)">{`${quality.acceptedStars ?? 0} / ${quality.detectedStars ?? 0}`}</DataRow>}
 			{quality.provider && <DataRow label="Detector">{PROVIDER_LABELS[quality.provider]}</DataRow>}
 			{quality.origin && <DataRow label="Measured by">{MEASURED_BY_LABELS[quality.origin]}</DataRow>}
-			{quality.error && <p className="m-0 text-xs leading-4 text-danger">{quality.error}</p>}
-			{quality.status === 'not-measured' && <p className="m-0 text-xs leading-4 text-ink-300">Run Star Detection to measure the HFD of this image.</p>}
+			{quality.error && <Notice error>{quality.error}</Notice>}
+			{quality.status === 'not-measured' && <Notice>Run Star Detection to measure the HFD of this image.</Notice>}
 		</CollapsibleSection>
 	)
 }

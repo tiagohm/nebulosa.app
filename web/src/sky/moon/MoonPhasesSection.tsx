@@ -1,7 +1,7 @@
 import type { MoonPhaseEvent } from 'api'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatEclipseTime } from '../../tools/eclipse/eclipse'
-import { Note } from '../InspectorParts'
+import { Notice } from '../../ui/Notice'
 import { MOON_PHASE_NAMES } from './moon'
 
 // Lunar Phases section of the Moon Inspector: the next four principal phases after the instant the Sky shows, in
@@ -21,7 +21,7 @@ export function MoonPhasesSection({ phases, timeZone }: { readonly phases?: read
 							</li>
 						))}
 					</ul>
-					<Note>Geocentric instants after the Sky instant, from the local model (Meeus).</Note>
+					<Notice>Geocentric instants after the Sky instant, from the local model (Meeus).</Notice>
 				</>
 			) : (
 				<p className="m-0 text-ink-300">Computing the phases…</p>

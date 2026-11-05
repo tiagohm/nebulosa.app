@@ -1,10 +1,10 @@
 import type { DeviceSummary, StarDetectorProvider } from 'api'
 import type { ReactNode } from 'react'
-import { Notice } from '../equipment-control/parts'
 import { cameraTabKey } from '../images/cameratabs'
 import { imagesState, selectImageTool } from '../images/images'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
+import { Notice } from '../ui/Notice'
 import { useAstapConfigured } from './StarRequestControls'
 import { PROVIDER_LABELS } from './stars'
 

@@ -1,7 +1,7 @@
 import type { SolarSeasonEvent, SolarSeasonKind } from 'api'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatEclipseTime } from '../../tools/eclipse/eclipse'
-import { Note } from '../InspectorParts'
+import { Notice } from '../../ui/Notice'
 
 // Seasons section of the Sun Inspector: the next four equinoxes and solstices after the instant the Sky shows, named by
 // their month so the name holds everywhere, and with the observer the season each one begins in its hemisphere.
@@ -36,7 +36,7 @@ export function SeasonsSection({ seasons, latitude, timeZone }: { readonly seaso
 							</li>
 						))}
 					</ul>
-					<Note>Astronomical seasons after the Sky instant, from the local model.</Note>
+					<Notice>Astronomical seasons after the Sky instant, from the local model.</Notice>
 				</>
 			) : (
 				<p className="m-0 text-ink-300">Computing the seasons…</p>

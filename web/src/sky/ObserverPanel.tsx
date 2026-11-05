@@ -3,6 +3,7 @@ import { normalizeSkyObserver, profileState, setSkyObserver } from '../profile/p
 import type { SkyObserverSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
+import { Notice } from '../ui/Notice'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { BROWSER_TIME_ZONE, TIME_ZONES } from './clock'
@@ -70,7 +71,7 @@ export function ObserverPanel({ observer, onDone }: ObserverPanelProps) {
 					<TextInput label="Longitude (east +)" suffix="°" inputMode="decimal" value={longitude} placeholder="-46.6333" onChange={(e) => setLongitude(e.target.value)} />
 					<TextInput label="Elevation" suffix="m" inputMode="decimal" value={elevation} onChange={(e) => setElevation(e.target.value)} />
 					<Select label="Time Zone" options={TIME_ZONES} value={timeZone} onChange={setTimeZone} format={(zone) => zone || `Browser (${BROWSER_TIME_ZONE})`} />
-					{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
+					{error && <Notice error>{error}</Notice>}
 					<div className="flex flex-wrap gap-2">
 						<Button type="submit">Save</Button>
 						<Button variant="secondary" onClick={onDone}>
@@ -85,7 +86,7 @@ export function ObserverPanel({ observer, onDone }: ObserverPanelProps) {
 				</form>
 			</PanelSection>
 			<PanelSection title="About">
-				<p className="m-0 text-xs leading-4 text-ink-300">The location belongs to the active profile. It sets the horizon, altitudes, and rise and set times, and its time zone sets how times are shown and entered; it does not change any equipment.</p>
+				<Notice>The location belongs to the active profile. It sets the horizon, altitudes, and rise and set times, and its time zone sets how times are shown and entered; it does not change any equipment.</Notice>
 			</PanelSection>
 		</>
 	)

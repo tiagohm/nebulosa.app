@@ -9,13 +9,16 @@ import { PanelSection } from '../../shell/ContextualPanel'
 import { navigate, routeState } from '../../shell/route'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
 import { horizontalOf } from '../../sky/mount'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
-import { Actions, ConfirmButton, type InterfaceProps, Notice } from '../parts'
+import type { InterfaceProps } from '../parts'
 
 // Controls of a mount: where it points, a coordinate to go to, flip to, or sync on, tracking and its rate,
 // the manual-motion speed, park and home, and the site and clock it uses. Every value shown is the one the

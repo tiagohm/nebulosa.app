@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import moon2k from '../../../assets/moon/moon.2k.jpg'
-import { Note } from '../InspectorParts'
+import { Notice } from '../../ui/Notice'
 import { almanacCurrent, MOON_IMAGE_CREDIT, MOON_PHASE_NAMES, moonOrientationCaption, moonState } from './moon'
 import { MoonCanvas } from './MoonCanvas'
 import { MoonImageModal } from './MoonImageModal'
@@ -33,12 +33,12 @@ export function MoonImage({ time, observer }: { readonly time?: number; readonly
 					<p className="m-0 text-center text-ink-100">
 						{MOON_PHASE_NAMES[shown.appearance.phase]} · {(shown.appearance.illuminatedFraction * 100).toFixed(1)}% illuminated
 					</p>
-					<Note>
+					<Notice>
 						{moonOrientationCaption(shown, up)}. {MOON_IMAGE_CREDIT}
-					</Note>
+					</Notice>
 				</>
 			)}
-			{almanac.error && <Note danger>Almanac unavailable: {almanac.error}</Note>}
+			{almanac.error && <Notice error>Almanac unavailable: {almanac.error}</Notice>}
 			{shown && <MoonImageModal open={open} onClose={() => setOpen(false)} almanac={shown} />}
 		</div>
 	)

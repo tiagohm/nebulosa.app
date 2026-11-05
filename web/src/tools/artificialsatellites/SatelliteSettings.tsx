@@ -4,7 +4,7 @@ import { downloadSatelliteSource, satelliteCatalogState, setSatelliteAutoDownloa
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { Modal } from '../../ui/Modal'
-import { Note } from '../eclipse/EclipsePanelParts'
+import { Notice } from '../../ui/Notice'
 import { formatSatelliteTime } from './artificialsatellites'
 
 // Settings of Artificial Satellites, opened from the workspace actions of the tool: the CelesTrak groups of the server's
@@ -72,11 +72,11 @@ export function SatelliteSettings({ open, onClose }: SatelliteSettingsProps) {
 		<Modal open={open} onClose={onClose} title="Settings" className="max-w-[760px]" fit>
 			<div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
 				<h3 className="m-0 text-sm font-semibold text-ink-100">CelesTrak Groups</h3>
-				<Note>
+				<Notice>
 					Groups are downloaded from CelesTrak when you ask, and those marked Automatic also when the server starts and every 6 hours. Each group is downloaded at most once per update of its data (every 2 hours), and never by opening the Sky or this tool. Large groups take longer and their catalog data is not
 					downloaded with them.
-				</Note>
-				{!snapshot && <Note>Reading the catalog sources…</Note>}
+				</Notice>
+				{!snapshot && <Notice>Reading the catalog sources…</Notice>}
 				{snapshot && (
 					<ul className="m-0 flex list-none flex-col p-0">
 						{snapshot.groups.map((group) => (

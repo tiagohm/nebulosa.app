@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Notice } from '../ui/Notice'
 import type { Celestial } from './celestial/celestial'
 import { formatMagnitude } from './format'
 import { type HoverLabel, hoverLabel, type MapNames } from './objects'
@@ -66,10 +67,10 @@ export function HoverTooltip({ celestial, names }: HoverTooltipProps) {
 			{label && (
 				<>
 					<p className="m-0 truncate text-sm font-medium text-ink-100">{label.name}</p>
-					<p className="m-0 text-xs text-ink-300">
+					<Notice>
 						{label.typeName}
 						{label.magnitude !== undefined && label.magnitude < 99 && <span className="font-mono"> · mag {formatMagnitude(label.magnitude)}</span>}
-					</p>
+					</Notice>
 				</>
 			)}
 		</div>

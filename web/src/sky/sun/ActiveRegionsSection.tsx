@@ -5,7 +5,7 @@ import { useSnapshot } from 'valtio'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatEclipseTime } from '../../tools/eclipse/eclipse'
 import { DataRow } from '../../ui/DataRow'
-import { Note } from '../InspectorParts'
+import { Notice } from '../../ui/Notice'
 import { sunState } from './sun'
 
 // Active regions of the latest NOAA SWPC report in the Sun Inspector: one row per region with its location, spot
@@ -76,16 +76,16 @@ export function ActiveRegionsSection() {
 							))}
 						</ul>
 					)}
-					<Note>
+					<Notice>
 						NOAA SWPC solar region report{report.observedDate && ` observed on ${report.observedDate} (UTC)`}, downloaded {formatEclipseTime(report.fetchedAt, 'UTC')}; a current observation, not the Sky instant. Locations are heliographic, east and west of the central meridian. Spots are counted per region,
 						which is not the sunspot number. MSH: millionths of the solar hemisphere.
-					</Note>
-					{report.stale && <Note danger>NOAA cannot be reached: this is the last report downloaded.</Note>}
+					</Notice>
+					{report.stale && <Notice error>NOAA cannot be reached: this is the last report downloaded.</Notice>}
 				</>
 			) : (
 				!error && <p className="m-0 text-ink-300">{loading ? 'Loading the NOAA report…' : 'No report.'}</p>
 			)}
-			{error && <Note danger>NOAA report unavailable: {error}</Note>}
+			{error && <Notice error>NOAA report unavailable: {error}</Notice>}
 		</CollapsibleSection>
 	)
 }

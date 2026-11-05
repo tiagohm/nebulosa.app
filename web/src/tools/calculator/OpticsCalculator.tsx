@@ -1,8 +1,9 @@
 import { formatDegrees, formatFixed } from '../../format'
 import { formatAngularSize } from '../../sky/format'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary } from './CalculatorParts'
 import { IMAGING_SETUP_EXAMPLE, type ImagingSetupDraft, imagingSetup, imagingSetupFromOptics, MOSAIC_EXAMPLE, type MosaicDraft, mosaic, mosaicFromOptics, type SensorKind } from './optics'
 
 // Views of the Optics & Field of View calculators: Imaging Setup and Mosaic Estimator.
@@ -45,7 +46,7 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 							</>
 						)}
 					</FieldGrid>
-					<Note>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without).</Note>
+					<Notice>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without).</Notice>
 				</>
 			}
 			results={
@@ -59,9 +60,9 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 								{formatDegrees(framing.width, 3)} × {formatDegrees(framing.height, 3)}
 							</DataRow>
 							<DataRow label="Diagonal">{formatDegrees(diagonal, 3)}</DataRow>
-							<DataRow label="Image scale">{framing.scale === undefined ? <span className="font-sans text-xs text-ink-300">Needs the pixel size: enter the sensor by resolution.</span> : `${formatFixed(framing.scale, 2)}″/px`}</DataRow>
+							<DataRow label="Image scale">{framing.scale === undefined ? <span className="text-xs text-ink-300">Needs the pixel size: enter the sensor by resolution.</span> : `${formatFixed(framing.scale, 2)}″/px`}</DataRow>
 							<DataRow label="Effective focal length">{formatFixed(framing.effectiveFocalLength, 0)} mm</DataRow>
-							<DataRow label="Focal ratio">{framing.focalRatio === undefined ? <span className="font-sans text-xs text-ink-300">Needs the aperture.</span> : `f/${formatFixed(framing.focalRatio, 1)}`}</DataRow>
+							<DataRow label="Focal ratio">{framing.focalRatio === undefined ? <span className="text-xs text-ink-300">Needs the aperture.</span> : `f/${formatFixed(framing.focalRatio, 1)}`}</DataRow>
 							<DataRow label="Sensor">
 								{formatFixed(framing.sensorWidth, 2)} × {formatFixed(framing.sensorHeight, 2)} mm
 							</DataRow>
@@ -104,7 +105,7 @@ export function MosaicCalculator({ entry, onChange, context }: CalculatorViewPro
 						<NumberField label="Field height" suffix="′" value={draft.fieldHeight} onChange={(fieldHeight) => set({ fieldHeight })} />
 						<NumberField label="Overlap" suffix="%" value={draft.overlap} onChange={(overlap) => set({ overlap })} />
 					</FieldGrid>
-					<Note>Angles in arcminutes. Importing fills the field of one panel from the optics.</Note>
+					<Notice>Angles in arcminutes. Importing fills the field of one panel from the optics.</Notice>
 				</>
 			}
 			results={

@@ -2,7 +2,7 @@ import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
 import { Button } from '../../ui/Button'
 import { inputClassName } from '../../ui/Field'
-import { Note } from '../eclipse/EclipsePanelParts'
+import { Notice } from '../../ui/Notice'
 import { artificialSatellitesState, importSatelliteElements } from './artificialsatellites'
 
 // Import of element sets typed or pasted, the content of the Import Elements popover of the workspace actions. The text
@@ -19,12 +19,12 @@ export function SatelliteImport() {
 			<Button className="self-start" disabled={importing || !importText.trim()} onClick={() => void importSatelliteElements(artificialSatellitesState)}>
 				Import
 			</Button>
-			{importError && <Note danger>{importError}</Note>}
+			{importError && <Notice error>{importError}</Notice>}
 			{importResult && (
-				<Note>
+				<Notice>
 					{importResult.imported.length} imported{importResult.imported.length > 0 ? `: ${importResult.imported.map((entry) => entry.name).join(', ')}` : ''}.
 					{importResult.rejected.length > 0 && ` ${importResult.rejected.length} left out (${importResult.rejected.map((entry) => `${entry.noradId ?? `#${entry.index + 1}`}: ${entry.error}`).join(', ')}).`} Imported elements are used for their satellites until you choose GP elements again.
-				</Note>
+				</Notice>
 			)}
 		</div>
 	)

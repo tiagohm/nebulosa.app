@@ -1,5 +1,5 @@
 import { toDeg } from 'nebulosa/src/math/units/angle'
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { roleDefinition } from '../equipment/roles'
@@ -9,6 +9,7 @@ import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
@@ -54,11 +55,6 @@ const SENSOR_KINDS: readonly SensorKind[] = ['pixels', 'physical']
 // Pixel size in micrometers given to a sensor entered by its size when it is switched to pixels: a common
 // CMOS pixel, adjusted afterwards by the user.
 const CONVERTED_PIXEL_SIZE = 3.76
-
-// Muted explanation under a section.
-function Note({ children, danger }: { readonly children: ReactNode; readonly danger?: boolean }) {
-	return <p className={danger ? 'm-0 text-xs leading-4 text-danger' : 'm-0 text-xs leading-4 text-ink-300'}>{children}</p>
-}
 
 // Converts a sensor to the other way of entering it, keeping its physical size; pixels of an unknown
 // size get the default pixel size.
@@ -181,7 +177,7 @@ function EquipmentSource({ framing, telescope, guideTelescope, hasTarget }: Pick
 				{sensorSource === 'manual' ? (
 					<>
 						<SensorInputs sensor={optics.sensor} onChange={(sensor) => setManualSensor(profileState, sensor)} />
-						<Note>Simulates a camera for planning; it is kept in the profile and never sent to a device.</Note>
+						<Notice>Simulates a camera for planning; it is kept in the profile and never sent to a device.</Notice>
 					</>
 				) : reported ? (
 					<>
@@ -189,11 +185,11 @@ function EquipmentSource({ framing, telescope, guideTelescope, hasTarget }: Pick
 							{reported.width} × {reported.height} px
 						</DataRow>
 						<DataRow label="Pixel size">{reported.pixelSize.toFixed(2)} µm</DataRow>
-						<Note>Reported by the {sensorSourceName(sensorSource)} device at full frame.</Note>
+						<Notice>Reported by the {sensorSourceName(sensorSource)} device at full frame.</Notice>
 					</>
 				) : (
 					<>
-						<Note>The {sensorSourceName(sensorSource)} has not reported its sensor: assign and connect it in the Equipment Setup, or enter a sensor manually.</Note>
+						<Notice>The {sensorSourceName(sensorSource)} has not reported its sensor: assign and connect it in the Equipment Setup, or enter a sensor manually.</Notice>
 						<div>
 							<Button variant="secondary" onClick={() => setSensorSource(profileState, 'manual')}>
 								Enter Manually
@@ -215,7 +211,7 @@ function OpticsInputs({ title, optics, onChange }: { readonly title: string; rea
 			<NumberInput label="Focal length" suffix="mm" value={optics.focalLength} min={0} step={1} onChange={(focalLength) => onChange({ focalLength })} />
 			<NumberInput label="Reducer / Barlow" suffix="×" value={optics.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => onChange({ focalMultiplier })} />
 			<NumberInput label="Aperture" suffix="mm" value={optics.aperture} min={0} step={1} onChange={(aperture) => onChange({ aperture })} />
-			<Note>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without).</Note>
+			<Notice>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without).</Notice>
 		</PanelSection>
 	)
 }
@@ -266,10 +262,10 @@ function FramingResult({ optics, missingCamera, onRotate }: { readonly optics: R
 					{framing.focalRatio !== undefined && <DataRow label="Focal ratio">f/{framing.focalRatio.toFixed(1)}</DataRow>}
 				</>
 			) : (
-				<Note danger>To compute the field, enter: {missing.join(', ')}.</Note>
+				<Notice error>To compute the field, enter: {missing.join(', ')}.</Notice>
 			)}
 			<NumberInput label="Rotation (PA of the top edge)" suffix="°" value={optics.rotation} min={0} max={359.5} step={0.5} onChange={onRotate} />
-			<Note>Position angle of the sensor&apos;s top edge, from north through east, as plate solvers report it; mirrored images are not modeled.</Note>
+			<Notice>Position angle of the sensor&apos;s top edge, from north through east, as plate solvers report it; mirrored images are not modeled.</Notice>
 		</PanelSection>
 	)
 }
@@ -279,7 +275,7 @@ function DisplaySection({ visible, hasTarget }: { readonly visible: boolean; rea
 	return (
 		<PanelSection title="Display">
 			<Checkbox label="Show field of view" checked={visible} onChange={(next) => setFramingVisible(profileState, next)} />
-			{visible && !hasTarget && <Note>The field of view is drawn around the selected object, once its position is known.</Note>}
+			{visible && !hasTarget && <Notice>The field of view is drawn around the selected object, once its position is known.</Notice>}
 		</PanelSection>
 	)
 }

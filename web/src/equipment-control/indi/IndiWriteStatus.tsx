@@ -1,7 +1,8 @@
 import { type Dispatch, type SetStateAction, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { operationsState } from '../../operations'
-import { FAILURE_REASONS, Notice } from '../parts'
+import { Notice } from '../../ui/Notice'
+import { FAILURE_REASONS } from '../parts'
 import { indiView } from './indi'
 
 // Outcome of the latest write of a vector, as the server reports it: sending, waiting for the driver, applied,

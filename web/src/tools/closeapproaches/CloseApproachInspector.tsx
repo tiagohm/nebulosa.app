@@ -4,9 +4,9 @@ import { useSnapshot } from 'valtio'
 import { MISSING } from '../../format'
 import { CLOSE_APPROACH_BODIES, type CloseApproachDistanceDisplay } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { Note } from '../../sky/InspectorParts'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import {
 	BODY_NAMES,
@@ -56,8 +56,8 @@ function PublishedValues({ values }: { readonly values: readonly MinorBodyPublis
 	return values.map((value) => (
 		<div key={value.name}>
 			<DataRow label={value.title}>{publishedText(value)}</DataRow>
-			{value.notes && <Note>{value.notes}</Note>}
-			{value.reference && <Note>{value.reference}</Note>}
+			{value.notes && <Notice>{value.notes}</Notice>}
+			{value.reference && <Notice>{value.reference}</Notice>}
 		</div>
 	))
 }
@@ -117,8 +117,8 @@ function ApproachSection({ approach }: { readonly approach: CloseApproach }) {
 			<DataRow label="Orbit solution">{orbitId}</DataRow>
 			<OptionalDatum label="Absolute magnitude H">{absoluteMagnitude?.toFixed(2)}</OptionalDatum>
 			<OptionalDatum label="Diameter (1σ)">{diameter === undefined ? undefined : formatDiameter(diameter, diameterSigma)}</OptionalDatum>
-			<Note>{RANGE_NOTE}</Note>
-			<Note>{VELOCITY_NOTE}</Note>
+			<Notice>{RANGE_NOTE}</Notice>
+			<Notice>{VELOCITY_NOTE}</Notice>
 		</CollapsibleSection>
 	)
 }
@@ -142,8 +142,8 @@ function OrbitSection({ details: { orbit } }: { readonly details: MinorBodyDetai
 			<OptionalDatum label="Ephemeris">{orbit.planetaryEphemeris}</OptionalDatum>
 			<OptionalDatum label="Perturbers">{orbit.smallBodyEphemeris}</OptionalDatum>
 			<OptionalDatum label="Valid until">{orbit.notValidAfter}</OptionalDatum>
-			{orbit.comment && <Note>{orbit.comment}</Note>}
-			<Note>{MOID_NOTE}</Note>
+			{orbit.comment && <Notice>{orbit.comment}</Notice>}
+			<Notice>{MOID_NOTE}</Notice>
 		</CollapsibleSection>
 	)
 }
@@ -168,8 +168,8 @@ function ObservationsSection({ details }: { readonly details: MinorBodyDetails }
 			<OptionalDatum label="Discovered">{discovery?.date}</OptionalDatum>
 			<OptionalDatum label="At">{discovery?.location}</OptionalDatum>
 			<OptionalDatum label="By">{discovery?.who}</OptionalDatum>
-			{discovery?.narrative && <Note>{discovery.narrative}</Note>}
-			{discovery?.citation && <Note>{discovery.citation}</Note>}
+			{discovery?.narrative && <Notice>{discovery.narrative}</Notice>}
+			{discovery?.citation && <Notice>{discovery.citation}</Notice>}
 			{alternateDesignations.length > 0 && <DataRow label="Also">{alternateDesignations.join(', ')}</DataRow>}
 			<DataRow label="First observation">{orbit.firstObservation}</DataRow>
 			<DataRow label="Last observation">{orbit.lastObservation}</DataRow>
@@ -215,7 +215,7 @@ function VirtualImpactorsSection({ details: { virtualImpactors } }: { readonly d
 					</li>
 				))}
 			</ul>
-			<Note>{VIRTUAL_IMPACTOR_NOTE}</Note>
+			<Notice>{VIRTUAL_IMPACTOR_NOTE}</Notice>
 		</CollapsibleSection>
 	)
 }
@@ -229,7 +229,7 @@ function OtherApproachesSection({ timeZone, distanceDisplay }: Omit<EncounterPro
 		<CollapsibleSection id="closeapproaches.other-approaches" title="Other Approaches" summary={history && `${history.total} in this span`} defaultOpen={false}>
 			<Select label="Target" options={CLOSE_APPROACH_BODIES} value={historyBody} format={(value: CloseApproachBody) => BODY_NAMES[value]} onChange={(value) => void filterCloseApproachHistory(closeApproachesState, { historyBody: value })} />
 			<Select label="Span" options={HISTORY_WINDOWS} value={historyWindow} format={(value) => HISTORY_WINDOW_LABELS[value]} onChange={(value) => void filterCloseApproachHistory(closeApproachesState, { historyWindow: value })} />
-			{historyError && <Note danger>{historyError}</Note>}
+			{historyError && <Notice error>{historyError}</Notice>}
 			{historyLoading && !history && <p className="m-0 text-ink-300">Reading from JPL…</p>}
 			{history?.rows.length === 0 && <p className="m-0 text-ink-300">No approaches in this span.</p>}
 			<ul className="m-0 flex list-none flex-col gap-1 p-0">
@@ -274,17 +274,17 @@ export function CloseApproachInspector({ approach, timeZone, distanceDisplay, ac
 		<>
 			<Overview approach={approach} timeZone={timeZone} distanceDisplay={distanceDisplay} body={found?.body}>
 				{found && actions(found.body)}
-				{objectLoading && <Note>Reading the object from SBDB…</Note>}
-				{objectError && <Note danger>Object details unavailable: {objectError}</Note>}
+				{objectLoading && <Notice>Reading the object from SBDB…</Notice>}
+				{objectError && <Notice error>Object details unavailable: {objectError}</Notice>}
 				{objectError && designation && (
 					<Button variant="secondary" className="self-start" onClick={() => void loadCloseApproachObject(closeApproachesState, designation)}>
 						Retry
 					</Button>
 				)}
-				{object?.kind === 'notFound' && <Note>SBDB does not know this designation: {object.message}</Note>}
+				{object?.kind === 'notFound' && <Notice>SBDB does not know this designation: {object.message}</Notice>}
 				{object?.kind === 'ambiguous' && (
 					<>
-						<Note>This designation matches several objects. Choose one.</Note>
+						<Notice>This designation matches several objects. Choose one.</Notice>
 						{object.matches.map((match) => (
 							<Button key={match.designation} variant="secondary" className="self-start" onClick={() => void loadCloseApproachObject(closeApproachesState, match.designation)}>
 								{match.name}
@@ -303,9 +303,9 @@ export function CloseApproachInspector({ approach, timeZone, distanceDisplay, ac
 					<OtherApproachesSection timeZone={timeZone} distanceDisplay={distanceDisplay} />
 					{observability(found.body)}
 					<div className="px-4 py-3">
-						<Note>
+						<Notice>
 							{found.details.source} {found.details.sourceVersion}, read {formatApproachTime(found.details.fetchedAt, timeZone)}.
-						</Note>
+						</Notice>
 					</div>
 				</>
 			)}

@@ -2,12 +2,14 @@ import type { WheelState } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand } from '../control'
-import { Actions, type InterfaceProps, Notice } from '../parts'
+import type { InterfaceProps } from '../parts'
 
 // Controls of a filter wheel: the filter it reports, a change to another slot sent only by an explicit
 // action, and the renaming of the slots when the driver allows it. Slots are 0-based in the API and shown

@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { Notice } from '../equipment-control/parts'
 import { navigate, routeState } from '../shell/route'
 import { useMediaQuery, WIDE_SCREEN } from '../shell/useMediaQuery'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
-import { Modal } from '../ui/Modal'
+import { Modal, ModalActions } from '../ui/Modal'
+import { Notice } from '../ui/Notice'
 import { ExternalToolDetail } from './ExternalToolDetail'
 import { externalToolsState, refreshExternalTools } from './externaltools'
 import { ExternalToolsSelect, ExternalToolsSidebar } from './ExternalToolsSidebar'
@@ -78,7 +78,7 @@ export function ExternalToolsSettings({ tool }: ExternalToolsSettingsProps) {
 			<div className="relative flex min-h-0 flex-1 flex-col">{body()}</div>
 			<Modal open={pending !== undefined} onClose={() => setPending(undefined)} title="Discard unsaved changes?" className="max-w-md">
 				<p className="m-0 text-sm leading-5 text-ink-200">The changes to {selected?.name} were not saved. Showing another external tool discards them.</p>
-				<div className="mt-5 flex justify-end gap-2">
+				<ModalActions>
 					<Button variant="secondary" onClick={() => setPending(undefined)}>
 						Keep Editing
 					</Button>
@@ -91,7 +91,7 @@ export function ExternalToolsSettings({ tool }: ExternalToolsSettingsProps) {
 					>
 						Discard Changes
 					</Button>
-				</div>
+				</ModalActions>
 			</Modal>
 		</>
 	)

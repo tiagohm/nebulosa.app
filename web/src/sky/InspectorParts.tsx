@@ -4,19 +4,15 @@ import { formatDegrees } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 import { formatDeclination, formatLocalTime, formatRightAscension, formatSolarSystemDistance } from './format'
 import type { SkySelection } from './sky'
 
-// Parts shared by the Object Inspector and the Sun and Moon Inspectors: a muted note, the collapsible
+// Parts shared by the Object Inspector and the Sun and Moon Inspectors: the collapsible
 // Position section with its provider and instant, and the Visibility section of the observer's rise, transit, and set.
 
 // Description of each fallback reason.
 const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 'Horizons cannot be reached', breakerOpen: 'Horizons failed repeatedly and is paused' } as const
-
-// Muted note under a section.
-export function Note({ children, danger }: { readonly children: ReactNode; readonly danger?: boolean }) {
-	return <p className={danger ? 'm-0 text-xs leading-4 text-danger' : 'm-0 text-xs leading-4 text-ink-300'}>{children}</p>
-}
 
 // Rows of the apparent coordinates of the selection, with their provider and instant; `children` adds rows before
 // the note.
@@ -40,12 +36,12 @@ function PositionData({ selection, timeZone, children }: { readonly selection: S
 					{position.illuminated !== undefined && selection.ref.kind !== 'catalog' && <DataRow label="Illuminated">{(position.illuminated * 100).toFixed(1)}%</DataRow>}
 					{position.elongation !== undefined && !(selection.ref.kind === 'body' && selection.ref.code === '10') && selection.ref.kind !== 'catalog' && <DataRow label="Solar elongation">{formatDegrees(position.elongation)}</DataRow>}
 					{children}
-					<Note>{positionNote(position, selection.ref.kind === 'constellation', timeZone)}</Note>
+					<Notice>{positionNote(position, selection.ref.kind === 'constellation', timeZone)}</Notice>
 				</>
 			) : (
 				!positionError && <p className="m-0 text-ink-300">{loading ? 'Computing the position…' : 'No position.'}</p>
 			)}
-			{positionError && <Note danger>Ephemeris unavailable: {positionError}</Note>}
+			{positionError && <Notice error>Ephemeris unavailable: {positionError}</Notice>}
 		</>
 	)
 }
@@ -87,7 +83,7 @@ export function ObserverSection({ position, events, hasObserver, onSetObserver, 
 	return (
 		<CollapsibleSection id="sky.visibility" title="Visibility" summary={`Altitude ${formatDeclination(position.altitude)}`}>
 			<DataRow label="Altitude">{formatDeclination(position.altitude)}</DataRow>
-			{position.altitude < 0 && <Note>Below the horizon at this instant, so the map does not show it.</Note>}
+			{position.altitude < 0 && <Notice>Below the horizon at this instant, so the map does not show it.</Notice>}
 			<DataRow label="Azimuth">{formatDegrees(position.azimuth)}</DataRow>
 			{events?.state === 'circumpolar' && <DataRow label="Rise and set">Circumpolar</DataRow>}
 			{events?.state === 'belowHorizon' && <DataRow label="Rise and set">Below the horizon all day</DataRow>}
@@ -99,7 +95,7 @@ export function ObserverSection({ position, events, hasObserver, onSetObserver, 
 				</DataRow>
 			)}
 			{events?.set !== undefined && <DataRow label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</DataRow>}
-			<Note>Refracted altitude. Rise and set are at the standard horizon (34′ of refraction), and the transit is on the meridian: the ones nearest the instant, within 12 hours{isSolarSystem ? ', from the local model' : ''}.</Note>
+			<Notice>Refracted altitude. Rise and set are at the standard horizon (34′ of refraction), and the transit is on the meridian: the ones nearest the instant, within 12 hours{isSolarSystem ? ', from the local model' : ''}.</Notice>
 		</CollapsibleSection>
 	)
 }

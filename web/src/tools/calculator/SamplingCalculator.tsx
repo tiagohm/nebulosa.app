@@ -1,8 +1,9 @@
 import type { FWHMSamplingKind } from 'nebulosa/src/astronomy/formulas'
 import { formatFixed } from '../../format'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
 import { DIFFRACTION_EXAMPLE, type DiffractionDraft, diffraction, diffractionFromOptics, SAMPLING_EXAMPLE, type SamplingDraft, type SamplingMode, sampling, samplingFromOptics } from './sampling'
 
 // Views of the Sampling & Focus calculators: Sampling and Diffraction & Focus.
@@ -39,7 +40,7 @@ export function SamplingCalculator({ entry, onChange, context }: CalculatorViewP
 						<NumberField label="Pixel size" suffix="µm" optional value={draft.pixelSize} onChange={(pixelSize) => set({ pixelSize })} />
 						<NumberField label="Target FWHM" suffix="px" optional value={draft.targetSampling} onChange={(targetSampling) => set({ targetSampling })} />
 					</FieldGrid>
-					<Note>{draft.mode === 'seeing' ? 'The seeing is the FWHM of a star in arcseconds, not its HFD.' : 'The FWHM of stars measured on a frame, in pixels; an HFD is a different measure.'} The pixel size and target FWHM give the focal length for that sampling.</Note>
+					<Notice>{draft.mode === 'seeing' ? 'The seeing is the FWHM of a star in arcseconds, not its HFD.' : 'The FWHM of stars measured on a frame, in pixels; an HFD is a different measure.'} The pixel size and target FWHM give the focal length for that sampling.</Notice>
 				</>
 			}
 			results={
@@ -89,7 +90,7 @@ export function DiffractionCalculator({ entry, onChange, context }: CalculatorVi
 						<NumberField label="Focal ratio (f/)" value={draft.focalRatio} onChange={(focalRatio) => set({ focalRatio })} />
 						<NumberField label="Pixel size" suffix="µm" optional value={draft.pixelSize} onChange={(pixelSize) => set({ pixelSize })} />
 					</FieldGrid>
-					<Note>550 nm is green light, near the eye&apos;s peak; Hα is 656.3 nm. The focal ratio is that of the effective focal length; importing needs the aperture.</Note>
+					<Notice>550 nm is green light, near the eye&apos;s peak; Hα is 656.3 nm. The focal ratio is that of the effective focal length; importing needs the aperture.</Notice>
 				</>
 			}
 			results={
@@ -97,7 +98,7 @@ export function DiffractionCalculator({ entry, onChange, context }: CalculatorVi
 					{({ airyDisk, airyDiskPixels, criticalFocusZone }) => (
 						<>
 							<Primary label="Airy disk">{formatFixed(airyDisk, 2)} µm</Primary>
-							<DataRow label="Airy disk on the sensor">{airyDiskPixels === undefined ? <span className="font-sans text-xs text-ink-300">Enter the pixel size.</span> : `${formatFixed(airyDiskPixels, 2)} px`}</DataRow>
+							<DataRow label="Airy disk on the sensor">{airyDiskPixels === undefined ? <span className="text-xs text-ink-300">Enter the pixel size.</span> : `${formatFixed(airyDiskPixels, 2)} px`}</DataRow>
 							<DataRow label="Critical focus zone">{formatFixed(criticalFocusZone, 1)} µm</DataRow>
 						</>
 					)}

@@ -1,8 +1,8 @@
 import type { AstronomicalSample, AstroWeatherForecast, AstroWeatherNight, MeteorologySample, SolarTwilightCrossings } from 'api'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { formatEclipseTime } from '../eclipse/eclipse'
-import { Note } from '../eclipse/EclipsePanelParts'
 import { formatClock, formatLength, SEEING_BANDS, TRANSPARENCY_BANDS } from './astroweather'
 import { PROVIDER_NAMES } from './ForecastSummary'
 import type { OutlookSegment } from './observing'
@@ -47,11 +47,11 @@ export function SkyConditions({ sample, hour }: SkyConditionsProps) {
 			<Value label="Middle cloud" value={sample?.cloudCoverMid} unit="%" />
 			<Value label="High cloud" value={sample?.cloudCoverHigh} unit="%" />
 			<Value label="Seeing" value={seeing && `class ${seeing}`} />
-			{seeing && <Note>{SEEING_BANDS[seeing - 1]}, the band of this class, not a measurement.</Note>}
+			{seeing && <Notice>{SEEING_BANDS[seeing - 1]}, the band of this class, not a measurement.</Notice>}
 			<Value label="Transparency" value={transparency && `class ${transparency}`} />
-			{transparency && <Note>{TRANSPARENCY_BANDS[transparency - 1]} mag per airmass, the band of this class, not a measurement.</Note>}
-			{(seeing || transparency) && <Note>Nearest 3 hour forecast sample, not interpolated.</Note>}
-			{!sample && !seeing && !transparency && <Note>No forecast for this hour.</Note>}
+			{transparency && <Notice>{TRANSPARENCY_BANDS[transparency - 1]} mag per airmass, the band of this class, not a measurement.</Notice>}
+			{(seeing || transparency) && <Notice>Nearest 3 hour forecast sample, not interpolated.</Notice>}
+			{!sample && !seeing && !transparency && <Notice>No forecast for this hour.</Notice>}
 		</CollapsibleSection>
 	)
 }
@@ -78,8 +78,8 @@ export function WeatherConditions({ sample, ending }: WeatherConditionsProps) {
 			<Value label="Wind" value={sample?.windSpeed} unit=" km/h" />
 			<Value label="Direction" value={sample?.windDirection === undefined ? undefined : `${compassPoint(sample.windDirection)} (${sample.windDirection}°)`} />
 			<Value label="Gusts" value={ending?.windGust} unit=" km/h" />
-			{!sample && !ending && <Note>No forecast for this hour.</Note>}
-			<Note>A chance is not an occurrence, and surfaces cool below the air temperature, so dew can form above the dew point shown.</Note>
+			{!sample && !ending && <Notice>No forecast for this hour.</Notice>}
+			<Notice>A chance is not an occurrence, and surfaces cool below the air temperature, so dew can form above the dew point shown.</Notice>
 		</CollapsibleSection>
 	)
 }
@@ -116,15 +116,15 @@ export function AstronomicalConditions({ night, timeZone }: AstronomicalConditio
 					{formatLength(span)}
 				</DataRow>
 			))}
-			{sun.darkness.length === 0 && <Note>The Sun does not reach −18° this night, so there is no astronomical darkness.</Note>}
+			{sun.darkness.length === 0 && <Notice>The Sun does not reach −18° this night, so there is no astronomical darkness.</Notice>}
 			<DataRow label="Moon lit">{(moon.illuminatedFraction * 100).toFixed(0)}%</DataRow>
 			{moon.above.map((span) => (
 				<DataRow key={span.start} label="Moon up">
 					{formatClock(span.start, timeZone)}–{formatClock(span.end, timeZone)}
 				</DataRow>
 			))}
-			{moon.above.length === 0 && <Note>The Moon stays below the horizon during this night.</Note>}
-			<Note>How much the Moon matters depends on the target and filter, neither of which is known here. Times are the Sun's and the Moon's, computed locally for this site.</Note>
+			{moon.above.length === 0 && <Notice>The Moon stays below the horizon during this night.</Notice>}
+			<Notice>How much the Moon matters depends on the target and filter, neither of which is known here. Times are the Sun's and the Moon's, computed locally for this site.</Notice>
 		</CollapsibleSection>
 	)
 }
@@ -164,7 +164,7 @@ export function Sources({ forecast, localDate, timeZone }: SourcesProps) {
 					<Value label="Covers to" value={lastSample(forecast.astronomy.samples, timeZone)} />
 				</>
 			)}
-			<Note>
+			<Notice>
 				Weather from{' '}
 				<a className="text-accent" href="https://open-meteo.com/" target="_blank" rel="noreferrer">
 					Open-Meteo
@@ -178,8 +178,8 @@ export function Sources({ forecast, localDate, timeZone }: SourcesProps) {
 					7Timer!
 				</a>
 				, for a cell of 0.1°. Both are free for non-commercial use.
-			</Note>
-			<Note>These are forecasts, not measurements of this site. They are planning aids, not a safety system, and they command nothing.</Note>
+			</Notice>
+			<Notice>These are forecasts, not measurements of this site. They are planning aids, not a safety system, and they command nothing.</Notice>
 		</CollapsibleSection>
 	)
 }

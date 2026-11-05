@@ -1,7 +1,6 @@
 import type { StackingCalibration, StackingCohort, StackingFilterGroup, StackingFrameSummary, StackingJobSummary, StackingProjectDetail, StackingSettings, StackingValidation } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { Notice } from '../../equipment-control/parts'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { NumberInput } from '../../ui/NumberInput'
@@ -10,6 +9,7 @@ import { StatusBadge } from '../../ui/StatusBadge'
 // oxfmt-ignore
 import { blocksAnalysis, cohortText, LIGHT_MASTER_KINDS, LIGHT_MASTER_LABELS, type LightMaster, masterText, metricText, registrationText, REJECTION_LABELS, selectionFields, selectionOf, SEVERITY_LABELS, SEVERITY_TONES, THRESHOLDS } from './format'
 import { MISSING } from '../../format'
+import { Notice } from '../../ui/Notice'
 import { cancelStackingAnalysis, imageStackingRuntime, jobEnded, startStackingAnalysis, updateStackingCohort, updateStackingSettings } from './projects'
 import { Cell, Row, Table } from './Table'
 
@@ -28,7 +28,7 @@ export function CalibrationView({ projectId }: { readonly projectId: string }) {
 
 	return (
 		<>
-			<p className="m-0 text-xs text-ink-300">Each list holds the masters of the Calibration Library that match the settings of these frames, newest first. A dark already holds the bias, so a bias is chosen only without one.</p>
+			<Notice>Each list holds the masters of the Calibration Library that match the settings of these frames, newest first. A dark already holds the bias, so a bias is chosen only without one.</Notice>
 			{items.map((cohort) => (
 				<CohortCard key={cohort.cohortId} projectId={projectId} cohort={cohort} />
 			))}
@@ -203,7 +203,7 @@ function SettingsForm({ project, groups }: { readonly project: StackingProjectDe
 				</Button>
 			</div>
 			{errors.settings && <Notice error>{errors.settings}</Notice>}
-			<p className="m-0 text-xs text-ink-300">Frames failing a threshold stay in the project and out of the stack. A threshold of 0 checks nothing. Every filter registers onto the reference of the project reference filter.</p>
+			<Notice>Frames failing a threshold stay in the project and out of the stack. A threshold of 0 checks nothing. Every filter registers onto the reference of the project reference filter.</Notice>
 		</div>
 	)
 }

@@ -5,8 +5,9 @@ import { navigate, routeState } from '../../shell/route'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { skyState } from '../../sky/sky'
 import { Button } from '../../ui/Button'
+import { Notice } from '../../ui/Notice'
 import { type EclipsePlace, observerPlace } from '../eclipse/eclipse'
-import { LocationSection, Note } from '../eclipse/EclipsePanelParts'
+import { LocationSection } from '../eclipse/EclipsePanelParts'
 import { astronomicalTimeState, conversionRequest, effectiveObserver, effectiveTimeZone, followConversion } from './astronomicaltime'
 import { HourAnglePanel } from './HourAnglePanel'
 import { TimeConversionResults } from './TimeConversionResults'
@@ -49,7 +50,7 @@ export function AstronomicalTimeConverter() {
 			<LocationSection place={state.place ?? (observer && observerPlace(observer))} observer={observer} onSelect={choosePlace} />
 			{!observer && (
 				<div className="flex flex-col gap-2 px-4 py-3">
-					<Note>This profile has no Sky observer, so the tool has no default location.</Note>
+					<Notice>This profile has no Sky observer, so the tool has no default location.</Notice>
 					<Button variant="secondary" className="self-start" onClick={openObserver}>
 						Set Sky Observer
 					</Button>

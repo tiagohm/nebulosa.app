@@ -7,12 +7,12 @@ import moonFeatures from '../../../assets/moon/moon.features.json.gz' with { typ
 import { Checkbox } from '../../ui/Checkbox'
 import { IconButton } from '../../ui/IconButton'
 import { Modal } from '../../ui/Modal'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
 import { anchoredTransform, beginGesture, type GestureAnchor, type GesturePointer, gestureTransform } from '../celestial/gesture'
 import type { ViewTransform } from '../celestial/types'
-import { Note } from '../InspectorParts'
 import { LUNAR_FEATURE_CATEGORIES, LUNAR_FEATURE_CATEGORY_NAMES, type LunarFeatureFilter, loadMoonFeatures, MOON_IMAGE_CREDIT, MOON_PHASE_NAMES, moonOrientationCaption, moonState, selectFeature, setMoonViewUp } from './moon'
 import { featureMarkers, searchFeatures } from './moon.features'
 import { CENTERED, type DiscViewport, discViewport, type MoonViewUp, projectPoint, viewMatrix } from './moon.geometry'
@@ -182,18 +182,18 @@ export function MoonImageModal({ open, onClose, almanac }: { readonly open: bool
 								))}
 							</ul>
 						)}
-						{explorer.query.trim() && all && matches.length === 0 && <Note>No feature has that name.</Note>}
+						{explorer.query.trim() && all && matches.length === 0 && <Notice>No feature has that name.</Notice>}
 						{selected ? (
 							<MoonFeatureDetails feature={selected} view={view} sun={appearance.sunDirection} />
 						) : (
-							<Note>{all ? 'Click a marker or search a name to see its details. Zoom in to see smaller features.' : features.error ? `The feature names are unavailable: ${features.error}` : 'Loading the feature names…'}</Note>
+							<Notice>{all ? 'Click a marker or search a name to see its details. Zoom in to see smaller features.' : features.error ? `The feature names are unavailable: ${features.error}` : 'Loading the feature names…'}</Notice>
 						)}
-						<Note>
+						<Notice>
 							{MOON_PHASE_NAMES[appearance.phase]} · {(appearance.illuminatedFraction * 100).toFixed(1)}% illuminated · {moonOrientationCaption(almanac, up)}.
-						</Note>
-						<Note>
+						</Notice>
+						<Notice>
 							{MOON_IMAGE_CREDIT} {FEATURE_CREDIT}
-						</Note>
+						</Notice>
 					</aside>
 				</div>
 			</div>

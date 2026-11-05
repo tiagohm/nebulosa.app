@@ -1,11 +1,11 @@
 import type { DeviceSummary } from 'api'
 import type { ReactNode } from 'react'
-import { Notice } from '../equipment-control/parts'
 import { cameraTabKey } from '../images/cameratabs'
 import { imagesState, selectImageTool } from '../images/images'
 import type { CameraPlateSolvingSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
+import { Notice } from '../ui/Notice'
 import { useSolverConfigured } from './PlateSolveControls'
 import { PROVIDER_LABELS } from './platesolving'
 

@@ -1,6 +1,6 @@
 import type { DebayerOperation, ImageProcessingOperation } from 'api'
-import { Notice } from '../equipment-control/parts'
 import { Checkbox } from '../ui/Checkbox'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'

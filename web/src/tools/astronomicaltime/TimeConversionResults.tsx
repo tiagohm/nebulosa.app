@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { copyText } from '../../clipboard'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { IconButton } from '../../ui/IconButton'
-import { Note } from '../eclipse/EclipsePanelParts'
+import { Notice } from '../../ui/Notice'
 import { astronomicalTimeState, type InputFormat, qualityNotes, TIME_SCALE_NAMES, takeAsInput } from './astronomicaltime'
 
 // Results of the Astronomical Time Converter, as the server answered them, grouped so the common readings show first:
@@ -95,10 +95,10 @@ export function TimeConversionResults({ result, timeZone, located }: TimeConvers
 			<CollapsibleSection id="tools.astronomicalTime.civil" title="Civil Time">
 				<ResultRow label="UTC" value={scales.UTC.calendar} />
 				<ResultRow label="Local" value={civil.local} />
-				<Note>
+				<Notice>
 					{timeZone}, {formatOffset(civil.offsetSeconds)}. Calendars are proleptic Gregorian, with astronomical year numbering.
-				</Note>
-				{civil.unixMillis === undefined ? <Note>This is an inserted leap second, which Unix time cannot represent.</Note> : <ResultRow label="Unix" value={`${civil.unixMillis / 1000}`} input={{ format: 'unix', scale: 'UTC' }} />}
+				</Notice>
+				{civil.unixMillis === undefined ? <Notice>This is an inserted leap second, which Unix time cannot represent.</Notice> : <ResultRow label="Unix" value={`${civil.unixMillis / 1000}`} input={{ format: 'unix', scale: 'UTC' }} />}
 			</CollapsibleSection>
 			<CollapsibleSection id="tools.astronomicalTime.julian" title="Julian Dates">
 				{COMMON_SCALES.map((scale) => (
@@ -107,20 +107,20 @@ export function TimeConversionResults({ result, timeZone, located }: TimeConvers
 				{COMMON_SCALES.map((scale) => (
 					<ResultRow key={`mjd-${scale}`} label={`MJD(${scale})`} value={scales[scale].mjd} input={{ format: 'mjd', scale }} />
 				))}
-				{civil.leapSecondDay && <Note>This UTC day has a leap second, so JD(UTC) is the ERFA quasi-Julian date of a stretched day.</Note>}
+				{civil.leapSecondDay && <Notice>This UTC day has a leap second, so JD(UTC) is the ERFA quasi-Julian date of a stretched day.</Notice>}
 			</CollapsibleSection>
 			<CollapsibleSection id="tools.astronomicalTime.sidereal" title="Sidereal Time">
 				<ResultRow label="GMST" value={formatSidereal(sidereal.gmst)} />
 				<ResultRow label="GAST" value={formatSidereal(sidereal.gast)} />
 				{sidereal.lmst !== undefined && <ResultRow label="LMST" value={formatSidereal(sidereal.lmst)} />}
 				{sidereal.last !== undefined && <ResultRow label="LAST" value={formatSidereal(sidereal.last)} />}
-				{!located && <Note>Local sidereal times need a location.</Note>}
-				<Note>Mean times use the mean equinox of date (IAU 2006), apparent times the true equinox (IAU 2006/2000A).</Note>
+				{!located && <Notice>Local sidereal times need a location.</Notice>}
+				<Notice>Mean times use the mean equinox of date (IAU 2006), apparent times the true equinox (IAU 2006/2000A).</Notice>
 			</CollapsibleSection>
 			{hourAngle !== undefined && (
 				<CollapsibleSection id="tools.astronomicalTime.hourAngleResult" title="Hour Angle">
 					<ResultRow label="HA" value={formatHourAngle(hourAngle)} />
-					<Note>HA = LAST − RA, wrapped to ±12 h. {meridianSide(hourAngle)}.</Note>
+					<Notice>HA = LAST − RA, wrapped to ±12 h. {meridianSide(hourAngle)}.</Notice>
 				</CollapsibleSection>
 			)}
 			<CollapsibleSection id="tools.astronomicalTime.scales" title="Time Scales" summary={`${TIME_SCALE_NAMES.length} scales`} defaultOpen={false}>
@@ -131,7 +131,7 @@ export function TimeConversionResults({ result, timeZone, located }: TimeConvers
 				{offsets.taiMinusUtc !== undefined && <ResultRow label="TAI−UTC" value={`${offsets.taiMinusUtc.toFixed(3)} s`} />}
 				{offsets.ttMinusUt1 !== undefined && <ResultRow label="TT−UT1" value={`${offsets.ttMinusUt1.toFixed(6)} s`} />}
 				<ResultRow label="TDB−TT" value={`${offsets.tdbMinusTt.toFixed(6)} s`} />
-				<Note>TDB is a model {located ? 'at the location' : 'at the center of the Earth'}.</Note>
+				<Notice>TDB is a model {located ? 'at the location' : 'at the center of the Earth'}.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="tools.astronomicalTime.epochs" title="Epochs and Calendar" summary={`J${epochs.julian.toFixed(3)}`} defaultOpen={false}>
 				<ResultRow label="Julian(TT)" value={`J${epochs.julian.toFixed(6)}`} />
@@ -140,9 +140,9 @@ export function TimeConversionResults({ result, timeZone, located }: TimeConvers
 			</CollapsibleSection>
 			<CollapsibleSection id="tools.astronomicalTime.quality" title="Accuracy">
 				{qualityNotes(quality).map((note) => (
-					<Note key={note}>{note}</Note>
+					<Notice key={note}>{note}</Notice>
 				))}
-				<Note>Calendars show milliseconds and Julian dates nine decimals, about 86 µs: not a claim of that accuracy.</Note>
+				<Notice>Calendars show milliseconds and Julian dates nine decimals, about 86 µs: not a claim of that accuracy.</Notice>
 			</CollapsibleSection>
 		</>
 	)

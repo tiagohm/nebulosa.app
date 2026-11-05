@@ -6,6 +6,7 @@ import { PanelSection } from '../shell/ContextualPanel'
 import { type EquipmentView, navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
+import { Notice } from '../ui/Notice'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { controlRuntime, deviceStateOf } from './control'
 import { CameraControls } from './controls/CameraControls'
@@ -22,7 +23,7 @@ import { DeviceDiagnostics } from './DeviceDiagnostics'
 import { DEVICE_TYPE_LABELS, type DeviceGroup, groupConnected, groupTypes } from './groups'
 import { IndiPropertiesPanel } from './indi/IndiPropertiesPanel'
 import { OperationStatus } from './OperationStatus'
-import { type InterfaceProps, Notice } from './parts'
+import type { InterfaceProps } from './parts'
 
 // Detail of one physical device: its name, interfaces, and connection, with an explicit connect or
 // disconnect command, then one of its views: the controls of each interface it offers, or the INDI properties
@@ -113,9 +114,9 @@ export function DeviceDetail({ group, view }: DeviceDetailProps) {
 				<Icon name={primary?.type ?? 'server'} className="text-ink-300" />
 				<div className="flex min-w-0 flex-1 flex-col">
 					<h2 className="m-0 truncate text-md leading-6 font-medium text-ink-100">{group.name}</h2>
-					<p className="m-0 text-xs text-ink-300">
+					<Notice>
 						{groupTypes(group)} · {connectionText(groupConnected(group), pending)}
-					</p>
+					</Notice>
 				</div>
 				{primary && (
 					<Button variant="secondary" disabled={!!pending} onClick={() => void switchDevice(deviceState, primary.id, !primary.connected)}>

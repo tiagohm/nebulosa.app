@@ -12,6 +12,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { DataList, DataRow } from '../ui/DataRow'
 import { Icon } from '../ui/Icon'
+import { Notice } from '../ui/Notice'
 import { Select } from '../ui/Select'
 import { cameraKey, captureRunning, captureRuntime } from './capture'
 import { NUDGE_DIRECTION_LABELS, nudgeDirectionSupported, nudgeKey, type NudgePress, nudgeRunning, nudgeRuntime, pressNudge, releaseNudge, setNudgeSlewRate, stopNudges, watchNudgeMount } from './nudge'
@@ -114,7 +115,7 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 						onChange={(name) => void setNudgeSlewRate(nudgeRuntime, name)}
 					/>
 				) : (
-					state?.connected && <p className="m-0 text-xs leading-4 text-ink-300">The driver offers no slew rate choice; it moves at its own rate.</p>
+					state?.connected && <Notice>The driver offers no slew rate choice; it moves at its own rate.</Notice>
 				)}
 				<div className="grid grid-cols-3 gap-2">
 					{GRID.map((cell) =>
@@ -135,7 +136,7 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 						),
 					)}
 				</div>
-				<p className="m-0 text-xs leading-4 text-ink-300">Hold a direction to move; release to stop. Directions follow the mount axes, not the image.</p>
+				<Notice>Hold a direction to move; release to stop. Directions follow the mount axes, not the image.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.mount-nudge.movement-status" title="Movement Status">
 				<DataList>
@@ -145,8 +146,8 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 					<DataRow label="Slew Rate">{slewRate?.label || slewRate?.name || 'Driver default'}</DataRow>
 					<DataRow label="Camera">{cameraStatus(cameraSession)}</DataRow>
 				</DataList>
-				{blocker && !press && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
-				{runtime.error && <p className="m-0 text-xs leading-4 text-danger">{runtime.error}</p>}
+				{blocker && !press && <Notice>{blocker}</Notice>}
+				{runtime.error && <Notice error>{runtime.error}</Notice>}
 			</CollapsibleSection>
 		</>
 	)

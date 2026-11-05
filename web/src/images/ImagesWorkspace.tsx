@@ -38,7 +38,7 @@ import { useStreakResult } from '../streaks/useStreakResult'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
-import { Modal } from '../ui/Modal'
+import { Modal, ModalActions } from '../ui/Modal'
 import { moveIndex } from '../ui/navigation'
 import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
@@ -350,7 +350,7 @@ export function ImagesWorkspace() {
 			/>
 			<Modal open={!!closingDocument} onClose={() => setClosing(undefined)} title="Close unsaved image?" className="max-w-md">
 				<p className="m-0 text-sm">{closingDocument?.name} exists only in memory. Closing it discards it.</p>
-				<div className="mt-5 flex flex-wrap justify-end gap-2">
+				<ModalActions>
 					<Button variant="secondary" onClick={() => setClosing(undefined)}>
 						Cancel
 					</Button>
@@ -372,7 +372,7 @@ export function ImagesWorkspace() {
 					>
 						Save As…
 					</Button>
-				</div>
+				</ModalActions>
 			</Modal>
 		</WorkspaceLayout>
 	)

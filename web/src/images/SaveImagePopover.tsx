@@ -1,6 +1,7 @@
 import type { SaveFormat } from 'api'
 import { useState } from 'react'
 import { Button } from '../ui/Button'
+import { Notice } from '../ui/Notice'
 import { Popover } from '../ui/Popover'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { downloadUrl, type ImageDocument, type ImageViewState, saveFileName, shownRendering } from './images'
@@ -54,7 +55,7 @@ export function SaveImagePopover({ document, view, onSaveToServer }: SaveImagePo
 	return (
 		<Popover icon="save" label="Save" open={open} onOpenChange={setOpen} disabled={!info || !shown}>
 			<SegmentedControl label="Format" options={SAVE_FORMATS} value={format} format={(f) => SAVE_FORMAT_LABELS[f]} onChange={setFormat} />
-			<p className="m-0 text-xs text-ink-300">{SAVE_FORMAT_HINTS[format]}</p>
+			<Notice>{SAVE_FORMAT_HINTS[format]}</Notice>
 			<div className="flex flex-wrap justify-end gap-2">
 				<Button variant="secondary" onClick={download}>
 					Download

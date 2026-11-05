@@ -1,7 +1,8 @@
 import { formatFixed, formatDuration } from '../../format'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
 import { EXPOSURE_PLAN_EXAMPLE, type ExposurePlanDraft, exposurePlan, type PlanMode, STAR_TRAIL_EXAMPLE, type StarTrailDraft, starTrail, starTrailFromOptics } from './exposure'
 
 // Views of the Exposure & Integration calculators: Exposure Planner and Star Trailing.
@@ -77,7 +78,7 @@ export function StarTrailingCalculator({ entry, onChange, context }: CalculatorV
 						<NumberField label="Exposure" suffix="s" optional value={draft.exposure} onChange={(exposure) => set({ exposure })} />
 						<NumberField label="Trail budget" suffix="px" optional value={draft.trailLimit} onChange={(trailLimit) => set({ trailLimit })} />
 					</FieldGrid>
-					<Note>For an untracked camera or a mount that is not tracking. The exposure gives the trail; the trail budget gives the longest exposure.</Note>
+					<Notice>For an untracked camera or a mount that is not tracking. The exposure gives the trail; the trail budget gives the longest exposure.</Notice>
 				</>
 			}
 			results={

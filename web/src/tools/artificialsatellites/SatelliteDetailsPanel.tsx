@@ -7,8 +7,8 @@ import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
 import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { Note } from '../eclipse/EclipsePanelParts'
 import { artificialSatellitesState, formatElementAge, formatSatelliteTime, openSkyObserver, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 
 // Contextual panel of Artificial Satellites: the satellite selected, its position now for the Sky observer (read again
@@ -58,7 +58,7 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 		<div className="flex flex-col">
 			<section className="flex flex-col gap-2 border-b border-line-100 px-4 py-3">
 				<h3 className="m-0 text-base font-medium text-ink-100">{name}</h3>
-				{detailsError && <Note danger>{detailsError}</Note>}
+				{detailsError && <Notice error>{detailsError}</Notice>}
 				<DataList>
 					<DataRow label="NORAD ID">{selectedId}</DataRow>
 					{object?.cosparId && <DataRow label="COSPAR ID">{object.cosparId}</DataRow>}
@@ -81,12 +81,12 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 						Open in Sky
 					</Button>
 				</div>
-				{!elements && details && <Note>This satellite has catalog data only: no orbital elements to predict it with. Download a group that lists it, or import its elements.</Note>}
+				{!elements && details && <Notice>This satellite has catalog data only: no orbital elements to predict it with. Download a group that lists it, or import its elements.</Notice>}
 			</section>
 
 			{elements && (
 				<CollapsibleSection id="satellites.position" title="Position Now" summary={p?.altitude === undefined ? undefined : `altitude ${formatDegrees(p.altitude, 1)}`}>
-					{positionError && <Note danger>{positionError}</Note>}
+					{positionError && <Notice error>{positionError}</Notice>}
 					{p && position && (
 						<DataList>
 							<DataRow label="Time">{formatSatelliteTime(p.time, timeZone)}</DataRow>
@@ -104,7 +104,7 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 							<QualityRow quality={position.quality} />
 						</DataList>
 					)}
-					<Note>{observer ? 'Read every 15 seconds for the observer of the Sky.' : "Read every 15 seconds from the Earth's center: set the observer location in the Sky to see the altitude and the passes."}</Note>
+					<Notice>{observer ? 'Read every 15 seconds for the observer of the Sky.' : "Read every 15 seconds from the Earth's center: set the observer location in the Sky to see the altitude and the passes."}</Notice>
 					{!observer && (
 						<Button variant="ghost" className="self-start" onClick={() => openSkyObserver()}>
 							Set Observer
@@ -121,7 +121,7 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 						<DataRow label="Illumination">{SHADOW_LABELS[p.shadow]}</DataRow>
 						{p.sunAltitude !== undefined && <DataRow label="Sun altitude here">{formatDegrees(p.sunAltitude, 1)}</DataRow>}
 					</DataList>
-					<Note>Brightness is unknown: no source gives the reflectivity of most satellites, so no magnitude is estimated.</Note>
+					<Notice>Brightness is unknown: no source gives the reflectivity of most satellites, so no magnitude is estimated.</Notice>
 				</CollapsibleSection>
 			)}
 
@@ -141,7 +141,7 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 						{object?.periodMinutes !== undefined && <DataRow label="Period (catalog)">{`${object.periodMinutes} min`}</DataRow>}
 						<DataRow label="Model">{orbit.model === 'deepSpace' ? 'SDP4 (deep space)' : 'SGP4 (near Earth)'}</DataRow>
 					</DataList>
-					<Note>Derived values come from the mean elements at their epoch; catalog values are published by SATCAT, possibly for another epoch.</Note>
+					<Notice>Derived values come from the mean elements at their epoch; catalog values are published by SATCAT, possibly for another epoch.</Notice>
 				</CollapsibleSection>
 			)}
 

@@ -2,10 +2,11 @@ import { useSnapshot } from 'valtio'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { BROWSER_TIME_ZONE } from '../../sky/clock'
 import { Button } from '../../ui/Button'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
-import { DISPLAY_TIME_ZONES, Note } from '../eclipse/EclipsePanelParts'
+import { DISPLAY_TIME_ZONES } from '../eclipse/EclipsePanelParts'
 import { applyToSky, astronomicalTimeState, CALENDAR_READS, type CalendarRead, type ConverterMode, INPUT_FORMAT_EXAMPLES, INPUT_FORMAT_LABELS, INPUT_FORMATS, setCalendarRead, setConverterMode, setEntryText, setInputFormat, setInputScale, TIME_SCALE_NAMES, takeSkyTime } from './astronomicaltime'
 
 // Input of the Astronomical Time Converter: the real current time or a custom instant in one of the forms the tool reads,
@@ -43,10 +44,10 @@ export function TimeInputPanel({ timeZone }: TimeInputPanelProps) {
 					{format === 'calendar' && <Select label="Read In" options={CALENDAR_READS} value={read} format={calendarReadLabel} onChange={(value) => setCalendarRead(astronomicalTimeState, value)} />}
 					{(format === 'jd' || format === 'mjd') && <Select label="Timescale" options={TIME_SCALE_NAMES} value={scale} onChange={(value) => setInputScale(astronomicalTimeState, value)} />}
 					<TextInput label={INPUT_FORMAT_LABELS[format]} placeholder={INPUT_FORMAT_EXAMPLES[format]} spellCheck={false} value={text} onChange={(e) => setEntryText(astronomicalTimeState, e.target.value)} />
-					{inputError && <Note danger>{inputError}</Note>}
+					{inputError && <Notice error>{inputError}</Notice>}
 					{ambiguous && (
 						<>
-							<Note>The clocks of {timeZone} show this reading twice. Choose one.</Note>
+							<Notice>The clocks of {timeZone} show this reading twice. Choose one.</Notice>
 							<div className="grid grid-cols-2 gap-2">
 								<Button variant="secondary" onClick={() => (astronomicalTimeState.fold = 'earlier')}>
 									Earlier
@@ -57,9 +58,9 @@ export function TimeInputPanel({ timeZone }: TimeInputPanelProps) {
 							</div>
 						</>
 					)}
-					{fold && <Note>Reading the {fold} of the two occurrences.</Note>}
-					{(format === 'julianEpoch' || format === 'besselianEpoch') && <Note>Epochs are in TT.</Note>}
-					{format === 'unix' && <Note>Unix time counts UTC days of 86400 s, so it has no timescale and no leap seconds.</Note>}
+					{fold && <Notice>Reading the {fold} of the two occurrences.</Notice>}
+					{(format === 'julianEpoch' || format === 'besselianEpoch') && <Notice>Epochs are in TT.</Notice>}
+					{format === 'unix' && <Notice>Unix time counts UTC days of 86400 s, so it has no timescale and no leap seconds.</Notice>}
 				</>
 			)}
 			<Select label="Time Zone" options={DISPLAY_TIME_ZONES} value={chosenZone ?? timeZone} format={(zone) => zone || `Browser (${BROWSER_TIME_ZONE})`} onChange={(zone) => (astronomicalTimeState.timeZone = zone)} />

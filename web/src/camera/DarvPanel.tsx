@@ -4,7 +4,6 @@ import { darvExposureTime } from 'nebulosa/src/observation/alignment/darv'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
-import { Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
@@ -15,6 +14,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataList, DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
@@ -121,7 +121,7 @@ export function DarvSections({ device, availability, mount, settings: identity }
 						<DeviceLink device={mount.device} fallback="Not assigned" />
 					</DataRow>
 				</DataList>
-				{!measuring && mountAvailability.status !== 'ready' && <p className="m-0 text-xs leading-4 text-ink-300">{mountAvailability.message}</p>}
+				{!measuring && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
 				{!measuring && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && (
 					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
 						Equipment Setup
@@ -143,7 +143,7 @@ export function DarvSections({ device, availability, mount, settings: identity }
 				{slewRates.length > 0 ? (
 					<Select label="Slew Rate" options={slewRates.map((rate) => rate.name)} value={slewRate ?? slewRates[0].name} format={(name) => slewRates.find((rate) => rate.name === name)?.label.trim() || name} disabled={locked} onChange={(name) => update({ slewRate: name })} />
 				) : (
-					<p className="m-0 text-xs leading-4 text-ink-300">Slew Rate: {measuring ? shown.slewRate : 'the mount reports no preset yet.'}</p>
+					<Notice>Slew Rate: {measuring ? shown.slewRate : 'the mount reports no preset yet.'}</Notice>
 				)}
 				<NumberInput label="Leg Duration" value={shown.legDuration} min={DARV_MINIMUM_LEG_DURATION} max={DARV_MAXIMUM_LEG_DURATION} step={5} suffix="s" disabled={locked} onChange={(legDuration) => update({ legDuration })} />
 				<Checkbox label="Stop the tracking when finishing" checked={settings.stopTracking} disabled={pending} onChange={(stopTracking) => update({ stopTracking })} />
@@ -172,10 +172,10 @@ export function DarvSections({ device, availability, mount, settings: identity }
 						)}
 					</>
 				)}
-				{blocker && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
+				{blocker && <Notice>{blocker}</Notice>}
 				{session && <TrackingState session={session} />}
-				{open && !measuring && latest?.state === 'ready' && <p className="m-0 text-xs leading-4 text-ink-300">Adjust the {DARV_AXIS_LABELS[latest.request.axis].toLowerCase()} knob to bring the two trails together, then repeat the measurement.</p>}
-				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
+				{open && !measuring && latest?.state === 'ready' && <Notice>Adjust the {DARV_AXIS_LABELS[latest.request.axis].toLowerCase()} knob to bring the two trails together, then repeat the measurement.</Notice>}
+				{error && <Notice error>{error}</Notice>}
 			</CollapsibleSection>
 		</>
 	)
@@ -209,9 +209,9 @@ function Result({ session, measurement }: ResultProps) {
 					</DataRow>
 				)}
 			</DataList>
-			{result?.status === 'limited' && <p className="m-0 text-xs leading-4 text-ink-300">The trails could not be measured fully; judge the separation on the frame.</p>}
-			{notes.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{notes.join(' ')}</p>}
-			<p className="m-0 text-xs leading-4 text-ink-300">The drift is how fast the return trail separates from the outbound one, across the RA motion; it is not a polar error.</p>
+			{result?.status === 'limited' && <Notice>The trails could not be measured fully; judge the separation on the frame.</Notice>}
+			{notes.length > 0 && <Notice>{notes.join(' ')}</Notice>}
+			<Notice>The drift is how fast the return trail separates from the outbound one, across the RA motion; it is not a polar error.</Notice>
 		</CollapsibleSection>
 	)
 }
@@ -242,7 +242,7 @@ function TrackingState({ session }: { readonly session: DarvSessionSummary }) {
 				: session.trackingStopped === false
 					? 'The tracking started for the session could not be stopped.'
 					: 'The tracking started for the session was left on.'
-	return <p className="m-0 text-xs leading-4 text-ink-300">{message}</p>
+	return <Notice>{message}</Notice>
 }
 
 // Phase of the running or last measurement, its failure, and the slew rate restoration.
@@ -252,8 +252,8 @@ function MeasurementState({ measurement }: { readonly measurement: DarvMeasureme
 	return (
 		<>
 			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{DARV_STATE_LABELS[measurement.state]}</p>
-			{failed && measurement.error && <p className="m-0 text-xs leading-4 text-danger">{measurement.error}</p>}
-			{measurement.slewRateRestored === false && measurement.previousSlewRate && <p className="m-0 text-xs leading-4 text-ink-300">The slew rate could not be restored to {measurement.previousSlewRate}.</p>}
+			{failed && measurement.error && <Notice error>{measurement.error}</Notice>}
+			{measurement.slewRateRestored === false && measurement.previousSlewRate && <Notice>The slew rate could not be restored to {measurement.previousSlewRate}.</Notice>}
 		</>
 	)
 }

@@ -9,10 +9,11 @@ import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { skyState } from '../../sky/sky'
 import { Button } from '../../ui/Button'
 import { IconButton } from '../../ui/IconButton'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { type EclipsePlace, observerPlace } from '../eclipse/eclipse'
-import { DISPLAY_TIME_ZONES, LocationSection, Note } from '../eclipse/EclipsePanelParts'
+import { DISPLAY_TIME_ZONES, LocationSection } from '../eclipse/EclipsePanelParts'
 import { type AstroWeatherState, astroWeatherState, EMPTY_FORECAST, effectiveSite, firstNight, followProfile, followSite, formatClock, hasNextNight, loadCurrentNight, loadForecast, MODE_LABELS, nightEnded, OUTLOOK_LABELS, siteKey, stepNight } from './astroweather'
 import { AstronomicalConditions, SkyConditions, Sources, WeatherConditions } from './ForecastDetails'
 import { ForecastSummary, reasonsText } from './ForecastSummary'
@@ -93,7 +94,7 @@ export function AstroWeather() {
 			{site && (
 				<PanelSection title="Time Zone">
 					<Select options={DISPLAY_TIME_ZONES} value={state.timeZone ?? site.timeZone} format={zoneName} onChange={(zone) => (astroWeatherState.timeZone = zone)} />
-					{place && !state.timeZone && <Note>Coordinates do not tell a civil time zone, so a place starts in UTC.</Note>}
+					{place && !state.timeZone && <Notice>Coordinates do not tell a civil time zone, so a place starts in UTC.</Notice>}
 				</PanelSection>
 			)}
 			{night && (
@@ -149,8 +150,8 @@ export function AstroWeather() {
 							{forecastLoading ? 'Refreshing…' : 'Refresh'}
 						</Button>
 					</div>
-					{forecastError && <Note danger>{forecastError} The night below is computed locally; Refresh tries again.</Note>}
-					{nightError && <Note danger>{nightError}</Note>}
+					{forecastError && <Notice error>{forecastError} The night below is computed locally; Refresh tries again.</Notice>}
+					{nightError && <Notice error>{nightError}</Notice>}
 					{night && evaluation ? (
 						<>
 							<ForecastSummary forecast={shown} loaded={!!forecast} night={night} evaluation={evaluation} mode={mode} timeZone={timeZone} />

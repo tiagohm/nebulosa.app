@@ -8,10 +8,11 @@ import { BROWSER_TIME_ZONE } from '../../sky/clock'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { displayTimeZone, type EclipsePlace, formatDuration, formatEclipseTime } from '../eclipse/eclipse'
-import { DISPLAY_TIME_ZONES, LocationSection, Note } from '../eclipse/EclipsePanelParts'
+import { DISPLAY_TIME_ZONES, LocationSection } from '../eclipse/EclipsePanelParts'
 import { GlobalPointIcon } from './GlobalPointMarker'
 import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectPlace, selectPoint, setViewSettings, solarEclipseState } from './solareclipse'
 import { SolarEclipseLocalView } from './SolarEclipseLocalView'
@@ -71,7 +72,7 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 			</button>
 			{selected && (
 				<div className="flex flex-col gap-1.5 border-t border-line-100 px-2 py-2">
-					<Note>{info.description}</Note>
+					<Notice>{info.description}</Notice>
 					<DataRow label="Position">{formatGeographic(point.latitude, point.longitude)}</DataRow>
 					{point.sunAltitude !== undefined && <DataRow label="Sun altitude">{point.sunAltitude.toFixed(1)}°</DataRow>}
 					{extreme && <DataRow label="Sun azimuth">{extreme.sunAzimuth.toFixed(1)}°</DataRow>}
@@ -104,27 +105,27 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 				<PanelSection title="Visibility">
 					{visibility && <p className="m-0 font-medium text-ink-100">{visibility.text}</p>}
 					{visibility && visibility.hasCentralPhase && <DataRow label="Central phase here">{visibility.centralPhaseKind === 'annular' ? 'Annular' : 'Total'}</DataRow>}
-					{visibility && visibility.hasGeometricEclipse && !visibility.hasCentralPhase && <Note>Only a partial eclipse reaches this place.</Note>}
-					{visibility?.kind === 'partialOnlyVisible' && visibility.hasCentralPhase && <Note>The {central} phase happens with the Sun below the horizon; only the partial phase is visible.</Note>}
-					{visibility && visibility.hasObservableEclipse && visibility.sunMotion !== 'none' && <Note>The Sun is {visibility.sunMotion === 'rising' ? 'climbing' : 'descending'} during the eclipse.</Note>}
-					{visibility && (!visibility.completeness.partialContactsComplete || !visibility.completeness.centralContactsComplete) && <Note>Some contacts could not be found; the visibility rests on those that were.</Note>}
-					{localLoading && <Note>Computing the local circumstances…</Note>}
+					{visibility && visibility.hasGeometricEclipse && !visibility.hasCentralPhase && <Notice>Only a partial eclipse reaches this place.</Notice>}
+					{visibility?.kind === 'partialOnlyVisible' && visibility.hasCentralPhase && <Notice>The {central} phase happens with the Sun below the horizon; only the partial phase is visible.</Notice>}
+					{visibility && visibility.hasObservableEclipse && visibility.sunMotion !== 'none' && <Notice>The Sun is {visibility.sunMotion === 'rising' ? 'climbing' : 'descending'} during the eclipse.</Notice>}
+					{visibility && (!visibility.completeness.partialContactsComplete || !visibility.completeness.centralContactsComplete) && <Notice>Some contacts could not be found; the visibility rests on those that were.</Notice>}
+					{localLoading && <Notice>Computing the local circumstances…</Notice>}
 					{localError && (
 						<>
-							<Note danger>{localError}</Note>
+							<Notice error>{localError}</Notice>
 							<Button variant="secondary" className="self-start" onClick={() => void loadLocal(solarEclipseState)}>
 								Retry
 							</Button>
 						</>
 					)}
-					<Note>Visible means the Sun's center at or above the 0° horizon; elevation and terrain are not considered.</Note>
+					<Notice>Visible means the Sun's center at or above the 0° horizon; elevation and terrain are not considered.</Notice>
 				</PanelSection>
 			)}
 			{eclipse && (
 				<PanelSection title="Contacts">
 					<Select label="Time Zone" options={DISPLAY_TIME_ZONES} value={timeZone} onChange={(zone) => (solarEclipseState.timeZone = zone)} format={(zone) => zone || `Browser (${BROWSER_TIME_ZONE})`} />
-					{!place && <Note>Select a location to see its contacts.</Note>}
-					{local && local.events.length === 0 && <Note>The eclipse does not reach this place.</Note>}
+					{!place && <Notice>Select a location to see its contacts.</Notice>}
+					{local && local.events.length === 0 && <Notice>The eclipse does not reach this place.</Notice>}
 					{local?.events.map((event) => {
 						const selected = event.kind === (local.view.selectedEvent ?? selectedEvent)
 
@@ -166,15 +167,15 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 					{local?.details.centralPhaseDuration !== undefined && <DataRow label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatDuration(local.details.centralPhaseDuration)}</DataRow>}
 					{local?.details.pathWidthKm !== undefined && <DataRow label="Path width here">{Math.round(local.details.pathWidthKm)} km</DataRow>}
 					{local?.details.shadowPathWidthKm !== undefined && <DataRow label="Shadow chord here">{Math.round(local.details.shadowPathWidthKm)} km</DataRow>}
-					<Note>
+					<Notice>
 						Magnitude is the fraction of the Sun's diameter covered by the Moon, not of its area. Path width is the distance between the limits of totality or annularity, across the central line. Shadow chord is the narrowest width of the shadow at one instant, which is smaller at a low Sun. Contacts assume
 						a smooth lunar limb and are good to about 5 s; the mountains of the limb matter most near the limits of the path.
-					</Note>
+					</Notice>
 				</PanelSection>
 			)}
 			{map && (
 				<PanelSection title="Global Points">
-					<Note>Points of the eclipse as a whole, the same for everyone. Choose one to find it on the map.</Note>
+					<Notice>Points of the eclipse as a whole, the same for everyone. Choose one to find it on the map.</Notice>
 					{globalPoints(map).map((point) => (
 						<GlobalPointRow key={point.kind} point={point} selected={point.kind === selectedPoint} timeZone={timeZone} />
 					))}
@@ -186,12 +187,12 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 					<SegmentedControl label="Up" options={ORIENTATIONS} value={view.orientation} onChange={(orientation) => void setViewSettings(solarEclipseState, { orientation })} format={(value) => (value === 'zenith' ? 'Zenith' : 'North')} />
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(solarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />
 					<Checkbox label="Moon at the other contacts" checked={view.ghosts} onChange={(ghosts) => void setViewSettings(solarEclipseState, { ghosts })} />
-					<Note>The Moon over the Sun at {local.view.selectedEvent ?? selectedEvent}; the red band is below the horizon. A geometric diagram, not a photorealistic rendering.</Note>
+					<Notice>The Moon over the Sun at {local.view.selectedEvent ?? selectedEvent}; the red band is below the horizon. A geometric diagram, not a photorealistic rendering.</Notice>
 				</PanelSection>
 			)}
 			<PanelSection title="About">
-				<Note>A computed prediction from the toolkit's ephemerides, without the site's elevation, the terrain, or the profile of the lunar limb; times near the edges of the path are less certain.</Note>
-				<Note danger>Never look at the Sun without a proper solar filter, except during totality itself.</Note>
+				<Notice>A computed prediction from the toolkit's ephemerides, without the site's elevation, the terrain, or the profile of the lunar limb; times near the edges of the path are less certain.</Notice>
+				<Notice error>Never look at the Sun without a proper solar filter, except during totality itself.</Notice>
 			</PanelSection>
 		</>
 	)

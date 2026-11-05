@@ -7,8 +7,9 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 import { formatAngularSize, formatDeclination, formatMagnitude, formatRightAscension, formatStellarDistance } from './format'
-import { Note, ObserverSection, PositionSection } from './InspectorParts'
+import { ObserverSection, PositionSection } from './InspectorParts'
 import { MoonInspector } from './moon/MoonInspector'
 import { MountInspector } from './MountInspector'
 import { ObjectActions } from './ObjectActions'
@@ -67,7 +68,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 				<p className="m-0 text-ink-300">{typeOf(selection)}</p>
 				{designations.length > 0 && <p className="m-0 text-xs leading-5 text-ink-200">{designations.join(' · ')}</p>}
 				{magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(magnitude)}</DataRow>}
-				{selection.detailsError && <Note danger>Details unavailable: {selection.detailsError}</Note>}
+				{selection.detailsError && <Notice error>Details unavailable: {selection.detailsError}</Notice>}
 				<ObjectActions target={selection.ref} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
 			</PanelSection>
 			<PositionSection selection={selection} timeZone={timeZone} />
@@ -111,7 +112,7 @@ function CatalogSection({ catalog }: { readonly catalog: SkyCatalogObject }) {
 			)}
 			<DataRow label="RA (J2000)">{formatRightAscension(catalog.rightAscension)}</DataRow>
 			<DataRow label="Dec (J2000)">{formatDeclination(catalog.declination)}</DataRow>
-			{pm && <Note>Proper motion is μα·cos δ and μδ. Catalog coordinates are for epoch J2000.</Note>}
+			{pm && <Notice>Proper motion is μα·cos δ and μδ. Catalog coordinates are for epoch J2000.</Notice>}
 		</CollapsibleSection>
 	)
 }
@@ -130,10 +131,10 @@ function MinorBodySection({ body }: { readonly body: MinorBody }) {
 					{e.units && ` ${e.units}`}
 				</DataRow>
 			))}
-			<Note>
+			<Notice>
 				Orbit solution {body.solutionDate}
 				{body.epoch !== undefined && `, elements at JD ${body.epoch}`}. Source: JPL Small-Body Database.
-			</Note>
+			</Notice>
 		</CollapsibleSection>
 	)
 }

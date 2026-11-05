@@ -1,11 +1,11 @@
 import type { GuidingStarProfile } from 'api'
-import { Notice } from '../equipment-control/parts'
 import { formatPixelLength, formatDegrees, MISSING } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { FLAG_LABELS, formatNumber } from '../stars/starprofile.format'
 import { consecutiveOffsets } from '../stars/starprofile.plot'
 import { StarProfilePlot } from '../stars/StarProfilePlot'
 import { DataList, DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 
 // Star Profile section of the Guiding panel: the horizontal and vertical cuts through the guide star of the latest
 // measured frame, plotted above its half maximum, and every measurement of its profile (position, quality, SNR, flux,

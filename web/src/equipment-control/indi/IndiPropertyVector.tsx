@@ -1,6 +1,6 @@
 import type { IndiProperty } from 'api'
 import { cn } from 'cn'
-import { Notice } from '../parts'
+import { Notice } from '../../ui/Notice'
 import { labelOf, PERMISSION_LABELS, RULE_LABELS, STATE_COLORS, TYPE_LABELS } from './indi.format'
 import { BlobVectorView, LightVectorView } from './IndiReadings'
 import { IndiWriteStatus } from './IndiWriteStatus'

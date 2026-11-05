@@ -1,12 +1,9 @@
 import type { DeviceSummary, OperationRecord } from 'api'
-import { cn } from 'cn'
-import { type ReactNode, useState } from 'react'
-import { Button, type ButtonProps } from '../ui/Button'
-import { Modal } from '../ui/Modal'
 import type { ActivityTone } from './groups'
 
-// Small building blocks shared by the Equipment Control panels: a command button that
-// asks for confirmation first, the tone of an activity, and the description of an operation outcome.
+// Small building blocks shared by the Equipment Control panels: the tone of an activity, the description of an
+// operation outcome, and the props of the controls of a device interface. The notes, button rows, and confirmed
+// commands they show are the shared primitives of `ui/`.
 
 // Text color of each activity tone.
 export const TONE_COLORS: Readonly<Record<ActivityTone, string>> = {
@@ -26,63 +23,6 @@ export const FAILURE_REASONS: Readonly<Record<NonNullable<OperationRecord['reaso
 	alert: 'the driver reported an error',
 	commandFailed: 'the command could not be confirmed',
 	unexpectedState: 'the device refused it in its current state',
-}
-
-export interface ConfirmButtonProps extends Omit<ButtonProps, 'onClick'> {
-	// Title of the confirmation dialog, phrased as a question.
-	readonly title: string
-	// What the command does and why it deserves a second look.
-	readonly message: ReactNode
-	// Label of the button that runs the command.
-	readonly confirmLabel: string
-	// Runs the command once confirmed.
-	readonly onConfirm: () => void
-}
-
-// Button that opens a confirmation dialog and runs its command only once confirmed. Used for commands that
-// redefine a reference (sync, set home, set park) or start a long physical search.
-export function ConfirmButton({ title, message, confirmLabel, onConfirm, size = 'md', variant = 'secondary', ...props }: ConfirmButtonProps) {
-	const [open, setOpen] = useState(false)
-
-	return (
-		<>
-			<Button size={size} variant={variant} {...props} onClick={() => setOpen(true)} />
-			<Modal open={open} onClose={() => setOpen(false)} title={title} className="max-w-md">
-				<div className="m-0 text-sm leading-5 text-ink-200">{message}</div>
-				<div className="mt-5 flex justify-end gap-2">
-					<Button variant="secondary" onClick={() => setOpen(false)}>
-						Cancel
-					</Button>
-					<Button
-						data-autofocus
-						onClick={() => {
-							setOpen(false)
-							onConfirm()
-						}}
-					>
-						{confirmLabel}
-					</Button>
-				</div>
-			</Modal>
-		</>
-	)
-}
-
-export interface NoticeProps {
-	// Whether the notice reports an error.
-	readonly error?: boolean
-	// Text of the notice.
-	readonly children: ReactNode
-}
-
-// One line of explanation under a control, or an error in the danger color.
-export function Notice({ error = false, children }: NoticeProps) {
-	return <p className={cn('m-0 text-xs leading-4', error ? 'text-danger' : 'text-ink-300')}>{children}</p>
-}
-
-// Row of command buttons that wraps on narrow panels.
-export function Actions({ children }: { readonly children: ReactNode }) {
-	return <div className="flex flex-wrap items-center gap-2">{children}</div>
 }
 
 // Props of the controls of one interface of a device.

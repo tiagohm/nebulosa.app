@@ -2,11 +2,13 @@ import type { GuidePulseRequest } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { PanelSection } from '../../shell/ContextualPanel'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
-import { Actions, type InterfaceProps, Notice } from '../parts'
+import type { InterfaceProps } from '../parts'
 
 // Controls of a guide output: single timed pulses along the driver's motion vectors, the guide rates, and
 // a stop of the pulses in progress. A pulse holds the physical device behind the output, so it is refused

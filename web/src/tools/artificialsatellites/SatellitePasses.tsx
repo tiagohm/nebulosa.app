@@ -8,10 +8,10 @@ import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { moveIndex } from '../../ui/navigation'
+import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
-import { Note } from '../eclipse/EclipsePanelParts'
 import { artificialSatellitesState, formatSatelliteTime, loadSatellitePasses, MAX_PASS_DAYS, openSkyObserver, SHADOW_LABELS, showSatelliteInSky, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
@@ -188,7 +188,7 @@ export function SatellitePasses({ observer }: { readonly observer?: SkyObserverS
 						<QualityRow quality={passes.quality} />
 					</div>
 					{list.length === 0 ? (
-						<Note>{passes.passes.length === 0 ? 'No pass above the minimum altitude in this window.' : 'No visible pass in this window: show the daylight passes too to list them.'}</Note>
+						<Notice>{passes.passes.length === 0 ? 'No pass above the minimum altitude in this window.' : 'No visible pass in this window: show the daylight passes too to list them.'}</Notice>
 					) : (
 						<div className="overflow-x-auto">
 							<table className="w-full border-collapse font-mono text-xs text-ink-200 tabular-nums">
@@ -221,7 +221,7 @@ export function SatellitePasses({ observer }: { readonly observer?: SkyObserverS
 									View in Sky at the Highest Point
 								</Button>
 							</div>
-							<Note>Altitudes are geometric, without refraction; the curve joins the rise, the highest point, and the set. Visible parts are sunlit while the Sun is below the twilight limit at the observer; whether the satellite is bright enough is not known.</Note>
+							<Notice>Altitudes are geometric, without refraction; the curve joins the rise, the highest point, and the set. Visible parts are sunlit while the Sun is below the twilight limit at the observer; whether the satellite is bright enough is not known.</Notice>
 						</div>
 					)}
 				</div>

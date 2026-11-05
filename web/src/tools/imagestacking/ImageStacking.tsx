@@ -1,7 +1,6 @@
 import type { Evidenced, Page, StackingFilterGroup, StackingFrameSummary, StackingImportCandidate, StackingSourceDetail } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { Actions, ConfirmButton, Notice } from '../../equipment-control/parts'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../../files/files'
 import { imagesState, openImage } from '../../images/images'
@@ -26,6 +25,9 @@ import { CalibrationView, QualityView } from './Planning'
 // oxfmt-ignore
 import { cancelStackingImport, commitStackingImport, createStackingProject, deleteStackingProject, imageStackingRuntime, jobEnded, loadStackingCandidates, loadStackingFrame, loadStackingFrames, loadStackingProject, refreshStackingProject, removeStackingFrame, renameStackingProject, STACKING_PAGE_SIZE, type StackingFrameFilter, startStackingImport, updateStackingFrame } from './projects'
 import { MISSING } from '../../format'
+import { Actions } from '../../ui/Actions'
+import { ConfirmButton } from '../../ui/ConfirmButton'
+import { Notice } from '../../ui/Notice'
 import { Cell, Row, Table } from './Table'
 
 // Image Stacking tool: projects of light frames saved on the server, grouped by the filter their headers write. It
@@ -313,7 +315,7 @@ function GroupsView({ onShow }: { readonly onShow: (key: string) => void }) {
 					</Row>
 				))}
 			</Table>
-			<p className="m-0 text-xs text-ink-300">Filters are grouped by the exact name their headers write; names spelled differently are different filters, and frames whose header names none are None.</p>
+			<Notice>Filters are grouped by the exact name their headers write; names spelled differently are different filters, and frames whose header names none are None.</Notice>
 		</>
 	)
 }

@@ -8,6 +8,7 @@ import { CHIP_ROLES } from '../shell/statusbar/selectors'
 import { skyState } from '../sky/sky'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { Notice } from '../ui/Notice'
 import { Select } from '../ui/Select'
 
 // Status Bar section of the Settings page: what the status bar of the active profile shows for each device and in its
@@ -73,7 +74,7 @@ export function StatusBarSettings() {
 				{CHIP_ROLES.map((role) => (
 					<DeviceChipSettings key={role} role={role} settings={settings} />
 				))}
-				<p className="m-0 text-xs leading-4 text-ink-300">A device shows only while it is connected. A chip without any reading shows its icon alone, and its title always has the full reading.</p>
+				<Notice>A device shows only while it is connected. A chip without any reading shows its icon alone, and its title always has the full reading.</Notice>
 			</section>
 			<section className="flex max-w-md flex-col gap-3">
 				<h2 className="m-0 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">Astronomical Clock</h2>
@@ -91,7 +92,7 @@ export function StatusBarSettings() {
 				<Checkbox label="Show seconds in times of day" disabled={!enabled} checked={showSeconds} onChange={(value) => setAstronomicalClockPreferences(profileState, { showSeconds: value })} />
 				{sidereal && !located && (
 					<>
-						<p className="m-0 text-xs leading-4 text-ink-300">This profile has no Sky observer, so the bar shows the Julian Date (UTC) until one is set.</p>
+						<Notice>This profile has no Sky observer, so the bar shows the Julian Date (UTC) until one is set.</Notice>
 						<Button
 							variant="secondary"
 							className="self-start"
@@ -104,7 +105,7 @@ export function StatusBarSettings() {
 						</Button>
 					</>
 				)}
-				<p className="m-0 text-xs leading-4 text-ink-300">The clock is always the real current time, never the Sky simulation clock. It uses the room the equipment and the operations leave, and is always listed in the status details.</p>
+				<Notice>The clock is always the real current time, never the Sky simulation clock. It uses the room the equipment and the operations leave, and is always listed in the status details.</Notice>
 			</section>
 		</div>
 	)

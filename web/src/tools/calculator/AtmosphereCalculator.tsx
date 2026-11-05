@@ -1,8 +1,9 @@
 import { formatFixed } from '../../format'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { AIRMASS_EXAMPLE, type AirmassDraft, airmass, DEW_EXAMPLE, type DewDraft, type DewMode, dew } from './atmosphere'
-import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary } from './CalculatorParts'
 
 // Views of the Atmosphere & Conditions calculators: Airmass & Visibility Effects and Dew Conditions.
 
@@ -35,7 +36,7 @@ export function AirmassCalculator({ entry, onChange, context }: CalculatorViewPr
 						<NumberField label="Altitude" suffix="°" value={draft.altitude} onChange={(altitude) => set({ altitude })} />
 						<NumberField label="Extinction coefficient" suffix="mag/X" optional value={draft.extinction} onChange={(extinction) => set({ extinction })} />
 					</FieldGrid>
-					<Note>The true altitude above the horizon, without refraction. Typical visual extinction is 0.15–0.3 mag per airmass, more in hazy or low sites.</Note>
+					<Notice>The true altitude above the horizon, without refraction. Typical visual extinction is 0.15–0.3 mag per airmass, more in hazy or low sites.</Notice>
 				</>
 			}
 			results={
@@ -85,9 +86,9 @@ export function DewCalculator({ entry, onChange, context }: CalculatorViewProps<
 						{draft.mode === 'frost' && <NumberField label="Humidity over ice" suffix="%" value={draft.iceHumidity} onChange={(iceHumidity) => set({ iceHumidity })} />}
 					</FieldGrid>
 					{draft.mode === 'frost' ? (
-						<Note>The humidity relative to ice, not the humidity a weather station reports, which is relative to water. Above freezing the dew point is the condensation temperature.</Note>
+						<Notice>The humidity relative to ice, not the humidity a weather station reports, which is relative to water. Above freezing the dew point is the condensation temperature.</Notice>
 					) : (
-						<Note>Ambient air temperature and the humidity relative to water, as weather stations report it.</Note>
+						<Notice>Ambient air temperature and the humidity relative to water, as weather stations report it.</Notice>
 					)}
 				</>
 			}

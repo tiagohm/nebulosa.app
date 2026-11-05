@@ -1,8 +1,8 @@
 import type { SunPhysicalData } from 'api'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { formatLocalTime } from '../format'
-import { Note } from '../InspectorParts'
 
 // Solar Physical Data section of the Sun Inspector: the equation of time and the Carrington rotation in progress at
 // the instant the almanac was computed for.
@@ -21,7 +21,7 @@ export function SolarPhysicalSection({ physical, time, timeZone }: { readonly ph
 				<>
 					<DataRow label="Equation of time">{formatEquationOfTime(physical.equationOfTimeSeconds)}</DataRow>
 					<DataRow label="Carrington rotation">{physical.carringtonRotation}</DataRow>
-					<Note>At {formatLocalTime(time, Date.now(), undefined, timeZone)}, from the local model. The equation of time is apparent minus mean solar time: positive when a sundial is ahead of the clock.</Note>
+					<Notice>At {formatLocalTime(time, Date.now(), undefined, timeZone)}, from the local model. The equation of time is apparent minus mean solar time: positive when a sundial is ahead of the clock.</Notice>
 				</>
 			) : (
 				<p className="m-0 text-ink-300">Computing…</p>

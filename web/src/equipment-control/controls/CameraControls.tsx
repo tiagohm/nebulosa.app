@@ -3,12 +3,14 @@ import { useSnapshot } from 'valtio'
 import { formatTemperature } from '../../format'
 import { deviceBusy, operationsState } from '../../operations'
 import { PanelSection } from '../../shell/ContextualPanel'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand } from '../control'
-import { Actions, type InterfaceProps, Notice } from '../parts'
+import type { InterfaceProps } from '../parts'
 
 // Auxiliary controls of a camera: what it is and what it can capture, as its driver reports it, and its
 // cooling (cooler switch, target temperature, sensor temperature, and cooler power). The target typed here

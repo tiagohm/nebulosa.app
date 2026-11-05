@@ -1,11 +1,11 @@
 import type { CameraCapabilities, DeviceSummary } from 'api'
 import type { ReactNode } from 'react'
-import { Notice } from '../equipment-control/parts'
 import { cameraTabKey } from '../images/cameratabs'
 import { imagesState, selectImageTool } from '../images/images'
 import type { CameraExposureSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
+import { Notice } from '../ui/Notice'
 import { CameraSummary } from './CameraSummary'
 
 // Acquisition section of the panels of the camera operations that take frames, as Plate Solving and Star Detection are

@@ -7,10 +7,10 @@ import { collapsibleSections, sectionOpen } from '../../shell/collapsible'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
 import { formatDeclination, formatLocalTime, formatMagnitude, formatRightAscension, formatSolarSystemDistance } from '../../sky/format'
-import { Note } from '../../sky/InspectorParts'
 import { skyState } from '../../sky/sky'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { closeApproachesState, formatApproachTime, loadCloseApproachObservability, OBSERVABILITY_INSTANTS, type ObservabilityInstant, showInSky } from './closeapproaches'
 
@@ -77,7 +77,7 @@ export function CloseApproachObservability({ body, time, observer, timeZone }: S
 			<SegmentedControl label="Instant" options={OBSERVABILITY_INSTANTS} value={observabilityInstant} format={(value) => INSTANT_LABELS[value]} onChange={(value) => (closeApproachesState.observabilityInstant = value)} />
 			{!observer && (
 				<>
-					<Note>Altitude, azimuth, rise, and set need the observer&apos;s location, so this position is geocentric.</Note>
+					<Notice>Altitude, azimuth, rise, and set need the observer&apos;s location, so this position is geocentric.</Notice>
 					<Button variant="secondary" className="self-start" onClick={openObserver}>
 						Set Sky Observer
 					</Button>
@@ -86,7 +86,7 @@ export function CloseApproachObservability({ body, time, observer, timeZone }: S
 			{observabilityLoading && !position && <p className="m-0 text-ink-300">Computing the position…</p>}
 			{observabilityError && (
 				<>
-					<Note danger>Position unavailable: {observabilityError}</Note>
+					<Notice error>Position unavailable: {observabilityError}</Notice>
 					<Button variant="secondary" className="self-start" onClick={load}>
 						Retry
 					</Button>
@@ -96,7 +96,7 @@ export function CloseApproachObservability({ body, time, observer, timeZone }: S
 				<>
 					<DataRow label={`At (${timeZone})`}>{formatApproachTime(position.time, timeZone)}</DataRow>
 					{position.altitude !== undefined && <DataRow label="Altitude">{formatDeclination(position.altitude)}</DataRow>}
-					{position.altitude !== undefined && position.altitude < 0 && <Note>Below the horizon at this instant.</Note>}
+					{position.altitude !== undefined && position.altitude < 0 && <Notice>Below the horizon at this instant.</Notice>}
 					{position.azimuth !== undefined && <DataRow label="Azimuth">{formatDegrees(position.azimuth)}</DataRow>}
 					<DataRow label="RA (of date)">{formatRightAscension(position.rightAscension)}</DataRow>
 					<DataRow label="Dec (of date)">{formatDeclination(position.declination)}</DataRow>
@@ -108,10 +108,10 @@ export function CloseApproachObservability({ body, time, observer, timeZone }: S
 					{events?.rise !== undefined && <DataRow label="Rise">{formatLocalTime(events.rise, position.time, undefined, timeZone)}</DataRow>}
 					{events?.transit !== undefined && <DataRow label="Transit">{formatLocalTime(events.transit, position.time, undefined, timeZone)}</DataRow>}
 					{events?.set !== undefined && <DataRow label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</DataRow>}
-					<Note>
+					<Notice>
 						Apparent {position.center} place from {position.source === 'horizons' ? 'JPL Horizons' : position.fallbackReason ? `the local model (${FALLBACK_REASONS[position.fallbackReason]})` : 'the local model'}.
-					</Note>
-					<Note>{FLYBY_NOTE}</Note>
+					</Notice>
+					<Notice>{FLYBY_NOTE}</Notice>
 				</>
 			)}
 		</CollapsibleSection>

@@ -7,13 +7,13 @@ import { navigate, routeState } from '../shell/route'
 import { useMediaQuery, WIDE_SCREEN } from '../shell/useMediaQuery'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
+import { Notice } from '../ui/Notice'
 import { ConnectionHeader } from './ConnectionHeader'
 import { controlRuntime } from './control'
 import { DeviceDetail } from './DeviceDetail'
 import { DeviceSelect, DeviceSidebar } from './DeviceSidebar'
 import { type DeviceGroup, findGroup, groupDevices } from './groups'
 import { useWatchedIndiDevices } from './indi/useIndi'
-import { Notice } from './parts'
 
 // Equipment Control page (Management → Equipment Control): manual control of every device the active
 // profile's connection discovered, whether or not the equipment setup assigns it a role, and every device its

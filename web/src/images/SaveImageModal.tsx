@@ -4,7 +4,7 @@ import { useSnapshot } from 'valtio'
 import { FileExplorerModal } from '../files/FileExplorerModal'
 import { activeProfile, profileState, setLastSaveDirectory } from '../profile/profile'
 import { Button } from '../ui/Button'
-import { Modal } from '../ui/Modal'
+import { Modal, ModalActions } from '../ui/Modal'
 import { documentPath, type ImageDocument, imagesState, SAVE_EXTENSIONS, saveFileName, saveImage } from './images'
 
 // Save of a copy of an image document to a file of the server in a format chosen beforehand: a file chooser in save
@@ -90,7 +90,7 @@ export function SaveImageModal({ document, format, onClose, onSaved }: SaveImage
 			/>
 			<Modal open={!!replacing} onClose={() => setReplacing(undefined)} title="Replace file?" className="max-w-md">
 				<p className="m-0 text-sm break-all">{replacing?.path} already exists. Replacing it overwrites its contents.</p>
-				<div className="mt-5 flex justify-end gap-2">
+				<ModalActions>
 					<Button variant="secondary" onClick={() => setReplacing(undefined)}>
 						Cancel
 					</Button>
@@ -103,7 +103,7 @@ export function SaveImageModal({ document, format, onClose, onSaved }: SaveImage
 					>
 						Replace
 					</Button>
-				</div>
+				</ModalActions>
 			</Modal>
 		</>
 	)

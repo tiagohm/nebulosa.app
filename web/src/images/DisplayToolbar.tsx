@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { IconButton } from '../ui/IconButton'
+import { Notice } from '../ui/Notice'
 import { Popover } from '../ui/Popover'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
@@ -119,7 +120,7 @@ function DebayerControls({ info, applied, onApply }: DebayerControlsProps) {
 						disabledReason={(p) => (p === 'auto' && !info.cfa ? 'The header has no known CFA pattern.' : undefined)}
 						onChange={(pattern) => onApply({ debayer: { enabled: true, pattern } })}
 					/>
-					{!info.cfa && <p className="m-0 text-xs text-ink-300">The header has no known CFA pattern; check that the chosen one matches the sensor.</p>}
+					{!info.cfa && <Notice>The header has no known CFA pattern; check that the chosen one matches the sensor.</Notice>}
 				</>
 			)}
 		</>
@@ -201,7 +202,7 @@ function StretchControls({ applied, color, rendering, onApply }: StretchControls
 					<Slider label="Shadow" {...DISPLAY_RANGES.stretch} value={stretch.stretch.shadow} onChange={(shadow) => editLevels({ shadow })} />
 					<Slider label="Midtone" {...DISPLAY_RANGES.stretch} value={stretch.stretch.midtone} onChange={(midtone) => editLevels({ midtone })} />
 					<Slider label="Highlight" {...DISPLAY_RANGES.stretch} value={stretch.stretch.highlight} onChange={(highlight) => editLevels({ highlight })} />
-					{invalid && <p className="m-0 text-xs text-danger">Shadow must not exceed highlight.</p>}
+					{invalid && <Notice error>Shadow must not exceed highlight.</Notice>}
 				</>
 			)}
 			<SectionActions section="stretch" draft={draft} edit={edit} onApply={onApply} invalid={invalid} />

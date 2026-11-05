@@ -7,10 +7,11 @@ import { BROWSER_TIME_ZONE } from '../../sky/clock'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { displayTimeZone, type EclipsePlace, formatDuration, formatEclipseTime } from '../eclipse/eclipse'
-import { DISPLAY_TIME_ZONES, LocationSection, Note } from '../eclipse/EclipsePanelParts'
+import { DISPLAY_TIME_ZONES, LocationSection } from '../eclipse/EclipsePanelParts'
 import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, loadLocal, lunarEclipseState, phaseDurations, selectEvent, selectPlace, setViewSettings } from './lunareclipse'
 import { LunarEclipseLocalView } from './LunarEclipseLocalView'
 
@@ -51,18 +52,18 @@ export function LunarEclipsePanel({ observer }: LunarEclipsePanelProps) {
 			{place && (
 				<PanelSection title="Visibility">
 					{local && <p className="m-0 font-medium text-ink-100">{local.visibility.text}</p>}
-					{local && !local.visibility.hasObservableEclipse && <Note>The Moon stays below the horizon here from P1 to P4; the contact times still hold for everyone.</Note>}
-					{local && local.visibility.kind === 'totalVisible' && <Note>The Moon is above the horizon during at least part of totality, but not during the whole eclipse.</Note>}
-					{localLoading && <Note>Computing the local circumstances…</Note>}
+					{local && !local.visibility.hasObservableEclipse && <Notice>The Moon stays below the horizon here from P1 to P4; the contact times still hold for everyone.</Notice>}
+					{local && local.visibility.kind === 'totalVisible' && <Notice>The Moon is above the horizon during at least part of totality, but not during the whole eclipse.</Notice>}
+					{localLoading && <Notice>Computing the local circumstances…</Notice>}
 					{localError && (
 						<>
-							<Note danger>{localError}</Note>
+							<Notice error>{localError}</Notice>
 							<Button variant="secondary" className="self-start" onClick={() => void loadLocal(lunarEclipseState)}>
 								Retry
 							</Button>
 						</>
 					)}
-					<Note>Visible means the Moon's center at or above the 0° horizon, without refraction. Partial and total contacts are computed to about 5 s and penumbral ones to about 30 s, and the edges of the Earth's shadow are too diffuse to see them that sharply.</Note>
+					<Notice>Visible means the Moon's center at or above the 0° horizon, without refraction. Partial and total contacts are computed to about 5 s and penumbral ones to about 30 s, and the edges of the Earth's shadow are too diffuse to see them that sharply.</Notice>
 				</PanelSection>
 			)}
 			{eclipse && (
@@ -119,7 +120,7 @@ export function LunarEclipsePanel({ observer }: LunarEclipsePanelProps) {
 					<SegmentedControl label="Up" options={ORIENTATIONS} value={view.orientation} onChange={(orientation) => void setViewSettings(lunarEclipseState, { orientation })} format={(value) => (value === 'zenith' ? 'Zenith' : 'North')} />
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(lunarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />
 					<Checkbox label="Moon at the other contacts" checked={view.ghosts} onChange={(ghosts) => void setViewSettings(lunarEclipseState, { ghosts })} />
-					<Note>The Moon at {local.view.selectedEvent ?? selectedEvent} crossing the Earth's penumbra and umbra; the red band is below the horizon. A geometric diagram, not a photorealistic rendering.</Note>
+					<Notice>The Moon at {local.view.selectedEvent ?? selectedEvent} crossing the Earth's penumbra and umbra; the red band is below the horizon. A geometric diagram, not a photorealistic rendering.</Notice>
 				</PanelSection>
 			)}
 		</>

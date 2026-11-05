@@ -62,3 +62,9 @@ export function Modal({ open, onClose, title, className, fit = false, children }
 		</dialog>
 	)
 }
+
+// Buttons that close a dialog's content, aligned to the end and wrapping on narrow screens; the button the dialog
+// proposes comes last.
+export function ModalActions({ children }: { readonly children: ReactNode }) {
+	return <div className="mt-5 flex flex-wrap justify-end gap-2">{children}</div>
+}

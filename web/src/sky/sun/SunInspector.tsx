@@ -9,9 +9,10 @@ import { PanelSection } from '../../shell/ContextualPanel'
 import { formatDuration } from '../../tools/eclipse/eclipse'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { BROWSER_TIME_ZONE } from '../clock'
 import { formatAngularSize, formatDeclination, formatLocalTime, formatMagnitude } from '../format'
-import { Note, PositionSection } from '../InspectorParts'
+import { PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
 import type { SkySelection } from '../sky'
 import { ActiveRegionsSection } from './ActiveRegionsSection'
@@ -89,7 +90,7 @@ function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone
 							)}
 							{(day.sunset !== undefined || day.daylight === 'partial') && <DataRow label="Sunset">{day.sunset !== undefined ? formatLocalTime(day.sunset, day.start, undefined, timeZone) : 'None this day'}</DataRow>}
 							{day.daylightSeconds !== undefined && <DataRow label="Daylight">{formatDuration(day.daylightSeconds)}</DataRow>}
-							<Note>Refracted altitude at the instant. Sunrise, transit, and sunset of {day.localDate}: the upper limb at the horizon with standard refraction (the center at −50′, geometric), from the local model.</Note>
+							<Notice>Refracted altitude at the instant. Sunrise, transit, and sunset of {day.localDate}: the upper limb at the horizon with standard refraction (the center at −50′, geometric), from the local model.</Notice>
 						</>
 					) : (
 						<p className="m-0 text-ink-300">Computing the day…</p>
@@ -151,7 +152,7 @@ export function SunInspector({ selection, observer, onSetObserver, timeZone, onS
 			<SolarPhysicalSection physical={almanac.value?.physical} time={almanac.value?.time} timeZone={timeZone} />
 			{almanac.error && (
 				<div className="px-4 py-3">
-					<Note danger>Almanac unavailable: {almanac.error}</Note>
+					<Notice error>Almanac unavailable: {almanac.error}</Notice>
 				</div>
 			)}
 		</>

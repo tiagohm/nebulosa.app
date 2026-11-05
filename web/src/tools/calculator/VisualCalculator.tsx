@@ -1,6 +1,7 @@
 import { formatFixed } from '../../format'
 import { DataRow } from '../../ui/DataRow'
-import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
+import { Notice } from '../../ui/Notice'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary } from './CalculatorParts'
 import { APERTURE_COMPARISON_EXAMPLE, type ApertureComparisonDraft, type ApertureSide, apertureComparison, EYEPIECE_EXAMPLE, type EyepieceDraft, eyepiece, eyepieceFromOptics, type LightGrasp } from './visual'
 
 // Views of the Visual Observation calculators: Eyepiece & Telescope and Aperture Comparison.
@@ -35,7 +36,7 @@ export function EyepieceCalculator({ entry, onChange, context }: CalculatorViewP
 						<NumberField label="Apparent field" suffix="°" optional value={draft.apparentField} onChange={(apparentField) => set({ apparentField })} />
 						<NumberField label="Field stop" suffix="mm" optional value={draft.fieldStop} onChange={(fieldStop) => set({ fieldStop })} />
 					</FieldGrid>
-					<Note>The telescope focal length includes any Barlow or reducer; importing applies its factor.</Note>
+					<Notice>The telescope focal length includes any Barlow or reducer; importing applies its factor.</Notice>
 				</>
 			}
 			results={

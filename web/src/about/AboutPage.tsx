@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useState } from 'react'
 import logo from '../../assets/nebulosa.ico'
 import { copyText } from '../clipboard'
 import { Button } from '../ui/Button'
+import { Notice } from '../ui/Notice'
 import { APP_REPOSITORY_URL, aboutFields, browserAboutIo, CORE_REPOSITORY_URL, CREDIT_GROUPS, type CreditGroup, fetchAbout, LICENSE_URL, NOT_AVAILABLE, versionInfoText } from './about'
 
 // About page (the button at the bottom of the navigation rail): the identity of the application, the version and
@@ -152,11 +153,11 @@ function CreditList({ group }: { readonly group: CreditGroup }) {
 						{owner && <span className="text-ink-300"> · {owner}</span>}
 						<p className="m-0 text-ink-200">{use}</p>
 						{(license ?? notice) && (
-							<p className="m-0 text-xs leading-4 text-ink-300">
+							<Notice>
 								{license && <ExternalLink href={license.url}>{license.name}</ExternalLink>}
 								{license && notice && ' · '}
 								{notice}
-							</p>
+							</Notice>
 						)}
 					</li>
 				))}

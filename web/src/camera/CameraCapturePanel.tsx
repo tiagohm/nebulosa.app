@@ -15,6 +15,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { DataList, DataRow } from '../ui/DataRow'
 import { IconButton } from '../ui/IconButton'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
@@ -129,7 +130,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 				{settings.exposureMode !== 'single' && (
 					<>
 						<NumberInput label="Delay" suffix="s" value={settings.delay} min={0} disabled={locked} onChange={(delay) => update({ delay })} />
-						<p className="m-0 text-xs leading-4 text-ink-300">Wait after each capture before starting the next one.</p>
+						<Notice>Wait after each capture before starting the next one.</Notice>
 					</>
 				)}
 				<CaptureCommands
@@ -142,8 +143,8 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 					onStop={() => device && session && void stopCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
 					onAbort={() => device && session && void abortCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
 				/>
-				{availability.status !== 'ready' && !running && <p className="m-0 text-xs leading-4 text-ink-300">{availability.message}</p>}
-				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
+				{availability.status !== 'ready' && !running && <Notice>{availability.message}</Notice>}
+				{error && <Notice error>{error}</Notice>}
 			</CollapsibleSection>
 			{session && <CaptureState session={session} />}
 			<CameraSettings device={device} settings={exposure} capabilities={capabilities} disabled={locked} onChange={updateExposure} />
@@ -167,11 +168,11 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 								))}
 							</dl>
 						</details>
-						<p className="m-0 text-xs leading-4 text-ink-300">Existing files are never replaced.</p>
+						<Notice>Existing files are never replaced.</Notice>
 						<Select label="Format" options={xisf ? (['FITS', 'XISF'] as const) : (['FITS'] as const)} value={xisf ? settings.output.format : 'FITS'} disabled={locked} onChange={(format) => updateOutput({ format })} />
 					</>
 				)}
-				{settings.output.mode === 'preview-only' && <p className="m-0 text-xs leading-4 text-ink-300">Frames are kept in memory for viewing only; nothing is written.</p>}
+				{settings.output.mode === 'preview-only' && <Notice>Frames are kept in memory for viewing only; nothing is written.</Notice>}
 			</CollapsibleSection>
 			{frame && <LastFrame frame={frame} />}
 			<FileExplorerModal
@@ -254,11 +255,11 @@ function CaptureState({ session }: CaptureStateProps) {
 				<DataRow label="Elapsed">{formatClockDuration(captureElapsed(session, now))}</DataRow>
 			</DataList>
 			{session.phase === 'failed' && session.captured > 0 && (
-				<p className="m-0 text-xs leading-4 text-ink-300">
+				<Notice>
 					The capture did not complete: {session.captured} frames taken, {session.saved} saved.
-				</p>
+				</Notice>
 			)}
-			{session.previewError && <p className="m-0 text-xs leading-4 text-danger">{session.previewError}</p>}
+			{session.previewError && <Notice error>{session.previewError}</Notice>}
 		</CollapsibleSection>
 	)
 }

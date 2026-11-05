@@ -2,12 +2,12 @@ import type { PlateSolveHints, PlateSolveRequest, PlateSolverProvider, PlateSolv
 import { arcsec, deg, parseAngle, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { Notice } from '../equipment-control/parts'
 import { externalToolsState } from '../settings/externaltools'
 import { summaryOf } from '../settings/ExternalToolStatus'
 import { navigate, routeState } from '../shell/route'
 import { formatDeclination, formatRightAscension } from '../sky/format'
 import { Button } from '../ui/Button'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
@@ -63,10 +63,10 @@ function SolverAvailability({ provider }: { readonly provider: PlateSolverProvid
 
 	return (
 		<div className="flex flex-col gap-1">
-			<p className="m-0 text-xs leading-4 text-ink-300">
+			<Notice>
 				{tool?.name ?? PROVIDER_LABELS[provider]}: <span className={summary?.className}>{tool?.session && tool.status !== 'configured' ? 'Not Signed In' : (summary?.label ?? 'Loading…')}</span>
 				{tool?.lastCheck && tool.lastCheck.status !== 'available' && ` — ${tool.lastCheck.message}`}
-			</p>
+			</Notice>
 			<Button variant="ghost" className="self-start px-1" onClick={() => navigate(routeState, { workspace: 'settings', tool: PROVIDER_TOOLS[provider] })}>
 				Settings → External Tools → {tool?.name ?? PROVIDER_LABELS[provider]}
 			</Button>

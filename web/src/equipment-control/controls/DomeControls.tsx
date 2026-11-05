@@ -5,13 +5,16 @@ import { type PointerEvent, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDegrees } from '../../format'
 import { PanelSection } from '../../shell/ContextualPanel'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
 import { type DomeDirection, domeMotionRuntime, pressDomeMotion, releaseDomeMotion } from '../domeMotion'
-import { Actions, ConfirmButton, type InterfaceProps, Notice } from '../parts'
+import type { InterfaceProps } from '../parts'
 
 // Controls of a dome: its reported azimuth, shutter, park, home, and slaving, a slew to an azimuth or by an
 // angle, the shutter altitude, press-and-hold manual rotation, a stop, and its configuration (sync, park

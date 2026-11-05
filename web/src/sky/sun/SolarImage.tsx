@@ -3,8 +3,8 @@ import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatEclipseTime } from '../../tools/eclipse/eclipse'
 import { Modal } from '../../ui/Modal'
+import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
-import { Note } from '../InspectorParts'
 import { loadSunImage, SUN_IMAGE_CHANNEL_NAMES, SUN_IMAGE_CHANNELS, type SunImage, selectSunImageChannel, sunState } from './sun'
 
 // Latest SDO image of the Sun Inspector, right under the Sun's name: the channel chosen, when SDO updated the file
@@ -43,8 +43,8 @@ export function SolarImage() {
 				<div className="flex h-60 items-center justify-center rounded-sm bg-base-000 px-4 text-center text-xs text-ink-300">{image.error ? 'The SDO image is unavailable.' : 'Loading the SDO image…'}</div>
 			)}
 			<Select label="Channel" options={SUN_IMAGE_CHANNELS} value={channel} format={(e) => SUN_IMAGE_CHANNEL_NAMES[e]} onChange={(e) => void selectSunImageChannel(sunState, e)} />
-			{shown && <Note>{imageCaption(shown)}</Note>}
-			{image.error && <Note danger>SDO image unavailable: {image.error}</Note>}
+			{shown && <Notice>{imageCaption(shown)}</Notice>}
+			{image.error && <Notice error>SDO image unavailable: {image.error}</Notice>}
 			<Modal open={open} onClose={() => setOpen(false)} title={shown ? SUN_IMAGE_CHANNEL_NAMES[shown.channel] : 'The Sun'} fit className="max-w-[min(100%,72rem)]">
 				<div className="flex min-h-0 flex-col gap-3">
 					{enlarged.value ? (
@@ -52,8 +52,8 @@ export function SolarImage() {
 					) : (
 						<p className="m-0 text-ink-300">{enlarged.error ? `The larger image is unavailable: ${enlarged.error}` : 'Loading the larger image…'}</p>
 					)}
-					{enlarged.value && <p className="m-0 text-xs leading-4 text-ink-300">{imageCaption(enlarged.value)}</p>}
-					<p className="m-0 text-xs leading-4 text-ink-300">{SDO_CREDIT} The image is the latest SDO has, whatever instant the Sky shows.</p>
+					{enlarged.value && <Notice>{imageCaption(enlarged.value)}</Notice>}
+					<Notice>{SDO_CREDIT} The image is the latest SDO has, whatever instant the Sky shows.</Notice>
 				</div>
 			</Modal>
 		</div>

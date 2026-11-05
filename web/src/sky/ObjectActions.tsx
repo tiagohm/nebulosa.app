@@ -6,7 +6,8 @@ import { formatDegrees } from '../format'
 import { operationsState } from '../operations'
 import type { SkyObserverSettings } from '../profile/schema'
 import { Button } from '../ui/Button'
-import { Modal } from '../ui/Modal'
+import { Modal, ModalActions } from '../ui/Modal'
+import { Notice } from '../ui/Notice'
 import { formatDeclination, formatRightAscension } from './format'
 import { mountRuntime, mountView, slewBlocker, slewMount, slewProgress, stopMount } from './mount'
 import { apiObserver, fetchSkyPosition } from './sky'
@@ -88,9 +89,9 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 					</Button>
 				)}
 			</div>
-			{connected && blocker && !moving && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}.</p>}
+			{connected && blocker && !moving && <Notice>{blocker}.</Notice>}
 			{mount && runtime.slew && <SlewStatus targetName={runtime.slew.targetName} operation={progress} />}
-			{mount && runtime.error && <p className="m-0 text-xs leading-4 text-danger">{runtime.error}</p>}
+			{mount && runtime.error && <Notice error>{runtime.error}</Notice>}
 			<Modal open={!!preview} onClose={() => setPreview(undefined)} title="Slew to object?" className="max-w-md">
 				<p className="m-0 text-sm">
 					Slew <strong className="text-ink-100">{mount?.name || 'the mount'}</strong> to <strong className="text-ink-100">{targetName}</strong>.
@@ -113,14 +114,14 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 						</>
 					)}
 				</div>
-				<div className="mt-5 flex justify-end gap-2">
+				<ModalActions>
 					<Button variant="secondary" onClick={() => setPreview(undefined)}>
 						Cancel
 					</Button>
 					<Button disabled={preview?.status === 'ready' && preview.position.altitude !== undefined && preview.position.altitude < 0} onClick={slew} data-autofocus>
 						Slew
 					</Button>
-				</div>
+				</ModalActions>
 			</Modal>
 		</>
 	)
@@ -131,9 +132,9 @@ function SlewStatus({ targetName, operation }: { readonly targetName: string; re
 	if (!operation || operation.state === 'running') return <p className="m-0 text-xs leading-4 text-ink-200">Slewing to {targetName}…</p>
 	if (operation.state === 'succeeded') return <p className="m-0 text-xs leading-4 text-ink-200">Arrived at {targetName}.</p>
 	return (
-		<p className="m-0 text-xs leading-4 text-danger">
+		<Notice error>
 			The slew to {targetName} failed: {operation.reason ? FAILURE_REASONS[operation.reason] : 'unknown reason'}
 			{operation.error ? ` (${operation.error})` : ''}.
-		</p>
+		</Notice>
 	)
 }

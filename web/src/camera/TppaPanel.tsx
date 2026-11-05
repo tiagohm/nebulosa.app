@@ -4,7 +4,6 @@ import { toArcmin, toDeg } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
-import { Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
@@ -18,6 +17,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataList, DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
@@ -98,7 +98,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 						<DeviceLink device={mount.device} fallback="Not assigned" />
 					</DataRow>
 				</DataList>
-				{!running && mountAvailability.status !== 'ready' && <p className="m-0 text-xs leading-4 text-ink-300">{mountAvailability.message}</p>}
+				{!running && mountAvailability.status !== 'ready' && <Notice>{mountAvailability.message}</Notice>}
 				{!running && (mountAvailability.status === 'notSelected' || mountAvailability.status === 'unsupported') && (
 					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
 						Equipment Setup
@@ -119,7 +119,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 				{slewRates.length > 0 ? (
 					<Select label="Slew Rate" options={slewRates.map((rate) => rate.name)} value={slewRate ?? slewRates[0].name} format={(name) => slewRates.find((rate) => rate.name === name)?.label.trim() || name} disabled={locked} onChange={(name) => update({ slewRate: name })} />
 				) : (
-					<p className="m-0 text-xs leading-4 text-ink-300">Slew Rate: {running ? shown.slewRate : 'the mount reports no preset yet.'}</p>
+					<Notice>Slew Rate: {running ? shown.slewRate : 'the mount reports no preset yet.'}</Notice>
 				)}
 				<NumberInput label="Rotation per Point" value={shown.rotation} min={TPPA_MINIMUM_ROTATION} max={TPPA_MAXIMUM_ROTATION} step={0.5} suffix="°" disabled={locked} onChange={(rotation) => update({ rotation })} />
 				<NumberInput label="Settle Time" value={shown.settleDelay} min={0} max={120} step={0.5} suffix="s" disabled={locked} onChange={(settleDelay) => update({ settleDelay })} />
@@ -164,9 +164,9 @@ export function TppaSections({ device, availability, mount, settings: identity }
 						Start Polar Alignment
 					</Button>
 				)}
-				{blocker && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
-				{session?.state === 'refining' && <p className="m-0 text-xs leading-4 text-ink-300">Turn the azimuth and altitude knobs to bring the star onto the target; the mount is not moved.</p>}
-				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
+				{blocker && <Notice>{blocker}</Notice>}
+				{session?.state === 'refining' && <Notice>Turn the azimuth and altitude knobs to bring the star onto the target; the mount is not moved.</Notice>}
+				{error && <Notice error>{error}</Notice>}
 			</CollapsibleSection>
 		</>
 	)
@@ -208,9 +208,9 @@ function Measurements({ session, details }: MeasurementsProps) {
 				{geometry && <DataRow label="Geometry">{`${geometry.acceptable ? 'Good' : 'Rejected'} (Q ${geometry.quality.toFixed(3)})`}</DataRow>}
 			</DataList>
 			{rejected && !session.geometry && (
-				<p className="m-0 text-xs leading-4 text-ink-300">
+				<Notice>
 					Last candidate: {formatDegrees(rejected.rotation, 1)}, {rejected.reason === 'insufficientRotation' ? 'moving further' : rejected.reason}.
-				</p>
+				</Notice>
 			)}
 		</CollapsibleSection>
 	)
@@ -240,8 +240,8 @@ function PolarError({ alignment, details }: PolarErrorProps) {
 				{alignment.stage === 'refinement' && <DataRow label="Last Adjustment">{`Az ${formatSignedArcmin(alignment.azimuthAdjustment)} · Alt ${formatSignedArcmin(alignment.altitudeAdjustment)}`}</DataRow>}
 				<DataRow label="Estimate">{alignment.stage === 'acquisition' ? 'Initial (three points)' : `Refined, frame #${alignment.frame}`}</DataRow>
 			</DataList>
-			{overlay?.failure && <p className="m-0 text-xs leading-4 text-ink-300">The correction guide could not be drawn ({overlay.failure}).</p>}
-			{warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">Guide: {warnings.join(', ')}.</p>}
+			{overlay?.failure && <Notice>The correction guide could not be drawn ({overlay.failure}).</Notice>}
+			{warnings.length > 0 && <Notice>Guide: {warnings.join(', ')}.</Notice>}
 		</CollapsibleSection>
 	)
 }
@@ -256,15 +256,13 @@ function SessionState({ session }: { readonly session: TppaSessionSummary }) {
 		<>
 			<p className={cn('m-0', failed ? 'text-danger' : 'text-ink-100')}>{TPPA_STATE_LABELS[session.state]}</p>
 			{(session.state === 'capturing' || session.state === 'refining') && <FrameProgress exposure={session.exposure} />}
-			{failed && session.error && <p className="m-0 text-xs leading-4 text-danger">{session.error}</p>}
-			{session.slewRateRestored === true && session.previousSlewRate && <p className="m-0 text-xs leading-4 text-ink-300">The slew rate was restored to {session.previousSlewRate}.</p>}
+			{failed && session.error && <Notice error>{session.error}</Notice>}
+			{session.slewRateRestored === true && session.previousSlewRate && <Notice>The slew rate was restored to {session.previousSlewRate}.</Notice>}
 			{session.trackingStarted && session.trackingStopped === undefined && (session.endedAt === undefined || !session.request.stopTracking) && (
-				<p className="m-0 text-xs leading-4 text-ink-300">
-					{session.endedAt !== undefined ? 'The tracking started for the session was left on.' : session.request.stopTracking ? 'The tracking was started for the session and is stopped again once it ends.' : 'The tracking was started for the session and is left on once it ends.'}
-				</p>
+				<Notice>{session.endedAt !== undefined ? 'The tracking started for the session was left on.' : session.request.stopTracking ? 'The tracking was started for the session and is stopped again once it ends.' : 'The tracking was started for the session and is left on once it ends.'}</Notice>
 			)}
-			{session.trackingStopped === true && <p className="m-0 text-xs leading-4 text-ink-300">The tracking started for the session was stopped.</p>}
-			{session.warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{session.warnings.at(-1)}</p>}
+			{session.trackingStopped === true && <Notice>The tracking started for the session was stopped.</Notice>}
+			{session.warnings.length > 0 && <Notice>{session.warnings.at(-1)}</Notice>}
 		</>
 	)
 }

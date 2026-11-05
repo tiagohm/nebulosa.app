@@ -5,7 +5,6 @@ import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
-import { ConfirmButton, Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import type { CameraRole } from '../equipment/roles'
@@ -37,7 +36,9 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { ConfirmButton } from '../ui/ConfirmButton'
 import { DataList, DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { CameraAcquisitionSection } from './CameraAcquisitionSection'
@@ -250,8 +251,8 @@ function SessionState({ session }: { readonly session: MountPointingSessionSumma
 				<DataRow label="Skipped">{skippedCount}</DataRow>
 			</DataList>
 			{step === 'exposing' && <FrameProgress exposure={exposure} />}
-			{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
-			{warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{warnings.at(-1)}</p>}
+			{error && <Notice error>{error}</Notice>}
+			{warnings.length > 0 && <Notice>{warnings.at(-1)}</Notice>}
 		</>
 	)
 }

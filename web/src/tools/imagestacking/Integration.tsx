@@ -2,7 +2,6 @@ import type { StackingJobSummary, StackingProductSummary, StackingRecipe } from 
 import { nanoid } from 'nanoid'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { Actions, ConfirmButton, Notice } from '../../equipment-control/parts'
 import { imagesState, openImage } from '../../images/images'
 import { navigate, routeState } from '../../shell/route'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -16,6 +15,9 @@ import { integrationText, INTERPOLATION_LABELS, INTERPOLATIONS, memoryText, METH
 // oxfmt-ignore
 import { cancelStackingRun, deleteStackingProduct, imageStackingRuntime, jobEnded, loadStackingPreflight, loadStackingProduct, startStackingRun } from './projects'
 import { MISSING } from '../../format'
+import { Actions } from '../../ui/Actions'
+import { ConfirmButton } from '../../ui/ConfirmButton'
+import { Notice } from '../../ui/Notice'
 import { Cell, Row, Table } from './Table'
 
 // Integration and results of an Image Stacking project. Integration edits the recipe, shows what a run would do with it
@@ -81,9 +83,7 @@ export function IntegrationView({ projectId }: { readonly projectId: string }) {
 				)}
 				<NumberInput label="Memory" className="w-28" value={memory} min={0.25} max={64} step={0.25} suffix="GiB" onChange={setMemory} />
 			</div>
-			<p className="m-0 text-xs text-ink-300">
-				Every filter is calibrated, registered onto the project grid, normalized to the reference of its filter, and combined into a linear master. Pixels covered by fewer frames than the minimum coverage hold no data. A filter whose inputs did not change reuses its master.
-			</p>
+			<Notice>Every filter is calibrated, registered onto the project grid, normalized to the reference of its filter, and combined into a linear master. Pixels covered by fewer frames than the minimum coverage hold no data. A filter whose inputs did not change reuses its master.</Notice>
 			{plan && plan.groups.length > 0 && (
 				<Table className="shrink-0" headers={['Filter', 'Frames', 'Exposure', 'Samples', 'Memory', 'Spill', 'Plan']}>
 					{plan.groups.map((group) => (

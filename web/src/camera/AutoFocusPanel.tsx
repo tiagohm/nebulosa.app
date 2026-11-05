@@ -3,7 +3,6 @@ import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, deviceStateOf, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
-import { Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import { type RoleDevice, useRoleDevice } from '../equipment/useEquipment'
@@ -17,6 +16,7 @@ import { useAstapConfigured } from '../stars/StarRequestControls'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataList, DataRow } from '../ui/DataRow'
+import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { useNow } from '../useNow'
@@ -136,9 +136,9 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 				<Select label="Curve Fitting" options={FITTING_MODES} value={settings.fittingMode} format={(mode) => FITTING_MODE_LABELS[mode]} disabled={locked} onChange={(fittingMode) => update({ fittingMode })} />
 				<NumberInput label="Step Size" value={stepSize} min={1} max={focuserState ? Math.max(1, focuserState.position.max - focuserState.position.min) : undefined} suffix="steps" disabled={locked} onChange={(value) => update({ stepSize: value })} />
 				<NumberInput label="Positions per Side" value={settings.initialOffsetSteps} min={1} max={50} disabled={locked} onChange={(initialOffsetSteps) => update({ initialOffsetSteps })} />
-				<p className="m-0 text-xs leading-4 text-ink-300">
+				<Notice>
 					The sweep starts {settings.initialOffsetSteps * stepSize} steps {settings.reversed ? 'inward' : 'outward'} and extends until both sides of the minimum have {settings.initialOffsetSteps} positions.
-				</p>
+				</Notice>
 				<Checkbox label="Return to the start position when stopped" checked={settings.restoreOnStop} disabled={locked} onChange={(restoreOnStop) => update({ restoreOnStop })} />
 			</CollapsibleSection>
 			<CollapsibleSection id="images.auto-focus.advanced-settings" title="Advanced Settings" defaultOpen={false}>
@@ -159,9 +159,9 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 						Run Auto Focus
 					</Button>
 				)}
-				{blocker && <p className="m-0 text-xs leading-4 text-ink-300">{blocker}</p>}
-				{running && <p className="m-0 text-xs leading-4 text-ink-300">{session!.request.restoreOnStop ? 'A stop moves the focuser back to the start position; a second stop leaves it where it stands.' : 'A stop leaves the focuser where it stands.'}</p>}
-				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}
+				{blocker && <Notice>{blocker}</Notice>}
+				{running && <Notice>{session!.request.restoreOnStop ? 'A stop moves the focuser back to the start position; a second stop leaves it where it stands.' : 'A stop leaves the focuser where it stands.'}</Notice>}
+				{error && <Notice error>{error}</Notice>}
 			</CollapsibleSection>
 		</>
 	)
@@ -193,7 +193,7 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 				{session.target !== undefined && running && ` — ${session.target}`}
 			</p>
 			{(session.state === 'exposing' || session.state === 'verifying') && <FrameProgress exposure={session.exposure} />}
-			{failed && session.error && <p className="m-0 text-xs leading-4 text-danger">{session.error}</p>}
+			{failed && session.error && <Notice error>{session.error}</Notice>}
 			<DataList>
 				<DataRow label="Focuser">{position === undefined ? MISSING : `${position}${moving ? ' (moving)' : ''}`}</DataRow>
 				{session.initialPosition !== undefined && <DataRow label="Start Position">{session.initialPosition}</DataRow>}
@@ -206,11 +206,9 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 				<DataRow label="Verification">{session.verification === 'measured' && session.verifiedHfd !== undefined ? `${session.verifiedHfd.toFixed(2)} px measured` : session.verification === 'pending' ? 'Pending' : VERIFICATION_LABELS[session.verification]}</DataRow>
 				<DataRow label="Elapsed">{formatClockDuration(((session.endedAt ?? now) - session.startedAt) / 1000)}</DataRow>
 			</DataList>
-			{last && last.warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{last.warnings.join(' ')}</p>}
-			{session.verificationError && <p className="m-0 text-xs leading-4 text-ink-300">{session.verificationError}</p>}
-			{session.state === 'cancelled' && (
-				<p className="m-0 text-xs leading-4 text-ink-300">{session.restored ? 'The focuser was moved back to the start position.' : session.restored === false ? 'The focuser could not be moved back to the start position and was left where it stood.' : 'The focuser was left where the stop found it.'}</p>
-			)}
+			{last && last.warnings.length > 0 && <Notice>{last.warnings.join(' ')}</Notice>}
+			{session.verificationError && <Notice>{session.verificationError}</Notice>}
+			{session.state === 'cancelled' && <Notice>{session.restored ? 'The focuser was moved back to the start position.' : session.restored === false ? 'The focuser could not be moved back to the start position and was left where it stood.' : 'The focuser was left where the stop found it.'}</Notice>}
 		</>
 	)
 }

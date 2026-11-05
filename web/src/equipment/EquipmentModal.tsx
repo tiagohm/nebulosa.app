@@ -79,19 +79,19 @@ export function EquipmentModal() {
 					</p>
 				</div>
 				{!connection ? (
-					<Notice text="This profile has no connection selected. Choose the server whose devices it uses in Management → Connections.">
+					<ConnectionCallout text="This profile has no connection selected. Choose the server whose devices it uses in Management → Connections.">
 						<Button data-autofocus onClick={openConnections}>
 							Open Connections
 						</Button>
-					</Notice>
+					</ConnectionCallout>
 				) : (
 					<>
 						{!serverOpen && (
-							<Notice text={`${connection.name} is not connected. Assignments are kept; connect the server to list its devices.`}>
+							<ConnectionCallout text={`${connection.name} is not connected. Assignments are kept; connect the server to list its devices.`}>
 								<Button data-autofocus disabled={loading !== undefined} onClick={() => void connect(connectionState, connection)}>
 									{serverConnecting ? 'Connecting…' : 'Connect'}
 								</Button>
-							</Notice>
+							</ConnectionCallout>
 						)}
 						{connectionError && !serverOpen && <p className="m-0 text-sm leading-5 text-danger">{connectionError}</p>}
 						{serverOpen && runtime.loading && <p className="m-0 text-sm leading-5 text-ink-300">Loading devices…</p>}
@@ -175,7 +175,7 @@ function TelescopeSection({ title, telescope, onChange, children }: TelescopeSec
 	)
 }
 
-interface NoticeProps {
+interface ConnectionCalloutProps {
 	// Explanation shown before the action.
 	readonly text: string
 	// Action that resolves the situation.
@@ -183,7 +183,7 @@ interface NoticeProps {
 }
 
 // Bordered explanation of why devices cannot be shown, with the action that fixes it.
-function Notice({ text, children }: NoticeProps) {
+function ConnectionCallout({ text, children }: ConnectionCalloutProps) {
 	return (
 		<div className="flex flex-wrap items-center gap-4 rounded-md border border-line-100 bg-base-100 px-4 py-3">
 			<p className="m-0 min-w-0 flex-[1_1_280px] text-sm leading-5 text-ink-200">{text}</p>

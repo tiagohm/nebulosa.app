@@ -20,6 +20,7 @@ import { activeProfile, activeSetup, profileState } from '../../profile/profile'
 import { BROWSER_TIME_ZONE } from '../../sky/clock'
 import { openAstronomicalTimeConverter, qualityNotes } from '../../tools/astronomicaltime/astronomicaltime'
 import { Icon, type IconName } from '../../ui/Icon'
+import { SectionHeading } from '../../ui/SectionHeading'
 import { useNow } from '../../useNow'
 import { routeState } from '../route'
 import { astronomicalClockRuntime, clockApproximate, clockFreshness, clockReadingText, liveClock } from './astronomicalclock'
@@ -339,7 +340,7 @@ interface SectionProps {
 function Section({ title, children }: SectionProps) {
 	return (
 		<section className="flex flex-col gap-1">
-			<h4 className="m-0 text-xs font-semibold tracking-wide text-ink-300 uppercase">{title}</h4>
+			<SectionHeading>{title}</SectionHeading>
 			{children}
 		</section>
 	)

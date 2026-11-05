@@ -4,6 +4,7 @@ import logo from '../../assets/nebulosa.ico'
 import { copyText } from '../clipboard'
 import { Button } from '../ui/Button'
 import { Notice } from '../ui/Notice'
+import { SectionHeading } from '../ui/SectionHeading'
 import { APP_REPOSITORY_URL, aboutFields, browserAboutIo, CORE_REPOSITORY_URL, CREDIT_GROUPS, type CreditGroup, fetchAbout, LICENSE_URL, NOT_AVAILABLE, versionInfoText } from './about'
 
 // About page (the button at the bottom of the navigation rail): the identity of the application, the version and
@@ -134,7 +135,7 @@ interface AboutSectionProps {
 function AboutSection({ title, children }: AboutSectionProps) {
 	return (
 		<section className="flex flex-col gap-3">
-			<h2 className="m-0 text-xs font-semibold tracking-wide text-ink-200 uppercase">{title}</h2>
+			<SectionHeading as="h2">{title}</SectionHeading>
 			{children}
 		</section>
 	)

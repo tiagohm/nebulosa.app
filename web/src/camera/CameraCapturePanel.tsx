@@ -158,23 +158,24 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 							<IconButton icon="folder" label="Choose directory" className="size-11" disabled={locked} onClick={() => setChoosingDirectory(true)} />
 						</div>
 						<TextInput label="Filename Template" placeholder="{date}_{time}_{camera}_{type}_{seq}" value={settings.output.filenameTemplate ?? ''} disabled={locked} onChange={(e) => updateOutput({ filenameTemplate: e.target.value || undefined })} />
-						<details className="text-xs leading-4">
-							<summary className="cursor-pointer text-ink-200 select-none">Template tags</summary>
-							<dl className="m-0 mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-								{FILENAME_TAGS.map(([tag, description]) => (
-									<div key={tag} className="contents">
-										<dt className="font-mono text-ink-100">{`{${tag}}`}</dt>
-										<dd className="m-0 text-ink-300">{description}</dd>
-									</div>
-								))}
-							</dl>
-						</details>
 						<Notice>Existing files are never replaced.</Notice>
 						<Select label="Format" options={xisf ? (['FITS', 'XISF'] as const) : (['FITS'] as const)} value={xisf ? settings.output.format : 'FITS'} disabled={locked} onChange={(format) => updateOutput({ format })} />
 					</>
 				)}
 				{settings.output.mode === 'preview-only' && <Notice>Frames are kept in memory for viewing only; nothing is written.</Notice>}
 			</CollapsibleSection>
+			{settings.output.mode === 'preview-save' && (
+				<CollapsibleSection id="images.camera-acquisition.template-tags" title="Template Tags" defaultOpen={false}>
+					<dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs leading-4">
+						{FILENAME_TAGS.map(([tag, description]) => (
+							<div key={tag} className="contents">
+								<dt className="font-mono text-ink-100">{`{${tag}}`}</dt>
+								<dd className="m-0 text-ink-300">{description}</dd>
+							</div>
+						))}
+					</dl>
+				</CollapsibleSection>
+			)}
 			{frame && <LastFrame frame={frame} />}
 			<FileExplorerModal
 				open={choosingDirectory}

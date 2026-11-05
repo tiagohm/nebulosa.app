@@ -1,16 +1,17 @@
 import { basename, join } from 'path'
 import { formatTemporal, TIMEZONE } from 'nebulosa/src/astronomy/time/temporal'
 import { type Camera, type CameraTransferFormat, CLIENT, type Client } from 'nebulosa/src/devices/indi/device'
-import type { OperationFailureReason, OperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import type { FailedOperationResult, OperationFailureReason, OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { CameraCapturer, type CameraFrameGate, type CameraFramePathRequest, type CameraFramePreparation, writeFrameExclusively } from 'nebulosa/src/observation/capture/capture'
 import type { CameraCaptureListener } from 'nebulosa/src/observation/capture/reporter'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START } from 'nebulosa/src/observation/capture/types'
 import type { CaptureFrameRegistry } from './captureframes'
-import { type CommandRefusal, type CommandRequest, refusal, refusalResponse } from './commands'
+import { type CommandErrorCode, type CommandRefusal, type CommandRequest, refusal, refusalResponse } from './commands'
 import { DEFAULT_DATA_DIRECTORY } from './database'
 import type { DeviceRegistry } from './devices'
+import { type CaptureDither, type CaptureDitherErrorCode, type CaptureDitherPlan, type CaptureDithering, ditherBoundary } from './dithering'
 import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 import type { OperationRegistry, ToolInvocation } from './operations'
@@ -34,6 +35,11 @@ import type { OperationRegistry, ToolInvocation } from './operations'
 // kept for decoding next, so a fast loop previews fewer frames than it saves. Exposure and delay times are
 // in seconds in requests and microseconds in progress. The mount, focuser, filter wheel and rotator a request
 // names by id on the connection of the camera are snooped into the frame headers, never acquired.
+//
+// A fixed or loop LIGHT capture may dither between its frames (dithering.ts): the capture keeps the cadence, dithering
+// before the frame that follows each `everyFrames` frames taken, after the delay and never before the first frame or
+// after the last, and the dithering service runs each dither with the method of the request. The dither phase is
+// published, a failed dither ends the capture, and the capture ends only once its dithers gave back what they held.
 //
 // A capture never analyzes or solves its frames: star detection and plate solving are run on demand on the frames the
 // Images workspace shows, and Auto Focus measures its own frames.
@@ -100,6 +106,9 @@ export interface CaptureRequest extends CaptureSettings {
 	readonly output: CaptureOutput
 	// Devices snooped into the frame headers; absent snoops none.
 	readonly snoop?: CaptureSnoop
+	// Automatic dither between the frames of a fixed or loop LIGHT capture (see dithering.ts); absent, or on a single
+	// exposure or another frame type, the capture never dithers.
+	readonly dither?: CaptureDither
 }
 
 // Body of POST /api/connections/:id/cameras/:deviceId/capture: a capture request and the token of the request.
@@ -138,8 +147,9 @@ export interface CaptureAdmitted {
 	readonly ended: Promise<CaptureSession>
 }
 
-// Outcome of asking for a capture inside the process: the capture admitted, or why it was refused.
-export type CaptureAdmission = CaptureAdmitted | CommandRefusal
+// Outcome of asking for a capture inside the process: the capture admitted, or why it was refused, the refusals of the
+// dither preflight included.
+export type CaptureAdmission = CaptureAdmitted | CommandRefusal<CommandErrorCode | CaptureDitherErrorCode>
 
 // Response of an accepted capture.
 export interface CaptureStartResponse {
@@ -155,11 +165,22 @@ export interface CaptureStartResponse {
 // - reading: the exposure finished and its frame is being transferred and decoded.
 // - saving: the frame is being written to its file.
 // - waiting: the delay before the next frame is running.
+// - dithering: a dither before the next frame is moving the mount or the guide lock, or waiting for its settle.
 // - completed: every requested frame was taken.
 // - stopped: the capture was stopped and ended after its last frame.
 // - aborted: the capture was aborted; the exposure in flight was lost.
 // - failed: the capture ended because of an error, given in reason and error.
-export type CapturePhase = 'starting' | 'exposing' | 'reading' | 'saving' | 'waiting' | 'completed' | 'stopped' | 'aborted' | 'failed'
+export type CapturePhase = 'starting' | 'exposing' | 'reading' | 'saving' | 'waiting' | 'dithering' | 'completed' | 'stopped' | 'aborted' | 'failed'
+
+// Dithers of a capture that dithers, as its session publishes them.
+export interface CaptureDitherProgress {
+	// Dithers that settled.
+	readonly completed: number
+	// Whether the dither running waits for its mechanical settle; a guided settle is shown by its guiding session.
+	readonly settling: boolean
+	// Why the latest dither failed, which ended the capture; absent while none failed.
+	readonly error?: string
+}
 
 // State of the write of a saved frame's file, independent of the capture's outcome:
 // - saving: the write has not completed yet.
@@ -240,6 +261,8 @@ export interface CaptureSession {
 	readonly error?: string
 	// Why the latest frame could not be previewed; cleared by the next previewed frame.
 	readonly previewError?: string
+	// Dithers of the capture; absent when it does not dither.
+	readonly dither?: CaptureDitherProgress
 }
 
 // Snapshot of GET /api/captures: the latest session and the latest previewed frame of each camera.
@@ -333,8 +356,12 @@ interface ActiveCapture {
 	admitted?: CaptureAdmitted
 	// Resolved with the final session once the capture ended.
 	readonly ended: PromiseWithResolvers<CaptureSession>
-	// Gate of the caller that admitted it, awaited before each frame after the gate of the frame sink.
+	// Gate of the caller that admitted it, awaited before each frame after the gate of the frame sink and the dither.
 	readonly beforeFrame?: CameraFrameGate
+	// Token the capture was started with, which names each of its dithers.
+	readonly token: string
+	// Dithers of the capture, when its request asks for them.
+	readonly dither?: CaptureDitherPlan
 	// Camera taking the frames.
 	readonly camera: Camera
 	// Latest frames of the session, by generation; older ones are forgotten (see FRAME_HISTORY).
@@ -445,7 +472,8 @@ export class CameraCaptures implements Disposable {
 
 	// Creates the service over the device registry. client resolves an open connection id to its client,
 	// operations holds and publishes every capture, images receives the frames, frames records them and closes their
-	// documents, and listener receives every capture event synchronously. capturesDir replaces DEFAULT_CAPTURES_DIR.
+	// documents, and listener receives every capture event synchronously. capturesDir replaces DEFAULT_CAPTURES_DIR, and
+	// dithering runs the dithers requests ask for; without it, a request that dithers is refused.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: (connectionId: string) => Client | undefined,
@@ -454,6 +482,7 @@ export class CameraCaptures implements Disposable {
 		readonly frames: CaptureFrameRegistry,
 		readonly listener: CaptureListener,
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
+		readonly dithering?: CaptureDithering,
 	) {
 		this.#capturer = new CameraCapturer(devices.cameras, operations.arbiter, {
 			capturesDir,
@@ -494,9 +523,10 @@ export class CameraCaptures implements Disposable {
 		}
 	}
 
-	// Awaits the gate of the frame sink, then the gate of the caller that admitted the capture, before a frame of a
-	// capture is prepared. The sink never fails the capture: a failing sink gate lets the frame go. The caller's gate
-	// answers for the frame (see CaptureAdmissionOptions.beforeFrame).
+	// Awaits the gate of the frame sink, then the dither of the boundary, when the capture dithers before this frame, then
+	// the gate of the caller that admitted the capture, before a frame of a capture is prepared. The sink never fails the
+	// capture: a failing sink gate lets the frame go. A failed dither ends the capture with its failure, without exposing.
+	// The caller's gate answers for the frame (see CaptureAdmissionOptions.beforeFrame).
 	async #gate(capture: ActiveCapture, frame: CameraFramePreparation, signal: AbortSignal) {
 		const sink = this.#sink
 
@@ -508,7 +538,32 @@ export class CameraCaptures implements Disposable {
 			}
 		}
 
+		if (capture.dither && !signal.aborted && ditherBoundary(frame.generation, capture.dither.everyFrames)) {
+			const failed = await this.#dither(capture, capture.dither, frame.generation, signal)
+			if (failed) return failed
+		}
+
 		return capture.beforeFrame && !signal.aborted ? await capture.beforeFrame(frame, signal) : undefined
+	}
+
+	// Dithers a capture before the frame opening generation, publishing the dither phase and its outcome. Resolves the
+	// failure that ends the capture, or undefined once the dither settled or the capture was interrupted.
+	async #dither(capture: ActiveCapture, plan: CaptureDitherPlan, generation: number, signal: AbortSignal): Promise<FailedOperationResult | undefined> {
+		const progress = () => capture.session.dither ?? { completed: 0, settling: false }
+		this.#update(capture, { phase: 'dithering', exposure: undefined, delay: undefined, dither: { ...progress(), settling: false } })
+
+		const result = await plan.dither(`${capture.token}:dither:${generation}`, signal, (phase) => {
+			if (phase === 'settling' && !signal.aborted) this.#update(capture, { dither: { ...progress(), settling: true } })
+		})
+
+		if (signal.aborted) return undefined
+		if (!result.ok) {
+			this.#update(capture, { dither: { ...progress(), settling: false, error: result.error ?? result.reason } })
+			return result
+		}
+
+		this.#update(capture, { dither: { completed: progress().completed + 1, settling: false } })
+		return undefined
 	}
 
 	// Returns the latest session and previewed frame of every camera.
@@ -552,6 +607,17 @@ export class CameraCaptures implements Disposable {
 		const key = resourceKey(camera)
 		if (this.#active.has(key) || !this.operations.admits(camera, options.invocation)) return refusal('The camera is busy', 409, 'busy')
 
+		// Only the fixed and loop LIGHT captures dither; nothing after the preparation refuses the capture, so what it took
+		// is always given back by the end of the capture.
+		let dither: CaptureDitherPlan | undefined
+
+		if (request.dither && request.frameType === 'LIGHT' && request.exposureMode !== 'single') {
+			if (!this.dithering) return refusal('Dithering is not available', 422, 'unsupported')
+			const prepared = this.dithering.prepare(request.dither)
+			if (!prepared.ok) return prepared
+			dither = prepared
+		}
+
 		const saving = request.output.mode === 'preview-save'
 		const start: CameraCaptureStart = {
 			...structuredClone(DEFAULT_CAMERA_CAPTURE_START),
@@ -590,12 +656,15 @@ export class CameraCaptures implements Disposable {
 				saved: 0,
 				count: request.exposureMode === 'loop' ? undefined : request.exposureMode === 'single' ? 1 : request.count,
 				startedAt: Date.now(),
+				...(dither && { dither: { completed: 0, settling: false } }),
 			},
 			camera,
 			frames: new Map(),
 			generation: 0,
 			ended: Promise.withResolvers(),
 			beforeFrame: options.beforeFrame,
+			token,
+			dither,
 		}
 
 		this.#active.set(key, capture)
@@ -613,10 +682,13 @@ export class CameraCaptures implements Disposable {
 		if (this.#recent.size > MAX_RECENT_CAPTURES) this.#recent.delete(this.#recent.keys().next().value!)
 		this.#update(capture, { sessionId: handle.id, operationId })
 
-		void handle.result.then((result) => {
-			if (this.#active.get(key) === capture) this.#active.delete(key)
+		// A capture that dithers stays the running capture of its camera until its dithers gave back what they held, so its
+		// end, and a new capture of the camera, come only once nothing it commanded still moves.
+		void handle.result.then(async (result) => {
 			for (const [path, write] of this.#writes) if (write.capture === capture) this.#writes.delete(path)
 			this.#notify((sink) => sink.captureEnded(handle.id, connectionId, deviceId))
+			if (capture.dither) await capture.dither.finish()
+			if (this.#active.get(key) === capture) this.#active.delete(key)
 
 			if (result.ok) this.#update(capture, { phase: capture.session.stopping ? 'stopped' : 'completed', endedAt: Date.now(), exposure: undefined, delay: undefined })
 			else this.#update(capture, { phase: result.reason === 'aborted' ? 'aborted' : 'failed', reason: result.reason, error: result.error, endedAt: Date.now(), exposure: undefined, delay: undefined })

@@ -17,6 +17,7 @@ import { createDarvRoutes, DarvSessions } from './darv'
 import { DarvAnalyzer } from './darv.analysis'
 import { AppDatabase, DEFAULT_DATABASE_FILE } from './database'
 import { createDewHeaterRoutes, DewHeaterCommands } from './dewheaters'
+import { CaptureDithering } from './dithering'
 import { createDomeRoutes, DomeCommands } from './domes'
 import { ServerEventDispatcher } from './events'
 import { createExternalToolsRoutes, ExternalToolsStore } from './externaltools'
@@ -110,6 +111,7 @@ export type {
 	CaptureAdmissionOptions,
 	CaptureAdmitted,
 	CaptureControlRequest,
+	CaptureDitherProgress,
 	CaptureFrame,
 	CaptureOutput,
 	CaptureOutputMode,
@@ -122,6 +124,7 @@ export type {
 	CaptureSnoop,
 	CaptureStartResponse,
 } from './captures'
+export type { CaptureDither, CaptureDitherErrorCode, GuidedCaptureDither } from './dithering'
 export type {
 	CaptureFrameAvailability,
 	CaptureFrameErrorCode,
@@ -749,8 +752,16 @@ const captureFrames = new CaptureFrameRegistry(images, broadcast, {
 connections.listen((event) => captureFrames.deviceChanged(event))
 listenClients(captureFrames)
 
-// Camera captures over the devices of the open connections, their frames entering the image store.
-const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, captureFrames, publish)
+// Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
+// guide output commands and previewing their frames in the image store and the capture frame registry.
+const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, publish)
+
+// Automatic dithering of the camera captures, commanded to the guiding sessions.
+const dithering = new CaptureDithering(guiding)
+
+// Camera captures over the devices of the open connections, their frames entering the image store, dithering between
+// their frames when their request asks for it.
+const captures = new CameraCaptures(connections.devices, (id) => connections.client(id), operations, images, captureFrames, publish, undefined, dithering)
 
 // Auto Focus sessions of the cameras of the open connections, taking their frames with the capturer of the captures and
 // moving the focusers with their backlash compensation.
@@ -831,10 +842,6 @@ const darkLibraryWizard = new DarkLibraryWizardSessions(
 	(frame) => void calibrationLibrary.registerDark(frame).catch((error: unknown) => console.error('A dark could not be registered', error)),
 	(plan) => void calibrationLibrary.darkSessionEnded(plan).catch((error: unknown) => console.error('The calibration library could not build the darks of a session', error)),
 )
-
-// Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
-// guide output commands and previewing their frames in the image store and the capture frame registry.
-const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, publish)
 
 // Target Centering sessions of the cameras of the open connections, sending the first slew through the mount commands, so a
 // model in force corrects it once, correcting with their commander from what the plate solving service measures, and taking

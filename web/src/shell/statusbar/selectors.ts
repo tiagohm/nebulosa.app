@@ -268,7 +268,7 @@ function temperatureText(temperature: number | undefined) {
 }
 
 // Status of a camera in each phase of a capture that is running.
-const CAPTURE_PHASE_STATUS: Readonly<Partial<Record<CapturePhase, string>>> = { starting: 'Starting', exposing: 'Exposing', reading: 'Reading', saving: 'Saving', waiting: 'Waiting' }
+const CAPTURE_PHASE_STATUS: Readonly<Partial<Record<CapturePhase, string>>> = { starting: 'Starting', exposing: 'Exposing', reading: 'Reading', saving: 'Saving', waiting: 'Waiting', dithering: 'Dithering' }
 
 // Returns the reading of a main camera: what it is doing, from its running capture or, for any other tool, from the
 // exposure its driver reports, its sensor temperature when the driver reports a finite one, and its cooler power in

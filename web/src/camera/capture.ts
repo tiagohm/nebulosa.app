@@ -200,6 +200,8 @@ export function captureStatus(session: CaptureSession): string {
 			return 'Saving Frame'
 		case 'waiting':
 			return delay ? `Waiting — ${seconds(delay.remainingTime / 1000000)} s` : 'Waiting'
+		case 'dithering':
+			return session.dither?.settling ? 'Settling' : 'Dithering'
 		case 'completed':
 			return 'Completed'
 		case 'stopped':

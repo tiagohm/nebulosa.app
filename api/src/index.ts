@@ -124,7 +124,7 @@ export type {
 	CaptureSnoop,
 	CaptureStartResponse,
 } from './captures'
-export type { CaptureDither, CaptureDitherErrorCode, GuidedCaptureDither } from './dithering'
+export type { CaptureDither, CaptureDitherErrorCode, GuidedCaptureDither, MountCaptureDither, PulseCaptureDither, SlewCaptureDither } from './dithering'
 export type {
 	CaptureFrameAvailability,
 	CaptureFrameErrorCode,
@@ -756,8 +756,9 @@ listenClients(captureFrames)
 // guide output commands and previewing their frames in the image store and the capture frame registry.
 const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, publish)
 
-// Automatic dithering of the camera captures, commanded to the guiding sessions.
-const dithering = new CaptureDithering(guiding)
+// Automatic dithering of the camera captures, commanded to the guiding sessions, or moving the mounts with the commanders of
+// the mount and guide output commands.
+const dithering = new CaptureDithering(connections.devices, (id) => connections.client(id), operations, guiding, { mount: mounts.commander, guideOutput: guideOutputs.commander })
 
 // Camera captures over the devices of the open connections, their frames entering the image store, dithering between
 // their frames when their request asks for it.

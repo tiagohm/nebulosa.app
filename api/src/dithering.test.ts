@@ -2,7 +2,11 @@ import { afterAll, afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readdirSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
+import { MountCommander } from 'nebulosa/src/devices/commanders/mount'
+import { successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { mulberry32 } from 'nebulosa/src/math/numerical/random'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureEvent, type CaptureSession, type CaptureStartRequest } from './captures'
 import { refusal } from './commands'
@@ -67,8 +71,21 @@ function fakeGuiding() {
 	let claims = 0
 	let outcome: (request: GuidingDitherRequest) => Promise<GuidingCommandStatus> = () => Promise.resolve({ commandId: 'command', command: 'dither', state: 'succeeded' })
 	let captured = () => 0
+	let runs: readonly GuidingSessionSummary[] = []
+	const holds: string[] = []
 
 	const guiding: CaptureDitheringGuiding = {
+		runsOn: () => runs,
+		hold: (connectionId) => {
+			holds.push(connectionId)
+			let held = true
+			return {
+				[Symbol.dispose]: () => {
+					if (held) holds.splice(holds.indexOf(connectionId), 1)
+					held = false
+				},
+			}
+		},
 		summaryOf: (sessionId) => (sessionId === SESSION_ID ? ({ sessionId, cameraName: 'Guide Camera', state } as GuidingSessionSummary) : undefined),
 		claimDither: (sessionId) => {
 			if (sessionId !== SESSION_ID) return refusal('No guiding session is running with this id', 404, 'notFound')
@@ -93,6 +110,8 @@ function fakeGuiding() {
 		dithers,
 		claimed: () => claimed,
 		claims: () => claims,
+		holds,
+		setRuns: (value: readonly GuidingSessionSummary[]) => (runs = value),
 		setState: (value: GuidingSessionSummary['state']) => (state = value),
 		setOutcome: (value: typeof outcome) => (outcome = value),
 		follow: (value: () => number) => (captured = value),
@@ -110,22 +129,24 @@ async function setup() {
 	const frames = new CaptureFrameRegistry(images, () => {}, { database: AppDatabase.memory(), connected: () => true })
 	disposables.push(frames)
 	const fake = fakeGuiding()
+	const mountCommander = new MountCommander(manager.devices.mounts)
+	const guideOutputCommander = new GuideOutputCommander(manager.devices.guideOutputs, operations.arbiter)
+	disposables.push(guideOutputCommander)
+	const resolve = (connectionId: string) => manager.client(connectionId)
+	const dithering = new CaptureDithering(manager.devices, resolve, operations, fake.guiding, { mount: mountCommander, guideOutput: guideOutputCommander }, mulberry32(7))
 	const events: CaptureEvent[] = []
-	const captures = new CameraCaptures(
-		manager.devices,
-		(connectionId) => manager.client(connectionId),
-		operations,
-		images,
-		frames,
-		(event) => events.push(event),
-		mkdtempSync(join(root, 'default-')),
-		new CaptureDithering(fake.guiding),
-	)
+	const captures = new CameraCaptures(manager.devices, resolve, operations, images, frames, (event) => events.push(event), mkdtempSync(join(root, 'default-')), dithering)
 	disposables.push(captures)
 	const cameraId = manager.devices.list(client).find((device) => device.type === 'camera')!.id
+	const mountId = manager.devices.list(client).find((device) => device.type === 'mount')!.id
 	manager.devices.switch(client, cameraId, true)
+	manager.devices.switch(client, mountId, true)
 	const camera = manager.devices.camera(client, cameraId)!
-	await waitUntil(() => camera.connected && camera.frame.width.max > 0 && operations.arbiter.availability(resourceKey(camera)) === 'available')
+	const mount = manager.devices.device(client, 'mount', mountId)!
+	await waitUntil(() => camera.connected && camera.frame.width.max > 0 && operations.available(camera) && mount.connected && mount.canPulseGuide && operations.available(mount))
+	await waitUntil(() => manager.devices.list(client).some((device) => device.type === 'guideOutput' && device.name === mount.name))
+	const guideOutputId = manager.devices.list(client).find((device) => device.type === 'guideOutput' && device.name === mount.name)!.id
+	const cameraGuideOutputId = manager.devices.list(client).find((device) => device.type === 'guideOutput' && device.name === camera.name)?.id
 
 	const sessions = () => events.flatMap((event) => (event.type === 'capture:updated' ? [event.session] : []))
 	fake.follow(() => sessions().at(-1)?.captured ?? 0)
@@ -137,7 +158,7 @@ async function setup() {
 		return admission
 	}
 
-	return { id, cameraId, captures, operations, camera, fake, sessions, admit }
+	return { manager, client, id, cameraId, captures, operations, camera, mount, mountId, guideOutputId, cameraGuideOutputId, mountCommander, fake, sessions, admit }
 }
 
 describe('dither boundary', () => {
@@ -227,5 +248,119 @@ describe('guided dithering of a capture', () => {
 		expect(captures.admit(id, cameraId, request())).toMatchObject({ ok: false, status: 409, code: 'busy' })
 		if (claim.ok) claim[Symbol.dispose]()
 		expect(captures.start(id, cameraId, request({ count: 1 })).status).toBe(202)
+	})
+})
+
+describe('mount dithering of a capture', () => {
+	type Setup = Awaited<ReturnType<typeof setup>>
+
+	const pulse = ({ id, mountId, guideOutputId }: Setup, patch: Partial<CaptureDither> = {}): CaptureDither =>
+		({
+			method: 'mount',
+			everyFrames: 1,
+			mount: { connectionId: id, deviceId: mountId },
+			movement: 'pulse',
+			guideOutput: { connectionId: id, deviceId: guideOutputId },
+			amount: 10,
+			raOnly: false,
+			pattern: 'random',
+			settleTime: 0,
+			maxPulseDuration: 5000,
+			rightAscensionDirection: 'EAST',
+			declinationDirection: 'NORTH',
+			...patch,
+		}) as CaptureDither
+
+	// The setup with its mount synced away from the celestial pole, where the simulator starts and no dither can move it.
+	const pointed = async () => {
+		const context = await setup()
+		expect(await context.mountCommander.sync(context.operations.coordinator, context.mount, { type: 'JNOW', JNOW: { x: 1, y: 0.5 } })).toMatchObject({ ok: true })
+		return context
+	}
+
+	// Whether a manual operation could take the mount now.
+	const manual = async ({ operations, mount }: Setup) => (await operations.coordinator.start('manual', [{ key: resourceKey(mount), device: mount }], () => Promise.resolve(successfulOperationResult(undefined))).result).ok
+
+	test('pulses the mount before each frame after the first, refusing manual motions and guiding until it ends', async () => {
+		const context = await pointed()
+		const { admit, mount, operations, fake, id, sessions } = context
+		const before = { ...mount.equatorialCoordinate }
+		const admitted = admit(request({ count: 3, exposureTime: 0.5, dither: pulse(context) }))
+
+		await waitUntil(() => sessions().at(-1)?.phase === 'exposing')
+		expect(await manual(context)).toBeFalse()
+		expect(fake.holds).toEqual([id])
+
+		expect(await admitted.ended).toMatchObject({ phase: 'completed', captured: 3, dither: { completed: 2, settling: false } })
+		expect(mount.equatorialCoordinate).not.toEqual(before)
+		expect(operations.available(mount)).toBeTrue()
+		expect(fake.holds).toEqual([])
+		expect(await manual(context)).toBeTrue()
+	})
+
+	test('slews the tracking mount by a small exact GoTo', async () => {
+		const context = await pointed()
+		const { admit, mount, operations, mountCommander } = context
+		expect(await mountCommander.setTracking(operations.coordinator, mount, true)).toMatchObject({ ok: true })
+		const before = { ...mount.equatorialCoordinate }
+
+		const ended = await admit(request({ count: 2, dither: pulse(context, { movement: 'slew', settleTime: 0.1 }) })).ended
+		expect(ended).toMatchObject({ phase: 'completed', captured: 2, dither: { completed: 1 } })
+		expect(mount.equatorialCoordinate).not.toEqual(before)
+		expect(operations.available(mount)).toBeTrue()
+	})
+
+	test('an abort during the mechanical settle ends the capture and frees the mount', async () => {
+		const context = await pointed()
+		const { admit, captures, operations, mount, sessions } = context
+		const admitted = admit(request({ count: 3, dither: pulse(context, { settleTime: 60 }) }))
+
+		await waitUntil(() => sessions().at(-1)?.dither?.settling === true)
+		expect(await captures.abortSession(admitted.sessionId)).toBe('aborted')
+		expect(await admitted.ended).toMatchObject({ phase: 'aborted', captured: 1, dither: { completed: 0 } })
+		expect(operations.available(mount)).toBeTrue()
+	})
+
+	test('a mount lost between two dithers fails the capture as disconnected', async () => {
+		const context = await pointed()
+		const { admit, manager, client, mountId, sessions } = context
+		const admitted = admit(request({ count: 3, exposureTime: 1, dither: pulse(context) }))
+
+		await waitUntil(() => sessions().at(-1)?.dither?.completed === 1)
+		manager.devices.switch(client, mountId, false)
+		expect(await admitted.ended).toMatchObject({ phase: 'failed', reason: 'disconnected', captured: 2, dither: { completed: 1 } })
+	})
+
+	test('a pulse longer than the limit fails the capture without moving the mount', async () => {
+		const context = await pointed()
+		const { admit, mount } = context
+		const before = { ...mount.equatorialCoordinate }
+		const ended = await admit(request({ count: 2, dither: pulse(context, { maxPulseDuration: 1, amount: 120 }) })).ended
+		expect(ended).toMatchObject({ phase: 'failed', reason: 'unexpectedState', captured: 1 })
+		expect(ended.error).toStartWith('Dither failed: ')
+		expect(mount.equatorialCoordinate).toEqual(before)
+	})
+
+	test('guiding on the connection, a busy mount, or the capture camera as guide output refuse the capture', async () => {
+		const context = await setup()
+		const { id, cameraId, captures, fake, operations, mount, cameraGuideOutputId } = context
+
+		fake.setRuns([{ sessionId: 'running' } as GuidingSessionSummary])
+		expect(captures.admit(id, cameraId, request({ dither: pulse(context) }))).toMatchObject({ ok: false, status: 409, code: 'guidingActive' })
+		fake.setRuns([])
+
+		const held = Promise.withResolvers<void>()
+		const holder = operations.coordinator.start('manual', [{ key: resourceKey(mount), device: mount }], async () => {
+			await held.promise
+			return successfulOperationResult(undefined)
+		})
+		expect(captures.admit(id, cameraId, request({ dither: pulse(context) }))).toMatchObject({ ok: false, status: 409, code: 'busy' })
+		held.resolve()
+		await holder.result
+
+		expect(captures.admit(id, cameraId, request({ dither: pulse(context, { mount: { connectionId: id, deviceId: 'unknown' } }) }))).toMatchObject({ ok: false, status: 404 })
+		if (cameraGuideOutputId) expect(captures.admit(id, cameraId, request({ dither: pulse(context, { guideOutput: { connectionId: id, deviceId: cameraGuideOutputId } }) }))).toMatchObject({ ok: false, status: 409, code: 'busy' })
+		expect(operations.available(mount)).toBeTrue()
+		expect(fake.holds).toEqual([])
 	})
 })

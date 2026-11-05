@@ -1,18 +1,38 @@
+import type { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
+import type { MountCommander } from 'nebulosa/src/devices/commanders/mount'
+import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import { failedOperationResult, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
-import { type DitherAmount, type DitherPhase, settleOnAbort } from 'nebulosa/src/observation/guiding/ditherer'
+import { type ResourceRequest, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import type { Random } from 'nebulosa/src/math/numerical/random'
+import { arcsec } from 'nebulosa/src/math/units/angle'
+import type { DitherMode } from 'nebulosa/src/observation/guiding/dither'
+import { type DitherAmount, type DitherPhase, type DitherRequest, MountDitherer, settleOnAbort } from 'nebulosa/src/observation/guiding/ditherer'
+import type { GuideDirectionDEC, GuideDirectionRA } from 'nebulosa/src/observation/guiding/guider'
 import type { GuidingSettle } from 'nebulosa/src/observation/guiding/session'
-import { type CommandErrorCode, type CommandRefusal, refusal } from './commands'
+import { type ClientResolver, type CommandErrorCode, type CommandRefusal, type DeviceContext, refusal, resolveConnected } from './commands'
+import type { DeviceRegistry } from './devices'
 import type { GuidingSessions } from './guiding'
+import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
 
 // Automatic dithering of Camera Acquisition: the preflight, the device coordination, and the execution of the dithers a
 // capture asks for between its frames, by the method its request names and never another. The capture owns the
 // cadence (which frame boundary dithers, see ditherBoundary); this service owns how each dither runs, and what the
-// capture holds for it from its admission to its end. Guided dithers are commands of the running native guiding
-// session, whose dither commands the capture claims for its whole life (GuidingSessions.claimDither), so no other dither
-// shifts the lock meanwhile; each resolves with the outcome of that exact command, once the guider settled. Nothing
-// physical is held for them: the guider finishes its own settle after a stop or an abort. A failed dither ends the
-// capture: there is no fallback to another method and no skipped dither. Guided amounts are guide-camera pixels and
-// settle tolerances guide pixels, settle times seconds.
+// capture holds for it from its admission to its end. A failed dither ends the capture: there is no fallback to another
+// method and no skipped dither.
+//
+// Guided dithers are commands of the running native guiding session, whose dither commands the capture claims for its
+// whole life (GuidingSessions.claimDither), so no other dither shifts the lock meanwhile; each resolves with the outcome
+// of that exact command, once the guider settled. Nothing physical is held for them: the guider finishes its own settle
+// after a stop or an abort. Guided amounts are guide-camera pixels, settle tolerances guide pixels, settle times seconds.
+//
+// Mount dithers move an unguided mount with the toolkit's MountDitherer, one per capture so its pattern runs across the
+// capture: timed pulses through the guide output the operator selected (the mount's own port or the ST4 port of a camera,
+// trusted to drive that mount) or a small exact GoTo, never corrected by a pointing model, then a fixed mechanical wait,
+// which measures nothing. The mount and the guide output are reserved in the arbiter for the whole capture (unless the
+// caller's invocation already reserves them), so no manual motion or pulse interleaves, and guiding is held off their
+// connections. A capture whose guide output is its own camera is refused, since the capture holds that device. The end of
+// the capture drains the motion in flight and waits for the observed end of its pulses before the reservation is given
+// back. Mount amounts are arcseconds on the sky, settle times seconds, pulse durations milliseconds.
 
 // Automatic dither of a capture through the guiding session that guides its setup.
 export interface GuidedCaptureDither {
@@ -30,8 +50,46 @@ export interface GuidedCaptureDither {
 	readonly settle: GuidingSettle
 }
 
+// Fields of every automatic dither of a capture that moves an unguided mount.
+interface MountCaptureDitherFields {
+	readonly method: 'mount'
+	// Frames taken between two dithers, an integer >= 1.
+	readonly everyFrames: number
+	// Mount the dithers move, by its exact connection and device ids.
+	readonly mount: OperationDevice
+	// Size of each dither on the sky, in arcseconds; > 0.
+	readonly amount: number
+	// Whether each dither moves the RA axis only.
+	readonly raOnly: boolean
+	// Pattern of the successive offsets, restarted by every capture.
+	readonly pattern: DitherMode
+	// Mechanical settle after each motion, in seconds; >= 0.
+	readonly settleTime: number
+}
+
+// Mount dither by a small exact GoTo of the mount, which must be able to go to a position, unparked and tracking.
+export interface SlewCaptureDither extends MountCaptureDitherFields {
+	readonly movement: 'slew'
+}
+
+// Mount dither by one timed guide pulse per axis, through a guide output that drives the mount.
+export interface PulseCaptureDither extends MountCaptureDitherFields {
+	readonly movement: 'pulse'
+	// Guide output the pulses are sent through: the mount's own port, or the ST4 port of a camera wired to the mount.
+	readonly guideOutput: OperationDevice
+	// Longest pulse of one axis, in milliseconds; > 0. A dither needing a longer one fails without moving.
+	readonly maxPulseDuration: number
+	// Guide direction that moves the mount toward a positive (east) right ascension offset, as the operator declared it.
+	readonly rightAscensionDirection: GuideDirectionRA
+	// Guide direction that moves the mount toward a positive (north) declination offset, as the operator declared it.
+	readonly declinationDirection: GuideDirectionDEC
+}
+
+// Automatic dither of a capture moving an unguided mount.
+export type MountCaptureDither = SlewCaptureDither | PulseCaptureDither
+
 // Automatic dither of a capture, by the method it names; absent from a request, the capture never dithers.
-export type CaptureDither = GuidedCaptureDither
+export type CaptureDither = GuidedCaptureDither | MountCaptureDither
 
 // Dithers a capture prepared, from its admission to its end.
 export interface CaptureDitherPlan {
@@ -39,24 +97,41 @@ export interface CaptureDitherPlan {
 	// Frames taken between two dithers, an integer >= 1.
 	readonly everyFrames: number
 	// Dithers once and resolves after the settle, or with the failure that must end the capture; never rejects. token
-	// identifies this dither, so a repeated boundary never dithers twice. An abort of signal resolves at once with its
-	// reason, while whatever moves is left to finish draining it. onPhase reports the progress synchronously.
+	// identifies this dither, so a repeated boundary never dithers twice. An abort of signal resolves at once, while the
+	// motion it interrupted is drained by finish. onPhase reports the progress synchronously.
 	readonly dither: (token: string, signal: AbortSignal, onPhase: (phase: DitherPhase) => void) => Promise<OperationResult<void>>
 	// Drains what a dither may still move and gives back what the capture held for its dithers. Idempotent; never rejects.
 	readonly finish: () => Promise<void>
 }
 
-// Refusal codes of a dither preflight besides the command codes: notGuiding, the guiding session is not guiding.
-export type CaptureDitherErrorCode = 'notGuiding'
+// Refusal codes of a dither preflight besides the command codes: notGuiding, the guiding session is not guiding;
+// guidingActive, guiding corrects a mount the capture would move itself.
+export type CaptureDitherErrorCode = 'notGuiding' | 'guidingActive'
 
 // Outcome of preparing the dithers of a capture: its plan, or why the capture is refused.
 export type CaptureDitherPreparation = CaptureDitherPlan | CommandRefusal<CommandErrorCode | CaptureDitherErrorCode>
 
 // Guiding sessions as the dithering service uses them.
-export type CaptureDitheringGuiding = Pick<GuidingSessions, 'summaryOf' | 'claimDither'>
+export type CaptureDitheringGuiding = Pick<GuidingSessions, 'summaryOf' | 'claimDither' | 'runsOn' | 'hold'>
+
+// Commanders the mount dithers move the mount with, shared with the mount and guide output commands so their manual
+// motions and the dithers see the same pulses and slews.
+export interface CaptureDitheringCommanders {
+	// Slews of the GoTo dithers.
+	readonly mount: MountCommander
+	// Pulses of the pulse dithers, and the observation of their end.
+	readonly guideOutput: GuideOutputCommander
+}
 
 // Name the dithering service holds guiding commands under, meant for people.
 const HOLDER = 'Camera Acquisition'
+
+// Kind of the reservation of the mount and guide output a capture dithering by itself holds, for diagnostics.
+const RESERVATION_KIND = 'camera.capture.dither'
+
+// Longest pulse a GoTo ditherer is configured with, in milliseconds: a slew sends no pulse, so any finite positive value
+// is never used.
+const SLEW_MAX_PULSE_DURATION = 1
 
 // Whether the frame opening generation (the first frame is 1) is preceded by a dither of a capture dithering every
 // everyFrames frames: never before the first frame, then before every frame that follows everyFrames frames taken.
@@ -64,17 +139,35 @@ export function ditherBoundary(generation: number, everyFrames: number) {
 	return generation > 1 && (generation - 1) % everyFrames === 0
 }
 
-// Dithering service of the camera captures.
-export class CaptureDithering {
-	// Creates the service over the guiding sessions the guided dithers are commanded to.
-	constructor(readonly guiding: CaptureDitheringGuiding) {}
+// Maps a failed dither to the failure that ends its capture, its detail prefixed so the capture says what failed.
+function ditherFailure(result: OperationResult<unknown>): OperationResult<void> {
+	return result.ok ? successfulOperationResult(undefined) : failedOperationResult(result.reason, `Dither failed: ${result.error ?? result.reason}`)
+}
 
-	// Prepares the dithers of a capture before it is admitted: checks the method can dither now and takes what the capture
-	// holds for its dithers. Synchronous, so nothing changes between the checks and the admission. Refused with 404 for an
-	// unknown or ended guiding session, 409 notGuiding while it is not guiding, and 409 busy while another claimant holds
-	// its dithers.
-	prepare(dither: CaptureDither): CaptureDitherPreparation {
-		return this.#guided(dither)
+// Dithering service of the camera captures.
+export class CaptureDithering implements DeviceContext {
+	// Creates the service over the devices of every open connection. client resolves an open connection id to its client,
+	// operations arbitrates the mounts and guide outputs the mount dithers reserve, guiding receives the guided dithers and
+	// holds guiding off the mounts the capture moves, commanders move the mounts, and random replaces Math.random as the
+	// source of the random dither patterns, for reproducible tests.
+	constructor(
+		readonly devices: DeviceRegistry,
+		readonly client: ClientResolver,
+		readonly operations: OperationRegistry,
+		readonly guiding: CaptureDitheringGuiding,
+		readonly commanders: CaptureDitheringCommanders,
+		readonly random?: Random,
+	) {}
+
+	// Prepares the dithers of a capture of camera before it is admitted, under the reservation of invocation when a caller
+	// composing tools admits it: checks the method can dither now and takes what the capture holds for its dithers.
+	// Synchronous, so nothing changes between the checks and the admission. Refused with 404 for an unknown guiding
+	// session, mount, or guide output; 409 notGuiding while the guiding session is not guiding, guidingActive while guiding
+	// corrects the mount to move, disconnected for a disconnected device, and busy while another claimant holds the
+	// guided dithers or another operation holds the mount or the guide output; 422 unsupported when the mount or the guide
+	// output cannot move as asked.
+	prepare(camera: Camera, dither: CaptureDither, invocation?: ToolInvocation): CaptureDitherPreparation {
+		return dither.method === 'guided' ? this.#guided(dither) : this.#mount(camera, dither, invocation)
 	}
 
 	// Prepares guided dithers: the session must be guiding, and its dither commands are claimed until finish.
@@ -102,6 +195,107 @@ export class CaptureDithering {
 			finish: () => {
 				claim[Symbol.dispose]()
 				return Promise.resolve()
+			},
+		}
+	}
+
+	// Prepares mount dithers: resolves the mount and the guide output, refuses a mount guiding corrects or one that cannot
+	// move as asked, reserves both unless the caller's invocation already does, and holds guiding off their connections.
+	#mount(camera: Camera, dither: MountCaptureDither, invocation?: ToolInvocation): CaptureDitherPreparation {
+		const resolvedMount = resolveConnected(this, dither.mount.connectionId, 'mount', dither.mount.deviceId, 'Mount')
+		if (!resolvedMount.ok) return resolvedMount
+		const mount = resolvedMount.device
+
+		let guideOutput: GuideOutput | undefined
+		const connections = new Set([dither.mount.connectionId])
+
+		if (dither.movement === 'pulse') {
+			const resolved = resolveConnected(this, dither.guideOutput.connectionId, 'guideOutput', dither.guideOutput.deviceId, 'Guide output')
+			if (!resolved.ok) return resolved
+			guideOutput = resolved.device
+			connections.add(dither.guideOutput.connectionId)
+		}
+
+		// A guide output on the ST4 port of a camera shares no device with the mount it moves, so guiding is refused by connection.
+		for (const connectionId of connections) {
+			if (this.guiding.runsOn(connectionId).length > 0) return refusal('Guiding is correcting the mount; dither through it, or stop it first', 409, 'guidingActive')
+		}
+
+		if (dither.movement === 'slew') {
+			if (!mount.canGoTo) return refusal(`${mount.name} cannot go to a position`, 422, 'unsupported')
+			if (mount.parked || mount.parking) return refusal(`${mount.name} is parked`, 422, 'unsupported')
+			if (!mount.tracking) return refusal(`${mount.name} is not tracking`, 422, 'unsupported')
+		} else if (guideOutput && !guideOutput.canPulseGuide) {
+			return refusal(`${guideOutput.name} cannot pulse`, 422, 'unsupported')
+		}
+
+		// The capture holds its camera from its first frame, so a pulse through the camera's own port could never be sent.
+		if (guideOutput && resourceKey(guideOutput) === resourceKey(camera)) return refusal('The guide output is the camera the capture exposes', 409, 'busy')
+
+		const devices = guideOutput ? [mount, guideOutput] : [mount]
+		const requests: ResourceRequest[] = devices.map((device) => ({ key: resourceKey(device), device }))
+		const owner = { id: crypto.randomUUID(), kind: RESERVATION_KIND }
+		let reserved: ToolInvocation | undefined
+
+		if (invocation) {
+			if (!devices.every((device) => this.operations.reserves(device, invocation))) return refusal('The mount or the guide output is not reserved by the invocation', 409, 'busy')
+		} else {
+			if (!devices.every((device) => this.operations.available(device))) return refusal('The mount or the guide output is busy', 409, 'busy')
+			const reservation = this.operations.arbiter.reserve(owner, requests)
+			if (!reservation.ok) return refusal('The mount or the guide output is busy', 409, 'busy')
+			reserved = { reservation: reservation.reservation }
+		}
+
+		// The dithers run as roots of the reservation, beside the capture, which holds the camera through its own scope.
+		const scope = this.operations.scope(invocation ?? reserved)
+		const holds = Array.from(connections, (connectionId) => this.guiding.hold(connectionId, HOLDER))
+
+		const ditherer = new MountDitherer(
+			mount,
+			guideOutput,
+			{ mountCommander: this.commanders.mount, guideOutputCommander: this.commanders.guideOutput },
+			dither.movement === 'pulse'
+				? { method: 'pulse', pattern: dither.pattern, random: this.random, maxPulseDuration: dither.maxPulseDuration, rightAscensionDirection: dither.rightAscensionDirection, declinationDirection: dither.declinationDirection }
+				: { method: 'slew', pattern: dither.pattern, random: this.random, maxPulseDuration: SLEW_MAX_PULSE_DURATION },
+		)
+
+		const request: DitherRequest = { amount: { unit: 'angle', value: arcsec(dither.amount) }, raOnly: dither.raOnly, settle: { kind: 'mechanical', time: dither.settleTime } }
+		let inFlight: Promise<unknown> | undefined
+		let finished: Promise<void> | undefined
+
+		return {
+			ok: true,
+			everyFrames: dither.everyFrames,
+			dither: async (_, signal, onPhase) => {
+				// A device lost since the previous dither leaves its reservation in place, so its absence is told before it is commanded.
+				if (!ditherer.ready()) return failedOperationResult('disconnected', `Dither failed: ${mount.name} or its guide output is not ready`)
+
+				const handle = scope.start('captureDither', [], (context) => ditherer.dither(context, request, onPhase))
+				const cancel = () => void handle.cancel()
+				signal.addEventListener('abort', cancel, { once: true })
+				if (signal.aborted) cancel()
+				inFlight = handle.result
+
+				try {
+					return ditherFailure(await handle.result)
+				} finally {
+					signal.removeEventListener('abort', cancel)
+				}
+			},
+			finish: () => {
+				finished ??= (async () => {
+					await inFlight
+					// A pulse cancelled in flight keeps its guide output unavailable until its end was observed, within the release bound.
+					const quiescent = await ditherer.awaitPulseQuiescence(new AbortController().signal)
+					if (!quiescent.ok) console.error(`the end of the dither pulses of ${guideOutput?.name} could not be observed:`, quiescent.error ?? quiescent.reason)
+					if (reserved) {
+						await this.operations.coordinator.cancelByReservationOwner(owner)
+						reserved.reservation.release()
+					}
+					for (const hold of holds) hold[Symbol.dispose]()
+				})()
+
+				return finished
 			},
 		}
 	}

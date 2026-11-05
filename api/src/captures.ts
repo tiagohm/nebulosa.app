@@ -613,7 +613,7 @@ export class CameraCaptures implements Disposable {
 
 		if (request.dither && request.frameType === 'LIGHT' && request.exposureMode !== 'single') {
 			if (!this.dithering) return refusal('Dithering is not available', 422, 'unsupported')
-			const prepared = this.dithering.prepare(request.dither)
+			const prepared = this.dithering.prepare(camera, request.dither, options.invocation)
 			if (!prepared.ok) return prepared
 			dither = prepared
 		}

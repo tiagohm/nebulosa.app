@@ -43,6 +43,7 @@ import {
 	darvRuntime,
 	darvSlewRate,
 	finishDarv,
+	formatDarvDrift,
 	repeatDarv,
 	startDarv,
 } from './darv'
@@ -198,12 +199,12 @@ function Result({ session, measurement }: ResultProps) {
 			<DataList>
 				<DataRow label="State">{DARV_STATE_LABELS[measurement.state]}</DataRow>
 				{result && <DataRow label="Result">{DARV_STATUS_LABELS[result.status]}</DataRow>}
-				{result?.driftMagnitude !== undefined && <DataRow label="Separation Drift">{formatDrift(result.driftMagnitude)}</DataRow>}
+				{result?.driftMagnitude !== undefined && <DataRow label="Separation Drift">{formatDarvDrift(result.driftMagnitude)}</DataRow>}
 				{result && <DataRow label="Trails">{`${result.usableCount} of ${result.trailCount} usable`}</DataRow>}
 				{result && result.trailCount > 0 && <DataRow label="Fit Quality">{formatPercent(result.confidence)}</DataRow>}
 				{previous?.result?.driftMagnitude !== undefined && result?.driftMagnitude !== undefined && (
 					<DataRow label={`Since #${previous.generation}`}>
-						<span className={cn(result.driftMagnitude < previous.result.driftMagnitude && 'text-success')}>{`${formatDrift(previous.result.driftMagnitude)} → ${formatDrift(result.driftMagnitude)}`}</span>
+						<span className={cn(result.driftMagnitude < previous.result.driftMagnitude && 'text-success')}>{`${formatDarvDrift(previous.result.driftMagnitude)} → ${formatDarvDrift(result.driftMagnitude)}`}</span>
 					</DataRow>
 				)}
 			</DataList>
@@ -221,7 +222,7 @@ function History({ measurements }: { readonly measurements: readonly DarvMeasure
 			<DataList>
 				{measurements.toReversed().map((measurement) => (
 					<DataRow key={measurement.generation} label={`#${measurement.generation} ${DARV_AXIS_LABELS[measurement.request.axis]}, ${measurement.request.legDuration} s`}>
-						{measurement.result?.driftMagnitude !== undefined ? formatDrift(measurement.result.driftMagnitude) : measurement.result ? DARV_STATUS_LABELS[measurement.result.status] : DARV_STATE_LABELS[measurement.state]}
+						{measurement.result?.driftMagnitude !== undefined ? formatDarvDrift(measurement.result.driftMagnitude) : measurement.result ? DARV_STATUS_LABELS[measurement.result.status] : DARV_STATE_LABELS[measurement.state]}
 					</DataRow>
 				))}
 			</DataList>
@@ -276,9 +277,4 @@ function MeasurementProgress({ measurement }: { readonly measurement: DarvMeasur
 			</p>
 		</div>
 	)
-}
-
-// Formats a drift in pixels per second.
-function formatDrift(drift: number) {
-	return `${drift < 0.01 ? drift.toExponential(1) : drift.toFixed(3)} px/s`
 }

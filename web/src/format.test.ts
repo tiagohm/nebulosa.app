@@ -12,12 +12,15 @@ import {
 	formatFixed,
 	formatGeographic,
 	formatPercent,
+	formatKilometers,
 	formatPixelLength,
+	formatPixelPosition,
 	formatSigned,
 	formatSignedAngle,
 	formatSignedArcmin,
 	formatSignificant,
 	formatTemperature,
+	formatUtcDateTime,
 	MISSING,
 } from './format'
 
@@ -144,5 +147,27 @@ describe('time', () => {
 		expect(formatClockDuration(65.9)).toBe('1:05')
 		expect(formatClockDuration(3725)).toBe('1:02:05')
 		expect(formatClockDuration(-10)).toBe('0:00')
+	})
+})
+
+describe('positions, distances, and instants', () => {
+	test('a position in an image keeps its decimals and never shows a non-finite coordinate', () => {
+		expect(formatPixelPosition(1203.44, 88)).toBe('1203.4, 88.0 px')
+		expect(formatPixelPosition(12.345, -0.001, 2)).toBe('12.35, 0.00 px')
+		expect(formatPixelPosition(Number.NaN, 4)).toBe(MISSING)
+	})
+
+	test('kilometers take thousands separators and never a negative zero', () => {
+		expect(formatKilometers(384_399.6)).toBe('384,400 km')
+		expect(formatKilometers(12.46, 1)).toBe('12.5 km')
+		expect(formatKilometers(-0.2)).toBe('0 km')
+		expect(formatKilometers(Number.POSITIVE_INFINITY)).toBe(MISSING)
+	})
+
+	test('an instant in UTC is written to the second or the minute with its zone', () => {
+		const time = Date.UTC(2026, 10, 5, 14, 23, 5, 900)
+		expect(formatUtcDateTime(time)).toBe('2026-11-05 14:23:05 UTC')
+		expect(formatUtcDateTime(time, false)).toBe('2026-11-05 14:23 UTC')
+		expect(formatUtcDateTime(Number.NaN)).toBe(MISSING)
 	})
 })

@@ -1,7 +1,7 @@
 import type { LocalViewHandedness, LocalViewOrientationMode } from 'api'
 import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
-import { MISSING, formatGeographic } from '../../format'
+import { formatGeographic, formatKilometers, MISSING } from '../../format'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { BROWSER_TIME_ZONE } from '../../sky/clock'
@@ -78,7 +78,7 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 					{extreme && <DataRow label="Sun azimuth">{extreme.sunAzimuth.toFixed(1)}°</DataRow>}
 					{extreme?.kind && <DataRow label="Central phase">{extreme.kind === 'annular' ? 'Annular' : 'Total'}</DataRow>}
 					{extreme?.centralDuration !== undefined && <DataRow label="Central duration">{formatDuration(extreme.centralDuration)}</DataRow>}
-					{extreme?.pathWidth !== undefined && <DataRow label="Path width">{extreme.pathWidth.toFixed(1)} km</DataRow>}
+					{extreme?.pathWidth !== undefined && <DataRow label="Path width">{formatKilometers(extreme.pathWidth, 1)}</DataRow>}
 					<Button variant="secondary" className="self-start" onClick={() => choosePlace({ source: 'map', longitude: point.longitude, latitude: point.latitude })}>
 						Use as Location
 					</Button>
@@ -160,13 +160,13 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 					{greatest && <DataRow label="Greatest eclipse">{formatEclipseTime(greatest.time, timeZone)}</DataRow>}
 					{greatest && <DataRow label="Greatest eclipse at">{formatGeographic(greatest.latitude, greatest.longitude)}</DataRow>}
 					{duration?.centralDuration !== undefined && <DataRow label="Greatest duration">{formatDuration(duration.centralDuration)}</DataRow>}
-					{greatest?.pathWidth !== undefined && <DataRow label="Path width at greatest">{greatest.pathWidth.toFixed(1)} km</DataRow>}
+					{greatest?.pathWidth !== undefined && <DataRow label="Path width at greatest">{formatKilometers(greatest.pathWidth, 1)}</DataRow>}
 					{local?.details.maximalMagnitude !== undefined && <DataRow label="Magnitude here">{local.details.maximalMagnitude.toFixed(4)}</DataRow>}
 					{local?.details.moonSunDiameterRatio !== undefined && <DataRow label="Moon/Sun diameter">{local.details.moonSunDiameterRatio.toFixed(4)}</DataRow>}
 					{local?.details.partialPhaseDuration !== undefined && <DataRow label="Eclipse here (C1–C4)">{formatDuration(local.details.partialPhaseDuration)}</DataRow>}
 					{local?.details.centralPhaseDuration !== undefined && <DataRow label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatDuration(local.details.centralPhaseDuration)}</DataRow>}
-					{local?.details.pathWidthKm !== undefined && <DataRow label="Path width here">{Math.round(local.details.pathWidthKm)} km</DataRow>}
-					{local?.details.shadowPathWidthKm !== undefined && <DataRow label="Shadow chord here">{Math.round(local.details.shadowPathWidthKm)} km</DataRow>}
+					{local?.details.pathWidthKm !== undefined && <DataRow label="Path width here">{formatKilometers(local.details.pathWidthKm)}</DataRow>}
+					{local?.details.shadowPathWidthKm !== undefined && <DataRow label="Shadow chord here">{formatKilometers(local.details.shadowPathWidthKm)}</DataRow>}
 					<Notice>
 						Magnitude is the fraction of the Sun's diameter covered by the Moon, not of its area. Path width is the distance between the limits of totality or annularity, across the central line. Shadow chord is the narrowest width of the shadow at one instant, which is smaller at a low Sun. Contacts assume
 						a smooth lunar limb and are good to about 5 s; the mountains of the limb matter most near the limits of the path.

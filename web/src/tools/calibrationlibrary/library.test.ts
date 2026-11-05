@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { CalibrationGroupSummary, CalibrationMetadata } from 'api'
-import { bytesText, cameraText, coverage, exposureText, groupTitle, jobFraction, masterName, masterWarnings, overrideIsText, temperatureText } from './library'
+import { cameraText, coverage, exposureText, groupTitle, jobFraction, masterName, masterWarnings, overrideIsText, temperatureText } from './library'
 
 const unknown = { evidence: 'unknown' } as const
 const verified = <T>(value: T) => ({ value, evidence: 'verified' }) as const
@@ -49,12 +49,6 @@ describe('text', () => {
 		expect(groupTitle(group('flat', { metadata: metadata({ filter: verified('L') }) }))).toBe('L · 180 s')
 		// A flat group may combine exposures; its title names their range instead of one of them.
 		expect(groupTitle(group('flat', { metadata: metadata({ filter: verified('L') }), exposures: [10000, 298523] }))).toBe('L · 0.01–0.298523 s')
-	})
-
-	test('sizes', () => {
-		expect(bytesText(512)).toBe('512 B')
-		expect(bytesText(1536)).toBe('1.5 KiB')
-		expect(bytesText(1024 ** 3)).toBe('1.00 GiB')
 	})
 
 	test('a declared field has the kind of input it needs', () => {

@@ -7,7 +7,7 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
-import { MISSING, formatTemperature, formatPercent, formatByteSize, formatExposureTime } from '../format'
+import { formatByteSize, formatDuration, formatExposureTime, formatPercent, formatTemperature, MISSING } from '../format'
 import { operationsState } from '../operations'
 import { activeProfile, darkLibraryWizardSettings, exposureSettings, profileState, setDarkLibraryWizardSettings } from '../profile/profile'
 import { type CameraIdentity, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS, DEFAULT_DARK_LIBRARY_WIZARD_GROUP, type DarkLibraryWizardSettings } from '../profile/schema'
@@ -29,7 +29,6 @@ import {
 	DARK_SUSPICION_LABELS,
 	darkLibraryWizardBlocker,
 	darkLibraryWizardCapture,
-	darkLibraryWizardDuration,
 	darkLibraryWizardEstimate,
 	darkLibraryWizardExposureLeft,
 	darkLibraryWizardRequest,
@@ -209,7 +208,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				{capture.subframe && <Notice>Darks of a subframe only calibrate lights of that same subframe.</Notice>}
 				<DataList>
 					<DataRow label="Frames">{estimate.frames}</DataRow>
-					<DataRow label="Exposure">{`at least ${darkLibraryWizardDuration(estimate.exposure)}`}</DataRow>
+					<DataRow label="Exposure">{`at least ${formatDuration(estimate.exposure)}`}</DataRow>
 					{estimate.bytes !== undefined && <DataRow label="Disk Space">{`~ ${formatByteSize(estimate.bytes[0])} (mono) to ${formatByteSize(estimate.bytes[1])}`}</DataRow>}
 				</DataList>
 				<Notice>Estimates only: downloads, cooling, and rejected frames add to them. Groups of one temperature run together.</Notice>
@@ -380,7 +379,7 @@ function Progress({ session, pending }: ProgressProps) {
 						{plane.median === undefined ? MISSING : `${Math.round(plane.median)} DN`}
 					</DataRow>
 				))}
-				{running && remaining > 0 && <DataRow label="Exposure Left">{`at least ${darkLibraryWizardDuration(remaining)}`}</DataRow>}
+				{running && remaining > 0 && <DataRow label="Exposure Left">{`at least ${formatDuration(remaining)}`}</DataRow>}
 			</DataList>
 			<hr className="text-ink-300 border-dashed" />
 			<DataList>

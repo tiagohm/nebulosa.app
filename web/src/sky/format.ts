@@ -1,6 +1,6 @@
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { formatDEC, formatRA, toArcmin, toArcsec } from 'nebulosa/src/math/units/angle'
-import { formatFixed, MISSING } from '../format'
+import { formatFixed, formatKilometers, MISSING } from '../format'
 
 // Display formats of the Sky workspace: equatorial and horizontal angles, apparent angular sizes, distances,
 // magnitudes, and instants in the browser's time zone with the zone named, so a time is never ambiguous. Azimuths and
@@ -48,7 +48,7 @@ export function formatApparentSize(angle: number) {
 // 10 AU and two beyond.
 export function formatSolarSystemDistance(au: number) {
 	if (!Number.isFinite(au)) return MISSING
-	if (au < KILOMETER_DISTANCE_LIMIT) return `${formatWhole(au * AU_KM)} km`
+	if (au < KILOMETER_DISTANCE_LIMIT) return formatKilometers(au * AU_KM)
 	return `${formatFixed(au, Number(au.toFixed(4)) < 10 ? 4 : 2)} AU`
 }
 

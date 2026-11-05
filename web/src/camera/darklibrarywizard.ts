@@ -141,16 +141,6 @@ export function darkLibraryWizardExposureLeft({ groups, state, exposure }: Pick<
 	return Math.max(0, missing - elapsed)
 }
 
-// Formats a duration in seconds for an estimate: seconds below a minute (hundredths below ten), minutes and seconds below an
-// hour, and hours and minutes above.
-export function darkLibraryWizardDuration(seconds: number) {
-	if (seconds < 60) return `${seconds < 10 ? Number(seconds.toFixed(2)) : Math.round(seconds)} s`
-	const total = Math.round(seconds)
-	if (total < 3600) return `${Math.floor(total / 60)} min ${total % 60} s`
-	const minutes = Math.round(seconds / 60)
-	return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
-}
-
 // Returns the camera settings a plan takes from Camera Acquisition, fitted to the camera's capabilities as a capture is:
 // everything but its exposure time, which each group sets.
 export function darkLibraryWizardCapture(exposure: Readonly<CameraExposureSettings>, capabilities?: CameraCapabilities): DarkLibraryWizardCaptureSettings {

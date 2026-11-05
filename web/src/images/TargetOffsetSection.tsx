@@ -1,7 +1,7 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { MISSING, formatAngularSize, formatSignedAngle } from '../format'
+import { formatAngularSize, formatPixelPosition, formatSignedAngle, MISSING } from '../format'
 import { type CoordinateStyle, formatDeclinationAs, formatPositionAngle, formatRightAscensionAs } from '../platesolving/coordinates'
 import { type AstrometricMarker, type AstrometryTarget, catalogTarget, targetOffset, targetPosition } from '../platesolving/measurement'
 import { AngleField } from '../platesolving/PlateSolveControls'
@@ -96,7 +96,7 @@ export function TargetOffsetSection({ documentKey, solution, image, astrometry, 
 					<DataRow label="Position angle">{formatPositionAngle(values?.offset.positionAngle)}</DataRow>
 					<DataRow label="East offset">{values?.offset.east === undefined ? MISSING : formatSignedAngle(values.offset.east)}</DataRow>
 					<DataRow label="North offset">{values?.offset.north === undefined ? MISSING : formatSignedAngle(values.offset.north)}</DataRow>
-					<DataRow label="In the image">{values ? (values.pixel ? `x ${values.pixel.x.toFixed(1)} y ${values.pixel.y.toFixed(1)}` : 'Outside the image') : MISSING}</DataRow>
+					<DataRow label="In the image">{values ? (values.pixel ? formatPixelPosition(values.pixel.x, values.pixel.y) : 'Outside the image') : MISSING}</DataRow>
 					{!values && <Notice>{solution ? 'The target or the centre of the image cannot be located with the solution shown.' : 'Target Offset needs a solution of this image.'}</Notice>}
 					<Actions>
 						<Button variant="secondary" onClick={() => choose(undefined)}>

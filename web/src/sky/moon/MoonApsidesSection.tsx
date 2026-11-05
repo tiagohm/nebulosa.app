@@ -1,4 +1,5 @@
 import type { MoonApsisEvent } from 'api'
+import { formatKilometers } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatEclipseTime } from '../../tools/eclipse/eclipse'
 import { DataRow } from '../../ui/DataRow'
@@ -10,11 +11,6 @@ import { formatApparentSize } from '../format'
 
 // Names of the apsides.
 const APSIS_NAMES = { perigee: 'Perigee', apogee: 'Apogee' } as const
-
-// Formats a distance in kilometers with thousands separators, like formatSolarSystemDistance: "356,980 km".
-export function formatKilometers(km: number) {
-	return `${Math.round(km).toLocaleString('en-US')} km`
-}
 
 // Perigee & Apogee section of the Moon Inspector.
 export function MoonApsidesSection({ apsides, timeZone }: { readonly apsides?: readonly MoonApsisEvent[]; readonly timeZone?: string }) {

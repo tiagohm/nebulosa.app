@@ -9,7 +9,7 @@ import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { skyClock, skyTime } from '../clock'
-import { formatDeclination, formatLocalTime, formatRightAscension } from '../format'
+import { formatDeclination, formatLocalTime, formatRightAscension, formatSolarSystemDistance } from '../format'
 import type { SkySelection } from '../sky'
 import { findNextSatellitePass, inspectSatellite, skySatelliteState } from './satellite'
 
@@ -70,7 +70,7 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 						<DataRow label="Dec (of date)">{formatDeclination(position.declination)}</DataRow>
 						<DataRow label="RA (J2000)">{formatRightAscension(position.rightAscensionJ2000)}</DataRow>
 						<DataRow label="Dec (J2000)">{formatDeclination(position.declinationJ2000)}</DataRow>
-						{position.distance !== undefined && <DataRow label="Distance">{`${Math.round(position.distance * 149_597_870.7)} km`}</DataRow>}
+						{position.distance !== undefined && <DataRow label="Distance">{formatSolarSystemDistance(position.distance)}</DataRow>}
 						{position.constellationName && <DataRow label="Constellation">{position.constellationName}</DataRow>}
 						<Notice>
 							Geometric {position.center} place at {formatLocalTime(position.time, Date.now(), undefined, timeZone)}, from the orbital elements of the satellite catalog.

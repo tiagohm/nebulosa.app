@@ -21,8 +21,8 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 // oxfmt-ignore
-import { bytesText, CALIBRATION_KINDS, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, masterName, masterWarnings, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
-import { MISSING, formatPercent, formatExposureTime } from '../../format'
+import { CALIBRATION_KINDS, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, masterName, masterWarnings, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
+import { formatByteSize, formatExposureTime, formatPercent, MISSING } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataRow } from '../../ui/DataRow'
@@ -434,7 +434,7 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 			{kind === 'flat' && <Select label="Correction" className="min-w-0" options={options} value={form.correction} format={correctionLabel} onChange={(correction) => edit({ correction })} />}
 			{added.length > 0 && <Findings findings={added} />}
 			{validation?.needsAcknowledgement && <Checkbox label="I reviewed the warnings and accept them" checked={form.acknowledged} onChange={(acknowledged) => edit({ acknowledged })} />}
-			{validation !== undefined && validation.spillBytes > 0 && <Notice>{`Needs about ${bytesText(validation.spillBytes)} of temporary disk.`}</Notice>}
+			{validation !== undefined && validation.spillBytes > 0 && <Notice>{`Needs about ${formatByteSize(validation.spillBytes)} of temporary disk.`}</Notice>}
 			{errors[key] && <Notice error>{errors[key]}</Notice>}
 			{failure && !building && <Notice error>{`The last build failed: ${failure}`}</Notice>}
 			<Button disabled={building || requesting || !validation?.valid} title={reason} onClick={() => void buildMaster(calibrationLibraryRuntime, key, request())}>
@@ -549,7 +549,7 @@ function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 						Delete
 					</ConfirmButton>
 				</Actions>
-				<DataRow label="Size">{bytesText(source.bytes)}</DataRow>
+				<DataRow label="Size">{formatByteSize(source.bytes)}</DataRow>
 				<DataRow label="Image">{`${metadata.width}×${metadata.height}×${metadata.channels}, BITPIX ${metadata.bitpix}${metadata.cfa ? `, ${metadata.cfa}` : ''}`}</DataRow>
 				<DataRow label="Camera">{cameraText(metadata)}</DataRow>
 				<EvidencedReadout label="Exposure" value={metadata.exposure} format={(value) => formatExposureTime(Number(value) / 1000000)} />
@@ -692,7 +692,7 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 		<div className="flex min-h-0 flex-col gap-3">
 			{!ended && (
 				<div className="flex items-center gap-3">
-					<Notice>{`Reading headers · ${job?.found ?? 0} files · ${bytesText(job?.bytes ?? 0)}`}</Notice>
+					<Notice>{`Reading headers · ${job?.found ?? 0} files · ${formatByteSize(job?.bytes ?? 0)}`}</Notice>
 					<Button variant="secondary" onClick={() => void cancelCalibrationImport(calibrationLibraryRuntime, jobId)}>
 						Cancel
 					</Button>

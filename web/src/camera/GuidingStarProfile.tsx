@@ -1,5 +1,5 @@
 import type { GuidingStarProfile } from 'api'
-import { formatPixelLength, formatDegrees, MISSING } from '../format'
+import { formatDegrees, formatPixelLength, formatPixelPosition, MISSING } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { FLAG_LABELS, formatNumber } from '../stars/starprofile.format'
 import { consecutiveOffsets } from '../stars/starprofile.plot'
@@ -42,7 +42,7 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 			</p>
 			<DataList>
 				<DataRow label="Frame">{`#${star.frameId}`}</DataRow>
-				<DataRow label="Position (px)">{`${star.x.toFixed(1)}, ${star.y.toFixed(1)}`}</DataRow>
+				<DataRow label="Position">{formatPixelPosition(star.x, star.y)}</DataRow>
 				<DataRow label="Valid">
 					<span className={star.valid ? 'text-success' : 'text-danger'}>{star.valid ? 'Yes' : 'No'}</span>
 				</DataRow>

@@ -1,5 +1,5 @@
 import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationMaster, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
-import { MISSING } from '../../format'
+import { formatTemperature, MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // What the Calibration Library tool shows of what the server decided: labels, tones, and the coverage of a page of groups.
@@ -89,7 +89,7 @@ export function exposureText(metadata: Pick<CalibrationMetadata, 'exposure'>) {
 // Text of a temperature: the target when there is one, what was observed otherwise, and unverified without either.
 export function temperatureText({ setTemperature, sensorTemperature }: Pick<CalibrationMetadata, 'setTemperature' | 'sensorTemperature'>) {
 	if (setTemperature.value !== undefined) return `${setTemperature.value} °C`
-	return sensorTemperature.value === undefined ? 'Unverified' : `~${sensorTemperature.value.toFixed(1)} °C`
+	return sensorTemperature.value === undefined ? 'Unverified' : `~${formatTemperature(sensorTemperature.value)}`
 }
 
 // Text of an operating point.
@@ -163,12 +163,4 @@ export function coverage(groups: readonly CalibrationGroupSummary[]): readonly C
 export function jobFraction({ progress, frames }: Pick<CalibrationJobSummary, 'progress' | 'frames'>) {
 	if (progress.rowsTotal > 0) return Math.min(1, progress.rowsCombined / progress.rowsTotal)
 	return frames ? Math.min(1, progress.framesValidated / frames) : 0
-}
-
-// Text of a size in bytes.
-export function bytesText(bytes: number) {
-	if (bytes < 1024) return `${bytes} B`
-	if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KiB`
-	if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`
-	return `${(bytes / 1024 ** 3).toFixed(2)} GiB`
 }

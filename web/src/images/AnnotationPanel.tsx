@@ -6,7 +6,7 @@ import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
 import { isAnnotationShown } from '../annotations/AnnotationOverlay'
 import { annotationKey, annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, resolveMinorBody, runAnnotation, sameAnnotationRequest } from '../annotations/annotations'
 import { useAnnotationContext, useAnnotationResult } from '../annotations/useAnnotationResult'
-import { formatDegrees, formatDuration, MISSING, formatGeographic } from '../format'
+import { formatDegrees, formatDuration, formatGeographic, formatUtcDateTime, MISSING } from '../format'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState, setAnnotationPreferences } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -208,7 +208,7 @@ function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, s
 	return (
 		<CollapsibleSection id="images.annotation.source-and-status" title="Source & Status">
 			<DataRow label="WCS">{request.plateSolveJobId !== undefined ? 'Plate solution shown' : wcsAvailable ? 'Image header' : 'None'}</DataRow>
-			<DataRow label="Observation (UTC)">{observation ? formatUtc(observation.time) : context ? TIME_ORIGIN_LABELS.now : MISSING}</DataRow>
+			<DataRow label="Observation (UTC)">{observation ? formatUtcDateTime(observation.time) : context ? TIME_ORIGIN_LABELS.now : MISSING}</DataRow>
 			{observation && <DataRow label="Time from">{`${TIME_ORIGIN_LABELS[observation.origin]}${observation.approximate ? ' (approximate)' : ''}`}</DataRow>}
 			<DataRow label="Seen from">{context?.site ? formatSite(context.site) : context ? 'Center of the Earth' : MISSING}</DataRow>
 			{context?.site && <DataRow label="Site from">{SITE_SOURCE_LABELS[context.site.source]}</DataRow>}
@@ -326,11 +326,6 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 			)}
 		</CollapsibleSection>
 	)
-}
-
-// Formats an instant (Unix milliseconds) in UTC to the second: "2026-01-15 00:00:00 UTC".
-function formatUtc(time: number): string {
-	return `${new Date(time).toISOString().slice(0, 19).replace('T', ' ')} UTC`
 }
 
 // Formats a site: "23.5500° S, 46.6300° W, 760 m".

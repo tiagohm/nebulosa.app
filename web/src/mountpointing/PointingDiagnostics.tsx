@@ -1,6 +1,6 @@
 import type { PointingModelDetail, PointingRevision, PointingSampleRecord } from 'api'
 import type { ReactNode } from 'react'
-import { MISSING, formatArcsec, formatPercent } from '../format'
+import { formatArcsec, formatPercent, formatUtcDateTime, MISSING } from '../format'
 import { formatPixelScale, formatPositionAngle } from '../platesolving/coordinates'
 import { formatDeclination, formatRightAscension } from '../sky/format'
 import { DataList, DataRow } from '../ui/DataRow'
@@ -79,7 +79,7 @@ export function PointingSampleInspector({ sample, revision }: { readonly sample:
 	return (
 		<DataList>
 			<DataRow label="Point">{`${sample.waypoint + 1}, attempt ${sample.attempt}${sample.role === 'heldOut' ? ', withheld' : ''}`}</DataRow>
-			<DataRow label="Taken">{new Date(sample.time).toISOString().slice(0, 19).replace('T', ' ')}</DataRow>
+			<DataRow label="Taken">{formatUtcDateTime(sample.time)}</DataRow>
 			<DataRow label="Command">{`${formatRightAscension(sample.command.rightAscension)} ${formatDeclination(sample.command.declination)}`}</DataRow>
 			<DataRow label="Solved">{sample.solved ? `${formatRightAscension(sample.solved.rightAscension)} ${formatDeclination(sample.solved.declination)}` : MISSING}</DataRow>
 			<DataRow label="Pier Side">{sample.pierSide}</DataRow>

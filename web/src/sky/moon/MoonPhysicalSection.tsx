@@ -1,10 +1,9 @@
 import type { MoonAppearance } from 'api'
-import { formatDegrees } from '../../format'
+import { formatDegrees, formatKilometers } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { formatApparentSize, formatLocalTime } from '../format'
-import { formatKilometers } from './MoonApsidesSection'
 
 // Lunar Physical Data section of the Moon Inspector: the Moon's age and lunation, distance, libration, the Sun's
 // colongitude, the orientation of its pole and bright limb, and its parallax at the instant the almanac was computed

@@ -1,5 +1,6 @@
 import type { AutoFocusSession, AutoFocusSessionSummary, FocusCurveSeriesKind } from 'api'
 import { useEffect, useRef, useState } from 'react'
+import { formatPixelLength } from '../format'
 
 // Focus Curve of an Auto Focus session, drawn under the viewer: the HFD measured at each focuser position, the
 // curves the server's runner fitted (sampled by the server from its own regressions, never recomputed here),
@@ -141,13 +142,13 @@ function Chart({ session, bounds, width }: ChartProps) {
 					</path>
 				) : (
 					<circle key={measurement.capture} cx={sx(measurement.requestedPosition)} cy={sy(measurement.hfd)} r={3.5} fill="var(--color-ink-100)">
-						<title>{`#${measurement.capture} at ${measurement.requestedPosition}: ${measurement.hfd.toFixed(2)} px, ${measurement.acceptedCount} stars`}</title>
+						<title>{`#${measurement.capture} at ${measurement.requestedPosition}: ${formatPixelLength(measurement.hfd)}, ${measurement.acceptedCount} stars`}</title>
 					</circle>
 				),
 			)}
 			{finalPosition !== undefined && verifiedHfd !== undefined && (
 				<rect x={sx(finalPosition) - 4.5} y={sy(verifiedHfd) - 4.5} width={9} height={9} fill="none" stroke="var(--color-success)" strokeWidth={2}>
-					<title>{`Verified at ${finalPosition}: ${verifiedHfd.toFixed(2)} px`}</title>
+					<title>{`Verified at ${finalPosition}: ${formatPixelLength(verifiedHfd)}`}</title>
 				</rect>
 			)}
 			{finalPosition !== undefined && <path d={`M${sx(finalPosition)},${bottom}l-4,6h8z`} fill="var(--color-success)" />}

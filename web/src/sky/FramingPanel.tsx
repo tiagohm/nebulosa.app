@@ -1,8 +1,10 @@
-import { toDeg } from 'nebulosa/src/math/units/angle'
+import { arcsec } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { roleDefinition } from '../equipment/roles'
+import { formatDegrees } from '../format'
+import { formatPixelScale } from '../platesolving/coordinates'
 import { createOpticalPreset, deleteOpticalPreset, duplicateOpticalPreset, profileState, selectOpticalPreset, setEquipmentRotation, setFramingSource, setFramingVisible, setManualSensor, setGuideTelescopeOptics, setSensorSource, setTelescopeOptics, updateOpticalPreset } from '../profile/profile'
 import type { SkyFramingSettings } from '../profile/schema'
 import { PanelSection } from '../shell/ContextualPanel'
@@ -252,9 +254,9 @@ function FramingResult({ optics, missingCamera, onRotate }: { readonly optics: R
 						{formatApparentSize(framing.width)} × {formatApparentSize(framing.height)}
 					</DataRow>
 					<DataRow label="Field (degrees)">
-						{toDeg(framing.width).toFixed(3)}° × {toDeg(framing.height).toFixed(3)}°
+						{formatDegrees(framing.width, 3)} × {formatDegrees(framing.height, 3)}
 					</DataRow>
-					{framing.scale !== undefined && <DataRow label="Image scale">{framing.scale.toFixed(2)}″/px</DataRow>}
+					{framing.scale !== undefined && <DataRow label="Image scale">{formatPixelScale(arcsec(framing.scale))}</DataRow>}
 					<DataRow label="Effective focal length">{framing.effectiveFocalLength.toFixed(0)} mm</DataRow>
 					<DataRow label="Sensor">
 						{framing.sensorWidth.toFixed(2)} × {framing.sensorHeight.toFixed(2)} mm

@@ -3,7 +3,7 @@ import type { MoffatFitFailureReason } from 'nebulosa/src/imaging/stars/profile.
 import { toArcsec } from 'nebulosa/src/math/units/angle'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatPixelLength, formatDegrees, MISSING } from '../format'
+import { formatDegrees, formatPixelLength, formatPixelPosition, MISSING } from '../format'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { isotropicPixelScaleAt } from '../platesolving/wcs'
 import { activeProfile, profileState, setStarProfileSettings, starProfileSettings } from '../profile/profile'
@@ -113,8 +113,8 @@ function Selection({ documentKey, state, star, settings, unavailable, hidden }: 
 			{unavailable ? <Notice>{unavailable}</Notice> : hidden ? <Notice>The overlays are hidden: show them to select a star.</Notice> : !state && <Notice>Click a star in the image to measure it. It needs no star detection first.</Notice>}
 			{state && (
 				<>
-					<DataRow label="Point">{`${state.request.x.toFixed(1)}, ${state.request.y.toFixed(1)} px`}</DataRow>
-					{star && <DataRow label="Centroid">{`${star.profile.x.toFixed(2)}, ${star.profile.y.toFixed(2)} px`}</DataRow>}
+					<DataRow label="Point">{formatPixelPosition(state.request.x, state.request.y)}</DataRow>
+					{star && <DataRow label="Centroid">{formatPixelPosition(star.profile.x, star.profile.y, 2)}</DataRow>}
 					<Actions>
 						<Button disabled={measuring} onClick={() => void reinspectStar(imagesState, documentKey, settings)}>
 							Analyze Star

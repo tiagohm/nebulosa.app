@@ -2,7 +2,7 @@ import type { CaptureFrameSummary } from 'api'
 import { cn } from 'cn'
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { MISSING, formatExposureTime } from '../format'
+import { formatExposureTime, formatUtcDateTime, MISSING } from '../format'
 import { Icon } from '../ui/Icon'
 import { moveIndex } from '../ui/navigation'
 import { type CameraFrameSelection, selectCameraFrame } from './cameratabs'
@@ -33,7 +33,7 @@ function timeOf(time: number): string {
 
 // Returns the tooltip of a frame: its id, time, exposure, size, file, and availability.
 function frameTooltip(frame: CaptureFrameSummary): string {
-	const lines = [`Frame ${frame.frameId}`, `${new Date(frame.time).toISOString().slice(0, 19).replace('T', ' ')} UTC`]
+	const lines = [`Frame ${frame.frameId}`, formatUtcDateTime(frame.time)]
 	if (frame.acquisition?.exposure !== undefined) lines.push(`Exposure ${formatExposureTime(frame.acquisition.exposure)}`)
 	if (frame.width !== undefined && frame.height !== undefined) lines.push(`${frame.width} × ${frame.height} px`)
 	if (frame.fileName) lines.push(frame.fileName)

@@ -7,7 +7,7 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
-import { MISSING } from '../format'
+import { formatExposureTime, MISSING } from '../format'
 import { cameraTabKey } from '../images/cameratabs'
 import { imagesState, selectImageTool } from '../images/images'
 import { operationsState } from '../operations'
@@ -26,7 +26,7 @@ import { TextInput } from '../ui/TextInput'
 import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { continueFlatWizard, darkFlatGroups, flatWizardFilterName, FLAT_WIZARD_DIAGNOSTIC_LABELS, FLAT_WIZARD_FILTER_STATE_LABELS, FLAT_WIZARD_STATE_LABELS, FLAT_WIZARD_VERDICT_LABELS, flatWizardBlocker, flatWizardRequest, flatWizardRunning, flatWizardRuntime, startFlatWizard, stopFlatWizard } from './flatwizard'
-import { FrameProgress, formatExposure } from './FrameProgress'
+import { FrameProgress } from './FrameProgress'
 import { SessionStateText } from './SessionStateText'
 
 // Contextual panel sections of Flat Wizard, a camera operation of the Images camera tabs: the equipment it uses (the
@@ -316,9 +316,9 @@ function Progress({ session, pending }: ProgressProps) {
 			<DataList>
 				{run && <DataRow label="Filter">{`${run.name} (${session.filter + 1} of ${session.filters.length})`}</DataRow>}
 				{run && <DataRow label="Step">{FLAT_WIZARD_FILTER_STATE_LABELS[run.state]}</DataRow>}
-				{run?.exposure !== undefined ? <DataRow label="Exposure">{formatExposure(run.exposure)}</DataRow> : run?.candidateExposure !== undefined && <DataRow label="Trying">{formatExposure(run.candidateExposure)}</DataRow>}
+				{run?.exposure !== undefined ? <DataRow label="Exposure">{formatExposureTime(run.exposure)}</DataRow> : run?.candidateExposure !== undefined && <DataRow label="Trying">{formatExposureTime(run.candidateExposure)}</DataRow>}
 				{run && <DataRow label="Accepted">{`${run.accepted} of ${run.required}`}</DataRow>}
-				{attempt && <DataRow label="Last Frame">{`${FLAT_WIZARD_VERDICT_LABELS[attempt.verdict]}, ${formatExposure(attempt.exposure)}`}</DataRow>}
+				{attempt && <DataRow label="Last Frame">{`${FLAT_WIZARD_VERDICT_LABELS[attempt.verdict]}, ${formatExposureTime(attempt.exposure)}`}</DataRow>}
 				{attempt?.planes.map((plane) => (
 					<DataRow key={plane.plane} label={`Level ${plane.plane}`}>
 						{plane.median === undefined ? MISSING : `${Math.round(plane.median)} DN${plane.upperClipping === 'present' ? ', clipped' : ''}`}
@@ -341,7 +341,7 @@ function Results({ session, onPrepareDarkFlats }: { readonly session: FlatWizard
 			<DataList>
 				{session.filters.map((run, index) => (
 					<DataRow key={index} label={run.name}>
-						{run.state === 'pending' ? FLAT_WIZARD_FILTER_STATE_LABELS.pending : `${run.accepted}/${run.required} saved${run.rejected + run.inconclusive > 0 ? `, ${run.rejected + run.inconclusive} discarded` : ''}${run.exposure !== undefined ? ` at ${formatExposure(run.exposure)}` : ''}`}
+						{run.state === 'pending' ? FLAT_WIZARD_FILTER_STATE_LABELS.pending : `${run.accepted}/${run.required} saved${run.rejected + run.inconclusive > 0 ? `, ${run.rejected + run.inconclusive} discarded` : ''}${run.exposure !== undefined ? ` at ${formatExposureTime(run.exposure)}` : ''}`}
 					</DataRow>
 				))}
 			</DataList>

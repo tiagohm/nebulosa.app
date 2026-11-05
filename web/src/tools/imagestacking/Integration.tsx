@@ -9,12 +9,11 @@ import { Button } from '../../ui/Button'
 import { NumberInput } from '../../ui/NumberInput'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
-import { bytesText } from '../calibrationlibrary/library'
 // oxfmt-ignore
 import { INTERPOLATION_LABELS, INTERPOLATIONS, memoryText, METHOD_LABELS, METHODS, NORMALIZATION_LABELS, NORMALIZATIONS, PRODUCT_LABELS, PRODUCT_TONES, SIGMA_METHODS, WEIGHTING_LABELS, WEIGHTINGS } from './format'
 // oxfmt-ignore
 import { cancelStackingRun, deleteStackingProduct, imageStackingRuntime, jobEnded, loadStackingPreflight, loadStackingProduct, startStackingRun } from './projects'
-import { MISSING, formatDuration } from '../../format'
+import { formatByteSize, formatDuration, formatUtcDateTime, MISSING } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { Notice } from '../../ui/Notice'
@@ -148,9 +147,9 @@ export function ResultsView() {
 							<Cell>{product.name}</Cell>
 							<Cell>{product.frames}</Cell>
 							<Cell>{formatDuration(product.exposure)}</Cell>
-							<Cell>{bytesText(product.bytes)}</Cell>
+							<Cell>{formatByteSize(product.bytes)}</Cell>
 							<Cell>{`${product.width}×${product.height}×${product.channels}`}</Cell>
-							<Cell>{new Date(product.createdAt).toISOString().slice(0, 16).replace('T', ' ')}</Cell>
+							<Cell>{formatUtcDateTime(product.createdAt, false)}</Cell>
 							<Cell>
 								<StatusBadge tone={PRODUCT_TONES[product.status]} label={PRODUCT_LABELS[product.status]} />
 							</Cell>

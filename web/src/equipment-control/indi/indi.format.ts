@@ -1,5 +1,6 @@
 import type { IndiBlobElement, IndiNumberElement, IndiProperty } from 'api'
 import { formatIndiNumber, parseIndiNumber } from 'nebulosa/src/devices/indi/number'
+import { formatByteSize } from '../../format'
 
 // Pure presentation helpers of the INDI Properties view: the groups of the vectors in driver order, the search,
 // and the text of permissions, kinds, rules, numbers, and BLOB deliveries. Numbers stay in the driver's own units
@@ -88,9 +89,9 @@ export function rangeText(element: IndiNumberElement) {
 	return element.step > 0 ? `${range}, step ${element.step}` : range
 }
 
-// Returns the latest delivery of a BLOB element as text, such as ".fits · 2.1 MB"; undefined before any.
+// Returns the latest delivery of a BLOB element as text, such as ".fits · 2.0 MiB"; undefined before any.
 export function blobText(element: IndiBlobElement) {
 	if (element.format === undefined && element.size === undefined) return undefined
-	const size = element.size === undefined ? undefined : element.size < 1000 ? `${element.size} B` : element.size < 1e6 ? `${(element.size / 1e3).toFixed(1)} kB` : `${(element.size / 1e6).toFixed(1)} MB`
+	const size = element.size === undefined ? undefined : formatByteSize(element.size)
 	return [element.format || 'no format', size].filter(Boolean).join(' · ')
 }

@@ -1,7 +1,7 @@
 import type { SatelliteGroundTrack as SatelliteGroundTrackData } from 'api'
 import { useEffect, useMemo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatGeographic } from '../../format'
+import { formatGeographic, formatKilometers } from '../../format'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
@@ -166,7 +166,7 @@ export function SatelliteGroundTrack({ observer }: { readonly observer?: SkyObse
 					<div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-300">
 						<span>{following ? 'Now, following the real time' : 'Chosen instant'}</span>
 						<span className="font-mono text-ink-200 tabular-nums">{formatGeographic(point.subpoint.latitude, point.subpoint.longitude)}</span>
-						<span>Height {point.heightKm.toFixed(0)} km</span>
+						<span>Height {formatKilometers(point.heightKm)}</span>
 						<span>{SHADOW_LABELS[point.shadow]}</span>
 						{inside !== undefined && <span>{inside ? "Above the observer's horizon" : "Below the observer's horizon"}</span>}
 						<span>

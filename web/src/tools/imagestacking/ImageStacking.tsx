@@ -17,14 +17,14 @@ import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
-import { bytesText, EVIDENCE_LABELS, exposureText, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES } from '../calibrationlibrary/library'
+import { EVIDENCE_LABELS, exposureText, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES } from '../calibrationlibrary/library'
 import { CompositionView } from './Composition'
 import { ALL_CANDIDATES, candidateChecked, candidateText, candidateUsable, committedCounts, type ImportSelection, NO_CANDIDATES, withCandidate, metricText, registrationText, ROLE_LABELS, SECTION_LABELS, STACKING_SECTIONS, type StackingSection } from './format'
 import { IntegrationView, ResultsView } from './Integration'
 import { CalibrationView, QualityView } from './Planning'
 // oxfmt-ignore
 import { cancelStackingImport, commitStackingImport, createStackingProject, deleteStackingProject, imageStackingRuntime, jobEnded, loadStackingCandidates, loadStackingFrame, loadStackingFrames, loadStackingProject, refreshStackingProject, removeStackingFrame, renameStackingProject, STACKING_PAGE_SIZE, type StackingFrameFilter, startStackingImport, updateStackingFrame } from './projects'
-import { MISSING, formatExposureTime, formatDuration } from '../../format'
+import { formatByteSize, formatDuration, formatExposureTime, formatUtcDateTime, MISSING } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { Notice } from '../../ui/Notice'
@@ -349,7 +349,7 @@ function FramesView({ selected, onSelect, onRemoved }: { readonly selected?: str
 						<Cell>{frame.metadata.filter.value ?? 'None'}</Cell>
 						<Cell>{exposureText(frame.metadata)}</Cell>
 						<Cell>{frame.object ?? MISSING}</Cell>
-						<Cell>{frame.observedAt === undefined ? MISSING : new Date(frame.observedAt).toISOString().slice(0, 16).replace('T', ' ')}</Cell>
+						<Cell>{frame.observedAt === undefined ? MISSING : formatUtcDateTime(frame.observedAt, false)}</Cell>
 						<Cell>{frame.excluded ? <StatusBadge tone="muted" label="Left Out" /> : <StatusBadge tone={SOURCE_STATUS_TONES[frame.status]} label={SOURCE_STATUS_LABELS[frame.status]} />}</Cell>
 						<Cell>
 							<div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
@@ -405,7 +405,7 @@ function FramePanel({ onRemoved }: { readonly onRemoved: () => void }) {
 					</ConfirmButton>
 				</Actions>
 				<DataRow label="Role">{ROLE_LABELS[frame.role]}</DataRow>
-				<DataRow label="Size">{bytesText(frame.bytes)}</DataRow>
+				<DataRow label="Size">{formatByteSize(frame.bytes)}</DataRow>
 				<DataRow label="Image">{`${metadata.width}×${metadata.height}×${metadata.channels}, BITPIX ${metadata.bitpix}${metadata.cfa ? `, ${metadata.cfa}` : ''}`}</DataRow>
 				<EvidencedReadout label="Filter" value={metadata.filter} />
 				<DataRow label="Target">{frame.object ?? 'Unknown'}</DataRow>
@@ -431,7 +431,7 @@ function FramePanel({ onRemoved }: { readonly onRemoved: () => void }) {
 						</>
 					)}
 					<DataRow label="Registration">{registrationText(frame.analysis.registration)}</DataRow>
-					<DataRow label="Measured">{new Date(frame.analysis.analyzedAt).toISOString().slice(0, 16).replace('T', ' ')}</DataRow>
+					<DataRow label="Measured">{formatUtcDateTime(frame.analysis.analyzedAt, false)}</DataRow>
 				</CollapsibleSection>
 			)}
 		</>
@@ -570,7 +570,7 @@ function ImportDialog({ projectId, onClose }: { readonly projectId: string; read
 				)}
 				{jobId !== undefined && !ended && (
 					<div className="flex items-center gap-3">
-						<Notice>{`Reading headers · ${job?.found ?? 0} files · ${bytesText(job?.bytes ?? 0)}`}</Notice>
+						<Notice>{`Reading headers · ${job?.found ?? 0} files · ${formatByteSize(job?.bytes ?? 0)}`}</Notice>
 						<Button variant="secondary" onClick={() => void cancelStackingImport(imageStackingRuntime, jobId)}>
 							Cancel
 						</Button>

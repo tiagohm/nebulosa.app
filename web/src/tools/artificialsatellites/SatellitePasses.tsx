@@ -1,6 +1,6 @@
 import type { SatellitePassPrediction } from 'api'
 import { useSnapshot } from 'valtio'
-import { formatDegrees } from '../../format'
+import { formatDegrees, formatKilometers } from '../../format'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
@@ -153,7 +153,7 @@ function PassRow({ pass, index, timeZone }: PassRowProps) {
 			</Cell>
 			<Cell numeric>{formatDegrees(pass.end.azimuth, 0)}</Cell>
 			<Cell numeric>{minutes.toFixed(1)} min</Cell>
-			<Cell numeric>{pass.culmination.rangeKm.toFixed(0)} km</Cell>
+			<Cell numeric>{formatKilometers(pass.culmination.rangeKm)}</Cell>
 			<Cell>{pass.visible.length > 0 ? 'Visible' : pass.culminationSunAltitude > 0 ? 'Daylight' : SHADOW_LABELS[pass.culminationShadow]}</Cell>
 		</Row>
 	)

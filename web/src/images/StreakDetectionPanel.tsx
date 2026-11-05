@@ -4,7 +4,7 @@ import type { Streak } from 'nebulosa/src/imaging/analysis/streak/types'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
-import { formatDuration, MISSING, formatSignificant, formatDegrees, formatPercent, formatExposureTime } from '../format'
+import { formatDegrees, formatDuration, formatExposureTime, formatPercent, formatPixelLength, formatPixelPosition, formatSignificant, MISSING } from '../format'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState, setStreakDetectionSettings, streakDetectionSettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -308,15 +308,15 @@ function SelectedStreak({ streak, classification }: SelectedStreakProps) {
 		<CollapsibleSection id="images.streak-detection.selected-streak" title="Selected Streak">
 			{streak ? (
 				<>
-					<DataRow label="Start">{formatPoint(streak.start)}</DataRow>
-					<DataRow label="End">{formatPoint(streak.end)}</DataRow>
-					<DataRow label="Center">{formatPoint(streak.center)}</DataRow>
+					<DataRow label="Start">{formatPixelPosition(streak.start.x, streak.start.y)}</DataRow>
+					<DataRow label="End">{formatPixelPosition(streak.end.x, streak.end.y)}</DataRow>
+					<DataRow label="Center">{formatPixelPosition(streak.center.x, streak.center.y)}</DataRow>
 					<DataRow label="Length">{streak.length.toFixed(1)} px</DataRow>
-					<DataRow label="Width (FWHM)">{streak.width.toFixed(2)} px</DataRow>
+					<DataRow label="Width (FWHM)">{formatPixelLength(streak.width)}</DataRow>
 					<DataRow label="Angle">{formatDegrees(streak.angle)}</DataRow>
 					<DataRow label="SNR">{streak.snr === undefined ? MISSING : streak.snr.toFixed(1)}</DataRow>
 					<DataRow label="Linearity">{streak.linearity.toFixed(3)}</DataRow>
-					<DataRow label="RMS residual">{streak.rmsResidual.toFixed(2)} px</DataRow>
+					<DataRow label="RMS residual">{formatPixelLength(streak.rmsResidual)}</DataRow>
 					<DataRow label="Coverage">{formatPercent(streak.coverage)}</DataRow>
 					<DataRow label="Support">{streak.supportPixels} px</DataRow>
 					<DataRow label="Cut by the border">{streak.clippedAtBorder ? 'Yes' : 'No'}</DataRow>
@@ -364,9 +364,4 @@ function Classification({ classification }: { readonly classification?: StreakCl
 			)}
 		</>
 	)
-}
-
-// Returns a point in pixels with one decimal.
-function formatPoint({ x, y }: Streak['start']): string {
-	return `${x.toFixed(1)}, ${y.toFixed(1)} px`
 }

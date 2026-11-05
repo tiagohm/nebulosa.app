@@ -41,7 +41,7 @@ describe('format', () => {
 
 	test('a BLOB shows its latest delivery or nothing', () => {
 		expect(blobText({ name: 'CCD1' })).toBeUndefined()
-		expect(blobText({ name: 'CCD1', format: '.fits', size: 2_100_000 })).toBe('.fits · 2.1 MB')
+		expect(blobText({ name: 'CCD1', format: '.fits', size: 2_100_000 })).toBe('.fits · 2.0 MiB')
 		expect(blobText({ name: 'CCD1', format: '.txt', size: 5 })).toBe('.txt · 5 B')
 	})
 })

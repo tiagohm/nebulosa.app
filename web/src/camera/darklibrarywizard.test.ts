@@ -7,7 +7,6 @@ import {
 	continueDarkLibraryWizard,
 	darkLibraryWizardBlocker,
 	darkLibraryWizardCapture,
-	darkLibraryWizardDuration,
 	darkLibraryWizardEstimate,
 	darkLibraryWizardExposureLeft,
 	darkLibraryWizardRequest,
@@ -269,8 +268,4 @@ test('exposure left counts the missing frames, less what the frame being exposed
 	]
 	expect(darkLibraryWizardExposureLeft({ groups, state: 'stabilizing' })).toBe(300)
 	expect(darkLibraryWizardExposureLeft({ groups, state: 'exposing', exposure: { elapsedTime: 45e6, remainingTime: 15e6, progress: 75 } })).toBe(255)
-})
-
-test('durations truncate minutes and round seconds', () => {
-	expect([0.02, 30, 90, 150, 599.6, 3599.6, 5400].map(darkLibraryWizardDuration)).toEqual(['0.02 s', '30 s', '1 min 30 s', '2 min 30 s', '10 min 0 s', '1 h 0 min', '1 h 30 min'])
 })

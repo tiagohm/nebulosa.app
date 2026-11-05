@@ -9,12 +9,11 @@ import { NumberInput } from '../../ui/NumberInput'
 import { Select } from '../../ui/Select'
 import { Slider } from '../../ui/Slider'
 import { StatusBadge } from '../../ui/StatusBadge'
-import { bytesText } from '../calibrationlibrary/library'
 import { PRODUCT_LABELS, PRODUCT_TONES } from './format'
 import { COMPOSITION_PRESETS, CUSTOM_PRESET, resolvePreset, weightOf, withoutSource, withWeight } from './presets'
 // oxfmt-ignore
 import { cancelStackingComposition, deleteStackingComposite, imageStackingRuntime, jobEnded, loadCompositionPreview, loadCompositionValidation, loadStackingComposite, startStackingComposition } from './projects'
-import { formatPercent } from '../../format'
+import { formatByteSize, formatPercent, formatUtcDateTime } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { Notice } from '../../ui/Notice'
@@ -49,7 +48,7 @@ function latestComposition(jobs: Readonly<Record<string, StackingJobSummary>>, p
 
 // Text of a master in a choice list.
 function masterLabel(product: StackingProductSummary) {
-	return `${product.name} · ${new Date(product.createdAt).toISOString().slice(0, 16).replace('T', ' ')}`
+	return `${product.name} · ${formatUtcDateTime(product.createdAt, false)}`
 }
 
 // Preset, mix, preview, and the composites of the project.
@@ -252,9 +251,9 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 					{items.map((composite) => (
 						<Row key={composite.compositeId}>
 							<Cell>{composite.composition.preset}</Cell>
-							<Cell>{bytesText(composite.bytes)}</Cell>
+							<Cell>{formatByteSize(composite.bytes)}</Cell>
 							<Cell>{`${composite.width}×${composite.height} at ${composite.left}, ${composite.top}`}</Cell>
-							<Cell>{new Date(composite.createdAt).toISOString().slice(0, 16).replace('T', ' ')}</Cell>
+							<Cell>{formatUtcDateTime(composite.createdAt, false)}</Cell>
 							<Cell>
 								<StatusBadge tone={PRODUCT_TONES[composite.status]} label={PRODUCT_LABELS[composite.status]} />
 							</Cell>

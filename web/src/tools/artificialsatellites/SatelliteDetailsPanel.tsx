@@ -1,6 +1,6 @@
 import type { SatelliteQuality } from 'api'
 import { useSnapshot } from 'valtio'
-import { formatDegrees } from '../../format'
+import { formatDegrees, formatKilometers } from '../../format'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
@@ -98,8 +98,8 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 							<DataRow label="RA (J2000)">{formatRightAscension(p.rightAscensionJ2000)}</DataRow>
 							<DataRow label="Dec (J2000)">{formatDeclination(p.declinationJ2000)}</DataRow>
 							<DataRow label="Constellation">{p.constellation}</DataRow>
-							<DataRow label="Distance">{`${p.distanceKm.toFixed(0)} km`}</DataRow>
-							<DataRow label="Height">{`${p.heightKm.toFixed(1)} km`}</DataRow>
+							<DataRow label="Distance">{formatKilometers(p.distanceKm)}</DataRow>
+							<DataRow label="Height">{formatKilometers(p.heightKm, 1)}</DataRow>
 							<DataRow label="Below">{`${formatDegrees(p.subpointLatitude)}, ${formatDegrees(p.subpointLongitude)}`}</DataRow>
 							<QualityRow quality={position.quality} />
 						</DataList>
@@ -136,8 +136,8 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 						<DataRow label="Arg. of perigee">{formatDegrees(orbit.argumentOfPerigee, 4)}</DataRow>
 						<DataRow label="Mean anomaly">{formatDegrees(orbit.meanAnomaly, 4)}</DataRow>
 						<DataRow label="B*">{orbit.bstar.toExponential(4)}</DataRow>
-						<DataRow label="Apogee / perigee (derived)">{`${orbit.apogeeHeightKm.toFixed(0)} / ${orbit.perigeeHeightKm.toFixed(0)} km`}</DataRow>
-						{object?.apogeeKm !== undefined && object.perigeeKm !== undefined && <DataRow label="Apogee / perigee (catalog)">{`${object.apogeeKm} / ${object.perigeeKm} km`}</DataRow>}
+						<DataRow label="Apogee / perigee (derived)">{`${formatKilometers(orbit.apogeeHeightKm)} / ${formatKilometers(orbit.perigeeHeightKm)}`}</DataRow>
+						{object?.apogeeKm !== undefined && object.perigeeKm !== undefined && <DataRow label="Apogee / perigee (catalog)">{`${formatKilometers(object.apogeeKm)} / ${formatKilometers(object.perigeeKm)}`}</DataRow>}
 						{object?.periodMinutes !== undefined && <DataRow label="Period (catalog)">{`${object.periodMinutes} min`}</DataRow>}
 						<DataRow label="Model">{orbit.model === 'deepSpace' ? 'SDP4 (deep space)' : 'SGP4 (near Earth)'}</DataRow>
 					</DataList>

@@ -1,11 +1,11 @@
 import type { CaptureFrameOrigin, CaptureFrameSummary, ImageAcquisition, ImageInfo, ImageProvenance, LiveStackingProvenanceStack, RenderResult, StarDetectionOrigin } from 'api'
 import { useSnapshot } from 'valtio'
 import { autoFocusFrameFocus, autoFocusRuntime } from '../camera/autofocus'
-import { DARV_AXIS_LABELS, DARV_DIRECTION_LABELS, DARV_STATUS_LABELS, darvFrameMeasurement, darvRuntime } from '../camera/darv'
+import { DARV_AXIS_LABELS, DARV_DIRECTION_LABELS, DARV_STATUS_LABELS, darvFrameMeasurement, darvRuntime, formatDarvDrift } from '../camera/darv'
 import { liveAcquisitionLabel, liveCalibrationLabel } from '../camera/livestacking'
 import { tppaFrameRole, tppaRuntime } from '../camera/tppa'
 import { connectionState } from '../connection/connection'
-import { formatDuration, MISSING } from '../format'
+import { formatDuration, formatPixelLength, MISSING } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -192,7 +192,7 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 							</span>
 						</DataRow>
 						<DataRow label="Measurement">{drift ? `${DARV_AXIS_LABELS[drift.request.axis]}, ${DARV_DIRECTION_LABELS[drift.request.direction]} first, ${drift.request.legDuration} s legs` : MISSING}</DataRow>
-						<DataRow label="Result">{drift?.result ? (drift.result.driftMagnitude !== undefined ? `${drift.result.driftMagnitude.toFixed(3)} px/s` : DARV_STATUS_LABELS[drift.result.status]) : MISSING}</DataRow>
+						<DataRow label="Result">{drift?.result ? (drift.result.driftMagnitude !== undefined ? formatDarvDrift(drift.result.driftMagnitude) : DARV_STATUS_LABELS[drift.result.status]) : MISSING}</DataRow>
 					</>
 				)}
 				<DataRow label="Frame of session">#{frame.generation}</DataRow>
@@ -241,7 +241,7 @@ function Quality({ imageId }: QualityProps) {
 	return (
 		<CollapsibleSection id="images.inspector.quality" title="Quality">
 			<DataRow label="State">{quality.status === 'failed' ? <span className="text-danger">{QUALITY_LABELS.failed}</span> : QUALITY_LABELS[quality.status]}</DataRow>
-			{measured && <DataRow label="HFD (px)">{quality.hfdPx === undefined ? MISSING : quality.hfdPx.toFixed(2)}</DataRow>}
+			{measured && <DataRow label="HFD">{formatPixelLength(quality.hfdPx)}</DataRow>}
 			{measured && <DataRow label="Stars (accepted / detected)">{`${quality.acceptedStars ?? 0} / ${quality.detectedStars ?? 0}`}</DataRow>}
 			{quality.provider && <DataRow label="Detector">{PROVIDER_LABELS[quality.provider]}</DataRow>}
 			{quality.origin && <DataRow label="Measured by">{MEASURED_BY_LABELS[quality.origin]}</DataRow>}

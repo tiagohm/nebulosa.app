@@ -1,4 +1,5 @@
 import type { AstroWeatherForecast, AstroWeatherNight, AstroWeatherSource } from 'api'
+import { formatTemperature } from '../../format'
 import type { AstroWeatherMode } from '../../profile/schema'
 import { Icon, type IconName } from '../../ui/Icon'
 import { Notice } from '../../ui/Notice'
@@ -109,7 +110,7 @@ export function ForecastSummary({ forecast, loaded, night, evaluation, mode, tim
 				<Fact label="Transparency class" value={rangeText(facts.transparency)} note="1 best, 8 worst" />
 				<Fact label="Precipitation" value={rainText(facts)} note="Chance, modeled amount" />
 				<Fact label="Strongest gust" value={facts.windGust === undefined ? undefined : `${facts.windGust} km/h`} />
-				<Fact label="Dew margin" value={facts.dewMargin === undefined ? undefined : `${facts.dewMargin.toFixed(1)} °C`} note="Smallest, air above dew point" />
+				<Fact label="Dew margin" value={facts.dewMargin === undefined ? undefined : formatTemperature(facts.dewMargin)} note="Smallest, air above dew point" />
 			</div>
 			{notices.length > 0 && (
 				<ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs leading-4 text-ink-200">

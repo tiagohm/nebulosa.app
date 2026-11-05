@@ -2,7 +2,8 @@ import { toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 
 // Display formats shared by every screen for quantities that are not tied to one feature: fixed and signed numbers,
 // percentages, angles in degrees, arcminutes, and arcseconds, geographic positions, temperatures, lengths in pixels
-// with their sky size, exposure times, durations, elapsed clocks, byte sizes, and measurements of a wide dynamic range.
+// with their sky size, positions in an image, distances in kilometers, exposure times, durations, elapsed clocks, instants
+// in UTC, byte sizes, and measurements of a wide dynamic range.
 // Each takes the value in its computational unit (radians, seconds, °C, pixels, bytes) and returns text only, so a
 // value is never rounded before it is used elsewhere. The decimals are a presentation choice, never a claim of
 // accuracy; a value that rounds to zero never shows a minus sign, and a value that is not finite is shown as MISSING,
@@ -153,4 +154,29 @@ export function formatByteSize(bytes: number) {
 	}
 
 	return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`
+}
+
+// Returns a position in an image, in pixels from its top-left corner, with `digits` decimals (1 by default; 2 for a
+// fitted centroid): "1203.4, 88.0 px", or MISSING when either coordinate is not finite.
+export function formatPixelPosition(x: number, y: number, digits: number = 1) {
+	const px = formatFixed(x, digits)
+	const py = formatFixed(y, digits)
+	return px === MISSING || py === MISSING ? MISSING : `${px}, ${py} px`
+}
+
+// Returns a distance or a length in kilometers with thousands separators and `digits` decimals (none by default):
+// "384,400 km", "12.5 km", or MISSING when it is not finite.
+export function formatKilometers(km: number, digits: number = 0) {
+	const text = formatFixed(km, digits)
+	return text === MISSING ? MISSING : `${Number(text).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })} km`
+}
+
+// Returns an instant (Unix milliseconds) in UTC to the second, or to the minute when `seconds` is false, with the zone
+// named: "2026-11-05 14:23:05 UTC", "2026-11-05 14:23 UTC", or MISSING when it is not finite.
+export function formatUtcDateTime(time: number, seconds: boolean = true) {
+	if (!Number.isFinite(time)) return MISSING
+	return `${new Date(time)
+		.toISOString()
+		.slice(0, seconds ? 19 : 16)
+		.replace('T', ' ')} UTC`
 }

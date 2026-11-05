@@ -1,12 +1,14 @@
 import type { CaptureSnoop, DeviceSummary, GuidingCommand, GuidingSessionSummary } from 'api'
+import { arcsec } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { formatDegrees, formatPixelLength } from '../format'
+import { formatDegrees, formatPixelLength, formatPixelPosition } from '../format'
 import { operationsState } from '../operations'
+import { formatPixelScale } from '../platesolving/coordinates'
 import { activeProfile, exposureSettings, guidingSettings, profileState, setGuidingSettings, starDetectionSettings } from '../profile/profile'
 import { type CameraIdentity, GUIDING_MAXIMUM_PULSE, GUIDING_MAXIMUM_SEARCH_REGION, GUIDING_MINIMUM_PULSE, GUIDING_MINIMUM_SEARCH_REGION, type GuidingDitherMode, type GuidingSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -148,7 +150,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 					</DataRow>
 					<DataRow label="Guide Output">{guideOutput ? <DeviceLink device={guideOutput.device} fallback="Not assigned" /> : 'Guide Camera only'}</DataRow>
 					<DataRow label="Guide Focal Length">{focalLength !== undefined ? `${Number(focalLength.toFixed(1))} mm` : 'Not set'}</DataRow>
-					{session?.pixelScale !== undefined && <DataRow label="Pixel Scale">{`${session.pixelScale.toFixed(2)}"/px`}</DataRow>}
+					{session?.pixelScale !== undefined && <DataRow label="Pixel Scale">{formatPixelScale(arcsec(session.pixelScale))}</DataRow>}
 				</DataList>
 				{!running && outputAvailability && outputAvailability.status !== 'ready' && outputAvailability.status !== 'busy' && <Notice>{outputAvailability.message}</Notice>}
 				{!running && focalLength === undefined && <Notice>Enter the Guide Telescope in Equipment Setup for the pixel scale of the RMS in arcseconds and the calibration step.</Notice>}
@@ -304,7 +306,7 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 				</DataRow>
 				{session.state === 'calibrating' && session.calibrating && <DataRow label="Step">{GUIDING_CALIBRATION_PHASE_LABELS[session.calibrating.phase]}</DataRow>}
 				{session.settling && <DataRow label="Settling">{session.dithering ? 'After a dither' : 'Yes'}</DataRow>}
-				{session.lockPosition && <DataRow label="Lock (px)">{`${session.lockPosition[0].toFixed(1)}, ${session.lockPosition[1].toFixed(1)}`}</DataRow>}
+				{session.lockPosition && <DataRow label="Lock">{formatPixelPosition(session.lockPosition[0], session.lockPosition[1])}</DataRow>}
 				{calibration && (
 					<>
 						<DataRow label="RA Rate">{`${formatRate(calibration.raRate)} at ${formatDegrees(calibration.raAngle, 1)}`}</DataRow>

@@ -139,6 +139,12 @@ export function darvMeasurementRequest(settings: Readonly<DarvSettings>, exposur
 	return { capture: capture satisfies DarvCaptureSettings, axis: settings.axis, direction: settings.direction, slewRate, legDuration: settings.legDuration }
 }
 
+// Returns the separation drift of a measurement in pixels per second: three decimals, or exponential notation below
+// 0.01 px/s, so a nearly aligned axis never reads as no drift at all: "0.123 px/s", "4.2e-3 px/s".
+export function formatDarvDrift(drift: number) {
+	return `${drift < 0.01 ? drift.toExponential(1) : drift.toFixed(3)} px/s`
+}
+
 // Returns whether a session is measuring.
 export function darvMeasuring(session: Pick<DarvSessionSummary, 'state'> | undefined): boolean {
 	return session?.state === 'measuring'

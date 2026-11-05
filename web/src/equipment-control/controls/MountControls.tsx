@@ -1,7 +1,7 @@
 import type { MountCoordinate, MountState } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees } from '../../format'
+import { formatDegrees, formatUtcDateTime } from '../../format'
 import { connectionCameraTab } from '../../images/cameratabs'
 import { imagesState, selectImage, selectImageTool } from '../../images/images'
 import { activeProfile, activeSetup, profileState } from '../../profile/profile'
@@ -165,7 +165,7 @@ export function MountControls({ device }: InterfaceProps) {
 				<DataRow label="Latitude">{formatDeclination(mount.site.latitude)}</DataRow>
 				<DataRow label="Longitude">{formatDeclination(mount.site.longitude)}</DataRow>
 				<DataRow label="Elevation">{`${mount.site.elevation.toFixed(0)} m`}</DataRow>
-				<DataRow label="Time (UTC)">{mount.time.utc > 0 ? new Date(mount.time.utc).toISOString().replace('T', ' ').slice(0, 19) : 'Not reported'}</DataRow>
+				<DataRow label="Time">{mount.time.utc > 0 ? formatUtcDateTime(mount.time.utc) : 'Not reported'}</DataRow>
 				<Actions>
 					{observer && (
 						<ConfirmButton

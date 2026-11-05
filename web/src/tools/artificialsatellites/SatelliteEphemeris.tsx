@@ -1,5 +1,5 @@
 import { useSnapshot } from 'valtio'
-import { MISSING, formatDegrees } from '../../format'
+import { formatDegrees, formatKilometers, MISSING } from '../../format'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
@@ -83,9 +83,9 @@ export function SatelliteEphemeris({ observer }: { readonly observer?: SkyObserv
 								<Cell>{formatDeclination(row.declination)}</Cell>
 								<Cell numeric>{row.azimuth === undefined ? MISSING : formatDegrees(row.azimuth, 1)}</Cell>
 								<Cell numeric>{row.altitude === undefined ? MISSING : formatDegrees(row.altitude, 1)}</Cell>
-								<Cell numeric>{row.distanceKm.toFixed(0)} km</Cell>
+								<Cell numeric>{formatKilometers(row.distanceKm)}</Cell>
 								<Cell numeric>{row.rangeRateKmPerSecond === undefined ? MISSING : `${row.rangeRateKmPerSecond.toFixed(2)} km/s`}</Cell>
-								<Cell numeric>{row.heightKm.toFixed(0)} km</Cell>
+								<Cell numeric>{formatKilometers(row.heightKm)}</Cell>
 								<Cell>{SHADOW_LABELS[row.shadow]}</Cell>
 							</Row>
 						))}

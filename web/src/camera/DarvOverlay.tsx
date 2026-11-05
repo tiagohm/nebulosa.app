@@ -3,7 +3,7 @@ import { useSnapshot } from 'valtio'
 import type { ImageDocument } from '../images/images'
 import type { OverlayView, Point } from '../viewer/transform'
 import { cameraKey } from './capture'
-import { darvRuntime } from './darv'
+import { darvRuntime, formatDarvDrift } from './darv'
 
 // Trails a DARV analysis paired over the frame they were found on: the outbound and the return leg of every star, with
 // the outer ends and the turn marked, so the operator sees which trails the drift came from. Trails left out of the
@@ -45,7 +45,7 @@ export function DarvOverlay({ trails, view }: DarvOverlayProps) {
 				const [start, turn, returnStart, end] = [trail.start, trail.turn, trail.returnStart, trail.end].map(viewer)
 				return (
 					<g key={`${trail.start.x},${trail.start.y}`}>
-						<title>{`${trail.driftMagnitude.toFixed(3)} px/s${trail.clipped ? ', clipped' : ''}${trail.unresolved ? ', unresolved' : ''}`}</title>
+						<title>{`${formatDarvDrift(trail.driftMagnitude)}${trail.clipped ? ', clipped' : ''}${trail.unresolved ? ', unresolved' : ''}`}</title>
 						<line x1={start.x} y1={start.y} x2={turn.x} y2={turn.y} stroke="var(--color-accent)" strokeDasharray={dashed} vectorEffect="non-scaling-stroke" />
 						<line x1={returnStart.x} y1={returnStart.y} x2={end.x} y2={end.y} stroke="var(--color-success)" strokeDasharray={dashed} vectorEffect="non-scaling-stroke" />
 						<circle cx={start.x} cy={start.y} r={MARKER_RADIUS * unit} stroke="var(--color-ink-100)" vectorEffect="non-scaling-stroke" />

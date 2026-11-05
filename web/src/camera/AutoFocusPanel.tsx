@@ -5,7 +5,7 @@ import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import { type RoleDevice, useRoleDevice } from '../equipment/useEquipment'
-import { formatClockDuration, MISSING } from '../format'
+import { formatClockDuration, formatPixelLength, MISSING } from '../format'
 import { operationsState } from '../operations'
 import { activeProfile, autoFocusSettings, exposureSettings, profileState, setAutoFocusSettings, starDetectionSettings } from '../profile/profile'
 import type { AutoFocusSettings, CameraIdentity } from '../profile/schema'
@@ -194,12 +194,12 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 				<DataRow label="Focuser">{position === undefined ? MISSING : `${position}${moving ? ' (moving)' : ''}`}</DataRow>
 				{session.initialPosition !== undefined && <DataRow label="Start Position">{session.initialPosition}</DataRow>}
 				<DataRow label="Samples">{session.measurementCount}</DataRow>
-				{last && <DataRow label="Last HFD">{last.hfd === undefined ? `— at ${last.requestedPosition}` : `${last.hfd.toFixed(2)} px at ${last.requestedPosition}`}</DataRow>}
+				{last && <DataRow label="Last HFD">{`${formatPixelLength(last.hfd)} at ${last.requestedPosition}`}</DataRow>}
 				{last && <DataRow label="Stars">{`${last.acceptedCount} / ${last.detectedCount}`}</DataRow>}
 				<DataRow label="Estimated Best">{session.estimatedPosition ?? MISSING}</DataRow>
-				{session.estimatedHfd !== undefined && <DataRow label="Fitted HFD">{`${session.estimatedHfd.toFixed(2)} px`}</DataRow>}
+				{session.estimatedHfd !== undefined && <DataRow label="Fitted HFD">{formatPixelLength(session.estimatedHfd)}</DataRow>}
 				<DataRow label="Final Position">{session.finalPosition ?? MISSING}</DataRow>
-				<DataRow label="Verification">{session.verification === 'measured' && session.verifiedHfd !== undefined ? `${session.verifiedHfd.toFixed(2)} px measured` : session.verification === 'pending' ? 'Pending' : VERIFICATION_LABELS[session.verification]}</DataRow>
+				<DataRow label="Verification">{session.verification === 'measured' && session.verifiedHfd !== undefined ? `${formatPixelLength(session.verifiedHfd)} measured` : session.verification === 'pending' ? 'Pending' : VERIFICATION_LABELS[session.verification]}</DataRow>
 				<DataRow label="Elapsed">{formatClockDuration(((session.endedAt ?? now) - session.startedAt) / 1000)}</DataRow>
 			</DataList>
 			{last && last.warnings.length > 0 && <Notice>{last.warnings.join(' ')}</Notice>}

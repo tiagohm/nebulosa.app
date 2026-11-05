@@ -639,8 +639,10 @@ export class LiveStackingEngine {
 	}
 }
 
-// Time an integration or an export may take on the worker before it is deemed stalled, in milliseconds; a frame of a
-// large sensor is read, calibrated, measured, and resampled in seconds.
+// Time an integration or an export may take on the worker before it is deemed stalled, in milliseconds. On an Intel Core
+// i5-6500T (4 cores at 2.5 GHz) the slowest measured request was 10.5 s, a 26 MP mono frame calibrated with a dark and a
+// flat (about 12 s extrapolated for a 26 MP mosaic), and an export of a 26 MP mono stack took 5.6 s (about 10 s for a
+// color one). A false stall loses every stack of the session, so it leaves ten times that for slower hosts and disks.
 export const INTEGRATION_STALL_TIMEOUT = 120000
 
 // What a stack export writes: one cohort, or a composition of cohorts of one field.

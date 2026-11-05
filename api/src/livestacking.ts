@@ -56,20 +56,39 @@ import type { LiveProductCohort, LiveStackingProduct, LiveStackingStore } from '
 // documents of the image store, made on demand at most every SNAPSHOT_INTERVAL per view and display-only: stretching
 // them never changes a stack. Events carry a compact summary with the epoch of the service and a revision that only grows.
 
-// Preview-only frames of a camera queued in memory, the one being integrated included, before its capture waits.
+// The limits below were chosen from synthetic 16-bit star fields calibrated with a dark and a flat, measured with Bun
+// 1.4.4 on an Intel Core i5-6500T (4 cores at 2.5 GHz, 8 GB), a slow host for this work. A frame integrated on the worker
+// of its session (read, calibrate, detect stars, register, accumulate) takes 0.45 s for 1 MP mono (1280 × 800), 10.0 s
+// for 26 MP mono (6248 × 4176), and 5.5 s for an 11.7 MP RGGB mosaic (4144 × 2822, debayered to color), so about 12 s
+// for a 26 MP mosaic; star detection is 65 to 85% of it.
+
+// Preview-only frames of a camera queued in memory, the one being integrated included, before its capture waits. One
+// frame integrating and one waiting keep the camera busy whenever a frame integrates faster than the next one is exposed
+// and downloaded; a deeper queue only absorbs bursts, never raises throughput, and costs the bytes of one more frame (2
+// MiB at 1 MP, 50 MiB at 26 MP), which count against the memory budget.
 export const MAX_PENDING_PAYLOADS = 2
 
-// Saved frames of a camera waiting to be integrated; beyond it a frame fails with backlogLimit.
+// Saved frames of a camera waiting to be integrated; beyond it a frame fails with backlogLimit. A queued saved frame holds
+// its path and record, never its pixels, so the limit bounds how far the stacks lag behind the capture rather than
+// memory: 1000 frames are 7.5 minutes of integration at 1 MP and 2.8 hours at 26 MP.
 export const MAX_SAVED_BACKLOG = 1000
 
 // Memory every Live Stacking session together may retain for fields, stacks, candidates, masters, and queued frames, in
-// bytes. A starting value until it is measured on real camera workloads: a 26-megapixel mono stack retains about 1.2 GB.
+// bytes. What an engine retains matches liveStackerMemoryBytes with its field reference and masters exactly: a 26 MP mono
+// field retains 1170 MiB for its first stack (846 MiB of stack, 100 MiB of reference, 224 MiB of dark and flat) and 846
+// MiB for each other filter, and a 26 MP mosaic 2364 MiB for its first color stack (1060 MiB measured at 11.7 MP). 4 GiB
+// holds four 26 MP mono filters of one field (3.6 GiB), or one 26 MP color stack with the candidates of a new field. It
+// bounds retained memory only: the transient work of a 26 MP frame, snapshot, or composition peaked 1.0 to 1.4 GiB above
+// it, so a full budget still fits a host of 8 GB.
 export const DEFAULT_LIVE_STACKING_MEMORY_BUDGET = 4 * 1024 ** 3
 
 // Frames whose outcome a session remembers, the newest first; older ones only count.
 export const FRAME_HISTORY = 500
 
-// Shortest time between two snapshots of one view, in milliseconds.
+// Shortest time between two snapshots of one view, in milliseconds. A view is taken again only once a frame changed its
+// stacks, on the worker between two integrations: a snapshot of a mono stack takes 20 ms at 1 MP and 0.45 s at 26 MP, a
+// composition of two stacks with a luminance 0.13 s and 3.2 s. With frames of 1 MP every 0.45 s it keeps a view to at
+// most 9% of the worker; frames slower than it are their own limit, 4.5% for a stack and 32% for a composition.
 export const SNAPSHOT_INTERVAL = 1500
 
 // Snapshot documents a session keeps open at most; the oldest is closed first.

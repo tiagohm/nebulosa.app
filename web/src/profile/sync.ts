@@ -276,8 +276,10 @@ export class WorkspaceSync {
 	readonly #revisions = new Map<string, number>()
 	// Units the tab changed and has not written yet, by unit key.
 	readonly #dirty = new Map<string, Unit>()
-	// Keys of the units being written.
-	readonly #writing = new Set<string>()
+	// Units being written, by unit key, with the encoded value sent; undefined while one is deleted or reset. The server
+	// publishes a write before it answers it, so a scan meanwhile compares the tab with what is in flight, not only with
+	// what was confirmed, and never writes the same value twice.
+	readonly #writing = new Map<string, string | undefined>()
 	// Timer of the next write.
 	#timer?: ReturnType<typeof setTimeout>
 	// Writes in progress, while they run.
@@ -378,7 +380,8 @@ export class WorkspaceSync {
 		return localUnits(snapshot(this.connections).connections, snapshot(this.sites).sites, snapshot(this.profiles).profiles)
 	}
 
-	// Marks the units whose value differs from what the server confirmed as changed, and schedules their write.
+	// Marks the units whose value differs from what the server confirmed, or from what is being written to it, as
+	// changed, and schedules their write.
 	#scan() {
 		if (!this.status.loaded) return
 
@@ -387,12 +390,20 @@ export class WorkspaceSync {
 		const connections = new Set(this.connections.connections.map(({ id }) => id))
 
 		for (const [key, { unit, value }] of local) {
-			if (this.#synced.get(key)?.encoded === JSON.stringify(value)) this.#dirty.delete(key)
+			const encoded = JSON.stringify(value)
+			if (this.#synced.get(key)?.encoded === encoded || (this.#writing.has(key) && this.#writing.get(key) === encoded)) this.#dirty.delete(key)
 			else this.#dirty.set(key, unit)
 		}
 
 		for (const [key, { unit }] of this.#synced) {
 			if (local.has(key)) continue
+
+			// Its deletion or reset is already on its way.
+			if (this.#writing.has(key) && this.#writing.get(key) === undefined) {
+				this.#dirty.delete(key)
+				continue
+			}
+
 			const { profileId, connectionId } = ownersOf(unit)
 			const orphan = (profileId !== undefined && !profiles.has(profileId)) || (connectionId !== undefined && !connections.has(connectionId))
 
@@ -442,7 +453,7 @@ export class WorkspaceSync {
 		if (value === undefined && !deleting && !RESETTABLE.has(unit.kind)) return true
 
 		const revision = this.#revisions.get(key) ?? 0
-		this.#writing.add(key)
+		this.#writing.set(key, value === undefined ? undefined : JSON.stringify(value))
 
 		try {
 			const init: RequestInit = deleting ? { method: 'DELETE' } : jsonInit('PUT', unitBody(unit, value ?? null, revision))

@@ -390,3 +390,61 @@ describe('observing sites', () => {
 		expect(profiles.profiles[0].activeSiteId).toBeUndefined()
 	})
 })
+
+describe('events of the tab own writes', () => {
+	test('an event published before the answer of a write never writes it again', async () => {
+		const tab: { sync?: WorkspaceSync } = {}
+		const { profiles, sites, sync, sent } = setup(undefined, ({ method, path, body }) => {
+			if (method !== 'PUT' || !body) return undefined
+			const revision = (body.revision as number) + 1
+			// The server publishes a committed change before it answers the request that made it.
+			if (path === '/api/profiles/p1/preferences/telescope') tab.sync!.handle({ type: 'profile:updated', profile: record('p1', { name: 'Default', preferences: { telescope: { version: PROFILE_SETTINGS_VERSION, value: body.value, revision } } }) })
+			if (path.startsWith('/api/observing-sites/')) tab.sync!.handle({ type: 'observingSite:updated', site: { id: path.split('/').at(-1)!, ...(body as typeof HOME), revision } })
+			return Response.json({ revision })
+		})
+		tab.sync = sync
+		await sync.refresh()
+
+		setTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
+		const site = saveSite(sites, HOME)!
+		await settle(sync)
+		await sync.flush()
+
+		expect(sent.map(({ path }) => path)).toEqual([`/api/observing-sites/${site.id}`, '/api/profiles/p1/preferences/telescope'])
+	})
+
+	test('an event published before the answer of a deletion never deletes it again', async () => {
+		const tab: { sync?: WorkspaceSync } = {}
+		const { sites, sync, sent } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], profiles: [record('p1')] }, ({ method, path }) => {
+			if (method === 'DELETE') tab.sync!.handle({ type: 'observingSite:removed', id: path.split('/').at(-1)! })
+			return undefined
+		})
+		tab.sync = sync
+		await sync.refresh()
+
+		removeSite(sites, 's1')
+		await settle(sync)
+		await sync.flush()
+
+		expect(sent.map(({ method, path }) => `${method} ${path}`)).toEqual(['DELETE /api/observing-sites/s1'])
+	})
+
+	test('a change made while its unit is being written is written after it', async () => {
+		const tab: { sync?: WorkspaceSync } = {}
+		let changed = false
+		const { profiles, sync, sent } = setup(undefined, ({ method, body }) => {
+			if (method !== 'PUT' || !body || changed) return undefined
+			changed = true
+			setTelescopeOptics(tab.sync!.profiles, { focalLength: 500, focalMultiplier: 1, aperture: 80 })
+			return Response.json({ revision: (body.revision as number) + 1 })
+		})
+		tab.sync = sync
+		await sync.refresh()
+
+		setTelescopeOptics(profiles, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
+		await settle(sync)
+		await settle(sync)
+
+		expect(sent.map(({ body }) => (body!.value as { focalLength: number }).focalLength)).toEqual([400, 500])
+	})
+})

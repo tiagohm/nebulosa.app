@@ -78,7 +78,7 @@ export class RotatorCommands implements Disposable {
 		return startCommand(this.operations, 'rotator.home', connectionId, rotator, request, () => this.#commander.home(this.operations.coordinator, rotator))
 	}
 
-	// Redefines the angle without moving. Responds 204 once sent; 404, 409, 422 when the rotator cannot sync.
+	// Redefines the angle without moving. Responds 204 once the driver reports it, 504 when it never does; 404, 409, 422 when the rotator cannot sync.
 	async sync(connectionId: string, deviceId: string, { angle }: RotatorSyncRequest): Promise<Response> {
 		const rotator = connectedDevice(this, connectionId, 'rotator', deviceId, 'Rotator')
 		if (rotator instanceof Response) return rotator

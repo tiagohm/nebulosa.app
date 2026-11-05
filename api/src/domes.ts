@@ -210,7 +210,7 @@ export class DomeCommands implements Disposable {
 		return await settle(this.#commander.slave(this.operations.coordinator, dome, enabled), 'Switching slaving')
 	}
 
-	// Redefines the azimuth without moving. Responds 204 once sent; 404, 409, 422 when the dome cannot sync.
+	// Redefines the azimuth without moving. Responds 204 once the driver reports it, 504 when it never does; 404, 409, 422 when the dome cannot sync.
 	async sync(connectionId: string, deviceId: string, { azimuth }: DomeSyncRequest): Promise<Response> {
 		const dome = this.#connected(connectionId, deviceId)
 		if (dome instanceof Response) return dome
@@ -218,7 +218,7 @@ export class DomeCommands implements Disposable {
 		return await settle(this.#commander.syncTo(this.operations.coordinator, dome, deg(azimuth)), 'The sync')
 	}
 
-	// Stores the current position as the park position. Responds 204 once sent; 404, 409, 422 when the dome
+	// Stores the current position as the park position. Responds 204 once the driver reports it, 504 when it never does; 404, 409, 422 when the dome
 	// cannot.
 	async setPark(connectionId: string, deviceId: string): Promise<Response> {
 		const dome = this.#connected(connectionId, deviceId)
@@ -227,7 +227,7 @@ export class DomeCommands implements Disposable {
 		return await settle(this.#commander.setPark(this.operations.coordinator, dome), 'Setting the park position')
 	}
 
-	// Sets the rotation speed. Responds 204 once sent; 404, 409, 422 when the speed cannot be set.
+	// Sets the rotation speed. Responds 204 once the driver reports it, 504 when it never does; 404, 409, 422 when the speed cannot be set.
 	async setSpeed(connectionId: string, deviceId: string, { value }: DomeSpeedRequest): Promise<Response> {
 		const dome = this.#connected(connectionId, deviceId)
 		if (dome instanceof Response) return dome

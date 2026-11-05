@@ -57,7 +57,7 @@ export class WheelCommands implements Disposable {
 		return startCommand(this.operations, 'wheel.move', connectionId, wheel, request, () => this.#commander.moveTo(this.operations.coordinator, wheel, request.slot))
 	}
 
-	// Renames the slots. Responds 204 once sent (the new names arrive as a wheel:updated event); 404, 409
+	// Renames the slots. Responds 204 once the driver reports it, 504 when it never does (the new names arrive as a wheel:updated event); 404, 409
 	// disconnected or busy, 422 when the wheel cannot rename its slots.
 	async setNames(connectionId: string, deviceId: string, { names }: WheelNamesRequest): Promise<Response> {
 		const wheel = connectedDevice(this, connectionId, 'wheel', deviceId, 'Filter wheel')

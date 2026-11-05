@@ -4,7 +4,7 @@ import type { DeviceRegistry } from './devices'
 import type { OperationRegistry } from './operations'
 
 // Dew heater commands of every open connection, over the toolkit's DewHeaterCommander: setting the duty
-// cycle, which the driver applies at once. A dew heater is the heater channel of a device such as a
+// cycle, which the driver applies at once and the commander reads back from what it reports. A dew heater is the heater channel of a device such as a
 // motorized cover, so the command acquires that physical device and is refused while it moves.
 
 // Body of POST /api/connections/:id/dew-heaters/:deviceId/duty-cycle.
@@ -14,7 +14,7 @@ export interface DewHeaterDutyCycleRequest {
 }
 
 // Dew heater commands over the heaters of every open connection.
-export class DewHeaterCommands {
+export class DewHeaterCommands implements Disposable {
 	// Commander driving the heaters.
 	readonly #commander: DewHeaterCommander
 
@@ -33,13 +33,18 @@ export class DewHeaterCommands {
 		return stateResponse(this, connectionId, 'dewHeater', deviceId, 'Dew heater')
 	}
 
-	// Sets the duty cycle. Responds 204 once sent (the new value arrives as a dewHeater:updated event); 404,
+	// Sets the duty cycle. Responds 204 once the driver reports it, 504 when it never does (the new value arrives as a dewHeater:updated event); 404,
 	// 409 disconnected or busy, 422 when the heater channel is gone.
 	async setDutyCycle(connectionId: string, deviceId: string, { value }: DewHeaterDutyCycleRequest): Promise<Response> {
 		const heater = connectedDevice(this, connectionId, 'dewHeater', deviceId, 'Dew heater')
 		if (heater instanceof Response) return heater
 		if (!heater.hasDewHeater) return unsupported('The device has no dew heater')
 		return await settle(this.#commander.dutyCycle(this.operations.coordinator, heater, value), 'Setting the duty cycle')
+	}
+
+	// Stops following the heaters: a command still waiting for its value ends by its timeout.
+	[Symbol.dispose]() {
+		this.#commander.dispose()
 	}
 }
 

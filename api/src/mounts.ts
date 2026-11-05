@@ -464,7 +464,7 @@ export class MountCommands implements Disposable {
 		return await settle(this.#commander.setTrackMode(this.operations.coordinator, mount, mode), 'Selecting the tracking rate')
 	}
 
-	// Sends a site to the mount, which uses it for its own coordinate conversions. Responds 204 once sent;
+	// Sends a site to the mount, which uses it for its own coordinate conversions. Responds 204 once the driver reports it, 504 when it never does;
 	// 404, 409 disconnected or busy.
 	async setSite(connectionId: string, deviceId: string, { site }: MountSiteRequest): Promise<Response> {
 		const mount = this.#connected(connectionId, deviceId)
@@ -473,7 +473,7 @@ export class MountCommands implements Disposable {
 		return await settle(this.#commander.setGeographicCoordinate(this.operations.coordinator, mount, coordinate), 'Sending the site')
 	}
 
-	// Sends a clock to the mount. Responds 204 once sent; 404, 409 disconnected or busy.
+	// Sends a clock to the mount. Responds 204 once the driver reports it, 504 when it never does; 404, 409 disconnected or busy.
 	async setTime(connectionId: string, deviceId: string, { utc, offset }: MountTimeRequest): Promise<Response> {
 		const mount = this.#connected(connectionId, deviceId)
 		if (mount instanceof Response) return mount

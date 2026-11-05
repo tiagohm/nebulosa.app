@@ -88,7 +88,7 @@ test('switches the light and sets the brightness, refused while the panel is hel
 })
 
 // Client delivering the properties of a flip-flat cover with a heater channel, as a WandererCover driver
-// does, and recording what the registry sends to it.
+// does, recording what the registry sends to it and reporting each heater value it is sent back, as the driver does.
 function heatedCover(registry: DeviceRegistry) {
 	const sent: (NewNumberVector | NewSwitchVector)[] = []
 	const client: Client = {
@@ -98,7 +98,11 @@ function heatedCover(registry: DeviceRegistry) {
 		getProperties: () => {},
 		enableBlob: () => {},
 		sendText: () => {},
-		sendNumber: (vector) => void sent.push(vector),
+		sendNumber: (vector) => {
+			sent.push(vector)
+			const value = vector.elements.Heater
+			if (vector.name === 'Heater' && value !== undefined) queueMicrotask(() => set(value))
+		},
 		sendSwitch: (vector) => void sent.push(vector),
 		[Symbol.dispose]: () => {},
 	}
@@ -114,11 +118,16 @@ function heatedCover(registry: DeviceRegistry) {
 	handleDefSwitchVector(client, handler, makeSwitchVector(name, 'CAP_PARK', 'Park', 'Main', 'OneOfMany', 'rw', ['PARK', 'Park', true], ['UNPARK', 'Unpark', false]))
 	const heater = makeNumberVector(name, 'Heater', 'Heater', 'Main', 'rw', ['Heater', 'Heater', 0, 0, 255, 1, '%.0f'])
 	handleDefNumberVector(client, handler, heater)
+	// Reports a heater value, as the driver does.
+	function set(value: number) {
+		handleSetNumberVector(client, handler, { ...heater, elements: { Heater: { ...heater.elements.Heater, value } } })
+	}
+
 	return {
 		client,
 		sent,
 		heater,
-		set: (value: number) => handleSetNumberVector(client, handler, { ...heater, elements: { Heater: { ...heater.elements.Heater, value } } }),
+		set,
 		park: (parked: boolean, busy = false) => handleSetSwitchVector(client, handler, { ...makeSwitchVector(name, 'CAP_PARK', 'Park', 'Main', 'OneOfMany', 'rw', ['PARK', 'Park', parked], ['UNPARK', 'Unpark', !parked]), state: busy ? 'Busy' : 'Idle' }),
 	}
 }
@@ -128,6 +137,7 @@ test('a dew heater is an interface of its cover, arbitrated with it', async () =
 	const operations = new OperationRegistry(registry, () => {})
 	disposables.push(operations)
 	const heaters = new DewHeaterCommands(registry, (connectionId) => (connectionId === 'w' ? fake.client : undefined), operations)
+	disposables.push(heaters)
 	const fake = heatedCover(registry)
 
 	const devices = registry.list(fake.client)
@@ -137,9 +147,9 @@ test('a dew heater is an interface of its cover, arbitrated with it', async () =
 	expect(devices.some((d) => d.type === 'flatPanel' && d.hardwareId === cover.hardwareId)).toBeTrue()
 	expect(registry.state(fake.client, 'dewHeater', heater.id)).toMatchObject({ hasDewHeater: true, dutyCycle: { value: 0, min: 0, max: 255 } })
 
+	// The command is answered once the heater reports the value it was clamped to.
 	expect((await heaters.setDutyCycle('w', heater.id, { value: 300 })).status).toBe(204)
 	expect(fake.sent.at(-1)).toMatchObject({ device: 'WandererCover', name: 'Heater', elements: { Heater: 255 } })
-	fake.set(255)
 	expect(registry.state(fake.client, 'dewHeater', heater.id)?.dutyCycle.value).toBe(255)
 
 	// While the cover moves the physical device is not at rest, so the heater cannot be changed under it.

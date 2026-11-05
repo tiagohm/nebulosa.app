@@ -25,7 +25,7 @@ export interface CameraTemperatureRequest {
 }
 
 // Thermal commands over the cameras of every open connection.
-export class CameraCommands {
+export class CameraCommands implements Disposable {
 	// Commander driving the cooling of the cameras, also used by the operations that cool a camera they hold.
 	readonly commander: CameraCommander
 
@@ -39,7 +39,7 @@ export class CameraCommands {
 		this.commander = new CameraCommander(devices.cameras)
 	}
 
-	// Switches the cooler. Responds 204 once sent (the new state arrives as a camera:capabilities event);
+	// Switches the cooler. Responds 204 once the driver reports it, 504 when it never does (the new state arrives as a camera:capabilities event);
 	// 404, 409 disconnected or capturing, 422 when the cooler cannot be switched.
 	async setCooler(connectionId: string, deviceId: string, { enabled }: CameraCoolerRequest): Promise<Response> {
 		const camera = this.#available(connectionId, deviceId)
@@ -48,7 +48,7 @@ export class CameraCommands {
 		return await settle(this.commander.cooler(this.operations.coordinator, camera, enabled), 'Switching the cooler')
 	}
 
-	// Sets the cooling target. Responds 204 once sent; 404, 409 disconnected or capturing, 422 when the
+	// Sets the cooling target. Responds 204 once the driver reports it, 504 when it never does (cooling toward it, not once reached); 404, 409 disconnected or capturing, 422 when the
 	// camera has no settable target.
 	async setTemperature(connectionId: string, deviceId: string, { value }: CameraTemperatureRequest): Promise<Response> {
 		const camera = this.#available(connectionId, deviceId)
@@ -64,6 +64,11 @@ export class CameraCommands {
 		if (camera instanceof Response) return camera
 		if (!this.operations.available(camera)) return errorResponse('The camera is busy; cooling changes wait until the exposure ends, so the frame stays calibratable', 409, 'busy')
 		return camera
+	}
+
+	// Stops following the cameras: a command still waiting for its state ends by its timeout.
+	[Symbol.dispose]() {
+		this.commander.dispose()
 	}
 }
 

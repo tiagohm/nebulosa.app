@@ -65,7 +65,7 @@ export class GuideOutputCommands implements Disposable {
 		return startCommand(this.operations, 'guideOutput.pulse', connectionId, output, request, () => this.#commander.pulse(this.operations.coordinator, output, request.direction, request.duration))
 	}
 
-	// Sets the guide rates. Responds 204 once sent (the new rates arrive as a guideOutput:updated event); 404,
+	// Sets the guide rates. Responds 204 once the driver reports it, 504 when it never does (the new rates arrive as a guideOutput:updated event); 404,
 	// 409 disconnected or busy, 422 when the rates cannot be set.
 	async setGuideRate(connectionId: string, deviceId: string, { rightAscension, declination }: GuideRateRequest): Promise<Response> {
 		const output = this.#connected(connectionId, deviceId)

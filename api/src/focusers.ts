@@ -180,7 +180,7 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	}
 
 	// Redefines the position counter without moving, which also makes the logical position the reported one.
-	// Responds 204 once sent; 404, 409 disconnected or busy, 422 when the focuser cannot sync.
+	// Responds 204 once the driver reports it, 504 when it never does; 404, 409 disconnected or busy, 422 when the focuser cannot sync.
 	async sync(connectionId: string, deviceId: string, { position }: FocuserSyncRequest): Promise<Response> {
 		const focuser = connectedDevice(this, connectionId, 'focuser', deviceId, 'Focuser')
 		if (focuser instanceof Response) return focuser

@@ -866,6 +866,8 @@ const RESOURCES: readonly Disposable[] = [
 	rotators,
 	covers,
 	flatPanels,
+	dewHeaters,
+	cameras,
 	domes,
 	solarEclipses,
 	satelliteAutoDownload,

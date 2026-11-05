@@ -7,8 +7,8 @@ import type { OperationKind, OperationProgressReporter, OperationRegistry } from
 
 // HTTP contract shared by the device command services. A command addresses one device of one open
 // connection by its exact id and answers in one of two ways:
-// - an immediate command (a setting the driver applies at once) is awaited and answered 204, or with the
-//   error that refused or failed it;
+// - an immediate command (a setting the driver applies at once) is awaited until the driver reports the commanded
+//   state and answered 204, or with the error that refused or failed it (timeout when the driver never reports it);
 // - a durable command (a motion or anything else the device takes time to complete) is answered 202 with
 //   the id of the operation running it as soon as it started; its outcome is published later as
 //   operation:updated events from the real operation result, never assumed from the request.

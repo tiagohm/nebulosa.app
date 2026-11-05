@@ -413,7 +413,7 @@ interface CameraControlsProps {
 }
 
 // Labels of the selections of a camera tab, as its toolbar shows them.
-const SELECTION_LABELS: Readonly<Record<NonNullable<ImageDocument['camera']>['selection']['kind'], string>> = { latest: 'Latest', saved: 'Saved frame', inspect: 'Held for analysis' }
+const SELECTION_LABELS: Readonly<Record<NonNullable<ImageDocument['camera']>['selection']['kind'], string>> = { latest: 'Latest', saved: 'Saved frame', inspect: 'Held for analysis', liveStack: 'Live stack' }
 
 // Frame a camera tab shows, Return to Latest while it does not follow the latest frame, and the toggles of the bottom
 // area and of the central reticle (for Mount Nudge or framing). None commands the camera: they only change which frame
@@ -432,7 +432,7 @@ function CameraControls({ document, framesShown, onToggleFrames, reticle, onTogg
 			<span className="h-5 w-px bg-line-100" />
 			<span title={camera.error} className={cn('px-1 text-xs', camera.error ? 'text-danger' : following ? 'text-success' : 'text-accent')}>
 				{restored ? 'Latest saved' : SELECTION_LABELS[camera.selection.kind]}
-				{camera.shown && ` · #${camera.shown.frame.sequence}`}
+				{camera.live ? ` · ${camera.live.revision} frames` : camera.shown && ` · #${camera.shown.frame.sequence}`}
 			</span>
 			{!following && <IconButton icon="skipToEnd" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />}
 			<IconButton icon="images" label={framesShown ? 'Hide frames and focus curve' : 'Show frames and focus curve'} pressed={framesShown} onClick={onToggleFrames} />

@@ -91,7 +91,7 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 					<p className="m-0 text-ink-300">{document.status === 'loading' ? 'Opening…' : 'Unavailable'}</p>
 				)}
 			</CollapsibleSection>
-			{document.camera?.shown && <CapturedFrame frame={document.camera.shown.frame} selection={document.camera.selection.kind} />}
+			{document.camera?.shown && !document.camera.live && <CapturedFrame frame={document.camera.shown.frame} selection={document.camera.selection.kind} />}
 			{info && <Quality imageId={info.id} />}
 			{info?.origin === 'derived' && <Derivation document={document} provenance={info.provenance} />}
 			{info && <Acquisition info={info} />}
@@ -119,7 +119,7 @@ function formatDate(date: string): string {
 const FILE_STATE_LABELS: Readonly<Record<NonNullable<CaptureFrameSummary['file']>, string>> = { saving: 'Saving', saved: 'Saved', failed: 'Save failed' }
 
 // Labels of why a camera tab shows its frame.
-const SELECTION_LABELS: Readonly<Record<CameraFrameSelection['kind'], string>> = { latest: 'Latest frame', saved: 'Saved frame', inspect: 'Held for analysis' }
+const SELECTION_LABELS: Readonly<Record<CameraFrameSelection['kind'], string>> = { latest: 'Latest frame', saved: 'Saved frame', inspect: 'Held for analysis', liveStack: 'Live stack' }
 
 interface CapturedFrameProps {
 	// Frame shown.

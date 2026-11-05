@@ -1,4 +1,4 @@
-import type { CaptureFrameOpened, CaptureFrameSummary, CaptureLeaseReconcileResponse, ServerEvent } from 'api'
+import type { CaptureFrameOpened, CaptureFrameSummary, CaptureLeaseReconcileResponse, DisplaySettings, ImageInfo, LiveStackingSession, LiveStackingView, LiveStackingViewTarget, ServerEvent } from 'api'
 import { ref } from 'valtio'
 import type { CameraRole } from '../equipment/roles'
 import { clientId } from '../events'
@@ -6,7 +6,26 @@ import { jsonInit, responseError } from '../http'
 import { adaptView } from '../viewer/transform'
 import { type CaptureFramesState, captureFrameUrl, frameSourceKey } from './captureframes'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
-import { applyingSettings, browserIo, clearStarProfile, copySettings, documentOf, type ImageDocument, type ImagesIo, type ImagesState, type ImageToolContext, type ImageViewState, initialDisplaySettings, message, newView, releaseLease, removeDocument, requestRendering, settleApplying } from './images'
+import {
+	applyingSettings,
+	browserIo,
+	clearStarProfile,
+	copySettings,
+	documentOf,
+	type ImageDocument,
+	type ImageRendering,
+	type ImagesIo,
+	type ImagesState,
+	type ImageToolContext,
+	type ImageViewState,
+	initialDisplaySettings,
+	message,
+	newView,
+	releaseLease,
+	removeDocument,
+	requestRendering,
+	settleApplying,
+} from './images'
 
 // Camera tabs of the Images workspace. Every connected camera of the watched connection has a camera tab, created and
 // removed with the camera and never closed by the operator. A camera tab shows one frame of the server's capture frame
@@ -21,9 +40,21 @@ import { applyingSettings, browserIo, clearStarProfile, copySettings, documentOf
 // tab whose lease was lost shows its selection again rather than another frame. The view state of a camera that
 // disconnects is kept in memory and given back to its tab when it reconnects.
 
-// Frame a camera tab shows: the latest frame of the camera, followed as new frames arrive; a saved frame; or a frame
-// held because a manual analysis was started on it while it was the latest.
-export type CameraFrameSelection = { readonly kind: 'latest' } | { readonly kind: 'saved'; readonly frameId: string } | { readonly kind: 'inspect'; readonly frameId: string }
+// Frame a camera tab shows: the latest frame of the camera, followed as new frames arrive; a saved frame; a frame held
+// because a manual analysis was started on it while it was the latest; or a snapshot of a stack, or a color composition
+// of stacks, of the Live Stacking session of the camera, followed as the stacks grow.
+export type CameraFrameSelection = { readonly kind: 'latest' } | { readonly kind: 'saved'; readonly frameId: string } | { readonly kind: 'inspect'; readonly frameId: string } | { readonly kind: 'liveStack'; readonly sessionId: string; readonly target: LiveStackingViewTarget }
+
+// Snapshot of a live stack shown by a camera tab.
+export interface CameraLiveShown {
+	// Session and what it shows.
+	readonly sessionId: string
+	readonly target: LiveStackingViewTarget
+	// Revision of the stacks it shows: their accepted frames when it was taken.
+	readonly revision: number
+	// Document of the snapshot.
+	readonly imageId: string
+}
 
 // Frame shown by a camera tab.
 export interface CameraFrameShown {
@@ -43,6 +74,10 @@ export interface CameraTabState {
 	requested?: string
 	// Why the frame selected could not be shown, or why the frame shown was lost.
 	error?: string
+	// Live stack snapshot shown instead of the frame while a live stack is selected; the frame keeps its lease.
+	live?: CameraLiveShown
+	// Revision of the live stacks being fetched; only one fetch at a time.
+	liveRequested?: number
 }
 
 // Camera of the watched connection a camera tab belongs to.
@@ -160,6 +195,17 @@ export async function selectCameraFrame(state: ImagesState, key: string, selecti
 	if (!document || document.source.kind !== 'camera') return
 	const camera = document.camera
 	camera.selection = selection
+
+	if (selection.kind === 'liveStack') {
+		camera.requested = undefined
+		await showLiveStack(state, key, io)
+		return
+	}
+
+	// The frame under a live stack snapshot is shown again, even when it is the same frame.
+	const covered = camera.live !== undefined
+	camera.live = undefined
+	camera.liveRequested = undefined
 	const frameId = selection.kind === 'latest' ? frames.sources[frameSourceKey(document.source.connectionId, document.source.deviceId)]?.latestAvailableFrameId : selection.frameId
 
 	if (!frameId) {
@@ -167,7 +213,7 @@ export async function selectCameraFrame(state: ImagesState, key: string, selecti
 		return
 	}
 
-	if (camera.shown?.frame.frameId === frameId && camera.shown.lease) {
+	if (!covered && camera.shown?.frame.frameId === frameId && camera.shown.lease) {
 		camera.requested = undefined
 		camera.error = undefined
 		return
@@ -205,58 +251,96 @@ export async function showCameraFrame(state: ImagesState, key: string, frameId: 
 		return
 	}
 
-	const view = state.views[key]
-
-	if (!current() || !view) {
+	if (!current() || !state.views[key]) {
 		releaseLease(opened.lease, io)
 		return
 	}
 
-	// Settings being applied are those of the tab once this frame shows; the rendering of the previous frame they were
-	// applied to is aborted by this one.
-	const applying = applyingSettings(key)
-	const settings = copySettings(applying ?? view.display.applied ?? initialDisplaySettings(opened.info, io.loadDisplay(asked.source)))
-	const rendering = await requestRendering(state, key, opened.info.id, settings, io)
-	const original = rendering && view.display.showOriginal ? await requestRendering(state, key, opened.info.id, ORIGINAL_DISPLAY_SETTINGS, io) : undefined
+	const rendered = await renderShown(state, key, opened.info, asked.source, io)
 	const document = current()
-	const committed = state.views[key]
 
-	if (!document || !committed || !rendering || (committed.display.showOriginal && !original)) {
-		if (rendering) io.revokeObjectURL(rendering.url)
-		if (original) io.revokeObjectURL(original.url)
+	if (!document || !rendered) {
 		releaseLease(opened.lease, io)
 
 		if (document) {
 			document.camera.requested = undefined
-			document.camera.error = committed?.error ?? 'The frame was not shown; select it again'
+			document.camera.error = state.views[key]?.error ?? 'The frame was not shown; select it again'
 		}
 
+		if (rendered) discardRendered(rendered, io)
 		return
 	}
 
 	const previous = document.camera.shown?.lease
-	const size = document.info
-
-	if (size) committed.view = adaptView(committed.view, size, opened.info)
-	document.info = ref(opened.info)
-	document.status = 'ready'
-	document.error = undefined
+	commitShown(state, document, opened.info, rendered, io)
 	document.camera.shown = { frame: ref(opened.frame), lease: opened.lease }
 	document.camera.requested = undefined
 	document.camera.error = undefined
+	if (previous) releaseLease(previous, io)
+}
+
+// Renderings of an image about to be shown by a camera tab, with the settings they were made with.
+interface RenderedShown {
+	readonly rendering: ImageRendering
+	// Original rendering, made during Show Original.
+	readonly original?: ImageRendering
+	readonly settings: DisplaySettings
+	// Settings that were being applied when the rendering started, which become the applied ones.
+	readonly applying?: DisplaySettings
+}
+
+// Renders an image a camera tab is about to show with the applied display settings of the tab (before any, those its
+// camera saved in the profile, or the defaults of the image), plus the original rendering during Show Original, while
+// the image shown stays. Resolves undefined when a rendering failed, or the tab is gone.
+async function renderShown(state: ImagesState, key: string, info: ImageInfo, source: ImageDocument['source'], io: ImagesIo): Promise<RenderedShown | undefined> {
+	const view = state.views[key]
+	if (!view) return undefined
+	// Settings being applied are those of the tab once this image shows; the rendering of the previous image they were
+	// applied to is aborted by this one.
+	const applying = applyingSettings(key)
+	const settings = copySettings(applying ?? view.display.applied ?? initialDisplaySettings(info, io.loadDisplay(source)))
+	const rendering = await requestRendering(state, key, info.id, settings, io)
+	const original = rendering && view.display.showOriginal ? await requestRendering(state, key, info.id, ORIGINAL_DISPLAY_SETTINGS, io) : undefined
+	const committed = state.views[key]
+
+	if (!committed || !rendering || (committed.display.showOriginal && !original)) {
+		if (rendering) io.revokeObjectURL(rendering.url)
+		if (original) io.revokeObjectURL(original.url)
+		return undefined
+	}
+
+	return { rendering, ...(original && { original }), settings, ...(applying && { applying }) }
+}
+
+// Releases renderings that will not be shown.
+function discardRendered(rendered: RenderedShown, io: ImagesIo) {
+	io.revokeObjectURL(rendered.rendering.url)
+	if (rendered.original) io.revokeObjectURL(rendered.original.url)
+}
+
+// Commits the image a camera tab shows with its renderings: adapts zoom and pan to its size, replaces the document
+// info and renderings, settles settings that were being applied, and clears the selected star, the solution, and the
+// measurements of the previous image.
+function commitShown(state: ImagesState, document: ImageDocument, info: ImageInfo, rendered: RenderedShown, io: ImagesIo) {
+	const committed = state.views[document.key]
+	if (!committed) return
+	if (document.info) committed.view = adaptView(committed.view, document.info, info)
+	document.info = ref(info)
+	document.status = 'ready'
+	document.error = undefined
 
 	if (committed.rendering) io.revokeObjectURL(committed.rendering.url)
 	if (committed.display.original) io.revokeObjectURL(committed.display.original.url)
-	committed.rendering = rendering
-	committed.display.original = original
+	committed.rendering = rendered.rendering
+	committed.display.original = rendered.original
 
-	if (applying) {
-		// The rendering of the settings being applied was aborted by this frame, so they are saved here instead.
-		committed.display.applied = settings
-		settleApplying(key, applying)
-		io.saveDisplay(document.source, settings)
+	if (rendered.applying) {
+		// The rendering of the settings being applied was aborted by this image, so they are saved here instead.
+		committed.display.applied = rendered.settings
+		settleApplying(document.key, rendered.applying)
+		io.saveDisplay(document.source, rendered.settings)
 	} else {
-		committed.display.applied ??= settings
+		committed.display.applied ??= rendered.settings
 	}
 
 	committed.stars.selected = undefined
@@ -264,10 +348,116 @@ export async function showCameraFrame(state: ImagesState, key: string, frameId: 
 	committed.streaks.selected = undefined
 	committed.annotation.selected = undefined
 	committed.plateSolving.selected = undefined
-	// Measurements and markers are pixels of the previous frame; a target typed or chosen in Sky is not, and stays.
+	// Measurements and markers are pixels of the previous image; a target typed or chosen in Sky is not, and stays.
 	const { target } = committed.astrometry
 	committed.astrometry = { measurements: [], markers: [], ...(target && target.source !== 'marker' && { target }) }
-	if (previous) releaseLease(previous, io)
+}
+
+// Returns the identity of a live stack view target.
+function liveTargetKey(target: LiveStackingViewTarget) {
+	return 'cohortId' in target ? `cohort:${target.cohortId}` : `composition:${JSON.stringify(target.composition)}`
+}
+
+// Returns the revision of the stacks a live stack view shows in a session, the sum of their accepted frames, or undefined
+// when one of them is gone.
+export function liveTargetRevision(session: Pick<LiveStackingSession, 'cohorts'>, target: LiveStackingViewTarget) {
+	const cohorts = 'cohortId' in target ? [target.cohortId] : target.composition.sources.map((source) => source.cohortId)
+	let revision = 0
+
+	for (const cohortId of cohorts) {
+		const cohort = session.cohorts.find((candidate) => candidate.cohortId === cohortId)
+		if (!cohort) return undefined
+		revision += cohort.accepted
+	}
+
+	return revision
+}
+
+// Shortest time between two snapshots of one view the server takes, in milliseconds; a later one is asked for after it.
+const LIVE_SNAPSHOT_RETRY = 1600
+
+// Number of the latest live stack request of each camera tab, so a late answer is dropped.
+const liveRequests = new Map<string, number>()
+
+// Shows the live stack a camera tab selected as one transaction, like a frame (see showCameraFrame): the server takes a
+// snapshot of its stacks as a document, which is rendered with the display settings of the tab and only then committed;
+// the frame under it keeps its lease. When the snapshot is older than expected, the revision the session reports, it is
+// asked for again once the server takes snapshots again. A refusal keeps what is shown and is the tab's error.
+export async function showLiveStack(state: ImagesState, key: string, io: ImagesIo = browserIo, expected?: number) {
+	const asked = cameraTabOf(state, key)
+	const selection = asked?.camera.selection
+	if (!asked || selection?.kind !== 'liveStack') return
+	const token = (liveRequests.get(key) ?? 0) + 1
+	liveRequests.set(key, token)
+	const target = liveTargetKey(selection.target)
+	asked.camera.liveRequested = expected ?? 0
+
+	// The same tab, still selecting the same live stack, and this request still the latest.
+	const current = () => {
+		const document = cameraTabOf(state, key)
+		const selected = document?.camera.selection
+		return selected?.kind === 'liveStack' && selected.sessionId === selection.sessionId && liveTargetKey(selected.target) === target && liveRequests.get(key) === token ? document : undefined
+	}
+
+	let view: LiveStackingView | string
+
+	try {
+		const response = await io.fetch(`/api/live-stacking/sessions/${encodeURIComponent(selection.sessionId)}/views`, jsonInit('POST', selection.target))
+		view = response.ok ? ((await response.json()) as LiveStackingView) : await responseError(response)
+	} catch (error) {
+		view = message(error)
+	}
+
+	if (typeof view === 'string') {
+		const document = current()
+
+		if (document) {
+			document.camera.liveRequested = undefined
+			document.camera.error = view
+		}
+
+		return
+	}
+
+	const rendered = current() ? await renderShown(state, key, view.info, asked.source, io) : undefined
+	const document = current()
+
+	if (!document || !rendered) {
+		if (rendered) discardRendered(rendered, io)
+
+		if (document) {
+			document.camera.liveRequested = undefined
+			document.camera.error = state.views[key]?.error ?? 'The live stack was not shown; select it again'
+		}
+
+		return
+	}
+
+	commitShown(state, document, view.info, rendered, io)
+	document.camera.live = { sessionId: selection.sessionId, target: selection.target, revision: view.revision, imageId: view.info.id }
+	document.camera.liveRequested = undefined
+	document.camera.error = undefined
+	if (expected !== undefined && view.revision < expected) setTimeout(() => void (current() && showLiveStack(state, key, io, expected)), LIVE_SNAPSHOT_RETRY)
+}
+
+// Follows the Live Stacking events: a camera tab showing a live stack asks for a new snapshot once its stacks grew, and
+// returns to the latest frame of its camera when its session was closed or its stacks are gone.
+export function followLiveStacks(state: ImagesState, event: ServerEvent, frames: Pick<CaptureFramesState, 'sources'>, io: ImagesIo = browserIo, client: string = clientId) {
+	if (event.type !== 'liveStacking:updated' && event.type !== 'liveStacking:closed') return
+	const sessionId = event.type === 'liveStacking:updated' ? event.session.sessionId : event.sessionId
+
+	for (const document of state.documents) {
+		const camera = document.camera
+		if (camera?.selection.kind !== 'liveStack' || camera.selection.sessionId !== sessionId) continue
+		const revision = event.type === 'liveStacking:updated' ? liveTargetRevision(event.session, camera.selection.target) : undefined
+
+		if (revision === undefined) {
+			void selectCameraFrame(state, document.key, { kind: 'latest' }, frames, io, client)
+			continue
+		}
+
+		if (camera.liveRequested === undefined && (camera.live?.revision ?? -1) < revision) void showLiveStack(state, document.key, io, revision)
+	}
 }
 
 // Holds the frame a camera tab shows for a manual analysis started on it: a tab following the latest frame stops
@@ -334,7 +524,7 @@ export async function reconcileCapturedFrames(state: ImagesState, frames: Pick<C
 
 	for (const document of state.documents) {
 		const camera = document.camera
-		if (!camera || camera.requested || (camera.shown?.lease && camera.selection.kind !== 'latest')) continue
+		if (!camera || camera.requested || (camera.shown?.lease && camera.selection.kind !== 'latest' && camera.selection.kind !== 'liveStack')) continue
 		void selectCameraFrame(state, document.key, camera.selection, frames, io, client)
 	}
 }

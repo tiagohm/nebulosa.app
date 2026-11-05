@@ -43,26 +43,36 @@ export const CUSTOM_PRESET = 'Custom'
 // Outcome of resolving a preset: a composition, or the filters without a usable master.
 export type PresetResolution = { readonly composition: StackingComposition } | { readonly missing: readonly FilterRole[] }
 
-// Returns the newest usable mono master of a filter role; products come newest first.
-function masterOf(role: FilterRole, products: readonly StackingProductSummary[]) {
-	return products.find((product) => product.status !== 'unavailable' && product.channels === 1 && FILTER_ROLE_KEYS[role].includes(product.groupKey))
+// Returns the canonical key of a filter name: lower case, spaces collapsed.
+export function canonicalFilterKey(name: string) {
+	return name.trim().toLowerCase().replaceAll(/\s+/g, ' ')
+}
+
+// Sources a preset takes from candidates: for each filter role, the first candidate whose filter (filterOf) is one of the
+// keys of the role, so candidates are given in order of preference; the mix of the output channels and the index of the
+// luminance source refer to the sources by their index. Returns the roles without a candidate instead when some are.
+export function presetSources<T>(preset: CompositionPreset, candidates: readonly T[], filterOf: (candidate: T) => string): { readonly sources: readonly T[]; readonly mix: StackingComposition['mix']; readonly luminance?: number } | { readonly missing: readonly FilterRole[] } {
+	const roles = [...new Set([...preset.red, ...preset.green, ...preset.blue, ...(preset.luminance ? [preset.luminance] : [])])]
+	const sourceOf = (role: FilterRole) => candidates.find((candidate) => FILTER_ROLE_KEYS[role].includes(canonicalFilterKey(filterOf(candidate))))
+	const missing = roles.filter((role) => !sourceOf(role))
+	if (missing.length > 0) return { missing }
+	const terms = (channel: readonly FilterRole[]) => channel.map((role) => ({ plane: roles.indexOf(role), weight: 1 }))
+	return { sources: roles.map((role) => sourceOf(role)!), mix: { red: terms(preset.red), green: terms(preset.green), blue: terms(preset.blue) }, ...(preset.luminance && { luminance: roles.indexOf(preset.luminance) }) }
 }
 
 // Resolves a preset against the masters of a project: one source per filter, the newest usable mono master of it, with
 // no correction, and the luminance blended fully after matching it to the mixed luminance.
 export function resolvePreset(preset: CompositionPreset, products: readonly StackingProductSummary[]): PresetResolution {
-	const roles = [...new Set([...preset.red, ...preset.green, ...preset.blue, ...(preset.luminance ? [preset.luminance] : [])])]
-	const missing = roles.filter((role) => !masterOf(role, products))
-	if (missing.length > 0) return { missing }
-	const sources = roles.map((role) => ({ productId: masterOf(role, products)!.productId, plane: 0, gain: 1, offset: 0 }))
-	const terms = (channel: readonly FilterRole[]) => channel.map((role) => ({ plane: roles.indexOf(role), weight: 1 }))
+	const usable = products.filter((product) => product.status !== 'unavailable' && product.channels === 1)
+	const resolved = presetSources(preset, usable, (product) => product.groupKey)
+	if ('missing' in resolved) return resolved
 
 	return {
 		composition: {
 			preset: preset.name,
-			sources,
-			mix: { red: terms(preset.red), green: terms(preset.green), blue: terms(preset.blue) },
-			...(preset.luminance && { luminance: { source: roles.indexOf(preset.luminance), alpha: 1, match: 'robustLinear' as const } }),
+			sources: resolved.sources.map((product) => ({ productId: product.productId, plane: 0, gain: 1, offset: 0 })),
+			mix: resolved.mix,
+			...(resolved.luminance !== undefined && { luminance: { source: resolved.luminance, alpha: 1, match: 'robustLinear' as const } }),
 		},
 	}
 }

@@ -11,6 +11,7 @@ import { darkLibraryWizardRuntime, handleDarkLibraryWizardEvent, refreshDarkLibr
 import { darvRuntime, handleDarvEvent, refreshDarv } from './camera/darv'
 import { flatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard } from './camera/flatwizard'
 import { guidingRuntime, handleGuidingEvent, refreshGuiding } from './camera/guiding'
+import { handleLiveStackingEvent, liveStackingRuntime, refreshLiveStacking } from './camera/livestacking'
 import { handleNudgeEvent, nudgeRuntime, refreshNudges } from './camera/nudge'
 import { handleTargetCenteringEvent, refreshTargetCentering, targetCenteringRuntime } from './camera/targetcentering'
 import { handleTppaEvent, refreshTppa, tppaRuntime } from './camera/tppa'
@@ -22,7 +23,7 @@ import { handleIndiDirectoryEvent, indiDirectory, refreshIndiDirectory } from '.
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { CAMERA_ROLES } from './equipment/roles'
 import { onClose, onOpen, subscribe } from './events'
-import { type CameraTabSource, handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
+import { type CameraTabSource, followLiveStacks, handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
 import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessing } from './images/imageprocessing'
 import { confirmUnsavedOnUnload, imagesState } from './images/images'
@@ -104,6 +105,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleDarkLibraryWizardEvent(darkLibraryWizardRuntime, event), refresh: () => refreshDarkLibraryWizard(darkLibraryWizardRuntime) },
 	{ handle: (event) => handleCalibrationLibraryEvent(calibrationLibraryRuntime, event), refresh: () => refreshCalibrationLibrary(calibrationLibraryRuntime) },
 	{ handle: (event) => handleImageStackingEvent(imageStackingRuntime, event), refresh: () => refreshImageStacking(imageStackingRuntime) },
+	{ handle: (event) => handleLiveStackingEvent(liveStackingRuntime, event), refresh: () => refreshLiveStacking(liveStackingRuntime) },
 	{ handle: (event) => handleGuidingEvent(guidingRuntime, event), refresh: () => refreshGuiding(guidingRuntime) },
 	{ handle: (event) => handleExternalToolEvent(externalToolsState, event), refresh: () => refreshExternalTools(externalToolsState) },
 	{ handle: (event) => handleStarsEvent(starsState, event), refresh: () => refreshStars(starsState) },
@@ -113,6 +115,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleImageProcessingEvent(imageProcessingState, imagesState, event), refresh: () => refreshImageProcessing(imageProcessingState, imagesState) },
 	{ handle: (event) => handleCaptureFramesEvent(captureFramesState, event), refresh: () => refreshCaptureFrames(captureFramesState).then(() => reconcileCapturedFrames(imagesState, captureFramesState)) },
 	{ handle: (event) => handleCapturedFrame(imagesState, event) },
+	{ handle: (event) => followLiveStacks(imagesState, event, captureFramesState) },
 ]
 
 // Functions that stop this run's persistence and event subscriptions.

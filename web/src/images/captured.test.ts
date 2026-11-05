@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import type { CaptureFrameSummary, CaptureSourceSummary, DisplaySettings, ServerEvent } from 'api'
+import type { CaptureFrameSummary, CaptureSourceSummary, DisplaySettings, LiveStackingSession, ServerEvent } from 'api'
 import { proxy, ref } from 'valtio'
-import { cameraTabKey, connectionCameraTab, handleCapturedFrame, holdCameraFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseCameraFrame, selectCameraFrame } from './cameratabs'
+import { cameraTabKey, connectionCameraTab, followLiveStacks, handleCapturedFrame, holdCameraFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseCameraFrame, selectCameraFrame } from './cameratabs'
 import { type CaptureFramesState, frameUnavailableReason, handleCaptureFramesEvent, loadOlderFrames, loadRecentFrames, refreshCaptureFrames } from './captureframes'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
 import { addStep } from './imageprocessing'
@@ -43,7 +43,7 @@ function fakeIo() {
 	const gated = new Map<string, () => void>()
 	const failing = new Set<string>()
 	const sizes = new Map<string, readonly [number, number]>()
-	const control: { lost: string[]; saved?: DisplaySettings } = { lost: [] }
+	const control: { lost: string[]; saved?: DisplaySettings; liveRevision: number } = { lost: [], liveRevision: 1 }
 	const revoked: string[] = []
 	const loads: ImageSource[] = []
 	const saves: { readonly source: ImageSource; readonly settings: DisplaySettings }[] = []
@@ -73,6 +73,12 @@ function fakeIo() {
 				return Response.json({ lease: `lease-${generation}-${++count}`, info: { origin: 'capture', format: 'fits', id: summary.imageId, name: 'frame', width, height, channels: 1, header: {}, acquisition: {}, connectionId: 'conn', deviceId: 'cam', frameId, time: 0 }, frame: summary })
 			}
 
+			if (input.startsWith('/api/live-stacking/sessions/') && input.endsWith('/views'))
+				return Response.json({
+					info: { origin: 'derived', id: `live-${++count}`, name: 'Ha — Live Stack', width: 4, height: 2, channels: 1, header: {}, acquisition: {}, provenance: { kind: 'liveStacking', sessionId: 'ls', sourceName: 'Ha', frames: control.liveRevision, createdAt: '2026-11-04T00:00:00.000Z' } },
+					revision: control.liveRevision,
+					frames: control.liveRevision,
+				})
 			if (method === 'PUT') return Response.json({ lost: control.lost })
 			if (method === 'DELETE') return new Response(null, { status: 204 })
 			const render = /\/api\/images\/([^/]+)\/render$/.exec(input)
@@ -633,5 +639,45 @@ describe('mount nudge tab', () => {
 		expect(connectionCameraTab(state, 'conn', 'gone')).toBe(cameraTabKey('conn', 'guide'))
 		expect(connectionCameraTab(state, 'conn')).toBe(cameraTabKey('conn', 'guide'))
 		expect(connectionCameraTab(state, 'none', 'main')).toBeUndefined()
+	})
+})
+
+describe('live stack of a camera tab', () => {
+	// A session whose stack c1 accepted frames.
+	function liveEvent(accepted: number | undefined): ServerEvent {
+		const cohorts = accepted === undefined ? [] : [{ cohortId: 'c1', accepted }]
+		return { type: 'liveStacking:updated', epoch: 'e', revision: 1, session: { sessionId: 'ls', cohorts } as unknown as LiveStackingSession }
+	}
+
+	test('a live stack replaces the frame shown, which keeps its lease, and Latest shows the frame again', async () => {
+		const { io, calls } = fakeIo()
+		const state = await cameraTab(io, 's:1')
+		const lease = tab(state).camera?.shown?.lease
+
+		await selectCameraFrame(state, KEY, { kind: 'liveStack', sessionId: 'ls', target: { cohortId: 'c1' } }, framesOf('s:1'), io, 'page')
+		expect(tab(state).info?.id).toStartWith('live-')
+		expect(tab(state).camera).toMatchObject({ live: { sessionId: 'ls', revision: 1 }, shown: { lease } })
+		expect(calls.find((call) => call.url.endsWith('/views'))?.body).toEqual({ cohortId: 'c1' })
+
+		await selectCameraFrame(state, KEY, { kind: 'latest' }, framesOf('s:1'), io, 'page')
+		expect(tab(state).info?.id).toBe('img-1')
+		expect(tab(state).camera?.live).toBeUndefined()
+		expect(opens(calls)).toHaveLength(2)
+	})
+
+	test('a grown stack is shown again, and a closed session returns the tab to the latest frame', async () => {
+		const { io, control } = fakeIo()
+		const state = await cameraTab(io, 's:1')
+		await selectCameraFrame(state, KEY, { kind: 'liveStack', sessionId: 'ls', target: { cohortId: 'c1' } }, framesOf('s:1'), io, 'page')
+
+		control.liveRevision = 3
+		followLiveStacks(state, liveEvent(3), framesOf('s:1'), io, 'page')
+		await Bun.sleep(20)
+		expect(tab(state).camera?.live?.revision).toBe(3)
+
+		followLiveStacks(state, liveEvent(undefined), framesOf('s:1'), io, 'page')
+		await Bun.sleep(20)
+		expect(tab(state).camera?.selection).toEqual({ kind: 'latest' })
+		expect(tab(state).info?.id).toBe('img-1')
 	})
 })

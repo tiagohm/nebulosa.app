@@ -10,6 +10,7 @@ import { GuidingTool } from './GuidingTool'
 import { ImageInspector } from './ImageInspector'
 import { ImageProcessingPanel } from './ImageProcessingPanel'
 import type { ImageDocument, ImageViewState } from './images'
+import { LiveStackingTool } from './LiveStackingTool'
 import { MountNudgeTool } from './MountNudgeTool'
 import { PlateSolverPanel } from './PlateSolverPanel'
 import { PointingModelBuilderTool } from './PointingModelBuilderTool'
@@ -27,7 +28,26 @@ import { TppaTool } from './TppaTool'
 // a tool never starts or stops an operation. This registry is the only place Images tools are declared.
 
 // Contextual tools of the Images workspace, in selector order: the image tools, then the camera operations.
-export const IMAGE_TOOLS = ['inspector', 'plate-solver', 'star-detection', 'star-profile', 'streak-detection', 'annotation', 'image-processing', 'camera-acquisition', 'auto-focus', 'mount-nudge', 'guiding', 'darv', 'tppa', 'pointing-model-builder', 'target-centering', 'flat-wizard', 'dark-library-wizard'] as const
+export const IMAGE_TOOLS = [
+	'inspector',
+	'plate-solver',
+	'star-detection',
+	'star-profile',
+	'streak-detection',
+	'annotation',
+	'image-processing',
+	'camera-acquisition',
+	'live-stacking',
+	'auto-focus',
+	'mount-nudge',
+	'guiding',
+	'darv',
+	'tppa',
+	'pointing-model-builder',
+	'target-centering',
+	'flat-wizard',
+	'dark-library-wizard',
+] as const
 
 // Identifier of an Images contextual tool.
 export type ImageToolId = (typeof IMAGE_TOOLS)[number]
@@ -94,6 +114,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	annotation: { id: 'annotation', label: 'Annotation', panelTitle: 'Annotation', category: 'image', outputs: ['analysis'], panel: AnnotationPanel },
 	'image-processing': { id: 'image-processing', label: 'Image Processing', panelTitle: 'Image Processing', category: 'image', outputs: ['derived'], panel: ImageProcessingPanel },
 	'camera-acquisition': { id: 'camera-acquisition', label: 'Acquisition', panelTitle: 'Acquisition', category: 'camera', panel: CameraAcquisitionTool },
+	'live-stacking': { id: 'live-stacking', label: 'Live Stacking', panelTitle: 'Live Stacking', category: 'camera', panel: LiveStackingTool },
 	'auto-focus': { id: 'auto-focus', label: 'Auto Focus', panelTitle: 'Auto Focus', category: 'camera', panel: AutoFocusTool },
 	'mount-nudge': { id: 'mount-nudge', label: 'Mount Nudge', panelTitle: 'Mount Nudge', category: 'camera', panel: MountNudgeTool },
 	guiding: { id: 'guiding', label: 'Guiding', panelTitle: 'Guiding', category: 'camera', panel: GuidingTool },

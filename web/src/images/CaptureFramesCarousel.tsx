@@ -122,7 +122,7 @@ export function CaptureFramesCarousel({ document, title }: CaptureFramesCarousel
 
 // Returns whether a card is the one a selection names.
 function isSelected(card: Card, selection: CameraFrameSelection): boolean {
-	return card.kind === 'latest' ? selection.kind === 'latest' : selection.kind !== 'latest' && selection.frameId === card.frame.frameId
+	return card.kind === 'latest' ? selection.kind === 'latest' : (selection.kind === 'saved' || selection.kind === 'inspect') && selection.frameId === card.frame.frameId
 }
 
 interface FrameCardProps {

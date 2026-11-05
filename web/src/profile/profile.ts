@@ -45,6 +45,8 @@ import {
 	type CameraPlateSolvingSettings,
 	type TppaSettings,
 	DEFAULT_DARV_SETTINGS,
+	DEFAULT_LIVE_STACKING_SETTINGS,
+	type LiveStackingSettings,
 	type DarvSettings,
 	DEFAULT_FLAT_WIZARD_SETTINGS,
 	type DarkLibraryWizardSettings,
@@ -417,6 +419,16 @@ export function darvSettings(settings: Pick<ProfileSettings, 'cameras'>, camera:
 // Replaces fields of the DARV form of a camera in the active profile.
 export function setDarvSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<DarvSettings>) {
 	setCameraForm(state, camera, 'darv', darvSettings(activeProfile(state).settings, camera), patch)
+}
+
+// Returns the Live Stacking form of a camera: the one edited last, or the defaults.
+export function liveStackingSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<LiveStackingSettings> {
+	return cameraSettings(settings, camera)?.liveStacking ?? DEFAULT_LIVE_STACKING_SETTINGS
+}
+
+// Replaces fields of the Live Stacking form of a camera in the active profile.
+export function setLiveStackingSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<LiveStackingSettings>) {
+	setCameraForm(state, camera, 'liveStacking', liveStackingSettings(activeProfile(state).settings, camera), patch)
 }
 
 // Returns the Flat Wizard form of a camera: the one edited last, or the defaults.

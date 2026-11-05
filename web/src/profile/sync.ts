@@ -133,6 +133,7 @@ const CAMERA_FORMS: Readonly<Record<keyof CameraSettings, ProfileCameraForm>> = 
 	darv: 'darv',
 	flatWizard: 'flatWizard',
 	darkLibraryWizard: 'darkLibraryWizard',
+	liveStacking: 'liveStacking',
 	guiding: 'guiding',
 	display: 'display',
 }

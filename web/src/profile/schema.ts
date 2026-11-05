@@ -9,6 +9,8 @@ import type {
 	FlatWizardFilter,
 	GuidingClientSettings,
 	GuidingStartRequest,
+	LiveStackingCalibration,
+	LiveStackingRecipe,
 	MountRemoteProtocol,
 	MountRemoteStartRequest,
 	PlateSolveRequest,
@@ -392,6 +394,8 @@ export interface CameraSettings {
 	flatWizard?: FlatWizardSettings
 	// Dark Library Wizard form.
 	darkLibraryWizard?: DarkLibraryWizardSettings
+	// Live Stacking form.
+	liveStacking?: LiveStackingSettings
 	// Guiding form.
 	guiding?: GuidingSettings
 	// Display settings applied last to the frames of the camera in its Images tab, which its tab starts with.
@@ -595,6 +599,21 @@ export const DARV_MINIMUM_LEG_DURATION = 5
 
 // Longest RA motion of the DARV form, in seconds (10 minutes), beyond which the exposure saturates the sky.
 export const DARV_MAXIMUM_LEG_DURATION = 600
+
+// Live Stacking form of one physical camera: the integration recipe and the masters chosen per filter of the next
+// session it starts. The recipe is locked into the stacks of a session; a change of masters during a session starts
+// other stacks for the frames that follow.
+export interface LiveStackingSettings {
+	readonly recipe: LiveStackingRecipe
+	readonly calibration: LiveStackingCalibration
+}
+
+// Live Stacking form of a camera that has none yet: the permissive recipe of the server, no masters, and the frames
+// of every filter integrated uncalibrated.
+export const DEFAULT_LIVE_STACKING_SETTINGS: LiveStackingSettings = {
+	recipe: { method: 'average', weighting: 'quality', normalization: 'background-scale', interpolation: 'bilinear', minStars: 6, minOverlap: 0.25 },
+	calibration: { filters: {}, otherwise: 'uncalibrated' },
+}
 
 // DARV form of a camera that has none yet: the classic one-minute legs, eastward first, adjusting the azimuth.
 export const DEFAULT_DARV_SETTINGS: DarvSettings = { axis: 'azimuth', direction: 'EAST', legDuration: 60, stopTracking: true }

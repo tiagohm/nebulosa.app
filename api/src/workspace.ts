@@ -15,7 +15,7 @@ import type { MountRemoteProtocol } from './mountremotecontrol'
 export type ProfilePreferenceKey = 'telescope' | 'guideTelescope' | 'skyObserver' | 'skyDisplay' | 'skyFraming' | 'starDetection' | 'starProfile' | 'streakDetection' | 'imageAnnotation' | 'imagePlateSolving' | 'imageDisplay' | 'imageAstrometry' | 'statusBar' | 'satelliteFavorites'
 
 // Form of a physical camera in a profile (profile_camera_settings).
-export type ProfileCameraForm = 'exposure' | 'acquisition' | 'plateSolving' | 'autoFocus' | 'tppa' | 'pointingModel' | 'targetCentering' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'guiding' | 'display'
+export type ProfileCameraForm = 'exposure' | 'acquisition' | 'plateSolving' | 'autoFocus' | 'tppa' | 'pointingModel' | 'targetCentering' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'liveStacking' | 'guiding' | 'display'
 
 // Error codes of the workspace routes.
 export type WorkspaceErrorCode = 'conflict' | 'notFound' | 'lastProfile'

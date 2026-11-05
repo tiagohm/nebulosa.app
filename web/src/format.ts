@@ -1,3 +1,4 @@
+import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { formatAngle, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 
 // Display formats shared by every screen for quantities that are not tied to one feature: fixed and signed numbers,
@@ -160,20 +161,21 @@ export function formatSignificant(value: number) {
 	return value !== 0 && (size >= 1e5 || size < 1e-2) ? value.toExponential(3) : value.toPrecision(4)
 }
 
+const BYTE_UNITS = ['KiB', 'MiB', 'GiB', 'TiB']
+
 // Returns a size in bytes in binary units, one decimal below 10 of a unit: "512 B", "3.4 MiB", "120 GiB".
 export function formatByteSize(bytes: number) {
 	if (!Number.isFinite(bytes)) return MISSING
 	if (bytes < 1024) return `${bytes} B`
-	const units = ['KiB', 'MiB', 'GiB', 'TiB']
 	let value = bytes / 1024
 	let unit = 0
 
-	while (value >= 1024 && unit < units.length - 1) {
+	while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
 		value /= 1024
 		unit++
 	}
 
-	return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`
+	return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${BYTE_UNITS[unit]}`
 }
 
 // Returns a position in an image, in pixels from its top-left corner, with `digits` decimals (1 by default; 2 for a
@@ -191,12 +193,12 @@ export function formatKilometers(km: number, digits: number = 0) {
 	return text === MISSING ? MISSING : `${Number(text).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })} km`
 }
 
+const UTC_DATE_TIME_FORMAT = 'YYYY-MM-DD HH:mm:ss UTC'
+const UTC_DATE_TIME_NO_SECONDS_FORMAT = 'YYYY-MM-DD HH:mm UTC'
+
 // Returns an instant (Unix milliseconds) in UTC to the second, or to the minute when `seconds` is false, with the zone
 // named: "2026-11-05 14:23:05 UTC", "2026-11-05 14:23 UTC", or MISSING when it is not finite.
 export function formatUtcDateTime(time: number, seconds: boolean = true) {
 	if (!Number.isFinite(time)) return MISSING
-	return `${new Date(time)
-		.toISOString()
-		.slice(0, seconds ? 19 : 16)
-		.replace('T', ' ')} UTC`
+	return formatTemporal(time, seconds ? UTC_DATE_TIME_FORMAT : UTC_DATE_TIME_NO_SECONDS_FORMAT)
 }

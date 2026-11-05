@@ -28,7 +28,7 @@ import { MISSING, formatExposureTime, formatDuration } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { Notice } from '../../ui/Notice'
-import { Cell, Row, Table } from './Table'
+import { Cell, Row, Table } from '../../ui/Table'
 
 // Image Stacking tool: projects of light frames saved on the server, grouped by the filter their headers write. It
 // works with no camera and starts no exposure. Frames enter a project through an import that is reviewed before it is
@@ -304,9 +304,9 @@ function GroupsView({ onShow }: { readonly onShow: (key: string) => void }) {
 
 	return (
 		<>
-			<Table headers={['Filter', 'Lights', 'Exposure', 'Settings', 'Targets']}>
+			<Table columns={['Filter', 'Lights', 'Exposure', 'Settings', 'Targets']}>
 				{items.map((item) => (
-					<Row key={item.key} onClick={() => onShow(item.key)}>
+					<Row key={item.key} onSelect={() => onShow(item.key)}>
 						<Cell>{item.key}</Cell>
 						<Cell>{item.unavailable > 0 ? `${item.usable}/${item.frames} · ${item.unavailable} unavailable` : `${item.usable}/${item.frames}`}</Cell>
 						<Cell>{formatDuration(item.exposure)}</Cell>
@@ -341,9 +341,9 @@ function FramesView({ selected, onSelect, onRemoved }: { readonly selected?: str
 						</Notice>
 					),
 			)}
-			<Table headers={['File', 'Role', 'Filter', 'Exposure', 'Target', 'Observed', 'State', 'Actions']}>
+			<Table columns={['File', 'Role', 'Filter', 'Exposure', 'Target', 'Observed', 'State', 'Actions']}>
 				{items.map((frame) => (
-					<Row key={frame.sourceId} selected={frame.sourceId === selected} onClick={() => onSelect(frame.sourceId)}>
+					<Row key={frame.sourceId} selected={frame.sourceId === selected} onSelect={() => onSelect(frame.sourceId)}>
 						<Cell>{frame.name}</Cell>
 						<Cell>{ROLE_LABELS[frame.role]}</Cell>
 						<Cell>{frame.metadata.filter.value ?? 'None'}</Cell>
@@ -590,7 +590,7 @@ function ImportDialog({ projectId, onClose }: { readonly projectId: string; read
 								Deselect All
 							</Button>
 						</Actions>
-						<Table headers={['File', 'Found', 'Filter', 'Exposure', 'Target', 'Declare Light']}>
+						<Table columns={['File', 'Found', 'Filter', 'Exposure', 'Target', 'Declare Light']}>
 							{items.map((candidate) => (
 								<Row key={candidate.path}>
 									<Cell>{candidateUsable(candidate) && candidate.role ? <Checkbox label={candidate.name} checked={candidateChecked(selection, candidate.path)} onChange={(checked) => setSelection(withCandidate(selection, candidate.path, candidate.role!, checked))} /> : candidate.name}</Cell>

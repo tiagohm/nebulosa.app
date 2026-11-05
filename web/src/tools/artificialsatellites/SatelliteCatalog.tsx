@@ -1,6 +1,4 @@
 import type { SatelliteGroupStatus, SatelliteSummary } from 'api'
-import { cn } from 'cn'
-import type { KeyboardEvent } from 'react'
 import { useSnapshot } from 'valtio'
 import { MISSING } from '../../format'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
@@ -9,8 +7,8 @@ import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { IconButton } from '../../ui/IconButton'
-import { moveIndex } from '../../ui/navigation'
 import { Select } from '../../ui/Select'
+import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 import { artificialSatellitesState, CATALOG_PAGE_SIZE, formatSatelliteTime, searchSatellites, selectSatellite } from './artificialsatellites'
 
@@ -64,32 +62,17 @@ function SearchForm() {
 interface SatelliteRowProps {
 	readonly satellite: SatelliteSummary
 	readonly favorite: boolean
-	readonly index: number
-	readonly count: number
 }
 
 // Row of one object of the catalog.
-function SatelliteRow({ satellite, favorite, index, count }: SatelliteRowProps) {
+function SatelliteRow({ satellite, favorite }: SatelliteRowProps) {
 	const { selectedId } = useSnapshot(artificialSatellitesState)
 	const { noradId, name, cosparId, objectType, elementKind, elementEpoch } = satellite
 	const select = () => void selectSatellite(artificialSatellitesState, noradId, activeProfile(profileState).settings.sky.observer)
 
-	function press(event: KeyboardEvent<HTMLTableRowElement>) {
-		if (event.key === 'Enter' || event.key === ' ') {
-			event.preventDefault()
-			select()
-			return
-		}
-
-		const next = moveIndex(index, count, event.key)
-		if (next === undefined) return
-		event.preventDefault()
-		;(event.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus()
-	}
-
 	return (
-		<tr tabIndex={0} onClick={select} onKeyDown={press} className={cn('cursor-pointer border-b border-line-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', selectedId === noradId ? 'bg-accent-subtle' : 'hover:bg-base-200')}>
-			<td className="px-2 py-1">
+		<Row selected={selectedId === noradId} onSelect={select}>
+			<Cell className="w-10 py-1">
 				<IconButton
 					icon="pin"
 					label={favorite ? 'Remove from favorites' : 'Add to favorites'}
@@ -99,17 +82,15 @@ function SatelliteRow({ satellite, favorite, index, count }: SatelliteRowProps) 
 						setSatelliteFavorite(profileState, noradId, !favorite)
 					}}
 				/>
-			</td>
-			<td className="max-w-64 truncate px-2 py-1.5 text-ink-100" title={name}>
+			</Cell>
+			<Cell className="max-w-64 truncate text-ink-100" title={name}>
 				{name}
-			</td>
-			<td className="px-2 py-1.5 text-right">{noradId}</td>
-			<td className="px-2 py-1.5 whitespace-nowrap">{cosparId ?? MISSING}</td>
-			<td className="px-2 py-1.5 whitespace-nowrap">{objectType ? OBJECT_TYPE_NAMES[objectType] : MISSING}</td>
-			<td className="px-2 py-1.5 whitespace-nowrap" title={elementKind ? undefined : 'No orbital elements: catalog data only, no prediction.'}>
-				{elementEpoch === undefined ? 'Catalog only' : `${elementKind === 'manual' ? 'Imported' : 'GP'} · ${formatSatelliteTime(elementEpoch, 'UTC')} UTC`}
-			</td>
-		</tr>
+			</Cell>
+			<Cell numeric>{noradId}</Cell>
+			<Cell>{cosparId ?? MISSING}</Cell>
+			<Cell>{objectType ? OBJECT_TYPE_NAMES[objectType] : MISSING}</Cell>
+			<Cell title={elementKind ? undefined : 'No orbital elements: catalog data only, no prediction.'}>{elementEpoch === undefined ? 'Catalog only' : `${elementKind === 'manual' ? 'Imported' : 'GP'} · ${formatSatelliteTime(elementEpoch, 'UTC')} UTC`}</Cell>
+		</Row>
 	)
 }
 
@@ -128,27 +109,11 @@ function Results() {
 
 	return (
 		<div className="flex min-h-80 flex-1 flex-col">
-			<div className="min-h-0 flex-1 overflow-auto">
-				<table className="w-full border-collapse font-mono text-xs text-ink-200 tabular-nums">
-					<thead className="sticky top-0 z-1 bg-base-100">
-						<tr className="border-b border-line-100 text-left text-ink-300">
-							<th className="w-10 px-2 py-2 font-normal">
-								<span className="sr-only">Favorite</span>
-							</th>
-							<th className="px-2 py-2 font-normal">Name</th>
-							<th className="px-2 py-2 text-right font-normal">NORAD</th>
-							<th className="px-2 py-2 font-normal">COSPAR</th>
-							<th className="px-2 py-2 font-normal">Type</th>
-							<th className="px-2 py-2 font-normal">Elements (epoch)</th>
-						</tr>
-					</thead>
-					<tbody>
-						{items.map((satellite, index) => (
-							<SatelliteRow key={satellite.noradId} satellite={satellite} favorite={favorites.includes(satellite.noradId)} index={index} count={items.length} />
-						))}
-					</tbody>
-				</table>
-			</div>
+			<Table className="flex-1 rounded-none border-0" columns={[{ key: 'favorite', label: <span className="sr-only">Favorite</span> }, 'Name', { key: 'norad', label: 'NORAD', numeric: true }, 'COSPAR', 'Type', 'Elements (epoch)']}>
+				{items.map((satellite) => (
+					<SatelliteRow key={satellite.noradId} satellite={satellite} favorite={favorites.includes(satellite.noradId)} />
+				))}
+			</Table>
 			<div className="flex flex-none items-center justify-center gap-3 border-t border-line-100 px-4 py-2">
 				<Button variant="secondary" disabled={searching || offset === 0} onClick={() => search(Math.max(0, offset - CATALOG_PAGE_SIZE))}>
 					Previous

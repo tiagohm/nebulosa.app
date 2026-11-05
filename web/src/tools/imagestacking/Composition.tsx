@@ -18,7 +18,7 @@ import { formatPercent } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { Notice } from '../../ui/Notice'
-import { Cell, Row, Table } from './Table'
+import { Cell, Row, Table } from '../../ui/Table'
 
 // Color composition of an Image Stacking project: a preset or a hand-edited mix of its linear masters into RGB, with an
 // optional luminance, previewed as the server stretches it, validated by the server, and composed into a linear
@@ -147,7 +147,7 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 			</div>
 			{resolution && 'missing' in resolution && <Notice error>{`${preset} needs a mono master of ${resolution.missing.join(', ')}. Integrate those filters, or choose another preset.`}</Notice>}
 			{composition && composition.sources.length > 0 && (
-				<Table className="shrink-0" headers={['Master', 'Channel', 'Gain', 'Red', 'Green', 'Blue', '']}>
+				<Table className="shrink-0" columns={['Master', 'Channel', 'Gain', 'Red', 'Green', 'Blue', '']}>
 					{composition.sources.map((source, index) => {
 						const master = masters.find((product) => product.productId === source.productId)
 
@@ -248,7 +248,7 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 			{errors.compose && <Notice error>{errors.compose}</Notice>}
 			{job?.state === 'failed' && job.error && <Notice error>{job.error}</Notice>}
 			{items.length > 0 && (
-				<Table className="shrink-0" headers={['Composite', 'Size', 'Grid', 'Published', 'State', '']}>
+				<Table className="shrink-0" columns={['Composite', 'Size', 'Grid', 'Published', 'State', '']}>
 					{items.map((composite) => (
 						<Row key={composite.compositeId}>
 							<Cell>{composite.composition.preset}</Cell>

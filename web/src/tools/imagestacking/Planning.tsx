@@ -10,8 +10,8 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { blocksAnalysis, cohortText, LIGHT_MASTER_KINDS, LIGHT_MASTER_LABELS, type LightMaster, masterText, metricText, registrationText, REJECTION_LABELS, selectionFields, selectionOf, SEVERITY_LABELS, SEVERITY_TONES, THRESHOLDS } from './format'
 import { MISSING } from '../../format'
 import { Notice } from '../../ui/Notice'
+import { Cell, Row, Table } from '../../ui/Table'
 import { cancelStackingAnalysis, imageStackingRuntime, jobEnded, startStackingAnalysis, updateStackingCohort, updateStackingSettings } from './projects'
-import { Cell, Row, Table } from './Table'
 
 // Calibration and quality of an Image Stacking project. Calibration lists its cohorts, the lights of one filter that share
 // their acquisition settings, where an operator chooses each master among those of the Calibration Library that match
@@ -238,13 +238,13 @@ function QualityTable({ projectId, group, selected, onSelect }: { readonly proje
 	if (items.length === 0) return <EmptyState title="No frames" description="This filter has no included light." />
 
 	return (
-		<Table className="shrink-0" headers={['File', 'Stars', 'SNR', 'HFD', 'FWHM', 'Eccentricity', 'Background', 'Score', 'Registration', 'State', 'Reference']}>
+		<Table className="shrink-0" columns={['File', 'Stars', 'SNR', 'HFD', 'FWHM', 'Eccentricity', 'Background', 'Score', 'Registration', 'State', 'Reference']}>
 			{items.map((frame) => {
 				const quality = frame.analysis?.quality
 				const state = frameState(frame)
 
 				return (
-					<Row key={frame.sourceId} selected={frame.sourceId === selected} onClick={() => onSelect(frame.sourceId)}>
+					<Row key={frame.sourceId} selected={frame.sourceId === selected} onSelect={() => onSelect(frame.sourceId)}>
 						<Cell>{frame.name}</Cell>
 						<Cell>{quality?.starCount ?? MISSING}</Cell>
 						<Cell>{metricText(quality?.medianSNR, 1)}</Cell>

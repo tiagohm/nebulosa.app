@@ -7,12 +7,26 @@ import { Button } from '../../ui/Button'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
+import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
 import { artificialSatellitesState, downloadEphemerisCsv, ephemerisDraftError, ephemerisRowCount, formatSatelliteTime, loadSatelliteEphemeris, MAX_EPHEMERIS_HOURS, SHADOW_LABELS } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
 // Ephemeris tab of Artificial Satellites: positions of the satellite selected sampled from now or from the Sky's time,
 // for the Sky observer or the Earth's center without one, with an export of the rows received as CSV. Positions are geometric:
 // RA/Dec of date (the Sky's frame) and the altitude without refraction.
+
+// Columns of the table of positions.
+const EPHEMERIS_COLUMNS: readonly TableColumn[] = [
+	'Time',
+	'RA',
+	'Dec',
+	{ key: 'azimuth', label: 'Az', numeric: true },
+	{ key: 'altitude', label: 'Alt', numeric: true },
+	{ key: 'distance', label: 'Distance', numeric: true },
+	{ key: 'rangeRate', label: 'Range rate', numeric: true },
+	{ key: 'height', label: 'Height', numeric: true },
+	'Illumination',
+]
 
 // Ephemeris tab.
 export function SatelliteEphemeris({ observer }: { readonly observer?: SkyObserverSettings }) {
@@ -61,38 +75,21 @@ export function SatelliteEphemeris({ observer }: { readonly observer?: SkyObserv
 					<div className="max-w-md">
 						<QualityRow quality={ephemeris.quality} />
 					</div>
-					<div className="overflow-x-auto">
-						<table className="w-full border-collapse font-mono text-xs text-ink-200 tabular-nums">
-							<thead>
-								<tr className="border-b border-line-100 text-left text-ink-300">
-									<th className="px-2 py-2 font-normal">Time</th>
-									<th className="px-2 py-2 font-normal">RA</th>
-									<th className="px-2 py-2 font-normal">Dec</th>
-									<th className="px-2 py-2 text-right font-normal">Az</th>
-									<th className="px-2 py-2 text-right font-normal">Alt</th>
-									<th className="px-2 py-2 text-right font-normal">Distance</th>
-									<th className="px-2 py-2 text-right font-normal">Range rate</th>
-									<th className="px-2 py-2 text-right font-normal">Height</th>
-									<th className="px-2 py-2 font-normal">Illumination</th>
-								</tr>
-							</thead>
-							<tbody>
-								{rows.map((row) => (
-									<tr key={row.time} className="border-b border-line-100">
-										<td className="px-2 py-1 whitespace-nowrap">{formatSatelliteTime(row.time, timeZone)}</td>
-										<td className="px-2 py-1 whitespace-nowrap">{formatRightAscension(row.rightAscension)}</td>
-										<td className="px-2 py-1 whitespace-nowrap">{formatDeclination(row.declination)}</td>
-										<td className="px-2 py-1 text-right">{row.azimuth === undefined ? MISSING : formatDegrees(row.azimuth, 1)}</td>
-										<td className="px-2 py-1 text-right">{row.altitude === undefined ? MISSING : formatDegrees(row.altitude, 1)}</td>
-										<td className="px-2 py-1 text-right">{row.distanceKm.toFixed(0)} km</td>
-										<td className="px-2 py-1 text-right">{row.rangeRateKmPerSecond === undefined ? MISSING : `${row.rangeRateKmPerSecond.toFixed(2)} km/s`}</td>
-										<td className="px-2 py-1 text-right">{row.heightKm.toFixed(0)} km</td>
-										<td className="px-2 py-1">{SHADOW_LABELS[row.shadow]}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
+					<Table columns={EPHEMERIS_COLUMNS}>
+						{rows.map((row) => (
+							<Row key={row.time}>
+								<Cell>{formatSatelliteTime(row.time, timeZone)}</Cell>
+								<Cell>{formatRightAscension(row.rightAscension)}</Cell>
+								<Cell>{formatDeclination(row.declination)}</Cell>
+								<Cell numeric>{row.azimuth === undefined ? MISSING : formatDegrees(row.azimuth, 1)}</Cell>
+								<Cell numeric>{row.altitude === undefined ? MISSING : formatDegrees(row.altitude, 1)}</Cell>
+								<Cell numeric>{row.distanceKm.toFixed(0)} km</Cell>
+								<Cell numeric>{row.rangeRateKmPerSecond === undefined ? MISSING : `${row.rangeRateKmPerSecond.toFixed(2)} km/s`}</Cell>
+								<Cell numeric>{row.heightKm.toFixed(0)} km</Cell>
+								<Cell>{SHADOW_LABELS[row.shadow]}</Cell>
+							</Row>
+						))}
+					</Table>
 				</div>
 			)}
 		</div>

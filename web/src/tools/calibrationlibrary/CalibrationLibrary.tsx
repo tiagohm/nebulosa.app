@@ -18,6 +18,7 @@ import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
+import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 // oxfmt-ignore
 import { bytesText, CALIBRATION_KINDS, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, masterName, masterWarnings, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
@@ -180,40 +181,6 @@ function Pager({ page, total, loading, onPage }: { readonly page: number; readon
 	)
 }
 
-// Table with a sticky header, of cells any list shares.
-function Table({ headers, children }: { readonly headers: readonly string[]; readonly children: React.ReactNode }) {
-	return (
-		<div className="min-h-0 overflow-auto rounded-md border border-line-100">
-			<table className="w-full border-collapse text-xs text-ink-200 tabular-nums">
-				<thead className="sticky top-0 z-1 bg-base-100">
-					<tr className="border-b border-line-100">
-						{headers.map((header) => (
-							<th key={header} className="px-2 py-1.5 text-left font-medium whitespace-nowrap text-ink-300">
-								{header}
-							</th>
-						))}
-					</tr>
-				</thead>
-				<tbody>{children}</tbody>
-			</table>
-		</div>
-	)
-}
-
-// Row that selects what it shows.
-function Row({ selected, onClick, children }: { readonly selected: boolean; readonly onClick: () => void; readonly children: React.ReactNode }) {
-	return (
-		<tr onClick={onClick} className={cn('cursor-pointer border-b border-line-100 last:border-b-0 hover:bg-base-200', selected && 'bg-accent-subtle')}>
-			{children}
-		</tr>
-	)
-}
-
-// Cell of a row.
-function Cell({ children, className }: { readonly children: React.ReactNode; readonly className?: string }) {
-	return <td className={cn('px-2 py-1.5 whitespace-nowrap', className)}>{children}</td>
-}
-
 // Coverage and groups.
 function GroupsView({ selected, onSelect }: { readonly selected?: string; readonly onSelect: (groupId: string) => void }) {
 	const { groups, summary } = useSnapshot(calibrationLibraryRuntime)
@@ -225,9 +192,9 @@ function GroupsView({ selected, onSelect }: { readonly selected?: string; readon
 		<>
 			<p className="m-0 text-xs text-ink-300 tabular-nums">{`${summary?.frames.available ?? 0} frames available · ${(summary?.masters.ready ?? 0) + (summary?.masters.warning ?? 0)} masters`}</p>
 			<Coverage groups={items} />
-			<Table headers={['Type', 'Group', 'Camera', 'Settings', 'Frames', 'State', 'Latest Master']}>
+			<Table columns={['Type', 'Group', 'Camera', 'Settings', 'Frames', 'State', 'Latest Master']}>
 				{items.map((group) => (
-					<Row key={group.groupId} selected={group.groupId === selected} onClick={() => onSelect(group.groupId)}>
+					<Row key={group.groupId} selected={group.groupId === selected} onSelect={() => onSelect(group.groupId)}>
 						<Cell>{KIND_LABELS[group.kind]}</Cell>
 						<Cell>{groupTitle(group)}</Cell>
 						<Cell>{cameraText(group.metadata)}</Cell>
@@ -247,9 +214,9 @@ function GroupsView({ selected, onSelect }: { readonly selected?: string; readon
 // Which roles have masters, per camera and operating point.
 function Coverage({ groups }: { readonly groups: readonly CalibrationGroupSummary[] }) {
 	return (
-		<Table headers={['Camera', 'Settings', ...CALIBRATION_KINDS.map((kind) => KIND_LABELS[kind])]}>
+		<Table columns={['Camera', 'Settings', ...CALIBRATION_KINDS.map((kind) => KIND_LABELS[kind])]}>
 			{coverage(groups).map(({ key, camera, settings, kinds }) => (
-				<tr key={key} className="border-b border-line-100 last:border-b-0">
+				<Row key={key}>
 					<Cell>{camera}</Cell>
 					<Cell>{settings}</Cell>
 					{CALIBRATION_KINDS.map((kind) => (
@@ -257,7 +224,7 @@ function Coverage({ groups }: { readonly groups: readonly CalibrationGroupSummar
 							{kinds[kind].groups === 0 ? MISSING : `${kinds[kind].masters}/${kinds[kind].groups}`}
 						</Cell>
 					))}
-				</tr>
+				</Row>
 			))}
 		</Table>
 	)
@@ -271,9 +238,9 @@ function FramesView({ selected, onSelect }: { readonly selected?: string; readon
 	if (items.length === 0) return <EmptyState title="No frames" description="Nothing matches these filters." />
 
 	return (
-		<Table headers={['File', 'Type', 'Exposure', 'Temperature', 'Settings', 'Origin', 'State']}>
+		<Table columns={['File', 'Type', 'Exposure', 'Temperature', 'Settings', 'Origin', 'State']}>
 			{items.map((source) => (
-				<Row key={source.sourceId} selected={source.sourceId === selected} onClick={() => onSelect(source.sourceId)}>
+				<Row key={source.sourceId} selected={source.sourceId === selected} onSelect={() => onSelect(source.sourceId)}>
 					<Cell>{source.name}</Cell>
 					<Cell>{KIND_LABELS[source.kind]}</Cell>
 					<Cell>{exposureText(source.metadata)}</Cell>
@@ -295,9 +262,9 @@ function MastersView({ selection, onSelect }: { readonly selection?: Selection; 
 	if (items.length === 0) return <EmptyState title="No masters" description="Build one from a group of the Library." />
 
 	return (
-		<Table headers={['Master', 'Type', 'Group', 'Camera', 'Frames', 'Method', 'Contents', 'State']}>
+		<Table columns={['Master', 'Type', 'Group', 'Camera', 'Frames', 'Method', 'Contents', 'State']}>
 			{items.map((master) => (
-				<Row key={master.masterId} selected={selection?.type === 'master' && selection.masterId === master.masterId} onClick={() => onSelect(master.masterId)}>
+				<Row key={master.masterId} selected={selection?.type === 'master' && selection.masterId === master.masterId} onSelect={() => onSelect(master.masterId)}>
 					<Cell>{masterName(master)}</Cell>
 					<Cell>{KIND_LABELS[master.kind]}</Cell>
 					<Cell>{groupTitle(master)}</Cell>
@@ -736,9 +703,9 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 			{page && (
 				<>
 					<Notice>{`${page.total} files found, ${ready} ready. Frames are referenced where they are and never changed.`}</Notice>
-					<Table headers={['File', 'Found', 'Exposure', 'Declared Type', 'Notes']}>
+					<Table columns={['File', 'Found', 'Exposure', 'Declared Type', 'Notes']}>
 						{items.map((candidate) => (
-							<tr key={candidate.path} className="border-b border-line-100 last:border-b-0">
+							<Row key={candidate.path}>
 								<Cell>{candidate.name}</Cell>
 								<Cell>{candidate.kind ? KIND_LABELS[candidate.kind] : (candidate.rejectedRole ?? 'Unknown')}</Cell>
 								<Cell>{candidate.metadata ? exposureText(candidate.metadata) : MISSING}</Cell>
@@ -753,7 +720,7 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 									)}
 								</Cell>
 								<Cell>{candidate.error ?? (candidate.known ? 'Already in the library' : candidate.warnings[0])}</Cell>
-							</tr>
+							</Row>
 						))}
 					</Table>
 					<Checkbox label="Copy into the library" checked={copy} onChange={setCopy} />

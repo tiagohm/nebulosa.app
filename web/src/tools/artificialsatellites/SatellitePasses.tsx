@@ -1,17 +1,15 @@
 import type { SatellitePassPrediction } from 'api'
-import { cn } from 'cn'
-import type { KeyboardEvent } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDegrees } from '../../format'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
-import { moveIndex } from '../../ui/navigation'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
+import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
 import { artificialSatellitesState, formatSatelliteTime, loadSatellitePasses, MAX_PASS_DAYS, openSkyObserver, SHADOW_LABELS, showSatelliteInSky, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
@@ -114,53 +112,50 @@ function PassProfile({ pass }: { readonly pass: SatellitePassPrediction }) {
 	)
 }
 
+// Columns of the table of passes.
+const PASS_COLUMNS: readonly TableColumn[] = [
+	'Start',
+	{ key: 'startAzimuth', label: 'Az', numeric: true },
+	'Highest',
+	{ key: 'altitude', label: 'Alt', numeric: true },
+	'End',
+	{ key: 'endAzimuth', label: 'Az', numeric: true },
+	{ key: 'duration', label: 'Duration', numeric: true },
+	{ key: 'range', label: 'Range', numeric: true },
+	'Conditions',
+]
+
 interface PassRowProps {
 	readonly pass: SatellitePassPrediction
 	// Index of the pass in the answer, which selects it.
 	readonly index: number
-	// Position of the row in the table and the rows of the table, for the keyboard.
-	readonly position: number
-	readonly count: number
 	readonly timeZone: string
 }
 
 // Row of one pass.
-function PassRow({ pass, index, position, count, timeZone }: PassRowProps) {
+function PassRow({ pass, index, timeZone }: PassRowProps) {
 	const { selectedPass } = useSnapshot(artificialSatellitesState)
 	const minutes = (pass.end.time - pass.start.time) / 60_000
 	const select = () => (artificialSatellitesState.selectedPass = index)
 
-	function press(event: KeyboardEvent<HTMLTableRowElement>) {
-		if (event.key === 'Enter' || event.key === ' ') {
-			event.preventDefault()
-			select()
-			return
-		}
-
-		const next = moveIndex(position, count, event.key)
-		if (next === undefined) return
-		event.preventDefault()
-		;(event.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus()
-	}
-
 	return (
-		<tr tabIndex={0} onClick={select} onKeyDown={press} className={cn('cursor-pointer border-b border-line-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', selectedPass === index ? 'bg-accent-subtle' : 'hover:bg-base-200')}>
-			<td className="px-2 py-1.5 whitespace-nowrap">
+		<Row selected={selectedPass === index} onSelect={select}>
+			<Cell>
 				{formatSatelliteTime(pass.start.time, timeZone)}
 				{pass.startsBeforeWindow && <span className="ml-1 text-ink-300">(in progress)</span>}
-			</td>
-			<td className="px-2 py-1.5 text-right">{formatDegrees(pass.start.azimuth, 0)}</td>
-			<td className="px-2 py-1.5 whitespace-nowrap">{formatSatelliteTime(pass.culmination.time, timeZone).slice(11)}</td>
-			<td className="px-2 py-1.5 text-right">{formatDegrees(pass.culmination.altitude, 1)}</td>
-			<td className="px-2 py-1.5 whitespace-nowrap">
+			</Cell>
+			<Cell numeric>{formatDegrees(pass.start.azimuth, 0)}</Cell>
+			<Cell>{formatSatelliteTime(pass.culmination.time, timeZone).slice(11)}</Cell>
+			<Cell numeric>{formatDegrees(pass.culmination.altitude, 1)}</Cell>
+			<Cell>
 				{formatSatelliteTime(pass.end.time, timeZone).slice(11)}
 				{pass.endsAfterWindow && <span className="ml-1 text-ink-300">(continues)</span>}
-			</td>
-			<td className="px-2 py-1.5 text-right">{formatDegrees(pass.end.azimuth, 0)}</td>
-			<td className="px-2 py-1.5 text-right">{minutes.toFixed(1)} min</td>
-			<td className="px-2 py-1.5 text-right">{pass.culmination.rangeKm.toFixed(0)} km</td>
-			<td className="px-2 py-1.5 whitespace-nowrap">{pass.visible.length > 0 ? 'Visible' : pass.culminationSunAltitude > 0 ? 'Daylight' : SHADOW_LABELS[pass.culminationShadow]}</td>
-		</tr>
+			</Cell>
+			<Cell numeric>{formatDegrees(pass.end.azimuth, 0)}</Cell>
+			<Cell numeric>{minutes.toFixed(1)} min</Cell>
+			<Cell numeric>{pass.culmination.rangeKm.toFixed(0)} km</Cell>
+			<Cell>{pass.visible.length > 0 ? 'Visible' : pass.culminationSunAltitude > 0 ? 'Daylight' : SHADOW_LABELS[pass.culminationShadow]}</Cell>
+		</Row>
 	)
 }
 
@@ -190,28 +185,11 @@ export function SatellitePasses({ observer }: { readonly observer?: SkyObserverS
 					{list.length === 0 ? (
 						<Notice>{passes.passes.length === 0 ? 'No pass above the minimum altitude in this window.' : 'No visible pass in this window: show the daylight passes too to list them.'}</Notice>
 					) : (
-						<div className="overflow-x-auto">
-							<table className="w-full border-collapse font-mono text-xs text-ink-200 tabular-nums">
-								<thead>
-									<tr className="border-b border-line-100 text-left text-ink-300">
-										<th className="px-2 py-2 font-normal">Start</th>
-										<th className="px-2 py-2 text-right font-normal">Az</th>
-										<th className="px-2 py-2 font-normal">Highest</th>
-										<th className="px-2 py-2 text-right font-normal">Alt</th>
-										<th className="px-2 py-2 font-normal">End</th>
-										<th className="px-2 py-2 text-right font-normal">Az</th>
-										<th className="px-2 py-2 text-right font-normal">Duration</th>
-										<th className="px-2 py-2 text-right font-normal">Range</th>
-										<th className="px-2 py-2 font-normal">Conditions</th>
-									</tr>
-								</thead>
-								<tbody>
-									{list.map((pass, position) => (
-										<PassRow key={pass.start.time} pass={pass} index={passes.passes.indexOf(pass)} position={position} count={list.length} timeZone={timeZone} />
-									))}
-								</tbody>
-							</table>
-						</div>
+						<Table columns={PASS_COLUMNS}>
+							{list.map((pass) => (
+								<PassRow key={pass.start.time} pass={pass} index={passes.passes.indexOf(pass)} timeZone={timeZone} />
+							))}
+						</Table>
 					)}
 					{shown && (
 						<div className="flex flex-col gap-2">

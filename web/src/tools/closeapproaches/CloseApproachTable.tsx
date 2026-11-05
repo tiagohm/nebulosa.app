@@ -1,16 +1,17 @@
 import type { CloseApproach, CloseApproachSortField } from 'api'
 import { cn } from 'cn'
-import type { KeyboardEvent, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { MISSING } from '../../format'
 import { profileState, setCloseApproachPreferences } from '../../profile/profile'
 import { CLOSE_APPROACH_DISTANCE_DISPLAYS, CLOSE_APPROACH_TIME_DISPLAYS, type CloseApproachPreferences } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
+import { formatMagnitude } from '../../sky/format'
 import { Button } from '../../ui/Button'
 import { Icon } from '../../ui/Icon'
-import { moveIndex } from '../../ui/navigation'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
+import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
 import { bodyName, closeApproachesState, formatApproachTime, formatDiameter, formatDistance, formatDistanceRange, formatVelocity, loadCloseApproaches, pageCloseApproaches, pageCount, resizeCloseApproachPages, selectCloseApproach, sortCloseApproaches } from './closeapproaches'
 
 // Table of the Close Approaches tool: one row per encounter of the page JPL answered, so an object appears once per
@@ -20,39 +21,45 @@ import { bodyName, closeApproachesState, formatApproachTime, formatDiameter, for
 // Rows per page offered.
 const PAGE_SIZES = ['25', '50', '100'] as const
 
-interface SortHeaderProps {
+interface SortButtonProps {
 	// Column of JPL the header orders by.
 	readonly field: CloseApproachSortField
 	// Header text.
 	readonly children: ReactNode
-	// Whether the column is right-aligned.
-	readonly numeric?: boolean
 }
 
-// Header of a column JPL can order by.
-function SortHeader({ field, children, numeric }: SortHeaderProps) {
+// Header of a column JPL can order by, which orders by it and shows the direction while it does.
+function SortButton({ field, children }: SortButtonProps) {
 	const { filters } = useSnapshot(closeApproachesState)
 	const sort = filters?.sort
 	const active = sort === field || sort === `-${field}`
 
 	return (
-		<th className={cn('p-0 font-normal', numeric ? 'text-right' : 'text-left')}>
-			<button
-				type="button"
-				title="Order all the matches by this column, from the first page"
-				onClick={() => void sortCloseApproaches(closeApproachesState, field)}
-				className={cn('inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent px-2 py-2 font-mono text-xs whitespace-nowrap hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-accent', active ? 'text-accent' : 'text-ink-300')}
-			>
-				{children}
-				{active && <Icon name="arrow" className={cn('size-3', sort !== field && 'rotate-180')} />}
-			</button>
-		</th>
+		<button
+			type="button"
+			title="Order all the matches by this column, from the first page"
+			onClick={() => void sortCloseApproaches(closeApproachesState, field)}
+			className={cn('inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 font-mono text-xs font-medium whitespace-nowrap hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-accent', active ? 'text-accent' : 'text-ink-300')}
+		>
+			{children}
+			{active && <Icon name="arrow" className={cn('size-3', sort !== field && 'rotate-180')} />}
+		</button>
 	)
 }
 
-// Header of a column JPL cannot order by.
-function PlainHeader({ children, numeric }: { readonly children: ReactNode; readonly numeric?: boolean }) {
-	return <th className={cn('px-2 py-2 text-xs font-normal whitespace-nowrap text-ink-300', numeric ? 'text-right' : 'text-left')}>{children}</th>
+// Columns of the table, in the time zone and distance unit shown.
+function encounterColumns(timeZone: string, distanceDisplay: CloseApproachPreferences['distanceDisplay']): readonly TableColumn[] {
+	return [
+		{ key: 'object', label: <SortButton field="object">Object</SortButton> },
+		{ key: 'date', label: <SortButton field="date">{`Close Approach (${timeZone})`}</SortButton> },
+		'Target',
+		{ key: 'dist', label: <SortButton field="dist">Distance</SortButton>, numeric: true },
+		{ key: 'range', label: `3σ Range (${distanceDisplay === 'au' ? 'AU' : distanceDisplay})`, numeric: true },
+		{ key: 'v-rel', label: <SortButton field="v-rel">Vrel</SortButton>, numeric: true },
+		{ key: 'h', label: <SortButton field="h">H</SortButton>, numeric: true },
+		{ key: 'diameter', label: 'Diameter', numeric: true },
+		'Orbit',
+	]
 }
 
 interface EncounterRowProps {
@@ -62,50 +69,27 @@ interface EncounterRowProps {
 	readonly timeZone: string
 	// Unit of the distances shown.
 	readonly distanceDisplay: CloseApproachPreferences['distanceDisplay']
-	// Position of the row, for the keyboard.
-	readonly index: number
-	// Rows of the page.
-	readonly count: number
 }
 
 // Row of one encounter.
-function EncounterRow({ approach, timeZone, distanceDisplay, index, count }: EncounterRowProps) {
+function EncounterRow({ approach, timeZone, distanceDisplay }: EncounterRowProps) {
 	const { selected } = useSnapshot(closeApproachesState)
 	const { id, fullName, designation, time, calendarDate, body, distance, distanceMin, distanceMax, relativeVelocity, absoluteMagnitude, diameter, diameterSigma, orbitId } = approach
 
-	function press(event: KeyboardEvent<HTMLTableRowElement>) {
-		if (event.key === 'Enter' || event.key === ' ') {
-			event.preventDefault()
-			void selectCloseApproach(closeApproachesState, approach)
-			return
-		}
-
-		const next = moveIndex(index, count, event.key)
-		if (next === undefined) return
-		event.preventDefault()
-		;(event.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus()
-	}
-
 	return (
-		<tr
-			tabIndex={0}
-			title={`${calendarDate} TDB`}
-			onClick={() => void selectCloseApproach(closeApproachesState, approach)}
-			onKeyDown={press}
-			className={cn('cursor-pointer border-b border-line-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent', selected?.id === id ? 'bg-accent-subtle' : 'hover:bg-base-200')}
-		>
-			<td className="max-w-64 truncate px-2 py-1.5 text-ink-100" title={fullName ?? designation}>
+		<Row title={`${calendarDate} TDB`} selected={selected?.id === id} onSelect={() => void selectCloseApproach(closeApproachesState, approach)}>
+			<Cell className="max-w-64 truncate text-ink-100" title={fullName ?? designation}>
 				{fullName ?? designation}
-			</td>
-			<td className="px-2 py-1.5 whitespace-nowrap">{formatApproachTime(time, timeZone)}</td>
-			<td className="px-2 py-1.5 whitespace-nowrap">{bodyName(body)}</td>
-			<td className="px-2 py-1.5 text-right whitespace-nowrap">{formatDistance(distance, distanceDisplay)}</td>
-			<td className="px-2 py-1.5 text-right whitespace-nowrap">{formatDistanceRange(distanceMin, distanceMax, distanceDisplay) ?? MISSING}</td>
-			<td className="px-2 py-1.5 text-right whitespace-nowrap">{formatVelocity(relativeVelocity)}</td>
-			<td className="px-2 py-1.5 text-right">{absoluteMagnitude?.toFixed(2) ?? MISSING}</td>
-			<td className="px-2 py-1.5 text-right whitespace-nowrap">{diameter === undefined ? MISSING : formatDiameter(diameter, diameterSigma)}</td>
-			<td className="px-2 py-1.5 whitespace-nowrap">{orbitId}</td>
-		</tr>
+			</Cell>
+			<Cell>{formatApproachTime(time, timeZone)}</Cell>
+			<Cell>{bodyName(body)}</Cell>
+			<Cell numeric>{formatDistance(distance, distanceDisplay)}</Cell>
+			<Cell numeric>{formatDistanceRange(distanceMin, distanceMax, distanceDisplay) ?? MISSING}</Cell>
+			<Cell numeric>{formatVelocity(relativeVelocity)}</Cell>
+			<Cell numeric>{absoluteMagnitude === undefined ? MISSING : formatMagnitude(absoluteMagnitude)}</Cell>
+			<Cell numeric>{diameter === undefined ? MISSING : formatDiameter(diameter, diameterSigma)}</Cell>
+			<Cell>{orbitId}</Cell>
+		</Row>
 	)
 }
 
@@ -161,34 +145,11 @@ export function CloseApproachTable({ timeZone, preferences }: { readonly timeZon
 			{!error && !result && <EmptyState title={loading ? 'Reading from JPL' : 'No search yet'} />}
 			{!error && result && rows.length === 0 && <EmptyState title="No encounters" description={result.total > 0 ? 'This page is past the last match.' : 'No close approach matches these filters.'} />}
 			{rows.length > 0 && (
-				<div className="min-h-0 flex-1 overflow-auto">
-					<table className="w-full border-collapse font-mono text-xs text-ink-200 tabular-nums">
-						<thead className="sticky top-0 z-1 bg-base-100">
-							<tr className="border-b border-line-100">
-								<SortHeader field="object">Object</SortHeader>
-								<SortHeader field="date">{`Close Approach (${timeZone})`}</SortHeader>
-								<PlainHeader>Target</PlainHeader>
-								<SortHeader field="dist" numeric>
-									Distance
-								</SortHeader>
-								<PlainHeader numeric>{`3σ Range (${distanceDisplay === 'au' ? 'AU' : distanceDisplay})`}</PlainHeader>
-								<SortHeader field="v-rel" numeric>
-									Vrel
-								</SortHeader>
-								<SortHeader field="h" numeric>
-									H
-								</SortHeader>
-								<PlainHeader numeric>Diameter</PlainHeader>
-								<PlainHeader>Orbit</PlainHeader>
-							</tr>
-						</thead>
-						<tbody>
-							{rows.map((approach, index) => (
-								<EncounterRow key={approach.id} approach={approach} timeZone={timeZone} distanceDisplay={distanceDisplay} index={index} count={rows.length} />
-							))}
-						</tbody>
-					</table>
-				</div>
+				<Table className="flex-1 rounded-none border-0" columns={encounterColumns(timeZone, distanceDisplay)}>
+					{rows.map((approach) => (
+						<EncounterRow key={approach.id} approach={approach} timeZone={timeZone} distanceDisplay={distanceDisplay} />
+					))}
+				</Table>
 			)}
 			<Pager />
 		</div>

@@ -18,7 +18,7 @@ import { MISSING, formatDuration } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { Notice } from '../../ui/Notice'
-import { Cell, Row, Table } from './Table'
+import { Cell, Row, Table } from '../../ui/Table'
 
 // Integration and results of an Image Stacking project. Integration edits the recipe, shows what a run would do with it
 // (frames, memory, spill, reuse) as the server answers, starts and cancels runs, and follows the one working. Results
@@ -85,7 +85,7 @@ export function IntegrationView({ projectId }: { readonly projectId: string }) {
 			</div>
 			<Notice>Every filter is calibrated, registered onto the project grid, normalized to the reference of its filter, and combined into a linear master. Pixels covered by fewer frames than the minimum coverage hold no data. A filter whose inputs did not change reuses its master.</Notice>
 			{plan && plan.groups.length > 0 && (
-				<Table className="shrink-0" headers={['Filter', 'Frames', 'Exposure', 'Samples', 'Memory', 'Spill', 'Plan']}>
+				<Table className="shrink-0" columns={['Filter', 'Frames', 'Exposure', 'Samples', 'Memory', 'Spill', 'Plan']}>
 					{plan.groups.map((group) => (
 						<Row key={group.groupKey}>
 							<Cell>{group.name}</Cell>
@@ -142,7 +142,7 @@ export function ResultsView() {
 			{items.length === 0 ? (
 				<EmptyState title="No masters" description="Integrate the project to publish a linear master of each filter." />
 			) : (
-				<Table className="shrink-0" headers={['Filter', 'Frames', 'Exposure', 'Size', 'Grid', 'Published', 'State', '']}>
+				<Table className="shrink-0" columns={['Filter', 'Frames', 'Exposure', 'Size', 'Grid', 'Published', 'State', '']}>
 					{items.map((product) => (
 						<Row key={product.productId}>
 							<Cell>{product.name}</Cell>

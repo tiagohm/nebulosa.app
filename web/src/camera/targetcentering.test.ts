@@ -100,13 +100,15 @@ describe('target centering blockers', () => {
 describe('target centering request', () => {
 	test('sends radians and the form, copying the target and the framing it came from', () => {
 		const settings = { ...DEFAULT_TARGET_CENTERING_SETTINGS, tolerance: 3600, maximumCorrection: 180, framingId: 'f1' }
-		const request = targetCenteringRequest('recenter', { ...TARGET, label: 'M 42' }, settings, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, mount)
+		const request = targetCenteringRequest('recenter', { ...TARGET, label: 'M 42' }, settings, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, { mount, guideOutput: { connectionId: 'c', deviceId: 'st4' } })
 
-		expect(request).toMatchObject({ mode: 'recenter', mount, target: { frame: 'J2000', ...TARGET, label: 'M 42', framingId: 'f1' }, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, blindRetry: false })
+		expect(request).toMatchObject({ mode: 'recenter', mount, guideOutput: { connectionId: 'c', deviceId: 'st4' }, target: { frame: 'J2000', ...TARGET, label: 'M 42', framingId: 'f1' }, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, blindRetry: false })
 		expect(request.tolerance).toBeCloseTo(Math.PI / 180, 9)
 		expect(request.maximumCorrection).toBeCloseTo(Math.PI, 9)
 		expect(request.capture.exposureTime).toBe(DEFAULT_TARGET_CENTERING_SETTINGS.exposureTime)
 		expect(request.solving).not.toBe(DEFAULT_CAMERA_PLATE_SOLVING)
+		// Without a guide output in the setup none is sent.
+		expect('guideOutput' in targetCenteringRequest('center', TARGET, settings, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, { mount })).toBeFalse()
 	})
 })
 
@@ -192,7 +194,7 @@ describe('target centering store', () => {
 		const url = '/api/connections/c/cameras/cam/target-centering'
 		const { request, calls } = fakeFetch({ [url]: () => Response.json({ error: 'Guiding is correcting the mount', code: 'guidingActive' }, { status: 409 }) })
 
-		await startTargetCentering(state, 'c', 'cam', targetCenteringRequest('center', TARGET, DEFAULT_TARGET_CENTERING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, mount), request)
+		await startTargetCentering(state, 'c', 'cam', targetCenteringRequest('center', TARGET, DEFAULT_TARGET_CENTERING_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, { mount }), request)
 
 		expect((JSON.parse(calls[0].init!.body as string) as { token: string }).token).toBeString()
 		expect(state.errors[key]).toBe('Guiding is correcting the mount')

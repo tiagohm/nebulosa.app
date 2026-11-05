@@ -66,13 +66,15 @@ export interface TargetCenteringPanelTarget {
 	readonly availability: RoleAvailability
 	// Mount of the equipment setup and its state.
 	readonly mount: RoleDevice
+	// Guide output of the equipment setup, which drives the mount; the session coordinates the guiding through it.
+	readonly guideOutput: RoleDevice
 	// Camera whose form is edited; absent when the profile has no saved connection, so the defaults are shown and nothing is
 	// kept.
 	readonly settings?: CameraIdentity
 }
 
 // Target Centering panel sections of a camera.
-export function TargetCenteringSections({ device, availability, mount, settings: identity }: TargetCenteringPanelTarget) {
+export function TargetCenteringSections({ device, availability, mount, guideOutput, settings: identity }: TargetCenteringPanelTarget) {
 	const profiles = useSnapshot(profileState)
 	const runtime = useSnapshot(targetCenteringRuntime)
 	const operations = useSnapshot(operationsState)
@@ -137,7 +139,12 @@ export function TargetCenteringSections({ device, availability, mount, settings:
 	function run(mode: TargetCenteringMode) {
 		if (!device || !mountDevice || draft?.rightAscension === undefined || draft.declination === undefined) return
 		const { rightAscension, declination, label } = draft
-		void startTargetCentering(targetCenteringRuntime, device.connectionId, device.id, targetCenteringRequest(mode, { rightAscension, declination, label }, settings, exposure, solving, mountDevice, capabilities))
+		void startTargetCentering(
+			targetCenteringRuntime,
+			device.connectionId,
+			device.id,
+			targetCenteringRequest(mode, { rightAscension, declination, label }, settings, exposure, solving, { mount: mountDevice, ...(guideOutput.device && { guideOutput: { connectionId: guideOutput.device.connectionId, deviceId: guideOutput.device.id } }) }, capabilities),
+		)
 	}
 
 	return (

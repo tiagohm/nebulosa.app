@@ -41,8 +41,10 @@ import type { SkyObserver } from './sky/ephemeris'
 // (origin targetCentering), never saved as captures. Guiding that may pulse the mount is stopped first, in the operation and
 // before the mount is taken, since it may hold the mount itself, and restored once the mount was released, recalibrating; only
 // what the session stopped is restored, and a failure there is told apart from the position, which stays verified. Guiding it
-// does not stop refuses the start, and the mount is kept from being guided until the operation ends: a guide output on a
-// camera's ST4 port shares no device with the mount, so the arbiter alone would not tell. A session belongs to the server: it survives tab reloads and workspace changes, and ends
+// does not stop refuses the start, and the mount is kept from being guided until the operation ends. The guiding that moves
+// the mount is the guiding through the guide output the request names, the GUIDE_OUTPUT of the Equipment Setup, which drives
+// its MOUNT whether it is the mount's own port or a camera's ST4 (which shares no device with the mount, so the arbiter alone
+// would not tell); without one, no guiding moves the mount. A session belongs to the server: it survives tab reloads and workspace changes, and ends
 // with the process; sessions live in memory, the latest of each camera. Angles are radians, durations seconds, and instants
 // Unix milliseconds.
 
@@ -67,6 +69,9 @@ export type TargetCenteringCaptureSettings = Pick<CaptureSettings, 'exposureTime
 export interface TargetCenteringRequest extends CommandRequest {
 	// Mount to center, by its exact connection and device ids.
 	readonly mount: OperationDevice
+	// Guide output that drives the mount (the GUIDE_OUTPUT of the Equipment Setup), whose guiding the session coordinates;
+	// absent when the setup has none, and then no guiding moves the mount.
+	readonly guideOutput?: OperationDevice
 	// What to do.
 	readonly mode: TargetCenteringMode
 	// Target, copied whole, so nothing is read from a profile once the session runs.
@@ -430,7 +435,7 @@ export class TargetCenteringSessions {
 
 		// A run stopped by the session frees the mount, so a mount held by guiding alone is free enough here; anything else that
 		// took it meanwhile fails the session, which restores guiding all the same.
-		const runs = this.guiding.runsOn(request.mount.connectionId)
+		const runs = request.guideOutput ? this.guiding.runsOn(request.guideOutput) : []
 		const stoppable = mode !== 'verifyOnly' && request.guiding === 'coordinate' && runs.every(({ state }) => state === 'guiding' || state === 'lostLock')
 		if (runs.length > 0 && !stoppable) return refusal(mode === 'verifyOnly' ? 'Guiding is correcting the mount; stop it before measuring' : 'Guiding is correcting the mount, or is paused or calibrating; stop it before centering', 409, 'guidingActive')
 		// A mount guiding holds is taken once the session stopped guiding; inside a reservation, it must still be reserved by it.
@@ -468,7 +473,7 @@ export class TargetCenteringSessions {
 			solutions: new Map(),
 			commanded: false,
 			pierSide: mount.pierSide,
-			guidingHold: this.guiding.hold(request.mount.connectionId, 'Target Centering'),
+			guidingHold: request.guideOutput && this.guiding.hold(request.guideOutput, 'Target Centering'),
 			guidingRuns: runs.map(({ sessionId }) => sessionId),
 			suspensions: [],
 			invocation,

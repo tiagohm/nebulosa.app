@@ -458,6 +458,11 @@ const RESTORE_FRAMES_POLL = 100
 // Commands that let a guide output send pulses, refused while a hold keeps guiding off a mount.
 const HELD_COMMANDS: ReadonlySet<GuidingCommand> = new Set<GuidingCommand>(['startGuiding', 'resume', 'dither'])
 
+// Identity of a guide output in the holds and the runs: its exact connection and device ids.
+function guideOutputKey({ connectionId, deviceId }: OperationDevice) {
+	return `${connectionId}:${deviceId}`
+}
+
 // Guide steps the RMS is computed over.
 export const GUIDING_RMS_WINDOW = 50
 
@@ -603,7 +608,7 @@ export function guidingRegions(session: Pick<Session, 'builtin' | 'tracker' | 's
 export class GuidingSessions implements Disposable {
 	// Latest session of each guide camera, and the session each start token started.
 	readonly #sessions: CameraSessionRegistry<GuidingSessionSummary, Session>
-	// Holds that keep the guide outputs of a connection from starting, by connection id: the name of the holder of each
+	// Holds that keep a guide output from starting, by guideOutputKey of the guide output: the name of the holder of each
 	// hold, in the order they were taken.
 	readonly #holds = new Map<string, string[]>()
 
@@ -891,10 +896,11 @@ export class GuidingSessions implements Disposable {
 		return stopped.ok ? new Response(null, { status: 204 }) : failureResponse(stopped, 'Stopping the guiding')
 	}
 
-	// Returns the sessions that may send pulses through a guide output of a connection, which may be the mount itself or the ST4
-	// port of a camera wired to it; only the operator knows which mount that port moves, so any of the connection counts.
-	runsOn(connectionId: string): readonly GuidingSessionSummary[] {
-		return this.#sessions.summaries().filter(({ active, guideOutputHeld, guideOutput }) => active && guideOutputHeld && guideOutput.connectionId === connectionId)
+	// Returns the sessions whose run holds guideOutput, so they may send pulses through it now. The Equipment Setup says which
+	// mount a guide output moves: its GUIDE_OUTPUT moves its MOUNT, whether it is the mount's own port or a camera's ST4.
+	runsOn(guideOutput: OperationDevice): readonly GuidingSessionSummary[] {
+		const key = guideOutputKey(guideOutput)
+		return this.#sessions.summaries().filter((summary) => summary.active && summary.guideOutputHeld && guideOutputKey(summary.guideOutput) === key)
 	}
 
 	// Stops the corrections of a session for a motion of another service, keeping its loop and calibration, and resolves once the
@@ -960,21 +966,22 @@ export class GuidingSessions implements Disposable {
 		return true
 	}
 
-	// Keeps every guide output of a connection from starting to guide until the result is disposed: Start Guiding, resume
-	// and dither are refused as busy, naming holder (a feature name meant for people, such as "Target Centering") as the
-	// one moving the mount. Looping, which sends no pulse, goes on. Disposing twice releases once.
-	hold(connectionId: string, holder: string): Disposable {
-		this.#holds.set(connectionId, [...(this.#holds.get(connectionId) ?? []), holder])
+	// Keeps guideOutput from starting to guide until the result is disposed: Start Guiding, resume and dither of the sessions
+	// guiding through it are refused as busy, naming holder (a feature name meant for people, such as "Target Centering") as
+	// the one moving the mount it drives. Looping, which sends no pulse, goes on. Disposing twice releases once.
+	hold(guideOutput: OperationDevice, holder: string): Disposable {
+		const key = guideOutputKey(guideOutput)
+		this.#holds.set(key, [...(this.#holds.get(key) ?? []), holder])
 		let held = true
 
 		return {
 			[Symbol.dispose]: () => {
 				if (!held) return
 				held = false
-				const holders = this.#holds.get(connectionId)!
+				const holders = this.#holds.get(key)!
 				const remaining = holders.toSpliced(holders.indexOf(holder), 1)
-				if (remaining.length === 0) this.#holds.delete(connectionId)
-				else this.#holds.set(connectionId, remaining)
+				if (remaining.length === 0) this.#holds.delete(key)
+				else this.#holds.set(key, remaining)
 			},
 		}
 	}
@@ -1020,7 +1027,7 @@ export class GuidingSessions implements Disposable {
 	#command(sessionId: string, token: string, command: GuidingCommand, run: (session: Session) => Promise<OperationResult<unknown>>, claim?: DitherClaimOwner): GuidingCommandAdmission {
 		const session = this.#living(sessionId)
 		if (!session) return refusal('No guiding session is running with this id', 404, 'notFound')
-		const holders = this.#holds.get(session.summary.guideOutput.connectionId)
+		const holders = this.#holds.get(guideOutputKey(session.summary.guideOutput))
 		if (HELD_COMMANDS.has(command) && holders) return refusal(`${holders[0]} is moving the mount`, 409, 'busy')
 		if (command === 'dither' && session.claim && session.claim !== claim) return refusal(`${session.claim.holder} is dithering with this guiding session`, 409, 'busy')
 

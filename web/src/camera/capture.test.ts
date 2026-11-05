@@ -217,5 +217,7 @@ test('builds the frozen dither of the next capture from the preferences and the 
 	expect(captureDither({ ...pulse, mountSettings: DEFAULT_MOUNT_DITHER_SETTINGS }).dither).toMatchObject({ movement: 'pulse', rightAscensionDirection: 'EAST', declinationDirection: 'NORTH', maxPulseDuration: 5000 })
 	expect(captureDither({ ...pulse, guideOutput: undefined }).blocker).toContain('Guide Output')
 	expect(captureDither({ ...pulse, mount: undefined }).blocker).toContain('Mount')
+	// A GoTo carries the guide output of the setup too, which drives the mount and is kept from guiding meanwhile.
+	expect(captureDither({ ...pulse, settings: { ...pulse.settings, movement: 'slew' } }).dither).toMatchObject({ movement: 'slew', guideOutput })
 	expect(captureDither({ ...pulse, guideOutput: undefined, mountSettings: DEFAULT_MOUNT_DITHER_SETTINGS, settings: { ...pulse.settings, movement: 'slew' } })).toEqual({ dither: { method: 'mount', everyFrames: 3, mount, amount: 10, raOnly: false, pattern: 'random', settleTime: 5, movement: 'slew' } })
 })

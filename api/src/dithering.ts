@@ -30,11 +30,12 @@ import type { OperationDevice, OperationRegistry, ToolInvocation } from './opera
 // after a stop or an abort. Guided amounts are guide-camera pixels, settle tolerances guide pixels, settle times seconds.
 //
 // Mount dithers move an unguided mount with the toolkit's MountDitherer, one per capture so its pattern runs across the
-// capture: timed pulses through the guide output the operator selected (the mount's own port or the ST4 port of a camera,
-// trusted to drive that mount) or a small exact GoTo, never corrected by a pointing model, then a fixed mechanical wait,
-// which measures nothing. The mount and the guide output are reserved in the arbiter for the whole capture (unless the
-// caller's invocation already reserves them), so no manual motion or pulse interleaves, and guiding is held off their
-// connections. A GoTo dither never flips a German equatorial mount knowingly: on evidence, never the time alone (a flip
+// capture: timed pulses through the guide output of the Equipment Setup or a small exact GoTo, never corrected by a pointing
+// model, then a fixed mechanical wait, which measures nothing. The Equipment Setup is the truth about the setup: its
+// GUIDE_OUTPUT drives its MOUNT, whether it is the mount's own port or the ST4 port of a camera, and nothing here second-
+// guesses it. The mount and that guide output are reserved in the arbiter for the whole capture (unless the caller's
+// invocation already reserves them), so no manual motion or pulse interleaves, and guiding through that guide output is
+// held off. A GoTo dither never flips a German equatorial mount knowingly: on evidence, never the time alone (a flip
 // candidate of the Meridian Flip Monitor, or a target whose expected pier side differs from the reported one), the
 // capture is refused and a dither fails before the mount moves, and a GoTo after which the mount reports another pier
 // side fails the capture. Pulses take the guide directions of the request, the nominal East and North unless the
@@ -73,6 +74,9 @@ interface MountCaptureDitherFields {
 	readonly pattern: DitherMode
 	// Mechanical settle after each motion, in seconds; >= 0.
 	readonly settleTime: number
+	// Guide output that drives the mount (the GUIDE_OUTPUT of the Equipment Setup), reserved and kept from guiding for the
+	// whole capture; absent when the setup has none.
+	readonly guideOutput?: OperationDevice
 }
 
 // Mount dither by a small exact GoTo of the mount, which must be able to go to a position, unparked and tracking.
@@ -83,7 +87,7 @@ export interface SlewCaptureDither extends MountCaptureDitherFields {
 // Mount dither by one timed guide pulse per axis, through a guide output that drives the mount.
 export interface PulseCaptureDither extends MountCaptureDitherFields {
 	readonly movement: 'pulse'
-	// Guide output the pulses are sent through: the mount's own port, or the ST4 port of a camera wired to the mount.
+	// Guide output the pulses are sent through: the GUIDE_OUTPUT of the Equipment Setup, which drives the mount.
 	readonly guideOutput: OperationDevice
 	// Longest pulse of one axis, in milliseconds; > 0. A dither needing a longer one fails without moving.
 	readonly maxPulseDuration: number
@@ -234,26 +238,21 @@ export class CaptureDithering implements DeviceContext {
 		}
 	}
 
-	// Prepares mount dithers: resolves the mount and the guide output, refuses a mount guiding corrects or one that cannot
-	// move as asked, reserves both unless the caller's invocation already does, and holds guiding off their connections.
+	// Prepares mount dithers: resolves the mount and the guide output that drives it, refuses while guiding through that
+	// guide output corrects the mount or when the mount cannot move as asked, reserves both unless the caller's invocation
+	// already does, and holds guiding through the guide output off.
 	#mount(camera: Camera, dither: MountCaptureDither, invocation?: ToolInvocation): CaptureDitherPreparation {
 		const resolvedMount = resolveConnected(this, dither.mount.connectionId, 'mount', dither.mount.deviceId, 'Mount')
 		if (!resolvedMount.ok) return resolvedMount
 		const mount = resolvedMount.device
 
 		let guideOutput: GuideOutput | undefined
-		const connections = new Set([dither.mount.connectionId])
 
-		if (dither.movement === 'pulse') {
+		if (dither.guideOutput) {
 			const resolved = resolveConnected(this, dither.guideOutput.connectionId, 'guideOutput', dither.guideOutput.deviceId, 'Guide output')
 			if (!resolved.ok) return resolved
 			guideOutput = resolved.device
-			connections.add(dither.guideOutput.connectionId)
-		}
-
-		// A guide output on the ST4 port of a camera shares no device with the mount it moves, so guiding is refused by connection.
-		for (const connectionId of connections) {
-			if (this.guiding.runsOn(connectionId).length > 0) return refusal('Guiding is correcting the mount; dither through it, or stop it first', 409, 'guidingActive')
+			if (this.guiding.runsOn(dither.guideOutput).length > 0) return refusal('Guiding is correcting the mount; dither through it, or stop it first', 409, 'guidingActive')
 		}
 
 		if (dither.movement === 'slew') {
@@ -267,10 +266,12 @@ export class CaptureDithering implements DeviceContext {
 			return refusal(`${guideOutput.name} cannot pulse`, 422, 'unsupported')
 		}
 
-		// The capture holds its camera from its first frame, so a pulse through the camera's own port could never be sent.
-		if (guideOutput && resourceKey(guideOutput) === resourceKey(camera)) return refusal('The guide output is the camera the capture exposes', 409, 'busy')
+		// A guide output on the ST4 port of the capture's own camera is held by the capture from its first frame to its last: it
+		// can send no pulse meanwhile, so pulse dithers through it are impossible, and nothing else can pulse it to reserve against.
+		const ownCamera = guideOutput !== undefined && resourceKey(guideOutput) === resourceKey(camera)
+		if (ownCamera && dither.movement === 'pulse') return refusal('The guide output is the camera the capture exposes, which cannot pulse while it captures', 409, 'busy')
 
-		const devices = guideOutput ? [mount, guideOutput] : [mount]
+		const devices = guideOutput && !ownCamera ? [mount, guideOutput] : [mount]
 		const requests: ResourceRequest[] = devices.map((device) => ({ key: resourceKey(device), device }))
 		const owner = { id: crypto.randomUUID(), kind: RESERVATION_KIND }
 		let reserved: ToolInvocation | undefined
@@ -286,7 +287,7 @@ export class CaptureDithering implements DeviceContext {
 
 		// The dithers run as roots of the reservation, beside the capture, which holds the camera through its own scope.
 		const scope = this.operations.scope(invocation ?? reserved)
-		const holds = Array.from(connections, (connectionId) => this.guiding.hold(connectionId, HOLDER))
+		const hold = dither.guideOutput && this.guiding.hold(dither.guideOutput, HOLDER)
 
 		const ditherer = new MountDitherer(
 			mount,
@@ -335,7 +336,7 @@ export class CaptureDithering implements DeviceContext {
 						await this.operations.coordinator.cancelByReservationOwner(owner)
 						reserved.reservation.release()
 					}
-					for (const hold of holds) hold[Symbol.dispose]()
+					hold?.[Symbol.dispose]()
 				})()
 
 				return finished

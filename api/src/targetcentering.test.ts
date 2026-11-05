@@ -192,6 +192,7 @@ async function setup(corrections?: Pick<MountCorrections, 'plan' | 'suspend' | '
 	const request = (patch: Partial<TargetCenteringRequest> = {}): TargetCenteringRequest => ({
 		token: `token-${tokens++}`,
 		mount: { connectionId: id, deviceId: mountId },
+		guideOutput: { connectionId: id, deviceId: 'st4' },
 		mode: 'center',
 		target: offsetTarget(deg(1)),
 		capture: { exposureTime: 0.02, gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 64, height: 64, frameFormat: '' },
@@ -449,6 +450,19 @@ describe('target centering sessions', () => {
 
 		expect(guiding.holds).toBe(0)
 		expect(guiding.calls).toBeEmpty()
+	})
+
+	test('without a guide output in the setup no guiding moves the mount, so none is consulted, stopped, or held', async () => {
+		const { sessions, id, cameraId, request, guiding } = await setup()
+		const asked: unknown[] = []
+		guiding.runs = [GUIDING]
+		const runsOn = guiding.runsOn
+		guiding.runsOn = (...args: unknown[]) => (asked.push(args), runsOn())
+
+		const response = await sessions.start(id, cameraId, request({ mode: 'verifyOnly', guideOutput: undefined }))
+		expect(response.status).toBe(202)
+		expect(asked).toBeEmpty()
+		expect(guiding.holds).toBe(0)
 	})
 
 	test('guiding its owner paused, or that is calibrating, is never taken over', async () => {

@@ -13,8 +13,8 @@ import type { ImageDocument } from './images'
 // filter wheel, flat panel, and cover of the active profile's equipment setup associated with it. The setup assigns flat roles per
 // connection, with no optical train, so the association is a fixed rule: the focuser, the filter wheel, the flat panel,
 // and the cover belong to the Main Camera, which looks through them, and only its operations move them; the mount is
-// shared by every camera of the connection, since a nudge holds only the mount; the guide output belongs to the Guide
-// Camera, and only that camera guides. Any other camera takes its flats with manual filters and light and leaves the
+// shared by every camera of the connection, since a nudge holds only the mount; the guide output drives that mount, as the
+// setup says whatever device it is, so it is shared the same way, but only the Guide Camera guides through it. Any other camera takes its flats with manual filters and light and leaves the
 // cover as it is. The Main Camera snoops the devices of the setup into its headers, the Guide Camera only the mount, and a
 // camera without a role nothing. The forms of the camera are those of the physical camera in the active
 // profile. An operation keeps the devices it started with; changing tab or profile never redirects it.
@@ -35,6 +35,10 @@ export interface CameraOperationContext {
 	readonly focuser?: RoleDevice
 	// Mount Mount Nudge moves: the MOUNT of the setup of the camera's connection.
 	readonly mount: RoleDevice
+	// Guide output that drives the mount: the GUIDE_OUTPUT of the setup, shared by every camera like the mount. The setup is
+	// the truth about which mount it moves, whether it is the mount's own port or a camera's ST4, so the operations moving the
+	// mount coordinate the guiding through it.
+	readonly mountGuideOutput: RoleDevice
 	// Guide output guiding pulses: the GUIDE_OUTPUT of the setup when the camera is its Guide Camera; absent otherwise,
 	// meaning the camera cannot guide.
 	readonly guideOutput?: RoleDevice
@@ -71,10 +75,10 @@ export function cameraOperationContext(document: Pick<ImageDocument, 'source'> |
 	const device = resolve('MAIN_CAMERA', { MAIN_CAMERA: { id: deviceId, name: '' } })
 	const role = watched ? CAMERA_ROLES.find((role) => setup[role]?.id === deviceId) : undefined
 	const settings = watched ? profileCamera(profile, deviceId) : undefined
-	const context: CameraOperationContext = { camera, device, ...(settings && { settings }), mount: resolve('MOUNT'), snoop: {} }
+	const context: CameraOperationContext = { camera, device, ...(settings && { settings }), mount: resolve('MOUNT'), mountGuideOutput: resolve('GUIDE_OUTPUT'), snoop: {} }
 
-	if (role === 'MAIN_CAMERA') return { ...context, role, snoop: captureSnoop(setup), focuser: resolve('FOCUSER'), wheel: resolve('FILTER_WHEEL'), flatPanel: resolve('FLAT_PANEL'), cover: resolve('COVER'), dither: { mount: context.mount, guideCamera: resolve('GUIDE_CAMERA'), guideOutput: resolve('GUIDE_OUTPUT') } }
-	if (role === 'GUIDE_CAMERA') return { ...context, role, snoop: { mount: setup.MOUNT?.id }, guideOutput: resolve('GUIDE_OUTPUT') }
+	if (role === 'MAIN_CAMERA') return { ...context, role, snoop: captureSnoop(setup), focuser: resolve('FOCUSER'), wheel: resolve('FILTER_WHEEL'), flatPanel: resolve('FLAT_PANEL'), cover: resolve('COVER'), dither: { mount: context.mount, guideCamera: resolve('GUIDE_CAMERA'), guideOutput: context.mountGuideOutput } }
+	if (role === 'GUIDE_CAMERA') return { ...context, role, snoop: { mount: setup.MOUNT?.id }, guideOutput: context.mountGuideOutput }
 	return context
 }
 

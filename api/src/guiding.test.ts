@@ -249,14 +249,18 @@ describe('guiding', () => {
 		expect(context.operations.available(context.camera)).toBeTrue()
 	})
 
-	test('a hold keeps guiding from starting, and its guide output in use is seen by the connection', async () => {
+	test('a hold keeps guiding through its guide output from starting, and the run holding it is seen by that guide output', async () => {
 		const context = await setup()
 		const { sessionId } = await start(context)
+		const guideOutput = { connectionId: context.id, deviceId: context.guideOutputId }
+		const another = { connectionId: context.id, deviceId: 'another' }
 		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
-		expect(context.guiding.runsOn(context.id)).toBeEmpty()
+		expect(context.guiding.runsOn(guideOutput)).toBeEmpty()
 
-		const hold = context.guiding.hold(context.id, 'Target Centering')
-		const other = context.guiding.hold(context.id, 'Camera Acquisition')
+		// A hold of another guide output of the same connection keeps nothing from guiding through this one.
+		const unrelated = context.guiding.hold(another, 'Target Centering')
+		const hold = context.guiding.hold(guideOutput, 'Target Centering')
+		const other = context.guiding.hold(guideOutput, 'Camera Acquisition')
 		const refused = context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE })
 		expect(refused.status).toBe(409)
 		expect((await refused.json()) as object).toEqual({ error: 'Target Centering is moving the mount', code: 'busy' })
@@ -269,11 +273,12 @@ describe('guiding', () => {
 		other[Symbol.dispose]()
 		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
 		await waitUntil(() => context.summary()?.guideOutputHeld === true)
-		expect(context.guiding.runsOn(context.id).map((run) => run.sessionId)).toEqual([sessionId])
-		expect(context.guiding.runsOn('another')).toBeEmpty()
+		expect(context.guiding.runsOn(guideOutput).map((run) => run.sessionId)).toEqual([sessionId])
+		expect(context.guiding.runsOn(another)).toBeEmpty()
+		unrelated[Symbol.dispose]()
 
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
-		expect(context.guiding.runsOn(context.id)).toBeEmpty()
+		expect(context.guiding.runsOn(guideOutput)).toBeEmpty()
 	})
 
 	test('a dither claim gives the dither commands of a session to its claimant only', async () => {

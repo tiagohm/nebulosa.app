@@ -209,7 +209,8 @@ export function captureDither({ acquisition, settings, guidingSession, guiding, 
 
 	if (!mount) return { blocker: 'Assign a Mount in Equipment Setup to dither it.' }
 	const fields = { method: 'mount', everyFrames, mount, amount: settings.amount, raOnly: settings.raOnly, pattern: settings.pattern, settleTime: settings.settleTime } as const
-	if (settings.movement === 'slew') return { dither: { ...fields, movement: 'slew' } }
+	// A GoTo needs no guide output, but the one of the setup drives the mount, so the capture keeps it from guiding meanwhile.
+	if (settings.movement === 'slew') return { dither: { ...fields, ...(guideOutput && { guideOutput }), movement: 'slew' } }
 
 	if (!guideOutput) return { blocker: 'Assign a Guide Output in Equipment Setup to dither by guide pulses.' }
 	const { rightAscensionDirection, declinationDirection, maxPulseDuration } = mountSettings

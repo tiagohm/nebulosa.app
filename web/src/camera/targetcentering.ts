@@ -1,4 +1,4 @@
-import type { CameraCapabilities, MountState, ServerEvent, TargetCenteringGuidingRestoration, TargetCenteringMode, TargetCenteringRequest, TargetCenteringSession, TargetCenteringSessionSummary, TargetCenteringState, TargetCenteringStep } from 'api'
+import type { CameraCapabilities, MountState, OperationDevice, ServerEvent, TargetCenteringGuidingRestoration, TargetCenteringMode, TargetCenteringRequest, TargetCenteringSession, TargetCenteringSessionSummary, TargetCenteringState, TargetCenteringStep } from 'api'
 import { nanoid } from 'nanoid'
 import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
@@ -91,7 +91,8 @@ export function targetCenteringBlocker(mode: TargetCenteringMode, camera: RoleAv
 	return undefined
 }
 
-// Builds the start request of a mode from the form of a camera, for a mount. The frames take the exposure time of the form
+// Builds the start request of a mode from the form of a camera, for the mount of the Equipment Setup and the guide output
+// that drives it (its GUIDE_OUTPUT, absent when it has none), whose guiding the session coordinates. The frames take the exposure time of the form
 // and the camera settings of exposure, whose own exposure time is never sent, fitted to the camera's capabilities as a
 // capture is, and are solved with the plate solving settings of the camera; the angles are sent in radians. Everything is
 // copied, so the session never depends on the profile.
@@ -101,7 +102,7 @@ export function targetCenteringRequest(
 	settings: Readonly<TargetCenteringSettings>,
 	exposure: Readonly<CameraExposureSettings>,
 	solving: Readonly<CameraPlateSolvingSettings>,
-	mount: { readonly connectionId: string; readonly deviceId: string },
+	{ mount, guideOutput }: { readonly mount: OperationDevice; readonly guideOutput?: OperationDevice },
 	capabilities?: CameraCapabilities,
 ): Omit<TargetCenteringRequest, 'token'> {
 	const { rightAscension, declination, label } = target
@@ -109,6 +110,7 @@ export function targetCenteringRequest(
 
 	return {
 		mount,
+		...(guideOutput && { guideOutput }),
 		mode,
 		target: { frame: 'J2000', rightAscension, declination, ...(label !== undefined && { label }), ...(framingId !== undefined && { framingId }) },
 		capture: fitExposure({ ...exposure, exposureTime }, capabilities),

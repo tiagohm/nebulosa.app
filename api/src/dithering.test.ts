@@ -20,7 +20,7 @@ import { type CaptureDither, CaptureDithering, type CaptureDitheringGuiding, dit
 import type { GuidingCommandStatus, GuidingDitherRequest, GuidingSessionSummary } from './guiding'
 import { ImageStore } from './images'
 import type { MeridianFlipMonitor, MeridianMechanicalAssessment } from './meridianflip'
-import { OperationRegistry } from './operations'
+import { type OperationDevice, OperationRegistry } from './operations'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-dithering-'))
 const disposables: Disposable[] = []
@@ -77,16 +77,16 @@ function fakeGuiding() {
 	let outcome: (request: GuidingDitherRequest) => Promise<GuidingCommandStatus> = () => Promise.resolve({ commandId: 'command', command: 'dither', state: 'succeeded' })
 	let captured = () => 0
 	let runs: readonly GuidingSessionSummary[] = []
-	const holds: string[] = []
+	const holds: OperationDevice[] = []
 
 	const guiding: CaptureDitheringGuiding = {
 		runsOn: () => runs,
-		hold: (connectionId) => {
-			holds.push(connectionId)
+		hold: (guideOutput) => {
+			holds.push(guideOutput)
 			let held = true
 			return {
 				[Symbol.dispose]: () => {
-					if (held) holds.splice(holds.indexOf(connectionId), 1)
+					if (held) holds.splice(holds.indexOf(guideOutput), 1)
 					held = false
 				},
 			}
@@ -290,13 +290,13 @@ describe('mount dithering of a capture', () => {
 
 	test('pulses the mount before each frame after the first, refusing manual motions and guiding until it ends', async () => {
 		const context = await pointed()
-		const { admit, mount, operations, fake, id, sessions } = context
+		const { admit, mount, operations, fake, id, guideOutputId, sessions } = context
 		const before = { ...mount.equatorialCoordinate }
 		const admitted = admit(request({ count: 3, exposureTime: 0.5, dither: pulse(context) }))
 
 		await waitUntil(() => sessions().at(-1)?.phase === 'exposing')
 		expect(await manual(context)).toBeFalse()
-		expect(fake.holds).toEqual([id])
+		expect(fake.holds).toEqual([{ connectionId: id, deviceId: guideOutputId }])
 
 		expect(await admitted.ended).toMatchObject({ phase: 'completed', captured: 3, dither: { completed: 2, settling: false } })
 		expect(mount.equatorialCoordinate).not.toEqual(before)
@@ -366,6 +366,20 @@ describe('mount dithering of a capture', () => {
 		expect(ended.error).toContain('changed its pier side')
 	})
 
+	test('a GoTo dither holds the guide output of the setup off guiding, even the ST4 port of the camera it captures with', async () => {
+		const context = await pointed()
+		const { admit, mount, operations, mountCommander, fake, id, cameraGuideOutputId } = context
+		expect(await mountCommander.setTracking(operations.coordinator, mount, true)).toMatchObject({ ok: true })
+		if (!cameraGuideOutputId) throw new Error('the simulated camera has no guide output')
+		const st4 = { connectionId: id, deviceId: cameraGuideOutputId }
+
+		const admitted = admit(request({ count: 2, exposureTime: 0.5, dither: pulse(context, { movement: 'slew', guideOutput: st4, settleTime: 0.1 }) }))
+		expect(fake.holds).toEqual([st4])
+		expect(await admitted.ended).toMatchObject({ phase: 'completed', captured: 2, dither: { completed: 1 } })
+		expect(fake.holds).toEqual([])
+		expect(operations.available(mount)).toBeTrue()
+	})
+
 	test('an abort during the mechanical settle ends the capture and frees the mount', async () => {
 		const context = await pointed()
 		const { admit, captures, operations, mount, sessions } = context
@@ -397,7 +411,7 @@ describe('mount dithering of a capture', () => {
 		expect(mount.equatorialCoordinate).toEqual(before)
 	})
 
-	test('guiding on the connection, a busy mount, or the capture camera as guide output refuse the capture', async () => {
+	test('guiding through the guide output, a busy mount, or pulses through the capture camera refuse the capture', async () => {
 		const context = await setup()
 		const { id, cameraId, captures, fake, operations, mount, cameraGuideOutputId } = context
 

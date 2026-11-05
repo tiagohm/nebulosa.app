@@ -13,5 +13,5 @@ import type { ImageToolPanelProps } from './tools'
 export function TargetCenteringTool({ camera }: ImageToolPanelProps) {
 	const operations = useSnapshot(operationsState)
 	if (!camera) return <EmptyState title="No camera tab" description="Select a camera tab to center a target with its camera." />
-	return <TargetCenteringSections device={camera.device.device} availability={deviceAvailability('camera', camera.device, operations)} mount={camera.mount} settings={camera.settings} />
+	return <TargetCenteringSections device={camera.device.device} availability={deviceAvailability('camera', camera.device, operations)} mount={camera.mount} guideOutput={camera.mountGuideOutput} settings={camera.settings} />
 }

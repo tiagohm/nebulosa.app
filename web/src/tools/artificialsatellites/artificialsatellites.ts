@@ -533,11 +533,6 @@ export function formatSatelliteTime(time: number, timeZone: string) {
 	return new Intl.DateTimeFormat('sv-SE', { timeZone: timeZone || undefined, dateStyle: 'short', timeStyle: 'medium' }).format(time)
 }
 
-// Formats an angle in radians as degrees with a number of decimals.
-export function degrees(radians: number, decimals = 2) {
-	return `${((radians * 180) / Math.PI).toFixed(decimals)}°`
-}
-
 // Formats an age in days, with its sign: elements older than the instant are a positive age.
 export function formatElementAge(days: number) {
 	const value = Math.abs(days)

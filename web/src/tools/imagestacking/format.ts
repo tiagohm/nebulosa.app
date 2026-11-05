@@ -1,5 +1,6 @@
 // oxfmt-ignore
 import type { StackingJobSummary, StackingCohort, StackingFinding, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingProductStatus, StackingRecipe, StackingRegistration, StackingRole, StackingSettings } from 'api'
+import { MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 import { masterName } from '../calibrationlibrary/library'
 
@@ -147,12 +148,12 @@ export function selectionFields(selection: StackingSettings['selection']): Recor
 
 // Text of a measured value with a precision; a missing or unbounded value is a dash. JSON writes Infinity as null.
 export function metricText(value: number | null | undefined, digits: number = 2) {
-	return value === null || value === undefined || !Number.isFinite(value) ? '—' : value.toFixed(digits)
+	return value === null || value === undefined || !Number.isFinite(value) ? MISSING : value.toFixed(digits)
 }
 
 // Text of a registration: the shift in pixels and the rotation in degrees, or why it failed.
 export function registrationText(registration: StackingRegistration | undefined) {
-	if (!registration) return '—'
+	if (!registration) return MISSING
 	if (!registration.success) return `Failed: ${registration.reason}`
 	const { translationX, translationY, rotation, rmsError } = registration.transform.summary
 	return `${translationX.toFixed(1)}, ${translationY.toFixed(1)} px · ${((rotation * 180) / Math.PI).toFixed(2)}° · ${rmsError.toFixed(2)} px rms`

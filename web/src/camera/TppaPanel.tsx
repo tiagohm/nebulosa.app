@@ -8,6 +8,7 @@ import { Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
+import { formatArcmin, formatSignedArcmin, formatDegrees, MISSING } from '../format'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
 import { useSolverConfigured } from '../platesolving/PlateSolveControls'
@@ -91,7 +92,7 @@ export function TppaSections({ device, availability, mount, settings: identity }
 			<CollapsibleSection id="images.tppa.equipment" title="Equipment">
 				<DataList>
 					<DataRow label="Camera">
-						<DeviceLink device={device} fallback="—" />
+						<DeviceLink device={device} />
 					</DataRow>
 					<DataRow label="Mount">
 						<DeviceLink device={mount.device} fallback="Not assigned" />
@@ -198,17 +199,17 @@ function Measurements({ session, details }: MeasurementsProps) {
 					const attempt = n > 1 ? attempts.find((a) => a.point === n && a.accepted) : undefined
 					return (
 						<DataRow key={n} label={`Point ${n}/3`}>
-							{pose ? (attempt ? `${formatDegrees(attempt.rotation)} rotated` : 'Solved') : session.point === n && tppaRunning(session) ? TPPA_STATE_LABELS[session.state] : '—'}
+							{pose ? (attempt ? `${formatDegrees(attempt.rotation, 1)} rotated` : 'Solved') : session.point === n && tppaRunning(session) ? TPPA_STATE_LABELS[session.state] : MISSING}
 						</DataRow>
 					)
 				})}
 				<DataRow label="Frames">{session.frameCount}</DataRow>
-				{geometry && <DataRow label="Total Rotation">{formatDegrees(geometry.rotation13)}</DataRow>}
+				{geometry && <DataRow label="Total Rotation">{formatDegrees(geometry.rotation13, 1)}</DataRow>}
 				{geometry && <DataRow label="Geometry">{`${geometry.acceptable ? 'Good' : 'Rejected'} (Q ${geometry.quality.toFixed(3)})`}</DataRow>}
 			</DataList>
 			{rejected && !session.geometry && (
 				<p className="m-0 text-xs leading-4 text-ink-300">
-					Last candidate: {formatDegrees(rejected.rotation)}, {rejected.reason === 'insufficientRotation' ? 'moving further' : rejected.reason}.
+					Last candidate: {formatDegrees(rejected.rotation, 1)}, {rejected.reason === 'insufficientRotation' ? 'moving further' : rejected.reason}.
 				</p>
 			)}
 		</CollapsibleSection>
@@ -231,12 +232,12 @@ function PolarError({ alignment, details }: PolarErrorProps) {
 	return (
 		<CollapsibleSection id="images.tppa.polar-alignment" title="Polar Alignment">
 			<DataList>
-				<DataRow label="Total Error">
-					<span className={cn(toArcmin(alignment.totalError) <= 1 && 'text-success')}>{formatArcmin(alignment.totalError, false)}</span>
+				<DataRow label="Total Error" tone={toArcmin(alignment.totalError) <= 1 ? 'success' : 'default'}>
+					{formatArcmin(alignment.totalError)}
 				</DataRow>
-				<DataRow label="Azimuth Error">{formatArcmin(alignment.azimuthError)}</DataRow>
-				<DataRow label="Altitude Error">{formatArcmin(alignment.altitudeError)}</DataRow>
-				{alignment.stage === 'refinement' && <DataRow label="Last Adjustment">{`Az ${formatArcmin(alignment.azimuthAdjustment)} · Alt ${formatArcmin(alignment.altitudeAdjustment)}`}</DataRow>}
+				<DataRow label="Azimuth Error">{formatSignedArcmin(alignment.azimuthError)}</DataRow>
+				<DataRow label="Altitude Error">{formatSignedArcmin(alignment.altitudeError)}</DataRow>
+				{alignment.stage === 'refinement' && <DataRow label="Last Adjustment">{`Az ${formatSignedArcmin(alignment.azimuthAdjustment)} · Alt ${formatSignedArcmin(alignment.altitudeAdjustment)}`}</DataRow>}
 				<DataRow label="Estimate">{alignment.stage === 'acquisition' ? 'Initial (three points)' : `Refined, frame #${alignment.frame}`}</DataRow>
 			</DataList>
 			{overlay?.failure && <p className="m-0 text-xs leading-4 text-ink-300">The correction guide could not be drawn ({overlay.failure}).</p>}
@@ -266,15 +267,4 @@ function SessionState({ session }: { readonly session: TppaSessionSummary }) {
 			{session.warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{session.warnings.at(-1)}</p>}
 		</>
 	)
-}
-
-// Formats an angle in radians as arcminutes, signed unless told otherwise.
-function formatArcmin(angle: number, signed = true) {
-	const value = toArcmin(angle)
-	return `${signed && value > 0 ? '+' : ''}${value.toFixed(1)}′`
-}
-
-// Formats an angle in radians as degrees with one decimal.
-function formatDegrees(angle: number) {
-	return `${toDeg(angle).toFixed(1)}°`
 }

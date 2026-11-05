@@ -1,6 +1,7 @@
 import type { LocalViewHandedness, LocalViewOrientationMode } from 'api'
 import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
+import { MISSING, formatGeographic } from '../../format'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { BROWSER_TIME_ZONE } from '../../sky/clock'
@@ -9,7 +10,6 @@ import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
-import { formatGeoPoint } from '../../ui/worldmap.geometry'
 import { displayTimeZone, type EclipsePlace, formatDuration, formatEclipseTime } from '../eclipse/eclipse'
 import { DISPLAY_TIME_ZONES, LocationSection, Note } from '../eclipse/EclipsePanelParts'
 import { GlobalPointIcon } from './GlobalPointMarker'
@@ -41,7 +41,7 @@ function choosePlace(place: EclipsePlace) {
 
 // Returns an angle in degrees to a tenth, or a dash when it is undefined.
 function angle(value: number | undefined) {
-	return value === undefined ? '—' : `${value.toFixed(1)}°`
+	return value === undefined ? MISSING : `${value.toFixed(1)}°`
 }
 
 interface GlobalPointRowProps {
@@ -72,7 +72,7 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 			{selected && (
 				<div className="flex flex-col gap-1.5 border-t border-line-100 px-2 py-2">
 					<Note>{info.description}</Note>
-					<DataRow label="Position">{formatGeoPoint(point)}</DataRow>
+					<DataRow label="Position">{formatGeographic(point.latitude, point.longitude)}</DataRow>
 					{point.sunAltitude !== undefined && <DataRow label="Sun altitude">{point.sunAltitude.toFixed(1)}°</DataRow>}
 					{extreme && <DataRow label="Sun azimuth">{extreme.sunAzimuth.toFixed(1)}°</DataRow>}
 					{extreme?.kind && <DataRow label="Central phase">{extreme.kind === 'annular' ? 'Annular' : 'Total'}</DataRow>}
@@ -157,7 +157,7 @@ export function SolarEclipsePanel({ observer }: SolarEclipsePanelProps) {
 					<DataRow label="Magnitude">{eclipse.magnitude.toFixed(4)}</DataRow>
 					<DataRow label="Gamma">{eclipse.gamma.toFixed(4)}</DataRow>
 					{greatest && <DataRow label="Greatest eclipse">{formatEclipseTime(greatest.time, timeZone)}</DataRow>}
-					{greatest && <DataRow label="Greatest eclipse at">{formatGeoPoint(greatest)}</DataRow>}
+					{greatest && <DataRow label="Greatest eclipse at">{formatGeographic(greatest.latitude, greatest.longitude)}</DataRow>}
 					{duration?.centralDuration !== undefined && <DataRow label="Greatest duration">{formatDuration(duration.centralDuration)}</DataRow>}
 					{greatest?.pathWidth !== undefined && <DataRow label="Path width at greatest">{greatest.pathWidth.toFixed(1)} km</DataRow>}
 					{local?.details.maximalMagnitude !== undefined && <DataRow label="Magnitude here">{local.details.maximalMagnitude.toFixed(4)}</DataRow>}

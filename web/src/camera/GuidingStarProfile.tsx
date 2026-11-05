@@ -1,7 +1,8 @@
 import type { GuidingStarProfile } from 'api'
 import { Notice } from '../equipment-control/parts'
+import { formatPixelLength, formatDegrees, MISSING } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
-import { FLAG_LABELS, formatNumber, formatWidth } from '../stars/starprofile.format'
+import { FLAG_LABELS, formatNumber } from '../stars/starprofile.format'
 import { consecutiveOffsets } from '../stars/starprofile.plot'
 import { StarProfilePlot } from '../stars/StarProfilePlot'
 import { DataList, DataRow } from '../ui/DataRow'
@@ -51,12 +52,12 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 				<DataRow label="Peak">{formatIntensity(star.peak, star.adu)}</DataRow>
 				<DataRow label="Background">{formatIntensity(star.background, star.adu)}</DataRow>
 				<DataRow label="Noise (σ)">{formatIntensity(star.deviation, star.adu)}</DataRow>
-				<DataRow label="HFD">{formatWidth(star.hfd, pixelScale)}</DataRow>
-				<DataRow label="FWHM">{formatWidth(star.fwhm, pixelScale)}</DataRow>
-				<DataRow label="FWHM Major / Minor">{star.major === undefined || star.minor === undefined ? '—' : `${star.major.toFixed(2)} / ${star.minor.toFixed(2)} px`}</DataRow>
+				<DataRow label="HFD">{formatPixelLength(star.hfd, pixelScale)}</DataRow>
+				<DataRow label="FWHM">{formatPixelLength(star.fwhm, pixelScale)}</DataRow>
+				<DataRow label="FWHM Major / Minor">{star.major === undefined || star.minor === undefined ? MISSING : `${star.major.toFixed(2)} / ${star.minor.toFixed(2)} px`}</DataRow>
 				<DataRow label="Eccentricity">{formatNumber(star.eccentricity, 3)}</DataRow>
 				<DataRow label="Elongation">{formatNumber(star.elongation, 3)}</DataRow>
-				<DataRow label="Orientation">{star.theta === undefined ? '—' : `${((star.theta * 180) / Math.PI).toFixed(1)}°`}</DataRow>
+				<DataRow label="Orientation">{star.theta === undefined ? MISSING : formatDegrees(star.theta, 1)}</DataRow>
 				<DataRow label="Model">{star.model === 'moffat' ? 'Moffat' : 'Moments'}</DataRow>
 			</DataList>
 			{star.flags.length > 0 && <Notice>{star.flags.map((flag) => FLAG_LABELS[flag]).join(', ')}.</Notice>}
@@ -68,6 +69,6 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 // Formats an optional intensity given in normalized samples: whole ADU when adu (ADU per normalized unit) is above 1,
 // else the normalized value.
 function formatIntensity(value: number | undefined, adu: number) {
-	if (value === undefined) return '—'
+	if (value === undefined) return MISSING
 	return adu > 1 ? `${Math.round(value * adu)} ADU` : value.toFixed(4)
 }

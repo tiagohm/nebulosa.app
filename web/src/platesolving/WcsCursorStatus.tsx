@@ -1,6 +1,7 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
+import { MISSING } from '../format'
 import type { ViewerCursor } from '../viewer/ImageViewer'
-import { type CoordinateStyle, formatDeclinationAs, formatPixelScale, formatRightAscensionAs, MISSING } from './coordinates'
+import { type CoordinateStyle, formatDeclinationAs, formatPixelScale, formatRightAscensionAs } from './coordinates'
 import { pixelScaleAt, skyAt, wcsFrame } from './wcs'
 
 // Sky position under the pointer in the status line of the shared image viewer: right ascension and declination in the

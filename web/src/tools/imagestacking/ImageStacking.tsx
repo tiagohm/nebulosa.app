@@ -25,6 +25,7 @@ import { IntegrationView, ResultsView } from './Integration'
 import { CalibrationView, QualityView } from './Planning'
 // oxfmt-ignore
 import { cancelStackingImport, commitStackingImport, createStackingProject, deleteStackingProject, imageStackingRuntime, jobEnded, loadStackingCandidates, loadStackingFrame, loadStackingFrames, loadStackingProject, refreshStackingProject, removeStackingFrame, renameStackingProject, STACKING_PAGE_SIZE, type StackingFrameFilter, startStackingImport, updateStackingFrame } from './projects'
+import { MISSING } from '../../format'
 import { Cell, Row, Table } from './Table'
 
 // Image Stacking tool: projects of light frames saved on the server, grouped by the filter their headers write. It
@@ -308,7 +309,7 @@ function GroupsView({ onShow }: { readonly onShow: (key: string) => void }) {
 						<Cell>{item.unavailable > 0 ? `${item.usable}/${item.frames} · ${item.unavailable} unavailable` : `${item.usable}/${item.frames}`}</Cell>
 						<Cell>{integrationText(item.exposure)}</Cell>
 						<Cell className={item.cohorts > 1 ? 'text-warning' : undefined}>{item.cohorts === 1 ? 'One setup' : `${item.cohorts} setups`}</Cell>
-						<Cell>{item.objects.join(', ') || '—'}</Cell>
+						<Cell>{item.objects.join(', ') || MISSING}</Cell>
 					</Row>
 				))}
 			</Table>
@@ -345,8 +346,8 @@ function FramesView({ selected, onSelect, onRemoved }: { readonly selected?: str
 						<Cell>{ROLE_LABELS[frame.role]}</Cell>
 						<Cell>{frame.metadata.filter.value ?? 'None'}</Cell>
 						<Cell>{exposureText(frame.metadata)}</Cell>
-						<Cell>{frame.object ?? '—'}</Cell>
-						<Cell>{frame.observedAt === undefined ? '—' : new Date(frame.observedAt).toISOString().slice(0, 16).replace('T', ' ')}</Cell>
+						<Cell>{frame.object ?? MISSING}</Cell>
+						<Cell>{frame.observedAt === undefined ? MISSING : new Date(frame.observedAt).toISOString().slice(0, 16).replace('T', ' ')}</Cell>
 						<Cell>{frame.excluded ? <StatusBadge tone="muted" label="Left Out" /> : <StatusBadge tone={SOURCE_STATUS_TONES[frame.status]} label={SOURCE_STATUS_LABELS[frame.status]} />}</Cell>
 						<Cell>
 							<div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
@@ -592,9 +593,9 @@ function ImportDialog({ projectId, onClose }: { readonly projectId: string; read
 								<Row key={candidate.path}>
 									<Cell>{candidateUsable(candidate) && candidate.role ? <Checkbox label={candidate.name} checked={candidateChecked(selection, candidate.path)} onChange={(checked) => setSelection(withCandidate(selection, candidate.path, candidate.role!, checked))} /> : candidate.name}</Cell>
 									<Cell className={candidateUsable(candidate) ? undefined : 'text-ink-300'}>{candidateText(candidate)}</Cell>
-									<Cell>{candidate.filter ?? '—'}</Cell>
-									<Cell>{candidate.metadata ? exposureText(candidate.metadata) : '—'}</Cell>
-									<Cell>{candidate.object ?? '—'}</Cell>
+									<Cell>{candidate.filter ?? MISSING}</Cell>
+									<Cell>{candidate.metadata ? exposureText(candidate.metadata) : MISSING}</Cell>
+									<Cell>{candidate.object ?? MISSING}</Cell>
 									<Cell>{candidate.role === 'unclassified' && candidateUsable(candidate) && <Checkbox label="Light" checked={declared.has(candidate.path)} onChange={(light) => toggle(candidate.path, light)} />}</Cell>
 								</Row>
 							))}

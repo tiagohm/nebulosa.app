@@ -1,6 +1,7 @@
 import type { CloseApproach, CloseApproachBody, MinorBody, MinorBodyDetails, MinorBodyPublishedValue } from 'api'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
+import { MISSING } from '../../format'
 import { CLOSE_APPROACH_BODIES, type CloseApproachDistanceDisplay } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Note } from '../../sky/InspectorParts'
@@ -47,7 +48,7 @@ const VIRTUAL_IMPACTOR_NOTE = 'As published by the JPL Sentry system through SBD
 
 // Value of a published number with its uncertainty and units.
 function publishedText({ value, sigma, units }: MinorBodyPublishedValue) {
-	return [value ?? '—', sigma && `± ${sigma}`, units].filter(Boolean).join(' ')
+	return [value ?? MISSING, sigma && `± ${sigma}`, units].filter(Boolean).join(' ')
 }
 
 // Rows of published values, with the reference of each.

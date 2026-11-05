@@ -7,12 +7,13 @@ import { isAnnotationShown } from '../annotations/AnnotationOverlay'
 import { annotationKey, annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, resolveMinorBody, runAnnotation, sameAnnotationRequest } from '../annotations/annotations'
 import { useAnnotationContext, useAnnotationResult } from '../annotations/useAnnotationResult'
 import { Actions, Notice } from '../equipment-control/parts'
+import { formatDegrees, formatDuration, MISSING, formatGeographic } from '../format'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState, setAnnotationPreferences } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
-import { formatAngularSize, formatDeclination, formatDegrees, formatMagnitude, formatRightAscension } from '../sky/format'
+import { formatAngularSize, formatDeclination, formatMagnitude, formatRightAscension } from '../sky/format'
 import type { SkySelectionRef } from '../sky/objects'
 import { selectSkyObject, skyState } from '../sky/sky'
 import { Button } from '../ui/Button'
@@ -35,9 +36,6 @@ import type { ImageToolPanelProps } from './tools'
 // solved implicitly, and the date and site always come from the image. Run Analysis is the only action that queries the
 // catalog, and Find the only one that asks the SkyBoT service for the solar-system objects:
 // showing, hiding, or restyling the overlay never does. A result always belongs to the image it annotated.
-
-// Text shown for a value the result does not have.
-const MISSING = '—'
 
 // Objects listed at most; the overlay still draws every one.
 const MAX_LISTED = 300
@@ -238,7 +236,7 @@ function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, s
 			{job ? (
 				<>
 					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
-					<DataRow label="Elapsed">{formatSeconds(elapsedOf(job, now))}</DataRow>
+					<DataRow label="Elapsed">{formatDuration(elapsedOf(job, now) / 1000)}</DataRow>
 					{job.error && <Notice error>{job.error}</Notice>}
 					{changed && <Notice>The WCS or the magnitude limit changed since this analysis; run it again to apply them.</Notice>}
 				</>
@@ -313,7 +311,7 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 			{job && (
 				<>
 					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
-					<DataRow label="Elapsed">{formatSeconds(elapsedOf(job, now))}</DataRow>
+					<DataRow label="Elapsed">{formatDuration(elapsedOf(job, now) / 1000)}</DataRow>
 					{job.summary &&
 						BODY_LAYERS.map(([layer]) => (
 							<DataRow key={layer} label={LAYER_LABELS[layer]}>
@@ -339,7 +337,7 @@ function formatUtc(time: number): string {
 
 // Formats a site: "23.5500° S, 46.6300° W, 760 m".
 function formatSite({ latitude, longitude, elevation }: AnnotationSite): string {
-	return `${Math.abs(latitude).toFixed(4)}° ${latitude < 0 ? 'S' : 'N'}, ${Math.abs(longitude).toFixed(4)}° ${longitude < 0 ? 'W' : 'E'}, ${elevation.toFixed(0)} m`
+	return `${formatGeographic(latitude, longitude)}, ${elevation.toFixed(0)} m`
 }
 
 interface ObjectsProps {
@@ -380,7 +378,7 @@ function Objects({ job, objects, warnings, resultError, annotation, selected, on
 								{summary.counts[layer]}
 							</DataRow>
 						))}
-					{summary && <DataRow label="Duration">{formatSeconds(summary.elapsed)}</DataRow>}
+					{summary && <DataRow label="Duration">{formatDuration(summary.elapsed / 1000)}</DataRow>}
 					{warnings?.map((warning) => (
 						<Notice key={warning}>{warning}</Notice>
 					))}
@@ -464,12 +462,6 @@ function elapsedOf(job: AnnotationJob, now: number): number {
 	if (job.summary) return job.summary.elapsed
 	if (job.startedAt === undefined) return 0
 	return (job.endedAt ?? now) - job.startedAt
-}
-
-// Returns a duration in milliseconds as seconds with two decimals below 10 s, one above.
-function formatSeconds(milliseconds: number): string {
-	const seconds = milliseconds / 1000
-	return `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
 }
 
 // Formats a position uncertainty in radians as arcseconds with two significant digits: "0.026″", "45″".

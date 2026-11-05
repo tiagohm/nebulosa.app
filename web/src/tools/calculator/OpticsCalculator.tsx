@@ -1,20 +1,14 @@
-import { toDeg } from 'nebulosa/src/math/units/angle'
+import { formatDegrees, formatFixed } from '../../format'
 import { formatAngularSize } from '../../sky/format'
 import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
 import { IMAGING_SETUP_EXAMPLE, type ImagingSetupDraft, imagingSetup, imagingSetupFromOptics, MOSAIC_EXAMPLE, type MosaicDraft, mosaic, mosaicFromOptics, type SensorKind } from './optics'
-import { formatFixed } from './values'
 
 // Views of the Optics & Field of View calculators: Imaging Setup and Mosaic Estimator.
 
 // Sensor kinds in display order.
 const SENSOR_KINDS: readonly SensorKind[] = ['pixels', 'physical']
-
-// Formats an angle in radians as degrees with three decimals.
-function formatDegrees(angle: number) {
-	return `${formatFixed(toDeg(angle), 3)}°`
-}
 
 // Imaging Setup calculator.
 export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorViewProps<ImagingSetupDraft>) {
@@ -62,9 +56,9 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 								{formatAngularSize(framing.width)} × {formatAngularSize(framing.height)}
 							</Primary>
 							<DataRow label="Field (degrees)">
-								{formatDegrees(framing.width)} × {formatDegrees(framing.height)}
+								{formatDegrees(framing.width, 3)} × {formatDegrees(framing.height, 3)}
 							</DataRow>
-							<DataRow label="Diagonal">{formatDegrees(diagonal)}</DataRow>
+							<DataRow label="Diagonal">{formatDegrees(diagonal, 3)}</DataRow>
 							<DataRow label="Image scale">{framing.scale === undefined ? <span className="font-sans text-xs text-ink-300">Needs the pixel size: enter the sensor by resolution.</span> : `${formatFixed(framing.scale, 2)}″/px`}</DataRow>
 							<DataRow label="Effective focal length">{formatFixed(framing.effectiveFocalLength, 0)} mm</DataRow>
 							<DataRow label="Focal ratio">{framing.focalRatio === undefined ? <span className="font-sans text-xs text-ink-300">Needs the aperture.</span> : `f/${formatFixed(framing.focalRatio, 1)}`}</DataRow>

@@ -15,6 +15,7 @@ import { bytesText } from '../calibrationlibrary/library'
 import { integrationText, INTERPOLATION_LABELS, INTERPOLATIONS, memoryText, METHOD_LABELS, METHODS, NORMALIZATION_LABELS, NORMALIZATIONS, PRODUCT_LABELS, PRODUCT_TONES, SIGMA_METHODS, WEIGHTING_LABELS, WEIGHTINGS } from './format'
 // oxfmt-ignore
 import { cancelStackingRun, deleteStackingProduct, imageStackingRuntime, jobEnded, loadStackingPreflight, loadStackingProduct, startStackingRun } from './projects'
+import { MISSING } from '../../format'
 import { Cell, Row, Table } from './Table'
 
 // Integration and results of an Image Stacking project. Integration edits the recipe, shows what a run would do with it
@@ -92,7 +93,7 @@ export function IntegrationView({ projectId }: { readonly projectId: string }) {
 							<Cell>{integrationText(group.exposure)}</Cell>
 							<Cell>{group.plan.mode === 'online' ? 'In memory' : `Strips of ${group.plan.stripRows} rows`}</Cell>
 							<Cell>{memoryText(group.plan.memoryBytes)}</Cell>
-							<Cell>{group.plan.diskBytes > 0 ? memoryText(group.plan.diskBytes) : '—'}</Cell>
+							<Cell>{group.plan.diskBytes > 0 ? memoryText(group.plan.diskBytes) : MISSING}</Cell>
 							<Cell>{group.reusedProductId !== undefined ? <StatusBadge tone="neutral" label="Reuses Master" /> : group.plan.fits ? <StatusBadge tone="success" label="Integrates" /> : <StatusBadge tone="danger" label="Does Not Fit" />}</Cell>
 						</Row>
 					))}

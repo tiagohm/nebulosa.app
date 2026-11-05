@@ -2,6 +2,7 @@ import type { CaptureFrameSummary } from 'api'
 import { cn } from 'cn'
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
+import { MISSING } from '../format'
 import { Icon } from '../ui/Icon'
 import { moveIndex } from '../ui/navigation'
 import { type CameraFrameSelection, selectCameraFrame } from './cameratabs'
@@ -176,7 +177,7 @@ function FrameCard({ card, selected, focusable, loading, error, restored, newer,
 				{card.kind === 'latest' && frame && <span className="text-ink-300">#{frame.sequence}</span>}
 			</span>
 			<span className="flex items-baseline justify-between gap-1 text-ink-300">
-				<span>{frame ? timeOf(frame.time) : '—'}</span>
+				<span>{frame ? timeOf(frame.time) : MISSING}</span>
 				{frame?.acquisition?.exposure !== undefined && <span>{frame.acquisition.exposure}s</span>}
 			</span>
 			<span className="flex h-4 items-center justify-between gap-1">

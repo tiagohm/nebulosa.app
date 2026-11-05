@@ -11,6 +11,7 @@ import { roleDevice, roleStatus } from '../../equipment/equipment'
 import { ROLES } from '../../equipment/roles'
 import { RoleStatusText } from '../../equipment/RoleStatusText'
 import { useActiveServerId, useRoleDevice, useWatchedDevices } from '../../equipment/useEquipment'
+import { formatGeographic } from '../../format'
 import { imagesState } from '../../images/images'
 import { notificationsState } from '../../notifications/notifications'
 import { openNotificationTarget, targetAvailable } from '../../notifications/target'
@@ -229,7 +230,7 @@ function AstronomicalTimeSection({ onNavigate }: AstronomicalTimeSectionProps) {
 					{label === 'Local' && ` · ${timeZone}`}
 				</Row>
 			))}
-			{observer ? <Row label="Site">{observer.name ?? `${observer.latitude.toFixed(4)}°, ${observer.longitude.toFixed(4)}°`}</Row> : <p className="m-0 text-ink-300">Sidereal times need a Sky observer in this profile.</p>}
+			{observer ? <Row label="Site">{observer.name ?? formatGeographic(observer.latitude, observer.longitude)}</Row> : <p className="m-0 text-ink-300">Sidereal times need a Sky observer in this profile.</p>}
 			{freshness === 'stale' && <p className="m-0 text-ink-300">Not updated recently: the server is not answering.</p>}
 			{sample &&
 				qualityNotes(sample.reference.quality).map((note) => (

@@ -1,4 +1,5 @@
 import { formatDEC, formatRA, normalizeAngle, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
+import { MISSING, formatDegrees } from '../format'
 import type { Point } from '../viewer/transform'
 import type { CoordinateFormat } from './preferences'
 import type { WcsFrame } from './wcs'
@@ -7,9 +8,6 @@ import type { WcsFrame } from './wcs'
 // decimals of the profile (sexagesimal through the toolkit's formatRA and formatDEC, or decimal degrees), angular
 // sizes in the unit that suits them, position angles, and zero-based pixels. The decimals are a presentation choice,
 // never a claim of accuracy. A missing value is written "—", never 0.
-
-// Text of a value that is not available.
-export const MISSING = '—'
 
 // How sky coordinates are written.
 export interface CoordinateStyle {
@@ -58,7 +56,7 @@ export function formatSignedAngle(angle: number): string {
 
 // Returns a position angle in radians as degrees from north through east ("123.45°"), or MISSING when undefined.
 export function formatPositionAngle(angle: number | undefined): string {
-	return angle === undefined ? MISSING : `${toDeg(angle).toFixed(2)}°`
+	return angle === undefined ? MISSING : formatDegrees(angle)
 }
 
 // Returns a pixel scale in radians per pixel as arcseconds per pixel ("2.736″/px").

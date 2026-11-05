@@ -301,9 +301,3 @@ export function interpolateWorldMapView(from: WorldMapView, to: WorldMapView, t:
 	const zoom = from.zoom * (to.zoom / from.zoom) ** t
 	return { zoom, center: { x: from.center.x + dx * t, y: from.center.y + (to.center.y - from.center.y) * t } }
 }
-
-// Returns a latitude and longitude, in degrees, as text with two decimals and the hemispheres, such as
-// 23.5567° S 46.6321° W.
-export function formatGeoPoint({ longitude, latitude }: GeoPoint): string {
-	return `${Math.abs(latitude).toFixed(4)}° ${latitude < 0 ? 'S' : 'N'}  ${Math.abs(longitude).toFixed(4)}° ${longitude < 0 ? 'W' : 'E'}`
-}

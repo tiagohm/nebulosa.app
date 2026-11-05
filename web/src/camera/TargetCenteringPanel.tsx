@@ -9,9 +9,10 @@ import { Actions, ConfirmButton, Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
+import { MISSING } from '../format'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
-import { type CoordinateStyle, formatAngularSize, formatDeclinationAs, formatRightAscensionAs, formatSignedAngle, MISSING } from '../platesolving/coordinates'
+import { type CoordinateStyle, formatAngularSize, formatDeclinationAs, formatRightAscensionAs, formatSignedAngle } from '../platesolving/coordinates'
 import { catalogTarget } from '../platesolving/measurement'
 import { AngleField, useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { activeProfile, cameraPlateSolving, deleteFramingReference, exposureSettings, framingReferences, imageAstrometrySettings, profileState, renameFramingReference, saveFramingReference, setTargetCenteringSettings, targetCenteringSettings } from '../profile/profile'
@@ -142,7 +143,7 @@ export function TargetCenteringSections({ device, availability, mount, settings:
 			<CollapsibleSection id="images.target-centering.equipment" title="Equipment">
 				<DataList>
 					<DataRow label="Camera">
-						<DeviceLink device={device} fallback="—" />
+						<DeviceLink device={device} />
 					</DataRow>
 					<DataRow label="Mount">
 						<DeviceLink device={mount.device} fallback="Not assigned" />

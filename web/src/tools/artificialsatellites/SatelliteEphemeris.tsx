@@ -1,4 +1,5 @@
 import { useSnapshot } from 'valtio'
+import { MISSING, formatDegrees } from '../../format'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
@@ -6,7 +7,7 @@ import { Button } from '../../ui/Button'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Note } from '../eclipse/EclipsePanelParts'
-import { artificialSatellitesState, degrees, downloadEphemerisCsv, ephemerisDraftError, ephemerisRowCount, formatSatelliteTime, loadSatelliteEphemeris, MAX_EPHEMERIS_HOURS, SHADOW_LABELS } from './artificialsatellites'
+import { artificialSatellitesState, downloadEphemerisCsv, ephemerisDraftError, ephemerisRowCount, formatSatelliteTime, loadSatelliteEphemeris, MAX_EPHEMERIS_HOURS, SHADOW_LABELS } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
 // Ephemeris tab of Artificial Satellites: positions of the satellite selected sampled from now or from the Sky's time,
@@ -81,10 +82,10 @@ export function SatelliteEphemeris({ observer }: { readonly observer?: SkyObserv
 										<td className="px-2 py-1 whitespace-nowrap">{formatSatelliteTime(row.time, timeZone)}</td>
 										<td className="px-2 py-1 whitespace-nowrap">{formatRightAscension(row.rightAscension)}</td>
 										<td className="px-2 py-1 whitespace-nowrap">{formatDeclination(row.declination)}</td>
-										<td className="px-2 py-1 text-right">{row.azimuth === undefined ? '—' : degrees(row.azimuth, 1)}</td>
-										<td className="px-2 py-1 text-right">{row.altitude === undefined ? '—' : degrees(row.altitude, 1)}</td>
+										<td className="px-2 py-1 text-right">{row.azimuth === undefined ? MISSING : formatDegrees(row.azimuth, 1)}</td>
+										<td className="px-2 py-1 text-right">{row.altitude === undefined ? MISSING : formatDegrees(row.altitude, 1)}</td>
 										<td className="px-2 py-1 text-right">{row.distanceKm.toFixed(0)} km</td>
-										<td className="px-2 py-1 text-right">{row.rangeRateKmPerSecond === undefined ? '—' : `${row.rangeRateKmPerSecond.toFixed(2)} km/s`}</td>
+										<td className="px-2 py-1 text-right">{row.rangeRateKmPerSecond === undefined ? MISSING : `${row.rangeRateKmPerSecond.toFixed(2)} km/s`}</td>
 										<td className="px-2 py-1 text-right">{row.heightKm.toFixed(0)} km</td>
 										<td className="px-2 py-1">{SHADOW_LABELS[row.shadow]}</td>
 									</tr>

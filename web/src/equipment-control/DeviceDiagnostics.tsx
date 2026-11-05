@@ -1,6 +1,7 @@
 import type { DeviceSummary } from 'api'
 import { useSnapshot } from 'valtio'
 import { deviceState } from '../equipment/equipment'
+import { MISSING } from '../format'
 import { operationsState, runningOn } from '../operations'
 import { DataRow } from '../ui/DataRow'
 import { controlRuntime, deviceStateOf } from './control'
@@ -36,8 +37,8 @@ function InterfaceDiagnostics({ device }: { readonly device: DeviceSummary }) {
 			<DataRow label="Hardware id">{device.hardwareId}</DataRow>
 			<DataRow label="Connection id">{device.connectionId}</DataRow>
 			<DataRow label="Interfaces">{device.interfaces.join(', ')}</DataRow>
-			<DataRow label="Driver">{device.driver.executable || '—'}</DataRow>
-			<DataRow label="Driver version">{device.driver.version || '—'}</DataRow>
+			<DataRow label="Driver">{device.driver.executable || MISSING}</DataRow>
+			<DataRow label="Driver version">{device.driver.version || MISSING}</DataRow>
 			<DataRow label="Capabilities">{capabilities.length > 0 ? capabilities.map(([key, value]) => `${key}: ${value ? 'yes' : 'no'}`).join(', ') : state ? 'none declared' : 'not reported yet'}</DataRow>
 			<DataRow label="Operations">{running.length > 0 ? running.map((operation) => `${operation.kind} (${operation.operationId})`).join(', ') : 'none'}</DataRow>
 			<DataRow label="Last error">{control.errors[device.id] ?? runtime.errors[device.id] ?? 'none'}</DataRow>

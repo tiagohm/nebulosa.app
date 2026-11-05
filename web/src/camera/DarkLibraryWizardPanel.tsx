@@ -9,6 +9,7 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
+import { MISSING, formatTemperature } from '../format'
 import { operationsState } from '../operations'
 import { activeProfile, darkLibraryWizardSettings, exposureSettings, profileState, setDarkLibraryWizardSettings } from '../profile/profile'
 import { type CameraIdentity, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, DARK_LIBRARY_WIZARD_MAXIMUM_REJECTIONS, DEFAULT_DARK_LIBRARY_WIZARD_GROUP, type DarkLibraryWizardSettings } from '../profile/schema'
@@ -132,7 +133,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 	const blocker = running ? undefined : darkLibraryWizardBlocker(availabilities, settings, wheelState, capabilities)
 	const capture = running && session ? session.capture : darkLibraryWizardCapture(exposure, capabilities)
 	const estimate = darkLibraryWizardEstimate(groups, capture, capabilities)
-	const sensorTemperature = capabilities?.temperature === undefined ? undefined : `${capabilities.temperature.toFixed(1)} °C`
+	const sensorTemperature = capabilities?.temperature === undefined ? undefined : formatTemperature(capabilities.temperature)
 	const warning = darkLibraryWizardWarning(settings)
 
 	// Updates fields of the camera's form.
@@ -171,11 +172,11 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 			<CollapsibleSection id="images.dark-library-wizard.equipment" title="Equipment">
 				<DataList>
 					<DataRow label="Camera">
-						<DeviceLink device={device} fallback="—" />
+						<DeviceLink device={device} />
 					</DataRow>
-					<DataRow label="Filter Wheel">{wheelAssigned ? <DeviceLink device={wheel.device} fallback="—" /> : 'Not assigned'}</DataRow>
-					<DataRow label="Flat Panel">{panelAssigned ? <DeviceLink device={flatPanel.device} fallback="—" /> : 'Not assigned'}</DataRow>
-					<DataRow label="Cover">{coverAssigned ? <DeviceLink device={cover.device} fallback="—" /> : 'Not assigned'}</DataRow>
+					<DataRow label="Filter Wheel">{wheelAssigned ? <DeviceLink device={wheel.device} /> : 'Not assigned'}</DataRow>
+					<DataRow label="Flat Panel">{panelAssigned ? <DeviceLink device={flatPanel.device} /> : 'Not assigned'}</DataRow>
+					<DataRow label="Cover">{coverAssigned ? <DeviceLink device={cover.device} /> : 'Not assigned'}</DataRow>
 				</DataList>
 				{!running && (!wheelAssigned || !panelAssigned || !coverAssigned) && wheel !== undefined && (
 					<Button variant="secondary" className="self-start" onClick={() => (deviceState.open = true)}>
@@ -381,11 +382,11 @@ function Progress({ session, pending }: ProgressProps) {
 			{session.pending && <StepPrompt session={session} step={session.pending} pending={pending} />}
 			<DataList>
 				{run && <DataRow label="Group">{`${groupLabel(run)} (${session.group + 1} of ${session.groups.length})`}</DataRow>}
-				{session.temperature !== undefined && <DataRow label="Sensor">{`${session.temperature.toFixed(1)} °C`}</DataRow>}
+				{session.temperature !== undefined && <DataRow label="Sensor">{formatTemperature(session.temperature)}</DataRow>}
 				{attempt?.verdict && <DataRow label="Last Frame">{attempt.verdict === 'acceptedWithWarnings' ? 'Accepted with warnings' : attempt.verdict === 'accepted' ? 'Accepted' : 'Rejected'}</DataRow>}
 				{attempt?.planes.map((plane) => (
 					<DataRow key={plane.plane} label={`Level ${plane.plane}`}>
-						{plane.median === undefined ? '—' : `${Math.round(plane.median)} DN`}
+						{plane.median === undefined ? MISSING : `${Math.round(plane.median)} DN`}
 					</DataRow>
 				))}
 				{running && remaining > 0 && <DataRow label="Exposure Left">{`at least ${darkLibraryWizardDuration(remaining)}`}</DataRow>}

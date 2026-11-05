@@ -1,6 +1,7 @@
 import type { SatelliteGroundTrack as SatelliteGroundTrackData } from 'api'
 import { useEffect, useMemo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatGeographic } from '../../format'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
@@ -8,7 +9,7 @@ import { Checkbox } from '../../ui/Checkbox'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { WorldMap, type WorldMapHandle, WorldMapSymbol } from '../../ui/WorldMap'
-import { formatGeoPoint, geoPath, horizonRegionPath, smallCircleRegionPath } from '../../ui/worldmap.geometry'
+import { geoPath, horizonRegionPath, smallCircleRegionPath } from '../../ui/worldmap.geometry'
 import { EclipseMapLegend } from '../eclipse/EclipseMapParts'
 import { artificialSatellitesState, formatSatelliteTime, type GroundTrackLayers, groundTrackInstant, loadSatelliteGroundTrack, MAX_GROUND_TRACK_ORBITS, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 import { type GroundTrackPoint, type GroundTrackShadow, groundTrackAt, groundTrackRuns, observerInFootprint } from './groundtrack'
@@ -164,7 +165,7 @@ export function SatelliteGroundTrack({ observer }: { readonly observer?: SkyObse
 					</div>
 					<div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-300">
 						<span>{following ? 'Now, following the real time' : 'Chosen instant'}</span>
-						<span className="font-mono text-ink-200 tabular-nums">{formatGeoPoint(point.subpoint)}</span>
+						<span className="font-mono text-ink-200 tabular-nums">{formatGeographic(point.subpoint.latitude, point.subpoint.longitude)}</span>
 						<span>Height {point.heightKm.toFixed(0)} km</span>
 						<span>{SHADOW_LABELS[point.shadow]}</span>
 						{inside !== undefined && <span>{inside ? "Above the observer's horizon" : "Below the observer's horizon"}</span>}

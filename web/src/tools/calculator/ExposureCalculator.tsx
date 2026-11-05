@@ -1,8 +1,8 @@
+import { formatFixed, formatDuration } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
 import { EXPOSURE_PLAN_EXAMPLE, type ExposurePlanDraft, exposurePlan, type PlanMode, STAR_TRAIL_EXAMPLE, type StarTrailDraft, starTrail, starTrailFromOptics } from './exposure'
-import { formatDuration, formatFixed } from './values'
 
 // Views of the Exposure & Integration calculators: Exposure Planner and Star Trailing.
 

@@ -1,7 +1,7 @@
 // Calculation contract shared by the calculators of the Calculator tool: the outcome of a calculation, the reading of
-// the text a field holds into a number within its domain, and the display formats of the results. A draft holds the
-// text of its fields as typed, so an empty or partial field is never replaced by a previous value; it is parsed only
-// here, at the calculation boundary. Formats never show NaN or Infinity.
+// the text a field holds into a number within its domain. A draft holds the text of its fields as typed, so an empty or
+// partial field is never replaced by a previous value; it is parsed only here, at the calculation boundary. Results are
+// written with the shared formats of `format.ts`, which never show NaN or Infinity.
 
 // Outcome of a calculation from a draft: its value, the fields still empty, why an input or the result is outside the
 // model's domain, or why the model gives no finite result.
@@ -125,20 +125,4 @@ export function outcomeMessage(outcome: Exclude<Outcome<unknown>, { readonly sta
 // Whether a draft differs from the values it was imported or reset with, in any of their fields.
 export function differs<D extends object>(draft: D, reference: D) {
 	return (Object.keys(reference) as (keyof D)[]).some((key) => draft[key] !== reference[key])
-}
-
-// Formats a finite number with a fixed number of decimals; a dash for a value that is not finite.
-export function formatFixed(value: number, digits: number) {
-	return Number.isFinite(value) ? value.toFixed(digits) : '—'
-}
-
-// Formats a duration in seconds: seconds below a minute ("12.5 s"), then minutes and seconds ("4 min 05 s"), then
-// hours and minutes ("12 h 05 min"); a dash for a value that is not finite.
-export function formatDuration(seconds: number) {
-	if (!Number.isFinite(seconds)) return '—'
-	if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 2 : 1)} s`
-	const total = Math.round(seconds)
-	if (total < 3600) return `${Math.floor(total / 60)} min ${String(total % 60).padStart(2, '0')} s`
-	const minutes = Math.round(seconds / 60)
-	return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`
 }

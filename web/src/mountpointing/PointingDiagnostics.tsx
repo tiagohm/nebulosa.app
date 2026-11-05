@@ -1,6 +1,7 @@
 import type { PointingModelDetail, PointingRevision, PointingSampleRecord } from 'api'
-import { toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import type { ReactNode } from 'react'
+import { MISSING, formatArcsec } from '../format'
+import { formatPixelScale, formatPositionAngle } from '../platesolving/coordinates'
 import { formatDeclination, formatRightAscension } from '../sky/format'
 import { DataList, DataRow } from '../ui/DataRow'
 import { errorDistribution, rejectionReasons } from './skymap'
@@ -8,14 +9,6 @@ import { errorDistribution, rejectionReasons } from './skymap'
 // Figures of a run, shared by Images and Tools: the measures of a revision with the ones on unseen sky told apart, the
 // spread of what the model leaves, the coverage, the rejections, and the samples one by one. The measures are the server's,
 // and a measure that does not exist is a dash, never a zero, since a zero would read as a perfect mount.
-
-// Text shown for a measure that does not exist.
-const MISSING = '—'
-
-// Formats an angle in radians as arcseconds, or a dash.
-export function formatArcsec(angle: number | undefined | null) {
-	return angle === undefined || angle === null ? MISSING : `${toArcsec(angle).toFixed(1)}″`
-}
 
 // Label and value of a measure.
 function Measure({ label, children }: { readonly label: string; readonly children: ReactNode }) {
@@ -90,8 +83,8 @@ export function PointingSampleInspector({ sample, revision }: { readonly sample:
 			<DataRow label="Command">{`${formatRightAscension(sample.command.rightAscension)} ${formatDeclination(sample.command.declination)}`}</DataRow>
 			<DataRow label="Solved">{sample.solved ? `${formatRightAscension(sample.solved.rightAscension)} ${formatDeclination(sample.solved.declination)}` : MISSING}</DataRow>
 			<DataRow label="Pier Side">{sample.pierSide}</DataRow>
-			<DataRow label="Scale">{sample.scale === undefined ? MISSING : `${toArcsec(sample.scale).toFixed(3)} ″/px`}</DataRow>
-			<DataRow label="Rotation">{sample.orientation === undefined ? MISSING : `${toDeg(sample.orientation).toFixed(2)}°`}</DataRow>
+			<DataRow label="Scale">{sample.scale === undefined ? MISSING : formatPixelScale(sample.scale)}</DataRow>
+			<DataRow label="Rotation">{formatPositionAngle(sample.orientation)}</DataRow>
 			<DataRow label="Error">{residual ? `${formatArcsec(residual.rawDx)} E, ${formatArcsec(residual.rawDy)} N` : MISSING}</DataRow>
 			<DataRow label="Left by Model">{residual ? `${formatArcsec(residual.dx)} E, ${formatArcsec(residual.dy)} N` : MISSING}</DataRow>
 			{sample.reason && (

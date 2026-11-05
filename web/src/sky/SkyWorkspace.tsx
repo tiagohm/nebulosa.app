@@ -2,6 +2,7 @@ import type { MinorBody, SkySearchResult } from 'api'
 import { type ReactNode, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
+import { formatGeographic } from '../format'
 import { imagesState } from '../images/images'
 import { activeProfile, profileState, satelliteFavorites, setSkyTimeBarVisible } from '../profile/profile'
 import { satelliteCatalogState } from '../satellites/satellites'
@@ -155,7 +156,7 @@ export function SkyWorkspace() {
 		return panelState.open && sky.panel === view
 	}
 
-	const location = observer ? `${observer.name ? `${observer.name} · ` : ''}${observer.latitude.toFixed(4)}°, ${observer.longitude.toFixed(4)}°` : 'No location'
+	const location = observer ? `${observer.name ? `${observer.name} · ` : ''}${formatGeographic(observer.latitude, observer.longitude)}` : 'No location'
 	const context = clock.mode === 'now' ? location : `${location} · Simulated time`
 
 	const panels: Record<SkyPanelView, () => { title: string; content: ReactNode }> = {

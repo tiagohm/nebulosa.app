@@ -5,12 +5,12 @@ import { DARV_AXIS_LABELS, DARV_DIRECTION_LABELS, DARV_STATUS_LABELS, darvFrameM
 import { liveAcquisitionLabel, liveCalibrationLabel } from '../camera/livestacking'
 import { tppaFrameRole, tppaRuntime } from '../camera/tppa'
 import { connectionState } from '../connection/connection'
+import { formatDuration, MISSING } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { type ImageQualityStatus, imageQuality } from '../stars/quality'
 import { PROVIDER_LABELS, starsState } from '../stars/stars'
-import { formatDuration } from '../tools/calculator/values'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
 import type { CameraFrameSelection } from './cameratabs'
@@ -25,9 +25,6 @@ import type { ImageToolPanelProps } from './tools'
 // on the image give (never measured here), acquisition data, the parameters of the current rendering, and the header
 // of the active document, with the statistics section still to come. The display settings are changed from the viewer
 // toolbar (DisplayToolbar).
-
-// Text shown for a datum the image does not have.
-const MISSING = '—'
 
 // Names of the RGB channels, in the order of a per-channel stretch.
 const CHANNEL_NAMES = ['R', 'G', 'B'] as const

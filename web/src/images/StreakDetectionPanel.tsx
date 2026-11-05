@@ -5,6 +5,7 @@ import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { isActive } from '../analysis'
 import { Actions, Notice } from '../equipment-control/parts'
+import { formatDuration, MISSING, formatSignificant, formatDegrees } from '../format'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState, setStreakDetectionSettings, streakDetectionSettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -31,9 +32,6 @@ import type { ImageToolPanelProps } from './tools'
 // detection is submitted. A classification is an uncalibrated evidence weight, never shown as a probability. The
 // settings are editable before the document has an image (a camera tab waiting for its first frame), with Run Detection
 // disabled until it has one; a result always belongs to the image it measured.
-
-// Text shown for a value the result does not have.
-const MISSING = '—'
 
 // Display names of the job states.
 const STATE_LABELS: Readonly<Record<StreakDetectionJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
@@ -241,7 +239,7 @@ function Analysis({ documentKey, imageId, request, job, streaks, solutionAvailab
 			{job ? (
 				<>
 					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
-					<DataRow label="Elapsed">{formatSeconds(elapsedOf(job, now))}</DataRow>
+					<DataRow label="Elapsed">{formatDuration(elapsedOf(job, now) / 1000)}</DataRow>
 					<DataRow label="WCS">{job.context.wcs ? WCS_LABELS[job.context.wcs] : 'None'}</DataRow>
 					<DataRow label="Stars">{job.context.starCount ?? 'None'}</DataRow>
 					<DataRow label="Exposure">{job.context.exposure === undefined ? MISSING : `${job.context.exposure} s`}</DataRow>
@@ -279,7 +277,7 @@ function Results({ job, result, resultError, selected, onSelect }: ResultsProps)
 				<>
 					<DataRow label="Detected streaks">{summary.detectedCount}</DataRow>
 					<DataRow label="Classified">{summary.classified ? 'Yes' : 'No'}</DataRow>
-					<DataRow label="Duration">{formatSeconds(summary.elapsed)}</DataRow>
+					<DataRow label="Duration">{formatDuration(summary.elapsed / 1000)}</DataRow>
 					{result?.warnings.map((warning) => (
 						<Notice key={warning}>{warning}</Notice>
 					))}
@@ -317,16 +315,16 @@ function SelectedStreak({ streak, classification }: SelectedStreakProps) {
 					<DataRow label="Center">{formatPoint(streak.center)}</DataRow>
 					<DataRow label="Length">{streak.length.toFixed(1)} px</DataRow>
 					<DataRow label="Width (FWHM)">{streak.width.toFixed(2)} px</DataRow>
-					<DataRow label="Angle">{toDeg(streak.angle).toFixed(2)}°</DataRow>
+					<DataRow label="Angle">{formatDegrees(streak.angle)}</DataRow>
 					<DataRow label="SNR">{streak.snr === undefined ? MISSING : streak.snr.toFixed(1)}</DataRow>
 					<DataRow label="Linearity">{streak.linearity.toFixed(3)}</DataRow>
 					<DataRow label="RMS residual">{streak.rmsResidual.toFixed(2)} px</DataRow>
 					<DataRow label="Coverage">{(streak.coverage * 100).toFixed(0)}%</DataRow>
 					<DataRow label="Support">{streak.supportPixels} px</DataRow>
 					<DataRow label="Cut by the border">{streak.clippedAtBorder ? 'Yes' : 'No'}</DataRow>
-					<DataRow label="Flux">{formatSignal(streak.flux)}</DataRow>
-					<DataRow label="Mean signal">{formatSignal(streak.meanSignal)}</DataRow>
-					<DataRow label="Peak signal">{formatSignal(streak.peakSignal)}</DataRow>
+					<DataRow label="Flux">{formatSignificant(streak.flux)}</DataRow>
+					<DataRow label="Mean signal">{formatSignificant(streak.meanSignal)}</DataRow>
+					<DataRow label="Peak signal">{formatSignificant(streak.peakSignal)}</DataRow>
 					<DataRow label="Saturated">{streak.saturationFraction === undefined ? MISSING : `${(streak.saturationFraction * 100).toFixed(1)}%`}</DataRow>
 					<DataRow label="Detector confidence">{streak.confidence.toFixed(2)}</DataRow>
 					<Classification classification={classification} />
@@ -377,18 +375,7 @@ function elapsedOf(job: StreakDetectionJob, now: number): number {
 	return (job.endedAt ?? now) - job.startedAt
 }
 
-// Returns a duration in milliseconds as seconds with two decimals below 10 s, one above.
-function formatSeconds(milliseconds: number): string {
-	const seconds = milliseconds / 1000
-	return `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
-}
-
 // Returns a point in pixels with one decimal.
 function formatPoint({ x, y }: Streak['start']): string {
 	return `${x.toFixed(1)}, ${y.toFixed(1)} px`
-}
-
-// Returns a signal in normalized sample units with four significant digits, in exponential notation when large or small.
-function formatSignal(value: number): string {
-	return value !== 0 && (Math.abs(value) >= 1e5 || Math.abs(value) < 1e-2) ? value.toExponential(3) : value.toPrecision(4)
 }

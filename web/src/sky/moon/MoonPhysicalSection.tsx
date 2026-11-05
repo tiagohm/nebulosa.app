@@ -1,7 +1,8 @@
 import type { MoonAppearance } from 'api'
+import { formatDegrees } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
-import { formatAngularSize, formatDegrees, formatLocalTime } from '../format'
+import { formatAngularSize, formatLocalTime } from '../format'
 import { Note } from '../InspectorParts'
 import { formatKilometers } from './MoonApsidesSection'
 

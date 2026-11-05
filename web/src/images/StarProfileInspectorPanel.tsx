@@ -4,6 +4,7 @@ import { toArcsec } from 'nebulosa/src/math/units/angle'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, Notice } from '../equipment-control/parts'
+import { formatPixelLength, formatDegrees, MISSING } from '../format'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { isotropicPixelScaleAt } from '../platesolving/wcs'
 import { activeProfile, profileState, setStarProfileSettings, starProfileSettings } from '../profile/profile'
@@ -11,7 +12,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { StarPreview } from '../stars/StarPreview'
 import { measuredStar, reinspectStar, starProfileOf } from '../stars/starprofile'
-import { FLAG_LABELS, formatFlux, formatLevel, formatNumber, formatSignal, formatWidth } from '../stars/starprofile.format'
+import { FLAG_LABELS, formatFlux, formatLevel, formatNumber, formatSignal } from '../stars/starprofile.format'
 import { MAXIMUM_RADIUS_RANGE, MINIMUM_SNR_RANGE, sameMeasurement, SEARCH_RADIUS_RANGE, STAR_PROFILE_MODELS, type StarProfileSettings } from '../stars/starprofile.settings'
 import { StarProfilePlot, type StarProfileSeries } from '../stars/StarProfilePlot'
 import { Button } from '../ui/Button'
@@ -162,8 +163,8 @@ function Measurement({ imageId, star, settings, selected }: MeasurementProps) {
 		<>
 			<CollapsibleSection id="images.star-profile.summary" title="Star">
 				<div className="grid grid-cols-2 gap-2">
-					<Headline label="HFD">{formatWidth(profile.hfd)}</Headline>
-					<Headline label={profile.model === 'moffat' ? 'FWHM (fitted)' : 'FWHM (Gaussian eq.)'}>{formatWidth(profile.fwhm)}</Headline>
+					<Headline label="HFD">{formatPixelLength(profile.hfd)}</Headline>
+					<Headline label={profile.model === 'moffat' ? 'FWHM (fitted)' : 'FWHM (Gaussian eq.)'}>{formatPixelLength(profile.fwhm)}</Headline>
 				</div>
 				<p className={profile.valid ? 'm-0 text-xs text-success' : 'm-0 text-xs text-danger'}>{profile.valid ? 'Valid measurement' : 'Invalid measurement'}</p>
 				{profile.flags.length > 0 && <Notice>{profile.flags.map((flag) => FLAG_LABELS[flag]).join(', ')}.</Notice>}
@@ -185,14 +186,14 @@ function Measurement({ imageId, star, settings, selected }: MeasurementProps) {
 			</CollapsibleSection>
 			<CollapsibleSection id="images.star-profile.measurements" title="Measurements">
 				<DataList>
-					<DataRow label="HFD">{formatWidth(profile.hfd, pixelScale)}</DataRow>
-					<DataRow label="HFR">{formatWidth(hfr, pixelScale)}</DataRow>
-					<DataRow label="FWHM">{formatWidth(profile.fwhm, pixelScale)}</DataRow>
-					<DataRow label="FWHM Major">{formatWidth(profile.major, pixelScale)}</DataRow>
-					<DataRow label="FWHM Minor">{formatWidth(profile.minor, pixelScale)}</DataRow>
+					<DataRow label="HFD">{formatPixelLength(profile.hfd, pixelScale)}</DataRow>
+					<DataRow label="HFR">{formatPixelLength(hfr, pixelScale)}</DataRow>
+					<DataRow label="FWHM">{formatPixelLength(profile.fwhm, pixelScale)}</DataRow>
+					<DataRow label="FWHM Major">{formatPixelLength(profile.major, pixelScale)}</DataRow>
+					<DataRow label="FWHM Minor">{formatPixelLength(profile.minor, pixelScale)}</DataRow>
 					<DataRow label="Eccentricity">{formatNumber(profile.eccentricity, 3)}</DataRow>
 					<DataRow label="Elongation">{formatNumber(profile.elongation, 3)}</DataRow>
-					<DataRow label="Orientation">{profile.theta === undefined ? '—' : `${((profile.theta * 180) / Math.PI).toFixed(1)}°`}</DataRow>
+					<DataRow label="Orientation">{profile.theta === undefined ? MISSING : formatDegrees(profile.theta, 1)}</DataRow>
 					<DataRow label="Peak">{formatSignal(profile.peak, conversion)}</DataRow>
 					<DataRow label="Flux">{formatFlux(profile.flux, conversion)}</DataRow>
 					<DataRow label="Background">{formatLevel(profile.background, conversion)}</DataRow>

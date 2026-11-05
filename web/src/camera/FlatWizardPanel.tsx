@@ -9,6 +9,7 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
+import { MISSING } from '../format'
 import { cameraTabKey } from '../images/cameratabs'
 import { imagesState, selectImageTool } from '../images/images'
 import { operationsState } from '../operations'
@@ -121,11 +122,11 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 			<CollapsibleSection id="images.flat-wizard.equipment" title="Equipment">
 				<DataList>
 					<DataRow label="Camera">
-						<DeviceLink device={device} fallback="—" />
+						<DeviceLink device={device} />
 					</DataRow>
-					<DataRow label="Filter Wheel">{wheelAssigned ? <DeviceLink device={wheel.device} fallback="—" /> : 'Manual'}</DataRow>
-					<DataRow label="Flat Panel">{panelAssigned ? <DeviceLink device={flatPanel.device} fallback="—" /> : 'Manual'}</DataRow>
-					<DataRow label="Cover">{coverAssigned ? <DeviceLink device={cover.device} fallback="—" /> : 'Not used'}</DataRow>
+					<DataRow label="Filter Wheel">{wheelAssigned ? <DeviceLink device={wheel.device} /> : 'Manual'}</DataRow>
+					<DataRow label="Flat Panel">{panelAssigned ? <DeviceLink device={flatPanel.device} /> : 'Manual'}</DataRow>
+					<DataRow label="Cover">{coverAssigned ? <DeviceLink device={cover.device} /> : 'Not used'}</DataRow>
 				</DataList>
 				{!running && wheelAvailability && wheelAvailability.status !== 'ready' && <Notice>{wheelAvailability.message}</Notice>}
 				{!running && panelAvailability && panelAvailability.status !== 'ready' && <Notice>{panelAvailability.message}</Notice>}
@@ -324,7 +325,7 @@ function Progress({ session, pending }: ProgressProps) {
 				{attempt && <DataRow label="Last Frame">{`${FLAT_WIZARD_VERDICT_LABELS[attempt.verdict]}, ${formatExposure(attempt.exposure)}`}</DataRow>}
 				{attempt?.planes.map((plane) => (
 					<DataRow key={plane.plane} label={`Level ${plane.plane}`}>
-						{plane.median === undefined ? '—' : `${Math.round(plane.median)} DN${plane.upperClipping === 'present' ? ', clipped' : ''}`}
+						{plane.median === undefined ? MISSING : `${Math.round(plane.median)} DN${plane.upperClipping === 'present' ? ', clipped' : ''}`}
 					</DataRow>
 				))}
 			</DataList>

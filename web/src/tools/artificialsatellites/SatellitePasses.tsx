@@ -2,6 +2,7 @@ import type { SatellitePassPrediction } from 'api'
 import { cn } from 'cn'
 import type { KeyboardEvent } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatDegrees } from '../../format'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
@@ -11,7 +12,7 @@ import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { Note } from '../eclipse/EclipsePanelParts'
-import { artificialSatellitesState, degrees, formatSatelliteTime, loadSatellitePasses, MAX_PASS_DAYS, openSkyObserver, SHADOW_LABELS, showSatelliteInSky, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
+import { artificialSatellitesState, formatSatelliteTime, loadSatellitePasses, MAX_PASS_DAYS, openSkyObserver, SHADOW_LABELS, showSatelliteInSky, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
 // Passes tab of Artificial Satellites: the passes of the satellite selected above a minimum altitude over the Sky observer, in
@@ -107,7 +108,7 @@ function PassProfile({ pass }: { readonly pass: SatellitePassPrediction }) {
 			<path d={path} fill="none" className="stroke-accent" strokeWidth="2" />
 			<circle cx={xc} cy={yc} r="4" className="fill-accent" />
 			<text x={xc} y={yc - 8} textAnchor="middle" className="fill-ink-100 text-[10px]">
-				highest {degrees(pass.culmination.altitude, 1)}
+				highest {formatDegrees(pass.culmination.altitude, 1)}
 			</text>
 		</svg>
 	)
@@ -148,14 +149,14 @@ function PassRow({ pass, index, position, count, timeZone }: PassRowProps) {
 				{formatSatelliteTime(pass.start.time, timeZone)}
 				{pass.startsBeforeWindow && <span className="ml-1 text-ink-300">(in progress)</span>}
 			</td>
-			<td className="px-2 py-1.5 text-right">{degrees(pass.start.azimuth, 0)}</td>
+			<td className="px-2 py-1.5 text-right">{formatDegrees(pass.start.azimuth, 0)}</td>
 			<td className="px-2 py-1.5 whitespace-nowrap">{formatSatelliteTime(pass.culmination.time, timeZone).slice(11)}</td>
-			<td className="px-2 py-1.5 text-right">{degrees(pass.culmination.altitude, 1)}</td>
+			<td className="px-2 py-1.5 text-right">{formatDegrees(pass.culmination.altitude, 1)}</td>
 			<td className="px-2 py-1.5 whitespace-nowrap">
 				{formatSatelliteTime(pass.end.time, timeZone).slice(11)}
 				{pass.endsAfterWindow && <span className="ml-1 text-ink-300">(continues)</span>}
 			</td>
-			<td className="px-2 py-1.5 text-right">{degrees(pass.end.azimuth, 0)}</td>
+			<td className="px-2 py-1.5 text-right">{formatDegrees(pass.end.azimuth, 0)}</td>
 			<td className="px-2 py-1.5 text-right">{minutes.toFixed(1)} min</td>
 			<td className="px-2 py-1.5 text-right">{pass.culmination.rangeKm.toFixed(0)} km</td>
 			<td className="px-2 py-1.5 whitespace-nowrap">{pass.visible.length > 0 ? 'Visible' : pass.culminationSunAltitude > 0 ? 'Daylight' : SHADOW_LABELS[pass.culminationShadow]}</td>

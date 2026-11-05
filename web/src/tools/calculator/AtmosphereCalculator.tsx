@@ -1,8 +1,8 @@
+import { formatFixed } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { AIRMASS_EXAMPLE, type AirmassDraft, airmass, DEW_EXAMPLE, type DewDraft, type DewMode, dew } from './atmosphere'
 import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
-import { formatFixed } from './values'
 
 // Views of the Atmosphere & Conditions calculators: Airmass & Visibility Effects and Dew Conditions.
 

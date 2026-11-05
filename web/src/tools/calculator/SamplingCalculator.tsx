@@ -1,9 +1,9 @@
 import type { FWHMSamplingKind } from 'nebulosa/src/astronomy/formulas'
+import { formatFixed } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
 import { DIFFRACTION_EXAMPLE, type DiffractionDraft, diffraction, diffractionFromOptics, SAMPLING_EXAMPLE, type SamplingDraft, type SamplingMode, sampling, samplingFromOptics } from './sampling'
-import { formatFixed } from './values'
 
 // Views of the Sampling & Focus calculators: Sampling and Diffraction & Focus.
 

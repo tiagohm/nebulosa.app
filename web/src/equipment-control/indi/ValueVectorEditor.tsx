@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { MISSING } from '../../format'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { TextInput } from '../../ui/TextInput'
@@ -30,7 +31,7 @@ export function ValueVectorEditor({ vector }: ValueVectorEditorProps) {
 			<div className="flex flex-col gap-1">
 				{vector.elementNames.map((name) => (
 					<DataRow key={name} label={labelOf(vector.elements[name])}>
-						{vector.type === 'NUMBER' ? numberText(vector.elements[name]) : vector.elements[name].value || '—'}
+						{vector.type === 'NUMBER' ? numberText(vector.elements[name]) : vector.elements[name].value || MISSING}
 					</DataRow>
 				))}
 			</div>

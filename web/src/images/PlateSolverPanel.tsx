@@ -1,6 +1,5 @@
 import type { PlateSolveHint, PlateSolveJob, PlateSolveRequest, PlateSolveResult } from 'api'
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
-import { toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { isActive } from '../analysis'
@@ -8,7 +7,9 @@ import { controlRuntime, sendCommand, watchedDeviceState } from '../equipment-co
 import { Actions, ConfirmButton, Notice } from '../equipment-control/parts'
 import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
+import { formatDuration, MISSING, formatDegrees, formatArcmin } from '../format'
 import { operationsState } from '../operations'
+import { formatPositionAngle, formatPixelScale } from '../platesolving/coordinates'
 import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { cancelPlateSolve, effectivePlateSolveRequest, loadHints, mountSyncBlocker, mountSyncSupport, mountSyncTarget, plateSolveSettings, plateSolvingState, PROVIDER_LABELS, runPlateSolve, solutionOptions, STAGE_LABELS } from '../platesolving/platesolving'
 import { type AstrometryGridSettings, COORDINATE_FORMATS, COORDINATE_PRECISION_RANGE, type CoordinateFormat, GRID_COLORS, GRID_OPACITY_RANGE, type GridColor, ORIENTATION_MODES, type OrientationMode } from '../platesolving/preferences'
@@ -44,9 +45,6 @@ import type { ImageToolPanelProps } from './tools'
 // documents never shows its solution on another one, and a job that ends never replaces the solution chosen. Solvers
 // are configured in Settings → External Tools, which the solver section links to. Sync Mount, after a confirmation,
 // syncs the MOUNT of the active equipment setup on the centre of the solution shown; nothing here moves a mount.
-
-// Text shown for a value the result does not have.
-const MISSING = '—'
 
 // Display names of the job states.
 const STATE_LABELS: Readonly<Record<PlateSolveJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
@@ -202,7 +200,7 @@ function Execution({ documentKey, imageId, request, job, submitError, unavailabl
 					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
 					{job.state === 'running' && job.stage && <DataRow label="Step">{STAGE_LABELS[job.stage]}</DataRow>}
 					<DataRow label="Solver">{PROVIDER_LABELS[job.request.provider]}</DataRow>
-					<DataRow label="Elapsed">{formatSeconds(elapsedOf(job, now))}</DataRow>
+					<DataRow label="Elapsed">{formatDuration(elapsedOf(job, now) / 1000)}</DataRow>
 					{job.remote?.submissionId !== undefined && <DataRow label="Remote submission">{job.remote.submissionId}</DataRow>}
 					{job.remote?.jobId !== undefined && <DataRow label="Remote job">{job.remote.jobId}</DataRow>}
 					{job.error && <Notice error>{job.error}</Notice>}
@@ -239,11 +237,11 @@ function Solution({ job, result, solution, fromHeader, resultError }: SolutionPr
 					<DataRow label="Source">{fromHeader ? 'Image header' : PROVIDER_LABELS[result?.request.provider ?? 'astap']}</DataRow>
 					<DataRow label={`RA (${wcsFrame(solution)})`}>{formatRightAscension(solution.rightAscension)}</DataRow>
 					<DataRow label={`Dec (${wcsFrame(solution)})`}>{formatDeclination(solution.declination)}</DataRow>
-					<DataRow label="Pixel Scale">{toArcsec(solution.scale).toFixed(3)} ″/px</DataRow>
-					<DataRow label="PA of Image Top">{topAngle === undefined ? MISSING : `${toDeg(topAngle).toFixed(2)}°`}</DataRow>
+					<DataRow label="Pixel Scale">{formatPixelScale(solution.scale)}</DataRow>
+					<DataRow label="PA of Image Top">{formatPositionAngle(topAngle)}</DataRow>
 					<DataRow label="Parity">{solution.parity === 'NORMAL' ? 'Normal' : 'Flipped'}</DataRow>
 					<DataRow label="Field of View">
-						{toArcmin(solution.width).toFixed(1)}′ × {toArcmin(solution.height).toFixed(1)}′
+						{formatArcmin(solution.width)} × {formatArcmin(solution.height)}
 					</DataRow>
 					<DataRow label="Projection">{String(solution.CTYPE1 ?? MISSING).trim()}</DataRow>
 				</>
@@ -260,13 +258,13 @@ function SolverDetails({ result }: { readonly result: PlateSolveResult }) {
 	const { hints } = result
 
 	return (
-		<CollapsibleSection id="images.plate-solver.solver-details" title="Solver Details" summary={formatSeconds(result.elapsed)} defaultOpen={false}>
+		<CollapsibleSection id="images.plate-solver.solver-details" title="Solver Details" summary={formatDuration(result.elapsed / 1000)} defaultOpen={false}>
 			<DataRow label="Strategy">{result.request.strategy === 'blind' ? 'Blind' : 'Assisted'}</DataRow>
 			<DataRow label="Center hint">{hints.rightAscension && hints.declination ? `${formatRightAscension(hints.rightAscension.value)} ${formatDeclination(hints.declination.value)} (${SOURCE_LABELS[hints.rightAscension.source]})` : 'None'}</DataRow>
-			<DataRow label="Radius hint">{hints.radius ? `${toDeg(hints.radius.value).toFixed(1)}° (${SOURCE_LABELS[hints.radius.source]})` : 'None'}</DataRow>
-			<DataRow label="Scale hint">{hints.scale ? `${toArcsec(hints.scale.value).toFixed(3)} ″/px (${SOURCE_LABELS[hints.scale.source]})` : 'None'}</DataRow>
-			<DataRow label="Duration">{formatSeconds(result.elapsed)}</DataRow>
-			<DataRow label="Waited">{formatSeconds(result.queueTime)}</DataRow>
+			<DataRow label="Radius hint">{hints.radius ? `${formatDegrees(hints.radius.value, 1)} (${SOURCE_LABELS[hints.radius.source]})` : 'None'}</DataRow>
+			<DataRow label="Scale hint">{hints.scale ? `${formatPixelScale(hints.scale.value)} (${SOURCE_LABELS[hints.scale.source]})` : 'None'}</DataRow>
+			<DataRow label="Duration">{formatDuration(result.elapsed / 1000)}</DataRow>
+			<DataRow label="Waited">{formatDuration(result.queueTime / 1000)}</DataRow>
 			{result.warnings.map((warning) => (
 				<Notice key={warning}>{warning}</Notice>
 			))}
@@ -355,12 +353,6 @@ function elapsedOf(job: PlateSolveJob, now: number): number {
 	if (job.summary) return job.summary.elapsed
 	if (job.startedAt === undefined) return 0
 	return (job.endedAt ?? now) - job.startedAt
-}
-
-// Returns a duration in milliseconds as seconds with two decimals below 10 s, one above.
-function formatSeconds(milliseconds: number): string {
-	const seconds = milliseconds / 1000
-	return `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
 }
 
 interface SkyFootprintProps {

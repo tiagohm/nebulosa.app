@@ -1,9 +1,10 @@
 import type { SkyEvents, SkyPosition } from 'api'
 import type { ReactNode } from 'react'
+import { formatDegrees } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
-import { formatDeclination, formatDegrees, formatLocalTime, formatRightAscension, formatSolarSystemDistance } from './format'
+import { formatDeclination, formatLocalTime, formatRightAscension, formatSolarSystemDistance } from './format'
 import type { SkySelection } from './sky'
 
 // Parts shared by the Object Inspector and the Sun and Moon Inspectors: a muted note, the collapsible

@@ -2,6 +2,7 @@ import type { ExternalToolCheck, ExternalToolConfig, ExternalToolState } from 'a
 import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { useEffect, useState } from 'react'
 import { Actions, Notice } from '../equipment-control/parts'
+import { MISSING } from '../format'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
@@ -40,9 +41,9 @@ function CheckDiagnostics({ check }: { readonly check: ExternalToolCheck }) {
 		<details className="text-sm leading-5 text-ink-200">
 			<summary className="cursor-pointer text-xs font-medium tracking-[0.08em] text-ink-300 uppercase select-none">Diagnostics</summary>
 			<div className="mt-2 flex flex-col gap-1">
-				{check.config.endpoint === undefined ? <DataRow label="Executable path">{check.config.executable || '—'}</DataRow> : <DataRow label="Endpoint">{check.config.endpoint || 'Default'}</DataRow>}
+				{check.config.endpoint === undefined ? <DataRow label="Executable path">{check.config.executable || MISSING}</DataRow> : <DataRow label="Endpoint">{check.config.endpoint || 'Default'}</DataRow>}
 				{check.config.config !== undefined && <DataRow label="Configuration file">{check.config.config || 'Default'}</DataRow>}
-				<DataRow label="Resolved path">{check.resolvedPath ?? '—'}</DataRow>
+				<DataRow label="Resolved path">{check.resolvedPath ?? MISSING}</DataRow>
 				<DataRow label="Version">{check.version ?? 'Unknown'}</DataRow>
 				<DataRow label="Checked at">{formatTemporal(check.checkedAt, undefined, true)}</DataRow>
 				<DataRow label="Duration">{check.duration.toFixed(1)} ms</DataRow>

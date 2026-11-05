@@ -1,4 +1,5 @@
 import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationMaster, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
+import { MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // What the Calibration Library tool shows of what the server decided: labels, tones, and the coverage of a page of groups.
@@ -77,7 +78,7 @@ export function overrideIsText(field: OverridableField) {
 
 // Text of a value, a dash when unknown.
 function valueText<T>({ value }: Evidenced<T>, format: (value: T) => string = String) {
-	return value === undefined ? '—' : format(value)
+	return value === undefined ? MISSING : format(value)
 }
 
 // Text of an exposure in integer microseconds, in the seconds an operator chose.

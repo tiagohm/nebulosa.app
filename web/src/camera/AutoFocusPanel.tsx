@@ -7,6 +7,7 @@ import { Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import { type RoleDevice, useRoleDevice } from '../equipment/useEquipment'
+import { formatClockDuration, MISSING } from '../format'
 import { operationsState } from '../operations'
 import { activeProfile, autoFocusSettings, exposureSettings, profileState, setAutoFocusSettings, starDetectionSettings } from '../profile/profile'
 import type { AutoFocusSettings, CameraIdentity } from '../profile/schema'
@@ -94,14 +95,14 @@ export function AutoFocusSections({ device, availability, focuser, settings: ide
 			<CollapsibleSection id="images.auto-focus.equipment" title="Equipment">
 				<DataList>
 					<DataRow label="Camera">
-						<DeviceLink device={device} fallback="—" />
+						<DeviceLink device={device} />
 					</DataRow>
 					<DataRow label="Focuser">
 						<DeviceLink device={focuserDevice} fallback="Not assigned" />
 					</DataRow>
 					{wheel.device && (
 						<DataRow label="Filter Wheel">
-							<DeviceLink device={wheel.device} fallback="—" />
+							<DeviceLink device={wheel.device} />
 						</DataRow>
 					)}
 				</DataList>
@@ -194,16 +195,16 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 			{(session.state === 'exposing' || session.state === 'verifying') && <FrameProgress exposure={session.exposure} />}
 			{failed && session.error && <p className="m-0 text-xs leading-4 text-danger">{session.error}</p>}
 			<DataList>
-				<DataRow label="Focuser">{position === undefined ? '—' : `${position}${moving ? ' (moving)' : ''}`}</DataRow>
+				<DataRow label="Focuser">{position === undefined ? MISSING : `${position}${moving ? ' (moving)' : ''}`}</DataRow>
 				{session.initialPosition !== undefined && <DataRow label="Start Position">{session.initialPosition}</DataRow>}
 				<DataRow label="Samples">{session.measurementCount}</DataRow>
 				{last && <DataRow label="Last HFD">{last.hfd === undefined ? `— at ${last.requestedPosition}` : `${last.hfd.toFixed(2)} px at ${last.requestedPosition}`}</DataRow>}
 				{last && <DataRow label="Stars">{`${last.acceptedCount} / ${last.detectedCount}`}</DataRow>}
-				<DataRow label="Estimated Best">{session.estimatedPosition ?? '—'}</DataRow>
+				<DataRow label="Estimated Best">{session.estimatedPosition ?? MISSING}</DataRow>
 				{session.estimatedHfd !== undefined && <DataRow label="Fitted HFD">{`${session.estimatedHfd.toFixed(2)} px`}</DataRow>}
-				<DataRow label="Final Position">{session.finalPosition ?? '—'}</DataRow>
+				<DataRow label="Final Position">{session.finalPosition ?? MISSING}</DataRow>
 				<DataRow label="Verification">{session.verification === 'measured' && session.verifiedHfd !== undefined ? `${session.verifiedHfd.toFixed(2)} px measured` : session.verification === 'pending' ? 'Pending' : VERIFICATION_LABELS[session.verification]}</DataRow>
-				<DataRow label="Elapsed">{formatElapsed(((session.endedAt ?? now) - session.startedAt) / 1000)}</DataRow>
+				<DataRow label="Elapsed">{formatClockDuration(((session.endedAt ?? now) - session.startedAt) / 1000)}</DataRow>
 			</DataList>
 			{last && last.warnings.length > 0 && <p className="m-0 text-xs leading-4 text-ink-300">{last.warnings.join(' ')}</p>}
 			{session.verificationError && <p className="m-0 text-xs leading-4 text-ink-300">{session.verificationError}</p>}
@@ -212,13 +213,4 @@ function SessionState({ session, position, moving }: SessionStateProps) {
 			)}
 		</>
 	)
-}
-
-// Formats an elapsed time in seconds as m:ss, or h:mm:ss from one hour.
-function formatElapsed(seconds: number) {
-	const total = Math.max(0, Math.floor(seconds))
-	const s = String(total % 60).padStart(2, '0')
-	const m = Math.floor(total / 60) % 60
-	const h = Math.floor(total / 3600)
-	return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
 }

@@ -1,7 +1,9 @@
 import type { DomeState } from 'api'
 import { cn } from 'cn'
+import { toDeg } from 'nebulosa/src/math/units/angle'
 import { type PointerEvent, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatDegrees } from '../../format'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
@@ -19,11 +21,6 @@ import { Actions, ConfirmButton, type InterfaceProps, Notice } from '../parts'
 // Display name of each shutter state.
 const SHUTTER_LABELS: Readonly<Record<DomeState['shutterState'], string>> = { UNKNOWN: 'Unknown', OPEN: 'Open', CLOSED: 'Closed', OPENING: 'Opening', CLOSING: 'Closing', ERROR: 'Error' }
 
-// Returns degrees from radians.
-function degrees(angle: number) {
-	return (angle * 180) / Math.PI
-}
-
 // Motion state of a dome as one line.
 function motionOf(dome: DomeState) {
 	if (dome.homing) return 'Homing'
@@ -38,10 +35,10 @@ function motionOf(dome: DomeState) {
 export function DomeControls({ device }: InterfaceProps) {
 	const control = useSnapshot(controlRuntime)
 	const dome = deviceStateOf(control.states, 'dome', device.id)!
-	const [azimuth, setAzimuth] = useState(Math.round(degrees(dome.azimuth.value)))
+	const [azimuth, setAzimuth] = useState(Math.round(toDeg(dome.azimuth.value)))
 	const [delta, setDelta] = useState(10)
-	const [altitude, setAltitude] = useState(Math.round(degrees(dome.altitude.value)))
-	const [sync, setSync] = useState(Math.round(degrees(dome.azimuth.value)))
+	const [altitude, setAltitude] = useState(Math.round(toDeg(dome.altitude.value)))
+	const [sync, setSync] = useState(Math.round(toDeg(dome.azimuth.value)))
 	const [speed, setSpeed] = useState(dome.speed.value)
 	const [backlash, setBacklash] = useState(dome.backlash.value)
 	const busy = control.pending[device.id] !== undefined
@@ -62,8 +59,8 @@ export function DomeControls({ device }: InterfaceProps) {
 		<>
 			<PanelSection title="Dome">
 				<DataRow label="State">{motionOf(dome)}</DataRow>
-				<DataRow label="Azimuth">{`${degrees(dome.azimuth.value).toFixed(1)}°`}</DataRow>
-				{dome.canSetAltitude && <DataRow label="Shutter altitude">{`${degrees(dome.altitude.value).toFixed(1)}°`}</DataRow>}
+				<DataRow label="Azimuth">{formatDegrees(dome.azimuth.value, 1)}</DataRow>
+				{dome.canSetAltitude && <DataRow label="Shutter altitude">{formatDegrees(dome.altitude.value, 1)}</DataRow>}
 				{dome.hasShutter && <DataRow label="Shutter">{SHUTTER_LABELS[dome.shutterState]}</DataRow>}
 				{dome.canSlave && <DataRow label="Slaving">{dome.slaved ? 'Following the mount' : 'Off'}</DataRow>}
 				{moving && dome.canAbort && (
@@ -96,7 +93,7 @@ export function DomeControls({ device }: InterfaceProps) {
 					)}
 					{dome.canSetAltitude && (
 						<div className="flex items-end gap-2">
-							<NumberInput className="min-w-0 flex-1" label="Shutter altitude" value={altitude} min={Math.round(degrees(dome.altitude.min))} max={Math.round(degrees(dome.altitude.max))} step={1} suffix="°" onChange={setAltitude} />
+							<NumberInput className="min-w-0 flex-1" label="Shutter altitude" value={altitude} min={Math.round(toDeg(dome.altitude.min))} max={Math.round(toDeg(dome.altitude.max))} step={1} suffix="°" onChange={setAltitude} />
 							<Button variant="secondary" disabled={blocked} onClick={() => run('altitude', 'Altitude', { altitude })}>
 								Move Shutter
 							</Button>

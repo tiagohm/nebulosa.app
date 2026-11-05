@@ -115,7 +115,7 @@ export function DarvSections({ device, availability, mount, settings: identity }
 			<CollapsibleSection id="images.darv.equipment" title="Equipment">
 				<DataList>
 					<DataRow label="Camera">
-						<DeviceLink device={device} fallback="—" />
+						<DeviceLink device={device} />
 					</DataRow>
 					<DataRow label="Mount">
 						<DeviceLink device={mount.device} fallback="Not assigned" />

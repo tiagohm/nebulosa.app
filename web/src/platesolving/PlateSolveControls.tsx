@@ -12,6 +12,7 @@ import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
+import { formatPixelScale } from './coordinates'
 import { PROVIDER_LABELS, PROVIDER_TOOLS, PROVIDERS } from './platesolving'
 
 // Controls of a plate solving request of the Plate Solver tool of the Images workspace: the solver with its availability in External Tools, the strategy, the hints, and the
@@ -87,7 +88,7 @@ export function StrategyControls({ request, onChange, disabled }: PlateSolveCont
 export function HintControls({ request, onChange, offered, disabled }: PlateSolveControlsProps) {
 	const hints = request.hints ?? {}
 	const edit = (patch: Partial<PlateSolveHints>) => onChange({ ...request, hints: withoutEmpty({ ...hints, ...patch }) })
-	const offeredScale = offered?.scale && `${toArcsec(offered.scale.value).toFixed(3)} (${offered.scale.source})`
+	const offeredScale = offered?.scale && `${formatPixelScale(offered.scale.value)} (${offered.scale.source})`
 
 	return (
 		<>
@@ -100,7 +101,7 @@ export function HintControls({ request, onChange, offered, disabled }: PlateSolv
 			)}
 			<NumberInput label="Pixel Scale" suffix="″/px" min={0} step={0.01} value={hints.scale === undefined ? 0 : toArcsec(hints.scale)} disabled={disabled} onChange={(seconds) => edit({ scale: seconds > 0 ? arcsec(seconds) : undefined })} />
 			<Notice>
-				Empty fields and 0 are taken from the image: {offered?.rightAscension ? `the header pointing (${offered.rightAscension.source})` : 'no pointing'}, {offeredScale ? `a scale of ${offeredScale} ″/px` : 'no scale'}. A position without a radius is searched within 10°.
+				Empty fields and 0 are taken from the image: {offered?.rightAscension ? `the header pointing (${offered.rightAscension.source})` : 'no pointing'}, {offeredScale ? `a scale of ${offeredScale}` : 'no scale'}. A position without a radius is searched within 10°.
 			</Notice>
 		</>
 	)

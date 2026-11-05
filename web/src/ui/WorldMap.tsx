@@ -1,9 +1,10 @@
 import { cn } from 'cn'
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, type Ref, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import worldMapUrl from '../../assets/world.map.svg'
+import { MISSING, formatGeographic } from '../format'
 import type { Point, Size } from '../viewer/transform'
 import { IconButton } from './IconButton'
-import { constrainWorldMapView, formatGeoPoint, type GeoPoint, graticulePath, interpolateWorldMapView, panWorldMap, project, unproject, WORLD_MAP_HOME, WORLD_MAP_WIDTH, type WorldMapView, worldMapTransform, zoomWorldMapAt } from './worldmap.geometry'
+import { constrainWorldMapView, type GeoPoint, graticulePath, interpolateWorldMapView, panWorldMap, project, unproject, WORLD_MAP_HOME, WORLD_MAP_WIDTH, type WorldMapView, worldMapTransform, zoomWorldMapAt } from './worldmap.geometry'
 import { permanentTiles, TileCache, tileKey } from './worldmap.tiles'
 import { startTileWorker, type TileWorkerMessage, type TileWorkerWant } from './worldmap.worker'
 
@@ -349,7 +350,7 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 
 	// Shows the position under the pointer, written directly so hovering never re-renders.
 	function hover(point: GeoPoint | undefined) {
-		if (readoutRef.current) readoutRef.current.textContent = point ? formatGeoPoint(point) : '—'
+		if (readoutRef.current) readoutRef.current.textContent = point ? formatGeographic(point.latitude, point.longitude) : MISSING
 		callbacks.current.onHover?.(point)
 	}
 

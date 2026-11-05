@@ -1,6 +1,6 @@
 import type { DeviceSummary, MountPointingSessionSummary, MountState, PointingModelSummary } from 'api'
 import { cn } from 'cn'
-import { toArcsec } from 'nebulosa/src/math/units/angle'
+import { toDeg } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
@@ -10,6 +10,7 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import { deviceState } from '../equipment/equipment'
 import type { CameraRole } from '../equipment/roles'
 import type { RoleDevice } from '../equipment/useEquipment'
+import { MISSING, formatArcsec, formatGeographic } from '../format'
 import {
 	MOUNT_POINTING_STATE_LABELS,
 	MOUNT_POINTING_STEP_LABELS,
@@ -58,9 +59,6 @@ const PATTERN_LABELS: Readonly<Record<PointingModelSettings['pattern'], string>>
 
 // Patterns of the plan, in selector order.
 const PATTERNS = Object.keys(PATTERN_LABELS) as PointingModelSettings['pattern'][]
-
-// Text shown for a measure that does not exist yet, never a zero.
-const MISSING = '—'
 
 // Camera a Pointing Model Builder panel samples with and the forms it edits.
 export interface PointingModelBuilderTarget {
@@ -131,7 +129,7 @@ export function PointingModelBuilderSections({ device, availability, role, mount
 			<CollapsibleSection id="images.pointing-model-builder.equipment" title="Equipment">
 				<DataList>
 					<DataRow label="Camera">
-						<DeviceLink device={device} fallback="—" />
+						<DeviceLink device={device} />
 					</DataRow>
 					<DataRow label="Mount">
 						<DeviceLink device={mount.device} fallback="Not assigned" />
@@ -231,7 +229,7 @@ function appliedSettings({ request }: Pick<MountPointingSessionSummary, 'request
 // Formats the site a mount reports, in degrees, or a dash without one.
 function formatSite(state: MountState | undefined) {
 	if (!state || (state.site.latitude === 0 && state.site.longitude === 0)) return MISSING
-	return `${((state.site.latitude * 180) / Math.PI).toFixed(2)}°, ${((state.site.longitude * 180) / Math.PI).toFixed(2)}°`
+	return formatGeographic(toDeg(state.site.latitude), toDeg(state.site.longitude))
 }
 
 // Step of the session, its counts, the progress of the frame being exposed, and why it stopped.
@@ -312,9 +310,4 @@ function Results({ model, verifying, locked, onVerify }: ResultsProps) {
 			</Button>
 		</CollapsibleSection>
 	)
-}
-
-// Formats an angle in radians as arcseconds, or a dash when it does not exist.
-function formatArcsec(angle: number | undefined) {
-	return angle === undefined ? MISSING : `${toArcsec(angle).toFixed(1)}″`
 }

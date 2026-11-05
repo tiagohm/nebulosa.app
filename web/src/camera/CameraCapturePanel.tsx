@@ -5,6 +5,7 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import type { RoleAvailability } from '../equipment/availability'
 import { FileExplorerModal } from '../files/FileExplorerModal'
+import { formatClockDuration, formatTemperature } from '../format'
 import { cameraTabKey, releaseCameraFrame } from '../images/cameratabs'
 import { captureFramesState } from '../images/captureframes'
 import { imagesState } from '../images/images'
@@ -250,7 +251,7 @@ function CaptureState({ session }: CaptureStateProps) {
 			{running && <div className="h-1 overflow-hidden rounded-full bg-base-300">{progress === undefined ? <div className="h-full w-1/3 animate-pulse bg-accent/60" /> : <div className="h-full bg-accent transition-[width] duration-200" style={{ width: `${Math.min(100, progress)}%` }} />}</div>}
 			<DataList>
 				<DataRow label={captureCount(session)}>{session.request.output.mode === 'preview-save' ? `Saved ${session.saved}` : 'Not Saved'}</DataRow>
-				<DataRow label="Elapsed">{formatElapsed(captureElapsed(session, now))}</DataRow>
+				<DataRow label="Elapsed">{formatClockDuration(captureElapsed(session, now))}</DataRow>
 			</DataList>
 			{session.phase === 'failed' && session.captured > 0 && (
 				<p className="m-0 text-xs leading-4 text-ink-300">
@@ -260,15 +261,6 @@ function CaptureState({ session }: CaptureStateProps) {
 			{session.previewError && <p className="m-0 text-xs leading-4 text-danger">{session.previewError}</p>}
 		</CollapsibleSection>
 	)
-}
-
-// Formats an elapsed time in seconds as m:ss, or h:mm:ss from one hour.
-function formatElapsed(seconds: number) {
-	const total = Math.floor(seconds)
-	const s = String(total % 60).padStart(2, '0')
-	const m = Math.floor(total / 60) % 60
-	const h = Math.floor(total / 3600)
-	return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
 }
 
 interface LastFrameProps {
@@ -295,7 +287,7 @@ function LastFrame({ frame }: LastFrameProps) {
 	if (acquisition.offset !== undefined) rows.push(['Offset', String(acquisition.offset)])
 	if (acquisition.binning) rows.push(['Binning', `${acquisition.binning.x} × ${acquisition.binning.y}`])
 	if (frame.bitpix !== undefined) rows.push(['Bit Depth', frame.bitpix < 0 ? `${-frame.bitpix}-bit float` : `${frame.bitpix}-bit`])
-	if (acquisition.temperature !== undefined) rows.push(['Temperature', `${acquisition.temperature.toFixed(1)} °C`])
+	if (acquisition.temperature !== undefined) rows.push(['Temperature', formatTemperature(acquisition.temperature)])
 	rows.push(['Acquired', formatTemporal(frame.time, undefined, true)])
 
 	return (

@@ -1,5 +1,6 @@
 import type { SampleConversion } from 'api'
 import type { StarProfileFlag } from 'nebulosa/src/imaging/stars/profile'
+import { MISSING } from '../format'
 
 // Texts of a star's profile, shared by the Star Profile of the Guiding panel and the Star Profile Inspector. Intensities
 // arrive as normalized samples and are written in the scale of the image's source: ADU, or that of the source when it has
@@ -21,13 +22,7 @@ export const FLAG_LABELS: Readonly<Record<StarProfileFlag, string>> = {
 
 // Formats an optional number with digits decimals, or a dash when it is absent.
 export function formatNumber(value: number | undefined, digits: number) {
-	return value === undefined ? '—' : value.toFixed(digits)
-}
-
-// Formats an optional width given in pixels, with its value in arcseconds when the pixel scale (arcsec/px) is known.
-export function formatWidth(pixels: number | undefined, pixelScale?: number) {
-	if (pixels === undefined) return '—'
-	return pixelScale === undefined ? `${pixels.toFixed(2)} px` : `${pixels.toFixed(2)} px (${(pixels * pixelScale).toFixed(2)}")`
+	return value === undefined ? MISSING : value.toFixed(digits)
 }
 
 // Formats a value already in the scale of the source: whole ADU, or four significant digits of a unit it does not name.
@@ -37,17 +32,17 @@ function formatConverted(value: number, unit: SampleConversion['unit'], suffix =
 
 // Formats an optional level given in normalized samples, such as a sky background, or a dash when it is absent.
 export function formatLevel(value: number | undefined, { unit, scale, offset }: SampleConversion) {
-	return value === undefined ? '—' : formatConverted(value * scale + offset, unit)
+	return value === undefined ? MISSING : formatConverted(value * scale + offset, unit)
 }
 
 // Formats an optional signal given as a difference of normalized samples, such as a peak above the sky or a noise, or a
 // dash when it is absent.
 export function formatSignal(value: number | undefined, { unit, scale }: SampleConversion) {
-	return value === undefined ? '—' : formatConverted(value * scale, unit)
+	return value === undefined ? MISSING : formatConverted(value * scale, unit)
 }
 
 // Formats an optional flux, the sum of the signal of the pixels of an aperture given in normalized samples, or a dash when
 // it is absent.
 export function formatFlux(value: number | undefined, { unit, scale }: SampleConversion) {
-	return value === undefined ? '—' : formatConverted(value * scale, unit, '·px')
+	return value === undefined ? MISSING : formatConverted(value * scale, unit, '·px')
 }

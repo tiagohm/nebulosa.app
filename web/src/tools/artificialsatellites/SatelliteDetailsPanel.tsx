@@ -1,5 +1,6 @@
 import type { SatelliteQuality } from 'api'
 import { useSnapshot } from 'valtio'
+import { formatDegrees } from '../../format'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
 import type { SkyObserverSettings } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
@@ -8,7 +9,7 @@ import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Note } from '../eclipse/EclipsePanelParts'
-import { artificialSatellitesState, degrees, formatElementAge, formatSatelliteTime, openSkyObserver, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
+import { artificialSatellitesState, formatElementAge, formatSatelliteTime, openSkyObserver, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 
 // Contextual panel of Artificial Satellites: the satellite selected, its position now for the Sky observer (read again
 // every POSITION_REFRESH_MS), its orbit, and where its elements come from. Every value is the server's; an absent one is left out, never shown as 0. Positions are
@@ -84,14 +85,14 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 			</section>
 
 			{elements && (
-				<CollapsibleSection id="satellites.position" title="Position Now" summary={p?.altitude === undefined ? undefined : `altitude ${degrees(p.altitude, 1)}`}>
+				<CollapsibleSection id="satellites.position" title="Position Now" summary={p?.altitude === undefined ? undefined : `altitude ${formatDegrees(p.altitude, 1)}`}>
 					{positionError && <Note danger>{positionError}</Note>}
 					{p && position && (
 						<DataList>
 							<DataRow label="Time">{formatSatelliteTime(p.time, timeZone)}</DataRow>
 							<DataRow label="Seen from">{p.center === 'topocentric' ? 'The observer' : "The Earth's center"}</DataRow>
-							{p.altitude !== undefined && <DataRow label="Altitude">{`${degrees(p.altitude)} (${p.altitude > 0 ? 'above' : 'below'} the horizon)`}</DataRow>}
-							{p.azimuth !== undefined && <DataRow label="Azimuth">{degrees(p.azimuth)}</DataRow>}
+							{p.altitude !== undefined && <DataRow label="Altitude">{`${formatDegrees(p.altitude)} (${p.altitude > 0 ? 'above' : 'below'} the horizon)`}</DataRow>}
+							{p.azimuth !== undefined && <DataRow label="Azimuth">{formatDegrees(p.azimuth)}</DataRow>}
 							<DataRow label="RA (of date)">{formatRightAscension(p.rightAscension)}</DataRow>
 							<DataRow label="Dec (of date)">{formatDeclination(p.declination)}</DataRow>
 							<DataRow label="RA (J2000)">{formatRightAscension(p.rightAscensionJ2000)}</DataRow>
@@ -99,7 +100,7 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 							<DataRow label="Constellation">{p.constellation}</DataRow>
 							<DataRow label="Distance">{`${p.distanceKm.toFixed(0)} km`}</DataRow>
 							<DataRow label="Height">{`${p.heightKm.toFixed(1)} km`}</DataRow>
-							<DataRow label="Below">{`${degrees(p.subpointLatitude)}, ${degrees(p.subpointLongitude)}`}</DataRow>
+							<DataRow label="Below">{`${formatDegrees(p.subpointLatitude)}, ${formatDegrees(p.subpointLongitude)}`}</DataRow>
 							<QualityRow quality={position.quality} />
 						</DataList>
 					)}
@@ -116,9 +117,9 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 				<CollapsibleSection id="satellites.motion" title="Motion & Illumination" defaultOpen={false}>
 					<DataList>
 						{p.rangeRateKmPerSecond !== undefined && <DataRow label="Range rate">{`${p.rangeRateKmPerSecond.toFixed(3)} km/s (${p.rangeRateKmPerSecond > 0 ? 'receding' : 'approaching'})`}</DataRow>}
-						{p.angularRate !== undefined && <DataRow label="Angular speed">{`${degrees(p.angularRate, 3)}/s`}</DataRow>}
+						{p.angularRate !== undefined && <DataRow label="Angular speed">{`${formatDegrees(p.angularRate, 3)}/s`}</DataRow>}
 						<DataRow label="Illumination">{SHADOW_LABELS[p.shadow]}</DataRow>
-						{p.sunAltitude !== undefined && <DataRow label="Sun altitude here">{degrees(p.sunAltitude, 1)}</DataRow>}
+						{p.sunAltitude !== undefined && <DataRow label="Sun altitude here">{formatDegrees(p.sunAltitude, 1)}</DataRow>}
 					</DataList>
 					<Note>Brightness is unknown: no source gives the reflectivity of most satellites, so no magnitude is estimated.</Note>
 				</CollapsibleSection>
@@ -129,11 +130,11 @@ export function SatelliteDetailsPanel({ observer }: { readonly observer?: SkyObs
 					<DataList>
 						<DataRow label="Mean motion">{`${orbit.meanMotion.toFixed(8)} rev/day`}</DataRow>
 						<DataRow label="Period (derived)">{`${orbit.periodMinutes.toFixed(2)} min`}</DataRow>
-						<DataRow label="Inclination">{degrees(orbit.inclination, 4)}</DataRow>
+						<DataRow label="Inclination">{formatDegrees(orbit.inclination, 4)}</DataRow>
 						<DataRow label="Eccentricity">{orbit.eccentricity.toFixed(7)}</DataRow>
-						<DataRow label="RAAN">{degrees(orbit.rightAscensionOfAscendingNode, 4)}</DataRow>
-						<DataRow label="Arg. of perigee">{degrees(orbit.argumentOfPerigee, 4)}</DataRow>
-						<DataRow label="Mean anomaly">{degrees(orbit.meanAnomaly, 4)}</DataRow>
+						<DataRow label="RAAN">{formatDegrees(orbit.rightAscensionOfAscendingNode, 4)}</DataRow>
+						<DataRow label="Arg. of perigee">{formatDegrees(orbit.argumentOfPerigee, 4)}</DataRow>
+						<DataRow label="Mean anomaly">{formatDegrees(orbit.meanAnomaly, 4)}</DataRow>
 						<DataRow label="B*">{orbit.bstar.toExponential(4)}</DataRow>
 						<DataRow label="Apogee / perigee (derived)">{`${orbit.apogeeHeightKm.toFixed(0)} / ${orbit.perigeeHeightKm.toFixed(0)} km`}</DataRow>
 						{object?.apogeeKm !== undefined && object.perigeeKm !== undefined && <DataRow label="Apogee / perigee (catalog)">{`${object.apogeeKm} / ${object.perigeeKm} km`}</DataRow>}

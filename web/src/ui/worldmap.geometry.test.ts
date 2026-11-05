@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import {
 	constrainWorldMapView,
 	DEGREE_PLANE_TRANSFORM,
-	formatGeoPoint,
 	geoPath,
 	graticulePath,
 	horizonCurve,
@@ -181,11 +180,6 @@ test('graticule lines', () => {
 	const wrapped = graticulePath(30, true)
 	expect(wrapped.match(/V/g)).toHaveLength(12)
 	expect(wrapped.startsWith('M0 0V')).toBeTrue()
-})
-
-test('formats a position', () => {
-	expect(formatGeoPoint({ longitude: -46.6333, latitude: -23.5505 })).toBe('23.5505° S  46.6333° W')
-	expect(formatGeoPoint({ longitude: 2.35, latitude: 48.86 })).toBe('48.8600° N  2.3500° E')
 })
 
 describe('view', () => {

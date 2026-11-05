@@ -1,8 +1,9 @@
 import { AU_KM } from 'nebulosa/src/core/constants'
-import { formatDEC, formatRA, toArcmin, toDeg } from 'nebulosa/src/math/units/angle'
+import { formatDEC, formatRA, toArcmin } from 'nebulosa/src/math/units/angle'
 
-// Display formats of the Sky workspace: equatorial and horizontal angles, angular sizes, distances,
-// magnitudes, and instants in the browser's time zone with the zone named, so a time is never ambiguous.
+// Display formats of the Sky workspace: equatorial and horizontal angles, apparent angular sizes, distances,
+// magnitudes, and instants in the browser's time zone with the zone named, so a time is never ambiguous. Azimuths and
+// position angles are plain degrees, written by `formatDegrees` of `format.ts`.
 
 // AU per light-year (IAU: 1 ly = 63 241.077 AU).
 const AU_PER_LIGHT_YEAR = 63_241.077
@@ -10,19 +11,14 @@ const AU_PER_LIGHT_YEAR = 63_241.077
 // Distance below which a solar-system distance is shown in kilometers, in AU (about 2.6 lunar distances).
 const KILOMETER_DISTANCE_LIMIT = 0.007
 
-// Formats a right ascension in radians as hours, minutes, and seconds: "06h 45m 08.93s".
+// Formats a right ascension in radians as hours, minutes, and seconds: "06 45 08.93".
 export function formatRightAscension(angle: number) {
 	return formatRA(angle)
 }
 
-// Formats a declination or altitude in radians as signed degrees, arcminutes, and arcseconds: "-16° 42′ 58.02″".
+// Formats a declination or altitude in radians as signed degrees, arcminutes, and arcseconds: "-16 42 58.02".
 export function formatDeclination(angle: number) {
 	return formatDEC(angle)
-}
-
-// Formats an azimuth or a position angle in radians as degrees with two decimals: "265.36°".
-export function formatDegrees(angle: number) {
-	return `${toDeg(angle).toFixed(2)}°`
 }
 
 // Formats an angular size in radians as arcminutes, or arcseconds below one arcminute: "189.10′", "45″".

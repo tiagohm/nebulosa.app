@@ -2,6 +2,7 @@ import type { CloseApproach, CloseApproachSortField } from 'api'
 import { cn } from 'cn'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
+import { MISSING } from '../../format'
 import { profileState, setCloseApproachPreferences } from '../../profile/profile'
 import { CLOSE_APPROACH_DISTANCE_DISPLAYS, CLOSE_APPROACH_TIME_DISPLAYS, type CloseApproachPreferences } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -18,9 +19,6 @@ import { bodyName, closeApproachesState, formatApproachTime, formatDiameter, for
 
 // Rows per page offered.
 const PAGE_SIZES = ['25', '50', '100'] as const
-
-// Text of an absent value.
-const NOT_PUBLISHED = '—'
 
 interface SortHeaderProps {
 	// Column of JPL the header orders by.
@@ -102,10 +100,10 @@ function EncounterRow({ approach, timeZone, distanceDisplay, index, count }: Enc
 			<td className="px-2 py-1.5 whitespace-nowrap">{formatApproachTime(time, timeZone)}</td>
 			<td className="px-2 py-1.5 whitespace-nowrap">{bodyName(body)}</td>
 			<td className="px-2 py-1.5 text-right whitespace-nowrap">{formatDistance(distance, distanceDisplay)}</td>
-			<td className="px-2 py-1.5 text-right whitespace-nowrap">{formatDistanceRange(distanceMin, distanceMax, distanceDisplay) ?? NOT_PUBLISHED}</td>
+			<td className="px-2 py-1.5 text-right whitespace-nowrap">{formatDistanceRange(distanceMin, distanceMax, distanceDisplay) ?? MISSING}</td>
 			<td className="px-2 py-1.5 text-right whitespace-nowrap">{formatVelocity(relativeVelocity)}</td>
-			<td className="px-2 py-1.5 text-right">{absoluteMagnitude?.toFixed(2) ?? NOT_PUBLISHED}</td>
-			<td className="px-2 py-1.5 text-right whitespace-nowrap">{diameter === undefined ? NOT_PUBLISHED : formatDiameter(diameter, diameterSigma)}</td>
+			<td className="px-2 py-1.5 text-right">{absoluteMagnitude?.toFixed(2) ?? MISSING}</td>
+			<td className="px-2 py-1.5 text-right whitespace-nowrap">{diameter === undefined ? MISSING : formatDiameter(diameter, diameterSigma)}</td>
 			<td className="px-2 py-1.5 whitespace-nowrap">{orbitId}</td>
 		</tr>
 	)

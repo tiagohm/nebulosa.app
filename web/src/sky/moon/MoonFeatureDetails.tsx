@@ -1,5 +1,6 @@
 import type { Mat3 } from 'nebulosa/src/math/linear-algebra/mat3'
 import type { Vec3 } from 'nebulosa/src/math/linear-algebra/vec3'
+import { formatGeographic } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Note } from '../InspectorParts'
 import type { LunarFeature } from './moon.features'
@@ -12,11 +13,6 @@ import { projectPoint } from './moon.geometry'
 
 // Page of a feature in the Gazetteer of Planetary Nomenclature.
 const GAZETTEER_FEATURE_URL = 'https://planetarynames.wr.usgs.gov/Feature/'
-
-// Formats a selenographic latitude and east longitude in degrees: "9.62° N, 20.08° W".
-export function formatSelenographicPoint(latitude: number, longitude: number) {
-	return `${Math.abs(latitude).toFixed(2)}° ${latitude >= 0 ? 'N' : 'S'}, ${Math.abs(longitude).toFixed(2)}° ${longitude >= 0 ? 'E' : 'W'}`
-}
 
 // Says where a feature is now: on the far side, on the night side, or in daylight.
 function featureState(feature: LunarFeature, view: Mat3, sun: Vec3) {
@@ -31,7 +27,7 @@ export function MoonFeatureDetails({ feature, view, sun }: { readonly feature: L
 		<div className="flex flex-col gap-2">
 			<p className="m-0 text-base leading-6 font-semibold text-ink-100">{feature.name}</p>
 			<p className="m-0 text-ink-300">{feature.descriptor}</p>
-			<DataRow label="Center">{formatSelenographicPoint(feature.latitude, feature.longitude)}</DataRow>
+			<DataRow label="Center">{formatGeographic(feature.latitude, feature.longitude, 2)}</DataRow>
 			{feature.dimension !== undefined && <DataRow label={feature.elongated ? 'Length' : 'Diameter'}>≈ {feature.dimension < 10 ? feature.dimension.toFixed(1) : Math.round(feature.dimension)} km</DataRow>}
 			{feature.approvalYear !== undefined && <DataRow label="Approved">{feature.approvalYear}</DataRow>}
 			{feature.origin && <p className="m-0 text-sm text-ink-200">{feature.origin}</p>}

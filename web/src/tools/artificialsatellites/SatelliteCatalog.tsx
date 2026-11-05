@@ -2,6 +2,7 @@ import type { SatelliteGroupStatus, SatelliteSummary } from 'api'
 import { cn } from 'cn'
 import type { KeyboardEvent } from 'react'
 import { useSnapshot } from 'valtio'
+import { MISSING } from '../../format'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
 import { satelliteCatalogState } from '../../satellites/satellites'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -19,9 +20,6 @@ import { artificialSatellitesState, CATALOG_PAGE_SIZE, formatSatelliteTime, sear
 
 // Names of the SATCAT object types.
 const OBJECT_TYPE_NAMES = { payload: 'Payload', rocketBody: 'Rocket body', debris: 'Debris', unknown: 'Unknown' } as const
-
-// Text of an absent value.
-const ABSENT = '—'
 
 // Searches the catalog with the state of the tab and the favorites of the active profile.
 function search(offset = 0) {
@@ -106,8 +104,8 @@ function SatelliteRow({ satellite, favorite, index, count }: SatelliteRowProps) 
 				{name}
 			</td>
 			<td className="px-2 py-1.5 text-right">{noradId}</td>
-			<td className="px-2 py-1.5 whitespace-nowrap">{cosparId ?? ABSENT}</td>
-			<td className="px-2 py-1.5 whitespace-nowrap">{objectType ? OBJECT_TYPE_NAMES[objectType] : ABSENT}</td>
+			<td className="px-2 py-1.5 whitespace-nowrap">{cosparId ?? MISSING}</td>
+			<td className="px-2 py-1.5 whitespace-nowrap">{objectType ? OBJECT_TYPE_NAMES[objectType] : MISSING}</td>
 			<td className="px-2 py-1.5 whitespace-nowrap" title={elementKind ? undefined : 'No orbital elements: catalog data only, no prediction.'}>
 				{elementEpoch === undefined ? 'Catalog only' : `${elementKind === 'manual' ? 'Imported' : 'GP'} · ${formatSatelliteTime(elementEpoch, 'UTC')} UTC`}
 			</td>

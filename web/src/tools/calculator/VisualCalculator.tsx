@@ -1,6 +1,6 @@
+import { formatFixed } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, Note, NumberField, OutcomeView, Primary } from './CalculatorParts'
-import { formatFixed } from './values'
 import { APERTURE_COMPARISON_EXAMPLE, type ApertureComparisonDraft, type ApertureSide, apertureComparison, EYEPIECE_EXAMPLE, type EyepieceDraft, eyepiece, eyepieceFromOptics, type LightGrasp } from './visual'
 
 // Views of the Visual Observation calculators: Eyepiece & Telescope and Aperture Comparison.

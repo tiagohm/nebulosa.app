@@ -3,6 +3,7 @@ import { cn } from 'cn'
 import { Fragment, type PointerEvent, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { Actions, Notice } from '../equipment-control/parts'
+import { formatDuration } from '../format'
 import { profileState, setImageProcessingPipeline } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -353,7 +354,7 @@ function RunSection({ document, draft, job, active, enabledCount, blocker, claim
 							{job.currentStepIndex + 1} of {job.steps.length} · {operationLabel(stepping.operation.type)}
 						</DataRow>
 					)}
-					{job.startedAt !== undefined && <DataRow label="Elapsed">{formatSeconds((job.endedAt ?? now) - job.startedAt)}</DataRow>}
+					{job.startedAt !== undefined && <DataRow label="Elapsed">{formatDuration(((job.endedAt ?? now) - job.startedAt) / 1000)}</DataRow>}
 					{job.error && <Notice error>{job.errorStepId === undefined ? job.error : `${stepName(job, job.errorStepId)}: ${job.error}`}</Notice>}
 					{job.state === 'completed' && !claimError && <Notice>The result opened as a new unsaved image; the source is unchanged.</Notice>}
 					{claimError && <Notice error>{claimError}</Notice>}
@@ -379,9 +380,4 @@ function RunSection({ document, draft, job, active, enabledCount, blocker, claim
 function stepName(job: ImageProcessingJob, stepId: string): string {
 	const index = job.steps.findIndex((step) => step.id === stepId)
 	return index < 0 ? 'A step' : `Step ${index + 1} (${operationLabel(job.steps[index].operation.type)})`
-}
-
-// Returns a duration in milliseconds as seconds with one decimal.
-function formatSeconds(milliseconds: number): string {
-	return `${(milliseconds / 1000).toFixed(1)} s`
 }

@@ -7,6 +7,7 @@ import { Notice } from '../equipment-control/parts'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { deviceState } from '../equipment/equipment'
 import type { RoleDevice } from '../equipment/useEquipment'
+import { formatDegrees, formatPixelLength } from '../format'
 import { operationsState } from '../operations'
 import { activeProfile, exposureSettings, guidingSettings, profileState, setGuidingSettings, starDetectionSettings } from '../profile/profile'
 import { type CameraIdentity, GUIDING_MAXIMUM_PULSE, GUIDING_MAXIMUM_SEARCH_REGION, GUIDING_MINIMUM_PULSE, GUIDING_MINIMUM_SEARCH_REGION, type GuidingDitherMode, type GuidingSettings } from '../profile/schema'
@@ -144,7 +145,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 			<CollapsibleSection id="images.guiding.equipment" title="Equipment">
 				<DataList>
 					<DataRow label="Camera">
-						<DeviceLink device={device} fallback="—" />
+						<DeviceLink device={device} />
 					</DataRow>
 					<DataRow label="Guide Output">{guideOutput ? <DeviceLink device={guideOutput.device} fallback="Not assigned" /> : 'Guide Camera only'}</DataRow>
 					<DataRow label="Guide Focal Length">{focalLength !== undefined ? `${Number(focalLength.toFixed(1))} mm` : 'Not set'}</DataRow>
@@ -303,29 +304,29 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 		<CollapsibleSection id="images.guiding.session" title="Session">
 			{session.active && <FrameProgress exposure={session.exposureProgress} />}
 			<DataList>
-				<DataRow label="State">
-					<span className={cn(session.state === 'lostLock' && 'text-danger', session.state === 'guiding' && 'text-success')}>{session.active ? GUIDING_STATE_LABELS[session.state] : session.lost ? 'Lost' : 'Stopped'}</span>
+				<DataRow label="State" tone={session.state === 'lostLock' ? 'danger' : session.state === 'guiding' ? 'success' : 'default'}>
+					{session.active ? GUIDING_STATE_LABELS[session.state] : session.lost ? 'Lost' : 'Stopped'}
 				</DataRow>
 				{session.state === 'calibrating' && session.calibrating && <DataRow label="Step">{GUIDING_CALIBRATION_PHASE_LABELS[session.calibrating.phase]}</DataRow>}
 				{session.settling && <DataRow label="Settling">{session.dithering ? 'After a dither' : 'Yes'}</DataRow>}
 				{session.lockPosition && <DataRow label="Lock (px)">{`${session.lockPosition[0].toFixed(1)}, ${session.lockPosition[1].toFixed(1)}`}</DataRow>}
 				{calibration && (
 					<>
-						<DataRow label="RA Rate">{`${formatRate(calibration.raRate)} at ${formatAngle(calibration.raAngle)}`}</DataRow>
-						<DataRow label="DEC Rate">{`${formatRate(calibration.decRate)} at ${formatAngle(calibration.decAngle)}`}</DataRow>
+						<DataRow label="RA Rate">{`${formatRate(calibration.raRate)} at ${formatDegrees(calibration.raAngle, 1)}`}</DataRow>
+						<DataRow label="DEC Rate">{`${formatRate(calibration.decRate)} at ${formatDegrees(calibration.decAngle, 1)}`}</DataRow>
 						{calibration.backlash > 0 && <DataRow label="DEC Backlash">{`${Math.round(calibration.backlash)} ms`}</DataRow>}
 					</>
 				)}
 				{rms && rms.samples > 0 && (
 					<>
-						<DataRow label="RMS RA">{formatError(rms.ra, pixelScale)}</DataRow>
-						<DataRow label="RMS DEC">{formatError(rms.dec, pixelScale)}</DataRow>
-						<DataRow label="RMS Total">{`${formatError(rms.total, pixelScale)} (${rms.samples})`}</DataRow>
+						<DataRow label="RMS RA">{formatPixelLength(rms.ra, pixelScale)}</DataRow>
+						<DataRow label="RMS DEC">{formatPixelLength(rms.dec, pixelScale)}</DataRow>
+						<DataRow label="RMS Total">{`${formatPixelLength(rms.total, pixelScale)} (${rms.samples})`}</DataRow>
 					</>
 				)}
 				{command && (
-					<DataRow label={COMMAND_LABELS[command.command]}>
-						<span className={cn(command.state === 'failed' && 'text-danger', command.state === 'succeeded' && 'text-success')}>{command.state === 'running' ? 'Running' : command.state === 'succeeded' ? 'Done' : 'Failed'}</span>
+					<DataRow label={COMMAND_LABELS[command.command]} tone={command.state === 'failed' ? 'danger' : command.state === 'succeeded' ? 'success' : 'default'}>
+						{command.state === 'running' ? 'Running' : command.state === 'succeeded' ? 'Done' : 'Failed'}
 					</DataRow>
 				)}
 			</DataList>
@@ -340,14 +341,4 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 // Formats a calibration rate given in pixels per millisecond as pixels per second.
 function formatRate(rate: number) {
 	return `${(rate * 1000).toFixed(2)} px/s`
-}
-
-// Formats an angle given in radians in degrees.
-function formatAngle(angle: number) {
-	return `${((angle * 180) / Math.PI).toFixed(1)}°`
-}
-
-// Formats a guide error given in guide pixels, with its value in arcseconds when the pixel scale (arcsec/px) is known.
-function formatError(pixels: number, pixelScale?: number) {
-	return pixelScale === undefined ? `${pixels.toFixed(2)} px` : `${pixels.toFixed(2)} px (${(pixels * pixelScale).toFixed(2)}")`
 }

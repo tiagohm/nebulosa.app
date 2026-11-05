@@ -1,12 +1,11 @@
 import { expect, test } from 'bun:test'
 import { deg } from 'nebulosa/src/math/units/angle'
-import { formatAngularSize, formatDeclination, formatDegrees, formatLocalTime, formatMagnitude, formatRightAscension, formatSolarSystemDistance, formatStellarDistance } from './format'
+import { formatAngularSize, formatDeclination, formatLocalTime, formatMagnitude, formatRightAscension, formatSolarSystemDistance, formatStellarDistance } from './format'
 
 test('angles', () => {
 	expect(formatRightAscension(1.7677953696021995)).toBe('06 45 08.93')
 	expect(formatDeclination(-0.291751258517685)).toBe('-16 42 58.02')
 	expect(formatDeclination(deg(41.27))).toBe('+41 16 12.00')
-	expect(formatDegrees(deg(265.357))).toBe('265.36°')
 	expect(formatAngularSize(deg(189.1 / 60))).toBe('189.10′')
 	expect(formatAngularSize(deg(45 / 3600))).toBe('45″')
 })

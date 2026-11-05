@@ -1,9 +1,9 @@
 import type { StarDetectionJob, StarDetectionRequest, StarDetectionResult } from 'api'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
-import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { isActive } from '../analysis'
 import { Actions, Notice } from '../equipment-control/parts'
+import { formatDuration, MISSING, formatSignificant, formatPixelLength } from '../format'
 import { activeProfile, profileState, setStarDetectionSettings, starDetectionSettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -25,9 +25,6 @@ import type { ImageToolPanelProps } from './tools'
 // The settings are editable before the document has an image (a camera tab waiting for its first frame), with Run
 // Detection disabled until it has one. ASTAP's executable and timeout are not set here but in Settings → External
 // Tools, which the detector section links to.
-
-// Text shown for a value the result does not have.
-const MISSING = '—'
 
 // Display names of the job states.
 const STATE_LABELS: Readonly<Record<StarDetectionJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
@@ -145,7 +142,7 @@ function Analysis({ documentKey, imageId, request, job, submitError, unavailable
 			{job ? (
 				<>
 					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
-					<DataRow label="Elapsed">{formatSeconds(elapsedOf(job, now))}</DataRow>
+					<DataRow label="Elapsed">{formatDuration(elapsedOf(job, now) / 1000)}</DataRow>
 					{job.error && <Notice error>{job.error}</Notice>}
 					{changed && <Notice>The settings changed since this detection; run it again to apply them.</Notice>}
 				</>
@@ -176,8 +173,8 @@ function Results({ job, result, resultError }: ResultsProps) {
 					<DataRow label="Detector">{PROVIDER_LABELS[job.request.detector.provider]}</DataRow>
 					<DataRow label="Detected stars">{summary.detectedCount}</DataRow>
 					<DataRow label="Accepted stars">{summary.acceptedCount}</DataRow>
-					<DataRow label="Aggregate HFD">{summary.measurement === 'ok' && summary.aggregateHfd !== undefined ? `${summary.aggregateHfd.toFixed(2)} px` : MISSING}</DataRow>
-					<DataRow label="Duration">{formatSeconds(summary.elapsed)}</DataRow>
+					<DataRow label="Aggregate HFD">{summary.measurement === 'ok' ? formatPixelLength(summary.aggregateHfd) : MISSING}</DataRow>
+					<DataRow label="Duration">{formatDuration(summary.elapsed / 1000)}</DataRow>
 					{summary.measurement === 'noStars' && <Notice>No stars were detected in this image.</Notice>}
 					{summary.measurement === 'unavailable' && <Notice>Too few stars were accepted for an aggregate HFD.</Notice>}
 					{result?.warnings.map((warning) => (
@@ -202,7 +199,7 @@ function SelectedStar({ star }: { readonly star?: DetectedStar }) {
 					<DataRow label="Y">{star.y.toFixed(2)} px</DataRow>
 					<DataRow label="HFD">{star.hfd.toFixed(2)} px</DataRow>
 					<DataRow label="SNR">{star.snr.toFixed(1)}</DataRow>
-					<DataRow label="Flux">{formatFlux(star.flux)}</DataRow>
+					<DataRow label="Flux">{formatSignificant(star.flux)}</DataRow>
 				</>
 			) : (
 				<Notice>No star selected.</Notice>
@@ -216,15 +213,4 @@ function elapsedOf(job: StarDetectionJob, now: number): number {
 	if (job.summary) return job.summary.elapsed
 	if (job.startedAt === undefined) return 0
 	return (job.endedAt ?? now) - job.startedAt
-}
-
-// Returns a duration in milliseconds as seconds with two decimals below 10 s, one above.
-function formatSeconds(milliseconds: number): string {
-	const seconds = milliseconds / 1000
-	return `${seconds < 10 ? seconds.toFixed(2) : seconds.toFixed(1)} s`
-}
-
-// Returns a flux with four significant digits, in exponential notation when large or small.
-function formatFlux(flux: number): string {
-	return flux !== 0 && (Math.abs(flux) >= 1e5 || Math.abs(flux) < 1e-2) ? flux.toExponential(3) : flux.toPrecision(4)
 }

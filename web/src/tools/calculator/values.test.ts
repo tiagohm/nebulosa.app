@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { between, differs, formatDuration, formatFixed, newCheck, optional, optionalOutcome, outcome, outcomeMessage, parseNumber, POSITIVE, POSITIVE_INTEGER, positiveText, ready, required } from './values'
+import { between, differs, newCheck, optional, optionalOutcome, outcome, outcomeMessage, parseNumber, POSITIVE, POSITIVE_INTEGER, positiveText, ready, required } from './values'
 
 describe('parseNumber', () => {
 	test('blank text is absent', () => {
@@ -88,22 +88,5 @@ describe('text', () => {
 	test('a draft differs when any field changed', () => {
 		expect(differs({ a: '1', b: '2' }, { a: '1', b: '2' })).toBe(false)
 		expect(differs({ a: '1', b: '3' }, { a: '1', b: '2' })).toBe(true)
-	})
-})
-
-describe('format', () => {
-	test('never shows a non-finite number', () => {
-		expect(formatFixed(Number.NaN, 2)).toBe('—')
-		expect(formatFixed(Number.POSITIVE_INFINITY, 2)).toBe('—')
-		expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('—')
-		expect(formatFixed(1.005, 1)).toBe('1.0')
-	})
-
-	test('durations', () => {
-		expect(formatDuration(2.5)).toBe('2.50 s')
-		expect(formatDuration(42)).toBe('42.0 s')
-		expect(formatDuration(245)).toBe('4 min 05 s')
-		expect(formatDuration(36000)).toBe('10 h 00 min')
-		expect(formatDuration(3 * 3600 + 7 * 60 + 20)).toBe('3 h 07 min')
 	})
 })

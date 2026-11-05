@@ -91,7 +91,7 @@ export function MountNudgeSections({ mount, camera }: MountNudgeTarget) {
 			<CollapsibleSection id="images.mount-nudge.equipment" title="Equipment">
 				<DataList>
 					<DataRow label="Camera">
-						<DeviceLink device={camera} fallback="—" />
+						<DeviceLink device={camera} />
 					</DataRow>
 					<DataRow label="Mount">
 						<DeviceLink device={device} fallback={mount.status === 'notSelected' ? 'None selected' : 'Unavailable'} />

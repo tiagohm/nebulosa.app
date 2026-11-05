@@ -1,5 +1,5 @@
 import type { CameraCapabilities, CapturePhase, CaptureSession, CoverState, DeviceSummary, DomeState, FlatPanelState, FocuserState, GuidingSessionSummary, MountState, OperationKind, OperationProgress, OperationRecord, RotatorState, WheelState } from 'api'
-import { formatDEC, formatRA, normalizeAngle, toDeg } from 'nebulosa/src/math/units/angle'
+import { formatDEC, formatRA, normalizeAngle } from 'nebulosa/src/math/units/angle'
 import type { AutoFocusRuntime } from '../../camera/autofocus'
 import { type CaptureRuntime, cameraKey, captureRunning, frameProgress } from '../../camera/capture'
 import type { DarkLibraryWizardRuntime } from '../../camera/darklibrarywizard'
@@ -12,6 +12,7 @@ import type { SelectedConnectionStatus } from '../../connection/useSelectedConne
 import { type ControlRuntime, watchedDeviceState } from '../../equipment-control/control'
 import { ROLE_STATUS_LABELS, type RoleStatus } from '../../equipment/equipment'
 import type { EquipmentRole } from '../../equipment/roles'
+import { formatClockDuration, formatDegrees } from '../../format'
 import type { MountPointingRuntime } from '../../mountpointing/mountpointing'
 import type { ServerLink } from '../../notifications/notifications'
 import { OPERATION_LABELS } from '../../operations'
@@ -339,7 +340,7 @@ const SHUTTER_TEXT: Readonly<Partial<Record<DomeState['shutterState'], string>>>
 export function domeChip(state: Pick<DomeState, 'slewing' | 'moving' | 'homing' | 'parking' | 'parked' | 'hasShutter' | 'shutterState' | 'azimuth'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.DOME.fields): ChipValue {
 	if (!state) return { text: '--', tone: 'muted', moving: false, title: 'State not reported' }
 	const shutterMoving = state.hasShutter && (state.shutterState === 'OPENING' || state.shutterState === 'CLOSING')
-	const azimuth = `${toDeg(state.azimuth.value).toFixed(1)}°`
+	const azimuth = formatDegrees(state.azimuth.value, 1)
 	const status = state.parking ? 'Parking' : state.homing ? 'Homing' : state.slewing || state.moving ? 'Moving' : state.parked ? 'Parked' : undefined
 	const moving = shutterMoving || state.parking || state.homing || state.slewing || state.moving
 	const shutter = state.hasShutter ? ` · shutter ${state.shutterState.toLowerCase()}` : ''
@@ -501,11 +502,7 @@ export function roleDetailValue(role: EquipmentRole, status: RoleStatus, device:
 // Returns the time an operation has run, from its start in Unix milliseconds to now in Unix milliseconds, as
 // "m:ss" or, from one hour, "h:mm:ss"; a start after now (clocks of the server and the browser differ) reads 0:00.
 export function formatElapsed(startedAt: number, now: number) {
-	const total = Math.max(0, Math.floor((now - startedAt) / 1000))
-	const hours = Math.floor(total / 3600)
-	const minutes = Math.floor(total / 60) % 60
-	const seconds = String(total % 60).padStart(2, '0')
-	return hours > 0 ? `${hours}:${String(minutes).padStart(2, '0')}:${seconds}` : `${minutes}:${seconds}`
+	return formatClockDuration((now - startedAt) / 1000)
 }
 
 // Returns the progress an operation reports, such as "2/5 · Moving to 1100", or undefined while it reports none.

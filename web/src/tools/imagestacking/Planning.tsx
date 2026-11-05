@@ -1,7 +1,7 @@
 import type { StackingCalibration, StackingCohort, StackingFilterGroup, StackingFrameSummary, StackingJobSummary, StackingProjectDetail, StackingSettings, StackingValidation } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { Actions, Notice } from '../../equipment-control/parts'
+import { Notice } from '../../equipment-control/parts'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { NumberInput } from '../../ui/NumberInput'
@@ -9,6 +9,7 @@ import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 // oxfmt-ignore
 import { blocksAnalysis, cohortText, LIGHT_MASTER_KINDS, LIGHT_MASTER_LABELS, type LightMaster, masterText, metricText, registrationText, REJECTION_LABELS, selectionFields, selectionOf, SEVERITY_LABELS, SEVERITY_TONES, THRESHOLDS } from './format'
+import { MISSING } from '../../format'
 import { cancelStackingAnalysis, imageStackingRuntime, jobEnded, startStackingAnalysis, updateStackingCohort, updateStackingSettings } from './projects'
 import { Cell, Row, Table } from './Table'
 
@@ -245,7 +246,7 @@ function QualityTable({ projectId, group, selected, onSelect }: { readonly proje
 				return (
 					<Row key={frame.sourceId} selected={frame.sourceId === selected} onClick={() => onSelect(frame.sourceId)}>
 						<Cell>{frame.name}</Cell>
-						<Cell>{quality?.starCount ?? '—'}</Cell>
+						<Cell>{quality?.starCount ?? MISSING}</Cell>
 						<Cell>{metricText(quality?.medianSNR, 1)}</Cell>
 						<Cell>{metricText(quality?.medianHFD)}</Cell>
 						<Cell>{metricText(quality?.medianFWHM)}</Cell>

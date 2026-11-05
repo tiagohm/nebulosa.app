@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { arcsec, deg, hour } from 'nebulosa/src/math/units/angle'
-import { formatAngularSize, formatDeclinationAs, formatPixel, formatPositionAngle, formatRightAscensionAs, formatSignedAngle, formatSkyPosition, MISSING } from './coordinates'
+import { MISSING } from '../format'
+import { formatAngularSize, formatDeclinationAs, formatPixel, formatPositionAngle, formatRightAscensionAs, formatSignedAngle, formatSkyPosition } from './coordinates'
 
 const SEXAGESIMAL = { format: 'sexagesimal', precision: 1 } as const
 const DECIMAL = { format: 'decimal', precision: 1 } as const

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatGeographic } from '../../format'
 import { activeProfile, astroWeatherPreferences, profileState, setAstroWeatherPreferences } from '../../profile/profile'
 import { ASTRO_WEATHER_MODES, type AstroWeatherMode } from '../../profile/schema'
 import { PanelSection } from '../../shell/ContextualPanel'
@@ -122,7 +123,7 @@ export function AstroWeather() {
 		)
 	}
 
-	const coordinates = `${site.latitude.toFixed(4)}°, ${site.longitude.toFixed(4)}°`
+	const coordinates = formatGeographic(site.latitude, site.longitude)
 	const back = night && firstNight(night, now, state.currentNightStart)
 	const forward = night && hasNextNight(night, forecast)
 

@@ -5,9 +5,10 @@ import { useSnapshot } from 'valtio'
 import { DeviceLink } from '../../equipment-control/DeviceLink'
 import { Actions, ConfirmButton, Notice } from '../../equipment-control/parts'
 import { useRoleDevice } from '../../equipment/useEquipment'
+import { formatArcsec, MISSING } from '../../format'
 import { imagesState, selectImage, selectImageTool } from '../../images/images'
 import { activatePointingModel, deactivatePointingModel, deletePointingModel, fitPointingModel, importPointingModel, mountPointingRuntime, patchPointingModel, pointingModelExportUrl, selectPointingModel } from '../../mountpointing/mountpointing'
-import { formatArcsec, PointingDiagnostics, PointingMeasures, PointingSampleInspector } from '../../mountpointing/PointingDiagnostics'
+import { PointingDiagnostics, PointingMeasures, PointingSampleInspector } from '../../mountpointing/PointingDiagnostics'
 import { PointingMap, type PointingMapVectors } from '../../mountpointing/PointingMap'
 import { shownRevision } from '../../mountpointing/skymap'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
@@ -186,7 +187,7 @@ function ModelPanel({ summary }: { readonly summary: PointingModelSummary }) {
 				<DataList>
 					<DataRow label="Mount">{summary.mount.name}</DataRow>
 					<DataRow label="Camera">{summary.optics.cameraName}</DataRow>
-					<DataRow label="Image Scale">{summary.optics.scale === undefined ? '—' : `${formatArcsec(summary.optics.scale)}/px`}</DataRow>
+					<DataRow label="Image Scale">{summary.optics.scale === undefined ? MISSING : `${formatArcsec(summary.optics.scale)}/px`}</DataRow>
 					<DataRow label="Origin">{summary.origin === 'import' ? 'Imported' : 'Measured'}</DataRow>
 					<DataRow label="Acquisition">
 						<span className="capitalize">{summary.acquisition.state}</span>

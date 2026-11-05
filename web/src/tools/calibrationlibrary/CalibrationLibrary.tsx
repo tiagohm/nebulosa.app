@@ -22,6 +22,7 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 // oxfmt-ignore
 import { bytesText, CALIBRATION_KINDS, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, masterName, masterWarnings, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
+import { MISSING } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 
 // Calibration Library tool: what calibration frames exist, what can be combined and why not, and which masters were made. It
@@ -233,7 +234,7 @@ function GroupsView({ selected, onSelect }: { readonly selected?: string; readon
 						<Cell>
 							<StatusBadge tone={READINESS_TONES[group.readiness]} label={READINESS_LABELS[group.readiness]} />
 						</Cell>
-						<Cell>{group.masters[0] ? masterName(group.masters[0]) : '—'}</Cell>
+						<Cell>{group.masters[0] ? masterName(group.masters[0]) : MISSING}</Cell>
 					</Row>
 				))}
 			</Table>
@@ -251,7 +252,7 @@ function Coverage({ groups }: { readonly groups: readonly CalibrationGroupSummar
 					<Cell>{settings}</Cell>
 					{CALIBRATION_KINDS.map((kind) => (
 						<Cell key={kind} className={kinds[kind].groups > 0 && kinds[kind].masters < kinds[kind].groups ? 'text-warning' : undefined}>
-							{kinds[kind].groups === 0 ? '—' : `${kinds[kind].masters}/${kinds[kind].groups}`}
+							{kinds[kind].groups === 0 ? MISSING : `${kinds[kind].masters}/${kinds[kind].groups}`}
 						</Cell>
 					))}
 				</tr>
@@ -738,7 +739,7 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 							<tr key={candidate.path} className="border-b border-line-100 last:border-b-0">
 								<Cell>{candidate.name}</Cell>
 								<Cell>{candidate.kind ? KIND_LABELS[candidate.kind] : (candidate.rejectedRole ?? 'Unknown')}</Cell>
-								<Cell>{candidate.metadata ? exposureText(candidate.metadata) : '—'}</Cell>
+								<Cell>{candidate.metadata ? exposureText(candidate.metadata) : MISSING}</Cell>
 								<Cell>
 									{!candidate.kind && !candidate.rejectedRole && !candidate.error && (
 										<Select

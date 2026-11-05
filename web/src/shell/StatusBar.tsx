@@ -15,6 +15,7 @@ import { astronomicalClockRuntime, effectiveReadings, watchAstronomicalClock } f
 import { AstronomicalClockChip } from './statusbar/AstronomicalClockChip'
 // oxfmt-ignore
 import { activeCapture, activeGuiding, type BarOperation, barOperations, CHIP_ROLES, type ChipRole, type ChipValue, fitClocks, fitItems, fitOperations, MOUNT_MOTION_ID, mountAbortTarget, mountChip, mountMotionRunning, mountMoving, roleChip, type ScopedDevice, scopedDeviceErrors, scopedRunningOperations } from './statusbar/selectors'
+import { formatGeographic } from '../format'
 import { StatusDetails } from './statusbar/StatusDetailsPanel'
 import { OperationItem, ServerLinkItem, StatusChip, useOperationAbortable } from './statusbar/StatusItems'
 
@@ -106,7 +107,7 @@ export function StatusBar() {
 	const clock = astronomicalClockPreferences(profile.settings)
 	const readings = effectiveReadings(clock, observer !== undefined)
 	const timeZone = observer?.timeZone ?? BROWSER_TIME_ZONE
-	const site = observer && (observer.name ?? `${observer.latitude.toFixed(4)}°, ${observer.longitude.toFixed(4)}°`)
+	const site = observer && (observer.name ?? formatGeographic(observer.latitude, observer.longitude))
 	const mount = roleDevice(setup, 'MOUNT', devices)
 	const mainCamera = roleDevice(setup, 'MAIN_CAMERA', devices)
 	const running = scopedRunningOperations(known, serverId)

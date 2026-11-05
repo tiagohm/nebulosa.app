@@ -1,7 +1,7 @@
 import type { StarDetectionJob, StarDetectionRequest, StarDetectionResult } from 'api'
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { useSnapshot } from 'valtio'
-import { isActive } from '../analysis'
+import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
 import { formatDuration, MISSING, formatSignificant, formatPixelLength } from '../format'
 import { activeProfile, profileState, setStarDetectionSettings, starDetectionSettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -26,9 +26,6 @@ import type { ImageToolPanelProps } from './tools'
 // The settings are editable before the document has an image (a camera tab waiting for its first frame), with Run
 // Detection disabled until it has one. ASTAP's executable and timeout are not set here but in Settings → External
 // Tools, which the detector section links to.
-
-// Display names of the job states.
-const STATE_LABELS: Readonly<Record<StarDetectionJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
 
 // Star Detection panel of the active document.
 export function StarDetectionPanel({ document, view, onOpen }: ImageToolPanelProps) {
@@ -142,8 +139,8 @@ function Analysis({ documentKey, imageId, request, job, submitError, unavailable
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job ? (
 				<>
-					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
-					<DataRow label="Elapsed">{formatDuration(elapsedOf(job, now) / 1000)}</DataRow>
+					<DataRow label="Status">{ANALYSIS_STATE_LABELS[job.state]}</DataRow>
+					<DataRow label="Elapsed">{formatDuration(analysisElapsed(job, now) / 1000)}</DataRow>
 					{job.error && <Notice error>{job.error}</Notice>}
 					{changed && <Notice>The settings changed since this detection; run it again to apply them.</Notice>}
 				</>
@@ -207,11 +204,4 @@ function SelectedStar({ star }: { readonly star?: DetectedStar }) {
 			)}
 		</CollapsibleSection>
 	)
-}
-
-// Returns how long a job ran, or has been running, in milliseconds; 0 while it waits.
-function elapsedOf(job: StarDetectionJob, now: number): number {
-	if (job.summary) return job.summary.elapsed
-	if (job.startedAt === undefined) return 0
-	return (job.endedAt ?? now) - job.startedAt
 }

@@ -2,7 +2,7 @@ import type { PlateSolveHint, PlateSolveJob, PlateSolveRequest, PlateSolveResult
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { isActive } from '../analysis'
+import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
 import { controlRuntime, sendCommand, watchedDeviceState } from '../equipment-control/control'
 import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
@@ -47,9 +47,6 @@ import type { ImageToolPanelProps } from './tools'
 // documents never shows its solution on another one, and a job that ends never replaces the solution chosen. Solvers
 // are configured in Settings → External Tools, which the solver section links to. Sync Mount, after a confirmation,
 // syncs the MOUNT of the active equipment setup on the centre of the solution shown; nothing here moves a mount.
-
-// Display names of the job states.
-const STATE_LABELS: Readonly<Record<PlateSolveJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
 
 // Display names of the hint origins.
 const SOURCE_LABELS: Readonly<Record<PlateSolveHint['source'], string>> = { user: 'request', header: 'header', optics: 'optics', default: 'default' }
@@ -199,10 +196,10 @@ function Execution({ documentKey, imageId, request, job, submitError, unavailabl
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job ? (
 				<>
-					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
+					<DataRow label="Status">{ANALYSIS_STATE_LABELS[job.state]}</DataRow>
 					{job.state === 'running' && job.stage && <DataRow label="Step">{STAGE_LABELS[job.stage]}</DataRow>}
 					<DataRow label="Solver">{PROVIDER_LABELS[job.request.provider]}</DataRow>
-					<DataRow label="Elapsed">{formatDuration(elapsedOf(job, now) / 1000)}</DataRow>
+					<DataRow label="Elapsed">{formatDuration(analysisElapsed(job, now) / 1000)}</DataRow>
 					{job.remote?.submissionId !== undefined && <DataRow label="Remote submission">{job.remote.submissionId}</DataRow>}
 					{job.remote?.jobId !== undefined && <DataRow label="Remote job">{job.remote.jobId}</DataRow>}
 					{job.error && <Notice error>{job.error}</Notice>}
@@ -348,13 +345,6 @@ function Solutions({ documentKey, imageId, selected }: SolutionsProps) {
 			<Notice>A new solve never replaces the solution chosen here; the original file is never changed.</Notice>
 		</CollapsibleSection>
 	)
-}
-
-// Returns how long a job ran, or has been running, in milliseconds; 0 while it waits.
-function elapsedOf(job: PlateSolveJob, now: number): number {
-	if (job.summary) return job.summary.elapsed
-	if (job.startedAt === undefined) return 0
-	return (job.endedAt ?? now) - job.startedAt
 }
 
 interface SkyFootprintProps {

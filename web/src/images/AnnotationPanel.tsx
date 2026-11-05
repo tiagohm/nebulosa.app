@@ -2,7 +2,7 @@ import type { AnnotationBodyLayer, AnnotationCenter, AnnotationImageContext, Ann
 import { toArcsec } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { isActive } from '../analysis'
+import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
 import { isAnnotationShown } from '../annotations/AnnotationOverlay'
 import { annotationKey, annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, resolveMinorBody, runAnnotation, sameAnnotationRequest } from '../annotations/annotations'
 import { useAnnotationContext, useAnnotationResult } from '../annotations/useAnnotationResult'
@@ -40,9 +40,6 @@ import type { ImageToolPanelProps } from './tools'
 
 // Objects listed at most; the overlay still draws every one.
 const MAX_LISTED = 300
-
-// Display names of the job states.
-const STATE_LABELS: Readonly<Record<AnnotationJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
 
 // Display names of the groups.
 const LAYER_LABELS: Readonly<Record<AnnotationLayer, string>> = { star: 'Stars', deepSky: 'Deep-sky objects', solarSystem: 'Sun, Moon, and planets', satellite: 'Satellites', minorBody: 'Asteroids and comets' }
@@ -236,8 +233,8 @@ function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, s
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job ? (
 				<>
-					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
-					<DataRow label="Elapsed">{formatDuration(elapsedOf(job, now) / 1000)}</DataRow>
+					<DataRow label="Status">{ANALYSIS_STATE_LABELS[job.state]}</DataRow>
+					<DataRow label="Elapsed">{formatDuration(analysisElapsed(job, now) / 1000)}</DataRow>
 					{job.error && <Notice error>{job.error}</Notice>}
 					{changed && <Notice>The WCS or the magnitude limit changed since this analysis; run it again to apply them.</Notice>}
 				</>
@@ -311,8 +308,8 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job && (
 				<>
-					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
-					<DataRow label="Elapsed">{formatDuration(elapsedOf(job, now) / 1000)}</DataRow>
+					<DataRow label="Status">{ANALYSIS_STATE_LABELS[job.state]}</DataRow>
+					<DataRow label="Elapsed">{formatDuration(analysisElapsed(job, now) / 1000)}</DataRow>
 					{job.summary &&
 						BODY_LAYERS.map(([layer]) => (
 							<DataRow key={layer} label={LAYER_LABELS[layer]}>
@@ -456,13 +453,6 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 			)}
 		</CollapsibleSection>
 	)
-}
-
-// Returns how long a job ran, or has been running, in milliseconds; 0 while it waits.
-function elapsedOf(job: AnnotationJob, now: number): number {
-	if (job.summary) return job.summary.elapsed
-	if (job.startedAt === undefined) return 0
-	return (job.endedAt ?? now) - job.startedAt
 }
 
 // Formats a position uncertainty in radians as arcseconds with two significant digits: "0.026″", "45″".

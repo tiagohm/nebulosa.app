@@ -3,7 +3,7 @@ import type { StreakClassification } from 'nebulosa/src/imaging/analysis/streak/
 import type { Streak } from 'nebulosa/src/imaging/analysis/streak/types'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
-import { isActive } from '../analysis'
+import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
 import { formatDuration, MISSING, formatSignificant, formatDegrees, formatPercent, formatExposureTime } from '../format'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState, setStreakDetectionSettings, streakDetectionSettings } from '../profile/profile'
@@ -33,9 +33,6 @@ import type { ImageToolPanelProps } from './tools'
 // detection is submitted. A classification is an uncalibrated evidence weight, never shown as a probability. The
 // settings are editable before the document has an image (a camera tab waiting for its first frame), with Run Detection
 // disabled until it has one; a result always belongs to the image it measured.
-
-// Display names of the job states.
-const STATE_LABELS: Readonly<Record<StreakDetectionJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
 
 // Display names of the WCS sources of a classification.
 const WCS_LABELS = { header: 'Image header', plateSolve: 'Plate solving' } as const
@@ -239,8 +236,8 @@ function Analysis({ documentKey, imageId, request, job, streaks, solutionAvailab
 			{submitError && <Notice error>{submitError}</Notice>}
 			{job ? (
 				<>
-					<DataRow label="Status">{STATE_LABELS[job.state]}</DataRow>
-					<DataRow label="Elapsed">{formatDuration(elapsedOf(job, now) / 1000)}</DataRow>
+					<DataRow label="Status">{ANALYSIS_STATE_LABELS[job.state]}</DataRow>
+					<DataRow label="Elapsed">{formatDuration(analysisElapsed(job, now) / 1000)}</DataRow>
 					<DataRow label="WCS">{job.context.wcs ? WCS_LABELS[job.context.wcs] : 'None'}</DataRow>
 					<DataRow label="Stars">{job.context.starCount ?? 'None'}</DataRow>
 					<DataRow label="Exposure">{job.context.exposure === undefined ? MISSING : formatExposureTime(job.context.exposure)}</DataRow>
@@ -367,13 +364,6 @@ function Classification({ classification }: { readonly classification?: StreakCl
 			)}
 		</>
 	)
-}
-
-// Returns how long a job ran, or has been running, in milliseconds; 0 while it waits.
-function elapsedOf(job: StreakDetectionJob, now: number): number {
-	if (job.summary) return job.summary.elapsed
-	if (job.startedAt === undefined) return 0
-	return (job.endedAt ?? now) - job.startedAt
 }
 
 // Returns a point in pixels with one decimal.

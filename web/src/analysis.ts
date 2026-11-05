@@ -27,6 +27,17 @@ export interface AnalysisJobs<J extends AnalysisJob, R> {
 	resultErrors: Record<string, string>
 }
 
+// Display name of each state of a job.
+export const ANALYSIS_STATE_LABELS: Readonly<Record<AnalysisJobState, string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
+
+// Returns how long a job has taken, in milliseconds: the duration its summary reports once it has one, the time from its
+// start to its end, or to `now` (Unix milliseconds) while it runs, and 0 before it starts.
+export function analysisElapsed(job: AnalysisJob & { readonly summary?: { readonly elapsed: number } }, now: number): number {
+	if (job.summary) return job.summary.elapsed
+	if (job.startedAt === undefined) return 0
+	return (job.endedAt ?? now) - job.startedAt
+}
+
 // Whether a job is waiting or running.
 export function isActive(job: Pick<AnalysisJob, 'state'> | undefined): boolean {
 	return job?.state === 'queued' || job?.state === 'running'

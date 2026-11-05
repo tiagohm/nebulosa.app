@@ -2,6 +2,7 @@ import type { ImageInfo, ImageProcessingJob } from 'api'
 import { cn } from 'cn'
 import { Fragment, type PointerEvent, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { ANALYSIS_STATE_LABELS } from '../analysis'
 import { formatDuration } from '../format'
 import { profileState, setImageProcessingPipeline } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -26,9 +27,6 @@ import type { ImageToolPanelProps } from './tools'
 // collapsing the panel, never stops it; only Stop Processing does. Its output opens as a new unsaved derived document;
 // the source never changes. There is no preview: running again, with the steps edited, makes another document. Editing
 // the steps also keeps them in the profile, for the documents opened next.
-
-// Display names of the job states.
-const STATE_LABELS: Readonly<Record<ImageProcessingJob['state'], string>> = { queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }
 
 // Image Processing panel of the active document.
 export function ImageProcessingPanel({ document, view, onOpen }: ImageToolPanelProps) {
@@ -349,7 +347,7 @@ function RunSection({ document, draft, job, active, enabledCount, blocker, claim
 			{draft.submitError && draft.submitErrorStepId === undefined && <Notice error>{draft.submitError}</Notice>}
 			{job && (
 				<>
-					<DataRow label="Status">{active && stopping === job.jobId ? 'Stopping…' : STATE_LABELS[job.state]}</DataRow>
+					<DataRow label="Status">{active && stopping === job.jobId ? 'Stopping…' : ANALYSIS_STATE_LABELS[job.state]}</DataRow>
 					{stepping && job.currentStepIndex !== undefined && (
 						<DataRow label="Step">
 							{job.currentStepIndex + 1} of {job.steps.length} · {operationLabel(stepping.operation.type)}

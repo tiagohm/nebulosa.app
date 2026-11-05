@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
-import { CameraCaptures, type CaptureEvent, type CaptureFrame, type CaptureRequest, type CaptureSession, frameName, sanitizeFileName } from './captures'
+import { CameraCaptures, type CaptureEvent, type CaptureFrame, type CaptureFrameSink, type CaptureRequest, type CaptureSession, frameName, sanitizeFileName } from './captures'
 import { ConnectionManager } from './connection'
 import { AppDatabase } from './database'
 import type { CameraCapabilities } from './devices'
@@ -271,4 +271,145 @@ test('mounts the capture routes', async () => {
 	expect((await call('/api/connections/:id/cameras/:deviceId', 'GET')).status).toBe(404)
 	expect((await call('/api/connections/:id/cameras/:deviceId/capture/stop', 'POST')).status).toBe(404)
 	expect((await call('/api/connections/:id/cameras/:deviceId/capture/abort', 'POST')).status).toBe(404)
+})
+
+// A frame sink that records every call, whose gate holds every frame from hold on until released.
+function recordingSink(hold = Number.POSITIVE_INFINITY) {
+	const calls: (readonly [string, ...unknown[]])[] = []
+	const bytes = new Map<string, Uint8Array>()
+	let gates = 0
+	let release: (() => void) | undefined
+
+	const sink: CaptureFrameSink = {
+		wants: () => true,
+		captured: (frame, data) => {
+			calls.push(['captured', frame.frameId, frame.generation, data !== undefined])
+			if (data) bytes.set(frame.frameId, data)
+		},
+		saved: (frameId, path) => calls.push(['saved', frameId, path]),
+		saveFailed: (frameId) => calls.push(['saveFailed', frameId]),
+		gate: (_connectionId, _deviceId, signal) => {
+			if (++gates < hold) return undefined
+			calls.push(['held', gates])
+			return new Promise<void>((resolve) => {
+				release = resolve
+				signal.addEventListener('abort', () => resolve(), { once: true })
+			})
+		},
+		captureEnded: (sessionId) => calls.push(['ended', sessionId]),
+	}
+
+	return { sink, calls, bytes, release: () => release?.() }
+}
+
+test('a frame sink receives every light frame of a preview-only capture with an owned copy of its bytes', async () => {
+	const { id, cameraId, captures, session, frames, ended } = await setup()
+	const { sink, calls, bytes } = recordingSink()
+	captures.listenFrames(sink)
+
+	captures.start(id, cameraId, request({ exposureMode: 'fixed', count: 4, output: { mode: 'preview-only', format: 'FITS' } }))
+	await waitUntil(ended)
+	await waitUntil(() => calls.some(([kind]) => kind === 'ended'))
+
+	const { sessionId } = session()!
+	expect(calls).toEqual([...[1, 2, 3, 4].map((generation) => ['captured', `${sessionId}:${generation}`, generation, true] as const), ['ended', sessionId]])
+	expect(new Set([...bytes.values()].map((data) => data.buffer)).size).toBe(4)
+	expect([...bytes.values()].every((data) => data.byteLength > 2880)).toBeTrue()
+	expect(frames().length).toBeLessThanOrEqual(4)
+})
+
+test('a frame sink learns a saved light frame at its decoding and its file once written', async () => {
+	const { id, cameraId, captures, session, ended } = await setup()
+	const { sink, calls } = recordingSink()
+	const capture = request({ exposureMode: 'fixed', count: 2, output: { mode: 'preview-save', directory: mkdtempSync(join(root, 'sink-')), filenameTemplate: 'sink_{seq}', format: 'FITS' } })
+	captures.listenFrames(sink)
+
+	captures.start(id, cameraId, capture)
+	await waitUntil(ended)
+	await waitUntil(() => calls.some(([kind]) => kind === 'ended'))
+
+	const { sessionId } = session()!
+	expect(calls).toEqual([
+		['captured', `${sessionId}:1`, 1, false],
+		['saved', `${sessionId}:1`, join(capture.output.directory!, 'sink_0001.fit')],
+		['captured', `${sessionId}:2`, 2, false],
+		['saved', `${sessionId}:2`, join(capture.output.directory!, 'sink_0002.fit')],
+		['ended', sessionId],
+	])
+})
+
+test('a frame sink learns a failed write, and receives no frame of other frame types', async () => {
+	const { id, cameraId, captures, session, ended } = await setup()
+	const { sink, calls } = recordingSink()
+	const blocker = join(mkdtempSync(join(root, 'sink-blocked-')), 'not-a-directory')
+	writeFileSync(blocker, 'a file')
+	captures.listenFrames(sink)
+
+	captures.start(id, cameraId, request({ output: { mode: 'preview-save', directory: join(blocker, 'frames'), format: 'FITS' } }))
+	await waitUntil(ended)
+	await waitUntil(() => calls.some(([kind]) => kind === 'ended'))
+	const failed = session()!.sessionId
+	expect(calls.map(([kind]) => kind)).toEqual(['captured', 'saveFailed', 'ended'])
+	expect(calls[1]).toEqual(['saveFailed', `${failed}:1`])
+
+	calls.length = 0
+	captures.start(id, cameraId, request({ frameType: 'DARK', output: { mode: 'preview-only', format: 'FITS' } }))
+	await waitUntil(() => session()?.sessionId !== failed && ended())
+	await waitUntil(() => calls.length > 0)
+	expect(calls).toEqual([['ended', session()!.sessionId]])
+})
+
+test('the gate of a frame sink holds the next exposure until released, and a stop releases it', async () => {
+	const { id, cameraId, captures, session, ended } = await setup()
+	const { sink, calls, release } = recordingSink(2)
+	captures.listenFrames(sink)
+
+	captures.start(id, cameraId, request({ exposureMode: 'loop', output: { mode: 'preview-only', format: 'FITS' } }))
+	await waitUntil(() => calls.some(([kind]) => kind === 'held'))
+	await Bun.sleep(300)
+	expect(session()).toMatchObject({ captured: 1 })
+
+	release()
+	await waitUntil(() => session()!.captured === 2)
+	await waitUntil(() => calls.filter(([kind]) => kind === 'held').length === 2)
+
+	expect(captures.stop(id, cameraId).status).toBe(204)
+	await waitUntil(ended, 3000)
+	expect(session()).toMatchObject({ phase: 'stopped', captured: 2 })
+})
+
+test('an abort releases the gate of a frame sink', async () => {
+	const { id, cameraId, captures, session, ended } = await setup()
+	const { sink, calls } = recordingSink(2)
+	captures.listenFrames(sink)
+
+	captures.start(id, cameraId, request({ exposureMode: 'loop', output: { mode: 'preview-only', format: 'FITS' } }))
+	await waitUntil(() => calls.some(([kind]) => kind === 'held'))
+
+	expect((await captures.abort(id, cameraId)).status).toBe(204)
+	await waitUntil(ended, 3000)
+	expect(session()).toMatchObject({ phase: 'aborted', captured: 1 })
+})
+
+test('a failing frame sink never fails the capture, and a detached one receives nothing', async () => {
+	const { id, cameraId, captures, session, frames, ended } = await setup()
+	const fail = () => {
+		throw new Error('sink failure')
+	}
+	const error = spyOn(console, 'error').mockImplementation(() => undefined)
+	const detach = captures.listenFrames({ wants: () => true, captured: fail, saved: fail, saveFailed: fail, gate: () => Promise.reject(new Error('gate failure')), captureEnded: fail })
+
+	captures.start(id, cameraId, request({ exposureMode: 'fixed', count: 2, output: { mode: 'preview-save', directory: mkdtempSync(join(root, 'sink-failing-')), format: 'FITS' } }))
+	await waitUntil(ended)
+	await waitUntil(() => frames().some((frame) => frame.generation === 2 && frame.file === 'saved'))
+	expect(session()).toMatchObject({ phase: 'completed', captured: 2, saved: 2 })
+	expect(error).toHaveBeenCalled()
+	error.mockRestore()
+
+	const { sink, calls } = recordingSink()
+	captures.listenFrames(sink)()
+	detach()
+	captures.start(id, cameraId, request({ output: { mode: 'preview-only', format: 'FITS' } }))
+	await waitUntil(() => session()?.captured === 1 && ended())
+	expect(calls).toEqual([])
 })

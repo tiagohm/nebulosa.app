@@ -210,6 +210,47 @@ export type CaptureEvent = { readonly type: 'capture:updated'; readonly session:
 // Receiver of capture events.
 export type CaptureListener = (event: CaptureEvent) => void
 
+// LIGHT frame of a capture session as a frame sink receives it, once per frame whatever the preview keeps.
+export interface CapturedFrame {
+	// Identity of the frame, unique across captures: the capture session id and the frame generation.
+	readonly frameId: string
+	// Id of the capture session that took it.
+	readonly sessionId: string
+	// Frame number within the session, from 1.
+	readonly generation: number
+	// Id of the open connection that provides the camera.
+	readonly connectionId: string
+	// Exact id of the camera.
+	readonly deviceId: string
+	// Driver-reported camera name.
+	readonly cameraName: string
+	// Instant the frame's exposure was commanded, Unix milliseconds (UTC).
+	readonly time: number
+	// Request of the session, as received; it never changes while the session runs.
+	readonly request: CaptureRequest
+}
+
+// Consumer of every LIGHT frame of the capture sessions, such as Live Stacking, fed from the decoded frames
+// before the lossy preview and from the confirmed writes. It never commands the camera. Every call is
+// synchronous, but the gate, and none may throw into the capture: a throwing sink is ignored for that call.
+export interface CaptureFrameSink {
+	// Whether the frames of a camera are wanted now; asked for each LIGHT frame as it is decoded.
+	readonly wants: (connectionId: string, deviceId: string) => boolean
+	// A wanted frame was decoded. Preview-only frames carry bytes, a copy the sink owns; a saved frame carries none,
+	// and its file follows with saved or saveFailed once its write completed.
+	readonly captured: (frame: CapturedFrame, bytes?: Uint8Array<ArrayBuffer>) => void
+	// The file of a saved LIGHT frame was completely written at path.
+	readonly saved: (frameId: string, path: string) => void
+	// The write of a saved LIGHT frame failed; the capture fails with it.
+	readonly saveFailed: (frameId: string) => void
+	// Awaited before each frame of a capture is prepared, so the sink can hold the next exposure back while it
+	// cannot take another frame; never the exposure in flight. It must settle when signal aborts (stop, abort,
+	// failure of the capture) and its result, or a rejection, never ends the capture.
+	readonly gate: (connectionId: string, deviceId: string, signal: AbortSignal) => Promise<void> | undefined
+	// A capture session ended, however it ended; no frame of it arrives afterwards.
+	readonly captureEnded: (sessionId: string, connectionId: string, deviceId: string) => void
+}
+
 // Frames of a session remembered behind the newest one, so a loop keeps a bounded record. Only the newest
 // frame waits for preview, so a frame being decoded is at most a few generations old.
 const FRAME_HISTORY = 8
@@ -341,6 +382,8 @@ export class CameraCaptures implements Disposable {
 	readonly #previews = new Map<string, CameraPreview>()
 	// Capture and generation of each frame path being saved, so the write can be attributed to its frame.
 	readonly #writes = new Map<string, { readonly capture: ActiveCapture; readonly generation: number }>()
+	// Consumer of every LIGHT frame, when one listens.
+	#sink?: CaptureFrameSink
 
 	// Creates the service over the device registry. client resolves an open connection id to its client,
 	// operations holds and publishes every capture, images receives the frames, frames records them and closes their
@@ -369,6 +412,43 @@ export class CameraCaptures implements Disposable {
 	// inside their operation; frames it takes for them never enter the capture sessions or previews of this service.
 	get capturer(): CameraCapturer {
 		return this.#capturer
+	}
+
+	// Feeds every LIGHT frame of the capture sessions to sink, which replaces any previous one, and returns the
+	// function that detaches it. A capture already running delivers its next frames.
+	listenFrames(sink: CaptureFrameSink) {
+		this.#sink = sink
+
+		return () => {
+			if (this.#sink === sink) this.#sink = undefined
+		}
+	}
+
+	// Calls the frame sink, if any, keeping its failures out of the capture.
+	#notify(call: (sink: CaptureFrameSink) => void) {
+		const sink = this.#sink
+		if (!sink) return
+
+		try {
+			call(sink)
+		} catch (error) {
+			console.error('the capture frame sink failed:', error)
+		}
+	}
+
+	// Awaits the gate of the frame sink before a frame of a capture is prepared. Resolves at once without a sink,
+	// and never fails the capture: a failing gate lets the frame go.
+	async #gate(capture: ActiveCapture, signal: AbortSignal) {
+		const sink = this.#sink
+		if (!sink) return undefined
+
+		try {
+			await sink.gate(capture.session.connectionId, capture.session.deviceId, signal)
+		} catch (error) {
+			if (!signal.aborted) console.error('the capture frame gate failed:', error)
+		}
+
+		return undefined
 	}
 
 	// Returns the latest session and previewed frame of every camera.
@@ -446,6 +526,7 @@ export class CameraCaptures implements Disposable {
 		const handle = this.#capturer.start(this.operations.coordinator, camera, start, {
 			listener: (event, path) => this.#reported(capture, event, path),
 			framePath: (frame) => this.#framePath(capture, frame),
+			beforeFrame: (_, signal) => this.#gate(capture, signal),
 		})
 
 		const { operationId } = this.operations.track('camera.capture', [{ connectionId, deviceId }], handle.result)
@@ -455,6 +536,7 @@ export class CameraCaptures implements Disposable {
 		void handle.result.then((result) => {
 			if (this.#active.get(key) === capture) this.#active.delete(key)
 			for (const [path, write] of this.#writes) if (write.capture === capture) this.#writes.delete(path)
+			this.#notify((sink) => sink.captureEnded(handle.id, connectionId, deviceId))
 
 			if (result.ok) this.#update(capture, { phase: capture.session.stopping ? 'stopped' : 'completed', endedAt: Date.now(), exposure: undefined, delay: undefined })
 			else this.#update(capture, { phase: result.reason === 'aborted' ? 'aborted' : 'failed', reason: result.reason, error: result.error, endedAt: Date.now(), exposure: undefined, delay: undefined })
@@ -553,6 +635,17 @@ export class CameraCaptures implements Disposable {
 		const resolved = capture.frames.get(generation)
 		this.#update(capture, { captured: capture.session.captured + 1, phase: capture.session.request.output.mode === 'preview-save' ? 'saving' : capture.session.phase })
 
+		// Every LIGHT frame reaches the sink, before the preview below drops any of them.
+		const { sessionId, connectionId, deviceId, cameraName, request } = capture.session
+
+		if (request.frameType === 'LIGHT') {
+			this.#notify((sink) => {
+				if (!sink.wants(connectionId, deviceId)) return
+				const captured: CapturedFrame = { frameId: `${sessionId}:${generation}`, sessionId, generation, connectionId, deviceId, cameraName, time: resolved?.time ?? Date.now(), request }
+				sink.captured(captured, request.output.mode === 'preview-only' ? new Uint8Array(frame) : undefined)
+			})
+		}
+
 		let preview = this.#previews.get(key)
 
 		if (!preview) {
@@ -620,6 +713,11 @@ export class CameraCaptures implements Disposable {
 
 		const { sessionId, connectionId, deviceId, cameraName, request } = capture.session
 		this.frames.written({ sessionId, generation, connectionId, deviceId, cameraName, time: record?.time ?? Date.now(), frameType: request.frameType, path }, file)
+
+		if (request.frameType === 'LIGHT') {
+			const frameId = `${sessionId}:${generation}`
+			this.#notify((sink) => (file === 'saved' ? sink.saved(frameId, path) : sink.saveFailed(frameId)))
+		}
 
 		const preview = this.#previews.get(resourceKey(capture.camera))
 

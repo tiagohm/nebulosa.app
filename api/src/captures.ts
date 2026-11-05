@@ -690,8 +690,10 @@ export class CameraCaptures implements Disposable {
 			if (capture.dither) await capture.dither.finish()
 			if (this.#active.get(key) === capture) this.#active.delete(key)
 
-			if (result.ok) this.#update(capture, { phase: capture.session.stopping ? 'stopped' : 'completed', endedAt: Date.now(), exposure: undefined, delay: undefined })
-			else this.#update(capture, { phase: result.reason === 'aborted' ? 'aborted' : 'failed', reason: result.reason, error: result.error, endedAt: Date.now(), exposure: undefined, delay: undefined })
+			// A dither interrupted by a stop or an abort no longer settles once the capture ended.
+			const ended = { endedAt: Date.now(), exposure: undefined, delay: undefined, ...(capture.session.dither && { dither: { ...capture.session.dither, settling: false } }) }
+			if (result.ok) this.#update(capture, { phase: capture.session.stopping ? 'stopped' : 'completed', ...ended })
+			else this.#update(capture, { phase: result.reason === 'aborted' ? 'aborted' : 'failed', reason: result.reason, error: result.error, ...ended })
 			capture.ended.resolve(capture.session)
 		})
 

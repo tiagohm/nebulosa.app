@@ -317,7 +317,7 @@ describe('mount dithering of a capture', () => {
 
 		await waitUntil(() => sessions().at(-1)?.dither?.settling === true)
 		expect(await captures.abortSession(admitted.sessionId)).toBe('aborted')
-		expect(await admitted.ended).toMatchObject({ phase: 'aborted', captured: 1, dither: { completed: 0 } })
+		expect(await admitted.ended).toMatchObject({ phase: 'aborted', captured: 1, dither: { completed: 0, settling: false } })
 		expect(operations.available(mount)).toBeTrue()
 	})
 

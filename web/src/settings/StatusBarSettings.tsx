@@ -9,6 +9,7 @@ import { skyState } from '../sky/sky'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { Notice } from '../ui/Notice'
+import { SectionHeading } from '../ui/SectionHeading'
 import { Select } from '../ui/Select'
 
 // Status Bar section of the Settings page: what the status bar of the active profile shows for each device and in its
@@ -70,14 +71,14 @@ export function StatusBarSettings() {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
 			<section className="flex max-w-md flex-col gap-3">
-				<h2 className="m-0 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">Devices</h2>
+				<SectionHeading as="h2">Devices</SectionHeading>
 				{CHIP_ROLES.map((role) => (
 					<DeviceChipSettings key={role} role={role} settings={settings} />
 				))}
 				<Notice>A device shows only while it is connected. A chip without any reading shows its icon alone, and its title always has the full reading.</Notice>
 			</section>
 			<section className="flex max-w-md flex-col gap-3">
-				<h2 className="m-0 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">Astronomical Clock</h2>
+				<SectionHeading as="h2">Astronomical Clock</SectionHeading>
 				<Checkbox label="Show the clock in the status bar" checked={enabled} onChange={(value) => setAstronomicalClockPreferences(profileState, { enabled: value })} />
 				<Select label="Primary Reading" disabled={!enabled} options={ASTRONOMICAL_CLOCK_READINGS} value={primary} format={(reading) => ASTRONOMICAL_CLOCK_READING_LABELS[reading]} onChange={(reading) => setAstronomicalClockPreferences(profileState, { primary: reading })} />
 				<Select

@@ -12,6 +12,7 @@ import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
+import { SectionHeading } from '../../ui/SectionHeading'
 import { TextInput } from '../../ui/TextInput'
 import { clientKey, disconnectRemoteClient, formatEndpoint, isLoopback, MOUNT_REMOTE_PROTOCOL_LABELS, mountRemoteControlState, remoteKey, startRemoteServer, stopRemoteServer } from './listeners'
 
@@ -142,7 +143,7 @@ function ClientList({ server }: { readonly server?: MountRemoteServer }) {
 
 	return (
 		<div className="flex flex-col gap-2 border-t border-line-100 pt-3">
-			<h3 className="m-0 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">Clients ({clients.length})</h3>
+			<SectionHeading>Clients ({clients.length})</SectionHeading>
 			{server && clients.length > 0 ? (
 				<ul className="m-0 flex list-none flex-col gap-1 p-0">
 					{clients.map((client) => {

@@ -6,6 +6,7 @@ import { Button } from '../ui/Button'
 import { List, ListItem } from '../ui/List'
 import { Modal } from '../ui/Modal'
 import { NumberInput } from '../ui/NumberInput'
+import { SectionHeading } from '../ui/SectionHeading'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { connect, type Connection, type ConnectionInput, connectionState, DEFAULT_PORT, disconnect, highlightConnection, removeConnection, saveConnection, serverOf } from './connection'
@@ -122,7 +123,7 @@ export function ConnectionModal() {
 		<Modal open={open} onClose={handleClose} title="Connections" className="max-w-[760px]">
 			<div className="flex flex-wrap gap-6">
 				<form onSubmit={handleSubmit} className="flex flex-[1_1_280px] flex-col gap-4 border-r border-line-100 pr-6 max-sm:border-r-0 max-sm:pr-0">
-					<div className="text-xs font-medium tracking-[0.04em] text-ink-300 uppercase">{editing ? 'Edit connection' : 'New connection'}</div>
+					<SectionHeading>{editing ? 'Edit connection' : 'New connection'}</SectionHeading>
 					<TextInput label="Name" placeholder="Observatory" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
 					<div className="grid grid-cols-2 gap-4">
 						<TextInput disabled={form.type === 'SIMULATOR'} label="Host" placeholder="192.168.0.10" value={form.host} onChange={(e) => setForm({ ...form, host: e.target.value })} />
@@ -141,7 +142,7 @@ export function ConnectionModal() {
 					</div>
 				</form>
 				<div className="flex min-w-0 flex-[1_1_280px] flex-col gap-4">
-					<div className="text-xs font-medium tracking-[0.04em] text-ink-300 uppercase">Saved connections · {connections.length}</div>
+					<SectionHeading>Saved connections · {connections.length}</SectionHeading>
 					<div className="h-full overflow-y-auto">
 						<List emptyText="No saved connections yet.">
 							{connections.map((c) => (

@@ -9,6 +9,7 @@ import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { Modal } from '../ui/Modal'
 import { NumberInput } from '../ui/NumberInput'
+import { SectionHeading } from '../ui/SectionHeading'
 import { Select } from '../ui/Select'
 import { deviceState, ROLE_STATUS_LABELS, type RoleStatus, roleDevice, roleStatus, switchDevice, switchSetup } from './equipment'
 import { conflictingRole, type EquipmentSetup, type RoleDefinition, roleDefinition, ROLE_GROUPS, ROLES } from './roles'
@@ -105,7 +106,7 @@ export function EquipmentModal() {
 						<div className="-mr-2 flex min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain pr-2">
 							{ROLE_GROUPS.map(({ group, label }) => (
 								<section key={group} className="flex flex-col gap-2">
-									<h3 className="m-0 text-xs leading-4 font-medium tracking-[0.08em] text-ink-300 uppercase">{label}</h3>
+									<SectionHeading>{label}</SectionHeading>
 									<ul className="m-0 flex list-none flex-col gap-2 p-0">
 										{ROLES.filter((definition) => definition.group === group).map((definition) => {
 											const assigned = setup[definition.role]
@@ -163,7 +164,7 @@ function TelescopeSection({ title, telescope, onChange, children }: TelescopeSec
 
 	return (
 		<section className="flex flex-col gap-2">
-			<h3 className="m-0 text-xs leading-4 font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h3>
+			<SectionHeading>{title}</SectionHeading>
 			<div className="grid grid-cols-3 gap-2 max-sm:grid-cols-1">
 				<NumberInput label="Focal length" suffix="mm" value={current.focalLength} min={0} step={1} onChange={(focalLength) => change({ focalLength })} />
 				<NumberInput label="Reducer / Barlow" suffix="×" value={current.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => change({ focalMultiplier })} />

@@ -3,6 +3,7 @@ import { useSnapshot } from 'valtio'
 import { Button } from '../ui/Button'
 import { List, ListItem } from '../ui/List'
 import { Modal } from '../ui/Modal'
+import { SectionHeading } from '../ui/SectionHeading'
 import { TextInput } from '../ui/TextInput'
 import { createProfile, deleteProfile, duplicateProfile, profileState, renameProfile, selectProfile } from './profile'
 
@@ -91,7 +92,7 @@ export function ProfileModal() {
 			<div className="flex flex-col gap-6">
 				<div className="flex flex-wrap gap-6">
 					<form onSubmit={handleSubmit} className="flex flex-[1_1_240px] flex-col gap-4 border-r border-line-100 pr-6 max-sm:border-r-0 max-sm:pr-0">
-						<div className="text-xs font-medium tracking-[0.04em] text-ink-300 uppercase">{editing ? 'Rename profile' : 'New profile'}</div>
+						<SectionHeading>{editing ? 'Rename profile' : 'New profile'}</SectionHeading>
 						<TextInput data-autofocus label="Name" placeholder="Deep Sky" value={name} onChange={(e) => setName(e.target.value)} />
 						<div className="flex gap-2">
 							<Button disabled={!name.trim()} type="submit">
@@ -105,7 +106,7 @@ export function ProfileModal() {
 						</div>
 					</form>
 					<div className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
-						<div className="text-xs font-medium tracking-[0.04em] text-ink-300 uppercase">Profiles · {profiles.length}</div>
+						<SectionHeading>Profiles · {profiles.length}</SectionHeading>
 						<div className="max-h-72 overflow-y-auto">
 							<List emptyText="No profiles.">
 								{profiles.map((p) => (

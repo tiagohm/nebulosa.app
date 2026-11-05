@@ -5,6 +5,7 @@ import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Field, InputSuffix, inputClassName, suffixPadding } from '../../ui/Field'
 import { Notice } from '../../ui/Notice'
+import { SectionHeading } from '../../ui/SectionHeading'
 import { Select } from '../../ui/Select'
 import { type DraftEntry, importOptics, isOriginCurrent, type OpticsSourceId, opticsSources, type SourceContext, sourceGroup, sourceLabel } from './sources'
 import { differs, type OptionalOutcome, type Outcome, outcomeMessage } from './values'
@@ -27,7 +28,7 @@ export interface CalculatorViewProps<D> {
 export function Card({ title, children }: { readonly title: string; readonly children: ReactNode }) {
 	return (
 		<section className="flex min-w-0 flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4">
-			<h2 className="m-0 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h2>
+			<SectionHeading as="h2">{title}</SectionHeading>
 			{children}
 		</section>
 	)

@@ -1,6 +1,7 @@
 import { cn } from 'cn'
 import type { ReactNode } from 'react'
 import { IconButton } from '../ui/IconButton'
+import { SectionHeading } from '../ui/SectionHeading'
 
 // Collapsible right-hand panel of a workspace with the controls of its current context. On wide screens
 // it is a docked column that takes no space when collapsed; on narrow screens it slides over the
@@ -81,7 +82,7 @@ export function PlannedControls({ items }: PlannedControlsProps) {
 export function PanelSection({ title, children }: PanelSectionProps) {
 	return (
 		<section className="border-b border-line-100 px-4 py-3 last:border-b-0">
-			<h3 className="m-0 mb-2 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h3>
+			<SectionHeading className="mb-2">{title}</SectionHeading>
 			<div className="flex flex-col gap-2 text-sm leading-5 text-ink-200">{children}</div>
 		</section>
 	)

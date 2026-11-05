@@ -2,6 +2,7 @@ import { cn } from 'cn'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { Icon } from '../ui/Icon'
+import { SectionHeading } from '../ui/SectionHeading'
 import { collapsibleSections, sectionOpen, setSectionOpen } from './collapsible'
 
 // Section of a contextual panel that expands and collapses: its heading is the toggle, and a one-line summary beside
@@ -30,7 +31,7 @@ export function CollapsibleSection({ id, title, summary, defaultOpen = true, chi
 		<details open={open} onToggle={(e) => e.currentTarget.open !== open && setSectionOpen(collapsibleSections, id, e.currentTarget.open)} className="border-b border-line-100 px-4 py-3 last:border-b-0">
 			<summary className="flex cursor-pointer list-none items-center gap-2 select-none focus-visible:outline-2 focus-visible:outline-accent [&::-webkit-details-marker]:hidden">
 				<Icon name="stepForward" className={cn('size-3.5 flex-none text-ink-300 transition-transform duration-150 motion-reduce:transition-none', open && 'rotate-90')} />
-				<h3 className="m-0 flex-none text-xs font-medium tracking-[0.08em] text-ink-300 uppercase">{title}</h3>
+				<SectionHeading className="flex-none">{title}</SectionHeading>
 				{!open && summary && <span className="ml-auto min-w-0 truncate text-xs text-ink-200">{summary}</span>}
 			</summary>
 			<div className="mt-2 flex flex-col gap-2 text-sm leading-5 text-ink-200">{children}</div>

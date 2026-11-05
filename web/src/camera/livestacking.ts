@@ -217,6 +217,30 @@ export async function loadLiveProduct(productId: string, request: typeof fetch =
 	}
 }
 
+// Kinds of master a stack can be calibrated with, in the order they are chosen and described.
+export const LIVE_MASTER_ORDER = ['dark', 'flat', 'bias'] as const satisfies readonly LiveMasterKind[]
+
+// Label of each kind of master.
+export const LIVE_MASTER_LABELS: Readonly<Record<LiveMasterKind, string>> = { dark: 'Dark', flat: 'Flat', bias: 'Bias' }
+
+// Describes the acquisition settings of a stack in one line: exposure of each frame in seconds, gain, offset, binning,
+// readout mode, and size in pixels, leaving out what its headers did not record.
+export function liveAcquisitionLabel({ acquisition }: Pick<LiveStackingCohort, 'acquisition'>) {
+	const parts = [`${acquisition.exposure} s`]
+	if (acquisition.gain !== undefined) parts.push(`gain ${acquisition.gain}`)
+	if (acquisition.offset !== undefined) parts.push(`offset ${acquisition.offset}`)
+	if (acquisition.binX !== undefined) parts.push(`bin ${acquisition.binX}×${acquisition.binY ?? acquisition.binX}`)
+	if (acquisition.readoutMode !== undefined) parts.push(acquisition.readoutMode)
+	parts.push(`${acquisition.width}×${acquisition.height}`)
+	return parts.join(' · ')
+}
+
+// Describes the masters a stack is calibrated with by their ids, or Uncalibrated.
+export function liveCalibrationLabel({ calibration }: Pick<LiveStackingCohort, 'calibration'>) {
+	if (!calibration) return 'Uncalibrated'
+	return LIVE_MASTER_ORDER.flatMap((kind) => (calibration[kind] ? [`${LIVE_MASTER_LABELS[kind]} #${calibration[kind].masterId}`] : [])).join(' · ')
+}
+
 // Filter group of the frames whose header names no filter, as the server and Image Stacking name it.
 export const NO_FILTER = 'None'
 

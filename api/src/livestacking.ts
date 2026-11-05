@@ -12,7 +12,7 @@ import { type FileInspection, inspectFile, inspectHeader } from './calibrationli
 import type { CapturedFrame, CaptureFrameSink, CaptureOutputMode } from './captures'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
-import type { ImageInfo, ImageStore } from './images'
+import type { ImageInfo, ImageStore, LiveStackingProvenanceStack } from './images'
 import type { AnalysisCalibration } from './imagestacking.analysis'
 import { productHeader } from './imagestacking.integration'
 import {
@@ -88,6 +88,9 @@ export const SNAPSHOT_INTERVAL = 1500
 
 // Snapshot documents a session keeps open at most; the oldest is closed first.
 const MAX_VIEW_DOCUMENTS = 4
+
+// Keywords of a snapshot that describe its data layout, kept under the header of its stacks.
+const STRUCTURAL_KEYWORDS = new Set(['SIMPLE', 'BITPIX', 'NAXIS', 'NAXIS1', 'NAXIS2', 'NAXIS3', 'EXTEND'])
 
 // State of a session:
 // - waiting: it admits frames and none is being integrated.
@@ -386,6 +389,17 @@ function recipeOf(recipe: Partial<LiveStackingRecipe> | undefined): LiveStacking
 	return { ...merged, minStars: Math.max(3, Math.trunc(merged.minStars)), minOverlap: Math.min(1, Math.max(0, merged.minOverlap)) }
 }
 
+// Returns the name of what a view or an export shows: the filter of its stack, or the preset of its composition.
+function stackName(target: LiveExportTarget, stacks: readonly LiveStackingCohort[]) {
+	return 'cohortId' in target ? stacks[0].filter : target.composition.preset
+}
+
+// Returns what the provenance of a snapshot records of one of its stacks.
+function provenanceStack(session: Session, { fieldId, filter, acquisition, calibration, accepted, exposure, temperature }: LiveStackingCohort): LiveStackingProvenanceStack {
+	const field = session.fields.find((candidate) => candidate.fieldId === fieldId)?.index ?? 0
+	return { filter, field, acquisition, ...(calibration && { calibration }), accepted, exposure, ...(temperature && { temperature }) }
+}
+
 // Returns the key of a view target.
 function viewKey(target: LiveStackingViewTarget) {
 	return 'cohortId' in target ? `cohort:${target.cohortId}` : `composite:${stableId(JSON.stringify(target.composition))}`
@@ -599,15 +613,11 @@ export class LiveStacking implements Disposable {
 		const session = this.#session(sessionId)
 		if (session.phase === 'failed') throw new LiveStackingError('The stacks of the session were lost', 409, 'workerFailed')
 
-		const cohorts = 'cohortId' in target ? [target.cohortId] : target.composition.sources.map((source) => source.cohortId)
-		const known = cohorts.map((cohortId) => session.cohorts.get(cohortId))
-		if (known.some((cohort) => !cohort)) throw new LiveStackingError('The stack is unknown', 404, 'notFound')
-		const stacks = known as LiveStackingCohort[]
-		const metadata = session.cohortMetadata.get(stacks[0].cohortId)!
+		const stacks = this.#stacksOf(session, target)
+		const name = stackName(target, stacks)
 		const frames = stacks.reduce((total, cohort) => total + cohort.accepted, 0)
 		const exposure = stacks.reduce((total, cohort) => total + cohort.exposure, 0)
-		const name = 'cohortId' in target ? stacks[0].filter : target.composition.preset
-		const header = this.#exportHeader(session, target, stacks, metadata, name, frames, exposure)
+		const header = this.#stackHeader(session, target, stacks, 'NaN')
 		const productId = crypto.randomUUID()
 		const staging = this.store.stagingDirectory(productId)
 
@@ -1030,8 +1040,10 @@ export class LiveStacking implements Disposable {
 	async #takeView(session: Session, key: string, target: LiveStackingViewTarget, revision: number): Promise<LiveStackingView> {
 		const snapshot: LiveSnapshot | undefined = await this.#call(session, () => ('cohortId' in target ? session.processor.snapshot(target.cohortId) : session.processor.compose(target.composition)))
 		if (!snapshot) throw new LiveStackingError('The stack has no frame', 404, 'notFound')
-		const sourceName = 'cohortId' in target ? (session.cohorts.get(target.cohortId)?.filter ?? 'Stack') : target.composition.preset
-		const info = await this.images.adopt(snapshot.image, { kind: 'liveStacking', sessionId: session.summary.sessionId, sourceName, frames: snapshot.frames, createdAt: new Date().toISOString() })
+		const stacks = this.#stacksOf(session, target)
+		const structure = Object.fromEntries(Object.entries(snapshot.image.header).filter(([key]) => STRUCTURAL_KEYWORDS.has(key)))
+		const image = { ...snapshot.image, header: { ...structure, ...this.#stackHeader(session, target, stacks, '0') } }
+		const info = await this.images.adopt(image, { kind: 'liveStacking', sessionId: session.summary.sessionId, sourceName: stackName(target, stacks), frames: snapshot.frames, stacks: stacks.map((cohort) => provenanceStack(session, cohort)), createdAt: new Date().toISOString() })
 		const view: LiveStackingView = { info, revision, frames: snapshot.frames }
 
 		const index = session.views.findIndex((cached) => cached.key === key)
@@ -1046,16 +1058,28 @@ export class LiveStacking implements Disposable {
 		for (const cached of session.views.splice(0)) this.images.close(cached.view.info.id)
 	}
 
-	// Builds the header of an export: the header of the first frame of its first stack, the frames, exposure, method, and
-	// masters it integrates, and the grid convention.
-	#exportHeader(session: Session, target: LiveExportTarget, stacks: readonly LiveStackingCohort[], metadata: CalibrationMetadata, name: string, frames: number, exposure: number): FitsHeader {
+	// Returns the stacks a view or an export shows, as the session counts them now. Throws notFound for an unknown stack.
+	#stacksOf(session: Session, target: LiveExportTarget): LiveStackingCohort[] {
+		const cohorts = 'cohortId' in target ? [target.cohortId] : target.composition.sources.map((source) => source.cohortId)
+		const known = cohorts.map((cohortId) => session.cohorts.get(cohortId))
+		if (known.some((cohort) => !cohort)) throw new LiveStackingError('The stack is unknown', 404, 'notFound')
+		return known as LiveStackingCohort[]
+	}
+
+	// Builds the header of a snapshot or an export of stacks: the header of the first frame of the first stack, the frames,
+	// exposure, method, and masters they integrate, and the grid convention; uncovered is the value of the pixels no frame
+	// covered (0 in a snapshot shown in Images, NaN in an export).
+	#stackHeader(session: Session, target: LiveExportTarget, stacks: readonly LiveStackingCohort[], uncovered: 'NaN' | '0'): FitsHeader {
+		const metadata = session.cohortMetadata.get(stacks[0].cohortId)!
+		const frames = stacks.reduce((total, cohort) => total + cohort.accepted, 0)
+		const exposure = stacks.reduce((total, cohort) => total + cohort.exposure, 0)
 		const each = stacks.length === 1 ? stacks[0].acquisition.exposure : undefined
-		const header = productHeader(metadata, name, frames, { ...(each !== undefined && { each }), total: exposure })
+		const header = productHeader(metadata, stackName(target, stacks), frames, { ...(each !== undefined && { each }), total: exposure })
 		const { recipe } = session.summary
 		if ('composition' in target) delete header.FILTER
 
 		const history = [
-			`Linear live stack of ${frames} accepted light frames on the grid of its field; NaN marks pixels no frame covered`,
+			`Linear live stack of ${frames} accepted light frames on the grid of its field; ${uncovered} marks pixels no frame covered`,
 			`Live stacking: ${recipe.method}${recipe.method === 'weighted-average' ? ` (${recipe.weighting})` : ''}, ${recipe.normalization} normalization, ${recipe.interpolation} resampling`,
 			...stacks.map(
 				(cohort) =>

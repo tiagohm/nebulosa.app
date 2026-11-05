@@ -7,6 +7,8 @@ import type { FitsHeader, FitsHeaderKey } from 'nebulosa/src/io/formats/fits/fit
 import { cfaPatternKeyword, exposureTimeKeyword, numericKeyword, observationDateKeyword, textKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { errorResponse } from './http'
 import type { ImageProcessingStep } from './imageprocessing'
+import type { LiveCohortAcquisition } from './livestacking'
+import type { LiveFilterCalibration } from './livestacking.groups'
 
 // Image documents opened by clients: FITS and XISF files read from the server's filesystem, or camera
 // frames handed over by the capture service, kept decoded in memory under an id until they are closed, so later renderings (and future
@@ -53,6 +55,22 @@ export interface ProcessingProvenance extends ProvenanceSource {
 	readonly steps: readonly ImageProcessingStep[]
 }
 
+// A stack of a live stack snapshot, as it was when the snapshot was taken.
+export interface LiveStackingProvenanceStack {
+	// Filter, exactly as the headers name it, or None.
+	readonly filter: string
+	// Order of its field in the session, from 1.
+	readonly field: number
+	readonly acquisition: LiveCohortAcquisition
+	// Masters it is calibrated with; absent when uncalibrated.
+	readonly calibration?: LiveFilterCalibration
+	// Accepted frames and their total exposure, in seconds.
+	readonly accepted: number
+	readonly exposure: number
+	// Lowest and highest sensor temperatures of its accepted frames, in degrees Celsius, when recorded.
+	readonly temperature?: readonly [minimum: number, maximum: number]
+}
+
 // A snapshot of a live stack: the linear integration of the frames a Live Stacking session accepted so far, or a color
 // composition of several of its stacks, held in memory until it is saved.
 export interface LiveStackingProvenance {
@@ -63,6 +81,8 @@ export interface LiveStackingProvenance {
 	readonly sourceName: string
 	// Accepted frames integrated, in total over the stacks it shows.
 	readonly frames: number
+	// Stacks it shows, as they were when it was taken.
+	readonly stacks: readonly LiveStackingProvenanceStack[]
 	// When the snapshot was taken, as an ISO 8601 UTC date-time.
 	readonly createdAt: string
 }

@@ -1,7 +1,8 @@
-import type { CaptureFrameOrigin, CaptureFrameSummary, ImageAcquisition, ImageInfo, ImageProvenance, RenderResult, StarDetectionOrigin } from 'api'
+import type { CaptureFrameOrigin, CaptureFrameSummary, ImageAcquisition, ImageInfo, ImageProvenance, LiveStackingProvenanceStack, RenderResult, StarDetectionOrigin } from 'api'
 import { useSnapshot } from 'valtio'
 import { autoFocusFrameFocus, autoFocusRuntime } from '../camera/autofocus'
 import { DARV_AXIS_LABELS, DARV_DIRECTION_LABELS, DARV_STATUS_LABELS, darvFrameMeasurement, darvRuntime } from '../camera/darv'
+import { liveAcquisitionLabel, liveCalibrationLabel } from '../camera/livestacking'
 import { tppaFrameRole, tppaRuntime } from '../camera/tppa'
 import { connectionState } from '../connection/connection'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -9,6 +10,7 @@ import { PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { type ImageQualityStatus, imageQuality } from '../stars/quality'
 import { PROVIDER_LABELS, starsState } from '../stars/stars'
+import { formatDuration } from '../tools/calculator/values'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
 import type { CameraFrameSelection } from './cameratabs'
@@ -281,15 +283,20 @@ interface DerivationProps {
 }
 
 // Provenance and persistence of a derived image: its source, when it was derived, the processing steps of the pipeline
-// that derived it, or the frames of the live stack it is a snapshot of, and whether it is saved (from the Save control
-// of the viewer toolbar).
+// that derived it, or the frames and stacks of the live stack it is a snapshot of, and whether it is saved (from the Save
+// control of the viewer toolbar).
 function Derivation({ document, provenance }: DerivationProps) {
 	return (
 		<CollapsibleSection id="images.inspector.derived-image" title="Derived Image">
 			<DataRow label="Source">{provenance.sourceName}</DataRow>
 			<DataRow label="Created (UTC)">{formatDate(provenance.createdAt)}</DataRow>
 			{provenance.kind === 'liveStacking' ? (
-				<DataRow label="Live stack">{provenance.frames} accepted frames</DataRow>
+				<>
+					<DataRow label="Live stack">{provenance.frames} accepted frames</DataRow>
+					{provenance.stacks.map((stack) => (
+						<LiveStack key={`${stack.field}:${stack.filter}:${liveAcquisitionLabel(stack)}:${liveCalibrationLabel(stack)}`} stack={stack} />
+					))}
+				</>
 			) : (
 				<ol className="m-0 flex list-none flex-col gap-0.5 p-0 text-xs">
 					{provenance.steps.map(({ id, operation }, i) => (
@@ -305,6 +312,28 @@ function Derivation({ document, provenance }: DerivationProps) {
 			)}
 			<DataRow label="State">{document.unsaved ? <span className="text-accent">Unsaved</span> : 'Saved'}</DataRow>
 		</CollapsibleSection>
+	)
+}
+
+// A stack of a live stack snapshot as it was when the snapshot was taken: its filter and field, its accepted frames with
+// their total exposure, the acquisition settings its frames share, its masters, and the sensor temperatures of its frames.
+function LiveStack({ stack }: { readonly stack: LiveStackingProvenanceStack }) {
+	return (
+		<div className="flex flex-col border-l border-line-200 pl-2">
+			<DataRow label="Filter">
+				{stack.filter} · field {stack.field}
+			</DataRow>
+			<DataRow label="Frames">
+				{stack.accepted} · {formatDuration(stack.exposure)}
+			</DataRow>
+			<DataRow label="Acquisition">{liveAcquisitionLabel(stack)}</DataRow>
+			<DataRow label="Calibration">{liveCalibrationLabel(stack)}</DataRow>
+			{stack.temperature && (
+				<DataRow label="Temperature">
+					{stack.temperature[0].toFixed(1)} to {stack.temperature[1].toFixed(1)} °C
+				</DataRow>
+			)}
+		</div>
 	)
 }
 

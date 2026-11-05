@@ -382,6 +382,7 @@ export type {
 	ImageProperties,
 	ImageProvenance,
 	LiveStackingProvenance,
+	LiveStackingProvenanceStack,
 	ProcessingProvenance,
 	RenderRequest,
 	RenderResult,

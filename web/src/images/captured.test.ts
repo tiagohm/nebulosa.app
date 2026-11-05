@@ -75,7 +75,7 @@ function fakeIo() {
 
 			if (input.startsWith('/api/live-stacking/sessions/') && input.endsWith('/views'))
 				return Response.json({
-					info: { origin: 'derived', id: `live-${++count}`, name: 'Ha — Live Stack', width: 4, height: 2, channels: 1, header: {}, acquisition: {}, provenance: { kind: 'liveStacking', sessionId: 'ls', sourceName: 'Ha', frames: control.liveRevision, createdAt: '2026-11-04T00:00:00.000Z' } },
+					info: { origin: 'derived', id: `live-${++count}`, name: 'Ha — Live Stack', width: 4, height: 2, channels: 1, header: {}, acquisition: {}, provenance: { kind: 'liveStacking', sessionId: 'ls', sourceName: 'Ha', frames: control.liveRevision, stacks: [], createdAt: '2026-11-04T00:00:00.000Z' } },
 					revision: control.liveRevision,
 					frames: control.liveRevision,
 				})

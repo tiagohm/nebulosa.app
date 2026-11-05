@@ -3,13 +3,14 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync 
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type { Client } from 'nebulosa/src/devices/indi/device'
+import type { Image } from 'nebulosa/src/imaging/model/types'
 import { type FitsHeader, writeFits } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSink } from 'nebulosa/src/io/io'
 import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
 import type { CapturedFrame, CaptureFrameSink, CaptureRequest } from './captures'
 import { AppDatabase } from './database'
 import type { DeviceRegistry } from './devices'
-import type { ImageInfo } from './images'
+import type { ImageInfo, ImageProvenance } from './images'
 import { createLiveStackingRoutes, LiveStacking, type LiveStackingCounters, type LiveStackingEvent, type LiveStackingMasters, MAX_PENDING_PAYLOADS } from './livestacking'
 import { InThreadProcessor, type LiveEngineFrame, type LiveEngineResult, type LiveStackingProcessor, type LiveStackingRecipe, LiveWorkerFailure } from './livestacking.engine'
 import { LiveStackingStore } from './livestacking.store'
@@ -116,8 +117,9 @@ function setup(options: { processor?: (recipe: LiveStackingRecipe) => LiveStacki
 	const masters: LiveStackingMasters = { pinnedMaster: () => Promise.resolve(undefined), lease: (references) => (leases.push(references.map(({ masterId }) => masterId).join(',')), () => undefined), ...options.masters }
 	const closed: string[] = []
 	let documents = 0
+	const adopted: { readonly image: Image; readonly provenance: ImageProvenance }[] = []
 	const images = {
-		adopt: () => Promise.resolve({ origin: 'derived', id: `doc-${++documents}`, name: 'stack', width: SIZE, height: SIZE, channels: 1, header: {} } as unknown as ImageInfo),
+		adopt: (image: Image, provenance: ImageProvenance) => (adopted.push({ image, provenance }), Promise.resolve({ origin: 'derived', id: `doc-${++documents}`, name: 'stack', width: SIZE, height: SIZE, channels: 1, header: {} } as unknown as ImageInfo)),
 		close: (id: string) => (closed.push(id), true),
 	}
 	const directory = mkdtempSync(join(root, 'store-'))
@@ -142,7 +144,7 @@ function setup(options: { processor?: (recipe: LiveStackingRecipe) => LiveStacki
 		sink!.captured(frame, bytes)
 	}
 
-	return { stacking, sink: () => sink!, deliver, store, directory, events, start, leases, closed }
+	return { stacking, sink: () => sink!, deliver, store, directory, events, start, leases, closed, adopted }
 }
 
 // Whether the counters of a session reconcile: every received frame is in exactly one other count.
@@ -361,7 +363,7 @@ describe('live stacking', () => {
 	})
 
 	test('a view is a snapshot document kept between frames, and a reset closes it and forgets the stacks', async () => {
-		const { stacking, sink, deliver, start, closed } = setup()
+		const { stacking, sink, deliver, start, closed, adopted } = setup()
 		const sessionId = start()
 		await deliver(captured('cap', 1), await fits(0, 0, { FILTER: 'Ha' }))
 		await waitUntil(() => stacking.session(sessionId).counters.accepted === 1)
@@ -370,6 +372,12 @@ describe('live stacking', () => {
 		const view = await stacking.view(sessionId, { cohortId: cohort.cohortId })
 		expect(view).toMatchObject({ revision: 1, frames: 1, info: { id: 'doc-1' } })
 		expect(await stacking.view(sessionId, { cohortId: cohort.cohortId })).toBe(view)
+
+		// A saved snapshot describes its stack, not its first frame.
+		const [{ image, provenance }] = adopted
+		expect(image.header).toMatchObject({ NAXIS1: SIZE, NAXIS2: SIZE, FILTER: 'Ha', NCOMBINE: 1, EXPTIME: 60, TOTALEXP: 60, GAIN: 100 })
+		expect(String(image.header.HISTORY)).toContain('0 marks pixels no frame covered')
+		expect(provenance).toMatchObject({ kind: 'liveStacking', sourceName: 'Ha', frames: 1, stacks: [{ filter: 'Ha', field: 1, accepted: 1, exposure: 60, acquisition: { exposure: 60, gain: 100 } }] })
 
 		await stacking.reset(sessionId)
 		expect(closed).toEqual(['doc-1'])

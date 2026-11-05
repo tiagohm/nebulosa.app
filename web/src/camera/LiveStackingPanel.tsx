@@ -26,10 +26,13 @@ import {
 	closeLiveSession,
 	LIVE_FALLBACK_LABELS,
 	LIVE_INTERPOLATION_LABELS,
+	LIVE_MASTER_LABELS,
+	LIVE_MASTER_ORDER,
 	LIVE_METHOD_LABELS,
 	LIVE_NORMALIZATION_LABELS,
 	LIVE_STACKING_STATE_LABELS,
 	LIVE_WEIGHTING_LABELS,
+	liveAcquisitionLabel,
 	liveCameraKey,
 	liveSessionActive,
 	liveSessionCommand,
@@ -45,19 +48,12 @@ import {
 } from './livestacking'
 
 // Contextual panel sections of Live Stacking, a camera operation of the Images camera tabs: the session of the tab's
-// camera (start, pause, resume, stop, abort, reset, a new field, close) with its frame counts, the stacks of its fields
-// by filter and acquisition settings, the masters chosen per filter, the integration recipe, which stack or color
+// camera (start, pause, resume, stop, abort, reset, a new field, close) with its frame counts, the masters chosen per filter, the integration recipe, which stack or color
 // composition the tab shows. The session is the server's, shown here whichever tab
 // started it, and keeps running when the panel unmounts or the tab closes; it only ever reads the frames Camera
 // Acquisition takes, so the acquisition itself is set up in its own panel. The recipe and masters are the camera's form,
 // kept in the profile, and the recipe is locked while a session runs. What the tab shows is display only: stretching a
 // stack, or composing it into color, never changes it.
-
-// Kinds of master chosen per filter, in the order they are shown.
-const MASTER_KINDS = ['dark', 'flat', 'bias'] as const satisfies readonly LiveMasterKind[]
-
-// Label of each kind of master.
-const MASTER_LABELS: Readonly<Record<LiveMasterKind, string>> = { dark: 'Dark', flat: 'Flat', bias: 'Bias' }
 
 // Option of a master select that chooses none.
 const NO_MASTER = 'none'
@@ -90,7 +86,6 @@ export function LiveStackingSections({ document, camera }: LiveStackingSectionsP
 	return (
 		<>
 			<SessionSection camera={camera} session={session} settings={settings} />
-			{session && <StacksSection document={document} session={session} />}
 			<CalibrationSection camera={camera} session={session} settings={settings} />
 			<IntegrationSection camera={camera} session={session} settings={settings} />
 			{session && <DisplaySection document={document} session={session} />}
@@ -211,84 +206,6 @@ interface SessionProps {
 	readonly session: LiveStackingSession
 }
 
-// Describes the acquisition of a stack in one line.
-function acquisitionLabel({ acquisition }: LiveStackingCohort) {
-	const parts = [`${acquisition.exposure} s`]
-	if (acquisition.gain !== undefined) parts.push(`gain ${acquisition.gain}`)
-	if (acquisition.offset !== undefined) parts.push(`offset ${acquisition.offset}`)
-	if (acquisition.binX !== undefined) parts.push(`bin ${acquisition.binX}×${acquisition.binY ?? acquisition.binX}`)
-	if (acquisition.readoutMode !== undefined) parts.push(acquisition.readoutMode)
-	parts.push(`${acquisition.width}×${acquisition.height}`)
-	return parts.join(' · ')
-}
-
-// Describes the calibration of a stack.
-function calibrationLabel({ calibration }: LiveStackingCohort) {
-	if (!calibration) return 'Uncalibrated'
-	return MASTER_KINDS.flatMap((kind) => (calibration[kind] ? [`${MASTER_LABELS[kind]} #${calibration[kind].masterId}`] : [])).join(' · ')
-}
-
-// Stacks of the session by field: filter, acquisition, calibration, frames, exposure, and temperatures; each can be shown
-// in the tab and saved as a linear FITS.
-function StacksSection({ document, session }: SessionProps) {
-	const runtime = useSnapshot(liveStackingRuntime)
-	const [saved, setSaved] = useState<Record<string, string>>({})
-	const exportKey = `export:${session.sessionId}`
-
-	const save = async (cohortId: string) => {
-		const product = await saveLiveStack(liveStackingRuntime, session.sessionId, { cohortId })
-		if (product) setSaved((paths) => ({ ...paths, [cohortId]: product.path }))
-	}
-
-	return (
-		<CollapsibleSection id="images.liveStacking.stacks" title="Filters & Stacks" summary={`${session.cohorts.length} stacks`}>
-			{session.fields.length === 0 && <Notice>No stack yet: the first good frame starts the first field.</Notice>}
-			{session.fields.map((field) => (
-				<div key={field.fieldId} className="flex flex-col gap-2">
-					<p className="m-0 text-xs text-ink-300">
-						Field {field.index} · {field.width}×{field.height}
-						{field.channels === 3 ? ' · color' : ''}
-					</p>
-					{session.cohorts
-						.filter((cohort) => cohort.fieldId === field.fieldId)
-						.map((cohort) => (
-							<div key={cohort.cohortId} className="flex flex-col gap-1 border-l border-line-200 pl-2">
-								<DataList>
-									<DataRow label="Filter">{cohort.filter}</DataRow>
-									<DataRow label="Acquisition">{acquisitionLabel(cohort)}</DataRow>
-									<DataRow label="Calibration">{calibrationLabel(cohort)}</DataRow>
-									<DataRow label="Frames">
-										{cohort.accepted} · {formatDuration(cohort.exposure)}
-									</DataRow>
-									{cohort.temperature && (
-										<DataRow label="Temperature">
-											{cohort.temperature[0].toFixed(1)} to {cohort.temperature[1].toFixed(1)} °C
-										</DataRow>
-									)}
-								</DataList>
-								<Actions>
-									<Button variant="secondary" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'liveStack', sessionId: session.sessionId, target: { cohortId: cohort.cohortId } }, captureFramesState)}>
-										Show
-									</Button>
-									<Button variant="secondary" disabled={runtime.pending[exportKey]} onClick={() => void save(cohort.cohortId)}>
-										Save
-									</Button>
-									{saved[cohort.cohortId] && (
-										<Button variant="ghost" onClick={() => void openImage(imagesState, saved[cohort.cohortId])}>
-											Open Saved
-										</Button>
-									)}
-								</Actions>
-							</div>
-						))}
-				</div>
-			))}
-			{session.cohorts.some((cohort, index) => session.cohorts.findIndex((other) => other.fieldId === cohort.fieldId && other.filter === cohort.filter) !== index) && <Notice>A filter with several stacks changed its acquisition settings or masters: frames of different settings never share a stack.</Notice>}
-			{runtime.errors[exportKey] && <Notice error>{runtime.errors[exportKey]}</Notice>}
-		</CollapsibleSection>
-	)
-}
-
 interface FormProps {
 	readonly camera: CameraOperationContext
 	readonly session?: LiveStackingSession
@@ -316,7 +233,7 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 
 	useEffect(() => {
 		let cancelled = false
-		void Promise.all(MASTER_KINDS.map((kind) => loadLiveMasters(kind))).then(([dark, flat, bias]) => {
+		void Promise.all(LIVE_MASTER_ORDER.map((kind) => loadLiveMasters(kind))).then(([dark, flat, bias]) => {
 			if (!cancelled) setMasters({ dark, flat, bias })
 		})
 		return () => {
@@ -347,7 +264,7 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 	// Summary of the masters chosen for a filter.
 	const chosenSummary = (name: string) => {
 		const chosen = calibration.filters[name]
-		const kinds = MASTER_KINDS.filter((kind) => chosen?.[kind] !== undefined).map((kind) => MASTER_LABELS[kind])
+		const kinds = LIVE_MASTER_ORDER.filter((kind) => chosen?.[kind] !== undefined).map((kind) => LIVE_MASTER_LABELS[kind])
 		return kinds.length > 0 ? kinds.join(' · ') : 'Uncalibrated'
 	}
 
@@ -356,7 +273,7 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 			{wheelNames ? <Notice>Choose the filters of the wheel to calibrate before their frames arrive.</Notice> : <Notice>Without a connected filter wheel the frames have no filter, so they take the masters of {NO_FILTER}.</Notice>}
 			{filters.map((name) => (
 				<CollapsibleSection key={name} id={`images.liveStacking.calibration.filter.${name}`} title={name === NO_FILTER ? 'No filter' : name} summary={chosenSummary(name)}>
-					{MASTER_KINDS.map((kind) => {
+					{LIVE_MASTER_ORDER.map((kind) => {
 						const options = [NO_MASTER, ...offered(kind, name).map((master) => String(master.masterId))]
 						const chosen = calibration.filters[name]?.[kind]
 						const value = chosen && options.includes(String(chosen.masterId)) ? String(chosen.masterId) : NO_MASTER
@@ -365,7 +282,7 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 							const master = masters[kind].find((candidate) => String(candidate.masterId) === option)
 							return master ? `#${master.masterId} · ${master.frames} frames${master.metadata.exposure.value !== undefined ? ` · ${master.metadata.exposure.value / 1000000} s` : ''}${master.metadata.setTemperature.value !== undefined ? ` · ${master.metadata.setTemperature.value} °C` : ''}` : option
 						}
-						return <Select key={kind} label={MASTER_LABELS[kind]} options={options} value={value} format={format} onChange={(option) => choose(name, kind, option)} />
+						return <Select key={kind} label={LIVE_MASTER_LABELS[kind]} options={options} value={value} format={format} onChange={(option) => choose(name, kind, option)} />
 					})}
 					{calibration.filters[name] && (
 						<Actions>
@@ -504,7 +421,7 @@ function DisplaySection({ document, session }: SessionProps) {
 					format={(cohortId) => {
 						const cohort = session.cohorts.find((candidate) => candidate.cohortId === cohortId)
 						const index = session.fields.find((candidate) => candidate.fieldId === cohort?.fieldId)?.index
-						return cohort ? `${cohort.filter} · field ${index} · ${acquisitionLabel(cohort)}` : cohortId
+						return cohort ? `${cohort.filter} · field ${index} · ${liveAcquisitionLabel(cohort)}` : cohortId
 					}}
 					onChange={(cohortId) => show({ cohortId })}
 				/>
@@ -529,7 +446,7 @@ function DisplaySection({ document, session }: SessionProps) {
 								const cohort = session.cohorts.find((candidate) => candidate.cohortId === source.cohortId)
 								return (
 									<div key={source.cohortId} className="flex flex-col gap-1 border-l border-line-200 pl-2">
-										<p className="m-0 text-xs text-ink-200">{cohort ? `${cohort.filter} · ${acquisitionLabel(cohort)}` : 'Unknown stack'}</p>
+										<p className="m-0 text-xs text-ink-200">{cohort ? `${cohort.filter} · ${liveAcquisitionLabel(cohort)}` : 'Unknown stack'}</p>
 										<div className="flex flex-col gap-2">
 											{(['red', 'green', 'blue'] as const).map((channel) => (
 												<NumberInput
@@ -570,6 +487,7 @@ function DisplaySection({ document, session }: SessionProps) {
 				</>
 			)}
 			{mode === 'color' && !field && <Notice>Color needs mono stacks of one field.</Notice>}
+			{runtime.errors[exportKey] && <Notice error>{runtime.errors[exportKey]}</Notice>}
 			<Notice>Stretching and color mixing change only the display; saved stacks are linear.</Notice>
 			<Actions>
 				<Button variant="ghost" onClick={() => selectImageTool(imagesState, document.key, 'camera-acquisition')}>

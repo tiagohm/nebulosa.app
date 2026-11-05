@@ -4,14 +4,15 @@ import logo from '../../assets/nebulosa.ico'
 import { connectionState } from '../connection/connection'
 import { ConnectionIndicator } from '../connection/ConnectionIndicator'
 import { deviceState } from '../equipment/equipment'
+import { ObservingSiteMenu } from '../location/ObservingSiteMenu'
 import { NotificationButton } from '../notifications/NotificationButton'
 import { ProfileMenu } from '../profile/ProfileMenu'
 import { navigate, routeState } from '../shell/route'
 import { Icon } from '../ui/Icon'
 import { Menu, MenuItem, NavigationMenu } from '../ui/NavigationMenu'
 
-// Application top bar: logo and the primary-action menus on the left, the connection status, the notification bell,
-// the Settings page button, and the profile switcher on the right.
+// Application top bar: logo and the primary-action menus on the left, the observing site switcher, the connection
+// status, the notification bell, the Settings page button, and the profile switcher on the right.
 
 // Classes of the round icon buttons of the right side of the bar.
 const ICON_BUTTON_CLASS = 'relative flex size-9 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-200 transition-colors duration-150 hover:bg-base-300 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent'
@@ -33,7 +34,8 @@ export function TopBar() {
 					</Menu>
 				</NavigationMenu>
 			</div>
-			<div className="flex flex-none items-center gap-2">
+			<div className="flex min-w-0 items-center gap-2">
+				<ObservingSiteMenu />
 				<ConnectionIndicator />
 				<NotificationButton className={ICON_BUTTON_CLASS} />
 				<SettingsButton />

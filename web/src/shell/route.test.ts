@@ -75,6 +75,13 @@ describe('parse', () => {
 		expect(routePath({ workspace: 'settings', tool: 'astap' })).toBe('/settings/external-tools/astap')
 	})
 
+	test('reads the Observing Sites section and the site shown', () => {
+		expect(parseRoute('/settings/observing-sites')).toEqual({ workspace: 'settings', section: 'observing-sites' })
+		expect(parseRoute('/settings/observing-sites/a%20b/extra')).toEqual({ workspace: 'settings', section: 'observing-sites', site: 'a b' })
+		expect(routePath({ workspace: 'settings', section: 'observing-sites', site: 'a b' })).toBe('/settings/observing-sites/a%20b')
+		expect(routePath({ workspace: 'settings', section: 'status-bar', site: 'ignored' })).toBe('/settings/status-bar')
+	})
+
 	test('reads the About page', () => {
 		expect(parseRoute('/about')).toEqual({ workspace: 'about' })
 		expect(parseRoute('/about/extra')).toEqual({ workspace: 'about' })

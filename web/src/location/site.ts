@@ -1,8 +1,10 @@
 import type { ObservingSite as SavedObservingSite } from 'api'
 import { nanoid } from 'nanoid'
+import { parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import { activeProfile, type ProfileState } from '../profile/profile'
 import type { Profile } from '../profile/schema'
+import { navigate, routeState } from '../shell/route'
 import { isKnownTimeZone } from './zone'
 
 // Observing sites of the workspace: named places with their civil time zone, one catalog shared by every profile, tab,
@@ -80,4 +82,41 @@ export function selectSite(state: ProfileState, sites: SiteState, siteId: string
 // Returns the site a profile observes from, of the state or a snapshot of it; undefined when it has none.
 export function activeSite<S extends Pick<ObservingSite, 'id'>>(profile: Pick<Profile, 'activeSiteId'>, sites: readonly S[]): S | undefined {
 	return profile.activeSiteId === undefined ? undefined : sites.find((site) => site.id === profile.activeSiteId)
+}
+
+// Reads a latitude or a longitude typed by a person, in degrees: decimal ("-23.5475") or sexagesimal ("23° 32′ 51″",
+// "23 32 51"), signed or followed (or preceded) by its hemisphere letter, positive for N or E, negative for S or W
+// ("23.5475 S"). axis says which letters apply. Returns undefined for a text that is not an angle, or a sign together
+// with a hemisphere letter; ranges are checked by normalizeObservingSite.
+export function parseGeographicAngle(text: string, axis: 'latitude' | 'longitude'): number | undefined {
+	const [positive, negative] = axis === 'latitude' ? ['N', 'S'] : ['E', 'W']
+	let value = text.trim().toUpperCase()
+	let sign = 1
+	const letter = value.endsWith(positive) || value.startsWith(positive) ? positive : value.endsWith(negative) || value.startsWith(negative) ? negative : undefined
+
+	if (letter) {
+		value = (value.startsWith(letter) ? value.slice(1) : value.slice(0, -1)).trim()
+		if (/^[-+−]/.test(value)) return undefined
+		if (letter === negative) sign = -1
+	}
+
+	// A hemisphere letter of the other axis, or a second one, is not a coordinate of this one.
+	if (/[NSEW]/.test(value)) return undefined
+
+	// Decimal degrees are kept as typed, never through radians, which would add digits to them.
+	const decimal = Number(value.replace('−', '-'))
+	if (value !== '' && Number.isFinite(decimal)) return sign * decimal
+
+	const angle = parseAngle(value)
+	return angle === undefined || !Number.isFinite(angle) ? undefined : (sign * Math.round(toDeg(angle) * SEXAGESIMAL_SCALE)) / SEXAGESIMAL_SCALE
+}
+
+// Scale sexagesimal coordinates are rounded to once read, 1e-9° (about 0.1 mm on the Earth), so the floating-point
+// noise of the conversion never shows in a field.
+const SEXAGESIMAL_SCALE = 1e9
+
+// Opens Settings → Observing Sites on a site, or on the first one; the way every screen sends a person to choose or
+// edit where they observe from.
+export function openObservingSites(siteId?: string) {
+	navigate(routeState, { workspace: 'settings', section: 'observing-sites', site: siteId })
 }

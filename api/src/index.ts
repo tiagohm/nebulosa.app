@@ -757,8 +757,8 @@ listenClients(captureFrames)
 const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, publish)
 
 // Automatic dithering of the camera captures, commanded to the guiding sessions, or moving the mounts with the commanders of
-// the mount and guide output commands.
-const dithering = new CaptureDithering(connections.devices, (id) => connections.client(id), operations, guiding, { mount: mounts.commander, guideOutput: guideOutputs.commander })
+// the mount and guide output commands, refusing a GoTo dither the Meridian Flip Monitor or the geometry says could flip.
+const dithering = new CaptureDithering(connections.devices, (id) => connections.client(id), operations, guiding, { mount: mounts.commander, guideOutput: guideOutputs.commander }, meridianFlip)
 
 // Camera captures over the devices of the open connections, their frames entering the image store, dithering between
 // their frames when their request asks for it.

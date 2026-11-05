@@ -1,7 +1,10 @@
+import type { EquatorialCoordinate } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import type { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import type { MountCommander } from 'nebulosa/src/devices/commanders/mount'
-import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
-import { failedOperationResult, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { type Camera, expectedPierSide, type GuideOutput, type Mount } from 'nebulosa/src/devices/indi/device'
+import { type FailedOperationResult, failedOperationResult, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { type ResourceRequest, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { Random } from 'nebulosa/src/math/numerical/random'
 import { arcsec } from 'nebulosa/src/math/units/angle'
@@ -12,6 +15,7 @@ import type { GuidingSettle } from 'nebulosa/src/observation/guiding/session'
 import { type ClientResolver, type CommandErrorCode, type CommandRefusal, type DeviceContext, refusal, resolveConnected } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { GuidingSessions } from './guiding'
+import type { MeridianFlipService } from './meridianflip'
 import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
 
 // Automatic dithering of Camera Acquisition: the preflight, the device coordination, and the execution of the dithers a
@@ -30,7 +34,11 @@ import type { OperationDevice, OperationRegistry, ToolInvocation } from './opera
 // trusted to drive that mount) or a small exact GoTo, never corrected by a pointing model, then a fixed mechanical wait,
 // which measures nothing. The mount and the guide output are reserved in the arbiter for the whole capture (unless the
 // caller's invocation already reserves them), so no manual motion or pulse interleaves, and guiding is held off their
-// connections. A capture whose guide output is its own camera is refused, since the capture holds that device. The end of
+// connections. A GoTo dither never flips a German equatorial mount knowingly: on evidence, never the time alone (a flip
+// candidate of the Meridian Flip Monitor, or a target whose expected pier side differs from the reported one), the
+// capture is refused and a dither fails before the mount moves, and a GoTo after which the mount reports another pier
+// side fails the capture. Pulses take the guide directions of the request, the nominal East and North unless the
+// operator reversed one. A capture whose guide output is its own camera is refused, since the capture holds that device. The end of
 // the capture drains the motion in flight and waits for the observed end of its pulses before the reservation is given
 // back. Mount amounts are arcseconds on the sky, settle times seconds, pulse durations milliseconds.
 
@@ -105,8 +113,8 @@ export interface CaptureDitherPlan {
 }
 
 // Refusal codes of a dither preflight besides the command codes: notGuiding, the guiding session is not guiding;
-// guidingActive, guiding corrects a mount the capture would move itself.
-export type CaptureDitherErrorCode = 'notGuiding' | 'guidingActive'
+// guidingActive, guiding corrects a mount the capture would move itself; meridianFlip, a GoTo dither could flip the mount.
+export type CaptureDitherErrorCode = 'notGuiding' | 'guidingActive' | 'meridianFlip'
 
 // Outcome of preparing the dithers of a capture: its plan, or why the capture is refused.
 export type CaptureDitherPreparation = CaptureDitherPlan | CommandRefusal<CommandErrorCode | CaptureDitherErrorCode>
@@ -122,6 +130,9 @@ export interface CaptureDitheringCommanders {
 	// Pulses of the pulse dithers, and the observation of their end.
 	readonly guideOutput: GuideOutputCommander
 }
+
+// Meridian Flip Monitors as the dithering service reads them.
+export type CaptureDitheringMeridianFlip = Pick<MeridianFlipService, 'monitor'>
 
 // Name the dithering service holds guiding commands under, meant for people.
 const HOLDER = 'Camera Acquisition'
@@ -156,8 +167,32 @@ export class CaptureDithering implements DeviceContext {
 		readonly operations: OperationRegistry,
 		readonly guiding: CaptureDitheringGuiding,
 		readonly commanders: CaptureDitheringCommanders,
+		readonly meridianFlip: CaptureDitheringMeridianFlip,
 		readonly random?: Random,
 	) {}
+
+	// Why a GoTo dither of mount (device, its exact ids) to target (JNOW, radians) could flip its pier side, and the status refusing a capture
+	// for it, or undefined when nothing suggests a flip. Evidence only, never the time alone: the Meridian Flip Monitor
+	// of the mount reporting a flip candidate, or the pier side a German equatorial mount uses for the target (from the
+	// hour angle at the site and the host clock) differing from the one it reports. An altazimuth or fork mount never
+	// flips; any other mount must report its pier side and its site, or a flip could not be ruled out.
+	#flipRisk(mount: Mount, device: OperationDevice, target: EquatorialCoordinate): { readonly message: string; readonly status: 409 | 422 } | undefined {
+		if (mount.mountType === 'ALTAZ' || mount.mountType === 'EQ_FORK') return undefined
+		if (this.meridianFlip.monitor(device.connectionId, device.deviceId)?.mechanical === 'flipCandidate') return { message: `The Meridian Flip Monitor of ${mount.name} reports that a flip may be due`, status: 409 }
+		if (!mount.hasPierSide || mount.pierSide === 'NEITHER') return { message: `${mount.name} reports no pier side, so a meridian flip of a GoTo could not be ruled out`, status: 422 }
+		if (!mount.hasGeographicCoordinate) return { message: `${mount.name} reports no site, so a meridian flip of a GoTo could not be ruled out`, status: 422 }
+
+		const lst = localSiderealTime(timeUnix(Date.now() / 1000, true), mount.geographicCoordinate.longitude)
+		const expected = expectedPierSide(target.rightAscension, target.declination, lst)
+		if (expected !== 'NEITHER' && expected !== mount.pierSide) return { message: `A GoTo of ${mount.name} there would cross the meridian and could flip it`, status: 409 }
+		return undefined
+	}
+
+	// Refuses a dither GoTo of mount to target whose meridian flip cannot be ruled out (see #flipRisk), without moving it.
+	#refuseFlip(mount: Mount, device: OperationDevice, target: EquatorialCoordinate): FailedOperationResult | undefined {
+		const risk = this.#flipRisk(mount, device, target)
+		return risk && failedOperationResult('unexpectedState', risk.message)
+	}
 
 	// Prepares the dithers of a capture of camera before it is admitted, under the reservation of invocation when a caller
 	// composing tools admits it: checks the method can dither now and takes what the capture holds for its dithers.
@@ -225,6 +260,9 @@ export class CaptureDithering implements DeviceContext {
 			if (!mount.canGoTo) return refusal(`${mount.name} cannot go to a position`, 422, 'unsupported')
 			if (mount.parked || mount.parking) return refusal(`${mount.name} is parked`, 422, 'unsupported')
 			if (!mount.tracking) return refusal(`${mount.name} is not tracking`, 422, 'unsupported')
+			// The pointing itself is the first target: a mount that would flip on a GoTo to it never starts dithering by GoTo.
+			const risk = this.#flipRisk(mount, dither.mount, mount.equatorialCoordinate)
+			if (risk) return refusal(risk.message, risk.status, risk.status === 409 ? 'meridianFlip' : 'unsupported')
 		} else if (guideOutput && !guideOutput.canPulseGuide) {
 			return refusal(`${guideOutput.name} cannot pulse`, 422, 'unsupported')
 		}
@@ -256,7 +294,7 @@ export class CaptureDithering implements DeviceContext {
 			{ mountCommander: this.commanders.mount, guideOutputCommander: this.commanders.guideOutput },
 			dither.movement === 'pulse'
 				? { method: 'pulse', pattern: dither.pattern, random: this.random, maxPulseDuration: dither.maxPulseDuration, rightAscensionDirection: dither.rightAscensionDirection, declinationDirection: dither.declinationDirection }
-				: { method: 'slew', pattern: dither.pattern, random: this.random, maxPulseDuration: SLEW_MAX_PULSE_DURATION },
+				: { method: 'slew', pattern: dither.pattern, random: this.random, maxPulseDuration: SLEW_MAX_PULSE_DURATION, beforeSlew: (target) => this.#refuseFlip(mount, dither.mount, target) },
 		)
 
 		const request: DitherRequest = { amount: { unit: 'angle', value: arcsec(dither.amount) }, raOnly: dither.raOnly, settle: { kind: 'mechanical', time: dither.settleTime } }
@@ -270,6 +308,7 @@ export class CaptureDithering implements DeviceContext {
 				// A device lost since the previous dither leaves its reservation in place, so its absence is told before it is commanded.
 				if (!ditherer.ready()) return failedOperationResult('disconnected', `Dither failed: ${mount.name} or its guide output is not ready`)
 
+				const pierSide = mount.pierSide
 				const handle = scope.start('captureDither', [], (context) => ditherer.dither(context, request, onPhase))
 				const cancel = () => void handle.cancel()
 				signal.addEventListener('abort', cancel, { once: true })
@@ -277,7 +316,11 @@ export class CaptureDithering implements DeviceContext {
 				inFlight = handle.result
 
 				try {
-					return ditherFailure(await handle.result)
+					const result = await handle.result
+					// A GoTo the checks let through may still flip a mount whose driver decides otherwise: the field turned, so the
+					// capture must not go on as if nothing happened.
+					if (result.ok && dither.movement === 'slew' && mount.pierSide !== pierSide) return failedOperationResult('unexpectedState', `Dither failed: ${mount.name} changed its pier side from ${pierSide} to ${mount.pierSide}, so the field turned`)
+					return ditherFailure(result)
 				} finally {
 					signal.removeEventListener('abort', cancel)
 				}

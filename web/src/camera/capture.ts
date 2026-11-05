@@ -213,7 +213,6 @@ export function captureDither({ acquisition, settings, guidingSession, guiding, 
 
 	if (!guideOutput) return { blocker: 'Assign a Guide Output in Equipment Setup to dither by guide pulses.' }
 	const { rightAscensionDirection, declinationDirection, maxPulseDuration } = mountSettings
-	if (!rightAscensionDirection || !declinationDirection) return { blocker: 'Set the guide pulse directions of the mount to dither by guide pulses.' }
 	return { dither: { ...fields, movement: 'pulse', guideOutput, maxPulseDuration, rightAscensionDirection, declinationDirection } }
 }
 

@@ -2,11 +2,15 @@ import { afterAll, afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readdirSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import { MountCommander } from 'nebulosa/src/devices/commanders/mount'
+import { expectedPierSide } from 'nebulosa/src/devices/indi/device'
 import { successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { mulberry32 } from 'nebulosa/src/math/numerical/random'
+import { arcsec, deg, normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureEvent, type CaptureSession, type CaptureStartRequest } from './captures'
 import { refusal } from './commands'
@@ -15,6 +19,7 @@ import { AppDatabase } from './database'
 import { type CaptureDither, CaptureDithering, type CaptureDitheringGuiding, ditherBoundary } from './dithering'
 import type { GuidingCommandStatus, GuidingDitherRequest, GuidingSessionSummary } from './guiding'
 import { ImageStore } from './images'
+import type { MeridianFlipMonitor, MeridianMechanicalAssessment } from './meridianflip'
 import { OperationRegistry } from './operations'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-dithering-'))
@@ -133,7 +138,9 @@ async function setup() {
 	const guideOutputCommander = new GuideOutputCommander(manager.devices.guideOutputs, operations.arbiter)
 	disposables.push(guideOutputCommander)
 	const resolve = (connectionId: string) => manager.client(connectionId)
-	const dithering = new CaptureDithering(manager.devices, resolve, operations, fake.guiding, { mount: mountCommander, guideOutput: guideOutputCommander }, mulberry32(7))
+	const meridian: { mechanical?: MeridianMechanicalAssessment } = {}
+	const meridianFlip = { monitor: () => (meridian.mechanical ? ({ mechanical: meridian.mechanical } as MeridianFlipMonitor) : undefined) }
+	const dithering = new CaptureDithering(manager.devices, resolve, operations, fake.guiding, { mount: mountCommander, guideOutput: guideOutputCommander }, meridianFlip, mulberry32(7))
 	const events: CaptureEvent[] = []
 	const captures = new CameraCaptures(manager.devices, resolve, operations, images, frames, (event) => events.push(event), mkdtempSync(join(root, 'default-')), dithering)
 	disposables.push(captures)
@@ -158,7 +165,7 @@ async function setup() {
 		return admission
 	}
 
-	return { manager, client, id, cameraId, captures, operations, camera, mount, mountId, guideOutputId, cameraGuideOutputId, mountCommander, fake, sessions, admit }
+	return { manager, client, id, cameraId, captures, operations, camera, mount, mountId, guideOutputId, cameraGuideOutputId, mountCommander, meridian, fake, sessions, admit }
 }
 
 describe('dither boundary', () => {
@@ -308,6 +315,55 @@ describe('mount dithering of a capture', () => {
 		expect(ended).toMatchObject({ phase: 'completed', captured: 2, dither: { completed: 1 } })
 		expect(mount.equatorialCoordinate).not.toEqual(before)
 		expect(operations.available(mount)).toBeTrue()
+	})
+
+	test('a GoTo dither is refused while the Meridian Flip Monitor reports a flip candidate', async () => {
+		const context = await pointed()
+		const { id, cameraId, captures, mount, operations, mountCommander, meridian, fake } = context
+		expect(await mountCommander.setTracking(operations.coordinator, mount, true)).toMatchObject({ ok: true })
+
+		meridian.mechanical = 'flipCandidate'
+		expect(captures.admit(id, cameraId, request({ dither: pulse(context, { movement: 'slew' }) }))).toMatchObject({ ok: false, status: 409, code: 'meridianFlip' })
+		// Pulses never flip a mount, so they are not refused for it.
+		meridian.mechanical = 'flipCandidate'
+		const pulsed = captures.admit(id, cameraId, request({ count: 1, dither: pulse(context) }))
+		expect(pulsed.ok).toBeTrue()
+		if (pulsed.ok) await pulsed.ended
+		expect(operations.available(mount)).toBeTrue()
+		expect(fake.holds).toEqual([])
+	})
+
+	test('a GoTo dither that would cross the meridian fails the capture without moving the mount', async () => {
+		const context = await setup()
+		const { admit, mount, operations, mountCommander } = context
+		// Just west of the meridian the mount points from the east side; a dither east of it would cross to the west side.
+		const lst = localSiderealTime(timeUnix(Date.now() / 1000, true), mount.geographicCoordinate.longitude)
+		expect(await mountCommander.sync(operations.coordinator, mount, { type: 'JNOW', JNOW: { x: normalizeAngle(lst - arcsec(30)), y: deg(20) } })).toMatchObject({ ok: true })
+		expect(await mountCommander.setTracking(operations.coordinator, mount, true)).toMatchObject({ ok: true })
+		await waitUntil(() => mount.pierSide === expectedPierSide(mount.equatorialCoordinate.rightAscension, mount.equatorialCoordinate.declination, lst))
+		const pierSide = mount.pierSide
+
+		// The first spiral step goes north, the second east, across the meridian.
+		const ended = await admit(request({ count: 3, dither: pulse(context, { movement: 'slew', pattern: 'spiral', amount: 120, settleTime: 0 }) })).ended
+		expect(ended).toMatchObject({ phase: 'failed', reason: 'unexpectedState', captured: 2, dither: { completed: 1 } })
+		expect(ended.error).toContain('would cross the meridian')
+		expect(mount.pierSide).toBe(pierSide)
+		expect(operations.available(mount)).toBeTrue()
+	})
+
+	test('a GoTo dither after which the mount reports another pier side fails the capture', async () => {
+		const context = await pointed()
+		const { admit, mount, operations, mountCommander, sessions } = context
+		expect(await mountCommander.setTracking(operations.coordinator, mount, true)).toMatchObject({ ok: true })
+		const pierSide = mount.pierSide
+		const admitted = admit(request({ count: 3, dither: pulse(context, { movement: 'slew', settleTime: 1 }) }))
+
+		// A driver flipping on its own reports the other side while the dither settles.
+		await waitUntil(() => sessions().at(-1)?.dither?.settling === true)
+		mount.pierSide = pierSide === 'EAST' ? 'WEST' : 'EAST'
+		const ended = await admitted.ended
+		expect(ended).toMatchObject({ phase: 'failed', reason: 'unexpectedState', captured: 1, dither: { completed: 0 } })
+		expect(ended.error).toContain('changed its pier side')
 	})
 
 	test('an abort during the mechanical settle ends the capture and frees the mount', async () => {

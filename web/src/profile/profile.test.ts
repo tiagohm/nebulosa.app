@@ -129,6 +129,7 @@ import {
 	DEFAULT_ASTRO_WEATHER_PREFERENCES,
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 	SATELLITE_FAVORITES_MAXIMUM,
+	type MountDitherSettings,
 } from './schema'
 
 function dev(id: string) {
@@ -759,12 +760,15 @@ describe('dithering settings', () => {
 		expect(ditherSettings(settings(), camera)).toEqual({ ...DEFAULT_DITHER_SETTINGS, enabled: true, method: 'mount' })
 		expect(acquisitionSettings(settings(), camera)).toMatchObject({ exposureMode: 'single', dither: { enabled: true, method: 'mount' } })
 
-		expect(mountDitherSettings(settings(), mount)).toEqual(DEFAULT_MOUNT_DITHER_SETTINGS)
+		expect(mountDitherSettings(settings(), mount)).toEqual({ rightAscensionDirection: 'EAST', declinationDirection: 'NORTH', maxPulseDuration: 5000 })
 		setMountDitherSettings(state, mount, { rightAscensionDirection: 'WEST' })
-		setMountDitherSettings(state, mount, { declinationDirection: 'NORTH' })
+		setMountDitherSettings(state, mount, { declinationDirection: 'SOUTH' })
 		setMountDitherSettings(state, undefined, { maxPulseDuration: 1 })
-		expect(state.profiles[0].settings.mountDither).toEqual({ c: { 'mount-1': { maxPulseDuration: 5000, rightAscensionDirection: 'WEST', declinationDirection: 'NORTH' } } })
+		expect(state.profiles[0].settings.mountDither).toEqual({ c: { 'mount-1': { maxPulseDuration: 5000, rightAscensionDirection: 'WEST', declinationDirection: 'SOUTH' } } })
 		expect(mountDitherSettings(settings(), { connectionId: 'c', deviceId: 'mount-2' })).toEqual(DEFAULT_MOUNT_DITHER_SETTINGS)
+		// A stored record missing a field reads it as its default.
+		state.profiles[0].settings.mountDither = { c: { 'mount-3': { maxPulseDuration: 900 } as MountDitherSettings } }
+		expect(mountDitherSettings(settings(), { connectionId: 'c', deviceId: 'mount-3' })).toEqual({ rightAscensionDirection: 'EAST', declinationDirection: 'NORTH', maxPulseDuration: 900 })
 	})
 })
 

@@ -17,8 +17,8 @@ import { guidingRuntime } from './guiding'
 // Dithering section of Camera Acquisition: whether the fixed and loop LIGHT captures of the camera dither, how often, and
 // by which method, Guided (the guiding session of the setup's Guide Camera, with the amount, RA only, and settle of its
 // Guiding form, shown here read-only) or Mount (the setup's Mount moved by guide pulses through the setup's Guide Output
-// or a small GoTo, then a mechanical settle). The guide pulse directions, which no calibration measures, and the pulse
-// limit are settings of the mount, under Advanced. A running capture shows the dither of its request, never the form.
+// or a small GoTo, then a mechanical settle). The guide pulse directions, which no calibration measures and which start at
+// the nominal East and North of the mount's commands, and the pulse limit are settings of the mount, under Advanced. A running capture shows the dither of its request, never the form.
 // The dither the next capture sends, or why it cannot start, comes from useCaptureDither; the server checks it again.
 
 // Dithering methods, in display order.
@@ -39,15 +39,15 @@ const PATTERNS: readonly CameraDitherSettings['pattern'][] = ['random', 'spiral'
 // Label of each Mount dither pattern.
 const PATTERN_LABELS: Readonly<Record<CameraDitherSettings['pattern'], string>> = { random: 'Random', spiral: 'Spiral', golden: 'Golden Spiral', grid: 'Grid' }
 
-// Choices of the guide direction moving the mount toward a positive right ascension, '' while undeclared.
-const RA_DIRECTIONS = ['', 'EAST', 'WEST'] as const
+// Choices of the guide direction moving the mount toward a positive right ascension, the nominal one first.
+const RA_DIRECTIONS = ['EAST', 'WEST'] as const
 
-// Choices of the guide direction moving the mount toward a positive declination, '' while undeclared.
-const DEC_DIRECTIONS = ['', 'NORTH', 'SOUTH'] as const
+// Choices of the guide direction moving the mount toward a positive declination, the nominal one first.
+const DEC_DIRECTIONS = ['NORTH', 'SOUTH'] as const
 
-// Label of a guide direction choice.
+// Label of a guide direction.
 function directionLabel(direction: string) {
-	return direction === '' ? 'Not set' : direction.charAt(0) + direction.slice(1).toLowerCase()
+	return direction.charAt(0) + direction.slice(1).toLowerCase()
 }
 
 // Devices of the setup the dithers of the Main Camera use.
@@ -192,12 +192,13 @@ function DitherForm({ camera, settings, devices, applicable, locked }: DitherFor
 					<NumberInput label="Settle" suffix="s" value={settings.settleTime} min={0} max={DITHER_MAXIMUM_SETTLE} disabled={disabled} onChange={(settleTime) => update({ settleTime })} />
 					<Checkbox label="Dither in RA only" checked={settings.raOnly} disabled={disabled} onChange={(raOnly) => update({ raOnly })} />
 					<Notice>The settle is a fixed wait after the motion; nothing measures it.</Notice>
+					{settings.movement === 'pulse' && <Notice>If this mount moves the other way for a guide direction, the dithers go the opposite way: the offsets are the intended ones, not the physical motion, and Spiral and Grid come out mirrored. Reverse the direction under Advanced.</Notice>}
 					{settings.movement === 'pulse' && (
 						<CollapsibleSection id="images.camera-acquisition.dithering.advanced" title="Advanced" defaultOpen={false}>
-							<Select label="+RA Pulse" options={RA_DIRECTIONS} value={pulse.rightAscensionDirection ?? ''} format={directionLabel} disabled={disabled || !mountIdentity} onChange={(direction) => updatePulse({ rightAscensionDirection: direction || undefined })} />
-							<Select label="+DEC Pulse" options={DEC_DIRECTIONS} value={pulse.declinationDirection ?? ''} format={directionLabel} disabled={disabled || !mountIdentity} onChange={(direction) => updatePulse({ declinationDirection: direction || undefined })} />
+							<Select label="+RA Pulse" options={RA_DIRECTIONS} value={pulse.rightAscensionDirection} format={directionLabel} disabled={disabled || !mountIdentity} onChange={(rightAscensionDirection) => updatePulse({ rightAscensionDirection })} />
+							<Select label="+DEC Pulse" options={DEC_DIRECTIONS} value={pulse.declinationDirection} format={directionLabel} disabled={disabled || !mountIdentity} onChange={(declinationDirection) => updatePulse({ declinationDirection })} />
 							<NumberInput label="Max Pulse" suffix="ms" value={pulse.maxPulseDuration} min={GUIDING_MINIMUM_PULSE} max={GUIDING_MAXIMUM_PULSE} step={100} disabled={disabled || !mountIdentity} onChange={(maxPulseDuration) => updatePulse({ maxPulseDuration })} />
-							<Notice>The guide directions that move this mount toward east and north, which no calibration measures.</Notice>
+							<Notice>The guide directions that move this mount toward east and north. No calibration measures them, so the nominal East and North of the mount's commands hold until you reverse one.</Notice>
 						</CollapsibleSection>
 					)}
 				</>

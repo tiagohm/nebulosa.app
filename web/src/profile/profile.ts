@@ -805,10 +805,12 @@ export function setDitherSettings(state: ProfileState, camera: CameraIdentity | 
 	setAcquisitionSettings(state, camera, { dither: { ...ditherSettings(activeProfile(state).settings, camera), ...patch } })
 }
 
-// Returns the guide pulse settings of the Mount dithers of a mount: the ones edited last, or the defaults. mount is the
-// saved connection id and the mount id; absent gives the defaults.
+// Returns the guide pulse settings of the Mount dithers of a mount: the ones edited last over the defaults, so a field it
+// never set reads as its default, or the defaults. mount is the saved connection id and the mount id; absent gives the
+// defaults.
 export function mountDitherSettings(settings: Pick<ProfileSettings, 'mountDither'>, mount: CameraIdentity | undefined): Readonly<MountDitherSettings> {
-	return (mount && settings.mountDither?.[mount.connectionId]?.[mount.deviceId]) ?? DEFAULT_MOUNT_DITHER_SETTINGS
+	const stored = mount && settings.mountDither?.[mount.connectionId]?.[mount.deviceId]
+	return stored ? { ...DEFAULT_MOUNT_DITHER_SETTINGS, ...stored } : DEFAULT_MOUNT_DITHER_SETTINGS
 }
 
 // Replaces fields of the guide pulse settings of the Mount dithers of a mount in the active profile. A running capture

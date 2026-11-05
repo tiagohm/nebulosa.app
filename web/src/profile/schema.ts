@@ -421,20 +421,22 @@ export const DITHER_MAXIMUM_SETTLE = 120
 // Mount dither by guide pulses of 10″ at random on both axes followed by a 5 s settle.
 export const DEFAULT_DITHER_SETTINGS: CameraDitherSettings = { enabled: false, everyFrames: 3, method: 'guided', movement: 'pulse', amount: 10, raOnly: false, pattern: 'random', settleTime: 5 }
 
-// Guide pulse settings of the Mount dithers of one mount, which no calibration measures: the guide direction that moves
-// the mount toward a positive (east) right ascension and a positive (north) declination offset, as the operator declares
-// them, and the longest pulse of one axis in milliseconds. Pulse dithers are unavailable until the directions are set.
+// Guide pulse settings of the Mount dithers of one mount: the guide direction that moves the mount toward a positive
+// (east) right ascension and a positive (north) declination offset, which no calibration measures, so the nominal
+// convention of the mount's commands holds until the operator reverses one, and the longest pulse of one axis in
+// milliseconds.
 export interface MountDitherSettings {
-	// Guide direction moving the mount toward a positive (east) right ascension offset; absent until declared.
-	rightAscensionDirection?: PulseCaptureDither['rightAscensionDirection']
-	// Guide direction moving the mount toward a positive (north) declination offset; absent until declared.
-	declinationDirection?: PulseCaptureDither['declinationDirection']
+	// Guide direction moving the mount toward a positive (east) right ascension offset.
+	rightAscensionDirection: PulseCaptureDither['rightAscensionDirection']
+	// Guide direction moving the mount toward a positive (north) declination offset.
+	declinationDirection: PulseCaptureDither['declinationDirection']
 	// Longest pulse of one axis, in milliseconds, in [GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE].
 	maxPulseDuration: number
 }
 
-// Guide pulse settings of a mount that has none yet: no declared direction and pulses of at most 5 s.
-export const DEFAULT_MOUNT_DITHER_SETTINGS: MountDitherSettings = { maxPulseDuration: 5000 }
+// Guide pulse settings of a mount that has none yet: the nominal convention of the mount's commands, East for a positive
+// right ascension and North for a positive declination, and pulses of at most 5 s.
+export const DEFAULT_MOUNT_DITHER_SETTINGS: MountDitherSettings = { rightAscensionDirection: 'EAST', declinationDirection: 'NORTH', maxPulseDuration: 5000 }
 
 // Camera Acquisition form of a camera that has none yet: one light frame, previewed and saved in the server's default
 // directory with the server's default names, as FITS.

@@ -213,7 +213,8 @@ test('builds the frozen dither of the next capture from the preferences and the 
 
 	const pulse = { ...input, settings: { ...input.settings, method: 'mount' } } as const
 	expect(captureDither(pulse)).toEqual({ dither: { method: 'mount', everyFrames: 3, mount, amount: 10, raOnly: false, pattern: 'random', settleTime: 5, movement: 'pulse', guideOutput, maxPulseDuration: 5000, rightAscensionDirection: 'EAST', declinationDirection: 'SOUTH' } })
-	expect(captureDither({ ...pulse, mountSettings: DEFAULT_MOUNT_DITHER_SETTINGS }).blocker).toContain('directions')
+	// Without a reversal, the pulses follow the nominal East and North of the mount's commands.
+	expect(captureDither({ ...pulse, mountSettings: DEFAULT_MOUNT_DITHER_SETTINGS }).dither).toMatchObject({ movement: 'pulse', rightAscensionDirection: 'EAST', declinationDirection: 'NORTH', maxPulseDuration: 5000 })
 	expect(captureDither({ ...pulse, guideOutput: undefined }).blocker).toContain('Guide Output')
 	expect(captureDither({ ...pulse, mount: undefined }).blocker).toContain('Mount')
 	expect(captureDither({ ...pulse, guideOutput: undefined, mountSettings: DEFAULT_MOUNT_DITHER_SETTINGS, settings: { ...pulse.settings, movement: 'slew' } })).toEqual({ dither: { method: 'mount', everyFrames: 3, mount, amount: 10, raOnly: false, pattern: 'random', settleTime: 5, movement: 'slew' } })

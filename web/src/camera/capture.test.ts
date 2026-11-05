@@ -106,7 +106,7 @@ test('starts a capture once, reports a refusal, and refreshes after a lost respo
 
 	expect(refused.requests).toHaveLength(1)
 	expect(refused.requests[0].url).toBe('/api/connections/c/cameras/cam/capture')
-	expect(JSON.parse(refused.requests[0].init!.body as string)).toEqual(DEFAULT_REQUEST)
+	expect(JSON.parse(refused.requests[0].init!.body as string)).toEqual({ ...DEFAULT_REQUEST, token: expect.any(String) as string })
 	expect(state.errors[key]).toBe('The camera is busy')
 	expect(state.pending[key]).toBeUndefined()
 
@@ -115,7 +115,8 @@ test('starts a capture once, reports a refusal, and refreshes after a lost respo
 		throw new Error('network')
 	})
 
-	await stopCapture(state, 'c', 'cam', lost.request)
+	await stopCapture(state, 'c', 'cam', 's1', lost.request)
+	expect(JSON.parse(lost.requests[0].init!.body as string)).toEqual({ sessionId: 's1' })
 	expect(lost.requests.map((r) => r.url)).toEqual(['/api/connections/c/cameras/cam/capture/stop', '/api/captures'])
 	expect(state.errors[key]).toBe('Unable to reach the server.')
 	expect(state.sessions[key]?.phase).toBe('exposing')

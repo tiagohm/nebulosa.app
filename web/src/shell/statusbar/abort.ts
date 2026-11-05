@@ -80,7 +80,7 @@ async function interrupt(interruption: Interruption, stores: OperationAbortStore
 
 	if (interruption.type === 'capture') {
 		const { connectionId, deviceId } = interruption.camera
-		await (interruption.abort ? abortCapture : stopCapture)(stores.captures, connectionId, deviceId, request)
+		await (interruption.abort ? abortCapture : stopCapture)(stores.captures, connectionId, deviceId, interruption.sessionId, request)
 		return stores.captures.errors[cameraKey(connectionId, deviceId)]
 	}
 

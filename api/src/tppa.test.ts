@@ -12,7 +12,7 @@ import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { deg, hour, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { CaptureFrameRegistry } from './captureframes'
-import { CameraCaptures, type CaptureRequest } from './captures'
+import { CameraCaptures, type CaptureStartRequest } from './captures'
 import { ConnectionManager } from './connection'
 import { AppDatabase } from './database'
 import { ImageStore } from './images'
@@ -84,8 +84,8 @@ function fakeSolver(images: ImageStore) {
 }
 
 // A small preview-only capture request.
-function captureRequest(): CaptureRequest {
-	return { exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-only', format: 'FITS' } }
+function captureRequest(): CaptureStartRequest {
+	return { token: crypto.randomUUID(), exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-only', format: 'FITS' } }
 }
 
 async function setup() {

@@ -7,7 +7,7 @@ import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { AutoFocusFittingMode } from 'nebulosa/src/observation/focus/autofocus'
 import { type AutoFocusEvent, type AutoFocusRequest, type AutoFocusSession, AutoFocusSessions, type AutoFocusSessionSummary } from './autofocus'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
-import { CameraCaptures, type CaptureRequest } from './captures'
+import { CameraCaptures, type CaptureStartRequest } from './captures'
 import { ConnectionManager } from './connection'
 import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
@@ -72,8 +72,8 @@ function slow(focuser: { connectionId: string; deviceId: string }) {
 }
 
 // A small preview-only capture request.
-function captureRequest(patch: Partial<CaptureRequest> = {}): CaptureRequest {
-	return { exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-only', format: 'FITS' }, ...patch }
+function captureRequest(patch: Partial<CaptureStartRequest> = {}): CaptureStartRequest {
+	return { token: crypto.randomUUID(), exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-only', format: 'FITS' }, ...patch }
 }
 
 async function setup() {
@@ -312,11 +312,12 @@ describe('sessions', () => {
 		await autoFocus.stop(sessionId)
 		await waitUntil(ended)
 
-		expect(captures.start(id, cameraId, captureRequest({ exposureMode: 'loop', exposureTime: 0.5 })).status).toBe(202)
+		const capture = captures.admit(id, cameraId, captureRequest({ exposureMode: 'loop', exposureTime: 0.5 }))
+		if (!capture.ok) throw new Error(capture.error)
 		const busy = await autoFocus.start(id, cameraId, request(focuserDevice))
 		expect(busy.status).toBe(409)
 		expect(await busy.json()).toMatchObject({ code: 'busy' })
-		await captures.abort(id, cameraId)
+		await captures.abortSession(capture.sessionId)
 	})
 
 	test('a session cannot start on a focuser another operation holds', async () => {

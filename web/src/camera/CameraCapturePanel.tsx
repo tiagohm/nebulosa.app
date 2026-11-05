@@ -138,8 +138,8 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 					pending={pending}
 					startable={availability.status === 'ready' && device !== undefined}
 					onStart={() => void start()}
-					onStop={() => device && void stopCapture(captureRuntime, device.connectionId, device.id)}
-					onAbort={() => device && void abortCapture(captureRuntime, device.connectionId, device.id)}
+					onStop={() => device && session && void stopCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
+					onAbort={() => device && session && void abortCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
 				/>
 				{availability.status !== 'ready' && !running && <p className="m-0 text-xs leading-4 text-ink-300">{availability.message}</p>}
 				{error && <p className="m-0 text-xs leading-4 text-danger">{error}</p>}

@@ -601,7 +601,10 @@ export interface InterruptibleSession {
 export type InterruptibleTool = 'autoFocus' | 'tppa' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'targetCentering' | 'mountPointing' | 'guiding'
 
 // The one command that interrupts an operation: the stop of a device, the abort of a capture, or the end of a session.
-export type Interruption = { readonly type: 'device'; readonly device: InterruptibleDevice; readonly deviceId: string } | { readonly type: 'capture'; readonly camera: SessionCamera; readonly abort: boolean } | { readonly type: 'session'; readonly tool: InterruptibleTool; readonly session: InterruptibleSession }
+export type Interruption =
+	| { readonly type: 'device'; readonly device: InterruptibleDevice; readonly deviceId: string }
+	| { readonly type: 'capture'; readonly camera: SessionCamera; readonly sessionId: string; readonly abort: boolean }
+	| { readonly type: 'session'; readonly tool: InterruptibleTool; readonly session: InterruptibleSession }
 
 // What decides how an operation can be interrupted.
 export interface InterruptionInput {
@@ -652,7 +655,7 @@ export function operationInterruption(operation: OperationRecord, input: Interru
 			const session = Object.values(input.captures.sessions).find((candidate) => candidate.operationId === operationId)
 			if (!session) return undefined
 			const camera = { connectionId: session.connectionId, deviceId: session.deviceId }
-			return { type: 'capture', camera, abort: watchedDeviceState(input.control, 'camera', { connectionId: camera.connectionId, id: camera.deviceId })?.canAbort ?? false }
+			return { type: 'capture', camera, sessionId: session.sessionId, abort: watchedDeviceState(input.control, 'camera', { connectionId: camera.connectionId, id: camera.deviceId })?.canAbort ?? false }
 		}
 		case 'camera.guiding':
 			return sessionInterruption('guiding', input.guiding.sessions, operationId)

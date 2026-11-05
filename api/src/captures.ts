@@ -1,18 +1,19 @@
 import { basename, join } from 'path'
 import { formatTemporal, TIMEZONE } from 'nebulosa/src/astronomy/time/temporal'
 import { type Camera, type CameraTransferFormat, CLIENT, type Client } from 'nebulosa/src/devices/indi/device'
-import type { OperationFailureReason } from 'nebulosa/src/devices/orchestration/operation'
+import type { OperationFailureReason, OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
-import { type CameraCaptureHandle, CameraCapturer, type CameraFramePathRequest, writeFrameExclusively } from 'nebulosa/src/observation/capture/capture'
+import { CameraCapturer, type CameraFrameGate, type CameraFramePathRequest, type CameraFramePreparation, writeFrameExclusively } from 'nebulosa/src/observation/capture/capture'
 import type { CameraCaptureListener } from 'nebulosa/src/observation/capture/reporter'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START } from 'nebulosa/src/observation/capture/types'
 import type { CaptureFrameRegistry } from './captureframes'
+import { type CommandRefusal, type CommandRequest, refusal, refusalResponse } from './commands'
 import { DEFAULT_DATA_DIRECTORY } from './database'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
-import type { OperationRegistry } from './operations'
+import type { OperationRegistry, ToolInvocation } from './operations'
 
 // Camera Capture service: single, fixed-count, and loop acquisitions of one camera, run on the server through
 // the toolkit's CameraCapturer under the process-wide operation registry, so the camera stays held for the
@@ -36,6 +37,12 @@ import type { OperationRegistry } from './operations'
 //
 // A capture never analyzes or solves its frames: star detection and plate solving are run on demand on the frames the
 // Images workspace shows, and Auto Focus measures its own frames.
+//
+// Every start carries a token the tab generates for it, so a repeated request answers the session it started instead of
+// exposing again. A capture is stopped or aborted by its session id, so a late command never reaches the session that
+// replaced it. A service composing tools inside the process admits a capture (admit) under the ToolInvocation of the
+// reservation it holds, may hold each next frame back with a gate of its own, and awaits the final session of the exact
+// capture it admitted, which stays known after a newer session of the camera replaced it.
 
 // Directory saved frames go into when a request names none, and the published path of previewed frames.
 export const DEFAULT_CAPTURES_DIR = join(DEFAULT_DATA_DIRECTORY, 'captures')
@@ -87,13 +94,52 @@ export interface CaptureSnoop {
 	readonly rotator?: string
 }
 
-// Body of POST /api/connections/:id/cameras/:deviceId/capture. exposureTime and delay are in seconds.
+// Request of a capture, as its session keeps it. exposureTime and delay are in seconds.
 export interface CaptureRequest extends CaptureSettings {
 	// Destination of the frames.
 	readonly output: CaptureOutput
 	// Devices snooped into the frame headers; absent snoops none.
 	readonly snoop?: CaptureSnoop
 }
+
+// Body of POST /api/connections/:id/cameras/:deviceId/capture: a capture request and the token of the request.
+export interface CaptureStartRequest extends CaptureRequest, CommandRequest {}
+
+// Body of POST /api/connections/:id/cameras/:deviceId/capture/stop and .../abort: the session to stop or abort.
+export interface CaptureControlRequest {
+	// Id of the capture session, which must be the running session of the camera.
+	readonly sessionId: string
+}
+
+// Options of a capture admitted inside the process.
+export interface CaptureAdmissionOptions {
+	// Reservation the capture runs inside; absent, the camera must be available, as for a manual capture.
+	readonly invocation?: ToolInvocation
+	// Awaited before each frame is prepared, after the gate of the frame sink, never before the exposure in flight. It
+	// receives the generation the frame opens and a signal aborted by a stop, an abort, or a failure, and must settle when
+	// it aborts. Resolving undefined lets the frame go; a failure, or a rejection (commandFailed), ends the capture with it.
+	readonly beforeFrame?: CameraFrameGate
+}
+
+// Capture admitted inside the process: its identity, its start, and its end.
+export interface CaptureAdmitted {
+	readonly ok: true
+	// Id of the capture session, repeated by its capture events.
+	readonly sessionId: string
+	// Id of the operation holding the camera, repeated by its operation:updated events.
+	readonly operationId: string
+	// Whether the token had already started the capture, which this request did not start again.
+	readonly repeated: boolean
+	// Settles once the camera was configured and the first exposure was dispatched, or with why it was not.
+	readonly started: Promise<OperationResult<void>>
+	// Final session once the capture ended and its cleanup released the camera: phase completed or stopped (with
+	// Preview + Save, saved equals captured, since a failed write fails the capture), aborted, or failed with its
+	// reason and error. Never rejects.
+	readonly ended: Promise<CaptureSession>
+}
+
+// Outcome of asking for a capture inside the process: the capture admitted, or why it was refused.
+export type CaptureAdmission = CaptureAdmitted | CommandRefusal
 
 // Response of an accepted capture.
 export interface CaptureStartResponse {
@@ -277,12 +323,18 @@ interface PendingFrame {
 	readonly path?: string
 }
 
-// Running capture of one camera, with what the service needs to follow it.
+// Capture of one camera, with what the service needs to follow it while it runs and to answer it once it ended.
 interface ActiveCapture {
 	// Published state, replaced on every change.
 	session: CaptureSession
-	// Toolkit capture that is running.
-	handle?: CameraCaptureHandle
+	// Interruptions of the toolkit capture, once it started.
+	handle?: { readonly stop: VoidFunction; readonly cancel: () => Promise<void> }
+	// Admission answered to the request that started it, once it started.
+	admitted?: CaptureAdmitted
+	// Resolved with the final session once the capture ended.
+	readonly ended: PromiseWithResolvers<CaptureSession>
+	// Gate of the caller that admitted it, awaited before each frame after the gate of the frame sink.
+	readonly beforeFrame?: CameraFrameGate
 	// Camera taking the frames.
 	readonly camera: Camera
 	// Latest frames of the session, by generation; older ones are forgotten (see FRAME_HISTORY).
@@ -365,6 +417,10 @@ export function exposureProgressListener(report: (exposure: CameraCaptureTime | 
 	}
 }
 
+// Captures remembered by operation id after they ended, so a repeated token and the caller that admitted one still find
+// it once a newer session of the camera replaced it; the oldest are forgotten, as command tokens are.
+const MAX_RECENT_CAPTURES = 256
+
 // Returns a session with fields replaced.
 function changed(session: CaptureSession, patch: Partial<CaptureSession>): CaptureSession {
 	return { ...session, ...patch }
@@ -376,6 +432,8 @@ export class CameraCaptures implements Disposable {
 	readonly #capturer: CameraCapturer
 	// Running capture of each camera, by camera resource key.
 	readonly #active = new Map<string, ActiveCapture>()
+	// Recent captures, running or ended, by operation id, oldest first (see MAX_RECENT_CAPTURES).
+	readonly #recent = new Map<string, ActiveCapture>()
 	// Latest session of each camera, running or ended, by camera resource key.
 	readonly #sessions = new Map<string, CaptureSession>()
 	// Preview state of each camera, by camera resource key.
@@ -436,19 +494,21 @@ export class CameraCaptures implements Disposable {
 		}
 	}
 
-	// Awaits the gate of the frame sink before a frame of a capture is prepared. Resolves at once without a sink,
-	// and never fails the capture: a failing gate lets the frame go.
-	async #gate(capture: ActiveCapture, signal: AbortSignal) {
+	// Awaits the gate of the frame sink, then the gate of the caller that admitted the capture, before a frame of a
+	// capture is prepared. The sink never fails the capture: a failing sink gate lets the frame go. The caller's gate
+	// answers for the frame (see CaptureAdmissionOptions.beforeFrame).
+	async #gate(capture: ActiveCapture, frame: CameraFramePreparation, signal: AbortSignal) {
 		const sink = this.#sink
-		if (!sink) return undefined
 
-		try {
-			await sink.gate(capture.session.connectionId, capture.session.deviceId, signal)
-		} catch (error) {
-			if (!signal.aborted) console.error('the capture frame gate failed:', error)
+		if (sink) {
+			try {
+				await sink.gate(capture.session.connectionId, capture.session.deviceId, signal)
+			} catch (error) {
+				if (!signal.aborted) console.error('the capture frame gate failed:', error)
+			}
 		}
 
-		return undefined
+		return capture.beforeFrame && !signal.aborted ? await capture.beforeFrame(frame, signal) : undefined
 	}
 
 	// Returns the latest session and previewed frame of every camera.
@@ -465,17 +525,32 @@ export class CameraCaptures implements Disposable {
 		return capabilities ? Response.json(capabilities) : errorResponse('Camera not found', 404, 'notFound')
 	}
 
-	// Starts a capture. Responds 202 with CaptureStartResponse once it is accepted; its progress and outcome
-	// arrive as capture:updated events. Responds 404 for an unknown camera, 409 when it is disconnected or
-	// held by another operation, such as a capture started by another tab.
-	start(connectionId: string, deviceId: string, request: CaptureRequest): Response {
+	// Starts a capture. Responds 202 with CaptureStartResponse once it is accepted (a repeated token answers the session
+	// it started); its progress and outcome arrive as capture:updated events. Responds 404 for an unknown camera, 409
+	// when it is disconnected or held by another operation, such as a capture started by another tab.
+	start(connectionId: string, deviceId: string, request: CaptureStartRequest): Response {
+		const admitted = this.admit(connectionId, deviceId, request)
+		return admitted.ok ? Response.json({ sessionId: admitted.sessionId, operationId: admitted.operationId } satisfies CaptureStartResponse, { status: 202 }) : refusalResponse(admitted)
+	}
+
+	// Admits a capture, under the reservation of options.invocation when given, and returns its identity and end, or why
+	// it was refused, as start answers it. A repeated token answers the capture it started, running or ended, while it is
+	// remembered.
+	admit(connectionId: string, deviceId: string, { token, ...request }: CaptureStartRequest, options: CaptureAdmissionOptions = {}): CaptureAdmission {
+		const known = this.operations.repeated(token)
+
+		if (known) {
+			const admitted = this.#recent.get(known.record.operationId)?.admitted
+			return admitted ? { ...admitted, repeated: true } : refusal('The capture of this request is no longer known', 404, 'notFound')
+		}
+
 		const client = this.client(connectionId)
 		const camera = client && this.devices.camera(client, deviceId)
-		if (!camera) return errorResponse('Camera not found', 404, 'notFound')
-		if (!camera.connected) return errorResponse('The camera is disconnected', 409, 'disconnected')
+		if (!camera) return refusal('Camera not found', 404, 'notFound')
+		if (!camera.connected) return refusal('The camera is disconnected', 409, 'disconnected')
 
 		const key = resourceKey(camera)
-		if (this.#active.has(key) || this.operations.arbiter.availability(key) !== 'available') return errorResponse('The camera is busy', 409, 'busy')
+		if (this.#active.has(key) || !this.operations.admits(camera, options.invocation)) return refusal('The camera is busy', 409, 'busy')
 
 		const saving = request.output.mode === 'preview-save'
 		const start: CameraCaptureStart = {
@@ -519,18 +594,23 @@ export class CameraCaptures implements Disposable {
 			camera,
 			frames: new Map(),
 			generation: 0,
+			ended: Promise.withResolvers(),
+			beforeFrame: options.beforeFrame,
 		}
 
 		this.#active.set(key, capture)
 
-		const handle = this.#capturer.start(this.operations.coordinator, camera, start, {
+		const handle = this.#capturer.start(this.operations.scope(options.invocation), camera, start, {
 			listener: (event, path) => this.#reported(capture, event, path),
 			framePath: (frame) => this.#framePath(capture, frame),
-			beforeFrame: (_, signal) => this.#gate(capture, signal),
+			beforeFrame: (frame, signal) => this.#gate(capture, frame, signal),
 		})
 
-		const { operationId } = this.operations.track('camera.capture', [{ connectionId, deviceId }], handle.result)
+		const { operationId } = this.operations.admit('camera.capture', [{ connectionId, deviceId }], token, () => handle.result).record
 		capture.handle = handle
+		capture.admitted = { ok: true, sessionId: handle.id, operationId, repeated: false, started: handle.started, ended: capture.ended.promise }
+		this.#recent.set(operationId, capture)
+		if (this.#recent.size > MAX_RECENT_CAPTURES) this.#recent.delete(this.#recent.keys().next().value!)
 		this.#update(capture, { sessionId: handle.id, operationId })
 
 		void handle.result.then((result) => {
@@ -540,32 +620,50 @@ export class CameraCaptures implements Disposable {
 
 			if (result.ok) this.#update(capture, { phase: capture.session.stopping ? 'stopped' : 'completed', endedAt: Date.now(), exposure: undefined, delay: undefined })
 			else this.#update(capture, { phase: result.reason === 'aborted' ? 'aborted' : 'failed', reason: result.reason, error: result.error, endedAt: Date.now(), exposure: undefined, delay: undefined })
+			capture.ended.resolve(capture.session)
 		})
 
-		return Response.json({ sessionId: handle.id, operationId } satisfies CaptureStartResponse, { status: 202 })
+		return capture.admitted
 	}
 
-	// Stops the capture of a camera after the exposure in flight, which is still saved. Responds 204 once
-	// requested (the end arrives as a capture:updated event) and 404 when the camera captures nothing.
-	stop(connectionId: string, deviceId: string): Response {
-		const capture = this.#running(connectionId, deviceId)
-		if (!capture?.handle) return errorResponse('No capture is running on this camera', 404, 'notFound')
+	// Stops the capture of a camera after the exposure in flight, which is still saved, when sessionId is its running
+	// session. Responds 204 once requested (the end arrives as a capture:updated event), and 404 when the camera
+	// captures nothing or runs another session, which a late stop must not reach.
+	stop(connectionId: string, deviceId: string, { sessionId }: CaptureControlRequest): Response {
+		if (this.#running(connectionId, deviceId)?.session.sessionId !== sessionId) return errorResponse('No capture with this id is running on this camera', 404, 'notFound')
+		this.stopSession(sessionId)
+		return new Response(null, { status: 204 })
+	}
+
+	// Aborts the capture of a camera when sessionId is its running session: the exposure in flight is aborted on the
+	// driver and its frame lost. Resolves once the camera is idle and released. Responds 204, 404 when the camera
+	// captures nothing or runs another session, and 409 when its driver cannot abort an exposure.
+	async abort(connectionId: string, deviceId: string, { sessionId }: CaptureControlRequest): Promise<Response> {
+		if (this.#running(connectionId, deviceId)?.session.sessionId !== sessionId) return errorResponse('No capture with this id is running on this camera', 404, 'notFound')
+		const aborted = await this.abortSession(sessionId)
+		return aborted === 'unsupported' ? errorResponse('The camera cannot abort an exposure', 409, 'unsupported') : new Response(null, { status: 204 })
+	}
+
+	// Stops a running capture session after the exposure in flight, which is still saved. Returns whether the session
+	// was running; an ended or unknown one is left as it is.
+	stopSession(sessionId: string): boolean {
+		const capture = this.#session(sessionId)
+		if (!capture?.handle) return false
 
 		capture.handle.stop()
 		if (!capture.session.stopping) this.#update(capture, { stopping: true })
-		return new Response(null, { status: 204 })
+		return true
 	}
 
-	// Aborts the capture of a camera: the exposure in flight is aborted on the driver and its frame lost.
-	// Resolves once the camera is idle and released. Responds 204, 404 when the camera captures nothing, and
-	// 409 when its driver cannot abort an exposure.
-	async abort(connectionId: string, deviceId: string): Promise<Response> {
-		const capture = this.#running(connectionId, deviceId)
-		if (!capture?.handle) return errorResponse('No capture is running on this camera', 404, 'notFound')
-		if (!capture.camera.canAbort) return errorResponse('The camera cannot abort an exposure', 409, 'unsupported')
+	// Aborts a running capture session, resolving once the camera is idle and released: aborted, notRunning for an
+	// ended or unknown session, or unsupported when the driver cannot abort an exposure.
+	async abortSession(sessionId: string): Promise<'aborted' | 'notRunning' | 'unsupported'> {
+		const capture = this.#session(sessionId)
+		if (!capture?.handle) return 'notRunning'
+		if (!capture.camera.canAbort) return 'unsupported'
 
 		await capture.handle.cancel()
-		return new Response(null, { status: 204 })
+		return 'aborted'
 	}
 
 	// Returns the running capture of a camera, if any.
@@ -573,6 +671,12 @@ export class CameraCaptures implements Disposable {
 		const client = this.client(connectionId)
 		const camera = client && this.devices.camera(client, deviceId)
 		return camera && this.#active.get(resourceKey(camera))
+	}
+
+	// Returns the running capture of a session, if any.
+	#session(sessionId: string): ActiveCapture | undefined {
+		for (const capture of this.#active.values()) if (capture.session.sessionId === sessionId) return capture
+		return undefined
 	}
 
 	// Publishes a changed session.
@@ -748,15 +852,15 @@ export function createCaptureRoutes(captures: CameraCaptures) {
 		},
 		'/api/connections/:id/cameras/:deviceId/capture': {
 			// Starts a capture; its progress and outcome arrive as capture:updated and operation:updated events.
-			POST: async (req) => captures.start(req.params.id, req.params.deviceId, (await req.json()) as CaptureRequest),
+			POST: async (req) => captures.start(req.params.id, req.params.deviceId, (await req.json()) as CaptureStartRequest),
 		},
 		'/api/connections/:id/cameras/:deviceId/capture/stop': {
-			// Stops the capture of a camera after the exposure in flight.
-			POST: (req) => captures.stop(req.params.id, req.params.deviceId),
+			// Stops the running capture session of a camera after the exposure in flight.
+			POST: async (req) => captures.stop(req.params.id, req.params.deviceId, (await req.json()) as CaptureControlRequest),
 		},
 		'/api/connections/:id/cameras/:deviceId/capture/abort': {
-			// Aborts the exposure in flight and ends the capture of a camera.
-			POST: (req) => captures.abort(req.params.id, req.params.deviceId),
+			// Aborts the exposure in flight and ends the running capture session of a camera.
+			POST: async (req) => captures.abort(req.params.id, req.params.deviceId, (await req.json()) as CaptureControlRequest),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

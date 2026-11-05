@@ -12,7 +12,7 @@ import { meter } from 'nebulosa/src/math/units/distance'
 import type { DarvImageAnalysisResult, DarvTrailMeasurement } from 'nebulosa/src/observation/alignment/darv.analysis'
 import type { DarvRunTiming } from 'nebulosa/src/observation/alignment/darv.runner'
 import { CaptureFrameRegistry } from './captureframes'
-import { CameraCaptures, type CaptureRequest } from './captures'
+import { CameraCaptures, type CaptureStartRequest } from './captures'
 import { ConnectionManager } from './connection'
 import { type DarvEvent, type DarvMeasurementRequest, type DarvRequest, type DarvSession, DarvSessions } from './darv'
 import { type DarvAnalysis, darvAnalysis, DarvAnalyzer } from './darv.analysis'
@@ -84,8 +84,8 @@ function fakeAnalyzer() {
 }
 
 // A small preview-only capture request.
-function captureRequest(): CaptureRequest {
-	return { exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-only', format: 'FITS' } }
+function captureRequest(): CaptureStartRequest {
+	return { token: crypto.randomUUID(), exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-only', format: 'FITS' } }
 }
 
 async function setup() {

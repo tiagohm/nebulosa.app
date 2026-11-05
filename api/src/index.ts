@@ -101,7 +101,25 @@ export type { CalibrationJobErrorCode, CalibrationJobState, CalibrationJobSummar
 export type { CalibrationMaster, CalibrationMasterDiagnostics, CalibrationSource, CalibrationSourceSummary, MasterCalibrationState, Page, ProductStatus, SourceFormat, SourceOrigin, SourceStatus } from './calibrationlibrary.store'
 export type { IntegrationProgress } from './calibrationlibrary.analysis'
 export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'
-export type { CaptureEvent, CaptureFormat, CaptureFrame, CaptureOutput, CaptureOutputMode, CapturePhase, CaptureRequest, CaptureSession, CaptureSettings, CaptureSnapshot, CaptureSnoop, CaptureStartResponse } from './captures'
+export type {
+	CaptureEvent,
+	CaptureFormat,
+	CaptureAdmission,
+	CaptureAdmissionOptions,
+	CaptureAdmitted,
+	CaptureControlRequest,
+	CaptureFrame,
+	CaptureOutput,
+	CaptureOutputMode,
+	CapturePhase,
+	CaptureRequest,
+	CaptureSession,
+	CaptureSettings,
+	CaptureStartRequest,
+	CaptureSnapshot,
+	CaptureSnoop,
+	CaptureStartResponse,
+} from './captures'
 export type {
 	CaptureFrameAvailability,
 	CaptureFrameErrorCode,

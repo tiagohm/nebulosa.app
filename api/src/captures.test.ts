@@ -2,9 +2,11 @@ import { afterAll, afterEach, expect, spyOn, test } from 'bun:test'
 import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import type { Camera } from 'nebulosa/src/devices/indi/device'
+import { failedOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
-import { CameraCaptures, type CaptureEvent, type CaptureFrame, type CaptureFrameSink, type CaptureRequest, type CaptureSession, frameName, sanitizeFileName } from './captures'
+import { CameraCaptures, type CaptureEvent, type CaptureFrame, type CaptureFrameSink, type CaptureAdmissionOptions, type CaptureSession, type CaptureStartRequest, frameName, sanitizeFileName } from './captures'
 import { ConnectionManager } from './connection'
 import { AppDatabase } from './database'
 import type { CameraCapabilities } from './devices'
@@ -29,8 +31,27 @@ async function waitUntil(condition: () => boolean, timeout = 10000) {
 }
 
 // A capture request of small, short subframes, with fields replaced.
-function request(patch: Partial<CaptureRequest> = {}): CaptureRequest {
-	return { exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-save', directory: mkdtempSync(join(root, 'frames-')), format: 'FITS' }, ...patch }
+function request(patch: Partial<CaptureStartRequest> = {}): CaptureStartRequest {
+	return {
+		token: crypto.randomUUID(),
+		exposureMode: 'single',
+		count: 1,
+		delay: 0,
+		exposureTime: 0.05,
+		frameType: 'LIGHT',
+		gain: 0,
+		offset: 0,
+		binX: 1,
+		binY: 1,
+		subframe: true,
+		x: 0,
+		y: 0,
+		width: 32,
+		height: 32,
+		frameFormat: '',
+		output: { mode: 'preview-save', directory: mkdtempSync(join(root, 'frames-')), format: 'FITS' },
+		...patch,
+	}
 }
 
 async function setup() {
@@ -141,13 +162,13 @@ test('stopping a loop during its delay ends it at once with the frames taken', a
 	await waitUntil(() => session()?.phase === 'waiting' && session()!.saved === 1)
 
 	const stoppedAt = performance.now()
-	expect(captures.stop(id, cameraId).status).toBe(204)
+	expect(captures.stop(id, cameraId, { sessionId: session()!.sessionId }).status).toBe(204)
 	await waitUntil(ended, 3000)
 
 	expect(performance.now() - stoppedAt).toBeLessThan(3000)
 	expect(session()).toMatchObject({ phase: 'stopped', stopping: true, captured: 1, saved: 1 })
 	expect(session()!.count).toBeUndefined()
-	expect(captures.stop(id, cameraId).status).toBe(404)
+	expect(captures.stop(id, cameraId, { sessionId: session()!.sessionId }).status).toBe(404)
 })
 
 test('preview only writes no file', async () => {
@@ -204,7 +225,7 @@ test('a busy camera refuses a second capture, and abort ends the first', async (
 	expect(second.status).toBe(409)
 	expect(await second.json()).toEqual({ error: 'The camera is busy', code: 'busy' })
 
-	expect((await captures.abort(id, cameraId)).status).toBe(204)
+	expect((await captures.abort(id, cameraId, { sessionId: session()!.sessionId })).status).toBe(204)
 	await waitUntil(ended)
 	expect(session()).toMatchObject({ phase: 'aborted', reason: 'aborted', captured: 0 })
 })
@@ -224,8 +245,8 @@ test('an unknown camera is not found', async () => {
 	const { id, captures } = await setup()
 
 	expect(captures.start(id, 'missing', request()).status).toBe(404)
-	expect(captures.stop(id, 'missing').status).toBe(404)
-	expect((await captures.abort(id, 'missing')).status).toBe(404)
+	expect(captures.stop(id, 'missing', { sessionId: 'none' }).status).toBe(404)
+	expect((await captures.abort(id, 'missing', { sessionId: 'none' })).status).toBe(404)
 	expect(captures.capabilities(id, 'missing').status).toBe(404)
 })
 
@@ -265,12 +286,13 @@ test('sanitizes a file name for every platform', () => {
 test('mounts the capture routes', async () => {
 	const { routes } = await import('./index')
 	type Handler = (req: Request & { params: Record<string, string> }) => Response | Promise<Response>
-	const call = (route: keyof typeof routes, method: 'GET' | 'POST') => Promise.resolve((routes[route] as Record<string, Handler>)[method](Object.assign(new Request('http://localhost/', { method }), { params: { id: 'closed', deviceId: 'camera' } })))
+	const call = (route: keyof typeof routes, method: 'GET' | 'POST', body?: unknown) =>
+		Promise.resolve((routes[route] as Record<string, Handler>)[method](Object.assign(new Request('http://localhost/', { method, body: body === undefined ? undefined : JSON.stringify(body) }), { params: { id: 'closed', deviceId: 'camera' } })))
 
 	expect(await (await call('/api/captures', 'GET')).json()).toEqual({ sessions: [], frames: [] })
 	expect((await call('/api/connections/:id/cameras/:deviceId', 'GET')).status).toBe(404)
-	expect((await call('/api/connections/:id/cameras/:deviceId/capture/stop', 'POST')).status).toBe(404)
-	expect((await call('/api/connections/:id/cameras/:deviceId/capture/abort', 'POST')).status).toBe(404)
+	expect((await call('/api/connections/:id/cameras/:deviceId/capture/stop', 'POST', { sessionId: 'none' })).status).toBe(404)
+	expect((await call('/api/connections/:id/cameras/:deviceId/capture/abort', 'POST', { sessionId: 'none' })).status).toBe(404)
 })
 
 // A frame sink that records every call, whose gate holds every frame from hold on until released.
@@ -373,7 +395,7 @@ test('the gate of a frame sink holds the next exposure until released, and a sto
 	await waitUntil(() => session()!.captured === 2)
 	await waitUntil(() => calls.filter(([kind]) => kind === 'held').length === 2)
 
-	expect(captures.stop(id, cameraId).status).toBe(204)
+	expect(captures.stop(id, cameraId, { sessionId: session()!.sessionId }).status).toBe(204)
 	await waitUntil(ended, 3000)
 	expect(session()).toMatchObject({ phase: 'stopped', captured: 2 })
 })
@@ -386,7 +408,7 @@ test('an abort releases the gate of a frame sink', async () => {
 	captures.start(id, cameraId, request({ exposureMode: 'loop', output: { mode: 'preview-only', format: 'FITS' } }))
 	await waitUntil(() => calls.some(([kind]) => kind === 'held'))
 
-	expect((await captures.abort(id, cameraId)).status).toBe(204)
+	expect((await captures.abort(id, cameraId, { sessionId: session()!.sessionId })).status).toBe(204)
 	await waitUntil(ended, 3000)
 	expect(session()).toMatchObject({ phase: 'aborted', captured: 1 })
 })
@@ -412,4 +434,112 @@ test('a failing frame sink never fails the capture, and a detached one receives 
 	captures.start(id, cameraId, request({ output: { mode: 'preview-only', format: 'FITS' } }))
 	await waitUntil(() => session()?.captured === 1 && ended())
 	expect(calls).toEqual([])
+})
+
+// Reserves the camera for a caller composing tools, released after the test.
+function reserve(operations: OperationRegistry, camera: Camera) {
+	const reserved = operations.arbiter.reserve({ id: 'composition', kind: 'test' }, [{ key: resourceKey(camera), device: camera }])
+	if (!reserved.ok) throw new Error('the camera could not be reserved')
+	disposables.push({ [Symbol.dispose]: () => reserved.reservation.release() })
+	return { reservation: reserved.reservation }
+}
+
+// Admits a capture and fails the test when it is refused.
+function admitted(captures: CameraCaptures, id: string, cameraId: string, capture: CaptureStartRequest, options?: CaptureAdmissionOptions) {
+	const admission = captures.admit(id, cameraId, capture, options)
+	if (!admission.ok) throw new Error(admission.error)
+	return admission
+}
+
+test('a capture admitted under a reservation runs while a manual capture is refused', async () => {
+	const { id, cameraId, captures, operations, camera } = await setup()
+	const invocation = reserve(operations, camera)
+
+	expect(captures.start(id, cameraId, request()).status).toBe(409)
+	const admission = admitted(captures, id, cameraId, request(), { invocation })
+	expect(await admission.started).toMatchObject({ ok: true })
+	expect(await admission.ended).toMatchObject({ sessionId: admission.sessionId, phase: 'completed', captured: 1, saved: 1 })
+	expect(operations.arbiter.availability(resourceKey(camera))).toBe('reserved')
+	expect(captures.start(id, cameraId, request()).status).toBe(409)
+})
+
+test('a repeated token answers the capture it started, and another token is refused while it runs', async () => {
+	const { id, cameraId, captures, operationEvents } = await setup()
+	const capture = request({ exposureTime: 1 })
+
+	const first = admitted(captures, id, cameraId, capture)
+	const repeated = captures.start(id, cameraId, capture)
+	expect(repeated.status).toBe(202)
+	expect(await repeated.json()).toEqual({ sessionId: first.sessionId, operationId: first.operationId })
+	expect(captures.admit(id, cameraId, capture)).toMatchObject({ ok: true, sessionId: first.sessionId, repeated: true })
+	expect(captures.admit(id, cameraId, request())).toMatchObject({ ok: false, status: 409, code: 'busy' })
+
+	expect(await first.ended).toMatchObject({ phase: 'completed', captured: 1 })
+	expect(operationEvents.filter((event) => event.operation.kind === 'camera.capture' && event.operation.state === 'running')).toHaveLength(1)
+})
+
+test('a late stop of an ended session never reaches the session that replaced it, which keeps the end of the first', async () => {
+	const { id, cameraId, captures, session } = await setup()
+	const capture = request()
+
+	const first = admitted(captures, id, cameraId, capture)
+	const ended = await first.ended
+	const second = admitted(captures, id, cameraId, request({ exposureMode: 'loop', output: { mode: 'preview-only', format: 'FITS' } }))
+	await waitUntil(() => session()?.sessionId === second.sessionId && session()!.captured >= 1)
+
+	expect(captures.stopSession(first.sessionId)).toBeFalse()
+	expect(captures.stop(id, cameraId, { sessionId: first.sessionId }).status).toBe(404)
+	expect(await captures.abortSession(first.sessionId)).toBe('notRunning')
+	expect(session()).toMatchObject({ sessionId: second.sessionId, stopping: false })
+
+	expect(await first.ended).toBe(ended)
+	expect(captures.admit(id, cameraId, capture)).toMatchObject({ ok: true, sessionId: first.sessionId, repeated: true })
+	expect(await captures.abortSession(second.sessionId)).toBe('aborted')
+	expect(await second.ended).toMatchObject({ phase: 'aborted' })
+})
+
+test('a stop during an exposure keeps its frame, and a failed write ends the capture as failed', async () => {
+	const { id, cameraId, captures, session } = await setup()
+
+	const stopped = admitted(captures, id, cameraId, request({ exposureMode: 'loop', exposureTime: 1 }))
+	await waitUntil(() => session()?.phase === 'exposing')
+	expect(captures.stopSession(stopped.sessionId)).toBeTrue()
+	expect(await stopped.ended).toMatchObject({ phase: 'stopped', captured: 1, saved: 1 })
+
+	const blocker = join(mkdtempSync(join(root, 'admit-blocked-')), 'not-a-directory')
+	writeFileSync(blocker, 'a file')
+	const failed = admitted(captures, id, cameraId, request({ output: { mode: 'preview-save', directory: join(blocker, 'frames'), format: 'FITS' } }))
+	expect(await failed.ended).toMatchObject({ phase: 'failed', reason: 'commandFailed', captured: 1, saved: 0 })
+})
+
+test('the gate of the caller holds each next frame, and its failure ends the capture', async () => {
+	const { id, cameraId, captures, session } = await setup()
+	const generations: number[] = []
+	let release: VoidFunction | undefined
+
+	const held = admitted(captures, id, cameraId, request({ exposureMode: 'loop', output: { mode: 'preview-only', format: 'FITS' } }), {
+		beforeFrame: ({ generation }, signal) => {
+			generations.push(generation)
+			if (generation < 2) return Promise.resolve(undefined)
+			const { promise, resolve } = Promise.withResolvers<undefined>()
+			release = () => resolve(undefined)
+			signal.addEventListener('abort', () => resolve(undefined), { once: true })
+			return promise
+		},
+	})
+
+	await waitUntil(() => release !== undefined)
+	await Bun.sleep(300)
+	expect(session()).toMatchObject({ sessionId: held.sessionId, captured: 1 })
+
+	release!()
+	await waitUntil(() => generations.length === 3)
+	expect(session()!.captured).toBe(2)
+	expect(captures.stopSession(held.sessionId)).toBeTrue()
+	expect(await held.ended).toMatchObject({ phase: 'stopped', captured: 2 })
+
+	const refused = admitted(captures, id, cameraId, request({ exposureMode: 'fixed', count: 3, output: { mode: 'preview-only', format: 'FITS' } }), {
+		beforeFrame: ({ generation }) => Promise.resolve(generation === 2 ? failedOperationResult('unexpectedState', 'not now') : undefined),
+	})
+	expect(await refused.ended).toMatchObject({ phase: 'failed', reason: 'unexpectedState', error: 'not now', captured: 1 })
 })

@@ -505,8 +505,8 @@ describe('interruption of an operation', () => {
 		const camera = { connectionId: 'A', deviceId: 'c1' }
 		const abortable = input()
 		abortable.control.states.camera.c1 = { id: 'c1', connectionId: 'A', canAbort: true } as (typeof abortable.control.states.camera)[string]
-		expect(operationInterruption(running, { ...abortable, captures: { sessions: { 'A:c1': session } } })).toEqual({ type: 'capture', camera, abort: true })
-		expect(operationInterruption(running, { ...input(), captures: { sessions: { 'A:c1': session } } })).toEqual({ type: 'capture', camera, abort: false })
+		expect(operationInterruption(running, { ...abortable, captures: { sessions: { 'A:c1': session } } })).toEqual({ type: 'capture', camera, sessionId: session.sessionId, abort: true })
+		expect(operationInterruption(running, { ...input(), captures: { sessions: { 'A:c1': session } } })).toEqual({ type: 'capture', camera, sessionId: session.sessionId, abort: false })
 	})
 
 	test('a session of a tool is found by its exact operation', () => {

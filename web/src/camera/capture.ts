@@ -1,4 +1,5 @@
-import type { CameraCapabilities, CaptureFrame, CaptureRequest, CaptureSession, CaptureSnapshot, CaptureSnoop, ServerEvent } from 'api'
+import type { CameraCapabilities, CaptureControlRequest, CaptureFrame, CaptureRequest, CaptureSession, CaptureSnapshot, CaptureSnoop, CaptureStartRequest, ServerEvent } from 'api'
+import { nanoid } from 'nanoid'
 import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
 import { proxy } from 'valtio'
 import type { EquipmentSetup } from '../equipment/roles'
@@ -115,19 +116,22 @@ async function command(state: CaptureRuntime, connectionId: string, deviceId: st
 	}
 }
 
-// Starts a capture on a camera; its progress arrives as events.
+// Starts a capture on a camera, with a token of its own so a repeated request starts nothing more; its progress arrives
+// as events.
 export function startCapture(state: CaptureRuntime, connectionId: string, deviceId: string, capture: CaptureRequest, request: typeof fetch = fetch) {
-	return command(state, connectionId, deviceId, 'capture', capture, 'Unable to start the capture.', request)
+	return command(state, connectionId, deviceId, 'capture', { ...capture, token: nanoid() } satisfies CaptureStartRequest, 'Unable to start the capture.', request)
 }
 
-// Stops the capture of a camera after the exposure in flight.
-export function stopCapture(state: CaptureRuntime, connectionId: string, deviceId: string, request: typeof fetch = fetch) {
-	return command(state, connectionId, deviceId, 'capture/stop', undefined, 'Unable to stop the capture.', request)
+// Stops the capture session sessionId of a camera after the exposure in flight; a session that ended or that a newer one
+// replaced is left alone.
+export function stopCapture(state: CaptureRuntime, connectionId: string, deviceId: string, sessionId: string, request: typeof fetch = fetch) {
+	return command(state, connectionId, deviceId, 'capture/stop', { sessionId } satisfies CaptureControlRequest, 'Unable to stop the capture.', request)
 }
 
-// Aborts the exposure in flight and the capture of a camera.
-export function abortCapture(state: CaptureRuntime, connectionId: string, deviceId: string, request: typeof fetch = fetch) {
-	return command(state, connectionId, deviceId, 'capture/abort', undefined, 'Unable to abort the capture.', request)
+// Aborts the exposure in flight and the capture session sessionId of a camera; a session that ended or that a newer one
+// replaced is left alone.
+export function abortCapture(state: CaptureRuntime, connectionId: string, deviceId: string, sessionId: string, request: typeof fetch = fetch) {
+	return command(state, connectionId, deviceId, 'capture/abort', { sessionId } satisfies CaptureControlRequest, 'Unable to abort the capture.', request)
 }
 
 // Returns a number limited to [min, max]; a bound that is undefined does not limit it.

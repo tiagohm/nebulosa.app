@@ -7,7 +7,7 @@ import { type OperationContext, type OperationResult, successfulOperationResult 
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { writeFits } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSink } from 'nebulosa/src/io/io'
-import { deg } from 'nebulosa/src/math/units/angle'
+import { deg, hour } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationDiagnostics } from 'nebulosa/src/observation/guiding/calibrator'
 import type { StarTracker } from 'nebulosa/src/observation/guiding/tracker.star'
 import type { CalibrationMasterDetail, CalibrationMasterSummary } from './calibrationlibrary'
@@ -15,7 +15,7 @@ import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
 import { ConnectionManager } from './connection'
 import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
-import { type GuidingDarkLibrary, calibrationProgressOf, GUIDING_REGION_RADIUS, GUIDING_REGION_STARS, type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest, guidingRegions } from './guiding'
+import { type GuidingDarkLibrary, calibrationProgressOf, GUIDING_REGION_RADIUS, GUIDING_REGION_STARS, type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest, type GuidingTelemetrySample, guidingRegions } from './guiding'
 import { GuidingCalibrationStore } from './guidingcalibration.store'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry, type ToolInvocation } from './operations'
@@ -125,12 +125,13 @@ function guided(context: Setup, patch: Partial<GuidingStartRequest> = {}): Parti
 	}
 }
 
-// Points the mount at declination +20° (it starts at the pole, where an RA pulse moves nothing) and has it track at a
+// Points the mount at RA 6h, declination +20° (it starts at the pole, where an RA pulse moves nothing), a field of stars
+// that does not depend on the time of day, and has it track at a
 // guide rate of 1× sidereal, so a 2 s pulse moves the catalog stars the camera renders through its 50 mm lens by more
 // than a pixel, and turns off the sky noise of the camera, so the detections are the stars.
 async function trackStars(context: Setup) {
 	const { mounts } = context.manager.devices
-	mounts.syncTo(context.mount, context.mount.equatorialCoordinate.rightAscension, deg(20))
+	mounts.syncTo(context.mount, hour(6), deg(20))
 	await waitUntil(() => Math.abs(context.mount.equatorialCoordinate.declination - deg(20)) < deg(0.1))
 	mounts.tracking(context.mount, true)
 	context.client.sendNumber({ device: context.mount.name, name: 'GUIDE_RATE', elements: { GUIDE_RATE_WE: 1, GUIDE_RATE_NS: 1 } })
@@ -561,6 +562,51 @@ describe('guiding', () => {
 		expect(derived.decRate).toBeCloseTo(solved.decRate, 9)
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
 	}, 180000)
+
+	test('end to end: calibrate and save, restore in a new session, move the mount, guide on with the derived calibration', async () => {
+		const store = new GuidingCalibrationStore(AppDatabase.memory())
+		const context = await setup(store)
+		await trackStars(context)
+		// The simulated field moves by more than a pixel per guide pulse, so the settles are generous.
+		const settle = { pixels: 3, time: 1, timeout: 60 }
+		const backlash = { guider: { decBacklashCompensation: { mode: 'adaptive', initialMs: 0, maxCompensationMs: 1000, adaptationRate: 0.3 } } } as const
+
+		const first = await start(context, guided(context, backlash))
+		await waitUntil(() => context.guiding.selectTarget(first.sessionId, {}).status === 200)
+		expect(context.guiding.startGuiding(first.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle }).status).toBe(202)
+		await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
+		expect((await context.guiding.stop(first.sessionId)).status).toBe(204)
+
+		// A new session restores the saved calibration and guides with the compensation on.
+		const second = await start(context, guided(context, backlash))
+		await waitUntil(() => context.guiding.selectTarget(second.sessionId, {}).status === 200)
+		const started = context.guiding.admitStartGuiding(second.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle })
+		if (!started.ok) throw new Error(started.error)
+		expect(await started.settled).toMatchObject({ state: 'succeeded' })
+		expect(context.summary()?.calibration?.origin).toBe('restored')
+		await waitUntil(() => context.summary()?.decBacklashEstimate !== undefined)
+
+		// The steps of the start settle are marked as such.
+		const steps = context.summary()!.telemetryCursor
+		await waitUntil(() => (context.summary()?.telemetryCursor ?? 0) >= steps + 3)
+		const telemetry = (await context.guiding.telemetry(second.sessionId, 0).json()) as GuidingPage<GuidingTelemetrySample>
+		expect(telemetry.items.every((sample) => sample.lost || sample.phase === 'guiding' || sample.phase === 'settling')).toBeTrue()
+
+		// Another service moves the mount to declination 45°; guiding comes back on the derived calibration.
+		const generation = context.summary()!.calibration!.generation
+		const suspended = await context.guiding.suspendForMotion(second.sessionId)
+		if (!suspended.ok) throw new Error('not suspended')
+		context.manager.devices.mounts.goTo(context.mount, context.mount.equatorialCoordinate.rightAscension, deg(45))
+		await waitUntil(() => !context.mount.slewing && Math.abs(context.mount.equatorialCoordinate.declination - deg(45)) < deg(0.1))
+		expect(await context.guiding.restoreAfterMotion(suspended.value, new AbortController().signal)).toBe('restored')
+		expect(context.summary()?.calibration).toMatchObject({ origin: 'restored', transformations: ['declinationCompensation'] })
+		expect(context.summary()!.calibration!.generation).toBeGreaterThan(generation)
+		const cursor = context.summary()!.telemetryCursor
+		await waitUntil(() => (context.summary()?.telemetryCursor ?? 0) > cursor + 3)
+		const after = (await context.guiding.telemetry(second.sessionId, cursor).json()) as GuidingPage<GuidingTelemetrySample>
+		expect(after.items.filter((sample) => !sample.lost).every((sample) => sample.calibrationGeneration === context.summary()!.calibration!.generation)).toBeTrue()
+		expect((await context.guiding.stop(second.sessionId)).status).toBe(204)
+	}, 240000)
 
 	test('commands of an ended or unknown session are refused', async () => {
 		const context = await setup()

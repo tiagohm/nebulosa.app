@@ -224,6 +224,40 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				<NumberInput label="DEC Aggressiveness" value={settings.aggressivenessDEC} min={0} max={1} step={0.05} disabled={running || pending} onChange={(aggressivenessDEC) => update({ aggressivenessDEC })} />
 				<NumberInput label="RA Max Pulse" value={settings.maximumPulseRA} min={GUIDING_MINIMUM_PULSE} max={GUIDING_MAXIMUM_PULSE} step={100} suffix="ms" disabled={running || pending} onChange={(maximumPulseRA) => update({ maximumPulseRA })} />
 				<NumberInput label="DEC Max Pulse" value={settings.maximumPulseDEC} min={GUIDING_MINIMUM_PULSE} max={GUIDING_MAXIMUM_PULSE} step={100} suffix="ms" disabled={running || pending} onChange={(maximumPulseDEC) => update({ maximumPulseDEC })} />
+				<SegmentedControl
+					label="DEC Backlash Compensation"
+					options={['off', 'adaptive'] as const}
+					value={settings.decBacklash.enabled ? 'adaptive' : 'off'}
+					format={(mode) => (mode === 'off' ? 'Off' : 'Adaptive')}
+					disabled={running || pending}
+					onChange={(mode) => update({ decBacklash: { ...settings.decBacklash, enabled: mode === 'adaptive' } })}
+				/>
+				{settings.decBacklash.enabled && (
+					<>
+						<NumberInput label="Initial Backlash" value={settings.decBacklash.initialMs} min={0} max={settings.decBacklash.maximumMs} step={50} suffix="ms" disabled={running || pending} onChange={(initialMs) => update({ decBacklash: { ...settings.decBacklash, initialMs } })} />
+						<NumberInput
+							label="Largest Compensation"
+							value={settings.decBacklash.maximumMs}
+							min={0}
+							max={GUIDING_MAXIMUM_PULSE}
+							step={50}
+							suffix="ms"
+							disabled={running || pending}
+							onChange={(maximumMs) => update({ decBacklash: { ...settings.decBacklash, maximumMs, initialMs: Math.min(settings.decBacklash.initialMs, maximumMs) } })}
+						/>
+						<NumberInput label="Adaptation Rate" value={settings.decBacklash.adaptationRate} min={0} max={1} step={0.05} disabled={running || pending} onChange={(adaptationRate) => update({ decBacklash: { ...settings.decBacklash, adaptationRate } })} />
+						{session?.calibration && session.calibration.backlash > 0 && !running && (
+							<Button variant="secondary" className="self-start" disabled={pending} onClick={() => update({ decBacklash: { ...settings.decBacklash, initialMs: Math.min(Math.round(session.calibration!.backlash), settings.decBacklash.maximumMs) } })}>
+								{`Start from the calibration's ${Math.round(session.calibration.backlash)} ms`}
+							</Button>
+						)}
+						{session?.decBacklashEstimate !== undefined && <DataRow label="Estimate">{`${Math.round(session.decBacklashEstimate)} ms`}</DataRow>}
+					</>
+				)}
+				<Notice>
+					The DEC backlash compensation lengthens the first DEC pulse after a reversal by its estimate of the backlash, and learns it from the error that follows, within the largest compensation. It is separate from the reversal suppression of the controller, and off by default; the calibration's estimate is
+					a single measurement, a starting point only.
+				</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.guiding.settle-and-dither" title="Settle and Dither" defaultOpen={false}>
 				<NumberInput label="Settle Within" value={settings.settle.pixels} min={0.1} max={50} step={0.1} suffix="px" disabled={pending} onChange={(pixels) => update({ settle: { ...settings.settle, pixels } })} />

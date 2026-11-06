@@ -37,7 +37,7 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // Version of the shape of the preferences and camera forms the server keeps (sync.ts). A value of any other version is
 // read as absent, never migrated, so a change to the shape of what is kept only raises this number; an added optional
 // field, which reads as its default, does not.
-export const PROFILE_SETTINGS_VERSION = 4
+export const PROFILE_SETTINGS_VERSION = 5
 
 // Application preferences that belong to a profile. Each preference is added here, with its default in
 // defaultSettings when it is not optional, and either kept by the server (PREFERENCES and the camera forms of sync.ts) or
@@ -862,6 +862,9 @@ export interface GuidingSettings {
 	maximumPulseRA: number
 	// Longest DEC correction, in milliseconds, in [GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE].
 	maximumPulseDEC: number
+	// Adaptive compensation of the DEC backlash on reversals: whether it is on, the estimate it starts from and its
+	// largest value, in milliseconds (0 <= initial <= maximum), and the fraction of the residual error it learns by, in [0, 1].
+	decBacklash: GuidingDecBacklashSettings
 	// Settle of Start Guiding, Resume, and Dither.
 	settle: GuidingSettleSettings
 	// Size of each dither, in guide-camera pixels; > 0.
@@ -892,6 +895,18 @@ export const GUIDING_TARGET_POINTS = [25, 50, 100, 250, 500] as const
 // Guiding graph of a profile that never changed it: the history, and 100 steps on the target.
 export const DEFAULT_GUIDING_GRAPH_VIEW: GuidingGraphView = { mode: 'history', points: 100 }
 
+// Adaptive DEC backlash compensation of the guiding form.
+export interface GuidingDecBacklashSettings {
+	// Whether the compensation is on.
+	readonly enabled: boolean
+	// Estimate it starts from, in milliseconds; within [0, maximumMs].
+	readonly initialMs: number
+	// Largest compensation of one pulse, in milliseconds; >= 0.
+	readonly maximumMs: number
+	// Fraction of the residual error of a reversal it learns by, within [0, 1].
+	readonly adaptationRate: number
+}
+
 // Pattern of the successive dithers: random offsets, an outward spiral (both as PHD2), a golden-angle spiral, or a grid.
 export type GuidingDitherMode = NonNullable<GuidingClientSettings['ditherMode']>
 
@@ -914,7 +929,7 @@ export const GUIDING_MINIMUM_PULSE = 1
 export const GUIDING_MAXIMUM_PULSE = 10000
 
 // Guiding form of a camera that has none yet: 2 s exposures on one star, the toolkit's controller defaults (gains 0.7
-// and 0.65, ceilings 2000 and 2500 ms, 650 ms calibration pulses), restoring a matching saved calibration with declination
+// and 0.65, ceilings 2000 and 2500 ms, no DEC backlash compensation, 650 ms calibration pulses), restoring a matching saved calibration with declination
 // compensation and calibrating only without one, DEC solved as measured, stopping when the mount slews, subtracting a matching master dark, settling within 1.5 px
 // for 10 s in at most 60 s, and dithering by 5 px on both axes at random with a fast recenter; the toolkit's 64 px
 // search square, a lock that follows the star, and a meridian flip that keeps the DEC output.
@@ -934,6 +949,7 @@ export const DEFAULT_GUIDING_SETTINGS: GuidingSettings = {
 	aggressivenessDEC: 0.65,
 	maximumPulseRA: 2000,
 	maximumPulseDEC: 2500,
+	decBacklash: { enabled: false, initialMs: 0, maximumMs: 1000, adaptationRate: 0.3 },
 	settle: { pixels: 1.5, time: 10, timeout: 60 },
 	ditherPixels: 5,
 	ditherRaOnly: false,

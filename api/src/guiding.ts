@@ -416,6 +416,8 @@ export interface GuidingSessionSummary {
 	// Progress of the calibration while one runs; absent otherwise.
 	readonly calibrating?: GuidingCalibrationProgress
 	readonly rms?: GuidingRms
+	// Estimate of the DEC backlash the adaptive compensation adds to a reversal, in milliseconds; absent without it.
+	readonly decBacklashEstimate?: number
 	// Progress of the guide exposure the camera counts down, in microseconds (progress in percent); absent between
 	// exposures and while the driver reports none.
 	readonly exposureProgress?: CameraCaptureTime
@@ -479,6 +481,8 @@ export interface GuidingTelemetrySample {
 	readonly decDistance: number
 	readonly ra: GuidingTelemetryAxis
 	readonly dec: GuidingTelemetryAxis
+	// DEC backlash compensation included in the DEC pulse, in milliseconds; absent when none was.
+	readonly decBacklashCompensation?: number
 	readonly snr: number
 	readonly mass: number
 	// Half-flux diameter, in pixels.
@@ -1673,6 +1677,7 @@ export class GuidingSessions implements Disposable {
 					decDistance: event.decDistance,
 					ra: { direction: event.ra.direction, duration: event.ra.duration, limited: event.ra.limited },
 					dec: { direction: event.dec.direction, duration: event.dec.duration, limited: event.dec.limited },
+					...(event.diagnostics.decBacklashCompensationMs !== undefined && event.dec.duration > 0 && { decBacklashCompensation: event.diagnostics.decBacklashCompensationMs }),
 					snr: event.snr,
 					mass: event.mass,
 					hfd: event.hfd,
@@ -1681,7 +1686,8 @@ export class GuidingSessions implements Disposable {
 		pushBounded(session.telemetry, sample, MAX_TELEMETRY)
 		// A lost frame has no error of its own, so it leaves a gap rather than a zero in the RMS.
 		if (!lost) pushBounded(session.errors, [event.raDistance, event.decDistance], GUIDING_RMS_WINDOW)
-		this.#update(session, { telemetryCursor: cursor, rms: rmsOf(session.errors) })
+		const estimate = lost ? undefined : event.diagnostics.decBacklashEstimateMs
+		this.#update(session, { telemetryCursor: cursor, rms: rmsOf(session.errors), ...(estimate !== undefined && { decBacklashEstimate: estimate }) })
 		this.listener({ type: 'guiding:telemetry', sessionId: session.summary.sessionId, sample })
 	}
 

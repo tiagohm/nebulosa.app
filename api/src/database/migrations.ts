@@ -13,11 +13,15 @@ export interface Migration {
 }
 
 // Migrations of the schema, in order. While the application is in development the history is the baseline alone,
-// edited in place; numbered migrations start with the first release.
+// edited in place and synchronized table by table (synchronizeBaseline); numbered migrations start with the first release.
 export const MIGRATIONS: readonly Migration[] = [{ version: 1, sql: initial }]
 
 // Version of the baseline, the only migration whose change recreates the database instead of stopping the server.
 export const BASELINE_VERSION = 1
+
+// Epoch of the baseline while the application is in development, recorded as PRAGMA user_version: raising it deletes
+// every database of another epoch and creates it again, once, when a change cannot be synchronized table by table.
+export const BASELINE_EPOCH = 0
 
 // Thrown when the baseline applied to a database is not the one the server knows, so the database is created again.
 export class BaselineChangedError extends Error {}

@@ -1,7 +1,11 @@
 -- Baseline schema of the operational database of Nebulosa.
 --
--- While the application is in development this file is edited in place: a database whose baseline checksum differs is
--- deleted and created again. Tables are STRICT; times are Unix milliseconds (UTC); every column states its unit.
+-- While the application is in development this file is edited in place and a database follows it table by table
+-- (api/src/database/baseline.ts): a table whose definition changed, comments and spaces aside, is emptied with the
+-- tables that depend on it and created again; the others keep their rows. In the body of a table, '-- @version <n>'
+-- empties it when raised, for a change of the data it holds that its columns do not show, and
+-- '-- @clearedWith <table>' empties it with that table. Raising BASELINE_EPOCH (migrations.ts) creates every database
+-- again. Tables are STRICT; times are Unix milliseconds (UTC); every column states its unit.
 
 -- Migrations applied to the database, one row per version.
 CREATE TABLE schema_migrations (
@@ -746,6 +750,9 @@ CREATE INDEX satellite_memberships_object ON satellite_memberships (norad_id);
 
 -- Downloads of each CelesTrak query (SatelliteSync), kept across restarts so the fair-use intervals and blocks hold.
 CREATE TABLE satellite_sources (
+	-- The downloads describe the objects they delivered: emptied with them, so no fair-use interval holds back
+	-- downloading them again.
+	-- @clearedWith satellite_objects
 	-- Source key, such as gp:GROUP:STATIONS or satcat:CATNR:25544.
 	source_key TEXT PRIMARY KEY,
 	-- Dataset read: GP element sets or SATCAT metadata.

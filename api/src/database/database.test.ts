@@ -5,7 +5,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { AppDatabase, DEFAULT_DATA_DIRECTORY } from '.'
 import { openConnection } from './connection'
-import { MIGRATIONS, migrate, migrationChecksum } from './migrations'
+import { BASELINE_EPOCH, MIGRATIONS, migrate, migrationChecksum } from './migrations'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-database-'))
 const opened: AppDatabase[] = []
@@ -70,10 +70,11 @@ test('reopening keeps the data and the record of the migrations', () => {
 	expect(migrations(db)).toEqual(applied)
 })
 
-test('a changed baseline creates the database again, with a warning', () => {
+test('a changed baseline is synchronized table by table, keeping the rows of unchanged tables, with a warning', () => {
 	const file = databaseFile()
 	const first = open(file)
 	first.db.run('CREATE TABLE marker (value INTEGER) STRICT')
+	first.db.run("INSERT INTO observing_sites VALUES ('site', 'Home', 0, 0, 0, 'UTC', 0, 1, 0, 0)")
 	first.db.run("UPDATE schema_migrations SET checksum = 'changed' WHERE version = 1")
 	first.close()
 
@@ -82,7 +83,27 @@ test('a changed baseline creates the database again, with a warning', () => {
 	try {
 		const { db } = open(file)
 		expect(tables(db)).not.toContain('marker')
+		expect(db.query('SELECT id FROM observing_sites').all()).toEqual([{ id: 'site' }])
 		expect(migrations(db)).toEqual([{ version: 1, checksum: migrationChecksum(MIGRATIONS[0].sql), applied_at: expect.any(Number) }])
+		expect(warn).toHaveBeenCalledWith(`The schema of ${file} changed: dropped marker`)
+	} finally {
+		warn.mockRestore()
+	}
+})
+
+test('a database of another epoch is created again, with a warning', () => {
+	const file = databaseFile()
+	const first = open(file)
+	first.db.run("INSERT INTO observing_sites VALUES ('site', 'Home', 0, 0, 0, 'UTC', 0, 1, 0, 0)")
+	first.db.run(`PRAGMA user_version = ${BASELINE_EPOCH + 1}`)
+	first.close()
+
+	const warn = spyOn(console, 'warn').mockImplementation(() => undefined)
+
+	try {
+		const { db } = open(file)
+		expect(db.query('SELECT id FROM observing_sites').all()).toEqual([])
+		expect(db.query('PRAGMA user_version').get()).toEqual({ user_version: BASELINE_EPOCH })
 		expect(warn).toHaveBeenCalledTimes(1)
 	} finally {
 		warn.mockRestore()

@@ -2,8 +2,9 @@ import type { Database } from 'bun:sqlite'
 import { rmSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
+import { type BaselineChanges, recordBaselineEpoch, synchronizeBaseline } from './baseline'
 import { MEMORY_DATABASE, openConnection } from './connection'
-import { BaselineChangedError, MIGRATIONS, migrate } from './migrations'
+import { BASELINE_EPOCH, BASELINE_VERSION, BaselineChangedError, MIGRATIONS, migrate } from './migrations'
 
 // Owner of the operational database of the server, the single SQLite file that holds every durable record of the
 // application. It opens the one connection of the process, brings its schema up to date, and runs the transactions
@@ -44,10 +45,12 @@ export class AppDatabase {
 		return this.#db ?? this.open()
 	}
 
-	// Opens the database and brings its schema to the migrations the server knows; does nothing when already open. A
-	// database whose baseline schema changed is deleted, with its WAL, and created again, with a warning. Throws an Error
-	// saying why the database cannot be opened (another server holds it, the file is not a database, or its schema is
-	// newer than this server knows); the file is never deleted then.
+	// Opens the database and brings its schema to the migrations the server knows; does nothing when already open. While
+	// the history is the baseline alone, a changed baseline is synchronized table by table, saying what changed, with a
+	// warning when rows were discarded. A database whose baseline cannot be synchronized, or of another epoch, is deleted,
+	// with its WAL, and created again, with a warning. Throws an Error saying why the database cannot be opened (another
+	// server holds it, the file is not a database, or its schema is newer than this server knows); the file is never
+	// deleted then.
 	open(): Database {
 		if (this.#db) return this.#db
 
@@ -56,15 +59,15 @@ export class AppDatabase {
 		OPEN_CONNECTIONS.delete(this.file)
 
 		try {
-			migrate(db, MIGRATIONS)
+			upgradeSchema(db, this.file)
 		} catch (error) {
 			db.close()
 			if (!(error instanceof BaselineChangedError)) throw error
 
-			console.warn(`The schema of ${this.file} changed; the database was deleted and created again`)
+			console.warn(`${error.message}; ${this.file} was deleted and created again`)
 			removeDatabaseFiles(this.file)
 			db = openConnection(this.file, this.exclusive)
-			migrate(db, MIGRATIONS)
+			upgradeSchema(db, this.file)
 		}
 
 		if (shared) OPEN_CONNECTIONS.set(this.file, db)
@@ -85,6 +88,31 @@ export class AppDatabase {
 		this.#db.close()
 		this.#db = undefined
 	}
+}
+
+// Brings the schema of db, the database at file, to the migrations the server knows: while the history is the baseline
+// alone, synchronizes the baseline table by table, reporting what changed, and records its epoch. Throws what
+// synchronizeBaseline and migrate throw.
+function upgradeSchema(db: Database, file: string) {
+	const development = MIGRATIONS.length === BASELINE_VERSION
+	if (development) reportBaselineChanges(file, synchronizeBaseline(db, MIGRATIONS[0].sql, BASELINE_EPOCH))
+	migrate(db, MIGRATIONS)
+	if (development) recordBaselineEpoch(db, BASELINE_EPOCH)
+}
+
+// Says which tables and indexes of the database at file a synchronization of its baseline changed: a warning when rows
+// were discarded, and information otherwise; nothing when changes is undefined or empty.
+function reportBaselineChanges(file: string, changes: BaselineChanges | undefined) {
+	if (!changes) return
+
+	const parts = (['rebuilt', 'emptied', 'dropped', 'created', 'indexes'] as const).filter((kind) => changes[kind].length > 0).map((kind) => `${kind === 'indexes' ? 'indexes changed' : kind} ${changes[kind].join(', ')}`)
+	if (parts.length === 0) return
+
+	const discarded = changes.rebuilt.length + changes.emptied.length + changes.dropped.length > 0
+	const message = `The schema of ${file} changed: ${parts.join('; ')}`
+
+	if (discarded) console.warn(message)
+	else console.info(message)
 }
 
 // Deletes the database at file with its WAL and shared memory files.

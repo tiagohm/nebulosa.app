@@ -1,6 +1,6 @@
 import type { MoonPhaseEvent } from 'api'
+import { formatLongDateTime } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { formatEclipseTime } from '../../tools/eclipse/eclipse'
 import { Notice } from '../../ui/Notice'
 import { MOON_PHASE_NAMES } from './moon'
 
@@ -17,7 +17,7 @@ export function MoonPhasesSection({ phases, timeZone }: { readonly phases?: read
 						{phases.map((e) => (
 							<li key={e.kind} className="flex flex-col">
 								<span className="text-ink-100">{MOON_PHASE_NAMES[e.kind]}</span>
-								<span className="font-mono text-sm text-ink-200">{formatEclipseTime(e.time, timeZone)}</span>
+								<span className="font-mono text-sm text-ink-200">{formatLongDateTime(e.time, timeZone)}</span>
 							</li>
 						))}
 					</ul>

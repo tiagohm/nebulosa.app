@@ -22,7 +22,8 @@ import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 // oxfmt-ignore
 import { CALIBRATION_KINDS, cameraText, coverage, EVIDENCE_LABELS, exposureText, groupTitle, jobFraction, KIND_FILTERS, KIND_LABELS, type KindFilter, LIBRARY_SECTIONS, type LibrarySection, masterName, masterWarnings, METHOD_LABELS, ORIGIN_LABELS, OVERRIDE_LABELS, overrideIsText, PRODUCT_STATUS_LABELS, PRODUCT_STATUS_TONES, READINESS_LABELS, READINESS_TONES, RECIPE_METHODS, SECTION_LABELS, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES, temperatureText } from './library'
-import { formatByteSize, formatExposureTime, formatPercent, MISSING } from '../../format'
+import { formatByteSize, formatDateTime, formatExposureTime, formatPercent, MISSING } from '../../format'
+import { BROWSER_TIME_ZONE } from '../../location/zone'
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataRow } from '../../ui/DataRow'
@@ -509,7 +510,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 				{master.dependencies.map(({ masterId }) => (
 					<DataRow key={masterId} label="Corrected by">{`#${masterId}`}</DataRow>
 				))}
-				<DataRow label="Published">{new Date(master.createdAt).toLocaleString()}</DataRow>
+				<DataRow label="Published">{formatDateTime(master.createdAt, BROWSER_TIME_ZONE)}</DataRow>
 				<DataRow label="SHA-256">
 					<span className="break-all">{master.contentDigest}</span>
 				</DataRow>

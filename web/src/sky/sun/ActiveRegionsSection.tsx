@@ -2,8 +2,8 @@ import type { SolarActiveRegion, SunActiveRegionsResponse } from 'api'
 import { cn } from 'cn'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatLongDateTime } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { formatEclipseTime } from '../../tools/eclipse/eclipse'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { sunState } from './sun'
@@ -77,8 +77,8 @@ export function ActiveRegionsSection() {
 						</ul>
 					)}
 					<Notice>
-						NOAA SWPC solar region report{report.observedDate && ` observed on ${report.observedDate} (UTC)`}, downloaded {formatEclipseTime(report.fetchedAt, 'UTC')}; a current observation, not the Sky instant. Locations are heliographic, east and west of the central meridian. Spots are counted per region,
-						which is not the sunspot number. MSH: millionths of the solar hemisphere.
+						NOAA SWPC solar region report{report.observedDate && ` observed on ${report.observedDate} (UTC)`}, downloaded {formatLongDateTime(report.fetchedAt, 'UTC')}; a current observation, not the Sky instant. Locations are heliographic, east and west of the central meridian. Spots are counted per
+						region, which is not the sunspot number. MSH: millionths of the solar hemisphere.
 					</Notice>
 					{report.stale && <Notice error>NOAA cannot be reached: this is the last report downloaded.</Notice>}
 				</>

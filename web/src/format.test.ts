@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { arcmin, arcsec, deg, hour } from 'nebulosa/src/math/units/angle'
 import {
+	dateTimeFormat,
 	formatAngularSize,
 	formatArcmin,
 	formatArcsec,
 	formatByteSize,
 	formatClockDuration,
+	formatClockTime,
+	formatDate,
+	formatDateTime,
 	formatDegrees,
 	formatDuration,
 	formatExposureTime,
@@ -14,6 +18,8 @@ import {
 	formatHourAngle,
 	formatPercent,
 	formatKilometers,
+	formatLocalTime,
+	formatLongDateTime,
 	formatPixelLength,
 	formatPixelPosition,
 	formatSigned,
@@ -189,5 +195,53 @@ describe('positions, distances, and instants', () => {
 		expect(formatUtcDateTime(time)).toBe('2026-11-05 14:23:05 UTC')
 		expect(formatUtcDateTime(time, false)).toBe('2026-11-05 14:23 UTC')
 		expect(formatUtcDateTime(Number.NaN)).toBe(MISSING)
+	})
+
+	test('an instant in a zone is written as an ISO date and a 24-hour time, across a daylight change', () => {
+		const time = Date.UTC(2029, 3, 13, 21, 45, 3)
+		expect(formatDateTime(time, 'UTC')).toBe('2029-04-13 21:45:03')
+		expect(formatDateTime(time, 'America/Sao_Paulo')).toBe('2029-04-13 18:45:03')
+		expect(formatDateTime(time, 'Asia/Kathmandu', false)).toBe('2029-04-14 03:30')
+		expect(formatDateTime(Date.UTC(2026, 2, 8, 6, 30), 'America/New_York')).toBe('2026-03-08 01:30:00')
+		expect(formatDateTime(Date.UTC(2026, 2, 8, 7, 30), 'America/New_York')).toBe('2026-03-08 03:30:00')
+		expect(formatDate(time, 'Asia/Kathmandu')).toBe('2029-04-14')
+		expect(formatDateTime(Number.NaN, 'UTC')).toBe(MISSING)
+		expect(formatDate(Number.NaN, 'UTC')).toBe(MISSING)
+	})
+
+	test('a time of day follows the zone, and the zone name tells apart a repeated hour', () => {
+		expect(formatClockTime(Date.UTC(2026, 9, 31, 23, 5, 7), 'America/Sao_Paulo')).toBe('20:05')
+		expect(formatClockTime(Date.UTC(2026, 9, 31, 23, 5, 7), 'America/Sao_Paulo', { seconds: true })).toBe('20:05:07')
+		expect(formatClockTime(Date.UTC(2026, 9, 31, 18, 20), 'Asia/Kathmandu')).toBe('00:05')
+		expect(formatClockTime(Date.UTC(2026, 9, 31, 23, 5), 'America/Sao_Paulo', { named: true })).toBe('20:05 GMT-3')
+		const zone = 'America/New_York'
+		expect(formatClockTime(Date.UTC(2026, 10, 1, 5, 30), zone)).toBe(formatClockTime(Date.UTC(2026, 10, 1, 6, 30), zone))
+		expect(formatClockTime(Date.UTC(2026, 10, 1, 5, 30), zone, { named: true })).not.toBe(formatClockTime(Date.UTC(2026, 10, 1, 6, 30), zone, { named: true }))
+		expect(formatClockTime(Number.NaN, 'UTC')).toBe(MISSING)
+	})
+
+	test('a local time names its zone and shows its date on another day than the reference', () => {
+		const time = Date.UTC(2026, 9, 18, 14, 23)
+		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23 GMT-3')
+		expect(formatLocalTime(time, 'UTC')).toBe('14:23 UTC')
+		expect(formatLocalTime(time + 86_400_000, 'UTC', time)).toBe('Oct 19, 14:23 UTC')
+		// 23:00 UTC is already the next day in Tokyo.
+		expect(formatLocalTime(Date.UTC(2026, 9, 18, 23), 'Asia/Tokyo', time)).toBe('Oct 19, 08:00 GMT+9')
+		expect(formatLocalTime(Number.NaN, 'UTC')).toBe(MISSING)
+	})
+
+	test('a long date and time names its zone, which follows daylight saving time', () => {
+		const time = Date.UTC(1997, 8, 16, 18, 47, 11)
+		expect(formatLongDateTime(time, 'UTC')).toBe('Sep 16, 1997, 18:47:11 UTC')
+		// The same instant is the next day in Tokyo.
+		expect(formatLongDateTime(time, 'Asia/Tokyo')).toBe('Sep 17, 1997, 03:47:11 GMT+9')
+		expect(formatLongDateTime(Date.UTC(2025, 2, 14, 6, 58, 43), 'America/New_York')).toBe('Mar 14, 2025, 02:58:43 EDT')
+		expect(formatLongDateTime(Date.UTC(2025, 0, 14, 6, 58, 43), 'America/New_York')).toBe('Jan 14, 2025, 01:58:43 EST')
+		expect(formatLongDateTime(Number.NaN, 'UTC')).toBe(MISSING)
+	})
+
+	test('formatters are shared by locale and options', () => {
+		expect(dateTimeFormat({ timeZone: 'UTC', hour: '2-digit' })).toBe(dateTimeFormat({ timeZone: 'UTC', hour: '2-digit', minute: undefined }))
+		expect(dateTimeFormat({ timeZone: 'UTC' }, 'sv-SE')).not.toBe(dateTimeFormat({ timeZone: 'UTC' }))
 	})
 })

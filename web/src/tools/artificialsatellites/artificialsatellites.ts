@@ -1,5 +1,6 @@
 import type { SatelliteDetails, SatelliteEphemerisResponse, SatelliteEphemerisRow, SatelliteGroundTrackResponse, SatelliteImportResponse, SatellitePassesResponse, SatellitePosition, SatellitePositionResponse, SatelliteSearchPage } from 'api'
 import { proxy } from 'valtio'
+import { formatDateTime } from '../../format'
 import { fetchJson, jsonInit } from '../../http'
 import { type GeographicLocation, locationKey, siteObserver } from '../../location/site'
 import { navigate, type RouteState, routeState } from '../../shell/route'
@@ -524,11 +525,6 @@ export function openArtificialSatellites(noradId: string, route: RouteState = ro
 // Name of each illumination state.
 export const SHADOW_LABELS: Readonly<Record<SatellitePosition['shadow'], string>> = { sunlit: 'Sunlit', penumbra: 'Penumbra', umbra: 'In shadow' }
 
-// Returns a time (Unix milliseconds) as YYYY-MM-DD HH:mm:ss in an IANA time zone.
-export function formatSatelliteTime(time: number, timeZone: string) {
-	return new Intl.DateTimeFormat('sv-SE', { timeZone, dateStyle: 'short', timeStyle: 'medium' }).format(time)
-}
-
 // Formats an age in days, with its sign: elements older than the instant are a positive age.
 export function formatElementAge(days: number) {
 	const value = Math.abs(days)
@@ -540,7 +536,7 @@ export function formatElementAge(days: number) {
 // display zone and the IANA name of that zone. Angles are degrees, distances km, rates km/s.
 const CSV_COLUMNS: readonly (readonly [string, (row: SatelliteEphemerisRow, timeZone: string) => string])[] = [
 	['time_utc', (row) => new Date(row.time).toISOString()],
-	['time_civil', (row, timeZone) => formatSatelliteTime(row.time, timeZone)],
+	['time_civil', (row, timeZone) => formatDateTime(row.time, timeZone)],
 	['time_zone', (_, timeZone) => timeZone],
 	['ra_of_date_deg', (row) => ((row.rightAscension * 180) / Math.PI).toFixed(6)],
 	['dec_of_date_deg', (row) => ((row.declination * 180) / Math.PI).toFixed(6)],

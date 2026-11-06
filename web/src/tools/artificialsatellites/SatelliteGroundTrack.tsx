@@ -1,7 +1,7 @@
 import type { SatelliteGroundTrack as SatelliteGroundTrackData } from 'api'
 import { useEffect, useMemo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatGeographic, formatKilometers } from '../../format'
+import { formatDateTime, formatGeographic, formatKilometers } from '../../format'
 import type { GeographicLocation } from '../../location/site'
 import type { DisplayZone } from '../../location/zone'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -12,7 +12,7 @@ import { SegmentedControl } from '../../ui/SegmentedControl'
 import { WorldMap, type WorldMapHandle, WorldMapSymbol } from '../../ui/WorldMap'
 import { geoPath, horizonRegionPath, smallCircleRegionPath } from '../../ui/worldmap.geometry'
 import { EclipseMapLegend } from '../eclipse/EclipseMapParts'
-import { artificialSatellitesState, formatSatelliteTime, type GroundTrackLayers, groundTrackInstant, loadSatelliteGroundTrack, MAX_GROUND_TRACK_ORBITS, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
+import { artificialSatellitesState, type GroundTrackLayers, groundTrackInstant, loadSatelliteGroundTrack, MAX_GROUND_TRACK_ORBITS, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 import { type GroundTrackPoint, type GroundTrackShadow, groundTrackAt, groundTrackRuns, observerInFootprint } from './groundtrack'
 
 // Ground Track tab of Artificial Satellites: the path of the point below the satellite selected on the world map, from
@@ -160,7 +160,7 @@ export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackPro
 							Instant
 							<input type="range" min={track.start} max={track.times.at(-1)} step={1000} value={point.time} onChange={(event) => (artificialSatellitesState.groundTrackCursor = +event.target.value)} className="h-4 min-w-0 flex-1 cursor-pointer accent-accent" />
 						</label>
-						<span className="font-mono text-xs text-ink-100 tabular-nums">{formatSatelliteTime(point.time, timeZone)}</span>
+						<span className="font-mono text-xs text-ink-100 tabular-nums">{formatDateTime(point.time, timeZone)}</span>
 						<div className="flex gap-2">
 							{anchor?.start === 'now' && !following && (
 								<Button variant="secondary" onClick={() => (artificialSatellitesState.groundTrackCursor = undefined)}>

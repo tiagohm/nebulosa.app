@@ -1,16 +1,16 @@
 import type { MinorBody } from 'api'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees } from '../../format'
+import { formatDateTime, formatDegrees, formatLocalTime } from '../../format'
 import { type ObservingSite, openObservingSites } from '../../location/site'
 import { collapsibleSections, sectionOpen } from '../../shell/collapsible'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { formatDeclination, formatLocalTime, formatMagnitude, formatRightAscension, formatSolarSystemDistance } from '../../sky/format'
+import { formatDeclination, formatMagnitude, formatRightAscension, formatSolarSystemDistance } from '../../sky/format'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { closeApproachesState, formatApproachTime, loadCloseApproachObservability, OBSERVABILITY_INSTANTS, type ObservabilityInstant, observabilityKey, showInSky } from './closeapproaches'
+import { closeApproachesState, loadCloseApproachObservability, OBSERVABILITY_INSTANTS, type ObservabilityInstant, observabilityKey, showInSky } from './closeapproaches'
 
 // How the Close Approaches tool meets the Sky: the two explicit actions that show the object there, and the Observability
 // section, read through the route of the Sky only while it is open, from the active observing site of the profile. Nothing
@@ -89,7 +89,7 @@ export function CloseApproachObservability({ body, time, site, timeZone }: SkyAc
 			)}
 			{position && (
 				<>
-					<DataRow label={`At (${timeZone})`}>{formatApproachTime(position.time, timeZone)}</DataRow>
+					<DataRow label={`At (${timeZone})`}>{formatDateTime(position.time, timeZone)}</DataRow>
 					{position.altitude !== undefined && <DataRow label="Altitude">{formatDeclination(position.altitude)}</DataRow>}
 					{position.altitude !== undefined && position.altitude < 0 && <Notice>Below the horizon at this instant.</Notice>}
 					{position.azimuth !== undefined && <DataRow label="Azimuth">{formatDegrees(position.azimuth)}</DataRow>}
@@ -100,9 +100,9 @@ export function CloseApproachObservability({ body, time, site, timeZone }: SkyAc
 					{position.distance !== undefined && <DataRow label="Distance">{formatSolarSystemDistance(position.distance)}</DataRow>}
 					{events?.state === 'circumpolar' && <DataRow label="Rise and set">Circumpolar</DataRow>}
 					{events?.state === 'belowHorizon' && <DataRow label="Rise and set">Below the horizon all day</DataRow>}
-					{events?.rise !== undefined && <DataRow label="Rise">{formatLocalTime(events.rise, position.time, undefined, timeZone)}</DataRow>}
-					{events?.transit !== undefined && <DataRow label="Transit">{formatLocalTime(events.transit, position.time, undefined, timeZone)}</DataRow>}
-					{events?.set !== undefined && <DataRow label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</DataRow>}
+					{events?.rise !== undefined && <DataRow label="Rise">{formatLocalTime(events.rise, timeZone, position.time)}</DataRow>}
+					{events?.transit !== undefined && <DataRow label="Transit">{formatLocalTime(events.transit, timeZone, position.time)}</DataRow>}
+					{events?.set !== undefined && <DataRow label="Set">{formatLocalTime(events.set, timeZone, position.time)}</DataRow>}
 					<Notice>
 						Apparent {position.center} place from {position.source === 'horizons' ? 'JPL Horizons' : position.fallbackReason ? `the local model (${FALLBACK_REASONS[position.fallbackReason]})` : 'the local model'}.
 					</Notice>

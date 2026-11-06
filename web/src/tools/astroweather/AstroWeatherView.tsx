@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatGeographic } from '../../format'
+import { formatClockTime, formatGeographic } from '../../format'
 import { openObservingSites } from '../../location/site'
 import { TimeZoneSelect } from '../../location/TimeZoneSelect'
 import { ToolLocationSection } from '../../location/ToolLocationSection'
@@ -14,7 +14,7 @@ import { Button } from '../../ui/Button'
 import { IconButton } from '../../ui/IconButton'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { type AstroWeatherState, astroWeatherState, EMPTY_FORECAST, firstNight, followProfile, followSite, formatClock, hasNextNight, loadCurrentNight, loadForecast, MODE_LABELS, nightEnded, OUTLOOK_LABELS, siteKey, stepNight } from './astroweather'
+import { type AstroWeatherState, astroWeatherState, EMPTY_FORECAST, firstNight, followProfile, followSite, hasNextNight, loadCurrentNight, loadForecast, MODE_LABELS, nightEnded, OUTLOOK_LABELS, siteKey, stepNight } from './astroweather'
 import { AstronomicalConditions, SkyConditions, Sources, WeatherConditions } from './ForecastDetails'
 import { ForecastSummary, reasonsText } from './ForecastSummary'
 import { ForecastTimeline } from './ForecastTimeline'
@@ -143,7 +143,7 @@ export function AstroWeather() {
 								{hour && (
 									<p className="m-0 mt-2 text-sm leading-5 text-ink-200">
 										<span className="text-ink-100">
-											{formatClock(hour.start, timeZone)}–{formatClock(hour.end, timeZone, true)}: {OUTLOOK_LABELS[hour.outlook]}
+											{formatClockTime(hour.start, timeZone)}–{formatClockTime(hour.end, timeZone, { named: true })}: {OUTLOOK_LABELS[hour.outlook]}
 										</span>
 										{reasonsText(hour) && `. ${reasonsText(hour)}`}
 									</p>

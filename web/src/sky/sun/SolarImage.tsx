@@ -1,7 +1,7 @@
 import { cn } from 'cn'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatEclipseTime } from '../../tools/eclipse/eclipse'
+import { formatLongDateTime } from '../../format'
 import { Modal } from '../../ui/Modal'
 import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
@@ -16,8 +16,8 @@ const SDO_CREDIT = 'Courtesy of NASA/SDO and the AIA, EVE, and HMI science teams
 
 // Says what an image is and when SDO updated it; a stale image says it is the last one downloaded.
 function imageCaption(image: SunImage) {
-	const updated = image.updatedAt !== undefined ? `updated ${formatEclipseTime(image.updatedAt, 'UTC')}` : 'update time unknown'
-	const stale = image.stale ? `. SDO cannot be reached: last image, downloaded ${formatEclipseTime(image.fetchedAt, 'UTC')}` : ''
+	const updated = image.updatedAt !== undefined ? `updated ${formatLongDateTime(image.updatedAt, 'UTC')}` : 'update time unknown'
+	const stale = image.stale ? `. SDO cannot be reached: last image, downloaded ${formatLongDateTime(image.fetchedAt, 'UTC')}` : ''
 	return `${SUN_IMAGE_CHANNEL_NAMES[image.channel]} · NASA/SDO, ${updated}${stale}.`
 }
 

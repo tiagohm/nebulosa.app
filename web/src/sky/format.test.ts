@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { arcmin, deg, hour } from 'nebulosa/src/math/units/angle'
 import { MISSING } from '../format'
-import { formatApparentSize, formatDeclination, formatLocalTime, formatMagnitude, formatRightAscension, formatSolarSystemDistance, formatStellarDistance } from './format'
+import { formatApparentSize, formatDeclination, formatMagnitude, formatRightAscension, formatSolarSystemDistance, formatStellarDistance } from './format'
 
 // AU per light-year, as the module converts them.
 const LY = 63_241.077
@@ -41,13 +41,4 @@ test('magnitudes', () => {
 	expect(formatMagnitude(-1.4)).toBe('-1.40')
 	expect(formatMagnitude(-0.001)).toBe('0.00')
 	expect(formatMagnitude(Number.NaN)).toBe(MISSING)
-})
-
-test('local times name their time zone', () => {
-	const time = Date.UTC(2026, 9, 18, 14, 23)
-	expect(formatLocalTime(time, time, 'en-US', 'America/Sao_Paulo')).toBe('11:23 GMT-3')
-	expect(formatLocalTime(time, time, 'en-US', 'UTC')).toBe('14:23 UTC')
-	expect(formatLocalTime(time + 86_400_000, time, 'en-US', 'UTC')).toBe('Oct 19, 14:23 UTC')
-	expect(formatLocalTime(time, time, 'en-US', 'UTC')).toBe('14:23 UTC')
-	expect(formatLocalTime(Number.NaN)).toBe(MISSING)
 })

@@ -493,11 +493,6 @@ export function showInSky(body: MinorBody, site: GeographicLocation | undefined,
 	navigate(handoff.route, { workspace: 'sky' }, handoff.history)
 }
 
-// Returns a time as YYYY-MM-DD HH:mm:ss in a zone (IANA), from Unix milliseconds. The instant is the same in every zone.
-export function formatApproachTime(time: number, timeZone: string) {
-	return new Intl.DateTimeFormat('sv-SE', { timeZone, dateStyle: 'short', timeStyle: 'medium' }).format(time)
-}
-
 // Returns a distance in AU in a unit, with the digits it means.
 export function distanceValue(au: number, unit: CloseApproachDistanceDisplay) {
 	if (unit === 'au') return au

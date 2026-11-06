@@ -2,7 +2,7 @@ import type { CloseApproach, CloseApproachSortField } from 'api'
 import { cn } from 'cn'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { MISSING } from '../../format'
+import { formatDateTime, MISSING } from '../../format'
 import type { ObservingSite } from '../../location/site'
 import { TimeZoneSelect } from '../../location/TimeZoneSelect'
 import { profileState, setCloseApproachPreferences } from '../../profile/profile'
@@ -14,7 +14,7 @@ import { Icon } from '../../ui/Icon'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
-import { bodyName, closeApproachesState, formatApproachTime, formatDiameter, formatDistance, formatDistanceRange, formatVelocity, loadCloseApproaches, pageCloseApproaches, pageCount, resizeCloseApproachPages, selectCloseApproach, sortCloseApproaches } from './closeapproaches'
+import { bodyName, closeApproachesState, formatDiameter, formatDistance, formatDistanceRange, formatVelocity, loadCloseApproaches, pageCloseApproaches, pageCount, resizeCloseApproachPages, selectCloseApproach, sortCloseApproaches } from './closeapproaches'
 
 // Table of the Close Approaches tool: one row per encounter of the page JPL answered, so an object appears once per
 // encounter. Sorting and paging ask the server again: rows are never sorted or sliced here. Arrow keys, Home, and End move
@@ -83,7 +83,7 @@ function EncounterRow({ approach, timeZone, distanceDisplay }: EncounterRowProps
 			<Cell className="max-w-64 truncate text-ink-100" title={fullName ?? designation}>
 				{fullName ?? designation}
 			</Cell>
-			<Cell>{formatApproachTime(time, timeZone)}</Cell>
+			<Cell>{formatDateTime(time, timeZone)}</Cell>
 			<Cell>{bodyName(body)}</Cell>
 			<Cell numeric>{formatDistance(distance, distanceDisplay)}</Cell>
 			<Cell numeric>{formatDistanceRange(distanceMin, distanceMax, distanceDisplay) ?? MISSING}</Cell>
@@ -109,7 +109,7 @@ interface CloseApproachTableProps {
 function ResultsBar({ timeZone, preferences, site }: CloseApproachTableProps) {
 	const { result, loading, pageSize } = useSnapshot(closeApproachesState)
 	const { distanceDisplay, timeDisplay } = preferences
-	const origin = result && `${result.total} ${result.total === 1 ? 'encounter' : 'encounters'} · ${result.source} ${result.sourceVersion} · read ${formatApproachTime(result.fetchedAt, timeZone)}`
+	const origin = result && `${result.total} ${result.total === 1 ? 'encounter' : 'encounters'} · ${result.source} ${result.sourceVersion} · read ${formatDateTime(result.fetchedAt, timeZone)}`
 
 	return (
 		<div className="flex flex-none flex-wrap items-end justify-between gap-2 border-b border-line-100 px-4 py-2">

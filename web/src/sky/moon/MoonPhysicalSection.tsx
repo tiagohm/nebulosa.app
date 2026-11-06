@@ -1,9 +1,9 @@
 import type { MoonAppearance } from 'api'
-import { formatDegrees, formatKilometers } from '../../format'
+import { formatDegrees, formatKilometers, formatLocalTime } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-import { formatApparentSize, formatLocalTime } from '../format'
+import { formatApparentSize } from '../format'
 
 // Lunar Physical Data section of the Moon Inspector: the Moon's age and lunation, distance, libration, the Sun's
 // colongitude, the orientation of its pole and bright limb, and its parallax at the instant the almanac was computed
@@ -33,8 +33,8 @@ export function MoonPhysicalSection({ appearance, time, timeZone }: { readonly a
 					<DataRow label="Horizontal parallax">{formatApparentSize(appearance.horizontalParallax)}</DataRow>
 					{appearance.parallacticAngle !== undefined && <DataRow label="Parallactic angle">{formatDegrees(appearance.parallacticAngle)}</DataRow>}
 					<Notice>
-						At {formatLocalTime(time, Date.now(), undefined, timeZone)}, {appearance.center === 'topocentric' ? 'from the observer' : "from the Earth's center"}, from the local model. The libration is the selenographic point at the disk&apos;s center; position angles are from celestial north through east.
-						The age counts from the previous geocentric new Moon.
+						At {formatLocalTime(time, timeZone, Date.now())}, {appearance.center === 'topocentric' ? 'from the observer' : "from the Earth's center"}, from the local model. The libration is the selenographic point at the disk&apos;s center; position angles are from celestial north through east. The age
+						counts from the previous geocentric new Moon.
 					</Notice>
 				</>
 			) : (

@@ -1,7 +1,6 @@
 import type { MoonApsisEvent } from 'api'
-import { formatKilometers } from '../../format'
+import { formatKilometers, formatLongDateTime } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { formatEclipseTime } from '../../tools/eclipse/eclipse'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { formatApparentSize } from '../format'
@@ -21,7 +20,7 @@ export function MoonApsidesSection({ apsides, timeZone }: { readonly apsides?: r
 					{apsides.map((e) => (
 						<div key={e.kind} className="flex flex-col gap-1">
 							<span className="text-ink-100">{APSIS_NAMES[e.kind]}</span>
-							<span className="font-mono text-sm text-ink-200">{formatEclipseTime(e.time, timeZone)}</span>
+							<span className="font-mono text-sm text-ink-200">{formatLongDateTime(e.time, timeZone)}</span>
 							<DataRow label="Distance">{formatKilometers(e.distanceKm)}</DataRow>
 							<DataRow label="Apparent diameter">{formatApparentSize(e.angularDiameter)}</DataRow>
 						</div>

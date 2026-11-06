@@ -7,7 +7,7 @@ import type { RouteState } from '../../shell/route'
 import type { SkyClock } from '../../sky/clock'
 import type { SkyState } from '../../sky/sky'
 // oxfmt-ignore
-import { catalogUrl, clearCloseApproachSelection, type CloseApproachesIo, type CloseApproachesState, draftFilters, filterCloseApproachHistory, formatApproachTime, formatDiameter, formatDistance, formatDistanceRange, historyDates, initialCloseApproachesState, initialDraft, loadCloseApproaches, loadCloseApproachObservability, nextSort, observabilityKey, openCloseApproaches, pageCloseApproaches, pageCount, periodDates, searchCloseApproaches, selectCloseApproach, setCloseApproachDate, setCloseApproachPeriod, showInSky, sortCloseApproaches } from './closeapproaches'
+import { catalogUrl, clearCloseApproachSelection, type CloseApproachesIo, type CloseApproachesState, draftFilters, filterCloseApproachHistory, formatDiameter, formatDistance, formatDistanceRange, historyDates, initialCloseApproachesState, initialDraft, loadCloseApproaches, loadCloseApproachObservability, nextSort, observabilityKey, openCloseApproaches, pageCloseApproaches, pageCount, periodDates, searchCloseApproaches, selectCloseApproach, setCloseApproachDate, setCloseApproachPeriod, showInSky, sortCloseApproaches } from './closeapproaches'
 
 // 2026-10-31T12:00:00Z.
 const NOW = Date.UTC(2026, 9, 31, 12)
@@ -408,14 +408,6 @@ describe('handoff to the Sky', () => {
 describe('formats', () => {
 	// 0.000254090910419299 au, the approach of Apophis of 2029.
 	const APOPHIS = 0.000254090910419299
-
-	test('one instant reads the same in any zone, across a daylight change', () => {
-		const time = Date.UTC(2029, 3, 13, 21, 45, 3)
-		expect(formatApproachTime(time, 'UTC')).toBe('2029-04-13 21:45:03')
-		expect(formatApproachTime(time, 'America/Sao_Paulo')).toBe('2029-04-13 18:45:03')
-		expect(formatApproachTime(Date.UTC(2026, 2, 8, 6, 30), 'America/New_York')).toBe('2026-03-08 01:30:00')
-		expect(formatApproachTime(Date.UTC(2026, 2, 8, 7, 30), 'America/New_York')).toBe('2026-03-08 03:30:00')
-	})
 
 	test("the times follow the profile's default, the active site's zone, or the tool's choice, and say when no site stands behind them", () => {
 		const site = { timeZone: 'America/Sao_Paulo' }

@@ -1,5 +1,6 @@
 import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationMaster, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
-import { formatTemperature, MISSING } from '../../format'
+import { formatDateTime, formatTemperature, MISSING } from '../../format'
+import { BROWSER_TIME_ZONE } from '../../location/zone'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // What the Calibration Library tool shows of what the server decided: labels, tones, and the coverage of a page of groups.
@@ -109,9 +110,10 @@ export function cameraText({ cameraName }: Pick<CalibrationMetadata, 'cameraName
 	return cameraName ?? 'Unknown camera'
 }
 
-// Name of a master: its id and when it was published, in local time, which tell apart masters of the same frames.
+// Name of a master: its id and when it was published, to the minute in the browser's zone, which tell apart masters of
+// the same frames.
 export function masterName({ masterId, createdAt }: { readonly masterId: number; readonly createdAt: number }) {
-	return `#${masterId} · ${new Date(createdAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}`
+	return `#${masterId} · ${formatDateTime(createdAt, BROWSER_TIME_ZONE, false)}`
 }
 
 // Explains the state of a master, in the words shown under its badge: why its file cannot be used, why it is stale, and

@@ -82,7 +82,7 @@ export function ArtificialSatellites() {
 	const content = state.tab === 'catalog' ? <SatelliteCatalog /> : state.tab === 'passes' ? <SatellitePasses observer={observer} zone={zone} /> : state.tab === 'ephemeris' ? <SatelliteEphemeris observer={observer} zone={zone} /> : <SatelliteGroundTrack observer={observer} zone={zone} />
 	const tabs = <SegmentedControl options={SATELLITE_TABS} value={state.tab} format={(tab) => SATELLITE_TAB_LABELS[tab]} onChange={(tab) => (artificialSatellitesState.tab = tab)} />
 
-	const settingsModal = <SatelliteSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+	const settingsModal = <SatelliteSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} timeZone={zone.zone} />
 	const actions = (
 		<>
 			<Popover icon="file" label="Import Elements" open={importOpen} onOpenChange={setImportOpen}>

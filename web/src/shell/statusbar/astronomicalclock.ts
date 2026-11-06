@@ -1,6 +1,7 @@
 import type { AstronomicalTimeReference, SkyObserver } from 'api'
 import { formatAngle, formatHMS, normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
+import { formatClockTime } from '../../format'
 import { fetchJson, jsonInit } from '../../http'
 import type { AstronomicalClockPreferences, AstronomicalClockReading } from '../../profile/schema'
 import { createRequestGuard } from '../../sky/selection'
@@ -113,9 +114,6 @@ export interface ClockReadingText {
 	readonly value: string
 }
 
-// Formatters of the time of day, by time zone and precision.
-const timeFormatters = new Map<string, Intl.DateTimeFormat>()
-
 // Returns how old a sample is at a moment of the monotonic clock.
 export function clockFreshness(sample: Pick<ClockSample, 'sampledAt'> | undefined, now: number): ClockFreshness {
 	if (!sample) return 'none'
@@ -137,19 +135,6 @@ export function effectiveReadings({ enabled, primary, secondary }: Pick<Astronom
 	const sidereal = (reading: AstronomicalClockReading) => reading === 'last' || reading === 'lmst'
 	const first = sidereal(primary) && !located ? 'jd' : primary
 	return secondary === 'none' || secondary === first || (sidereal(secondary) && !located) ? [first] : [first, secondary]
-}
-
-// Returns a time of day of an instant in a time zone, on 24 hours.
-function timeOfDay(time: number, timeZone: string, seconds: boolean) {
-	const key = `${timeZone}|${seconds}`
-	let formatter = timeFormatters.get(key)
-
-	if (!formatter) {
-		formatter = new Intl.DateTimeFormat('en-GB', { timeZone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: seconds ? '2-digit' : undefined })
-		timeFormatters.set(key, formatter)
-	}
-
-	return formatter.format(time)
 }
 
 // Returns a sidereal time, in hours and minutes, or with its seconds.
@@ -174,9 +159,9 @@ export function clockReadingText(reading: AstronomicalClockReading, live: LiveCl
 		case 'mjd':
 			return { label, value: (live.jd - MJD_ORIGIN).toFixed(JULIAN_DECIMALS) }
 		case 'utc':
-			return { label, value: timeOfDay(live.unixMillis, 'UTC', showSeconds) }
+			return { label, value: formatClockTime(live.unixMillis, 'UTC', { seconds: showSeconds }) }
 		case 'local':
-			return { label, value: timeOfDay(live.unixMillis, timeZone, showSeconds) }
+			return { label, value: formatClockTime(live.unixMillis, timeZone, { seconds: showSeconds }) }
 	}
 }
 

@@ -1,10 +1,10 @@
-import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { formatAngle, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 
 // Display formats shared by every screen for quantities that are not tied to one feature: fixed and signed numbers,
 // percentages, angles in degrees, arcminutes, and arcseconds, hour angles, geographic positions, temperatures, lengths in pixels
 // with their sky size, positions in an image, distances in kilometers, exposure times, durations, elapsed and signed clocks, instants
-// in UTC, byte sizes, and measurements of a wide dynamic range.
+// in UTC or in an IANA time zone, byte sizes, and measurements of a wide dynamic range. Every Intl.DateTimeFormat of the
+// web is built and cached here (`dateTimeFormat`), and every civil time a screen shows is one of the formats below.
 // Each takes the value in its computational unit (radians, seconds, °C, pixels, bytes) and returns text only, so a
 // value is never rounded before it is used elsewhere. The decimals are a presentation choice, never a claim of
 // accuracy; a value that rounds to zero never shows a minus sign, and a value that is not finite is shown as MISSING,
@@ -193,12 +193,75 @@ export function formatKilometers(km: number, digits: number = 0) {
 	return text === MISSING ? MISSING : `${Number(text).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })} km`
 }
 
-const UTC_DATE_TIME_FORMAT = 'YYYY-MM-DD HH:mm:ss UTC'
-const UTC_DATE_TIME_NO_SECONDS_FORMAT = 'YYYY-MM-DD HH:mm UTC'
+// Formatters of instants, by locale and options. A formatter is costly to build and a table formats thousands of
+// instants, so each locale and set of options is built once and shared by every screen.
+const dateTimeFormatters = new Map<string, Intl.DateTimeFormat>()
+
+// Returns the shared formatter of instants with a set of options in a locale (en-US by default), built on its first use.
+// An absent `timeZone` option is the browser's zone. Every reading of an instant in a zone, shown or parsed into its
+// wall-clock fields, goes through it; options that differ only by an undefined property share one formatter.
+export function dateTimeFormat(options: Intl.DateTimeFormatOptions, locale: string = 'en-US') {
+	const key = `${locale}|${JSON.stringify(options)}`
+	let formatter = dateTimeFormatters.get(key)
+
+	if (!formatter) {
+		formatter = new Intl.DateTimeFormat(locale, options)
+		dateTimeFormatters.set(key, formatter)
+	}
+
+	return formatter
+}
+
+// Locale whose short date and medium time styles are ISO 8601: "2026-11-05 14:23:05".
+const ISO_LOCALE = 'sv-SE'
+
+// Returns the calendar date of an instant (Unix milliseconds) in an IANA time zone as YYYY-MM-DD: "2026-11-05", or
+// MISSING when it is not finite.
+export function formatDate(time: number, timeZone: string) {
+	if (!Number.isFinite(time)) return MISSING
+	return dateTimeFormat({ timeZone, dateStyle: 'short' }, ISO_LOCALE).format(time)
+}
+
+// Returns an instant (Unix milliseconds) in an IANA time zone to the second, or to the minute when `seconds` is false,
+// as YYYY-MM-DD HH:mm:ss on 24 hours: "2026-11-05 14:23:05", "2026-11-05 14:23", or MISSING when it is not finite.
+export function formatDateTime(time: number, timeZone: string, seconds: boolean = true) {
+	if (!Number.isFinite(time)) return MISSING
+	return dateTimeFormat({ timeZone, dateStyle: 'short', timeStyle: seconds ? 'medium' : 'short' }, ISO_LOCALE).format(time)
+}
 
 // Returns an instant (Unix milliseconds) in UTC to the second, or to the minute when `seconds` is false, with the zone
 // named: "2026-11-05 14:23:05 UTC", "2026-11-05 14:23 UTC", or MISSING when it is not finite.
 export function formatUtcDateTime(time: number, seconds: boolean = true) {
+	return withUnit(formatDateTime(time, 'UTC', seconds), ' UTC')
+}
+
+// How a time of day is written.
+export interface ClockTimeOptions {
+	// Whether the seconds are shown; false by default.
+	readonly seconds?: boolean
+	// Whether the short name of the zone follows, whose offset tells apart an hour the clocks repeat; false by default.
+	readonly named?: boolean
+}
+
+// Returns the time of day of an instant (Unix milliseconds) in an IANA time zone on 24 hours: "20:05", "20:05:07",
+// "20:05 GMT-3" when named, or MISSING when it is not finite.
+export function formatClockTime(time: number, timeZone: string, { seconds = false, named = false }: ClockTimeOptions = {}) {
 	if (!Number.isFinite(time)) return MISSING
-	return formatTemporal(time, seconds ? UTC_DATE_TIME_FORMAT : UTC_DATE_TIME_NO_SECONDS_FORMAT)
+	return dateTimeFormat({ timeZone, hour: '2-digit', minute: '2-digit', second: seconds ? '2-digit' : undefined, hourCycle: 'h23', timeZoneName: named ? 'short' : undefined }).format(time)
+}
+
+// Returns an instant (Unix milliseconds) as its time of day in an IANA time zone with the zone named, so a time is never
+// ambiguous: "14:23 GMT-3". A time on another calendar day of the zone than `reference` (Unix milliseconds) also shows
+// its month and day: "Oct 19, 14:23 UTC". An instant that is not finite reads MISSING.
+export function formatLocalTime(time: number, timeZone: string, reference: number = time) {
+	if (!Number.isFinite(time)) return MISSING
+	const dated = Number.isFinite(reference) && formatDate(time, timeZone) !== formatDate(reference, timeZone)
+	return dateTimeFormat({ timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short', ...(dated && { month: 'short', day: 'numeric' }) }).format(time)
+}
+
+// Returns an instant (Unix milliseconds) as its date and time to the second in an IANA time zone with the zone named,
+// so a time past midnight shows its day: "Sep 16, 1997, 18:47:11 UTC", or MISSING when it is not finite.
+export function formatLongDateTime(time: number, timeZone: string) {
+	if (!Number.isFinite(time)) return MISSING
+	return dateTimeFormat({ timeZone, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: 'short' }).format(time)
 }

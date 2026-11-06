@@ -1,6 +1,7 @@
 import type { LunarEclipseContactKind, LunarEclipseMap as LunarEclipseMapData } from 'api'
 import { useEffect, useMemo, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatLongDateTime } from '../../format'
 import { locationKey } from '../../location/site'
 import { useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { redirect, routeState } from '../../shell/route'
@@ -12,7 +13,7 @@ import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
 import { WorldMap, WorldMapSymbol } from '../../ui/WorldMap'
 import { DEGREE_PLANE_TRANSFORM } from '../../ui/worldmap.geometry'
-import { formatEclipseTime, utcDate } from '../eclipse/eclipse'
+import { utcDate } from '../eclipse/eclipse'
 import { EclipseHeading, EclipseMapLegend } from '../eclipse/EclipseMapParts'
 import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, findEclipseFrom, lunarEclipseState, nextEclipse, openLunarEclipseMap, previousEclipse, retryEclipse, selectEvent, selectMapPlace, showLunarEclipse, syncPlace } from './lunareclipse'
 import { LunarEclipsePanel } from './LunarEclipsePanel'
@@ -140,7 +141,7 @@ export function LunarEclipseMap() {
 						<EclipseMapLegend passThrough>
 							<span className="flex items-center gap-2">
 								<span className="size-3 flex-none rounded-xs border border-accent bg-accent/15" />
-								Moon above the horizon at {selectedEvent} · {formatEclipseTime(selectedContact.time, timeZone)}
+								Moon above the horizon at {selectedEvent} · {formatLongDateTime(selectedContact.time, timeZone)}
 							</span>
 							<span className="flex items-center gap-2">
 								<span className="h-0.5 w-3 flex-none bg-ink-300" />

@@ -1,6 +1,6 @@
 import type { SatelliteGroupStatus, SatelliteSummary } from 'api'
 import { useSnapshot } from 'valtio'
-import { MISSING } from '../../format'
+import { formatUtcDateTime, MISSING } from '../../format'
 import { activeSite, siteState } from '../../location/site'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
 import { satelliteCatalogState } from '../../satellites/satellites'
@@ -11,7 +11,7 @@ import { IconButton } from '../../ui/IconButton'
 import { Select } from '../../ui/Select'
 import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
-import { artificialSatellitesState, CATALOG_PAGE_SIZE, formatSatelliteTime, searchSatellites, selectSatellite } from './artificialsatellites'
+import { artificialSatellitesState, CATALOG_PAGE_SIZE, searchSatellites, selectSatellite } from './artificialsatellites'
 
 // Catalog tab of Artificial Satellites: the local search of the server's catalog (never CelesTrak), its pages, and the
 // favorites of the profile. The groups and their downloads are in the Settings of the tool, the imports in the Import
@@ -90,7 +90,7 @@ function SatelliteRow({ satellite, favorite }: SatelliteRowProps) {
 			<Cell numeric>{noradId}</Cell>
 			<Cell>{cosparId ?? MISSING}</Cell>
 			<Cell>{objectType ? OBJECT_TYPE_NAMES[objectType] : MISSING}</Cell>
-			<Cell title={elementKind ? undefined : 'No orbital elements: catalog data only, no prediction.'}>{elementEpoch === undefined ? 'Catalog only' : `${elementKind === 'manual' ? 'Imported' : 'GP'} · ${formatSatelliteTime(elementEpoch, 'UTC')} UTC`}</Cell>
+			<Cell title={elementKind ? undefined : 'No orbital elements: catalog data only, no prediction.'}>{elementEpoch === undefined ? 'Catalog only' : `${elementKind === 'manual' ? 'Imported' : 'GP'} · ${formatUtcDateTime(elementEpoch)}`}</Cell>
 		</Row>
 	)
 }

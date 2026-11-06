@@ -1,7 +1,7 @@
 import type { LocalViewHandedness, LocalViewOrientationMode } from 'api'
 import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
-import { formatGeographic, formatKilometers, MISSING } from '../../format'
+import { formatGeographic, formatKilometers, formatLongDateTime, MISSING } from '../../format'
 import { useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
@@ -9,7 +9,7 @@ import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { formatDuration, formatEclipseTime } from '../eclipse/eclipse'
+import { formatDuration } from '../eclipse/eclipse'
 import { EclipseLocationSection, EclipseZoneSelect } from '../eclipse/EclipsePanelParts'
 import { GlobalPointIcon } from './GlobalPointMarker'
 import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectMapPlace, selectPoint, setViewSettings, solarEclipseState } from './solareclipse'
@@ -56,7 +56,7 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 					<span className="font-semibold text-ink-100">{point.kind}</span>
 					<span className="truncate text-ink-300">{info.name}</span>
 				</span>
-				{point.time !== undefined && <span className="text-ink-100">{formatEclipseTime(point.time, timeZone)}</span>}
+				{point.time !== undefined && <span className="text-ink-100">{formatLongDateTime(point.time, timeZone)}</span>}
 			</button>
 			{selected && (
 				<div className="flex flex-col gap-1.5 border-t border-line-100 px-2 py-2">
@@ -133,7 +133,7 @@ export function SolarEclipsePanel() {
 									<span className="font-semibold text-ink-100">{event.kind}</span>
 									<span className="truncate text-ink-300">{contactName(event.kind, local.visibility.centralPhaseKind)}</span>
 								</span>
-								<span className="text-ink-100">{formatEclipseTime(event.time, timeZone)}</span>
+								<span className="text-ink-100">{formatLongDateTime(event.time, timeZone)}</span>
 								<span className={event.observable ? 'text-ink-200' : 'text-ink-300'}>
 									Alt {event.altitude.toFixed(1)}° · P {angle(event.positionAngle)} · Z {angle(event.zenithAngle)} · {event.observable ? 'Above horizon' : 'Below horizon'}
 								</span>
@@ -147,7 +147,7 @@ export function SolarEclipsePanel() {
 					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
 					<DataRow label="Magnitude">{eclipse.magnitude.toFixed(4)}</DataRow>
 					<DataRow label="Gamma">{eclipse.gamma.toFixed(4)}</DataRow>
-					{greatest && <DataRow label="Greatest eclipse">{formatEclipseTime(greatest.time, timeZone)}</DataRow>}
+					{greatest && <DataRow label="Greatest eclipse">{formatLongDateTime(greatest.time, timeZone)}</DataRow>}
 					{greatest && <DataRow label="Greatest eclipse at">{formatGeographic(greatest.latitude, greatest.longitude)}</DataRow>}
 					{duration?.centralDuration !== undefined && <DataRow label="Greatest duration">{formatDuration(duration.centralDuration)}</DataRow>}
 					{greatest?.pathWidth !== undefined && <DataRow label="Path width at greatest">{formatKilometers(greatest.pathWidth, 1)}</DataRow>}

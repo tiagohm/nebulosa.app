@@ -1,6 +1,6 @@
 import type { SolarSeasonEvent, SolarSeasonKind } from 'api'
+import { formatLongDateTime } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { formatEclipseTime } from '../../tools/eclipse/eclipse'
 import { Notice } from '../../ui/Notice'
 
 // Seasons section of the Sun Inspector: the next four equinoxes and solstices after the instant the Sky shows, named by
@@ -32,7 +32,7 @@ export function SeasonsSection({ seasons, latitude, timeZone }: { readonly seaso
 									<span className="text-ink-100">{SEASON_NAMES[e.kind]}</span>
 									{latitude !== undefined && <span className="text-right text-xs text-ink-300">{NORTHERN_SEASONS[e.kind][latitude < 0 ? 1 : 0]} begins here</span>}
 								</span>
-								<span className="font-mono text-sm text-ink-200">{formatEclipseTime(e.time, timeZone)}</span>
+								<span className="font-mono text-sm text-ink-200">{formatLongDateTime(e.time, timeZone)}</span>
 							</li>
 						))}
 					</ul>

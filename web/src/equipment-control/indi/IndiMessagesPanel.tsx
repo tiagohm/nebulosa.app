@@ -1,12 +1,13 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { copyText } from '../../clipboard'
+import { formatDateTime } from '../../format'
 import { useActiveSite, useDisplayZone } from '../../location/useLocation'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { Notice } from '../../ui/Notice'
 import { TextInput } from '../../ui/TextInput'
-import { formatMessageTime, indiMessagesView, messagesText, searchMessages } from './messages'
+import { indiMessagesView, messagesText, searchMessages } from './messages'
 import { useWatchedIndiDevices } from './useIndi'
 import { useIndiMessages } from './useIndiMessages'
 
@@ -87,7 +88,7 @@ export function IndiMessagesPanel({ connectionId, hardwareId, name }: IndiMessag
 					{shown.map((message) => (
 						<li key={message.id} className="flex flex-wrap gap-x-3">
 							<span className="font-mono text-ink-300 tabular-nums" title={message.timestamp === undefined ? undefined : `Driver timestamp: ${message.timestamp}`}>
-								{formatMessageTime(message.receivedAt, zone)}
+								{formatDateTime(message.receivedAt, zone)}
 							</span>
 							<span className="min-w-0 flex-1 whitespace-pre-wrap text-ink-100 wrap-break-word">
 								{message.text}

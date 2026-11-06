@@ -1,10 +1,9 @@
 import type { AstronomicalSample, AstroWeatherForecast, AstroWeatherNight, MeteorologySample, SolarTwilightCrossings } from 'api'
-import { formatPercent } from '../../format'
+import { formatClockTime, formatLongDateTime, formatPercent } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-import { formatEclipseTime } from '../eclipse/eclipse'
-import { formatClock, formatLength, SEEING_BANDS, TRANSPARENCY_BANDS } from './astroweather'
+import { formatLength, SEEING_BANDS, TRANSPARENCY_BANDS } from './astroweather'
 import { PROVIDER_NAMES } from './ForecastSummary'
 import type { OutlookSegment } from './observing'
 
@@ -87,7 +86,7 @@ export function WeatherConditions({ sample, ending }: WeatherConditionsProps) {
 
 // Text of a crossing, or of why there is none.
 function crossingText(time: number | undefined, { state }: Pick<SolarTwilightCrossings, 'state'>, timeZone: string) {
-	if (time !== undefined) return formatClock(time, timeZone)
+	if (time !== undefined) return formatClockTime(time, timeZone)
 	return state === 'continuousAbove' ? 'Sun stays above' : state === 'continuousBelow' ? 'Sun stays below' : 'Not this night'
 }
 
@@ -121,7 +120,7 @@ export function AstronomicalConditions({ night, timeZone }: AstronomicalConditio
 			<DataRow label="Moon lit">{formatPercent(moon.illuminatedFraction)}</DataRow>
 			{moon.above.map((span) => (
 				<DataRow key={span.start} label="Moon up">
-					{formatClock(span.start, timeZone)}–{formatClock(span.end, timeZone)}
+					{formatClockTime(span.start, timeZone)}–{formatClockTime(span.end, timeZone)}
 				</DataRow>
 			))}
 			{moon.above.length === 0 && <Notice>The Moon stays below the horizon during this night.</Notice>}
@@ -142,13 +141,13 @@ export interface SourcesProps {
 // Text of when a service was last read.
 function readAt(source: AstroWeatherForecast['meteorology']['source'], timeZone: string) {
 	if (source.fetchedAt === undefined) return 'Unavailable'
-	return `${formatClock(source.fetchedAt, timeZone, true)}${source.state === 'stale' ? ' (stale)' : ''}`
+	return `${formatClockTime(source.fetchedAt, timeZone, { named: true })}${source.state === 'stale' ? ' (stale)' : ''}`
 }
 
 // Last sample of a forecast, as a text.
 function lastSample(samples: readonly (MeteorologySample | AstronomicalSample)[], timeZone: string) {
 	const last = samples.at(-1)
-	return last && formatEclipseTime(last.time, timeZone)
+	return last && formatLongDateTime(last.time, timeZone)
 }
 
 // Where the forecast comes from, with the credits the services ask for.
@@ -161,7 +160,7 @@ export function Sources({ forecast, localDate, timeZone }: SourcesProps) {
 					<Value label="Covers to" value={lastSample(forecast.meteorology.samples, timeZone)} />
 					<Value label="Model height" value={forecast.meteorology.grid?.elevation} unit=" m" />
 					<DataRow label={`${PROVIDER_NAMES.sevenTimer} read`}>{readAt(forecast.astronomy.source, timeZone)}</DataRow>
-					<Value label="Model run" value={forecast.astronomy.source.modelRunAt && formatClock(forecast.astronomy.source.modelRunAt, timeZone, true)} />
+					<Value label="Model run" value={forecast.astronomy.source.modelRunAt && formatClockTime(forecast.astronomy.source.modelRunAt, timeZone, { named: true })} />
 					<Value label="Covers to" value={lastSample(forecast.astronomy.samples, timeZone)} />
 				</>
 			)}

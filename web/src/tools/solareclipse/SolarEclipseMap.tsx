@@ -2,6 +2,7 @@ import type { SolarEclipseMap as SolarEclipseMapData } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatLongDateTime } from '../../format'
 import { locationKey } from '../../location/site'
 import { useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { redirect, routeState } from '../../shell/route'
@@ -12,7 +13,7 @@ import { IconButton } from '../../ui/IconButton'
 import { TextInput } from '../../ui/TextInput'
 import { WorldMap, type WorldMapHandle, WorldMapSymbol } from '../../ui/WorldMap'
 import { DEGREE_PLANE_TRANSFORM } from '../../ui/worldmap.geometry'
-import { formatEclipseTime, utcDate } from '../eclipse/eclipse'
+import { utcDate } from '../eclipse/eclipse'
 import { EclipseHeading, EclipseMapLegend } from '../eclipse/EclipseMapParts'
 import { GlobalPointIcon, GlobalPointMarker } from './GlobalPointMarker'
 import { ECLIPSE_TYPE_NAMES, findEclipseFrom, GLOBAL_POINTS, type GlobalPointKind, globalPoints, labelRows, limitName, nextEclipse, openSolarEclipseMap, previousEclipse, retryEclipse, type SolarEclipseLayers, selectMapPlace, setLayer, showEclipse, solarEclipseState, syncPlace } from './solareclipse'
@@ -183,7 +184,7 @@ export function SolarEclipseMap() {
 					</WorldMap>
 					{map && eclipse && (
 						<EclipseMapLegend>
-							{map.greatestEclipse && <span className="text-ink-100">Greatest eclipse · {formatEclipseTime(map.greatestEclipse.time, timeZone)}</span>}
+							{map.greatestEclipse && <span className="text-ink-100">Greatest eclipse · {formatLongDateTime(map.greatestEclipse.time, timeZone)}</span>}
 							{central && (
 								<LegendItem
 									layer="centralLine"

@@ -1,6 +1,7 @@
 import type { LocalLunarViewHandedness, LocalLunarViewOrientationMode } from 'api'
 import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
+import { formatLongDateTime } from '../../format'
 import { useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
@@ -8,7 +9,7 @@ import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { formatDuration, formatEclipseTime } from '../eclipse/eclipse'
+import { formatDuration } from '../eclipse/eclipse'
 import { EclipseLocationSection, EclipseZoneSelect } from '../eclipse/EclipsePanelParts'
 import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, loadLocal, lunarEclipseState, phaseDurations, selectEvent, setViewSettings } from './lunareclipse'
 import { LunarEclipseLocalView } from './LunarEclipseLocalView'
@@ -77,7 +78,7 @@ export function LunarEclipsePanel() {
 									<span className="font-semibold text-ink-100">{contact.kind}</span>
 									<span className="truncate text-ink-300">{CONTACT_NAMES[contact.kind]}</span>
 								</span>
-								<span className="text-ink-100">{formatEclipseTime(contact.time, timeZone)}</span>
+								<span className="text-ink-100">{formatLongDateTime(contact.time, timeZone)}</span>
 								{event && (
 									<span className={event.observable ? 'text-ink-200' : 'text-ink-300'}>
 										Alt {event.altitude.toFixed(1)}° · Az {event.azimuth.toFixed(1)}° · {event.observable ? 'Above horizon' : 'Below horizon'}

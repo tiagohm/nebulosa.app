@@ -1,22 +1,22 @@
 import type { SatelliteGroupStatus } from 'api'
 import { useSnapshot } from 'valtio'
+import { formatDateTime } from '../../format'
 import { downloadSatelliteSource, satelliteCatalogState, setSatelliteAutoDownload } from '../../satellites/satellites'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { Modal } from '../../ui/Modal'
 import { Notice } from '../../ui/Notice'
-import { formatSatelliteTime } from './artificialsatellites'
 
 // Settings of Artificial Satellites, opened from the workspace actions of the tool: the CelesTrak groups of the server's
 // catalog, each with its download state, a download now, and the choice of downloading it automatically. The choices
 // belong to the server, shared by every profile and tab, and its downloads follow CelesTrak's fair-use rules whoever
 // asks.
 
-// State of the downloads of a group, in words.
-function groupStatus(group: SatelliteGroupStatus, now: number) {
+// State of the downloads of a group, in words, its instants in an IANA time zone.
+function groupStatus(group: SatelliteGroupStatus, now: number, timeZone: string) {
 	const parts = [group.members > 0 ? `${group.members} objects` : 'Not downloaded']
-	if (group.gp?.lastSuccessAt) parts.push(`elements read ${formatSatelliteTime(group.gp.lastSuccessAt, '')}`)
-	if (group.gpAllowedAt > now) parts.push(`next download from ${formatSatelliteTime(group.gpAllowedAt, '')}`)
+	if (group.gp?.lastSuccessAt) parts.push(`elements read ${formatDateTime(group.gp.lastSuccessAt, timeZone)}`)
+	if (group.gpAllowedAt > now) parts.push(`next download from ${formatDateTime(group.gpAllowedAt, timeZone)}`)
 	if (group.gp?.lastError) parts.push(`last failure: ${group.gp.lastError}`)
 	return parts.join(' · ')
 }
@@ -24,10 +24,12 @@ function groupStatus(group: SatelliteGroupStatus, now: number) {
 interface GroupRowProps {
 	readonly group: SatelliteGroupStatus
 	readonly now: number
+	// IANA time zone the instants of the group are shown in.
+	readonly timeZone: string
 }
 
 // One CelesTrak group: its state, its automatic downloads, and a download now.
-function GroupRow({ group, now }: GroupRowProps) {
+function GroupRow({ group, now, timeZone }: GroupRowProps) {
 	const { downloading, errors } = useSnapshot(satelliteCatalogState)
 	const key = `gp:GROUP:${group.group}`
 	const waiting = group.gpAllowedAt > now
@@ -37,7 +39,7 @@ function GroupRow({ group, now }: GroupRowProps) {
 			<span className="min-w-0 flex-1 basis-64">
 				<span className="text-ink-100">{group.label}</span>
 				{group.large && <span className="ml-2 text-xs text-warning">large</span>}
-				<span className="block text-xs text-ink-300">{groupStatus(group, now)}</span>
+				<span className="block text-xs text-ink-300">{groupStatus(group, now, timeZone)}</span>
 				{errors[key] && <span className="block text-xs text-danger">{errors[key]}</span>}
 			</span>
 			<span className="flex flex-none items-center gap-4">
@@ -46,7 +48,7 @@ function GroupRow({ group, now }: GroupRowProps) {
 					variant="secondary"
 					className="w-32"
 					disabled={key in downloading || waiting}
-					title={waiting ? `CelesTrak is not asked again before ${formatSatelliteTime(group.gpAllowedAt, '')}.` : 'Downloads the elements of the group from CelesTrak now.'}
+					title={waiting ? `CelesTrak is not asked again before ${formatDateTime(group.gpAllowedAt, timeZone)}.` : 'Downloads the elements of the group from CelesTrak now.'}
 					onClick={() => void downloadSatelliteSource(satelliteCatalogState, key)}
 				>
 					{key in downloading ? 'Downloading…' : group.members > 0 ? 'Refresh' : 'Download'}
@@ -61,10 +63,12 @@ export interface SatelliteSettingsProps {
 	readonly open: boolean
 	// Closes them.
 	readonly onClose: () => void
+	// IANA time zone the tool shows its civil times in.
+	readonly timeZone: string
 }
 
 // Settings of the tool.
-export function SatelliteSettings({ open, onClose }: SatelliteSettingsProps) {
+export function SatelliteSettings({ open, onClose, timeZone }: SatelliteSettingsProps) {
 	const { snapshot } = useSnapshot(satelliteCatalogState)
 	const now = Date.now()
 
@@ -80,7 +84,7 @@ export function SatelliteSettings({ open, onClose }: SatelliteSettingsProps) {
 				{snapshot && (
 					<ul className="m-0 flex list-none flex-col p-0">
 						{snapshot.groups.map((group) => (
-							<GroupRow key={group.group} group={group} now={now} />
+							<GroupRow key={group.group} group={group} now={now} timeZone={timeZone} />
 						))}
 					</ul>
 				)}

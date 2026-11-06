@@ -1,9 +1,9 @@
 import type { SolarDailyState, SolarTwilightCrossings, SunLocalDay } from 'api'
+import { formatLocalTime } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatDuration } from '../../tools/eclipse/eclipse'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-import { formatLocalTime } from '../format'
 
 // Twilight section of the Sun Inspector: the dawn and dusk of civil, nautical, and astronomical twilight on the
 // observer's civil date, and the astronomical night that begins that evening. A limit the Sun never reaches that day
@@ -27,8 +27,8 @@ function Crossings({ crossings, depression, day, timeZone }: { readonly crossing
 
 	return (
 		<>
-			<span className="text-right font-mono text-ink-100">{crossings.dawn !== undefined ? formatLocalTime(crossings.dawn, day.start, undefined, timeZone) : 'none'}</span>
-			<span className="text-right font-mono text-ink-100">{crossings.dusk !== undefined ? formatLocalTime(crossings.dusk, day.start, undefined, timeZone) : 'none'}</span>
+			<span className="text-right font-mono text-ink-100">{crossings.dawn !== undefined ? formatLocalTime(crossings.dawn, timeZone, day.start) : 'none'}</span>
+			<span className="text-right font-mono text-ink-100">{crossings.dusk !== undefined ? formatLocalTime(crossings.dusk, timeZone, day.start) : 'none'}</span>
 		</>
 	)
 }
@@ -46,14 +46,14 @@ function astronomicalNight(day: SunLocalDay) {
 function astronomicalNightSpan(day: SunLocalDay, timeZone: string) {
 	const { start, end } = day.astronomicalNight
 	if (start === undefined) return undefined
-	const from = formatLocalTime(start, day.start, undefined, timeZone)
-	return end === undefined ? `From ${from}` : `${from} → ${formatLocalTime(end, day.start, undefined, timeZone)}`
+	const from = formatLocalTime(start, timeZone, day.start)
+	return end === undefined ? `From ${from}` : `${from} → ${formatLocalTime(end, timeZone, day.start)}`
 }
 
 // Twilight section of the Sun Inspector; without an observer it asks for the location.
 export function TwilightSection({ day, hasObserver, timeZone }: { readonly day?: SunLocalDay; readonly hasObserver: boolean; readonly timeZone: string }) {
 	const dusk = day?.astronomical.dusk
-	const summary = dusk !== undefined && day ? `Astronomical dusk ${formatLocalTime(dusk, day.start, undefined, timeZone)}` : undefined
+	const summary = dusk !== undefined && day ? `Astronomical dusk ${formatLocalTime(dusk, timeZone, day.start)}` : undefined
 
 	return (
 		<CollapsibleSection id="sky.twilight" title="Twilight" summary={summary} defaultOpen={false}>

@@ -1,6 +1,6 @@
 import type { SatellitePassPrediction } from 'api'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatKilometers } from '../../format'
+import { formatClockTime, formatDateTime, formatDegrees, formatKilometers } from '../../format'
 import { type GeographicLocation, openObservingSites } from '../../location/site'
 import { type DisplayZone, describeDisplayZone } from '../../location/zone'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -11,7 +11,7 @@ import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
-import { artificialSatellitesState, formatSatelliteTime, loadSatellitePasses, MAX_PASS_DAYS, SHADOW_LABELS, showSatelliteInSky, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
+import { artificialSatellitesState, loadSatellitePasses, MAX_PASS_DAYS, SHADOW_LABELS, showSatelliteInSky, TWILIGHT_LABELS, TWILIGHT_LIMITS, type TwilightLimit } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
 // Passes tab of Artificial Satellites: the passes of the satellite selected above a minimum altitude over the observing
@@ -146,14 +146,14 @@ function PassRow({ pass, index, timeZone }: PassRowProps) {
 	return (
 		<Row selected={selectedPass === index} onSelect={select}>
 			<Cell>
-				{formatSatelliteTime(pass.start.time, timeZone)}
+				{formatDateTime(pass.start.time, timeZone)}
 				{pass.startsBeforeWindow && <span className="ml-1 text-ink-300">(in progress)</span>}
 			</Cell>
 			<Cell numeric>{formatDegrees(pass.start.azimuth, 0)}</Cell>
-			<Cell>{formatSatelliteTime(pass.culmination.time, timeZone).slice(11)}</Cell>
+			<Cell>{formatClockTime(pass.culmination.time, timeZone, { seconds: true })}</Cell>
 			<Cell numeric>{formatDegrees(pass.culmination.altitude, 1)}</Cell>
 			<Cell>
-				{formatSatelliteTime(pass.end.time, timeZone).slice(11)}
+				{formatClockTime(pass.end.time, timeZone, { seconds: true })}
 				{pass.endsAfterWindow && <span className="ml-1 text-ink-300">(continues)</span>}
 			</Cell>
 			<Cell numeric>{formatDegrees(pass.end.azimuth, 0)}</Cell>

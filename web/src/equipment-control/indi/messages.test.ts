@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { ClientMessage, IndiDeviceMessage, IndiMessagesSnapshotEvent } from 'api'
 import { proxy, snapshot as snap } from 'valtio'
-import { disconnectMessages, followMessages, formatMessageTime, handleMessagesEvent, type IndiMessagesViewState, MAX_MESSAGES, messagesText, newIndiMessagesView, pauseMessages, resubscribeMessages, searchMessages, unfollowMessages } from './messages'
+import { disconnectMessages, followMessages, handleMessagesEvent, type IndiMessagesViewState, MAX_MESSAGES, messagesText, newIndiMessagesView, pauseMessages, resubscribeMessages, searchMessages, unfollowMessages } from './messages'
 
 const target = { connectionId: 'c', hardwareId: 'h' }
 
@@ -120,11 +120,9 @@ describe('presentation', () => {
 		expect(searchMessages(messages, ' ')).toBe(messages)
 	})
 
-	test('formats the instant of receipt in the zone and copies one line per message', () => {
+	test('copies one line per message with the instant of receipt in the zone', () => {
 		const messages = [message(5, 'first'), message(6, 'two\nlines')]
 
-		expect(formatMessageTime(messages[0].receivedAt, 'UTC')).toBe('2026-11-05 14:23:05')
-		expect(formatMessageTime(messages[0].receivedAt, 'America/Sao_Paulo')).toBe('2026-11-05 11:23:05')
 		expect(messagesText(messages, 'Mount', 'UTC')).toBe('2026-11-05 14:23:05\tMount\tfirst\n2026-11-05 14:23:06\tMount\ttwo\nlines')
 	})
 })

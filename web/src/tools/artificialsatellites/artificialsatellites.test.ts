@@ -11,7 +11,6 @@ import {
 	ephemerisCsv,
 	ephemerisDraftError,
 	followSatelliteObserver,
-	formatSatelliteTime,
 	groundTrackInstant,
 	initialArtificialSatellitesState,
 	loadSatelliteGroundTrack,
@@ -175,13 +174,6 @@ test('the ephemeris export is CSV with units in the header, its civil time in th
 
 	// Another zone writes the same instant in its civil time and names it.
 	expect(ephemerisCsv([row], 'America/Sao_Paulo').split('\r\n')[1]).toStartWith('2026-01-01T00:00:00.000Z,2025-12-31 21:00:00,America/Sao_Paulo,180.000000,')
-})
-
-test('a satellite time is written in the IANA zone given', () => {
-	const time = Date.UTC(2026, 10, 4, 12, 30, 15)
-	expect(formatSatelliteTime(time, 'UTC')).toBe('2026-11-04 12:30:15')
-	expect(formatSatelliteTime(time, 'America/Sao_Paulo')).toBe('2026-11-04 09:30:15')
-	expect(formatSatelliteTime(time, 'Asia/Kathmandu')).toBe('2026-11-04 18:15:15')
 })
 
 // Ground track answered for an instant, of a 90-minute orbit.

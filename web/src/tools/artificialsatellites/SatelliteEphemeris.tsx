@@ -1,5 +1,5 @@
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatKilometers, MISSING } from '../../format'
+import { formatDateTime, formatDegrees, formatKilometers, MISSING } from '../../format'
 import type { GeographicLocation } from '../../location/site'
 import { type DisplayZone, describeDisplayZone } from '../../location/zone'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -9,7 +9,7 @@ import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
-import { artificialSatellitesState, downloadEphemerisCsv, ephemerisDraftError, ephemerisRowCount, formatSatelliteTime, loadSatelliteEphemeris, MAX_EPHEMERIS_HOURS, SHADOW_LABELS } from './artificialsatellites'
+import { artificialSatellitesState, downloadEphemerisCsv, ephemerisDraftError, ephemerisRowCount, loadSatelliteEphemeris, MAX_EPHEMERIS_HOURS, SHADOW_LABELS } from './artificialsatellites'
 import { QualityRow } from './SatelliteDetailsPanel'
 
 // Ephemeris tab of Artificial Satellites: positions of the satellite selected sampled from now or from the Sky's time,
@@ -88,7 +88,7 @@ export function SatelliteEphemeris({ observer, zone }: SatelliteEphemerisProps) 
 					<Table columns={EPHEMERIS_COLUMNS}>
 						{rows.map((row) => (
 							<Row key={row.time}>
-								<Cell>{formatSatelliteTime(row.time, timeZone)}</Cell>
+								<Cell>{formatDateTime(row.time, timeZone)}</Cell>
 								<Cell>{formatRightAscension(row.rightAscension)}</Cell>
 								<Cell>{formatDeclination(row.declination)}</Cell>
 								<Cell numeric>{row.azimuth === undefined ? MISSING : formatDegrees(row.azimuth, 1)}</Cell>

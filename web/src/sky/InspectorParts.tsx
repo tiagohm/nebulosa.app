@@ -1,11 +1,11 @@
 import type { SkyEvents, SkyPosition } from 'api'
 import type { ReactNode } from 'react'
-import { formatDegrees, formatPercent } from '../format'
+import { formatDegrees, formatLocalTime, formatPercent } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
-import { formatDeclination, formatLocalTime, formatRightAscension, formatSolarSystemDistance } from './format'
+import { formatDeclination, formatRightAscension, formatSolarSystemDistance } from './format'
 import type { SkySelection } from './sky'
 
 // Parts shared by the Object Inspector and the Sun and Moon Inspectors: the collapsible
@@ -61,7 +61,7 @@ export function PositionSection({ selection, timeZone, children }: { readonly se
 // point near its center. Times are shown in a time zone, or in the browser's when absent.
 function positionNote(position: SkyPosition, constellation: boolean, timeZone: string) {
 	const source = position.source === 'horizons' ? 'JPL Horizons' : position.fallbackReason ? `local model (${FALLBACK_REASONS[position.fallbackReason]})` : 'local model'
-	const place = `Apparent ${position.center} place at ${formatLocalTime(position.time, Date.now(), undefined, timeZone)}, from ${source}.`
+	const place = `Apparent ${position.center} place at ${formatLocalTime(position.time, timeZone, Date.now())}, from ${source}.`
 	return constellation ? `${place} The position is the constellation label, a fixed J2000 point near its center.` : place
 }
 
@@ -87,14 +87,14 @@ export function ObserverSection({ position, events, hasObserver, onSetObserver, 
 			<DataRow label="Azimuth">{formatDegrees(position.azimuth)}</DataRow>
 			{events?.state === 'circumpolar' && <DataRow label="Rise and set">Circumpolar</DataRow>}
 			{events?.state === 'belowHorizon' && <DataRow label="Rise and set">Below the horizon all day</DataRow>}
-			{events?.rise !== undefined && <DataRow label="Rise">{formatLocalTime(events.rise, position.time, undefined, timeZone)}</DataRow>}
+			{events?.rise !== undefined && <DataRow label="Rise">{formatLocalTime(events.rise, timeZone, position.time)}</DataRow>}
 			{events?.transit !== undefined && (
 				<DataRow label="Transit">
-					{formatLocalTime(events.transit, position.time, undefined, timeZone)}
+					{formatLocalTime(events.transit, timeZone, position.time)}
 					{events.transitAltitude !== undefined && ` · ${formatDeclination(events.transitAltitude)}`}
 				</DataRow>
 			)}
-			{events?.set !== undefined && <DataRow label="Set">{formatLocalTime(events.set, position.time, undefined, timeZone)}</DataRow>}
+			{events?.set !== undefined && <DataRow label="Set">{formatLocalTime(events.set, timeZone, position.time)}</DataRow>}
 			<Notice>Refracted altitude. Rise and set are at the standard horizon (34′ of refraction), and the transit is on the meridian: the ones nearest the instant, within 12 hours{isSolarSystem ? ', from the local model' : ''}.</Notice>
 		</CollapsibleSection>
 	)

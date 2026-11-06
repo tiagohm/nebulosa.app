@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees } from '../../format'
+import { formatDegrees, formatLocalTime } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { PanelSection } from '../../shell/ContextualPanel'
@@ -9,7 +9,7 @@ import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { skyClock, skyTime } from '../clock'
-import { formatDeclination, formatLocalTime, formatRightAscension, formatSolarSystemDistance } from '../format'
+import { formatDeclination, formatRightAscension, formatSolarSystemDistance } from '../format'
 import type { SkySelection } from '../sky'
 import { findNextSatellitePass, inspectSatellite, skySatelliteState } from './satellite'
 
@@ -73,7 +73,7 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 						{position.distance !== undefined && <DataRow label="Distance">{formatSolarSystemDistance(position.distance)}</DataRow>}
 						{position.constellationName && <DataRow label="Constellation">{position.constellationName}</DataRow>}
 						<Notice>
-							Geometric {position.center} place at {formatLocalTime(position.time, Date.now(), undefined, timeZone)}, from the orbital elements of the satellite catalog.
+							Geometric {position.center} place at {formatLocalTime(position.time, timeZone, Date.now())}, from the orbital elements of the satellite catalog.
 						</Notice>
 					</>
 				)}
@@ -102,9 +102,9 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 				{nextPass === null && <Notice>No pass above the horizon in the next two days.</Notice>}
 				{nextPass && (
 					<>
-						<DataRow label="Rises">{`${formatLocalTime(nextPass.start.time, Date.now(), undefined, timeZone)} · ${formatDegrees(nextPass.start.azimuth)}`}</DataRow>
-						<DataRow label="Highest">{`${formatLocalTime(nextPass.culmination.time, Date.now(), undefined, timeZone)} · ${formatDegrees(nextPass.culmination.altitude)}`}</DataRow>
-						<DataRow label="Sets">{`${formatLocalTime(nextPass.end.time, Date.now(), undefined, timeZone)} · ${formatDegrees(nextPass.end.azimuth)}`}</DataRow>
+						<DataRow label="Rises">{`${formatLocalTime(nextPass.start.time, timeZone, Date.now())} · ${formatDegrees(nextPass.start.azimuth)}`}</DataRow>
+						<DataRow label="Highest">{`${formatLocalTime(nextPass.culmination.time, timeZone, Date.now())} · ${formatDegrees(nextPass.culmination.altitude)}`}</DataRow>
+						<DataRow label="Sets">{`${formatLocalTime(nextPass.end.time, timeZone, Date.now())} · ${formatDegrees(nextPass.end.azimuth)}`}</DataRow>
 						<DataRow label="Visible">{nextPass.visible.length > 0 ? 'Yes, sunlit in a dark sky' : 'No (daylight or in the shadow)'}</DataRow>
 					</>
 				)}
@@ -112,7 +112,7 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 			{details?.elements && (
 				<CollapsibleSection id="sky.satelliteElements" title="Orbital Data" defaultOpen={false}>
 					<DataRow label="Source">{details.elements.kind === 'manual' ? 'Imported' : 'CelesTrak GP'}</DataRow>
-					<DataRow label="Epoch">{formatLocalTime(details.elements.epoch, Date.now(), undefined, 'UTC')}</DataRow>
+					<DataRow label="Epoch">{formatLocalTime(details.elements.epoch, 'UTC', Date.now())}</DataRow>
 					{details.orbit && <DataRow label="Period">{`${details.orbit.periodMinutes.toFixed(1)} min`}</DataRow>}
 					{details.orbit && <DataRow label="Inclination">{formatDegrees(details.orbit.inclination)}</DataRow>}
 				</CollapsibleSection>

@@ -1,6 +1,6 @@
 import type { SatelliteQuality } from 'api'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatKilometers } from '../../format'
+import { formatDateTime, formatDegrees, formatKilometers, formatUtcDateTime } from '../../format'
 import { type GeographicLocation, openObservingSites } from '../../location/site'
 import type { DisplayZone } from '../../location/zone'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
@@ -10,7 +10,7 @@ import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { artificialSatellitesState, formatElementAge, formatSatelliteTime, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
+import { artificialSatellitesState, formatElementAge, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 
 // Contextual panel of Artificial Satellites: the satellite selected, its position now for the observing site of the
 // active profile (read again every POSITION_REFRESH_MS, its time in the display zone), its orbit, and where its elements
@@ -99,7 +99,7 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 					{positionError && <Notice error>{positionError}</Notice>}
 					{p && position && (
 						<DataList>
-							<DataRow label="Time">{formatSatelliteTime(p.time, timeZone)}</DataRow>
+							<DataRow label="Time">{formatDateTime(p.time, timeZone)}</DataRow>
 							<DataRow label="Seen from">{p.center === 'topocentric' ? 'The observing site' : "The Earth's center"}</DataRow>
 							{p.altitude !== undefined && <DataRow label="Altitude">{`${formatDegrees(p.altitude)} (${p.altitude > 0 ? 'above' : 'below'} the horizon)`}</DataRow>}
 							{p.azimuth !== undefined && <DataRow label="Azimuth">{formatDegrees(p.azimuth)}</DataRow>}
@@ -159,7 +159,7 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 				<CollapsibleSection id="satellites.elements" title="Orbital Data" defaultOpen={false}>
 					<DataList>
 						<DataRow label="Source">{elements.kind === 'manual' ? 'Imported' : `CelesTrak GP (${elements.sourceKey})`}</DataRow>
-						<DataRow label="Epoch">{`${formatSatelliteTime(elements.epoch, 'UTC')} UTC`}</DataRow>
+						<DataRow label="Epoch">{formatUtcDateTime(elements.epoch)}</DataRow>
 						{position && <DataRow label="Age now">{formatElementAge(position.quality.elementAgeDays)}</DataRow>}
 						<DataRow label="Digest">
 							<span title={elements.digest}>{elements.digest.slice(0, 12)}</span>

@@ -1,9 +1,9 @@
 import type { AstroWeatherForecast, AstroWeatherNight, AstroWeatherSource } from 'api'
-import { formatTemperature } from '../../format'
+import { formatClockTime, formatTemperature } from '../../format'
 import type { AstroWeatherMode } from '../../profile/schema'
 import { Icon, type IconName } from '../../ui/Icon'
 import { Notice } from '../../ui/Notice'
-import { BLOCK_LABELS, coverage, formatClock, formatLength, MISSING_LABELS, MODE_LABELS, OUTLOOK_LABELS, REASON_LABELS } from './astroweather'
+import { BLOCK_LABELS, coverage, formatLength, MISSING_LABELS, MODE_LABELS, OUTLOOK_LABELS, REASON_LABELS } from './astroweather'
 import { type FactRange, type NightEvaluation, type NightFacts, nightFacts, type Outlook, type OutlookSegment } from './observing'
 
 // Night at a glance: the outlook in the mode with why, the window worth using or why there is none, and six facts of the part
@@ -53,9 +53,9 @@ function sourceNotices(source: AstroWeatherSource, night: AstroWeatherNight, tim
 	if (source.state === 'unavailable') return [source.errorCode === 'rateLimited' ? `${name} is limiting requests.` : source.errorCode === 'invalidResponse' ? `${name} answered something that cannot be read.` : `${name} cannot be reached.`]
 
 	const notices: string[] = []
-	if (source.state === 'stale' && source.fetchedAt !== undefined) notices.push(`${name} could not be read again: showing its forecast of ${formatClock(source.fetchedAt, timeZone)}.`)
+	if (source.state === 'stale' && source.fetchedAt !== undefined) notices.push(`${name} could not be read again: showing its forecast of ${formatClockTime(source.fetchedAt, timeZone)}.`)
 	const covered = coverage(night.display, source.validFrom, source.validTo)
-	if (covered === 'partial' && source.validTo !== undefined && source.validTo < night.display.end) notices.push(`${name} ends at ${formatClock(source.validTo, timeZone)}.`)
+	if (covered === 'partial' && source.validTo !== undefined && source.validTo < night.display.end) notices.push(`${name} ends at ${formatClockTime(source.validTo, timeZone)}.`)
 	if (covered === 'none') notices.push(`${name} does not cover this night.`)
 	return notices
 }
@@ -87,7 +87,7 @@ export function ForecastSummary({ forecast, loaded, night, evaluation, mode, tim
 	const { outlook, weather, best, marginal, block, scope } = evaluation
 	const mark = OUTLOOK_MARKS[outlook]
 	const facts = nightFacts(forecast, scope)
-	const span = (window: { readonly start: number; readonly end: number }) => `${formatClock(window.start, timeZone)}–${formatClock(window.end, timeZone, true)} (${formatLength(window)})`
+	const span = (window: { readonly start: number; readonly end: number }) => `${formatClockTime(window.start, timeZone)}–${formatClockTime(window.end, timeZone, { named: true })} (${formatLength(window)})`
 	const notices = loaded ? [...sourceNotices(forecast.meteorology.source, night, timeZone), ...sourceNotices(forecast.astronomy.source, night, timeZone)] : []
 	const why = reasonsText(evaluation, REASONS_SHOWN)
 

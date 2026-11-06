@@ -1,5 +1,6 @@
 import type { IndiDeviceMessage, ServerEvent } from 'api'
 import { proxy } from 'valtio'
+import { formatDateTime } from '../../format'
 import type { IndiSend, IndiTarget } from './indi'
 
 // Messages view of one physical device of an INDI connection: the <message> elements its driver sent, which the
@@ -133,13 +134,8 @@ export function searchMessages(messages: readonly IndiDeviceMessage[], query: st
 	return needle ? messages.filter((message) => message.text.toLowerCase().includes(needle)) : messages
 }
 
-// Returns an instant (Unix milliseconds) as YYYY-MM-DD HH:mm:ss in an IANA time zone.
-export function formatMessageTime(time: number, timeZone: string) {
-	return new Intl.DateTimeFormat('sv-SE', { timeZone, dateStyle: 'short', timeStyle: 'medium' }).format(time)
-}
-
 // Returns messages as plain text for the clipboard, one line per message separated by tabs: the instant of receipt
 // in the zone, the device name, and the text, which keeps its own line breaks.
 export function messagesText(messages: readonly IndiDeviceMessage[], device: string, timeZone: string) {
-	return messages.map((message) => `${formatMessageTime(message.receivedAt, timeZone)}\t${device}\t${message.text}`).join('\n')
+	return messages.map((message) => `${formatDateTime(message.receivedAt, timeZone)}\t${device}\t${message.text}`).join('\n')
 }

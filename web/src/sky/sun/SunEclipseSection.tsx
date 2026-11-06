@@ -1,7 +1,8 @@
 import { useSnapshot } from 'valtio'
+import { formatLongDateTime } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
-import { formatEclipseTime, utcDate } from '../../tools/eclipse/eclipse'
+import { utcDate } from '../../tools/eclipse/eclipse'
 import { ECLIPSE_TYPE_NAMES } from '../../tools/solareclipse/solareclipse'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
@@ -23,7 +24,7 @@ export function SunEclipseSection({ hasObserver, timeZone }: { readonly hasObser
 			{eclipse ? (
 				<>
 					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
-					<DataRow label="Greatest eclipse">{formatEclipseTime(eclipse.maximum, timeZone)}</DataRow>
+					<DataRow label="Greatest eclipse">{formatLongDateTime(eclipse.maximum, timeZone)}</DataRow>
 					<DataRow label="Magnitude">{eclipse.magnitude.toFixed(3)}</DataRow>
 					{value.local ? <DataRow label="From here">{value.local.visibility.text}</DataRow> : !hasObserver && <Notice>Select an observing site to see whether it is visible from there.</Notice>}
 					<div>

@@ -1,7 +1,7 @@
 import type { CloseApproach, CloseApproachBody, MinorBody, MinorBodyDetails, MinorBodyPublishedValue } from 'api'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { MISSING } from '../../format'
+import { formatDate, formatDateTime, MISSING } from '../../format'
 import { describeDisplayZone, type DisplayZone } from '../../location/zone'
 import { CLOSE_APPROACH_BODIES, type CloseApproachDistanceDisplay } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
@@ -15,7 +15,6 @@ import {
 	type CloseApproachesState,
 	closeApproachesState,
 	filterCloseApproachHistory,
-	formatApproachTime,
 	formatDiameter,
 	formatDistance,
 	formatDistanceRange,
@@ -97,7 +96,7 @@ function Overview({ approach, zone, distanceDisplay, body, children }: Encounter
 			<DataRow label="Nominal distance">{formatDistance(distance, distanceDisplay)}</DataRow>
 			<OptionalDatum label="3σ range">{formatDistanceRange(distanceMin, distanceMax, distanceDisplay)}</OptionalDatum>
 			<DataRow label="Vrel">{formatVelocity(relativeVelocity)}</DataRow>
-			<DataRow label="Time">{formatApproachTime(time, zone.zone)}</DataRow>
+			<DataRow label="Time">{formatDateTime(time, zone.zone)}</DataRow>
 			<DataRow label="Time zone">{describeDisplayZone(zone)}</DataRow>
 			{children}
 		</CollapsibleSection>
@@ -242,7 +241,7 @@ function OtherApproachesSection({ zone, distanceDisplay }: Omit<EncounterProps, 
 							onClick={() => void selectCloseApproach(closeApproachesState, approach)}
 							className={`flex w-full cursor-pointer items-baseline justify-between gap-2 rounded-sm border-0 px-1 py-0.5 text-left font-mono text-xs hover:bg-base-300 focus-visible:outline-2 focus-visible:outline-accent ${selected?.id === approach.id ? 'bg-accent-subtle text-accent' : 'bg-transparent text-ink-200'}`}
 						>
-							<span>{formatApproachTime(approach.time, zone.zone).slice(0, 10)}</span>
+							<span>{formatDate(approach.time, zone.zone)}</span>
 							<span>{bodyName(approach.body)}</span>
 							<span>{formatDistance(approach.distance, distanceDisplay)}</span>
 						</button>
@@ -306,7 +305,7 @@ export function CloseApproachInspector({ approach, zone, distanceDisplay, action
 					{observability(found.body)}
 					<div className="px-4 py-3">
 						<Notice>
-							{found.details.source} {found.details.sourceVersion}, read {formatApproachTime(found.details.fetchedAt, zone.zone)}.
+							{found.details.source} {found.details.sourceVersion}, read {formatDateTime(found.details.fetchedAt, zone.zone)}.
 						</Notice>
 					</div>
 				</>

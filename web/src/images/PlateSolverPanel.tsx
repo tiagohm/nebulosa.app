@@ -6,7 +6,8 @@ import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
 import { controlRuntime, sendCommand, watchedDeviceState } from '../equipment-control/control'
 import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
-import { formatDuration, MISSING, formatDegrees, formatArcmin } from '../format'
+import { formatArcmin, formatClockTime, formatDegrees, formatDuration, MISSING } from '../format'
+import { BROWSER_TIME_ZONE } from '../location/zone'
 import { operationsState } from '../operations'
 import { formatPositionAngle, formatPixelScale } from '../platesolving/coordinates'
 import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
@@ -336,7 +337,7 @@ function Solutions({ documentKey, imageId, selected }: SolutionsProps) {
 		if (option === 'latest') return 'Latest solve'
 		if (option === 'header') return 'Image header'
 		const job = state.jobs[option]
-		return `${PROVIDER_LABELS[job.request.provider]} ${job.request.strategy} · ${new Date(job.queuedAt).toLocaleTimeString('en-GB')}${job.summary?.outcome === 'noSolution' ? ' · no solution' : ''}`
+		return `${PROVIDER_LABELS[job.request.provider]} ${job.request.strategy} · ${formatClockTime(job.queuedAt, BROWSER_TIME_ZONE, { seconds: true })}${job.summary?.outcome === 'noSolution' ? ' · no solution' : ''}`
 	}
 
 	return (

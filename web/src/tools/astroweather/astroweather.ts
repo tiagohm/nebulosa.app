@@ -243,23 +243,6 @@ export function coverage(span: TimeSpan, validFrom: number | undefined, validTo:
 	return validFrom <= span.start && validTo >= span.end ? 'full' : 'partial'
 }
 
-// Formatters of times by locale, zone, and whether they name the zone.
-const clockFormatters = new Map<string, Intl.DateTimeFormat>()
-
-// Returns the time of day of an instant in a time zone, optionally with the zone's name, whose offset tells apart an hour the
-// clocks repeat.
-export function formatClock(time: number, timeZone: string, named = false, locale: string = 'en-US') {
-	const key = `${locale}|${timeZone}|${named}`
-	let formatter = clockFormatters.get(key)
-
-	if (!formatter) {
-		formatter = new Intl.DateTimeFormat(locale, { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: named ? 'short' : undefined })
-		clockFormatters.set(key, formatter)
-	}
-
-	return formatter.format(time)
-}
-
 // Returns the length of a span as hours and minutes, such as "5h 20m".
 export function formatLength({ start, end }: TimeSpan) {
 	const minutes = Math.round((end - start) / 60_000)

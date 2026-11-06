@@ -1,3 +1,4 @@
+import { dateTimeFormat } from '../format'
 import type { DisplayTimeZoneMode } from '../profile/schema'
 
 // Civil time zones of the application, and the one rule that says which zone a civil time is shown in. A zone is always
@@ -70,38 +71,23 @@ export function describeDisplayZone({ zone, source }: DisplayZone): string {
 	}
 }
 
-// Formatters of the UTC offset of an instant, by time zone.
-const offsetFormatters = new Map<string, Intl.DateTimeFormat>()
-
 // Returns the offset of a time zone from UTC at an instant (Unix milliseconds) as text, east positive: "UTC−03:00",
 // "UTC+05:45", "UTC+00:00". It holds at that instant only, since a zone's offset changes with daylight saving time and
 // its history.
 export function formatUtcOffset(timeZone: string, time: number) {
-	let formatter = offsetFormatters.get(timeZone)
-
-	if (!formatter) {
-		formatter = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
-		offsetFormatters.set(timeZone, formatter)
-	}
-
-	const name = formatter.formatToParts(time).find((part) => part.type === 'timeZoneName')?.value ?? 'GMT'
+	const parts = dateTimeFormat({ timeZone, timeZoneName: 'longOffset' }).formatToParts(time)
+	const name = parts.find((part) => part.type === 'timeZoneName')?.value ?? 'GMT'
 	const offset = name.replace('GMT', '').replace('-', '−')
 	return `UTC${offset || '+00:00'}`
 }
 
-// Formatters of the short name of a zone, by time zone.
-const nameFormatters = new Map<string, Intl.DateTimeFormat>()
-
 // Returns the short name of a time zone at an instant (Unix milliseconds), such as "GMT-3" or "CEST".
 export function zoneShortName(timeZone: string, time: number) {
-	let formatter = nameFormatters.get(timeZone)
-
-	if (!formatter) {
-		formatter = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'short' })
-		nameFormatters.set(timeZone, formatter)
-	}
-
-	return formatter.formatToParts(time).find((part) => part.type === 'timeZoneName')?.value ?? ''
+	return (
+		dateTimeFormat({ timeZone, timeZoneName: 'short' })
+			.formatToParts(time)
+			.find((part) => part.type === 'timeZoneName')?.value ?? ''
+	)
 }
 
 // Wall-clock reading of an instant in a time zone. Months are 1-12.
@@ -123,18 +109,9 @@ export interface WallTime {
 // Milliseconds in one day.
 const DAY_MS = 86_400_000
 
-// Formatters of wall-clock parts by time zone.
-const partFormatters = new Map<string, Intl.DateTimeFormat>()
-
 // Returns the wall-clock reading of an instant (Unix milliseconds) in a time zone. Seconds are truncated.
 export function zonedWallTime(time: number, timeZone: string): WallTime {
-	let formatter = partFormatters.get(timeZone)
-
-	if (!formatter) {
-		formatter = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' })
-		partFormatters.set(timeZone, formatter)
-	}
-
+	const formatter = dateTimeFormat({ timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' })
 	const parts: Record<string, number> = {}
 	for (const part of formatter.formatToParts(time)) if (part.type !== 'literal') parts[part.type] = +part.value
 	return { year: parts.year, month: parts.month, day: parts.day, hour: parts.hour, minute: parts.minute, second: parts.second }

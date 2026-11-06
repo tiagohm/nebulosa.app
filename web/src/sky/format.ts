@@ -2,9 +2,9 @@ import { AU_KM } from 'nebulosa/src/core/constants'
 import { formatDEC, formatRA, toArcmin, toArcsec } from 'nebulosa/src/math/units/angle'
 import { formatFixed, formatKilometers, MISSING } from '../format'
 
-// Display formats of the Sky workspace: equatorial and horizontal angles, apparent angular sizes, distances,
-// magnitudes, and instants in the browser's time zone with the zone named, so a time is never ambiguous. Azimuths and
-// position angles are plain degrees, written by `formatDegrees` of `format.ts`. Right ascension and declination are
+// Display formats of the Sky workspace: equatorial and horizontal angles, apparent angular sizes, distances, and
+// magnitudes. Azimuths and position angles are plain degrees, written by `formatDegrees` of `format.ts`, and instants
+// by its time formats (`formatLocalTime` names the zone, so a time is never ambiguous). Right ascension and declination are
 // always sexagesimal with the toolkit's default decimals, which carry a rounded 60 into the next field. Every format
 // follows the rules of `format.ts`: a value that is not finite reads MISSING, and a unit or a number of decimals is
 // chosen after rounding, so a boundary value never reads "60″", "10.0000 AU", or "100.0 ly".
@@ -14,12 +14,6 @@ const AU_PER_LIGHT_YEAR = 63_241.077
 
 // Distance below which a solar-system distance is shown in kilometers, in AU (about 2.6 lunar distances).
 const KILOMETER_DISTANCE_LIMIT = 0.007
-
-// Formatters of local times, by locale, time zone, and whether they show the date.
-const localTimeFormatters = new Map<string, Intl.DateTimeFormat>()
-
-// Formatters of the calendar day of an instant, by time zone, which tell whether two instants share a day.
-const dayFormatters = new Map<string, Intl.DateTimeFormat>()
 
 // Returns a number with thousands separators and no decimals: "1,344".
 function formatWhole(value: number) {
@@ -69,28 +63,4 @@ export function formatStellarDistance(au: number) {
 // Formats a visual magnitude with two decimals: "-1.46", "8.00".
 export function formatMagnitude(magnitude: number) {
 	return formatFixed(magnitude, 2)
-}
-
-// Formats an instant (Unix milliseconds) as a local time with its time zone: "14:23 GMT-3". A time on another day than
-// `reference` also shows the date. An instant that is not finite reads MISSING.
-export function formatLocalTime(time: number, reference: number = time, locale: string = 'en-US', timeZone?: string) {
-	if (!Number.isFinite(time)) return MISSING
-	const zone = timeZone ?? ''
-	let day = dayFormatters.get(zone)
-
-	if (!day) {
-		day = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
-		dayFormatters.set(zone, day)
-	}
-
-	const dated = Number.isFinite(reference) && day.format(time) !== day.format(reference)
-	const key = `${locale}|${zone}|${dated}`
-	let formatter = localTimeFormatters.get(key)
-
-	if (!formatter) {
-		formatter = new Intl.DateTimeFormat(locale, { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short', ...(dated && { month: 'short', day: 'numeric' }) })
-		localTimeFormatters.set(key, formatter)
-	}
-
-	return formatter.format(time)
 }

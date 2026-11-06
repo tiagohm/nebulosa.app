@@ -4,7 +4,7 @@ import { proxy } from 'valtio'
 import { ACTIVE_TOOL_LOCATION, resolveToolLocation } from '../../location/site'
 import { DEFAULT_ZONE_OVERRIDE, resolveDisplayZone } from '../../location/zone'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { type AstroWeatherState, coverage, firstNight, followProfile, followSite, formatClock, formatLength, hasNextNight, loadCurrentNight, loadForecast, loadNight, nightEnded, siteKey, skyBands, stepNight } from './astroweather'
+import { type AstroWeatherState, coverage, firstNight, followProfile, followSite, formatLength, hasNextNight, loadCurrentNight, loadForecast, loadNight, nightEnded, siteKey, skyBands, stepNight } from './astroweather'
 
 const SITE = { latitude: -22.4, longitude: -45.45, elevation: 850, timeZone: 'America/Sao_Paulo' }
 const OTHER = { ...SITE, latitude: 10 }
@@ -312,13 +312,6 @@ describe('sky bands', () => {
 })
 
 describe('formats', () => {
-	test('times follow the zone, and the zone tells apart a repeated hour', () => {
-		expect(formatClock(Date.UTC(2026, 9, 31, 23, 5), 'America/Sao_Paulo', false, 'en-GB')).toBe('20:05')
-		expect(formatClock(Date.UTC(2026, 9, 31, 18, 20), 'Asia/Kathmandu', false, 'en-GB')).toBe('00:05')
-		const zone = 'America/New_York'
-		expect(formatClock(Date.UTC(2026, 10, 1, 5, 30), zone, true, 'en-US')).not.toBe(formatClock(Date.UTC(2026, 10, 1, 6, 30), zone, true, 'en-US'))
-	})
-
 	test('lengths', () => {
 		expect(formatLength({ start: 0, end: 5 * HOUR + 7 * 60_000 })).toBe('5h 07m')
 	})

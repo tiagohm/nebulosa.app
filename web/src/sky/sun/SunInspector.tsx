@@ -2,7 +2,7 @@ import type { SkyObjectRef, SkyPosition, SunLocalDay } from 'api'
 import { SUN_RADIUS_AU } from 'nebulosa/src/core/constants'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees } from '../../format'
+import { formatDegrees, formatLocalTime } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { PanelSection } from '../../shell/ContextualPanel'
@@ -10,7 +10,7 @@ import { formatDuration } from '../../tools/eclipse/eclipse'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-import { formatApparentSize, formatDeclination, formatLocalTime, formatMagnitude } from '../format'
+import { formatApparentSize, formatDeclination, formatMagnitude } from '../format'
 import { PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
 import type { SkySelection } from '../sky'
@@ -80,14 +80,14 @@ function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone
 					{day ? (
 						<>
 							{daylightState(day) && <DataRow label="Day">{daylightState(day)}</DataRow>}
-							{(day.sunrise !== undefined || day.daylight === 'partial') && <DataRow label="Sunrise">{day.sunrise !== undefined ? formatLocalTime(day.sunrise, day.start, undefined, timeZone) : 'None this day'}</DataRow>}
+							{(day.sunrise !== undefined || day.daylight === 'partial') && <DataRow label="Sunrise">{day.sunrise !== undefined ? formatLocalTime(day.sunrise, timeZone, day.start) : 'None this day'}</DataRow>}
 							{day.transit !== undefined && (
 								<DataRow label="Transit">
-									{formatLocalTime(day.transit, day.start, undefined, timeZone)}
+									{formatLocalTime(day.transit, timeZone, day.start)}
 									{day.transitAltitude !== undefined && ` · ${formatDeclination(day.transitAltitude)}`}
 								</DataRow>
 							)}
-							{(day.sunset !== undefined || day.daylight === 'partial') && <DataRow label="Sunset">{day.sunset !== undefined ? formatLocalTime(day.sunset, day.start, undefined, timeZone) : 'None this day'}</DataRow>}
+							{(day.sunset !== undefined || day.daylight === 'partial') && <DataRow label="Sunset">{day.sunset !== undefined ? formatLocalTime(day.sunset, timeZone, day.start) : 'None this day'}</DataRow>}
 							{day.daylightSeconds !== undefined && <DataRow label="Daylight">{formatDuration(day.daylightSeconds)}</DataRow>}
 							<Notice>Refracted altitude at the instant. Sunrise, transit, and sunset of {day.localDate}: the upper limb at the horizon with standard refraction (the center at −50′, geometric), from the local model.</Notice>
 						</>

@@ -45,23 +45,6 @@ export function mapLocation(current: ToolLocation, point: EclipsePlace): Extract
 	return { mode: 'manual', latitude: point.latitude, longitude: point.longitude, elevation: 0, timeZone: current.mode === 'manual' ? current.timeZone : 'UTC' }
 }
 
-// Formatters of eclipse times by locale and time zone.
-const timeFormatters = new Map<string, Intl.DateTimeFormat>()
-
-// Returns an instant (Unix milliseconds) as its date and time to the second in an IANA time zone, with the zone's
-// name, such as "Sep 16, 1997, 18:47:11 UTC", so a time past midnight shows its day.
-export function formatEclipseTime(time: number, timeZone: string, locale: string = 'en-US'): string {
-	const key = `${locale}|${timeZone}`
-	let formatter = timeFormatters.get(key)
-
-	if (!formatter) {
-		formatter = new Intl.DateTimeFormat(locale, { timeZone, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: 'short' })
-		timeFormatters.set(key, formatter)
-	}
-
-	return formatter.format(time)
-}
-
 // Returns the UTC calendar date of an instant (Unix milliseconds) as YYYY-MM-DD, the value of a date field.
 export function utcDate(time: number): string {
 	return new Date(time).toISOString().slice(0, 10)

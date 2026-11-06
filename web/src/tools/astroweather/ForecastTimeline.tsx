@@ -1,7 +1,8 @@
 import type { AstronomicalSample, AstroWeatherForecast, AstroWeatherNight, MeteorologySample } from 'api'
 import { type KeyboardEvent, type MouseEvent, useEffect, useRef, useState } from 'react'
+import { formatClockTime } from '../../format'
 import { moveIndex } from '../../ui/navigation'
-import { formatClock, OUTLOOK_LABELS, type SkyBand, skyBands } from './astroweather'
+import { OUTLOOK_LABELS, type SkyBand, skyBands } from './astroweather'
 import type { NightEvaluation, ObservingWindow, Outlook, OutlookSegment } from './observing'
 
 // Timeline of a night: one time axis shared by rows of the outlook, cloud, seeing, transparency, precipitation, gusts, and the
@@ -169,7 +170,7 @@ function Tiles({ samples, value, title, row, night, scale, timeZone }: TilesProp
 				const right = scale.x(Math.min(display.end, sample.time + SAMPLE_HALF_WIDTH_MS))
 				return (
 					<g key={sample.time}>
-						<title>{`${formatClock(sample.time, timeZone)}: ${title(sample, code)}, nearest 3 hour forecast sample`}</title>
+						<title>{`${formatClockTime(sample.time, timeZone)}: ${title(sample, code)}, nearest 3 hour forecast sample`}</title>
 						<rect x={left} y={top} width={Math.max(1, right - left - MARK_GAP)} height={height} rx={2} fill="var(--color-info)" fillOpacity={0.12 + (0.5 * (8 - code)) / 7} />
 						{right - left > SYMBOL_MINIMUM_WIDTH && (
 							<text x={(left + right - MARK_GAP) / 2} y={top + height / 2} dy="0.35em" textAnchor="middle" fill="var(--color-ink-100)">
@@ -224,7 +225,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 	}
 	const byTime = new Map<number, MeteorologySample>(forecast.meteorology.samples.map((sample) => [sample.time, sample]))
 	const selected = segments[cursor]
-	const hourLabel = (hour: OutlookSegment) => `${formatClock(hour.start, timeZone)}–${formatClock(hour.end, timeZone)}`
+	const hourLabel = (hour: OutlookSegment) => `${formatClockTime(hour.start, timeZone)}–${formatClockTime(hour.end, timeZone)}`
 
 	// Chooses the hour clicked.
 	function onClick(event: MouseEvent<SVGSVGElement>) {
@@ -249,7 +250,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 				<title>Forecast timeline of the night: use the arrow keys to choose an hour</title>
 				{skyBands(night).map((band) => (
 					<rect key={band.start} x={scale.x(band.start)} y={AXIS_HEIGHT} width={Math.max(0, scale.x(band.end) - scale.x(band.start))} height={height - AXIS_HEIGHT} fill={SKY_FILLS[band.band]}>
-						<title>{`${SKY_LABELS[band.band]}: ${formatClock(band.start, timeZone)}–${formatClock(band.end, timeZone)}`}</title>
+						<title>{`${SKY_LABELS[band.band]}: ${formatClockTime(band.start, timeZone)}–${formatClockTime(band.end, timeZone)}`}</title>
 					</rect>
 				))}
 				{ROWS.map((row) => (
@@ -264,7 +265,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 					<g key={time}>
 						<line x1={scale.x(time)} x2={scale.x(time)} y1={AXIS_HEIGHT - 4} y2={AXIS_HEIGHT} stroke="var(--color-line-200)" />
 						<text x={scale.x(time)} y={AXIS_HEIGHT - 8} textAnchor="middle" fill="var(--color-ink-300)">
-							{formatClock(time, timeZone)}
+							{formatClockTime(time, timeZone)}
 						</text>
 					</g>
 				))}
@@ -324,7 +325,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 				/>
 				{moon.above.map((span) => (
 					<rect key={span.start} x={scale.x(span.start)} y={scale.y('Moon up') + ROW_HEIGHT / 2 - 3} width={Math.max(1, scale.x(span.end) - scale.x(span.start))} height={6} rx={3} fill="var(--color-ink-200)">
-						<title>{`Moon above the horizon: ${formatClock(span.start, timeZone)}–${formatClock(span.end, timeZone)}`}</title>
+						<title>{`Moon above the horizon: ${formatClockTime(span.start, timeZone)}–${formatClockTime(span.end, timeZone)}`}</title>
 					</rect>
 				))}
 				{now > display.start && now < display.end && <line x1={scale.x(now)} x2={scale.x(now)} y1={AXIS_HEIGHT} y2={height} stroke="var(--color-ink-100)" strokeDasharray="1 3" />}

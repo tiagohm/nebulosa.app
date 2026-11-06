@@ -456,8 +456,12 @@ function currentTarget(mount: { readonly equatorialCoordinate: { readonly rightA
 	return { frame: 'JNOW', x: `${((mount.equatorialCoordinate.rightAscension + offset) * 12) / Math.PI}`, y: `${(mount.equatorialCoordinate.declination * 180) / Math.PI}` }
 }
 
-// Observer at the mount's site, so the pole is always above the horizon from the simulator.
+// Observer at the equator and Greenwich, for answers that do not depend on where the sky is (a parked mount, an altitude
+// and azimuth, an unparsable coordinate); a sky coordinate is above its horizon only half of the day.
 const SITE_OBSERVER = { latitude: 0, longitude: 0, elevation: 0 }
+
+// Observer at mid northern latitude, whose celestial pole is always 45° high.
+const NORTHERN_OBSERVER = { latitude: 45, longitude: 0, elevation: 0 }
 
 test('switches tracking and its rate only as the mount reports them', async () => {
 	const { manager, id, client, commands, mountId } = await setup()
@@ -560,12 +564,14 @@ test('a GoTo admitted under a reservation keeps the refusals and the correction 
 	if (!reserved.ok) throw new Error('not reserved')
 	const invocation = { reservation: reserved.reservation }
 	const target = currentTarget(mount, deg(1))
+	// Seen from where the mount points at the zenith, so the target is above the horizon at any time of the day.
+	const { observer } = zenithOf(mount)
 
-	expect(commands.goTo(id, mount.id, { token: 'manual', target, observer: SITE_OBSERVER }).status).toBe(409)
-	expect(commands.admitGoTo(id, mount.id, { token: 'refused', target: { frame: 'JNOW', x: '0', y: '89.5' }, observer: SITE_OBSERVER }, invocation)).toMatchObject({ ok: false, status: 422, code: 'correctionRefused' })
+	expect(commands.goTo(id, mount.id, { token: 'manual', target, observer }).status).toBe(409)
+	expect(commands.admitGoTo(id, mount.id, { token: 'refused', target: { frame: 'JNOW', x: '0', y: '89.5' }, observer: NORTHERN_OBSERVER }, invocation)).toMatchObject({ ok: false, status: 422, code: 'correctionRefused' })
 
-	const admitted = commands.admitGoTo(id, mount.id, { token: 'reserved', target, observer: SITE_OBSERVER }, invocation)
+	const admitted = commands.admitGoTo(id, mount.id, { token: 'reserved', target, observer }, invocation)
 	if (!admitted.ok) throw new Error(admitted.error)
 	expect(await admitted.admission.finished).toMatchObject({ kind: 'mount.goto', state: 'succeeded' })
 	reserved.reservation.release()
-}, 40000)
+})

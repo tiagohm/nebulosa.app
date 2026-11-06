@@ -71,6 +71,14 @@ export const ICONS = {
 	duplicate: 'M9 9h11v11H9zM15 9V4H4v11h5',
 	trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3',
 	edit: 'M4 20v-4L15 5l4 4L8 20zM13 7l4 4',
+	// A video camera: its body and the lens cone.
+	video: 'M3 7h12v10H3zM15 10.5l6-3.5v10l-6-3.5',
+	// Arrows out to two opposite corners.
+	expand: 'M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7',
+	// A small window inside a larger one.
+	pictureInPicture: 'M3 5h18v14H3zM12 12h7v5h-7z',
+	// A window docked at the bottom left of the screen.
+	dock: 'M3 5h18v14H3zM5 13h7v4H5z',
 } as const satisfies Readonly<Record<string, string>>
 
 // Name of an icon in ICONS.

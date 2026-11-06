@@ -116,6 +116,8 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 
 	const outdated = tool.revision !== base.revision
 	const { min, max } = tool.timeoutLimits
+	// Whether the program is a gateway the server keeps running, whose timeout bounds its start, not a run.
+	const gateway = tool.capabilities.includes('video-gateway')
 	const check = test && checkMatches(test, draft) ? test : tool.lastCheck && checkMatches(tool.lastCheck, draft) ? tool.lastCheck : undefined
 	const checkStatus: CheckDisplay = testing ? 'checking' : (check?.status ?? 'notTested')
 	const staleTest = !testing && !check && test !== undefined
@@ -195,9 +197,11 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 						<Notice>Base URL of the service; the public nova.astrometry.net when empty. Changing it signs out.</Notice>
 					</>
 				)}
-				<NumberInput label="Default Timeout" suffix="s" min={min / 1000} max={max / 1000} step={1} value={draft.timeout / 1000} onChange={(seconds) => edit({ ...draft, timeout: seconds * 1000 })} />
+				<NumberInput label={gateway ? 'Startup Timeout' : 'Default Timeout'} suffix="s" min={min / 1000} max={max / 1000} step={1} value={draft.timeout / 1000} onChange={(seconds) => edit({ ...draft, timeout: seconds * 1000 })} />
 				<Notice>
-					Time limit of each run, from {min / 1000} to {max / 1000} seconds. Services that run {tool.name} use these settings; an operation keeps the settings it started with.
+					{gateway
+						? `Time ${tool.name} may take to become ready after starting, from ${min / 1000} to ${max / 1000} seconds. The server keeps it running while any observatory camera is enabled, and saving restarts it.`
+						: `Time limit of each run, from ${min / 1000} to ${max / 1000} seconds. Services that run ${tool.name} use these settings; an operation keeps the settings it started with.`}
 				</Notice>
 			</PanelSection>
 			<PanelSection title="Actions">

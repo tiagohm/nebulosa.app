@@ -44,6 +44,8 @@ import { handleStreaksEvent, refreshStreaks, streaksState } from './streaks/stre
 import { handleImageStackingEvent, imageStackingRuntime, refreshImageStacking } from './tools/imagestacking/projects'
 import { handleMeridianFlipEvent, meridianFlipState, refreshMeridianFlip } from './tools/meridianflip/meridianflip'
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
+import { handleObservatoryCameraEvent, observatoryCamerasState, refreshObservatoryCameras } from './tools/observatorycameras/observatorycameras'
+import { handlePlayerEvent, watchPlayers } from './tools/observatorycameras/player'
 
 // Entry point of the browser bundle: restores the URL route, reads the workspace (saved connections and profiles) from
 // the server, which the shell waits for, writes back what the tab changes in it, keeps the view state of the tab in
@@ -96,6 +98,8 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleCaptureEvent(captureRuntime, event), refresh: () => refreshCaptures(captureRuntime) },
 	{ handle: (event) => handleNudgeEvent(nudgeRuntime, event), refresh: () => refreshNudges(nudgeRuntime) },
 	{ handle: (event) => handleMountRemoteControlEvent(mountRemoteControlState, event), refresh: () => refreshMountRemoteControl(mountRemoteControlState) },
+	{ handle: (event) => handleObservatoryCameraEvent(observatoryCamerasState, event), refresh: () => refreshObservatoryCameras(observatoryCamerasState) },
+	{ handle: (event) => handlePlayerEvent(event) },
 	{ handle: (event) => handleMeridianFlipEvent(meridianFlipState, event), refresh: () => refreshMeridianFlip(meridianFlipState) },
 	{ handle: (event) => handleSatelliteEvent(satelliteCatalogState, event), refresh: () => refreshSatelliteCatalog(satelliteCatalogState) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
@@ -128,6 +132,7 @@ const stops = [
 	new ViewPersistence(profileState).start(),
 	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), activeCameraTabEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime)]),
 	watchHistory(routeState),
+	watchPlayers(),
 	confirmUnsavedOnUnload(imagesState),
 	releaseLeasesOnHide(imagesState),
 	subscribe((event) => {

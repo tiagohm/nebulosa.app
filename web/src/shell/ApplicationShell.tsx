@@ -7,13 +7,14 @@ import { TopBar } from '../layout/TopBar'
 import { NotificationToasts } from '../notifications/NotificationToasts'
 import { ProfileModal } from '../profile/ProfileModal'
 import { SettingsPage } from '../settings/SettingsPage'
+import { CameraViewerHost } from '../tools/observatorycameras/CameraViewerHost'
 import { NavigationRail } from './NavigationRail'
 import { routeState } from './route'
 import { StatusBar } from './StatusBar'
 import { workspaceDefinition } from './workspaces'
 
 // Persistent frame of the application: top bar, navigation rail, the active workspace, the Equipment
-// Control page, the Settings page, or the About page, status bar, the management modals, and the notification toasts. The frame stays mounted while navigating; only the
+// Control page, the Settings page, or the About page, status bar, the management modals, the mini-player of the observatory cameras, and the notification toasts. The frame stays mounted while navigating; only the
 // active workspace's component is swapped, and unmounting it releases presentation resources only.
 
 // Application shell.
@@ -32,6 +33,7 @@ export function ApplicationShell() {
 			<ConnectionModal />
 			<EquipmentModal />
 			<ProfileModal />
+			<CameraViewerHost />
 			<NotificationToasts />
 		</div>
 	)

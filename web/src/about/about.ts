@@ -111,6 +111,14 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 		credits: [
 			{ name: 'ASTAP', owner: 'Han Kleijn', url: 'https://www.hnsky.org/astap.htm', use: 'Optional plate solving and star detection, installed by you.' },
 			{ name: 'Astrometry.net', url: 'https://astrometry.net/', use: 'Optional local plate solving with solve-field, installed by you.', notice: 'Lang et al., The Astronomical Journal, 2010.' },
+			{
+				name: 'MediaMTX',
+				owner: 'bluenviron',
+				url: 'https://github.com/bluenviron/mediamtx',
+				use: 'Optional media gateway of Observatory Cameras, installed by you; the WHEP reader of the browser is adapted from its reader.js.',
+				license: { name: 'MIT', url: 'https://github.com/bluenviron/mediamtx/blob/main/LICENSE' },
+				notice: 'Copyright (c) 2019 aler9.',
+			},
 		],
 	},
 ]

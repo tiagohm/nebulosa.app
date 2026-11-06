@@ -49,14 +49,16 @@ Run it and open the address it prints (`http://localhost:7000` by default):
 
 To run from source instead, without compiling, use `bun start`, which takes the same options (`bun start --port 8080`).
 
-| Option / variable     | Default      | Description                                                                                                       |
-| --------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `--host` / `APP_HOST` | `localhost`  | Host or IP address the server listens on; `0.0.0.0` accepts every network interface                               |
-| `--port` / `APP_PORT` | `7000`       | TCP port the server listens on                                                                                    |
-| `NEBULOSA_HOME`       | `~/Nebulosa` | Data directory: the database (`nebulosa.sqlite`), captures, calibration frames and masters, and stacking projects |
+| Option / variable            | Default      | Description                                                                                                                                                |
+| ---------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--host` / `APP_HOST`        | `localhost`  | Host or IP address the server listens on; `0.0.0.0` accepts every network interface                                                                        |
+| `--port` / `APP_PORT`        | `7000`       | TCP port the server listens on                                                                                                                             |
+| `NEBULOSA_HOME`              | `~/Nebulosa` | Data directory: the database (`nebulosa.sqlite`), captures, calibration frames and masters, and stacking projects                                          |
+| `NEBULOSA_CAMERA_SECRET_KEY` | (none)       | Base64 of 32 random bytes that encrypts the addresses of the observatory cameras; without it, the key is kept by the operating system's credential storage |
 
 The command-line options win over the environment variables. The executable also reads a `.env` file from the directory it is started in, and `APP_HOST` and `APP_PORT` present when it was compiled become its defaults.
 
 - Only one server can use a data directory at a time; give a second server its own `NEBULOSA_HOME`.
 - Stop it with Ctrl+C (or `SIGTERM` from a service manager): the device operations still running are stopped and the database is closed before it exits.
 - There is no authentication: any client that can reach the server can command the devices and browse the server's files. Keep it on `localhost`, or on a network you trust.
+- Observatory Cameras (Tools) relays IP security cameras through [MediaMTX](https://github.com/bluenviron/mediamtx) 1.21 or later, which you install and set in Settings → External Tools. The browser receives the video directly from the server over UDP port 8189, so allow it in the server's firewall. The camera addresses are encrypted in the database with a key kept outside it: a copy of the database without `NEBULOSA_CAMERA_SECRET_KEY` (or the operating system's credential storage) cannot give them back.

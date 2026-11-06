@@ -5,6 +5,7 @@ import { join } from 'path'
 import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import { type OperationContext, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { deg } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationDiagnostics } from 'nebulosa/src/observation/guiding/calibrator'
 import type { StarTracker } from 'nebulosa/src/observation/guiding/tracker.star'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
@@ -12,6 +13,7 @@ import { ConnectionManager } from './connection'
 import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import { calibrationProgressOf, GUIDING_REGION_RADIUS, GUIDING_REGION_STARS, type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest, guidingRegions } from './guiding'
+import { GuidingCalibrationStore } from './guidingcalibration.store'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry, type ToolInvocation } from './operations'
 
@@ -37,8 +39,8 @@ let tokens = 0
 const SETTLE = { pixels: 1.5, time: 1, timeout: 10 }
 
 // The simulator connection with its camera and mount connected, and the guiding sessions over it, guiding through the
-// mount's ST4 port.
-async function setup() {
+// mount's ST4 port. calibrations keeps the solved calibrations, a database of its own when absent.
+async function setup(calibrations = new GuidingCalibrationStore(AppDatabase.memory())) {
 	const manager = new ConnectionManager()
 	disposables.push(manager)
 	const { id } = await manager.connect({ type: 'SIMULATOR' })
@@ -62,6 +64,7 @@ async function setup() {
 		frames,
 		// A settings file of its own, where ASTAP is not configured.
 		new ExternalToolsStore(AppDatabase.memory()),
+		calibrations,
 		(event) => events.push(event),
 	)
 	disposables.push(guiding)
@@ -101,6 +104,30 @@ function request({ id, guideOutputId }: Setup, patch: Partial<GuidingStartReques
 		trackingMode: 'singleStar',
 		...patch,
 	}
+}
+
+// A request guiding through the mount, whose camera renders the whole field of stars at the mount's pointing, calibrating
+// in a few long steps without the returns.
+function guided(context: Setup, patch: Partial<GuidingStartRequest> = {}): Partial<GuidingStartRequest> {
+	return {
+		mount: { connectionId: context.id, deviceId: context.mountId },
+		snoop: { mount: context.mountId },
+		camera: { gain: 0, offset: 0, binX: 1, binY: 1, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '' },
+		calibration: { clearingMoveEnabled: false, decReturnEnabled: false, settleFramesAfterMove: 1, raPulse: 2000, decPulse: 2000, minMovePerStepPx: 0.5, minNetRaTravelPx: 5, minNetDecTravelPx: 5 },
+		...patch,
+	}
+}
+
+// Points the mount at declination +20° (it starts at the pole, where an RA pulse moves nothing) and has it track at a
+// guide rate of 1× sidereal, so a 2 s pulse moves the catalog stars the camera renders through its 50 mm lens by more
+// than a pixel, and turns off the sky noise of the camera, so the detections are the stars.
+async function trackStars(context: Setup) {
+	const { mounts } = context.manager.devices
+	mounts.syncTo(context.mount, context.mount.equatorialCoordinate.rightAscension, deg(20))
+	await waitUntil(() => Math.abs(context.mount.equatorialCoordinate.declination - deg(20)) < deg(0.1))
+	mounts.tracking(context.mount, true)
+	context.client.sendNumber({ device: context.mount.name, name: 'GUIDE_RATE', elements: { GUIDE_RATE_WE: 1, GUIDE_RATE_NS: 1 } })
+	context.client.sendSwitch({ device: context.camera.name, name: 'SIMULATOR_NOISE_FEATURES', elements: { SKY_ENABLED: false, LIGHT_POLLUTION_ENABLED: false, MOON_ENABLED: false, AMP_GLOW_ENABLED: false } })
 }
 
 // Starts a session and waits until it loops; returns its ids.
@@ -388,6 +415,71 @@ describe('guiding', () => {
 		expect(await context.guiding.restoreAfterMotion(suspended.value, new AbortController().signal)).toBe('externallyChanged')
 		expect(await context.guiding.suspendForMotion('unknown')).toMatchObject({ ok: false })
 	})
+
+	test('a completed calibration is saved, and a later session of the same equipment restores it instead of calibrating', async () => {
+		const store = new GuidingCalibrationStore(AppDatabase.memory())
+		const context = await setup(store)
+		await trackStars(context)
+		const types = (sessionId: string) => context.guiding.events(sessionId, 0).json() as Promise<GuidingPage<GuidingEventRecord>>
+
+		const first = await start(context, guided(context))
+		await waitUntil(() => context.guiding.selectTarget(first.sessionId, {}).status === 200)
+		expect(context.guiding.startGuiding(first.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
+		const solved = context.summary()!.calibration!
+		expect(solved).toMatchObject({ origin: 'new', saved: true, transformations: [], declinationScale: 1, orthogonalAssumed: false })
+		expect(solved.source.pierSide).toBeDefined()
+		expect(solved.source.declination).toBeDefined()
+		expect(store.list(undefined, 10).map((header) => header.calibrationId)).toEqual([solved.storedId!])
+		// The session serves its calibration with the measured steps.
+		const served = (await context.guiding.sessionCalibration(first.sessionId).json()) as { record: { calibration: { review: { raSamples: unknown[] } } } }
+		expect(served.record.calibration.review.raSamples.length).toBeGreaterThan(0)
+		expect((await context.guiding.stop(first.sessionId)).status).toBe(204)
+
+		// A new session of the same equipment guides with it without calibrating.
+		const second = await start(context, guided(context))
+		await waitUntil(() => context.summary()?.frame !== undefined)
+		const candidates = (await context.guiding.calibrationCandidates(second.sessionId).json()) as { candidates: { calibrationId: string; status: string }[] }
+		expect(candidates.candidates.map(({ calibrationId, status }) => [calibrationId, status])).toEqual([[solved.storedId!, 'direct']])
+		await waitUntil(() => context.guiding.selectTarget(second.sessionId, {}).status === 200)
+		expect(context.guiding.startGuiding(second.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+		expect(context.summary()?.calibration).toMatchObject({ origin: 'restored', storedId: solved.storedId, saved: true })
+		const events = (await types(second.sessionId)).items.map((record) => record.event.type)
+		expect(events).toContain('calibrationRestored')
+		expect(events).not.toContain('calibrationStarted')
+		expect(store.list(undefined, 10)[0].lastUsedAt).toBeDefined()
+		expect((await context.guiding.stop(second.sessionId)).status).toBe(204)
+
+		// Disabled, it is set aside, and other binning is other equipment geometry.
+		expect(context.guiding.patchSavedCalibration(solved.storedId!, { disabled: true }).status).toBe(204)
+		const third = await start(context, guided(context, { camera: { gain: 0, offset: 0, binX: 2, binY: 2, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '' } }))
+		await waitUntil(() => context.summary()?.frame !== undefined)
+		expect(context.guiding.patchSavedCalibration(solved.storedId!, { disabled: false }).status).toBe(204)
+		const other = (await context.guiding.calibrationCandidates(third.sessionId).json()) as { candidates: { status: string; reasons: string[] }[] }
+		expect(other.candidates).toEqual([expect.objectContaining({ status: 'incompatible', reasons: expect.arrayContaining(['binning']) })])
+		const refused = context.guiding.restoreSavedCalibration(third.sessionId, { calibrationId: solved.storedId! })
+		expect(refused.status).toBe(422)
+		expect(await refused.json()).toMatchObject({ code: 'calibrationIncompatible', reasons: expect.arrayContaining(['binning']) })
+		expect(context.guiding.restoreSavedCalibration(third.sessionId, { calibrationId: 'unknown' }).status).toBe(404)
+		expect((await context.guiding.stop(third.sessionId)).status).toBe(204)
+	}, 120000)
+
+	test('Force Recalibrate calibrates even when a saved calibration matches', async () => {
+		const context = await setup()
+		await trackStars(context)
+		const { sessionId } = await start(context, guided(context))
+		await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
+		const stopped = await context.guiding.stopGuiding(sessionId, { token: `token-${tokens++}` }).json()
+		await waitUntil(() => context.summary()?.command?.commandId === stopped.commandId && context.summary()?.command?.state !== 'running')
+
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.state === 'calibrating')
+		expect(context.summary()?.calibration).toBeUndefined()
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+	}, 120000)
 
 	test('commands of an ended or unknown session are refused', async () => {
 		const context = await setup()

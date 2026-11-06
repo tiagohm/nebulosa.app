@@ -86,7 +86,8 @@ export function guidingExposureRange(exposure: CameraCapabilities['exposure'] | 
 // Builds the start request of the guiding form of a camera, guiding through the GUIDE_OUTPUT of the Equipment Setup and
 // holding the MOUNT it drives while guiding (absent when the setup has none): the guide exposures in milliseconds, the camera settings
 // of the camera fitted to its capabilities as a capture is (never its exposure time), the controller, the calibration
-// and the client settings (dither pattern, search square, sticky lock, DEC reversal after a flip) of the form, the
+// (with the orthogonal DEC assumption), the client settings (dither pattern, search square, sticky lock, DEC reversal
+// after a flip, declination compensation) and the reuse of saved calibrations of the form, the
 // devices snooped into the frame headers, and the star detector of the profile's Star Detection with its settings (its
 // acceptance criteria are not sent: the tracker filters the stars). The effective focal length of the guide optics, in
 // mm (see guideFocalLength), is sent only when known.
@@ -108,9 +109,10 @@ export function guidingRequest(
 		camera,
 		trackingMode: settings.trackingMode,
 		...(focalLength !== undefined && { optics: { focalLength } }),
-		calibration: { raPulse: settings.calibrationPulse, decPulse: settings.calibrationPulse },
+		calibration: { raPulse: settings.calibrationPulse, decPulse: settings.calibrationPulse, assumeDecOrthogonalToRa: settings.assumeDecOrthogonalToRa },
 		guider: { aggressivenessRA: settings.aggressivenessRA, aggressivenessDEC: settings.aggressivenessDEC, maxPulseMsRA: settings.maximumPulseRA, maxPulseMsDEC: settings.maximumPulseDEC },
-		client: { ditherMode: settings.ditherMode, searchRegion: settings.searchRegion, stickyLockPosition: settings.stickyLockPosition, fastRecenter: settings.fastRecenter, reverseDecOutputAfterMeridianFlip: settings.reverseDecOutputAfterMeridianFlip },
+		client: { ditherMode: settings.ditherMode, searchRegion: settings.searchRegion, stickyLockPosition: settings.stickyLockPosition, fastRecenter: settings.fastRecenter, reverseDecOutputAfterMeridianFlip: settings.reverseDecOutputAfterMeridianFlip, declinationCompensation: settings.declinationCompensation },
+		calibrationPolicy: { autoRestore: settings.autoRestoreCalibration, recalibrateOnEveryStart: settings.recalibrateOnEveryStart },
 		snoop,
 		detection: { ...detection },
 	}
@@ -200,9 +202,10 @@ export const GUIDING_CALIBRATION_PHASE_LABELS: Readonly<Record<GuidingCalibratio
 	failed: 'Failed',
 }
 
-// Builds the Start Guiding request of the guiding form.
-export function guidingStartRequest(settings: Readonly<GuidingSettings>): Omit<GuidingStartGuidingRequest, 'token'> {
-	return { recalibrate: settings.recalibrate, settle: { ...settings.settle } }
+// Builds the Start Guiding request of the guiding form; recalibrate is Force Recalibrate, which calibrates whatever the
+// session or the saved calibrations hold.
+export function guidingStartRequest(settings: Readonly<GuidingSettings>, recalibrate = false): Omit<GuidingStartGuidingRequest, 'token'> {
+	return { recalibrate, settle: { ...settings.settle } }
 }
 
 // Builds the dither request of the guiding form: one dither of its size, in guide-camera pixels, with its settle.

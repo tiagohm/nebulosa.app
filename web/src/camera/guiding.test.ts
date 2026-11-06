@@ -65,7 +65,7 @@ function record(sequence: number): GuidingEventRecord {
 
 function sample(cursor: number): GuidingTelemetrySample {
 	const axis = { duration: 0, limited: false }
-	return { cursor, frameId: cursor, timestamp: cursor, lost: false, dx: 0, dy: 0, raDistance: 0, decDistance: 0, ra: axis, dec: axis, snr: 10, mass: 100, hfd: 2 }
+	return { cursor, frameId: cursor, timestamp: cursor, lost: false, calibrationGeneration: 1, dx: 0, dy: 0, raDistance: 0, decDistance: 0, ra: axis, dec: axis, snr: 10, mass: 100, hfd: 2 }
 }
 
 // Fetch fake answering each URL with the response its handler builds, recording the requests.
@@ -88,7 +88,9 @@ describe('requests', () => {
 		expect('exposureTime' in request.camera).toBeFalse()
 		expect(request).toMatchObject({ guideOutput: OUTPUT, exposure: 1500, trackingMode: 'multiStar', camera: { gain: 120, binX: 2, binY: 2 }, calibration: { raPulse: 650, decPulse: 650 }, guider: { aggressivenessRA: 0.4, aggressivenessDEC: 0.65, maxPulseMsRA: 2000, maxPulseMsDEC: 2500 } })
 		expect('optics' in request).toBeFalse()
-		expect(request.client).toEqual({ ditherMode: 'random', searchRegion: 64, stickyLockPosition: false, fastRecenter: true, reverseDecOutputAfterMeridianFlip: false })
+		expect(request.client).toEqual({ ditherMode: 'random', searchRegion: 64, stickyLockPosition: false, fastRecenter: true, reverseDecOutputAfterMeridianFlip: false, declinationCompensation: true })
+		expect(request.calibrationPolicy).toEqual({ autoRestore: true, recalibrateOnEveryStart: false })
+		expect(request.calibration).toEqual({ raPulse: 650, decPulse: 650, assumeDecOrthogonalToRa: false })
 		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_BUILTIN_SETTINGS, 240).optics).toEqual({ focalLength: 240 })
 	})
 
@@ -141,8 +143,9 @@ describe('requests', () => {
 	})
 
 	test('Start Guiding and dither carry the settle of the form, and the dither its size in guide pixels', () => {
-		const settings = { ...DEFAULT_GUIDING_SETTINGS, recalibrate: false, ditherPixels: 3, ditherRaOnly: true }
+		const settings = { ...DEFAULT_GUIDING_SETTINGS, ditherPixels: 3, ditherRaOnly: true }
 		expect(guidingStartRequest(settings)).toEqual({ recalibrate: false, settle: DEFAULT_GUIDING_SETTINGS.settle })
+		expect(guidingStartRequest(settings, true)).toEqual({ recalibrate: true, settle: DEFAULT_GUIDING_SETTINGS.settle })
 		expect(guidingDitherRequest(settings)).toEqual({ amount: { unit: 'guidePixel', value: 3 }, raOnly: true, settle: DEFAULT_GUIDING_SETTINGS.settle })
 	})
 
@@ -284,7 +287,7 @@ describe('commands', () => {
 		const state = newState()
 		const { request, requests } = fakeFetch((url) => (url.endsWith('/start') ? Response.json({ commandId: 'k1' }, { status: 202 }) : new Response(null, { status: 204 })))
 		const session = summary()
-		expect(await startGuiding(state, session, guidingStartRequest(DEFAULT_GUIDING_SETTINGS), request)).toEqual({ commandId: 'k1' })
+		expect(await startGuiding(state, session, guidingStartRequest(DEFAULT_GUIDING_SETTINGS, true), request)).toEqual({ commandId: 'k1' })
 		await setGuidingExposure(state, session, 0.5, request)
 		await stopGuidingSession(state, session, request)
 		expect(requests.map(({ url }) => url)).toEqual(['/api/guiding/s1/start', '/api/guiding/s1/exposure', '/api/guiding/s1/stop'])

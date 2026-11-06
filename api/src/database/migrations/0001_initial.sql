@@ -322,6 +322,39 @@ CREATE TABLE operation_runs (
 
 CREATE INDEX operation_runs_started ON operation_runs (started_at);
 
+-- Completed guiding calibrations (GuidingCalibrationStore), each solved once and never edited: a recalibration adds a
+-- row. A session restores one whose equipment and geometry match its own. The newest rows of each equipment key are
+-- kept, the older ones deleted when a row is added. Never the guide frames nor the guiding telemetry.
+CREATE TABLE guiding_calibrations (
+	-- Id of the calibration.
+	calibration_id TEXT PRIMARY KEY,
+	-- When the calibration completed, Unix milliseconds (UTC).
+	created_at INTEGER NOT NULL,
+	-- Physical guide camera, guide output, and mount, as hardware ids joined (GuidingCalibrationEvidence).
+	equipment_key TEXT NOT NULL,
+	-- Names of the guide camera, the guide output and the mount (NULL without one), for people.
+	camera_name TEXT NOT NULL,
+	guide_output_name TEXT NOT NULL,
+	mount_name TEXT,
+	-- Declination of the mount when it was measured, apparent of date, in radians; NULL when unknown.
+	source_declination REAL,
+	-- Side of the pier the mount reported; NULL when unknown.
+	source_pier_side TEXT CHECK (source_pier_side IN ('EAST', 'WEST', 'NEITHER')),
+	-- Grade of the solution (assessGuidingCalibration).
+	quality TEXT NOT NULL CHECK (quality IN ('good', 'warning', 'poor')),
+	-- Whether the operator excluded it from restoring, 0 or 1.
+	disabled INTEGER NOT NULL CHECK (disabled IN (0, 1)),
+	-- When a session last restored it, Unix milliseconds (UTC); NULL when never.
+	last_used_at INTEGER,
+	-- Version of the payload shape, and the payload: the source record (GuidingCalibrationRecord, with the review of
+	-- its measured steps), the equipment and geometry evidence, and the quality assessment; angles in radians, pixels
+	-- of the guide frames, durations in milliseconds.
+	payload_version INTEGER NOT NULL CHECK (payload_version > 0),
+	payload TEXT NOT NULL CHECK (json_valid(payload))
+) STRICT;
+
+CREATE INDEX guiding_calibrations_equipment_recent ON guiding_calibrations (equipment_key, created_at);
+
 -- Mount pointing models (PointingModelStore): what was measured for each model and every fit of it, never pixels nor
 -- whether a revision is active, which lives in server memory. Samples, revisions, and verifications are immutable once
 -- written: a refit or an exclusion adds a revision. Kept until the operator deletes the model.

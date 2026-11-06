@@ -3,7 +3,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { AstapError, astapDetectStars } from 'nebulosa/src/astrometry/solvers/astap'
 import type { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
-import type { Camera, GuideOutput } from 'nebulosa/src/devices/indi/device'
+import type { Camera, GuideOutput, Mount, PierSide } from 'nebulosa/src/devices/indi/device'
 import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
 import type { BlobEncoding } from 'nebulosa/src/devices/indi/types'
 import { failedOperationResult, type OperationFailureReason, type OperationResult, type OperationScope, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
@@ -12,6 +12,8 @@ import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
+import { assessGuidingCalibration, type GuidingCalibrationAssessment } from 'nebulosa/src/observation/guiding/calibration.quality'
+import { DECLINATION_SCALE_TOLERANCE, type GuidingCalibrationContext, type GuidingCalibrationRecord, type GuidingCalibrationTransformation, type GuidingCalibrationTransformOptions } from 'nebulosa/src/observation/guiding/calibration.transform'
 import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationConfig, type GuidingCalibrationDiagnostics, type GuidingCalibrationPhase } from 'nebulosa/src/observation/guiding/calibrator'
 import { GuiderClient, type GuideFrameImage, type GuiderClientConnectOptions, type GuiderClientGuiderOptions, type GuiderClientOptions } from 'nebulosa/src/observation/guiding/client'
 import type { DitherAmount } from 'nebulosa/src/observation/guiding/ditherer'
@@ -26,6 +28,8 @@ import { type ClientResolver, type CommandRefusal, type CommandRequest, failureR
 import type { DeviceRegistry } from './devices'
 import type { ExternalToolsStore, ResolvedExternalTool } from './externaltools'
 import type { GuideRegions } from './guideregions'
+import { equipmentKeyOf, evidenceRejections, type GuidingCalibrationCandidate, type GuidingCalibrationEvidence, type GuidingDeviceIdentity, selectGuidingCalibration } from './guidingcalibration'
+import type { GuidingCalibrationHeader, GuidingCalibrationStore } from './guidingcalibration.store'
 import { guideStarProfile, type GuidingStarProfile } from './guidingprofile'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
@@ -61,6 +65,14 @@ import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './star
 // caller or a tab) commands it there. Each durable command is admitted too (admitStartGuiding, admitDither, ...), with
 // the outcome of that exact command, which the single command of the record cannot keep once a newer one replaced it.
 // rootOf names the root a drain of the reservation preserves so guiding outlives the interruption of the other work.
+//
+// Every calibration that completes is saved in the operational database (GuidingCalibrationStore) with the evidence of the
+// equipment and geometry it was measured with and the declination and side of the pier the mount reported; the record
+// tells whether the save succeeded, and a failed save leaves the calibration usable in its session. Start Guiding without
+// a calibration restores the best saved one that matches the session (selectGuidingCalibration) when the session's
+// policy allows it, transformed by the toolkit for the current declination and side of the pier; one already in use is
+// derived again when the mount moved since. A refusal, or no match, calibrates as before. Nothing of a session itself is
+// persisted.
 
 // Sensor settings of the guide exposures, sent once when the session starts. The frame type is always LIGHT.
 export type GuidingCameraSettings = Pick<CaptureSettings, 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
@@ -68,7 +80,20 @@ export type GuidingCameraSettings = Pick<CaptureSettings, 'gain' | 'offset' | 'b
 // Settings of the guider client, fixed when the session starts: the dither pattern, the side of the star search square
 // in pixels (clamped by the toolkit to [16, 128], 64 when absent), whether the lock position stays exactly where it is
 // across guider re-initialization, and whether a meridian flip of the calibration also reverses the DEC output.
-export type GuidingClientSettings = Pick<GuiderClientOptions, 'ditherMode' | 'searchRegion' | 'stickyLockPosition' | 'fastRecenter' | 'reverseDecOutputAfterMeridianFlip'>
+// declinationCompensation scales the RA response of a calibration reused at another declination, off for a mount whose RA
+// guide rate already follows the declination.
+export type GuidingClientSettings = Pick<GuiderClientOptions, 'ditherMode' | 'searchRegion' | 'stickyLockPosition' | 'fastRecenter' | 'reverseDecOutputAfterMeridianFlip' | 'declinationCompensation'>
+
+// How a session reuses saved calibrations, fixed when it starts.
+export interface GuidingCalibrationPolicy {
+	// Whether Start Guiding without a calibration restores the best matching saved one instead of calibrating.
+	readonly autoRestore: boolean
+	// Whether every Start Guiding calibrates again, as Force Recalibrate does.
+	readonly recalibrateOnEveryStart: boolean
+}
+
+// Policy of a session whose request names none: restore, and calibrate only when nothing matches.
+export const DEFAULT_GUIDING_CALIBRATION_POLICY: GuidingCalibrationPolicy = { autoRestore: true, recalibrateOnEveryStart: false }
 
 // Body of POST /api/connections/:id/cameras/:deviceId/guiding.
 export interface GuidingStartRequest extends CommandRequest {
@@ -91,6 +116,8 @@ export interface GuidingStartRequest extends CommandRequest {
 	readonly guider?: GuiderClientGuiderOptions
 	// Settings of the guider client; absent keeps the toolkit defaults.
 	readonly client?: GuidingClientSettings
+	// How saved calibrations are reused; absent is DEFAULT_GUIDING_CALIBRATION_POLICY.
+	readonly calibrationPolicy?: GuidingCalibrationPolicy
 	// Devices of the camera's connection snooped into the guide frame headers, set once when the session starts; absent
 	// snoops none. A simulated camera renders its star field from the pointing of the snooped mount.
 	readonly snoop?: CaptureSnoop
@@ -101,7 +128,7 @@ export interface GuidingStartRequest extends CommandRequest {
 
 // Body of POST /api/guiding/:sessionId/start.
 export interface GuidingStartGuidingRequest extends CommandRequest {
-	// Whether to calibrate again before guiding instead of reusing the solved calibration.
+	// Whether to calibrate again before guiding instead of reusing the solved or a saved calibration (Force Recalibrate).
 	readonly recalibrate: boolean
 	// Settle the start waits for.
 	readonly settle: GuidingSettle
@@ -156,11 +183,49 @@ export interface GuidingCommandStatus {
 	readonly error?: string
 }
 
-// Solved calibration of a session.
+// Body of POST /api/guiding/:sessionId/calibration/restore.
+export interface GuidingRestoreCalibrationRequest {
+	// Saved calibration to restore.
+	readonly calibrationId: string
+}
+
+// Body of PATCH /api/guiding/calibrations/:calibrationId.
+export interface GuidingCalibrationPatch {
+	// Whether the calibration is excluded from restoring.
+	readonly disabled: boolean
+}
+
+// Mount context of a calibration, as GuidingCalibrationContext: the declination, apparent of date in radians, and the
+// side of the pier; either absent when unknown.
+export interface GuidingMountContext {
+	readonly declination?: number
+	readonly pierSide?: PierSide
+}
+
+// Calibration in use by a session.
 export interface GuidingCalibrationSummary {
-	// Number of the solution within the session, from 1.
+	// Number of the solution within the session, from 1, raised by every solve and restore.
 	readonly calibrationId: number
-	// Image motion of a pulse, in pixels per millisecond, along the RA and DEC axes.
+	// Id of the saved calibration it derives from; absent while a save of a new one failed.
+	readonly storedId?: string
+	// Whether it was solved in this session or restored from a saved one.
+	readonly origin: 'new' | 'restored'
+	// Whether it is saved for later sessions, and why the save failed when it did.
+	readonly saved: boolean
+	readonly saveError?: string
+	// Grade of the solution and what lowered it (assessGuidingCalibration).
+	readonly assessment: GuidingCalibrationAssessment
+	// Context the calibration was measured in, and the one it is derived for now.
+	readonly source: GuidingMountContext
+	readonly current: GuidingMountContext
+	// Transformations of the source in use, and the factor applied to the RA response for the declination.
+	readonly transformations: readonly GuidingCalibrationTransformation[]
+	readonly declinationScale: number
+	// Whether DEC was assumed perpendicular to RA when it was solved.
+	readonly orthogonalAssumed: boolean
+	// Generation of the calibration in use (see the calibrationGeneration of the telemetry).
+	readonly generation: number
+	// Image motion of a pulse of the calibration in use, in pixels per millisecond, along the RA and DEC axes.
 	readonly raRate: number
 	readonly decRate: number
 	// Direction of the image motion of each axis, in radians from the image X axis.
@@ -170,6 +235,25 @@ export interface GuidingCalibrationSummary {
 	readonly backlash: number
 	// Calibration warnings meant for people.
 	readonly warnings: readonly string[]
+}
+
+// The calibration of a session with its measurements, for review.
+export interface GuidingSessionCalibration {
+	readonly summary: GuidingCalibrationSummary
+	// Source record, with the review of the measured steps.
+	readonly record: GuidingCalibrationRecord
+}
+
+// Saved calibrations a session could restore, by decreasing preference.
+export interface GuidingCalibrationCandidates {
+	// Key of the equipment of the session; absent before its first frame, when the evidence is not complete.
+	readonly equipmentKey?: string
+	readonly candidates: readonly GuidingCalibrationCandidate[]
+}
+
+// Page of GET /api/guiding/calibrations.
+export interface GuidingCalibrationList {
+	readonly calibrations: readonly GuidingCalibrationHeader[]
 }
 
 // Progress of a running calibration, from the diagnostics of its latest frame: the phase, and for each leg the steps
@@ -317,6 +401,8 @@ export interface GuidingTelemetrySample {
 	readonly timestamp: number
 	// Whether the star could not be measured; the distances and pulses are then 0.
 	readonly lost: boolean
+	// Generation of the calibration that converted the errors; 0 for a lost star.
+	readonly calibrationGeneration: number
 	// Image-space error, in pixels.
 	readonly dx: number
 	readonly dy: number
@@ -549,6 +635,17 @@ interface Session {
 	readonly decoder: GuideFrameDecoder
 	readonly camera: Camera
 	readonly guideOutput: GuideOutput
+	// Mount the guide output drives, as the request named it.
+	readonly mount?: Mount
+	// Settings the session was started with: the sensor, the optics, the client, and how saved calibrations are reused.
+	readonly cameraSettings: GuidingCameraSettings
+	readonly policy: GuidingCalibrationPolicy
+	readonly transformOptions: GuidingCalibrationTransformOptions
+	// Size of the latest decoded guide frame, in pixels; absent before the first one.
+	frameSize?: { readonly width: number; readonly height: number }
+	// Calibration in use beyond what the client keeps: where it came from, its save, its grade, and the context it was
+	// derived for; absent without one.
+	calibration?: SessionCalibration
 	// Stars and file bytes of each decoded image, until its frame is processed.
 	readonly detections: WeakMap<Image, readonly GuideStar[]>
 	readonly files: WeakMap<Image, Uint8Array<ArrayBuffer>>
@@ -592,6 +689,20 @@ interface Session {
 	claim?: DitherClaimOwner
 }
 
+// What a session knows of the calibration in use beyond the client.
+interface SessionCalibration {
+	readonly calibrationId: number
+	storedId?: string
+	readonly origin: 'new' | 'restored'
+	saved: boolean
+	saveError?: string
+	readonly assessment: GuidingCalibrationAssessment
+	// Context it was last derived for, and the transformations of its source then.
+	context: GuidingMountContext
+	transformations: readonly GuidingCalibrationTransformation[]
+	declinationScale: number
+}
+
 // Returns the regions the built-in detection of a session's next frame is limited to, or undefined for the whole frame:
 // only while its run holds the guide output (calibrating, guiding, settling, paused) and the previous frame was measured,
 // around the measured position, the lock, and the GUIDING_REGION_STARS accepted stars of highest SNR. While looping or
@@ -622,7 +733,7 @@ export class GuidingSessions implements Disposable {
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, guideOutputs is the commander the pulses are dispatched through, images receives the previewed frames,
 	// frames records them as the latest frame of their camera, tools resolves ASTAP for the sessions that detect their stars
-	// with it, and listener receives every notification synchronously.
+	// with it, calibrations keeps the completed calibrations, and listener receives every notification synchronously.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -631,6 +742,7 @@ export class GuidingSessions implements Disposable {
 		readonly images: ImageStore,
 		readonly frames: CaptureFrameRegistry,
 		readonly tools: ExternalToolsStore,
+		readonly calibrations: GuidingCalibrationStore,
 		readonly listener: GuidingListener,
 	) {
 		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'guiding:updated', session }))
@@ -743,6 +855,10 @@ export class GuidingSessions implements Disposable {
 			decoder,
 			camera,
 			guideOutput,
+			...(mount && { mount }),
+			cameraSettings: request.camera,
+			policy: request.calibrationPolicy ?? DEFAULT_GUIDING_CALIBRATION_POLICY,
+			transformOptions: { declinationCompensation: request.client?.declinationCompensation !== false, reverseDecOutputAfterMeridianFlip: request.client?.reverseDecOutputAfterMeridianFlip === true },
 			detections,
 			files,
 			events: [],
@@ -825,11 +941,185 @@ export class GuidingSessions implements Disposable {
 	}
 
 	// Admits Start Guiding (see startGuiding) and returns the command with its outcome, or its refusal.
+	// Unless it recalibrates (recalibrate, or the policy's recalibrateOnEveryStart), the calibration in use is derived again
+	// when the mount moved since, and without one the best matching saved calibration is restored when the policy allows
+	// it; the calibration then solved is recorded with the mount context of now.
 	admitStartGuiding(sessionId: string, { token, recalibrate, settle }: GuidingStartGuidingRequest): GuidingCommandAdmission {
 		return this.#command(sessionId, token, 'startGuiding', (session) => {
 			session.settle = settle
-			return session.interactive.startGuiding(session.scope, session.scope, { recalibrate, settle })
+			const calibrating = recalibrate || session.policy.recalibrateOnEveryStart
+			const context = this.#mountContext(session)
+			if (!calibrating) this.#prepareCalibration(session, context)
+
+			// Calibrating again drops the calibration in use once the client starts, which announces nothing.
+			if (calibrating && session.calibration) {
+				session.calibration = undefined
+				this.#update(session, { calibration: undefined })
+			}
+
+			session.interactive.setCalibrationContext(context)
+			return session.interactive.startGuiding(session.scope, session.scope, { recalibrate: calibrating, settle })
 		})
+	}
+
+	// Makes the calibration of a session fit the mount context before guiding: derives the one in use again when the
+	// context changed since it was derived, or restores the best matching saved one when there is none and the policy
+	// allows it. A refusal leaves the session without a calibration, so Start Guiding calibrates.
+	#prepareCalibration(session: Session, context: GuidingMountContext) {
+		if (session.client.getCalibrated()) {
+			if (session.calibration && contextChanged(session.calibration.context, context)) this.#reassess(session, context)
+			return
+		}
+
+		if (!session.policy.autoRestore) return
+		const evidence = this.#evidence(session)
+		if (!evidence) return
+		const { selected } = selectGuidingCalibration(this.#entries(evidence), evidence, context, session.transformOptions)
+		if (selected) this.#restore(session, selected.entry.calibrationId, selected.entry.record, selected.entry.assessment, context)
+	}
+
+	// Restores a saved calibration on a session for the context; returns whether the client took it.
+	#restore(session: Session, storedId: string, record: GuidingCalibrationRecord, assessment: GuidingCalibrationAssessment, context: GuidingMountContext) {
+		const previous = session.calibration
+		// Known before the client announces the restore, which publishes the summary.
+		session.calibration = { calibrationId: ++session.calibrations, storedId, origin: 'restored', saved: true, assessment, context, transformations: [], declinationScale: 1 }
+		const restored = session.interactive.restoreCalibration(record, context)
+
+		if (restored.status !== 'direct' && restored.status !== 'transformed') {
+			session.calibration = previous
+			return false
+		}
+
+		session.calibration.transformations = restored.transformations
+		session.calibration.declinationScale = restored.declinationScale
+		this.#publishCalibration(session)
+
+		try {
+			this.calibrations.touch(storedId, Date.now())
+		} catch (error) {
+			console.error('guiding calibration use was not recorded:', error)
+		}
+
+		return true
+	}
+
+	// Derives the calibration in use again for the context; returns whether it still applies (else it was dropped).
+	#reassess(session: Session, context: GuidingMountContext) {
+		const info = session.calibration
+		const previous = info && { context: info.context, transformations: info.transformations, declinationScale: info.declinationScale }
+		if (info) info.context = context
+		const reassessed = session.interactive.reassessCalibration(context)
+
+		if (reassessed.status === 'direct' || reassessed.status === 'transformed') {
+			if (info) {
+				info.transformations = reassessed.transformations
+				info.declinationScale = reassessed.declinationScale
+			}
+
+			this.#publishCalibration(session)
+			return true
+		}
+
+		if (info && previous && reassessed.status === 'busy') Object.assign(info, previous)
+		return false
+	}
+
+	// Returns the declination and side of the pier the mount of a session reports, each absent when unknown.
+	#mountContext(session: Session): GuidingMountContext {
+		const mount = session.mount
+		if (!mount?.connected) return {}
+		return { ...(mount.hasEquatorialCoordinate && { declination: mount.equatorialCoordinate.declination }), ...(mount.hasPierSide && mount.pierSide !== 'NEITHER' && { pierSide: mount.pierSide }) }
+	}
+
+	// Returns the evidence of the equipment and geometry of a session, or undefined before its first frame.
+	#evidence(session: Session): GuidingCalibrationEvidence | undefined {
+		const size = session.frameSize
+		if (!size) return undefined
+		const { camera, guideOutput, mount, cameraSettings } = session
+		const pixelScale = session.client.getPixelScale()
+
+		return {
+			camera: identityOf(camera),
+			guideOutput: identityOf(guideOutput),
+			...(mount && { mount: identityOf(mount) }),
+			binX: cameraSettings.binX ?? 1,
+			binY: cameraSettings.binY ?? 1,
+			width: size.width,
+			height: size.height,
+			...(pixelScale > 0 && { pixelScale }),
+			...(guideOutput.hasGuideRate && { guideRate: { rightAscension: guideOutput.guideRate.rightAscension, declination: guideOutput.guideRate.declination } }),
+		}
+	}
+
+	// Returns the saved calibrations of the equipment of the evidence; none when the database cannot be read.
+	#entries(evidence: GuidingCalibrationEvidence) {
+		try {
+			return this.calibrations.entries(equipmentKeyOf(evidence))
+		} catch (error) {
+			console.error('saved guiding calibrations could not be read:', error)
+			return []
+		}
+	}
+
+	// Responds with the headers of the saved calibrations, newest first: of one equipment key when given, at most limit
+	// (50 when absent, at most 500).
+	savedCalibrations(equipmentKey: string | undefined, limit: number | undefined): Response {
+		const calibrations = this.calibrations.list(equipmentKey, Math.min(500, limit ?? 50))
+		return Response.json({ calibrations } satisfies GuidingCalibrationList)
+	}
+
+	// Responds with a saved calibration with its measurements, evidence and grade, or 404.
+	savedCalibration(calibrationId: string): Response {
+		const entry = this.calibrations.get(calibrationId)
+		return entry ? Response.json(entry) : notFound('Guiding calibration')
+	}
+
+	// Excludes a saved calibration from restoring, or includes it again; a calibration a session uses keeps being used.
+	// Responds 204, or 404.
+	patchSavedCalibration(calibrationId: string, { disabled }: GuidingCalibrationPatch): Response {
+		return this.calibrations.setDisabled(calibrationId, disabled) ? new Response(null, { status: 204 }) : notFound('Guiding calibration')
+	}
+
+	// Responds with the calibration a session uses, with its source record and measurements, or 404 when it has none.
+	sessionCalibration(sessionId: string): Response {
+		const session = this.#sessions.find(sessionId)
+		const record = session?.client.exportCalibration()
+		const summary = session?.summary.calibration
+		return record && summary ? Response.json({ summary, record } satisfies GuidingSessionCalibration) : notFound('Guiding calibration')
+	}
+
+	// Responds with the saved calibrations of the equipment of a living session, each with how it fits the session now.
+	calibrationCandidates(sessionId: string): Response {
+		const session = this.#active(sessionId)
+		if (session instanceof Response) return session
+		const evidence = this.#evidence(session)
+		if (!evidence) return Response.json({ candidates: [] } satisfies GuidingCalibrationCandidates)
+		const { candidates } = selectGuidingCalibration(this.#entries(evidence), evidence, this.#mountContext(session), session.transformOptions)
+		return Response.json({ equipmentKey: equipmentKeyOf(evidence), candidates } satisfies GuidingCalibrationCandidates)
+	}
+
+	// Restores a saved calibration on a living session that is not guiding. Responds 204; 404 for an unknown session or
+	// calibration; 409 busy while a run lives; 422 calibrationIncompatible, with the reasons, when it does not fit the
+	// equipment or the mount context, or is disabled or unreadable.
+	restoreSavedCalibration(sessionId: string, { calibrationId }: GuidingRestoreCalibrationRequest): Response {
+		const session = this.#active(sessionId)
+		if (session instanceof Response) return session
+		if (session.summary.guideOutputHeld) return errorResponse('The calibration is in use while guiding', 409, 'busy')
+		const entry = this.calibrations.get(calibrationId)
+		if (!entry) return notFound('Guiding calibration')
+		if (entry.status === 'invalid') return errorResponse(`The saved calibration cannot be read: ${entry.reason}`, 422, 'calibrationIncompatible', { reasons: ['invalid'] })
+		if (entry.disabled) return errorResponse('The saved calibration is disabled', 422, 'calibrationIncompatible', { reasons: ['disabled'] })
+		const evidence = this.#evidence(session)
+		if (!evidence) return errorResponse('No guide frame was taken yet to compare the equipment with', 409, 'busy')
+		const mismatches = evidenceRejections(entry.evidence, evidence)
+		if (mismatches.length > 0) return errorResponse('The saved calibration was measured with other equipment or geometry', 422, 'calibrationIncompatible', { reasons: mismatches })
+
+		const context = this.#mountContext(session)
+		const { candidates } = selectGuidingCalibration([entry], evidence, context, session.transformOptions)
+		if (candidates[0].status !== 'direct' && candidates[0].status !== 'transformed') return errorResponse('The saved calibration does not apply to the mount as it is now', 422, 'calibrationIncompatible', { reasons: candidates[0].reasons })
+		if (!this.#restore(session, entry.calibrationId, entry.record, entry.assessment, context)) return errorResponse('The calibration is in use', 409, 'busy')
+		this.#sync(session)
+		return new Response(null, { status: 204 })
 	}
 
 	// Admits Stop Guiding (see stopGuiding) and returns the command with its outcome, or its refusal.
@@ -892,7 +1182,12 @@ export class GuidingSessions implements Disposable {
 	clearCalibration(sessionId: string): Response {
 		return this.#immediate(sessionId, 'Clearing the calibration', (session) => {
 			const cleared = session.interactive.clearCalibration()
-			if (cleared.ok) this.#update(session, { calibration: undefined })
+
+			if (cleared.ok) {
+				session.calibration = undefined
+				this.#update(session, { calibration: undefined })
+			}
+
 			return cleared
 		})
 	}
@@ -1087,7 +1382,11 @@ export class GuidingSessions implements Disposable {
 	#event(session: Session, event: GuidingEvent) {
 		if (event.type === 'guideStep' || event.type === 'starLost') this.#telemetry(session, event)
 		else if (event.type === 'calibrationCompleted') this.#calibrated(session, event.calibration)
-		else if (event.type === 'calibrationStep') this.#update(session, { calibrating: calibrationProgressOf(event.diagnostics, session.calibrator) })
+		else if (event.type === 'calibrationRestored' || event.type === 'calibrationTransformed' || event.type === 'calibrationFlipped') this.#publishCalibration(session)
+		else if (event.type === 'calibrationCleared') {
+			session.calibration = undefined
+			this.#update(session, { calibration: undefined })
+		} else if (event.type === 'calibrationStep') this.#update(session, { calibrating: calibrationProgressOf(event.diagnostics, session.calibrator) })
 		else if (event.type === 'guidingStarted' || event.type === 'dithered') session.errors.length = 0
 
 		if (!PER_FRAME_EVENTS.has(event.type)) {
@@ -1106,12 +1405,13 @@ export class GuidingSessions implements Disposable {
 		const lost = event.type === 'starLost'
 		const none: GuidingTelemetryAxis = { duration: 0, limited: false }
 		const sample: GuidingTelemetrySample = lost
-			? { cursor, frameId: event.frameId, timestamp: event.timestamp, lost, dx: 0, dy: 0, raDistance: 0, decDistance: 0, ra: none, dec: none, snr: event.snr, mass: event.mass, hfd: event.hfd }
+			? { cursor, frameId: event.frameId, timestamp: event.timestamp, lost, calibrationGeneration: 0, dx: 0, dy: 0, raDistance: 0, decDistance: 0, ra: none, dec: none, snr: event.snr, mass: event.mass, hfd: event.hfd }
 			: {
 					cursor,
 					frameId: event.frameId,
 					timestamp: event.timestamp,
 					lost,
+					calibrationGeneration: event.calibrationGeneration,
 					dx: event.dx,
 					dy: event.dy,
 					raDistance: event.raDistance,
@@ -1130,11 +1430,63 @@ export class GuidingSessions implements Disposable {
 		this.listener({ type: 'guiding:telemetry', sessionId: session.summary.sessionId, sample })
 	}
 
-	// Records a solved calibration.
+	// Records a solved calibration and saves it with the evidence of the session; a failed save is recorded, and the
+	// calibration still guides the session.
 	#calibrated(session: Session, calibration: Extract<GuidingEvent, { type: 'calibrationCompleted' }>['calibration']) {
-		const calibrationId = ++session.calibrations
-		const { ra, dec, backlash, warnings } = calibration
-		this.#update(session, { calibration: { calibrationId, raRate: ra.ratePxPerMs, decRate: dec.ratePxPerMs, raAngle: ra.angle, decAngle: dec.angle, backlash, warnings } })
+		const record = session.client.exportCalibration()
+		const evidence = this.#evidence(session)
+		const assessment = assessGuidingCalibration(calibration)
+		const info: SessionCalibration = { calibrationId: ++session.calibrations, origin: 'new', saved: false, assessment, context: record?.context ?? {}, transformations: [], declinationScale: 1 }
+		session.calibration = info
+
+		if (record && evidence) {
+			const storedId = crypto.randomUUID()
+
+			try {
+				this.calibrations.insert({ calibrationId: storedId, createdAt: record.acquiredAt, record, evidence, assessment })
+				info.storedId = storedId
+				info.saved = true
+			} catch (error) {
+				info.saveError = Error.isError(error) ? error.message : String(error)
+				console.error('guiding calibration was not saved:', error)
+			}
+		} else {
+			info.saveError = 'The equipment of the calibration is not known'
+		}
+
+		this.#publishCalibration(session)
+	}
+
+	// Publishes the calibration a session uses: what the session knows of it, with the axes of the client's calibration.
+	#publishCalibration(session: Session) {
+		const info = session.calibration
+		const record = session.client.exportCalibration()
+		if (!info || !record || !session.client.getCalibrated()) return
+		const data = session.client.getCalibrationData()
+		const { calibration, context } = record
+
+		this.#update(session, {
+			calibration: {
+				calibrationId: info.calibrationId,
+				...(info.storedId !== undefined && { storedId: info.storedId }),
+				origin: info.origin,
+				saved: info.saved,
+				...(info.saveError !== undefined && { saveError: info.saveError }),
+				assessment: info.assessment,
+				source: { ...context },
+				current: { ...info.context },
+				transformations: info.transformations,
+				declinationScale: info.declinationScale,
+				orthogonalAssumed: calibration.orthogonalAssumed,
+				generation: session.client.getCalibrationGeneration(),
+				raRate: data.xRate,
+				decRate: data.yRate,
+				raAngle: data.xAngle,
+				decAngle: data.yAngle,
+				backlash: calibration.backlash,
+				warnings: calibration.warnings,
+			},
+		})
 	}
 
 	// Queues the newest decoded frame of a session for its preview, with its overlay.
@@ -1144,6 +1496,7 @@ export class GuidingSessions implements Disposable {
 		session.detections.delete(frame.image)
 		const measurement = frame.tracking.measurement
 		const star = measurement && guideStarProfile(frame.image, frame.frameId, [measurement.x, measurement.y])
+		session.frameSize = { width: frame.image.metadata.width, height: frame.image.metadata.height }
 		this.#update(session, { frame: { frameId: frame.frameId, time: frame.timestamp }, ...(star && { star }) })
 		if (bytes === undefined) return
 
@@ -1304,6 +1657,20 @@ export class GuidingSessions implements Disposable {
 	}
 }
 
+// Identity of a device of a calibration: its resource key, its name, and its driver executable.
+function identityOf(device: Camera | GuideOutput | Mount): GuidingDeviceIdentity {
+	return { key: resourceKey(device), name: device.name, ...(device.driver.executable && { driver: device.driver.executable }) }
+}
+
+// Whether the mount context changed enough since a calibration was derived for it to derive it again: another known or
+// unknown side of the pier, a declination that became known or unknown, or one whose cosine changed by more than the
+// toolkit's DECLINATION_SCALE_TOLERANCE.
+function contextChanged(previous: GuidingMountContext, current: GuidingMountContext) {
+	if (previous.pierSide !== current.pierSide) return true
+	if (previous.declination === undefined || current.declination === undefined) return previous.declination !== current.declination
+	return Math.abs(Math.cos(current.declination) / Math.cos(previous.declination) - 1) > DECLINATION_SCALE_TOLERANCE
+}
+
 // Overlay of a guide frame from its tracking result.
 function overlayOf(frame: GuideFrameImage): GuidingFrameOverlay {
 	const stellar = starTrackingOf(frame.tracking)
@@ -1409,9 +1776,35 @@ export function createGuidingRoutes(guiding: GuidingSessions) {
 			// The latest guiding session of every guide camera, started by any tab.
 			GET: () => Response.json(guiding.snapshot()),
 		},
+		'/api/guiding/calibrations': {
+			// The saved calibrations, newest first, of ?equipmentKey= when given, at most ?limit=.
+			GET: (req) => {
+				const params = new URL(req.url).searchParams
+				const limit = params.get('limit')
+				return guiding.savedCalibrations(params.get('equipmentKey') ?? undefined, limit === null ? undefined : Number(limit))
+			},
+		},
+		'/api/guiding/calibrations/:calibrationId': {
+			// A saved calibration with its measurements.
+			GET: (req) => guiding.savedCalibration(req.params.calibrationId),
+			// Excludes it from restoring, or includes it again.
+			PATCH: async (req) => guiding.patchSavedCalibration(req.params.calibrationId, (await req.json()) as GuidingCalibrationPatch),
+		},
 		'/api/guiding/:sessionId': {
 			// A guiding session; 404 when it is not the latest of its camera.
 			GET: (req) => guiding.session(req.params.sessionId),
+		},
+		'/api/guiding/:sessionId/calibration': {
+			// The calibration a session uses, with its measurements.
+			GET: (req) => guiding.sessionCalibration(req.params.sessionId),
+		},
+		'/api/guiding/:sessionId/calibration/candidates': {
+			// The saved calibrations of the equipment of a session and how each fits it now.
+			GET: (req) => guiding.calibrationCandidates(req.params.sessionId),
+		},
+		'/api/guiding/:sessionId/calibration/restore': {
+			// Restores a saved calibration while not guiding.
+			POST: async (req) => guiding.restoreSavedCalibration(req.params.sessionId, (await req.json()) as GuidingRestoreCalibrationRequest),
 		},
 		'/api/guiding/:sessionId/events': {
 			// The control events of a session after ?after=sequence.

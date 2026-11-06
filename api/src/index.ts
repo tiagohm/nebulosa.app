@@ -29,6 +29,7 @@ import { FocuserBacklashStore } from './focuserbacklash'
 import { createFocuserRoutes, FocuserCommands } from './focusers'
 import { createGuideOutputRoutes, GuideOutputCommands } from './guideoutputs'
 import { createGuidingRoutes, GuidingSessions } from './guiding'
+import { GuidingCalibrationStore } from './guidingcalibration.store'
 import { errorResponse } from './http'
 import { createImageProcessingRoutes, ImageProcessingService } from './imageprocessing'
 import { createImageRoutes, images } from './images'
@@ -571,6 +572,10 @@ export type {
 	FlatWizardVerdict,
 } from './flatwizard'
 export type {
+	GuidingCalibrationCandidates,
+	GuidingCalibrationList,
+	GuidingCalibrationPatch,
+	GuidingCalibrationPolicy,
 	GuidingCalibrationProgress,
 	GuidingCalibrationSummary,
 	GuidingCameraSettings,
@@ -582,11 +587,14 @@ export type {
 	GuidingEventRecord,
 	GuidingExposureRequest,
 	GuidingFrameOverlay,
+	GuidingMountContext,
 	GuidingPage,
 	GuidingPauseRequest,
+	GuidingRestoreCalibrationRequest,
 	GuidingResumeRequest,
 	GuidingRms,
 	GuidingServerEvent,
+	GuidingSessionCalibration,
 	GuidingSessionSummary,
 	GuidingSnapshot,
 	GuidingStartGuidingRequest,
@@ -596,6 +604,8 @@ export type {
 	GuidingTelemetryAxis,
 	GuidingTelemetrySample,
 } from './guiding'
+export type { GuidingCalibrationCandidate, GuidingCalibrationEntry, GuidingCalibrationEvidence, GuidingCalibrationRejection, StoredGuidingCalibration } from './guidingcalibration'
+export type { GuidingCalibrationHeader } from './guidingcalibration.store'
 export type { PointingFitModelRequest, PointingFitState, PointingModelDetail, PointingModelEvent, PointingModelPatch, PointingModelsSnapshot } from './mountpointing'
 export type { PointingFitStrategy, PointingGate, PointingOfflineMetrics, PointingSampleResidual } from './mountpointing.fit'
 export type { CorrectionRefusal, PointingActivateRequest, PointingActivation, PointingActivationEvent, PointingActivationsSnapshot, PointingCorrectionAudit } from './mountpointing.corrections'
@@ -800,7 +810,7 @@ listenClients(captureFrames)
 
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
 // guide output commands and previewing their frames in the image store and the capture frame registry.
-const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, publish)
+const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, new GuidingCalibrationStore(database), publish)
 
 // Automatic dithering of the camera captures, commanded to the guiding sessions, or moving the mounts with the commanders of
 // the mount and guide output commands, refusing a GoTo dither the Meridian Flip Monitor or the geometry says could flip.

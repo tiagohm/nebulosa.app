@@ -1,4 +1,4 @@
-import type { CaptureSnoop, DeviceSummary, GuidingCommand, GuidingSessionSummary } from 'api'
+import type { CaptureSnoop, DeviceSummary, GuidingCalibrationSummary, GuidingCommand, GuidingSessionSummary } from 'api'
 import { arcsec } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
@@ -58,7 +58,9 @@ import { StarProfileSection } from './GuidingStarProfile'
 // latest command), the Star Profile of the guide star, the guide exposure, tracking and star search, the calibration
 // and controller settings, the settle and dither pattern, and the commands of each state: start and
 // stop looping, select or clear the star, start and stop guiding, pause (corrections only, or the exposures too),
-// resume, dither, and clear the calibration. The camera is the panel's target and the guide output the GUIDE_OUTPUT of
+// resume, dither, force a new calibration, and clear the calibration. Every solved calibration is saved by the server,
+// which restores a matching one at the next Start Guiding when the form allows it; the session tells where the
+// calibration in use came from, whether it was saved, and how it was adapted to the mount. The camera is the panel's target and the guide output the GUIDE_OUTPUT of
 // the setup, which only the Guide Camera has; a missing or unsuitable one says why. The frames take the camera
 // settings of Camera Acquisition without its exposure time, shown under the guide exposure, and their stars are
 // detected with the detector of the profile's Star Detection (built-in or ASTAP) and its settings, as Auto Focus does;
@@ -184,7 +186,12 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				<Notice>The guide star is searched in a square of this side around the lock. A sticky lock stays exactly where it is when the guider starts again, instead of moving to the star.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.guiding.calibration" title="Calibration" defaultOpen={false}>
-				<Checkbox label="Calibrate again on every start" checked={settings.recalibrate} disabled={pending} onChange={(recalibrate) => update({ recalibrate })} />
+				<Checkbox label="Restore a saved calibration that matches" checked={settings.autoRestoreCalibration} disabled={running || pending} onChange={(autoRestoreCalibration) => update({ autoRestoreCalibration })} />
+				<Checkbox label="Calibrate again on every start" checked={settings.recalibrateOnEveryStart} disabled={running || pending} onChange={(recalibrateOnEveryStart) => update({ recalibrateOnEveryStart })} />
+				<Notice>Every calibration is saved. Start Guiding restores the best one measured with the same guide camera, guide output, mount, binning, pixel scale and guide rate, adapted to the declination and the side of the pier the mount reports; without one, it calibrates.</Notice>
+				<Checkbox label="Declination compensation" checked={settings.declinationCompensation} disabled={running || pending} onChange={(declinationCompensation) => update({ declinationCompensation })} />
+				<Notice>Scales the RA response of a calibration reused at another declination. Turn it off for a mount that already scales its RA guide rate by the declination, or one that is not equatorial.</Notice>
+				<Checkbox label="Assume DEC orthogonal to RA" checked={settings.assumeDecOrthogonalToRa} disabled={running || pending} onChange={(assumeDecOrthogonalToRa) => update({ assumeDecOrthogonalToRa })} />
 				<div className="flex flex-col gap-2">
 					<NumberInput label="Calibration Step" value={settings.calibrationPulse} min={GUIDING_MINIMUM_PULSE} max={GUIDING_MAXIMUM_PULSE} step={50} suffix="ms" disabled={running || pending} onChange={(calibrationPulse) => update({ calibrationPulse })} className="flex-1" />
 					<Button variant="secondary" disabled={running || pending || calibrationPulse === undefined} title={calculateBlocker ?? (calibrationPulse === undefined ? undefined : `${calibrationPulse} ms`)} onClick={() => calibrationPulse !== undefined && update({ calibrationPulse })}>
@@ -194,7 +201,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				{!running && calculateBlocker && <Notice>{calculateBlocker}</Notice>}
 				<Notice>Calculate sizes the step to move the star about 25 px in 12 RA steps at the declination the mount points at; calibrate away from the pole.</Notice>
 				<Checkbox label="Reverse DEC output after a meridian flip" checked={settings.reverseDecOutputAfterMeridianFlip} disabled={running || pending} onChange={(reverseDecOutputAfterMeridianFlip) => update({ reverseDecOutputAfterMeridianFlip })} />
-				<Notice>Reversing the DEC output applies when the calibration is flipped for a meridian flip, which guiding does not do yet; leave it off for mounts that reverse it themselves.</Notice>
+				<Notice>Reversing the DEC output applies when a calibration is flipped for the other side of the pier; leave it off for mounts that reverse it themselves.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.guiding.corrections" title="Corrections" defaultOpen={false}>
 				<NumberInput label="RA Aggressiveness" value={settings.aggressivenessRA} min={0} max={1} step={0.05} disabled={running || pending} onChange={(aggressivenessRA) => update({ aggressivenessRA })} />
@@ -240,14 +247,20 @@ function SessionControls({ session, settings, pending }: SessionControlsProps) {
 	const busy = pending || session.command?.state === 'running'
 	const guiding = session.guideOutputHeld
 	const paused = session.state === 'paused'
+	const calibrates = settings.recalibrateOnEveryStart || (!session.calibrated && !settings.autoRestoreCalibration)
 
 	return (
 		<>
 			{!guiding && (
 				<div className="flex flex-wrap gap-2">
 					<Button disabled={busy} onClick={() => void startGuiding(guidingRuntime, session, guidingStartRequest(settings))}>
-						{session.calibrated && !settings.recalibrate ? 'Start Guiding' : 'Calibrate and Guide'}
+						{calibrates ? 'Calibrate and Guide' : 'Start Guiding'}
 					</Button>
+					{!calibrates && (
+						<Button variant="secondary" disabled={busy} onClick={() => void startGuiding(guidingRuntime, session, guidingStartRequest(settings, true))}>
+							Force Recalibrate
+						</Button>
+					)}
 					<Button variant="secondary" disabled={busy} onClick={() => void selectGuidingTarget(guidingRuntime, session)}>
 						Auto Select Star
 					</Button>
@@ -314,6 +327,11 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 				{session.lockPosition && <DataRow label="Lock">{formatPixelPosition(session.lockPosition[0], session.lockPosition[1])}</DataRow>}
 				{calibration && (
 					<>
+						<DataRow label="Calibration" tone={calibration.assessment.quality === 'poor' ? 'danger' : 'default'}>
+							{`${calibration.origin === 'restored' ? 'Restored' : 'Solved'}, ${QUALITY_LABELS[calibration.assessment.quality]}`}
+						</DataRow>
+						<DataRow label="Calibrated At">{formatCalibrationContext(calibration.source)}</DataRow>
+						{calibration.transformations.length > 0 && <DataRow label="Adapted">{formatTransformations(calibration)}</DataRow>}
 						<DataRow label="RA Rate">{`${formatRate(calibration.raRate)} at ${formatDegrees(calibration.raAngle, 1)}`}</DataRow>
 						<DataRow label="DEC Rate">{`${formatRate(calibration.decRate)} at ${formatDegrees(calibration.decAngle, 1)}`}</DataRow>
 						{calibration.backlash > 0 && <DataRow label="DEC Backlash">{`${Math.round(calibration.backlash)} ms`}</DataRow>}
@@ -335,9 +353,25 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 			{session.state === 'calibrating' && session.calibrating && <CalibrationProgress progress={session.calibrating} />}
 			{command?.state === 'failed' && command.error && <Notice error>{command.error}</Notice>}
 			{calibration && calibration.warnings.length > 0 && <Notice>{calibration.warnings.join(' ')}</Notice>}
+			{calibration && !calibration.saved && <Notice error>{`The calibration was not saved for later sessions${calibration.saveError ? `: ${calibration.saveError}` : '.'}`}</Notice>}
 			{session.failure && <Notice error>{session.failure.error ?? `The session ended: ${session.failure.reason}.`}</Notice>}
 		</CollapsibleSection>
 	)
+}
+
+// Labels of the grades of a calibration.
+const QUALITY_LABELS: Readonly<Record<GuidingCalibrationSummary['assessment']['quality'], string>> = { good: 'good', warning: 'usable with warnings', poor: 'poor' }
+
+// Formats the mount context of a calibration: its declination in degrees and its side of the pier, each when known.
+function formatCalibrationContext({ declination, pierSide }: GuidingCalibrationSummary['source']) {
+	const parts = [declination !== undefined ? `DEC ${formatDegrees(declination, 1)}` : 'DEC unknown', pierSide ? `pier ${pierSide.toLowerCase()}` : 'pier side unknown']
+	return parts.join(', ')
+}
+
+// Formats how the calibration in use was adapted from the one measured: flipped for the other side of the pier, and its
+// RA response scaled for the declination.
+function formatTransformations({ transformations, declinationScale }: GuidingCalibrationSummary) {
+	return transformations.map((transformation) => (transformation === 'pierFlip' ? 'flipped for the pier side' : `RA ×${declinationScale.toFixed(2)} for the declination`)).join(', ')
 }
 
 // Formats a calibration rate given in pixels per millisecond as pixels per second.

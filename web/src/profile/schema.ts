@@ -37,7 +37,7 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // Version of the shape of the preferences and camera forms the server keeps (sync.ts). A value of any other version is
 // read as absent, never migrated, so a change to the shape of what is kept only raises this number; an added optional
 // field, which reads as its default, does not.
-export const PROFILE_SETTINGS_VERSION = 1
+export const PROFILE_SETTINGS_VERSION = 2
 
 // Application preferences that belong to a profile. Each preference is added here, with its default in
 // defaultSettings when it is not optional, and either kept by the server (PREFERENCES and the camera forms of sync.ts) or
@@ -833,8 +833,16 @@ export interface GuidingSettings {
 	searchRegion: number
 	// Whether the lock position stays exactly where it is when the guider re-initializes, instead of following the star.
 	stickyLockPosition: boolean
-	// Whether Start Guiding calibrates again instead of reusing the calibration solved earlier in the session.
-	recalibrate: boolean
+	// Whether Start Guiding without a calibration restores the best saved calibration of the same equipment and geometry,
+	// transformed for the declination and side of the pier the mount reports, instead of calibrating.
+	autoRestoreCalibration: boolean
+	// Whether every Start Guiding calibrates again, ignoring the calibration in use and the saved ones.
+	recalibrateOnEveryStart: boolean
+	// Whether a calibration reused at another declination has its RA response scaled by the cosine of the declination;
+	// off for a mount whose RA guide rate already follows the declination.
+	declinationCompensation: boolean
+	// Whether a calibration solves DEC perpendicular to the measured RA axis instead of the measured DEC axis.
+	assumeDecOrthogonalToRa: boolean
 	// Duration of each calibration pulse, in milliseconds, in [GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE].
 	calibrationPulse: number
 	// Proportional gain of the RA corrections, in [0, 1].
@@ -883,7 +891,8 @@ export const GUIDING_MINIMUM_PULSE = 1
 export const GUIDING_MAXIMUM_PULSE = 10000
 
 // Guiding form of a camera that has none yet: 2 s exposures on one star, the toolkit's controller defaults (gains 0.7
-// and 0.65, ceilings 2000 and 2500 ms, 650 ms calibration pulses), recalibrating on every start, settling within 1.5 px
+// and 0.65, ceilings 2000 and 2500 ms, 650 ms calibration pulses), restoring a matching saved calibration with declination
+// compensation and calibrating only without one, DEC solved as measured, settling within 1.5 px
 // for 10 s in at most 60 s, and dithering by 5 px on both axes at random with a fast recenter; the toolkit's 64 px
 // search square, a lock that follows the star, and a meridian flip that keeps the DEC output.
 export const DEFAULT_GUIDING_SETTINGS: GuidingSettings = {
@@ -891,7 +900,10 @@ export const DEFAULT_GUIDING_SETTINGS: GuidingSettings = {
 	trackingMode: 'singleStar',
 	searchRegion: 64,
 	stickyLockPosition: false,
-	recalibrate: true,
+	autoRestoreCalibration: true,
+	recalibrateOnEveryStart: false,
+	declinationCompensation: true,
+	assumeDecOrthogonalToRa: false,
 	calibrationPulse: 650,
 	aggressivenessRA: 0.7,
 	aggressivenessDEC: 0.65,

@@ -169,10 +169,10 @@ describe('writes', () => {
 		}
 
 		expect(written()).toEqual([
-			'/api/profiles/p1/cameras/c1/cam/exposure {"version":1,"value":{"exposureTime":7},"revision":2}',
-			'/api/profiles/p1/cameras/c1/cam/exposure {"version":1,"value":{"exposureTime":8},"revision":3}',
-			'/api/profiles/p1/cameras/c1/other/exposure {"version":1,"value":{"exposureTime":1,"gain":0,"offset":0,"binX":1,"binY":1,"subframe":false,"x":0,"y":0,"width":0,"height":0,"frameFormat":""},"revision":0}',
-			'/api/profiles/p1/cameras/c1/other/exposure {"version":1,"value":{"exposureTime":2,"gain":0,"offset":0,"binX":1,"binY":1,"subframe":false,"x":0,"y":0,"width":0,"height":0,"frameFormat":""},"revision":1}',
+			`/api/profiles/p1/cameras/c1/cam/exposure {"version":${PROFILE_SETTINGS_VERSION},"value":{"exposureTime":7},"revision":2}`,
+			`/api/profiles/p1/cameras/c1/cam/exposure {"version":${PROFILE_SETTINGS_VERSION},"value":{"exposureTime":8},"revision":3}`,
+			`/api/profiles/p1/cameras/c1/other/exposure {"version":${PROFILE_SETTINGS_VERSION},"value":{"exposureTime":1,"gain":0,"offset":0,"binX":1,"binY":1,"subframe":false,"x":0,"y":0,"width":0,"height":0,"frameFormat":""},"revision":0}`,
+			`/api/profiles/p1/cameras/c1/other/exposure {"version":${PROFILE_SETTINGS_VERSION},"value":{"exposureTime":2,"gain":0,"offset":0,"binX":1,"binY":1,"subframe":false,"x":0,"y":0,"width":0,"height":0,"frameFormat":""},"revision":1}`,
 			'/api/profiles/p1/mount-bindings/c1/mount/lx200 {"host":"0.0.0.0","port":5000}',
 			'/api/profiles/p1/mount-bindings/c1/mount/lx200 {"host":"0.0.0.0","port":5001}',
 		])

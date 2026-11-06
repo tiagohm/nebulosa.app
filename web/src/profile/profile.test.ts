@@ -547,7 +547,21 @@ describe('camera forms', () => {
 		expect(guidingSettings(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_GUIDING_SETTINGS)
 
 		const settle = { pixels: 0.8, time: 5, timeout: 30 }
-		setGuidingSettings(state, GUIDE, { exposureTime: 1.5, trackingMode: 'multiStar', searchRegion: 40, stickyLockPosition: true, recalibrate: false, aggressivenessRA: 0.5, settle, ditherPixels: 3, ditherRaOnly: true, ditherMode: 'spiral', fastRecenter: false, reverseDecOutputAfterMeridianFlip: true })
+		setGuidingSettings(state, GUIDE, {
+			exposureTime: 1.5,
+			trackingMode: 'multiStar',
+			searchRegion: 40,
+			stickyLockPosition: true,
+			recalibrateOnEveryStart: true,
+			assumeDecOrthogonalToRa: true,
+			aggressivenessRA: 0.5,
+			settle,
+			ditherPixels: 3,
+			ditherRaOnly: true,
+			ditherMode: 'spiral',
+			fastRecenter: false,
+			reverseDecOutputAfterMeridianFlip: true,
+		})
 		expect(guidingSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_GUIDING_SETTINGS)
 
 		const reloaded = state.profiles[0].settings
@@ -557,7 +571,8 @@ describe('camera forms', () => {
 			trackingMode: 'multiStar',
 			searchRegion: 40,
 			stickyLockPosition: true,
-			recalibrate: false,
+			recalibrateOnEveryStart: true,
+			assumeDecOrthogonalToRa: true,
 			aggressivenessRA: 0.5,
 			settle,
 			ditherPixels: 3,

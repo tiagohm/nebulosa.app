@@ -1,8 +1,8 @@
 import type { Image } from 'nebulosa/src/imaging/model/types'
-import { type DetectedStar, type DetectStarOptions, detectStars, STAR_SIGNAL_RADIUS } from 'nebulosa/src/imaging/stars/detector'
+import { type DetectedStar, type DetectStarOptions, detectStars, STAR_SIGNAL_RADIUS, starDetectionBorder } from 'nebulosa/src/imaging/stars/detector'
 
 // Star detection of a guide frame limited to regions around the stars the guider uses: one square around each center,
-// padded by what the detector needs around a star (its border margin, the aperture, and the sky annulus), merged while
+// padded by what the detector needs around a star (the star itself and the border it starts no star in), merged while
 // the padded squares overlap, so every star falls in exactly one crop, and clamped to the frame. Each crop is a copy of
 // the mono frame the toolkit detector runs on, and the stars it finds are shifted back to the frame. Positions are
 // 0-based pixel centres of the full frame, the origin at the upper-left sample, x right and y down.
@@ -25,15 +25,12 @@ export interface CropRect {
 	readonly bottom: number
 }
 
-// Pixels the detector needs around a star besides its aperture radius: the 4-pixel border it never detects in, the PSF
-// kernel, and the sky annulus 1 to 3 pixels beyond the aperture.
-const DETECTOR_PADDING = 12
-
 // Returns the crops of the regions in a frame of width x height pixels: each center's square of half side radius,
-// padded by the detector's needs for apertures up to maximumRadius pixels, merged while two overlap, and clamped to the
-// frame. The crops never overlap one another.
+// padded for apertures up to maximumRadius pixels by that radius, which a star's pixels that start its detection lie
+// within, and by the border of the crop the detector starts no star in (starDetectionBorder, 16 pixels by default),
+// merged while two overlap, and clamped to the frame. The crops never overlap one another.
 export function guideCrops({ centers, radius }: GuideRegions, width: number, height: number, maximumRadius: number): CropRect[] {
-	const half = Math.ceil(radius + maximumRadius + DETECTOR_PADDING)
+	const half = Math.ceil(radius + maximumRadius + starDetectionBorder(maximumRadius))
 	let crops: CropRect[] = centers.map(([x, y]) => ({ left: Math.max(0, Math.floor(x) - half), top: Math.max(0, Math.floor(y) - half), right: Math.min(width, Math.floor(x) + half + 1), bottom: Math.min(height, Math.floor(y) + half + 1) }))
 	let merged = true
 

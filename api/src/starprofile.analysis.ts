@@ -1,4 +1,4 @@
-import { detectStars } from 'nebulosa/src/imaging/stars/detector'
+import { detectStars, starDetectionBorder } from 'nebulosa/src/imaging/stars/detector'
 import { measureStarProfile, type StarProfile, type StarProfileModel } from 'nebulosa/src/imaging/stars/profile'
 import { moffatProfileValue, type MoffatProfileFit } from 'nebulosa/src/imaging/stars/profile.moffat'
 import type { Point } from 'nebulosa/src/math/numerical/geometry'
@@ -10,18 +10,16 @@ import type { DocumentSize, ImageRect, ImageRegion, SampleConversion } from './i
 // worker of its own (starprofile.worker.ts). The toolkit's detectStars finds the star nearest the point in the region
 // and measureStarProfile measures it, so no star is ever taken from the brightest sample of the region, and nothing here
 // computes a profile of its own. The region holds everything both read, so a star away from the frame edges measures as
-// it would on the whole image. Positions are 0-based pixel centres of the whole image, the origin at the upper-left
+// it would on the whole image; the detector takes its sky level and noise from the region, so it may find a little more
+// or less there than on the whole image. Positions are 0-based pixel centres of the whole image, the origin at the upper-left
 // sample, x right and y down; intensities are the normalized samples of the image, which conversion turns into the
 // scale of its source.
-
-// Pixels from the edge of an image inside which detectStars finds no candidate: its margin of 4 pixels plus its kernel.
-const DETECTION_EDGE = 8
 
 // Signal of the brightest sample of a star measured where the detector cannot look, in background deviations: well
 // above the noise peak of an aperture of any size, whose flux-based SNR grows with the aperture and proves nothing.
 const EDGE_MIN_PEAK = 6
 
-// Smallest HFD of a star measured where the detector cannot look, in pixels: as for the detector, below it is a hot pixel.
+// Smallest HFD of a star measured where the detector cannot look, in pixels: below it is a hot pixel.
 const EDGE_MIN_HFD = 1
 
 // Sample at or above which a pixel counts as saturated, in normalized samples: the full scale, less the rounding of the
@@ -148,9 +146,11 @@ export type StarProfileWorkerResponse = { readonly id: number; readonly status: 
 
 // Returns the pixels a region must reach on every side of a point, so that nothing the measurement reads is left out:
 // a star up to searchRadius from the point, its centroid up to searchRadius from there (see inspectStarRegion), an
-// aperture of maximumRadius, and its sky annulus 3 pixels beyond, plus one. The frame edges alone can then flag it.
+// aperture of maximumRadius, and its sky annulus 3 pixels beyond, plus one; and so that the detector can start that
+// star, whose pixels lie within maximumRadius of its center, outside the border of the region it starts no star in
+// (starDetectionBorder). The frame edges alone can then flag it.
 export function regionHalfSize({ searchRadius, maximumRadius }: Pick<StarProfileRequest, 'searchRadius' | 'maximumRadius'>): number {
-	return 2 * searchRadius + maximumRadius + 4
+	return Math.max(2 * searchRadius + maximumRadius + 4, searchRadius + maximumRadius + starDetectionBorder(maximumRadius))
 }
 
 // Returns the rectangle reaching halfSize pixels on every side of a point inside an image, clipped to the image.
@@ -162,8 +162,9 @@ export function regionAround({ x, y }: Readonly<Point>, halfSize: number, { widt
 	return { left, top, width: right - left + 1, height: bottom - top + 1 }
 }
 
-// Returns an image the detector can read: itself, or a copy with its non-finite samples set to 0, since the running sums
-// of the detector would carry one of them over every star after it. The profile still measures the samples as they are.
+// Returns an image the detector can read: itself, or a copy with its non-finite samples set to 0, since one of them makes
+// the measurement of every star around it non-finite, which drops that star. The profile still measures the samples as
+// they are.
 function finiteImage(image: ImageRegion['image']): ImageRegion['image'] {
 	return image.raw.every(Number.isFinite) ? image : { ...image, raw: image.raw.map((value) => (Number.isFinite(value) ? value : 0)) }
 }
@@ -171,7 +172,7 @@ function finiteImage(image: ImageRegion['image']): ImageRegion['image'] {
 // Returns the detected star nearest a point of a region and within searchRadius, undefined when there is none, or
 // ambiguous when another one is about as near.
 function nearestCandidate(image: ImageRegion['image'], point: Readonly<Point>, { searchRadius, maximumRadius, minSNR }: StarProfileRequest): Readonly<Point> | 'ambiguous' | undefined {
-	const stars = detectStars(finiteImage(image), { minSNR, maximumRadius, scoreGapTrim: false })
+	const stars = detectStars(finiteImage(image), { minSNR, maximumRadius })
 	const near = stars.map((star) => ({ star, distance: Math.hypot(star.x - point.x, star.y - point.y) })).filter(({ distance }) => distance <= searchRadius)
 	near.sort((a, b) => a.distance - b.distance)
 	if (near.length > 1 && near[1].distance - near[0].distance < AMBIGUOUS_DISTANCE) return 'ambiguous'
@@ -179,8 +180,8 @@ function nearestCandidate(image: ImageRegion['image'], point: Readonly<Point>, {
 }
 
 // Returns whether a point of an image is where detectStars cannot find the star that may be there.
-function nearFrameEdge({ x, y }: Readonly<Point>, { width, height }: DocumentSize, searchRadius: number): boolean {
-	return Math.min(x, y, width - 1 - x, height - 1 - y) < searchRadius + DETECTION_EDGE
+function nearFrameEdge({ x, y }: Readonly<Point>, { width, height }: DocumentSize, searchRadius: number, maximumRadius: number): boolean {
+	return Math.min(x, y, width - 1 - x, height - 1 - y) < searchRadius + starDetectionBorder(maximumRadius)
 }
 
 // Returns whether a profile measured at a point the detector cannot reach stands out as a star.
@@ -205,7 +206,7 @@ export function inspectStarRegion(imageId: string, { image, conversion }: ImageR
 	const candidate = request.detected ? point : nearestCandidate(image, point, request)
 
 	if (candidate === 'ambiguous') return { status: 'noStar', imageId, seed, reason: 'ambiguous' }
-	if (!candidate && !nearFrameEdge(seed, size, searchRadius)) return { status: 'noStar', imageId, seed, reason: 'noPeak' }
+	if (!candidate && !nearFrameEdge(seed, size, searchRadius, maximumRadius)) return { status: 'noStar', imageId, seed, reason: 'noPeak' }
 
 	const start = candidate ?? point
 	const saturationKnown = !conversion.rescaled

@@ -36,7 +36,7 @@ export interface BuiltinStarDetectionSettings {
 	readonly provider: 'builtin'
 	// Maximum number of stars kept, brightest first; the detector returns at most BUILTIN_STAR_LIMIT.
 	readonly maxStars: number
-	// Minimum SNR a detection must reach to be kept.
+	// SNR a detection must exceed to be kept; above 7 it also raises the detection level to that many sky deviations.
 	readonly minSNR: number
 	// Side of the uniqueness box of the detector, in pixels: pairs of stars of similar brightness closer
 	// than it are removed; 0 disables the filter.
@@ -247,7 +247,8 @@ const MANUAL_ORIGIN: StarDetectionOrigin = { kind: 'manual' }
 
 export { MAX_QUEUED } from './analysis'
 
-// Most stars the built-in detector returns, whatever maxStars asks for (the capacity of its star list).
+// Most stars the built-in detector returns, whatever maxStars asks for: STAR_DETECTION_LIMIT of the toolkit detector,
+// copied so this module imports only its types.
 export const BUILTIN_STAR_LIMIT = 2000
 
 // Fewest accepted stars an aggregate HFD is computed from: below three, a median is one or two stars.

@@ -92,13 +92,14 @@ test('the nearest star wins over a brighter one, and two equally near are ambigu
 	expect(inspect(image, 128, 120, { searchRadius: 10 })).toMatchObject({ status: 'noStar', reason: 'ambiguous' })
 })
 
-test('a faint star beside a brighter one is measured, not that neighbor', () => {
+test('a faint star beside a brighter one in the search box of the detector is not taken for that neighbor', () => {
 	const image = field([
 		[120, 120, 0.1],
 		[132, 120, 0.8],
 	])
 
-	expect(measured(inspect(image, 123, 120)).profile.x).toBeCloseTo(120, 0)
+	// ASTAP's extraction leaves out a star whose box holds a much brighter neighbor, and the neighbor is too far.
+	expect(inspect(image, 123, 120)).toMatchObject({ status: 'noStar', reason: 'noPeak' })
 })
 
 test('a centroid carried away from where it started is ambiguous, not what carried it', () => {

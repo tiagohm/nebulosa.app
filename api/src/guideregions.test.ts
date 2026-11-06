@@ -7,8 +7,9 @@ import { detectStarsInRegions, guideCrops } from './guideregions'
 const WIDTH = 640
 const HEIGHT = 480
 
-// A sky of Gaussian noise (sigma 0.01 around 0.1) with Gaussian stars of peak 0.2 and sigma 1.5 px at the positions.
-function frame(stars: readonly (readonly [number, number])[]): Image {
+// A sky of Gaussian noise (sigma 0.01 around 0.1) with Gaussian stars of sigma 1.5 px at the positions, of peak 0.2
+// unless a third value gives it.
+function frame(stars: readonly (readonly [number, number, number?])[]): Image {
 	const raw = new Float32Array(WIDTH * HEIGHT)
 	const random = mulberry32(5)
 
@@ -19,9 +20,9 @@ function frame(stars: readonly (readonly [number, number])[]): Image {
 		raw[i + 1] = 0.1 + 0.01 * radius * Math.sin(angle)
 	}
 
-	for (const [sx, sy] of stars) {
+	for (const [sx, sy, peak = 0.2] of stars) {
 		for (let y = Math.floor(sy) - 10; y <= Math.ceil(sy) + 10; y++) {
-			for (let x = Math.floor(sx) - 10; x <= Math.ceil(sx) + 10; x++) raw[y * WIDTH + x] += 0.2 * Math.exp(-((x - sx) ** 2 + (y - sy) ** 2) / (2 * 1.5 ** 2))
+			for (let x = Math.floor(sx) - 10; x <= Math.ceil(sx) + 10; x++) raw[y * WIDTH + x] += peak * Math.exp(-((x - sx) ** 2 + (y - sy) ** 2) / (2 * 1.5 ** 2))
 		}
 	}
 
@@ -30,9 +31,9 @@ function frame(stars: readonly (readonly [number, number])[]): Image {
 
 describe('crops', () => {
 	test('pad each region by what the detector needs, clamp to the frame, and merge until none overlaps', () => {
-		// Radius 24 + aperture 4 + padding 12: 40 px on each side of the center.
-		expect(guideCrops({ centers: [[100, 100]], radius: 24, minSNR: 0 }, WIDTH, HEIGHT, 4)).toEqual([{ left: 60, top: 60, right: 141, bottom: 141 }])
-		expect(guideCrops({ centers: [[10, 470]], radius: 24, minSNR: 0 }, WIDTH, HEIGHT, 4)).toEqual([{ left: 0, top: 430, right: 51, bottom: 480 }])
+		// Radius 24 + aperture 4 + detection border 16: 44 px on each side of the center.
+		expect(guideCrops({ centers: [[100, 100]], radius: 24, minSNR: 0 }, WIDTH, HEIGHT, 4)).toEqual([{ left: 56, top: 56, right: 145, bottom: 145 }])
+		expect(guideCrops({ centers: [[10, 470]], radius: 24, minSNR: 0 }, WIDTH, HEIGHT, 4)).toEqual([{ left: 0, top: 426, right: 55, bottom: 480 }])
 
 		// The first two overlap and merge; the union then overlaps the third, which joins it; the fourth stays apart.
 		const crops = guideCrops(
@@ -51,8 +52,8 @@ describe('crops', () => {
 			4,
 		)
 		expect(crops).toEqual([
-			{ left: 60, top: 60, right: 271, bottom: 171 },
-			{ left: 460, top: 360, right: 541, bottom: 441 },
+			{ left: 56, top: 56, right: 275, bottom: 175 },
+			{ left: 456, top: 356, right: 545, bottom: 445 },
 		])
 		for (const a of crops) for (const b of crops) if (a !== b) expect(a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom).toBeFalse()
 	})
@@ -81,19 +82,22 @@ describe('detection in regions', () => {
 		}
 	})
 
-	test('keeps only the detections from the minimum SNR of the regions', () => {
+	test('keeps only the detections above the minimum SNR of the regions', () => {
+		// A star of peak 40 sky deviations and one of 10.
 		const stars = [
-			[120.3, 90.7],
-			[400.6, 300.2],
+			[120.3, 90.7, 0.4],
+			[400.6, 300.2, 0.1],
 		] as const
+		const centers = stars.map(([x, y]) => [x, y] as const)
 		const image = frame(stars)
-		const all = detectStarsInRegions(image, { centers: stars, radius: 24, minSNR: 0 })
-		const kept = detectStarsInRegions(image, { centers: stars, radius: 24, minSNR: 5 })
+		const all = detectStarsInRegions(image, { centers, radius: 24, minSNR: 0 })
+		const kept = detectStarsInRegions(image, { centers, radius: 24, minSNR: 30 })
 
-		// The noise peaks of the crops are gone, and the stars stay as they were measured.
-		expect(all.length).toBeGreaterThan(kept.length)
-		expect(kept).toEqual(all.filter((star) => star.snr >= 5))
-		expect(kept).toHaveLength(2)
+		expect(all).toHaveLength(2)
+		expect(all.map((star) => star.snr).sort((a, b) => a - b)[0]).toBeLessThan(30)
+		expect(kept).toHaveLength(1)
+		expect(Math.hypot(kept[0].x - 120.3, kept[0].y - 90.7)).toBeLessThan(0.5)
+		expect(kept[0].snr).toBeGreaterThan(30)
 	})
 
 	test('keeps the brightest stars of all the regions', () => {

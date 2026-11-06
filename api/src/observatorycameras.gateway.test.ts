@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { join } from 'path'
-import { classifyLine, type GatewayListener, type GatewayState, gatewayEnvironment, MediaMtxGateway, parseVersion, pathConfiguration, supportedVersion } from './observatorycameras.gateway'
+import { classifyLine, type GatewayListener, type GatewayState, gatewayEnvironment, isBindFailure, MediaMtxGateway, parseVersion, pathConfiguration, supportedVersion } from './observatorycameras.gateway'
 
 const FAKE = join(import.meta.dir, 'observatorycameras.fake.ts')
 
@@ -36,6 +36,12 @@ describe('output', () => {
 		expect(classifyLine('2026/11/06 10:58:06 INF [path obs-c1] [RTSP source] started on demand')).toBeUndefined()
 		expect(classifyLine('2026/11/06 10:58:06 ERR [path other] [RTSP source] bad status code: 401')).toBeUndefined()
 		expect(classifyLine('2026/11/06 10:58:01 INF [API] started with listener on 127.0.0.1:19997 (TCP/HTTP)')).toBeUndefined()
+	})
+
+	test('tells a listener that could not be opened, in any language', () => {
+		expect(isBindFailure('2026/11/06 11:34:32 ERR listen udp :8189: bind: Normalmente é permitida apenas uma utilização de cada endereço de soquete (protocolo/endereço de rede/porta).')).toBeTrue()
+		expect(isBindFailure('2026/11/06 11:34:32 ERR listen tcp 127.0.0.1:9997: bind: address already in use')).toBeTrue()
+		expect(isBindFailure('2026/11/06 10:59:09 ERR [path obs-c1] [RTSP source] dial tcp 192.0.2.250:554: i/o timeout')).toBeFalse()
 	})
 })
 

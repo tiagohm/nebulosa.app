@@ -204,6 +204,13 @@ export function classifyLine(line: string): { readonly cameraId: string; readonl
 	return { cameraId, code: 'sourceFailed' }
 }
 
+// Whether a line of the gateway's output says it could not open a listener, such as
+// "ERR listen udp :8189: bind: address already in use". The reason after "bind:" is in the language of the operating
+// system, so only the start of the line is matched.
+export function isBindFailure(line: string) {
+	return /\bERR listen (tcp|udp)[46]? \S+: bind:/.test(line)
+}
+
 // Returns a free TCP port of the loopback interface.
 function freePort() {
 	const listener = Bun.listen({ hostname: '127.0.0.1', port: 0, socket: { data: () => undefined } })
@@ -331,9 +338,8 @@ export class MediaMtxGateway {
 		this.#directory = directory
 		this.#endpoints = { api: `http://127.0.0.1:${apiPort}`, webrtc: `http://127.0.0.1:${webrtcPort}` }
 		this.#epoch = crypto.randomUUID()
-		void this.#read(subprocess.stdout)
-		void this.#read(subprocess.stderr)
-		void subprocess.exited.then(() => this.#exited(subprocess))
+		// The exit is handled once its output was read, so the reason it printed is known.
+		void Promise.all([subprocess.exited, this.#read(subprocess.stdout), this.#read(subprocess.stderr)]).then(() => this.#exited(subprocess))
 
 		const deadline = Date.now() + program.timeout
 
@@ -406,7 +412,7 @@ export class MediaMtxGateway {
 
 	// Handles a line of the output of the process.
 	#line(line: string) {
-		if (/address already in use|only one usage of each socket address/i.test(line)) this.#bindFailed = true
+		if (isBindFailure(line)) this.#bindFailed = true
 		const source = classifyLine(line)
 		if (source) this.options.listener.sourceChanged(source.cameraId, source.code)
 	}

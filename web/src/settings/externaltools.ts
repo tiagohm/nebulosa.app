@@ -29,6 +29,7 @@ export type ExternalToolTestResult = { readonly check: ExternalToolCheck } | { r
 export const CAPABILITY_LABELS: Readonly<Record<ExternalToolCapability, string>> = {
 	'plate-solving': 'Plate solving',
 	'star-detection': 'Star detection',
+	'video-gateway': 'Observatory cameras',
 }
 
 // Mirror of the server's external programs, shared by every component of the tab.

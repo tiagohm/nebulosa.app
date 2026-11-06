@@ -7,7 +7,7 @@ import { errorResponse } from './http'
 import { errorCode } from './util'
 
 // Server-side settings of the external programs and services the backend uses: ASTAP, the local solve-field
-// of astrometry.net, and the nova.astrometry.net web service. Each one is registered here with the capabilities
+// of astrometry.net, the nova.astrometry.net web service, and MediaMTX, the media gateway of Observatory Cameras. Each one is registered here with the capabilities
 // its adapters provide and the settings it takes; nothing else can be configured, and no route runs an
 // arbitrary command. Settings belong to the server instance (not to a browser, profile, or workspace), are
 // persisted in the operational database, and are applied to the next runs without a restart. A test
@@ -18,10 +18,11 @@ import { errorCode } from './util'
 // learn whether there is one. Any client that can reach the API can change and test these settings, like every other route.
 
 // Identifier of a supported external program; also its key in the database and its route segment.
-export type ExternalToolId = 'astap' | 'astrometryLocal' | 'nova'
+export type ExternalToolId = 'astap' | 'astrometryLocal' | 'nova' | 'mediamtx'
 
-// Capability an adapter of an external program provides to the services that use it.
-export type ExternalToolCapability = 'plate-solving' | 'star-detection'
+// Capability an adapter of an external program provides to the services that use it; video-gateway is the media
+// gateway the server keeps running to relay the observatory cameras to browsers.
+export type ExternalToolCapability = 'plate-solving' | 'star-detection' | 'video-gateway'
 
 // Setting a program takes besides its timeout: its executable, the configuration file passed to it, or the
 // endpoint of a web service.
@@ -51,6 +52,8 @@ export interface ExternalToolDefinition {
 	readonly session: boolean
 	// Valid range of the default timeout of a run.
 	readonly timeoutLimits: TimeoutLimits
+	// Timeout of a program never saved, in milliseconds, within timeoutLimits.
+	readonly defaultTimeout: number
 }
 
 // Settings of an external program. A field the program does not take (see its fields) is absent.
@@ -58,7 +61,8 @@ export interface ExternalToolConfig {
 	// Path of the executable on the server's filesystem, or a name looked up on the server's PATH; empty when not
 	// configured or not taken.
 	readonly executable: string
-	// Default time limit of a run, in milliseconds, within the program's timeoutLimits.
+	// Default time limit of a run, in milliseconds, within the program's timeoutLimits; for a program the server keeps
+	// running, the time it may take to become ready after starting.
 	readonly timeout: number
 	// Path of a configuration file on the server's filesystem passed to the program; empty for its default one.
 	readonly config?: string
@@ -170,6 +174,9 @@ export type ExternalToolSaveOutcome = { readonly status: 'saved'; readonly tool:
 // Default time limit of a run, in milliseconds: 5 minutes, as ASTAP's adapters use when given none.
 export const DEFAULT_EXTERNAL_TOOL_TIMEOUT = 300000
 
+// Default time MediaMTX may take to answer its control API after starting, in milliseconds.
+export const DEFAULT_MEDIAMTX_TIMEOUT = 15000
+
 // Time a sign-in request to a web service may take, in milliseconds.
 const LOGIN_TIMEOUT = 30000
 
@@ -183,6 +190,7 @@ export const EXTERNAL_TOOLS: readonly ExternalToolDefinition[] = [
 		fields: ['executable'],
 		session: false,
 		timeoutLimits: { min: 1000, max: 3600000 },
+		defaultTimeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT,
 	},
 	{
 		id: 'astrometryLocal',
@@ -192,6 +200,7 @@ export const EXTERNAL_TOOLS: readonly ExternalToolDefinition[] = [
 		fields: ['executable', 'config'],
 		session: false,
 		timeoutLimits: { min: 1000, max: 3600000 },
+		defaultTimeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT,
 	},
 	{
 		id: 'nova',
@@ -201,6 +210,17 @@ export const EXTERNAL_TOOLS: readonly ExternalToolDefinition[] = [
 		fields: ['endpoint'],
 		session: true,
 		timeoutLimits: { min: 10000, max: 3600000 },
+		defaultTimeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT,
+	},
+	{
+		id: 'mediamtx',
+		name: 'MediaMTX',
+		description: 'Media gateway the server keeps running while observatory cameras are enabled; it reads their RTSP streams and relays them to browsers over WebRTC.',
+		capabilities: ['video-gateway'],
+		fields: ['executable'],
+		session: false,
+		timeoutLimits: { min: 1000, max: 60000 },
+		defaultTimeout: DEFAULT_MEDIAMTX_TIMEOUT,
 	},
 ]
 
@@ -333,7 +353,7 @@ export class ExternalToolsStore {
 	// Returns the saved settings of a program, the defaults when never saved.
 	#tool(id: ExternalToolId): StoredTool {
 		const row = this.database.db.query<ToolRow, [string]>('SELECT executable, timeout, config, endpoint, revision FROM external_tool_settings WHERE tool_id = ?').get(id)
-		if (!row) return { ...configOf(id, { executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT }), revision: 0 }
+		if (!row) return { ...configOf(id, { executable: '', timeout: definition(id).defaultTimeout }), revision: 0 }
 		const { executable, timeout, config, endpoint, revision } = row
 		return { ...configOf(id, { executable, timeout, config: config ?? undefined, endpoint: endpoint ?? undefined }), revision }
 	}

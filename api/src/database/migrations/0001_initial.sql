@@ -17,7 +17,7 @@ CREATE TABLE schema_migrations (
 -- never been saved and runs with the defaults. The session of a web service is never stored.
 CREATE TABLE external_tool_settings (
 	-- Supported program.
-	tool_id TEXT PRIMARY KEY CHECK (tool_id IN ('astap', 'astrometryLocal', 'nova')),
+	tool_id TEXT PRIMARY KEY CHECK (tool_id IN ('astap', 'astrometryLocal', 'nova', 'mediamtx')),
 	-- Path or PATH name of the executable on the server; empty when not configured or not taken.
 	executable TEXT NOT NULL,
 	-- Default time limit of a run, in milliseconds.

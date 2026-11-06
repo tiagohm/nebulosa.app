@@ -12,6 +12,7 @@ function astap(patch: Partial<ExternalToolState> = {}): ExternalToolState {
 		fields: ['executable'],
 		session: false,
 		timeoutLimits: { min: 1000, max: 3600000 },
+		defaultTimeout: 300000,
 		status: 'notConfigured',
 		config: { executable: '', timeout: 300000 },
 		revision: 0,

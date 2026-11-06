@@ -3,7 +3,7 @@ import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { AppDatabase } from './database'
-import { createExternalToolsRoutes, DEFAULT_EXTERNAL_TOOL_TIMEOUT, EXTERNAL_TOOLS, type ExternalToolCheck, type ExternalToolEvent, type ExternalToolState, ExternalToolsStore, inspectExecutable } from './externaltools'
+import { createExternalToolsRoutes, DEFAULT_EXTERNAL_TOOL_TIMEOUT, DEFAULT_MEDIAMTX_TIMEOUT, EXTERNAL_TOOLS, type ExternalToolCheck, type ExternalToolEvent, type ExternalToolState, ExternalToolsStore, inspectExecutable } from './externaltools'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-external-tools-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -52,12 +52,13 @@ describe('catalog', () => {
 		const routes = createExternalToolsRoutes(store().store)
 		const tools = (await (await call(routes, '/api/settings/external-tools', 'GET')).json()) as ExternalToolState[]
 
-		expect(tools.map((tool) => tool.id)).toEqual(['astap', 'astrometryLocal', 'nova'])
+		expect(tools.map((tool) => tool.id)).toEqual(['astap', 'astrometryLocal', 'nova', 'mediamtx'])
 		expect(tools[0]).toMatchObject({ name: 'ASTAP', capabilities: ['plate-solving', 'star-detection'], fields: ['executable'], session: false, status: 'notConfigured', revision: 0, config: { executable: '', timeout: DEFAULT_EXTERNAL_TOOL_TIMEOUT } })
 		expect(tools[0].lastCheck).toBeUndefined()
 		expect(tools[0].signedIn).toBeUndefined()
 		expect(tools[1]).toMatchObject({ capabilities: ['plate-solving'], fields: ['executable', 'config'], status: 'notConfigured', config: { executable: '', config: '' } })
 		expect(tools[2]).toMatchObject({ capabilities: ['plate-solving'], fields: ['endpoint'], session: true, status: 'notConfigured', signedIn: false, config: { executable: '', endpoint: '' } })
+		expect(tools[3]).toMatchObject({ name: 'MediaMTX', capabilities: ['video-gateway'], fields: ['executable'], session: false, status: 'notConfigured', timeoutLimits: { min: 1000, max: 60000 }, config: { executable: '', timeout: DEFAULT_MEDIAMTX_TIMEOUT } })
 	})
 
 	test('native providers are not external tools', () => {

@@ -578,7 +578,7 @@ describe('guiding', () => {
 	)
 
 	test.skipIf(SKIP)(
-		'end to end: calibrate and save, restore in a new session, move the mount, guide on with the derived calibration',
+		'end to end: calibrate and save, restore in a new session, dither, move the mount, guide on with the derived calibration',
 		async () => {
 			const store = new GuidingCalibrationStore(AppDatabase.memory())
 			const context = await setup(store)
@@ -607,6 +607,15 @@ describe('guiding', () => {
 			await waitUntil(() => (context.summary()?.telemetryCursor ?? 0) >= steps + 3)
 			const telemetry = (await context.guiding.telemetry(second.sessionId, 0).json()) as GuidingPage<GuidingTelemetrySample>
 			expect(telemetry.items.every((sample) => sample.lost || sample.phase === 'guiding' || sample.phase === 'settling')).toBeTrue()
+
+			// A dither moves the lock, settles, and marks its steps; the compensation stays out of the dither.
+			const dithering = context.summary()!.telemetryCursor
+			const dithered = context.guiding.admitDither(second.sessionId, { token: `token-${tokens++}`, amount: { unit: 'guidePixel', value: 3 }, raOnly: false, settle })
+			if (!dithered.ok) throw new Error(dithered.error)
+			expect(await dithered.settled).toMatchObject({ command: 'dither', state: 'succeeded' })
+			const ditherSteps = (await context.guiding.telemetry(second.sessionId, dithering).json()) as GuidingPage<GuidingTelemetrySample>
+			expect(ditherSteps.items.some((sample) => sample.phase === 'dithering' || sample.phase === 'settling')).toBeTrue()
+			expect(ditherSteps.items.filter((sample) => sample.phase === 'dithering').every((sample) => sample.decBacklashCompensation === undefined)).toBeTrue()
 
 			// Another service moves the mount to declination 45°; guiding comes back on the derived calibration.
 			const generation = context.summary()!.calibration!.generation

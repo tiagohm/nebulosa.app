@@ -5,14 +5,17 @@ import { join } from 'path'
 import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import { type OperationContext, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { writeFits } from 'nebulosa/src/io/formats/fits/fits'
+import { bufferSink } from 'nebulosa/src/io/io'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationDiagnostics } from 'nebulosa/src/observation/guiding/calibrator'
 import type { StarTracker } from 'nebulosa/src/observation/guiding/tracker.star'
+import type { CalibrationMasterDetail, CalibrationMasterSummary } from './calibrationlibrary'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
 import { ConnectionManager } from './connection'
 import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
-import { calibrationProgressOf, GUIDING_REGION_RADIUS, GUIDING_REGION_STARS, type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest, guidingRegions } from './guiding'
+import { type GuidingDarkLibrary, calibrationProgressOf, GUIDING_REGION_RADIUS, GUIDING_REGION_STARS, type GuidingEventRecord, type GuidingPage, type GuidingServerEvent, GuidingSessions, type GuidingSessionSummary, type GuidingStartRequest, guidingRegions } from './guiding'
 import { GuidingCalibrationStore } from './guidingcalibration.store'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry, type ToolInvocation } from './operations'
@@ -38,9 +41,12 @@ let tokens = 0
 
 const SETTLE = { pixels: 1.5, time: 1, timeout: 10 }
 
+// A Calibration Library without any master.
+const NO_DARKS: GuidingDarkLibrary = { resolvePreview: () => Promise.resolve({ candidates: [] }), pinnedMaster: () => Promise.resolve(undefined), lease: () => () => {} }
+
 // The simulator connection with its camera and mount connected, and the guiding sessions over it, guiding through the
 // mount's ST4 port. calibrations keeps the solved calibrations, a database of its own when absent.
-async function setup(calibrations = new GuidingCalibrationStore(AppDatabase.memory())) {
+async function setup(calibrations = new GuidingCalibrationStore(AppDatabase.memory()), library: GuidingDarkLibrary = NO_DARKS) {
 	const manager = new ConnectionManager()
 	disposables.push(manager)
 	const { id } = await manager.connect({ type: 'SIMULATOR' })
@@ -65,6 +71,7 @@ async function setup(calibrations = new GuidingCalibrationStore(AppDatabase.memo
 		// A settings file of its own, where ASTAP is not configured.
 		new ExternalToolsStore(AppDatabase.memory()),
 		calibrations,
+		library,
 		(event) => events.push(event),
 	)
 	disposables.push(guiding)
@@ -613,6 +620,65 @@ describe('detection regions', () => {
 		expect(guidingRegions({ builtin: true, tracker: tracker(false), summary: held })).toBeUndefined()
 		expect(guidingRegions({ builtin: false, tracker: tracker(true), summary: held })).toBeUndefined()
 	})
+})
+
+describe('dark', () => {
+	// A Calibration Library holding one master dark of 1000 DN for 200 ms frames of 256 × 256 pixels, whose leases are
+	// counted.
+	async function darkLibrary() {
+		const path = join(root, `dark-${tokens++}.fit`)
+		const raw = new Float32Array(256 * 256).fill(1000 / 65535)
+		const buffer = Buffer.alloc(4 * 2880 + raw.length * 2)
+		const sink = bufferSink(buffer)
+		await writeFits(sink, [{ header: { SIMPLE: true, BITPIX: 16, NAXIS: 2, NAXIS1: 256, NAXIS2: 256, BZERO: 32768, BSCALE: 1, IMAGETYP: 'Dark Frame', EXPTIME: 0.2 }, raw }])
+		await Bun.write(path, buffer.subarray(0, sink.position))
+		const unknown = { evidence: 'unknown' } as const
+		const metadata = { exposure: { value: 200000, evidence: 'verified' }, setTemperature: unknown, sensorTemperature: unknown } as unknown as CalibrationMasterSummary['metadata']
+		const master = { masterId: 7, kind: 'dark', metadata, createdAt: 1, frames: 10, contentDigest: 'digest' } as unknown as CalibrationMasterSummary
+		const leases = { taken: 0, released: 0 }
+
+		const library: GuidingDarkLibrary = {
+			// As matchesTarget, the dark matches only frames exposed 200 ms.
+			resolvePreview: (target) => Promise.resolve({ candidates: target.exposure !== undefined && Math.round(target.exposure * 1000000) === 200000 ? [master] : [] }),
+			pinnedMaster: ({ masterId, digest }) => Promise.resolve(masterId === 7 && digest === 'digest' ? ({ ...master, path, units: 'DN', fullScaleDn: 65535 } as unknown as CalibrationMasterDetail) : undefined),
+			lease: () => {
+				leases.taken++
+				return () => leases.released++
+			},
+		}
+
+		return { library, leases }
+	}
+
+	test('subtracts the master dark of the frames, chosen again when the exposure changes, and releases it at the end', async () => {
+		const { library, leases } = await darkLibrary()
+		const context = await setup(undefined, library)
+		const { sessionId } = await start(context, { dark: {} })
+		expect(context.summary()?.darkCalibration?.state).toBeOneOf(['pending', 'selected', 'applied'])
+
+		await waitUntil(() => context.summary()?.darkCalibration?.state === 'applied')
+		expect(context.summary()?.darkCalibration).toEqual({ state: 'applied', masterId: 7, pinned: false })
+		expect(leases).toEqual({ taken: 1, released: 0 })
+		expect((await context.guiding.darkCandidates(sessionId)).status).toBe(200)
+
+		// Frames of another exposure have no dark: the lease goes, and they are guided uncalibrated.
+		expect(context.guiding.setExposure(sessionId, { exposure: 300 }).status).toBe(204)
+		await waitUntil(() => context.summary()?.darkCalibration?.state === 'noCompatibleDark')
+		expect(leases).toEqual({ taken: 1, released: 1 })
+
+		// Turned off, nothing is subtracted; turned on with a pinned master that does not match, nothing either.
+		expect(context.guiding.setDark(sessionId, { enabled: true, masterId: 9 }).status).toBe(204)
+		await waitUntil(() => context.summary()?.darkCalibration?.state === 'noCompatibleDark' && context.summary()?.darkCalibration?.pinned === true)
+		expect(context.guiding.setDark(sessionId, { enabled: false }).status).toBe(204)
+		expect(context.summary()?.darkCalibration).toBeUndefined()
+
+		// Back to 200 ms with the dark on, it is leased again, and released when the session stops.
+		expect(context.guiding.setExposure(sessionId, { exposure: 200 }).status).toBe(204)
+		expect(context.guiding.setDark(sessionId, { enabled: true }).status).toBe(204)
+		await waitUntil(() => context.summary()?.darkCalibration?.state === 'applied')
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		expect(leases).toEqual({ taken: 2, released: 2 })
+	}, 60000)
 })
 
 describe('composition', () => {

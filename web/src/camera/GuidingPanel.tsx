@@ -1,4 +1,4 @@
-import type { CaptureSnoop, DeviceSummary, GuidingCalibrationCandidate, GuidingCalibrationSummary, GuidingCommand, GuidingSessionSummary } from 'api'
+import type { CaptureSnoop, DeviceSummary, GuidingCalibrationCandidate, GuidingCalibrationSummary, GuidingCommand, GuidingDarkCandidates, GuidingSessionSummary } from 'api'
 import { arcsec } from 'nebulosa/src/math/units/angle'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -43,10 +43,12 @@ import {
 	guidingRuntime,
 	guidingStartRequest,
 	loadGuidingCalibrationCandidates,
+	loadGuidingDarkCandidates,
 	pauseGuiding,
 	restoreGuidingCalibration,
 	resumeGuiding,
 	selectGuidingTarget,
+	setGuidingDark,
 	setGuidingExposure,
 	setSavedCalibrationDisabled,
 	startGuiding,
@@ -67,7 +69,9 @@ import { StarProfileSection } from './GuidingStarProfile'
 // which restores a matching one at the next Start Guiding when the form allows it; the session tells where the
 // calibration in use came from, whether it was saved, and how it was adapted to the mount; Review Calibration shows its
 // measured steps, and Saved Calibrations lists those of the same equipment with how each fits the session, to review,
-// restore while not guiding, or exclude from restoring. The camera is the panel's target and the guide output the GUIDE_OUTPUT of
+// restore while not guiding, or exclude from restoring. Dark subtracts a master dark of the Calibration Library from the
+// guide frames: the form's choice is sent at the start and changes the running session too, and while it runs a master
+// can be pinned among those matching its frames. The camera is the panel's target and the guide output the GUIDE_OUTPUT of
 // the setup, which only the Guide Camera has; a missing or unsuitable one says why. The frames take the camera
 // settings of Camera Acquisition without its exposure time, shown under the guide exposure, and their stars are
 // detected with the detector of the profile's Star Detection (built-in or ASTAP) and its settings, as Auto Focus does;
@@ -178,6 +182,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 			<CameraAcquisitionSection id="images.guiding.acquisition" device={device} exposure={exposure} capabilities={capabilities} description="The guide frames are LIGHTs taken with the camera settings of Camera Acquisition, shown as the latest frame of the camera and never saved.">
 				<ExposureTimeInput value={settings.exposureTime} exposure={guidingExposureRange(capabilities?.exposure)} disabled={pending} onChange={changeExposure} />
 			</CameraAcquisitionSection>
+			<DarkSection session={running ? session : undefined} enabled={settings.useCalibrationLibraryDark} disabled={pending} onEnabled={(useCalibrationLibraryDark) => update({ useCalibrationLibraryDark })} />
 			<CameraStarDetectionSection
 				id="images.guiding.star-detection"
 				device={device}
@@ -245,6 +250,84 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 	)
 }
 
+// Labels of the states of the master dark of a session.
+const DARK_STATE_LABELS: Readonly<Record<NonNullable<GuidingSessionSummary['darkCalibration']>['state'], string>> = {
+	pending: 'Waiting for a frame',
+	noCompatibleDark: 'No matching dark',
+	selected: 'Chosen',
+	applied: 'Subtracted',
+	failed: 'Not subtracted',
+}
+
+interface DarkSectionProps {
+	// Running session, whose dark is shown and changed; absent while none runs.
+	readonly session?: GuidingSessionSummary
+	// Whether the form subtracts a dark.
+	readonly enabled: boolean
+	readonly disabled: boolean
+	// Changes whether the form subtracts a dark.
+	readonly onEnabled: (enabled: boolean) => void
+}
+
+// Master dark of the guide frames: whether the form subtracts one, and for a running session, which one, how it went,
+// and the masters matching its frames, of which one can be pinned.
+function DarkSection({ session, enabled, disabled, onEnabled }: DarkSectionProps) {
+	const [candidates, setCandidates] = useState<GuidingDarkCandidates['candidates']>([])
+	const dark = session?.darkCalibration
+	const sessionId = session?.sessionId
+
+	useEffect(() => {
+		if (!sessionId) return setCandidates([])
+		let current = true
+		loadGuidingDarkCandidates(sessionId).then(
+			(loaded) => current && setCandidates(loaded.candidates),
+			() => current && setCandidates([]),
+		)
+
+		return () => {
+			current = false
+		}
+	}, [sessionId, session?.exposure, dark?.state])
+
+	// Changes the form, and the dark of the running session.
+	function change(next: boolean) {
+		onEnabled(next)
+		if (session) void setGuidingDark(guidingRuntime, session, { enabled: next })
+	}
+
+	const options = ['auto', ...candidates.map(({ masterId }) => String(masterId))]
+	const value = dark?.pinned && dark.masterId !== undefined ? String(dark.masterId) : 'auto'
+
+	return (
+		<CollapsibleSection id="images.guiding.dark" title="Dark" defaultOpen={false}>
+			<Checkbox label="Subtract a Calibration Library dark" checked={enabled} disabled={disabled} onChange={change} />
+			{session && dark && (
+				<>
+					<DataList>
+						<DataRow label="Dark" tone={dark.state === 'applied' ? 'success' : dark.state === 'failed' ? 'danger' : 'default'}>
+							{`${DARK_STATE_LABELS[dark.state]}${dark.masterId !== undefined ? ` · master ${dark.masterId}` : ''}${dark.pinned ? ' (pinned)' : ''}`}
+						</DataRow>
+					</DataList>
+					<Select
+						label="Master"
+						options={options.includes(value) ? options : [...options, value]}
+						value={value}
+						format={(option) => {
+							if (option === 'auto') return 'Best match'
+							const candidate = candidates.find(({ masterId }) => String(masterId) === option)
+							return candidate ? `${option} · ${candidate.frames} frames${candidate.temperature !== undefined ? ` · ${candidate.temperature.toFixed(1)} °C` : ''}` : option
+						}}
+						disabled={disabled}
+						onChange={(option) => void setGuidingDark(guidingRuntime, session, option === 'auto' ? { enabled: true } : { enabled: true, masterId: Number(option) })}
+					/>
+					{dark.reason && <Notice error={dark.state === 'failed'}>{dark.reason}</Notice>}
+				</>
+			)}
+			<Notice>The dark is matched to the frames by size, binning, gain, offset and temperature in the Calibration Library, and must have been exposed exactly as long; the frames are guided without one when none matches. The preview shows the frames as taken.</Notice>
+		</CollapsibleSection>
+	)
+}
+
 interface SavedCalibrationsProps {
 	// Living session whose equipment the calibrations are of.
 	readonly session: GuidingSessionSummary
@@ -253,7 +336,7 @@ interface SavedCalibrationsProps {
 }
 
 // Saved calibrations of the equipment of a session, newest usable first, each with how it fits the session now: read when
-// the section opens and whenever the calibration in use, the run or the side of the pier the session knows changes.
+// the section opens, once the first frame tells the equipment apart, and whenever the calibration in use or the run changes.
 function SavedCalibrations({ session, onReview }: SavedCalibrationsProps) {
 	const [candidates, setCandidates] = useState<readonly GuidingCalibrationCandidate[]>()
 	const [error, setError] = useState<string>()
@@ -274,7 +357,7 @@ function SavedCalibrations({ session, onReview }: SavedCalibrationsProps) {
 		return () => {
 			current = false
 		}
-	}, [session.sessionId, session.calibration?.calibrationId, session.calibration?.generation, guiding, generation])
+	}, [session.sessionId, session.frame !== undefined, session.calibration?.calibrationId, session.calibration?.generation, guiding, generation])
 
 	// Runs an action on a saved calibration, then reads the list again.
 	function act(action: Promise<unknown>) {

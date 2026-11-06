@@ -583,6 +583,10 @@ export type {
 	GuidingCommand,
 	GuidingCommandAccepted,
 	GuidingCommandStatus,
+	GuidingDarkCalibration,
+	GuidingDarkCandidates,
+	GuidingDarkChange,
+	GuidingDarkRequest,
 	GuidingDitherRequest,
 	GuidingEventRecord,
 	GuidingExposureRequest,
@@ -811,7 +815,10 @@ listenClients(captureFrames)
 
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
 // guide output commands and previewing their frames in the image store and the capture frame registry.
-const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, new GuidingCalibrationStore(database), publish)
+// The Calibration Library, single owner of the calibration frames and masters, whose master darks the guiding sessions
+// read too.
+const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(database), publish, () => operations.running().some(({ kind }) => kind.startsWith('camera.')))
+const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, new GuidingCalibrationStore(database), calibrationLibrary, publish)
 
 // Automatic dithering of the camera captures, commanded to the guiding sessions, or moving the mounts with the commanders of
 // the mount and guide output commands, refusing a GoTo dither the Meridian Flip Monitor or the geometry says could flip.
@@ -845,7 +852,6 @@ const pointingActivations = new PointingActivations(connections.devices, (id) =>
 const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, new DarvAnalyzer(images), publish)
 
 // Calibration frames and masters, which need no connection and hold no device; automatic masters wait for the camera operations.
-const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(database), publish, () => operations.running().some(({ kind }) => kind.startsWith('camera.')))
 
 // Projects of light frames for Image Stacking, which need no connection and hold no device. Imports never read the
 // directories of Nebulosa: its stacks and the Calibration Library.

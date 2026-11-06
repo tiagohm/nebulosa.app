@@ -37,7 +37,7 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // Version of the shape of the preferences and camera forms the server keeps (sync.ts). A value of any other version is
 // read as absent, never migrated, so a change to the shape of what is kept only raises this number; an added optional
 // field, which reads as its default, does not.
-export const PROFILE_SETTINGS_VERSION = 3
+export const PROFILE_SETTINGS_VERSION = 4
 
 // Application preferences that belong to a profile. Each preference is added here, with its default in
 // defaultSettings when it is not optional, and either kept by the server (PREFERENCES and the camera forms of sync.ts) or
@@ -849,6 +849,9 @@ export interface GuidingSettings {
 	// Whether guiding stops when the mount slews, parks or homes while guiding, which only something outside the
 	// application can command then.
 	stopGuidingOnSlew: boolean
+	// Whether the best matching master dark of the Calibration Library is subtracted from the guide frames before their
+	// stars are detected.
+	useCalibrationLibraryDark: boolean
 	// Duration of each calibration pulse, in milliseconds, in [GUIDING_MINIMUM_PULSE, GUIDING_MAXIMUM_PULSE].
 	calibrationPulse: number
 	// Proportional gain of the RA corrections, in [0, 1].
@@ -912,7 +915,7 @@ export const GUIDING_MAXIMUM_PULSE = 10000
 
 // Guiding form of a camera that has none yet: 2 s exposures on one star, the toolkit's controller defaults (gains 0.7
 // and 0.65, ceilings 2000 and 2500 ms, 650 ms calibration pulses), restoring a matching saved calibration with declination
-// compensation and calibrating only without one, DEC solved as measured, stopping when the mount slews, settling within 1.5 px
+// compensation and calibrating only without one, DEC solved as measured, stopping when the mount slews, subtracting a matching master dark, settling within 1.5 px
 // for 10 s in at most 60 s, and dithering by 5 px on both axes at random with a fast recenter; the toolkit's 64 px
 // search square, a lock that follows the star, and a meridian flip that keeps the DEC output.
 export const DEFAULT_GUIDING_SETTINGS: GuidingSettings = {
@@ -925,6 +928,7 @@ export const DEFAULT_GUIDING_SETTINGS: GuidingSettings = {
 	declinationCompensation: true,
 	assumeDecOrthogonalToRa: false,
 	stopGuidingOnSlew: true,
+	useCalibrationLibraryDark: true,
 	calibrationPulse: 650,
 	aggressivenessRA: 0.7,
 	aggressivenessDEC: 0.65,

@@ -21,6 +21,8 @@ import type { GuiderState, GuidingEvent } from 'nebulosa/src/observation/guiding
 import type { GuidingSettle } from 'nebulosa/src/observation/guiding/session'
 import { InteractiveGuidingSession, type GuidingPauseMode } from 'nebulosa/src/observation/guiding/session.interactive'
 import { enrichGuideStars, type GuideStar, type GuidingMode, StarTracker, starTrackingOf } from 'nebulosa/src/observation/guiding/tracker.star'
+import type { CalibrationLibrary } from './calibrationlibrary'
+import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
 import { CameraSessionRegistry } from './camerasessions'
 import type { CaptureFrameRegistry } from './captureframes'
 import type { CaptureFrame, CaptureSettings, CaptureSnoop } from './captures'
@@ -33,6 +35,7 @@ import type { GuidingCalibrationHeader, GuidingCalibrationStore } from './guidin
 import { guideStarProfile, type GuidingStarProfile } from './guidingprofile'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
+import { frameTarget } from './livestacking.groups'
 import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
 import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './stars'
 
@@ -79,6 +82,16 @@ import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './star
 // waiting for the end of its pulses as Stop Guiding does, and the lock is cleared, since its pixel means nothing after the
 // slew; the loop goes on and guiding never starts again by itself. After the motion of another service
 // (restoreAfterMotion), the calibration in use is derived again for where the mount points instead of being solved again.
+//
+// A session asked to (dark) subtracts a master dark of the Calibration Library from its guide frames before their stars
+// are detected, by the built-in detector or ASTAP: from the header of each frame the service builds its calibration
+// target, and whenever it changes (another exposure, gain, offset, binning, temperature) chooses again among the darks the
+// library matches (matchesTarget) the one exposed exactly as long, closest in temperature, newest, or the one the
+// operator pinned, which must match the same way; it reads it through pinnedMaster and leases it until another one is
+// chosen or the session ends, so the library never deletes it meanwhile. The worker subtracts it only from a frame whose
+// exposure is the dark's, so a frame taken before a change is never calibrated with a dark of another exposure. Without
+// a matching dark, or when one does not apply, the frames are guided uncalibrated and the record says why
+// (darkCalibration). The preview always shows the frames as taken.
 
 // Sensor settings of the guide exposures, sent once when the session starts. The frame type is always LIGHT.
 export type GuidingCameraSettings = Pick<CaptureSettings, 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
@@ -124,6 +137,9 @@ export interface GuidingStartRequest extends CommandRequest {
 	readonly client?: GuidingClientSettings
 	// How saved calibrations are reused; absent is DEFAULT_GUIDING_CALIBRATION_POLICY.
 	readonly calibrationPolicy?: GuidingCalibrationPolicy
+	// Whether, and with which master, a dark of the Calibration Library is subtracted from the guide frames; absent
+	// subtracts none.
+	readonly dark?: GuidingDarkRequest
 	// Whether guiding stops when the mount slews, parks or homes while guiding; absent is true.
 	readonly stopGuidingOnSlew?: boolean
 	// Devices of the camera's connection snooped into the guide frame headers, set once when the session starts; absent
@@ -195,6 +211,39 @@ export interface GuidingCommandStatus {
 export interface GuidingRestoreCalibrationRequest {
 	// Saved calibration to restore.
 	readonly calibrationId: string
+}
+
+// Master dark subtracted from the guide frames of a session: the best matching one, or the one pinned.
+export interface GuidingDarkRequest {
+	// Master pinned by the operator; it must match the frames as the automatic choice does. Absent chooses one.
+	readonly masterId?: number
+}
+
+// Body of POST /api/guiding/:sessionId/dark.
+export interface GuidingDarkChange {
+	// Whether a dark is subtracted from the next frames.
+	readonly enabled: boolean
+	// Master pinned by the operator; absent chooses one.
+	readonly masterId?: number
+}
+
+// Master dark of the guide frames of a session, as the record shows it.
+export interface GuidingDarkCalibration {
+	// pending: no frame was decoded yet to choose a dark for; noCompatibleDark: no dark of the library matches the frames (or the pinned one does not); selected: a dark matches
+	// and the next frames will be calibrated with it; applied: the latest frame was; failed: the latest frame could not be,
+	// or the dark could not be read, with reason.
+	readonly state: 'pending' | 'noCompatibleDark' | 'selected' | 'applied' | 'failed'
+	// Master chosen or pinned.
+	readonly masterId?: number
+	// Whether the operator pinned it.
+	readonly pinned: boolean
+	// Why it does not apply, meant for people.
+	readonly reason?: string
+}
+
+// Masters of the Calibration Library a session could subtract from its frames now, newest first.
+export interface GuidingDarkCandidates {
+	readonly candidates: readonly { readonly masterId: number; readonly createdAt: number; readonly exposure?: number; readonly temperature?: number; readonly frames: number }[]
 }
 
 // Body of PATCH /api/guiding/calibrations/:calibrationId.
@@ -374,6 +423,8 @@ export interface GuidingSessionSummary {
 	readonly star?: GuidingStarProfile
 	// Latest guide frame, with its capture document once previewed.
 	readonly frame?: { readonly frameId: number; readonly time: number; readonly imageId?: string }
+	// Master dark of the guide frames; absent when the session subtracts none.
+	readonly darkCalibration?: GuidingDarkCalibration
 	// Why guiding stopped by itself, until the next Start Guiding: the mount slewed, parked or homed while guiding, at time,
 	// Unix milliseconds (UTC).
 	readonly interruption?: { readonly reason: 'externalSlew'; readonly time: number }
@@ -517,6 +568,10 @@ interface DitherClaimOwner {
 	readonly holder: string
 }
 
+// What the guiding sessions use of the Calibration Library: the masters matching a target, the file of a pinned master,
+// and leases that keep masters from being deleted while a session reads them.
+export type GuidingDarkLibrary = Pick<CalibrationLibrary, 'resolvePreview' | 'pinnedMaster' | 'lease'>
+
 // Notifications of the guiding sessions.
 export type GuidingServerEvent =
 	| { readonly type: 'guiding:updated'; readonly session: GuidingSessionSummary }
@@ -527,6 +582,18 @@ export type GuidingServerEvent =
 // Receiver of the guiding notifications.
 export type GuidingListener = (event: GuidingServerEvent) => void
 
+// Master dark a worker job subtracts: the file of the pinned master, the digital full scale of its frames, and their
+// exposure in microseconds, which the frame's must equal.
+export interface GuidingWorkerDark {
+	readonly masterId: number
+	readonly path: string
+	readonly fullScale: number
+	readonly exposure: number
+}
+
+// Whether the dark of a job was subtracted from its frame, and why not.
+export type GuidingWorkerDarkOutcome = { readonly masterId: number; readonly applied: true } | { readonly masterId: number; readonly applied: false; readonly reason: string }
+
 // Request to the guide frame worker: one BLOB, transferred.
 export interface GuidingWorkerRequest {
 	readonly jobId: number
@@ -536,11 +603,27 @@ export interface GuidingWorkerRequest {
 	readonly detection?: Partial<Omit<BuiltinStarDetectionSettings, 'provider'>>
 	// Regions the built-in detector is limited to; absent detects the whole frame.
 	readonly regions?: GuideRegions
+	// Master dark subtracted from the frame before its stars are detected; absent subtracts none.
+	readonly dark?: GuidingWorkerDark
 }
 
 // Answer of the guide frame worker.
 export type GuidingWorkerResponse =
-	| { readonly jobId: number; readonly status: 'decoded'; readonly image: Image; readonly stars: readonly GuideStar[]; readonly bytes: Uint8Array<ArrayBuffer> }
+	| {
+			readonly jobId: number
+			readonly status: 'decoded'
+			// Grayscale copy the stars were detected on, calibrated when the dark applied.
+			readonly image: Image
+			readonly stars: readonly GuideStar[]
+			// The frame as taken, for the preview.
+			readonly bytes: Uint8Array<ArrayBuffer>
+			// What its header says, for the dark of the next frames.
+			readonly metadata: CalibrationMetadata
+			// Whether the dark of the job applied; absent without one.
+			readonly dark?: GuidingWorkerDarkOutcome
+			// The calibrated frame as FITS, for ASTAP; present when the dark applied and the worker detected no stars.
+			readonly detectionBytes?: Uint8Array<ArrayBuffer>
+	  }
 	| { readonly jobId: number; readonly status: 'unsupported' }
 	| { readonly jobId: number; readonly status: 'failed'; readonly error: string }
 
@@ -604,12 +687,12 @@ class GuideFrameDecoder implements Disposable {
 
 	// Decodes one BLOB on the worker, and detects its stars with the built-in detection given. Rejects when the worker
 	// crashes or was disposed.
-	decode(data: Buffer, encoding: BlobEncoding, detection: GuidingWorkerRequest['detection'], regions: GuideRegions | undefined): Promise<GuidingWorkerResponse> {
+	decode(data: Buffer, encoding: BlobEncoding, detection: GuidingWorkerRequest['detection'], regions: GuideRegions | undefined, dark: GuidingWorkerDark | undefined): Promise<GuidingWorkerResponse> {
 		const jobId = ++this.#jobs
 		const pending = Promise.withResolvers<GuidingWorkerResponse>()
 		this.#pending.set(jobId, pending)
 		const bytes = new Uint8Array(data)
-		this.#ensure().postMessage({ jobId, bytes, encoding, detection, ...(regions && { regions }) } satisfies GuidingWorkerRequest, [bytes.buffer])
+		this.#ensure().postMessage({ jobId, bytes, encoding, detection, ...(regions && { regions }), ...(dark && { dark }) } satisfies GuidingWorkerRequest, [bytes.buffer])
 		return pending.promise
 	}
 
@@ -669,6 +752,14 @@ interface Session {
 	// Calibration in use beyond what the client keeps: where it came from, its save, its grade, and the context it was
 	// derived for; absent without one.
 	calibration?: SessionCalibration
+	// Master dark asked for; absent subtracts none.
+	darkRequest?: GuidingDarkRequest
+	// Key of the calibration target of the latest frame the dark was chosen for.
+	darkKey?: string
+	// Master dark chosen, with the release of its lease; absent without one.
+	dark?: GuidingWorkerDark & { readonly release: () => void }
+	// What the header of the latest decoded frame says; absent before the first one.
+	lastMetadata?: CalibrationMetadata
 	// Stars and file bytes of each decoded image, until its frame is processed.
 	readonly detections: WeakMap<Image, readonly GuideStar[]>
 	readonly files: WeakMap<Image, Uint8Array<ArrayBuffer>>
@@ -756,7 +847,8 @@ export class GuidingSessions implements Disposable {
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, guideOutputs is the commander the pulses are dispatched through, images receives the previewed frames,
 	// frames records them as the latest frame of their camera, tools resolves ASTAP for the sessions that detect their stars
-	// with it, calibrations keeps the completed calibrations, and listener receives every notification synchronously.
+	// with it, calibrations keeps the completed calibrations, library resolves, pins and leases the master darks of the
+	// frames, and listener receives every notification synchronously.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -766,6 +858,7 @@ export class GuidingSessions implements Disposable {
 		readonly frames: CaptureFrameRegistry,
 		readonly tools: ExternalToolsStore,
 		readonly calibrations: GuidingCalibrationStore,
+		readonly library: GuidingDarkLibrary,
 		readonly listener: GuidingListener,
 	) {
 		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'guiding:updated', session }))
@@ -836,10 +929,12 @@ export class GuidingSessions implements Disposable {
 		const tracker = new StarTracker({ mode: request.trackingMode, detector: (image) => detections.get(image) ?? [] })
 		const client = new GuiderClient(this.devices.cameras, this.devices.guideOutputs, tracker, {
 			decodeImage: async (data, encoding) => {
-				const decoded = await decoder.decode(data, encoding, builtin, guidingRegions(session))
+				const dark = session.dark && { masterId: session.dark.masterId, path: session.dark.path, fullScale: session.dark.fullScale, exposure: session.dark.exposure }
+				const decoded = await decoder.decode(data, encoding, builtin, guidingRegions(session), dark)
 				if (decoded.status === 'unsupported') return undefined
 				if (decoded.status === 'failed') throw new Error(decoded.error)
-				detections.set(decoded.image, session.astap ? await this.#astapStars(session, session.astap, decoded.image, decoded.bytes) : decoded.stars)
+				this.#darkFrame(session, decoded.metadata, decoded.dark)
+				detections.set(decoded.image, session.astap ? await this.#astapStars(session, session.astap, decoded.image, decoded.detectionBytes ?? decoded.bytes) : decoded.stars)
 				files.set(decoded.image, decoded.bytes)
 				return decoded.image
 			},
@@ -868,6 +963,7 @@ export class GuidingSessions implements Disposable {
 				settling: false,
 				dithering: false,
 				calibrated: false,
+				...(request.dark && { darkCalibration: { state: 'pending', pinned: request.dark.masterId !== undefined } }),
 				exposure: request.exposure,
 				eventSequence: 0,
 				telemetryCursor: 0,
@@ -879,6 +975,7 @@ export class GuidingSessions implements Disposable {
 			camera,
 			guideOutput,
 			...(mount && { mount }),
+			...(request.dark && { darkRequest: request.dark }),
 			cameraSettings: request.camera,
 			policy: request.calibrationPolicy ?? DEFAULT_GUIDING_CALIBRATION_POLICY,
 			stopOnSlew: request.stopGuidingOnSlew !== false,
@@ -1076,6 +1173,97 @@ export class GuidingSessions implements Disposable {
 			session.interactive.clearTarget()
 			this.#sync(session)
 		})
+	}
+
+	// Follows the dark of the frame a session just decoded: records whether it applied, and chooses the dark again when
+	// the calibration target of the frame differs from the one it was chosen for.
+	#darkFrame(session: Session, metadata: CalibrationMetadata, outcome: GuidingWorkerDarkOutcome | undefined) {
+		session.lastMetadata = metadata
+		const request = session.darkRequest
+		if (!request) return
+		const pinned = request.masterId !== undefined
+
+		if (outcome) this.#update(session, { darkCalibration: outcome.applied ? { state: 'applied', masterId: outcome.masterId, pinned } : { state: 'failed', masterId: outcome.masterId, pinned, reason: outcome.reason } })
+
+		const target = frameTarget(metadata)
+		const key = JSON.stringify({ ...target, temperature: target.temperature === undefined ? undefined : Math.round(target.temperature * 2) / 2, request })
+		if (key === session.darkKey) return
+		session.darkKey = key
+		void this.#chooseDark(session, target, key)
+	}
+
+	// Chooses the master dark of the next frames of a session for the calibration target of its latest frame: among the
+	// darks the library matches, exposed exactly as long, the pinned one or the closest in temperature, newest first;
+	// pins and leases it, and releases the previous one. A choice overtaken by a newer frame is dropped.
+	async #chooseDark(session: Session, target: ReturnType<typeof frameTarget>, key: string) {
+		const request = session.darkRequest
+		if (!request) return
+		const pinned = request.masterId !== undefined
+		const exposure = target.exposure === undefined ? undefined : Math.round(target.exposure * 1000000)
+
+		try {
+			const { candidates } = await this.library.resolvePreview(target)
+			const darks = candidates.filter((master) => master.kind === 'dark' && exposure !== undefined && master.metadata.exposure.value === exposure && (!pinned || master.masterId === request.masterId))
+			const temperature = (master: (typeof darks)[number]) => master.metadata.setTemperature.value ?? master.metadata.sensorTemperature.value
+			const distance = (master: (typeof darks)[number]) => (target.temperature === undefined || temperature(master) === undefined ? Number.POSITIVE_INFINITY : Math.abs(temperature(master)! - target.temperature))
+			const best = darks.toSorted((a, b) => distance(a) - distance(b) || b.createdAt - a.createdAt)[0]
+			const master = best && (await this.library.pinnedMaster({ masterId: best.masterId, digest: best.contentDigest }))
+			if (session.darkKey !== key || session.ending) return
+
+			if (!best || !master) {
+				this.#dropDark(session)
+				const reason = exposure === undefined ? 'The frames do not state their exposure' : pinned ? 'The pinned dark does not match the frames' : 'No dark of the Calibration Library matches the frames'
+				this.#update(session, { darkCalibration: { state: best ? 'failed' : 'noCompatibleDark', pinned, reason: best ? 'The dark cannot be read' : reason } })
+				return
+			}
+
+			if (session.dark?.masterId !== master.masterId) {
+				const release = this.library.lease([{ masterId: master.masterId }])
+				this.#dropDark(session)
+				session.dark = { masterId: master.masterId, path: master.path, fullScale: master.units === 'dimensionless' ? 1 : master.fullScaleDn, exposure: exposure!, release }
+				this.#update(session, { darkCalibration: { state: 'selected', masterId: master.masterId, pinned } })
+			}
+		} catch (error) {
+			if (session.darkKey !== key) return
+			this.#dropDark(session)
+			this.#update(session, { darkCalibration: { state: 'failed', pinned, reason: Error.isError(error) ? error.message : String(error) } })
+		}
+	}
+
+	// Stops subtracting the dark of a session and releases its lease.
+	#dropDark(session: Session) {
+		session.dark?.release()
+		session.dark = undefined
+	}
+
+	// Responds with the darks of the Calibration Library that match the latest frame of a living session, exposed exactly
+	// as long, newest first; none before its first frame.
+	darkCandidates(sessionId: string): Promise<Response> | Response {
+		const session = this.#active(sessionId)
+		if (session instanceof Response) return session
+		return this.#darkCandidates(session)
+	}
+
+	async #darkCandidates(session: Session): Promise<Response> {
+		const frame = session.lastMetadata
+		if (!frame) return Response.json({ candidates: [] } satisfies GuidingDarkCandidates)
+		const target = frameTarget(frame)
+		const exposure = target.exposure === undefined ? undefined : Math.round(target.exposure * 1000000)
+		const { candidates } = await this.library.resolvePreview(target)
+		const darks = candidates.filter((master) => master.kind === 'dark' && exposure !== undefined && master.metadata.exposure.value === exposure)
+		return Response.json({ candidates: darks.map(({ masterId, createdAt, metadata, frames }) => ({ masterId, createdAt, frames, exposure: metadata.exposure.value, temperature: metadata.setTemperature.value ?? metadata.sensorTemperature.value })) } satisfies GuidingDarkCandidates)
+	}
+
+	// Changes the dark of the next frames of a living session: none, the best match, or a pinned master, chosen again from
+	// the next frame. Responds 204, or 404.
+	setDark(sessionId: string, { enabled, masterId }: GuidingDarkChange): Response {
+		const session = this.#active(sessionId)
+		if (session instanceof Response) return session
+		session.darkRequest = enabled ? { ...(masterId !== undefined && { masterId }) } : undefined
+		session.darkKey = undefined
+		this.#dropDark(session)
+		this.#update(session, { darkCalibration: enabled ? { state: 'pending', pinned: masterId !== undefined } : undefined })
+		return new Response(null, { status: 204 })
 	}
 
 	// Returns the declination and side of the pier the mount of a session reports, each absent when unknown.
@@ -1661,6 +1849,7 @@ export class GuidingSessions implements Disposable {
 		this.devices.cameras.removeHandler(session.progress)
 		if (session.motion) this.devices.mounts.removeHandler(session.motion)
 		session.decoder[Symbol.dispose]()
+		this.#dropDark(session)
 		session.abort.abort()
 		if (session.astap?.directory)
 			void session.astap.directory.then(
@@ -1869,6 +2058,14 @@ export function createGuidingRoutes(guiding: GuidingSessions) {
 		'/api/guiding/:sessionId/calibration/candidates': {
 			// The saved calibrations of the equipment of a session and how each fits it now.
 			GET: (req) => guiding.calibrationCandidates(req.params.sessionId),
+		},
+		'/api/guiding/:sessionId/dark': {
+			// Changes the master dark of the next frames.
+			POST: async (req) => guiding.setDark(req.params.sessionId, (await req.json()) as GuidingDarkChange),
+		},
+		'/api/guiding/:sessionId/dark/candidates': {
+			// The darks of the Calibration Library that match the latest frame.
+			GET: (req) => guiding.darkCandidates(req.params.sessionId),
 		},
 		'/api/guiding/:sessionId/calibration/restore': {
 			// Restores a saved calibration while not guiding.

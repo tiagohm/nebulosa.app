@@ -15,13 +15,15 @@ import type { TppaSessionSummary } from './tppa'
 import type { ServerEvent } from './websocket'
 
 // Deterministic classification of the server events into notification drafts. Only a few transitions of the
-// session services and the Meridian Flip Monitors, the failures of a short list of device operations, and lost connections are worth a
-// notification; every other event, including telemetry, frames, and progress, gives none. Each draft carries a
+// session services and the Meridian Flip Monitors, the failures of a short list of device operations, lost connections, and the global messages of
+// the INDI servers are worth a notification; every other event, including telemetry, frames, and progress, gives none. Each draft carries a
 // key naming the occurrence it reports (a session outcome, a manual step, an operation, a close), so the
 // notification service creates one record per occurrence however often the same state is published. The text
 // is built from fixed templates, device names, and fixed descriptions of the failure reasons. The error text of
 // a session or driver can hold server paths and is not copied into a notification; a cause the operator can fix
-// is recognized and described instead (failureText).
+// is recognized and described instead (failureText). The one exception is a global <message> of an INDI server
+// (indi:globalMessage), the text the server meant for people: it is copied on one line as the INDI message
+// service cleaned it, one info notification per occurrence, under the rate that service admits.
 
 // Severity of a notification.
 export type NotificationLevel = 'info' | 'success' | 'warning' | 'error'
@@ -57,7 +59,7 @@ export type NotificationTarget =
 
 // What a notification is about.
 export interface NotificationSource {
-	// Service that reported the occurrence: connection, capture, autofocus, tppa, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, meridianFlip, or operation.
+	// Service that reported the occurrence: connection, capture, autofocus, tppa, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, meridianFlip, operation, or indi (a global message of an INDI server).
 	readonly kind: string
 	// Id of the connection involved; absent for an application-wide notification.
 	readonly connectionId?: string
@@ -199,6 +201,19 @@ export class NotificationClassifier {
 				return this.#operation(event.operation)
 			case 'meridianFlip:transition':
 				return this.#meridianFlip(event.transition)
+			case 'indi:globalMessage':
+				return [{ key: `indi:global:${event.connectionId}:${event.epoch}:${event.id}`, level: 'info', code: 'indi.globalMessage', title: 'INDI Server', message: event.text, source: this.#indiSource(event.connectionId) }]
+			case 'indi:globalMessagesSuppressed':
+				return [
+					{
+						key: `indi:suppressed:${event.connectionId}:${event.epoch}:${event.windowStart}`,
+						level: 'info',
+						code: 'indi.globalMessagesSuppressed',
+						title: 'INDI Server',
+						message: `The INDI server sent more than ${event.limit} messages within ${Math.round(event.window / 1000)} s; the rest of them were not recorded.`,
+						source: this.#indiSource(event.connectionId),
+					},
+				]
 			default:
 				return []
 		}
@@ -451,6 +466,11 @@ export class NotificationClassifier {
 	// on request.
 	#quiet(connectionId: string, reason: OperationFailureReason | undefined) {
 		return reason === 'aborted' || (this.#requested.has(connectionId) && (reason === 'removed' || reason === 'disconnected'))
+	}
+
+	// Source of a global message of the INDI server of a connection: the connection and its endpoint, no device.
+	#indiSource(connectionId: string): NotificationSource {
+		return { kind: 'indi', connectionId, endpoint: this.#endpoints.get(connectionId) }
 	}
 
 	// Source of a notification about a connection, with the endpoint of that connection when known.

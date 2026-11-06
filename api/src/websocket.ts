@@ -15,6 +15,7 @@ import type { GuidingServerEvent } from './guiding'
 import type { ImageProcessingEvent } from './imageprocessing'
 import type { ImageStackingEvent } from './imagestacking'
 import type { IndiClientMessage, IndiServerEvent } from './indi'
+import type { IndiMessagesClientMessage, IndiMessagesServerEvent } from './indimessages'
 import type { LiveStackingEvent } from './livestacking'
 import type { MeridianFlipEvent } from './meridianflip'
 import type { PointingModelEvent } from './mountpointing'
@@ -35,15 +36,16 @@ import type { WorkspaceEvent } from './workspace'
 // WebSocket endpoint that pushes server events to every open browser tab. A tab names itself with the client id
 // it opens the socket with (/api/ws?client=<id>), the same for every socket it reopens, so services can keep
 // what the tab holds across reconnects. Events are broadcast to every socket, except the ones a service sends
-// to the one socket that asked for them, such as the INDI property stream of a device. A tab sends a few
-// control messages over the same socket (ClientMessage); the services that handle them identify the asker by
-// the socket itself, never by its client id, so what a socket asked for ends with it.
+// to the one socket that asked for them, such as the INDI property and message streams of a device. A tab sends a
+// few control messages over the same socket (ClientMessage); every socket listener receives each of them and
+// handles only the types it owns. The services that handle them identify the asker by the socket itself, never by
+// its client id, so what a socket asked for ends with it.
 
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the operation events
 // of the operation registry, the events of the capture, Auto Focus, TPPA, mount pointing, mount nudge, mount remote control, meridian flip monitor, and dome manual rotation services,
 // the captured frames of the frame registry, the guiding sessions, the changes of the external program settings and of the focuser backlash
-// compensations, the star detection, streak detection, plate solving, annotation, and image processing jobs, the created notifications, and the INDI device directory
-// and property streams.
+// compensations, the star detection, streak detection, plate solving, annotation, and image processing jobs, the created notifications, the INDI device directory
+// and property streams, and the INDI message streams and global messages.
 export type ServerEvent =
 	| ConnectionRegistryEvent
 	| OperationEvent
@@ -77,9 +79,10 @@ export type ServerEvent =
 	| NotificationCreatedEvent
 	| SatellitesChangedEvent
 	| IndiServerEvent
+	| IndiMessagesServerEvent
 
 // Any control message a tab sends over its socket.
-export type ClientMessage = IndiClientMessage
+export type ClientMessage = IndiClientMessage | IndiMessagesClientMessage
 
 // What the upgrade attaches to a socket.
 export interface WebSocketData {

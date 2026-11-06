@@ -35,6 +35,7 @@ import { createImageRoutes, images } from './images'
 import { createImageStackingRoutes, ImageStacking } from './imagestacking'
 import { DEFAULT_IMAGE_STACKING_DIRECTORY, ImageStackingStore } from './imagestacking.store'
 import { createIndiRoutes, IndiPropertyService } from './indi'
+import { IndiMessageService } from './indimessages'
 import { createLiveStackingRoutes, LiveStacking } from './livestacking'
 import { LiveStackingStore } from './livestacking.store'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
@@ -246,8 +247,6 @@ export type {
 	IndiDeviceEvent,
 	IndiDeviceSummary,
 	IndiErrorCode,
-	IndiMessage,
-	IndiMessageEvent,
 	IndiPropertyDefinedEvent,
 	IndiPropertyRemovedEvent,
 	IndiPropertyUpdate,
@@ -260,6 +259,19 @@ export type {
 	IndiSubscriptionErrorEvent,
 	IndiWriteRequest,
 } from './indi'
+export type {
+	IndiDeviceMessage,
+	IndiGlobalMessageEvent,
+	IndiGlobalMessagesSuppressedEvent,
+	IndiMessageReceivedEvent,
+	IndiMessagesClientMessage,
+	IndiMessagesHeader,
+	IndiMessagesServerEvent,
+	IndiMessagesSnapshotEvent,
+	IndiMessagesStreamEvent,
+	IndiMessagesSubscriptionErrorCode,
+	IndiMessagesSubscriptionErrorEvent,
+} from './indimessages'
 export type { IndiBlobElement, IndiBlobProperty, IndiDriver, IndiLightElement, IndiLightProperty, IndiNumberElement, IndiNumberProperty, IndiProperty, IndiPropertyChangeKind, IndiPropertyType, IndiSwitchElement, IndiSwitchProperty, IndiTextElement, IndiTextProperty } from 'nebulosa/src/devices/indi/properties'
 export type {
 	MountCoordinate,
@@ -721,6 +733,13 @@ const cameras = new CameraCommands(connections.devices, (id) => connections.clie
 const indi = new IndiPropertyService(connections.devices, (id) => connections.client(id), operations, broadcast, undefined, corrections)
 listenSockets(indi)
 
+// The <message> elements of the INDI servers of the open connections: a global one becomes a notification through
+// the server events, a device one is kept for the Messages view of that device and streamed only to the sockets
+// that subscribed to it; a connection that closes drops what it kept.
+const indiMessages = new IndiMessageService(connections.devices, (id) => connections.client(id), publish)
+listenSockets(indiMessages)
+connections.listen((event) => indiMessages.connectionChanged(event))
+
 // Settings of the external programs, such as ASTAP, read by the services that run them.
 const externalTools = new ExternalToolsStore(database, broadcast)
 
@@ -914,6 +933,7 @@ const RESOURCES: readonly Disposable[] = [
 	mountRemoteControl,
 	meridianFlip,
 	indi,
+	indiMessages,
 	mounts,
 	corrections,
 	guideOutputs,

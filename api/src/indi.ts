@@ -1,14 +1,14 @@
 import type { IndiClientHandler } from 'nebulosa/src/devices/indi/client'
 import type { Client, Device } from 'nebulosa/src/devices/indi/device'
 import type { IndiDevice, IndiDriver, IndiProperty, IndiPropertyChange, IndiPropertyChangeKind, IndiPropertyListener } from 'nebulosa/src/devices/indi/properties'
-import type { Message, SetVector } from 'nebulosa/src/devices/indi/types'
+import type { SetVector } from 'nebulosa/src/devices/indi/types'
 import { failedOperationResult, type OperationFailureReason, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { busy, type ClientResolver, type CommandAccepted, type CommandErrorCode, type CommandRequest, notFound, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { MountCorrections } from './mountpointing.corrections'
 import type { OperationRegistry } from './operations'
-import type { EventSocket, ServerEvent, SocketListener } from './websocket'
+import type { ClientMessage, EventSocket, ServerEvent, SocketListener } from './websocket'
 
 // The raw INDI property vectors of the devices of every open connection, for the INDI Properties view of
 // Equipment Control. Every client speaks them: an indiserver natively, the simulator and the Alpaca client by
@@ -22,8 +22,9 @@ import type { EventSocket, ServerEvent, SocketListener } from './websocket'
 //   (indi:subscribe), never broadcast. A subscription first receives a full snapshot on its own socket, so
 //   the snapshot and the later changes travel one ordered stream; it ends when the socket unsubscribes or
 //   closes. While a device has no subscriber, its changes build no payload and start no timer.
-// Definitions, removals, and changes of state, message, range, or timeout are sent at once; changes of
-// values only are coalesced per vector and sent at most once per VALUE_INTERVAL with the latest values. Every
+// The <message> elements of the drivers are not part of these streams (indimessages.ts collects them); only the
+// message attribute of each vector is. Definitions, removals, and changes of state, message, range, or timeout
+// are sent at once; changes of values only are coalesced per vector and sent at most once per VALUE_INTERVAL with the latest values. Every
 // stream event carries the epoch of its connection's client (a new one for every client the connection
 // opens) and a revision that increases with every event of the service, and every vector its own revision
 // from the registry, which a write names as its base. A socket whose queue grows beyond MAX_BUFFERED_AMOUNT
@@ -62,9 +63,6 @@ export const WRITE_GRACE = 5000
 // Bytes a socket may have queued before its streams skip changes and wait for it to drain.
 export const MAX_BUFFERED_AMOUNT = 1024 * 1024
 
-// Driver messages of a device kept for the snapshot of a new subscription, newest last.
-export const MAX_MESSAGES = 20
-
 // A physical device of a connection, as the directory lists it.
 export interface IndiDeviceSummary {
 	// Id of the open connection that provides the device.
@@ -77,16 +75,6 @@ export interface IndiDeviceSummary {
 	readonly driver?: IndiDriver
 	// Whether the device reports being connected to its hardware, when it defines CONNECTION.
 	readonly connected?: boolean
-}
-
-// A message the driver sent for a device.
-export interface IndiMessage {
-	// Unique id of the message.
-	readonly id: string
-	// Text of the message.
-	readonly message: string
-	// Timestamp the driver attached, as sent (ISO 8601 UTC without zone).
-	readonly timestamp?: string
 }
 
 // Events of the directory, broadcast to every tab.
@@ -112,8 +100,6 @@ export interface IndiSnapshotEvent extends IndiStreamHeader {
 	readonly device: IndiDeviceSummary
 	// Every vector, in definition order; each carries its own revision.
 	readonly vectors: readonly IndiProperty[]
-	// The latest driver messages of the device, newest last.
-	readonly messages: readonly IndiMessage[]
 }
 
 // A vector was defined or redefined; it replaces any vector of the same name.
@@ -157,15 +143,8 @@ export interface IndiPropertyRemovedEvent extends IndiStreamHeader {
 	readonly name: string
 }
 
-// The driver sent a message for the device.
-export interface IndiMessageEvent extends IndiStreamHeader {
-	readonly type: 'indi:message'
-	// The message.
-	readonly message: IndiMessage
-}
-
 // Events of the property stream of one device, sent only to the sockets that subscribed to it.
-export type IndiStreamEvent = IndiSnapshotEvent | IndiPropertyDefinedEvent | IndiPropertyUpdatedEvent | IndiPropertyRemovedEvent | IndiMessageEvent
+export type IndiStreamEvent = IndiSnapshotEvent | IndiPropertyDefinedEvent | IndiPropertyUpdatedEvent | IndiPropertyRemovedEvent
 
 // Stable code of a refused subscription: notFound, the connection is not open or has no such device.
 export type IndiSubscriptionErrorCode = 'notFound'
@@ -265,8 +244,6 @@ export class IndiPropertyService implements SocketListener, Disposable {
 	readonly #subscriptions = new Map<EventSocket, Set<Stream>>()
 	// Streams whose changes a socket skips until it drains.
 	readonly #stale = new Map<EventSocket, Set<Stream>>()
-	// Latest driver messages of each device.
-	readonly #messages = new WeakMap<IndiDevice, IndiMessage[]>()
 	// Epoch of each client.
 	readonly #epochs = new WeakMap<Client, string>()
 	// Interval of the value-only changes, in milliseconds.
@@ -357,10 +334,15 @@ export class IndiPropertyService implements SocketListener, Disposable {
 		return Response.json(this.devices.properties.devices(client).map((device) => summary(connectionId, device)))
 	}
 
-	// Handles the control messages of a socket.
-	message(socket: EventSocket, message: IndiClientMessage) {
-		if (message.type === 'indi:subscribe') this.subscribe(socket, message)
-		else this.unsubscribe(socket, message)
+	// Handles the property stream control messages of a socket; every other control message is ignored.
+	message(socket: EventSocket, message: ClientMessage) {
+		switch (message.type) {
+			case 'indi:subscribe':
+				this.subscribe(socket, message)
+				return
+			case 'indi:unsubscribe':
+				this.unsubscribe(socket, message)
+		}
 	}
 
 	// Subscribes a socket to the property stream of a device and sends it a snapshot, or the error refusing it.
@@ -450,11 +432,6 @@ export class IndiPropertyService implements SocketListener, Disposable {
 			if (stream === undefined) return
 			stream.pending.delete(property.name)
 			this.#send(stream, { ...this.#header(stream), type: 'indi:propertyRemoved', name: property.name })
-		},
-		message: (_, device, message) => {
-			const received = this.#keep(device, message)
-			const stream = this.#devices.get(device)
-			if (stream !== undefined) this.#send(stream, { ...this.#header(stream), type: 'indi:message', message: received })
 		},
 	}
 
@@ -563,7 +540,7 @@ export class IndiPropertyService implements SocketListener, Disposable {
 	#sendSnapshot(socket: EventSocket, stream: Stream) {
 		this.#stale.get(socket)?.delete(stream)
 		const { connectionId, device } = stream
-		const event: IndiSnapshotEvent = { ...this.#header(stream), type: 'indi:snapshot', device: summary(connectionId, device), vectors: Object.values(device.properties), messages: this.#messages.get(device) ?? [] }
+		const event: IndiSnapshotEvent = { ...this.#header(stream), type: 'indi:snapshot', device: summary(connectionId, device), vectors: Object.values(device.properties) }
 		this.#write(socket, stream, JSON.stringify(event))
 	}
 
@@ -599,21 +576,6 @@ export class IndiPropertyService implements SocketListener, Disposable {
 		}
 
 		return { connectionId, hardwareId: device.hardwareId, epoch, revision: ++this.#revision }
-	}
-
-	// Keeps a driver message of a device among its latest ones and returns it as the stream sends it.
-	#keep(device: IndiDevice, { id, message, timestamp }: Message): IndiMessage {
-		const received: IndiMessage = timestamp === undefined ? { id, message } : { id, message, timestamp }
-		let messages = this.#messages.get(device)
-
-		if (messages === undefined) {
-			messages = []
-			this.#messages.set(device, messages)
-		}
-
-		messages.push(received)
-		if (messages.length > MAX_MESSAGES) messages.shift()
-		return received
 	}
 
 	// Removes a socket from a stream, closing the stream with its last subscriber.

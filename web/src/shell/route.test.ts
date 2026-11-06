@@ -60,6 +60,13 @@ describe('parse', () => {
 		expect(routePath({ workspace: 'equipment', device: 'abc123', view: 'indi' })).toBe('/equipment/abc123/indi')
 	})
 
+	test('reads the INDI messages view of a device', () => {
+		expect(parseRoute('/equipment/abc123/messages')).toEqual({ workspace: 'equipment', device: 'abc123', view: 'messages' })
+		expect(parseRoute('/equipment/abc123/messages/extra')).toEqual({ workspace: 'equipment', device: 'abc123', view: 'messages' })
+		expect(parseRoute('/equipment/abc123/Messages')).toEqual({ workspace: 'equipment', device: 'abc123' })
+		expect(routePath({ workspace: 'equipment', device: 'abc123', view: 'messages' })).toBe('/equipment/abc123/messages')
+	})
+
 	test('reads the Settings page, its section, and its external program', () => {
 		expect(parseRoute('/settings')).toEqual({ workspace: 'settings', section: 'external-tools' })
 		expect(parseRoute('/settings/external-tools')).toEqual({ workspace: 'settings', section: 'external-tools' })
@@ -98,7 +105,7 @@ describe('parse', () => {
 	})
 
 	test('round-trips canonical paths', () => {
-		for (const path of ['/images', '/sky', '/tools', '/tools/calculator', '/tools/solar-eclipse-map/1786556760000', '/tools/lunar-eclipse-map/1803423600000', '/equipment/abc123', '/equipment/abc123/indi', '/about']) expect(routePath(parseRoute(path))).toBe(path)
+		for (const path of ['/images', '/sky', '/tools', '/tools/calculator', '/tools/solar-eclipse-map/1786556760000', '/tools/lunar-eclipse-map/1803423600000', '/equipment/abc123', '/equipment/abc123/indi', '/equipment/abc123/messages', '/about']) expect(routePath(parseRoute(path))).toBe(path)
 	})
 })
 

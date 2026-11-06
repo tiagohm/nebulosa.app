@@ -21,14 +21,15 @@ import { MountControls } from './controls/MountControls'
 import { RotatorControls } from './controls/RotatorControls'
 import { DeviceDiagnostics } from './DeviceDiagnostics'
 import { DEVICE_TYPE_LABELS, type DeviceGroup, groupConnected, groupTypes } from './groups'
+import { IndiMessagesPanel } from './indi/IndiMessagesPanel'
 import { IndiPropertiesPanel } from './indi/IndiPropertiesPanel'
 import { OperationStatus } from './OperationStatus'
 import type { InterfaceProps } from './parts'
 
 // Detail of one physical device: its name, interfaces, and connection, with an explicit connect or
-// disconnect command, then one of its views: the controls of each interface it offers, or the INDI properties
-// its connection reports for it (the only view of a device no interface manages), chosen with a selector that
-// is part of the URL; then its activity and its diagnostics. Controls are shown only for a connected
+// disconnect command, then one of its views: the controls of each interface it offers, the INDI properties its
+// connection reports for it (the first view of a device no interface manages), or, on an INDI server, the
+// messages its driver sent, chosen with a selector that is part of the URL; then its activity and its diagnostics. Controls are shown only for a connected
 // device whose state the server reported, and only for what it reports it can do. Switching views never
 // connects, disconnects, or stops anything.
 
@@ -49,15 +50,17 @@ const CONTROLS: Readonly<Record<ManagedDeviceType, ComponentType<InterfaceProps>
 export interface DeviceDetailProps {
 	// Device shown.
 	readonly group: DeviceGroup
-	// View the route asks for; the device's controls when absent or when the device has no INDI properties.
+	// View the route asks for; the device's first view when absent or when the device has no such view.
 	readonly view?: EquipmentView
+	// Whether the connection of the device is an INDI server, whose drivers send messages.
+	readonly messages: boolean
 }
 
 // View shown in the detail of a device.
-type DetailView = 'controls' | 'indi'
+type DetailView = 'controls' | EquipmentView
 
 // Text of each view in the view selector.
-const VIEW_LABELS: Readonly<Record<DetailView, string>> = { controls: 'Controls', indi: 'INDI Properties' }
+const VIEW_LABELS: Readonly<Record<DetailView, string>> = { controls: 'Controls', indi: 'INDI Properties', messages: 'Messages' }
 
 // Controls of one interface, or a note while its state is not known yet.
 function InterfaceSection({ device }: InterfaceProps) {
@@ -96,16 +99,17 @@ function connectionText(connected: boolean | undefined, pending?: 'connect' | 'd
 }
 
 // Detail of a device.
-export function DeviceDetail({ group, view }: DeviceDetailProps) {
+export function DeviceDetail({ group, view, messages }: DeviceDetailProps) {
 	const runtime = useSnapshot(deviceState)
 	const { primary, indi } = group
 	const pending = primary && runtime.pending[primary.id]
 	const error = primary && runtime.errors[primary.id]
-	const views: readonly DetailView[] = [...(primary ? ['controls' as const] : []), ...(indi ? ['indi' as const] : [])]
-	const shown: DetailView = (view === 'indi' && indi) || !primary ? 'indi' : 'controls'
+	const views: readonly DetailView[] = [...(primary ? ['controls' as const] : []), ...(indi ? ['indi' as const] : []), ...(indi && messages ? ['messages' as const] : [])]
+	// The view the route asks for when the device has it, otherwise its first one.
+	const shown: DetailView = view !== undefined && views.includes(view) ? view : (views[0] ?? 'controls')
 
 	function show(next: DetailView) {
-		navigate(routeState, { workspace: 'equipment', device: group.id, view: next === 'indi' ? 'indi' : undefined })
+		navigate(routeState, { workspace: 'equipment', device: group.id, view: next === 'controls' ? undefined : next })
 	}
 
 	return (
@@ -130,7 +134,13 @@ export function DeviceDetail({ group, view }: DeviceDetailProps) {
 					<Notice error>{error}</Notice>
 				</div>
 			)}
-			{shown === 'indi' && indi ? <IndiPropertiesPanel connectionId={indi.connectionId} hardwareId={group.hardwareId} /> : primary && <DeviceControls group={group} primary={primary} />}
+			{shown === 'messages' && indi ? (
+				<IndiMessagesPanel connectionId={indi.connectionId} hardwareId={group.hardwareId} name={group.name} />
+			) : shown === 'indi' && indi ? (
+				<IndiPropertiesPanel connectionId={indi.connectionId} hardwareId={group.hardwareId} />
+			) : (
+				primary && <DeviceControls group={group} primary={primary} />
+			)}
 			<OperationStatus group={group} />
 			{primary && <DeviceDiagnostics group={group} />}
 		</div>

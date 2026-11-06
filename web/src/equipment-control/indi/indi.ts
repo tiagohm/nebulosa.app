@@ -1,4 +1,4 @@
-import type { ClientMessage, CommandAccepted, IndiDeviceSummary, IndiErrorCode, IndiMessage, IndiProperty, IndiPropertyUpdate, IndiWriteRequest, ServerEvent } from 'api'
+import type { ClientMessage, CommandAccepted, IndiDeviceSummary, IndiErrorCode, IndiProperty, IndiPropertyUpdate, IndiWriteRequest, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { jsonInit } from '../../http'
@@ -10,9 +10,6 @@ import { jsonInit } from '../../http'
 // that does not show it. The subscription belongs to the socket, so it is sent again on every socket open and
 // each snapshot replaces the view. A change of another epoch (an earlier connection of the device) or older
 // than the last one applied is dropped, and a vector update older than the vector it would apply to too.
-
-// Latest driver messages kept by the view, newest last; the server keeps as many for the snapshot.
-export const MAX_MESSAGES = 20
 
 // Physical device a view follows.
 export interface IndiTarget {
@@ -57,8 +54,6 @@ export interface IndiViewState {
 	// Times each vector was defined since the latest snapshot, by name, so a redefinition discards the drafts of
 	// the vector it replaces.
 	definitions: Record<string, number>
-	// Latest driver messages, newest last.
-	messages: IndiMessage[]
 	// Latest write of each vector, by name.
 	writes: Record<string, IndiVectorWrite>
 }
@@ -68,7 +63,7 @@ export type IndiSend = (message: ClientMessage) => boolean
 
 // Creates the state of a view that follows no device.
 export function newIndiView(): IndiViewState {
-	return { status: 'idle', revision: 0, vectors: [], definitions: {}, messages: [], writes: {} }
+	return { status: 'idle', revision: 0, vectors: [], definitions: {}, writes: {} }
 }
 
 // View of the INDI properties of the tab.
@@ -87,7 +82,6 @@ function clear(state: IndiViewState) {
 	state.revision = 0
 	state.vectors = []
 	state.definitions = {}
-	state.messages = []
 	state.writes = {}
 }
 
@@ -145,7 +139,6 @@ export function handleIndiEvent(state: IndiViewState, event: ServerEvent) {
 			state.revision = event.revision
 			state.vectors = [...event.vectors]
 			state.definitions = {}
-			state.messages = [...event.messages]
 			return
 		case 'indi:subscriptionError':
 			if (!sameTarget(target, event)) return
@@ -160,7 +153,6 @@ export function handleIndiEvent(state: IndiViewState, event: ServerEvent) {
 		case 'indi:propertyDefined':
 		case 'indi:propertyUpdated':
 		case 'indi:propertyRemoved':
-		case 'indi:message':
 			if (!sameTarget(target, event) || event.epoch !== state.epoch || !(event.revision > state.revision)) return
 			state.revision = event.revision
 
@@ -169,11 +161,9 @@ export function handleIndiEvent(state: IndiViewState, event: ServerEvent) {
 				state.definitions[event.vector.name] = (state.definitions[event.vector.name] ?? 0) + 1
 			} else if (event.type === 'indi:propertyUpdated') {
 				applyUpdate(state, event.vector)
-			} else if (event.type === 'indi:propertyRemoved') {
+			} else {
 				state.vectors = state.vectors.filter((vector) => vector.name !== event.name)
 				delete state.writes[event.name]
-			} else {
-				state.messages = [...state.messages, event.message].slice(-MAX_MESSAGES)
 			}
 	}
 }

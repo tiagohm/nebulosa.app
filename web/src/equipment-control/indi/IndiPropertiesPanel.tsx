@@ -77,19 +77,6 @@ export function IndiPropertiesPanel({ connectionId, hardwareId }: IndiProperties
 					</div>
 				</details>
 			))}
-			{view.messages.length > 0 && (
-				<details className="border-b border-line-100 px-4">
-					<summary className="cursor-pointer py-3 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase select-none">Driver messages · {view.messages.length}</summary>
-					<ol className="m-0 flex list-none flex-col gap-1 p-0 pb-3 text-xs text-ink-200">
-						{view.messages.toReversed().map((message) => (
-							<li key={message.id} className="wrap-break-word">
-								{message.timestamp && <span className="mr-2 font-mono text-ink-300">{message.timestamp}</span>}
-								{message.message}
-							</li>
-						))}
-					</ol>
-				</details>
-			)}
 		</div>
 	)
 }

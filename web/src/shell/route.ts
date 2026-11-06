@@ -4,7 +4,8 @@ import { proxy } from 'valtio'
 // source of truth, so each tab navigates independently and a reload reopens the same context.
 // Paths are /images, /sky, /tools, /tools/<tool>, /tools/solar-eclipse-map/<eclipse id>,
 // /tools/lunar-eclipse-map/<eclipse id>, /tools/calibration-library/<group id>, /tools/image-stacking/<project id>, the Equipment Control page
-// /equipment, /equipment/<device id>, and /equipment/<device id>/indi for the INDI properties of the device,
+// /equipment, /equipment/<device id>, /equipment/<device id>/indi for the INDI properties of the device, and
+// /equipment/<device id>/messages for the messages its INDI driver sent,
 // the Settings page /settings/<section>, with /settings/external-tools/<tool id> for an external program,
 // and the About page /about, opened from the bottom of the navigation rail, which are not workspaces of the
 // navigation rail; anything else opens the default route.
@@ -43,8 +44,14 @@ export interface ToolsRoute {
 	readonly satellite?: string
 }
 
-// View of a device in the Equipment Control page besides its controls: its INDI properties.
-export type EquipmentView = 'indi'
+// View of a device in the Equipment Control page besides its controls: its INDI properties, or the messages its INDI
+// driver sent.
+export type EquipmentView = 'indi' | 'messages'
+
+// Whether a path segment names a view of a device.
+function isEquipmentView(value: string): value is EquipmentView {
+	return value === 'indi' || value === 'messages'
+}
 
 // Location in the Equipment Control page: the device shown, if any, and its view. The page is opened from the
 // Management menu, not from the navigation rail, and lists the devices of the active profile's connection only.
@@ -126,7 +133,7 @@ export function settingsSection(route: SettingsRoute): SettingsSectionId {
 // Stacking, and the satellite of Artificial Satellites.
 export function parseRoute(pathname: string): Route {
 	const [workspace = '', first = '', second = ''] = pathname.split('/').filter(Boolean)
-	if (workspace === 'equipment') return first ? (second === 'indi' ? { workspace, device: first, view: second } : { workspace, device: first }) : { workspace }
+	if (workspace === 'equipment') return first ? (isEquipmentView(second) ? { workspace, device: first, view: second } : { workspace, device: first }) : { workspace }
 	if (workspace === 'settings') {
 		const section = isSettingsSectionId(first) ? first : SETTINGS_SECTION_IDS[0]
 		if (first === 'external-tools' && second) return { workspace, section, tool: second }

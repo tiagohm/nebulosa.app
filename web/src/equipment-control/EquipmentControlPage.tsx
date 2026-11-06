@@ -61,7 +61,7 @@ export function EquipmentControlPage() {
 		if (groups.length === 0) return <EmptyState title={runtime.loading ? 'Loading devices…' : 'No devices discovered'} description={runtime.loading ? undefined : `${connection.name} has not reported any device yet.`} />
 
 		const detail = selected ? (
-			<DeviceDetail key={selected.hardwareId} group={selected} view={view} />
+			<DeviceDetail key={selected.hardwareId} group={selected} view={view} messages={connection.type === 'INDI'} />
 		) : (
 			<EmptyState title={deviceId ? 'Device not found' : 'No device selected'} description={deviceId ? `${connection.name} has no such device. It may have been removed.` : 'Select a device to see its state and controls.'} />
 		)

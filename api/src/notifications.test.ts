@@ -4,7 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { AppDatabase } from './database'
 import { createNotificationRoutes, MAX_NOTIFICATIONS, NOTIFICATION_RETENTION, type NotificationCreatedEvent, NotificationService } from './notifications'
-import type { NotificationDraft } from './notifications.rules'
+import { type NotificationDraft, NotificationClassifier } from './notifications.rules'
 import type { ServerEvent } from './websocket'
 import { Workspace } from './workspace'
 
@@ -134,4 +134,18 @@ test('GET /api/notifications answers the snapshot', async () => {
 	expect(response.status).toBe(200)
 	const body = (await response.json()) as { items: { message: string }[] }
 	expect(body.items.map((n) => n.message)).toEqual(['Operation b failed.', 'Operation a failed.'])
+})
+
+test('records a global INDI message once per occurrence, cut to the message limit', () => {
+	const events: NotificationCreatedEvent[] = []
+	const service = new NotificationService((e) => events.push(e), { database: AppDatabase.memory(), now: () => 1000, classifier: new NotificationClassifier() })
+	const global = (id: string, text: string): ServerEvent => ({ type: 'indi:globalMessage', connectionId: 'c', epoch: 'e', id, receivedAt: 1000, text })
+
+	service.consume(global('m1', 'same'))
+	service.consume(global('m1', 'same'))
+	service.consume(global('m2', 'same'))
+	service.consume(global('m3', 'x'.repeat(300)))
+
+	expect(events.map((e) => e.notification.message)).toEqual(['same', 'same', `${'x'.repeat(239)}…`])
+	expect(events.every((e) => e.notification.level === 'info' && e.notification.target === undefined)).toBeTrue()
 })

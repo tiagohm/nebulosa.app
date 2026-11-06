@@ -195,7 +195,8 @@ describe('stream', () => {
 		service.subscribe(a.socket, { type: 'indi:subscribe', connectionId: id, hardwareId: relay.hardwareId })
 
 		const snapshot = a.events[0] as IndiSnapshotEvent
-		expect(snapshot).toMatchObject({ type: 'indi:snapshot', connectionId: id, hardwareId: relay.hardwareId, epoch: expect.any(String), device: { name: 'Relay', connected: true }, messages: [] })
+		expect(snapshot).toMatchObject({ type: 'indi:snapshot', connectionId: id, hardwareId: relay.hardwareId, epoch: expect.any(String), device: { name: 'Relay', connected: true } })
+		expect(snapshot).not.toHaveProperty('messages')
 		expect(snapshot.vectors.map((vector) => vector.name)).toEqual(RELAY_VECTORS)
 		expect(snapshot.vectors[2]).toMatchObject({ type: 'NUMBER', permission: 'rw', timeout: 10, elementNames: ['TEMP', 'HUMIDITY'], elements: { TEMP: { format: '%6.2f', min: -50, max: 50, step: 0.1, value: 10 } } })
 
@@ -243,7 +244,7 @@ describe('stream', () => {
 		expect(a.events).toHaveLength(2)
 	})
 
-	test('sends definitions, removals, and messages at once', async () => {
+	test('sends definitions and removals at once, and never a driver message', async () => {
 		const { indi, service, id, relay } = await setup({ valueInterval: 1000 })
 		const a = fakeSocket()
 		service.subscribe(a.socket, { type: 'indi:subscribe', connectionId: id, hardwareId: relay.hardwareId })
@@ -251,20 +252,35 @@ describe('stream', () => {
 		indi.push('<defLightVector device="Relay" name="STATUS" group="Main Control" state="Ok"><defLight name="READY" label="Ready">Busy</defLight></defLightVector>')
 		indi.push('<message device="Relay" timestamp="2026-10-26T12:00:00" message="relay armed"/>')
 		indi.push('<delProperty device="Relay" name="STATUS"/>')
-		await until(() => a.events.length === 4, 500)
+		await until(() => a.events.length === 3, 500)
+		await Bun.sleep(50)
 
 		expect(a.events.slice(1)).toMatchObject([
 			{ type: 'indi:propertyDefined', vector: { type: 'LIGHT', name: 'STATUS', elements: { READY: { value: 'Busy' } } } },
-			{ type: 'indi:message', message: { message: 'relay armed', timestamp: '2026-10-26T12:00:00' } },
 			{ type: 'indi:propertyRemoved', name: 'STATUS' },
 		])
+		expect(a.events).toHaveLength(3)
 
 		const revisions = a.events.map((event) => (event as { revision: number }).revision)
 		expect(revisions).toEqual([...revisions].sort((x, y) => x - y))
+	})
 
-		const later = fakeSocket()
-		service.subscribe(later.socket, { type: 'indi:subscribe', connectionId: id, hardwareId: relay.hardwareId })
-		expect((later.events[0] as IndiSnapshotEvent).messages).toMatchObject([{ message: 'relay armed' }])
+	test('ignores the control messages of the message streams', async () => {
+		const { indi, service, id, relay } = await setup()
+		const a = fakeSocket()
+		const target = { connectionId: id, hardwareId: relay.hardwareId }
+
+		service.message(a.socket, { type: 'indi:subscribe', ...target })
+		service.message(a.socket, { type: 'indi:messagesSubscribe', ...target })
+		service.message(a.socket, { type: 'indi:messagesUnsubscribe', ...target })
+		expect(service.subscribers(id, relay.hardwareId)).toBe(1)
+		expect(a.events.map((event) => event.type)).toEqual(['indi:snapshot'])
+
+		indi.push(temperature(33))
+		await until(() => a.events.length === 2)
+
+		service.message(a.socket, { type: 'indi:unsubscribe', ...target })
+		expect(service.subscribers(id, relay.hardwareId)).toBe(0)
 	})
 
 	test('keeps every subscriber apart and stops with the last one', async () => {

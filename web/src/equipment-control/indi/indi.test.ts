@@ -24,7 +24,7 @@ function connection(revision: number): IndiSwitchProperty {
 }
 
 function snapshot(vectors: IndiProperty[], epoch = 'e1', revision = 10): IndiSnapshotEvent {
-	return { type: 'indi:snapshot', ...target, epoch, revision, device: { ...target, name: 'Relay', connected: true }, vectors, messages: [] }
+	return { type: 'indi:snapshot', ...target, epoch, revision, device: { ...target, name: 'Relay', connected: true }, vectors }
 }
 
 function setup() {
@@ -89,16 +89,14 @@ describe('stream', () => {
 
 		handleIndiEvent(state, { type: 'indi:propertyUpdated', ...header(11), kind: 'values', vector: { name: 'TEMPERATURE', revision: 3, state: 'Busy', elements: { TEMP: { name: 'TEMP', format: '%g', min: -50, max: 50, step: 1, value: 12 } } } })
 		handleIndiEvent(state, { type: 'indi:propertyDefined', ...header(12), vector: { type: 'LIGHT', device: 'Relay', name: 'STATUS', state: 'Ok', elementNames: ['READY'], revision: 4, elements: { READY: { name: 'READY', value: 'Ok' } } } })
-		handleIndiEvent(state, { type: 'indi:message', ...header(13), message: { id: 'm', message: 'armed' } })
-		handleIndiEvent(state, { type: 'indi:propertyRemoved', ...header(14), name: 'CONNECTION' })
+		handleIndiEvent(state, { type: 'indi:propertyRemoved', ...header(13), name: 'CONNECTION' })
 
 		expect(state.status).toBe('ready')
 		expect(temperatureOf(state)).toBe(12)
 		expect(state.vectors.find((vector) => vector.name === 'TEMPERATURE')).toMatchObject({ state: 'Busy', revision: 3, elements: { HUMIDITY: { value: 40 } } })
 		expect(state.vectors.map((vector) => vector.name)).toEqual(['TEMPERATURE', 'STATUS'])
 		expect(state.definitions).toEqual({ STATUS: 1 })
-		expect(state.messages).toEqual([{ id: 'm', message: 'armed' }])
-		expect(state.revision).toBe(14)
+		expect(state.revision).toBe(13)
 	})
 
 	test('drops late events, events of another epoch or device, and updates older than the vector', () => {

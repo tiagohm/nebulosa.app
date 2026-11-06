@@ -253,3 +253,34 @@ describe('meridian flip monitor', () => {
 		}
 	})
 })
+
+describe('INDI server messages', () => {
+	const global = (id: string, text: string): ServerEvent => ({ type: 'indi:globalMessage', connectionId: 'c', epoch: 'e', id, receivedAt: 0, text })
+
+	test('a global message is an info notification per occurrence, scoped to its connection and opening nothing', () => {
+		const classifier = new NotificationClassifier()
+		classifier.classify(open)
+
+		expect(classifier.classify(global('m1', 'Driver indi_eqmod_telescope: started'))).toEqual([
+			{ key: 'indi:global:c:e:m1', level: 'info', code: 'indi.globalMessage', title: 'INDI Server', message: 'Driver indi_eqmod_telescope: started', source: { kind: 'indi', connectionId: 'c', endpoint: { type: 'INDI', host: 'pi', port: 7624 } } },
+		])
+		expect(classifier.classify(global('m2', 'Driver indi_eqmod_telescope: started'))[0].key).toBe('indi:global:c:e:m2')
+	})
+
+	test('a suppression is its own notification, named by its window, and not a driver text', () => {
+		const classifier = new NotificationClassifier()
+		const [draft] = classifier.classify({ type: 'indi:globalMessagesSuppressed', connectionId: 'c', epoch: 'e', windowStart: 5000, limit: 8, window: 60000 })
+
+		expect(draft).toMatchObject({ key: 'indi:suppressed:c:e:5000', level: 'info', code: 'indi.globalMessagesSuppressed', title: 'INDI Server', source: { kind: 'indi', connectionId: 'c' } })
+		expect(draft).not.toHaveProperty('target')
+		expect(draft.message).toContain('8 messages within 60 s')
+	})
+
+	test('the message streams of a device give none', () => {
+		const classifier = new NotificationClassifier()
+		const header = { connectionId: 'c', hardwareId: 'h', epoch: 'e', revision: 1 }
+
+		expect(classifier.classify({ type: 'indi:messageReceived', ...header, message: { id: 'm', sequence: 1, receivedAt: 0, text: 'x' } })).toEqual([])
+		expect(classifier.classify({ type: 'indi:messagesSnapshot', ...header, messages: [] })).toEqual([])
+	})
+})

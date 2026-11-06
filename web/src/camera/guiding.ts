@@ -87,7 +87,7 @@ export function guidingExposureRange(exposure: CameraCapabilities['exposure'] | 
 // holding the MOUNT it drives while guiding (absent when the setup has none): the guide exposures in milliseconds, the camera settings
 // of the camera fitted to its capabilities as a capture is (never its exposure time), the controller, the calibration
 // (with the orthogonal DEC assumption), the client settings (dither pattern, search square, sticky lock, DEC reversal
-// after a flip, declination compensation) and the reuse of saved calibrations of the form, the
+// after a flip, declination compensation), the reuse of saved calibrations and the stop on a slew of the form, the
 // devices snooped into the frame headers, and the star detector of the profile's Star Detection with its settings (its
 // acceptance criteria are not sent: the tracker filters the stars). The effective focal length of the guide optics, in
 // mm (see guideFocalLength), is sent only when known.
@@ -113,6 +113,7 @@ export function guidingRequest(
 		guider: { aggressivenessRA: settings.aggressivenessRA, aggressivenessDEC: settings.aggressivenessDEC, maxPulseMsRA: settings.maximumPulseRA, maxPulseMsDEC: settings.maximumPulseDEC },
 		client: { ditherMode: settings.ditherMode, searchRegion: settings.searchRegion, stickyLockPosition: settings.stickyLockPosition, fastRecenter: settings.fastRecenter, reverseDecOutputAfterMeridianFlip: settings.reverseDecOutputAfterMeridianFlip, declinationCompensation: settings.declinationCompensation },
 		calibrationPolicy: { autoRestore: settings.autoRestoreCalibration, recalibrateOnEveryStart: settings.recalibrateOnEveryStart },
+		stopGuidingOnSlew: settings.stopGuidingOnSlew,
 		snoop,
 		detection: { ...detection },
 	}

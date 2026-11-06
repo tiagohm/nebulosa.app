@@ -73,6 +73,12 @@ import type { BuiltinStarDetectionSettings, StarDetectionSettings } from './star
 // policy allows it, transformed by the toolkit for the current declination and side of the pier; one already in use is
 // derived again when the mount moved since. A refusal, or no match, calibrates as before. Nothing of a session itself is
 // persisted.
+//
+// While a run holds the mount, nothing of this application can move it, so a slew, park or home the mount reports then
+// was commanded elsewhere (a hand controller, another client): with stopGuidingOnSlew (the default) the run is stopped,
+// waiting for the end of its pulses as Stop Guiding does, and the lock is cleared, since its pixel means nothing after the
+// slew; the loop goes on and guiding never starts again by itself. After the motion of another service
+// (restoreAfterMotion), the calibration in use is derived again for where the mount points instead of being solved again.
 
 // Sensor settings of the guide exposures, sent once when the session starts. The frame type is always LIGHT.
 export type GuidingCameraSettings = Pick<CaptureSettings, 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
@@ -118,6 +124,8 @@ export interface GuidingStartRequest extends CommandRequest {
 	readonly client?: GuidingClientSettings
 	// How saved calibrations are reused; absent is DEFAULT_GUIDING_CALIBRATION_POLICY.
 	readonly calibrationPolicy?: GuidingCalibrationPolicy
+	// Whether guiding stops when the mount slews, parks or homes while guiding; absent is true.
+	readonly stopGuidingOnSlew?: boolean
 	// Devices of the camera's connection snooped into the guide frame headers, set once when the session starts; absent
 	// snoops none. A simulated camera renders its star field from the pointing of the snooped mount.
 	readonly snoop?: CaptureSnoop
@@ -366,6 +374,9 @@ export interface GuidingSessionSummary {
 	readonly star?: GuidingStarProfile
 	// Latest guide frame, with its capture document once previewed.
 	readonly frame?: { readonly frameId: number; readonly time: number; readonly imageId?: string }
+	// Why guiding stopped by itself, until the next Start Guiding: the mount slewed, parked or homed while guiding, at time,
+	// Unix milliseconds (UTC).
+	readonly interruption?: { readonly reason: 'externalSlew'; readonly time: number }
 	readonly command?: GuidingCommandStatus
 	// Sequence of the latest control event and cursor of the latest telemetry sample.
 	readonly eventSequence: number
@@ -641,6 +652,12 @@ interface Session {
 	readonly cameraSettings: GuidingCameraSettings
 	readonly policy: GuidingCalibrationPolicy
 	readonly transformOptions: GuidingCalibrationTransformOptions
+	// Whether a slew of the mount while guiding stops guiding.
+	readonly stopOnSlew: boolean
+	// Follows the motion of the mount until the end, when the session holds one.
+	readonly motion?: DeviceHandler<Mount>
+	// Whether a stop for a slew of the mount is in progress.
+	stoppingForSlew: boolean
 	// Size of the latest decoded guide frame, in pixels; absent before the first one.
 	frameSize?: { readonly width: number; readonly height: number }
 	// Calibration in use beyond what the client keeps: where it came from, its save, its grade, and the context it was
@@ -858,6 +875,17 @@ export class GuidingSessions implements Disposable {
 			...(mount && { mount }),
 			cameraSettings: request.camera,
 			policy: request.calibrationPolicy ?? DEFAULT_GUIDING_CALIBRATION_POLICY,
+			stopOnSlew: request.stopGuidingOnSlew !== false,
+			stoppingForSlew: false,
+			...(mount && {
+				motion: {
+					added: () => {},
+					removed: () => {},
+					updated: (device: Mount, property: keyof Mount) => {
+						if (device === mount && (property === 'slewing' || property === 'parking' || property === 'homing') && (mount.slewing || mount.parking || mount.homing)) this.#mountMoved(session)
+					},
+				},
+			}),
 			transformOptions: { declinationCompensation: request.client?.declinationCompensation !== false, reverseDecOutputAfterMeridianFlip: request.client?.reverseDecOutputAfterMeridianFlip === true },
 			detections,
 			files,
@@ -886,6 +914,7 @@ export class GuidingSessions implements Disposable {
 			},
 		}
 		this.devices.cameras.addHandler(session.progress)
+		if (session.motion) this.devices.mounts.addHandler(session.motion)
 
 		client.addHandler({ event: (_, event) => this.#event(session, event), frame: (_, frame) => this.#frame(session, frame) })
 
@@ -947,6 +976,7 @@ export class GuidingSessions implements Disposable {
 	admitStartGuiding(sessionId: string, { token, recalibrate, settle }: GuidingStartGuidingRequest): GuidingCommandAdmission {
 		return this.#command(sessionId, token, 'startGuiding', (session) => {
 			session.settle = settle
+			if (session.summary.interruption) this.#update(session, { interruption: undefined })
 			const calibrating = recalibrate || session.policy.recalibrateOnEveryStart
 			const context = this.#mountContext(session)
 			if (!calibrating) this.#prepareCalibration(session, context)
@@ -1022,6 +1052,24 @@ export class GuidingSessions implements Disposable {
 
 		if (info && previous && reassessed.status === 'busy') Object.assign(info, previous)
 		return false
+	}
+
+	// Stops guiding when the mount of a session slews, parks or homes while its run holds it, which only something outside
+	// this application can command: closes the pulses and waits for their end as Stop Guiding does, then clears the lock,
+	// whose pixel the slew made meaningless, and records the interruption; the loop goes on. Does nothing without
+	// stopGuidingOnSlew, while not guiding, or while a stop is already in progress.
+	#mountMoved(session: Session) {
+		if (!session.stopOnSlew || !session.summary.guideOutputHeld || session.stoppingForSlew || session.ending) return
+		session.stoppingForSlew = true
+		const commandId = crypto.randomUUID()
+		this.#update(session, { command: { commandId, command: 'stopGuiding', state: 'running' }, interruption: { reason: 'externalSlew', time: Date.now() } })
+
+		void this.#settle(session, commandId, 'stopGuiding', session.interactive.stopGuiding(session.scope)).then((stopped) => {
+			session.stoppingForSlew = false
+			if (!stopped.ok || session.ending) return
+			session.interactive.clearTarget()
+			this.#sync(session)
+		})
 	}
 
 	// Returns the declination and side of the pier the mount of a session reports, each absent when unknown.
@@ -1226,8 +1274,10 @@ export class GuidingSessions implements Disposable {
 	}
 
 	// Starts guiding again after a motion, if the session is as suspendForMotion left it: the lock pixel no longer means anything
-	// after a slew, and the calibration does not follow the declination, so the best star of a frame taken after the motion is
-	// selected and the guider recalibrates. Resolves how that went, without rejecting. An abort stops waiting and stops guiding.
+	// after a slew, so the best star of a frame taken after the motion is selected, and the calibration in use is derived
+	// again for the declination and side of the pier the mount reports now (guiding without calibrating), or solved again
+	// when it does not apply there, when there is none, or with recalibrateOnEveryStart. Resolves how that went, without
+	// rejecting. An abort stops waiting and stops guiding.
 	async restoreAfterMotion({ sessionId, commandId, settle }: GuidingSuspension, signal: AbortSignal): Promise<GuidingRestoration> {
 		const session = this.#sessions.find(sessionId)
 		if (!session?.summary.active || session.summary.guideOutputHeld || session.summary.command?.commandId !== commandId) return 'externallyChanged'
@@ -1240,9 +1290,17 @@ export class GuidingSessions implements Disposable {
 		this.#sync(session)
 		if (!selected.ok) return 'failed'
 
+		const context = this.#mountContext(session)
+		const reused = !session.policy.recalibrateOnEveryStart && session.client.getCalibrated() && this.#reassess(session, context)
+		if (!reused && session.calibration) {
+			session.calibration = undefined
+			this.#update(session, { calibration: undefined })
+		}
+
+		session.interactive.setCalibrationContext(context)
 		const restoring = crypto.randomUUID()
 		this.#update(session, { command: { commandId: restoring, command: 'startGuiding', state: 'running' } })
-		const started = this.#settle(session, restoring, 'startGuiding', session.interactive.startGuiding(session.scope, session.scope, { recalibrate: true, settle }))
+		const started = this.#settle(session, restoring, 'startGuiding', session.interactive.startGuiding(session.scope, session.scope, { recalibrate: !reused, settle }))
 		const { promise: aborted, resolve } = Promise.withResolvers<undefined>()
 		signal.addEventListener('abort', () => resolve(undefined), { once: true })
 		if (signal.aborted) resolve(undefined)
@@ -1592,6 +1650,7 @@ export class GuidingSessions implements Disposable {
 		session.client.stopCapture()
 		session.client.disconnect()
 		this.devices.cameras.removeHandler(session.progress)
+		if (session.motion) this.devices.mounts.removeHandler(session.motion)
 		session.decoder[Symbol.dispose]()
 		session.abort.abort()
 		if (session.astap?.directory)

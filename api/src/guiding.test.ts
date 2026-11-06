@@ -481,6 +481,80 @@ describe('guiding', () => {
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
 	}, 120000)
 
+	test('a slew of the mount while guiding, commanded elsewhere, stops guiding and clears the lock while the loop goes on', async () => {
+		const context = await setup()
+		await trackStars(context)
+		const { sessionId } = await start(context, guided(context))
+		await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+
+		// The run holds the mount, so only something outside the application moves it: here the driver directly.
+		const { rightAscension, declination } = context.mount.equatorialCoordinate
+		context.manager.devices.mounts.goTo(context.mount, rightAscension + deg(5), declination)
+		await waitUntil(() => context.summary()?.guideOutputHeld === false)
+		expect(context.summary()).toMatchObject({ active: true, interruption: { reason: 'externalSlew' }, command: { command: 'stopGuiding' } })
+		await waitUntil(() => context.summary()?.command?.state === 'succeeded')
+		expect(context.summary()?.lockPosition).toBeUndefined()
+		expect(context.summary()?.state).toBe('looping')
+		await waitUntil(() => !context.mount.slewing && context.operations.available(context.mount))
+
+		// Guiding never starts again by itself; the next Start Guiding clears the interruption.
+		await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+		expect(context.summary()?.interruption).toBeUndefined()
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+	}, 120000)
+
+	test('without stopGuidingOnSlew a slew leaves guiding alone', async () => {
+		const context = await setup()
+		await trackStars(context)
+		const { sessionId } = await start(context, guided(context, { stopGuidingOnSlew: false }))
+		await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+		const command = context.summary()?.command?.commandId
+
+		const { rightAscension, declination } = context.mount.equatorialCoordinate
+		context.manager.devices.mounts.goTo(context.mount, rightAscension + deg(1), declination)
+		await waitUntil(() => context.mount.slewing)
+		await waitUntil(() => !context.mount.slewing)
+		expect(context.summary()?.interruption).toBeUndefined()
+		expect(context.summary()?.command?.commandId).toBe(command)
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+	}, 120000)
+
+	test('after the motion of another service the calibration is derived for the new declination instead of solved again', async () => {
+		const context = await setup()
+		await trackStars(context)
+		const { sessionId } = await start(context, guided(context))
+		await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
+		const solved = context.summary()!.calibration!
+
+		const suspended = await context.guiding.suspendForMotion(sessionId)
+		if (!suspended.ok) throw new Error('not suspended')
+		const { rightAscension } = context.mount.equatorialCoordinate
+		context.manager.devices.mounts.goTo(context.mount, rightAscension, deg(45))
+		await waitUntil(() => !context.mount.slewing && Math.abs(context.mount.equatorialCoordinate.declination - deg(45)) < deg(0.1))
+		const before = (await context.guiding.events(sessionId, 0).json()) as GuidingPage<GuidingEventRecord>
+
+		expect(await Promise.race([context.guiding.restoreAfterMotion(suspended.value, new AbortController().signal), Bun.sleep(60000).then(() => 'slow')])).toBe('restored')
+		const after = (await context.guiding.events(sessionId, before.items.at(-1)!.sequence).json()) as GuidingPage<GuidingEventRecord>
+		const types = after.items.map((record) => record.event.type)
+		expect(types).toContain('calibrationTransformed')
+		expect(types).not.toContain('calibrationStarted')
+		const derived = context.summary()!.calibration!
+		expect(derived).toMatchObject({ storedId: solved.storedId, transformations: ['declinationCompensation'] })
+		expect(derived.current.declination!).toBeCloseTo(deg(45), 2)
+		expect(derived.declinationScale).toBeCloseTo(Math.cos(deg(45)) / Math.cos(derived.source.declination!), 3)
+		expect(derived.raRate).toBeCloseTo(solved.raRate * derived.declinationScale, 6)
+		expect(derived.decRate).toBeCloseTo(solved.decRate, 9)
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+	}, 180000)
+
 	test('commands of an ended or unknown session are refused', async () => {
 		const context = await setup()
 		const { sessionId } = await start(context)

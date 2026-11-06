@@ -90,6 +90,7 @@ describe('requests', () => {
 		expect('optics' in request).toBeFalse()
 		expect(request.client).toEqual({ ditherMode: 'random', searchRegion: 64, stickyLockPosition: false, fastRecenter: true, reverseDecOutputAfterMeridianFlip: false, declinationCompensation: true })
 		expect(request.calibrationPolicy).toEqual({ autoRestore: true, recalibrateOnEveryStart: false })
+		expect(request.stopGuidingOnSlew).toBeTrue()
 		expect(request.calibration).toEqual({ raPulse: 650, decPulse: 650, assumeDecOrthogonalToRa: false })
 		expect(guidingRequest(DEFAULT_GUIDING_SETTINGS, exposure, { guideOutput: OUTPUT }, {}, DEFAULT_BUILTIN_SETTINGS, 240).optics).toEqual({ focalLength: 240 })
 	})

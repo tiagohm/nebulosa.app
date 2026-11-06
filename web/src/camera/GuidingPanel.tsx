@@ -161,6 +161,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				</DataList>
 				{!running && outputAvailability && outputAvailability.status !== 'ready' && outputAvailability.status !== 'busy' && <Notice>{outputAvailability.message}</Notice>}
 				{!running && focalLength === undefined && <Notice>Enter the Guide Telescope in Equipment Setup for the pixel scale of the RMS in arcseconds and the calibration step.</Notice>}
+				<Checkbox label="Stop guiding when the mount slews" checked={settings.stopGuidingOnSlew} disabled={running || pending} onChange={(stopGuidingOnSlew) => update({ stopGuidingOnSlew })} />
 				{!running && (!guideOutput || focalLength === undefined || outputAvailability?.status === 'notSelected' || outputAvailability?.status === 'unsupported') && <EquipmentSetupButton />}
 			</CollapsibleSection>
 			{session && <SessionState session={session} />}
@@ -354,6 +355,7 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 			{command?.state === 'failed' && command.error && <Notice error>{command.error}</Notice>}
 			{calibration && calibration.warnings.length > 0 && <Notice>{calibration.warnings.join(' ')}</Notice>}
 			{calibration && !calibration.saved && <Notice error>{`The calibration was not saved for later sessions${calibration.saveError ? `: ${calibration.saveError}` : '.'}`}</Notice>}
+			{session.interruption && <Notice error>The mount slewed while guiding, commanded outside Nebulosa, so guiding stopped and the star was cleared. Select a star and start guiding again.</Notice>}
 			{session.failure && <Notice error>{session.failure.error ?? `The session ended: ${session.failure.reason}.`}</Notice>}
 		</CollapsibleSection>
 	)

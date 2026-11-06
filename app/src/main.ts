@@ -1,4 +1,22 @@
-import { type AboutInfo, type ConnectRequest, closeDatabase, createAboutRoutes, identifyCelestrakClient, identifyJplClient, reopenConnections, startSatelliteDownloads, routes, startDatabase, startEarthOrientation, startStores, stopOperations, stopServer, websocket } from 'api'
+import {
+	type AboutInfo,
+	type ConnectRequest,
+	closeDatabase,
+	createAboutRoutes,
+	identifyCelestrakClient,
+	identifyJplClient,
+	reopenConnections,
+	startObservatoryCameras,
+	startSatelliteDownloads,
+	routes,
+	startDatabase,
+	startEarthOrientation,
+	startStores,
+	stopObservatoryCameras,
+	stopOperations,
+	stopServer,
+	websocket,
+} from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
 import { serverAddress } from './address'
@@ -6,7 +24,7 @@ import { serverAddress } from './address'
 // Entry point of the application: serves the API routes, the /api/ws WebSocket, and the web UI from a
 // single Bun server. Every path the API does not handle falls back to the UI's HTML entry point. A server whose
 // operational database cannot be opened stops before serving. A stop signal ends the process once the running device
-// operations were stopped and the database was closed, which writes its WAL back into the file. Under bun --hot, a change of
+// operations and the media gateway of the observatory cameras were stopped and the database was closed, which writes its WAL back into the file. Under bun --hot, a change of
 // the server code evaluates this module again; the previous run is stopped first and its connections are opened again.
 
 // Whether the server runs in development mode (HMR and the browser console); false when NODE_ENV is production.
@@ -62,6 +80,9 @@ startStores()
 // The CelesTrak groups chosen for automatic downloads are read again when allowed, then every 6 hours.
 startSatelliteDownloads()
 
+// The media gateway of the observatory cameras is started when any is enabled; no camera stream is read until watched.
+startObservatoryCameras()
+
 // Host and port of the server: --host and --port, else APP_HOST and APP_PORT, else localhost and 7000 (serverAddress).
 const address = serverAddress(process.argv.slice(2), process.env)
 
@@ -78,9 +99,10 @@ const server = Bun.serve({
 	websocket,
 })
 
-// Stops the device work still running, so no device is left moving, then closes the database and ends the process.
+// Stops the device work still running, so no device is left moving, and the media gateway of the observatory cameras,
+// then closes the database and ends the process.
 async function stop() {
-	await stopOperations()
+	await Promise.all([stopOperations(), stopObservatoryCameras()])
 	closeDatabase()
 	process.exit(0)
 }

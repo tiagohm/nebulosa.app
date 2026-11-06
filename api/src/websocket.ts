@@ -24,6 +24,7 @@ import type { MountPointingEvent } from './mountpointing.sessions'
 import type { MountRemoteControlEvent } from './mountremotecontrol'
 import type { MountNudgeEvent } from './mounts'
 import type { NotificationCreatedEvent } from './notifications'
+import type { ObservatoryCameraEvent } from './observatorycameras'
 import type { OperationEvent } from './operations'
 import type { PlateSolvingEvent } from './platesolving'
 import type { SatellitesChangedEvent } from './satellites'
@@ -43,7 +44,7 @@ import type { WorkspaceEvent } from './workspace'
 
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the operation events
 // of the operation registry, the events of the capture, Auto Focus, TPPA, mount pointing, mount nudge, mount remote control, meridian flip monitor, and dome manual rotation services,
-// the captured frames of the frame registry, the guiding sessions, the changes of the external program settings and of the focuser backlash
+// the captured frames of the frame registry, the guiding sessions, the changes of the external program settings, of the observatory cameras, and of the focuser backlash
 // compensations, the star detection, streak detection, plate solving, annotation, and image processing jobs, the created notifications, the INDI device directory
 // and property streams, and the INDI message streams and global messages.
 export type ServerEvent =
@@ -68,6 +69,7 @@ export type ServerEvent =
 	| MeridianFlipEvent
 	| DomeMotionEvent
 	| ExternalToolEvent
+	| ObservatoryCameraEvent
 	| WorkspaceEvent
 	| StarDetectionEvent
 	| StreakDetectionEvent

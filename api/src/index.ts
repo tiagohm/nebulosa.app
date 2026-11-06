@@ -49,6 +49,9 @@ import { createMountRemoteControlRoutes, MountRemoteControlService } from './mou
 import { createMountRoutes, MountCommands } from './mounts'
 import { createNotificationRoutes, NotificationService } from './notifications'
 import { NotificationClassifier } from './notifications.rules'
+import { createObservatoryCameraRoutes, ObservatoryCameraService } from './observatorycameras'
+import { CAMERA_SECRET_KEY_VARIABLE, CameraSecretKey, systemSecretStorage } from './observatorycameras.secret'
+import { ObservatoryCameraStore } from './observatorycameras.store'
 import { createOperationHistoryRoutes, OperationRecorder } from './operationhistory'
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
@@ -312,6 +315,10 @@ export type {
 	MeridianTransitionKind,
 } from './meridianflip'
 export type { MountRemoteClient, MountRemoteControlEvent, MountRemoteErrorCode, MountRemoteKey, MountRemoteProtocol, MountRemoteServer, MountRemoteSnapshot, MountRemoteStartRequest } from './mountremotecontrol'
+export type { ObservatoryCamera, ObservatoryCameraErrorCode, ObservatoryCameraEvent, ObservatoryCameraSaveRequest, ObservatoryCameraSecretKeyState, ObservatoryCameraStream, ObservatoryCameraStreamCode, ObservatoryCameraStreamState, ObservatoryCamerasSnapshot, RtspTransport } from './observatorycameras'
+export type { GatewayCode, GatewayState, GatewayStatus, SourceCode } from './observatorycameras.gateway'
+export type { CameraSecretKeyStatus } from './observatorycameras.secret'
+export type { WhepErrorCode } from './observatorycameras.whep'
 export type { OperationDevice, OperationEvent, OperationKind, OperationProgress, OperationRecord, OperationState } from './operations'
 export type { OperationHistoryPage, OperationRun, OperationRunDevice, OperationRunState } from './operationhistory'
 export type { RotatorMoveByRequest, RotatorMoveToRequest, RotatorReverseRequest, RotatorSyncRequest } from './rotators'
@@ -659,8 +666,12 @@ const EXCLUSIVE_DATABASE = process.env.NODE_ENV === 'production'
 // nothing.
 const database = new AppDatabase(DEFAULT_DATABASE_FILE, EXCLUSIVE_DATABASE)
 
-// Saved connections and profiles of the operators, shared by every tab and browser.
-const workspace = new Workspace(database, broadcast)
+// Saved connections and profiles of the operators, shared by every tab and browser; the observatory cameras of a deleted
+// site become shared by every site.
+const workspace = new Workspace(database, (event) => {
+	broadcast(event)
+	if (event.type === 'observingSite:removed') observatoryCameras.siteRemoved(event.id)
+})
 
 // Name of a device of an open connection, or undefined.
 function deviceName(connectionId: string, deviceId: string) {
@@ -740,8 +751,24 @@ const indiMessages = new IndiMessageService(connections.devices, (id) => connect
 listenSockets(indiMessages)
 connections.listen((event) => indiMessages.connectionChanged(event))
 
-// Settings of the external programs, such as ASTAP, read by the services that run them.
-const externalTools = new ExternalToolsStore(database, broadcast)
+// Settings of the external programs, such as ASTAP, read by the services that run them; a change of MediaMTX restarts the
+// gateway of the observatory cameras.
+const externalTools = new ExternalToolsStore(database, (event) => {
+	broadcast(event)
+	observatoryCameras.externalToolChanged(event)
+})
+
+// IP cameras watching the observatory, relayed to the browsers by the MediaMTX gateway set in External Tools; their
+// addresses are encrypted with the key of NEBULOSA_CAMERA_SECRET_KEY, else of the operating system's credential storage.
+const observatoryCameras = new ObservatoryCameraService(
+	new ObservatoryCameraStore(database),
+	new CameraSecretKey(process.env[CAMERA_SECRET_KEY_VARIABLE], systemSecretStorage(DEFAULT_DATABASE_FILE)),
+	async () => {
+		const tool = await externalTools.resolve('mediamtx')
+		return tool && { executable: tool.executable, timeout: tool.timeout }
+	},
+	broadcast,
+)
 
 // Star detection of the image documents, shared by the Images workspace and the captures.
 const stars = new StarDetectionService(images, externalTools, broadcast)
@@ -931,6 +958,7 @@ const RESOURCES: readonly Disposable[] = [
 	captures,
 	captureFrames,
 	mountRemoteControl,
+	observatoryCameras,
 	meridianFlip,
 	indi,
 	indiMessages,
@@ -959,6 +987,7 @@ const RESOURCES: readonly Disposable[] = [
 export async function stopServer(): Promise<ConnectRequest[]> {
 	const open = connections.list().map(connectRequestOf)
 	await stopOperations()
+	await stopObservatoryCameras()
 
 	for (const resource of RESOURCES) {
 		try {
@@ -1013,6 +1042,19 @@ export function startSatelliteDownloads() {
 	satelliteAutoDownload.start()
 }
 
+// Starts the MediaMTX gateway of the observatory cameras when any is enabled and MediaMTX is set in External Tools, and
+// configures their paths; a stream is still read only while a browser watches it. Called by the app after startDatabase;
+// a test that only imports this module starts nothing. Never rejects: a gateway that cannot start degrades only this feature.
+export function startObservatoryCameras() {
+	void observatoryCameras.start().catch((error: unknown) => console.error('The observatory cameras could not be started', error))
+}
+
+// Stops the gateway of the observatory cameras and waits for its process to end, so a server stopping (or replaced by a
+// hot reload) never leaves it running. Never rejects.
+export function stopObservatoryCameras() {
+	return observatoryCameras.stop()
+}
+
 // Names the running version to JPL, as its fair-use policy asks of automated clients. Called by the app before it serves,
 // since this package does not know the version of the distribution.
 export function identifyJplClient(version: string) {
@@ -1065,6 +1107,7 @@ export const routes = {
 	...createImageRoutes(images),
 	...createImageProcessingRoutes(imageProcessing),
 	...createExternalToolsRoutes(externalTools),
+	...createObservatoryCameraRoutes(observatoryCameras),
 	...createWorkspaceRoutes(workspace),
 	...createStarDetectionRoutes(stars),
 	...createStarProfileRoutes(starProfiles),

@@ -3,7 +3,7 @@ import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import type { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import type { MountCommander } from 'nebulosa/src/devices/commanders/mount'
-import { type Camera, expectedPierSide, type GuideOutput, type Mount } from 'nebulosa/src/devices/indi/device'
+import { expectedPierSide, type GuideOutput, type Mount } from 'nebulosa/src/devices/indi/device'
 import { type FailedOperationResult, failedOperationResult, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { type ResourceRequest, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { Random } from 'nebulosa/src/math/numerical/random'
@@ -39,9 +39,10 @@ import type { OperationDevice, OperationRegistry, ToolInvocation } from './opera
 // candidate of the Meridian Flip Monitor, or a target whose expected pier side differs from the reported one), the
 // capture is refused and a dither fails before the mount moves, and a GoTo after which the mount reports another pier
 // side fails the capture. Pulses take the guide directions of the request, the nominal East and North unless the
-// operator reversed one. A capture whose guide output is its own camera is refused, since the capture holds that device. The end of
-// the capture drains the motion in flight and waits for the observed end of its pulses before the reservation is given
-// back. Mount amounts are arcseconds on the sky, settle times seconds, pulse durations milliseconds.
+// operator reversed one. The ST4 port of the camera the capture exposes pulses beside its exposures, since the arbiter
+// grants the sensor and the port apart. The end of the capture drains the motion in flight and waits for the observed
+// end of its pulses before the reservation is given back. Mount amounts are arcseconds on the sky, settle times seconds,
+// pulse durations milliseconds.
 
 // Automatic dither of a capture through the guiding session that guides its setup.
 export interface GuidedCaptureDither {
@@ -198,15 +199,15 @@ export class CaptureDithering implements DeviceContext {
 		return risk && failedOperationResult('unexpectedState', risk.message)
 	}
 
-	// Prepares the dithers of a capture of camera before it is admitted, under the reservation of invocation when a caller
+	// Prepares the dithers of a capture before it is admitted, under the reservation of invocation when a caller
 	// composing tools admits it: checks the method can dither now and takes what the capture holds for its dithers.
 	// Synchronous, so nothing changes between the checks and the admission. Refused with 404 for an unknown guiding
 	// session, mount, or guide output; 409 notGuiding while the guiding session is not guiding, guidingActive while guiding
 	// corrects the mount to move, disconnected for a disconnected device, and busy while another claimant holds the
 	// guided dithers or another operation holds the mount or the guide output; 422 unsupported when the mount or the guide
 	// output cannot move as asked.
-	prepare(camera: Camera, dither: CaptureDither, invocation?: ToolInvocation): CaptureDitherPreparation {
-		return dither.method === 'guided' ? this.#guided(dither) : this.#mount(camera, dither, invocation)
+	prepare(dither: CaptureDither, invocation?: ToolInvocation): CaptureDitherPreparation {
+		return dither.method === 'guided' ? this.#guided(dither) : this.#mount(dither, invocation)
 	}
 
 	// Prepares guided dithers: the session must be guiding, and its dither commands are claimed until finish.
@@ -241,7 +242,7 @@ export class CaptureDithering implements DeviceContext {
 	// Prepares mount dithers: resolves the mount and the guide output that drives it, refuses while guiding through that
 	// guide output corrects the mount or when the mount cannot move as asked, reserves both unless the caller's invocation
 	// already does, and holds guiding through the guide output off.
-	#mount(camera: Camera, dither: MountCaptureDither, invocation?: ToolInvocation): CaptureDitherPreparation {
+	#mount(dither: MountCaptureDither, invocation?: ToolInvocation): CaptureDitherPreparation {
 		const resolvedMount = resolveConnected(this, dither.mount.connectionId, 'mount', dither.mount.deviceId, 'Mount')
 		if (!resolvedMount.ok) return resolvedMount
 		const mount = resolvedMount.device
@@ -266,12 +267,9 @@ export class CaptureDithering implements DeviceContext {
 			return refusal(`${guideOutput.name} cannot pulse`, 422, 'unsupported')
 		}
 
-		// A guide output on the ST4 port of the capture's own camera is held by the capture from its first frame to its last: it
-		// can send no pulse meanwhile, so pulse dithers through it are impossible, and nothing else can pulse it to reserve against.
-		const ownCamera = guideOutput !== undefined && resourceKey(guideOutput) === resourceKey(camera)
-		if (ownCamera && dither.movement === 'pulse') return refusal('The guide output is the camera the capture exposes, which cannot pulse while it captures', 409, 'busy')
-
-		const devices = guideOutput && !ownCamera ? [mount, guideOutput] : [mount]
+		// The ST4 port of the camera the capture exposes is a capability of its own, apart from the sensor the capture holds, so it
+		// is reserved and pulsed like any other guide output.
+		const devices = guideOutput ? [mount, guideOutput] : [mount]
 		const requests: ResourceRequest[] = devices.map((device) => ({ key: resourceKey(device), device }))
 		const owner = { id: crypto.randomUUID(), kind: RESERVATION_KIND }
 		let reserved: ToolInvocation | undefined

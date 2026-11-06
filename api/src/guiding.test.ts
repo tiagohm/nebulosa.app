@@ -281,29 +281,32 @@ describe('guiding', () => {
 		expect(context.guiding.runsOn(guideOutput)).toBeEmpty()
 	})
 
-	test('guiding through the ST4 port of a camera holds the mount the setup says it drives', async () => {
+	test('guiding through the ST4 port of the guide camera itself starts while that camera loops', async () => {
 		const context = await setup()
-		const { manager, client, id, cameraId, mount, operations } = context
-		// The ST4 port of another camera: the camera guiding is exposing, which keeps its own device unavailable.
-		const otherId = manager.devices.list(client).find((device) => device.type === 'camera' && device.id !== cameraId)!.id
-		manager.devices.switch(client, otherId, true)
-		const other = manager.devices.camera(client, otherId)!
-		await waitUntil(() => other.connected && manager.devices.list(client).some((device) => device.type === 'guideOutput' && device.hardwareId === other.hardwareId))
-		const st4 = { connectionId: id, deviceId: manager.devices.list(client).find((device) => device.type === 'guideOutput' && device.hardwareId === other.hardwareId)!.id }
-		await waitUntil(() => manager.devices.device(client, 'guideOutput', st4.deviceId)!.canPulseGuide && operations.available(other))
+		const { manager, client, id, camera, mount, operations } = context
+		const ownId = manager.devices.list(client).find((device) => device.type === 'guideOutput' && device.hardwareId === camera.hardwareId)!.id
+		const st4 = { connectionId: id, deviceId: ownId }
+		const output = manager.devices.device(client, 'guideOutput', ownId)!
+		await waitUntil(() => output.canPulseGuide && operations.available(output))
 		const mountDevice = { connectionId: id, deviceId: context.mountId }
 		const { sessionId } = await start(context, { guideOutput: st4, mount: mountDevice })
-		expect(context.summary()).toMatchObject({ guideOutput: st4, mount: mountDevice })
 		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
-		expect(operations.available(mount)).toBeTrue()
+		// The loop holds the sensor, and leaves its ST4 port to the run.
+		expect(operations.available(camera)).toBeFalse()
+		expect(operations.available(output)).toBeTrue()
 
 		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
 		await waitUntil(() => context.summary()?.guideOutputHeld === true)
-		// The mount shares no device with the camera, and still nothing else moves it while guiding.
-		expect(operations.available(mount)).toBeFalse()
 		expect(context.running('guideOutput.guiding').map((operation) => operation.devices)).toEqual([[st4, mountDevice]])
+		expect(context.summary()).toMatchObject({ active: true, guideOutput: st4 })
+		expect(operations.available(output)).toBeFalse()
+		expect(operations.available(mount)).toBeFalse()
+		// The run holds the port while the root keeps the same camera exposing.
+		await waitUntil(() => camera.exposuring)
+		expect(operations.available(camera)).toBeFalse()
 
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		await waitUntil(() => operations.available(output) && operations.available(camera))
 		expect(operations.available(mount)).toBeTrue()
 	})
 

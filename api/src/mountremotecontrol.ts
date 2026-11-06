@@ -4,7 +4,7 @@ import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import type { ManualMoveHandle } from 'nebulosa/src/devices/commanders/mount'
 import type { Mount } from 'nebulosa/src/devices/indi/device'
 import type { OperationResult } from 'nebulosa/src/devices/orchestration/operation'
-import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { deviceKey, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { ProtocolClient } from 'nebulosa/src/devices/protocols/client'
 import { type MoveDirection, Lx200ProtocolServer } from 'nebulosa/src/devices/protocols/lx200'
 import { StellariumProtocolServer } from 'nebulosa/src/devices/protocols/stellarium'
@@ -429,7 +429,7 @@ export class MountRemoteControlService implements Disposable {
 
 	// Cancels the operation holding a mount and stops its motion, as the stop endpoint does.
 	async #abort(mount: Mount) {
-		await this.operations.coordinator.cancelByDevice(resourceKey(mount))
+		await this.operations.coordinator.cancelByDevice(deviceKey(mount))
 		const result = await this.mounts.commander.stopMotion(mount)
 		if (!result.ok) console.warn('mount remote control: the mount did not stop', result.reason, result.error)
 	}

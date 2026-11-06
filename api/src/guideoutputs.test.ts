@@ -96,12 +96,14 @@ test('a pulse through the ST4 port of a camera also holds the mount the setup sa
 	const { operationId } = (await response.json()) as CommandAccepted
 	// The mount shares no device with the camera, and still nothing else moves it during the pulse.
 	expect(operations.available(mount)).toBeFalse()
-	expect(operations.available(camera)).toBeFalse()
+	expect(operations.available(st4)).toBeFalse()
+	// The port is a capability of its own: the sensor of that camera stays free for an exposure.
+	expect(operations.available(camera)).toBeTrue()
 	expect(commands.pulse(id, st4Id, { token: 'st4', direction: 'NORTH', duration: 500, mount: mountDevice }).status).toBe(202)
 
 	await waitUntil(() => events.some((event) => event.operation.operationId === operationId && event.operation.state !== 'running'))
 	expect(events.findLast((event) => event.operation.operationId === operationId)?.operation).toMatchObject({ kind: 'guideOutput.pulse', state: 'succeeded', devices: [{ connectionId: id, deviceId: st4Id }, mountDevice] })
-	await waitUntil(() => operations.available(mount) && operations.available(camera))
+	await waitUntil(() => operations.available(mount) && operations.available(st4))
 
 	// A pulse is refused while the mount it drives is busy, and for a mount that is not there.
 	const hold = operations.coordinator.start('test.hold', [{ key: resourceKey(mount), device: mount }], (context) => {

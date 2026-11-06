@@ -1,6 +1,6 @@
 import type { Client, Device } from 'nebulosa/src/devices/indi/device'
 import type { FailedOperationResult, OperationFailureReason, OperationResult, OperationScope } from 'nebulosa/src/devices/orchestration/operation'
-import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { deviceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { DeviceRegistry, ManagedDeviceMap, ManagedDeviceType } from './devices'
 import { type ApiError, errorResponse } from './http'
 import type { OperationAdmission, OperationKind, OperationProgressReporter, OperationRegistry, ToolInvocation } from './operations'
@@ -136,7 +136,7 @@ export function stateResponse({ devices, client }: DeviceContext, connectionId: 
 // command the motion again, then sends the stop, which never needs the device to be granted. Responds 204
 // once the device reports a standstill, and 409 when the stop could not be confirmed.
 export async function stopResponse(operations: OperationRegistry, device: Device, stop: () => Promise<OperationResult<unknown>>): Promise<Response> {
-	await operations.coordinator.cancelByDevice(resourceKey(device))
+	await operations.coordinator.cancelByDevice(deviceKey(device))
 	const result = await stop()
 	return result.ok ? new Response(null, { status: 204 }) : errorResponse(result.error ?? `The device did not stop (${result.reason})`, 409, failureCode(result.reason))
 }

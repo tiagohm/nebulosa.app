@@ -5,7 +5,7 @@ import { type MountCommandOptions, MountCommander, type MountMoveDirection, type
 import type { Client, Mount, MountTargetCoordinate, MountTargetCoordinateType, TrackMode } from 'nebulosa/src/devices/indi/device'
 import { mountTargetEquatorial } from 'nebulosa/src/devices/indi/manager/mount'
 import type { OperationContext, OperationResult, OperationScope } from 'nebulosa/src/devices/orchestration/operation'
-import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { deviceKey, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { admissionResponse, admitCommand, type CommandAdmission, type CommandErrorCode, type CommandRequest, disconnected, failureCode, findDevice, notFound, refusal, resolveConnected, settle, startCommand, unsupported } from './commands'
@@ -361,7 +361,7 @@ export class MountCommands implements Disposable {
 		const mount = client && this.devices.mount(client, deviceId)
 		if (!mount) return notFound('Mount')
 
-		await this.operations.coordinator.cancelByDevice(resourceKey(mount))
+		await this.operations.coordinator.cancelByDevice(deviceKey(mount))
 		const result = await this.#commander.stopMotion(mount)
 		return result.ok ? new Response(null, { status: 204 }) : errorResponse(result.error ?? `The mount did not stop (${result.reason})`, 409, failureCode(result.reason))
 	}

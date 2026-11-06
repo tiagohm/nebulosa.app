@@ -380,6 +380,31 @@ describe('mount dithering of a capture', () => {
 		expect(operations.available(mount)).toBeTrue()
 	})
 
+	test('pulses through the ST4 port of the camera it captures with, which the capture does not hold', async () => {
+		const context = await pointed()
+		const { admit, manager, client, mount, camera, operations, fake, id, cameraGuideOutputId, sessions } = context
+		if (!cameraGuideOutputId) throw new Error('the simulated camera has no guide output')
+		const st4 = { connectionId: id, deviceId: cameraGuideOutputId }
+		const output = manager.devices.device(client, 'guideOutput', cameraGuideOutputId)!
+		await waitUntil(() => output.canPulseGuide && operations.available(output))
+		// The camera simulator publishes no GUIDE_RATE; the rate of the mount its port drives stands in for the one a driver reports.
+		output.guideRate.rightAscension = mount.guideRate.rightAscension
+		output.guideRate.declination = mount.guideRate.declination
+		const before = { ...mount.equatorialCoordinate }
+
+		const admitted = admit(request({ count: 3, exposureTime: 0.5, dither: pulse(context, { guideOutput: st4 }) }))
+		await waitUntil(() => sessions().at(-1)?.phase === 'exposing')
+		expect(fake.holds).toEqual([st4])
+		// The capture holds the sensor and the dithering reserves the port, apart.
+		expect(operations.available(camera)).toBeFalse()
+		expect(operations.available(output)).toBeFalse()
+
+		expect(await admitted.ended).toMatchObject({ phase: 'completed', captured: 3, dither: { completed: 2, settling: false } })
+		expect(mount.equatorialCoordinate).not.toEqual(before)
+		expect(fake.holds).toEqual([])
+		await waitUntil(() => operations.available(output) && operations.available(camera))
+	})
+
 	test('an abort during the mechanical settle ends the capture and frees the mount', async () => {
 		const context = await pointed()
 		const { admit, captures, operations, mount, sessions } = context
@@ -411,9 +436,9 @@ describe('mount dithering of a capture', () => {
 		expect(mount.equatorialCoordinate).toEqual(before)
 	})
 
-	test('guiding through the guide output, a busy mount, or pulses through the capture camera refuse the capture', async () => {
+	test('guiding through the guide output or a busy mount refuse the capture', async () => {
 		const context = await setup()
-		const { id, cameraId, captures, fake, operations, mount, cameraGuideOutputId } = context
+		const { id, cameraId, captures, fake, operations, mount } = context
 
 		fake.setRuns([{ sessionId: 'running' } as GuidingSessionSummary])
 		expect(captures.admit(id, cameraId, request({ dither: pulse(context) }))).toMatchObject({ ok: false, status: 409, code: 'guidingActive' })
@@ -429,7 +454,6 @@ describe('mount dithering of a capture', () => {
 		await holder.result
 
 		expect(captures.admit(id, cameraId, request({ dither: pulse(context, { mount: { connectionId: id, deviceId: 'unknown' } }) }))).toMatchObject({ ok: false, status: 404 })
-		if (cameraGuideOutputId) expect(captures.admit(id, cameraId, request({ dither: pulse(context, { guideOutput: { connectionId: id, deviceId: cameraGuideOutputId } }) }))).toMatchObject({ ok: false, status: 409, code: 'busy' })
 		expect(operations.available(mount)).toBeTrue()
 		expect(fake.holds).toEqual([])
 	})

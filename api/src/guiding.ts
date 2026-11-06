@@ -403,6 +403,10 @@ export interface GuidingTelemetryAxis {
 	readonly limited: boolean
 }
 
+// What the guider was doing in a telemetry sample: correcting toward the lock, settling after a start or a resume, or
+// moving to a dithered lock (its settle and its fast recenter); only the guiding samples tell the guiding error.
+export type GuidingTelemetryPhase = 'guiding' | 'settling' | 'dithering'
+
 // Per-frame telemetry of a guiding frame: a measured guide step, or a frame the star was lost in.
 export interface GuidingTelemetrySample {
 	// Position in the session, from 1, without gaps.
@@ -414,6 +418,8 @@ export interface GuidingTelemetrySample {
 	readonly lost: boolean
 	// Generation of the calibration that converted the errors; 0 for a lost star.
 	readonly calibrationGeneration: number
+	// What the guider was doing.
+	readonly phase: GuidingTelemetryPhase
 	// Image-space error, in pixels.
 	readonly dx: number
 	readonly dy: number
@@ -1462,14 +1468,17 @@ export class GuidingSessions implements Disposable {
 		const cursor = session.summary.telemetryCursor + 1
 		const lost = event.type === 'starLost'
 		const none: GuidingTelemetryAxis = { duration: 0, limited: false }
+		const snapshot = session.interactive.snapshot()
+		const phase: GuidingTelemetryPhase = snapshot.dithering || (!lost && event.recentering === true) ? 'dithering' : snapshot.settling ? 'settling' : 'guiding'
 		const sample: GuidingTelemetrySample = lost
-			? { cursor, frameId: event.frameId, timestamp: event.timestamp, lost, calibrationGeneration: 0, dx: 0, dy: 0, raDistance: 0, decDistance: 0, ra: none, dec: none, snr: event.snr, mass: event.mass, hfd: event.hfd }
+			? { cursor, frameId: event.frameId, timestamp: event.timestamp, lost, calibrationGeneration: 0, phase, dx: 0, dy: 0, raDistance: 0, decDistance: 0, ra: none, dec: none, snr: event.snr, mass: event.mass, hfd: event.hfd }
 			: {
 					cursor,
 					frameId: event.frameId,
 					timestamp: event.timestamp,
 					lost,
 					calibrationGeneration: event.calibrationGeneration,
+					phase,
 					dx: event.dx,
 					dy: event.dy,
 					raDistance: event.raDistance,

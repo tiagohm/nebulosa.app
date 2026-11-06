@@ -1,12 +1,13 @@
-import type { CaptureSnoop, DeviceSummary, GuidingCalibrationSummary, GuidingCommand, GuidingSessionSummary } from 'api'
+import type { CaptureSnoop, DeviceSummary, GuidingCalibrationCandidate, GuidingCalibrationSummary, GuidingCommand, GuidingSessionSummary } from 'api'
 import { arcsec } from 'nebulosa/src/math/units/angle'
+import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { formatDegrees, formatPixelLength, formatPixelPosition } from '../format'
+import { formatDegrees, formatPixelLength, formatPixelPosition, formatUtcDateTime } from '../format'
 import { operationsState } from '../operations'
 import { formatPixelScale } from '../platesolving/coordinates'
 import { activeProfile, exposureSettings, guidingSettings, profileState, setGuidingSettings, starDetectionSettings } from '../profile/profile'
@@ -41,16 +42,20 @@ import {
 	guidingRunning,
 	guidingRuntime,
 	guidingStartRequest,
+	loadGuidingCalibrationCandidates,
 	pauseGuiding,
+	restoreGuidingCalibration,
 	resumeGuiding,
 	selectGuidingTarget,
 	setGuidingExposure,
+	setSavedCalibrationDisabled,
 	startGuiding,
 	startGuidingSession,
 	stopGuiding,
 	stopGuidingSession,
 } from './guiding'
 import { CalibrationProgress } from './GuidingCalibrationProgress'
+import { CALIBRATION_CANDIDATE_LABELS, CALIBRATION_QUALITY_LABELS, CALIBRATION_REJECTION_LABELS, GuidingCalibrationReview, type GuidingCalibrationReviewSource } from './GuidingCalibrationReview'
 import { StarProfileSection } from './GuidingStarProfile'
 
 // Contextual panel sections of Guiding, a camera operation of the Images camera tabs: the equipment it uses, the state
@@ -60,7 +65,9 @@ import { StarProfileSection } from './GuidingStarProfile'
 // stop looping, select or clear the star, start and stop guiding, pause (corrections only, or the exposures too),
 // resume, dither, force a new calibration, and clear the calibration. Every solved calibration is saved by the server,
 // which restores a matching one at the next Start Guiding when the form allows it; the session tells where the
-// calibration in use came from, whether it was saved, and how it was adapted to the mount. The camera is the panel's target and the guide output the GUIDE_OUTPUT of
+// calibration in use came from, whether it was saved, and how it was adapted to the mount; Review Calibration shows its
+// measured steps, and Saved Calibrations lists those of the same equipment with how each fits the session, to review,
+// restore while not guiding, or exclude from restoring. The camera is the panel's target and the guide output the GUIDE_OUTPUT of
 // the setup, which only the Guide Camera has; a missing or unsuitable one says why. The frames take the camera
 // settings of Camera Acquisition without its exposure time, shown under the guide exposure, and their stars are
 // detected with the detector of the profile's Star Detection (built-in or ASTAP) and its settings, as Auto Focus does;
@@ -114,6 +121,8 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 	const running = guidingRunning(session)
 	const pending = key !== undefined && runtime.pending[key] === true
 	const error = key ? runtime.errors[key] : undefined
+	// Calibration the Review Calibration dialog shows; absent while it is closed.
+	const [review, setReview] = useState<GuidingCalibrationReviewSource>()
 	const capabilities = watchedDeviceState(control, 'camera', device)
 	const outputState = watchedDeviceState(control, 'guideOutput', guideOutput?.device)
 	const mountState = watchedDeviceState(control, 'mount', mount.device)
@@ -164,7 +173,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				<Checkbox label="Stop guiding when the mount slews" checked={settings.stopGuidingOnSlew} disabled={running || pending} onChange={(stopGuidingOnSlew) => update({ stopGuidingOnSlew })} />
 				{!running && (!guideOutput || focalLength === undefined || outputAvailability?.status === 'notSelected' || outputAvailability?.status === 'unsupported') && <EquipmentSetupButton />}
 			</CollapsibleSection>
-			{session && <SessionState session={session} />}
+			{session && <SessionState session={session} onReview={() => setReview({ kind: 'session', sessionId: session.sessionId })} />}
 			{session?.star && <StarProfileSection star={session.star} pixelScale={session.pixelScale} frameId={session.frame?.frameId} />}
 			<CameraAcquisitionSection id="images.guiding.acquisition" device={device} exposure={exposure} capabilities={capabilities} description="The guide frames are LIGHTs taken with the camera settings of Camera Acquisition, shown as the latest frame of the camera and never saved.">
 				<ExposureTimeInput value={settings.exposureTime} exposure={guidingExposureRange(capabilities?.exposure)} disabled={pending} onChange={changeExposure} />
@@ -204,6 +213,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				<Checkbox label="Reverse DEC output after a meridian flip" checked={settings.reverseDecOutputAfterMeridianFlip} disabled={running || pending} onChange={(reverseDecOutputAfterMeridianFlip) => update({ reverseDecOutputAfterMeridianFlip })} />
 				<Notice>Reversing the DEC output applies when a calibration is flipped for the other side of the pier; leave it off for mounts that reverse it themselves.</Notice>
 			</CollapsibleSection>
+			{session && running && <SavedCalibrations session={session} onReview={(calibrationId) => setReview({ kind: 'saved', calibrationId })} />}
 			<CollapsibleSection id="images.guiding.corrections" title="Corrections" defaultOpen={false}>
 				<NumberInput label="RA Aggressiveness" value={settings.aggressivenessRA} min={0} max={1} step={0.05} disabled={running || pending} onChange={(aggressivenessRA) => update({ aggressivenessRA })} />
 				<NumberInput label="DEC Aggressiveness" value={settings.aggressivenessDEC} min={0} max={1} step={0.05} disabled={running || pending} onChange={(aggressivenessDEC) => update({ aggressivenessDEC })} />
@@ -230,7 +240,86 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 				{blocker && <Notice>{blocker}</Notice>}
 				{error && <Notice error>{error}</Notice>}
 			</CollapsibleSection>
+			<GuidingCalibrationReview source={review} pixelScale={session?.pixelScale} onClose={() => setReview(undefined)} />
 		</>
+	)
+}
+
+interface SavedCalibrationsProps {
+	// Living session whose equipment the calibrations are of.
+	readonly session: GuidingSessionSummary
+	// Opens the review of a saved calibration.
+	readonly onReview: (calibrationId: string) => void
+}
+
+// Saved calibrations of the equipment of a session, newest usable first, each with how it fits the session now: read when
+// the section opens and whenever the calibration in use, the run or the side of the pier the session knows changes.
+function SavedCalibrations({ session, onReview }: SavedCalibrationsProps) {
+	const [candidates, setCandidates] = useState<readonly GuidingCalibrationCandidate[]>()
+	const [error, setError] = useState<string>()
+	const [generation, setGeneration] = useState(0)
+	const guiding = session.guideOutputHeld
+
+	useEffect(() => {
+		let current = true
+		loadGuidingCalibrationCandidates(session.sessionId).then(
+			(loaded) => {
+				if (!current) return
+				setCandidates(loaded.candidates)
+				setError(undefined)
+			},
+			(reason: unknown) => current && setError(reason instanceof Error ? reason.message : String(reason)),
+		)
+
+		return () => {
+			current = false
+		}
+	}, [session.sessionId, session.calibration?.calibrationId, session.calibration?.generation, guiding, generation])
+
+	// Runs an action on a saved calibration, then reads the list again.
+	function act(action: Promise<unknown>) {
+		void action.then(
+			() => setGeneration((value) => value + 1),
+			(reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)),
+		)
+	}
+
+	return (
+		<CollapsibleSection id="images.guiding.saved-calibrations" title="Saved Calibrations" defaultOpen={false}>
+			{candidates?.length === 0 && <Notice>No calibration of this equipment is saved yet{session.frame ? '' : ', or no frame was taken yet to compare it with'}.</Notice>}
+			{candidates?.map((candidate) => {
+				const usable = candidate.status === 'direct' || candidate.status === 'transformed'
+				const inUse = session.calibration?.storedId === candidate.calibrationId
+
+				return (
+					<div key={candidate.calibrationId} className="flex flex-col gap-1 border-b border-line-100 pb-2 last:border-b-0">
+						<span className="text-sm text-ink-100 tabular-nums">{`${formatUtcDateTime(candidate.createdAt, false)}${candidate.quality ? ` · ${CALIBRATION_QUALITY_LABELS[candidate.quality]}` : ''}${inUse ? ' · in use' : ''}`}</span>
+						<span className={usable ? 'text-xs text-success' : 'text-xs text-ink-300'}>
+							{CALIBRATION_CANDIDATE_LABELS[candidate.status]}
+							{!usable && candidate.reasons.length > 0 && `: ${candidate.reasons.map((reason) => CALIBRATION_REJECTION_LABELS[reason]).join(', ')}`}
+						</span>
+						<div className="flex flex-wrap gap-2">
+							{candidate.status !== 'invalid' && (
+								<Button variant="secondary" onClick={() => onReview(candidate.calibrationId)}>
+									Review
+								</Button>
+							)}
+							{usable && !inUse && (
+								<Button variant="secondary" disabled={guiding} title={guiding ? 'Stop guiding to restore another calibration' : undefined} onClick={() => act(restoreGuidingCalibration(guidingRuntime, session, candidate.calibrationId))}>
+									Restore
+								</Button>
+							)}
+							{candidate.status !== 'invalid' && (
+								<Button variant="secondary" onClick={() => act(setSavedCalibrationDisabled(candidate.calibrationId, candidate.status !== 'disabled'))}>
+									{candidate.status === 'disabled' ? 'Enable' : 'Disable'}
+								</Button>
+							)}
+						</div>
+					</div>
+				)
+			})}
+			{error && <Notice error>{error}</Notice>}
+		</CollapsibleSection>
 	)
 }
 
@@ -311,9 +400,15 @@ function SessionControls({ session, settings, pending }: SessionControlsProps) {
 	)
 }
 
+interface SessionStateProps {
+	readonly session: GuidingSessionSummary
+	// Opens the review of the calibration the session uses.
+	readonly onReview: () => void
+}
+
 // State of a session: the progress of the guide exposure, the guider state (with the step and the legs of a running
-// calibration) and its lock, the calibration, the RMS, the latest command, and why it ended.
-function SessionState({ session }: { readonly session: GuidingSessionSummary }) {
+// calibration) and its lock, the calibration with its review, the RMS, the latest command, and why it ended.
+function SessionState({ session, onReview }: SessionStateProps) {
 	const { calibration, rms, command, pixelScale } = session
 
 	return (
@@ -354,6 +449,11 @@ function SessionState({ session }: { readonly session: GuidingSessionSummary }) 
 			{session.state === 'calibrating' && session.calibrating && <CalibrationProgress progress={session.calibrating} />}
 			{command?.state === 'failed' && command.error && <Notice error>{command.error}</Notice>}
 			{calibration && calibration.warnings.length > 0 && <Notice>{calibration.warnings.join(' ')}</Notice>}
+			{calibration && (
+				<Button variant="secondary" className="self-start" onClick={onReview}>
+					Review Calibration
+				</Button>
+			)}
 			{calibration && !calibration.saved && <Notice error>{`The calibration was not saved for later sessions${calibration.saveError ? `: ${calibration.saveError}` : '.'}`}</Notice>}
 			{session.interruption && <Notice error>The mount slewed while guiding, commanded outside Nebulosa, so guiding stopped and the star was cleared. Select a star and start guiding again.</Notice>}
 			{session.failure && <Notice error>{session.failure.error ?? `The session ended: ${session.failure.reason}.`}</Notice>}

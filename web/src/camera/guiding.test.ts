@@ -65,7 +65,7 @@ function record(sequence: number): GuidingEventRecord {
 
 function sample(cursor: number): GuidingTelemetrySample {
 	const axis = { duration: 0, limited: false }
-	return { cursor, frameId: cursor, timestamp: cursor, lost: false, calibrationGeneration: 1, dx: 0, dy: 0, raDistance: 0, decDistance: 0, ra: axis, dec: axis, snr: 10, mass: 100, hfd: 2 }
+	return { cursor, frameId: cursor, timestamp: cursor, lost: false, calibrationGeneration: 1, phase: 'guiding', dx: 0, dy: 0, raDistance: 0, decDistance: 0, ra: axis, dec: axis, snr: 10, mass: 100, hfd: 2 }
 }
 
 // Fetch fake answering each URL with the response its handler builds, recording the requests.

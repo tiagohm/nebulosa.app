@@ -11,7 +11,7 @@ import { cameraKey, captureCount, captureRuntime, captureRunning, captureStatus,
 import { DarvOverlay, useDarvOverlay } from '../camera/DarvOverlay'
 import { FocusCurve } from '../camera/FocusCurve'
 import { GUIDING_STATE_LABELS, guidingRuntime, selectGuidingTarget } from '../camera/guiding'
-import { GuidingGraph } from '../camera/GuidingGraph'
+import { GuidingGraphs } from '../camera/GuidingGraphs'
 import { GuidingOverlay, useGuidingOverlay } from '../camera/GuidingOverlay'
 import { useTargetCenteringOverlay } from '../camera/targetcentering.overlay'
 import { TppaOverlay, useTppaOverlay } from '../camera/TppaOverlay'
@@ -542,7 +542,7 @@ function CameraBottom({ document, view: chosen, onView }: CameraBottomProps) {
 				{view === 'pointing' && pointing ? (
 					<PointingMapView session={pointing} />
 				) : view === 'guiding' && guiding ? (
-					<GuidingGraph session={guiding} telemetry={guidingState.telemetry[guiding.sessionId]} events={guidingState.events[guiding.sessionId]} />
+					<GuidingGraphs session={guiding} telemetry={guidingState.telemetry[guiding.sessionId]} events={guidingState.events[guiding.sessionId]} />
 				) : (
 					session && <FocusCurve summary={session} session={autoFocus.details[session.sessionId]} />
 				)}

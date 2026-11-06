@@ -1,9 +1,9 @@
 // oxfmt-ignore
-import type { CameraCapabilities, CaptureSnoop, StarDetectionSettings, GuidingCalibrationProgress, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
+import type { CameraCapabilities, CaptureSnoop, StarDetectionSettings, GuidingCalibrationCandidates, GuidingCalibrationEntry, GuidingCalibrationPatch, GuidingCalibrationProgress, GuidingRestoreCalibrationRequest, GuidingSessionCalibration, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit } from '../http'
+import { ApiResponseError, deviceUrl, fetchJson, jsonInit, responseError } from '../http'
 import { type CameraExposureSettings, GUIDING_MAXIMUM_EXPOSURE, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_EXPOSURE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import type { TelescopeOptics } from '../sky/framing'
@@ -436,6 +436,33 @@ export function setGuidingExposure(state: GuidingRuntime, session: SessionRef, e
 // Forgets the calibration solved in the session, so the next Start Guiding calibrates; refused while guiding.
 export function clearGuidingCalibration(state: GuidingRuntime, session: SessionRef, request: typeof fetch = fetch) {
 	return sessionCommand(state, session, 'calibration/clear', undefined, request)
+}
+
+// Reads the calibration a session uses, with the review of its measured steps; rejects with the API error, a 404 when
+// the session has none.
+export function loadSessionCalibration(sessionId: string, request: typeof fetch = fetch): Promise<GuidingSessionCalibration> {
+	return fetchJson({ fetch: (input, init) => request(input, init) }, `/api/guiding/${encodeURIComponent(sessionId)}/calibration`)
+}
+
+// Reads a saved calibration with the review of its measured steps, its evidence and its grade.
+export function loadSavedCalibration(calibrationId: string, request: typeof fetch = fetch): Promise<GuidingCalibrationEntry> {
+	return fetchJson({ fetch: (input, init) => request(input, init) }, `/api/guiding/calibrations/${encodeURIComponent(calibrationId)}`)
+}
+
+// Reads the saved calibrations of the equipment of a session, each with how it fits the session now.
+export function loadGuidingCalibrationCandidates(sessionId: string, request: typeof fetch = fetch): Promise<GuidingCalibrationCandidates> {
+	return fetchJson({ fetch: (input, init) => request(input, init) }, `/api/guiding/${encodeURIComponent(sessionId)}/calibration/candidates`)
+}
+
+// Excludes a saved calibration from restoring, or includes it again; rejects with the API error.
+export async function setSavedCalibrationDisabled(calibrationId: string, disabled: boolean, request: typeof fetch = fetch) {
+	const response = await request(`/api/guiding/calibrations/${encodeURIComponent(calibrationId)}`, jsonInit('PATCH', { disabled } satisfies GuidingCalibrationPatch))
+	if (!response.ok) throw new ApiResponseError(await responseError(response), response.status)
+}
+
+// Restores a saved calibration on a session that is not guiding; the session record then shows it.
+export function restoreGuidingCalibration(state: GuidingRuntime, session: SessionRef, calibrationId: string, request: typeof fetch = fetch) {
+	return sessionCommand(state, session, 'calibration/restore', { calibrationId } satisfies GuidingRestoreCalibrationRequest, request)
 }
 
 // Ends a session, releasing the guide camera and the guide output.

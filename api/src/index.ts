@@ -602,6 +602,7 @@ export type {
 	GuidingStartResponse,
 	GuidingTargetRequest,
 	GuidingTelemetryAxis,
+	GuidingTelemetryPhase,
 	GuidingTelemetrySample,
 } from './guiding'
 export type { GuidingCalibrationCandidate, GuidingCalibrationEntry, GuidingCalibrationEvidence, GuidingCalibrationRejection, StoredGuidingCalibration } from './guidingcalibration'

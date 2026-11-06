@@ -53,7 +53,9 @@ import {
 	type DarkLibraryWizardSettings,
 	DEFAULT_DARK_LIBRARY_WIZARD_SETTINGS,
 	type FlatWizardSettings,
+	DEFAULT_GUIDING_GRAPH_VIEW,
 	DEFAULT_GUIDING_SETTINGS,
+	type GuidingGraphView,
 	type GuidingSettings,
 	DEFAULT_MERIDIAN_FLIP_SETTINGS,
 	DEFAULT_DITHER_SETTINGS,
@@ -219,6 +221,17 @@ export function setCameraFramesShown(state: ProfileState, shown: boolean) {
 	if (cameraFramesShown(settings) === shown) return
 	if (shown) delete settings.framesHidden
 	else settings.framesHidden = true
+}
+
+// Returns how a profile shows the guiding graph under the camera tabs.
+export function guidingGraphView(settings: Pick<ProfileSettings, 'guidingGraph'>): GuidingGraphView {
+	return settings.guidingGraph ?? DEFAULT_GUIDING_GRAPH_VIEW
+}
+
+// Changes how the active profile shows the guiding graph under the camera tabs.
+export function setGuidingGraphView(state: ProfileState, patch: Partial<GuidingGraphView>) {
+	const profile = activeProfile(state)
+	profile.settings.guidingGraph = { ...guidingGraphView(profile.settings), ...patch }
 }
 
 // Remembers in the active profile the server directory an image was opened from.

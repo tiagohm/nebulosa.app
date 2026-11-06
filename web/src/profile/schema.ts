@@ -58,6 +58,9 @@ export interface ProfileSettings {
 	// Server directory listed last when directories or files were added to a Calibration Library import, where both
 	// choosers start; absent before the first one is added. View state.
 	lastCalibrationDirectory?: string
+	// How the guiding graph under the camera tabs is shown; absent until changed, and then DEFAULT_GUIDING_GRAPH_VIEW
+	// holds. View state.
+	guidingGraph?: GuidingGraphView
 	// Forms of each physical camera edited so far, by saved connection id, then device id.
 	cameras: Record<string, Record<string, CameraSettings>>
 	// Targets saved to recover a framing, at most FRAMING_REFERENCES_MAXIMUM; absent until one is saved.
@@ -871,6 +874,20 @@ export interface GuidingSettings {
 	// it themselves.
 	reverseDecOutputAfterMeridianFlip: boolean
 }
+
+// How the guiding graph under the camera tabs is shown.
+export interface GuidingGraphView {
+	// The errors of the latest guide steps along time (history), or around the lock (target).
+	readonly mode: 'history' | 'target'
+	// Latest guide steps the target shows, one of GUIDING_TARGET_POINTS.
+	readonly points: number
+}
+
+// Numbers of latest guide steps the target of the guiding graph can show.
+export const GUIDING_TARGET_POINTS = [25, 50, 100, 250, 500] as const
+
+// Guiding graph of a profile that never changed it: the history, and 100 steps on the target.
+export const DEFAULT_GUIDING_GRAPH_VIEW: GuidingGraphView = { mode: 'history', points: 100 }
 
 // Pattern of the successive dithers: random offsets, an outward spiral (both as PHD2), a golden-angle spiral, or a grid.
 export type GuidingDitherMode = NonNullable<GuidingClientSettings['ditherMode']>

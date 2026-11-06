@@ -53,7 +53,7 @@ interface ViewField {
 type FramingView = Pick<SkyFramingSettings, 'activePresetId' | 'visible' | 'source' | 'sensorSource'>
 
 // Field of the view kept as an optional field of ProfileSettings.
-function setting(key: 'lastImageDirectory' | 'lastSaveDirectory' | 'lastStackingDirectory' | 'lastCalibrationDirectory' | 'framesHidden' | 'imageProcessing' | 'closeApproaches' | 'astroWeather'): ViewField {
+function setting(key: 'lastImageDirectory' | 'lastSaveDirectory' | 'lastStackingDirectory' | 'lastCalibrationDirectory' | 'framesHidden' | 'imageProcessing' | 'closeApproaches' | 'astroWeather' | 'guidingGraph'): ViewField {
 	return {
 		get: (settings) => settings[key],
 		set: (settings, value) => Object.assign(settings, { [key]: value }),
@@ -74,6 +74,7 @@ const VIEW_FIELDS = {
 	imageProcessing: setting('imageProcessing'),
 	closeApproaches: setting('closeApproaches'),
 	astroWeather: setting('astroWeather'),
+	guidingGraph: setting('guidingGraph'),
 	skyTimeBar: {
 		get: (settings) => settings.sky.timeBar,
 		set: (settings, value) => (settings.sky.timeBar = value as boolean),
@@ -113,6 +114,7 @@ export const VIEW_STORAGE: Readonly<Record<ViewFieldKey | ViewEntryName | 'activ
 	imageProcessing: ['local'],
 	closeApproaches: ['local'],
 	astroWeather: ['local'],
+	guidingGraph: ['local'],
 	// Whether the simulation clock is shown belongs to what this tab is doing.
 	skyTimeBar: ['session'],
 	skyFraming: ['local'],

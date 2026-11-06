@@ -19,6 +19,7 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, string>>>> = {
 	},
 	'new Database(': {
 		'api/src/database/connection.ts': 'the operational database',
+		'api/src/database/baseline.ts': 'an in-memory copy of the baseline schema to compare tables with, closed before returning',
 		'api/src/sky/fixture.ts': 'an in-memory sky catalog for tests',
 	},
 }

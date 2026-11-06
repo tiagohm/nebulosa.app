@@ -20,6 +20,8 @@ import { GuidingCalibrationStore } from './guidingcalibration.store'
 import { ImageStore } from './images'
 import { type OperationEvent, OperationRegistry, type ToolInvocation } from './operations'
 
+const SKIP = process.env.RUN_ALL_TESTS !== 'true'
+
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-guiding-test-'))
 const disposables: Disposable[] = []
 
@@ -424,70 +426,78 @@ describe('guiding', () => {
 		expect(await context.guiding.suspendForMotion('unknown')).toMatchObject({ ok: false })
 	})
 
-	test('a completed calibration is saved, and a later session of the same equipment restores it instead of calibrating', async () => {
-		const store = new GuidingCalibrationStore(AppDatabase.memory())
-		const context = await setup(store)
-		await trackStars(context)
-		const types = (sessionId: string) => context.guiding.events(sessionId, 0).json() as Promise<GuidingPage<GuidingEventRecord>>
+	test.skipIf(SKIP)(
+		'a completed calibration is saved, and a later session of the same equipment restores it instead of calibrating',
+		async () => {
+			const store = new GuidingCalibrationStore(AppDatabase.memory())
+			const context = await setup(store)
+			await trackStars(context)
+			const types = (sessionId: string) => context.guiding.events(sessionId, 0).json() as Promise<GuidingPage<GuidingEventRecord>>
 
-		const first = await start(context, guided(context))
-		await waitUntil(() => context.guiding.selectTarget(first.sessionId, {}).status === 200)
-		expect(context.guiding.startGuiding(first.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
-		await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
-		const solved = context.summary()!.calibration!
-		expect(solved).toMatchObject({ origin: 'new', saved: true, transformations: [], declinationScale: 1, orthogonalAssumed: false })
-		expect(solved.source.pierSide).toBeDefined()
-		expect(solved.source.declination).toBeDefined()
-		expect(store.list(undefined, 10).map((header) => header.calibrationId)).toEqual([solved.storedId!])
-		// The session serves its calibration with the measured steps.
-		const served = (await context.guiding.sessionCalibration(first.sessionId).json()) as { record: { calibration: { review: { raSamples: unknown[] } } } }
-		expect(served.record.calibration.review.raSamples.length).toBeGreaterThan(0)
-		expect((await context.guiding.stop(first.sessionId)).status).toBe(204)
+			const first = await start(context, guided(context))
+			await waitUntil(() => context.guiding.selectTarget(first.sessionId, {}).status === 200)
+			expect(context.guiding.startGuiding(first.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+			await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
+			const solved = context.summary()!.calibration!
+			expect(solved).toMatchObject({ origin: 'new', saved: true, transformations: [], declinationScale: 1, orthogonalAssumed: false })
+			expect(solved.source.pierSide).toBeDefined()
+			expect(solved.source.declination).toBeDefined()
+			expect(store.list(undefined, 10).map((header) => header.calibrationId)).toEqual([solved.storedId!])
+			// The session serves its calibration with the measured steps.
+			const served = (await context.guiding.sessionCalibration(first.sessionId).json()) as { record: { calibration: { review: { raSamples: unknown[] } } } }
+			expect(served.record.calibration.review.raSamples.length).toBeGreaterThan(0)
+			expect((await context.guiding.stop(first.sessionId)).status).toBe(204)
 
-		// A new session of the same equipment guides with it without calibrating.
-		const second = await start(context, guided(context))
-		await waitUntil(() => context.summary()?.frame !== undefined)
-		const candidates = (await context.guiding.calibrationCandidates(second.sessionId).json()) as { candidates: { calibrationId: string; status: string }[] }
-		expect(candidates.candidates.map(({ calibrationId, status }) => [calibrationId, status])).toEqual([[solved.storedId!, 'direct']])
-		await waitUntil(() => context.guiding.selectTarget(second.sessionId, {}).status === 200)
-		expect(context.guiding.startGuiding(second.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
-		await waitUntil(() => context.summary()?.guideOutputHeld === true)
-		expect(context.summary()?.calibration).toMatchObject({ origin: 'restored', storedId: solved.storedId, saved: true })
-		const events = (await types(second.sessionId)).items.map((record) => record.event.type)
-		expect(events).toContain('calibrationRestored')
-		expect(events).not.toContain('calibrationStarted')
-		expect(store.list(undefined, 10)[0].lastUsedAt).toBeDefined()
-		expect((await context.guiding.stop(second.sessionId)).status).toBe(204)
+			// A new session of the same equipment guides with it without calibrating.
+			const second = await start(context, guided(context))
+			await waitUntil(() => context.summary()?.frame !== undefined)
+			const candidates = (await context.guiding.calibrationCandidates(second.sessionId).json()) as { candidates: { calibrationId: string; status: string }[] }
+			expect(candidates.candidates.map(({ calibrationId, status }) => [calibrationId, status])).toEqual([[solved.storedId!, 'direct']])
+			await waitUntil(() => context.guiding.selectTarget(second.sessionId, {}).status === 200)
+			expect(context.guiding.startGuiding(second.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+			await waitUntil(() => context.summary()?.guideOutputHeld === true)
+			expect(context.summary()?.calibration).toMatchObject({ origin: 'restored', storedId: solved.storedId, saved: true })
+			const events = (await types(second.sessionId)).items.map((record) => record.event.type)
+			expect(events).toContain('calibrationRestored')
+			expect(events).not.toContain('calibrationStarted')
+			expect(store.list(undefined, 10)[0].lastUsedAt).toBeDefined()
+			expect((await context.guiding.stop(second.sessionId)).status).toBe(204)
 
-		// Disabled, it is set aside, and other binning is other equipment geometry.
-		expect(context.guiding.patchSavedCalibration(solved.storedId!, { disabled: true }).status).toBe(204)
-		const third = await start(context, guided(context, { camera: { gain: 0, offset: 0, binX: 2, binY: 2, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '' } }))
-		await waitUntil(() => context.summary()?.frame !== undefined)
-		expect(context.guiding.patchSavedCalibration(solved.storedId!, { disabled: false }).status).toBe(204)
-		const other = (await context.guiding.calibrationCandidates(third.sessionId).json()) as { candidates: { status: string; reasons: string[] }[] }
-		expect(other.candidates).toEqual([expect.objectContaining({ status: 'incompatible', reasons: expect.arrayContaining(['binning']) })])
-		const refused = context.guiding.restoreSavedCalibration(third.sessionId, { calibrationId: solved.storedId! })
-		expect(refused.status).toBe(422)
-		expect(await refused.json()).toMatchObject({ code: 'calibrationIncompatible', reasons: expect.arrayContaining(['binning']) })
-		expect(context.guiding.restoreSavedCalibration(third.sessionId, { calibrationId: 'unknown' }).status).toBe(404)
-		expect((await context.guiding.stop(third.sessionId)).status).toBe(204)
-	}, 120000)
+			// Disabled, it is set aside, and other binning is other equipment geometry.
+			expect(context.guiding.patchSavedCalibration(solved.storedId!, { disabled: true }).status).toBe(204)
+			const third = await start(context, guided(context, { camera: { gain: 0, offset: 0, binX: 2, binY: 2, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: '' } }))
+			await waitUntil(() => context.summary()?.frame !== undefined)
+			expect(context.guiding.patchSavedCalibration(solved.storedId!, { disabled: false }).status).toBe(204)
+			const other = (await context.guiding.calibrationCandidates(third.sessionId).json()) as { candidates: { status: string; reasons: string[] }[] }
+			expect(other.candidates).toEqual([expect.objectContaining({ status: 'incompatible', reasons: expect.arrayContaining(['binning']) })])
+			const refused = context.guiding.restoreSavedCalibration(third.sessionId, { calibrationId: solved.storedId! })
+			expect(refused.status).toBe(422)
+			expect(await refused.json()).toMatchObject({ code: 'calibrationIncompatible', reasons: expect.arrayContaining(['binning']) })
+			expect(context.guiding.restoreSavedCalibration(third.sessionId, { calibrationId: 'unknown' }).status).toBe(404)
+			expect((await context.guiding.stop(third.sessionId)).status).toBe(204)
+		},
+		90000,
+	)
 
-	test('Force Recalibrate calibrates even when a saved calibration matches', async () => {
-		const context = await setup()
-		await trackStars(context)
-		const { sessionId } = await start(context, guided(context))
-		await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
-		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
-		await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
-		const stopped = await context.guiding.stopGuiding(sessionId, { token: `token-${tokens++}` }).json()
-		await waitUntil(() => context.summary()?.command?.commandId === stopped.commandId && context.summary()?.command?.state !== 'running')
+	test.skipIf(SKIP)(
+		'Force Recalibrate calibrates even when a saved calibration matches',
+		async () => {
+			const context = await setup()
+			await trackStars(context)
+			const { sessionId } = await start(context, guided(context))
+			await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
+			expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+			await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
+			const stopped = await context.guiding.stopGuiding(sessionId, { token: `token-${tokens++}` }).json()
+			await waitUntil(() => context.summary()?.command?.commandId === stopped.commandId && context.summary()?.command?.state !== 'running')
 
-		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
-		await waitUntil(() => context.summary()?.state === 'calibrating')
-		expect(context.summary()?.calibration).toBeUndefined()
-		expect((await context.guiding.stop(sessionId)).status).toBe(204)
-	}, 120000)
+			expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
+			await waitUntil(() => context.summary()?.state === 'calibrating')
+			expect(context.summary()?.calibration).toBeUndefined()
+			expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		},
+		90000,
+	)
 
 	test('a slew of the mount while guiding, commanded elsewhere, stops guiding and clears the lock while the loop goes on', async () => {
 		const context = await setup()
@@ -513,7 +523,7 @@ describe('guiding', () => {
 		await waitUntil(() => context.summary()?.guideOutputHeld === true)
 		expect(context.summary()?.interruption).toBeUndefined()
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
-	}, 120000)
+	})
 
 	test('without stopGuidingOnSlew a slew leaves guiding alone', async () => {
 		const context = await setup()
@@ -531,82 +541,90 @@ describe('guiding', () => {
 		expect(context.summary()?.interruption).toBeUndefined()
 		expect(context.summary()?.command?.commandId).toBe(command)
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
-	}, 120000)
+	})
 
-	test('after the motion of another service the calibration is derived for the new declination instead of solved again', async () => {
-		const context = await setup()
-		await trackStars(context)
-		const { sessionId } = await start(context, guided(context))
-		await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
-		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
-		await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
-		const solved = context.summary()!.calibration!
+	test.skipIf(SKIP)(
+		'after the motion of another service the calibration is derived for the new declination instead of solved again',
+		async () => {
+			const context = await setup()
+			await trackStars(context)
+			const { sessionId } = await start(context, guided(context))
+			await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
+			expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
+			await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
+			const solved = context.summary()!.calibration!
 
-		const suspended = await context.guiding.suspendForMotion(sessionId)
-		if (!suspended.ok) throw new Error('not suspended')
-		const { rightAscension } = context.mount.equatorialCoordinate
-		context.manager.devices.mounts.goTo(context.mount, rightAscension, deg(45))
-		await waitUntil(() => !context.mount.slewing && Math.abs(context.mount.equatorialCoordinate.declination - deg(45)) < deg(0.1))
-		const before = (await context.guiding.events(sessionId, 0).json()) as GuidingPage<GuidingEventRecord>
+			const suspended = await context.guiding.suspendForMotion(sessionId)
+			if (!suspended.ok) throw new Error('not suspended')
+			const { rightAscension } = context.mount.equatorialCoordinate
+			context.manager.devices.mounts.goTo(context.mount, rightAscension, deg(45))
+			await waitUntil(() => !context.mount.slewing && Math.abs(context.mount.equatorialCoordinate.declination - deg(45)) < deg(0.1))
+			const before = (await context.guiding.events(sessionId, 0).json()) as GuidingPage<GuidingEventRecord>
 
-		expect(await Promise.race([context.guiding.restoreAfterMotion(suspended.value, new AbortController().signal), Bun.sleep(60000).then(() => 'slow')])).toBe('restored')
-		const after = (await context.guiding.events(sessionId, before.items.at(-1)!.sequence).json()) as GuidingPage<GuidingEventRecord>
-		const types = after.items.map((record) => record.event.type)
-		expect(types).toContain('calibrationTransformed')
-		expect(types).not.toContain('calibrationStarted')
-		const derived = context.summary()!.calibration!
-		expect(derived).toMatchObject({ storedId: solved.storedId, transformations: ['declinationCompensation'] })
-		expect(derived.current.declination!).toBeCloseTo(deg(45), 2)
-		expect(derived.declinationScale).toBeCloseTo(Math.cos(deg(45)) / Math.cos(derived.source.declination!), 3)
-		expect(derived.raRate).toBeCloseTo(solved.raRate * derived.declinationScale, 6)
-		expect(derived.decRate).toBeCloseTo(solved.decRate, 9)
-		expect((await context.guiding.stop(sessionId)).status).toBe(204)
-	}, 180000)
+			expect(await Promise.race([context.guiding.restoreAfterMotion(suspended.value, new AbortController().signal), Bun.sleep(60000).then(() => 'slow')])).toBe('restored')
+			const after = (await context.guiding.events(sessionId, before.items.at(-1)!.sequence).json()) as GuidingPage<GuidingEventRecord>
+			const types = after.items.map((record) => record.event.type)
+			expect(types).toContain('calibrationTransformed')
+			expect(types).not.toContain('calibrationStarted')
+			const derived = context.summary()!.calibration!
+			expect(derived).toMatchObject({ storedId: solved.storedId, transformations: ['declinationCompensation'] })
+			expect(derived.current.declination!).toBeCloseTo(deg(45), 2)
+			expect(derived.declinationScale).toBeCloseTo(Math.cos(deg(45)) / Math.cos(derived.source.declination!), 3)
+			expect(derived.raRate).toBeCloseTo(solved.raRate * derived.declinationScale, 6)
+			expect(derived.decRate).toBeCloseTo(solved.decRate, 9)
+			expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		},
+		90000,
+	)
 
-	test('end to end: calibrate and save, restore in a new session, move the mount, guide on with the derived calibration', async () => {
-		const store = new GuidingCalibrationStore(AppDatabase.memory())
-		const context = await setup(store)
-		await trackStars(context)
-		// The simulated field moves by more than a pixel per guide pulse, so the settles are generous.
-		const settle = { pixels: 3, time: 1, timeout: 60 }
-		const backlash = { guider: { decBacklashCompensation: { mode: 'adaptive', initialMs: 0, maxCompensationMs: 1000, adaptationRate: 0.3 } } } as const
+	test.skipIf(SKIP)(
+		'end to end: calibrate and save, restore in a new session, move the mount, guide on with the derived calibration',
+		async () => {
+			const store = new GuidingCalibrationStore(AppDatabase.memory())
+			const context = await setup(store)
+			await trackStars(context)
+			// The simulated field moves by more than a pixel per guide pulse, so the settles are generous.
+			const settle = { pixels: 3, time: 1, timeout: 60 }
+			const backlash = { guider: { decBacklashCompensation: { mode: 'adaptive', initialMs: 0, maxCompensationMs: 1000, adaptationRate: 0.3 } } } as const
 
-		const first = await start(context, guided(context, backlash))
-		await waitUntil(() => context.guiding.selectTarget(first.sessionId, {}).status === 200)
-		expect(context.guiding.startGuiding(first.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle }).status).toBe(202)
-		await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
-		expect((await context.guiding.stop(first.sessionId)).status).toBe(204)
+			const first = await start(context, guided(context, backlash))
+			await waitUntil(() => context.guiding.selectTarget(first.sessionId, {}).status === 200)
+			expect(context.guiding.startGuiding(first.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle }).status).toBe(202)
+			await waitUntil(() => context.summary()?.calibration?.saved === true, 90000)
+			expect((await context.guiding.stop(first.sessionId)).status).toBe(204)
 
-		// A new session restores the saved calibration and guides with the compensation on.
-		const second = await start(context, guided(context, backlash))
-		await waitUntil(() => context.guiding.selectTarget(second.sessionId, {}).status === 200)
-		const started = context.guiding.admitStartGuiding(second.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle })
-		if (!started.ok) throw new Error(started.error)
-		expect(await started.settled).toMatchObject({ state: 'succeeded' })
-		expect(context.summary()?.calibration?.origin).toBe('restored')
-		await waitUntil(() => context.summary()?.decBacklashEstimate !== undefined)
+			// A new session restores the saved calibration and guides with the compensation on.
+			const second = await start(context, guided(context, backlash))
+			await waitUntil(() => context.guiding.selectTarget(second.sessionId, {}).status === 200)
+			const started = context.guiding.admitStartGuiding(second.sessionId, { token: `token-${tokens++}`, recalibrate: false, settle })
+			if (!started.ok) throw new Error(started.error)
+			expect(await started.settled).toMatchObject({ state: 'succeeded' })
+			expect(context.summary()?.calibration?.origin).toBe('restored')
+			await waitUntil(() => context.summary()?.decBacklashEstimate !== undefined)
 
-		// The steps of the start settle are marked as such.
-		const steps = context.summary()!.telemetryCursor
-		await waitUntil(() => (context.summary()?.telemetryCursor ?? 0) >= steps + 3)
-		const telemetry = (await context.guiding.telemetry(second.sessionId, 0).json()) as GuidingPage<GuidingTelemetrySample>
-		expect(telemetry.items.every((sample) => sample.lost || sample.phase === 'guiding' || sample.phase === 'settling')).toBeTrue()
+			// The steps of the start settle are marked as such.
+			const steps = context.summary()!.telemetryCursor
+			await waitUntil(() => (context.summary()?.telemetryCursor ?? 0) >= steps + 3)
+			const telemetry = (await context.guiding.telemetry(second.sessionId, 0).json()) as GuidingPage<GuidingTelemetrySample>
+			expect(telemetry.items.every((sample) => sample.lost || sample.phase === 'guiding' || sample.phase === 'settling')).toBeTrue()
 
-		// Another service moves the mount to declination 45°; guiding comes back on the derived calibration.
-		const generation = context.summary()!.calibration!.generation
-		const suspended = await context.guiding.suspendForMotion(second.sessionId)
-		if (!suspended.ok) throw new Error('not suspended')
-		context.manager.devices.mounts.goTo(context.mount, context.mount.equatorialCoordinate.rightAscension, deg(45))
-		await waitUntil(() => !context.mount.slewing && Math.abs(context.mount.equatorialCoordinate.declination - deg(45)) < deg(0.1))
-		expect(await context.guiding.restoreAfterMotion(suspended.value, new AbortController().signal)).toBe('restored')
-		expect(context.summary()?.calibration).toMatchObject({ origin: 'restored', transformations: ['declinationCompensation'] })
-		expect(context.summary()!.calibration!.generation).toBeGreaterThan(generation)
-		const cursor = context.summary()!.telemetryCursor
-		await waitUntil(() => (context.summary()?.telemetryCursor ?? 0) > cursor + 3)
-		const after = (await context.guiding.telemetry(second.sessionId, cursor).json()) as GuidingPage<GuidingTelemetrySample>
-		expect(after.items.filter((sample) => !sample.lost).every((sample) => sample.calibrationGeneration === context.summary()!.calibration!.generation)).toBeTrue()
-		expect((await context.guiding.stop(second.sessionId)).status).toBe(204)
-	}, 240000)
+			// Another service moves the mount to declination 45°; guiding comes back on the derived calibration.
+			const generation = context.summary()!.calibration!.generation
+			const suspended = await context.guiding.suspendForMotion(second.sessionId)
+			if (!suspended.ok) throw new Error('not suspended')
+			context.manager.devices.mounts.goTo(context.mount, context.mount.equatorialCoordinate.rightAscension, deg(45))
+			await waitUntil(() => !context.mount.slewing && Math.abs(context.mount.equatorialCoordinate.declination - deg(45)) < deg(0.1))
+			expect(await context.guiding.restoreAfterMotion(suspended.value, new AbortController().signal)).toBe('restored')
+			expect(context.summary()?.calibration).toMatchObject({ origin: 'restored', transformations: ['declinationCompensation'] })
+			expect(context.summary()!.calibration!.generation).toBeGreaterThan(generation)
+			const cursor = context.summary()!.telemetryCursor
+			await waitUntil(() => (context.summary()?.telemetryCursor ?? 0) > cursor + 3)
+			const after = (await context.guiding.telemetry(second.sessionId, cursor).json()) as GuidingPage<GuidingTelemetrySample>
+			expect(after.items.filter((sample) => !sample.lost).every((sample) => sample.calibrationGeneration === context.summary()!.calibration!.generation)).toBeTrue()
+			expect((await context.guiding.stop(second.sessionId)).status).toBe(204)
+		},
+		90000,
+	)
 
 	test('commands of an ended or unknown session are refused', async () => {
 		const context = await setup()

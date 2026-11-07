@@ -24,6 +24,8 @@ import {
 } from './jupiter.astronomy'
 import type { JupiterGrsSaveOutcome, JupiterGrsSaveRequest, JupiterGrsSettings, JupiterGrsStore } from './jupiter.store'
 import { LruCache } from './lrucache'
+import { type PlanetarySourceErrorCode, unavailableResponse } from './planetary.source'
+import { SiteNightCache } from './planetary.visibility'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 
 // Jupiter Observing Planner service: read-only predictions of Jupiter and its Galilean satellites (the view at an
@@ -36,7 +38,7 @@ import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 // Stable codes of the planner's error responses: 409 conflict of a Great Red Spot save, 500 writeFailed, and 503 when the
 // spkOnly policy finds the kernels unable to give a computation (coverageUnavailable, missingDependency,
 // unsupportedKernel) or the kernel set kept changing during one (generationChanged).
-export type JupiterErrorCode = 'conflict' | 'writeFailed' | 'coverageUnavailable' | 'missingDependency' | 'unsupportedKernel' | 'generationChanged'
+export type JupiterErrorCode = 'conflict' | 'writeFailed' | PlanetarySourceErrorCode
 
 // Great Red Spot model with its state now.
 export interface JupiterGrsResponse extends JupiterGrsSettings {
@@ -60,32 +62,15 @@ const EVENTS_CACHE_LIMIT = 16
 // Track answers kept.
 const TRACK_CACHE_LIMIT = 16
 
-// Sites whose nights are kept.
-const NIGHT_SITES_LIMIT = 8
-
-// Nights kept per site: a 14-day range with its padding and one more.
-const NIGHTS_PER_SITE = 20
-
 // Read-only Jupiter predictions and the Great Red Spot model.
 export class JupiterPlannerService {
 	readonly #events = new LruCache<JupiterEvents>(EVENTS_CACHE_LIMIT)
 	readonly #tracks = new LruCache<JupiterTrack>(TRACK_CACHE_LIMIT)
-	readonly #nights = new LruCache<AstroWeatherNight[]>(NIGHT_SITES_LIMIT)
+	// Nights of the sites, which hold a whole range of nights where the provider keeps fewer.
+	readonly #nights: SiteNightCache
 
-	constructor(readonly options: JupiterPlannerOptions) {}
-
-	// Night of a site containing an instant, from the provider once and then from the planner's own per-site list, which
-	// holds a whole range of nights where the provider keeps fewer.
-	readonly #night = (request: AstroWeatherNightRequest): AstroWeatherNight => {
-		const { observer, timeZone, time } = request
-		const key = `${timeZone}|${observer.latitude}|${observer.longitude}|${observer.elevation}`
-		const nights = this.#nights.get(key) ?? []
-		const cached = nights.find(({ sun }) => sun.start <= time && time < sun.end)
-		if (cached) return cached
-
-		const night = this.options.night(request)
-		this.#nights.set(key, [...nights, night].slice(-NIGHTS_PER_SITE))
-		return night
+	constructor(readonly options: JupiterPlannerOptions) {
+		this.#nights = new SiteNightCache(options.night)
 	}
 
 	// The Great Red Spot model and its state at `now` (Unix milliseconds).
@@ -124,7 +109,7 @@ export class JupiterPlannerService {
 		const cached = this.#events.get(eventsKey(request, this.options.kernels.current(), revision))
 		if (cached) return cached
 
-		const { sourced, grsUsed, ...events } = await computeEvents(this.options.kernels, this.#night, request, model, signal)
+		const { sourced, grsUsed, ...events } = await computeEvents(this.options.kernels, this.#nights.night, request, model, signal)
 		const answer: JupiterEvents = { ...events, grsStatus: grsStatus(model, revision, request.start), signature: signature(sourced.source, sourced.snapshot, grsUsed ? revision : undefined) }
 		this.#events.set(eventsKey(request, sourced.snapshot, revision), answer)
 		return answer
@@ -158,8 +143,7 @@ async function answer(compute: () => Promise<unknown>): Promise<Response> {
 		return Response.json(await compute())
 	} catch (error) {
 		if (!(error instanceof JupiterSourceUnavailableError)) throw error
-		const code: JupiterErrorCode = error.reason === 'generationChanged' ? 'generationChanged' : error.reason === 'outOfCoverage' ? 'coverageUnavailable' : error.reason === 'unsupportedFrame' || error.reason === 'unsupportedType' ? 'unsupportedKernel' : 'missingDependency'
-		return errorResponse(error.message, 503, code, { reason: error.reason, ...(error.miss && { miss: error.miss }) })
+		return unavailableResponse(error)
 	}
 }
 

@@ -1,20 +1,20 @@
-import { analyticalJovianEphemeris, GALILEAN_MOONS, type GalileanMoon, hasJovianTargets, interpolatedJovianEphemeris, JOVIAN_BODIES, JOVIAN_NAIF, type JovianBody, type JovianEphemeris, JovianEphemerisMiss, type SpkJovianEphemeris, spkJovianEphemeris } from 'nebulosa/src/astronomy/ephemeris/jovian'
-import type { SpkMissReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
-import { altitudeOf } from 'nebulosa/src/astronomy/events/horizon'
+import { analyticalJovianEphemeris, GALILEAN_MOONS, type GalileanMoon, interpolatedJovianEphemeris, JOVIAN_BODIES, JOVIAN_NAIF, type JovianBody, type JovianEphemeris, JovianEphemerisMiss, spkJovianEphemeris } from 'nebulosa/src/astronomy/ephemeris/jovian'
 import { greatRedSpotLongitude, type GreatRedSpotModel, greatRedSpotTransitsWithDrift, jupiterCentralMeridian } from 'nebulosa/src/astronomy/events/jupiter'
 import { type JovianDiskState, type JovianEclipseState, type JovianMoonMargins, jovianMoonMargins, jovianSystemState, jovianView, projectJovianSurfacePoint } from 'nebulosa/src/astronomy/events/jupiter.geometry'
 import { type JovianPhenomenon, type JovianPhenomenonKind, jovianPhenomena } from 'nebulosa/src/astronomy/events/jupiter.phenomena'
 import { findGalileanMutualEvents, type MutualEvent } from 'nebulosa/src/astronomy/events/mutual'
-import { visibilityWindows } from 'nebulosa/src/astronomy/events/visibility'
-import { airmassKastenYoung } from 'nebulosa/src/astronomy/formulas'
-import { precessionNutationMatrix, type Time, tdb, timeShift, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
+import { precessionNutationMatrix, type Time, tdb, timeShift, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { DEG2RAD, JUPITER_EQUATORIAL_RADIUS_AU } from 'nebulosa/src/core/constants'
 import { type Vec3, vecCross, vecDot, vecMinus, vecNormalize } from 'nebulosa/src/math/linear-algebra/vec3'
 import { brentRoot } from 'nebulosa/src/math/numerical/optimization'
 import { normalizePI } from 'nebulosa/src/math/units/angle'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
 import type { JupiterGrsModel } from './jupiter.store'
-import { OBSERVING_PRESETS, type PlanningSite, PlanningNight, SEARCH_STEP_DAYS } from './observingplanner.astronomy'
+import type { PlanningSite } from './observingplanner.astronomy'
+// oxfmt-ignore
+import { kernelReadiness as planetaryReadiness, type PlanetaryFallbackReason, type PlanetaryKernels, type PlanetarySource, type PlanetarySourceMiss, PlanetarySourceUnavailableError, type SatelliteSourceConfig, type SourcedResult as PlanetarySourcedResult, toolkitTime, withSatelliteSource, yieldToEventLoop } from './planetary.source'
+// oxfmt-ignore
+import { overlapsOf, type PlanetEventVisibility, type PlanetNight, type PlanetVisibilityStatus, rank, siteNights, type SiteReasons, siteVisibility, subtract, type VisiblePart } from './planetary.visibility'
 import type { TimeSpan } from './sky/sun'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 import type { SpiceEphemerisPolicy } from './spicekernels.store'
@@ -22,13 +22,15 @@ import type { SpiceEphemerisPolicy } from './spicekernels.store'
 // Astronomy of the Jupiter Observing Planner: the apparent view of Jupiter and its Galilean satellites at an instant, the
 // sampled tracks of the satellites, and the phenomena over a range (Great Red Spot transits, satellite transits, shadow
 // transits, occultations, eclipses, and mutual events) with their visibility from a site. Every computation takes all its
-// states from one source chosen once: the kernels of the SPICE Kernel Library when they resolve every Jovian body, else
-// the analytical VSOP87E + L1.2 theories, unless the ephemeris policy is spkOnly, which fails instead. A kernel miss in
-// the middle of a computation discards it and reruns it whole from the theories, so sources are never mixed; Horizons is
-// never asked. Long computations run in chunks that yield to the event loop and re-read the kernel snapshot, restarting
-// when its generation changed so no closed kernel is ever read. Phenomena are geocentric; a site only decides when they
-// can be watched, with the planetary constraints of the Observing Planner on Jupiter's own altitude (its local VSOP87E
-// position), which is a separate question from the phenomena. Angles are radians and times Unix milliseconds (UTC).
+// states from one source chosen once with the shared orchestration of planetary.source.ts: the kernels of the SPICE
+// Kernel Library when they resolve every Jovian body, else the analytical VSOP87E + L1.2 theories, unless the ephemeris
+// policy is spkOnly, which fails instead; sources are never mixed and Horizons is never asked. Long computations run in
+// chunks that restart when the kernel generation changed. Phenomena are geocentric; a site only decides when they can be
+// watched (planetary.visibility.ts), with the planetary constraints of the Observing Planner on Jupiter's own altitude,
+// which is a separate question from the phenomena. Angles are radians and times Unix milliseconds (UTC).
+
+// NAIF code of Jupiter's centre in the Observing Planner's planning bodies.
+const JUPITER_CODE = '599'
 
 // Version of the Jupiter prediction model; changes whenever the meaning of a computed field changes.
 export const JUPITER_MODEL_VERSION = 1
@@ -39,41 +41,23 @@ export type JupiterEventKind = 'grsTransit' | JovianPhenomenonKind | 'mutualOccu
 // Every Jupiter event kind, in display order.
 export const JUPITER_EVENT_KINDS: readonly JupiterEventKind[] = ['grsTransit', 'satelliteTransit', 'shadowTransit', 'satelliteOccultation', 'satelliteEclipse', 'mutualOccultation', 'mutualEclipse']
 
-// Why the analytical theories were used instead of the kernels:
-// - noKernel: no kernel is enabled; loading: the kernels are still being opened at the start of the server;
-// - targetMissing: no kernel has a Jovian body; missingCenter: a body is relative to a center no kernel has;
-// - outOfCoverage: an epoch falls outside the segments or in a gap;
-// - unsupportedFrame or unsupportedType: the selected segment cannot be evaluated; cycle: a center chain never ends.
-export type JupiterFallbackReason = 'noKernel' | 'loading' | 'targetMissing' | 'missingCenter' | 'outOfCoverage' | 'unsupportedFrame' | 'unsupportedType' | 'cycle'
+// Why the analytical theories were used instead of the kernels (see PlanetaryFallbackReason).
+export type JupiterFallbackReason = PlanetaryFallbackReason
 
 // The kernel state that could not be resolved.
-export interface JupiterSourceMiss {
-	// Jovian body requested.
-	readonly target: JovianBody
-	// NAIF code of the body of the chain where resolution stopped.
-	readonly body: number
-	// Epoch that could not be resolved, Unix milliseconds; absent when no epoch was evaluated.
-	readonly time?: number
+export type JupiterSourceMiss = PlanetarySourceMiss<JovianBody>
+
+// The analytical theories of a Jupiter computation.
+interface AnalyticalJupiterSource {
+	readonly kind: 'analytical'
+	// Planetary theory of the Sun, the Earth and Jupiter.
+	readonly planetary: 'VSOP87E'
+	// Satellite theory of the Galilean moons.
+	readonly satellites: 'L1.2'
 }
 
 // Source of the states of a computation.
-export type JupiterSource =
-	| {
-			readonly kind: 'analytical'
-			// Planetary theory of the Sun, the Earth and Jupiter.
-			readonly planetary: 'VSOP87E'
-			// Satellite theory of the Galilean moons.
-			readonly satellites: 'L1.2'
-			// Why the kernels were not used.
-			readonly fallbackReason: JupiterFallbackReason
-			// The state the kernels could not resolve, when one was tried.
-			readonly miss?: JupiterSourceMiss
-	  }
-	| {
-			readonly kind: 'spk'
-			// Ids of the kernels that supplied each body.
-			readonly kernels: Readonly<Partial<Record<JovianBody, readonly string[]>>>
-	  }
+export type JupiterSource = PlanetarySource<JovianBody, AnalyticalJupiterSource>
 
 // Identity of a computed result: the model, its source, and the inputs that change it.
 export interface JupiterSignature {
@@ -91,124 +75,34 @@ export interface JupiterSignature {
 
 // Thrown when the ephemeris policy is spkOnly and the kernels cannot give a whole computation, or when the kernel set
 // kept changing during one.
-export class JupiterSourceUnavailableError extends Error {
-	constructor(
-		readonly reason: JupiterFallbackReason | 'generationChanged',
-		readonly miss?: JupiterSourceMiss,
-	) {
-		super(reason === 'generationChanged' ? 'The SPICE kernels changed during the computation' : `The SPICE kernels cannot give the Jovian states (${reason})`)
+export class JupiterSourceUnavailableError extends PlanetarySourceUnavailableError<JovianBody> {
+	constructor(reason: JupiterFallbackReason | 'generationChanged', miss?: JupiterSourceMiss) {
+		super(reason === 'generationChanged' ? 'The SPICE kernels changed during the computation' : `The SPICE kernels cannot give the Jovian states (${reason})`, reason, miss)
 	}
 }
 
 // Live kernel snapshots of the SPICE Kernel Library.
-export interface JupiterKernels {
-	readonly current: () => SpiceKernelSnapshot
-}
+export type JupiterKernels = PlanetaryKernels
 
-// Restarts allowed when the kernel generation changes during a computation.
-const GENERATION_RESTARTS = 2
-
-// Yields to the event loop.
-function yieldToEventLoop() {
-	return new Promise<void>((resolve) => {
-		setImmediate(resolve)
-	})
-}
-
-// Fallback reason of a kernel miss: a missing requested body is a missing target, a missing link of its chain a missing center.
-function missReason(miss: JovianEphemerisMiss): JupiterFallbackReason {
-	const reason: SpkMissReason = miss.reason
-	if (reason === 'missing') return miss.body === JOVIAN_NAIF[miss.target] ? 'targetMissing' : 'missingCenter'
-	if (reason === 'coverage') return 'outOfCoverage'
-	if (reason === 'frame') return 'unsupportedFrame'
-	if (reason === 'dataType') return 'unsupportedType'
-	return 'cycle'
-}
-
-// Why a snapshot cannot even be tried, or undefined when its set has a segment for every Jovian body.
-function snapshotReason(snapshot: SpiceKernelSnapshot): { readonly reason: JupiterFallbackReason; readonly miss?: JupiterSourceMiss } | undefined {
-	if (snapshot.loading) return { reason: 'loading' }
-	if (!snapshot.set) return { reason: 'noKernel' }
-	if (hasJovianTargets(snapshot.set)) return undefined
-	const target = JOVIAN_BODIES.find((body) => !snapshot.set!.bodies.has(JOVIAN_NAIF[body]))!
-	return { reason: 'targetMissing', miss: { target, body: JOVIAN_NAIF[target] } }
-}
-
-// Kernel ids that supplied each body of an SPK ephemeris.
-function kernelsOf(ephemeris: SpkJovianEphemeris): Partial<Record<JovianBody, readonly string[]>> {
-	const kernels: Partial<Record<JovianBody, readonly string[]>> = {}
-	for (const [body, ids] of ephemeris.kernelsByBody) kernels[body] = [...ids]
-	return kernels
+// How the Jovian system is evaluated from the kernels or the VSOP87E + L1.2 theories.
+const JOVIAN_SOURCE: SatelliteSourceConfig<JovianBody, JovianEphemeris, AnalyticalJupiterSource> = {
+	naif: JOVIAN_NAIF,
+	analytical: analyticalJovianEphemeris,
+	analyticalSource: { kind: 'analytical', planetary: 'VSOP87E', satellites: 'L1.2' },
+	spk: spkJovianEphemeris,
+	miss: JovianEphemerisMiss,
+	unavailable: (reason, miss) => new JupiterSourceUnavailableError(reason, miss),
 }
 
 // Result of a computation and the source it used.
-export interface SourcedResult<T> {
-	readonly results: readonly T[]
-	readonly source: JupiterSource
-	readonly snapshot: SpiceKernelSnapshot
-}
+export type SourcedResult<T> = PlanetarySourcedResult<JovianBody, AnalyticalJupiterSource, T>
 
-// Runs `count` chunks of a computation with one source for all of them, yielding to the event loop and checking `signal`
-// between chunks. The kernels are tried first when they have every Jovian body; a JovianEphemerisMiss in any chunk
-// discards the kernel results and reruns every chunk from the analytical theories, or throws
-// JupiterSourceUnavailableError under spkOnly. A kernel computation restarts from the first chunk when the kernel
-// generation changed during a yield, at most GENERATION_RESTARTS times. `interpolate` wraps the source for dense
-// sampling; a single instant is evaluated directly.
-export async function withJovianSource<T>(kernels: JupiterKernels, count: number, chunk: (ephemeris: JovianEphemeris, index: number) => T, interpolate: boolean, signal?: AbortSignal): Promise<SourcedResult<T>> {
-	let restarts = 0
-
-	attempts: while (true) {
-		const snapshot = kernels.current()
-		let fallback = snapshotReason(snapshot)
-
-		if (fallback === undefined) {
-			const spk = spkJovianEphemeris(snapshot.set!)
-			const ephemeris = interpolate ? interpolatedJovianEphemeris(spk) : spk
-			const results: T[] = []
-
-			try {
-				for (let i = 0; i < count; i++) {
-					if (i > 0) {
-						await yieldToEventLoop()
-						signal?.throwIfAborted()
-
-						if (kernels.current().generation !== snapshot.generation) {
-							if (++restarts > GENERATION_RESTARTS) throw new JupiterSourceUnavailableError('generationChanged')
-							continue attempts
-						}
-					}
-
-					results.push(chunk(ephemeris, i))
-				}
-
-				return { results, source: { kind: 'spk', kernels: kernelsOf(spk) }, snapshot }
-			} catch (error) {
-				if (!(error instanceof JovianEphemerisMiss)) throw error
-				fallback = { reason: missReason(error), miss: { target: error.target, body: error.body, time: timeToUnixMillis(error.time) } }
-			}
-		}
-
-		if (snapshot.policy === 'spkOnly') throw new JupiterSourceUnavailableError(fallback.reason, fallback.miss)
-
-		const ephemeris = interpolate ? interpolatedJovianEphemeris(analyticalJovianEphemeris) : analyticalJovianEphemeris
-		const results: T[] = []
-
-		for (let i = 0; i < count; i++) {
-			if (i > 0) {
-				await yieldToEventLoop()
-				signal?.throwIfAborted()
-			}
-
-			results.push(chunk(ephemeris, i))
-		}
-
-		return { results, source: { kind: 'analytical', planetary: 'VSOP87E', satellites: 'L1.2', fallbackReason: fallback.reason, ...(fallback.miss && { miss: fallback.miss }) }, snapshot }
-	}
-}
-
-// Toolkit instant of a Unix time in milliseconds.
-function toolkitTime(time: number): Time {
-	return timeUnix(time / 1000, true)
+// Runs `count` chunks of a computation over every Jovian body with one source for all of them (see
+// withSatelliteSource): the kernels when they resolve every Jovian body, else VSOP87E + L1.2, or
+// JupiterSourceUnavailableError under spkOnly. `interpolate` wraps the source for dense sampling; a single instant is
+// evaluated directly.
+export function withJovianSource<T>(kernels: JupiterKernels, count: number, chunk: (ephemeris: JovianEphemeris, index: number) => T, interpolate: boolean, signal?: AbortSignal): Promise<SourcedResult<T>> {
+	return withSatelliteSource(kernels, JOVIAN_SOURCE, JOVIAN_BODIES, count, chunk, interpolate ? interpolatedJovianEphemeris : undefined, signal)
 }
 
 // Great Red Spot model of the toolkit from the stored model.
@@ -485,7 +379,7 @@ export interface JupiterEventContacts {
 }
 
 // Whether an event can be watched from the site.
-export type JupiterVisibilityStatus = 'observable' | 'partial' | 'notObservable' | 'unknownNoSite'
+export type JupiterVisibilityStatus = PlanetVisibilityStatus
 
 // Why an event, or part of it, cannot be watched from the site:
 // - sunTooHigh: the Sun is above the planetary limit (−6°); jupiterTooLow: Jupiter is below the planetary minimum (25°);
@@ -493,26 +387,10 @@ export type JupiterVisibilityStatus = 'observable' | 'partial' | 'notObservable'
 export type JupiterVisibilityReason = 'sunTooHigh' | 'jupiterTooLow' | 'moonHidden' | 'shadowHidden'
 
 // Visibility of an event from the site.
-export interface JupiterEventVisibility {
-	readonly status: JupiterVisibilityStatus
-	// Civil date, in the site's zone, of the evening of the night holding the maximum; absent without a site.
-	readonly eveningDate?: string
-	// Parts of the event interval that can be watched, Unix milliseconds.
-	readonly windows: readonly TimeSpan[]
-	// Longest watchable part, milliseconds.
-	readonly longestMs: number
-	// Highest geometric altitude of Jupiter over the event interval.
-	readonly peakAltitude?: number
-	// Kasten–Young airmass at the peak altitude; absent below the horizon.
-	readonly peakAirmass?: number
-	// Geometric altitude of the Sun's centre at the maximum.
-	readonly sunAltitude?: number
-	// Why the event, or part of it, cannot be watched; empty when it can be watched whole.
-	readonly reasons: readonly JupiterVisibilityReason[]
-	// Position among the watchable events of the answer, 1 the best (longest watchable part, then highest peak); absent
-	// when nothing of it can be watched.
-	readonly rank?: number
-}
+export type JupiterEventVisibility = PlanetEventVisibility<JupiterVisibilityReason>
+
+// Reason codes of Jupiter's site limits.
+const SITE_REASONS: SiteReasons<JupiterVisibilityReason> = { sunTooHigh: 'sunTooHigh', planetTooLow: 'jupiterTooLow' }
 
 // The Great Red Spot of a transit.
 export interface JupiterGrsTransit {
@@ -571,18 +449,7 @@ export interface JupiterEventsRequest {
 }
 
 // A night of the site over the range, with Jupiter's watchable windows.
-export interface JupiterNight {
-	// Civil date of the evening in the site's zone.
-	readonly eveningDate: string
-	// The night, from the Sun's upper transit to the next, Unix milliseconds.
-	readonly start: number
-	readonly end: number
-	// Sunset and sunrise, Unix milliseconds; absent when the Sun does not set or rise.
-	readonly sunset?: number
-	readonly sunrise?: number
-	// Stretches with Jupiter at or above the planetary minimum altitude and the Sun at or below the planetary limit.
-	readonly windows: readonly TimeSpan[]
-}
+export type JupiterNight = PlanetNight
 
 // Events over a range.
 export interface JupiterEvents {
@@ -614,9 +481,6 @@ const GRS_WINDOW_SEARCH_DAYS = 0.1
 
 // Events whose visibility is evaluated between two yields to the event loop.
 const VISIBILITY_YIELD_EVERY = 10
-
-// Spacing of the altitude samples of an event interval, milliseconds.
-const ALTITUDE_SAMPLE_MS = 600_000
 
 // Raw events of one chunk of the scan, before the window and visibility are applied.
 interface ChunkEvents {
@@ -705,49 +569,6 @@ function definedContacts(contacts: JupiterEventContacts): JupiterEventContacts {
 	return defined
 }
 
-// Intersection of two sorted lists of spans.
-function intersect(a: readonly TimeSpan[], b: readonly TimeSpan[]): TimeSpan[] {
-	const out: TimeSpan[] = []
-
-	for (const x of a) {
-		for (const y of b) {
-			const start = Math.max(x.start, y.start)
-			const end = Math.min(x.end, y.end)
-			if (end > start) out.push({ start, end })
-		}
-	}
-
-	return out.sort((x, y) => x.start - y.start)
-}
-
-// Spans of `spans` with the parts covered by `holes` removed.
-function subtract(spans: readonly TimeSpan[], holes: readonly TimeSpan[]): TimeSpan[] {
-	let out = [...spans]
-
-	for (const hole of holes) {
-		const next: TimeSpan[] = []
-
-		for (const span of out) {
-			if (hole.end <= span.start || hole.start >= span.end) next.push(span)
-			else {
-				if (hole.start > span.start) next.push({ start: span.start, end: hole.start })
-				if (hole.end < span.end) next.push({ start: hole.end, end: span.end })
-			}
-		}
-
-		out = next
-	}
-
-	return out
-}
-
-// Total length of spans, milliseconds.
-function totalMs(spans: readonly TimeSpan[]) {
-	let sum = 0
-	for (const span of spans) sum += span.end - span.start
-	return sum
-}
-
 // Intervals in which a moon is hidden from the Earth, by moon: its centre behind Jupiter's limb (occulted) or inside
 // Jupiter's umbra (eclipsed).
 interface HiddenIntervals {
@@ -771,17 +592,11 @@ function hiddenIntervals(events: readonly ScannedEvent[]): HiddenIntervals {
 	return { occulted, eclipsed }
 }
 
-// The physically visible part of an event, before any site, and why part of it is not.
-interface VisiblePart {
-	readonly spans: readonly TimeSpan[]
-	readonly reason?: JupiterVisibilityReason
-}
-
 // The part of an event that is physically visible from the Earth: a shadow transit while its centre faces the Earth,
 // an eclipse while the moon is not behind the disk (its fading is what is watched), a mutual event while neither moon
 // is behind the disk or in the umbra; transits, occultations and Great Red Spot transits whole. A zero-length event is
 // one instant, visible or not.
-function physicallyVisible(event: ScannedEvent, { occulted, eclipsed }: HiddenIntervals): VisiblePart {
+function physicallyVisible(event: ScannedEvent, { occulted, eclipsed }: HiddenIntervals): VisiblePart<JupiterVisibilityReason> {
 	const whole: TimeSpan[] = [{ start: event.start, end: Math.max(event.end, event.start) }]
 	let holes: readonly TimeSpan[] = []
 	let reason: JupiterVisibilityReason = 'moonHidden'
@@ -803,95 +618,6 @@ function physicallyVisible(event: ScannedEvent, { occulted, eclipsed }: HiddenIn
 	return { spans: subtract(whole, holes), reason }
 }
 
-// A night of a site prepared for the visibility of the events.
-interface SiteNight {
-	readonly planning: PlanningNight
-	readonly night: JupiterNight
-}
-
-// The planning nights of a site covering [start, end): each with its PlanningNight and Jupiter's watchable windows.
-// Yields to the event loop between nights, whose Sun and Moon take a noticeable time to compute the first time.
-async function siteNights(nights: (request: AstroWeatherNightRequest) => AstroWeatherNight, site: PlanningSite, start: number, end: number, signal?: AbortSignal) {
-	const out: SiteNight[] = []
-	const { minimumAltitude, maximumSunAltitude } = OBSERVING_PRESETS.planetary
-	let time = start
-
-	while (time < end) {
-		if (out.length > 0) {
-			await yieldToEventLoop()
-			signal?.throwIfAborted()
-		}
-
-		const night = nights({ observer: site, timeZone: site.timeZone, time })
-		const planning = new PlanningNight(site, night)
-		const found = visibilityWindows(planning.bodyAt('599'), planning.location, planning.start, planning.end, { minimumAltitude, maximumSunAltitude }, { sunAt: planning.sunAt, step: SEARCH_STEP_DAYS })
-		const windows = found.map((e) => ({ start: timeToUnixMillis(e.start), end: timeToUnixMillis(e.end) }))
-		out.push({ planning, night: { eveningDate: night.sun.localDate, start: night.sun.start, end: night.sun.end, sunset: night.sun.sunset, sunrise: night.sun.sunrise, windows } })
-		time = night.sun.end
-	}
-
-	return out
-}
-
-// Visibility of an event from the nights of a site. A zero-length event is observable when its instant is physically
-// visible and inside a watchable window.
-function siteVisibility(event: ScannedEvent, visible: VisiblePart, nights: readonly SiteNight[]): JupiterEventVisibility {
-	const { minimumAltitude, maximumSunAltitude } = OBSERVING_PRESETS.planetary
-	const watchable = nights.flatMap((e) => e.night.windows)
-	const windows = intersect(visible.spans, watchable)
-	let longestMs = 0
-	for (const window of windows) longestMs = Math.max(longestMs, window.end - window.start)
-	const whole = Math.max(event.end - event.start, 0)
-	const covered = totalMs(windows)
-	const instant = whole === 0 && visible.spans.length > 0 && watchable.some((e) => event.maximum >= e.start && event.maximum <= e.end)
-	const status: JupiterVisibilityStatus = whole === 0 ? (instant ? 'observable' : 'notObservable') : longestMs === 0 ? 'notObservable' : covered >= whole - 1000 ? 'observable' : 'partial'
-
-	// The night holding the maximum, or the nearest one.
-	const holder = nights.find((e) => event.maximum >= e.night.start && event.maximum < e.night.end) ?? nights[0]
-	const { planning } = holder
-	const location = planning.location
-	const jupiterAt = planning.bodyAt('599')
-	const altitude = (time: number) => {
-		const t = planning.time(time)
-		return altitudeOf(jupiterAt(t), t, location)
-	}
-	const sunAltitude = (time: number) => {
-		const t = planning.time(time)
-		return altitudeOf(planning.sunAt(t), t, location)
-	}
-
-	let peakAltitude = altitude(event.maximum)
-	for (let time = event.start; time <= event.end; time += ALTITUDE_SAMPLE_MS) peakAltitude = Math.max(peakAltitude, altitude(time))
-	peakAltitude = Math.max(peakAltitude, altitude(event.end))
-
-	const reasons = new Set<JupiterVisibilityReason>()
-	if (visible.reason) reasons.add(visible.reason)
-
-	if (status !== 'observable') {
-		// Explain the longest part of the physically visible interval the site cannot watch.
-		const missed = subtract(visible.spans, windows).sort((a, b) => b.end - b.start - (a.end - a.start))[0]
-		const probe = missed ? (missed.start + missed.end) / 2 : event.maximum
-		if (sunAltitude(probe) > maximumSunAltitude) reasons.add('sunTooHigh')
-		if (altitude(probe) < minimumAltitude) reasons.add('jupiterTooLow')
-	}
-
-	return {
-		status,
-		eveningDate: holder.night.eveningDate,
-		windows,
-		longestMs,
-		peakAltitude,
-		peakAirmass: peakAltitude > 0 ? airmassKastenYoung(peakAltitude) : undefined,
-		sunAltitude: sunAltitude(event.maximum),
-		reasons: [...reasons],
-	}
-}
-
-// Ids of the events whose intervals intersect each event's, a zero-length event intersecting what contains its instant.
-function overlapsOf(events: readonly ScannedEvent[]): string[][] {
-	return events.map((a) => events.filter((b) => b !== a && a.start <= b.end && b.start <= a.end && (a.end > a.start || b.end > b.start)).map((b) => b.id))
-}
-
 // Computes the events over a range: scans the padded range in day chunks with one source, keeps the events overlapping
 // the range, filters them by kind and moon, and evaluates their visibility from the site when one is given. The
 // visibility of a mutual event or an eclipse uses the occultations and eclipses of every moon, filtered or not.
@@ -911,7 +637,7 @@ export async function computeEvents(kernels: JupiterKernels, nights: (request: A
 	const selected = all.filter((e) => kinds.has(e.kind) && (e.moons.length === 0 || e.moons.some((moon) => moons.has(moon))))
 	const overlaps = overlapsOf(selected)
 	// Nights over the padded range, so the parts of the events beyond the range are judged too.
-	const siteNightList = site ? await siteNights(nights, site, from, to, signal) : []
+	const siteNightList = site ? await siteNights(nights, site, JUPITER_CODE, from, to, signal) : []
 
 	const events: JupiterEvent[] = []
 
@@ -922,7 +648,7 @@ export async function computeEvents(kernels: JupiterKernels, nights: (request: A
 		}
 
 		const event = selected[i]
-		const visibility: JupiterEventVisibility = site ? siteVisibility(event, physicallyVisible(event, hidden), siteNightList) : { status: 'unknownNoSite', windows: [], longestMs: 0, reasons: physicallyVisibleReason(event, hidden) }
+		const visibility: JupiterEventVisibility = site ? siteVisibility(event, physicallyVisible(event, hidden), siteNightList, JUPITER_CODE, SITE_REASONS) : { status: 'unknownNoSite', windows: [], longestMs: 0, reasons: physicallyVisibleReason(event, hidden) }
 		events.push({ ...event, overlaps: overlaps[i], visibility })
 	}
 
@@ -935,17 +661,6 @@ export async function computeEvents(kernels: JupiterKernels, nights: (request: A
 function physicallyVisibleReason(event: ScannedEvent, hidden: HiddenIntervals): JupiterVisibilityReason[] {
 	const { reason } = physicallyVisible(event, hidden)
 	return reason ? [reason] : []
-}
-
-// Ranks the watchable events in place: the longest watchable part first, then the highest peak altitude.
-function rank(events: JupiterEvent[]) {
-	const watchable = events.filter((e) => e.visibility.longestMs > 0).sort((a, b) => b.visibility.longestMs - a.visibility.longestMs || (b.visibility.peakAltitude ?? 0) - (a.visibility.peakAltitude ?? 0))
-	const ranks = new Map(watchable.map((e, i) => [e.id, i + 1]))
-
-	for (let i = 0; i < events.length; i++) {
-		const value = ranks.get(events[i].id)
-		if (value !== undefined) events[i] = { ...events[i], visibility: { ...events[i].visibility, rank: value } }
-	}
 }
 
 // Readiness of the kernels for the planner over a range:
@@ -978,36 +693,10 @@ export interface JupiterSourceReport {
 	readonly probes: number
 }
 
-// Spacing of the readiness probes, milliseconds.
-const PROBE_STEP_MS = 6 * 3_600_000
-
-// Probes the kernels over a range: every Jovian body at every 6 hours, both ends included. Not a guarantee for a scan,
-// which evaluates many more epochs, but an explanation of what the kernels lack.
+// Probes the kernels over a range for every Jovian body (see kernelReadiness of planetary.source.ts: every 6 hours,
+// both ends included, for the ranges of the planner). Not a guarantee for a scan, which evaluates many more epochs, but
+// an explanation of what the kernels lack.
 export function kernelReadiness(snapshot: SpiceKernelSnapshot, { start, end }: JupiterSourceRequest): JupiterSourceReport {
-	const { policy, generation } = snapshot
-	const unready = (readiness: JupiterKernelReadiness, reason: JupiterFallbackReason, probes: number, miss?: JupiterSourceMiss): JupiterSourceReport => ({ readiness, source: policy === 'spkOnly' ? 'unavailable' : 'analytical', reason, ...(miss && { miss }), policy, generation, probes })
-	const fallback = snapshotReason(snapshot)
-	if (fallback) return unready('missingDependencies', fallback.reason, 0, fallback.miss)
-
-	const ephemeris = spkJovianEphemeris(snapshot.set!)
-	let probes = 0
-
-	for (let time = start; ; time = Math.min(end, time + PROBE_STEP_MS)) {
-		probes++
-
-		for (const body of JOVIAN_BODIES) {
-			try {
-				ephemeris.position(body, toolkitTime(time))
-			} catch (error) {
-				if (!(error instanceof JovianEphemerisMiss)) throw error
-				const reason = missReason(error)
-				const readiness = reason === 'outOfCoverage' ? 'partialCoverage' : reason === 'unsupportedFrame' || reason === 'unsupportedType' ? 'unsupported' : 'missingDependencies'
-				return unready(readiness, reason, probes, { target: error.target, body: error.body, time })
-			}
-		}
-
-		if (time >= end) break
-	}
-
-	return { readiness: 'readyForJupiter', source: 'spk', policy, generation, probes }
+	const report = planetaryReadiness(JOVIAN_SOURCE, JOVIAN_BODIES, snapshot, start, end)
+	return { ...report, readiness: report.readiness === 'ready' ? 'readyForJupiter' : report.readiness }
 }

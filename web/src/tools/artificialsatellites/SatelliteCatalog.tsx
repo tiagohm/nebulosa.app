@@ -15,7 +15,7 @@ import { artificialSatellitesState, CATALOG_PAGE_SIZE, searchSatellites, selectS
 
 // Catalog tab of Artificial Satellites: the local search of the server's catalog (never CelesTrak), its pages, and the
 // favorites of the profile. The groups and their downloads are in the Settings of the tool, the imports in the Import
-// Elements popover of its workspace actions. A row chosen also tells the view, which shows the details on narrow screens.
+// Elements popover of its workspace actions.
 
 // Names of the SATCAT object types.
 const OBJECT_TYPE_NAMES = { payload: 'Payload', rocketBody: 'Rocket body', debris: 'Debris', unknown: 'Unknown' } as const
@@ -63,18 +63,13 @@ function SearchForm() {
 interface SatelliteRowProps {
 	readonly satellite: SatelliteSummary
 	readonly favorite: boolean
-	// Called after the row is chosen, even when its satellite was already the one selected.
-	readonly onSelect: () => void
 }
 
 // Row of one object of the catalog.
-function SatelliteRow({ satellite, favorite, onSelect }: SatelliteRowProps) {
+function SatelliteRow({ satellite, favorite }: SatelliteRowProps) {
 	const { selectedId } = useSnapshot(artificialSatellitesState)
 	const { noradId, name, cosparId, objectType, elementKind, elementEpoch } = satellite
-	const select = () => {
-		void selectSatellite(artificialSatellitesState, noradId, activeSite(activeProfile(profileState), siteState.sites))
-		onSelect()
-	}
+	const select = () => void selectSatellite(artificialSatellitesState, noradId, activeSite(activeProfile(profileState), siteState.sites))
 
 	return (
 		<Row selected={selectedId === noradId} onSelect={select}>
@@ -100,13 +95,8 @@ function SatelliteRow({ satellite, favorite, onSelect }: SatelliteRowProps) {
 	)
 }
 
-interface CatalogProps {
-	// Called after a row is chosen.
-	readonly onSelect: () => void
-}
-
 // Objects of the page, or why there are none.
-function Results({ onSelect }: CatalogProps) {
+function Results() {
 	const { results, searching, searchError, offset } = useSnapshot(artificialSatellitesState)
 	const profiles = useSnapshot(profileState)
 	const { snapshot } = useSnapshot(satelliteCatalogState)
@@ -122,7 +112,7 @@ function Results({ onSelect }: CatalogProps) {
 		<div className="flex min-h-80 flex-1 flex-col">
 			<Table className="flex-1 rounded-none border-0" columns={[{ key: 'favorite', label: <span className="sr-only">Favorite</span> }, 'Name', { key: 'norad', label: 'NORAD', numeric: true }, 'COSPAR', 'Type', 'Elements (epoch)']}>
 				{items.map((satellite) => (
-					<SatelliteRow key={satellite.noradId} satellite={satellite} favorite={favorites.includes(satellite.noradId)} onSelect={onSelect} />
+					<SatelliteRow key={satellite.noradId} satellite={satellite} favorite={favorites.includes(satellite.noradId)} />
 				))}
 			</Table>
 			<div className="flex flex-none items-center justify-center gap-3 border-t border-line-100 px-4 py-2">
@@ -141,11 +131,11 @@ function Results({ onSelect }: CatalogProps) {
 }
 
 // Catalog tab.
-export function SatelliteCatalog({ onSelect }: CatalogProps) {
+export function SatelliteCatalog() {
 	return (
 		<div className="flex h-full min-h-0 flex-col overflow-y-auto">
 			<SearchForm />
-			<Results onSelect={onSelect} />
+			<Results />
 		</div>
 	)
 }

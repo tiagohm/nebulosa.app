@@ -14,6 +14,7 @@ import { MountPointingModel } from './mountpointing/MountPointingModel'
 import { MountRemoteControl } from './mountremotecontrol/MountRemoteControl'
 import { ObservatoryCamerasView } from './observatorycameras/ObservatoryCamerasView'
 import { SolarEclipseMap } from './solareclipse/SolarEclipseMap'
+import { SpiceKernelLibrary } from './spicekernels/SpiceKernelLibrary'
 
 // Static registry of the Tools workspace: standalone utilities that need neither a camera view nor an
 // image document. The contextual tools and camera operations of Images are not listed
@@ -53,6 +54,7 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 	'mount-pointing-model': { id: 'mount-pointing-model', label: 'Mount Pointing Model', description: 'Inspects, refits, and validates the pointing models of the mount.', icon: 'mount', view: MountPointingModel },
 	'meridian-flip-monitor': { id: 'meridian-flip-monitor', label: 'Meridian Flip Monitor', description: 'Follows the tracked target through the meridian and reports when a flip may be needed, without moving the mount.', icon: 'meridian', view: MeridianFlipMonitorView },
 	'observatory-cameras': { id: 'observatory-cameras', label: 'Observatory Cameras', description: 'Live video of the IP security cameras watching the observatory, relayed by the server over WebRTC.', icon: 'video', view: ObservatoryCamerasView },
+	'spice-kernel-library': { id: 'spice-kernel-library', label: 'SPICE Kernel Library', description: 'SPK ephemeris files for accurate positions without asking JPL: planetary kernels from NAIF, asteroids and comets from Horizons, or your own.', icon: 'orbit', view: SpiceKernelLibrary },
 	'alpaca-server': { id: 'alpaca-server', label: 'Alpaca Server', description: 'Publishes selected devices to ASCOM Alpaca clients on the network.', icon: 'server' },
 }
 

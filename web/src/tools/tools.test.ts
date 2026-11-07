@@ -18,6 +18,7 @@ describe('registry', () => {
 			'mount-pointing-model',
 			'meridian-flip-monitor',
 			'observatory-cameras',
+			'spice-kernel-library',
 			'alpaca-server',
 		])
 		for (const id of TOOL_IDS) expect(TOOL_DEFINITIONS[id].id).toBe(id)

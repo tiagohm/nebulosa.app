@@ -31,6 +31,7 @@ export const TOOL_IDS = [
 	'mount-pointing-model',
 	'meridian-flip-monitor',
 	'observatory-cameras',
+	'spice-kernel-library',
 	'alpaca-server',
 ] as const
 

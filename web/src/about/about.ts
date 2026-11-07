@@ -50,7 +50,8 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 		credits: [
 			{ name: 'Open-Meteo', url: 'https://open-meteo.com/', use: 'Hourly weather forecast of Astro Weather.', license: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' }, notice: 'Free tier for non-commercial use.' },
 			{ name: '7Timer!', url: 'https://www.7timer.info/', use: 'Seeing and transparency forecast of Astro Weather.', notice: 'Free for non-commercial use. Ye, Q.-Z. 2011, PASP, 123, 113.' },
-			{ name: 'Horizons', owner: 'NASA/JPL Solar System Dynamics', url: 'https://ssd-api.jpl.nasa.gov/doc/horizons.html', use: 'Accurate positions of solar system bodies in the Sky.' },
+			{ name: 'Horizons', owner: 'NASA/JPL Solar System Dynamics', url: 'https://ssd-api.jpl.nasa.gov/doc/horizons.html', use: 'Accurate positions of solar system bodies in the Sky, and small-body SPK kernels of the SPICE Kernel Library.' },
+			{ name: 'SPICE generic kernels', owner: 'NASA/JPL Navigation and Ancillary Information Facility (NAIF)', url: 'https://naif.jpl.nasa.gov/naif/data_generic.html', use: 'DE440 planetary ephemeris downloaded by the SPICE Kernel Library.', notice: 'Park, R. S. et al. 2021, AJ, 161, 105.' },
 			{ name: 'Small-Body Database', owner: 'NASA/JPL Solar System Dynamics', url: 'https://ssd-api.jpl.nasa.gov/doc/sbdb.html', use: 'Search, orbits, and details of asteroids and comets.' },
 			{ name: 'Close Approach Data', owner: 'NASA/JPL Solar System Dynamics', url: 'https://ssd-api.jpl.nasa.gov/doc/cad.html', use: 'Encounters listed by the Close Approaches tool.' },
 			{ name: 'SkyBoT', owner: 'LTE, Observatoire de Paris / CNRS (developed by IMCCE)', url: 'https://ssp.imcce.fr/webservices/skybot/', use: 'Solar system objects in the field of Image Annotation.', notice: 'This research has made use of LTE SkyBoT VO tool.' },

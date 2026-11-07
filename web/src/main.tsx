@@ -46,6 +46,7 @@ import { handleMeridianFlipEvent, meridianFlipState, refreshMeridianFlip } from 
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
 import { handleObservatoryCameraEvent, observatoryCamerasState, refreshObservatoryCameras } from './tools/observatorycameras/observatorycameras'
 import { handlePlayerEvent, watchPlayers } from './tools/observatorycameras/player'
+import { handleSpiceKernelEvent, refreshSpiceKernels, spiceKernelsState } from './tools/spicekernels/spicekernels'
 
 // Entry point of the browser bundle: restores the URL route, reads the workspace (saved connections and profiles) from
 // the server, which the shell waits for, writes back what the tab changes in it, keeps the view state of the tab in
@@ -102,6 +103,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handlePlayerEvent(event) },
 	{ handle: (event) => handleMeridianFlipEvent(meridianFlipState, event), refresh: () => refreshMeridianFlip(meridianFlipState) },
 	{ handle: (event) => handleSatelliteEvent(satelliteCatalogState, event), refresh: () => refreshSatelliteCatalog(satelliteCatalogState) },
+	{ handle: (event) => handleSpiceKernelEvent(spiceKernelsState, event), refresh: () => refreshSpiceKernels(spiceKernelsState) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
 	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },
 	{ handle: (event) => handleMountPointingEvent(mountPointingRuntime, event), refresh: () => refreshMountPointing(mountPointingRuntime) },

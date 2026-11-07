@@ -12,7 +12,7 @@ import type { SkySelection } from './sky'
 // Position section with its provider and instant, and the Visibility section of the observer's rise, transit, and set.
 
 // Description of each fallback reason.
-const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 'Horizons cannot be reached', breakerOpen: 'Horizons failed repeatedly and is paused' } as const
+const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 'Horizons cannot be reached', breakerOpen: 'Horizons failed repeatedly and is paused', offline: 'the offline policy forbids asking Horizons' } as const
 
 // Rows of the apparent coordinates of the selection, with their provider and instant; `children` adds rows before
 // the note.
@@ -60,7 +60,7 @@ export function PositionSection({ selection, timeZone, children }: { readonly se
 // Describes how and when a position was computed; a constellation is located at its label, a fixed J2000
 // point near its center. Times are shown in a time zone, or in the browser's when absent.
 function positionNote(position: SkyPosition, constellation: boolean, timeZone: string) {
-	const source = position.source === 'horizons' ? 'JPL Horizons' : position.fallbackReason ? `local model (${FALLBACK_REASONS[position.fallbackReason]})` : 'local model'
+	const source = position.source === 'horizons' ? 'JPL Horizons' : position.source === 'spk' ? 'SPK kernels' : position.fallbackReason ? `local model (${FALLBACK_REASONS[position.fallbackReason]})` : 'local model'
 	const place = `Apparent ${position.center} place at ${formatLocalTime(position.time, timeZone, Date.now())}, from ${source}.`
 	return constellation ? `${place} The position is the constellation label, a fixed J2000 point near its center.` : place
 }

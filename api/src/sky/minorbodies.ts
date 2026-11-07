@@ -249,6 +249,11 @@ export class MinorBodies {
 		return { kind: 'notFound', message: result.message }
 	}
 
+	// Returns a body by SPK-ID from the cache alone, never asking SBDB; undefined when it was not resolved recently.
+	cached(spkId: string): ResolvedMinorBody | undefined {
+		return this.#bodies.get(spkId)
+	}
+
 	// Returns a body by SPK-ID, from the cache or SBDB; undefined when SBDB does not know it.
 	async body(spkId: string, signal?: AbortSignal): Promise<ResolvedMinorBody | undefined> {
 		const cached = this.#bodies.get(spkId)

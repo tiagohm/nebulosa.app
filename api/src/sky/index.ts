@@ -35,7 +35,7 @@ export const spiceKernels = new SpiceKernelRuntime()
 export const minorBodies = new MinorBodies({ queue: ssdRequests })
 
 // Services shared by the sky routes and the sky locator.
-const services: SkyServices = { catalog, constellations, ephemeris: new SkyEphemeris({ queue: ssdRequests }), minorBodies }
+const services: SkyServices = { catalog, constellations, ephemeris: new SkyEphemeris({ queue: ssdRequests, kernels: spiceKernels }), minorBodies }
 
 // Sky data of the image annotation: the J2000 objects and figures of a field.
 export const annotationSky: AnnotationSky = {

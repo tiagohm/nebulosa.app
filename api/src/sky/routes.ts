@@ -71,9 +71,10 @@ function refKey(ref: SkyObjectRef) {
 export type SkyLocator = (ref: SkyObjectRef, request: PositionRequest) => Promise<SkyPosition | undefined>
 
 // Resolves an object identity to an ephemeris target; undefined for an unknown catalog id or
-// constellation. A minor body whose elements cannot be read from SBDB is still resolved, for Horizons alone. A satellite
-// has no ephemeris target.
-async function resolveTarget({ catalog, constellations, minorBodies }: SkyServices, ref: SkyObjectRef, signal?: AbortSignal): Promise<EphemerisTarget | undefined> {
+// constellation. A minor body whose elements cannot be read from SBDB is still resolved, for Horizons or the SPK kernels
+// alone; when the ephemeris policy forbids requests to JPL, its elements come only from what SBDB already answered. A
+// satellite has no ephemeris target.
+async function resolveTarget({ catalog, constellations, ephemeris, minorBodies }: SkyServices, ref: SkyObjectRef, signal?: AbortSignal): Promise<EphemerisTarget | undefined> {
 	if (ref.kind === 'catalog') {
 		const object = catalogObject(catalog, ref.id)
 		return object && { type: 'catalog', object }
@@ -86,6 +87,8 @@ async function resolveTarget({ catalog, constellations, minorBodies }: SkyServic
 		const constellation = constellationDetails(constellations, ref.code)
 		return constellation && { type: 'catalog', object: { rightAscension: constellation.rightAscension, declination: constellation.declination, pmRA: 0, pmDEC: 0 } }
 	}
+
+	if (!ephemeris.remoteAllowed) return { type: 'minorBody', spkId: ref.spkId, elements: minorBodies.cached(ref.spkId)?.elements }
 
 	try {
 		const body = await minorBodies.body(ref.spkId, signal)
@@ -167,7 +170,8 @@ export function createSkyRoutes(services: SkyServices) {
 		},
 		'/api/sky/position': {
 			// Position of an object, with its events for an observer. 404 for an unknown catalog object, 502
-			// when Horizons rejects the target, and 503 when no provider can compute it. A satellite is located by the satellite catalog,
+			// when Horizons rejects the target, and 503 when no provider can compute it: serviceUnavailable, or the
+			// coverageUnavailable, missingDependency, or offline of the ephemeris policy. A satellite is located by the satellite catalog,
 			// without events: 404 notFound or noElements, 422 predictionUnreliable.
 			POST: async (req) => {
 				const { target: ref, time, observer, mode } = (await req.json()) as SkyPositionRequest
@@ -191,7 +195,7 @@ export function createSkyRoutes(services: SkyServices) {
 					const events = observer ? ephemeris.events(target, time, observer, refKey(ref)) : undefined
 					return Response.json({ position, events } satisfies SkyPositionResponse)
 				} catch (error) {
-					if (error instanceof EphemerisUnavailableError) return errorResponse(error.message, 503, 'serviceUnavailable')
+					if (error instanceof EphemerisUnavailableError) return errorResponse(error.message, 503, error.code ?? 'serviceUnavailable')
 					if (error instanceof HorizonsEphemerisError) return errorResponse(error.message, 502, 'rejected')
 					throw error
 				}

@@ -62,8 +62,10 @@ import { SatelliteAutoDownload } from './satellites.auto'
 import { SatelliteEphemeris } from './satellites.ephemeris'
 import { SatelliteStore } from './satellites.store'
 import { SatelliteSync } from './satellites.sync'
-import { annotationSky, createSkyApiRoutes, minorBodies, skyLocator, ssdRequests } from './sky'
+import { annotationSky, createSkyApiRoutes, minorBodies, skyLocator, spiceKernels, ssdRequests } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
+import { createSpiceKernelRoutes, SpiceKernelLibrary } from './spicekernels'
+import { SpiceKernelStore } from './spicekernels.store'
 import { createStarProfileRoutes, StarProfileService } from './starprofile'
 import { createStarDetectionRoutes, StarDetectionService } from './stars'
 import { createStreakDetectionRoutes, StreakDetectionService } from './streaks'
@@ -347,6 +349,29 @@ export type {
 	SatelliteTracksResponse,
 } from './satellites'
 export type { RejectedRecord, SatelliteRecordError } from './satellites.elements'
+export type {
+	SpiceCatalogItem,
+	SpiceEphemerisPolicy,
+	SpiceKernelCoverage,
+	SpiceKernelDetails,
+	SpiceKernelDownloadRequest,
+	SpiceKernelErrorCode,
+	SpiceKernelEvent,
+	SpiceKernelGenerateRequest,
+	SpiceKernelImportResponse,
+	SpiceKernelJob,
+	SpiceKernelJobKind,
+	SpiceKernelJobState,
+	SpiceKernelLibrarySnapshot,
+	SpiceKernelReadiness,
+	SpiceKernelRecord,
+	SpiceKernelSettingsRequest,
+	SpiceKernelSourceKind,
+	SpiceKernelState,
+	SpiceKernelSummary,
+	SpiceKernelUpdateRequest,
+	SpiceSegmentRecord,
+} from './spicekernels'
 export type { SatelliteElementsRef, SatelliteEphemerisRow, SatelliteGroundTrack, SatelliteOrbitSummary, SatellitePassPoint, SatellitePassPrediction, SatellitePosition, SatelliteQuality, SatelliteQualityReason, SatelliteSuitability, SatelliteTrack, SatelliteVisiblePart } from './satellites.ephemeris'
 export type { SatelliteCatalogMetadata, SatelliteElementKind, SatelliteObjectType, SatelliteProvider, SatelliteSearchPage, SatelliteSourceState, SatelliteSummary } from './satellites.store'
 export type { SatelliteRefreshErrorCode } from './satellites.sync'
@@ -937,6 +962,10 @@ const satelliteSync = new SatelliteSync(satelliteStore, () => satellites.changed
 const satellites = new SatelliteService(satelliteStore, satelliteSync, new SatelliteEphemeris((utc) => earthOrientation.coverage(utc)), broadcast)
 const satelliteAutoDownload = new SatelliteAutoDownload(satellites)
 
+// SPICE Kernel Library: the SPK files of the operational database and its directory, the runtime set the Sky ephemeris
+// evaluates, and the curated downloads and Horizons generations, which share the JPL queue.
+const spiceKernelLibrary = new SpiceKernelLibrary(new SpiceKernelStore(database), spiceKernels, broadcast, ssdRequests)
+
 // Opens the operational database and brings its schema up to date, before anything is served, creates the Default
 // profile when it has none, and records the operations and the pointing model acquisitions a previous run left running
 // as interrupted; nothing resumes them. Throws an Error saying why it cannot be opened (another server uses it, the file
@@ -992,6 +1021,8 @@ const RESOURCES: readonly Disposable[] = [
 	domes,
 	solarEclipses,
 	satelliteAutoDownload,
+	spiceKernelLibrary,
+	spiceKernels,
 	operations,
 	connections,
 ]
@@ -1050,6 +1081,13 @@ export function startStores() {
 	void calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))
 	void imageStacking.ready().catch((error: unknown) => console.error('The image stacking projects could not be opened', error))
 	void liveStacking.ready().catch((error: unknown) => console.error('The live stacking products could not be opened', error))
+}
+
+// Opens the kernels of the SPICE Kernel Library in the background, after finishing what a previous run left (staged
+// files, pending deletions) and checking their files; until then the Sky uses its other sources. Called by the app after
+// startDatabase; a test that only imports this module opens no kernel. Never rejects.
+export function startSpiceKernels() {
+	void spiceKernelLibrary.start()
 }
 
 // Starts the automatic downloads of the CelesTrak groups an operator turned on: one run now, then every 6 hours, each
@@ -1139,6 +1177,7 @@ export const routes = {
 	...createAstroWeatherRoutes(astroWeather),
 	...createAstronomicalTimeRoutes(astronomicalTime),
 	...createSatelliteRoutes(satellites),
+	...createSpiceKernelRoutes(spiceKernelLibrary),
 	'/api/ws': {
 		// Upgrades to the event WebSocket, attaching the client id the tab names itself with; Bun sends the handshake
 		// response itself.

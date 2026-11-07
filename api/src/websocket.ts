@@ -28,6 +28,7 @@ import type { ObservatoryCameraEvent } from './observatorycameras'
 import type { OperationEvent } from './operations'
 import type { PlateSolvingEvent } from './platesolving'
 import type { SatellitesChangedEvent } from './satellites'
+import type { SpiceKernelEvent } from './spicekernels'
 import type { StarDetectionEvent } from './stars'
 import type { StreakDetectionEvent } from './streaks'
 import type { TargetCenteringEvent } from './targetcentering'
@@ -45,7 +46,7 @@ import type { WorkspaceEvent } from './workspace'
 // Any event pushed to the browser tabs: connection and device events of the connection registry, the operation events
 // of the operation registry, the events of the capture, Auto Focus, TPPA, mount pointing, mount nudge, mount remote control, meridian flip monitor, and dome manual rotation services,
 // the captured frames of the frame registry, the guiding sessions, the changes of the external program settings, of the observatory cameras, and of the focuser backlash
-// compensations, the star detection, streak detection, plate solving, annotation, and image processing jobs, the created notifications, the INDI device directory
+// compensations, the star detection, streak detection, plate solving, annotation, and image processing jobs, the created notifications, the changes and acquisition jobs of the SPICE Kernel Library, the INDI device directory
 // and property streams, and the INDI message streams and global messages.
 export type ServerEvent =
 	| ConnectionRegistryEvent
@@ -80,6 +81,7 @@ export type ServerEvent =
 	| GuidingServerEvent
 	| NotificationCreatedEvent
 	| SatellitesChangedEvent
+	| SpiceKernelEvent
 	| IndiServerEvent
 	| IndiMessagesServerEvent
 

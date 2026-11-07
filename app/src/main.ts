@@ -8,6 +8,7 @@ import {
 	reopenConnections,
 	startObservatoryCameras,
 	startSatelliteDownloads,
+	startSpiceKernels,
 	routes,
 	startDatabase,
 	startEarthOrientation,
@@ -76,6 +77,9 @@ await startEarthOrientation()
 
 // What a crash left of the products of the Calibration Library and Image Stacking is finished without anyone opening them.
 startStores()
+
+// The SPK files of the SPICE Kernel Library are checked and opened in the background; the Sky uses its other sources meanwhile.
+startSpiceKernels()
 
 // The CelesTrak groups chosen for automatic downloads are read again when allowed, then every 6 hours.
 startSatelliteDownloads()

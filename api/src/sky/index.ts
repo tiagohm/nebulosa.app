@@ -4,6 +4,7 @@ import labels from '../../data/constellation.labels.json'
 import lines from '../../data/constellation.lines.json'
 import catalog from '../../data/sky.catalog.db' with { embed: 'true', type: 'sqlite' }
 import type { AnnotationSky } from '../annotations'
+import { SpiceKernelRuntime } from '../spicekernels.runtime'
 import { SsdRequestQueue } from '../ssd'
 import { createActiveRegionRoutes, SolarActiveRegions } from './activeregions'
 import { type ConstellationSource, catalogStars, fieldConstellations, fieldObjects } from './catalog'
@@ -26,6 +27,9 @@ const constellations: ConstellationSource = { lines, labels, boundaries }
 
 // Queue of every request of the process to JPL.
 export const ssdRequests = new SsdRequestQueue()
+
+// Open SPK files of the SPICE Kernel Library and the snapshot the ephemeris evaluates; the library service owns its changes.
+export const spiceKernels = new SpiceKernelRuntime()
 
 // Minor body lookups of the process, with their cache.
 export const minorBodies = new MinorBodies({ queue: ssdRequests })

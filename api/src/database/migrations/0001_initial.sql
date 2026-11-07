@@ -806,3 +806,63 @@ CREATE TABLE live_stack_products (
 	-- calibration, and the composition of a color stack.
 	product TEXT NOT NULL CHECK (json_valid(product))
 ) STRICT;
+
+-- SPK files of the SPICE Kernel Library (SpiceKernelStore), shared by every profile. The bytes of a file are under
+-- spice-kernels/objects/<sha256>.bsp, written into spice-kernels/staging/ and renamed into place before the row exists;
+-- a row whose file is gone is marked missing at the start of the server.
+CREATE TABLE spice_kernels (
+	kernel_id TEXT PRIMARY KEY,
+	-- SHA-256 of the file, in lowercase hexadecimal; one row per distinct file.
+	sha256 TEXT NOT NULL UNIQUE,
+	-- Name shown to people: the uploaded file name, the curated name, or the designation of a generated kernel.
+	name TEXT NOT NULL,
+	-- Where it came from: a curated NAIF download, a Horizons small-body generation, or an upload.
+	source_kind TEXT NOT NULL CHECK (source_kind IN ('naif', 'horizons', 'import')),
+	-- Id of the curated source, or SPK-ID of the generated small body; NULL for an upload.
+	source_ref TEXT,
+	-- Interval asked of Horizons for a generated kernel, Unix milliseconds (UTC); NULL otherwise.
+	requested_start INTEGER,
+	requested_end INTEGER,
+	-- Size of the file, in bytes.
+	bytes INTEGER NOT NULL CHECK (bytes > 0),
+	-- When it was added, Unix milliseconds (UTC).
+	created_at INTEGER NOT NULL,
+	-- Whether the operator wants it in the ephemeris (1) or not (0).
+	enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+	-- Load order, from 0: a higher priority takes precedence where segments overlap, as a file loaded later in SPICE.
+	priority INTEGER NOT NULL CHECK (priority >= 0),
+	-- Lifecycle: usable, being deleted, failing its integrity or format checks, or without its file.
+	state TEXT NOT NULL CHECK (state IN ('ready', 'pendingDelete', 'invalid', 'missing'))
+) STRICT;
+
+-- Segments of each SPK file of the SPICE Kernel Library, in file order, as inspected when it was added.
+CREATE TABLE spice_segments (
+	kernel_id TEXT NOT NULL REFERENCES spice_kernels (kernel_id) ON DELETE CASCADE,
+	-- Position of the segment in the file, from 0; later segments take precedence.
+	segment_index INTEGER NOT NULL CHECK (segment_index >= 0),
+	-- Name of the segment in the file.
+	name TEXT NOT NULL,
+	-- NAIF codes of the target, of the center its state is relative to, and of the reference frame.
+	target INTEGER NOT NULL,
+	center INTEGER NOT NULL,
+	frame INTEGER NOT NULL,
+	-- SPK data type.
+	data_type INTEGER NOT NULL,
+	-- Coverage, inclusive, in TDB seconds past J2000.
+	start_et REAL NOT NULL,
+	end_et REAL NOT NULL,
+	-- Whether the segment can be evaluated (1) or not (0), and why not: a data type or a frame the server cannot read.
+	supported INTEGER NOT NULL CHECK (supported IN (0, 1)),
+	unsupported_reason TEXT CHECK (unsupported_reason IN ('dataType', 'frame')),
+	PRIMARY KEY (kernel_id, segment_index)
+) STRICT;
+
+CREATE INDEX spice_segments_target ON spice_segments (target, start_et, end_et);
+
+-- Ephemeris policy of the SPICE Kernel Library: one row, absent until an operator changes it from automatic.
+CREATE TABLE spice_settings (
+	singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+	-- Source of accurate solar-system positions: SPK then Horizons (automatic), SPK then local models without any
+	-- request to JPL (offline), or SPK alone (spkOnly).
+	policy TEXT NOT NULL CHECK (policy IN ('automatic', 'offline', 'spkOnly'))
+) STRICT;

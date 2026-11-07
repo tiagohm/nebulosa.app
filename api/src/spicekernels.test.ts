@@ -215,6 +215,16 @@ test('a curated download is streamed, inspected, and installed', async () => {
 	expect(() => library.download('unknown')).toThrow('Unknown curated kernel.')
 })
 
+test('the curated catalog lists the reviewed Jovian kernel within the size limit', async () => {
+	const { library } = await started({})
+	const catalog = library.catalog()
+	expect(catalog.map((e) => e.id)).toEqual(['de440s', 'jup365-1990-2050'])
+	const jovian = catalog[1]
+	expect(jovian.url).toBe('https://naif.jpl.nasa.gov/pub/naif/JUICE/kernels/spk/jup365_19900101_20500101.bsp')
+	expect(jovian.bytes).toBeLessThanOrEqual(MAX_SPICE_KERNEL_BYTES)
+	expect(jovian.kernelId).toBeUndefined()
+})
+
 test('a download larger than the limit fails without a trace', async () => {
 	const { library, events, store } = await started({ fetch: () => Promise.resolve(new Response(stream(PLANETARY), { headers: { 'content-length': `${MAX_SPICE_KERNEL_BYTES + 1}` } })) })
 	const end = await ended(events, library.download('de440s').jobId)

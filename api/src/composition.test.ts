@@ -2,8 +2,11 @@ import { afterAll, afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, readdirSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import { timeNow } from 'nebulosa/src/astronomy/time/time'
 import type { Device } from 'nebulosa/src/devices/indi/device'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { hour } from 'nebulosa/src/math/units/angle'
 import { type AutoFocusRequest, AutoFocusSessions } from './autofocus'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureStartRequest } from './captures'
@@ -12,7 +15,12 @@ import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
 import { FocuserBacklashStore } from './focuserbacklash'
 import { FocuserCommands } from './focusers'
+import type { GuidingSessionSummary } from './guiding'
 import { ImageStore } from './images'
+import type { MeridianFlipMonitor } from './meridianflip'
+import { type MeridianFlipExecution, MeridianFlipExecutor } from './meridianflipexecutor'
+import { DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY } from './meridianflipexecutor.policy'
+import { MountCommands } from './mounts'
 import { OperationRegistry, type ToolInvocation } from './operations'
 import { DEFAULT_BUILTIN_SETTINGS, DEFAULT_STAR_ACCEPTANCE, StarDetectionService } from './stars'
 import { WheelCommands } from './wheels'
@@ -201,4 +209,92 @@ test.skipIf(SKIP)('capture, Auto Focus, filter change, and capture compose under
 	await operations.coordinator.cancelByReservationOwner(owner)
 	reservation.release()
 	expect([camera, focuser, wheel].every((device) => operations.available(device))).toBeTrue()
+})
+
+test('a meridian flip pauses a real capture at a frame boundary, flips the simulator under its reservation, and leaves an unverified flip paused for the operator', async () => {
+	const context = await setup()
+	const { manager, client, id, cameraId, captures, operations, camera } = context
+	const resolve = (connectionId: string) => manager.client(connectionId)
+	const mounts = new MountCommands(
+		manager.devices,
+		resolve,
+		() => Promise.resolve(undefined),
+		operations,
+		() => {},
+	)
+	disposables.push(mounts)
+	const mountId = manager.devices.list(client).find((device) => device.type === 'mount')!.id
+	manager.devices.switch(client, mountId, true)
+	const mount = manager.devices.mount(client, mountId)!
+	await waitUntil(() => mount.connected && mount.canGoTo && operations.available(mount))
+	manager.devices.mounts.slewRate(mount, 'SPEED_7')
+
+	// Seconds before the meridian of its own site, tracking, so it crosses it on its pre-meridian side.
+	const lst = localSiderealTime(timeNow(true), mount.geographicCoordinate.longitude)
+	expect(await mounts.commander.sync(operations.coordinator, mount, { type: 'JNOW', JNOW: { x: lst + hour(2 / 3600), y: mount.geographicCoordinate.latitude } })).toMatchObject({ ok: true })
+	expect(await mounts.commander.setTracking(operations.coordinator, mount, true)).toMatchObject({ ok: true })
+	await Bun.sleep(3000)
+
+	const now = Date.now()
+	const monitor: MeridianFlipMonitor = {
+		monitorId: 'monitor',
+		connectionId: id,
+		deviceId: mountId,
+		revision: 1,
+		settings: { earlyWarningSeconds: 900, minimumSeconds: 0, maximumSeconds: 900, deadlineWarningSeconds: 180, settleSeconds: 2 },
+		settingsRevision: 1,
+		sampledAt: now,
+		contextId: 'context',
+		episodeId: 'episode',
+		mount: { mountType: 'EQ_GEM', pierSide: mount.pierSide, tracking: true, trackMode: 'SIDEREAL' },
+		availability: 'monitoring',
+		timing: { phase: 'windowOpen', quality: 'valid', transitAt: now - 1000, windowOpensAt: now - 1000, windowClosesAt: now + 900000 },
+		mechanical: 'flipCandidate',
+	}
+	const none = () => Promise.reject(new Error('not used'))
+	const guidingRuns: readonly GuidingSessionSummary[] = []
+	const executor = new MeridianFlipExecutor(
+		manager.devices,
+		resolve,
+		operations,
+		{
+			monitor: { monitor: () => monitor },
+			mounts,
+			captures,
+			guiding: { runsOn: () => guidingRuns, hold: () => ({ [Symbol.dispose]: () => {} }), suspendForMotion: none, restoreAfterMotion: none },
+			targetCentering: { admit: none, interrupt: () => false, solutionsOf: () => undefined },
+			autoFocus: { admit: none, interrupt: () => Promise.resolve(false) },
+		},
+		() => {},
+	)
+	disposables.push(executor)
+
+	const directory = mkdtempSync(join(root, 'frames-'))
+	const capture = captures.admit(id, cameraId, captureRequest(directory, { exposureMode: 'loop', exposureTime: 0.2 }))
+	if (!capture.ok) throw new Error(capture.error)
+	await capture.started
+
+	const response = executor.execute(id, mountId, { token: `token-${tokens++}`, mode: 'now', setup: { camera: { connectionId: id, deviceId: cameraId } }, policy: { ...DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY, recenterAfterFlip: false, mountSettleSeconds: 0 } })
+	expect(response.status).toBe(202)
+	const { sessionId } = (await response.json()) as MeridianFlipExecution
+
+	// While the flip runs, the camera and the mount belong to its reservation: a manual capture is refused.
+	await waitUntil(() => captures.snapshot().sessions.some((session) => session.phase === 'paused'))
+	expect(operations.arbiter.reservationOwnerOf(resourceKey(camera))?.id).toBe(sessionId)
+	expect(captures.start(id, cameraId, captureRequest(directory)).status).toBe(409)
+
+	const execution = await executor.ended(sessionId)!
+	// The simulator's pier side is simulated, and nothing solved the field, so the flip stays unverified.
+	expect(execution).toMatchObject({ state: 'failed', verificationMode: 'none', captureSessionId: capture.sessionId })
+	expect(execution.outcome).toMatchObject({ verification: 'unverified', captureRestoration: 'leftSuspended', readyForImaging: 'notReady' })
+	expect(captures.snapshot().sessions.find((session) => session.sessionId === capture.sessionId)).toMatchObject({ phase: 'paused', suspension: { state: 'released' } })
+	expect(operations.arbiter.reservationOwnerOf(resourceKey(mount))).toBeUndefined()
+	expect(operations.arbiter.availability(resourceKey(camera))).toBe('leased')
+
+	// The operator resumes the same session, which goes on taking frames.
+	expect(captures.resume(id, cameraId, { sessionId: capture.sessionId }).status).toBe(204)
+	const captured = captures.snapshot().sessions.find((session) => session.sessionId === capture.sessionId)!.captured
+	await waitUntil(() => captures.snapshot().sessions.find((session) => session.sessionId === capture.sessionId)!.captured > captured)
+	captures.stopSession(capture.sessionId)
+	expect(await capture.ended).toMatchObject({ phase: 'stopped' })
 })

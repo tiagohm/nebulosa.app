@@ -41,6 +41,27 @@ import { createLiveStackingRoutes, LiveStacking } from './livestacking'
 import { LiveStackingStore } from './livestacking.store'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
 import { createMeridianFlipRoutes, MeridianFlipService } from './meridianflip'
+export type { ExecutorEligibility, FlipStrategyChoice, FlipTrigger, FlipVerification, FlipVerificationMode, MeridianFlipExecutorErrorCode, MeridianFlipExecutorPolicy, WcsEvidence } from './meridianflipexecutor.policy'
+export type {
+	MeridianFlipArm,
+	MeridianFlipAutoFocus,
+	MeridianFlipCentering,
+	MeridianFlipExecuteRequest,
+	MeridianFlipExecution,
+	MeridianFlipExecutionRequest,
+	MeridianFlipExecutionState,
+	MeridianFlipExecutorEvent,
+	MeridianFlipExecutorKey,
+	MeridianFlipExecutorSnapshot,
+	MeridianFlipOutcome,
+	MeridianFlipSetup,
+	MeridianFlipStep,
+	MeridianFlipStepOutcome,
+	MeridianFlipStepRecord,
+	MeridianFlipTarget,
+	PostFlipReadiness,
+} from './meridianflipexecutor'
+import { createMeridianFlipExecutorRoutes, MeridianFlipExecutor } from './meridianflipexecutor'
 import { createPointingModelRoutes, PointingModels } from './mountpointing'
 import { createPointingActivationRoutes, MountCorrections, PointingActivations } from './mountpointing.corrections'
 import { PointingModelFitter } from './mountpointing.fit'
@@ -129,6 +150,7 @@ export type {
 	CaptureStartRequest,
 	CaptureSnapshot,
 	CaptureSnoop,
+	CaptureSuspensionState,
 	CaptureStartResponse,
 } from './captures'
 export type { CaptureDither, CaptureDitherErrorCode, GuidedCaptureDither, MountCaptureDither, PulseCaptureDither, SlewCaptureDither } from './dithering'
@@ -937,6 +959,11 @@ const darkLibraryWizard = new DarkLibraryWizardSessions(
 // their frames with the capturer of the captures.
 const targetCentering = new TargetCenteringSessions(connections.devices, (id) => connections.client(id), operations, mounts, mounts.commander, captures.capturer, images, captureFrames, plateSolving, guiding, publish)
 
+// Meridian Flip Executor of the mounts of the open connections: flips at the meridian passage the Monitor follows, composing the
+// captures, guiding, mount commands, Target Centering, and Auto Focus, after the Monitor so it reads its state of each event.
+const meridianFlipExecutor = new MeridianFlipExecutor(connections.devices, (id) => connections.client(id), operations, { monitor: meridianFlip, mounts, captures, guiding, targetCentering, autoFocus }, publish)
+events.subscribe((event) => meridianFlipExecutor.consume(event))
+
 // Lunar eclipse queries of the Lunar Eclipse Map tool.
 const lunarEclipses = new LunarEclipseService()
 
@@ -996,6 +1023,7 @@ export function stopOperations() {
 // Services holding devices, sockets, listeners, timers, or workers, in the order a server stopping in place releases them:
 // the sessions and commands before the registries they use, the connections last.
 const RESOURCES: readonly Disposable[] = [
+	meridianFlipExecutor,
 	liveStacking,
 	guiding,
 	darkLibraryWizard,
@@ -1135,6 +1163,7 @@ export const routes = {
 	...createMountRoutes(mounts),
 	...createMountRemoteControlRoutes(mountRemoteControl),
 	...createMeridianFlipRoutes(meridianFlip),
+	...createMeridianFlipExecutorRoutes(meridianFlipExecutor),
 	...createGuideOutputRoutes(guideOutputs),
 	...createFocuserRoutes(focusers),
 	...createWheelRoutes(wheels),

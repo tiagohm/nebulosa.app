@@ -40,6 +40,7 @@ export type OperationKind =
 	| 'dome.shutter'
 	| 'dome.move'
 	| 'camera.capture'
+	| 'mount.meridianFlipExecutor'
 	| 'focuser.autofocus'
 	| 'mount.tppa'
 	| 'mount.pointingModel'

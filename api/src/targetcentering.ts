@@ -385,6 +385,12 @@ export class TargetCenteringSessions {
 		return { sessions: this.#sessions.summaries() }
 	}
 
+	// Returns the solution of each solved attempt of a session, by attempt, for a caller inside the process that compares
+	// them, such as the Meridian Flip Executor; undefined when the session is not the latest of its camera.
+	solutionsOf(sessionId: string): ReadonlyMap<number, PlateSolution> | undefined {
+		return this.#sessions.find(sessionId)?.solutions
+	}
+
 	// Responds with the complete record of a session, or 404 when it is not the latest of its camera.
 	session(sessionId: string): Response {
 		const session = this.#sessions.find(sessionId)

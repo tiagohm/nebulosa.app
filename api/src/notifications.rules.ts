@@ -8,6 +8,7 @@ import type { DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingEventRecord, GuidingSessionSummary } from './guiding'
 import type { MeridianFlipTransition } from './meridianflip'
+import type { MeridianFlipExecution } from './meridianflipexecutor'
 import type { MountPointingSessionSummary } from './mountpointing.sessions'
 import type { OperationDevice, OperationKind, OperationRecord } from './operations'
 import type { TargetCenteringSessionSummary } from './targetcentering'
@@ -59,7 +60,7 @@ export type NotificationTarget =
 
 // What a notification is about.
 export interface NotificationSource {
-	// Service that reported the occurrence: connection, capture, autofocus, tppa, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, meridianFlip, operation, or indi (a global message of an INDI server).
+	// Service that reported the occurrence: connection, capture, autofocus, tppa, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, meridianFlip (the Monitor and the Executor), operation, or indi (a global message of an INDI server).
 	readonly kind: string
 	// Id of the connection involved; absent for an application-wide notification.
 	readonly connectionId?: string
@@ -201,6 +202,8 @@ export class NotificationClassifier {
 				return this.#operation(event.operation)
 			case 'meridianFlip:transition':
 				return this.#meridianFlip(event.transition)
+			case 'meridianFlipExecutor:updated':
+				return this.#meridianFlipExecution(event.execution)
 			case 'indi:globalMessage':
 				return [{ key: `indi:global:${event.connectionId}:${event.epoch}:${event.id}`, level: 'info', code: 'indi.globalMessage', title: 'INDI Server', message: event.text, source: this.#indiSource(event.connectionId) }]
 			case 'indi:globalMessagesSuppressed':
@@ -240,6 +243,28 @@ export class NotificationClassifier {
 				return [{ ...base, key: `meridianFlip:${monitorId}:${transitionId}`, code: 'meridianFlip.unavailable', title: 'Meridian flip monitor lost the mount', message: `${name} stopped reporting near the meridian; its pier side cannot be assessed until it does again.` }]
 			default:
 				return []
+		}
+	}
+
+	// Reports how a Meridian Flip execution ended, once: imaging ready, with how the flip was verified; or not ready, telling
+	// apart a flip that could not be established, a capture left paused, and a mount that needs the operator's eyes.
+	#meridianFlipExecution(execution: MeridianFlipExecution): NotificationDraft[] {
+		const { sessionId, state, connectionId, deviceId, mountName, outcome, error } = execution
+		if (state === 'running') return []
+
+		const source: NotificationSource = { kind: 'meridianFlip', connectionId, endpoint: this.#endpoints.get(connectionId), deviceId }
+		const base = { key: `meridianFlipExecutor:${sessionId}`, source, target: { kind: 'tool', tool: 'meridian-flip-monitor' } } as const
+		const paused = outcome?.captureRestoration === 'leftSuspended' ? ' The capture stays paused until you resume or stop it.' : ''
+
+		switch (state) {
+			case 'completed':
+				return [{ ...base, level: 'success', code: `meridianFlip.${outcome?.verification ?? 'verified'}`, title: 'Meridian flip completed', message: `${mountName} flipped (${outcome?.verification === 'inferred' ? 'inferred from plate solutions' : 'pier side verified by the driver'}) and imaging went on.` }]
+			case 'blocked':
+				return [{ ...base, level: 'error', code: 'meridianFlip.blocked', title: 'Meridian flip needs attention', message: `The flip of ${mountName} ended in a state that could not be established: ${error ?? 'unknown'}. Check the mount before going on.${paused}` }]
+			case 'cancelled':
+				return [{ ...base, level: 'warning', code: 'meridianFlip.cancelled', title: 'Meridian flip cancelled', message: `The flip of ${mountName} was cancelled.${paused}` }]
+			default:
+				return [{ ...base, level: 'error', code: outcome?.verification === 'unverified' && outcome.flipCommandCompleted ? 'meridianFlip.unverified' : 'meridianFlip.failed', title: 'Meridian flip not completed', message: `The flip of ${mountName} did not leave imaging ready: ${error ?? 'unknown'}.${paused}` }]
 		}
 	}
 

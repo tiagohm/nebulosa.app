@@ -18,6 +18,7 @@ import type { IndiClientMessage, IndiServerEvent } from './indi'
 import type { IndiMessagesClientMessage, IndiMessagesServerEvent } from './indimessages'
 import type { LiveStackingEvent } from './livestacking'
 import type { MeridianFlipEvent } from './meridianflip'
+import type { MeridianFlipExecutorEvent } from './meridianflipexecutor'
 import type { PointingModelEvent } from './mountpointing'
 import type { PointingActivationEvent } from './mountpointing.corrections'
 import type { MountPointingEvent } from './mountpointing.sessions'
@@ -68,6 +69,7 @@ export type ServerEvent =
 	| MountNudgeEvent
 	| MountRemoteControlEvent
 	| MeridianFlipEvent
+	| MeridianFlipExecutorEvent
 	| DomeMotionEvent
 	| ExternalToolEvent
 	| ObservatoryCameraEvent

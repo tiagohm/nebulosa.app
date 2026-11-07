@@ -20,6 +20,7 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, readonly [IconName
 	'mount.slew': ['mount', 'Slew'],
 	'mount.goto': ['mount', 'Goto'],
 	'mount.flip': ['mount', 'Flip'],
+	'mount.meridianFlipExecutor': ['mount', 'Meridian Flip'],
 	'mount.park': ['mount', 'Park'],
 	'mount.unpark': ['mount', 'Unpark'],
 	'mount.home': ['mount', 'Go home'],

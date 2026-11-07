@@ -161,9 +161,10 @@ function open(library: StackingMasters = masters().library, frameAnalyzer?: Fram
 	return { stacking, events, managed }
 }
 
-// Waits until a job ends, and returns it.
-async function settled(stacking: ImageStacking, jobId: string) {
-	for (let attempt = 0; attempt < 500; attempt++) {
+// Waits up to timeout milliseconds until a job ends, and returns it.
+async function settled(stacking: ImageStacking, jobId: string, timeout: number = 5000) {
+	const deadline = performance.now() + timeout
+	while (performance.now() < deadline) {
 		const job = await stacking.job(jobId)
 		if (job.state !== 'scanning' && job.state !== 'analyzing' && job.state !== 'integrating' && job.state !== 'composing') return job
 		await Bun.sleep(10)
@@ -819,9 +820,9 @@ describe('integration and publication', () => {
 })
 
 describe('scale', () => {
-	// Writes a 16-bit light of 48 × 48 pixels with Gaussian stars at the given centers over a noisy sky.
+	// Writes a 16-bit light of 96 × 96 pixels with Gaussian stars at the given centers over a noisy sky.
 	async function writeSmall(path: string, stars: readonly (readonly [number, number])[], seed: number) {
-		const size = 48
+		const size = 96
 		const raw = new Float64Array(size * size)
 		const next = random(seed)
 
@@ -841,19 +842,20 @@ describe('scale', () => {
 	}
 
 	test.skipIf(SKIP)('hundreds of frames integrate in strips of one row as in one strip, and a cancelled run leaves nothing to the next process', async () => {
-		const frames = 200
+		// Keep enough stars inside the detector border and enough frames to force one-row strips.
+		const frames = 400
 		const folder = directory('scale')
 		const field = [
-			[8, 8],
-			[36, 10],
-			[14, 34],
-			[38, 38],
-			[24, 22],
-			[10, 22],
-			[40, 24],
-			[22, 6],
-			[30, 30],
-			[18, 16],
+			[20, 20],
+			[70, 25],
+			[30, 70],
+			[75, 75],
+			[50, 48],
+			[20, 50],
+			[75, 50],
+			[48, 20],
+			[60, 65],
+			[35, 38],
 		] as const
 		const next = random(5)
 
@@ -873,14 +875,15 @@ describe('scale', () => {
 		const first = new ImageStacking(store, () => undefined, masters().library, [managed])
 		const { projectId } = await first.createProject({ name: 'Scale' })
 		expect(await importAll(first, projectId, [folder])).toEqual({ committed: frames })
-		expect(await settled(first, (await first.startAnalysis(projectId)).jobId)).toMatchObject({ state: 'completed', measured: frames, failures: 0, registered: frames, registrationTotal: frames })
+		expect(await settled(first, (await first.startAnalysis(projectId)).jobId, 30000)).toMatchObject({ state: 'completed', measured: frames, failures: 0, registered: frames, registrationTotal: frames })
 		expect((await first.validate(projectId)).ready).toBeTrue()
 
 		const recipe = { method: 'sigma-clip' as const, minimumCoverage: 0.9 }
-		const tight = await first.preflight(projectId, { recipe, memoryBudget: 100000 })
+		const tight = await first.preflight(projectId, { recipe, memoryBudget: 300000 })
+		expect(tight.groups[0].frames).toBe(frames)
 		expect(tight.groups[0].plan).toMatchObject({ mode: 'spill', stripRows: 1, fits: true })
 
-		const cancelled = await first.startRun(projectId, { token: 'cancel', recipe, memoryBudget: 100000 })
+		const cancelled = await first.startRun(projectId, { token: 'cancel', recipe, memoryBudget: 300000 })
 		while ((await first.job(cancelled.jobId)).measured === 0) await Bun.sleep(5)
 		first.cancel(cancelled.jobId)
 		expect(await settled(first, cancelled.jobId)).toMatchObject({ state: 'cancelled' })
@@ -889,16 +892,16 @@ describe('scale', () => {
 		expect(await second.products(projectId)).toEqual([])
 		expect(readdirSync(managed)).not.toContain('staging')
 
-		const strips = await second.startRun(projectId, { token: 'strips', recipe, memoryBudget: 100000 })
-		expect(await settled(second, strips.jobId)).toMatchObject({ state: 'completed', measured: frames, published: 1 })
+		const strips = await second.startRun(projectId, { token: 'strips', recipe, memoryBudget: 300000 })
+		expect(await settled(second, strips.jobId, 30000)).toMatchObject({ state: 'completed', measured: frames, published: 1 })
 		const [narrow] = await second.products(projectId)
 		expect(narrow.diagnostics).toMatchObject({ mode: 'spill', stripRows: 1 })
 		await second.deleteProduct(narrow.productId)
 
 		const whole = await second.startRun(projectId, { token: 'whole', recipe })
-		await settled(second, whole.jobId)
+		expect(await settled(second, whole.jobId, 30000)).toMatchObject({ state: 'completed', measured: frames, published: 1 })
 		const [wide] = await second.products(projectId)
-		expect(wide.diagnostics.stripRows).toBe(48)
+		expect(wide.diagnostics.stripRows).toBe(96)
 		expect(wide.contentDigest).toBe(narrow.contentDigest)
 	})
 })

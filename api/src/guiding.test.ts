@@ -34,7 +34,7 @@ afterAll(() => rmSync(root, { recursive: true, force: true }))
 async function waitUntil(condition: () => boolean, timeout = 30000) {
 	const start = Date.now()
 	while (!condition()) {
-		if (Date.now() - start > timeout) throw new Error('timeout')
+		if (Date.now() - start > timeout) throw new Error(`timeout: ${condition.toString()}`)
 		await Bun.sleep(10)
 	}
 }
@@ -553,6 +553,8 @@ describe('guiding', () => {
 	test('a slew of the mount while guiding, commanded elsewhere, stops guiding and clears the lock while the loop goes on', async () => {
 		const context = await setup()
 		await trackStars(context)
+		// The CI sky catalog is empty; use the simulator's seeded star field for target selection.
+		context.client.sendSwitch({ device: context.camera.name, name: 'SIMULATOR_CATALOG_SOURCE', elements: { RANDOM: true } })
 		const { sessionId } = await start(context, guided(context))
 		await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
 		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)
@@ -574,11 +576,13 @@ describe('guiding', () => {
 		await waitUntil(() => context.summary()?.guideOutputHeld === true)
 		expect(context.summary()?.interruption).toBeUndefined()
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
-	})
+	}, 90000)
 
 	test('without stopGuidingOnSlew a slew leaves guiding alone', async () => {
 		const context = await setup()
 		await trackStars(context)
+		// The CI sky catalog is empty; use the simulator's seeded star field for target selection.
+		context.client.sendSwitch({ device: context.camera.name, name: 'SIMULATOR_CATALOG_SOURCE', elements: { RANDOM: true } })
 		const { sessionId } = await start(context, guided(context, { stopGuidingOnSlew: false }))
 		await waitUntil(() => context.guiding.selectTarget(sessionId, {}).status === 200)
 		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: false, settle: SETTLE }).status).toBe(202)

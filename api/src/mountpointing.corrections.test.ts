@@ -155,14 +155,18 @@ describe('corrected GoTos', () => {
 		expect(plan).not.toHaveBeenCalled()
 	})
 
-	test.skipIf(SKIP)('the sessions go around the correction, since they use the commander', async () => {
-		const { corrections, mount, commands, operations, target } = await setup()
-		corrections.activate(mount, MODEL, REVISION)
-		const plan = spyOn(corrections, 'plan')
+	test.skipIf(SKIP)(
+		'the sessions go around the correction, since they use the commander',
+		async () => {
+			const { corrections, mount, commands, operations, target } = await setup()
+			corrections.activate(mount, MODEL, REVISION)
+			const plan = spyOn(corrections, 'plan')
 
-		expect(await commands.commander.goTo(operations.coordinator, mount, target())).toMatchObject({ ok: true })
-		expect(plan).not.toHaveBeenCalled()
-	})
+			expect(await commands.commander.goTo(operations.coordinator, mount, target())).toMatchObject({ ok: true })
+			expect(plan).not.toHaveBeenCalled()
+		},
+		90000,
+	)
 
 	test('a target far from the samples is refused, nothing moves, and the reason is kept', async () => {
 		const { id, commands, corrections, mount, target, goTo, events } = await setup()

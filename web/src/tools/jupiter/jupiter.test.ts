@@ -2,28 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import type { JupiterEvent, JupiterGrsResponse, JupiterTrack, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { skyClock } from '../../sky/clock'
-import {
-	adjacentEvent,
-	createJupiterPlannerState,
-	equatorOffset,
-	eveningOf,
-	handleJupiterGrsEvent,
-	inputInstant,
-	interpolateTrack,
-	type JupiterGrsState,
-	type JupiterIo,
-	keepTheirGrs,
-	listedEvents,
-	loadEvents,
-	loadState,
-	localInput,
-	periodRange,
-	play,
-	saveJupiterGrs,
-	saveMineGrs,
-	screenOffset,
-	selectEvent,
-} from './jupiter'
+import type { PlannerIo } from '../planetary/planetary'
+import { createJupiterPlannerState, handleJupiterGrsEvent, interpolateTrack, type JupiterGrsState, keepTheirGrs, listedEvents, loadEvents, loadState, play, saveJupiterGrs, saveMineGrs, selectEvent } from './jupiter'
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
@@ -35,7 +15,7 @@ function json(body: unknown, status: number = 200) {
 // A fake IO answering each request with the next queued responder, recording the requests.
 function fakeIo(...responders: ((url: string, init?: RequestInit) => Promise<Response> | Response)[]) {
 	const requests: { url: string; body?: unknown; method?: string }[] = []
-	const io: JupiterIo = {
+	const io: PlannerIo = {
 		fetch: (url, init) => {
 			requests.push({ url, method: init?.method, body: init?.body ? JSON.parse(init.body as string) : undefined })
 			const next = responders.shift()
@@ -62,31 +42,6 @@ function event(id: string, kind: JupiterEvent['kind'], maximum: number, moons: J
 function grs(revision: number, longitude: number = 1): JupiterGrsResponse {
 	return { model: { longitude, referenceTime: 0, drift: 0 }, revision, status: { quality: 'current', revision, referenceAgeDays: 1 } }
 }
-
-describe('dates and periods', () => {
-	test('the evening of an instant is the date twelve hours earlier in the zone', () => {
-		// 01:00 in São Paulo on December 2 belongs to the evening of December 1.
-		expect(eveningOf(Date.UTC(2026, 11, 2, 4), 'America/Sao_Paulo')).toBe('2026-12-01')
-		expect(eveningOf(Date.UTC(2026, 11, 2, 0), 'America/Sao_Paulo')).toBe('2026-12-01')
-		expect(eveningOf(Date.UTC(2026, 11, 2, 16), 'America/Sao_Paulo')).toBe('2026-12-02')
-	})
-
-	test('a period starts at local noon of its evening and lasts its days', () => {
-		const range = periodRange('2026-12-01', 3, 'America/New_York')
-		expect(range.start).toBe(Date.UTC(2026, 11, 1, 17))
-		expect(range.end - range.start).toBe(3 * DAY)
-		// Across the end of daylight time, noon is still local noon.
-		expect(periodRange('2026-11-01', 1, 'America/New_York').start).toBe(Date.UTC(2026, 10, 1, 17))
-		expect(periodRange('2026-10-31', 1, 'America/New_York').start).toBe(Date.UTC(2026, 9, 31, 16))
-	})
-
-	test('datetime inputs read and write wall times of a zone', () => {
-		const time = Date.UTC(2026, 11, 1, 23, 30)
-		expect(localInput(time, 'America/Sao_Paulo')).toBe('2026-12-01T20:30')
-		expect(inputInstant('2026-12-01T20:30', 'America/Sao_Paulo')).toBe(time)
-		expect(inputInstant('', 'UTC')).toBeUndefined()
-	})
-})
 
 describe('requests', () => {
 	test('a superseded view never replaces a newer one', async () => {
@@ -200,22 +155,6 @@ describe('helpers', () => {
 		const events = [event('a', 'satelliteTransit', 1), event('b', 'mutualEclipse', 2, ['europa', 'ganymede']), event('c', 'grsTransit', 3, [])]
 		expect(listedEvents(events, ['satelliteTransit', 'mutualEclipse', 'grsTransit'], ['ganymede']).map((e) => e.id)).toEqual(['b', 'c'])
 		expect(listedEvents(events, ['satelliteTransit'], ['io']).map((e) => e.id)).toEqual(['a'])
-	})
-
-	test('the adjacent events skip the one at the clock', () => {
-		const events = [event('a', 'satelliteTransit', 10_000), event('b', 'satelliteTransit', 20_000), event('c', 'satelliteTransit', 30_000)]
-		expect(adjacentEvent(events, 20_000, 1)?.id).toBe('c')
-		expect(adjacentEvent(events, 20_000, -1)?.id).toBe('a')
-		expect(adjacentEvent(events, 30_000, 1)).toBeUndefined()
-	})
-
-	test('orientations place east and north on the screen', () => {
-		expect(screenOffset(1, 1, 'north')).toEqual([-1, -1])
-		expect(screenOffset(1, 1, 'south')).toEqual([1, 1])
-		expect(screenOffset(1, 1, 'mirrored')).toEqual([1, -1])
-		// With the pole turned 90° east, the equator runs north-south.
-		expect(equatorOffset(0, -2, Math.PI / 2)).toBeCloseTo(2, 12)
-		expect(equatorOffset(3, 0, 0)).toBe(3)
 	})
 })
 

@@ -1,16 +1,14 @@
 import type { JupiterEvent, JupiterEvents } from 'api'
-import { formatClockTime, formatDateTime, formatDegrees, formatHours, formatLongDateTime, formatSpan, formatUtcDateTime } from '../../format'
+import { formatDegrees, formatLongDateTime } from '../../format'
 import { DataList, DataRow } from '../../ui/DataRow'
-import { StatusBadge } from '../../ui/StatusBadge'
-import { Cell, Row, Table } from '../../ui/Table'
-import { CONTACT_LABELS, CONTACT_ORDER, describeSource, KIND_DEFINITIONS, KIND_LABELS, MOON_LABELS, REASON_LABELS, VISIBILITY_LABELS } from './jupiter'
+import { ContactRows, EventTable, VisibilityRows } from '../planetary/EventTable'
+import { VISIBILITY_LABELS } from '../planetary/planetary'
+import { describeSource, KIND_DEFINITIONS, KIND_LABELS, MOON_LABELS, REASON_LABELS } from './jupiter'
 
 // Events of the period: a chronological table of what happens, when, and whether the site can watch it, and the inspector
 // of the selected event with its contacts in the display zone and in UTC, its definition, what overlaps it, and where its
-// numbers came from. Every contact is the server's; a contact is listed only when it was reached.
-
-// Columns of the table.
-const COLUMNS = ['When', 'Event', { key: 'maximum', label: 'Maximum' }, 'Here', { key: 'rank', label: 'Rank', numeric: true }] as const
+// numbers came from. The table and the contact and visibility rows are the shared planetary ones; Great Red Spot transits
+// show their viewing window instead of contacts. Every contact is the server's; a contact is listed only when it was reached.
 
 // Name of an event: its kind and the moons taking part.
 export function eventName(event: Pick<JupiterEvent, 'kind' | 'moons'>) {
@@ -32,29 +30,7 @@ export interface EventTimelineProps {
 
 // Chronological table of the events.
 export function EventTimeline({ events, selected, timeZone, onSelect }: EventTimelineProps) {
-	return (
-		<Table columns={COLUMNS}>
-			{events.map((event) => (
-				<Row key={event.id} selected={event.id === selected} onSelect={() => onSelect(event)} title={KIND_DEFINITIONS[event.kind]}>
-					<Cell>
-						{formatDateTime(event.start, timeZone, false)}
-						{event.end > event.start && `–${formatClockTime(event.end, timeZone)}`}
-						{(event.startsBeforeRange || event.endsAfterRange) && <span className="text-ink-300"> (beyond the period)</span>}
-					</Cell>
-					<Cell>
-						{eventName(event)}
-						{event.overlaps.length > 0 && <span className="text-ink-300"> · overlaps {event.overlaps.length}</span>}
-						{event.grazing && <span className="text-ink-300"> · grazing</span>}
-					</Cell>
-					<Cell>{formatClockTime(event.maximum, timeZone)}</Cell>
-					<Cell>
-						<StatusBadge {...VISIBILITY_LABELS[event.visibility.status]} />
-					</Cell>
-					<Cell numeric>{event.visibility.rank ?? ''}</Cell>
-				</Row>
-			))}
-		</Table>
-	)
+	return <EventTable events={events} selected={selected} timeZone={timeZone} name={eventName} definition={(event) => KIND_DEFINITIONS[event.kind]} status={(event) => VISIBILITY_LABELS[event.visibility.status]} onSelect={onSelect} />
 }
 
 export interface EventInspectorProps {
@@ -68,8 +44,6 @@ export interface EventInspectorProps {
 
 // Inspector of the selected event.
 export function EventInspector({ event, all, answer, timeZone }: EventInspectorProps) {
-	const { visibility } = event
-	const contacts = CONTACT_ORDER.filter((key) => event.contacts[key] !== undefined)
 	const overlapping = all.filter((e) => event.overlaps.includes(e.id))
 
 	return (
@@ -85,35 +59,11 @@ export function EventInspector({ event, all, answer, timeZone }: EventInspectorP
 						{event.grs && <DataRow label="Model reference age">{`${event.grs.referenceAgeDays.toFixed(1)} days`}</DataRow>}
 					</>
 				) : (
-					<>
-						{contacts.map((key) => (
-							<DataRow key={key} label={CONTACT_LABELS[key]}>
-								{`${formatLongDateTime(event.contacts[key]!, timeZone)} · ${formatUtcDateTime(event.contacts[key]!)}`}
-							</DataRow>
-						))}
-						<DataRow label="Maximum">{`${formatLongDateTime(event.maximum, timeZone)} · ${formatUtcDateTime(event.maximum)}`}</DataRow>
-						{event.impactParameter !== undefined && <DataRow label="Impact parameter">{event.impactParameter.toFixed(3)}</DataRow>}
-						{contacts.length === 0 && <DataRow label="Contacts">None reached: a tangency or a contact outside the search.</DataRow>}
-					</>
+					<ContactRows event={event} timeZone={timeZone} />
 				)}
 				{event.startsBeforeRange && <DataRow label="Starts">Before the period</DataRow>}
 				{event.endsAfterRange && <DataRow label="Ends">After the period</DataRow>}
-				<DataRow label="From the site">{VISIBILITY_LABELS[visibility.status].label}</DataRow>
-				{visibility.eveningDate && <DataRow label="Night of">{visibility.eveningDate}</DataRow>}
-				{visibility.longestMs > 0 && <DataRow label="Longest watchable part">{formatHours(visibility.longestMs)}</DataRow>}
-				{visibility.peakAltitude !== undefined && <DataRow label="Jupiter's highest altitude">{formatDegrees(visibility.peakAltitude, 1)}</DataRow>}
-				{visibility.peakAirmass !== undefined && <DataRow label="Airmass there">{visibility.peakAirmass.toFixed(2)}</DataRow>}
-				{visibility.sunAltitude !== undefined && <DataRow label="Sun at the maximum">{formatDegrees(visibility.sunAltitude, 1)}</DataRow>}
-				{visibility.windows.map((window) => (
-					<DataRow key={window.start} label="Watchable">
-						{formatSpan(window.start, window.end, timeZone)}
-					</DataRow>
-				))}
-				{visibility.reasons.map((reason) => (
-					<DataRow key={reason} label="Why not all of it">
-						{REASON_LABELS[reason]}
-					</DataRow>
-				))}
+				<VisibilityRows visibility={event.visibility} status={VISIBILITY_LABELS[event.visibility.status].label} planet="Jupiter" reason={(reason) => REASON_LABELS[reason]} timeZone={timeZone} />
 				{overlapping.map((other) => (
 					<DataRow key={other.id} label="Overlaps">
 						{eventName(other)}

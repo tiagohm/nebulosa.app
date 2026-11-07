@@ -6,7 +6,8 @@ import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
-import { inputInstant, type JupiterGrsState, jupiterGrsState, keepTheirGrs, localInput, saveJupiterGrs, saveMineGrs } from './jupiter'
+import { inputInstant, localInput } from '../planetary/planetary'
+import { type JupiterGrsState, jupiterGrsState, keepTheirGrs, saveJupiterGrs, saveMineGrs } from './jupiter'
 
 // Editor of the server's Great Red Spot model: the System II longitude at a reference instant and its drift, in degrees,
 // with where they came from. The values are the operator's, from an observer bulletin; nothing is fetched or defaulted.

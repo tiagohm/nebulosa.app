@@ -15,41 +15,15 @@ import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
+// oxfmt-ignore
+import { browserPlannerIo, eveningOf, openKernelLibrary, ORIENTATION_LABELS, PLANET_ORIENTATIONS, type PlanetOrientation, type PlanetScale, periodRange, SCALE_LABELS, setTime } from '../planetary/planetary'
+import { TimeBar } from '../planetary/TimeBar'
 import { EventInspector, EventTimeline } from './EventTimeline'
 import { GrsSettings } from './GrsSettings'
-import {
-	browserJupiterIo,
-	describeSource,
-	EVENT_KINDS,
-	eveningOf,
-	FALLBACK_LABELS,
-	GALILEAN_MOONS,
-	interpolateTrack,
-	JUPITER_ORIENTATIONS,
-	type JupiterOrientation,
-	type JupiterPlannerState,
-	jupiterGrsState,
-	jupiterPlannerState,
-	type JupiterScale,
-	KIND_LABELS,
-	listedEvents,
-	loadEvents,
-	loadSource,
-	loadTrack,
-	MOON_LABELS,
-	openKernelLibrary,
-	ORIENTATION_LABELS,
-	periodRange,
-	play,
-	scheduleState,
-	selectEvent,
-	setTime,
-	showJupiterInSky,
-	SCALE_LABELS,
-} from './jupiter'
+// oxfmt-ignore
+import { describeSource, EVENT_KINDS, FALLBACK_LABELS, GALILEAN_MOONS, interpolateTrack, type JupiterPlannerState, jupiterGrsState, jupiterPlannerState, KIND_LABELS, listedEvents, loadEvents, loadSource, loadTrack, MOON_LABELS, play, scheduleState, selectEvent, showJupiterInSky } from './jupiter'
 import { JupiterViewer } from './JupiterViewer'
 import { MoonChart } from './MoonChart'
-import { TimeBar } from './TimeBar'
 
 // Jupiter Observing Planner tool: the view of Jupiter and its Galilean moons at the tool's own instant, the moons over the
 // period, and the period's phenomena with their visibility from the tool's location, all computed by the server from one
@@ -57,7 +31,7 @@ import { TimeBar } from './TimeBar'
 // Nothing here moves the mount, changes a site or the profile, or starts an operation.
 
 // Scales of the viewer, in display order.
-const SCALES: readonly JupiterScale[] = ['disk', 'system']
+const SCALES: readonly PlanetScale[] = ['disk', 'system']
 
 // Whether the browser asks for reduced motion.
 function prefersReducedMotion() {
@@ -80,7 +54,7 @@ export function JupiterPlanner() {
 
 	// The clock starts at real now and the period at tonight, once.
 	useEffect(() => {
-		const now = browserJupiterIo.time()
+		const now = browserPlannerIo.time()
 		jupiterPlannerState.time ??= now
 		jupiterPlannerState.eveningDate ??= eveningOf(now, namingZone)
 	}, [])
@@ -144,7 +118,7 @@ export function JupiterPlanner() {
 				))}
 			</PanelSection>
 			<PanelSection title="View">
-				<Select label="Orientation" options={JUPITER_ORIENTATIONS} value={state.orientation} format={(value: JupiterOrientation) => ORIENTATION_LABELS[value]} onChange={(value) => (jupiterPlannerState.orientation = value)} />
+				<Select label="Orientation" options={PLANET_ORIENTATIONS} value={state.orientation} format={(value: PlanetOrientation) => ORIENTATION_LABELS[value]} onChange={(value) => (jupiterPlannerState.orientation = value)} />
 			</PanelSection>
 			<GrsSettings timeZone={displayZone.zone} />
 			<PanelSection title="Ephemeris">
@@ -195,7 +169,7 @@ export function JupiterPlanner() {
 							</Button>
 						</Notice>
 					)}
-					{range && <TimeBar state={state} range={range} events={events} timeZone={displayZone.zone} now={browserJupiterIo.time} />}
+					{range && <TimeBar state={state} store={jupiterPlannerState} range={range} events={events} timeZone={displayZone.zone} now={browserPlannerIo.time} />}
 					<div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
 						<div className="flex min-w-0 flex-col gap-2">
 							<SegmentedControl options={SCALES} value={state.scale} format={(scale) => SCALE_LABELS[scale]} onChange={(scale) => (jupiterPlannerState.scale = scale)} />

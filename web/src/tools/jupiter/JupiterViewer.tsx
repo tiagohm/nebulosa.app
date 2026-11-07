@@ -1,6 +1,7 @@
 import type { JupiterState } from 'api'
 import { useId } from 'react'
-import { type GalileanMoon, GALILEAN_MOONS, type JupiterOrientation, type JupiterScale, MOON_COLORS, MOON_INITIALS, MOON_LABELS, type MoonPosition, screenOffset } from './jupiter'
+import { type MoonPosition, type PlanetOrientation, type PlanetScale, screenOffset } from '../planetary/planetary'
+import { type GalileanMoon, GALILEAN_MOONS, MOON_COLORS, MOON_INITIALS, MOON_LABELS } from './jupiter'
 
 // Schematic view of Jupiter and its Galilean satellites at the tool's instant: the oblate disk turned by the position angle
 // of its pole, the central meridian, the moons in front of or behind it, their shadows where they fall on the disk, and
@@ -9,13 +10,13 @@ import { type GalileanMoon, GALILEAN_MOONS, type JupiterOrientation, type Jupite
 // interpolated from the tracks while the clock plays; states, shadows, and the spot are the exact view's.
 
 // Half-extent of each scale, in Jupiter radii: horizontal and vertical.
-const EXTENTS: Readonly<Record<JupiterScale, readonly [number, number]>> = { disk: [2.6, 1.6], system: [30, 12] }
+const EXTENTS: Readonly<Record<PlanetScale, readonly [number, number]>> = { disk: [2.6, 1.6], system: [30, 12] }
 
 // Smallest drawn radius of a moon and of a shadow, in Jupiter radii, at each scale, so they stay visible.
-const MINIMUM_RADIUS: Readonly<Record<JupiterScale, number>> = { disk: 0.04, system: 0.3 }
+const MINIMUM_RADIUS: Readonly<Record<PlanetScale, number>> = { disk: 0.04, system: 0.3 }
 
 // Size of the label of a moon, in Jupiter radii, at each scale.
-const LABEL_SIZE: Readonly<Record<JupiterScale, number>> = { disk: 0.14, system: 1.4 }
+const LABEL_SIZE: Readonly<Record<PlanetScale, number>> = { disk: 0.14, system: 1.4 }
 
 // Half-axes of the schematic Great Red Spot, in Jupiter radii: about 16 000 by 12 000 km.
 const GRS_AXES = [0.11, 0.08] as const
@@ -28,8 +29,8 @@ export interface JupiterViewerProps {
 	readonly state?: JupiterState
 	// Moon positions to draw instead of the view's, interpolated while the clock moves.
 	readonly positions?: Readonly<Record<GalileanMoon, MoonPosition>>
-	readonly orientation: JupiterOrientation
-	readonly scale: JupiterScale
+	readonly orientation: PlanetOrientation
+	readonly scale: PlanetScale
 	// Moons drawn.
 	readonly moons: readonly GalileanMoon[]
 }

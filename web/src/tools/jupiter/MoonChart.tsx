@@ -2,7 +2,8 @@ import type { JupiterEvent, JupiterNight, JupiterTrack } from 'api'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { formatClockTime, formatDate } from '../../format'
 import { moveIndex } from '../../ui/navigation'
-import { equatorOffset, type GalileanMoon, GALILEAN_MOONS, MOON_COLORS, MOON_LABELS } from './jupiter'
+import { equatorOffset } from '../planetary/planetary'
+import { type GalileanMoon, GALILEAN_MOONS, MOON_COLORS, MOON_LABELS } from './jupiter'
 
 // Chart of the Galilean moons over the period: each moon's offset along Jupiter's equator against time, east up, with
 // the band of the planet's disk, the stretches the site can watch Jupiter, the selected event, and the clock's cursor.

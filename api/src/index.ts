@@ -442,6 +442,8 @@ export type {
 export type { SatelliteElementsRef, SatelliteEphemerisRow, SatelliteGroundTrack, SatelliteOrbitSummary, SatellitePassPoint, SatellitePassPrediction, SatellitePosition, SatelliteQuality, SatelliteQualityReason, SatelliteSuitability, SatelliteTrack, SatelliteVisiblePart } from './satellites.ephemeris'
 export type { SatelliteCatalogMetadata, SatelliteElementKind, SatelliteObjectType, SatelliteProvider, SatelliteSearchPage, SatelliteSourceState, SatelliteSummary } from './satellites.store'
 export type { SatelliteRefreshErrorCode } from './satellites.sync'
+export type { PlanetaryFallbackReason, PlanetaryKernelReadiness, PlanetaryReadinessReport, PlanetarySourceErrorCode, PlanetarySourceMiss } from './planetary.source'
+export type { PlanetEventVisibility, PlanetNight, PlanetVisibilityStatus } from './planetary.visibility'
 export type { SaturnErrorCode } from './saturn'
 // oxfmt-ignore
 export type { SaturnElongation, SaturnElongations, SaturnElongationsRequest, SaturnFallbackReason, SaturnMoon, SaturnMoonsState, SaturnMoonState, SaturnRingEvent, SaturnRingModel, SaturnRings, SaturnRingState, SaturnRingTimeline, SaturnRingTimelineRequest, SaturnScope, SaturnShadow, SaturnSignature, SaturnSource, SaturnSourceMiss, SaturnSourceReport, SaturnSourceRequest, SaturnStateRequest, SaturnTrack, SaturnTrackMoon, SaturnTrackRequest } from './saturn.astronomy'

@@ -27,6 +27,7 @@ export const TOOL_IDS = [
 	'astro-weather',
 	'observing-planner',
 	'jupiter-observing-planner',
+	'saturn-observing-planner',
 	'artificial-satellites',
 	'calibration-library',
 	'image-stacking',

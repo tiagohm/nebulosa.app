@@ -66,6 +66,8 @@ export const ICONS = {
 	moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
 	// Jupiter: a slightly oblate disk with two belts and the Great Red Spot below the southern one.
 	jupiter: 'M4 12a8 7.5 0 1 0 16 0a8 7.5 0 1 0-16 0M4.5 9.5h15M4.3 14h15.4M13 16.4a1.5 1 0 1 0 3 0a1.5 1 0 1 0-3 0',
+	// Saturn: a small disk crossed by a tilted ring.
+	saturn: 'M7 12a5 5 0 1 0 10 0a5 5 0 1 0-10 0M2 15.6A10.4 3.4 -20 1 0 22 8.4A10.4 3.4 -20 1 0 2 15.6',
 	cloud: 'M7 18.5a4.5 4.5 0 0 1-.7-8.95A6 6 0 0 1 17.8 8.6a5 5 0 0 1-.8 9.9z',
 	server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01M12 7h4M12 17h4',
 	grip: 'M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01',

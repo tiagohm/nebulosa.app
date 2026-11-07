@@ -46,6 +46,8 @@ describe('parse', () => {
 		expect(parseRoute('/tools/jupiter-observing-planner')).toEqual({ workspace: 'tools', tool: 'jupiter-observing-planner' })
 		expect(parseRoute('/tools/jupiter-observing-planner/extra')).toEqual({ workspace: 'tools', tool: 'jupiter-observing-planner' })
 		expect(routePath({ workspace: 'tools', tool: 'jupiter-observing-planner' })).toBe('/tools/jupiter-observing-planner')
+		expect(parseRoute('/tools/saturn-observing-planner')).toEqual({ workspace: 'tools', tool: 'saturn-observing-planner' })
+		expect(routePath({ workspace: 'tools', tool: 'saturn-observing-planner' })).toBe('/tools/saturn-observing-planner')
 		expect(routePath({ workspace: 'tools', tool: 'calculator', plan: 'p' })).toBe('/tools/calculator')
 	})
 

@@ -6,7 +6,7 @@ import { TimeZoneSelect } from '../../location/TimeZoneSelect'
 import { ToolLocationSection } from '../../location/ToolLocationSection'
 import { useActiveSite, useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
-import { PanelSection } from '../../shell/ContextualPanel'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
@@ -32,10 +32,10 @@ import { MoonChart } from './MoonChart'
 
 // Pan and zoom of the viewer, in Jupiter radii: from the whole system (Callisto reaches ~26.3) to the disk, opening on
 // Io, Europa, and Ganymede, two units wide for one high.
-const ZOOM = { maxHalfWidth: 30, minHalfWidth: 1.4, initialHalfWidth: 16, aspect: 2 } as const
+const ZOOM = { maxHalfWidth: 30, minHalfWidth: 1, initialHalfWidth: 6, aspect: 2 } as const
 
 // Half-width of the close-up of Jupiter, in Jupiter radii.
-const PLANET_HALF_WIDTH = 1.6
+const PLANET_HALF_WIDTH = 2.6
 
 // Whether the browser asks for reduced motion.
 function prefersReducedMotion() {
@@ -106,33 +106,33 @@ export function JupiterPlanner() {
 
 	const panel = (
 		<>
-			<ToolLocationSection value={state.location} location={location} onChange={(value) => (jupiterPlannerState.location = value)} elevation hint="Only decides when the phenomena can be watched; the predictions are geocentric." />
+			<ToolLocationSection value={state.location} location={location} onChange={(value) => (jupiterPlannerState.location = value)} collapsibleId="jupiter.location" elevation hint="Only decides when the phenomena can be watched; the predictions are geocentric." />
 			{location && (
-				<PanelSection title="Time Zone">
+				<CollapsibleSection id="jupiter.timeZone" title="Time Zone" summary={displayZone.zone} defaultOpen={false}>
 					<TimeZoneSelect label="Times Shown In" value={state.zone} onChange={(value) => (jupiterPlannerState.zone = value)} site={location} selectedSite={location.source !== 'active'} />
-				</PanelSection>
+				</CollapsibleSection>
 			)}
-			<PanelSection title="Events">
+			<CollapsibleSection id="jupiter.events" title="Events" summary={`${state.kinds.length} of ${EVENT_KINDS.length} kinds`}>
 				{EVENT_KINDS.map((kind) => (
 					<Checkbox key={kind} label={KIND_LABELS[kind]} checked={state.kinds.includes(kind)} onChange={(on) => (jupiterPlannerState.kinds = toggle(state.kinds, kind, on))} />
 				))}
-			</PanelSection>
-			<PanelSection title="Moons">
+			</CollapsibleSection>
+			<CollapsibleSection id="jupiter.moons" title="Moons" summary={`${state.moons.length} of ${GALILEAN_MOONS.length}`}>
 				{GALILEAN_MOONS.map((moon) => (
 					<Checkbox key={moon} label={MOON_LABELS[moon]} checked={state.moons.includes(moon)} onChange={(on) => (jupiterPlannerState.moons = toggle(state.moons, moon, on))} />
 				))}
-			</PanelSection>
-			<PanelSection title="View">
+			</CollapsibleSection>
+			<CollapsibleSection id="jupiter.view" title="View" summary={ORIENTATION_LABELS[state.orientation]} defaultOpen={false}>
 				<Select label="Orientation" options={PLANET_ORIENTATIONS} value={state.orientation} format={(value: PlanetOrientation) => ORIENTATION_LABELS[value]} onChange={(value) => (jupiterPlannerState.orientation = value)} />
-			</PanelSection>
+			</CollapsibleSection>
 			<GrsSettings timeZone={displayZone.zone} />
-			<PanelSection title="Ephemeris">
+			<CollapsibleSection id="jupiter.ephemeris" title="Ephemeris" summary={source ? (source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E + L1.2') : undefined} defaultOpen={false}>
 				<p className="m-0 text-xs text-ink-300">{describeSource(signature) ?? 'Not computed yet.'}</p>
 				{state.source && <p className="m-0 text-xs text-ink-300">{state.source.readiness === 'readyForJupiter' ? 'The enabled kernels cover the whole period.' : `Kernels: ${state.source.reason ? FALLBACK_LABELS[state.source.reason] : state.source.readiness}.`}</p>}
 				<Button variant="secondary" onClick={() => openKernelLibrary()}>
 					Manage Kernels
 				</Button>
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 

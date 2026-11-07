@@ -2,6 +2,7 @@ import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatGeographic } from '../format'
 import { activeProfile, profileState } from '../profile/profile'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
@@ -13,7 +14,7 @@ import { TIME_ZONES } from './zone'
 
 // Location section of a tool: where it observes from, chosen for the tool alone among the active profile's site
 // (followed live), another saved site, or coordinates typed in with their time zone. Nothing here changes the profile
-// or a site.
+// or a site. A tool may ask for a collapsible section, which then summarizes the place while collapsed.
 
 export interface ToolLocationSectionProps {
 	// Choice of the tool.
@@ -26,6 +27,8 @@ export interface ToolLocationSectionProps {
 	readonly elevation?: boolean
 	// Extra guidance, such as how the tool's map chooses a place.
 	readonly hint?: ReactNode
+	// Identifier of the collapsible section, namespaced by panel; a plain section when absent.
+	readonly collapsibleId?: string
 }
 
 // Option of the source selector: the active site, a saved site after "site:", or coordinates.
@@ -94,7 +97,7 @@ function ManualForm({ start, elevation, onApply }: ManualFormProps) {
 }
 
 // Location section of a tool.
-export function ToolLocationSection({ value, location, onChange, elevation = false, hint }: ToolLocationSectionProps) {
+export function ToolLocationSection({ value, location, onChange, elevation = false, hint, collapsibleId }: ToolLocationSectionProps) {
 	const profiles = useSnapshot(profileState)
 	const { sites } = useSnapshot(siteState)
 	const active = activeSite(activeProfile(profiles), sites)
@@ -114,8 +117,8 @@ export function ToolLocationSection({ value, location, onChange, elevation = fal
 		else onChange({ mode: 'manual', latitude: 0, longitude: 0, elevation: 0, timeZone: 'UTC' })
 	}
 
-	return (
-		<PanelSection title="Location">
+	const content = (
+		<>
 			<Select label="Source" options={options} value={sourceOf(value)} format={format} onChange={choose} />
 			{location ? (
 				<>
@@ -136,6 +139,14 @@ export function ToolLocationSection({ value, location, onChange, elevation = fal
 			{value.mode === 'manual' && <ManualForm key={formKey} start={location} elevation={elevation} onApply={onChange} />}
 			{hint}
 			<Notice>Choosing a location here never changes the profile or its observing site.</Notice>
-		</PanelSection>
+		</>
+	)
+
+	if (!collapsibleId) return <PanelSection title="Location">{content}</PanelSection>
+
+	return (
+		<CollapsibleSection id={collapsibleId} title="Location" summary={location ? (location.name ?? formatGeographic(location.latitude, location.longitude)) : 'No site'}>
+			{content}
+		</CollapsibleSection>
 	)
 }

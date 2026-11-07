@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { PanelSection } from '../../shell/ContextualPanel'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Button } from '../../ui/Button'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
@@ -54,7 +54,7 @@ export function GrsSettings({ timeZone }: GrsSettingsProps) {
 	}
 
 	return (
-		<PanelSection title="Great Red Spot">
+		<CollapsibleSection id="jupiter.grs" title="Great Red Spot" summary={quality.label} defaultOpen={false}>
 			<span className="flex flex-wrap items-center gap-2 text-xs text-ink-300">
 				<StatusBadge tone={quality.tone} label={quality.label} />
 				{status?.referenceAgeDays !== undefined && `reference ${Math.abs(status.referenceAgeDays).toFixed(0)} days ${status.referenceAgeDays >= 0 ? 'old' : 'ahead'}`}
@@ -84,6 +84,6 @@ export function GrsSettings({ timeZone }: GrsSettingsProps) {
 			<Button onClick={save} disabled={grs.saving || referenceTime === undefined || grs.conflict !== undefined} title={grs.conflict ? 'Resolve the conflict first' : undefined}>
 				{grs.saving ? 'Saving…' : 'Save Model'}
 			</Button>
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }

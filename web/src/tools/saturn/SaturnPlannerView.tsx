@@ -6,7 +6,7 @@ import { TimeZoneSelect } from '../../location/TimeZoneSelect'
 import { ToolLocationSection } from '../../location/ToolLocationSection'
 import { useActiveSite, useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
-import { PanelSection } from '../../shell/ContextualPanel'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
@@ -37,7 +37,7 @@ import { SaturnViewer } from './SaturnViewer'
 
 // Pan and zoom of the viewer, in Saturn radii: from the whole system (Iapetus reaches ~59) to the disk and rings,
 // opening on the moons out to Rhea, two units wide for one high.
-const ZOOM = { maxHalfWidth: 62, minHalfWidth: 1.4, initialHalfWidth: 10, aspect: 2 } as const
+const ZOOM = { maxHalfWidth: 62, minHalfWidth: 1, initialHalfWidth: 7, aspect: 2 } as const
 
 // Half-width of the close-up of Saturn and its rings, in Saturn radii.
 const PLANET_HALF_WIDTH = 2.8
@@ -136,27 +136,27 @@ export function SaturnPlanner() {
 
 	const panel = (
 		<>
-			<ToolLocationSection value={state.location} location={location} onChange={(value) => (saturnPlannerState.location = value)} elevation hint="Only decides when the phenomena can be watched; the predictions are geocentric." />
+			<ToolLocationSection value={state.location} location={location} onChange={(value) => (saturnPlannerState.location = value)} collapsibleId="saturn.location" elevation hint="Only decides when the phenomena can be watched; the predictions are geocentric." />
 			{location && (
-				<PanelSection title="Time Zone">
+				<CollapsibleSection id="saturn.timeZone" title="Time Zone" summary={displayZone.zone} defaultOpen={false}>
 					<TimeZoneSelect label="Times Shown In" value={state.zone} onChange={(value) => (saturnPlannerState.zone = value)} site={location} selectedSite={location.source !== 'active'} />
-				</PanelSection>
+				</CollapsibleSection>
 			)}
-			<PanelSection title="Phenomena">
+			<CollapsibleSection id="saturn.phenomena" title="Phenomena" summary={`${state.kinds.length} of ${EVENT_KINDS.length} kinds`}>
 				{EVENT_KINDS.map((kind) => (
 					<Checkbox key={kind} label={KIND_LABELS[kind]} checked={state.kinds.includes(kind)} onChange={(on) => (saturnPlannerState.kinds = toggle(state.kinds, kind, on))} />
 				))}
-			</PanelSection>
-			<PanelSection title="Moons">
+			</CollapsibleSection>
+			<CollapsibleSection id="saturn.moons" title="Moons" summary={`${state.moons.length} of ${SATURN_MOONS.length}`}>
 				{SATURN_MOONS.map((moon) => (
 					<Checkbox key={moon} label={MOON_LABELS[moon]} checked={state.moons.includes(moon)} onChange={(on) => (saturnPlannerState.moons = toggle(state.moons, moon, on))} />
 				))}
-			</PanelSection>
-			<PanelSection title="View">
+			</CollapsibleSection>
+			<CollapsibleSection id="saturn.view" title="View" summary={`${ORIENTATION_LABELS[state.orientation]}${state.showRings ? '' : ', no rings'}`} defaultOpen={false}>
 				<Select label="Orientation" options={PLANET_ORIENTATIONS} value={state.orientation} format={(value: PlanetOrientation) => ORIENTATION_LABELS[value]} onChange={(value) => (saturnPlannerState.orientation = value)} />
 				<Checkbox label="Rings" checked={state.showRings} onChange={(on) => (saturnPlannerState.showRings = on)} />
-			</PanelSection>
-			<PanelSection title="Ephemeris">
+			</CollapsibleSection>
+			<CollapsibleSection id="saturn.ephemeris" title="Ephemeris" summary={moonSignature ? (moonSignature.source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E + TASS 1.7') : ringSignature ? (ringSignature.source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E') : undefined} defaultOpen={false}>
 				<p className="m-0 text-xs text-ink-300">Rings: {describeSource(ringSignature) ?? 'not computed yet.'}</p>
 				<p className="m-0 text-xs text-ink-300">Moons: {describeSource(moonSignature) ?? (state.moonsRefused ? 'refused by the ephemeris policy.' : 'not computed yet.')}</p>
 				{readiness('rings') && <p className="m-0 text-xs text-ink-300">{readiness('rings')}</p>}
@@ -164,7 +164,7 @@ export function SaturnPlanner() {
 				<Button variant="secondary" onClick={() => openKernelLibrary()}>
 					Manage Kernels
 				</Button>
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 

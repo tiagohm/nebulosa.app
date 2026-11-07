@@ -134,6 +134,12 @@ export function abortCapture(state: CaptureRuntime, connectionId: string, device
 	return command(state, connectionId, deviceId, 'capture/abort', { sessionId } satisfies CaptureControlRequest, 'Unable to abort the capture.', request)
 }
 
+// Resumes the capture session sessionId of a camera, which a tool paused and released (such as after a meridian flip
+// that did not leave imaging ready); refused while a tool still holds it.
+export function resumeCapture(state: CaptureRuntime, connectionId: string, deviceId: string, sessionId: string, request: typeof fetch = fetch) {
+	return command(state, connectionId, deviceId, 'capture/resume', { sessionId } satisfies CaptureControlRequest, 'Unable to resume the capture.', request)
+}
+
 // Returns a number limited to [min, max]; a bound that is undefined does not limit it.
 function clamp(value: number, min?: number, max?: number) {
 	return Math.min(max ?? Infinity, Math.max(min ?? -Infinity, value))

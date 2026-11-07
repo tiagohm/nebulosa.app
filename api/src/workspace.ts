@@ -13,7 +13,24 @@ import type { MountRemoteProtocol } from './mountremotecontrol'
 // come, and checks only revisions and what the schema enforces.
 
 // Preference of a profile kept as one value (profile_preferences).
-export type ProfilePreferenceKey = 'telescope' | 'guideTelescope' | 'skyDisplay' | 'skyFraming' | 'starDetection' | 'starProfile' | 'streakDetection' | 'imageAnnotation' | 'imagePlateSolving' | 'imageDisplay' | 'imageAstrometry' | 'statusBar' | 'satelliteFavorites' | 'dateTime' | 'meridianFlipMonitor' | 'mountDither'
+export type ProfilePreferenceKey =
+	| 'telescope'
+	| 'guideTelescope'
+	| 'skyDisplay'
+	| 'skyFraming'
+	| 'starDetection'
+	| 'starProfile'
+	| 'streakDetection'
+	| 'imageAnnotation'
+	| 'imagePlateSolving'
+	| 'imageDisplay'
+	| 'imageAstrometry'
+	| 'statusBar'
+	| 'satelliteFavorites'
+	| 'dateTime'
+	| 'meridianFlipMonitor'
+	| 'meridianFlipExecutor'
+	| 'mountDither'
 
 // Form of a physical camera in a profile (profile_camera_settings).
 export type ProfileCameraForm = 'exposure' | 'acquisition' | 'plateSolving' | 'autoFocus' | 'tppa' | 'pointingModel' | 'targetCentering' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'liveStacking' | 'guiding' | 'display'

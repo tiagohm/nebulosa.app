@@ -142,15 +142,20 @@ interface MeridianFlipItemProps {
 	readonly monitor: MeridianFlipMonitor
 	// Name of the mount, read through the title.
 	readonly name?: string
+	// Executor of the mount: the step of its running flip, or whether a flip is armed or scheduled.
+	readonly executor?: { readonly step?: string; readonly armed: boolean }
 }
 
-// Meridian Flip Monitor of the profile's mount while it is enabled: its icon and short status in the tone of its headline,
+// Meridian Flip Monitor of the profile's mount while it is enabled: its icon and short status in the tone of its headline
+// (the step of a running flip of the Executor instead, and whether a flip is armed),
 // with the time to or since the transit while it monitors, opening the tool. The countdown is only interpolated from the
 // server's sample.
-export function MeridianFlipItem({ monitor, name }: MeridianFlipItemProps) {
+export function MeridianFlipItem({ monitor, name, executor }: MeridianFlipItemProps) {
 	const now = useNow(monitor.availability === 'monitoring')
-	const [, tone] = meridianFlipHeadline(monitor)
-	const text = meridianFlipStatusText(monitor, now)
+	const [, headline] = meridianFlipHeadline(monitor)
+	// A running flip shows its step; an armed one is said after the monitor status.
+	const text = executor?.step ?? `${meridianFlipStatusText(monitor, now)}${executor?.armed ? ' · Armed' : ''}`
+	const tone = executor?.step ? 'active' : headline
 	const title = `Meridian Flip Monitor${name ? ` of ${name}` : ''}: ${text}`
 
 	return (

@@ -12,6 +12,7 @@ import type {
 	GuidingStartRequest,
 	LiveStackingCalibration,
 	LiveStackingRecipe,
+	MeridianFlipExecutorPolicy,
 	MeridianFlipSettings,
 	MountCaptureDither,
 	MountRemoteProtocol,
@@ -105,6 +106,10 @@ export interface ProfileSettings {
 	// edited, and then DEFAULT_MERIDIAN_FLIP_SETTINGS holds. A preference only: it never enables, disables, or changes a
 	// running monitor, whose settings stay the ones it was enabled or updated with.
 	meridianFlipMonitor?: Record<string, Record<string, MeridianFlipSettings>>
+	// Policy of the Meridian Flip Executor of each mount, by saved connection id, then mount id; absent until edited, and then
+	// DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY holds. A preference only: it never arms, disarms, or changes a running execution,
+	// which keeps the policy it was asked with.
+	meridianFlipExecutor?: Record<string, Record<string, MeridianFlipExecutorPolicy>>
 	// Guide pulse settings of the Mount dithers of each mount, by saved connection id, then mount id; absent until edited,
 	// and then DEFAULT_MOUNT_DITHER_SETTINGS holds. A preference only: a running capture keeps the snapshot of its request.
 	mountDither?: Record<string, Record<string, MountDitherSettings>>
@@ -333,6 +338,10 @@ export const DEFAULT_MOUNT_REMOTE_BINDINGS: Readonly<Record<MountRemoteProtocol,
 // transit, a preferred window from 5 to 15 minutes after it, the deadline near 3 minutes before it closes, and 2 seconds
 // to settle. Wall-clock seconds.
 export const DEFAULT_MERIDIAN_FLIP_SETTINGS: MeridianFlipSettings = { earlyWarningSeconds: 900, minimumSeconds: 300, maximumSeconds: 900, deadlineWarningSeconds: 180, settleSeconds: 2 }
+
+// Policy of a Meridian Flip Executor before any was edited, the defaults of the server: the driver's own flip when it has
+// one, recentering, no Auto Focus, 5 seconds of mount settle, and no inference without the operator's consent.
+export const DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY: MeridianFlipExecutorPolicy = { strategy: 'auto', recenterAfterFlip: true, autofocusAfterFlip: false, mountSettleSeconds: 5, allowInferredVerification: false, allowInferredAutoResume: false, treatUnknownMountAsGem: false }
 
 // Largest early warning and window offset the server accepts, in wall-clock seconds: 6 sidereal hours
 // (MAXIMUM_OFFSET_SECONDS of the server).

@@ -43,6 +43,7 @@ import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
 import { handleStreaksEvent, refreshStreaks, streaksState } from './streaks/streaks'
 import { handleImageStackingEvent, imageStackingRuntime, refreshImageStacking } from './tools/imagestacking/projects'
 import { handleMeridianFlipEvent, meridianFlipState, refreshMeridianFlip } from './tools/meridianflip/meridianflip'
+import { handleMeridianFlipExecutorEvent, meridianFlipExecutorState, refreshMeridianFlipExecutor } from './tools/meridianflip/meridianflipexecutor'
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
 import { handleObservatoryCameraEvent, observatoryCamerasState, refreshObservatoryCameras } from './tools/observatorycameras/observatorycameras'
 import { handlePlayerEvent, watchPlayers } from './tools/observatorycameras/player'
@@ -102,6 +103,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleObservatoryCameraEvent(observatoryCamerasState, event), refresh: () => refreshObservatoryCameras(observatoryCamerasState) },
 	{ handle: (event) => handlePlayerEvent(event) },
 	{ handle: (event) => handleMeridianFlipEvent(meridianFlipState, event), refresh: () => refreshMeridianFlip(meridianFlipState) },
+	{ handle: (event) => handleMeridianFlipExecutorEvent(meridianFlipExecutorState, event), refresh: () => refreshMeridianFlipExecutor(meridianFlipExecutorState) },
 	{ handle: (event) => handleSatelliteEvent(satelliteCatalogState, event), refresh: () => refreshSatelliteCatalog(satelliteCatalogState) },
 	{ handle: (event) => handleSpiceKernelEvent(spiceKernelsState, event), refresh: () => refreshSpiceKernels(spiceKernelsState) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },

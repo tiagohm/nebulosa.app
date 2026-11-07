@@ -1,4 +1,4 @@
-import type { AnnotationBodies, DisplaySettings, MeridianFlipSettings, MountRemoteProtocol, StarDetectionRequest, StreakDetectorSettings } from 'api'
+import type { AnnotationBodies, DisplaySettings, MeridianFlipExecutorPolicy, MeridianFlipSettings, MountRemoteProtocol, StarDetectionRequest, StreakDetectorSettings } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, snapshot } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
@@ -58,6 +58,7 @@ import {
 	type GuidingGraphView,
 	type GuidingSettings,
 	DEFAULT_MERIDIAN_FLIP_SETTINGS,
+	DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY,
 	DEFAULT_DITHER_SETTINGS,
 	type CameraDitherSettings,
 	DEFAULT_MOUNT_DITHER_SETTINGS,
@@ -806,6 +807,22 @@ export function setMeridianFlipSettings(state: ProfileState, mount: CameraIdenti
 	const profile = activeProfile(state)
 	profile.settings.meridianFlipMonitor ??= {}
 	nestedObject(profile.settings.meridianFlipMonitor, mount.connectionId)[mount.deviceId] = { ...settings }
+}
+
+// Returns the Meridian Flip Executor policy of a mount: the one edited last, or the defaults. mount is the saved connection
+// id and the mount id; absent gives the defaults.
+export function meridianFlipExecutorPolicy(settings: Pick<ProfileSettings, 'meridianFlipExecutor'>, mount: CameraIdentity | undefined): Readonly<MeridianFlipExecutorPolicy> {
+	return { ...DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY, ...(mount && settings.meridianFlipExecutor?.[mount.connectionId]?.[mount.deviceId]) }
+}
+
+// Remembers fields of the Meridian Flip Executor policy of a mount in the active profile. It never arms, disarms, or changes a
+// running execution. Does nothing without a mount.
+export function setMeridianFlipExecutorPolicy(state: ProfileState, mount: CameraIdentity | undefined, patch: Partial<MeridianFlipExecutorPolicy>) {
+	if (!mount) return
+	const profile = activeProfile(state)
+	profile.settings.meridianFlipExecutor ??= {}
+	const policies = nestedObject(profile.settings.meridianFlipExecutor, mount.connectionId)
+	policies[mount.deviceId] = { ...DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY, ...policies[mount.deviceId], ...patch }
 }
 
 // Returns the dithering preferences of the Camera Acquisition form of a camera: the ones edited last, or the defaults.

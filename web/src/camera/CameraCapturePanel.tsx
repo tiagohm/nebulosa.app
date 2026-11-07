@@ -22,7 +22,7 @@ import { SegmentedControl } from '../ui/SegmentedControl'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { useNow } from '../useNow'
-import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, startCapture, stopCapture } from './capture'
+import { abortCapture, cameraKey, captureCount, captureElapsed, captureRequest, captureRuntime, captureRunning, captureStatus, FILE_STATE_LABELS, fileState, resumeCapture, startCapture, stopCapture } from './capture'
 import { type DitherDevices, DitheringSection, useCaptureDither } from './DitheringSection'
 import { CameraSettings, ExposureSection } from './ExposureSettings'
 
@@ -148,6 +148,7 @@ export function CameraAcquisitionSections({ device, availability, settings: came
 					onStart={() => void start()}
 					onStop={() => device && session && void stopCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
 					onAbort={() => device && session && void abortCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
+					onResume={() => device && session && void resumeCapture(captureRuntime, device.connectionId, device.id, session.sessionId)}
 				/>
 				{availability.status !== 'ready' && !running && <Notice>{availability.message}</Notice>}
 				{error && <Notice error>{error}</Notice>}
@@ -212,11 +213,12 @@ interface CaptureCommandsProps {
 	readonly onStart: () => void
 	readonly onStop: () => void
 	readonly onAbort: () => void
+	readonly onResume: () => void
 }
 
-// Start command of the form's mode while the camera is idle; Stop, and Abort when the driver can abort,
-// while it captures.
-function CaptureCommands({ session, capabilities, mode, pending, startable, onStart, onStop, onAbort }: CaptureCommandsProps) {
+// Start command of the form's mode while the camera is idle; Stop, and Abort when the driver can abort, while it captures;
+// and Resume for a capture a tool paused and gave back to the operator.
+function CaptureCommands({ session, capabilities, mode, pending, startable, onStart, onStop, onAbort, onResume }: CaptureCommandsProps) {
 	if (!captureRunning(session)) {
 		return (
 			<Button disabled={!startable || pending} onClick={onStart}>
@@ -227,6 +229,11 @@ function CaptureCommands({ session, capabilities, mode, pending, startable, onSt
 
 	return (
 		<div className="flex gap-2">
+			{session!.suspension?.state === 'released' && (
+				<Button className="flex-1" disabled={pending || session!.stopping} onClick={onResume}>
+					Resume
+				</Button>
+			)}
 			<Button className="flex-1" variant="secondary" disabled={pending || session!.stopping} onClick={onStop}>
 				{session!.stopping ? 'Stopping…' : 'Stop'}
 			</Button>

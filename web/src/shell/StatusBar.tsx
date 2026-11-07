@@ -11,6 +11,7 @@ import { notificationsState } from '../notifications/notifications'
 import { operationsState } from '../operations'
 import { activeProfile, activeSetup, astronomicalClockPreferences, profileState, statusChipPreferences } from '../profile/profile'
 import { meridianFlipState, monitorKey } from '../tools/meridianflip/meridianflip'
+import { latestExecution, MERIDIAN_FLIP_STEP_LABELS, meridianFlipExecutorState } from '../tools/meridianflip/meridianflipexecutor'
 import { Icon, type IconName } from '../ui/Icon'
 import { astronomicalClockRuntime, effectiveReadings, watchAstronomicalClock } from './statusbar/astronomicalclock'
 import { AstronomicalClockChip } from './statusbar/AstronomicalClockChip'
@@ -101,6 +102,7 @@ export function StatusBar() {
 	const captures = useSnapshot(captureRuntime)
 	const guiding = useSnapshot(guidingRuntime)
 	const meridianFlip = useSnapshot(meridianFlipState)
+	const meridianFlipExecutor = useSnapshot(meridianFlipExecutorState)
 	const abortable = useOperationAbortable()
 	const devices = useWatchedDevices()
 	const profile = activeProfile(profiles)
@@ -115,6 +117,8 @@ export function StatusBar() {
 	const running = scopedRunningOperations(known, serverId)
 	const mountState = watchedDeviceState(control, 'mount', mount)
 	const monitor = mount ? meridianFlip.monitors[monitorKey(mount.connectionId, mount.id)] : undefined
+	const flip = mount ? latestExecution(meridianFlipExecutor, mount.connectionId, mount.id) : undefined
+	const executor = mount && { step: flip?.state === 'running' && flip.step ? MERIDIAN_FLIP_STEP_LABELS[flip.step] : undefined, armed: meridianFlipExecutor.arms[monitorKey(mount.connectionId, mount.id)] !== undefined }
 	const capture = activeCapture(captures.sessions, mainCamera)
 	const session = activeGuiding(guiding.sessions, roleDevice(setup, 'GUIDE_CAMERA', devices))
 	const errors = scopedDeviceErrors({ serverId, devices, control })
@@ -217,7 +221,7 @@ export function StatusBar() {
 			<span ref={groupRef} className="ml-auto flex min-w-0 items-center gap-3 border-l border-line-100 pl-3">
 				{operations.map((operation) => (!fitted || fitted.operations.has(operation.id)) && <OperationItem key={operation.id} operation={operation} online={online} />)}
 				{readings.map((reading) => fittedClocks?.has(reading) && <AstronomicalClockChip key={reading} reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} site={site} />)}
-				{monitor && <MeridianFlipItem monitor={monitor} name={mount?.name} />}
+				{monitor && <MeridianFlipItem monitor={monitor} name={mount?.name} executor={executor} />}
 				{errors.length > 0 && (
 					<span data-fixed title={errors.map((error) => `${error.name}: ${error.message}`).join('\n')} className="flex flex-none items-center gap-1 text-danger">
 						<Icon name="error" className="size-3.5" />

@@ -15,6 +15,7 @@ import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
+import { SegmentedControl } from '../../ui/SegmentedControl'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { useNow } from '../../useNow'
@@ -33,8 +34,9 @@ import {
 	secondsToTransit,
 	updateMeridianFlipSettings,
 } from './meridianflip'
+import { MeridianFlipExecutorSections } from './MeridianFlipExecutorView'
 
-// Meridian Flip Monitor tool: shows the server's monitor of the MOUNT of the active profile's Equipment Setup, where
+// Meridian Flip tool, Monitor section (the Executor section is MeridianFlipExecutorView.tsx): shows the server's monitor of the MOUNT of the active profile's Equipment Setup, where
 // its tracked target stands relative to the upper meridian and the preferred flip window, whether the pier side the
 // driver reports still needs a flip, and the transitions it observed. The mount is never chosen here: a missing or
 // unavailable one is reported and Enable is disabled. The monitor is the server's, so changing profile, setup, or
@@ -151,6 +153,9 @@ export function MeridianFlipMonitorView() {
 	const [draft, setDraft] = useState<MeridianFlipSettings>(() => monitor?.settings ?? saved)
 	const [label, tone] = meridianFlipHeadline(monitor)
 
+	// Section shown: the passive monitor or the executor that flips; transient, a view choice of this tab.
+	const [section, setSection] = useState<'Monitor' | 'Executor'>('Monitor')
+
 	// The draft starts over from the settings of another mount, profile, or enablement.
 	const draftKey = `${profile.id}:${key}:${monitor?.monitorId}`
 	const [draftOf, setDraftOf] = useState(draftKey)
@@ -194,9 +199,10 @@ export function MeridianFlipMonitorView() {
 	)
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Meridian Flip Monitor" actions={actions}>
+		<WorkspaceLayout workspace="tools" title="Meridian Flip" actions={section === 'Monitor' ? actions : undefined}>
 			<div className="h-full overflow-y-auto bg-base-000">
 				<div className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
+					<SegmentedControl options={['Monitor', 'Executor'] as const} value={section} onChange={setSection} className="max-w-xs" />
 					<div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm leading-5">
 						<span className="text-ink-300">Mount</span>
 						<span className="min-w-0 truncate text-ink-100">
@@ -207,19 +213,25 @@ export function MeridianFlipMonitorView() {
 						{mount.status === 'notSelected' && <EquipmentSetupButton />}
 					</div>
 					{error && <Notice error>{error}</Notice>}
-					<div className="grid gap-4 md:grid-cols-2">
-						<ObservationPanel monitor={monitor} />
-						<SettingsPanel draft={draft} onChange={(settings) => setDraft(normalizeMeridianFlipSettings(settings))} monitor={monitor} saved={saved} pending={!!pending} onApply={apply} />
-					</div>
-					{monitor && <TimelinePanel monitor={monitor} />}
-					<div className="grid gap-4 md:grid-cols-2">
-						<ExposurePanel device={device} monitor={monitor} />
-						<EventsPanel monitorKey={key} />
-					</div>
-					<Notice>
-						The monitor only observes: it never moves the mount, stops tracking, or interrupts an exposure. The window is a timing preference, not a physical limit of the mount. A pier side change is reported as observed, never as a verified flip. It stays enabled when this tab closes and ends when the
-						server stops.
-					</Notice>
+					{section === 'Executor' ? (
+						<MeridianFlipExecutorSections mount={mount} monitor={monitor} />
+					) : (
+						<>
+							<div className="grid gap-4 md:grid-cols-2">
+								<ObservationPanel monitor={monitor} />
+								<SettingsPanel draft={draft} onChange={(settings) => setDraft(normalizeMeridianFlipSettings(settings))} monitor={monitor} saved={saved} pending={!!pending} onApply={apply} />
+							</div>
+							{monitor && <TimelinePanel monitor={monitor} />}
+							<div className="grid gap-4 md:grid-cols-2">
+								<ExposurePanel device={device} monitor={monitor} />
+								<EventsPanel monitorKey={key} />
+							</div>
+							<Notice>
+								The monitor only observes: it never moves the mount, stops tracking, or interrupts an exposure. The window is a timing preference, not a physical limit of the mount. A pier side change is reported as observed, never as a verified flip; the Executor is what flips. It stays enabled when
+								this tab closes and ends when the server stops.
+							</Notice>
+						</>
+					)}
 				</div>
 			</div>
 		</WorkspaceLayout>

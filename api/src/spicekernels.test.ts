@@ -215,14 +215,20 @@ test('a curated download is streamed, inspected, and installed', async () => {
 	expect(() => library.download('unknown')).toThrow('Unknown curated kernel.')
 })
 
-test('the curated catalog lists the reviewed Jovian kernel within the size limit', async () => {
+test('the curated catalog lists the reviewed Jovian and Saturnian kernels within the size limit', async () => {
 	const { library } = await started({})
 	const catalog = library.catalog()
-	expect(catalog.map((e) => e.id)).toEqual(['de440s', 'jup365-1990-2050'])
+	expect(catalog.map((e) => e.id)).toEqual(['de440s', 'jup365-1990-2050', 'sat480', 'sat441'])
 	const jovian = catalog[1]
 	expect(jovian.url).toBe('https://naif.jpl.nasa.gov/pub/naif/JUICE/kernels/spk/jup365_19900101_20500101.bsp')
-	expect(jovian.bytes).toBeLessThanOrEqual(MAX_SPICE_KERNEL_BYTES)
-	expect(jovian.kernelId).toBeUndefined()
+	expect(catalog[2].url).toBe('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/sat480.bsp')
+	expect(catalog[3].url).toBe('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/sat441.bsp')
+	// sat441 alone is larger than the former 256 MiB limit.
+	expect(catalog[3].bytes).toBeGreaterThan(256 * 1024 * 1024)
+	for (const entry of catalog) {
+		expect(entry.bytes).toBeLessThanOrEqual(MAX_SPICE_KERNEL_BYTES)
+		expect(entry.kernelId).toBeUndefined()
+	}
 })
 
 test('a download larger than the limit fails without a trace', async () => {

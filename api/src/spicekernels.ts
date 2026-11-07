@@ -19,11 +19,12 @@ export type { SpiceCatalogEntry } from './spicekernels.catalog'
 export type { SpiceKernelJob, SpiceKernelJobKind, SpiceKernelJobState } from './spicekernels.jobs'
 export type { SpiceEphemerisPolicy, SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelState, SpiceSegmentRecord } from './spicekernels.store'
 
-// Largest SPK file the library accepts, in bytes: covers de440s.bsp and the full de440.bsp.
-export const MAX_SPICE_KERNEL_BYTES = 256 * 1024 * 1024
+// Largest SPK file the library accepts, in bytes (1 GiB): covers de440s.bsp, the full de440.bsp and NAIF's full Saturnian
+// satellite ephemeris sat441.bsp (631 MiB), the only NAIF source of Saturn's major moons.
+export const MAX_SPICE_KERNEL_BYTES = 1024 * 1024 * 1024
 
-// Longest wait for a curated download, in milliseconds.
-const DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000
+// Longest wait for a curated download, in milliseconds: 30 minutes, so sat441.bsp completes at about 0.4 MB/s.
+const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000
 
 // Longest wait for a Horizons SPK generation, in milliseconds, once it reaches the head of the JPL queue.
 const GENERATION_TIMEOUT_MS = 120_000

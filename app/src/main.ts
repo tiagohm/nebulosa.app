@@ -5,6 +5,7 @@ import {
 	createAboutRoutes,
 	identifyCelestrakClient,
 	identifyJplClient,
+	MAX_SPICE_KERNEL_BYTES,
 	reopenConnections,
 	startObservatoryCameras,
 	startSatelliteDownloads,
@@ -90,10 +91,15 @@ startObservatoryCameras()
 // Host and port of the server: --host and --port, else APP_HOST and APP_PORT, else localhost and 7000 (serverAddress).
 const address = serverAddress(process.argv.slice(2), process.env)
 
+// Largest request body the server reads, in bytes: an SPK upload of the library's own limit plus 1 MiB, so an oversized
+// upload reaches the library and gets its typed tooLarge answer instead of Bun's default 128 MiB cut-off.
+const MAX_REQUEST_BODY_BYTES = MAX_SPICE_KERNEL_BYTES + 1024 * 1024
+
 // HTTP server listening on that address.
 const server = Bun.serve({
 	hostname: address.host,
 	port: address.port,
+	maxRequestBodySize: MAX_REQUEST_BODY_BYTES,
 	development: development && { hmr: true, console: true },
 	routes: {
 		...routes,

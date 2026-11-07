@@ -105,6 +105,7 @@ import { createWorkspaceRoutes, Workspace } from './workspace'
 
 export type { AboutInfo } from './about'
 export { createAboutRoutes } from './about'
+export { MAX_SPICE_KERNEL_BYTES } from './spicekernels'
 export type { AnalysisJob, AnalysisJobState } from './analysis'
 export type { AstronomicalTimeErrorCode, AstronomicalTimeInput, AstronomicalTimeQuality, AstronomicalTimeReference, AstronomicalTimeReferenceRequest, AstronomicalTimeRequest, AstronomicalTimeResult, CalendarReference, LeapSecondStatus, TimeScaleName, TimeScaleReading } from './astronomicaltime'
 export type { AstroWeatherAstronomy, AstroWeatherErrorCode, AstroWeatherForecast, AstroWeatherMeteorology, AstroWeatherProvider, AstroWeatherSource, AstroWeatherSourceState } from './astroweather'

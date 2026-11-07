@@ -5,7 +5,7 @@ import type { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guide
 import type { MountCommander } from 'nebulosa/src/devices/commanders/mount'
 import { expectedPierSide, type GuideOutput, type Mount } from 'nebulosa/src/devices/indi/device'
 import { type FailedOperationResult, failedOperationResult, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
-import { type ResourceRequest, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { type ResourceRequest, type ResourceReservation, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { Random } from 'nebulosa/src/math/numerical/random'
 import { arcsec } from 'nebulosa/src/math/units/angle'
 import type { DitherMode } from 'nebulosa/src/observation/guiding/dither'
@@ -115,7 +115,23 @@ export interface CaptureDitherPlan {
 	readonly dither: (token: string, signal: AbortSignal, onPhase: (phase: DitherPhase) => void) => Promise<OperationResult<void>>
 	// Drains what a dither may still move and gives back what the capture held for its dithers. Idempotent; never rejects.
 	readonly finish: () => Promise<void>
+	// Lends what the capture reserved for its dithers to another reservation, at once, while the capture is paused between
+	// two frames and no dither runs; nothing is lent by a plan that reserved nothing of its own (guided dithers, or mount
+	// dithers under the caller's invocation). Refused while a dither holds the mount or the guide output.
+	readonly lend: (to: ResourceReservation) => CaptureDitherLending
 }
+
+// What the dither reservation of a capture lent to another reservation, to give back before the capture dithers again.
+export interface CaptureDitherLoan {
+	// Moves the lent mount and guide output back to the reservation of the capture, at once. Returns whether they came
+	// back: not while an operation of the borrower still holds one, nor once the capture finished and gave its reservation
+	// up, and then what was lent stays in the borrower's reservation until it is released.
+	readonly return: () => boolean
+}
+
+// Outcome of lending the dither reservation of a capture: the loan, absent when the plan had nothing to lend, or why
+// nothing moved.
+export type CaptureDitherLending = { readonly ok: true; readonly loan?: CaptureDitherLoan } | { readonly ok: false; readonly error: string }
 
 // Refusal codes of a dither preflight besides the command codes: notGuiding, the guiding session is not guiding;
 // guidingActive, guiding corrects a mount the capture would move itself; meridianFlip, a GoTo dither could flip the mount.
@@ -236,6 +252,7 @@ export class CaptureDithering implements DeviceContext {
 				claim[Symbol.dispose]()
 				return Promise.resolve()
 			},
+			lend: () => ({ ok: true }),
 		}
 	}
 
@@ -338,6 +355,16 @@ export class CaptureDithering implements DeviceContext {
 				})()
 
 				return finished
+			},
+			lend: (to) => {
+				if (!reserved) return { ok: true }
+
+				const own = reserved.reservation
+				const keys = requests.map((request) => request.key)
+				const lent = this.operations.arbiter.transfer(own, to, keys)
+				if (!lent.ok) return { ok: false, error: 'A dither still holds the mount or the guide output' }
+
+				return { ok: true, loan: { return: () => this.operations.arbiter.transfer(to, own, keys).ok } }
 			},
 		}
 	}

@@ -247,6 +247,8 @@ export function captureStatus(session: CaptureSession): string {
 			return delay ? `Waiting — ${seconds(delay.remainingTime / 1000000)} s` : 'Waiting'
 		case 'dithering':
 			return session.dither?.settling ? 'Settling' : 'Dithering'
+		case 'paused':
+			return session.suspension?.state === 'released' ? 'Paused — Resume or Stop' : `Paused by ${session.suspension?.holder ?? 'a tool'}`
 		case 'completed':
 			return 'Completed'
 		case 'stopped':

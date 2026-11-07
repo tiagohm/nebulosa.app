@@ -2,16 +2,16 @@ import { basename, join } from 'path'
 import { formatTemporal, TIMEZONE } from 'nebulosa/src/astronomy/time/temporal'
 import { type Camera, type CameraTransferFormat, CLIENT, type Client } from 'nebulosa/src/devices/indi/device'
 import type { FailedOperationResult, OperationFailureReason, OperationResult } from 'nebulosa/src/devices/orchestration/operation'
-import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { type ResourceReservation, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
-import { CameraCapturer, type CameraFrameGate, type CameraFramePathRequest, type CameraFramePreparation, writeFrameExclusively } from 'nebulosa/src/observation/capture/capture'
+import { type CameraCaptureHandle, type CameraCaptureSuspension, CameraCapturer, type CameraFrameGate, type CameraFramePathRequest, type CameraFramePreparation, writeFrameExclusively } from 'nebulosa/src/observation/capture/capture'
 import type { CameraCaptureListener } from 'nebulosa/src/observation/capture/reporter'
 import { type CameraCaptureEvent, type CameraCaptureStart, type CameraCaptureTime, DEFAULT_CAMERA_CAPTURE_START } from 'nebulosa/src/observation/capture/types'
 import type { CaptureFrameRegistry } from './captureframes'
 import { type CommandErrorCode, type CommandRefusal, type CommandRequest, refusal, refusalResponse } from './commands'
 import { DEFAULT_DATA_DIRECTORY } from './database'
 import type { DeviceRegistry } from './devices'
-import { type CaptureDither, type CaptureDitherErrorCode, type CaptureDitherPlan, type CaptureDithering, ditherBoundary } from './dithering'
+import { type CaptureDither, type CaptureDitherErrorCode, type CaptureDitherLoan, type CaptureDitherPlan, type CaptureDithering, ditherBoundary } from './dithering'
 import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 import type { OperationRegistry, ToolInvocation } from './operations'
@@ -49,6 +49,14 @@ import type { OperationRegistry, ToolInvocation } from './operations'
 // replaced it. A service composing tools inside the process admits a capture (admit) under the ToolInvocation of the
 // reservation it holds, may hold each next frame back with a gate of its own, and awaits the final session of the exact
 // capture it admitted, which stays known after a newer session of the camera replaced it.
+//
+// A capture started by a tab can be paused between two frames by a tool of the process that needs its camera, such as the
+// Meridian Flip Executor (suspendForMotion): the pause takes effect after the frame in flight was exposed, received and
+// written, before the next frame's gate and dither, and lends the camera, and the reservation of its mount dithers, to the
+// tool's reservation. The session keeps its id, counters, file sequence and dither cadence, publishes the paused phase,
+// counts none of the borrower's frames, and goes on from its next frame when the tool resumes it. A tool that cannot let
+// it go on releases it instead: the capture takes its camera back and stays paused until the operator resumes it (the
+// resume route) or stops it.
 
 // Directory saved frames go into when a request names none, and the published path of previewed frames.
 export const DEFAULT_CAPTURES_DIR = join(DEFAULT_DATA_DIRECTORY, 'captures')
@@ -151,6 +159,47 @@ export interface CaptureAdmitted {
 // dither preflight included.
 export type CaptureAdmission = CaptureAdmitted | CommandRefusal<CommandErrorCode | CaptureDitherErrorCode>
 
+// Tool of the process asking to pause a capture (see CameraCaptures.suspendForMotion). Never serialized.
+export interface CaptureSuspensionRequester {
+	// Identity of the request: the same id asking again gets the same answer, any other is refused while one is pending.
+	readonly id: string
+	// Name of the tool, meant for people.
+	readonly holder: string
+	// Reservation the camera, and the dither reservation of the capture, are lent to.
+	readonly reservation: ResourceReservation
+}
+
+// Paused capture as the tool that paused it holds it. Never serialized: only that tool can resume or release it.
+export interface CaptureSuspensionHandle {
+	// Id of the paused capture session.
+	readonly sessionId: string
+	// Frames dispatched before the pause; the next frame opens generation + 1.
+	readonly generation: number
+	// Final session once the capture ended, however it ended; never rejects.
+	readonly ended: Promise<CaptureSession>
+	// Takes the camera and the dither reservation back from the tool's reservation, still paused, at once: busy while an
+	// operation of the tool still holds one of them, ended once the capture ended.
+	readonly reclaim: () => 'reclaimed' | 'busy' | 'ended'
+	// Takes everything back and lets the capture go on with its next frame; busy or ended as reclaim. Once resumed, the
+	// handle does nothing more.
+	readonly resume: () => 'resumed' | 'busy' | 'ended'
+	// Takes everything back and leaves the capture paused, for the operator to resume or stop; busy or ended as reclaim.
+	readonly release: () => 'released' | 'busy' | 'ended'
+}
+
+// Outcome of asking to pause a capture: paused, with the handle; ended before reaching a frame boundary, with its final
+// session; withdrawn, when the signal aborted before the boundary and the capture goes on; or refused.
+export type CaptureSuspensionAdmission = { readonly status: 'suspended'; readonly handle: CaptureSuspensionHandle } | { readonly status: 'captureEnded'; readonly session: CaptureSession } | { readonly status: 'withdrawn' } | CommandRefusal<'notFound' | 'busy' | 'unsupported' | 'deviceError'>
+
+// Pause of a capture as its session publishes it: requested while it waits for the frame boundary, suspended while a tool
+// holds the camera, released once the tool gave it back and the capture waits for the operator.
+export interface CaptureSuspensionState {
+	// Tool that asked for the pause, meant for people.
+	readonly holder: string
+	// Where the pause stands.
+	readonly state: 'requested' | 'suspended' | 'released'
+}
+
 // Response of an accepted capture.
 export interface CaptureStartResponse {
 	// Id of the capture session, repeated by its capture events.
@@ -166,11 +215,12 @@ export interface CaptureStartResponse {
 // - saving: the frame is being written to its file.
 // - waiting: the delay before the next frame is running.
 // - dithering: a dither before the next frame is moving the mount or the guide lock, or waiting for its settle.
+// - paused: the capture is paused between two frames (see CaptureSession.suspension).
 // - completed: every requested frame was taken.
 // - stopped: the capture was stopped and ended after its last frame.
 // - aborted: the capture was aborted; the exposure in flight was lost.
 // - failed: the capture ended because of an error, given in reason and error.
-export type CapturePhase = 'starting' | 'exposing' | 'reading' | 'saving' | 'waiting' | 'dithering' | 'completed' | 'stopped' | 'aborted' | 'failed'
+export type CapturePhase = 'starting' | 'exposing' | 'reading' | 'saving' | 'waiting' | 'dithering' | 'paused' | 'completed' | 'stopped' | 'aborted' | 'failed'
 
 // Dithers of a capture that dithers, as its session publishes them.
 export interface CaptureDitherProgress {
@@ -263,6 +313,8 @@ export interface CaptureSession {
 	readonly previewError?: string
 	// Dithers of the capture; absent when it does not dither.
 	readonly dither?: CaptureDitherProgress
+	// Pause asked by a tool of the process; absent when none was asked or the capture went on.
+	readonly suspension?: CaptureSuspensionState
 }
 
 // Snapshot of GET /api/captures: the latest session and the latest previewed frame of each camera.
@@ -351,7 +403,7 @@ interface ActiveCapture {
 	// Published state, replaced on every change.
 	session: CaptureSession
 	// Interruptions of the toolkit capture, once it started.
-	handle?: { readonly stop: VoidFunction; readonly cancel: () => Promise<void> }
+	handle?: Pick<CameraCaptureHandle, 'stop' | 'cancel' | 'suspend'>
 	// Admission answered to the request that started it, once it started.
 	admitted?: CaptureAdmitted
 	// Resolved with the final session once the capture ended.
@@ -368,6 +420,27 @@ interface ActiveCapture {
 	readonly frames: Map<number, FrameRecord>
 	// Generation of the exposure currently open.
 	generation: number
+	// Reservation the capture was admitted under; such a capture already belongs to a tool and is never paused for another.
+	readonly invocation?: ToolInvocation
+	// Generation whose boundary dither already settled, so a gate run again for the same frame after a pause never dithers
+	// twice.
+	ditheredGeneration?: number
+	// Pause a tool asked for, while it is pending or effective.
+	suspension?: Suspension
+}
+
+// Pause of a capture, from its request to its resumption.
+interface Suspension {
+	// Tool that asked for it.
+	readonly requester: CaptureSuspensionRequester
+	// Answer to the request, shared by a repeated request of the same tool.
+	readonly admission: Promise<CaptureSuspensionAdmission>
+	// Paused toolkit capture, once the pause took effect.
+	paused?: CameraCaptureSuspension
+	// What the dither reservation lent to the tool, while it is lent.
+	loan?: CaptureDitherLoan
+	// Whether the camera is lent to the tool, so frames the capturer publishes are the tool's, not this capture's.
+	lent: boolean
 }
 
 // Preview state of one camera: the frame shown, and decoding in progress.
@@ -538,9 +611,11 @@ export class CameraCaptures implements Disposable {
 			}
 		}
 
-		if (capture.dither && !signal.aborted && ditherBoundary(frame.generation, capture.dither.everyFrames)) {
+		// A pause that came after this dither runs the gate again for the same frame, which must not dither twice.
+		if (capture.dither && !signal.aborted && capture.ditheredGeneration !== frame.generation && ditherBoundary(frame.generation, capture.dither.everyFrames)) {
 			const failed = await this.#dither(capture, capture.dither, frame.generation, signal)
 			if (failed) return failed
+			if (!signal.aborted) capture.ditheredGeneration = frame.generation
 		}
 
 		return capture.beforeFrame && !signal.aborted ? await capture.beforeFrame(frame, signal) : undefined
@@ -665,6 +740,7 @@ export class CameraCaptures implements Disposable {
 			beforeFrame: options.beforeFrame,
 			token,
 			dither,
+			invocation: options.invocation,
 		}
 
 		this.#active.set(key, capture)
@@ -673,6 +749,7 @@ export class CameraCaptures implements Disposable {
 			listener: (event, path) => this.#reported(capture, event, path),
 			framePath: (frame) => this.#framePath(capture, frame),
 			beforeFrame: (frame, signal) => this.#gate(capture, frame, signal),
+			suspendable: true,
 		})
 
 		const { operationId } = this.operations.admit('camera.capture', [{ connectionId, deviceId }], token, () => handle.result).record
@@ -690,8 +767,8 @@ export class CameraCaptures implements Disposable {
 			if (capture.dither) await capture.dither.finish()
 			if (this.#active.get(key) === capture) this.#active.delete(key)
 
-			// A dither interrupted by a stop or an abort no longer settles once the capture ended.
-			const ended = { endedAt: Date.now(), exposure: undefined, delay: undefined, ...(capture.session.dither && { dither: { ...capture.session.dither, settling: false } }) }
+			// A dither interrupted by a stop or an abort no longer settles once the capture ended, and a pause ends with it.
+			const ended = { endedAt: Date.now(), exposure: undefined, delay: undefined, suspension: undefined, ...(capture.session.dither && { dither: { ...capture.session.dither, settling: false } }) }
 			if (result.ok) this.#update(capture, { phase: capture.session.stopping ? 'stopped' : 'completed', ...ended })
 			else this.#update(capture, { phase: result.reason === 'aborted' ? 'aborted' : 'failed', reason: result.reason, error: result.error, ...ended })
 			capture.ended.resolve(capture.session)
@@ -734,10 +811,139 @@ export class CameraCaptures implements Disposable {
 	async abortSession(sessionId: string): Promise<'aborted' | 'notRunning' | 'unsupported'> {
 		const capture = this.#session(sessionId)
 		if (!capture?.handle) return 'notRunning'
-		if (!capture.camera.canAbort) return 'unsupported'
+		// A paused capture has no exposure in flight, so ending it commands nothing the driver must support.
+		if (!capture.camera.canAbort && capture.suspension?.paused === undefined) return 'unsupported'
 
 		await capture.handle.cancel()
 		return 'aborted'
+	}
+
+	// Resumes a capture the tool that paused it released (see CaptureSuspensionHandle.release), when sessionId is the
+	// running session of the camera. Responds 204, 404 when the camera captures nothing or runs another session, and 409
+	// while the capture is not paused, a tool still holds it, or its camera cannot be taken back.
+	resume(connectionId: string, deviceId: string, { sessionId }: CaptureControlRequest): Response {
+		const capture = this.#running(connectionId, deviceId)
+		if (capture?.session.sessionId !== sessionId) return errorResponse('No capture with this id is running on this camera', 404, 'notFound')
+
+		const suspension = capture.suspension
+		if (suspension?.paused === undefined || capture.session.suspension?.state !== 'released') return errorResponse(suspension ? `${suspension.requester.holder} still holds the capture` : 'The capture is not paused', 409, 'busy')
+
+		const resumed = this.#resume(capture, suspension)
+		return resumed === 'resumed' ? new Response(null, { status: 204 }) : errorResponse(resumed === 'ended' ? 'The capture has ended' : 'The camera cannot be taken back now', 409, 'busy')
+	}
+
+	// Pauses the running capture session sessionId at its next frame boundary for a tool of the process, and lends its
+	// camera, and the reservation of its mount dithers, to the tool's reservation (see CaptureSuspensionHandle). The camera
+	// joins the reservation at once, so nothing else can take it while the frame in flight finishes. The same requester
+	// asking again gets the same answer. Refused: notFound for an unknown session, busy while another tool asked or the
+	// reservation cannot take the camera, unsupported for a capture admitted under a reservation, and deviceError when the
+	// camera did not become idle at the boundary. An abort of signal before the boundary withdraws the request; the capture
+	// goes on and the camera stays in the tool's reservation until it is released.
+	suspendForMotion(sessionId: string, requester: CaptureSuspensionRequester, signal: AbortSignal): Promise<CaptureSuspensionAdmission> {
+		const capture = this.#session(sessionId)
+
+		if (!capture?.handle) {
+			const session = this.#sessions.values().find((session) => session.sessionId === sessionId)
+			return Promise.resolve(session?.endedAt !== undefined ? { status: 'captureEnded', session } : refusal('No capture with this id is running', 404, 'notFound'))
+		}
+
+		if (capture.invocation) return Promise.resolve(refusal('The capture already runs for a tool', 409, 'unsupported'))
+
+		if (capture.suspension) {
+			if (capture.suspension.requester.id === requester.id) return capture.suspension.admission
+			return Promise.resolve(refusal(`${capture.suspension.requester.holder} already paused the capture`, 409, 'busy'))
+		}
+
+		const { handle } = capture
+		const admission = Promise.withResolvers<CaptureSuspensionAdmission>()
+		const suspension: Suspension = { requester, admission: admission.promise, lent: false }
+		capture.suspension = suspension
+		this.#update(capture, { suspension: { holder: requester.holder, state: 'requested' } })
+
+		void handle.suspend(requester.reservation, signal).then(async (result) => {
+			if (!result.ok) {
+				if (capture.suspension === suspension) capture.suspension = undefined
+				if (capture.session.suspension !== undefined && capture.session.endedAt === undefined) this.#update(capture, { suspension: undefined })
+
+				if (result.reason === 'ended') admission.resolve({ status: 'captureEnded', session: await capture.ended.promise })
+				else if (result.reason === 'withdrawn') admission.resolve({ status: 'withdrawn' })
+				else if (result.reason === 'unexpectedState') admission.resolve(refusal(result.error ?? 'The camera did not become idle', 502, 'deviceError'))
+				else admission.resolve(refusal(result.error ?? 'The camera cannot be lent', 409, result.reason === 'unsupported' ? 'unsupported' : 'busy'))
+				return
+			}
+
+			suspension.paused = result.suspension
+			suspension.lent = true
+
+			// No dither runs at the boundary, so what the capture reserved for its dithers is free to lend.
+			const lending = capture.dither?.lend(requester.reservation) ?? { ok: true }
+
+			if (!lending.ok) {
+				suspension.lent = false
+				result.suspension.resume()
+				capture.suspension = undefined
+				this.#update(capture, { suspension: undefined })
+				admission.resolve(refusal(lending.error, 409, 'busy'))
+				return
+			}
+
+			suspension.loan = lending.loan
+			this.#update(capture, { phase: 'paused', exposure: undefined, delay: undefined, suspension: { holder: requester.holder, state: 'suspended' } })
+			admission.resolve({ status: 'suspended', handle: this.#suspensionHandle(capture, suspension, result.suspension) })
+		})
+
+		return admission.promise
+	}
+
+	// Builds the handle of a paused capture, which acts only while that pause is the capture's.
+	#suspensionHandle(capture: ActiveCapture, suspension: Suspension, paused: CameraCaptureSuspension): CaptureSuspensionHandle {
+		const current = () => capture.suspension === suspension && capture.session.endedAt === undefined
+
+		return Object.freeze({
+			sessionId: capture.session.sessionId,
+			generation: paused.generation,
+			ended: capture.ended.promise,
+			reclaim: () => (current() ? this.#reclaim(suspension) : 'ended'),
+			resume: () => (current() ? this.#resume(capture, suspension) : 'ended'),
+			release: () => {
+				if (!current()) return 'ended'
+				const reclaimed = this.#reclaim(suspension)
+				if (reclaimed !== 'reclaimed') return reclaimed
+				this.#update(capture, { suspension: { holder: suspension.requester.holder, state: 'released' } })
+				return 'released'
+			},
+		})
+	}
+
+	// Takes the camera and the dither reservation of a paused capture back from the tool, still paused.
+	#reclaim(suspension: Suspension): 'reclaimed' | 'busy' {
+		const paused = suspension.paused
+		if (paused === undefined) return 'busy'
+
+		if (suspension.lent) {
+			if (!paused.reclaim().ok) return 'busy'
+			suspension.lent = false
+		}
+
+		if (suspension.loan) {
+			// A capture that finished already gave its dither reservation up; what was lent then goes with the tool's.
+			if (!suspension.loan.return()) return 'busy'
+			suspension.loan = undefined
+		}
+
+		return 'reclaimed'
+	}
+
+	// Takes everything back and lets a paused capture go on with its next frame.
+	#resume(capture: ActiveCapture, suspension: Suspension): 'resumed' | 'busy' | 'ended' {
+		if (capture.session.endedAt !== undefined) return 'ended'
+		const reclaimed = this.#reclaim(suspension)
+		if (reclaimed !== 'reclaimed') return reclaimed
+		if (!suspension.paused?.resume().ok) return 'busy'
+
+		capture.suspension = undefined
+		this.#update(capture, { phase: 'starting', suspension: undefined })
+		return 'resumed'
 	}
 
 	// Returns the running capture of a camera, if any.
@@ -807,7 +1013,8 @@ export class CameraCaptures implements Disposable {
 	#published(frame: Buffer, camera: Camera) {
 		const key = resourceKey(camera)
 		const capture = this.#active.get(key)
-		if (!capture) return
+		// The frames of a tool the camera is lent to are the tool's own, never this capture's.
+		if (!capture || capture.suspension?.lent) return
 
 		const generation = capture.generation
 		const resolved = capture.frames.get(generation)
@@ -935,6 +1142,10 @@ export function createCaptureRoutes(captures: CameraCaptures) {
 		'/api/connections/:id/cameras/:deviceId/capture/abort': {
 			// Aborts the exposure in flight and ends the running capture session of a camera.
 			POST: async (req) => captures.abort(req.params.id, req.params.deviceId, (await req.json()) as CaptureControlRequest),
+		},
+		'/api/connections/:id/cameras/:deviceId/capture/resume': {
+			// Resumes a capture session a tool paused and released, from its next frame.
+			POST: async (req) => captures.resume(req.params.id, req.params.deviceId, (await req.json()) as CaptureControlRequest),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

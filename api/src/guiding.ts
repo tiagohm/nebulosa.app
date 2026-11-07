@@ -8,7 +8,7 @@ import type { DeviceHandler } from 'nebulosa/src/devices/indi/manager/device'
 import type { BlobEncoding } from 'nebulosa/src/devices/indi/types'
 import { failedOperationResult, type OperationFailureReason, type OperationResult, type OperationScope, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { abortableDelay } from 'nebulosa/src/devices/orchestration/operation.wait'
-import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { type ResourceReservation, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { Image } from 'nebulosa/src/imaging/model/types'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
@@ -1458,9 +1458,25 @@ export class GuidingSessions implements Disposable {
 
 	// Stops the corrections of a session for a motion of another service, keeping its loop and calibration, and resolves once the
 	// guide output was released, with what restoreAfterMotion needs; a failure leaves the output as it stands.
-	async suspendForMotion(sessionId: string): Promise<OperationResult<GuidingSuspension>> {
+	//
+	// With options.reservation, the guide output and the mount of the session join that reservation before guiding stops, with
+	// the session as their guest: when the run lets them go they stay in the reservation instead of becoming free, so no other
+	// command takes the mount between the stop and the motion, and restoreAfterMotion takes them back inside it. A reservation
+	// that cannot take them, such as one of a session admitted under another reservation, refuses the suspension as busy
+	// without stopping anything.
+	async suspendForMotion(sessionId: string, options: { readonly reservation?: ResourceReservation } = {}): Promise<OperationResult<GuidingSuspension>> {
 		const session = this.#sessions.find(sessionId)
 		if (!session?.summary.active) return failedOperationResult('unexpectedState', 'The guiding session ended')
+
+		if (options.reservation) {
+			// The root of the session holds its guide camera and is the owner of every lease of its runs.
+			const root = this.operations.arbiter.snapshot(resourceKey(session.camera)).owner
+			if (!root) return failedOperationResult('unexpectedState', 'The guiding session holds no camera')
+
+			const devices = session.mount ? [session.guideOutput, session.mount] : [session.guideOutput]
+			const extended = options.reservation.extend(devices.map((device) => ({ key: resourceKey(device), device, guest: root })))
+			if (!extended.ok) return failedOperationResult('busy', 'The guide output or the mount cannot be reserved')
+		}
 
 		const commandId = crypto.randomUUID()
 		this.#update(session, { command: { commandId, command: 'stopGuiding', state: 'running' } })

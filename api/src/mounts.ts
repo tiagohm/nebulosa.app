@@ -1,19 +1,19 @@
 import { equatorialToHorizontal } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { timeNow } from 'nebulosa/src/astronomy/time/time'
-import { type MountCommandOptions, MountCommander, type MountMoveDirection, type MountSlewResult } from 'nebulosa/src/devices/commanders/mount'
+import { type MountCommandOptions, MountCommander, type MountFlipExecution, type MountFlipStrategy, type MountMoveDirection, type MountSlewResult } from 'nebulosa/src/devices/commanders/mount'
 import type { Client, Mount, MountTargetCoordinate, MountTargetCoordinateType, TrackMode } from 'nebulosa/src/devices/indi/device'
 import { mountTargetEquatorial } from 'nebulosa/src/devices/indi/manager/mount'
-import type { OperationContext, OperationResult, OperationScope } from 'nebulosa/src/devices/orchestration/operation'
+import { failedOperationResult, type OperationContext, type OperationResult, type OperationScope } from 'nebulosa/src/devices/orchestration/operation'
 import { deviceKey, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
-import { deg } from 'nebulosa/src/math/units/angle'
+import { type Angle, deg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import { admissionResponse, admitCommand, type CommandAdmission, type CommandErrorCode, type CommandRequest, disconnected, failureCode, findDevice, notFound, refusal, resolveConnected, settle, startCommand, unsupported } from './commands'
+import { admissionResponse, admitCommand, type CommandAdmission, type CommandErrorCode, type CommandRefusal, type CommandRequest, disconnected, failureCode, findDevice, notFound, refusal, resolveConnected, settle, startCommand, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import { DEFAULT_LEASE_OPTIONS, type LeasedMotion, LeasedMotions, type LeasedPhase, type LeasedSession, type LeasedStartResponse, type LeaseOptions, leasedFailureStatus } from './leases'
 import type { MountCorrectionPlan, MountCorrections } from './mountpointing.corrections'
-import type { OperationRegistry, ToolInvocation } from './operations'
+import type { OperationAdmission, OperationRegistry, ToolInvocation } from './operations'
 import { EphemerisUnavailableError, HorizonsEphemerisError, type SkyObserver, type SkyPosition } from './sky/ephemeris'
 import type { SkyLocator } from './sky/routes'
 import type { SkyObjectRef } from './sky/types'
@@ -114,6 +114,28 @@ export interface MountGoToRequest extends CommandRequest {
 	// Observer whose horizon the target must be above; the mount points from the same site.
 	readonly observer: SkyObserver
 }
+
+// Meridian flip a service composing tools admits inside the process (MountCommands.admitMeridianFlip).
+export interface MountMeridianFlipRequest extends CommandRequest {
+	// Target the flip ends on, in the equinox of date, in radians: the frozen target of the flip, never re-read.
+	readonly target: { readonly rightAscension: Angle; readonly declination: Angle }
+	// Observer whose horizon the target must be above.
+	readonly observer: SkyObserver
+	// How the flip is commanded; the mount must support it.
+	readonly strategy: MountFlipStrategy
+	// Time the mount has to show motion or a pier side change after the command, in milliseconds; the toolkit's default
+	// when absent.
+	readonly motionStartTimeout?: number
+	// Time a pier side change may lag the end of the motion, in milliseconds; the toolkit's default when absent.
+	readonly pierSideSettleTime?: number
+}
+
+// Meridian flip admitted inside the process: its operation, and the evidence it leaves once it ended.
+export type MountMeridianFlipAdmission = { readonly ok: true; readonly admission: OperationAdmission; readonly result: Promise<OperationResult<MountFlipExecution>> } | CommandRefusal
+
+// Flip results remembered by operation id, so a repeated token still finds the evidence of its flip; older ones are
+// forgotten, as command tokens are.
+const MAX_FLIP_RESULTS = 32
 
 // Body of POST /api/connections/:id/mounts/:deviceId/sync.
 export interface MountSyncRequest {
@@ -230,6 +252,8 @@ export class MountCommands implements Disposable {
 	readonly #commander: MountCommander
 	// Nudge sessions of every mount.
 	readonly #nudges: LeasedMotions<MountNudgeSession>
+	// Evidence of the recent in-process meridian flips, by operation id, oldest first (see MAX_FLIP_RESULTS).
+	readonly #flips = new Map<string, Promise<OperationResult<MountFlipExecution>>>()
 
 	// Creates the commands over the device registry. client resolves an open connection id to its client,
 	// locate resolves sky objects, operations runs and publishes every mount operation, listener receives
@@ -403,6 +427,48 @@ export class MountCommands implements Disposable {
 		if (refused) return errorResponse(...refused)
 
 		return startCommand(this.operations, 'mount.flip', connectionId, mount, request, () => this.#commander.flip(this.operations.coordinator, mount, coordinate))
+	}
+
+	// Admits a meridian flip with an explicit strategy, under the invocation's reservation when given, as a mount.flip
+	// operation, and returns it with the evidence it leaves (MountCommander.executeMeridianFlip), or its refusal: 404 unknown
+	// mount; 409 disconnected, parked or busy; 422 when the mount does not support the strategy or the target is below the
+	// observer's horizon. The command is always sent, even toward the coordinate the mount holds, and never corrected by a
+	// pointing model: the first motion of a flip is the one that decides the pier side, so it goes exactly as frozen.
+	admitMeridianFlip(connectionId: string, deviceId: string, request: MountMeridianFlipRequest, invocation?: ToolInvocation): MountMeridianFlipAdmission {
+		const resolved = resolveConnected(this, connectionId, 'mount', deviceId, 'Mount')
+		if (!resolved.ok) return resolved
+		const mount = resolved.device
+
+		const coordinate: MountTargetCoordinate<number> = { type: 'JNOW', JNOW: { x: request.target.rightAscension, y: request.target.declination } }
+		const refused = slewRefusal(request.strategy === 'nativeFlip' ? 'mount.flip' : 'mount.goto', mount, coordinate, request.observer)
+		if (refused) return refusal(...refused)
+
+		let result: Promise<OperationResult<MountFlipExecution>> | undefined
+		const options = { strategy: request.strategy, motionStartTimeout: request.motionStartTimeout, pierSideSettleTime: request.pierSideSettleTime }
+
+		const admitted = admitCommand(
+			this.operations,
+			'mount.flip',
+			connectionId,
+			mount,
+			request,
+			(scope) => {
+				result = this.#commander.executeMeridianFlip(scope, mount, coordinate, options)
+				return result
+			},
+			invocation,
+		)
+
+		if (!admitted.ok) return admitted
+
+		const { operationId } = admitted.admission.record
+
+		if (result) {
+			this.#flips.set(operationId, result)
+			if (this.#flips.size > MAX_FLIP_RESULTS) this.#flips.delete(this.#flips.keys().next().value!)
+		}
+
+		return { ok: true, admission: admitted.admission, result: this.#flips.get(operationId) ?? Promise.resolve(failedOperationResult('unexpectedState', 'The evidence of this flip is no longer known')) }
 	}
 
 	// Redefines where the mount points. Responds 204 once applied, 404 unknown mount, 409 disconnected or

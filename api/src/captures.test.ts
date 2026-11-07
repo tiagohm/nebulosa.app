@@ -5,6 +5,7 @@ import { join } from 'path'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
 import { failedOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { DEFAULT_CAMERA_CAPTURE_START } from 'nebulosa/src/observation/capture/types'
 import { type CaptureFrameEvent, CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureEvent, type CaptureFrame, type CaptureFrameSink, type CaptureAdmissionOptions, type CaptureSession, type CaptureStartRequest, frameName, sanitizeFileName } from './captures'
 import { ConnectionManager } from './connection'
@@ -542,4 +543,125 @@ test('the gate of the caller holds each next frame, and its failure ends the cap
 		beforeFrame: ({ generation }) => Promise.resolve(generation === 2 ? failedOperationResult('unexpectedState', 'not now') : undefined),
 	})
 	expect(await refused.ended).toMatchObject({ phase: 'failed', reason: 'unexpectedState', error: 'not now', captured: 1 })
+})
+
+// Opens a reservation a tool would pause captures for, released after the test.
+function toolReservation(operations: OperationRegistry, id: string = crypto.randomUUID()) {
+	const reserved = operations.arbiter.reserve({ id, kind: 'mount.meridianFlip' }, [])
+	if (!reserved.ok) throw new Error('reservation refused')
+	disposables.push({ [Symbol.dispose]: () => reserved.reservation.release() })
+	return reserved.reservation
+}
+
+test('a paused capture lends its camera to a tool, counts none of its frames, and resumes the same session', async () => {
+	const { id, cameraId, captures, operations, camera, session, frames } = await setup()
+	const reservation = toolReservation(operations)
+	const capture = admitted(captures, id, cameraId, request({ exposureMode: 'loop' }))
+	await capture.started
+
+	const suspended = await captures.suspendForMotion(capture.sessionId, { id: 'flip', holder: 'Meridian Flip Executor', reservation }, new AbortController().signal)
+	if (!('status' in suspended) || suspended.status !== 'suspended') throw new Error('not suspended')
+
+	expect(session()).toMatchObject({ phase: 'paused', suspension: { holder: 'Meridian Flip Executor', state: 'suspended' } })
+	expect(operations.arbiter.reservationOwnerOf(resourceKey(camera))?.id).toBe(reservation.ownerId)
+	expect(captures.start(id, cameraId, request()).status).toBe(409)
+
+	// A frame of the tool through the shared capturer under the reservation is not one of the capture's.
+	const captured = session()!.captured
+	const borrowed = await captures.capturer.start(operations.scope({ reservation }), camera, { ...structuredClone(DEFAULT_CAMERA_CAPTURE_START), exposureTime: 0.05, exposureTimeUnit: 'second', width: 16, height: 16, subframe: true }).result
+	expect(borrowed.ok).toBeTrue()
+	expect(session()!.captured).toBe(captured)
+
+	expect(suspended.handle.resume()).toBe('resumed')
+	await waitUntil(() => session()!.captured >= captured + 2)
+	expect(captures.stopSession(capture.sessionId)).toBeTrue()
+
+	const ended = await capture.ended
+	expect(ended).toMatchObject({ sessionId: capture.sessionId, phase: 'stopped' })
+	expect(ended.suspension).toBeUndefined()
+	expect(ended.saved).toBe(ended.captured)
+	// The file sequence goes on across the pause.
+	const generations = frames()
+		.filter((frame) => frame.sessionId === capture.sessionId && frame.file === 'saved')
+		.map((frame) => frame.generation)
+	expect(generations).toEqual(generations.toSorted((a, b) => a - b))
+})
+
+test('a released capture stays paused until the operator resumes it', async () => {
+	const { id, cameraId, captures, operations, camera, session } = await setup()
+	const reservation = toolReservation(operations)
+	const capture = admitted(captures, id, cameraId, request({ exposureMode: 'loop' }))
+	await capture.started
+
+	const suspended = await captures.suspendForMotion(capture.sessionId, { id: 'flip', holder: 'Meridian Flip Executor', reservation }, new AbortController().signal)
+	if (!('status' in suspended) || suspended.status !== 'suspended') throw new Error('not suspended')
+
+	const resume = (sessionId: string) => captures.resume(id, cameraId, { sessionId })
+
+	expect(resume(capture.sessionId).status).toBe(409)
+	expect(suspended.handle.release()).toBe('released')
+	expect(session()).toMatchObject({ phase: 'paused', suspension: { state: 'released' } })
+	expect(operations.arbiter.availability(resourceKey(camera))).toBe('leased')
+	expect(resume('another').status).toBe(404)
+	expect(resume(capture.sessionId).status).toBe(204)
+	expect(resume(capture.sessionId).status).toBe(409)
+
+	const captured = session()!.captured
+	await waitUntil(() => session()!.captured > captured)
+	await captures.abortSession(capture.sessionId)
+	expect(await capture.ended).toMatchObject({ phase: 'aborted' })
+})
+
+test('a stop while paused ends the capture and the handle reports it ended', async () => {
+	const { id, cameraId, captures, operations } = await setup()
+	const reservation = toolReservation(operations)
+	const capture = admitted(captures, id, cameraId, request({ exposureMode: 'loop' }))
+	await capture.started
+
+	const suspended = await captures.suspendForMotion(capture.sessionId, { id: 'flip', holder: 'Meridian Flip Executor', reservation }, new AbortController().signal)
+	if (!('status' in suspended) || suspended.status !== 'suspended') throw new Error('not suspended')
+
+	captures.stopSession(capture.sessionId)
+	expect(await suspended.handle.ended).toMatchObject({ phase: 'stopped' })
+	expect(suspended.handle.resume()).toBe('ended')
+	expect(await captures.suspendForMotion(capture.sessionId, { id: 'flip', holder: 'Meridian Flip Executor', reservation }, new AbortController().signal)).toMatchObject({ status: 'captureEnded', session: { phase: 'stopped' } })
+})
+
+test('a pause is refused for an unknown session, another tool, or a capture of a reservation, and repeated for the same tool', async () => {
+	const { id, cameraId, captures, operations, camera } = await setup()
+	const reservation = toolReservation(operations)
+	const signal = new AbortController().signal
+
+	expect(await captures.suspendForMotion('unknown', { id: 'flip', holder: 'Flip', reservation }, signal)).toMatchObject({ ok: false, code: 'notFound' })
+
+	const capture = admitted(captures, id, cameraId, request({ exposureMode: 'loop' }))
+	await capture.started
+	const first = captures.suspendForMotion(capture.sessionId, { id: 'flip', holder: 'Flip', reservation }, signal)
+	expect(captures.suspendForMotion(capture.sessionId, { id: 'flip', holder: 'Flip', reservation }, signal)).toBe(first)
+	expect(await captures.suspendForMotion(capture.sessionId, { id: 'other', holder: 'Other', reservation }, signal)).toMatchObject({ ok: false, code: 'busy' })
+	expect(await first).toMatchObject({ status: 'suspended' })
+	await captures.abortSession(capture.sessionId)
+	await capture.ended
+	reservation.release()
+
+	const invocation = reserve(operations, camera)
+	const automated = admitted(captures, id, cameraId, request({ exposureMode: 'loop' }), { invocation })
+	await automated.started
+	expect(await captures.suspendForMotion(automated.sessionId, { id: 'flip', holder: 'Flip', reservation: toolReservation(operations) }, signal)).toMatchObject({ ok: false, code: 'unsupported' })
+	await captures.abortSession(automated.sessionId)
+	await automated.ended
+})
+
+test('a withdrawn pause lets the capture go on', async () => {
+	const { id, cameraId, captures, operations, session } = await setup()
+	const reservation = toolReservation(operations)
+	const capture = admitted(captures, id, cameraId, request({ exposureMode: 'fixed', count: 3 }))
+	await capture.started
+	const withdraw = new AbortController()
+
+	const pending = captures.suspendForMotion(capture.sessionId, { id: 'flip', holder: 'Flip', reservation }, withdraw.signal)
+	withdraw.abort()
+	expect(await pending).toEqual({ status: 'withdrawn' })
+	expect(await capture.ended).toMatchObject({ phase: 'completed', captured: 3 })
+	expect(session()?.suspension).toBeUndefined()
 })

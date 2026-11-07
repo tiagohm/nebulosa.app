@@ -408,6 +408,57 @@ describe('guiding', () => {
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
 	})
 
+	test('a run suspended into a reservation hands the mount to it with no gap and takes it back on restore', async () => {
+		const context = await setup()
+		const { sessionId } = await start(context)
+		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+
+		const reserved = context.operations.arbiter.reserve({ id: 'flip', kind: 'mount.meridianFlip' }, [])
+		if (!reserved.ok) throw new Error('reservation refused')
+		const key = resourceKey(context.mount)
+		const states: string[] = []
+		const observer = setInterval(() => states.push(context.operations.arbiter.availability(key)), 1)
+
+		const suspended = await context.guiding.suspendForMotion(sessionId, { reservation: reserved.reservation })
+		if (!suspended.ok) throw new Error('not suspended')
+		await waitUntil(() => context.operations.arbiter.availability(key) === 'reserved')
+		clearInterval(observer)
+
+		// The mount never became free: only the reservation, or the guiding run as its guest, held it.
+		expect(states).not.toContain('available')
+		expect(context.operations.arbiter.reservationOwnerOf(key)?.id).toBe('flip')
+		expect(context.operations.admits(context.mount)).toBeFalse()
+		expect(context.operations.admits(context.mount, { reservation: reserved.reservation })).toBeTrue()
+
+		// The restored run takes the mount back as the guest of the reservation, which nobody else could.
+		const controller = new AbortController()
+		const restored = context.guiding.restoreAfterMotion(suspended.value, controller.signal)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+		expect(context.operations.arbiter.snapshot(key)).toMatchObject({ availability: 'leased', owner: { kind: 'guiding' }, reservationOwner: { id: 'flip' } })
+		reserved.reservation.release()
+		expect(context.operations.arbiter.snapshot(key)).toMatchObject({ availability: 'leased', owner: { kind: 'guiding' } })
+		controller.abort()
+		await restored
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+	})
+
+	test('a reservation that cannot take the mount refuses the suspension without stopping guiding', async () => {
+		const context = await setup()
+		const { sessionId } = await start(context)
+		expect(context.guiding.selectTarget(sessionId, { position: [128, 128] }).status).toBe(200)
+		expect(context.guiding.startGuiding(sessionId, { token: `token-${tokens++}`, recalibrate: true, settle: SETTLE }).status).toBe(202)
+		await waitUntil(() => context.summary()?.guideOutputHeld === true)
+
+		const reserved = context.operations.arbiter.reserve({ id: 'flip', kind: 'mount.meridianFlip' }, [])
+		if (!reserved.ok) throw new Error('reservation refused')
+		reserved.reservation.release()
+
+		expect(await context.guiding.suspendForMotion(sessionId, { reservation: reserved.reservation })).toMatchObject({ ok: false, reason: 'busy' })
+		expect(context.summary()).toMatchObject({ guideOutputHeld: true })
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+	})
 	test('a session changed during the motion is left as it is', async () => {
 		const context = await setup()
 		const { sessionId } = await start(context)

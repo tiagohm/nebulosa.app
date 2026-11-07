@@ -458,3 +458,93 @@ describe('mount dithering of a capture', () => {
 		expect(fake.holds).toEqual([])
 	})
 })
+
+describe('dithering across a pause', () => {
+	// Opens a reservation a tool pauses captures for, released after the test.
+	const toolReservation = (operations: OperationRegistry) => {
+		const reserved = operations.arbiter.reserve({ id: crypto.randomUUID(), kind: 'mount.meridianFlip' }, [])
+		if (!reserved.ok) throw new Error('reservation refused')
+		disposables.push({ [Symbol.dispose]: () => reserved.reservation.release() })
+		return reserved.reservation
+	}
+
+	for (const everyFrames of [1, 3]) {
+		test(`dithers each boundary exactly once when paused, every ${everyFrames} frames`, async () => {
+			const { admit, captures, operations, fake, sessions } = await setup()
+			const reservation = toolReservation(operations)
+			const admitted = admit(request({ count: 7, exposureTime: 0.2, dither: { ...GUIDED, everyFrames } }))
+
+			for (const pausedAfter of [1, 4]) {
+				await waitUntil(() => (sessions().at(-1)?.captured ?? 0) >= pausedAfter)
+				const suspended = await captures.suspendForMotion(admitted.sessionId, { id: crypto.randomUUID(), holder: 'Flip', reservation }, new AbortController().signal)
+				if (!('status' in suspended) || suspended.status !== 'suspended') throw new Error('not suspended')
+				expect(suspended.handle.resume()).toBe('resumed')
+			}
+
+			expect(await admitted.ended).toMatchObject({ phase: 'completed', captured: 7 })
+			const boundaries = [2, 3, 4, 5, 6, 7].filter((generation) => ditherBoundary(generation, everyFrames))
+			expect(fake.dithers.map((dither) => Number(dither.request.token.split(':dither:')[1]))).toEqual(boundaries)
+		})
+	}
+
+	test('lends the mount dither reservation to the tool while paused and takes it back on resume', async () => {
+		const context = await setup()
+		const { admit, captures, operations, mount, sessions } = context
+		expect(await context.mountCommander.sync(operations.coordinator, mount, { type: 'JNOW', JNOW: { x: 1, y: 0.5 } })).toMatchObject({ ok: true })
+		const reservation = toolReservation(operations)
+		const dither: CaptureDither = {
+			method: 'mount',
+			everyFrames: 1,
+			mount: { connectionId: context.id, deviceId: context.mountId },
+			movement: 'pulse',
+			guideOutput: { connectionId: context.id, deviceId: context.guideOutputId },
+			amount: 10,
+			raOnly: false,
+			pattern: 'random',
+			settleTime: 0,
+			maxPulseDuration: 5000,
+			rightAscensionDirection: 'EAST',
+			declinationDirection: 'NORTH',
+		}
+		const admitted = admit(request({ count: 3, exposureTime: 0.2, dither }))
+
+		await waitUntil(() => (sessions().at(-1)?.captured ?? 0) >= 1)
+		const suspended = await captures.suspendForMotion(admitted.sessionId, { id: 'flip', holder: 'Flip', reservation }, new AbortController().signal)
+		if (!('status' in suspended) || suspended.status !== 'suspended') throw new Error('not suspended')
+
+		expect(operations.arbiter.reservationOwnerOf(resourceKey(mount))?.id).toBe(reservation.ownerId)
+		const flip = await operations.scope({ reservation }).start('flip', [{ key: resourceKey(mount), device: mount }], () => Promise.resolve(successfulOperationResult(undefined))).result
+		expect(flip.ok).toBeTrue()
+
+		expect(suspended.handle.resume()).toBe('resumed')
+		expect(operations.arbiter.reservationOwnerOf(resourceKey(mount))?.kind).toBe('camera.capture.dither')
+		expect(await admitted.ended).toMatchObject({ phase: 'completed', captured: 3, dither: { completed: 2 } })
+		expect(operations.arbiter.reservationOwnerOf(resourceKey(mount))).toBeUndefined()
+	})
+})
+
+test('a pause asked during a dither waits for it and never dithers that boundary again', async () => {
+	const { admit, captures, operations, fake, sessions } = await setup()
+	const reserved = operations.arbiter.reserve({ id: crypto.randomUUID(), kind: 'mount.meridianFlip' }, [])
+	if (!reserved.ok) throw new Error('reservation refused')
+	disposables.push({ [Symbol.dispose]: () => reserved.reservation.release() })
+	const settle = Promise.withResolvers<GuidingCommandStatus>()
+	fake.setOutcome(() => settle.promise)
+
+	const admitted = admit(request({ count: 3, exposureTime: 0.05, dither: { ...GUIDED, everyFrames: 1 } }))
+	await waitUntil(() => sessions().at(-1)?.phase === 'dithering')
+
+	const pending = captures.suspendForMotion(admitted.sessionId, { id: 'flip', holder: 'Flip', reservation: reserved.reservation }, new AbortController().signal)
+	await Bun.sleep(50)
+	expect(sessions().at(-1)?.phase).toBe('dithering')
+	fake.setOutcome(() => Promise.resolve({ commandId: 'command', command: 'dither', state: 'succeeded' }))
+	settle.resolve({ commandId: 'command', command: 'dither', state: 'succeeded' })
+
+	const suspended = await pending
+	if (!('status' in suspended) || suspended.status !== 'suspended') throw new Error('not suspended')
+	expect(suspended.handle.generation).toBe(1)
+	expect(suspended.handle.resume()).toBe('resumed')
+
+	expect(await admitted.ended).toMatchObject({ phase: 'completed', captured: 3, dither: { completed: 2 } })
+	expect(fake.dithers.map((dither) => Number(dither.request.token.split(':dither:')[1]))).toEqual([2, 3])
+})

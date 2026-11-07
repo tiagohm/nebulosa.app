@@ -575,3 +575,30 @@ test('a GoTo admitted under a reservation keeps the refusals and the correction 
 	expect(await admitted.admission.finished).toMatchObject({ kind: 'mount.goto', state: 'succeeded' })
 	reserved.reservation.release()
 })
+
+test('a meridian flip admitted under a reservation always commands the frozen target, uncorrected, and returns its evidence', async () => {
+	const { id, commands, operations, mount, plans } = await setupCorrected((target) => ({ status: 'uncorrected', target }))
+	expect(await commands.commander.sync(operations.coordinator, mount, { type: 'JNOW', JNOW: { x: 1, y: deg(20) } })).toMatchObject({ ok: true })
+	const reserved = operations.arbiter.reserve({ id: 'flip', kind: 'test' }, [{ key: resourceKey(mount), device: mount }])
+	if (!reserved.ok) throw new Error('not reserved')
+	const invocation = { reservation: reserved.reservation }
+	const { observer } = zenithOf(mount)
+	const target = { rightAscension: mount.equatorialCoordinate.rightAscension, declination: mount.equatorialCoordinate.declination }
+	const flip = { target, observer, strategy: 'forcedGoto', motionStartTimeout: 1000 } as const
+
+	expect(commands.admitMeridianFlip(id, mount.id, { token: 'manual', ...flip })).toMatchObject({ ok: false, status: 409, code: 'busy' })
+	expect(commands.admitMeridianFlip(id, mount.id, { token: 'below', ...flip, target: { ...target, rightAscension: target.rightAscension + Math.PI } }, invocation)).toMatchObject({ ok: false, status: 422, code: 'invalidParameter' })
+
+	const admitted = commands.admitMeridianFlip(id, mount.id, { token: 'reserved', ...flip }, invocation)
+	if (!admitted.ok) throw new Error(admitted.error)
+	const result = await admitted.result
+	expect(result).toMatchObject({ ok: true, value: { strategy: 'forcedGoto', target } })
+	expect(await admitted.admission.finished).toMatchObject({ kind: 'mount.flip', state: 'succeeded' })
+	expect(plans).toEqual([])
+
+	const repeated = commands.admitMeridianFlip(id, mount.id, { token: 'reserved', ...flip }, invocation)
+	if (!repeated.ok) throw new Error(repeated.error)
+	expect(repeated.admission.repeated).toBeTrue()
+	expect(await repeated.result).toBe(result)
+	reserved.reservation.release()
+})

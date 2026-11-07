@@ -88,6 +88,7 @@ import { SatelliteAutoDownload } from './satellites.auto'
 import { SatelliteEphemeris } from './satellites.ephemeris'
 import { SatelliteStore } from './satellites.store'
 import { SatelliteSync } from './satellites.sync'
+import { createSaturnRoutes, SaturnPlannerService } from './saturn'
 import { annotationSky, createSkyApiRoutes, minorBodies, skyCatalog, skyLocator, spiceKernels, ssdRequests } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createSpiceKernelRoutes, SpiceKernelLibrary } from './spicekernels'
@@ -441,6 +442,9 @@ export type {
 export type { SatelliteElementsRef, SatelliteEphemerisRow, SatelliteGroundTrack, SatelliteOrbitSummary, SatellitePassPoint, SatellitePassPrediction, SatellitePosition, SatelliteQuality, SatelliteQualityReason, SatelliteSuitability, SatelliteTrack, SatelliteVisiblePart } from './satellites.ephemeris'
 export type { SatelliteCatalogMetadata, SatelliteElementKind, SatelliteObjectType, SatelliteProvider, SatelliteSearchPage, SatelliteSourceState, SatelliteSummary } from './satellites.store'
 export type { SatelliteRefreshErrorCode } from './satellites.sync'
+export type { SaturnErrorCode } from './saturn'
+// oxfmt-ignore
+export type { SaturnElongation, SaturnElongations, SaturnElongationsRequest, SaturnFallbackReason, SaturnMoon, SaturnMoonsState, SaturnMoonState, SaturnRingEvent, SaturnRingModel, SaturnRings, SaturnRingState, SaturnRingTimeline, SaturnRingTimelineRequest, SaturnScope, SaturnShadow, SaturnSignature, SaturnSource, SaturnSourceMiss, SaturnSourceReport, SaturnSourceRequest, SaturnStateRequest, SaturnTrack, SaturnTrackMoon, SaturnTrackRequest } from './saturn.astronomy'
 export type { WheelMoveRequest, WheelNamesRequest } from './wheels'
 export type {
 	AstapStarDetectionSettings,
@@ -1035,6 +1039,7 @@ const observingPlanner = new ObservingPlannerService({ catalog: skyCatalog, nigh
 // Read-only predictions of the Jupiter Observing Planner over the SPICE kernels or the analytical theories, and the
 // server's Great Red Spot model in the operational database, sent to every tab once saved.
 const jupiterPlanner = new JupiterPlannerService({ kernels: spiceKernels, night: (request) => astroWeather.night(request), store: new JupiterGrsStore(database, broadcast) })
+const saturnPlanner = new SaturnPlannerService({ kernels: spiceKernels })
 
 // Earth orientation tables of the process, shared by the converter and, once installed, by every Time of the server.
 const earthOrientation = new EarthOrientationData()
@@ -1266,6 +1271,7 @@ export const routes = {
 	...createAstroWeatherRoutes(astroWeather),
 	...createObservingPlannerRoutes(observingPlanner),
 	...createJupiterRoutes(jupiterPlanner),
+	...createSaturnRoutes(saturnPlanner),
 	...createAstronomicalTimeRoutes(astronomicalTime),
 	...createSatelliteRoutes(satellites),
 	...createSpiceKernelRoutes(spiceKernelLibrary),

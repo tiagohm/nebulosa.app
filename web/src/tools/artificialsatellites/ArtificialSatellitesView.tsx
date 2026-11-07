@@ -26,7 +26,8 @@ import { SatelliteSettings } from './SatelliteSettings'
 // time on the same tick. Civil times are shown in the profile's display zone. Its workspace actions hold the Import
 // Elements popover and the Settings of the tool, where the CelesTrak groups are downloaded on request or automatically.
 // It commands no device and changes the Sky only through Open in Sky and Show in Sky. The details are the contextual
-// panel on wide screens and take the place of the content below them, as in Close Approaches.
+// panel on wide screens; below them they take the place of the catalog when a satellite is chosen, as in Close
+// Approaches, and Back to Catalog hides them but keeps the selection for the other views.
 
 // Artificial Satellites tool.
 export function ArtificialSatellites() {
@@ -43,6 +44,7 @@ export function ArtificialSatellites() {
 	const linked = route.route.workspace === 'tools' ? route.route.satellite : undefined
 	const [importOpen, setImportOpen] = useState(false)
 	const [settingsOpen, setSettingsOpen] = useState(false)
+	const [detailsShown, setDetailsShown] = useState(true)
 
 	// Follows the place of the observing site, which every prediction is for; its name and zone never ask again.
 	useEffect(() => followSatelliteObserver(artificialSatellitesState, observer), [observerKey])
@@ -75,11 +77,15 @@ export function ArtificialSatellites() {
 
 	// Selects the satellite the URL names.
 	useEffect(() => {
-		if (linked && linked !== artificialSatellitesState.selectedId) void selectSatellite(artificialSatellitesState, linked, observer)
+		if (linked && linked !== artificialSatellitesState.selectedId) {
+			void selectSatellite(artificialSatellitesState, linked, observer)
+			setDetailsShown(true)
+		}
 	}, [linked])
 
 	const panel = state.selectedId ? <SatelliteDetailsPanel observer={observer} zone={zone} /> : undefined
-	const content = state.tab === 'catalog' ? <SatelliteCatalog /> : state.tab === 'passes' ? <SatellitePasses observer={observer} zone={zone} /> : state.tab === 'ephemeris' ? <SatelliteEphemeris observer={observer} zone={zone} /> : <SatelliteGroundTrack observer={observer} zone={zone} />
+	const content =
+		state.tab === 'catalog' ? <SatelliteCatalog onSelect={() => setDetailsShown(true)} /> : state.tab === 'passes' ? <SatellitePasses observer={observer} zone={zone} /> : state.tab === 'ephemeris' ? <SatelliteEphemeris observer={observer} zone={zone} /> : <SatelliteGroundTrack observer={observer} zone={zone} />
 	const tabs = <SegmentedControl options={SATELLITE_TABS} value={state.tab} format={(tab) => SATELLITE_TAB_LABELS[tab]} onChange={(tab) => (artificialSatellitesState.tab = tab)} />
 
 	const settingsModal = <SatelliteSettings open={settingsOpen} onClose={() => setSettingsOpen(false)} timeZone={zone.zone} />
@@ -92,12 +98,12 @@ export function ArtificialSatellites() {
 		</>
 	)
 
-	if (!docked && panel && state.tab === 'catalog') {
+	if (!docked && panel && detailsShown && state.tab === 'catalog') {
 		return (
 			<WorkspaceLayout workspace="tools" title="Artificial Satellites" actions={actions}>
 				<div className="h-full overflow-y-auto">
 					<div className="border-b border-line-100 px-4 py-2">
-						<Button variant="secondary" onClick={() => (artificialSatellitesState.selectedId = undefined)}>
+						<Button variant="secondary" onClick={() => setDetailsShown(false)}>
 							Back to Catalog
 						</Button>
 					</div>

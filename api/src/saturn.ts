@@ -1,5 +1,7 @@
+import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
 import { LruCache } from './lrucache'
 import { type PlanetarySourceErrorCode, unavailableResponse } from './planetary.source'
+import { SiteNightCache } from './planetary.visibility'
 import {
 	computeElongations,
 	computeMoonsState,
@@ -16,6 +18,7 @@ import {
 	type SaturnRingState,
 	type SaturnRingTimeline,
 	type SaturnRingTimelineRequest,
+	type SaturnSignature,
 	saturnSignature,
 	type SaturnSourceReport,
 	type SaturnSourceRequest,
@@ -25,11 +28,12 @@ import {
 	type SaturnTrackRequest,
 	withSaturnianSource,
 } from './saturn.astronomy'
+import { computeEvents, type SaturnEvent, type SaturnEventsRequest, type SaturnNight } from './saturn.events'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 
 // Saturn Observing Planner service: read-only predictions of Saturn's rings (the geometry at an instant and the ring-plane
-// seasons over a range) and of its seven major moons (the view at an instant, their tracks, and their greatest
-// separations). Each answer is computed on request from one ephemeris source of its scope (see saturn.astronomy.ts), so
+// seasons over a range) and of its seven major moons (the view at an instant, their tracks, their greatest separations,
+// and their phenomena with their visibility from a site). Each answer is computed on request from one ephemeris source of its scope (see saturn.astronomy.ts), so
 // a rings answer survives a missing satellite kernel, and kept in bounded in-memory caches whose keys hold every input
 // that changes it, including the kernel generation and the ephemeris policy. Nothing is stored; nothing here moves a
 // device, changes the Sky clock or a site, starts an operation, or asks a remote service.
@@ -43,6 +47,21 @@ export type SaturnErrorCode = PlanetarySourceErrorCode
 export interface SaturnPlannerOptions {
 	// Kernels of the SPICE Kernel Library and its ephemeris policy.
 	readonly kernels: SaturnKernels
+	// Night of a site containing an instant (Astro Weather's local night).
+	readonly night: (request: AstroWeatherNightRequest) => AstroWeatherNight
+}
+
+// Events over a range.
+export interface SaturnEvents {
+	// First instant of the range, Unix milliseconds.
+	readonly start: number
+	// End of the range, exclusive, Unix milliseconds.
+	readonly end: number
+	// Events overlapping the range, chronologically by maximum.
+	readonly events: readonly SaturnEvent[]
+	// Nights of the site over the range; empty without a site.
+	readonly nights: readonly SaturnNight[]
+	readonly signature: SaturnSignature
 }
 
 // Ring timelines kept: a few tabs, each with a season and a zoom.
@@ -54,13 +73,21 @@ const TRACK_CACHE_LIMIT = 16
 // Separation answers kept.
 const ELONGATIONS_CACHE_LIMIT = 16
 
+// Event answers kept: a few tabs, each with a range and a site.
+const EVENTS_CACHE_LIMIT = 16
+
 // Read-only Saturn predictions.
 export class SaturnPlannerService {
 	readonly #timelines = new LruCache<SaturnRingTimeline>(TIMELINE_CACHE_LIMIT)
 	readonly #tracks = new LruCache<SaturnTrack>(TRACK_CACHE_LIMIT)
 	readonly #elongations = new LruCache<SaturnElongations>(ELONGATIONS_CACHE_LIMIT)
+	readonly #events = new LruCache<SaturnEvents>(EVENTS_CACHE_LIMIT)
+	// Nights of the sites, which hold a whole range of nights where the provider keeps fewer.
+	readonly #nights: SiteNightCache
 
-	constructor(readonly options: SaturnPlannerOptions) {}
+	constructor(readonly options: SaturnPlannerOptions) {
+		this.#nights = new SiteNightCache(options.night)
+	}
 
 	// The disk and ring geometry at an instant, from a rings source.
 	async ringState({ time }: SaturnStateRequest, signal?: AbortSignal): Promise<SaturnRingState> {
@@ -105,6 +132,22 @@ export class SaturnPlannerService {
 		const { sourced, ...elongations } = await computeElongations(this.options.kernels, request, signal)
 		const answer: SaturnElongations = { ...elongations, signature: saturnSignature('moons', sourced.source, sourced.snapshot) }
 		this.#elongations.set(key(sourced.snapshot), answer)
+		return answer
+	}
+
+	// The phenomena over a range with their visibility from the site, cached by every input and the kernel identity.
+	async events(request: SaturnEventsRequest, signal?: AbortSignal): Promise<SaturnEvents> {
+		const key = (snapshot: SpiceKernelSnapshot) => {
+			const { site, kinds, moons } = request
+			const place = site ? [site.latitude, site.longitude, site.elevation, site.timeZone] : null
+			return JSON.stringify([rangeKey('events', request, snapshot), place, kinds ?? null, moons ?? null])
+		}
+		const cached = this.#events.get(key(this.options.kernels.current()))
+		if (cached) return cached
+
+		const { sourced, ...events } = await computeEvents(this.options.kernels, this.#nights.night, request, signal)
+		const answer: SaturnEvents = { ...events, signature: saturnSignature('moons', sourced.source, sourced.snapshot) }
+		this.#events.set(key(sourced.snapshot), answer)
 		return answer
 	}
 
@@ -166,6 +209,13 @@ export function createSaturnRoutes(service: SaturnPlannerService) {
 			POST: async (req) => {
 				const request = (await req.json()) as SaturnElongationsRequest
 				return answer(() => service.elongations(request, req.signal))
+			},
+		},
+		'/api/saturn/moons/events': {
+			// The phenomena over the range of the body with their visibility from its site (SaturnEventsRequest → SaturnEvents).
+			POST: async (req) => {
+				const request = (await req.json()) as SaturnEventsRequest
+				return answer(() => service.events(request, req.signal))
 			},
 		},
 		'/api/saturn/source': {

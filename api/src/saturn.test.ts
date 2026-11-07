@@ -2,7 +2,9 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { createSaturnRoutes, SaturnPlannerService } from './saturn'
+import { AstroWeatherNights } from './astroweather.night'
+import type { PlanningSite } from './observingplanner.astronomy'
+import { createSaturnRoutes, type SaturnEvents, SaturnPlannerService } from './saturn'
 import type { SaturnElongations, SaturnKernels, SaturnMoonsState, SaturnRingState, SaturnRingTimeline, SaturnSourceReport, SaturnTrack } from './saturn.astronomy'
 import { spkFixture, type SpkFixtureSegment } from './spicekernels.fixture'
 import { SpiceKernelRuntime, type SpiceKernelSnapshot } from './spicekernels.runtime'
@@ -80,8 +82,12 @@ const MOON_KERNEL: SpkFixtureSegment[] = [
 	{ center: 6, target: 608, ...COVERAGE, position: [-3560840, 0, 0] },
 ]
 
+const nights = new AstroWeatherNights()
+
+const SAO_PAULO: PlanningSite = { name: 'São Paulo', latitude: -23.55, longitude: -46.633, elevation: 760, timeZone: 'America/Sao_Paulo' }
+
 function setup(kernels: SaturnKernels = noKernels()) {
-	const service = new SaturnPlannerService({ kernels })
+	const service = new SaturnPlannerService({ kernels, night: (request) => nights.night(request) })
 	return { service, routes: createSaturnRoutes(service) }
 }
 
@@ -242,5 +248,57 @@ describe('sources', () => {
 		const { runtime } = await runtimeOf('automatic', RING_KERNEL, MOON_KERNEL)
 		const report = (await (await setup(runtime).routes['/api/saturn/source'].POST(post({ start: Date.UTC(2049, 0, 1), end: Date.UTC(2051, 0, 1) }))).json()) as SaturnSourceReport
 		expect(report.rings).toMatchObject({ readiness: 'partialCoverage', source: 'analytical', reason: 'outOfCoverage' })
+	})
+})
+
+describe('events', () => {
+	const start = Date.UTC(2025, 3, 5)
+	const end = Date.UTC(2025, 3, 6)
+
+	test('finds the eclipse and occultation of Titan with their contacts, geocentric without a site', async () => {
+		const { routes } = setup()
+		const answer = (await (await routes['/api/saturn/moons/events'].POST(post({ start, end }))).json()) as SaturnEvents
+		const titan = answer.events.filter((e) => e.moons.length === 1 && e.moons[0] === 'titan')
+		expect(titan.map((e) => e.kind)).toEqual(['satelliteEclipse', 'satelliteOccultation'])
+		// JPL Horizons: Titan wholly umbral from 11:14 UTC.
+		expect(Math.abs(titan[0].contacts.internal1! - Date.UTC(2025, 3, 5, 11, 13, 30))).toBeLessThan(120_000)
+		expect(titan[0].id).toBe(`satelliteEclipse|titan|${Math.round(titan[0].maximum / 1000)}`)
+		// The eclipse ends while Titan is behind the disk, so part of it is hidden; the occultation overlaps it.
+		expect(titan[0].visibility).toMatchObject({ status: 'unknownNoSite', reasons: ['moonHidden'] })
+		expect(titan[0].overlaps).toContain(titan[1].id)
+		expect(answer.nights).toEqual([])
+		expect(answer.signature).toMatchObject({ scope: 'moons', source: { kind: 'analytical', satellites: 'TASS1.7' } })
+		expect(numbers(answer).every(Number.isFinite)).toBeTrue()
+	})
+
+	test('a site changes only the visibility, never the contacts', async () => {
+		const { service } = setup()
+		const global = await service.events({ start, end })
+		const local = await service.events({ start, end, site: SAO_PAULO })
+		expect(local.events.map((e) => [e.id, e.contacts])).toEqual(global.events.map((e) => [e.id, e.contacts]))
+		expect(local.nights.length).toBeGreaterThan(0)
+		for (const event of local.events) {
+			expect(['observable', 'partial', 'notObservable', 'uncertainRingInterference']).toContain(event.visibility.status)
+			if (event.visibility.status === 'uncertainRingInterference') expect(event.visibility.reasons).toContain('ringInterferencePossible')
+			if (event.ringInterference) expect(event.visibility.reasons).toContain('ringInterferencePossible')
+		}
+		// In early April 2025 Saturn rose just before the Sun: nothing could be watched from São Paulo, and the reasons say so.
+		expect(local.events.every((e) => e.visibility.status === 'notObservable')).toBeTrue()
+		expect(local.events.every((e) => e.visibility.reasons.includes('sunTooHigh') || e.visibility.reasons.includes('saturnTooLow'))).toBeTrue()
+	})
+
+	test('filters by kind and moon and repeats the same identities', async () => {
+		const { service } = setup()
+		const first = await service.events({ start, end, kinds: ['satelliteTransit', 'satelliteOccultation'], moons: ['tethys'] })
+		expect(first.events.every((e) => e.moons.includes('tethys') && (e.kind === 'satelliteTransit' || e.kind === 'satelliteOccultation'))).toBeTrue()
+		const again = await setup().service.events({ start, end, kinds: ['satelliteTransit', 'satelliteOccultation'], moons: ['tethys'] })
+		expect(again.events.map((e) => e.id)).toEqual(first.events.map((e) => e.id))
+	})
+
+	test('are refused under spkOnly without a satellite kernel', async () => {
+		const { runtime } = await runtimeOf('spkOnly', RING_KERNEL)
+		const response = await setup(runtime).routes['/api/saturn/moons/events'].POST(post({ start, end }))
+		expect(response.status).toBe(503)
+		expect(await response.json()).toMatchObject({ code: 'missingDependency' })
 	})
 })

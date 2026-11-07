@@ -444,9 +444,11 @@ export type { SatelliteCatalogMetadata, SatelliteElementKind, SatelliteObjectTyp
 export type { SatelliteRefreshErrorCode } from './satellites.sync'
 export type { PlanetaryFallbackReason, PlanetaryKernelReadiness, PlanetaryReadinessReport, PlanetarySourceErrorCode, PlanetarySourceMiss } from './planetary.source'
 export type { PlanetEventVisibility, PlanetNight, PlanetVisibilityStatus } from './planetary.visibility'
-export type { SaturnErrorCode } from './saturn'
+export type { SaturnErrorCode, SaturnEvents } from './saturn'
 // oxfmt-ignore
 export type { SaturnElongation, SaturnElongations, SaturnElongationsRequest, SaturnFallbackReason, SaturnMoon, SaturnMoonsState, SaturnMoonState, SaturnRingEvent, SaturnRingModel, SaturnRings, SaturnRingState, SaturnRingTimeline, SaturnRingTimelineRequest, SaturnScope, SaturnShadow, SaturnSignature, SaturnSource, SaturnSourceMiss, SaturnSourceReport, SaturnSourceRequest, SaturnStateRequest, SaturnTrack, SaturnTrackMoon, SaturnTrackRequest } from './saturn.astronomy'
+// oxfmt-ignore
+export type { SaturnEvent, SaturnEventContacts, SaturnEventKind, SaturnEventsRequest, SaturnEventVisibility, SaturnNight, SaturnVisibilityReason, SaturnVisibilityStatus } from './saturn.events'
 export type { WheelMoveRequest, WheelNamesRequest } from './wheels'
 export type {
 	AstapStarDetectionSettings,
@@ -1041,7 +1043,7 @@ const observingPlanner = new ObservingPlannerService({ catalog: skyCatalog, nigh
 // Read-only predictions of the Jupiter Observing Planner over the SPICE kernels or the analytical theories, and the
 // server's Great Red Spot model in the operational database, sent to every tab once saved.
 const jupiterPlanner = new JupiterPlannerService({ kernels: spiceKernels, night: (request) => astroWeather.night(request), store: new JupiterGrsStore(database, broadcast) })
-const saturnPlanner = new SaturnPlannerService({ kernels: spiceKernels })
+const saturnPlanner = new SaturnPlannerService({ kernels: spiceKernels, night: (request) => astroWeather.night(request) })
 
 // Earth orientation tables of the process, shared by the converter and, once installed, by every Time of the server.
 const earthOrientation = new EarthOrientationData()

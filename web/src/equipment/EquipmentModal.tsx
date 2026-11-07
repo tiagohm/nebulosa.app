@@ -258,7 +258,7 @@ function RoleRow({ definition, setup, devices, device, status, error, serverOpen
 			<Icon name={deviceType} className="text-ink-300 max-sm:mt-0.5" />
 			<div className="flex min-w-0 items-center gap-3 max-sm:col-span-2 max-sm:flex-col max-sm:items-stretch max-sm:gap-1">
 				<span className="w-32 flex-none text-xs font-medium tracking-[0.08em] text-ink-200 uppercase max-sm:w-auto">{label}</span>
-				<Select className="min-w-0 flex-1" options={options} value={assigned ?? NONE} onChange={handleChange} format={format} disabledReason={disabledReason} />
+				<Select options={options} value={assigned ?? NONE} onChange={handleChange} format={format} disabledReason={disabledReason} />
 			</div>
 			<span className={root({ className: 'max-sm:col-start-2 max-sm:self-center max-sm:justify-self-start' })}>
 				<span className={dot()} />

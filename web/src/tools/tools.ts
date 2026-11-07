@@ -13,6 +13,7 @@ import { MeridianFlipMonitorView } from './meridianflip/MeridianFlipMonitorView'
 import { MountPointingModel } from './mountpointing/MountPointingModel'
 import { MountRemoteControl } from './mountremotecontrol/MountRemoteControl'
 import { ObservatoryCamerasView } from './observatorycameras/ObservatoryCamerasView'
+import { ObservingPlanner } from './observingplanner/ObservingPlannerView'
 import { SolarEclipseMap } from './solareclipse/SolarEclipseMap'
 import { SpiceKernelLibrary } from './spicekernels/SpiceKernelLibrary'
 
@@ -47,6 +48,7 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 	'lunar-eclipse-map': { id: 'lunar-eclipse-map', label: 'Lunar Eclipse Map', description: 'Visibility and local circumstances of lunar eclipses.', icon: 'moon', view: LunarEclipseMap },
 	'close-approaches': { id: 'close-approaches', label: 'Close Approaches', description: 'Close encounters of asteroids and comets published by JPL, with the object behind each one.', icon: 'orbit', view: CloseApproaches },
 	'astro-weather': { id: 'astro-weather', label: 'Astro Weather', description: 'Whether a night is worth observing, and when, from free public forecasts and the local Sun and Moon.', icon: 'cloud', view: AstroWeather },
+	'observing-planner': { id: 'observing-planner', label: 'Observing Planner', description: 'Finds the best targets of a night, explains when and why each one is observable, and keeps manual night plans.', icon: 'compass', view: ObservingPlanner },
 	'artificial-satellites': { id: 'artificial-satellites', label: 'Artificial Satellites', description: 'Catalog, passes, ephemerides, and ground tracks of artificial satellites from CelesTrak orbital elements.', icon: 'orbit', view: ArtificialSatellites },
 	'calibration-library': { id: 'calibration-library', label: 'Calibration Library', description: 'Indexes calibration frames, explains what can be combined, and builds master darks, biases, dark-flats, and flats.', icon: 'layers', view: CalibrationLibrary },
 	'image-stacking': { id: 'image-stacking', label: 'Image Stacking', description: 'Groups saved light frames by filter, integrates them, and composes color from mono masters.', icon: 'stack', view: ImageStacking },

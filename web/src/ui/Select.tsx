@@ -169,7 +169,7 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 	}, [open, active])
 
 	return (
-		<Field label={label} className={className}>
+		<Field label={label} className={cn('min-w-0 flex-1', className)}>
 			<div ref={rootRef} className="relative">
 				<button
 					ref={triggerRef}

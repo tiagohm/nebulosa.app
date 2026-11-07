@@ -47,7 +47,7 @@ export function CloseApproachFilters() {
 				<Select label="Period" className="w-40" options={CLOSE_APPROACH_PERIODS} value={period} format={(value) => PERIOD_LABELS[value]} onChange={(value) => setCloseApproachPeriod(closeApproachesState, value)} />
 				<TextInput label="First Day (TDB)" title={TDB_HELP} type="date" className="w-40" value={dateMin} onChange={(e) => setCloseApproachDate(closeApproachesState, 'dateMin', e.target.value)} />
 				<TextInput label="Last Day (TDB)" title={TDB_HELP} type="date" className="w-40" value={dateMax} onChange={(e) => setCloseApproachDate(closeApproachesState, 'dateMax', e.target.value)} />
-				<NumberInput label="Largest Distance" className="w-40" min={0} step={1} value={distanceMax} onChange={(value) => (closeApproachesState.draft.distanceMax = value)} />
+				<NumberInput label="Largest Distance" classNames={{ input: 'max-w-30' }} min={0} step={1} value={distanceMax} onChange={(value) => (closeApproachesState.draft.distanceMax = value)} />
 				<SegmentedControl label="Unit" options={CLOSE_APPROACH_DISTANCE_UNITS} value={distanceUnit} format={(value) => (value === 'au' ? 'AU' : value)} onChange={(value) => (closeApproachesState.draft.distanceUnit = value)} />
 				<SegmentedControl label="Objects" options={OBJECT_KINDS} value={kind} format={(value) => OBJECT_KIND_LABELS[value]} onChange={(value) => (closeApproachesState.draft.kind = value)} />
 				<TextInput label="H from" title="Smallest absolute magnitude H, empty for no limit" inputMode="decimal" className="w-20 min-w-0" value={hMin} onChange={(e) => (closeApproachesState.draft.hMin = e.target.value)} />

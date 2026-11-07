@@ -40,6 +40,10 @@ describe('parse', () => {
 		expect(parseRoute('/tools/artificial-satellites')).toEqual({ workspace: 'tools', tool: 'artificial-satellites' })
 		expect(parseRoute('/tools/close-approaches/25544')).toEqual({ workspace: 'tools', tool: 'close-approaches' })
 		expect(routePath({ workspace: 'tools', tool: 'calculator', project: 'p' })).toBe('/tools/calculator')
+		expect(parseRoute('/tools/observing-planner/plan%20a')).toEqual({ workspace: 'tools', tool: 'observing-planner', plan: 'plan a' })
+		expect(routePath({ workspace: 'tools', tool: 'observing-planner', plan: 'plan a' })).toBe('/tools/observing-planner/plan%20a')
+		expect(parseRoute('/tools/observing-planner')).toEqual({ workspace: 'tools', tool: 'observing-planner' })
+		expect(routePath({ workspace: 'tools', tool: 'calculator', plan: 'p' })).toBe('/tools/calculator')
 	})
 
 	test('reads the eclipse of the Solar and Lunar Eclipse Maps, and no id for other tools', () => {
@@ -105,7 +109,8 @@ describe('parse', () => {
 	})
 
 	test('round-trips canonical paths', () => {
-		for (const path of ['/images', '/sky', '/tools', '/tools/calculator', '/tools/solar-eclipse-map/1786556760000', '/tools/lunar-eclipse-map/1803423600000', '/equipment/abc123', '/equipment/abc123/indi', '/equipment/abc123/messages', '/about']) expect(routePath(parseRoute(path))).toBe(path)
+		for (const path of ['/images', '/sky', '/tools', '/tools/calculator', '/tools/solar-eclipse-map/1786556760000', '/tools/lunar-eclipse-map/1803423600000', '/tools/observing-planner/p1', '/equipment/abc123', '/equipment/abc123/indi', '/equipment/abc123/messages', '/about'])
+			expect(routePath(parseRoute(path))).toBe(path)
 	})
 })
 

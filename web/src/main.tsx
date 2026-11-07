@@ -47,6 +47,7 @@ import { handleMeridianFlipExecutorEvent, meridianFlipExecutorState, refreshMeri
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
 import { handleObservatoryCameraEvent, observatoryCamerasState, refreshObservatoryCameras } from './tools/observatorycameras/observatorycameras'
 import { handlePlayerEvent, watchPlayers } from './tools/observatorycameras/player'
+import { handleObservingPlanEvent, observingPlansState, refreshObservingPlans } from './tools/observingplanner/observingplanner'
 import { handleSpiceKernelEvent, refreshSpiceKernels, spiceKernelsState } from './tools/spicekernels/spicekernels'
 
 // Entry point of the browser bundle: restores the URL route, reads the workspace (saved connections and profiles) from
@@ -106,6 +107,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleMeridianFlipExecutorEvent(meridianFlipExecutorState, event), refresh: () => refreshMeridianFlipExecutor(meridianFlipExecutorState) },
 	{ handle: (event) => handleSatelliteEvent(satelliteCatalogState, event), refresh: () => refreshSatelliteCatalog(satelliteCatalogState) },
 	{ handle: (event) => handleSpiceKernelEvent(spiceKernelsState, event), refresh: () => refreshSpiceKernels(spiceKernelsState) },
+	{ handle: (event) => handleObservingPlanEvent(observingPlansState, event), refresh: () => refreshObservingPlans(observingPlansState) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
 	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },
 	{ handle: (event) => handleMountPointingEvent(mountPointingRuntime, event), refresh: () => refreshMountPointing(mountPointingRuntime) },

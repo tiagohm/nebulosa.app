@@ -11,6 +11,7 @@ describe('registry', () => {
 			'lunar-eclipse-map',
 			'close-approaches',
 			'astro-weather',
+			'observing-planner',
 			'artificial-satellites',
 			'calibration-library',
 			'image-stacking',

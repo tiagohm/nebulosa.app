@@ -1,10 +1,11 @@
-import type { OperationRecord, SkyObjectRef, SkyPosition } from 'api'
+import type { ObservingTargetRef, OperationRecord, SkyObjectRef, SkyPosition } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { formatDegrees } from '../format'
 import { type GeographicLocation, siteObserver } from '../location/site'
 import { operationsState } from '../operations'
+import { addToObservingPlanner } from '../tools/observingplanner/observingplanner'
 import { Button } from '../ui/Button'
 import { Modal, ModalActions } from '../ui/Modal'
 import { Notice } from '../ui/Notice'
@@ -12,9 +13,10 @@ import { formatDeclination, formatRightAscension } from './format'
 import { mountRuntime, mountView, slewBlocker, slewMount, slewProgress, stopMount } from './mount'
 import { fetchSkyPosition } from './sky'
 
-// Actions of the selected object in the Object section of the Object Inspector: Show Framing, and Slew to Object
-// while the profile's mount is connected. A slew points the mount at the object after an explicit confirmation,
-// then shows the real outcome of the operation as the server reports it. The target is resolved by the server at
+// Actions of the selected object in the Object section of the Object Inspector: Show Framing, Add to Observing Planner for
+// a catalog object or a major body other than the Sun (which opens the tool to choose a plan, changing nothing else), and
+// Slew to Object while the profile's mount is connected. A slew points the mount at the object after an explicit
+// confirmation, then shows the real outcome of the operation as the server reports it. The target is resolved by the server at
 // the real current time, whatever instant the Sky shows; the dialog previews where the object is now for the
 // observer. Accepting the request is never shown as arrival.
 
@@ -41,6 +43,14 @@ const FAILURE_REASONS: Readonly<Record<NonNullable<OperationRecord['reason']>, s
 	unexpectedState: 'the mount was in an unexpected state',
 }
 
+// Target of the Observing Planner for an object: a catalog object or a major body other than the Sun; undefined for what the
+// planner cannot evaluate locally (the Sun, minor bodies, constellations, satellites).
+export function plannerTarget(ref: SkyObjectRef): ObservingTargetRef | undefined {
+	if (ref.kind === 'catalog') return { kind: 'catalog', id: ref.id }
+	if (ref.kind === 'body' && ref.code !== '10') return { kind: 'body', code: ref.code }
+	return undefined
+}
+
 // Preview of the object's place now, or why it is unknown.
 type Preview = { readonly status: 'loading' } | { readonly status: 'ready'; readonly position: SkyPosition } | { readonly status: 'error'; readonly error: string }
 
@@ -54,6 +64,7 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 	const progress = slewProgress(runtime, operations)
 	const moving = runtime.state?.slewing === true || progress?.state === 'running'
 	const connected = !!mount && runtime.state?.connected === true
+	const plannable = plannerTarget(target)
 
 	// Opens the confirmation with the object's place at the real current time.
 	function confirm() {
@@ -78,6 +89,11 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 				<Button variant="secondary" onClick={onShowFraming}>
 					Show Framing
 				</Button>
+				{plannable && (
+					<Button variant="secondary" onClick={() => addToObservingPlanner({ target: plannable, name: targetName })}>
+						Add to Observing Planner
+					</Button>
+				)}
 				{connected && (
 					<Button variant="secondary" disabled={!!blocker} title={blocker} onClick={confirm}>
 						Slew to Object

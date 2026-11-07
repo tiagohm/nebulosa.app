@@ -38,7 +38,7 @@ export function FilterWheelControls({ device }: InterfaceProps) {
 			<DataRow label="Slots">{wheel.count}</DataRow>
 			{wheel.count > 0 && (
 				<div className="flex items-end gap-2">
-					<Select className="min-w-0 flex-1" label="Target filter" options={slots} value={slots.includes(target) ? target : slots[0]} format={(value) => slotLabel(wheel, Number(value))} onChange={setTarget} />
+					<Select label="Target filter" options={slots} value={slots.includes(target) ? target : slots[0]} format={(value) => slotLabel(wheel, Number(value))} onChange={setTarget} />
 					<Button disabled={busy || wheel.moving || slot === wheel.position} onClick={() => void startCommand(controlRuntime, { type: 'wheel', deviceId: device.id, action: 'move', label: 'Change Filter', body: { slot } })}>
 						Change Filter
 					</Button>

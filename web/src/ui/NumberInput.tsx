@@ -11,6 +11,9 @@ export interface NumberInputProps {
 	readonly max?: number
 	readonly step?: number
 	readonly className?: string
+	readonly classNames?: {
+		readonly input?: string
+	}
 	readonly disabled?: boolean
 	// Unit drawn inside the right end of the field, such as "mm" or "µm"; shown as written, never uppercased.
 	readonly suffix?: string
@@ -19,7 +22,7 @@ export interface NumberInputProps {
 const stepButtonClassName =
 	'flex flex-[0_0_38px] cursor-pointer items-center justify-center border border-line-200 bg-base-300 p-0 text-base leading-none text-ink-100 transition-colors duration-150 not-disabled:hover:bg-accent-subtle not-disabled:hover:text-accent disabled:cursor-not-allowed disabled:bg-base-200 disabled:text-ink-300'
 
-export function NumberInput({ label, value, onChange, min, max, step = 1, className, disabled, suffix }: NumberInputProps) {
+export function NumberInput({ label, value, onChange, min, max, step = 1, className, classNames, disabled, suffix }: NumberInputProps) {
 	// Text being typed; undefined shows the committed value.
 	const [draft, setDraft] = useState<string>()
 
@@ -49,7 +52,7 @@ export function NumberInput({ label, value, onChange, min, max, step = 1, classN
 						}}
 						onBlur={() => setDraft(undefined)}
 						style={suffix ? { paddingRight: suffixPadding(suffix) } : undefined}
-						className={cn(inputClassName, 'relative flex-1 rounded-none text-center tabular-nums [appearance:textfield] focus:z-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none')}
+						className={cn(inputClassName, 'relative flex-1 rounded-none text-center tabular-nums [appearance:textfield] focus:z-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none', classNames?.input)}
 					/>
 					{suffix && <InputSuffix>{suffix}</InputSuffix>}
 				</div>

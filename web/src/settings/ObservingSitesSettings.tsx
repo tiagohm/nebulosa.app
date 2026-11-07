@@ -111,7 +111,7 @@ function SiteList({ sites, activeId, selected, onSelect, onAdd, wide }: SiteList
 	if (!wide) {
 		return (
 			<div className="flex flex-none items-center gap-2 border-b border-line-100 p-3">
-				<Select className="min-w-0 flex-1" options={sites.map((site) => site.id)} value={selected ?? ''} format={(id) => sites.find((site) => site.id === id)?.name ?? 'New Site'} onChange={onSelect} />
+				<Select options={sites.map((site) => site.id)} value={selected ?? ''} format={(id) => sites.find((site) => site.id === id)?.name ?? 'New Site'} onChange={onSelect} />
 				<Button variant="secondary" onClick={onAdd}>
 					Add Site
 				</Button>

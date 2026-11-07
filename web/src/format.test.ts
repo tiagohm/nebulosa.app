@@ -8,6 +8,7 @@ import {
 	formatByteSize,
 	formatClockDuration,
 	formatClockTime,
+	formatHours,
 	formatDate,
 	formatDateTime,
 	formatDegrees,
@@ -27,6 +28,7 @@ import {
 	formatSignedAngle,
 	formatSignedArcmin,
 	formatSignificant,
+	formatSpan,
 	formatTemperature,
 	formatUtcDateTime,
 	MISSING,
@@ -207,6 +209,15 @@ describe('positions, distances, and instants', () => {
 		expect(formatDate(time, 'Asia/Kathmandu')).toBe('2029-04-14')
 		expect(formatDateTime(Number.NaN, 'UTC')).toBe(MISSING)
 		expect(formatDate(Number.NaN, 'UTC')).toBe(MISSING)
+	})
+
+	test('a span reads its two times of day in the zone, and a length its hours and minutes', () => {
+		expect(formatSpan(Date.UTC(2026, 9, 31, 23, 10), Date.UTC(2026, 10, 1, 6, 45), 'America/Sao_Paulo')).toBe('20:10–03:45')
+		expect(formatSpan(Date.UTC(2026, 9, 31, 23, 10), Number.NaN, 'UTC')).toBe(`23:10–${MISSING}`)
+		expect(formatHours(19_200_000)).toBe('5h 20m')
+		expect(formatHours(2_700_000)).toBe('0h 45m')
+		expect(formatHours(29_000)).toBe('0h 00m')
+		expect(formatHours(Number.NaN)).toBe(MISSING)
 	})
 
 	test('a time of day follows the zone, and the zone name tells apart a repeated hour', () => {

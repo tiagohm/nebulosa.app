@@ -153,6 +153,14 @@ export function formatSignedClockDuration(seconds: number) {
 	return Math.abs(seconds) < 1 ? text : `${seconds < 0 ? MINUS : '+'}${text}`
 }
 
+// Returns a length in milliseconds as whole hours and minutes, such as "5h 20m" or "0h 45m", or MISSING when it is not
+// finite.
+export function formatHours(ms: number) {
+	if (!Number.isFinite(ms)) return MISSING
+	const minutes = Math.round(ms / 60_000)
+	return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
+}
+
 // Returns a measurement of a wide dynamic range, such as a flux or a signal, with four significant digits, in exponential
 // notation from 1e5 and below 1e-2 in magnitude: "1234", "0.1235", "1.235e+5".
 export function formatSignificant(value: number) {
@@ -248,6 +256,12 @@ export interface ClockTimeOptions {
 export function formatClockTime(time: number, timeZone: string, { seconds = false, named = false }: ClockTimeOptions = {}) {
 	if (!Number.isFinite(time)) return MISSING
 	return dateTimeFormat({ timeZone, hour: '2-digit', minute: '2-digit', second: seconds ? '2-digit' : undefined, hourCycle: 'h23', timeZoneName: named ? 'short' : undefined }).format(time)
+}
+
+// Returns a span between two instants (Unix milliseconds) as their times of day in an IANA time zone on 24 hours, such as
+// "21:10–03:45"; an instant that is not finite reads MISSING.
+export function formatSpan(start: number, end: number, timeZone: string) {
+	return `${formatClockTime(start, timeZone)}–${formatClockTime(end, timeZone)}`
 }
 
 // Returns an instant (Unix milliseconds) as its time of day in an IANA time zone with the zone named, so a time is never

@@ -114,7 +114,7 @@ export function elementsOf(result: SmallBodySearchFound): MinorBodyElements | un
 type RetainedSearchFound = Omit<SmallBodySearchFound, 'ca_data'>
 
 // Minor body of an SBDB match, with its elements for the local model.
-interface ResolvedMinorBody {
+export interface ResolvedMinorBody {
 	// Public data of the body.
 	readonly body: MinorBody
 	// Osculating elements; undefined when SBDB does not publish usable ones.
@@ -254,9 +254,10 @@ export class MinorBodies {
 		return this.#bodies.get(spkId)
 	}
 
-	// Returns a body by SPK-ID, from the cache or SBDB; undefined when SBDB does not know it.
-	async body(spkId: string, signal?: AbortSignal): Promise<ResolvedMinorBody | undefined> {
-		const cached = this.#bodies.get(spkId)
+	// Returns a body by SPK-ID, from the cache or SBDB; undefined when SBDB does not know it. `refresh` asks SBDB even when
+	// the body is cached, replacing the cached answer.
+	async body(spkId: string, signal?: AbortSignal, refresh: boolean = false): Promise<ResolvedMinorBody | undefined> {
+		const cached = refresh ? undefined : this.#bodies.get(spkId)
 		if (cached) return cached
 
 		const result = await this.#lookup(spkId, signal)

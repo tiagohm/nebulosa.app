@@ -1,8 +1,11 @@
 import type {
+	MinorBody,
+	MinorBodySearchResponse,
 	ObservingCandidate,
 	ObservingConstraints,
 	ObservingDiscoveryPage,
 	ObservingDiscoveryRequest,
+	ObservingMinorBodyRefresh,
 	ObservingMode,
 	ObservingPlan,
 	ObservingPlanDocument,
@@ -30,7 +33,7 @@ import { navigate, type RouteState, routeState } from '../../shell/route'
 import { type SkyClock, skyClock } from '../../sky/clock'
 import { showCoordinateInSky, type SkyImageState, skyImageState } from '../../sky/footprint'
 import { createRequestGuard } from '../../sky/selection'
-import { browserSkyIo, type SkyIo, type SkyState, selectSkyObject, skyState } from '../../sky/sky'
+import { browserSkyIo, type SkyIo, type SkyState, searchMinorBodies, selectSkyObject, skyState } from '../../sky/sky'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Observing Planner of the tab: the saved night plans mirrored from the server, and the tab-lived state of the tool
@@ -95,11 +98,17 @@ export const STATUS_LABELS: Readonly<Record<ObservingStatus, { readonly label: s
 	limitedDuration: { label: 'Limited', tone: 'warning' },
 	notObservable: { label: 'Not observable', tone: 'danger' },
 	unresolved: { label: 'Unresolved', tone: 'muted' },
+	ephemerisUnavailable: { label: 'No ephemeris', tone: 'muted' },
 }
 
 // Sentence of each reason.
 export const REASON_LABELS: Readonly<Record<ObservingReasonCode, string>> = {
-	unresolvedTarget: 'The catalog no longer has this object.',
+	unresolvedTarget: 'The catalog or the Small-Body Database does not know this object.',
+	orbitalSolutionUnavailable: 'No usable orbital elements are known for this body.',
+	kernelCoverageUnavailable: 'The enabled SPK kernels do not cover this body all night, and the ephemeris policy allows nothing else.',
+	ephemerisOffline: 'No SPK kernel or saved orbital elements cover this body, and the ephemeris policy forbids asking JPL.',
+	ephemerisSourceUnavailable: 'JPL could not be reached, and no SPK kernel or orbital elements cover this body.',
+	trajectoryResolutionExceeded: 'The body moves too fast to be followed over the night.',
 	noAstronomicalDarkness: 'The site has no astronomical night on this date.',
 	sunTooHigh: 'The Sun never goes below the limit.',
 	belowMinimumAltitude: 'The target never reaches the minimum altitude.',
@@ -112,7 +121,8 @@ export const REASON_LABELS: Readonly<Record<ObservingReasonCode, string>> = {
 
 // Sentence of each schedule problem.
 export const CONFLICT_LABELS: Readonly<Record<ObservingScheduleConflictCode, string>> = {
-	unresolvedTarget: 'The catalog no longer has this object.',
+	unresolvedTarget: 'The catalog or the Small-Body Database does not know this object.',
+	ephemerisUnavailable: 'No ephemeris covers this body tonight; its windows are unknown.',
 	notObservable: 'Not observable this night.',
 	insufficientContiguousTime: 'No window is as long as the requested time.',
 	outsideNight: 'The block is outside the night.',
@@ -152,6 +162,21 @@ export interface CatalogListing {
 	readonly nextCursor?: string
 }
 
+// What the Discover section lists: the embedded catalog, or asteroids and comets searched in the Small-Body Database.
+export type DiscoverSource = 'catalog' | 'minorBodies'
+
+// Search of asteroids and comets in the Small-Body Database (SBDB), one explicit lookup at a time.
+export interface MinorBodySearch {
+	// Text searched: a name, a designation, or an SPK-ID.
+	text: string
+	// Answer of the latest search: one body, candidates to choose from, or none.
+	result?: MinorBodySearchResponse
+	// Whether a search is in flight.
+	loading: boolean
+	// Why the latest search failed, such as SBDB being unreachable.
+	error?: string
+}
+
 // Discovery of the night, accumulated batch by batch and ranked over every batch read.
 export interface DiscoveryListing {
 	// Key of the night, site, constraints, and filter it was computed for.
@@ -180,8 +205,12 @@ export interface ObservingPlannerState {
 	constraints?: ObservingConstraints
 	// Defaults and limits of the server.
 	presets?: ObservingPlannerPresets
+	// What the Discover section lists.
+	discoverSource: DiscoverSource
 	// Static catalog filter.
 	filter: CatalogFilter
+	// Search of asteroids and comets.
+	minorBodySearch: MinorBodySearch
 	// Listing of the catalog.
 	catalog?: CatalogListing
 	// Whether the catalog is being read.
@@ -202,6 +231,10 @@ export interface ObservingPlannerState {
 	analysisLoading: boolean
 	// Why the analysis failed.
 	analysisError?: string
+	// Whether the orbital elements of the analyzed minor body are being read again.
+	elementsRefreshing: boolean
+	// Why reading them again failed.
+	elementsError?: string
 	// Target the Sky asked to add to a plan.
 	pendingTarget?: NamedTarget
 	// Preview of the plan shown.
@@ -217,7 +250,19 @@ export const DEFAULT_FILTER: CatalogFilter = { text: '', classes: ['galaxy', 'ne
 
 // Creates the tab state of the tool.
 export function createObservingPlannerState(): ObservingPlannerState {
-	return { section: 'discover', location: { ...ACTIVE_TOOL_LOCATION }, zone: { ...DEFAULT_ZONE_OVERRIDE }, filter: structuredClone(DEFAULT_FILTER), catalogLoading: false, discoveryLoading: false, analysisLoading: false, previewLoading: false }
+	return {
+		section: 'discover',
+		location: { ...ACTIVE_TOOL_LOCATION },
+		zone: { ...DEFAULT_ZONE_OVERRIDE },
+		discoverSource: 'catalog',
+		filter: structuredClone(DEFAULT_FILTER),
+		minorBodySearch: { text: '', loading: false },
+		catalogLoading: false,
+		discoveryLoading: false,
+		analysisLoading: false,
+		elementsRefreshing: false,
+		previewLoading: false,
+	}
 }
 
 // Tab state of the tool.
@@ -227,6 +272,7 @@ export const observingPlannerState = proxy<ObservingPlannerState>(createObservin
 const catalogGuard = createRequestGuard()
 const discoveryGuard = createRequestGuard()
 const analysisGuard = createRequestGuard()
+const minorBodyGuard = createRequestGuard()
 const previewGuard = createRequestGuard()
 
 // Returns a plain copy of a JSON value, such as a document read from a valtio proxy or snapshot, which structuredClone
@@ -346,6 +392,59 @@ export async function discover(state: ObservingPlannerState, location: SiteLocat
 export function stopDiscovery(state: ObservingPlannerState) {
 	discoveryGuard.cancel()
 	state.discoveryLoading = false
+}
+
+// Searches asteroids and comets in SBDB by a name, a designation, or an SPK-ID, superseding the previous search; the
+// targets already chosen are kept whatever it answers. A query shorter than two characters clears the answer.
+export async function searchMinorBody(state: ObservingPlannerState, text: string, io: ObservingPlannerIo = browserObservingPlannerIo) {
+	const search = state.minorBodySearch
+	const query = text.trim()
+	search.text = text
+	search.error = undefined
+
+	if (query.length < 2) {
+		minorBodyGuard.cancel()
+		search.result = undefined
+		search.loading = false
+		return
+	}
+
+	const request = minorBodyGuard.begin()
+	search.loading = true
+
+	try {
+		const result = await searchMinorBodies(query, request.signal, io)
+		if (!request.current()) return
+		search.result = result
+	} catch (error) {
+		if (!request.current() || aborted(error)) return
+		search.result = undefined
+		search.error = errorMessage(error)
+	}
+
+	search.loading = false
+}
+
+// Target of a minor body SBDB found: its canonical identity and its full name.
+export function minorBodyTarget(body: Pick<MinorBody, 'spkId' | 'designation' | 'name'>): NamedTarget {
+	return { target: { kind: 'minorBody', spkId: body.spkId, designation: body.designation }, name: body.name }
+}
+
+// Reads the orbital elements of the analyzed minor body again from SBDB, then analyzes it again with them.
+export async function refreshOrbitalElements(state: ObservingPlannerState, location: SiteLocation, io: ObservingPlannerIo = browserObservingPlannerIo) {
+	const target = state.selected?.target
+	if (target?.kind !== 'minorBody' || state.elementsRefreshing) return
+	state.elementsRefreshing = true
+	state.elementsError = undefined
+
+	try {
+		await fetchJson<ObservingMinorBodyRefresh>(io, `/api/observing-planner/minor-bodies/${encodeURIComponent(target.spkId)}/refresh`, { method: 'POST' })
+		state.elementsRefreshing = false
+		await refreshAnalysis(state, location, io)
+	} catch (error) {
+		state.elementsRefreshing = false
+		state.elementsError = errorMessage(error)
+	}
 }
 
 // Analyzes a target over the tool's night and shows the Analysis section.
@@ -629,17 +728,19 @@ function browserHandoff(): SkyHandoff {
 	return { sky: skyState, images: skyImageState, clock: skyClock, route: routeState, io: browserSkyIo, history: window.history }
 }
 
-// Shows a target in the Sky at the Sky's own time: a catalog object or a body is selected through the Sky's path from the
-// active site, fixed coordinates are marked and panned to. The clock, the mount, the profile, and the site are left alone.
+// Shows a target in the Sky at the Sky's own time: a catalog object, a body, or a minor body is selected through the
+// Sky's path from the active site (a minor body by its SPK-ID, located by the Sky's own ephemeris, never the planner's),
+// fixed coordinates are marked and panned to. The clock, the mount, the profile, and the site are left alone.
 export function showTargetInSky({ target, name }: NamedTarget, site: SiteLocation | undefined, handoff: SkyHandoff = browserHandoff()) {
 	if (target.kind === 'coordinates') showCoordinateInSky(handoff.images, [target.rightAscension, target.declination], name)
-	else selectSkyObject(handoff.sky, { ref: plain(target), source: 'search', name, category: target.kind === 'body' ? 'solarSystem' : undefined }, site, handoff.io)
+	else selectSkyObject(handoff.sky, { ref: plain(target), source: 'search', name, category: target.kind === 'body' ? 'solarSystem' : target.kind === 'minorBody' ? 'minorBody' : undefined }, site, handoff.io)
 	navigate(handoff.route, { workspace: 'sky' }, handoff.history)
 }
 
-// Returns whether two targets are the same.
+// Returns whether two targets are the same. Minor bodies are the same by SPK-ID alone, whatever designation named them.
 export function sameTarget(a: ObservingTargetRef, b: ObservingTargetRef) {
 	if (a.kind === 'catalog' && b.kind === 'catalog') return a.id === b.id
 	if (a.kind === 'body' && b.kind === 'body') return a.code === b.code
+	if (a.kind === 'minorBody' && b.kind === 'minorBody') return a.spkId === b.spkId
 	return a.kind === 'coordinates' && b.kind === 'coordinates' && a.rightAscension === b.rightAscension && a.declination === b.declination && a.name === b.name
 }

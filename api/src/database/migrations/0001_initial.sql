@@ -912,13 +912,16 @@ CREATE TABLE observing_plan_items (
 	id TEXT NOT NULL,
 	-- Position in the plan, ascending from 0 without gaps.
 	position INTEGER NOT NULL CHECK (position >= 0),
-	-- Target: a sky catalog object by id, a major body by Horizons code, or a fixed ICRS/J2000 place (right ascension
-	-- and declination in radians) named by target_name.
-	target_kind TEXT NOT NULL CHECK (target_kind IN ('catalog', 'body', 'coordinates')),
+	-- Target: a sky catalog object by id, a major body by Horizons code, a fixed ICRS/J2000 place (right ascension and
+	-- declination in radians) named by target_name, or a minor body by its canonical SBDB SPK-ID (decimal text) with
+	-- its designation; never coordinates captured for a moving body.
+	target_kind TEXT NOT NULL CHECK (target_kind IN ('catalog', 'body', 'coordinates', 'minorBody')),
 	catalog_id INTEGER,
 	body_code TEXT CHECK (body_code IS NULL OR body_code IN ('301', '199', '299', '499', '599', '699', '799', '899', '999')),
 	right_ascension REAL,
 	declination REAL,
+	minor_body_spk_id TEXT,
+	minor_body_designation TEXT,
 	-- Name of the target when it was added, shown even if the catalog no longer knows it.
 	target_name TEXT NOT NULL CHECK (length(trim(target_name)) > 0),
 	-- Priority, 1 (lowest) to 5 (highest); it never reorders or schedules anything.
@@ -939,5 +942,28 @@ CREATE TABLE observing_plan_items (
 	UNIQUE (plan_id, position),
 	CHECK ((target_kind = 'catalog') = (catalog_id IS NOT NULL)),
 	CHECK ((target_kind = 'body') = (body_code IS NOT NULL)),
-	CHECK ((target_kind = 'coordinates') = (right_ascension IS NOT NULL AND declination IS NOT NULL))
+	CHECK ((target_kind = 'coordinates') = (right_ascension IS NOT NULL AND declination IS NOT NULL)),
+	CHECK ((target_kind = 'minorBody') = (minor_body_spk_id IS NOT NULL AND minor_body_designation IS NOT NULL))
+) STRICT;
+
+-- Orbital elements of the minor bodies of the night plans (ObservingMinorBodyStore), saved so a plan can be analyzed with
+-- the approximate Kepler model offline and after a restart. Reference data shared by every plan, not part of any: a plan
+-- item names its body by SPK-ID without a foreign key, so deleting a row never touches a plan. A row is added when a
+-- saved plan names a body SBDB has answered for, replaced by an explicit refresh, and removed once no plan names it.
+CREATE TABLE observing_minor_bodies (
+	-- Canonical SBDB SPK-ID, decimal text.
+	spk_id TEXT PRIMARY KEY,
+	-- Designation and full name of SBDB.
+	designation TEXT NOT NULL,
+	name TEXT NOT NULL,
+	-- Asteroid or comet, and the SBDB orbit class name, such as "Main-belt Asteroid".
+	kind TEXT NOT NULL CHECK (kind IN ('asteroid', 'comet')),
+	orbit_class TEXT NOT NULL,
+	-- Heliocentric osculating elements (MinorBodyElements: radians, AU, Julian dates TDB) with the photometry, as JSON;
+	-- null when SBDB published none usable.
+	elements TEXT CHECK (elements IS NULL OR json_valid(elements)),
+	-- Date SBDB computed the orbit solution, as SBDB publishes it (such as "2021-04-13 11:15:57").
+	solution_date TEXT NOT NULL,
+	-- When SBDB answered, Unix milliseconds (UTC).
+	fetched_at INTEGER NOT NULL
 ) STRICT;

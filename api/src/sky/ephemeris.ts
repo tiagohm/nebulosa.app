@@ -524,8 +524,9 @@ export function bodyModel(code: SolarSystemBodyCode): PositionAndVelocityOverTim
 	return PLANET_MODELS[code]!
 }
 
-// Kepler orbit of osculating elements; undefined for B1950 elements, which the local model does not support.
-function keplerOrbit(elements: MinorBodyElements): KeplerOrbit | undefined {
+// Kepler orbit of osculating elements; undefined for B1950 elements, which the local model does not support, and for
+// hyperbolic elements without a perihelion distance and time.
+export function keplerOrbit(elements: MinorBodyElements): KeplerOrbit | undefined {
 	if (elements.referenceEclipticFrame === 'B1950') return undefined
 
 	const { tpqr, ec, i, om, w } = elements
@@ -568,15 +569,19 @@ function magnitudeModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>): 
 
 	const elements = target.elements
 	if (!elements) return () => undefined
+	return (sunToBody, observerToBody) => minorBodyMagnitude(elements, sunToBody, observerToBody)
+}
 
-	return (sunToBody, observerToBody) => {
-		const r = vecLength(sunToBody)
-		const delta = vecLength(observerToBody)
-		if (elements.m1 !== undefined) return cometMagnitudeEstimate(elements.m1, delta, r, elements.k1 ?? 10)
-		if (elements.h === undefined) return undefined
-		const correction = elements.g === undefined ? 0 : hgPhaseCorrection(vecAngle(sunToBody, observerToBody), elements.g)
-		return asteroidMagnitudeEstimate(elements.h, r, delta, correction)
-	}
+// Estimated visual magnitude of a minor body from its photometry and the Sun-to-body and observer-to-body vectors (AU):
+// the comet model of M1 and K1 (K1 = 10 when absent), else the asteroid H-G model (no phase correction without G);
+// undefined without either.
+export function minorBodyMagnitude(elements: MinorBodyElements, sunToBody: Vec3, observerToBody: Vec3) {
+	const r = vecLength(sunToBody)
+	const delta = vecLength(observerToBody)
+	if (elements.m1 !== undefined) return cometMagnitudeEstimate(elements.m1, delta, r, elements.k1 ?? 10)
+	if (elements.h === undefined) return undefined
+	const correction = elements.g === undefined ? 0 : hgPhaseCorrection(vecAngle(sunToBody, observerToBody), elements.g)
+	return asteroidMagnitudeEstimate(elements.h, r, delta, correction)
 }
 
 // Local model of a body or minor body; undefined when there is none (minor body without usable elements).

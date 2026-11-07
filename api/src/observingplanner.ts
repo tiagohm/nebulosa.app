@@ -6,6 +6,7 @@ import { errorResponse } from './http'
 import { LruCache } from './lrucache'
 import {
 	analyzeTarget,
+	ephemerisUnavailableAnalysis,
 	MINIMUM_CONTINUOUS_MS,
 	OBSERVING_PRESETS,
 	OBSERVING_SCORE_MODEL_VERSION,
@@ -24,23 +25,46 @@ import {
 	type TargetAnalysisRequest,
 	unresolvedAnalysis,
 } from './observingplanner.astronomy'
+import { type HorizonsVectors, MinorBodyTrajectories } from './observingplanner.minorbodies'
+import type { ObservingMinorBodyStore } from './observingplanner.minorbodies.store'
 import { diagnoseSchedule, type ScheduleItemDiagnostics, type ScheduleTotals } from './observingplanner.schedule'
 import type { ObservingPlan, ObservingPlanDocument, ObservingPlanOutcome, ObservingPlanSaveRequest, ObservingPlanStore } from './observingplanner.store'
 import { queryCatalog } from './sky/catalog'
+import { type MinorBodies, SbdbUnavailableError } from './sky/minorbodies'
 import type { TimeSpan } from './sky/sun'
-import type { SkyCatalogClass, SkyCatalogQuery } from './sky/types'
+import type { MinorBody, SkyCatalogClass, SkyCatalogQuery } from './sky/types'
+import type { SpiceKernelSnapshot } from './spicekernels.runtime'
+import type { SsdRequestQueue } from './ssd'
 
-// Observing Planner: local discovery and analysis of observing targets over a night of a site, and the night plans the
-// operator saves. The catalog listing, the analysis of one target, the bounded discovery, and the preview of a plan are
-// read-only, computed from the embedded sky catalog and the toolkit, never JPL, a forecast, or a device; their results
-// are kept only in memory. Plans are documents of the operational database, written whole with an optimistic revision
-// and published once committed; they never command a device or start an operation. Angles are radians and times Unix
-// milliseconds (UTC).
+// Observing Planner: discovery and analysis of observing targets over a night of a site, and the night plans the operator
+// saves. The catalog listing, the analysis of one target, the bounded discovery, and the preview of a plan are read-only.
+// Catalog objects, major bodies, and coordinates are computed locally from the embedded sky catalog and the toolkit; a
+// minor body (asteroid or comet) is asked of the SPK kernels, or of JPL (SBDB and Horizons, through the shared JPL queue)
+// when the ephemeris policy of the SPICE Kernel Library allows it, never a forecast or a device. Derived results are kept
+// only in memory; the orbital elements of the minor bodies of saved plans are kept in the database for offline use.
+// Plans are documents of the operational database, written whole with an optimistic revision and published once
+// committed; they never command a device or start an operation. Angles are radians and times Unix milliseconds (UTC).
 
 export type { ObservingScheduleConflict, ObservingScheduleConflictCode, ScheduleItemDiagnostics, ScheduleTotals } from './observingplanner.schedule'
 export type { ObservingConstraintsOverride, ObservingPlan, ObservingPlanDocument, ObservingPlanItem, ObservingPlanSaveRequest } from './observingplanner.store'
 
-export type { ObservingConstraints, ObservingMode, ObservingReasonCode, ObservingSample, ObservingScore, ObservingStatus, ObservingSummary, ObservingTargetRef, ObservingWindow, PlanningBodyCode, PlanningSite, TargetAnalysis, TargetAnalysisRequest } from './observingplanner.astronomy'
+export type {
+	ObservingConstraints,
+	ObservingMode,
+	ObservingReasonCode,
+	ObservingSample,
+	ObservingScore,
+	ObservingStatus,
+	ObservingSummary,
+	ObservingTargetRef,
+	ObservingWindow,
+	PlannerEphemerisProvenance,
+	PlannerEphemerisSource,
+	PlanningBodyCode,
+	PlanningSite,
+	TargetAnalysis,
+	TargetAnalysisRequest,
+} from './observingplanner.astronomy'
 export { MINIMUM_CONTINUOUS_MS, OBSERVING_PRESETS, PLANNING_BODY_CODES } from './observingplanner.astronomy'
 
 // Catalog objects one discovery request evaluates.
@@ -59,8 +83,19 @@ const NIGHT_CACHE_LIMIT = 8
 // Target analyses kept in memory.
 const ANALYSIS_CACHE_LIMIT = 256
 
-// Codes of the Observing Planner errors.
-export type ObservingPlannerErrorCode = 'notFound' | 'conflict'
+// Codes of the Observing Planner errors: an unknown plan or minor body, another revision saved since, a refresh the
+// ephemeris policy forbids, or SBDB unavailable.
+export type ObservingPlannerErrorCode = 'notFound' | 'conflict' | 'offline' | 'serviceUnavailable'
+
+// Orbital elements of a minor body read again from SBDB on request (POST /minor-bodies/:spkId/refresh).
+export interface ObservingMinorBodyRefresh {
+	// The body as SBDB answers it now.
+	readonly body: MinorBody
+	// Epoch of its osculating elements, Julian date (TDB); absent when SBDB publishes none usable.
+	readonly orbitEpoch?: number
+	// When SBDB answered, Unix milliseconds (UTC).
+	readonly fetchedAt: number
+}
 
 // Body of POST /api/observing-planner/discover.
 export interface ObservingDiscoveryRequest {
@@ -88,7 +123,7 @@ export interface ObservingCandidate {
 	readonly name: string
 	// Object type.
 	readonly typeName?: string
-	// Broad class, or 'solarSystem' for a body.
+	// Broad class, or 'solarSystem' for a major body.
 	readonly class: SkyCatalogClass | 'solarSystem'
 	// IAU abbreviation of the constellation; absent for bodies.
 	readonly constellation?: string
@@ -126,11 +161,19 @@ export interface ObservingDiscoveryPage {
 	readonly modelVersion: number
 }
 
-// Canonical sort key of a target, for deterministic ties: bodies, then catalog objects, then coordinates.
+// Canonical sort key of a target, for deterministic ties: bodies, then catalog objects, then coordinates, then minor
+// bodies by SPK-ID.
 function targetKey(ref: ObservingTargetRef) {
-	if (ref.kind === 'body') return `0:${ref.code.padStart(4, '0')}`
-	if (ref.kind === 'catalog') return `1:${`${ref.id}`.padStart(12, '0')}`
-	return `2:${ref.name}:${ref.rightAscension}:${ref.declination}`
+	switch (ref.kind) {
+		case 'body':
+			return `0:${ref.code.padStart(4, '0')}`
+		case 'catalog':
+			return `1:${`${ref.id}`.padStart(12, '0')}`
+		case 'coordinates':
+			return `2:${ref.name}:${ref.rightAscension}:${ref.declination}`
+		case 'minorBody':
+			return `3:${ref.spkId.padStart(12, '0')}`
+	}
 }
 
 // Orders candidates by score, then longest window, then identity.
@@ -206,14 +249,28 @@ export interface ObservingPlannerOptions {
 	readonly store: ObservingPlanStore
 	// Receives every committed change of a plan.
 	readonly listener?: (event: ObservingPlanEvent) => void
+	// SBDB lookups of the process, shared with the Sky and Close Approaches.
+	readonly minorBodies: Pick<MinorBodies, 'body' | 'cached'>
+	// Kernels of the SPICE Kernel Library and its ephemeris policy.
+	readonly kernels: { readonly current: () => SpiceKernelSnapshot }
+	// Queue of every request of the process to JPL.
+	readonly queue: SsdRequestQueue
+	// Orbital elements of the minor bodies of the saved plans.
+	readonly minorBodyStore: ObservingMinorBodyStore
+	// Horizons vector-table client; the nebulosa adapter by default.
+	readonly vectors?: HorizonsVectors
 }
 
 // Listing, analysis, discovery, and saved plans of the Observing Planner, with the in-memory caches of the derived results.
 export class ObservingPlannerService {
 	readonly #nights = new LruCache<PlanningNight>(NIGHT_CACHE_LIMIT)
 	readonly #analyses = new LruCache<TargetAnalysis>(ANALYSIS_CACHE_LIMIT)
+	readonly #trajectories: MinorBodyTrajectories
 
-	constructor(readonly options: ObservingPlannerOptions) {}
+	constructor(readonly options: ObservingPlannerOptions) {
+		const { minorBodies, kernels, queue, minorBodyStore, vectors } = options
+		this.#trajectories = new MinorBodyTrajectories({ minorBodies, kernels, queue, store: minorBodyStore, vectors })
+	}
 
 	// Every saved plan.
 	plans(): ObservingPlansSnapshot {
@@ -238,23 +295,51 @@ export class ObservingPlannerService {
 	// Deletes a plan when the revision matches, publishing the removal once committed.
 	removePlan(id: string, revision: number) {
 		const outcome = this.options.store.remove(id, revision)
-		if (outcome.status === 'removed') this.options.listener?.({ type: 'observingPlan:removed', id })
+
+		if (outcome.status === 'removed') {
+			this.#reconcileMinorBodies()
+			this.options.listener?.({ type: 'observingPlan:removed', id })
+		}
+
 		return outcome
 	}
 
-	// Analyzes every item of a plan with its effective constraints and diagnoses the schedule; nothing is stored.
-	preview({ site, eveningDate, constraints, items }: ObservingPlanPreviewRequest): ObservingPlanPreview {
+	// Reads the orbital elements of a minor body again from SBDB and saves them, so later analyses use them; the plans
+	// naming it are not changed. Refused under the offline and spkOnly policies, which forbid asking JPL; notFound when
+	// SBDB does not know the body. Rejects with SbdbUnavailableError when SBDB times out, cannot be reached, or the JPL
+	// queue refuses the request.
+	async refreshMinorBody(spkId: string, signal?: AbortSignal): Promise<{ readonly status: 'refreshed'; readonly refresh: ObservingMinorBodyRefresh } | { readonly status: 'offline' | 'notFound' }> {
+		if (this.options.kernels.current().policy !== 'automatic') return { status: 'offline' }
+		const resolved = await this.options.minorBodies.body(spkId, signal, true)
+		if (!resolved) return { status: 'notFound' }
+		this.options.minorBodyStore.put(resolved)
+		return { status: 'refreshed', refresh: { body: resolved.body, orbitEpoch: resolved.elements?.epoch, fetchedAt: resolved.fetchedAt } }
+	}
+
+	// Saves the elements SBDB answered for the minor bodies the plans name, and forgets those no plan names any more.
+	#reconcileMinorBodies() {
+		this.options.minorBodyStore.reconcile((spkId) => this.options.minorBodies.cached(spkId))
+	}
+
+	// Analyzes every item of a plan with its effective constraints and diagnoses the schedule; nothing is stored. Minor
+	// bodies are prepared one after the other; an item without a trajectory is diagnosed as such and the others go on.
+	async preview({ site, eveningDate, constraints, items }: ObservingPlanPreviewRequest, signal?: AbortSignal): Promise<ObservingPlanPreview> {
 		const night = this.planningNight(site, eveningDate)
-		const analyses = items.map((item) => this.analyze({ target: item.target, site, eveningDate, constraints: { ...constraints, ...item.constraints }, requestedDurationMs: item.requestedDurationMs }))
+		const analyses: TargetAnalysis[] = []
+		for (const item of items) analyses.push(await this.analyze({ target: item.target, site, eveningDate, constraints: { ...constraints, ...item.constraints }, requestedDurationMs: item.requestedDurationMs }, signal))
 		const scope = night.sunWindows(constraints.maximumSunAltitude)
 		const entries = items.map((item, i) => ({ id: item.id, requestedDurationMs: item.requestedDurationMs, scheduledStartAt: item.scheduledStartAt, status: analyses[i].status, windows: analyses[i].windows }))
 		const { items: diagnostics, totals } = diagnoseSchedule(entries, night.night.sun, scope)
 		return { night: night.night, scope, items: items.map((item, i) => ({ itemId: item.id, analysis: analyses[i], ...diagnostics.get(item.id)! })), totals }
 	}
 
-	// Publishes a saved plan.
+	// Publishes a saved plan, after saving the elements of the minor bodies it names.
 	#published(outcome: ObservingPlanOutcome) {
-		if (outcome.status === 'saved') this.options.listener?.({ type: 'observingPlan:updated', plan: outcome.plan })
+		if (outcome.status === 'saved') {
+			this.#reconcileMinorBodies()
+			this.options.listener?.({ type: 'observingPlan:updated', plan: outcome.plan })
+		}
+
 		return outcome
 	}
 
@@ -276,8 +361,30 @@ export class ObservingPlannerService {
 		return night
 	}
 
-	// Analyzes one target over a night; an unknown catalog id is unresolved, never an error.
-	analyze({ target, site, eveningDate, constraints, requestedDurationMs }: TargetAnalysisRequest): TargetAnalysis {
+	// Analyzes one target over a night; an unknown catalog id or SPK-ID is unresolved, and a minor body no source covers
+	// over the night is ephemerisUnavailable, never an error. A minor body is first prepared from its ephemeris source,
+	// which may ask JPL; its analysis is cached with the identity of that source, so a new kernel set, policy, or orbit
+	// solution analyzes it again. Rejects only when `signal` aborts.
+	async analyze(request: TargetAnalysisRequest, signal?: AbortSignal): Promise<TargetAnalysis> {
+		const { target, site, eveningDate, constraints, requestedDurationMs } = request
+		if (target.kind !== 'minorBody') return this.#analyzeLocal({ ...request, target })
+
+		const night = this.planningNight(site, eveningDate)
+		const preparation = await this.#trajectories.prepare(target, night, signal)
+		if (preparation.kind === 'unresolved') return unresolvedAnalysis(night, target, constraints, requestedDurationMs)
+		if (preparation.kind === 'unavailable') return ephemerisUnavailableAnalysis(night, target, preparation.reason, constraints, requestedDurationMs, preparation.name, preparation.typeName)
+
+		const key = JSON.stringify([OBSERVING_SCORE_MODEL_VERSION, target, site.latitude, site.longitude, site.elevation, site.timeZone, eveningDate, constraints, requestedDurationMs, preparation.revision])
+		const cached = this.#analyses.get(key)
+		if (cached) return cached
+
+		const analysis = analyzeTarget(night, { ...preparation.target, ref: target }, constraints, requestedDurationMs)
+		this.#analyses.set(key, analysis)
+		return analysis
+	}
+
+	// Analyzes a target computed locally (a catalog object, a major body, or coordinates) over a night, synchronously.
+	#analyzeLocal({ target, site, eveningDate, constraints, requestedDurationMs }: TargetAnalysisRequest & { readonly target: Exclude<ObservingTargetRef, { kind: 'minorBody' }> }): TargetAnalysis {
 		const key = JSON.stringify([OBSERVING_SCORE_MODEL_VERSION, target, site.latitude, site.longitude, site.elevation, site.timeZone, eveningDate, constraints, requestedDurationMs])
 		const cached = this.#analyses.get(key)
 		if (cached) return cached
@@ -301,10 +408,10 @@ export class ObservingPlannerService {
 		const latitude = night.location.latitude
 		let evaluated = 0
 
-		const evaluate = async (target: ObservingTargetRef, details: Pick<ObservingCandidate, 'class' | 'constellation' | 'magnitude' | 'majorAxis'>) => {
+		const evaluate = async (target: Exclude<ObservingTargetRef, { kind: 'minorBody' }>, details: Pick<ObservingCandidate, 'class' | 'constellation' | 'magnitude' | 'majorAxis'>) => {
 			if (++evaluated % DISCOVERY_YIELD_EVERY === 0) await yieldToEventLoop()
 			signal?.throwIfAborted()
-			const candidate = candidateOf(this.analyze({ target, site, eveningDate, constraints, requestedDurationMs }), details)
+			const candidate = candidateOf(this.#analyzeLocal({ target, site, eveningDate, constraints, requestedDurationMs }), details)
 			if (candidate) candidates.push(candidate)
 		}
 
@@ -393,8 +500,9 @@ export function createObservingPlannerRoutes(service: ObservingPlannerService) {
 			POST: async (req) => planResponse(service.duplicatePlan(req.params.id, (await req.json()) as ObservingPlanDuplicateRequest)),
 		},
 		'/api/observing-planner/preview': {
-			// Analysis and schedule diagnostics of the plan document of the body (ObservingPlanPreviewRequest).
-			POST: async (req) => Response.json(service.preview((await req.json()) as ObservingPlanPreviewRequest) satisfies ObservingPlanPreview),
+			// Analysis and schedule diagnostics of the plan document of the body (ObservingPlanPreviewRequest); a request that
+			// left stops preparing its minor bodies and is not answered.
+			POST: async (req) => Response.json((await service.preview((await req.json()) as ObservingPlanPreviewRequest, req.signal)) satisfies ObservingPlanPreview),
 		},
 		'/api/observing-planner/presets': {
 			// Defaults and limits of the constraints (ObservingPlannerPresets).
@@ -405,8 +513,24 @@ export function createObservingPlannerRoutes(service: ObservingPlannerService) {
 			GET: (req) => Response.json(service.catalog(catalogQuery(new URL(req.url).searchParams))),
 		},
 		'/api/observing-planner/analyze': {
-			// Analysis of one target over a night (TargetAnalysis) for the body (TargetAnalysisRequest).
-			POST: async (req) => Response.json(service.analyze((await req.json()) as TargetAnalysisRequest) satisfies TargetAnalysis),
+			// Analysis of one target over a night (TargetAnalysis) for the body (TargetAnalysisRequest); a minor body without a
+			// trajectory is answered with its status, never an error. A request that left is not answered.
+			POST: async (req) => Response.json((await service.analyze((await req.json()) as TargetAnalysisRequest, req.signal)) satisfies TargetAnalysis),
+		},
+		'/api/observing-planner/minor-bodies/:spkId/refresh': {
+			// Reads the orbital elements of a minor body again from SBDB and saves them (ObservingMinorBodyRefresh); 404
+			// notFound, 503 offline when the ephemeris policy forbids asking JPL, 503 serviceUnavailable when SBDB is unavailable.
+			POST: async (req) => {
+				try {
+					const outcome = await service.refreshMinorBody(req.params.spkId, req.signal)
+					if (outcome.status === 'refreshed') return Response.json(outcome.refresh satisfies ObservingMinorBodyRefresh)
+					if (outcome.status === 'offline') return errorResponse('The ephemeris policy forbids asking JPL', 503, 'offline' satisfies ObservingPlannerErrorCode)
+					return errorResponse('SBDB does not know this minor body', 404, 'notFound' satisfies ObservingPlannerErrorCode)
+				} catch (error) {
+					if (error instanceof SbdbUnavailableError) return errorResponse(error.message, 503, 'serviceUnavailable' satisfies ObservingPlannerErrorCode)
+					throw error
+				}
+			},
 		},
 		'/api/observing-planner/discover': {
 			// Next batch of a discovery (ObservingDiscoveryPage) for the body (ObservingDiscoveryRequest); a request that left

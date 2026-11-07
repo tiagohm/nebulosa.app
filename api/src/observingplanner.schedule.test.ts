@@ -30,11 +30,13 @@ test('overlaps are reported on both items, even for the same target', () => {
 })
 
 test('unscheduled items are allowed and the target problems are reported', () => {
-	const entries = [entry('free', 30), entry('long', 45), entry('never', 10, undefined, { status: 'notObservable', windows: [] }), entry('gone', 10, 20, { status: 'unresolved', windows: [] })]
+	const entries = [entry('free', 30), entry('long', 45), entry('never', 10, undefined, { status: 'notObservable', windows: [] }), entry('gone', 10, 20, { status: 'unresolved', windows: [] }), entry('unknown', 10, 35, { status: 'ephemerisUnavailable', windows: [] })]
 	const { items, totals } = diagnoseSchedule(entries, NIGHT, [{ start: 20, end: 80 }])
 	expect(items.get('free')).toEqual({ scheduledEndAt: undefined, conflicts: [] })
 	expect(items.get('long')!.conflicts).toEqual([{ code: 'insufficientContiguousTime' }])
 	expect(items.get('never')!.conflicts).toEqual([{ code: 'notObservable' }])
 	expect(items.get('gone')!.conflicts).toEqual([{ code: 'unresolvedTarget' }])
-	expect(totals).toEqual({ requestedMs: 95, scheduledMs: 10, unscheduled: 3, observable: 1, withConflicts: 3, scopeMs: 60, unallocatedMs: 50 })
+	// Nothing is known of the windows of a minor body without a trajectory, so its block is judged against none.
+	expect(items.get('unknown')!.conflicts).toEqual([{ code: 'ephemerisUnavailable' }])
+	expect(totals).toEqual({ requestedMs: 105, scheduledMs: 20, unscheduled: 3, observable: 1, withConflicts: 4, scopeMs: 60, unallocatedMs: 40 })
 })

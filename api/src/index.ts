@@ -75,6 +75,7 @@ import { createObservatoryCameraRoutes, ObservatoryCameraService } from './obser
 import { CAMERA_SECRET_KEY_VARIABLE, CameraSecretKey, systemSecretStorage } from './observatorycameras.secret'
 import { ObservatoryCameraStore } from './observatorycameras.store'
 import { createObservingPlannerRoutes, ObservingPlannerService } from './observingplanner'
+import { ObservingMinorBodyStore } from './observingplanner.minorbodies.store'
 import { ObservingPlanStore } from './observingplanner.store'
 import { createOperationHistoryRoutes, OperationRecorder } from './operationhistory'
 import { createOperationRoutes, OperationRegistry } from './operations'
@@ -349,6 +350,7 @@ export type {
 	ObservingDiscoveryPage,
 	ObservingDiscoveryRequest,
 	ObservingConstraintsOverride,
+	ObservingMinorBodyRefresh,
 	ObservingMode,
 	ObservingPlan,
 	ObservingPlanDocument,
@@ -371,6 +373,8 @@ export type {
 	ObservingSummary,
 	ObservingTargetRef,
 	ObservingWindow,
+	PlannerEphemerisProvenance,
+	PlannerEphemerisSource,
 	PlanningBodyCode,
 	PlanningSite,
 	ScheduleItemDiagnostics,
@@ -1019,7 +1023,7 @@ const astroWeather = new AstroWeatherService()
 
 // Target discovery and analysis of the Observing Planner, over the sky catalog and the nights of Astro Weather, and its
 // night plans in the operational database, sent to every tab once saved.
-const observingPlanner = new ObservingPlannerService({ catalog: skyCatalog, night: (request) => astroWeather.night(request), store: new ObservingPlanStore(database), listener: broadcast })
+const observingPlanner = new ObservingPlannerService({ catalog: skyCatalog, night: (request) => astroWeather.night(request), store: new ObservingPlanStore(database), listener: broadcast, minorBodies, kernels: spiceKernels, queue: ssdRequests, minorBodyStore: new ObservingMinorBodyStore(database) })
 
 // Earth orientation tables of the process, shared by the converter and, once installed, by every Time of the server.
 const earthOrientation = new EarthOrientationData()

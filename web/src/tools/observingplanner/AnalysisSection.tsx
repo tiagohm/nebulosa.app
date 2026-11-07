@@ -1,8 +1,11 @@
+import type { PlannerEphemerisProvenance, TargetAnalysis } from 'api'
+import { RAD2DEG } from 'nebulosa/src/core/constants'
 import { parseAngle } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatClockTime, formatDegrees, formatHours, formatPercent, formatSpan } from '../../format'
+import { formatClockTime, formatDate, formatDateTime, formatDegrees, formatHours, formatPercent, formatSpan } from '../../format'
 import type { SiteLocation } from '../../location/site'
+import { formatMagnitude, formatSolarSystemDistance } from '../../sky/format'
 import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
@@ -10,14 +13,26 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import { formatScore, formatTargetKind } from './format'
 import { NightChart } from './NightChart'
-import { analyze, type NamedTarget, type ObservingPlannerState, observingPlannerState, REASON_LABELS, showTargetInSky, STATUS_LABELS } from './observingplanner'
+import { analyze, type NamedTarget, type ObservingPlannerState, observingPlannerState, REASON_LABELS, refreshOrbitalElements, showTargetInSky, STATUS_LABELS } from './observingplanner'
 
 // Analysis section of the Observing Planner: one target over the tool's night, with its status and reasons, its windows,
-// the factors of its score, and the chart of its altitude. Fixed coordinates typed here are analyzed the same way. Show in
-// Sky selects the object in the Sky at the Sky's own time; nothing moves the mount or the clock.
+// the factors of its score, and the chart of its altitude. Fixed coordinates typed here are analyzed the same way. A minor
+// body also shows where its trajectory came from and how far it can be trusted, its distance and estimated magnitude at the
+// instant chosen on the chart, and Refresh Orbital Elements. Show in Sky selects the object in the Sky at the Sky's own
+// time; nothing moves the mount or the clock.
 
 // Names of the score factors.
 const FACTOR_LABELS = { altitude: 'Altitude', airmass: 'Airmass', twilight: 'Twilight', moon: 'Moon', duration: 'Duration' } as const
+
+// Name of each source of a minor body's trajectory.
+const SOURCE_LABELS: Readonly<Record<PlannerEphemerisProvenance['source'], string>> = { spk: 'SPK kernels', horizons: 'JPL Horizons', kepler: 'Approximate orbital elements (two-body)' }
+
+// Why the approximate orbital elements were used.
+const FALLBACK_LABELS: Readonly<Record<NonNullable<PlannerEphemerisProvenance['fallbackReason']>, string>> = { offline: 'The ephemeris policy forbids asking JPL.', timeout: 'JPL Horizons did not answer in time.', network: 'JPL Horizons could not be reached.' }
+
+// Julian date of the Unix epoch, to show a TDB Julian date as a calendar date (the TDB-UTC offset of about a minute is
+// below the precision shown).
+const UNIX_EPOCH_JD = 2440587.5
 
 export interface AnalysisSectionProps {
 	// Location of the tool; undefined without one.
@@ -56,6 +71,11 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 							<Button variant="secondary" disabled={analysis.status === 'unresolved'} onClick={() => showTargetInSky(selected, activeSite)}>
 								Show in Sky
 							</Button>
+							{analysis.target.kind === 'minorBody' && (
+								<Button variant="secondary" disabled={!location || state.elementsRefreshing} title="Read the orbital elements of this body again from the Small-Body Database" onClick={() => location && void refreshOrbitalElements(observingPlannerState, location)}>
+									{state.elementsRefreshing ? 'Refreshing…' : 'Refresh Orbital Elements'}
+								</Button>
+							)}
 							<Button variant="secondary" onClick={() => onAdd(selected)}>
 								Add
 							</Button>
@@ -70,7 +90,9 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 							))}
 						</Notice>
 					)}
+					{state.elementsError && <Notice error>{state.elementsError}</Notice>}
 					{analysis.samples.length > 0 && <NightChart analysis={analysis} timeZone={timeZone} cursor={Math.min(cursor, analysis.samples.length - 1)} onCursor={setCursor} />}
+					{analysis.target.kind === 'minorBody' && <MinorBodyDetails analysis={analysis} cursor={Math.min(cursor, analysis.samples.length - 1)} timeZone={timeZone} />}
 					<div className="grid gap-4 md:grid-cols-2">
 						<section className="flex flex-col gap-2 rounded-sm border border-line-100 bg-base-100 p-4">
 							<h4 className="m-0 text-sm font-medium text-ink-100">Windows</h4>
@@ -116,6 +138,37 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 				</>
 			)}
 		</div>
+	)
+}
+
+// Ephemeris of a minor body: the source of its trajectory and how far it can be trusted, its motion against the stars,
+// and its distance and estimated magnitude at the sample chosen on the chart (never a single place for the whole night).
+function MinorBodyDetails({ analysis, cursor, timeZone }: { readonly analysis: TargetAnalysis; readonly cursor: number; readonly timeZone: string }) {
+	const { ephemeris, motion } = analysis
+	const sample = analysis.samples[cursor]
+
+	return (
+		<section className="flex flex-col gap-2 rounded-sm border border-line-100 bg-base-100 p-4">
+			<h4 className="m-0 text-sm font-medium text-ink-100">Ephemeris</h4>
+			{ephemeris ? (
+				<DataList>
+					<DataRow label="Source">{SOURCE_LABELS[ephemeris.source]}</DataRow>
+					{ephemeris.kernels && <DataRow label="Kernels">{`Generation ${ephemeris.kernels.generation} · ${ephemeris.kernels.kernelIds.length} kernel${ephemeris.kernels.kernelIds.length === 1 ? '' : 's'}`}</DataRow>}
+					{ephemeris.orbitEpoch !== undefined && <DataRow label="Elements Epoch">{formatDate((ephemeris.orbitEpoch - UNIX_EPOCH_JD) * 86_400_000, timeZone)}</DataRow>}
+					{ephemeris.solutionDate && <DataRow label="Orbit Solution">{ephemeris.solutionDate}</DataRow>}
+					{ephemeris.elementsFetchedAt !== undefined && <DataRow label="Elements Read">{formatDateTime(ephemeris.elementsFetchedAt, timeZone, false)}</DataRow>}
+					{motion !== undefined && <DataRow label="Fastest Motion">{`${(motion * RAD2DEG * 3600).toFixed(1)}″/min`}</DataRow>}
+					{sample && (
+						<DataRow label={`At ${formatClockTime(sample.time, timeZone)}`}>{`${sample.distance === undefined ? 'Distance unknown' : formatSolarSystemDistance(sample.distance)} · ${sample.magnitude === undefined ? 'magnitude unavailable' : `mag ${formatMagnitude(sample.magnitude)} (estimate)`}`}</DataRow>
+					)}
+				</DataList>
+			) : (
+				<p className="m-0 text-sm text-ink-300">No source gives this body's trajectory over the night, so nothing is known of its visibility.</p>
+			)}
+			{ephemeris?.fallbackReason && <p className="m-0 text-xs text-warning">{FALLBACK_LABELS[ephemeris.fallbackReason]}</p>}
+			{ephemeris?.approximate && <p className="m-0 text-xs text-ink-300">A two-body orbit ignores the planets' pull: its error grows with the age of the elements and near the planets. Enable an SPK kernel of the body, or allow JPL, for an accurate trajectory.</p>}
+			<p className="m-0 text-xs text-ink-300">Positions are geometric and topocentric, without light-time. Magnitudes are estimates from published photometry; comets often differ.</p>
+		</section>
 	)
 }
 

@@ -9,9 +9,10 @@ export function formatScore(score: number) {
 	return score.toFixed(0)
 }
 
-// Returns what a target is, for a subtitle: a catalog object, a body, or its coordinates.
+// Returns what a target is, for a subtitle: a catalog object, a body, a minor body with its SPK-ID, or its coordinates.
 export function formatTargetKind(target: ObservingTargetRef) {
 	if (target.kind === 'catalog') return 'Sky catalog object'
 	if (target.kind === 'body') return 'Solar system body'
+	if (target.kind === 'minorBody') return `Asteroid or comet · SPK-ID ${target.spkId}`
 	return `RA ${formatRightAscension(target.rightAscension)} · Dec ${formatDeclination(target.declination)} (J2000)`
 }

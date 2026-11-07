@@ -101,6 +101,8 @@ interface ItemRow {
 	readonly bodyCode: PlanningBodyCode | null
 	readonly rightAscension: number | null
 	readonly declination: number | null
+	readonly minorBodySpkId: string | null
+	readonly minorBodyDesignation: string | null
 	readonly targetName: string
 	readonly priority: number
 	readonly requestedDurationMs: number
@@ -119,7 +121,7 @@ const PLAN_COLUMNS =
 
 // Columns of an item, named as the API names them.
 const ITEM_COLUMNS =
-	'plan_id AS planId, id, target_kind AS targetKind, catalog_id AS catalogId, body_code AS bodyCode, right_ascension AS rightAscension, declination, target_name AS targetName, priority, requested_duration_ms AS requestedDurationMs, scheduled_start_at AS scheduledStartAt, minimum_altitude AS minimumAltitude, maximum_airmass AS maximumAirmass, maximum_sun_altitude AS maximumSunAltitude, minimum_moon_separation AS minimumMoonSeparation, minimum_continuous_ms AS minimumContinuousMs, notes'
+	'plan_id AS planId, id, target_kind AS targetKind, catalog_id AS catalogId, body_code AS bodyCode, right_ascension AS rightAscension, declination, minor_body_spk_id AS minorBodySpkId, minor_body_designation AS minorBodyDesignation, target_name AS targetName, priority, requested_duration_ms AS requestedDurationMs, scheduled_start_at AS scheduledStartAt, minimum_altitude AS minimumAltitude, maximum_airmass AS maximumAirmass, maximum_sun_altitude AS maximumSunAltitude, minimum_moon_separation AS minimumMoonSeparation, minimum_continuous_ms AS minimumContinuousMs, notes'
 
 // Copies the defined fields of an object, so absent optional fields stay absent rather than undefined or null.
 function defined<T extends object>(value: { [K in keyof T]: T[K] | null | undefined }): T {
@@ -130,9 +132,16 @@ function defined<T extends object>(value: { [K in keyof T]: T[K] | null | undefi
 
 // Returns the target of an item row.
 function targetOf(row: ItemRow): ObservingTargetRef {
-	if (row.targetKind === 'catalog') return { kind: 'catalog', id: row.catalogId! }
-	if (row.targetKind === 'body') return { kind: 'body', code: row.bodyCode! }
-	return { kind: 'coordinates', name: row.targetName, rightAscension: row.rightAscension!, declination: row.declination! }
+	switch (row.targetKind) {
+		case 'catalog':
+			return { kind: 'catalog', id: row.catalogId! }
+		case 'body':
+			return { kind: 'body', code: row.bodyCode! }
+		case 'coordinates':
+			return { kind: 'coordinates', name: row.targetName, rightAscension: row.rightAscension!, declination: row.declination! }
+		case 'minorBody':
+			return { kind: 'minorBody', spkId: row.minorBodySpkId!, designation: row.minorBodyDesignation! }
+	}
 }
 
 // Returns the item of a row.
@@ -247,7 +256,7 @@ export class ObservingPlanStore {
 		db.query('DELETE FROM observing_plan_items WHERE plan_id = ?').run(id)
 
 		const insert = db.query(
-			'INSERT INTO observing_plan_items (plan_id, id, position, target_kind, catalog_id, body_code, right_ascension, declination, target_name, priority, requested_duration_ms, scheduled_start_at, minimum_altitude, maximum_airmass, maximum_sun_altitude, minimum_moon_separation, minimum_continuous_ms, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+			'INSERT INTO observing_plan_items (plan_id, id, position, target_kind, catalog_id, body_code, right_ascension, declination, minor_body_spk_id, minor_body_designation, target_name, priority, requested_duration_ms, scheduled_start_at, minimum_altitude, maximum_airmass, maximum_sun_altitude, minimum_moon_separation, minimum_continuous_ms, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
 		)
 
 		for (const [position, item] of items.entries()) {
@@ -261,6 +270,8 @@ export class ObservingPlanStore {
 				target.kind === 'body' ? target.code : null,
 				target.kind === 'coordinates' ? target.rightAscension : null,
 				target.kind === 'coordinates' ? target.declination : null,
+				target.kind === 'minorBody' ? target.spkId : null,
+				target.kind === 'minorBody' ? target.designation : null,
 				target.kind === 'coordinates' ? target.name : item.targetName,
 				item.priority,
 				item.requestedDurationMs,

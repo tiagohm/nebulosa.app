@@ -9,8 +9,9 @@ const SITE = { name: 'Backyard', latitude: -23.55, longitude: -46.633, elevation
 const M42: ObservingPlanItem = { id: 'i1', target: { kind: 'catalog', id: 1001879 }, targetName: 'Great Orion Nebula', priority: 3, requestedDurationMs: 7_200_000, notes: '' }
 const SATURN: ObservingPlanItem = { id: 'i2', target: { kind: 'body', code: '699' }, targetName: 'Saturn', priority: 5, requestedDurationMs: 1_800_000, scheduledStartAt: 1_768_520_000_000, constraints: { minimumAltitude: 0.5, maximumAirmass: 1.5 }, notes: 'barlow' }
 const FIELD: ObservingPlanItem = { id: 'i3', target: { kind: 'coordinates', name: 'Field', rightAscension: 1.2, declination: -0.3 }, targetName: 'Field', priority: 1, requestedDurationMs: 600_000, notes: '' }
+const VESTA: ObservingPlanItem = { id: 'i4', target: { kind: 'minorBody', spkId: '2000004', designation: '4' }, targetName: '4 Vesta', priority: 2, requestedDurationMs: 1_200_000, scheduledStartAt: 1_768_530_000_000, notes: '' }
 
-const PLAN: ObservingPlanSaveRequest = { name: 'Orion night', eveningDate: '2026-01-15', site: SITE, constraints: OBSERVING_PRESETS.deepSky, items: [M42, SATURN, FIELD], revision: 0 }
+const PLAN: ObservingPlanSaveRequest = { name: 'Orion night', eveningDate: '2026-01-15', site: SITE, constraints: OBSERVING_PRESETS.deepSky, items: [M42, SATURN, FIELD, VESTA], revision: 0 }
 
 function setup() {
 	const database = AppDatabase.memory()
@@ -21,7 +22,7 @@ describe('save', () => {
 	test('creates, reads back, and edits the whole document with a new revision', () => {
 		const { store } = setup()
 		const created = store.save('p1', PLAN, 1000)
-		expect(created).toEqual({ status: 'saved', plan: { id: 'p1', name: 'Orion night', eveningDate: '2026-01-15', site: SITE, constraints: OBSERVING_PRESETS.deepSky, items: [M42, SATURN, FIELD], revision: 1, createdAt: 1000, updatedAt: 1000 } })
+		expect(created).toEqual({ status: 'saved', plan: { id: 'p1', name: 'Orion night', eveningDate: '2026-01-15', site: SITE, constraints: OBSERVING_PRESETS.deepSky, items: [M42, SATURN, FIELD, VESTA], revision: 1, createdAt: 1000, updatedAt: 1000 } })
 		expect(store.get('p1')).toEqual(store.list()[0])
 
 		const reordered = store.save('p1', { ...PLAN, name: 'Renamed', items: [FIELD, { ...M42, scheduledStartAt: 5 }], revision: 1 }, 2000)
@@ -43,7 +44,7 @@ describe('save', () => {
 		store.save('p1', PLAN)
 		// The second item breaks the priority check after the plan row and the first item were written.
 		expect(() => store.save('p1', { ...PLAN, name: 'Broken', items: [M42, { ...SATURN, priority: 9 }], revision: 1 })).toThrow()
-		expect(store.get('p1')).toMatchObject({ name: 'Orion night', revision: 1, items: [M42, SATURN, FIELD] })
+		expect(store.get('p1')).toMatchObject({ name: 'Orion night', revision: 1, items: [M42, SATURN, FIELD, VESTA] })
 	})
 
 	test('keeps the same target twice as separate items', () => {
@@ -59,14 +60,14 @@ describe('list, duplicate, and remove', () => {
 		store.save('a', PLAN, 1000)
 		store.save('b', PLAN, 2000)
 		expect(store.list().map((e) => e.id)).toEqual(['b', 'a'])
-		expect(store.list()[1].items).toHaveLength(3)
+		expect(store.list()[1].items).toHaveLength(4)
 	})
 
 	test('duplicates with its items as a first revision', () => {
 		const { store } = setup()
 		store.save('p1', PLAN, 1000)
 		store.save('p1', { ...PLAN, revision: 1 }, 1500)
-		expect(store.duplicate('p1', 'p2', 'Copy', 2000)).toMatchObject({ status: 'saved', plan: { id: 'p2', name: 'Copy', revision: 1, createdAt: 2000, items: [M42, SATURN, FIELD] } })
+		expect(store.duplicate('p1', 'p2', 'Copy', 2000)).toMatchObject({ status: 'saved', plan: { id: 'p2', name: 'Copy', revision: 1, createdAt: 2000, items: [M42, SATURN, FIELD, VESTA] } })
 		expect(store.duplicate('missing', 'p3', 'Copy')).toEqual({ status: 'notFound' })
 		expect(store.duplicate('p1', 'p2', 'Again')).toMatchObject({ status: 'conflict' })
 	})

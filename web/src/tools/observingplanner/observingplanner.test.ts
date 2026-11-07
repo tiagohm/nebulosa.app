@@ -6,7 +6,7 @@ import type { SkyClock } from '../../sky/clock'
 import type { SkyImageState } from '../../sky/footprint'
 import { plannerTarget } from '../../sky/ObjectActions'
 import type { SkyIo, SkyState } from '../../sky/sky'
-import { addToObservingPlanner, createObservingPlannerState, discardDraft, discover, editPlan, handleObservingPlanEvent, type ObservingPlannerIo, type ObservingPlansState, overwritePlan, planDocument, refreshObservingPlans, showTargetInSky, tonight } from './observingplanner'
+import { addToObservingPlanner, createObservingPlannerState, discardDraft, discover, editPlan, handleObservingPlanEvent, type ObservingPlannerIo, type ObservingPlansState, overwritePlan, planDocument, refreshObservingPlans, sameTarget, searchMinorBody, showTargetInSky, tonight } from './observingplanner'
 
 const CONSTRAINTS: ObservingConstraints = { mode: 'deepSky', minimumAltitude: 0.5, maximumAirmass: 2, maximumSunAltitude: -0.3, minimumMoonSeparation: 0.7, minimumContinuousMs: 3_600_000 }
 const SITE = { name: 'Backyard', latitude: -23.55, longitude: -46.63, elevation: 760, timeZone: 'America/Sao_Paulo' }
@@ -158,7 +158,7 @@ describe('handoffs', () => {
 		return { route, sky, images, clock, io: skyIo, history: { pushState: () => undefined } }
 	}
 
-	test('the Sky adds catalog objects and bodies but the Sun and other kinds', () => {
+	test('the Sky adds catalog objects, bodies, and minor bodies but the Sun and other kinds', () => {
 		const refs: SkyObjectRef[] = [
 			{ kind: 'catalog', id: 1 },
 			{ kind: 'body', code: '599' },
@@ -166,7 +166,7 @@ describe('handoffs', () => {
 			{ kind: 'minorBody', spkId: '1', designation: '1' },
 			{ kind: 'constellation', code: 'ORI' },
 		]
-		expect(refs.map(plannerTarget)).toEqual([{ kind: 'catalog', id: 1 }, { kind: 'body', code: '599' }, undefined, undefined, undefined])
+		expect(refs.map(plannerTarget)).toEqual([{ kind: 'catalog', id: 1 }, { kind: 'body', code: '599' }, undefined, { kind: 'minorBody', spkId: '1', designation: '1' }, undefined])
 	})
 
 	test('adding from the Sky opens the tool with the target pending and changes nothing else', () => {
@@ -188,6 +188,11 @@ describe('handoffs', () => {
 		showTargetInSky({ target: { kind: 'coordinates', name: 'Field', rightAscension: 1, declination: -0.2 }, name: 'Field' }, undefined, place)
 		expect(place.images.intent).toMatchObject({ rightAscension: 1, declination: -0.2, label: 'Field', mark: true })
 		expect(place.sky.selection).toBeUndefined()
+
+		const body = handoff()
+		showTargetInSky({ target: { kind: 'minorBody', spkId: '2000004', designation: '4' }, name: '4 Vesta' }, undefined, body)
+		expect(body.sky.selection).toMatchObject({ ref: { kind: 'minorBody', spkId: '2000004', designation: '4' }, name: '4 Vesta', category: 'minorBody' })
+		expect(body.clock).toEqual({ mode: 'fixed', anchor: 1000, startedAt: 0, rate: 1 })
 	})
 })
 
@@ -195,4 +200,36 @@ test('tonight is the evening of the night in progress in the zone of the locatio
 	// 02:00 in São Paulo (05:00 UTC) still belongs to the evening before; 20:00 belongs to its own date.
 	expect(tonight(Date.UTC(2026, 0, 16, 5), 'America/Sao_Paulo')).toBe('2026-01-15')
 	expect(tonight(Date.UTC(2026, 0, 16, 23), 'America/Sao_Paulo')).toBe('2026-01-16')
+})
+
+test('minor bodies are the same by SPK-ID, whatever designation named them', () => {
+	expect(sameTarget({ kind: 'minorBody', spkId: '1000012', designation: '1P' }, { kind: 'minorBody', spkId: '1000012', designation: '1P/Halley' })).toBe(true)
+	expect(sameTarget({ kind: 'minorBody', spkId: '2000001', designation: '1' }, { kind: 'minorBody', spkId: '2000004', designation: '1' })).toBe(false)
+})
+
+describe('minor body search', () => {
+	test('a search tells found, ambiguous, and not found apart, and keeps only the latest answer', async () => {
+		const state = createObservingPlannerState()
+		const answers: Record<string, unknown> = {
+			vesta: { kind: 'found', body: { spkId: '2000004', designation: '4', name: '4 Vesta (A807 FA)' } },
+			ceres: { kind: 'ambiguous', matches: [{ designation: '1', name: '1 Ceres' }] },
+			none: { kind: 'notFound', message: 'No matches found.' },
+		}
+		const { io: value, requests } = io((url) => respond(answers[new URL(url, 'http://localhost').searchParams.get('q')!]))
+		await searchMinorBody(state, 'vesta', value)
+		expect(state.minorBodySearch).toMatchObject({ text: 'vesta', loading: false, result: answers.vesta })
+		await searchMinorBody(state, 'ceres', value)
+		expect(state.minorBodySearch.result).toEqual(answers.ceres as never)
+		await searchMinorBody(state, 'none', value)
+		expect(state.minorBodySearch.result).toEqual(answers.none as never)
+		expect(requests.map((e) => e.url)).toEqual(['/api/sky/minorbodies/search?q=vesta', '/api/sky/minorbodies/search?q=ceres', '/api/sky/minorbodies/search?q=none'])
+	})
+
+	test('a failure is shown apart from no match', async () => {
+		const state = createObservingPlannerState()
+		await searchMinorBody(state, 'vesta', io(() => respond({ error: 'SBDB cannot be reached', code: 'serviceUnavailable' }, 503)).io)
+		expect(state.minorBodySearch.result).toBeUndefined()
+		expect(state.minorBodySearch.error).toBe('SBDB cannot be reached')
+		expect(state.minorBodySearch.loading).toBe(false)
+	})
 })

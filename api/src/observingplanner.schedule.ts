@@ -7,8 +7,10 @@ import type { TimeSpan } from './sky/sun'
 
 // Problem of an item of a schedule.
 export type ObservingScheduleConflictCode =
-	// The catalog no longer knows the target.
+	// The catalog or SBDB does not know the target.
 	| 'unresolvedTarget'
+	// No ephemeris source gives the trajectory of the minor body over the night, so nothing is known of its windows.
+	| 'ephemerisUnavailable'
 	// The target has no window the whole night.
 	| 'notObservable'
 	// No window is as long as the requested duration.
@@ -98,14 +100,17 @@ export function diagnoseSchedule(entries: readonly ScheduleEntry[], night: TimeS
 	for (const entry of entries) {
 		const conflicts: ObservingScheduleConflict[] = []
 		const block = blocks.find((e) => e.id === entry.id)
+		// Whether nothing is known of the target's windows, so its block cannot be judged against them.
+		const unknown = entry.status === 'unresolved' || entry.status === 'ephemerisUnavailable'
 
 		if (entry.status === 'unresolved') conflicts.push({ code: 'unresolvedTarget' })
+		else if (entry.status === 'ephemerisUnavailable') conflicts.push({ code: 'ephemerisUnavailable' })
 		else if (entry.status === 'notObservable') conflicts.push({ code: 'notObservable' })
 		else if (!entry.windows.some((e) => e.durationMs >= entry.requestedDurationMs)) conflicts.push({ code: 'insufficientContiguousTime' })
 
 		if (block) {
 			if (block.start < night.start || block.end > night.end) conflicts.push({ code: 'outsideNight' })
-			else if (entry.status !== 'unresolved' && !entry.windows.some((e) => e.start <= block.start && block.end <= e.end)) conflicts.push({ code: 'outsideValidWindow' })
+			else if (!unknown && !entry.windows.some((e) => e.start <= block.start && block.end <= e.end)) conflicts.push({ code: 'outsideValidWindow' })
 			for (const other of blocks) if (other.id !== block.id && other.start < block.end && block.start < other.end) conflicts.push({ code: 'overlapsItem', itemId: other.id })
 		}
 

@@ -14,7 +14,7 @@ import { mountRuntime, mountView, slewBlocker, slewMount, slewProgress, stopMoun
 import { fetchSkyPosition } from './sky'
 
 // Actions of the selected object in the Object section of the Object Inspector: Show Framing, Add to Observing Planner for
-// a catalog object or a major body other than the Sun (which opens the tool to choose a plan, changing nothing else), and
+// a catalog object, a major body other than the Sun, or a minor body (which opens the tool to choose a plan, changing nothing else), and
 // Slew to Object while the profile's mount is connected. A slew points the mount at the object after an explicit
 // confirmation, then shows the real outcome of the operation as the server reports it. The target is resolved by the server at
 // the real current time, whatever instant the Sky shows; the dialog previews where the object is now for the
@@ -43,11 +43,12 @@ const FAILURE_REASONS: Readonly<Record<NonNullable<OperationRecord['reason']>, s
 	unexpectedState: 'the mount was in an unexpected state',
 }
 
-// Target of the Observing Planner for an object: a catalog object or a major body other than the Sun; undefined for what the
-// planner cannot evaluate locally (the Sun, minor bodies, constellations, satellites).
+// Target of the Observing Planner for an object: a catalog object, a major body other than the Sun, or a minor body by its
+// SPK-ID; undefined for what the planner does not evaluate (the Sun, constellations, satellites).
 export function plannerTarget(ref: SkyObjectRef): ObservingTargetRef | undefined {
 	if (ref.kind === 'catalog') return { kind: 'catalog', id: ref.id }
 	if (ref.kind === 'body' && ref.code !== '10') return { kind: 'body', code: ref.code }
+	if (ref.kind === 'minorBody') return { kind: 'minorBody', spkId: ref.spkId, designation: ref.designation }
 	return undefined
 }
 

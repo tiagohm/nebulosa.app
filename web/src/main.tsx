@@ -42,6 +42,7 @@ import { routeState, watchHistory } from './shell/route'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
 import { handleStreaksEvent, refreshStreaks, streaksState } from './streaks/streaks'
 import { handleImageStackingEvent, imageStackingRuntime, refreshImageStacking } from './tools/imagestacking/projects'
+import { handleJupiterGrsEvent, jupiterGrsState, refreshJupiterGrs } from './tools/jupiter/jupiter'
 import { handleMeridianFlipEvent, meridianFlipState, refreshMeridianFlip } from './tools/meridianflip/meridianflip'
 import { handleMeridianFlipExecutorEvent, meridianFlipExecutorState, refreshMeridianFlipExecutor } from './tools/meridianflip/meridianflipexecutor'
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
@@ -108,6 +109,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleSatelliteEvent(satelliteCatalogState, event), refresh: () => refreshSatelliteCatalog(satelliteCatalogState) },
 	{ handle: (event) => handleSpiceKernelEvent(spiceKernelsState, event), refresh: () => refreshSpiceKernels(spiceKernelsState) },
 	{ handle: (event) => handleObservingPlanEvent(observingPlansState, event), refresh: () => refreshObservingPlans(observingPlansState) },
+	{ handle: (event) => handleJupiterGrsEvent(jupiterGrsState, event), refresh: () => refreshJupiterGrs(jupiterGrsState) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
 	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },
 	{ handle: (event) => handleMountPointingEvent(mountPointingRuntime, event), refresh: () => refreshMountPointing(mountPointingRuntime) },

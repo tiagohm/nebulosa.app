@@ -45,14 +45,6 @@ export function epochDate(seconds: number) {
 	return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : '—'
 }
 
-// Size in bytes with a binary unit, such as "31.2 MiB".
-export function formatBytes(bytes: number) {
-	if (bytes < 1024) return `${bytes} B`
-	if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KiB`
-	if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MiB`
-	return `${(bytes / 1073741824).toFixed(2)} GiB`
-}
-
 // Label and tone of each readiness.
 export const READINESS: Readonly<Record<SpiceKernelReadiness, { readonly label: string; readonly tone: StatusTone }>> = {
 	ready: { label: 'Ready', tone: 'success' },

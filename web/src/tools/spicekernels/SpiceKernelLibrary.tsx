@@ -1,6 +1,7 @@
 import type { SpiceEphemerisPolicy, SpiceKernelSummary } from 'api'
 import { type ChangeEvent, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatByteSize } from '../../format'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
@@ -11,7 +12,7 @@ import { SegmentedControl } from '../../ui/SegmentedControl'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { AddKernel } from './AddKernel'
-import { epochDate, formatBytes, naifName, READINESS, SOURCE_LABELS } from './format'
+import { epochDate, naifName, READINESS, SOURCE_LABELS } from './format'
 import { KernelDetails } from './KernelDetails'
 import { importSpiceKernel, SPICE_POLICY_LABELS, setSpicePolicy, spiceKernelsState, updateSpiceKernel } from './spicekernels'
 
@@ -99,7 +100,7 @@ function Installed({ kernels, selected, onSelect }: InstalledProps) {
 	return (
 		<>
 			<p className="m-0 text-sm text-ink-300">
-				{kernels.length} {kernels.length === 1 ? 'kernel' : 'kernels'}, {usable} ready · {formatBytes(snapshot.bytes)} · policy {SPICE_POLICY_LABELS[snapshot.policy]}
+				{kernels.length} {kernels.length === 1 ? 'kernel' : 'kernels'}, {usable} ready · {formatByteSize(snapshot.bytes)} · policy {SPICE_POLICY_LABELS[snapshot.policy]}
 				{snapshot.loading && ' · opening the kernels'}
 			</p>
 			<Table columns={['On', 'Name', 'Source', 'Bodies', 'Coverage', { key: 'size', label: 'Size', numeric: true }, 'Status']}>
@@ -139,7 +140,7 @@ function KernelRow({ kernel, selected, onSelect }: KernelRowProps) {
 				{bodies}
 			</Cell>
 			<Cell>{coverage}</Cell>
-			<Cell numeric>{formatBytes(kernel.bytes)}</Cell>
+			<Cell numeric>{formatByteSize(kernel.bytes)}</Cell>
 			<Cell>
 				<StatusBadge tone={readiness.tone} label={readiness.label} />
 			</Cell>
@@ -159,7 +160,7 @@ function Settings() {
 			<RadioGroup className="items-start" options={['automatic', 'offline', 'spkOnly'] as const} value={snapshot.policy} format={(e) => SPICE_POLICY_LABELS[e]} disabled={state.pending.settings} onChange={(policy) => void setSpicePolicy(spiceKernelsState, policy)} />
 			<Notice>{POLICY_DESCRIPTIONS[snapshot.policy]}</Notice>
 			{state.errors.settings && <Notice error>{state.errors.settings}</Notice>}
-			<p className="m-0 text-xs leading-4 text-ink-300">The policy applies to the whole server and every profile. Downloading or generating a kernel, and searching SBDB, still need the network whatever the policy. The library uses {formatBytes(snapshot.bytes)} of the data directory.</p>
+			<p className="m-0 text-xs leading-4 text-ink-300">The policy applies to the whole server and every profile. Downloading or generating a kernel, and searching SBDB, still need the network whatever the policy. The library uses {formatByteSize(snapshot.bytes)} of the data directory.</p>
 		</section>
 	)
 }

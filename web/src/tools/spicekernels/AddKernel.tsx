@@ -1,12 +1,13 @@
 import type { MinorBody, SpiceCatalogItem, SpiceKernelJob } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatByteSize } from '../../format'
 import { searchMinorBodies } from '../../sky/sky'
 import { Button } from '../../ui/Button'
 import { Notice } from '../../ui/Notice'
 import { ProgressBar } from '../../ui/ProgressBar'
 import { TextInput } from '../../ui/TextInput'
-import { epochDate, formatBytes, JOB_STATE_LABELS } from './format'
+import { epochDate, JOB_STATE_LABELS } from './format'
 import { activeJobs, cancelSpiceKernelJob, downloadSpiceKernel, fetchSpiceCatalog, generateSpiceKernel, spiceKernelsState } from './spicekernels'
 
 // Add Kernel section of the SPICE Kernel Library tool: the curated NAIF downloads, the Horizons generation of a
@@ -56,7 +57,7 @@ function Curated() {
 					<div key={item.id} className="flex flex-wrap items-center justify-between gap-3">
 						<div className="flex min-w-0 flex-col gap-1">
 							<span className="text-sm text-ink-100">
-								{item.name} · {formatBytes(item.bytes)}
+								{item.name} · {formatByteSize(item.bytes)}
 							</span>
 							<span className="text-xs leading-4 text-ink-300">{item.description}</span>
 						</div>
@@ -195,7 +196,7 @@ function JobItem({ job }: { readonly job: SpiceKernelJob }) {
 				<span className="flex items-center gap-3">
 					<span className={job.state === 'failed' ? 'text-danger' : 'text-ink-300'}>
 						{outcome}
-						{job.state === 'running' && job.bytes !== undefined ? ` · ${formatBytes(job.bytes)}` : ''}
+						{job.state === 'running' && job.bytes !== undefined ? ` · ${formatByteSize(job.bytes)}` : ''}
 					</span>
 					{active && (
 						<Button variant="secondary" disabled={state.pending[`job:${job.jobId}`]} onClick={() => void cancelSpiceKernelJob(spiceKernelsState, job.jobId)}>

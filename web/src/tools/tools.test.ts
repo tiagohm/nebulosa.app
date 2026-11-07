@@ -12,6 +12,7 @@ describe('registry', () => {
 			'close-approaches',
 			'astro-weather',
 			'observing-planner',
+			'jupiter-observing-planner',
 			'artificial-satellites',
 			'calibration-library',
 			'image-stacking',

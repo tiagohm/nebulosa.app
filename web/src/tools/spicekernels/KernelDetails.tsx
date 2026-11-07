@@ -1,6 +1,7 @@
 import type { SpiceKernelDetails, SpiceKernelSummary } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatByteSize } from '../../format'
 import { Button } from '../../ui/Button'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataList, DataRow } from '../../ui/DataRow'
@@ -8,7 +9,7 @@ import { Notice } from '../../ui/Notice'
 import { SectionHeading } from '../../ui/SectionHeading'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
-import { epochDate, formatBytes, naifName, READINESS, SOURCE_LABELS } from './format'
+import { epochDate, naifName, READINESS, SOURCE_LABELS } from './format'
 import { deleteSpiceKernel, fetchSpiceKernelDetails, spiceKernelsState, updateSpiceKernel, verifySpiceKernel } from './spicekernels'
 
 // Panel of one kernel of the SPICE Kernel Library: its provenance and integrity, why it is or is not usable, the
@@ -67,7 +68,7 @@ export function KernelDetails({ kernel, onDeleted }: KernelDetailsProps) {
 					</DataRow>
 				)}
 				<DataRow label="Added">{new Date(kernel.createdAt).toISOString().slice(0, 16).replace('T', ' ')} UTC</DataRow>
-				<DataRow label="Size">{formatBytes(kernel.bytes)}</DataRow>
+				<DataRow label="Size">{formatByteSize(kernel.bytes)}</DataRow>
 				<DataRow label="Segments">
 					{kernel.segmentCount}
 					{kernel.unsupportedSegments > 0 ? `, ${kernel.unsupportedSegments} unsupported` : ''}

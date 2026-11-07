@@ -1,22 +1,21 @@
 import type { JupiterState } from 'api'
 import { useId } from 'react'
-import { type MoonPosition, type PlanetOrientation, type PlanetScale, screenOffset } from '../planetary/planetary'
+import type { ViewBox } from '../planetary/PanZoom'
+import { type MoonPosition, type PlanetOrientation, screenOffset } from '../planetary/planetary'
 import { type GalileanMoon, GALILEAN_MOONS, MOON_COLORS, MOON_INITIALS, MOON_LABELS } from './jupiter'
 
-// Schematic view of Jupiter and its Galilean satellites at the tool's instant: the oblate disk turned by the position angle
+// Schematic view of Jupiter and its Galilean satellites at the tool's instant, over the rectangle the pan and zoom show: the oblate disk turned by the position angle
 // of its pole, the central meridian, the moons in front of or behind it, their shadows where they fall on the disk, and
 // the Great Red Spot from the operator's model at a schematic latitude. Sizes and offsets are in Jupiter's apparent
 // equatorial radii, from the server; the faint belts are decoration, not observed cloud features. Moon positions may be
 // interpolated from the tracks while the clock plays; states, shadows, and the spot are the exact view's.
 
-// Half-extent of each scale, in Jupiter radii: horizontal and vertical.
-const EXTENTS: Readonly<Record<PlanetScale, readonly [number, number]>> = { disk: [2.6, 1.6], system: [30, 12] }
+// Smallest drawn radius of a moon and of a shadow, as a fraction of the view's half-width, so they stay visible at
+// any zoom.
+const MINIMUM_RADIUS = 0.012
 
-// Smallest drawn radius of a moon and of a shadow, in Jupiter radii, at each scale, so they stay visible.
-const MINIMUM_RADIUS: Readonly<Record<PlanetScale, number>> = { disk: 0.04, system: 0.3 }
-
-// Size of the label of a moon, in Jupiter radii, at each scale.
-const LABEL_SIZE: Readonly<Record<PlanetScale, number>> = { disk: 0.14, system: 1.4 }
+// Size of the label of a moon, as a fraction of the view's half-width.
+const LABEL_SIZE = 0.05
 
 // Half-axes of the schematic Great Red Spot, in Jupiter radii: about 16 000 by 12 000 km.
 const GRS_AXES = [0.11, 0.08] as const
@@ -30,21 +29,23 @@ export interface JupiterViewerProps {
 	// Moon positions to draw instead of the view's, interpolated while the clock moves.
 	readonly positions?: Readonly<Record<GalileanMoon, MoonPosition>>
 	readonly orientation: PlanetOrientation
-	readonly scale: PlanetScale
+	// The rectangle shown, in Jupiter radii (x right, y down).
+	readonly box: ViewBox
 	// Moons drawn.
 	readonly moons: readonly GalileanMoon[]
 }
 
 // Schematic view of Jupiter and its moons.
-export function JupiterViewer({ state, positions, orientation, scale, moons }: JupiterViewerProps) {
-	const [width, height] = EXTENTS[scale]
+export function JupiterViewer({ state, positions, orientation, box, moons }: JupiterViewerProps) {
+	const viewBox = `${box.x} ${box.y} ${box.width} ${box.height}`
+	const halfWidth = box.width / 2
 	const id = useId()
 	const clip = `${id}-disk`
 	const localClip = `${id}-local`
 
 	if (!state) {
 		return (
-			<svg viewBox={`${-width} ${-height} ${2 * width} ${2 * height}`} className="block h-auto w-full rounded border border-line-100 bg-base-000">
+			<svg viewBox={viewBox} className="block h-auto w-full rounded border border-line-100 bg-base-000">
 				<title>Jupiter is being computed</title>
 			</svg>
 		)
@@ -55,8 +56,8 @@ export function JupiterViewer({ state, positions, orientation, scale, moons }: J
 	// Screen direction of the projected north pole, which carries the disk's minor axis.
 	const [px, py] = screenOffset(Math.sin(disk.poleAngle), Math.cos(disk.poleAngle), orientation)
 	const rotation = Math.atan2(py, px) * DEGREES + 90
-	const minimum = MINIMUM_RADIUS[scale]
-	const label = LABEL_SIZE[scale]
+	const minimum = MINIMUM_RADIUS * halfWidth
+	const label = LABEL_SIZE * halfWidth
 	const drawn = GALILEAN_MOONS.filter((moon) => moons.includes(moon))
 	const view = new Map(state.moons.map((moon) => [moon.moon, moon]))
 	const place = (moon: GalileanMoon) => positions?.[moon] ?? view.get(moon)!
@@ -64,7 +65,7 @@ export function JupiterViewer({ state, positions, orientation, scale, moons }: J
 	const front = drawn.filter((moon) => place(moon).depth >= 0)
 	const [northX, northY] = screenOffset(0, 1, orientation)
 	const [eastX, eastY] = screenOffset(1, 0, orientation)
-	const compass = [-width + label * 4, height - label * 4] as const
+	const compass = [box.x + label * 4, box.y + box.height - label * 4] as const
 
 	// A moon: a filled disk, hollow inside the umbra, dimmed in the penumbra, with its initial above.
 	const moonMark = (moon: GalileanMoon) => {
@@ -86,8 +87,8 @@ export function JupiterViewer({ state, positions, orientation, scale, moons }: J
 	}
 
 	return (
-		<svg viewBox={`${-width} ${-height} ${2 * width} ${2 * height}`} className="block h-auto w-full rounded border border-line-100 bg-base-000">
-			<title>{`Jupiter and its moons, ${scale === 'disk' ? 'the disk' : 'the whole system'}, ${orientation === 'north' ? 'north up and east left' : orientation === 'south' ? 'south up' : 'north up and east right'}`}</title>
+		<svg viewBox={viewBox} className="block h-auto w-full rounded border border-line-100 bg-base-000">
+			<title>{`Jupiter and its moons, ${halfWidth.toFixed(1)} Jupiter radii either side, ${orientation === 'north' ? 'north up and east left' : orientation === 'south' ? 'south up' : 'north up and east right'}`}</title>
 			<defs>
 				<clipPath id={clip}>
 					<ellipse cx={0} cy={0} rx={1} ry={ratio} transform={`rotate(${rotation})`} />

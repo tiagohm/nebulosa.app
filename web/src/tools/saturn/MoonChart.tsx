@@ -2,13 +2,13 @@ import type { SaturnMoon, SaturnTrack } from 'api'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { formatClockTime, formatDate } from '../../format'
 import { moveIndex } from '../../ui/navigation'
-import { equatorOffset, type PlanetScale } from '../planetary/planetary'
+import { equatorOffset } from '../planetary/planetary'
 import { MOON_COLORS, MOON_LABELS, SATURN_MOONS } from './saturn'
 
 // Chart of Saturn's major moons over the period: each moon's offset along the ring plane's long axis against time, east up,
 // in arcseconds from the server's samples, with the bands of the disk and of the rings (to the outer edge of the A ring)
-// and the clock's cursor. The disk scale reaches Titan and the system scale Iapetus, which otherwise leaves the plot for
-// long stretches. A moon behind the disk leaves a gap, a moon in Saturn's umbra is drawn faint; no event is read from
+// and the clock's cursor. The vertical extent fits the moons drawn, so Iapetus is never cut off and the inner moons
+// spread out when it is not drawn. A moon behind the disk leaves a gap, a moon in Saturn's umbra is drawn faint; no event is read from
 // these samples. The cursor moves by a click or with the arrow keys, Home, and End.
 
 // Size of the drawing, in viewBox units.
@@ -18,9 +18,32 @@ const HEIGHT = 300
 // Margins of the plot, in viewBox units.
 const MARGIN = { top: 12, right: 12, bottom: 28, left: 48 } as const
 
-// Largest offset drawn at each scale, in Saturn radii: beyond Titan (~20) for the disk scale, beyond Iapetus (~59) for
-// the system scale.
-const EXTENT: Readonly<Record<PlanetScale, number>> = { disk: 22, system: 62 }
+// Margin of the extent beyond the largest offset drawn, as a fraction of it.
+const EXTENT_MARGIN = 0.08
+
+// Grid lines aimed for on each side of the ring plane.
+const GRID_LINES = 4
+
+// Extent of the plot, in Saturn radii: the largest offset along the ring plane of the moons drawn, with a margin, and
+// at least the rings with a margin.
+export function chartExtent(track: Pick<SaturnTrack, 'moons' | 'poleAngle'>, moons: readonly SaturnMoon[], ringRadius: number) {
+	let largest = ringRadius
+
+	for (const moon of moons) {
+		const { east, north } = track.moons[moon]
+		for (let i = 0; i < east.length; i++) largest = Math.max(largest, Math.abs(equatorOffset(east[i], north[i], track.poleAngle)))
+	}
+
+	return largest * (1 + EXTENT_MARGIN)
+}
+
+// Spacing of the grid lines for an extent: 1, 2, or 5 times a power of ten, about GRID_LINES per side.
+export function gridStep(extent: number) {
+	const raw = extent / GRID_LINES
+	const power = 10 ** Math.floor(Math.log10(raw))
+	const unit = raw / power
+	return (unit <= 1 ? 1 : unit <= 2 ? 2 : unit <= 5 ? 5 : 10) * power
+}
 
 // Milliseconds per hour.
 const HOUR_MS = 3_600_000
@@ -36,7 +59,6 @@ export interface MoonChartProps {
 	readonly ringRadius: number
 	// Moons drawn.
 	readonly moons: readonly SaturnMoon[]
-	readonly scale: PlanetScale
 	// Instant of the clock.
 	readonly time?: number
 	// IANA zone the times are labeled in.
@@ -70,8 +92,9 @@ function moonPaths(track: SaturnTrack, moon: SaturnMoon, x: (time: number) => nu
 }
 
 // Chart of the moons over the period.
-export function MoonChart({ track, equatorialRadius, ringRadius, moons, scale, time, timeZone, onTime }: MoonChartProps) {
-	const extent = EXTENT[scale]
+export function MoonChart({ track, equatorialRadius, ringRadius, moons, time, timeZone, onTime }: MoonChartProps) {
+	const drawn = SATURN_MOONS.filter((moon) => moons.includes(moon))
+	const extent = chartExtent(track, drawn, ringRadius)
 	const start = track.times[0]
 	const end = track.times.at(-1)!
 	const span = Math.max(1, end - start)
@@ -83,11 +106,10 @@ export function MoonChart({ track, equatorialRadius, ringRadius, moons, scale, t
 	const labels: number[] = []
 	for (let t = Math.ceil(start / every) * every; t <= end; t += every) labels.push(t)
 	const cursorIndex = time === undefined ? 0 : Math.max(0, Math.min(track.times.length - 1, Math.round((time - start) / track.step)))
-	// Grid every 5 or 20 radii, labeled in arcseconds.
-	const gridStep = scale === 'disk' ? 5 : 20
+	// Grid lines in Saturn radii, labeled in arcseconds.
+	const step = gridStep(extent)
 	const grid: number[] = []
-	for (let offset = -Math.floor(extent / gridStep) * gridStep; offset <= extent; offset += gridStep) grid.push(offset)
-	const drawn = SATURN_MOONS.filter((moon) => moons.includes(moon))
+	for (let offset = -Math.floor(extent / step) * step; offset <= extent; offset += step) grid.push(offset)
 
 	// Moves the clock to the instant clicked.
 	function onClick(event: MouseEvent<SVGSVGElement>) {
@@ -148,7 +170,6 @@ export function MoonChart({ track, equatorialRadius, ringRadius, moons, scale, t
 				))}
 				<span>gap: behind Saturn</span>
 				<span>┄ in Saturn's shadow</span>
-				{scale === 'disk' && <span>Iapetus may lie beyond the plot: switch to System.</span>}
 			</div>
 		</div>
 	)

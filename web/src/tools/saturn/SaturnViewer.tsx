@@ -1,9 +1,10 @@
 import type { SaturnMoon, SaturnMoonState, SaturnRingModel, SaturnRings } from 'api'
 import { useId } from 'react'
-import { type MoonPosition, type PlanetOrientation, type PlanetScale, screenOffset } from '../planetary/planetary'
+import type { ViewBox } from '../planetary/PanZoom'
+import { type MoonPosition, type PlanetOrientation, screenOffset } from '../planetary/planetary'
 import { MOON_COLORS, MOON_INITIALS, MOON_LABELS, SATURN_MOONS } from './saturn'
 
-// Schematic view of Saturn, its rings and its major moons at the tool's instant. Everything is drawn in Saturn's apparent
+// Schematic view of Saturn, its rings and its major moons at the tool's instant, over the rectangle the pan and zoom show. Everything is drawn in Saturn's apparent
 // equatorial radii on the sky (east, north) from the server's geometry, with exactly one orientation transform. The disk
 // is the oblate outline turned by the position angle of the pole; each ring annulus of the server's model is the
 // projected circle of its radius, foreshortened by the Earth opening B, so a ring seen nearly edge-on is nearly a line.
@@ -11,14 +12,12 @@ import { MOON_COLORS, MOON_INITIALS, MOON_LABELS, SATURN_MOONS } from './saturn'
 // Moons are layered by their depth and their geometric overlap with the rings; a moon the rings may hide is outlined,
 // never claimed hidden. Colours and opacities are schematic, not photometric, and ring and globe shadows are not drawn.
 
-// Half-extent of each scale, in Saturn radii: horizontal and vertical. The system scale reaches Iapetus (~59 radii).
-const EXTENTS: Readonly<Record<PlanetScale, readonly [number, number]>> = { disk: [3, 1.7], system: [62, 26] }
+// Smallest drawn radius of a moon and of a shadow, as a fraction of the view's half-width, so they stay visible at
+// any zoom.
+const MINIMUM_RADIUS = 0.012
 
-// Smallest drawn radius of a moon and of a shadow, in Saturn radii, at each scale, so they stay visible.
-const MINIMUM_RADIUS: Readonly<Record<PlanetScale, number>> = { disk: 0.035, system: 0.45 }
-
-// Size of the label of a moon, in Saturn radii, at each scale.
-const LABEL_SIZE: Readonly<Record<PlanetScale, number>> = { disk: 0.13, system: 2.2 }
+// Size of the label of a moon, as a fraction of the view's half-width.
+const LABEL_SIZE = 0.045
 
 // Smallest drawn half-thickness of a ring ellipse, in Saturn radii: a render-only affordance so an edge-on ring stays a
 // visible line; the server's opening is not changed.
@@ -39,7 +38,8 @@ export interface SaturnViewerProps {
 	// Moon positions to draw instead of the exact ones, interpolated while the clock moves.
 	readonly positions?: Readonly<Record<SaturnMoon, MoonPosition>>
 	readonly orientation: PlanetOrientation
-	readonly scale: PlanetScale
+	// The rectangle shown, in Saturn radii (x right, y down).
+	readonly box: ViewBox
 	// Moons drawn.
 	readonly drawn: readonly SaturnMoon[]
 	// Whether the ring annuli are drawn.
@@ -59,8 +59,9 @@ export function farHalfSign(earthOpening: number) {
 }
 
 // Schematic view of Saturn, its rings and its moons.
-export function SaturnViewer({ rings, model, moons, positions, orientation, scale, drawn, showRings }: SaturnViewerProps) {
-	const [width, height] = EXTENTS[scale]
+export function SaturnViewer({ rings, model, moons, positions, orientation, box, drawn, showRings }: SaturnViewerProps) {
+	const viewBox = `${box.x} ${box.y} ${box.width} ${box.height}`
+	const halfWidth = box.width / 2
 	const id = useId()
 	const diskClip = `${id}-disk`
 	const farClip = `${id}-far`
@@ -68,7 +69,7 @@ export function SaturnViewer({ rings, model, moons, positions, orientation, scal
 
 	if (!rings || !model) {
 		return (
-			<svg viewBox={`${-width} ${-height} ${2 * width} ${2 * height}`} className="block h-auto w-full rounded border border-line-100 bg-base-000">
+			<svg viewBox={viewBox} className="block h-auto w-full rounded border border-line-100 bg-base-000">
 				<title>Saturn is being computed</title>
 			</svg>
 		)
@@ -83,8 +84,8 @@ export function SaturnViewer({ rings, model, moons, positions, orientation, scal
 	const outer = model.annuli.at(-1)!.outer / model.equatorialRadiusKm
 	// Opposite faces: the Earth sees the unlit face, drawn dimmer.
 	const lit = rings.illumination === 'oppositeFaces' ? 0.45 : 1
-	const minimum = MINIMUM_RADIUS[scale]
-	const label = LABEL_SIZE[scale]
+	const minimum = MINIMUM_RADIUS * halfWidth
+	const label = LABEL_SIZE * halfWidth
 	const exact = new Map((moons ?? []).map((moon) => [moon.moon, moon]))
 	const shown = SATURN_MOONS.filter((moon) => drawn.includes(moon) && exact.has(moon))
 	const place = (moon: SaturnMoon) => positions?.[moon] ?? exact.get(moon)!
@@ -98,7 +99,7 @@ export function SaturnViewer({ rings, model, moons, positions, orientation, scal
 	]
 	const [northX, northY] = screenOffset(0, 1, orientation)
 	const [eastX, eastY] = screenOffset(1, 0, orientation)
-	const compass = [-width + label * 4, height - label * 4] as const
+	const compass = [box.x + label * 4, box.y + box.height - label * 4] as const
 
 	// The annuli, in the frame turned with the pole, clipped to one half.
 	const ringLayer = (clip: string) =>
@@ -138,8 +139,8 @@ export function SaturnViewer({ rings, model, moons, positions, orientation, scal
 	}
 
 	return (
-		<svg viewBox={`${-width} ${-height} ${2 * width} ${2 * height}`} className="block h-auto w-full rounded border border-line-100 bg-base-000">
-			<title>{`Saturn, its rings and its moons, ${scale === 'disk' ? 'close up' : 'the whole system'}, ${orientation === 'north' ? 'north up and east left' : orientation === 'south' ? 'south up' : 'north up and east right'}`}</title>
+		<svg viewBox={viewBox} className="block h-auto w-full rounded border border-line-100 bg-base-000">
+			<title>{`Saturn, its rings and its moons, ${halfWidth.toFixed(1)} Saturn radii either side, ${orientation === 'north' ? 'north up and east left' : orientation === 'south' ? 'south up' : 'north up and east right'}`}</title>
 			<defs>
 				<clipPath id={diskClip}>
 					<ellipse cx={0} cy={0} rx={1} ry={ratio} transform={`rotate(${rotation})`} />

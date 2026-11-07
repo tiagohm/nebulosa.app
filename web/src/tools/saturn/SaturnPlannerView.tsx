@@ -16,7 +16,8 @@ import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 // oxfmt-ignore
-import { browserPlannerIo, eveningOf, openKernelLibrary, ORIENTATION_LABELS, PLANET_ORIENTATIONS, type PlanetOrientation, type PlanetScale, periodRange, SCALE_LABELS, setTime } from '../planetary/planetary'
+import { browserPlannerIo, eveningOf, openKernelLibrary, ORIENTATION_LABELS, PLANET_ORIENTATIONS, type PlanetOrientation, periodRange, setTime } from '../planetary/planetary'
+import { PanZoomSurface, usePanZoom } from '../planetary/PanZoom'
 import { TimeBar } from '../planetary/TimeBar'
 import { spiceKernelsState } from '../spicekernels/spicekernels'
 import { MoonChart } from './MoonChart'
@@ -34,8 +35,12 @@ import { SaturnViewer } from './SaturnViewer'
 // computed. The tool's clock is its own, never the Sky's; choosing an event or a point of a chart only moves that clock.
 // Nothing here moves the mount, changes a site or the profile, or starts an operation.
 
-// Scales of the viewer, in display order.
-const SCALES: readonly PlanetScale[] = ['disk', 'system']
+// Pan and zoom of the viewer, in Saturn radii: from the whole system (Iapetus reaches ~59) to the disk and rings,
+// opening on the moons out to Rhea, two units wide for one high.
+const ZOOM = { maxHalfWidth: 62, minHalfWidth: 1.4, initialHalfWidth: 10, aspect: 2 } as const
+
+// Half-width of the close-up of Saturn and its rings, in Saturn radii.
+const PLANET_HALF_WIDTH = 2.8
 
 // Arcseconds per radian.
 const ARCSEC = (180 / Math.PI) * 3600
@@ -49,6 +54,7 @@ function prefersReducedMotion() {
 export function SaturnPlanner() {
 	const state = useSnapshot(saturnPlannerState) as SaturnPlannerState
 	const kernels = useSnapshot(spiceKernelsState)
+	const zoom = usePanZoom(ZOOM)
 	const location = useToolLocation(state.location)
 	const active = useActiveSite()
 	const displayZone = useDisplayZone(location, state.zone)
@@ -208,11 +214,12 @@ export function SaturnPlanner() {
 					{range && <TimeBar state={state} store={saturnPlannerState} range={range} events={jumps} timeZone={displayZone.zone} now={browserPlannerIo.time} />}
 					<div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
 						<div className="flex min-w-0 flex-col gap-2">
-							<SegmentedControl options={SCALES} value={state.scale} format={(scale) => SCALE_LABELS[scale]} onChange={(scale) => (saturnPlannerState.scale = scale)} />
-							<SaturnViewer rings={rings} model={model} moons={view?.moons} positions={positions} orientation={state.orientation} scale={state.scale} drawn={state.moons} showRings={state.showRings} />
+							<PanZoomSurface zoom={zoom} planetHalfWidth={PLANET_HALF_WIDTH} planet="Saturn">
+								<SaturnViewer rings={rings} model={model} moons={view?.moons} positions={positions} orientation={state.orientation} box={zoom.box} drawn={state.moons} showRings={state.showRings} />
+							</PanZoomSurface>
 						</div>
 						<div className="flex min-w-0 flex-col gap-2">
-							{state.track && rings && <MoonChart track={state.track} equatorialRadius={rings.equatorialRadius} ringRadius={ringRadius} moons={state.moons} scale={state.scale} time={state.time} timeZone={displayZone.zone} onTime={(time) => setTime(saturnPlannerState, time)} />}
+							{state.track && rings && <MoonChart track={state.track} equatorialRadius={rings.equatorialRadius} ringRadius={ringRadius} moons={state.moons} time={state.time} timeZone={displayZone.zone} onTime={(time) => setTime(saturnPlannerState, time)} />}
 							{state.trackLoading && !state.track && <p className="m-0 text-xs text-ink-300">Computing the moons over the period…</p>}
 							{state.trackError && <Notice error>{state.trackError}</Notice>}
 						</div>

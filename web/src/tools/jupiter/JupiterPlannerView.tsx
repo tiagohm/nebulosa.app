@@ -12,11 +12,11 @@ import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { Notice } from '../../ui/Notice'
-import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 // oxfmt-ignore
-import { browserPlannerIo, eveningOf, openKernelLibrary, ORIENTATION_LABELS, PLANET_ORIENTATIONS, type PlanetOrientation, type PlanetScale, periodRange, SCALE_LABELS, setTime } from '../planetary/planetary'
+import { browserPlannerIo, eveningOf, openKernelLibrary, ORIENTATION_LABELS, PLANET_ORIENTATIONS, type PlanetOrientation, periodRange, setTime } from '../planetary/planetary'
+import { PanZoomSurface, usePanZoom } from '../planetary/PanZoom'
 import { TimeBar } from '../planetary/TimeBar'
 import { EventInspector, EventTimeline } from './EventTimeline'
 import { GrsSettings } from './GrsSettings'
@@ -30,8 +30,12 @@ import { MoonChart } from './MoonChart'
 // ephemeris source it names. The tool's clock is its own, never the Sky's; choosing an event only moves that clock.
 // Nothing here moves the mount, changes a site or the profile, or starts an operation.
 
-// Scales of the viewer, in display order.
-const SCALES: readonly PlanetScale[] = ['disk', 'system']
+// Pan and zoom of the viewer, in Jupiter radii: from the whole system (Callisto reaches ~26.3) to the disk, opening on
+// Io, Europa, and Ganymede, two units wide for one high.
+const ZOOM = { maxHalfWidth: 30, minHalfWidth: 1.4, initialHalfWidth: 16, aspect: 2 } as const
+
+// Half-width of the close-up of Jupiter, in Jupiter radii.
+const PLANET_HALF_WIDTH = 1.6
 
 // Whether the browser asks for reduced motion.
 function prefersReducedMotion() {
@@ -51,6 +55,7 @@ export function JupiterPlanner() {
 	const range = useMemo(() => (state.eveningDate ? periodRange(state.eveningDate, state.period, namingZone) : undefined), [state.eveningDate, state.period, namingZone])
 	const siteKey = site && JSON.stringify([site.latitude, site.longitude, site.elevation, site.timeZone])
 	const grsRevision = grs.grs?.revision ?? 0
+	const zoom = usePanZoom(ZOOM)
 
 	// The clock starts at real now and the period at tonight, once.
 	useEffect(() => {
@@ -172,8 +177,9 @@ export function JupiterPlanner() {
 					{range && <TimeBar state={state} store={jupiterPlannerState} range={range} events={events} timeZone={displayZone.zone} now={browserPlannerIo.time} />}
 					<div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
 						<div className="flex min-w-0 flex-col gap-2">
-							<SegmentedControl options={SCALES} value={state.scale} format={(scale) => SCALE_LABELS[scale]} onChange={(scale) => (jupiterPlannerState.scale = scale)} />
-							<JupiterViewer state={state.state} positions={positions} orientation={state.orientation} scale={state.scale} moons={state.moons} />
+							<PanZoomSurface zoom={zoom} planetHalfWidth={PLANET_HALF_WIDTH} planet="Jupiter">
+								<JupiterViewer state={state.state} positions={positions} orientation={state.orientation} box={zoom.box} moons={state.moons} />
+							</PanZoomSurface>
 							{state.stateError && <Notice error>{state.stateError}</Notice>}
 							{grs.grs && !grs.grs.model && <p className="m-0 text-xs text-ink-300">No Great Red Spot model: set it in the panel to draw the spot and predict its transits.</p>}
 						</div>

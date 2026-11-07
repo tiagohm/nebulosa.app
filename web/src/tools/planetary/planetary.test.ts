@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { proxy } from 'valtio'
+import { panZoomViewBox } from './PanZoom'
 import { adjacentEvent, equatorOffset, eveningOf, inputInstant, interpolateTrack, localInput, periodRange, type PlannerClock, playClock, screenOffset, setTime } from './planetary'
 
 const HOUR = 3_600_000
@@ -94,5 +95,21 @@ describe('helpers', () => {
 		// With the pole turned 90° east, the equator runs north-south.
 		expect(equatorOffset(0, -2, Math.PI / 2)).toBeCloseTo(2, 12)
 		expect(equatorOffset(3, 0, 0)).toBe(3)
+	})
+})
+
+describe('pan and zoom', () => {
+	test('the whole system fills the width at zoom 1, centred on the planet', () => {
+		expect(panZoomViewBox({ x: 0, y: 0, k: 1 }, 30, 2, 600)).toEqual({ x: -30, y: -15, width: 60, height: 30 })
+	})
+
+	test('zooming narrows the box and a pan moves its centre the other way', () => {
+		// At zoom 10 the half-width is 3 radii; 600 pixels span 60 radii at zoom 1, so 10 px per radius at zoom 1 and
+		// 100 px per radius at zoom 10: a pan of 200 px to the right shows the point 2 radii to the left in the centre.
+		const box = panZoomViewBox({ x: 200, y: -100, k: 10 }, 30, 2, 600)
+		expect(box.width).toBeCloseTo(6, 12)
+		expect(box.height).toBeCloseTo(3, 12)
+		expect(box.x + box.width / 2).toBeCloseTo(-2, 12)
+		expect(box.y + box.height / 2).toBeCloseTo(1, 12)
 	})
 })

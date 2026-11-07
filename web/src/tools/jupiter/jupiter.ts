@@ -6,7 +6,7 @@ import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/
 import { createRequestGuard } from '../../sky/selection'
 import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
 // oxfmt-ignore
-import { aborted, browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlanetScale, type PlannerIo, playClock, scheduleLoad, setTime } from '../planetary/planetary'
+import { aborted, browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, setTime } from '../planetary/planetary'
 
 // Jupiter Observing Planner of the tab: the tool-local clock and period, the filters, the answers of the server (the view
 // at the clock's instant, the satellite tracks and the events over the period), and the mirror of the server's Great Red
@@ -97,8 +97,6 @@ export interface JupiterPlannerState {
 	moons: GalileanMoon[]
 	// Orientation of the viewer.
 	orientation: PlanetOrientation
-	// Scale of the viewer.
-	scale: PlanetScale
 	// Id of the event selected.
 	selected?: string
 	// View at the clock's instant, the latest answered.
@@ -134,7 +132,6 @@ export function createJupiterPlannerState(): JupiterPlannerState {
 		kinds: [...EVENT_KINDS],
 		moons: [...GALILEAN_MOONS],
 		orientation: 'north',
-		scale: 'system',
 		trackLoading: false,
 		eventsLoading: false,
 		kernelsRefused: false,

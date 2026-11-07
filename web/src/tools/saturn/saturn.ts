@@ -7,7 +7,7 @@ import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/
 import { createRequestGuard } from '../../sky/selection'
 import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
 // oxfmt-ignore
-import { aborted, browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlanetScale, type PlannerIo, playClock, scheduleLoad, setTime, VISIBILITY_LABELS } from '../planetary/planetary'
+import { aborted, browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, setTime, VISIBILITY_LABELS } from '../planetary/planetary'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Saturn Observing Planner of the tab: the tool-local clock and period, the moons drawn, the view, and the answers of the
@@ -136,8 +136,6 @@ export interface SaturnPlannerState {
 	kinds: SaturnEventKind[]
 	// Orientation of the viewer.
 	orientation: PlanetOrientation
-	// Scale of the viewer.
-	scale: PlanetScale
 	// Whether the ring annuli are drawn.
 	showRings: boolean
 	// Span of the ring history.
@@ -194,7 +192,6 @@ export function createSaturnPlannerState(): SaturnPlannerState {
 		kinds: [...EVENT_KINDS],
 		eventsLoading: false,
 		orientation: 'north',
-		scale: 'disk',
 		showRings: true,
 		history: 'decade',
 		moonsRefused: false,

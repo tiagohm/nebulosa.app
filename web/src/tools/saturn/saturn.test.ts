@@ -3,6 +3,7 @@ import type { SaturnElongations, SaturnEvent, SaturnRingTimeline, SaturnSignatur
 import { proxy } from 'valtio'
 import { skyClock } from '../../sky/clock'
 import type { PlannerIo } from '../planetary/planetary'
+import { chartExtent, gridStep } from './MoonChart'
 import { createSaturnPlannerState, describeSource, historyRange, listedEvents, listedId, listedPhenomena, loadEvents, loadState, phenomenonName, selectEvent, selectPhenomenon } from './saturn'
 import { annulusPath, farHalfSign } from './SaturnViewer'
 
@@ -155,5 +156,18 @@ describe('phenomena', () => {
 		expect(state.selectedEvent).toBe('a')
 		expect(state.time).toBe(1000)
 		expect({ ...skyClock }).toEqual(sky)
+	})
+})
+
+describe('moon chart', () => {
+	test('fits the moons drawn, at least the rings, with round grid steps', () => {
+		const series = (east: number[]) => ({ east, north: east.map(() => 0), depth: east.map(() => 0), disk: [], eclipse: [], ringOverlap: [] })
+		const track = { poleAngle: 0, moons: { mimas: series([3, -3]), iapetus: series([-58, 50]) } } as unknown as Parameters<typeof chartExtent>[0]
+		expect(chartExtent(track, ['mimas'], 2.27)).toBeCloseTo(3 * 1.08, 12)
+		expect(chartExtent(track, ['mimas', 'iapetus'], 2.27)).toBeCloseTo(58 * 1.08, 12)
+		expect(chartExtent(track, [], 2.27)).toBeCloseTo(2.27 * 1.08, 12)
+		expect(gridStep(62)).toBe(20)
+		expect(gridStep(22)).toBe(10)
+		expect(gridStep(3.2)).toBe(1)
 	})
 })

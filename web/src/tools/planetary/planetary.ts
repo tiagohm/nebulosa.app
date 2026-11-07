@@ -55,12 +55,6 @@ export const PLANET_ORIENTATIONS: readonly PlanetOrientation[] = ['north', 'sout
 // Label of each orientation.
 export const ORIENTATION_LABELS: Readonly<Record<PlanetOrientation, string>> = { north: 'North up, east left', south: 'South up (inverting)', mirrored: 'North up, east right (diagonal)' }
 
-// Scale of a viewer: the planet close up, or the whole system of the moons.
-export type PlanetScale = 'disk' | 'system'
-
-// Label of each scale.
-export const SCALE_LABELS: Readonly<Record<PlanetScale, string>> = { disk: 'Disk', system: 'System' }
-
 // Step of the step buttons, in milliseconds (10 minutes).
 export const STEP_MS = 600_000
 

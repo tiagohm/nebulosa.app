@@ -26,6 +26,7 @@ import type { MountRemoteControlEvent } from './mountremotecontrol'
 import type { MountNudgeEvent } from './mounts'
 import type { NotificationCreatedEvent } from './notifications'
 import type { ObservatoryCameraEvent } from './observatorycameras'
+import type { ObservingPlanEvent } from './observingplanner'
 import type { OperationEvent } from './operations'
 import type { PlateSolvingEvent } from './platesolving'
 import type { SatellitesChangedEvent } from './satellites'
@@ -84,6 +85,7 @@ export type ServerEvent =
 	| NotificationCreatedEvent
 	| SatellitesChangedEvent
 	| SpiceKernelEvent
+	| ObservingPlanEvent
 	| IndiServerEvent
 	| IndiMessagesServerEvent
 

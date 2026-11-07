@@ -52,5 +52,8 @@ export function createSkyApiRoutes(satellites: SkySatellites) {
 // Locator of the objects of the sky API, used to resolve mount targets.
 export const skyLocator = createSkyLocator(services)
 
+// The embedded, read-only sky catalog, which the Observing Planner lists and evaluates.
+export const skyCatalog = catalog
+
 // Stars of the sky catalog around a J2000 cone, the catalog source of the simulated camera.
 export const skyStarSource: CatalogSource = (rightAscension, declination, radius) => catalogStars(catalog, rightAscension, declination, radius)

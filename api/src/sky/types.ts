@@ -42,6 +42,77 @@ export interface SkySearchResult {
 	readonly constellation?: string
 }
 
+// Broad class of a catalog object for filtering: galaxies (and their clusters and parts), nebulae (emission,
+// reflection, planetary, dark, supernova remnants, and the like), star clusters and associations, stars, and
+// everything else (quasars, blazars, young stellar objects, unknown types, and the like).
+export type SkyCatalogClass = 'galaxy' | 'nebula' | 'cluster' | 'star' | 'other'
+
+// Filtered, paged listing of the sky catalog. Every field is optional; an empty query lists the whole catalog.
+export interface SkyCatalogQuery {
+	// Text matched against the designations ("M 31", "HIP 32349") and the proper names (anywhere in the name).
+	readonly text?: string
+	// Classes to list; empty or absent lists every class.
+	readonly classes?: readonly SkyCatalogClass[]
+	// Upper-case IAU constellation code, such as "ORI".
+	readonly constellation?: string
+	// Brightest visual magnitude listed.
+	readonly minimumMagnitude?: number
+	// Faintest visual magnitude listed.
+	readonly maximumMagnitude?: number
+	// Whether objects without a magnitude are listed (after every object with one); true when absent.
+	readonly includeUnknownMagnitude?: boolean
+	// Smallest apparent major axis, in radians; objects without a size are left out when set.
+	readonly minimumSize?: number
+	// Largest apparent major axis, in radians; objects without a size are left out when set.
+	readonly maximumSize?: number
+	// Cursor of the page, the nextCursor of the previous one; absent for the first page.
+	readonly cursor?: string
+	// Most entries of the page, 1 to MAX_CATALOG_PAGE; 50 when absent.
+	readonly limit?: number
+}
+
+// Object of a catalog listing.
+export interface SkyCatalogEntry {
+	// Identity of the object.
+	readonly ref: { readonly kind: 'catalog'; readonly id: number }
+	// Display name.
+	readonly name: string
+	// Other designations, most relevant first (at most three).
+	readonly designations: readonly string[]
+	// Group of the object.
+	readonly category: 'star' | 'deepSky'
+	// Broad class of the object.
+	readonly class: SkyCatalogClass
+	// Object type, such as "Galaxy".
+	readonly typeName: string
+	// IAU abbreviation of the constellation, such as "And".
+	readonly constellation?: string
+	// Visual magnitude; absent when unknown.
+	readonly magnitude?: number
+	// Apparent major axis in radians; absent when unknown.
+	readonly majorAxis?: number
+	// Apparent minor axis in radians; absent when unknown.
+	readonly minorAxis?: number
+	// Right ascension at J2000 in radians.
+	readonly rightAscension: number
+	// Declination at J2000 in radians.
+	readonly declination: number
+	// Proper motion dα/dt in radians per Julian year.
+	readonly pmRA: number
+	// Proper motion in declination in radians per Julian year.
+	readonly pmDEC: number
+}
+
+// One page of a catalog listing, ordered by magnitude (unknown last) then id.
+export interface SkyCatalogPage {
+	// Entries of the page.
+	readonly entries: readonly SkyCatalogEntry[]
+	// Number of objects matching the query over every page.
+	readonly total: number
+	// Cursor of the next page; absent on the last one.
+	readonly nextCursor?: string
+}
+
 // Catalog data of a star or deep-sky object. Coordinates are J2000 catalog values, never positions of date.
 export interface SkyCatalogObject {
 	// Catalog id.

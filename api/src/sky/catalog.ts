@@ -11,10 +11,10 @@ import { normalizeAngle, toArcmin } from 'nebulosa/src/math/units/angle'
 import { constellationOfLabel } from './constellations'
 import { CATALOG, constellationAbbreviation, displayPriority, formatDesignation, parseDesignationQuery } from './designations'
 import type { SkyCatalogNameRow, SkyCatalogObjectRow } from './schema'
-import type { SkyCatalogObject, SkyConstellations, SkyDeepSkyData, SkySearchResult, SkyStarData } from './types'
+import type { SkyCatalogClass, SkyCatalogEntry, SkyCatalogObject, SkyCatalogPage, SkyCatalogQuery, SkyConstellations, SkyDeepSkyData, SkySearchResult, SkyStarData } from './types'
 
-// Queries of the sky catalog database: local search by designation and name, the catalog data of one
-// object, the columnar star and deep-sky data the star map renders, with positions referred to the
+// Queries of the sky catalog database: local search by designation and name, the filtered and paged listing the
+// Observing Planner browses, the catalog data of one object, the columnar star and deep-sky data the star map renders, with positions referred to the
 // true equator and equinox of the requested instant, the J2000 stars the camera simulator renders, and the J2000 objects
 // and constellation figures of a field the image annotation projects.
 // Every function takes the database, so tests can pass an in-memory one built with createSkyCatalogSchema.
@@ -219,6 +219,152 @@ export function searchCatalog(db: Database, query: string, limit: number = 20): 
 	}
 
 	return results
+}
+
+// Most entries of a catalog page.
+export const MAX_CATALOG_PAGE = 200
+
+// Entries of a catalog page when the query asks for no limit.
+const DEFAULT_CATALOG_PAGE = 50
+
+// Most objects a text query matches by designation; designations name a few objects at most.
+const DESIGNATION_MATCH_LIMIT = 100
+
+// Stellarium object types of each class that is not 'other'.
+const CLASS_TYPES: Readonly<Record<Exclude<SkyCatalogClass, 'other'>, readonly StellariumObjectType[]>> = {
+	galaxy: [StellariumObjectType.GALAXY, StellariumObjectType.ACTIVE_GALAXY, StellariumObjectType.RADIO_GALAXY, StellariumObjectType.INTERACTING_GALAXY, StellariumObjectType.CLUSTER_OF_GALAXIES, StellariumObjectType.PART_OF_GALAXY],
+	nebula: [
+		StellariumObjectType.NEBULA,
+		StellariumObjectType.PLANETARY_NEBULA,
+		StellariumObjectType.DARK_NEBULA,
+		StellariumObjectType.REFLECTION_NEBULA,
+		StellariumObjectType.BIPOLAR_NEBULA,
+		StellariumObjectType.EMISSION_NEBULA,
+		StellariumObjectType.HII_REGION,
+		StellariumObjectType.SUPERNOVA_REMNANT,
+		StellariumObjectType.INTERSTELLAR_MATTER,
+		StellariumObjectType.MOLECULAR_CLOUD,
+		StellariumObjectType.POSSIBLE_PLANETARY_NEBULA,
+		StellariumObjectType.PROTOPLANETARY_NEBULA,
+		StellariumObjectType.SUPER_NOVA_REMNANT_CANDIDATE,
+	],
+	cluster: [StellariumObjectType.STAR_CLUSTER, StellariumObjectType.OPEN_STAR_CLUSTER, StellariumObjectType.GLOBULAR_STAR_CLUSTER, StellariumObjectType.STELLAR_ASSOCIATION, StellariumObjectType.STAR_CLOUD, StellariumObjectType.CLUSTER_ASSOCIATED_WITH_NEBULOSITY],
+	star: [StellariumObjectType.STAR],
+}
+
+// Every object type of a named class.
+const CLASSIFIED_TYPES: readonly StellariumObjectType[] = Object.values(CLASS_TYPES).flat()
+
+// Returns the broad class of a Stellarium object type.
+export function catalogClass(type: number): SkyCatalogClass {
+	for (const [name, types] of Object.entries(CLASS_TYPES)) if (types.includes(type)) return name as SkyCatalogClass
+	return 'other'
+}
+
+// Position of an object in the listing order: unknown magnitudes last, then by magnitude, then by id.
+type CatalogKey = readonly [unknown: 0 | 1, magnitude: number, id: number]
+
+// Encodes the key of the last entry of a page as the cursor of the next one.
+function encodeCursor(key: CatalogKey) {
+	return key.join(':')
+}
+
+// Decodes a cursor written by encodeCursor.
+function decodeCursor(cursor: string): CatalogKey {
+	const [unknown, magnitude, id] = cursor.split(':').map(Number)
+	return [unknown === 1 ? 1 : 0, magnitude, id]
+}
+
+// Lists the stars and deep-sky objects matching a query, one page at a time, ordered by magnitude (unknown last) then
+// id so pages never overlap or skip an object. Text matches designations parsed from it and proper names containing it.
+// Returns the page with the number of matching objects over every page.
+export function queryCatalog(db: Database, query: SkyCatalogQuery): SkyCatalogPage {
+	const where: string[] = []
+	const params: (string | number)[] = []
+	const text = query.text?.trim()
+
+	if (text) {
+		const ids = designationMatches(db, text, DESIGNATION_MATCH_LIMIT)
+		const byName = "o.id IN (SELECT objectId FROM names WHERE type = 0 AND name LIKE ? ESCAPE '\\')"
+		where.push(ids.length > 0 ? `(${byName} OR o.id IN (${placeholders(ids.length)}))` : byName)
+		params.push(`%${escapeLike(text)}%`, ...ids)
+	}
+
+	const classes = query.classes ?? []
+
+	if (classes.length > 0) {
+		const types = classes.flatMap((e) => (e === 'other' ? [] : CLASS_TYPES[e]))
+		const conditions = types.length > 0 ? [`o.type IN (${placeholders(types.length)})`] : []
+		if (classes.includes('other')) conditions.push(`o.type NOT IN (${placeholders(CLASSIFIED_TYPES.length)})`)
+		where.push(`(${conditions.join(' OR ')})`)
+		params.push(...types, ...(classes.includes('other') ? CLASSIFIED_TYPES : []))
+	}
+
+	if (query.constellation) {
+		where.push('o.constellation = ?')
+		params.push(CONSTELLATION_LIST.indexOf(query.constellation as never))
+	}
+
+	const magnitude: string[] = []
+	if (query.minimumMagnitude !== undefined) {
+		magnitude.push('o.magnitude >= ?')
+		params.push(query.minimumMagnitude)
+	}
+	if (query.maximumMagnitude !== undefined) {
+		magnitude.push('o.magnitude <= ?')
+		params.push(query.maximumMagnitude)
+	}
+	const unknown = query.includeUnknownMagnitude !== false
+	if (magnitude.length > 0) where.push(unknown ? `(o.magnitude IS NULL OR (${magnitude.join(' AND ')}))` : magnitude.join(' AND '))
+	else if (!unknown) where.push('o.magnitude IS NOT NULL')
+
+	if (query.minimumSize !== undefined) {
+		where.push('o.majorAxis >= ?')
+		params.push(query.minimumSize)
+	}
+	if (query.maximumSize !== undefined) {
+		where.push('o.majorAxis <= ?')
+		params.push(query.maximumSize)
+	}
+
+	const filter = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+	const total = db.query<{ total: number }, (string | number)[]>(`SELECT count(*) AS total FROM objects o ${filter}`).get(...params)!.total
+	const limit = Math.max(1, Math.min(MAX_CATALOG_PAGE, Math.trunc(query.limit ?? DEFAULT_CATALOG_PAGE)))
+	const order = '(o.magnitude IS NULL), coalesce(o.magnitude, 0), o.id'
+	const after = query.cursor ? decodeCursor(query.cursor) : undefined
+	const page = after ? `${filter ? `${filter} AND` : 'WHERE'} (${order}) > (?, ?, ?)` : filter
+	// One more row than the page tells whether another page follows.
+	const rows = db.query<SkyCatalogObjectRow, (string | number)[]>(`SELECT o.* FROM objects o ${page} ORDER BY ${order} LIMIT ?`).all(...params, ...(after ?? []), limit + 1)
+	const listed = rows.slice(0, limit)
+	const names = namesOf(
+		db,
+		listed.map((e) => e.id),
+	)
+
+	const entries = listed.map((row): SkyCatalogEntry => {
+		const { name, designations, catalogDesignation } = objectNames(names.get(row.id) ?? [], row.constellation)
+		const others = catalogDesignation ? [catalogDesignation, ...designations.filter((e) => e !== catalogDesignation)] : designations
+		return {
+			ref: { kind: 'catalog', id: row.id },
+			name,
+			designations: others.slice(0, SEARCH_DESIGNATIONS),
+			category: isStar(row.type) ? 'star' : 'deepSky',
+			class: catalogClass(row.type),
+			typeName: objectTypeName(row.type),
+			constellation: constellationAbbreviation(row.constellation),
+			magnitude: row.magnitude ?? undefined,
+			majorAxis: row.majorAxis ?? undefined,
+			minorAxis: row.minorAxis ?? undefined,
+			rightAscension: row.rightAscension,
+			declination: row.declination,
+			pmRA: row.pmRA,
+			pmDEC: row.pmDEC,
+		}
+	})
+
+	const last = listed.at(-1)
+	const nextCursor = rows.length > limit && last ? encodeCursor([last.magnitude === null ? 1 : 0, last.magnitude ?? 0, last.id]) : undefined
+	return { entries, total, nextCursor }
 }
 
 // Returns the catalog data of a star or deep-sky object; undefined when the id is unknown.

@@ -74,6 +74,8 @@ import { NotificationClassifier } from './notifications.rules'
 import { createObservatoryCameraRoutes, ObservatoryCameraService } from './observatorycameras'
 import { CAMERA_SECRET_KEY_VARIABLE, CameraSecretKey, systemSecretStorage } from './observatorycameras.secret'
 import { ObservatoryCameraStore } from './observatorycameras.store'
+import { createObservingPlannerRoutes, ObservingPlannerService } from './observingplanner'
+import { ObservingPlanStore } from './observingplanner.store'
 import { createOperationHistoryRoutes, OperationRecorder } from './operationhistory'
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
@@ -83,7 +85,7 @@ import { SatelliteAutoDownload } from './satellites.auto'
 import { SatelliteEphemeris } from './satellites.ephemeris'
 import { SatelliteStore } from './satellites.store'
 import { SatelliteSync } from './satellites.sync'
-import { annotationSky, createSkyApiRoutes, minorBodies, skyLocator, spiceKernels, ssdRequests } from './sky'
+import { annotationSky, createSkyApiRoutes, minorBodies, skyCatalog, skyLocator, spiceKernels, ssdRequests } from './sky'
 import { createSolarEclipseRoutes, SolarEclipseService } from './solareclipses'
 import { createSpiceKernelRoutes, SpiceKernelLibrary } from './spicekernels'
 import { SpiceKernelStore } from './spicekernels.store'
@@ -341,6 +343,41 @@ export type {
 } from './meridianflip'
 export type { MountRemoteClient, MountRemoteControlEvent, MountRemoteErrorCode, MountRemoteKey, MountRemoteProtocol, MountRemoteServer, MountRemoteSnapshot, MountRemoteStartRequest } from './mountremotecontrol'
 export type { ObservatoryCamera, ObservatoryCameraErrorCode, ObservatoryCameraEvent, ObservatoryCameraSaveRequest, ObservatoryCameraSecretKeyState, ObservatoryCameraStream, ObservatoryCameraStreamCode, ObservatoryCameraStreamState, ObservatoryCamerasSnapshot, RtspTransport } from './observatorycameras'
+export type {
+	ObservingCandidate,
+	ObservingConstraints,
+	ObservingDiscoveryPage,
+	ObservingDiscoveryRequest,
+	ObservingConstraintsOverride,
+	ObservingMode,
+	ObservingPlan,
+	ObservingPlanDocument,
+	ObservingPlanDuplicateRequest,
+	ObservingPlanEvent,
+	ObservingPlanItem,
+	ObservingPlanItemPreview,
+	ObservingPlanPreview,
+	ObservingPlanPreviewRequest,
+	ObservingPlanSaveRequest,
+	ObservingPlansSnapshot,
+	ObservingScheduleConflict,
+	ObservingScheduleConflictCode,
+	ObservingPlannerErrorCode,
+	ObservingPlannerPresets,
+	ObservingReasonCode,
+	ObservingSample,
+	ObservingScore,
+	ObservingStatus,
+	ObservingSummary,
+	ObservingTargetRef,
+	ObservingWindow,
+	PlanningBodyCode,
+	PlanningSite,
+	ScheduleItemDiagnostics,
+	ScheduleTotals,
+	TargetAnalysis,
+	TargetAnalysisRequest,
+} from './observingplanner'
 export type { GatewayCode, GatewayState, GatewayStatus, SourceCode } from './observatorycameras.gateway'
 export type { CameraSecretKeyStatus } from './observatorycameras.secret'
 export type { WhepErrorCode } from './observatorycameras.whep'
@@ -466,7 +503,11 @@ export type {
 	MinorBodyVirtualImpactor,
 	SkyBodiesRequest,
 	SkyBodyPosition,
+	SkyCatalogClass,
+	SkyCatalogEntry,
 	SkyCatalogObject,
+	SkyCatalogPage,
+	SkyCatalogQuery,
 	SkyConstellation,
 	SkyConstellations,
 	SkyDeepSkyData,
@@ -976,6 +1017,10 @@ const closeApproaches = new CloseApproachesService(minorBodies, ssdRequests)
 // Forecasts of the Astro Weather tool, read from their public services and cached for every tab.
 const astroWeather = new AstroWeatherService()
 
+// Target discovery and analysis of the Observing Planner, over the sky catalog and the nights of Astro Weather, and its
+// night plans in the operational database, sent to every tab once saved.
+const observingPlanner = new ObservingPlannerService({ catalog: skyCatalog, night: (request) => astroWeather.night(request), store: new ObservingPlanStore(database), listener: broadcast })
+
 // Earth orientation tables of the process, shared by the converter and, once installed, by every Time of the server.
 const earthOrientation = new EarthOrientationData()
 
@@ -1204,6 +1249,7 @@ export const routes = {
 	...createSolarEclipseRoutes(solarEclipses),
 	...createCloseApproachRoutes(closeApproaches),
 	...createAstroWeatherRoutes(astroWeather),
+	...createObservingPlannerRoutes(observingPlanner),
 	...createAstronomicalTimeRoutes(astronomicalTime),
 	...createSatelliteRoutes(satellites),
 	...createSpiceKernelRoutes(spiceKernelLibrary),

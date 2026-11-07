@@ -643,12 +643,10 @@ function catalogPosition(object: CatalogAstrometry, time: Time): Omit<SkyPositio
 	}
 }
 
-// Airless altitude and hour angle model of a solar-system target for an observer, over Unix milliseconds.
-// The model is evaluated once per hour as a geocentric geometric vector (neglecting light-time, under
-// 15″ for the planets and 1″ for the Moon) and interpolated linearly in between (about 2″ for the
-// Moon), so a day of event samples costs about 25 evaluations of models as slow as ELPMPP02; the
-// observer's offset is then removed and the direction reduced to the observed place. The Earth comes from foundation.
-function solarSystemHorizontalModel(model: SolarSystemModel, observer: SkyObserver, deflected: boolean, foundation: EphemerisFoundation = ANALYTIC_FOUNDATION): (time: number) => HorizontalSample {
+// Geometric geocentric ICRS vector (AU) of a barycentric model over Unix milliseconds, neglecting light-time: the model
+// and the Earth are evaluated once at each whole UTC hour and interpolated linearly in between, which keeps slow models
+// such as ELPMPP02 cheap over a night (about 2″ for the Moon). The Earth comes from foundation. Returns a new vector.
+export function geocentricInterpolation(state: PositionAndVelocityOverTime, foundation: EphemerisFoundation = ANALYTIC_FOUNDATION): (time: number) => Vec3 {
 	const nodes = new Map<number, Vec3>()
 
 	const node = (hour: number) => {
@@ -656,7 +654,7 @@ function solarSystemHorizontalModel(model: SolarSystemModel, observer: SkyObserv
 
 		if (!vector) {
 			const t = timeUnix((hour * HOUR_MS) / 1000, true)
-			const body = model.state(t)[0]
+			const body = state(t)[0]
 			const earth = foundation.earth(t)[0]
 			vector = [body[0] - earth[0], body[1] - earth[1], body[2] - earth[2]]
 			nodes.set(hour, vector)
@@ -670,9 +668,23 @@ function solarSystemHorizontalModel(model: SolarSystemModel, observer: SkyObserv
 		const fraction = (time - hour * HOUR_MS) / HOUR_MS
 		const a = node(hour)
 		const b = node(hour + 1)
+		return [lerp(a[0], b[0], fraction), lerp(a[1], b[1], fraction), lerp(a[2], b[2], fraction)]
+	}
+}
+
+// Airless altitude and hour angle model of a solar-system target for an observer, over Unix milliseconds.
+// The model is evaluated once per hour as a geocentric geometric vector (neglecting light-time, under
+// 15″ for the planets and 1″ for the Moon) and interpolated linearly in between (about 2″ for the
+// Moon), so a day of event samples costs about 25 evaluations of models as slow as ELPMPP02; the
+// observer's offset is then removed and the direction reduced to the observed place. The Earth comes from foundation.
+function solarSystemHorizontalModel(model: SolarSystemModel, observer: SkyObserver, deflected: boolean, foundation: EphemerisFoundation = ANALYTIC_FOUNDATION): (time: number) => HorizontalSample {
+	const geocentric = geocentricInterpolation(model.state, foundation)
+
+	return (time: number) => {
+		const center = geocentric(time)
 		const t = makeTime(time, observer)
 		const site = frameToFrame(itrs(t.location!), ITRS, ICRS, t)
-		const direction: Vec3 = [lerp(a[0], b[0], fraction) - site[0], lerp(a[1], b[1], fraction) - site[1], lerp(a[2], b[2], fraction) - site[2]]
+		const direction: Vec3 = [center[0] - site[0], center[1] - site[1], center[2] - site[2]]
 		const { geometricAltitude, hourAngle } = apparentPlace(direction, t, foundation.earth(t), deflected)
 		return { altitude: geometricAltitude!, hourAngle: hourAngle! }
 	}

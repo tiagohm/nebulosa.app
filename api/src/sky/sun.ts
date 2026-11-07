@@ -238,6 +238,12 @@ export function zonedDay(time: number, timeZone: string): ZonedDay {
 	return { localDate, start: zonedMidnight(year, month, day, timeZone), end: zonedMidnight(year, month, day + 1, timeZone) }
 }
 
+// Returns a civil date (YYYY-MM-DD) of an IANA time zone with its real bounds, as zonedDay does for an instant.
+export function zonedDate(localDate: string, timeZone: string): ZonedDay {
+	const [year, month, day] = localDate.split('-').map(Number)
+	return { localDate, start: zonedMidnight(year, month, day, timeZone), end: zonedMidnight(year, month, day + 1, timeZone) }
+}
+
 // Toolkit time of a Unix instant in milliseconds.
 function toolkitTime(time: number) {
 	return timeUnix(time / 1000, true)

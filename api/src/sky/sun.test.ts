@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { geographic } from './ephemeris'
-import { createSunAlmanacRoutes, nextSeasons, SunAlmanac, sunNightAt, sunPhysicalData, zonedDay } from './sun'
+import { createSunAlmanacRoutes, nextSeasons, SunAlmanac, sunNightAt, sunPhysicalData, zonedDate, zonedDay } from './sun'
 
 const MINUTE = 60_000
 
@@ -33,6 +33,12 @@ test('a skipped midnight starts the day when the clocks jump', () => {
 	expect(day.end - day.start).toBe(23 * 60 * MINUTE)
 	expect(zonedDay(day.start, 'America/Santiago').localDate).toBe('2026-09-06')
 	expect(zonedDay(day.start - 1, 'America/Santiago').localDate).toBe('2026-09-05')
+})
+
+test('a civil date has the bounds of the day containing its instants', () => {
+	expect(zonedDate('2026-03-08', 'America/New_York')).toEqual(zonedDay(Date.UTC(2026, 2, 8, 17), 'America/New_York'))
+	expect(zonedDate('2026-09-06', 'America/Santiago')).toEqual(zonedDay(Date.UTC(2026, 8, 6, 12), 'America/Santiago'))
+	expect(zonedDate('2026-12-31', 'UTC')).toEqual({ localDate: '2026-12-31', start: Date.UTC(2026, 11, 31), end: Date.UTC(2027, 0, 1) })
 })
 
 test('sunrise, sunset, and daylight of a temperate summer day', () => {

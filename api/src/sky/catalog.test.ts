@@ -1,7 +1,7 @@
 import { Database } from 'bun:sqlite'
 import { describe, expect, test } from 'bun:test'
 import { mas } from 'nebulosa/src/math/units/angle'
-import { catalogObject, catalogStars, fieldConstellations, fieldObjects, renderConstellations, renderDeepSky, renderStars, searchCatalog } from './catalog'
+import { catalogObject, catalogStars, fieldConstellations, fieldObjects, queryCatalog, renderConstellations, renderDeepSky, renderStars, searchCatalog } from './catalog'
 import { fixtureCatalog } from './fixture'
 import { assertSkyCatalogSchema } from './schema'
 
@@ -203,4 +203,41 @@ test('field constellations', () => {
 	expect(field.lines[0][0][0]).toBeCloseTo(2 * Math.PI - 0.1, 12)
 	expect(field.labels).toEqual([{ name: 'Orion', code: 'ORI', rightAscension: 2 * Math.PI - 0.005, declination: 0.01 }])
 	expect(fieldConstellations(source, 0, 0.05, 0.02).lines).toBeEmpty()
+})
+
+describe('query', () => {
+	test('lists by magnitude with unknown magnitudes last and pages without overlap', () => {
+		const all = queryCatalog(db, {})
+		expect(all.total).toBe(7)
+		expect(all.entries.map((e) => e.ref.id)).toEqual([32263, 27919, 22449, 1000255, 1001879, 22509, 1090000])
+		const first = queryCatalog(db, { limit: 3 })
+		expect(first.entries.map((e) => e.ref.id)).toEqual([32263, 27919, 22449])
+		expect(first.nextCursor).toBeDefined()
+		const second = queryCatalog(db, { limit: 3, cursor: first.nextCursor })
+		expect(second.entries.map((e) => e.ref.id)).toEqual([1000255, 1001879, 22509])
+		const third = queryCatalog(db, { limit: 3, cursor: second.nextCursor })
+		expect(third.entries.map((e) => e.ref.id)).toEqual([1090000])
+		expect(third.nextCursor).toBeUndefined()
+		expect(third.total).toBe(7)
+	})
+
+	test('filters by text, class, constellation, magnitude, and size', () => {
+		expect(queryCatalog(db, { text: 'M 31' }).entries.map((e) => e.name)).toEqual(['Andromeda Galaxy'])
+		expect(queryCatalog(db, { text: 'orion' }).entries.map((e) => e.name)).toEqual(['Great Orion Nebula'])
+		expect(queryCatalog(db, { classes: ['galaxy'] }).entries.map((e) => e.ref.id)).toEqual([1000255, 1090000])
+		expect(queryCatalog(db, { classes: ['nebula', 'star'] }).total).toBe(5)
+		expect(queryCatalog(db, { classes: ['other'] }).total).toBe(0)
+		expect(queryCatalog(db, { constellation: 'ORI' }).entries.map((e) => e.ref.id)).toEqual([27919, 22449, 1001879, 22509])
+		expect(queryCatalog(db, { maximumMagnitude: 1 }).entries.map((e) => e.ref.id)).toEqual([32263, 27919, 1090000])
+		expect(queryCatalog(db, { maximumMagnitude: 1, includeUnknownMagnitude: false }).entries.map((e) => e.ref.id)).toEqual([32263, 27919])
+		expect(queryCatalog(db, { includeUnknownMagnitude: false }).total).toBe(6)
+		expect(queryCatalog(db, { minimumSize: 0.03 }).entries.map((e) => e.ref.id)).toEqual([1000255])
+	})
+
+	test('entries carry the class, size, and J2000 place', () => {
+		const [m31] = queryCatalog(db, { text: 'M 31' }).entries
+		expect(m31).toMatchObject({ ref: { kind: 'catalog', id: 1000255 }, category: 'deepSky', class: 'galaxy', typeName: 'Galaxy', constellation: 'And', magnitude: 3.4, majorAxis: 0.055006963976016975, pmRA: 0, pmDEC: 0 })
+		expect(m31.designations[0]).toBe('M 31')
+		expect(queryCatalog(db, { text: 'PGC 90000' }).entries[0].magnitude).toBeUndefined()
+	})
 })

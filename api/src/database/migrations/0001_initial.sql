@@ -967,3 +967,24 @@ CREATE TABLE observing_minor_bodies (
 	-- When SBDB answered, Unix milliseconds (UTC).
 	fetched_at INTEGER NOT NULL
 ) STRICT;
+
+-- Great Red Spot longitude model of the Jupiter Observing Planner (JupiterGrsStore), one per server. Without a row the
+-- model has never been saved and Great Red Spot transits are not predicted; the longitude is never fetched.
+CREATE TABLE jupiter_grs_settings (
+	-- Always 1: the table holds at most one row.
+	singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+	-- System II west longitude of the spot at the reference instant, radians in [0, 2π).
+	longitude REAL NOT NULL,
+	-- Reference instant of the longitude, Unix milliseconds (UTC).
+	reference_time INTEGER NOT NULL,
+	-- Drift of the System II west longitude, radians per day; positive toward increasing west longitude.
+	drift REAL NOT NULL,
+	-- Where the operator took the values from, free text; NULL when not given.
+	source_label TEXT,
+	-- Notes of the operator, free text; NULL when not given.
+	notes TEXT,
+	-- Revision of the model, increased by every save; >= 1.
+	revision INTEGER NOT NULL CHECK (revision > 0),
+	-- When the model last changed, Unix milliseconds (UTC).
+	updated_at INTEGER NOT NULL
+) STRICT;

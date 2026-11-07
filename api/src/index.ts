@@ -37,6 +37,8 @@ import { createImageStackingRoutes, ImageStacking } from './imagestacking'
 import { DEFAULT_IMAGE_STACKING_DIRECTORY, ImageStackingStore } from './imagestacking.store'
 import { createIndiRoutes, IndiPropertyService } from './indi'
 import { IndiMessageService } from './indimessages'
+import { createJupiterRoutes, JupiterPlannerService } from './jupiter'
+import { JupiterGrsStore } from './jupiter.store'
 import { createLiveStackingRoutes, LiveStacking } from './livestacking'
 import { LiveStackingStore } from './livestacking.store'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
@@ -605,6 +607,10 @@ export type { IntegrationPlan } from './imagestacking.integration'
 export type { StackingRole } from './imagestacking.sources'
 // oxfmt-ignore
 export type { StackingCalibration, StackingCohortDecision, StackingComposite, StackingCompositeDiagnostics, StackingComposition, StackingCompositionLuminance, StackingCompositionSource, StackingFrameAnalysis, StackingFrameNormalization, StackingProduct, StackingProductDiagnostics, StackingProductSource, StackingProject, StackingProjectAnalysis, StackingRecipe, StackingRegistration, StackingSettings, StackingSourceSummary } from './imagestacking.store'
+export type { JupiterErrorCode, JupiterGrsResponse } from './jupiter'
+// oxfmt-ignore
+export type { JupiterDisk, JupiterEvent, JupiterEventContacts, JupiterEventKind, JupiterEvents, JupiterEventsRequest, JupiterEventVisibility, JupiterFallbackReason, JupiterGrsMarker, JupiterGrsQuality, JupiterGrsStatus, JupiterGrsTransit, JupiterKernelReadiness, JupiterMoonState, JupiterNight, JupiterSignature, JupiterSource, JupiterSourceMiss, JupiterSourceReport, JupiterSourceRequest, JupiterState, JupiterStateRequest, JupiterTrack, JupiterTrackMoon, JupiterTrackRequest, JupiterVisibilityReason, JupiterVisibilityStatus } from './jupiter.astronomy'
+export type { JupiterGrsEvent, JupiterGrsModel, JupiterGrsSaveRequest, JupiterGrsSettings } from './jupiter.store'
 export type {
 	LiveCohortAcquisition,
 	LiveStackingCapture,
@@ -1025,6 +1031,10 @@ const astroWeather = new AstroWeatherService()
 // night plans in the operational database, sent to every tab once saved.
 const observingPlanner = new ObservingPlannerService({ catalog: skyCatalog, night: (request) => astroWeather.night(request), store: new ObservingPlanStore(database), listener: broadcast, minorBodies, kernels: spiceKernels, queue: ssdRequests, minorBodyStore: new ObservingMinorBodyStore(database) })
 
+// Read-only predictions of the Jupiter Observing Planner over the SPICE kernels or the analytical theories, and the
+// server's Great Red Spot model in the operational database, sent to every tab once saved.
+const jupiterPlanner = new JupiterPlannerService({ kernels: spiceKernels, night: (request) => astroWeather.night(request), store: new JupiterGrsStore(database, broadcast) })
+
 // Earth orientation tables of the process, shared by the converter and, once installed, by every Time of the server.
 const earthOrientation = new EarthOrientationData()
 
@@ -1254,6 +1264,7 @@ export const routes = {
 	...createCloseApproachRoutes(closeApproaches),
 	...createAstroWeatherRoutes(astroWeather),
 	...createObservingPlannerRoutes(observingPlanner),
+	...createJupiterRoutes(jupiterPlanner),
 	...createAstronomicalTimeRoutes(astronomicalTime),
 	...createSatelliteRoutes(satellites),
 	...createSpiceKernelRoutes(spiceKernelLibrary),

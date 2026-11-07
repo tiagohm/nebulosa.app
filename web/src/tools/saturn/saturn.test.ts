@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import type { SaturnElongations, SaturnRingTimeline, SaturnSignature } from 'api'
+import type { SaturnElongations, SaturnEvent, SaturnRingTimeline, SaturnSignature } from 'api'
 import { proxy } from 'valtio'
 import { skyClock } from '../../sky/clock'
 import type { PlannerIo } from '../planetary/planetary'
-import { createSaturnPlannerState, describeSource, historyRange, listedEvents, listedId, loadState, selectEvent } from './saturn'
+import { createSaturnPlannerState, describeSource, historyRange, listedEvents, listedId, listedPhenomena, loadEvents, loadState, phenomenonName, selectEvent, selectPhenomenon } from './saturn'
 import { annulusPath, farHalfSign } from './SaturnViewer'
 
 const DAY = 86_400_000
@@ -126,5 +126,34 @@ describe('helpers', () => {
 		expect(describeSource(signature({ kind: 'analytical', planetary: 'VSOP87E', fallbackReason: 'noKernel' }))).toBe('VSOP87E, because no SPICE kernel is enabled')
 		expect(describeSource(signature({ kind: 'analytical', planetary: 'VSOP87E', satellites: 'TASS1.7', fallbackReason: 'targetMissing' }))).toBe('VSOP87E + TASS 1.7, because no enabled kernel has every body needed')
 		expect(describeSource(signature({ kind: 'spk', kernels: { saturn: ['a'], titan: ['a', 'b'] } }))).toBe('SPICE kernels (2 files, generation 3)')
+	})
+})
+
+describe('phenomena', () => {
+	function phenomenon(id: string, kind: SaturnEvent['kind'], moons: SaturnEvent['moons']): SaturnEvent {
+		return { id, kind, moons, start: 0, maximum: 1000, end: 2000, contacts: {}, startsBeforeRange: false, endsAfterRange: false, grazing: false, ringInterference: false, overlaps: [], visibility: { status: 'unknownNoSite', windows: [], longestMs: 0, reasons: [] } }
+	}
+
+	test('are asked for whole, with the site, and listed by kind and moon', async () => {
+		const state = proxy(createSaturnPlannerState())
+		const { io, requests } = fakeIo(() => json({ start: 0, end: DAY, events: [], nights: [] }))
+		const site = { name: 'São Paulo', latitude: -23.55, longitude: -46.633, elevation: 760, timeZone: 'America/Sao_Paulo' }
+		await loadEvents(state, { start: 0, end: DAY }, site, io)
+		expect(requests).toEqual(['/api/saturn/moons/events'])
+		expect(state.eventsLoading).toBeFalse()
+
+		const events = [phenomenon('a', 'satelliteTransit', ['titan']), phenomenon('b', 'mutualEclipse', ['mimas', 'tethys']), phenomenon('c', 'shadowTransit', ['rhea'])]
+		expect(listedPhenomena(events, ['satelliteTransit', 'mutualEclipse'], ['tethys', 'titan']).map((e) => e.id)).toEqual(['a', 'b'])
+		expect(phenomenonName(events[1])).toBe('Mutual eclipse: Mimas shadowing Tethys')
+		expect(phenomenonName(events[2])).toBe('Rhea shadow transit')
+	})
+
+	test('selecting one moves only the tool clock', () => {
+		const state = proxy(createSaturnPlannerState())
+		const sky = { ...skyClock }
+		selectPhenomenon(state, { id: 'a', maximum: 1000 })
+		expect(state.selectedEvent).toBe('a')
+		expect(state.time).toBe(1000)
+		expect({ ...skyClock }).toEqual(sky)
 	})
 })

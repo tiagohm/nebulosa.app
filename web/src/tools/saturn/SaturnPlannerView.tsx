@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDegrees, formatGeographic } from '../../format'
-import type { SiteLocation } from '../../location/site'
+import { openObservingSites, type SiteLocation } from '../../location/site'
 import { TimeZoneSelect } from '../../location/TimeZoneSelect'
 import { ToolLocationSection } from '../../location/ToolLocationSection'
 import { useActiveSite, useDisplayZone, useToolLocation } from '../../location/useLocation'
@@ -23,8 +23,9 @@ import { MoonChart } from './MoonChart'
 import { RingGeometry } from './RingGeometry'
 import { RingHistoryChart } from './RingHistoryChart'
 // oxfmt-ignore
-import { describeSource, FALLBACK_LABELS, historyRange, interpolateTrack, listedEvents, loadElongations, loadSource, loadTimeline, loadTrack, MOON_LABELS, play, RING_HISTORIES, RING_HISTORY_LABELS, SATURN_MOONS, type SaturnPlannerState, saturnPlannerState, scheduleState, selectEvent, showSaturnInSky } from './saturn'
+import { describeSource, EVENT_KINDS, FALLBACK_LABELS, historyRange, interpolateTrack, KIND_LABELS, listedEvents, listedPhenomena, loadElongations, loadEvents, loadSource, loadTimeline, loadTrack, MOON_LABELS, play, RING_HISTORIES, RING_HISTORY_LABELS, SATURN_MOONS, type SaturnPlannerState, saturnPlannerState, scheduleState, selectEvent, selectPhenomenon, showSaturnInSky } from './saturn'
 import { SaturnEventList } from './SaturnEventList'
+import { PhenomenaTable, PhenomenonInspector } from './SaturnPhenomena'
 import { SaturnViewer } from './SaturnViewer'
 
 // Saturn Observing Planner tool: Saturn's disk, rings and seven major moons at the tool's own instant, the ring openings
@@ -52,6 +53,8 @@ export function SaturnPlanner() {
 	const active = useActiveSite()
 	const displayZone = useDisplayZone(location, state.zone)
 	const namingZone = location?.timeZone ?? displayZone.zone
+	const site: SiteLocation | undefined = location && { name: location.name, latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, timeZone: location.timeZone }
+	const siteKey = site && JSON.stringify([site.latitude, site.longitude, site.elevation, site.timeZone])
 	const activeSite: SiteLocation | undefined = active && { name: active.name, latitude: active.latitude, longitude: active.longitude, elevation: active.elevation, timeZone: active.timeZone }
 	const range = useMemo(() => (state.eveningDate ? periodRange(state.eveningDate, state.period, namingZone) : undefined), [state.eveningDate, state.period, namingZone])
 	const history = useMemo(() => (range ? historyRange(state.history, range.start) : undefined), [state.history, range?.start])
@@ -72,6 +75,11 @@ export function SaturnPlanner() {
 		void loadElongations(saturnPlannerState, range)
 		void loadSource(saturnPlannerState, range)
 	}, [range?.start, range?.end, kernelKey])
+
+	// The phenomena follow the period, the site, and the kernels.
+	useEffect(() => {
+		if (range) void loadEvents(saturnPlannerState, range, site)
+	}, [range?.start, range?.end, siteKey, kernelKey])
 
 	// The ring history follows its span and the kernels.
 	useEffect(() => {
@@ -105,6 +113,9 @@ export function SaturnPlanner() {
 	const moonSignature = view?.signature ?? state.track?.signature
 	const positions = state.playing && state.time !== undefined ? interpolateTrack(state.track, state.time) : undefined
 	const events = listedEvents(state.timeline, state.elongations, range, state.moons)
+	const phenomena = state.events ? listedPhenomena(state.events.events, state.kinds, state.moons) : []
+	const selectedPhenomenon = state.events?.events.find((e) => e.id === state.selectedEvent)
+	const jumps = [...events.map((e) => ({ maximum: e.time })), ...phenomena]
 	const ringRadius = model ? model.annuli.at(-1)!.outer / model.equatorialRadiusKm : 2.27
 
 	const toggle = <T extends string>(list: readonly T[], value: T, on: boolean) => (on ? [...list, value] : list.filter((e) => e !== value))
@@ -119,12 +130,17 @@ export function SaturnPlanner() {
 
 	const panel = (
 		<>
-			<ToolLocationSection value={state.location} location={location} onChange={(value) => (saturnPlannerState.location = value)} hint="Names the evenings and the zone of the times; the predictions are geocentric." />
+			<ToolLocationSection value={state.location} location={location} onChange={(value) => (saturnPlannerState.location = value)} elevation hint="Only decides when the phenomena can be watched; the predictions are geocentric." />
 			{location && (
 				<PanelSection title="Time Zone">
 					<TimeZoneSelect label="Times Shown In" value={state.zone} onChange={(value) => (saturnPlannerState.zone = value)} site={location} selectedSite={location.source !== 'active'} />
 				</PanelSection>
 			)}
+			<PanelSection title="Phenomena">
+				{EVENT_KINDS.map((kind) => (
+					<Checkbox key={kind} label={KIND_LABELS[kind]} checked={state.kinds.includes(kind)} onChange={(on) => (saturnPlannerState.kinds = toggle(state.kinds, kind, on))} />
+				))}
+			</PanelSection>
 			<PanelSection title="Moons">
 				{SATURN_MOONS.map((moon) => (
 					<Checkbox key={moon} label={MOON_LABELS[moon]} checked={state.moons.includes(moon)} onChange={(on) => (saturnPlannerState.moons = toggle(state.moons, moon, on))} />
@@ -155,7 +171,7 @@ export function SaturnPlanner() {
 	)
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Saturn Observing Planner" actions={actions} panel={{ title: 'Location, Moons, and View', content: panel }}>
+		<WorkspaceLayout workspace="tools" title="Saturn Observing Planner" actions={actions} panel={{ title: 'Location, Filters, and View', content: panel }}>
 			<div className="h-full overflow-y-auto bg-base-000">
 				<div className="mx-auto flex max-w-6xl flex-col gap-4 p-4">
 					<p className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-300">
@@ -179,9 +195,17 @@ export function SaturnPlanner() {
 							</Button>
 						</Notice>
 					)}
+					{!location && (
+						<Notice>
+							<span className="block">{state.location.mode === 'active' ? 'Without a site the phenomena are listed without their local visibility. Set the observing site of this profile, or choose a location in the panel.' : 'The site chosen was deleted. Choose another location in the panel.'}</span>
+							<Button variant="secondary" className="mt-2" onClick={() => openObservingSites()}>
+								Set Location
+							</Button>
+						</Notice>
+					)}
 					{state.moonsError && !state.moonsRefused && <Notice error>{state.moonsError}</Notice>}
 					{state.ringError && <Notice error>{state.ringError}</Notice>}
-					{range && <TimeBar state={state} store={saturnPlannerState} range={range} events={events.map((e) => ({ maximum: e.time }))} timeZone={displayZone.zone} now={browserPlannerIo.time} />}
+					{range && <TimeBar state={state} store={saturnPlannerState} range={range} events={jumps} timeZone={displayZone.zone} now={browserPlannerIo.time} />}
 					<div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
 						<div className="flex min-w-0 flex-col gap-2">
 							<SegmentedControl options={SCALES} value={state.scale} format={(scale) => SCALE_LABELS[scale]} onChange={(scale) => (saturnPlannerState.scale = scale)} />
@@ -207,7 +231,16 @@ export function SaturnPlanner() {
 						</div>
 					</section>
 					<section className="flex flex-col gap-2">
-						<h2 className="m-0 text-sm font-semibold text-ink-100">Events of the period</h2>
+						<h2 className="m-0 text-sm font-semibold text-ink-100">Phenomena {state.eventsLoading && <span className="font-normal text-ink-300">· computing…</span>}</h2>
+						{state.eventsError && !state.moonsRefused && <Notice error>{state.eventsError}</Notice>}
+						{state.events && phenomena.length === 0 && (
+							<Notice>No transit, shadow, occultation, eclipse, or mutual event of the chosen kinds and moons falls in this period. With the rings open the moons pass north or south of Saturn: these phenomena happen only within a few years of the ring-plane crossings (around 2025 and 2038–2039).</Notice>
+						)}
+						{phenomena.length > 0 && <PhenomenaTable events={phenomena} selected={state.selectedEvent} timeZone={displayZone.zone} onSelect={(event) => selectPhenomenon(saturnPlannerState, event)} />}
+						{state.events && selectedPhenomenon && <PhenomenonInspector event={selectedPhenomenon} all={state.events.events} answer={state.events} timeZone={displayZone.zone} />}
+					</section>
+					<section className="flex flex-col gap-2">
+						<h2 className="m-0 text-sm font-semibold text-ink-100">Ring events and greatest separations</h2>
 						{state.elongationsError && <Notice error>{state.elongationsError}</Notice>}
 						{events.length === 0 && state.elongations && <Notice>No ring-plane event or greatest separation of the chosen moons falls in this period. Iapetus reaches its greatest separation only every 40 days.</Notice>}
 						{events.length > 0 && <SaturnEventList events={events} selected={state.selected} timeZone={displayZone.zone} onSelect={(event) => selectEvent(saturnPlannerState, event)} />}

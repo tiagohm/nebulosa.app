@@ -1,12 +1,14 @@
-import type { PlanetaryFallbackReason, SaturnElongation, SaturnElongations, SaturnMoon, SaturnMoonsState, SaturnRingEvent, SaturnRingState, SaturnRingTimeline, SaturnSignature, SaturnSourceReport, SaturnTrack } from 'api'
+// oxfmt-ignore
+import type { PlanetaryFallbackReason, SaturnElongation, SaturnElongations, SaturnEvent, SaturnEventKind, SaturnEvents, SaturnEventsRequest, SaturnMoon, SaturnMoonsState, SaturnRingEvent, SaturnRingState, SaturnRingTimeline, SaturnSignature, SaturnSourceReport, SaturnTrack, SaturnVisibilityReason, SaturnVisibilityStatus } from 'api'
 import { proxy } from 'valtio'
 import { ApiResponseError, fetchJson, jsonInit } from '../../http'
 import { ACTIVE_TOOL_LOCATION, type SiteLocation, type ToolLocation } from '../../location/site'
 import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
 import { createRequestGuard } from '../../sky/selection'
-import { showTargetInSky } from '../observingplanner/observingplanner'
+import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
 // oxfmt-ignore
-import { aborted, browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlanetScale, type PlannerIo, playClock, scheduleLoad, setTime } from '../planetary/planetary'
+import { aborted, browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlanetScale, type PlannerIo, playClock, scheduleLoad, setTime, VISIBILITY_LABELS } from '../planetary/planetary'
+import type { StatusTone } from '../../ui/StatusBadge'
 
 // Saturn Observing Planner of the tab: the tool-local clock and period, the moons drawn, the view, and the answers of the
 // server (the rings and moons at the clock's instant, the ring openings and ring-plane events over a season, the moon
@@ -44,6 +46,44 @@ export const RING_EVENT_DEFINITIONS: Readonly<Record<SaturnRingEvent['kind'], st
 	nearPlaneApproach: 'The Earth comes close to the ring plane and turns back without crossing it.',
 	openingMaximum: 'A local maximum of the signed Earth opening: the rings open no further in this stretch.',
 	openingMinimum: 'A local minimum of the signed Earth opening.',
+}
+
+// Every phenomenon kind, in display order.
+export const EVENT_KINDS: readonly SaturnEventKind[] = ['satelliteTransit', 'shadowTransit', 'satelliteOccultation', 'satelliteEclipse', 'mutualOccultation', 'mutualEclipse']
+
+// Name of each phenomenon kind.
+export const KIND_LABELS: Readonly<Record<SaturnEventKind, string>> = {
+	satelliteTransit: 'Transit',
+	shadowTransit: 'Shadow transit',
+	satelliteOccultation: 'Occultation',
+	satelliteEclipse: 'Eclipse',
+	mutualOccultation: 'Mutual occultation',
+	mutualEclipse: 'Mutual eclipse',
+}
+
+// What each phenomenon kind is, in one sentence.
+export const KIND_DEFINITIONS: Readonly<Record<SaturnEventKind, string>> = {
+	satelliteTransit: 'The moon crosses in front of the oblate disk. External contacts: the disks touch; internal: the moon is wholly on the disk.',
+	shadowTransit: "The moon's shadow crosses the sunlit disk. External contacts: the penumbra touches the disk as seen from the Sun; internal: the whole penumbra is on it. The shadow need not cross with the moon.",
+	satelliteOccultation: 'The moon passes behind the disk. External contacts: the disks touch; internal: the moon is wholly hidden.',
+	satelliteEclipse: "The moon passes through Saturn's shadow. External contacts: the moon touches the penumbra; centre: its centre crosses the umbra's edge; internal: it is wholly in the umbra.",
+	mutualOccultation: 'One moon passes in front of another. Only the first and last contacts and how central it is are predicted, not the drop in light.',
+	mutualEclipse: "One moon's shadow falls on another. Only the first and last contacts and how central it is are predicted, not the drop in light.",
+}
+
+// Label and tone of each visibility status of a phenomenon.
+export const EVENT_VISIBILITY_LABELS: Readonly<Record<SaturnVisibilityStatus, { readonly label: string; readonly tone: StatusTone }>> = {
+	...VISIBILITY_LABELS,
+	uncertainRingInterference: { label: 'Rings may hide it', tone: 'warning' },
+}
+
+// Sentence of each visibility reason.
+export const REASON_LABELS: Readonly<Record<SaturnVisibilityReason, string>> = {
+	sunTooHigh: 'The Sun is above −6° at the site.',
+	saturnTooLow: 'Saturn is below 25° at the site.',
+	moonHidden: 'A moon taking part is behind Saturn or in its shadow for part of it.',
+	shadowHidden: 'The shadow faces away from the Earth for part of it.',
+	ringInterferencePossible: 'A moon or the shadow lies behind the rings for part of it; the rings may hide it, which is not predicted exactly.',
 }
 
 // Sentence of each reason the kernels were not used.
@@ -92,6 +132,8 @@ export interface SaturnPlannerState {
 	rate: PlanetRate
 	// Moons drawn and listed.
 	moons: SaturnMoon[]
+	// Kinds of phenomena listed.
+	kinds: SaturnEventKind[]
 	// Orientation of the viewer.
 	orientation: PlanetOrientation
 	// Scale of the viewer.
@@ -128,6 +170,14 @@ export interface SaturnPlannerState {
 	elongations?: SaturnElongations
 	// Why the separations could not be computed.
 	elongationsError?: string
+	// Phenomena of the period.
+	events?: SaturnEvents
+	// Whether the phenomena are being computed.
+	eventsLoading: boolean
+	// Why the phenomena could not be computed.
+	eventsError?: string
+	// Id of the phenomenon selected.
+	selectedEvent?: string
 	// Readiness of the kernels over the period, for the rings and for the moons.
 	source?: SaturnSourceReport
 }
@@ -141,6 +191,8 @@ export function createSaturnPlannerState(): SaturnPlannerState {
 		playing: false,
 		rate: 600,
 		moons: [...SATURN_MOONS],
+		kinds: [...EVENT_KINDS],
+		eventsLoading: false,
 		orientation: 'north',
 		scale: 'disk',
 		showRings: true,
@@ -161,6 +213,7 @@ const timelineGuard = createRequestGuard()
 const trackGuard = createRequestGuard()
 const elongationsGuard = createRequestGuard()
 const sourceGuard = createRequestGuard()
+const eventsGuard = createRequestGuard()
 
 // A range of instants, Unix milliseconds.
 export interface Range {
@@ -271,6 +324,44 @@ export async function loadElongations(state: SaturnPlannerState, range: Range, i
 		state.elongations = undefined
 		state.elongationsError = errorMessage(error)
 	}
+}
+
+// Reads the phenomena of a period, judged from a site when one is given; every kind and moon is asked for, and the
+// filters only choose what is listed.
+export async function loadEvents(state: SaturnPlannerState, range: Range, site: SiteLocation | undefined, io: PlannerIo = browserPlannerIo) {
+	const request = eventsGuard.begin()
+	state.eventsLoading = true
+	const body: SaturnEventsRequest = { ...range, ...(site && { site: planningSite(site) }) }
+
+	try {
+		const answer = await fetchJson<SaturnEvents>(io, '/api/saturn/moons/events', jsonInit('POST', body, request.signal))
+		if (!request.current()) return
+		state.events = answer
+		state.eventsError = undefined
+	} catch (error) {
+		if (aborted(error) || !request.current()) return
+		state.events = undefined
+		state.eventsError = errorMessage(error)
+	} finally {
+		if (request.current()) state.eventsLoading = false
+	}
+}
+
+// The phenomena listed: the filtered kinds, with at least one of the filtered moons.
+export function listedPhenomena(events: readonly SaturnEvent[], kinds: readonly SaturnEventKind[], moons: readonly SaturnMoon[]) {
+	return events.filter((e) => kinds.includes(e.kind) && e.moons.some((moon) => moons.includes(moon)))
+}
+
+// Name of a phenomenon: its kind and the moons taking part.
+export function phenomenonName(event: Pick<SaturnEvent, 'kind' | 'moons'>) {
+	if (event.moons.length === 2) return `${KIND_LABELS[event.kind]}: ${MOON_LABELS[event.moons[0]]} ${event.kind === 'mutualOccultation' ? 'in front of' : 'shadowing'} ${MOON_LABELS[event.moons[1]]}`
+	return `${MOON_LABELS[event.moons[0]]} ${KIND_LABELS[event.kind].toLowerCase()}`
+}
+
+// Selects a phenomenon and moves the tool's clock to its maximum; the Sky clock, the site, and the devices are left alone.
+export function selectPhenomenon(state: SaturnPlannerState, event: Pick<SaturnEvent, 'id' | 'maximum'>) {
+	state.selectedEvent = event.id
+	setTime(state, event.maximum)
 }
 
 // Reads the readiness of the kernels over a period.

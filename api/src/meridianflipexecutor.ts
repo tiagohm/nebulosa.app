@@ -763,6 +763,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 				this.#step(session, 'referenceSolve')
 				const measured = await this.#center(session, 'verifyOnly', invocation)
 				reference = measured.measurement
+				if (measured.blocked) fail('blocked', 'unknownResult', measured.error ?? 'Target Centering blocked')
 				this.#stepEnd(session, reference ? 'done' : 'failed', reference ? undefined : 'No plate solution before the flip; the flip cannot be inferred')
 			}
 
@@ -805,6 +806,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 					this.#step(session, 'measuring')
 					const measured = await this.#center(session, 'verifyOnly', invocation)
 					measurement = measured.measurement
+					if (measured.blocked) fail('blocked', 'unknownResult', measured.error ?? 'Target Centering blocked')
 					targetPositionConfirmed = measured.positionVerified
 					this.#stepEnd(session, measurement ? 'done' : 'failed')
 				}
@@ -822,6 +824,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 			if (!outcomeOf.failure && !signal.aborted && policy.recenterAfterFlip && setup.camera && request.centering) {
 				this.#step(session, 'recentering')
 				const centered = await this.#center(session, 'recenter', invocation)
+				if (centered.blocked) fail('blocked', 'unknownResult', centered.error ?? 'Target Centering blocked')
 				targetPositionConfirmed = centered.positionVerified
 				recentering = centered.positionVerified ? 'completed' : 'failed'
 				this.#stepEnd(session, centered.positionVerified ? 'done' : 'failed', centered.error)
@@ -903,9 +906,10 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 		}
 	}
 
-	// Runs one Target Centering session of the frozen target under the reservation and waits for its end. Resolves the first
-	// solution it took, as the WCS of the field, whether a solution after its last motion lies within tolerance, and why not.
-	async #center(session: Session, mode: 'verifyOnly' | 'recenter', invocation: { readonly reservation: ResourceReservation }): Promise<{ readonly measurement?: WcsMeasurement; readonly positionVerified: boolean; readonly error?: string }> {
+	// Runs one Target Centering session of the frozen target under the reservation and waits for its end, or for its block (a
+	// mount it could not confirm stopped), which ends only once the operator dismissed it. Resolves the first solution it took,
+	// as the WCS of the field, whether a solution after its last motion lies within tolerance, why not, and whether it blocked.
+	async #center(session: Session, mode: 'verifyOnly' | 'recenter', invocation: { readonly reservation: ResourceReservation }): Promise<{ readonly measurement?: WcsMeasurement; readonly positionVerified: boolean; readonly error?: string; readonly blocked?: boolean }> {
 		const { setup, centering } = session.request
 		if (!setup.camera || !centering) return { positionVerified: false, error: 'No camera or Target Centering settings' }
 
@@ -922,8 +926,9 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 
 		session.tool = { interrupt: () => this.services.targetCentering.interrupt(admitted.sessionId) }
 		if (session.controller.signal.aborted) session.tool.interrupt()
-		const ended: TargetCenteringSessionSummary = await admitted.ended
+		const ended: TargetCenteringSessionSummary = await admitted.settled
 		session.tool = undefined
+		if (ended.state === 'blocked') return { positionVerified: false, blocked: true, error: ended.error ?? 'Target Centering could not confirm the mount stopped' }
 
 		const solutions = this.services.targetCentering.solutionsOf(admitted.sessionId)
 		const first = ended.attempts.find((attempt) => attempt.outcome === 'solved' && solutions?.has(attempt.attempt))

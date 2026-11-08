@@ -107,6 +107,8 @@ async function setup(mountPatch: Partial<Mount> = {}) {
 	// Plate solutions Target Centering finds: the field turns by half a turn with the flip.
 	let flipped = false
 	let solutionsFound = true
+	// Whether a recentering session blocks, its mount not confirmed stopped.
+	let recenterBlocks = false
 	const centered: { mode: string; invocation?: ToolInvocation }[] = []
 
 	const services: MeridianFlipExecutorServices = {
@@ -162,9 +164,10 @@ async function setup(mountPatch: Partial<Mount> = {}) {
 				calls.push(`center:${request.mode}`)
 				centered.push({ mode: request.mode, invocation })
 				const orientation = flipped ? deg(190) : deg(10)
-				const summary = { sessionId: `center-${centered.length}`, attempts: solutionsFound ? [{ attempt: 1, outcome: 'solved' }] : [], positionVerified: solutionsFound, readyForImaging: solutionsFound } as unknown as TargetCenteringSessionSummary
+				const blocked = recenterBlocks && request.mode === 'recenter'
+				const summary = { sessionId: `center-${centered.length}`, state: blocked ? 'blocked' : 'completed', attempts: solutionsFound ? [{ attempt: 1, outcome: 'solved' }] : [], positionVerified: solutionsFound && !blocked, readyForImaging: solutionsFound && !blocked } as unknown as TargetCenteringSessionSummary
 				solutions.set(summary.sessionId, { orientation, parity: 'NORMAL' })
-				return Promise.resolve({ ok: true, sessionId: summary.sessionId, operationId: 'center', repeated: false, ended: Promise.resolve(summary) })
+				return Promise.resolve({ ok: true, sessionId: summary.sessionId, operationId: 'center', repeated: false, ended: blocked ? Promise.withResolvers<TargetCenteringSessionSummary>().promise : Promise.resolve(summary), settled: Promise.resolve(summary) })
 			},
 			interrupt: () => true,
 			solutionsOf: (sessionId) => {
@@ -228,6 +231,7 @@ async function setup(mountPatch: Partial<Mount> = {}) {
 			suspendGate = value
 		},
 		setSolutionsFound: (value: boolean) => (solutionsFound = value),
+		setRecenterBlocks: (value: boolean) => (recenterBlocks = value),
 	}
 }
 
@@ -410,6 +414,15 @@ test('a flip that ended before the mount moved leaves its passage to a retry', a
 	context.setGuiding('guiding')
 	expect(await context.ended(context.execute('now'))).toMatchObject({ state: 'completed' })
 	expect(context.calls.filter((call) => call.startsWith('flip:'))).toHaveLength(1)
+})
+
+test('a recentering that blocks ends the execution blocked instead of waiting for its dismissal', async () => {
+	const context = await setup()
+	context.setRecenterBlocks(true)
+	const execution = await context.ended(context.execute('now', context.request({}, { recenterAfterFlip: true })))
+
+	expect(execution).toMatchObject({ state: 'blocked', code: 'unknownResult' })
+	expect(context.executor.snapshot().executions[0].endedAt).toBeDefined()
 })
 
 test('guiding that cannot be restored leaves the capture paused', async () => {

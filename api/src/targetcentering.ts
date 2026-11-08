@@ -288,6 +288,8 @@ interface Session {
 	readonly invocation?: ToolInvocation
 	// Resolved with the final summary once the session ended.
 	readonly ended: PromiseWithResolvers<TargetCenteringSessionSummary>
+	// Resolved with the summary once the session ended or was blocked, whichever comes first.
+	readonly settled: PromiseWithResolvers<TargetCenteringSessionSummary>
 }
 
 // Session admitted inside the process: its identity and its end.
@@ -302,6 +304,9 @@ export interface TargetCenteringAdmitted {
 	// Final summary once the session ended, after guiding was restored: completed (positionVerified and readyForImaging say
 	// what it reached), failed, or cancelled. A blocked session ends only once it is dismissed. Never rejects.
 	readonly ended: Promise<TargetCenteringSessionSummary>
+	// Summary once the session ended, as ended, or was blocked, its mount not confirmed stopped: a caller composing tools waits
+	// on it, since a blocked session ends only once the operator dismissed it. Never rejects.
+	readonly settled: Promise<TargetCenteringSessionSummary>
 }
 
 // Outcome of asking for a session inside the process: the session admitted, or why it was refused (guidingActive when
@@ -483,6 +488,7 @@ export class TargetCenteringSessions {
 			suspensions: [],
 			invocation,
 			ended: Promise.withResolvers(),
+			settled: Promise.withResolvers(),
 		}
 
 		const record = this.operations.run('mount.targetCentering', [session.summary.camera, session.summary.mount], token, () => {
@@ -762,7 +768,9 @@ export class TargetCenteringSessions {
 
 		if (!result.ok && mount.connected && !isDeviceQuiescent(mount)) {
 			const guidingRestoration = session.suspensions.length > 0 ? 'failed' : 'notNeeded'
-			return this.#sessions.update(session, { state: 'blocked', step: undefined, exposure: undefined, guidingRestoration, reason: result.reason, error: `${mount.name} could not be confirmed stopped` })
+			this.#sessions.update(session, { state: 'blocked', step: undefined, exposure: undefined, guidingRestoration, reason: result.reason, error: `${mount.name} could not be confirmed stopped` })
+			session.settled.resolve(session.summary)
+			return
 		}
 
 		await this.#restoreGuiding(session)
@@ -786,6 +794,7 @@ export class TargetCenteringSessions {
 		const readyForImaging = positionVerified && (guidingRestoration === 'notNeeded' || guidingRestoration === 'restored')
 		this.#sessions.update(session, { state, step: undefined, exposure: undefined, positionVerified, readyForImaging, endedAt: Date.now(), ...failure })
 		session.ended.resolve(session.summary)
+		session.settled.resolve(session.summary)
 	}
 
 	// Records a warning of a session.
@@ -799,9 +808,9 @@ export class TargetCenteringSessions {
 	}
 }
 
-// Returns the admission of a session: its ids, whether a repeated token answered it, and its end.
-function admitted({ summary: { sessionId, operationId }, ended }: Session, repeated: boolean): TargetCenteringAdmitted {
-	return { ok: true, sessionId, operationId, repeated, ended: ended.promise }
+// Returns the admission of a session: its ids, whether a repeated token answered it, its end, and its end or block.
+function admitted({ summary: { sessionId, operationId }, ended, settled }: Session, repeated: boolean): TargetCenteringAdmitted {
+	return { ok: true, sessionId, operationId, repeated, ended: ended.promise, settled: settled.promise }
 }
 
 // Routes of the Target Centering sessions.

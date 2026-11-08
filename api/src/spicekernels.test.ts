@@ -1,9 +1,10 @@
-import { afterEach, expect, test } from 'bun:test'
+import { afterEach, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import { mkdir, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type { SpkFile } from 'nebulosa/src/adapters/ephemeris/horizons'
+import * as kernelSets from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { AppDatabase } from './database'
 import { createSpiceKernelRoutes, MAX_SPICE_KERNEL_BYTES, SpiceKernelError, type SpiceKernelEvent, SpiceKernelLibrary, type SpiceKernelLibraryOptions, type SpkGenerator } from './spicekernels'
@@ -309,4 +310,23 @@ test('a runtime disposed while it opens the kernels keeps none of them', async (
 
 	expect(second.library.runtime.current().loading).toBeTrue()
 	expect(second.library.runtime.current().set).toBeUndefined()
+})
+
+test('a set that cannot be prepared together keeps the kernels ready and the previous set in force', async () => {
+	const { library } = setup()
+	await library.start()
+	const { kernel } = await library.importFile('planets.bsp', stream(PLANETARY))
+	const { set } = library.runtime.current()
+	const prepare = spyOn(kernelSets, 'prepareSpkKernelSet').mockRejectedValue(new Error('changed while read'))
+	const error = spyOn(console, 'error').mockImplementation(() => undefined)
+
+	try {
+		await library.update(kernel.id, { priority: 5 })
+		expect(prepare).toHaveBeenCalled()
+		expect(library.runtime.current().set).toBe(set)
+		expect(library.snapshot().kernels.find((e) => e.id === kernel.id)?.readiness).not.toBe('invalid')
+	} finally {
+		prepare.mockRestore()
+		error.mockRestore()
+	}
 })

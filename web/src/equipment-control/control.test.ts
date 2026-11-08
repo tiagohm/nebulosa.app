@@ -59,6 +59,18 @@ test('the snapshot is replaced and events received while it loads are replayed o
 	expect(deviceStateOf(state.states, 'focuser', 'f')).toMatchObject({ moving: true, position: { value: 150 } })
 })
 
+test('events received during a failed snapshot are never replayed onto a later one', async () => {
+	const state = newState()
+	const failed = Promise.withResolvers<Response>()
+	const refresh = refreshStates(state, fakeFetch(() => failed.promise).request)
+	handleControlEvent(state, event(focuser({ position: { value: 150, min: 0, max: 1000, step: 1 } })))
+	failed.resolve(Response.json({ error: 'Unavailable' }, { status: 503 }))
+	await refresh
+
+	await refreshStates(state, fakeFetch(() => Response.json(states({ focuser: [focuser({ position: { value: 300, min: 0, max: 1000, step: 1 } })] }))).request)
+	expect(deviceStateOf(state.states, 'focuser', 'f')).toMatchObject({ position: { value: 300 } })
+})
+
 test('events of other connections are ignored and a removed device is forgotten', () => {
 	const state = newState()
 	handleControlEvent(state, event(focuser({ connectionId: 'other' })))

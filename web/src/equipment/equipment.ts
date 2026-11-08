@@ -109,7 +109,11 @@ export async function refreshDevices(state: DeviceState) {
 	} catch {
 		// The server is unreachable; the next socket open refreshes the list.
 	} finally {
-		if (current === generation) state.loading = false
+		// The events queued for this refresh were already applied; a later snapshot, newer than them, must not replay them.
+		if (current === generation) {
+			state.loading = false
+			queued = []
+		}
 	}
 }
 

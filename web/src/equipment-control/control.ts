@@ -145,7 +145,11 @@ export async function refreshStates(state: ControlRuntime, request: typeof fetch
 	} catch {
 		if (current === generation && state.watched === serverId) state.loadError = 'Unable to reach the server'
 	} finally {
-		if (current === generation) state.loading = false
+		// The events queued for this refresh were already applied; a later snapshot, newer than them, must not replay them.
+		if (current === generation) {
+			state.loading = false
+			queued = []
+		}
 	}
 }
 

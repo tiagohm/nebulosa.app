@@ -334,6 +334,10 @@ interface Session {
 	readonly waiters: Set<() => void>
 	readonly views: ViewDocument[]
 	readonly viewRequests: Map<string, Promise<LiveStackingView>>
+	// Exports writing, which hold the integration of the next frames until they are written.
+	exporting: number
+	// Settles once the frame being integrated was integrated or failed; absent while none is.
+	integration?: Promise<void>
 	// Number of times its snapshot documents were closed (a reset, a failure, the close), so a view taken before is discarded.
 	viewsClosed: number
 	pumping: boolean
@@ -497,6 +501,7 @@ export class LiveStacking implements Disposable {
 			waiters: new Set(),
 			views: [],
 			viewRequests: new Map(),
+			exporting: 0,
 			viewsClosed: 0,
 			pumping: false,
 		}
@@ -616,6 +621,22 @@ export class LiveStacking implements Disposable {
 		const session = this.#session(sessionId)
 		if (session.phase === 'failed') throw new LiveStackingError('The stacks of the session were lost', 409, 'workerFailed')
 
+		// The worker answers in order: the frame being integrated ends first, and no other one starts until the export is written,
+		// so the frames, exposure, and header read from the stacks describe the pixels the worker exports.
+		session.exporting++
+
+		try {
+			await session.integration
+			return await this.#export(session, target)
+		} finally {
+			session.exporting--
+			void this.#pump(session)
+		}
+	}
+
+	// Writes the export of a session whose integration is held (see export).
+	async #export(session: Session, target: LiveExportTarget): Promise<LiveStackingProductDetail> {
+		const { sessionId } = session.summary
 		const stacks = this.#stacksOf(session, target)
 		const name = stackName(target, stacks)
 		const frames = stacks.reduce((total, cohort) => total + cohort.accepted, 0)
@@ -819,7 +840,7 @@ export class LiveStacking implements Disposable {
 		session.pumping = true
 
 		try {
-			while (session.phase !== 'failed' && !session.current) {
+			while (session.phase !== 'failed' && !session.current && session.exporting === 0) {
 				const entry = session.queue[0]
 				if (!entry || entry.awaitingFile) break
 				session.queue.shift()
@@ -829,13 +850,20 @@ export class LiveStacking implements Disposable {
 				entry.state = 'processing'
 				this.#publish(session)
 
+				const integration = this.#integrate(session, entry)
+				session.integration = integration.then(
+					() => undefined,
+					() => undefined,
+				)
+
 				try {
-					await this.#integrate(session, entry)
+					await integration
 				} catch (error) {
 					if (error instanceof LiveWorkerFailure) this.#fail(session, entry, error.message)
 					else this.#finish(session, entry, 'deliveryFailed', true)
 				} finally {
 					session.current = undefined
+					session.integration = undefined
 					this.#release(session)
 				}
 

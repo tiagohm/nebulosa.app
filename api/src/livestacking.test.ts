@@ -12,7 +12,7 @@ import { AppDatabase } from './database'
 import type { DeviceRegistry } from './devices'
 import type { ImageInfo, ImageProvenance } from './images'
 import { createLiveStackingRoutes, LiveStacking, type LiveStackingCounters, type LiveStackingEvent, type LiveStackingMasters, MAX_PENDING_PAYLOADS } from './livestacking'
-import { InThreadProcessor, type LiveEngineFrame, type LiveEngineResult, type LiveStackingProcessor, type LiveStackingRecipe, LiveWorkerFailure } from './livestacking.engine'
+import { InThreadProcessor, type LiveEngineFrame, type LiveEngineResult, type LiveStackingProcessor, type LiveStackingRecipe, LiveWorkerFailure, type LiveWorkerRequest, type LiveWorkerResponse } from './livestacking.engine'
 import { LiveStackingStore } from './livestacking.store'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-livestacking-'))
@@ -344,6 +344,38 @@ describe('live stacking', () => {
 		const second = start('b')
 		expect(second).not.toBe(first)
 		expect(() => stacking.session(first)).toThrow('Live Stacking session not found')
+	})
+
+	test('an export while a frame is integrated describes the frames its pixels hold', async () => {
+		// Answers each integration only once hold settles, after the engine integrated it in order.
+		class HeldProcessor extends InThreadProcessor {
+			hold?: Promise<void>
+			integrations = 0
+
+			protected override async send(request: LiveWorkerRequest): Promise<LiveWorkerResponse> {
+				if (request.type === 'integrate') this.integrations++
+				const response = await super.send(request)
+				if (request.type === 'integrate') await this.hold
+				return response
+			}
+		}
+
+		let processor: HeldProcessor | undefined
+		const { stacking, deliver, start } = setup({ processor: (recipe) => (processor = new HeldProcessor(recipe)) })
+		const sessionId = start()
+		await deliver(captured('cap', 1), await fits(0, 0, { FILTER: 'Ha' }))
+		await waitUntil(() => stacking.session(sessionId).counters.accepted === 1)
+		const [cohort] = stacking.session(sessionId).cohorts
+
+		const hold = Promise.withResolvers<void>()
+		processor!.hold = hold.promise
+		await deliver(captured('cap', 2), await fits(2, 1, { FILTER: 'Ha' }, 1, 2))
+		await waitUntil(() => processor!.integrations === 2)
+		const exported = stacking.export(sessionId, { cohortId: cohort.cohortId })
+		await Bun.sleep(20)
+		hold.resolve()
+
+		expect(await exported).toMatchObject({ frames: 2, exposure: 120, cohorts: [{ frames: 2 }] })
 	})
 
 	test('a stack of preview-only frames is saved as a product, listed, opened by path, and deleted', async () => {

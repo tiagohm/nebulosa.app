@@ -23,7 +23,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   `WcsAidsOverlay` draws an optional crosshair, the compact north and east arrows inside the top-right corner of the visible image from the WCS at that point (an arrow that cannot be projected is left out; the orientation mode can draw them at the solved centre instead, or hide them), and the scale bar near the bottom-left corner, exact through the WCS where it is drawn and hidden when the two axis scales differ too much there or it does not fit (`web/src/platesolving/aids.ts`, which gives its lengths and limits).
   Coordinates are written in the profile's format and decimals (`coordinates.ts`), a display choice that claims no accuracy.
   Its `fitsToViewer` is the only place where a FITS pixel (1-based, integer centres) becomes a viewer point (minus half a pixel);
-  the TPPA correction guide, whose geometry the server computes with the toolkit in that convention, converts through it too.
+  the TPPA correction guide and the iPolar axis and pole markers, whose geometry the server computes with the toolkit in that convention, convert through it too.
 - `ImageViewer`'s `onImageClick(point, view)` reports a click (never a drag or a pinch) in image coordinates; the star markers use it to pick a star.
   The viewer stays unaware of what its consumers draw or measure; its other pointer contracts are generic and optional:
     - `overlays(size, view, cursor)` and `status(cursor)` receive the `ViewerCursor` (image point, zero-based pixel inside the image, viewport point), absent off the viewport, so the status line and overlays follow the pointer without re-rendering their owner.

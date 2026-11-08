@@ -2,7 +2,7 @@
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- One service, `PlateSolvingService` (`api/src/platesolving.ts`), solves an image document for every consumer: Images → Plate Solver, TPPA, mount pointing sessions, and Target Centering.
+- One service, `PlateSolvingService` (`api/src/platesolving.ts`), solves an image document for every consumer: Images → Plate Solver, TPPA, iPolar, mount pointing sessions, and Target Centering.
   Captures never solve their frames.
   Providers are ASTAP, Astrometry.net Local (`solve-field`), and Nova Astrometry.net, each resolved once per job from [External Tools](external-tools.md); a request never names an executable or a URL.
   A provider never falls back to another, so a local failure never uploads an image.
@@ -27,7 +27,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Routes are `POST /api/images/:id/plate-solving` (`422 notConfigured` when the provider is not configured) and `/api/plate-solving`, and the event `plateSolving:updated` without the WCS;
   instead of a list of kept jobs, `GET /api/images/:id/plate-solutions` gives the header's WCS and the kept completed jobs, and `GET /api/images/:id/plate-solving/hints?strategy=` the hints an image would use.
 - Images → Plate Solver (`web/src/images/PlateSolverPanel.tsx`, store `web/src/platesolving/platesolving.ts`) edits the document's hints and the settings the profile shares between the documents (`imagePlateSolving`), and sends them only with Solve Image;
-  on a camera tab it edits the plate solving settings of the physical camera instead (`CameraSettings.plateSolving`, `effectivePlateSolveRequest`), which TPPA and the other operations of that camera apply, keeping only the hints in the document, so a typed position never reaches an operation;
+  on a camera tab it edits the plate solving settings of the physical camera instead (`CameraSettings.plateSolving`, `effectivePlateSolveRequest`), which TPPA, iPolar, and the other operations of that camera apply, keeping only the hints in the document, so a typed position never reaches an operation;
   the request is editable before the document has an image (`imageUnavailableReason` says why), with Solve Image disabled until it has one.
   The solution shown is the latest submitted job of the image unless the operator chose another one or the header's (`ImagePlateSolvingState.selected`), so a job that ends never replaces a chosen solution;
   the choice is offered whenever the image has a header solution, even before any solve, or more than one completed job (`solutionOptions`), and a header solution is never shown unless chosen;
@@ -37,7 +37,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   `solution.orientation` is the solver’s own angle and is not shown.
 - Operation integration: `PlateSolvingService.solve(imageId, request, signal, origin)` resolves to the result of that image (a search without a solution completes with `outcome: noSolution`), whatever newer frame arrives, cancels with its signal, and throws `PlateSolvingError` with the job code otherwise;
   a preparation resolved once keeps the provider settings of a whole session.
-  TPPA jobs carry the `tppa` origin (session, camera, frame id, and the pose during acquisition), mount pointing jobs the `mountPointing` origin, and Target Centering jobs the `targetCentering` origin (session, camera, frame id).
+  TPPA jobs carry the `tppa` origin (session, camera, frame id, and the pose during acquisition), iPolar jobs the `ipolar` origin (session, camera, frame id, and the step: `reference`, `second`, or `refinement`), mount pointing jobs the `mountPointing` origin, and Target Centering jobs the `targetCentering` origin (session, camera, frame id).
 - Sync Mount (the Mount section of Images → Plate Solver, shown with a solution) syncs the MOUNT of the active equipment setup on the centre of the solution shown, after a confirmation, through `POST /api/connections/:id/mounts/:deviceId/sync`: the ICRS centre is sent as J2000 in decimal hours and degrees (`mountSyncTarget`).
   It is offered only while the mount is connected, can sync, is not parked, and no operation or command holds it (`mountSyncBlocker`); the server checks again.
   This action only syncs: it never slews or centers the mount.

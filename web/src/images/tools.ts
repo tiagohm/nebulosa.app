@@ -10,6 +10,7 @@ import { GuidingTool } from './GuidingTool'
 import { ImageInspector } from './ImageInspector'
 import { ImageProcessingPanel } from './ImageProcessingPanel'
 import type { ImageDocument, ImageViewState } from './images'
+import { IPolarTool } from './IPolarTool'
 import { LiveStackingTool } from './LiveStackingTool'
 import { MountNudgeTool } from './MountNudgeTool'
 import { PlateSolverPanel } from './PlateSolverPanel'
@@ -43,6 +44,7 @@ export const IMAGE_TOOLS = [
 	'guiding',
 	'darv',
 	'tppa',
+	'ipolar',
 	'pointing-model-builder',
 	'target-centering',
 	'flat-wizard',
@@ -120,6 +122,7 @@ export const IMAGE_TOOL_DEFINITIONS: Readonly<Record<ImageToolId, ImageToolDefin
 	guiding: { id: 'guiding', label: 'Guiding', panelTitle: 'Guiding', category: 'camera', panel: GuidingTool },
 	darv: { id: 'darv', label: 'DARV', panelTitle: 'DARV', category: 'camera', panel: DarvTool },
 	tppa: { id: 'tppa', label: 'TPPA', panelTitle: 'TPPA', category: 'camera', panel: TppaTool },
+	ipolar: { id: 'ipolar', label: 'iPolar', panelTitle: 'iPolar', category: 'camera', panel: IPolarTool },
 	'pointing-model-builder': { id: 'pointing-model-builder', label: 'Pointing Model Builder', panelTitle: 'Pointing Model Builder', category: 'camera', panel: PointingModelBuilderTool },
 	'target-centering': { id: 'target-centering', label: 'Target Centering', panelTitle: 'Target Centering', category: 'camera', panel: TargetCenteringTool },
 	'flat-wizard': { id: 'flat-wizard', label: 'Flat Wizard', panelTitle: 'Flat Wizard', category: 'camera', panel: FlatWizardTool },

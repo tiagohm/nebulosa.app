@@ -67,13 +67,14 @@ export type CaptureFrameAvailability = 'memory' | 'file' | 'saving' | 'unavailab
 // - capture: Camera Capture, previewed only or saved.
 // - autofocus: an Auto Focus session, sampled or verifying; never saved.
 // - tppa: a TPPA session, a pose or a refinement frame; never saved.
+// - ipolar: an iPolar session, a calibration pose, a rejected candidate, or a refinement frame; never saved.
 // - mountPointing: a mount pointing session, one frame per attempt at a waypoint; never saved.
 // - targetCentering: a Target Centering session, one frame per measurement; never saved.
 // - darv: a DARV measurement, one frame per measurement; never saved.
 // - flatWizard: a Flat Wizard session, a trial or a final frame; saved once its final frame was accepted and published.
 // - darkLibraryWizard: a Dark Library Wizard session, one frame per attempt; saved once it was accepted and published.
 // - guiding: a guiding session, the newest guide frame previewed; never saved.
-export type CaptureFrameOrigin = 'capture' | 'autofocus' | 'tppa' | 'mountPointing' | 'targetCentering' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'guiding'
+export type CaptureFrameOrigin = 'capture' | 'autofocus' | 'tppa' | 'ipolar' | 'mountPointing' | 'targetCentering' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'guiding'
 
 // Why a frame cannot be opened:
 // - expired: it was only previewed and its document was closed.

@@ -11,6 +11,7 @@ import { darkLibraryWizardRuntime, handleDarkLibraryWizardEvent, refreshDarkLibr
 import { darvRuntime, handleDarvEvent, refreshDarv } from './camera/darv'
 import { flatWizardRuntime, handleFlatWizardEvent, refreshFlatWizard } from './camera/flatwizard'
 import { guidingRuntime, handleGuidingEvent, refreshGuiding } from './camera/guiding'
+import { handleIPolarEvent, ipolarRuntime, refreshIPolar } from './camera/ipolar'
 import { handleLiveStackingEvent, liveStackingRuntime, refreshLiveStacking } from './camera/livestacking'
 import { handleNudgeEvent, nudgeRuntime, refreshNudges } from './camera/nudge'
 import { handleTargetCenteringEvent, refreshTargetCentering, targetCenteringRuntime } from './camera/targetcentering'
@@ -121,6 +122,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleJupiterGrsEvent(jupiterGrsState, event), refresh: () => refreshJupiterGrs(jupiterGrsState) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
 	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },
+	{ handle: (event) => handleIPolarEvent(ipolarRuntime, event), refresh: () => refreshIPolar(ipolarRuntime) },
 	{ handle: (event) => handleMountPointingEvent(mountPointingRuntime, event), refresh: () => refreshMountPointing(mountPointingRuntime) },
 	{ handle: (event) => handleTargetCenteringEvent(targetCenteringRuntime, event), refresh: () => refreshTargetCentering(targetCenteringRuntime) },
 	{ handle: (event) => handleDarvEvent(darvRuntime, event), refresh: () => refreshDarv(darvRuntime) },

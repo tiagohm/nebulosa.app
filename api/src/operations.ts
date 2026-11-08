@@ -43,6 +43,7 @@ export type OperationKind =
 	| 'mount.meridianFlipExecutor'
 	| 'focuser.autofocus'
 	| 'mount.tppa'
+	| 'camera.ipolar'
 	| 'mount.pointingModel'
 	| 'mount.pointingVerification'
 	| 'mount.targetCentering'

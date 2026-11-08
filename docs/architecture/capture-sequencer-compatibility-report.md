@@ -36,7 +36,7 @@ Readiness of the services a sequencer would call:
   the other device commands stay manual until a caller needs them, the manual `MountCommands.flip` included.
   The read-only Meridian Flip Monitor already offers what a caller deciding a flip reads: its snapshot, `meridianFlip:transition`, and `assessExposure`.
 - **Server events (`ServerEventDispatcher`, `api/src/events.ts`)** (ready): `publish` of `api/src/index.ts` goes through the dispatcher (see [Routes and Events](routes-and-events.md)); no event of a sequencer exists yet.
-- **TPPA, DARV, Mount Pointing Model** (future): No in-process `admit` under an invocation: only their routes start them, and TPPA and DARV need a person adjusting the mount.
+- **TPPA, iPolar, DARV, Mount Pointing Model** (future): No in-process `admit` under an invocation: only their routes start them, and TPPA, iPolar, and DARV need a person adjusting the mount.
 - **Flat Wizard, Dark Library Wizard** (future): Their manual steps (`continue` of a pending step, a pause) wait for a person; unattended automation cannot assume they happen.
 - **Rotator, Dome, Cover, Flat Panel, cooling, Plate Solving, stacking** (future): Not needed until the sequencer itself; read-only and analysis services need no operation contract.
 
@@ -47,7 +47,7 @@ Readiness of the services a sequencer would call:
   The guiding drain and the Target Centering composition are tested in their own files.
   The physical exclusivity of a camera and its integrated filter wheel (one `resourceKey`) is not simulated: the simulator's devices are separate hardware, and the arbiter's own tests cover shared keys.
 
-- Acquisition exists once, in `CameraCapturer`: Camera Acquisition, Auto Focus, TPPA, DARV, Flat Wizard, Dark Library Wizard, the Mount Pointing Model, and Target Centering expose through the one capturer of `CameraCaptures` (`captures.capturer`), never an exposure loop of their own;
+- Acquisition exists once, in `CameraCapturer`: Camera Acquisition, Auto Focus, TPPA, iPolar, DARV, Flat Wizard, Dark Library Wizard, the Mount Pointing Model, and Target Centering expose through the one capturer of `CameraCaptures` (`captures.capturer`), never an exposure loop of their own;
   only guiding exposes through the toolkit's `GuiderClient`.
 - Every acquisition snoops the managed devices of the equipment setup (mount, focuser, filter wheel, rotator; `captureSnoop` in `web/src/camera/capture.ts`, chosen per camera by `CameraOperationContext.snoop`) into the frame headers.
   Requests name them by device id on the camera's connection (`CaptureSnoop`), and `api` resolves the ids to the driver names (`snoopedDevices`); snooped devices are read, never acquired.

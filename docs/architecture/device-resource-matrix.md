@@ -37,6 +37,10 @@ Every `OperationKind`, what it requires besides the view's camera, and the devic
     - Operation kinds: `mount.tppa`
     - Requires: Mount; a plate solver
     - Holds: camera and mount for the whole session
+- **iPolar**
+    - Operation kinds: `camera.ipolar`
+    - Requires: a plate solver; the Mount for the automatic rotation
+    - Holds: camera for the whole session; the setup's mount for the whole session too when the request names it (always in automatic mode); never the guide output
 - **Mount pointing session**
     - Operation kinds: `mount.pointingModel`
     - Requires: Mount; a plate solver; the camera is the Main Camera

@@ -46,6 +46,7 @@ export const OPERATION_LABELS: Readonly<Record<OperationKind, readonly [IconName
 	'camera.capture': ['camera', 'Capture'],
 	'focuser.autofocus': ['focuser', 'Auto Focus'],
 	'mount.tppa': ['mount', 'TPPA'],
+	'camera.ipolar': ['camera', 'iPolar'],
 	'mount.darv': ['mount', 'DARV'],
 	'camera.flatWizard': ['camera', 'Flat Wizard'],
 	'camera.darkLibraryWizard': ['camera', 'Dark Library Wizard'],

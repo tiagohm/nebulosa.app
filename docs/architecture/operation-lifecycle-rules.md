@@ -46,6 +46,6 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   both take them back inside the reservation as its guest.
 - Toolkit runners (the `GuiderClient` of a guiding session, `CameraCapturer` reports) keep their own state machines.
   The registry tracks what they hold; it does not replace their states.
-- The shared `CameraCapturer` of `api/src/captures.ts` (Camera Capture, Auto Focus, TPPA, DARV, Mount Pointing, Target Centering, Flat Wizard, Dark Library Wizard) allows `FRAME_TRANSFER_TIMEOUT` (10 min) for a frame's payload to arrive after its exposure, and for a stopped exposure to stop being Busy.
+- The shared `CameraCapturer` of `api/src/captures.ts` (Camera Capture, Auto Focus, TPPA, iPolar, DARV, Mount Pointing, Target Centering, Flat Wizard, Dark Library Wizard) allows `FRAME_TRANSFER_TIMEOUT` (10 min) for a frame's payload to arrive after its exposure, and for a stopped exposure to stop being Busy.
   INDI delivers in order, so a stop is answered only after the BLOB in transit, and an unbinned frame of a large sensor over a slow link takes minutes (an ASI294MM Pro frame of 124.8 MB in base64 took about 130 s at 1.2 MB/s).
   The camera stays held until then, and a frame that is really lost fails only after that time.

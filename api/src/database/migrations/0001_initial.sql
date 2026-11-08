@@ -192,7 +192,7 @@ CREATE TABLE profile_camera_settings (
 	saved_connection_id TEXT NOT NULL REFERENCES saved_connections (id) ON DELETE CASCADE,
 	device_id TEXT NOT NULL,
 	-- Form (ProfileCameraForm).
-	form TEXT NOT NULL CHECK (form IN ('exposure', 'acquisition', 'plateSolving', 'autoFocus', 'tppa', 'pointingModel', 'targetCentering', 'darv', 'flatWizard', 'darkLibraryWizard', 'liveStacking', 'guiding', 'display')),
+	form TEXT NOT NULL CHECK (form IN ('exposure', 'acquisition', 'plateSolving', 'autoFocus', 'tppa', 'ipolar', 'pointingModel', 'targetCentering', 'darv', 'flatWizard', 'darkLibraryWizard', 'liveStacking', 'guiding', 'display')),
 	-- Version of the shape of the value.
 	version INTEGER NOT NULL,
 	-- Value; null when reset to its default.

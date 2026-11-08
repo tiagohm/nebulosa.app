@@ -474,6 +474,8 @@ export interface CameraSettings {
 	autoFocus?: AutoFocusSettings
 	// TPPA form.
 	tppa?: TppaSettings
+	// iPolar form.
+	ipolar?: IPolarSettings
 	// Pointing Model Builder form.
 	pointingModel?: PointingModelSettings
 	// Target Centering form; absent until edited, and then DEFAULT_TARGET_CENTERING_SETTINGS holds.
@@ -556,6 +558,51 @@ export interface TppaSettings {
 	refinementDelay: number
 	// Whether the tracking the session starts on a mount that was not tracking is stopped when the session ends.
 	stopTracking: boolean
+}
+
+// iPolar form of one physical camera: how the next camera-based polar alignment calibrates and refines. The frames are
+// taken with the camera settings and solved with the plate solving settings of the camera, which this form never holds;
+// the site is the active observing site of the profile. Whether the mount is clear to turn is confirmed for each start
+// and never kept. Angles are in degrees and arcseconds and durations in seconds, as edited.
+export interface IPolarSettings {
+	// Exposure of each frame, in seconds; > 0.
+	exposureTime: number
+	// Whether the operator turns the RA axis by hand (manual) or the mount of the setup turns it (automatic).
+	mode: 'manual' | 'automatic'
+	// Direction of the automatic RA motion.
+	direction: 'WEST' | 'EAST'
+	// Name of the slew-rate preset of the automatic motion, checked again against the presets the mount announces when a
+	// session starts; absent before one was chosen.
+	slewRate?: string
+	// RA rotation the automatic motion aims at, in degrees, in [IPOLAR_MINIMUM_ROTATION, IPOLAR_MAXIMUM_ROTATION].
+	rotation: number
+	// Wait after the rotation and before the second exposure, in seconds; >= 0.
+	settleDelay: number
+	// Wait before each refinement exposure, in seconds; >= 0.
+	refinementDelay: number
+	// Total polar error a converging measurement stays within, in arcseconds; > 0. A target, not an accuracy.
+	completionThreshold: number
+	// Whether the rays and the target pole use the default atmosphere (the apparent pole) instead of the geometric pole.
+	refraction: boolean
+}
+
+// Smallest RA rotation of the iPolar form, in degrees: the least rotation the toolkit accepts between the poses.
+export const IPOLAR_MINIMUM_ROTATION = 10
+
+// Largest RA rotation of the iPolar form, in degrees: the most rotation the toolkit accepts between the poses.
+export const IPOLAR_MAXIMUM_ROTATION = 60
+
+// iPolar form of a camera that has none yet: 2 s frames, a manual rotation (30° aimed at when automatic), and a
+// 30″ target.
+export const DEFAULT_IPOLAR_SETTINGS: IPolarSettings = {
+	exposureTime: 2,
+	mode: 'manual',
+	direction: 'WEST',
+	rotation: 30,
+	settleDelay: 2,
+	refinementDelay: 1,
+	completionThreshold: 30,
+	refraction: true,
 }
 
 // Smallest RA rotation of the TPPA form, in degrees: the least rotation the server accepts between two poses.

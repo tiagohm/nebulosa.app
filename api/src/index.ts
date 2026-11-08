@@ -37,6 +37,7 @@ import { createImageStackingRoutes, ImageStacking } from './imagestacking'
 import { DEFAULT_IMAGE_STACKING_DIRECTORY, ImageStackingStore } from './imagestacking.store'
 import { createIndiRoutes, IndiPropertyService } from './indi'
 import { IndiMessageService } from './indimessages'
+import { createIPolarRoutes, IPolarSessions } from './ipolar'
 import { createJupiterRoutes, JupiterPlannerService } from './jupiter'
 import { JupiterGrsStore } from './jupiter.store'
 import { createLiveStackingRoutes, LiveStacking } from './livestacking'
@@ -740,6 +741,7 @@ export type {
 } from './mountpointing.sessions'
 export type { PointingAcquisitionState, PointingModelExport, PointingModelFile, PointingModelSummary, PointingMountIdentity, PointingOpticsFingerprint, PointingPlanRecord, PointingRevision, PointingSampleRecord, PointingVerification } from './mountpointing.store'
 export type { TppaAlignment, TppaAttempt, TppaCaptureSettings, TppaEvent, TppaGeometry, TppaOverlay, TppaPoint, TppaRequest, TppaSession, TppaSessionSummary, TppaSnapshot, TppaStartResponse, TppaState } from './tppa'
+export type { IPolarAttempt, IPolarCalibrationSummary, IPolarCaptureSettings, IPolarErrorCode, IPolarEvent, IPolarMeasurementSummary, IPolarOverlay, IPolarPose, IPolarRejectionSummary, IPolarRequest, IPolarSession, IPolarSessionSummary, IPolarSite, IPolarSnapshot, IPolarStartResponse, IPolarState } from './ipolar'
 export type {
 	TargetCenteringAttempt,
 	TargetCenteringCaptureSettings,
@@ -947,6 +949,10 @@ const autoFocus = new AutoFocusSessions(connections.devices, (id) => connections
 // TPPA sessions of the cameras of the open connections, rotating the mounts with the commander of the mount commands,
 // taking their frames with the capturer of the captures, and solving them with the plate solving service.
 const tppa = new TppaSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, publish)
+
+// iPolar sessions of the cameras of the open connections, rotating the mounts in automatic mode with the commander of
+// the mount commands, taking their frames with the capturer of the captures, and solving them with the plate solving service.
+const ipolar = new IPolarSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, publish)
 
 // Fits the pointing models on a worker of its own.
 const pointingModelFitter = new PointingModelFitter()
@@ -1263,6 +1269,7 @@ export const routes = {
 	...createCaptureRoutes(captures),
 	...createAutoFocusRoutes(autoFocus),
 	...createTppaRoutes(tppa),
+	...createIPolarRoutes(ipolar),
 	...createPointingModelRoutes(pointingModels),
 	...createMountPointingRoutes(mountPointing),
 	...createPointingActivationRoutes(pointingActivations),

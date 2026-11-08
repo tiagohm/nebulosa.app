@@ -40,6 +40,8 @@ import {
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 	type SkyFramingSettings,
 	DEFAULT_TPPA_SETTINGS,
+	DEFAULT_IPOLAR_SETTINGS,
+	type IPolarSettings,
 	DEFAULT_POINTING_MODEL_SETTINGS,
 	type PointingModelSettings,
 	DEFAULT_CAMERA_PLATE_SOLVING,
@@ -368,6 +370,16 @@ export function autoFocusSettings(settings: Pick<ProfileSettings, 'cameras'>, ca
 // Replaces fields of the Auto Focus form of a camera in the active profile.
 export function setAutoFocusSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<AutoFocusSettings>) {
 	setCameraForm(state, camera, 'autoFocus', autoFocusSettings(activeProfile(state).settings, camera), patch)
+}
+
+// Returns the iPolar form of a camera: the one edited last, or the defaults.
+export function ipolarSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<IPolarSettings> {
+	return cameraSettings(settings, camera)?.ipolar ?? DEFAULT_IPOLAR_SETTINGS
+}
+
+// Replaces fields of the iPolar form of a camera in the active profile.
+export function setIPolarSettings(state: ProfileState, camera: CameraIdentity | undefined, patch: Partial<IPolarSettings>) {
+	setCameraForm(state, camera, 'ipolar', ipolarSettings(activeProfile(state).settings, camera), patch)
 }
 
 // Returns the TPPA form of a camera: the one edited last, or the defaults.

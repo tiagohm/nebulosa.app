@@ -33,7 +33,7 @@ export type ProfilePreferenceKey =
 	| 'mountDither'
 
 // Form of a physical camera in a profile (profile_camera_settings).
-export type ProfileCameraForm = 'exposure' | 'acquisition' | 'plateSolving' | 'autoFocus' | 'tppa' | 'pointingModel' | 'targetCentering' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'liveStacking' | 'guiding' | 'display'
+export type ProfileCameraForm = 'exposure' | 'acquisition' | 'plateSolving' | 'autoFocus' | 'tppa' | 'ipolar' | 'pointingModel' | 'targetCentering' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'liveStacking' | 'guiding' | 'display'
 
 // Error codes of the workspace routes.
 export type WorkspaceErrorCode = 'conflict' | 'notFound' | 'lastProfile'

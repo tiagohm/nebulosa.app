@@ -6,6 +6,7 @@ import type { DarkLibraryWizardRuntime } from '../../camera/darklibrarywizard'
 import type { DarvRuntime } from '../../camera/darv'
 import type { FlatWizardRuntime } from '../../camera/flatwizard'
 import { GUIDING_STATE_LABELS, type GuidingRuntime, guidingRunning } from '../../camera/guiding'
+import type { IPolarRuntime } from '../../camera/ipolar'
 import type { TargetCenteringRuntime } from '../../camera/targetcentering'
 import type { TppaRuntime } from '../../camera/tppa'
 import type { SelectedConnectionStatus } from '../../connection/useSelectedConnection'
@@ -595,7 +596,7 @@ export interface InterruptibleSession {
 }
 
 // Tool whose session is ended to interrupt its operation.
-export type InterruptibleTool = 'autoFocus' | 'tppa' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'targetCentering' | 'mountPointing' | 'guiding'
+export type InterruptibleTool = 'autoFocus' | 'tppa' | 'ipolar' | 'darv' | 'flatWizard' | 'darkLibraryWizard' | 'targetCentering' | 'mountPointing' | 'guiding'
 
 // The one command that interrupts an operation: the stop of a device, the abort of a capture, or the end of a session.
 export type Interruption =
@@ -614,6 +615,7 @@ export interface InterruptionInput {
 	readonly guiding: Pick<GuidingRuntime, 'sessions'>
 	readonly autoFocus: Pick<AutoFocusRuntime, 'sessions'>
 	readonly tppa: Pick<TppaRuntime, 'sessions'>
+	readonly ipolar: Pick<IPolarRuntime, 'sessions'>
 	readonly darv: Pick<DarvRuntime, 'sessions'>
 	readonly flatWizard: Pick<FlatWizardRuntime, 'sessions'>
 	readonly darkLibraryWizard: Pick<DarkLibraryWizardRuntime, 'sessions'>
@@ -660,6 +662,8 @@ export function operationInterruption(operation: OperationRecord, input: Interru
 			return sessionInterruption('autoFocus', input.autoFocus.sessions, operationId)
 		case 'mount.tppa':
 			return sessionInterruption('tppa', input.tppa.sessions, operationId)
+		case 'camera.ipolar':
+			return sessionInterruption('ipolar', input.ipolar.sessions, operationId)
 		case 'camera.flatWizard':
 			return sessionInterruption('flatWizard', input.flatWizard.sessions, operationId)
 		case 'camera.darkLibraryWizard':

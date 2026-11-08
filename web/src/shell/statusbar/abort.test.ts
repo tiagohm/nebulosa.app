@@ -99,17 +99,27 @@ describe('abort of an operation', () => {
 		const control = stores().control
 		control.states.focuser.f1 = { id: 'f1', connectionId: 'A', connected: true, canAbort: true } as FocuserState
 		const session = { sessionId: 's', operationId: 'tppa', camera: { connectionId: 'A', deviceId: 'c1' } }
+		const ipolar = { sessionId: 'i', operationId: 'ipolar', camera: { connectionId: 'A', deviceId: 'c2' } }
 
 		return {
 			...stores(),
 			control,
 			operations: {
-				operations: { slew: running('slew', 'mount.slew', 'm1'), focus: running('focus', 'focuser.move', 'f1'), capture: running('capture', 'camera.capture', 'c1'), tppa: running('tppa', 'mount.tppa', 'c1'), wheel: running('wheel', 'wheel.move', 'w1'), other: running('other', 'focuser.move', 'f1', 'B') },
+				operations: {
+					slew: running('slew', 'mount.slew', 'm1'),
+					focus: running('focus', 'focuser.move', 'f1'),
+					capture: running('capture', 'camera.capture', 'c1'),
+					tppa: running('tppa', 'mount.tppa', 'c1'),
+					ipolar: running('ipolar', 'camera.ipolar', 'c2'),
+					wheel: running('wheel', 'wheel.move', 'w1'),
+					other: running('other', 'focuser.move', 'f1', 'B'),
+				},
 			},
 			captures: { sessions: { 'A:c1': { operationId: 'capture', connectionId: 'A', deviceId: 'c1' } }, pending: {}, errors: {} } as unknown as CaptureRuntime,
 			guiding: tool(),
 			autoFocus: tool(),
 			tppa: tool({ 'A:c1': session }),
+			ipolar: tool({ 'A:c2': ipolar }),
 			darv: tool(),
 			flatWizard: tool(),
 			darkLibraryWizard: tool(),
@@ -124,6 +134,7 @@ describe('abort of an operation', () => {
 			['focus', '/api/connections/A/focusers/f1/stop'],
 			['capture', '/api/connections/A/cameras/c1/capture/stop'],
 			['tppa', '/api/tppa/s/stop'],
+			['ipolar', '/api/ipolar/i/stop'],
 		] as const) {
 			const { calls, request } = recorder()
 			expect(await abortOperation(id, operationStores(), request)).toBe(true)

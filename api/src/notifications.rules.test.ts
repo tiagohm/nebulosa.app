@@ -6,6 +6,7 @@ import type { DarkLibraryWizardSessionSummary } from './darklibrarywizard'
 import type { DarvMeasurement, DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingSessionSummary } from './guiding'
+import type { IPolarSessionSummary } from './ipolar'
 import type { MeridianFlipTransition } from './meridianflip'
 import type { MeridianFlipExecution } from './meridianflipexecutor'
 import { failureText, NotificationClassifier } from './notifications.rules'
@@ -27,6 +28,10 @@ function autoFocus(session: Partial<AutoFocusSessionSummary>): ServerEvent {
 
 function tppa(session: Partial<TppaSessionSummary>): ServerEvent {
 	return { type: 'tppa:updated', session: { sessionId: 't1', operationId: 'o3', camera, cameraName: 'CCD', mount, mountName: 'Mount', state: 'capturing', ...session } as TppaSessionSummary }
+}
+
+function ipolar(session: Partial<IPolarSessionSummary>): ServerEvent {
+	return { type: 'ipolar:updated', session: { sessionId: 'i1', operationId: 'o9', camera, cameraName: 'CCD', state: 'capturing', convergence: { streak: 0, converged: false }, ...session } as IPolarSessionSummary }
 }
 
 function targetCentering(session: Partial<TargetCenteringSessionSummary>): ServerEvent {
@@ -101,6 +106,16 @@ test('reports Auto Focus and TPPA transitions', () => {
 	expect(classifier.classify(tppa({ state: 'failed', reason: 'timeout' }))[0]).toMatchObject({ key: 'tppa:t1', code: 'tppa.failed' })
 })
 
+test('reports iPolar ready to refine, within its target, and failed, never a cancellation', () => {
+	const classifier = new NotificationClassifier()
+	expect(classifier.classify(ipolar({ state: 'readyToRefine' }))[0]).toMatchObject({ key: 'ipolar.ready:i1', level: 'info', code: 'ipolar.readyToRefine', target: { tool: 'ipolar', deviceId: 'cam' } })
+	expect(classifier.classify(ipolar({ state: 'refining' }))).toEqual([])
+	expect(classifier.classify(ipolar({ state: 'refining', convergence: { streak: 3, converged: true } }))[0]).toMatchObject({ key: 'ipolar.converged:i1', code: 'ipolar.converged' })
+	expect(classifier.classify(ipolar({ state: 'completed' }))).toEqual([])
+	expect(classifier.classify(ipolar({ state: 'cancelled', reason: 'aborted' }))).toEqual([])
+	expect(classifier.classify(ipolar({ state: 'failed', reason: 'unexpectedState', error: 'the second pose was rejected: wrongAxis' }))[0]).toMatchObject({ key: 'ipolar:i1', code: 'ipolar.failed', level: 'error' })
+})
+
 test('reports a blocked mount and the outcome of a centering, never a measurement out of tolerance or a stop', () => {
 	const classifier = new NotificationClassifier()
 	expect(classifier.classify(targetCentering({ state: 'completed', positionVerified: true, readyForImaging: true }))[0]).toMatchObject({ key: 'targetCentering:c1', level: 'success', code: 'targetCentering.completed', target: { kind: 'cameraTool', tool: 'target-centering' } })
@@ -152,7 +167,7 @@ test('reports failures of the listed device operations only', () => {
 	expect(classifier.classify(operation({ state: 'succeeded', reason: undefined }))).toEqual([])
 	expect(classifier.classify(operation({ reason: 'aborted' }))).toEqual([])
 
-	for (const kind of ['camera.capture', 'focuser.autofocus', 'mount.tppa', 'mount.darv', 'camera.flatWizard', 'camera.darkLibraryWizard', 'camera.guiding', 'guideOutput.guiding', 'mount.nudge', 'guideOutput.pulse', 'indi.propertyWrite'] as const) {
+	for (const kind of ['camera.capture', 'focuser.autofocus', 'mount.tppa', 'camera.ipolar', 'mount.darv', 'camera.flatWizard', 'camera.darkLibraryWizard', 'camera.guiding', 'guideOutput.guiding', 'mount.nudge', 'guideOutput.pulse', 'indi.propertyWrite'] as const) {
 		expect(classifier.classify(operation({ kind }))).toEqual([])
 	}
 })

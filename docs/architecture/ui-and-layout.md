@@ -30,7 +30,7 @@ Shell (`web/src/shell/ApplicationShell.tsx`), always mounted while navigating:
   The server link, the Meridian Flip Monitor, the failures, the details button, and the first operation are never left out.
   An Abort is offered only while the event socket is online, and it sends the one command that interrupts that operation (`operationInterruption`, see [Operation Lifecycle Rules](operation-lifecycle-rules.md)): the `/stop` of its mount, focuser, rotator, dome, cover, or guide output, while the control store mirrors its connection and the driver reports it connected and able to abort;
   the abort of a capture, or its stop after the exposure on a camera that cannot abort;
-  and the stop of the session of Guiding, Auto Focus, TPPA, DARV, Flat Wizard, Dark Library Wizard, Target Centering, or the Pointing Model Builder and its verification, found by exact operation id, which ends that session keeping what it did.
+  and the stop of the session of Guiding, Auto Focus, TPPA, iPolar, DARV, Flat Wizard, Dark Library Wizard, Target Centering, or the Pointing Model Builder and its verification, found by exact operation id, which ends that session keeping what it did.
   A filter wheel change and an INDI property write have none.
   A motion of the profile's mount that no operation holds, reported by the driver as a goto, a manual axis motion, parking, or homing, shows as an operation of its own with its Abort.
   The click decides again from the live stores (`abortOperation`, `abortProfileMount`), so a profile, connection, or role switch after the render sends nothing;

@@ -133,6 +133,7 @@ const CAMERA_FORMS: Readonly<Record<keyof CameraSettings, ProfileCameraForm>> = 
 	plateSolving: 'plateSolving',
 	autoFocus: 'autoFocus',
 	tppa: 'tppa',
+	ipolar: 'ipolar',
 	pointingModel: 'pointingModel',
 	targetCentering: 'targetCentering',
 	darv: 'darv',

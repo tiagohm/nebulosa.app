@@ -484,7 +484,7 @@ describe('interruption of an operation', () => {
 		const control = newControlRuntime()
 		control.watched = 'A'
 		Object.assign(control.states, states)
-		return { link: 'online', control, captures: empty, guiding: empty, autoFocus: empty, tppa: empty, darv: empty, flatWizard: empty, darkLibraryWizard: empty, targetCentering: empty, mountPointing: empty } as Parameters<typeof operationInterruption>[1]
+		return { link: 'online', control, captures: empty, guiding: empty, autoFocus: empty, tppa: empty, ipolar: empty, darv: empty, flatWizard: empty, darkLibraryWizard: empty, targetCentering: empty, mountPointing: empty } as Parameters<typeof operationInterruption>[1]
 	}
 
 	test('a motion stops its device, when the driver reports it can', () => {
@@ -513,6 +513,7 @@ describe('interruption of an operation', () => {
 		const session = { sessionId: 's', operationId: 'op', camera: { connectionId: 'A', deviceId: 'c1' }, measurements: [{ operationId: 'measure' }] }
 		const sessions = { sessions: { 'A:c1': session } } as never
 		expect(operationInterruption(operation('op', 'mount.tppa', 'A', 'c1'), { ...input(), tppa: sessions })).toMatchObject({ type: 'session', tool: 'tppa' })
+		expect(operationInterruption(operation('op', 'camera.ipolar', 'A', 'c1'), { ...input(), ipolar: sessions })).toMatchObject({ type: 'session', tool: 'ipolar' })
 		expect(operationInterruption(operation('op', 'camera.guiding', 'A', 'c1'), { ...input(), guiding: sessions })).toMatchObject({ type: 'session', tool: 'guiding' })
 		expect(operationInterruption(operation('measure', 'mount.darv', 'A', 'c1'), { ...input(), darv: sessions })).toMatchObject({ type: 'session', tool: 'darv' })
 		expect(operationInterruption(operation('other', 'mount.tppa', 'A', 'c1'), { ...input(), tppa: sessions })).toBeUndefined()

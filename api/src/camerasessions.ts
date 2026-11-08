@@ -1,7 +1,7 @@
 import type { OperationRegistry } from './operations'
 
-// Bookkeeping shared by the sessions of the camera operations (Auto Focus, TPPA, Target Centering, Flat Wizard, Dark
-// Library Wizard, Guiding): the latest session of each camera, which the snapshot lists and the routes of a session id
+// Bookkeeping shared by the sessions of the camera operations (Auto Focus, TPPA, iPolar, Target Centering, Flat Wizard,
+// Dark Library Wizard, Guiding): the latest session of each camera, which the snapshot lists and the routes of a session id
 // find, the session each operation started, so a repeated start token answers it, and the publication of a changed
 // summary with the next revision, only while the session is still the latest of its camera, so a session replaced by a
 // newer one changes silently. What a session holds, runs, and answers belongs to its service. It serves the sessions run

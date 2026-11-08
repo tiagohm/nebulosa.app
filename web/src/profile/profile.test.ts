@@ -36,9 +36,11 @@ import {
 	profileCamera,
 	setAutoFocusSettings,
 	setExposureSettings,
+	setIPolarSettings,
 	setTppaSettings,
 	setCameraPlateSolving,
 	tppaSettings,
+	ipolarSettings,
 	darvSettings,
 	flatWizardSettings,
 	guidingSettings,
@@ -123,6 +125,7 @@ import {
 	DEFAULT_MOUNT_DITHER_SETTINGS,
 	DEFAULT_MOUNT_REMOTE_BINDINGS,
 	DEFAULT_TPPA_SETTINGS,
+	DEFAULT_IPOLAR_SETTINGS,
 	DEFAULT_TARGET_CENTERING_SETTINGS,
 	FRAMING_REFERENCES_MAXIMUM,
 	type FramingReference,
@@ -516,6 +519,17 @@ describe('camera forms', () => {
 
 		const reloaded = state.profiles[0].settings
 		expect(tppaSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_TPPA_SETTINGS, direction: 'EAST', slewRate: 'SPEED_4', rotation: 10 })
+	})
+
+	test('the iPolar form is kept per camera and persisted', () => {
+		const state = load()
+		expect(ipolarSettings(activeProfile(state).settings, MAIN)).toEqual(DEFAULT_IPOLAR_SETTINGS)
+
+		setIPolarSettings(state, MAIN, { mode: 'automatic', slewRate: 'SPEED_4', rotation: 25, completionThreshold: 20 })
+		expect(ipolarSettings(activeProfile(state).settings, GUIDE)).toEqual(DEFAULT_IPOLAR_SETTINGS)
+
+		const reloaded = state.profiles[0].settings
+		expect(ipolarSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_IPOLAR_SETTINGS, mode: 'automatic', slewRate: 'SPEED_4', rotation: 25, completionThreshold: 20 })
 	})
 
 	test('the plate solving settings belong to the camera and keep the scale tolerance', () => {

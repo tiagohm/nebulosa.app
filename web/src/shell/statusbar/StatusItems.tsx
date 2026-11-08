@@ -8,6 +8,7 @@ import { darkLibraryWizardRuntime } from '../../camera/darklibrarywizard'
 import { darvRuntime } from '../../camera/darv'
 import { flatWizardRuntime } from '../../camera/flatwizard'
 import { guidingRuntime } from '../../camera/guiding'
+import { ipolarRuntime } from '../../camera/ipolar'
 import { targetCenteringRuntime } from '../../camera/targetcentering'
 import { tppaRuntime } from '../../camera/tppa'
 import { connectionState } from '../../connection/connection'
@@ -57,6 +58,7 @@ const ABORT_STORES: OperationAbortStores = {
 	guiding: guidingRuntime,
 	autoFocus: autoFocusRuntime,
 	tppa: tppaRuntime,
+	ipolar: ipolarRuntime,
 	darv: darvRuntime,
 	flatWizard: flatWizardRuntime,
 	darkLibraryWizard: darkLibraryWizardRuntime,
@@ -72,13 +74,14 @@ export function useOperationAbortable() {
 	const guiding = useSnapshot(guidingRuntime)
 	const autoFocus = useSnapshot(autoFocusRuntime)
 	const tppa = useSnapshot(tppaRuntime)
+	const ipolar = useSnapshot(ipolarRuntime)
 	const darv = useSnapshot(darvRuntime)
 	const flatWizard = useSnapshot(flatWizardRuntime)
 	const darkLibraryWizard = useSnapshot(darkLibraryWizardRuntime)
 	const targetCentering = useSnapshot(targetCenteringRuntime)
 	const mountPointing = useSnapshot(mountPointingRuntime)
 
-	return (operation: OperationRecord) => operationInterruption(operation, { link, control, captures, guiding, autoFocus, tppa, darv, flatWizard, darkLibraryWizard, targetCentering, mountPointing }) !== undefined
+	return (operation: OperationRecord) => operationInterruption(operation, { link, control, captures, guiding, autoFocus, tppa, ipolar, darv, flatWizard, darkLibraryWizard, targetCentering, mountPointing }) !== undefined
 }
 
 interface ServerLinkItemProps {

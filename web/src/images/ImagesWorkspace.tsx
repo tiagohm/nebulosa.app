@@ -13,6 +13,7 @@ import { FocusCurve } from '../camera/FocusCurve'
 import { GUIDING_STATE_LABELS, guidingRuntime, selectGuidingTarget } from '../camera/guiding'
 import { GuidingGraphs } from '../camera/GuidingGraphs'
 import { GuidingOverlay, useGuidingOverlay } from '../camera/GuidingOverlay'
+import { IPolarOverlay, useIPolarOverlay } from '../camera/IPolarOverlay'
 import { useTargetCenteringOverlay } from '../camera/targetcentering.overlay'
 import { TppaOverlay, useTppaOverlay } from '../camera/TppaOverlay'
 import { FileExplorerModal } from '../files/FileExplorerModal'
@@ -170,6 +171,7 @@ export function ImagesWorkspace() {
 	const grid = view?.plateSolving.grid ? solution : undefined
 	const camera = useCameraOperationContext(document)
 	const guide = useTppaOverlay(document)
+	const ipolar = useIPolarOverlay(document)
 	const centering = useTargetCenteringOverlay(document)
 	const trails = useDarvOverlay(document)
 	const guiding = useGuidingOverlay(document)
@@ -181,7 +183,7 @@ export function ImagesWorkspace() {
 	const starProfiling = tool === 'star-profile'
 	const starProfile = starProfiling ? starProfileOf(view, imageInfo?.id) : undefined
 	const profileSettings = starProfileSettings(activeProfile(profiles).settings)
-	const hasOverlays = [markers, lines, solution, annotation, reticle, guide, centering, trails, guiding, starProfile].some(Boolean)
+	const hasOverlays = [markers, lines, solution, annotation, reticle, guide, ipolar, centering, trails, guiding, starProfile].some(Boolean)
 	const overlaysHidden = view?.overlaysHidden === true
 	const astrometryTool = useAstrometryTool({
 		documentKey: document?.key,
@@ -243,6 +245,7 @@ export function ImagesWorkspace() {
 											{centered && <WcsOverlay solution={centered} image={size} view={overlay} marker={view.plateSolving.overlay} arrows={astrometry.orientation === 'center'} />}
 											{annotation && <AnnotationOverlay projection={annotation} view={overlay} state={view.annotation} selected={selectedAnnotation} />}
 											{guide && <TppaOverlay geometry={guide} view={overlay} />}
+											{ipolar && <IPolarOverlay overlay={ipolar.overlay} stale={ipolar.stale} view={overlay} />}
 											{trails && <DarvOverlay trails={trails} view={overlay} />}
 											{guiding && <GuidingOverlay overlay={guiding.overlay} view={overlay} />}
 											{lines && <StreakOverlay result={lines} view={overlay} labels={view.streaks.labels} selected={selectedStreak} />}

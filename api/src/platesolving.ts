@@ -51,7 +51,7 @@ export interface PlateSolveRequest {
 	readonly downsample?: number
 }
 
-// Who asked for a plate solve: a person, in Images, or the solve of a TPPA, mount pointing, or Target Centering frame.
+// Who asked for a plate solve: a person, in Images, or the solve of a TPPA, iPolar, mount pointing, or Target Centering frame.
 export type PlateSolveOrigin =
 	| { readonly kind: 'manual' }
 	| {
@@ -66,6 +66,19 @@ export type PlateSolveOrigin =
 			readonly frameId: string
 			// Pose being acquired (1, 2 or 3), absent for a refinement frame.
 			readonly point?: 1 | 2 | 3
+	  }
+	| {
+			readonly kind: 'ipolar'
+			// Id of the iPolar session.
+			readonly sessionId: string
+			// Id of the open connection that provides the camera.
+			readonly connectionId: string
+			// Exact id of the camera.
+			readonly deviceId: string
+			// Identity of the frame: the session id and the frame ordinal.
+			readonly frameId: string
+			// Step of the frame: the reference pose, the second-pose candidate, or a refinement frame.
+			readonly step: 'reference' | 'second' | 'refinement'
 	  }
 	| {
 			readonly kind: 'mountPointing'

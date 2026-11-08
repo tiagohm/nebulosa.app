@@ -2,6 +2,7 @@ import type { CaptureFrameOrigin, CaptureFrameSummary, ImageAcquisition, ImageIn
 import { useSnapshot } from 'valtio'
 import { autoFocusFrameFocus, autoFocusRuntime } from '../camera/autofocus'
 import { DARV_AXIS_LABELS, DARV_DIRECTION_LABELS, DARV_STATUS_LABELS, darvFrameMeasurement, darvRuntime, formatDarvDrift } from '../camera/darv'
+import { ipolarFrameRole, ipolarRuntime } from '../camera/ipolar'
 import { liveAcquisitionLabel, liveCalibrationLabel } from '../camera/livestacking'
 import { tppaFrameRole, tppaRuntime } from '../camera/tppa'
 import { connectionState } from '../connection/connection'
@@ -129,11 +130,22 @@ interface CapturedFrameProps {
 }
 
 // Labels of the operations that take frames.
-const ORIGIN_LABELS: Readonly<Record<CaptureFrameOrigin, string>> = { capture: 'Acquisition', autofocus: 'Auto Focus', tppa: 'TPPA', mountPointing: 'Pointing Model', targetCentering: 'Target Centering', darv: 'DARV', flatWizard: 'Flat Wizard', darkLibraryWizard: 'Dark Library Wizard', guiding: 'Guiding' }
+const ORIGIN_LABELS: Readonly<Record<CaptureFrameOrigin, string>> = {
+	capture: 'Acquisition',
+	autofocus: 'Auto Focus',
+	tppa: 'TPPA',
+	ipolar: 'iPolar',
+	mountPointing: 'Pointing Model',
+	targetCentering: 'Target Centering',
+	darv: 'DARV',
+	flatWizard: 'Flat Wizard',
+	darkLibraryWizard: 'Dark Library Wizard',
+	guiding: 'Guiding',
+}
 
 // Camera, origin, session, and storage of the frame a camera tab shows, as the capture frame registry describes it,
-// and, for an Auto Focus frame, its measurement and the focuser position its session recorded, for a TPPA frame,
-// the step of its session it was taken for, and for a DARV frame, the settings and outcome of its measurement.
+// and, for an Auto Focus frame, its measurement and the focuser position its session recorded, for a TPPA or iPolar
+// frame, the step of its session it was taken for, and for a DARV frame, the settings and outcome of its measurement.
 function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 	const connections = useSnapshot(connectionState)
 	const autoFocus = useSnapshot(autoFocusRuntime)
@@ -141,6 +153,8 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 	const focus = frame.origin === 'autofocus' ? autoFocusFrameFocus(autoFocus.details[frame.sessionId], frame) : undefined
 	const tppa = useSnapshot(tppaRuntime)
 	const role = frame.origin === 'tppa' ? tppaFrameRole(tppa.details[frame.sessionId], frame) : undefined
+	const ipolar = useSnapshot(ipolarRuntime)
+	const ipolarRole = frame.origin === 'ipolar' ? ipolarFrameRole(ipolar.details[frame.sessionId], frame) : undefined
 	const darv = useSnapshot(darvRuntime)
 	const drift =
 		frame.origin === 'darv'
@@ -175,6 +189,16 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 							</span>
 						</DataRow>
 						<DataRow label="Step">{role ? (role.point !== undefined ? `Point ${role.point}/3` : role.refinement ? 'Refinement' : 'Rejected candidate') : MISSING}</DataRow>
+					</>
+				)}
+				{frame.origin === 'ipolar' && (
+					<>
+						<DataRow label="iPolar session">
+							<span title={frame.sessionId} className="block truncate">
+								{frame.sessionId}
+							</span>
+						</DataRow>
+						<DataRow label="Step">{ipolarRole ? (ipolarRole.pose === 1 ? 'Reference pose' : ipolarRole.pose === 2 ? 'Second pose' : ipolarRole.refinement ? 'Refinement' : 'Rejected candidate') : MISSING}</DataRow>
 					</>
 				)}
 				{frame.origin === 'mountPointing' && (

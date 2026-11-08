@@ -4,6 +4,7 @@ import { type DarkLibraryWizardRuntime, stopDarkLibraryWizard } from '../../came
 import { abortDarv, type DarvRuntime } from '../../camera/darv'
 import { type FlatWizardRuntime, stopFlatWizard } from '../../camera/flatwizard'
 import { type GuidingRuntime, stopGuidingSession } from '../../camera/guiding'
+import { type IPolarRuntime, stopIPolar } from '../../camera/ipolar'
 import { stopTargetCentering, type TargetCenteringRuntime } from '../../camera/targetcentering'
 import { stopTppa, type TppaRuntime } from '../../camera/tppa'
 import type { ConnectionState } from '../../connection/connection'
@@ -62,6 +63,7 @@ export interface OperationAbortStores extends MountAbortStores {
 	readonly guiding: GuidingRuntime
 	readonly autoFocus: AutoFocusRuntime
 	readonly tppa: TppaRuntime
+	readonly ipolar: IPolarRuntime
 	readonly darv: DarvRuntime
 	readonly flatWizard: FlatWizardRuntime
 	readonly darkLibraryWizard: DarkLibraryWizardRuntime
@@ -97,6 +99,9 @@ async function interrupt(interruption: Interruption, stores: OperationAbortStore
 		case 'tppa':
 			await stopTppa(stores.tppa, session, request)
 			return stores.tppa.errors[key]
+		case 'ipolar':
+			await stopIPolar(stores.ipolar, session, request)
+			return stores.ipolar.errors[key]
 		case 'darv':
 			await abortDarv(stores.darv, session, request)
 			return stores.darv.errors[key]

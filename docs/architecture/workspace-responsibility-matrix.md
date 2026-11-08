@@ -8,7 +8,7 @@ Workspaces share services, not interfaces.
 - **Images**
     - Responsibility: Documents, image work, and the camera operations of camera tabs
     - Features: Image Tools: Image Inspector, Plate Solving, Star Detection, Star Profile Inspector, Streak Detection, Annotation, Image Processing.
-      Camera Operations: Camera Acquisition (labeled Acquisition), Live Stacking, Auto Focus, Mount Nudge, Guiding, DARV, TPPA, Pointing Model Builder, Target Centering, Flat Wizard, Dark Library Wizard
+      Camera Operations: Camera Acquisition (labeled Acquisition), Live Stacking, Auto Focus, Mount Nudge, Guiding, DARV, TPPA, iPolar, Pointing Model Builder, Target Centering, Flat Wizard, Dark Library Wizard
     - Registry: `IMAGE_TOOL_DEFINITIONS` (`web/src/images/tools.ts`)
 - **Sky**
     - Responsibility: Exploration, planning, contextual mount control
@@ -71,6 +71,12 @@ Rules:
   the camera settings are the camera's shared block, shown as for Auto Focus.
   The session state shows the progress of the frame being exposed (`FrameProgress`; a refinement frame once the driver reports it) and whether the tracking the session started was stopped or left on.
   Its frames are shown by the tab's Latest with the correction guide (`web/src/camera/TppaOverlay.tsx`) over the frame the latest estimate was solved on; the Image Inspector names the step of a TPPA frame (pose, rejected candidate, refinement).
+- iPolar is a camera operation of a camera tab too (`web/src/images/IPolarTool.tsx`, over `IPolarSections` of `web/src/camera/IPolarPanel.tsx`, store `web/src/camera/ipolar.ts`).
+  It aligns with the tab's camera; the setup's `MOUNT` is used when ready and needed only for the automatic rotation, where a mount it can never turn (`ipolarMountSupport`) is `unsupported` and offers Equipment Setup.
+  `ipolarBlocker` judges a start: a manual one needs the camera, the active observing site, and the plate solver, and is blocked by the mount only while another operation holds it; an automatic one also needs the mount ready, a preset it announces, unparked, and the clearance checkbox, which is asked for every start and never kept.
+  The form (mode, direction, slew rate, rotation, settle and refinement delays, target error, refraction) is the camera's and shows the values applied while a session runs; the site is shown read-only from the profile.
+  The controls follow the session: Rotation Done while it waits for a manual rotation, Start, Resume, or Pause Refinement, Finish once calibrated, and Stop; the polar error shows the signed on-sky components, marks a measurement a later frame left stale, and shows the convergence streak.
+  Its frames are shown by the tab's Latest with the axis and pole markers (`web/src/camera/IPolarOverlay.tsx`) over the frame the latest measurement belongs to, dimmed when stale; the Image Inspector names the step of an iPolar frame (reference pose, second pose, rejected candidate, refinement).
 - DARV is a camera operation of a camera tab too (`web/src/images/DarvTool.tsx`, over `DarvSections` of `web/src/camera/DarvPanel.tsx`, store `web/src/camera/darv.ts`).
   It measures with the tab's camera and the setup's `MOUNT`;
   a mount DARV can never use (alt-az, no west-east motion or abort, no slew-rate preset: `darvMountSupport`) is `unsupported` and offers Equipment Setup, and `darvBlocker` judges a start (mount state known, a preset the mount announces, unparked, tracking or able to switch tracking; no site or plate solver is needed).

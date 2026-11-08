@@ -7,6 +7,7 @@ import type { DarkLibraryWizardSessionSummary } from './darklibrarywizard'
 import type { DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingEventRecord, GuidingSessionSummary } from './guiding'
+import type { IPolarSessionSummary } from './ipolar'
 import type { MeridianFlipTransition } from './meridianflip'
 import type { MeridianFlipExecution } from './meridianflipexecutor'
 import type { MeridianFlipExecutorErrorCode } from './meridianflipexecutor.policy'
@@ -32,7 +33,7 @@ import type { ServerEvent } from './websocket'
 export type NotificationLevel = 'info' | 'success' | 'warning' | 'error'
 
 // Camera tool a notification can open, named as the Images workspace names it.
-export type NotificationCameraTool = 'camera-acquisition' | 'auto-focus' | 'guiding' | 'tppa' | 'pointing-model-builder' | 'target-centering' | 'darv' | 'flat-wizard' | 'dark-library-wizard'
+export type NotificationCameraTool = 'camera-acquisition' | 'auto-focus' | 'guiding' | 'tppa' | 'ipolar' | 'pointing-model-builder' | 'target-centering' | 'darv' | 'flat-wizard' | 'dark-library-wizard'
 
 // Context a notification can open in the UI; opening it never commands a device.
 export type NotificationTarget =
@@ -62,7 +63,7 @@ export type NotificationTarget =
 
 // What a notification is about.
 export interface NotificationSource {
-	// Service that reported the occurrence: connection, capture, autofocus, tppa, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, meridianFlip (the Monitor and the Executor), operation, or indi (a global message of an INDI server).
+	// Service that reported the occurrence: connection, capture, autofocus, tppa, ipolar, mountPointing, targetCentering, flatWizard, darkLibraryWizard, calibrationLibrary, guiding, darv, meridianFlip (the Monitor and the Executor), operation, or indi (a global message of an INDI server).
 	readonly kind: string
 	// Id of the connection involved; absent for an application-wide notification.
 	readonly connectionId?: string
@@ -213,6 +214,8 @@ export class NotificationClassifier {
 				return this.#autoFocus(event.session)
 			case 'tppa:updated':
 				return this.#tppa(event.session)
+			case 'ipolar:updated':
+				return this.#ipolar(event.session)
 			case 'mountPointing:updated':
 				return this.#mountPointing(event.session)
 			case 'targetCentering:updated':
@@ -373,6 +376,19 @@ export class NotificationClassifier {
 
 		if (state === 'readyToRefine') return [{ key: `tppa.ready:${sessionId}`, level: 'info', code: 'tppa.readyToRefine', title: 'TPPA ready to refine', message: `The polar error of ${mountName} was estimated; adjust the mount while TPPA refines it.`, source, target }]
 		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ key: `tppa:${sessionId}`, level: 'error', code: 'tppa.failed', title: 'TPPA failed', message: `TPPA with ${mountName} failed: ${failureText(reason, session.error)}.`, source, target }]
+		return []
+	}
+
+	// Reports an iPolar ready to refine, within its requested threshold (once per session), or failed; it never claims an
+	// accuracy beyond that threshold.
+	#ipolar(session: IPolarSessionSummary): NotificationDraft[] {
+		const { sessionId, camera, cameraName, state, reason } = session
+		const source = this.#source('ipolar', camera.connectionId, camera.deviceId, session.operationId, sessionId)
+		const target = cameraTool(camera.connectionId, camera.deviceId, 'ipolar')
+
+		if (state === 'readyToRefine') return [{ key: `ipolar.ready:${sessionId}`, level: 'info', code: 'ipolar.readyToRefine', title: 'iPolar ready to refine', message: `The RA axis seen by ${cameraName} was calibrated; start the refinement and adjust the mount base.`, source, target }]
+		if (state === 'refining' && session.convergence.converged) return [{ key: `ipolar.converged:${sessionId}`, level: 'info', code: 'ipolar.converged', title: 'iPolar within the target', message: `The polar error measured by ${cameraName} stayed within the requested threshold.`, source, target }]
+		if (state === 'failed' && !this.#quiet(camera.connectionId, reason)) return [{ key: `ipolar:${sessionId}`, level: 'error', code: 'ipolar.failed', title: 'iPolar failed', message: `iPolar with ${cameraName} failed: ${failureText(reason, session.error)}.`, source, target }]
 		return []
 	}
 

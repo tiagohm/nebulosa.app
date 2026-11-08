@@ -2,14 +2,14 @@
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- `CaptureFrameRegistry` (`api/src/captureframes.ts`) indexes the frames of Camera Capture, Auto Focus, TPPA, Mount Pointing, Target Centering, DARV, Flat Wizard, Dark Library Wizard, and Guiding by physical camera (connection id + device id, never a role, profile, tool, or operation).
-  A frame is identified by its `frameId` (`sessionId:generation`, the session that took it and the frame number within it), the acquisition, and its `origin` (`capture`, `autofocus`, `tppa`, `mountPointing`, `targetCentering`, `darv`, `flatWizard`, `darkLibraryWizard`, or `guiding`) names the operation that took it;
+- `CaptureFrameRegistry` (`api/src/captureframes.ts`) indexes the frames of Camera Capture, Auto Focus, TPPA, iPolar, Mount Pointing, Target Centering, DARV, Flat Wizard, Dark Library Wizard, and Guiding by physical camera (connection id + device id, never a role, profile, tool, or operation).
+  A frame is identified by its `frameId` (`sessionId:generation`, the session that took it and the frame number within it), the acquisition, and its `origin` (`capture`, `autofocus`, `tppa`, `ipolar`, `mountPointing`, `targetCentering`, `darv`, `flatWizard`, `darkLibraryWizard`, or `guiding`) names the operation that took it;
   its `imageId` is only the document currently holding its pixels, and a saved frame reopened from its file gets a new one.
   Frames are ordered by a registry-wide `sequence`, never by time, and every change carries a `revision` so a late event never replaces a newer state.
   Every producer shares one latest frame per camera, ordered by the order the registry received them, never by their session numbering, and a write completing late never takes the latest frame back.
   Auto Focus records every sampled and verification frame it decoded, before it is measured and whether or not an HFD could be measured;
   its files are auxiliary and deleted, so its frames are never saved, and only become the latest frame and then transient frames.
-  TPPA records its poses and refinement frames the same way, before they are solved, Mount Pointing each sample frame, Target Centering each frame it measures, and DARV the frame of each measurement, before it is analyzed.
+  TPPA and iPolar record their poses and refinement frames the same way, before they are solved, Mount Pointing each sample frame, Target Centering each frame it measures, and DARV the frame of each measurement, before it is analyzed.
   Guiding records only the newest guide frame it previewed, which is never saved.
   Flat Wizard records every trial and final frame from its staging file before it is measured;
   an accepted frame becomes saved through `published()`, the only change of a frame's path, which names the final file it was published under (a frame the registry does not know is recorded from that file), while trial and rejected frames stay previewed only and become transient.
@@ -60,7 +60,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   then the frame, its document, and its renderings are committed together, zoom and pan are adapted to its size (`adaptView` in `web/src/viewer/transform.ts`), the selected star, the star of the Star Profile Inspector, and the solution are cleared, and the previous lease is released.
   A frame asked for later supersedes one still opening, whose lease and renderings are released.
   Settings being edited in a popup of the viewer toolbar are never applied by a frame change.
-  Overlays and results follow the image id of the frame shown, and the Image Inspector shows its camera, connection, origin, frame, storage state, and why it is shown, with the session of an Auto Focus, TPPA, Mount Pointing, or DARV frame and what it was taken for: the measurement or verification and the focuser position its Auto Focus session recorded (`autoFocusFrameFocus`; nothing when not recorded yet), the TPPA step, or the DARV measurement and its result.
+  Overlays and results follow the image id of the frame shown, and the Image Inspector shows its camera, connection, origin, frame, storage state, and why it is shown, with the session of an Auto Focus, TPPA, iPolar, Mount Pointing, or DARV frame and what it was taken for: the measurement or verification and the focuser position its Auto Focus session recorded (`autoFocusFrameFocus`; nothing when not recorded yet), the TPPA or iPolar step, or the DARV measurement and its result.
   A frame without a known star detection fetches the jobs kept for its image (`GET /api/images/:id/stars`), so the measurements of Auto Focus are shown without a new detection.
 - Below the viewer of a camera tab, the capture frames carousel (`web/src/images/CaptureFramesCarousel.tsx`) shows the Latest card first (the latest available frame, Latest saved after a restart, marked New while another card is selected and a newer frame exists), then the saved frames newest first, without the frame Latest already shows.
   Cards show metadata only (a generation number, a label, Latest, Latest saved, or Saved, then time, exposure, a floppy disk icon once the frame's file is written, the Latest card included, a state only while loading, failed, or missing, and a tooltip with id, size, file, and availability; the selected card is marked by its outline alone) and an icon in the area reserved for a future thumbnail;
@@ -100,7 +100,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Besides the lossy preview, `CameraCaptures.listenFrames(sink)` (`api/src/captures.ts`) feeds one `CaptureFrameSink` with every LIGHT frame of Camera Acquisition exactly once, identified by its `frameId`: `captured` as each frame is decoded, before the preview may drop it, with an owned copy of its bytes for Preview Only and none for Preview + Save, whose file follows with `saved` once its write completed or `saveFailed`, and `captureEnded` when the session ends.
   The sink is also asked through the `beforeFrame` gate of the toolkit capturer before each frame is prepared, so it can hold the next exposure back (never the one in flight);
   the gate settles on stop, abort, or failure of the capture and never ends it.
-  Frames of other frame types and of the composite operations (Auto Focus, TPPA, DARV, the wizards, Target Centering, Mount Pointing) never reach it, nor guide frames.
+  Frames of other frame types and of the composite operations (Auto Focus, TPPA, iPolar, DARV, the wizards, Target Centering, Mount Pointing) never reach it, nor guide frames.
   A sink never commands the camera, and its failures are logged and never fail the capture.
 - Limitations: a previewed-only frame can be opened only while it is the latest of its camera or leased;
   a tab asleep for longer than the grace period may lose such frames;

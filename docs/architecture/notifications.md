@@ -10,6 +10,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   completed or failed captures, Auto Focus runs, Flat Wizard runs, and Dark Library Wizard runs (success or error);
   failed masters of the Calibration Library, and completed ones a wizard asked for;
   TPPA ready to refine (info) or failed;
+  iPolar ready to refine, within its requested threshold (info, once per session), or failed;
   each new Flat Wizard or Dark Library Wizard manual step, by `stepId` (warning), and their cleanup warnings;
   guiding calibrations completed and sessions ended by a failure;
   failed DARV measurements, by generation;

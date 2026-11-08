@@ -9,6 +9,7 @@ import { errorResponse } from './http'
 import type { ImageProcessingStep } from './imageprocessing'
 import type { LiveCohortAcquisition } from './livestacking'
 import type { LiveFilterCalibration } from './livestacking.groups'
+import { type ClientListener, ClientPresence } from './websocket'
 
 // Image documents opened by clients: FITS and XISF files read from the server's filesystem, or camera
 // frames handed over by the capture service, kept decoded in memory under an id until they are closed, so later renderings (and future
@@ -495,9 +496,25 @@ function documentRecord({ name, width, height, channels, cfa, header, acquisitio
 	return { name, width, height, channels, ...(cfa && { cfa }), header, acquisition }
 }
 
+// Time the documents a client owns survive its last socket, in milliseconds: long enough for a tab that reconnects (a phone
+// whose screen locked) to find them again, as the leases of the capture frames do.
+export const DOCUMENT_GRACE = 10 * 60 * 1000
+
 // Open image documents of every client. The pixels live in the image worker; this side tracks the
 // open ids, so unknown ones are answered without a round trip, and relays requests to the worker.
-export class ImageStore implements Disposable {
+// A document a client opened from a file or claimed from a processing job is owned by it, and closed once the client is
+// gone for DOCUMENT_GRACE, so a tab that reloaded or closed leaves no document behind; the services close their own.
+export class ImageStore implements Disposable, ClientListener {
+	// Client owning each document a client opened or claimed, by document id.
+	readonly #owners = new Map<string, string>()
+	// Presence of the clients, closing the documents of one gone for the grace.
+	readonly #presence: ClientPresence
+
+	// grace is how long the documents of a client survive its last socket, in milliseconds.
+	constructor(grace: number = DOCUMENT_GRACE) {
+		this.#presence = new ClientPresence(grace, (client) => this.#expire(client))
+	}
+
 	// Open documents, by id.
 	readonly #documents = new Map<string, DocumentRecord>()
 	// Retained documents, open or closed, by id.
@@ -511,12 +528,31 @@ export class ImageStore implements Disposable {
 	// Worker started on first use and kept for the lifetime of the process.
 	#worker?: ImageWorker
 
-	// Opens the FITS or XISF file at path as a new document. Throws ImageOpenError.
-	async open(path: string): Promise<ImageInfo> {
+	// Opens the FITS or XISF file at path as a new document, owned by client when given. Throws ImageOpenError.
+	async open(path: string, client?: string): Promise<ImageInfo> {
 		const response = await this.#request({ type: 'open', id: this.#id++, path })
 		if (response.status !== 'opened') throw responseError(response)
 		this.#documents.set(response.info.id, { ...documentRecord(response.info), path: resolve(path) })
+		if (client !== undefined) this.#owners.set(response.info.id, client)
 		return response.info
+	}
+
+	// Makes client the owner of an open document, which closes with the client gone for the grace. Returns false for a
+	// document that is not open.
+	own(id: string, client: string): boolean {
+		if (!this.#documents.has(id)) return false
+		this.#owners.set(id, client)
+		return true
+	}
+
+	// Counts a socket of a client that opened, keeping its documents.
+	connected(client: string) {
+		this.#presence.connected(client)
+	}
+
+	// Counts a socket of a client that closed; once its last one closed, its documents close after the grace.
+	disconnected(client: string) {
+		this.#presence.disconnected(client)
 	}
 
 	// Opens a camera frame, the bytes of a FITS or XISF file, as a new document named name. The bytes are
@@ -670,6 +706,7 @@ export class ImageStore implements Disposable {
 	// or when its last retention is released. Returns false for an unknown id.
 	close(id: string): boolean {
 		if (!this.#documents.delete(id)) return false
+		this.#owners.delete(id)
 		if (!this.#retained.has(id)) this.#discard(id)
 		return true
 	}
@@ -750,7 +787,13 @@ export class ImageStore implements Disposable {
 	// Ends the worker of a server stopping in place, along with every document it held, and fails every request it was
 	// carrying; a hot reload would otherwise keep it, with all its pixels, beside the worker of the next run.
 	[Symbol.dispose]() {
+		this.#presence[Symbol.dispose]()
 		this.#drop('the image store was stopped')
+	}
+
+	// Closes the documents a client that is gone for good owned.
+	#expire(client: string) {
+		for (const [id, owner] of this.#owners) if (owner === client) this.close(id)
 	}
 
 	// Discards the worker after it failed. The next request starts a fresh worker.
@@ -763,6 +806,7 @@ export class ImageStore implements Disposable {
 	// was carrying with reason.
 	#drop(reason: string): void {
 		this.#worker?.terminate()
+		this.#owners.clear()
 		this.#worker = undefined
 		const lost = new Set([...this.#documents.keys(), ...this.#retained.keys()])
 		this.#documents.clear()
@@ -791,17 +835,25 @@ export function downloadName(name: string, format: ImageFormat): string {
 	return `${name.replace(IMAGE_EXTENSION, '') || 'image'}.${FORMAT_EXTENSIONS[format]}`
 }
 
+// Body of POST /api/images.
+export interface ImageOpenRequest {
+	// Path of the FITS or XISF file on the server.
+	readonly path: string
+	// Id of the client (the page) that owns the document, which closes once that client is gone for DOCUMENT_GRACE.
+	readonly client?: string
+}
+
 // Routes of the image documents.
 export function createImageRoutes(images: ImageStore) {
 	return {
 		'/api/images': {
-			// Opens a FITS or XISF file of the server ({ path }) as an image document: responds 201 with the ImageInfo,
+			// Opens a FITS or XISF file of the server ({ path, client }) as an image document owned by the client: responds 201 with the ImageInfo,
 			// 404 when the file does not exist, and 415 when it is not a FITS or XISF image.
 			POST: async (req) => {
-				const { path } = (await req.json()) as { readonly path: string }
+				const { path, client } = (await req.json()) as ImageOpenRequest
 
 				try {
-					return Response.json(await images.open(path), { status: 201 })
+					return Response.json(await images.open(path, client), { status: 201 })
 				} catch (error) {
 					if (error instanceof ImageOpenError) return errorResponse(error.message, error.status, error.status === 404 ? 'notFound' : 'unsupportedFormat')
 					throw error

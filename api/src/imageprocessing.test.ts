@@ -119,7 +119,7 @@ describe('execution', () => {
 
 		const job = await ended(events, submit(service, source.id, pipeline).jobId)
 		const output = (await images.processingImage(job.outputImageId!))!
-		const info = service.claim(job.jobId)
+		const info = service.claim(job.jobId, 'page')
 
 		const expected = (await images.processingImage(source.id))!
 		gaussianBlur(expected, BLUR)
@@ -146,8 +146,8 @@ describe('execution', () => {
 
 		const gray = await ended(events, submit(service, source.id, [step({ type: 'debayer', pattern: 'auto' }), step({ type: 'grayscale', channel: 'GREEN' })]).jobId)
 		const flipped = await ended(events, submit(service, source.id, [step({ type: 'horizontalFlip' })]).jobId)
-		const grayInfo = service.claim(gray.jobId) as { readonly info: ImageInfo }
-		const flippedInfo = service.claim(flipped.jobId) as { readonly info: ImageInfo }
+		const grayInfo = service.claim(gray.jobId, 'page') as { readonly info: ImageInfo }
+		const flippedInfo = service.claim(flipped.jobId, 'page') as { readonly info: ImageInfo }
 
 		expect(grayInfo.info).toMatchObject({ channels: 1, header: { NAXIS: 2 } })
 		expect(grayInfo.info.cfa).toBeUndefined()
@@ -177,7 +177,7 @@ describe('execution', () => {
 
 		expect(job).toMatchObject({ state: 'failed', code: 'processingFailed', errorStepId: bad.id, completedSteps: 1 })
 		expect(job.outputImageId).toBeUndefined()
-		expect(service.claim(job.jobId)).toEqual({ status: 'invalidState' })
+		expect(service.claim(job.jobId, 'page')).toEqual({ status: 'invalidState' })
 
 		// The worker survives a step that threw.
 		expect((await ended(events, submit(service, source.id, [step(BLUR)]).jobId)).state).toBe('completed')
@@ -224,18 +224,35 @@ describe('scheduling', () => {
 })
 
 describe('claims', () => {
+	test('a claimed document belongs to its client and closes once that client is gone', async () => {
+		const images = new ImageStore(5)
+		const events: ImageProcessingEvent[] = []
+		const service = new ImageProcessingService(images, (event) => events.push(event))
+		const source = await images.open(writeFits(16, 8))
+		const job = await ended(events, submit(service, source.id, [step(BLUR)]).jobId)
+
+		images.connected('page')
+		expect(service.claim(job.jobId, 'page')).toMatchObject({ status: 'claimed' })
+		images.disconnected('page')
+		await Bun.sleep(30)
+
+		expect(service.claim(job.jobId, 'page')).toEqual({ status: 'expired' })
+		expect(images.close(source.id)).toBeTrue()
+		images[Symbol.dispose]()
+	})
+
 	test('hand the same document again while it is open, and expire once it is closed', async () => {
 		const { images, events, service } = setup()
 		const source = await images.open(writeFits(16, 8))
 		const job = await ended(events, submit(service, source.id, [step(BLUR)]).jobId)
 
-		const first = service.claim(job.jobId)
+		const first = service.claim(job.jobId, 'page')
 		expect(first).toMatchObject({ status: 'claimed', info: { id: job.outputImageId } })
-		expect(service.claim(job.jobId)).toEqual(first)
+		expect(service.claim(job.jobId, 'page')).toEqual(first)
 
 		images.close(job.outputImageId!)
-		expect(service.claim(job.jobId)).toEqual({ status: 'expired' })
-		expect(service.claim('unknown')).toEqual({ status: 'notFound' })
+		expect(service.claim(job.jobId, 'page')).toEqual({ status: 'expired' })
+		expect(service.claim('unknown', 'page')).toEqual({ status: 'notFound' })
 	})
 
 	test('close the document of a job never claimed after the grace period', async () => {
@@ -246,7 +263,7 @@ describe('claims', () => {
 		expect(images.name(job.outputImageId!)).toBeDefined()
 		await Bun.sleep(60)
 		expect(images.name(job.outputImageId!)).toBeUndefined()
-		expect(service.claim(job.jobId)).toEqual({ status: 'expired' })
+		expect(service.claim(job.jobId, 'page')).toEqual({ status: 'expired' })
 	})
 })
 
@@ -268,12 +285,12 @@ describe('routes', () => {
 		const busy = await call(routes, '/api/images/:id/processing', 'POST', { id: mono.id }, { steps: [step(BLUR)] })
 		expect(busy.status).toBe(409)
 		expect(await busy.json()).toMatchObject({ code: 'busy', job: { jobId: job.jobId } })
-		expect((await call(routes, '/api/image-processing/:jobId/claim', 'POST', { jobId: job.jobId })).status).toBe(409)
+		expect((await call(routes, '/api/image-processing/:jobId/claim', 'POST', { jobId: job.jobId }, { client: 'page' })).status).toBe(409)
 
 		await ended(events, job.jobId)
 		expect(((await (await call(routes, '/api/image-processing', 'GET', {})).json()) as { jobs: ImageProcessingJob[] }).jobs.map((j) => j.jobId)).toEqual([job.jobId])
 		expect(await (await call(routes, '/api/image-processing/:jobId', 'GET', { jobId: job.jobId })).json()).toMatchObject({ state: 'completed' })
-		expect(await (await call(routes, '/api/image-processing/:jobId/claim', 'POST', { jobId: job.jobId })).json()).toMatchObject({ origin: 'derived', provenance: { kind: 'processing' } })
+		expect(await (await call(routes, '/api/image-processing/:jobId/claim', 'POST', { jobId: job.jobId }, { client: 'page' })).json()).toMatchObject({ origin: 'derived', provenance: { kind: 'processing' } })
 		expect((await call(routes, '/api/image-processing/:jobId/cancel', 'POST', { jobId: job.jobId })).status).toBe(404)
 		expect((await call(routes, '/api/image-processing/:jobId', 'GET', { jobId: 'unknown' })).status).toBe(404)
 	})

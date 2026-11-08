@@ -5,6 +5,7 @@ import type { ConnectionRegistryEvent } from './connection'
 import type { AppDatabase } from './database'
 import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
+import { ClientPresence } from './websocket'
 
 // Capture frame registry: the index of the frames acquired by Camera Capture and Auto Focus, by physical camera
 // (connection id + device id), so the Images workspace can show the latest frame of any camera and its recent saved
@@ -418,10 +419,8 @@ export class CaptureFrameRegistry implements Disposable {
 	readonly #leases = new Map<string, Lease>()
 	// Number of leases of each document, by image id.
 	readonly #holds = new Map<string, number>()
-	// Open sockets of each client.
-	readonly #sockets = new Map<string, number>()
-	// Pending release of the leases of each client whose sockets all closed.
-	readonly #graces = new Map<string, Timer>()
+	// Presence of the clients, releasing the leases of one whose sockets all stayed closed for the lease grace.
+	readonly #presence: ClientPresence
 	// Files being opened for a frame, by frame id, so concurrent opens share one document.
 	readonly #opening = new Map<string, Promise<ImageInfo>>()
 	// Last sequence or revision handed out.
@@ -444,6 +443,9 @@ export class CaptureFrameRegistry implements Disposable {
 	) {
 		this.database = database
 		this.leaseGrace = leaseGrace
+		this.#presence = new ClientPresence(leaseGrace, (client) => {
+			for (const [id, lease] of this.#leases) if (lease.client === client) this.release(id)
+		})
 		this.#connected = connected
 		this.#unlisten = images.onDiscard((id) => this.#discarded(id))
 	}
@@ -698,27 +700,12 @@ export class CaptureFrameRegistry implements Disposable {
 
 	// Counts a socket of a client that opened, keeping its leases.
 	connected(client: string) {
-		this.#sockets.set(client, (this.#sockets.get(client) ?? 0) + 1)
-		clearTimeout(this.#graces.get(client))
-		this.#graces.delete(client)
+		this.#presence.connected(client)
 	}
 
 	// Counts a socket of a client that closed; once its last one closed, its leases are released after the grace.
 	disconnected(client: string) {
-		const sockets = (this.#sockets.get(client) ?? 1) - 1
-
-		if (sockets > 0) {
-			this.#sockets.set(client, sockets)
-			return
-		}
-
-		this.#sockets.delete(client)
-		const timer = setTimeout(() => {
-			this.#graces.delete(client)
-			for (const [id, lease] of this.#leases) if (lease.client === client) this.release(id)
-		}, this.leaseGrace)
-		timer.unref()
-		this.#graces.set(client, timer)
+		this.#presence.disconnected(client)
 	}
 
 	// Republishes the cameras a connection or device event changes the state of.
@@ -886,8 +873,7 @@ export class CaptureFrameRegistry implements Disposable {
 	// Stops following the image store and cancels the pending releases; leases are forgotten.
 	[Symbol.dispose]() {
 		this.#unlisten()
-		for (const timer of this.#graces.values()) clearTimeout(timer)
-		this.#graces.clear()
+		this.#presence[Symbol.dispose]()
 	}
 }
 

@@ -544,6 +544,7 @@ export type {
 	ImageCapture,
 	ImageFormat,
 	ImageInfo,
+	ImageOpenRequest,
 	ImageOrigin,
 	ImageProperties,
 	ImageProvenance,
@@ -566,6 +567,7 @@ export type {
 	DebayerOperation,
 	GaussianBlurOperation,
 	GrayscaleOperation,
+	ImageProcessingClaimRequest,
 	ImageProcessingErrorCode,
 	ImageProcessingEvent,
 	ImageProcessingJob,
@@ -919,6 +921,7 @@ const captureFrames = new CaptureFrameRegistry(images, broadcast, {
 })
 connections.listen((event) => captureFrames.deviceChanged(event))
 listenClients(captureFrames)
+listenClients(images)
 
 // The Calibration Library, single owner of the calibration frames and masters, which needs no connection and holds no
 // device; its automatic masters wait for the camera operations, and the guiding sessions read its master darks too.

@@ -116,6 +116,54 @@ export interface ClientListener {
 	readonly disconnected: (client: string) => void
 }
 
+// Presence of the named clients: counts the open sockets of each one and, once the last one closed, calls expired with the
+// client after grace milliseconds, unless a socket of the client opened again meanwhile. What a client holds on the server
+// (capture frame leases, image documents) survives a short absence, such as a phone whose screen locked, and is released
+// once its page is gone for good. A ClientListener, registered with listenClients.
+export class ClientPresence implements ClientListener, Disposable {
+	// Open sockets of each client.
+	readonly #sockets = new Map<string, number>()
+	// Pending expiry of each client whose sockets all closed.
+	readonly #graces = new Map<string, Timer>()
+
+	// grace is how long a client survives its last socket, in milliseconds; expired receives the client then.
+	constructor(
+		readonly grace: number,
+		private readonly expired: (client: string) => void,
+	) {}
+
+	// Counts a socket of a client that opened, cancelling its pending expiry.
+	readonly connected = (client: string) => {
+		this.#sockets.set(client, (this.#sockets.get(client) ?? 0) + 1)
+		clearTimeout(this.#graces.get(client))
+		this.#graces.delete(client)
+	}
+
+	// Counts a socket of a client that closed; once its last one closed, the client expires after the grace.
+	readonly disconnected = (client: string) => {
+		const sockets = (this.#sockets.get(client) ?? 1) - 1
+
+		if (sockets > 0) {
+			this.#sockets.set(client, sockets)
+			return
+		}
+
+		this.#sockets.delete(client)
+		const timer = setTimeout(() => {
+			this.#graces.delete(client)
+			this.expired(client)
+		}, this.grace)
+		timer.unref()
+		this.#graces.set(client, timer)
+	};
+
+	// Cancels every pending expiry.
+	[Symbol.dispose]() {
+		for (const timer of this.#graces.values()) clearTimeout(timer)
+		this.#graces.clear()
+	}
+}
+
 // Receiver of the control messages of every socket and of the end of its backpressure and of its life.
 export interface SocketListener {
 	// The socket sent a control message.

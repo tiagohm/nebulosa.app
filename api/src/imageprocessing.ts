@@ -288,6 +288,12 @@ export interface ImageProcessingResult {
 export type ImageProcessingSubmitOutcome = { readonly status: 'accepted'; readonly job: ImageProcessingJob } | { readonly status: 'missing' } | { readonly status: 'busy'; readonly job: ImageProcessingJob } | { readonly status: 'incompatible'; readonly step: IncompatibleStep } | { readonly status: 'queueFull' }
 
 // Outcome of a claim: the output document, or why there is none (see ImageProcessingErrorCode).
+// Body of POST /api/image-processing/:jobId/claim.
+export interface ImageProcessingClaimRequest {
+	// Id of the client (the page) that owns the claimed document from now on.
+	readonly client: string
+}
+
 export type ImageProcessingClaimOutcome = { readonly status: 'claimed'; readonly info: ImageInfo } | { readonly status: 'notFound' } | { readonly status: 'expired' } | { readonly status: 'invalidState' }
 
 // Error of a job that did not complete, with its reason and the step it belongs to.
@@ -389,14 +395,15 @@ export class ImageProcessingService {
 		return { jobs: this.#scheduler.snapshot() }
 	}
 
-	// Hands the output document of a completed job to a client, which owns it from now on (it is no longer closed
-	// after the grace period). Claiming it again answers the same document while it is open.
-	claim(jobId: string): ImageProcessingClaimOutcome {
+	// Hands the output document of a completed job to client, which owns it from now on: it is no longer closed after the
+	// claim grace, but once the client is gone (see ImageStore). Claiming it again answers the same document while it is open.
+	claim(jobId: string, client: string): ImageProcessingClaimOutcome {
 		const output = this.#outputs.get(jobId)
 
 		if (output) {
 			clearTimeout(output.timer)
 			output.timer = undefined
+			this.images.own(output.info.id, client)
 			return { status: 'claimed', info: output.info }
 		}
 
@@ -524,11 +531,12 @@ export function createImageProcessingRoutes(service: ImageProcessingService) {
 			POST: (req) => (service.cancel(req.params.jobId) ? new Response(null, { status: 204 }) : errorResponse('The image processing is not waiting or running', 404, 'notFound')),
 		},
 		'/api/image-processing/:jobId/claim': {
-			// Hands the output document of a completed job to the client: responds with its ImageInfo, 404 notFound for
+			// Hands the output document of a completed job to the client of the ImageProcessingClaimRequest: responds with its ImageInfo, 404 notFound for
 			// an unknown job, 404 expired when its document was closed, and 409 invalidState when the job did not
 			// complete.
-			POST: (req) => {
-				const outcome = service.claim(req.params.jobId)
+			POST: async (req) => {
+				const { client } = (await req.json()) as ImageProcessingClaimRequest
+				const outcome = service.claim(req.params.jobId, client)
 				if (outcome.status === 'notFound') return errorResponse('Image processing not found', 404, 'notFound')
 				if (outcome.status === 'expired') return errorResponse('The processed image is no longer available', 404, 'expired')
 				if (outcome.status === 'invalidState') return errorResponse('The image processing did not complete', 409, 'invalidState')

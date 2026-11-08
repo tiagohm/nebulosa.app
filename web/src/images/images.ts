@@ -1,7 +1,8 @@
-import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, ImageProcessingOperation, PlateSolveRequest, RenderRequest, RenderResult, SaveFormat, SaveRequest, SaveResult, StarProfileRequest, StarProfileResult, Stretch } from 'api'
+import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, ImageOpenRequest, ImageProcessingOperation, PlateSolveRequest, RenderRequest, RenderResult, SaveFormat, SaveRequest, SaveResult, StarProfileRequest, StarProfileResult, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { deviceState } from '../equipment/equipment'
+import { clientId } from '../events'
 import { jsonInit, responseError } from '../http'
 import type { AstrometricMarker, AstrometrySelection, AstrometryTarget, Measurement } from '../platesolving/measurement'
 import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
@@ -432,15 +433,16 @@ function release(id: string, io: ImagesIo) {
 
 // Opens a server file as a new active document, fitted to the viewer and shown with the Image
 // Inspector, and renders it once with the display settings it starts with (initialDisplaySettings), which
-// become its applied settings. A document closed before the server answers is released on the server.
-export async function openImage(state: ImagesState, path: string, io: ImagesIo = browserIo) {
+// become its applied settings. A document closed before the server answers is released on the server. The document belongs
+// to client (this page), so the server closes it once the page is gone.
+export async function openImage(state: ImagesState, path: string, io: ImagesIo = browserIo, client: string = clientId) {
 	const key = nanoid()
 	const name = path.split(/[\\/]/).at(-1) || path
 	const source: ImageSource = { kind: 'file', path }
 	addDocument(state, { key, name, source, status: 'loading', unsaved: false }, io)
 
 	try {
-		const response = await io.fetch('/api/images', jsonInit('POST', { path }))
+		const response = await io.fetch('/api/images', jsonInit('POST', { path, client } satisfies ImageOpenRequest))
 		const document = documentOf(state, key)
 
 		if (!response.ok) {

@@ -133,7 +133,7 @@ describe('open', () => {
 		const state = newState()
 		const { io, calls } = fakeIo()
 
-		await openImage(state, '/data/m31.fits', io)
+		await openImage(state, '/data/m31.fits', io, 'page')
 		const document = activeDocument(state)!
 
 		expect(document).toMatchObject({ name: 'm31.fits', source: { kind: 'file', path: '/data/m31.fits' }, status: 'ready' })
@@ -141,7 +141,7 @@ describe('open', () => {
 		expect(activeView(state)?.display).toEqual({ applied: ORIGINAL_DISPLAY_SETTINGS, showOriginal: false })
 		expect(document.info?.id).toBe('srv-1')
 		expect(calls.map((c) => [c.method, c.url, c.body])).toEqual([
-			['POST', '/api/images', { path: '/data/m31.fits' }],
+			['POST', '/api/images', { path: '/data/m31.fits', client: 'page' }],
 			['POST', '/api/images/srv-1/render', { settings: ORIGINAL_DISPLAY_SETTINGS }],
 		])
 	})

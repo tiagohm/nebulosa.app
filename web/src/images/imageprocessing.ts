@@ -1,6 +1,7 @@
-import type { ImageInfo, ImageProcessingJob, ImageProcessingOperation, ImageProcessingOperationType, ImageProcessingRequest, ImageProcessingSnapshot, ImageProcessingStep, ServerEvent } from 'api'
+import type { ImageInfo, ImageProcessingClaimRequest, ImageProcessingJob, ImageProcessingOperation, ImageProcessingOperationType, ImageProcessingRequest, ImageProcessingSnapshot, ImageProcessingStep, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
+import { clientId } from '../events'
 import { jsonInit, responseError } from '../http'
 import type { ImageProcessingPresetStep } from '../profile/schema'
 import { createOperation } from './imageprocessing.catalog'
@@ -171,15 +172,15 @@ function prune(state: ImageProcessingState) {
 	for (const job of forgettable.slice(0, forgettable.length - MAX_JOBS)) delete state.jobs[job.jobId]
 }
 
-// Claims the output of a completed job this tab submitted, once, and opens it as a new derived document, active only
-// when its source document is the one shown.
+// Claims the output of a completed job this tab submitted, once, for this page (clientId), which owns it from then on, and
+// opens it as a new derived document, active only when its source document is the one shown.
 async function claim(state: ImageProcessingState, images: ImagesState, jobId: string, io: ImagesIo) {
 	const submission = state.submissions[jobId]
 	if (state.jobs[jobId]?.state !== 'completed' || !submission || state.claims[jobId]) return
 	state.claims[jobId] = 'pending'
 
 	try {
-		const response = await io.fetch(`/api/image-processing/${encodeURIComponent(jobId)}/claim`, { method: 'POST' })
+		const response = await io.fetch(`/api/image-processing/${encodeURIComponent(jobId)}/claim`, jsonInit('POST', { client: clientId } satisfies ImageProcessingClaimRequest))
 
 		if (!response.ok) {
 			state.claimErrors[jobId] = await responseError(response)

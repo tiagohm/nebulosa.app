@@ -369,6 +369,24 @@ describe('acquisition', () => {
 describe('capture documents', () => {
 	const capture = { connectionId: 'connection', deviceId: 'camera', frameId: 'session:1', time: Date.UTC(2026, 9, 19) }
 
+	test('a document a client opened closes once the client is gone for the grace, not when it comes back in time', async () => {
+		const store = new ImageStore(20)
+		const owned = await store.open(writeFits('owned.fits', 16, 8), 'page')
+		const shared = await store.open(writeFits('shared.fits', 16, 8))
+
+		store.connected('page')
+		store.disconnected('page')
+		store.connected('page')
+		await Bun.sleep(40)
+		expect(store.own(owned.id, 'page')).toBeTrue()
+
+		store.disconnected('page')
+		await Bun.sleep(40)
+		expect(store.close(owned.id)).toBeFalse()
+		expect(store.close(shared.id)).toBeTrue()
+		store[Symbol.dispose]()
+	})
+
 	test('a disposed store ends its worker and forgets its documents', async () => {
 		const store = new ImageStore()
 		const discarded: string[] = []

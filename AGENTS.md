@@ -115,6 +115,7 @@ Follow the OXC configuration (`.oxfmtrc.json`, `.oxlintrc.json`) and `.editorcon
 - Expose endpoints as `Bun.serve` routes under `/api/`; respond with `Response.json` and meaningful status codes.
 - Release timers, sockets, device connections, and in-flight work when a request, connection, or session ends.
 - No input (request bodies, query strings, uploaded files, device and network messages) should be validated. Assume that the caller will always send the valid values.
+- Never call "crypto.randomUUID", use Bun.randomUUIDv7 instead.
 
 ### Frontend (`web`)
 
@@ -124,6 +125,7 @@ Follow the OXC configuration (`.oxfmtrc.json`, `.oxlintrc.json`) and `.editorcon
 - Reference static assets relative to the importing HTML or module so Bun can hash and bundle them.
 - Never use aria-* attributes.
 - Avoid using size="sm" on buttons, unless it is highly recommended for the layout.
+- Never call "crypto.randomUUID", use nanoid instead.
 
 ## Documentation Comments
 

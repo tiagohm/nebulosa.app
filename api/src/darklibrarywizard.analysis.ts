@@ -333,7 +333,7 @@ export class DarkLibraryWizardAnalyzer {
 	// Measures the FITS file at path. Resolves the measurement; rejects when the file is not a readable FITS image, the
 	// worker failed or timed out, or signal aborted it.
 	measure(path: string, signal: AbortSignal): Promise<DarkFrameMeasurement> {
-		const run = this.#queue.then(() => this.#measure({ jobId: crypto.randomUUID(), path }, signal))
+		const run = this.#queue.then(() => this.#measure({ jobId: Bun.randomUUIDv7(), path }, signal))
 		this.#queue = run.catch(() => undefined)
 		return run
 	}

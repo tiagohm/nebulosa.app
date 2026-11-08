@@ -274,7 +274,7 @@ export class DarvSessions {
 		// still stops it.
 		const inherited = previous?.summary.trackingStarted === true && previous.summary.state !== 'finished' && previous.summary.mount.connectionId === mountDevice.connectionId && previous.summary.mount.deviceId === mountDevice.deviceId
 		const session: Session = {
-			summary: { sessionId: crypto.randomUUID(), camera: { connectionId, deviceId }, cameraName: camera.name, mount: mountDevice, mountName: mount.name, state: 'idle', measurements: [], ...(inherited && { trackingStarted: true }), startedAt: Date.now(), revision: 0 },
+			summary: { sessionId: Bun.randomUUIDv7(), camera: { connectionId, deviceId }, cameraName: camera.name, mount: mountDevice, mountName: mount.name, state: 'idle', measurements: [], ...(inherited && { trackingStarted: true }), startedAt: Date.now(), revision: 0 },
 			trails: [],
 		}
 

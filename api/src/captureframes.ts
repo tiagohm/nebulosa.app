@@ -409,7 +409,7 @@ async function exists(path: string) {
 // Index of the frames of every camera and the leases on their documents.
 export class CaptureFrameRegistry implements Disposable {
 	// Identity of this run of the server.
-	readonly epoch = crypto.randomUUID()
+	readonly epoch = Bun.randomUUIDv7()
 	// Cameras by key, read from the database on first use.
 	#sources?: Map<string, SourceEntry>
 	// Document of the latest previewed frame of each camera, by camera key; kept open without a lease.
@@ -668,7 +668,7 @@ export class CaptureFrameRegistry implements Disposable {
 		const { imageId, info } = frame
 		// The document may have been lost with the image worker while its file was opened.
 		if (!info) return { status: 'refused', code: 'expired' }
-		const lease = crypto.randomUUID()
+		const lease = Bun.randomUUIDv7()
 		this.#leases.set(lease, { frameId, imageId, client })
 		this.#holds.set(imageId, (this.#holds.get(imageId) ?? 0) + 1)
 		return { status: 'opened', lease, info, frame: this.#summary(frame) }

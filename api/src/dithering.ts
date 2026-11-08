@@ -288,7 +288,7 @@ export class CaptureDithering implements DeviceContext {
 		// is reserved and pulsed like any other guide output.
 		const devices = guideOutput ? [mount, guideOutput] : [mount]
 		const requests: ResourceRequest[] = devices.map((device) => ({ key: resourceKey(device), device }))
-		const owner = { id: crypto.randomUUID(), kind: RESERVATION_KIND }
+		const owner = { id: Bun.randomUUIDv7(), kind: RESERVATION_KIND }
 		let reserved: ToolInvocation | undefined
 
 		if (invocation) {

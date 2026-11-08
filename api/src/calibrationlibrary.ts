@@ -1,7 +1,7 @@
 import { constants } from 'fs'
 import { copyFile, mkdir, rename, rm, stat } from 'fs/promises'
 import { basename, join, relative } from 'path'
-import { fileDigest, type IntegrationProgress, type IntegrationResult, IntegrationError, masterHeader, MasterIntegrator, type MasterWorkerRequest } from './calibrationlibrary.analysis'
+import { fileDigest, type IntegrationResult, IntegrationError, masterHeader, MasterIntegrator, type MasterWorkerRequest } from './calibrationlibrary.analysis'
 import {
 	type CalibrationKind,
 	type CalibrationMetadata,
@@ -22,7 +22,7 @@ import {
 	stableId,
 } from './calibrationlibrary.compatibility'
 import { ACTIVE_JOB_STATES, type CalibrationJob, CalibrationJobs, type CalibrationJobSummary, type Integrator, jobSummary, type MasterBuild, NO_PROGRESS } from './calibrationlibrary.jobs'
-import { darkPlanSource, type FileInspection, fileIdentity, inspectFile, makeSource, regrouped, type ScanCandidate, scanDirectory } from './calibrationlibrary.sources'
+import { darkPlanSource, fileIdentity, inspectFile, makeSource, regrouped, type ScanCandidate, scanDirectory } from './calibrationlibrary.sources'
 import {
 	type CalibrationLibraryStore,
 	type CalibrationMaster,
@@ -377,7 +377,7 @@ function masterSummary(master: CalibrationMaster): CalibrationMasterSummary {
 // The service. Work waits for the first open of the library, so importing this module touches no file.
 export class CalibrationLibrary {
 	// Id of this process.
-	readonly #epoch = crypto.randomUUID()
+	readonly #epoch = Bun.randomUUIDv7()
 	// Change counter.
 	#revision = 0
 	// First open of the library and the reconciliation after it.
@@ -457,7 +457,7 @@ export class CalibrationLibrary {
 
 		for (const { masterId, name } of await this.store.productDirectories()) {
 			if (masterId !== undefined && this.store.hasMaster(masterId)) continue
-			const target = join(this.store.orphanedDirectory, `${name}-${crypto.randomUUID()}`)
+			const target = join(this.store.orphanedDirectory, `${name}-${Bun.randomUUIDv7()}`)
 
 			try {
 				await mkdir(this.store.orphanedDirectory, { recursive: true })
@@ -811,7 +811,7 @@ export class CalibrationLibrary {
 		const kind = validation.kind!
 		const now = Date.now()
 		const job: CalibrationJob = {
-			jobId: crypto.randomUUID(),
+			jobId: Bun.randomUUIDv7(),
 			type: 'master',
 			state: 'queued',
 			createdAt: now,
@@ -1001,7 +1001,7 @@ export class CalibrationLibrary {
 
 		const now = Date.now()
 		const scan = { paths, recursive, depth, found: 0, bytes: 0, truncated: false }
-		const job: CalibrationJob = { jobId: crypto.randomUUID(), type: 'import', state: 'validating', createdAt: now, updatedAt: now, automatic: false, progress: NO_PROGRESS, scan }
+		const job: CalibrationJob = { jobId: Bun.randomUUIDv7(), type: 'import', state: 'validating', createdAt: now, updatedAt: now, automatic: false, progress: NO_PROGRESS, scan }
 		this.jobs.save(job)
 
 		const controller = new AbortController()

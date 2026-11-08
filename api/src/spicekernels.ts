@@ -186,7 +186,7 @@ function displayName(name: string) {
 
 // SPICE Kernel Library of the server.
 export class SpiceKernelLibrary implements Disposable {
-	readonly #epoch = crypto.randomUUID()
+	readonly #epoch = Bun.randomUUIDv7()
 	#revision = 0
 	#loading = true
 	#chain: Promise<unknown> = Promise.resolve()
@@ -270,7 +270,7 @@ export class SpiceKernelLibrary implements Disposable {
 
 	// Adds an uploaded file, streamed from body; an identical file returns the installed kernel.
 	async importFile(name: string, body: ReadableStream<Uint8Array>, signal?: AbortSignal): Promise<SpiceKernelImportResponse> {
-		const staged = await this.store.stage(crypto.randomUUID(), body, MAX_SPICE_KERNEL_BYTES, signal)
+		const staged = await this.store.stage(Bun.randomUUIDv7(), body, MAX_SPICE_KERNEL_BYTES, signal)
 		return this.#exclusive(() => this.#publishFile(staged, { name: displayName(name), sourceKind: 'import' }))
 	}
 
@@ -394,7 +394,7 @@ export class SpiceKernelLibrary implements Disposable {
 		const length = Number(response.headers.get('content-length')) || undefined
 		if (length !== undefined && length > MAX_SPICE_KERNEL_BYTES) throw new SpiceKernelTooLargeError(MAX_SPICE_KERNEL_BYTES)
 		const total = length ?? entry.bytes
-		const staged = await this.store.stage(crypto.randomUUID(), response.body, MAX_SPICE_KERNEL_BYTES, signal, (bytes) => context.progress(bytes, total))
+		const staged = await this.store.stage(Bun.randomUUIDv7(), response.body, MAX_SPICE_KERNEL_BYTES, signal, (bytes) => context.progress(bytes, total))
 		context.stage('validating')
 		return await this.#exclusive(() => this.#publishFile(staged, { name: entry.name, sourceKind: 'naif', sourceRef: entry.id }, context))
 	}
@@ -408,7 +408,7 @@ export class SpiceKernelLibrary implements Disposable {
 
 		const bytes = Buffer.from(file.spk, 'base64')
 		context.progress(bytes.byteLength, bytes.byteLength)
-		const staged = await this.store.stage(crypto.randomUUID(), new Blob([bytes]).stream(), MAX_SPICE_KERNEL_BYTES, context.signal)
+		const staged = await this.store.stage(Bun.randomUUIDv7(), new Blob([bytes]).stream(), MAX_SPICE_KERNEL_BYTES, context.signal)
 		context.stage('validating')
 		return await this.#exclusive(() => this.#publishFile(staged, { name: label, sourceKind: 'horizons', sourceRef: request.spkId, requestedStart: request.start, requestedEnd: request.end, target: id }, context))
 	}
@@ -437,7 +437,7 @@ export class SpiceKernelLibrary implements Disposable {
 			context?.stage('publishing')
 			await this.store.promote(staged)
 			const { target: _, ...record } = provenance
-			const kernel = this.store.insert({ ...record, id: crypto.randomUUID(), sha256: staged.sha256, bytes: staged.bytes, createdAt: this.#now() }, prepared.segments)
+			const kernel = this.store.insert({ ...record, id: Bun.randomUUIDv7(), sha256: staged.sha256, bytes: staged.bytes, createdAt: this.#now() }, prepared.segments)
 			await this.#rebuild()
 			this.#changed()
 			return { kernel: this.#summary(kernel, this.store.segments(kernel.id)), kernelId: kernel.id, alreadyInstalled: false }

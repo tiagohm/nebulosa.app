@@ -342,7 +342,7 @@ interface Arm {
 // Meridian Flip Executor of every open connection.
 export class MeridianFlipExecutor implements DeviceContext, Disposable {
 	// Id of this process.
-	readonly #epoch = crypto.randomUUID()
+	readonly #epoch = Bun.randomUUIDv7()
 	// Revision of the service; grows with every publication.
 	#revision = 0
 	// Running and recent executions by id, oldest first.
@@ -470,7 +470,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 
 		const key = resourceKey(prepared.mount)
 		const arm: Arm = {
-			arm: { armId: crypto.randomUUID(), connectionId, deviceId, mountName: prepared.mount.name, trigger, armedAt: this.options.now(), decision, policy: request.policy },
+			arm: { armId: Bun.randomUUIDv7(), connectionId, deviceId, mountName: prepared.mount.name, trigger, armedAt: this.options.now(), decision, policy: request.policy },
 			request,
 			target: this.#frozen(prepared.mount, request),
 			contextId: decision.decision === 'eligible' ? decision.contextId : this.services.monitor.monitor(connectionId, deviceId)?.contextId,
@@ -593,7 +593,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 
 		const session: Session = {
 			execution: {
-				sessionId: crypto.randomUUID(),
+				sessionId: Bun.randomUUIDv7(),
 				connectionId,
 				deviceId,
 				mountName: mount.name,

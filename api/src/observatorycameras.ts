@@ -181,7 +181,7 @@ const STREAM_MESSAGES: Readonly<Record<ObservatoryCameraStreamCode, string>> = {
 // Service of the observatory cameras.
 export class ObservatoryCameraService implements Disposable {
 	// Id of this server process.
-	readonly #epoch = crypto.randomUUID()
+	readonly #epoch = Bun.randomUUIDv7()
 	// Revision of the snapshot, increased by every event.
 	#revision = 0
 	// Gateway of the cameras.

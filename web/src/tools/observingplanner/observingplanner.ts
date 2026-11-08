@@ -25,6 +25,7 @@ import type {
 	TargetAnalysis,
 	TargetAnalysisRequest,
 } from 'api'
+import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { ApiResponseError, fetchJson, jsonInit, responseError } from '../../http'
 import { ACTIVE_TOOL_LOCATION, type SiteLocation, type ToolLocation } from '../../location/site'
@@ -68,7 +69,7 @@ export const browserObservingPlannerIo: ObservingPlannerIo = {
 		const timer = setTimeout(run, delay)
 		return () => clearTimeout(timer)
 	},
-	id: () => crypto.randomUUID(),
+	id: () => nanoid(),
 }
 
 // Section of the tool.

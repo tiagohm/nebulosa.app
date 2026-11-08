@@ -648,7 +648,7 @@ export class ImageStore {
 		const bytes = await this.encode(id, format, settings)
 		if (!bytes) return { status: 'missing' }
 
-		const temporary = `${target}.${crypto.randomUUID()}.tmp`
+		const temporary = `${target}.${Bun.randomUUIDv7()}.tmp`
 
 		try {
 			await Bun.write(temporary, bytes)

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, expect, spyOn, test } from 'bun:test'
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs'
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type { Camera } from 'nebulosa/src/devices/indi/device'
@@ -34,7 +34,7 @@ async function waitUntil(condition: () => boolean, timeout = 10000) {
 // A capture request of small, short subframes, with fields replaced.
 function request(patch: Partial<CaptureStartRequest> = {}): CaptureStartRequest {
 	return {
-		token: crypto.randomUUID(),
+		token: Bun.randomUUIDv7(),
 		exposureMode: 'single',
 		count: 1,
 		delay: 0,
@@ -546,7 +546,7 @@ test('the gate of the caller holds each next frame, and its failure ends the cap
 })
 
 // Opens a reservation a tool would pause captures for, released after the test.
-function toolReservation(operations: OperationRegistry, id: string = crypto.randomUUID()) {
+function toolReservation(operations: OperationRegistry, id: string = Bun.randomUUIDv7()) {
 	const reserved = operations.arbiter.reserve({ id, kind: 'mount.meridianFlip' }, [])
 	if (!reserved.ok) throw new Error('reservation refused')
 	disposables.push({ [Symbol.dispose]: () => reserved.reservation.release() })

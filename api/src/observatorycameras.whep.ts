@@ -102,7 +102,7 @@ export class WhepBroker {
 			return refusalOf(response.status, body?.error)
 		}
 
-		const token = crypto.randomUUID()
+		const token = Bun.randomUUIDv7()
 		const sessionId = response.headers.get(SESSION_ID_HEADER) ?? undefined
 		this.#sessions.set(token, { cameraId, epoch, resource: new URL(location, base).toString(), ...(sessionId && { sessionId }) })
 		this.listener(cameraId)

@@ -105,7 +105,7 @@ export class DarvAnalyzer {
 		const worker = this.#idle ?? this.#startWorker()
 		this.#idle = undefined
 		const { promise, resolve, reject } = Promise.withResolvers<DarvImageAnalysisResult>()
-		const jobId = crypto.randomUUID()
+		const jobId = Bun.randomUUIDv7()
 		let reusable = false
 
 		const onMessage = (event: MessageEvent<DarvWorkerResponse>) => {

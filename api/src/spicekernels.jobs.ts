@@ -104,7 +104,7 @@ export class SpiceKernelJobs implements Disposable {
 		if (this.#queue.length >= MAX_QUEUED_SPICE_KERNEL_JOBS) throw new SpiceKernelQueueFullError()
 
 		const now = this.now()
-		const job: SpiceKernelJob = { jobId: crypto.randomUUID(), kind, key, label, state: 'queued', createdAt: now, updatedAt: now }
+		const job: SpiceKernelJob = { jobId: Bun.randomUUIDv7(), kind, key, label, state: 'queued', createdAt: now, updatedAt: now }
 		const entry: JobEntry = { job, task, controller: new AbortController(), published: 0 }
 		this.#entries.set(job.jobId, entry)
 		this.#queue.push(entry)

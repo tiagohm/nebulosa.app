@@ -451,7 +451,7 @@ export class FlatWizardSessions {
 		const held: OperationDevice[] = [{ connectionId, deviceId }, ...[request.wheel, request.panel, request.cover].filter((device) => device !== undefined)]
 		const session: Session = {
 			summary: {
-				sessionId: crypto.randomUUID(),
+				sessionId: Bun.randomUUIDv7(),
 				operationId: '',
 				camera: { connectionId, deviceId },
 				cameraName: camera.name,
@@ -630,7 +630,7 @@ export class FlatWizardSessions {
 		const { signal } = context
 		if (signal.aborted) return failedOperationResult(abortReason(signal))
 
-		const stepId = crypto.randomUUID()
+		const stepId = Bun.randomUUIDv7()
 		const { promise, resolve } = Promise.withResolvers<OperationResult<void>>()
 		const onAbort = () => resolve(failedOperationResult(abortReason(signal)))
 		signal.addEventListener('abort', onAbort, { once: true })

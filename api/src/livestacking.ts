@@ -407,7 +407,7 @@ function viewKey(target: LiveStackingViewTarget) {
 
 // Live Stacking sessions of every camera.
 export class LiveStacking implements Disposable {
-	readonly epoch = crypto.randomUUID()
+	readonly epoch = Bun.randomUUIDv7()
 	readonly #sessions = new Map<string, Session>()
 	readonly #processor: LiveProcessorFactory
 	readonly memoryBudget: number
@@ -478,7 +478,7 @@ export class LiveStacking implements Disposable {
 
 		const recipe = recipeOf(request.recipe)
 		const calibration = request.calibration ?? { filters: {}, otherwise: 'uncalibrated' }
-		const sessionId = crypto.randomUUID()
+		const sessionId = Bun.randomUUIDv7()
 
 		const session: Session = {
 			summary: { sessionId, connectionId, deviceId, cameraName: camera.name, startedAt: Date.now(), recipe, calibration, newFieldRequested: false, retainedBytes: 0, products: [], revision: 0 },
@@ -618,7 +618,7 @@ export class LiveStacking implements Disposable {
 		const frames = stacks.reduce((total, cohort) => total + cohort.accepted, 0)
 		const exposure = stacks.reduce((total, cohort) => total + cohort.exposure, 0)
 		const header = this.#stackHeader(session, target, stacks, 'NaN')
-		const productId = crypto.randomUUID()
+		const productId = Bun.randomUUIDv7()
 		const staging = this.store.stagingDirectory(productId)
 
 		try {
@@ -1117,7 +1117,7 @@ export class LiveStacking implements Disposable {
 
 		for (const name of await this.store.productDirectories()) {
 			if (this.store.hasProduct(name)) continue
-			const target = join(this.store.orphanedDirectory, `${name}-${crypto.randomUUID()}`)
+			const target = join(this.store.orphanedDirectory, `${name}-${Bun.randomUUIDv7()}`)
 
 			try {
 				await mkdir(this.store.orphanedDirectory, { recursive: true })

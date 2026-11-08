@@ -74,7 +74,7 @@ function slow(focuser: { connectionId: string; deviceId: string }) {
 
 // A small preview-only capture request.
 function captureRequest(patch: Partial<CaptureStartRequest> = {}): CaptureStartRequest {
-	return { token: crypto.randomUUID(), exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-only', format: 'FITS' }, ...patch }
+	return { token: Bun.randomUUIDv7(), exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-only', format: 'FITS' }, ...patch }
 }
 
 async function setup() {

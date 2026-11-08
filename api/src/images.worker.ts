@@ -101,7 +101,7 @@ async function readImage(path: string): Promise<{ readonly format: ImageFormat; 
 function documentProperties(name: string, image: Image) {
 	const { width, height, channels, bayer } = image.metadata
 	const cfa = cfaPattern(image.header, channels)
-	return { id: crypto.randomUUID(), name, width, height, channels, header: image.header, acquisition: imageAcquisition(image.header), ...(bayer && { bayer }), ...(cfa && { cfa }) }
+	return { id: Bun.randomUUIDv7(), name, width, height, channels, header: image.header, acquisition: imageAcquisition(image.header), ...(bayer && { bayer }), ...(cfa && { cfa }) }
 }
 
 // Keeps the decoded image of a new document and returns its info.
@@ -226,7 +226,7 @@ function addDerivedDocument(image: Image, provenance: ImageProvenance, cfa: CfaP
 	const pixelSizeInBytes = image.raw.BYTES_PER_ELEMENT
 	const derived: Image = { ...image, header, metadata: { ...image.metadata, bitpix: header.BITPIX as Bitpix, pixelSizeInBytes, strideInBytes: width * channels * pixelSizeInBytes } }
 	const name = derivedName(provenance)
-	const info: ImageInfo = { origin: 'derived', provenance, id: crypto.randomUUID(), name, width, height, channels, header, acquisition: imageAcquisition(header), ...(image.metadata.bayer && { bayer: image.metadata.bayer }), ...(cfa && { cfa }) }
+	const info: ImageInfo = { origin: 'derived', provenance, id: Bun.randomUUIDv7(), name, width, height, channels, header, acquisition: imageAcquisition(header), ...(image.metadata.bayer && { bayer: image.metadata.bayer }), ...(cfa && { cfa }) }
 	documents.set(info.id, { name, image: derived, cfa, autoStretches: new Map() })
 	return info
 }

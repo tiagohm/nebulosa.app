@@ -509,7 +509,7 @@ export class LiveStackingEngine {
 		const needed = imageBytes(frame.image) + liveStackerMemoryBytes(width, height, channels, 4)
 		if (this.retainedBytes + needed > budget) return { frameId: frame.frameId, status: 'rejected', reason: 'capacityExceeded', detail: 'A new field would exceed the memory of Live Stacking', measurement: frame.measurement }
 
-		const field: Field = { fieldId: crypto.randomUUID(), geometry: frame.geometry, reference: { image: frame.image, stars: frame.stars }, cohorts: new Map(), used: ++this.#uses }
+		const field: Field = { fieldId: Bun.randomUUIDv7(), geometry: frame.geometry, reference: { image: frame.image, stars: frame.stars }, cohorts: new Map(), used: ++this.#uses }
 		const cohort: Cohort = { cohortId: cohortIdOf(field.fieldId, frame.segment), stacker: new LiveStacker(this.#options(frame.mask !== undefined), field.reference), accepted: 0 }
 		const result = cohort.stacker.add(this.#stackingFrame(frame))
 		if (!result.accepted) return this.#rejection(frame, result)

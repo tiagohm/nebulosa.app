@@ -47,7 +47,7 @@ function fakeDownload(center: number, dut1: number, requests: string[] = []): No
 
 // Returns a converter on an empty directory of its own, with its clock at `now`, and removes the directory afterwards.
 async function withService(run: (service: AstronomicalTimeService, eop: EarthOrientationData) => Promise<void>, options: EarthOrientationOptions = {}, now: number = NOW) {
-	const directory = join(tmpdir(), `nebulosa-iers-${crypto.randomUUID()}`)
+	const directory = join(tmpdir(), `nebulosa-iers-${Bun.randomUUIDv7()}`)
 	const eop = new EarthOrientationData({ directory, fetch: () => Promise.reject(new Error('offline')), now: () => now, ...options })
 
 	try {
@@ -368,7 +368,7 @@ describe('Earth orientation data', () => {
 
 	test('a read-only copy never downloads', async () => {
 		const requests: string[] = []
-		const data = new EarthOrientationData({ directory: join(tmpdir(), `nebulosa-iers-${crypto.randomUUID()}`), fetch: fakeDownload(NOW, 0.25, requests), now: () => NOW, refresh: false })
+		const data = new EarthOrientationData({ directory: join(tmpdir(), `nebulosa-iers-${Bun.randomUUIDv7()}`), fetch: fakeDownload(NOW, 0.25, requests), now: () => NOW, refresh: false })
 		await data.prepare()
 		await data.settled()
 		expect(requests).toEqual([])
@@ -388,7 +388,7 @@ describe('Earth orientation data', () => {
 		))
 
 	test('reads the cached table of an earlier refresh, without the network', async () => {
-		const directory = join(tmpdir(), `nebulosa-iers-${crypto.randomUUID()}`)
+		const directory = join(tmpdir(), `nebulosa-iers-${Bun.randomUUIDv7()}`)
 
 		try {
 			const first = new EarthOrientationData({ directory, fetch: fakeDownload(NOW, 0.25), now: () => NOW })

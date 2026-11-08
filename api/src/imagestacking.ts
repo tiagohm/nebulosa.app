@@ -609,7 +609,7 @@ function projectSummary({ analysis: _, ...project }: StackingProject, facts: rea
 // The service. Work waits for the first open, so importing this module touches no file.
 export class ImageStacking {
 	// Id of this process.
-	readonly #epoch = crypto.randomUUID()
+	readonly #epoch = Bun.randomUUIDv7()
 	// Change counter.
 	#revision = 0
 	// First comparison of the frames with the disk.
@@ -716,7 +716,7 @@ export class ImageStacking {
 	async createProject({ name }: { readonly name: string }) {
 		await this.ready()
 		const now = Date.now()
-		const project: StackingProject = { projectId: crypto.randomUUID(), name: name.trim(), revision: 1, createdAt: now, updatedAt: now, settings: DEFAULT_STACKING_SETTINGS }
+		const project: StackingProject = { projectId: Bun.randomUUIDv7(), name: name.trim(), revision: 1, createdAt: now, updatedAt: now, settings: DEFAULT_STACKING_SETTINGS }
 		this.store.putProject(project)
 		this.#changed()
 		return this.project(project.projectId)
@@ -954,7 +954,7 @@ export class ImageStacking {
 		}
 
 		const now = Date.now()
-		const job = this.#saveJob({ jobId: crypto.randomUUID(), projectId, type: 'analysis', state: 'analyzing', createdAt: now, updatedAt: now, found: frames.length, bytes: frames.reduce((sum, frame) => sum + frame.bytes, 0), truncated: false, measured: 0, failures: 0 })
+		const job = this.#saveJob({ jobId: Bun.randomUUIDv7(), projectId, type: 'analysis', state: 'analyzing', createdAt: now, updatedAt: now, found: frames.length, bytes: frames.reduce((sum, frame) => sum + frame.bytes, 0), truncated: false, measured: 0, failures: 0 })
 		const controller = new AbortController()
 		this.#scans.set(job.jobId, controller)
 		const release = this.masters.lease(references)
@@ -1021,7 +1021,7 @@ export class ImageStacking {
 
 		const input: RegistrationGroup[] = []
 		for (const [key, frames] of groups) input.push({ key, frames, reference: project.settings.references[key] })
-		const outcome = await this.analyzer.register({ jobId: crypto.randomUUID(), groups: input, ...(project.settings.referenceGroup !== undefined && { referenceGroup: project.settings.referenceGroup }), now: Date.now() }, onProgress, signal)
+		const outcome = await this.analyzer.register({ jobId: Bun.randomUUIDv7(), groups: input, ...(project.settings.referenceGroup !== undefined && { referenceGroup: project.settings.referenceGroup }), now: Date.now() }, onProgress, signal)
 		if (!this.store.project(projectId)) return
 		const updates: { sourceId: string; analysis: StackingFrameAnalysis }[] = []
 
@@ -1081,7 +1081,7 @@ export class ImageStacking {
 		for (const composites of [false, true]) {
 			for (const name of await this.store.productDirectories(composites)) {
 				if (composites ? this.store.hasComposite(name) : this.store.hasProduct(name)) continue
-				const target = join(this.store.orphanedDirectory, `${name}-${crypto.randomUUID()}`)
+				const target = join(this.store.orphanedDirectory, `${name}-${Bun.randomUUIDv7()}`)
 
 				try {
 					await mkdir(this.store.orphanedDirectory, { recursive: true })
@@ -1244,7 +1244,7 @@ export class ImageStacking {
 	// computed: a newer request aborts this one, which then answers 409 superseded.
 	async previewComposition(projectId: string, composition: StackingComposition) {
 		await this.ready()
-		const { products, input } = await this.#compositionInput(projectId, composition, crypto.randomUUID())
+		const { products, input } = await this.#compositionInput(projectId, composition, Bun.randomUUIDv7())
 		this.#preview?.abort(new DOMException('Superseded', 'AbortError'))
 		const controller = new AbortController()
 		this.#preview = controller
@@ -1267,7 +1267,7 @@ export class ImageStacking {
 		await this.ready()
 		const project = this.#project(projectId)
 		if ([...this.#jobs.values()].some((job) => job.type === 'composition' && ACTIVE_JOB_STATES.has(job.state))) throw new StackingError('Another composition is running', 409, 'jobConflict')
-		const jobId = crypto.randomUUID()
+		const jobId = Bun.randomUUIDv7()
 		const { validation, products, input } = await this.#compositionInput(projectId, composition, jobId)
 		if (validation.reusedCompositeId !== undefined) return { composite: await this.#compositeSummary(this.store.composite(validation.reusedCompositeId)!), reused: true }
 
@@ -1305,7 +1305,7 @@ export class ImageStacking {
 				signal,
 			)
 			if (!this.store.project(job.projectId)) throw new Error('The project was deleted')
-			const compositeId = crypto.randomUUID()
+			const compositeId = Bun.randomUUIDv7()
 			const composite: StackingComposite = { compositeId, projectId: job.projectId, fingerprint, createdAt: Date.now(), contentDigest: image.contentDigest, bytes: image.bytes, width: image.width, height: image.height, left: image.left, top: image.top, composition, diagnostics: image.diagnostics }
 			this.store.beginComposite(composite)
 
@@ -1500,7 +1500,7 @@ export class ImageStacking {
 		if (plan.problems.length > 0) throw new StackingError(plan.problems[0], 409, plan.code ?? 'notReady')
 
 		const now = Date.now()
-		const jobId = crypto.randomUUID()
+		const jobId = Bun.randomUUIDv7()
 		const pending = plan.groups.filter((group) => group.reusedProductId === undefined)
 		const job = this.#saveJob({ jobId, projectId, type: 'integration', token: request.token, state: 'integrating', createdAt: now, updatedAt: now, found: pending.reduce((sum, group) => sum + group.frames, 0), bytes: 0, truncated: false, measured: 0, published: 0 })
 
@@ -1604,7 +1604,7 @@ export class ImageStacking {
 		}
 
 		if (!this.store.project(projectId)) throw new Error('The project was deleted')
-		const productId = crypto.randomUUID()
+		const productId = Bun.randomUUIDv7()
 
 		const product: StackingProduct = {
 			productId,
@@ -1796,7 +1796,7 @@ export class ImageStacking {
 		}
 
 		const now = Date.now()
-		const job = this.#saveJob({ jobId: crypto.randomUUID(), projectId, type: 'import', state: 'scanning', createdAt: now, updatedAt: now, found: 0, bytes: 0, truncated: false })
+		const job = this.#saveJob({ jobId: Bun.randomUUIDv7(), projectId, type: 'import', state: 'scanning', createdAt: now, updatedAt: now, found: 0, bytes: 0, truncated: false })
 		const controller = new AbortController()
 		this.#scans.set(job.jobId, controller)
 		void this.#scan(job, paths, recursive, controller.signal)

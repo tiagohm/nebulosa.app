@@ -292,7 +292,7 @@ export class Workspace {
 	ensureProfile(now: number = Date.now()): boolean {
 		const { db } = this.database
 		if (db.query('SELECT 1 FROM profiles LIMIT 1').get()) return false
-		db.query('INSERT INTO profiles (id, name, connection_id, active_site_id, sort_order, revision, created_at, updated_at) VALUES (?, ?, NULL, NULL, 0, 1, ?, ?)').run(crypto.randomUUID(), DEFAULT_PROFILE_NAME, now, now)
+		db.query('INSERT INTO profiles (id, name, connection_id, active_site_id, sort_order, revision, created_at, updated_at) VALUES (?, ?, NULL, NULL, 0, 1, ?, ?)').run(Bun.randomUUIDv7(), DEFAULT_PROFILE_NAME, now, now)
 		return true
 	}
 

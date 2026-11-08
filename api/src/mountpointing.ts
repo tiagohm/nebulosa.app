@@ -148,7 +148,7 @@ export class PointingModels {
 		if (refusal) return errorResponse(refusal, 422, 'invalidParameter')
 
 		const { label, notes, mount, site, optics, plan, samples, fit } = document
-		const modelId = crypto.randomUUID()
+		const modelId = Bun.randomUUIDv7()
 		const model = await this.store.create({ modelId, label, ...(notes !== undefined && { notes }), mount, site, optics, origin: 'import', createdAt: Date.now(), plan, acquisition: { sessionId: '', state: 'stopped' }, samples, revisions: [] })
 		this.published(model)
 
@@ -232,7 +232,7 @@ export class PointingModels {
 			const parent = model.revisions.at(-1)?.revisionId
 
 			const revision: PointingRevision = {
-				revisionId: crypto.randomUUID(),
+				revisionId: Bun.randomUUIDv7(),
 				...(parent !== undefined && { parent }),
 				createdAt: Date.now(),
 				request: strategy,

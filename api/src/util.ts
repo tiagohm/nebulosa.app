@@ -10,7 +10,7 @@ import { dirname } from 'path'
 // missing. Throws when the file cannot be written; the previous file is then left as it was.
 export async function writeAtomically(file: string, text: string) {
 	await mkdir(dirname(file), { recursive: true })
-	const temporary = `${file}.${crypto.randomUUID()}.tmp`
+	const temporary = `${file}.${Bun.randomUUIDv7()}.tmp`
 
 	try {
 		const handle = await open(temporary, 'w', 0o600)

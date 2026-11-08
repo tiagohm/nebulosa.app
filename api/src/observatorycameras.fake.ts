@@ -75,8 +75,8 @@ Bun.serve({
 				return Response.json({ status: 'error', error: `source of path '${pathName}' has timed out` }, { status: 400 })
 			}
 
-			const id = crypto.randomUUID()
-			const secret = crypto.randomUUID()
+			const id = Bun.randomUUIDv7()
+			const secret = Bun.randomUUIDv7()
 			sessions.set(id, pathName)
 			sessions.set(`${id}:${secret}`, pathName)
 			console.info(`2026/11/06 10:58:06 INF [path ${pathName}] stream is available and online, 1 track (H264)`)

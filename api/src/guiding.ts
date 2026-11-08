@@ -13,7 +13,7 @@ import type { Image } from 'nebulosa/src/imaging/model/types'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
 import { assessGuidingCalibration, type GuidingCalibrationAssessment } from 'nebulosa/src/observation/guiding/calibration.quality'
-import { DECLINATION_SCALE_TOLERANCE, type GuidingCalibrationContext, type GuidingCalibrationRecord, type GuidingCalibrationTransformation, type GuidingCalibrationTransformOptions } from 'nebulosa/src/observation/guiding/calibration.transform'
+import { DECLINATION_SCALE_TOLERANCE, type GuidingCalibrationRecord, type GuidingCalibrationTransformation, type GuidingCalibrationTransformOptions } from 'nebulosa/src/observation/guiding/calibration.transform'
 import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationConfig, type GuidingCalibrationDiagnostics, type GuidingCalibrationPhase } from 'nebulosa/src/observation/guiding/calibrator'
 import { GuiderClient, type GuideFrameImage, type GuiderClientConnectOptions, type GuiderClientGuiderOptions, type GuiderClientOptions } from 'nebulosa/src/observation/guiding/client'
 import type { DitherAmount } from 'nebulosa/src/observation/guiding/ditherer'
@@ -951,7 +951,7 @@ export class GuidingSessions implements Disposable {
 
 		const session: Session = {
 			summary: {
-				sessionId: crypto.randomUUID(),
+				sessionId: Bun.randomUUIDv7(),
 				operationId: '',
 				camera: cameraDevice,
 				cameraName: camera.name,
@@ -1168,7 +1168,7 @@ export class GuidingSessions implements Disposable {
 	#mountMoved(session: Session) {
 		if (!session.stopOnSlew || !session.summary.guideOutputHeld || session.stoppingForSlew || session.ending) return
 		session.stoppingForSlew = true
-		const commandId = crypto.randomUUID()
+		const commandId = Bun.randomUUIDv7()
 		this.#update(session, { command: { commandId, command: 'stopGuiding', state: 'running' }, interruption: { reason: 'externalSlew', time: Date.now() } })
 
 		void this.#settle(session, commandId, 'stopGuiding', session.interactive.stopGuiding(session.scope)).then((stopped) => {
@@ -1478,7 +1478,7 @@ export class GuidingSessions implements Disposable {
 			if (!extended.ok) return failedOperationResult('busy', 'The guide output or the mount cannot be reserved')
 		}
 
-		const commandId = crypto.randomUUID()
+		const commandId = Bun.randomUUIDv7()
 		this.#update(session, { command: { commandId, command: 'stopGuiding', state: 'running' } })
 
 		const stopped = await this.#settle(session, commandId, 'stopGuiding', session.interactive.stopGuiding(session.scope))
@@ -1512,7 +1512,7 @@ export class GuidingSessions implements Disposable {
 		}
 
 		session.interactive.setCalibrationContext(context)
-		const restoring = crypto.randomUUID()
+		const restoring = Bun.randomUUIDv7()
 		this.#update(session, { command: { commandId: restoring, command: 'startGuiding', state: 'running' } })
 		const started = this.#settle(session, restoring, 'startGuiding', session.interactive.startGuiding(session.scope, session.scope, { recalibrate: !reused, settle }))
 		const { promise: aborted, resolve } = Promise.withResolvers<undefined>()
@@ -1613,7 +1613,7 @@ export class GuidingSessions implements Disposable {
 		const known = session.tokens.get(token)
 		if (known) return { ...known, repeated: true }
 
-		const commandId = crypto.randomUUID()
+		const commandId = Bun.randomUUIDv7()
 		this.#update(session, { command: { commandId, command, state: 'running' } })
 
 		const settled = this.#settle(session, commandId, command, run(session)).then((result): GuidingCommandStatus => (result.ok ? { commandId, command, state: 'succeeded' } : { commandId, command, state: 'failed', reason: result.reason, ...(result.error !== undefined && { error: result.error }) }))
@@ -1717,7 +1717,7 @@ export class GuidingSessions implements Disposable {
 		session.calibration = info
 
 		if (record && evidence) {
-			const storedId = crypto.randomUUID()
+			const storedId = Bun.randomUUIDv7()
 
 			try {
 				this.calibrations.insert({ calibrationId: storedId, createdAt: record.acquiredAt, record, evidence, assessment })

@@ -1,4 +1,5 @@
 import type { ObservatoryCamera, RtspTransport } from 'api'
+import { nanoid } from 'nanoid'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { siteState } from '../../location/site'
@@ -40,7 +41,7 @@ export interface CameraEditorProps {
 // Editor of a camera in a dialog; mounted while open.
 export function CameraEditor({ camera, defaultSiteId, onClose }: CameraEditorProps) {
 	const { sites } = useSnapshot(siteState)
-	const [id] = useState(() => camera?.id ?? crypto.randomUUID())
+	const [id] = useState(() => camera?.id ?? nanoid())
 	const [name, setName] = useState(camera?.name ?? '')
 	const [siteId, setSiteId] = useState(camera ? (camera.observingSiteId ?? SHARED) : (defaultSiteId ?? SHARED))
 	const [source, setSource] = useState('')

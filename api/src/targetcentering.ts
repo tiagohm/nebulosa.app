@@ -22,7 +22,6 @@ import { type CaptureFrame, type CaptureSettings, exposureProgressListener } fro
 import { type ClientResolver, type CommandErrorCode, type CommandRefusal, type CommandRequest, notFound, refusal, refusalResponse, resolveConnected } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { GuidingRestoration, GuidingSessions, GuidingSuspension } from './guiding'
-import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import type { MountCommands } from './mounts'
 import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
@@ -455,7 +454,7 @@ export class TargetCenteringSessions {
 		const { token, ...settings } = request
 		const session: Session = {
 			summary: {
-				sessionId: crypto.randomUUID(),
+				sessionId: Bun.randomUUIDv7(),
 				operationId: '',
 				camera: { connectionId, deviceId },
 				cameraName: camera.name,

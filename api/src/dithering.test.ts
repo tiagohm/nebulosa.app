@@ -46,7 +46,7 @@ const GUIDED: CaptureDither = { method: 'guided', everyFrames: 3, guidingSession
 // A fixed capture of small, short, previewed LIGHT frames that dithers, with fields replaced.
 function request(patch: Partial<CaptureStartRequest> = {}): CaptureStartRequest {
 	return {
-		token: crypto.randomUUID(),
+		token: Bun.randomUUIDv7(),
 		exposureMode: 'fixed',
 		count: 7,
 		delay: 0,
@@ -462,7 +462,7 @@ describe('mount dithering of a capture', () => {
 describe('dithering across a pause', () => {
 	// Opens a reservation a tool pauses captures for, released after the test.
 	const toolReservation = (operations: OperationRegistry) => {
-		const reserved = operations.arbiter.reserve({ id: crypto.randomUUID(), kind: 'mount.meridianFlip' }, [])
+		const reserved = operations.arbiter.reserve({ id: Bun.randomUUIDv7(), kind: 'mount.meridianFlip' }, [])
 		if (!reserved.ok) throw new Error('reservation refused')
 		disposables.push({ [Symbol.dispose]: () => reserved.reservation.release() })
 		return reserved.reservation
@@ -476,7 +476,7 @@ describe('dithering across a pause', () => {
 
 			for (const pausedAfter of [1, 4]) {
 				await waitUntil(() => (sessions().at(-1)?.captured ?? 0) >= pausedAfter)
-				const suspended = await captures.suspendForMotion(admitted.sessionId, { id: crypto.randomUUID(), holder: 'Flip', reservation }, new AbortController().signal)
+				const suspended = await captures.suspendForMotion(admitted.sessionId, { id: Bun.randomUUIDv7(), holder: 'Flip', reservation }, new AbortController().signal)
 				if (!('status' in suspended) || suspended.status !== 'suspended') throw new Error('not suspended')
 				expect(suspended.handle.resume()).toBe('resumed')
 			}
@@ -525,7 +525,7 @@ describe('dithering across a pause', () => {
 
 test('a pause asked during a dither waits for it and never dithers that boundary again', async () => {
 	const { admit, captures, operations, fake, sessions } = await setup()
-	const reserved = operations.arbiter.reserve({ id: crypto.randomUUID(), kind: 'mount.meridianFlip' }, [])
+	const reserved = operations.arbiter.reserve({ id: Bun.randomUUIDv7(), kind: 'mount.meridianFlip' }, [])
 	if (!reserved.ok) throw new Error('reservation refused')
 	disposables.push({ [Symbol.dispose]: () => reserved.reservation.release() })
 	const settle = Promise.withResolvers<GuidingCommandStatus>()

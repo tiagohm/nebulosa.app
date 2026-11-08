@@ -142,7 +142,7 @@ export class NotificationService {
 			record = this.database.write(() => {
 				const { db } = this.database
 				if (db.query('SELECT 1 FROM notifications WHERE key = ?').get(key)) return undefined
-				const id = crypto.randomUUID()
+				const id = Bun.randomUUIDv7()
 				const inserted = db
 					.query<NotificationRow, [string, string, number, string, string, string, string, string, string | null]>(
 						'INSERT INTO notifications (id, key, created_at, level, code, title, message, source, target) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (key) DO NOTHING RETURNING sequence, id, created_at, level, code, title, message, source, target',

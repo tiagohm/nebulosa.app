@@ -146,7 +146,7 @@ export class AnalysisScheduler<J extends AnalysisJob, R, P, V extends string> {
 		const size = this.images.retain(imageId)
 		if (!size) return undefined
 
-		const job = { ...fields, jobId: crypto.randomUUID(), imageId, state: 'queued', queuedAt: Date.now() } as J
+		const job = { ...fields, jobId: Bun.randomUUIDv7(), imageId, state: 'queued', queuedAt: Date.now() } as J
 		const entry: AnalysisEntry<J, P> = { job, preparation, key, size, controller: new AbortController(), done: Promise.withResolvers() }
 		this.#entries.set(job.jobId, entry)
 		this.#queue.push(entry)

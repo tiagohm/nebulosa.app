@@ -508,7 +508,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		if (previous && previous.summary.endedAt === undefined) return errorResponse('A Dark Library Wizard session is running on this camera', 409, 'alreadyRunning')
 
 		const offered: SessionDevices = { camera, wheel, panel, cover }
-		const plan = this.#newPlan(crypto.randomUUID(), request, offered)
+		const plan = this.#newPlan(Bun.randomUUIDv7(), request, offered)
 		const { protection } = plan
 		const refused = usable(plan, offered)
 		if (refused) return refused
@@ -542,7 +542,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 			exposure: group.exposure,
 			temperature: group.temperature,
 			count: group.count,
-			groupId: crypto.randomUUID(),
+			groupId: Bun.randomUUIDv7(),
 			key: darkGroupKey(group, capture, hardwareId),
 		}))
 		const device = (entry: Device) => ({ hardwareId: resourceKey(entry), name: entry.name })
@@ -588,7 +588,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 			plan,
 			snoop,
 			summary: {
-				sessionId: crypto.randomUUID(),
+				sessionId: Bun.randomUUIDv7(),
 				operationId: '',
 				planId: plan.planId,
 				camera: { connectionId, deviceId },
@@ -718,7 +718,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		const { signal } = context
 		if (signal.aborted) return failedOperationResult(abortReason(signal))
 
-		const stepId = crypto.randomUUID()
+		const stepId = Bun.randomUUIDv7()
 		const { promise, resolve } = Promise.withResolvers<OperationResult<void>>()
 		const onAbort = () => resolve(failedOperationResult(abortReason(signal)))
 		signal.addEventListener('abort', onAbort, { once: true })
@@ -1086,7 +1086,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 
 	// Returns the record of a frame.
 	#frameRecord(session: Session, index: number, { sequence, time, measurement, assessment, trace }: ExaminedFrame, path: string, size: number, verdict: DarkFrameVerdict): DarkFrameRecord {
-		return { frameId: crypto.randomUUID(), groupId: session.plan.groups[index].groupId, sequence, path, size, time, verdict, planes: measurement.planes, header: measurement.header, ...assessment, ...temperatureRecord(trace) }
+		return { frameId: Bun.randomUUIDv7(), groupId: session.plan.groups[index].groupId, sequence, path, size, time, verdict, planes: measurement.planes, header: measurement.header, ...assessment, ...temperatureRecord(trace) }
 	}
 
 	// Publishes an examined frame as the latest attempt of the session.
@@ -1215,7 +1215,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		if (files.length > 0) {
 			const rejected = join(darksDirectory(plan), REJECTED_DIRECTORY)
 			await mkdir(rejected, { recursive: true })
-			for (const file of files) await publishFrame(join(staging, file), join(rejected, `incomplete_${crypto.randomUUID()}.fit`))
+			for (const file of files) await publishFrame(join(staging, file), join(rejected, `incomplete_${Bun.randomUUIDv7()}.fit`))
 		}
 
 		await rmdir(staging).catch(() => undefined)

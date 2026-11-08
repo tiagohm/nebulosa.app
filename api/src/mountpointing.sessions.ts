@@ -420,7 +420,7 @@ export class MountPointingSessions {
 		if (plan?.waypoints.length === 0) return unsupported('The allowed sky holds no waypoint')
 
 		const startedAt = Date.now()
-		const sessionId = crypto.randomUUID()
+		const sessionId = Bun.randomUUIDv7()
 		const model = continued ?? (await this.#createModel(request, plan!, sessionId, camera, mount, site, startedAt))
 
 		// Creating the model gave way to other requests, so what was checked is checked again.
@@ -518,7 +518,7 @@ export class MountPointingSessions {
 
 		const session: Session = {
 			summary: {
-				sessionId: crypto.randomUUID(),
+				sessionId: Bun.randomUUIDv7(),
 				kind: 'verification',
 				revisionId,
 				modelId,
@@ -636,7 +636,7 @@ export class MountPointingSessions {
 		const subframe = capture.subframe ? { subframe: { x: capture.x, y: capture.y, width: capture.width, height: capture.height } } : {}
 
 		return this.models.store.create({
-			modelId: crypto.randomUUID(),
+			modelId: Bun.randomUUIDv7(),
 			label: label?.trim() || `${mount.name} ${new Date(createdAt).toISOString().slice(0, 16).replace('T', ' ')}`,
 			mount: identityOf(mount, request.mount.connectionId),
 			site,
@@ -1017,7 +1017,7 @@ export class MountPointingSessions {
 		const uncorrectedRms = rootMeanSquare(uncorrected)
 		const correctedRms = rootMeanSquare(corrected)
 		const passed = corrected.length >= MINIMUM_VERIFICATION_TARGETS && correctedRms < uncorrectedRms
-		const verification: PointingVerification = { verificationId: crypto.randomUUID(), createdAt: Date.now(), count: corrected.length, uncorrectedRms, correctedRms, passed }
+		const verification: PointingVerification = { verificationId: Bun.randomUUIDv7(), createdAt: Date.now(), count: corrected.length, uncorrectedRms, correctedRms, passed }
 
 		try {
 			const saved = await this.models.store.update(modelId, (model) => ({ ...model, revisions: model.revisions.map((each) => (each.revisionId === revisionId ? { ...each, verifications: [...each.verifications, verification] } : each)) }))

@@ -295,7 +295,7 @@ export class SolarEclipseService {
 	async #compute(id: string): Promise<SolarEclipseMap | undefined> {
 		const worker = this.#idle ?? this.startWorker()
 		this.#idle = undefined
-		const request: SolarEclipseMapWorkerRequest = { jobId: crypto.randomUUID(), id }
+		const request: SolarEclipseMapWorkerRequest = { jobId: Bun.randomUUIDv7(), id }
 		const { promise, resolve, reject } = Promise.withResolvers<SolarEclipseMap | undefined>()
 		let reusable = false
 

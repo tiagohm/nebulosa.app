@@ -85,7 +85,7 @@ function fakeSolver(images: ImageStore) {
 
 // A small preview-only capture request.
 function captureRequest(): CaptureStartRequest {
-	return { token: crypto.randomUUID(), exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-only', format: 'FITS' } }
+	return { token: Bun.randomUUIDv7(), exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-only', format: 'FITS' } }
 }
 
 async function setup() {

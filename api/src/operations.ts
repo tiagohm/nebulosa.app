@@ -199,7 +199,7 @@ export class OperationRegistry implements Disposable {
 		const known = this.repeated(token)
 		if (known) return known
 
-		const operationId = crypto.randomUUID()
+		const operationId = Bun.randomUUIDv7()
 		const admission = this.#track(operationId, kind, devices, () => start((progress) => this.#progress(operationId, progress)))
 		this.#tokens.set(token, admission)
 		if (this.#tokens.size > MAX_TOKENS) this.#tokens.delete(this.#tokens.keys().next().value!)
@@ -215,7 +215,7 @@ export class OperationRegistry implements Disposable {
 	// result settles; a rejected result fails with reason commandFailed. Returns the running record, whose
 	// id names the operation in every later event.
 	track(kind: OperationKind, devices: readonly OperationDevice[], result: Promise<OperationResult<unknown>>): OperationRecord {
-		return this.#track(crypto.randomUUID(), kind, devices, () => result).record
+		return this.#track(Bun.randomUUIDv7(), kind, devices, () => result).record
 	}
 
 	// Publishes the operation operationId as running, then starts it with start, and publishes it as finished once the

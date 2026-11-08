@@ -194,7 +194,7 @@ async function setup(mountPatch: Partial<Mount> = {}) {
 
 	const policy = (patch: Partial<MeridianFlipExecutorPolicy> = {}): MeridianFlipExecutorPolicy => ({ ...DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY, mountSettleSeconds: 0, ...patch })
 	const request = (patch: Partial<MeridianFlipExecutionRequest> = {}, policyPatch: Partial<MeridianFlipExecutorPolicy> = {}): MeridianFlipExecutionRequest => ({
-		token: crypto.randomUUID(),
+		token: Bun.randomUUIDv7(),
 		setup: { camera, guideOutput: guide, focuser: { connectionId: id, deviceId: focuserId } },
 		policy: policy(policyPatch),
 		centering: {} as never,

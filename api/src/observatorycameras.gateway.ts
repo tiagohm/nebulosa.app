@@ -337,7 +337,7 @@ export class MediaMtxGateway {
 		this.#process = subprocess
 		this.#directory = directory
 		this.#endpoints = { api: `http://127.0.0.1:${apiPort}`, webrtc: `http://127.0.0.1:${webrtcPort}` }
-		this.#epoch = crypto.randomUUID()
+		this.#epoch = Bun.randomUUIDv7()
 		// The exit is handled once its output was read, so the reason it printed is known.
 		void Promise.all([subprocess.exited, this.#read(subprocess.stdout), this.#read(subprocess.stderr)]).then(() => this.#exited(subprocess))
 

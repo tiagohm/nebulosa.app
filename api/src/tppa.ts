@@ -362,7 +362,7 @@ export class TppaSessions {
 		const cameraDevice = { connectionId, deviceId }
 		const session: Session = {
 			summary: {
-				sessionId: crypto.randomUUID(),
+				sessionId: Bun.randomUUIDv7(),
 				operationId: '',
 				camera: cameraDevice,
 				cameraName: camera.name,

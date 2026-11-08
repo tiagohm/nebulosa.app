@@ -477,7 +477,7 @@ function mechanicalOf(sample: MeridianMountSample, availability: MeridianAvailab
 // side, and reports the transitions since the previous evaluation. Pure: memory is never mutated, now is Unix
 // milliseconds (UTC) read from the host clock, settings are in force, and newId creates the ids of new contexts and
 // episodes. Transitions are only observed while monitoring, besides monitorUnavailable.
-export function evaluateMeridianFlipMonitor(memory: MeridianFlipMemory, sample: MeridianMountSample, settings: MeridianFlipSettings, now: number, newId: () => string = () => crypto.randomUUID()): MeridianFlipEvaluation {
+export function evaluateMeridianFlipMonitor(memory: MeridianFlipMemory, sample: MeridianMountSample, settings: MeridianFlipSettings, now: number, newId: () => string = () => Bun.randomUUIDv7()): MeridianFlipEvaluation {
 	let { context, episodeId, emitted, settling, interrupted, lost, last } = memory
 	let availability: MeridianAvailability
 	let reason: MeridianMonitorReason | undefined
@@ -688,7 +688,7 @@ export class MeridianFlipService implements Disposable {
 	// Enabled monitors by resourceKey of their mount.
 	readonly #monitors = new Map<string, MonitorEntry>()
 	// Id of this process run.
-	readonly #epoch = crypto.randomUUID()
+	readonly #epoch = Bun.randomUUIDv7()
 	// Revision of the last publication.
 	#revision = 0
 	// Evaluates every monitor while any is enabled.
@@ -730,7 +730,7 @@ export class MeridianFlipService implements Disposable {
 			return monitorError('This mount is already monitored through another connection', 409, 'conflict')
 		}
 
-		const entry: MonitorEntry = { connectionId, deviceId, monitorId: crypto.randomUUID(), key, mount, settings, settingsRevision: 1, memory: INITIAL_MERIDIAN_FLIP_MEMORY, sampledAt: 0, revision: 0, published: '', publishedAt: 0, operations: new Set(), transitions: [] }
+		const entry: MonitorEntry = { connectionId, deviceId, monitorId: Bun.randomUUIDv7(), key, mount, settings, settingsRevision: 1, memory: INITIAL_MERIDIAN_FLIP_MEMORY, sampledAt: 0, revision: 0, published: '', publishedAt: 0, operations: new Set(), transitions: [] }
 
 		for (const operation of this.operations.running()) this.#track(entry, operation)
 
@@ -852,7 +852,7 @@ export class MeridianFlipService implements Disposable {
 		this.#publishMonitor(entry)
 
 		for (const draft of transitions) {
-			const transition: MeridianFlipTransition = { transitionId: crypto.randomUUID(), monitorId: entry.monitorId, connectionId: entry.connectionId, deviceId: entry.deviceId, contextId: context?.id, episodeId, revision: entry.revision, at: now, ...draft }
+			const transition: MeridianFlipTransition = { transitionId: Bun.randomUUIDv7(), monitorId: entry.monitorId, connectionId: entry.connectionId, deviceId: entry.deviceId, contextId: context?.id, episodeId, revision: entry.revision, at: now, ...draft }
 			entry.transitions.push(transition)
 			if (entry.transitions.length > TRANSITION_HISTORY) entry.transitions.shift()
 			this.publish({ type: 'meridianFlip:transition', epoch: this.#epoch, transition })

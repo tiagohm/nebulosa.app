@@ -69,7 +69,7 @@ export class FlatWizardAnalyzer {
 	// of a final frame. Resolves the measurement; rejects when the file is not a readable FITS image, the
 	// worker failed or timed out, or signal aborted it.
 	measure(path: string, context: FlatFrameContext, options: FlatMeasurementOptions, sample: boolean, signal: AbortSignal): Promise<FlatFrameMeasurement> {
-		const run = this.#queue.then(() => this.#measure({ jobId: crypto.randomUUID(), path, context, options, sample }, signal))
+		const run = this.#queue.then(() => this.#measure({ jobId: Bun.randomUUIDv7(), path, context, options, sample }, signal))
 		this.#queue = run.catch(() => undefined)
 		return run
 	}

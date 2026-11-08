@@ -200,7 +200,7 @@ export class MountRemoteControlService implements Disposable {
 	// Running listeners by entryKey.
 	readonly #entries = new Map<string, RemoteEntry>()
 	// Id of this process run.
-	readonly #epoch = crypto.randomUUID()
+	readonly #epoch = Bun.randomUUIDv7()
 	// Revision of the last change.
 	#revision = 0
 

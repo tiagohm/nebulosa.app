@@ -90,6 +90,8 @@ function readinessOf(segments: readonly SpkSegmentDescriptor[], set: SpkKernelSe
 export class SpiceKernelRuntime implements Disposable {
 	#snapshot = LOADING_SNAPSHOT
 	readonly #prepared = new Map<string, PreparedKernel>()
+	// Whether the runtime was disposed: a rebuild still opening files then keeps none of them.
+	#disposed = false
 
 	// Current snapshot. Read it once per calculation and evaluate it synchronously.
 	current(): SpiceKernelSnapshot {
@@ -137,6 +139,13 @@ export class SpiceKernelRuntime implements Disposable {
 		const readiness = new Map<string, SpiceKernelSetReadiness>()
 		if (set) for (const [id, kernel] of opened) readiness.set(id, readinessOf(kernel.segments, set))
 
+		// Disposed while the files were opened (a server stopping in place during a rebuild): nothing is swapped in, and the
+		// files of this rebuild are closed, since the disposal could not see them.
+		if (this.#disposed) {
+			for (const kernel of opened.values()) await kernel.source.close().catch(() => undefined)
+			return failures
+		}
+
 		const previous = [...this.#prepared.entries()]
 		this.#snapshot = { generation: this.#snapshot.generation + 1, policy, loading: false, set, readiness }
 		this.#prepared.clear()
@@ -156,6 +165,7 @@ export class SpiceKernelRuntime implements Disposable {
 
 	// Closes every file, in the background, and returns to the loading snapshot, for a server stopping in place.
 	[Symbol.dispose]() {
+		this.#disposed = true
 		for (const kernel of this.#prepared.values()) void kernel.source.close().catch(() => undefined)
 		this.#prepared.clear()
 		this.#snapshot = LOADING_SNAPSHOT

@@ -294,3 +294,19 @@ test('the routes answer the snapshot, uploads, and errors', async () => {
 	const deleted = await routes['/api/spice-kernels/:id'].DELETE({ params: { id: kernel.id } } as never)
 	expect(deleted.status).toBe(204)
 })
+
+test('a runtime disposed while it opens the kernels keeps none of them', async () => {
+	const database = AppDatabase.memory()
+	const first = setup({}, database)
+	await first.library.start()
+	await first.library.importFile('planets.bsp', stream(PLANETARY))
+	first.library.runtime[Symbol.dispose]()
+
+	const second = setup({}, database, first.directory)
+	const started = second.library.start()
+	second.library.runtime[Symbol.dispose]()
+	await started
+
+	expect(second.library.runtime.current().loading).toBeTrue()
+	expect(second.library.runtime.current().set).toBeUndefined()
+})

@@ -299,6 +299,8 @@ describe('mount pointing sessions', () => {
 
 		expect(sessions.pause(sessionId).status).toBe(409)
 		expect(sessions.stop(sessionId).status).toBe(202)
+		// A resume arriving while the stopped session finishes no longer finds it paused.
+		expect((await sessions.resume(sessionId, { token: Bun.randomUUIDv7() })).status).toBe(409)
 		await waitUntil(() => summary()?.endedAt !== undefined)
 		expect(summary()?.state).toBe('stopped')
 	})

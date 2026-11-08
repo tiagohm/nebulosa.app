@@ -619,7 +619,9 @@ export class MountPointingSessions {
 		const { state } = session.summary
 
 		if (state === 'paused' || state === 'blocked') {
-			void this.#finish(session, 'stopped')
+			// Marked at once, so a resume or a second stop arriving while the session finishes finds it no longer paused.
+			this.#update(session, { state: 'stopping', step: undefined, exposure: undefined })
+			void this.#finish(session, 'stopped').catch((error: unknown) => console.error('mount pointing: the stopped session could not be finished', error))
 			return new Response(null, { status: 202 })
 		}
 

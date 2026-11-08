@@ -702,6 +702,7 @@ class GuideFrameDecoder implements Disposable {
 
 	// Terminates the worker and rejects what it was doing.
 	[Symbol.dispose]() {
+		if (this.#worker === undefined) return
 		this.#worker?.terminate()
 		this.#worker = undefined
 		this.#fail(new Error('the guide frame worker was stopped'))

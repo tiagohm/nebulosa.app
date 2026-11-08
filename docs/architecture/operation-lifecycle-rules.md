@@ -17,15 +17,15 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The web mirrors them in `web/src/operations.ts`.
 - `OperationRecorder` (`api/src/operationhistory.ts`) keeps the history of the operations in `operation_runs`: `publish` of `api/src/index.ts` hands it every event through the `ServerEventDispatcher`, and it writes the start of an operation and its end (state and reason), with the names its devices had, never a progress nor the text of an error, which can hold server paths.
   An operation still running when the server stopped is recorded as `interrupted` when it starts again, and nothing resumes it.
-  Rows older than 90 days or beyond the newest 10 000 are deleted as operations end.
+  Rows beyond its retention (see [Persistence and State](persistence-and-state.md)) are deleted as operations end.
   `GET /api/operations/history?before=&limit=` pages it newest first (at most 200 per page, `next` the cursor of the next page: the start instant and the id of the last operation of the page, since operations a composed tool starts together share a millisecond);
   no screen shows it yet.
 - Operations are owned by the server.
   Switching workspace, profile, camera tab, or mode, collapsing a panel, or unmounting a component never ends one.
 - A server stopped by a signal (`app/src/main.ts`) first cancels every running operation and waits, at most 3 s (`stopOperations` of `api/src/index.ts`, `OperationRegistry.stop`), for their cleanups to stop what they commanded, then closes the database: a driver keeps a motion once its client is gone, so exiting at once would leave a mount moving under a held nudge.
   A second signal ends the process at once.
-  A hot reload of `bun dev` evaluates the server code again in the same process, which kept the previous run alive beside the new one (its device connections, the operations commanding the devices, its listeners, and its database);
-  the new run first stops the previous one in place (`stopServer`: the operations as above, then every service holding devices, sockets, listeners, timers, or workers, the connections, and the database) and opens again the connections it had open (`reopenConnections`).
+  A hot reload of `bun dev` evaluates the server code again in the same process, which would keep the previous run alive beside the new one;
+  the new run first stops the previous one in place (`stopServer` of `api/src/index.ts`, which says what it releases) and opens again the connections it had open (`reopenConnections`).
   Operations and in-memory sessions do not survive a reload; the connections are closed and opened again.
 - Interruptions are distinct commands, offered only when supported: cancel a pending request, abort an exposure, stop guiding, stop mount motion, stop a persistent service.
   There is no generic "Cancel": the Abort of the status bar sends the command of each operation, the same as the page that started it (see Status bar).

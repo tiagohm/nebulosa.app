@@ -2,7 +2,7 @@
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- One service, `StreakDetectionService` (`api/src/streaks.ts`, analysis jobs of the Shared Image Contracts with routes `/api/images/:id/streaks` and `/api/streaks` and event `streaks:updated`), detects the approximately straight streaks of an image document for Images → Streak Detection (manual runs only; no capture, sequence, or other analysis starts one).
+- One service, `StreakDetectionService` (`api/src/streaks.ts`, analysis jobs of the [Shared Image Contracts](shared-image.md) with routes `/api/images/:id/streaks` and `/api/streaks` and event `streaks:updated`), detects the approximately straight streaks of an image document for Images → Streak Detection (manual runs only; no capture, sequence, or other analysis starts one).
   It runs the toolkit's `detectStreaks` on a worker of its own (`api/src/streaks.worker.ts`), fed `ImageStore.processingImage`: a full copy of the decoded samples in their own precision and layout, mono, RGB, or a CFA mosaic with its trusted pattern, never the debayered luminance copy of Star Detection nor anything the viewer applies (debayering, stretch, inversion, zoom).
   The analysis plane is `auto` (mono, RGB green, CFA green1) unless the settings name one the image has.
   Bright pixels whose gradient coherence is below `minCoherence` (stars, hot pixels) neither vote nor count in the photometry, so a trail crossing a crowded field is found; 0 keeps them, which a dotted trail of dashes shorter than about 7 px needs.

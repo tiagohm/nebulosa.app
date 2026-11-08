@@ -11,13 +11,12 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Cloud, temperature, humidity, dew point, and sustained wind are instantaneous; precipitation, its probability, and gusts describe the hour before their sample.
   Upstream seconds become milliseconds once.
   The observer's elevation is not sent, since it is a height above the ellipsoid and the service expects terrain, so the forecast's own height is reported with the grid cell.
-- 7Timer!
-  ASTRO gives seeing and transparency (`AstronomicalSample`): classes 1 (best) to 8 (worst), read for those two only, as discrete samples 3 hours apart counted in hours from a model run in UTC, for about 3 days from a run that may be hours old, so coverage is always read from the samples.
+- 7Timer! ASTRO gives seeing and transparency (`AstronomicalSample`): classes 1 (best) to 8 (worst), read for those two only, as discrete samples 3 hours apart counted in hours from a model run in UTC, for about 3 days from a run that may be hours old, so coverage is always read from the samples.
   A class is the service's category for a band, seeing in arcseconds (below 0.5, 0.5–0.75, 0.75–1, 1–1.25, 1.25–1.5, 1.5–2, 2–2.5, above 2.5) and transparency in magnitudes per airmass (below 0.3, 0.3–0.4, 0.4–0.5, 0.5–0.6, 0.6–0.7, 0.7–0.85, 0.85–1, above 1), never a measurement of one value.
   `-9999` and anything outside 1 to 8 are unknown.
   Observed behavior the service does not document or documents otherwise: `api.pl` redirects to its `astro.php`, which rounds the place to 0.1° (`cellDegrees`), not 0.001°, and JSON arrives labeled `text/html`, so its content type is not checked.
   `ac` stays 0: its modes are 2 and 7 km corrections, not a site elevation.
-- Through `RemoteCache` with its limits (`RemoteCacheOptions`): fresh for 30 minutes (Open-Meteo) or 2 hours (7Timer!), one download shared by concurrent requests, a 12 s timeout, a 1 MiB limit, 128 places per service keyed at 0.01° and 0.1°, a failure repeated for a minute without downloading, and the last good value answered as `stale` for up to 6 or 12 hours from its download.
+- Through `RemoteCache` with the limits of `api/src/astroweather.ts`: fresh for 30 minutes (Open-Meteo) or 2 hours (7Timer!), one download shared by concurrent requests, places keyed at 0.01° and 0.1°, a failure repeated for a minute without downloading, and the last good value answered as `stale` for up to 6 or 12 hours from its download.
   The cache is shared by every tab, so no route bypasses it.
   The free services allow fewer than 10,000 Open-Meteo calls a day, and 7Timer! states no limit.
 - `POST /api/astro-weather/night` (`AstroWeatherNightRequest`, `AstroWeatherNight`) answers the night containing an instant, computed from the toolkit and never the network.
@@ -25,10 +24,10 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The previous night is asked with `start − 1` and the next with `end`.
   Crossings use the convention of the Sun Inspector, absent ones are absent, and `darkness` is the time the Sun's center stays below −18°, empty when it never does.
   `display` runs from an hour before sunset to an hour after sunrise, or to the end of the night missing one.
-  The Moon's illuminated fraction and phase are taken at the middle of `display`, and its intervals above the horizon (`moonAboveHorizon`, the rise and set convention of `SkyEphemeris.events`, on a 15-minute search) cover `display`, however many rises and sets fall in it;
+  The Moon's illuminated fraction and phase are taken at the middle of `display`, and its intervals above the horizon (`moonAboveHorizon`, the rise and set convention of `SkyEphemeris.events`, on a coarse search) cover `display`, however many rises and sets fall in it;
   a grazing pass near a polar latitude can be missed.
   This is site-wide guidance: nothing knows a target or its separation from the Moon.
-  A night costs about half a second of local computation, so the latest 10 nights of 16 sites are kept and found by the instant they contain.
+  A night costs about half a second of local computation, so the latest nights of the latest sites are kept (`astroweather.night.ts`) and found by the instant they contain.
 - Reading a forecast (`web/src/tools/astroweather/observing.ts`) is pure and deterministic, with no request and no score: every hour of `display` gets `favorable`, `variable`, `unfavorable`, or `unavailable`, with its reasons and what it misses, beside a reading of the weather alone.
   Its limits are planning heuristics in constants, not scientific or equipment limits.
   Instantaneous values come from the sample starting an hour, and precipitation and gusts from the one ending it.

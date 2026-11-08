@@ -2,14 +2,14 @@
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- One tick drives the star map and the selection (`#followClock` of `web/src/sky/planetarium.ts`): every `SKY_REALTIME_TICK_MS` (15 s) while the clock follows the real time, every 250 ms while playing, and once for a fixed instant.
-  Each tick reads the instant once, shows it on the map, and refreshes the selection's position and events for that same instant (`refreshSkySelection` with the tick's time): accurately on every real-time tick, from the local models every 2 s while playing, and accurately 400 ms after a fixed instant settles.
+- One tick drives the star map and the selection (`#followClock` of `web/src/sky/planetarium.ts`): every `SKY_REALTIME_TICK_MS` (15 s) while the clock follows the real time, frequently while playing, and once for a fixed instant.
+  Each tick reads the instant once, shows it on the map, and refreshes the selection's position and events for that same instant (`refreshSkySelection` with the tick's time): accurately on every real-time tick, from the local models every few ticks while playing, and accurately once a fixed instant settles.
   The time bar's own redraws are display only.
   Once the clock is not playing, an instant more than `MAP_DATA_EPOCH_MS` (a Julian year) from the map data's reloads the catalogs (`mapDataCovers` of `web/src/sky/sky.ts`).
-- Picking tolerates fingers: a touch or pen tap picks within `touchPickRadius` (22 px) and stays a tap within `touchTapSlop` (10 px of travel), a mouse click within `pickRadius` (7 px) and `tapSlop` (3 px) (`InteractionOptions` of `web/src/sky/celestial/`).
+- Picking tolerates fingers: a touch or pen tap picks within a larger radius and stays a tap over a longer travel than a mouse click (`touchPickRadius` and `touchTapSlop` of `InteractionOptions` of `web/src/sky/celestial/`).
 - On the local sky zoomed in to `SKY_ANCHOR_ZOOM` or more, a tick that changes the instant keeps the view on the same point of the sky (recentered after the update) instead of the same point of the horizon, unless the mount is followed;
   at lower zoom the horizon stays still.
-- Selected objects the map data lacks are remembered for the tab (`RememberedObjects` of `web/src/sky/remembered.ts`, at most `REMEMBERED_LIMIT` = 32, the least recently selected forgotten first, in memory only, kept when the map is replaced by the other kind of chart): minor bodies from SBDB as moving bodies drawn at every zoom whatever their magnitude (`alwaysVisible`), and catalog stars and deep-sky objects fainter than the map data as selectable shapes with their name.
+- Selected objects the map data lacks are remembered for the tab (`RememberedObjects` of `web/src/sky/remembered.ts`, at most `REMEMBERED_LIMIT`, the least recently selected forgotten first, in memory only, kept when the map is replaced by the other kind of chart): minor bodies from SBDB as moving bodies drawn at every zoom whatever their magnitude (`alwaysVisible`), and catalog stars and deep-sky objects fainter than the map data as selectable shapes with their name.
   They stay drawn and can be selected again on the map.
   The selected one follows the Inspector's position of each tick; the other minor bodies are moved with local (`fast`) positions at every map update.
   Satellites are never remembered: the satellite layer draws them (see [Artificial Satellites Contract](artificial-satellites.md)).
@@ -17,7 +17,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   "Centre on" a coordinate (the mount, a coordinate or footprint sent from an image) only pans the screen view with `Planetarium.centerOn`/`Celestial.centerOnCoordinate`, keeping the zoom and orientation;
   a point the map cannot project (below the local horizon, or outside the hemisphere the equatorial chart projects) leaves the view unchanged and is said to be so.
 - Handoffs from a solved image (`web/src/sky/footprint.ts`, `skyImageState`, tab memory): Open Coordinates in Sky (the image context menu, and the details of a marker) marks a position and pans to it;
-  Show Footprint in Sky (Images → Plate Solver) draws the outline the selected solution gives to the image borders (24 points per side, broken where the WCS cannot unproject) as a dashed shape of its own beside the framing, with a cross at its centre, and pans to that centre.
+  Show Footprint in Sky (Images → Plate Solver) draws the outline the selected solution gives to the image borders (sampled along each side, broken where the WCS cannot unproject) as a dashed shape of its own beside the framing, with a cross at its centre, and pans to that centre.
   Both keep their positions in the J2000 (ICRS or FK5 J2000) frame of the solution and are converted for the map with the toolkit's IAU 2006/2000A precession-nutation matrix at the instant the catalogs were computed for (`ofDateMatrix`, the conversion of `api/src/sky/catalog.ts`), so they line up with the stars drawn;
   the matrix is computed once per map data load, never per tick, and nothing is requested.
   A footprint is drawn only while its document still shows that image and is dropped otherwise (the document closed, or its camera tab shows another frame);

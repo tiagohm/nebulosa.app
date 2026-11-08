@@ -38,8 +38,9 @@ import type { SkyObserver } from './sky/ephemeris'
 // The operation's root holds the camera and a child of it the mount, both until the end, so nothing comes between an
 // exposure and its correction. Frames are auxiliary files deleted once solved, recorded as the latest frame of their camera
 // (origin targetCentering), never saved as captures. Guiding that may pulse the mount is stopped first, in the operation and
-// before the mount is taken, since it may hold the mount itself, and restored once the mount was released, recalibrating; only
-// what the session stopped is restored, and a failure there is told apart from the position, which stays verified. Guiding it
+// before the mount is taken, since it may hold the mount itself, and restored once the mount was released, with the calibration
+// in use derived again for where the mount points (solved again only where it does not apply, see
+// GuidingSessions.restoreAfterMotion); only what the session stopped is restored, and a failure there is told apart from the position, which stays verified. Guiding it
 // does not stop refuses the start, and the mount is kept from being guided until the operation ends. The guiding that moves
 // the mount is the guiding through the guide output the request names, the GUIDE_OUTPUT of the Equipment Setup, which drives
 // its MOUNT whether it is the mount's own port or a camera's ST4 (which shares no device with the mount, so the arbiter alone

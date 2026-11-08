@@ -1189,8 +1189,8 @@ export async function startEarthOrientation() {
 	installEarthOrientation(earthOrientation)
 }
 
-// Opens the Calibration Library and the projects of Image Stacking in the background, so what a crash left of their
-// products is finished before anyone opens the tools. Called by the app after startDatabase and before it serves; a test
+// Opens the Calibration Library, the projects of Image Stacking, and the saved stacks of Live Stacking in the background,
+// so what a crash left of their products is finished before anyone opens the tools. Called by the app after startDatabase and before it serves; a test
 // that only imports this module opens no file. Never rejects: a request opens them again and reports its failure.
 export function startStores() {
 	void calibrationLibrary.ready().catch((error: unknown) => console.error('The calibration library could not be opened', error))

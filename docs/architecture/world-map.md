@@ -14,7 +14,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Toolkit eclipse paths fit when projected into the same map units; the API draws them on the degree plane (x = longitude + 180, y = 90 − latitude, in degrees), which `DEGREE_PLANE_TRANSFORM` scales to map units.
   Strokes use `vectorEffect="non-scaling-stroke"`.
 - Zoom and pan never re-render React: the view is written to the layers once per animation frame.
-  The basemap is a tile pyramid on a `<canvas>` (`web/src/ui/worldmap.tiles.ts`): level L is the whole map 2^L tiles of 256 device pixels across, up to level 11, rasterized from the SVG's shapes by a worker (`web/src/ui/worldmap.worker.ts`, started from a Blob of self-contained functions, so it needs OffscreenCanvas 2D in workers), so a frame only draws bitmaps already made and never waits for the thousands of country paths.
-  A missing tile is drawn from the matching part of the nearest coarser cached tile and fades in when it arrives; levels 0 to 3 are fetched first and never evicted, so the map is never blank, and at most 256 tiles are kept.
-  Borders keep the SVG's width up to 1.5 device pixels; the children are on an SVG layer with the same zoom and pan, which also sets `--world-map-scale` (viewport pixels per map unit).
+  The basemap is a tile pyramid on a `<canvas>` (`web/src/ui/worldmap.tiles.ts`, which documents its levels and sizes), rasterized from the SVG's shapes by a worker (`web/src/ui/worldmap.worker.ts`, started from a Blob of self-contained functions, so it needs OffscreenCanvas 2D in workers), so a frame only draws bitmaps already made and never waits for the thousands of country paths.
+  A missing tile is drawn from the matching part of the nearest coarser cached tile and fades in when it arrives; the coarsest levels are fetched first and never evicted, so the map is never blank.
+  Borders keep the SVG's width up to a cap (`MAX_BORDER_PIXELS` of the worker); the children are on an SVG layer with the same zoom and pan, which also sets `--world-map-scale` (viewport pixels per map unit).
   Children should be memoized by their owner, since the map renders them again whenever its own props change.

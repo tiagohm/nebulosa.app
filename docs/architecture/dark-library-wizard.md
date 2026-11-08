@@ -29,11 +29,11 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   more than 10 % of the exposure out of tolerance rejects the frame (`temperatureExcursion`), less only notes it (`temperatureTransient`, accepted with warnings).
   A group without a target records what the camera reports and claims nothing, and a camera without a thermometer records `temperatureUnverified`.
   The cooler is never switched off, warmed, or given back a setpoint.
-- Every exposure goes through the shared `CameraCapturer`, one frame per capture, into the staging directory of its plan, and is measured by `DarkLibraryWizardAnalyzer` (`api/src/darklibrarywizard.analysis.ts`) on a worker of its own (`api/src/darklibrarywizard.worker.ts`, embedded by `app/build.ts`) in the digital numbers of the file, reusing the statistics of the toolkit's flat analysis without its targets or verdict.
+- Every exposure goes through the shared `CameraCapturer`, one frame per capture, into the staging directory of its plan, and is measured by `DarkLibraryWizardAnalyzer` (`api/src/darklibrarywizard.analysis.ts`) on a worker of its own (`api/src/darklibrarywizard.worker.ts`, embedded by `app/build.ts`) in the digital numbers of the file.
   `assessDarkFrame` decides it.
   A proven failure rejects it: unreadable, a header that reports another frame type, exposure, gain, offset, or binning, a size off the request by more than 16 pixels (drivers trim) or other than the first frame of its group, non-finite samples.
   A keyword the driver omits is only a note.
-  A suspicion of light never rejects a frame: 1 % of a plane at the clipping limit, a level or tile spread above the baseline of the group once 3 frames were accepted, or a level above `m(t₀)·t/t₀` of a shorter exposure at the same operating point, which holds whatever the pedestal is.
+  A suspicion of light never rejects a frame: saturation, a level or tile spread above the baseline of the group once it has one, or a level above `m(t₀)·t/t₀` of a shorter exposure at the same operating point, which holds whatever the pedestal is (thresholds in the constants of `api/src/darklibrarywizard.analysis.ts`).
   Amp glow, hot pixels, gradients, and pedestal are the signal a dark records, so no rule uses an absolute brightness or the gradient of one frame.
 - Verdicts: `accepted` and `acceptedWithWarnings` count, `rejected` (a proven failure) and `incomplete` (never examined) do not.
   A suspicion on the first frame of a group, when `verifyFirstFrame` is on, and two in a row anywhere, wait in `waitingForDecision` with a `suspectedLight` step: continuing records the frame as acknowledged, and stopping quarantines it.
@@ -49,7 +49,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Nothing is ever deleted, and nothing starts a device by itself.
 - Pausing (`/pause`) takes effect after the current frame was examined and saved, and keeps every device held, reported as the operation's progress, because releasing them would let the protection be undone unnoticed;
   a pause can be withdrawn until then.
-  `/resume` is the operator's assertion of the protection; the verified devices are read again before the next exposure and the temperature is confirmed again.
+  After `/resume` the verified devices are read again before the next exposure and the temperature is confirmed again.
   Stopping (`/stop`) cancels the operation at once, the exposure in flight is lost, and published frames stay.
   A disconnection of a held device cancels the session the same way.
 - Once the operation ended (`restoring`), whatever staging holds is quarantined, the panel is confirmed off whatever it was before, the wheel returns to the slot it started at if the session moved it, and the cover opens if the session closed it and the panel is known to be off.

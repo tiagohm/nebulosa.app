@@ -35,7 +35,7 @@ Image Stacking calibrates its lights with the masters an operator chose among th
   `GET /masters?status=` filters by it, and `?groupId=` by group.
   Dark, bias, and dark-flat masters are Float32 FITS in DN, keep their pedestal, and take no normalization.
   A master flat exists only from flats corrected by a master dark-flat or bias, is dimensionless, has a median of 1 per plane (CFA phase or channel), and is marked `calibratedNormalized`, so no calibrator subtracts a pedestal twice.
-  A master in DN must be read with `sampleScale: 'digital'`: the normalized read rescales float data outside 0..1 per image, and `calibrationMasterImage` of the toolkit converts it with the `fullScaleDn` of its master.
+  A master in DN must be read with `sampleScale: 'digital'` (see Calibrating a light): the normalized read rescales float data outside 0..1 per image.
   The header is written from metadata, never copied, so no stale `BZERO` reaches it.
 - **Jobs.**
   Master builds and import scans are jobs of this process, kept in memory only, with the exact frames a build saw: they survive the tab, never the server, and nothing of them is written but the staging of a running build.
@@ -43,16 +43,15 @@ Image Stacking calibrates its lights with the masters an operator chose among th
   A request always queues a new job (`202` with its `jobId`), and only a repeated token meets the job it started; a completed job names the master it published.
   One master integrates at a time on `calibrationlibrary.worker.ts`, with its own queue instead of `AnalysisScheduler`, which needs an open document.
   A wizard's session end queues automatic jobs, from the frames of one group each and only when every frame is usable and nothing but the temperature asks for a review: `flatSessionEnded` one master flat per completed filter, corrected by the newest matching master dark-flat, else the newest matching master bias (never a stale or unavailable one, and none is queued without one), and `darkSessionEnded`, when the plan asked for masters, one master per complete group.
-  An automatic job waits, checked again every 15 s, while an operation of a `camera.` kind runs (a capture, a wizard, guiding).
+  An automatic job waits while an operation of a `camera.` kind runs (a capture, a wizard, guiding).
   Progress is a heartbeat: there is no limit on a job, but a worker silent for two minutes is terminated.
   A restart forgets every job, the masters a wizard asked for among them, and removes all staging; nothing asks for them again.
   No route lists, cancels, or retries a master job (the snapshot carries the active ones and the latest of the wizards): a new request builds a master again, and the group shows its latest build;
   only the scan of an import can be cancelled (`/imports/:jobId/cancel`).
   The review of an import pages its candidates (`/imports/:jobId/candidates`, `ImportCandidatePage`), each page also answering `ready`, how many of all of them a commit adds as they are; the roles an operator declares are kept across pages.
 - **Memory.**
-  A strip of rows per frame fits a budget of 256 MiB.
-  Uncompressed FITS reads rows from the file (`FitsImageReader.readRows`).
-  Tile-compressed FITS and XISF decode once into a raw spill file in `staging/`, one frame in memory at a time, which trades that memory for disk; `recipes/validate` reports it.
+  A build reads a strip of rows per frame within a budget of 256 MiB (see `api/src/calibrationlibrary.analysis.ts`).
+  Tile-compressed FITS and XISF, which have no addressable rows, decode once into a raw spill file in `staging/`, which trades memory for disk; `recipes/validate` reports it.
 - **Publication.**
   The worker writes and reads back its file in `staging/<jobId>/`;
   the server compares the sources with what the job saw, takes the next master id and records the master as `publishing` in one transaction, renames the directory into `products/<masterId>/`, and only then makes it `published` with the digests of its sources.
@@ -62,7 +61,7 @@ Image Stacking calibrates its lights with the masters an operator chose among th
   a directory of `products/` without a row moves to `calibration-library/orphaned/<name>-<uuid>/` and is reported, never adopted nor deleted;
   and all staging is removed.
   A change of a source is seen by size and modification time at publication.
-  Files reached through two names are told apart by their device and inode, read as a bigint so a 64-bit NTFS file id keeps every digit.
+  Files reached through two names are told apart by their device and inode (`fileIdentity`).
 - **Persistence.**
   `CalibrationLibraryStore` keeps the frames (`calibration_sources`, with what an operator declared about them) and the masters (`calibration_masters`, `calibration_master_sources`, `calibration_master_dependencies`) in the operational database;
   the products stay files.
@@ -75,9 +74,8 @@ Image Stacking calibrates its lights with the masters an operator chose among th
 - **Calibrating a light.**
   Image Stacking, Live Stacking, and the guide frames of Guiding apply masters;
   any other calibrator reads `/api/calibration-library/masters`, keeps the `masterId` and `contentDigest` it used, reads the file with `sampleScale: 'digital'`, and converts it with `calibrationMasterImage(master, fullScaleDn)` (1 for a flat).
-  The recipe is `(light - dark) / flat`, or `(light - bias) / flat`, on the raw mosaic before debayering: a master dark already holds the bias, so no bias is subtracted after it, and a master flat is passed to `calibrate` with `flatRepresentation: 'calibratedNormalized'`, which refuses a dark-flat because the flat already includes it.
+  The recipe is `(light - dark) / flat`, or `(light - bias) / flat`, on the raw mosaic before debayering: a master dark already holds the bias, so no bias is subtracted after it, and a master flat is passed to `calibrate` with `flatRepresentation: 'calibratedNormalized'`, which refuses a dark-flat because the flat already includes it, and with `darkScaling: 'none'`.
   Its dead pixels are not repaired: `invalidFlat: 'passthrough'` leaves those samples without flat correction.
-  A candidate is what `matchesTarget` accepts, never the closest one, and with `darkScaling: 'none'`.
 - **Tool.**
   Tools → Calibration Library (`web/src/tools/calibrationlibrary/`, `/tools/calibration-library[/<group id>]`) mirrors the server through `web/src/calibrationlibrary/calibrationlibrary.ts`, a snapshot and the jobs in `SERVER_STORES` and pages fetched by the view, again whenever a change arrives.
   Library shows the coverage of a page of groups by camera name and operating point (a group covered only by a master of its own role), their states, and the latest master of each, a flat group whose frames have several exposures named by their range (`exposures` of its summary), since only a bias corrects them together;

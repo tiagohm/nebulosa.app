@@ -9,8 +9,7 @@ Route prefixes, each owned by the module named:
 - `/api/connections` (including `/:id/devices`, `/:id/states`): `connection.ts`
 - `/api/connections/:id/indi`: `indi.ts` (directory of the physical INDI devices of a connection, and the writes of their vectors)
 - `/api/connections/:id/<device type>/:deviceId[/<command>]`: one commands module per device type: `mounts`, `guide-outputs`, `focusers`, `wheels`, `rotators`, `covers`, `flat-panels`, `dew-heaters`, `domes`, `cameras` (`mounts.ts` … `cameras.ts`);
-  a camera's `/capture` (with `/stop`, `/abort`), and the `/autofocus`, `/tppa`, `/mount-pointing`, `/target-centering`, `/darv`, `/flat-wizard`, `/dark-library-wizard`, `/live-stacking`, and `/guiding` starts belong to `captures.ts`, `autofocus.ts`, `tppa.ts`, `mountpointing.sessions.ts`, `targetcentering.ts`, `darv.ts`, `flatwizard.ts`, `darklibrarywizard.ts`, `livestacking.ts`, and `guiding.ts`;
-  a mount's `/remote-control/:protocol` belongs to `mountremotecontrol.ts`
+  a camera's `/capture` (with `/stop`, `/abort`), and the `/autofocus`, `/tppa`, `/mount-pointing`, `/target-centering`, `/darv`, `/flat-wizard`, `/dark-library-wizard`, `/live-stacking`, and `/guiding` starts belong to `captures.ts`, `autofocus.ts`, `tppa.ts`, `mountpointing.sessions.ts`, `targetcentering.ts`, `darv.ts`, `flatwizard.ts`, `darklibrarywizard.ts`, `livestacking.ts`, and `guiding.ts`
 - `/api/notifications`: `notifications.ts` (the retained notification history, newest first)
 - `/api/operations`: `operations.ts`
 - `/api/operations/history`: `operationhistory.ts` (the start and end of past operations, newest first, paged)

@@ -9,14 +9,14 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   A closed image is 404, an aborted request 409 `superseded`, too many requests waiting 503 `queueFull`, and a failed measurement 500 `workerFailed` or `timeout`.
 - Measurements run one at a time on a worker of their own (`api/src/starprofile.worker.ts`), at most 8 waiting, in arrival order.
   A request retains its image from the start.
-  It reads only a region around the point (`ImageStore.detectionRegion`, see [Shared Image Contracts](shared-image.md)), reaching `2 × searchRadius + maximumRadius + 4` pixels on every side, so a click never copies the frame and a region edge never flags a star: `nearBorder` and `clipped` only come from the frame edges.
+  It reads only a region around the point (`ImageStore.detectionRegion`, see [Shared Image Contracts](shared-image.md)), reaching `regionHalfSize` pixels on every side (the larger of `2 × searchRadius + maximumRadius + 4`, for the measurement, and `searchRadius + maximumRadius + starDetectionBorder(maximumRadius)`, for the detector), so a click never copies the frame and a region edge never flags a star: `nearBorder` and `clipped` only come from the frame edges.
   An abort takes a request out of the queue; one on the worker cannot be interrupted, so it finishes, its result is dropped, and no other request of the same image is touched.
   A worker that dies or runs for 10 s is replaced.
 - The toolkit does the science (`inspectStarRegion`, `api/src/starprofile.analysis.ts`): `detectStars` finds the star nearest the point within `searchRadius` on a region wide enough for it to start that star (`regionHalfSize`), and `measureStarProfile` measures it, sizing its aperture up to `maximumRadius`.
   The brightest sample of the region is never taken as the star.
   Two stars less than 1 px from being equally near are `ambiguous`, and so is a centroid that moved more than `searchRadius` from its candidate, which followed something else.
   `detectStars` cannot look within `starDetectionBorder(maximumRadius)` of a frame edge (34 px for the default aperture radius of 32 px), so with no candidate there the point itself is measured, and kept only with an HFD of at least 1 px and a peak of at least 6 deviations;
-  the SNR of the profile proves nothing here, since it counts positive flux only and grows with the aperture on a bare sky.
+  the SNR of the profile proves nothing there (see `EDGE_MIN_PEAK` of `api/src/starprofile.analysis.ts`).
   Elsewhere no candidate is `noPeak`, as for a faint star whose search box holds a much brighter neighbor, which the detector leaves out as ASTAP does.
 - Images → Star Profile Inspector (`web/src/images/StarProfileInspectorPanel.tsx`, store `web/src/stars/starprofile.ts`) is an image tool of every document.
   Selecting it runs nothing, and neither does editing its settings: only a click on the image (`onImageClick`, after Star Detection in the click owners) or Analyze Star on the star selected.

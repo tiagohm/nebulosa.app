@@ -4,7 +4,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 - One service, `PlateSolvingService` (`api/src/platesolving.ts`), solves an image document for every consumer: Images → Plate Solver, TPPA, mount pointing sessions, and Target Centering.
   Captures never solve their frames.
-  Providers are ASTAP, Astrometry.net Local (`solve-field`), and Nova Astrometry.net, each resolved once per job from External Tools; a request never names an executable or a URL.
+  Providers are ASTAP, Astrometry.net Local (`solve-field`), and Nova Astrometry.net, each resolved once per job from [External Tools](external-tools.md); a request never names an executable or a URL.
   A provider never falls back to another, so a local failure never uploads an image.
   The libastrometry FFI binding is not a provider (see [External Tools Contract](external-tools.md)).
 - Strategies: `assisted` searches around a position, `blind` over the whole sky.
@@ -17,7 +17,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   It is accepted only when `plateSolutionFrom` proves it (equatorial TAN or TAN-SIP, ICRS or FK5 J2000) and its image size is the document's, within 1 px (ASTAP rebuilds NAXIS from CRPIX); otherwise the job fails as `invalidSolution`.
   A solver that ended normally without a WCS completes with `outcome: noSolution`, which is not a failure.
   The WCS a header already had is reported apart (`GET /api/images/:id/plate-solutions`, `header`) and never replaced; no file is written.
-- Jobs are the analysis jobs of the Shared Image Contracts, with one ASTAP and one solve-field process and two nova solves at a time.
+- Jobs are the analysis jobs of the [Shared Image Contracts](shared-image.md), with one ASTAP and one solve-field process and two nova solves at a time.
   An equivalent request (image, provider, strategy, effective hints, tolerance, downsampling, provider settings) is answered with the job still waiting or running, or with its kept result (200 for both), so a double click, a second tab, or a retry never solves twice.
   The service itself never syncs, slews, or centers a mount; Target Centering does that with what it measures.
 - Nova (`api/src/platesolving.nova.ts`) uploads the FITS copy once, as a private submission, publishes the stages `uploading`, `submitted` (submission id), `solving` (job id), and `retrieving`, polls every 5 s, and gives up after 3 failed requests in a row (`network`) or at the provider timeout.
@@ -48,7 +48,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   A camera tab clears them when it shows another frame.
   A distance reports its great-circle separation, the position angle from north through east, ΔRA and ΔDec (a difference of right ascension, not an angle on the sky), the gnomonic east and north offsets of its end around its start, and its length in pixels, and is drawn along the great circle through the WCS.
   A rectangle is axis-aligned in image pixels, not in right ascension and declination: it reports the great-circle lengths of its four sides, of its two centre lines (between the midpoints of opposite sides), and of its diagonals, and its size in pixels, since one width would mislead under distortion.
-  A circle has a constant angular radius on the sky around its centre, set by a rim point: its outline is that small circle sampled at every position angle (48 to 360 vertices, about one per 6 screen pixels) and projected through the WCS, so it may look elliptical, and it reports its radius, diameter, and centre;
+  A circle has a constant angular radius on the sky around its centre, set by a rim point: its outline is that small circle sampled at every position angle (`CIRCLE_VERTICES`) and projected through the WCS, so it may look elliptical, and it reports its radius, diameter, and centre;
   a degenerate or unprojectable one is unavailable.
   A marker is a fixed point with its coordinates in the WCS frame and its zero-based pixel.
   The measure mode of the viewer toolbar (per document, Pan by default, disabled without a solution or while Guiding picks a star) owns every press: a drag draws, or a click then a second click, and a click places a marker;

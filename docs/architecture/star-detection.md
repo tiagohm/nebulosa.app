@@ -2,7 +2,7 @@
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- One service, `StarDetectionService` (`api/src/stars.ts`, analysis jobs of the Shared Image Contracts with routes `/api/images/:id/stars` and `/api/stars`, event `stars:updated`), detects the stars of an image document for Images → Star Detection (manual runs) and Auto Focus.
+- One service, `StarDetectionService` (`api/src/stars.ts`, analysis jobs of the [Shared Image Contracts](shared-image.md) with routes `/api/images/:id/stars` and `/api/stars`, event `stars:updated`), detects the stars of an image document for Images → Star Detection (manual runs) and Auto Focus.
   Captures never analyze their frames; Guiding, the stacking analyses, and the Star Profile Inspector run the toolkit's detector on their own.
   Results are the toolkit's `DetectedStar` (x, y, HFD, SNR, flux) in 0-based pixel coordinates of the document, origin at the upper-left sample, +X right, +Y down.
 - Providers: `builtin` runs `detectStars`, the toolkit's port of ASTAP's star extraction (it finds the stars `astap` finds on the same image for the same minimum SNR, and measures each with the toolkit's centroid, HFD, and shape), on a worker of its own (`api/src/stars.worker.ts`), fed the grayscale copy of `ImageStore.detectionImage` (a CFA mosaic debayered with its trusted pattern first), one at a time, cancelled or stopped after 120 s (`timeout`) by terminating its worker.

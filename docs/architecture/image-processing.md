@@ -10,7 +10,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - The source is never changed: the image worker hands a full copy (`ImageStore.processingImage`, a trusted pattern named at the image origin) to a worker of its own (`api/src/imageprocessing.worker.ts`), which applies the steps in order, announcing each one, and transfers the result back.
   Only when every step succeeded is the result adopted as **one** derived document (`ImageStore.adopt`, provenance `processing`);
   a failure names its step (`errorStepId`, `processingFailed`), and a failed or cancelled job adopts nothing, even when the cancel arrives during the adoption.
-- Scheduling is the analysis queue of the Shared Image Contracts (arrival order, at most 16 waiting, the source retained until the job ends), with one pipeline at a time and at most one waiting or running pipeline per source image (a second one is `409 busy` with the job).
+- Scheduling is the analysis queue of the [Shared Image Contracts](shared-image.md), with one pipeline at a time and at most one waiting or running pipeline per source image (a second one is `409 busy` with the job).
   A running pipeline is cancelled, or stopped after 10 min (`timeout`), by terminating its worker.
   Results are never reused: running again creates another document.
 - Jobs are published as `imageProcessing:updated` (state, `currentStepIndex`, `completedSteps`, `outputImageId`, the failure), never with pixels or paths;

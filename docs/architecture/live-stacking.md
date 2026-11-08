@@ -25,11 +25,11 @@ It covers the session of a camera (`api/src/livestacking.ts`), the grouping poli
   At most `MAX_PENDING_PAYLOADS` (2) Preview Only frames of a camera are held in memory, the one being integrated included: while the queue is full, the `beforeFrame` gate of the capture waits before the next exposure is prepared (never during one), and a stop, an abort, a pause, a failure, or the end of either side releases it.
   Saved frames queue at most `MAX_SAVED_BACKLOG` (1000) identities; beyond either limit a frame fails to be delivered.
   Frames are integrated one at a time, in order, on a worker per session (`WorkerProcessor`), which is terminated when an integration or an export stalls past `INTEGRATION_STALL_TIMEOUT` (120 s) or crashes: the session fails, its pending frames fail to be delivered, and the capture goes on.
-  Measured on a 4-core Intel Core i5-6500T, a 16-bit frame calibrated with a dark and a flat integrates in 0.45 s at 1 MP mono, 10 s at 26 MP mono, and 5.5 s as an 11.7 MP mosaic (star detection is 65 to 85% of it), and a 26 MP mono export takes 5.6 s: the queue of two keeps the camera busy whenever a frame integrates faster than the next one is exposed, the saved backlog is at most 2.8 hours of integration at 26 MP, and the stall timeout leaves ten times the slowest request.
+  The queue of two keeps the camera busy whenever a frame integrates faster than the next one is exposed, the saved backlog is at most 2.8 hours of integration at 26 MP, and the stall timeout leaves ten times the slowest request (the measurements are at those constants in `api/src/livestacking.ts` and `livestacking.engine.ts`).
 - **Grouping.**
   The header of each frame decides its group (`inspectHeader` of the Calibration Library): the filter is exactly its `FILTER`, trimmed, as Image Stacking keeps it (None without a filter wheel snooped into the capture; unclassified, and skipped, when one was snooped but the header names none);
   a frame that is not a light, or whose size or exposure is unknown, is skipped.
-  A segment is the filter, the acquisition cohort (`cohortKeyOf`: camera, geometry, sample type, CFA layout, binning, gain, offset, readout mode, exposure in integer microseconds, unknowns never matching known values) and the calibration policy (`segmentKeyOf`);
+  A segment is the filter, the acquisition cohort as Image Stacking keys it (`cohortKeyOf`, see [Image Stacking Contract](image-stacking.md)), and the calibration policy (`segmentKeyOf`);
   temperature is not keyed.
   A field is one pointing and its grid: its reference is the first frame of its geometry (`geometryKeyOf`) with at least the minimum stars, and every stack of the field is resampled onto it (`LiveStackingField` of the toolkit), so stacks of different filters on one field can be composed.
   A frame joins the stack of its segment on the field it registers onto, the most recently used first;
@@ -43,18 +43,18 @@ It covers the session of a camera (`api/src/livestacking.ts`), the grouping poli
   Quality only gates through the stars and the registration by default, so a dim narrowband frame is kept.
 - **Calibration.**
   The masters an operator chose for a filter (`LiveStackingCalibration.filters`, by exact filter name) are pinned by id and content: for each frame, `pinnedMaster` must still return them and `matchesTarget` must accept them for that frame (a dark within 1 °C of its temperature and of its exact exposure), else the frame is rejected;
-  they are leased while it is read and applied as Image Stacking does (`calibrateLight`: `(light - dark) / flat`, a bias only without a dark, the unusable pixels of a flat masked).
+  they are leased while it is read and applied as Image Stacking integrates (`calibrateLight`: the recipe of the [Calibration Library Contract](calibration-library.md), the unusable pixels of a flat masked).
   The Calibration Library never chooses: a filter without masters is integrated uncalibrated, in stacks of its own, or skipped (`otherwise`).
   Changing the masters (`PUT /sessions/:sessionId/calibration`) starts other stacks for the frames that follow; no stack is ever recalibrated or mixes calibrated and uncalibrated frames.
 - **Memory.**
   The engine reports the bytes it retains (field references, stacks by `liveStackerMemoryBytes`, held frames, the masters read), and every new field, stack, or held frame is refused with `capacityExceeded` when every session together, with their queued frames, would exceed `DEFAULT_LIVE_STACKING_MEMORY_BUDGET` (4 GiB);
   nothing is ever evicted.
-  The retained bytes match `liveStackerMemoryBytes` with the reference and masters exactly: a 26 MP mono field retains 1170 MiB for its first stack with a dark and a flat and 846 MiB for each other filter, so the budget holds four 26 MP mono filters of one field, or one 26 MP color stack of a one-shot-color camera with the candidates of a new field.
-  It bounds retained memory only: the transient work of a 26 MP frame, snapshot, or composition peaks 1.0 to 1.4 GiB above it, and the snapshot documents of the image store are not counted.
+  The budget holds four 26 MP mono filters of one field, or one 26 MP color stack of a one-shot-color camera with the candidates of a new field (the sizes are at `DEFAULT_LIVE_STACKING_MEMORY_BUDGET`).
+  It bounds retained memory only: the transient work of a frame, snapshot, or composition and the snapshot documents of the image store are not counted.
 - **Views.**
   `POST /sessions/:sessionId/views` with a stack (`{ cohortId }`) or a composition (`{ composition }`: mono stacks of one field mixed as Image Stacking composes masters, `mixChannelRows` and `blendLuminanceRows`) answers a snapshot as a derived document of the image store (provenance `liveStacking`), with the header of a saved stack (the camera and settings of its first frame, `NCOMBINE`, `TOTALEXP`, and the method and masters in `HISTORY`; pixels no frame covered are 0 instead of NaN), so a save from the viewer toolbar writes what it integrates, taken again only when its stacks changed and the previous one is older than `SNAPSHOT_INTERVAL` (1.5 s);
   a session keeps at most four such documents open.
-  A snapshot runs on the worker between integrations: a mono stack takes 20 ms at 1 MP and 0.45 s at 26 MP, a composition of two stacks with a luminance 0.13 s and 3.2 s, so a color view of frames slower than the interval takes about a third of the worker.
+  A snapshot runs on the worker between integrations, so a color view of frames slower than the interval takes about a third of the worker (the timings are at `SNAPSHOT_INTERVAL`).
   Snapshots are linear: display stretches never change a stack or a save.
 - **Saving.**
   `POST /sessions/:sessionId/exports` with a stack or a composition writes one consistent revision as a linear Float32 FITS (the frame being integrated ends first and no other starts until it is written, so its frames, exposure, and header describe its pixels) (`stack.fit`, NaN where no frame covered a pixel; a stack also `coverage.fit`) whose header records the accepted frames, total exposure, method, and masters, in `live-stacking/staging/<id>/`, records it as publishing in `live_stack_products`, renames it into `live-stacking/products/<id>/`, and marks it published;

@@ -9,7 +9,6 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The reduction is not the toolkit's `equatorialFromJ2000`, which the mount manager applies to a J2000 GoTo and which leaves aberration out, so a model of that frame would carry up to about 20″ that drift over the year.
   The error is solved minus command, east and north positive.
 - Fitting (`api/src/mountpointing.fit.ts`, `mountpointing.worker.ts`, embedded by `app/build.ts`) runs on a worker of its own, one fit at a time, since the leave-one-out refits take seconds at the sample counts of a run.
-  Samples cross as plain numbers, because a toolkit `Time` cannot be cloned.
   Cross terms are off by default, because at one site `sinAlt` is an exact combination of `sinDec` and `cosHA·cosDec`, which leaves the default features singular from about 65 samples on;
   pier terms are used only when the training samples hold both sides.
 - Withheld samples never enter a fit.
@@ -76,8 +75,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The result, added to the revision without touching its samples or coefficients, passes with at least 3 targets and a corrected RMS under the uncorrected one.
   A target the revision refuses is skipped with a warning.
 - Software correction (`api/src/mountpointing.corrections.ts`): a GoTo of `MountCommands` (the slew route, the goto route and its in-process form `admitGoTo`, `goToNow` of Mount Remote Control, and `goToWithin`, which sends the first slew of a Target Centering session from inside the operation holding the mount) asks `MountCorrections.plan` what to do with its target, once, and synchronously, since `goToNow` is answered at once, so a model in force is held in memory.
-  J2000 and galactic targets are reduced to the frame of the samples, and JNOW, ecliptic, and Alt/Az targets are of date already.
-  The command comes from `correctPointingCoordinate`, with the model, the support of the target, the expected pier side, the convergence, and the clamp all checked, since an unusable model reports convergence too, and goes with `tolerance: 0`, so the commander never skips a small one.
+  The target is reduced to the frame of the samples (`apparentTarget`), and the command comes from the toolkit's `correctPointingCoordinate`, checked as the module description of `api/src/mountpointing.corrections.ts` says, and goes with `tolerance: 0`, so the commander never skips a small one.
   The corrected target is checked against the horizon again.
   A target the model cannot speak for, or within 1° of the meridian with pier terms (provisional), is refused with `422 correctionRefused`, and nothing moves.
   `flip` is never corrected.

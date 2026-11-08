@@ -21,7 +21,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
     - deadline warning before the window closes (180);
     - settle time (2).
 
-    `evaluateMeridianFlip` of the toolkit classifies them as hour angles (`seconds · SIDEREAL_DRIFT_RATE`, bounded to ±6 sidereal hours, `MAXIMUM_OFFSET_SECONDS`).
+    `evaluateMeridianFlip` of the toolkit classifies them as hour angles, bounded to ±6 sidereal hours (`MAXIMUM_OFFSET_SECONDS`).
     The server does not validate them, so the tool keeps them within range.
     `PATCH …/settings` carries `expectedRevision` of `settingsRevision`, and an outdated one is `409 conflict` with the current monitor.
     The window is a timing preference, never a physical tracking limit of the mount.

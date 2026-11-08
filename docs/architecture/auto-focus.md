@@ -17,14 +17,14 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   a second stop cancels that move where it stands, and an Equipment Control stop or a disconnection never moves the focuser back.
   While a frame is exposed, the summary carries the driver's countdown as `exposure` (microseconds and percent), cleared once the frame was read.
 - Sessions live in memory, the latest of each camera: `GET /api/autofocus` is the snapshot of their summaries, `GET /api/autofocus/:sessionId` the complete record with its measurements (requested and observed position, image id, HFD, star counts) and its curve, sampled from the runner's own regressions (`api/src/autofocus.curve.ts`), and `autofocus:updated` carries every change.
-  Each sampled and verification frame is recorded in the capture frame registry before it is measured (origin `autofocus`, the verification numbered after the samples; see [Capture Frames Contract](capture-frames.md)), whose closing the registry owns, so a measurement's image id stays open only while it is the latest frame of its camera or leased;
+  Each sampled and verification frame is recorded in the capture frame registry before it is measured (origin `autofocus`, the verification numbered after the samples), which owns their closing (see [Capture Frames Contract](capture-frames.md));
   the measurement job retains the document until it ends.
 - `POST /api/connections/:id/cameras/:deviceId/autofocus` starts a session (202 with `sessionId` and `operationId`; a repeated token answers its session), refused with 404 for an unknown camera or focuser, 409 when either is disconnected or held, and 422 when the focuser cannot move to absolute positions or the detector is ASTAP and it is not configured.
   The route answers through `admit(connectionId, deviceId, request, invocation?)`, the start of a caller inside the process, which answers that `CommandRefusal` or the session and operation ids, `repeated`, and `ended`, the final summary once the session released its devices (after the move back of a stop).
   Under an invocation (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)), the camera and the focuser must be reserved by it, and every operation of the session, the move back included, runs inside the reservation;
   a move back after the reservation was cancelled is refused, and the focuser stays where it stands.
   `interrupt(sessionId)` is the in-process stop.
-  A token repeated after a newer session of the camera replaced its own still answers its own session, which `CameraSessionRegistry` remembers by operation (the last 256); the snapshot, the routes of a session id, and the events name only the latest.
+  A token repeated after a newer session of the camera replaced its own still answers its own session (`CameraSessionRegistry`, see the [architecture](../ARCHITECTURE.md)).
 - Limitations: focusers that only move relatively are refused;
   there is one frame per position and no repeated samples;
   the runner's sweep starts `initialOffsetSteps` steps out and comes back one step past the start before extending each side, so it is not symmetric;

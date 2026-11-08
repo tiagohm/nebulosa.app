@@ -510,10 +510,14 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 		return { ok: true, mount }
 	}
 
-	// Decides whether a flip of a mount may start now for a request.
-	#decide(connectionId: string, deviceId: string, mount: Mount, request: MeridianFlipExecutionRequest, trigger: FlipTrigger, expectedContextId?: string): ExecutorEligibility {
+	// Decides whether a flip of a mount may start now for a request. A running execution deciding again once it holds its
+	// devices names its own passage (recheck): its record is no earlier service, and its capture is already paused at the
+	// frame boundary, so no wait remains before the flip and the window and firmware limit are judged from now.
+	#decide(connectionId: string, deviceId: string, mount: Mount, request: MeridianFlipExecutionRequest, trigger: FlipTrigger, expectedContextId?: string, recheck?: string): ExecutorEligibility {
 		this.#forgetPassages()
-		const capture = this.#capture(request.setup)
+		const capture = recheck === undefined ? this.#capture(request.setup) : undefined
+		const serviced = new Set(this.#passages.keys())
+		if (recheck !== undefined) serviced.delete(recheck)
 
 		return evaluateEligibility({
 			now: this.options.now(),
@@ -523,7 +527,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 			policy: { ...DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY, ...request.policy },
 			canInfer: request.setup.camera !== undefined && request.centering !== undefined,
 			boundarySeconds: capture ? capture.request.exposureTime + capture.request.delay + FRAME_OVERHEAD_SECONDS : 0,
-			serviced: new Set(this.#passages.keys()),
+			serviced,
 			expectedContextId,
 		})
 	}
@@ -648,7 +652,10 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 		const policy = session.execution.policy
 		const owner: ResourceReservationOwner = { id: session.execution.sessionId, kind: 'mount.meridianFlipExecutor' }
 		const reserved = this.operations.arbiter.reserve(owner, [])
-		if (!reserved.ok) return this.#end(session, 'failed', { code: 'busy', error: 'The reservation could not be opened' })
+		if (!reserved.ok) {
+			this.#passages.delete(session.execution.passage)
+			return this.#end(session, 'failed', { code: 'busy', error: 'The reservation could not be opened' })
+		}
 		const reservation = reserved.reservation
 		const invocation = { reservation }
 		const hold = setup.guideOutput && this.services.guiding.hold(setup.guideOutput, HOLDER)
@@ -734,9 +741,8 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 				if (!extended.ok) {
 					fail('failed', 'busy', `Another operation holds ${extended.conflicts.map((conflict) => conflict.ownerKind).join(', ')}`)
 				} else {
-					const decision = this.#decide(session.execution.connectionId, session.execution.deviceId, mount, request, session.execution.trigger === 'manual' ? 'manual' : 'scheduled', session.execution.contextId)
-					const serviced = decision.decision === 'refuse' && decision.code === 'alreadyServiced'
-					if (decision.decision !== 'eligible' && !serviced) fail('failed', decision.code, decision.reason)
+					const decision = this.#decide(session.execution.connectionId, session.execution.deviceId, mount, request, session.execution.trigger === 'manual' ? 'manual' : 'scheduled', session.execution.contextId, session.execution.passage)
+					if (decision.decision !== 'eligible') fail('failed', decision.code, decision.reason)
 				}
 
 				this.#stepEnd(session, outcomeOf.failure ? 'failed' : 'done')
@@ -871,6 +877,9 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 			}
 
 			reservation.release()
+
+			// A passage counts as serviced only once its flip was sent; an execution that ended before leaves it to a retry.
+			if (!dispatched) this.#passages.delete(session.execution.passage)
 
 			const outcome: MeridianFlipOutcome = {
 				executionStrategy: session.execution.strategy,

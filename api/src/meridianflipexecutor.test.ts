@@ -383,6 +383,35 @@ test('guiding that is calibrating refuses the flip before the mount moves, and t
 	expect(context.calls).toContain('capture:resume')
 })
 
+test('a scheduled flip is decided again after the frame boundary, refusing a window that closed while waiting', async () => {
+	const context = await setup()
+	const gate = Promise.withResolvers<void>()
+	context.setSuspendGate(gate.promise)
+	expect(context.execute('whenEligible').status).toBe(202)
+	await waitUntil(() => context.calls.includes('capture:suspend'))
+	const running = context.executor.snapshot().executions[0]
+	expect(running).toMatchObject({ trigger: 'scheduled' })
+
+	// The frame took longer than the window lasted: the same passage is now past its deadline.
+	context.setMonitor(openWindow(context.id, context.mountId, {}, { phase: 'pastDeadline' }))
+	gate.resolve()
+	const execution = await context.executor.ended(running.sessionId)!
+
+	expect(execution).toMatchObject({ state: 'failed', code: 'unsafeWindow' })
+	expect(context.calls.some((call) => call.startsWith('flip:'))).toBeFalse()
+	expect(context.calls).toContain('capture:resume')
+})
+
+test('a flip that ended before the mount moved leaves its passage to a retry', async () => {
+	const context = await setup()
+	context.setGuiding('calibrating')
+	expect(await context.ended(context.execute('now'))).toMatchObject({ state: 'failed', code: 'guidingActive' })
+
+	context.setGuiding('guiding')
+	expect(await context.ended(context.execute('now'))).toMatchObject({ state: 'completed' })
+	expect(context.calls.filter((call) => call.startsWith('flip:'))).toHaveLength(1)
+})
+
 test('guiding that cannot be restored leaves the capture paused', async () => {
 	const context = await setup()
 	context.setRestoration('failed')

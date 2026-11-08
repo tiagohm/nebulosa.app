@@ -164,6 +164,10 @@ export class ConnectionManager implements Disposable {
 	readonly #open = new Map<string, OpenConnection>()
 	// In-flight open attempts, shared by concurrent requests for the same endpoint.
 	readonly #pending = new Map<string, Promise<ConnectionStatus>>()
+	// Endpoints whose opening a disconnect cancelled: the client closes as soon as it opened.
+	readonly #cancelled = new Set<string>()
+	// Whether the registry was disposed: a connection that opens afterwards closes at once.
+	#disposed = false
 	// Receivers of every connection:open and connection:close event.
 	readonly #listeners = new Set<ConnectionListener>()
 	// Devices of every open connection, publishing their events to the same listeners.
@@ -177,6 +181,8 @@ export class ConnectionManager implements Disposable {
 		if (open) return Promise.resolve(open.status)
 
 		let pending = this.#pending.get(id)
+		// A new request wants the endpoint open again, whatever an earlier disconnect asked.
+		this.#cancelled.delete(id)
 
 		if (!pending) {
 			pending = this.#connect(id, request).finally(() => this.#pending.delete(id))
@@ -187,21 +193,34 @@ export class ConnectionManager implements Disposable {
 	}
 
 	// Opens the client for request under the endpoint id, registers it as open, and publishes
-	// connection:open. Rejects with the Error thrown by openClient, leaving the registry unchanged.
+	// connection:open. Rejects with the Error thrown by openClient, leaving the registry unchanged, and with an Error when a
+	// disconnect cancelled the opening or the registry was disposed meanwhile, closing the client that opened.
 	async #connect(id: string, request: ConnectRequest): Promise<ConnectionStatus> {
 		const handler = new IndiClientHandlerSet([this.devices.handler, { close: (client: Client) => this.#closed(id, client) }])
 		const client = await openClient(id, request, handler, this.devices)
+
+		if (this.#disposed || this.#cancelled.delete(id)) {
+			client[Symbol.dispose]()
+			this.devices.close(client)
+			throw new Error('The connection was closed while it opened')
+		}
+
 		const status: ConnectionStatus = { ...request, id }
 		this.#open.set(id, { status, client })
 		this.#emit({ type: 'connection:open', connection: status })
 		return status
 	}
 
-	// Closes the connection with the given id for every tab. Returns false when it is not open.
-	// Publishes connection:close with the requested cause.
+	// Closes the connection with the given id for every tab, or cancels its opening, which then fails. Returns false when it
+	// is neither open nor opening. Publishes connection:close with the requested cause for an open one.
 	disconnect(id: string): boolean {
 		const open = this.#open.get(id)
-		if (!open) return false
+
+		if (!open) {
+			if (!this.#pending.has(id)) return false
+			this.#cancelled.add(id)
+			return true
+		}
 
 		// Removed before disposal so the client's own close callback does not publish a second event.
 		this.#open.delete(id)
@@ -242,8 +261,9 @@ export class ConnectionManager implements Disposable {
 		for (const listener of this.#listeners) listener(event)
 	}
 
-	// Closes every open connection.
+	// Closes every open connection; one still opening closes as soon as it opened.
 	[Symbol.dispose]() {
+		this.#disposed = true
 		for (const id of Array.from(this.#open.keys())) this.disconnect(id)
 	}
 }

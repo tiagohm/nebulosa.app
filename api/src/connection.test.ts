@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import type { Focuser, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import type { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
-import { type ConnectionEvent, ConnectionManager } from './connection'
+import { type ConnectionEvent, ConnectionManager, connectionId } from './connection'
 import type { DeviceEvent, DeviceSummary } from './devices'
 import { routes, websocket } from './index'
 import type { ServerEvent } from './websocket'
@@ -233,4 +233,21 @@ describe('routes', () => {
 		expect(messages.filter((m) => m.type === 'device:removed').length).toBeGreaterThanOrEqual(devices.length)
 		expect(await (await fetch(`${server.url}api/connections`)).json()).toEqual([])
 	})
+})
+
+test('a disconnect while a connection opens cancels it, and a disposed registry keeps none it was opening', async () => {
+	const manager = new ConnectionManager()
+	const events: string[] = []
+	manager.listen((event) => events.push(event.type))
+
+	const opening = manager.connect({ type: 'SIMULATOR' })
+	expect(manager.disconnect(connectionId({ type: 'SIMULATOR' }))).toBeTrue()
+	await expect(opening).rejects.toThrow('closed while it opened')
+	expect(manager.list()).toEqual([])
+	expect(events).not.toContain('connection:open')
+
+	const disposed = manager.connect({ type: 'SIMULATOR' })
+	manager[Symbol.dispose]()
+	await expect(disposed).rejects.toThrow('closed while it opened')
+	expect(manager.list()).toEqual([])
 })

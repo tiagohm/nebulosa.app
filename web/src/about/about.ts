@@ -74,6 +74,7 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 			{ name: 'CGI Moon Kit', owner: "NASA's Scientific Visualization Studio", url: 'https://svs.gsfc.nasa.gov/4720/', use: 'Color maps of the Moon Inspector.' },
 			{ name: 'Gazetteer of Planetary Nomenclature', owner: 'USGS Astrogeology Science Center and the IAU', url: 'https://planetarynames.wr.usgs.gov/', use: 'Lunar surface features of the Moon Inspector.' },
 			{ name: 'World location map', owner: 'TUBS, Wikimedia Commons', url: 'https://commons.wikimedia.org/wiki/File:World_location_map_(equirectangular_180).svg', use: 'Basemap of the eclipse maps.', license: { name: 'CC BY-SA 3.0', url: 'https://creativecommons.org/licenses/by-sa/3.0/' } },
+			{ name: 'JetBrains Mono', owner: 'The JetBrains Mono Project Authors', url: 'https://github.com/JetBrains/JetBrainsMono', use: 'Typeface of the interface, bundled with the application.', license: { name: 'SIL Open Font License 1.1', url: 'https://openfontlicense.org/' } },
 		],
 	},
 	{

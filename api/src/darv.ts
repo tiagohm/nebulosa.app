@@ -441,12 +441,13 @@ export class DarvSessions {
 	async #ended(session: Session, running: Measurement, mount: Mount, result: OperationResult<string>) {
 		const { generation } = running
 
+		// The mount is restored before the end is recorded, so a tab sees the measurement ended only once it is as it was.
+		await this.#restore(session, generation, mount)
+
 		if (!result.ok) {
 			const state = result.reason === 'aborted' ? 'aborted' : 'failed'
 			this.#patch(session, generation, { state, ...(state === 'failed' && { reason: result.reason }), ...(result.error !== undefined && { error: result.error }), endedAt: Date.now() })
 		}
-
-		await this.#restore(session, generation, mount)
 
 		if (result.ok && running.aborted) {
 			this.#patch(session, generation, { state: 'aborted', endedAt: Date.now() })

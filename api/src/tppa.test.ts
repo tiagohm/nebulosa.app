@@ -202,7 +202,8 @@ describe('TPPA sessions', () => {
 
 		await waitUntil(() => summary()?.state === 'moving', 30000)
 		expect((await tppa.stop(sessionId)).status).toBe(204)
-		await waitUntil(() => summary()?.slewRateRestored !== undefined)
+		// The session ends only once the slew rate it replaced is restored.
+		await waitUntil(() => summary()?.endedAt !== undefined)
 
 		expect(summary()).toMatchObject({ state: 'cancelled', slewRateRestored: true })
 		expect(isDeviceQuiescent(mount)).toBeTrue()

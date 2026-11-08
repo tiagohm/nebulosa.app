@@ -647,33 +647,35 @@ export class TppaSessions {
 		if (!session.refinement && session.summary.state !== state) this.#sessions.update(session, { state })
 	}
 
-	// Records the end of a session from the result of its operation, then restores the slew rate it replaced and stops
-	// the tracking it started unless the request leaves it on.
+	// Ends a session from the result of its operation: restores the slew rate it replaced and stops the tracking it started
+	// unless the request leaves it on, then records its end, so a tab sees the session ended only once the mount is as it
+	// was, and a session started from that end finds the mount free.
 	async #ended(session: Session, result: OperationResult<void>) {
 		session.frame = undefined
-		const endedAt = Date.now()
 		const estimated = session.summary.alignment !== undefined
-
-		if (result.ok || (result.reason === 'aborted' && estimated)) this.#sessions.update(session, { state: 'completed', exposure: undefined, endedAt })
-		else if (result.reason === 'aborted') this.#sessions.update(session, { state: 'cancelled', exposure: undefined, endedAt })
-		else this.#sessions.update(session, { state: 'failed', exposure: undefined, reason: result.reason, ...(result.error !== undefined && { error: result.error }), endedAt })
-
 		const previous = session.summary.previousSlewRate
 		const { mount } = session
+		const restoration: { slewRateRestored?: boolean; trackingStopped?: boolean } = {}
+		let { warnings } = session.summary
 
 		// The operation released the mount, so each restoration takes it again for itself; another operation that took
 		// it first, or a disconnection, leaves the mount as the session left it.
 		if (previous !== undefined && mount.slewRate !== previous) {
 			const restored = mount.connected && this.operations.available(mount) ? await this.commander.setSlewRate(this.operations.coordinator, mount, previous) : undefined
-			if (restored?.ok) this.#sessions.update(session, { slewRateRestored: true })
-			else this.#sessions.update(session, { slewRateRestored: false, warnings: appendWarning(session.summary.warnings, `The slew rate of ${mount.name} was left at ${mount.slewRate ?? 'an unknown preset'} instead of ${previous}.`) })
+			restoration.slewRateRestored = restored?.ok === true
+			if (!restored?.ok) warnings = appendWarning(warnings, `The slew rate of ${mount.name} was left at ${mount.slewRate ?? 'an unknown preset'} instead of ${previous}.`)
 		}
 
 		if (session.summary.trackingStarted && session.summary.request.stopTracking) {
 			const stopped = !mount.tracking || (mount.connected && this.operations.available(mount) && (await this.commander.setTracking(this.operations.coordinator, mount, false)).ok)
-			if (stopped) this.#sessions.update(session, { trackingStopped: true })
-			else this.#sessions.update(session, { trackingStopped: false, warnings: appendWarning(session.summary.warnings, `The tracking of ${mount.name} that the session started was left on.`) })
+			restoration.trackingStopped = stopped
+			if (!stopped) warnings = appendWarning(warnings, `The tracking of ${mount.name} that the session started was left on.`)
 		}
+
+		const ended = { ...restoration, warnings, exposure: undefined, endedAt: Date.now() }
+		if (result.ok || (result.reason === 'aborted' && estimated)) this.#sessions.update(session, { state: 'completed', ...ended })
+		else if (result.reason === 'aborted') this.#sessions.update(session, { state: 'cancelled', ...ended })
+		else this.#sessions.update(session, { state: 'failed', reason: result.reason, ...(result.error !== undefined && { error: result.error }), ...ended })
 	}
 
 	// Records a warning of a session.

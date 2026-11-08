@@ -2,7 +2,8 @@ import type { IndiClientHandler } from 'nebulosa/src/devices/indi/client'
 import type { Client, Device } from 'nebulosa/src/devices/indi/device'
 import type { IndiDevice, IndiDriver, IndiProperty, IndiPropertyChange, IndiPropertyChangeKind, IndiPropertyListener } from 'nebulosa/src/devices/indi/properties'
 import type { SetVector } from 'nebulosa/src/devices/indi/types'
-import { failedOperationResult, type OperationFailureReason, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { failedOperationResult, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { abortReason } from 'nebulosa/src/devices/orchestration/operation.wait'
 import { busy, type ClientResolver, type CommandAccepted, type CommandErrorCode, type CommandRequest, notFound, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
@@ -462,7 +463,7 @@ export class IndiPropertyService implements SocketListener, Disposable {
 			},
 		}
 
-		const abort = () => write.finish(failedOperationResult((signal?.reason as OperationFailureReason | undefined) ?? 'aborted'))
+		const abort = () => write.finish(failedOperationResult(signal ? abortReason(signal) : 'aborted'))
 		const timer = setTimeout(() => write.finish(failedOperationResult('timeout', `The driver did not report the end of the change of ${property.name} within ${seconds + this.#writeGrace / 1000} s; the device may still be working`)), seconds * 1000 + this.#writeGrace)
 
 		writes.add(write)

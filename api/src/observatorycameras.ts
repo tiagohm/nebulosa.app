@@ -267,7 +267,7 @@ export class ObservatoryCameraService implements Disposable {
 		if (this.#program?.executable === executable && this.#program.timeout === timeout) return
 		void this.#serialized(async () => {
 			if (await this.#gateway.restart()) await this.#reconcile()
-		})
+		}).catch((error: unknown) => console.error('observatory cameras: the media gateway could not be restarted', error))
 	}
 
 	// Publishes the cameras whose observing site was deleted, which are now shared by every site.
@@ -304,7 +304,7 @@ export class ObservatoryCameraService implements Disposable {
 			this.#setStream(camera, undefined)
 		}
 
-		void this.#sync()
+		void this.#sync().catch((error: unknown) => console.error('observatory cameras: the media gateway could not be synchronized', error))
 		return { status: 'saved', camera }
 	}
 
@@ -315,7 +315,7 @@ export class ObservatoryCameraService implements Disposable {
 		this.#streams.delete(id)
 		this.#sites.delete(id)
 		this.#emit({ type: 'observatoryCamera:removed', cameraId: id })
-		void this.#sync()
+		void this.#sync().catch((error: unknown) => console.error('observatory cameras: the media gateway could not be synchronized', error))
 		return true
 	}
 

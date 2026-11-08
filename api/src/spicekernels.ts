@@ -234,7 +234,14 @@ export class SpiceKernelLibrary implements Disposable {
 			}
 
 			this.#loading = false
-			await this.#rebuild()
+
+			try {
+				await this.#rebuild()
+			} catch (error) {
+				console.error('The SPICE kernels could not be opened', error)
+			}
+
+			// Published whatever happened, so the tabs stop showing the library as loading.
 			this.#changed()
 		})
 	}

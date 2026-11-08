@@ -178,7 +178,11 @@ export class LeasedMotions<S extends LeasedSession> implements Disposable {
 		const { operationId } = this.operations.track(this.kind, [{ connectionId: start.connectionId, deviceId: start.deviceId }], operation.result)
 		this.#renew(active)
 		this.#update(active, { operationId } as Partial<S>)
-		void operation.result.then((result) => this.#ended(active, result))
+		// The coordinator rejects the result of an executor that threw; the press still ends, so its device is freed.
+		void operation.result.then(
+			(result) => this.#ended(active, result),
+			(error: unknown) => this.#ended(active, failedOperationResult('commandFailed', Error.isError(error) ? error.message : String(error))),
+		)
 
 		return await this.#startResponse(active)
 	}

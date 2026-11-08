@@ -267,7 +267,7 @@ export class OperationRegistry implements Disposable {
 
 	// Cancels every running operation and stops following the devices.
 	[Symbol.dispose]() {
-		void this.coordinator.cancelAll()
+		void this.coordinator.cancelAll().catch((error: unknown) => console.error('The running operations could not be stopped', error))
 		this.#unobserve()
 		this.#lifecycle.dispose()
 	}

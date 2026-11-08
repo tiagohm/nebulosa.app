@@ -134,6 +134,7 @@ Every contract and reference below is a document of its own under `docs/architec
 - [Saturn Observing Planner Contract](architecture/saturn-observing-planner.md)
 - [Artificial Satellites Contract](architecture/artificial-satellites.md)
 - [SPICE Kernel Library Contract](architecture/spice-kernel-library.md)
+- [Orbital Mechanics Explorer Contract](architecture/orbital-mechanics-explorer.md)
 - [External Tools Contract](architecture/external-tools.md)
 - [Observatory Cameras Contract](architecture/observatory-cameras.md)
 - [Star Detection Contract](architecture/star-detection.md)

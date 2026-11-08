@@ -82,6 +82,7 @@ import { ObservingMinorBodyStore } from './observingplanner.minorbodies.store'
 import { ObservingPlanStore } from './observingplanner.store'
 import { createOperationHistoryRoutes, OperationRecorder } from './operationhistory'
 import { createOperationRoutes, OperationRegistry } from './operations'
+import { createOrbitalMechanicsRoutes, OrbitalMechanicsService } from './orbitalmechanics'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
 import { createSatelliteRoutes, SatelliteService, satelliteSkyAdapter } from './satellites'
@@ -393,6 +394,11 @@ export type { CameraSecretKeyStatus } from './observatorycameras.secret'
 export type { WhepErrorCode } from './observatorycameras.whep'
 export type { OperationDevice, OperationEvent, OperationKind, OperationProgress, OperationRecord, OperationState } from './operations'
 export type { OperationHistoryPage, OperationRun, OperationRunDevice, OperationRunState } from './operationhistory'
+// oxfmt-ignore
+export type { OrbitalMechanicsErrorCode, OrbitalMechanicsLimits, OrbitalMechanicsReference, OrbitCenterPayload, OrbitDefinitionPayload, OrbitElementsPayload, OrbitMarkerPayload, OrbitSolveRequest, OrbitSolveResponse, OrbitTrajectoryRequest, OrbitTrajectoryResponse, OrbitVector, OrbitWarning } from './orbitalmechanics'
+export type { OrbitPreset, OrbitPresetSource } from './orbitalmechanics.presets'
+export type { ClassicalElements, ConicClass, OrbitAngle, OrbitDiagnostics, ReferencePlane, UndefinedAngleReason } from 'nebulosa/src/astronomy/orbits/mechanics'
+export type { ConicMarkerKind } from 'nebulosa/src/astronomy/orbits/sampling'
 export type { RotatorMoveByRequest, RotatorMoveToRequest, RotatorReverseRequest, RotatorSyncRequest } from './rotators'
 export type {
 	SatelliteAutoDownloadRequest,
@@ -1071,6 +1077,9 @@ const solarEclipses = new SolarEclipseService()
 // Close approach queries of the Close Approaches tool, over the minor bodies and the JPL queue of the Sky.
 const closeApproaches = new CloseApproachesService(minorBodies, ssdRequests)
 
+// Stateless two-body analysis of the Orbital Mechanics Explorer.
+const orbitalMechanics = new OrbitalMechanicsService()
+
 // Forecasts of the Astro Weather tool, read from their public services and cached for every tab.
 const astroWeather = new AstroWeatherService()
 
@@ -1320,6 +1329,7 @@ export const routes = {
 	...createLunarEclipseRoutes(lunarEclipses),
 	...createSolarEclipseRoutes(solarEclipses),
 	...createCloseApproachRoutes(closeApproaches),
+	...createOrbitalMechanicsRoutes(orbitalMechanics),
 	...createAstroWeatherRoutes(astroWeather),
 	...createObservingPlannerRoutes(observingPlanner),
 	...createJupiterRoutes(jupiterPlanner),

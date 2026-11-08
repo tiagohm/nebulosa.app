@@ -64,6 +64,19 @@ describe('live stacking store', () => {
 		expect(state).toMatchObject({ memoryBudget: 100, memoryUsed: 10 })
 	})
 
+	test('a session closed while a snapshot is fetched stays closed', async () => {
+		const state = newRuntime()
+		handleLiveStackingEvent(state, { type: 'liveStacking:updated', epoch: 'e1', revision: 1, session: session(1) })
+		const response = Promise.withResolvers<Response>()
+		const refreshed = refreshLiveStacking(state, (() => response.promise) as unknown as typeof fetch)
+
+		handleLiveStackingEvent(state, { type: 'liveStacking:closed', epoch: 'e1', revision: 2, sessionId: 's1' })
+		response.resolve(Response.json({ epoch: 'e1', revision: 1, sessions: [session(1)], memoryBudget: 0, memoryUsed: 0 } satisfies LiveStackingSnapshot))
+		await refreshed
+
+		expect(state.sessions).toEqual({})
+	})
+
 	test('a start sends the form of the camera with a token and keeps the session it answers', async () => {
 		const state = newRuntime()
 		const bodies: unknown[] = []

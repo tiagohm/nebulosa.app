@@ -172,6 +172,11 @@ export class AnalysisScheduler<J extends AnalysisJob, R, P, V extends string> {
 		return true
 	}
 
+	// Cancels every job waiting or running, as cancel does, for a server stopping in place.
+	cancelAll(): void {
+		for (const jobId of Array.from(this.#entries.keys())) this.cancel(jobId)
+	}
+
 	// Publishes a change of a job waiting or running, such as the stage it reached; ignored for any other job.
 	update(jobId: string, patch: Partial<J>): void {
 		const entry = this.#entries.get(jobId)

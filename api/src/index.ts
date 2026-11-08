@@ -948,8 +948,11 @@ const autoFocus = new AutoFocusSessions(connections.devices, (id) => connections
 // taking their frames with the capturer of the captures, and solving them with the plate solving service.
 const tppa = new TppaSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, publish)
 
+// Fits the pointing models on a worker of its own.
+const pointingModelFitter = new PointingModelFitter()
+
 // Mount pointing models, persisted under the home of the server and fitted on a worker of their own.
-const pointingModels = new PointingModels(new PointingModelStore(database), new PointingModelFitter(), publish)
+const pointingModels = new PointingModels(new PointingModelStore(database), pointingModelFitter, publish)
 
 // Mount pointing sessions of the cameras of the open connections, slewing the mounts with the commander of the mount
 // commands, so no model corrects them, taking their frames with the capturer of the captures, and solving them with the
@@ -959,9 +962,12 @@ const mountPointing = new MountPointingSessions(connections.devices, (id) => con
 // Activation of the models: the checks of the moment, and the routes of the models in force.
 const pointingActivations = new PointingActivations(connections.devices, (id) => connections.client(id), corrections, pointingModels, operations)
 
+// Analyzes the DARV frames on a worker of its own.
+const darvAnalyzer = new DarvAnalyzer(images)
+
 // DARV sessions of the cameras of the open connections, moving the mounts with the commander of the mount commands,
 // taking their frames with the capturer of the captures, and analyzing them on a worker of their own.
-const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, new DarvAnalyzer(images), publish)
+const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, darvAnalyzer, publish)
 
 // Projects of light frames for Image Stacking, which need no connection and hold no device. Imports never read the
 // directories of Nebulosa: its stacks and the Calibration Library.
@@ -1104,6 +1110,8 @@ const RESOURCES: readonly Disposable[] = [
 	darkLibraryWizard,
 	darkLibraryWizardAnalyzer,
 	flatWizardAnalyzer,
+	darvAnalyzer,
+	pointingModelFitter,
 	captures,
 	captureFrames,
 	mountRemoteControl,
@@ -1126,6 +1134,9 @@ const RESOURCES: readonly Disposable[] = [
 	satelliteAutoDownload,
 	spiceKernelLibrary,
 	spiceKernels,
+	stars,
+	streaks,
+	imageProcessing,
 	images,
 	operations,
 	connections,

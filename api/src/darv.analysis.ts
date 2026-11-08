@@ -77,7 +77,7 @@ const ANALYSIS_TIMEOUT = 120000
 type DarvWorker = Worker & Pick<Bun.Worker, 'unref'>
 
 // Analyzes DARV frames of the image store.
-export class DarvAnalyzer {
+export class DarvAnalyzer implements Disposable {
 	// Worker kept between analyses.
 	#idle?: DarvWorker
 	// Settles when the previous analysis ended; analyses run one at a time.
@@ -85,6 +85,12 @@ export class DarvAnalyzer {
 
 	// Creates the analyzer over the documents of images.
 	constructor(readonly images: Pick<ImageStore, 'detectionImage'>) {}
+
+	// Terminates the idle worker, for a server stopping in place; an analysis still queued starts a new one.
+	[Symbol.dispose]() {
+		this.#idle?.terminate()
+		this.#idle = undefined
+	}
 
 	// Analyzes the open or retained document imageId as a DARV frame of the given timing, whose outbound motion
 	// went in direction. Resolves the analysis; rejects when the document is no longer available, the worker

@@ -170,6 +170,18 @@ describe('cancellation', () => {
 		expect(scheduler.cancel(first.jobId)).toBeFalse()
 	})
 
+	test('cancels every job waiting or running at once', async () => {
+		const { images, scheduler, enqueue } = setup()
+		const { id } = await images.open(writeImage())
+		const first = enqueue(id, 'f1')
+		const second = enqueue(id, 'f2')
+		const settled = scheduler.settled(first.jobId)!
+
+		scheduler.cancelAll()
+		expect(await settled).toBeUndefined()
+		expect([scheduler.job(first.jobId)?.state, scheduler.job(second.jobId)?.state]).toEqual(['cancelled', 'cancelled'])
+	})
+
 	test('records the failure of a job', async () => {
 		const { images, scheduler, running, enqueue } = setup()
 		const { id } = await images.open(writeImage())

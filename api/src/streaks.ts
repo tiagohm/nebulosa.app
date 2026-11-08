@@ -253,7 +253,7 @@ type StreakWorker = Worker & Pick<Bun.Worker, 'unref'>
 type JobEntry = AnalysisEntry<StreakDetectionJob, StreakDetectionPreparation>
 
 // Streak detection jobs of the server, their scheduling (see analysis.ts), and their results.
-export class StreakDetectionService {
+export class StreakDetectionService implements Disposable {
 	// Queue, limits, reservations, and kept results.
 	readonly #scheduler: AnalysisScheduler<StreakDetectionJob, StreakDetectionResult, StreakDetectionPreparation, 'builtin'>
 	// Idle workers.
@@ -416,6 +416,13 @@ export class StreakDetectionService {
 			if (reusable) this.#idle.push(worker)
 			else worker.terminate()
 		}
+	}
+
+	// Stops a server in place: cancels every job waiting or running and terminates the idle workers, so none outlives
+	// the run.
+	[Symbol.dispose]() {
+		this.#scheduler.cancelAll()
+		for (const worker of this.#idle.splice(0)) worker.terminate()
 	}
 
 	// Starts a detector worker.

@@ -323,7 +323,7 @@ interface ProcessingOutput {
 }
 
 // Image processing jobs of the server, their scheduling (see analysis.ts), and their output documents.
-export class ImageProcessingService {
+export class ImageProcessingService implements Disposable {
 	// Queue, limit, and retention of the sources.
 	readonly #scheduler: AnalysisScheduler<ImageProcessingJob, ImageProcessingResult, ImageProcessingPreparation, 'builtin'>
 	// Idle workers.
@@ -485,6 +485,14 @@ export class ImageProcessingService {
 			if (reusable) this.#idle.push(worker)
 			else worker.terminate()
 		}
+	}
+
+	// Stops a server in place: cancels every job waiting or running and terminates the idle workers, so none outlives
+	// the run.
+	[Symbol.dispose]() {
+		this.#scheduler.cancelAll()
+		for (const worker of this.#idle.splice(0)) worker.terminate()
+		for (const output of this.#outputs.values()) clearTimeout(output.timer)
 	}
 
 	// Starts a processing worker.

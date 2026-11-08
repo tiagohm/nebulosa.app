@@ -227,7 +227,7 @@ export function computePointingFit(request: PointingFitRequest): PointingFitResu
 }
 
 // Runs fits on a worker of their own, one at a time, in arrival order.
-export class PointingModelFitter {
+export class PointingModelFitter implements Disposable {
 	// Worker kept between fits.
 	#idle?: PointingFitWorker
 	// Settles when the previous fit ended.
@@ -238,6 +238,12 @@ export class PointingModelFitter {
 		const run = this.#queue.then(() => this.#fit(request, signal))
 		this.#queue = run.catch(() => undefined)
 		return run
+	}
+
+	// Terminates the idle worker, for a server stopping in place; a fit still queued starts a new one.
+	[Symbol.dispose]() {
+		this.#idle?.terminate()
+		this.#idle = undefined
 	}
 
 	// Runs one fit on the worker.

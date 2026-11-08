@@ -1,4 +1,4 @@
-import type { CalibrationGroupSummary, CalibrationKind, CalibrationMasterSummary, CalibrationSource, CalibrationSourceSummary, CompatibilityFinding, Evidenced, ImportCandidate, MasterRequest, OverridableField, Page, RecipeValidation } from 'api'
+import type { CalibrationGroupSummary, CalibrationKind, CalibrationMasterSummary, CalibrationSource, CalibrationSourceSummary, CompatibilityFinding, Evidenced, ImportCandidatePage, MasterRequest, OverridableField, Page, RecipeValidation } from 'api'
 import { cn } from 'cn'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -28,6 +28,7 @@ import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
+import { Pager } from '../../ui/Pager'
 
 // Calibration Library tool: what calibration frames exist, what can be combined and why not, and which masters were made. It
 // works with no camera and starts no exposure; every capture stays in Images. State lives on the server, so a reload, another
@@ -151,7 +152,7 @@ export function CalibrationLibrary() {
 				{section === 'library' && <GroupsView selected={selection?.type === 'group' ? selection.groupId : undefined} onSelect={selectGroup} />}
 				{section === 'frames' && <FramesView selected={selection?.type === 'source' ? selection.sourceId : undefined} onSelect={(sourceId) => select({ type: 'source', sourceId })} />}
 				{section === 'masters' && <MastersView selection={selection} onSelect={(masterId) => select({ type: 'master', masterId })} />}
-				<Pager page={page} total={pageTotal(section)} loading={runtime.loading} onPage={setPage} />
+				<Pager page={page} total={pageTotal(section)} pageSize={CALIBRATION_PAGE_SIZE} noun="rows" loading={runtime.loading} onPage={setPage} />
 			</div>
 			{importing && <ImportDialog onClose={() => setImporting(false)} />}
 		</WorkspaceLayout>
@@ -162,24 +163,6 @@ export function CalibrationLibrary() {
 function pageTotal(section: LibrarySection) {
 	const { groups, sources, masters } = calibrationLibraryRuntime
 	return (section === 'library' ? groups : section === 'frames' ? sources : masters)?.total ?? 0
-}
-
-// Previous and next page of a list, shown only when there is more than one.
-function Pager({ page, total, loading, onPage }: { readonly page: number; readonly total: number; readonly loading: boolean; readonly onPage: (page: number) => void }) {
-	const pages = Math.ceil(total / CALIBRATION_PAGE_SIZE)
-	if (pages < 2) return null
-
-	return (
-		<div className="flex items-center gap-2 text-xs text-ink-300 tabular-nums">
-			<Button variant="secondary" disabled={page === 0 || loading} onClick={() => onPage(page - 1)}>
-				Previous
-			</Button>
-			<span>{`Page ${page + 1} of ${pages} · ${total} rows`}</span>
-			<Button variant="secondary" disabled={page + 1 >= pages || loading} onClick={() => onPage(page + 1)}>
-				Next
-			</Button>
-		</div>
-	)
 }
 
 // Coverage and groups.
@@ -672,14 +655,31 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 	const { jobs, pending, errors } = useSnapshot(calibrationLibraryRuntime)
 	const job = jobs[jobId]
 	const ended = job !== undefined && jobEnded(job)
-	const [page, setPage] = useState<Page<ImportCandidate>>()
+	const [pageIndex, setPageIndex] = useState(0)
+	const [page, setPage] = useState<ImportCandidatePage>()
+	const [loading, setLoading] = useState(false)
+	const [failed, setFailed] = useState(false)
 	const [declared, setDeclared] = useState<Readonly<Record<string, CalibrationKind>>>({})
 	const [copy, setCopy] = useState(false)
+	const completed = job?.state === 'completed'
 
-	// Fetches what was found once the scan ended.
+	// Fetches the page shown once the scan ended; a page asked for later replaces an earlier answer.
 	useEffect(() => {
-		if (job?.state === 'completed' && !page) void loadImportCandidates(jobId, 0).then(setPage)
-	}, [job?.state, jobId, page])
+		if (!completed) return
+		let current = true
+		setLoading(true)
+
+		void loadImportCandidates(jobId, pageIndex).then((answer) => {
+			if (!current) return
+			setLoading(false)
+			setFailed(answer === undefined)
+			if (answer) setPage(answer)
+		})
+
+		return () => {
+			current = false
+		}
+	}, [completed, jobId, pageIndex])
 
 	async function commit() {
 		const answer = await commitCalibrationImport(calibrationLibraryRuntime, jobId, { classifications: declared, copy })
@@ -687,7 +687,8 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 	}
 
 	const items = page?.items ?? []
-	const ready = items.filter(({ path, kind, rejectedRole, error, known }) => (kind ?? declared[path]) !== undefined && !rejectedRole && !error && !known).length
+	// What a commit adds: the candidates ready as they are, on every page, and those an operator declared, on any page.
+	const ready = (page?.ready ?? 0) + Object.keys(declared).length
 
 	return (
 		<div className="flex min-h-0 flex-col gap-3">
@@ -703,7 +704,7 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 			{job?.truncated && <Notice error>The limit of files was reached; only part of these directories was read.</Notice>}
 			{page && (
 				<>
-					<Notice>{`${page.total} files found, ${ready} ready. Frames are referenced where they are and never changed.`}</Notice>
+					<Notice>{`${page.total} files found, ${ready} ready. Declared types are kept across pages. Frames are referenced where they are and never changed.`}</Notice>
 					<Table columns={['File', 'Found', 'Exposure', 'Declared Type', 'Notes']}>
 						{items.map((candidate) => (
 							<Row key={candidate.path}>
@@ -711,7 +712,7 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 								<Cell>{candidate.kind ? KIND_LABELS[candidate.kind] : (candidate.rejectedRole ?? 'Unknown')}</Cell>
 								<Cell>{candidate.metadata ? exposureText(candidate.metadata) : MISSING}</Cell>
 								<Cell>
-									{!candidate.kind && !candidate.rejectedRole && !candidate.error && (
+									{!candidate.kind && !candidate.rejectedRole && !candidate.error && !candidate.known && candidate.metadata && candidate.format && (
 										<Select
 											options={['none', ...CALIBRATION_KINDS]}
 											value={declared[candidate.path] ?? 'none'}
@@ -724,6 +725,7 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 							</Row>
 						))}
 					</Table>
+					<Pager page={pageIndex} total={page.total} pageSize={CALIBRATION_PAGE_SIZE} noun="files" loading={loading} onPage={setPageIndex} />
 					<Checkbox label="Copy into the library" checked={copy} onChange={setCopy} />
 					{errors.import && <Notice error>{errors.import}</Notice>}
 					<Actions>
@@ -733,6 +735,7 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 					</Actions>
 				</>
 			)}
+			{failed && <Notice error>The files found could not be read from the server.</Notice>}
 			{ended && !page && (
 				<Actions>
 					<Button variant="secondary" onClick={onClose}>

@@ -126,6 +126,7 @@ export type {
 	CalibrationMasterSummary,
 	FlatFrameRegistration,
 	ImportCandidate,
+	ImportCandidatePage,
 	ImportCommit,
 	ImportRequest,
 	MasterRequest,

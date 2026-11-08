@@ -1,5 +1,5 @@
 // oxfmt-ignore
-import type { CalibrationGroupDetail, CalibrationGroupSummary, CalibrationJobSummary, CalibrationKind, CalibrationLibrarySnapshot, CalibrationMasterDetail, CalibrationMasterSummary, CalibrationSource, CalibrationSourceSummary, ImportCandidate, ImportCommit, MasterRequest, MasterRequestResult, OverridableField, Page, RecipeValidation, ServerEvent, SourceStatus } from 'api'
+import type { CalibrationGroupDetail, CalibrationGroupSummary, CalibrationJobSummary, CalibrationKind, CalibrationLibrarySnapshot, CalibrationMasterDetail, CalibrationMasterSummary, CalibrationSource, CalibrationSourceSummary, ImportCandidatePage, ImportCommit, MasterRequest, MasterRequestResult, OverridableField, Page, RecipeValidation, ServerEvent, SourceStatus } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../http'
@@ -275,7 +275,7 @@ export function startCalibrationImport(state: CalibrationLibraryRuntime, paths: 
 
 // Fetches what an import found.
 export function loadImportCandidates(jobId: string, page: number, request: typeof fetch = fetch) {
-	return fetchJson<Page<ImportCandidate>>(`${BASE_URL}/imports/${encodeURIComponent(jobId)}/candidates?${query({}, page)}`, request)
+	return fetchJson<ImportCandidatePage>(`${BASE_URL}/imports/${encodeURIComponent(jobId)}/candidates?${query({}, page)}`, request)
 }
 
 // Adds reviewed files to the library.

@@ -391,6 +391,8 @@ describe('imports', () => {
 			['nested/b.fit', 'bias', undefined],
 			['unknown.fit', undefined, undefined],
 		])
+		// A page of one still counts what every page holds ready.
+		expect(await library.importCandidates(job.jobId, 0, 1)).toMatchObject({ total: 4, ready: 2 })
 
 		const { committed } = await library.commitImport(job.jobId, {})
 		expect(committed).toBe(2)

@@ -273,6 +273,12 @@ export interface ImportCandidate {
 	readonly known: boolean
 }
 
+// A page of the candidates of an import, with how many of all of them enter the library on a commit without a declared role.
+export interface ImportCandidatePage extends Page<ImportCandidate> {
+	// Candidates of every page that a commit adds as they are, without a role an operator declared.
+	readonly ready: number
+}
+
 // How the frames of an import enter the library.
 export interface ImportCommit {
 	// Files to add; all the recognized ones when absent.
@@ -1082,9 +1088,10 @@ export class CalibrationLibrary implements Disposable {
 	}
 
 	// Lists what an import found. Paths are shown because the operator chose where to look.
-	async importCandidates(jobId: string, offset: number, limit: number): Promise<Page<ImportCandidate>> {
+	async importCandidates(jobId: string, offset: number, limit: number): Promise<ImportCandidatePage> {
 		const candidates = (await this.#job(jobId)).candidates ?? []
-		return { items: candidates.slice(offset, offset + Math.min(limit, MAX_PAGE_SIZE)), total: candidates.length }
+		const ready = candidates.reduce((count, candidate) => count + (candidate.kind !== undefined && entersLibrary(candidate) ? 1 : 0), 0)
+		return { items: candidates.slice(offset, offset + Math.min(limit, MAX_PAGE_SIZE)), total: candidates.length, ready }
 	}
 
 	// Adds reviewed files to the library. A role comes from the file or from an operator, never from a name; a file
@@ -1100,7 +1107,7 @@ export class CalibrationLibrary implements Disposable {
 			if (chosen && !chosen.has(candidate.path)) continue
 			const declared = classifications[candidate.path]
 			const kind = declared ?? candidate.kind
-			if (kind === undefined || candidate.known || candidate.error !== undefined || candidate.rejectedRole !== undefined || !candidate.metadata || !candidate.format) continue
+			if (kind === undefined || !entersLibrary(candidate)) continue
 
 			const warnings = [...candidate.warnings]
 			if (declared) warnings.push('Role declared by an operator')
@@ -1306,6 +1313,12 @@ export class CalibrationLibrary implements Disposable {
 	[Symbol.dispose]() {
 		this.close()
 	}
+}
+
+// Whether a candidate of an import can enter the library once it has a role, from its file or an operator: a readable
+// calibration frame the library does not hold yet.
+function entersLibrary(candidate: ImportCandidate): candidate is ImportCandidate & Required<Pick<ImportCandidate, 'metadata' | 'format'>> {
+	return !candidate.known && candidate.error === undefined && candidate.rejectedRole === undefined && candidate.metadata !== undefined && candidate.format !== undefined
 }
 
 // Returns the id a frame at a path has, whatever else is known about it.

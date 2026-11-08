@@ -28,6 +28,7 @@ import { formatByteSize, formatDuration, formatExposureTime, formatUtcDateTime, 
 import { Actions } from '../../ui/Actions'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { Notice } from '../../ui/Notice'
+import { Pager } from '../../ui/Pager'
 import { Cell, Row, Table } from '../../ui/Table'
 
 // Image Stacking tool: projects of light frames saved on the server, grouped by the filter their headers write. It
@@ -177,7 +178,7 @@ export function ImageStacking() {
 							<TextInput label="Search" className="w-48" value={search} onChange={(event) => change(setSearch)(event.target.value)} />
 						</div>
 						<FramesView selected={selected} onSelect={selectFrame} onRemoved={(sourceId) => sourceId === selected && setSelected(undefined)} />
-						<Pager page={page} total={runtime.frames?.total ?? 0} loading={runtime.loading} onPage={setPage} />
+						<Pager page={page} total={runtime.frames?.total ?? 0} pageSize={STACKING_PAGE_SIZE} noun="frames" loading={runtime.loading} onPage={setPage} />
 					</>
 				)}
 				{project && section === 'calibration' && <CalibrationView projectId={project.projectId} />}
@@ -187,7 +188,7 @@ export function ImageStacking() {
 				{project && section === 'quality' && (
 					<>
 						<QualityView projectId={project.projectId} group={qualityKey} onGroup={change(setQualityGroup)} selected={selected} onSelect={selectFrame} />
-						<Pager page={page} total={runtime.frames?.total ?? 0} loading={runtime.loading} onPage={setPage} />
+						<Pager page={page} total={runtime.frames?.total ?? 0} pageSize={STACKING_PAGE_SIZE} noun="frames" loading={runtime.loading} onPage={setPage} />
 					</>
 				)}
 			</div>
@@ -202,24 +203,6 @@ export function ImageStacking() {
 			)}
 			{importing && projectId !== undefined && <ImportDialog projectId={projectId} onClose={() => setImporting(false)} />}
 		</WorkspaceLayout>
-	)
-}
-
-// Previous and next page of the frames, shown only when there is more than one.
-function Pager({ page, total, loading, onPage }: { readonly page: number; readonly total: number; readonly loading: boolean; readonly onPage: (page: number) => void }) {
-	const pages = Math.ceil(total / STACKING_PAGE_SIZE)
-	if (pages < 2) return null
-
-	return (
-		<div className="flex items-center gap-2 text-xs text-ink-300 tabular-nums">
-			<Button variant="secondary" disabled={page === 0 || loading} onClick={() => onPage(page - 1)}>
-				Previous
-			</Button>
-			<span>{`Page ${page + 1} of ${pages} · ${total} frames`}</span>
-			<Button variant="secondary" disabled={page + 1 >= pages || loading} onClick={() => onPage(page + 1)}>
-				Next
-			</Button>
-		</div>
 	)
 }
 
@@ -602,7 +585,7 @@ function ImportDialog({ projectId, onClose }: { readonly projectId: string; read
 								</Row>
 							))}
 						</Table>
-						<Pager page={pageIndex} total={page.total} loading={loading} onPage={setPageIndex} />
+						<Pager page={pageIndex} total={page.total} pageSize={STACKING_PAGE_SIZE} noun="files" loading={loading} onPage={setPageIndex} />
 						{errors.import && <Notice error>{errors.import}</Notice>}
 						<Actions>
 							<Button disabled={totalCount === 0 || pending.import === true} onClick={() => void commit()}>

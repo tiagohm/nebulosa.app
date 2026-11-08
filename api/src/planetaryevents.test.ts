@@ -119,6 +119,8 @@ describe('search', () => {
 			const [opposition] = find(events, 'opposition', code)
 			expect(Math.abs(opposition.time - date - DAY / 2)).toBeLessThan(DAY)
 			expect(opposition.kind === 'opposition' && opposition.separation > 170 * DEG).toBeTrue()
+			// Opposite the Sun the disk is fully lit.
+			expect(opposition.circumstances[0].illuminatedFraction).toBeGreaterThan(0.99)
 			// The closest approach is a separate event, related to the opposition.
 			const [closest] = find(events, 'closestEarthApproach', code)
 			expect(closest.id).not.toBe(opposition.id)
@@ -176,6 +178,8 @@ describe('search', () => {
 		expect(find(events, 'greatestBrightness', '299').every((e) => e.kind === 'greatestBrightness' && e.phaseAngle > 90 * DEG && e.phaseAngle < 163.7 * DEG && e.magnitude < -4.5)).toBeTrue()
 		expect(find(events, 'greatestBrightness', '299').length).toBeGreaterThan(0)
 		expect(find(events, 'halfIllumination', '299').length).toBeGreaterThan(0)
+		// The circumstances agree with the dichotomy the toolkit found.
+		for (const event of find(events, 'halfIllumination', '299')) expect(event.circumstances[0].illuminatedFraction).toBeCloseTo(0.5, 3)
 		expect(find(events, 'solarConjunction', '299').every((e) => e.kind === 'solarConjunction' && (e.subtype === 'inferior' || e.subtype === 'superior'))).toBeTrue()
 	})
 

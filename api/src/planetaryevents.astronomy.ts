@@ -491,7 +491,7 @@ class Providers {
 		const geometric = this.geometric(body)(time)
 		const sunToPlanet = vecMinus(geometric, this.geometric('sun')(time))
 		const eclipticVector = ecliptic(apparent, time, vecZero())
-		const phase = vecAngle(vecNegate(geometric), sunToPlanet)
+		const phase = vecAngle(vecNegate(geometric), vecNegate(sunToPlanet))
 		const magnitude = planetMagnitude(body, sunToPlanet, geometric, { year: julianYear(time) })
 		return {
 			body: code,

@@ -8,10 +8,10 @@ import { failedOperationResult, type OperationContext, type OperationResult, typ
 import { deviceKey, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { type Angle, deg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import { admissionResponse, admitCommand, type CommandAdmission, type CommandErrorCode, type CommandRefusal, type CommandRequest, disconnected, failureCode, findDevice, notFound, refusal, resolveConnected, settle, startCommand, unsupported } from './commands'
+import { admissionResponse, admitCommand, type CommandAdmission, type CommandErrorCode, type CommandRefusal, type CommandRequest, disconnected, failureCode, failureResponse, findDevice, notFound, refusal, resolveConnected, settle, startCommand, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
-import { DEFAULT_LEASE_OPTIONS, type LeasedMotion, LeasedMotions, type LeasedPhase, type LeasedSession, type LeasedStartResponse, type LeaseOptions, leasedFailureStatus } from './leases'
+import { DEFAULT_LEASE_OPTIONS, type LeasedMotion, LeasedMotions, type LeasedPhase, type LeasedSession, type LeasedStartResponse, type LeaseOptions } from './leases'
 import type { MountCorrectionPlan, MountCorrections } from './mountpointing.corrections'
 import type { OperationAdmission, OperationRegistry, ToolInvocation } from './operations'
 import { EphemerisUnavailableError, HorizonsEphemerisError, type SkyObserver, type SkyPosition } from './sky/ephemeris'
@@ -327,7 +327,7 @@ export class MountCommands implements Disposable {
 
 		const result = await this.#commander.setSlewRate(this.operations.coordinator, mount, name)
 		if (result.ok) return new Response(null, { status: 204 })
-		return errorResponse(result.reason === 'busy' ? 'The mount is busy' : (result.error ?? `The slew rate was not changed (${result.reason})`), leasedFailureStatus(result.reason), failureCode(result.reason))
+		return failureResponse(result, 'Selecting the slew rate')
 	}
 
 	// Responds with the state of a mount, or 404 when the connection is not open or has no such mount.
@@ -369,6 +369,8 @@ export class MountCommands implements Disposable {
 
 		const planned = this.#planned(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
 		if (planned.status === 'refused') return errorResponse(planned.error, 422, 'correctionRefused')
+		// Locating the object may take seconds, during which the mount may have been parked.
+		if (mount.parked || mount.parking) return errorResponse('The mount is parked', 409, 'unsupported')
 		const below = planned.status === 'corrected' ? slewRefusal('mount.goto', mount, planned.target, observer) : undefined
 		if (below) return errorResponse(...below)
 
@@ -613,9 +615,12 @@ export class MountCommands implements Disposable {
 		if (!this.operations.available(mount)) return refused(['The mount is busy', 409, 'busy'])
 
 		this.corrections?.suspend(mount, 'The mount was synced')
-		void this.#commander.sync(this.operations.coordinator, mount, target).then((result) => {
-			if (!result.ok) console.warn('mount: the sync failed', result.reason, result.error)
-		})
+		void this.#commander.sync(this.operations.coordinator, mount, target).then(
+			(result) => {
+				if (!result.ok) console.warn('mount: the sync failed', result.reason, result.error)
+			},
+			(error: unknown) => console.error('mount: the sync failed', error),
+		)
 
 		return { ok: true }
 	}
@@ -655,9 +660,13 @@ export class MountCommands implements Disposable {
 
 		const result = this.#commander.goTo(scope, mount, planned.target, { ...options, ...planned.options })
 
-		void result.then((outcome) => {
-			if (outcome.ok) this.corrections?.observed(mount, planned.pierSide, outcome.value.pierSide)
-		})
+		// Only observes the pier side; the caller of the GoTo handles its failure, this branch only keeps it from going unhandled.
+		void result.then(
+			(outcome) => {
+				if (outcome.ok) this.corrections?.observed(mount, planned.pierSide, outcome.value.pierSide)
+			},
+			() => undefined,
+		)
 
 		return result
 	}

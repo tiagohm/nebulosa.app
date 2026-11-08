@@ -2,7 +2,10 @@
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-Requirements are declared by each tool's registry; the web evaluates availability with `roleAvailability` and `deviceAvailability` (`web/src/equipment/availability.ts`): ready, busy (a running operation holds that exact connection and device id), unsupported, or the role or device state that prevents use. Unsupported is a connected device the operation can never run on, judged by the operation from the device state the server reports (mechanical design, capabilities) and passed as its reason; it comes before busy, and Equipment Setup is its fix. A device reserved by a caller composing tools (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)) shows ready while no operation runs on it, and the server still refuses it to every manual operation.
+Requirements are declared by each tool's registry;
+the web evaluates availability with `roleAvailability` and `deviceAvailability` (`web/src/equipment/availability.ts`): ready, busy (a running operation holds that exact connection and device id), unsupported, or the role or device state that prevents use.
+Unsupported is a connected device the operation can never run on, judged by the operation from the device state the server reports (mechanical design, capabilities) and passed as its reason; it comes before busy, and Equipment Setup is its fix.
+A device reserved by a caller composing tools (see [Operation Lifecycle Rules](operation-lifecycle-rules.md)) shows ready while no operation runs on it, and the server still refuses it to every manual operation.
 
 Every `OperationKind` and the devices it holds:
 
@@ -87,4 +90,6 @@ Every `OperationKind` and the devices it holds:
     - Requires (besides the view's camera): the device shown
     - Holds: the physical device until the driver ends the change, only while connected
 
-Each feature conflicts with every operation holding one of its devices, immediate settings included (cooling during a capture, a panel's light during a Flat Wizard), and with nothing else but one case: Target Centering stops the guiding that may pulse its mount and restores it afterwards, refuses to start beside guiding it would not stop, and keeps guiding from starting until it ends, through the setup's guide output, which drives the mount even on a camera's ST4 port that shares no device with it. Camera Acquisition with Mount dithering likewise refuses to start beside guiding through that guide output, reserves it with the mount, and keeps guiding through it from starting until it ends, the ST4 port of the camera it captures with included, which the capture's hold of the sensor does not cover. Conflicts are resolved by the arbiter on the server, never only in the browser, because several tabs (and profiles) may address the same device.
+Each feature conflicts with every operation holding one of its devices, immediate settings included (cooling during a capture, a panel's light during a Flat Wizard), and with nothing else but one case: Target Centering stops the guiding that may pulse its mount and restores it afterwards, refuses to start beside guiding it would not stop, and keeps guiding from starting until it ends, through the setup's guide output, which drives the mount even on a camera's ST4 port that shares no device with it.
+Camera Acquisition with Mount dithering likewise refuses to start beside guiding through that guide output, reserves it with the mount, and keeps guiding through it from starting until it ends, the ST4 port of the camera it captures with included, which the capture's hold of the sensor does not cover.
+Conflicts are resolved by the arbiter on the server, never only in the browser, because several tabs (and profiles) may address the same device.

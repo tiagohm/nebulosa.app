@@ -2,7 +2,8 @@ import type { CaptureFrameSummary } from 'api'
 import { cn } from 'cn'
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatExposureTime, formatUtcDateTime, MISSING } from '../format'
+import { formatClockTime, formatExposureTime, formatUtcDateTime, MISSING } from '../format'
+import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { Icon } from '../ui/Icon'
 import { moveIndex } from '../ui/navigation'
 import { type CameraFrameSelection, selectCameraFrame } from './cameratabs'
@@ -27,13 +28,13 @@ interface CaptureFramesCarouselProps {
 type Card = { readonly kind: 'latest'; readonly frame?: CaptureFrameSummary } | { readonly kind: 'saved'; readonly frame: CaptureFrameSummary }
 
 // Returns the hh:mm:ss UTC time of a Unix time in milliseconds.
-function timeOf(time: number): string {
-	return new Date(time).toISOString().slice(11, 19)
+function timeOf(time: number, timeZone: string): string {
+	return formatClockTime(time, timeZone)
 }
 
 // Returns the tooltip of a frame: its id, time, exposure, size, file, and availability.
 function frameTooltip(frame: CaptureFrameSummary): string {
-	const lines = [`Frame ${frame.frameId}`, formatUtcDateTime(frame.time)]
+	const lines = [`Frame #${frame.generation}`, formatUtcDateTime(frame.time)]
 	if (frame.acquisition?.exposure !== undefined) lines.push(`Exposure ${formatExposureTime(frame.acquisition.exposure)}`)
 	if (frame.width !== undefined && frame.height !== undefined) lines.push(`${frame.width} × ${frame.height} px`)
 	if (frame.fileName) lines.push(frame.fileName)
@@ -145,15 +146,17 @@ interface FrameCardProps {
 	readonly onSelect: () => void
 }
 
-// Card of a frame: an icon in the area reserved for a thumbnail, its label and number, the time of its acquisition,
+// Card of a frame: an icon in the area reserved for a thumbnail, its label, the time of its acquisition,
 // its exposure, a textual state only when it is loading, failed, or missing, and a floppy disk icon on the right once
 // its file is written, the Latest one included; the selected card is outlined. A saved frame that cannot be
 // opened shows why and cannot be selected.
 function FrameCard({ card, selected, focusable, loading, error, restored, newer, onSelect }: FrameCardProps) {
+	const observer = useActiveSite()
+	const displayZone = useDisplayZone(observer)
+
 	const { frame } = card
 	const unavailable = frame ? frameUnavailableReason(frame) : undefined
-	const label = card.kind === 'latest' ? (restored ? 'Latest saved' : 'Latest') : `#${card.frame.sequence}`
-	const state = unavailable ?? (error ? 'Error' : loading ? 'Loading…' : frame ? undefined : 'No frame yet')
+	const state = unavailable ?? (error ? 'Error' : loading ? 'Loading…' : frame ? undefined : 'No frame yet') ?? (card.kind === 'latest' ? (restored ? 'Latest saved' : 'Latest') : frame?.generation ? `#${frame.generation}` : undefined)
 
 	return (
 		<button
@@ -169,19 +172,15 @@ function FrameCard({ card, selected, focusable, loading, error, restored, newer,
 			)}
 		>
 			<span className="relative flex min-h-0 flex-1 items-center justify-center rounded-xs bg-base-200 text-ink-300">
-				<Icon name={card.kind === 'latest' ? 'camera' : 'images'} className="size-5" />
+				<Icon name={card.kind === 'latest' ? 'camera' : 'images'} className="size-8" />
 				{newer && <span className="absolute top-1 right-1 rounded-xs bg-accent px-1 text-xs text-on-accent">New</span>}
 			</span>
-			<span className="flex items-baseline justify-between gap-1 text-ink-100">
-				<span className="truncate">{label}</span>
-				{card.kind === 'latest' && frame && <span className="text-ink-300">#{frame.sequence}</span>}
-			</span>
 			<span className="flex items-baseline justify-between gap-1 text-ink-300">
-				<span>{frame ? timeOf(frame.time) : MISSING}</span>
+				<span>{frame ? timeOf(frame.time, displayZone.zone) : MISSING}</span>
 				{frame?.acquisition?.exposure !== undefined && <span>{frame.acquisition.exposure}s</span>}
 			</span>
 			<span className="flex h-4 items-center justify-between gap-1">
-				<span className={cn('truncate', error || unavailable ? 'text-danger' : 'text-ink-300')}>{state}</span>
+				<span className={cn('truncate', error || unavailable ? 'text-danger' : 'text-ink-100')}>{state}</span>
 				{frame?.file === 'saved' && <Icon name="save" className="size-3.5 text-ink-300" />}
 			</span>
 		</button>

@@ -27,6 +27,8 @@ const OPEN_CONNECTIONS = ((globalThis as unknown as Record<symbol, Map<string, D
 // The operational database: one file and the one connection of the process to it.
 export class AppDatabase {
 	#db?: Database
+	// Whether close ended the connection: the database then opens again only through open, never on a use.
+	#closed = false
 
 	// file is the path of the database, or ':memory:' for one that lives in memory only; exclusive keeps every other
 	// process off the file while it is open (openConnection), which production asks for.
@@ -40,9 +42,12 @@ export class AppDatabase {
 		return new AppDatabase(MEMORY_DATABASE)
 	}
 
-	// Connection of the database, opened on first use.
+	// Connection of the database, opened on first use. Throws once close ended it: a late write of a server that stopped in place
+	// (a hot reload) would otherwise open it again behind the next run, or take that run's connection.
 	get db(): Database {
-		return this.#db ?? this.open()
+		if (this.#db) return this.#db
+		if (this.#closed) throw new Error(`The database ${this.file} was closed`)
+		return this.open()
 	}
 
 	// Opens the database and brings its schema to the migrations the server knows; does nothing when already open. While
@@ -53,6 +58,7 @@ export class AppDatabase {
 	// deleted then.
 	open(): Database {
 		if (this.#db) return this.#db
+		this.#closed = false
 
 		const shared = this.file !== MEMORY_DATABASE
 		let db = (shared && OPEN_CONNECTIONS.get(this.file)) || openConnection(this.file, this.exclusive)
@@ -81,8 +87,10 @@ export class AppDatabase {
 		return this.db.transaction(fn).immediate()
 	}
 
-	// Closes the connection, which writes the WAL back into the file and releases its lock. Opening again is allowed.
+	// Closes the connection, which writes the WAL back into the file and releases its lock. Opening again is allowed through
+	// open; a use before that throws.
 	close() {
+		this.#closed = true
 		if (!this.#db) return
 		if (OPEN_CONNECTIONS.get(this.file) === this.#db) OPEN_CONNECTIONS.delete(this.file)
 		this.#db.close()

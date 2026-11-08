@@ -216,3 +216,13 @@ test('foreign keys are enforced and a failed transaction writes nothing', () => 
 	expect(database.write(() => db.run('INSERT INTO parent VALUES (2)').changes)).toBe(1)
 	expect(db.query('SELECT id FROM parent').all()).toEqual([{ id: 2 }])
 })
+
+test('a closed database refuses a use until it is opened again', () => {
+	const database = open(databaseFile())
+	database.db.run('CREATE TABLE notes (text TEXT)')
+	database.close()
+
+	expect(() => database.db).toThrow('was closed')
+	database.open()
+	expect(database.db.query('SELECT COUNT(*) AS count FROM notes').get()).toEqual({ count: 0 })
+})

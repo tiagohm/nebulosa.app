@@ -140,6 +140,7 @@ Every contract and reference below is a document of its own under `docs/architec
 - [Star Detection Contract](architecture/star-detection.md)
 - [Star Profile Inspector Contract](architecture/star-profile-inspector.md)
 - [Streak Detection Contract](architecture/streak-detection.md)
+- [Image Statistics Contract](architecture/image-statistics.md)
 - [Annotation Contract](architecture/annotation.md)
 - [Plate Solving Contract](architecture/plate-solving.md)
 - [Image Processing Contract](architecture/image-processing.md)

@@ -14,6 +14,7 @@ import type { FocuserBacklashEvent } from './focusers'
 import type { GuidingServerEvent } from './guiding'
 import type { ImageProcessingEvent } from './imageprocessing'
 import type { ImageStackingEvent } from './imagestacking'
+import type { ImageStatisticsEvent } from './imagestatistics'
 import type { IndiClientMessage, IndiServerEvent } from './indi'
 import type { IndiMessagesClientMessage, IndiMessagesServerEvent } from './indimessages'
 import type { IPolarEvent } from './ipolar'
@@ -80,6 +81,7 @@ export type ServerEvent =
 	| WorkspaceEvent
 	| StarDetectionEvent
 	| StreakDetectionEvent
+	| ImageStatisticsEvent
 	| PlateSolvingEvent
 	| AnnotationEvent
 	| ImageProcessingEvent

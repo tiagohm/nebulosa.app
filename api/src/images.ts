@@ -1,5 +1,6 @@
 import { rename, rm } from 'fs/promises'
 import { resolve } from 'path'
+import type { ImageStatisticsResult } from 'nebulosa/src/imaging/analysis/statistics'
 import { type CfaPattern, type Image, type ImageChannel, shiftCfaPattern } from 'nebulosa/src/imaging/model/types'
 import type { SCNRProtectionMethod } from 'nebulosa/src/imaging/processing/scnr'
 import type { AutoStfPreset } from 'nebulosa/src/imaging/processing/stf.presets'
@@ -355,10 +356,25 @@ export interface ImageRegion {
 	readonly conversion: SampleConversion
 }
 
+// Statistics of the samples of a document as the worker measured them, with what interprets them.
+export interface DocumentStatistics {
+	// Statistics of each plane, in normalized sample units.
+	readonly statistics: ImageStatisticsResult
+	// Conversion of the samples to the scale of the source.
+	readonly conversion: SampleConversion
+	// Whether the image is a mono mosaic: trusted, with its CFA pattern measured phase by phase, or untrusted, named by
+	// the header but measured as one mono plane; absent for any other image.
+	readonly mosaic?: 'trusted' | 'untrusted'
+}
+
+// Outcome of a statistics scan: the statistics, a document that is not open (missing), or a scan cancelled before it
+// ended (cancelled).
+export type StatisticsOutcome = ({ readonly status: 'completed' } & DocumentStatistics) | { readonly status: 'missing' } | { readonly status: 'cancelled' }
+
 // Message sent to the image worker. Open, open capture, render, encode, detection image, detection region, processing
-// image, and adopt carry an id that their response echoes; open capture and adopt transfer their bytes to the worker; a
-// close has no response, and a
-// cancel drops the render with that id if it has not started yet (the render then answers superseded).
+// image, statistics, and adopt carry an id that their response echoes; open capture and adopt transfer their bytes to
+// the worker; a close has no response, and a cancel drops the render with that id if it has not started yet, or stops
+// the statistics scan with that id at its next slice (both then answer superseded).
 export type ImageWorkerRequest =
 	| { readonly type: 'open'; readonly id: number; readonly path: string }
 	| { readonly type: 'openCapture'; readonly id: number; readonly bytes: Uint8Array<ArrayBuffer>; readonly name: string; readonly capture: ImageCapture }
@@ -367,6 +383,7 @@ export type ImageWorkerRequest =
 	| { readonly type: 'detectionImage'; readonly id: number; readonly document: string }
 	| { readonly type: 'detectionRegion'; readonly id: number; readonly document: string; readonly rect: ImageRect }
 	| { readonly type: 'processingImage'; readonly id: number; readonly document: string }
+	| { readonly type: 'statistics'; readonly id: number; readonly document: string; readonly area?: ImageRect }
 	| { readonly type: 'adopt'; readonly id: number; readonly image: Image; readonly provenance: ImageProvenance }
 	| { readonly type: 'cancel'; readonly id: number }
 	| { readonly type: 'close'; readonly document: string }
@@ -374,7 +391,8 @@ export type ImageWorkerRequest =
 // Message the image worker answers a request with, by request id: the opened document, the
 // rendering, the encoded file, the grayscale copy a star detection measures (see ImageStore.detectionImage), that of
 // a region (see ImageStore.detectionRegion), the
-// full copy an image processing pipeline works on (see ImageStore.processingImage), the adopted document, a
+// full copy an image processing pipeline works on (see ImageStore.processingImage), the statistics of its samples (see
+// ImageStore.statistics), the adopted document, a
 // document that is not open (missing), a render dropped before it
 // started (superseded), settings that cannot be applied to the image (invalid), a file that cannot be
 // opened (with the status of its ImageOpenError), or any other failure.
@@ -384,6 +402,7 @@ export type ImageWorkerResponse =
 	| { readonly id: number; readonly status: 'detectionImage'; readonly image: Image }
 	| ({ readonly id: number; readonly status: 'detectionRegion' } & ImageRegion)
 	| { readonly id: number; readonly status: 'processingImage'; readonly image: Image }
+	| ({ readonly id: number; readonly status: 'statistics' } & DocumentStatistics)
 	| { readonly id: number; readonly status: 'adopted'; readonly info: ImageInfo }
 	| ({ readonly id: number; readonly status: 'rendered' } & Rendering)
 	| { readonly id: number; readonly status: 'missing' }
@@ -647,6 +666,29 @@ export class ImageStore implements Disposable, ClientListener {
 		if (response.status === 'processingImage') return response.image
 		if (response.status === 'missing') return undefined
 		throw responseError(response)
+	}
+
+	// Measures the statistics of the original samples of an open or retained document, inside area or over the whole
+	// image (an area must lie inside it), on the worker that holds the pixels, so nothing is copied: per mono, RGB plus
+	// luminance, or trusted CFA phase plane, with a local background noise estimate per native plane. The scan yields
+	// between slices so renderings proceed; an abort of signal stops it at the next slice (cancelled). Resolves to
+	// missing when the document is neither open nor retained.
+	async statistics(id: string, area: ImageRect | undefined, signal?: AbortSignal): Promise<StatisticsOutcome> {
+		if (!this.#documents.has(id) && !this.#retained.has(id)) return { status: 'missing' }
+		if (signal?.aborted) return { status: 'cancelled' }
+		const requestId = this.#id++
+		const cancel = () => this.#post({ type: 'cancel', id: requestId })
+		signal?.addEventListener('abort', cancel, { once: true })
+
+		try {
+			const response = await this.#request({ type: 'statistics', id: requestId, document: id, ...(area && { area }) })
+			if (response.status === 'statistics') return { status: 'completed', statistics: response.statistics, conversion: response.conversion, ...(response.mosaic && { mosaic: response.mosaic }) }
+			if (response.status === 'missing') return { status: 'missing' }
+			if (response.status === 'superseded') return { status: 'cancelled' }
+			throw responseError(response)
+		} finally {
+			signal?.removeEventListener('abort', cancel)
+		}
 	}
 
 	// Adopts the result of an image processing pipeline, or a live stack snapshot, as a new derived document, with the

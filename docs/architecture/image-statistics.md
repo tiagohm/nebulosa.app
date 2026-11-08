@@ -1,0 +1,41 @@
+# Image Statistics Contract
+
+Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
+
+- **One service.** `ImageStatisticsService` (`api/src/imagestatistics.ts`) measures the original decoded samples of an image document, whole or inside a rectangle. It runs as one of the analysis jobs of the [Shared Image Contracts](shared-image.md): routes `/api/images/:id/statistics` and `/api/statistics`, event `statistics:updated`.
+    - The scan is the toolkit's `createImageStatisticsScan` (`core/src/imaging/analysis/statistics.ts`). It runs on the image worker that holds the pixels (`ImageStore.statistics`, op `statistics` of `images.worker.ts`), so the image is never copied to another thread.
+    - The scan advances in slices of about 6 ms and yields between them, so renderings, other requests, and a cancel are handled while a large frame is measured. A cancel stops it at the next slice and publishes no result.
+    - Nothing the viewer applies (debayer preview, stretch, inversion, zoom) changes what is measured. A derived document or a live stack snapshot is measured like any other document.
+- **Planes follow the document.**
+    - A mono image has one plane, `mono`.
+    - An RGB image has `red`, `green` and `blue`, plus `luminance`: BT.709 weights on the linear samples, not a calibrated photometric luminance.
+    - A mono mosaic with a trusted CFA pattern (`ImageInfo.cfa`) has `red`, `green1`, `green2` and `blue`. Each phase is selected by absolute image coordinates, so an area at an odd offset keeps its phases, and the two greens are never merged.
+    - A mosaic whose `BAYERPAT` is not trusted is measured as one mono plane and reported as `mosaic: 'untrusted'`.
+- **Every value is in the scale of the source** (`SampleConversion`), in ADU for unscaled integer data and in the unit of the source otherwise (`unit`); nothing is converted to electrons. The service converts two kinds of value:
+    - Levels, as scale × sample + offset: the mean, median, percentiles, extrema, histogram domains and background level.
+    - Dispersions, as |scale| × sample: the population standard deviation, MAD, robust sigma and background noise.
+
+    A read that rescaled the image to 0..1 is reported as `rescaled`.
+
+- **Statistics of each plane:**
+    - **Counts and moments.** Finite and non-finite counts (NaN and infinities never enter a reduction). Min, max, mean and population standard deviation are exact over every finite sample.
+    - **Order statistics.** Median, MAD (about the median), robust sigma (1.4826 × MAD, a dispersion of the whole plane, not a noise), and P01 and P99. Their `quantileMethod` is one of:
+        - `exact` for at most 65536 samples, or for unscaled 8 and 16-bit codes;
+        - `binned` when such codes are not integral;
+        - `sampled` from a deterministic reservoir of 65536 values.
+    - **Numeric limits.** Counts at the representable limits of the source, present only for unsigned integer data that the read did not rescale and that has no BSCALE (`numericLimitsKnown` of `api/src/imagedecode.ts`). A count at a limit is labelled as such, never as saturation.
+    - **Histograms.** Two chart histograms of 2048 bins, both from the same scan, counting every finite sample, with the samples outside the domain counted apart: `robust` over P0.1..P99.9 and `full` over min..max. Changing the domain therefore never runs the scan again.
+    - **Background.** On each native plane, the toolkit's local background noise: tiles clipped asymmetrically, a first-order surface removed, and residual MADs combined. It reports a `status` (`measured`, `uncertain` or `unavailable`), the level, the noise sigma, the coverage, and warnings.
+
+        It is a spatial estimate on one frame: not a read noise, a gain or a temporal noise. Correlated pixels (debayered, resampled or denoised data) bias it low and are flagged (`correlatedNoisePossible`). An unavailable estimate has no value, never 0.
+- **Scheduling.**
+    - One scan runs at a time.
+    - An equivalent request (same image and area, under the same statistics version) is answered with the job still waiting or running (202), or with its kept result (200).
+    - The job summary (`summary`: the median and standard deviation of the luminance of an RGB image, otherwise of the first plane) travels in the event. The planes are fetched from `GET /api/statistics/:jobId/result`.
+    - The area is not validated by the API; the web keeps it inside the image.
+    - No device is held, and nothing is persisted.
+- **Limitations:**
+    - There is no statistics plane mixing the phases of a mosaic.
+    - There is no background estimate of the luminance.
+    - Contamination covering more than half of every background tile pixel by pixel cannot be told from noise.
+    - There is no export, no comparison of documents, and no trend across frames.

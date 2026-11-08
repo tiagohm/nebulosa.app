@@ -1,5 +1,6 @@
 import { open } from 'fs/promises'
 import { basename } from 'path'
+import { createImageStatisticsScan } from 'nebulosa/src/imaging/analysis/statistics'
 import { writeImageToFits, writeImageToFormat, writeImageToXisf } from 'nebulosa/src/imaging/model/image'
 import type { CfaPattern, Image, ImageChannel } from 'nebulosa/src/imaging/model/types'
 import { clone } from 'nebulosa/src/imaging/processing/arithmetic'
@@ -13,14 +14,15 @@ import { fileHandleSource } from 'nebulosa/src/io/file'
 import { Bitpix, type FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSource } from 'nebulosa/src/io/io'
 import type { Sink } from 'nebulosa/src/io/types'
-import { luminanceImage, luminanceRegion, readImageFrom, sampleConversion } from './imagedecode'
-import { cfaPattern, DisplayError, type DisplaySettings, type ImageCapture, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type SaveFormat, type Stretch } from './images'
+import { luminanceImage, luminanceRegion, numericLimitsKnown, readImageFrom, sampleConversion } from './imagedecode'
+import { cfaPattern, DisplayError, type DisplaySettings, type ImageCapture, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageRect, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type SaveFormat, type Stretch } from './images'
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
 // work on them: decoding FITS and XISF files and camera frames, the display pipeline, JPEG encoding, encoding
 // documents as FITS, XISF, or JPEG files, preparing the grayscale
 // copies star detections measure on their own worker (stars.worker.ts), whole or of one small region, and the full copies image processing
-// pipelines work on (imageprocessing.worker.ts), whose results come back to be adopted as documents. Keeping the
+// pipelines work on (imageprocessing.worker.ts), whose results come back to be adopted as documents, and the statistics
+// of the original samples, scanned in place in short slices between which renderings and other requests proceed. Keeping the
 // pixels here means they are never copied between threads, and the server event loop stays free while
 // a large image is decoded or rendered. Renderings run one at a time, always on a copy of the decoded
 // image, which is never modified; opens overlap them only while reading. A rendering waits in a
@@ -63,6 +65,15 @@ interface QueuedRender {
 	// Settings to render with.
 	readonly request: RenderRequest
 }
+
+// Time a statistics scan works before it yields to the messages received meanwhile, in milliseconds.
+const STATISTICS_SLICE = 6
+
+// Image rows a statistics scan processes between two reads of the clock.
+const STATISTICS_ROWS = 8
+
+// Ids of the statistics scans running; a cancel removes one, which then stops at its next slice.
+const scans = new Set<number>()
 
 // Open documents, by document id.
 const documents = new Map<string, DocumentEntry>()
@@ -372,8 +383,60 @@ function drain(): void {
 	setImmediate(drain)
 }
 
-// Drops the queued rendering with a request id, answering it superseded. Ignored when it already started.
+// Resolves after the messages already received are handled.
+function yieldToMessages(): Promise<void> {
+	return new Promise((resolve) => {
+		setImmediate(resolve)
+	})
+}
+
+// Scans the statistics of a document in slices of STATISTICS_SLICE milliseconds, yielding between them, and answers
+// them with the conversion of the samples and the kind of mosaic; superseded when it was cancelled meanwhile. The
+// decoded image is read in place and never copied; the histogram buffers of the answer are transferred.
+async function scanStatistics(id: number, document: string, area: ImageRect | undefined): Promise<void> {
+	const entry = documents.get(document)
+
+	if (!entry) {
+		reply({ id, status: 'missing' })
+		return
+	}
+
+	const { image, cfa } = entry
+	scans.add(id)
+
+	try {
+		const rect = area && { left: area.left, top: area.top, right: area.left + area.width, bottom: area.top + area.height }
+		const scan = createImageStatisticsScan(image, { area: rect, cfa, numericLimits: numericLimitsKnown(image) })
+		let done = false
+
+		while (!done) {
+			const start = performance.now()
+			while (!done && performance.now() - start < STATISTICS_SLICE) done = scan.consumeRows(STATISTICS_ROWS)
+			if (done) break
+			await yieldToMessages()
+
+			if (!scans.has(id)) {
+				reply({ id, status: 'superseded' })
+				return
+			}
+		}
+
+		const statistics = scan.finish()
+		const mosaic = image.metadata.channels !== 1 ? undefined : cfa ? 'trusted' : image.metadata.bayer ? 'untrusted' : undefined
+		const transfer = statistics.planes.flatMap((plane) => (plane.histograms ? [plane.histograms.robust.counts.buffer, plane.histograms.full.counts.buffer] : []))
+		reply({ id, status: 'statistics', statistics, conversion: sampleConversion(image), ...(mosaic && { mosaic }) }, transfer)
+	} catch (error) {
+		reply({ id, status: 'failed', error: Error.isError(error) ? error.message : String(error) })
+	} finally {
+		scans.delete(id)
+	}
+}
+
+// Drops the queued rendering with a request id, answering it superseded, or stops the statistics scan with that id at
+// its next slice. Ignored when a rendering already started.
 function cancel(id: number): void {
+	if (scans.delete(id)) return
+
 	for (const render of queue.values()) {
 		if (render.id === id) {
 			queue.delete(render.document)
@@ -400,6 +463,11 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 
 	if (request.type === 'render') {
 		enqueue(request)
+		return
+	}
+
+	if (request.type === 'statistics') {
+		await scanStatistics(request.id, request.document, request.area)
 		return
 	}
 

@@ -35,6 +35,7 @@ import { createImageProcessingRoutes, ImageProcessingService } from './imageproc
 import { createImageRoutes, images } from './images'
 import { createImageStackingRoutes, ImageStacking } from './imagestacking'
 import { DEFAULT_IMAGE_STACKING_DIRECTORY, ImageStackingStore } from './imagestacking.store'
+import { createImageStatisticsRoutes, ImageStatisticsService } from './imagestatistics'
 import { createIndiRoutes, IndiPropertyService } from './indi'
 import { IndiMessageService } from './indimessages'
 import { createIPolarRoutes, IPolarSessions } from './ipolar'
@@ -502,6 +503,7 @@ export type {
 	AnnotationTimeOrigin,
 	AnnotationWcs,
 } from './annotations'
+export type { ImageStatisticsErrorCode, ImageStatisticsEvent, ImageStatisticsJob, ImageStatisticsJobState, ImageStatisticsReport, ImageStatisticsRequest, ImageStatisticsSnapshot, ImageStatisticsSummary, PlaneStatistics, StatisticsBackground, StatisticsHistogram, StatisticsNumericLimits } from './imagestatistics'
 export type { StreakContextSources, StreakDetectionErrorCode, StreakDetectionEvent, StreakDetectionJob, StreakDetectionJobState, StreakDetectionRequest, StreakDetectionResult, StreakDetectionSnapshot, StreakDetectionSummary, StreakDetectorSettings } from './streaks'
 export type { PlateSolutions, PlateSolveErrorCode, PlateSolveJob, PlateSolveJobState, PlateSolveOrigin, PlateSolveOutcome, PlateSolveRemote, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolverSettings, PlateSolveSnapshot, PlateSolveStage, PlateSolveSummary, PlateSolvingEvent } from './platesolving'
 export type { PlateSolveHint, PlateSolveHints, PlateSolveHintSource, PlateSolveStrategy, ResolvedPlateSolveHints } from './platesolving.hints'
@@ -556,6 +558,7 @@ export type {
 	ImageOrigin,
 	ImageProperties,
 	ImageProvenance,
+	ImageRect,
 	LiveStackingProvenance,
 	LiveStackingProvenanceStack,
 	ProcessingProvenance,
@@ -935,6 +938,9 @@ const starProfiles = new StarProfileService(images)
 // Streak detection of the image documents, classified with the solutions and stars already found for each image.
 const streaks = new StreakDetectionService(images, plateSolving, stars, broadcast)
 
+// Histogram and statistics of the original samples of the image documents, scanned on the image worker.
+const imageStatistics = new ImageStatisticsService(images, broadcast)
+
 // Annotation of the image documents with the sky catalog and SkyBoT, through the WCS of each image.
 const annotations = new AnnotationService(images, plateSolving, annotationSky, broadcast)
 
@@ -1174,6 +1180,7 @@ const RESOURCES: readonly Disposable[] = [
 	spiceKernels,
 	stars,
 	streaks,
+	imageStatistics,
 	imageProcessing,
 	images,
 	operations,
@@ -1323,6 +1330,7 @@ export const routes = {
 	...createStarProfileRoutes(starProfiles),
 	...createPlateSolvingRoutes(plateSolving),
 	...createStreakDetectionRoutes(streaks),
+	...createImageStatisticsRoutes(imageStatistics),
 	...createAnnotationRoutes(annotations),
 	...createCaptureFrameRoutes(captureFrames),
 	...createSkyApiRoutes(satelliteSkyAdapter(satellites)),

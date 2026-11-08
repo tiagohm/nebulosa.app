@@ -87,3 +87,14 @@ export function sampleConversion({ header, metadata }: Image): SampleConversion 
 	const unit = bitpix > 0 && numericKeyword(header, 'BSCALE', 1) === 1 ? 'adu' : 'source'
 	return { unit, scale: (normalization?.range ?? 1) * fullScale, offset: (normalization?.minimum ?? 0) * fullScale, rescaled: normalization !== undefined }
 }
+
+// Returns whether the normalized samples 0 and 1 of an image are the representable limits of its source: unsigned
+// integer data (8-bit without BZERO, wider with no BZERO, as XISF stores it, or the unsigned BZERO of 2^(BITPIX-1)), not
+// rescaled by the read and without a BSCALE. Signed, scaled, floating-point, and rescaled data have limits the samples
+// do not show.
+export function numericLimitsKnown({ header, metadata }: Image): boolean {
+	const { bitpix, normalization } = metadata
+	if (!(bitpix > 0) || normalization !== undefined || numericKeyword(header, 'BSCALE', 1) !== 1) return false
+	const zero = numericKeyword(header, 'BZERO', bitpix === 8 ? 0 : 2 ** (bitpix - 1))
+	return zero === (bitpix === 8 ? 0 : 2 ** (bitpix - 1))
+}

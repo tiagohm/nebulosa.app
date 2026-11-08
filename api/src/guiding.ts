@@ -1446,7 +1446,7 @@ export class GuidingSessions implements Disposable {
 		const session = this.#active(sessionId)
 		if (session instanceof Response) return session
 		const stopped = await session.interactive.stop(session.scope)
-		this.#end(session, successfulOperationResult(undefined))
+		this.#end(session, stopped)
 		return stopped.ok ? new Response(null, { status: 204 }) : failureResponse(stopped, 'Stopping the guiding')
 	}
 
@@ -1517,10 +1517,11 @@ export class GuidingSessions implements Disposable {
 		this.#update(session, { command: { commandId: restoring, command: 'startGuiding', state: 'running' } })
 		const started = this.#settle(session, restoring, 'startGuiding', session.interactive.startGuiding(session.scope, session.scope, { recalibrate: !reused, settle }))
 		const { promise: aborted, resolve } = Promise.withResolvers<undefined>()
-		signal.addEventListener('abort', () => resolve(undefined), { once: true })
+		const abort = () => resolve(undefined)
+		signal.addEventListener('abort', abort, { once: true })
 		if (signal.aborted) resolve(undefined)
 
-		const result = await Promise.race([started, aborted])
+		const result = await Promise.race([started, aborted]).finally(() => signal.removeEventListener('abort', abort))
 
 		if (!result) {
 			await session.interactive.stopGuiding(session.scope)
@@ -1597,7 +1598,13 @@ export class GuidingSessions implements Disposable {
 	[Symbol.dispose]() {
 		for (const session of this.#sessions.sessions()) {
 			if (!session.summary.active) continue
-			void session.interactive.stop(session.scope).then(() => this.#end(session, successfulOperationResult(undefined)))
+			void session.interactive.stop(session.scope).then(
+				(stopped) => this.#end(session, stopped),
+				(error: unknown) => {
+					console.error('the guiding session could not be stopped:', error)
+					this.#end(session, failedOperationResult('commandFailed'))
+				},
+			)
 		}
 	}
 

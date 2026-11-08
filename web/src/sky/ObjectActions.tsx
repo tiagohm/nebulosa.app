@@ -1,5 +1,5 @@
 import type { ObservingTargetRef, OperationRecord, SkyObjectRef, SkyPosition } from 'api'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { formatDegrees } from '../format'
@@ -11,6 +11,7 @@ import { Modal, ModalActions } from '../ui/Modal'
 import { Notice } from '../ui/Notice'
 import { formatDeclination, formatRightAscension } from './format'
 import { mountRuntime, mountView, slewBlocker, slewMount, slewProgress, stopMount } from './mount'
+import { createRequestGuard } from './selection'
 import { fetchSkyPosition } from './sky'
 
 // Actions of the selected object in the Object section of the Object Inspector: Show Framing, Add to Observing Planner for
@@ -60,6 +61,8 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 	const runtime = mountView(useSnapshot(mountRuntime), useSnapshot(controlRuntime))
 	const operations = useSnapshot(operationsState)
 	const [preview, setPreview] = useState<Preview>()
+	// Lookup of the place in the confirmation: a closed confirmation, or a later one, ignores an earlier answer.
+	const lookup = useRef(createRequestGuard())
 	const mount = runtime.target
 	const blocker = observer ? slewBlocker(runtime, operations) : 'Set the observer location to check the horizon'
 	const progress = slewProgress(runtime, operations)
@@ -67,19 +70,31 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 	const connected = !!mount && runtime.state?.connected === true
 	const plannable = plannerTarget(target)
 
+	useEffect(() => {
+		const guard = lookup.current
+		return () => guard.cancel()
+	}, [])
+
 	// Opens the confirmation with the object's place at the real current time.
 	function confirm() {
 		if (!observer) return
+		const request = lookup.current.begin()
 		setPreview({ status: 'loading' })
-		fetchSkyPosition(target, Date.now(), siteObserver(observer), 'fast').then(
-			({ position }) => setPreview({ status: 'ready', position }),
-			(error: unknown) => setPreview({ status: 'error', error: error instanceof Error ? error.message : 'Request failed' }),
+		fetchSkyPosition(target, Date.now(), siteObserver(observer), 'fast', request.signal).then(
+			({ position }) => request.current() && setPreview({ status: 'ready', position }),
+			(error: unknown) => request.current() && setPreview({ status: 'error', error: error instanceof Error ? error.message : 'Request failed' }),
 		)
+	}
+
+	// Closes the confirmation, ignoring the lookup still in flight.
+	function close() {
+		lookup.current.cancel()
+		setPreview(undefined)
 	}
 
 	// Sends the slew and closes the confirmation.
 	function slew() {
-		setPreview(undefined)
+		close()
 		const current = siteObserver(observer)
 		if (current) void slewMount(mountRuntime, target, targetName, current)
 	}
@@ -109,7 +124,7 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 			{connected && blocker && !moving && <Notice>{blocker}.</Notice>}
 			{mount && runtime.slew && <SlewStatus targetName={runtime.slew.targetName} operation={progress} />}
 			{mount && runtime.error && <Notice error>{runtime.error}</Notice>}
-			<Modal open={!!preview} onClose={() => setPreview(undefined)} title="Slew to object?" className="max-w-md">
+			<Modal open={!!preview} onClose={close} title="Slew to object?" className="max-w-md">
 				<p className="m-0 text-sm">
 					Slew <strong className="text-ink-100">{mount?.name || 'the mount'}</strong> to <strong className="text-ink-100">{targetName}</strong>.
 				</p>
@@ -132,7 +147,7 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 					)}
 				</div>
 				<ModalActions>
-					<Button variant="secondary" onClick={() => setPreview(undefined)}>
+					<Button variant="secondary" onClick={close}>
 						Cancel
 					</Button>
 					<Button disabled={preview?.status === 'ready' && preview.position.altitude !== undefined && preview.position.altitude < 0} onClick={slew} data-autofocus>

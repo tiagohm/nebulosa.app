@@ -644,7 +644,7 @@ export const DEFAULT_TARGET_CENTERING_SETTINGS: TargetCenteringSettings = { expo
 
 // Target saved to recover a framing. It is a definition, never a reference to an image, so it outlives any frame.
 export interface FramingReference {
-	// Id of the framing, unique in the profile.
+	// Id of the framing, unique across every profile: the server keeps each framing as a row keyed by it.
 	id: string
 	// Name of the framing, not blank.
 	name: string

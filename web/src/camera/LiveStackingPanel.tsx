@@ -1,6 +1,7 @@
 import type { CalibrationMasterSummary, LiveMasterKind, LiveStackingCohort, LiveStackingComposition, LiveStackingRecipe, LiveStackingSession } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { calibrationLibraryRuntime } from '../calibrationlibrary/calibrationlibrary'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { formatDuration, formatExposureTime, formatByteSize } from '../format'
@@ -221,6 +222,8 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 	const runtime = useSnapshot(liveStackingRuntime)
 	const control = useSnapshot(controlRuntime)
 	const [masters, setMasters] = useState<Readonly<Record<LiveMasterKind, readonly CalibrationMasterSummary[]>>>({ dark: [], flat: [], bias: [] })
+	const [mastersFailed, setMastersFailed] = useState(false)
+	const library = useSnapshot(calibrationLibraryRuntime)
 	const { calibration } = settings
 	const sessionKey = session ? `session:${session.sessionId}` : ''
 	const wheel = camera.wheel?.device?.connected ? watchedDeviceState(control, 'wheel', camera.wheel.device) : undefined
@@ -231,15 +234,21 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 	const chosenFilter = filter !== undefined && addable.includes(filter) ? filter : addable[0]
 	const cameraName = session?.cameraName ?? camera.device.device?.name
 
+	// Fetches the masters offered, again whenever the Calibration Library changes; a failed fetch keeps the masters known.
 	useEffect(() => {
 		let cancelled = false
+
 		void Promise.all(LIVE_MASTER_ORDER.map((kind) => loadLiveMasters(kind))).then(([dark, flat, bias]) => {
-			if (!cancelled) setMasters({ dark, flat, bias })
+			if (cancelled) return
+			const failed = !dark || !flat || !bias
+			setMastersFailed(failed)
+			if (!failed) setMasters({ dark, flat, bias })
 		})
+
 		return () => {
 			cancelled = true
 		}
-	}, [])
+	}, [library.changes])
 
 	const update = (next: LiveStackingSettings['calibration']) => setLiveStackingSettings(profileState, camera.settings, { calibration: next })
 
@@ -271,6 +280,7 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 	return (
 		<CollapsibleSection id="images.liveStacking.calibration" title="Calibration" summary={`${Object.keys(calibration.filters).length} filters`} defaultOpen={false}>
 			{wheelNames ? <Notice>Choose the filters of the wheel to calibrate before their frames arrive.</Notice> : <Notice>Without a connected filter wheel the frames have no filter, so they take the masters of {NO_FILTER}.</Notice>}
+			{mastersFailed && <Notice error>The masters of the Calibration Library could not be read; the list may be out of date.</Notice>}
 			{filters.map((name) => (
 				<CollapsibleSection key={name} id={`images.liveStacking.calibration.filter.${name}`} title={name === NO_FILTER ? 'No filter' : name} summary={chosenSummary(name)}>
 					{LIVE_MASTER_ORDER.map((kind) => {

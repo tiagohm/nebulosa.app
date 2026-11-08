@@ -3,7 +3,7 @@ import type { LiveStackingCohort, LiveStackingSession, LiveStackingSnapshot } fr
 import { proxy } from 'valtio'
 import { DEFAULT_LIVE_STACKING_SETTINGS } from '../profile/schema'
 import { COMPOSITION_PRESETS } from '../tools/imagestacking/presets'
-import { calibrationFilters, cameraLiveSession, handleLiveStackingEvent, type LiveStackingRuntime, liveSessionActive, NO_FILTER, refreshLiveStacking, removeFilterCalibration, resolveLivePreset, startLiveStacking, wheelFilterNames } from './livestacking'
+import { calibrationFilters, cameraLiveSession, handleLiveStackingEvent, loadLiveMasters, type LiveStackingRuntime, liveSessionActive, NO_FILTER, refreshLiveStacking, removeFilterCalibration, resolveLivePreset, startLiveStacking, wheelFilterNames } from './livestacking'
 
 // A session of camera c1/cam with fields replaced.
 function session(revision: number, patch: Partial<LiveStackingSession> = {}): LiveStackingSession {
@@ -75,6 +75,14 @@ describe('live stacking store', () => {
 		await refreshed
 
 		expect(state.sessions).toEqual({})
+	})
+
+	test('masters that cannot be read are told apart from no master', async () => {
+		const failing = (() => Promise.resolve(Response.json({ error: 'Unavailable' }, { status: 503 }))) as unknown as typeof fetch
+		const empty = (() => Promise.resolve(Response.json({ items: [], total: 0 }))) as unknown as typeof fetch
+
+		expect(await loadLiveMasters('dark', failing)).toBeUndefined()
+		expect(await loadLiveMasters('dark', empty)).toEqual([])
 	})
 
 	test('a start sends the form of the camera with a token and keeps the session it answers', async () => {

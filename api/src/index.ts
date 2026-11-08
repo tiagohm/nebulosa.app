@@ -920,11 +920,12 @@ const captureFrames = new CaptureFrameRegistry(images, broadcast, {
 connections.listen((event) => captureFrames.deviceChanged(event))
 listenClients(captureFrames)
 
+// The Calibration Library, single owner of the calibration frames and masters, which needs no connection and holds no
+// device; its automatic masters wait for the camera operations, and the guiding sessions read its master darks too.
+const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(database), publish, () => operations.running().some(({ kind }) => kind.startsWith('camera.')))
+
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
 // guide output commands and previewing their frames in the image store and the capture frame registry.
-// The Calibration Library, single owner of the calibration frames and masters, whose master darks the guiding sessions
-// read too.
-const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(database), publish, () => operations.running().some(({ kind }) => kind.startsWith('camera.')))
 const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, new GuidingCalibrationStore(database), calibrationLibrary, publish)
 
 // Automatic dithering of the camera captures, commanded to the guiding sessions, or moving the mounts with the commanders of
@@ -958,8 +959,6 @@ const pointingActivations = new PointingActivations(connections.devices, (id) =>
 // taking their frames with the capturer of the captures, and analyzing them on a worker of their own.
 const darv = new DarvSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, new DarvAnalyzer(images), publish)
 
-// Calibration frames and masters, which need no connection and hold no device; automatic masters wait for the camera operations.
-
 // Projects of light frames for Image Stacking, which need no connection and hold no device. Imports never read the
 // directories of Nebulosa: its stacks and the Calibration Library.
 const imageStacking = new ImageStacking(new ImageStackingStore(database), publish, calibrationLibrary, [DEFAULT_IMAGE_STACKING_DIRECTORY, DEFAULT_CALIBRATION_LIBRARY_DIRECTORY])
@@ -968,12 +967,12 @@ const imageStacking = new ImageStacking(new ImageStackingStore(database), publis
 // service, calibrated with the masters of the Calibration Library, and integrated on a worker of their own per session.
 const liveStacking = new LiveStacking(captures, connections.devices, (id) => connections.client(id), calibrationLibrary, images, new LiveStackingStore(database), publish)
 
-// Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
-// moving the wheels, driving the panels, and closing and opening the covers with the commanders of their commands,
-// previewing and recording the frames in the capture frame registry, and measuring them in DN on a worker of their own.
 // Measures Flat Wizard frames in DN on a worker of its own.
 const flatWizardAnalyzer = new FlatWizardAnalyzer()
 
+// Flat Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the captures,
+// moving the wheels, driving the panels, and closing and opening the covers with the commanders of their commands,
+// previewing and recording the frames in the capture frame registry, and measuring them in DN on a worker of their own.
 const flatWizard = new FlatWizardSessions(
 	connections.devices,
 	(id) => connections.client(id),

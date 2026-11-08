@@ -11,6 +11,7 @@ import type { MeridianFlipTransition } from './meridianflip'
 import type { MeridianFlipExecution } from './meridianflipexecutor'
 import type { MeridianFlipExecutorErrorCode } from './meridianflipexecutor.policy'
 import type { MountPointingSessionSummary } from './mountpointing.sessions'
+import type { DeviceNameResolver } from './operationhistory'
 import type { OperationDevice, OperationKind, OperationRecord } from './operations'
 import type { TargetCenteringSessionSummary } from './targetcentering'
 import type { TppaSessionSummary } from './tppa'
@@ -89,9 +90,6 @@ export interface NotificationDraft {
 	readonly source: NotificationSource
 	readonly target?: NotificationTarget
 }
-
-// Returns the name of a device of an open connection, if it is still known.
-export type DeviceNameResolver = (connectionId: string, deviceId: string) => string | undefined
 
 // Device operations whose failure is reported: commands that keep running after their request was answered, so
 // their failure is not shown inline by the form that started them. Session operations are reported by their

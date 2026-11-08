@@ -584,7 +584,25 @@ export interface IPolarSettings {
 	completionThreshold: number
 	// Whether the rays and the target pole use the default atmosphere (the apparent pole) instead of the geometric pole.
 	refraction: boolean
+	// Master dark of the Calibration Library subtracted from the frames before they are solved; absent subtracts none.
+	dark?: IPolarDarkSettings
 }
+
+// Master dark of the iPolar form: the operator pins one master of the Calibration Library, never chosen automatically,
+// since nothing identifies the physical camera a master came from.
+export interface IPolarDarkSettings {
+	// Whether the frames are solved less the master.
+	enabled: boolean
+	// Id of the pinned master; absent before one was chosen.
+	masterId?: number
+	// SHA-256 of the master as it was chosen, so a master that changed since is refused.
+	digest?: string
+	// What a frame the master does not fit does: solved without it (continue), or end the session (stop).
+	onUnavailable: 'continue' | 'stop'
+}
+
+// Master dark of an iPolar form that has none yet: off, solving without it when it does not fit.
+export const DEFAULT_IPOLAR_DARK_SETTINGS: IPolarDarkSettings = { enabled: false, onUnavailable: 'continue' }
 
 // Smallest RA rotation of the iPolar form, in degrees: the least rotation the toolkit accepts between the poses.
 export const IPOLAR_MINIMUM_ROTATION = 10

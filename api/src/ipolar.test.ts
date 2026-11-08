@@ -10,19 +10,24 @@ import { MountCommander } from 'nebulosa/src/devices/commanders/mount'
 import { isDeviceQuiescent } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 import { failedOperationResult, type OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import { type FitsHeader, writeFits } from 'nebulosa/src/io/formats/fits/fits'
+import { bufferSink } from 'nebulosa/src/io/io'
 import { matMulVec, matRodriguesRotation } from 'nebulosa/src/math/linear-algebra/mat3'
 import { type Vec3, vecCross, vecDot, vecNormalize } from 'nebulosa/src/math/linear-algebra/vec3'
 import { arcmin, arcsec, deg, hour, normalizePI, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { ipolarFrameContext, ipolarItrsToIcrs } from 'nebulosa/src/observation/alignment/ipolar.geometry'
+import type { CalibrationMasterDetail } from './calibrationlibrary'
+import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
+import { inspectHeader } from './calibrationlibrary.sources'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureStartRequest } from './captures'
 import { ConnectionManager } from './connection'
 import { AppDatabase } from './database'
 import { ImageStore } from './images'
-import { type IPolarEvent, type IPolarRequest, type IPolarSession, IPolarSessions } from './ipolar'
+import { type IPolarDarkLibrary, type IPolarEvent, type IPolarRequest, type IPolarSession, IPolarSessions } from './ipolar'
 import { OperationRegistry } from './operations'
-import type { PlateSolveOrigin, PlateSolvePreparation, PlateSolveRequest, PlateSolveResult } from './platesolving'
+import type { PlateSolveOrigin, PlateSolvePixels, PlateSolvePreparation, PlateSolveRequest, PlateSolveResult } from './platesolving'
 
 const SKIP = process.env.RUN_ALL_TESTS !== 'true'
 
@@ -111,25 +116,31 @@ class Rig {
 // Plate solver standing for ASTAP over the rig; configured unless told otherwise.
 function fakeSolver(rig: Rig) {
 	const origins: PlateSolveOrigin[] = []
+	// What each solve read: the fingerprint of its private pixels, or 'raw' for the image itself.
+	const pixels: string[] = []
 	let configured = true
 
 	const solver = {
 		prepare: (solving: PlateSolveRequest) => Promise.resolve(configured ? { request: solving, tool: { executable: 'astap', timeout: 60000 } } : undefined),
-		solve: (_imageId: string, _preparation: PlateSolvePreparation, _signal?: AbortSignal, origin?: PlateSolveOrigin) => {
+		solve: (_imageId: string, _preparation: PlateSolvePreparation, _signal?: AbortSignal, origin?: PlateSolveOrigin, calibrated?: PlateSolvePixels) => {
 			if (origin) origins.push(origin)
+			pixels.push(calibrated?.fingerprint ?? 'raw')
 			return Promise.resolve({ outcome: 'solved', solution: rig.solution() } as PlateSolveResult)
 		},
 	}
 
-	return { solver, origins, unconfigure: () => (configured = false) }
+	return { solver, origins, pixels, unconfigure: () => (configured = false) }
 }
+
+// A Calibration Library without any master.
+const NO_DARKS: IPolarDarkLibrary = { pinnedMaster: () => Promise.resolve(undefined), lease: () => () => {} }
 
 // A small preview-only capture request.
 function captureRequest(): CaptureStartRequest {
 	return { token: Bun.randomUUIDv7(), exposureMode: 'single', count: 1, delay: 0, exposureTime: 0.05, frameType: 'LIGHT', gain: 0, offset: 0, binX: 1, binY: 1, subframe: true, x: 0, y: 0, width: 32, height: 32, frameFormat: '', output: { mode: 'preview-only', format: 'FITS' } }
 }
 
-async function setup() {
+async function setup(library: IPolarDarkLibrary = NO_DARKS) {
 	const manager = new ConnectionManager()
 	disposables.push(manager)
 	const { id } = await manager.connect({ type: 'SIMULATOR' })
@@ -164,6 +175,7 @@ async function setup() {
 		images,
 		frames,
 		solving.solver,
+		library,
 		(event) => events.push(event),
 		auxiliaryDir,
 	)
@@ -188,7 +200,7 @@ async function setup() {
 	// Complete record of a session.
 	const session = async (sessionId: string) => (await ipolar.session(sessionId).json()) as IPolarSession
 
-	return { id, operations, frames, captures, commander, rig, solving, ipolar, events, auxiliaryDir, camera, cameraId, mount, mountDevice: { connectionId: id, deviceId: mountId }, summary, ended, session }
+	return { id, operations, images, frames, captures, commander, rig, solving, ipolar, events, auxiliaryDir, camera, cameraId, mount, mountDevice: { connectionId: id, deviceId: mountId }, summary, ended, session }
 }
 
 // Starts a session and returns its ids.
@@ -360,5 +372,103 @@ describe('iPolar sessions', () => {
 		} finally {
 			clearInterval(follow)
 		}
+	})
+})
+
+describe('iPolar dark', () => {
+	// Metadata of the frames the simulator takes for a request, read from the first frame of a session without a dark.
+	async function frameMetadata() {
+		const { id, cameraId, ipolar, images, summary, ended, session } = await setup()
+		const { sessionId } = await start(ipolar, id, cameraId, request())
+		await waitUntil(() => summary()?.state === 'waitingForRotation')
+		const { header } = images.metadata((await session(sessionId)).poses[0].imageId!)!
+		await ipolar.stop(sessionId)
+		await waitUntil(ended)
+		return { header, metadata: inspectHeader(header, 'fits', false).metadata }
+	}
+
+	// A Calibration Library holding master dark #7 ('digest'): a zero dark of the simulator's frame geometry with the
+	// given metadata, whose leases are counted.
+	async function darkLibrary(header: FitsHeader, metadata: CalibrationMetadata) {
+		const width = header.NAXIS1 as number
+		const height = header.NAXIS2 as number
+		const channels = (header.NAXIS3 as number | undefined) ?? 1
+		const raw = new Float32Array(width * height * channels)
+		const buffer = Buffer.alloc(4 * 2880 + raw.length * 4)
+		const sink = bufferSink(buffer)
+		await writeFits(sink, [{ header: { SIMPLE: true, BITPIX: header.BITPIX, NAXIS: channels > 1 ? 3 : 2, NAXIS1: width, NAXIS2: height, ...(channels > 1 && { NAXIS3: channels }), ...(header.BITPIX === 16 && { BZERO: 32768, BSCALE: 1 }) }, raw }])
+		const path = join(root, `dark-${tokens++}.fit`)
+		await Bun.write(path, buffer.subarray(0, sink.position))
+		const master = { masterId: 7, kind: 'dark', metadata, contentDigest: 'digest', path, units: 'DN', fullScaleDn: 65535 } as unknown as CalibrationMasterDetail
+		const leases = { taken: 0, released: 0 }
+		const library: IPolarDarkLibrary = {
+			pinnedMaster: ({ masterId, digest }) => Promise.resolve(masterId === 7 && digest === 'digest' ? master : undefined),
+			lease: () => {
+				leases.taken++
+				return () => leases.released++
+			},
+		}
+		return { library, leases }
+	}
+
+	const DARK = { masterId: 7, digest: 'digest', onUnavailable: 'continue' } as const
+
+	test('solves both poses and the refinement less the pinned dark, the frame itself still the one shown', async () => {
+		const { header, metadata } = await frameMetadata()
+		const { library, leases } = await darkLibrary(header, metadata)
+		const { id, cameraId, ipolar, rig, frames, solving, summary, session } = await setup(library)
+		const { sessionId } = await start(ipolar, id, cameraId, request({ dark: DARK }))
+		await waitUntil(() => summary()?.state === 'waitingForRotation')
+		expect(summary()!.dark).toMatchObject({ frame: 1, state: 'applied', masterId: 7, unverified: expect.arrayContaining(['camera']) })
+
+		rig.rotation = deg(30)
+		ipolar.confirmRotation(sessionId)
+		await waitUntil(() => summary()?.state === 'readyToRefine' || summary()?.endedAt !== undefined)
+		expect(summary()).toMatchObject({ state: 'readyToRefine', dark: { frame: 2, state: 'applied' } })
+		ipolar.startRefinement(sessionId)
+		await waitUntil(() => (summary()?.refinementCount ?? 0) >= 1, 30000)
+		await ipolar.stopRefinement(sessionId)
+
+		expect(solving.pixels.every((pixels) => pixels === 'dark:7:digest')).toBeTrue()
+		expect(solving.pixels.length).toBeGreaterThanOrEqual(3)
+		const record = await session(sessionId)
+		expect(record.darkFrames.map((status) => status.state).every((state) => state === 'applied')).toBeTrue()
+		// The camera tab shows the frame itself, never a calibrated copy.
+		expect(frames.snapshot().sources[0].latestFrameId).toBe(`${sessionId}:${record.frameCount}`)
+
+		await ipolar.finish(sessionId)
+		await waitUntil(() => summary()?.endedAt !== undefined)
+		expect(leases).toEqual({ taken: 1, released: 1 })
+	})
+
+	test('a frame the dark does not fit is solved without it, said so, or ends the session under the stop policy', async () => {
+		const { header, metadata } = await frameMetadata()
+		const { library, leases } = await darkLibrary(header, { ...metadata, exposure: { value: 999, evidence: 'verified' } })
+
+		const continued = await setup(library)
+		const { sessionId } = await start(continued.ipolar, continued.id, continued.cameraId, request({ dark: DARK }))
+		await waitUntil(() => continued.summary()?.state === 'waitingForRotation')
+		expect(continued.summary()!.dark).toMatchObject({ frame: 1, state: 'notApplied', code: 'exposureMismatch' })
+		expect(continued.summary()!.warnings.at(-1)).toContain('without the dark')
+		expect(continued.solving.pixels).toEqual(['raw'])
+		await continued.ipolar.stop(sessionId)
+		await waitUntil(continued.ended)
+
+		const stopped = await setup(library)
+		await start(stopped.ipolar, stopped.id, stopped.cameraId, request({ dark: { ...DARK, onUnavailable: 'stop' } }))
+		await waitUntil(stopped.ended)
+		expect(stopped.summary()).toMatchObject({ state: 'failed', reason: 'unexpectedState', error: expect.stringContaining('could not be subtracted from frame 1'), dark: { state: 'notApplied' } })
+		expect(stopped.solving.pixels).toEqual([])
+		expect(leases).toEqual({ taken: 2, released: 2 })
+	})
+
+	test('a pinned dark no longer in the library refuses the start, leasing nothing', async () => {
+		const { header, metadata } = await frameMetadata()
+		const { library, leases } = await darkLibrary(header, metadata)
+		const { id, cameraId, ipolar, events } = await setup(library)
+
+		expect((await ipolar.start(id, cameraId, request({ dark: { ...DARK, digest: 'changed' } }))).status).toBe(422)
+		expect(events).toEqual([])
+		expect(leases).toEqual({ taken: 0, released: 0 })
 	})
 })

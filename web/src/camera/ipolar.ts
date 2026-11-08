@@ -1,4 +1,4 @@
-import type { CameraCapabilities, IPolarRequest, IPolarSession, IPolarSessionSummary, IPolarState, MountState, ServerEvent } from 'api'
+import type { CameraCapabilities, DarkEvidence, IPolarDarkRequest, IPolarDarkStatus, IPolarRequest, IPolarSession, IPolarSessionSummary, IPolarState, MountState, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
 import type { IPolarRejection } from 'nebulosa/src/observation/alignment/ipolar'
@@ -6,7 +6,7 @@ import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { deviceUrl, jsonInit } from '../http'
 import type { ObservingSite } from '../location/site'
-import type { CameraExposureSettings, CameraPlateSolvingSettings, IPolarSettings } from '../profile/schema'
+import type { CameraExposureSettings, CameraPlateSolvingSettings, IPolarDarkSettings, IPolarSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
 import { applySession, type CameraSessionKind, type CameraSessionRecords, refreshSessionRecords, sendSessionCommand } from './sessions'
@@ -26,12 +26,19 @@ export type IPolarRuntime = CameraSessionRecords<IPolarSessionSummary, IPolarSes
 export const ipolarRuntime = proxy<IPolarRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
 
 // How the sessions are mirrored (sessions.ts): the complete record is fetched again when the summary reports a new
-// frame, candidate, measurement, or rejection, or an end.
+// frame, candidate, measurement, rejection, or dark outcome, or an end.
 const IPOLAR_SESSIONS: CameraSessionKind<IPolarSessionSummary, IPolarSession> = {
 	url: '/api/ipolar',
 	refreshes: new SnapshotRefreshes(),
 	stale: (session, _, details) =>
-		!details || details.frameCount !== session.frameCount || details.attemptCount !== session.attemptCount || details.measurement?.frame !== session.measurement?.frame || details.rejection?.frame !== session.rejection?.frame || (session.endedAt !== undefined && details.endedAt === undefined),
+		!details ||
+		details.frameCount !== session.frameCount ||
+		details.attemptCount !== session.attemptCount ||
+		details.measurement?.frame !== session.measurement?.frame ||
+		details.rejection?.frame !== session.rejection?.frame ||
+		details.dark?.frame !== session.dark?.frame ||
+		details.dark?.state !== session.dark?.state ||
+		(session.endedAt !== undefined && details.endedAt === undefined),
 }
 
 // Label of each session state.
@@ -78,6 +85,28 @@ export const IPOLAR_REJECTION_LABELS: Readonly<Record<IPolarRejection | 'unsolve
 	singularGeometry: 'the pole is at the zenith',
 }
 
+// What each unverified fact of an applied dark means, for people.
+export const IPOLAR_DARK_EVIDENCE_LABELS: Readonly<Record<DarkEvidence, string>> = {
+	camera: 'camera',
+	temperature: 'temperature',
+	gain: 'gain',
+	offset: 'offset',
+	binning: 'binning',
+	readoutMode: 'readout mode',
+	origin: 'subframe origin',
+}
+
+// Returns how the pinned dark went for the latest frame, for people: pending, applied (with what could not be checked),
+// or not applied and why, with what the frame was then solved with.
+export function ipolarDarkText(status: IPolarDarkStatus, onUnavailable: IPolarDarkRequest['onUnavailable']): string {
+	if (status.state === 'pending') return `Subtracting dark #${status.masterId} from frame #${status.frame}…`
+	if (status.state === 'applied') {
+		const unverified = (status.unverified ?? []).map((evidence) => IPOLAR_DARK_EVIDENCE_LABELS[evidence])
+		return `Dark #${status.masterId} subtracted from frame #${status.frame}${unverified.length > 0 ? `; not verified: ${unverified.join(', ')}` : ''}.`
+	}
+	return `Dark #${status.masterId} not subtracted from frame #${status.frame}: ${status.reason ?? status.code}. ${onUnavailable === 'stop' ? 'The session stopped.' : 'The frame was solved without it.'}`
+}
+
 // Returns why the mount can never run an automatic rotation, from the state the server reports, or undefined when it
 // can (or its state is not known yet): an alt-az mount, no west-east motion, no abort, or no slew-rate preset.
 export function ipolarMountSupport(state: Pick<MountState, 'mountType' | 'canMove' | 'canMoveWE' | 'canAbort' | 'slewRates'> | undefined): string | undefined {
@@ -105,16 +134,19 @@ export interface IPolarStartContext {
 	readonly site: ObservingSite | undefined
 	// Whether the plate solver is configured.
 	readonly solverConfigured: boolean
+	// Master dark of the form; absent subtracts none.
+	readonly dark?: Pick<IPolarDarkSettings, 'enabled' | 'masterId'>
 }
 
 // Returns why no session can start now, or undefined when one can. A manual session needs only a ready camera, a site
 // and a solver; the setup's mount is used when ready, ignored when absent or disconnected, and blocks only while
 // another operation holds it. An automatic session needs the mount ready and supported, a preset it announces,
 // and unparked; its clearance is the operator's, warned beside the Start button. The server checks again.
-export function ipolarBlocker({ camera, mount, mode, mountState, slewRate, site, solverConfigured }: IPolarStartContext): string | undefined {
+export function ipolarBlocker({ camera, mount, mode, mountState, slewRate, site, solverConfigured, dark }: IPolarStartContext): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (!site) return 'Choose an active observing site for the profile.'
 	if (!solverConfigured) return 'The plate solver is not configured.'
+	if (dark?.enabled && dark.masterId === undefined) return 'Choose the master dark to subtract.'
 
 	if (mode === 'manual') return mount.status === 'busy' ? mount.message : undefined
 
@@ -135,7 +167,8 @@ export function ipolarSlewRate(settings: Pick<IPolarSettings, 'slewRate'>, state
 // Builds the start request of the iPolar form of a camera. The frames take the exposure time of the form and the
 // camera settings of exposure, whose own exposure time is never sent, fitted to the camera's capabilities as a capture
 // is, and are solved with the plate solving settings of the camera. The site is the active observing site, in radians
-// and meters; the mount, when given, is the setup's; the rotation and the threshold are sent in radians.
+// and meters; the mount, when given, is the setup's; the rotation and the threshold are sent in radians. The master dark is
+// sent only when it is enabled and pinned.
 export function ipolarRequest(
 	settings: Readonly<IPolarSettings>,
 	exposure: Readonly<CameraExposureSettings>,
@@ -158,6 +191,7 @@ export function ipolarRequest(
 		settleDelay: settings.settleDelay,
 		refinementDelay: settings.refinementDelay,
 		completionThreshold: settings.completionThreshold * ASEC2RAD,
+		...(settings.dark?.enabled && settings.dark.masterId !== undefined && settings.dark.digest !== undefined && { dark: { masterId: settings.dark.masterId, digest: settings.dark.digest, onUnavailable: settings.dark.onUnavailable } }),
 	}
 }
 

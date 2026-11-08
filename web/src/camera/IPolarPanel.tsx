@@ -1,5 +1,6 @@
-import type { DeviceSummary, IPolarSession, IPolarSessionSummary } from 'api'
+import type { CalibrationMasterSummary, DeviceSummary, IPolarSession, IPolarSessionSummary } from 'api'
 import { toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
+import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -12,7 +13,7 @@ import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
 import { useSolverConfigured } from '../platesolving/PlateSolveControls'
 import { activeProfile, cameraPlateSolving, exposureSettings, ipolarSettings, profileState, setIPolarSettings } from '../profile/profile'
-import { type CameraIdentity, IPOLAR_MAXIMUM_ROTATION, IPOLAR_MINIMUM_ROTATION, type IPolarSettings } from '../profile/schema'
+import { type CameraIdentity, DEFAULT_IPOLAR_DARK_SETTINGS, IPOLAR_MAXIMUM_ROTATION, IPOLAR_MINIMUM_ROTATION, type IPolarDarkSettings, type IPolarSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
@@ -26,7 +27,8 @@ import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
 // oxfmt-ignore
-import { confirmIPolarRotation, finishIPolar, IPOLAR_DIRECTION_LABELS, IPOLAR_DIRECTIONS, IPOLAR_MODE_LABELS, IPOLAR_MODES, IPOLAR_REJECTION_LABELS, IPOLAR_STATE_LABELS, ipolarBlocker, ipolarMountSupport, ipolarRequest, ipolarRunning, ipolarRuntime, ipolarSlewRate, startIPolar, startIPolarRefinement, stopIPolar, stopIPolarRefinement } from './ipolar'
+import { confirmIPolarRotation, finishIPolar, ipolarDarkText, IPOLAR_DIRECTION_LABELS, IPOLAR_DIRECTIONS, IPOLAR_MODE_LABELS, IPOLAR_MODES, IPOLAR_REJECTION_LABELS, IPOLAR_STATE_LABELS, ipolarBlocker, ipolarMountSupport, ipolarRequest, ipolarRunning, ipolarRuntime, ipolarSlewRate, startIPolar, startIPolarRefinement, stopIPolar, stopIPolarRefinement } from './ipolar'
+import { loadLiveMasters } from './livestacking'
 import { SessionStateText } from './SessionStateText'
 
 // Contextual panel sections of iPolar, a camera operation of the Images camera tabs: the equipment and the mode (the
@@ -80,7 +82,7 @@ export function IPolarSections({ device, availability, mount, settings: identity
 	const automatic = shown.mode === 'automatic'
 	const slewRate = running && session ? session.request.slewRate : ipolarSlewRate(settings, mountState)
 	const mountAvailability = roleAvailability('MOUNT', mount, operations, automatic ? ipolarMountSupport(mountState) : undefined)
-	const blocker = running ? undefined : ipolarBlocker({ camera: availability, mount: mountAvailability, mode: settings.mode, mountState, slewRate, site, solverConfigured: configured })
+	const blocker = running ? undefined : ipolarBlocker({ camera: availability, mount: mountAvailability, mode: settings.mode, mountState, slewRate, site, solverConfigured: configured, dark: settings.dark })
 	const slewRates = mountState?.slewRates ?? []
 
 	// Updates fields of the camera's iPolar form.
@@ -121,6 +123,7 @@ export function IPolarSections({ device, availability, mount, settings: identity
 			>
 				<ExposureTimeInput value={shown.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
 			</CameraAcquisitionSection>
+			<DarkSection dark={shown.dark ?? DEFAULT_IPOLAR_DARK_SETTINGS} exposureTime={shown.exposureTime} locked={locked} session={running ? session : undefined} onChange={(patch) => update({ dark: { ...(settings.dark ?? DEFAULT_IPOLAR_DARK_SETTINGS), ...patch } })} />
 			<CollapsibleSection id="images.ipolar.rotation" title="Rotation">
 				{automatic ? (
 					<>
@@ -226,6 +229,7 @@ function appliedSettings({ request }: IPolarSessionSummary): IPolarSettings {
 		refinementDelay: request.refinementDelay,
 		completionThreshold: toArcsec(request.completionThreshold),
 		refraction: request.refraction,
+		...(request.dark && { dark: { enabled: true, ...request.dark } }),
 	}
 }
 
@@ -308,5 +312,96 @@ function SessionState({ session }: { readonly session: IPolarSessionSummary }) {
 			{session.slewRateRestored === true && session.previousSlewRate && <Notice>The slew rate was restored to {session.previousSlewRate}.</Notice>}
 			{session.warnings.length > 0 && <Notice>{session.warnings.at(-1)}</Notice>}
 		</>
+	)
+}
+
+interface DarkSectionProps {
+	// Master dark of the form, or the one a running session applies.
+	readonly dark: IPolarDarkSettings
+	// Exposure time of the frames, in seconds, which a master must have exactly.
+	readonly exposureTime: number
+	// Whether the form is locked by a session or a command in flight.
+	readonly locked: boolean
+	// Running session, whose latest frame's dark outcome is shown.
+	readonly session?: IPolarSessionSummary
+	// Updates fields of the form's dark.
+	readonly onChange: (patch: Partial<IPolarDarkSettings>) => void
+}
+
+// Option of the master selector meaning no master chosen yet.
+const NO_MASTER = ''
+
+// The master dark of the Calibration Library the frames are solved less: the operator pins one (nothing identifies the
+// camera a master came from, so none is chosen automatically), what a frame it does not fit does, and, while a session
+// runs, how it went for the latest frame. The masters are listed from the library; the server checks the pinned one
+// against the header of every frame.
+function DarkSection({ dark, exposureTime, locked, session, onChange }: DarkSectionProps) {
+	const [masters, setMasters] = useState<readonly CalibrationMasterSummary[]>()
+	const exposure = Math.round(exposureTime * 1e6)
+
+	useEffect(() => {
+		if (!dark.enabled || session) return
+		let current = true
+		void loadLiveMasters('dark').then((loaded) => current && setMasters(loaded))
+		return () => {
+			current = false
+		}
+	}, [dark.enabled, session])
+
+	const ids = (masters ?? []).map((master) => String(master.masterId))
+	const selected = dark.masterId === undefined ? NO_MASTER : String(dark.masterId)
+	const listed = selected === NO_MASTER || ids.includes(selected)
+
+	function describe(id: string) {
+		if (id === NO_MASTER) return 'Choose a master dark'
+		const master = masters?.find((candidate) => String(candidate.masterId) === id)
+		if (!master) return `#${id}`
+		const { metadata } = master
+		const temperature = metadata.setTemperature.value ?? metadata.sensorTemperature.value
+		const parts = [
+			`#${master.masterId}`,
+			metadata.exposure.value === undefined ? MISSING : `${metadata.exposure.value / 1e6} s`,
+			metadata.gain.value === undefined ? undefined : `gain ${metadata.gain.value}`,
+			metadata.binX.value === undefined ? undefined : `bin ${metadata.binX.value}×${metadata.binY.value ?? metadata.binX.value}`,
+			temperature === undefined ? undefined : `${temperature} °C`,
+			`${master.frames} frames`,
+			metadata.cameraName,
+		]
+		return parts.filter(Boolean).join(' · ')
+	}
+
+	function choose(id: string) {
+		const master = masters?.find((candidate) => String(candidate.masterId) === id)
+		if (master) onChange({ masterId: master.masterId, digest: master.contentDigest })
+	}
+
+	return (
+		<CollapsibleSection id="images.ipolar.dark" title="Dark">
+			<Checkbox label="Subtract a Calibration Library dark" checked={dark.enabled} disabled={locked} onChange={(enabled) => onChange({ enabled })} />
+			{dark.enabled && (
+				<>
+					{session ? (
+						<DataList>
+							<DataRow label="Master">{dark.masterId === undefined ? MISSING : `#${dark.masterId}`}</DataRow>
+						</DataList>
+					) : (
+						<Select
+							label="Master"
+							options={[NO_MASTER, ...ids]}
+							value={listed ? selected : NO_MASTER}
+							format={describe}
+							disabledReason={(id) => (id === NO_MASTER ? undefined : masters?.find((candidate) => String(candidate.masterId) === id)?.metadata.exposure.value !== exposure ? 'Exposure differs from the frames' : undefined)}
+							disabled={locked}
+							onChange={choose}
+						/>
+					)}
+					<SegmentedControl label="When It Does Not Fit" options={['continue', 'stop'] as const} value={dark.onUnavailable} format={(policy) => (policy === 'continue' ? 'Solve Without' : 'Stop')} disabled={locked} onChange={(onUnavailable) => onChange({ onUnavailable })} />
+					{!session && masters !== undefined && masters.length === 0 && <Notice>The Calibration Library has no master dark yet; make one with the Dark Library Wizard.</Notice>}
+					{!session && !listed && <Notice>The dark #{dark.masterId} is no longer in the Calibration Library; choose another one.</Notice>}
+					{session?.dark && <Notice error={session.dark.state === 'failed' || (session.dark.state === 'notApplied' && dark.onUnavailable === 'stop')}>{ipolarDarkText(session.dark, dark.onUnavailable)}</Notice>}
+					<Notice>The camera a master came from cannot be verified; the server checks the master against the exposure, size, gain, offset, binning, and temperature of every frame, and only the frame itself is shown.</Notice>
+				</>
+			)}
+		</CollapsibleSection>
 	)
 }

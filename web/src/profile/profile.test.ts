@@ -530,6 +530,11 @@ describe('camera forms', () => {
 
 		const reloaded = state.profiles[0].settings
 		expect(ipolarSettings(reloaded, MAIN)).toEqual({ ...DEFAULT_IPOLAR_SETTINGS, mode: 'automatic', slewRate: 'SPEED_4', rotation: 25, completionThreshold: 20 })
+
+		// A form kept before the dark existed has none, and a pinned dark is kept with its digest.
+		expect(ipolarSettings(reloaded, MAIN).dark).toBeUndefined()
+		setIPolarSettings(state, MAIN, { dark: { enabled: true, masterId: 23, digest: 'abc', onUnavailable: 'stop' } })
+		expect(ipolarSettings(state.profiles[0].settings, MAIN).dark).toEqual({ enabled: true, masterId: 23, digest: 'abc', onUnavailable: 'stop' })
 	})
 
 	test('the plate solving settings belong to the camera and keep the scale tolerance', () => {

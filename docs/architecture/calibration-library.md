@@ -72,7 +72,7 @@ Image Stacking calibrates its lights with the masters an operator chose among th
   a path comes only from a detail route.
   Frames with a BITPIX of 64 are `notSupported`.
 - **Calibrating a light.**
-  Image Stacking, Live Stacking, and the guide frames of Guiding apply masters;
+  Image Stacking, Live Stacking, the guide frames of Guiding, and the frames iPolar solves (a pinned dark, `api/src/calibrationdark.ts`) apply masters;
   any other calibrator reads `/api/calibration-library/masters`, keeps the `masterId` and `contentDigest` it used, reads the file with `sampleScale: 'digital'`, and converts it with `calibrationMasterImage(master, fullScaleDn)` (1 for a flat).
   The recipe is `(light - dark) / flat`, or `(light - bias) / flat`, on the raw mosaic before debayering: a master dark already holds the bias, so no bias is subtracted after it, and a master flat is passed to `calibrate` with `flatRepresentation: 'calibratedNormalized'`, which refuses a dark-flat because the flat already includes it, and with `darkScaling: 'none'`.
   Its dead pixels are not repaired: `invalidFlat: 'passthrough'` leaves those samples without flat correction.

@@ -87,7 +87,7 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
   Images Guiding tool `web/src/images/GuidingTool.tsx`
 - **Auto focus** (Implemented): `api/src/autofocus.ts` + `autofocus.curve.ts` over `runAutoFocus`; Images Auto Focus tool `web/src/images/AutoFocusTool.tsx` over `web/src/camera/AutoFocusPanel.tsx`, `FocusCurve.tsx`, store `autofocus.ts`
 - **TPPA** (Implemented): `api/src/tppa.ts` over `acquireThreePointPolarAlignment` and `refineThreePointPolarAlignment` (`core/src/observation/alignment/tppa.runner.ts`); Images TPPA tool `web/src/images/TppaTool.tsx`
-- **iPolar** (Implemented): `api/src/ipolar.ts` over `runIPolarCalibration` and `runIPolarRefinement` (`core/src/observation/alignment/ipolar.runner.ts`), the Earth-fixed engine `ipolar.ts` and `ipolar.geometry.ts`; Images iPolar tool `web/src/images/IPolarTool.tsx`;
+- **iPolar** (Implemented): `api/src/ipolar.ts` over `runIPolarCalibration` and `runIPolarRefinement` (`core/src/observation/alignment/ipolar.runner.ts`), the Earth-fixed engine `ipolar.ts` and `ipolar.geometry.ts`; a pinned master dark subtracted before each solve (`api/src/calibrationdark.ts` on `calibrationdark.worker.ts`); Images iPolar tool `web/src/images/IPolarTool.tsx`;
   not validated on hardware in the field
 - **DARV** (Implemented): `api/src/darv.ts` over `runDarv` (`core/src/observation/alignment/darv.runner.ts`), `api/src/darv.analysis.ts` over `analyzeDarvImage` on `darv.worker.ts`; Images DARV tool `web/src/images/DarvTool.tsx`
 - **Flat analysis and exposure** (Implemented): `core/src/imaging/analysis/flat/`; `api/src/flatwizard.ts` session over `api/src/flatwizard.analysis.ts`, which measures acquired FITS files in DN on a worker; Images → Flat Wizard

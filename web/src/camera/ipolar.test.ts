@@ -5,7 +5,7 @@ import { proxy } from 'valtio'
 import { DEFAULT_CAMERA_PLATE_SOLVING, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_IPOLAR_SETTINGS } from '../profile/schema'
 import { cameraKey } from './capture'
 // oxfmt-ignore
-import { confirmIPolarRotation, finishIPolar, handleIPolarEvent, ipolarBlocker, ipolarFrameRole, ipolarMountSupport, ipolarRequest, type IPolarRuntime, ipolarSlewRate, refreshIPolar, startIPolar, type IPolarStartContext } from './ipolar'
+import { confirmIPolarRotation, finishIPolar, handleIPolarEvent, ipolarDarkText, ipolarBlocker, ipolarFrameRole, ipolarMountSupport, ipolarRequest, type IPolarRuntime, ipolarSlewRate, refreshIPolar, startIPolar, type IPolarStartContext } from './ipolar'
 
 function newState() {
 	return proxy<IPolarRuntime>({ sessions: {}, details: {}, pending: {}, errors: {} })
@@ -58,7 +58,7 @@ function summary(patch: Partial<IPolarSessionSummary> = {}): IPolarSessionSummar
 }
 
 function details(patch: Partial<IPolarSession> = {}): IPolarSession {
-	return { ...summary(), poses: [], attempts: [], ...patch }
+	return { ...summary(), poses: [], attempts: [], darkFrames: [], ...patch }
 }
 
 function context(patch: Partial<IPolarStartContext> = {}): IPolarStartContext {
@@ -176,4 +176,22 @@ test('an iPolar frame is a pose, a rejected candidate, or a refinement frame of 
 	expect(ipolarFrameRole(session, { sessionId: 's1', generation: 3 })).toEqual({ pose: 2, rejected: false, refinement: false })
 	expect(ipolarFrameRole(session, { sessionId: 's1', generation: 4 })).toEqual({ rejected: false, refinement: true })
 	expect(ipolarFrameRole(session, { sessionId: 's2', generation: 1 })).toBeUndefined()
+})
+
+test('the pinned dark is sent only when enabled with a master, and a start waits for its master', () => {
+	const pinned = { enabled: true, masterId: 23, digest: 'abc', onUnavailable: 'stop' } as const
+	expect(ipolarRequest({ ...DEFAULT_IPOLAR_SETTINGS, dark: pinned }, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, SITE, undefined, undefined).dark).toEqual({ masterId: 23, digest: 'abc', onUnavailable: 'stop' })
+	expect('dark' in ipolarRequest({ ...DEFAULT_IPOLAR_SETTINGS, dark: { ...pinned, enabled: false } }, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, SITE, undefined, undefined)).toBeFalse()
+	expect('dark' in ipolarRequest(DEFAULT_IPOLAR_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, SITE, undefined, undefined)).toBeFalse()
+
+	expect(ipolarBlocker(context({ dark: { enabled: true } }))).toContain('master dark')
+	expect(ipolarBlocker(context({ dark: { enabled: true, masterId: 23 } }))).toBeUndefined()
+	expect(ipolarBlocker(context({ dark: { enabled: false } }))).toBeUndefined()
+})
+
+test('the dark outcome of a frame names the frame, what was not verified, and what the frame was solved with', () => {
+	expect(ipolarDarkText({ frame: 4, state: 'applied', masterId: 23, unverified: ['camera', 'temperature'] }, 'continue')).toBe('Dark #23 subtracted from frame #4; not verified: camera, temperature.')
+	expect(ipolarDarkText({ frame: 5, state: 'notApplied', masterId: 23, code: 'exposureMismatch', reason: 'The frame was exposed 3000 ms, the dark 2000 ms' }, 'continue')).toBe('Dark #23 not subtracted from frame #5: The frame was exposed 3000 ms, the dark 2000 ms. The frame was solved without it.')
+	expect(ipolarDarkText({ frame: 1, state: 'failed', masterId: 23, code: 'calibrationFailed', reason: 'boom' }, 'stop')).toContain('The session stopped.')
+	expect(ipolarDarkText({ frame: 2, state: 'pending', masterId: 23 }, 'continue')).toContain('frame #2')
 })

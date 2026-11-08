@@ -11,6 +11,7 @@ import type { Camera, Mount } from 'nebulosa/src/devices/indi/device'
 import { failedOperationResult, type OperationFailureReason, type OperationHandle, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { abortableDelay } from 'nebulosa/src/devices/orchestration/operation.wait'
 import { type ResourceRequest, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
+import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { meter, toMeter } from 'nebulosa/src/math/units/distance'
 import { DEFAULT_IPOLAR_CONVERGENCE, type IPolarAcceptedMeasurement, type IPolarConvergence, IPOLAR_CONVERGENCE_START, type IPolarMeasurement, type IPolarRejection } from 'nebulosa/src/observation/alignment/ipolar'
@@ -21,6 +22,9 @@ import type { PolarAlignmentDirection } from 'nebulosa/src/observation/alignment
 import type { CameraCapturer } from 'nebulosa/src/observation/capture/capture'
 import { type CameraCaptureTime, SYSTEM_CAMERA_CAPTURE_CLOCK } from 'nebulosa/src/observation/capture/types'
 import type { CenteringCaptureOptions } from 'nebulosa/src/observation/mount/centering'
+import { assessDarkForFrame, DarkCalibrator, type DarkEvidence, type DarkRejection } from './calibrationdark'
+import type { CalibrationLibrary } from './calibrationlibrary'
+import { inspectHeader } from './calibrationlibrary.sources'
 import { CameraSessionRegistry } from './camerasessions'
 import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
@@ -29,7 +33,8 @@ import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import { type OperationDevice, type OperationRegistry, settledResult } from './operations'
-import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, PlateSolvingService } from './platesolving'
+import type { PlateSolvePixels, PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, PlateSolvingService } from './platesolving'
+import { POINTING_KEYWORDS } from './platesolving.hints'
 
 // iPolar service: runs the toolkit's camera-based polar alignment (calibration of the mechanical RA axis from two
 // solved frames, then refinement while the operator adjusts the mount base) for one camera inside a single operation
@@ -91,6 +96,46 @@ export interface IPolarRequest extends CommandRequest {
 	readonly refinementDelay: number
 	// Total polar error a converging measurement stays within, in radians: a requested target, not an accuracy.
 	readonly completionThreshold: number
+	// Master dark of the Calibration Library subtracted from every frame before it is solved; absent subtracts none.
+	readonly dark?: IPolarDarkRequest
+}
+
+// Master dark an operator pinned for a session: the frames are solved less it, and the frame itself is still the one shown.
+export interface IPolarDarkRequest {
+	// Id of the master.
+	readonly masterId: number
+	// SHA-256 of the master as the operator chose it; a master that changed since is never used.
+	readonly digest: string
+	// What a frame the dark cannot be applied to does: solved without it, with a warning (continue), or end the session
+	// (stop).
+	readonly onUnavailable: 'continue' | 'stop'
+}
+
+// How the pinned dark went for one frame:
+// - pending: the frame is being calibrated.
+// - applied: the frame was solved less the dark.
+// - notApplied: the dark does not apply to the frame (code says why, from the frame's own header), or is no longer in the
+//   library; the frame was solved without it, or the session stopped.
+// - failed: the subtraction failed; the frame was solved without it, or the session stopped.
+export type IPolarDarkState = 'pending' | 'applied' | 'notApplied' | 'failed'
+
+// Why the pinned dark was not applied to a frame: a refusal of the strict check (calibrationdark.ts), a master no longer
+// in the library or changed (unavailable), or a failed subtraction (calibrationFailed).
+export type IPolarDarkCode = DarkRejection | 'unavailable' | 'calibrationFailed'
+
+// How the pinned dark went for one frame of a session.
+export interface IPolarDarkStatus {
+	// Frame number within the session.
+	readonly frame: number
+	readonly state: IPolarDarkState
+	// Id of the master.
+	readonly masterId: number
+	// Why it was not applied.
+	readonly code?: IPolarDarkCode
+	// Why, for people.
+	readonly reason?: string
+	// What could not be checked when it was applied; the camera always, since nothing identifies a physical camera.
+	readonly unverified?: readonly DarkEvidence[]
 }
 
 // What a session is doing:
@@ -243,6 +288,8 @@ export interface IPolarSessionSummary {
 	readonly convergence: Pick<IPolarConvergence, 'streak' | 'converged'>
 	// Refinement frames measured.
 	readonly refinementCount: number
+	// How the pinned dark went for the latest frame; absent without a dark or before the first frame.
+	readonly dark?: IPolarDarkStatus
 	// Slew-rate preset the mount used before an automatic rotation changed it; absent when it reported none.
 	readonly previousSlewRate?: string
 	// Whether the previous preset was restored when the session ended; absent before it ended or when there was nothing to
@@ -272,7 +319,13 @@ export interface IPolarSession extends IPolarSessionSummary {
 	readonly attempts: readonly IPolarAttempt[]
 	// Correction guide of the latest accepted measurement.
 	readonly overlay?: IPolarOverlay
+	// How the pinned dark went for each frame, latest MAXIMUM_WARNINGS; empty without a dark.
+	readonly darkFrames: readonly IPolarDarkStatus[]
 }
+
+// Calls of the Calibration Library a session makes: the pinned master, checked again for every frame, and the lease that
+// keeps it from being deleted while the session may read it.
+export type IPolarDarkLibrary = Pick<CalibrationLibrary, 'pinnedMaster' | 'lease'>
 
 // Snapshot of GET /api/ipolar: the latest session of every camera.
 export interface IPolarSnapshot {
@@ -353,6 +406,12 @@ interface Session {
 	// Latest accepted measurement and the convergence, the state a resumed refinement continues from.
 	previous?: IPolarAcceptedMeasurement
 	convergence: IPolarConvergence
+	// Pinned dark: its lease, released once, and the worker that subtracts it; absent without a dark.
+	readonly dark?: { readonly request: IPolarDarkRequest; readonly release: () => void; readonly calibrator: DarkCalibrator }
+	// How the dark went for each frame, latest MAXIMUM_WARNINGS.
+	readonly darkFrames: IPolarDarkStatus[]
+	// Why the session itself ended it (a dark it could not apply under the stop policy), shown instead of the cancellation.
+	failure?: { readonly reason: OperationFailureReason; readonly error: string }
 }
 
 // iPolar sessions of the cameras of every open connection.
@@ -363,8 +422,8 @@ export class IPolarSessions {
 	// Creates the service. client resolves an open connection id to its client, operations holds and publishes every
 	// session, commander rotates the mounts in automatic mode (the one of the mount commands), capturer takes the frames
 	// (the one of the capture service), images receives the frames, frames records them as the latest frame of their
-	// camera and closes them, plateSolving solves them, and listener receives every session change synchronously.
-	// auxiliaryDir is the parent of the temporary directory of each session.
+	// camera and closes them, plateSolving solves them, library gives the master dark a session pinned, and listener
+	// receives every session change synchronously. auxiliaryDir is the parent of the temporary directory of each session.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -374,6 +433,7 @@ export class IPolarSessions {
 		readonly images: ImageStore,
 		readonly frames: CaptureFrameRegistry,
 		readonly plateSolving: Pick<PlateSolvingService, 'prepare' | 'solve'>,
+		readonly library: IPolarDarkLibrary,
 		readonly listener: IPolarListener,
 		readonly auxiliaryDir: string = tmpdir(),
 	) {
@@ -404,6 +464,12 @@ export class IPolarSessions {
 		// The provider settings are resolved first, so nothing can take the devices between the checks below and the start.
 		const preparation = await this.plateSolving.prepare(request.solving)
 		if (!preparation) return unsupported('The plate solver is not configured; set it up in Settings → External Tools')
+
+		// The pinned dark is checked before anything starts; every frame checks it again against its own header.
+		if (request.dark) {
+			const master = await this.library.pinnedMaster({ masterId: request.dark.masterId, digest: request.dark.digest })
+			if (!master || master.kind !== 'dark') return unsupported(`The pinned dark #${request.dark.masterId} is no longer in the Calibration Library, or it changed`)
+		}
 
 		// The same request, sent twice, may have started its session while this one was prepared.
 		const raced = this.#sessions.repeated(request.token)
@@ -448,6 +514,9 @@ export class IPolarSessions {
 			attempts: [],
 			mount,
 			convergence: IPOLAR_CONVERGENCE_START,
+			// The lease keeps the master from being deleted for the whole session; #ended releases it.
+			...(request.dark && { dark: { request: request.dark, release: this.library.lease([{ masterId: request.dark.masterId }]), calibrator: new DarkCalibrator() } }),
+			darkFrames: [],
 		}
 
 		const devices = mount && request.mount ? [cameraDevice, request.mount] : [cameraDevice]
@@ -658,14 +727,67 @@ export class IPolarSessions {
 			this.frames.previewed(info, record, cameraName, 'ipolar')
 			if (current) Object.assign(current, { imageId: info.id, observedAt: frame.observedAt })
 
+			// The frame itself stays the one shown and solved for; only the pixels the solver reads lose the dark.
+			const pixels = session.dark && (await this.#darkPixels(session, frame, info.header, number, preparation))
+			if (pixels === 'stop') throw new Error(session.failure!.error)
+
 			const step = frame.pose === 1 ? 'reference' : frame.pose === 2 ? 'second' : 'refinement'
-			const result = await this.plateSolving.solve(info.id, preparation, signal, { kind: 'ipolar', sessionId, ...camera, frameId, step })
+			const result = await this.plateSolving.solve(info.id, preparation, signal, { kind: 'ipolar', sessionId, ...camera, frameId, step }, pixels)
 			if (!result.solution) this.#warn(session, `Frame ${number} did not solve.`)
 			return result.solution
 		} catch (error) {
-			if (!signal.aborted) this.#warn(session, `Frame ${number} could not be solved: ${Error.isError(error) ? error.message : String(error)}`)
+			if (!signal.aborted && !session.failure) this.#warn(session, `Frame ${number} could not be solved: ${Error.isError(error) ? error.message : String(error)}`)
 			throw error
 		}
+	}
+
+	// Subtracts the pinned dark from a frame for its solve. The master is checked again (it may have been deleted, changed,
+	// or gone stale) and judged against the frame's own header, then subtracted on the session's worker. Resolves the
+	// calibrated pixels, undefined when the frame is to be solved as it is (continue), or 'stop' after the session was
+	// set to end (stop); every frame publishes its own outcome, so an earlier frame's never stands for it.
+	async #darkPixels(session: Session, frame: IPolarRunnerFrame, header: FitsHeader, number: number, preparation: PlateSolvePreparation): Promise<PlateSolvePixels | undefined | 'stop'> {
+		const { request, calibrator } = session.dark!
+		const { masterId, digest } = request
+		this.#darkStatus(session, { frame: number, state: 'pending', masterId })
+
+		const master = await this.library.pinnedMaster({ masterId, digest })
+		const assessment = master ? assessDarkForFrame(inspectHeader(header, 'fits', false).metadata, master) : ({ eligible: false, code: 'unavailable', reason: `The dark #${masterId} is no longer in the Calibration Library, or it changed` } as const)
+		let outcome: IPolarDarkStatus
+
+		if (master && assessment.eligible) {
+			const omit = preparation.request.strategy === 'blind' ? POINTING_KEYWORDS : []
+			const calibrated = await calibrator.calibrate({ framePath: frame.path, darkPath: master.path, fullScale: master.units === 'dimensionless' ? 1 : master.fullScaleDn, masterKey: `${masterId}:${digest}`, omit })
+
+			if ('bytes' in calibrated) {
+				this.#darkStatus(session, { frame: number, state: 'applied', masterId, unverified: assessment.unverified })
+				return { bytes: calibrated.bytes, fingerprint: `dark:${masterId}:${digest}` }
+			}
+
+			outcome = { frame: number, state: 'failed', masterId, code: 'calibrationFailed', reason: calibrated.failed }
+		} else {
+			outcome = { frame: number, state: 'notApplied', masterId, code: assessment.eligible ? 'unavailable' : assessment.code, reason: assessment.eligible ? undefined : assessment.reason }
+		}
+
+		this.#darkStatus(session, outcome)
+
+		if (request.onUnavailable === 'stop') {
+			session.failure = { reason: 'unexpectedState', error: `The dark #${masterId} could not be subtracted from frame ${number}: ${outcome.reason}` }
+			void session.handle?.cancel('unexpectedState')
+			return 'stop'
+		}
+
+		this.#warn(session, `Frame ${number} was solved without the dark: ${outcome.reason}`)
+		return undefined
+	}
+
+	// Publishes how the pinned dark went for a frame, and keeps the outcomes of the latest frames.
+	#darkStatus(session: Session, status: IPolarDarkStatus) {
+		if (status.state !== 'pending') {
+			session.darkFrames.push(status)
+			if (session.darkFrames.length > MAXIMUM_WARNINGS) session.darkFrames.shift()
+		}
+
+		this.#sessions.update(session, { dark: status })
 	}
 
 	// Follows the progress the runner reports.
@@ -788,6 +910,9 @@ export class IPolarSessions {
 	// the mount free.
 	async #ended(session: Session, result: OperationResult<void>) {
 		session.frame = undefined
+		// Nothing reads the dark any more: its lease and its worker end with the session.
+		session.dark?.release()
+		session.dark?.calibrator[Symbol.dispose]()
 		const previous = session.summary.previousSlewRate
 		const { mount } = session
 		const restoration: { slewRateRestored?: boolean } = {}
@@ -804,6 +929,7 @@ export class IPolarSessions {
 		const ended = { ...restoration, warnings, exposure: undefined, endedAt: Date.now() }
 		if (result.ok || (result.reason === 'aborted' && session.finishing)) this.#sessions.update(session, { state: 'completed', ...ended })
 		else if (result.reason === 'aborted') this.#sessions.update(session, { state: 'cancelled', ...ended })
+		else if (session.failure) this.#sessions.update(session, { state: 'failed', reason: session.failure.reason, error: session.failure.error, ...ended })
 		else this.#sessions.update(session, { state: 'failed', reason: result.reason, ...(result.error !== undefined && { error: result.error }), ...ended })
 	}
 
@@ -814,7 +940,7 @@ export class IPolarSessions {
 
 	// Returns the complete record of a session.
 	#complete(session: Session): IPolarSession {
-		return { ...session.summary, poses: session.poses, attempts: session.attempts, ...(session.overlay && { overlay: session.overlay }) }
+		return { ...session.summary, poses: session.poses, attempts: session.attempts, ...(session.overlay && { overlay: session.overlay }), darkFrames: session.darkFrames }
 	}
 }
 

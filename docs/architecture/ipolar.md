@@ -19,6 +19,11 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Each frame is recorded in the capture frame registry (origin `ipolar`) before it is solved with `PlateSolvingService.solve` (origin `ipolar`, with its step: `reference`, `second`, or `refinement`), whose provider is resolved once when the session starts.
   The mount is snooped into the frames only in automatic mode: a mount turned by hand keeps reporting its old pointing, a stale hint.
 - The site is the profile's active observing site, sent in the request, never the driver's: in automatic mode a mount reporting a site more than 0.1° or 500 m away adds a warning.
+- A master dark of the Calibration Library can be pinned for a session (`dark`: its `masterId`, its `contentDigest`, and `onUnavailable`); nothing identifies the camera a master came from, so none is ever chosen automatically.
+  The start is refused (422) when `pinnedMaster` no longer answers it, and the session holds a `lease` of it until it ends.
+  Every frame is checked again: `pinnedMaster`, then `assessDarkForFrame` (`api/src/calibrationdark.ts`) against the frame's own header, which refuses another exposure (exact microseconds), size, channels, CFA or CFA offsets, subframe origin (a known nonzero origin against an unknown one included), BITPIX, and a known different binning, gain, offset, readout mode, camera name, or temperature (beyond 1 °C), and reports what stays unknown as unverified, the camera always.
+  A dark that fits is subtracted on the session's worker (`calibrationdark.worker.ts`: light minus dark in digital numbers on the raw mosaic, no scaling, written back in the frame's integer scale, negative values clipped to 0), and the frame is solved from those pixels as `PlateSolvePixels` (fingerprint `dark:<masterId>:<digest>`), while the frame itself stays the one recorded, shown, and solved for (see [Plate Solving Contract](plate-solving.md)).
+  A dark that does not fit or fails is reported for that frame (`dark`: `notApplied` or `failed`, with a code and a reason) and the frame is solved without it, with a warning (`continue`), or the session fails (`stop`); the summary carries the outcome of the latest frame, so an earlier frame's never stands for it, and the record the latest 20 (`darkFrames`).
   `refraction` selects the default atmosphere for both the rays and the target (the apparent pole), or the geometric pole.
 - After the calibration the session is `readyToRefine`.
   `…/refinement/start` starts or resumes the refinement, which captures and measures every refinement delay, never commanding the mount; `…/refinement/stop` pauses it (`refinementPaused`), keeping the devices.
@@ -37,5 +42,6 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   the camera must be rigid with the RA axis, and a DEC, rotator, or camera change needs a new calibration;
   the backend knows no obstacle the driver does not report, so the clearance of an automatic rotation is the operator's;
   refraction uses the default atmosphere;
+  whether a dark improves the solves of a given camera has not been measured in the field;
   the precision has not been validated on hardware in the field, and simulated accuracy is necessary, not sufficient;
   sessions do not survive a restart.

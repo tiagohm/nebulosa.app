@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { CalibrationJobSummary, CalibrationLibrarySnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { buildMaster, type CalibrationLibraryRuntime, handleCalibrationLibraryEvent, jobEnded, latestGroupJob, loadCalibrationGroups, loadFlatCorrections, refreshCalibrationLibrary } from './calibrationlibrary'
+import { buildMaster, type CalibrationLibraryRuntime, handleCalibrationLibraryEvent, jobEnded, latestGroupJob, loadCalibrationGroups, loadCalibrationMaster, loadFlatCorrections, refreshCalibrationLibrary } from './calibrationlibrary'
 
 function runtime() {
 	return proxy<CalibrationLibraryRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
@@ -109,5 +109,26 @@ describe('requests', () => {
 		await buildMaster(state, 'group', { groupId: 'g' }, (() => Promise.resolve(Response.json({ error: 'Gain differs', code: 'incompatibleFrames' }, { status: 409 }))) as unknown as typeof fetch)
 		expect(state.errors.group).toBe('Gain differs')
 		expect(state.pending.group).toBeUndefined()
+	})
+})
+
+describe('details', () => {
+	test('the master selected last is shown, whichever answer arrives first', async () => {
+		const state = runtime()
+		const answers = new Map<string, PromiseWithResolvers<Response>>()
+		const request = ((url: string) => {
+			const answer = Promise.withResolvers<Response>()
+			answers.set(url, answer)
+			return answer.promise
+		}) as typeof fetch
+
+		const first = loadCalibrationMaster(state, 1, request)
+		const second = loadCalibrationMaster(state, 2, request)
+		answers.get('/api/calibration-library/masters/2')!.resolve(Response.json({ masterId: 2 }))
+		await second
+		answers.get('/api/calibration-library/masters/1')!.resolve(Response.json({ masterId: 1 }))
+		await first
+
+		expect(state.master?.masterId).toBe(2)
 	})
 })

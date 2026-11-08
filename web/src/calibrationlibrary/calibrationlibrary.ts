@@ -58,7 +58,7 @@ const BASE_URL = '/api/calibration-library'
 // Rows of a page.
 export const CALIBRATION_PAGE_SIZE = 50
 
-// Number of the latest request of each list, so a late response is dropped.
+// Number of the latest request of each list and of each detail, so a late response is dropped.
 const requests: Record<string, number> = {}
 
 // States of a job with nothing left to do.
@@ -183,19 +183,31 @@ export async function loadFlatCorrections(request: typeof fetch = fetch): Promis
 	return pages.flatMap((page) => page?.items ?? [])
 }
 
+// Fetches the detail at url, or none without one. Resolves its value, absent when it could not be fetched, while it is the
+// latest request of key, and undefined once a newer one replaced it: selecting another record before the answer arrives
+// never shows the previous one.
+async function loadDetail<T>(key: string, url: string | undefined, request: typeof fetch): Promise<{ readonly value?: T } | undefined> {
+	const number = (requests[key] = (requests[key] ?? 0) + 1)
+	const value = url === undefined ? undefined : await fetchJson<T>(url, request)
+	return requests[key] === number ? { value } : undefined
+}
+
 // Fetches a group and its frames; one the server does not know is forgotten.
 export async function loadCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string | undefined, request: typeof fetch = fetch) {
-	state.group = groupId === undefined ? undefined : await fetchJson<CalibrationGroupDetail>(`${BASE_URL}/groups/${encodeURIComponent(groupId)}`, request)
+	const answer = await loadDetail<CalibrationGroupDetail>('group', groupId === undefined ? undefined : `${BASE_URL}/groups/${encodeURIComponent(groupId)}`, request)
+	if (answer) state.group = answer.value
 }
 
 // Fetches a master; absent clears it.
 export async function loadCalibrationMaster(state: CalibrationLibraryRuntime, masterId: number | undefined, request: typeof fetch = fetch) {
-	state.master = masterId === undefined ? undefined : await fetchJson<CalibrationMasterDetail>(`${BASE_URL}/masters/${masterId}`, request)
+	const answer = await loadDetail<CalibrationMasterDetail>('master', masterId === undefined ? undefined : `${BASE_URL}/masters/${masterId}`, request)
+	if (answer) state.master = answer.value
 }
 
 // Fetches a frame; absent clears it.
 export async function loadCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string | undefined, request: typeof fetch = fetch) {
-	state.source = sourceId === undefined ? undefined : await fetchJson<CalibrationSource>(`${BASE_URL}/sources/${encodeURIComponent(sourceId)}`, request)
+	const answer = await loadDetail<CalibrationSource>('source', sourceId === undefined ? undefined : `${BASE_URL}/sources/${encodeURIComponent(sourceId)}`, request)
+	if (answer) state.source = answer.value
 }
 
 // Sends a command and records its failure. Resolves its JSON answer, or undefined when it failed.

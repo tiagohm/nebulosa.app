@@ -238,6 +238,21 @@ export interface PlateSolvePreparation {
 	readonly tool: Readonly<ResolvedExternalTool>
 }
 
+// Pixels a job solves in place of a FITS copy of its image, for a consumer that solves a private, calibrated copy of an
+// image while the job, its hints, its size check, and its result stay bound to the image itself, such as an iPolar frame
+// less a master dark. The FITS has the image's size and pixel grid and already leaves out the pointing keywords when
+// the strategy is blind. Never a route input.
+export interface PlateSolvePixels {
+	// Complete FITS file of the pixels.
+	readonly bytes: Uint8Array<ArrayBuffer>
+	// Stable identity of what was done to the image, such as "dark:<masterId>:<digest>": part of the cache key, so a
+	// solve of the image itself and one of these pixels are never answered for each other.
+	readonly fingerprint: string
+}
+
+// Preparation of one job: the preparation of its request and, for one job only, the pixels it solves.
+type JobPreparation = PlateSolvePreparation & { readonly pixels?: PlateSolvePixels }
+
 // Outcome of a submission: a new job, the job of an equivalent request still waiting or running (active), the
 // completed job of an equivalent earlier one (cached), or why there is none.
 export type PlateSolveSubmitOutcome =
@@ -292,10 +307,11 @@ const DERIVED_FIELDS = new Set(['orientation', 'scale', 'width', 'height', 'pari
 const MANUAL_ORIGIN: PlateSolveOrigin = { kind: 'manual' }
 
 // Returns the key of an equivalent solve: the same image, provider, strategy, effective hints, tolerance,
-// downsampling, and provider settings. The timeout and the session are left out, since they do not change a result.
-export function plateSolveCacheKey(imageId: string, { provider, strategy, scaleTolerance, downsample }: PlateSolveRequest, hints: ResolvedPlateSolveHints, tool: ExternalToolConfig): string {
+// downsampling, provider settings, and pixels (the fingerprint of private pixels, empty for the image itself). The
+// timeout and the session are left out, since they do not change a result.
+export function plateSolveCacheKey(imageId: string, { provider, strategy, scaleTolerance, downsample }: PlateSolveRequest, hints: ResolvedPlateSolveHints, tool: ExternalToolConfig, fingerprint: string = ''): string {
 	const values = [hints.rightAscension?.value, hints.declination?.value, hints.radius?.value, hints.scale?.value]
-	return JSON.stringify([imageId, provider, strategy, values, scaleTolerance ?? DEFAULT_SCALE_TOLERANCE, downsample || DEFAULT_DOWNSAMPLE[provider], tool.executable, tool.config ?? '', tool.endpoint ?? ''])
+	return JSON.stringify([imageId, provider, strategy, values, scaleTolerance ?? DEFAULT_SCALE_TOLERANCE, downsample || DEFAULT_DOWNSAMPLE[provider], tool.executable, tool.config ?? '', tool.endpoint ?? '', fingerprint])
 }
 
 // Returns the solution of a WCS header for an image of width × height pixels, or undefined when plateSolutionFrom
@@ -313,12 +329,12 @@ export function validatedSolution(header: FitsHeader, width: number, height: num
 }
 
 // A job of the service while it waits or runs, with its scheduling state.
-type JobEntry = AnalysisEntry<PlateSolveJob, PlateSolvePreparation>
+type JobEntry = AnalysisEntry<PlateSolveJob, JobPreparation>
 
 // Plate solving jobs of the server, their scheduling (see analysis.ts), and their results.
 export class PlateSolvingService {
 	// Queue, limits, reservations, and kept results.
-	readonly #scheduler: AnalysisScheduler<PlateSolveJob, PlateSolveResult, PlateSolvePreparation, PlateSolverProvider>
+	readonly #scheduler: AnalysisScheduler<PlateSolveJob, PlateSolveResult, JobPreparation, PlateSolverProvider>
 	// Wait between two polls of a nova job, in milliseconds.
 	readonly #pollInterval: number
 
@@ -331,7 +347,7 @@ export class PlateSolvingService {
 		{ novaPollInterval = NOVA_POLL_INTERVAL }: PlateSolvingOptions = {},
 	) {
 		this.#pollInterval = novaPollInterval
-		this.#scheduler = new AnalysisScheduler<PlateSolveJob, PlateSolveResult, PlateSolvePreparation, PlateSolverProvider>(images, {
+		this.#scheduler = new AnalysisScheduler<PlateSolveJob, PlateSolveResult, JobPreparation, PlateSolverProvider>(images, {
 			limits: PROVIDER_LIMITS,
 			provider: (preparation) => preparation.request.provider,
 			execute: (entry) => this.#execute(entry),
@@ -357,13 +373,14 @@ export class PlateSolvingService {
 
 	// Submits a solve of an open image, queued in arrival order, as origin (manual by default). An equivalent job still
 	// waiting or running, or completed with its result kept, is answered instead of solving again. A preparation,
-	// resolved earlier by prepare, keeps the settings it captured instead of reading them again.
-	async submit(imageId: string, request: PlateSolveRequest | PlateSolvePreparation, origin: PlateSolveOrigin = MANUAL_ORIGIN): Promise<PlateSolveSubmitOutcome> {
+	// resolved earlier by prepare, keeps the settings it captured instead of reading them again. pixels, given only by a
+	// consumer inside the process, are solved in place of a copy of the image, for this job only.
+	async submit(imageId: string, request: PlateSolveRequest | PlateSolvePreparation, origin: PlateSolveOrigin = MANUAL_ORIGIN, pixels?: PlateSolvePixels): Promise<PlateSolveSubmitOutcome> {
 		const preparation = 'provider' in request ? await this.prepare(request) : request
 		if (!preparation) return { status: 'notConfigured' }
 		if (this.images.name(imageId) === undefined) return { status: 'missing' }
 
-		const job = this.#job(imageId, preparation, origin)
+		const job = this.#job(imageId, preparation, origin, pixels?.fingerprint)
 		if (!job) return { status: 'missing' }
 
 		const active = this.#scheduler.active(job.key)
@@ -372,7 +389,7 @@ export class PlateSolvingService {
 		if (cached) return { status: 'cached', job: cached.job }
 		if (this.#scheduler.full()) return { status: 'queueFull' }
 
-		const queued = this.#scheduler.enqueue(imageId, preparation, job.key, job.fields)
+		const queued = this.#scheduler.enqueue(imageId, pixels ? { ...preparation, pixels } : preparation, job.key, job.fields)
 		return queued ? { status: 'accepted', job: queued } : { status: 'missing' }
 	}
 
@@ -380,9 +397,10 @@ export class PlateSolvingService {
 	// solution of one specific image, such as a TPPA frame: the job is bound to that image and is never
 	// replaced by a newer frame. A completed job without solution resolves with `outcome: noSolution`. Aborting
 	// signal cancels the job. Throws PlateSolvingError when the job does not complete. A preparation keeps the
-	// provider settings of a whole session, as submit does; the provider never falls back to another.
-	async solve(imageId: string, request: PlateSolveRequest | PlateSolvePreparation, signal?: AbortSignal, origin?: PlateSolveOrigin): Promise<PlateSolveResult> {
-		const outcome = await this.submit(imageId, request, origin)
+	// provider settings of a whole session, as submit does; the provider never falls back to another. Pixels are solved in place of
+	// a copy of the image, as submit does.
+	async solve(imageId: string, request: PlateSolveRequest | PlateSolvePreparation, signal?: AbortSignal, origin?: PlateSolveOrigin, pixels?: PlateSolvePixels): Promise<PlateSolveResult> {
+		const outcome = await this.submit(imageId, request, origin, pixels)
 		if (outcome.status === 'missing') throw new PlateSolvingError('expired', 'The image is not open')
 		if (outcome.status === 'notConfigured') throw new PlateSolvingError('notConfigured', 'The plate solver is not configured')
 		if (outcome.status === 'queueFull') throw new PlateSolvingError('queueFull', 'Too many plate solves are waiting')
@@ -440,11 +458,12 @@ export class PlateSolvingService {
 		return { jobs: this.#scheduler.snapshot() }
 	}
 
-	// Returns the fields and the key of a job of an image, with the hints it uses; undefined when the image is not open.
-	#job(imageId: string, preparation: PlateSolvePreparation, origin: PlateSolveOrigin) {
+	// Returns the fields and the key of a job of an image, with the hints it uses and the fingerprint of the pixels it solves
+	// instead of the image; undefined when the image is not open.
+	#job(imageId: string, preparation: PlateSolvePreparation, origin: PlateSolveOrigin, fingerprint?: string) {
 		const hints = this.hints(imageId, preparation.request.strategy, preparation.request.hints)
 		if (!hints) return undefined
-		return { key: plateSolveCacheKey(imageId, preparation.request, hints, preparation.tool), fields: { origin, request: preparation.request, hints } }
+		return { key: plateSolveCacheKey(imageId, preparation.request, hints, preparation.tool, fingerprint), fields: { origin, request: preparation.request, hints } }
 	}
 
 	// Runs a job with its provider and validates the WCS it found.
@@ -453,7 +472,8 @@ export class PlateSolvingService {
 		const { request } = entry.preparation
 		this.#scheduler.update(jobId, { stage: 'preparing' })
 
-		const bytes = await this.images.detectionFile(imageId, request.strategy === 'blind' ? POINTING_KEYWORDS : undefined)
+		// Private pixels replace the copy of the image; the image stays retained, so its size and its result are its own.
+		const bytes = entry.preparation.pixels?.bytes ?? (await this.images.detectionFile(imageId, request.strategy === 'blind' ? POINTING_KEYWORDS : undefined))
 		if (!bytes) throw new PlateSolvingError('expired', 'The image was released before it could be solved')
 		if (entry.controller.signal.aborted) throw new PlateSolvingError('cancelled', 'The plate solve was cancelled')
 

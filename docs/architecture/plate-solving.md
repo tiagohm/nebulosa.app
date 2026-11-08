@@ -18,7 +18,10 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   A solver that ended normally without a WCS completes with `outcome: noSolution`, which is not a failure.
   The WCS a header already had is reported apart (`GET /api/images/:id/plate-solutions`, `header`) and never replaced; no file is written.
 - Jobs are the analysis jobs of the [Shared Image Contracts](shared-image.md), with one ASTAP and one solve-field process and two nova solves at a time.
-  An equivalent request (image, provider, strategy, effective hints, tolerance, downsampling, provider settings) is answered with the job still waiting or running, or with its kept result (200 for both), so a double click, a second tab, or a retry never solves twice.
+  An equivalent request (image, provider, strategy, effective hints, tolerance, downsampling, provider settings, pixels) is answered with the job still waiting or running, or with its kept result (200 for both), so a double click, a second tab, or a retry never solves twice.
+- A consumer inside the process may hand a job private pixels (`PlateSolvePixels`: a FITS of the same size and pixel grid, with a fingerprint such as `dark:<masterId>:<digest>`), solved in place of the copy of the image, as iPolar does with a frame less a master dark.
+  The job stays the image's: it retains the image, takes its hints from its header, checks the size against it, and keeps its result under its id, so the camera tab and the Plate Solver see the WCS on the frame itself.
+  The fingerprint is part of the equivalence, so a solve of the image itself and one of its private pixels are never answered for each other; private pixels never become a document, and no route takes them.
   The service itself never syncs, slews, or centers a mount; Target Centering does that with what it measures.
 - Nova (`api/src/platesolving.nova.ts`) uploads the FITS copy once, as a private submission, publishes the stages `uploading`, `submitted` (submission id), `solving` (job id), and `retrieving`, polls every 5 s, and gives up after 3 failed requests in a row (`network`) or at the provider timeout.
   An upload refused for its session is `sessionExpired`.

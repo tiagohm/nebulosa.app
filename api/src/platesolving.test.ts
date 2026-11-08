@@ -134,17 +134,22 @@ interface FakeNova {
 }
 
 // Starts a fake nova service that signs in the key "good", recording the paths it was asked for.
+// The body of every upload is kept as latin1 text, so a test can find what was uploaded.
 function fakeNova({ upload = { status: 'success', subid: 3 }, job = 'success', wcs = { ...WCS, IMAGEW: 100, IMAGEH: 50 } }: FakeNova = {}) {
 	const paths: string[] = []
+	const uploads: string[] = []
 	let polls = 0
 
 	const server = Bun.serve({
 		port: 0,
-		fetch(req) {
+		async fetch(req) {
 			const { pathname } = new URL(req.url)
 			paths.push(pathname)
 			if (pathname === '/api/login') return Response.json({ status: 'success', session: 'session-1' })
-			if (pathname === '/api/upload') return Response.json(upload)
+			if (pathname === '/api/upload') {
+				uploads.push(Buffer.from(await req.arrayBuffer()).toString('latin1'))
+				return Response.json(upload)
+			}
 			// The job is created on the second poll of the submission.
 			if (pathname === '/api/submissions/3') return Response.json({ jobs: ++polls > 1 ? [7] : [null] })
 			if (pathname === '/api/jobs/7') return Response.json({ status: job })
@@ -153,7 +158,7 @@ function fakeNova({ upload = { status: 'success', subid: 3 }, job = 'success', w
 		},
 	})
 
-	return { server, paths }
+	return { server, paths, uploads }
 }
 
 // Creates a service over its own image store and settings file, recording its events. Nova is polled every 10 ms.
@@ -264,6 +269,7 @@ describe('solution', () => {
 		const hints = resolvePlateSolveHints('assisted', { RA: 42, DEC: -17 }, {})
 		expect(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 1 })).toBe(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 2 }))
 		expect(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 1 })).not.toBe(plateSolveCacheKey('i', { ...ASSISTED, strategy: 'blind' }, hints, { executable: 'astap', timeout: 1 }))
+		expect(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 1 })).not.toBe(plateSolveCacheKey('i', ASSISTED, hints, { executable: 'astap', timeout: 1 }, 'dark:7:digest'))
 	})
 })
 
@@ -456,6 +462,30 @@ describe('nova', () => {
 		expect(events.map((event) => event.job.stage).filter(Boolean)).toEqual(expect.arrayContaining(['uploading', 'submitted', 'solving', 'retrieving']))
 		expect(paths.filter((path) => path === '/api/upload')).toHaveLength(1)
 		expect(service.result(job.jobId)!.tool).not.toHaveProperty('session')
+	})
+
+	test('solves private pixels of an image for that image, never answered for a solve of the image itself', async () => {
+		const { server, uploads } = fakeNova()
+		using _ = server
+		const { images, tools, service } = setup()
+		await signIn(tools, server.url.origin)
+		const info = await images.open(writeImage({ OBJECT: 'RAWFRAME' }))
+		const preparation = (await service.prepare({ provider: 'nova', strategy: 'blind' }))!
+		const pixels = { bytes: new Uint8Array(await Bun.file(writeImage({ OBJECT: 'DARKSUBTRACTED' })).arrayBuffer()), fingerprint: 'dark:7:digest' }
+
+		const calibrated = await service.solve(info.id, preparation, undefined, undefined, pixels)
+		expect(calibrated).toMatchObject({ outcome: 'solved', imageId: info.id, widthInPixels: 100, heightInPixels: 50 })
+		expect(uploads).toHaveLength(1)
+		expect(uploads[0]).toContain('DARKSUBTRACTED')
+		expect(uploads[0]).not.toContain('RAWFRAME')
+		expect(service.solutions(info.id)!.jobs.map((solved) => solved.jobId)).toEqual([calibrated.jobId])
+
+		// The image itself is a different solve: its own job, with its own upload.
+		const raw = await service.solve(info.id, preparation)
+		expect(raw.jobId).not.toBe(calibrated.jobId)
+		expect(uploads).toHaveLength(2)
+		expect(uploads[1]).toContain('RAWFRAME')
+		expect(await service.solve(info.id, preparation, undefined, undefined, pixels)).toBe(calibrated)
 	})
 
 	test('completes without a solution when the remote job failed', async () => {

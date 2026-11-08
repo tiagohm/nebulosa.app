@@ -101,7 +101,7 @@ Components:
   The few times with no display zone of their own (calibration masters, plate-solving jobs) read in the browser's zone; `MISSING` ("—") is the one text of an absent value, and a value that is not finite is shown as it, never as NaN.
   Sky coordinates are written by `web/src/sky/format.ts` (with the apparent diameters and fields of view of the Sky, in arcminutes as catalogs give them, distances, and magnitudes) and, in the profile's coordinate format, by `web/src/platesolving/coordinates.ts` (with position angles and pixel scales).
   A unit or a number of decimals is chosen after rounding, so a boundary value carries (59.999″ reads 1.00′, and a right ascension or position angle that rounds to a full turn reads 0), while a declination keeps its sign when it rounds to zero.
-- Every pixel image is shown by `ImageViewer` (`web/src/viewer/`) with overlays in image coordinates (see [Overlay Contracts](overlay.md)); the star map is the canvas renderer of `web/src/sky/celestial/`.
+- Every pixel image is shown by `ImageViewer` (`web/src/viewer/`) with overlays in image coordinates (see [Overlay Contracts](overlay.md)); the star map is the canvas renderer of `web/src/sky/celestial/`, and the orbits of the Orbital Mechanics Explorer the depth-sorted 2D canvas renderer of `web/src/tools/orbitalmechanics/scene.ts` (see [Orbital Mechanics Explorer Contract](orbital-mechanics-explorer.md)).
 
 Behaviour every screen keeps:
 

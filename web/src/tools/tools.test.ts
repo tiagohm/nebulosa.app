@@ -10,6 +10,7 @@ describe('registry', () => {
 			'solar-eclipse-map',
 			'lunar-eclipse-map',
 			'close-approaches',
+			'orbital-mechanics-explorer',
 			'astro-weather',
 			'observing-planner',
 			'jupiter-observing-planner',

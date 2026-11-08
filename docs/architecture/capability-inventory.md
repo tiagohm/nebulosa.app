@@ -61,7 +61,9 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 - **Solar eclipses and map** (Implemented): Solar Eclipse Map tool (`web/src/tools/solareclipse/`) over `api/src/solareclipses.ts`, `solareclipses.map.ts` on `solareclipses.worker.ts`, drawn on `WorldMap`
 - **Calculator formulas** (Implemented): Calculator tool (`web/src/tools/calculator/`) over `core/src/astronomy/formulas.ts` and Sky Framing's `resolveFraming`; computed in the browser
 - **Close approaches of small bodies** (Implemented): Close Approaches tool (`web/src/tools/closeapproaches/`) over `api/src/closeapproaches.ts`, JPL CAD and SBDB through the queue of `api/src/ssd.ts`;
-  orbit rendering and MPC observations are not provided
+  MPC observations are not provided
+- **Two-body orbital mechanics** (Implemented): Orbital Mechanics Explorer tool (`web/src/tools/orbitalmechanics/`) over `api/src/orbitalmechanics.ts` and the toolkit's `core/src/astronomy/orbits/mechanics.ts` and `sampling.ts`;
+  two-body only, never perturbations, an ephemeris, or a collision prediction (see [Orbital Mechanics Explorer Contract](orbital-mechanics-explorer.md))
 - **Astro Weather (forecast and night planning)** (Implemented): Astro Weather tool (`web/src/tools/astroweather/`) over `api/src/astroweather.ts`, Open-Meteo (`astroweather.openmeteo.ts`) and 7Timer! (`astroweather.seventimer.ts`), with the local night of `astroweather.night.ts`;
   forecasts only, never local sensors or automation
 - **Observing Planner (target discovery, night analysis, manual night plans)** (Implemented): `api/src/observingplanner.ts` (service and routes), `observingplanner.astronomy.ts` (nights, windows, scores) over `core/src/astronomy/events/visibility.ts` and `core/src/astronomy/planning.ts`, `observingplanner.minorbodies.ts` (trajectories of asteroids and comets) with `observingplanner.minorbodies.store.ts`, `observingplanner.schedule.ts`, `observingplanner.store.ts`, and the catalog listing `queryCatalog` of `api/src/sky/catalog.ts`;

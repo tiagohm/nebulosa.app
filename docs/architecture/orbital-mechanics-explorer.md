@@ -40,3 +40,29 @@ Every number answered is finite.
 
 Each preset names its center and whether it is `illustrative` (an invented orbit showing one kind of conic) or `sourced` (published elements at their own epoch, with a citation): circular low Earth orbit, Molniya-type, retrograde, highly eccentric, near-parabolic, exact parabolic, hyperbolic, the J2000 mean elements of the Earth–Moon barycenter (Standish and Williams 1992, valid 1800–2050), and 1P/Halley (JPL SBDB orbit solution 75, epoch 1968-Jan-20 TDB).
 A sourced preset is still a two-body model of its elements, accurate near its epoch only.
+
+## Tool
+
+`web/src/tools/orbitalmechanics/`, `/tools/orbital-mechanics-explorer`, icon `orbit`.
+
+- State: a tab-lived valtio proxy, `orbitalMechanicsState` (`orbitalmechanics.ts`), never persisted and never in `SERVER_STORES`: the reference, the shared center and its unit (km and km/s around a planet or the Moon, AU and AU/day around the Sun), the orbits (at most 8), the selected orbit, the clock, the exact inspection, the reference plane drawn, the layers, and the camera.
+  The first opening of a tab reads the reference once and loads the Molniya-type preset; a preset or an imported scenario replaces the scene and frames it.
+- Every orbit is about the scene's one center, in the same axes, on the same clock; changing the center solves every orbit again with its GM, as a manual orbit.
+  An orbit keeps its draft (display units: degrees, the scene's unit, Julian dates TDB) apart from the last definition it sent; `draftDefinition` checks every domain the model needs (eccentricity per kind, positive distances and GM, inclination 0–180°, a non-rectilinear state, the supported instants) and says why a draft cannot be solved, keeping the last valid orbit drawn.
+  Edits are solved once they rest (300 ms), and until the answer the inspector says its values belong to the previous definition.
+  Changing the kind of definition carries the solved geometry over (an open orbit becomes an ellipse of eccentricity 0.5 with its periapsis, a bound one a hyperbola of eccentricity 1.5).
+- Requests: the solve and the trajectory of each orbit and the inspection each run behind their own request guard, so a late answer of an older definition or instant is discarded.
+- Clock: the tool's own, never the Sky's.
+  The timeline of the selected orbit is one period from its anchor for a bound orbit, which loops by whole periods so the state shown is the same, or its arc (widened to the clock) for an open one, which stops at its ends.
+  While it plays, each animation frame advances it by the monotonic time since the previous frame times the signed rate, at most 1 s of real time per frame, so a hidden tab never makes it jump; the default rate plays the timeline in 20 s, and the rates offered include fractions of the selected orbit's period.
+- Exact versus drawn: the body on screen is interpolated between the exact samples of its track (a cubic Hermite through positions and velocities, reduced by whole periods on a bound orbit) and is a drawing only.
+  The inspector shows exact values read from `/solve` for the instant it names: the clock's instant once the clock stops, steps, or is scrubbed to rest, never on every frame, or the anchor; while playing it says that the moving body is interpolated.
+- Scene (`scene.ts`, `OrbitScene.tsx`): a 2D canvas with a camera orbiting a target (drag), panned (Shift or secondary-button drag, two fingers), and zoomed (wheel, pinch), perspective or orthographic, with Top, Side, Face-on (along the selected orbit's normal), and Fit.
+  Display axes are those of the reference plane drawn (J2000 equator or ecliptic), right-handed with +Z up.
+  Segments, the orbital-plane fills, markers, and the central body are depth-sorted, so the body hides what passes behind it.
+  Layers: reference plane, orbital plane, axes, nodes and the line of nodes, apsides, position, velocity, angular momentum, eccentricity vector, labels; v, h, and e show directions only, and the center is drawn to scale or as a marker that says it is not.
+  It draws only when its state changes, at most once per frame, releases its observer, listeners, and frame on unmount, and without a 2D context says so while the panel keeps every value.
+  Only the canvas captures touch gestures.
+- Inspector sections (`orbitalmechanics.*`): Elements (on the reference plane drawn), Geometry, Dynamics, Cartesian State, Source & Accuracy, each undefined element with its reason, and the warnings.
+- Exchange: Export Scenario writes `nebulosa-orbital-mechanics-scenario` version 1 (center, plane, clock, rate, layers, and each orbit's name, color, visibility, source, and definition in radians, AU, AU/day, and Julian dates TDB); Import checks its kind and version and runs every orbit through `draftDefinition` against its center, refusing the whole file with the reason otherwise.
+  Export CSV writes the exact states received for the selected orbit (RFC 4180), with the units in the column names and the frame, origin, GM, model, and source in columns of their own; interpolated positions are never exported.

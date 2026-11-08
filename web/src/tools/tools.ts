@@ -15,6 +15,7 @@ import { MountPointingModel } from './mountpointing/MountPointingModel'
 import { MountRemoteControl } from './mountremotecontrol/MountRemoteControl'
 import { ObservatoryCamerasView } from './observatorycameras/ObservatoryCamerasView'
 import { ObservingPlanner } from './observingplanner/ObservingPlannerView'
+import { OrbitalMechanicsExplorer } from './orbitalmechanics/OrbitalMechanicsExplorer'
 import { SaturnPlanner } from './saturn/SaturnPlannerView'
 import { SolarEclipseMap } from './solareclipse/SolarEclipseMap'
 import { SpiceKernelLibrary } from './spicekernels/SpiceKernelLibrary'
@@ -49,6 +50,7 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 	'solar-eclipse-map': { id: 'solar-eclipse-map', label: 'Solar Eclipse Map', description: 'Path and local circumstances of solar eclipses.', icon: 'sun', view: SolarEclipseMap },
 	'lunar-eclipse-map': { id: 'lunar-eclipse-map', label: 'Lunar Eclipse Map', description: 'Visibility and local circumstances of lunar eclipses.', icon: 'moon', view: LunarEclipseMap },
 	'close-approaches': { id: 'close-approaches', label: 'Close Approaches', description: 'Close encounters of asteroids and comets published by JPL, with the object behind each one.', icon: 'orbit', view: CloseApproaches },
+	'orbital-mechanics-explorer': { id: 'orbital-mechanics-explorer', label: 'Orbital Mechanics Explorer', description: 'Builds two-body orbits from elements or a state vector, plays them in 3D, and inspects their elements, energy, and geometry.', icon: 'orbit', view: OrbitalMechanicsExplorer },
 	'astro-weather': { id: 'astro-weather', label: 'Astro Weather', description: 'Whether a night is worth observing, and when, from free public forecasts and the local Sun and Moon.', icon: 'cloud', view: AstroWeather },
 	'observing-planner': { id: 'observing-planner', label: 'Observing Planner', description: 'Finds the best targets of a night, explains when and why each one is observable, and keeps manual night plans.', icon: 'compass', view: ObservingPlanner },
 	'jupiter-observing-planner': { id: 'jupiter-observing-planner', label: 'Jupiter Observing Planner', description: 'Transits, shadows, occultations, and eclipses of the Galilean moons and Great Red Spot transits, with when your site can watch them.', icon: 'jupiter', view: JupiterPlanner },

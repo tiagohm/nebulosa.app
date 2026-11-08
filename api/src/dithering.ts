@@ -342,16 +342,20 @@ export class CaptureDithering implements DeviceContext {
 				}
 			},
 			finish: () => {
+				// Gives back the reservation and the guiding hold whatever happened, so a capture that dithered always ends.
 				finished ??= (async () => {
-					await inFlight
-					// A pulse cancelled in flight keeps its guide output unavailable until its end was observed, within the release bound.
-					const quiescent = await ditherer.awaitPulseQuiescence(new AbortController().signal)
-					if (!quiescent.ok) console.error(`the end of the dither pulses of ${guideOutput?.name} could not be observed:`, quiescent.error ?? quiescent.reason)
-					if (reserved) {
-						await this.operations.coordinator.cancelByReservationOwner(owner)
-						reserved.reservation.release()
+					try {
+						await inFlight
+						// A pulse cancelled in flight keeps its guide output unavailable until its end was observed, within the release bound.
+						const quiescent = await ditherer.awaitPulseQuiescence(new AbortController().signal)
+						if (!quiescent.ok) console.error(`the end of the dither pulses of ${guideOutput?.name} could not be observed:`, quiescent.error ?? quiescent.reason)
+						if (reserved) await this.operations.coordinator.cancelByReservationOwner(owner)
+					} catch (error) {
+						console.error('dithering: what the dithers held could not be stopped', error)
+					} finally {
+						reserved?.reservation.release()
+						hold?.[Symbol.dispose]()
 					}
-					hold?.[Symbol.dispose]()
 				})()
 
 				return finished

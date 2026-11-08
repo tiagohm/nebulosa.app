@@ -170,8 +170,15 @@ export function listenSockets(listener: SocketListener): () => void {
 	return () => socketListeners.delete(listener)
 }
 
-// Sends an event as JSON to every open socket.
+// Code of the close of a socket that lost an event: 1013, Try Again Later.
+const EVENT_DROPPED_CLOSE_CODE = 1013
+
+// Sends an event as JSON to every open socket. A socket whose backlog went past the backpressure limit drops the event;
+// it is closed then, so its tab reconnects and refreshes its snapshots instead of mirroring a state that lost an event.
 export function broadcast(event: ServerEvent) {
 	const data = JSON.stringify(event)
-	for (const ws of sockets) ws.send(data)
+
+	for (const ws of sockets) {
+		if (ws.send(data) === 0) ws.close(EVENT_DROPPED_CLOSE_CODE, 'An event was dropped under backpressure')
+	}
 }

@@ -270,6 +270,26 @@ interface RefusedBody {
 	readonly value?: WorkspaceValue | null
 }
 
+// Record of the workspace a server event changes (connection:<id>, site:<id>, or profile:<id>), or undefined for another event.
+function eventRecord(event: ServerEvent): string | undefined {
+	switch (event.type) {
+		case 'savedConnection:updated':
+			return `connection:${event.connection.id}`
+		case 'savedConnection:removed':
+			return `connection:${event.id}`
+		case 'observingSite:updated':
+			return `site:${event.site.id}`
+		case 'observingSite:removed':
+			return `site:${event.id}`
+		case 'profile:updated':
+			return `profile:${event.profile.id}`
+		case 'profile:removed':
+			return `profile:${event.id}`
+		default:
+			return undefined
+	}
+}
+
 // Synchronizes the saved connections of connections, the observing sites of sites, and the profiles of profiles with the
 // server, through request.
 export class WorkspaceSync {
@@ -291,6 +311,14 @@ export class WorkspaceSync {
 	#refreshes = 0
 	// Number of completed writes, so a snapshot read across a write is read again.
 	#writes = 0
+	// Whether a refresh is waiting for its snapshot. Events keep arriving meanwhile, and one received after the refresh started is
+	// at least as new as the snapshot for what it changed.
+	#refreshing = false
+	// Records (connection:<id>, site:<id>, profile:<id>) an event changed since the latest refresh started, which its snapshot
+	// leaves as the event set them.
+	readonly #touched = new Set<string>()
+	// Events received before the workspace was first loaded, applied once it is.
+	#pending: ServerEvent[] = []
 
 	// connections, profiles, and sites are the stores of the tab, status what it shows, request the fetch of the server,
 	// and delay the time after the latest change before writing, in milliseconds.
@@ -322,7 +350,23 @@ export class WorkspaceSync {
 	// later refresh started.
 	async refresh(): Promise<boolean> {
 		const refresh = ++this.#refreshes
+		this.#refreshing = true
+		this.#touched.clear()
+		// Events held for a load an earlier refresh failed to make are older than this snapshot.
+		this.#pending = []
 
+		try {
+			return await this.#read(refresh)
+		} finally {
+			if (refresh === this.#refreshes) {
+				this.#refreshing = false
+				this.#touched.clear()
+			}
+		}
+	}
+
+	// Reads the workspace for the refresh of number refresh (see refresh).
+	async #read(refresh: number): Promise<boolean> {
 		for (let attempt = 0; attempt < MAXIMUM_REFRESHES; attempt++) {
 			const writes = this.#writes
 
@@ -335,6 +379,7 @@ export class WorkspaceSync {
 				if (this.#writes !== writes && attempt < MAXIMUM_REFRESHES - 1) continue
 				this.#reconcile(undefined, () => this.#applySnapshot(workspace))
 				this.status.loaded = true
+				for (const event of this.#pending.splice(0)) this.handle(event)
 				if (this.#dirty.size > 0) this.#schedule(0)
 				return true
 			} catch {
@@ -346,8 +391,17 @@ export class WorkspaceSync {
 	}
 
 	// Applies an event of the server: a saved connection, an observing site, or a profile another tab, or this one, changed.
+	// One received while a refresh waits for its snapshot is recorded, so the snapshot leaves what it changed alone, and one
+	// received before the first load is applied once the workspace is loaded.
 	handle(event: ServerEvent) {
-		if (!this.status.loaded) return
+		const record = eventRecord(event)
+		if (record === undefined) return
+		if (this.#refreshing) this.#touched.add(record)
+
+		if (!this.status.loaded) {
+			if (this.#refreshing) this.#pending.push(event)
+			return
+		}
 
 		switch (event.type) {
 			case 'savedConnection:updated':
@@ -529,23 +583,24 @@ export class WorkspaceSync {
 	}
 
 	// Applies a snapshot of the workspace: what it holds, in its order, and what it no longer holds goes, except what the
-	// tab is creating.
+	// tab is creating and the records an event changed while the snapshot was read (see handle).
 	#applySnapshot({ connections, sites, profiles }: WorkspaceSnapshot) {
-		for (const connection of connections) this.#applyConnection(connection.id, connection)
+		const fresh = (record: string) => !this.#touched.has(record)
+		for (const connection of connections) if (fresh(`connection:${connection.id}`)) this.#applyConnection(connection.id, connection)
 		const savedConnections = new Set(connections.map(({ id }) => id))
-		for (const id of this.connections.connections.map((connection) => connection.id)) if (!savedConnections.has(id)) this.#applyConnection(id, undefined)
+		for (const id of this.connections.connections.map((connection) => connection.id)) if (!savedConnections.has(id) && fresh(`connection:${id}`)) this.#applyConnection(id, undefined)
 		const connectionOrder = new Map(connections.map(({ id }, index) => [id, index]))
 		this.connections.connections = [...this.connections.connections].sort((a, b) => (connectionOrder.get(a.id) ?? Infinity) - (connectionOrder.get(b.id) ?? Infinity))
 
-		for (const site of sites) this.#applySite(site.id, site)
+		for (const site of sites) if (fresh(`site:${site.id}`)) this.#applySite(site.id, site)
 		const savedSites = new Set(sites.map(({ id }) => id))
-		for (const id of this.sites.sites.map((site) => site.id)) if (!savedSites.has(id)) this.#applySite(id, undefined)
+		for (const id of this.sites.sites.map((site) => site.id)) if (!savedSites.has(id) && fresh(`site:${id}`)) this.#applySite(id, undefined)
 		const siteOrder = new Map(sites.map(({ id }, index) => [id, index]))
 		this.sites.sites = [...this.sites.sites].sort((a, b) => (siteOrder.get(a.id) ?? Infinity) - (siteOrder.get(b.id) ?? Infinity))
 
-		for (const profile of profiles) this.#applyProfile(profile)
+		for (const profile of profiles) if (fresh(`profile:${profile.id}`)) this.#applyProfile(profile)
 		const savedProfiles = new Set(profiles.map(({ id }) => id))
-		for (const id of this.profiles.profiles.map((profile) => profile.id)) if (!savedProfiles.has(id)) this.#removeProfile(id)
+		for (const id of this.profiles.profiles.map((profile) => profile.id)) if (!savedProfiles.has(id) && fresh(`profile:${id}`)) this.#removeProfile(id)
 		const profileOrder = new Map(profiles.map(({ id }, index) => [id, index]))
 		this.profiles.profiles = [...this.profiles.profiles].sort((a, b) => (profileOrder.get(a.id) ?? Infinity) - (profileOrder.get(b.id) ?? Infinity))
 	}

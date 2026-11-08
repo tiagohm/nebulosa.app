@@ -105,6 +105,46 @@ describe('loading', () => {
 	})
 })
 
+describe('ordering', () => {
+	// A tab whose workspace answers come from answers, one per read, in order.
+	function gated(answers: Promise<WorkspaceSnapshot>[]) {
+		const connections = proxy<ConnectionState>({ open: false, connections: [], servers: [], errors: {} })
+		const profiles = proxy<ProfileState>({ profiles: [], activeId: '', open: false })
+		const sites = proxy<SiteState>({ sites: [] })
+		const status = proxy<WorkspaceSyncState>({ loaded: false })
+		const request = (async (input: string) => (input === '/api/workspace' ? Response.json(await answers.shift()!) : new Response(undefined, { status: 204 }))) as typeof fetch
+		const sync = new WorkspaceSync(connections, profiles, sites, status, request, 0)
+		stops.push(sync.start())
+		return { connections, profiles, status, sync }
+	}
+
+	test('an event received while a snapshot is read is never undone by it', async () => {
+		const older = Promise.withResolvers<WorkspaceSnapshot>()
+		const { profiles, sync } = gated([Promise.resolve(NEW_WORKSPACE), older.promise])
+		await sync.refresh()
+
+		const refreshed = sync.refresh()
+		sync.handle({ type: 'profile:updated', profile: record('p1', { name: 'Default', revision: 2, equipment: { c1: { MOUNT: { id: 'mount', name: 'Mount' } } } }) })
+		older.resolve(NEW_WORKSPACE)
+		await refreshed
+
+		expect(snapshot(profiles).profiles[0].equipment).toEqual({ c1: { MOUNT: { id: 'mount', name: 'Mount' } } })
+	})
+
+	test('an event received before the first load is applied once it loads', async () => {
+		const first = Promise.withResolvers<WorkspaceSnapshot>()
+		const { connections, status, sync } = gated([first.promise])
+
+		const refreshed = sync.refresh()
+		sync.handle({ type: 'savedConnection:updated', connection: { id: 'c2', name: 'Observatory', type: 'INDI', host: 'obs', port: 7624, revision: 1 } })
+		first.resolve(NEW_WORKSPACE)
+		await refreshed
+
+		expect(status.loaded).toBeTrue()
+		expect(connections.connections.map(({ id }) => id)).toEqual(['c2'])
+	})
+})
+
 describe('writes', () => {
 	test('a preference is written once, from its revision, after the latest change', async () => {
 		const { profiles, sync, sent } = setup()

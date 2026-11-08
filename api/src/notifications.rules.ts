@@ -9,6 +9,7 @@ import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingEventRecord, GuidingSessionSummary } from './guiding'
 import type { MeridianFlipTransition } from './meridianflip'
 import type { MeridianFlipExecution } from './meridianflipexecutor'
+import type { MeridianFlipExecutorErrorCode } from './meridianflipexecutor.policy'
 import type { MountPointingSessionSummary } from './mountpointing.sessions'
 import type { OperationDevice, OperationKind, OperationRecord } from './operations'
 import type { TargetCenteringSessionSummary } from './targetcentering'
@@ -126,6 +127,38 @@ const REASON_TEXT: Readonly<Record<OperationFailureReason, string>> = {
 	alert: 'the driver reported an alert',
 	commandFailed: 'a command failed',
 	unexpectedState: 'a device reached an unexpected state',
+}
+
+// Description of why a Meridian Flip execution did not leave imaging ready, by its code, completing a sentence such as "The
+// flip of <mount> did not leave imaging ready: <description>."; the error of an execution may carry a driver error or a
+// path, which a notification never copies.
+const MERIDIAN_FLIP_FAILURE_TEXT: Readonly<Record<MeridianFlipExecutorErrorCode, string>> = {
+	notFound: 'a device of the setup was not found',
+	disconnected: 'a device disconnected',
+	busy: 'another operation held a device of the setup',
+	conflict: 'it conflicted with another request',
+	monitorDisabled: 'the Meridian Flip Monitor of the mount was disabled',
+	notTracking: 'the mount did not track a settled target',
+	notDue: 'the flip window had not opened',
+	notEligible: 'the mount refused the flip',
+	unsupportedMount: 'the mount cannot flip',
+	parked: 'the mount was parked',
+	nonSidereal: 'the target was not tracked at the sidereal rate',
+	nearPole: 'the target was too close to the pole',
+	noPierSide: 'the mount publishes no usable pier side',
+	alreadyFlipped: 'the mount already stood on its side past the meridian',
+	alreadyServiced: 'this meridian passage was already flipped',
+	unsafeWindow: 'the flip window closed, or the flip would have ended past the firmware limit',
+	staleContext: 'the mount no longer pointed at the target of the flip',
+	missingCamera: 'the setup has no main camera',
+	missingFocuser: 'the setup has no focuser',
+	guidingActive: 'guiding could not be suspended',
+	captureHandoffFailed: 'the capture could not hand its camera over',
+	noFlipEvidence: 'no evidence confirmed the flip',
+	unknownResult: 'the result of a command could not be established',
+	externalChange: 'the guiding or the capture was changed meanwhile',
+	notReady: 'imaging could not be made ready again',
+	cancelled: 'it was cancelled',
 }
 
 // Names of the device types an operation kind starts with, for an operation whose device name is unknown.
@@ -249,7 +282,8 @@ export class NotificationClassifier {
 	// Reports how a Meridian Flip execution ended, once: imaging ready, with how the flip was verified; or not ready, telling
 	// apart a flip that could not be established, a capture left paused, and a mount that needs the operator's eyes.
 	#meridianFlipExecution(execution: MeridianFlipExecution): NotificationDraft[] {
-		const { sessionId, state, connectionId, deviceId, mountName, outcome, error } = execution
+		const { sessionId, state, connectionId, deviceId, mountName, outcome, code } = execution
+		const why = code ? MERIDIAN_FLIP_FAILURE_TEXT[code] : 'an error occurred'
 		if (state === 'running') return []
 
 		const source: NotificationSource = { kind: 'meridianFlip', connectionId, endpoint: this.#endpoints.get(connectionId), deviceId }
@@ -260,11 +294,11 @@ export class NotificationClassifier {
 			case 'completed':
 				return [{ ...base, level: 'success', code: `meridianFlip.${outcome?.verification ?? 'verified'}`, title: 'Meridian flip completed', message: `${mountName} flipped (${outcome?.verification === 'inferred' ? 'inferred from plate solutions' : 'pier side verified by the driver'}) and imaging went on.` }]
 			case 'blocked':
-				return [{ ...base, level: 'error', code: 'meridianFlip.blocked', title: 'Meridian flip needs attention', message: `The flip of ${mountName} ended in a state that could not be established: ${error ?? 'unknown'}. Check the mount before going on.${paused}` }]
+				return [{ ...base, level: 'error', code: 'meridianFlip.blocked', title: 'Meridian flip needs attention', message: `The flip of ${mountName} ended in a state that could not be established: ${why}. Check the mount before going on.${paused}` }]
 			case 'cancelled':
 				return [{ ...base, level: 'warning', code: 'meridianFlip.cancelled', title: 'Meridian flip cancelled', message: `The flip of ${mountName} was cancelled.${paused}` }]
 			default:
-				return [{ ...base, level: 'error', code: outcome?.verification === 'unverified' && outcome.flipCommandCompleted ? 'meridianFlip.unverified' : 'meridianFlip.failed', title: 'Meridian flip not completed', message: `The flip of ${mountName} did not leave imaging ready: ${error ?? 'unknown'}.${paused}` }]
+				return [{ ...base, level: 'error', code: outcome?.verification === 'unverified' && outcome.flipCommandCompleted ? 'meridianFlip.unverified' : 'meridianFlip.failed', title: 'Meridian flip not completed', message: `The flip of ${mountName} did not leave imaging ready: ${why}.${paused}` }]
 		}
 	}
 

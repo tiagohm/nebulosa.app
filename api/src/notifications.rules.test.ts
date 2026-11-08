@@ -7,6 +7,7 @@ import type { DarvMeasurement, DarvSessionSummary } from './darv'
 import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingSessionSummary } from './guiding'
 import type { MeridianFlipTransition } from './meridianflip'
+import type { MeridianFlipExecution } from './meridianflipexecutor'
 import { failureText, NotificationClassifier } from './notifications.rules'
 import type { OperationRecord } from './operations'
 import type { TargetCenteringSessionSummary } from './targetcentering'
@@ -282,5 +283,17 @@ describe('INDI server messages', () => {
 
 		expect(classifier.classify({ type: 'indi:messageReceived', ...header, message: { id: 'm', sequence: 1, receivedAt: 0, text: 'x' } })).toEqual([])
 		expect(classifier.classify({ type: 'indi:messagesSnapshot', ...header, messages: [] })).toEqual([])
+	})
+})
+
+describe('meridian flip executor', () => {
+	const classifier = new NotificationClassifier()
+
+	test('a failed execution says why from its code, never from its error text', () => {
+		const execution = { sessionId: 's', connectionId: 'c', deviceId: 'mnt', mountName: 'EQ6', state: 'failed', code: 'unknownResult', error: 'ENOENT: /home/secret/frame.fits' } as unknown as MeridianFlipExecution
+		const [draft] = classifier.classify({ type: 'meridianFlipExecutor:updated', epoch: 'e', revision: 1, execution })
+
+		expect(draft).toMatchObject({ code: 'meridianFlip.failed', message: 'The flip of EQ6 did not leave imaging ready: the result of a command could not be established.' })
+		expect(draft.message).not.toContain('secret')
 	})
 })

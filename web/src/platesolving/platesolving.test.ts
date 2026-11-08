@@ -9,6 +9,7 @@ import {
 	latestJob,
 	loadPlateSolveResult,
 	loadSolutions,
+	MAX_CACHED_IMAGES,
 	mountSyncBlocker,
 	mountSyncSupport,
 	mountSyncTarget,
@@ -140,6 +141,16 @@ describe('solutions', () => {
 		expect(urls).toHaveLength(1)
 		expect(selectedSolution(s, 'i1', 'header')).toEqual(SOLUTION)
 		expect(completedJobs(s, 'i1').map((known) => known.jobId)).toEqual(['old'])
+	})
+
+	test('only the header solutions of the latest images are kept', async () => {
+		const s = state()
+		const request = (() => Promise.resolve(Response.json({ jobs: [] }))) as unknown as typeof fetch
+		for (let i = 0; i <= MAX_CACHED_IMAGES; i++) await loadSolutions(s, `i${i}`, request)
+
+		expect(Object.keys(s.headers)).toHaveLength(MAX_CACHED_IMAGES)
+		expect('i0' in s.headers).toBeFalse()
+		expect(`i${MAX_CACHED_IMAGES}` in s.headers).toBeTrue()
 	})
 
 	test('a header solution can be chosen before any solve', async () => {

@@ -194,6 +194,18 @@ export async function loadPlateSolveResult(state: PlateSolvingState, jobId: stri
 	}
 }
 
+// Most images whose header solution and hints are kept: every frame a camera tab shows asks for them, so the oldest are
+// forgotten, and asked for again if shown again.
+export const MAX_CACHED_IMAGES = 64
+
+// Keeps value for imageId in cache, forgetting the images asked for longest ago beyond MAX_CACHED_IMAGES.
+function remember<T>(cache: Record<string, T>, imageId: string, value: T) {
+	delete cache[imageId]
+	cache[imageId] = value
+	const keys = Object.keys(cache)
+	for (const key of keys.slice(0, Math.max(0, keys.length - MAX_CACHED_IMAGES))) delete cache[key]
+}
+
 // Fetches once the solutions of an image: its header solution, and the completed jobs the server kept, which this tab
 // may not have seen.
 export async function loadSolutions(state: PlateSolvingState, imageId: string, request: typeof fetch = fetch) {
@@ -205,7 +217,7 @@ export async function loadSolutions(state: PlateSolvingState, imageId: string, r
 		const response = await request(`/api/images/${encodeURIComponent(imageId)}/plate-solutions`)
 		if (!response.ok) return
 		const solutions = (await response.json()) as PlateSolutions
-		state.headers[imageId] = solutions.header ? ref(solutions.header) : null
+		remember(state.headers, imageId, solutions.header ? ref(solutions.header) : null)
 		for (const job of solutions.jobs) if (!(job.jobId in state.jobs)) track(state, job)
 	} catch {
 		// A later view retries.
@@ -222,7 +234,7 @@ export async function loadHints(state: PlateSolvingState, imageId: string, reque
 
 	try {
 		const response = await request(`/api/images/${encodeURIComponent(imageId)}/plate-solving/hints`)
-		if (response.ok) state.hints[imageId] = ref((await response.json()) as ResolvedPlateSolveHints)
+		if (response.ok) remember(state.hints, imageId, ref((await response.json()) as ResolvedPlateSolveHints))
 	} catch {
 		// A later view retries.
 	} finally {

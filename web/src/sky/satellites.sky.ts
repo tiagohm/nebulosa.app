@@ -19,6 +19,10 @@ import { createRequestGuard } from './selection'
 const UPDATE_INTERVAL_MS = 250
 const REDUCED_MOTION_INTERVAL_MS = 1000
 
+// Wait after a request of the samples failed (the server away or answering an error) before asking again, in milliseconds;
+// the updates would otherwise ask the server for a batch of SGP4 propagations at their own rate.
+const LOAD_RETRY_DELAY_MS = 10000
+
 // Id of the shape of the track of the selected satellite.
 const TRAIL_SHAPE_ID = 'satellite-trail'
 
@@ -58,6 +62,8 @@ export class SatelliteLayer {
 	// Key of the targets the samples were asked for; another key asks again.
 	#key = ''
 	#loading = false
+	// Instant before which a failed request of the samples is not asked again, in Unix milliseconds.
+	#retryAt = 0
 	#timer?: Timer
 	#running = false
 
@@ -79,6 +85,7 @@ export class SatelliteLayer {
 			this.#tracks.clear()
 			this.#guard.cancel()
 			this.#loading = false
+			this.#retryAt = 0
 		}
 
 		this.#schedule()
@@ -117,7 +124,7 @@ export class SatelliteLayer {
 		if (typeof document !== 'undefined' && document.hidden) return
 		const time = this.map.time()
 		const rate = this.map.rate()
-		if (this.#targets.ids.length > 0 && !this.#loading && !windowServes(this.#window, time, rate)) void this.#load(time, rate)
+		if (this.#targets.ids.length > 0 && !this.#loading && Date.now() >= this.#retryAt && !windowServes(this.#window, time, rate)) void this.#load(time, rate)
 		this.#draw(time)
 	}
 
@@ -129,14 +136,21 @@ export class SatelliteLayer {
 
 		try {
 			const response = await this.fetch('/api/satellites/tracks', jsonInit('POST', { ids: this.#targets.ids, observer: siteObserver(this.#targets.observer), start: window.start, end: window.end, step: window.step }, request.signal))
-			if (!request.current() || !response.ok) return
+			if (!request.current()) return
+
+			if (!response.ok) {
+				this.#retryAt = Date.now() + LOAD_RETRY_DELAY_MS
+				return
+			}
+
 			const { tracks } = (await response.json()) as SatelliteTracksResponse
 			if (!request.current()) return
 			this.#tracks.clear()
 			for (const entry of tracks) if ('track' in entry) this.#tracks.set(entry.noradId, { name: entry.name, track: entry.track })
 			this.#window = window
 		} catch {
-			// The markers stay where they were; the next update asks again.
+			// The markers stay where they were; an update asks again once the retry delay passed.
+			if (request.current()) this.#retryAt = Date.now() + LOAD_RETRY_DELAY_MS
 		} finally {
 			if (request.current()) this.#loading = false
 		}

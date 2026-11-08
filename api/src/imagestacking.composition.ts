@@ -11,6 +11,7 @@ import { type FitsHeader, FitsImageReader, FitsImageRowWriter, readFits } from '
 import { uncompressedHeightKeyword, uncompressedNumberOfChannelsKeyword, uncompressedWidthKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { fileDigest } from './calibrationlibrary.analysis'
 import { COMPOSITE_FILE, type StackingCompositeDiagnostics, type StackingCompositionLuminance } from './imagestacking.store'
+import { runWorkerJob } from './workerjob'
 
 // Color composition of the linear masters of a project, on the worker of Image Stacking (`imagestacking.worker.ts`), and
 // the client of that worker. Masters share the project grid, so they are read as strips of the same rows and never
@@ -352,48 +353,24 @@ export class StackingCompositor implements FrameCompositor {
 	) {}
 
 	// Runs a request of a mode on a worker until it answers. Rejects with an Error, or with the reason of the signal.
-	async #run<T>(message: { readonly jobId: string; readonly mode: 'compose' | 'preview' }, signal: AbortSignal, onProgress: (progress: CompositionProgress) => void, answer: (response: CompositionWorkerResponse) => T | undefined): Promise<T> {
-		signal.throwIfAborted()
-		const worker = this.startWorker()
-		const { promise, resolve, reject } = Promise.withResolvers<T>()
-		let timer: Timer | undefined
-
-		const watch = () => {
-			clearTimeout(timer)
-			timer = setTimeout(() => reject(new Error('The composition stopped reporting progress')), this.stallTimeout)
-			timer.unref()
-		}
-
-		const onMessage = ({ data }: MessageEvent<CompositionWorkerResponse>) => {
-			if (data.jobId !== message.jobId) return
-			watch()
-
-			if (data.status === 'progress') onProgress(data.progress)
-			else if (data.status === 'failed') reject(new Error(data.error))
-			else {
-				const value = answer(data)
-				if (value !== undefined) resolve(value)
-			}
-		}
-
-		const onError = (event: ErrorEvent) => reject(new Error(event.message || 'The composition worker failed'))
-		const onAbort = () => reject(signal.reason)
-
-		worker.addEventListener('message', onMessage)
-		worker.addEventListener('error', onError)
-		signal.addEventListener('abort', onAbort, { once: true })
-		watch()
-
-		try {
-			worker.postMessage(message, [])
-			return await promise
-		} finally {
-			clearTimeout(timer)
-			signal.removeEventListener('abort', onAbort)
-			worker.removeEventListener('message', onMessage)
-			worker.removeEventListener('error', onError)
-			worker.terminate()
-		}
+	#run<T>(message: { readonly jobId: string; readonly mode: 'compose' | 'preview' }, signal: AbortSignal, onProgress: (progress: CompositionProgress) => void, answer: (response: CompositionWorkerResponse) => T | undefined): Promise<T> {
+		return runWorkerJob<CompositionWorkerResponse, T>({
+			start: this.startWorker,
+			request: message,
+			jobId: message.jobId,
+			signal,
+			stallTimeout: this.stallTimeout,
+			stalled: () => new Error('The composition stopped reporting progress'),
+			crashed: (event) => new Error(event.message || 'The composition worker failed'),
+			receive: (response, { resolve, reject }) => {
+				if (response.status === 'progress') onProgress(response.progress)
+				else if (response.status === 'failed') reject(new Error(response.error))
+				else {
+					const value = answer(response)
+					if (value !== undefined) resolve(value)
+				}
+			},
+		})
 	}
 
 	// Composes a composite on a worker.

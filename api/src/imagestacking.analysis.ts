@@ -15,6 +15,7 @@ import { fileDigest } from './calibrationlibrary.analysis'
 import { digitalFullScale } from './calibrationlibrary.sources'
 import type { ImageSource } from './imagedecode'
 import type { StackingFrameAnalysis, StackingProjectAnalysis, StackingRegistration, StackingStar } from './imagestacking.store'
+import { runWorkerJob } from './workerjob'
 
 // Analysis of the light frames of a stacking project. Measuring runs on a worker of its own (`imagestacking.worker.ts`):
 // one frame at a time it hashes the file, reads it in digital numbers, calibrates it with the pinned masters of its
@@ -362,44 +363,21 @@ export class StackingAnalyzer implements FrameAnalyzer {
 
 	// Runs a request of a mode on a worker until it answers. Every message resets the stall timer; aborting the signal
 	// terminates the worker at once. Rejects with an Error, or with the reason of the signal.
-	async #run<T>(message: { readonly jobId: string; readonly mode: 'analyze' | 'register' }, signal: AbortSignal, handle: (response: AnalysisWorkerResponse) => { readonly value: T } | undefined): Promise<T> {
-		signal.throwIfAborted()
-		const worker = this.startWorker()
-		const { promise, resolve, reject } = Promise.withResolvers<T>()
-		let timer: Timer | undefined
-
-		const watch = () => {
-			clearTimeout(timer)
-			timer = setTimeout(() => reject(new Error('The analysis stopped reporting progress')), this.stallTimeout)
-			timer.unref()
-		}
-
-		const onMessage = ({ data }: MessageEvent<AnalysisWorkerResponse>) => {
-			if (data.jobId !== message.jobId) return
-			watch()
-			if (data.status === 'failed') return reject(new Error(data.error))
-			const answer = handle(data)
-			if (answer) resolve(answer.value)
-		}
-
-		const onError = (event: ErrorEvent) => reject(new Error(event.message || 'The analysis worker failed'))
-		const onAbort = () => reject(signal.reason)
-
-		worker.addEventListener('message', onMessage)
-		worker.addEventListener('error', onError)
-		signal.addEventListener('abort', onAbort, { once: true })
-		watch()
-
-		try {
-			worker.postMessage(message, [])
-			return await promise
-		} finally {
-			clearTimeout(timer)
-			signal.removeEventListener('abort', onAbort)
-			worker.removeEventListener('message', onMessage)
-			worker.removeEventListener('error', onError)
-			worker.terminate()
-		}
+	#run<T>(message: { readonly jobId: string; readonly mode: 'analyze' | 'register' }, signal: AbortSignal, handle: (response: AnalysisWorkerResponse) => { readonly value: T } | undefined): Promise<T> {
+		return runWorkerJob<AnalysisWorkerResponse, T>({
+			start: this.startWorker,
+			request: message,
+			jobId: message.jobId,
+			signal,
+			stallTimeout: this.stallTimeout,
+			stalled: () => new Error('The analysis stopped reporting progress'),
+			crashed: (event) => new Error(event.message || 'The analysis worker failed'),
+			receive: (response, { resolve, reject }) => {
+				if (response.status === 'failed') return reject(new Error(response.error))
+				const answer = handle(response)
+				if (answer) resolve(answer.value)
+			},
+		})
 	}
 
 	// Measures the frames of a request on a worker until it ends.

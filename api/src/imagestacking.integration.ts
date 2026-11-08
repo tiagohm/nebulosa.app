@@ -17,6 +17,7 @@ import { fileDigest } from './calibrationlibrary.analysis'
 import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
 import { type AnalysisCalibration, calibrateLight, type CohortMasters, readCohortMasters, readDigital } from './imagestacking.analysis'
 import { PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingFrameNormalization, type StackingProductDiagnostics, type StackingRecipe } from './imagestacking.store'
+import { runWorkerJob } from './workerjob'
 
 // Integration of the light frames of filter groups into linear masters, on the worker of Image Stacking
 // (`imagestacking.worker.ts`), and the client of that worker. Each frame is read in digital numbers, calibrated with the
@@ -455,45 +456,21 @@ export class StackingIntegrator implements FrameIntegrator {
 	// Integrates the groups of a request on a worker until it ends. Aborting the signal terminates the worker at once.
 	// Rejects with an Error, or with the reason of the signal.
 	async integrate(request: IntegrationWorkerRequest, handlers: IntegrationHandlers, signal: AbortSignal) {
-		signal.throwIfAborted()
-		const worker = this.startWorker()
-		const { promise, resolve, reject } = Promise.withResolvers<void>()
-		let timer: Timer | undefined
-
-		const watch = () => {
-			clearTimeout(timer)
-			timer = setTimeout(() => reject(new Error('The integration stopped reporting progress')), this.stallTimeout)
-			timer.unref()
-		}
-
-		const onMessage = ({ data }: MessageEvent<IntegrationWorkerResponse>) => {
-			if (data.jobId !== request.jobId) return
-			watch()
-
-			if (data.status === 'progress') handlers.onProgress(data.progress)
-			else if (data.status === 'staged') handlers.onStaged(data.product)
-			else if (data.status === 'groupFailed') handlers.onGroupFailed(data.group, data.error)
-			else if (data.status === 'finished') resolve()
-			else reject(new Error(data.error))
-		}
-
-		const onError = (event: ErrorEvent) => reject(new Error(event.message || 'The integration worker failed'))
-		const onAbort = () => reject(signal.reason)
-
-		worker.addEventListener('message', onMessage)
-		worker.addEventListener('error', onError)
-		signal.addEventListener('abort', onAbort, { once: true })
-		watch()
-
-		try {
-			worker.postMessage({ ...request, mode: 'integrate' }, [])
-			await promise
-		} finally {
-			clearTimeout(timer)
-			signal.removeEventListener('abort', onAbort)
-			worker.removeEventListener('message', onMessage)
-			worker.removeEventListener('error', onError)
-			worker.terminate()
-		}
+		await runWorkerJob<IntegrationWorkerResponse, undefined>({
+			start: this.startWorker,
+			request: { ...request, mode: 'integrate' },
+			jobId: request.jobId,
+			signal,
+			stallTimeout: this.stallTimeout,
+			stalled: () => new Error('The integration stopped reporting progress'),
+			crashed: (event) => new Error(event.message || 'The integration worker failed'),
+			receive: (response, { resolve, reject }) => {
+				if (response.status === 'progress') handlers.onProgress(response.progress)
+				else if (response.status === 'staged') handlers.onStaged(response.product)
+				else if (response.status === 'groupFailed') handlers.onGroupFailed(response.group, response.error)
+				else if (response.status === 'finished') resolve(undefined)
+				else reject(new Error(response.error))
+			},
+		})
 	}
 }

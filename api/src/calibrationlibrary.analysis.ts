@@ -12,6 +12,7 @@ import { type CalibrationKind, type CalibrationMetadata, type CalibrationRecipe,
 import { digitalFullScale } from './calibrationlibrary.sources'
 import { type CalibrationMasterDiagnostics, MASTER_FILE, type MasterPlaneDiagnostics } from './calibrationlibrary.store'
 import { precisionOf } from './images'
+import { runWorkerJob } from './workerjob'
 
 // Integration of a master from files, on a worker of its own (`calibrationlibrary.worker.ts`), and the client of that
 // worker. Frames are read in digital numbers, rows at a time, so a stack costs one strip per frame and never a full image
@@ -644,48 +645,22 @@ export class MasterIntegrator {
 
 	// Runs an integration on a worker until it ends. Aborting the signal terminates the worker at once. Rejects with
 	// IntegrationError, or with the reason of the signal.
-	async integrate(request: MasterWorkerRequest, onProgress: (progress: IntegrationProgress) => void, signal: AbortSignal): Promise<IntegrationResult> {
-		signal.throwIfAborted()
-		const worker = this.startWorker()
-		const { promise, resolve, reject } = Promise.withResolvers<IntegrationResult>()
-		let timer: Timer | undefined
-
-		const watch = () => {
-			clearTimeout(timer)
-			timer = setTimeout(() => reject(new IntegrationError('processingFailed', 'The integration stopped reporting progress')), this.stallTimeout)
-			timer.unref()
-		}
-
-		const onMessage = ({ data }: MessageEvent<MasterWorkerResponse>) => {
-			if (data.jobId !== request.jobId) return
-
-			if (data.status === 'progress') {
-				watch()
-				onProgress(data.progress)
-			} else if (data.status === 'finished') {
-				resolve(data.result)
-			} else {
-				reject(new IntegrationError(data.code, data.error))
-			}
-		}
-
-		const onError = (event: ErrorEvent) => reject(new IntegrationError('processingFailed', event.message || 'The integration worker failed'))
-		const onAbort = () => reject(signal.reason)
-
-		worker.addEventListener('message', onMessage)
-		worker.addEventListener('error', onError)
-		signal.addEventListener('abort', onAbort, { once: true })
-		watch()
-
-		try {
-			worker.postMessage(request, [])
-			return await promise
-		} finally {
-			clearTimeout(timer)
-			signal.removeEventListener('abort', onAbort)
-			worker.removeEventListener('message', onMessage)
-			worker.removeEventListener('error', onError)
-			worker.terminate()
-		}
+	integrate(request: MasterWorkerRequest, onProgress: (progress: IntegrationProgress) => void, signal: AbortSignal): Promise<IntegrationResult> {
+		return runWorkerJob<MasterWorkerResponse, IntegrationResult>({
+			start: this.startWorker,
+			request,
+			jobId: request.jobId,
+			signal,
+			stallTimeout: this.stallTimeout,
+			stalled: () => new IntegrationError('processingFailed', 'The integration stopped reporting progress'),
+			crashed: (event) => new IntegrationError('processingFailed', event.message || 'The integration worker failed'),
+			// Only progress proves the integration alive; a combination may take long between two of them.
+			resets: (response) => response.status === 'progress',
+			receive: (response, { resolve, reject }) => {
+				if (response.status === 'progress') onProgress(response.progress)
+				else if (response.status === 'finished') resolve(response.result)
+				else reject(new IntegrationError(response.code, response.error))
+			},
+		})
 	}
 }

@@ -85,9 +85,16 @@ jobs:
               shell: bash
               env:
                   TEST_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+              # --changed maps changed modules to the tests that import them. A change no module import reaches (the core
+              # submodule pointer, the lockfile, a manifest, the TypeScript, Bun, or lint configuration, a workflow) can change
+              # how every test runs, so it runs them all.
               run: |
                   args=()
                   if [[ -n "$TEST_BASE_REF" ]] && git cat-file -e "${TEST_BASE_REF}^{commit}" 2>/dev/null; then
-                      args+=("--changed=$TEST_BASE_REF")
+                      if git diff --name-only "$TEST_BASE_REF" HEAD | grep -qE '^(core|bun\.lock|bunfig\.toml|tsconfig\.json|\.oxlintrc\.json|\.github/workflows/.*)$|(^|/)(package|tsconfig)\.json$'; then
+                          echo "A change outside the modules reaches every test; running them all."
+                      else
+                          args+=("--changed=$TEST_BASE_REF")
+                      fi
                   fi
                   bun test --timeout 30000 --parallel --pass-with-no-tests "${args[@]}" --timings timings.json

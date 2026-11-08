@@ -138,8 +138,9 @@ export function duplicateProfile(state: ProfileState, id: string): Profile | und
 
 	const source = structuredClone(snapshot(state).profiles[index]) as Profile
 	// Framing references are rows of their own, keyed by their id across every profile, so the copy gets new ones.
-	const framingReferences = source.framingReferences?.map((reference) => ({ ...reference, id: nanoid() }))
-	const copy: Profile = { ...source, id: nanoid(), name: `${source.name} (copy)`, ...(framingReferences && { framingReferences }) }
+	const framingReferences = source.settings.framingReferences?.map((reference) => ({ ...reference, id: nanoid() }))
+	const settings = framingReferences ? { ...source.settings, framingReferences } : source.settings
+	const copy: Profile = { ...source, id: nanoid(), name: `${source.name} (copy)`, settings }
 	state.profiles.splice(index + 1, 0, copy)
 	return copy
 }

@@ -182,12 +182,13 @@ describe('management', () => {
 	test('a duplicate gives its framing references ids of their own', () => {
 		const state = load()
 		const source = activeProfile(state)
-		source.framingReferences = [{ id: 'm31', name: 'M31', rightAscension: 0.18, declination: 0.72, source: 'manual', createdAt: 1, updatedAt: 1 }]
+		source.settings.framingReferences = [{ id: 'm31', name: 'M31', rightAscension: 0.18, declination: 0.72, source: 'manual', createdAt: 1, updatedAt: 1 }]
 		const copy = duplicateProfile(state, source.id)!
 
-		expect(copy.framingReferences).toHaveLength(1)
-		expect(copy.framingReferences![0]).toMatchObject({ name: 'M31', rightAscension: 0.18, declination: 0.72 })
-		expect(copy.framingReferences![0].id).not.toBe('m31')
+		expect(copy.settings.framingReferences).toHaveLength(1)
+		expect(copy.settings.framingReferences![0]).toMatchObject({ name: 'M31', rightAscension: 0.18, declination: 0.72 })
+		expect(copy.settings.framingReferences![0].id).not.toBe('m31')
+		expect(source.settings.framingReferences[0].id).toBe('m31')
 	})
 
 	test('the last profile cannot be deleted; deleting the active one selects another', () => {

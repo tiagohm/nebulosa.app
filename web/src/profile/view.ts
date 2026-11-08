@@ -98,7 +98,7 @@ export type ViewFieldKey = keyof typeof VIEW_FIELDS
 const VIEW_FIELD_KEYS = Object.keys(VIEW_FIELDS) as ViewFieldKey[]
 
 // View state kept outside the profiles, each under one key of browser storage (ViewEntry).
-export type ViewEntryName = 'sections' | 'cameraTools' | 'activeCameraTab' | 'centeringTargets'
+export type ViewEntryName = 'sections' | 'cameraTools' | 'activeCameraTab' | 'centeringTargets' | 'pixelInspection'
 
 // Storage areas of each field of the view, of the active profile, and of each view entry, in the order they are read;
 // every one listed is written. An empty list keeps it in the memory of the page only.
@@ -120,6 +120,8 @@ export const VIEW_STORAGE: Readonly<Record<ViewFieldKey | ViewEntryName | 'activ
 	skyFraming: ['local'],
 	// How the operator arranged the panels, wherever a section appears.
 	sections: ['local'],
+	// Whether the viewer status line reads the samples under the pointer.
+	pixelInspection: ['local'],
 	// What this tab was doing with each camera, and which camera it was showing.
 	cameraTools: ['session'],
 	activeCameraTab: ['session'],
@@ -383,6 +385,18 @@ export function sectionsEntry(sections: CollapsibleSections): ViewEntry {
 			for (const [id, open] of Object.entries(value as CollapsibleSections)) sections[id] ??= open
 		},
 		value: () => (Object.keys(sections).length > 0 ? sections : undefined),
+	}
+}
+
+// Keeps whether the viewer status line reads the samples under the pointer (Inspect Pixels of the Image Inspector).
+export function pixelInspectionEntry(inspection: { enabled: boolean }): ViewEntry {
+	return {
+		name: 'pixelInspection',
+		store: inspection,
+		restore: (value) => {
+			if (typeof value === 'boolean') inspection.enabled = value
+		},
+		value: () => (inspection.enabled ? true : undefined),
 	}
 }
 

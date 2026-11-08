@@ -503,6 +503,7 @@ export type {
 	AnnotationTimeOrigin,
 	AnnotationWcs,
 } from './annotations'
+export type { SampleTileHeader } from './imagesamples'
 export type { ImageStatisticsErrorCode, ImageStatisticsEvent, ImageStatisticsJob, ImageStatisticsJobState, ImageStatisticsReport, ImageStatisticsRequest, ImageStatisticsSnapshot, ImageStatisticsSummary, PlaneStatistics, StatisticsBackground, StatisticsHistogram, StatisticsNumericLimits } from './imagestatistics'
 export type { StreakContextSources, StreakDetectionErrorCode, StreakDetectionEvent, StreakDetectionJob, StreakDetectionJobState, StreakDetectionRequest, StreakDetectionResult, StreakDetectionSnapshot, StreakDetectionSummary, StreakDetectorSettings } from './streaks'
 export type { PlateSolutions, PlateSolveErrorCode, PlateSolveJob, PlateSolveJobState, PlateSolveOrigin, PlateSolveOutcome, PlateSolveRemote, PlateSolveRequest, PlateSolveResult, PlateSolverProvider, PlateSolverSettings, PlateSolveSnapshot, PlateSolveStage, PlateSolveSummary, PlateSolvingEvent } from './platesolving'

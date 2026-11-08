@@ -77,6 +77,8 @@ import {
 	toggleOriginal,
 } from './images'
 import { MeasurementOverlay } from './MeasurementOverlay'
+import { PixelCursorStatus } from './PixelCursorStatus'
+import { pixelInspection } from './pixeltiles'
 import { SaveImageModal } from './SaveImageModal'
 import { SaveImagePopover } from './SaveImagePopover'
 import { useStatisticsAreaTool } from './statisticsArea'
@@ -109,7 +111,8 @@ import { IMAGE_TOOL_DEFINITIONS, imageToolGroup, imageToolsFor, imageToolUnavail
 // (selecting and editing measurements), then Star Detection, the Star Profile Inspector (measuring the star at the
 // click, a star detected there if any), Streak Detection, and Annotation. The toolbar hides every overlay of a document
 // and shows them again as they were; while hidden only the Guiding star pick stays, so a click or a measure never acts
-// on what cannot be seen.
+// on what cannot be seen. With Inspect Pixels of the Image Inspector on, the status line adds the native samples under
+// the pointer (PixelCursorStatus) after the sky coordinates of a solution.
 
 // Distance from the pointer a click looks for a star within, in screen pixels.
 const STAR_PICK_RADIUS = 8
@@ -188,6 +191,7 @@ export function ImagesWorkspace() {
 	const starProfile = starProfiling ? starProfileOf(view, imageInfo?.id) : undefined
 	const profileSettings = starProfileSettings(activeProfile(profiles).settings)
 	const overlaysHidden = view?.overlaysHidden === true
+	const inspectPixels = useSnapshot(pixelInspection).enabled
 	const inspecting = tool === 'inspector'
 	const areaTool = useStatisticsAreaTool({ documentKey: document?.key, imageId: imageInfo?.id, image: imageInfo, enabled: inspecting && !!imageInfo && !overlaysHidden })
 	const statisticsArea = inspecting && imageInfo && (view?.statistics.area || areaTool) ? imageInfo.id : undefined
@@ -267,7 +271,16 @@ export function ImagesWorkspace() {
 									)
 								: undefined
 						}
-						status={solution ? (cursor) => <WcsCursorStatus solution={solution} cursor={cursor} style={astrometry.coordinates} /> : undefined}
+						status={
+							solution || (inspectPixels && imageInfo)
+								? (cursor) => (
+										<>
+											{solution && <WcsCursorStatus solution={solution} cursor={cursor} style={astrometry.coordinates} />}
+											{inspectPixels && imageInfo && <PixelCursorStatus imageId={imageInfo.id} image={imageInfo} cursor={cursor} />}
+										</>
+									)
+								: undefined
+						}
 						interaction={areaTool ?? astrometryTool.interaction}
 						onImageContextMenu={
 							solution && document && imageInfo

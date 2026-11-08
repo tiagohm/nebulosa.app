@@ -28,6 +28,7 @@ import { type CameraTabSource, followLiveStacks, handleCapturedFrame, reconcileC
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
 import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessing } from './images/imageprocessing'
 import { confirmUnsavedOnUnload, imagesState } from './images/images'
+import { pixelInspection } from './images/pixeltiles'
 import { handleStatisticsEvent, refreshStatistics, statisticsState } from './images/statistics'
 import { handleMountPointingEvent, mountPointingRuntime, refreshMountPointing } from './mountpointing/mountpointing'
 import { handleNotificationEvent, notificationsState, refreshNotifications, setServerLink } from './notifications/notifications'
@@ -35,7 +36,7 @@ import { handleOperationEvent, operationsState, refreshOperations } from './oper
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
 import { activeProfile, activeSetup, profileState, pruneNotificationPreferences } from './profile/profile'
 import { WorkspaceSync, workspaceSyncState } from './profile/sync'
-import { activeCameraTabEntry, cameraToolsEntry, centeringTargetsEntry, keepViewEntries, sectionsEntry, ViewPersistence } from './profile/view'
+import { activeCameraTabEntry, cameraToolsEntry, centeringTargetsEntry, keepViewEntries, pixelInspectionEntry, sectionsEntry, ViewPersistence } from './profile/view'
 import { WorkspaceGate } from './profile/WorkspaceGate'
 import { handleSatelliteEvent, refreshSatelliteCatalog, satelliteCatalogState } from './satellites/satellites'
 import { externalToolsState, handleExternalToolEvent, refreshExternalTools } from './settings/externaltools'
@@ -151,7 +152,7 @@ const stops = [
 	subscribeState(profileState, syncCameraTabs),
 	workspace.start(),
 	new ViewPersistence(profileState).start(),
-	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), activeCameraTabEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime)]),
+	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), activeCameraTabEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime), pixelInspectionEntry(pixelInspection)]),
 	watchHistory(routeState),
 	watchPlayers(),
 	confirmUnsavedOnUnload(imagesState),

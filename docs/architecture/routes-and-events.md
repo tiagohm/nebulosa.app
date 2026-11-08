@@ -25,7 +25,7 @@ Route prefixes, each owned by the module named:
 - `/api/mount-pointing/activations`, `/api/mount-pointing/models/:modelId/activate`, `/api/mount-pointing/mounts/:connectionId/:deviceId/deactivate`: `mountpointing.corrections.ts` (the models in force)
 - `/api/mount-pointing/models`: `mountpointing.ts` (the model library: list, import, rename, delete, export, and fits)
 - `/api/capture-frames`: `captureframes.ts`
-- `/api/images`: `images.ts` (open, render, save and download of a copy as FITS, XISF, or JPEG);
+- `/api/images`: `images.ts` (open, render, save and download of a copy as FITS, XISF, or JPEG, and `/:id/samples`, the native samples of a small tile in the binary envelope of `imagesamples.ts`);
   the analyses of a document belong to their services: `/:id/stars` to `stars.ts`, `/:id/star-profile` to `starprofile.ts`, `/:id/streaks` to `streaks.ts`, `/:id/statistics` to `imagestatistics.ts`, `/:id/plate-solving` and `/:id/plate-solutions` to `platesolving.ts`, `/:id/annotations` to `annotations.ts`, `/:id/processing` to `imageprocessing.ts`
 - `/api/stars`, `/api/streaks`, `/api/statistics`, `/api/plate-solving`, `/api/annotations`, `/api/image-processing`: the jobs of `stars.ts`, `streaks.ts`, `imagestatistics.ts`, `platesolving.ts`, `annotations.ts`, `imageprocessing.ts`
 - `/api/settings/external-tools`: `externaltools.ts`

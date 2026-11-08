@@ -9,7 +9,7 @@ import type { CollapsibleSections } from '../shell/collapsible'
 import { deleteProfile, type ProfileState, selectProfile, setCameraFramesShown, setImageProcessingPipeline, setLastImageDirectory, setPanelOpen, setSkyTimeBarVisible } from './profile'
 import { PROFILE_SETTINGS_VERSION } from './schema'
 import { WorkspaceSync, type WorkspaceSyncState } from './sync'
-import { activeCameraTabEntry, cameraToolsEntry, centeringTargetsEntry, keepViewEntries, sectionsEntry, ViewPersistence, type ViewStorages } from './view'
+import { activeCameraTabEntry, cameraToolsEntry, centeringTargetsEntry, keepViewEntries, pixelInspectionEntry, sectionsEntry, ViewPersistence, type ViewStorages } from './view'
 
 // Storage area of a browser, in memory.
 class MemoryStorage {
@@ -283,5 +283,19 @@ describe('view entries', () => {
 		stops.push(keepViewEntries([centeringTargetsEntry(ignored)], { local: new MemoryStorage(), session: old }))
 		expect(snapshot(ignored).drafts).toEqual({})
 		expect(old.getItem('nebulosa:centeringTargets')).toBeNull()
+	})
+})
+
+describe('pixel inspection', () => {
+	test('whether the status line reads pixels comes back after a reload', async () => {
+		const local = new MemoryStorage()
+		const before = proxy({ enabled: false })
+		stops.push(keepViewEntries([pixelInspectionEntry(before)], { local, session: new MemoryStorage() }))
+		before.enabled = true
+		await Bun.sleep(0)
+
+		const reloaded = proxy({ enabled: false })
+		stops.push(keepViewEntries([pixelInspectionEntry(reloaded)], { local, session: new MemoryStorage() }))
+		expect(reloaded.enabled).toBeTrue()
 	})
 })

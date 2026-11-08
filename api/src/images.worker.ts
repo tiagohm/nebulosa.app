@@ -14,7 +14,7 @@ import { fileHandleSource } from 'nebulosa/src/io/file'
 import { Bitpix, type FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSource } from 'nebulosa/src/io/io'
 import type { Sink } from 'nebulosa/src/io/types'
-import { luminanceImage, luminanceRegion, numericLimitsKnown, readImageFrom, sampleConversion } from './imagedecode'
+import { cropImage, luminanceImage, luminanceRegion, numericLimitsKnown, readImageFrom, sampleConversion } from './imagedecode'
 import { cfaPattern, DisplayError, type DisplaySettings, type ImageCapture, type ImageFormat, imageAcquisition, type ImageInfo, ImageOpenError, type ImageProvenance, type ImageRect, type ImageWorkerRequest, type ImageWorkerResponse, type RenderRequest, type RenderResult, type SaveFormat, type Stretch } from './images'
 
 // Worker thread that owns the decoded pixels of every open image document and does all the heavy
@@ -22,7 +22,8 @@ import { cfaPattern, DisplayError, type DisplaySettings, type ImageCapture, type
 // documents as FITS, XISF, or JPEG files, preparing the grayscale
 // copies star detections measure on their own worker (stars.worker.ts), whole or of one small region, and the full copies image processing
 // pipelines work on (imageprocessing.worker.ts), whose results come back to be adopted as documents, and the statistics
-// of the original samples, scanned in place in short slices between which renderings and other requests proceed. Keeping the
+// of the original samples, scanned in place in short slices between which renderings and other requests proceed, and copies
+// of the native samples of the small tiles a pixel readout reads. Keeping the
 // pixels here means they are never copied between threads, and the server event loop stays free while
 // a large image is decoded or rendered. Renderings run one at a time, always on a copy of the decoded
 // image, which is never modified; opens overlap them only while reading. A rendering waits in a
@@ -481,7 +482,7 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 		return
 	}
 
-	if (request.type === 'encode' || request.type === 'detectionImage' || request.type === 'detectionRegion' || request.type === 'processingImage') {
+	if (request.type === 'encode' || request.type === 'detectionImage' || request.type === 'detectionRegion' || request.type === 'processingImage' || request.type === 'samples') {
 		const entry = documents.get(request.document)
 
 		if (!entry) {
@@ -496,6 +497,9 @@ async function handle(request: ImageWorkerRequest): Promise<void> {
 			} else if (request.type === 'detectionRegion') {
 				const image = luminanceRegion(entry.image, entry.cfa, request.rect)
 				reply({ id: request.id, status: 'detectionRegion', image, conversion: sampleConversion(entry.image) }, [image.raw.buffer])
+			} else if (request.type === 'samples') {
+				const { raw, metadata } = cropImage(entry.image, request.rect)
+				reply({ id: request.id, status: 'samples', rect: request.rect, channels: metadata.channels, samples: raw as Float32Array<ArrayBuffer> | Float64Array<ArrayBuffer>, conversion: sampleConversion(entry.image), ...(entry.cfa && { cfa: entry.cfa }) }, [raw.buffer])
 			} else if (request.type === 'processingImage') {
 				const image = processingImage(entry)
 				reply({ id: request.id, status: 'processingImage', image }, [image.raw.buffer])

@@ -13,6 +13,7 @@ import { Notice } from '../ui/Notice'
 import { SectionHeading } from '../ui/SectionHeading'
 import { SegmentedControl } from '../ui/SegmentedControl'
 import { type ImageDocument, imagesState, type ImageViewState, setStatisticsArea } from './images'
+import { pixelInspection } from './pixeltiles'
 import { cancelStatistics, loadStatisticsResult, runStatistics, statisticsState, statisticsView } from './statistics'
 import { startAreaSelection, statisticsAreaSelection, stopAreaSelection } from './statisticsArea'
 import { StatisticsHistogram, type StatisticsHistogramSeries } from './StatisticsHistogram'
@@ -23,7 +24,7 @@ import { StatisticsHistogram, type StatisticsHistogramSeries } from './Statistic
 // robust or the full domain, linear or logarithmic, the statistics of one plane, and its local background. Levels and
 // dispersions are in ADU or the unit of the source; approximate order statistics, numeric limits, and an uncertain
 // background say so. Changing the domain, the scale, the planes drawn, or the zoom never measures again; a new image or
-// area does.
+// area does. Inspect Pixels shows the native samples under the pointer in the viewer status line (PixelCursorStatus).
 
 // A plane of the statistics: mono, an RGB channel or their luminance, or a CFA phase.
 type ImageStatisticsPlane = PlaneStatistics['plane']
@@ -90,6 +91,7 @@ export function ImageStatisticsSection({ document, view }: ImageStatisticsSectio
 	const areaKey = area && `${area.left},${area.top},${area.width},${area.height}`
 	const { job, result, error, due } = statisticsView(state, document.key, imageId, area, open)
 	const active = isActive(job)
+	const inspectPixels = useSnapshot(pixelInspection).enabled
 	const [choices, setChoices] = useState<HistogramChoices>(DEFAULT_CHOICES)
 
 	// The section measures the image shown once it is expanded, and the next one as soon as the previous scan ends.
@@ -132,6 +134,7 @@ export function ImageStatisticsSection({ document, view }: ImageStatisticsSectio
 						)}
 					</Actions>
 					{selecting && <p className="m-0 text-xs text-ink-300">Drag over the image to draw the area; Escape cancels.</p>}
+					<Checkbox label="Inspect pixels: native samples under the pointer in the status line" checked={inspectPixels} onChange={(checked) => (pixelInspection.enabled = checked)} />
 				</>
 			)}
 		</CollapsibleSection>

@@ -40,6 +40,16 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
     - **Matching results.** A result is looked up by image id and area, so an earlier frame or another area never shows on the current one. A failure is not retried by itself; Recalculate submits again.
     - **The histogram.** The domain (robust or full range), the count scale (linear or log), the planes drawn and the zoom only redraw the counts fetched. A drag over the plot zooms; a double click resets.
     - **The statistics area.** It is drawn with Select Area (see [Overlay Contracts](overlay.md)) and kept in the document view (`ImageViewState.statistics`). A camera tab keeps it for frames of the same size and drops it, with a notice, for a frame of another size. Whole Image measures the whole image again.
+- **Pixel readout.** With Inspect Pixels of the section on (kept in browser storage), the viewer status line adds the samples under the pointer after the sky coordinates of a plate solution (`web/src/images/PixelCursorStatus.tsx`).
+    - **What it shows.** The value of a mono pixel, the red, green and blue samples of an RGB pixel, or the value of a mosaic photosite with its CFA phase (R, G1, G2 or B, from absolute coordinates and the trusted pattern). Values are in the scale of the source, and NaN and infinities are labelled as such.
+    - **Where the values come from.** `GET /api/images/:id/samples?left&top&width&height` (`ImageStore.samples`, op `samples` of the image worker) answers a copy of the native decoded samples of a rectangle, never the rendered JPEG, with `Cache-Control: no-store`.
+    - **The envelope.** It is versioned, binary, and written by `api/src/imagesamples.ts`, in this order:
+        - the header length, a u32 little-endian;
+        - a UTF-8 JSON header: rectangle, channels, precision 32 or 64, `SampleConversion`, CFA pattern, version;
+        - zero padding to 8 bytes;
+        - interleaved row-major little-endian floats, NaN and infinities kept.
+    - **The tiles.** The web reads tiles of a 64-pixel grid, cut at the image edges (`web/src/images/pixeltiles.ts`). A tile is fetched once when the pointer enters it, so moves inside a fetched tile send nothing. A fetch of another tile still on its way is aborted.
+    - **The cache.** It is least recently used, bounded to 8 MiB, and keeps only the image read last; a failed tile is not fetched again for that image. The rectangle is not validated by the API.
 - **Limitations:**
     - There is no statistics plane mixing the phases of a mosaic.
     - There is no background estimate of the luminance.

@@ -8,6 +8,7 @@ import type { FitsHeader, FitsHeaderKey } from 'nebulosa/src/io/formats/fits/fit
 import { cfaPatternKeyword, exposureTimeKeyword, numericKeyword, observationDateKeyword, textKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { errorResponse } from './http'
 import type { ImageProcessingStep } from './imageprocessing'
+import { encodeSampleTile } from './imagesamples'
 import type { LiveCohortAcquisition } from './livestacking'
 import type { LiveFilterCalibration } from './livestacking.groups'
 import { type ClientListener, ClientPresence } from './websocket'
@@ -367,12 +368,26 @@ export interface DocumentStatistics {
 	readonly mosaic?: 'trusted' | 'untrusted'
 }
 
+// Native decoded samples of a small rectangle of a document, as the pixel readout reads them (see imagesamples.ts).
+export interface SampleTile {
+	// Rectangle read, inside the image.
+	readonly rect: ImageRect
+	// Channels per pixel: 1 for mono or a mosaic, 3 for RGB.
+	readonly channels: number
+	// Samples in the normalized scale and precision of the document, interleaved by channel in row-major order.
+	readonly samples: Float32Array<ArrayBuffer> | Float64Array<ArrayBuffer>
+	// Conversion of the samples to the scale of the source.
+	readonly conversion: SampleConversion
+	// Trusted CFA pattern at the image origin of a mono mosaic.
+	readonly cfa?: CfaPattern
+}
+
 // Outcome of a statistics scan: the statistics, a document that is not open (missing), or a scan cancelled before it
 // ended (cancelled).
 export type StatisticsOutcome = ({ readonly status: 'completed' } & DocumentStatistics) | { readonly status: 'missing' } | { readonly status: 'cancelled' }
 
 // Message sent to the image worker. Open, open capture, render, encode, detection image, detection region, processing
-// image, statistics, and adopt carry an id that their response echoes; open capture and adopt transfer their bytes to
+// image, statistics, samples, and adopt carry an id that their response echoes; open capture and adopt transfer their bytes to
 // the worker; a close has no response, and a cancel drops the render with that id if it has not started yet, or stops
 // the statistics scan with that id at its next slice (both then answer superseded).
 export type ImageWorkerRequest =
@@ -384,6 +399,7 @@ export type ImageWorkerRequest =
 	| { readonly type: 'detectionRegion'; readonly id: number; readonly document: string; readonly rect: ImageRect }
 	| { readonly type: 'processingImage'; readonly id: number; readonly document: string }
 	| { readonly type: 'statistics'; readonly id: number; readonly document: string; readonly area?: ImageRect }
+	| { readonly type: 'samples'; readonly id: number; readonly document: string; readonly rect: ImageRect }
 	| { readonly type: 'adopt'; readonly id: number; readonly image: Image; readonly provenance: ImageProvenance }
 	| { readonly type: 'cancel'; readonly id: number }
 	| { readonly type: 'close'; readonly document: string }
@@ -392,7 +408,7 @@ export type ImageWorkerRequest =
 // rendering, the encoded file, the grayscale copy a star detection measures (see ImageStore.detectionImage), that of
 // a region (see ImageStore.detectionRegion), the
 // full copy an image processing pipeline works on (see ImageStore.processingImage), the statistics of its samples (see
-// ImageStore.statistics), the adopted document, a
+// ImageStore.statistics), the native samples of a small rectangle (see ImageStore.samples), the adopted document, a
 // document that is not open (missing), a render dropped before it
 // started (superseded), settings that cannot be applied to the image (invalid), a file that cannot be
 // opened (with the status of its ImageOpenError), or any other failure.
@@ -403,6 +419,7 @@ export type ImageWorkerResponse =
 	| ({ readonly id: number; readonly status: 'detectionRegion' } & ImageRegion)
 	| { readonly id: number; readonly status: 'processingImage'; readonly image: Image }
 	| ({ readonly id: number; readonly status: 'statistics' } & DocumentStatistics)
+	| ({ readonly id: number; readonly status: 'samples' } & SampleTile)
 	| { readonly id: number; readonly status: 'adopted'; readonly info: ImageInfo }
 	| ({ readonly id: number; readonly status: 'rendered' } & Rendering)
 	| { readonly id: number; readonly status: 'missing' }
@@ -691,6 +708,18 @@ export class ImageStore implements Disposable, ClientListener {
 		}
 	}
 
+	// Returns a copy of the native decoded samples of a rectangle of an open document, which must lie inside the image:
+	// its channels, precision, and normalized scale, NaN and infinities kept, never debayered nor converted to luminance,
+	// with the conversion to the scale of the source and the trusted CFA pattern. Meant for small tiles of a pixel
+	// readout. Resolves to undefined when the document is not open.
+	async samples(id: string, rect: ImageRect): Promise<SampleTile | undefined> {
+		if (!this.#documents.has(id)) return undefined
+		const response = await this.#request({ type: 'samples', id: this.#id++, document: id, rect })
+		if (response.status === 'samples') return { rect: response.rect, channels: response.channels, samples: response.samples, conversion: response.conversion, ...(response.cfa && { cfa: response.cfa }) }
+		if (response.status === 'missing') return undefined
+		throw responseError(response)
+	}
+
 	// Adopts the result of an image processing pipeline, or a live stack snapshot, as a new derived document, with the
 	// floating-point header and the history of its provenance. The buffer of the image is transferred to the worker, so
 	// the caller must not use it afterwards.
@@ -934,6 +963,18 @@ export function createImageRoutes(images: ImageStore) {
 					if (error instanceof DisplayError) return errorResponse(error.message, 422, 'invalidSettings')
 					return errorResponse(`Unable to write the file: ${Error.isError(error) ? error.message : String(error)}`, 500, 'writeFailed')
 				}
+			},
+		},
+		'/api/images/:id/samples': {
+			// Native decoded samples of a rectangle (?left&top&width&height, inside the image, at most SAMPLE_TILE_SIZE on a
+			// side) of an open image document, as the binary envelope of imagesamples.ts; 404 when it is not open.
+			GET: async (req) => {
+				const query = new URL(req.url).searchParams
+				const rect = { left: Number(query.get('left')), top: Number(query.get('top')), width: Number(query.get('width')), height: Number(query.get('height')) }
+				const tile = await images.samples(req.params.id, rect)
+				if (!tile) return errorResponse('Image not found', 404, 'notFound')
+				const body = encodeSampleTile({ ...tile.rect, channels: tile.channels, conversion: tile.conversion, ...(tile.cfa && { cfa: tile.cfa }) }, tile.samples)
+				return new Response(body, { headers: { 'Content-Type': 'application/octet-stream', 'Cache-Control': 'no-store' } })
 			},
 		},
 		'/api/images/:id/file': {

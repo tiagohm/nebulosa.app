@@ -10,7 +10,7 @@ import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather
 import type { PlanningSite } from './observingplanner.astronomy'
 import { toolkitTime, yieldToEventLoop } from './planetary.source'
 // oxfmt-ignore
-import { overlapsOf, type PlanetEventVisibility, type PlanetNight, rank, siteNights, type SiteReasons, siteVisibility, subtract, type VisiblePart } from './planetary.visibility'
+import { definedContacts, hiddenIntervals, type MoonEventContacts, overlapsOf, physicallyVisible, type PlanetEventVisibility, type PlanetNight, rank, siteNights, type SiteReasons, siteVisibility, unixMillisOf, type VisiblePart } from './planetary.visibility'
 import { type SaturnKernels, type SaturnMoon, type SaturnSourced, withSaturnianSource } from './saturn.astronomy'
 import type { TimeSpan } from './sky/sun'
 
@@ -30,18 +30,7 @@ export const SATURN_EVENT_KINDS: readonly SaturnEventKind[] = ['satelliteTransit
 
 // Contacts of an event, Unix milliseconds; each only where it is computed and reached (see the toolkit's
 // SatellitePhenomenon). A mutual event has only external1 and external2.
-export interface SaturnEventContacts {
-	readonly external1?: number
-	readonly internal1?: number
-	readonly center1?: number
-	readonly center2?: number
-	readonly internal2?: number
-	readonly external2?: number
-	// For a shadow transit, when its centre starts to face the Earth.
-	readonly visibleStart?: number
-	// For a shadow transit, when its centre stops facing the Earth.
-	readonly visibleEnd?: number
-}
+export type SaturnEventContacts = MoonEventContacts
 
 // Whether an event can be watched from the site; uncertainRingInterference when it could be, but the rings may hide it.
 export type SaturnVisibilityStatus = PlanetEventVisibility<string>['status'] | 'uncertainRingInterference'
@@ -131,18 +120,6 @@ const RING_OUTER = SATURN_RING_MODEL.outerRadius / SATURN_EQUATORIAL_RADIUS_KM
 // An event of the scan before the site and the overlaps are considered.
 type ScannedEvent = Omit<SaturnEvent, 'overlaps' | 'visibility'>
 
-// Unix milliseconds of an optional toolkit instant.
-function ms(time: Time | undefined) {
-	return time === undefined ? undefined : timeToUnixMillis(time)
-}
-
-// Contacts without their undefined entries.
-function definedContacts(contacts: SaturnEventContacts): SaturnEventContacts {
-	const defined: Record<string, number> = {}
-	for (const [key, value] of Object.entries(contacts)) if (value !== undefined) defined[key] = value
-	return defined
-}
-
 // Whether a sky offset (Saturn radii) lies over the near half of the projected ring annulus, so the rings are in front
 // of what lies there on the disk: between the C ring's inner and the A ring's outer ellipses, on the side away from the
 // far half (the far half lies toward the projected north pole when the Earth is north of the ring plane).
@@ -193,72 +170,26 @@ function scanChunk(ephemeris: SaturnianEphemeris, from: Time, to: Time, start: n
 
 	for (const p of saturnianPhenomena(ephemeris, from, to) satisfies SaturnianPhenomenon[]) {
 		const maximum = timeToUnixMillis(p.maximum)
-		const contacts = definedContacts({ external1: ms(p.external1), internal1: ms(p.internal1), center1: ms(p.center1), center2: ms(p.center2), internal2: ms(p.internal2), external2: ms(p.external2), visibleStart: ms(p.visibleStart), visibleEnd: ms(p.visibleEnd) })
+		const contacts = definedContacts({
+			external1: unixMillisOf(p.external1),
+			internal1: unixMillisOf(p.internal1),
+			center1: unixMillisOf(p.center1),
+			center2: unixMillisOf(p.center2),
+			internal2: unixMillisOf(p.internal2),
+			external2: unixMillisOf(p.external2),
+			visibleStart: unixMillisOf(p.visibleStart),
+			visibleEnd: unixMillisOf(p.visibleEnd),
+		})
 		push({ kind: p.kind, moons: [p.moon], start: contacts.external1 ?? maximum, maximum, end: contacts.external2 ?? maximum, contacts, grazing: p.grazing, depth: p.depth })
 	}
 
 	for (const e of findSaturnianMutualEvents(ephemeris, from, to) satisfies MutualEvent<SaturnMoon>[]) {
 		const maximum = timeToUnixMillis(e.middle)
-		const contacts = definedContacts({ external1: ms(e.start), external2: ms(e.end) })
+		const contacts = definedContacts({ external1: unixMillisOf(e.start), external2: unixMillisOf(e.end) })
 		push({ kind: e.kind === 'occultation' ? 'mutualOccultation' : 'mutualEclipse', moons: [e.front, e.back], start: contacts.external1 ?? maximum, maximum, end: contacts.external2 ?? maximum, contacts, grazing: false, impactParameter: e.impactParameter })
 	}
 
 	return events
-}
-
-// Intervals in which a moon is hidden from the Earth, by moon: its centre behind Saturn's limb (occulted) or inside
-// Saturn's umbra (eclipsed).
-interface HiddenIntervals {
-	readonly occulted: Readonly<Record<SaturnMoon, readonly TimeSpan[]>>
-	readonly eclipsed: Readonly<Record<SaturnMoon, readonly TimeSpan[]>>
-}
-
-// Empty intervals of every moon.
-function emptyIntervals(): Record<SaturnMoon, TimeSpan[]> {
-	const out = {} as Record<SaturnMoon, TimeSpan[]>
-	for (const moon of SATURNIAN_MOONS) out[moon] = []
-	return out
-}
-
-// Collects the centre-contact intervals of the occultations and eclipses of every moon.
-function hiddenIntervals(events: readonly ScannedEvent[]): HiddenIntervals {
-	const occulted = emptyIntervals()
-	const eclipsed = emptyIntervals()
-
-	for (const event of events) {
-		if (event.kind !== 'satelliteOccultation' && event.kind !== 'satelliteEclipse') continue
-		const { center1, center2 } = event.contacts
-		if (center1 === undefined || center2 === undefined) continue
-		const into = event.kind === 'satelliteOccultation' ? occulted : eclipsed
-		into[event.moons[0]].push({ start: center1, end: center2 })
-	}
-
-	return { occulted, eclipsed }
-}
-
-// The part of an event that is physically visible from the Earth, rings aside: a shadow transit while its centre faces
-// the Earth, an eclipse while the moon is not behind the disk, a mutual event while neither moon is behind the disk or
-// in the umbra; transits and occultations whole. A zero-length event is one instant, visible or not.
-function physicallyVisible(event: ScannedEvent, { occulted, eclipsed }: HiddenIntervals): VisiblePart<SaturnVisibilityReason> {
-	const whole: TimeSpan[] = [{ start: event.start, end: Math.max(event.end, event.start) }]
-	let holes: readonly TimeSpan[] = []
-	let reason: SaturnVisibilityReason = 'moonHidden'
-
-	if (event.kind === 'shadowTransit') {
-		const { visibleStart, visibleEnd } = event.contacts
-		const facing = visibleStart !== undefined && visibleEnd !== undefined ? [{ start: visibleStart, end: visibleEnd }] : []
-		holes = subtract(whole, facing)
-		reason = 'shadowHidden'
-	} else if (event.kind === 'satelliteEclipse') {
-		holes = occulted[event.moons[0]]
-	} else if (event.kind === 'mutualOccultation' || event.kind === 'mutualEclipse') {
-		holes = event.moons.flatMap((moon) => [...occulted[moon], ...eclipsed[moon]])
-	}
-
-	const hit = holes.some((hole) => hole.start <= event.end && hole.end >= event.start)
-	if (!hit) return { spans: whole }
-	if (event.end <= event.start) return { spans: [], reason }
-	return { spans: subtract(whole, holes), reason }
 }
 
 // Applies the ring interference to a visibility: a watchable event becomes uncertain, and the reason is added.
@@ -288,7 +219,7 @@ export async function computeEvents(
 	const { results, source, snapshot } = await withSaturnianSource(kernels, 'moons', count, chunk, interpolatedSaturnianEphemeris, signal)
 
 	const all = results.flat().sort((a, b) => a.maximum - b.maximum || a.id.localeCompare(b.id))
-	const hidden = hiddenIntervals(all)
+	const hidden = hiddenIntervals(all, SATURNIAN_MOONS)
 	const selected = all.filter((e) => kinds.has(e.kind) && e.moons.some((moon) => moons.has(moon)))
 	const overlaps = overlapsOf(selected)
 	// Nights over the padded range, so the parts of the events beyond the range are judged too.

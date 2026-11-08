@@ -14,7 +14,7 @@ import type { PlanningSite } from './observingplanner.astronomy'
 // oxfmt-ignore
 import { kernelReadiness as planetaryReadiness, type PlanetaryFallbackReason, type PlanetaryKernels, type PlanetarySource, type PlanetarySourceMiss, PlanetarySourceUnavailableError, type SatelliteSourceConfig, type SourcedResult as PlanetarySourcedResult, toolkitTime, withSatelliteSource, yieldToEventLoop } from './planetary.source'
 // oxfmt-ignore
-import { overlapsOf, type PlanetEventVisibility, type PlanetNight, type PlanetVisibilityStatus, rank, siteNights, type SiteReasons, siteVisibility, subtract, type VisiblePart } from './planetary.visibility'
+import { definedContacts, type HiddenIntervals, hiddenIntervals, type MoonEventContacts, overlapsOf, physicallyVisible, type PlanetEventVisibility, type PlanetNight, type PlanetVisibilityStatus, rank, siteNights, type SiteReasons, siteVisibility, unixMillisOf, type VisiblePart } from './planetary.visibility'
 import type { TimeSpan } from './sky/sun'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 import type { SpiceEphemerisPolicy } from './spicekernels.store'
@@ -365,18 +365,7 @@ export async function computeTrack(kernels: JupiterKernels, { start, end }: Jupi
 
 // Contacts of an event, Unix milliseconds; each only where it is computed and reached (see the toolkit's
 // JovianPhenomenon). A mutual event has only external1 and external2; a Great Red Spot transit has none.
-export interface JupiterEventContacts {
-	readonly external1?: number
-	readonly internal1?: number
-	readonly center1?: number
-	readonly center2?: number
-	readonly internal2?: number
-	readonly external2?: number
-	// For a shadow transit, when its centre starts to face the Earth.
-	readonly visibleStart?: number
-	// For a shadow transit, when its centre stops facing the Earth.
-	readonly visibleEnd?: number
-}
+export type JupiterEventContacts = MoonEventContacts
 
 // Whether an event can be watched from the site.
 export type JupiterVisibilityStatus = PlanetVisibilityStatus
@@ -527,11 +516,6 @@ function scanChunk(ephemeris: JovianEphemeris, start: Time, stop: Time, grs: Gre
 // An event of the scan before the site is considered.
 type ScannedEvent = Omit<JupiterEvent, 'overlaps' | 'visibility'>
 
-// Unix milliseconds of an optional toolkit instant.
-function ms(time: Time | undefined) {
-	return time === undefined ? undefined : timeToUnixMillis(time)
-}
-
 // Builds the events of the range from the chunks: the identity, interval, contacts and range flags of each.
 function scannedEvents(chunks: readonly ChunkEvents[], start: number, end: number, grs: JupiterGrsModel | undefined): ScannedEvent[] {
 	const events: ScannedEvent[] = []
@@ -543,13 +527,22 @@ function scannedEvents(chunks: readonly ChunkEvents[], start: number, end: numbe
 	for (const chunk of chunks) {
 		for (const p of chunk.phenomena) {
 			const maximum = timeToUnixMillis(p.maximum)
-			const contacts: JupiterEventContacts = { external1: ms(p.external1), internal1: ms(p.internal1), center1: ms(p.center1), center2: ms(p.center2), internal2: ms(p.internal2), external2: ms(p.external2), visibleStart: ms(p.visibleStart), visibleEnd: ms(p.visibleEnd) }
+			const contacts: JupiterEventContacts = {
+				external1: unixMillisOf(p.external1),
+				internal1: unixMillisOf(p.internal1),
+				center1: unixMillisOf(p.center1),
+				center2: unixMillisOf(p.center2),
+				internal2: unixMillisOf(p.internal2),
+				external2: unixMillisOf(p.external2),
+				visibleStart: unixMillisOf(p.visibleStart),
+				visibleEnd: unixMillisOf(p.visibleEnd),
+			}
 			push({ kind: p.kind, moons: [p.moon], start: contacts.external1 ?? maximum, maximum, end: contacts.external2 ?? maximum, contacts: definedContacts(contacts), grazing: p.grazing, depth: p.depth })
 		}
 
 		for (const e of chunk.mutual) {
 			const maximum = timeToUnixMillis(e.middle)
-			const contacts = definedContacts({ external1: ms(e.start), external2: ms(e.end) })
+			const contacts = definedContacts({ external1: unixMillisOf(e.start), external2: unixMillisOf(e.end) })
 			push({ kind: e.kind === 'occultation' ? 'mutualOccultation' : 'mutualEclipse', moons: [e.front, e.back], start: contacts.external1 ?? maximum, maximum, end: contacts.external2 ?? maximum, contacts, grazing: false, impactParameter: e.impactParameter })
 		}
 
@@ -560,62 +553,6 @@ function scannedEvents(chunks: readonly ChunkEvents[], start: number, end: numbe
 
 	events.sort((a, b) => a.maximum - b.maximum || a.id.localeCompare(b.id))
 	return events
-}
-
-// Contacts without their undefined entries.
-function definedContacts(contacts: JupiterEventContacts): JupiterEventContacts {
-	const defined: Record<string, number> = {}
-	for (const [key, value] of Object.entries(contacts)) if (value !== undefined) defined[key] = value
-	return defined
-}
-
-// Intervals in which a moon is hidden from the Earth, by moon: its centre behind Jupiter's limb (occulted) or inside
-// Jupiter's umbra (eclipsed).
-interface HiddenIntervals {
-	readonly occulted: Readonly<Record<GalileanMoon, readonly TimeSpan[]>>
-	readonly eclipsed: Readonly<Record<GalileanMoon, readonly TimeSpan[]>>
-}
-
-// Collects the centre-contact intervals of the occultations and eclipses of every moon.
-function hiddenIntervals(events: readonly ScannedEvent[]): HiddenIntervals {
-	const occulted: Record<GalileanMoon, TimeSpan[]> = { io: [], europa: [], ganymede: [], callisto: [] }
-	const eclipsed: Record<GalileanMoon, TimeSpan[]> = { io: [], europa: [], ganymede: [], callisto: [] }
-
-	for (const event of events) {
-		if (event.kind !== 'satelliteOccultation' && event.kind !== 'satelliteEclipse') continue
-		const { center1, center2 } = event.contacts
-		if (center1 === undefined || center2 === undefined) continue
-		const into = event.kind === 'satelliteOccultation' ? occulted : eclipsed
-		into[event.moons[0]].push({ start: center1, end: center2 })
-	}
-
-	return { occulted, eclipsed }
-}
-
-// The part of an event that is physically visible from the Earth: a shadow transit while its centre faces the Earth,
-// an eclipse while the moon is not behind the disk (its fading is what is watched), a mutual event while neither moon
-// is behind the disk or in the umbra; transits, occultations and Great Red Spot transits whole. A zero-length event is
-// one instant, visible or not.
-function physicallyVisible(event: ScannedEvent, { occulted, eclipsed }: HiddenIntervals): VisiblePart<JupiterVisibilityReason> {
-	const whole: TimeSpan[] = [{ start: event.start, end: Math.max(event.end, event.start) }]
-	let holes: readonly TimeSpan[] = []
-	let reason: JupiterVisibilityReason = 'moonHidden'
-
-	if (event.kind === 'shadowTransit') {
-		const { visibleStart, visibleEnd } = event.contacts
-		const facing = visibleStart !== undefined && visibleEnd !== undefined ? [{ start: visibleStart, end: visibleEnd }] : []
-		holes = subtract(whole, facing)
-		reason = 'shadowHidden'
-	} else if (event.kind === 'satelliteEclipse') {
-		holes = occulted[event.moons[0]]
-	} else if (event.kind === 'mutualOccultation' || event.kind === 'mutualEclipse') {
-		holes = event.moons.flatMap((moon) => [...occulted[moon], ...eclipsed[moon]])
-	}
-
-	const hit = holes.some((hole) => hole.start <= event.end && hole.end >= event.start)
-	if (!hit) return { spans: whole }
-	if (event.end <= event.start) return { spans: [], reason }
-	return { spans: subtract(whole, holes), reason }
 }
 
 // Computes the events over a range: scans the padded range in day chunks with one source, keeps the events overlapping
@@ -633,7 +570,7 @@ export async function computeEvents(kernels: JupiterKernels, nights: (request: A
 	const { results, source, snapshot } = await withJovianSource(kernels, count, (ephemeris, i) => scanChunk(ephemeris, toolkitTime(from + i * chunkMs), toolkitTime(Math.min(to, from + (i + 1) * chunkMs)), model), true, signal)
 
 	const all = scannedEvents(results, start, end, grs)
-	const hidden = hiddenIntervals(all)
+	const hidden = hiddenIntervals(all, GALILEAN_MOONS)
 	const selected = all.filter((e) => kinds.has(e.kind) && (e.moons.length === 0 || e.moons.some((moon) => moons.has(moon))))
 	const overlaps = overlapsOf(selected)
 	// Nights over the padded range, so the parts of the events beyond the range are judged too.
@@ -658,7 +595,7 @@ export async function computeEvents(kernels: JupiterKernels, nights: (request: A
 }
 
 // Reasons an event is partly hidden from the Earth whatever the site.
-function physicallyVisibleReason(event: ScannedEvent, hidden: HiddenIntervals): JupiterVisibilityReason[] {
+function physicallyVisibleReason(event: ScannedEvent, hidden: HiddenIntervals<GalileanMoon>): JupiterVisibilityReason[] {
 	const { reason } = physicallyVisible(event, hidden)
 	return reason ? [reason] : []
 }

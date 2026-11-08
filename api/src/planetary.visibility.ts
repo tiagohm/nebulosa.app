@@ -1,7 +1,7 @@
 import { altitudeOf } from 'nebulosa/src/astronomy/events/horizon'
 import { visibilityWindows } from 'nebulosa/src/astronomy/events/visibility'
 import { airmassKastenYoung } from 'nebulosa/src/astronomy/formulas'
-import { timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
+import { type Time, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
 import { LruCache } from './lrucache'
 import { OBSERVING_PRESETS, type PlanningBodyCode, type PlanningSite, PlanningNight, SEARCH_STEP_DAYS } from './observingplanner.astronomy'
@@ -251,4 +251,106 @@ export class SiteNightCache {
 		this.#nights.set(key, [...nights, night].slice(-NIGHTS_PER_SITE))
 		return night
 	}
+}
+
+// Contacts of an event of a planet's moons, Unix milliseconds; each only where it is computed and reached (see the
+// toolkit's phenomena). A mutual event has only external1 and external2.
+export interface MoonEventContacts {
+	// First external contact.
+	readonly external1?: number
+	// First internal contact.
+	readonly internal1?: number
+	// First contact of the centre.
+	readonly center1?: number
+	// Last contact of the centre.
+	readonly center2?: number
+	// Last internal contact.
+	readonly internal2?: number
+	// Last external contact.
+	readonly external2?: number
+	// For a shadow transit, when its centre starts to face the Earth.
+	readonly visibleStart?: number
+	// For a shadow transit, when its centre stops facing the Earth.
+	readonly visibleEnd?: number
+}
+
+// An event of a planet's moons as its physical visibility is judged: its kind, the moons it involves, and its contacts.
+export interface MoonEventSpan<M extends string> extends EventSpan {
+	// Kind of the event, as the planner names it.
+	readonly kind: string
+	// Moons the event involves: one for a phenomenon, front then back for a mutual event, none for a feature of the disk.
+	readonly moons: readonly M[]
+	// Contacts of the event.
+	readonly contacts: MoonEventContacts
+}
+
+// Intervals in which a moon is hidden from the Earth, by moon: its centre behind the planet's limb (occulted) or inside
+// the planet's umbra (eclipsed), Unix milliseconds.
+export interface HiddenIntervals<M extends string> {
+	// Intervals with the moon's centre behind the limb.
+	readonly occulted: Readonly<Record<M, readonly TimeSpan[]>>
+	// Intervals with the moon's centre inside the umbra.
+	readonly eclipsed: Readonly<Record<M, readonly TimeSpan[]>>
+}
+
+// Unix milliseconds of an optional toolkit instant.
+export function unixMillisOf(time: Time | undefined) {
+	return time === undefined ? undefined : timeToUnixMillis(time)
+}
+
+// Contacts without their undefined entries.
+export function definedContacts(contacts: MoonEventContacts): MoonEventContacts {
+	const defined: Record<string, number> = {}
+	for (const [key, value] of Object.entries(contacts)) if (value !== undefined) defined[key] = value
+	return defined
+}
+
+// No interval for every moon of moons.
+function emptyIntervals<M extends string>(moons: readonly M[]): Record<M, TimeSpan[]> {
+	const intervals = {} as Record<M, TimeSpan[]>
+	for (const moon of moons) intervals[moon] = []
+	return intervals
+}
+
+// Collects the centre-contact intervals of the occultations and eclipses (satelliteOccultation, satelliteEclipse) of every
+// moon of moons.
+export function hiddenIntervals<M extends string>(events: readonly MoonEventSpan<M>[], moons: readonly M[]): HiddenIntervals<M> {
+	const occulted = emptyIntervals(moons)
+	const eclipsed = emptyIntervals(moons)
+
+	for (const event of events) {
+		if (event.kind !== 'satelliteOccultation' && event.kind !== 'satelliteEclipse') continue
+		const { center1, center2 } = event.contacts
+		if (center1 === undefined || center2 === undefined) continue
+		const into = event.kind === 'satelliteOccultation' ? occulted : eclipsed
+		into[event.moons[0]].push({ start: center1, end: center2 })
+	}
+
+	return { occulted, eclipsed }
+}
+
+// The part of an event that is physically visible from the Earth: a shadow transit while its centre faces the Earth
+// (shadowHidden otherwise), an eclipse while the moon is not behind the disk (its fading is what is watched), a mutual
+// event while neither moon is behind the disk or in the umbra (moonHidden otherwise); any other event whole. A
+// zero-length event is one instant, visible or not.
+export function physicallyVisible<M extends string>(event: MoonEventSpan<M>, { occulted, eclipsed }: HiddenIntervals<M>): VisiblePart<'moonHidden' | 'shadowHidden'> {
+	const whole: TimeSpan[] = [{ start: event.start, end: Math.max(event.end, event.start) }]
+	let holes: readonly TimeSpan[] = []
+	let reason: 'moonHidden' | 'shadowHidden' = 'moonHidden'
+
+	if (event.kind === 'shadowTransit') {
+		const { visibleStart, visibleEnd } = event.contacts
+		const facing = visibleStart !== undefined && visibleEnd !== undefined ? [{ start: visibleStart, end: visibleEnd }] : []
+		holes = subtract(whole, facing)
+		reason = 'shadowHidden'
+	} else if (event.kind === 'satelliteEclipse') {
+		holes = occulted[event.moons[0]]
+	} else if (event.kind === 'mutualOccultation' || event.kind === 'mutualEclipse') {
+		holes = event.moons.flatMap((moon) => [...occulted[moon], ...eclipsed[moon]])
+	}
+
+	const hit = holes.some((hole) => hole.start <= event.end && hole.end >= event.start)
+	if (!hit) return { spans: whole }
+	if (event.end <= event.start) return { spans: [], reason }
+	return { spans: subtract(whole, holes), reason }
 }

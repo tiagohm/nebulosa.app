@@ -7,6 +7,7 @@ import { adaptView } from '../viewer/transform'
 import { type CaptureFramesState, captureFrameUrl, frameSourceKey } from './captureframes'
 import { ORIGINAL_DISPLAY_SETTINGS } from './display'
 import {
+	adaptStatisticsArea,
 	applyingSettings,
 	browserIo,
 	clearStarProfile,
@@ -325,6 +326,7 @@ function commitShown(state: ImagesState, document: ImageDocument, info: ImageInf
 	const committed = state.views[document.key]
 	if (!committed) return
 	if (document.info) committed.view = adaptView(committed.view, document.info, info)
+	adaptStatisticsArea(committed, document.info, info)
 	document.info = ref(info)
 	document.status = 'ready'
 	document.error = undefined

@@ -1,4 +1,4 @@
-import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, ImageOpenRequest, ImageProcessingOperation, PlateSolveRequest, RenderRequest, RenderResult, SaveFormat, SaveRequest, SaveResult, StarProfileRequest, StarProfileResult, Stretch } from 'api'
+import type { AnnotationBodies, DisplaySettings, ImageFormat, ImageInfo, ImageOpenRequest, ImageProcessingOperation, ImageRect, PlateSolveRequest, RenderRequest, RenderResult, SaveFormat, SaveRequest, SaveResult, StarProfileRequest, StarProfileResult, Stretch } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { deviceState } from '../equipment/equipment'
@@ -208,6 +208,14 @@ export interface ImageAstrometryState {
 	target?: AstrometryTarget
 }
 
+// Area of a document the Histogram and Statistics section of the Image Inspector measures.
+export interface ImageStatisticsViewState {
+	// Rectangle of image pixels measured; the whole image when absent.
+	area?: ImageRect
+	// Whether the area was dropped because the frame a camera tab now shows has another size.
+	areaDropped?: boolean
+}
+
 // How a document is shown: its own zoom, pan, display settings, and rendering.
 export interface ImageViewState {
 	// Zoom and pan of the viewer.
@@ -234,6 +242,8 @@ export interface ImageViewState {
 	annotation: ImageAnnotationState
 	// Image processing pipeline being edited and the latest job it submitted.
 	processing: ImageProcessingDraft
+	// Area the statistics of the Image Inspector measure.
+	statistics: ImageStatisticsViewState
 	// Whether every overlay of the image is kept off it, whatever each one's own setting; absent draws them.
 	overlaysHidden?: boolean
 }
@@ -478,6 +488,7 @@ export function newView({ annotation, processing }: ImageToolPreferences = DEFAU
 		plateSolving: { request: { ...DEFAULT_PLATE_SOLVE_REQUEST }, overlay: true, grid: false },
 		astrometry: { measurements: [], markers: [] },
 		annotation: { ...annotation, layers: { ...annotation.layers }, bodies: { ...annotation.bodies } },
+		statistics: {},
 		processing: { steps: processing.map(({ enabled, operation }) => ({ id: nanoid(), enabled, operation: JSON.parse(JSON.stringify(operation)) as ImageProcessingOperation })), expanded: [], adding: DEFAULT_ADDED_OPERATION },
 	}
 }
@@ -700,6 +711,18 @@ export function setPlateSolveOverlay(state: ImagesState, key: string, patch: Par
 export function toggleImageOverlays(state: ImagesState, key: string) {
 	const view = state.views[key]
 	if (view) view.overlaysHidden = !view.overlaysHidden
+}
+
+// Sets the area the statistics of a document measure, or the whole image when area is undefined.
+export function setStatisticsArea(state: ImagesState, key: string, area: ImageRect | undefined) {
+	const view = state.views[key]
+	if (view) view.statistics = area ? { area } : {}
+}
+
+// Keeps the statistics area of a document for the image it now shows when that image has the size of the previous one;
+// otherwise the area, which would name other pixels, is dropped and marked as such.
+export function adaptStatisticsArea(view: Pick<ImageViewState, 'statistics'>, from: { readonly width: number; readonly height: number } | undefined, to: { readonly width: number; readonly height: number }) {
+	if (view.statistics.area && (from?.width !== to.width || from.height !== to.height)) view.statistics = { areaDropped: true }
 }
 
 // Adds a measurement to a document under a new id and selects it; returns the id, or undefined for an unknown key.

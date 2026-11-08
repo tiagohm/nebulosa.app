@@ -8,7 +8,6 @@ import { tppaFrameRole, tppaRuntime } from '../camera/tppa'
 import { connectionState } from '../connection/connection'
 import { formatDuration, formatPixelLength, MISSING } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
-import { PlannedControls } from '../shell/ContextualPanel'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { type ImageQualityStatus, imageQuality } from '../stars/quality'
 import { PROVIDER_LABELS, starsState } from '../stars/stars'
@@ -19,14 +18,15 @@ import type { CameraFrameSelection } from './cameratabs'
 import { connectionLabel, frameUnavailableReason } from './captureframes'
 import { operationLabel, operationSummary } from './imageprocessing.catalog'
 import { documentPath, type ImageDocument } from './images'
+import { ImageStatisticsSection } from './ImageStatisticsSection'
 import type { ImageToolPanelProps } from './tools'
 
 // Image Inspector, the default contextual tool of the Images workspace: properties, the provenance and save state of a
 // derived image (saved from the viewer toolbar), the camera, origin, session, and storage of the frame a camera tab
 // shows (with the focuser position of an Auto Focus frame when its session recorded it), the quality the measurements already made
-// on the image give (never measured here), acquisition data, the parameters of the current rendering, and the header
-// of the active document, with the statistics section still to come. The display settings are changed from the viewer
-// toolbar (DisplayToolbar).
+// on the image give (never measured here), acquisition data, the parameters of the current rendering, the histogram and
+// statistics of its original samples (ImageStatisticsSection, measured only while expanded), and the header of the active
+// document. The display settings are changed from the viewer toolbar (DisplayToolbar).
 
 // Names of the RGB channels, in the order of a per-channel stretch.
 const CHANNEL_NAMES = ['R', 'G', 'B'] as const
@@ -97,9 +97,7 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 			{info?.origin === 'derived' && <Derivation document={document} provenance={info.provenance} />}
 			{info && <Acquisition info={info} />}
 			{view?.rendering && <AppliedDisplay result={view.rendering.result} />}
-			<CollapsibleSection id="images.inspector.histogram-and-statistics" title="Histogram and Statistics" defaultOpen={false}>
-				<PlannedControls items={['Histogram', 'Mean, median, and deviation']} />
-			</CollapsibleSection>
+			<ImageStatisticsSection document={document} view={view} />
 			{info && <Header info={info} />}
 		</>
 	)

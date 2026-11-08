@@ -34,6 +34,12 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
     - The job summary (`summary`: the median and standard deviation of the luminance of an RGB image, otherwise of the first plane) travels in the event. The planes are fetched from `GET /api/statistics/:jobId/result`.
     - The area is not validated by the API; the web keeps it inside the image.
     - No device is held, and nothing is persisted.
+- **The web side.** The Histogram and Statistics section of the Image Inspector (`web/src/images/ImageStatisticsSection.tsx`, store `statistics.ts`) keeps the id `images.inspector.histogram-and-statistics` and starts collapsed.
+    - **When it measures.** It submits a scan only while it is expanded and its document is ready, and never for display changes.
+    - **Camera tabs.** A document submits one scan at a time: a camera tab following its latest frame measures the frame shown once its scan ends, skipping the frames that came meanwhile.
+    - **Matching results.** A result is looked up by image id and area, so an earlier frame or another area never shows on the current one. A failure is not retried by itself; Recalculate submits again.
+    - **The histogram.** The domain (robust or full range), the count scale (linear or log), the planes drawn and the zoom only redraw the counts fetched. A drag over the plot zooms; a double click resets.
+    - **The statistics area.** It is drawn with Select Area (see [Overlay Contracts](overlay.md)) and kept in the document view (`ImageViewState.statistics`). A camera tab keeps it for frames of the same size and drops it, with a notice, for a frame of another size. Whole Image measures the whole image again.
 - **Limitations:**
     - There is no statistics plane mixing the phases of a mosaic.
     - There is no background estimate of the luminance.

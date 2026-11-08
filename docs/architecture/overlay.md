@@ -36,4 +36,5 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
     - `onImageContextMenu(point, client, view)` answers the native `contextmenu` event (a right click, or a long press on touch devices) and returns whether it handled it; otherwise the browser's own menu opens.
     - No screen-space layer exists: an overlay keeps a size constant on screen with `1 / view.scale` and places corner symbols from `view.visible`.
 - An ROI is a region in image pixels.
+  The statistics area of the Image Inspector is one: Select Area makes `rectangleSelection` (`web/src/viewer/rectangleSelection.ts`) the viewer's `interaction` in place of the astrometric tool, and takes the clicks, while the Inspector is shown and the overlays are visible. A drag from inside the image commits the half-open rectangle of the whole pixels it covers, clamped to the image; a click selects nothing; Escape drops the rectangle in progress, then leaves the mode. The first press holds the frame a camera tab shows.
   It never changes a camera's physical subframe unless an explicit, capability-checked command does it.

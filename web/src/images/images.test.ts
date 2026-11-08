@@ -6,6 +6,8 @@ import {
 	activeDocument,
 	activeTool,
 	activeView,
+	adaptStatisticsArea,
+	newView,
 	applyDisplay,
 	closeImage,
 	documentPath,
@@ -624,4 +626,17 @@ test('a document without an image says why, so its tools keep their settings edi
 	expect(imageUnavailableReason({ status: 'ready', camera: {} as never })).toBe('Waiting for the first frame of the camera.')
 	expect(imageUnavailableReason({ status: 'error' })).toBe('The image is unavailable.')
 	expect(imageUnavailableReason({ status: 'ready', info: {} as never })).toBeUndefined()
+})
+
+describe('statistics area', () => {
+	test('is kept for a frame of the same size and dropped for another size', () => {
+		const view = newView()
+		view.statistics = { area: { left: 1, top: 2, width: 3, height: 4 } }
+		adaptStatisticsArea(view, { width: 10, height: 10 }, { width: 10, height: 10 })
+		expect(view.statistics).toEqual({ area: { left: 1, top: 2, width: 3, height: 4 } })
+		adaptStatisticsArea(view, { width: 10, height: 10 }, { width: 20, height: 10 })
+		expect(view.statistics).toEqual({ areaDropped: true })
+		adaptStatisticsArea(view, { width: 20, height: 10 }, { width: 30, height: 10 })
+		expect(view.statistics).toEqual({ areaDropped: true })
+	})
 })

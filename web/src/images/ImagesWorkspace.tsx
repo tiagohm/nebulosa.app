@@ -79,6 +79,8 @@ import {
 import { MeasurementOverlay } from './MeasurementOverlay'
 import { SaveImageModal } from './SaveImageModal'
 import { SaveImagePopover } from './SaveImagePopover'
+import { useStatisticsAreaTool } from './statisticsArea'
+import { StatisticsAreaOverlay } from './StatisticsAreaOverlay'
 import { TargetOffsetOverlay } from './TargetOffsetOverlay'
 import { IMAGE_TOOL_DEFINITIONS, imageToolGroup, imageToolsFor, imageToolUnavailable } from './tools'
 
@@ -101,11 +103,13 @@ import { IMAGE_TOOL_DEFINITIONS, imageToolGroup, imageToolsFor, imageToolUnavail
 // an unsaved derived image asks first (cancel, discard, or Save As FITS and then close).
 // With a solution of the image shown, its grid, centre, passive aids (crosshair, orientation, scale bar), and the
 // coordinates under the pointer are drawn from that solution, and the measure mode of the toolbar draws measurements
-// (astrometryTool.ts). Clicks go to the first owner of: a Guiding star pick (which disables the measure modes), a measure
-// mode, the Plate Solver tool (selecting and editing measurements), then Star Detection, the Star Profile Inspector
-// (measuring the star at the click, a star detected there if any), Streak Detection, and
-// Annotation. The toolbar hides every overlay of a document and shows them again as they were; while hidden only the
-// Guiding star pick stays, so a click or a measure never acts on what cannot be seen.
+// (astrometryTool.ts). With the Image Inspector shown, Select Area of its statistics takes the presses over the image to
+// draw the area measured (statisticsArea.ts), which is drawn while the Inspector is shown. Clicks go to the first owner
+// of: a Guiding star pick (which disables the measure modes), the area selection, a measure mode, the Plate Solver tool
+// (selecting and editing measurements), then Star Detection, the Star Profile Inspector (measuring the star at the
+// click, a star detected there if any), Streak Detection, and Annotation. The toolbar hides every overlay of a document
+// and shows them again as they were; while hidden only the Guiding star pick stays, so a click or a measure never acts
+// on what cannot be seen.
 
 // Distance from the pointer a click looks for a star within, in screen pixels.
 const STAR_PICK_RADIUS = 8
@@ -183,8 +187,11 @@ export function ImagesWorkspace() {
 	const starProfiling = tool === 'star-profile'
 	const starProfile = starProfiling ? starProfileOf(view, imageInfo?.id) : undefined
 	const profileSettings = starProfileSettings(activeProfile(profiles).settings)
-	const hasOverlays = [markers, lines, solution, annotation, reticle, guide, ipolar, centering, trails, guiding, starProfile].some(Boolean)
 	const overlaysHidden = view?.overlaysHidden === true
+	const inspecting = tool === 'inspector'
+	const areaTool = useStatisticsAreaTool({ documentKey: document?.key, imageId: imageInfo?.id, image: imageInfo, enabled: inspecting && !!imageInfo && !overlaysHidden })
+	const statisticsArea = inspecting && imageInfo && (view?.statistics.area || areaTool) ? imageInfo.id : undefined
+	const hasOverlays = [markers, lines, solution, annotation, reticle, guide, ipolar, centering, trails, guiding, starProfile, statisticsArea].some(Boolean)
 	const astrometryTool = useAstrometryTool({
 		documentKey: document?.key,
 		imageId: document?.info?.id,
@@ -254,13 +261,14 @@ export function ImagesWorkspace() {
 											{solution && document?.info && <MeasurementOverlay solution={solution} imageId={document.info.id} image={size} view={overlay} astrometry={view.astrometry} />}
 											{solution && view.astrometry.target && <TargetOffsetOverlay solution={solution} image={size} view={overlay} target={view.astrometry.target} markers={view.astrometry.markers} />}
 											{centering && <TargetOffsetOverlay solution={centering.solution} image={size} view={overlay} target={centering.target} markers={[]} />}
+											{statisticsArea && <StatisticsAreaOverlay area={view.statistics.area} imageId={statisticsArea} view={overlay} />}
 											{solution && <WcsAidsOverlay solution={solution} image={size} view={overlay} cursor={cursor} crosshair={astrometry.crosshair} corner={astrometry.orientation === 'corner'} scaleBar={astrometry.scaleBar} />}
 										</>
 									)
 								: undefined
 						}
 						status={solution ? (cursor) => <WcsCursorStatus solution={solution} cursor={cursor} style={astrometry.coordinates} /> : undefined}
-						interaction={astrometryTool.interaction}
+						interaction={areaTool ?? astrometryTool.interaction}
 						onImageContextMenu={
 							solution && document && imageInfo
 								? (point, client) => {
@@ -274,7 +282,7 @@ export function ImagesWorkspace() {
 						onImageClick={
 							picking
 								? (point) => void selectGuidingTarget(guidingRuntime, picking, [point.x - 0.5, point.y - 0.5])
-								: overlaysHidden
+								: overlaysHidden || areaTool
 									? undefined
 									: (astrometryTool.select ??
 										(markers && view && document && tool === 'star-detection'

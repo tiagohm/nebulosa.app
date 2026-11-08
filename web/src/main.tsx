@@ -28,6 +28,7 @@ import { type CameraTabSource, followLiveStacks, handleCapturedFrame, reconcileC
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
 import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessing } from './images/imageprocessing'
 import { confirmUnsavedOnUnload, imagesState } from './images/images'
+import { handleStatisticsEvent, refreshStatistics, statisticsState } from './images/statistics'
 import { handleMountPointingEvent, mountPointingRuntime, refreshMountPointing } from './mountpointing/mountpointing'
 import { handleNotificationEvent, notificationsState, refreshNotifications, setServerLink } from './notifications/notifications'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
@@ -135,6 +136,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleExternalToolEvent(externalToolsState, event), refresh: () => refreshExternalTools(externalToolsState) },
 	{ handle: (event) => handleStarsEvent(starsState, event), refresh: () => refreshStars(starsState) },
 	{ handle: (event) => handleStreaksEvent(streaksState, event), refresh: () => refreshStreaks(streaksState) },
+	{ handle: (event) => handleStatisticsEvent(statisticsState, event), refresh: () => refreshStatistics(statisticsState) },
 	{ handle: (event) => handlePlateSolvingEvent(plateSolvingState, event), refresh: () => refreshPlateSolving(plateSolvingState) },
 	{ handle: (event) => handleAnnotationsEvent(annotationsState, event), refresh: () => refreshAnnotations(annotationsState) },
 	{ handle: (event) => handleImageProcessingEvent(imageProcessingState, imagesState, event), refresh: () => refreshImageProcessing(imageProcessingState, imagesState) },

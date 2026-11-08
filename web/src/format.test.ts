@@ -3,6 +3,8 @@ import { arcmin, arcsec, deg, hour } from 'nebulosa/src/math/units/angle'
 import {
 	dateTimeFormat,
 	formatAngularSize,
+	formatCount,
+	formatSampleValue,
 	formatArcmin,
 	formatArcsec,
 	formatByteSize,
@@ -255,4 +257,17 @@ describe('positions, distances, and instants', () => {
 		expect(dateTimeFormat({ timeZone: 'UTC', hour: '2-digit' })).toBe(dateTimeFormat({ timeZone: 'UTC', hour: '2-digit', minute: undefined }))
 		expect(dateTimeFormat({ timeZone: 'UTC' }, 'sv-SE')).not.toBe(dateTimeFormat({ timeZone: 'UTC' }))
 	})
+})
+
+test('formats sample values and counts', () => {
+	expect(formatSampleValue(1019.98634)).toBe('1019.99')
+	expect(formatSampleValue(65535)).toBe('65535')
+	expect(formatSampleValue(0.0123456)).toBe('0.0123456')
+	expect(formatSampleValue(-2.5)).toBe('−2.5')
+	expect(formatSampleValue(1.2345e-5)).toBe('1.234e-5')
+	expect(formatSampleValue(Number.NaN)).toBe('NaN')
+	expect(formatSampleValue(Number.POSITIVE_INFINITY)).toBe('+∞')
+	expect(formatSampleValue(Number.NEGATIVE_INFINITY)).toBe('−∞')
+	expect(formatCount(1048576)).toBe('1,048,576')
+	expect(formatCount(Number.NaN)).toBe('—')
 })

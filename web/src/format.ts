@@ -169,6 +169,23 @@ export function formatSignificant(value: number) {
 	return value !== 0 && (size >= 1e5 || size < 1e-2) ? value.toExponential(3) : value.toPrecision(4)
 }
 
+// Returns an image sample level or dispersion, in ADU or the unit of its source, with six significant digits and no
+// trailing zeros, in exponential notation from 1e7 and below 1e-4 in magnitude: "1019.99", "65535", "0.012345",
+// "1.235e-5". NaN and infinities have their own labels, so an invalid sample never reads as a value.
+export function formatSampleValue(value: number) {
+	if (Number.isNaN(value)) return 'NaN'
+	if (value === Number.POSITIVE_INFINITY) return '+∞'
+	if (value === Number.NEGATIVE_INFINITY) return `${MINUS}∞`
+	const size = Math.abs(value)
+	const text = value !== 0 && (size >= 1e7 || size < 1e-4) ? value.toExponential(3) : String(Number(value.toPrecision(6)))
+	return text.startsWith('-') ? `${MINUS}${text.slice(1)}` : text
+}
+
+// Returns a count of samples or pixels with thousands separators: "1,048,576".
+export function formatCount(count: number) {
+	return Number.isFinite(count) ? count.toLocaleString('en-US') : MISSING
+}
+
 const BYTE_UNITS = ['KiB', 'MiB', 'GiB', 'TiB']
 
 // Returns a size in bytes in binary units, one decimal below 10 of a unit: "512 B", "3.4 MiB", "120 GiB".

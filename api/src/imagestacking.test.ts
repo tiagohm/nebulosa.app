@@ -519,6 +519,23 @@ describe('calibration and registration planning', () => {
 		expect((await stacking.validate(projectId)).findings.some((finding) => finding.code === 'masterUnavailable')).toBeTrue()
 	})
 
+	test('a frame whose measurement failed is measured again by the next analysis', async () => {
+		const values = measurements()
+		const [name] = Object.keys(values)
+		const measured = values[name]
+		delete values[name]
+		const { fake, requests } = analyzer(values)
+		const { stacking } = open(masters().library, fake)
+		const { projectId } = await project(stacking)
+		await decide(stacking, projectId)
+
+		expect(await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)).toMatchObject({ measured: 5, failures: 1 })
+
+		values[name] = measured
+		expect(await settled(stacking, (await stacking.startAnalysis(projectId)).jobId)).toMatchObject({ found: 1, measured: 1, failures: 0 })
+		expect(requests[1].frames.map((frame) => basename(frame.path))).toEqual([name])
+	})
+
 	test('a group that does not register onto the project reference fails alone', async () => {
 		const { fake } = analyzer(measurements(99))
 		const { stacking } = open(masters().library, fake)

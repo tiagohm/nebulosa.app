@@ -947,7 +947,9 @@ export class ImageStacking {
 
 			for (const source of cohort.sources) {
 				const fingerprint = analysisFingerprint(source, cohort.calibration)
-				if (source.analysis?.fingerprint === fingerprint) continue
+				// A measurement of the same inputs is kept, unless it failed: a failure may be passing (an I/O error, a master
+				// read while it was replaced), so a new analysis measures the frame again.
+				if (source.analysis?.fingerprint === fingerprint && source.analysis.error === undefined) continue
 				frames.push({ sourceId: source.sourceId, path: source.path, bytes: source.bytes, mtimeMillis: source.mtimeMillis, cohortId: cohort.cohortId })
 				fingerprints.set(source.sourceId, fingerprint)
 			}

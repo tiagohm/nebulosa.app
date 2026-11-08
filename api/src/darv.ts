@@ -250,8 +250,8 @@ export class DarvSessions {
 	// Starts a session and its first measurement, replacing the idle or finished session of the camera. Responds 202
 	// with DarvStartResponse once accepted (a repeated token answers its first measurement); progress and outcome
 	// arrive as darv:updated and operation:updated events. Responds 404 for an unknown camera or mount, 409 when
-	// either is disconnected or held by another operation or the camera's session is measuring, and 422 when the
-	// mount cannot run DARV (not equatorial, no west-east motion or abort, no such slew rate, parked, not tracking
+	// either is disconnected or held by another operation, the camera's session is measuring, or its open session
+	// started the tracking of another mount, which it must finish first, and 422 when the mount cannot run DARV (not equatorial, no west-east motion or abort, no such slew rate, parked, not tracking
 	// and unable to switch tracking, or tracking at another rate than sidereal).
 	start(connectionId: string, deviceId: string, request: DarvRequest): Response {
 		const repeated = this.#repeated(request.token)
@@ -265,14 +265,17 @@ export class DarvSessions {
 		const key = resourceKey(camera)
 		const previous = this.#sessions.get(key)
 		if (previous?.running || previous?.finishing) return errorResponse('A DARV measurement or finish is running on this camera', 409, 'busy')
+		const { mount: mountDevice, ...measurement } = request
+		// An open session replaced on the same mount hands over the tracking it started, so the finish of the new one
+		// still stops it; one that started the tracking of another mount is finished first, since nothing could stop it later.
+		const tracking = previous?.summary.trackingStarted === true && previous.summary.state !== 'finished'
+		const sameMount = previous?.summary.mount.connectionId === mountDevice.connectionId && previous.summary.mount.deviceId === mountDevice.deviceId
+		if (tracking && !sameMount) return errorResponse(`Finish the open DARV session of ${camera.name} first: it started the tracking of ${previous.summary.mountName}`, 409, 'busy')
 
 		const refused = this.#refusal(camera, mount, request.slewRate)
 		if (refused) return refused
 
-		const { mount: mountDevice, ...measurement } = request
-		// An open session replaced on the same mount hands over the tracking it started, so the finish of the new one
-		// still stops it.
-		const inherited = previous?.summary.trackingStarted === true && previous.summary.state !== 'finished' && previous.summary.mount.connectionId === mountDevice.connectionId && previous.summary.mount.deviceId === mountDevice.deviceId
+		const inherited = tracking && sameMount
 		const session: Session = {
 			summary: { sessionId: Bun.randomUUIDv7(), camera: { connectionId, deviceId }, cameraName: camera.name, mount: mountDevice, mountName: mount.name, state: 'idle', measurements: [], ...(inherited && { trackingStarted: true }), startedAt: Date.now(), revision: 0 },
 			trails: [],

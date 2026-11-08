@@ -1,8 +1,9 @@
-import { afterAll, afterEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdtempSync, readdirSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { MountCommander } from 'nebulosa/src/devices/commanders/mount'
+import type { Client } from 'nebulosa/src/devices/indi/device'
 import { isDeviceQuiescent } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 import { failedOperationResult, type OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
@@ -163,7 +164,7 @@ async function setup() {
 	// Whether the camera and the mount are free for a new operation.
 	const released = () => operations.available(camera) && operations.available(mount)
 
-	return { id, operations, images, frames, captures, commander, analysis, darv, events, auxiliaryDir, camera, cameraId, mount, mountDevice: { connectionId: id, deviceId: mountId }, summary, latest, ended, states, session, released }
+	return { id, manager, operations, images, frames, captures, commander, analysis, darv, events, auxiliaryDir, camera, cameraId, mount, mountDevice: { connectionId: id, deviceId: mountId }, summary, latest, ended, states, session, released }
 }
 
 // Starts a session and returns its ids.
@@ -261,7 +262,7 @@ describe('DARV sessions', () => {
 	})
 
 	test.skipIf(SKIP)('a measurement starts the tracking of a mount that is not tracking, which stays on until the finish stops it', async () => {
-		const { id, cameraId, darv, mountDevice, mount, commander, operations, summary, latest, ended, states, released } = await setup()
+		const { id, manager, cameraId, darv, mountDevice, mount, commander, operations, summary, latest, ended, states, released } = await setup()
 		expect(await commander.setTracking(operations.coordinator, mount, false)).toMatchObject({ ok: true })
 		const { sessionId } = await start(darv, id, cameraId, request(mountDevice))
 
@@ -275,6 +276,14 @@ describe('DARV sessions', () => {
 		// Between measurements the mount keeps tracking.
 		expect(mount.tracking).toBeTrue()
 		expect(released()).toBeTrue()
+
+		// A session on another mount is refused while this one keeps the tracking it started, which only its finish stops.
+		const device = manager.devices.device.bind(manager.devices)
+		const other = spyOn(manager.devices, 'device').mockImplementation(((owner: Client, type: string, deviceId: string) => (type === 'mount' && deviceId === 'other' ? { ...mount, id: 'other', name: 'Other Mount' } : device(owner, type as 'mount', deviceId))) as typeof device)
+		const refused = darv.start(id, cameraId, request({ connectionId: id, deviceId: 'other' }))
+		other.mockRestore()
+		expect(refused.status).toBe(409)
+		expect(summary()!.state).not.toBe('finished')
 
 		expect((await darv.finish(sessionId, { stopTracking: true })).status).toBe(204)
 		expect(summary()).toMatchObject({ state: 'finished', trackingStarted: true, trackingStopped: true })

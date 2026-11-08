@@ -118,7 +118,7 @@ function ExplorerActions() {
 // Presets, each loaded in place of the scene.
 function PresetList({ presets, onLoad }: { readonly presets: readonly OrbitPreset[]; readonly onLoad: () => void }) {
 	return (
-		<div className="flex max-h-[70vh] w-96 max-w-full flex-col gap-2 overflow-y-auto">
+		<div className="flex max-h-[70vh] w-64 max-w-full flex-col gap-2 overflow-y-auto">
 			{presets.map((preset) => (
 				<button
 					key={preset.id}

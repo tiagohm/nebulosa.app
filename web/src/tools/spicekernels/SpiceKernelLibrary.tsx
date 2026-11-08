@@ -68,7 +68,7 @@ export function SpiceKernelLibrary() {
 	return (
 		<WorkspaceLayout workspace="tools" title="SPICE Kernel Library" context={context} actions={actions} panel={kernel ? { title: 'Kernel', content: <KernelDetails key={kernel.id} kernel={kernel} onDeleted={() => setSelected(undefined)} /> } : undefined}>
 			<div className="h-full overflow-y-auto bg-base-000">
-				<div className="mx-auto flex max-w-6xl flex-col gap-4 p-4">
+				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					{state.errors.import && <Notice error>{state.errors.import}</Notice>}
 					{section === 'installed' && <Installed kernels={kernels} selected={selected} onSelect={setSelected} />}
 					{section === 'add' && <AddKernel />}

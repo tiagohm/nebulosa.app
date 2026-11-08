@@ -17,7 +17,7 @@ Workspaces share services, not interfaces.
     - Registry: `SkyPanelView` (`web/src/sky/sky.ts`), panels in `SkyWorkspace.tsx`
 - **Tools**
     - Responsibility: Standalone utilities, no camera or document needed
-    - Features: Calculator, Astronomical Time Converter, Solar Eclipse Map, Lunar Eclipse Map, Close Approaches, Orbital Mechanics Explorer, Astro Weather, Meridian Flip, Observing Planner, Jupiter Observing Planner, Saturn Observing Planner, Artificial Satellites, Calibration Library, Image Stacking, Mount Remote Control, Mount Pointing Model, Observatory Cameras, SPICE Kernel Library;
+    - Features: Calculator, Astronomical Time Converter, Solar Eclipse Map, Lunar Eclipse Map, Close Approaches, Orbital Mechanics Explorer, Astro Weather, Meridian Flip, Observing Planner, Jupiter Observing Planner, Saturn Observing Planner, Planetary Events, Artificial Satellites, Calibration Library, Image Stacking, Mount Remote Control, Mount Pointing Model, Observatory Cameras, SPICE Kernel Library;
       Alpaca Server planned
     - Registry: `TOOL_DEFINITIONS` (`web/src/tools/tools.ts`), `/tools/<id>`
 - **Sequencer**

@@ -225,6 +225,25 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Choosing an event, a marker, or a point of a chart only moves the tool's clock.
   Manage Kernels opens the SPICE Kernel Library and Show in Sky selects Saturn through the Observing Planner's handoff.
   Nothing here moves the mount, changes the Sky clock, a site, or the profile, or starts an operation.
+- Planetary Events tool (`web/src/tools/planetaryevents/`, `/tools/planetary-events`, icon `orbit`; see [Planetary Events Contract](planetary-events.md)):
+    - State: the tab state is `planetaryEventsState` (`planetaryevents.ts`), tab memory. It holds a `ToolLocation`, the display zone, the range (a start and 1, 3, 6, 12, or 24 months), the planets and kinds searched, the appulse threshold in degrees (5 by default, 0.1 to 15), the Timeline or Calendar view (a `SegmentedControl` beside the title), the calendar month, the visibility filter, and the selected event.
+    - Range: it opens on real now for twelve months, never on the Sky clock.
+      Use Sky Time copies the Sky's instant into the start without moving the Sky clock, and a start date is the first instant of that civil date in the display zone.
+    - Requests: each answer has its own request guard.
+      The search follows the range, the planets, the kinds, the threshold, and the SPICE Kernel Library's generation and policy (`spiceKernelsState`).
+      With a site, each answer is followed by one batch `/visibility` request for every event, cancelled when the answer or the place changes and never sent again for a change of zone.
+      Without a site every event reads `unknownNoSite`, and the filter (All, Observable at the event or nearby, Not observable, Unknown) never drops an event because no site is set.
+      The selected event's curves (`/series`) follow it and the kernels.
+    - `PlanetaryEventsTimeline` lists the events by their UTC instant, with the civil date of the display zone heading each day, their title, planets, primary value, and visibility badge.
+    - `PlanetaryEventsCalendar` lays out a Monday-first month of the display zone's dates from the same answer, navigable within the range.
+    - `PlanetaryEventDetails` shows the definition of the kind (a conjunction is never named an appulse), the instant in the display zone and in UTC, each planet's circumstances, and how it can be watched.
+      It tells apart the instant from the best nearby window (its offset from the event, its period, the peak altitudes, and a pair's separation), names the visibility profile, and shows the reasons, the source, the related events, and `PlanetaryEventChart`.
+      The chart is a hand-drawn SVG of the curves against days from the event, with the event marked at its solved instant and magnitudes upward toward brighter.
+    - Handoffs, one row per planet of a pair: Show in Sky selects the planet through the Observing Planner's handoff at the Sky's own time; Set Sky Time to Event is the one action that sets the Sky clock, to the event's instant, before showing it; Add to Observing Planner offers the planet as an independent target, never a night or a schedule.
+    - Export CSV writes the listed events (RFC 4180, CRLF) with UTC ISO instants, angles in degrees, empty missing values, the site's visibility, the source, and the model version.
+      A text field starting with `=`, `+`, `-`, or `@` is prefixed with an apostrophe.
+      The download helper and the CSV quoting are `web/src/download.ts`, shared with the Orbital Mechanics Explorer.
+    - Nothing here moves the mount, changes a site or the profile, or starts an operation.
 - Alpaca Server (planned: a catalog entry without a view, and no `api` service yet): an `api` service over `AlpacaServer` (`core/src/devices/alpaca/server.ts`), started and stopped explicitly, bound to localhost by default, publishing only an explicit allowlist of devices.
   Devices imported from Alpaca connections are never exported, to avoid publication loops.
   Its state is published as events.

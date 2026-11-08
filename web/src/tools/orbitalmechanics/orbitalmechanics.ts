@@ -5,6 +5,7 @@ import { AU_KM, DAYSEC, DEG2RAD, MU_AU3_D2_TO_KM3_S2, MU_KM3_S2_TO_AU3_D2, RAD2D
 import type { MutVec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { hermiteVec3 } from 'nebulosa/src/math/numerical/spline'
 import { proxy } from 'valtio'
+import { csvField } from '../../download'
 import { fetchJson, jsonInit } from '../../http'
 import { createRequestGuard, type RequestGuard } from '../../sky/selection'
 
@@ -1064,11 +1065,6 @@ const CSV_COLUMNS: readonly (readonly [string, (time: number, position: OrbitVec
 	['vz_au_per_day', (_, __, v) => String(v[2])],
 ]
 
-// Quotes a CSV field when it holds a separator, a quote, or a line break (RFC 4180).
-function csvField(text: string) {
-	return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
-}
-
 // Name of the source of an orbit, for exports.
 export function sourceLabel(source: ExplorerOrbitSource) {
 	switch (source.kind) {
@@ -1100,14 +1096,4 @@ export function trackCsv(orbit: Pick<ExplorerOrbit, 'name' | 'source'>, track: P
 	const tail = constants.map(([, value]) => csvField(value)).join(',')
 	const rows = times.map((t, i) => `${CSV_COLUMNS.map(([, column]) => csvField(column(t, positions[i], velocities[i]))).join(',')},${tail}`)
 	return `${[header, ...rows].join('\r\n')}\r\n`
-}
-
-// Offers a text as a file download named `name`.
-export function downloadText(text: string, name: string, type: string) {
-	const url = URL.createObjectURL(new Blob([text], { type }))
-	const link = document.createElement('a')
-	link.href = url
-	link.download = name.replaceAll(/[^\w.-]+/g, '_')
-	link.click()
-	URL.revokeObjectURL(url)
 }

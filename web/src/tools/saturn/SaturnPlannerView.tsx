@@ -179,7 +179,7 @@ export function SaturnPlanner() {
 	return (
 		<WorkspaceLayout workspace="tools" title="Saturn Observing Planner" actions={actions} panel={{ title: 'Location, Filters, and View', content: panel }}>
 			<div className="h-full overflow-y-auto bg-base-000">
-				<div className="mx-auto flex max-w-6xl flex-col gap-4 p-4">
+				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					<p className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-300">
 						{ringSignature && <StatusBadge tone={ringSignature.source.kind === 'spk' ? 'success' : 'neutral'} label={`Rings: ${ringSignature.source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E'}`} />}
 						{moonSignature && <StatusBadge tone={moonSignature.source.kind === 'spk' ? 'success' : 'neutral'} label={`Moons: ${moonSignature.source.kind === 'spk' ? 'SPICE kernels' : 'TASS 1.7'}`} />}

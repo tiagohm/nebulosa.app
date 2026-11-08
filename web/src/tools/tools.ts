@@ -16,6 +16,7 @@ import { MountRemoteControl } from './mountremotecontrol/MountRemoteControl'
 import { ObservatoryCamerasView } from './observatorycameras/ObservatoryCamerasView'
 import { ObservingPlanner } from './observingplanner/ObservingPlannerView'
 import { OrbitalMechanicsExplorer } from './orbitalmechanics/OrbitalMechanicsExplorer'
+import { PlanetaryEvents } from './planetaryevents/PlanetaryEventsView'
 import { SaturnPlanner } from './saturn/SaturnPlannerView'
 import { SolarEclipseMap } from './solareclipse/SolarEclipseMap'
 import { SpiceKernelLibrary } from './spicekernels/SpiceKernelLibrary'
@@ -55,6 +56,7 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 	'observing-planner': { id: 'observing-planner', label: 'Observing Planner', description: 'Finds the best targets of a night, explains when and why each one is observable, and keeps manual night plans.', icon: 'compass', view: ObservingPlanner },
 	'jupiter-observing-planner': { id: 'jupiter-observing-planner', label: 'Jupiter Observing Planner', description: 'Transits, shadows, occultations, and eclipses of the Galilean moons and Great Red Spot transits, with when your site can watch them.', icon: 'jupiter', view: JupiterPlanner },
 	'saturn-observing-planner': { id: 'saturn-observing-planner', label: 'Saturn Observing Planner', description: 'Ring tilt and ring-plane seasons, and the positions and greatest separations of the seven major moons.', icon: 'saturn', view: SaturnPlanner },
+	'planetary-events': { id: 'planetary-events', label: 'Planetary Events', description: 'Conjunctions, oppositions, elongations, stations, and close approaches of the planets, with when your site can watch them.', icon: 'orbit', view: PlanetaryEvents },
 	'artificial-satellites': { id: 'artificial-satellites', label: 'Artificial Satellites', description: 'Catalog, passes, ephemerides, and ground tracks of artificial satellites from CelesTrak orbital elements.', icon: 'orbit', view: ArtificialSatellites },
 	'calibration-library': { id: 'calibration-library', label: 'Calibration Library', description: 'Indexes calibration frames, explains what can be combined, and builds master darks, biases, dark-flats, and flats.', icon: 'layers', view: CalibrationLibrary },
 	'image-stacking': { id: 'image-stacking', label: 'Image Stacking', description: 'Groups saved light frames by filter, integrates them, and composes color from mono masters.', icon: 'stack', view: ImageStacking },

@@ -152,7 +152,7 @@ function EnlargedCamera({ camera, onClose }: EnlargedCameraProps) {
 	const playing = player?.status === 'playing'
 
 	return (
-		<Modal open onClose={onClose} title={camera.name} className="max-w-6xl">
+		<Modal open onClose={onClose} title={camera.name} className="max-w-7xl">
 			<div className="flex flex-col gap-3">
 				<div className="relative aspect-video bg-black">{player?.stream ? <CameraVideo cameraId={camera.id} videoRef={video} /> : <Placeholder text={player?.status === 'failed' ? 'Failed' : 'Connecting…'} />}</div>
 				<div className="flex flex-wrap items-center gap-2">

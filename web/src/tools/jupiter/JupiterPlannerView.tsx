@@ -147,7 +147,7 @@ export function JupiterPlanner() {
 	return (
 		<WorkspaceLayout workspace="tools" title="Jupiter Observing Planner" actions={actions} panel={{ title: 'Location, Filters, and Model', content: panel }}>
 			<div className="h-full overflow-y-auto bg-base-000">
-				<div className="mx-auto flex max-w-6xl flex-col gap-4 p-4">
+				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					<p className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-300">
 						{source && <StatusBadge tone={source.kind === 'spk' ? 'success' : 'neutral'} label={source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E + L1.2'} />}
 						<span>{location ? `${location.name ?? 'Coordinates entered'} · ${formatGeographic(location.latitude, location.longitude)}` : 'No site: global predictions only'}</span>

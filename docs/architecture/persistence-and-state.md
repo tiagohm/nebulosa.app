@@ -10,7 +10,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Route: URL path
 - Document view, zoom/pan, camera tab presentation, astrometric measurements, markers, and target: tab memory; the tool of each camera tab and the camera tab selected last in browser storage (`web/src/profile/view.ts`)
 - Panel sections expanded: browser storage (`web/src/profile/view.ts`)
-- `sunState`, `moonState`, `skyImageState`, `closeApproachesState`, `observingPlannerState`, `jupiterPlannerState`, `saturnPlannerState`, `artificialSatellitesState`, `skySatelliteState`: tab memory
+- `sunState`, `moonState`, `skyImageState`, `closeApproachesState`, `observingPlannerState`, `jupiterPlannerState`, `saturnPlannerState`, `planetaryEventsState`, `artificialSatellitesState`, `skySatelliteState`: tab memory
 - Target Centering target being typed: browser storage (`web/src/profile/view.ts`), the tab across its reloads
 - Image pixels: `api` image store, memory only
 - Star detection, streak detection, plate solving, and annotation jobs and results: `api` analysis services, memory only

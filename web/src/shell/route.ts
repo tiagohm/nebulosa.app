@@ -29,6 +29,7 @@ export const TOOL_IDS = [
 	'observing-planner',
 	'jupiter-observing-planner',
 	'saturn-observing-planner',
+	'planetary-events',
 	'artificial-satellites',
 	'calibration-library',
 	'image-stacking',

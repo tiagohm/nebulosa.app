@@ -115,7 +115,7 @@ export function ObservingPlanner() {
 			panel={{ title: 'Location, Night, and Constraints', content: panel }}
 		>
 			<div className="h-full overflow-y-auto bg-base-000">
-				<div className="mx-auto flex max-w-6xl flex-col gap-4 p-4">
+				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					{location ? (
 						<p className="m-0 text-xs text-ink-300">
 							{location.name ?? 'Coordinates entered'} · {formatGeographic(location.latitude, location.longitude)} · {describeDisplayZone(displayZone)}

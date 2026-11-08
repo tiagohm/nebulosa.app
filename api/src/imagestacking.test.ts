@@ -519,6 +519,22 @@ describe('calibration and registration planning', () => {
 		expect((await stacking.validate(projectId)).findings.some((finding) => finding.code === 'masterUnavailable')).toBeTrue()
 	})
 
+	test('two analyses asked at once start one, and two runs with one token answer one job', async () => {
+		const { fake } = analyzer(measurements())
+		const { stacking } = open(masters().library, fake)
+		const { projectId } = await project(stacking)
+		await decide(stacking, projectId)
+
+		const analyses = await Promise.allSettled([stacking.startAnalysis(projectId), stacking.startAnalysis(projectId)])
+		expect(analyses.map(({ status }) => status).toSorted()).toEqual(['fulfilled', 'rejected'])
+		expect(analyses.find((outcome) => outcome.status === 'rejected')).toMatchObject({ reason: { code: 'jobConflict' } })
+		const analysis = analyses.find((outcome) => outcome.status === 'fulfilled')!
+		await settled(stacking, (analysis as PromiseFulfilledResult<{ readonly jobId: string }>).value.jobId)
+
+		const [first, second] = await Promise.all([stacking.startRun(projectId, { token: 'run' }), stacking.startRun(projectId, { token: 'run' })])
+		expect(second.jobId).toBe(first.jobId)
+	})
+
 	test('a frame whose measurement failed is measured again by the next analysis', async () => {
 		const values = measurements()
 		const [name] = Object.keys(values)

@@ -618,6 +618,10 @@ export class ImageStacking implements Disposable {
 	readonly #jobs = new Map<string, StackingJob>()
 	// Scans and analyses running, by job.
 	readonly #scans = new Map<string, AbortController>()
+	// Kinds of job whose start is being set up (see #settingUp).
+	readonly #starting = new Set<'work' | 'composition'>()
+	// Runs being set up, by project and token, so a request sent again meanwhile answers the same job.
+	readonly #runStarts = new Map<string, Promise<StackingJobSummary>>()
 
 	// Creates the service. listener receives every change synchronously; masters is the Calibration Library; managed lists
 	// the directories whose files belong to the application, which an import never reads; analyzer measures frames and
@@ -924,7 +928,11 @@ export class ImageStacking implements Disposable {
 		await this.ready()
 		this.#project(projectId)
 		this.#ensureIdle()
+		return await this.#settingUp('work', () => this.#startAnalysis(projectId))
+	}
 
+	// Sets up and starts an analysis once startAnalysis admitted it.
+	async #startAnalysis(projectId: string) {
 		const cohorts = await this.#cohorts(projectId)
 		if (cohorts.length === 0) throw new StackingError('No included light with an available file belongs to a filter group', 409, 'conflict')
 
@@ -1041,7 +1049,20 @@ export class ImageStacking implements Disposable {
 
 	// Throws while an analysis or a run works, since both read and write the measurements of frames.
 	#ensureIdle() {
-		if ([...this.#jobs.values()].some((job) => (job.type === 'analysis' || job.type === 'integration') && ACTIVE_JOB_STATES.has(job.state))) throw new StackingError('Another analysis or integration is running', 409, 'jobConflict')
+		if (this.#starting.has('work') || [...this.#jobs.values()].some((job) => (job.type === 'analysis' || job.type === 'integration') && ACTIVE_JOB_STATES.has(job.state))) throw new StackingError('Another analysis or integration is running', 409, 'jobConflict')
+	}
+
+	// Runs setUp, which creates a job of kind after awaiting what it needs, as the one start of kind in progress: until it
+	// returned, #ensureIdle (work) or startComposition (composition) refuses another start, which would otherwise find no job
+	// yet and start a second one.
+	async #settingUp<T>(kind: 'work' | 'composition', setUp: () => Promise<T>): Promise<T> {
+		this.#starting.add(kind)
+
+		try {
+			return await setUp()
+		} finally {
+			this.#starting.delete(kind)
+		}
 	}
 
 	// Finishes what a crash interrupted, from the disk: a product or composite being published becomes published when its
@@ -1268,7 +1289,13 @@ export class ImageStacking implements Disposable {
 	async startComposition(projectId: string, composition: StackingComposition) {
 		await this.ready()
 		const project = this.#project(projectId)
-		if ([...this.#jobs.values()].some((job) => job.type === 'composition' && ACTIVE_JOB_STATES.has(job.state))) throw new StackingError('Another composition is running', 409, 'jobConflict')
+		if (this.#starting.has('composition') || [...this.#jobs.values()].some((job) => job.type === 'composition' && ACTIVE_JOB_STATES.has(job.state))) throw new StackingError('Another composition is running', 409, 'jobConflict')
+		return await this.#settingUp('composition', () => this.#startComposition(project, composition))
+	}
+
+	// Sets up and starts a composition once startComposition admitted it.
+	async #startComposition(project: StackingProject, composition: StackingComposition) {
+		const { projectId } = project
 		const jobId = Bun.randomUUIDv7()
 		const { validation, products, input } = await this.#compositionInput(projectId, composition, jobId)
 		if (validation.reusedCompositeId !== undefined) return { composite: await this.#compositeSummary(this.store.composite(validation.reusedCompositeId)!), reused: true }
@@ -1496,8 +1523,24 @@ export class ImageStacking implements Disposable {
 		const project = this.#project(projectId)
 		const known = [...this.#jobs.values()].find((job) => job.type === 'integration' && job.projectId === projectId && job.token === request.token)
 		if (known) return jobSummary(known)
+		const key = `${projectId}:${request.token}`
+		const starting = this.#runStarts.get(key)
+		if (starting) return await starting
 		this.#ensureIdle()
 
+		const started = this.#settingUp('work', () => this.#startRun(project, request))
+		this.#runStarts.set(key, started)
+
+		try {
+			return await started
+		} finally {
+			this.#runStarts.delete(key)
+		}
+	}
+
+	// Plans and starts a run once startRun admitted it.
+	async #startRun(project: StackingProject, request: StackingRunRequest) {
+		const { projectId } = project
 		const plan = await this.#planRun(project, request)
 		if (plan.problems.length > 0) throw new StackingError(plan.problems[0], 409, plan.code ?? 'notReady')
 

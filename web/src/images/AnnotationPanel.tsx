@@ -1,6 +1,6 @@
 import type { AnnotationBodyLayer, AnnotationCenter, AnnotationImageContext, AnnotationJob, AnnotationKind, AnnotationLayer, AnnotationObject, AnnotationRequest, AnnotationResult, AnnotationSite, AnnotationSiteSource, ImageInfo, MinorBody } from 'api'
 import { toArcsec } from 'nebulosa/src/math/units/angle'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
 import { isAnnotationShown } from '../annotations/AnnotationOverlay'
@@ -398,6 +398,16 @@ function Objects({ job, objects, warnings, resultError, annotation, selected, on
 function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 	// Why the SBDB lookup of the selected minor body failed, by object id, and the object being looked up.
 	const [lookup, setLookup] = useState<{ readonly id: string; readonly error?: string }>()
+	// Id of the object shown while this panel is mounted, so a lookup answering after the selection moved on, or after the
+	// panel went away, opens nothing.
+	const shown = useRef<string>(undefined)
+
+	useEffect(() => {
+		shown.current = object?.id
+		return () => {
+			shown.current = undefined
+		}
+	}, [object?.id])
 	// The Sky observes from the active profile's site; the image keeps the site of its own header.
 	const observer = useActiveSite()
 
@@ -412,6 +422,7 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 	async function openMinorBody(target: AnnotationObject) {
 		setLookup({ id: target.id })
 		const body = await resolveMinorBody(target)
+		if (shown.current !== target.id) return setLookup((current) => (current?.id === target.id ? undefined : current))
 		if (typeof body === 'string') setLookup({ id: target.id, error: body })
 		else openInSky({ kind: 'minorBody', spkId: body.spkId, designation: body.designation }, body.name, body)
 	}

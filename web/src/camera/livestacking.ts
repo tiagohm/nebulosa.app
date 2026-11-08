@@ -207,16 +207,6 @@ export async function loadLiveProducts(state: LiveStackingRuntime, request: type
 	}
 }
 
-// Fetches a saved stack with the paths of its files.
-export async function loadLiveProduct(productId: string, request: typeof fetch = fetch) {
-	try {
-		const response = await request(`${BASE_URL}/products/${encodeURIComponent(productId)}`)
-		return response.ok ? ((await response.json()) as LiveStackingProductDetail) : undefined
-	} catch {
-		return undefined
-	}
-}
-
 // Kinds of master a stack can be calibrated with, in the order they are chosen and described.
 export const LIVE_MASTER_ORDER = ['dark', 'flat', 'bias'] as const satisfies readonly LiveMasterKind[]
 

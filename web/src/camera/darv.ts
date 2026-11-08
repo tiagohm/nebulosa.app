@@ -7,7 +7,7 @@ import { deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, DarvSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
-import { applySession, type CameraSessionKind, type CameraSessionRecords, loadSessionRecord, refreshSessionRecords, sendSessionCommand } from './sessions'
+import { applySession, type CameraSessionKind, type CameraSessionRecords, refreshSessionRecords, sendSessionCommand } from './sessions'
 
 // DARV sessions as this tab knows them. The server owns every session, whichever tab started it, and every motion,
 // exposure, and analysis of it, so this store only mirrors it: the compact summary of the latest session of each
@@ -179,11 +179,6 @@ export function darvFrameMeasurement(session: Pick<DarvSessionSummary, 'sessionI
 // Number of analyzed measurements of a session, which tells whether its record has new trails.
 function analyzed(session: Pick<DarvSessionSummary, 'measurements'>) {
 	return session.measurements.filter((measurement) => measurement.result !== undefined).length
-}
-
-// Fetches the complete record of a session (loadSessionRecord).
-export function loadDarvSession(state: DarvRuntime, sessionId: string, request: typeof fetch = fetch) {
-	return loadSessionRecord(state, DARV_SESSIONS, sessionId, request)
 }
 
 // Applies a DARV event (applySession); any other event is ignored.

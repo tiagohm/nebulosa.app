@@ -7,7 +7,7 @@ import type { AutoFocusSettings, CameraExposureSettings } from '../profile/schem
 import { SnapshotRefreshes } from '../refresh'
 import { DEFAULT_APERTURE_RADIUS } from '../stars/stars'
 import { cameraKey, fitExposure } from './capture'
-import { applySession, type CameraSessionKind, type CameraSessionRecords, loadSessionRecord, refreshSessionRecords, sendSessionCommand } from './sessions'
+import { applySession, type CameraSessionKind, type CameraSessionRecords, refreshSessionRecords, sendSessionCommand } from './sessions'
 
 // Auto Focus sessions as this tab knows them. The server owns every session, whichever tab started it, so
 // this store only mirrors it: the compact summary of the latest session of each camera arrives with every
@@ -138,11 +138,6 @@ export function autoFocusRequest(
 		measureTimeout: settings.measureTimeout,
 		restoreOnStop: settings.restoreOnStop,
 	}
-}
-
-// Fetches the complete record of a session (loadSessionRecord).
-export function loadAutoFocusSession(state: AutoFocusRuntime, sessionId: string, request: typeof fetch = fetch) {
-	return loadSessionRecord(state, AUTO_FOCUS_SESSIONS, sessionId, request)
 }
 
 // Applies a Auto Focus event (applySession); any other event is ignored.

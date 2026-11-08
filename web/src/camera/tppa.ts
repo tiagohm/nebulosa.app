@@ -7,7 +7,7 @@ import { deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, TppaSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
-import { applySession, type CameraSessionKind, type CameraSessionRecords, loadSessionRecord, refreshSessionRecords, sendSessionCommand } from './sessions'
+import { applySession, type CameraSessionKind, type CameraSessionRecords, refreshSessionRecords, sendSessionCommand } from './sessions'
 
 // TPPA sessions as this tab knows them. The server owns every session, whichever tab started it, and every motion,
 // exposure, and solve of it, so this store only mirrors it: the compact summary of the latest session of each camera
@@ -128,11 +128,6 @@ export function tppaFrameRole(session: Pick<TppaSession, 'sessionId' | 'points' 
 	if (session.attempts.some((a) => a.frame === frame.generation)) return { rejected: true, refinement: false }
 	if (session.initialAlignment && frame.generation > session.initialAlignment.frame) return { rejected: false, refinement: true }
 	return undefined
-}
-
-// Fetches the complete record of a session (loadSessionRecord).
-export function loadTppaSession(state: TppaRuntime, sessionId: string, request: typeof fetch = fetch) {
-	return loadSessionRecord(state, TPPA_SESSIONS, sessionId, request)
 }
 
 // Applies a TPPA event (applySession); any other event is ignored.

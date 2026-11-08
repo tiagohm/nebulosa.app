@@ -7,7 +7,7 @@ import { deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, FlatWizardSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
-import { applySession, type CameraSessionKind, type CameraSessionRecords, loadSessionRecord, refreshSessionRecords, sendSessionCommand } from './sessions'
+import { applySession, type CameraSessionKind, type CameraSessionRecords, refreshSessionRecords, sendSessionCommand } from './sessions'
 
 // Flat Wizard sessions as this tab knows them. The server owns every session, whichever tab started it, and every
 // filter change, exposure, measurement, and saved file of it, so this store only mirrors it: the summary of the latest
@@ -146,11 +146,6 @@ export function flatWizardBlocker(camera: RoleAvailability, wheel: RoleAvailabil
 	}
 
 	return undefined
-}
-
-// Fetches the complete record of a session (loadSessionRecord).
-export function loadFlatWizardSession(state: FlatWizardRuntime, sessionId: string, request: typeof fetch = fetch) {
-	return loadSessionRecord(state, FLAT_WIZARD_SESSIONS, sessionId, request)
 }
 
 // Applies a Flat Wizard event (applySession); any other event is ignored.

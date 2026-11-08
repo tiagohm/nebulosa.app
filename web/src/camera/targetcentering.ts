@@ -7,7 +7,7 @@ import { deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, TargetCenteringSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
-import { applySession, type CameraSessionKind, type CameraSessionRecords, loadSessionRecord, refreshSessionRecords, sendSessionCommand } from './sessions'
+import { applySession, type CameraSessionKind, type CameraSessionRecords, refreshSessionRecords, sendSessionCommand } from './sessions'
 
 // Target Centering sessions as this tab knows them. The server owns every session, whichever tab started it, and every
 // motion, exposure, and solve of it, so this store only mirrors it: the summary of the latest session of each camera arrives
@@ -156,11 +156,6 @@ export function bullseyeRing(distance: number): number {
 // Returns the number of attempts of a session that were solved.
 function solvedCount({ attempts }: Pick<TargetCenteringSessionSummary, 'attempts'>) {
 	return attempts.filter(({ outcome }) => outcome === 'solved').length
-}
-
-// Fetches the complete record of a session (loadSessionRecord).
-export function loadTargetCenteringSession(state: TargetCenteringRuntime, sessionId: string, request: typeof fetch = fetch) {
-	return loadSessionRecord(state, TARGET_CENTERING_SESSIONS, sessionId, request)
 }
 
 // Applies a Target Centering event (applySession); any other event is ignored.

@@ -6,7 +6,7 @@ import { deviceUrl, jsonInit } from '../http'
 import { type CameraExposureSettings, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WIZARD_MAXIMUM_FRAMES, DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, type DarkLibraryWizardSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure, frameProgress } from './capture'
-import { applySession, type CameraSessionKind, type CameraSessionRecords, loadSessionRecord, refreshSessionRecords, sendSessionCommand } from './sessions'
+import { applySession, type CameraSessionKind, type CameraSessionRecords, refreshSessionRecords, sendSessionCommand } from './sessions'
 
 // Dark Library Wizard sessions as this tab knows them. The server owns every session, whichever tab started it, so this
 // store only mirrors them: the summary of the latest session of each camera arrives with every darkLibraryWizard:updated
@@ -221,11 +221,6 @@ export function darkLibraryWizardWarning({ manualCap, useDarkFilter, darkSlot, p
 
 	if (asserted.length === 0) return undefined
 	return `Before starting, make sure that ${asserted.length === 1 ? asserted[0] : `${asserted.slice(0, -1).join(', ')} and ${asserted.at(-1)}`}.`
-}
-
-// Fetches the complete record of a session (loadSessionRecord).
-export function loadDarkLibraryWizardSession(state: DarkLibraryWizardRuntime, sessionId: string, request: typeof fetch = fetch) {
-	return loadSessionRecord(state, DARK_LIBRARY_WIZARD_SESSIONS, sessionId, request)
 }
 
 // Applies a Dark Library Wizard event (applySession); any other event is ignored.

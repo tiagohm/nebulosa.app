@@ -10,7 +10,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Two modes, chosen in the request (`mode`):
   `manual` needs only the camera: after the first frame the session is `waitingForRotation`, the operator turns the RA axis (DEC, camera, and optics untouched) and sends `POST /api/ipolar/:sessionId/rotation/confirm`, which never moves anything.
   The mount, when the setup has one, is held and only watched: its reported declination and pier side must not change.
-  `automatic` needs the setup's mount, equatorial, unparked, able to move west-east and abort, announcing the preset (`ipolarMountRefusal`), and `clearanceConfirmed` in the request: the runner turns it in `direction` at `slewRate` with bounded timed motions (at most 30 s each, 180 s in all), each stopped in a `finally`, sized from the rotation fitted so far towards `rotation`.
+  `automatic` needs the setup's mount, equatorial, unparked, able to move west-east and abort, announcing the preset (`ipolarMountRefusal`): the runner turns it in `direction` at `slewRate` with bounded timed motions (at most 30 s each, 180 s in all), each stopped in a `finally`, sized from the rotation fitted so far towards `rotation`.
   Tracking is never started or stopped.
 - The second pose is accepted only from the rotation fitted between the solves: 10° to 60° (20° to 40° reported as preferred), an axis within 5° of the pole, a rigid fit, and the same sensor geometry and parity.
   Too little rotation or a poor solve keeps the first frame and asks again (manual) or turns further (automatic), up to 8 candidates; a wrong axis (a DEC move, a wrong blind solve), too much rotation, or a different sensor fails the session.

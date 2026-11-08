@@ -37,8 +37,8 @@ import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, Pla
 // mount of the request, when one is given, for as long, so no GoTo, nudge, or capture can move the geometry between
 // the calibration frames or the refinement frames; it never holds a guide output, since the alignment sends no pulse.
 // In manual mode the operator turns the RA axis and confirms it through the rotation route, and the mount, optional, is
-// only watched; in automatic mode the runner turns the mount of the setup with bounded timed motions, after the request
-// confirmed its clearance. The toolkit owns the geometry, the quality gates, the motions, and the convergence; nothing
+// only watched; in automatic mode the runner turns the mount of the setup with bounded timed motions, whose clearance is
+// the operator's. The toolkit owns the geometry, the quality gates, the motions, and the convergence; nothing
 // is fitted here. The site and atmosphere come from the request (the profile's active observing site), never from the
 // driver; a mount reporting another site only adds a warning. Frames are auxiliary LIGHT FITS files in a temporary
 // directory, decoded into the image store and recorded as the latest frame of the camera (origin ipolar) before they
@@ -91,8 +91,6 @@ export interface IPolarRequest extends CommandRequest {
 	readonly refinementDelay: number
 	// Total polar error a converging measurement stays within, in radians: a requested target, not an accuracy.
 	readonly completionThreshold: number
-	// Whether the operator confirmed that the mount can turn in RA without hitting anything; required in automatic mode.
-	readonly clearanceConfirmed: boolean
 }
 
 // What a session is doing:
@@ -114,8 +112,8 @@ export type IPolarState = 'preparing' | 'capturing' | 'solving' | 'waitingForRot
 // - notFound: no such camera, mount, or running session.
 // - busy: a device is held by another operation.
 // - disconnected: a device is not connected.
-// - unsupported: the plate solver is not configured, or the automatic rotation cannot run (no mount, no clearance, a mount
-//   that cannot move in RA).
+// - unsupported: the plate solver is not configured, or the automatic rotation cannot run (no mount, or a mount that cannot
+//   move in RA).
 // - notInStage: the session is not in the stage the command needs.
 export type IPolarErrorCode = 'notFound' | 'busy' | 'disconnected' | 'unsupported' | 'notInStage'
 
@@ -396,9 +394,9 @@ export class IPolarSessions {
 	// Starts a session. Responds 202 with IPolarStartResponse once accepted (a repeated token answers its first session);
 	// its progress and outcome arrive as ipolar:updated and operation:updated events. Responds 404 for an unknown camera
 	// or mount, 409 when either is disconnected or held by another operation, and 422 when the plate solver is not
-	// configured or, in automatic mode, there is no mount, the clearance was not confirmed, or the mount cannot turn in RA
-	// at the preset (not equatorial, no west-east motion or abort, no such preset, or parked). A mount in manual mode is
-	// never refused for what it cannot do, since it is only watched.
+	// configured or, in automatic mode, there is no mount or the mount cannot turn in RA at the preset (not equatorial, no
+	// west-east motion or abort, no such preset, or parked). A mount in manual mode is never refused for what it cannot do,
+	// since it is only watched.
 	async start(connectionId: string, deviceId: string, request: IPolarRequest): Promise<Response> {
 		const repeated = this.#sessions.repeated(request.token)
 		if (repeated) return accepted(repeated)
@@ -418,7 +416,6 @@ export class IPolarSessions {
 
 		if (request.mode === 'automatic') {
 			if (!mount) return unsupported('The automatic rotation needs the mount of the equipment setup')
-			if (!request.clearanceConfirmed) return unsupported('Confirm that the mount can turn in RA without hitting anything')
 			const refused = ipolarMountRefusal(mount, request.slewRate ?? '')
 			if (refused) return unsupported(refused)
 		}

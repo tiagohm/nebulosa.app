@@ -105,15 +105,13 @@ export interface IPolarStartContext {
 	readonly site: ObservingSite | undefined
 	// Whether the plate solver is configured.
 	readonly solverConfigured: boolean
-	// Whether the operator confirmed the mount can turn in RA freely.
-	readonly clearanceConfirmed: boolean
 }
 
 // Returns why no session can start now, or undefined when one can. A manual session needs only a ready camera, a site
 // and a solver; the setup's mount is used when ready, ignored when absent or disconnected, and blocks only while
 // another operation holds it. An automatic session needs the mount ready and supported, a preset it announces,
-// unparked, and the clearance confirmed. The server checks again.
-export function ipolarBlocker({ camera, mount, mode, mountState, slewRate, site, solverConfigured, clearanceConfirmed }: IPolarStartContext): string | undefined {
+// and unparked; its clearance is the operator's, warned beside the Start button. The server checks again.
+export function ipolarBlocker({ camera, mount, mode, mountState, slewRate, site, solverConfigured }: IPolarStartContext): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (!site) return 'Choose an active observing site for the profile.'
 	if (!solverConfigured) return 'The plate solver is not configured.'
@@ -124,7 +122,6 @@ export function ipolarBlocker({ camera, mount, mode, mountState, slewRate, site,
 	if (!mountState) return 'The mount state is not known yet.'
 	if (slewRate === undefined || !mountState.slewRates.some((rate) => rate.name === slewRate)) return 'Choose a slew rate.'
 	if (mountState.parked || mountState.parking) return 'The mount is parked.'
-	if (!clearanceConfirmed) return 'Confirm that the mount can turn in RA without hitting anything.'
 	return undefined
 }
 
@@ -146,7 +143,6 @@ export function ipolarRequest(
 	site: Pick<ObservingSite, 'name' | 'latitude' | 'longitude' | 'elevation'>,
 	mount: { readonly connectionId: string; readonly deviceId: string } | undefined,
 	slewRate: string | undefined,
-	clearanceConfirmed: boolean,
 	capabilities?: CameraCapabilities,
 ): Omit<IPolarRequest, 'token'> {
 	return {
@@ -162,7 +158,6 @@ export function ipolarRequest(
 		settleDelay: settings.settleDelay,
 		refinementDelay: settings.refinementDelay,
 		completionThreshold: settings.completionThreshold * ASEC2RAD,
-		clearanceConfirmed: settings.mode === 'automatic' && clearanceConfirmed,
 	}
 }
 

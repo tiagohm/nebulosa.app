@@ -42,7 +42,7 @@ function summary(patch: Partial<IPolarSessionSummary> = {}): IPolarSessionSummar
 		operationId: 'o1',
 		camera: { connectionId: 'c', deviceId: 'cam' },
 		cameraName: 'Camera',
-		request: ipolarRequest(DEFAULT_IPOLAR_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, SITE, undefined, undefined, false),
+		request: ipolarRequest(DEFAULT_IPOLAR_SETTINGS, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, SITE, undefined, undefined),
 		provider: 'astap',
 		state: 'capturing',
 		frameCount: 1,
@@ -62,7 +62,7 @@ function details(patch: Partial<IPolarSession> = {}): IPolarSession {
 }
 
 function context(patch: Partial<IPolarStartContext> = {}): IPolarStartContext {
-	return { camera: READY, mount: READY, mode: 'manual', mountState: mountState(), slewRate: 'SPEED_4', site: SITE, solverConfigured: true, clearanceConfirmed: false, ...patch }
+	return { camera: READY, mount: READY, mode: 'manual', mountState: mountState(), slewRate: 'SPEED_4', site: SITE, solverConfigured: true, ...patch }
 }
 
 // Fetch fake answering each URL with the response its handler builds, recording the requests.
@@ -76,15 +76,15 @@ function fakeFetch(handler: (url: string, init?: RequestInit) => Response | Prom
 }
 
 test('the request sends the site, rotation and threshold in radians, and the mount and preset only when used', () => {
-	const manual = ipolarRequest({ ...DEFAULT_IPOLAR_SETTINGS, exposureTime: 4, completionThreshold: 45 }, DEFAULT_EXPOSURE_SETTINGS, { provider: 'nova', strategy: 'blind' }, SITE, undefined, 'SPEED_4', true)
-	expect(manual).toMatchObject({ mode: 'manual', clearanceConfirmed: false, refraction: true, site: { name: 'Home', elevation: 800 } })
+	const manual = ipolarRequest({ ...DEFAULT_IPOLAR_SETTINGS, exposureTime: 4, completionThreshold: 45 }, DEFAULT_EXPOSURE_SETTINGS, { provider: 'nova', strategy: 'blind' }, SITE, undefined, 'SPEED_4')
+	expect(manual).toMatchObject({ mode: 'manual', refraction: true, site: { name: 'Home', elevation: 800 } })
 	expect(manual.site.latitude).toBeCloseTo(deg(-22), 12)
 	expect(manual.completionThreshold).toBeCloseTo(arcsec(45), 12)
 	expect(manual.capture.exposureTime).toBe(4)
 	expect('mount' in manual || 'slewRate' in manual).toBeFalse()
 
-	const automatic = ipolarRequest({ ...DEFAULT_IPOLAR_SETTINGS, mode: 'automatic', rotation: 25 }, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, SITE, MOUNT, 'SPEED_4', true)
-	expect(automatic).toMatchObject({ mode: 'automatic', mount: MOUNT, slewRate: 'SPEED_4', clearanceConfirmed: true })
+	const automatic = ipolarRequest({ ...DEFAULT_IPOLAR_SETTINGS, mode: 'automatic', rotation: 25 }, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, SITE, MOUNT, 'SPEED_4')
+	expect(automatic).toMatchObject({ mode: 'automatic', mount: MOUNT, slewRate: 'SPEED_4' })
 	expect(automatic.rotation).toBeCloseTo(deg(25), 12)
 
 	expect(ipolarSlewRate({ slewRate: 'SPEED_4' }, mountState())).toBe('SPEED_4')
@@ -92,7 +92,7 @@ test('the request sends the site, rotation and threshold in radians, and the mou
 	expect(ipolarSlewRate({}, undefined)).toBeUndefined()
 })
 
-test('a manual start needs only the camera, a site and a solver; an automatic one the mount and its clearance', () => {
+test('a manual start needs only the camera, a site and a solver; an automatic one the mount and its preset', () => {
 	expect(ipolarBlocker(context())).toBeUndefined()
 	expect(ipolarBlocker(context({ mount: { status: 'notSelected', message: 'No mount.' }, mountState: undefined }))).toBeUndefined()
 	expect(ipolarBlocker(context({ mount: { status: 'busy', operations: [], message: 'The Mount is busy.' } }))).toBe('The Mount is busy.')
@@ -100,13 +100,12 @@ test('a manual start needs only the camera, a site and a solver; an automatic on
 	expect(ipolarBlocker(context({ site: undefined }))).toContain('observing site')
 	expect(ipolarBlocker(context({ solverConfigured: false }))).toContain('not configured')
 
-	const automatic = { mode: 'automatic' as const, clearanceConfirmed: true }
+	const automatic = { mode: 'automatic' as const }
 	expect(ipolarBlocker(context(automatic))).toBeUndefined()
 	expect(ipolarBlocker(context({ ...automatic, mount: { status: 'unsupported', message: 'No.' } }))).toBe('No.')
 	expect(ipolarBlocker(context({ ...automatic, mountState: undefined }))).toContain('not known')
 	expect(ipolarBlocker(context({ ...automatic, slewRate: undefined }))).toContain('slew rate')
 	expect(ipolarBlocker(context({ ...automatic, mountState: mountState({ parked: true }) }))).toContain('parked')
-	expect(ipolarBlocker(context({ ...automatic, clearanceConfirmed: false }))).toContain('without hitting')
 
 	expect(ipolarMountSupport(mountState({ mountType: 'ALTAZ' }))).toContain('not equatorial')
 	expect(ipolarMountSupport(mountState({ canAbort: false }))).toContain('abort')

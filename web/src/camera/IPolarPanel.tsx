@@ -1,6 +1,5 @@
 import type { DeviceSummary, IPolarSession, IPolarSessionSummary } from 'api'
 import { toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
-import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
@@ -37,8 +36,8 @@ import { SessionStateText } from './SessionStateText'
 // camera settings, edited only in Camera Acquisition, and solved with the camera's plate solving settings; the site is
 // the profile's active observing site, shown read-only. The camera is the panel's target and the mount the MOUNT of the
 // active equipment setup, required only for the automatic rotation. The forms are the camera's, kept in the profile, and
-// stay locked showing the values applied while a session runs; the clearance confirmation of an automatic rotation is
-// asked for every start and never kept. The session is the server's, shown here whichever tab started it, and keeps
+// stay locked showing the values applied while a session runs; before an automatic rotation, a notice beside Start asks
+// the operator to check the mount is clear to turn. The session is the server's, shown here whichever tab started it, and keeps
 // running when the panel unmounts. Errors are the signed on-sky components the server measured; no knob direction is
 // inferred.
 
@@ -62,7 +61,6 @@ export function IPolarSections({ device, availability, mount, settings: identity
 	const operations = useSnapshot(operationsState)
 	const control = useSnapshot(controlRuntime)
 	const site = useActiveSite()
-	const [clearance, setClearance] = useState(false)
 	const profile = activeProfile(profiles)
 	const settings = ipolarSettings(profile.settings, identity)
 	const exposure = exposureSettings(profile.settings, identity)
@@ -82,7 +80,7 @@ export function IPolarSections({ device, availability, mount, settings: identity
 	const automatic = shown.mode === 'automatic'
 	const slewRate = running && session ? session.request.slewRate : ipolarSlewRate(settings, mountState)
 	const mountAvailability = roleAvailability('MOUNT', mount, operations, automatic ? ipolarMountSupport(mountState) : undefined)
-	const blocker = running ? undefined : ipolarBlocker({ camera: availability, mount: mountAvailability, mode: settings.mode, mountState, slewRate, site, solverConfigured: configured, clearanceConfirmed: clearance })
+	const blocker = running ? undefined : ipolarBlocker({ camera: availability, mount: mountAvailability, mode: settings.mode, mountState, slewRate, site, solverConfigured: configured })
 	const slewRates = mountState?.slewRates ?? []
 
 	// Updates fields of the camera's iPolar form.
@@ -94,8 +92,7 @@ export function IPolarSections({ device, availability, mount, settings: identity
 		if (!device || !site) return
 		// A manual session uses the setup's mount only when it is ready; without one, nothing is held but the camera.
 		const used = mount.device && mountAvailability.status === 'ready' ? { connectionId: mount.device.connectionId, deviceId: mount.device.id } : undefined
-		void startIPolar(ipolarRuntime, device.connectionId, device.id, ipolarRequest(settings, exposure, solving, site, used, slewRate, clearance, capabilities))
-		setClearance(false)
+		void startIPolar(ipolarRuntime, device.connectionId, device.id, ipolarRequest(settings, exposure, solving, site, used, slewRate, capabilities))
 	}
 
 	return (
@@ -135,9 +132,8 @@ export function IPolarSections({ device, availability, mount, settings: identity
 						)}
 						<NumberInput label="RA Rotation" value={shown.rotation} min={IPOLAR_MINIMUM_ROTATION} max={IPOLAR_MAXIMUM_ROTATION} step={1} suffix="°" disabled={locked} onChange={(rotation) => update({ rotation })} />
 						<NumberInput label="Settle Time" value={shown.settleDelay} min={0} max={120} step={0.5} suffix="s" disabled={locked} onChange={(settleDelay) => update({ settleDelay })} />
-						{!running && <Checkbox label="The mount can turn in RA without hitting anything" checked={clearance} disabled={locked} onChange={setClearance} />}
 						<Notice>
-							The mount turns in RA only, towards the {IPOLAR_DIRECTION_LABELS[shown.direction].toLowerCase()}, about {shown.rotation}° in bounded steps; check counterweights, cables, the pier, and the roof first. Rotation is measured by plate solving, never assumed from the motion time.
+							The mount turns in RA only, towards the {IPOLAR_DIRECTION_LABELS[shown.direction].toLowerCase()}, about {shown.rotation.toFixed(1)}° in bounded steps. Rotation is measured by plate solving, never assumed from the motion time.
 						</Notice>
 					</>
 				) : (
@@ -208,6 +204,7 @@ export function IPolarSections({ device, availability, mount, settings: identity
 						Start Polar Alignment
 					</Button>
 				)}
+				{!running && automatic && <Notice>Pressing Start turns the mount in RA by itself: make sure counterweights, cables, the pier, and the roof leave it clear.</Notice>}
 				{blocker && <Notice>{blocker}</Notice>}
 				{session?.state === 'waitingForRotation' && <Notice>Turn the RA axis by hand now, keeping DEC still, then press Rotation Done.</Notice>}
 				{session?.state === 'refining' && <Notice>Adjust the altitude and azimuth of the mount base to bring the pole marker onto the axis marker; the mount is not moved.</Notice>}

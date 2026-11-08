@@ -66,7 +66,6 @@ function request(patch: Partial<IPolarRequest> = {}): IPolarRequest {
 		settleDelay: 0,
 		refinementDelay: 0.1,
 		completionThreshold: arcsec(30),
-		clearanceConfirmed: true,
 		...patch,
 	}
 }
@@ -301,11 +300,10 @@ describe('iPolar sessions', () => {
 		expect((await ipolar.stop(sessionId)).status).toBe(404)
 	})
 
-	test('an automatic rotation is refused without the mount, its clearance, or its preset, and without a solver', async () => {
+	test('an automatic rotation is refused without the mount or its preset, and without a solver', async () => {
 		const { id, cameraId, ipolar, mountDevice, solving, events } = await setup()
 
 		expect((await ipolar.start(id, cameraId, request({ mode: 'automatic', slewRate: 'SPEED_4' }))).status).toBe(422)
-		expect((await ipolar.start(id, cameraId, request({ mode: 'automatic', mount: mountDevice, slewRate: 'SPEED_4', clearanceConfirmed: false }))).status).toBe(422)
 		expect((await ipolar.start(id, cameraId, request({ mode: 'automatic', mount: mountDevice, slewRate: 'WARP' }))).status).toBe(422)
 		expect((await ipolar.start(id, cameraId, request({ mount: { connectionId: id, deviceId: 'unknown' } }))).status).toBe(404)
 		solving.unconfigure()

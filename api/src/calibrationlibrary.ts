@@ -525,10 +525,12 @@ export class CalibrationLibrary {
 		return changed.length > 0
 	}
 
-	// Compares the files with the disk on request.
+	// Compares the files with the disk on request: the indexed frames and the files of the masters, so a master removed or
+	// replaced while the server runs is unavailable, and one put back is offered again.
 	async refresh() {
 		await this.#usable()
 		await this.#refreshFiles()
+		await this.#reconcileMasters()
 		this.#changed()
 		return this.snapshot()
 	}

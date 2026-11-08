@@ -342,6 +342,19 @@ describe('restart', () => {
 		expect(store.allMasters()).toHaveLength(1)
 	})
 
+	test('a refresh finds a master whose file went away while the server runs, and gives it back once it returns', async () => {
+		const { library, base, masterId, directory } = await published()
+		const status = (await library.master(masterId)).status
+
+		renameSync(join(directory, MASTER_FILE), join(base, MASTER_FILE))
+		await library.refresh()
+		expect((await library.master(masterId)).status).toBe('unavailable')
+
+		renameSync(join(base, MASTER_FILE), join(directory, MASTER_FILE))
+		await library.refresh()
+		expect((await library.master(masterId)).status).toBe(status)
+	})
+
 	test('writes no catalog, journal, or manifest', async () => {
 		const { base, directory } = await published()
 		expect(readdirSync(join(base, 'library')).toSorted()).toEqual(['products', 'staging'])

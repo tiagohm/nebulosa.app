@@ -205,10 +205,10 @@ export function formatKilometers(km: number, digits: number = 0) {
 // instants, so each locale and set of options is built once and shared by every screen.
 const dateTimeFormatters = new Map<string, Intl.DateTimeFormat>()
 
-// Returns the shared formatter of instants with a set of options in a locale (sv-SE by default), built on its first use.
+// Returns the shared formatter of instants with a set of options in a locale (en-US by default), built on its first use.
 // An absent `timeZone` option is the browser's zone. Every reading of an instant in a zone, shown or parsed into its
 // wall-clock fields, goes through it; options that differ only by an undefined property share one formatter.
-export function dateTimeFormat(options: Intl.DateTimeFormatOptions, locale: string = ISO_LOCALE) {
+export function dateTimeFormat(options: Intl.DateTimeFormatOptions, locale: string = 'en-US') {
 	const key = `${locale}|${JSON.stringify(options)}`
 	let formatter = dateTimeFormatters.get(key)
 
@@ -277,5 +277,5 @@ export function formatLocalTime(time: number, timeZone: string, reference: numbe
 // so a time past midnight shows its day: "1997-09-16 18:47:11 UTC", or MISSING when it is not finite.
 export function formatLongDateTime(time: number, timeZone: string) {
 	if (!Number.isFinite(time)) return MISSING
-	return dateTimeFormat({ timeZone, year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: 'short' }).format(time)
+	return dateTimeFormat({ timeZone, year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: 'short' }).format(time)
 }

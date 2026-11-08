@@ -1,10 +1,16 @@
+import type { SpkKernelSet, SpkMissReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
 import { eccentricAnomaly, meanAnomaly, meanMotion, timeSincePeriapsis } from 'nebulosa/src/astronomy/orbits/asteroid'
 // oxfmt-ignore
-import { type ClassicalElements, conicClass, ORBIT_CENTERS, type OrbitDefinition, type OrbitDiagnostics, type OrbitFailureReason, orbitalElements, orbitDiagnostics, orbitOf, orbitStateAt, type ReferencePlane } from 'nebulosa/src/astronomy/orbits/mechanics'
+import { type ClassicalElements, conicClass, ORBIT_CENTERS, orbitCenter, type OrbitDefinition, type OrbitDiagnostics, type OrbitFailureReason, orbitalElements, orbitDiagnostics, orbitOf, orbitStateAt, type ReferencePlane, stateResidual } from 'nebulosa/src/astronomy/orbits/mechanics'
 import { type ConicMarkerKind, OPEN_ARC_RADIUS, ORBIT_SAMPLE_LIMIT, sampleConic, sampleStates } from 'nebulosa/src/astronomy/orbits/sampling'
 import { type Time, Timescale, tdb, time, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { errorResponse } from './http'
 import { ORBITAL_MECHANICS_PRESETS, type OrbitPreset } from './orbitalmechanics.presets'
+import { solarSystemBody } from './sky/bodies'
+import type { MinorBodyElements } from './sky/ephemeris'
+import { type MinorBodies, type ResolvedMinorBody, SbdbUnavailableError } from './sky/minorbodies'
+import type { SpiceKernelSnapshot } from './spicekernels.runtime'
+import { SsdBusyError, SsdThrottledError, SsdTimeoutError } from './ssd'
 
 // Orbital Mechanics Explorer: stateless two-body analysis over the toolkit's canonical Kepler model, never operations,
 // events, devices, or persisted state. A request carries the whole orbit definition, so the server keeps nothing between
@@ -27,7 +33,15 @@ export const ORBIT_LIMIT = 8
 const NEAR_PARABOLIC = 1e-3
 
 // Stable codes of the orbital mechanics errors.
-export type OrbitalMechanicsErrorCode = 'degenerateOrbit' | 'outOfRange' | 'solverFailed'
+// - degenerateOrbit, outOfRange, solverFailed (422): outcomes of the two-body model.
+// - objectNotFound (404): SBDB knows no such body; notCached (404): an offline lookup found no body read recently.
+// - orbitSolutionUnavailable (422): SBDB publishes no usable elements; unsupportedFrame (422): they are not J2000.
+// - centerUnavailable (422): the center has no trustworthy gravitational parameter.
+// - kernelMissing, kernelCoverageUnavailable, unsupportedKernel (422), kernelReadFailed (503): the installed SPICE kernels
+//   cannot give a state of a body at an instant, with the body and the instant.
+// - serviceUnavailable, rateLimited (503): JPL cannot be reached, or asks to wait (with retryAfter in milliseconds).
+// oxfmt-ignore
+export type OrbitalMechanicsErrorCode = 'degenerateOrbit' | 'outOfRange' | 'solverFailed' | 'objectNotFound' | 'notCached' | 'orbitSolutionUnavailable' | 'unsupportedFrame' | 'centerUnavailable' | 'kernelMissing' | 'kernelCoverageUnavailable' | 'unsupportedKernel' | 'kernelReadFailed' | 'serviceUnavailable' | 'rateLimited'
 
 // A 3-vector in J2000 equatorial axes.
 export type OrbitVector = readonly [number, number, number]
@@ -222,11 +236,13 @@ export interface OrbitalMechanicsReference {
 	readonly limits: OrbitalMechanicsLimits
 }
 
-// A scientific outcome of the model, answered 422 with its stable code.
+// An outcome answered as an error with its status, stable code, and documented fields.
 class OrbitModelError extends Error {
 	constructor(
 		readonly code: OrbitalMechanicsErrorCode,
 		message: string,
+		readonly status: number = 422,
+		readonly details?: object,
 	) {
 		super(message)
 	}
@@ -290,8 +306,143 @@ function model(payload: OrbitDefinitionPayload) {
 	return result.orbit
 }
 
+// Where an orbit resolved from a real object comes from.
+export type OrbitSourcePayload =
+	| {
+			readonly kind: 'sbdb'
+			// SPK-ID of the body, its identity.
+			readonly spkId: string
+			// Primary designation.
+			readonly designation: string
+			// Identifier of the published orbit solution.
+			readonly orbitId?: string
+			// Date SBDB solved it.
+			readonly solutionDate?: string
+			// Epoch of the published elements, Julian date TDB.
+			readonly epoch: number
+			// When SBDB was read, Unix milliseconds.
+			readonly fetchedAt: number
+	  }
+	| {
+			readonly kind: 'spk'
+			// NAIF ID of the target.
+			readonly target: number
+			// NAIF ID of the center.
+			readonly center: number
+			// Instant of the state, Julian date TDB.
+			readonly epoch: number
+			// Generation of the SPICE library the state was read from.
+			readonly generation: number
+			// Kernels that gave the target's and the center's states.
+			readonly kernels: readonly string[]
+	  }
+
+// Request of POST /api/orbital-mechanics/resolve: a minor body by SPK-ID, designation, or name, read only from the
+// bodies resolved recently unless `online` allows asking SBDB; or the osculating state of an SPK target about a center at
+// an instant from the installed SPICE kernels.
+export type OrbitResolveRequest = { readonly kind: 'minorBody'; readonly query: string; readonly online: boolean } | { readonly kind: 'spk'; readonly target: number; readonly center: number; readonly epoch: number }
+
+// Answer of a resolve: the orbit, or the candidates of an ambiguous name to choose from.
+export type OrbitResolveResponse =
+	| {
+			readonly kind: 'resolved'
+			// Name of the object.
+			readonly name: string
+			// NAIF ID of the center the definition is about.
+			readonly center: number
+			// The orbit, with the center's DE440 gravitational parameter.
+			readonly definition: OrbitDefinitionPayload
+			// Where it comes from.
+			readonly source: OrbitSourcePayload
+	  }
+	| { readonly kind: 'ambiguous'; readonly matches: readonly { readonly designation: string; readonly name: string }[] }
+
+// Request of POST /api/orbital-mechanics/compare.
+export interface OrbitCompareRequest {
+	// NAIF ID of the target.
+	readonly target: number
+	// NAIF ID of the center, one of the DE440 centers.
+	readonly center: number
+	// Instant of the osculating state the Kepler model starts from, Julian date TDB.
+	readonly anchor: number
+	// First instant compared, Julian date TDB.
+	readonly start: number
+	// Last instant compared, Julian date TDB, after start.
+	readonly end: number
+	// Number of instants compared, evenly spaced, 2 to COMPARE_NODE_LIMIT; the anchor is added when inside.
+	readonly count: number
+}
+
+// States at the instants of a comparison, parallel arrays, AU and AU/day relative to the center.
+export interface OrbitStateTable {
+	// Positions, AU.
+	readonly positions: readonly OrbitVector[]
+	// Velocities, AU/day.
+	readonly velocities: readonly OrbitVector[]
+}
+
+// One instant of a comparison.
+export interface OrbitCompareNode {
+	// Instant, Julian date TDB.
+	readonly time: number
+	// |Δr| of the Kepler model minus the SPK reference, AU.
+	readonly distance: number
+	// |Δv|, AU/day.
+	readonly speed: number
+	// Δr on the RTN axes of the reference (radial, along-track, normal), AU; absent when the frame is undefined.
+	readonly rtnPosition?: OrbitVector
+	// Δv projected on the same axes, AU/day.
+	readonly rtnVelocity?: OrbitVector
+}
+
+// Answer of a comparison: the difference between two models over the same instants, center, axes, and units, never an
+// uncertainty of either.
+export interface OrbitCompareResponse {
+	// NAIF ID of the target.
+	readonly target: number
+	// NAIF ID of the center.
+	readonly center: number
+	// Name of the target.
+	readonly name: string
+	// The osculating two-body orbit at the anchor.
+	readonly definition: OrbitDefinitionPayload
+	// Its provenance: the SPK state it starts from, and every kernel the comparison read.
+	readonly source: OrbitSourcePayload
+	// Instants and residuals.
+	readonly nodes: readonly OrbitCompareNode[]
+	// SPK states at the instants.
+	readonly reference: OrbitStateTable
+	// Kepler states at the instants.
+	readonly model: OrbitStateTable
+	// Largest |Δr| (AU) and its instant (Julian date TDB), and the largest |Δv| (AU/day).
+	readonly summary: { readonly maxDistance: number; readonly maxDistanceTime: number; readonly maxSpeed: number }
+}
+
+// Largest number of instants of a comparison.
+export const COMPARE_NODE_LIMIT = 2048
+
+// Collaborators of the service.
+export interface OrbitalMechanicsServiceOptions {
+	// SBDB lookups and their cache, shared with the Sky.
+	readonly minorBodies: MinorBodies
+	// SPICE library of the server.
+	readonly kernels: { readonly current: () => SpiceKernelSnapshot }
+}
+
+// Error code of an SPK miss, by reason.
+const MISS_ERRORS: Readonly<Record<SpkMissReason, OrbitalMechanicsErrorCode>> = { missing: 'kernelMissing', cycle: 'kernelMissing', coverage: 'kernelCoverageUnavailable', dataType: 'unsupportedKernel', frame: 'unsupportedKernel' }
+
 // Stateless two-body analysis of the Orbital Mechanics Explorer.
 export class OrbitalMechanicsService {
+	readonly #minorBodies?: MinorBodies
+	readonly #kernels?: OrbitalMechanicsServiceOptions['kernels']
+
+	// Creates the service; the collaborators are needed only to resolve real objects and compare with SPICE.
+	constructor(options?: OrbitalMechanicsServiceOptions) {
+		this.#minorBodies = options?.minorBodies
+		this.#kernels = options?.kernels
+	}
+
 	// Centers, presets, and supported ranges; never changes while the server runs.
 	reference(): OrbitalMechanicsReference {
 		return {
@@ -334,6 +485,108 @@ export class OrbitalMechanicsService {
 		return arc === undefined ? response : { ...response, arc }
 	}
 
+	// The orbit of a real object: a minor body's published SBDB solution, or an SPK target's osculating state.
+	async resolve(request: OrbitResolveRequest, signal?: AbortSignal): Promise<OrbitResolveResponse> {
+		return request.kind === 'spk' ? this.#spkState(request.target, request.center, request.epoch) : await this.#minorBody(request.query.trim(), request.online, signal)
+	}
+
+	// The SBDB orbit of a minor body, as heliocentric J2000 ecliptic elements with the Sun's DE440 GM.
+	async #minorBody(query: string, online: boolean, signal?: AbortSignal): Promise<OrbitResolveResponse> {
+		const bodies = this.#minorBodies!
+		// An SPK-ID of a small body has at least seven digits; anything else is a designation or a name.
+		const spkId = /^\d{7,}$/.test(query) ? query : undefined
+		let resolved: ResolvedMinorBody | undefined
+
+		if (!online) {
+			resolved = spkId === undefined ? undefined : bodies.cached(spkId)
+			if (!resolved) throw new OrbitModelError('notCached', `${query} was not looked up recently, so it needs JPL`, 404)
+		} else if (spkId !== undefined) {
+			resolved = await bodies.body(spkId, signal)
+		} else {
+			const found = await bodies.search(query, signal)
+			if (found.kind === 'ambiguous') return { kind: 'ambiguous', matches: found.matches }
+			if (found.kind === 'found') resolved = bodies.cached(found.body.spkId)
+		}
+
+		if (!resolved) throw new OrbitModelError('objectNotFound', `JPL knows no small body ${query}`, 404)
+		const { elements, body, found, fetchedAt } = resolved
+		if (!elements) throw new OrbitModelError('orbitSolutionUnavailable', `JPL publishes no usable orbit of ${body.name}`)
+		if (elements.referenceEclipticFrame === 'B1950') throw new OrbitModelError('unsupportedFrame', `The orbit of ${body.name} is referred to B1950, which is not supported`)
+
+		const source: OrbitSourcePayload = { kind: 'sbdb', spkId: body.spkId, designation: body.designation, orbitId: found.orbit.orbit_id || undefined, solutionDate: found.orbit.soln_date || undefined, epoch: elements.epoch, fetchedAt }
+		return { kind: 'resolved', name: body.name, center: 10, definition: minorBodyDefinition(elements, orbitCenter(10)!.mu), source }
+	}
+
+	// The osculating state of an SPK target about a center at an instant, read synchronously from one snapshot.
+	#spkState(target: number, center: number, epoch: number): OrbitResolveResponse {
+		const gm = orbitCenter(center)
+		if (!gm) throw new OrbitModelError('centerUnavailable', `NAIF ${center} has no trustworthy gravitational parameter`)
+		const { set, generation } = this.#snapshot()
+		const state = relativeState(set, target, center, tdbTime(epoch))
+		const definition: OrbitDefinitionPayload = { kind: 'cartesian', mu: gm.mu, position: state.position, velocity: state.velocity, epoch }
+		return { kind: 'resolved', name: bodyName(target, this.#minorBodies), center, definition, source: { kind: 'spk', target, center, epoch, generation, kernels: state.kernels } }
+	}
+
+	// The current SPICE snapshot with a kernel set, or the error of an empty library.
+	#snapshot() {
+		const snapshot = this.#kernels!.current()
+		if (!snapshot.set) throw new OrbitModelError('kernelMissing', snapshot.loading ? 'The SPICE kernels are still loading' : 'No SPICE kernel is installed and enabled')
+		return { set: snapshot.set, generation: snapshot.generation }
+	}
+
+	// Kepler versus SPICE: the osculating two-body orbit of the target's SPK state at the anchor, propagated, against the
+	// SPK states at the same instants, about the same center, in the same axes. Every read comes from one snapshot,
+	// synchronously, so the whole comparison belongs to one generation of the library; an instant any kernel cannot give
+	// fails the whole comparison, never patched by another source.
+	compare({ target, center, anchor, start, end, count }: OrbitCompareRequest): OrbitCompareResponse {
+		const gm = orbitCenter(center)
+		if (!gm) throw new OrbitModelError('centerUnavailable', `NAIF ${center} has no trustworthy gravitational parameter`)
+		const { set, generation } = this.#snapshot()
+		const initial = relativeState(set, target, center, tdbTime(anchor))
+		const definition: OrbitDefinitionPayload = { kind: 'cartesian', mu: gm.mu, position: initial.position, velocity: initial.velocity, epoch: anchor }
+		const orbit = model(definition)
+		const kernels = new Set(initial.kernels)
+
+		const times: number[] = []
+		// Bounded so a request can never allocate without limit.
+		const nodes = Math.max(2, Math.min(COMPARE_NODE_LIMIT, Math.floor(count)))
+		for (let k = 0; k < nodes; k++) times.push(start + ((end - start) * k) / (nodes - 1))
+		if (anchor > start && anchor < end && !times.includes(anchor)) times.push(anchor)
+		times.sort((a, b) => a - b)
+
+		const result: OrbitCompareNode[] = []
+		const reference: { positions: OrbitVector[]; velocities: OrbitVector[] } = { positions: [], velocities: [] }
+		const kepler: { positions: OrbitVector[]; velocities: OrbitVector[] } = { positions: [], velocities: [] }
+		let maxDistance = 0
+		let maxDistanceTime = times[0]
+		let maxSpeed = 0
+
+		for (const jd of times) {
+			const instant = tdbTime(jd)
+			const spk = relativeState(set, target, center, instant)
+			for (const kernel of spk.kernels) kernels.add(kernel)
+			const state = orbitStateAt(orbit, instant)
+			if (!state.ok) throw modelError(state.reason)
+
+			const residual = stateResidual(state.position, state.velocity, spk.position, spk.velocity)
+			result.push({ time: jd, distance: residual.distance, speed: residual.speed, rtnPosition: residual.rtnPosition && vector(residual.rtnPosition), rtnVelocity: residual.rtnVelocity && vector(residual.rtnVelocity) })
+			reference.positions.push(spk.position)
+			reference.velocities.push(spk.velocity)
+			kepler.positions.push(vector(state.position))
+			kepler.velocities.push(vector(state.velocity))
+
+			if (residual.distance > maxDistance) {
+				maxDistance = residual.distance
+				maxDistanceTime = jd
+			}
+
+			maxSpeed = Math.max(maxSpeed, residual.speed)
+		}
+
+		const source: OrbitSourcePayload = { kind: 'spk', target, center, epoch: anchor, generation, kernels: [...kernels] }
+		return { target, center, name: bodyName(target, this.#minorBodies), definition, source, nodes: result, reference, model: kepler, summary: { maxDistance, maxDistanceTime, maxSpeed } }
+	}
+
 	// The curve and the exact states of an orbit over a window.
 	trajectory({ definition, start, end, plane, maxRadius }: OrbitTrajectoryRequest): OrbitTrajectoryResponse {
 		const orbit = model(definition)
@@ -354,6 +607,68 @@ export class OrbitalMechanicsService {
 	}
 }
 
+// Geometric state of `target` relative to `center` at `instant` (barycentric states subtracted, no light time), AU and
+// AU/day in J2000 axes, with the kernels that gave both, or the error naming the body and the instant a kernel cannot give.
+function relativeState(set: SpkKernelSet, target: number, center: number, instant: Time) {
+	const read = (body: number) => {
+		let result: ReturnType<SpkKernelSet['stateAt']>
+
+		try {
+			result = set.stateAt(body, instant)
+		} catch (error) {
+			throw new OrbitModelError('kernelReadFailed', `A SPICE kernel could not be read: ${error instanceof Error ? error.message : String(error)}`, 503)
+		}
+
+		if (!result.ok) {
+			const jd = julianDateTdb(instant)
+			const code = MISS_ERRORS[result.reason]
+			const why = code === 'kernelCoverageUnavailable' ? 'is not covered' : code === 'unsupportedKernel' ? 'is in a segment that is not supported' : 'is in no installed kernel'
+			throw new OrbitModelError(code, `NAIF ${result.body} ${why} at JD ${jd.toFixed(5)} TDB`, 422, { body: result.body, epoch: jd })
+		}
+
+		return result
+	}
+
+	const t = read(target)
+	const c = read(center)
+	const [[tx, ty, tz], [tvx, tvy, tvz]] = t.state
+	const [[cx, cy, cz], [cvx, cvy, cvz]] = c.state
+	const position: OrbitVector = [tx - cx, ty - cy, tz - cz]
+	const velocity: OrbitVector = [tvx - cvx, tvy - cvy, tvz - cvz]
+	return { position, velocity, kernels: [...new Set([...t.kernels, ...c.kernels])] }
+}
+
+// Name of a NAIF body: a planet, the Sun, or the Moon, a center, a minor body read recently, or its ID.
+function bodyName(code: number, minorBodies?: MinorBodies) {
+	return solarSystemBody(String(code))?.name ?? ORBIT_CENTERS.find((e) => e.code === code)?.name ?? minorBodies?.cached(String(code))?.body.name ?? `NAIF ${code}`
+}
+
+// Definition of SBDB's heliocentric J2000 ecliptic elements about the Sun with gravitational parameter `mu` (AU³/day²):
+// an open orbit by its perihelion distance and time, a bound one by its semi-major axis and mean anomaly at the epoch
+// (from the mean motion, or the perihelion time, when SBDB gives those instead).
+export function minorBodyDefinition(elements: MinorBodyElements, mu: number): OrbitDefinitionPayload {
+	const { ec, i, om, w, epoch, tpqr } = elements
+	const angles = { mu, plane: 'ecliptic', inclination: i, node: om, argumentOfPeriapsis: w } as const
+
+	if ('qr' in tpqr) {
+		if (ec > 1) return { kind: 'hyperbolic', ...angles, periapsisDistance: tpqr.qr, eccentricity: ec, periapsisTime: tpqr.tp }
+		if (ec === 1) return { kind: 'parabolic', ...angles, periapsisDistance: tpqr.qr, periapsisTime: tpqr.tp }
+		const a = tpqr.qr / (1 - ec)
+		return { kind: 'elliptic', ...angles, semiMajorAxis: a, eccentricity: ec, meanAnomaly: Math.sqrt(mu / (a * a * a)) * (epoch - tpqr.tp), epoch }
+	}
+
+	const a = 'a' in tpqr ? tpqr.a : Math.cbrt(mu / (tpqr.n * tpqr.n))
+	return { kind: 'elliptic', ...angles, semiMajorAxis: a, eccentricity: ec, meanAnomaly: tpqr.ma, epoch }
+}
+
+// Error response of a failure of JPL, or undefined when it is not one.
+function jplFailure(error: unknown) {
+	const cause = error instanceof SbdbUnavailableError ? error.cause : error
+	if (cause instanceof SsdThrottledError) return errorResponse(cause.message, 503, 'rateLimited' satisfies OrbitalMechanicsErrorCode, { retryAfter: cause.retryAfter })
+	if (error instanceof SbdbUnavailableError || error instanceof SsdBusyError || error instanceof SsdTimeoutError) return errorResponse(error.message, 503, 'serviceUnavailable' satisfies OrbitalMechanicsErrorCode)
+	return undefined
+}
+
 // For an open orbit, the instants it is at OPEN_ARC_RADIUS periapsis distances before and after its periapsis passage,
 // the same arc sampleConic draws by default; undefined for a bound orbit. Uses the toolkit's time since periapsis,
 // which falls back to Barker's equation when the mean motion vanishes.
@@ -369,12 +684,16 @@ function openArc(elements: ClassicalElements, mu: number) {
 	return { start: tp - since, end: tp + since }
 }
 
-// Answers a computation of a route, mapping a scientific outcome of the model to 422.
-function answer(compute: () => unknown) {
+// Answers a computation of a route, mapping an outcome of the model or of its sources to its error; the abort of a
+// request that left is not answered.
+async function answer(req: Request, compute: () => unknown) {
 	try {
-		return Response.json(compute())
+		return Response.json(await compute())
 	} catch (error) {
-		if (error instanceof OrbitModelError) return errorResponse(error.message, 422, error.code)
+		if (req.signal.aborted) throw error
+		if (error instanceof OrbitModelError) return errorResponse(error.message, error.status, error.code, error.details)
+		const failure = jplFailure(error)
+		if (failure) return failure
 		throw error
 	}
 }
@@ -388,13 +707,25 @@ export function createOrbitalMechanicsRoutes(service: OrbitalMechanicsService) {
 		'/api/orbital-mechanics/solve': {
 			POST: async (req: Request) => {
 				const request = (await req.json()) as OrbitSolveRequest
-				return answer(() => service.solve(request))
+				return answer(req, () => service.solve(request))
 			},
 		},
 		'/api/orbital-mechanics/trajectory': {
 			POST: async (req: Request) => {
 				const request = (await req.json()) as OrbitTrajectoryRequest
-				return answer(() => service.trajectory(request))
+				return answer(req, () => service.trajectory(request))
+			},
+		},
+		'/api/orbital-mechanics/resolve': {
+			POST: async (req: Request) => {
+				const request = (await req.json()) as OrbitResolveRequest
+				return answer(req, () => service.resolve(request, req.signal))
+			},
+		},
+		'/api/orbital-mechanics/compare': {
+			POST: async (req: Request) => {
+				const request = (await req.json()) as OrbitCompareRequest
+				return answer(req, () => service.compare(request))
 			},
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>

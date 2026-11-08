@@ -395,7 +395,7 @@ export type { WhepErrorCode } from './observatorycameras.whep'
 export type { OperationDevice, OperationEvent, OperationKind, OperationProgress, OperationRecord, OperationState } from './operations'
 export type { OperationHistoryPage, OperationRun, OperationRunDevice, OperationRunState } from './operationhistory'
 // oxfmt-ignore
-export type { OrbitalMechanicsErrorCode, OrbitalMechanicsLimits, OrbitalMechanicsReference, OrbitCenterPayload, OrbitDefinitionPayload, OrbitElementsPayload, OrbitMarkerPayload, OrbitSolveRequest, OrbitSolveResponse, OrbitTrajectoryRequest, OrbitTrajectoryResponse, OrbitVector, OrbitWarning } from './orbitalmechanics'
+export type { OrbitalMechanicsErrorCode, OrbitalMechanicsLimits, OrbitalMechanicsReference, OrbitCenterPayload, OrbitCompareNode, OrbitCompareRequest, OrbitCompareResponse, OrbitDefinitionPayload, OrbitElementsPayload, OrbitMarkerPayload, OrbitResolveRequest, OrbitResolveResponse, OrbitSolveRequest, OrbitSourcePayload, OrbitStateTable, OrbitSolveResponse, OrbitTrajectoryRequest, OrbitTrajectoryResponse, OrbitVector, OrbitWarning } from './orbitalmechanics'
 export type { OrbitPreset, OrbitPresetSource } from './orbitalmechanics.presets'
 export type { ClassicalElements, ConicClass, OrbitAngle, OrbitDiagnostics, ReferencePlane, UndefinedAngleReason } from 'nebulosa/src/astronomy/orbits/mechanics'
 export type { ConicMarkerKind } from 'nebulosa/src/astronomy/orbits/sampling'
@@ -1078,7 +1078,7 @@ const solarEclipses = new SolarEclipseService()
 const closeApproaches = new CloseApproachesService(minorBodies, ssdRequests)
 
 // Stateless two-body analysis of the Orbital Mechanics Explorer.
-const orbitalMechanics = new OrbitalMechanicsService()
+const orbitalMechanics = new OrbitalMechanicsService({ minorBodies, kernels: spiceKernels })
 
 // Forecasts of the Astro Weather tool, read from their public services and cached for every tab.
 const astroWeather = new AstroWeatherService()

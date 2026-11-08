@@ -28,13 +28,24 @@ It changes no other tool's state: not the Sky's time, the observing site, the pr
 
 ## Routes
 
-`api/src/orbitalmechanics.ts`, stateless: no operation, event, store, database row, or network access, and requests carry the whole definition, so every answer is reproducible from its request.
-The tool checks what it sends, so requests are taken as valid; scientific outcomes of the model are `422` with an `OrbitalMechanicsErrorCode`: `degenerateOrbit` (position and velocity parallel), `outOfRange` (an offset beyond the solver's range), `solverFailed` (no convergence or a non-finite state).
+`api/src/orbitalmechanics.ts`, stateless: no operation, event, store, or database row, and requests carry the whole definition, so every answer is reproducible from its request.
+Only `/resolve` with `online` asks JPL, through `MinorBodies` and the queue of the Sky Map Contract; every other route works offline.
+The tool checks what it sends, so requests are taken as valid; outcomes are answered with an `OrbitalMechanicsErrorCode`: `degenerateOrbit` (position and velocity parallel), `outOfRange` (an offset beyond the solver's range), `solverFailed` (no convergence or a non-finite state), `orbitSolutionUnavailable`, `unsupportedFrame` (B1950 elements), `centerUnavailable` (a center without a DE440 GM), `kernelMissing`, `kernelCoverageUnavailable`, and `unsupportedKernel` (with the `body` and the `epoch` the kernels cannot give) as `422`; `objectNotFound` and `notCached` as `404`; `kernelReadFailed`, `serviceUnavailable`, and `rateLimited` (with `retryAfter` in milliseconds) as `503`.
 Every number answered is finite.
 
 - `GET /api/orbital-mechanics/reference`: the centers, the presets (`orbitalmechanics.presets.ts`), and the limits (supported instants, 2048 points or states per sample, 8 orbits at once).
 - `POST /api/orbital-mechanics/solve` (`OrbitSolveRequest`): the exact state, elements, diagnostics, and warnings at `at` (default the anchor), the `fingerprint` (a hash of the definition) the values belong to, and for an open orbit the `arc` it plays by default, the instants it is at 20 periapsis distances inbound and outbound.
 - `POST /api/orbital-mechanics/trajectory` (`OrbitTrajectoryRequest`): the conic as a curve (the whole ellipse, its last point repeating the first, or a finite open arc out to `maxRadius`, by default 20 periapsis distances, strictly inside the asymptotes), with its apsides and the nodes on the requested plane, and the exact chronological states over `[start, end]`, refined until a cubic Hermite through neighboring states is within 1e-6 of the distance; either stops at 2048 points and says `truncated`.
+
+- `POST /api/orbital-mechanics/resolve` (`OrbitResolveRequest`): the orbit of a real object with its `source`.
+    - `minorBody`: by SPK-ID, designation, or name. Offline (`online: false`) it reads only the bodies `MinorBodies` resolved recently (by any tool), by SPK-ID, and answers `notCached` otherwise, never asking JPL; online it asks SBDB, answering `ambiguous` with the candidates of a name.
+      The definition is SBDB's published heliocentric J2000 ecliptic solution at its own epoch (an open orbit by perihelion distance and time, a bound one by semi-major axis and mean anomaly), propagated with the Sun's DE440 GM, with the SPK-ID, designation, solution id and date, epoch, and fetch time; B1950 elements are refused.
+    - `spk`: the geometric state of an SPK target relative to a DE440 center at an instant, both barycentric states read from one snapshot of the SPICE library and subtracted (no light time), with the generation and the kernels that gave them.
+      It never installs or generates a kernel: a missing kernel is reported, and the SPICE Kernel Library resolves it.
+- `POST /api/orbital-mechanics/compare` (`OrbitCompareRequest`): Kepler versus SPICE.
+  The osculating two-body orbit of the target's SPK state at the anchor, about the center with its DE440 GM and no rotation, is propagated to up to 2048 evenly spaced instants (with the anchor) and compared with the SPK states at the same instants, center, axes, and units: per instant |Δr|, |Δv|, and their components on the RTN axes of the SPK reference (R radial, T along-track, N along the angular momentum; Δ = Kepler − SPK, absent when undefined), both state tables, and the largest separation and its instant.
+  The whole comparison is read synchronously from one snapshot, so it belongs to one library generation, named in its `source` with every kernel read; an instant a kernel cannot give fails the whole comparison, never patched by another source or interpolated.
+  The residual is a difference between two models, zero at the anchor by construction, not an uncertainty of either and not a prediction of an impact.
 
 ## Presets
 

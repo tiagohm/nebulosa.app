@@ -2,11 +2,15 @@ import type { OrbitAngle, OrbitElementsPayload, OrbitSolveResponse, OrbitVector,
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import { useSnapshot } from 'valtio'
 import { MISSING } from '../../format'
+import { useActiveSite } from '../../location/useLocation'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { Actions } from '../../ui/Actions'
+import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 // oxfmt-ignore
 import { definitionKey, distanceSymbol, type DistanceUnit, type ExplorerOrbit, formatTdb, fromAu, fromAuPerDay, inspectionCurrent, type OrbitalMechanicsState, orbitalMechanicsState, solutionCurrent, sourceLabel, velocitySymbol } from './orbitalmechanics'
+import { showMinorBodyInSky } from './orbitalmechanics.sources'
 
 // Inspector of the selected orbit of the Orbital Mechanics Explorer: its elements on the reference plane drawn, its
 // geometry, dynamics, and Cartesian state, and where it comes from. Every value is exact, read from the server for the
@@ -173,6 +177,7 @@ function StateSection({ solution, unit }: { readonly solution: OrbitSolveRespons
 // Where the orbit comes from and what kind of values these are.
 function SourceSection({ orbit, solution }: { readonly orbit: ExplorerOrbit; readonly solution: OrbitSolveResponse }) {
 	const { source } = orbit
+	const site = useActiveSite()
 	return (
 		<CollapsibleSection id="orbitalmechanics.source" title="Source & Accuracy" summary={source.kind === 'preset' ? (source.sourced ? 'Sourced preset' : 'Illustrative preset') : sourceLabel(source)} defaultOpen={false}>
 			<DataRow label="Source">{sourceLabel(source)}</DataRow>
@@ -186,6 +191,13 @@ function SourceSection({ orbit, solution }: { readonly orbit: ExplorerOrbit; rea
 			<DataRow label="Anchor">{formatTdb(solution.anchor)}</DataRow>
 			<DataRow label="Fingerprint">{solution.fingerprint}</DataRow>
 			<Notice>A two-body model ignores every perturbation, so it drifts from a real object&apos;s motion away from its epoch. It is not a precise ephemeris.</Notice>
+			{source.kind === 'sbdb' && (
+				<Actions>
+					<Button variant="secondary" title="Selects the body in the Sky, which computes its place with its own ephemeris. The Sky's clock does not change." onClick={() => showMinorBodyInSky(source, orbit.name, site)}>
+						Show in Sky
+					</Button>
+				</Actions>
+			)}
 		</CollapsibleSection>
 	)
 }

@@ -6,6 +6,7 @@ import { formatDegrees } from '../format'
 import { type GeographicLocation, siteObserver } from '../location/site'
 import { operationsState } from '../operations'
 import { addToObservingPlanner } from '../tools/observingplanner/observingplanner'
+import { exploreMinorBody } from '../tools/orbitalmechanics/orbitalmechanics.sources'
 import { Button } from '../ui/Button'
 import { Modal, ModalActions } from '../ui/Modal'
 import { Notice } from '../ui/Notice'
@@ -108,6 +109,11 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 				{plannable && (
 					<Button variant="secondary" onClick={() => addToObservingPlanner({ target: plannable, name: targetName })}>
 						Add to Observing Planner
+					</Button>
+				)}
+				{target.kind === 'minorBody' && (
+					<Button variant="secondary" onClick={() => exploreMinorBody({ spkId: target.spkId, name: targetName })}>
+						Explore Orbit
 					</Button>
 				)}
 				{connected && (

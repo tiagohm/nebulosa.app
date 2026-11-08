@@ -1,5 +1,5 @@
 // oxfmt-ignore
-import type { OrbitalMechanicsLimits, OrbitalMechanicsReference, OrbitCenterPayload, OrbitDefinitionPayload, OrbitPreset, OrbitSolveResponse, OrbitTrajectoryResponse, OrbitVector, ReferencePlane } from 'api'
+import type { OrbitalMechanicsLimits, OrbitalMechanicsReference, OrbitCenterPayload, OrbitCompareRequest, OrbitCompareResponse, OrbitDefinitionPayload, OrbitPreset, OrbitResolveResponse, OrbitSolveResponse, OrbitSourcePayload, OrbitTrajectoryResponse, OrbitVector, ReferencePlane } from 'api'
 import { nanoid } from 'nanoid'
 import { AU_KM, DAYSEC, DEG2RAD, MU_AU3_D2_TO_KM3_S2, MU_KM3_S2_TO_AU3_D2, RAD2DEG } from 'nebulosa/src/core/constants'
 import type { MutVec3 } from 'nebulosa/src/math/linear-algebra/vec3'
@@ -62,12 +62,38 @@ export interface OrbitDraft {
 	velocity: [number, number, number]
 }
 
-// Where an orbit comes from, kept with it and exported with the scenario.
-export type ExplorerOrbitSource =
-	| { readonly kind: 'manual' }
-	| { readonly kind: 'preset'; readonly id: string; readonly name: string; readonly sourced: boolean; readonly citation?: string }
-	| { readonly kind: 'sbdb'; readonly spkId: string; readonly designation: string; readonly orbitId?: string; readonly solutionDate?: string; readonly epoch: number; readonly fetchedAt: number }
-	| { readonly kind: 'spk'; readonly target: number; readonly center: number; readonly epoch: number; readonly generation: number; readonly kernels: readonly string[] }
+// Where an orbit comes from, kept with it and exported with the scenario: typed by hand, a preset, or a real object's
+// SBDB solution or SPK state as the server resolved it.
+export type ExplorerOrbitSource = { readonly kind: 'manual' } | { readonly kind: 'preset'; readonly id: string; readonly name: string; readonly sourced: boolean; readonly citation?: string } | OrbitSourcePayload
+
+// A resolved orbit waiting for the operator, since it is about another center than the scene's.
+export type PendingOrbit = Extract<OrbitResolveResponse, { readonly kind: 'resolved' }>
+
+// Lookup of a real object.
+export interface OrbitLookup {
+	// Text of a minor body: an SPK-ID, a designation, or a name.
+	query: string
+	// Whether a lookup is pending.
+	loading: boolean
+	// Why the last lookup failed.
+	error?: string
+	// Whether the last failure was an offline lookup of a body not read recently, which JPL may answer.
+	offerOnline: boolean
+	// Whether the last failure was the SPICE library's, which the SPICE Kernel Library may fix.
+	kernelProblem: boolean
+	// Candidates of an ambiguous name.
+	matches?: readonly { readonly designation: string; readonly name: string }[]
+	// An orbit resolved about another center, waiting to replace the scene.
+	pending?: PendingOrbit
+}
+
+// A comparison of the two-body model with the SPICE kernels, with what was asked.
+export interface OrbitComparison {
+	// The request.
+	readonly request: OrbitCompareRequest
+	// The server's answer.
+	readonly response: OrbitCompareResponse
+}
 
 // Trajectory of an orbit with the window it was asked for.
 export interface OrbitTrack {
@@ -177,6 +203,16 @@ export interface OrbitalMechanicsState {
 	fitPending: boolean
 	// Whether the rate is chosen from the selected orbit's timeline once it is solved, after a preset replaced the scene.
 	ratePending: boolean
+	// A minor body another tool handed over, resolved once the reference is read.
+	pendingTarget?: { readonly spkId: string; readonly name: string }
+	// Lookup of real objects.
+	lookup: OrbitLookup
+	// Last comparison with the SPICE kernels.
+	comparison?: OrbitComparison
+	// Whether a comparison is pending.
+	comparing: boolean
+	// Why the last comparison failed.
+	comparisonError?: string
 }
 
 // Side effects of the tool, replaced in tests.
@@ -241,7 +277,22 @@ export function initialView(): OrbitView {
 
 // Initial state of the tool, before the reference is read.
 export function initialOrbitalMechanicsState(): OrbitalMechanicsState {
-	return { unit: 'au', orbits: [], time: 2451545, playing: false, rate: 1, inspecting: false, plane: 'equator', overlays: { ...DEFAULT_OVERLAYS }, centerDrawing: 'true', view: initialView(), fitPending: false, ratePending: false }
+	return {
+		unit: 'au',
+		orbits: [],
+		time: 2451545,
+		playing: false,
+		rate: 1,
+		inspecting: false,
+		plane: 'equator',
+		overlays: { ...DEFAULT_OVERLAYS },
+		centerDrawing: 'true',
+		view: initialView(),
+		fitPending: false,
+		ratePending: false,
+		lookup: { query: '', loading: false, offerOnline: false, kernelProblem: false },
+		comparing: false,
+	}
 }
 
 // Orbital Mechanics Explorer state of the tab.
@@ -527,7 +578,7 @@ export function loadPreset(state: OrbitalMechanicsState, preset: OrbitPreset, io
 }
 
 // Forgets every orbit and its requests.
-function clearOrbits(state: OrbitalMechanicsState) {
+export function clearOrbits(state: OrbitalMechanicsState) {
 	for (const orbit of state.orbits) forgetGuards(orbit.id)
 	inspectionGuard.cancel()
 	state.orbits = []
@@ -1028,7 +1079,7 @@ export function sourceLabel(source: ExplorerOrbitSource) {
 		case 'sbdb':
 			return `JPL SBDB ${source.designation}${source.orbitId ? ` solution ${source.orbitId}` : ''}`
 		case 'spk':
-			return `SPK state of ${source.target} about ${source.center} at JD ${source.epoch} TDB`
+			return `SPK state of NAIF ${source.target} about NAIF ${source.center} at JD ${source.epoch} TDB`
 	}
 }
 

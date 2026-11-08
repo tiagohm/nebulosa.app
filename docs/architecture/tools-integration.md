@@ -119,6 +119,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Its sections are collapsible (`closeapproaches.*`), each shown only with something to show: Overview, Close Approach, Orbit, Physical Properties, Observations & Discovery, Virtual Impactors, and Other Approaches, paged by JPL by SPK-ID over a span and a target of its own.
   An unknown value is left out, and every term easily read as a risk (NEO, PHA, MOID, the 3σ range) says what it means; nothing is shown as a hazard.
   Open in Sky selects the body through `selectSkyObject` and leaves the clock alone; View in Sky at Approach Time first sets `skyClock` to the UTC instant of the encounter, since the selection reads it.
+  Explore Orbit opens the Orbital Mechanics Explorer on the body by its SPK-ID and name only (`exploreMinorBody`, see [Orbital Mechanics Explorer Contract](orbital-mechanics-explorer.md)).
   Neither changes the observer or any device.
   Observability is read only while its section is open, through `POST /api/sky/position` with no endpoint of its own, at the encounter by default, the real current time, or the instant the Sky shows, and for the active profile's observing site, read again only when its place changes (`locationKey`), without which it is geocentric and offers Set Location.
   It states its source and fallback reason.

@@ -1,6 +1,7 @@
 import type { ConicMarkerKind, ReferencePlane } from 'api'
 import { ECLIPTIC_J2000_MATRIX } from 'nebulosa/src/core/constants'
 import { type CenterDrawing, interpolatedPosition, type OrbitalMechanicsState, type OverlayKey, type OrbitView, solutionCurrent } from './orbitalmechanics'
+import { referencePositionAt } from './orbitalmechanics.sources'
 
 // Renderer of the Orbital Mechanics Explorer: a camera orbiting a target, the projection of display points to canvas
 // pixels, and the drawing of a scene on a 2D canvas, depth-sorted so nearer segments cover farther ones and the central
@@ -187,6 +188,9 @@ export interface SceneModel {
 	readonly overlays: Readonly<Record<OverlayKey, boolean>>
 	// Radius of the region drawn (grid, axes, direction vectors), AU.
 	readonly extent: number
+	// SPK reference of a comparison about the scene's center: its path, its place at the clock's instant, and the place of
+	// the osculating orbit there, display points.
+	readonly reference?: { readonly name: string; readonly points: readonly ScenePoint[]; readonly body?: ScenePoint; readonly model?: ScenePoint }
 	// Name of the reference plane, for the grid's label.
 	readonly planeName: string
 }
@@ -285,6 +289,16 @@ export function drawScene(ctx: CanvasRenderingContext2D, camera: Camera, model: 
 		}
 		ctx.globalAlpha = 1
 		label([extent, 0, 0], model.planeName, theme.muted)
+	}
+
+	if (model.reference) {
+		const { reference } = model
+		for (let k = 1; k < reference.points.length; k++) segment(reference.points[k - 1], reference.points[k], theme.text, 1, [3, 3])
+		if (reference.body) {
+			disc(reference.body, theme.text, MARKER_PX - 1, true)
+			label(reference.body, `${reference.name} (SPK)`, theme.muted)
+			if (reference.model) segment(reference.model, reference.body, theme.text, 1.5)
+		}
 	}
 
 	if (overlays.axes) {
@@ -471,7 +485,7 @@ const VELOCITY_STEP = 1e-5
 // Scene of the explorer's state at its clock's instant: each visible orbit's curve and markers in display axes, its body
 // interpolated from its exact samples, and its plane normal and eccentricity vector from its solution, which a two-body
 // orbit keeps constant. The extent covers every curve drawn and at least three radii of the center.
-export function buildSceneModel(state: Pick<OrbitalMechanicsState, 'orbits' | 'selected' | 'time' | 'plane' | 'overlays' | 'centerDrawing' | 'center'>): SceneModel {
+export function buildSceneModel(state: Pick<OrbitalMechanicsState, 'orbits' | 'selected' | 'time' | 'plane' | 'overlays' | 'centerDrawing' | 'center' | 'comparison'>): SceneModel {
 	const { plane, time } = state
 	const orbits: SceneOrbit[] = []
 	let extent = 3 * (state.center?.radius ?? 0)
@@ -508,7 +522,22 @@ export function buildSceneModel(state: Pick<OrbitalMechanicsState, 'orbits' | 's
 		})
 	}
 
+	// A comparison is drawn only about its own center, never at another center's origin.
+	const comparison = state.comparison
+	let reference: SceneModel['reference']
+
+	if (comparison && state.center?.code === comparison.request.center) {
+		const { response, request } = comparison
+		const points = response.reference.positions.map((e) => toDisplay(e, plane))
+		for (const p of points) extent = Math.max(extent, Math.hypot(p[0], p[1], p[2]))
+		const body = referencePositionAt(response, time)
+		const osculating = state.orbits.find((e) => e.source.kind === 'spk' && e.source.target === request.target && e.source.center === request.center && e.source.epoch === request.anchor)
+		const model = body && osculating?.track ? interpolatedPosition(osculating.track, time) : undefined
+		reference = { name: response.name, points, body: body && toDisplay(body, plane), model: model && toDisplay(model, plane) }
+	}
+
 	return {
+		reference,
 		orbits,
 		center: { name: state.center?.name ?? '', radius: state.center?.radius ?? 0 },
 		centerDrawing: state.centerDrawing,

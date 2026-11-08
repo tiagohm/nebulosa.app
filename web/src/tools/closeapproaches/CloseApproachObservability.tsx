@@ -10,6 +10,7 @@ import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
+import { exploreMinorBody } from '../orbitalmechanics/orbitalmechanics.sources'
 import { closeApproachesState, loadCloseApproachObservability, OBSERVABILITY_INSTANTS, type ObservabilityInstant, observabilityKey, showInSky } from './closeapproaches'
 
 // How the Close Approaches tool meets the Sky: the two explicit actions that show the object there, and the Observability
@@ -46,6 +47,9 @@ export function CloseApproachSkyActions({ body, time, site }: SkyActionsProps) {
 			</Button>
 			<Button variant="secondary" title="Sets the clock of the Sky to the UTC instant of this encounter and selects the object." onClick={() => showInSky(body, site, time)}>
 				View in Sky at Approach Time
+			</Button>
+			<Button variant="secondary" title="Opens the Orbital Mechanics Explorer on this body's published orbit. Nothing here changes." onClick={() => exploreMinorBody({ spkId: body.spkId, name: body.name })}>
+				Explore Orbit
 			</Button>
 		</div>
 	)

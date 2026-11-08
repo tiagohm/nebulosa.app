@@ -11,11 +11,14 @@ import { IconButton } from '../../ui/IconButton'
 import { Notice } from '../../ui/Notice'
 import { Popover } from '../../ui/Popover'
 import { SegmentedControl } from '../../ui/SegmentedControl'
+import { consumePendingTarget } from './orbitalmechanics.sources'
+import { OrbitComparison } from './OrbitComparison'
 import { OrbitEditor, CenterEditor } from './OrbitEditor'
 import { OrbitInspector } from './OrbitInspector'
 // oxfmt-ignore
 import { addOrbit, addRefusal, cloneOrbit, downloadText, exportScenario, importScenario, loadPreset, type OrbitalMechanicsState, orbitalMechanicsState, openOrbitalMechanics, type OverlayKey, removeOrbit, selectedOrbit, selectOrbit, setPlane, trackCsv } from './orbitalmechanics'
 import { OrbitScene } from './OrbitScene'
+import { OrbitSources } from './OrbitSources'
 import { OrbitTimeline, usePlayback } from './OrbitTimeline'
 import { buildSceneModel, fitDistance, PALETTE_TOKENS, presetAngles, toDisplay } from './scene'
 
@@ -47,12 +50,17 @@ export function OrbitalMechanicsExplorer() {
 	// Reads the reference on the first opening of the tab.
 	useEffect(() => void openOrbitalMechanics(orbitalMechanicsState), [])
 
+	// Resolves a minor body another tool handed over, once the reference is read.
+	useEffect(() => void consumePendingTarget(orbitalMechanicsState), [state.reference, state.pendingTarget])
+
 	const panel = (
 		<div className="flex flex-col">
 			<OrbitList />
 			<CenterEditor />
 			{orbit && <OrbitEditor key={orbit.id} orbit={orbit} />}
 			{orbit && <OrbitInspector orbit={orbit} />}
+			<OrbitSources />
+			<OrbitComparison />
 			<ViewSection />
 		</div>
 	)

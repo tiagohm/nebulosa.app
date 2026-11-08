@@ -23,6 +23,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   A footprint is drawn only while its document still shows that image and is dropped otherwise (the document closed, or its camera tab shows another frame);
   the mark stays until replaced or cleared from the Sky toolbar, where a toggle also hides the footprint and shows it again in place, without moving the view (sending a footprint shows it).
   Neither changes the Sky selection, the clock, or the mount.
+- Handoff to the Orbital Mechanics Explorer: Explore Orbit (`ObjectActions.tsx`, for a minor body) opens the tool on the body by its SPK-ID and name only (`exploreMinorBody`), never by a position, and changes nothing of the Sky (see [Orbital Mechanics Explorer Contract](orbital-mechanics-explorer.md)).
 - Handoffs with the Observing Planner: Add to Observing Planner (`ObjectActions.tsx`, for a catalog object, a major body other than the Sun, or a minor body by its SPK-ID, `plannerTarget`) opens the tool with the target pending (`addToObservingPlanner`), where a dialog adds it to a plan chosen by the operator;
   Show in Sky of the planner (`showTargetInSky`) selects a catalog object, a body, or a minor body (located by the Sky's own ephemeris, never the planner's trajectory) through `selectSkyObject` without moving the view, and marks fixed coordinates through `skyImageState`, panning to them.
   Neither moves the Sky clock (positions are at the Sky's own time), the mount, the profile, or its site.

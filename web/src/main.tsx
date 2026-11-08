@@ -32,7 +32,7 @@ import { handleNotificationEvent, notificationsState, refreshNotifications, setS
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
 import { handlePlateSolvingEvent, plateSolvingState, refreshPlateSolving } from './platesolving/platesolving'
 import { activeProfile, activeSetup, profileState, pruneNotificationPreferences } from './profile/profile'
-import { WorkspaceSync } from './profile/sync'
+import { WorkspaceSync, workspaceSyncState } from './profile/sync'
 import { activeCameraTabEntry, cameraToolsEntry, centeringTargetsEntry, keepViewEntries, sectionsEntry, ViewPersistence } from './profile/view'
 import { WorkspaceGate } from './profile/WorkspaceGate'
 import { handleSatelliteEvent, refreshSatelliteCatalog, satelliteCatalogState } from './satellites/satellites'
@@ -56,8 +56,17 @@ import { handleSpiceKernelEvent, refreshSpiceKernels, spiceKernelsState } from '
 // browser storage (profile/view.ts), and keeps the server state current through the event socket. Under HMR the module
 // re-runs on every update: the React root is reused and the previous run's subscriptions are released.
 
-// Synchronization of the saved connections and the profiles of the tab with the server.
-const workspace = new WorkspaceSync(connectionState, profileState)
+// Synchronization of the saved connections and the profiles of the tab with the server (newWorkspaceSync).
+const workspace: WorkspaceSync = (import.meta.hot.data.workspace = newWorkspaceSync(import.meta.hot.data.workspace))
+
+// Returns the synchronization of the previous HMR run while it still syncs the same stores, or a new one, which starts
+// unloaded: a new one knows nothing the server confirmed, so with the workspace still loaded it would take the whole tab
+// as changed and write it back, refused as conflicts.
+function newWorkspaceSync(kept: unknown) {
+	if (kept instanceof WorkspaceSync && kept.connections === connectionState && kept.profiles === profileState) return kept
+	workspaceSyncState.loaded = false
+	return new WorkspaceSync(connectionState, profileState)
+}
 
 // Gives the Images workspace a camera tab for each connected camera of the watched connection, ordered by the role each
 // one fills in the equipment setup of the active profile (none before the workspace is read), and removes the tabs of the

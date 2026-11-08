@@ -2,6 +2,7 @@ import type { ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectReq
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { jsonInit, responseError } from '../http'
+import { SnapshotRefreshes } from '../refresh'
 
 // Saved connections of the workspace and the connections the server holds open. Saved connections belong to the server
 // (sync.ts of the profiles) and are shared by every profile, tab, and browser; the actions here change the tab at once,
@@ -104,9 +105,13 @@ export function removeConnection(state: ConnectionState, id: string) {
 	delete state.errors[id]
 }
 
+// Refreshes of the open server connections, ordered against the events and answers that open or close one meanwhile.
+const serverRefreshes = new SnapshotRefreshes()
+
 // Records an open server connection, once per id, and clears the failures of the saved connections
 // that address it.
 function addServer(state: ConnectionState, status: ConnectionStatus) {
+	serverRefreshes.updated(status.id)
 	if (!state.servers.some((s) => s.id === status.id)) state.servers.push(status)
 
 	for (const connection of state.connections) {
@@ -114,14 +119,29 @@ function addServer(state: ConnectionState, status: ConnectionStatus) {
 	}
 }
 
-// Replaces the open server connections with the server's current list. Failures leave them unchanged.
-export async function refreshServers(state: ConnectionState) {
+// Replaces the open server connections with the server's current list, but for a connection an event or an answer opened
+// or closed while the list was fetched, which stays as that left it. Failures leave them unchanged.
+export async function refreshServers(state: ConnectionState, request: typeof fetch = fetch) {
+	const token = serverRefreshes.start()
+
 	try {
-		const response = await fetch('/api/connections')
-		if (response.ok) state.servers = (await response.json()) as ConnectionStatus[]
+		const response = await request('/api/connections')
+		if (!response.ok || !serverRefreshes.current(token)) return
+		const listed = (await response.json()) as ConnectionStatus[]
+		if (!serverRefreshes.current(token)) return
+		const kept = state.servers.filter(({ id }) => serverRefreshes.changed(id))
+		state.servers = [...listed.filter(({ id }) => !serverRefreshes.changed(id)), ...kept]
 	} catch {
 		// The server is unreachable; its events resynchronize the list once the socket reopens.
+	} finally {
+		serverRefreshes.end(token)
 	}
+}
+
+// Forgets an open server connection that closed.
+function removeServer(state: ConnectionState, id: string) {
+	serverRefreshes.updated(id)
+	state.servers = state.servers.filter((s) => s.id !== id)
 }
 
 // Opens the server connection of a saved connection, or reuses it when another tab opened it. Ignored
@@ -156,7 +176,7 @@ export async function disconnect(state: ConnectionState, connection: Connection)
 	try {
 		const response = await fetch(`/api/connections/${encodeURIComponent(server.id)}`, { method: 'DELETE' })
 
-		if (response.ok || response.status === 404) state.servers = state.servers.filter((s) => s.id !== server.id)
+		if (response.ok || response.status === 404) removeServer(state, server.id)
 		else state.errors[connection.id] = await responseError(response)
 	} catch (error) {
 		state.errors[connection.id] = error instanceof Error ? error.message : 'Unable to disconnect'
@@ -169,5 +189,5 @@ export async function disconnect(state: ConnectionState, connection: Connection)
 // server connections.
 export function handleConnectionEvent(state: ConnectionState, event: ServerEvent) {
 	if (event.type === 'connection:open') addServer(state, event.connection)
-	else if (event.type === 'connection:close') state.servers = state.servers.filter((s) => s.id !== event.id)
+	else if (event.type === 'connection:close') removeServer(state, event.id)
 }

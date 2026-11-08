@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { proxy } from 'valtio'
-import { connect, type ConnectionState, disconnect, handleConnectionEvent, highlightConnection, removeConnection, saveConnection, serverOf } from './connection'
+import { connect, type ConnectionState, disconnect, handleConnectionEvent, highlightConnection, refreshServers, removeConnection, saveConnection, serverOf } from './connection'
 
 function newState(): ConnectionState {
 	return { open: true, connections: [], servers: [], errors: {} }
@@ -162,5 +162,26 @@ describe('connection errors', () => {
 
 		saveConnection(state, { name: 'B', host: 'b2', port: 2, type: 'INDI' }, b.id)
 		expect(state.errors).toEqual({})
+	})
+})
+
+describe('refresh', () => {
+	test('a connection opened or closed while the list is fetched stays as the event left it', async () => {
+		const state = newState()
+		handleConnectionEvent(state, { type: 'connection:open', connection: { type: 'SIMULATOR', id: 'closing' } as never })
+		const answer = Promise.withResolvers<Response>()
+		const refreshed = refreshServers(state, (() => answer.promise) as unknown as typeof fetch)
+
+		handleConnectionEvent(state, { type: 'connection:open', connection: { type: 'SIMULATOR', id: 'opened' } as never })
+		handleConnectionEvent(state, { type: 'connection:close', id: 'closing', cause: 'requested' })
+		answer.resolve(
+			Response.json([
+				{ type: 'SIMULATOR', id: 'closing' },
+				{ type: 'SIMULATOR', id: 'other' },
+			]),
+		)
+		await refreshed
+
+		expect(state.servers.map(({ id }) => id)).toEqual(['other', 'opened'])
 	})
 })

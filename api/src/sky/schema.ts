@@ -8,8 +8,8 @@ import type { Database } from 'bun:sqlite'
 // Increment it whenever a table, column, or unit changes.
 export const SKY_CATALOG_SCHEMA_VERSION = 2
 
-// Keys of the meta table.
-export type SkyCatalogMetaKey = 'schemaVersion' | 'generatedAt' | 'sources'
+// Keys of the meta table; empty is 'true' for a placeholder written by `bun make:catalog --empty`, which holds no object.
+export type SkyCatalogMetaKey = 'schemaVersion' | 'generatedAt' | 'sources' | 'empty'
 
 // One row of the objects table. Angles are radians, J2000.
 export interface SkyCatalogObjectRow {

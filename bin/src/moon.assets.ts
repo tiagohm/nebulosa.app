@@ -99,9 +99,22 @@ const empty = process.argv.includes('--empty')
 
 const exists = await Promise.all(Object.values(OUTPUT).map((name) => Bun.file(outputFile(name)).exists()))
 
+// Whether the assets in place are the placeholders of --empty, which real assets replace without --force.
+async function arePlaceholders() {
+	try {
+		return ((await Bun.file(outputFile(OUTPUT.provenance)).json()) as { readonly empty?: boolean }).empty === true
+	} catch {
+		return false
+	}
+}
+
 if (!force && exists.every(Boolean)) {
-	console.info('Moon assets already exist! Use --force to regenerate them.')
-	exit(0)
+	if (empty || !(await arePlaceholders())) {
+		console.info('Moon assets already exist! Use --force to regenerate them.')
+		exit(0)
+	}
+
+	console.info('The Moon assets are the empty placeholders; generating the real ones...')
 }
 
 await fs.mkdir(OUTPUT_DIR, { recursive: true })

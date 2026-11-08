@@ -3,7 +3,7 @@ import fs from 'fs/promises'
 import { join } from 'path'
 import { exit } from 'process'
 import { abbreviateGreekLetter, CATALOG } from 'api/sky/designations'
-import { createSkyCatalogSchema, writeSkyCatalogMeta } from 'api/sky/schema'
+import { createSkyCatalogSchema, readSkyCatalogMeta, writeSkyCatalogMeta } from 'api/sky/schema'
 import { simbadQuery } from 'nebulosa/src/adapters/catalogs/simbad'
 import { type Constellation, CONSTELLATION_LIST, constellation } from 'nebulosa/src/astronomy/coordinates/constellation'
 import { readHygCatalog } from 'nebulosa/src/catalogs/stars/hyg'
@@ -772,12 +772,32 @@ function dataFile(name: string) {
 const OUTPUT = dataFile('sky.catalog.db')
 const TEMPORARY = dataFile('sky.catalog.db.tmp')
 
-if (!process.argv.includes('--force') && (await Bun.file(OUTPUT).exists())) {
-	console.info('sky.catalog.db already exists! Use --force to regenerate it.')
-	exit(0)
+// Whether this run writes the empty placeholder (--empty), enough for the tests, instead of the real catalog.
+const EMPTY = process.argv.includes('--empty')
+
+// Whether the catalog at OUTPUT is the placeholder of --empty, which a real catalog replaces without --force.
+function isPlaceholder() {
+	const existing = new Database(OUTPUT, { readonly: true })
+
+	try {
+		return readSkyCatalogMeta(existing, 'empty') === 'true'
+	} catch {
+		return false
+	} finally {
+		existing.close()
+	}
 }
 
-if (!process.argv.includes('--empty')) {
+if (!process.argv.includes('--force') && (await Bun.file(OUTPUT).exists())) {
+	if (EMPTY || !isPlaceholder()) {
+		console.info('sky.catalog.db already exists! Use --force to regenerate it.')
+		exit(0)
+	}
+
+	console.info('sky.catalog.db is the empty placeholder; generating the real catalog...')
+}
+
+if (!EMPTY) {
 	for (const [name, url] of Object.entries(SOURCE_FILES)) {
 		const file = Bun.file(dataFile(name))
 		if (await file.exists()) continue
@@ -888,7 +908,7 @@ const GUM_CATALOG_MAP = mapCatalog(GUM_CATALOG)
 // Proper names of names.dat by catalog code, as [designation, proper name] pairs.
 const NAMES = new Map<number, [string, string][]>()
 
-if (!process.argv.includes('--empty')) {
+if (!EMPTY) {
 	for await (const entry of readNamesDat(fileHandleSource(await fs.open(dataFile('names.dat'))))) {
 		const type: number = CATALOG[entry.prefix as keyof typeof CATALOG] ?? -1
 		const names = NAMES.get(type) ?? []
@@ -1133,14 +1153,16 @@ async function readStarClustersFromSimbad() {
 
 db.run('BEGIN TRANSACTION')
 
-if (!process.argv.includes('--empty')) {
+if (!EMPTY) {
 	await readStarsFromHyg()
 	await readDsosFromStellarium()
 	await readStarClustersFromSimbad()
 }
 
 writeSkyCatalogMeta(db, 'generatedAt', new Date().toISOString())
-writeSkyCatalogMeta(db, 'sources', JSON.stringify({ ...SOURCE_FILES, simbad: 'SIMBAD TAP star clusters' }))
+// A placeholder read no source, and says so, so a later run replaces it.
+if (EMPTY) writeSkyCatalogMeta(db, 'empty', 'true')
+else writeSkyCatalogMeta(db, 'sources', JSON.stringify({ ...SOURCE_FILES, simbad: 'SIMBAD TAP star clusters' }))
 
 db.run('COMMIT')
 db.run('VACUUM')

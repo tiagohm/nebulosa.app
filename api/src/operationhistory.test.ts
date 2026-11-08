@@ -64,7 +64,7 @@ test('the history is paged newest first through its route', async () => {
 	const routes = createOperationHistoryRoutes(recorder)
 	const first = (await routes['/api/operations/history'].GET(new Request('http://localhost/api/operations/history?limit=2') as never).json()) as OperationHistoryPage
 	expect(first.items.map(({ operationId }) => operationId)).toEqual(['op5', 'op4'])
-	expect(first.next).toBe('400')
+	expect(first.next).toBe('400:op4')
 
 	const second = (await routes['/api/operations/history'].GET(new Request(`http://localhost/api/operations/history?limit=2&before=${first.next}`) as never).json()) as OperationHistoryPage
 	expect(second.items.map(({ operationId }) => operationId)).toEqual(['op3', 'op2'])
@@ -75,4 +75,21 @@ test('a row that cannot be written never throws into the publisher', () => {
 	database.db.run('PRAGMA query_only = ON')
 	expect(() => recorder.consume(event('a'))).not.toThrow()
 	expect(() => recorder.consume(event('a', { state: 'succeeded' }))).not.toThrow()
+})
+
+test('operations that started in the same millisecond are never lost at a page boundary', () => {
+	const { recorder } = setup()
+	for (const id of ['a', 'b', 'c']) recorder.consume(event(id, {}, 1000))
+	recorder.consume(event('older', {}, 900))
+
+	const seen: string[] = []
+	let before: string | undefined
+
+	do {
+		const page = recorder.history(before, 1)
+		seen.push(...page.items.map(({ operationId }) => operationId))
+		before = page.next
+	} while (before !== undefined)
+
+	expect(seen).toEqual(['a', 'b', 'c', 'older'])
 })

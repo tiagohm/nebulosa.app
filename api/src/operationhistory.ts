@@ -123,13 +123,19 @@ export class OperationRecorder {
 		}
 	}
 
-	// Returns a page of the history, newest first: at most limit operations that started before the instant before
-	// (Unix milliseconds), or the newest ones.
-	history(before?: number, limit: number = MAX_OPERATION_PAGE): OperationHistoryPage {
+	// Returns a page of the history, newest first: at most limit operations after the cursor before (the next of the
+	// previous page: the start instant, in Unix milliseconds, and the id of its last operation), or the newest ones.
+	// Operations that started in the same millisecond, as the operations a composed tool starts together, are ordered by
+	// their id, so a page boundary between them loses none.
+	history(before?: string, limit: number = MAX_OPERATION_PAGE): OperationHistoryPage {
 		const size = Math.min(Math.max(1, limit), MAX_OPERATION_PAGE)
-		const rows = this.database.db.query<OperationRunRow, [number, number]>('SELECT * FROM operation_runs WHERE started_at < ? ORDER BY started_at DESC, operation_id LIMIT ?').all(before ?? Number.MAX_SAFE_INTEGER, size)
+		const separator = before?.indexOf(':') ?? -1
+		const startedAt = before === undefined ? Number.MAX_SAFE_INTEGER : Number(before.slice(0, separator))
+		const operationId = before === undefined ? '' : before.slice(separator + 1)
+		const rows = this.database.db.query<OperationRunRow, [number, string, number]>('SELECT * FROM operation_runs WHERE started_at < ?1 OR (started_at = ?1 AND operation_id > ?2) ORDER BY started_at DESC, operation_id LIMIT ?3').all(startedAt, operationId, size)
 		const items = rows.map(rowRun)
-		return items.length === size ? { items, next: String(items.at(-1)!.startedAt) } : { items }
+		const last = items.at(-1)
+		return items.length === size && last ? { items, next: `${last.startedAt}:${last.operationId}` } : { items }
 	}
 }
 
@@ -143,7 +149,7 @@ export function createOperationHistoryRoutes(recorder: OperationRecorder) {
 				const params = new URL(req.url).searchParams
 				const before = params.get('before')
 				const limit = params.get('limit')
-				return Response.json(recorder.history(before === null ? undefined : Number(before), limit === null ? undefined : Number(limit)))
+				return Response.json(recorder.history(before ?? undefined, limit === null ? undefined : Number(limit)))
 			},
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>

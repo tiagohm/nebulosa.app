@@ -1,6 +1,6 @@
 import type { Device } from 'nebulosa/src/devices/indi/device'
 import { DeviceLifecycle } from 'nebulosa/src/devices/orchestration/device.lifecycle'
-import { OperationCoordinator, type OperationFailureReason, type OperationResult, type OperationScope } from 'nebulosa/src/devices/orchestration/operation'
+import { failedOperationResult, OperationCoordinator, type OperationFailureReason, type OperationResult, type OperationScope } from 'nebulosa/src/devices/orchestration/operation'
 import { ResourceArbiter, type ResourceReservation, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import type { DeviceRegistry } from './devices'
 
@@ -125,6 +125,13 @@ export type OperationListener = (event: OperationEvent) => void
 // Command tokens remembered so a repeated request is answered with its first operation; older ones are
 // forgotten. A request is never repeated after more than a few others, so the most recent are enough.
 const MAX_TOKENS = 256
+
+// Resolves the result of an operation of the coordinator, which rejects when its executor threw, as a failure
+// (commandFailed, with the message of the error) instead, so a service that follows the end of its operation to end its
+// session and free its devices always sees it. Never rejects.
+export function settledResult<T>(result: Promise<OperationResult<T>>): Promise<OperationResult<T>> {
+	return result.catch((error: unknown) => failedOperationResult('commandFailed', Error.isError(error) ? error.message : String(error)))
+}
 
 // Process-wide registry of device operations.
 export class OperationRegistry implements Disposable {

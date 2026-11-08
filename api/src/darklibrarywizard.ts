@@ -38,7 +38,7 @@ import type { DeviceRegistry } from './devices'
 import { publishFrame } from './flatwizard'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
-import type { OperationDevice, OperationProgressReporter, OperationRegistry } from './operations'
+import { type OperationDevice, type OperationProgressReporter, type OperationRegistry, settledResult } from './operations'
 
 // Dark Library Wizard service: one server-owned session per camera that acquires the DARK frames of a capture plan, group
 // after group, until each group has its accepted frames. A plan is immutable and lives in the memory of its session
@@ -529,7 +529,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 
 		this.#sessions.adopt(key, session, record.operationId)
 
-		void session.handle!.result.then((result) => this.#ended(session, devices, result))
+		void settledResult(session.handle!.result).then((result) => this.#ended(session, devices, result))
 		return startResponse(session)
 	}
 

@@ -26,7 +26,7 @@ import type { DeviceRegistry } from './devices'
 import type { FlatFrameContext, FlatFrameMeasurement, FlatMeasurementOptions, FlatWizardAnalyzer } from './flatwizard.analysis'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
-import type { OperationDevice, OperationRegistry } from './operations'
+import { type OperationDevice, type OperationRegistry, settledResult } from './operations'
 
 // Flat Wizard service: one server-owned session per camera that, filter after filter, finds the exposure putting
 // the brightest plane of a flat inside its target and then acquires the requested number of accepted FLAT frames
@@ -482,7 +482,7 @@ export class FlatWizardSessions {
 
 		this.#sessions.adopt(key, session, record.operationId)
 
-		void session.handle!.result.then((result) => this.#ended(session, devices, result))
+		void settledResult(session.handle!.result).then((result) => this.#ended(session, devices, result))
 		return Response.json({ sessionId: session.summary.sessionId, operationId: record.operationId } satisfies FlatWizardStartResponse, { status: 202 })
 	}
 

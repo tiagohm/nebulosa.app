@@ -31,7 +31,7 @@ import type { PointingModels } from './mountpointing'
 import { CORRECTION_REFUSALS, correctedCommand } from './mountpointing.corrections'
 import { apparentFromIcrs, type EquatorialPosition, type PointingSite } from './mountpointing.frames'
 import type { PointingAcquisitionState, PointingModelFile, PointingMountIdentity, PointingOpticsFingerprint, PointingSampleRecord, PointingVerification } from './mountpointing.store'
-import type { OperationDevice, OperationRegistry } from './operations'
+import { type OperationDevice, type OperationRegistry, settledResult } from './operations'
 import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, PlateSolvingService } from './platesolving'
 
 // Acquisition of the samples of a mount pointing model, for one camera and one mount. A session walks the waypoints of a
@@ -664,7 +664,7 @@ export class MountPointingSessions {
 
 		this.#byOperation.set(record.operationId, session)
 		this.#update(session, { operationId: record.operationId, state: 'preparing', reason: undefined, error: undefined })
-		void session.handle!.result.then((result) => this.#operationEnded(session, result))
+		void settledResult(session.handle!.result).then((result) => this.#operationEnded(session, result))
 	}
 
 	// Runs a stretch of work holding the camera and the mount.

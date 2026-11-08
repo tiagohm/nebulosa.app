@@ -3,7 +3,7 @@ import type { Device } from 'nebulosa/src/devices/indi/device'
 import { type OperationContext, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { ConnectionManager } from './connection'
-import { type OperationEvent, OperationRegistry } from './operations'
+import { type OperationEvent, OperationRegistry, settledResult } from './operations'
 
 const disposables: Disposable[] = []
 
@@ -191,4 +191,9 @@ test('a reserved device is admitted only to its reservation, whose scope acquire
 	expect(operations.arbiter.availability(key)).toBe('reserved')
 	reserved.reservation.release()
 	expect(operations.admits(mount)).toBeTrue()
+})
+
+test('a result whose executor threw settles as a failure', async () => {
+	expect(await settledResult(Promise.reject(new Error('boom')))).toEqual({ ok: false, reason: 'commandFailed', error: 'boom' })
+	expect(await settledResult(Promise.resolve({ ok: true, value: 1 } as const))).toEqual({ ok: true, value: 1 })
 })

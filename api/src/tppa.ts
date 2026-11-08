@@ -27,7 +27,7 @@ import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupp
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
-import type { OperationDevice, OperationRegistry } from './operations'
+import { type OperationDevice, type OperationRegistry, settledResult } from './operations'
 import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, PlateSolvingService } from './platesolving'
 
 // TPPA service: runs the toolkit's automatic three-point polar alignment for one camera and one mount inside a
@@ -391,7 +391,7 @@ export class TppaSessions {
 
 		this.#sessions.adopt(resourceKey(camera), session, record.operationId)
 
-		void session.handle!.result.then((result) => this.#ended(session, result))
+		void settledResult(session.handle!.result).then((result) => this.#ended(session, result))
 		return accepted(session)
 	}
 

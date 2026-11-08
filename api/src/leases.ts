@@ -5,7 +5,7 @@ import { abortReason } from 'nebulosa/src/devices/orchestration/operation.wait'
 import { type ResourceKey, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { failureCode } from './commands'
 import { errorResponse } from './http'
-import type { OperationKind, OperationRegistry } from './operations'
+import { type OperationKind, type OperationRegistry, settledResult } from './operations'
 
 // Manual motion authorized only while a tab keeps renewing it, shared by the mount nudge and the manual
 // rotation of a dome. Each press is a session named by a token the tab generates, run as one operation that
@@ -178,11 +178,7 @@ export class LeasedMotions<S extends LeasedSession> implements Disposable {
 		const { operationId } = this.operations.track(this.kind, [{ connectionId: start.connectionId, deviceId: start.deviceId }], operation.result)
 		this.#renew(active)
 		this.#update(active, { operationId } as Partial<S>)
-		// The coordinator rejects the result of an executor that threw; the press still ends, so its device is freed.
-		void operation.result.then(
-			(result) => this.#ended(active, result),
-			(error: unknown) => this.#ended(active, failedOperationResult('commandFailed', Error.isError(error) ? error.message : String(error))),
-		)
+		void settledResult(operation.result).then((result) => this.#ended(active, result))
 
 		return await this.#startResponse(active)
 	}

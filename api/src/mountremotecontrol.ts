@@ -14,7 +14,7 @@ import type { ConnectionRegistryEvent } from './connection'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { MountAdmission, MountCommands } from './mounts'
-import type { OperationRegistry } from './operations'
+import { type OperationRegistry, settledResult } from './operations'
 
 // Mount Remote Control: TCP listeners speaking the LX200 and Stellarium telescope protocols that expose one mount of
 // one open connection to planetarium programs. A listener exists per (connection, mount, protocol), so a mount may
@@ -527,7 +527,7 @@ export class MountRemoteControlService implements Disposable {
 			end.resolve()
 		}, this.options.motionWatchdog)
 
-		void operation.result.then((result) => {
+		void settledResult(operation.result).then((result) => {
 			clearTimeout(watchdog)
 			ready.resolve(false)
 			if (remote.motion === motion) remote.motion = undefined

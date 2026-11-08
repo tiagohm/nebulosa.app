@@ -19,7 +19,7 @@ import { type ClientResolver, type CommandRefusal, type CommandRequest, refusal,
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
-import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
+import { type OperationDevice, type OperationRegistry, type ToolInvocation, settledResult } from './operations'
 import { StarDetectionError, type StarDetectionPreparation, type StarDetectionRequest, type StarDetectionService, type StarDetectorProvider } from './stars'
 
 // Auto Focus service: runs the toolkit's runAutoFocus for one camera and one focuser inside a single operation of
@@ -369,7 +369,7 @@ export class AutoFocusSessions {
 
 		this.#sessions.adopt(resourceKey(camera), session, record.operationId)
 
-		void session.handle!.result.then(async (result) => {
+		void settledResult(session.handle!.result).then(async (result) => {
 			await this.#ended(session, result)
 			session.ended.resolve(session.summary)
 		})

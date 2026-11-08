@@ -19,7 +19,7 @@ import type { DarvAnalyzer, DarvMeasurementResult, DarvTrail } from './darv.anal
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
-import type { OperationDevice, OperationRegistry } from './operations'
+import { type OperationDevice, type OperationRegistry, settledResult } from './operations'
 
 // DARV service: drift alignment for one camera and one mount, as a session of measurements the operator repeats
 // while adjusting the mount by hand. Each measurement is its own `mount.darv` operation of the process-wide registry,
@@ -380,7 +380,7 @@ export class DarvSessions {
 		this.#byOperation.set(record.operationId, { session, generation })
 		this.#update(session, { state: 'measuring', measurements })
 
-		void running.handle!.result.then((result) => this.#ended(session, running, mount, result))
+		void settledResult(running.handle!.result).then((result) => this.#ended(session, running, mount, result))
 		return Response.json({ sessionId: session.summary.sessionId, operationId: record.operationId, generation } satisfies DarvStartResponse, { status: 202 })
 	}
 

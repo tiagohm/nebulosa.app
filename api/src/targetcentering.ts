@@ -24,7 +24,7 @@ import type { DeviceRegistry } from './devices'
 import type { GuidingRestoration, GuidingSessions, GuidingSuspension } from './guiding'
 import type { ImageStore } from './images'
 import type { MountCommands } from './mounts'
-import type { OperationDevice, OperationRegistry, ToolInvocation } from './operations'
+import { type OperationDevice, type OperationRegistry, type ToolInvocation, settledResult } from './operations'
 import { type PlateSolvePreparation, type PlateSolveRequest, PlateSolvingError, type PlateSolverProvider, type PlateSolvingService } from './platesolving'
 import type { SkyObserver } from './sky/ephemeris'
 
@@ -492,7 +492,7 @@ export class TargetCenteringSessions {
 		})
 
 		this.#sessions.adopt(key, session, record.operationId)
-		void session.handle!.result.then((result) => this.#operationEnded(session, result))
+		void settledResult(session.handle!.result).then((result) => this.#operationEnded(session, result))
 		return admitted(session, false)
 	}
 

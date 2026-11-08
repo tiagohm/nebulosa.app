@@ -1,7 +1,7 @@
 import { basename, join } from 'path'
 import { formatTemporal, TIMEZONE } from 'nebulosa/src/astronomy/time/temporal'
 import { type Camera, type CameraTransferFormat, CLIENT, type Client } from 'nebulosa/src/devices/indi/device'
-import { type FailedOperationResult, failedOperationResult, type OperationFailureReason, type OperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import type { FailedOperationResult, OperationFailureReason, OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { type ResourceReservation, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { numericKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { type CameraCaptureHandle, type CameraCaptureSuspension, CameraCapturer, type CameraFrameGate, type CameraFramePathRequest, type CameraFramePreparation, writeFrameExclusively } from 'nebulosa/src/observation/capture/capture'
@@ -14,7 +14,7 @@ import type { DeviceRegistry } from './devices'
 import { type CaptureDither, type CaptureDitherErrorCode, type CaptureDitherLoan, type CaptureDitherPlan, type CaptureDithering, ditherBoundary } from './dithering'
 import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
-import type { OperationRegistry, ToolInvocation } from './operations'
+import { type OperationRegistry, settledResult, type ToolInvocation } from './operations'
 
 // Camera Capture service: single, fixed-count, and loop acquisitions of one camera, run on the server through
 // the toolkit's CameraCapturer under the process-wide operation registry, so the camera stays held for the
@@ -761,7 +761,6 @@ export class CameraCaptures implements Disposable {
 
 		// A capture that dithers stays the running capture of its camera until its dithers gave back what they held, so its
 		// end, and a new capture of the camera, come only once nothing it commanded still moves.
-		// The coordinator rejects the result of a capture whose runner threw; it still ends, so its camera is freed.
 		const end = async (result: Awaited<typeof handle.result>) => {
 			for (const [path, write] of this.#writes) if (write.capture === capture) this.#writes.delete(path)
 			this.#notify((sink) => sink.captureEnded(handle.id, connectionId, deviceId))
@@ -775,7 +774,7 @@ export class CameraCaptures implements Disposable {
 			capture.ended.resolve(capture.session)
 		}
 
-		void handle.result.then(end, (error: unknown) => end(failedOperationResult('commandFailed', Error.isError(error) ? error.message : String(error))))
+		void settledResult(handle.result).then(end)
 
 		return capture.admitted
 	}

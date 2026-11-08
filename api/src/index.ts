@@ -84,6 +84,7 @@ import { ObservingPlanStore } from './observingplanner.store'
 import { createOperationHistoryRoutes, OperationRecorder } from './operationhistory'
 import { createOperationRoutes, OperationRegistry } from './operations'
 import { createOrbitalMechanicsRoutes, OrbitalMechanicsService } from './orbitalmechanics'
+import { createPlanetaryEventsRoutes, PlanetaryEventsService } from './planetaryevents'
 import { createPlateSolvingRoutes, PlateSolvingService } from './platesolving'
 import { createRotatorRoutes, RotatorCommands } from './rotators'
 import { createSatelliteRoutes, SatelliteService, satelliteSkyAdapter } from './satellites'
@@ -453,6 +454,11 @@ export type { SatelliteCatalogMetadata, SatelliteElementKind, SatelliteObjectTyp
 export type { SatelliteRefreshErrorCode } from './satellites.sync'
 export type { PlanetaryFallbackReason, PlanetaryKernelReadiness, PlanetaryReadinessReport, PlanetarySourceErrorCode, PlanetarySourceMiss } from './planetary.source'
 export type { PlanetEventVisibility, PlanetNight, PlanetVisibilityStatus } from './planetary.visibility'
+export type { PlanetaryEventsErrorCode, PlanetaryEventsSearch } from './planetaryevents'
+// oxfmt-ignore
+export type { ClosestEarthApproachEvent, GreatestBrightnessEvent, GreatestElongationEvent, HalfIlluminationEvent, OppositionEvent, PlanetaryAppulseEvent, PlanetaryBodyCircumstances, PlanetaryConjunctionEvent, PlanetaryEvent, PlanetaryEventBody, PlanetaryEventKind, PlanetaryEventQuantity, PlanetaryEventsBodyOrigin, PlanetaryEventsConvention, PlanetaryEventSeries, PlanetaryEventSeriesCurve, PlanetaryEventSeriesRequest, PlanetaryEventsSearchRequest, PlanetaryEventsSignature, PlanetaryEventsSource, PlanetaryEventsSourceMiss, QuadratureEvent, SolarConjunctionEvent, StationEvent } from './planetaryevents.astronomy'
+// oxfmt-ignore
+export type { PlanetaryAtEvent, PlanetaryBodyHorizontal, PlanetaryEventsVisibility, PlanetaryEventsVisibilityRequest, PlanetaryEventVisibility, PlanetaryObservingWindow, PlanetaryVisibilityEvent, PlanetaryVisibilityProfile, PlanetaryVisibilityReason, PlanetaryVisibilityStatus } from './planetaryevents.visibility'
 export type { SaturnErrorCode, SaturnEvents } from './saturn'
 // oxfmt-ignore
 export type { SaturnElongation, SaturnElongations, SaturnElongationsRequest, SaturnFallbackReason, SaturnMoon, SaturnMoonsState, SaturnMoonState, SaturnRingEvent, SaturnRingModel, SaturnRings, SaturnRingState, SaturnRingTimeline, SaturnRingTimelineRequest, SaturnScope, SaturnShadow, SaturnSignature, SaturnSource, SaturnSourceMiss, SaturnSourceReport, SaturnSourceRequest, SaturnStateRequest, SaturnTrack, SaturnTrackMoon, SaturnTrackRequest } from './saturn.astronomy'
@@ -1098,6 +1104,7 @@ const observingPlanner = new ObservingPlannerService({ catalog: skyCatalog, nigh
 // server's Great Red Spot model in the operational database, sent to every tab once saved.
 const jupiterPlanner = new JupiterPlannerService({ kernels: spiceKernels, night: (request) => astroWeather.night(request), store: new JupiterGrsStore(database, broadcast) })
 const saturnPlanner = new SaturnPlannerService({ kernels: spiceKernels, night: (request) => astroWeather.night(request) })
+const planetaryEvents = new PlanetaryEventsService({ kernels: spiceKernels })
 
 // Earth orientation tables of the process, shared by the converter and, once installed, by every Time of the server.
 const earthOrientation = new EarthOrientationData()
@@ -1343,6 +1350,7 @@ export const routes = {
 	...createObservingPlannerRoutes(observingPlanner),
 	...createJupiterRoutes(jupiterPlanner),
 	...createSaturnRoutes(saturnPlanner),
+	...createPlanetaryEventsRoutes(planetaryEvents),
 	...createAstronomicalTimeRoutes(astronomicalTime),
 	...createSatelliteRoutes(satellites),
 	...createSpiceKernelRoutes(spiceKernelLibrary),

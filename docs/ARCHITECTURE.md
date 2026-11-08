@@ -132,6 +132,7 @@ Every contract and reference below is a document of its own under `docs/architec
 - [Observing Planner Contract](architecture/observing-planner.md)
 - [Jupiter Observing Planner Contract](architecture/jupiter-observing-planner.md)
 - [Saturn Observing Planner Contract](architecture/saturn-observing-planner.md)
+- [Planetary Events Contract](architecture/planetary-events.md)
 - [Artificial Satellites Contract](architecture/artificial-satellites.md)
 - [SPICE Kernel Library Contract](architecture/spice-kernel-library.md)
 - [Orbital Mechanics Explorer Contract](architecture/orbital-mechanics-explorer.md)

@@ -309,11 +309,11 @@ export function resolveNight(nights: (request: AstroWeatherNightRequest) => Astr
 	return night
 }
 
-// Earth orientation of a night: the precession-nutation matrix of its middle, held fixed, and the apparent sidereal time
-// of its middle advanced at the sidereal rate. Over half a day the matrix drifts by under 0.1″ and the sidereal time by
-// under a millisecond, while the full IAU 2006/2000A evaluation costs a few hundred microseconds per instant; every
-// instant shifted from one carrying these providers inherits them.
-function nightProviders(middle: Time): TimeProviders {
+// Earth orientation of a span around `middle`: the precession-nutation matrix of its middle, held fixed, and the apparent
+// sidereal time of its middle advanced at the sidereal rate. Over half a day the matrix drifts by under 0.1″ and the
+// sidereal time by under a millisecond, over a week by under 2″ and 0.02 s, while the full IAU 2006/2000A evaluation
+// costs a few hundred microseconds per instant; every instant shifted from one carrying these providers inherits them.
+export function fixedOrientationProviders(middle: Time): TimeProviders {
 	const matrix = precessionNutationMatrix(middle)
 	const reference = ut1(middle)
 	const sidereal = greenwichApparentSiderealTime(middle)
@@ -323,9 +323,50 @@ function nightProviders(middle: Time): TimeProviders {
 // Turns of the Earth per UT1 day, in radians per day.
 const SIDEREAL_RATE = TAU * 1.00273781191135448
 
+// A toolkit instant of a Unix time in milliseconds carrying the fixed orientation of a span (fixedOrientationProviders).
+export function fixedOrientationTime(middle: number): Time {
+	const time = timeUnix(middle / 1000, true)
+	Object.defineProperty(time, 'providers', { value: fixedOrientationProviders(time), enumerable: false, writable: true })
+	return time
+}
+
+// The geocentric ICRS position of a site, memoized for the last instant, so the providers of several bodies evaluated at
+// the same epoch remove the same offset once.
+export class SiteOffset {
+	// Instant and offset of the last site offset computed.
+	#at = Number.NaN
+	#offset: Vec3 = [0, 0, 0]
+
+	// `location` is the toolkit location of the site.
+	constructor(readonly location: GeographicPosition) {}
+
+	// Geocentric ICRS position of the site at an instant, in AU.
+	at(time: Time) {
+		const at = time.day + time.fraction
+
+		if (at !== this.#at) {
+			const offset = frameToFrame(itrs(this.location), ITRS, ICRS, time)
+			this.#offset = [offset[0], offset[1], offset[2]]
+			this.#at = at
+		}
+
+		return this.#offset
+	}
+
+	// Provider of the topocentric direction of a geocentric ICRS vector over Unix milliseconds (AU), removing the site
+	// offset at each instant; each call returns a new vector.
+	topocentric(geocentric: (time: number) => Vec3): PositionOverTime {
+		return (time) => {
+			const center = geocentric(timeToUnixMillis(time))
+			const site = this.at(time)
+			return [center[0] - site[0], center[1] - site[1], center[2] - site[2]]
+		}
+	}
+}
+
 // One night of a site with the Sun and Moon directions every analysis of it shares: their geocentric vectors are
 // evaluated hourly and interpolated, and the observer's offset is removed, so the directions are topocentric. Every
-// instant of the night carries the night's Earth orientation (nightProviders).
+// instant of the night carries the night's Earth orientation (fixedOrientationProviders).
 export class PlanningNight {
 	// Toolkit location of the site.
 	readonly location: GeographicPosition
@@ -343,9 +384,8 @@ export class PlanningNight {
 	readonly #sunWindows = new Map<number, readonly TimeSpan[]>()
 	// Middle of the night, which carries the night's Earth orientation.
 	readonly #middle: Time
-	// Instant and offset of the last site offset computed, reused by the providers evaluated at the same epoch.
-	#offsetAt = Number.NaN
-	#offset: Vec3 = [0, 0, 0]
+	// The site offset shared by the providers evaluated at the same epoch.
+	readonly #site: SiteOffset
 
 	// Toolkit instant of a Unix time in milliseconds, with the night's Earth orientation.
 	time(time: number) {
@@ -359,8 +399,8 @@ export class PlanningNight {
 		readonly night: AstroWeatherNight,
 	) {
 		this.location = geographic(site)
-		this.#middle = timeUnix((night.sun.start + night.sun.end) / 2000, true)
-		Object.defineProperty(this.#middle, 'providers', { value: nightProviders(this.#middle), enumerable: false, writable: true })
+		this.#site = new SiteOffset(this.location)
+		this.#middle = fixedOrientationTime((night.sun.start + night.sun.end) / 2)
 		this.start = this.time(night.sun.start)
 		this.end = this.time(night.sun.end)
 		this.sunAt = this.topocentric(geocentricInterpolation(bodyModel('10')))
@@ -398,27 +438,10 @@ export class PlanningNight {
 		return provider
 	}
 
-	// Geocentric ICRS position of the observer at an instant, in AU.
-	#siteOffset(time: Time) {
-		const at = time.day + time.fraction
-
-		if (at !== this.#offsetAt) {
-			const offset = frameToFrame(itrs(this.location), ITRS, ICRS, time)
-			this.#offset = [offset[0], offset[1], offset[2]]
-			this.#offsetAt = at
-		}
-
-		return this.#offset
-	}
-
 	// Provider of the topocentric direction of a geocentric ICRS vector over Unix milliseconds (AU), removing the
 	// observer's offset at each instant; each call returns a new vector.
 	topocentric(geocentric: (time: number) => Vec3): PositionOverTime {
-		return (time) => {
-			const center = geocentric(timeToUnixMillis(time))
-			const site = this.#siteOffset(time)
-			return [center[0] - site[0], center[1] - site[1], center[2] - site[2]]
-		}
+		return this.#site.topocentric(geocentric)
 	}
 }
 

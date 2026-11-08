@@ -497,7 +497,7 @@ function documentRecord({ name, width, height, channels, cfa, header, acquisitio
 
 // Open image documents of every client. The pixels live in the image worker; this side tracks the
 // open ids, so unknown ones are answered without a round trip, and relays requests to the worker.
-export class ImageStore {
+export class ImageStore implements Disposable {
 	// Open documents, by id.
 	readonly #documents = new Map<string, DocumentRecord>()
 	// Retained documents, open or closed, by id.
@@ -747,10 +747,21 @@ export class ImageStore {
 		resolvers.resolve(response)
 	}
 
-	// Discards the worker, along with every document it held, and fails every request it was carrying.
-	// The next request starts a fresh worker.
+	// Ends the worker of a server stopping in place, along with every document it held, and fails every request it was
+	// carrying; a hot reload would otherwise keep it, with all its pixels, beside the worker of the next run.
+	[Symbol.dispose]() {
+		this.#drop('the image store was stopped')
+	}
+
+	// Discards the worker after it failed. The next request starts a fresh worker.
 	#fail(reason: string): void {
 		console.error('image worker failed:', reason)
+		this.#drop(`image worker failed: ${reason}`)
+	}
+
+	// Terminates the worker, forgets every document it held, telling the discard listeners, and rejects every request it
+	// was carrying with reason.
+	#drop(reason: string): void {
 		this.#worker?.terminate()
 		this.#worker = undefined
 		const lost = new Set([...this.#documents.keys(), ...this.#retained.keys()])
@@ -761,7 +772,7 @@ export class ImageStore {
 		const pending = [...this.#pending.values()]
 		this.#pending.clear()
 
-		for (const resolvers of pending) resolvers.reject(new Error(`image worker failed: ${reason}`))
+		for (const resolvers of pending) resolvers.reject(new Error(reason))
 	}
 }
 

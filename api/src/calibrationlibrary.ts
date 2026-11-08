@@ -375,7 +375,7 @@ function masterSummary(master: CalibrationMaster): CalibrationMasterSummary {
 }
 
 // The service. Work waits for the first open of the library, so importing this module touches no file.
-export class CalibrationLibrary {
+export class CalibrationLibrary implements Disposable {
 	// Id of this process.
 	readonly #epoch = Bun.randomUUIDv7()
 	// Change counter.
@@ -1300,6 +1300,11 @@ export class CalibrationLibrary {
 	close() {
 		this.jobs.stop()
 		for (const scan of this.#scans.values()) scan.abort(new DOMException('Stopped', 'AbortError'))
+	}
+
+	// Stops a server in place (close).
+	[Symbol.dispose]() {
+		this.close()
 	}
 }
 

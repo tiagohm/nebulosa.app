@@ -607,7 +607,7 @@ function projectSummary({ analysis: _, ...project }: StackingProject, facts: rea
 }
 
 // The service. Work waits for the first open, so importing this module touches no file.
-export class ImageStacking {
+export class ImageStacking implements Disposable {
 	// Id of this process.
 	readonly #epoch = Bun.randomUUIDv7()
 	// Change counter.
@@ -1899,6 +1899,13 @@ export class ImageStacking {
 		for (const { identity: _, ...candidate } of candidates.slice(offset, offset + Math.min(limit, MAX_PAGE_SIZE))) items.push(candidate)
 
 		return { items, total: candidates.length }
+	}
+
+	// Stops a server in place: aborts every job and the composition preview, so their workers end with the run that
+	// started them instead of writing beside the next one.
+	[Symbol.dispose]() {
+		for (const scan of this.#scans.values()) scan.abort(new DOMException('Stopped', 'AbortError'))
+		this.#preview?.abort(new DOMException('Stopped', 'AbortError'))
 	}
 
 	// Cancels the scan of an import or an analysis. Throws when it already ended.

@@ -1090,10 +1090,13 @@ export function stopOperations() {
 }
 
 // Services holding devices, sockets, listeners, timers, or workers, in the order a server stopping in place releases them:
-// the sessions and commands before the registries they use, the connections last.
+// the sessions and commands before the registries they use, the image documents once nothing closes one any more, the
+// connections last.
 const RESOURCES: readonly Disposable[] = [
 	meridianFlipExecutor,
 	liveStacking,
+	imageStacking,
+	calibrationLibrary,
 	guiding,
 	darkLibraryWizard,
 	darkLibraryWizardAnalyzer,
@@ -1120,6 +1123,7 @@ const RESOURCES: readonly Disposable[] = [
 	satelliteAutoDownload,
 	spiceKernelLibrary,
 	spiceKernels,
+	images,
 	operations,
 	connections,
 ]

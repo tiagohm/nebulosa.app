@@ -6,7 +6,7 @@ import { readImageFromPath } from 'nebulosa/src/imaging/model/image'
 import type { AutoStfPreset } from 'nebulosa/src/imaging/processing/stf.presets'
 import type { ApiError } from './http'
 import { cropImage } from './imagedecode'
-import { cfaPattern, type DisplaySettings, imageAcquisition, type ImageInfo, images, precisionOf, type RenderResult, type SaveRequest } from './images'
+import { cfaPattern, type DisplaySettings, imageAcquisition, type ImageInfo, ImageStore, images, precisionOf, type RenderResult, type SaveRequest } from './images'
 import { routes } from './index'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-images-'))
@@ -368,6 +368,17 @@ describe('acquisition', () => {
 
 describe('capture documents', () => {
 	const capture = { connectionId: 'connection', deviceId: 'camera', frameId: 'session:1', time: Date.UTC(2026, 9, 19) }
+
+	test('a disposed store ends its worker and forgets its documents', async () => {
+		const store = new ImageStore()
+		const discarded: string[] = []
+		store.onDiscard((id) => discarded.push(id))
+		const info = await store.openCapture(new Uint8Array(readFileSync(writeFits('disposed.fits', 16, 8))), 'Camera #1', capture)
+
+		store[Symbol.dispose]()
+		expect(discarded).toEqual([info.id])
+		expect(store.close(info.id)).toBeFalse()
+	})
 
 	test('open a camera frame from its bytes', async () => {
 		const bytes = new Uint8Array(readFileSync(writeFits('frame.fits', 16, 8)))

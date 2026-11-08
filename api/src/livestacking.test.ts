@@ -104,7 +104,7 @@ function masterMetadata(): CalibrationMetadata {
 }
 
 // Sets up a service over fake captures, a camera c1/cam, masters, and image store, with an in-thread engine.
-function setup(options: { processor?: (recipe: LiveStackingRecipe) => LiveStackingProcessor; masters?: Partial<LiveStackingMasters>; memoryBudget?: number } = {}) {
+function setup(options: { processor?: (recipe: LiveStackingRecipe) => LiveStackingProcessor; masters?: Partial<LiveStackingMasters>; memoryBudget?: number; adopting?: Promise<void> } = {}) {
 	let sink: CaptureFrameSink | undefined
 	const captures = {
 		listenFrames: (value: CaptureFrameSink) => {
@@ -119,7 +119,12 @@ function setup(options: { processor?: (recipe: LiveStackingRecipe) => LiveStacki
 	let documents = 0
 	const adopted: { readonly image: Image; readonly provenance: ImageProvenance }[] = []
 	const images = {
-		adopt: (image: Image, provenance: ImageProvenance) => (adopted.push({ image, provenance }), Promise.resolve({ origin: 'derived', id: `doc-${++documents}`, name: 'stack', width: SIZE, height: SIZE, channels: 1, header: {} } as unknown as ImageInfo)),
+		adopt: async (image: Image, provenance: ImageProvenance) => {
+			adopted.push({ image, provenance })
+			const id = `doc-${++documents}`
+			await options.adopting
+			return { origin: 'derived', id, name: 'stack', width: SIZE, height: SIZE, channels: 1, header: {} } as unknown as ImageInfo
+		},
 		close: (id: string) => (closed.push(id), true),
 	}
 	const directory = mkdtempSync(join(root, 'store-'))
@@ -382,6 +387,23 @@ describe('live stacking', () => {
 		await stacking.reset(sessionId)
 		expect(closed).toEqual(['doc-1'])
 		expect(stacking.session(sessionId)).toMatchObject({ cohorts: [], fields: [], counters: { received: 0, accepted: 0 } })
+	})
+
+	test('a view whose session is reset while its document is adopted closes that document', async () => {
+		const adopting = Promise.withResolvers<void>()
+		const { stacking, deliver, start, closed, adopted } = setup({ adopting: adopting.promise })
+		const sessionId = start()
+		await deliver(captured('cap', 1), await fits(0, 0, { FILTER: 'Ha' }))
+		await waitUntil(() => stacking.session(sessionId).counters.accepted === 1)
+		const [cohort] = stacking.session(sessionId).cohorts
+
+		const view = stacking.view(sessionId, { cohortId: cohort.cohortId })
+		await waitUntil(() => adopted.length === 1)
+		await stacking.reset(sessionId)
+		adopting.resolve()
+
+		await expect(view).rejects.toMatchObject({ code: 'notFound' })
+		expect(closed).toEqual(['doc-1'])
 	})
 
 	test('the next start finishes interrupted products and sets aside unknown directories', async () => {

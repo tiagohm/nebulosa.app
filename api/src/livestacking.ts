@@ -334,6 +334,8 @@ interface Session {
 	readonly waiters: Set<() => void>
 	readonly views: ViewDocument[]
 	readonly viewRequests: Map<string, Promise<LiveStackingView>>
+	// Number of times its snapshot documents were closed (a reset, a failure, the close), so a view taken before is discarded.
+	viewsClosed: number
 	pumping: boolean
 }
 
@@ -495,6 +497,7 @@ export class LiveStacking implements Disposable {
 			waiters: new Set(),
 			views: [],
 			viewRequests: new Map(),
+			viewsClosed: 0,
 			pumping: false,
 		}
 
@@ -1036,8 +1039,11 @@ export class LiveStacking implements Disposable {
 		return revision
 	}
 
-	// Takes a snapshot of a view as a derived document, closing the oldest documents of the session beyond its limit.
+	// Takes a snapshot of a view as a derived document, closing the oldest documents of the session beyond its limit. A view
+	// whose session closed its documents meanwhile (a reset, a failure, the close) is closed at once and answers notFound,
+	// so no document outlives the session nor shows its stacks from before a reset.
 	async #takeView(session: Session, key: string, target: LiveStackingViewTarget, revision: number): Promise<LiveStackingView> {
+		const closed = session.viewsClosed
 		const snapshot: LiveSnapshot | undefined = await this.#call(session, () => ('cohortId' in target ? session.processor.snapshot(target.cohortId) : session.processor.compose(target.composition)))
 		if (!snapshot) throw new LiveStackingError('The stack has no frame', 404, 'notFound')
 		const stacks = this.#stacksOf(session, target)
@@ -1045,6 +1051,11 @@ export class LiveStacking implements Disposable {
 		const image = { ...snapshot.image, header: { ...structure, ...this.#stackHeader(session, target, stacks, '0') } }
 		const info = await this.images.adopt(image, { kind: 'liveStacking', sessionId: session.summary.sessionId, sourceName: stackName(target, stacks), frames: snapshot.frames, stacks: stacks.map((cohort) => provenanceStack(session, cohort)), createdAt: new Date().toISOString() })
 		const view: LiveStackingView = { info, revision, frames: snapshot.frames }
+
+		if (session.viewsClosed !== closed) {
+			this.images.close(info.id)
+			throw new LiveStackingError('The stack changed while its view was taken', 404, 'notFound')
+		}
 
 		const index = session.views.findIndex((cached) => cached.key === key)
 		if (index >= 0) this.images.close(session.views.splice(index, 1)[0].view.info.id)
@@ -1055,6 +1066,7 @@ export class LiveStacking implements Disposable {
 
 	// Closes the snapshot documents of a session.
 	#closeViews(session: Session) {
+		session.viewsClosed++
 		for (const cached of session.views.splice(0)) this.images.close(cached.view.info.id)
 	}
 

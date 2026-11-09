@@ -28,8 +28,8 @@ import type {
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { ApiResponseError, fetchJson, jsonInit, responseError } from '../../http'
-import { ACTIVE_TOOL_LOCATION, type SiteLocation, type ToolLocation } from '../../location/site'
-import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride, zonedWallTime } from '../../location/zone'
+import type { SiteLocation } from '../../location/site'
+import { zonedWallTime } from '../../location/zone'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import { type SkyClock, skyClock } from '../../sky/clock'
 import { showCoordinateInSky, type SkyImageState, skyImageState } from '../../sky/footprint'
@@ -38,7 +38,7 @@ import { browserSkyIo, type SkyIo, type SkyState, searchMinorBodies, selectSkyOb
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Observing Planner of the tab: the saved night plans mirrored from the server, and the tab-lived state of the tool
-// (location, night, constraints, discovery, analysis, and preview). Every number here comes from the server; nothing is
+// (night, constraints, discovery, analysis, and preview), which always observes from the active site. Every number here comes from the server; nothing is
 // computed locally but labels and lengths. Plans are edited as drafts written whole, one request at a time per plan, from
 // the revision they were edited from; a conflict is shown, never overwritten without the operator saying so. Times are
 // Unix milliseconds (UTC); angles radians.
@@ -198,10 +198,6 @@ export interface DiscoveryListing {
 export interface ObservingPlannerState {
 	// Section shown.
 	section: ObservingPlannerSection
-	// Where the tool observes from.
-	location: ToolLocation
-	// Zone the times are shown in.
-	zone: DisplayZoneOverride
 	// Civil date of the evening in the location's zone; absent until a location gives tonight's.
 	eveningDate?: string
 	// Constraints of the tool; absent until the presets are read.
@@ -255,8 +251,6 @@ export const DEFAULT_FILTER: CatalogFilter = { text: '', classes: ['galaxy', 'ne
 export function createObservingPlannerState(): ObservingPlannerState {
 	return {
 		section: 'discover',
-		location: { ...ACTIVE_TOOL_LOCATION },
-		zone: { ...DEFAULT_ZONE_OVERRIDE },
 		discoverSource: 'catalog',
 		filter: structuredClone(DEFAULT_FILTER),
 		minorBodySearch: { text: '', loading: false },

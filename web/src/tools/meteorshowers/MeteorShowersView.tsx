@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatGeographic } from '../../format'
 import { locationKey, openObservingSites, type SiteLocation } from '../../location/site'
-import { TimeZoneSelect } from '../../location/TimeZoneSelect'
-import { ToolLocationSection } from '../../location/ToolLocationSection'
-import { useActiveSite, useDisplayZone, useToolLocation } from '../../location/useLocation'
+import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { routeState } from '../../shell/route'
@@ -63,13 +61,11 @@ export function MeteorShowers() {
 	const state = useSnapshot(meteorShowersState) as MeteorShowersState
 	const { revision } = useSnapshot(meteorShowerSourcesState)
 	const { route } = useSnapshot(routeState)
-	const location = useToolLocation(state.location)
-	const active = useActiveSite()
-	const displayZone = useDisplayZone(location, state.zone)
+	const location = useActiveLocation()
+	const displayZone = useDisplayZone(location)
 	const zone = displayZone.zone
 	const [sourcesOpen, setSourcesOpen] = useState(false)
 	const site: SiteLocation | undefined = location && { name: location.name, latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, timeZone: location.timeZone }
-	const activeSite: SiteLocation | undefined = active && { name: active.name, latitude: active.latitude, longitude: active.longitude, elevation: active.elevation, timeZone: active.timeZone }
 	const place = site ? `${locationKey(site)}|${site.timeZone}` : ''
 	const latitude = state.reachable ? site?.latitude : undefined
 	const linked = route.workspace === 'tools' && route.tool === 'meteor-showers' ? route.meteorShower : undefined
@@ -122,10 +118,6 @@ export function MeteorShowers() {
 
 	const panel = (
 		<>
-			<ToolLocationSection value={state.location} location={location} onChange={(value) => (meteorShowersState.location = value)} collapsibleId="meteorShowers.location" elevation hint="Only decides when a radiant can be watched; the dates of the showers are global." />
-			<CollapsibleSection id="meteorShowers.timeZone" title="Time Zone" summary={zone} defaultOpen={false}>
-				<TimeZoneSelect label="Times Shown In" value={state.zone} onChange={(value) => (meteorShowersState.zone = value)} site={location} selectedSite={location ? location.source !== 'active' : false} />
-			</CollapsibleSection>
 			<CollapsibleSection id="meteorShowers.filters" title="Search and Filters" summary={state.query || undefined}>
 				<TextInput label="Name, code, or IAU number" value={state.query} onChange={(event) => Object.assign(meteorShowersState, { query: event.currentTarget.value, offset: 0 })} />
 				{state.section === 'all' && <Select label="Status" options={METEOR_STATUS_FILTERS} value={state.status} format={(value: MeteorStatusFilter) => (value === 'any' ? 'Any status' : STATUS_LABELS[value])} onChange={(value) => Object.assign(meteorShowersState, { status: value, offset: 0 })} />}
@@ -160,7 +152,7 @@ export function MeteorShowers() {
 	const context = <SegmentedControl options={METEOR_SHOWER_SECTIONS} value={state.section} format={(value) => SECTION_LABELS[value]} onChange={(value) => Object.assign(meteorShowersState, { section: value, offset: 0 })} />
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Meteor Showers" context={context} actions={actions} panel={{ title: 'Location and Filters', content: panel }}>
+		<WorkspaceLayout workspace="tools" title="Meteor Showers" context={context} actions={actions} panel={{ title: 'Filters', content: panel }}>
 			<MeteorSourcesModal open={sourcesOpen} onClose={() => setSourcesOpen(false)} timeZone={zone} />
 			<div className="h-full overflow-y-auto bg-base-000">
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
@@ -175,11 +167,9 @@ export function MeteorShowers() {
 					</div>
 					{!location && (
 						<Notice>
-							<span className="block">
-								{state.location.mode === 'active' ? 'Without a site the showers are listed without when their radiants can be watched. Set the observing site of this profile, or choose a location in the panel.' : 'The site chosen was deleted. Choose another location in the panel.'}
-							</span>
+							<span className="block">Without a site the showers are listed without when their radiants can be watched. Set the observing site of this profile.</span>
 							<Button variant="secondary" className="mt-2" onClick={() => openObservingSites()}>
-								Set Location
+								Choose Observing Site
 							</Button>
 						</Notice>
 					)}
@@ -208,7 +198,7 @@ export function MeteorShowers() {
 							nightError={state.nightError}
 							minimumAltitude={(state.minimumAltitude * Math.PI) / 180}
 							site={site}
-							activeSite={activeSite}
+							activeSite={site}
 							timeZone={zone}
 							activity={state.activity}
 							ranking={state.ranking}

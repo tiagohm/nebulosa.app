@@ -1,10 +1,10 @@
 import type { ObservingConstraints, ObservingPlanDocument, ObservingPlanItem, ObservingPlanItemPreview } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatGeographic, formatHours } from '../../format'
+import { formatDegrees, formatHours } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { useDisplayZone } from '../../location/useLocation'
-import { describeDisplayZone, wallTimeToInstant, zonedWallTime } from '../../location/zone'
+import { wallTimeToInstant, zonedWallTime } from '../../location/zone'
 import { Button } from '../../ui/Button'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataList, DataRow } from '../../ui/DataRow'
@@ -95,7 +95,7 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 	const list = sortedPlans(plans)
 	const document = planId ? planDocument(plans, planId) : undefined
 	const saved = planId ? plans.plans[planId] : undefined
-	const displayZone = useDisplayZone(document?.site, tool.zone)
+	const displayZone = useDisplayZone(document?.site)
 	const timeZone = displayZone.zone
 	const [creating, setCreating] = useState(false)
 
@@ -123,7 +123,7 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 				onChange={(id) => openPlan(observingPlannerState, id || undefined)}
 				format={(id) => (id ? `${plans.plans[id]?.name} · ${plans.plans[id]?.eveningDate}` : list.length > 0 ? 'Choose a plan…' : 'No plans yet')}
 			/>
-			<Button disabled={!location || !tool.eveningDate || !tool.constraints || creating} title={location ? undefined : 'Choose a location first'} onClick={() => void create()}>
+			<Button disabled={!location || !tool.eveningDate || !tool.constraints || creating} title={location ? undefined : 'Set the observing site of this profile first'} onClick={() => void create()}>
 				New Plan
 			</Button>
 			{saved && (
@@ -210,15 +210,11 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 					<TextInput label="Evening" type="date" className="w-44" value={document.eveningDate} onChange={(event) => event.target.value && edit((current) => ({ ...current, eveningDate: event.target.value }))} />
 				</div>
 				<DataList>
-					<DataRow label="Location">
-						{document.site.name} · {formatGeographic(document.site.latitude, document.site.longitude)} · {document.site.timeZone}
-					</DataRow>
 					<DataRow label="Constraints">{constraintsSummary(document.constraints)}</DataRow>
-					<DataRow label="Times Shown In">{describeDisplayZone(displayZone)}</DataRow>
 				</DataList>
 				<div className="flex flex-wrap gap-2">
 					<Button variant="secondary" disabled={!location} onClick={() => location && edit((current) => ({ ...current, site: planningSite(location), observingSiteId: siteId }))}>
-						Use Tool Location
+						Use Active Site
 					</Button>
 					<Button variant="secondary" disabled={!tool.constraints} onClick={() => tool.constraints && edit((current) => ({ ...current, constraints: plain(tool.constraints!) }))}>
 						Use Tool Constraints

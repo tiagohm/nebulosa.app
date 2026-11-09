@@ -26,9 +26,9 @@ export type ViewStorageArea = 'local' | 'session'
 // Storage areas of the browser, or none where one cannot be used.
 export type ViewStorages = Readonly<Partial<Record<ViewStorageArea, Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>>>>
 
-// Version of the shape of the documents; a document of another version is ignored and replaced, never migrated. 2: the
-// zone of the times of Close Approaches (closeApproaches.timeDisplay) became a DisplayZoneOverride.
-const VIEW_VERSION = 2
+// Version of the shape of the documents; a document of another version is ignored and replaced, never migrated. 3: the
+// Close Approaches preferences lost their zone (closeApproaches.timeDisplay); the tool shows the profile's display zone.
+const VIEW_VERSION = 3
 
 // Prefix of the keys of this application in browser storage.
 const PREFIX = 'nebulosa:'

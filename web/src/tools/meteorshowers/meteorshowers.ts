@@ -1,8 +1,7 @@
 import type { AstroWeatherForecast, MeteorActivityCurve, MeteorNightRanking, MeteorNightsRequest, MeteorObservingNight, MeteorObservingRequest, MeteorShowerDetail, MeteorShowerListPage, MeteorShowersCalendar, MeteorShowersCalendarRequest, MeteorShowerStatus } from 'api'
 import { proxy } from 'valtio'
 import { fetchJson, jsonInit } from '../../http'
-import { ACTIVE_TOOL_LOCATION, type SiteLocation, type ToolLocation } from '../../location/site'
-import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
+import type { SiteLocation } from '../../location/site'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import { type SkyClock, setSkyTime, skyClock } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
@@ -62,10 +61,6 @@ export interface MeteorRateSettings {
 
 // Tab-lived state of the tool.
 export interface MeteorShowersState {
-	// Where the nights are judged from.
-	location: ToolLocation
-	// Zone the times are shown in.
-	zone: DisplayZoneOverride
 	// Section listed.
 	section: MeteorShowersSection
 	// List or calendar.
@@ -137,8 +132,6 @@ export interface MeteorShowersState {
 // Creates the tab state of the tool.
 export function createMeteorShowersState(): MeteorShowersState {
 	return {
-		location: { ...ACTIVE_TOOL_LOCATION },
-		zone: { ...DEFAULT_ZONE_OVERRIDE },
 		section: 'upcoming',
 		display: 'list',
 		query: '',
@@ -425,11 +418,10 @@ export function addShowerToPlanner(id: string, name: string, add: typeof addToOb
 	add({ target: { kind: 'meteorShower', id }, name })
 }
 
-// Opens the tool on a shower from another tool (the Observing Planner) with that tool's place and evening as the tool's
-// own location and night, never the profile's or its site.
-export function openMeteorShowerAt(id: string, site: SiteLocation, eveningDate: string, state: MeteorShowersState = meteorShowersState, route: RouteState = routeState, history: Pick<History, 'pushState'> = window.history) {
+// Opens the tool on a shower from another tool (the Observing Planner) with that tool's evening as the tool's own night;
+// both tools observe from the active site.
+export function openMeteorShowerAt(id: string, eveningDate: string, state: MeteorShowersState = meteorShowersState, route: RouteState = routeState, history: Pick<History, 'pushState'> = window.history) {
 	selectShower(state, id)
-	state.location = { mode: 'manual', latitude: site.latitude, longitude: site.longitude, elevation: site.elevation, timeZone: site.timeZone }
 	state.eveningDate = eveningDate
 	openMeteorShower(id, route, history)
 }

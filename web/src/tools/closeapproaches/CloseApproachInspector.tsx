@@ -2,7 +2,7 @@ import type { CloseApproach, CloseApproachBody, MinorBody, MinorBodyDetails, Min
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDate, formatDateTime, MISSING } from '../../format'
-import { describeDisplayZone, type DisplayZone } from '../../location/zone'
+import type { DisplayZone } from '../../location/zone'
 import { CLOSE_APPROACH_BODIES, type CloseApproachDistanceDisplay } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Button } from '../../ui/Button'
@@ -97,7 +97,6 @@ function Overview({ approach, zone, distanceDisplay, body, children }: Encounter
 			<OptionalDatum label="3σ range">{formatDistanceRange(distanceMin, distanceMax, distanceDisplay)}</OptionalDatum>
 			<DataRow label="Vrel">{formatVelocity(relativeVelocity)}</DataRow>
 			<DataRow label="Time">{formatDateTime(time, zone.zone)}</DataRow>
-			<DataRow label="Time zone">{describeDisplayZone(zone)}</DataRow>
 			{children}
 		</CollapsibleSection>
 	)

@@ -24,7 +24,6 @@ import type {
 } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
 import type { AnnotationDensity, AnnotationLayers } from '../images/images'
-import type { DisplayZoneOverride } from '../location/zone'
 import type { ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
@@ -206,10 +205,6 @@ export type CloseApproachDistanceDisplay = (typeof CLOSE_APPROACH_DISTANCE_DISPL
 export interface CloseApproachPreferences {
 	// Unit of the distances shown.
 	readonly distanceDisplay: CloseApproachDistanceDisplay
-	// Zone the times of the encounters are shown in, resolved by resolveDisplayZone against the active observing site:
-	// the profile's default (Settings → Date & Time), the site's, UTC, the browser's, or an IANA zone. Display only: it
-	// never changes an instant or a request.
-	readonly timeDisplay: DisplayZoneOverride
 	// Target body of the first search.
 	readonly body: CloseApproachBody
 	// Largest nominal distance of the first search, in `distanceUnit`, above 0.
@@ -218,9 +213,8 @@ export interface CloseApproachPreferences {
 	readonly distanceUnit: (typeof CLOSE_APPROACH_DISTANCE_UNITS)[number]
 }
 
-// Preferences of a profile that has not edited them: lunar distances, the profile's default zone, and the Earth within
-// 10 LD.
-export const DEFAULT_CLOSE_APPROACH_PREFERENCES: CloseApproachPreferences = { distanceDisplay: 'LD', timeDisplay: { mode: 'default' }, body: 'Earth', distanceMax: 10, distanceUnit: 'LD' }
+// Preferences of a profile that has not edited them: lunar distances and the Earth within 10 LD.
+export const DEFAULT_CLOSE_APPROACH_PREFERENCES: CloseApproachPreferences = { distanceDisplay: 'LD', body: 'Earth', distanceMax: 10, distanceUnit: 'LD' }
 
 // Zones civil times can be shown in by default: the observing site's (the browser's when there is none), UTC, or the
 // browser's.

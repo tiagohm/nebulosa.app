@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { CloseApproach, MinorBody } from 'api'
 import { proxy } from 'valtio'
 import { resolveDisplayZone } from '../../location/zone'
-import { type CloseApproachPreferences, DEFAULT_CLOSE_APPROACH_PREFERENCES } from '../../profile/schema'
+import type { CloseApproachPreferences } from '../../profile/schema'
 import type { RouteState } from '../../shell/route'
 import type { SkyClock } from '../../sky/clock'
 import type { SkyState } from '../../sky/sky'
@@ -121,7 +121,7 @@ describe('catalog', () => {
 	test('the first opening searches once, and returning keeps the result', async () => {
 		const state = newState()
 		const { io, urls } = fakeIo()
-		const preferences: CloseApproachPreferences = { distanceDisplay: 'km', timeDisplay: { mode: 'utc' }, body: 'Moon', distanceMax: 2, distanceUnit: 'au' }
+		const preferences: CloseApproachPreferences = { distanceDisplay: 'km', body: 'Moon', distanceMax: 2, distanceUnit: 'au' }
 		await openCloseApproaches(state, preferences, io)
 		await openCloseApproaches(state, preferences, io)
 
@@ -435,14 +435,11 @@ describe('formats', () => {
 	// 0.000254090910419299 au, the approach of Apophis of 2029.
 	const APOPHIS = 0.000254090910419299
 
-	test("the times follow the profile's default, the active site's zone, or the tool's choice, and say when no site stands behind them", () => {
+	test("the times follow the profile's display zone against the active site, and say when no site stands behind them", () => {
 		const site = { timeZone: 'America/Sao_Paulo' }
-		const { timeDisplay } = DEFAULT_CLOSE_APPROACH_PREFERENCES
-		expect(resolveDisplayZone('site', timeDisplay, site, 'Europe/Paris')).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
-		expect(resolveDisplayZone('utc', timeDisplay, site, 'Europe/Paris')).toEqual({ zone: 'UTC', source: 'utc' })
-		expect(resolveDisplayZone('site', timeDisplay, undefined, 'Europe/Paris')).toEqual({ zone: 'Europe/Paris', source: 'browserFallback' })
-		expect(resolveDisplayZone('utc', { mode: 'site' }, site, 'Europe/Paris').zone).toBe('America/Sao_Paulo')
-		expect(resolveDisplayZone('site', { mode: 'zone', zone: 'Asia/Tokyo' }, site, 'Europe/Paris').zone).toBe('Asia/Tokyo')
+		expect(resolveDisplayZone('site', undefined, site, 'Europe/Paris')).toEqual({ zone: 'America/Sao_Paulo', source: 'site' })
+		expect(resolveDisplayZone('utc', undefined, site, 'Europe/Paris')).toEqual({ zone: 'UTC', source: 'utc' })
+		expect(resolveDisplayZone('site', undefined, undefined, 'Europe/Paris')).toEqual({ zone: 'Europe/Paris', source: 'browserFallback' })
 	})
 
 	test('a distance states its unit, the LD being 384400 km', () => {

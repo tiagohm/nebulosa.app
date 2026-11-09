@@ -7,7 +7,7 @@ import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { formatArcmin, formatArcsec, formatClockTime, formatDegrees, formatGeographic, formatSignedArcmin, MISSING } from '../format'
+import { formatArcmin, formatArcsec, formatClockTime, formatDegrees, formatSignedArcmin, MISSING } from '../format'
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
@@ -51,11 +51,11 @@ import { loadLiveMasters } from './livestacking'
 import { SessionStateText } from './SessionStateText'
 
 // Contextual panel sections of iPolar, a camera operation of the Images camera tabs: the equipment and the mode (the
-// operator turns the RA axis by hand, or the setup's mount turns it), the frame exposure, the rotation, the site, the
-// plate solving settings it applies, the calibration, the polar error and its convergence, and the commands (Start,
+// operator turns the RA axis by hand, or the setup's mount turns it), the frame exposure, the rotation, the plate solving
+// settings it applies, the refinement, the calibration, the polar error and its convergence, and the commands (Start,
 // Rotation Done, Refine, Pause, Finish, Stop). Frames are taken with the exposure time of this form and the camera's
 // camera settings, edited only in Camera Acquisition, and solved with the camera's plate solving settings; the site is
-// the profile's active observing site, shown read-only. The camera is the panel's target and the mount the MOUNT of the
+// always the profile's active observing site, which the panel does not show. The camera is the panel's target and the mount the MOUNT of the
 // active equipment setup, required only for the automatic rotation. The forms are the camera's, kept in the profile, and
 // stay locked showing the values applied while a session runs; before an automatic rotation, a notice beside Start asks
 // the operator to check the mount is clear to turn. The session is the server's, shown here whichever tab started it, and keeps
@@ -167,15 +167,6 @@ export function IPolarSections({ device, availability, mount, settings: identity
 					</>
 				)}
 			</CollapsibleSection>
-			<CollapsibleSection id="images.ipolar.site" title="Site">
-				<DataList>
-					<DataRow label="Observing Site">{site?.name ?? MISSING}</DataRow>
-					<DataRow label="Coordinates">{site ? formatGeographic(site.latitude, site.longitude) : MISSING}</DataRow>
-					<DataRow label="Pole">{site ? (site.latitude >= 0 ? 'North celestial pole' : 'South celestial pole') : MISSING}</DataRow>
-				</DataList>
-				<Checkbox label="Correct for atmospheric refraction" checked={shown.refraction} disabled={locked} onChange={(refraction) => update({ refraction })} />
-				{!site && <Notice>The profile has no active observing site; choose one in the status bar.</Notice>}
-			</CollapsibleSection>
 			<CameraPlateSolvingSection
 				id="images.ipolar.plate-solver"
 				device={device}
@@ -190,6 +181,7 @@ export function IPolarSections({ device, availability, mount, settings: identity
 			<CollapsibleSection id="images.ipolar.refinement" title="Refinement">
 				<NumberInput label="Refinement Interval" value={shown.refinementDelay} min={0} max={600} step={0.5} suffix="s" disabled={locked} onChange={(refinementDelay) => update({ refinementDelay })} />
 				<NumberInput label="Target Error" value={shown.completionThreshold} min={1} max={3600} step={5} suffix="″" disabled={locked} onChange={(completionThreshold) => update({ completionThreshold })} />
+				<Checkbox label="Correct for atmospheric refraction" checked={shown.refraction} disabled={locked} onChange={(refraction) => update({ refraction })} />
 			</CollapsibleSection>
 			{session && <Calibration session={session} details={details} />}
 			{session?.measurement && <PolarError session={session} timeZone={site?.timeZone} />}

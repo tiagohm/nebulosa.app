@@ -2,9 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDegrees, formatGeographic } from '../../format'
 import { openObservingSites, type SiteLocation } from '../../location/site'
-import { TimeZoneSelect } from '../../location/TimeZoneSelect'
-import { ToolLocationSection } from '../../location/ToolLocationSection'
-import { useActiveSite, useDisplayZone, useToolLocation } from '../../location/useLocation'
+import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
@@ -24,7 +22,7 @@ import { JupiterViewer } from './JupiterViewer'
 import { MoonChart } from './MoonChart'
 
 // Jupiter Observing Planner tool: the view of Jupiter and its Galilean moons at the tool's own instant, the moons over the
-// period, and the period's phenomena with their visibility from the tool's location, all computed by the server from one
+// period, and the period's phenomena with their visibility from the active site, all computed by the server from one
 // ephemeris source it names. The tool's clock is its own, never the Sky's; choosing an event only moves that clock.
 // Nothing here moves the mount, changes a site or the profile, or starts an operation.
 
@@ -44,12 +42,10 @@ function prefersReducedMotion() {
 export function JupiterPlanner() {
 	const state = useSnapshot(jupiterPlannerState) as JupiterPlannerState
 	const grs = useSnapshot(jupiterGrsState)
-	const location = useToolLocation(state.location)
-	const active = useActiveSite()
-	const displayZone = useDisplayZone(location, state.zone)
+	const location = useActiveLocation()
+	const displayZone = useDisplayZone(location)
 	const namingZone = location?.timeZone ?? displayZone.zone
 	const site: SiteLocation | undefined = location && { name: location.name, latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, timeZone: location.timeZone }
-	const activeSite: SiteLocation | undefined = active && { name: active.name, latitude: active.latitude, longitude: active.longitude, elevation: active.elevation, timeZone: active.timeZone }
 	const range = useMemo(() => (state.eveningDate ? periodRange(state.eveningDate, state.period, namingZone) : undefined), [state.eveningDate, state.period, namingZone])
 	const siteKey = site && JSON.stringify([site.latitude, site.longitude, site.elevation, site.timeZone])
 	const grsRevision = grs.grs?.revision ?? 0
@@ -104,12 +100,6 @@ export function JupiterPlanner() {
 
 	const panel = (
 		<>
-			<ToolLocationSection value={state.location} location={location} onChange={(value) => (jupiterPlannerState.location = value)} collapsibleId="jupiter.location" elevation hint="Only decides when the phenomena can be watched; the predictions are geocentric." />
-			{location && (
-				<CollapsibleSection id="jupiter.timeZone" title="Time Zone" summary={displayZone.zone} defaultOpen={false}>
-					<TimeZoneSelect label="Times Shown In" value={state.zone} onChange={(value) => (jupiterPlannerState.zone = value)} site={location} selectedSite={location.source !== 'active'} />
-				</CollapsibleSection>
-			)}
 			<CollapsibleSection id="jupiter.events" title="Events" summary={`${state.kinds.length} of ${EVENT_KINDS.length} kinds`}>
 				{EVENT_KINDS.map((kind) => (
 					<Checkbox key={kind} label={KIND_LABELS[kind]} checked={state.kinds.includes(kind)} onChange={(on) => (jupiterPlannerState.kinds = toggle(state.kinds, kind, on))} />
@@ -136,14 +126,14 @@ export function JupiterPlanner() {
 
 	const actions = (
 		<Actions>
-			<Button variant="secondary" onClick={() => showJupiterInSky(activeSite)}>
+			<Button variant="secondary" onClick={() => showJupiterInSky(site)}>
 				Show in Sky
 			</Button>
 		</Actions>
 	)
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Jupiter Observing Planner" actions={actions} panel={{ title: 'Location, Filters, and Model', content: panel }}>
+		<WorkspaceLayout workspace="tools" title="Jupiter Observing Planner" actions={actions} panel={{ title: 'Filters and Model', content: panel }}>
 			<div className="h-full overflow-y-auto bg-base-000">
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					<p className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-300">
@@ -158,9 +148,9 @@ export function JupiterPlanner() {
 					</p>
 					{!location && (
 						<Notice>
-							<span className="block">{state.location.mode === 'active' ? 'Without a site the events are listed without their local visibility. Set the observing site of this profile, or choose a location in the panel.' : 'The site chosen was deleted. Choose another location in the panel.'}</span>
+							<span className="block">Without a site the events are listed without their local visibility. Set the observing site of this profile.</span>
 							<Button variant="secondary" className="mt-2" onClick={() => openObservingSites()}>
-								Set Location
+								Choose Observing Site
 							</Button>
 						</Notice>
 					)}

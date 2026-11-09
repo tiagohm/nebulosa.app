@@ -1,6 +1,6 @@
 import { useSnapshot } from 'valtio'
 import { activeProfile, dateTimePreferences, profileState } from '../profile/profile'
-import { activeSite, type ObservingSite, type ResolvedLocation, resolveToolLocation, siteState, type ToolLocation } from './site'
+import { ACTIVE_TOOL_LOCATION, activeSite, type ObservingSite, type ResolvedLocation, resolveToolLocation, siteState, type ToolLocation } from './site'
 import { type DisplayZone, type DisplayZoneOverride, resolveDisplayZone } from './zone'
 
 // Hooks of the place a screen observes from and the zone it shows civil times in, read from the active profile and the
@@ -26,4 +26,9 @@ export function useToolLocation(location: ToolLocation): ResolvedLocation | unde
 export function useDisplayZone(site: { readonly timeZone: string } | undefined, override?: DisplayZoneOverride): DisplayZone {
 	const profiles = useSnapshot(profileState)
 	return resolveDisplayZone(dateTimePreferences(activeProfile(profiles).settings).displayTimeZone, override, site)
+}
+
+// Returns the active profile's site as the place a tool observes from; undefined when the profile has none.
+export function useActiveLocation(): ResolvedLocation | undefined {
+	return useToolLocation(ACTIVE_TOOL_LOCATION)
 }

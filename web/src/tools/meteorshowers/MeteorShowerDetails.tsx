@@ -213,7 +213,7 @@ export function MeteorShowerDetails({
 			</div>
 			<div className="flex flex-col gap-1">
 				<h3 className="m-0 text-sm font-semibold text-ink-100">Observing Night</h3>
-				{!site && <p className="m-0 text-xs text-ink-300">Choose a location in the panel to see when the radiant can be watched.</p>}
+				{!site && <p className="m-0 text-xs text-ink-300">Set the observing site of this profile to see when the radiant can be watched.</p>}
 				{site && nightLoading && <p className="m-0 text-xs text-ink-300">Computing the night…</p>}
 				{site && nightError && <Notice error>{nightError}</Notice>}
 				{site && night && <ObservingNight night={night} name={detail.name} minimumAltitude={minimumAltitude} timeZone={timeZone} forecast={forecast} />}

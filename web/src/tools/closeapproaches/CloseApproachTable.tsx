@@ -3,8 +3,6 @@ import { cn } from 'cn'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDateTime, MISSING } from '../../format'
-import type { ObservingSite } from '../../location/site'
-import { TimeZoneSelect } from '../../location/TimeZoneSelect'
 import { profileState, setCloseApproachPreferences } from '../../profile/profile'
 import { CLOSE_APPROACH_DISTANCE_DISPLAYS, type CloseApproachPreferences } from '../../profile/schema'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -98,17 +96,15 @@ function EncounterRow({ approach, timeZone, distanceDisplay }: EncounterRowProps
 interface CloseApproachTableProps {
 	// IANA zone the times are shown in.
 	readonly timeZone: string
-	// Preferences of the tool, its distance unit and zone choice among them.
+	// Preferences of the tool, its distance unit among them.
 	readonly preferences: CloseApproachPreferences
-	// Active observing site of the profile, whose zone the Site choice takes; absent when it has none.
-	readonly site?: ObservingSite
 }
 
-// Distance unit and time zone of the table, with where the rows came from and when. Choosing a zone only formats the
-// times again: it never reads the page again.
-function ResultsBar({ timeZone, preferences, site }: CloseApproachTableProps) {
+// Distance unit of the table, with where the rows came from and when. Choosing a unit only formats the distances again:
+// it never reads the page again.
+function ResultsBar({ timeZone, preferences }: CloseApproachTableProps) {
 	const { result, loading, pageSize } = useSnapshot(closeApproachesState)
-	const { distanceDisplay, timeDisplay } = preferences
+	const { distanceDisplay } = preferences
 	const origin = result && `${result.total} ${result.total === 1 ? 'encounter' : 'encounters'} · ${result.source} ${result.sourceVersion} · read ${formatDateTime(result.fetchedAt, timeZone)}`
 
 	return (
@@ -116,7 +112,6 @@ function ResultsBar({ timeZone, preferences, site }: CloseApproachTableProps) {
 			<p className="m-0 min-w-0 text-xs leading-5 text-ink-300">{loading ? 'Reading from JPL…' : origin}</p>
 			<div className="flex items-end gap-2">
 				<SegmentedControl options={CLOSE_APPROACH_DISTANCE_DISPLAYS} value={distanceDisplay} format={(value) => (value === 'au' ? 'AU' : value)} onChange={(value) => setCloseApproachPreferences(profileState, { distanceDisplay: value })} />
-				<TimeZoneSelect className="w-64" value={timeDisplay} site={site} onChange={(value) => setCloseApproachPreferences(profileState, { timeDisplay: value })} />
 				<Select className="w-20" options={PAGE_SIZES} value={`${pageSize}` as (typeof PAGE_SIZES)[number]} onChange={(value) => void resizeCloseApproachPages(closeApproachesState, +value)} />
 			</div>
 		</div>
@@ -145,14 +140,14 @@ function Pager() {
 }
 
 // Encounters of the page shown, or why there are none.
-export function CloseApproachTable({ timeZone, preferences, site }: CloseApproachTableProps) {
+export function CloseApproachTable({ timeZone, preferences }: CloseApproachTableProps) {
 	const { result, loading, error } = useSnapshot(closeApproachesState)
 	const { distanceDisplay } = preferences
 	const rows = result?.rows ?? []
 
 	return (
 		<div className="flex min-h-96 flex-1 flex-col lg:min-h-0">
-			<ResultsBar timeZone={timeZone} preferences={preferences} site={site} />
+			<ResultsBar timeZone={timeZone} preferences={preferences} />
 			{error && <EmptyState title="JPL did not answer" description={error} action={<Button onClick={() => void loadCloseApproaches(closeApproachesState)}>Retry</Button>} />}
 			{!error && !result && <EmptyState title={loading ? 'Reading from JPL' : 'No search yet'} />}
 			{!error && result && rows.length === 0 && <EmptyState title="No encounters" description={result.total > 0 ? 'This page is past the last match.' : 'No close approach matches these filters.'} />}

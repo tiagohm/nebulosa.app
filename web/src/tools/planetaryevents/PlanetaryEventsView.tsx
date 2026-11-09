@@ -3,9 +3,7 @@ import { useSnapshot } from 'valtio'
 import { downloadText } from '../../download'
 import { formatDate, formatGeographic } from '../../format'
 import { openObservingSites, type SiteLocation } from '../../location/site'
-import { TimeZoneSelect } from '../../location/TimeZoneSelect'
-import { ToolLocationSection } from '../../location/ToolLocationSection'
-import { useActiveSite, useDisplayZone, useToolLocation } from '../../location/useLocation'
+import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
@@ -64,12 +62,10 @@ const MONTH_LABELS: Readonly<Record<RangeMonths, string>> = { 1: '1 month', 3: '
 export function PlanetaryEvents() {
 	const state = useSnapshot(planetaryEventsState) as PlanetaryEventsState
 	const kernels = useSnapshot(spiceKernelsState)
-	const location = useToolLocation(state.location)
-	const active = useActiveSite()
-	const displayZone = useDisplayZone(location, state.zone)
+	const location = useActiveLocation()
+	const displayZone = useDisplayZone(location)
 	const zone = displayZone.zone
 	const site: SiteLocation | undefined = location && { name: location.name, latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, timeZone: location.timeZone }
-	const activeSite: SiteLocation | undefined = active && { name: active.name, latitude: active.latitude, longitude: active.longitude, elevation: active.elevation, timeZone: active.timeZone }
 	const place = site && siteKey(site)
 	// A new kernel generation or policy may change every event, so the search is read again.
 	const kernelKey = `${kernels.snapshot?.generation ?? -1}|${kernels.snapshot?.policy ?? ''}`
@@ -114,10 +110,6 @@ export function PlanetaryEvents() {
 
 	const panel = (
 		<>
-			<ToolLocationSection value={state.location} location={location} onChange={(value) => (planetaryEventsState.location = value)} collapsibleId="planetaryEvents.location" elevation hint="Only decides when the events can be watched; the events are geocentric." />
-			<CollapsibleSection id="planetaryEvents.timeZone" title="Time Zone" summary={zone} defaultOpen={false}>
-				<TimeZoneSelect label="Times Shown In" value={state.zone} onChange={(value) => (planetaryEventsState.zone = value)} site={location} selectedSite={location ? location.source !== 'active' : false} />
-			</CollapsibleSection>
 			<CollapsibleSection id="planetaryEvents.range" title="Range" summary={start === undefined ? undefined : `${formatDate(start, zone)} · ${MONTH_LABELS[state.months]}`}>
 				<TextInput
 					label="Start"
@@ -181,7 +173,7 @@ export function PlanetaryEvents() {
 	const context = <SegmentedControl options={['timeline', 'calendar'] as const} value={state.view} format={(value) => (value === 'timeline' ? 'Timeline' : 'Calendar')} onChange={(value) => (planetaryEventsState.view = value)} />
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Planetary Events" context={context} actions={actions} panel={{ title: 'Location, Range, and Filters', content: panel }}>
+		<WorkspaceLayout workspace="tools" title="Planetary Events" context={context} actions={actions} panel={{ title: 'Range and Filters', content: panel }}>
 			<div className="h-full overflow-y-auto bg-base-000">
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					<p className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-300">
@@ -198,9 +190,9 @@ export function PlanetaryEvents() {
 					</p>
 					{!location && (
 						<Notice>
-							<span className="block">{state.location.mode === 'active' ? 'Without a site the events are listed without their local visibility. Set the observing site of this profile, or choose a location in the panel.' : 'The site chosen was deleted. Choose another location in the panel.'}</span>
+							<span className="block">Without a site the events are listed without their local visibility. Set the observing site of this profile.</span>
 							<Button variant="secondary" className="mt-2" onClick={() => openObservingSites()}>
-								Set Location
+								Choose Observing Site
 							</Button>
 						</Notice>
 					)}
@@ -236,7 +228,7 @@ export function PlanetaryEvents() {
 									seriesError={state.seriesError}
 									signature={signature}
 									timeZone={zone}
-									site={activeSite}
+									site={site}
 									onSelect={(id) => selectEvent(planetaryEventsState, id)}
 								/>
 							) : (

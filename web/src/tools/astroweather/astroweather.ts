@@ -1,16 +1,14 @@
 import type { AstroWeatherForecast, AstroWeatherNight, AstroWeatherNightRequest, TimeSpan } from 'api'
 import { proxy } from 'valtio'
 import { fetchJson } from '../../http'
-import { ACTIVE_TOOL_LOCATION, locationKey, type SiteLocation, siteObserver, type ToolLocation } from '../../location/site'
-import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
+import { locationKey, type SiteLocation, siteObserver } from '../../location/site'
 import type { AstroWeatherMode } from '../../profile/schema'
 import { createRequestGuard } from '../../sky/selection'
 import { aborted, browserEclipseIo, type EclipseIo, errorMessage } from '../eclipse/eclipse'
 import type { MissingMetric, Outlook, OutlookReason, WindowBlock } from './observing'
 
 // State of the Astro Weather tool, tab-lived and never persisted but for the observing mode, which the profile keeps: the
-// location chosen for the tool alone, the zone its times are shown in, the night shown, the forecast, and the hour under the
-// cursor. The forecast and the night are independent requests, each behind a guard of its own, so one failing leaves the
+// night shown from the active site, the forecast, and the hour under the cursor. The forecast and the night are independent requests, each behind a guard of its own, so one failing leaves the
 // other shown and an answer for another site never replaces a newer one. The server caches forecasts for every tab, so
 // nothing here polls or bypasses that: changing mode, night, hour, or display zone asks for nothing. A night is named in the
 // location's own zone, never in the display zone, which only formats the times. Forecasts describe real instants, so the Sky
@@ -64,10 +62,6 @@ export const TRANSPARENCY_BANDS = ['below 0.3', '0.3–0.4', '0.4–0.5', '0.5�
 
 // Astro Weather state of the tab.
 export interface AstroWeatherState {
-	// Where the tool observes from: the active profile's site, followed live, unless one was chosen for the tool alone.
-	location: ToolLocation
-	// Zone the tool shows its times in; it never names a night, keys a value, or changes a request.
-	zone: DisplayZoneOverride
 	// Latest forecast of the site.
 	forecast?: AstroWeatherForecast
 	// Whether a forecast is being read.
@@ -86,12 +80,10 @@ export interface AstroWeatherState {
 	cursor?: number
 	// Key of the location the values belong to (siteKey).
 	siteKey?: string
-	// Id of the profile the location and zone were chosen under.
-	profileId?: string
 }
 
 // Astro Weather store of the tab.
-export const astroWeatherState = proxy<AstroWeatherState>({ location: { ...ACTIVE_TOOL_LOCATION }, zone: { ...DEFAULT_ZONE_OVERRIDE }, forecastLoading: false, nightLoading: false })
+export const astroWeatherState = proxy<AstroWeatherState>({ forecastLoading: false, nightLoading: false })
 
 // Forecast standing for none while it loads or fails, so the hours of the night still read as unknown.
 export const EMPTY_FORECAST: AstroWeatherForecast = { latitude: 0, longitude: 0, generatedAt: 0, meteorology: { source: { provider: 'openMeteo', state: 'unavailable' }, samples: [] }, astronomy: { source: { provider: 'sevenTimer', state: 'unavailable' }, cellDegrees: 0.1, samples: [] } }
@@ -175,17 +167,6 @@ export function loadCurrentNight(state: AstroWeatherState, site: SiteLocation, i
 // Whether the display window of a night has ended.
 export function nightEnded(night: AstroWeatherNight, now: number) {
 	return now >= night.display.end
-}
-
-// Takes the active profile: another profile goes back to its own active site and default zone, forgetting the location and
-// zone chosen here.
-export function followProfile(state: AstroWeatherState, profileId: string) {
-	if (state.profileId !== undefined && state.profileId !== profileId) {
-		state.location = { ...ACTIVE_TOOL_LOCATION }
-		state.zone = { ...DEFAULT_ZONE_OVERRIDE }
-	}
-
-	state.profileId = profileId
 }
 
 // Starts showing a site: another site forgets the values of the one before at once and shows the current night, and the same

@@ -73,7 +73,7 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 								Show in Sky
 							</Button>
 							{analysis.target.kind === 'meteorShower' && location && (
-								<Button variant="secondary" onClick={() => analysis.target.kind === 'meteorShower' && openMeteorShowerAt(analysis.target.id, location, analysis.night.sun.localDate)}>
+								<Button variant="secondary" onClick={() => analysis.target.kind === 'meteorShower' && openMeteorShowerAt(analysis.target.id, analysis.night.sun.localDate)}>
 									Open in Meteor Showers
 								</Button>
 							)}

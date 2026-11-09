@@ -62,10 +62,11 @@ Workspace frame (`WorkspaceLayout.tsx`), used by every workspace and every tool 
   Important sections start expanded, advanced or secondary ones collapsed (`defaultOpen`);
   a section the operator toggled keeps its state, keyed by its namespaced id (`sky.*`, `images.<tool>.*`), across selections, documents, camera tabs, and tool switches, and across reloads and tabs of the browser (`collapsibleSections` of `web/src/shell/collapsible.ts`, kept in browser storage by `web/src/profile/view.ts`).
   Every section of the Images tools, image tools and camera operations alike, is one, and a panel never nests a disclosure inside a section: an advanced group is a collapsed section of its own (for example Advanced Settings, Solver Details, Template Tags, or the Camera settings of Acquisition).
-  The panels of the Jupiter and Saturn Observing Planners are collapsible sections too (`jupiter.*`, `saturn.*`): Location (`ToolLocationSection` with a `collapsibleId`, summarizing the place), the event kinds, and the moons start expanded;
-  Time Zone, View, the Great Red Spot, and Ephemeris start collapsed with their zone, orientation, model quality, or source as summary.
-  The panel of Planetary Events follows them (`planetaryEvents.*`): Location, Range, Planets, and Events (with the appulse threshold) start expanded, and Time Zone, Visibility, and Ephemeris and Definitions start collapsed.
-  The panel of Meteor Showers follows them too (`meteorShowers.*`): Location, Search and Filters, and Observing Night start expanded, and Time Zone and Modelled Rates start collapsed.
+  The panels of the Jupiter and Saturn Observing Planners are collapsible sections too (`jupiter.*`, `saturn.*`): the event kinds and the moons start expanded;
+  View, the Great Red Spot, and Ephemeris start collapsed with their orientation, model quality, or source as summary.
+  Like Planetary Events, Meteor Showers, Astro Weather, and the Observing Planner, they have no Location or Time Zone section: they observe from the active site.
+  The panel of Planetary Events follows them (`planetaryEvents.*`): Range, Planets, and Events (with the appulse threshold) start expanded, and Visibility, and Ephemeris and Definitions start collapsed.
+  The panel of Meteor Showers follows them too (`meteorShowers.*`): Search and Filters and Observing Night start expanded, and Modelled Rates starts collapsed.
 - Label and value rows (`DataRow` of `web/src/ui/DataRow.tsx`, grouped by `DataList`): every datum shown as a label and its value, in the contextual panels, the inspectors, Equipment Control, and the tool results, is one.
   Label and value share a line while both fit; a value that does not fit goes below its label, aligned to the end, and a label or value wider than the panel wraps instead of being cut.
   A value takes a tone (plain, success, or danger), never a layout of its own.

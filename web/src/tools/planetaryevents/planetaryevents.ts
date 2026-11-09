@@ -2,8 +2,8 @@ import type { PlanetaryEvent, PlanetaryEventBody, PlanetaryEventKind, PlanetaryE
 import { proxy } from 'valtio'
 import { formatDate } from '../../format'
 import { ApiResponseError, fetchJson, jsonInit } from '../../http'
-import { ACTIVE_TOOL_LOCATION, type SiteLocation, type ToolLocation } from '../../location/site'
-import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride, wallTimeToInstant, zonedWallTime } from '../../location/zone'
+import type { SiteLocation } from '../../location/site'
+import { wallTimeToInstant, zonedWallTime } from '../../location/zone'
 import { type SkyClock, setSkyTime, skyClock, skyTime } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
 import { addToObservingPlanner, planningSite, showTargetInSky } from '../observingplanner/observingplanner'
@@ -54,10 +54,6 @@ export interface SiteVisibility {
 
 // Tab-lived state of the tool.
 export interface PlanetaryEventsState {
-	// Where the visibility is judged from.
-	location: ToolLocation
-	// Zone the times are shown in.
-	zone: DisplayZoneOverride
 	// First instant of the range; absent until the tool opens, then real now.
 	start?: number
 	// Months of the range.
@@ -101,8 +97,6 @@ export interface PlanetaryEventsState {
 // Creates the tab state of the tool.
 export function createPlanetaryEventsState(): PlanetaryEventsState {
 	return {
-		location: { ...ACTIVE_TOOL_LOCATION },
-		zone: { ...DEFAULT_ZONE_OVERRIDE },
 		months: 12,
 		bodies: [...EVENT_BODIES],
 		kinds: [...EVENT_KINDS],

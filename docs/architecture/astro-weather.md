@@ -39,9 +39,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   A best window is at least 2 continuous favorable hours, the longest first and then the one with fewer cautions, clipped to the part of the night the mode can use and never in the past.
   A stale forecast the mode depends on is shown and recommends nothing; with no window the tool says why, and may offer the longest variable stretch as marginal.
 - Astro Weather tool (`web/src/tools/astroweather/`, `/tools/astro-weather`): its state is a tab-lived valtio proxy (`astroWeatherState`); only the observing mode is a profile preference (see [Persistence and State](persistence-and-state.md)).
-  The location is a tab-memory `ToolLocation` chosen in the shared `ToolLocationSection`: the active profile's observing site, followed live, another saved site, or coordinates typed with their elevation and a zone (UTC until one is chosen);
-  it never changes the profile, and another profile resets it.
-  Nights are named in the zone of the location (the `timeZone` of `/night`), and their times are shown in the zone `resolveDisplayZone` gives for the tool's `DisplayZoneOverride` (tab memory, `TimeZoneSelect`), which only reformats: the forecast and the night are keyed by the place and the location's zone (`siteKey`), never by the display zone.
+  It always observes from the active profile's observing site, followed live (`useActiveLocation`); it has no location or zone of its own.
+  Nights are named in the site's zone (the `timeZone` of `/night`), and their times are shown in the profile's display zone, which only reformats: the forecast and the night are keyed by the place and the site's zone (`siteKey`), never by the display zone.
   Its answers are read behind one request guard each for the forecast and the night, so a failure of one leaves the other shown and a late answer for another site is discarded; another site clears both at once.
   Changing mode, night, or hour asks for no forecast, and only a new site, Refresh, or reopening after 30 minutes does, with the cache of the server deciding whether a service is read at all; nothing polls.
   It opens on the current night, the one in progress until its `display` ends and the next one from then on, even before the upper transit that starts it, moves to that next night by itself while the tool stays open, asking for no forecast, goes back no further, and goes forward while the forecast has samples for the next night.
@@ -49,8 +48,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The timeline (`ForecastTimeline.tsx`) has rows of the outlook, cloud, the two classes, rain chance, gusts, and the Moon on one time axis over bands of how dark the sky is, each row on its own scale.
   Hours are bars, 7Timer! samples are tiles centered on their timestamps and 3 hours wide, a missing value draws nothing, and an hour is chosen by a click or with the arrow keys, Home, and End, never by hovering;
   each reading has a symbol as well as a color.
-  The contextual panel holds the location, the time zone, Sky Conditions and Weather Conditions of the hour chosen, Astronomical Conditions of the night (`astroWeather.*`), and Sources with the credits.
-  Without a location the tool offers Set Location, which opens Settings → Observing Sites.
+  The contextual panel holds Sky Conditions and Weather Conditions of the hour chosen, Astronomical Conditions of the night (`astroWeather.*`), and Sources with the credits.
+  Without an active site the tool has no panel and offers Choose Observing Site, which opens Settings → Observing Sites.
   Nothing here is passed to the Sky, the Sequencer, or a device.
 - Both free services are for non-commercial use: Open-Meteo under CC BY 4.0, 7Timer! with no formal license and public pages that conflict about paid software.
   Commercial distribution stays blocked until that is settled.

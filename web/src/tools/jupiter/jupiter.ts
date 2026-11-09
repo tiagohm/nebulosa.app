@@ -1,8 +1,7 @@
 import type { JupiterEvent, JupiterEventKind, JupiterEvents, JupiterEventsRequest, JupiterFallbackReason, JupiterGrsModel, JupiterGrsResponse, JupiterGrsSaveRequest, JupiterMoonState, JupiterSignature, JupiterSourceReport, JupiterState, JupiterTrack, JupiterVisibilityReason, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { ApiResponseError, fetchJson, jsonInit } from '../../http'
-import { ACTIVE_TOOL_LOCATION, type SiteLocation, type ToolLocation } from '../../location/site'
-import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
+import type { SiteLocation } from '../../location/site'
 import { createRequestGuard } from '../../sky/selection'
 import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
 import { aborted, browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, setTime } from '../planetary/planetary'
@@ -76,10 +75,6 @@ export const FALLBACK_LABELS: Readonly<Record<JupiterFallbackReason, string>> = 
 
 // Tab-lived state of the tool.
 export interface JupiterPlannerState {
-	// Where the visibility is judged from.
-	location: ToolLocation
-	// Zone the times are shown in.
-	zone: DisplayZoneOverride
 	// Civil date of the first evening of the period, in the zone that names the dates; absent until the tool opens.
 	eveningDate?: string
 	// Days of the period.
@@ -123,8 +118,6 @@ export interface JupiterPlannerState {
 // Creates the tab state of the tool.
 export function createJupiterPlannerState(): JupiterPlannerState {
 	return {
-		location: { ...ACTIVE_TOOL_LOCATION },
-		zone: { ...DEFAULT_ZONE_OVERRIDE },
 		period: 3,
 		playing: false,
 		rate: 600,

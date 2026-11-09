@@ -19,8 +19,7 @@ import type {
 } from 'api'
 import { proxy } from 'valtio'
 import { ApiResponseError, fetchJson, jsonInit } from '../../http'
-import { ACTIVE_TOOL_LOCATION, type SiteLocation, type ToolLocation } from '../../location/site'
-import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
+import type { SiteLocation } from '../../location/site'
 import { createRequestGuard } from '../../sky/selection'
 import type { StatusTone } from '../../ui/StatusBadge'
 import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
@@ -132,10 +131,6 @@ const SATURN_YEAR_MS = 29.46 * YEAR_MS
 
 // Tab-lived state of the tool.
 export interface SaturnPlannerState {
-	// Where the night windows are judged from.
-	location: ToolLocation
-	// Zone the times are shown in.
-	zone: DisplayZoneOverride
 	// Civil date of the first evening of the period, in the zone that names the dates; absent until the tool opens.
 	eveningDate?: string
 	// Days of the period.
@@ -199,8 +194,6 @@ export interface SaturnPlannerState {
 // Creates the tab state of the tool.
 export function createSaturnPlannerState(): SaturnPlannerState {
 	return {
-		location: { ...ACTIVE_TOOL_LOCATION },
-		zone: { ...DEFAULT_ZONE_OVERRIDE },
 		period: 3,
 		playing: false,
 		rate: 600,

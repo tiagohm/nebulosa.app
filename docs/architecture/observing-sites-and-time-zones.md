@@ -12,8 +12,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
     - Owner: `ProfileSettings.dateTime` (Settings → Date & Time)
     - Meaning: How civil times read in every screen of the profile: the site's zone, UTC, or the browser's
 - **Tool location and zone override**
-    - Owner: tab memory of each tool (`ToolLocation`, `DisplayZoneOverride`)
-    - Meaning: A place and a zone chosen for one tool alone: another saved site or coordinates typed in with their zone; never written to the profile or a site
+    - Owner: tab memory of the Solar and Lunar Eclipse Maps and the Astronomical Time Converter (`ToolLocation`, `DisplayZoneOverride`)
+    - Meaning: A place and a zone chosen for one of those tools alone: another saved site, coordinates typed in with their zone, or a click on the eclipse map; never written to the profile or a site. Every other tool and screen observes from the active site and shows the profile's display zone
 - **Instants**
     - Owner: every request and result
     - Meaning: Unix milliseconds (UTC), or the toolkit's scales; never changed by a zone
@@ -27,7 +27,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The top bar's site menu selects the active site in one click.
   Selecting, editing, or deleting a site changes the workspace only: no device is commanded, no operation restarted, and a running operation keeps the place it started with (operations receive coordinates by value, or read the mount's own site).
 - `web/src/location/` derives the rest, storing nothing: `activeSite`, `resolveToolLocation` (the active site followed live, a saved site, or typed coordinates whose zone is UTC until chosen), `siteObserver` (the `{ latitude, longitude, elevation }` the API takes), and `locationKey` (geographic only, so a renamed site or a new zone reloads nothing that depends on the place alone).
-  `ToolLocationSection` is the Location section every tool with a place of its own uses, and `TimeZoneSelect` the zone override every tool that offers one uses.
+  `ToolLocationSection` is the Location section and `TimeZoneSelect` the zone override of the three tools with a place of their own (the eclipse maps and the Astronomical Time Converter);
+  the Observing, Jupiter, and Saturn Planners, Planetary Events, Meteor Showers, Astro Weather, and Close Approaches have neither and observe from the active site (`useActiveLocation`, `useActiveSite`), showing times in the profile's display zone, as iPolar does without showing the site.
 - One rule shows a civil time (`resolveDisplayZone` of `web/src/location/zone.ts`): a tool's override when it made one (an IANA zone, UTC, the browser's, or the site of the tool), otherwise the profile's display zone;
   the site mode takes the tool's own location (a saved site other than the active one, or typed coordinates), and without one the browser's zone stands in, named as such.
   Zones are always IANA identifiers, never offsets or an empty sentinel; offsets are shown for an instant only (`formatUtcOffset`).

@@ -2,28 +2,25 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatClockTime, formatGeographic } from '../../format'
 import { openObservingSites } from '../../location/site'
-import { TimeZoneSelect } from '../../location/TimeZoneSelect'
-import { ToolLocationSection } from '../../location/ToolLocationSection'
-import { useDisplayZone, useToolLocation } from '../../location/useLocation'
+import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
 import { activeProfile, astroWeatherPreferences, profileState, setAstroWeatherPreferences } from '../../profile/profile'
 import { ASTRO_WEATHER_MODES, type AstroWeatherMode } from '../../profile/schema'
-import { PanelSection } from '../../shell/ContextualPanel'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { IconButton } from '../../ui/IconButton'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { type AstroWeatherState, astroWeatherState, EMPTY_FORECAST, firstNight, followProfile, followSite, hasNextNight, loadCurrentNight, loadForecast, MODE_LABELS, nightEnded, OUTLOOK_LABELS, siteKey, stepNight } from './astroweather'
+import { type AstroWeatherState, astroWeatherState, EMPTY_FORECAST, firstNight, followSite, hasNextNight, loadCurrentNight, loadForecast, MODE_LABELS, nightEnded, OUTLOOK_LABELS, siteKey, stepNight } from './astroweather'
 import { AstronomicalConditions, SkyConditions, Sources, WeatherConditions } from './ForecastDetails'
 import { ForecastSummary, reasonsText } from './ForecastSummary'
 import { ForecastTimeline } from './ForecastTimeline'
 import { evaluateNight } from './observing'
 
 // Astro Weather tool: whether a night is worth observing, when, and for what, from forecasts and the local astronomy of the
-// site. It reads and commands nothing but those: no device, no profile, no site, no sequence. The active profile's observing
-// site is the default location, and a saved site or coordinates chosen here are held for the tool alone. Nights are named in
-// the location's own zone; the display zone only formats the times. Everything here is a forecast, and the page says so.
+// site. It reads and commands nothing but those: no device, no profile, no site, no sequence. It always observes from the
+// active profile's observing site, followed live. Nights are named in the site's own zone; the display zone of the profile
+// only formats the times. Everything here is a forecast, and the page says so.
 
 // How often the current time is read again for what depends on it, in milliseconds; nothing is requested for it.
 const CLOCK_INTERVAL_MS = 60_000
@@ -34,13 +31,11 @@ export function AstroWeather() {
 	const state = useSnapshot(astroWeatherState) as AstroWeatherState
 	const profile = activeProfile(profiles)
 	const { mode } = astroWeatherPreferences(profile.settings)
-	const location = useToolLocation(state.location)
-	const displayZone = useDisplayZone(location, state.zone)
+	const location = useActiveLocation()
+	const displayZone = useDisplayZone(location)
 	const key = location && siteKey(location)
 	const [now, setNow] = useState(() => Date.now())
 	const { forecast, night, cursor, forecastError, forecastLoading, nightError } = state
-
-	useEffect(() => followProfile(astroWeatherState, profile.id), [profile.id])
 
 	// Follows the location while the tool is shown; the key holds everything its requests depend on, never the display zone.
 	useEffect(() => (location ? followSite(astroWeatherState, location) : undefined), [key])
@@ -73,13 +68,6 @@ export function AstroWeather() {
 
 	const panel = (
 		<>
-			<ToolLocationSection value={state.location} location={location} onChange={(value) => (astroWeatherState.location = value)} elevation />
-			{location && (
-				<PanelSection title="Time Zone">
-					<TimeZoneSelect label="Times Shown In" value={state.zone} onChange={(value) => (astroWeatherState.zone = value)} site={location} selectedSite={location.source !== 'active'} />
-					{timeZone !== location.timeZone && <Notice>Nights are named by the date of their evening in {location.timeZone}, the zone of the location.</Notice>}
-				</PanelSection>
-			)}
 			{night && (
 				<>
 					<SkyConditions sample={sample} hour={hour} />
@@ -93,13 +81,13 @@ export function AstroWeather() {
 
 	if (!location) {
 		return (
-			<WorkspaceLayout workspace="tools" title="Astro Weather" panel={{ title: 'Location', content: panel }}>
+			<WorkspaceLayout workspace="tools" title="Astro Weather">
 				<EmptyState
-					title="No location"
-					description={state.location.mode === 'active' ? 'Set the observing site of this profile, or choose a location in the panel.' : 'The site chosen was deleted. Choose another location in the panel.'}
+					title="No observing site"
+					description="Set the observing site of this profile."
 					action={
 						<Button variant="secondary" onClick={() => openObservingSites()}>
-							Set Location
+							Choose Observing Site
 						</Button>
 					}
 				/>
@@ -112,7 +100,7 @@ export function AstroWeather() {
 	const forward = night && hasNextNight(night, forecast)
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Astro Weather" panel={{ title: 'Location and Details', content: panel }}>
+		<WorkspaceLayout workspace="tools" title="Astro Weather" panel={{ title: 'Details', content: panel }}>
 			<div className="h-full overflow-y-auto">
 				<div className="flex flex-col gap-4 p-4">
 					<div className="flex flex-wrap items-end gap-x-4 gap-y-3">

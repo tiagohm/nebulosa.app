@@ -298,3 +298,15 @@ describe('positions and nights', () => {
 		expect(detail.annualPredictionAvailable).toBe(true)
 	})
 })
+
+describe('radiants far from their activity', () => {
+	test('a radiant more than 30 days from its reference keeps its catalog position instead of a drifted one', async () => {
+		const { service } = setup()
+		const june = await service.states({ ids: ['iau:4'], time: Date.UTC(2026, 5, 1) })
+		expect(june.showers[0].radiantAtReference).toBe(true)
+		expect(june.showers[0].radiantJ2000!.rightAscension).toBeCloseTo(113.1 * DEG, 6)
+		const peak = await service.states({ ids: ['iau:4'], time: Date.UTC(2026, 11, 14) })
+		expect(peak.showers[0].radiantAtReference).toBeUndefined()
+		expect(peak.showers[0].radiantExtrapolated).toBe(true)
+	})
+})

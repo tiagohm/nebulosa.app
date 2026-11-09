@@ -238,8 +238,9 @@ async function loadSelection(state: SkyState, observer: GeographicLocation | und
 	const request = selectionGuard.begin()
 	const { key, ref } = selection
 
-	// The mount's position comes from its runtime.
-	if (ref.kind === 'mount') {
+	// The mount's position comes from its runtime; a meteor shower radiant is a direction its inspector reads from the
+	// Meteor Showers routes, never an object of /api/sky/position.
+	if (ref.kind === 'mount' || ref.kind === 'meteorShower') {
 		selection.loading = false
 		return
 	}

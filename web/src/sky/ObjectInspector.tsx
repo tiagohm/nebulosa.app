@@ -9,6 +9,7 @@ import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import { formatApparentSize, formatDeclination, formatMagnitude, formatRightAscension, formatStellarDistance } from './format'
 import { ObserverSection, PositionSection } from './InspectorParts'
+import { MeteorShowerInspector } from './meteor/MeteorShowerInspector'
 import { MoonInspector } from './moon/MoonInspector'
 import { MountInspector } from './MountInspector'
 import { ObjectActions } from './ObjectActions'
@@ -22,7 +23,7 @@ import { SunInspector } from './sun/SunInspector'
 // says what it is: catalog J2000 or apparent of date, topocentric or geocentric, the instant, and the
 // provider (Horizons or a local model, with the reason). Missing data is shown as missing, never as a
 // placeholder value, and catalog data stays shown when a position fails. With a mount on the profile's
-// connection, the object can be slewed to from its Object section. The mount marker, the Sun, and the Moon have their own views.
+// connection, the object can be slewed to from its Object section. The mount marker, the Sun, the Moon, satellites, and meteor shower radiants have their own views.
 
 // Orbital elements and physical parameters of minor bodies shown, in order.
 const MINOR_BODY_PARAMETERS = ['a', 'e', 'i', 'q', 'per', 'H', 'G', 'M1', 'diameter'] as const
@@ -52,6 +53,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 
 	if (selection.ref.kind === 'mount') return <MountInspector mountRef={selection.ref} observer={observer} onShowFraming={onShowFraming} />
 	if (selection.ref.kind === 'body' && selection.ref.code === '10') return <SunInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} onShowFraming={onShowFraming} />
+	if (selection.ref.kind === 'meteorShower') return <MeteorShowerInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} />
 	if (selection.ref.kind === 'satellite') return <SatelliteInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} />
 	if (selection.ref.kind === 'body' && selection.ref.code === '301') return <MoonInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} onShowFraming={onShowFraming} />
 

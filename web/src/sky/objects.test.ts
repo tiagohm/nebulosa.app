@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { CelestialObject } from './celestial/celestial'
-import { hoverLabel, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
+import { hoverLabel, METEOR_RADIANT_SHAPE_TYPE, meteorRadiantShapeId, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
 import { type RememberedObject, REMEMBERED_SHAPE_TYPE, rememberedShapeId } from './remembered'
 import { createRequestGuard } from './selection'
 
@@ -84,4 +84,15 @@ test('a newer request supersedes the previous one', () => {
 	guard.cancel()
 	expect(b.signal.aborted).toBe(true)
 	expect(b.current()).toBe(false)
+})
+
+test('a meteor shower radiant is a shape selected by its shower id, never a body or a target', () => {
+	const ref = { kind: 'meteorShower', id: 'iau:4' } as const
+	expect(refKey(ref)).toBe('meteor:iau:4')
+	expect(movingBodyId(ref)).toBeUndefined()
+	expect(selectionTargets(ref, 'meteorShower', names)).toEqual([{ type: 'shape', id: meteorRadiantShapeId('iau:4') }])
+	const id = meteorRadiantShapeId('iau:4')
+	const object: CelestialObject = { type: 'shape', id, shape: { id, type: METEOR_RADIANT_SHAPE_TYPE, coordinate: { rightAscension: 2, declination: 0.5 }, data: { ref, name: 'Geminids', code: 'GEM' }, render: () => {} } }
+	expect(refOfCelestialObject(object, names)).toEqual(ref)
+	expect(hoverLabel(object, names)).toEqual({ name: 'Geminids', typeName: 'Meteor shower radiant' })
 })

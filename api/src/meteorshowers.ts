@@ -27,6 +27,8 @@ import { MeteorSolarLongitudeTable } from './meteorshowers.solar'
 import type { MeteorCatalogFailureCode, MeteorShowerStore } from './meteorshowers.store'
 import { METEOR_ANNUAL_PREDICTION_YEARS, METEOR_VISUAL_REVISION, METEOR_VISUAL_SOURCES, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSource } from './meteorshowers.visual'
 import { fetchUpstream, type UpstreamFetch, UpstreamTooLargeError, UpstreamUnavailableError } from './sky/remote'
+import type { SkyMeteorShowers } from './sky/routes'
+import type { SkySearchResult } from './sky/types'
 
 // Meteor Showers service: the IAU Meteor Data Center stream catalog with its curated visual subset, listed, searched,
 // dated, and located for the Meteor Showers tool and the Sky, and the geometric observing night of a shower from a site.
@@ -519,13 +521,16 @@ export class MeteorShowersService {
 		return record
 	}
 
-	// Row of a shower: its activity at the instant and its next occurrence after it, or the occurrence of a civil year.
+	// Row of a shower: its activity at the instant and its next occurrence after it, or the occurrence of a civil year; for a
+	// curated shower, the next visual occurrence.
 	#summary(record: MeteorShowerRecord, time: number, solarLongitude: number, year: number | undefined): MeteorShowerSummary {
 		const solution = preferredSolution(record)
 		const from = year === undefined ? time : Date.UTC(year, 0, 1)
 		const to = year === undefined ? time + 400 * DAY_MS : Date.UTC(year + 1, 0, 1)
 		const occurrences = occurrencesOverlapping(record, from, to, this.#table)
-		const occurrence = year === undefined ? occurrences.find((candidate) => (occurrenceInstant(candidate) ?? Number.NEGATIVE_INFINITY) >= time || (candidate.visual?.end ?? candidate.iau?.end ?? 0) >= time) : occurrences[0]
+		// A curated shower is about its visual occurrences, so a longer IAU support never stands for one already over.
+		const candidates = record.visual === undefined ? occurrences : occurrences.filter((candidate) => candidate.visual !== undefined)
+		const occurrence = year === undefined ? candidates.find((candidate) => (occurrenceInstant(candidate) ?? Number.NEGATIVE_INFINITY) >= time || (candidate.visual?.end ?? candidate.iau?.end ?? 0) >= time) : candidates[0]
 		const { state, basis } = activityAt(record, time, solarLongitude, this.#table)
 
 		return {
@@ -640,4 +645,16 @@ export function createMeteorShowersRoutes(service: MeteorShowersService) {
 			},
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>
+}
+
+// The meteor showers as the Sky search finds them: every shower but the removed ones whose names, code, or IAU number
+// match, the curated ones first.
+export function meteorShowerSkyAdapter(service: MeteorShowersService): SkyMeteorShowers {
+	return {
+		search: async (text, limit) => {
+			const page = await service.list({ query: text, status: ['established', 'working', 'toBeEstablished', 'unknown'], sort: 'name', limit: MAX_LIST_LIMIT })
+			const rows = [...page.showers].sort((a, b) => Number(b.visual !== undefined) - Number(a.visual !== undefined)).slice(0, limit)
+			return rows.map((row): SkySearchResult => ({ ref: { kind: 'meteorShower', id: row.id }, name: row.name, designations: [row.code, row.number === undefined ? undefined : `IAU ${row.number}`].filter((value) => value !== undefined), category: 'meteorShower', typeName: 'Meteor shower radiant' }))
+		},
+	}
 }

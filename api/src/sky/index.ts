@@ -11,7 +11,7 @@ import { type ConstellationSource, catalogStars, fieldConstellations, fieldObjec
 import { SkyEphemeris } from './ephemeris'
 import { MinorBodies } from './minorbodies'
 import { createMoonAlmanacRoutes, MoonAlmanac } from './moon'
-import { createSkyLocator, createSkyRoutes, type SkySatellites, type SkyServices } from './routes'
+import { createSkyLocator, createSkyRoutes, type SkyMeteorShowers, type SkySatellites, type SkyServices } from './routes'
 import { assertSkyCatalogSchema } from './schema'
 import { createSolarImageRoutes, SolarImages } from './sdo'
 import { createSunAlmanacRoutes, SunAlmanac } from './sun'
@@ -45,8 +45,8 @@ export const annotationSky: AnnotationSky = {
 
 // Routes of the sky API, with those of the Sun and Moon Inspectors; the satellites of the satellite catalog, which the
 // server composes apart, are searched and located through `satellites`.
-export function createSkyApiRoutes(satellites: SkySatellites) {
-	return { ...createSkyRoutes({ ...services, satellites }), ...createSunAlmanacRoutes(new SunAlmanac()), ...createMoonAlmanacRoutes(new MoonAlmanac()), ...createSolarImageRoutes(new SolarImages()), ...createActiveRegionRoutes(new SolarActiveRegions()) }
+export function createSkyApiRoutes(satellites: SkySatellites, meteorShowers: SkyMeteorShowers) {
+	return { ...createSkyRoutes({ ...services, satellites, meteorShowers }), ...createSunAlmanacRoutes(new SunAlmanac()), ...createMoonAlmanacRoutes(new MoonAlmanac()), ...createSolarImageRoutes(new SolarImages()), ...createActiveRegionRoutes(new SolarActiveRegions()) }
 }
 
 // Locator of the objects of the sky API, used to resolve mount targets.

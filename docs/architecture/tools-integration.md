@@ -244,6 +244,18 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
       A text field starting with `=`, `+`, `-`, or `@` is prefixed with an apostrophe.
       The download helper and the CSV quoting are `web/src/download.ts`, shared with the Orbital Mechanics Explorer.
     - Nothing here moves the mount, changes a site or the profile, or starts an operation.
+- Meteor Showers tool (`web/src/tools/meteorshowers/`, `/tools/meteor-showers[/<shower id>]`, icon `meteor`; see [Meteor Showers Contract](meteor-showers.md)):
+    - State: the tab state is `meteorShowersState` (`meteorshowers.ts`), tab memory: a `ToolLocation` (the active site by default), a `DisplayZoneOverride`, the section (Upcoming: the curated showers by next maximum; Active Now; All IAU, by name), List or Calendar, the search, the status filter of the whole catalog, whether only radiants reaching the lowest altitude at the location are listed, the page, the calendar month, the selected shower, and the night's evening (tonight in the location's zone by default), darkness (astronomical, nautical, or civil), lowest radiant altitude (20° by default), and optional Moon separation.
+      Each answer has its own request guard; the page, the month, the detail, and the night are read again when their inputs or the catalog revision (`meteorShowerSourcesState`, in `SERVER_STORES`, fed by `/sources` and `meteorShowers:changed`) change, the night only with a location.
+    - A URL that names a shower selects it; another selection keeps the URL.
+    - `MeteorShowerList` shows each shower's activity now with the source that decided it, its period, its maximum (the published visual one with the precision its solar longitude allows, else the IAU mean reference named as such, never as a maximum), and the typical visual ZHR, a dash without curated data.
+      Visual periods are calendar days, never shifted by the display zone.
+    - `MeteorShowerCalendar` lays out a Monday-first month: each date lists the showers whose maximum falls on it (the IAU reference marked "(ref.)") and counts the showers active that day.
+    - `MeteorShowerDetails` keeps the sources apart: the curated visual data with its source, the occurrences of each source, every IAU solution with the preferred one and why, the gaps, and the observing night with its windows (the radiant's highest altitude and the Moon at that instant), the reasons when there is none, and `MeteorNightChart` (the radiant's and the Moon's altitude over the bands of the sky, the windows shaded, the lowest altitude drawn, a sample chosen by a click or the keyboard).
+      A record without an IAU number says its id may name another record after a refresh, and a year without curated notes says its visual values are the recurring baseline.
+    - Sources (a workspace action) opens `MeteorSourcesModal`: the IAU catalog in use (bundled or downloaded, version, date, counts, SHA-256, the last failure) with Update Catalog, and the visual sources with their credit.
+    - Handoffs: Show Radiant in Sky selects the radiant through `selectSkyObject` at the Sky's own time; Set Sky Time to Maximum, offered only for a maximum published to a tenth of a degree or better, is the one action that sets the Sky clock.
+      Nothing here moves the mount, changes a site or the profile, or starts an operation, and a radiant is never a target.
 - Alpaca Server (planned: a catalog entry without a view, and no `api` service yet): an `api` service over `AlpacaServer` (`core/src/devices/alpaca/server.ts`), started and stopped explicitly, bound to localhost by default, publishing only an explicit allowlist of devices.
   Devices imported from Alpaca connections are never exported, to avoid publication loops.
   Its state is published as events.

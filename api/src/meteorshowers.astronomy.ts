@@ -173,6 +173,9 @@ export interface MeteorShowerStateEntry {
 	readonly radiantOfDate?: MeteorRadiantDirection
 	// Whether the radiant was moved by its drift away from the reference longitude.
 	readonly radiantExtrapolated?: boolean
+	// Whether the instant is more than MAX_DRIFT_DAYS from the reference longitude, so the radiant is the catalog position
+	// at the reference, not moved by the drift.
+	readonly radiantAtReference?: boolean
 	// Geometric altitude of the radiant, radians; absent without an observer or a radiant.
 	readonly altitude?: number
 	// Azimuth of the radiant, radians from north through east; absent without an observer or a radiant.
@@ -200,6 +203,11 @@ export interface MeteorShowerStates {
 // Most showers one state request may name.
 export const MAX_STATE_IDS = 100
 
+// Farthest a radiant is moved by its daily drift from its reference longitude, days: about the half-width of a long
+// activity period (the Perseids span ±30 days). Beyond it, outside any activity, a linear drift no longer says where the
+// radiant is, so the catalog position at the reference is given instead, said so.
+export const MAX_DRIFT_DAYS = 30
+
 // The state of a batch of showers at one instant: one toolkit context (the Sun, the Moon, the sidereal time) shared by
 // every radiant through meteorShowerStates. Showers without a usable solution keep their activity and have no radiant.
 export function meteorShowerStatesAt(records: readonly MeteorShowerRecord[], request: MeteorShowerStatesRequest, table: MeteorSolarLongitudeTable): MeteorShowerStates {
@@ -207,12 +215,22 @@ export function meteorShowerStatesAt(records: readonly MeteorShowerRecord[], req
 	const observer = request.observer === undefined ? undefined : geographic(request.observer)
 	const context = meteorShowerComputationContext(time, observer, { includeHorizontal: observer !== undefined, includeSun: observer !== undefined, includeMoon: true })
 	const withSolution = records.filter((record) => preferredSolution(record) !== undefined)
+	const options = { includeHorizontal: observer !== undefined, includeSun: observer !== undefined, includeMoon: true, includeRadiantOfDate: true, maxExtrapolationDays: MAX_DRIFT_DAYS }
 	const states = meteorShowerStates(
 		withSolution.map((record) => ({ solution: preferredSolution(record)! })),
 		context,
-		{ includeHorizontal: observer !== undefined, includeSun: observer !== undefined, includeMoon: true, includeRadiantOfDate: true },
+		options,
 	)
 	const byId = new Map(withSolution.map((record, index) => [record.id, states[index]]))
+	// A radiant beyond its drift falls back to its catalog position, the solution without the drift.
+	const beyondDrift = withSolution.filter((record, index) => states[index].radiantJ2000 === undefined && preferredSolution(record)!.radiantDrift !== undefined)
+	const atReference = meteorShowerStates(
+		beyondDrift.map((record) => ({ solution: { ...preferredSolution(record)!, radiantDrift: undefined } })),
+		context,
+		options,
+	)
+	for (const [index, record] of beyondDrift.entries()) byId.set(record.id, atReference[index])
+	const referenceIds = new Set(beyondDrift.map((record) => record.id))
 
 	const showers = records.map((record): MeteorShowerStateEntry => {
 		const { state: activity, basis: activityBasis } = activityAt(record, request.time, context.solarLongitude, table)
@@ -222,6 +240,7 @@ export function meteorShowerStatesAt(records: readonly MeteorShowerRecord[], req
 			activity,
 			activityBasis,
 			...(state?.radiantJ2000 && { radiantJ2000: state.radiantJ2000, radiantExtrapolated: state.radiantExtrapolated }),
+			...(referenceIds.has(record.id) && { radiantAtReference: true }),
 			...(state?.radiantOfDate && { radiantOfDate: state.radiantOfDate }),
 			...(state?.horizontal && { altitude: state.horizontal.altitude, azimuth: state.horizontal.azimuth }),
 			...(state?.moonSeparation !== undefined && { moonSeparation: state.moonSeparation }),
@@ -271,7 +290,7 @@ export function skyRadiantsAt(records: readonly MeteorShowerRecord[], time: numb
 	const radiants: MeteorSkyRadiant[] = []
 	for (const record of candidates) {
 		if (radiants.length >= MAX_SKY_RADIANTS) break
-		const state = meteorShowerState(preferredSolution(record)!, context, { includeMoon: false, includeSun: false, includeHorizontal: false, includeRadiantOfDate: false })
+		const state = meteorShowerState(preferredSolution(record)!, context, { includeMoon: false, includeSun: false, includeHorizontal: false, includeRadiantOfDate: false, maxExtrapolationDays: MAX_DRIFT_DAYS })
 		if (state.radiantJ2000 === undefined) continue
 		radiants.push({ id: record.id, ...(record.code && { code: record.code }), name: record.name, visual: record.visual !== undefined, ...state.radiantJ2000 })
 	}

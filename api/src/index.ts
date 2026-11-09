@@ -46,7 +46,7 @@ import { LiveStackingStore } from './livestacking.store'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
 import { createMeridianFlipRoutes, MeridianFlipService } from './meridianflip'
 import { createMeridianFlipExecutorRoutes, MeridianFlipExecutor } from './meridianflipexecutor'
-import { createMeteorShowersRoutes, MeteorShowersService } from './meteorshowers'
+import { createMeteorShowersRoutes, meteorShowerSkyAdapter, MeteorShowersService } from './meteorshowers'
 import { MeteorShowerStore } from './meteorshowers.store'
 import { createPointingModelRoutes, PointingModels } from './mountpointing'
 import { createPointingActivationRoutes, MountCorrections, PointingActivations } from './mountpointing.corrections'
@@ -513,6 +513,7 @@ export type {
 	MeteorSkyRadiants,
 	MeteorVisualOccurrence,
 } from './meteorshowers.astronomy'
+export type { MeteorShowerActivity, MeteorShowerSolution, MeteorShowerStatus, MeteorSolarLongitudeInterval } from 'nebulosa/src/astronomy/meteors/types'
 export type { MeteorShowerFilter, MeteorShowerGap, MeteorShowerIdentity, MeteorSolutionSelection } from './meteorshowers.catalog'
 export type { MeteorCatalogFailureCode } from './meteorshowers.store'
 export type { MeteorCalendarDay, MeteorDataBasis, MeteorVisualEntry, MeteorVisualSource, MeteorVisualSourceId } from './meteorshowers.visual'
@@ -1497,7 +1498,7 @@ export const routes = {
 	...createImageStatisticsRoutes(imageStatistics),
 	...createAnnotationRoutes(annotations),
 	...createCaptureFrameRoutes(captureFrames),
-	...createSkyApiRoutes(satelliteSkyAdapter(satellites)),
+	...createSkyApiRoutes(satelliteSkyAdapter(satellites), meteorShowerSkyAdapter(meteorShowers)),
 	...createLunarEclipseRoutes(lunarEclipses),
 	...createSolarEclipseRoutes(solarEclipses),
 	...createCloseApproachRoutes(closeApproaches),

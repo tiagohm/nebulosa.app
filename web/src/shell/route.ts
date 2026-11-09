@@ -30,6 +30,7 @@ export const TOOL_IDS = [
 	'jupiter-observing-planner',
 	'saturn-observing-planner',
 	'planetary-events',
+	'meteor-showers',
 	'artificial-satellites',
 	'calibration-library',
 	'image-stacking',
@@ -66,6 +67,8 @@ export interface ToolsRoute {
 	readonly satellite?: string
 	// Id of the night plan the Observing Planner shows; absent for its other sections and for every other tool.
 	readonly plan?: string
+	// Id of the shower Meteor Showers shows (such as iau:4); absent for its own choice and for every other tool.
+	readonly meteorShower?: string
 }
 
 // View of a device in the Equipment Control page besides its controls: its INDI properties, or the messages its INDI
@@ -172,6 +175,7 @@ export function parseRoute(pathname: string): Route {
 		if (first === 'image-stacking' && second) return { workspace, tool: first, project: decodeURIComponent(second) }
 		if (first === 'artificial-satellites' && second) return { workspace, tool: first, satellite: decodeURIComponent(second) }
 		if (first === 'observing-planner' && second) return { workspace, tool: first, plan: decodeURIComponent(second) }
+		if (first === 'meteor-showers' && second) return { workspace, tool: first, meteorShower: decodeURIComponent(second) }
 		return ECLIPSE_MAP_TOOLS.has(first) && second ? { workspace, tool: first, eclipse: decodeURIComponent(second) } : { workspace, tool: first }
 	}
 
@@ -184,6 +188,7 @@ export function routePath(route: Route): string {
 	if (route.workspace === 'tools' && route.tool === 'image-stacking' && route.project) return `/tools/${route.tool}/${encodeURIComponent(route.project)}`
 	if (route.workspace === 'tools' && route.tool === 'artificial-satellites' && route.satellite) return `/tools/${route.tool}/${encodeURIComponent(route.satellite)}`
 	if (route.workspace === 'tools' && route.tool === 'observing-planner' && route.plan) return `/tools/${route.tool}/${encodeURIComponent(route.plan)}`
+	if (route.workspace === 'tools' && route.tool === 'meteor-showers' && route.meteorShower) return `/tools/${route.tool}/${encodeURIComponent(route.meteorShower)}`
 	if (route.workspace === 'tools' && route.tool) return ECLIPSE_MAP_TOOLS.has(route.tool) && route.eclipse ? `/tools/${route.tool}/${encodeURIComponent(route.eclipse)}` : `/tools/${route.tool}`
 	if (route.workspace === 'equipment') return route.device ? `/equipment/${encodeURIComponent(route.device)}${route.view ? `/${route.view}` : ''}` : '/equipment'
 	if (route.workspace === 'settings') {

@@ -7,13 +7,13 @@ import { SatelliteSync } from '../satellites.sync'
 import { SkyEphemeris } from './ephemeris'
 import { fixtureCatalog } from './fixture'
 import { MinorBodies } from './minorbodies'
-import { createSkyRoutes } from './routes'
+import { createSkyLocator, createSkyRoutes } from './routes'
 import type { SkyBodyPosition, SkyCatalogObject, SkyPositionResponse, SkySearchResult, SkyStarData } from './types'
 
 const routes = createSkyRoutes({ catalog: fixtureCatalog(), constellations: { lines: [], boundaries: [], labels: [] }, ephemeris: new SkyEphemeris({ observer: () => Promise.reject(new TypeError('offline')) }), minorBodies: new MinorBodies({ fetch: () => Promise.reject(new TypeError('offline')) }) })
 
 test('search lists solar-system bodies before catalog objects', async () => {
-	const response = routes['/api/sky/search'].GET(new Request('http://localhost/api/sky/search?q=an'))
+	const response = await routes['/api/sky/search'].GET(new Request('http://localhost/api/sky/search?q=an'))
 	const results = (await response.json()) as SkySearchResult[]
 	expect(results.map((e) => e.name)).toEqual(['Uranus', 'Andromeda Galaxy'])
 	expect(results[0].ref).toEqual({ kind: 'body', code: '799' })
@@ -94,9 +94,9 @@ test('satellites are searched and located through the satellite catalog, without
 	store.publish({ sourceKey: 'satcat:CATNR:5', objects: [{ noradId: '5', name: 'VANGUARD 1', cosparId: '1958-002B', catalog: { objectType: 'payload' } }], elements: [], at: 0 })
 	const sky = createSkyRoutes({ catalog: fixtureCatalog(), constellations: { lines: [], boundaries: [], labels: [] }, ephemeris: new SkyEphemeris(), minorBodies: new MinorBodies(), satellites: satelliteSkyAdapter(satellites) })
 
-	const found = (await sky['/api/sky/search'].GET(new Request('http://localhost/api/sky/search?q=zarya')).json()) as SkySearchResult[]
+	const found = (await (await sky['/api/sky/search'].GET(new Request('http://localhost/api/sky/search?q=zarya'))).json()) as SkySearchResult[]
 	expect(found).toEqual([{ ref: { kind: 'satellite', noradId: '25544' }, name: 'ISS (ZARYA)', designations: ['NORAD 25544', '1998-067A'], category: 'satellite', typeName: 'Artificial satellite' }])
-	expect(((await sky['/api/sky/search'].GET(new Request('http://localhost/api/sky/search?q=5')).json()) as SkySearchResult[]).map((result) => result.name)).toContain('VANGUARD 1')
+	expect(((await (await sky['/api/sky/search'].GET(new Request('http://localhost/api/sky/search?q=5'))).json()) as SkySearchResult[]).map((result) => result.name)).toContain('VANGUARD 1')
 
 	const locate = (noradId: string, observer?: object) => sky['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify({ target: { kind: 'satellite', noradId }, time: Date.UTC(2023, 7, 19, 13), observer }) }) as never)
 	const response = await locate('25544', { latitude: -23.5, longitude: -46.6, elevation: 760 })
@@ -114,4 +114,12 @@ test('satellites are searched and located through the satellite catalog, without
 	expect((await locate('1')).status).toBe(404)
 	// Without a satellite catalog a satellite is unknown.
 	expect((await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify({ target: { kind: 'satellite', noradId: '25544' }, time: 0 }) }) as never)).status).toBe(404)
+})
+
+test('a meteor shower radiant is a direction the position route refuses and a mount never locates', async () => {
+	const response = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify({ target: { kind: 'meteorShower', id: 'iau:4' }, time: 0 }) }) as never)
+	expect(response.status).toBe(422)
+	expect(((await response.json()) as { code: string }).code).toBe('unsupportedTarget')
+	const locate = createSkyLocator({ catalog: fixtureCatalog(), constellations: { lines: [], boundaries: [], labels: [] }, ephemeris: new SkyEphemeris({ observer: () => Promise.reject(new TypeError('offline')) }), minorBodies: new MinorBodies({ fetch: () => Promise.reject(new TypeError('offline')) }) })
+	expect(await locate({ kind: 'meteorShower', id: 'iau:4' }, { time: 0 })).toBeUndefined()
 })

@@ -48,6 +48,7 @@ import { handleImageStackingEvent, imageStackingRuntime, refreshImageStacking } 
 import { handleJupiterGrsEvent, jupiterGrsState, refreshJupiterGrs } from './tools/jupiter/jupiter'
 import { handleMeridianFlipEvent, meridianFlipState, refreshMeridianFlip } from './tools/meridianflip/meridianflip'
 import { handleMeridianFlipExecutorEvent, meridianFlipExecutorState, refreshMeridianFlipExecutor } from './tools/meridianflip/meridianflipexecutor'
+import { handleMeteorShowersEvent, meteorShowerSourcesState, refreshMeteorShowerSources } from './tools/meteorshowers/meteorshowers.sources'
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
 import { handleObservatoryCameraEvent, observatoryCamerasState, refreshObservatoryCameras } from './tools/observatorycameras/observatorycameras'
 import { handlePlayerEvent, watchPlayers } from './tools/observatorycameras/player'
@@ -119,6 +120,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleMeridianFlipEvent(meridianFlipState, event), refresh: () => refreshMeridianFlip(meridianFlipState) },
 	{ handle: (event) => handleMeridianFlipExecutorEvent(meridianFlipExecutorState, event), refresh: () => refreshMeridianFlipExecutor(meridianFlipExecutorState) },
 	{ handle: (event) => handleSatelliteEvent(satelliteCatalogState, event), refresh: () => refreshSatelliteCatalog(satelliteCatalogState) },
+	{ handle: (event) => handleMeteorShowersEvent(meteorShowerSourcesState, event), refresh: () => refreshMeteorShowerSources(meteorShowerSourcesState) },
 	{ handle: (event) => handleSpiceKernelEvent(spiceKernelsState, event), refresh: () => refreshSpiceKernels(spiceKernelsState) },
 	{ handle: (event) => handleObservingPlanEvent(observingPlansState, event), refresh: () => refreshObservingPlans(observingPlansState) },
 	{ handle: (event) => handleJupiterGrsEvent(jupiterGrsState, event), refresh: () => refreshJupiterGrs(jupiterGrsState) },

@@ -16,6 +16,7 @@ describe('registry', () => {
 			'jupiter-observing-planner',
 			'saturn-observing-planner',
 			'planetary-events',
+			'meteor-showers',
 			'artificial-satellites',
 			'calibration-library',
 			'image-stacking',

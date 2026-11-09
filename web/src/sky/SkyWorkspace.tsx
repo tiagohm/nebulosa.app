@@ -9,11 +9,12 @@ import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { activeProfile, profileState, satelliteFavorites, setSkyTimeBarVisible } from '../profile/profile'
 import { satelliteCatalogState } from '../satellites/satellites'
 import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
+import { meteorShowerSourcesState } from '../tools/meteorshowers/meteorshowers.sources'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import type { CoordinateSystem } from './celestial/celestial'
 import { skyClock } from './clock'
-import { isSkyLayerVisible, SATELLITE_TRACKS_LIMIT, SATELLITES_LAYER } from './display'
+import { isSkyLayerVisible, METEOR_RADIANTS_LAYER, SATELLITE_TRACKS_LIMIT, SATELLITES_LAYER } from './display'
 import { DisplayPanel } from './DisplayPanel'
 import { clearImageFootprint, clearSkyCoordinate, skyImageState, toggleImageFootprint } from './footprint'
 import { equipmentOptics } from './framing'
@@ -96,6 +97,17 @@ export function SkyWorkspace() {
 	useEffect(() => {
 		map.setSatellites({ ids: satelliteIds ? satelliteIds.split(',') : [], selected: selectedSatellite, observer: currentSite(), revision, tracking: tracking && showSatellites && !!selectedSatellite, trail })
 	}, [map, satelliteIds, selectedSatellite, key, revision, tracking, trail, showSatellites])
+
+	// Draws the radiants of the active meteor showers while the display shows them, and the selected shower's radiant,
+	// following the catalog.
+	const showRadiants = isSkyLayerVisible(display, METEOR_RADIANTS_LAYER)
+	const selectedShower = sky.selection?.ref.kind === 'meteorShower' ? sky.selection.ref.id : undefined
+	const selectedShowerName = selectedShower ? sky.selection?.name : undefined
+	const { revision: meteorRevision } = useSnapshot(meteorShowerSourcesState)
+
+	useEffect(() => {
+		map.setMeteorRadiants({ visible: showRadiants, revision: meteorRevision, selected: selectedShower, selectedName: selectedShowerName })
+	}, [map, showRadiants, meteorRevision, selectedShower, selectedShowerName])
 
 	// Draws the field of view of the selected preset, or of the Equipment Setup, around the selection,
 	// following its position.

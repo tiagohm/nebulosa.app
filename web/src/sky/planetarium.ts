@@ -8,6 +8,7 @@ import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } fr
 import { type ImageFootprint, ofDateMatrix, outlineLabel, type ScreenPoint, type SkyCoordinateIntent, type SkyPoint, toDate } from './footprint'
 import { formatApparentSize } from './format'
 import { type FramePoint, framePolygon, isFraming, type OpticalConfiguration, resolveFraming } from './framing'
+import { MeteorRadiantLayer, type MeteorRadiantTargets } from './meteors.sky'
 import { type MountPoint, mountRuntime } from './mount'
 import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, type SkySelectionRef } from './objects'
 import { isRememberable, type RememberedObject, RememberedObjects, type RememberedShapeData, REMEMBERED_SHAPE_TYPE, rememberedOf, rememberedShapeId } from './remembered'
@@ -286,6 +287,7 @@ function mapOptions(coordinateSystem: CoordinateSystem): CelestialOptions {
 // Group of an object picked on the map; undefined for the mount marker.
 function categoryOf(object: CelestialObject, objectRef: SkySelectionRef): SkyObjectCategory | undefined {
 	if (objectRef.kind === 'mount') return undefined
+	if (objectRef.kind === 'meteorShower') return 'meteorShower'
 	if (object.type === 'shape') return rememberedOf(object)?.category
 	if (object.type === 'star') return 'star'
 	if (object.type === 'deepSky') return 'deepSky'
@@ -343,6 +345,10 @@ export class Planetarium {
 	#unsubscribeClock?: VoidFunction
 	// Artificial satellites drawn on the map.
 	readonly #satellites: SatelliteLayer
+	// Meteor shower radiants drawn on the map.
+	readonly #meteorRadiants: MeteorRadiantLayer
+	// Precession-nutation matrix of the loaded map data and the instant it is for.
+	#dataMatrix?: { readonly time: number; readonly matrix: ReturnType<typeof ofDateMatrix> }
 	#destroyed = false
 
 	// Creates the map of a kind of chart for an observer and starts loading its data.
@@ -352,6 +358,7 @@ export class Planetarium {
 		this.#host.className = 'absolute inset-0 touch-none overflow-hidden select-none'
 		this.celestial = new Celestial(this.#host, mapOptions(coordinateSystem))
 		this.#satellites = new SatelliteLayer(this.celestial, { time: () => this.time, rate: () => (skyClock.mode === 'fixed' ? 0 : skyClock.mode === 'playing' ? skyClock.rate : 1), centerOn: (point) => this.centerOn(point) })
+		this.#meteorRadiants = new MeteorRadiantLayer(this.celestial, { time: () => this.time, toMapFrame: (rightAscension, declination) => this.#toMapFrame(rightAscension, declination) })
 		this.setObserver(observer)
 
 		for (const [code, type, name] of BODY_TYPES) {
@@ -420,6 +427,7 @@ export class Planetarium {
 		this.#minorGuard.cancel()
 		this.#locateGuard.cancel()
 		this.#satellites.destroy()
+		this.#meteorRadiants.destroy()
 		this.#loadGuard.cancel()
 		this.celestial.destroy()
 	}
@@ -428,6 +436,20 @@ export class Planetarium {
 	// the selected one and draws its track.
 	setSatellites(targets: SatelliteTargets) {
 		this.#satellites.set(targets)
+	}
+
+	// Sets the meteor shower radiants drawn: those of the active showers while the layer is shown, and the selected one.
+	setMeteorRadiants(targets: MeteorRadiantTargets) {
+		this.#meteorRadiants.set(targets)
+	}
+
+	// A geocentric J2000 direction (radians) in the frame of the loaded map data, as the stars are drawn; undefined before
+	// the data is loaded. The matrix is computed once per data load.
+	#toMapFrame(rightAscension: number, declination: number) {
+		const time = this.#dataTime
+		if (time === undefined) return undefined
+		if (this.#dataMatrix?.time !== time) this.#dataMatrix = { time, matrix: ofDateMatrix(time) }
+		return framePoint(toDate(this.#dataMatrix.matrix, [rightAscension, declination]))
 	}
 
 	// Loads the map data for the instant shown (downloaded once per tab and epoch), or retries after a
@@ -448,6 +470,7 @@ export class Planetarium {
 				planetariumState.status = 'ready'
 				this.syncSelection()
 				this.#drawImageShapes()
+				this.#meteorRadiants.redraw()
 			},
 			(error: unknown) => {
 				if (this.#destroyed || !request.current()) return
@@ -729,6 +752,7 @@ export class Planetarium {
 		this.#anchor = undefined
 		if (anchor) this.centerOn(anchor)
 		this.#requestMovingBodies(time)
+		this.#meteorRadiants.update(time)
 	}
 
 	// Stops the clock updates and the pending refresh of a fixed instant.

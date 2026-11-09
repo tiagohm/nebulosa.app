@@ -18,6 +18,34 @@ export const SATELLITE_ID_PREFIX = 'satellite:'
 // Kind of the custom map shape marking the mount.
 export const MOUNT_SHAPE_TYPE = 'mount'
 
+// Kind of the custom map shape of a meteor shower radiant.
+export const METEOR_RADIANT_SHAPE_TYPE = 'meteorRadiant'
+
+// Identity of a meteor shower radiant.
+export type MeteorShowerRef = Extract<SkyObjectRef, { kind: 'meteorShower' }>
+
+// Data a radiant shape carries.
+export interface MeteorRadiantData {
+	// Identity of the shower.
+	readonly ref: MeteorShowerRef
+	// Name shown.
+	readonly name: string
+	// IAU code; absent when the shower has none.
+	readonly code?: string
+}
+
+// Map id of the shape of a shower's radiant.
+export function meteorRadiantShapeId(id: string) {
+	return `meteor-radiant:${id}`
+}
+
+// Returns the radiant data of a picked object; undefined for anything else.
+export function meteorRadiantOf(object: CelestialObject): MeteorRadiantData | undefined {
+	if (object.type !== 'shape' || object.shape.type !== METEOR_RADIANT_SHAPE_TYPE) return undefined
+	const data = object.shape.data as Partial<MeteorRadiantData> | undefined
+	return data?.ref?.kind === 'meteorShower' ? (data as MeteorRadiantData) : undefined
+}
+
 // Identity of the mount marker: one device of one server connection, located by the mount runtime
 // rather than by the sky API.
 export interface MountRef {
@@ -61,13 +89,14 @@ export interface MapNames {
 }
 
 // Returns the stable key of a selection reference: "catalog:32263", "body:499", "minor:20000001",
-// "constellation:ORI", "satellite:25544", or "mount:<connection id>:<device id>".
+// "constellation:ORI", "satellite:25544", "meteor:iau:4", or "mount:<connection id>:<device id>".
 export function refKey(ref: SkySelectionRef): string {
 	if (ref.kind === 'mount') return `mount:${ref.connectionId}:${ref.id}`
 	if (ref.kind === 'catalog') return `catalog:${ref.id}`
 	if (ref.kind === 'body') return `${BODY_ID_PREFIX}${ref.code}`
 	if (ref.kind === 'constellation') return `constellation:${ref.code}`
 	if (ref.kind === 'satellite') return `${SATELLITE_ID_PREFIX}${ref.noradId}`
+	if (ref.kind === 'meteorShower') return `meteor:${ref.id}`
 	return `${MINOR_ID_PREFIX}${ref.spkId}`
 }
 
@@ -97,7 +126,7 @@ export function refOfCelestialObject(object: CelestialObject, names: MapNames): 
 			return code ? { kind: 'constellation', code } : undefined
 		}
 		case 'shape':
-			return mountMarkerOf(object)?.ref ?? rememberedOf(object)?.ref
+			return mountMarkerOf(object)?.ref ?? meteorRadiantOf(object)?.ref ?? rememberedOf(object)?.ref
 		default:
 			return undefined
 	}
@@ -109,6 +138,7 @@ export function refOfCelestialObject(object: CelestialObject, names: MapNames): 
 // only when clicked, so it has none.
 export function selectionTargets(ref: SkySelectionRef, category: SkySearchResult['category'] | undefined, names: MapNames): SelectionTarget[] {
 	if (ref.kind === 'mount') return []
+	if (ref.kind === 'meteorShower') return [{ type: 'shape', id: meteorRadiantShapeId(ref.id) }]
 
 	if (ref.kind === 'constellation') {
 		return [...names.constellationCodes].filter(([, code]) => code === ref.code).map(([name]) => ({ type: 'constellationLabel', id: name }))
@@ -165,6 +195,8 @@ export function hoverLabel(object: CelestialObject, names: MapNames): HoverLabel
 		case 'shape': {
 			const mount = mountMarkerOf(object)
 			if (mount) return { name: mount.name || 'Mount', typeName: 'Mount position' }
+			const radiant = meteorRadiantOf(object)
+			if (radiant) return { name: radiant.name, typeName: 'Meteor shower radiant' }
 			const remembered = rememberedOf(object)
 			return remembered && { name: remembered.name, typeName: remembered.typeName, magnitude: remembered.magnitude }
 		}

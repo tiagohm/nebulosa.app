@@ -4,10 +4,12 @@ import type { ResolvedReferenceLinesOptions } from './celestial/celestial'
 // faintest stars drawn. Preferences are kept in the profile and applied to the map in place, so changing
 // them never recreates the map, reloads its data, or moves its view. Every moving body (Sun, Moon,
 // planets, asteroids, and comets) shares one layer of the map, so they are shown or hidden together. Artificial
-// satellites have a layer of their own: hidden, no satellite is drawn, neither the selected one nor the favorites.
+// satellites have a layer of their own: hidden, no satellite is drawn, neither the selected one nor the favorites. The
+// radiants of the active meteor showers are custom shapes the map draws apart (meteors.sky.ts): hidden, none is drawn and
+// none is asked for, and a selected radiant is still drawn.
 
 // Layer of the star map a user can show or hide.
-export type SkyLayerId = 'stars' | 'starLabels' | 'deepSky' | 'movingBodies' | 'satellites' | 'constellations' | 'constellationBoundaries' | 'constellationLabels' | 'grid' | 'celestialEquator' | 'ecliptic' | 'localMeridian'
+export type SkyLayerId = 'stars' | 'starLabels' | 'deepSky' | 'movingBodies' | 'satellites' | 'meteorRadiants' | 'constellations' | 'constellationBoundaries' | 'constellationLabels' | 'grid' | 'celestialEquator' | 'ecliptic' | 'localMeridian'
 
 // Display preferences of the star map.
 export interface SkyDisplaySettings {
@@ -45,6 +47,9 @@ export interface SkyDisplayTarget {
 // Layer of the artificial satellites: the selected satellite and the profile's favorites.
 export const SATELLITES_LAYER: SkyLayerDefinition = { id: 'satellites', label: 'Artificial satellites', visible: true }
 
+// Layer of the radiants of the meteor showers active at the instant shown.
+export const METEOR_RADIANTS_LAYER: SkyLayerDefinition = { id: 'meteorRadiants', label: 'Meteor shower radiants', visible: true }
+
 // Layers in display order, with their defaults (the map's look before preferences existed).
 export const SKY_LAYERS: readonly SkyLayerDefinition[] = [
 	{ id: 'stars', label: 'Stars', visible: true },
@@ -52,6 +57,7 @@ export const SKY_LAYERS: readonly SkyLayerDefinition[] = [
 	{ id: 'deepSky', label: 'Deep-sky objects', visible: true },
 	{ id: 'movingBodies', label: 'Solar system, asteroids & comets', visible: true },
 	SATELLITES_LAYER,
+	METEOR_RADIANTS_LAYER,
 	{ id: 'constellations', label: 'Constellation lines', visible: true },
 	{ id: 'constellationBoundaries', label: 'Constellation boundaries', visible: false },
 	{ id: 'constellationLabels', label: 'Constellation names', visible: true },
@@ -90,6 +96,9 @@ export function applySkyDisplay(target: SkyDisplayTarget, display: Readonly<SkyD
 			case 'ecliptic':
 			case 'localMeridian':
 				target.setReferenceLineVisible(layer.id, visible)
+				break
+			// Drawn by the map apart from the Celestial layers (meteors.sky.ts), which follows the preference itself.
+			case 'meteorRadiants':
 				break
 			default:
 				target.setLayerVisible(layer.id, visible)

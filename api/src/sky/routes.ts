@@ -23,6 +23,16 @@ export interface SkyServices {
 	readonly minorBodies: MinorBodies
 	// Artificial satellites of the satellite catalog; absent when the server has none.
 	readonly satellites?: SkySatellites
+	// Meteor shower radiants of the Meteor Showers catalog; absent when the server has none.
+	readonly meteorShowers?: SkyMeteorShowers
+}
+
+// Meteor showers as the sky routes search them. A radiant is a direction: it has no position of an object, no rise, transit,
+// or set, and no ephemeris target, so the position route refuses it and a mount never locates one; the Sky reads its state
+// from the Meteor Showers routes.
+export interface SkyMeteorShowers {
+	// Showers whose name, code, or IAU number match a text, at most `limit`.
+	readonly search: (text: string, limit: number) => Promise<readonly SkySearchResult[]>
 }
 
 // Satellites of the satellite catalog, as the sky routes search and locate them. They have no rise, transit, or set, and
@@ -50,6 +60,9 @@ export class SkySatelliteError extends Error {
 // Most satellites a search lists, after the bodies and constellations and before the catalog.
 const SATELLITE_SEARCH_LIMIT = 5
 
+// Most meteor showers a search lists, after the satellites and before the catalog.
+const METEOR_SHOWER_SEARCH_LIMIT = 5
+
 // Reads the `time` query parameter (Unix milliseconds); the current time when absent.
 function timeParam(params: URLSearchParams) {
 	const time = params.get('time')
@@ -62,6 +75,7 @@ function refKey(ref: SkyObjectRef) {
 	if (ref.kind === 'body') return `body:${ref.code}`
 	if (ref.kind === 'constellation') return `constellation:${ref.code}`
 	if (ref.kind === 'satellite') return `satellite:${ref.noradId}`
+	if (ref.kind === 'meteorShower') return `meteor:${ref.id}`
 	return `minor:${ref.spkId}`
 }
 
@@ -73,7 +87,7 @@ export type SkyLocator = (ref: SkyObjectRef, request: PositionRequest) => Promis
 // Resolves an object identity to an ephemeris target; undefined for an unknown catalog id or
 // constellation. A minor body whose elements cannot be read from SBDB is still resolved, for Horizons or the SPK kernels
 // alone; when the ephemeris policy forbids requests to JPL, its elements come only from what SBDB already answered. A
-// satellite has no ephemeris target.
+// satellite and a meteor shower radiant have no ephemeris target.
 async function resolveTarget({ catalog, constellations, ephemeris, minorBodies }: SkyServices, ref: SkyObjectRef, signal?: AbortSignal): Promise<EphemerisTarget | undefined> {
 	if (ref.kind === 'catalog') {
 		const object = catalogObject(catalog, ref.id)
@@ -81,7 +95,7 @@ async function resolveTarget({ catalog, constellations, ephemeris, minorBodies }
 	}
 
 	if (ref.kind === 'body') return { type: 'body', code: ref.code }
-	if (ref.kind === 'satellite') return undefined
+	if (ref.kind === 'satellite' || ref.kind === 'meteorShower') return undefined
 
 	if (ref.kind === 'constellation') {
 		const constellation = constellationDetails(constellations, ref.code)
@@ -140,14 +154,15 @@ export function createSkyRoutes(services: SkyServices) {
 			},
 		},
 		'/api/sky/search': {
-			// Local search: solar-system bodies, constellations, satellites of the satellite catalog, then catalog designations
-			// and names; `limit` caps the catalog results.
-			GET: (req: Request) => {
+			// Local search: solar-system bodies, constellations, satellites of the satellite catalog, meteor showers, then catalog
+			// designations and names; `limit` caps the catalog results.
+			GET: async (req: Request) => {
 				const params = new URL(req.url).searchParams
 				const query = params.get('q') ?? ''
 				const limit = params.get('limit')
 				const satellites = query.trim() && services.satellites ? services.satellites.search(query, SATELLITE_SEARCH_LIMIT) : []
-				return Response.json([...searchSolarSystem(query), ...searchConstellations(query), ...satellites, ...searchCatalog(catalog, query, limit ? +limit : undefined)])
+				const meteorShowers = query.trim() && services.meteorShowers ? await services.meteorShowers.search(query, METEOR_SHOWER_SEARCH_LIMIT) : []
+				return Response.json([...searchSolarSystem(query), ...searchConstellations(query), ...satellites, ...meteorShowers, ...searchCatalog(catalog, query, limit ? +limit : undefined)])
 			},
 		},
 		'/api/sky/minorbodies/search': {
@@ -172,9 +187,10 @@ export function createSkyRoutes(services: SkyServices) {
 			// Position of an object, with its events for an observer. 404 for an unknown catalog object, 502
 			// when Horizons rejects the target, and 503 when no provider can compute it: serviceUnavailable, or the
 			// coverageUnavailable, missingDependency, or offline of the ephemeris policy. A satellite is located by the satellite catalog,
-			// without events: 404 notFound or noElements, 422 predictionUnreliable.
+			// without events: 404 notFound or noElements, 422 predictionUnreliable. A meteor shower radiant is 422 unsupportedTarget.
 			POST: async (req) => {
 				const { target: ref, time, observer, mode } = (await req.json()) as SkyPositionRequest
+				if (ref.kind === 'meteorShower') return errorResponse('A meteor shower radiant is a direction, not an object with a position', 422, 'unsupportedTarget')
 
 				if (ref.kind === 'satellite') {
 					if (!services.satellites) return errorResponse('Satellite not found', 404, 'notFound')

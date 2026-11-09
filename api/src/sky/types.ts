@@ -20,9 +20,11 @@ export type SkyObjectRef =
 	| { readonly kind: 'constellation'; readonly code: string }
 	// Artificial satellite of the satellite catalog, by its NORAD catalog number as canonical decimal digits.
 	| { readonly kind: 'satellite'; readonly noradId: string }
+	// Radiant of a meteor shower of the Meteor Showers catalog, by its shower id ('iau:4'): a direction, never a target.
+	| { readonly kind: 'meteorShower'; readonly id: string }
 
 // Group an object belongs to in search results and in the inspector.
-export type SkyObjectCategory = 'star' | 'deepSky' | 'solarSystem' | 'minorBody' | 'constellation' | 'satellite'
+export type SkyObjectCategory = 'star' | 'deepSky' | 'solarSystem' | 'minorBody' | 'constellation' | 'satellite' | 'meteorShower'
 
 // Object matched by a search.
 export interface SkySearchResult {

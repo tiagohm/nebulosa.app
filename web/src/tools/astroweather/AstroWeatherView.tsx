@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatClockTime, formatGeographic } from '../../format'
+import { formatClockTime } from '../../format'
 import { openObservingSites } from '../../location/site'
 import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
@@ -95,7 +95,6 @@ export function AstroWeather() {
 		)
 	}
 
-	const coordinates = formatGeographic(location.latitude, location.longitude)
 	const back = night && firstNight(night, now, state.currentNightStart)
 	const forward = night && hasNextNight(night, forecast)
 
@@ -105,10 +104,7 @@ export function AstroWeather() {
 				<div className="flex flex-col gap-4 p-4">
 					<div className="flex flex-wrap items-end gap-x-4 gap-y-3">
 						<div className="min-w-0 flex-1 basis-56">
-							<p className="m-0 truncate text-sm font-medium text-ink-100">{location.name ?? 'Coordinates entered'}</p>
-							<p className="m-0 truncate text-xs text-ink-300">
-								{coordinates} · {describeDisplayZone(displayZone)}
-							</p>
+							<p className="m-0 truncate text-xs text-ink-300">{describeDisplayZone(displayZone)}</p>
 							<p className="m-0 mt-1 text-xs font-medium text-ink-200">Forecast — not live observations</p>
 						</div>
 						<div className="flex items-center gap-1">

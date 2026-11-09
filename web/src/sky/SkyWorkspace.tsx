@@ -2,7 +2,6 @@ import type { MinorBody, SkySearchResult } from 'api'
 import { type ReactNode, useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
-import { formatGeographic } from '../format'
 import { imagesState } from '../images/images'
 import { activeSite, locationKey, openObservingSites, siteState } from '../location/site'
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
@@ -177,8 +176,8 @@ export function SkyWorkspace() {
 		return panelState.open && sky.panel === view
 	}
 
-	const location = observer ? `${observer.name} · ${formatGeographic(observer.latitude, observer.longitude)}` : 'No observing site'
-	const context = clock.mode === 'now' ? location : `${location} · Simulated time`
+	// The active site is named by the top bar alone; the header says only when there is none or the time is simulated.
+	const context = [!observer && 'No observing site', clock.mode !== 'now' && 'Simulated time'].filter(Boolean).join(' · ')
 
 	const panels: Record<SkyPanelView, () => { title: string; content: ReactNode }> = {
 		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector observer={observer} onSetObserver={() => openObservingSites(observer?.id)} timeZone={displayZone.zone} onShowFraming={() => openPanel('framing')} /> }),
@@ -187,7 +186,7 @@ export function SkyWorkspace() {
 	}
 
 	return (
-		<WorkspaceLayout workspace="sky" title="Sky" context={<span className="truncate text-xs text-ink-300 max-sm:hidden">{context}</span>} panel={panels[sky.panel]()} panelState={panelState}>
+		<WorkspaceLayout workspace="sky" title="Sky" context={context ? <span className="truncate text-xs text-ink-300 max-sm:hidden">{context}</span> : undefined} panel={panels[sky.panel]()} panelState={panelState}>
 			<div className="flex h-full flex-col bg-base-000">
 				<div className="flex flex-none items-center gap-2 border-b border-line-100 bg-base-100 px-2 max-sm:flex-wrap max-sm:gap-y-1 max-sm:py-1 sm:h-11">
 					<SkySearch onSelect={handleSearchSelect} />

@@ -34,14 +34,14 @@ interface AstronomicalClockChipProps {
 	readonly timeZone: string
 	// Whether times of day show seconds.
 	readonly showSeconds: boolean
-	// Name of the observing site; absent without one.
-	readonly site?: string
+	// Whether the profile has an observing site, without which the sidereal times are left out.
+	readonly hasSite: boolean
 	// Whether this is the hidden copy the bar measures, which cannot be used.
 	readonly measure?: boolean
 }
 
 // One reading of the clock.
-export function AstronomicalClockChip({ reading, timeZone, showSeconds, site, measure = false }: AstronomicalClockChipProps) {
+export function AstronomicalClockChip({ reading, timeZone, showSeconds, hasSite, measure = false }: AstronomicalClockChipProps) {
 	const now = useMonotonicNow()
 	const { sample } = useSnapshot(astronomicalClockRuntime)
 	const freshness = clockFreshness(sample, now)
@@ -54,7 +54,7 @@ export function AstronomicalClockChip({ reading, timeZone, showSeconds, site, me
 		<button
 			type="button"
 			tabIndex={measure ? -1 : undefined}
-			title={clockTitle(live, timeZone, site, notes, approximate)}
+			title={clockTitle(live, timeZone, hasSite, notes, approximate)}
 			onClick={() => openAstronomicalTimeConverter()}
 			className={cn('flex flex-none cursor-pointer items-center gap-1 tabular-nums hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent', freshness === 'fresh' ? 'text-ink-200' : 'text-ink-300')}
 		>

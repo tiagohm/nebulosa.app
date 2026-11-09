@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatGeographic } from '../../format'
 import { locationKey, openObservingSites, type SiteLocation } from '../../location/site'
 import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
@@ -159,8 +158,7 @@ export function MeteorShowers() {
 					<div className="flex flex-wrap items-center gap-2">
 						<SegmentedControl options={['list', 'calendar'] as const} value={state.display} format={(value) => (value === 'list' ? 'List' : 'Calendar')} onChange={(value) => (meteorShowersState.display = value)} />
 						<p className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-300">
-							<span>{location ? `${location.name ?? 'Coordinates entered'} · ${formatGeographic(location.latitude, location.longitude)}` : 'No site: dates and radiants only'}</span>
-							<span>· {describeDisplayZone(displayZone)}</span>
+							<span>{describeDisplayZone(displayZone)}</span>
 							{page && <span>· {page.total} showers</span>}
 							{state.pageLoading && <span>· reading…</span>}
 						</p>

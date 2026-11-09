@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { downloadText } from '../../download'
-import { formatDate, formatGeographic } from '../../format'
+import { formatDate } from '../../format'
 import { openObservingSites, type SiteLocation } from '../../location/site'
 import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
@@ -178,8 +178,7 @@ export function PlanetaryEvents() {
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					<p className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-300">
 						{source && <StatusBadge tone={source.kind === 'spk' ? 'success' : 'neutral'} label={sourceName(signature)!} />}
-						<span>{location ? `${location.name ?? 'Coordinates entered'} · ${formatGeographic(location.latitude, location.longitude)}` : 'No site: global events only'}</span>
-						<span>· {describeDisplayZone(displayZone)}</span>
+						<span>{describeDisplayZone(displayZone)}</span>
 						{start !== undefined && end !== undefined && (
 							<span>
 								· {formatDate(start, zone)} to {formatDate(end, zone)}

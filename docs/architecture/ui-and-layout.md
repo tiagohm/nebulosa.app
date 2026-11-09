@@ -46,6 +46,7 @@ Shell (`web/src/shell/ApplicationShell.tsx`), always mounted while navigating:
   A sidereal reading computed with UT1 taken as UTC starts with `~`, a reading 5 minutes old is dimmed and says so in its title, and from 30 minutes it shows `--`.
   A chip's title holds the full readout, and its click opens the Astronomical Time Converter on the real current time at the active site, whatever instant the tool held, and nothing else;
   the details panel has an Astronomical Time section with the same data and the same action.
+  Neither names the active site or its coordinates: the observing site menu of the top bar is the one place that shows them, and no workspace or tool repeats them (the Sky header says only No observing site or Simulated time).
   It is the only global status surface.
 - **Modals**: Connections, Equipment Setup, and Profiles, over native `<dialog>` (`web/src/ui/Modal.tsx`).
 

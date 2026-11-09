@@ -130,7 +130,6 @@ export function StatusBar() {
 	const clock = astronomicalClockPreferences(profile.settings)
 	const readings = effectiveReadings(clock, observer !== undefined)
 	const timeZone = useDisplayZone(observer).zone
-	const site = observer?.name
 	const mount = roleDevice(setup, 'MOUNT', devices)
 	const mainCamera = roleDevice(setup, 'MAIN_CAMERA', devices)
 	const running = scopedRunningOperations(known, serverId)
@@ -231,7 +230,7 @@ export function StatusBar() {
 				))}
 				{readings.map((reading) => (
 					<span key={reading} data-chip={reading} className="flex">
-						<AstronomicalClockChip reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} site={site} measure />
+						<AstronomicalClockChip reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} hasSite={observer !== undefined} measure />
 					</span>
 				))}
 			</div>
@@ -239,7 +238,7 @@ export function StatusBar() {
 			{chips.map((chip) => (!fitted || fitted.chips.has(chip.id)) && <StatusChip key={chip.id} icon={chip.icon} label={chip.label} value={chip.value} device={chip.device} />)}
 			<span ref={groupRef} className="ml-auto flex min-w-0 items-center gap-3 border-l border-line-100 pl-3">
 				{operations.map((operation) => (!fitted || fitted.operations.has(operation.id)) && <OperationItem key={operation.id} operation={operation} online={online} />)}
-				{readings.map((reading) => fittedClocks?.has(reading) && <AstronomicalClockChip key={reading} reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} site={site} />)}
+				{readings.map((reading) => fittedClocks?.has(reading) && <AstronomicalClockChip key={reading} reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} hasSite={observer !== undefined} />)}
 				{monitor && <MeridianFlipItem monitor={monitor} name={mount?.name} executor={executor} />}
 				{errors.length > 0 && (
 					<span data-fixed title={errors.map((error) => `${error.name}: ${error.message}`).join('\n')} className="flex flex-none items-center gap-1 text-danger">

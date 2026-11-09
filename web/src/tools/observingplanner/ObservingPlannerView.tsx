@@ -1,7 +1,7 @@
 import type { ObservingMode } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatGeographic, formatHours } from '../../format'
+import { formatDegrees, formatHours } from '../../format'
 import { openObservingSites } from '../../location/site'
 import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
@@ -107,7 +107,7 @@ export function ObservingPlanner() {
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					{location ? (
 						<p className="m-0 text-xs text-ink-300">
-							{location.name ?? 'Coordinates entered'} · {formatGeographic(location.latitude, location.longitude)} · {describeDisplayZone(displayZone)}
+							{describeDisplayZone(displayZone)}
 							{state.eveningDate && ` · night of ${state.eveningDate}`}
 							{constraints && ` · ${MODE_LABELS[constraints.mode]}, altitude ≥ ${formatDegrees(constraints.minimumAltitude, 0)}`}
 						</p>

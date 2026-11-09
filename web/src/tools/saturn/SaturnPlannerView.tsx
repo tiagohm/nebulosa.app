@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatGeographic } from '../../format'
+import { formatDegrees } from '../../format'
 import { openObservingSites, type SiteLocation } from '../../location/site'
 import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
@@ -197,8 +197,7 @@ export function SaturnPlanner() {
 						{ringSignature && <StatusBadge tone={ringSignature.source.kind === 'spk' ? 'success' : 'neutral'} label={`Rings: ${ringSignature.source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E'}`} />}
 						{moonSignature && <StatusBadge tone={moonSignature.source.kind === 'spk' ? 'success' : 'neutral'} label={`Moons: ${moonSignature.source.kind === 'spk' ? 'SPICE kernels' : 'TASS 1.7'}`} />}
 						{state.moonsRefused && <StatusBadge tone="danger" label="Moons refused" />}
-						<span>{location ? `${location.name ?? 'Coordinates entered'} · ${formatGeographic(location.latitude, location.longitude)}` : 'No site'}</span>
-						<span>· {describeDisplayZone(displayZone)}</span>
+						<span>{describeDisplayZone(displayZone)}</span>
 						{rings && (
 							<span>
 								· B {rings.earthOpening >= 0 ? '+' : '−'}

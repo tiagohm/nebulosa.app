@@ -9,7 +9,7 @@ import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
 import { createPlan, editPlan, type NamedTarget, newItem, newPlanDocument, observingPlannerState, observingPlansState, openPlan, sortedPlans } from './observingplanner'
 
-// Dialog adding a target to a night plan: an existing plan, or a new one for the tool's location, night, and constraints.
+// Dialog adding a target to a night plan: an existing plan, or a new one for the active site and the tool's night and constraints.
 // The target joins the end of the plan unscheduled, with an hour requested; nothing else of the plan changes.
 
 export interface AddToPlanProps {
@@ -76,14 +76,10 @@ export function AddToPlan({ target, onClose, location, siteId, eveningDate, cons
 						const plan = plans.find((e) => e.id === id)
 						return plan ? `${plan.name} · ${plan.eveningDate}` : id
 					}}
-					disabledReason={(id) => (id === NEW_PLAN && !canCreate ? 'Choose a location first' : undefined)}
+					disabledReason={(id) => (id === NEW_PLAN && !canCreate ? 'Set the observing site of this profile first' : undefined)}
 				/>
 				{selected === NEW_PLAN && <TextInput label="Name" value={name} placeholder={eveningDate ? `Night of ${eveningDate}` : 'Night plan'} onChange={(event) => setName(event.target.value)} />}
-				{selected === NEW_PLAN && canCreate && (
-					<p className="m-0 text-xs text-ink-300">
-						The new plan copies the location ({location.name ?? 'coordinates entered'}), the night of {eveningDate}, and the constraints of the tool.
-					</p>
-				)}
+				{selected === NEW_PLAN && canCreate && <p className="m-0 text-xs text-ink-300">The new plan copies the active site, the night of {eveningDate}, and the constraints of the tool.</p>}
 				{error && <Notice error>{error}</Notice>}
 			</div>
 			<ModalActions>

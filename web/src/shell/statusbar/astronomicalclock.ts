@@ -165,15 +165,15 @@ export function clockReadingText(reading: AstronomicalClockReading, live: LiveCl
 	}
 }
 
-// Returns the full readout of the clock, one line each: every reading, the site, why a reading may be off, and where the
-// clock leads. `site` is absent without an observer, whose sidereal times are then left out.
-export function clockTitle(live: LiveClock | undefined, timeZone: string, site: string | undefined, notes: readonly string[], approximate: boolean) {
-	const readings: readonly AstronomicalClockReading[] = site === undefined ? ['utc', 'local', 'jd', 'mjd'] : ['utc', 'local', 'jd', 'mjd', 'last', 'lmst']
+// Returns the full readout of the clock, one line each: every reading, why a reading may be off, and where the clock leads.
+// Without an observing site (hasSite false) the sidereal times are left out.
+export function clockTitle(live: LiveClock | undefined, timeZone: string, hasSite: boolean, notes: readonly string[], approximate: boolean) {
+	const readings: readonly AstronomicalClockReading[] = !hasSite ? ['utc', 'local', 'jd', 'mjd'] : ['utc', 'local', 'jd', 'mjd', 'last', 'lmst']
 	const lines = readings.map((reading) => {
 		const { label, value } = clockReadingText(reading, live, timeZone, true, approximate)
 		return `${label} ${value}${reading === 'local' ? ` (${timeZone})` : ''}`
 	})
-	return [...lines, ...(site === undefined ? [] : [`Site ${site}`]), ...notes, 'Open Astronomical Time Converter'].join('\n')
+	return [...lines, ...notes, 'Open Astronomical Time Converter'].join('\n')
 }
 
 // Whether a sample's sidereal times take UT1 as UTC.

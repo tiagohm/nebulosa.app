@@ -68,10 +68,10 @@ describe('readings', () => {
 		expect(clockApproximate({ reference: reference() })).toBeFalse()
 	})
 
-	test('the title is the full readout, with the site and the way to the converter', () => {
+	test('the title is the full readout, with the way to the converter', () => {
 		const live = { unixMillis: Date.UTC(2026, 9, 31, 12, 34, 56), jd: 2461345.024259, lmst: Math.PI / 2, last: Math.PI }
-		expect(clockTitle(live, 'America/Sao_Paulo', 'Backyard', ['A note.'], false).split('\n')).toEqual(['UTC 12:34:56', 'Local 09:34:56 (America/Sao_Paulo)', 'JD(UTC) 2461345.02426', 'MJD(UTC) 61344.52426', 'LAST 12:00:00', 'LMST 06:00:00', 'Site Backyard', 'A note.', 'Open Astronomical Time Converter'])
-		expect(clockTitle(live, 'UTC', undefined, [], false)).not.toInclude('LAST')
+		expect(clockTitle(live, 'America/Sao_Paulo', true, ['A note.'], false).split('\n')).toEqual(['UTC 12:34:56', 'Local 09:34:56 (America/Sao_Paulo)', 'JD(UTC) 2461345.02426', 'MJD(UTC) 61344.52426', 'LAST 12:00:00', 'LMST 06:00:00', 'A note.', 'Open Astronomical Time Converter'])
+		expect(clockTitle(live, 'UTC', false, [], false)).not.toInclude('LAST')
 	})
 
 	test('shows absence, never a number, without a clock or an observer', () => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatGeographic } from '../../format'
+import { formatDegrees } from '../../format'
 import { openObservingSites, type SiteLocation } from '../../location/site'
 import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
@@ -138,8 +138,7 @@ export function JupiterPlanner() {
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					<p className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-300">
 						{source && <StatusBadge tone={source.kind === 'spk' ? 'success' : 'neutral'} label={source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E + L1.2'} />}
-						<span>{location ? `${location.name ?? 'Coordinates entered'} · ${formatGeographic(location.latitude, location.longitude)}` : 'No site: global predictions only'}</span>
-						<span>· {describeDisplayZone(displayZone)}</span>
+						<span>{describeDisplayZone(displayZone)}</span>
 						{state.state && (
 							<span>
 								· CM II {formatDegrees(state.state.disk.centralMeridian.II, 1)} · diameter {((state.state.disk.equatorialRadius * 2 * 180 * 3600) / Math.PI).toFixed(1)}″

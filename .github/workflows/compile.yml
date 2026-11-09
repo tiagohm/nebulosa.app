@@ -40,5 +40,8 @@ jobs:
             - name: Generate Moon Assets
               run: bun make:moon
 
+            - name: Generate Meteor Shower Catalog
+              run: bun make:meteors
+
             - name: Compile
               run: bun compile

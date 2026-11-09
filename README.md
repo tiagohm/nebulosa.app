@@ -12,6 +12,7 @@ git clone --recurse-submodules https://github.com/tiagohm/nebulosa.app
 bun i
 bun run make:catalog --force
 bun run make:moon --force
+bun run make:meteors --force
 ```
 
 | Command                               | Description                                        |

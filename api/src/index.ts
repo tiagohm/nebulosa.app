@@ -46,6 +46,8 @@ import { LiveStackingStore } from './livestacking.store'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
 import { createMeridianFlipRoutes, MeridianFlipService } from './meridianflip'
 import { createMeridianFlipExecutorRoutes, MeridianFlipExecutor } from './meridianflipexecutor'
+import { createMeteorShowersRoutes, MeteorShowersService } from './meteorshowers'
+import { MeteorShowerStore } from './meteorshowers.store'
 import { createPointingModelRoutes, PointingModels } from './mountpointing'
 import { createPointingActivationRoutes, MountCorrections, PointingActivations } from './mountpointing.corrections'
 import { PointingModelFitter } from './mountpointing.fit'
@@ -475,6 +477,45 @@ export type { SatelliteRefreshErrorCode } from './satellites.sync'
 export type { PlanetaryFallbackReason, PlanetaryKernelReadiness, PlanetaryReadinessReport, PlanetarySourceErrorCode, PlanetarySourceMiss } from './planetary.source'
 export type { PlanetEventVisibility, PlanetNight, PlanetVisibilityStatus } from './planetary.visibility'
 export type { PlanetaryEventsErrorCode, PlanetaryEventsSearch } from './planetaryevents'
+export type {
+	MeteorCatalogOrigin,
+	MeteorCatalogSourceSummary,
+	MeteorShowerActivityNow,
+	MeteorShowerDetail,
+	MeteorShowerListPage,
+	MeteorShowerListRequest,
+	MeteorShowersCalendar,
+	MeteorShowersCalendarEntry,
+	MeteorShowersCalendarRequest,
+	MeteorShowersChangedEvent,
+	MeteorShowersErrorCode,
+	MeteorShowerSort,
+	MeteorShowersSources,
+	MeteorShowerSummary,
+	MeteorSkyRadiantsRequest,
+	MeteorVisualSummary,
+} from './meteorshowers'
+export type {
+	MeteorActivityState,
+	MeteorIauOccurrence,
+	MeteorNightSample,
+	MeteorNoWindowReason,
+	MeteorObservingNight,
+	MeteorObservingRequest,
+	MeteorObservingSupport,
+	MeteorObservingWindow,
+	MeteorRadiantDirection,
+	MeteorShowerOccurrence,
+	MeteorShowerStateEntry,
+	MeteorShowerStates,
+	MeteorShowerStatesRequest,
+	MeteorSkyRadiant,
+	MeteorSkyRadiants,
+	MeteorVisualOccurrence,
+} from './meteorshowers.astronomy'
+export type { MeteorShowerFilter, MeteorShowerGap, MeteorShowerIdentity, MeteorSolutionSelection } from './meteorshowers.catalog'
+export type { MeteorCatalogFailureCode } from './meteorshowers.store'
+export type { MeteorCalendarDay, MeteorDataBasis, MeteorVisualEntry, MeteorVisualSource, MeteorVisualSourceId } from './meteorshowers.visual'
 export type {
 	ClosestEarthApproachEvent,
 	GreatestBrightnessEvent,
@@ -1217,6 +1258,10 @@ const jupiterPlanner = new JupiterPlannerService({ kernels: spiceKernels, night:
 const saturnPlanner = new SaturnPlannerService({ kernels: spiceKernels, night: (request) => astroWeather.night(request) })
 const planetaryEvents = new PlanetaryEventsService({ kernels: spiceKernels })
 
+// Meteor shower catalog of the IAU Meteor Data Center with its curated visual subset, its snapshots in the operational
+// database, and the observing nights of a shower over the nights of Astro Weather; a refreshed catalog is sent to every tab.
+const meteorShowers = new MeteorShowersService({ store: new MeteorShowerStore(database), night: (request) => astroWeather.night(request), publish: broadcast })
+
 // Earth orientation tables of the process, shared by the converter and, once installed, by every Time of the server.
 const earthOrientation = new EarthOrientationData()
 
@@ -1462,6 +1507,7 @@ export const routes = {
 	...createJupiterRoutes(jupiterPlanner),
 	...createSaturnRoutes(saturnPlanner),
 	...createPlanetaryEventsRoutes(planetaryEvents),
+	...createMeteorShowersRoutes(meteorShowers),
 	...createAstronomicalTimeRoutes(astronomicalTime),
 	...createSatelliteRoutes(satellites),
 	...createSpiceKernelRoutes(spiceKernelLibrary),

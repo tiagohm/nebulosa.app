@@ -72,6 +72,9 @@ jobs:
             - name: Generate Empty Moon Assets
               run: bun make:moon --empty
 
+            - name: Generate Empty Meteor Shower Catalog
+              run: bun make:meteors --empty
+
             - name: Format
               if: ${{ matrix.os == 'ubuntu-24.04' }}
               run: bun fmt --check

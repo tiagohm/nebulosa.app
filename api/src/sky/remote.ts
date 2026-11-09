@@ -22,6 +22,9 @@ export class UpstreamUnavailableError extends Error {
 // A source answered, but with something that cannot be read.
 export class UpstreamInvalidError extends UpstreamUnavailableError {}
 
+// A source answered with a body larger than the bytes allowed.
+export class UpstreamTooLargeError extends UpstreamUnavailableError {}
+
 // Body of an upstream response.
 export interface UpstreamBody {
 	// Bytes of the body.
@@ -66,7 +69,7 @@ export async function fetchUpstream(fetch: UpstreamFetch, url: string, contentTy
 
 			if (length > maxBytes) {
 				await reader.cancel()
-				throw new UpstreamUnavailableError(`${url} is larger than ${maxBytes} bytes`)
+				throw new UpstreamTooLargeError(`${url} is larger than ${maxBytes} bytes`)
 			}
 
 			chunks.push(result.value)

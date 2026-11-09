@@ -988,3 +988,41 @@ CREATE TABLE jupiter_grs_settings (
 	-- When the model last changed, Unix milliseconds (UTC).
 	updated_at INTEGER NOT NULL
 ) STRICT;
+
+-- Snapshots of the IAU Meteor Data Center stream catalog downloaded on the operator's request (MeteorShowerStore): the
+-- document exactly as published, validated before it was written, never edited. The active one and at most one previous
+-- one are kept. The catalog bundled with the application is never written here; it is used while no row is active.
+CREATE TABLE meteor_catalog_snapshots (
+	id INTEGER PRIMARY KEY,
+	-- Version the document names itself with, such as 2026-11-03.
+	version TEXT NOT NULL,
+	-- SHA-256 of the document's bytes, lowercase hexadecimal.
+	sha256 TEXT NOT NULL,
+	-- URL the document was downloaded from.
+	url TEXT NOT NULL,
+	-- When the download finished, Unix milliseconds (UTC).
+	retrieved_at INTEGER NOT NULL,
+	-- Shower records of the document.
+	record_count INTEGER NOT NULL CHECK (record_count >= 0),
+	-- Solutions of all its records.
+	solution_count INTEGER NOT NULL CHECK (solution_count >= 0),
+	-- The document, as published (JSON).
+	payload TEXT NOT NULL CHECK (json_valid(payload))
+) STRICT;
+
+-- State of the IAU meteor shower catalog (MeteorShowerStore), one row per server: the active snapshot, the revision every
+-- tab keys its answers by, and the outcome of the last refresh. Without a row the bundled catalog is active, revision 0.
+CREATE TABLE meteor_catalog_source (
+	-- Always 1: the table holds at most one row.
+	singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+	-- Snapshot in use; NULL when none was ever installed.
+	active_snapshot_id INTEGER REFERENCES meteor_catalog_snapshots (id),
+	-- Revision of the active catalog, raised by every installed snapshot; >= 0.
+	revision INTEGER NOT NULL CHECK (revision >= 0),
+	-- When the last refresh started, Unix milliseconds (UTC); NULL before the first one.
+	last_attempt_at INTEGER,
+	-- When the last refresh failed, Unix milliseconds (UTC); NULL when it succeeded or none failed.
+	last_failure_at INTEGER,
+	-- Code of the last failure; NULL when the last refresh succeeded or none failed.
+	last_error_code TEXT CHECK (last_error_code IS NULL OR last_error_code IN ('upstreamUnavailable', 'invalidCatalog', 'catalogTooLarge', 'persistenceFailure'))
+) STRICT;

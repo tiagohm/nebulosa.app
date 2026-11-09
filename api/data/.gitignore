@@ -5,3 +5,4 @@ hyg_v*.csv
 *-journal
 *.db
 *.tmp
+*.gz

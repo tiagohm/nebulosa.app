@@ -74,6 +74,8 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
   ring occultations, ring shadows, and photometry are not provided
 - **Planetary Events (almanac phenomena of Mercury to Neptune, site visibility)** (Implemented): Planetary Events tool (`web/src/tools/planetaryevents/`) over `api/src/planetaryevents.ts` (service and routes), `planetaryevents.astronomy.ts`, and `planetaryevents.visibility.ts` over the shared `planetary.source.ts` and the longitude, appulse, station, elongation, closest-approach, illumination, and brightness finders of `core/src/astronomy/events/planetary.ts`;
   geocentric apparent events only, no Pluto, Moon, occultations, transits, or groupings, and visibility without terrain or weather
+- **Meteor Showers (IAU catalog, curated visual subset, dates, radiants, geometric observing nights)** (Partial): `api/src/meteorshowers.ts` (service and routes) over `meteorshowers.catalog.ts`, `meteorshowers.astronomy.ts`, `meteorshowers.solar.ts`, and `meteorshowers.store.ts`, the IAU MDC adapter, and the meteor modules of `core/src/astronomy/meteors/` (`meteorGeometricObservingWindows`);
+  the tool and the Sky layer are not provided yet, and no activity profile, local rate, or count is computed
 - **Artificial satellites (catalog, passes, ephemerides, ground tracks)** (Partial): `api/src/satellites.ts` over `core/src/astronomy/events/satellite.ts`, the CelesTrak downloads of `satellites.sync.ts`, and the catalog of `satellites.store.ts`;
   Artificial Satellites tool `web/src/tools/artificialsatellites/` (Ground Track on `WorldMap`);
   Sky search, Satellite Inspector (`web/src/sky/satellite/`), and map markers (`web/src/sky/satellites.sky.ts`);

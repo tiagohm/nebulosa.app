@@ -13,3 +13,10 @@ declare module '*.sql' {
 	const text: string
 	export default text
 }
+
+// Gzipped JSON imported with `{ type: 'file' }`: its path, embedded in the executable.
+declare module '*.json.gz' {
+	// Path of the file, readable with Bun.file.
+	const path: string
+	export default path
+}

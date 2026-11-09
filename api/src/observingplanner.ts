@@ -173,6 +173,8 @@ function targetKey(ref: ObservingTargetRef) {
 			return `2:${ref.name}:${ref.rightAscension}:${ref.declination}`
 		case 'minorBody':
 			return `3:${ref.spkId.padStart(12, '0')}`
+		case 'meteorShower':
+			return `4:${ref.id}`
 	}
 }
 
@@ -257,6 +259,9 @@ export interface ObservingPlannerOptions {
 	readonly queue: SsdRequestQueue
 	// Orbital elements of the minor bodies of the saved plans.
 	readonly minorBodyStore: ObservingMinorBodyStore
+	// Analysis of a meteor shower observation over a night (MeteorShowersService.plannerAnalysis); without it a meteor shower
+	// item is unresolved.
+	readonly meteorShowers?: (request: TargetAnalysisRequest & { readonly target: Extract<ObservingTargetRef, { kind: 'meteorShower' }> }) => Promise<TargetAnalysis>
 	// Horizons vector-table client; the nebulosa adapter by default.
 	readonly vectors?: HorizonsVectors
 }
@@ -367,6 +372,7 @@ export class ObservingPlannerService {
 	// solution analyzes it again. Rejects only when `signal` aborts.
 	async analyze(request: TargetAnalysisRequest, signal?: AbortSignal): Promise<TargetAnalysis> {
 		const { target, site, eveningDate, constraints, requestedDurationMs } = request
+		if (target.kind === 'meteorShower') return this.options.meteorShowers ? this.options.meteorShowers({ ...request, target }) : unresolvedAnalysis(this.planningNight(site, eveningDate), target, constraints, requestedDurationMs)
 		if (target.kind !== 'minorBody') return this.#analyzeLocal({ ...request, target })
 
 		const night = this.planningNight(site, eveningDate)
@@ -384,7 +390,7 @@ export class ObservingPlannerService {
 	}
 
 	// Analyzes a target computed locally (a catalog object, a major body, or coordinates) over a night, synchronously.
-	#analyzeLocal({ target, site, eveningDate, constraints, requestedDurationMs }: TargetAnalysisRequest & { readonly target: Exclude<ObservingTargetRef, { kind: 'minorBody' }> }): TargetAnalysis {
+	#analyzeLocal({ target, site, eveningDate, constraints, requestedDurationMs }: TargetAnalysisRequest & { readonly target: Exclude<ObservingTargetRef, { kind: 'minorBody' | 'meteorShower' }> }): TargetAnalysis {
 		const key = JSON.stringify([OBSERVING_SCORE_MODEL_VERSION, target, site.latitude, site.longitude, site.elevation, site.timeZone, eveningDate, constraints, requestedDurationMs])
 		const cached = this.#analyses.get(key)
 		if (cached) return cached
@@ -408,7 +414,7 @@ export class ObservingPlannerService {
 		const latitude = night.location.latitude
 		let evaluated = 0
 
-		const evaluate = async (target: Exclude<ObservingTargetRef, { kind: 'minorBody' }>, details: Pick<ObservingCandidate, 'class' | 'constellation' | 'magnitude' | 'majorAxis'>) => {
+		const evaluate = async (target: Exclude<ObservingTargetRef, { kind: 'minorBody' | 'meteorShower' }>, details: Pick<ObservingCandidate, 'class' | 'constellation' | 'magnitude' | 'majorAxis'>) => {
 			if (++evaluated % DISCOVERY_YIELD_EVERY === 0) await yieldToEventLoop()
 			signal?.throwIfAborted()
 			const candidate = candidateOf(this.#analyzeLocal({ target, site, eveningDate, constraints, requestedDurationMs }), details)

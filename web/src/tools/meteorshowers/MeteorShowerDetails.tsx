@@ -11,7 +11,7 @@ import { Cell, Row, Table } from '../../ui/Table'
 import { MeteorActivityChart } from './MeteorActivityChart'
 import { MeteorNightChart } from './MeteorNightChart'
 import { MeteorNightRanking } from './MeteorNightRanking'
-import { showRadiantInSky, showRadiantInSkyAt } from './meteorshowers'
+import { addShowerToPlanner, showRadiantInSky, showRadiantInSkyAt } from './meteorshowers'
 import { ACTIVITY_KIND_LABELS, ACTIVITY_LABELS, ANNUAL_RELATION_LABELS, BASIS_LABELS, formatAnnualEvent, formatPeak, formatSolarLongitude, GAP_LABELS, kilometersPerSecond, REASON_LABELS, SELECTION_LABELS, STATUS_LABELS } from './meteorshowers.format'
 import { type MeteorWeatherAssessment, sourceStateText, windowsWeather } from './meteorshowers.weather'
 
@@ -166,6 +166,9 @@ export function MeteorShowerDetails({
 						Set Sky Time to Maximum
 					</Button>
 				)}
+				<Button variant="secondary" disabled={detail.radiant === undefined} onClick={() => addShowerToPlanner(detail.id, detail.name)}>
+					Add to Observing Planner
+				</Button>
 			</Actions>
 			{detail.identity === 'snapshot' && <Notice>This record has no IAU number; its id comes from this edition of the catalog and may name another record after a refresh.</Notice>}
 			{visual && (

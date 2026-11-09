@@ -11,6 +11,7 @@ import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
+import { openMeteorShowerAt } from '../meteorshowers/meteorshowers'
 import { formatScore, formatTargetKind } from './format'
 import { NightChart } from './NightChart'
 import { analyze, type NamedTarget, type ObservingPlannerState, observingPlannerState, REASON_LABELS, refreshOrbitalElements, showTargetInSky, STATUS_LABELS } from './observingplanner'
@@ -71,6 +72,11 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 							<Button variant="secondary" disabled={analysis.status === 'unresolved'} onClick={() => showTargetInSky(selected, activeSite)}>
 								Show in Sky
 							</Button>
+							{analysis.target.kind === 'meteorShower' && location && (
+								<Button variant="secondary" onClick={() => analysis.target.kind === 'meteorShower' && openMeteorShowerAt(analysis.target.id, location, analysis.night.sun.localDate)}>
+									Open in Meteor Showers
+								</Button>
+							)}
 							{analysis.target.kind === 'minorBody' && (
 								<Button variant="secondary" disabled={!location || state.elementsRefreshing} title="Read the orbital elements of this body again from the Small-Body Database" onClick={() => location && void refreshOrbitalElements(observingPlannerState, location)}>
 									{state.elementsRefreshing ? 'Refreshing…' : 'Refresh Orbital Elements'}
@@ -102,7 +108,7 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 								<DataList>
 									{analysis.windows.map((window) => (
 										<DataRow key={window.start} label={formatSpan(window.start, window.end, timeZone)}>
-											{formatHours(window.durationMs)} · best {formatScore(window.bestScore)} at {formatClockTime(window.bestAt, timeZone)}
+											{formatHours(window.durationMs)} · {window.bestScore === undefined ? 'highest radiant' : `best ${formatScore(window.bestScore)}`} at {formatClockTime(window.bestAt, timeZone)}
 										</DataRow>
 									))}
 								</DataList>

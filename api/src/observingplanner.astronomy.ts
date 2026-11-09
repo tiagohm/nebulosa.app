@@ -60,7 +60,8 @@ export type PlanningBodyCode = Exclude<SolarSystemBodyCode, '10'>
 export const PLANNING_BODY_CODES: readonly PlanningBodyCode[] = ['301', '199', '299', '499', '599', '699', '799', '899', '999']
 
 // Identity of a planner target. Catalog, body, and minor-body kinds are those of SkyObjectRef; coordinates are a named
-// fixed place.
+// fixed place; a meteor shower is an observing event of a shower, analyzed by the Meteor Showers service, never a fixed
+// target at its radiant.
 export type ObservingTargetRef =
 	// Star or deep-sky object of the sky catalog.
 	| { readonly kind: 'catalog'; readonly id: number }
@@ -74,6 +75,9 @@ export type ObservingTargetRef =
 			// Designation, shown when nothing else names the body; not an identity.
 			readonly designation: string
 	  }
+	// Observation of a meteor shower by its shower id (iau:<number>), whose windows are the shower's geometric observing
+	// windows: darkness, its radiant high enough, and its activity, never a pointing.
+	| { readonly kind: 'meteorShower'; readonly id: string }
 	// Fixed place entered by the user, ICRS/J2000.
 	| {
 			readonly kind: 'coordinates'
@@ -154,6 +158,10 @@ export type ObservingReasonCode =
 	| 'ephemerisSourceUnavailable'
 	// The body moves too fast for the trajectory to be interpolated or searched within the computation budget.
 	| 'trajectoryResolutionExceeded'
+	// The meteor shower is not active that night.
+	| 'meteorShowerInactive'
+	// The meteor shower has no known radiant.
+	| 'radiantUnknown'
 	// The Sun limit asks for an astronomical night the site does not have that night.
 	| 'noAstronomicalDarkness'
 	// The Sun never goes below its limit.
@@ -179,9 +187,9 @@ export interface ObservingWindow {
 	readonly end: number
 	// Length, in milliseconds.
 	readonly durationMs: number
-	// Highest score inside the window, 0..100.
-	readonly bestScore: number
-	// Instant of that score.
+	// Highest score inside the window, 0..100; absent for a meteor shower, which has no score.
+	readonly bestScore?: number
+	// Instant of that score; for a meteor shower, of the highest radiant.
 	readonly bestAt: number
 }
 
@@ -298,6 +306,16 @@ export interface TargetAnalysis {
 	// Highest topocentric angular rate of a minor body against the stars over the night, in radians per minute; absent
 	// for other targets.
 	readonly motion?: number
+	// What a meteor shower's windows were judged against; absent for other targets.
+	readonly meteorShower?: PlannerMeteorShowerDetails
+}
+
+// The basis of a meteor shower analysis: the support of its windows, and how long its id lasts.
+export interface PlannerMeteorShowerDetails {
+	// Support the windows were judged against: the IMO visual period, the IAU support, or none (geometry only).
+	readonly support: 'imoVisual' | 'iauScientific' | 'none'
+	// Whether the shower id comes from an IAU number (iau) or names a record of this edition of the catalog (snapshot).
+	readonly identity: 'iau' | 'snapshot'
 }
 
 // Returns the night of a site whose evening falls on a civil date of the site's zone, through the Astro Weather nights:
@@ -479,7 +497,7 @@ export function fixedDirection(rightAscension: number, declination: number, pmRA
 
 // Resolves a target the planner computes locally for a night; undefined when the catalog has no such object. A minor body
 // is prepared asynchronously instead (MinorBodyTrajectories).
-export function resolveTarget(catalog: Database, night: PlanningNight, ref: Exclude<ObservingTargetRef, { kind: 'minorBody' }>): ResolvedTarget | undefined {
+export function resolveTarget(catalog: Database, night: PlanningNight, ref: Exclude<ObservingTargetRef, { kind: 'minorBody' | 'meteorShower' }>): ResolvedTarget | undefined {
 	const middle = (night.night.sun.start + night.night.sun.end) / 2
 
 	if (ref.kind === 'catalog') {
@@ -501,6 +519,7 @@ function unresolvedName(ref: ObservingTargetRef) {
 	if (ref.kind === 'catalog') return `Catalog object ${ref.id}`
 	if (ref.kind === 'body') return solarSystemBody(ref.code)?.name ?? ref.code
 	if (ref.kind === 'minorBody') return ref.designation
+	if (ref.kind === 'meteorShower') return ref.id
 	return ref.name
 }
 

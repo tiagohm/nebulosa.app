@@ -7,7 +7,7 @@ import { navigate, type RouteState, routeState } from '../../shell/route'
 import { type SkyClock, setSkyTime, skyClock } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
 import { browserSkyIo, selectSkyObject, type SkyIo, type SkyState, skyState } from '../../sky/sky'
-import { planningSite, tonight } from '../observingplanner/observingplanner'
+import { addToObservingPlanner, planningSite, tonight } from '../observingplanner/observingplanner'
 import { aborted, browserPlannerIo, errorMessage, type PlannerIo } from '../planetary/planetary'
 
 // Meteor Showers of the tab: the section listed (the curated showers by their next maximum, the showers active now, or the
@@ -417,4 +417,19 @@ export function showRadiantInSky(id: string, name: string, site: SiteLocation | 
 export function showRadiantInSkyAt(id: string, name: string, time: number, site: SiteLocation | undefined, clock: SkyClock = skyClock, io: PlannerIo = browserPlannerIo) {
 	setSkyTime(clock, time, io.time())
 	showRadiantInSky(id, name, site)
+}
+
+// Offers a meteor shower observation to the Observing Planner, where the operator chooses a plan and saves it: an
+// observing event analyzed by the shower's geometric windows, never a fixed target at its radiant.
+export function addShowerToPlanner(id: string, name: string, add: typeof addToObservingPlanner = addToObservingPlanner) {
+	add({ target: { kind: 'meteorShower', id }, name })
+}
+
+// Opens the tool on a shower from another tool (the Observing Planner) with that tool's place and evening as the tool's
+// own location and night, never the profile's or its site.
+export function openMeteorShowerAt(id: string, site: SiteLocation, eveningDate: string, state: MeteorShowersState = meteorShowersState, route: RouteState = routeState, history: Pick<History, 'pushState'> = window.history) {
+	selectShower(state, id)
+	state.location = { mode: 'manual', latitude: site.latitude, longitude: site.longitude, elevation: site.elevation, timeZone: site.timeZone }
+	state.eveningDate = eveningDate
+	openMeteorShower(id, route, history)
 }

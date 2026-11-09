@@ -2,19 +2,19 @@ import { altitudeOf } from 'nebulosa/src/astronomy/events/horizon'
 import { isMeteorShowerActive, meteorActivityZhr, meteorShowerActivityYearApplies } from 'nebulosa/src/astronomy/meteors/activity'
 import { meteorLocalHourlyRate, meteorMoonDirection, meteorSunDirection } from 'nebulosa/src/astronomy/meteors/observation'
 import { meteorGeometricObservingWindows, meteorObservingWindows } from 'nebulosa/src/astronomy/meteors/planner'
-import { meteorRadiantPathSegmentsBetween } from 'nebulosa/src/astronomy/meteors/radiant'
+import { meteorRadiantPathSegmentsBetween, meteorRadiantVector } from 'nebulosa/src/astronomy/meteors/radiant'
 import { meteorSolarLongitude } from 'nebulosa/src/astronomy/meteors/solar'
 import { meteorShowerComputationContext, meteorShowerState, meteorShowerStates } from 'nebulosa/src/astronomy/meteors/state'
 import type { MeteorExponentialActivityProfile, MeteorGeometricObservingWindow, MeteorGeometricObservingWindowOptions, MeteorShowerSolution, MeteorSolarLongitudeInterval, MeteorVisualObservation } from 'nebulosa/src/astronomy/meteors/types'
 import { type Time, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
-import type { Vec3 } from 'nebulosa/src/math/linear-algebra/vec3'
+import { type Vec3, vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
 import { type MeteorShowerRecord, preferredSolution } from './meteorshowers.catalog'
 import type { MeteorSolarLongitudeTable } from './meteorshowers.solar'
 import { annualEventsOf, type MeteorActivityProfileEntry, type MeteorAnnualEvent, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSourceId } from './meteorshowers.visual'
-import { type PlanningSite, resolveNight } from './observingplanner.astronomy'
+import { type ObservingReasonCode, type ObservingSample, type ObservingWindow, type PlanningSite, resolveNight, type TargetAnalysis, type TargetAnalysisRequest } from './observingplanner.astronomy'
 import { geographic, type SkyObserver } from './sky/ephemeris'
 import type { TimeSpan } from './sky/sun'
 
@@ -407,6 +407,10 @@ export interface MeteorNightSample {
 	readonly time: number
 	// Geometric radiant altitude, radians; absent without a radiant.
 	readonly radiantAltitude?: number
+	// Azimuth of the radiant, radians from north through east; absent without a radiant.
+	readonly radiantAzimuth?: number
+	// Geocentric angle between the radiant and the Moon, radians; absent without a radiant.
+	readonly moonSeparation?: number
 	// Geometric solar altitude, radians.
 	readonly sunAltitude: number
 	// Geometric, geocentric lunar altitude, radians.
@@ -844,10 +848,22 @@ function nightSamples(solution: MeteorShowerSolution | undefined, site: SkyObser
 		const sun = vecLerp(before.sun, after.sun, fraction)
 		const moon = vecLerp(before.moon, after.moon, fraction)
 		const context = meteorShowerComputationContext(instant, observer, { includeHorizontal: true, includeSun: false, includeMoon: false })
-		const altitude = solution === undefined ? undefined : meteorShowerState(solution, context, { includeHorizontal: true, includeSun: false, includeMoon: false, includeRadiantOfDate: false }).horizontal?.altitude
+		const state = solution === undefined ? undefined : meteorShowerState(solution, context, { includeHorizontal: true, includeSun: false, includeMoon: false, includeRadiantOfDate: false })
+		const altitude = state?.horizontal?.altitude
+		const azimuth = state?.horizontal?.azimuth
+		const moonSeparation = state?.radiantJ2000 === undefined ? undefined : vecAngle(moon, meteorRadiantVector(state.radiantJ2000))
 		const zhr = rate === undefined ? undefined : meteorActivityZhr(rate.profile, context.solarLongitude)
 		const localRate = rate === undefined || zhr === undefined || altitude === undefined ? undefined : meteorLocalHourlyRate(zhr, { ...rate.observation, radiantAltitude: altitude })
-		samples.push({ time, ...(altitude !== undefined && { radiantAltitude: altitude }), sunAltitude: altitudeOf(sun, instant, observer), moonAltitude: altitudeOf(moon, instant, observer), ...(zhr !== undefined && { zhr }), ...(localRate !== undefined && { localRate }) })
+		samples.push({
+			time,
+			...(altitude !== undefined && { radiantAltitude: altitude }),
+			...(azimuth !== undefined && { radiantAzimuth: azimuth }),
+			...(moonSeparation !== undefined && { moonSeparation }),
+			sunAltitude: altitudeOf(sun, instant, observer),
+			moonAltitude: altitudeOf(moon, instant, observer),
+			...(zhr !== undefined && { zhr }),
+			...(localRate !== undefined && { localRate }),
+		})
 	}
 	return samples
 }
@@ -903,4 +919,79 @@ export function radiantPath(record: MeteorShowerRecord, request: MeteorRadiantPa
 	const step = Math.max((end - start) / (MAX_PATH_POINTS - 1), 3600000) / 86400000
 	const segments = meteorRadiantPathSegmentsBetween(solution, toolkitTime(start), toolkitTime(end), { step }).map((segment) => segment.map((point): MeteorRadiantPathPoint => ({ time: timeToUnixMillis(point.time), rightAscension: point.rightAscension, declination: point.declination })))
 	return { support, start, end, segments }
+}
+
+// Request of the Observing Planner analysis of a meteor shower observation.
+export type MeteorPlannerRequest = TargetAnalysisRequest & { readonly target: { readonly kind: 'meteorShower'; readonly id: string } }
+
+// The Observing Planner reason of each reason a night has no window.
+const PLANNER_REASONS: Readonly<Record<MeteorNoWindowReason, ObservingReasonCode>> = {
+	missingRadiant: 'radiantUnknown',
+	noSupportedActivity: 'meteorShowerInactive',
+	sunTooHigh: 'sunTooHigh',
+	radiantBelowThreshold: 'belowMinimumAltitude',
+	moonConstraint: 'moonTooClose',
+	noWindow: 'belowMinimumAltitude',
+	// The cause the samples cannot exclude is the support ending during the dark hours.
+	insufficientData: 'meteorShowerInactive',
+}
+
+// The Observing Planner analysis of a meteor shower observation: the shower's geometric windows under the plan's
+// constraints (its minimum altitude is the radiant's, its Sun limit the darkness, its Moon separation applied while the
+// Moon is up), kept when they last the minimum continuous duration, and the radiant's samples. It has no score, airmass,
+// or magnitude, and it is never a pointing: a radiant is a direction. A shower the catalog does not know is unresolved.
+export function plannerAnalysis(record: MeteorShowerRecord | undefined, request: MeteorPlannerRequest, nights: (request: AstroWeatherNightRequest) => AstroWeatherNight, table: MeteorSolarLongitudeTable): TargetAnalysis {
+	const { target, site, eveningDate, constraints, requestedDurationMs } = request
+
+	if (record === undefined) {
+		const night = resolveNight(nights, site, eveningDate)
+		return { target, name: target.id, night, constraints, requestedDurationMs, status: 'unresolved', reasons: ['unresolvedTarget'], windows: [], summary: { totalUsableMs: 0, longestWindowMs: 0 }, samples: [] }
+	}
+
+	const observing = observingNight(record, { site, eveningDate, maximumSolarAltitude: constraints.maximumSunAltitude, minimumRadiantAltitude: constraints.minimumAltitude, ...(constraints.minimumMoonSeparation !== undefined && { minimumMoonSeparation: constraints.minimumMoonSeparation }) }, nights, table)
+	const windows = observing.windows.filter((window) => window.end - window.start >= constraints.minimumContinuousMs).map((window): ObservingWindow => ({ start: window.start, end: window.end, durationMs: window.end - window.start, bestAt: window.bestTime }))
+	const samples: ObservingSample[] = []
+	for (const sample of observing.samples) {
+		if (sample.radiantAltitude === undefined || sample.radiantAzimuth === undefined || sample.moonSeparation === undefined) continue
+		samples.push({ time: sample.time, altitude: sample.radiantAltitude, azimuth: sample.radiantAzimuth, sunAltitude: sample.sunAltitude, moonAltitude: sample.moonAltitude, moonSeparation: sample.moonSeparation })
+	}
+
+	let culmination: ObservingSample | undefined
+	for (const sample of samples) if (culmination === undefined || sample.altitude > culmination.altitude) culmination = sample
+	// A highest sample at either end of the night is a rising or setting radiant, not a culmination.
+	const culminates = culmination !== undefined && culmination !== samples[0] && culmination !== samples.at(-1)
+	let totalUsableMs = 0
+	let longestWindowMs = 0
+	for (const window of windows) {
+		totalUsableMs += window.durationMs
+		longestWindowMs = Math.max(longestWindowMs, window.durationMs)
+	}
+
+	let status: TargetAnalysis['status'] = 'observable'
+	let reasons: ObservingReasonCode[] = []
+
+	if (windows.length === 0) {
+		status = 'notObservable'
+		reasons = observing.windows.length > 0 ? ['windowTooShort'] : [...new Set(observing.reasons.map((reason) => PLANNER_REASONS[reason]))]
+	} else if (requestedDurationMs !== undefined && longestWindowMs < requestedDurationMs) {
+		status = 'limitedDuration'
+		reasons = ['shorterThanRequested']
+	}
+
+	const solution = preferredSolution(record)
+	return {
+		target,
+		name: record.name,
+		typeName: 'Meteor shower',
+		...(solution?.rightAscension !== undefined && solution.declination !== undefined && { rightAscension: solution.rightAscension, declination: solution.declination }),
+		night: observing.night,
+		constraints,
+		requestedDurationMs,
+		status,
+		reasons,
+		windows,
+		summary: { ...(culminates && { culminationAt: culmination!.time, culminationAltitude: culmination!.altitude }), totalUsableMs, longestWindowMs },
+		samples,
+		meteorShower: { support: observing.support.basis, identity: record.identity },
+	}
 }

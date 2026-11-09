@@ -1264,7 +1264,17 @@ const astroWeather = new AstroWeatherService()
 
 // Target discovery and analysis of the Observing Planner, over the sky catalog and the nights of Astro Weather, and its
 // night plans in the operational database, sent to every tab once saved.
-const observingPlanner = new ObservingPlannerService({ catalog: skyCatalog, night: (request) => astroWeather.night(request), store: new ObservingPlanStore(database), listener: broadcast, minorBodies, kernels: spiceKernels, queue: ssdRequests, minorBodyStore: new ObservingMinorBodyStore(database) })
+const observingPlanner = new ObservingPlannerService({
+	catalog: skyCatalog,
+	night: (request) => astroWeather.night(request),
+	store: new ObservingPlanStore(database),
+	listener: broadcast,
+	meteorShowers: (request) => meteorShowers.plannerAnalysis(request),
+	minorBodies,
+	kernels: spiceKernels,
+	queue: ssdRequests,
+	minorBodyStore: new ObservingMinorBodyStore(database),
+})
 
 // Read-only predictions of the Jupiter Observing Planner over the SPICE kernels or the analytical theories, and the
 // server's Great Red Spot model in the operational database, sent to every tab once saved.

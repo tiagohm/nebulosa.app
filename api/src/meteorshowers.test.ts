@@ -8,7 +8,12 @@ import { iauOccurrence } from './meteorshowers.astronomy'
 import { filterMeteorShowers, indexMeteorCatalog, selectSolution } from './meteorshowers.catalog'
 import { MeteorSolarLongitudeTable } from './meteorshowers.solar'
 import { MeteorShowerStore } from './meteorshowers.store'
-import type { PlanningSite } from './observingplanner.astronomy'
+import { ObservingPlannerService } from './observingplanner'
+import { OBSERVING_PRESETS, type PlanningSite } from './observingplanner.astronomy'
+import { ObservingMinorBodyStore } from './observingplanner.minorbodies.store'
+import { ObservingPlanStore } from './observingplanner.store'
+import { fixtureCatalog } from './sky/fixture'
+import { SsdRequestQueue } from './ssd'
 
 const DEG = Math.PI / 180
 const NOW = Date.UTC(2026, 10, 9, 12)
@@ -399,5 +404,49 @@ describe('annual events and drift paths', () => {
 		expect(points.length).toBeLessThanOrEqual(256)
 		expect(points.at(-1)!.rightAscension - points[0].rightAscension).toBeCloseTo(1.04 * DEG * ((path.end! - path.start!) / 86400000), 2)
 		expect((await service.path('iau:89', { time: Date.UTC(2026, 11, 14) })).segments).toEqual([])
+	})
+})
+
+describe('observing planner blocks', () => {
+	// A planner whose meteor shower items are analyzed by a meteor service, as index.ts wires them.
+	function planner() {
+		const { service: meteors } = setup()
+		const database = AppDatabase.memory()
+		const nights = new AstroWeatherNights()
+		const kernels = { current: () => ({ generation: 0, policy: 'offline' as const, loading: false, readiness: new Map() }) }
+		const minorBodies = { cached: () => undefined, body: () => Promise.resolve(undefined) } as never
+		return new ObservingPlannerService({
+			catalog: fixtureCatalog(),
+			night: (request) => nights.night(request),
+			store: new ObservingPlanStore(database),
+			minorBodies,
+			kernels,
+			queue: new SsdRequestQueue(),
+			minorBodyStore: new ObservingMinorBodyStore(database),
+			meteorShowers: (request) => meteors.plannerAnalysis(request),
+		})
+	}
+
+	test('a meteor shower item is an observing event with geometric windows and no score, saved by its shower id', async () => {
+		const service = planner()
+		const constraints = { ...OBSERVING_PRESETS.visual, maximumSunAltitude: -18 * DEG, minimumAltitude: 20 * DEG }
+		const meteor = { kind: 'meteorShower', id: 'iau:4' } as const
+		const analysis = await service.analyze({ target: meteor, site: SAO_PAULO, eveningDate: '2026-12-13', constraints, requestedDurationMs: 3 * 3600000 })
+		expect(analysis).toMatchObject({ name: 'Geminids', typeName: 'Meteor shower', status: 'observable', reasons: [], meteorShower: { support: 'imoVisual', identity: 'iau' } })
+		expect(analysis.score).toBeUndefined()
+		expect(analysis.windows).toHaveLength(1)
+		expect(analysis.windows[0].bestScore).toBeUndefined()
+		expect(analysis.samples.length).toBeGreaterThan(60)
+
+		expect((await service.analyze({ target: meteor, site: SAO_PAULO, eveningDate: '2026-06-13', constraints })).reasons).toEqual(['meteorShowerInactive'])
+		expect((await service.analyze({ target: { kind: 'meteorShower', id: 'iau:12345' }, site: SAO_PAULO, eveningDate: '2026-12-13', constraints })).status).toBe('unresolved')
+		expect((await service.analyze({ target: meteor, site: SAO_PAULO, eveningDate: '2026-12-13', constraints, requestedDurationMs: 12 * 3600000 })).status).toBe('limitedDuration')
+
+		const saved = service.savePlan('plan-1', { name: 'Geminids', eveningDate: '2026-12-13', site: SAO_PAULO, constraints, items: [{ id: 'a', target: meteor, targetName: 'Geminids', priority: 3, requestedDurationMs: 3600000, notes: '' }], revision: 0 })
+		expect(saved.status).toBe('saved')
+		expect(service.plan('plan-1')?.items[0].target).toEqual(meteor)
+
+		const preview = await service.preview({ site: SAO_PAULO, eveningDate: '2026-12-13', constraints, items: [{ id: 'a', target: meteor, targetName: 'Geminids', priority: 3, requestedDurationMs: 3600000, scheduledStartAt: analysis.windows[0].start, notes: '' }] })
+		expect(preview.items[0].conflicts).toEqual([])
 	})
 })

@@ -913,15 +913,17 @@ CREATE TABLE observing_plan_items (
 	-- Position in the plan, ascending from 0 without gaps.
 	position INTEGER NOT NULL CHECK (position >= 0),
 	-- Target: a sky catalog object by id, a major body by Horizons code, a fixed ICRS/J2000 place (right ascension and
-	-- declination in radians) named by target_name, or a minor body by its canonical SBDB SPK-ID (decimal text) with
-	-- its designation; never coordinates captured for a moving body.
-	target_kind TEXT NOT NULL CHECK (target_kind IN ('catalog', 'body', 'coordinates', 'minorBody')),
+	-- declination in radians) named by target_name, a minor body by its canonical SBDB SPK-ID (decimal text) with
+	-- its designation, or a meteor shower observation by its shower id (iau:<number>); never coordinates captured for a
+	-- moving body or for a radiant.
+	target_kind TEXT NOT NULL CHECK (target_kind IN ('catalog', 'body', 'coordinates', 'minorBody', 'meteorShower')),
 	catalog_id INTEGER,
 	body_code TEXT CHECK (body_code IS NULL OR body_code IN ('301', '199', '299', '499', '599', '699', '799', '899', '999')),
 	right_ascension REAL,
 	declination REAL,
 	minor_body_spk_id TEXT,
 	minor_body_designation TEXT,
+	meteor_shower_id TEXT,
 	-- Name of the target when it was added, shown even if the catalog no longer knows it.
 	target_name TEXT NOT NULL CHECK (length(trim(target_name)) > 0),
 	-- Priority, 1 (lowest) to 5 (highest); it never reorders or schedules anything.
@@ -943,7 +945,8 @@ CREATE TABLE observing_plan_items (
 	CHECK ((target_kind = 'catalog') = (catalog_id IS NOT NULL)),
 	CHECK ((target_kind = 'body') = (body_code IS NOT NULL)),
 	CHECK ((target_kind = 'coordinates') = (right_ascension IS NOT NULL AND declination IS NOT NULL)),
-	CHECK ((target_kind = 'minorBody') = (minor_body_spk_id IS NOT NULL AND minor_body_designation IS NOT NULL))
+	CHECK ((target_kind = 'minorBody') = (minor_body_spk_id IS NOT NULL AND minor_body_designation IS NOT NULL)),
+	CHECK ((target_kind = 'meteorShower') = (meteor_shower_id IS NOT NULL))
 ) STRICT;
 
 -- Orbital elements of the minor bodies of the night plans (ObservingMinorBodyStore), saved so a plan can be analyzed with

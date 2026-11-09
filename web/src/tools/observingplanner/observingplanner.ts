@@ -105,6 +105,8 @@ export const STATUS_LABELS: Readonly<Record<ObservingStatus, { readonly label: s
 // Sentence of each reason.
 export const REASON_LABELS: Readonly<Record<ObservingReasonCode, string>> = {
 	unresolvedTarget: 'The catalog or the Small-Body Database does not know this object.',
+	meteorShowerInactive: 'The meteor shower is not active this night.',
+	radiantUnknown: 'The catalog gives no radiant for this meteor shower.',
 	orbitalSolutionUnavailable: 'No usable orbital elements are known for this body.',
 	kernelCoverageUnavailable: 'The enabled SPK kernels do not cover this body all night, and the ephemeris policy allows nothing else.',
 	ephemerisOffline: 'No SPK kernel or saved orbital elements cover this body, and the ephemeris policy forbids asking JPL.',
@@ -729,19 +731,22 @@ function browserHandoff(): SkyHandoff {
 	return { sky: skyState, images: skyImageState, clock: skyClock, route: routeState, io: browserSkyIo, history: window.history }
 }
 
-// Shows a target in the Sky at the Sky's own time: a catalog object, a body, or a minor body is selected through the
-// Sky's path from the active site (a minor body by its SPK-ID, located by the Sky's own ephemeris, never the planner's),
-// fixed coordinates are marked and panned to. The clock, the mount, the profile, and the site are left alone.
+// Shows a target in the Sky at the Sky's own time: a catalog object, a body, a minor body, or a meteor shower's radiant
+// is selected through the Sky's path from the active site (a minor body by its SPK-ID, located by the Sky's own ephemeris,
+// never the planner's; a radiant by its shower id, never targeted), fixed coordinates are marked and panned to. The clock,
+// the mount, the profile, and the site are left alone.
 export function showTargetInSky({ target, name }: NamedTarget, site: SiteLocation | undefined, handoff: SkyHandoff = browserHandoff()) {
 	if (target.kind === 'coordinates') showCoordinateInSky(handoff.images, [target.rightAscension, target.declination], name)
-	else selectSkyObject(handoff.sky, { ref: plain(target), source: 'search', name, category: target.kind === 'body' ? 'solarSystem' : target.kind === 'minorBody' ? 'minorBody' : undefined }, site, handoff.io)
+	else selectSkyObject(handoff.sky, { ref: plain(target), source: 'search', name, category: target.kind === 'body' ? 'solarSystem' : target.kind === 'minorBody' ? 'minorBody' : target.kind === 'meteorShower' ? 'meteorShower' : undefined }, site, handoff.io)
 	navigate(handoff.route, { workspace: 'sky' }, handoff.history)
 }
 
-// Returns whether two targets are the same. Minor bodies are the same by SPK-ID alone, whatever designation named them.
+// Returns whether two targets are the same. Minor bodies are the same by SPK-ID alone, whatever designation named them,
+// and meteor shower observations by shower id.
 export function sameTarget(a: ObservingTargetRef, b: ObservingTargetRef) {
 	if (a.kind === 'catalog' && b.kind === 'catalog') return a.id === b.id
 	if (a.kind === 'body' && b.kind === 'body') return a.code === b.code
 	if (a.kind === 'minorBody' && b.kind === 'minorBody') return a.spkId === b.spkId
+	if (a.kind === 'meteorShower' && b.kind === 'meteorShower') return a.id === b.id
 	return a.kind === 'coordinates' && b.kind === 'coordinates' && a.rightAscension === b.rightAscension && a.declination === b.declination && a.name === b.name
 }

@@ -14,6 +14,8 @@ import {
 	type MeteorActivityRequest,
 	type MeteorNightRanking,
 	type MeteorNightsRequest,
+	type MeteorPlannerRequest,
+	plannerAnalysis,
 	type MeteorRadiantPath,
 	type MeteorRadiantPathRequest,
 	radiantPath,
@@ -35,6 +37,7 @@ import { activityKindOf, filterMeteorShowers, indexMeteorCatalog, type MeteorCat
 import { MeteorSolarLongitudeTable } from './meteorshowers.solar'
 import type { MeteorCatalogFailureCode, MeteorShowerStore } from './meteorshowers.store'
 import { annualEventsOf, METEOR_ACTIVITY_MODEL_REVISION, METEOR_ANNUAL_PREDICTION_YEARS, METEOR_VISUAL_REVISION, METEOR_VISUAL_SOURCES, type MeteorAnnualEvent, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSource } from './meteorshowers.visual'
+import type { TargetAnalysis } from './observingplanner.astronomy'
 import { fetchUpstream, type UpstreamFetch, UpstreamTooLargeError, UpstreamUnavailableError } from './sky/remote'
 import type { SkyMeteorShowers } from './sky/routes'
 import type { SkySearchResult } from './sky/types'
@@ -571,6 +574,12 @@ export class MeteorShowersService {
 		const path = radiantPath(record, request, this.#table)
 		this.#paths.set(key, path)
 		return path
+	}
+
+	// The Observing Planner analysis of a meteor shower observation; a shower the catalog does not know is unresolved.
+	async plannerAnalysis(request: MeteorPlannerRequest): Promise<TargetAnalysis> {
+		const { index } = await this.#catalog()
+		return plannerAnalysis(index.byId.get(request.target.id), request, this.options.night, this.#table)
 	}
 
 	// Shower of an id, or MeteorShowersError notFound.

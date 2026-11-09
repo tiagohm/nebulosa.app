@@ -1,4 +1,4 @@
-import type { MeteorShowerStates, MeteorSkyRadiant, MeteorSkyRadiants } from 'api'
+import type { MeteorRadiantPath, MeteorShowerStates, MeteorSkyRadiant, MeteorSkyRadiants } from 'api'
 import { TAU } from 'nebulosa/src/core/constants'
 import { jsonInit } from '../http'
 import type { Celestial } from './celestial/celestial'
@@ -12,6 +12,8 @@ import { createRequestGuard } from './selection'
 // Radiants drift by at most a degree or two per day, so they are asked for again only when the instant shown moves more
 // than REFRESH_SPAN_MS from the last request (about 0.05° of drift), the catalog or the layer changes, or another shower
 // is selected; never on a timer of their own, and never once per frame. A failed request waits LOAD_RETRY_DELAY_MS.
+// The selected shower's drift path over its nearest occurrence is drawn too, dashed, in the same frame as the radiants: it
+// is asked for once per shower and catalog, and again only when the instant leaves the occurrence by more than a month.
 
 // Largest distance of the instant shown from the instant of the radiants drawn, milliseconds.
 export const REFRESH_SPAN_MS = 3_600_000
@@ -28,6 +30,12 @@ const RADIANT_RAY_RANGE = [5, 10] as const
 
 // Number of rays of the glyph.
 const RADIANT_RAYS = 8
+
+// Id of the shape of the selected shower's drift path.
+const PATH_SHAPE_ID = 'meteor-radiant-path'
+
+// How far the instant shown may leave the occurrence of the drift path drawn before it is asked for again, milliseconds.
+const PATH_MARGIN_MS = 30 * 86400000
 
 // What the map draws.
 export interface MeteorRadiantTargets {
@@ -86,6 +94,10 @@ export class MeteorRadiantLayer {
 	#activeTime?: number
 	#selectedTime?: number
 	#retryAt = 0
+	// Drift path of the selected shower and the instant it was asked for.
+	#path?: MeteorRadiantPath
+	#pathTime?: number
+	readonly #pathGuard = createRequestGuard()
 
 	// Creates the layer of a map.
 	constructor(
@@ -110,6 +122,9 @@ export class MeteorRadiantLayer {
 			this.#selectedGuard.cancel()
 			this.#selectedTime = undefined
 			this.#selected = undefined
+			this.#pathGuard.cancel()
+			this.#path = undefined
+			this.#pathTime = undefined
 		}
 
 		this.#retryAt = 0
@@ -123,6 +138,7 @@ export class MeteorRadiantLayer {
 		if (this.#targets.visible && outdated(this.#activeTime, time)) void this.#loadActive(time)
 		const selected = this.#targets.selected
 		if (selected !== undefined && outdated(this.#selectedTime, time) && !this.#radiants.some((radiant) => radiant.id === selected)) void this.#loadSelected(selected, time)
+		if (selected !== undefined && pathOutdated(this.#path, this.#pathTime, time)) void this.#loadPath(selected, time)
 	}
 
 	// Draws the radiants again in the frame of the map data, after it was loaded or changed.
@@ -143,12 +159,80 @@ export class MeteorRadiantLayer {
 		for (const id of this.#shapes) if (!drawn.has(id)) this.celestial.removeShape(id)
 		this.#shapes.clear()
 		for (const id of drawn) this.#shapes.add(id)
+		this.#drawPath()
+	}
+
+	// Draws the selected shower's drift path, or removes it.
+	#drawPath() {
+		const segments = (this.#path?.segments ?? []).map((segment) => segment.map((point) => this.map.toMapFrame(point.rightAscension, point.declination)).filter((point) => point !== undefined))
+		const anchor = segments.find((segment) => segment.length > 0)?.[0]
+
+		if (!anchor || this.#targets.selected === undefined) {
+			this.celestial.removeShape(PATH_SHAPE_ID)
+			return
+		}
+
+		this.celestial.addShape({
+			id: PATH_SHAPE_ID,
+			coordinate: { ...anchor },
+			selectable: false,
+			render: (_, ctx, { state }) => {
+				const point: [number, number] = [0, 0]
+				ctx.strokeStyle = RADIANT_COLOR
+				ctx.globalAlpha = 0.8
+				ctx.lineWidth = 1.25
+				ctx.setLineDash([5, 4])
+				ctx.beginPath()
+
+				// Each piece is drawn on its own, and a point the projection cannot place breaks the line, so the path is never joined
+				// across a gap.
+				for (const segment of segments) {
+					let drawing = false
+					for (const vertex of segment) {
+						if (!state.projectEquatorialToScreen(vertex.rightAscension, vertex.declination, point)) {
+							drawing = false
+							continue
+						}
+
+						if (drawing) ctx.lineTo(point[0], point[1])
+						else ctx.moveTo(point[0], point[1])
+						drawing = true
+					}
+				}
+
+				ctx.stroke()
+				ctx.setLineDash([])
+				ctx.globalAlpha = 1
+			},
+		})
+	}
+
+	// Asks for the drift path of the selected shower around an instant.
+	async #loadPath(id: string, time: number) {
+		const request = this.#pathGuard.begin()
+		this.#pathTime = time
+
+		try {
+			const response = await this.fetch(`/api/meteor-showers/${encodeURIComponent(id)}/path`, jsonInit('POST', { time }, request.signal))
+			if (!request.current()) return
+			if (!response.ok) throw new Error(`HTTP ${response.status}`)
+			const path = (await response.json()) as MeteorRadiantPath
+			if (!request.current()) return
+			this.#path = path
+			this.#drawPath()
+		} catch {
+			if (!request.current()) return
+			this.#pathTime = undefined
+			this.#retryAt = Date.now() + LOAD_RETRY_DELAY_MS
+		}
 	}
 
 	// Releases the layer for good.
 	destroy() {
 		this.#guard.cancel()
 		this.#selectedGuard.cancel()
+		this.#pathGuard.cancel()
+		this.celestial.removeShape(PATH_SHAPE_ID)
 		for (const id of this.#shapes) this.celestial.removeShape(id)
 		this.#shapes.clear()
 	}
@@ -199,4 +283,13 @@ export class MeteorRadiantLayer {
 // Whether radiants asked for at `requested` (absent when never) are out of date at `time`.
 export function outdated(requested: number | undefined, time: number) {
 	return requested === undefined || Math.abs(time - requested) > REFRESH_SPAN_MS
+}
+
+// Whether the drift path asked for at `requested` (absent when never) no longer covers `time`: never asked, or the instant
+// is more than PATH_MARGIN_MS outside the occurrence of the path (or of the request, for a shower without a path).
+export function pathOutdated(path: MeteorRadiantPath | undefined, requested: number | undefined, time: number) {
+	if (requested === undefined) return true
+	const start = path?.start ?? requested
+	const end = path?.end ?? requested
+	return time < start - PATH_MARGIN_MS || time > end + PATH_MARGIN_MS
 }

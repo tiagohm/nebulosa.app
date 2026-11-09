@@ -6,6 +6,7 @@ import { meteorCalendarWeeks, shiftMonth } from './MeteorShowerCalendar'
 import { calendarRequest, createMeteorShowersState, listQuery, loadNight, loadPage, observingRequest, rankingRequest, selectShower } from './meteorshowers'
 import { formatOccurrencePeak, formatOccurrencePeriod, formatPeak, occurrenceInstant } from './meteorshowers.format'
 import { handleMeteorShowersEvent, type MeteorShowerSourcesState, refreshIauCatalog } from './meteorshowers.sources'
+import { windowsWeather } from './meteorshowers.weather'
 
 const NOW = Date.UTC(2026, 10, 9, 15)
 const DEG = Math.PI / 180
@@ -143,5 +144,25 @@ describe('rates and ranking', () => {
 		const ranking = rankingRequest({ ...modelled, rankedNights: 60 }, SITE, '2026-12-05')
 		expect(ranking).toMatchObject({ startEveningDate: '2026-12-05', nights: 31, assumptions: { limitingMagnitude: 6, obstructedFraction: 0.2 } })
 		expect('eveningDate' in ranking).toBe(false)
+	})
+})
+
+describe('weather', () => {
+	const HOUR = 3600000
+	const forecast = (state: 'fresh' | 'stale', cloud: number, rain: number) => ({
+		latitude: 0,
+		longitude: 0,
+		generatedAt: NOW,
+		meteorology: { source: { provider: 'openMeteo' as const, state }, samples: [0, 1, 2].map((i) => ({ time: NOW + i * HOUR, cloudCover: cloud, precipitationProbability: rain })) },
+		astronomy: { source: { provider: 'sevenTimer' as const, state }, cellDegrees: 1, samples: [{ time: NOW, transparency: 3 as const }] },
+	})
+
+	test('only a fresh forecast is assessed, and a window beyond it is said to be so', () => {
+		const window = { start: NOW, end: NOW + 2 * HOUR }
+		expect(windowsWeather(forecast('fresh', 10, 5), [window])[0]).toEqual({ ...window, cloudCover: 10, precipitationProbability: 5, transparency: 3, assessment: 'favorable' })
+		expect(windowsWeather(forecast('fresh', 50, 5), [window])[0].assessment).toBe('variable')
+		expect(windowsWeather(forecast('fresh', 80, 5), [window])[0].assessment).toBe('unfavorable')
+		expect(windowsWeather(forecast('stale', 10, 5), [window])[0].assessment).toBe('unassessed')
+		expect(windowsWeather(forecast('fresh', 10, 5), [{ start: NOW + 10 * HOUR, end: NOW + 12 * HOUR }])[0]).toMatchObject({ assessment: 'notCovered', cloudCover: undefined })
 	})
 })

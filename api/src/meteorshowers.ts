@@ -14,6 +14,9 @@ import {
 	type MeteorActivityRequest,
 	type MeteorNightRanking,
 	type MeteorNightsRequest,
+	type MeteorRadiantPath,
+	type MeteorRadiantPathRequest,
+	radiantPath,
 	type MeteorActivityState,
 	type MeteorObservingNight,
 	type MeteorObservingRequest,
@@ -31,7 +34,7 @@ import {
 import { activityKindOf, filterMeteorShowers, indexMeteorCatalog, type MeteorCatalogIndex, MeteorCatalogInvalidError, type MeteorShowerFilter, type MeteorShowerGap, type MeteorShowerIdentity, type MeteorShowerRecord, type MeteorSolutionSelection, preferredSolution } from './meteorshowers.catalog'
 import { MeteorSolarLongitudeTable } from './meteorshowers.solar'
 import type { MeteorCatalogFailureCode, MeteorShowerStore } from './meteorshowers.store'
-import { METEOR_ACTIVITY_MODEL_REVISION, METEOR_ANNUAL_PREDICTION_YEARS, METEOR_VISUAL_REVISION, METEOR_VISUAL_SOURCES, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSource } from './meteorshowers.visual'
+import { annualEventsOf, METEOR_ACTIVITY_MODEL_REVISION, METEOR_ANNUAL_PREDICTION_YEARS, METEOR_VISUAL_REVISION, METEOR_VISUAL_SOURCES, type MeteorAnnualEvent, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSource } from './meteorshowers.visual'
 import { fetchUpstream, type UpstreamFetch, UpstreamTooLargeError, UpstreamUnavailableError } from './sky/remote'
 import type { SkyMeteorShowers } from './sky/routes'
 import type { SkySearchResult } from './sky/types'
@@ -208,6 +211,8 @@ export interface MeteorShowerDetail extends MeteorShowerSummary {
 	readonly visualSource?: MeteorVisualSource
 	// The occurrences of the previous, current, and next civil year, chronologically.
 	readonly occurrences: readonly MeteorShowerOccurrence[]
+	// Year-specific events of the previous, current, and next civil year, chronologically.
+	readonly annualEvents: readonly MeteorAnnualEvent[]
 	// Whether year-specific notes were curated for the year of the instant of the answer.
 	readonly annualPredictionAvailable: boolean
 }
@@ -246,6 +251,8 @@ export interface MeteorShowersCalendar {
 	readonly end: number
 	// Occurrences overlapping the span, by the instant that stands for each.
 	readonly entries: readonly MeteorShowersCalendarEntry[]
+	// Year-specific events of the listed showers in the span, chronologically, each with its shower id.
+	readonly annualEvents: readonly (MeteorAnnualEvent & { readonly showerId: string })[]
 }
 
 // Request of POST /api/meteor-showers/radiants.
@@ -288,6 +295,9 @@ const NIGHT_CACHE_LIMIT = 64
 // One day, milliseconds.
 const DAY_MS = 86400000
 
+// Radiant paths kept: a few selected showers over a few days.
+const PATH_CACHE_LIMIT = 32
+
 // The catalog in use.
 interface ActiveCatalog {
 	readonly index: MeteorCatalogIndex
@@ -316,6 +326,7 @@ function isIsoDate(version: string) {
 export class MeteorShowersService {
 	readonly #table = new MeteorSolarLongitudeTable()
 	readonly #nights = new LruCache<MeteorObservingNight>(NIGHT_CACHE_LIMIT)
+	readonly #paths = new LruCache<MeteorRadiantPath>(PATH_CACHE_LIMIT)
 	readonly #fetch: UpstreamFetch
 	readonly #now: () => number
 	readonly #bundled: () => Promise<string>
@@ -471,6 +482,7 @@ export class MeteorShowersService {
 			selectedBy: record.selectedBy,
 			...(record.visual && { visualSource: METEOR_VISUAL_SOURCES[record.visual.sourceId] }),
 			occurrences,
+			annualEvents: annualEventsOf(record.number, Date.UTC(year - 1, 0, 1), Date.UTC(year + 2, 0, 1)),
 			annualPredictionAvailable: METEOR_ANNUAL_PREDICTION_YEARS.includes(year),
 		}
 	}
@@ -489,7 +501,10 @@ export class MeteorShowersService {
 		}
 
 		entries.sort((a, b) => (occurrenceInstant(a.occurrence) ?? 0) - (occurrenceInstant(b.occurrence) ?? 0) || a.id.localeCompare(b.id))
-		return { revision: this.options.store.state().revision, start, end, entries }
+		const annualEvents: (MeteorAnnualEvent & { readonly showerId: string })[] = []
+		for (const record of filterMeteorShowers(index, request.filter ?? {})) for (const event of annualEventsOf(record.number, start, end)) annualEvents.push(Object.assign({ showerId: record.id }, event))
+		annualEvents.sort((a, b) => a.time - b.time)
+		return { revision: this.options.store.state().revision, start, end, entries, annualEvents }
 	}
 
 	// State of a batch of showers at an instant; ids the catalog does not know are left out.
@@ -544,6 +559,18 @@ export class MeteorShowersService {
 	// MeteorShowersError notFound.
 	async nights(id: string, request: MeteorNightsRequest, signal?: AbortSignal): Promise<MeteorNightRanking | undefined> {
 		return rankNights(await this.#record(id), request, this.options.night, this.#table, signal)
+	}
+
+	// Radiant drift path of a shower over the occurrence nearest to an instant, cached by the catalog revision, the shower,
+	// and the start of the occurrence's day. Throws MeteorShowersError notFound.
+	async path(id: string, request: MeteorRadiantPathRequest): Promise<MeteorRadiantPath> {
+		const record = await this.#record(id)
+		const key = JSON.stringify([this.options.store.state().revision, id, Math.floor(request.time / DAY_MS)])
+		const cached = this.#paths.get(key)
+		if (cached) return cached
+		const path = radiantPath(record, request, this.#table)
+		this.#paths.set(key, path)
+		return path
 	}
 
 	// Shower of an id, or MeteorShowersError notFound.
@@ -683,6 +710,14 @@ export function createMeteorShowersRoutes(service: MeteorShowersService) {
 			POST: async (req) => {
 				const request = (await req.json()) as MeteorActivityRequest
 				return answer(() => service.activity(decodeURIComponent(req.params.id), request))
+			},
+		},
+		'/api/meteor-showers/:id/path': {
+			// Radiant drift path of one shower over the occurrence nearest to an instant (MeteorRadiantPathRequest → MeteorRadiantPath);
+			// 404 notFound.
+			POST: async (req) => {
+				const request = (await req.json()) as MeteorRadiantPathRequest
+				return answer(() => service.path(decodeURIComponent(req.params.id), request))
 			},
 		},
 		'/api/meteor-showers/:id/nights': {

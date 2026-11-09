@@ -106,6 +106,13 @@ export function MeteorActivityChart({ curve, timeZone, now }: MeteorActivityChar
 							<circle cx={x(visualX)} cy={y(visual.typicalZhr)} r={3.5} fill="none" stroke="var(--color-warning)" strokeWidth={1.5} />
 						</g>
 					)}
+					{curve.annualEvents
+						.filter((event) => event.time >= samples[0].time && event.time <= samples.at(-1)!.time)
+						.map((event) => (
+							<text key={event.id} x={x(atTime(event.time))} y={MARGIN.top + 8} textAnchor="middle" fill="var(--color-warning)" fontSize={11}>
+								<title>{`${event.attribution} (${event.confidence})`}</title>★
+							</text>
+						))}
 					{nowX !== undefined && <line x1={x(nowX)} x2={x(nowX)} y1={MARGIN.top} y2={MARGIN.top + plotHeight} stroke="var(--color-ink-100)" strokeDasharray="1 3" />}
 				</svg>
 			</div>
@@ -115,6 +122,7 @@ export function MeteorActivityChart({ curve, timeZone, now }: MeteorActivityChar
 				</span>
 				<span>● model maximum {formatSolarLongitude(profile.peakSolarLongitude, 2)}</span>
 				{visual && <span className="text-warning">╌ ○ IMO maximum and typical ZHR</span>}
+				{curve.annualEvents.length > 0 && <span className="text-warning">★ year-specific event, never drawn into the curve</span>}
 				{nowX !== undefined && <span>┆ now</span>}
 			</div>
 		</div>

@@ -1,4 +1,4 @@
-import type { MeteorActivityCurve, MeteorNightRanking as Ranking, MeteorObservingNight, MeteorShowerDetail, MeteorShowerOccurrence } from 'api'
+import type { AstroWeatherForecast, MeteorActivityCurve, MeteorNightRanking as Ranking, MeteorObservingNight, MeteorShowerDetail, MeteorShowerOccurrence } from 'api'
 import { formatDate, formatDateTime, formatDegrees, formatPercent, formatSpan } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
@@ -12,7 +12,8 @@ import { MeteorActivityChart } from './MeteorActivityChart'
 import { MeteorNightChart } from './MeteorNightChart'
 import { MeteorNightRanking } from './MeteorNightRanking'
 import { showRadiantInSky, showRadiantInSkyAt } from './meteorshowers'
-import { ACTIVITY_KIND_LABELS, ACTIVITY_LABELS, BASIS_LABELS, formatPeak, formatSolarLongitude, GAP_LABELS, kilometersPerSecond, REASON_LABELS, SELECTION_LABELS, STATUS_LABELS } from './meteorshowers.format'
+import { ACTIVITY_KIND_LABELS, ACTIVITY_LABELS, ANNUAL_RELATION_LABELS, BASIS_LABELS, formatAnnualEvent, formatPeak, formatSolarLongitude, GAP_LABELS, kilometersPerSecond, REASON_LABELS, SELECTION_LABELS, STATUS_LABELS } from './meteorshowers.format'
+import { type MeteorWeatherAssessment, sourceStateText, windowsWeather } from './meteorshowers.weather'
 
 // Details of one shower: its identity and status, its curated visual data with the edition it comes from, its
 // occurrences by each source apart (the published visual maximum is never confused with the IAU mean reference), every
@@ -36,8 +37,43 @@ function OccurrenceRows({ occurrence, timeZone }: { readonly occurrence: MeteorS
 	)
 }
 
+// Name and tone of each weather assessment.
+const WEATHER_LABELS: Readonly<Record<MeteorWeatherAssessment, { readonly label: string; readonly tone: 'success' | 'warning' | 'danger' | 'neutral' }>> = {
+	favorable: { label: 'Favorable', tone: 'success' },
+	variable: { label: 'Variable', tone: 'warning' },
+	unfavorable: { label: 'Unfavorable', tone: 'danger' },
+	notCovered: { label: 'Beyond the forecast', tone: 'neutral' },
+	unassessed: { label: 'Not assessed', tone: 'neutral' },
+}
+
+// The forecast of the windows, from the Astro Weather sources.
+function WindowsWeather({ night, forecast, timeZone }: { readonly night: MeteorObservingNight; readonly forecast: AstroWeatherForecast; readonly timeZone: string }) {
+	const weather = windowsWeather(forecast, night.windows)
+	return (
+		<div className="flex flex-col gap-1">
+			{weather.map((window) => {
+				const assessment = WEATHER_LABELS[window.assessment]
+				const facts = [
+					window.cloudCover === undefined ? undefined : `${Math.round(window.cloudCover)}% cloud`,
+					window.precipitationProbability === undefined ? undefined : `${window.precipitationProbability}% chance of precipitation`,
+					window.transparency === undefined ? undefined : `transparency class ${window.transparency} of 8`,
+				]
+					.filter(Boolean)
+					.join(', ')
+				return (
+					<p key={window.start} className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-200">
+						<StatusBadge tone={assessment.tone} label={assessment.label} />
+						<span>{`${formatSpan(window.start, window.end, timeZone)}${facts ? `: ${facts}` : ''}`}</span>
+					</p>
+				)
+			})}
+			<p className="m-0 text-xs text-ink-300">{`Forecast of Open-Meteo (${sourceStateText(forecast.meteorology.source)}) and 7Timer! (${sourceStateText(forecast.astronomy.source)}), as Astro Weather shows them: a forecast, not a measurement of the site. Only a fresh forecast is assessed, and the weather never changes a window, a rate, or a ranking.`}</p>
+		</div>
+	)
+}
+
 // The observing night section.
-function ObservingNight({ night, name, minimumAltitude, timeZone }: { readonly night: MeteorObservingNight; readonly name: string; readonly minimumAltitude: number; readonly timeZone: string }) {
+function ObservingNight({ night, name, minimumAltitude, timeZone, forecast }: { readonly night: MeteorObservingNight; readonly name: string; readonly minimumAltitude: number; readonly timeZone: string; readonly forecast?: AstroWeatherForecast }) {
 	return (
 		<div className="flex flex-col gap-2">
 			<p className="m-0 text-xs text-ink-300">
@@ -68,6 +104,7 @@ function ObservingNight({ night, name, minimumAltitude, timeZone }: { readonly n
 					)}
 				</div>
 			)}
+			{forecast && night.windows.length > 0 && <WindowsWeather night={night} forecast={forecast} timeZone={timeZone} />}
 			<MeteorNightChart night={night} name={name} minimumAltitude={minimumAltitude} timeZone={timeZone} />
 		</div>
 	)
@@ -89,6 +126,7 @@ export function MeteorShowerDetails({
 	rankingError,
 	onRank,
 	onSelectNight,
+	forecast,
 }: {
 	readonly detail: MeteorShowerDetail
 	readonly night?: MeteorObservingNight
@@ -104,6 +142,7 @@ export function MeteorShowerDetails({
 	readonly rankingError?: string
 	readonly onRank: () => void
 	readonly onSelectNight: (eveningDate: string) => void
+	readonly forecast?: AstroWeatherForecast
 }) {
 	const activityNow = ACTIVITY_LABELS[detail.activityNow.state]
 	const visual = detail.visual
@@ -143,6 +182,20 @@ export function MeteorShowerDetails({
 			)}
 			{!visual && <p className="m-0 text-xs text-ink-300">No curated visual data: no ZHR or visual maximum is known for this shower here.</p>}
 			{!detail.annualPredictionAvailable && <p className="m-0 text-xs text-ink-300">No year-specific predictions were curated for this year; the visual values are the recurring baseline.</p>}
+			{detail.annualEvents.length > 0 && (
+				<div className="flex flex-col gap-1">
+					<h3 className="m-0 text-sm font-semibold text-ink-100">Year-Specific Events</h3>
+					<ul className="m-0 flex list-disc flex-col gap-1 pl-4 text-xs text-ink-200">
+						{detail.annualEvents.map((event) => (
+							<li key={event.id}>
+								<span className="text-ink-100">{formatAnnualEvent(event, timeZone)}</span>
+								<span className="block text-ink-300">{`${event.attribution}; ${ANNUAL_RELATION_LABELS[event.relation]}. IMO Meteor Shower Calendar ${event.year}.`}</span>
+							</li>
+						))}
+					</ul>
+					<p className="m-0 text-xs text-ink-300">Each event belongs to its year alone. A possible enhancement is not a predicted outburst, and none is a storm forecast.</p>
+				</div>
+			)}
 			<div className="flex flex-col gap-1">
 				<h3 className="m-0 text-sm font-semibold text-ink-100">Occurrences</h3>
 				{detail.occurrences.length === 0 && <p className="m-0 text-xs text-ink-300">No source dates this shower in these years.</p>}
@@ -160,7 +213,7 @@ export function MeteorShowerDetails({
 				{!site && <p className="m-0 text-xs text-ink-300">Choose a location in the panel to see when the radiant can be watched.</p>}
 				{site && nightLoading && <p className="m-0 text-xs text-ink-300">Computing the night…</p>}
 				{site && nightError && <Notice error>{nightError}</Notice>}
-				{site && night && <ObservingNight night={night} name={detail.name} minimumAltitude={minimumAltitude} timeZone={timeZone} />}
+				{site && night && <ObservingNight night={night} name={detail.name} minimumAltitude={minimumAltitude} timeZone={timeZone} forecast={forecast} />}
 			</div>
 			{site && (
 				<div className="flex flex-col gap-1">

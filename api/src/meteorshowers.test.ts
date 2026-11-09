@@ -325,7 +325,7 @@ describe('activity and rates', () => {
 		expect(geminids.visual?.typicalZhr).toBe(150)
 
 		const outburst = await service.activity('iau:900', { year: 2026 })
-		expect(outburst).toEqual({ year: 2026, reason: 'noActivityProfile' })
+		expect(outburst).toEqual({ year: 2026, reason: 'noActivityProfile', annualEvents: [] })
 	})
 
 	test('a modelled night adds counts under the stated assumptions, and a geometric one never has a rate', async () => {
@@ -367,5 +367,37 @@ describe('activity and rates', () => {
 		const aborted = new AbortController()
 		aborted.abort()
 		expect(await service.nights('iau:4', { site: SAO_PAULO, startEveningDate: '2026-12-01', nights: 31, ...NIGHT }, aborted.signal)).toBeUndefined()
+	})
+})
+
+describe('annual events and drift paths', () => {
+	test('a year-specific event belongs to its year alone, in the detail, the calendar, and the curve', async () => {
+		const { service } = setup()
+		const calendar2027 = await service.calendar({ year: 2027, fromMonth: 11, toMonth: 11 })
+		expect(calendar2027.annualEvents.map((event) => event.id)).toEqual([])
+		const perseids = { IAUNo: '00007', Code: 'PER', s: ' 1', Name: 'Perseids', ProvName: '-', solution: [{ AdNo: '009', s: ' 1', activity: 'annual', LoSb: 115, LoSe: 175, LoS: 140.1, Ra: 48.2, De: 58.1, dRa: 1.45, dDe: 0.2, N: 141256 }] }
+		const withPerseids = setup({ bundled: catalog('2026-01-01', [perseids]) })
+		const august2026 = await withPerseids.service.calendar({ year: 2026, fromMonth: 8, toMonth: 8, filter: { visual: true } })
+		expect(august2026.annualEvents.map((event) => [event.showerId, event.id])).toEqual([
+			['iau:7', 'PER-2026-08-12T16:53'],
+			['iau:7', 'PER-2026-08-13T01:00'],
+		])
+		expect((await withPerseids.service.calendar({ year: 2028, fromMonth: 8, toMonth: 8, filter: { visual: true } })).annualEvents).toEqual([])
+		const detail = await withPerseids.service.detail('iau:7')
+		expect(detail.annualEvents.every((event) => event.year >= 2025 && event.year <= 2027)).toBe(true)
+		expect(detail.annualEvents.find((event) => event.id === 'PER-2027-08-12T23:46')).toMatchObject({ kind: 'possibleEnhancement', confidence: 'possible', predictedZhr: { low: 280 }, sourceId: 'imo2027' })
+		expect((await withPerseids.service.activity('iau:7', { year: 2027 })).annualEvents).toHaveLength(4)
+	})
+
+	test('a drift path covers the support of the nearest occurrence and moves the radiant; a fixed radiant has none', async () => {
+		const { service } = setup()
+		const path = await service.path('iau:4', { time: Date.UTC(2026, 11, 14) })
+		expect(path.support.basis).toBe('imoVisual')
+		expect(new Date(path.start!).toISOString().slice(0, 10)).toBe('2026-12-04')
+		expect(path.segments).toHaveLength(1)
+		const points = path.segments[0]
+		expect(points.length).toBeLessThanOrEqual(256)
+		expect(points.at(-1)!.rightAscension - points[0].rightAscension).toBeCloseTo(1.04 * DEG * ((path.end! - path.start!) / 86400000), 2)
+		expect((await service.path('iau:89', { time: Date.UTC(2026, 11, 14) })).segments).toEqual([])
 	})
 })

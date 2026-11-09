@@ -1,4 +1,4 @@
-import type { MeteorActivityState, MeteorDataBasis, MeteorNoWindowReason, MeteorShowerGap, MeteorShowerOccurrence, MeteorShowerStatus, MeteorShowerSummary, MeteorSolutionSelection } from 'api'
+import type { MeteorActivityState, MeteorAnnualEvent, MeteorDataBasis, MeteorNoWindowReason, MeteorShowerGap, MeteorShowerOccurrence, MeteorShowerStatus, MeteorShowerSummary, MeteorSolutionSelection } from 'api'
 import { AU_KM, DAYSEC } from 'nebulosa/src/core/constants'
 import { formatDate, formatDateTime } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
@@ -91,4 +91,27 @@ export function formatOccurrencePeak(occurrence: MeteorShowerOccurrence | undefi
 // Geocentric speed in km/s of an AU/day speed.
 export function kilometersPerSecond(auPerDay: number) {
 	return (auPerDay * AU_KM) / DAYSEC
+}
+
+// Name of each kind of year-specific event.
+export const ANNUAL_KIND_LABELS: Readonly<Record<MeteorAnnualEvent['kind'], string>> = { specialPeak: 'Special maximum', outburst: 'Possible outburst', possibleEnhancement: 'Possible enhancement' }
+
+// How each year-specific event relates to the usual maximum.
+export const ANNUAL_RELATION_LABELS: Readonly<Record<MeteorAnnualEvent['relation'], string>> = { additional: 'in addition to the usual maximum', supersedes: 'replacing the usual maximum', uncertainAlternative: 'an alternative timing of the usual maximum' }
+
+// How firmly each year-specific event is stated.
+export const ANNUAL_CONFIDENCE_LABELS: Readonly<Record<MeteorAnnualEvent['confidence'], string>> = { publishedPrediction: 'published prediction', possible: 'possible', uncertain: 'uncertain' }
+
+// Predicted ZHR of a year-specific event as the source states it; "no rate given" without one.
+export function formatPredictedZhr(event: MeteorAnnualEvent): string {
+	const zhr = event.predictedZhr
+	if (zhr === undefined) return 'no rate given'
+	return `ZHR ${zhr.high === undefined ? zhr.low : `${zhr.low}–${zhr.high}`}${zhr.uncertain ? ' (uncertain)' : ''}`
+}
+
+// One line describing a year-specific event: its instant (with the uncertainty the source gives), kind, rate, and
+// confidence.
+export function formatAnnualEvent(event: MeteorAnnualEvent, timeZone: string): string {
+	const uncertainty = event.uncertaintyMs === undefined ? '' : ` (± ${Math.round(event.uncertaintyMs / 3600000)} h)`
+	return `${formatDateTime(event.time, timeZone, false)}${uncertainty} · ${ANNUAL_KIND_LABELS[event.kind]}, ${formatPredictedZhr(event)} · ${ANNUAL_CONFIDENCE_LABELS[event.confidence]}`
 }

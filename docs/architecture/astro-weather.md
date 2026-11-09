@@ -3,6 +3,7 @@
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 - Astro Weather (`api/src/astroweather.ts`, `astroweather.openmeteo.ts`, `astroweather.seventimer.ts`, `astroweather.night.ts`) is stateless and read-only, never an operation or an event, and nothing here reads or commands a device, opens a dome, or changes a sequence.
+  Other features read it as it is: the Observing Planner and Meteor Showers call `AstroWeatherService.night` in process for their nights, and the Meteor Showers tool reads `/forecast` for the weather of its observing windows (see [Meteor Showers Contract](meteor-showers.md)), never a provider of its own.
   It answers planning questions from forecasts and is not a safety system: a forecast is never presented as an observation.
 - `GET /api/astro-weather/forecast?latitude&longitude` (`AstroWeatherForecast`) reads two fixed public services, no key needed, and no URL or service is ever taken from a request.
   Each is read and cached apart, so one failing leaves the other usable, with `AstroWeatherSource` telling its `state` (`fresh`, `stale`, `unavailable`), download time, first and last sample, model run when known, and `errorCode` (`upstreamUnavailable`, `invalidResponse`, `rateLimited`).

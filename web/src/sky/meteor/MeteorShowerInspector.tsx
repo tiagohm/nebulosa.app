@@ -1,4 +1,4 @@
-import type { MeteorShowerDetail, MeteorShowerStates } from 'api'
+import type { MeteorRadiantPath, MeteorShowerDetail, MeteorShowerStates } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDateTime, formatDegrees, formatPercent } from '../../format'
@@ -58,6 +58,7 @@ export function MeteorShowerInspector({ selection, observer, onSetObserver, time
 	const [states, setStates] = useState<MeteorShowerStates>()
 	const [detail, setDetail] = useState<MeteorShowerDetail>()
 	const [error, setError] = useState<string>()
+	const [path, setPath] = useState<MeteorRadiantPath>()
 	const time = Math.floor(skyTime(clock, now) / STATE_STEP_MS) * STATE_STEP_MS
 	const place = observer ? `${observer.latitude},${observer.longitude},${observer.elevation}` : ''
 
@@ -78,6 +79,18 @@ export function MeteorShowerInspector({ selection, observer, onSetObserver, time
 		)
 		return () => detailGuard.cancel()
 	}, [id, revision])
+
+	// The drift path the map draws, read for its dates; the server keeps it per day, so a new day reads it again.
+	const day = Math.floor(time / 86400000)
+
+	useEffect(() => {
+		const controller = new AbortController()
+		fetchJson<MeteorRadiantPath>(browserFetch, `/api/meteor-showers/${encodeURIComponent(id)}/path`, jsonInit('POST', { time }, controller.signal)).then(
+			(answer) => !controller.signal.aborted && setPath(answer),
+			() => !controller.signal.aborted && setPath(undefined),
+		)
+		return () => controller.abort()
+	}, [id, day, revision])
 
 	// The state follows the shower, the instant, the site's place, and the catalog.
 	useEffect(() => {
@@ -148,6 +161,9 @@ export function MeteorShowerInspector({ selection, observer, onSetObserver, time
 							Set Location
 						</Button>
 					</Notice>
+				)}
+				{path?.start !== undefined && path.end !== undefined && path.segments.length > 0 && (
+					<p className="m-0 text-xs text-ink-300">{`The dashed line on the map is the radiant moved by its drift over ${formatDateTime(path.start, timeZone, false).slice(0, 10)} to ${formatDateTime(path.end, timeZone, false).slice(0, 10)}, drawn in the frame of the map's stars.`}</p>
 				)}
 				{state?.altitude !== undefined && state.altitude < 0 && <p className="m-0 text-xs text-ink-300">The radiant is below the horizon: no meteor of the shower is seen from here now.</p>}
 			</PanelSection>

@@ -129,3 +129,113 @@ export const METEOR_ACTIVITY_PROFILES: readonly MeteorActivityProfileEntry[] = [
 	{ number: 4, peakSolarLongitude: 262.23, zhr: 118, populationIndex: 2.6, slopeBefore: 0.15, slopeAfter: 0.462, sourceId: 'moorhead2019' },
 	{ number: 15, peakSolarLongitude: 270.96, zhr: 12, populationIndex: 3, slopeBefore: 2.292, slopeAfter: 1.258, sourceId: 'moorhead2019' },
 ]
+
+// Kind of a year-specific event: a maximum published apart from the usual one, an outburst, or a possible enhancement
+// whose rate is not, or only roughly, predicted.
+export type MeteorAnnualEventKind = 'specialPeak' | 'outburst' | 'possibleEnhancement'
+
+// How a year-specific event relates to the recurring maximum: in addition to it, replacing it, or an alternative
+// timing of it that the sources do not settle.
+export type MeteorAnnualEventRelation = 'additional' | 'supersedes' | 'uncertainAlternative'
+
+// How firmly the source states the event: a published prediction with a rate, a possible event, or one whose details
+// the source itself calls uncertain.
+export type MeteorAnnualEventConfidence = 'publishedPrediction' | 'possible' | 'uncertain'
+
+// ZHR the source predicts for an event, meteors per hour: one value, or a range.
+export interface MeteorPredictedZhr {
+	// Lowest (or only) value.
+	readonly low: number
+	// Highest value; absent for one value.
+	readonly high?: number
+	// Whether the source marks the value as uncertain ("20+?", "about").
+	readonly uncertain?: boolean
+}
+
+// One year-specific event of a shower, as a curated source states it. It belongs to its year alone and is never
+// repeated in another.
+export interface MeteorAnnualEvent {
+	// Stable id: <code>-<year>-<instant in UTC minutes>.
+	readonly id: string
+	// IAU number of the shower.
+	readonly number: number
+	// Civil UTC year.
+	readonly year: number
+	// Kind of event.
+	readonly kind: MeteorAnnualEventKind
+	// Relation to the recurring maximum.
+	readonly relation: MeteorAnnualEventRelation
+	// Instant the source gives, Unix milliseconds (UTC).
+	readonly time: number
+	// Uncertainty of the instant the source gives, milliseconds; absent when it gives none.
+	readonly uncertaintyMs?: number
+	// Solar longitude the source gives, degrees, equinox J2000.0; absent when it gives none.
+	readonly solarLongitude?: number
+	// ZHR the source predicts; absent when it gives no rate.
+	readonly predictedZhr?: MeteorPredictedZhr
+	// How firmly the source states it.
+	readonly confidence: MeteorAnnualEventConfidence
+	// Curated source the event is read from.
+	readonly sourceId: MeteorVisualSourceId
+	// The modelling the source attributes the event to, such as "Vaubaillon, 1079 trail".
+	readonly attribution: string
+}
+
+// Year-specific events of the curated showers, read from the IMO Meteor Shower Calendars 2026 and 2027; only events the
+// calendars date are listed, with the rate only when they give one.
+export const METEOR_ANNUAL_EVENTS: readonly MeteorAnnualEvent[] = [
+	{ id: 'PER-2026-08-12T16:53', number: 7, year: 2026, kind: 'possibleEnhancement', relation: 'additional', time: Date.UTC(2026, 7, 12, 16, 53), solarLongitude: 139.859, confidence: 'uncertain', sourceId: 'imo2026', attribution: 'Vaubaillon, a branch of the very old 1079 trail; no activity estimate' },
+	{
+		id: 'PER-2026-08-13T01:00',
+		number: 7,
+		year: 2026,
+		kind: 'possibleEnhancement',
+		relation: 'additional',
+		time: Date.UTC(2026, 7, 13, 1),
+		uncertaintyMs: 5 * 3600000,
+		solarLongitude: 139.97,
+		predictedZhr: { low: 43, uncertain: true },
+		confidence: 'possible',
+		sourceId: 'imo2026',
+		attribution: 'Jenniskens (2006, Table 5d), a weak filament of 109P',
+	},
+	{
+		id: 'LEO-2026-11-17T16:00',
+		number: 13,
+		year: 2026,
+		kind: 'specialPeak',
+		relation: 'uncertainAlternative',
+		time: Date.UTC(2026, 10, 17, 16),
+		solarLongitude: 234.95,
+		predictedZhr: { low: 15, uncertain: true },
+		confidence: 'publishedPrediction',
+		sourceId: 'imo2026',
+		attribution: 'Maslov (2007), the maximum before the nodal crossing',
+	},
+	{ id: 'PER-2027-08-12T19:18', number: 7, year: 2027, kind: 'possibleEnhancement', relation: 'additional', time: Date.UTC(2027, 7, 12, 19, 18), predictedZhr: { low: 20, uncertain: true }, confidence: 'possible', sourceId: 'imo2027', attribution: 'Jenniskens (2006, Table 5c), a dust trail encounter, probably weak' },
+	{ id: 'PER-2027-08-12T23:46', number: 7, year: 2027, kind: 'possibleEnhancement', relation: 'additional', time: Date.UTC(2027, 7, 12, 23, 46), predictedZhr: { low: 280 }, confidence: 'possible', sourceId: 'imo2027', attribution: 'Jenniskens (2006, Table 5c), a dust trail encounter that may be stronger' },
+	{ id: 'PER-2027-08-13T02:00', number: 7, year: 2027, kind: 'possibleEnhancement', relation: 'additional', time: Date.UTC(2027, 7, 13, 2), confidence: 'uncertain', sourceId: 'imo2027', attribution: 'Maslov, rarified fragments of the 1479 trail' },
+	{ id: 'PER-2027-08-13T07:00', number: 7, year: 2027, kind: 'possibleEnhancement', relation: 'additional', time: Date.UTC(2027, 7, 13, 7), predictedZhr: { low: 50 }, confidence: 'possible', sourceId: 'imo2027', attribution: 'Jenniskens (2006, Table 5d), a filament of 109P' },
+	{ id: 'LEO-2027-11-17T22:00', number: 13, year: 2027, kind: 'specialPeak', relation: 'additional', time: Date.UTC(2027, 10, 17, 22), predictedZhr: { low: 40, high: 50 }, confidence: 'publishedPrediction', sourceId: 'imo2027', attribution: 'Maslov (2007), nodal meteoroids near the comet' },
+	{ id: 'LEO-2027-11-18T20:02', number: 13, year: 2027, kind: 'possibleEnhancement', relation: 'additional', time: Date.UTC(2027, 10, 18, 20, 2), solarLongitude: 235.86, predictedZhr: { low: 20, uncertain: true }, confidence: 'possible', sourceId: 'imo2027', attribution: 'Sato (2026), the 1533 trail' },
+	{ id: 'LEO-2027-11-19T12:23', number: 13, year: 2027, kind: 'possibleEnhancement', relation: 'additional', time: Date.UTC(2027, 10, 19, 12, 23), solarLongitude: 236.547, predictedZhr: { low: 20, uncertain: true }, confidence: 'possible', sourceId: 'imo2027', attribution: 'Sato (2026), the 1567 trail' },
+	{
+		id: 'LEO-2027-11-20T04:18',
+		number: 13,
+		year: 2027,
+		kind: 'outburst',
+		relation: 'additional',
+		time: Date.UTC(2027, 10, 20, 4, 18),
+		predictedZhr: { low: 40, high: 50 },
+		confidence: 'uncertain',
+		sourceId: 'imo2027',
+		attribution: 'Maslov (2007), the old 1167 trail, rich in bright meteors; Vaubaillon (2026) gives 04h25m and calls the details really uncertain',
+	},
+	{ id: 'LEO-2027-11-20T10:10', number: 13, year: 2027, kind: 'possibleEnhancement', relation: 'additional', time: Date.UTC(2027, 10, 20, 10, 10), solarLongitude: 237.463, predictedZhr: { low: 20, uncertain: true }, confidence: 'possible', sourceId: 'imo2027', attribution: 'Sato (2026), the 1600 trail' },
+]
+
+// Year-specific events of a shower whose instant falls in [from, to), chronologically.
+export function annualEventsOf(number: number | undefined, from: number, to: number): readonly MeteorAnnualEvent[] {
+	if (number === undefined) return []
+	return METEOR_ANNUAL_EVENTS.filter((event) => event.number === number && event.time >= from && event.time < to).sort((a, b) => a.time - b.time)
+}

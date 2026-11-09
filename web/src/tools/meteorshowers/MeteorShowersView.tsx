@@ -28,6 +28,7 @@ import {
 	loadActivity,
 	loadCalendar,
 	loadDetail,
+	loadForecast,
 	loadNight,
 	loadPage,
 	loadRanking,
@@ -108,6 +109,11 @@ export function MeteorShowers() {
 		if (detail) void loadActivity(meteorShowersState, activityYear)
 	}, [detail?.id, activityYear, revision])
 
+	// The forecast of the location is read once per place, while a shower is selected.
+	useEffect(() => {
+		if (site && state.selected) void loadForecast(meteorShowersState, site, place)
+	}, [place, state.selected])
+
 	// A ranking is computed on request and forgotten when its inputs change.
 	useEffect(() => clearRanking(meteorShowersState), [state.selected, place, state.eveningDate, state.darkness, state.minimumAltitude, state.moonSeparation, state.rates.enabled, state.rates.limitingMagnitude, state.rates.obstructedPercent, state.rankedNights, revision])
 
@@ -187,7 +193,9 @@ export function MeteorShowers() {
 					{state.display === 'calendar' && (
 						<>
 							{state.calendarError && <Notice error>{state.calendarError}</Notice>}
-							{state.month && <MeteorShowerCalendar month={state.month} entries={state.calendar?.entries ?? []} selected={state.selected} timeZone={zone} onMonth={(month) => (meteorShowersState.month = month)} onSelect={(id) => selectShower(meteorShowersState, id)} />}
+							{state.month && (
+								<MeteorShowerCalendar month={state.month} entries={state.calendar?.entries ?? []} annualEvents={state.calendar?.annualEvents ?? []} selected={state.selected} timeZone={zone} onMonth={(month) => (meteorShowersState.month = month)} onSelect={(id) => selectShower(meteorShowersState, id)} />
+							)}
 							<p className="m-0 text-xs text-ink-300">{state.section === 'upcoming' ? 'Curated visual showers.' : 'Established, working, and to-be-established IAU showers; removed records are not shown.'}</p>
 						</>
 					)}
@@ -208,6 +216,7 @@ export function MeteorShowers() {
 							rankingError={state.rankingError}
 							onRank={() => site && void loadRanking(meteorShowersState, site)}
 							onSelectNight={(eveningDate) => (meteorShowersState.eveningDate = eveningDate)}
+							forecast={state.forecast?.place === place ? state.forecast.forecast : undefined}
 						/>
 					) : (
 						!state.selected && <p className="m-0 text-xs text-ink-300">Choose a shower to see its sources, its dates, and when its radiant can be watched.</p>

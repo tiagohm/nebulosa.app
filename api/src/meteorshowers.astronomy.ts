@@ -2,6 +2,7 @@ import { altitudeOf } from 'nebulosa/src/astronomy/events/horizon'
 import { isMeteorShowerActive, meteorActivityZhr, meteorShowerActivityYearApplies } from 'nebulosa/src/astronomy/meteors/activity'
 import { meteorLocalHourlyRate, meteorMoonDirection, meteorSunDirection } from 'nebulosa/src/astronomy/meteors/observation'
 import { meteorGeometricObservingWindows, meteorObservingWindows } from 'nebulosa/src/astronomy/meteors/planner'
+import { meteorRadiantPathSegmentsBetween } from 'nebulosa/src/astronomy/meteors/radiant'
 import { meteorSolarLongitude } from 'nebulosa/src/astronomy/meteors/solar'
 import { meteorShowerComputationContext, meteorShowerState, meteorShowerStates } from 'nebulosa/src/astronomy/meteors/state'
 import type { MeteorExponentialActivityProfile, MeteorGeometricObservingWindow, MeteorGeometricObservingWindowOptions, MeteorShowerSolution, MeteorSolarLongitudeInterval, MeteorVisualObservation } from 'nebulosa/src/astronomy/meteors/types'
@@ -12,7 +13,7 @@ import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
 import { type MeteorShowerRecord, preferredSolution } from './meteorshowers.catalog'
 import type { MeteorSolarLongitudeTable } from './meteorshowers.solar'
-import type { MeteorActivityProfileEntry, MeteorDataBasis, MeteorVisualEntry, MeteorVisualSourceId } from './meteorshowers.visual'
+import { annualEventsOf, type MeteorActivityProfileEntry, type MeteorAnnualEvent, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSourceId } from './meteorshowers.visual'
 import { type PlanningSite, resolveNight } from './observingplanner.astronomy'
 import { geographic, type SkyObserver } from './sky/ephemeris'
 import type { TimeSpan } from './sky/sun'
@@ -638,6 +639,8 @@ export interface MeteorActivityCurve {
 	readonly visual?: MeteorVisualOccurrence
 	// Why there is no curve.
 	readonly reason?: 'noActivityProfile'
+	// Year-specific events of the year, chronologically, never drawn into the curve.
+	readonly annualEvents: readonly MeteorAnnualEvent[]
 }
 
 // Samples of an activity curve.
@@ -651,7 +654,8 @@ const YEAR_MS = 365.25 * 86400000
 // each dated by its crossing nearest to the maximum.
 export function activityCurve(record: MeteorShowerRecord, request: MeteorActivityRequest, table: MeteorSolarLongitudeTable): MeteorActivityCurve {
 	const visual = record.visual === undefined ? undefined : visualOccurrence(record.visual, request.year, table)
-	if (record.profile === undefined) return { year: request.year, ...(visual && { visual }), reason: 'noActivityProfile' }
+	const annualEvents = annualEventsOf(record.number, Date.UTC(request.year, 0, 1), Date.UTC(request.year + 1, 0, 1))
+	if (record.profile === undefined) return { year: request.year, ...(visual && { visual }), reason: 'noActivityProfile', annualEvents }
 
 	const entry = record.profile
 	const profile = activityProfileOf(entry)
@@ -672,6 +676,7 @@ export function activityCurve(record: MeteorShowerRecord, request: MeteorActivit
 		year: request.year,
 		profile: { sourceId: entry.sourceId, basis: 'publishedActivityModel', peakSolarLongitude: profile.solarLongitude, peakTime, zhr: entry.zhr, slopeBefore: entry.slopeBefore, slopeAfter: entry.slopeAfter, populationIndex: entry.populationIndex, support: profile.support, samples },
 		...(visual && { visual }),
+		annualEvents,
 	}
 }
 
@@ -855,4 +860,47 @@ function vecLerp(a: Vec3, b: Vec3, fraction: number): Vec3 {
 // Toolkit time of a Unix instant in milliseconds.
 function toolkitTime(time: number): Time {
 	return timeUnix(time / 1000, true)
+}
+
+// Request of the radiant drift path of one shower.
+export interface MeteorRadiantPathRequest {
+	// Instant whose nearest occurrence the path covers, Unix milliseconds (UTC).
+	readonly time: number
+}
+
+// One point of a radiant path.
+export interface MeteorRadiantPathPoint extends MeteorRadiantDirection {
+	// Instant, Unix milliseconds.
+	readonly time: number
+}
+
+// The radiant of one shower over the occurrence nearest to an instant, geocentric J2000, as its daily drift moves it:
+// pieces broken where the toolkit gives no radiant, never joined across them, and never beyond the support.
+export interface MeteorRadiantPath {
+	// Support the path covers; none when the shower has no support or no drift, and then no path.
+	readonly support: MeteorObservingSupport
+	// First instant of the path, Unix milliseconds; absent without a path.
+	readonly start?: number
+	// Last instant of the path, Unix milliseconds; absent without a path.
+	readonly end?: number
+	// Pieces of the path, each chronological; empty without a path.
+	readonly segments: readonly (readonly MeteorRadiantPathPoint[])[]
+}
+
+// Most points of a radiant path.
+export const MAX_PATH_POINTS = 256
+
+// The radiant drift path of a shower over its support's occurrence nearest to an instant, at most MAX_PATH_POINTS points
+// and at least an hour apart. A shower without a radiant, a support, or a drift has none: its radiant does not move.
+export function radiantPath(record: MeteorShowerRecord, request: MeteorRadiantPathRequest, table: MeteorSolarLongitudeTable): MeteorRadiantPath {
+	const solution = preferredSolution(record)
+	if (solution?.rightAscension === undefined || solution.declination === undefined || solution.radiantDrift === undefined) return { support: { basis: 'none' }, segments: [] }
+	const support = observingSupport(record, solution, request.time, table)
+	if (support.interval === undefined) return { support, segments: [] }
+
+	const start = table.nearest(request.time, support.interval.start)
+	const end = table.after(start, support.interval.end)
+	const step = Math.max((end - start) / (MAX_PATH_POINTS - 1), 3600000) / 86400000
+	const segments = meteorRadiantPathSegmentsBetween(solution, toolkitTime(start), toolkitTime(end), { step }).map((segment) => segment.map((point): MeteorRadiantPathPoint => ({ time: timeToUnixMillis(point.time), rightAscension: point.rightAscension, declination: point.declination })))
+	return { support, start, end, segments }
 }

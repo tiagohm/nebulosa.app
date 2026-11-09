@@ -1,4 +1,4 @@
-import type { MeteorShowersCalendarEntry } from 'api'
+import type { MeteorShowersCalendar, MeteorShowersCalendarEntry } from 'api'
 import { cn } from 'cn'
 import { formatDate } from '../../format'
 import { Button } from '../../ui/Button'
@@ -36,11 +36,13 @@ export interface MeteorCalendarDay {
 	readonly peaks: readonly MeteorShowersCalendarEntry[]
 	// Showers active during some part of it.
 	readonly active: number
+	// Year-specific events whose instant falls on it.
+	readonly events: MeteorShowersCalendar['annualEvents']
 }
 
 // Weeks of a month, Monday first, with the maxima and the active showers of each civil date of the zone. A date is active
 // for a shower when its period (visual, else IAU) holds the date's noon UTC, a count good to a day.
-export function meteorCalendarWeeks(month: string, entries: readonly MeteorShowersCalendarEntry[], timeZone: string): MeteorCalendarDay[][] {
+export function meteorCalendarWeeks(month: string, entries: readonly MeteorShowersCalendarEntry[], timeZone: string, annualEvents: MeteorShowersCalendar['annualEvents'] = []): MeteorCalendarDay[][] {
 	const [year, value] = month.split('-').map(Number)
 	const peaks = new Map<string, MeteorShowersCalendarEntry[]>()
 
@@ -49,6 +51,12 @@ export function meteorCalendarWeeks(month: string, entries: readonly MeteorShowe
 		if (instant === undefined) continue
 		const date = formatDate(instant, timeZone)
 		peaks.set(date, [...(peaks.get(date) ?? []), entry])
+	}
+
+	const events = new Map<string, MeteorShowersCalendar['annualEvents'][number][]>()
+	for (const event of annualEvents) {
+		const date = formatDate(event.time, timeZone)
+		events.set(date, [...(events.get(date) ?? []), event])
 	}
 
 	const first = new Date(Date.UTC(year, value - 1, 1))
@@ -66,7 +74,7 @@ export function meteorCalendarWeeks(month: string, entries: readonly MeteorShowe
 			return start !== undefined && end !== undefined && start <= noon && end >= noon
 		}).length
 		if ((index + offset) % 7 === 0) weeks.push([])
-		weeks.at(-1)!.push({ date: iso, day: date.getUTCDate(), inMonth: index >= 0 && index < days, peaks: peaks.get(iso) ?? [], active })
+		weeks.at(-1)!.push({ date: iso, day: date.getUTCDate(), inMonth: index >= 0 && index < days, peaks: peaks.get(iso) ?? [], active, events: events.get(iso) ?? [] })
 	}
 
 	return weeks
@@ -76,6 +84,7 @@ export function meteorCalendarWeeks(month: string, entries: readonly MeteorShowe
 export function MeteorShowerCalendar({
 	month,
 	entries,
+	annualEvents,
 	selected,
 	timeZone,
 	onMonth,
@@ -83,12 +92,14 @@ export function MeteorShowerCalendar({
 }: {
 	readonly month: string
 	readonly entries: readonly MeteorShowersCalendarEntry[]
+	readonly annualEvents: MeteorShowersCalendar['annualEvents']
 	readonly selected?: string
 	readonly timeZone: string
 	readonly onMonth: (month: string) => void
 	readonly onSelect: (id: string) => void
 }) {
-	const weeks = meteorCalendarWeeks(month, entries, timeZone)
+	const weeks = meteorCalendarWeeks(month, entries, timeZone, annualEvents)
+	const codes = new Map(entries.map((entry) => [entry.id, entry.code ?? entry.name]))
 	const today = formatDate(Date.now(), timeZone)
 
 	return (
@@ -131,10 +142,16 @@ export function MeteorShowerCalendar({
 									{!entry.occurrence.visual && ' (ref.)'}
 								</button>
 							))}
+						{day.inMonth &&
+							day.events.map((event) => (
+								<button key={event.id} type="button" title={`${event.attribution} (${event.confidence})`} onClick={() => onSelect(event.showerId)} className="cursor-pointer truncate rounded-sm px-1 text-left text-warning hover:bg-base-300 focus-visible:outline-2 focus-visible:outline-accent">
+									★ {codes.get(event.showerId) ?? event.showerId}
+								</button>
+							))}
 					</div>
 				))}
 			</div>
-			<p className="m-0 text-xs text-ink-300">A name marks the published maximum; "(ref.)" marks the IAU mean reference, which is not a maximum. The count is how many showers are active that day.</p>
+			<p className="m-0 text-xs text-ink-300">A name marks the published maximum; "(ref.)" marks the IAU mean reference, which is not a maximum; ★ marks a year-specific event of that year. The count is how many showers are active that day.</p>
 		</section>
 	)
 }

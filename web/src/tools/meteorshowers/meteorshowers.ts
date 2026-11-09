@@ -1,4 +1,4 @@
-import type { MeteorActivityCurve, MeteorNightRanking, MeteorNightsRequest, MeteorObservingNight, MeteorObservingRequest, MeteorShowerDetail, MeteorShowerListPage, MeteorShowersCalendar, MeteorShowersCalendarRequest, MeteorShowerStatus } from 'api'
+import type { AstroWeatherForecast, MeteorActivityCurve, MeteorNightRanking, MeteorNightsRequest, MeteorObservingNight, MeteorObservingRequest, MeteorShowerDetail, MeteorShowerListPage, MeteorShowersCalendar, MeteorShowersCalendarRequest, MeteorShowerStatus } from 'api'
 import { proxy } from 'valtio'
 import { fetchJson, jsonInit } from '../../http'
 import { ACTIVE_TOOL_LOCATION, type SiteLocation, type ToolLocation } from '../../location/site'
@@ -128,6 +128,10 @@ export interface MeteorShowersState {
 	rankingLoading: boolean
 	// Why the ranking could not be computed.
 	rankingError?: string
+	// Astro Weather forecast of the location, with the place it is for (locationKey).
+	forecast?: { readonly place: string; readonly forecast: AstroWeatherForecast }
+	// Why the forecast could not be read.
+	forecastError?: string
 }
 
 // Creates the tab state of the tool.
@@ -163,6 +167,7 @@ const detailGuard = createRequestGuard()
 const nightGuard = createRequestGuard()
 const activityGuard = createRequestGuard()
 const rankingGuard = createRequestGuard()
+const forecastGuard = createRequestGuard()
 
 // Query string of the page of a section, the search, and the filters; a latitude keeps the reachable radiants.
 export function listQuery(state: Pick<MeteorShowersState, 'section' | 'query' | 'status' | 'reachable' | 'offset' | 'minimumAltitude'>, latitude: number | undefined): string {
@@ -368,6 +373,24 @@ export function clearRanking(state: MeteorShowersState) {
 	state.ranking = undefined
 	state.rankingLoading = false
 	state.rankingError = undefined
+}
+
+// Reads the Astro Weather forecast of a site once per place, dropping the answer of a superseded request; a failure keeps
+// the tool working without weather.
+export async function loadForecast(state: MeteorShowersState, site: SiteLocation, place: string, io: PlannerIo = browserPlannerIo) {
+	if (state.forecast?.place === place) return
+	const request = forecastGuard.begin()
+
+	try {
+		const forecast = await fetchJson<AstroWeatherForecast>(io, `/api/astro-weather/forecast?latitude=${site.latitude}&longitude=${site.longitude}`, { signal: request.signal })
+		if (!request.current()) return
+		state.forecast = { place, forecast }
+		state.forecastError = undefined
+	} catch (error) {
+		if (aborted(error) || !request.current()) return
+		state.forecast = undefined
+		state.forecastError = errorMessage(error)
+	}
 }
 
 // Forgets the night when the tool has no site, cancelling a request in flight.

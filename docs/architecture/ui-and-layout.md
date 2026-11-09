@@ -51,7 +51,7 @@ Shell (`web/src/shell/ApplicationShell.tsx`), always mounted while navigating:
 
 Workspace frame (`WorkspaceLayout.tsx`), used by every workspace and every tool view:
 
-- From top to bottom: optional `tabs` spanning the workspace (the Images document and camera tabs), a header at least 42 px tall (`min-h-12`) with the title, `context` controls, `actions`, and the panel toggle, whose actions wrap to a line of their own when they do not fit beside the title (the header then grows instead of clipping them), then the content beside the contextual panel.
+- From top to bottom: optional `tabs` spanning the workspace (the Images document and camera tabs), a header at least 42 px tall (`min-h-12`) with the title, `context` controls, `actions`, and the panel toggle, whose actions wrap to a line of their own when they do not fit beside the title (the header then grows instead of clipping them), then the content beside the contextual panel. With `contextFill` the context controls take all the room the title and the actions leave on the line (the Images tool bar, which fits itself to it), so they never push the actions to a line of their own.
   The content fills the remaining space and scrolls itself.
 - The contextual panel (`ContextualPanel.tsx`) is the right-hand column of the current context: 280 px (`w-80`; 308 px, `w-88`, from `xl`), docked from Tailwind's `lg` breakpoint (`WIDE_SCREEN`, 64rem, 1024 px), its visibility a per-workspace preference of the profile;
   below `lg` it is a drawer over the content that starts closed, is never persisted, and closes with Escape or a click outside.

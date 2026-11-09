@@ -57,7 +57,8 @@ export const ICONS = {
 	skipToEnd: 'M5 6l6 6l-6 6M11 6l6 6l-6 6M19 5v14',
 	save: 'M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6',
 	clock: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7v5l3 2',
-	orbit: 'M9.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M3 12c0-2.5 4-4.5 9-4.5s9 2 9 4.5s-4 4.5-9 4.5s-9-2-9-4.5',
+	// A tilted elliptic orbit with the central body at its focus and a small body on the orbit.
+	orbit: 'M4.21 16.5A9 6.5 -30 1 1 19.79 7.5A9 6.5 -30 1 1 4.21 16.5M4.81 15.11a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M7.25 6.37a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0',
 	layers: 'M12 4l9 5l-9 5l-9-5zM3 14l9 5l9-5',
 	stack: 'M9 3h12v12H9zM6 6v12h12M3 9v12h12',
 	frame: 'M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M9 9h6v6H9z',
@@ -84,6 +85,66 @@ export const ICONS = {
 	pictureInPicture: 'M3 5h18v14H3zM12 12h7v5h-7z',
 	// A window docked at the bottom left of the screen.
 	dock: 'M3 5h18v14H3zM5 13h7v4H5z',
+	// Three dots in a row: more entries than the row has room for.
+	more: 'M3.75 12a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0-2.5 0M10.75 12a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0-2.5 0M17.75 12a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0-2.5 0',
+	// A histogram of pixel values over its baseline.
+	histogram: 'M3 20h18M5.5 20v-3M8.5 20v-7M11.5 20V5M14.5 20v-9M17.5 20v-5',
+	// A framed image crossed by curved lines of right ascension and declination.
+	plateSolve: 'M4 4h16v16H4zM4 10c5-2 11-2 16 0M4 15.5c5-2 11-2 16 0M10 4c-1.5 5-1.5 11 0 16M15 4c1.5 5 1.5 11 0 16',
+	// Three stars, each ringed by its detection circle.
+	starDetection: 'M4 8a3 3 0 1 0 6 0a3 3 0 1 0-6 0M7 8h.01M14 6a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M16.5 6h.01M10.5 16a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0M14 16h.01',
+	// The radial profile of a star, a bell over its baseline, with its full width at half maximum.
+	starProfile: 'M2 19.5c4 0 5.5-1 7-6.5s1.5-7 3-7s1.5 1.5 3 7s3 6.5 7 6.5M9 13h6M9 11.5v3M15 11.5v3',
+	// A trail crossing the field between detection corners, among point-like stars.
+	streakDetection: 'M3 7V3h4M17 3h4v4M21 17v4h-4M7 21H3v-4M7.5 16.5l9-9M7 8h.01M17 16.5h.01M12.5 17h.01',
+	// An object ringed and labeled by a leader line.
+	annotation: 'M5 16a3 3 0 1 0 6 0a3 3 0 1 0-6 0M10.2 13.8L15 9h6M15 5.5h6',
+	// A wand with sparkles: transforms that produce a new image.
+	wand: 'M4 20l10-10M14 10l2-2M17 2.5v3M15.5 4h3M20.5 8v2M19.5 9h2M10.5 3.5v2M9.5 4.5h2',
+	// The blades of a camera aperture: an exposure.
+	shutter: 'M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20M14.31 8l5.74 9.94M9.69 8h11.48M7.38 12l5.74-9.94M9.69 16L3.95 6.06M14.31 16H2.83M16.62 12l-5.74 9.94',
+	// Stacked frames with a play mark: frames integrated as they arrive.
+	liveStack: 'M8 3h13v13H8zM5 6v13h13M2 9v13h13M12.5 6.5v6l5-3z',
+	// A focus curve, its samples, and the best focus at its minimum.
+	focusCurve: 'M3 3v18h18M6.5 5Q12.5 25 18.5 5M8.15 12.5a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0M11.3 15a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0M14.45 12.5a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0',
+	// Arrows to the four directions.
+	move: 'M12 3v18M3 12h18M9 6l3-3l3 3M9 18l3 3l3-3M6 9l-3 3l3 3M18 9l3 3l-3 3',
+	// A guide star locked inside its tracking box.
+	guideStar: 'M7 7h10v10H7zM12 3v4M12 17v4M3 12h4M17 12h4M12 10.5a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3',
+	// The V-shaped trail of a star drifting east and back west.
+	darv: 'M5.5 6.5L12 19l6.5-12.5M3 5a2 2 0 1 0 4 0a2 2 0 1 0-4 0M17 5a2 2 0 1 0 4 0a2 2 0 1 0-4 0',
+	// Three points on the arc the mount turns about the pole.
+	threePoint: 'M5.07 17A8 8 0 1 1 18.93 17M3.57 17a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M10.5 5a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M17.43 17a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0M12 11v4M10 13h4',
+	// A polar scope reticle with the polestar on its circle.
+	polarScope: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M12 7a5 5 0 1 0 0 10a5 5 0 1 0 0-10M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M14.04 8.46a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0-3 0',
+	// Points spread over the sky dome, above the horizon.
+	pointingModel: 'M2 18h20M3 18a9 9 0 0 1 18 0M7 15a1 1 0 1 0 2 0a1 1 0 1 0-2 0M11 15a1 1 0 1 0 2 0a1 1 0 1 0-2 0M15 15a1 1 0 1 0 2 0a1 1 0 1 0-2 0M9 11.5a1 1 0 1 0 2 0a1 1 0 1 0-2 0M13 11.5a1 1 0 1 0 2 0a1 1 0 1 0-2 0',
+	// A bullseye with an arrow reaching its center.
+	target: 'M11 5a8 8 0 1 0 0 16a8 8 0 1 0 0-16M11 9a4 4 0 1 0 0 8a4 4 0 1 0 0-8M11 13l9-9M11 13h4M11 13V9M17 4v3h3',
+	// An evenly lit frame with light around it.
+	flatField: 'M7 7h10v10H7zM12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8',
+	// Two stacked frames with a crescent: frames taken in the dark, kept for later.
+	darkLibrary: 'M8 3h13v13H8zM5 6v13h13M17.86 10.55A3.36 3.36 0 1 1 13.45 6.14a2.73 2.73 0 0 0 4.41 4.41z',
+	// The Sun with the edge of the Moon crossing its disk.
+	solarEclipse: 'M12 7a5 5 0 1 0 0 10a5 5 0 1 0 0-10M10.79 7.15A5 5 0 0 0 15.71 15.35M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8',
+	// The Moon entering the shadow of the Earth, the shaded part hatched.
+	lunarEclipse: 'M12 5a7 7 0 1 0 0 14a7 7 0 1 0 0-14M10.82 5.1A12 12 0 0 1 10.82 18.9M6.5 10l3.5-3.5M6 14.5l5.5-5.5M8 17l4-4',
+	// A small body passing close to the Earth along its trajectory.
+	closeApproach: 'M4 17a4 4 0 1 0 8 0a4 4 0 1 0-8 0M2 5.5Q8 9 12.5 9.6M12.5 9.7a2 2 0 1 0 4 0a2 2 0 1 0-4 0M18.5 9.4h.5M21 9h.5',
+	// A cloud in front of a crescent Moon: the night's weather.
+	cloudMoon: 'M10.2 8.5A6 6 0 0 1 16 4a4.5 4.5 0 0 0 6 6a6 6 0 0 1-3 5.2M13 16a3 3 0 1 1 0 6H7a5 5 0 1 1 4.9-6z',
+	// Two planets lined up with the Sun on their orbits.
+	planetAlignment: 'M1.5 12a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M10.13 6.86A8 8 0 0 1 10.13 17.14M15.49 2.36A15 15 0 0 1 15.49 21.64M10.2 12a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0M16.8 12a2.2 2.2 0 1 0 4.4 0a2.2 2.2 0 1 0-4.4 0',
+	// A satellite: its body, two solar panels, and its antenna.
+	satellite: 'M10 9h4v6h-4zM2.5 10h5v4h-5zM16.5 10h5v4h-5zM5 10v4M19 10v4M7.5 12H10M14 12h2.5M12 9V6M10.5 6h3',
+	// An archive box: indexed frames kept for reuse.
+	archive: 'M3 4h18v5H3zM5 9v11h14V9M10 13h4',
+	// A remote control with its directional pad, sending a signal.
+	remote: 'M8 9.5h8v11.5H8zM12 12.5v3M10.5 14h3M10.5 18.5h3M9.2 6.2a4 4 0 0 1 5.6 0M6.4 3.4a8 8 0 0 1 11.2 0',
+	// A security camera on its wall bracket.
+	cctv: 'M4.5 4.2l12.6 5.6l-2.7 6l-12.6-5.6zM17.1 9.8l3.4.6l-1.6 4.6l-3.2-1.5M7.8 13l-1 4.5H2.5M2.5 15v5M13 12.5h.01',
+	// A database cylinder: stored ephemeris files.
+	database: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3s-3.6 3-8 3s-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
 } as const satisfies Readonly<Record<string, string>>
 
 // Name of an icon in ICONS.

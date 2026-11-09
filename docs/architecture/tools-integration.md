@@ -2,7 +2,7 @@
 
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
-- Navigation: Tools → catalog card → `/tools/<id>` (`TOOL_DEFINITIONS` of `web/src/tools/tools.ts`), rendered by the tool's `view` inside its own `WorkspaceLayout`.
+- Navigation: Tools → catalog card → `/tools/<id>` (`TOOL_DEFINITIONS` of `web/src/tools/tools.ts`), rendered by the tool's `view` inside its own `WorkspaceLayout`; each card shows an icon of its own, never shared with another tool.
   A tool without a view (the Alpaca Server) is planned and its URL is replaced by the catalog's.
   The [Astro Weather](astro-weather.md), [Calibration Library](calibration-library.md), [Image Stacking](image-stacking.md), and [Mount Pointing Model](mount-pointing-model.md) tools follow their own contracts.
 - Calculator (`web/src/tools/calculator/`): task-oriented calculators chosen in one menu grouped by category (`catalog.ts`), each composing pure formulas of `nebulosa/src/astronomy/formulas` behind one form, never one entry per formula and no expression engine.
@@ -183,7 +183,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
     The latest flip shows its steps and its outcome, the flip verification apart from Ready for imaging, and Resume Capture (confirmed) for a capture it left paused.
     Equipment Control's manual Flip says it only moves the mount and links here, and Camera Acquisition shows a paused capture and, once a tool released it, Resume.
 
-- SPICE Kernel Library tool (`web/src/tools/spicekernels/`, `/tools/spice-kernel-library`, icon `orbit`): shows the server's library (see [SPICE Kernel Library Contract](spice-kernel-library.md)) through one mirror, `spiceKernelsState` (`spicekernels.ts`) in `SERVER_STORES`, fed by `GET /api/spice-kernels` and both `spiceKernels:*` events, ordered by epoch and revision, with tab-lived requests in flight and their errors;
+- SPICE Kernel Library tool (`web/src/tools/spicekernels/`, `/tools/spice-kernel-library`, icon `database`): shows the server's library (see [SPICE Kernel Library Contract](spice-kernel-library.md)) through one mirror, `spiceKernelsState` (`spicekernels.ts`) in `SERVER_STORES`, fed by `GET /api/spice-kernels` and both `spiceKernels:*` events, ordered by epoch and revision, with tab-lived requests in flight and their errors;
   nothing is persisted by the tab, and changing tab, profile, or route starts or stops nothing.
   Its context selects Installed (the kernels by precedence, highest first, each with an enabled checkbox, its bodies, the span of its segments, size, and readiness; a row opens the panel with provenance, SHA-256, the missing bodies of a kernel that needs a planetary kernel, Raise and Lower in the load order, Verify, Delete behind a confirmation, and every segment with its own coverage), Add Kernel (the curated downloads, the SBDB search of `searchMinorBodies` that resolves a small body to its SPK-ID before a Horizons generation over a UTC interval, ten years suggested, with the kernels already covering it, and the acquisitions with their progress and Cancel), and Settings (the ephemeris policy and the storage used).
   The header action Import uploads a `.bsp` file as the request body.
@@ -225,7 +225,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Choosing an event, a marker, or a point of a chart only moves the tool's clock.
   Manage Kernels opens the SPICE Kernel Library and Show in Sky selects Saturn through the Observing Planner's handoff.
   Nothing here moves the mount, changes the Sky clock, a site, or the profile, or starts an operation.
-- Planetary Events tool (`web/src/tools/planetaryevents/`, `/tools/planetary-events`, icon `orbit`; see [Planetary Events Contract](planetary-events.md)):
+- Planetary Events tool (`web/src/tools/planetaryevents/`, `/tools/planetary-events`, icon `planetAlignment`; see [Planetary Events Contract](planetary-events.md)):
     - State: the tab state is `planetaryEventsState` (`planetaryevents.ts`), tab memory. It holds a `ToolLocation`, the display zone, the range (a start and 1, 3, 6, 12, or 24 months), the planets and kinds searched, the appulse threshold in degrees (5 by default, 0.1 to 15), the Timeline or Calendar view (a `SegmentedControl` beside the title), the calendar month, the visibility filter, and the selected event.
     - Range: it opens on real now for twelve months, never on the Sky clock.
       Use Sky Time copies the Sky's instant into the start without moving the Sky clock, and a start date is the first instant of that civil date in the display zone.

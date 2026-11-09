@@ -76,6 +76,7 @@ import {
 	toggleImageOverlays,
 	toggleOriginal,
 } from './images'
+import { ImageToolBar } from './ImageToolBar'
 import { MeasurementOverlay } from './MeasurementOverlay'
 import { PixelCursorStatus } from './PixelCursorStatus'
 import { pixelInspection } from './pixeltiles'
@@ -84,7 +85,7 @@ import { SaveImagePopover } from './SaveImagePopover'
 import { useStatisticsAreaTool } from './statisticsArea'
 import { StatisticsAreaOverlay } from './StatisticsAreaOverlay'
 import { TargetOffsetOverlay } from './TargetOffsetOverlay'
-import { IMAGE_TOOL_DEFINITIONS, imageToolGroup, imageToolsFor, imageToolUnavailable } from './tools'
+import { IMAGE_TOOL_DEFINITIONS, imageToolsFor } from './tools'
 
 // Images workspace: a permanent camera tab for each connected camera of the watched connection, showing the frames
 // its camera takes, then FITS and XISF images opened from the server, one closable tab each, shown in the shared
@@ -207,7 +208,7 @@ export function ImagesWorkspace() {
 		enabled: !!solution && !picking && !overlaysHidden,
 		editable: tool === 'plate-solver',
 	})
-	const toolSelector = <Select options={imageToolsFor(document)} value={tool} disabled={!document} format={(t) => IMAGE_TOOL_DEFINITIONS[t].label} group={imageToolGroup} disabledReason={imageToolUnavailable} onChange={(t) => document && selectImageTool(imagesState, document.key, t)} className="w-52 max-sm:w-40" />
+	const toolBar = <ImageToolBar tools={imageToolsFor(document)} selected={tool} disabled={!document} onSelect={(t) => document && selectImageTool(imagesState, document.key, t)} />
 	const openButton = <IconButton icon="folder" onClick={() => setChoosing(true)} label="Open file" />
 	const waiting = document?.camera && !document.info
 
@@ -221,7 +222,7 @@ export function ImagesWorkspace() {
 	const savingDocument = state.documents.find((d) => d.key === saving?.key)
 
 	return (
-		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolSelector} panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} /> }}>
+		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolBar} contextFill panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} /> }}>
 			<div className="flex h-full flex-col">
 				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={requestClose} />}
 				<div className="min-h-0 flex-1">

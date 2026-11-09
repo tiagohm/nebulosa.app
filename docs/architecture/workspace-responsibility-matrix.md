@@ -30,7 +30,7 @@ Workspaces share services, not interfaces.
     - Registry: `CONTROLS` (`web/src/equipment-control/DeviceDetail.tsx`), `/equipment[/<device id>[/indi|/messages]]`
 - **Settings (top bar gear button)**
     - Responsibility: Settings of the server instance and of the active profile
-    - Features: Sections chosen by a header selector, like the Images tool selector: External Tools (server), Observing Sites (server), Date & Time (profile), Status Bar (profile)
+    - Features: Sections chosen by a header selector: External Tools (server), Observing Sites (server), Date & Time (profile), Status Bar (profile)
     - Registry: `SETTINGS_SECTION_IDS`, `/settings/<section>`, `/settings/external-tools[/<tool id>]` (`web/src/settings/`)
 - **About (rail footer button)**
     - Responsibility: Identity of the running distribution
@@ -135,8 +135,9 @@ Rules:
   The toolbar of a camera tab shows the state of its camera's capture (phase, time left, frame count, file state of the latest frame, or why it failed) whatever tool is selected; switching tool, frame, or tab never stops a capture.
 - The devices a camera operation uses are named as links to their page in Equipment Control (`DeviceLink` of `web/src/equipment-control/DeviceLink.tsx`, route `/equipment/<device id>`): the camera in the camera settings of Camera Acquisition (`CameraSettings` of `web/src/camera/ExposureSettings.tsx`), and every device of the Equipment section of the other camera operations;
   Mount Remote Control, Mount Pointing Model, and the status bar details link their devices the same way.
-- An Images tool is an image tool or a camera operation (`category` of `IMAGE_TOOL_DEFINITIONS`), listed under its heading in one selector (`imageToolsFor`).
-  Camera operations are listed only on a camera tab: the selector of a file or derived document shows only the image tools.
+- An Images tool is an image tool or a camera operation (`category` of `IMAGE_TOOL_DEFINITIONS`), chosen in the tool bar of the header (`ImageToolBar` of `web/src/images/ImageToolBar.tsx`, the tools of `imageToolsFor`): a button with the tool's icon each, the camera operations after a divider, the selected one pressed.
+  When the header has no room for every button, the trailing ones move to a list under its heading opened by a More Tools button at the end of the bar (`fitImageToolBar`, refitted whenever the bar's width changes), and the selected tool always keeps its button.
+  Camera operations are listed only on a camera tab: the tool bar of a file or derived document shows only the image tools.
   Its equipment is the `CameraOperationContext` of the tab (`web/src/images/cameracontext.ts`): the physical camera of the tab;
   the `FOCUSER` of the active setup only when the camera is its `MAIN_CAMERA` (the setup has flat roles and no optical train, so no other camera has a focuser);
   the `MOUNT` of the active setup for every camera of the watched connection;

@@ -1,3 +1,4 @@
+import { cn } from 'cn'
 import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { activeProfile, panelOpen, profileState, setPanelOpen } from '../profile/profile'
@@ -7,7 +8,7 @@ import type { WorkspaceId } from './route'
 import { useMediaQuery, WIDE_SCREEN } from './useMediaQuery'
 
 // Common frame of every workspace: optional tabs spanning the whole workspace (such as the Images document and
-// camera tabs), a header with the title, the workspace's context controls (such as the Images tool selector)
+// camera tabs), a header with the title, the workspace's context controls (such as the Images tool bar)
 // and actions, which wrap to a line of their own when they do not fit beside the title, the main content, and the
 // collapsible contextual panel. On
 // wide screens the panel's visibility is a preference of the active profile, kept per workspace; on
@@ -54,6 +55,9 @@ export interface WorkspaceLayoutProps {
 	readonly title: string
 	// Context controls shown after the title, such as an operational mode selector.
 	readonly context?: ReactNode
+	// Whether the context controls take all the room the title and the actions leave on the header's line, for controls
+	// that fit themselves to it (such as the Images tool bar) and so never push the actions to a line of their own.
+	readonly contextFill?: boolean
 	// Actions shown at the end of the header, before the panel toggle.
 	readonly actions?: ReactNode
 	// Contextual panel; absent when the workspace has none.
@@ -67,7 +71,7 @@ export interface WorkspaceLayoutProps {
 }
 
 // Frame of a workspace.
-export function WorkspaceLayout({ workspace, title, context, actions, panel, panelState, tabs, children }: WorkspaceLayoutProps) {
+export function WorkspaceLayout({ workspace, title, context, contextFill = false, actions, panel, panelState, tabs, children }: WorkspaceLayoutProps) {
 	const ownPanelState = useWorkspacePanel(workspace)
 	const { docked, open, setOpen } = panelState ?? ownPanelState
 
@@ -78,7 +82,7 @@ export function WorkspaceLayout({ workspace, title, context, actions, panel, pan
 			<div className="flex min-w-0 flex-1 flex-col">
 				<header className="flex min-h-12 flex-none flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-100 bg-base-100 px-4 py-1">
 					<h1 className="m-0 flex-none text-sm font-semibold text-ink-100">{title}</h1>
-					{context && <div className="flex min-w-0 items-center gap-2">{context}</div>}
+					{context && <div className={cn('flex min-w-0 items-center gap-2', contextFill && 'flex-1')}>{context}</div>}
 					<div className="ml-auto flex flex-wrap items-center justify-end gap-1">
 						{actions}
 						{panel && <IconButton icon="panel" label={open ? 'Hide panel' : 'Show panel'} pressed={open} onClick={() => setOpen(!open)} />}

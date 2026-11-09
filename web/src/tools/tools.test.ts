@@ -43,4 +43,9 @@ describe('registry', () => {
 		expect(toolStatus(TOOL_DEFINITIONS['meridian-flip-monitor'])).toBe('available')
 		expect(toolStatus({ view: () => null })).toBe('available')
 	})
+
+	test('gives every tool card an icon of its own', () => {
+		const icons = TOOL_IDS.map((id) => TOOL_DEFINITIONS[id].icon)
+		expect(new Set(icons).size).toBe(icons.length)
+	})
 })

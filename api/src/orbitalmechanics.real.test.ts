@@ -12,14 +12,28 @@ import { MinorBodies } from './sky/minorbodies'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 import { SsdThrottledError } from './ssd'
 
-// The DE440 short kernel of the toolkit's fixtures, 1849 to 2150.
-const handle = await fs.open(`${import.meta.dir}/../../core/data/de440s.bsp`)
-const daf = await readDaf(fileHandleSource(handle))
-const inspection = inspectSpk(daf, (await handle.stat()).size)
-if (!inspection.ok) throw new Error(inspection.error)
-const DE440S = await prepareSpkKernelSet([{ id: 'de440s', daf, segments: inspection.segments }])
+let de440sFileHandle: fs.FileHandle | undefined
+let de440s: SpkKernelSet | undefined
 
-afterAll(() => handle.close())
+const DE440S_PATH = `${import.meta.dir}/../../core/data/de440s.bsp`
+const SKIP = !(await fs.exists(DE440S_PATH))
+
+async function load() {
+	if (de440s || SKIP) return de440s
+	// The DE440 short kernel of the toolkit's fixtures, 1849 to 2150.
+	const handle = await fs.open(DE440S_PATH)
+	const daf = await readDaf(fileHandleSource(handle))
+	const inspection = inspectSpk(daf, (await handle.stat()).size)
+	if (!inspection.ok) throw new Error(inspection.error)
+	de440s = await prepareSpkKernelSet([{ id: 'de440s', daf, segments: inspection.segments }])
+	return de440s
+}
+
+afterAll(async () => {
+	await de440sFileHandle?.close()
+	de440s = undefined
+	de440sFileHandle = undefined
+})
 
 // Snapshot of a library holding `set`, or none.
 function kernels(set?: SpkKernelSet, generation = 7) {
@@ -48,7 +62,7 @@ const APOPHIS = {
 
 // Service over a fake SBDB answering `answers` by query text, recording the queries, and a library holding `set`, or
 // none when it is false.
-function serve(answers: Record<string, SmallBodySearch | Error>, set: SpkKernelSet | false = DE440S) {
+async function serve(answers: Record<string, SmallBodySearch | Error>, set: boolean = true) {
 	const queries: string[] = []
 	const minorBodies = new MinorBodies({
 		fetch: (text) => {
@@ -57,13 +71,13 @@ function serve(answers: Record<string, SmallBodySearch | Error>, set: SpkKernelS
 			return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer ?? { message: 'not found' })
 		},
 	})
-	const routes = createOrbitalMechanicsRoutes(new OrbitalMechanicsService({ minorBodies, kernels: kernels(set || undefined) }))
+	const routes = createOrbitalMechanicsRoutes(new OrbitalMechanicsService({ minorBodies, kernels: kernels(set === false ? undefined : await load()) }))
 	const post = (path: '/api/orbital-mechanics/resolve' | '/api/orbital-mechanics/compare', body: unknown) => routes[path].POST(new Request(`http://localhost${path}`, { method: 'POST', body: JSON.stringify(body) }))
 	return { queries, post }
 }
 
-test('an offline lookup never asks SBDB, and an online one resolves the published solution', async () => {
-	const { queries, post } = serve({ '20099942': APOPHIS, apophis: APOPHIS })
+test.skipIf(SKIP)('an offline lookup never asks SBDB, and an online one resolves the published solution', async () => {
+	const { queries, post } = await serve({ '20099942': APOPHIS, apophis: APOPHIS })
 
 	const offline = await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: '20099942', online: false })
 	expect(offline.status).toBe(404)
@@ -83,9 +97,9 @@ test('an offline lookup never asks SBDB, and an online one resolves the publishe
 	expect(queries).toEqual(['apophis'])
 })
 
-test('ambiguous, unknown, B1950, and throttled lookups answer their codes', async () => {
+test.skipIf(SKIP)('ambiguous, unknown, B1950, and throttled lookups answer their codes', async () => {
 	const b1950 = { ...APOPHIS, object: { ...APOPHIS.object, spkid: '20000002' }, orbit: { ...APOPHIS.orbit, equinox: 'B1950' } } as unknown as SmallBodySearchFound
-	const { post } = serve({
+	const { post } = await serve({
 		halley: {
 			list: [
 				{ pdes: '1P', name: '1P/Halley' },
@@ -117,8 +131,8 @@ test('ambiguous, unknown, B1950, and throttled lookups answer their codes', asyn
 	expect(await busy.json()).toMatchObject({ code: 'rateLimited', retryAfter: 4000 })
 })
 
-test('an SPK state is the target minus the center from one snapshot, with its provenance', async () => {
-	const { post } = serve({})
+test.skipIf(SKIP)('an SPK state is the target minus the center from one snapshot, with its provenance', async () => {
+	const { post } = await serve({})
 	const resolved = (await (await post('/api/orbital-mechanics/resolve', { kind: 'spk', target: 399, center: 10, epoch: 2451545 })).json()) as OrbitResolveResponse
 	if (resolved.kind !== 'resolved') throw new Error(resolved.kind)
 	expect(resolved.name).toBe('Earth')
@@ -135,12 +149,12 @@ test('an SPK state is the target minus the center from one snapshot, with its pr
 	const uncovered = await post('/api/orbital-mechanics/resolve', { kind: 'spk', target: 399, center: 10, epoch: 2300000 })
 	expect(await uncovered.json()).toMatchObject({ code: 'kernelCoverageUnavailable', body: 399, epoch: 2300000 })
 
-	const empty = serve({}, false)
+	const empty = await serve({}, false)
 	expect(await (await empty.post('/api/orbital-mechanics/resolve', { kind: 'spk', target: 399, center: 10, epoch: 2451545 })).json()).toMatchObject({ code: 'kernelMissing' })
 })
 
-test('Kepler versus SPICE starts at zero at the anchor and grows away from it', async () => {
-	const { post } = serve({})
+test.skipIf(SKIP)('Kepler versus SPICE starts at zero at the anchor and grows away from it', async () => {
+	const { post } = await serve({})
 	// The Moon about the Earth: strongly perturbed by the Sun, so the osculating ellipse departs within days.
 	const response = await post('/api/orbital-mechanics/compare', { target: 301, center: 399, anchor: 2451545, start: 2451545 - 10, end: 2451545 + 10, count: 21 })
 	expect(response.status).toBe(200)
@@ -164,7 +178,7 @@ test('Kepler versus SPICE starts at zero at the anchor and grows away from it', 
 	expect(await outside.json()).toMatchObject({ code: 'kernelCoverageUnavailable' })
 })
 
-test('SBDB elements become the definition their shape publishes', () => {
+test.skipIf(SKIP)('SBDB elements become the definition their shape publishes', () => {
 	const mu = orbitCenter(10)!.mu
 	const base = { epoch: 2461000.5, ec: 0.5, om: DEG2RAD, w: 2 * DEG2RAD, i: 3 * DEG2RAD }
 	expect(minorBodyDefinition({ ...base, tpqr: { qr: 1, tp: 2461000.5 } }, mu)).toMatchObject({ kind: 'elliptic', semiMajorAxis: 2, meanAnomaly: 0, epoch: 2461000.5 })

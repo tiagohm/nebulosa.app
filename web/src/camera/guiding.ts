@@ -1,5 +1,28 @@
-// oxfmt-ignore
-import type { CameraCapabilities, CaptureSnoop, StarDetectionSettings, GuidingCalibrationCandidates, GuidingCalibrationEntry, GuidingCalibrationPatch, GuidingCalibrationProgress, GuidingDarkCandidates, GuidingDarkChange, GuidingRestoreCalibrationRequest, GuidingSessionCalibration, GuidingDitherRequest, GuidingEventRecord, GuidingFrameOverlay, GuidingPage, GuidingPauseRequest, GuidingResumeRequest, GuidingSessionSummary, GuidingStartGuidingRequest, GuidingStartRequest, GuidingTelemetrySample, OperationDevice, ServerEvent } from 'api'
+import type {
+	CameraCapabilities,
+	CaptureSnoop,
+	StarDetectionSettings,
+	GuidingCalibrationCandidates,
+	GuidingCalibrationEntry,
+	GuidingCalibrationPatch,
+	GuidingCalibrationProgress,
+	GuidingDarkCandidates,
+	GuidingDarkChange,
+	GuidingRestoreCalibrationRequest,
+	GuidingSessionCalibration,
+	GuidingDitherRequest,
+	GuidingEventRecord,
+	GuidingFrameOverlay,
+	GuidingPage,
+	GuidingPauseRequest,
+	GuidingResumeRequest,
+	GuidingSessionSummary,
+	GuidingStartGuidingRequest,
+	GuidingStartRequest,
+	GuidingTelemetrySample,
+	OperationDevice,
+	ServerEvent,
+} from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'

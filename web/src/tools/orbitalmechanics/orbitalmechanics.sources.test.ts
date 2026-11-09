@@ -4,7 +4,6 @@ import { AU_KM } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
 import type { RouteState } from '../../shell/route'
 import { initialOrbitalMechanicsState, type OrbitalMechanicsIo, type OrbitalMechanicsState } from './orbitalmechanics'
-// oxfmt-ignore
 import { comparisonCsv, comparisonRefusal, consumePendingTarget, exploreMinorBody, referencePositionAt, replaceSceneWithPending, resolveMinorBody, resolveSpkState, runComparison } from './orbitalmechanics.sources'
 
 const SUN: OrbitCenterPayload = { code: 10, name: 'Sun', mu: 2.959122082855911e-4, radius: 0.00465, system: false }

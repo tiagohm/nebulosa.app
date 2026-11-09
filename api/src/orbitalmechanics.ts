@@ -1,6 +1,5 @@
 import type { SpkKernelSet, SpkMissReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
 import { eccentricAnomaly, meanAnomaly, meanMotion, timeSincePeriapsis } from 'nebulosa/src/astronomy/orbits/asteroid'
-// oxfmt-ignore
 import { type ClassicalElements, conicClass, ORBIT_CENTERS, orbitCenter, type OrbitDefinition, type OrbitDiagnostics, type OrbitFailureReason, orbitalElements, orbitDiagnostics, orbitOf, orbitStateAt, type ReferencePlane, stateResidual } from 'nebulosa/src/astronomy/orbits/mechanics'
 import { type ConicMarkerKind, OPEN_ARC_RADIUS, ORBIT_SAMPLE_LIMIT, sampleConic, sampleStates } from 'nebulosa/src/astronomy/orbits/sampling'
 import { type Time, Timescale, tdb, time, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
@@ -40,8 +39,21 @@ const NEAR_PARABOLIC = 1e-3
 // - kernelMissing, kernelCoverageUnavailable, unsupportedKernel (422), kernelReadFailed (503): the installed SPICE kernels
 //   cannot give a state of a body at an instant, with the body and the instant.
 // - serviceUnavailable, rateLimited (503): JPL cannot be reached, or asks to wait (with retryAfter in milliseconds).
-// oxfmt-ignore
-export type OrbitalMechanicsErrorCode = 'degenerateOrbit' | 'outOfRange' | 'solverFailed' | 'objectNotFound' | 'notCached' | 'orbitSolutionUnavailable' | 'unsupportedFrame' | 'centerUnavailable' | 'kernelMissing' | 'kernelCoverageUnavailable' | 'unsupportedKernel' | 'kernelReadFailed' | 'serviceUnavailable' | 'rateLimited'
+export type OrbitalMechanicsErrorCode =
+	| 'degenerateOrbit'
+	| 'outOfRange'
+	| 'solverFailed'
+	| 'objectNotFound'
+	| 'notCached'
+	| 'orbitSolutionUnavailable'
+	| 'unsupportedFrame'
+	| 'centerUnavailable'
+	| 'kernelMissing'
+	| 'kernelCoverageUnavailable'
+	| 'unsupportedKernel'
+	| 'kernelReadFailed'
+	| 'serviceUnavailable'
+	| 'rateLimited'
 
 // A 3-vector in J2000 equatorial axes.
 export type OrbitVector = readonly [number, number, number]

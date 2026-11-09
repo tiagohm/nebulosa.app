@@ -1,23 +1,22 @@
 import type { StackingCompositeSummary, StackingComposition, StackingJobSummary, StackingProductSummary } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatByteSize, formatPercent, formatUtcDateTime } from '../../format'
 import { imagesState, openImage } from '../../images/images'
 import { navigate, routeState } from '../../shell/route'
 import { EmptyState } from '../../shell/WorkspaceLayout'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
+import { ConfirmButton } from '../../ui/ConfirmButton'
+import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { Select } from '../../ui/Select'
 import { Slider } from '../../ui/Slider'
 import { StatusBadge } from '../../ui/StatusBadge'
+import { Cell, Row, Table } from '../../ui/Table'
 import { PRODUCT_LABELS, PRODUCT_TONES } from './format'
 import { COMPOSITION_PRESETS, CUSTOM_PRESET, resolvePreset, weightOf, withoutSource, withWeight } from './presets'
-// oxfmt-ignore
 import { cancelStackingComposition, deleteStackingComposite, imageStackingRuntime, jobEnded, loadCompositionPreview, loadCompositionValidation, loadStackingComposite, startStackingComposition } from './projects'
-import { formatByteSize, formatPercent, formatUtcDateTime } from '../../format'
-import { Actions } from '../../ui/Actions'
-import { ConfirmButton } from '../../ui/ConfirmButton'
-import { Notice } from '../../ui/Notice'
-import { Cell, Row, Table } from '../../ui/Table'
 
 // Color composition of an Image Stacking project: a preset or a hand-edited mix of its linear masters into RGB, with an
 // optional luminance, previewed as the server stretches it, validated by the server, and composed into a linear

@@ -6,10 +6,9 @@ import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { StatusBadge } from '../../ui/StatusBadge'
-import { addPlanetToPlanner, showPlanetInSky, showPlanetInSkyAt } from './planetaryevents'
-// oxfmt-ignore
-import { BODY_LABELS, bodiesLabel, describeSource, eventTitle, formatDistance, formatOffset, KIND_DEFINITIONS, primaryValue, reasonLabel, STATUS_LABELS, STATUS_TONES } from './planetaryevents.format'
 import { PlanetaryEventChart } from './PlanetaryEventChart'
+import { addPlanetToPlanner, showPlanetInSky, showPlanetInSkyAt } from './planetaryevents'
+import { BODY_LABELS, bodiesLabel, describeSource, eventTitle, formatDistance, formatOffset, KIND_DEFINITIONS, primaryValue, reasonLabel, STATUS_LABELS, STATUS_TONES } from './planetaryevents.format'
 
 // Inspector of the selected event: its definition, its geocentric instant in the display zone and in UTC, the
 // circumstances of its planets, how it can be watched from the site (at the instant and in the best nearby window, told

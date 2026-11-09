@@ -1,4 +1,3 @@
-// oxfmt-ignore
 import { type CloseApproachBody, type CloseApproachCatalogQuery, type CloseApproachObjectQuery, type CloseApproachPage, type CloseApproachQuery, type CloseApproachRow, type CloseApproachSort, closeApproachesUrl, parseCloseApproaches, SmallBodyResponseError } from 'nebulosa/src/adapters/orbits/sbd'
 import { time, Timescale, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { errorResponse } from './http'

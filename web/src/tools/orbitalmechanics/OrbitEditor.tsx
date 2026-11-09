@@ -10,7 +10,6 @@ import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { Slider } from '../../ui/Slider'
 import { TextInput } from '../../ui/TextInput'
-// oxfmt-ignore
 import { centerGm, convertDraft, customCenter, distanceSymbol, type DistanceUnit, type DraftKind, editDraft, type ExplorerOrbit, type OrbitalMechanicsState, orbitalMechanicsState, type OrbitDraft, parseTdb, setCenter, setUnit, tdbInputValue, velocitySymbol } from './orbitalmechanics'
 
 // Editor of the selected orbit of the Orbital Mechanics Explorer: the kind of definition, which decides its fields

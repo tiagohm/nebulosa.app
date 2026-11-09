@@ -5,7 +5,6 @@ import { ACTIVE_TOOL_LOCATION, type SiteLocation, type ToolLocation } from '../.
 import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
 import { createRequestGuard } from '../../sky/selection'
 import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
-// oxfmt-ignore
 import { aborted, browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, setTime } from '../planetary/planetary'
 
 // Jupiter Observing Planner of the tab: the tool-local clock and period, the filters, the answers of the server (the view

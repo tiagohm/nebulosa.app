@@ -1,6 +1,30 @@
 import { type IndiClientHandler, IndiClientHandlerSet } from 'nebulosa/src/devices/indi/client'
-// oxfmt-ignore
-import { type Camera, type CameraTransferFormat, CLIENT, type Client, type Cover, type Device, type DeviceType, type DewHeater, type Dome, type DomeDirection, type DomeOTASide, type DomeShutterState, type DriverInfo, type FlatPanel, type Focuser, type GuideOutput, type MinMaxValueProperty, type Mount, type MountType, type NameAndLabel, type PierSide, type Rotator, type TrackMode, type Wheel } from 'nebulosa/src/devices/indi/device'
+import {
+	type Camera,
+	type CameraTransferFormat,
+	CLIENT,
+	type Client,
+	type Cover,
+	type Device,
+	type DeviceType,
+	type DewHeater,
+	type Dome,
+	type DomeDirection,
+	type DomeOTASide,
+	type DomeShutterState,
+	type DriverInfo,
+	type FlatPanel,
+	type Focuser,
+	type GuideOutput,
+	type MinMaxValueProperty,
+	type Mount,
+	type MountType,
+	type NameAndLabel,
+	type PierSide,
+	type Rotator,
+	type TrackMode,
+	type Wheel,
+} from 'nebulosa/src/devices/indi/device'
 import { CameraManager } from 'nebulosa/src/devices/indi/manager/camera'
 import { CoverManager } from 'nebulosa/src/devices/indi/manager/cover'
 import type { DeviceManager, DeviceProvider } from 'nebulosa/src/devices/indi/manager/device'

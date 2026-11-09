@@ -1,4 +1,3 @@
-// oxfmt-ignore
 import type { OrbitalMechanicsLimits, OrbitalMechanicsReference, OrbitCenterPayload, OrbitCompareRequest, OrbitCompareResponse, OrbitDefinitionPayload, OrbitPreset, OrbitResolveResponse, OrbitSolveResponse, OrbitSourcePayload, OrbitTrajectoryResponse, OrbitVector, ReferencePlane } from 'api'
 import { nanoid } from 'nanoid'
 import { AU_KM, DAYSEC, DEG2RAD, MU_AU3_D2_TO_KM3_S2, MU_KM3_S2_TO_AU3_D2, RAD2DEG } from 'nebulosa/src/core/constants'

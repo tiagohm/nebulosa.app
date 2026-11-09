@@ -1,4 +1,3 @@
-// oxfmt-ignore
 import { assertSupportedSignature, SBD_BASE_URL, SEARCH_PATH, type SmallBodySearch, type SmallBodySearchFound, type SmallBodySearchModelParameter, type SmallBodySearchOrbit, type SmallBodySearchOrbitElement, type SmallBodySearchPhyscalParameter } from 'nebulosa/src/adapters/orbits/sbd'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { LruCache } from '../lrucache'

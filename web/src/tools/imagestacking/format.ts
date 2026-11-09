@@ -1,4 +1,3 @@
-// oxfmt-ignore
 import type { StackingJobSummary, StackingCohort, StackingFinding, StackingFindingSeverity, StackingFrameSummary, StackingImportCandidate, StackingMasterCandidate, StackingProductStatus, StackingRecipe, StackingRegistration, StackingRole, StackingSettings } from 'api'
 import { MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'

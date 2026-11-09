@@ -2,22 +2,20 @@ import type { StackingJobSummary, StackingProductSummary, StackingRecipe } from 
 import { nanoid } from 'nanoid'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatByteSize, formatDuration, formatUtcDateTime, MISSING } from '../../format'
 import { imagesState, openImage } from '../../images/images'
 import { navigate, routeState } from '../../shell/route'
 import { EmptyState } from '../../shell/WorkspaceLayout'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
+import { ConfirmButton } from '../../ui/ConfirmButton'
+import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
-// oxfmt-ignore
-import { INTERPOLATION_LABELS, INTERPOLATIONS, memoryText, METHOD_LABELS, METHODS, NORMALIZATION_LABELS, NORMALIZATIONS, PRODUCT_LABELS, PRODUCT_TONES, SIGMA_METHODS, WEIGHTING_LABELS, WEIGHTINGS } from './format'
-// oxfmt-ignore
-import { cancelStackingRun, deleteStackingProduct, imageStackingRuntime, jobEnded, loadStackingPreflight, loadStackingProduct, startStackingRun } from './projects'
-import { formatByteSize, formatDuration, formatUtcDateTime, MISSING } from '../../format'
-import { Actions } from '../../ui/Actions'
-import { ConfirmButton } from '../../ui/ConfirmButton'
-import { Notice } from '../../ui/Notice'
 import { Cell, Row, Table } from '../../ui/Table'
+import { INTERPOLATION_LABELS, INTERPOLATIONS, memoryText, METHOD_LABELS, METHODS, NORMALIZATION_LABELS, NORMALIZATIONS, PRODUCT_LABELS, PRODUCT_TONES, SIGMA_METHODS, WEIGHTING_LABELS, WEIGHTINGS } from './format'
+import { cancelStackingRun, deleteStackingProduct, imageStackingRuntime, jobEnded, loadStackingPreflight, loadStackingProduct, startStackingRun } from './projects'
 
 // Integration and results of an Image Stacking project. Integration edits the recipe, shows what a run would do with it
 // (frames, memory, spill, reuse) as the server answers, starts and cancels runs, and follows the one working. Results

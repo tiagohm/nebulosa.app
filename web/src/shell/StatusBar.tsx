@@ -15,8 +15,27 @@ import { latestExecution, MERIDIAN_FLIP_STEP_LABELS, meridianFlipExecutorState }
 import { Icon, type IconName } from '../ui/Icon'
 import { astronomicalClockRuntime, effectiveReadings, watchAstronomicalClock } from './statusbar/astronomicalclock'
 import { AstronomicalClockChip } from './statusbar/AstronomicalClockChip'
-// oxfmt-ignore
-import { activeCapture, activeGuiding, type BarOperation, barOperations, CHIP_ROLES, type ChipRole, type ChipValue, fitClocks, fitItems, fitOperations, MOUNT_MOTION_ID, mountAbortTarget, mountChip, mountMotionRunning, mountMoving, roleChip, type ScopedDevice, scopedDeviceErrors, scopedRunningOperations } from './statusbar/selectors'
+import {
+	activeCapture,
+	activeGuiding,
+	type BarOperation,
+	barOperations,
+	CHIP_ROLES,
+	type ChipRole,
+	type ChipValue,
+	fitClocks,
+	fitItems,
+	fitOperations,
+	MOUNT_MOTION_ID,
+	mountAbortTarget,
+	mountChip,
+	mountMotionRunning,
+	mountMoving,
+	roleChip,
+	type ScopedDevice,
+	scopedDeviceErrors,
+	scopedRunningOperations,
+} from './statusbar/selectors'
 import { StatusDetails } from './statusbar/StatusDetailsPanel'
 import { MeridianFlipItem, OperationItem, ServerLinkItem, StatusChip, useOperationAbortable } from './statusbar/StatusItems'
 

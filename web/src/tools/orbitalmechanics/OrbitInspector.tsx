@@ -8,7 +8,6 @@ import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-// oxfmt-ignore
 import { definitionKey, distanceSymbol, type DistanceUnit, type ExplorerOrbit, formatTdb, fromAu, fromAuPerDay, inspectionCurrent, type OrbitalMechanicsState, orbitalMechanicsState, solutionCurrent, sourceLabel, velocitySymbol } from './orbitalmechanics'
 import { showMinorBodyInSky } from './orbitalmechanics.sources'
 

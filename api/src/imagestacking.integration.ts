@@ -7,7 +7,6 @@ import { debayer } from 'nebulosa/src/imaging/processing/debayer'
 import { applyGlobalNormalizationInPlace, broadcastNormalizationPlanes, solveGlobalNormalizationPlanes } from 'nebulosa/src/imaging/processing/normalization'
 import { warpImage } from 'nebulosa/src/imaging/processing/registration'
 import type { StackingCombinationMethod } from 'nebulosa/src/imaging/processing/stacker'
-// oxfmt-ignore
 import { accumulateSamples, type CombinationStripFrame, combineStrip, coverageThreshold, createCombinationScratch, finalizeOnlineSamples, isOnlineCombinationMethod, resolveCombinationParameters } from 'nebulosa/src/imaging/processing/stacking.combination'
 import { fileHandleSink, fileHandleSource } from 'nebulosa/src/io/file'
 import { type FitsHeader, FitsImageRowWriter, readFits } from 'nebulosa/src/io/formats/fits/fits'

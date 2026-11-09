@@ -3,33 +3,50 @@ import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../../files/files'
+import { formatByteSize, formatDuration, formatExposureTime, formatUtcDateTime, MISSING } from '../../format'
 import { imagesState, openImage } from '../../images/images'
 import { activeProfile, profileState, setLastStackingDirectory } from '../../profile/profile'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
 import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../../shell/WorkspaceLayout'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataRow } from '../../ui/DataRow'
 import { Modal } from '../../ui/Modal'
+import { Notice } from '../../ui/Notice'
+import { Pager } from '../../ui/Pager'
 import { Popover } from '../../ui/Popover'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
+import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 import { EVIDENCE_LABELS, exposureText, settingsText, SOURCE_STATUS_LABELS, SOURCE_STATUS_TONES } from '../calibrationlibrary/library'
 import { CompositionView } from './Composition'
 import { ALL_CANDIDATES, candidateChecked, candidateText, candidateUsable, committedCounts, type ImportSelection, NO_CANDIDATES, withCandidate, metricText, registrationText, ROLE_LABELS, SECTION_LABELS, STACKING_SECTIONS, type StackingSection } from './format'
 import { IntegrationView, ResultsView } from './Integration'
 import { CalibrationView, QualityView } from './Planning'
-// oxfmt-ignore
-import { cancelStackingImport, commitStackingImport, createStackingProject, deleteStackingProject, imageStackingRuntime, jobEnded, loadStackingCandidates, loadStackingFrame, loadStackingFrames, loadStackingProject, refreshStackingProject, removeStackingFrame, renameStackingProject, STACKING_PAGE_SIZE, type StackingFrameFilter, startStackingImport, updateStackingFrame } from './projects'
-import { formatByteSize, formatDuration, formatExposureTime, formatUtcDateTime, MISSING } from '../../format'
-import { Actions } from '../../ui/Actions'
-import { ConfirmButton } from '../../ui/ConfirmButton'
-import { Notice } from '../../ui/Notice'
-import { Pager } from '../../ui/Pager'
-import { Cell, Row, Table } from '../../ui/Table'
+import {
+	cancelStackingImport,
+	commitStackingImport,
+	createStackingProject,
+	deleteStackingProject,
+	imageStackingRuntime,
+	jobEnded,
+	loadStackingCandidates,
+	loadStackingFrame,
+	loadStackingFrames,
+	loadStackingProject,
+	refreshStackingProject,
+	removeStackingFrame,
+	renameStackingProject,
+	STACKING_PAGE_SIZE,
+	type StackingFrameFilter,
+	startStackingImport,
+	updateStackingFrame,
+} from './projects'
 
 // Image Stacking tool: projects of light frames saved on the server, grouped by the filter their headers write. It
 // works with no camera and starts no exposure. Frames enter a project through an import that is reviewed before it is

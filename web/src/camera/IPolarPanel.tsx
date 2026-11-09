@@ -26,8 +26,27 @@ import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
 import { ExposureTimeInput } from './ExposureTimeInput'
 import { FrameProgress } from './FrameProgress'
-// oxfmt-ignore
-import { confirmIPolarRotation, finishIPolar, ipolarDarkText, IPOLAR_DIRECTION_LABELS, IPOLAR_DIRECTIONS, IPOLAR_MODE_LABELS, IPOLAR_MODES, IPOLAR_REJECTION_LABELS, IPOLAR_STATE_LABELS, ipolarBlocker, ipolarMountSupport, ipolarRequest, ipolarRunning, ipolarRuntime, ipolarSlewRate, startIPolar, startIPolarRefinement, stopIPolar, stopIPolarRefinement } from './ipolar'
+import {
+	confirmIPolarRotation,
+	finishIPolar,
+	ipolarDarkText,
+	IPOLAR_DIRECTION_LABELS,
+	IPOLAR_DIRECTIONS,
+	IPOLAR_MODE_LABELS,
+	IPOLAR_MODES,
+	IPOLAR_REJECTION_LABELS,
+	IPOLAR_STATE_LABELS,
+	ipolarBlocker,
+	ipolarMountSupport,
+	ipolarRequest,
+	ipolarRunning,
+	ipolarRuntime,
+	ipolarSlewRate,
+	startIPolar,
+	startIPolarRefinement,
+	stopIPolar,
+	stopIPolarRefinement,
+} from './ipolar'
 import { loadLiveMasters } from './livestacking'
 import { SessionStateText } from './SessionStateText'
 

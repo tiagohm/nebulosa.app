@@ -1,11 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { proxy, snapshot } from 'valtio'
-// oxfmt-ignore
-import { DEFAULT_STAR_PROFILE_SETTINGS } from '../stars/starprofile.settings'
 import type { DisplaySettings } from 'api'
+import { proxy, snapshot } from 'valtio'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
 import { createOperation } from '../images/imageprocessing.catalog'
 import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
+import { DEFAULT_STAR_PROFILE_SETTINGS } from '../stars/starprofile.settings'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
 import {
@@ -128,7 +127,6 @@ import {
 	DEFAULT_IPOLAR_SETTINGS,
 	DEFAULT_TARGET_CENTERING_SETTINGS,
 	FRAMING_REFERENCES_MAXIMUM,
-	type FramingReference,
 	DEFAULT_ASTRO_WEATHER_PREFERENCES,
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 	SATELLITE_FAVORITES_MAXIMUM,

@@ -3,7 +3,6 @@ import type { PlanetaryEvent, PlanetaryEventsSearch, PlanetaryEventVisibility } 
 import { proxy } from 'valtio'
 import { skyClock } from '../../sky/clock'
 import type { PlannerIo } from '../planetary/planetary'
-// oxfmt-ignore
 import { addPlanetToPlanner, calendarWeeks, createPlanetaryEventsState, groupByDay, initialize, listedEvents, loadSearch, loadVisibility, rangeEnd, searchRequest, showPlanetInSky, showPlanetInSkyAt, startAtSkyTime } from './planetaryevents'
 import { CSV_COLUMNS, eventsCsv, eventTitle, formatOffset, KIND_LABELS, spreadsheetText } from './planetaryevents.format'
 

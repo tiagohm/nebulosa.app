@@ -8,7 +8,6 @@ import { collapsibleSections, setSectionOpen } from '../../shell/collapsible'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import { createRequestGuard } from '../../sky/selection'
 import { browserSkyIo, type SkyIo, type SkyState, selectSkyObject, skyState } from '../../sky/sky'
-// oxfmt-ignore
 import { addOrbit, addRefusal, anchorOf, clearOrbits, formatTdb, initialView, type OrbitalMechanicsIo, type OrbitalMechanicsState, type OrbitComparison, orbitalMechanicsState, type PendingOrbit, referenceCenter, unitOf } from './orbitalmechanics'
 
 // Real objects of the Orbital Mechanics Explorer: a minor body's published SBDB solution or an SPK target's osculating

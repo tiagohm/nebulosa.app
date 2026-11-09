@@ -9,10 +9,8 @@ import { SATURN_EQUATORIAL_RADIUS_KM } from 'nebulosa/src/core/constants'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
 import type { PlanningSite } from './observingplanner.astronomy'
 import { toolkitTime, yieldToEventLoop } from './planetary.source'
-// oxfmt-ignore
-import { definedContacts, hiddenIntervals, type MoonEventContacts, overlapsOf, physicallyVisible, type PlanetEventVisibility, type PlanetNight, rank, siteNights, type SiteReasons, siteVisibility, unixMillisOf, type VisiblePart } from './planetary.visibility'
+import { definedContacts, hiddenIntervals, type MoonEventContacts, overlapsOf, physicallyVisible, type PlanetEventVisibility, type PlanetNight, rank, siteNights, type SiteReasons, siteVisibility, unixMillisOf } from './planetary.visibility'
 import { type SaturnKernels, type SaturnMoon, type SaturnSourced, withSaturnianSource } from './saturn.astronomy'
-import type { TimeSpan } from './sky/sun'
 
 // Phenomena of the Saturn Observing Planner: the transits, shadow transits, occultations and eclipses of the seven
 // major moons and their mutual occultations and eclipses over a range, all from one moons source, with the contacts the

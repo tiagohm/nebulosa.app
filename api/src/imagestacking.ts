@@ -12,13 +12,33 @@ import { fileIdentity, type FileInspection, inspectFile, scanDirectory } from '.
 import { MAX_PAGE_SIZE, type Page, type ProductStatus, type SourceFormat, type SourceStatus } from './calibrationlibrary.store'
 import { errorResponse } from './http'
 import { ANALYSIS_VERSION, type AnalysisCalibration, type AnalysisFrame, type FrameAnalyzer, REFERENCE_MIN_STARS, type RegistrationFrame, type RegistrationGroup, StackingAnalyzer } from './imagestacking.analysis'
-// oxfmt-ignore
+import { COMPOSITION_MEMORY_BUDGET, COMPOSITION_VERSION, type CompositionInput, type FrameCompositor, PREVIEW_SIZE, StackingCompositor } from './imagestacking.composition'
 import { DEFAULT_STACK_MEMORY_BUDGET, type FrameIntegrator, INTEGRATION_VERSION, type IntegrationFrame, type IntegrationPlan, integrationPlan, type IntegrationWorkerRequest, productHeader, StackingIntegrator, type StagedProduct } from './imagestacking.integration'
 import { cohortKeyOf, filterKeyOf, isWithin, lightRoleOf, type StackingRole, stackingSourceId } from './imagestacking.sources'
-// oxfmt-ignore
-import { COMPOSITE_FILE, DEFAULT_STACKING_RECIPE, DEFAULT_STACKING_SETTINGS, type ImageStackingStore, PRODUCT_COVERAGE_FILE, type StackingComposite, type StackingComposition, PRODUCT_MASTER_FILE, type StackingCalibration, type StackingProduct, type StackingProductSource, type StackingRecipe, type StackingCohortDecision, type StackingFrameAnalysis, type StackingProject, type StackingProjectAnalysis, type StackingSettings, type StackingSource, type StackingSourceFacts, type StackingSourceFilter, type StackingSourceSummary, stackingSourceSummary } from './imagestacking.store'
-// oxfmt-ignore
-import { COMPOSITION_MEMORY_BUDGET, COMPOSITION_VERSION, type CompositionInput, type FrameCompositor, PREVIEW_SIZE, StackingCompositor } from './imagestacking.composition'
+import {
+	COMPOSITE_FILE,
+	DEFAULT_STACKING_RECIPE,
+	DEFAULT_STACKING_SETTINGS,
+	type ImageStackingStore,
+	PRODUCT_COVERAGE_FILE,
+	type StackingComposite,
+	type StackingComposition,
+	PRODUCT_MASTER_FILE,
+	type StackingCalibration,
+	type StackingProduct,
+	type StackingProductSource,
+	type StackingRecipe,
+	type StackingCohortDecision,
+	type StackingFrameAnalysis,
+	type StackingProject,
+	type StackingProjectAnalysis,
+	type StackingSettings,
+	type StackingSource,
+	type StackingSourceFacts,
+	type StackingSourceFilter,
+	type StackingSourceSummary,
+	stackingSourceSummary,
+} from './imagestacking.store'
 import { errorCode } from './util'
 
 // Image Stacking: projects of light frames saved on the server, grouped by the filter their headers write, for

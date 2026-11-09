@@ -6,16 +6,52 @@ import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { DeepSkyCatalog, normalizeMilkyWayCoordinates, StarCatalog } from './catalog'
 import { DSO_VIEWPORT_MARGIN, isProjectedSample, writeProjectedSample } from './drawing'
 import { CelestialEventBus } from './events'
-// oxfmt-ignore
-import { applyViewTransform, HORIZON_EPSILON, isFiniteDiskProjection, isFiniteNumber, isPointInsideViewportMargin, multiplyMatrixVector, normalizeVector, projectionScale, projectViewVector, unprojectViewVector, writeBaseViewportBounds, writeEquatorialToHorizontalMatrix, writeHorizontalUnitVector, writeRaDecUnitVector, writeViewMatrix } from './geometry'
+import {
+	applyViewTransform,
+	HORIZON_EPSILON,
+	isFiniteDiskProjection,
+	isFiniteNumber,
+	isPointInsideViewportMargin,
+	multiplyMatrixVector,
+	normalizeVector,
+	projectionScale,
+	projectViewVector,
+	unprojectViewVector,
+	writeBaseViewportBounds,
+	writeEquatorialToHorizontalMatrix,
+	writeHorizontalUnitVector,
+	writeRaDecUnitVector,
+	writeViewMatrix,
+} from './geometry'
 import { anchoredTransform, beginGesture, type GestureAnchor, type GesturePointer, gestureTransform } from './gesture'
 import { BackgroundLayer, CONSTELLATION_LABEL_MIN_ZOOM, ConstellationBoundaryLayer, ConstellationLabelLayer, ConstellationLineLayer, DeepSkyObjectLayer, GridLayer, HorizonLayer, InteractionOverlayLayer, MilkyWayLayer, MovingBodyLayer, ReferenceLineLayer, ShapeLayer, StarLayer } from './layers'
 import { resolveOptions, validateObserver, validateProjection } from './options'
 import { FixedGridSpatialIndex, isPickableLayerId, movingBodyLayerId, objectLayerId, PICK_TYPE_CONSTELLATION_LABEL, PICK_TYPE_DSO, PICK_TYPE_MOVING_BODY, PICK_TYPE_SHAPE, PICK_TYPE_STAR, type PickIndex, pickMatchesObject, sameObject } from './picking'
 import { CanvasRenderer } from './renderer'
 import { type CelestialTime, unixTimeOf } from './time'
-// oxfmt-ignore
-import type { AutoUpdateOptions, CelestialEventCallback, CelestialEventName, CelestialObject, CelestialOptions, CelestialShape, ConstellationData, DeepSkyObject, MilkyWayCoordinates, MilkyWayStep, MovingBody, ObserverLocation, ProjectionType, RenderState, ResolvedCelestialOptions, ResolvedReferenceLinesOptions, SelectionTarget, Star, StarCatalogInput, ViewState, ViewTransform } from './types'
+import type {
+	AutoUpdateOptions,
+	CelestialEventCallback,
+	CelestialEventName,
+	CelestialObject,
+	CelestialOptions,
+	CelestialShape,
+	ConstellationData,
+	DeepSkyObject,
+	MilkyWayCoordinates,
+	MilkyWayStep,
+	MovingBody,
+	ObserverLocation,
+	ProjectionType,
+	RenderState,
+	ResolvedCelestialOptions,
+	ResolvedReferenceLinesOptions,
+	SelectionTarget,
+	Star,
+	StarCatalogInput,
+	ViewState,
+	ViewTransform,
+} from './types'
 import { deepSkyMagnitude, isDeepSkyObjectVisibleAtZoom, isMovingBodyVisibleAtZoom, movingBodyMagnitude, starSymbolMagnitudeLimitAtZoom } from './visibility'
 
 export { StarCatalog } from './catalog'

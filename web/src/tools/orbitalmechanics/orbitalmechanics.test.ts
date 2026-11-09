@@ -2,8 +2,27 @@ import { describe, expect, test } from 'bun:test'
 import type { OrbitalMechanicsReference, OrbitCenterPayload, OrbitDefinitionPayload, OrbitSolveResponse, OrbitTrajectoryResponse } from 'api'
 import { AU_KM, DEG2RAD } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
-// oxfmt-ignore
-import { advanceClock, convertDraft, draftDefinition, draftOf, editDraft, exportScenario, formatTdb, importScenario, initialOrbitalMechanicsState, interpolatedPosition, nearestRate, type OrbitalMechanicsIo, type OrbitalMechanicsState, openOrbitalMechanics, parseTdb, rateOptions, setPlaying, setTime, trackCsv } from './orbitalmechanics'
+import {
+	advanceClock,
+	convertDraft,
+	draftDefinition,
+	draftOf,
+	editDraft,
+	exportScenario,
+	formatTdb,
+	importScenario,
+	initialOrbitalMechanicsState,
+	interpolatedPosition,
+	nearestRate,
+	type OrbitalMechanicsIo,
+	type OrbitalMechanicsState,
+	openOrbitalMechanics,
+	parseTdb,
+	rateOptions,
+	setPlaying,
+	setTime,
+	trackCsv,
+} from './orbitalmechanics'
 
 const LIMITS = { epochMin: 2451545 - 3_652_500, epochMax: 2451545 + 3_652_500, maxSamples: 2048, maxOrbits: 8 }
 const MU_EARTH = (398600.435507 * (86400 * 86400)) / AU_KM ** 3

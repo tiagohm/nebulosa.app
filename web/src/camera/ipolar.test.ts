@@ -4,7 +4,6 @@ import { arcsec, deg } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import { DEFAULT_CAMERA_PLATE_SOLVING, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_IPOLAR_SETTINGS } from '../profile/schema'
 import { cameraKey } from './capture'
-// oxfmt-ignore
 import { confirmIPolarRotation, finishIPolar, handleIPolarEvent, ipolarDarkText, ipolarBlocker, ipolarFrameRole, ipolarMountSupport, ipolarRequest, type IPolarRuntime, ipolarSlewRate, refreshIPolar, startIPolar, type IPolarStartContext } from './ipolar'
 
 function newState() {

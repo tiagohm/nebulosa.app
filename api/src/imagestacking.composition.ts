@@ -2,7 +2,6 @@ import { mkdir, open, rm } from 'fs/promises'
 import { join } from 'path'
 import { writeImageToFormat } from 'nebulosa/src/imaging/model/image'
 import type { Image } from 'nebulosa/src/imaging/model/types'
-// oxfmt-ignore
 import { blendLuminanceRows, type ChannelMix, collectLuminanceSamples, type CompositionPlane, createCompositionCounters, createLuminanceSamples, type LuminanceMatch, mixChannelRows, solveLuminanceMatch } from 'nebulosa/src/imaging/processing/channel.composition'
 import { stf } from 'nebulosa/src/imaging/processing/stf'
 import { autoStf } from 'nebulosa/src/imaging/processing/stf.presets'

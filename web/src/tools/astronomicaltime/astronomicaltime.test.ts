@@ -5,8 +5,27 @@ import { resolveToolLocation } from '../../location/site'
 import { resolveDisplayZone } from '../../location/zone'
 import { routePath, type RouteState } from '../../shell/route'
 import { setSkyTime, skyClock, type SkyClock } from '../../sky/clock'
-// oxfmt-ignore
-import { applyToSky, type AstronomicalTimeState, chooseFold, conversionRequest, type ConverterIo, entryText, followConversion, initialAstronomicalTimeState, type InputFormat, openAstronomicalTimeConverter, parseEntry, parseRightAscension, qualityNotes, setConverterLocation, setConverterMode, setConverterZone, setEntryText, setInputFormat, takeSkyTime } from './astronomicaltime'
+import {
+	applyToSky,
+	type AstronomicalTimeState,
+	chooseFold,
+	conversionRequest,
+	type ConverterIo,
+	entryText,
+	followConversion,
+	initialAstronomicalTimeState,
+	type InputFormat,
+	openAstronomicalTimeConverter,
+	parseEntry,
+	parseRightAscension,
+	qualityNotes,
+	setConverterLocation,
+	setConverterMode,
+	setConverterZone,
+	setEntryText,
+	setInputFormat,
+	takeSkyTime,
+} from './astronomicaltime'
 
 const SITE = { id: 'home', name: 'Home', latitude: -22, longitude: -45, elevation: 850, timeZone: 'America/Sao_Paulo' }
 

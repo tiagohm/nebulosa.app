@@ -1,4 +1,4 @@
-import type { MeteorObservingNight, MeteorObservingRequest, MeteorShowerDetail, MeteorShowerListPage, MeteorShowersCalendar, MeteorShowersCalendarRequest, MeteorShowerStatus } from 'api'
+import type { MeteorActivityCurve, MeteorNightRanking, MeteorNightsRequest, MeteorObservingNight, MeteorObservingRequest, MeteorShowerDetail, MeteorShowerListPage, MeteorShowersCalendar, MeteorShowersCalendarRequest, MeteorShowerStatus } from 'api'
 import { proxy } from 'valtio'
 import { fetchJson, jsonInit } from '../../http'
 import { ACTIVE_TOOL_LOCATION, type SiteLocation, type ToolLocation } from '../../location/site'
@@ -42,6 +42,23 @@ export const DEFAULT_MINIMUM_RADIANT_ALTITUDE = 20
 
 // Rows of a page of the list.
 export const PAGE_SIZE = 25
+
+// Default limiting magnitude of the modelled rates: the reference sky of the ZHR.
+export const DEFAULT_LIMITING_MAGNITUDE = 6.5
+
+// Evenings a ranking spans by default, and at most (the server ranks at most 31).
+export const DEFAULT_RANKED_NIGHTS = 14
+export const MAX_RANKED_NIGHTS = 31
+
+// Assumptions of the modelled rates as the panel edits them.
+export interface MeteorRateSettings {
+	// Whether modelled rates are asked for; they apply only to a shower with a published activity profile.
+	enabled: boolean
+	// Limiting magnitude of the sky.
+	limitingMagnitude: number
+	// Part of the field obstructed, percent.
+	obstructedPercent: number
+}
 
 // Tab-lived state of the tool.
 export interface MeteorShowersState {
@@ -97,6 +114,20 @@ export interface MeteorShowersState {
 	nightLoading: boolean
 	// Why the night could not be computed.
 	nightError?: string
+	// Assumptions of the modelled rates.
+	rates: MeteorRateSettings
+	// Activity curve of the selected shower for the year of its next occurrence.
+	activity?: MeteorActivityCurve
+	// Why the curve could not be read.
+	activityError?: string
+	// Evenings the ranking spans.
+	rankedNights: number
+	// Ranking of the nights of the selected shower.
+	ranking?: MeteorNightRanking
+	// Whether the ranking is being computed.
+	rankingLoading: boolean
+	// Why the ranking could not be computed.
+	rankingError?: string
 }
 
 // Creates the tab state of the tool.
@@ -116,6 +147,9 @@ export function createMeteorShowersState(): MeteorShowersState {
 		darkness: 'astronomical',
 		minimumAltitude: DEFAULT_MINIMUM_RADIANT_ALTITUDE,
 		nightLoading: false,
+		rates: { enabled: false, limitingMagnitude: DEFAULT_LIMITING_MAGNITUDE, obstructedPercent: 0 },
+		rankedNights: DEFAULT_RANKED_NIGHTS,
+		rankingLoading: false,
 	}
 }
 
@@ -127,6 +161,8 @@ const pageGuard = createRequestGuard()
 const calendarGuard = createRequestGuard()
 const detailGuard = createRequestGuard()
 const nightGuard = createRequestGuard()
+const activityGuard = createRequestGuard()
+const rankingGuard = createRequestGuard()
 
 // Query string of the page of a section, the search, and the filters; a latitude keeps the reachable radiants.
 export function listQuery(state: Pick<MeteorShowersState, 'section' | 'query' | 'status' | 'reachable' | 'offset' | 'minimumAltitude'>, latitude: number | undefined): string {
@@ -205,10 +241,17 @@ export function selectShower(state: MeteorShowersState, id: string | undefined) 
 	state.detailError = undefined
 	state.night = undefined
 	state.nightError = undefined
+	state.activity = undefined
+	state.activityError = undefined
+	state.ranking = undefined
+	state.rankingError = undefined
 	detailGuard.cancel()
 	nightGuard.cancel()
+	activityGuard.cancel()
+	rankingGuard.cancel()
 	state.detailLoading = false
 	state.nightLoading = false
+	state.rankingLoading = false
 }
 
 // Reads the detail of the selected shower, dropping the answer of a superseded request.
@@ -238,7 +281,7 @@ export function defaultEvening(site: SiteLocation, io: PlannerIo = browserPlanne
 }
 
 // Request of the observing night of the tab's evening, darkness, and constraints at a site.
-export function observingRequest(state: Pick<MeteorShowersState, 'eveningDate' | 'darkness' | 'minimumAltitude' | 'moonSeparation'>, site: SiteLocation, eveningDate: string): MeteorObservingRequest {
+export function observingRequest(state: Pick<MeteorShowersState, 'eveningDate' | 'darkness' | 'minimumAltitude' | 'moonSeparation' | 'rates'>, site: SiteLocation, eveningDate: string): MeteorObservingRequest {
 	const DEG = Math.PI / 180
 	return {
 		site: planningSite(site),
@@ -246,6 +289,7 @@ export function observingRequest(state: Pick<MeteorShowersState, 'eveningDate' |
 		maximumSolarAltitude: DARKNESS_ALTITUDES[state.darkness] * DEG,
 		minimumRadiantAltitude: state.minimumAltitude * DEG,
 		...(state.moonSeparation !== undefined && { minimumMoonSeparation: state.moonSeparation * DEG }),
+		...(state.rates.enabled && { assumptions: { limitingMagnitude: state.rates.limitingMagnitude, obstructedFraction: state.rates.obstructedPercent / 100 } }),
 	}
 }
 
@@ -269,6 +313,61 @@ export async function loadNight(state: MeteorShowersState, site: SiteLocation, i
 	} finally {
 		if (request.current()) state.nightLoading = false
 	}
+}
+
+// Reads the activity curve of the selected shower for a civil year, dropping the answer of a superseded request.
+export async function loadActivity(state: MeteorShowersState, year: number, io: PlannerIo = browserPlannerIo) {
+	const id = state.selected
+	if (id === undefined) return
+	const request = activityGuard.begin()
+
+	try {
+		const curve = await fetchJson<MeteorActivityCurve>(io, `/api/meteor-showers/${encodeURIComponent(id)}/activity`, jsonInit('POST', { year }, request.signal))
+		if (!request.current()) return
+		state.activity = curve
+		state.activityError = undefined
+	} catch (error) {
+		if (aborted(error) || !request.current()) return
+		state.activity = undefined
+		state.activityError = errorMessage(error)
+	}
+}
+
+// Request of the ranking of the tab's evenings from a site.
+export function rankingRequest(state: Pick<MeteorShowersState, 'eveningDate' | 'darkness' | 'minimumAltitude' | 'moonSeparation' | 'rates' | 'rankedNights'>, site: SiteLocation, startEveningDate: string): MeteorNightsRequest {
+	const { eveningDate: _, ...night } = observingRequest(state, site, startEveningDate)
+	return { ...night, startEveningDate, nights: Math.min(MAX_RANKED_NIGHTS, Math.max(1, Math.round(state.rankedNights))) }
+}
+
+// Ranks the evenings from the tab's evening for the selected shower, dropping the answer of a superseded request; asked
+// for explicitly, since it searches up to a month of nights.
+export async function loadRanking(state: MeteorShowersState, site: SiteLocation, io: PlannerIo = browserPlannerIo) {
+	const id = state.selected
+	if (id === undefined) return
+	const start = (state.eveningDate ??= defaultEvening(site, io))
+	const request = rankingGuard.begin()
+	state.rankingLoading = true
+
+	try {
+		const ranking = await fetchJson<MeteorNightRanking>(io, `/api/meteor-showers/${encodeURIComponent(id)}/nights`, jsonInit('POST', rankingRequest(state, site, start), request.signal))
+		if (!request.current()) return
+		state.ranking = ranking
+		state.rankingError = undefined
+	} catch (error) {
+		if (aborted(error) || !request.current()) return
+		state.ranking = undefined
+		state.rankingError = errorMessage(error)
+	} finally {
+		if (request.current()) state.rankingLoading = false
+	}
+}
+
+// Forgets the ranking, cancelling a request in flight, when its inputs change.
+export function clearRanking(state: MeteorShowersState) {
+	rankingGuard.cancel()
+	state.ranking = undefined
+	state.rankingLoading = false
+	state.rankingError = undefined
 }
 
 // Forgets the night when the tool has no site, cancelling a request in flight.

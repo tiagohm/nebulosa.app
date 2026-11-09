@@ -1,6 +1,6 @@
 import { normalizeIauMeteorShowerCatalog, parseIauMeteorShowerCatalog } from 'nebulosa/src/adapters/catalogs/iau.meteor.showers'
 import type { MeteorShower, MeteorShowerActivity, MeteorShowerSolution, MeteorShowerStatus } from 'nebulosa/src/astronomy/meteors/types'
-import { METEOR_VISUAL_ENTRIES, type MeteorVisualEntry } from './meteorshowers.visual'
+import { METEOR_ACTIVITY_PROFILES, METEOR_VISUAL_ENTRIES, type MeteorActivityProfileEntry, type MeteorVisualEntry } from './meteorshowers.visual'
 
 // The IAU Meteor Data Center catalog of the Meteor Showers tool as an immutable index, built once per active document: the
 // showers with every published solution in source order (never merged), a stable identity, the preferred solution and why,
@@ -47,6 +47,8 @@ export interface MeteorShowerRecord {
 	readonly gaps: readonly MeteorShowerGap[]
 	// Curated visual entry; absent when the subset does not list the shower.
 	readonly visual?: MeteorVisualEntry
+	// Published activity profile; absent when none is curated.
+	readonly profile?: MeteorActivityProfileEntry
 	// Normalized names, code and number the search reads.
 	readonly searchText: readonly string[]
 }
@@ -78,6 +80,9 @@ export class MeteorCatalogInvalidError extends Error {}
 
 // Visual entries by IAU number.
 const VISUAL_BY_NUMBER = new Map(METEOR_VISUAL_ENTRIES.map((entry) => [entry.number, entry]))
+
+// Activity profiles by IAU number.
+const PROFILE_BY_NUMBER = new Map(METEOR_ACTIVITY_PROFILES.map((entry) => [entry.number, entry]))
 
 // Parses, normalizes, checks, and indexes an IAU document's text. Throws MeteorCatalogInvalidError when it is not the
 // versioned stream catalog or its published count disagrees with its records.
@@ -116,6 +121,7 @@ function indexShower(shower: MeteorShower, used: Set<string>): MeteorShowerRecor
 	used.add(id)
 
 	const visual = number === undefined ? undefined : VISUAL_BY_NUMBER.get(number)
+	const profile = number === undefined ? undefined : PROFILE_BY_NUMBER.get(number)
 	const { selected, selectedBy } = selectSolution(shower.solutions)
 	const solution = selected === undefined ? undefined : shower.solutions[selected]
 	const name = visual?.name ?? shower.name
@@ -136,6 +142,7 @@ function indexShower(shower: MeteorShower, used: Set<string>): MeteorShowerRecor
 		selectedBy,
 		gaps: gapsOf(solution),
 		visual,
+		profile,
 		searchText,
 	}
 }

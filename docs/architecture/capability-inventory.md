@@ -76,7 +76,7 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
   geocentric apparent events only, no Pluto, Moon, occultations, transits, or groupings, and visibility without terrain or weather
 - **Meteor Showers (IAU catalog, curated visual subset, dates, radiants, geometric observing nights)** (Partial): Meteor Showers tool (`web/src/tools/meteorshowers/`) over `api/src/meteorshowers.ts` (service and routes), `meteorshowers.catalog.ts`, `meteorshowers.astronomy.ts`, `meteorshowers.solar.ts`, and `meteorshowers.store.ts`, the IAU MDC adapter, and the meteor modules of `core/src/astronomy/meteors/` (`meteorGeometricObservingWindows`);
   Sky radiant layer (`web/src/sky/meteors.sky.ts`), search, and Meteor Shower Inspector (`web/src/sky/meteor/`);
-  no activity profile, local rate, or count is computed yet
+  activity curves and modelled rates only for the eight showers with a published double-exponential profile, and no weather, Observing Planner blocks, drift paths, or annual special peaks yet
 - **Artificial satellites (catalog, passes, ephemerides, ground tracks)** (Partial): `api/src/satellites.ts` over `core/src/astronomy/events/satellite.ts`, the CelesTrak downloads of `satellites.sync.ts`, and the catalog of `satellites.store.ts`;
   Artificial Satellites tool `web/src/tools/artificialsatellites/` (Ground Track on `WorldMap`);
   Sky search, Satellite Inspector (`web/src/sky/satellite/`), and map markers (`web/src/sky/satellites.sky.ts`);

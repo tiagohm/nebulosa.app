@@ -107,6 +107,13 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 			{ name: 'Rotational elements', owner: 'IAU Working Group on Cartographic Coordinates and Rotational Elements', url: 'https://doi.org/10.1007/s10569-017-9805-5', use: 'Rotation of the Moon and orientation of its surface.' },
 			{ name: 'Planetary magnitudes', owner: 'A. Mallama and J. L. Hilton', url: 'https://doi.org/10.1016/j.ascom.2018.08.002', use: 'Apparent magnitudes of the planets.', notice: 'Astronomy and Computing, 2018.' },
 			{ name: 'H-G magnitudes', owner: 'E. Bowell et al.', url: 'https://ui.adsabs.harvard.edu/abs/1989aste.conf..524B', use: 'Magnitude of asteroids with their phase angle.', notice: 'Asteroids II, 524 (1989).' },
+			{
+				name: 'Meteor shower activity profiles',
+				owner: 'A. V. Moorhead, A. Egal, P. G. Brown, D. E. Moser, and W. J. Cooke',
+				url: 'https://arxiv.org/abs/1904.06370',
+				use: 'Activity curves and modelled rates of eight major meteor showers (Table 5, the NASA Meteoroid Environment Office forecast parameters).',
+				notice: 'Meteor shower forecasting in near-Earth space, 2019.',
+			},
 			{ name: 'Air mass formula', owner: 'F. Kasten and A. T. Young', url: 'https://doi.org/10.1364/AO.28.004735', use: 'Air mass in the Calculator.', notice: 'Applied Optics 28, 4735 (1989).' },
 			{ name: 'Refraction formula', owner: 'Thorsteinn Sæmundsson', url: 'https://en.wikipedia.org/wiki/Atmospheric_refraction', use: 'Refraction in the Calculator.', notice: 'Sky & Telescope 72, 70 (1986).' },
 			{ name: 'Improved Magnus approximation', owner: 'O. A. Alduchov and R. E. Eskridge', url: 'https://doi.org/10.1175/1520-0450(1996)035%3C0601:IMFAOS%3E2.0.CO;2', use: 'Frost point in the Calculator.', notice: 'Journal of Applied Meteorology 35, 601 (1996).' },

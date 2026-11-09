@@ -1,4 +1,4 @@
-import type { MeteorObservingNight, MeteorShowerDetail, MeteorShowerOccurrence } from 'api'
+import type { MeteorActivityCurve, MeteorNightRanking as Ranking, MeteorObservingNight, MeteorShowerDetail, MeteorShowerOccurrence } from 'api'
 import { formatDate, formatDateTime, formatDegrees, formatPercent, formatSpan } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
@@ -8,7 +8,9 @@ import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
+import { MeteorActivityChart } from './MeteorActivityChart'
 import { MeteorNightChart } from './MeteorNightChart'
+import { MeteorNightRanking } from './MeteorNightRanking'
 import { showRadiantInSky, showRadiantInSkyAt } from './meteorshowers'
 import { ACTIVITY_KIND_LABELS, ACTIVITY_LABELS, BASIS_LABELS, formatPeak, formatSolarLongitude, GAP_LABELS, kilometersPerSecond, REASON_LABELS, SELECTION_LABELS, STATUS_LABELS } from './meteorshowers.format'
 
@@ -52,6 +54,20 @@ function ObservingNight({ night, name, minimumAltitude, timeZone }: { readonly n
 			) : (
 				<Notice>{night.reasons.map((reason) => REASON_LABELS[reason]).join(' ')}</Notice>
 			)}
+			{night.model && (
+				<div className="flex flex-col gap-1">
+					<p className="m-0 text-xs text-ink-300">{`Modelled from the published activity profile for a limiting magnitude of ${night.model.limitingMagnitude.toFixed(1)}, r = ${night.model.populationIndex.toFixed(1)} (${night.model.populationIndexSource === 'profile' ? 'from the profile' : 'yours'}), and F = ${night.model.obstructionCorrection.toFixed(2)}: what an ideal observer would count, never a forecast.`}</p>
+					{night.model.windows.length === 0 ? (
+						<p className="m-0 text-xs text-ink-300">The profile gives no activity in these windows.</p>
+					) : (
+						<DataList>
+							{night.model.windows.map((window) => (
+								<DataRow key={window.start} label={`Modelled ${formatSpan(window.start, window.end, timeZone)}`}>{`about ${window.expectedCount.toFixed(0)} meteors · up to ${window.bestLocalHourlyRate.toFixed(0)} per hour at ${formatDateTime(window.bestTime, timeZone, false).slice(11)}`}</DataRow>
+							))}
+						</DataList>
+					)}
+				</div>
+			)}
 			<MeteorNightChart night={night} name={name} minimumAltitude={minimumAltitude} timeZone={timeZone} />
 		</div>
 	)
@@ -67,6 +83,12 @@ export function MeteorShowerDetails({
 	site,
 	activeSite,
 	timeZone,
+	activity,
+	ranking,
+	rankingLoading,
+	rankingError,
+	onRank,
+	onSelectNight,
 }: {
 	readonly detail: MeteorShowerDetail
 	readonly night?: MeteorObservingNight
@@ -76,8 +98,14 @@ export function MeteorShowerDetails({
 	readonly site?: SiteLocation
 	readonly activeSite?: SiteLocation
 	readonly timeZone: string
+	readonly activity?: MeteorActivityCurve
+	readonly ranking?: Ranking
+	readonly rankingLoading: boolean
+	readonly rankingError?: string
+	readonly onRank: () => void
+	readonly onSelectNight: (eveningDate: string) => void
 }) {
-	const activity = ACTIVITY_LABELS[detail.activityNow.state]
+	const activityNow = ACTIVITY_LABELS[detail.activityNow.state]
 	const visual = detail.visual
 	const peakOccurrence = detail.occurrences.find((occurrence) => occurrence.visual && occurrence.visual.peak >= Date.now()) ?? detail.occurrences.findLast((occurrence) => occurrence.visual)
 	const preciseVisualPeak = peakOccurrence?.visual && peakOccurrence.visual.peakSolarLongitudeDecimals > 0 ? peakOccurrence.visual.peak : undefined
@@ -88,7 +116,7 @@ export function MeteorShowerDetails({
 				<h2 className="m-0 text-base font-semibold text-ink-100">{detail.name}</h2>
 				<span className="text-xs text-ink-300">{[detail.code, detail.number === undefined ? undefined : `IAU ${detail.number}`, detail.iauName !== detail.name ? detail.iauName : undefined].filter(Boolean).join(' · ')}</span>
 				<StatusBadge tone={detail.status === 'established' ? 'success' : detail.status === 'removed' ? 'danger' : 'neutral'} label={STATUS_LABELS[detail.status]} />
-				<StatusBadge tone={activity.tone} label={`${activity.label} (${BASIS_LABELS[detail.activityNow.basis]})`} />
+				<StatusBadge tone={activityNow.tone} label={`${activityNow.label} (${BASIS_LABELS[detail.activityNow.basis]})`} />
 			</header>
 			<Actions>
 				<Button variant="secondary" disabled={detail.radiant === undefined} onClick={() => showRadiantInSky(detail.id, detail.name, activeSite)}>
@@ -123,12 +151,29 @@ export function MeteorShowerDetails({
 				))}
 			</div>
 			<div className="flex flex-col gap-1">
+				<h3 className="m-0 text-sm font-semibold text-ink-100">Activity</h3>
+				{activity ? <MeteorActivityChart curve={activity} timeZone={timeZone} now={Date.now()} /> : <p className="m-0 text-xs text-ink-300">Reading the activity…</p>}
+				{activity?.profile && <p className="m-0 text-xs text-ink-300">Profile: Moorhead et al. (2019), the NASA Meteoroid Environment Office forecast parameters, a model of a typical year.</p>}
+			</div>
+			<div className="flex flex-col gap-1">
 				<h3 className="m-0 text-sm font-semibold text-ink-100">Observing Night</h3>
 				{!site && <p className="m-0 text-xs text-ink-300">Choose a location in the panel to see when the radiant can be watched.</p>}
 				{site && nightLoading && <p className="m-0 text-xs text-ink-300">Computing the night…</p>}
 				{site && nightError && <Notice error>{nightError}</Notice>}
 				{site && night && <ObservingNight night={night} name={detail.name} minimumAltitude={minimumAltitude} timeZone={timeZone} />}
 			</div>
+			{site && (
+				<div className="flex flex-col gap-1">
+					<h3 className="m-0 text-sm font-semibold text-ink-100">Best Nights</h3>
+					<Actions>
+						<Button variant="secondary" disabled={rankingLoading || detail.radiant === undefined} onClick={onRank}>
+							{rankingLoading ? 'Ranking…' : 'Rank Nights'}
+						</Button>
+					</Actions>
+					{rankingError && <Notice error>{rankingError}</Notice>}
+					{ranking && <MeteorNightRanking ranking={ranking} onSelect={onSelectNight} />}
+				</div>
+			)}
 			<div className="flex flex-col gap-1">
 				<h3 className="m-0 text-sm font-semibold text-ink-100">IAU Solutions</h3>
 				<p className="m-0 text-xs text-ink-300">{SELECTION_LABELS[detail.selectedBy]}</p>

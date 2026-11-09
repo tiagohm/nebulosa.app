@@ -21,7 +21,27 @@ import { TextInput } from '../../ui/TextInput'
 import { MeteorShowerCalendar } from './MeteorShowerCalendar'
 import { MeteorShowerDetails } from './MeteorShowerDetails'
 import { MeteorShowerList } from './MeteorShowerList'
-import { clearNight, DARKNESS_ALTITUDES, loadCalendar, loadDetail, loadNight, loadPage, METEOR_SHOWER_SECTIONS, METEOR_STATUS_FILTERS, type MeteorDarkness, type MeteorShowersSection, type MeteorShowersState, meteorShowersState, type MeteorStatusFilter, PAGE_SIZE, selectShower } from './meteorshowers'
+import {
+	clearNight,
+	clearRanking,
+	DARKNESS_ALTITUDES,
+	loadActivity,
+	loadCalendar,
+	loadDetail,
+	loadNight,
+	loadPage,
+	loadRanking,
+	MAX_RANKED_NIGHTS,
+	METEOR_SHOWER_SECTIONS,
+	METEOR_STATUS_FILTERS,
+	type MeteorDarkness,
+	type MeteorShowersSection,
+	type MeteorShowersState,
+	meteorShowersState,
+	type MeteorStatusFilter,
+	PAGE_SIZE,
+	selectShower,
+} from './meteorshowers'
 import { STATUS_LABELS } from './meteorshowers.format'
 import { meteorShowerSourcesState } from './meteorshowers.sources'
 import { MeteorSourcesModal } from './MeteorSourcesModal'
@@ -77,7 +97,19 @@ export function MeteorShowers() {
 	useEffect(() => {
 		if (!site) clearNight(meteorShowersState)
 		else if (state.selected) void loadNight(meteorShowersState, site)
-	}, [state.selected, place, state.eveningDate, state.darkness, state.minimumAltitude, state.moonSeparation, revision])
+	}, [state.selected, place, state.eveningDate, state.darkness, state.minimumAltitude, state.moonSeparation, state.rates.enabled, state.rates.limitingMagnitude, state.rates.obstructedPercent, revision])
+
+	// The activity curve follows the selection, the year of its next occurrence, and the catalog.
+	const detail = state.detail?.id === state.selected ? state.detail : undefined
+	const nextInstant = detail?.occurrence?.visual?.peak ?? detail?.occurrence?.iau?.reference ?? detail?.occurrence?.iau?.start
+	const activityYear = new Date(nextInstant ?? Date.now()).getUTCFullYear()
+
+	useEffect(() => {
+		if (detail) void loadActivity(meteorShowersState, activityYear)
+	}, [detail?.id, activityYear, revision])
+
+	// A ranking is computed on request and forgotten when its inputs change.
+	useEffect(() => clearRanking(meteorShowersState), [state.selected, place, state.eveningDate, state.darkness, state.minimumAltitude, state.moonSeparation, state.rates.enabled, state.rates.limitingMagnitude, state.rates.obstructedPercent, state.rankedNights, revision])
 
 	const page = state.page
 	const pageIndex = Math.floor(state.offset / PAGE_SIZE)
@@ -100,6 +132,13 @@ export function MeteorShowers() {
 				<Checkbox label="Keep the radiant away from the Moon" checked={state.moonSeparation !== undefined} onChange={(on) => (meteorShowersState.moonSeparation = on ? 30 : undefined)} />
 				{state.moonSeparation !== undefined && <NumberInput label="Smallest Moon separation" value={state.moonSeparation} min={5} max={120} step={5} suffix="°" onChange={(value) => (meteorShowersState.moonSeparation = value)} />}
 				<p className="m-0 text-xs text-ink-300">Windows are geometric: darkness, the radiant above the lowest altitude, and the Moon constraint while the Moon is up. They say when the radiant can be watched, not how many meteors appear.</p>
+				<NumberInput label="Nights ranked" value={state.rankedNights} min={1} max={MAX_RANKED_NIGHTS} step={1} onChange={(value) => (meteorShowersState.rankedNights = value)} />
+			</CollapsibleSection>
+			<CollapsibleSection id="meteorShowers.rates" title="Modelled Rates" summary={state.rates.enabled ? `LM ${state.rates.limitingMagnitude}` : 'Off'} defaultOpen={false}>
+				<Checkbox label="Model meteor rates where a published activity profile exists" checked={state.rates.enabled} onChange={(on) => (meteorShowersState.rates.enabled = on)} />
+				<NumberInput label="Limiting magnitude" value={state.rates.limitingMagnitude} min={3} max={7.5} step={0.1} disabled={!state.rates.enabled} onChange={(value) => (meteorShowersState.rates.limitingMagnitude = value)} />
+				<NumberInput label="Field obstructed" value={state.rates.obstructedPercent} min={0} max={90} step={5} suffix="%" disabled={!state.rates.enabled} onChange={(value) => (meteorShowersState.rates.obstructedPercent = value)} />
+				<p className="m-0 text-xs text-ink-300">Your assumptions, not measurements: the rate is the profile ZHR scaled by the radiant height, the limiting magnitude, and the obstruction, for an ideal observer. No Moon, weather, or sporadic background is applied.</p>
 			</CollapsibleSection>
 		</>
 	)
@@ -154,7 +193,22 @@ export function MeteorShowers() {
 					)}
 					{state.detailError && <Notice error>{state.detailError}</Notice>}
 					{state.detail && state.detail.id === state.selected ? (
-						<MeteorShowerDetails detail={state.detail} night={state.night} nightLoading={state.nightLoading} nightError={state.nightError} minimumAltitude={(state.minimumAltitude * Math.PI) / 180} site={site} activeSite={activeSite} timeZone={zone} />
+						<MeteorShowerDetails
+							detail={state.detail}
+							night={state.night}
+							nightLoading={state.nightLoading}
+							nightError={state.nightError}
+							minimumAltitude={(state.minimumAltitude * Math.PI) / 180}
+							site={site}
+							activeSite={activeSite}
+							timeZone={zone}
+							activity={state.activity}
+							ranking={state.ranking}
+							rankingLoading={state.rankingLoading}
+							rankingError={state.rankingError}
+							onRank={() => site && void loadRanking(meteorShowersState, site)}
+							onSelectNight={(eveningDate) => (meteorShowersState.eveningDate = eveningDate)}
+						/>
 					) : (
 						!state.selected && <p className="m-0 text-xs text-ink-300">Choose a shower to see its sources, its dates, and when its radiant can be watched.</p>
 					)}

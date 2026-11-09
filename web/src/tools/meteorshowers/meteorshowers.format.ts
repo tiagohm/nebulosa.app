@@ -20,7 +20,7 @@ export const ACTIVITY_LABELS: Readonly<Record<MeteorActivityState, { readonly la
 }
 
 // Name of each source of a datum.
-export const BASIS_LABELS: Readonly<Record<MeteorDataBasis, string>> = { iauScientific: 'IAU MDC', imoVisual: 'IMO visual', publishedAnnualPrediction: 'Published prediction', nebulosaModel: 'Nebulosa model', observerGeometry: 'Observer geometry' }
+export const BASIS_LABELS: Readonly<Record<MeteorDataBasis, string>> = { iauScientific: 'IAU MDC', imoVisual: 'IMO visual', publishedActivityModel: 'Published activity model', publishedAnnualPrediction: 'Published prediction', nebulosaModel: 'Nebulosa model', observerGeometry: 'Observer geometry' }
 
 // What each gap of the preferred solution means for the shower.
 export const GAP_LABELS: Readonly<Record<MeteorShowerGap, string>> = {
@@ -45,6 +45,7 @@ export const REASON_LABELS: Readonly<Record<MeteorNoWindowReason, string>> = {
 	sunTooHigh: 'The Sun never goes as low as the darkness asked for.',
 	radiantBelowThreshold: 'The radiant never rises above the lowest altitude while it is dark.',
 	moonConstraint: 'Only the Moon constraint leaves no window.',
+	noWindow: 'No stretch of the night is dark enough with the radiant high enough.',
 	insufficientData: 'No window, for a reason the samples cannot tell.',
 }
 

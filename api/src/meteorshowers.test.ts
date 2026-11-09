@@ -310,3 +310,62 @@ describe('radiants far from their activity', () => {
 		expect(peak.showers[0].radiantExtrapolated).toBe(true)
 	})
 })
+
+describe('activity and rates', () => {
+	test('a curated profile gives a curve over its support, and a shower without one gives none', async () => {
+		const { service } = setup()
+		const geminids = await service.activity('iau:4', { year: 2026 })
+		const profile = geminids.profile!
+		expect(profile.sourceId).toBe('moorhead2019')
+		expect(profile.samples).toHaveLength(241)
+		expect(new Date(profile.peakTime).toISOString().slice(0, 10)).toBe('2026-12-14')
+		expect(Math.max(...profile.samples.map((sample) => sample.zhr))).toBeCloseTo(118, -1)
+		expect(profile.samples[0].zhr).toBeCloseTo(1, 1)
+		for (let i = 1; i < profile.samples.length; i++) expect(profile.samples[i].time).toBeGreaterThan(profile.samples[i - 1].time)
+		expect(geminids.visual?.typicalZhr).toBe(150)
+
+		const outburst = await service.activity('iau:900', { year: 2026 })
+		expect(outburst).toEqual({ year: 2026, reason: 'noActivityProfile' })
+	})
+
+	test('a modelled night adds counts under the stated assumptions, and a geometric one never has a rate', async () => {
+		const { service } = setup()
+		const night = await service.observing('iau:4', { site: SAO_PAULO, eveningDate: '2026-12-13', ...NIGHT, assumptions: { limitingMagnitude: 6, obstructedFraction: 0 } })
+		expect(night.kind).toBe('modelled')
+		expect(night.model).toMatchObject({ sourceId: 'moorhead2019', basis: 'publishedActivityModel', limitingMagnitude: 6, populationIndex: 2.6, populationIndexSource: 'profile', obstructionCorrection: 1 })
+		expect(night.model!.windows).toHaveLength(1)
+		expect(night.model!.windows[0].expectedCount).toBeGreaterThan(50)
+		expect(night.samples.some((sample) => (sample.localRate ?? 0) > 10)).toBe(true)
+
+		const halfObstructed = await service.observing('iau:4', { site: SAO_PAULO, eveningDate: '2026-12-13', ...NIGHT, assumptions: { limitingMagnitude: 6, obstructedFraction: 0.5 } })
+		expect(halfObstructed.model!.windows[0].expectedCount).toBeCloseTo(night.model!.windows[0].expectedCount / 2, 6)
+
+		const geometric = await service.observing('iau:4', { site: SAO_PAULO, eveningDate: '2026-12-13', ...NIGHT })
+		expect(geometric.kind).toBe('geometric')
+		expect(geometric.model).toBeUndefined()
+		expect(geometric.samples.every((sample) => sample.localRate === undefined)).toBe(true)
+	})
+
+	test('nights are ranked eligible first, by count or suitability, then window length, then date; an abort stops it', async () => {
+		const { service } = setup()
+		const ranking = (await service.nights('iau:4', { site: SAO_PAULO, startEveningDate: '2026-12-01', nights: 6, ...NIGHT }))!
+		expect(ranking.kind).toBe('geometric')
+		expect(ranking.nights).toHaveLength(6)
+		expect(ranking.nights.slice(-2).map((night) => [night.eveningDate, night.eligible, night.reasons])).toEqual([
+			['2026-12-01', false, ['noSupportedActivity']],
+			['2026-12-02', false, ['noSupportedActivity']],
+		])
+		const eligible = ranking.nights.filter((night) => night.eligible)
+		for (let i = 1; i < eligible.length; i++) expect(eligible[i].radiantSineHours).toBeLessThanOrEqual(eligible[i - 1].radiantSineHours)
+		expect(eligible.every((night) => night.expectedCount === undefined)).toBe(true)
+
+		const modelled = (await service.nights('iau:4', { site: SAO_PAULO, startEveningDate: '2026-12-11', nights: 4, ...NIGHT, assumptions: { limitingMagnitude: 6.5, obstructedFraction: 0 } }))!
+		expect(modelled.kind).toBe('modelled')
+		expect(modelled.nights[0].eveningDate).toBe('2026-12-13')
+		for (let i = 1; i < modelled.nights.length; i++) expect(modelled.nights[i].expectedCount!).toBeLessThanOrEqual(modelled.nights[0].expectedCount!)
+
+		const aborted = new AbortController()
+		aborted.abort()
+		expect(await service.nights('iau:4', { site: SAO_PAULO, startEveningDate: '2026-12-01', nights: 31, ...NIGHT }, aborted.signal)).toBeUndefined()
+	})
+})

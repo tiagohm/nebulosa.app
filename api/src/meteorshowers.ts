@@ -8,7 +8,12 @@ import { errorResponse } from './http'
 import { LruCache } from './lrucache'
 import {
 	activityAt,
+	activityCurve,
 	MAX_STATE_IDS,
+	type MeteorActivityCurve,
+	type MeteorActivityRequest,
+	type MeteorNightRanking,
+	type MeteorNightsRequest,
 	type MeteorActivityState,
 	type MeteorObservingNight,
 	type MeteorObservingRequest,
@@ -20,12 +25,13 @@ import {
 	observingNight,
 	occurrenceInstant,
 	occurrencesOverlapping,
+	rankNights,
 	skyRadiantsAt,
 } from './meteorshowers.astronomy'
 import { activityKindOf, filterMeteorShowers, indexMeteorCatalog, type MeteorCatalogIndex, MeteorCatalogInvalidError, type MeteorShowerFilter, type MeteorShowerGap, type MeteorShowerIdentity, type MeteorShowerRecord, type MeteorSolutionSelection, preferredSolution } from './meteorshowers.catalog'
 import { MeteorSolarLongitudeTable } from './meteorshowers.solar'
 import type { MeteorCatalogFailureCode, MeteorShowerStore } from './meteorshowers.store'
-import { METEOR_ANNUAL_PREDICTION_YEARS, METEOR_VISUAL_REVISION, METEOR_VISUAL_SOURCES, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSource } from './meteorshowers.visual'
+import { METEOR_ACTIVITY_MODEL_REVISION, METEOR_ANNUAL_PREDICTION_YEARS, METEOR_VISUAL_REVISION, METEOR_VISUAL_SOURCES, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSource } from './meteorshowers.visual'
 import { fetchUpstream, type UpstreamFetch, UpstreamTooLargeError, UpstreamUnavailableError } from './sky/remote'
 import type { SkyMeteorShowers } from './sky/routes'
 import type { SkySearchResult } from './sky/types'
@@ -141,6 +147,8 @@ export interface MeteorShowerSummary {
 	readonly activityKind: MeteorShowerActivity['kind']
 	// Curated visual entry; absent without visual data.
 	readonly visual?: MeteorVisualEntry
+	// Whether a published activity profile is curated, so a curve and modelled rates can be computed.
+	readonly hasActivityProfile: boolean
 	// Radiant of the preferred solution at its reference longitude, radians, geocentric J2000; absent without one.
 	readonly radiant?: { readonly rightAscension: number; readonly declination: number }
 	// What the preferred solution leaves unknown.
@@ -505,12 +513,37 @@ export class MeteorShowersService {
 	async observing(id: string, request: MeteorObservingRequest): Promise<MeteorObservingNight> {
 		const record = await this.#record(id)
 		const { site } = request
-		const key = JSON.stringify([this.options.store.state().revision, id, site.latitude, site.longitude, site.elevation, site.timeZone, request.eveningDate, request.maximumSolarAltitude, request.minimumRadiantAltitude, request.minimumMoonSeparation, request.maximumMoonIllumination])
+		const key = JSON.stringify([
+			this.options.store.state().revision,
+			METEOR_ACTIVITY_MODEL_REVISION,
+			id,
+			site.latitude,
+			site.longitude,
+			site.elevation,
+			site.timeZone,
+			request.eveningDate,
+			request.maximumSolarAltitude,
+			request.minimumRadiantAltitude,
+			request.minimumMoonSeparation,
+			request.maximumMoonIllumination,
+			request.assumptions,
+		])
 		const cached = this.#nights.get(key)
 		if (cached) return cached
 		const night = observingNight(record, request, this.options.night, this.#table)
 		this.#nights.set(key, night)
 		return night
+	}
+
+	// Activity curve of a shower in a civil year: its published profile sampled, or none. Throws MeteorShowersError notFound.
+	async activity(id: string, request: MeteorActivityRequest): Promise<MeteorActivityCurve> {
+		return activityCurve(await this.#record(id), request, this.#table)
+	}
+
+	// Ranking of the nights of a period for a shower from a site; undefined when the request was aborted. Throws
+	// MeteorShowersError notFound.
+	async nights(id: string, request: MeteorNightsRequest, signal?: AbortSignal): Promise<MeteorNightRanking | undefined> {
+		return rankNights(await this.#record(id), request, this.options.night, this.#table, signal)
 	}
 
 	// Shower of an id, or MeteorShowersError notFound.
@@ -543,6 +576,7 @@ export class MeteorShowersService {
 			status: record.status,
 			activityKind: activityKindOf(record),
 			...(record.visual && { visual: record.visual }),
+			hasActivityProfile: record.profile !== undefined,
 			...(solution?.rightAscension !== undefined && solution.declination !== undefined && { radiant: { rightAscension: solution.rightAscension, declination: solution.declination } }),
 			gaps: record.gaps,
 			activityNow: { state, basis },
@@ -642,6 +676,21 @@ export function createMeteorShowersRoutes(service: MeteorShowersService) {
 			POST: async (req) => {
 				const request = (await req.json()) as MeteorObservingRequest
 				return answer(() => service.observing(decodeURIComponent(req.params.id), request))
+			},
+		},
+		'/api/meteor-showers/:id/activity': {
+			// Activity curve of one shower in a year (MeteorActivityRequest → MeteorActivityCurve); 404 notFound.
+			POST: async (req) => {
+				const request = (await req.json()) as MeteorActivityRequest
+				return answer(() => service.activity(decodeURIComponent(req.params.id), request))
+			},
+		},
+		'/api/meteor-showers/:id/nights': {
+			// Ranking of the nights of a period (MeteorNightsRequest → MeteorNightRanking); 404 notFound. A request that left
+			// stops between nights and is not answered.
+			POST: async (req) => {
+				const request = (await req.json()) as MeteorNightsRequest
+				return answer(() => service.nights(decodeURIComponent(req.params.id), request, req.signal))
 			},
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>

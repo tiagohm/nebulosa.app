@@ -3,7 +3,7 @@ import type { MeteorShowersCalendarEntry, MeteorShowersSources } from 'api'
 import { parseRoute, routePath } from '../../shell/route'
 import type { PlannerIo } from '../planetary/planetary'
 import { meteorCalendarWeeks, shiftMonth } from './MeteorShowerCalendar'
-import { calendarRequest, createMeteorShowersState, listQuery, loadNight, loadPage, observingRequest, selectShower } from './meteorshowers'
+import { calendarRequest, createMeteorShowersState, listQuery, loadNight, loadPage, observingRequest, rankingRequest, selectShower } from './meteorshowers'
 import { formatOccurrencePeak, formatOccurrencePeriod, formatPeak, occurrenceInstant } from './meteorshowers.format'
 import { handleMeteorShowersEvent, type MeteorShowerSourcesState, refreshIauCatalog } from './meteorshowers.sources'
 
@@ -131,5 +131,17 @@ describe('sources', () => {
 		expect(await refreshIauCatalog(state, request)).toBe(false)
 		expect(state.error).toBe('The IAU Meteor Data Center could not be reached')
 		expect(state.refreshing).toBe(false)
+	})
+})
+
+describe('rates and ranking', () => {
+	test('assumptions are sent only when modelled rates are on, and a ranking spans at most 31 evenings', () => {
+		const state = createMeteorShowersState()
+		expect(observingRequest(state, SITE, '2026-12-13').assumptions).toBeUndefined()
+		const modelled = { ...state, rates: { enabled: true, limitingMagnitude: 6, obstructedPercent: 20 } }
+		expect(observingRequest(modelled, SITE, '2026-12-13').assumptions).toEqual({ limitingMagnitude: 6, obstructedFraction: 0.2 })
+		const ranking = rankingRequest({ ...modelled, rankedNights: 60 }, SITE, '2026-12-05')
+		expect(ranking).toMatchObject({ startEveningDate: '2026-12-05', nights: 31, assumptions: { limitingMagnitude: 6, obstructedFraction: 0.2 } })
+		expect('eveningDate' in ranking).toBe(false)
 	})
 })

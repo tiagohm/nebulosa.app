@@ -111,7 +111,9 @@ function SessionSection({ camera, session, settings }: SessionSectionProps) {
 	const active = liveSessionActive(session)
 	const error = runtime.errors[startKey] ?? runtime.errors[sessionKey]
 	const exposure = session?.cohorts.reduce((total, cohort) => total + cohort.exposure, 0) ?? 0
-	const send = (action: Parameters<typeof liveSessionCommand>[2]) => void liveSessionCommand(liveStackingRuntime, session!.sessionId, action)
+	// Guarded rather than asserted: the React Compiler of the executable reads an asserted `session!.sessionId` during the
+	// render to memoize this closure, which throws while the camera has no session.
+	const send = (action: Parameters<typeof liveSessionCommand>[2]) => session && void liveSessionCommand(liveStackingRuntime, session.sessionId, action)
 
 	return (
 		<CollapsibleSection id="images.liveStacking.session" title="Session" summary={session ? LIVE_STACKING_STATE_LABELS[session.state] : 'Not started'}>

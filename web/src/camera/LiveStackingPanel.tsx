@@ -4,7 +4,7 @@ import { useSnapshot } from 'valtio'
 import { calibrationLibraryRuntime } from '../calibrationlibrary/calibrationlibrary'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
-import { formatDuration, formatExposureTime, formatByteSize } from '../format'
+import { formatByteSize, formatDuration, formatExposureTime, formatTemperature } from '../format'
 import type { CameraOperationContext } from '../images/cameracontext'
 import { selectCameraFrame } from '../images/cameratabs'
 import { captureFramesState } from '../images/captureframes'
@@ -293,7 +293,7 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 							if (option === NO_MASTER) return 'None'
 							const master = masters[kind].find((candidate) => String(candidate.masterId) === option)
 							return master
-								? `#${master.masterId} · ${master.frames} frames${master.metadata.exposure.value !== undefined ? ` · ${formatExposureTime(master.metadata.exposure.value / 1000000)}` : ''}${master.metadata.setTemperature.value !== undefined ? ` · ${master.metadata.setTemperature.value} °C` : ''}`
+								? `#${master.masterId} · ${master.frames} frames${master.metadata.exposure.value !== undefined ? ` · ${formatExposureTime(master.metadata.exposure.value / 1000000)}` : ''}${master.metadata.setTemperature.value !== undefined ? ` · ${formatTemperature(master.metadata.setTemperature.value)}` : ''}`
 								: option
 						}
 						return <Select key={kind} label={LIVE_MASTER_LABELS[kind]} options={options} value={value} format={format} onChange={(option) => choose(name, kind, option)} />

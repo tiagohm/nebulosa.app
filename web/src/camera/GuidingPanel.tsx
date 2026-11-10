@@ -7,7 +7,7 @@ import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { formatDegrees, formatPixelLength, formatPixelPosition, formatUtcDateTime } from '../format'
+import { formatDegrees, formatPixelLength, formatPixelPosition, formatTemperature, formatUtcDateTime } from '../format'
 import { operationsState } from '../operations'
 import { formatPixelScale } from '../platesolving/coordinates'
 import { activeProfile, exposureSettings, guidingSettings, profileState, setGuidingSettings, starDetectionSettings } from '../profile/profile'
@@ -352,7 +352,7 @@ function DarkSection({ session, enabled, disabled, onEnabled }: DarkSectionProps
 						format={(option) => {
 							if (option === 'auto') return 'Best match'
 							const candidate = candidates.find(({ masterId }) => String(masterId) === option)
-							return candidate ? `${option} · ${candidate.frames} frames${candidate.temperature !== undefined ? ` · ${candidate.temperature.toFixed(1)} °C` : ''}` : option
+							return candidate ? `${option} · ${candidate.frames} frames${candidate.temperature !== undefined ? ` · ${formatTemperature(candidate.temperature)}` : ''}` : option
 						}}
 						disabled={disabled}
 						onChange={(option) => void setGuidingDark(guidingRuntime, session, option === 'auto' ? { enabled: true } : { enabled: true, masterId: Number(option) })}

@@ -15,6 +15,7 @@ import {
 	formatDateTime,
 	formatDegrees,
 	formatDuration,
+	formatElevation,
 	formatExposureTime,
 	formatFixed,
 	formatGeographic,
@@ -129,6 +130,13 @@ describe('measurements', () => {
 		expect(formatTemperature(-10.24)).toBe('-10.2 °C')
 		expect(formatTemperature(-0.02)).toBe('0.0 °C')
 		expect(formatTemperature(Number.NaN)).toBe(MISSING)
+	})
+
+	test('elevations in whole meters', () => {
+		expect(formatElevation(759.6)).toBe('760 m')
+		expect(formatElevation(-28.2)).toBe('-28 m')
+		expect(formatElevation(-0.3)).toBe('0 m')
+		expect(formatElevation(Number.NaN)).toBe(MISSING)
 	})
 
 	test('byte sizes in binary units', () => {

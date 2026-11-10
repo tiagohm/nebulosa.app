@@ -87,7 +87,7 @@ const DARK_FRAME_TYPE_LABELS: Readonly<Record<DarkFrameType, string>> = { dark: 
 
 // Returns the label of a group, short enough for a row of the panel; a group without a target names no temperature.
 function groupLabel({ exposure, temperature }: Pick<DarkGroup, 'exposure' | 'temperature'>) {
-	return `${formatExposureTime(exposure)}${temperature === undefined ? '' : `, ${temperature} °C`}`
+	return `${formatExposureTime(exposure)}${temperature === undefined ? '' : `, ${formatTemperature(temperature)}`}`
 }
 
 // Returns the groups a running session applied, to show while it runs.

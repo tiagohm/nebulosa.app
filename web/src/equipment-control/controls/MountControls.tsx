@@ -1,7 +1,8 @@
 import type { MountCoordinate, MountState } from 'api'
+import { toDeg } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatUtcDateTime } from '../../format'
+import { formatDegrees, formatElevation, formatGeographic, formatUtcDateTime } from '../../format'
 import { connectionCameraTab } from '../../images/cameratabs'
 import { imagesState, selectImage, selectImageTool } from '../../images/images'
 import { useActiveSite } from '../../location/useLocation'
@@ -163,9 +164,8 @@ export function MountControls({ device }: InterfaceProps) {
 				</PanelSection>
 			)}
 			<PanelSection title="Site & Time">
-				<DataRow label="Latitude">{formatDeclination(mount.site.latitude)}</DataRow>
-				<DataRow label="Longitude">{formatDeclination(mount.site.longitude)}</DataRow>
-				<DataRow label="Elevation">{`${mount.site.elevation.toFixed(0)} m`}</DataRow>
+				<DataRow label="Location">{formatGeographic(toDeg(mount.site.latitude), toDeg(mount.site.longitude))}</DataRow>
+				<DataRow label="Elevation">{formatElevation(mount.site.elevation)}</DataRow>
 				<DataRow label="Time">{mount.time.utc > 0 ? formatUtcDateTime(mount.time.utc) : 'Not reported'}</DataRow>
 				<Actions>
 					{observer && (

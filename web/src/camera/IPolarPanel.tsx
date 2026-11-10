@@ -7,7 +7,7 @@ import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { formatArcmin, formatArcsec, formatClockTime, formatDegrees, formatSignedArcmin, MISSING } from '../format'
+import { formatArcmin, formatArcsec, formatClockTime, formatDegrees, formatExposureTime, formatSignedArcmin, formatTemperature, MISSING } from '../format'
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
@@ -371,10 +371,10 @@ function DarkSection({ dark, exposureTime, locked, session, onChange }: DarkSect
 		const temperature = metadata.setTemperature.value ?? metadata.sensorTemperature.value
 		const parts = [
 			`#${master.masterId}`,
-			metadata.exposure.value === undefined ? MISSING : `${metadata.exposure.value / 1e6} s`,
+			metadata.exposure.value === undefined ? MISSING : formatExposureTime(metadata.exposure.value / 1e6),
 			metadata.gain.value === undefined ? undefined : `gain ${metadata.gain.value}`,
 			metadata.binX.value === undefined ? undefined : `bin ${metadata.binX.value}×${metadata.binY.value ?? metadata.binX.value}`,
-			temperature === undefined ? undefined : `${temperature} °C`,
+			temperature === undefined ? undefined : formatTemperature(temperature),
 			`${master.frames} frames`,
 			metadata.cameraName,
 		]

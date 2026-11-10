@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatGeographic } from '../format'
+import { formatElevation, formatGeographic } from '../format'
 import { activeProfile, profileState } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
@@ -123,7 +123,7 @@ export function ToolLocationSection({ value, location, onChange, elevation = fal
 			{location ? (
 				<>
 					<DataRow label="Place">{formatGeographic(location.latitude, location.longitude)}</DataRow>
-					{elevation && <DataRow label="Elevation">{location.elevation} m</DataRow>}
+					{elevation && <DataRow label="Elevation">{formatElevation(location.elevation)}</DataRow>}
 					<DataRow label="Time Zone">{location.timeZone}</DataRow>
 				</>
 			) : value.mode === 'active' ? (

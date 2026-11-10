@@ -6,7 +6,7 @@ import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
 import { isAnnotationShown } from '../annotations/AnnotationOverlay'
 import { annotationKey, annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, resolveMinorBody, runAnnotation, sameAnnotationRequest } from '../annotations/annotations'
 import { useAnnotationContext, useAnnotationResult } from '../annotations/useAnnotationResult'
-import { formatDegrees, formatDuration, formatGeographic, formatUtcDateTime, MISSING } from '../format'
+import { formatDegrees, formatDuration, formatElevation, formatGeographic, formatUtcDateTime, MISSING } from '../format'
 import { useActiveSite } from '../location/useLocation'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { profileState, setAnnotationPreferences } from '../profile/profile'
@@ -331,7 +331,7 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 
 // Formats a site: "23.5500° S, 46.6300° W, 760 m".
 function formatSite({ latitude, longitude, elevation }: AnnotationSite): string {
-	return `${formatGeographic(latitude, longitude)}, ${elevation.toFixed(0)} m`
+	return `${formatGeographic(latitude, longitude)}, ${formatElevation(elevation)}`
 }
 
 interface ObjectsProps {

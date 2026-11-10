@@ -1,7 +1,7 @@
 import { formatAngle, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/angle'
 
 // Display formats shared by every screen for quantities that are not tied to one feature: fixed and signed numbers,
-// percentages, angles in degrees, arcminutes, and arcseconds, hour angles, geographic positions, temperatures, lengths in pixels
+// percentages, angles in degrees, arcminutes, and arcseconds, hour angles, geographic positions and elevations, temperatures, lengths in pixels
 // with their sky size, positions in an image, distances in kilometers, exposure times, durations, elapsed and signed clocks, instants
 // in UTC or in an IANA time zone, byte sizes, and measurements of a wide dynamic range. Every Intl.DateTimeFormat of the
 // web is built and cached here (`dateTimeFormat`), and every civil time a screen shows is one of the formats below.
@@ -103,6 +103,11 @@ export function formatGeographic(latitude: number, longitude: number, digits: nu
 	const lon = formatFixed(Math.abs(longitude), digits)
 	if (lat === MISSING || lon === MISSING) return MISSING
 	return `${lat}° ${latitude < 0 && Number(lat) !== 0 ? 'S' : 'N'}, ${lon}° ${longitude < 0 && Number(lon) !== 0 ? 'W' : 'E'}`
+}
+
+// Returns an elevation above sea level in meters, whole: "760 m", "-28 m", or MISSING when it is not finite.
+export function formatElevation(meters: number) {
+	return withUnit(formatFixed(meters, 0), ' m')
 }
 
 // Returns a temperature in °C with one decimal, the resolution drivers report: "-10.2 °C".

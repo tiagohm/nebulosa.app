@@ -6,7 +6,7 @@ import { ipolarFrameRole, ipolarRuntime } from '../camera/ipolar'
 import { liveAcquisitionLabel, liveCalibrationLabel } from '../camera/livestacking'
 import { tppaFrameRole, tppaRuntime } from '../camera/tppa'
 import { connectionState } from '../connection/connection'
-import { formatDuration, formatPixelLength, MISSING } from '../format'
+import { formatDuration, formatFixed, formatPixelLength, formatTemperature, MISSING } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { type ImageQualityStatus, imageQuality } from '../stars/quality'
@@ -40,7 +40,7 @@ const ACQUISITION_FIELDS: readonly (readonly [label: string, format: (acquisitio
 	['Filter', (a) => a.filter],
 	['Gain', (a) => a.gain?.toString()],
 	['Offset', (a) => a.offset?.toString()],
-	['Sensor temp. (°C)', (a) => a.temperature?.toFixed(1)],
+	['Sensor temp. (°C)', (a) => (a.temperature === undefined ? undefined : formatFixed(a.temperature, 1))],
 	['Binning', (a) => a.binning && `${a.binning.x}×${a.binning.y}`],
 	['Camera', (a) => a.camera],
 	['Telescope', (a) => a.telescope],
@@ -348,11 +348,7 @@ function LiveStack({ stack }: { readonly stack: LiveStackingProvenanceStack }) {
 			</DataRow>
 			<DataRow label="Acquisition">{liveAcquisitionLabel(stack)}</DataRow>
 			<DataRow label="Calibration">{liveCalibrationLabel(stack)}</DataRow>
-			{stack.temperature && (
-				<DataRow label="Temperature">
-					{stack.temperature[0].toFixed(1)} to {stack.temperature[1].toFixed(1)} °C
-				</DataRow>
-			)}
+			{stack.temperature && <DataRow label="Temperature">{`${formatFixed(stack.temperature[0], 1)} to ${formatTemperature(stack.temperature[1])}`}</DataRow>}
 		</div>
 	)
 }

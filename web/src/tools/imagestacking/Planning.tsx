@@ -1,7 +1,7 @@
 import type { StackingCalibration, StackingCohort, StackingFilterGroup, StackingFrameSummary, StackingJobSummary, StackingProjectDetail, StackingSettings, StackingValidation } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { MISSING } from '../../format'
+import { formatTemperature, MISSING } from '../../format'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Notice } from '../../ui/Notice'
@@ -66,7 +66,7 @@ function CohortCard({ projectId, cohort }: { readonly projectId: string; readonl
 		target.binX === undefined ? undefined : `bin ${target.binX}`,
 		target.gain === undefined ? undefined : `gain ${target.gain}`,
 		target.offset === undefined ? undefined : `offset ${target.offset}`,
-		target.temperature === undefined ? undefined : `${target.temperature} °C`,
+		target.temperature === undefined ? undefined : formatTemperature(target.temperature),
 		target.filter,
 	]
 

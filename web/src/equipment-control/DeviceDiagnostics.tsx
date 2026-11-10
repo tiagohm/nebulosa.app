@@ -4,6 +4,7 @@ import { deviceState } from '../equipment/equipment'
 import { MISSING } from '../format'
 import { operationsState, runningOn } from '../operations'
 import { DataRow } from '../ui/DataRow'
+import { DisclosureSummary } from '../ui/DisclosureSummary'
 import { controlRuntime, deviceStateOf } from './control'
 import { DEVICE_TYPE_LABELS, type DeviceGroup } from './groups'
 
@@ -50,8 +51,8 @@ function InterfaceDiagnostics({ device }: { readonly device: DeviceSummary }) {
 // Collapsible diagnostics of a device.
 export function DeviceDiagnostics({ group }: DeviceDiagnosticsProps) {
 	return (
-		<details className="border-b border-line-100 px-4 py-3 text-sm leading-5 text-ink-200">
-			<summary className="cursor-pointer text-xs font-medium tracking-[0.08em] text-ink-300 uppercase select-none">Diagnostics</summary>
+		<details className="group/disclosure border-b border-line-100 px-4 py-3 text-sm leading-5 text-ink-200">
+			<DisclosureSummary title="Diagnostics" />
 			<div className="mt-2 flex flex-col gap-2">
 				{group.devices.map((device) => (
 					<InterfaceDiagnostics key={device.id} device={device} />

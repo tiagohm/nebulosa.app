@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { Button } from '../../ui/Button'
+import { DisclosureSummary } from '../../ui/DisclosureSummary'
 import { Notice } from '../../ui/Notice'
 import { TextInput } from '../../ui/TextInput'
 import { indiView } from './indi'
@@ -66,10 +67,8 @@ export function IndiPropertiesPanel({ connectionId, hardwareId }: IndiProperties
 			</div>
 			{shown.length === 0 && <Message>No property matches the search.</Message>}
 			{shown.map((group) => (
-				<details key={group.name} open={searching || open.has(group.name)} onToggle={(event) => toggle(group.name, event.currentTarget.open)} className="border-b border-line-100 px-4">
-					<summary className="cursor-pointer py-3 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase select-none">
-						{group.name} · {group.vectors.length}
-					</summary>
+				<details key={group.name} open={searching || open.has(group.name)} onToggle={(event) => toggle(group.name, event.currentTarget.open)} className="group/disclosure border-b border-line-100 px-4">
+					<DisclosureSummary title={`${group.name} · ${group.vectors.length}`} className="py-3" />
 					<div className="flex flex-col pb-1">
 						{group.vectors.map((vector) => (
 							<IndiPropertyVector key={`${view.epoch}:${vector.name}:${view.definitions[vector.name] ?? 0}`} vector={vector} />

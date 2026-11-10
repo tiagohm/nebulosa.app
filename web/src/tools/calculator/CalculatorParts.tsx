@@ -3,6 +3,7 @@ import { type ReactNode, useState } from 'react'
 import type { OpticalConfiguration } from '../../sky/framing'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
+import { DisclosureSummary } from '../../ui/DisclosureSummary'
 import { Field, InputSuffix, inputClassName, suffixPadding } from '../../ui/Field'
 import { Notice } from '../../ui/Notice'
 import { SectionHeading } from '../../ui/SectionHeading'
@@ -126,8 +127,8 @@ export function OptionalDatum<T>({ label, outcome, hint, children }: { readonly 
 // Collapsible notes on a model: its equation, parameters, valid domain, and approximations.
 export function FormulaNotes({ children }: { readonly children: ReactNode }) {
 	return (
-		<details className="rounded-sm border border-line-100 bg-base-100">
-			<summary className="cursor-pointer px-4 py-3 text-xs font-medium tracking-[0.08em] text-ink-300 uppercase select-none hover:text-ink-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent">Formula & assumptions</summary>
+		<details className="group/disclosure rounded-sm border border-line-100 bg-base-100">
+			<DisclosureSummary title="Formula & assumptions" className="px-4 py-3 focus-visible:-outline-offset-2" />
 			<div className="flex flex-col gap-2 border-t border-line-100 px-4 py-3 text-sm leading-5 text-ink-200">{children}</div>
 		</details>
 	)

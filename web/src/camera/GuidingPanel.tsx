@@ -55,6 +55,9 @@ import {
 	startGuidingSession,
 	stopGuiding,
 	stopGuidingSession,
+	formatCalibrationAdaptation,
+	formatCalibrationPlace,
+	formatCalibrationRate,
 } from './guiding'
 import { CalibrationProgress } from './GuidingCalibrationProgress'
 import { CALIBRATION_CANDIDATE_LABELS, CALIBRATION_QUALITY_LABELS, CALIBRATION_REJECTION_LABELS, GuidingCalibrationReview, type GuidingCalibrationReviewSource } from './GuidingCalibrationReview'
@@ -543,10 +546,10 @@ function SessionState({ session, onReview }: SessionStateProps) {
 						<DataRow label="Calibration" tone={calibration.assessment.quality === 'poor' ? 'danger' : 'default'}>
 							{`${calibration.origin === 'restored' ? 'Restored' : 'Solved'}, ${QUALITY_LABELS[calibration.assessment.quality]}`}
 						</DataRow>
-						<DataRow label="Calibrated At">{formatCalibrationContext(calibration.source)}</DataRow>
-						{calibration.transformations.length > 0 && <DataRow label="Adapted">{formatTransformations(calibration)}</DataRow>}
-						<DataRow label="RA Rate">{`${formatRate(calibration.raRate)} at ${formatDegrees(calibration.raAngle, 1)}`}</DataRow>
-						<DataRow label="DEC Rate">{`${formatRate(calibration.decRate)} at ${formatDegrees(calibration.decAngle, 1)}`}</DataRow>
+						<DataRow label="Calibrated At">{formatCalibrationPlace(calibration.source)}</DataRow>
+						{calibration.transformations.length > 0 && <DataRow label="Adapted">{formatCalibrationAdaptation(calibration)}</DataRow>}
+						<DataRow label="RA Rate">{`${formatCalibrationRate(calibration.raRate, pixelScale)} at ${formatDegrees(calibration.raAngle, 1)}`}</DataRow>
+						<DataRow label="DEC Rate">{`${formatCalibrationRate(calibration.decRate, pixelScale)} at ${formatDegrees(calibration.decAngle, 1)}`}</DataRow>
 						{calibration.backlash > 0 && <DataRow label="DEC Backlash">{`${Math.round(calibration.backlash)} ms`}</DataRow>}
 					</>
 				)}
@@ -580,20 +583,3 @@ function SessionState({ session, onReview }: SessionStateProps) {
 
 // Labels of the grades of a calibration.
 const QUALITY_LABELS: Readonly<Record<GuidingCalibrationSummary['assessment']['quality'], string>> = { good: 'good', warning: 'usable with warnings', poor: 'poor' }
-
-// Formats the mount context of a calibration: its declination in degrees and its side of the pier, each when known.
-function formatCalibrationContext({ declination, pierSide }: GuidingCalibrationSummary['source']) {
-	const parts = [declination !== undefined ? `DEC ${formatDegrees(declination, 1)}` : 'DEC unknown', pierSide ? `pier ${pierSide.toLowerCase()}` : 'pier side unknown']
-	return parts.join(', ')
-}
-
-// Formats how the calibration in use was adapted from the one measured: flipped for the other side of the pier, and its
-// RA response scaled for the declination.
-function formatTransformations({ transformations, declinationScale }: GuidingCalibrationSummary) {
-	return transformations.map((transformation) => (transformation === 'pierFlip' ? 'flipped for the pier side' : `RA ×${declinationScale.toFixed(2)} for the declination`)).join(', ')
-}
-
-// Formats a calibration rate given in pixels per millisecond as pixels per second.
-function formatRate(rate: number) {
-	return `${(rate * 1000).toFixed(2)} px/s`
-}

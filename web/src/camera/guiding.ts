@@ -6,6 +6,7 @@ import type {
 	GuidingCalibrationEntry,
 	GuidingCalibrationPatch,
 	GuidingCalibrationProgress,
+	GuidingCalibrationSummary,
 	GuidingDarkCandidates,
 	GuidingDarkChange,
 	GuidingRestoreCalibrationRequest,
@@ -26,6 +27,7 @@ import type {
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
+import { formatDegrees, formatFixed, MISSING } from '../format'
 import { ApiResponseError, deviceUrl, fetchJson, jsonInit, responseError } from '../http'
 import { type CameraExposureSettings, GUIDING_MAXIMUM_EXPOSURE, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_EXPOSURE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
@@ -231,6 +233,38 @@ export const GUIDING_CALIBRATION_PHASE_LABELS: Readonly<Record<GuidingCalibratio
 	decReturnMeasure: 'Measuring the DEC return',
 	completed: 'Completed',
 	failed: 'Failed',
+}
+
+// Where a calibration was measured or is used: the declination of the mount in radians and its side of the pier, each
+// when known.
+export interface GuidingCalibrationPlace {
+	// Declination of the mount, radians.
+	readonly declination?: number
+	// Side of the pier as the driver reports it; NEITHER is unknown.
+	readonly pierSide?: string
+}
+
+// Returns where a calibration was measured or is used: "DEC 12.3°, pier east", or "DEC unknown, pier side unknown" for
+// what is not known.
+export function formatCalibrationPlace({ declination, pierSide }: GuidingCalibrationPlace) {
+	return `${declination === undefined ? 'DEC unknown' : `DEC ${formatDegrees(declination, 1)}`}, ${pierSide && pierSide !== 'NEITHER' ? `pier ${pierSide.toLowerCase()}` : 'pier side unknown'}`
+}
+
+// Returns a calibration rate in pixels per millisecond as pixels per second, followed by arcseconds per second when the
+// guide pixel scale (arcsec/px) is known: "4.12 px/s", "4.12 px/s (9.3″/s)", or MISSING when it is not finite.
+export function formatCalibrationRate(rate: number, pixelScale?: number) {
+	if (!Number.isFinite(rate)) return MISSING
+	const perSecond = rate * 1000
+	const pixels = `${formatFixed(perSecond, 2)} px/s`
+	return pixelScale === undefined ? pixels : `${pixels} (${formatFixed(perSecond * pixelScale, 1)}″/s)`
+}
+
+// Returns how the calibration in use was adapted from the one measured: flipped for the other side of the pier, and its
+// RA response scaled for the declination ("flipped for the pier side, RA ×0.87 for the declination"), or undefined when
+// it is used as measured.
+export function formatCalibrationAdaptation({ transformations, declinationScale }: Pick<GuidingCalibrationSummary, 'transformations' | 'declinationScale'>) {
+	if (transformations.length === 0) return undefined
+	return transformations.map((transformation) => (transformation === 'pierFlip' ? 'flipped for the pier side' : `RA ×${formatFixed(declinationScale, 2)} for the declination`)).join(', ')
 }
 
 // Builds the Start Guiding request of the guiding form; recalibrate is Force Recalibrate, which calibrates whatever the

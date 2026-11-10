@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { ObservatoryCamera, ObservatoryCameraEvent, ObservatoryCamerasSnapshot } from 'api'
 import { proxy } from 'valtio'
 import { applyObservatoryCamerasSnapshot, filterCameras, handleObservatoryCameraEvent, moveCamera, type ObservatoryCamerasState, saveCamera, sortedCameras } from './observatorycameras'
-import { cameraStatus, formatElapsed } from './status'
+import { cameraStatus } from './status'
 import { parseOffer, sdpFragment } from './whep'
 
 function camera(patch: Partial<ObservatoryCamera> = {}): ObservatoryCamera {
@@ -111,12 +111,6 @@ describe('status', () => {
 		expect(cameraStatus(camera(), undefined, { status: 'playing', docked: true }, { status: 'ready' }).label).toBe('Live in mini-player')
 		expect(cameraStatus(camera(), undefined, { status: 'failed', docked: false, error: 'No video' }, { status: 'ready' })).toEqual({ tone: 'danger', label: 'Failed', detail: 'No video' })
 		expect(cameraStatus(camera(), undefined, undefined, { status: 'notInstalled' }).label).toBe('Gateway not installed')
-	})
-
-	test('elapsed time', () => {
-		expect(formatElapsed(5)).toBe('0:05')
-		expect(formatElapsed(65.9)).toBe('1:05')
-		expect(formatElapsed(3725)).toBe('1:02:05')
 	})
 })
 

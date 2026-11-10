@@ -1,15 +1,17 @@
 import type { ObservatoryCamera } from 'api'
 import { useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatClockDuration } from '../../format'
 import { siteState } from '../../location/site'
 import { Button } from '../../ui/Button'
 import { Icon } from '../../ui/Icon'
 import { IconButton } from '../../ui/IconButton'
+import { Notice } from '../../ui/Notice'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { CameraVideo, canPictureInPicture, requestFullscreen, togglePictureInPicture } from './CameraVideo'
 import { observatoryCamerasState } from './observatorycameras'
 import { dockPlayer, playerState, setTileOnscreen, startPlayer, stopPlayer } from './player'
-import { cameraStatus, formatElapsed } from './status'
+import { cameraStatus } from './status'
 
 // Tile of a camera in the grid of Observatory Cameras: a 16:9 frame that shows the video only once the operator starts
 // its preview (a static placeholder otherwise, so a grid never opens a stream by itself), its name, site, host, and
@@ -85,9 +87,9 @@ export function CameraTile({ camera, canMove, onEdit, onEnlarge, onMove }: Camer
 				<p className="m-0 truncate text-xs leading-4 text-ink-300">
 					{site} · {camera.sourceHost}
 					{stream && stream.readers > 0 && ` · ${stream.readers} ${stream.readers === 1 ? 'viewer' : 'viewers'}`}
-					{elapsed !== undefined && ` · ${formatElapsed(elapsed)}`}
+					{elapsed !== undefined && ` · ${formatClockDuration(elapsed)}`}
 				</p>
-				{status.detail && <p className={`m-0 text-xs leading-4 ${player?.status === 'failed' ? 'text-danger' : 'text-ink-300'}`}>{status.detail}</p>}
+				{status.detail && <Notice error={player?.status === 'failed'}>{status.detail}</Notice>}
 				<div className="flex flex-wrap items-center gap-1">
 					{player && player.status !== 'failed' ? (
 						<Button variant="secondary" onClick={() => stopPlayer(camera.id)}>

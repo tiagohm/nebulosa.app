@@ -5,6 +5,9 @@ import { DEFAULT_EXPOSURE_SETTINGS, DEFAULT_GUIDING_SETTINGS, GUIDING_MAXIMUM_PU
 import { DEFAULT_BUILTIN_SETTINGS } from '../stars/stars'
 import { cameraKey } from './capture'
 import {
+	formatCalibrationAdaptation,
+	formatCalibrationPlace,
+	formatCalibrationRate,
 	guideFocalLength,
 	GUIDING_TELEMETRY_KEPT,
 	guidingBlocker,
@@ -299,5 +302,24 @@ describe('commands', () => {
 		expect(requests.map(({ url }) => url)).toEqual(['/api/guiding/s1/start', '/api/guiding/s1/exposure', '/api/guiding/s1/stop'])
 		expect(JSON.parse(requests[0].init!.body as string)).toMatchObject({ recalibrate: true, token: expect.any(String) })
 		expect(JSON.parse(requests[1].init!.body as string)).toEqual({ exposure: 500 })
+	})
+})
+
+describe('calibration text', () => {
+	test('the place names the declination and a known pier side', () => {
+		expect(formatCalibrationPlace({ declination: (12.34 * Math.PI) / 180, pierSide: 'EAST' })).toBe('DEC 12.3°, pier east')
+		expect(formatCalibrationPlace({ declination: -1e-6, pierSide: 'NEITHER' })).toBe('DEC 0.0°, pier side unknown')
+		expect(formatCalibrationPlace({})).toBe('DEC unknown, pier side unknown')
+	})
+
+	test('the rate is per second, in arcseconds only with a pixel scale', () => {
+		expect(formatCalibrationRate(0.004123)).toBe('4.12 px/s')
+		expect(formatCalibrationRate(0.004123, 2.25)).toBe('4.12 px/s (9.3″/s)')
+		expect(formatCalibrationRate(Number.NaN)).toBe('—')
+	})
+
+	test('the adaptation lists each transformation, or none', () => {
+		expect(formatCalibrationAdaptation({ transformations: [], declinationScale: 1 })).toBeUndefined()
+		expect(formatCalibrationAdaptation({ transformations: ['pierFlip', 'declinationCompensation'], declinationScale: 0.8666 })).toBe('flipped for the pier side, RA ×0.87 for the declination')
 	})
 })

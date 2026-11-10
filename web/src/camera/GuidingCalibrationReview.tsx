@@ -1,10 +1,13 @@
 import type { GuidingCalibrationCandidate, GuidingCalibrationEvidence, GuidingCalibrationSummary, GuidingSessionCalibration } from 'api'
+import { arcsec } from 'nebulosa/src/math/units/angle'
 import { useEffect, useState } from 'react'
-import { formatDegrees, formatUtcDateTime } from '../format'
+import { formatDegrees, formatFixed, formatPercent, formatUtcDateTime } from '../format'
+import { formatPixelScale } from '../platesolving/coordinates'
 import { DataList, DataRow } from '../ui/DataRow'
 import { Modal } from '../ui/Modal'
 import { Notice } from '../ui/Notice'
-import { loadSavedCalibration, loadSessionCalibration } from './guiding'
+import { SectionHeading } from '../ui/SectionHeading'
+import { formatCalibrationAdaptation, formatCalibrationPlace, formatCalibrationRate, loadSavedCalibration, loadSessionCalibration } from './guiding'
 import { GuidingCalibrationPlot } from './GuidingCalibrationPlot'
 
 // Review Calibration: the measured steps of a guiding calibration (GuidingCalibrationPlot), the solution as it was measured
@@ -136,13 +139,13 @@ function MeasuredSection({ record, pixelScale }: { readonly record: ReviewData['
 
 	return (
 		<section className="flex flex-col gap-1">
-			<h3 className="m-0 font-mono text-xs tracking-wide text-ink-300 uppercase">Measured</h3>
+			<SectionHeading>Measured</SectionHeading>
 			<DataList>
 				<DataRow label="When">{formatUtcDateTime(acquiredAt)}</DataRow>
-				<DataRow label="Where">{formatContext(context.declination, context.pierSide)}</DataRow>
+				<DataRow label="Where">{formatCalibrationPlace(context)}</DataRow>
 				<DataRow label="RA">{formatAxis(calibration.ra.ratePxPerMs, calibration.ra.angle, review.raSamples.length, calibration.ra.totalTravelPx, calibration.ra.rmsOrthogonalResidualPx, pixelScale)}</DataRow>
 				<DataRow label="DEC">{formatAxis(review.measuredDec.ratePxPerMs, review.measuredDec.angle, review.decSamples.length, review.measuredDec.totalTravelPx, review.measuredDec.rmsOrthogonalResidualPx, pixelScale)}</DataRow>
-				{calibration.orthogonalAssumed && <DataRow label="DEC Assumed">{`${formatRate(calibration.dec.ratePxPerMs, pixelScale)} at ${formatDegrees(calibration.dec.angle, 1)}, perpendicular to RA`}</DataRow>}
+				{calibration.orthogonalAssumed && <DataRow label="DEC Assumed">{`${formatCalibrationRate(calibration.dec.ratePxPerMs, pixelScale)} at ${formatDegrees(calibration.dec.angle, 1)}, perpendicular to RA`}</DataRow>}
 				<DataRow label="Off Perpendicular">{formatDegrees(review.orthogonalityError, 1)}</DataRow>
 				<DataRow label="DEC Backlash">{`${Math.round(calibration.backlash)} ms`}</DataRow>
 				<DataRow label="Returns">{`${calibration.clearingSteps} RA, ${calibration.decReturnSteps} DEC steps`}</DataRow>
@@ -154,17 +157,15 @@ function MeasuredSection({ record, pixelScale }: { readonly record: ReviewData['
 
 // The calibration a session derived for where the mount points.
 function InUseSection({ summary, pixelScale }: { readonly summary: GuidingCalibrationSummary; readonly pixelScale?: number }) {
-	const adapted = summary.transformations.map((transformation) => (transformation === 'pierFlip' ? 'flipped for the pier side' : `RA ×${summary.declinationScale.toFixed(3)}`)).join(', ')
-
 	return (
 		<section className="flex flex-col gap-1">
-			<h3 className="m-0 font-mono text-xs tracking-wide text-ink-300 uppercase">In use</h3>
+			<SectionHeading>In use</SectionHeading>
 			<DataList>
 				<DataRow label="Origin">{`${summary.origin === 'restored' ? 'Restored' : 'Solved in this session'}${summary.saved ? ', saved' : ', not saved'}`}</DataRow>
-				<DataRow label="For">{formatContext(summary.current.declination, summary.current.pierSide)}</DataRow>
-				<DataRow label="Adapted">{adapted || 'As measured'}</DataRow>
-				<DataRow label="RA">{`${formatRate(summary.raRate, pixelScale)} at ${formatDegrees(summary.raAngle, 1)}`}</DataRow>
-				<DataRow label="DEC">{`${formatRate(summary.decRate, pixelScale)} at ${formatDegrees(summary.decAngle, 1)}`}</DataRow>
+				<DataRow label="For">{formatCalibrationPlace(summary.current)}</DataRow>
+				<DataRow label="Adapted">{formatCalibrationAdaptation(summary) ?? 'As measured'}</DataRow>
+				<DataRow label="RA">{`${formatCalibrationRate(summary.raRate, pixelScale)} at ${formatDegrees(summary.raAngle, 1)}`}</DataRow>
+				<DataRow label="DEC">{`${formatCalibrationRate(summary.decRate, pixelScale)} at ${formatDegrees(summary.decAngle, 1)}`}</DataRow>
 			</DataList>
 		</section>
 	)
@@ -174,14 +175,14 @@ function InUseSection({ summary, pixelScale }: { readonly summary: GuidingCalibr
 function EquipmentSection({ evidence }: { readonly evidence: GuidingCalibrationEvidence }) {
 	return (
 		<section className="flex flex-col gap-1">
-			<h3 className="m-0 font-mono text-xs tracking-wide text-ink-300 uppercase">Equipment</h3>
+			<SectionHeading>Equipment</SectionHeading>
 			<DataList>
 				<DataRow label="Guide Camera">{evidence.camera.name}</DataRow>
 				<DataRow label="Guide Output">{evidence.guideOutput.name}</DataRow>
 				{evidence.mount && <DataRow label="Mount">{evidence.mount.name}</DataRow>}
 				<DataRow label="Frames">{`${evidence.width} × ${evidence.height} px, bin ${evidence.binX}×${evidence.binY}`}</DataRow>
-				{evidence.pixelScale !== undefined && <DataRow label="Pixel Scale">{`${evidence.pixelScale.toFixed(2)}″/px`}</DataRow>}
-				{evidence.guideRate && <DataRow label="Guide Rate">{`RA ${evidence.guideRate.rightAscension.toFixed(2)}×, DEC ${evidence.guideRate.declination.toFixed(2)}× sidereal`}</DataRow>}
+				{evidence.pixelScale !== undefined && <DataRow label="Pixel Scale">{formatPixelScale(arcsec(evidence.pixelScale))}</DataRow>}
+				{evidence.guideRate && <DataRow label="Guide Rate">{`RA ${formatFixed(evidence.guideRate.rightAscension, 2)}×, DEC ${formatFixed(evidence.guideRate.declination, 2)}× sidereal`}</DataRow>}
 			</DataList>
 		</section>
 	)
@@ -191,7 +192,7 @@ function EquipmentSection({ evidence }: { readonly evidence: GuidingCalibrationE
 function QualitySection({ assessment }: { readonly assessment: ReviewData['assessment'] }) {
 	return (
 		<section className="flex flex-col gap-1">
-			<h3 className="m-0 font-mono text-xs tracking-wide text-ink-300 uppercase">Quality</h3>
+			<SectionHeading>Quality</SectionHeading>
 			<DataList>
 				<DataRow label="Grade" tone={assessment.quality === 'poor' ? 'danger' : assessment.quality === 'good' ? 'success' : 'default'}>
 					{CALIBRATION_QUALITY_LABELS[assessment.quality]}
@@ -206,20 +207,9 @@ function QualitySection({ assessment }: { readonly assessment: ReviewData['asses
 	)
 }
 
-// Formats a mount context: the declination in degrees and the side of the pier, each when known.
-function formatContext(declination: number | undefined, pierSide: string | undefined) {
-	return `${declination === undefined ? 'DEC unknown' : `DEC ${formatDegrees(declination, 1)}`}, ${pierSide && pierSide !== 'NEITHER' ? `pier ${pierSide.toLowerCase()}` : 'pier side unknown'}`
-}
-
-// Formats a rate given in pixels per millisecond, as pixels per second and, with a pixel scale, arcseconds per second.
-function formatRate(rate: number, pixelScale: number | undefined) {
-	const perSecond = rate * 1000
-	return pixelScale === undefined ? `${perSecond.toFixed(2)} px/s` : `${perSecond.toFixed(2)} px/s (${(perSecond * pixelScale).toFixed(1)}″/s)`
-}
-
 // Formats a measured axis: its rate, angle, fitted steps, travel and scatter across it.
 function formatAxis(rate: number, angle: number, steps: number, travel: number, residual: number, pixelScale: number | undefined) {
-	return `${formatRate(rate, pixelScale)} at ${formatDegrees(angle, 1)}; ${steps} steps over ${travel.toFixed(1)} px, scatter ${residual.toFixed(2)} px`
+	return `${formatCalibrationRate(rate, pixelScale)} at ${formatDegrees(angle, 1)}; ${steps} steps over ${formatFixed(travel, 1)} px, scatter ${formatFixed(residual, 2)} px`
 }
 
 // Formats the value of a finding against its limit, in its unit.
@@ -228,9 +218,9 @@ function formatFinding({ code, value, limit }: ReviewData['assessment']['finding
 
 	switch (code) {
 		case 'shortTravel':
-			return `${value.toFixed(1)} px, under ${limit} px`
+			return `${formatFixed(value, 1)} px, under ${limit} px`
 		case 'highResidual':
-			return `${(value * 100).toFixed(0)}% of a step, over ${(limit * 100).toFixed(0)}%`
+			return `${formatPercent(value)} of a step, over ${formatPercent(limit)}`
 		case 'orthogonalityError':
 			return `${formatDegrees(value, 1)}, over ${formatDegrees(limit, 0)}`
 		case 'largeBacklash':

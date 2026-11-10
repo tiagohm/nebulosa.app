@@ -11,7 +11,7 @@ export const TONE_TEXT: Readonly<Record<StatusTone, string>> = { muted: 'text-in
 // Styles of a status badge for each tone.
 const badge = tv({
 	slots: {
-		root: 'inline-flex h-6 flex-none items-center gap-1.5 rounded-full border px-2.5 text-xs leading-none whitespace-nowrap',
+		root: 'inline-flex h-6 flex-none items-center gap-1.5 rounded-full max-w-fit border px-2.5 text-xs leading-none whitespace-nowrap',
 		dot: 'size-1.5 rounded-full',
 	},
 	variants: {

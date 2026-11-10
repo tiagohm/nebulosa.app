@@ -5,7 +5,7 @@ import { siteState } from '../../location/site'
 import { Button } from '../../ui/Button'
 import { Icon } from '../../ui/Icon'
 import { IconButton } from '../../ui/IconButton'
-import { StatusBadge, TONE_TEXT } from '../../ui/StatusBadge'
+import { StatusBadge } from '../../ui/StatusBadge'
 import { CameraVideo, canPictureInPicture, requestFullscreen, togglePictureInPicture } from './CameraVideo'
 import { observatoryCamerasState } from './observatorycameras'
 import { dockPlayer, playerState, setTileOnscreen, startPlayer, stopPlayer } from './player'
@@ -87,7 +87,7 @@ export function CameraTile({ camera, canMove, onEdit, onEnlarge, onMove }: Camer
 					{stream && stream.readers > 0 && ` · ${stream.readers} ${stream.readers === 1 ? 'viewer' : 'viewers'}`}
 					{elapsed !== undefined && ` · ${formatElapsed(elapsed)}`}
 				</p>
-				{status.detail && <p className={`m-0 text-xs leading-4 ${player?.status === 'failed' ? TONE_TEXT.danger : 'text-ink-300'}`}>{status.detail}</p>}
+				{status.detail && <p className={`m-0 text-xs leading-4 ${player?.status === 'failed' ? 'text-danger' : 'text-ink-300'}`}>{status.detail}</p>}
 				<div className="flex flex-wrap items-center gap-1">
 					{player && player.status !== 'failed' ? (
 						<Button variant="secondary" onClick={() => stopPlayer(camera.id)}>

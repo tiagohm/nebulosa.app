@@ -1,7 +1,7 @@
 import type { CloseApproach, CloseApproachBody, MinorBody, MinorBodyDetails, MinorBodyPublishedValue } from 'api'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDate, formatDateTime, MISSING } from '../../format'
+import { formatDate, formatDateTime, formatZonedDateTime, MISSING } from '../../format'
 import type { DisplayZone } from '../../location/zone'
 import { CLOSE_APPROACH_BODIES, type CloseApproachDistanceDisplay } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
@@ -293,11 +293,11 @@ export function CloseApproachInspector({ approach, zone, distanceDisplay, action
 					<VirtualImpactorsSection details={found.details} />
 					<OtherApproachesSection zone={zone} distanceDisplay={distanceDisplay} />
 					{observability(found.body)}
-					<div className="px-4 py-3">
+					<CollapsibleSection id="closeapproaches.source" title="Source" summary={found.details.source} defaultOpen={false}>
 						<Notice>
-							{found.details.source} {found.details.sourceVersion}, read {formatDateTime(found.details.fetchedAt, zone.zone)}.
+							{found.details.source} {found.details.sourceVersion}, read {formatZonedDateTime(found.details.fetchedAt, zone.zone)}.
 						</Notice>
-					</div>
+					</CollapsibleSection>
 				</>
 			)}
 		</>

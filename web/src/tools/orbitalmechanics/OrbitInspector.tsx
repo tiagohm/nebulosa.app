@@ -71,7 +71,13 @@ export function OrbitInspector({ orbit }: { readonly orbit: ExplorerOrbit }) {
 	const exact = inspected && inspectionCurrent(state) ? inspected : undefined
 	const solution = inspected ?? orbit.solution
 
-	if (!solution) return <div className="px-4 py-3 text-sm text-ink-300">{orbit.loading ? 'Solving…' : 'No solution yet.'}</div>
+	if (!solution) {
+		return (
+			<CollapsibleSection id="orbitalmechanics.instant" title="Exact Values">
+				<Notice>{orbit.loading ? 'Solving…' : 'No solution yet.'}</Notice>
+			</CollapsibleSection>
+		)
+	}
 
 	const { unit, plane } = state
 	const elements = solution.elements[plane]
@@ -80,18 +86,18 @@ export function OrbitInspector({ orbit }: { readonly orbit: ExplorerOrbit }) {
 
 	return (
 		<>
-			<div className="flex flex-col gap-1 border-b border-line-100 px-4 py-3 text-sm">
-				<span className="text-ink-100">Exact values {instantNote}</span>
+			<CollapsibleSection id="orbitalmechanics.instant" title="Exact Values" summary={instantNote}>
+				<Notice>Exact values {instantNote}.</Notice>
 				<span className="text-xs text-ink-300 tabular-nums">
 					{formatTdb(solution.time)} · JD {solution.time.toFixed(6)} · {new Date(solution.utc).toISOString().replace('T', ' ').slice(0, 19)} UTC
 				</span>
-				{state.inspecting && <span className="text-xs text-ink-300">Reading exact values…</span>}
+				{state.inspecting && <Notice>Reading exact values…</Notice>}
 				{stale && <Notice>These values belong to the previous definition until the new one is solved.</Notice>}
 				{state.inspectionError && <Notice error>{state.inspectionError}</Notice>}
 				{solution.warnings.map((e) => (
 					<Notice key={e}>{WARNING_TEXTS[e]}</Notice>
 				))}
-			</div>
+			</CollapsibleSection>
 			<ElementsSection elements={elements} unit={unit} plane={plane} />
 			<GeometrySection elements={elements} solution={solution} unit={unit} />
 			<DynamicsSection solution={solution} unit={unit} />

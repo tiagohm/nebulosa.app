@@ -6,9 +6,11 @@ import type { DisplayZone } from '../../location/zone'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
+import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
+import { ObjectTitle } from '../../ui/ObjectTitle'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { artificialSatellitesState, formatElementAge, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 
@@ -65,9 +67,9 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 	const timeZone = zone.zone
 
 	return (
-		<div className="flex flex-col">
-			<section className="flex flex-col gap-2 border-b border-line-100 px-4 py-3">
-				<h3 className="m-0 text-base font-medium text-ink-100">{name}</h3>
+		<>
+			<CollapsibleSection id="satellites.satellite" title="Satellite" summary={name}>
+				<ObjectTitle name={name} />
 				{detailsError && <Notice error>{detailsError}</Notice>}
 				<DataList>
 					<DataRow label="NORAD ID">{selectedId}</DataRow>
@@ -83,16 +85,16 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 					)}
 					<DataRow label="Brightness">Unknown</DataRow>
 				</DataList>
-				<div className="flex flex-wrap gap-2">
+				<Actions>
 					<Button variant="secondary" onClick={() => setSatelliteFavorite(profileState, selectedId, !favorite)}>
 						{favorite ? 'Remove Favorite' : 'Add Favorite'}
 					</Button>
 					<Button variant="secondary" disabled={!elements} title={elements ? 'Selects the satellite in the Sky, at the time the Sky shows.' : 'The satellite has no orbital elements.'} onClick={() => showSatelliteInSky(selectedId, name, observer)}>
 						Open in Sky
 					</Button>
-				</div>
+				</Actions>
 				{!elements && details && <Notice>This satellite has catalog data only: no orbital elements to predict it with. Download a group that lists it, or import its elements.</Notice>}
-			</section>
+			</CollapsibleSection>
 
 			{elements && (
 				<CollapsibleSection id="satellites.position" title="Position Now" summary={p?.altitude === undefined ? undefined : `altitude ${formatDegrees(p.altitude, 1)}`}>
@@ -170,6 +172,6 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 					)}
 				</CollapsibleSection>
 			)}
-		</div>
+		</>
 	)
 }

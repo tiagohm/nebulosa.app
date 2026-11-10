@@ -54,7 +54,7 @@ export function OrbitalMechanicsExplorer() {
 	useEffect(() => void consumePendingTarget(orbitalMechanicsState), [state.reference, state.pendingTarget])
 
 	const panel = (
-		<div className="flex flex-col">
+		<>
 			<OrbitList />
 			<CenterEditor />
 			{orbit && <OrbitEditor key={orbit.id} orbit={orbit} />}
@@ -62,7 +62,7 @@ export function OrbitalMechanicsExplorer() {
 			<OrbitSources />
 			<OrbitComparison />
 			<ViewSection />
-		</div>
+		</>
 	)
 
 	return (

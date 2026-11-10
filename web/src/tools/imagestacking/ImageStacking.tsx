@@ -7,7 +7,7 @@ import { formatByteSize, formatDuration, formatExposureTime, formatZonedDateTime
 import { imagesState, openImage } from '../../images/images'
 import { useActiveTimeZone } from '../../location/useLocation'
 import { activeProfile, profileState, setLastStackingDirectory } from '../../profile/profile'
-import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { CollapsibleSection, LoadingSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
 import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Actions } from '../../ui/Actions'
@@ -385,7 +385,7 @@ function openInImages(path: string) {
 function FramePanel({ onRemoved }: { readonly onRemoved: () => void }) {
 	const timeZone = useActiveTimeZone()
 	const { frame, pending } = useSnapshot(imageStackingRuntime)
-	if (!frame) return <p className="m-0 p-4 text-xs text-ink-300">Loading…</p>
+	if (!frame) return <LoadingSection id="stacking.frame" title="Frame" />
 	const { metadata } = frame
 
 	async function remove(sourceId: string) {

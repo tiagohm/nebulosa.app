@@ -149,9 +149,9 @@ export function SunInspector({ selection, observer, onSetObserver, timeZone, onS
 			<SeasonsSection seasons={almanac.value?.seasons} latitude={latitude} timeZone={timeZone} />
 			<SolarPhysicalSection physical={almanac.value?.physical} time={almanac.value?.time} timeZone={timeZone} />
 			{almanac.error && (
-				<div className="px-4 py-3">
+				<CollapsibleSection id="sky.almanac" title="Almanac">
 					<Notice error>Almanac unavailable: {almanac.error}</Notice>
-				</div>
+				</CollapsibleSection>
 			)}
 		</>
 	)

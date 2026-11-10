@@ -33,7 +33,7 @@ import { formatByteSize, formatDateTime, formatExposureTime, formatPercent, MISS
 import { imagesState, openImage } from '../../images/images'
 import { useActiveTimeZone } from '../../location/useLocation'
 import { activeProfile, profileState, setLastCalibrationDirectory } from '../../profile/profile'
-import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { CollapsibleSection, LoadingSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
 import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Actions } from '../../ui/Actions'
@@ -353,7 +353,7 @@ function Findings({ findings }: { readonly findings: readonly CompatibilityFindi
 function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
 	const timeZone = useActiveTimeZone()
 	const { group, jobs, pending, errors } = useSnapshot(calibrationLibraryRuntime)
-	if (!group) return <p className="m-0 p-4 text-xs text-ink-300">Loading…</p>
+	if (!group) return <LoadingSection id="calibration.group" title="Group" />
 
 	const key = `delete:${group.groupId}`
 	const job = latestGroupJob(jobs, group.groupId)
@@ -494,7 +494,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 	const timeZone = useActiveTimeZone()
 	const { master: snapshot, pending, errors } = useSnapshot(calibrationLibraryRuntime)
 	const master = snapshot
-	if (!master) return <p className="m-0 p-4 text-xs text-ink-300">Loading…</p>
+	if (!master) return <LoadingSection id="calibration.master" title="Master" />
 
 	const key = `master:${master.masterId}`
 	const { diagnostics } = master
@@ -565,7 +565,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 	const { source: snapshot, pending } = useSnapshot(calibrationLibraryRuntime)
 	const source = snapshot
-	if (!source) return <p className="m-0 p-4 text-xs text-ink-300">Loading…</p>
+	if (!source) return <LoadingSection id="calibration.source" title="Frame" />
 	const { metadata } = source
 
 	async function remove(sourceId: string) {

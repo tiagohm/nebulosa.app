@@ -60,6 +60,8 @@ Workspace frame (`WorkspaceLayout.tsx`), used by every workspace and every tool 
   The workspace frame clips the closed drawer (`overflow: clip`) rather than hiding it, so no focus or scroll into view inside it can shift the workspace sideways.
   It holds no operational state, so collapsing or replacing it never stops what its controls started.
 - Collapsible panel sections (`CollapsibleSection` of `web/src/shell/`): the heading is the toggle (`DisclosureSummary`), with a one-line summary beside it while collapsed.
+  A contextual panel holds collapsible sections only, at its top level: no plain heading (`PanelSection` is left to the pages, Equipment Control and Settings), and no loose notice, row, or button outside a section; a note of a whole panel is a section of its own (an Almanac error, a Source), and a panel waiting for its content shows `LoadingSection`, the section it will fill with a Loading line.
+  The one exception is `EmptyState`, which replaces a whole panel that has nothing to show (no image, no camera tab, no selection).
   Important sections start expanded, advanced or secondary ones collapsed (`defaultOpen`);
   a section the operator toggled keeps its state, keyed by its namespaced id (`sky.*`, `images.<tool>.*`), across selections, documents, camera tabs, and tool switches, and across reloads and tabs of the browser (`collapsibleSections` of `web/src/shell/collapsible.ts`, kept in browser storage by `web/src/profile/view.ts`).
   Every section of the Images tools, image tools and camera operations alike, is one, and a panel never nests a disclosure inside a section: an advanced group is a collapsed section of its own (for example Advanced Settings, Solver Details, Template Tags, or the Camera settings of Acquisition).
@@ -72,8 +74,8 @@ Workspace frame (`WorkspaceLayout.tsx`), used by every workspace and every tool 
   Label and value share a line while both fit; a value that does not fit goes below its label, aligned to the end, and a label or value wider than the panel wraps instead of being cut.
   A value takes a tone (plain, success, or danger), never a layout of its own.
   Lists of another shape stay their own: the FITS header keywords, the filename template tags, and the metric tiles of the pointing diagnostics.
-- The sections of the Sky Object Inspector, every object's and the Sun's and the Moon's, are collapsible sections, except the Object section, which holds the name, the type, and the designations (`ObjectTitle`, also the head of the lunar feature details and of a close approach's overview), the magnitude (the catalog's for a catalog object, the position's otherwise), and the actions: Show Framing, and Slew to Object (with Stop while slewing) only while the profile's mount is connected (`ObjectActions`);
-  Position and Visibility start expanded and the others collapsed.
+- The sections of the Sky Object Inspector, every object's and the Sun's and the Moon's, are collapsible sections; the first, Object (`sky.object`, summarized by the name), holds the name, the type, and the designations (`ObjectTitle`, also the head of the lunar feature details and of a close approach's overview), the magnitude (the catalog's for a catalog object, the position's otherwise), and the actions: Show Framing, and Slew to Object (with Stop while slewing) only while the profile's mount is connected (`ObjectActions`);
+  Object, Position, and Visibility start expanded and the others collapsed.
 - One panel content at a time: Images shows the panel of the selected tool, Sky the selected panel view.
   Pages (Equipment Control, Settings) use a sidebar list and a detail area instead of a contextual panel.
 

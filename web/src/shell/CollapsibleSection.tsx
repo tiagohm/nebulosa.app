@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { DisclosureSummary } from '../ui/DisclosureSummary'
+import { Notice } from '../ui/Notice'
 import { collapsibleSections, sectionOpen, setSectionOpen } from './collapsible'
 
 // Section of a contextual panel that expands and collapses: its heading is the toggle, and a one-line summary beside
@@ -30,5 +31,15 @@ export function CollapsibleSection({ id, title, summary, defaultOpen = true, chi
 			<DisclosureSummary title={title}>{!open && summary && <span className="ml-auto min-w-0 truncate text-xs text-ink-200">{summary}</span>}</DisclosureSummary>
 			<div className="mt-2 flex flex-col gap-2 text-sm leading-5 text-ink-200">{children}</div>
 		</details>
+	)
+}
+
+// Section shown in place of a panel's content while it loads: the id and title of the section that will hold it, so its
+// expanded state carries over, and a Loading line.
+export function LoadingSection({ id, title }: { readonly id: string; readonly title: string }) {
+	return (
+		<CollapsibleSection id={id} title={title}>
+			<Notice>Loading…</Notice>
+		</CollapsibleSection>
 	)
 }

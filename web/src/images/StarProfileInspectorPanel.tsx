@@ -67,8 +67,7 @@ export function StarProfileInspectorPanel({ document, view, onOpen }: ImageToolP
 
 	return (
 		<>
-			<Selection documentKey={document.key} state={state} star={star} settings={settings} unavailable={unavailable} hidden={view?.overlaysHidden === true} />
-			{info && !info.cfa && isMosaic(info) && <Notice>This mosaic has no trusted CFA pattern: its samples are measured as they are, not debayered.</Notice>}
+			<Selection documentKey={document.key} state={state} star={star} settings={settings} unavailable={unavailable} hidden={view?.overlaysHidden === true} untrustedMosaic={!!info && !info.cfa && isMosaic(info)} />
 			{star && <Measurement imageId={star.imageId} star={star} settings={settings} selected={view?.plateSolving.selected} />}
 			<CollapsibleSection id="images.star-profile.visualization" title="Visualization" defaultOpen={false}>
 				<Checkbox label="Pixel grid" checked={settings.grid} onChange={(grid) => edit({ grid })} />
@@ -100,10 +99,12 @@ interface SelectionProps {
 	readonly unavailable?: string
 	// Whether the overlays are hidden, which stops a click from selecting anything.
 	readonly hidden: boolean
+	// Whether the image is a mosaic with no trusted CFA pattern, whose samples are measured as they are.
+	readonly untrustedMosaic: boolean
 }
 
 // What is selected, with the state of its measurement and how to repeat or clear it.
-function Selection({ documentKey, state, star, settings, unavailable, hidden }: SelectionProps) {
+function Selection({ documentKey, state, star, settings, unavailable, hidden, untrustedMosaic }: SelectionProps) {
 	const measuring = state?.status === 'measuring'
 	const changed = state && !sameMeasurement(state.request, settings)
 	const reason = state?.result?.status === 'noStar' ? state.result.reason : undefined
@@ -111,6 +112,7 @@ function Selection({ documentKey, state, star, settings, unavailable, hidden }: 
 	return (
 		<CollapsibleSection id="images.star-profile.selection" title="Selection">
 			{unavailable ? <Notice>{unavailable}</Notice> : hidden ? <Notice>The overlays are hidden: show them to select a star.</Notice> : !state && <Notice>Click a star in the image to measure it. It needs no star detection first.</Notice>}
+			{untrustedMosaic && <Notice>This mosaic has no trusted CFA pattern: its samples are measured as they are, not debayered.</Notice>}
 			{state && (
 				<>
 					<DataRow label="Point">{formatPixelPosition(state.request.x, state.request.y)}</DataRow>

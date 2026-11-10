@@ -82,9 +82,9 @@ export function MoonInspector({ selection, observer, onSetObserver, timeZone, on
 			<MoonEclipseSection hasObserver={!!observer} timeZone={timeZone} />
 			<MoonPhysicalSection appearance={almanac.value?.appearance} time={almanac.value?.time} timeZone={timeZone} />
 			{almanac.error && (
-				<div className="px-4 py-3">
+				<CollapsibleSection id="sky.almanac" title="Almanac">
 					<Notice error>Almanac unavailable: {almanac.error}</Notice>
-				</div>
+				</CollapsibleSection>
 			)}
 		</>
 	)

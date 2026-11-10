@@ -30,6 +30,7 @@ import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessin
 import { confirmUnsavedOnUnload, imagesState } from './images/images'
 import { pixelInspection } from './images/pixeltiles'
 import { handleStatisticsEvent, refreshStatistics, statisticsState } from './images/statistics'
+import { siteState, watchActiveSiteZone } from './location/site'
 import { handleMountPointingEvent, mountPointingRuntime, refreshMountPointing } from './mountpointing/mountpointing'
 import { handleNotificationEvent, notificationsState, refreshNotifications, setServerLink } from './notifications/notifications'
 import { handleOperationEvent, operationsState, refreshOperations } from './operations'
@@ -152,6 +153,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 const stops = [
 	subscribeState(deviceState, syncCameraTabs),
 	subscribeState(profileState, syncCameraTabs),
+	watchActiveSiteZone(profileState, siteState),
 	workspace.start(),
 	new ViewPersistence(profileState).start(),
 	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), activeCameraTabEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime), pixelInspectionEntry(pixelInspection)]),

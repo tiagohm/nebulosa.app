@@ -87,7 +87,7 @@ describe('names', () => {
 	test('a camera is named by its headers, and a master by its id and date', () => {
 		expect(cameraText(metadata())).toBe('Camera')
 		expect(cameraText(metadata({ cameraName: undefined }))).toBe('Unknown camera')
-		expect(masterName({ masterId: 12, createdAt: Date.UTC(2026, 10, 3, 21, 4) })).toMatch(/^#12 · \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/)
+		expect(masterName({ masterId: 12, createdAt: Date.UTC(2026, 10, 3, 21, 4) }, 'UTC')).toBe('#12 · 2026-11-03 21:04 UTC')
 	})
 })
 

@@ -1,6 +1,6 @@
 import type { SatelliteQuality } from 'api'
 import { useSnapshot } from 'valtio'
-import { formatDateTime, formatDegrees, formatKilometers, formatUtcDateTime } from '../../format'
+import { formatDateTime, formatDegrees, formatKilometers, formatZonedDateTime } from '../../format'
 import { type GeographicLocation, openObservingSites } from '../../location/site'
 import type { DisplayZone } from '../../location/zone'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
@@ -14,7 +14,7 @@ import { artificialSatellitesState, formatElementAge, setSatelliteElementSource,
 
 // Contextual panel of Artificial Satellites: the satellite selected, its position now for the observing site of the
 // active profile (read again every POSITION_REFRESH_MS, its time in the display zone), its orbit, and where its elements
-// come from (their epoch in UTC). Every value is the server's; an absent one is left out, never shown as 0. Positions
+// come from (their epoch in the display zone). Every value is the server's; an absent one is left out, never shown as 0. Positions
 // are geometric; the RA/Dec of date are those the Sky draws, J2000 is ICRS.
 
 // Names of the SATCAT object types.
@@ -159,7 +159,7 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 				<CollapsibleSection id="satellites.elements" title="Orbital Data" defaultOpen={false}>
 					<DataList>
 						<DataRow label="Source">{elements.kind === 'manual' ? 'Imported' : `CelesTrak GP (${elements.sourceKey})`}</DataRow>
-						<DataRow label="Epoch">{formatUtcDateTime(elements.epoch)}</DataRow>
+						<DataRow label="Epoch">{formatZonedDateTime(elements.epoch, timeZone)}</DataRow>
 						{position && <DataRow label="Age now">{formatElementAge(position.quality.elementAgeDays)}</DataRow>}
 						<DataRow label="Digest">
 							<span title={elements.digest}>{elements.digest.slice(0, 12)}</span>

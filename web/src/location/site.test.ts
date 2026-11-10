@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test'
 import { proxy } from 'valtio'
+import { formatLocalTime } from '../format'
 import { newProfile, type ProfileState } from '../profile/profile'
-import { activeSite, forgetSite, normalizeObservingSite, parseGeographicAngle, removeSite, saveSite, selectSite, type SiteState } from './site'
+import { activeSite, forgetSite, normalizeObservingSite, parseGeographicAngle, removeSite, saveSite, selectSite, type SiteState, watchActiveSiteZone } from './site'
 import { formatUtcOffset, isKnownTimeZone } from './zone'
 
 const HOME = { name: ' Home ', latitude: -23.5475, longitude: -46.63611, elevation: 760, timeZone: 'America/Sao_Paulo' }
@@ -77,4 +78,23 @@ test('time zones are named by IANA and their offset holds at an instant', () => 
 	expect(formatUtcOffset('Asia/Kathmandu', Date.UTC(2026, 0, 1))).toBe('UTC+05:45')
 	expect(formatUtcOffset('America/New_York', Date.UTC(2026, 0, 1))).toBe('UTC−05:00')
 	expect(formatUtcOffset('America/New_York', Date.UTC(2026, 6, 1))).toBe('UTC−04:00')
+})
+
+test('a time in the zone of the active site leaves its zone unnamed, following the site the profile selects', () => {
+	expect(() => watchActiveSiteZone(proxy<ProfileState>({ profiles: [], activeId: '', open: false }), proxy<SiteState>({ sites: [] }))()).not.toThrow()
+	const { profiles, sites } = stores()
+	const time = Date.UTC(2026, 10, 5, 14, 23)
+	const stop = watchActiveSiteZone(profiles, sites)
+
+	try {
+		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23 GMT-3')
+		sites.sites.push({ ...HOME, id: 'home', name: 'Home', timeZone: 'America/Sao_Paulo' })
+		profiles.profiles[0].activeSiteId = 'home'
+		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23')
+		expect(formatLocalTime(time, 'UTC')).toBe('14:23 UTC')
+		profiles.activeId = 'b'
+		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23 GMT-3')
+	} finally {
+		stop()
+	}
 })

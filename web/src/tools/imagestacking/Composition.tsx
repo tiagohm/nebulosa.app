@@ -1,8 +1,9 @@
 import type { StackingCompositeSummary, StackingComposition, StackingJobSummary, StackingProductSummary } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatByteSize, formatPercent, formatUtcDateTime } from '../../format'
+import { formatByteSize, formatPercent, formatZonedDateTime } from '../../format'
 import { imagesState, openImage } from '../../images/images'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { navigate, routeState } from '../../shell/route'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Actions } from '../../ui/Actions'
@@ -46,12 +47,13 @@ function latestComposition(jobs: Readonly<Record<string, StackingJobSummary>>, p
 }
 
 // Text of a master in a choice list.
-function masterLabel(product: StackingProductSummary) {
-	return `${product.name} · ${formatUtcDateTime(product.createdAt, false)}`
+function masterLabel(product: StackingProductSummary, timeZone: string) {
+	return `${product.name} · ${formatZonedDateTime(product.createdAt, timeZone, false)}`
 }
 
 // Preset, mix, preview, and the composites of the project.
 export function CompositionView({ projectId }: { readonly projectId: string }) {
+	const timeZone = useActiveTimeZone()
 	const { products, composites, composition: validation, jobs, pending, errors } = useSnapshot(imageStackingRuntime)
 	const masters = (products ?? []) as readonly StackingProductSummary[]
 	const items = (composites ?? []) as readonly StackingCompositeSummary[]
@@ -158,7 +160,7 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 										value={source.productId}
 										format={(id) => {
 											const product = masters.find((item) => item.productId === id)
-											return product ? masterLabel(product) : 'Unknown master'
+											return product ? masterLabel(product, timeZone) : 'Unknown master'
 										}}
 										onChange={(productId) => setSource(index, { productId, plane: 0 })}
 									/>
@@ -198,7 +200,7 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 						format={(option) => {
 							if (option === '') return 'None'
 							const master = masters.find((product) => product.productId === composition.sources[Number(option)].productId)
-							return master ? masterLabel(master) : 'Unknown master'
+							return master ? masterLabel(master, timeZone) : 'Unknown master'
 						}}
 						onChange={(option) => {
 							const { luminance, ...rest } = composition
@@ -252,7 +254,7 @@ export function CompositionView({ projectId }: { readonly projectId: string }) {
 							<Cell>{composite.composition.preset}</Cell>
 							<Cell>{formatByteSize(composite.bytes)}</Cell>
 							<Cell>{`${composite.width}×${composite.height} at ${composite.left}, ${composite.top}`}</Cell>
-							<Cell>{formatUtcDateTime(composite.createdAt, false)}</Cell>
+							<Cell>{formatZonedDateTime(composite.createdAt, timeZone, false)}</Cell>
 							<Cell>
 								<StatusBadge tone={PRODUCT_TONES[composite.status]} label={PRODUCT_LABELS[composite.status]} />
 							</Cell>

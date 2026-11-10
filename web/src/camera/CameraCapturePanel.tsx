@@ -1,14 +1,14 @@
 import type { CameraCapabilities, CaptureFrame, CaptureOutputMode, CaptureRequest, CaptureSession, CaptureSnoop, DeviceSummary } from 'api'
-import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import type { RoleAvailability } from '../equipment/availability'
 import { FileExplorerModal } from '../files/FileExplorerModal'
-import { formatClockDuration, formatTemperature, formatExposureTime } from '../format'
+import { formatClockDuration, formatTemperature, formatExposureTime, formatZonedDateTime } from '../format'
 import { cameraTabKey, releaseCameraFrame } from '../images/cameratabs'
 import { captureFramesState } from '../images/captureframes'
 import { imagesState } from '../images/images'
+import { useActiveTimeZone } from '../location/useLocation'
 import { acquisitionSettings, activeProfile, exposureSettings, profileState, setAcquisitionSettings, setExposureSettings } from '../profile/profile'
 import type { CameraAcquisitionSettings, CameraExposureSettings, CameraIdentity } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -292,6 +292,7 @@ interface LastFrameProps {
 // the capture, so the last frame of an aborted capture is still shown as saved. The frame itself is shown by the
 // Images camera tab.
 function LastFrame({ frame }: LastFrameProps) {
+	const timeZone = useActiveTimeZone()
 	const { acquisition } = frame
 	const file = fileState(frame)
 	const rows: [string, string, boolean?][] = [
@@ -307,7 +308,7 @@ function LastFrame({ frame }: LastFrameProps) {
 	if (acquisition.binning) rows.push(['Binning', `${acquisition.binning.x} × ${acquisition.binning.y}`])
 	if (frame.bitpix !== undefined) rows.push(['Bit Depth', frame.bitpix < 0 ? `${-frame.bitpix}-bit float` : `${frame.bitpix}-bit`])
 	if (acquisition.temperature !== undefined) rows.push(['Temperature', formatTemperature(acquisition.temperature)])
-	rows.push(['Acquired', formatTemporal(frame.time, undefined, true)])
+	rows.push(['Acquired', formatZonedDateTime(frame.time, timeZone)])
 
 	return (
 		<CollapsibleSection id="images.camera-acquisition.last-frame" title="Last Frame">

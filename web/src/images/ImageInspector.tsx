@@ -6,7 +6,8 @@ import { ipolarFrameRole, ipolarRuntime } from '../camera/ipolar'
 import { liveAcquisitionLabel, liveCalibrationLabel } from '../camera/livestacking'
 import { tppaFrameRole, tppaRuntime } from '../camera/tppa'
 import { connectionState } from '../connection/connection'
-import { formatDuration, formatFixed, formatPixelLength, formatTemperature, MISSING } from '../format'
+import { formatDuration, formatFixed, formatPixelLength, formatTemperature, MISSING, formatZonedDateTime } from '../format'
+import { useActiveTimeZone } from '../location/useLocation'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { type ImageQualityStatus, imageQuality } from '../stars/quality'
@@ -145,6 +146,7 @@ const ORIGIN_LABELS: Readonly<Record<CaptureFrameOrigin, string>> = {
 // and, for an Auto Focus frame, its measurement and the focuser position its session recorded, for a TPPA or iPolar
 // frame, the step of its session it was taken for, and for a DARV frame, the settings and outcome of its measurement.
 function CapturedFrame({ frame, selection }: CapturedFrameProps) {
+	const timeZone = useActiveTimeZone()
 	const connections = useSnapshot(connectionState)
 	const autoFocus = useSnapshot(autoFocusRuntime)
 	const unavailable = frameUnavailableReason(frame)
@@ -219,7 +221,7 @@ function CapturedFrame({ frame, selection }: CapturedFrameProps) {
 				)}
 				<DataRow label="Frame of session">#{frame.generation}</DataRow>
 				<DataRow label="Frame type">{frame.frameType}</DataRow>
-				<DataRow label="Captured (UTC)">{formatDate(new Date(frame.time).toISOString())}</DataRow>
+				<DataRow label="Captured">{formatZonedDateTime(frame.time, timeZone)}</DataRow>
 				<DataRow label="Frame ID">
 					<span title={frame.frameId} className="block truncate">
 						{frame.frameId}
@@ -306,10 +308,11 @@ interface DerivationProps {
 // that derived it, or the frames and stacks of the live stack it is a snapshot of, and whether it is saved (from the Save
 // control of the viewer toolbar).
 function Derivation({ document, provenance }: DerivationProps) {
+	const timeZone = useActiveTimeZone()
 	return (
 		<CollapsibleSection id="images.inspector.derived-image" title="Derived Image">
 			<DataRow label="Source">{provenance.sourceName}</DataRow>
-			<DataRow label="Created (UTC)">{formatDate(provenance.createdAt)}</DataRow>
+			<DataRow label="Created">{formatZonedDateTime(Date.parse(provenance.createdAt), timeZone)}</DataRow>
 			{provenance.kind === 'liveStacking' ? (
 				<>
 					<DataRow label="Live stack">{provenance.frames} accepted frames</DataRow>

@@ -1,7 +1,8 @@
 import type { GuidingCalibrationCandidate, GuidingCalibrationEvidence, GuidingCalibrationSummary, GuidingSessionCalibration } from 'api'
 import { arcsec } from 'nebulosa/src/math/units/angle'
 import { useEffect, useState } from 'react'
-import { formatDegrees, formatFixed, formatPercent, formatUtcDateTime } from '../format'
+import { formatDegrees, formatFixed, formatPercent, formatZonedDateTime } from '../format'
+import { useActiveTimeZone } from '../location/useLocation'
 import { formatPixelScale } from '../platesolving/coordinates'
 import { DataList, DataRow } from '../ui/DataRow'
 import { Modal } from '../ui/Modal'
@@ -134,6 +135,7 @@ export function GuidingCalibrationReview({ source, pixelScale, onClose }: Guidin
 
 // The solution as it was measured, with its context.
 function MeasuredSection({ record, pixelScale }: { readonly record: ReviewData['record']; readonly pixelScale?: number }) {
+	const timeZone = useActiveTimeZone()
 	const { calibration, context, acquiredAt } = record
 	const { review } = calibration
 
@@ -141,7 +143,7 @@ function MeasuredSection({ record, pixelScale }: { readonly record: ReviewData['
 		<section className="flex flex-col gap-1">
 			<SectionHeading>Measured</SectionHeading>
 			<DataList>
-				<DataRow label="When">{formatUtcDateTime(acquiredAt)}</DataRow>
+				<DataRow label="When">{formatZonedDateTime(acquiredAt, timeZone)}</DataRow>
 				<DataRow label="Where">{formatCalibrationPlace(context)}</DataRow>
 				<DataRow label="RA">{formatAxis(calibration.ra.ratePxPerMs, calibration.ra.angle, review.raSamples.length, calibration.ra.totalTravelPx, calibration.ra.rmsOrthogonalResidualPx, pixelScale)}</DataRow>
 				<DataRow label="DEC">{formatAxis(review.measuredDec.ratePxPerMs, review.measuredDec.angle, review.decSamples.length, review.measuredDec.totalTravelPx, review.measuredDec.rmsOrthogonalResidualPx, pixelScale)}</DataRow>

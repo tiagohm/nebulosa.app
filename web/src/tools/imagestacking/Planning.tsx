@@ -2,6 +2,7 @@ import type { StackingCalibration, StackingCohort, StackingFilterGroup, Stacking
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatTemperature, MISSING } from '../../format'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Notice } from '../../ui/Notice'
@@ -37,6 +38,7 @@ export function CalibrationView({ projectId }: { readonly projectId: string }) {
 
 // Masters of one cohort, each chosen from those that match it; a choice is saved as soon as it changes.
 function CohortCard({ projectId, cohort }: { readonly projectId: string; readonly cohort: StackingCohort }) {
+	const timeZone = useActiveTimeZone()
 	const { pending, errors } = useSnapshot(imageStackingRuntime)
 	const key = `cohort:${cohort.cohortId}`
 	const busy = pending[key] === true
@@ -93,7 +95,7 @@ function CohortCard({ projectId, cohort }: { readonly projectId: string; readonl
 							disabled={disabled}
 							format={(option) => {
 								const candidate = candidates.find(({ masterId }) => String(masterId) === option)
-								return candidate ? masterText(candidate) : candidates.length === 0 ? 'None matches' : 'None'
+								return candidate ? masterText(candidate, timeZone) : candidates.length === 0 ? 'None matches' : 'None'
 							}}
 							onChange={(option) => choose(kind, option)}
 						/>

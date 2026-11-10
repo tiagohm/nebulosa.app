@@ -1,6 +1,6 @@
 import type { PlanetEventVisibility } from 'api'
 import type { ReactNode } from 'react'
-import { formatClockTime, formatDateTime, formatDegrees, formatHours, formatLongDateTime, formatSpan, formatUtcDateTime } from '../../format'
+import { formatClockTime, formatDateTime, formatDegrees, formatHours, formatFixed, formatLongDateTime, formatSpan } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
@@ -85,7 +85,7 @@ export interface ContactRowsProps {
 	readonly timeZone: string
 }
 
-// Rows of an event's reached contacts and maximum, in the display zone and in UTC, with the impact parameter of a mutual
+// Rows of an event's reached contacts and maximum, in the display zone, with the impact parameter of a mutual
 // event.
 export function ContactRows({ event, timeZone }: ContactRowsProps) {
 	const contacts = CONTACT_ORDER.filter((key) => event.contacts[key] !== undefined)
@@ -94,11 +94,11 @@ export function ContactRows({ event, timeZone }: ContactRowsProps) {
 		<>
 			{contacts.map((key) => (
 				<DataRow key={key} label={CONTACT_LABELS[key]}>
-					{`${formatLongDateTime(event.contacts[key]!, timeZone)} · ${formatUtcDateTime(event.contacts[key]!)}`}
+					{formatLongDateTime(event.contacts[key]!, timeZone)}
 				</DataRow>
 			))}
-			<DataRow label="Maximum">{`${formatLongDateTime(event.maximum, timeZone)} · ${formatUtcDateTime(event.maximum)}`}</DataRow>
-			{event.impactParameter !== undefined && <DataRow label="Impact parameter">{event.impactParameter.toFixed(3)}</DataRow>}
+			<DataRow label="Maximum">{formatLongDateTime(event.maximum, timeZone)}</DataRow>
+			{event.impactParameter !== undefined && <DataRow label="Impact parameter">{formatFixed(event.impactParameter, 3)}</DataRow>}
 			{contacts.length === 0 && <DataRow label="Contacts">None reached: a tangency or a contact outside the search.</DataRow>}
 		</>
 	)

@@ -7,7 +7,8 @@ import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { formatDegrees, formatPixelLength, formatPixelPosition, formatTemperature, formatUtcDateTime } from '../format'
+import { formatDegrees, formatPixelLength, formatPixelPosition, formatTemperature, formatZonedDateTime } from '../format'
+import { useActiveTimeZone } from '../location/useLocation'
 import { operationsState } from '../operations'
 import { formatPixelScale } from '../platesolving/coordinates'
 import { activeProfile, exposureSettings, guidingSettings, profileState, setGuidingSettings, starDetectionSettings } from '../profile/profile'
@@ -375,6 +376,7 @@ interface SavedCalibrationsProps {
 // Saved calibrations of the equipment of a session, newest usable first, each with how it fits the session now: read when
 // the section opens, once the first frame tells the equipment apart, and whenever the calibration in use or the run changes.
 function SavedCalibrations({ session, onReview }: SavedCalibrationsProps) {
+	const timeZone = useActiveTimeZone()
 	const [candidates, setCandidates] = useState<readonly GuidingCalibrationCandidate[]>()
 	const [error, setError] = useState<string>()
 	const [generation, setGeneration] = useState(0)
@@ -413,7 +415,7 @@ function SavedCalibrations({ session, onReview }: SavedCalibrationsProps) {
 
 				return (
 					<div key={candidate.calibrationId} className="flex flex-col gap-1 border-b border-line-100 pb-2 last:border-b-0">
-						<span className="text-sm text-ink-100 tabular-nums">{`${formatUtcDateTime(candidate.createdAt, false)}${candidate.quality ? ` · ${CALIBRATION_QUALITY_LABELS[candidate.quality]}` : ''}${inUse ? ' · in use' : ''}`}</span>
+						<span className="text-sm text-ink-100 tabular-nums">{`${formatZonedDateTime(candidate.createdAt, timeZone, false)}${candidate.quality ? ` · ${CALIBRATION_QUALITY_LABELS[candidate.quality]}` : ''}${inUse ? ' · in use' : ''}`}</span>
 						<span className={usable ? 'text-xs text-success' : 'text-xs text-ink-300'}>
 							{CALIBRATION_CANDIDATE_LABELS[candidate.status]}
 							{!usable && candidate.reasons.length > 0 && `: ${candidate.reasons.map((reason) => CALIBRATION_REJECTION_LABELS[reason]).join(', ')}`}

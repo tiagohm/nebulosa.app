@@ -1,6 +1,7 @@
 import type { PointingModelDetail, PointingRevision, PointingSampleRecord } from 'api'
 import type { ReactNode } from 'react'
-import { formatArcsec, formatPercent, formatUtcDateTime, MISSING } from '../format'
+import { formatArcsec, formatPercent, formatZonedDateTime, MISSING } from '../format'
+import { useActiveTimeZone } from '../location/useLocation'
 import { formatPixelScale, formatPositionAngle } from '../platesolving/coordinates'
 import { formatDeclination, formatRightAscension } from '../sky/format'
 import { DataList, DataRow } from '../ui/DataRow'
@@ -74,12 +75,13 @@ export function PointingDiagnostics({ model, revision }: { readonly model: Pick<
 
 // Everything measured of one sample.
 export function PointingSampleInspector({ sample, revision }: { readonly sample: PointingSampleRecord; readonly revision?: PointingRevision }) {
+	const timeZone = useActiveTimeZone()
 	const residual = revision?.residuals.find((each) => each.id === sample.id)
 
 	return (
 		<DataList>
 			<DataRow label="Point">{`${sample.waypoint + 1}, attempt ${sample.attempt}${sample.role === 'heldOut' ? ', withheld' : ''}`}</DataRow>
-			<DataRow label="Taken">{formatUtcDateTime(sample.time)}</DataRow>
+			<DataRow label="Taken">{formatZonedDateTime(sample.time, timeZone)}</DataRow>
 			<DataRow label="Command">{`${formatRightAscension(sample.command.rightAscension)} ${formatDeclination(sample.command.declination)}`}</DataRow>
 			<DataRow label="Solved">{sample.solved ? `${formatRightAscension(sample.solved.rightAscension)} ${formatDeclination(sample.solved.declination)}` : MISSING}</DataRow>
 			<DataRow label="Pier Side">{sample.pierSide}</DataRow>

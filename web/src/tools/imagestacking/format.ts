@@ -151,10 +151,10 @@ export function registrationText(registration: StackingRegistration | undefined)
 	return `${translationX.toFixed(1)}, ${translationY.toFixed(1)} px · ${((rotation * 180) / Math.PI).toFixed(2)}° · ${rmsError.toFixed(2)} px rms`
 }
 
-// Text of a master offered to a cohort: its id, when it was published, the frames it integrated, and whether it carries
+// Text of a master offered to a cohort: its id, when it was published in a zone, the frames it integrated, and whether it carries
 // warnings.
-export function masterText(candidate: Pick<StackingMasterCandidate, 'masterId' | 'createdAt' | 'frames' | 'status'>) {
-	return `${masterName(candidate)} · ${candidate.frames === 1 ? '1 frame' : `${candidate.frames} frames`}${candidate.status === 'warning' ? ' · warnings' : ''}`
+export function masterText(candidate: Pick<StackingMasterCandidate, 'masterId' | 'createdAt' | 'frames' | 'status'>, timeZone: string) {
+	return `${masterName(candidate, timeZone)} · ${candidate.frames === 1 ? '1 frame' : `${candidate.frames} frames`}${candidate.status === 'warning' ? ' · warnings' : ''}`
 }
 
 // Title of a cohort: its filter, exposure, and frames.

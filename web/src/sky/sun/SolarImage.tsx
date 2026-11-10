@@ -2,27 +2,29 @@ import { cn } from 'cn'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatLongDateTime } from '../../format'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { Modal } from '../../ui/Modal'
 import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { loadSunImage, SUN_IMAGE_CHANNEL_NAMES, SUN_IMAGE_CHANNELS, type SunImage, selectSunImageChannel, sunState } from './sun'
 
 // Latest SDO image of the Sun Inspector, right under the Sun's name: the channel chosen, when SDO updated the file
-// and when the server downloaded it (in UTC, never the Sky instant, since the image is a current observation), and
+// and when the server downloaded it (in the display zone, never the Sky instant, since the image is a current observation), and
 // a larger view on a click. A failure of the image only says so here; the rest of the inspector is unaffected.
 
 // Credit SDO asks for.
 const SDO_CREDIT = 'Courtesy of NASA/SDO and the AIA, EVE, and HMI science teams.'
 
-// Says what an image is and when SDO updated it; a stale image says it is the last one downloaded.
-function imageCaption(image: SunImage) {
-	const updated = image.updatedAt !== undefined ? `updated ${formatLongDateTime(image.updatedAt, 'UTC')}` : 'update time unknown'
-	const stale = image.stale ? `. SDO cannot be reached: last image, downloaded ${formatLongDateTime(image.fetchedAt, 'UTC')}` : ''
+// Says what an image is and when SDO updated it, in a zone; a stale image says it is the last one downloaded.
+function imageCaption(image: SunImage, timeZone: string) {
+	const updated = image.updatedAt !== undefined ? `updated ${formatLongDateTime(image.updatedAt, timeZone)}` : 'update time unknown'
+	const stale = image.stale ? `. SDO cannot be reached: last image, downloaded ${formatLongDateTime(image.fetchedAt, timeZone)}` : ''
 	return `${SUN_IMAGE_CHANNEL_NAMES[image.channel]} · NASA/SDO, ${updated}${stale}.`
 }
 
 // SDO image of the Sun Inspector.
 export function SolarImage() {
+	const timeZone = useActiveTimeZone()
 	const { image, enlarged, channel } = useSnapshot(sunState)
 	const [open, setOpen] = useState(false)
 	const shown = image.value
@@ -43,7 +45,7 @@ export function SolarImage() {
 				<div className="flex h-60 items-center justify-center rounded-sm bg-base-000 px-4 text-center text-xs text-ink-300">{image.error ? 'The SDO image is unavailable.' : 'Loading the SDO image…'}</div>
 			)}
 			<Select label="Channel" options={SUN_IMAGE_CHANNELS} value={channel} format={(e) => SUN_IMAGE_CHANNEL_NAMES[e]} onChange={(e) => void selectSunImageChannel(sunState, e)} />
-			{shown && <Notice>{imageCaption(shown)}</Notice>}
+			{shown && <Notice>{imageCaption(shown, timeZone)}</Notice>}
 			{image.error && <Notice error>SDO image unavailable: {image.error}</Notice>}
 			<Modal open={open} onClose={() => setOpen(false)} title={shown ? SUN_IMAGE_CHANNEL_NAMES[shown.channel] : 'The Sun'} fit className="max-w-[min(100%,72rem)]">
 				<div className="flex min-h-0 flex-col gap-3">
@@ -52,7 +54,7 @@ export function SolarImage() {
 					) : (
 						<Notice>{enlarged.error ? `The larger image is unavailable: ${enlarged.error}` : 'Loading the larger image…'}</Notice>
 					)}
-					{enlarged.value && <Notice>{imageCaption(enlarged.value)}</Notice>}
+					{enlarged.value && <Notice>{imageCaption(enlarged.value, timeZone)}</Notice>}
 					<Notice>{SDO_CREDIT} The image is the latest SDO has, whatever instant the Sky shows.</Notice>
 				</div>
 			</Modal>

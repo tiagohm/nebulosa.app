@@ -1,7 +1,8 @@
 import type { ObservingSite as SavedObservingSite } from 'api'
 import { nanoid } from 'nanoid'
 import { parseAngle, toDeg } from 'nebulosa/src/math/units/angle'
-import { proxy } from 'valtio'
+import { proxy, subscribe } from 'valtio'
+import { setActiveSiteZone } from '../format'
 import { activeProfile, type ProfileState } from '../profile/profile'
 import type { Profile } from '../profile/schema'
 import { navigate, routeState } from '../shell/route'
@@ -181,4 +182,22 @@ const SEXAGESIMAL_SCALE = 1e9
 // edit where they observe from.
 export function openObservingSites(siteId?: string) {
 	navigate(routeState, { workspace: 'settings', section: 'observing-sites', site: siteId })
+}
+
+// Keeps the zone of the active profile's site in the time formats (setActiveSiteZone of format.ts), so a time shown in
+// it leaves its zone unnamed, as the profile, its site, or the site's zone change; returns the function that stops it.
+// It is notified synchronously, so the formats know the new zone before a screen renders with it.
+export function watchActiveSiteZone(profiles: ProfileState, sites: SiteState) {
+	// The profiles are empty until the workspace is read, when there is no site yet.
+	const sync = () => {
+		const profile = profiles.profiles.length > 0 ? activeProfile(profiles) : undefined
+		setActiveSiteZone(profile && activeSite(profile, sites.sites)?.timeZone)
+	}
+	sync()
+	const stops = [subscribe(profiles, sync, true), subscribe(sites, sync, true)]
+
+	return () => {
+		for (const stop of stops) stop()
+		setActiveSiteZone(undefined)
+	}
 }

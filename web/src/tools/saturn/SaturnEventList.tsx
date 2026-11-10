@@ -1,15 +1,15 @@
-import { formatArcsec, formatDateTime, formatDegrees, formatUtcDateTime } from '../../format'
+import { formatArcsec, formatDegrees, formatZonedDateTime } from '../../format'
 import { formatPositionAngle } from '../../platesolving/coordinates'
 import { Cell, Row, Table } from '../../ui/Table'
 import { listedId, MOON_LABELS, RING_EVENT_DEFINITIONS, RING_EVENT_LABELS, type SaturnListedEvent } from './saturn'
 
 // Events of the period: the ring-plane events found by search and the greatest separations of the moons drawn, with
-// their instant in the display zone and in UTC and the value at that instant. A greatest separation is a true maximum of
+// their instant in the display zone and the value at that instant. A greatest separation is a true maximum of
 // the moon's distance from Saturn, not an east-west elongation; a slow moon such as Iapetus may have none in a short
 // period. Choosing an event moves only the tool's clock.
 
 // Columns of the table.
-const COLUMNS = ['When', 'Event', 'Value', 'UTC'] as const
+const COLUMNS = ['When', 'Event', 'Value'] as const
 
 // Name of a listed event.
 export function listedName(event: SaturnListedEvent) {
@@ -38,10 +38,9 @@ export function SaturnEventList({ events, selected, timeZone, onSelect }: Saturn
 		<Table columns={COLUMNS}>
 			{events.map((event) => (
 				<Row key={listedId(event)} selected={listedId(event) === selected} onSelect={() => onSelect(event)} title={event.type === 'ring' ? RING_EVENT_DEFINITIONS[event.kind] : 'A local maximum of the apparent distance of the moon from the centre of Saturn.'}>
-					<Cell>{formatDateTime(event.time, timeZone, false)}</Cell>
+					<Cell>{formatZonedDateTime(event.time, timeZone, false)}</Cell>
 					<Cell>{listedName(event)}</Cell>
 					<Cell>{listedValue(event)}</Cell>
-					<Cell>{formatUtcDateTime(event.time)}</Cell>
 				</Row>
 			))}
 		</Table>

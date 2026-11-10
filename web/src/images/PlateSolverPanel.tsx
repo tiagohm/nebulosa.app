@@ -7,7 +7,7 @@ import { controlRuntime, sendCommand, watchedDeviceState } from '../equipment-co
 import { roleAvailability } from '../equipment/availability'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { formatArcmin, formatClockTime, formatDegrees, formatDuration, MISSING } from '../format'
-import { BROWSER_TIME_ZONE } from '../location/zone'
+import { useActiveTimeZone } from '../location/useLocation'
 import { operationsState } from '../operations'
 import { formatPositionAngle, formatPixelScale } from '../platesolving/coordinates'
 import { AdvancedControls, HintControls, SolverControls, StrategyControls, useSolverConfigured } from '../platesolving/PlateSolveControls'
@@ -329,6 +329,7 @@ interface SolutionsProps {
 
 // Choice of the solution shown among the completed jobs of the image and its header.
 function Solutions({ documentKey, imageId, selected }: SolutionsProps) {
+	const timeZone = useActiveTimeZone()
 	const state = useSnapshot(plateSolvingState)
 	const options = solutionOptions(state, imageId)
 	if (options.length === 0) return null
@@ -337,7 +338,7 @@ function Solutions({ documentKey, imageId, selected }: SolutionsProps) {
 		if (option === 'latest') return 'Latest solve'
 		if (option === 'header') return 'Image header'
 		const job = state.jobs[option]
-		return `${PROVIDER_LABELS[job.request.provider]} ${job.request.strategy} · ${formatClockTime(job.queuedAt, BROWSER_TIME_ZONE, { seconds: true })}${job.summary?.outcome === 'noSolution' ? ' · no solution' : ''}`
+		return `${PROVIDER_LABELS[job.request.provider]} ${job.request.strategy} · ${formatClockTime(job.queuedAt, timeZone, { seconds: true, named: true })}${job.summary?.outcome === 'noSolution' ? ' · no solution' : ''}`
 	}
 
 	return (

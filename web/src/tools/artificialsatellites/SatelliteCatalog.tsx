@@ -1,7 +1,8 @@
 import type { SatelliteGroupStatus, SatelliteSummary } from 'api'
 import { useSnapshot } from 'valtio'
-import { formatUtcDateTime, MISSING } from '../../format'
+import { formatZonedDateTime, MISSING } from '../../format'
 import { activeSite, siteState } from '../../location/site'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
 import { satelliteCatalogState } from '../../satellites/satellites'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -67,6 +68,7 @@ interface SatelliteRowProps {
 
 // Row of one object of the catalog.
 function SatelliteRow({ satellite, favorite }: SatelliteRowProps) {
+	const timeZone = useActiveTimeZone()
 	const { selectedId } = useSnapshot(artificialSatellitesState)
 	const { noradId, name, cosparId, objectType, elementKind, elementEpoch } = satellite
 	const select = () => void selectSatellite(artificialSatellitesState, noradId, activeSite(activeProfile(profileState), siteState.sites))
@@ -90,7 +92,7 @@ function SatelliteRow({ satellite, favorite }: SatelliteRowProps) {
 			<Cell numeric>{noradId}</Cell>
 			<Cell>{cosparId ?? MISSING}</Cell>
 			<Cell>{objectType ? OBJECT_TYPE_NAMES[objectType] : MISSING}</Cell>
-			<Cell title={elementKind ? undefined : 'No orbital elements: catalog data only, no prediction.'}>{elementEpoch === undefined ? 'Catalog only' : `${elementKind === 'manual' ? 'Imported' : 'GP'} · ${formatUtcDateTime(elementEpoch)}`}</Cell>
+			<Cell title={elementKind ? undefined : 'No orbital elements: catalog data only, no prediction.'}>{elementEpoch === undefined ? 'Catalog only' : `${elementKind === 'manual' ? 'Imported' : 'GP'} · ${formatZonedDateTime(elementEpoch, timeZone)}`}</Cell>
 		</Row>
 	)
 }

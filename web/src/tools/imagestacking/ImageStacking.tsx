@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../../files/files'
-import { formatByteSize, formatDuration, formatExposureTime, formatUtcDateTime, MISSING } from '../../format'
+import { formatByteSize, formatDuration, formatExposureTime, formatZonedDateTime, MISSING } from '../../format'
 import { imagesState, openImage } from '../../images/images'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { activeProfile, profileState, setLastStackingDirectory } from '../../profile/profile'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
@@ -322,6 +323,7 @@ function GroupsView({ onShow }: { readonly onShow: (key: string) => void }) {
 
 // Page of frames, each left out of stacks, included again, or removed from the project from its row.
 function FramesView({ selected, onSelect, onRemoved }: { readonly selected?: string; readonly onSelect: (sourceId: string) => void; readonly onRemoved: (sourceId: string) => void }) {
+	const timeZone = useActiveTimeZone()
 	const { frames, pending, errors } = useSnapshot(imageStackingRuntime)
 	const items = (frames?.items ?? []) as readonly StackingFrameSummary[]
 
@@ -349,7 +351,7 @@ function FramesView({ selected, onSelect, onRemoved }: { readonly selected?: str
 						<Cell>{frame.metadata.filter.value ?? 'None'}</Cell>
 						<Cell>{exposureText(frame.metadata)}</Cell>
 						<Cell>{frame.object ?? MISSING}</Cell>
-						<Cell>{frame.observedAt === undefined ? MISSING : formatUtcDateTime(frame.observedAt, false)}</Cell>
+						<Cell>{frame.observedAt === undefined ? MISSING : formatZonedDateTime(frame.observedAt, timeZone, false)}</Cell>
 						<Cell>{frame.excluded ? <StatusBadge tone="muted" label="Left Out" /> : <StatusBadge tone={SOURCE_STATUS_TONES[frame.status]} label={SOURCE_STATUS_LABELS[frame.status]} />}</Cell>
 						<Cell>
 							<div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
@@ -381,6 +383,7 @@ function openInImages(path: string) {
 
 // Frame, how each value is known, and what an operator may declare about it.
 function FramePanel({ onRemoved }: { readonly onRemoved: () => void }) {
+	const timeZone = useActiveTimeZone()
 	const { frame, pending } = useSnapshot(imageStackingRuntime)
 	if (!frame) return <p className="m-0 p-4 text-xs text-ink-300">Loading…</p>
 	const { metadata } = frame
@@ -431,7 +434,7 @@ function FramePanel({ onRemoved }: { readonly onRemoved: () => void }) {
 						</>
 					)}
 					<DataRow label="Registration">{registrationText(frame.analysis.registration)}</DataRow>
-					<DataRow label="Measured">{formatUtcDateTime(frame.analysis.analyzedAt, false)}</DataRow>
+					<DataRow label="Measured">{formatZonedDateTime(frame.analysis.analyzedAt, timeZone, false)}</DataRow>
 				</CollapsibleSection>
 			)}
 		</>

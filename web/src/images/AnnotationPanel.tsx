@@ -6,8 +6,8 @@ import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
 import { isAnnotationShown } from '../annotations/AnnotationOverlay'
 import { annotationKey, annotationPlateSolveJobId, annotationRequest, annotationsState, cancelAnnotation, resolveMinorBody, runAnnotation, sameAnnotationRequest } from '../annotations/annotations'
 import { useAnnotationContext, useAnnotationResult } from '../annotations/useAnnotationResult'
-import { formatDegrees, formatDuration, formatElevation, formatGeographic, formatUtcDateTime, MISSING } from '../format'
-import { useActiveSite } from '../location/useLocation'
+import { formatDegrees, formatDuration, formatElevation, formatGeographic, formatZonedDateTime, MISSING } from '../format'
+import { useActiveSite, useActiveTimeZone } from '../location/useLocation'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { profileState, setAnnotationPreferences } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -201,6 +201,7 @@ interface AnalysisProps {
 // job. Without a date in the header, the analysis moves the stars to the current time. Running holds the frame a
 // camera tab shows first, so the frame annotated stays shown.
 function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, submitError, unavailable }: AnalysisProps) {
+	const timeZone = useActiveTimeZone()
 	const active = isActive(job)
 	const now = useNow(active)
 	const changed = job && !sameAnnotationRequest(job.request, request)
@@ -209,7 +210,7 @@ function Analysis({ documentKey, imageId, request, context, job, wcsAvailable, s
 	return (
 		<CollapsibleSection id="images.annotation.source-and-status" title="Source & Status">
 			<DataRow label="WCS">{request.plateSolveJobId !== undefined ? 'Plate solution shown' : wcsAvailable ? 'Image header' : 'None'}</DataRow>
-			<DataRow label="Observation (UTC)">{observation ? formatUtcDateTime(observation.time) : context ? TIME_ORIGIN_LABELS.now : MISSING}</DataRow>
+			<DataRow label="Observation">{observation ? formatZonedDateTime(observation.time, timeZone) : context ? TIME_ORIGIN_LABELS.now : MISSING}</DataRow>
 			{observation && <DataRow label="Time from">{`${TIME_ORIGIN_LABELS[observation.origin]}${observation.approximate ? ' (approximate)' : ''}`}</DataRow>}
 			<DataRow label="Seen from">{context?.site ? formatSite(context.site) : context ? 'Center of the Earth' : MISSING}</DataRow>
 			{context?.site && <DataRow label="Site from">{SITE_SOURCE_LABELS[context.site.source]}</DataRow>}

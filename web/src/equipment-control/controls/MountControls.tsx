@@ -2,10 +2,10 @@ import type { MountCoordinate, MountState } from 'api'
 import { toDeg } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatElevation, formatGeographic, formatUtcDateTime } from '../../format'
+import { formatDegrees, formatElevation, formatGeographic, formatZonedDateTime } from '../../format'
 import { connectionCameraTab } from '../../images/cameratabs'
 import { imagesState, selectImage, selectImageTool } from '../../images/images'
-import { useActiveSite } from '../../location/useLocation'
+import { useActiveSite, useActiveTimeZone } from '../../location/useLocation'
 import { activeProfile, activeSetup, profileState } from '../../profile/profile'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { navigate, routeState } from '../../shell/route'
@@ -68,6 +68,7 @@ function openMountNudge(tab: string) {
 
 // Controls of a mount.
 export function MountControls({ device }: InterfaceProps) {
+	const timeZone = useActiveTimeZone()
 	const control = useSnapshot(controlRuntime)
 	const profiles = useSnapshot(profileState)
 	const images = useSnapshot(imagesState)
@@ -167,7 +168,7 @@ export function MountControls({ device }: InterfaceProps) {
 			<PanelSection title="Site & Time">
 				<DataRow label="Location">{formatGeographic(toDeg(mount.site.latitude), toDeg(mount.site.longitude))}</DataRow>
 				<DataRow label="Elevation">{formatElevation(mount.site.elevation)}</DataRow>
-				<DataRow label="Time">{mount.time.utc > 0 ? formatUtcDateTime(mount.time.utc) : 'Not reported'}</DataRow>
+				<DataRow label="Time">{mount.time.utc > 0 ? formatZonedDateTime(mount.time.utc, timeZone) : 'Not reported'}</DataRow>
 				<Actions>
 					{observer && (
 						<ConfirmButton

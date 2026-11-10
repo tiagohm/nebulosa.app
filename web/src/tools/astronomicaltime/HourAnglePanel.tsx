@@ -1,5 +1,7 @@
 import { formatRA } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
+import { formatZonedDateTime } from '../../format'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { skyState } from '../../sky/sky'
 import { Button } from '../../ui/Button'
@@ -13,6 +15,7 @@ import { astronomicalTimeState } from './astronomicaltime'
 
 // Hour angle section of the tool.
 export function HourAnglePanel() {
+	const timeZone = useActiveTimeZone()
 	const { rightAscension } = useSnapshot(astronomicalTimeState)
 	const position = useSnapshot(skyState).selection?.position
 
@@ -22,7 +25,7 @@ export function HourAnglePanel() {
 			<Button variant="secondary" disabled={!position} title={position ? 'Copies the apparent right ascension of date of the Sky selection' : 'Select an object in the Sky first'} onClick={() => position && (astronomicalTimeState.rightAscension = formatRA(position.rightAscension, 2))}>
 				Use Sky Selection
 			</Button>
-			{position && <Notice>The Sky selection was computed for {new Date(position.time).toISOString()}.</Notice>}
+			{position && <Notice>The Sky selection was computed for {formatZonedDateTime(position.time, timeZone)}.</Notice>}
 			<Notice>Hours as 5.5 or 05 30 00, referred to the true equinox of date, not J2000.</Notice>
 		</CollapsibleSection>
 	)

@@ -29,9 +29,9 @@ import {
 } from '../../calibrationlibrary/calibrationlibrary'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../../files/files'
-import { formatByteSize, formatDateTime, formatExposureTime, formatPercent, MISSING } from '../../format'
+import { formatByteSize, formatDateTime, formatExposureTime, formatPercent, MISSING, formatZonedDateTime } from '../../format'
 import { imagesState, openImage } from '../../images/images'
-import { BROWSER_TIME_ZONE } from '../../location/zone'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { activeProfile, profileState, setLastCalibrationDirectory } from '../../profile/profile'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
@@ -218,6 +218,7 @@ function pageTotal(section: LibrarySection) {
 
 // Coverage and groups.
 function GroupsView({ selected, onSelect }: { readonly selected?: string; readonly onSelect: (groupId: string) => void }) {
+	const timeZone = useActiveTimeZone()
 	const { groups, summary } = useSnapshot(calibrationLibraryRuntime)
 	const items = (groups?.items ?? []) as readonly CalibrationGroupSummary[]
 
@@ -238,7 +239,7 @@ function GroupsView({ selected, onSelect }: { readonly selected?: string; readon
 						<Cell>
 							<StatusBadge tone={READINESS_TONES[group.readiness]} label={READINESS_LABELS[group.readiness]} />
 						</Cell>
-						<Cell>{group.masters[0] ? masterName(group.masters[0]) : MISSING}</Cell>
+						<Cell>{group.masters[0] ? masterName(group.masters[0], timeZone) : MISSING}</Cell>
 					</Row>
 				))}
 			</Table>
@@ -291,6 +292,7 @@ function FramesView({ selected, onSelect }: { readonly selected?: string; readon
 
 // List of masters, newest first.
 function MastersView({ selection, onSelect }: { readonly selection?: Selection; readonly onSelect: (masterId: number) => void }) {
+	const timeZone = useActiveTimeZone()
 	const { masters } = useSnapshot(calibrationLibraryRuntime)
 	const items = (masters?.items ?? []) as readonly CalibrationMasterSummary[]
 
@@ -300,7 +302,7 @@ function MastersView({ selection, onSelect }: { readonly selection?: Selection; 
 		<Table columns={['Master', 'Type', 'Group', 'Camera', 'Frames', 'Method', 'Contents', 'State']}>
 			{items.map((master) => (
 				<Row key={master.masterId} selected={selection?.type === 'master' && selection.masterId === master.masterId} onSelect={() => onSelect(master.masterId)}>
-					<Cell>{masterName(master)}</Cell>
+					<Cell>{masterName(master, timeZone)}</Cell>
 					<Cell>{KIND_LABELS[master.kind]}</Cell>
 					<Cell>{groupTitle(master)}</Cell>
 					<Cell>{cameraText(master.metadata)}</Cell>
@@ -349,6 +351,7 @@ function Findings({ findings }: { readonly findings: readonly CompatibilityFindi
 
 // Group, why it is in its state, its build form, and its deletion.
 function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
+	const timeZone = useActiveTimeZone()
 	const { group, jobs, pending, errors } = useSnapshot(calibrationLibraryRuntime)
 	if (!group) return <p className="m-0 p-4 text-xs text-ink-300">Loading…</p>
 
@@ -388,7 +391,7 @@ function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
 				<CollapsibleSection id="calibration.masters" title="Masters">
 					{group.masters.map((master) => (
 						<div key={master.masterId} className="flex items-center gap-2 text-xs text-ink-200 tabular-nums">
-							<span>{`${masterName(master)} · ${master.frames} frames · ${METHOD_LABELS[master.method]}`}</span>
+							<span>{`${masterName(master, timeZone)} · ${master.frames} frames · ${METHOD_LABELS[master.method]}`}</span>
 							<StatusBadge tone={PRODUCT_STATUS_TONES[master.status]} label={PRODUCT_STATUS_LABELS[master.status]} />
 						</div>
 					))}
@@ -401,6 +404,7 @@ function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
 // Recipe of a master, which the server explains as it changes.
 // shown is what the group section already lists, so only what the recipe itself adds is listed here.
 function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonly kind: CalibrationKind; readonly shown: readonly CompatibilityFinding[] }) {
+	const timeZone = useActiveTimeZone()
 	const { pending, errors, masters, changes, jobs } = useSnapshot(calibrationLibraryRuntime)
 	const [form, setForm] = useState<RecipeForm>(DEFAULT_FORM)
 	const [validation, setValidation] = useState<RecipeValidation>()
@@ -442,7 +446,7 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 
 	function correctionLabel(option: string) {
 		const master = corrections.find(({ masterId }) => String(masterId) === option)
-		return master ? `${KIND_LABELS[master.kind]} ${masterName(master)} · ${exposureText(master.metadata)}` : 'None'
+		return master ? `${KIND_LABELS[master.kind]} ${masterName(master, timeZone)} · ${exposureText(master.metadata)}` : 'None'
 	}
 
 	const reason = validation?.findings.find(({ severity }) => severity === 'blocker')?.message
@@ -487,6 +491,7 @@ function EvidencedReadout({ label, value, format = String }: { readonly label: s
 
 // Master, what went in, how to use it, and its deletion.
 function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: string) => void; readonly onDeleted: () => void }) {
+	const timeZone = useActiveTimeZone()
 	const { master: snapshot, pending, errors } = useSnapshot(calibrationLibraryRuntime)
 	const master = snapshot
 	if (!master) return <p className="m-0 p-4 text-xs text-ink-300">Loading…</p>
@@ -501,7 +506,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 
 	return (
 		<>
-			<CollapsibleSection id="calibration.master" title={`${KIND_LABELS[master.kind]} ${masterName(master)}`}>
+			<CollapsibleSection id="calibration.master" title={`${KIND_LABELS[master.kind]} ${masterName(master, timeZone)}`}>
 				<StatusBadge tone={PRODUCT_STATUS_TONES[master.status]} label={PRODUCT_STATUS_LABELS[master.status]} />
 				{warnings.length > 0 && (
 					<ul className="m-0 flex list-none flex-col gap-1 p-0">
@@ -544,7 +549,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 				{master.dependencies.map(({ masterId }) => (
 					<DataRow key={masterId} label="Corrected by">{`#${masterId}`}</DataRow>
 				))}
-				<DataRow label="Published">{formatDateTime(master.createdAt, BROWSER_TIME_ZONE)}</DataRow>
+				<DataRow label="Published">{formatZonedDateTime(master.createdAt, timeZone)}</DataRow>
 				<DataRow label="SHA-256">
 					<span className="break-all">{master.contentDigest}</span>
 				</DataRow>

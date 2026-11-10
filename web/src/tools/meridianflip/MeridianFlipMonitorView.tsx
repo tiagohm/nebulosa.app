@@ -6,7 +6,8 @@ import { DeviceLink } from '../../equipment-control/DeviceLink'
 import type { RoleStatus } from '../../equipment/equipment'
 import { EquipmentSetupButton } from '../../equipment/EquipmentSetupButton'
 import { useRoleDevice } from '../../equipment/useEquipment'
-import { formatClockDuration, formatDuration, formatHourAngle, formatUtcDateTime, MISSING } from '../../format'
+import { formatClockDuration, formatDuration, formatHourAngle, formatZonedDateTime, MISSING } from '../../format'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { activeProfile, meridianFlipSettings, profileCamera, profileState, setMeridianFlipSettings } from '../../profile/profile'
 import { MERIDIAN_FLIP_MAXIMUM_SECONDS } from '../../profile/schema'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
@@ -250,6 +251,7 @@ function Panel({ title, children }: { readonly title: string; readonly children:
 
 // What the monitor observes now: the hour angle, the transit, the window, the pier sides, and the assessment.
 function ObservationPanel({ monitor }: { readonly monitor?: MeridianFlipMonitor }) {
+	const timeZone = useActiveTimeZone()
 	const now = useNow(!!monitor)
 
 	if (!monitor) {
@@ -271,9 +273,9 @@ function ObservationPanel({ monitor }: { readonly monitor?: MeridianFlipMonitor 
 				<DataRow label="Phase">{stale ? 'Stale' : PHASES[timing.phase]}</DataRow>
 				<DataRow label={timing.phase === 'unavailable' ? 'Hour angle (geometry only)' : 'Hour angle'}>{timing.hourAngle === undefined ? MISSING : formatHourAngle(timing.hourAngle)}</DataRow>
 				<DataRow label="Transit">{stale ? 'Stale' : formatCountdown(countdown)}</DataRow>
-				<DataRow label="Transit at">{timing.transitAt === undefined ? MISSING : formatUtcDateTime(timing.transitAt)}</DataRow>
-				<DataRow label="Window opens">{timing.windowOpensAt === undefined ? MISSING : formatUtcDateTime(timing.windowOpensAt)}</DataRow>
-				<DataRow label="Window closes">{timing.windowClosesAt === undefined ? MISSING : formatUtcDateTime(timing.windowClosesAt)}</DataRow>
+				<DataRow label="Transit at">{timing.transitAt === undefined ? MISSING : formatZonedDateTime(timing.transitAt, timeZone)}</DataRow>
+				<DataRow label="Window opens">{timing.windowOpensAt === undefined ? MISSING : formatZonedDateTime(timing.windowOpensAt, timeZone)}</DataRow>
+				<DataRow label="Window closes">{timing.windowClosesAt === undefined ? MISSING : formatZonedDateTime(timing.windowClosesAt, timeZone)}</DataRow>
 				<DataRow label="Forecast">{timing.quality === 'valid' ? 'Sidereal tracking' : timing.quality === 'approximate' ? 'Approximate' : MISSING}</DataRow>
 				<DataRow label="Tracking">{mount.tracking ? mount.trackMode.toLowerCase().replace(/^./, (c) => c.toUpperCase()) : 'Off'}</DataRow>
 				<DataRow label="Pier side (reported)">{PIER_SIDES[mount.pierSide]}</DataRow>
@@ -281,7 +283,7 @@ function ObservationPanel({ monitor }: { readonly monitor?: MeridianFlipMonitor 
 				<DataRow label="Flip" tone={monitor.mechanical === 'flipCandidate' ? 'danger' : 'default'}>
 					{MECHANICAL[monitor.mechanical]}
 				</DataRow>
-				<DataRow label="Sampled">{formatUtcDateTime(monitor.sampledAt)}</DataRow>
+				<DataRow label="Sampled">{formatZonedDateTime(monitor.sampledAt, timeZone)}</DataRow>
 			</DataList>
 			{reason && <Notice>{REASONS[reason]}</Notice>}
 		</Panel>
@@ -332,6 +334,7 @@ function SettingsPanel({ draft, onChange, monitor, saved, pending, onApply }: Se
 
 // Timeline from the early warning to the closing of the window, with the transit and now marked.
 function TimelinePanel({ monitor }: { readonly monitor: MeridianFlipMonitor }) {
+	const timeZone = useActiveTimeZone()
 	const now = useNow()
 	const { warningAt, transitAt, windowOpensAt, deadlineWarningAt, windowClosesAt } = monitor.timing
 	const stale = secondsToTransit(monitor, now) === undefined
@@ -361,10 +364,10 @@ function TimelinePanel({ monitor }: { readonly monitor: MeridianFlipMonitor }) {
 				<div className={cn('absolute top-0 h-8 -translate-x-6/12', TIMELINE.now)} style={{ left: position(now) }} />
 			</div>
 			<div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs leading-4 text-ink-300">
-				<span>Warning {formatUtcDateTime(warningAt)}</span>
-				<span>Transit {formatUtcDateTime(transitAt)}</span>
-				<span>Window {formatUtcDateTime(windowOpensAt)}</span>
-				<span>Closes {formatUtcDateTime(windowClosesAt)}</span>
+				<span>Warning {formatZonedDateTime(warningAt, timeZone)}</span>
+				<span>Transit {formatZonedDateTime(transitAt, timeZone)}</span>
+				<span>Window {formatZonedDateTime(windowOpensAt, timeZone)}</span>
+				<span>Closes {formatZonedDateTime(windowClosesAt, timeZone)}</span>
 			</div>
 			<ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-xs leading-4 text-ink-300">
 				{TIMELINE_LEGEND.map(({ mark, label }) => (
@@ -380,6 +383,7 @@ function TimelinePanel({ monitor }: { readonly monitor: MeridianFlipMonitor }) {
 
 // Whether a hypothetical next exposure ends within the preferred window, asked of the server on demand.
 function ExposurePanel({ device, monitor }: { readonly device?: DeviceSummary; readonly monitor?: MeridianFlipMonitor }) {
+	const timeZone = useActiveTimeZone()
 	const [exposure, setExposure] = useState(300)
 	const [overhead, setOverhead] = useState(10)
 	const [result, setResult] = useState<{ readonly assessment: MeridianExposureAssessment } | { readonly error: string }>()
@@ -411,8 +415,8 @@ function ExposurePanel({ device, monitor }: { readonly device?: DeviceSummary; r
 					<DataRow label="Next exposure" tone={assessment.decision === 'allowed' ? 'success' : assessment.decision === 'blocked' ? 'danger' : 'default'}>
 						{DECISIONS[assessment.decision]}
 					</DataRow>
-					{assessment.decision === 'allowed' && assessment.latestSafeStartAt !== undefined && <DataRow label="Latest start">{formatUtcDateTime(assessment.latestSafeStartAt)}</DataRow>}
-					{assessment.decision === 'defer' && assessment.reevaluateAt !== undefined && <DataRow label="Ask again at">{formatUtcDateTime(assessment.reevaluateAt)}</DataRow>}
+					{assessment.decision === 'allowed' && assessment.latestSafeStartAt !== undefined && <DataRow label="Latest start">{formatZonedDateTime(assessment.latestSafeStartAt, timeZone)}</DataRow>}
+					{assessment.decision === 'defer' && assessment.reevaluateAt !== undefined && <DataRow label="Ask again at">{formatZonedDateTime(assessment.reevaluateAt, timeZone)}</DataRow>}
 					<DataRow label="Duration">{formatDuration(exposure + overhead)}</DataRow>
 				</DataList>
 			)}
@@ -424,6 +428,7 @@ function ExposurePanel({ device, monitor }: { readonly device?: DeviceSummary; r
 
 // Recent transitions of the monitor, newest first.
 function EventsPanel({ monitorKey: key }: { readonly monitorKey?: string }) {
+	const timeZone = useActiveTimeZone()
 	const state = useSnapshot(meridianFlipState)
 	const transitions = key ? (state.transitions[key] ?? []) : []
 
@@ -434,7 +439,7 @@ function EventsPanel({ monitorKey: key }: { readonly monitorKey?: string }) {
 					<Table columns={['Time', 'Event', 'Pier side']}>
 						{transitions.toReversed().map((transition) => (
 							<Row key={transition.transitionId}>
-								<Cell numeric>{formatUtcDateTime(transition.at)}</Cell>
+								<Cell numeric>{formatZonedDateTime(transition.at, timeZone)}</Cell>
 								<Cell>{TRANSITIONS[transition.kind]}</Cell>
 								<Cell>{transition.previousPierSide ? `${PIER_SIDES[transition.previousPierSide]} → ${PIER_SIDES[transition.pierSide]}` : PIER_SIDES[transition.pierSide]}</Cell>
 							</Row>

@@ -2,7 +2,7 @@ import type { CaptureFrameSummary } from 'api'
 import { cn } from 'cn'
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatClockTime, formatExposureTime, formatUtcDateTime, MISSING } from '../format'
+import { formatClockTime, formatExposureTime, formatZonedDateTime, MISSING } from '../format'
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { Icon } from '../ui/Icon'
 import { moveIndex } from '../ui/navigation'
@@ -27,14 +27,14 @@ interface CaptureFramesCarouselProps {
 // Card of the carousel: the Latest card or a saved frame.
 type Card = { readonly kind: 'latest'; readonly frame?: CaptureFrameSummary } | { readonly kind: 'saved'; readonly frame: CaptureFrameSummary }
 
-// Returns the hh:mm:ss UTC time of a Unix time in milliseconds.
+// Returns the time of day of a Unix time in milliseconds in a zone, to the minute.
 function timeOf(time: number, timeZone: string): string {
 	return formatClockTime(time, timeZone)
 }
 
-// Returns the tooltip of a frame: its id, time, exposure, size, file, and availability.
-function frameTooltip(frame: CaptureFrameSummary): string {
-	const lines = [`Frame #${frame.generation}`, formatUtcDateTime(frame.time)]
+// Returns the tooltip of a frame: its id, time in a zone, exposure, size, file, and availability.
+function frameTooltip(frame: CaptureFrameSummary, timeZone: string): string {
+	const lines = [`Frame #${frame.generation}`, formatZonedDateTime(frame.time, timeZone)]
 	if (frame.acquisition?.exposure !== undefined) lines.push(`Exposure ${formatExposureTime(frame.acquisition.exposure)}`)
 	if (frame.width !== undefined && frame.height !== undefined) lines.push(`${frame.width} × ${frame.height} px`)
 	if (frame.fileName) lines.push(frame.fileName)
@@ -164,7 +164,7 @@ function FrameCard({ card, selected, focusable, loading, error, restored, newer,
 			data-card
 			tabIndex={focusable ? 0 : -1}
 			disabled={card.kind === 'saved' && !!unavailable}
-			title={[frame ? frameTooltip(frame) : 'No captured image available', error].filter(Boolean).join('\n')}
+			title={[frame ? frameTooltip(frame, displayZone.zone) : 'No captured image available', error].filter(Boolean).join('\n')}
 			onClick={onSelect}
 			className={cn(
 				'flex h-36 w-36 flex-none cursor-pointer flex-col gap-1 rounded-sm border bg-base-000 p-1.5 text-left font-mono text-xs text-ink-200 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-60',

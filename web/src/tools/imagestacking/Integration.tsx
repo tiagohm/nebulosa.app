@@ -2,8 +2,9 @@ import type { StackingJobSummary, StackingProductSummary, StackingRecipe } from 
 import { nanoid } from 'nanoid'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatByteSize, formatDuration, formatUtcDateTime, MISSING } from '../../format'
+import { formatByteSize, formatDuration, formatZonedDateTime, MISSING } from '../../format'
 import { imagesState, openImage } from '../../images/images'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { navigate, routeState } from '../../shell/route'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Actions } from '../../ui/Actions'
@@ -126,6 +127,7 @@ export function IntegrationView({ projectId }: { readonly projectId: string }) {
 
 // Masters of the project.
 export function ResultsView() {
+	const timeZone = useActiveTimeZone()
 	const { products, pending, errors } = useSnapshot(imageStackingRuntime)
 	const items = (products ?? []) as readonly StackingProductSummary[]
 
@@ -147,7 +149,7 @@ export function ResultsView() {
 							<Cell>{formatDuration(product.exposure)}</Cell>
 							<Cell>{formatByteSize(product.bytes)}</Cell>
 							<Cell>{`${product.width}×${product.height}×${product.channels}`}</Cell>
-							<Cell>{formatUtcDateTime(product.createdAt, false)}</Cell>
+							<Cell>{formatZonedDateTime(product.createdAt, timeZone, false)}</Cell>
 							<Cell>
 								<StatusBadge tone={PRODUCT_TONES[product.status]} label={PRODUCT_LABELS[product.status]} />
 							</Cell>

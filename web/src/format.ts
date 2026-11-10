@@ -3,7 +3,7 @@ import { formatAngle, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/
 // Display formats shared by every screen for quantities that are not tied to one feature: fixed and signed numbers,
 // percentages, angles in degrees, arcminutes, and arcseconds, hour angles, geographic positions and elevations, temperatures, lengths in pixels
 // with their sky size, positions in an image, distances in kilometers, exposure times, durations, elapsed and signed clocks, instants
-// in UTC or in an IANA time zone, byte sizes, and measurements of a wide dynamic range. Every Intl.DateTimeFormat of the
+// in an IANA time zone (named unless it is the active site's), byte sizes, and measurements of a wide dynamic range. Every Intl.DateTimeFormat of the
 // web is built and cached here (`dateTimeFormat`), and every civil time a screen shows is one of the formats below.
 // Each takes the value in its computational unit (radians, seconds, °C, pixels, bytes) and returns text only, so a
 // value is never rounded before it is used elsewhere. The decimals are a presentation choice, never a claim of
@@ -269,17 +269,43 @@ export function formatDateTime(time: number, timeZone: string, seconds: boolean 
 	return dateTimeFormat({ timeZone, dateStyle: 'short', timeStyle: seconds ? 'medium' : 'short' }, ISO_LOCALE).format(time)
 }
 
-// Returns an instant (Unix milliseconds) in UTC to the second, or to the minute when `seconds` is false, with the zone
-// named: "2026-11-05 14:23:05 UTC", "2026-11-05 14:23 UTC", or MISSING when it is not finite.
-export function formatUtcDateTime(time: number, seconds: boolean = true) {
-	return withUnit(formatDateTime(time, 'UTC', seconds), ' UTC')
+// Zone of the active profile's observing site, the zone the times of the app are read in by default: a time shown in it
+// leaves its zone unnamed, and a time in any other zone names it. Undefined while the profile has no site, when every
+// named format names its zone. Kept current by `watchActiveSiteZone` of `location/site.ts`; tests set it directly.
+let activeSiteZone: string | undefined
+
+// Sets the zone of the active profile's observing site (undefined without one).
+export function setActiveSiteZone(timeZone: string | undefined) {
+	activeSiteZone = timeZone
+}
+
+// Whether a time shown in a zone names it: always, unless the zone is the active site's.
+function namesZone(timeZone: string) {
+	return timeZone !== activeSiteZone
+}
+
+// Returns the short name of a zone at an instant (Unix milliseconds), such as "GMT-3", "UTC", or "CET".
+function zoneName(time: number, timeZone: string) {
+	return dateTimeFormat({ timeZone, timeZoneName: 'short' })
+		.formatToParts(time)
+		.find((part) => part.type === 'timeZoneName')!.value
+}
+
+// Returns an instant (Unix milliseconds) in an IANA time zone to the second, or to the minute when `seconds` is false, as
+// YYYY-MM-DD HH:mm:ss on 24 hours followed by the short name of the zone unless it is the active site's:
+// "2026-11-05 14:23:05", "2026-11-05 17:23 UTC", or MISSING when it is not finite. The one format of an instant in a data
+// row, a list, a table, or a tooltip.
+export function formatZonedDateTime(time: number, timeZone: string, seconds: boolean = true) {
+	const text = formatDateTime(time, timeZone, seconds)
+	return text === MISSING || !namesZone(timeZone) ? text : `${text} ${zoneName(time, timeZone)}`
 }
 
 // How a time of day is written.
 export interface ClockTimeOptions {
 	// Whether the seconds are shown; false by default.
 	readonly seconds?: boolean
-	// Whether the short name of the zone follows, whose offset tells apart an hour the clocks repeat; false by default.
+	// Whether the short name of the zone follows, whose offset tells apart an hour the clocks repeat, unless the zone is the
+	// active site's; false by default.
 	readonly named?: boolean
 }
 
@@ -287,7 +313,7 @@ export interface ClockTimeOptions {
 // "20:05 GMT-3" when named, or MISSING when it is not finite.
 export function formatClockTime(time: number, timeZone: string, { seconds = false, named = false }: ClockTimeOptions = {}) {
 	if (!Number.isFinite(time)) return MISSING
-	return dateTimeFormat({ timeZone, hour: '2-digit', minute: '2-digit', second: seconds ? '2-digit' : undefined, hourCycle: 'h23', timeZoneName: named ? 'short' : undefined }).format(time)
+	return dateTimeFormat({ timeZone, hour: '2-digit', minute: '2-digit', second: seconds ? '2-digit' : undefined, hourCycle: 'h23', timeZoneName: named && namesZone(timeZone) ? 'short' : undefined }).format(time)
 }
 
 // Returns a span between two instants (Unix milliseconds) as their times of day in an IANA time zone on 24 hours, such as
@@ -296,18 +322,19 @@ export function formatSpan(start: number, end: number, timeZone: string) {
 	return `${formatClockTime(start, timeZone)}–${formatClockTime(end, timeZone)}`
 }
 
-// Returns an instant (Unix milliseconds) as its time of day in an IANA time zone with the zone named, so a time is never
-// ambiguous: "14:23 GMT-3". A time on another calendar day of the zone than `reference` (Unix milliseconds) also shows
+// Returns an instant (Unix milliseconds) as its time of day in an IANA time zone, with the zone named unless it is the
+// active site's, so a time is never ambiguous: "14:23", "14:23 GMT-3". A time on another calendar day of the zone than `reference` (Unix milliseconds) also shows
 // its month and day: "Oct 19, 14:23 UTC". An instant that is not finite reads MISSING.
 export function formatLocalTime(time: number, timeZone: string, reference: number = time) {
 	if (!Number.isFinite(time)) return MISSING
 	const dated = Number.isFinite(reference) && formatDate(time, timeZone) !== formatDate(reference, timeZone)
-	return dateTimeFormat({ timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: 'short', ...(dated && { month: 'short', day: 'numeric' }) }).format(time)
+	return dateTimeFormat({ timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: namesZone(timeZone) ? 'short' : undefined, ...(dated && { month: 'short', day: 'numeric' }) }).format(time)
 }
 
-// Returns an instant (Unix milliseconds) as its date and time to the second in an IANA time zone with the zone named,
-// so a time past midnight shows its day: "1997-09-16 18:47:11 UTC", or MISSING when it is not finite.
+// Returns an instant (Unix milliseconds) as its date and time to the second in an IANA time zone, with the zone named
+// unless it is the active site's, so a time past midnight shows its day: "Sep 16, 1997, 18:47:11 UTC", or MISSING when it
+// is not finite.
 export function formatLongDateTime(time: number, timeZone: string) {
 	if (!Number.isFinite(time)) return MISSING
-	return dateTimeFormat({ timeZone, year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: 'short' }).format(time)
+	return dateTimeFormat({ timeZone, year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23', timeZoneName: namesZone(timeZone) ? 'short' : undefined }).format(time)
 }

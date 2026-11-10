@@ -3,6 +3,7 @@ import { cn } from 'cn'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatLongDateTime } from '../../format'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
@@ -60,6 +61,7 @@ function RegionRow({ region, selected, onSelect }: { readonly region: SolarActiv
 
 // Active Regions section of the Sun Inspector.
 export function ActiveRegionsSection() {
+	const timeZone = useActiveTimeZone()
 	const { value: report, loading, error } = useSnapshot(sunState).regions
 	const [selected, setSelected] = useState<string>()
 
@@ -77,7 +79,7 @@ export function ActiveRegionsSection() {
 						</ul>
 					)}
 					<Notice>
-						NOAA SWPC solar region report{report.observedDate && ` observed on ${report.observedDate} (UTC)`}, downloaded {formatLongDateTime(report.fetchedAt, 'UTC')}; a current observation, not the Sky instant. Locations are heliographic, east and west of the central meridian. Spots are counted per
+						NOAA SWPC solar region report{report.observedDate && ` observed on ${report.observedDate} (UTC)`}, downloaded {formatLongDateTime(report.fetchedAt, timeZone)}; a current observation, not the Sky instant. Locations are heliographic, east and west of the central meridian. Spots are counted per
 						region, which is not the sunspot number. MSH: millionths of the solar hemisphere.
 					</Notice>
 					{report.stale && <Notice error>NOAA cannot be reached: this is the last report downloaded.</Notice>}

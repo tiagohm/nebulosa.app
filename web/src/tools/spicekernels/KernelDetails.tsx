@@ -1,7 +1,8 @@
 import type { SpiceKernelDetails, SpiceKernelSummary } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatByteSize } from '../../format'
+import { formatByteSize, formatZonedDateTime } from '../../format'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { Button } from '../../ui/Button'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataList, DataRow } from '../../ui/DataRow'
@@ -26,6 +27,7 @@ interface KernelDetailsProps {
 
 // Details of a kernel; its segments are read again whenever the library changes.
 export function KernelDetails({ kernel, onDeleted }: KernelDetailsProps) {
+	const timeZone = useActiveTimeZone()
 	const state = useSnapshot(spiceKernelsState)
 	const [details, setDetails] = useState<SpiceKernelDetails>()
 	const key = `kernel:${kernel.id}`
@@ -67,7 +69,7 @@ export function KernelDetails({ kernel, onDeleted }: KernelDetailsProps) {
 						{new Date(kernel.requestedStart).toISOString().slice(0, 10)} – {new Date(kernel.requestedEnd).toISOString().slice(0, 10)} UTC
 					</DataRow>
 				)}
-				<DataRow label="Added">{new Date(kernel.createdAt).toISOString().slice(0, 16).replace('T', ' ')} UTC</DataRow>
+				<DataRow label="Added">{formatZonedDateTime(kernel.createdAt, timeZone, false)}</DataRow>
 				<DataRow label="Size">{formatByteSize(kernel.bytes)}</DataRow>
 				<DataRow label="Segments">
 					{kernel.segmentCount}

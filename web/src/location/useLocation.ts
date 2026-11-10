@@ -32,3 +32,9 @@ export function useDisplayZone(site: { readonly timeZone: string } | undefined, 
 export function useActiveLocation(): ResolvedLocation | undefined {
 	return useToolLocation(ACTIVE_TOOL_LOCATION)
 }
+
+// Returns the zone the times of a screen with no place of its own are shown in: the profile's display zone for its
+// active site (the site's zone by default).
+export function useActiveTimeZone(): string {
+	return useDisplayZone(useActiveSite()).zone
+}

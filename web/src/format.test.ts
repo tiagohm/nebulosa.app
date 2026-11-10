@@ -34,8 +34,9 @@ import {
 	formatSignificant,
 	formatSpan,
 	formatTemperature,
-	formatUtcDateTime,
+	formatZonedDateTime,
 	MISSING,
+	setActiveSiteZone,
 } from './format'
 
 describe('numbers', () => {
@@ -204,11 +205,24 @@ describe('positions, distances, and instants', () => {
 		expect(formatKilometers(Number.POSITIVE_INFINITY)).toBe(MISSING)
 	})
 
-	test('an instant in UTC is written to the second or the minute with its zone', () => {
+	test('an instant in a zone names the zone unless it is the active site zone', () => {
 		const time = Date.UTC(2026, 10, 5, 14, 23, 5, 900)
-		expect(formatUtcDateTime(time)).toBe('2026-11-05 14:23:05 UTC')
-		expect(formatUtcDateTime(time, false)).toBe('2026-11-05 14:23 UTC')
-		expect(formatUtcDateTime(Number.NaN)).toBe(MISSING)
+		expect(formatZonedDateTime(time, 'UTC')).toBe('2026-11-05 14:23:05 UTC')
+		expect(formatZonedDateTime(time, 'America/Sao_Paulo', false)).toBe('2026-11-05 11:23 GMT-3')
+		expect(formatZonedDateTime(Number.NaN, 'UTC')).toBe(MISSING)
+
+		try {
+			setActiveSiteZone('America/Sao_Paulo')
+			expect(formatZonedDateTime(time, 'America/Sao_Paulo')).toBe('2026-11-05 11:23:05')
+			expect(formatZonedDateTime(time, 'UTC')).toBe('2026-11-05 14:23:05 UTC')
+			expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23')
+			expect(formatLocalTime(time + 86_400_000, 'America/Sao_Paulo', time)).toBe('Nov 6, 11:23')
+			expect(formatLongDateTime(time, 'America/Sao_Paulo')).toBe('Nov 05, 2026, 11:23:05')
+			expect(formatClockTime(time, 'America/Sao_Paulo', { named: true })).toBe('11:23')
+			expect(formatClockTime(time, 'Asia/Tokyo', { named: true })).toBe('23:23 GMT+9')
+		} finally {
+			setActiveSiteZone(undefined)
+		}
 	})
 
 	test('an instant in a zone is written as an ISO date and a 24-hour time, across a daylight change', () => {

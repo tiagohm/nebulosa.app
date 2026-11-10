@@ -1,8 +1,8 @@
 import type { OrbitAngle, OrbitElementsPayload, OrbitSolveResponse, OrbitVector, OrbitWarning } from 'api'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, MISSING } from '../../format'
-import { useActiveSite } from '../../location/useLocation'
+import { formatDegrees, MISSING, formatZonedDateTime } from '../../format'
+import { useActiveSite, useActiveTimeZone } from '../../location/useLocation'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
@@ -170,6 +170,7 @@ function StateSection({ solution, unit }: { readonly solution: OrbitSolveRespons
 
 // Where the orbit comes from and what kind of values these are.
 function SourceSection({ orbit, solution }: { readonly orbit: ExplorerOrbit; readonly solution: OrbitSolveResponse }) {
+	const timeZone = useActiveTimeZone()
 	const { source } = orbit
 	const site = useActiveSite()
 	return (
@@ -178,7 +179,7 @@ function SourceSection({ orbit, solution }: { readonly orbit: ExplorerOrbit; rea
 			{source.kind === 'preset' && <DataRow label="Kind">{source.sourced ? 'Published elements' : 'Illustrative orbit'}</DataRow>}
 			{source.kind === 'preset' && source.citation && <DataRow label="Citation">{source.citation}</DataRow>}
 			{source.kind === 'sbdb' && source.solutionDate && <DataRow label="Solution date">{source.solutionDate}</DataRow>}
-			{source.kind === 'sbdb' && <DataRow label="Fetched">{new Date(source.fetchedAt).toISOString().replace('T', ' ').slice(0, 19)} UTC</DataRow>}
+			{source.kind === 'sbdb' && <DataRow label="Fetched">{formatZonedDateTime(source.fetchedAt, timeZone)}</DataRow>}
 			{source.kind === 'spk' && <DataRow label="Kernels">{source.kernels.join(', ')}</DataRow>}
 			{source.kind === 'spk' && <DataRow label="Library generation">{source.generation}</DataRow>}
 			<DataRow label="Model">Two-body Kepler, universal variables</DataRow>

@@ -1,7 +1,7 @@
 import type { ExternalToolCheck, ExternalToolConfig, ExternalToolState } from 'api'
-import { formatTemporal } from 'nebulosa/src/astronomy/time/temporal'
 import { useEffect, useState } from 'react'
-import { formatFixed, MISSING } from '../format'
+import { formatFixed, MISSING, formatZonedDateTime } from '../format'
+import { useActiveTimeZone } from '../location/useLocation'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Actions } from '../ui/Actions'
 import { Button } from '../ui/Button'
@@ -39,6 +39,7 @@ interface Base {
 
 // Diagnostics of a check, collapsed by default.
 function CheckDiagnostics({ check }: { readonly check: ExternalToolCheck }) {
+	const timeZone = useActiveTimeZone()
 	return (
 		<details className="group/disclosure text-sm leading-5 text-ink-200">
 			<DisclosureSummary title="Diagnostics" />
@@ -47,7 +48,7 @@ function CheckDiagnostics({ check }: { readonly check: ExternalToolCheck }) {
 				{check.config.config !== undefined && <DataRow label="Configuration file">{check.config.config || 'Default'}</DataRow>}
 				<DataRow label="Resolved path">{check.resolvedPath ?? MISSING}</DataRow>
 				<DataRow label="Version">{check.version ?? 'Unknown'}</DataRow>
-				<DataRow label="Checked at">{formatTemporal(check.checkedAt, undefined, true)}</DataRow>
+				<DataRow label="Checked at">{formatZonedDateTime(check.checkedAt, timeZone)}</DataRow>
 				<DataRow label="Duration">{`${formatFixed(check.duration, 1)} ms`}</DataRow>
 				<DataRow label="Code">{check.code}</DataRow>
 			</div>

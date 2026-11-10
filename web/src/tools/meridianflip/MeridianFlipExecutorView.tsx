@@ -7,7 +7,8 @@ import { targetCenteringRequest } from '../../camera/targetcentering'
 import { controlRuntime, deviceStateOf, watchedDeviceState } from '../../equipment-control/control'
 import { DeviceLink } from '../../equipment-control/DeviceLink'
 import { type RoleDevice, useRoleDevice } from '../../equipment/useEquipment'
-import { formatUtcDateTime, MISSING } from '../../format'
+import { formatZonedDateTime, MISSING } from '../../format'
+import { useActiveTimeZone } from '../../location/useLocation'
 import { activeProfile, activeSetup, autoFocusSettings, cameraPlateSolving, exposureSettings, meridianFlipExecutorPolicy, profileCamera, profileState, setMeridianFlipExecutorPolicy, starDetectionSettings, targetCenteringSettings } from '../../profile/profile'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
@@ -60,6 +61,7 @@ function operationDevice(role: RoleDevice): OperationDevice | undefined {
 
 // Executor sections for the mount of the Equipment Setup and its monitor.
 export function MeridianFlipExecutorSections({ mount, monitor }: { readonly mount: RoleDevice; readonly monitor?: MeridianFlipMonitor }) {
+	const timeZone = useActiveTimeZone()
 	const profiles = useSnapshot(profileState)
 	const control = useSnapshot(controlRuntime)
 	const state = useSnapshot(meridianFlipExecutorState)
@@ -185,9 +187,9 @@ export function MeridianFlipExecutorSections({ mount, monitor }: { readonly moun
 			<div className="grid gap-4 md:grid-cols-2">
 				<Panel title="Flip">
 					<DataList>
-						<DataRow label="Window opens">{monitor?.timing.windowOpensAt === undefined ? MISSING : formatUtcDateTime(monitor.timing.windowOpensAt)}</DataRow>
-						<DataRow label="Window closes">{monitor?.timing.windowClosesAt === undefined ? MISSING : formatUtcDateTime(monitor.timing.windowClosesAt)}</DataRow>
-						<DataRow label="Firmware limit">{policy.firmwareLimitSeconds === undefined || monitor?.timing.transitAt === undefined ? 'Not entered' : formatUtcDateTime(monitor.timing.transitAt + policy.firmwareLimitSeconds * 1000)}</DataRow>
+						<DataRow label="Window opens">{monitor?.timing.windowOpensAt === undefined ? MISSING : formatZonedDateTime(monitor.timing.windowOpensAt, timeZone)}</DataRow>
+						<DataRow label="Window closes">{monitor?.timing.windowClosesAt === undefined ? MISSING : formatZonedDateTime(monitor.timing.windowClosesAt, timeZone)}</DataRow>
+						<DataRow label="Firmware limit">{policy.firmwareLimitSeconds === undefined || monitor?.timing.transitAt === undefined ? 'Not entered' : formatZonedDateTime(monitor.timing.transitAt + policy.firmwareLimitSeconds * 1000, timeZone)}</DataRow>
 						{decided?.decision === 'eligible' && <DataRow label="Strategy">{decided.strategy === 'nativeFlip' ? 'Native flip' : 'Forced GoTo'}</DataRow>}
 						{decided?.decision === 'eligible' && <DataRow label="Verification">{FLIP_VERIFICATION_MODE_LABELS[decided.verificationMode]}</DataRow>}
 						{decided && (
@@ -200,7 +202,7 @@ export function MeridianFlipExecutorSections({ mount, monitor }: { readonly moun
 					{decision && 'error' in decision && <Notice error>{decision.error}</Notice>}
 					{arm && (
 						<Notice>
-							{arm.trigger === 'automatic' ? 'Armed' : 'Scheduled'} since {formatUtcDateTime(arm.armedAt)}: {arm.decision.reason}.
+							{arm.trigger === 'automatic' ? 'Armed' : 'Scheduled'} since {formatZonedDateTime(arm.armedAt, timeZone)}: {arm.decision.reason}.
 						</Notice>
 					)}
 					<Actions>
@@ -281,6 +283,7 @@ function PolicyPanel({ policy, disabled, hasCamera, hasFocuser, onChange }: Poli
 
 // Latest execution of the mount: its steps and its outcome, the flip verification apart from the readiness of imaging.
 function ExecutionPanel({ execution, pending }: { readonly execution?: MeridianFlipExecution; readonly pending: boolean }) {
+	const timeZone = useActiveTimeZone()
 	const captures = useSnapshot(captureRuntime)
 
 	if (!execution) {
@@ -300,7 +303,7 @@ function ExecutionPanel({ execution, pending }: { readonly execution?: MeridianF
 	return (
 		<Panel title="Latest Flip">
 			<DataList>
-				<DataRow label="Started">{formatUtcDateTime(execution.startedAt)}</DataRow>
+				<DataRow label="Started">{formatZonedDateTime(execution.startedAt, timeZone)}</DataRow>
 				<DataRow label="Strategy">{execution.strategy === 'nativeFlip' ? 'Native flip' : 'Forced GoTo'}</DataRow>
 				<DataRow label="Target">{execution.target.label ?? (execution.target.source === 'derivedFromMount' ? 'Where the mount pointed' : 'Framed target')}</DataRow>
 				{outcome && (
@@ -328,7 +331,7 @@ function ExecutionPanel({ execution, pending }: { readonly execution?: MeridianF
 						<Row key={`${step.step}:${step.startedAt}`}>
 							<Cell>{MERIDIAN_FLIP_STEP_LABELS[step.step]}</Cell>
 							<Cell>{step.detail ? `${STEP_OUTCOMES[step.outcome]}: ${step.detail}` : STEP_OUTCOMES[step.outcome]}</Cell>
-							<Cell numeric>{formatUtcDateTime(step.startedAt)}</Cell>
+							<Cell numeric>{formatZonedDateTime(step.startedAt, timeZone)}</Cell>
 						</Row>
 					))}
 				</Table>

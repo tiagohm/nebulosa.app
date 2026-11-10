@@ -1,5 +1,5 @@
 import type { PlanetaryEvent, PlanetaryEventSeries, PlanetaryEventsSignature, PlanetaryEventVisibility } from 'api'
-import { formatDate, formatDateTime, formatDegrees, formatFixed, formatPercent, formatSpan, MISSING } from '../../format'
+import { formatDate, formatDateTime, formatDegrees, formatFixed, formatPercent, formatSpan, formatZonedDateTime, MISSING } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
@@ -10,7 +10,7 @@ import { PlanetaryEventChart } from './PlanetaryEventChart'
 import { addPlanetToPlanner, showPlanetInSky, showPlanetInSkyAt } from './planetaryevents'
 import { BODY_LABELS, bodiesLabel, describeSource, eventTitle, formatDistance, formatOffset, KIND_DEFINITIONS, primaryValue, reasonLabel, STATUS_LABELS, STATUS_TONES } from './planetaryevents.format'
 
-// Inspector of the selected event: its definition, its geocentric instant in the display zone and in UTC, the
+// Inspector of the selected event: its definition, its geocentric instant in the display zone, the
 // circumstances of its planets, how it can be watched from the site (at the instant and in the best nearby window, told
 // apart), its source, its curves, its related events, and the explicit handoffs. Show in Sky keeps the Sky's clock; only
 // Set Sky Time to Event changes it. Nothing here moves the mount.
@@ -55,8 +55,7 @@ export function PlanetaryEventDetails({
 				<Notice>{KIND_DEFINITIONS[event.kind]}</Notice>
 			</header>
 			<DataList>
-				<DataRow label="Event time">{formatDateTime(event.time, timeZone, false)}</DataRow>
-				<DataRow label="UTC">{formatDateTime(event.time, 'UTC', false)}</DataRow>
+				<DataRow label="Event time">{formatZonedDateTime(event.time, timeZone, false)}</DataRow>
 				<DataRow label="Value">{primaryValue(event)}</DataRow>
 			</DataList>
 			{event.circumstances.map((body) => (

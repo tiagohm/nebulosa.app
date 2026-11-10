@@ -168,7 +168,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   It keeps the recent transitions of each enablement, loaded from `GET …/transitions` and appended from `meridianFlip:transition`.
   Closing the tab, switching profile, setup, or workspace, or reloading never enables, disables, or redirects a monitor.
   The view shows:
-    - the availability and the derived headline, the signed hour angle (`formatHourAngle`, "geometry only" without a forecast), the transit as a countdown interpolated from `sampledAt` with `useNow`, which shows "Stale" after 65 s without a publication, and the window instants in UTC;
+    - the availability and the derived headline, the signed hour angle (`formatHourAngle`, "geometry only" without a forecast), the transit as a countdown interpolated from `sampledAt` with `useNow`, which shows "Stale" after 65 s without a publication, and the window instants in the display zone of the active site;
     - the reported and the geometric pier side, the mechanical assessment, and the reason in words;
     - a timeline of the warning, transit, window, and deadline with now, and a legend naming each color (the approach, the preferred window, its closing minutes, outside them) and each mark (the transit, now);
     - the settings in minutes (the settle time in seconds), held as a draft clamped by `normalizeMeridianFlipSettings` to what the server accepts.
@@ -205,7 +205,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Play stops when the tab is hidden and jumps once a second under reduced motion.
   `JupiterViewer` draws the oblate disk turned by its pole's position angle, the central meridian, decorative belts, the moons in front of or behind the disk, the shadows that face the Earth, and the schematic Great Red Spot, north up and east left, south up, or north up and east right, in one view that pans and zooms from the whole system to the disk (`PanZoomSurface` of `web/src/tools/planetary/PanZoom.tsx`; the zoom is transient React state, and marker and label sizes follow it).
   `MoonChart` plots each moon's offset along the equator against time over the period, east up, with the disk's band, the site's watchable windows, the selected event, and a cursor moved by a click or the arrow keys, Home, and End.
-  `EventTimeline` lists the events with their visibility and rank, and `EventInspector` shows the reached contacts in the display zone and UTC, the definition, overlaps, reasons, and the ephemeris source.
+  `EventTimeline` lists the events with their visibility and rank, and `EventInspector` shows the reached contacts in the display zone, the definition, overlaps, reasons, and the ephemeris source.
   Choosing an event only moves the tool's clock to its maximum.
   The Great Red Spot model is the server mirror `jupiterGrsState` in `SERVER_STORES` (`GET /api/jupiter/grs` and `jupiter:grsUpdated`), edited in degrees by `GrsSettings` from the revision it knows; a 409 offers Keep Theirs and Save Mine.
   Manage Kernels opens the SPICE Kernel Library and Show in Sky selects Jupiter through the Observing Planner's handoff.
@@ -219,7 +219,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   colours are schematic.
   `MoonChart` plots each moon's offset along the ring plane in arcseconds against time, with the disk and ring bands, with an extent fitted to the moons drawn.
   `RingGeometry` lists B, B′, P, the apparent ring and disk sizes, and which face is seen and lit; `RingHistoryChart` plots B and B′ over the span with the server's searched events as markers.
-  `PhenomenaTable` lists the period's phenomena with their visibility (`Rings may hide it` for `uncertainRingInterference`) and rank, and `PhenomenonInspector` shows the reached contacts in the display zone and UTC, the definition, the ring note, the visibility rows, the overlaps, and the source;
+  `PhenomenaTable` lists the period's phenomena with their visibility (`Rings may hide it` for `uncertainRingInterference`) and rank, and `PhenomenonInspector` shows the reached contacts in the display zone, the definition, the ring note, the visibility rows, the overlaps, and the source;
   a notice explains a quiet season or a missing site.
   `SaturnEventList` lists the period's ring-plane events and the greatest separations of the moons drawn.
   Choosing an event, a marker, or a point of a chart only moves the tool's clock.
@@ -236,7 +236,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
       The selected event's curves (`/series`) follow it and the kernels.
     - `PlanetaryEventsTimeline` lists the events by their UTC instant, with the civil date of the display zone heading each day, their title, planets, primary value, and visibility badge.
     - `PlanetaryEventsCalendar` lays out a Monday-first month of the display zone's dates from the same answer, navigable within the range.
-    - `PlanetaryEventDetails` shows the definition of the kind (a conjunction is never named an appulse), the instant in the display zone and in UTC, each planet's circumstances, and how it can be watched.
+    - `PlanetaryEventDetails` shows the definition of the kind (a conjunction is never named an appulse), the instant in the display zone, each planet's circumstances, and how it can be watched.
       It tells apart the instant from the best nearby window (its offset from the event, its period, the peak altitudes, and a pair's separation), names the visibility profile, and shows the reasons, the source, the related events, and `PlanetaryEventChart`.
       The chart is a hand-drawn SVG of the curves against days from the event, with the event marked at its solved instant and magnitudes upward toward brighter.
     - Handoffs, one row per planet of a pair: Show in Sky selects the planet through the Observing Planner's handoff at the Sky's own time; Set Sky Time to Event is the one action that sets the Sky clock, to the event's instant, before showing it; Add to Observing Planner offers the planet as an independent target, never a night or a schedule.

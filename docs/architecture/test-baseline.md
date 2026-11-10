@@ -14,5 +14,5 @@ The commands and when to run them are those of `AGENTS.md` (Tooling, Verificatio
   `api/src/persistence.test.ts` guards that operational state stays in the database (see [Persistence and State](persistence-and-state.md)).
 - `api` tests drive devices through the `SIMULATOR` connection (`mounts.test.ts`, `operations.test.ts`, among others);
   the INDI property service runs against a fake `indiserver` over TCP that writes the protocol XML, the simulator, and an Alpaca server of the toolkit (`indi.test.ts`), and the INDI message service against the same kind of fake server (`indimessages.test.ts`).
-- `web` tests are pure store and logic tests with injectable `fetch`.
+- `web` tests are pure store and logic tests with an injectable fetch: every store, session, and io object takes an `ApiFetch` of `web/src/http.ts`, whose default is `browserFetch`, and a test passes a fake.
 - Hardware tests with real motion are run separately and only with explicit authorization.

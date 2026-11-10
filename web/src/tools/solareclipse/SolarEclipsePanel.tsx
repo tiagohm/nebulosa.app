@@ -1,7 +1,7 @@
 import type { LocalViewHandedness, LocalViewOrientationMode } from 'api'
 import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
-import { formatGeographic, formatKilometers, formatLongDateTime } from '../../format'
+import { formatGeographic, formatKilometers, formatLongDateTime, formatLongDuration } from '../../format'
 import { useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
@@ -9,7 +9,7 @@ import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { formatDuration, formatEclipseAngle, formatEclipseMagnitude } from '../eclipse/eclipse'
+import { formatEclipseAngle, formatEclipseMagnitude } from '../eclipse/eclipse'
 import { EclipseLocationSection, EclipseZoneSelect } from '../eclipse/EclipsePanelParts'
 import { GlobalPointIcon } from './GlobalPointMarker'
 import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectMapPlace, selectPoint, setViewSettings, solarEclipseState } from './solareclipse'
@@ -60,7 +60,7 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 					{point.sunAltitude !== undefined && <DataRow label="Sun altitude">{formatEclipseAngle(point.sunAltitude)}</DataRow>}
 					{extreme && <DataRow label="Sun azimuth">{formatEclipseAngle(extreme.sunAzimuth)}</DataRow>}
 					{extreme?.kind && <DataRow label="Central phase">{extreme.kind === 'annular' ? 'Annular' : 'Total'}</DataRow>}
-					{extreme?.centralDuration !== undefined && <DataRow label="Central duration">{formatDuration(extreme.centralDuration)}</DataRow>}
+					{extreme?.centralDuration !== undefined && <DataRow label="Central duration">{formatLongDuration(extreme.centralDuration)}</DataRow>}
 					{extreme?.pathWidth !== undefined && <DataRow label="Path width">{formatKilometers(extreme.pathWidth, 1)}</DataRow>}
 					<Button variant="secondary" className="self-start" onClick={() => void selectMapPlace(solarEclipseState, { longitude: point.longitude, latitude: point.latitude })}>
 						Use as Location
@@ -144,12 +144,12 @@ export function SolarEclipsePanel() {
 					<DataRow label="Gamma">{formatEclipseMagnitude(eclipse.gamma)}</DataRow>
 					{greatest && <DataRow label="Greatest eclipse">{formatLongDateTime(greatest.time, timeZone)}</DataRow>}
 					{greatest && <DataRow label="Greatest eclipse at">{formatGeographic(greatest.latitude, greatest.longitude)}</DataRow>}
-					{duration?.centralDuration !== undefined && <DataRow label="Greatest duration">{formatDuration(duration.centralDuration)}</DataRow>}
+					{duration?.centralDuration !== undefined && <DataRow label="Greatest duration">{formatLongDuration(duration.centralDuration)}</DataRow>}
 					{greatest?.pathWidth !== undefined && <DataRow label="Path width at greatest">{formatKilometers(greatest.pathWidth, 1)}</DataRow>}
 					{local?.details.maximalMagnitude !== undefined && <DataRow label="Magnitude here">{formatEclipseMagnitude(local.details.maximalMagnitude)}</DataRow>}
 					{local?.details.moonSunDiameterRatio !== undefined && <DataRow label="Moon/Sun diameter">{formatEclipseMagnitude(local.details.moonSunDiameterRatio)}</DataRow>}
-					{local?.details.partialPhaseDuration !== undefined && <DataRow label="Eclipse here (C1–C4)">{formatDuration(local.details.partialPhaseDuration)}</DataRow>}
-					{local?.details.centralPhaseDuration !== undefined && <DataRow label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatDuration(local.details.centralPhaseDuration)}</DataRow>}
+					{local?.details.partialPhaseDuration !== undefined && <DataRow label="Eclipse here (C1–C4)">{formatLongDuration(local.details.partialPhaseDuration)}</DataRow>}
+					{local?.details.centralPhaseDuration !== undefined && <DataRow label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatLongDuration(local.details.centralPhaseDuration)}</DataRow>}
 					{local?.details.pathWidthKm !== undefined && <DataRow label="Path width here">{formatKilometers(local.details.pathWidthKm)}</DataRow>}
 					{local?.details.shadowPathWidthKm !== undefined && <DataRow label="Shadow chord here">{formatKilometers(local.details.shadowPathWidthKm)}</DataRow>}
 					<Notice>

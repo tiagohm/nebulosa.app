@@ -1,9 +1,9 @@
 import type { AstroWeatherForecast, AstroWeatherNight, AstroWeatherSource } from 'api'
-import { formatClockTime, formatTemperature } from '../../format'
+import { formatClockTime, formatHours, formatTemperature } from '../../format'
 import type { AstroWeatherMode } from '../../profile/schema'
 import { Icon, type IconName } from '../../ui/Icon'
 import { Notice } from '../../ui/Notice'
-import { BLOCK_LABELS, coverage, formatLength, MISSING_LABELS, MODE_LABELS, OUTLOOK_LABELS, REASON_LABELS } from './astroweather'
+import { BLOCK_LABELS, coverage, MISSING_LABELS, MODE_LABELS, OUTLOOK_LABELS, REASON_LABELS } from './astroweather'
 import { type FactRange, type NightEvaluation, type NightFacts, nightFacts, type Outlook, type OutlookSegment } from './observing'
 
 // Night at a glance: the outlook in the mode with why, the window worth using or why there is none, and six facts of the part
@@ -87,7 +87,7 @@ export function ForecastSummary({ forecast, loaded, night, evaluation, mode, tim
 	const { outlook, weather, best, marginal, block, scope } = evaluation
 	const mark = OUTLOOK_MARKS[outlook]
 	const facts = nightFacts(forecast, scope)
-	const span = (window: { readonly start: number; readonly end: number }) => `${formatClockTime(window.start, timeZone)}–${formatClockTime(window.end, timeZone, { named: true })} (${formatLength(window)})`
+	const span = (window: { readonly start: number; readonly end: number }) => `${formatClockTime(window.start, timeZone)}–${formatClockTime(window.end, timeZone, { named: true })} (${formatHours(window.end - window.start)})`
 	const notices = loaded ? [...sourceNotices(forecast.meteorology.source, night, timeZone), ...sourceNotices(forecast.astronomy.source, night, timeZone)] : []
 	const why = reasonsText(evaluation, REASONS_SHOWN)
 

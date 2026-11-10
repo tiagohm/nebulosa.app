@@ -1,7 +1,6 @@
 import type { SolarDailyState, SolarTwilightCrossings, SunLocalDay } from 'api'
-import { formatLocalTime } from '../../format'
+import { formatLocalTime, formatLongDuration } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { formatDuration } from '../../tools/eclipse/eclipse'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 
@@ -36,7 +35,7 @@ function Crossings({ crossings, depression, day, timeZone }: { readonly crossing
 // Says when the astronomical night of a day is, or why there is none.
 function astronomicalNight(day: SunLocalDay) {
 	const { durationSeconds, start, state } = day.astronomicalNight
-	if (durationSeconds !== undefined) return formatDuration(durationSeconds)
+	if (durationSeconds !== undefined) return formatLongDuration(durationSeconds)
 	if (state === 'continuousAbove') return 'None, the Sun stays above −18°'
 	if (state === 'continuousBelow') return 'All day'
 	return start !== undefined ? 'Lasts beyond 36 hours' : 'None this evening'

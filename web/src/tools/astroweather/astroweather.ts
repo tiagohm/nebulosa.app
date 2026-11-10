@@ -224,12 +224,6 @@ export function coverage(span: TimeSpan, validFrom: number | undefined, validTo:
 	return validFrom <= span.start && validTo >= span.end ? 'full' : 'partial'
 }
 
-// Returns the length of a span as hours and minutes, such as "5h 20m".
-export function formatLength({ start, end }: TimeSpan) {
-	const minutes = Math.round((end - start) / 60_000)
-	return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
-}
-
 // Part of a night by how dark it is.
 export type SkyBand = 'day' | 'twilight' | 'dark'
 

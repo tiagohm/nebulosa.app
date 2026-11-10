@@ -7,10 +7,10 @@ import { Notice } from '../../ui/Notice'
 // Solar Physical Data section of the Sun Inspector: the equation of time and the Carrington rotation in progress at
 // the instant the almanac was computed for.
 
-// Formats the equation of time in seconds as signed minutes and seconds: "+16m 26s".
+// Formats the equation of time in seconds as signed minutes and seconds: "+16 min 26 s".
 export function formatEquationOfTime(seconds: number) {
 	const total = Math.round(Math.abs(seconds))
-	return `${seconds < 0 ? '−' : '+'}${Math.floor(total / 60)}m ${String(total % 60).padStart(2, '0')}s`
+	return `${seconds < 0 ? '−' : '+'}${Math.floor(total / 60)} min ${String(total % 60).padStart(2, '0')} s`
 }
 
 // Solar Physical Data section of the Sun Inspector; `time` is the instant of the data, Unix milliseconds.

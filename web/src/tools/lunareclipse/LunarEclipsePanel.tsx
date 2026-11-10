@@ -1,7 +1,7 @@
 import type { LocalLunarViewHandedness, LocalLunarViewOrientationMode } from 'api'
 import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
-import { formatLongDateTime } from '../../format'
+import { formatLongDateTime, formatLongDuration } from '../../format'
 import { useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
@@ -9,7 +9,7 @@ import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { formatDuration, formatEclipseAngle, formatEclipseMagnitude } from '../eclipse/eclipse'
+import { formatEclipseAngle, formatEclipseMagnitude } from '../eclipse/eclipse'
 import { EclipseLocationSection, EclipseZoneSelect } from '../eclipse/EclipsePanelParts'
 import { CONTACT_NAMES, ECLIPSE_TYPE_NAMES, loadLocal, lunarEclipseState, phaseDurations, selectEvent, setViewSettings } from './lunareclipse'
 import { LunarEclipseLocalView } from './LunarEclipseLocalView'
@@ -94,10 +94,10 @@ export function LunarEclipsePanel() {
 					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
 					<DataRow label={eclipse.type === 'PENUMBRAL' ? 'Penumbral magnitude' : 'Umbral magnitude'}>{formatEclipseMagnitude(eclipse.magnitude)}</DataRow>
 					{local && eclipse.type !== 'PENUMBRAL' && <DataRow label="Penumbral magnitude">{formatEclipseMagnitude(local.details.maximalPenumbralMagnitude)}</DataRow>}
-					{durations.penumbral !== undefined && <DataRow label="Penumbral phase">{formatDuration(durations.penumbral)}</DataRow>}
-					{durations.partial !== undefined && <DataRow label="Partial phase">{formatDuration(durations.partial)}</DataRow>}
-					{durations.total !== undefined && <DataRow label="Totality">{formatDuration(durations.total)}</DataRow>}
-					{local && <DataRow label="Observable here">{formatDuration(local.details.observableDuration)}</DataRow>}
+					{durations.penumbral !== undefined && <DataRow label="Penumbral phase">{formatLongDuration(durations.penumbral)}</DataRow>}
+					{durations.partial !== undefined && <DataRow label="Partial phase">{formatLongDuration(durations.partial)}</DataRow>}
+					{durations.total !== undefined && <DataRow label="Totality">{formatLongDuration(durations.total)}</DataRow>}
+					{local && <DataRow label="Observable here">{formatLongDuration(local.details.observableDuration)}</DataRow>}
 					{selectedLocal && (
 						<DataRow label={`P / Z at ${selectedEvent}`}>
 							{formatEclipseAngle(selectedLocal.positionAngle)} / {formatEclipseAngle(selectedLocal.zenithAngle)}

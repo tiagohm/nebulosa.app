@@ -3,7 +3,7 @@ import type { AstroWeatherForecast, AstroWeatherNight } from 'api'
 import { proxy } from 'valtio'
 import { resolveDisplayZone } from '../../location/zone'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { type AstroWeatherState, coverage, firstNight, followSite, formatLength, hasNextNight, loadCurrentNight, loadForecast, loadNight, nightEnded, siteKey, skyBands, stepNight } from './astroweather'
+import { type AstroWeatherState, coverage, firstNight, followSite, hasNextNight, loadCurrentNight, loadForecast, loadNight, nightEnded, siteKey, skyBands, stepNight } from './astroweather'
 
 const SITE = { latitude: -22.4, longitude: -45.45, elevation: 850, timeZone: 'America/Sao_Paulo' }
 const OTHER = { ...SITE, latitude: 10 }
@@ -262,11 +262,5 @@ describe('sky bands', () => {
 		expect(skyBands(day).map((e) => e.band)).toEqual(['day'])
 		const dark = { ...NIGHT, sun: { ...NIGHT.sun, sunset: undefined, sunrise: undefined, daylight: 'continuousBelow', darkness: [NIGHT.display] } } as AstroWeatherNight
 		expect(skyBands(dark).map((e) => e.band)).toEqual(['dark'])
-	})
-})
-
-describe('formats', () => {
-	test('lengths', () => {
-		expect(formatLength({ start: 0, end: 5 * HOUR + 7 * 60_000 })).toBe('5h 07m')
 	})
 })

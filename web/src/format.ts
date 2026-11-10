@@ -158,12 +158,22 @@ export function formatSignedClockDuration(seconds: number) {
 	return Math.abs(seconds) < 1 ? text : `${seconds < 0 ? MINUS : '+'}${text}`
 }
 
-// Returns a length in milliseconds as whole hours and minutes, such as "5h 20m" or "0h 45m", or MISSING when it is not
-// finite.
+// Returns a length in milliseconds as whole hours and minutes, such as "5 h 20 min" or "0 h 45 min", or MISSING when it is
+// not finite.
 export function formatHours(ms: number) {
 	if (!Number.isFinite(ms)) return MISSING
 	const minutes = Math.round(ms / 60_000)
-	return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
+	return `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')} min`
+}
+
+// Returns a duration in seconds to the whole second with its hours always shown, so the lengths of a list keep one shape:
+// "3 h 16 min 05 s", "0 h 01 min 00 s", or MISSING when it is not finite. For the phases of an eclipse and the length of a
+// day or a twilight, whose seconds are computed.
+export function formatLongDuration(seconds: number) {
+	if (!Number.isFinite(seconds)) return MISSING
+	const total = Math.round(seconds)
+	const minutes = Math.floor((total % 3600) / 60)
+	return `${Math.floor(total / 3600)} h ${String(minutes).padStart(2, '0')} min ${String(total % 60).padStart(2, '0')} s`
 }
 
 // Returns a measurement of a wide dynamic range, such as a flux or a signal, with four significant digits, in exponential

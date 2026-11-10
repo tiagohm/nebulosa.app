@@ -1,9 +1,9 @@
 import type { AstronomicalSample, AstroWeatherForecast, AstroWeatherNight, MeteorologySample, SolarTwilightCrossings } from 'api'
-import { formatClockTime, formatLongDateTime, formatPercent } from '../../format'
+import { formatClockTime, formatHours, formatLongDateTime, formatPercent } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-import { formatLength, SEEING_BANDS, TRANSPARENCY_BANDS } from './astroweather'
+import { SEEING_BANDS, TRANSPARENCY_BANDS } from './astroweather'
 import { PROVIDER_NAMES } from './ForecastSummary'
 import type { OutlookSegment } from './observing'
 
@@ -113,7 +113,7 @@ export function AstronomicalConditions({ night, timeZone }: AstronomicalConditio
 			<DataRow label="Sunrise">{crossingText(sun.sunrise, { state: sun.daylight }, timeZone)}</DataRow>
 			{sun.darkness.map((span) => (
 				<DataRow key={span.start} label="Darkness">
-					{formatLength(span)}
+					{formatHours(span.end - span.start)}
 				</DataRow>
 			))}
 			{sun.darkness.length === 0 && <Notice>The Sun does not reach −18° this night, so there is no astronomical darkness.</Notice>}

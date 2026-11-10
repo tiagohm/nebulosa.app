@@ -2,11 +2,10 @@ import type { SkyObjectRef, SkyPosition, SunLocalDay } from 'api'
 import { SUN_RADIUS_AU } from 'nebulosa/src/core/constants'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatLocalTime } from '../../format'
+import { formatDegrees, formatLocalTime, formatLongDuration } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { PanelSection } from '../../shell/ContextualPanel'
-import { formatDuration } from '../../tools/eclipse/eclipse'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
@@ -61,7 +60,7 @@ function daylightState(day: SunLocalDay) {
 
 // Altitude, azimuth, and the observer's day; without an observer, an invitation to set one.
 function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone }: { readonly position?: SkyPosition; readonly day?: SunLocalDay; readonly hasObserver: boolean; readonly onSetObserver: () => void; readonly timeZone: string }) {
-	const summary = day?.daylightSeconds !== undefined ? `Daylight ${formatDuration(day.daylightSeconds)}` : day && daylightState(day)
+	const summary = day?.daylightSeconds !== undefined ? `Daylight ${formatLongDuration(day.daylightSeconds)}` : day && daylightState(day)
 
 	return (
 		<CollapsibleSection id="sky.visibility" title="Visibility" summary={summary}>
@@ -89,7 +88,7 @@ function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone
 								</DataRow>
 							)}
 							{(day.sunset !== undefined || day.daylight === 'partial') && <DataRow label="Sunset">{day.sunset !== undefined ? formatLocalTime(day.sunset, timeZone, day.start) : 'None this day'}</DataRow>}
-							{day.daylightSeconds !== undefined && <DataRow label="Daylight">{formatDuration(day.daylightSeconds)}</DataRow>}
+							{day.daylightSeconds !== undefined && <DataRow label="Daylight">{formatLongDuration(day.daylightSeconds)}</DataRow>}
 							<Notice>Refracted altitude at the instant. Sunrise, transit, and sunset of {day.localDate}: the upper limb at the horizon with standard refraction (the center at −50′, geometric), from the local model.</Notice>
 						</>
 					) : (

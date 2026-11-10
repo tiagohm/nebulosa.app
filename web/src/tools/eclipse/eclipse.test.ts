@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { MISSING } from '../../format'
 import { ACTIVE_TOOL_LOCATION, resolveToolLocation } from '../../location/site'
 import { DEFAULT_ZONE_OVERRIDE, resolveDisplayZone } from '../../location/zone'
-import { formatDuration, formatEclipseAngle, formatEclipseMagnitude, mapLocation, samePlace, utcDate, utcDateStart } from './eclipse'
+import { formatEclipseAngle, formatEclipseMagnitude, mapLocation, samePlace, utcDate, utcDateStart } from './eclipse'
 
 test('a click on the map keeps the zone of the coordinates entered before, or UTC after a site', () => {
 	expect(mapLocation(ACTIVE_TOOL_LOCATION, { longitude: 10, latitude: 20 })).toEqual({ mode: 'manual', latitude: 20, longitude: 10, elevation: 0, timeZone: 'UTC' })
@@ -24,11 +24,6 @@ test('places are the same for the same longitude and latitude', () => {
 	expect(samePlace({ longitude: 1, latitude: 2 }, { longitude: 1, latitude: 2 })).toBe(true)
 	expect(samePlace({ longitude: 1, latitude: 2 }, { longitude: 1, latitude: 3 })).toBe(false)
 	expect(samePlace({ longitude: 1, latitude: 2 }, undefined)).toBe(false)
-})
-
-test('formats durations to the second', () => {
-	expect(formatDuration(3 * 3600 + 16 * 60 + 5.4)).toBe('3h 16m 05s')
-	expect(formatDuration(59.6)).toBe('0h 01m 00s')
 })
 
 test('converts between UTC instants and calendar dates', () => {

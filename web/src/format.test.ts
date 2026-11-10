@@ -23,6 +23,7 @@ import {
 	formatPercent,
 	formatKilometers,
 	formatLocalTime,
+	formatLongDuration,
 	formatLongDateTime,
 	formatPixelLength,
 	formatPixelPosition,
@@ -225,10 +226,13 @@ describe('positions, distances, and instants', () => {
 	test('a span reads its two times of day in the zone, and a length its hours and minutes', () => {
 		expect(formatSpan(Date.UTC(2026, 9, 31, 23, 10), Date.UTC(2026, 10, 1, 6, 45), 'America/Sao_Paulo')).toBe('20:10–03:45')
 		expect(formatSpan(Date.UTC(2026, 9, 31, 23, 10), Number.NaN, 'UTC')).toBe(`23:10–${MISSING}`)
-		expect(formatHours(19_200_000)).toBe('5h 20m')
-		expect(formatHours(2_700_000)).toBe('0h 45m')
-		expect(formatHours(29_000)).toBe('0h 00m')
+		expect(formatHours(19_200_000)).toBe('5 h 20 min')
+		expect(formatHours(2_700_000)).toBe('0 h 45 min')
+		expect(formatHours(29_000)).toBe('0 h 00 min')
 		expect(formatHours(Number.NaN)).toBe(MISSING)
+		expect(formatLongDuration(3 * 3600 + 16 * 60 + 5.4)).toBe('3 h 16 min 05 s')
+		expect(formatLongDuration(59.6)).toBe('0 h 01 min 00 s')
+		expect(formatLongDuration(Number.NaN)).toBe(MISSING)
 	})
 
 	test('a time of day follows the zone, and the zone name tells apart a repeated hour', () => {

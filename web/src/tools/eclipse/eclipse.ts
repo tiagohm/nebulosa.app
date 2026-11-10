@@ -70,15 +70,6 @@ export function formatEclipseMagnitude(magnitude: number | undefined) {
 	return magnitude === undefined ? MISSING : formatFixed(magnitude, 4)
 }
 
-// Returns a duration in seconds as hours, minutes, and seconds, such as "3h 16m 05s".
-export function formatDuration(seconds: number): string {
-	const total = Math.round(seconds)
-	const hours = Math.floor(total / 3600)
-	const minutes = Math.floor((total % 3600) / 60)
-	const rest = total % 60
-	return `${hours}h ${String(minutes).padStart(2, '0')}m ${String(rest).padStart(2, '0')}s`
-}
-
 // Returns the message of a failure, or a generic one.
 export function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : 'Request failed'

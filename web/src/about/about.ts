@@ -1,5 +1,5 @@
 import type { AboutInfo } from 'api'
-import { fetchJson } from '../http'
+import { type ApiFetch, browserFetch, fetchJson } from '../http'
 
 // Data of the About page: the identity of the running distribution fetched from the server, the official links of
 // the project, the credits of the work it uses, and the plain-text summary copied for bug reports.
@@ -152,11 +152,11 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 // Fetch of the About page, injectable for tests.
 export interface AboutIo {
 	// Fetches a resource of the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 }
 
 // Fetch of the browser.
-export const browserAboutIo: AboutIo = { fetch: (input, init) => fetch(input, init) }
+export const browserAboutIo: AboutIo = { fetch: browserFetch }
 
 // Fetches the identity of the running distribution; signal aborts the request. Rejects with an ApiResponseError
 // on a failed response.

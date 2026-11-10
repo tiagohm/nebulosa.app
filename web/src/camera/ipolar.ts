@@ -4,7 +4,7 @@ import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
 import type { IPolarRejection } from 'nebulosa/src/observation/alignment/ipolar'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
 import type { ObservingSite } from '../location/site'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, IPolarDarkSettings, IPolarSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
@@ -222,52 +222,52 @@ export function ipolarFrameRole(session: Pick<IPolarSession, 'sessionId' | 'pose
 }
 
 // Applies an iPolar event (applySession); any other event is ignored.
-export function handleIPolarEvent(state: IPolarRuntime, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleIPolarEvent(state: IPolarRuntime, event: ServerEvent, request: ApiFetch = browserFetch) {
 	if (event.type === 'ipolar:updated') applySession(state, IPOLAR_SESSIONS, event.session, request)
 }
 
 // Replaces the sessions with the server's snapshot and fetches their complete records (refreshSessionRecords).
-export function refreshIPolar(state: IPolarRuntime, request: typeof fetch = fetch) {
+export function refreshIPolar(state: IPolarRuntime, request: ApiFetch = browserFetch) {
 	return refreshSessionRecords(state, IPOLAR_SESSIONS, request)
 }
 
 // Sends a command of a camera (sendSessionCommand).
-function command(state: IPolarRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
+function command(state: IPolarRuntime, key: string, url: string, body: unknown, request: ApiFetch) {
 	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshIPolar(state, request), request)
 }
 
 // Sends a command of a session by the last segments of its URL.
-function sessionCommand(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, path: string, request: typeof fetch) {
+function sessionCommand(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, path: string, request: ApiFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/ipolar/${encodeURIComponent(session.sessionId)}/${path}`, undefined, request)
 }
 
 // Starts an iPolar alignment with a camera; its progress arrives as events.
-export function startIPolar(state: IPolarRuntime, connectionId: string, deviceId: string, body: Omit<IPolarRequest, 'token'>, request: typeof fetch = fetch) {
+export function startIPolar(state: IPolarRuntime, connectionId: string, deviceId: string, body: Omit<IPolarRequest, 'token'>, request: ApiFetch = browserFetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'ipolar')
 	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: nanoid() } satisfies IPolarRequest, request)
 }
 
 // Tells a manual session that the operator turned the RA axis; nothing is moved.
-export function confirmIPolarRotation(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function confirmIPolarRotation(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'rotation/confirm', request)
 }
 
 // Starts or resumes the refinement of a calibrated session.
-export function startIPolarRefinement(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function startIPolarRefinement(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'refinement/start', request)
 }
 
 // Pauses the refinement of a session; its devices stay held.
-export function stopIPolarRefinement(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function stopIPolarRefinement(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'refinement/stop', request)
 }
 
 // Finishes a calibrated session as completed.
-export function finishIPolar(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function finishIPolar(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'finish', request)
 }
 
 // Stops the session of a camera; the server stops an automatic rotation and restores its slew rate when it can.
-export function stopIPolar(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function stopIPolar(state: IPolarRuntime, session: Pick<IPolarSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'stop', request)
 }

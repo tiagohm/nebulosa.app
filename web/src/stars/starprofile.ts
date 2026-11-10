@@ -1,6 +1,6 @@
 import type { StarProfileMeasurement, StarProfilePreview, StarProfileRequest, StarProfileResult } from 'api'
 import { ref } from 'valtio'
-import { fetchJson, jsonInit } from '../http'
+import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../http'
 import { clearStarProfile, type ImageStarProfileState, type ImagesState, message } from '../images/images'
 import type { Point } from '../viewer/transform'
 import type { StarProfileMeasurementSettings } from './starprofile.settings'
@@ -16,14 +16,14 @@ let token = 0
 
 // Measures the star near a point of the image of a document, replacing what the document shows. detected says that a
 // star detection already found a star at the point. Ignored for an unknown key.
-export function inspectStar(state: ImagesState, key: string, imageId: string, point: Point, detected: boolean, settings: StarProfileMeasurementSettings, request: typeof fetch = fetch) {
+export function inspectStar(state: ImagesState, key: string, imageId: string, point: Point, detected: boolean, settings: StarProfileMeasurementSettings, request: ApiFetch = browserFetch) {
 	const { model, searchRadius, maximumRadius, minSNR } = settings
 	const body: StarProfileRequest = { x: point.x, y: point.y, ...(detected && { detected }), model, searchRadius, maximumRadius, minSNR }
 	return measure(state, key, imageId, body, request)
 }
 
 // Measures again the star of a document with new settings, from the same point. Ignored without one.
-export function reinspectStar(state: ImagesState, key: string, settings: StarProfileMeasurementSettings, request: typeof fetch = fetch) {
+export function reinspectStar(state: ImagesState, key: string, settings: StarProfileMeasurementSettings, request: ApiFetch = browserFetch) {
 	const current = state.views[key]?.starProfile
 	if (!current) return Promise.resolve()
 	const { model, searchRadius, maximumRadius, minSNR } = settings
@@ -31,7 +31,7 @@ export function reinspectStar(state: ImagesState, key: string, settings: StarPro
 }
 
 // Runs a measurement and commits its answer while it is still the one the document waits for.
-async function measure(state: ImagesState, key: string, imageId: string, body: StarProfileRequest, request: typeof fetch) {
+async function measure(state: ImagesState, key: string, imageId: string, body: StarProfileRequest, request: ApiFetch) {
 	const view = state.views[key]
 	if (!view) return
 

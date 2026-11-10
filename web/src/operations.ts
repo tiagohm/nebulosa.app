@@ -1,5 +1,6 @@
 import type { OperationKind, OperationRecord, ServerEvent } from 'api'
 import { proxy } from 'valtio'
+import { type ApiFetch, browserFetch } from './http'
 import { SnapshotRefreshes } from './refresh'
 import type { IconName } from './ui/Icon'
 
@@ -83,7 +84,7 @@ export function handleOperationEvent(state: OperationsState, event: ServerEvent)
 // whose event arrived during the request is left as the event set it, so one that ended meanwhile is never
 // shown running again and one that started meanwhile is never dropped. A response is dropped when another
 // refresh started meanwhile.
-export async function refreshOperations(state: OperationsState, request: typeof fetch = fetch) {
+export async function refreshOperations(state: OperationsState, request: ApiFetch = browserFetch) {
 	const token = refreshes.start()
 
 	try {

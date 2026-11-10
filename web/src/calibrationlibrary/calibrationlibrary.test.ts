@@ -70,7 +70,7 @@ describe('groups', () => {
 describe('requests', () => {
 	test('a refresh brings a job created elsewhere', async () => {
 		const state = runtime()
-		await refreshCalibrationLibrary(state, (() => Promise.resolve(Response.json(snapshot('a', 3, [job('j', 'queued', 1)])))) as unknown as typeof fetch)
+		await refreshCalibrationLibrary(state, () => Promise.resolve(Response.json(snapshot('a', 3, [job('j', 'queued', 1)]))))
 		expect(state.jobs.j.state).toBe('queued')
 	})
 
@@ -101,12 +101,12 @@ describe('requests', () => {
 
 		expect(await loadFlatCorrections(request)).toEqual([{ masterId: 1 }] as never)
 		expect(urls).toEqual(['/api/calibration-library/masters?kind=darkFlat&limit=100', '/api/calibration-library/masters?kind=bias&limit=100'])
-		expect(await loadFlatCorrections((() => Promise.reject(new Error('offline'))) as unknown as typeof fetch)).toEqual([])
+		expect(await loadFlatCorrections(() => Promise.reject(new Error('offline')))).toEqual([])
 	})
 
 	test('a refused master leaves its reason', async () => {
 		const state = runtime()
-		await buildMaster(state, 'group', { groupId: 'g' }, (() => Promise.resolve(Response.json({ error: 'Gain differs', code: 'incompatibleFrames' }, { status: 409 }))) as unknown as typeof fetch)
+		await buildMaster(state, 'group', { groupId: 'g' }, () => Promise.resolve(Response.json({ error: 'Gain differs', code: 'incompatibleFrames' }, { status: 409 })))
 		expect(state.errors.group).toBe('Gain differs')
 		expect(state.pending.group).toBeUndefined()
 	})

@@ -2,7 +2,7 @@ import type { CameraCapabilities, CaptureSnoop, DarkGroup, DarkLibraryWizardCapt
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
 import { type CameraExposureSettings, DARK_LIBRARY_WIZARD_MAXIMUM_COUNT, DARK_LIBRARY_WIZARD_MAXIMUM_FRAMES, DARK_LIBRARY_WIZARD_MAXIMUM_GROUPS, type DarkLibraryWizardSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure, frameProgress } from './capture'
@@ -224,46 +224,46 @@ export function darkLibraryWizardWarning({ manualCap, useDarkFilter, darkSlot, p
 }
 
 // Applies a Dark Library Wizard event (applySession); any other event is ignored.
-export function handleDarkLibraryWizardEvent(state: DarkLibraryWizardRuntime, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleDarkLibraryWizardEvent(state: DarkLibraryWizardRuntime, event: ServerEvent, request: ApiFetch = browserFetch) {
 	if (event.type === 'darkLibraryWizard:updated') applySession(state, DARK_LIBRARY_WIZARD_SESSIONS, event.session, request)
 }
 
 // Replaces the sessions with the server's snapshot and fetches their complete records (refreshSessionRecords).
-export function refreshDarkLibraryWizard(state: DarkLibraryWizardRuntime, request: typeof fetch = fetch) {
+export function refreshDarkLibraryWizard(state: DarkLibraryWizardRuntime, request: ApiFetch = browserFetch) {
 	return refreshSessionRecords(state, DARK_LIBRARY_WIZARD_SESSIONS, request)
 }
 
 // Sends a command of a camera (sendSessionCommand).
-function command(state: DarkLibraryWizardRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
+function command(state: DarkLibraryWizardRuntime, key: string, url: string, body: unknown, request: ApiFetch) {
 	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshDarkLibraryWizard(state, request), request)
 }
 
 // Starts a session on a new plan; progress arrives as events.
-export function startDarkLibraryWizard(state: DarkLibraryWizardRuntime, connectionId: string, deviceId: string, body: Omit<DarkLibraryWizardRequest, 'token'>, request: typeof fetch = fetch) {
+export function startDarkLibraryWizard(state: DarkLibraryWizardRuntime, connectionId: string, deviceId: string, body: Omit<DarkLibraryWizardRequest, 'token'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(connectionId, deviceId), deviceUrl(connectionId, 'camera', deviceId, 'dark-library-wizard'), { ...body, token: nanoid() } satisfies DarkLibraryWizardRequest, request)
 }
 
 // Sends a command of a session.
-function sessionCommand(state: DarkLibraryWizardRuntime, session: Pick<DarkLibraryWizardSessionSummary, 'sessionId' | 'camera'>, action: string, body: unknown, request: typeof fetch) {
+function sessionCommand(state: DarkLibraryWizardRuntime, session: Pick<DarkLibraryWizardSessionSummary, 'sessionId' | 'camera'>, action: string, body: unknown, request: ApiFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/dark-library-wizard/${encodeURIComponent(session.sessionId)}/${action}`, body, request)
 }
 
 // Confirms the step a session waits for, by the step id the session published.
-export function continueDarkLibraryWizard(state: DarkLibraryWizardRuntime, session: Pick<DarkLibraryWizardSessionSummary, 'sessionId' | 'camera'>, stepId: string, request: typeof fetch = fetch) {
+export function continueDarkLibraryWizard(state: DarkLibraryWizardRuntime, session: Pick<DarkLibraryWizardSessionSummary, 'sessionId' | 'camera'>, stepId: string, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'continue', { stepId }, request)
 }
 
 // Pauses a session after the current frame; its devices stay held.
-export function pauseDarkLibraryWizard(state: DarkLibraryWizardRuntime, session: Pick<DarkLibraryWizardSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function pauseDarkLibraryWizard(state: DarkLibraryWizardRuntime, session: Pick<DarkLibraryWizardSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'pause', undefined, request)
 }
 
 // Resumes a paused session, after the server checked the protection and the temperature again.
-export function resumeDarkLibraryWizard(state: DarkLibraryWizardRuntime, session: Pick<DarkLibraryWizardSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function resumeDarkLibraryWizard(state: DarkLibraryWizardRuntime, session: Pick<DarkLibraryWizardSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'resume', undefined, request)
 }
 
 // Stops a running session; the exposure in flight is lost and the frames already saved stay.
-export function stopDarkLibraryWizard(state: DarkLibraryWizardRuntime, session: Pick<DarkLibraryWizardSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function stopDarkLibraryWizard(state: DarkLibraryWizardRuntime, session: Pick<DarkLibraryWizardSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'stop', undefined, request)
 }

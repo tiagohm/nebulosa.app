@@ -1,7 +1,7 @@
 import type { CloseApproach, CloseApproachBody, CloseApproachFilters, CloseApproachHistoryFilters, CloseApproachPageResponse, CloseApproachSort, CloseApproachSortField, MinorBody, MinorBodyDetailsResponse, SkyPositionResponse } from 'api'
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
-import { fetchJson } from '../../http'
+import { type ApiFetch, browserFetch, fetchJson } from '../../http'
 import { type GeographicLocation, locationKey, siteObserver } from '../../location/site'
 import { type CloseApproachDistanceDisplay, type CloseApproachPreferences, DEFAULT_CLOSE_APPROACH_PREFERENCES } from '../../profile/schema'
 import { navigate, type RouteState, routeState } from '../../shell/route'
@@ -154,7 +154,7 @@ export interface CloseApproachesState {
 // Side effects of the tool, replaced in tests.
 export interface CloseApproachesIo {
 	// Fetch of the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 	// Real current time, Unix milliseconds.
 	readonly now: () => number
 	// Instant the Sky shows, Unix milliseconds (UTC).
@@ -162,7 +162,7 @@ export interface CloseApproachesIo {
 }
 
 // Browser implementation of the side effects.
-const browserIo: CloseApproachesIo = { fetch: (input, init) => fetch(input, init), now: () => Date.now(), skyTime: () => skyTime(skyClock, Date.now()) }
+const browserIo: CloseApproachesIo = { fetch: browserFetch, now: () => Date.now(), skyTime: () => skyTime(skyClock, Date.now()) }
 
 // Requests of the page shown; a new search or page supersedes them.
 const listGuard = createRequestGuard()

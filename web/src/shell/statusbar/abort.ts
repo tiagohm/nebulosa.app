@@ -11,6 +11,7 @@ import type { ConnectionState } from '../../connection/connection'
 import { type ControlRuntime, stopCommand, watchedDeviceState } from '../../equipment-control/control'
 import { type DeviceState, roleDevice } from '../../equipment/equipment'
 import { activeServerIdOf } from '../../equipment/useEquipment'
+import { type ApiFetch, browserFetch } from '../../http'
 import { type MountPointingRuntime, stopMountPointing } from '../../mountpointing/mountpointing'
 import type { NotificationsState } from '../../notifications/notifications'
 import type { OperationsState } from '../../operations'
@@ -43,7 +44,7 @@ export interface MountAbortStores {
 // when the profile has no mount, it belongs to another connection than the one mirrored, it is not moving, cannot
 // abort, or the event socket is not online. Resolves true when the server confirmed the stop; a refused stop is
 // recorded in the control store's errors of the mount.
-export async function abortProfileMount(stores: MountAbortStores, request: typeof fetch = fetch): Promise<boolean> {
+export async function abortProfileMount(stores: MountAbortStores, request: ApiFetch = browserFetch): Promise<boolean> {
 	const { connections, profiles, devices, control, operations, notifications } = stores
 	if (profiles.profiles.length === 0) return false
 
@@ -73,7 +74,7 @@ export interface OperationAbortStores extends MountAbortStores {
 
 // Sends an interruption and returns why it was refused, undefined when it was not. Each command records its failure in
 // the store of its tool.
-async function interrupt(interruption: Interruption, stores: OperationAbortStores, request: typeof fetch): Promise<string | undefined> {
+async function interrupt(interruption: Interruption, stores: OperationAbortStores, request: ApiFetch): Promise<string | undefined> {
 	if (interruption.type === 'device') {
 		const { device, deviceId } = interruption
 		await stopCommand(stores.control, { type: device, deviceId, action: 'stop' }, request)
@@ -124,7 +125,7 @@ async function interrupt(interruption: Interruption, stores: OperationAbortStore
 // nothing, and resolves false, when the operation is no longer running on the active server connection or can no longer
 // be interrupted. Resolves true when the server accepted the command; a refused one is recorded in the control store's
 // errors of the device, so it shows as a device failure of the bar.
-export async function abortOperation(id: string, stores: OperationAbortStores, request: typeof fetch = fetch): Promise<boolean> {
+export async function abortOperation(id: string, stores: OperationAbortStores, request: ApiFetch = browserFetch): Promise<boolean> {
 	if (id === MOUNT_MOTION_ID) return await abortProfileMount(stores, request)
 	if (stores.profiles.profiles.length === 0) return false
 

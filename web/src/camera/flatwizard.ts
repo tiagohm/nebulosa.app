@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import type { FlatDiagnosticCode } from 'nebulosa/src/imaging/analysis/flat/types'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, FlatWizardSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
@@ -149,32 +149,32 @@ export function flatWizardBlocker(camera: RoleAvailability, wheel: RoleAvailabil
 }
 
 // Applies a Flat Wizard event (applySession); any other event is ignored.
-export function handleFlatWizardEvent(state: FlatWizardRuntime, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleFlatWizardEvent(state: FlatWizardRuntime, event: ServerEvent, request: ApiFetch = browserFetch) {
 	if (event.type === 'flatWizard:updated') applySession(state, FLAT_WIZARD_SESSIONS, event.session, request)
 }
 
 // Replaces the sessions with the server's snapshot and fetches their complete records (refreshSessionRecords).
-export function refreshFlatWizard(state: FlatWizardRuntime, request: typeof fetch = fetch) {
+export function refreshFlatWizard(state: FlatWizardRuntime, request: ApiFetch = browserFetch) {
 	return refreshSessionRecords(state, FLAT_WIZARD_SESSIONS, request)
 }
 
 // Sends a command of a camera (sendSessionCommand).
-function command(state: FlatWizardRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
+function command(state: FlatWizardRuntime, key: string, url: string, body: unknown, request: ApiFetch) {
 	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshFlatWizard(state, request), request)
 }
 
 // Starts a Flat Wizard session with a camera; progress arrives as events.
-export function startFlatWizard(state: FlatWizardRuntime, connectionId: string, deviceId: string, body: Omit<FlatWizardRequest, 'token'>, request: typeof fetch = fetch) {
+export function startFlatWizard(state: FlatWizardRuntime, connectionId: string, deviceId: string, body: Omit<FlatWizardRequest, 'token'>, request: ApiFetch = browserFetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'flat-wizard')
 	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: nanoid() } satisfies FlatWizardRequest, request)
 }
 
 // Confirms the manual step a session waits for, by the step id the session published.
-export function continueFlatWizard(state: FlatWizardRuntime, session: Pick<FlatWizardSessionSummary, 'sessionId' | 'camera'>, stepId: string, request: typeof fetch = fetch) {
+export function continueFlatWizard(state: FlatWizardRuntime, session: Pick<FlatWizardSessionSummary, 'sessionId' | 'camera'>, stepId: string, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/flat-wizard/${encodeURIComponent(session.sessionId)}/continue`, { stepId }, request)
 }
 
 // Stops a running session; the exposure in flight is lost and the frames already saved stay.
-export function stopFlatWizard(state: FlatWizardRuntime, session: Pick<FlatWizardSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function stopFlatWizard(state: FlatWizardRuntime, session: Pick<FlatWizardSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/flat-wizard/${encodeURIComponent(session.sessionId)}/stop`, undefined, request)
 }

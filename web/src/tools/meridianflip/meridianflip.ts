@@ -1,7 +1,7 @@
 import type { MeridianAvailability, MeridianExposureAssessment, MeridianExposureRequest, MeridianFlipMonitor, MeridianFlipSettings, MeridianFlipSnapshot, MeridianFlipTransition, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { formatSignedClockDuration } from '../../format'
-import { jsonInit, responseError } from '../../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
 import { MERIDIAN_FLIP_MAXIMUM_SECONDS } from '../../profile/schema'
 import type { StatusTone } from '../../ui/StatusBadge'
 
@@ -83,7 +83,7 @@ export function applyMeridianFlipSnapshot(state: MeridianFlipState, snapshot: Me
 }
 
 // Fetches the monitors again; called on every socket (re)open, since they may have changed while it was closed.
-export async function refreshMeridianFlip(state: MeridianFlipState, request: typeof fetch = fetch) {
+export async function refreshMeridianFlip(state: MeridianFlipState, request: ApiFetch = browserFetch) {
 	const current = ++generation
 
 	try {
@@ -124,7 +124,7 @@ export function handleMeridianFlipEvent(state: MeridianFlipState, event: ServerE
 }
 
 // Fetches the recent transitions of a monitor and merges them with the ones received meanwhile.
-export async function loadMeridianFlipTransitions(state: MeridianFlipState, connectionId: string, deviceId: string, request: typeof fetch = fetch) {
+export async function loadMeridianFlipTransitions(state: MeridianFlipState, connectionId: string, deviceId: string, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request(`${monitorUrl(connectionId, deviceId)}/transitions`)
 		if (!response.ok) return
@@ -136,7 +136,7 @@ export async function loadMeridianFlipTransitions(state: MeridianFlipState, conn
 }
 
 // Enables the monitor of a mount with settings. Returns whether it runs; a failure is kept in errors.
-export async function enableMeridianFlip(state: MeridianFlipState, connectionId: string, deviceId: string, settings: MeridianFlipSettings, request: typeof fetch = fetch) {
+export async function enableMeridianFlip(state: MeridianFlipState, connectionId: string, deviceId: string, settings: MeridianFlipSettings, request: ApiFetch = browserFetch) {
 	const key = monitorKey(connectionId, deviceId)
 	if (state.pending[key]) return false
 
@@ -162,7 +162,7 @@ export async function enableMeridianFlip(state: MeridianFlipState, connectionId:
 }
 
 // Disables the monitor of a mount; it disappears with its event. Returns whether the request succeeded.
-export async function disableMeridianFlip(state: MeridianFlipState, connectionId: string, deviceId: string, request: typeof fetch = fetch) {
+export async function disableMeridianFlip(state: MeridianFlipState, connectionId: string, deviceId: string, request: ApiFetch = browserFetch) {
 	const key = monitorKey(connectionId, deviceId)
 	if (state.pending[key]) return false
 
@@ -184,7 +184,7 @@ export async function disableMeridianFlip(state: MeridianFlipState, connectionId
 
 // Replaces the settings of a running monitor, made from the settings revision expectedRevision. Returns whether they
 // were applied; a conflict keeps the monitor the server answered and its message in errors.
-export async function updateMeridianFlipSettings(state: MeridianFlipState, connectionId: string, deviceId: string, settings: MeridianFlipSettings, expectedRevision: number, request: typeof fetch = fetch) {
+export async function updateMeridianFlipSettings(state: MeridianFlipState, connectionId: string, deviceId: string, settings: MeridianFlipSettings, expectedRevision: number, request: ApiFetch = browserFetch) {
 	const key = monitorKey(connectionId, deviceId)
 	if (state.pending[key]) return false
 
@@ -213,7 +213,7 @@ export async function updateMeridianFlipSettings(state: MeridianFlipState, conne
 
 // Asks the server whether a hypothetical next exposure ends within the preferred window of a monitor; starts and changes
 // nothing. Returns the assessment, or the reason it could not be answered.
-export async function assessMeridianExposure(connectionId: string, deviceId: string, exposure: MeridianExposureRequest, request: typeof fetch = fetch): Promise<{ readonly assessment: MeridianExposureAssessment } | { readonly error: string }> {
+export async function assessMeridianExposure(connectionId: string, deviceId: string, exposure: MeridianExposureRequest, request: ApiFetch = browserFetch): Promise<{ readonly assessment: MeridianExposureAssessment } | { readonly error: string }> {
 	try {
 		const response = await request(`${monitorUrl(connectionId, deviceId)}/assess-exposure`, jsonInit('POST', exposure))
 		if (!response.ok) return { error: await responseError(response, 'The exposure could not be assessed.') }

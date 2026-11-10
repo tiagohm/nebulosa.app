@@ -1,7 +1,7 @@
 import type { CommandAccepted, DeviceStateMap, DeviceStates, ManagedDeviceType, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
-import { deviceUrl, jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit, responseError } from '../http'
 
 // Control state of the devices of the active profile's server connection, as the server reports it, and
 // the commands this tab sends to them. The server owns every physical state: this store only mirrors it,
@@ -111,7 +111,7 @@ export function watchedDeviceState<T extends ManagedDeviceType>(state: Pick<Cont
 
 // Fetches the control states of the watched connection. A response is dropped when the watched
 // connection changed or another fetch started meanwhile.
-export async function refreshStates(state: ControlRuntime, request: typeof fetch = fetch) {
+export async function refreshStates(state: ControlRuntime, request: ApiFetch = browserFetch) {
 	const serverId = state.watched
 	const current = ++generation
 
@@ -155,7 +155,7 @@ export async function refreshStates(state: ControlRuntime, request: typeof fetch
 
 // Mirrors the devices of another server connection, or none. The previous connection's states, pending
 // commands, and errors are dropped; nothing is sent to its devices.
-export function watchControl(state: ControlRuntime, serverId: string | undefined, request: typeof fetch = fetch) {
+export function watchControl(state: ControlRuntime, serverId: string | undefined, request: ApiFetch = browserFetch) {
 	if (state.watched === serverId) return
 
 	state.watched = serverId
@@ -171,7 +171,7 @@ export function watchControl(state: ControlRuntime, serverId: string | undefined
 
 // Applies a server event of the watched connection: a device's new state, its removal, and the connection
 // opening again or closing. Events of any other connection are ignored.
-export function handleControlEvent(state: ControlRuntime, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleControlEvent(state: ControlRuntime, event: ServerEvent, request: ApiFetch = browserFetch) {
 	switch (event.type) {
 		case 'connection:open':
 			if (event.connection.id === state.watched) void refreshStates(state, request)
@@ -210,7 +210,7 @@ export interface DeviceCommand {
 // Sends a command and records its failure. Ignored while the device has a command in flight. When the
 // server cannot be reached, the command may still have been applied, so the snapshot is fetched again
 // instead of assuming nothing happened. Returns the parsed body of a successful response, if any.
-async function send(state: ControlRuntime, { type, deviceId, action, label, body }: DeviceCommand, request: typeof fetch): Promise<unknown> {
+async function send(state: ControlRuntime, { type, deviceId, action, label, body }: DeviceCommand, request: ApiFetch): Promise<unknown> {
 	const serverId = state.watched
 	if (!serverId || state.pending[deviceId]) return undefined
 
@@ -239,14 +239,14 @@ async function send(state: ControlRuntime, { type, deviceId, action, label, body
 
 // Sends an immediate command, a setting the driver applies at once; resolves true when it was applied.
 // The new state arrives as an event, never from the request.
-export async function sendCommand(state: ControlRuntime, command: DeviceCommand, request: typeof fetch = fetch): Promise<boolean> {
+export async function sendCommand(state: ControlRuntime, command: DeviceCommand, request: ApiFetch = browserFetch): Promise<boolean> {
 	return (await send(state, command, request)) !== undefined
 }
 
 // Sends a stop or abort. Unlike other commands it is sent even while another command of the device is in
 // flight, since stopping a motion must never wait for the request that started it, and it marks nothing as
 // pending. Resolves true when the server confirmed the stop.
-export async function stopCommand(state: ControlRuntime, { type, deviceId, action }: Omit<DeviceCommand, 'label' | 'body'>, request: typeof fetch = fetch): Promise<boolean> {
+export async function stopCommand(state: ControlRuntime, { type, deviceId, action }: Omit<DeviceCommand, 'label' | 'body'>, request: ApiFetch = browserFetch): Promise<boolean> {
 	const serverId = state.watched
 	if (!serverId) return false
 
@@ -263,7 +263,7 @@ export async function stopCommand(state: ControlRuntime, { type, deviceId, actio
 
 // Starts a durable command, such as a motion, under a token generated once for this action, and records
 // the id of the operation running it; its progress and outcome arrive as operation events.
-export async function startCommand(state: ControlRuntime, command: DeviceCommand, request: typeof fetch = fetch): Promise<void> {
+export async function startCommand(state: ControlRuntime, command: DeviceCommand, request: ApiFetch = browserFetch): Promise<void> {
 	const token = nanoid()
 	const accepted = (await send(state, { ...command, body: { ...command.body, token } }, request)) as CommandAccepted | undefined
 	if (accepted?.operationId) state.operations[command.deviceId] = accepted.operationId

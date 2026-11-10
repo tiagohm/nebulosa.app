@@ -47,7 +47,7 @@ test('keeps the events received while the request was in flight and drops what t
 	await refreshNotifications(state, respond(notification('old', 1)))
 
 	const { promise, resolve } = Promise.withResolvers<Response>()
-	const refresh = refreshNotifications(state, (() => promise) as unknown as typeof fetch)
+	const refresh = refreshNotifications(state, () => promise)
 	handleNotificationEvent(state, created(notification('live', 5)))
 	resolve(Response.json({ items: [notification('a', 2)] }))
 
@@ -58,7 +58,7 @@ test('keeps the events received while the request was in flight and drops what t
 test('a stale response is dropped', async () => {
 	const state = newState()
 	const first = Promise.withResolvers<Response>()
-	const stale = refreshNotifications(state, (() => first.promise) as unknown as typeof fetch)
+	const stale = refreshNotifications(state, () => first.promise)
 	await refreshNotifications(state, respond(notification('new', 2)))
 	first.resolve(Response.json({ items: [notification('stale', 1)] }))
 
@@ -69,7 +69,7 @@ test('a stale response is dropped', async () => {
 test('an unreachable server keeps the history', async () => {
 	const state = newState()
 	await refreshNotifications(state, respond(notification('a', 1)))
-	expect(await refreshNotifications(state, (() => Promise.reject(new Error('offline'))) as unknown as typeof fetch)).toBeUndefined()
+	expect(await refreshNotifications(state, () => Promise.reject(new Error('offline')))).toBeUndefined()
 	expect(state.records).toHaveLength(1)
 })
 

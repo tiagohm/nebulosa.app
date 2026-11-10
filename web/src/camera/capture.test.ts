@@ -82,7 +82,7 @@ test('a refresh never undoes the events that arrive while its request is in flig
 	const key = cameraKey('c', 'cam')
 	const other = cameraKey('c', 'guide')
 	const { promise, resolve } = Promise.withResolvers<Response>()
-	const refresh = refreshCaptures(state, (() => promise) as unknown as typeof fetch)
+	const refresh = refreshCaptures(state, () => promise)
 
 	// The snapshot was taken while the capture exposed; it then ends with a new frame before the response arrives.
 	handleCaptureEvent(state, { type: 'capture:updated', session: session({ phase: 'completed', captured: 1, endedAt: 2000 }) })

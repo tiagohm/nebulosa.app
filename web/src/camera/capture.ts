@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import type { CameraCaptureTime } from 'nebulosa/src/observation/capture/types'
 import { proxy } from 'valtio'
 import type { EquipmentSetup } from '../equipment/roles'
-import { deviceUrl, jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit, responseError } from '../http'
 import type { CameraAcquisitionSettings, CameraDitherSettings, CameraExposureSettings, GuidingSettings, MountDitherSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 
@@ -71,7 +71,7 @@ export function handleCaptureEvent(state: CaptureRuntime, event: ServerEvent) {
 // closed. The session or frame of a camera whose event arrived during the request is left as the event set it, so a
 // session that ended meanwhile is never shown running again. A response is dropped when another refresh started
 // meanwhile.
-export async function refreshCaptures(state: CaptureRuntime, request: typeof fetch = fetch) {
+export async function refreshCaptures(state: CaptureRuntime, request: ApiFetch = browserFetch) {
 	const sessionToken = sessionRefreshes.start()
 	const frameToken = frameRefreshes.start()
 
@@ -99,7 +99,7 @@ function recordKey({ connectionId, deviceId }: { readonly connectionId: string; 
 // Sends a command to a camera's capture route and records its failure. When the server cannot be reached,
 // the command may still have been applied, so the snapshot is fetched again before the camera accepts
 // another command, instead of assuming nothing happened.
-async function command(state: CaptureRuntime, connectionId: string, deviceId: string, path: string, body: unknown, fallback: string, request: typeof fetch) {
+async function command(state: CaptureRuntime, connectionId: string, deviceId: string, path: string, body: unknown, fallback: string, request: ApiFetch) {
 	const key = cameraKey(connectionId, deviceId)
 	if (state.pending[key]) return
 	state.pending[key] = true
@@ -118,25 +118,25 @@ async function command(state: CaptureRuntime, connectionId: string, deviceId: st
 
 // Starts a capture on a camera, with a token of its own so a repeated request starts nothing more; its progress arrives
 // as events.
-export function startCapture(state: CaptureRuntime, connectionId: string, deviceId: string, capture: CaptureRequest, request: typeof fetch = fetch) {
+export function startCapture(state: CaptureRuntime, connectionId: string, deviceId: string, capture: CaptureRequest, request: ApiFetch = browserFetch) {
 	return command(state, connectionId, deviceId, 'capture', { ...capture, token: nanoid() } satisfies CaptureStartRequest, 'Unable to start the capture.', request)
 }
 
 // Stops the capture session sessionId of a camera after the exposure in flight; a session that ended or that a newer one
 // replaced is left alone.
-export function stopCapture(state: CaptureRuntime, connectionId: string, deviceId: string, sessionId: string, request: typeof fetch = fetch) {
+export function stopCapture(state: CaptureRuntime, connectionId: string, deviceId: string, sessionId: string, request: ApiFetch = browserFetch) {
 	return command(state, connectionId, deviceId, 'capture/stop', { sessionId } satisfies CaptureControlRequest, 'Unable to stop the capture.', request)
 }
 
 // Aborts the exposure in flight and the capture session sessionId of a camera; a session that ended or that a newer one
 // replaced is left alone.
-export function abortCapture(state: CaptureRuntime, connectionId: string, deviceId: string, sessionId: string, request: typeof fetch = fetch) {
+export function abortCapture(state: CaptureRuntime, connectionId: string, deviceId: string, sessionId: string, request: ApiFetch = browserFetch) {
 	return command(state, connectionId, deviceId, 'capture/abort', { sessionId } satisfies CaptureControlRequest, 'Unable to abort the capture.', request)
 }
 
 // Resumes the capture session sessionId of a camera, which a tool paused and released (such as after a meridian flip
 // that did not leave imaging ready); refused while a tool still holds it.
-export function resumeCapture(state: CaptureRuntime, connectionId: string, deviceId: string, sessionId: string, request: typeof fetch = fetch) {
+export function resumeCapture(state: CaptureRuntime, connectionId: string, deviceId: string, sessionId: string, request: ApiFetch = browserFetch) {
 	return command(state, connectionId, deviceId, 'capture/resume', { sessionId } satisfies CaptureControlRequest, 'Unable to resume the capture.', request)
 }
 

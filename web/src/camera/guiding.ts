@@ -28,7 +28,7 @@ import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
 import { formatDegrees, formatFixed, MISSING } from '../format'
-import { ApiResponseError, deviceUrl, fetchJson, jsonInit, responseError } from '../http'
+import { type ApiFetch, ApiResponseError, browserFetch, deviceUrl, fetchJson, jsonInit, responseError } from '../http'
 import { type CameraExposureSettings, GUIDING_MAXIMUM_EXPOSURE, GUIDING_MAXIMUM_PULSE, GUIDING_MINIMUM_EXPOSURE, GUIDING_MINIMUM_PULSE, type GuidingSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import type { TelescopeOptics } from '../sky/framing'
@@ -339,7 +339,7 @@ function append<T>(state: GuidingRuntime, kind: PageKind<T>, sessionId: string, 
 
 // Fetches the items of a session after the last one known and appends them; a session the server no longer keeps is
 // forgotten. One fetch runs per session and kind: one asked for meanwhile runs again once it ends.
-async function loadPage<T>(state: GuidingRuntime, kind: PageKind<T>, sessionId: string, request: typeof fetch) {
+async function loadPage<T>(state: GuidingRuntime, kind: PageKind<T>, sessionId: string, request: ApiFetch) {
 	const key = `${kind.route}:${sessionId}`
 	let loading = loadings.get(state)
 	if (!loading) loadings.set(state, (loading = new Map()))
@@ -377,7 +377,7 @@ async function loadPage<T>(state: GuidingRuntime, kind: PageKind<T>, sessionId: 
 }
 
 // Fetches the control events and the telemetry of a session after the last ones known.
-export function loadGuidingHistory(state: GuidingRuntime, sessionId: string, request: typeof fetch = fetch) {
+export function loadGuidingHistory(state: GuidingRuntime, sessionId: string, request: ApiFetch = browserFetch) {
 	return Promise.all([loadPage(state, EVENTS, sessionId, request), loadPage(state, TELEMETRY, sessionId, request)])
 }
 
@@ -389,7 +389,7 @@ function forgetSession(state: GuidingRuntime, sessionId: string) {
 }
 
 // Appends one item a session published at its position; a gap is filled from the session's page instead.
-function receive<T>(state: GuidingRuntime, kind: PageKind<T>, sessionId: string, item: T, request: typeof fetch) {
+function receive<T>(state: GuidingRuntime, kind: PageKind<T>, sessionId: string, item: T, request: ApiFetch) {
 	if (!sessionById(state, sessionId)) return
 	const last = lastPosition(kind, kind.list(state)[sessionId] ?? [])
 	const position = kind.position(item)
@@ -401,7 +401,7 @@ function receive<T>(state: GuidingRuntime, kind: PageKind<T>, sessionId: string,
 // Applies a guiding event; any other event is ignored. A session older than the one known for its camera, or an
 // earlier revision of the same one, never replaces it; a newer session of a camera drops the history of the previous
 // one and fetches its own. Events, telemetry, and frames of a session that is not the latest of its camera are ignored.
-export function handleGuidingEvent(state: GuidingRuntime, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleGuidingEvent(state: GuidingRuntime, event: ServerEvent, request: ApiFetch = browserFetch) {
 	switch (event.type) {
 		case 'guiding:updated': {
 			const { session } = event
@@ -427,7 +427,7 @@ export function handleGuidingEvent(state: GuidingRuntime, event: ServerEvent, re
 
 // Replaces the sessions with the server's snapshot (refreshSessions), forgets the history of the sessions no longer
 // kept, and fetches the events and telemetry missed meanwhile.
-export function refreshGuiding(state: GuidingRuntime, request: typeof fetch = fetch) {
+export function refreshGuiding(state: GuidingRuntime, request: ApiFetch = browserFetch) {
 	return refreshSessions(state, GUIDING_SESSIONS, request, async (sessionIds) => {
 		const kept = new Set(sessionIds)
 		for (const id of new Set([...Object.keys(state.events), ...Object.keys(state.telemetry), ...Object.keys(state.frames)])) if (!kept.has(id)) forgetSession(state, id)
@@ -436,7 +436,7 @@ export function refreshGuiding(state: GuidingRuntime, request: typeof fetch = fe
 }
 
 // Sends a command of a camera (sendSessionCommand); resolves to the response body of an accepted command, or undefined.
-async function command(state: GuidingRuntime, key: string, url: string, body: unknown, request: typeof fetch): Promise<unknown> {
+async function command(state: GuidingRuntime, key: string, url: string, body: unknown, request: ApiFetch): Promise<unknown> {
 	const response = await sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshGuiding(state, request), request)
 	return response && response.status !== 204 ? await response.json() : undefined
 }
@@ -445,101 +445,101 @@ async function command(state: GuidingRuntime, key: string, url: string, body: un
 type SessionRef = Pick<GuidingSessionSummary, 'sessionId' | 'camera'>
 
 // Sends a command of a session to its route.
-function sessionCommand(state: GuidingRuntime, session: SessionRef, action: string, body: unknown, request: typeof fetch) {
+function sessionCommand(state: GuidingRuntime, session: SessionRef, action: string, body: unknown, request: ApiFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/guiding/${encodeURIComponent(session.sessionId)}/${action}`, body, request)
 }
 
 // Starts a guiding session with a guide camera, which loops its exposures until stopped; progress arrives as events.
-export function startGuidingSession(state: GuidingRuntime, connectionId: string, deviceId: string, body: Omit<GuidingStartRequest, 'token'>, request: typeof fetch = fetch) {
+export function startGuidingSession(state: GuidingRuntime, connectionId: string, deviceId: string, body: Omit<GuidingStartRequest, 'token'>, request: ApiFetch = browserFetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'guiding')
 	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: nanoid() } satisfies GuidingStartRequest, request)
 }
 
 // Selects the star nearest a pixel of the current guide frame (pixels of the full frame from its top-left), or the
 // best star the tracker offers without one.
-export function selectGuidingTarget(state: GuidingRuntime, session: SessionRef, position?: readonly [number, number], request: typeof fetch = fetch) {
+export function selectGuidingTarget(state: GuidingRuntime, session: SessionRef, position?: readonly [number, number], request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'target', position ? { position } : {}, request)
 }
 
 // Clears the selected star; refused while guiding.
-export function clearGuidingTarget(state: GuidingRuntime, session: SessionRef, request: typeof fetch = fetch) {
+export function clearGuidingTarget(state: GuidingRuntime, session: SessionRef, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'target/clear', undefined, request)
 }
 
 // Starts guiding on the selected star, calibrating first when asked or when uncalibrated; the outcome arrives as the
 // command of the session.
-export function startGuiding(state: GuidingRuntime, session: SessionRef, body: Omit<GuidingStartGuidingRequest, 'token'>, request: typeof fetch = fetch) {
+export function startGuiding(state: GuidingRuntime, session: SessionRef, body: Omit<GuidingStartGuidingRequest, 'token'>, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'start', { ...body, token: nanoid() } satisfies GuidingStartGuidingRequest, request)
 }
 
 // Stops guiding and releases the guide output; the session keeps looping.
-export function stopGuiding(state: GuidingRuntime, session: SessionRef, request: typeof fetch = fetch) {
+export function stopGuiding(state: GuidingRuntime, session: SessionRef, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'stop-guiding', { token: nanoid() }, request)
 }
 
 // Pauses the corrections, or the exposures too.
-export function pauseGuiding(state: GuidingRuntime, session: SessionRef, mode: GuidingPauseRequest['mode'], request: typeof fetch = fetch) {
+export function pauseGuiding(state: GuidingRuntime, session: SessionRef, mode: GuidingPauseRequest['mode'], request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'pause', { mode, token: nanoid() } satisfies GuidingPauseRequest, request)
 }
 
 // Resumes a paused session and waits for its settle.
-export function resumeGuiding(state: GuidingRuntime, session: SessionRef, settle: GuidingStartGuidingRequest['settle'], request: typeof fetch = fetch) {
+export function resumeGuiding(state: GuidingRuntime, session: SessionRef, settle: GuidingStartGuidingRequest['settle'], request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'resume', { settle, token: nanoid() } satisfies GuidingResumeRequest, request)
 }
 
 // Dithers the lock position and waits for the settle.
-export function ditherGuiding(state: GuidingRuntime, session: SessionRef, body: Omit<GuidingDitherRequest, 'token'>, request: typeof fetch = fetch) {
+export function ditherGuiding(state: GuidingRuntime, session: SessionRef, body: Omit<GuidingDitherRequest, 'token'>, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'dither', { ...body, token: nanoid() } satisfies GuidingDitherRequest, request)
 }
 
 // Changes the guide exposure of the next frames, in seconds.
-export function setGuidingExposure(state: GuidingRuntime, session: SessionRef, exposureTime: number, request: typeof fetch = fetch) {
+export function setGuidingExposure(state: GuidingRuntime, session: SessionRef, exposureTime: number, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'exposure', { exposure: Math.round(exposureTime * 1000) }, request)
 }
 
 // Forgets the calibration solved in the session, so the next Start Guiding calibrates; refused while guiding.
-export function clearGuidingCalibration(state: GuidingRuntime, session: SessionRef, request: typeof fetch = fetch) {
+export function clearGuidingCalibration(state: GuidingRuntime, session: SessionRef, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'calibration/clear', undefined, request)
 }
 
 // Reads the calibration a session uses, with the review of its measured steps; rejects with the API error, a 404 when
 // the session has none.
-export function loadSessionCalibration(sessionId: string, request: typeof fetch = fetch): Promise<GuidingSessionCalibration> {
+export function loadSessionCalibration(sessionId: string, request: ApiFetch = browserFetch): Promise<GuidingSessionCalibration> {
 	return fetchJson({ fetch: (input, init) => request(input, init) }, `/api/guiding/${encodeURIComponent(sessionId)}/calibration`)
 }
 
 // Reads a saved calibration with the review of its measured steps, its evidence and its grade.
-export function loadSavedCalibration(calibrationId: string, request: typeof fetch = fetch): Promise<GuidingCalibrationEntry> {
+export function loadSavedCalibration(calibrationId: string, request: ApiFetch = browserFetch): Promise<GuidingCalibrationEntry> {
 	return fetchJson({ fetch: (input, init) => request(input, init) }, `/api/guiding/calibrations/${encodeURIComponent(calibrationId)}`)
 }
 
 // Reads the saved calibrations of the equipment of a session, each with how it fits the session now.
-export function loadGuidingCalibrationCandidates(sessionId: string, request: typeof fetch = fetch): Promise<GuidingCalibrationCandidates> {
+export function loadGuidingCalibrationCandidates(sessionId: string, request: ApiFetch = browserFetch): Promise<GuidingCalibrationCandidates> {
 	return fetchJson({ fetch: (input, init) => request(input, init) }, `/api/guiding/${encodeURIComponent(sessionId)}/calibration/candidates`)
 }
 
 // Excludes a saved calibration from restoring, or includes it again; rejects with the API error.
-export async function setSavedCalibrationDisabled(calibrationId: string, disabled: boolean, request: typeof fetch = fetch) {
+export async function setSavedCalibrationDisabled(calibrationId: string, disabled: boolean, request: ApiFetch = browserFetch) {
 	const response = await request(`/api/guiding/calibrations/${encodeURIComponent(calibrationId)}`, jsonInit('PATCH', { disabled } satisfies GuidingCalibrationPatch))
 	if (!response.ok) throw new ApiResponseError(await responseError(response), response.status)
 }
 
 // Restores a saved calibration on a session that is not guiding; the session record then shows it.
-export function restoreGuidingCalibration(state: GuidingRuntime, session: SessionRef, calibrationId: string, request: typeof fetch = fetch) {
+export function restoreGuidingCalibration(state: GuidingRuntime, session: SessionRef, calibrationId: string, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'calibration/restore', { calibrationId } satisfies GuidingRestoreCalibrationRequest, request)
 }
 
 // Reads the master darks of the Calibration Library that match the latest frame of a session.
-export function loadGuidingDarkCandidates(sessionId: string, request: typeof fetch = fetch): Promise<GuidingDarkCandidates> {
+export function loadGuidingDarkCandidates(sessionId: string, request: ApiFetch = browserFetch): Promise<GuidingDarkCandidates> {
 	return fetchJson({ fetch: (input, init) => request(input, init) }, `/api/guiding/${encodeURIComponent(sessionId)}/dark/candidates`)
 }
 
 // Changes the master dark of the next frames of a session: none, the best match, or a pinned master.
-export function setGuidingDark(state: GuidingRuntime, session: SessionRef, change: GuidingDarkChange, request: typeof fetch = fetch) {
+export function setGuidingDark(state: GuidingRuntime, session: SessionRef, change: GuidingDarkChange, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'dark', change, request)
 }
 
 // Ends a session, releasing the guide camera and the guide output.
-export function stopGuidingSession(state: GuidingRuntime, session: SessionRef, request: typeof fetch = fetch) {
+export function stopGuidingSession(state: GuidingRuntime, session: SessionRef, request: ApiFetch = browserFetch) {
 	return sessionCommand(state, session, 'stop', undefined, request)
 }

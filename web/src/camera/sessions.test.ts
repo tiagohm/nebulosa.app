@@ -168,7 +168,14 @@ describe('commands', () => {
 		const state = newState()
 		let refreshed = 0
 
-		const response = await sendSessionCommand(state, KEY, '/api/start', jsonInit('POST'), () => Promise.resolve(refreshed++), (() => Promise.reject(new Error('offline'))) as unknown as typeof fetch)
+		const response = await sendSessionCommand(
+			state,
+			KEY,
+			'/api/start',
+			jsonInit('POST'),
+			() => Promise.resolve(refreshed++),
+			() => Promise.reject(new Error('offline')),
+		)
 		expect(response).toBeUndefined()
 		expect(refreshed).toBe(1)
 		expect(state.errors[KEY]).toBe('Unable to reach the server.')

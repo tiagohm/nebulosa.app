@@ -1,6 +1,7 @@
 import type { ImageRect, SampleConversion, SampleTileHeader } from 'api'
 import type { CfaPattern } from 'nebulosa/src/imaging/model/types'
 import { proxy } from 'valtio'
+import { type ApiFetch, browserFetch } from '../http'
 import type { Size } from '../viewer/transform'
 
 // Raw sample tiles of the pixel readout of the Images viewer: small tiles of the native decoded samples of an image
@@ -102,7 +103,7 @@ export class SampleTileCache {
 
 	// Creates a cache fetching with request and keeping at most maxBytes of tiles.
 	constructor(
-		readonly request: typeof fetch = fetch,
+		readonly request: ApiFetch = browserFetch,
 		readonly maxBytes: number = MAX_TILE_BYTES,
 	) {}
 

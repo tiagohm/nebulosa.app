@@ -1,7 +1,7 @@
 import type { MountRemoteProtocol, ObservingSite as SavedObservingSite, ProfileCameraForm, ProfilePreferenceKey, ProfileRecord, SavedConnection, ServerEvent, WorkspaceSnapshot, WorkspaceValue } from 'api'
 import { proxy, snapshot, subscribe } from 'valtio'
 import type { Connection, ConnectionState } from '../connection/connection'
-import { jsonInit } from '../http'
+import { type ApiFetch, browserFetch, jsonInit } from '../http'
 import { type ObservingSite, siteState, type SiteState } from '../location/site'
 import { nestedObject, newProfile, type ProfileState } from './profile'
 import { type CameraSettings, type FramingReference, type MountRemoteBinding, type Profile, PROFILE_SETTINGS_VERSION, type ProfileSettings, type SkyFramingSettings, type SkySettings } from './schema'
@@ -328,7 +328,7 @@ export class WorkspaceSync {
 		readonly profiles: ProfileState,
 		readonly sites: SiteState = siteState,
 		readonly status: WorkspaceSyncState = workspaceSyncState,
-		readonly request: typeof fetch = fetch,
+		readonly request: ApiFetch = browserFetch,
 		readonly delay: number = WRITE_DELAY,
 	) {}
 

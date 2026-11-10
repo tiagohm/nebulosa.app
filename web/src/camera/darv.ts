@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import type { DarvAnalysisFailureReason } from 'nebulosa/src/observation/alignment/darv.analysis'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, DarvSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
@@ -182,37 +182,37 @@ function analyzed(session: Pick<DarvSessionSummary, 'measurements'>) {
 }
 
 // Applies a DARV event (applySession); any other event is ignored.
-export function handleDarvEvent(state: DarvRuntime, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleDarvEvent(state: DarvRuntime, event: ServerEvent, request: ApiFetch = browserFetch) {
 	if (event.type === 'darv:updated') applySession(state, DARV_SESSIONS, event.session, request)
 }
 
 // Replaces the sessions with the server's snapshot and fetches their complete records (refreshSessionRecords).
-export function refreshDarv(state: DarvRuntime, request: typeof fetch = fetch) {
+export function refreshDarv(state: DarvRuntime, request: ApiFetch = browserFetch) {
 	return refreshSessionRecords(state, DARV_SESSIONS, request)
 }
 
 // Sends a command of a camera (sendSessionCommand).
-function command(state: DarvRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
+function command(state: DarvRuntime, key: string, url: string, body: unknown, request: ApiFetch) {
 	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshDarv(state, request), request)
 }
 
 // Starts a DARV session with a camera and a mount, and its first measurement; progress arrives as events.
-export function startDarv(state: DarvRuntime, connectionId: string, deviceId: string, mount: DarvRequest['mount'], body: Omit<DarvMeasurementRequest, 'token'>, request: typeof fetch = fetch) {
+export function startDarv(state: DarvRuntime, connectionId: string, deviceId: string, mount: DarvRequest['mount'], body: Omit<DarvMeasurementRequest, 'token'>, request: ApiFetch = browserFetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'darv')
 	return command(state, cameraKey(connectionId, deviceId), url, { ...body, mount, token: nanoid() } satisfies DarvRequest, request)
 }
 
 // Starts another measurement of an open session, after the operator adjusted the mount.
-export function repeatDarv(state: DarvRuntime, session: Pick<DarvSessionSummary, 'sessionId' | 'camera'>, body: Omit<DarvMeasurementRequest, 'token'>, request: typeof fetch = fetch) {
+export function repeatDarv(state: DarvRuntime, session: Pick<DarvSessionSummary, 'sessionId' | 'camera'>, body: Omit<DarvMeasurementRequest, 'token'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/darv/${encodeURIComponent(session.sessionId)}/measurements`, { ...body, token: nanoid() } satisfies DarvMeasurementRequest, request)
 }
 
 // Aborts the measurement of a session; the server stops the mount, discards the exposure, and restores the slew rate.
-export function abortDarv(state: DarvRuntime, session: Pick<DarvSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function abortDarv(state: DarvRuntime, session: Pick<DarvSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/darv/${encodeURIComponent(session.sessionId)}/abort`, undefined, request)
 }
 
 // Finishes an idle session; stopTracking asks the server to stop the tracking its measurements started.
-export function finishDarv(state: DarvRuntime, session: Pick<DarvSessionSummary, 'sessionId' | 'camera'>, stopTracking: boolean, request: typeof fetch = fetch) {
+export function finishDarv(state: DarvRuntime, session: Pick<DarvSessionSummary, 'sessionId' | 'camera'>, stopTracking: boolean, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/darv/${encodeURIComponent(session.sessionId)}/finish`, { stopTracking } satisfies DarvFinishRequest, request)
 }

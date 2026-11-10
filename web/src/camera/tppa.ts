@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, TppaSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
@@ -131,37 +131,37 @@ export function tppaFrameRole(session: Pick<TppaSession, 'sessionId' | 'points' 
 }
 
 // Applies a TPPA event (applySession); any other event is ignored.
-export function handleTppaEvent(state: TppaRuntime, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleTppaEvent(state: TppaRuntime, event: ServerEvent, request: ApiFetch = browserFetch) {
 	if (event.type === 'tppa:updated') applySession(state, TPPA_SESSIONS, event.session, request)
 }
 
 // Replaces the sessions with the server's snapshot and fetches their complete records (refreshSessionRecords).
-export function refreshTppa(state: TppaRuntime, request: typeof fetch = fetch) {
+export function refreshTppa(state: TppaRuntime, request: ApiFetch = browserFetch) {
 	return refreshSessionRecords(state, TPPA_SESSIONS, request)
 }
 
 // Sends a command of a camera (sendSessionCommand).
-function command(state: TppaRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
+function command(state: TppaRuntime, key: string, url: string, body: unknown, request: ApiFetch) {
 	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshTppa(state, request), request)
 }
 
 // Starts a TPPA with a camera; its progress arrives as events.
-export function startTppa(state: TppaRuntime, connectionId: string, deviceId: string, body: Omit<TppaRequest, 'token'>, request: typeof fetch = fetch) {
+export function startTppa(state: TppaRuntime, connectionId: string, deviceId: string, body: Omit<TppaRequest, 'token'>, request: ApiFetch = browserFetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'tppa')
 	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: nanoid() } satisfies TppaRequest, request)
 }
 
 // Stops the session of a camera; the server stops the mount and restores its slew rate when it can.
-export function stopTppa(state: TppaRuntime, session: Pick<TppaSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function stopTppa(state: TppaRuntime, session: Pick<TppaSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/tppa/${encodeURIComponent(session.sessionId)}/stop`, undefined, request)
 }
 
 // Starts or resumes the refinement of a session that has an estimate.
-export function startTppaRefinement(state: TppaRuntime, session: Pick<TppaSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function startTppaRefinement(state: TppaRuntime, session: Pick<TppaSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/tppa/${encodeURIComponent(session.sessionId)}/refinement/start`, undefined, request)
 }
 
 // Pauses the refinement of a session; its devices stay held.
-export function stopTppaRefinement(state: TppaRuntime, session: Pick<TppaSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function stopTppaRefinement(state: TppaRuntime, session: Pick<TppaSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/tppa/${encodeURIComponent(session.sessionId)}/refinement/stop`, undefined, request)
 }

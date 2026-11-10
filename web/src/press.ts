@@ -1,5 +1,5 @@
 import type { LeasedSession } from 'api'
-import { jsonInit, responseError } from './http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from './http'
 import type { SnapshotRefreshes } from './refresh'
 
 // Client side of a manual motion held by a lease (the mount nudge and the manual rotation of a dome): the
@@ -66,7 +66,7 @@ export function forgetPress<P extends Press>(holder: PressHolder<P>, token: stri
 // Starts a press: posts the start request with its token and, once the server answers that it runs,
 // renews it at the server's heartbeat interval. Ignored while this tab already holds a press. path returns
 // the URL of the session resource of a token, under which /heartbeat and /stop are addressed.
-export async function startPress<P extends Press>(holder: PressHolder<P>, press: P, url: string, body: object, path: (token: string) => string, request: typeof fetch = fetch) {
+export async function startPress<P extends Press>(holder: PressHolder<P>, press: P, url: string, body: object, path: (token: string) => string, request: ApiFetch = browserFetch) {
 	if (holder.press) return
 
 	const { token } = press
@@ -107,7 +107,7 @@ export async function startPress<P extends Press>(holder: PressHolder<P>, press:
 
 // Renews a press; a press the server no longer runs is forgotten. A failed request is not an end: the
 // server stops the press by itself if no later heartbeat arrives in time.
-async function heartbeat<P extends Press>(holder: PressHolder<P>, token: string, path: (token: string) => string, request: typeof fetch) {
+async function heartbeat<P extends Press>(holder: PressHolder<P>, token: string, path: (token: string) => string, request: ApiFetch) {
 	try {
 		const response = await request(`${path(token)}/heartbeat`, { method: 'POST' })
 		if (response.status === 404) forgetPress(holder, token)
@@ -119,7 +119,7 @@ async function heartbeat<P extends Press>(holder: PressHolder<P>, token: string,
 // Sends the stop of a press and forgets it once answered, keeping the server's reason when the device
 // could not be observed to stop. It is sent with keepalive so it still leaves a page that is being closed;
 // unreachable is the message kept when the server cannot be reached.
-export async function stopPress<P extends Press>(holder: PressHolder<P>, token: string, path: (token: string) => string, unreachable: string, request: typeof fetch = fetch) {
+export async function stopPress<P extends Press>(holder: PressHolder<P>, token: string, path: (token: string) => string, unreachable: string, request: ApiFetch = browserFetch) {
 	stopHeartbeat(token)
 
 	try {
@@ -133,7 +133,7 @@ export async function stopPress<P extends Press>(holder: PressHolder<P>, token: 
 }
 
 // Releases the press of this tab, if any, and resolves once the server answered.
-export async function releasePress<P extends Press>(holder: PressHolder<P>, path: (token: string) => string, unreachable: string, request: typeof fetch = fetch) {
+export async function releasePress<P extends Press>(holder: PressHolder<P>, path: (token: string) => string, unreachable: string, request: ApiFetch = browserFetch) {
 	const press = holder.press
 	if (!press || press.phase === 'stopping') return
 	press.phase = 'stopping'
@@ -159,7 +159,7 @@ export function followPress<P extends Press, S extends LeasedSession>(holder: Pr
 // that ended meanwhile is never shown running again. keyOf returns the device key of a session. A press of this tab
 // that then no longer runs has ended, so it is forgotten; one still waiting for its start response is kept, since that
 // response decides it. A response is dropped when another refresh of refreshes started meanwhile.
-export async function refreshPressSessions<P extends Press, S extends LeasedSession>(holder: SessionHolder<P, S>, url: string, keyOf: (session: S) => string, refreshes: SnapshotRefreshes, request: typeof fetch = fetch) {
+export async function refreshPressSessions<P extends Press, S extends LeasedSession>(holder: SessionHolder<P, S>, url: string, keyOf: (session: S) => string, refreshes: SnapshotRefreshes, request: ApiFetch = browserFetch) {
 	const token = refreshes.start()
 
 	try {

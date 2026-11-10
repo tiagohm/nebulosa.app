@@ -1,6 +1,6 @@
 import type { MinorBody, MinorBodySearchResponse, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyEvents, SkyObjectCategory, SkyObjectRef, SkyObserver, SkyPosition, SkyPositionResponse, SkySearchResult, SkyStarData } from 'api'
 import { proxy } from 'valtio'
-import { fetchJson, jsonInit } from '../http'
+import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../http'
 import { type GeographicLocation, siteObserver } from '../location/site'
 import { skyClock, skyTime } from './clock'
 import { MAP_STAR_MAGNITUDE_LIMIT } from './display'
@@ -92,14 +92,14 @@ export interface SkyMapData {
 // Browser services the store uses, replaced in tests.
 export interface SkyIo {
 	// Performs HTTP requests to the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 	// Instant the Sky shows, Unix milliseconds (UTC): the simulation clock's.
 	readonly time: () => number
 }
 
 // Browser implementation of SkyIo.
 export const browserSkyIo: SkyIo = {
-	fetch: (input, init) => fetch(input, init),
+	fetch: browserFetch,
 	time: () => skyTime(skyClock, Date.now()),
 }
 

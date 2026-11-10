@@ -2,7 +2,7 @@ import type { AstronomicalTimeReference, SkyObserver } from 'api'
 import { formatAngle, formatHMS, normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import { formatClockTime } from '../../format'
-import { fetchJson, jsonInit } from '../../http'
+import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../../http'
 import type { AstronomicalClockPreferences, AstronomicalClockReading } from '../../profile/schema'
 import { createRequestGuard } from '../../sky/selection'
 
@@ -35,7 +35,7 @@ export const astronomicalClockRuntime = proxy<AstronomicalClockRuntime>({})
 // Browser services of the clock, replaced in tests.
 export interface AstronomicalClockIo {
 	// Performs HTTP requests to the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 	// Monotonic clock in milliseconds.
 	readonly monotonic: () => number
 	// Wall clock in Unix milliseconds.
@@ -48,7 +48,7 @@ export interface AstronomicalClockIo {
 
 // Browser implementation of AstronomicalClockIo.
 const browserClockIo: AstronomicalClockIo = {
-	fetch: (input, init) => fetch(input, init),
+	fetch: browserFetch,
 	monotonic: () => performance.now(),
 	wall: () => Date.now(),
 	visible: () => document.visibilityState === 'visible',

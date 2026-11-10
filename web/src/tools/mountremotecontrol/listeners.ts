@@ -1,6 +1,6 @@
 import type { MountRemoteProtocol, MountRemoteServer, MountRemoteSnapshot, MountRemoteStartRequest, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { jsonInit, responseError } from '../../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
 
 // Mirror of the Mount Remote Control listeners of the server, of every mount and connection, and the requests this tab
 // sends to start and stop them and to close their clients. The listeners are the server's: this mirror is fed by
@@ -64,7 +64,7 @@ export function applyMountRemoteSnapshot(state: MountRemoteControlState, snapsho
 }
 
 // Fetches the listeners again; called on every socket (re)open, since they may have changed while it was closed.
-export async function refreshMountRemoteControl(state: MountRemoteControlState, request: typeof fetch = fetch) {
+export async function refreshMountRemoteControl(state: MountRemoteControlState, request: ApiFetch = browserFetch) {
 	const current = ++generation
 
 	try {
@@ -100,7 +100,7 @@ export function handleMountRemoteControlEvent(state: MountRemoteControlState, ev
 }
 
 // Starts the listener of a protocol for a mount with a binding. Returns whether it runs; a failure is kept in errors.
-export async function startRemoteServer(state: MountRemoteControlState, connectionId: string, deviceId: string, protocol: MountRemoteProtocol, binding: MountRemoteStartRequest, request: typeof fetch = fetch) {
+export async function startRemoteServer(state: MountRemoteControlState, connectionId: string, deviceId: string, protocol: MountRemoteProtocol, binding: MountRemoteStartRequest, request: ApiFetch = browserFetch) {
 	const key = remoteKey(connectionId, deviceId, protocol)
 	if (state.pending[key]) return false
 
@@ -128,7 +128,7 @@ export async function startRemoteServer(state: MountRemoteControlState, connecti
 }
 
 // Stops the listener of a protocol for a mount; it disappears with its event. Returns whether the stop succeeded.
-export async function stopRemoteServer(state: MountRemoteControlState, connectionId: string, deviceId: string, protocol: MountRemoteProtocol, request: typeof fetch = fetch) {
+export async function stopRemoteServer(state: MountRemoteControlState, connectionId: string, deviceId: string, protocol: MountRemoteProtocol, request: ApiFetch = browserFetch) {
 	const key = remoteKey(connectionId, deviceId, protocol)
 	if (state.pending[key]) return false
 
@@ -149,7 +149,7 @@ export async function stopRemoteServer(state: MountRemoteControlState, connectio
 }
 
 // Closes one client of a listener; its row disappears with the event. A client that left meanwhile is not an error.
-export async function disconnectRemoteClient(state: MountRemoteControlState, server: Pick<MountRemoteServer, 'connectionId' | 'deviceId' | 'protocol'>, clientId: string, request: typeof fetch = fetch) {
+export async function disconnectRemoteClient(state: MountRemoteControlState, server: Pick<MountRemoteServer, 'connectionId' | 'deviceId' | 'protocol'>, clientId: string, request: ApiFetch = browserFetch) {
 	const { connectionId, deviceId, protocol } = server
 	const key = remoteKey(connectionId, deviceId, protocol)
 	const pending = clientKey(key, clientId)

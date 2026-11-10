@@ -1,7 +1,7 @@
 import type { SatelliteDetails, SatelliteEphemerisResponse, SatelliteEphemerisRow, SatelliteGroundTrackResponse, SatelliteImportResponse, SatellitePassesResponse, SatellitePosition, SatellitePositionResponse, SatelliteSearchPage } from 'api'
 import { proxy } from 'valtio'
 import { formatDateTime } from '../../format'
-import { fetchJson, jsonInit } from '../../http'
+import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../../http'
 import { type GeographicLocation, locationKey, siteObserver } from '../../location/site'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import { setSkyTime, SKY_REALTIME_TICK_MS, type SkyClock, skyClock, skyTime } from '../../sky/clock'
@@ -173,7 +173,7 @@ export interface ArtificialSatellitesState {
 // Side effects of the tool, replaced in tests.
 export interface ArtificialSatellitesIo {
 	// Fetch of the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 	// Real current time, Unix milliseconds.
 	readonly now: () => number
 	// Instant the Sky shows, Unix milliseconds (UTC).
@@ -181,7 +181,7 @@ export interface ArtificialSatellitesIo {
 }
 
 // Browser implementation of the side effects.
-const browserIo: ArtificialSatellitesIo = { fetch: (input, init) => fetch(input, init), now: () => Date.now(), skyTime: () => skyTime(skyClock, Date.now()) }
+const browserIo: ArtificialSatellitesIo = { fetch: browserFetch, now: () => Date.now(), skyTime: () => skyTime(skyClock, Date.now()) }
 
 // Requests of each kind of answer; a newer request of a kind supersedes the older.
 const searchGuard = createRequestGuard()

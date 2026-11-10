@@ -26,7 +26,7 @@ import type {
 	StackingValidation,
 } from 'api'
 import { proxy } from 'valtio'
-import { jsonInit, responseError } from '../../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError, tryFetchJson } from '../../http'
 
 // Image Stacking as this tab knows it. The server owns every project, frame, and job, so this store only mirrors them: a
 // snapshot on every socket (re)open and on every change event, jobs as they change, and the project, its groups, its
@@ -126,22 +126,12 @@ export function handleImageStackingEvent(state: ImageStackingRuntime, event: Ser
 }
 
 // Fetches the snapshot; the server being away leaves what is known.
-export async function refreshImageStacking(state: ImageStackingRuntime, request: typeof fetch = fetch) {
+export async function refreshImageStacking(state: ImageStackingRuntime, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request(BASE_URL)
 		if (response.ok) applySnapshot(state, (await response.json()) as ImageStackingSnapshot)
 	} catch {
 		// The server is unreachable; the next socket open refreshes the snapshot.
-	}
-}
-
-// Fetches JSON, returning undefined when it failed.
-async function fetchJson<T>(url: string, request: typeof fetch) {
-	try {
-		const response = await request(url)
-		return response.ok ? ((await response.json()) as T) : undefined
-	} catch {
-		return undefined
 	}
 }
 
@@ -170,7 +160,7 @@ function projectUrl(projectId: string) {
 
 // Fetches a project with its filter groups, cohorts, validation, products, and runs; absent, or one the server does not
 // know, clears them.
-export async function loadStackingProject(state: ImageStackingRuntime, projectId: string | undefined, request: typeof fetch = fetch) {
+export async function loadStackingProject(state: ImageStackingRuntime, projectId: string | undefined, request: ApiFetch = browserFetch) {
 	if (projectId === undefined) {
 		for (const key of ['project', 'groups', 'cohorts', 'validation', 'products', 'composites']) requests[key] = (requests[key] ?? 0) + 1
 		state.project = undefined
@@ -184,12 +174,12 @@ export async function loadStackingProject(state: ImageStackingRuntime, projectId
 
 	const url = projectUrl(projectId)
 	const [project, groups, cohorts, validation, products, composites] = await Promise.all([
-		latest('project', fetchJson<StackingProjectDetail>(url, request)),
-		latest('groups', fetchJson<StackingFilterGroup[]>(`${url}/groups`, request)),
-		latest('cohorts', fetchJson<StackingCohort[]>(`${url}/cohorts`, request)),
-		latest('validation', fetchJson<StackingValidation>(`${url}/validation`, request)),
-		latest('products', fetchJson<StackingProductSummary[]>(`${url}/products`, request)),
-		latest('composites', fetchJson<StackingCompositeSummary[]>(`${url}/composites`, request)),
+		latest('project', tryFetchJson<StackingProjectDetail>(url, request)),
+		latest('groups', tryFetchJson<StackingFilterGroup[]>(`${url}/groups`, request)),
+		latest('cohorts', tryFetchJson<StackingCohort[]>(`${url}/cohorts`, request)),
+		latest('validation', tryFetchJson<StackingValidation>(`${url}/validation`, request)),
+		latest('products', tryFetchJson<StackingProductSummary[]>(`${url}/products`, request)),
+		latest('composites', tryFetchJson<StackingCompositeSummary[]>(`${url}/composites`, request)),
 	])
 	if (project) state.project = project.value
 	if (groups) state.groups = groups.value
@@ -200,7 +190,7 @@ export async function loadStackingProject(state: ImageStackingRuntime, projectId
 }
 
 // Fetches what a composition of a project would do; absent clears it, and a failure leaves the last answer.
-export async function loadCompositionValidation(state: ImageStackingRuntime, projectId: string, composition: StackingComposition | undefined, request: typeof fetch = fetch) {
+export async function loadCompositionValidation(state: ImageStackingRuntime, projectId: string, composition: StackingComposition | undefined, request: ApiFetch = browserFetch) {
 	if (!composition) {
 		requests.composition = (requests.composition ?? 0) + 1
 		state.composition = undefined
@@ -218,7 +208,7 @@ export async function loadCompositionValidation(state: ImageStackingRuntime, pro
 }
 
 // Fetches the preview of a composition as a JPEG, or undefined when it was refused, superseded, or aborted.
-export async function loadCompositionPreview(projectId: string, composition: StackingComposition, signal?: AbortSignal, request: typeof fetch = fetch) {
+export async function loadCompositionPreview(projectId: string, composition: StackingComposition, signal?: AbortSignal, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request(`${projectUrl(projectId)}/compositions/preview`, jsonInit('POST', composition, signal))
 		return response.ok ? await response.blob() : undefined
@@ -228,12 +218,12 @@ export async function loadCompositionPreview(projectId: string, composition: Sta
 }
 
 // Fetches a composite with the path of its file.
-export function loadStackingComposite(compositeId: string, request: typeof fetch = fetch) {
-	return fetchJson<StackingCompositeDetail>(`${BASE_URL}/composites/${encodeURIComponent(compositeId)}`, request)
+export function loadStackingComposite(compositeId: string, request: ApiFetch = browserFetch) {
+	return tryFetchJson<StackingCompositeDetail>(`${BASE_URL}/composites/${encodeURIComponent(compositeId)}`, request)
 }
 
 // Fetches what a run of a project would do with a recipe; a failure leaves the last answer.
-export async function loadStackingPreflight(state: ImageStackingRuntime, projectId: string, body: Omit<StackingRunRequest, 'token'>, request: typeof fetch = fetch) {
+export async function loadStackingPreflight(state: ImageStackingRuntime, projectId: string, body: Omit<StackingRunRequest, 'token'>, request: ApiFetch = browserFetch) {
 	const answer = await latest(
 		'preflight',
 		request(`${projectUrl(projectId)}/preflight`, jsonInit('POST', body)).then(
@@ -245,33 +235,33 @@ export async function loadStackingPreflight(state: ImageStackingRuntime, project
 }
 
 // Fetches a product with the paths of its files.
-export function loadStackingProduct(productId: string, request: typeof fetch = fetch) {
-	return fetchJson<StackingProductDetail>(`${BASE_URL}/products/${encodeURIComponent(productId)}`, request)
+export function loadStackingProduct(productId: string, request: ApiFetch = browserFetch) {
+	return tryFetchJson<StackingProductDetail>(`${BASE_URL}/products/${encodeURIComponent(productId)}`, request)
 }
 
 // Fetches a page of frames of a project.
-export async function loadStackingFrames(state: ImageStackingRuntime, projectId: string, filter: StackingFrameFilter, page: number, request: typeof fetch = fetch) {
+export async function loadStackingFrames(state: ImageStackingRuntime, projectId: string, filter: StackingFrameFilter, page: number, request: ApiFetch = browserFetch) {
 	state.loading = true
-	const frames = await latest('frames', fetchJson<Page<StackingFrameSummary>>(`${projectUrl(projectId)}/frames?${framesQuery(filter, page)}`, request))
+	const frames = await latest('frames', tryFetchJson<Page<StackingFrameSummary>>(`${projectUrl(projectId)}/frames?${framesQuery(filter, page)}`, request))
 	if (!frames) return
 	state.loading = false
 	if (frames.value) state.frames = frames.value
 }
 
 // Fetches a frame with its path; absent clears it.
-export async function loadStackingFrame(state: ImageStackingRuntime, sourceId: string | undefined, request: typeof fetch = fetch) {
+export async function loadStackingFrame(state: ImageStackingRuntime, sourceId: string | undefined, request: ApiFetch = browserFetch) {
 	if (sourceId === undefined) {
 		requests.frame = (requests.frame ?? 0) + 1
 		state.frame = undefined
 		return
 	}
 
-	const frame = await latest('frame', fetchJson<StackingSourceDetail>(`${BASE_URL}/frames/${encodeURIComponent(sourceId)}`, request))
+	const frame = await latest('frame', tryFetchJson<StackingSourceDetail>(`${BASE_URL}/frames/${encodeURIComponent(sourceId)}`, request))
 	if (frame) state.frame = frame.value
 }
 
 // Sends a command and records its failure. Resolves its JSON answer, or undefined when it failed.
-async function command<T>(state: ImageStackingRuntime, key: string, url: string, init: RequestInit, request: typeof fetch): Promise<T | undefined> {
+async function command<T>(state: ImageStackingRuntime, key: string, url: string, init: RequestInit, request: ApiFetch): Promise<T | undefined> {
 	if (state.pending[key]) return undefined
 	state.pending[key] = true
 	delete state.errors[key]
@@ -294,101 +284,101 @@ async function command<T>(state: ImageStackingRuntime, key: string, url: string,
 }
 
 // Creates a project.
-export function createStackingProject(state: ImageStackingRuntime, name: string, request: typeof fetch = fetch) {
+export function createStackingProject(state: ImageStackingRuntime, name: string, request: ApiFetch = browserFetch) {
 	return command<StackingProjectDetail>(state, 'project', `${BASE_URL}/projects`, jsonInit('POST', { name }), request)
 }
 
 // Renames a project from the revision it was edited from.
-export function renameStackingProject(state: ImageStackingRuntime, projectId: string, name: string, revision: number, request: typeof fetch = fetch) {
+export function renameStackingProject(state: ImageStackingRuntime, projectId: string, name: string, revision: number, request: ApiFetch = browserFetch) {
 	return command<StackingProjectDetail>(state, 'project', projectUrl(projectId), jsonInit('PATCH', { name, revision }), request)
 }
 
 // Deletes a project; its frames stay on the disk.
-export function deleteStackingProject(state: ImageStackingRuntime, projectId: string, request: typeof fetch = fetch) {
+export function deleteStackingProject(state: ImageStackingRuntime, projectId: string, request: ApiFetch = browserFetch) {
 	return command(state, 'project', projectUrl(projectId), { method: 'DELETE' }, request)
 }
 
 // Compares the frames of a project with the disk.
-export function refreshStackingProject(state: ImageStackingRuntime, projectId: string, request: typeof fetch = fetch) {
+export function refreshStackingProject(state: ImageStackingRuntime, projectId: string, request: ApiFetch = browserFetch) {
 	return command(state, 'refresh', `${projectUrl(projectId)}/refresh`, jsonInit('POST'), request)
 }
 
 // Starts looking at directories and files of the server for a project; its progress arrives as events.
-export function startStackingImport(state: ImageStackingRuntime, projectId: string, paths: readonly string[], recursive: boolean, request: typeof fetch = fetch) {
+export function startStackingImport(state: ImageStackingRuntime, projectId: string, paths: readonly string[], recursive: boolean, request: ApiFetch = browserFetch) {
 	return command<StackingJobSummary>(state, 'import', `${projectUrl(projectId)}/imports`, jsonInit('POST', { paths, recursive }), request)
 }
 
 // Fetches what an import found.
-export function loadStackingCandidates(jobId: string, page: number, request: typeof fetch = fetch) {
-	return fetchJson<Page<StackingImportCandidate>>(`${BASE_URL}/imports/${encodeURIComponent(jobId)}/candidates?offset=${page * STACKING_PAGE_SIZE}&limit=${STACKING_PAGE_SIZE}`, request)
+export function loadStackingCandidates(jobId: string, page: number, request: ApiFetch = browserFetch) {
+	return tryFetchJson<Page<StackingImportCandidate>>(`${BASE_URL}/imports/${encodeURIComponent(jobId)}/candidates?offset=${page * STACKING_PAGE_SIZE}&limit=${STACKING_PAGE_SIZE}`, request)
 }
 
 // Cancels the scan of an import.
-export function cancelStackingImport(state: ImageStackingRuntime, jobId: string, request: typeof fetch = fetch) {
+export function cancelStackingImport(state: ImageStackingRuntime, jobId: string, request: ApiFetch = browserFetch) {
 	return command(state, `import:${jobId}`, `${BASE_URL}/imports/${encodeURIComponent(jobId)}/cancel`, jsonInit('POST'), request)
 }
 
 // Adds reviewed files to the project of an import.
-export function commitStackingImport(state: ImageStackingRuntime, jobId: string, body: StackingImportCommit, request: typeof fetch = fetch) {
+export function commitStackingImport(state: ImageStackingRuntime, jobId: string, body: StackingImportCommit, request: ApiFetch = browserFetch) {
 	return command<{ readonly committed: number }>(state, 'import', `${BASE_URL}/imports/${encodeURIComponent(jobId)}/commit`, jsonInit('POST', body), request)
 }
 
 // Changes what an operator decides about a frame.
-export function updateStackingFrame(state: ImageStackingRuntime, sourceId: string, patch: StackingSourcePatch, request: typeof fetch = fetch) {
+export function updateStackingFrame(state: ImageStackingRuntime, sourceId: string, patch: StackingSourcePatch, request: ApiFetch = browserFetch) {
 	return command<StackingSourceDetail>(state, `frame:${sourceId}`, `${BASE_URL}/frames/${encodeURIComponent(sourceId)}`, jsonInit('PATCH', patch), request)
 }
 
 // Takes a frame out of its project; its file stays where it is.
-export function removeStackingFrame(state: ImageStackingRuntime, sourceId: string, request: typeof fetch = fetch) {
+export function removeStackingFrame(state: ImageStackingRuntime, sourceId: string, request: ApiFetch = browserFetch) {
 	return command(state, `frame:${sourceId}`, `${BASE_URL}/frames/${encodeURIComponent(sourceId)}`, { method: 'DELETE' }, request)
 }
 
 // Records what an operator decides about a cohort: its camera, or its calibration.
-export function updateStackingCohort(state: ImageStackingRuntime, projectId: string, cohortId: string, patch: StackingCohortPatch, request: typeof fetch = fetch) {
+export function updateStackingCohort(state: ImageStackingRuntime, projectId: string, cohortId: string, patch: StackingCohortPatch, request: ApiFetch = browserFetch) {
 	return command<StackingCohort>(state, `cohort:${cohortId}`, `${projectUrl(projectId)}/cohorts/${encodeURIComponent(cohortId)}`, jsonInit('PATCH', patch), request)
 }
 
 // Replaces the reference pins and quality thresholds of a project.
-export function updateStackingSettings(state: ImageStackingRuntime, projectId: string, settings: StackingSettings, request: typeof fetch = fetch) {
+export function updateStackingSettings(state: ImageStackingRuntime, projectId: string, settings: StackingSettings, request: ApiFetch = browserFetch) {
 	return command<StackingProjectDetail>(state, 'settings', `${projectUrl(projectId)}/settings`, jsonInit('PUT', settings), request)
 }
 
 // Starts measuring and registering the frames of a project; its progress arrives as events.
-export function startStackingAnalysis(state: ImageStackingRuntime, projectId: string, request: typeof fetch = fetch) {
+export function startStackingAnalysis(state: ImageStackingRuntime, projectId: string, request: ApiFetch = browserFetch) {
 	return command<StackingJobSummary>(state, 'analysis', `${projectUrl(projectId)}/analyses`, jsonInit('POST'), request)
 }
 
 // Cancels an analysis; what it measured stays.
-export function cancelStackingAnalysis(state: ImageStackingRuntime, jobId: string, request: typeof fetch = fetch) {
+export function cancelStackingAnalysis(state: ImageStackingRuntime, jobId: string, request: ApiFetch = browserFetch) {
 	return command(state, `analysis:${jobId}`, `${BASE_URL}/analyses/${encodeURIComponent(jobId)}/cancel`, jsonInit('POST'), request)
 }
 
 // Starts integrating a project and answers its job; its progress arrives as events. The token makes a repeated request answer the same job.
-export function startStackingRun(state: ImageStackingRuntime, projectId: string, body: StackingRunRequest, request: typeof fetch = fetch) {
+export function startStackingRun(state: ImageStackingRuntime, projectId: string, body: StackingRunRequest, request: ApiFetch = browserFetch) {
 	return command<StackingJobSummary>(state, 'run', `${projectUrl(projectId)}/runs`, jsonInit('POST', body), request)
 }
 
 // Cancels a run; the masters it published stay.
-export function cancelStackingRun(state: ImageStackingRuntime, runId: string, request: typeof fetch = fetch) {
+export function cancelStackingRun(state: ImageStackingRuntime, runId: string, request: ApiFetch = browserFetch) {
 	return command(state, `run:${runId}`, `${BASE_URL}/runs/${encodeURIComponent(runId)}/cancel`, jsonInit('POST'), request)
 }
 
 // Deletes a product with its files.
-export function deleteStackingProduct(state: ImageStackingRuntime, productId: string, request: typeof fetch = fetch) {
+export function deleteStackingProduct(state: ImageStackingRuntime, productId: string, request: ApiFetch = browserFetch) {
 	return command(state, `product:${productId}`, `${BASE_URL}/products/${encodeURIComponent(productId)}`, { method: 'DELETE' }, request)
 }
 
 // Starts composing a composition; its progress arrives as events, or the published composite with its inputs answers.
-export function startStackingComposition(state: ImageStackingRuntime, projectId: string, composition: StackingComposition, request: typeof fetch = fetch) {
+export function startStackingComposition(state: ImageStackingRuntime, projectId: string, composition: StackingComposition, request: ApiFetch = browserFetch) {
 	return command<{ readonly job?: StackingJobSummary; readonly composite?: StackingCompositeSummary; readonly reused?: boolean }>(state, 'compose', `${projectUrl(projectId)}/compositions`, jsonInit('POST', composition), request)
 }
 
 // Cancels a composition.
-export function cancelStackingComposition(state: ImageStackingRuntime, jobId: string, request: typeof fetch = fetch) {
+export function cancelStackingComposition(state: ImageStackingRuntime, jobId: string, request: ApiFetch = browserFetch) {
 	return command(state, `compose:${jobId}`, `${BASE_URL}/compositions/${encodeURIComponent(jobId)}/cancel`, jsonInit('POST'), request)
 }
 
 // Deletes a composite with its file; its masters stay.
-export function deleteStackingComposite(state: ImageStackingRuntime, compositeId: string, request: typeof fetch = fetch) {
+export function deleteStackingComposite(state: ImageStackingRuntime, compositeId: string, request: ApiFetch = browserFetch) {
 	return command(state, `composite:${compositeId}`, `${BASE_URL}/composites/${encodeURIComponent(compositeId)}`, { method: 'DELETE' }, request)
 }

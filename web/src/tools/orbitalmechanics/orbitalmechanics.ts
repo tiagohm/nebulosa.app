@@ -6,7 +6,7 @@ import { hermiteVec3 } from 'nebulosa/src/math/numerical/spline'
 import { proxy } from 'valtio'
 import { csvField } from '../../download'
 import { MISSING } from '../../format'
-import { fetchJson, jsonInit } from '../../http'
+import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../../http'
 import { createRequestGuard, type RequestGuard } from '../../sky/selection'
 
 // State of the Orbital Mechanics Explorer, tab-lived and never persisted or mirrored from the server: the orbits shown,
@@ -219,14 +219,14 @@ export interface OrbitalMechanicsState {
 // Side effects of the tool, replaced in tests.
 export interface OrbitalMechanicsIo {
 	// Fetch of the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 	// Schedules a call after a delay in milliseconds, returning its cancel.
 	readonly schedule: (callback: () => void, delay: number) => () => void
 }
 
 // Browser implementation of the side effects.
 const browserIo: OrbitalMechanicsIo = {
-	fetch: (input, init) => fetch(input, init),
+	fetch: browserFetch,
 	schedule: (callback, delay) => {
 		const id = setTimeout(callback, delay)
 		return () => clearTimeout(id)

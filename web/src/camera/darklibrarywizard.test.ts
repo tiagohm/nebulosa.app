@@ -254,10 +254,10 @@ test('commands address the exact camera and session, with a token and the step i
 
 test('a refused command is recorded for its camera, and an unreachable server refreshes the sessions', async () => {
 	const state = newState()
-	await stopDarkLibraryWizard(state, summary(), (() => Promise.resolve(Response.json({ error: 'No', code: 'notRunning' }, { status: 409 }))) as unknown as typeof fetch)
+	await stopDarkLibraryWizard(state, summary(), () => Promise.resolve(Response.json({ error: 'No', code: 'notRunning' }, { status: 409 })))
 	expect(state.errors[KEY]).toBe('No')
 
-	await stopDarkLibraryWizard(state, summary(), (() => Promise.reject(new Error('down'))) as unknown as typeof fetch)
+	await stopDarkLibraryWizard(state, summary(), () => Promise.reject(new Error('down')))
 	expect(state.errors[KEY]).toBe('Unable to reach the server.')
 })
 

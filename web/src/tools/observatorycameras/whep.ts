@@ -1,3 +1,5 @@
+import { type ApiFetch, browserFetch } from '../../http'
+
 // WHEP reader of one camera: a receive-only WebRTC peer connection whose signaling goes to the same-origin routes of the
 // server (/api/observatory-cameras/:id/whep), which relays it to the media gateway; the browser never learns where the
 // camera is. It sends its SDP offer, then its ICE candidates as they are gathered (trickle ICE, PATCH of the session
@@ -30,7 +32,7 @@ export interface WhepReaderOptions {
 	// Receives the failure that ended the reader; called at most once.
 	readonly onError: (failure: WhepFailure) => void
 	// Fetch of the signaling requests; injectable for tests.
-	readonly fetch?: typeof fetch
+	readonly fetch?: ApiFetch
 	// Creates the peer connection; injectable for tests.
 	readonly peerConnection?: () => RTCPeerConnection
 }
@@ -103,9 +105,9 @@ export class WhepReader {
 	// Creates a reader with options; it starts with start.
 	constructor(readonly options: WhepReaderOptions) {}
 
-	// Fetch of the signaling requests, bound to the window as the browser requires.
-	get #fetch(): typeof fetch {
-		return this.options.fetch ?? globalThis.fetch.bind(globalThis)
+	// Fetch of the signaling requests.
+	get #fetch(): ApiFetch {
+		return this.options.fetch ?? browserFetch
 	}
 
 	// Makes the offer, sends it, and applies the answer. A failure is reported to onError. Never rejects.

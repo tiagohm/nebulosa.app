@@ -1,7 +1,7 @@
 import type { ImageRect, ImageStatisticsJob, ImageStatisticsReport, ImageStatisticsRequest, ImageStatisticsSnapshot, ServerEvent } from 'api'
 import { proxy, ref } from 'valtio'
 import { type AnalysisJobs, isActive, latestOf, trackJob } from '../analysis'
-import { jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 
 // Image statistics jobs of the server as this tab knows them, for the Histogram and Statistics section of the Image
 // Inspector. The server runs every scan and keeps every result: this store mirrors the compact jobs of its snapshot and
@@ -61,7 +61,7 @@ export function handleStatisticsEvent(state: StatisticsState, event: ServerEvent
 }
 
 // Fetches the snapshot of the server's jobs, after the socket (re)opened.
-export async function refreshStatistics(state: StatisticsState, request: typeof fetch = fetch) {
+export async function refreshStatistics(state: StatisticsState, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request('/api/statistics')
 		if (!response.ok) return
@@ -75,7 +75,7 @@ export async function refreshStatistics(state: StatisticsState, request: typeof 
 // Submits a scan of an image, whole or of an area, for a document. The job, or the completed job of an equivalent
 // earlier scan, becomes the latest of the image and area and the one the document waits for; a refusal is kept in
 // submitErrors. A submission of the same image and area already on its way is not sent again.
-export async function runStatistics(state: StatisticsState, documentKey: string, imageId: string, area?: ImageRect, request: typeof fetch = fetch) {
+export async function runStatistics(state: StatisticsState, documentKey: string, imageId: string, area?: ImageRect, request: ApiFetch = browserFetch) {
 	const key = statisticsKey(imageId, area)
 	if (submitting.has(key)) return
 	submitting.add(key)
@@ -102,7 +102,7 @@ export async function runStatistics(state: StatisticsState, documentKey: string,
 }
 
 // Asks the server to cancel a job; its end arrives as an event.
-export async function cancelStatistics(jobId: string, request: typeof fetch = fetch) {
+export async function cancelStatistics(jobId: string, request: ApiFetch = browserFetch) {
 	try {
 		await request(`/api/statistics/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' })
 	} catch {
@@ -111,7 +111,7 @@ export async function cancelStatistics(jobId: string, request: typeof fetch = fe
 }
 
 // Fetches the result of a completed job once, unless it is fetched or failed already.
-export async function loadStatisticsResult(state: StatisticsState, jobId: string, request: typeof fetch = fetch) {
+export async function loadStatisticsResult(state: StatisticsState, jobId: string, request: ApiFetch = browserFetch) {
 	if (state.results[jobId] || state.resultErrors[jobId] !== undefined || fetching.has(jobId)) return
 	fetching.add(jobId)
 

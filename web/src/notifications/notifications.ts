@@ -1,6 +1,7 @@
 import type { NotificationLevel, NotificationRecord, NotificationSnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
 import { type ConnectionInput, sameEndpoint } from '../connection/connection'
+import { type ApiFetch, browserFetch } from '../http'
 import type { NotificationPreferences } from '../profile/schema'
 
 // Notification history of the server as this tab knows it. The server owns the history and the same records reach
@@ -62,7 +63,7 @@ export function handleNotificationEvent(state: NotificationsState, event: Server
 // Replaces the history with the server's, keeping the notifications received while the request was in flight.
 // Notifications the server no longer retains are dropped. Returns the ids of every notification known afterwards, or
 // undefined when the server is unreachable or another refresh started meanwhile.
-export async function refreshNotifications(state: NotificationsState, request: typeof fetch = fetch): Promise<string[] | undefined> {
+export async function refreshNotifications(state: NotificationsState, request: ApiFetch = browserFetch): Promise<string[] | undefined> {
 	const current = ++generation
 	received = new Set()
 

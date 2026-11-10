@@ -1,7 +1,7 @@
 import type { ConnectionStatus, ConnectionType, ConnectRequest, RemoteConnectRequest, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
-import { jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 import { SnapshotRefreshes } from '../refresh'
 
 // Saved connections of the workspace and the connections the server holds open. Saved connections belong to the server
@@ -121,7 +121,7 @@ function addServer(state: ConnectionState, status: ConnectionStatus) {
 
 // Replaces the open server connections with the server's current list, but for a connection an event or an answer opened
 // or closed while the list was fetched, which stays as that left it. Failures leave them unchanged.
-export async function refreshServers(state: ConnectionState, request: typeof fetch = fetch) {
+export async function refreshServers(state: ConnectionState, request: ApiFetch = browserFetch) {
 	const token = serverRefreshes.start()
 
 	try {

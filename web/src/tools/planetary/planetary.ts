@@ -1,4 +1,5 @@
 import type { PlanetVisibilityStatus } from 'api'
+import { type ApiFetch, browserFetch } from '../../http'
 import { wallTimeToInstant, zonedWallTime } from '../../location/zone'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import type { StatusTone } from '../../ui/StatusBadge'
@@ -12,13 +13,13 @@ import type { StatusTone } from '../../ui/StatusBadge'
 // Requests of a planner, replaced in tests.
 export interface PlannerIo {
 	// Performs HTTP requests to the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 	// Real current time, Unix milliseconds (UTC).
 	readonly time: () => number
 }
 
 // Browser implementation of PlannerIo.
-export const browserPlannerIo: PlannerIo = { fetch: (input, init) => fetch(input, init), time: () => Date.now() }
+export const browserPlannerIo: PlannerIo = { fetch: browserFetch, time: () => Date.now() }
 
 // The clock of a planner: its instant, whether it plays, and its rate.
 export interface PlannerClock {

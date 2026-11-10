@@ -51,7 +51,7 @@ describe('events', () => {
 		const state = runtime()
 		await refreshImageStacking(state, fakeFetch({ '/api/image-stacking': snapshot('a', 3) }).request)
 		expect(state.snapshot?.revision).toBe(3)
-		await refreshImageStacking(state, (() => Promise.reject(new Error('offline'))) as unknown as typeof fetch)
+		await refreshImageStacking(state, () => Promise.reject(new Error('offline')))
 		expect(state.snapshot?.revision).toBe(3)
 	})
 })

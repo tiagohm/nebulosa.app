@@ -1,7 +1,7 @@
 import type { ApiError, AstronomicalTimeErrorCode, AstronomicalTimeInput, AstronomicalTimeQuality, AstronomicalTimeRequest, AstronomicalTimeResult, TimeScaleName } from 'api'
 import { type Angle, parseAngle } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
-import { jsonInit, responseError } from '../../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
 import { ACTIVE_TOOL_LOCATION, type GeographicLocation, siteObserver, type ToolLocation } from '../../location/site'
 import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
 import { navigate, routeState, type RouteState } from '../../shell/route'
@@ -70,14 +70,14 @@ export interface AstronomicalTimeState {
 // Browser services of the tool, replaced in tests.
 export interface ConverterIo {
 	// Performs HTTP requests to the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 	// Whether the page is visible; a hidden page asks for nothing.
 	readonly visible: () => boolean
 }
 
 // Browser implementation of ConverterIo.
 const browserConverterIo: ConverterIo = {
-	fetch: (input, init) => fetch(input, init),
+	fetch: browserFetch,
 	visible: () => document.visibilityState === 'visible',
 }
 

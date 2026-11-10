@@ -1,6 +1,6 @@
 import type { MeteorShowersSources, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { jsonInit, responseError } from '../../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
 
 // Mirror of the meteor shower catalog the server uses: the IAU catalog in use and its source state, and the curated
 // visual data, fed by GET /api/meteor-showers/sources and the meteorShowers:changed events, with the refresh this tab
@@ -33,7 +33,7 @@ function applySources(state: MeteorShowerSourcesState, sources: MeteorShowersSou
 }
 
 // Reads the sources again; called on every socket (re)open, since another tab may have refreshed the catalog.
-export async function refreshMeteorShowerSources(state: MeteorShowerSourcesState, request: typeof fetch = fetch) {
+export async function refreshMeteorShowerSources(state: MeteorShowerSourcesState, request: ApiFetch = browserFetch) {
 	const current = ++generation
 
 	try {
@@ -55,7 +55,7 @@ export function handleMeteorShowersEvent(state: MeteorShowerSourcesState, event:
 
 // Asks the server to download the IAU catalog again. Returns whether it answered the sources; a failure keeps the
 // catalog in use and is kept in error with the server's reason.
-export async function refreshIauCatalog(state: MeteorShowerSourcesState, request: typeof fetch = fetch) {
+export async function refreshIauCatalog(state: MeteorShowerSourcesState, request: ApiFetch = browserFetch) {
 	if (state.refreshing) return false
 	state.refreshing = true
 	state.error = undefined

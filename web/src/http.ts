@@ -53,10 +53,30 @@ export class ApiResponseError extends Error {
 	}
 }
 
+// Fetch of the API that stores, sessions, and io objects take, replaced by a fake in tests: a URL of the API, as a string,
+// and the init of the request.
+export type ApiFetch = (input: string, init?: RequestInit) => Promise<Response>
+
+// The browser's fetch as an ApiFetch, the one default of every store and io object. It calls the global fetch on its
+// own, so it can be kept as a property and called as a method (`io.fetch(url)`): the bare fetch called through an object
+// throws "Illegal invocation".
+export const browserFetch: ApiFetch = (input, init) => globalThis.fetch(input, init)
+
 // Fetches JSON from the API through io's fetch, rejecting with an ApiResponseError carrying the API's error message
 // and the status on failure.
-export async function fetchJson<T>(io: { readonly fetch: (input: string, init?: RequestInit) => Promise<Response> }, input: string, init?: RequestInit): Promise<T> {
+export async function fetchJson<T>(io: { readonly fetch: ApiFetch }, input: string, init?: RequestInit): Promise<T> {
 	const response = await io.fetch(input, init)
 	if (!response.ok) throw new ApiResponseError(await responseError(response), response.status)
 	return (await response.json()) as T
+}
+
+// Fetches JSON from the API, or undefined when the request failed or was answered with an error, for a refresh that
+// keeps what it showed rather than reporting a failure.
+export async function tryFetchJson<T>(input: string, request: ApiFetch = browserFetch): Promise<T | undefined> {
+	try {
+		const response = await request(input)
+		return response.ok ? ((await response.json()) as T) : undefined
+	} catch {
+		return undefined
+	}
 }

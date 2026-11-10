@@ -38,6 +38,6 @@ test('lists the watched connection, replaying the events received while it loads
 
 test('a refused listing lists no device', async () => {
 	const state = proxy<IndiDirectoryState>({ watched: 's', devices: [device('stale', 's')], loading: false })
-	await refreshIndiDirectory(state, (() => Promise.resolve(Response.json({ error: 'no', code: 'notFound' }, { status: 404 }))) as unknown as typeof fetch)
+	await refreshIndiDirectory(state, () => Promise.resolve(Response.json({ error: 'no', code: 'notFound' }, { status: 404 })))
 	expect(state.devices).toEqual([])
 })

@@ -1,6 +1,6 @@
 import type { SatelliteAutoDownloadRequest, SatelliteRefreshResponse, SatelliteSourcesSnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 
 // Mirror of the artificial satellite catalog of the server: the download state of its CelesTrak sources, fed by
 // GET /api/satellites/sources and the satellites:changed events, the downloads this tab asks for, and the choice of the
@@ -29,7 +29,7 @@ let generation = 0
 
 // Fetches the sources again; called on every socket (re)open and after every change of the catalog, since a download
 // of another tab changes them.
-export async function refreshSatelliteCatalog(state: SatelliteCatalogState, request: typeof fetch = fetch) {
+export async function refreshSatelliteCatalog(state: SatelliteCatalogState, request: ApiFetch = browserFetch) {
 	const current = ++generation
 
 	try {
@@ -43,7 +43,7 @@ export async function refreshSatelliteCatalog(state: SatelliteCatalogState, requ
 }
 
 // Applies a change of the catalog: its revision, then the sources read again. Any other event is ignored.
-export function handleSatelliteEvent(state: SatelliteCatalogState, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleSatelliteEvent(state: SatelliteCatalogState, event: ServerEvent, request: ApiFetch = browserFetch) {
 	if (event.type !== 'satellites:changed') return
 	state.revision = event.revision
 	void refreshSatelliteCatalog(state, request)
@@ -51,7 +51,7 @@ export function handleSatelliteEvent(state: SatelliteCatalogState, event: Server
 
 // Asks the server to download a source now. Returns whether it was downloaded; a refusal (its interval, a block, a
 // failure of CelesTrak) is kept in errors with the server's reason, and the sources are read again to show its state.
-export async function downloadSatelliteSource(state: SatelliteCatalogState, sourceKey: string, request: typeof fetch = fetch) {
+export async function downloadSatelliteSource(state: SatelliteCatalogState, sourceKey: string, request: ApiFetch = browserFetch) {
 	if (state.downloading[sourceKey]) return false
 	state.downloading[sourceKey] = true
 	delete state.errors[sourceKey]
@@ -81,7 +81,7 @@ export async function downloadSatelliteSource(state: SatelliteCatalogState, sour
 // Asks the server to download a group automatically, or no longer: at the start of the server and every 6 hours, within
 // the fair-use interval of the group. Returns whether the server took the choice; a failure is kept in errors by the
 // source key of the group.
-export async function setSatelliteAutoDownload(state: SatelliteCatalogState, sourceKey: string, enabled: boolean, request: typeof fetch = fetch) {
+export async function setSatelliteAutoDownload(state: SatelliteCatalogState, sourceKey: string, enabled: boolean, request: ApiFetch = browserFetch) {
 	delete state.errors[sourceKey]
 
 	try {

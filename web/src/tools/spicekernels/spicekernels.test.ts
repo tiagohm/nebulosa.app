@@ -70,7 +70,7 @@ test('a snapshot request answered after a newer one is dropped', async () => {
 		})) as unknown as typeof fetch
 
 	const first = refreshSpiceKernels(s, slow)
-	await refreshSpiceKernels(s, (() => respond(snapshot('a', 4))) as unknown as typeof fetch)
+	await refreshSpiceKernels(s, () => respond(snapshot('a', 4)))
 	release?.()
 	await first
 

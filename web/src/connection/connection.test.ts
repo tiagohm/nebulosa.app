@@ -170,7 +170,7 @@ describe('refresh', () => {
 		const state = newState()
 		handleConnectionEvent(state, { type: 'connection:open', connection: { type: 'SIMULATOR', id: 'closing' } as never })
 		const answer = Promise.withResolvers<Response>()
-		const refreshed = refreshServers(state, (() => answer.promise) as unknown as typeof fetch)
+		const refreshed = refreshServers(state, () => answer.promise)
 
 		handleConnectionEvent(state, { type: 'connection:open', connection: { type: 'SIMULATOR', id: 'opened' } as never })
 		handleConnectionEvent(state, { type: 'connection:close', id: 'closing', cause: 'requested' })

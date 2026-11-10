@@ -28,7 +28,7 @@ import { cameraKey, fitExposure } from '../camera/capture'
 import { sendSessionCommand } from '../camera/sessions'
 import type { RoleAvailability } from '../equipment/availability'
 import type { CameraRole } from '../equipment/roles'
-import { deviceUrl, jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit, responseError } from '../http'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, PointingModelSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 
@@ -172,7 +172,7 @@ function modelUrl(modelId: string, action?: string) {
 
 // Fetches the samples and revisions of a model; a record older than the one known (a late response) never replaces it,
 // and a model the server no longer keeps is forgotten.
-export async function loadPointingModel(state: MountPointingRuntime, modelId: string, request: typeof fetch = fetch) {
+export async function loadPointingModel(state: MountPointingRuntime, modelId: string, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request(modelUrl(modelId))
 
@@ -191,7 +191,7 @@ export async function loadPointingModel(state: MountPointingRuntime, modelId: st
 }
 
 // Applies a model event.
-function applyModelEvent(state: MountPointingRuntime, event: PointingModelEvent, request: typeof fetch) {
+function applyModelEvent(state: MountPointingRuntime, event: PointingModelEvent, request: ApiFetch) {
 	if (event.sequence <= state.sequence) return
 	state.sequence = event.sequence
 
@@ -236,7 +236,7 @@ function applyActivationEvent(state: MountPointingRuntime, { hardwareId, activat
 }
 
 // Applies a mount pointing event; any other event is ignored.
-export function handleMountPointingEvent(state: MountPointingRuntime, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleMountPointingEvent(state: MountPointingRuntime, event: ServerEvent, request: ApiFetch = browserFetch) {
 	if (event.type === 'mountPointing:updated') applySessionEvent(state, event.session)
 	else if (event.type === 'mountPointing:activation') applyActivationEvent(state, event)
 	else if (event.type === 'mountPointing:modelUpdated' || event.type === 'mountPointing:modelRemoved') applyModelEvent(state, event, request)
@@ -245,13 +245,13 @@ export function handleMountPointingEvent(state: MountPointingRuntime, event: Ser
 // Replaces the models with the server's snapshot, which may have changed while the socket was closed, and fetches the
 // complete records already open. A model an event changed during the request is left as the event set it, and a response
 // is dropped when another refresh started meanwhile.
-export async function refreshMountPointing(state: MountPointingRuntime, request: typeof fetch = fetch) {
+export async function refreshMountPointing(state: MountPointingRuntime, request: ApiFetch = browserFetch) {
 	await Promise.all([refreshModels(state, request), refreshSessions(state, request), refreshActivations(state, request)])
 }
 
 // Replaces the models in force with the server's, which holds none after a restart. A snapshot older than an event applied
 // meanwhile is dropped.
-async function refreshActivations(state: MountPointingRuntime, request: typeof fetch) {
+async function refreshActivations(state: MountPointingRuntime, request: ApiFetch) {
 	const started = state.activationSequence
 
 	try {
@@ -267,7 +267,7 @@ async function refreshActivations(state: MountPointingRuntime, request: typeof f
 }
 
 // Replaces the sessions with the server's snapshot, leaving what an event changed during the request.
-async function refreshSessions(state: MountPointingRuntime, request: typeof fetch) {
+async function refreshSessions(state: MountPointingRuntime, request: ApiFetch) {
 	const token = sessionRefreshes.start()
 
 	try {
@@ -290,7 +290,7 @@ async function refreshSessions(state: MountPointingRuntime, request: typeof fetc
 }
 
 // Replaces the models with the server's snapshot.
-async function refreshModels(state: MountPointingRuntime, request: typeof fetch) {
+async function refreshModels(state: MountPointingRuntime, request: ApiFetch) {
 	const token = refreshes.start()
 
 	try {
@@ -318,12 +318,12 @@ async function refreshModels(state: MountPointingRuntime, request: typeof fetch)
 }
 
 // Sends a command of a model or a camera, by its id or camera key (sendSessionCommand).
-function command(state: MountPointingRuntime, key: string, url: string, init: RequestInit, request: typeof fetch) {
+function command(state: MountPointingRuntime, key: string, url: string, init: RequestInit, request: ApiFetch) {
 	return sendSessionCommand(state, key, url, init, () => refreshMountPointing(state, request), request)
 }
 
 // Starts a pointing session with a camera; its progress arrives as events.
-export function startMountPointing(state: MountPointingRuntime, connectionId: string, deviceId: string, body: Omit<MountPointingRequest, 'token'>, request: typeof fetch = fetch) {
+export function startMountPointing(state: MountPointingRuntime, connectionId: string, deviceId: string, body: Omit<MountPointingRequest, 'token'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(connectionId, deviceId), deviceUrl(connectionId, 'camera', deviceId, 'mount-pointing'), jsonInit('POST', { ...body, token: nanoid() } satisfies MountPointingRequest), request)
 }
 
@@ -333,27 +333,27 @@ function sessionUrl(sessionId: string, action: string) {
 }
 
 // Pauses a session, releasing its devices.
-export function pauseMountPointing(state: MountPointingRuntime, { sessionId, camera }: Pick<MountPointingSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function pauseMountPointing(state: MountPointingRuntime, { sessionId, camera }: Pick<MountPointingSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(camera.connectionId, camera.deviceId), sessionUrl(sessionId, 'pause'), jsonInit('POST'), request)
 }
 
 // Resumes a paused session in a new operation; the token keeps a retried request from resuming it twice.
-export function resumeMountPointing(state: MountPointingRuntime, { sessionId, camera }: Pick<MountPointingSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function resumeMountPointing(state: MountPointingRuntime, { sessionId, camera }: Pick<MountPointingSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(camera.connectionId, camera.deviceId), sessionUrl(sessionId, 'resume'), jsonInit('POST', { token: nanoid() }), request)
 }
 
 // Ends a session, keeping its samples.
-export function stopMountPointing(state: MountPointingRuntime, { sessionId, camera }: Pick<MountPointingSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function stopMountPointing(state: MountPointingRuntime, { sessionId, camera }: Pick<MountPointingSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(camera.connectionId, camera.deviceId), sessionUrl(sessionId, 'stop'), jsonInit('POST'), request)
 }
 
 // Tests the latest revision of a model on the sky with a camera, without activating it; its progress arrives as events.
-export function verifyMountPointing(state: MountPointingRuntime, modelId: string, body: Omit<MountPointingVerifyRequest, 'token'>, request: typeof fetch = fetch) {
+export function verifyMountPointing(state: MountPointingRuntime, modelId: string, body: Omit<MountPointingVerifyRequest, 'token'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(body.camera.connectionId, body.camera.deviceId), modelUrl(modelId, 'verify'), jsonInit('POST', { ...body, token: nanoid() } satisfies MountPointingVerifyRequest), request)
 }
 
 // Asks the server for the plan a form would sample, which commands nothing, and keeps it for its camera.
-export async function previewMountPointingPlan(state: MountPointingRuntime, key: string, mount: { readonly connectionId: string; readonly deviceId: string }, settings: Readonly<PointingModelSettings>, request: typeof fetch = fetch) {
+export async function previewMountPointingPlan(state: MountPointingRuntime, key: string, mount: { readonly connectionId: string; readonly deviceId: string }, settings: Readonly<PointingModelSettings>, request: ApiFetch = browserFetch) {
 	delete state.errors[key]
 
 	try {
@@ -366,38 +366,38 @@ export async function previewMountPointingPlan(state: MountPointingRuntime, key:
 }
 
 // Shows a model in the Tools page and fetches its record; absent shows none.
-export function selectPointingModel(state: MountPointingRuntime, modelId: string | undefined, request: typeof fetch = fetch) {
+export function selectPointingModel(state: MountPointingRuntime, modelId: string | undefined, request: ApiFetch = browserFetch) {
 	state.selectedModelId = modelId
 	if (modelId !== undefined) void loadPointingModel(state, modelId, request)
 }
 
 // Starts a fit of a model; its outcome arrives as events.
-export function fitPointingModel(state: MountPointingRuntime, modelId: string, body: PointingFitModelRequest, request: typeof fetch = fetch) {
+export function fitPointingModel(state: MountPointingRuntime, modelId: string, body: PointingFitModelRequest, request: ApiFetch = browserFetch) {
 	return command(state, modelId, modelUrl(modelId, 'fit'), jsonInit('POST', body), request)
 }
 
 // Renames a model or changes its notes.
-export function patchPointingModel(state: MountPointingRuntime, modelId: string, body: PointingModelPatch, request: typeof fetch = fetch) {
+export function patchPointingModel(state: MountPointingRuntime, modelId: string, body: PointingModelPatch, request: ApiFetch = browserFetch) {
 	return command(state, modelId, modelUrl(modelId), jsonInit('PATCH', body), request)
 }
 
 // Deletes a model.
-export function deletePointingModel(state: MountPointingRuntime, modelId: string, request: typeof fetch = fetch) {
+export function deletePointingModel(state: MountPointingRuntime, modelId: string, request: ApiFetch = browserFetch) {
 	return command(state, modelId, modelUrl(modelId), { method: 'DELETE' }, request)
 }
 
 // Puts a revision of a model in force on a mount.
-export function activatePointingModel(state: MountPointingRuntime, modelId: string, body: PointingActivateRequest, request: typeof fetch = fetch) {
+export function activatePointingModel(state: MountPointingRuntime, modelId: string, body: PointingActivateRequest, request: ApiFetch = browserFetch) {
 	return command(state, modelId, modelUrl(modelId, 'activate'), jsonInit('POST', body), request)
 }
 
 // Takes the model of a mount out of force.
-export function deactivatePointingModel(state: MountPointingRuntime, modelId: string, mount: { readonly connectionId: string; readonly deviceId: string }, request: typeof fetch = fetch) {
+export function deactivatePointingModel(state: MountPointingRuntime, modelId: string, mount: { readonly connectionId: string; readonly deviceId: string }, request: ApiFetch = browserFetch) {
 	return command(state, modelId, `/api/mount-pointing/mounts/${encodeURIComponent(mount.connectionId)}/${encodeURIComponent(mount.deviceId)}/deactivate`, jsonInit('POST'), request)
 }
 
 // Sends an exchange document to the server, which fits it again from its samples. Resolves why it was refused, if it was.
-export async function importPointingModel(document: PointingModelExport, request: typeof fetch = fetch): Promise<string | undefined> {
+export async function importPointingModel(document: PointingModelExport, request: ApiFetch = browserFetch): Promise<string | undefined> {
 	try {
 		const response = await request('/api/mount-pointing/models', jsonInit('POST', document))
 		return response.ok ? undefined : await responseError(response)

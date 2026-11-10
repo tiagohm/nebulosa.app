@@ -1,6 +1,6 @@
 import type { LocalLunarEclipse, LunarEclipseSummary, LunarFeatureCategory, MoonAlmanacResponse, MoonFeatureCatalog, MoonPhaseName, SkyObserver } from 'api'
 import { proxy, ref } from 'valtio'
-import { fetchJson, jsonInit } from '../../http'
+import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../../http'
 import { createRequestGuard } from '../selection'
 import { catalogFeatures, type LunarFeature } from './moon.features'
 import { effectiveUp, type MoonViewUp } from './moon.geometry'
@@ -95,11 +95,11 @@ export const LUNAR_FEATURE_CATEGORY_NAMES: Readonly<Record<LunarFeatureCategory,
 // Browser services the store uses, replaced in tests.
 export interface MoonIo {
 	// Performs HTTP requests to the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 }
 
 // Browser implementation of MoonIo.
-export const browserMoonIo: MoonIo = { fetch: (input, init) => fetch(input, init) }
+export const browserMoonIo: MoonIo = { fetch: browserFetch }
 
 // Initial state: nothing loaded, zenith up.
 export function initialMoonState(): MoonState {

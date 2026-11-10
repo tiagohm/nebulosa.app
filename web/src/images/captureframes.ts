@@ -1,7 +1,7 @@
 import type { CaptureFramePage, CaptureFramesSnapshot, CaptureFrameSummary, CaptureSourceSummary, ConnectionStatus, ServerEvent } from 'api'
 import { proxy, ref } from 'valtio'
 import { type Connection, serverOf } from '../connection/connection'
-import { responseError } from '../http'
+import { type ApiFetch, browserFetch, responseError } from '../http'
 
 // Captured frames of every camera as this tab knows them, mirrored from the server's capture frame registry: the
 // cameras with frames come from the snapshot on every socket (re)open and from captureFrame:updated and
@@ -102,7 +102,7 @@ export function handleCaptureFramesEvent(state: CaptureFramesState, event: Serve
 // changed while the socket was closed. A camera an event of the same server run made newer than the snapshot keeps
 // its newer state; after a restart (another epoch) only the snapshot counts. A response is dropped when another
 // refresh started meanwhile. Resolves once the cameras are replaced, without waiting for their frames.
-export async function refreshCaptureFrames(state: CaptureFramesState, request: typeof fetch = fetch) {
+export async function refreshCaptureFrames(state: CaptureFramesState, request: ApiFetch = browserFetch) {
 	const current = ++generation
 
 	try {
@@ -154,7 +154,7 @@ export async function refreshCaptureFrames(state: CaptureFramesState, request: t
 
 // Fetches the latest frame and the saved frames of a camera, newest first, replacing those known and the older ones
 // fetched; the frames events made newer while the page was fetched are kept.
-export async function loadRecentFrames(state: CaptureFramesState, connectionId: string, deviceId: string, request: typeof fetch = fetch) {
+export async function loadRecentFrames(state: CaptureFramesState, connectionId: string, deviceId: string, request: ApiFetch = browserFetch) {
 	const key = frameSourceKey(connectionId, deviceId)
 	state.loading[key] = true
 
@@ -189,7 +189,7 @@ export async function loadRecentFrames(state: CaptureFramesState, connectionId: 
 // Fetches the next page of older saved frames of a camera, appending them to those known; nothing when none is older
 // or a fetch of the camera is running. A page whose cursor was replaced meanwhile, by a fetch of the recent frames, is
 // dropped.
-export async function loadOlderFrames(state: CaptureFramesState, connectionId: string, deviceId: string, request: typeof fetch = fetch) {
+export async function loadOlderFrames(state: CaptureFramesState, connectionId: string, deviceId: string, request: ApiFetch = browserFetch) {
 	const key = frameSourceKey(connectionId, deviceId)
 	const before = state.next[key]
 	if (before === undefined || state.loading[key]) return

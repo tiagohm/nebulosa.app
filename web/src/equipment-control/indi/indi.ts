@@ -1,7 +1,7 @@
 import type { ClientMessage, CommandAccepted, IndiDeviceSummary, IndiErrorCode, IndiProperty, IndiPropertyUpdate, IndiWriteRequest, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
-import { jsonInit } from '../../http'
+import { type ApiFetch, browserFetch, jsonInit } from '../../http'
 
 // INDI Properties view of one physical device: the vectors the server streams to this tab's socket while the
 // view is shown, and the writes the view started. Unlike the mirrors of SERVER_STORES, it lives only while the
@@ -193,7 +193,7 @@ function applyVector(state: IndiViewState, vector: IndiProperty) {
 // meanwhile is refused as a conflict, whose current vector then replaces the one shown. Values left out are
 // completed by the server (see IndiWriteRequest). The write's state is kept per vector until the next one; a
 // response for a device the view no longer follows is dropped.
-export async function writeIndiVector(state: IndiViewState, name: string, elements: IndiWriteRequest['elements'], request: typeof fetch = fetch) {
+export async function writeIndiVector(state: IndiViewState, name: string, elements: IndiWriteRequest['elements'], request: ApiFetch = browserFetch) {
 	const target = state.target
 	const vector = state.vectors.find((candidate) => candidate.name === name)
 	if (!target || !vector || state.writes[name]?.sending) return

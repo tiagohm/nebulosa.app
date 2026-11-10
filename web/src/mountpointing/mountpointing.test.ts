@@ -94,10 +94,10 @@ test('a late record never replaces a newer one, and a record the server dropped 
 	const state = runtime()
 	state.details.m1 = { revision: 5 } as PointingModelDetail
 
-	await loadPointingModel(state, 'm1', (() => json({ revision: 4 })) as unknown as typeof fetch)
+	await loadPointingModel(state, 'm1', () => json({ revision: 4 }))
 	expect(state.details.m1.revision).toBe(5)
 
-	await loadPointingModel(state, 'm1', (() => json({}, 404)) as unknown as typeof fetch)
+	await loadPointingModel(state, 'm1', () => json({}, 404))
 	expect(state.details.m1).toBeUndefined()
 })
 
@@ -106,7 +106,7 @@ test('a snapshot replaces the models but leaves what an event changed during the
 	handleMountPointingEvent(state, updated(1, { modelId: 'gone' }), ignore)
 
 	const { promise, resolve } = Promise.withResolvers<Response>()
-	const refresh = refreshMountPointing(state, (() => promise) as unknown as typeof fetch)
+	const refresh = refreshMountPointing(state, () => promise)
 
 	handleMountPointingEvent(state, updated(2, { modelId: 'late', label: 'Event' }), ignore)
 	resolve(Response.json(snapshot({ models: [summary({ modelId: 'late', label: 'Snapshot' }), summary({ modelId: 'other' })], sequence: 1 })))
@@ -135,10 +135,10 @@ test('a server out of reach is reported and the snapshot is asked for again', as
 	const state = runtime()
 	const urls: string[] = []
 
-	await patchPointingModel(state, 'm1', { expectedRevision: 1, label: 'A' }, ((url: string) => {
+	await patchPointingModel(state, 'm1', { expectedRevision: 1, label: 'A' }, (url: string) => {
 		urls.push(url)
 		return Promise.reject(new Error('offline'))
-	}) as unknown as typeof fetch)
+	})
 
 	expect(state.errors.m1).toBe('Unable to reach the server.')
 	expect(urls).toContain('/api/mount-pointing/models/m1')
@@ -149,15 +149,15 @@ test('a server out of reach is reported and the snapshot is asked for again', as
 
 test('selecting a model loads it', async () => {
 	const state = runtime()
-	selectPointingModel(state, 'm1', (() => json({ revision: 1 })) as unknown as typeof fetch)
+	selectPointingModel(state, 'm1', () => json({ revision: 1 }))
 	await Bun.sleep(0)
 	expect(state.selectedModelId).toBe('m1')
 	expect(state.details.m1.revision).toBe(1)
 })
 
 test('an import reports why it was refused', async () => {
-	expect(await importPointingModel({} as never, (() => json({ error: 'newer' }, 422)) as unknown as typeof fetch)).toBe('newer')
-	expect(await importPointingModel({} as never, (() => json({}, 201)) as unknown as typeof fetch)).toBeUndefined()
+	expect(await importPointingModel({} as never, () => json({ error: 'newer' }, 422))).toBe('newer')
+	expect(await importPointingModel({} as never, () => json({}, 201))).toBeUndefined()
 })
 
 const READY = { status: 'ready' } as RoleAvailability
@@ -227,7 +227,7 @@ test('a snapshot of the sessions leaves a session an event changed during the re
 	const state = runtime()
 	const { promise, resolve } = Promise.withResolvers<Response>()
 
-	const refresh = refreshMountPointing(state, ((url: string) => (url.endsWith('/sessions') ? promise : json(snapshot()))) as unknown as typeof fetch)
+	const refresh = refreshMountPointing(state, (url: string) => (url.endsWith('/sessions') ? promise : json(snapshot())))
 	handleMountPointingEvent(state, { type: 'mountPointing:updated', session: { ...CAMERA, revision: 5, state: 'paused' } }, ignore)
 	resolve(
 		Response.json({
@@ -269,7 +269,7 @@ test('the models in force follow their sequence, and a restart of the server lea
 	handleMountPointingEvent(state, { type: 'mountPointing:activation', hardwareId: 'h', activation: { ...activation, state: 'suspended', reason: 'synced' }, sequence: 3 }, ignore)
 	expect(state.activations.h.reason).toBe('synced')
 
-	await refreshMountPointing(state, ((url: string) => (url.endsWith('/activations') ? json({ activations: [], sequence: 0 }) : json(snapshot({ sessions: [] } as never)))) as unknown as typeof fetch)
+	await refreshMountPointing(state, (url: string) => (url.endsWith('/activations') ? json({ activations: [], sequence: 0 }) : json(snapshot({ sessions: [] } as never))))
 	expect(state.activations).toEqual({})
 })
 
@@ -277,9 +277,9 @@ test('a preview keeps the plan of its camera and reports a refusal', async () =>
 	const state = runtime()
 	const mount = { connectionId: 'c', deviceId: 'm' }
 
-	await previewMountPointingPlan(state, 'c:cam', mount, DEFAULT_POINTING_MODEL_SETTINGS, (() => json({ requestedCount: 30, waypoints: [] })) as unknown as typeof fetch)
+	await previewMountPointingPlan(state, 'c:cam', mount, DEFAULT_POINTING_MODEL_SETTINGS, () => json({ requestedCount: 30, waypoints: [] }))
 	expect(state.plans['c:cam'].requestedCount).toBe(30)
 
-	await previewMountPointingPlan(state, 'c:cam', mount, DEFAULT_POINTING_MODEL_SETTINGS, (() => json({ error: 'no site' }, 422)) as unknown as typeof fetch)
+	await previewMountPointingPlan(state, 'c:cam', mount, DEFAULT_POINTING_MODEL_SETTINGS, () => json({ error: 'no site' }, 422))
 	expect(state.errors['c:cam']).toBe('no site')
 })

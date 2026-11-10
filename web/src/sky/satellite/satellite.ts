@@ -1,6 +1,6 @@
 import type { SatelliteDetails, SatellitePassesResponse, SatellitePassPrediction } from 'api'
 import { proxy } from 'valtio'
-import { fetchJson, jsonInit } from '../../http'
+import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../../http'
 import { type GeographicLocation, siteObserver } from '../../location/site'
 import { createRequestGuard } from '../selection'
 
@@ -34,9 +34,6 @@ export interface SkySatelliteState {
 // Satellite Inspector state of the tab.
 export const skySatelliteState = proxy<SkySatelliteState>({ nextPassLoading: false, tracking: false, trail: false })
 
-// Fetch of the API, replaced in tests.
-type Fetch = (input: string, init?: RequestInit) => Promise<Response>
-
 // Requests of the details and of the next pass.
 const detailsGuard = createRequestGuard()
 const passGuard = createRequestGuard()
@@ -44,7 +41,7 @@ const passGuard = createRequestGuard()
 // Shows another satellite (or the same one again after a failure): forgets the details and the next pass of the previous
 // one at once, stops following it, and
 // reads the new details.
-export async function inspectSatellite(state: SkySatelliteState, noradId: string, fetch: Fetch = (input, init) => globalThis.fetch(input, init)) {
+export async function inspectSatellite(state: SkySatelliteState, noradId: string, fetch: ApiFetch = browserFetch) {
 	if (state.noradId === noradId && !state.detailsError) return
 	state.noradId = noradId
 	state.details = undefined
@@ -65,7 +62,7 @@ export async function inspectSatellite(state: SkySatelliteState, noradId: string
 }
 
 // Finds the next pass above the horizon for the observer within two days of an instant (Unix milliseconds).
-export async function findNextSatellitePass(state: SkySatelliteState, observer: GeographicLocation, time: number, fetch: Fetch = (input, init) => globalThis.fetch(input, init)) {
+export async function findNextSatellitePass(state: SkySatelliteState, observer: GeographicLocation, time: number, fetch: ApiFetch = browserFetch) {
 	const noradId = state.noradId
 	if (!noradId) return
 	const request = passGuard.begin()

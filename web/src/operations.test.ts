@@ -39,7 +39,7 @@ test('a refresh replaces the running operations with the server list', async () 
 	handleOperationEvent(state, { type: 'operation:updated', operation: operation('gone') })
 	handleOperationEvent(state, { type: 'operation:updated', operation: operation('done', 'succeeded') })
 
-	await refreshOperations(state, (() => Promise.resolve(Response.json([operation('other')]))) as unknown as typeof fetch)
+	await refreshOperations(state, () => Promise.resolve(Response.json([operation('other')])))
 
 	expect(Object.keys(state.operations).toSorted()).toEqual(['done', 'other'])
 })
@@ -48,7 +48,7 @@ test('a refresh never undoes the events that arrive while its request is in flig
 	const state = newState()
 	handleOperationEvent(state, { type: 'operation:updated', operation: operation('slew') })
 	const { promise, resolve } = Promise.withResolvers<Response>()
-	const refresh = refreshOperations(state, (() => promise) as unknown as typeof fetch)
+	const refresh = refreshOperations(state, () => promise)
 
 	// The snapshot was taken while the slew ran; the slew then ends and a goto starts before the response arrives.
 	handleOperationEvent(state, { type: 'operation:updated', operation: operation('slew', 'succeeded') })
@@ -60,7 +60,7 @@ test('a refresh never undoes the events that arrive while its request is in flig
 	expect(state.operations.goto?.state).toBe('running')
 
 	// A later refresh applies its snapshot as usual.
-	await refreshOperations(state, (() => Promise.resolve(Response.json([]))) as unknown as typeof fetch)
+	await refreshOperations(state, () => Promise.resolve(Response.json([])))
 	expect(state.operations.goto).toBeUndefined()
 })
 

@@ -27,7 +27,7 @@ import type {
 } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
-import { ApiResponseError, fetchJson, jsonInit, responseError } from '../../http'
+import { type ApiFetch, ApiResponseError, browserFetch, fetchJson, jsonInit, responseError } from '../../http'
 import type { SiteLocation } from '../../location/site'
 import { zonedWallTime } from '../../location/zone'
 import { navigate, type RouteState, routeState } from '../../shell/route'
@@ -52,7 +52,7 @@ const HOUR_MS = 3_600_000
 // Requests of the tool, replaced in tests.
 export interface ObservingPlannerIo {
 	// Performs HTTP requests to the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 	// Real current time, Unix milliseconds (UTC).
 	readonly time: () => number
 	// Schedules a delayed write, returning its cancellation.
@@ -63,7 +63,7 @@ export interface ObservingPlannerIo {
 
 // Browser implementation of ObservingPlannerIo.
 export const browserObservingPlannerIo: ObservingPlannerIo = {
-	fetch: (input, init) => fetch(input, init),
+	fetch: browserFetch,
 	time: () => Date.now(),
 	later: (run, delay) => {
 		const timer = setTimeout(run, delay)

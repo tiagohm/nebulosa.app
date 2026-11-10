@@ -1,4 +1,4 @@
-import { responseError } from '../http'
+import { type ApiFetch, responseError } from '../http'
 import type { SnapshotRefreshes } from '../refresh'
 import { cameraKey } from './capture'
 
@@ -94,7 +94,7 @@ export function acceptSession<S extends CameraSessionSummary>(state: CameraSessi
 
 // Applies the summary of a session from an event (acceptSession); a new session of a camera forgets the records of the
 // others, and the record of the session is fetched again when the kind says it is out of date.
-export function applySession<S extends CameraSessionSummary, D extends CameraSessionRecord>(state: CameraSessionRecords<S, D>, kind: CameraSessionKind<S, D>, session: S, request: typeof fetch) {
+export function applySession<S extends CameraSessionSummary, D extends CameraSessionRecord>(state: CameraSessionRecords<S, D>, kind: CameraSessionKind<S, D>, session: S, request: ApiFetch) {
 	const accepted = acceptSession(state, kind.refreshes, session)
 	if (!accepted) return
 
@@ -105,7 +105,7 @@ export function applySession<S extends CameraSessionSummary, D extends CameraSes
 
 // Fetches the complete record of a session; a record no newer than the one known, as a late response can be, never
 // replaces it, and a session the server no longer keeps is forgotten.
-export async function loadSessionRecord<S extends CameraSessionSummary, D extends CameraSessionRecord>(state: CameraSessionRecords<S, D>, kind: CameraSessionKind<S, D>, sessionId: string, request: typeof fetch) {
+export async function loadSessionRecord<S extends CameraSessionSummary, D extends CameraSessionRecord>(state: CameraSessionRecords<S, D>, kind: CameraSessionKind<S, D>, sessionId: string, request: ApiFetch) {
 	try {
 		const response = await request(`${kind.url}/${encodeURIComponent(sessionId)}`)
 
@@ -127,7 +127,7 @@ export async function loadSessionRecord<S extends CameraSessionSummary, D extend
 // event changed meanwhile, so a session that ended during the request is never shown running again, then hands kept the
 // ids of the sessions the tab now knows and waits for what it does with them. A response is dropped when another refresh
 // of the source started meanwhile.
-export async function refreshSessions<S extends CameraSessionSummary>(state: CameraSessions<S>, source: CameraSessionSource, request: typeof fetch, kept: (sessionIds: readonly string[]) => unknown) {
+export async function refreshSessions<S extends CameraSessionSummary>(state: CameraSessions<S>, source: CameraSessionSource, request: ApiFetch, kept: (sessionIds: readonly string[]) => unknown) {
 	const { refreshes } = source
 	const token = refreshes.start()
 
@@ -148,7 +148,7 @@ export async function refreshSessions<S extends CameraSessionSummary>(state: Cam
 
 // Refreshes the sessions (refreshSessions), forgets the records of the sessions no longer kept, and fetches the records of
 // the others.
-export function refreshSessionRecords<S extends CameraSessionSummary, D extends CameraSessionRecord>(state: CameraSessionRecords<S, D>, kind: CameraSessionKind<S, D>, request: typeof fetch) {
+export function refreshSessionRecords<S extends CameraSessionSummary, D extends CameraSessionRecord>(state: CameraSessionRecords<S, D>, kind: CameraSessionKind<S, D>, request: ApiFetch) {
 	return refreshSessions(state, kind, request, (kept) => {
 		for (const id of Object.keys(state.details)) if (!kept.includes(id)) delete state.details[id]
 		for (const id of kept) void loadSessionRecord(state, kind, id, request)
@@ -159,7 +159,7 @@ export function refreshSessionRecords<S extends CameraSessionSummary, D extends 
 // command of it waits for the server, and records its refusal under key. When the server cannot be reached, the command
 // may still have been applied, so refresh fetches the snapshot again instead of assuming nothing happened. Resolves to
 // the response of an accepted command, whose body is left unread, or undefined.
-export async function sendSessionCommand(state: Pick<CameraSessions<CameraSessionSummary>, 'pending' | 'errors'>, key: string, url: string, init: RequestInit, refresh: () => Promise<unknown>, request: typeof fetch): Promise<Response | undefined> {
+export async function sendSessionCommand(state: Pick<CameraSessions<CameraSessionSummary>, 'pending' | 'errors'>, key: string, url: string, init: RequestInit, refresh: () => Promise<unknown>, request: ApiFetch): Promise<Response | undefined> {
 	if (state.pending[key]) return undefined
 	state.pending[key] = true
 	delete state.errors[key]

@@ -5,7 +5,7 @@ import type { StreakClass } from 'nebulosa/src/imaging/analysis/streak/classific
 import { DEFAULT_STREAK_DETECTION_OPTIONS } from 'nebulosa/src/imaging/analysis/streak/types'
 import { proxy, ref } from 'valtio'
 import { latestOf, trackJob } from '../analysis'
-import { jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 import type { Point, Rect } from '../viewer/transform'
 
 // Streak detection jobs of the server as this tab knows them, for the Streak Detection tool of the Images workspace. The
@@ -163,7 +163,7 @@ export function handleStreaksEvent(state: StreaksState, event: ServerEvent) {
 const fetchedImages = new Set<string>()
 
 // Fetches once the completed jobs the server keeps for an image, which may be older than the jobs of the snapshot.
-export async function loadImageStreakJobs(state: StreaksState, imageId: string, request: typeof fetch = fetch) {
+export async function loadImageStreakJobs(state: StreaksState, imageId: string, request: ApiFetch = browserFetch) {
 	if (fetchedImages.has(imageId)) return
 	fetchedImages.add(imageId)
 
@@ -177,7 +177,7 @@ export async function loadImageStreakJobs(state: StreaksState, imageId: string, 
 }
 
 // Fetches the snapshot of the server's jobs, after the socket (re)opened.
-export async function refreshStreaks(state: StreaksState, request: typeof fetch = fetch) {
+export async function refreshStreaks(state: StreaksState, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request('/api/streaks')
 		if (!response.ok) return
@@ -190,7 +190,7 @@ export async function refreshStreaks(state: StreaksState, request: typeof fetch 
 
 // Submits a detection of an image. The job, or the equivalent job the server answers, becomes the latest of the image;
 // a refusal is kept in submitErrors.
-export async function runStreakDetection(state: StreaksState, imageId: string, detection: StreakDetectionRequest, request: typeof fetch = fetch) {
+export async function runStreakDetection(state: StreaksState, imageId: string, detection: StreakDetectionRequest, request: ApiFetch = browserFetch) {
 	delete state.submitErrors[imageId]
 
 	try {
@@ -208,7 +208,7 @@ export async function runStreakDetection(state: StreaksState, imageId: string, d
 }
 
 // Asks the server to cancel a job; its end arrives as an event.
-export async function cancelStreakDetection(jobId: string, request: typeof fetch = fetch) {
+export async function cancelStreakDetection(jobId: string, request: ApiFetch = browserFetch) {
 	try {
 		await request(`/api/streaks/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' })
 	} catch {
@@ -217,7 +217,7 @@ export async function cancelStreakDetection(jobId: string, request: typeof fetch
 }
 
 // Fetches the result of a completed job once, unless it is fetched or failed already.
-export async function loadStreakResult(state: StreaksState, jobId: string, request: typeof fetch = fetch) {
+export async function loadStreakResult(state: StreaksState, jobId: string, request: ApiFetch = browserFetch) {
 	if (state.results[jobId] || state.resultErrors[jobId] !== undefined || fetching.has(jobId)) return
 	fetching.add(jobId)
 

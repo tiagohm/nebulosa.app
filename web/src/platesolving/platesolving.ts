@@ -4,7 +4,7 @@ import { normalizeAngle, toDeg, toHour } from 'nebulosa/src/math/units/angle'
 import { proxy, ref } from 'valtio'
 import { latestOf, trackJob } from '../analysis'
 import type { RoleAvailability } from '../equipment/availability'
-import { jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 import type { CameraPlateSolvingSettings } from '../profile/schema'
 
 // Plate solving jobs of the server as this tab knows them, used by the Images workspace (manual solves). The server
@@ -136,7 +136,7 @@ export function handlePlateSolvingEvent(state: PlateSolvingState, event: ServerE
 }
 
 // Fetches the snapshot of the server's jobs, after the socket (re)opened.
-export async function refreshPlateSolving(state: PlateSolvingState, request: typeof fetch = fetch) {
+export async function refreshPlateSolving(state: PlateSolvingState, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request('/api/plate-solving')
 		if (!response.ok) return
@@ -149,7 +149,7 @@ export async function refreshPlateSolving(state: PlateSolvingState, request: typ
 
 // Submits a solve of an image. The job, or the job of an equivalent request, becomes the latest of the image and is
 // returned; a refusal is kept in submitErrors.
-export async function runPlateSolve(state: PlateSolvingState, imageId: string, solve: PlateSolveRequest, request: typeof fetch = fetch): Promise<PlateSolveJob | undefined> {
+export async function runPlateSolve(state: PlateSolvingState, imageId: string, solve: PlateSolveRequest, request: ApiFetch = browserFetch): Promise<PlateSolveJob | undefined> {
 	delete state.submitErrors[imageId]
 
 	try {
@@ -170,7 +170,7 @@ export async function runPlateSolve(state: PlateSolvingState, imageId: string, s
 }
 
 // Asks the server to cancel a job; its end arrives as an event.
-export async function cancelPlateSolve(jobId: string, request: typeof fetch = fetch) {
+export async function cancelPlateSolve(jobId: string, request: ApiFetch = browserFetch) {
 	try {
 		await request(`/api/plate-solving/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' })
 	} catch {
@@ -179,7 +179,7 @@ export async function cancelPlateSolve(jobId: string, request: typeof fetch = fe
 }
 
 // Fetches the result of a completed job once, unless it is fetched or failed already.
-export async function loadPlateSolveResult(state: PlateSolvingState, jobId: string, request: typeof fetch = fetch) {
+export async function loadPlateSolveResult(state: PlateSolvingState, jobId: string, request: ApiFetch = browserFetch) {
 	if (state.results[jobId] || state.resultErrors[jobId] !== undefined || fetching.has(jobId)) return
 	fetching.add(jobId)
 
@@ -208,7 +208,7 @@ function remember<T>(cache: Record<string, T>, imageId: string, value: T) {
 
 // Fetches once the solutions of an image: its header solution, and the completed jobs the server kept, which this tab
 // may not have seen.
-export async function loadSolutions(state: PlateSolvingState, imageId: string, request: typeof fetch = fetch) {
+export async function loadSolutions(state: PlateSolvingState, imageId: string, request: ApiFetch = browserFetch) {
 	const key = `solutions:${imageId}`
 	if (imageId in state.headers || fetching.has(key)) return
 	fetching.add(key)
@@ -227,7 +227,7 @@ export async function loadSolutions(state: PlateSolvingState, imageId: string, r
 }
 
 // Fetches once the hints an assisted solve of an image would take from its header.
-export async function loadHints(state: PlateSolvingState, imageId: string, request: typeof fetch = fetch) {
+export async function loadHints(state: PlateSolvingState, imageId: string, request: ApiFetch = browserFetch) {
 	const key = `hints:${imageId}`
 	if (imageId in state.hints || fetching.has(key)) return
 	fetching.add(key)

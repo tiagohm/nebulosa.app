@@ -58,7 +58,7 @@ describe('live stacking store', () => {
 		handleLiveStackingEvent(state, { type: 'liveStacking:updated', epoch: 'e1', revision: 9, session: session(9, { state: 'paused' }) })
 		const snapshot: LiveStackingSnapshot = { epoch: 'e1', revision: 8, sessions: [session(8), session(1, { sessionId: 's2', deviceId: 'other' })], memoryBudget: 100, memoryUsed: 10 }
 
-		await refreshLiveStacking(state, (() => Promise.resolve(Response.json(snapshot))) as unknown as typeof fetch)
+		await refreshLiveStacking(state, () => Promise.resolve(Response.json(snapshot)))
 		expect(state.sessions.s1.state).toBe('paused')
 		expect(state.sessions.s2.revision).toBe(1)
 		expect(state).toMatchObject({ memoryBudget: 100, memoryUsed: 10 })
@@ -68,7 +68,7 @@ describe('live stacking store', () => {
 		const state = newRuntime()
 		handleLiveStackingEvent(state, { type: 'liveStacking:updated', epoch: 'e1', revision: 1, session: session(1) })
 		const response = Promise.withResolvers<Response>()
-		const refreshed = refreshLiveStacking(state, (() => response.promise) as unknown as typeof fetch)
+		const refreshed = refreshLiveStacking(state, () => response.promise)
 
 		handleLiveStackingEvent(state, { type: 'liveStacking:closed', epoch: 'e1', revision: 2, sessionId: 's1' })
 		response.resolve(Response.json({ epoch: 'e1', revision: 1, sessions: [session(1)], memoryBudget: 0, memoryUsed: 0 } satisfies LiveStackingSnapshot))
@@ -98,7 +98,7 @@ describe('live stacking store', () => {
 		expect(liveSessionActive(state.sessions.s1)).toBeTrue()
 		expect(liveSessionActive(session(2, { state: 'stopped' }))).toBeFalse()
 
-		const failed = await startLiveStacking(state, 'c1', 'cam', DEFAULT_LIVE_STACKING_SETTINGS, (() => Promise.resolve(Response.json({ error: 'Live Stacking already runs for this camera', code: 'sessionConflict' }, { status: 409 }))) as unknown as typeof fetch)
+		const failed = await startLiveStacking(state, 'c1', 'cam', DEFAULT_LIVE_STACKING_SETTINGS, () => Promise.resolve(Response.json({ error: 'Live Stacking already runs for this camera', code: 'sessionConflict' }, { status: 409 })))
 		expect(failed).toBeUndefined()
 		expect(state.errors['camera:c1:cam']).toBe('Live Stacking already runs for this camera')
 	})

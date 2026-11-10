@@ -1,7 +1,7 @@
 import type { AstapStarDetectionSettings, BuiltinStarDetectionSettings, ServerEvent, StarAcceptance, StarDetectionJob, StarDetectionRequest, StarDetectionResult, StarDetectionSettings, StarDetectionSnapshot, StarDetectorProvider } from 'api'
 import { proxy, ref } from 'valtio'
 import { latestOf, trackJob } from '../analysis'
-import { jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 import type { Point, Rect } from '../viewer/transform'
 
 // Star detection jobs of the server as this tab knows them, shared by the Images workspace (manual runs and
@@ -134,7 +134,7 @@ const fetchedImages = new Set<string>()
 
 // Fetches once the completed jobs the server keeps for an image, such as the Auto Focus measurement of a frame
 // shown later, which may be older than the jobs of the snapshot.
-export async function loadImageJobs(state: StarsState, imageId: string, request: typeof fetch = fetch) {
+export async function loadImageJobs(state: StarsState, imageId: string, request: ApiFetch = browserFetch) {
 	if (fetchedImages.has(imageId)) return
 	fetchedImages.add(imageId)
 
@@ -148,7 +148,7 @@ export async function loadImageJobs(state: StarsState, imageId: string, request:
 }
 
 // Fetches the snapshot of the server's jobs, after the socket (re)opened.
-export async function refreshStars(state: StarsState, request: typeof fetch = fetch) {
+export async function refreshStars(state: StarsState, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request('/api/stars')
 		if (!response.ok) return
@@ -161,7 +161,7 @@ export async function refreshStars(state: StarsState, request: typeof fetch = fe
 
 // Submits a detection of an image. The job, or the completed job of an equivalent earlier detection,
 // becomes the latest of the image; a refusal is kept in submitErrors.
-export async function runDetection(state: StarsState, imageId: string, detection: StarDetectionRequest, request: typeof fetch = fetch) {
+export async function runDetection(state: StarsState, imageId: string, detection: StarDetectionRequest, request: ApiFetch = browserFetch) {
 	delete state.submitErrors[imageId]
 
 	try {
@@ -179,7 +179,7 @@ export async function runDetection(state: StarsState, imageId: string, detection
 }
 
 // Asks the server to cancel a job; its end arrives as an event.
-export async function cancelDetection(jobId: string, request: typeof fetch = fetch) {
+export async function cancelDetection(jobId: string, request: ApiFetch = browserFetch) {
 	try {
 		await request(`/api/stars/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' })
 	} catch {
@@ -188,7 +188,7 @@ export async function cancelDetection(jobId: string, request: typeof fetch = fet
 }
 
 // Fetches the result of a completed job once, unless it is fetched or failed already.
-export async function loadResult(state: StarsState, jobId: string, request: typeof fetch = fetch) {
+export async function loadResult(state: StarsState, jobId: string, request: ApiFetch = browserFetch) {
 	if (state.results[jobId] || state.resultErrors[jobId] !== undefined || fetching.has(jobId)) return
 	fetching.add(jobId)
 

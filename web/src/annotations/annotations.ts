@@ -1,7 +1,7 @@
 import type { AnnotationBodies, AnnotationImageContext, AnnotationJob, AnnotationKind, AnnotationObject, AnnotationRequest, AnnotationResult, AnnotationSnapshot, MinorBody, MinorBodySearchResponse, ServerEvent } from 'api'
 import { proxy, ref } from 'valtio'
 import { latestOf, trackJob } from '../analysis'
-import { jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 
 // Annotation jobs of the server as this tab knows them, for the Annotation tool of the Images workspace. The server
 // runs every job and keeps every result: this store mirrors the compact jobs of its snapshot and annotations:updated
@@ -79,7 +79,7 @@ export function handleAnnotationsEvent(state: AnnotationsState, event: ServerEve
 }
 
 // Fetches once the completed jobs the server keeps for an image, which may be older than the jobs of the snapshot.
-export async function loadImageAnnotations(state: AnnotationsState, imageId: string, request: typeof fetch = fetch) {
+export async function loadImageAnnotations(state: AnnotationsState, imageId: string, request: ApiFetch = browserFetch) {
 	if (fetchedImages.has(imageId)) return
 	fetchedImages.add(imageId)
 
@@ -93,7 +93,7 @@ export async function loadImageAnnotations(state: AnnotationsState, imageId: str
 }
 
 // Fetches the snapshot of the server's jobs, after the socket (re)opened.
-export async function refreshAnnotations(state: AnnotationsState, request: typeof fetch = fetch) {
+export async function refreshAnnotations(state: AnnotationsState, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request('/api/annotations')
 		if (!response.ok) return
@@ -106,7 +106,7 @@ export async function refreshAnnotations(state: AnnotationsState, request: typeo
 
 // Submits an annotation of an image. The job, or the equivalent job the server answers, becomes the latest of its kind
 // of the image; a refusal is kept in submitErrors.
-export async function runAnnotation(state: AnnotationsState, imageId: string, annotation: AnnotationRequest, request: typeof fetch = fetch) {
+export async function runAnnotation(state: AnnotationsState, imageId: string, annotation: AnnotationRequest, request: ApiFetch = browserFetch) {
 	const key = annotationKey(imageId, annotation.kind)
 	delete state.submitErrors[key]
 
@@ -125,7 +125,7 @@ export async function runAnnotation(state: AnnotationsState, imageId: string, an
 }
 
 // Asks the server to cancel a job; its end arrives as an event.
-export async function cancelAnnotation(jobId: string, request: typeof fetch = fetch) {
+export async function cancelAnnotation(jobId: string, request: ApiFetch = browserFetch) {
 	try {
 		await request(`/api/annotations/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' })
 	} catch {
@@ -134,7 +134,7 @@ export async function cancelAnnotation(jobId: string, request: typeof fetch = fe
 }
 
 // Fetches the result of a completed job once, unless it is fetched or failed already.
-export async function loadAnnotationResult(state: AnnotationsState, jobId: string, request: typeof fetch = fetch) {
+export async function loadAnnotationResult(state: AnnotationsState, jobId: string, request: ApiFetch = browserFetch) {
 	if (state.results[jobId] || state.resultErrors[jobId] !== undefined || fetching.has(jobId)) return
 	fetching.add(jobId)
 
@@ -190,7 +190,7 @@ export function minorBodyQuery(object: Pick<AnnotationObject, 'id'>): string {
 
 // Looks a minor body SkyBoT listed up in SBDB through the sky API, so it can open in the Sky workspace with its SPK-ID:
 // the body when SBDB knows exactly one, or why it cannot be resolved. A match is never guessed from a position.
-export async function resolveMinorBody(object: Pick<AnnotationObject, 'id'>, request: typeof fetch = fetch): Promise<MinorBody | string> {
+export async function resolveMinorBody(object: Pick<AnnotationObject, 'id'>, request: ApiFetch = browserFetch): Promise<MinorBody | string> {
 	try {
 		const response = await request(`/api/sky/minorbodies/search?q=${encodeURIComponent(minorBodyQuery(object))}`)
 		if (!response.ok) return await responseError(response)
@@ -204,7 +204,7 @@ export async function resolveMinorBody(object: Pick<AnnotationObject, 'id'>, req
 
 // Fetches once the observation date and site an image header gives, which its annotations use. An image's
 // header never changes, so the context is never fetched again; a failed fetch is retried by the next call.
-export async function loadAnnotationContext(state: AnnotationsState, imageId: string, request: typeof fetch = fetch) {
+export async function loadAnnotationContext(state: AnnotationsState, imageId: string, request: ApiFetch = browserFetch) {
 	if (fetchedContexts.has(imageId)) return
 	fetchedContexts.add(imageId)
 

@@ -1,7 +1,7 @@
 import type { CalibrationMasterSummary, LiveExportTarget, LiveMasterKind, LiveStackingCalibration, LiveStackingCohort, LiveStackingProduct, LiveStackingProductDetail, LiveStackingRecipe, LiveStackingSession, LiveStackingSnapshot, LiveStackingState, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
-import { jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 import type { LiveStackingSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { COMPOSITION_PRESETS, type CompositionPreset, presetSources } from '../tools/imagestacking/presets'
@@ -95,7 +95,7 @@ export function handleLiveStackingEvent(state: LiveStackingRuntime, event: Serve
 
 // Fetches the snapshot; a session an event changed meanwhile keeps the event's state. The server being away leaves what
 // is known.
-export async function refreshLiveStacking(state: LiveStackingRuntime, request: typeof fetch = fetch) {
+export async function refreshLiveStacking(state: LiveStackingRuntime, request: ApiFetch = browserFetch) {
 	const token = refreshes.start()
 
 	try {
@@ -134,7 +134,7 @@ export function liveSessionActive(session: Pick<LiveStackingSession, 'state'> | 
 }
 
 // Sends a command and records its failure. Resolves its JSON answer, or undefined when it failed.
-async function command<T>(state: LiveStackingRuntime, key: string, url: string, init: RequestInit, request: typeof fetch): Promise<T | undefined> {
+async function command<T>(state: LiveStackingRuntime, key: string, url: string, init: RequestInit, request: ApiFetch): Promise<T | undefined> {
 	if (state.pending[key]) return undefined
 	state.pending[key] = true
 	delete state.errors[key]
@@ -162,7 +162,7 @@ export function liveCameraKey(connectionId: string, deviceId: string) {
 }
 
 // Starts the session of a camera with the form of the camera, under a new token.
-export async function startLiveStacking(state: LiveStackingRuntime, connectionId: string, deviceId: string, settings: LiveStackingSettings, request: typeof fetch = fetch) {
+export async function startLiveStacking(state: LiveStackingRuntime, connectionId: string, deviceId: string, settings: LiveStackingSettings, request: ApiFetch = browserFetch) {
 	const url = `/api/connections/${encodeURIComponent(connectionId)}/cameras/${encodeURIComponent(deviceId)}/live-stacking`
 	const session = await command<LiveStackingSession>(state, liveCameraKey(connectionId, deviceId), url, jsonInit('POST', { token: nanoid(), recipe: settings.recipe, calibration: settings.calibration }), request)
 	if (session) applySession(state, session)
@@ -170,21 +170,21 @@ export async function startLiveStacking(state: LiveStackingRuntime, connectionId
 }
 
 // Sends a command of a session: pause, resume, stop, abort, reset, or a new field.
-export async function liveSessionCommand(state: LiveStackingRuntime, sessionId: string, action: 'pause' | 'resume' | 'stop' | 'abort' | 'reset' | 'fields', request: typeof fetch = fetch) {
+export async function liveSessionCommand(state: LiveStackingRuntime, sessionId: string, action: 'pause' | 'resume' | 'stop' | 'abort' | 'reset' | 'fields', request: ApiFetch = browserFetch) {
 	const session = await command<LiveStackingSession>(state, `session:${sessionId}`, `${BASE_URL}/sessions/${encodeURIComponent(sessionId)}/${action}`, jsonInit('POST'), request)
 	if (session) applySession(state, session)
 	return session
 }
 
 // Replaces the masters chosen per filter of a running session, for the frames that follow.
-export async function setLiveCalibration(state: LiveStackingRuntime, sessionId: string, calibration: LiveStackingCalibration, request: typeof fetch = fetch) {
+export async function setLiveCalibration(state: LiveStackingRuntime, sessionId: string, calibration: LiveStackingCalibration, request: ApiFetch = browserFetch) {
 	const session = await command<LiveStackingSession>(state, `session:${sessionId}`, `${BASE_URL}/sessions/${encodeURIComponent(sessionId)}/calibration`, jsonInit('PUT', calibration), request)
 	if (session) applySession(state, session)
 	return session
 }
 
 // Closes a stopped or failed session.
-export async function closeLiveSession(state: LiveStackingRuntime, sessionId: string, request: typeof fetch = fetch) {
+export async function closeLiveSession(state: LiveStackingRuntime, sessionId: string, request: ApiFetch = browserFetch) {
 	const closed = await command<{ readonly closed: boolean }>(state, `session:${sessionId}`, `${BASE_URL}/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' }, request)
 
 	if (closed) delete state.sessions[sessionId]
@@ -193,12 +193,12 @@ export async function closeLiveSession(state: LiveStackingRuntime, sessionId: st
 }
 
 // Saves a stack or a composition of a session as a product. Resolves the product with the paths of its files.
-export function saveLiveStack(state: LiveStackingRuntime, sessionId: string, target: LiveExportTarget, request: typeof fetch = fetch) {
+export function saveLiveStack(state: LiveStackingRuntime, sessionId: string, target: LiveExportTarget, request: ApiFetch = browserFetch) {
 	return command<LiveStackingProductDetail>(state, `export:${sessionId}`, `${BASE_URL}/sessions/${encodeURIComponent(sessionId)}/exports`, jsonInit('POST', target), request)
 }
 
 // Fetches the saved stacks.
-export async function loadLiveProducts(state: LiveStackingRuntime, request: typeof fetch = fetch) {
+export async function loadLiveProducts(state: LiveStackingRuntime, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request(`${BASE_URL}/products`)
 		if (response.ok) state.products = ref((await response.json()) as LiveStackingProduct[])
@@ -266,7 +266,7 @@ const MASTERS_LIMIT = 200
 
 // Fetches the usable masters of a kind of the Calibration Library, newest first; undefined when they cannot be fetched. The
 // server checks each chosen master again against every frame, so the list only offers them.
-export async function loadLiveMasters(kind: LiveMasterKind, request: typeof fetch = fetch): Promise<readonly CalibrationMasterSummary[] | undefined> {
+export async function loadLiveMasters(kind: LiveMasterKind, request: ApiFetch = browserFetch): Promise<readonly CalibrationMasterSummary[] | undefined> {
 	try {
 		const response = await request(`/api/calibration-library/masters?kind=${kind}&limit=${MASTERS_LIMIT}`)
 		if (!response.ok) return undefined

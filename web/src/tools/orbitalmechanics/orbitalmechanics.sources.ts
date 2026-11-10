@@ -2,7 +2,7 @@ import type { OrbitCompareRequest, OrbitCompareResponse, OrbitResolveRequest, Or
 import { AU_KM, DAYSEC } from 'nebulosa/src/core/constants'
 import type { MutVec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { hermiteVec3 } from 'nebulosa/src/math/numerical/spline'
-import { ApiResponseError, fetchJson, jsonInit } from '../../http'
+import { ApiResponseError, browserFetch, fetchJson, jsonInit } from '../../http'
 import type { GeographicLocation } from '../../location/site'
 import { collapsibleSections, setSectionOpen } from '../../shell/collapsible'
 import { navigate, type RouteState, routeState } from '../../shell/route'
@@ -41,7 +41,7 @@ export interface ExplorerSkyHandoff {
 
 // Browser implementation of the side effects.
 const browserIo: OrbitalMechanicsIo = {
-	fetch: (input, init) => fetch(input, init),
+	fetch: browserFetch,
 	schedule: (callback, delay) => {
 		const id = setTimeout(callback, delay)
 		return () => clearTimeout(id)

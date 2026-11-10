@@ -1,6 +1,6 @@
 import type { GatewayState, ObservatoryCamera, ObservatoryCameraEvent, ObservatoryCameraSaveRequest, ObservatoryCameraSecretKeyState, ObservatoryCamerasSnapshot, ObservatoryCameraStream, ObservatoryCameraStreamCode, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { jsonInit, responseError } from '../../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
 
 // Mirror of the observatory cameras of the server: their definitions, the state of their streams on the server, the
 // media gateway, and the key of their addresses, fed by GET /api/observatory-cameras and the observatoryCamera:* events,
@@ -89,7 +89,7 @@ export function applyObservatoryCamerasSnapshot(state: ObservatoryCamerasState, 
 }
 
 // Fetches the snapshot again; called on every socket (re)open, since the cameras may have changed while it was closed.
-export async function refreshObservatoryCameras(state: ObservatoryCamerasState, request: typeof fetch = fetch) {
+export async function refreshObservatoryCameras(state: ObservatoryCamerasState, request: ApiFetch = browserFetch) {
 	const current = ++generation
 
 	try {
@@ -154,7 +154,7 @@ function keep(state: ObservatoryCamerasState, camera: ObservatoryCamera) {
 }
 
 // Saves a camera edited from revision (0 to create); an empty source keeps the saved address.
-export async function saveCamera(state: ObservatoryCamerasState, id: string, draft: CameraDraft, revision: number, sortOrder?: number, request: typeof fetch = fetch): Promise<CameraSaveResult> {
+export async function saveCamera(state: ObservatoryCamerasState, id: string, draft: CameraDraft, revision: number, sortOrder?: number, request: ApiFetch = browserFetch): Promise<CameraSaveResult> {
 	const body: ObservatoryCameraSaveRequest = { ...draft, source: draft.source?.trim() || undefined, revision, ...(sortOrder !== undefined && { sortOrder }) }
 
 	try {
@@ -184,7 +184,7 @@ export async function saveCamera(state: ObservatoryCamerasState, id: string, dra
 }
 
 // Deletes a camera. Returns an error message, or undefined once deleted.
-export async function removeCamera(state: ObservatoryCamerasState, id: string, request: typeof fetch = fetch): Promise<string | undefined> {
+export async function removeCamera(state: ObservatoryCamerasState, id: string, request: ApiFetch = browserFetch): Promise<string | undefined> {
 	try {
 		const response = await request(cameraUrl(id), { method: 'DELETE' })
 		if (!response.ok) return await responseError(response)
@@ -198,7 +198,7 @@ export async function removeCamera(state: ObservatoryCamerasState, id: string, r
 
 // Swaps the position of a camera with its neighbor in direction (-1 up, 1 down) among cameras, saving both. Returns an
 // error message, or undefined once both are saved.
-export async function moveCamera(state: ObservatoryCamerasState, cameras: readonly ObservatoryCamera[], id: string, direction: -1 | 1, request: typeof fetch = fetch): Promise<string | undefined> {
+export async function moveCamera(state: ObservatoryCamerasState, cameras: readonly ObservatoryCamera[], id: string, direction: -1 | 1, request: ApiFetch = browserFetch): Promise<string | undefined> {
 	const index = cameras.findIndex((camera) => camera.id === id)
 	const other = cameras[index + direction]
 	if (index < 0 || !other) return undefined

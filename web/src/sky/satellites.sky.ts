@@ -1,5 +1,5 @@
 import type { SatelliteTrack, SatelliteTracksResponse } from 'api'
-import { jsonInit } from '../http'
+import { type ApiFetch, browserFetch, jsonInit } from '../http'
 import { type GeographicLocation, siteObserver } from '../location/site'
 import type { Celestial, CelestialShape, MovingBody } from './celestial/celestial'
 import { refKey } from './objects'
@@ -71,7 +71,7 @@ export class SatelliteLayer {
 	constructor(
 		private readonly celestial: Celestial,
 		private readonly map: SatelliteMap,
-		private readonly fetch: (input: string, init?: RequestInit) => Promise<Response> = (input, init) => globalThis.fetch(input, init),
+		private readonly fetch: ApiFetch = browserFetch,
 	) {}
 
 	// Sets what is drawn; samples are asked for again when the satellites, the observer, or the catalog changed.

@@ -2,7 +2,7 @@ import type { MeteorRadiantPath, MeteorShowerDetail, MeteorShowerStates } from '
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDateTime, formatDegrees, formatPercent } from '../../format'
-import { fetchJson, jsonInit } from '../../http'
+import { browserFetch, fetchJson, jsonInit } from '../../http'
 import { siteObserver, type SiteLocation } from '../../location/site'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { openMeteorShower } from '../../tools/meteorshowers/meteorshowers'
@@ -31,7 +31,7 @@ import type { SkySelection } from '../sky'
 const STATE_STEP_MS = 60_000
 
 // Requests of the inspector, through the browser's fetch.
-const browserFetch = { fetch: (input: string, init?: RequestInit) => fetch(input, init) }
+const INSPECTOR_IO = { fetch: browserFetch }
 
 // Guard of the state requests of the inspector, each superseding its previous one.
 const stateGuard = createRequestGuard()
@@ -74,7 +74,7 @@ export function MeteorShowerInspector({ selection, observer, onSetObserver, time
 	useEffect(() => {
 		const request = detailGuard.begin()
 		setDetail(undefined)
-		fetchJson<MeteorShowerDetail>(browserFetch, `/api/meteor-showers/${encodeURIComponent(id)}`, { signal: request.signal }).then(
+		fetchJson<MeteorShowerDetail>(INSPECTOR_IO, `/api/meteor-showers/${encodeURIComponent(id)}`, { signal: request.signal }).then(
 			(answer) => request.current() && setDetail(answer),
 			(cause: unknown) => request.current() && setError(cause instanceof Error ? cause.message : String(cause)),
 		)
@@ -86,7 +86,7 @@ export function MeteorShowerInspector({ selection, observer, onSetObserver, time
 
 	useEffect(() => {
 		const controller = new AbortController()
-		fetchJson<MeteorRadiantPath>(browserFetch, `/api/meteor-showers/${encodeURIComponent(id)}/path`, jsonInit('POST', { time }, controller.signal)).then(
+		fetchJson<MeteorRadiantPath>(INSPECTOR_IO, `/api/meteor-showers/${encodeURIComponent(id)}/path`, jsonInit('POST', { time }, controller.signal)).then(
 			(answer) => !controller.signal.aborted && setPath(answer),
 			() => !controller.signal.aborted && setPath(undefined),
 		)
@@ -96,7 +96,7 @@ export function MeteorShowerInspector({ selection, observer, onSetObserver, time
 	// The state follows the shower, the instant, the site's place, and the catalog.
 	useEffect(() => {
 		const request = stateGuard.begin()
-		fetchJson<MeteorShowerStates>(browserFetch, '/api/meteor-showers/states', jsonInit('POST', { ids: [id], time, observer: siteObserver(observer) }, request.signal)).then(
+		fetchJson<MeteorShowerStates>(INSPECTOR_IO, '/api/meteor-showers/states', jsonInit('POST', { ids: [id], time, observer: siteObserver(observer) }, request.signal)).then(
 			(answer) => {
 				if (!request.current()) return
 				setStates(answer)

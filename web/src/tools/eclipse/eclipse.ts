@@ -1,4 +1,5 @@
 import { formatFixed, MISSING } from '../../format'
+import { type ApiFetch, browserFetch } from '../../http'
 import type { GeographicLocation, ToolLocation } from '../../location/site'
 
 // Place and formatting rules shared by the Lunar and Solar Eclipse Map tools. Each tool observes from a ToolLocation
@@ -18,14 +19,14 @@ export interface EclipsePlace {
 // Browser services an eclipse tool uses, replaced in tests.
 export interface EclipseIo {
 	// Performs HTTP requests to the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 	// Real current time, Unix milliseconds (UTC); never the Sky simulation clock.
 	readonly time: () => number
 }
 
 // Browser implementation of EclipseIo.
 export const browserEclipseIo: EclipseIo = {
-	fetch: (input, init) => fetch(input, init),
+	fetch: browserFetch,
 	time: () => Date.now(),
 }
 

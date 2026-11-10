@@ -2,7 +2,7 @@ import type { AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoF
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
 import type { AutoFocusSettings, CameraExposureSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { DEFAULT_APERTURE_RADIUS } from '../stars/stars'
@@ -141,27 +141,27 @@ export function autoFocusRequest(
 }
 
 // Applies a Auto Focus event (applySession); any other event is ignored.
-export function handleAutoFocusEvent(state: AutoFocusRuntime, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleAutoFocusEvent(state: AutoFocusRuntime, event: ServerEvent, request: ApiFetch = browserFetch) {
 	if (event.type === 'autofocus:updated') applySession(state, AUTO_FOCUS_SESSIONS, event.session, request)
 }
 
 // Replaces the sessions with the server's snapshot and fetches their complete records (refreshSessionRecords).
-export function refreshAutoFocus(state: AutoFocusRuntime, request: typeof fetch = fetch) {
+export function refreshAutoFocus(state: AutoFocusRuntime, request: ApiFetch = browserFetch) {
 	return refreshSessionRecords(state, AUTO_FOCUS_SESSIONS, request)
 }
 
 // Sends a command of a camera (sendSessionCommand).
-function command(state: AutoFocusRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
+function command(state: AutoFocusRuntime, key: string, url: string, body: unknown, request: ApiFetch) {
 	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshAutoFocus(state, request), request)
 }
 
 // Starts an Auto Focus with a camera; its progress arrives as events.
-export function startAutoFocus(state: AutoFocusRuntime, connectionId: string, deviceId: string, body: Omit<AutoFocusRequest, 'token'>, request: typeof fetch = fetch) {
+export function startAutoFocus(state: AutoFocusRuntime, connectionId: string, deviceId: string, body: Omit<AutoFocusRequest, 'token'>, request: ApiFetch = browserFetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'autofocus')
 	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: nanoid() } satisfies AutoFocusRequest, request)
 }
 
 // Stops the session of a camera where it stands; the focuser is not moved back.
-export function stopAutoFocus(state: AutoFocusRuntime, session: Pick<AutoFocusSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function stopAutoFocus(state: AutoFocusRuntime, session: Pick<AutoFocusSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/autofocus/${encodeURIComponent(session.sessionId)}/stop`, undefined, request)
 }

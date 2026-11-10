@@ -1,7 +1,7 @@
 import type { DomeMotionSession, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
-import { deviceUrl } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl } from '../http'
 import { followPress, type Press, refreshPressSessions, releasePress, type SessionHolder, startPress } from '../press'
 import { SnapshotRefreshes } from '../refresh'
 
@@ -57,13 +57,13 @@ export function domeMotionEndProblem(session: DomeMotionSession): string | undef
 }
 
 // Starts a press of a dome in a direction; ignored while this tab already holds a press.
-export async function pressDomeMotion(runtime: DomeMotionRuntime, connectionId: string, deviceId: string, direction: DomeDirection, request: typeof fetch = fetch) {
+export async function pressDomeMotion(runtime: DomeMotionRuntime, connectionId: string, deviceId: string, direction: DomeDirection, request: ApiFetch = browserFetch) {
 	const url = deviceUrl(connectionId, 'dome', deviceId, 'motion')
 	await startPress(runtime, { token: nanoid(), connectionId, deviceId, direction, phase: 'starting' }, url, { direction }, motionPath, request)
 }
 
 // Releases the press of this tab, if any, and resolves once the server answered.
-export async function releaseDomeMotion(runtime: DomeMotionRuntime, request: typeof fetch = fetch) {
+export async function releaseDomeMotion(runtime: DomeMotionRuntime, request: ApiFetch = browserFetch) {
 	await releasePress(runtime, motionPath, UNREACHABLE, request)
 }
 
@@ -86,6 +86,6 @@ export function handleDomeMotionEvent(runtime: DomeMotionRuntime, event: ServerE
 
 // Replaces the running sessions with the server's list, which may have changed while the socket was closed, leaving
 // what an event changed meanwhile, and forgets a press of this tab that no longer runs (refreshPressSessions).
-export function refreshDomeMotions(runtime: DomeMotionRuntime, request: typeof fetch = fetch) {
+export function refreshDomeMotions(runtime: DomeMotionRuntime, request: ApiFetch = browserFetch) {
 	return refreshPressSessions(runtime, '/api/domes/motions', ({ connectionId, deviceId }: DomeMotionSession) => domeKey(connectionId, deviceId), refreshes, request)
 }

@@ -1,5 +1,6 @@
 import type { IndiDeviceEvent, IndiDeviceSummary, ServerEvent } from 'api'
 import { proxy } from 'valtio'
+import { type ApiFetch, browserFetch } from '../../http'
 
 // Mirror of the INDI device directory of the watched connection: every physical device the connection
 // reports, managed by Nebulosa or not, without any property value. Fed by GET
@@ -27,7 +28,7 @@ let queued: IndiDeviceEvent[] = []
 
 // Fetches the directory of the watched connection; a response is dropped when the watched connection changed or
 // another fetch started meanwhile.
-export async function refreshIndiDirectory(state: IndiDirectoryState, request: typeof fetch = fetch) {
+export async function refreshIndiDirectory(state: IndiDirectoryState, request: ApiFetch = browserFetch) {
 	const connectionId = state.watched
 	const current = ++generation
 
@@ -54,7 +55,7 @@ export async function refreshIndiDirectory(state: IndiDirectoryState, request: t
 }
 
 // Lists the devices of another connection, or none.
-export function watchIndiDirectory(state: IndiDirectoryState, connectionId: string | undefined, request: typeof fetch = fetch) {
+export function watchIndiDirectory(state: IndiDirectoryState, connectionId: string | undefined, request: ApiFetch = browserFetch) {
 	if (state.watched === connectionId) return
 	state.watched = connectionId
 	state.devices = []
@@ -64,7 +65,7 @@ export function watchIndiDirectory(state: IndiDirectoryState, connectionId: stri
 
 // Applies a server event: the directory events of the watched connection, and the watched connection opening
 // again or closing.
-export function handleIndiDirectoryEvent(state: IndiDirectoryState, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleIndiDirectoryEvent(state: IndiDirectoryState, event: ServerEvent, request: ApiFetch = browserFetch) {
 	switch (event.type) {
 		case 'connection:open':
 			if (event.connection.id === state.watched) void refreshIndiDirectory(state, request)

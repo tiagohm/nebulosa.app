@@ -1,7 +1,7 @@
 import type { MountSlewResponse, MountState, OperationRecord, SkyObjectRef, SkyObserver } from 'api'
 import { proxy } from 'valtio'
 import { type ControlRuntime, watchedDeviceState } from '../equipment-control/control'
-import { deviceUrl, jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit, responseError } from '../http'
 import { type OperationsState, runningOn } from '../operations'
 import { multiplyMatrixVector, writeEquatorialToHorizontalMatrix, writeRaDecUnitVector } from './celestial/geometry'
 import type { ObserverLocation } from './celestial/types'
@@ -141,7 +141,7 @@ export function slewBlocker(runtime: Pick<MountView, 'target' | 'state' | 'sendi
 // Asks the server to slew the followed mount to an object, resolved by the server at its current time
 // for the observer. On acceptance the slew is recorded and its outcome arrives as operation:updated events;
 // on refusal the server's reason is kept in error.
-export async function slewMount(runtime: MountRuntime, target: SkyObjectRef, targetName: string, observer: SkyObserver, request: typeof fetch = fetch) {
+export async function slewMount(runtime: MountRuntime, target: SkyObjectRef, targetName: string, observer: SkyObserver, request: ApiFetch = browserFetch) {
 	const mount = runtime.target
 	if (!mount || runtime.sending) return
 
@@ -167,7 +167,7 @@ export async function slewMount(runtime: MountRuntime, target: SkyObjectRef, tar
 }
 
 // Asks the server to abort the operation of the followed mount and stop its motion.
-export async function stopMount(runtime: MountRuntime, request: typeof fetch = fetch) {
+export async function stopMount(runtime: MountRuntime, request: ApiFetch = browserFetch) {
 	const mount = runtime.target
 	if (!mount) return
 

@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import { proxy, ref } from 'valtio'
 import { deviceState } from '../equipment/equipment'
 import { clientId } from '../events'
-import { jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 import type { AstrometricMarker, AstrometrySelection, AstrometryTarget, Measurement } from '../platesolving/measurement'
 import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
 import { activeProfile, annotationPreferences, imageDisplaySettings, imageProcessingPipeline, profileCamera, profileState, setImageDisplaySettings } from '../profile/profile'
@@ -269,7 +269,7 @@ export interface ImagesState {
 // Browser services the store uses, replaced in tests.
 export interface ImagesIo {
 	// Performs HTTP requests to the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 	// Creates an object URL for a rendered JPEG.
 	readonly createObjectURL: (blob: Blob) => string
 	// Releases an object URL.
@@ -310,7 +310,7 @@ function displayScope(source: ImageSource) {
 
 // Browser implementation of ImagesIo, keeping display settings in the active profile.
 export const browserIo: ImagesIo = {
-	fetch: (input, init) => fetch(input, init),
+	fetch: browserFetch,
 	createObjectURL: (blob) => URL.createObjectURL(blob),
 	revokeObjectURL: (url) => URL.revokeObjectURL(url),
 	loadDisplay: (source) => {

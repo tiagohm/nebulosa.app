@@ -1,6 +1,6 @@
 import type { LocalSolarEclipse, SkyObserver, SolarEclipseSummary, SunActiveRegionsResponse, SunAlmanacResponse, SunImageChannel, SunImageSize } from 'api'
 import { proxy } from 'valtio'
-import { fetchJson, jsonInit, responseError } from '../../http'
+import { type ApiFetch, browserFetch, fetchJson, jsonInit, responseError } from '../../http'
 import { zonedWallTime } from '../../location/zone'
 import { createRequestGuard } from '../selection'
 
@@ -88,7 +88,7 @@ export interface SunState {
 // Browser services the store uses, replaced in tests.
 export interface SunIo {
 	// Performs HTTP requests to the API.
-	readonly fetch: (input: string, init?: RequestInit) => Promise<Response>
+	readonly fetch: ApiFetch
 	// Creates an object URL of a blob.
 	readonly createObjectURL: (blob: Blob) => string
 	// Releases an object URL.
@@ -97,7 +97,7 @@ export interface SunIo {
 
 // Browser implementation of SunIo.
 export const browserSunIo: SunIo = {
-	fetch: (input, init) => fetch(input, init),
+	fetch: browserFetch,
 	createObjectURL: (blob) => URL.createObjectURL(blob),
 	revokeObjectURL: (url) => URL.revokeObjectURL(url),
 }

@@ -1,6 +1,6 @@
 import type { FocuserBacklashConfig, FocuserBacklashState, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { deviceUrl, jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit, responseError } from '../http'
 
 // Backlash compensation of the focusers, as the server reports it. The server owns the settings and applies
 // them to every focuser move: this store mirrors the state fetched for each focuser shown and its
@@ -35,7 +35,7 @@ function upsert(state: FocuserBacklashRuntime, backlash: FocuserBacklashState) {
 }
 
 // Fetches the compensation state of a focuser.
-export async function loadFocuserBacklash(state: FocuserBacklashRuntime, connectionId: string, deviceId: string, request: typeof fetch = fetch) {
+export async function loadFocuserBacklash(state: FocuserBacklashRuntime, connectionId: string, deviceId: string, request: ApiFetch = browserFetch) {
 	const key = focuserBacklashKey(connectionId, deviceId)
 
 	try {
@@ -48,7 +48,7 @@ export async function loadFocuserBacklash(state: FocuserBacklashRuntime, connect
 }
 
 // Fetches again the state of every focuser in the store, such as after the socket reopened.
-export async function refreshFocuserBacklash(state: FocuserBacklashRuntime, request: typeof fetch = fetch) {
+export async function refreshFocuserBacklash(state: FocuserBacklashRuntime, request: ApiFetch = browserFetch) {
 	await Promise.all(Object.values(state.states).map(({ connectionId, deviceId }) => loadFocuserBacklash(state, connectionId, deviceId, request)))
 }
 
@@ -58,7 +58,7 @@ export function handleFocuserBacklashEvent(state: FocuserBacklashRuntime, event:
 }
 
 // Saves the compensation of a focuser, edited from revision.
-export async function saveFocuserBacklash(state: FocuserBacklashRuntime, connectionId: string, deviceId: string, config: FocuserBacklashConfig, revision: number, request: typeof fetch = fetch): Promise<FocuserBacklashSaveResult> {
+export async function saveFocuserBacklash(state: FocuserBacklashRuntime, connectionId: string, deviceId: string, config: FocuserBacklashConfig, revision: number, request: ApiFetch = browserFetch): Promise<FocuserBacklashSaveResult> {
 	try {
 		const response = await request(deviceUrl(connectionId, 'focuser', deviceId, 'backlash'), jsonInit('PUT', { config, revision }))
 

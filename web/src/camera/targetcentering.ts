@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid'
 import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
 import type { RoleAvailability } from '../equipment/availability'
-import { deviceUrl, jsonInit } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit } from '../http'
 import type { CameraExposureSettings, CameraPlateSolvingSettings, TargetCenteringSettings } from '../profile/schema'
 import { SnapshotRefreshes } from '../refresh'
 import { cameraKey, fitExposure } from './capture'
@@ -159,27 +159,27 @@ function solvedCount({ attempts }: Pick<TargetCenteringSessionSummary, 'attempts
 }
 
 // Applies a Target Centering event (applySession); any other event is ignored.
-export function handleTargetCenteringEvent(state: TargetCenteringRuntime, event: ServerEvent, request: typeof fetch = fetch) {
+export function handleTargetCenteringEvent(state: TargetCenteringRuntime, event: ServerEvent, request: ApiFetch = browserFetch) {
 	if (event.type === 'targetCentering:updated') applySession(state, TARGET_CENTERING_SESSIONS, event.session, request)
 }
 
 // Replaces the sessions with the server's snapshot and fetches their complete records (refreshSessionRecords).
-export function refreshTargetCentering(state: TargetCenteringRuntime, request: typeof fetch = fetch) {
+export function refreshTargetCentering(state: TargetCenteringRuntime, request: ApiFetch = browserFetch) {
 	return refreshSessionRecords(state, TARGET_CENTERING_SESSIONS, request)
 }
 
 // Sends a command of a camera (sendSessionCommand).
-function command(state: TargetCenteringRuntime, key: string, url: string, body: unknown, request: typeof fetch) {
+function command(state: TargetCenteringRuntime, key: string, url: string, body: unknown, request: ApiFetch) {
 	return sendSessionCommand(state, key, url, jsonInit('POST', body), () => refreshTargetCentering(state, request), request)
 }
 
 // Starts a session with a camera; its progress arrives as events.
-export function startTargetCentering(state: TargetCenteringRuntime, connectionId: string, deviceId: string, body: Omit<TargetCenteringRequest, 'token'>, request: typeof fetch = fetch) {
+export function startTargetCentering(state: TargetCenteringRuntime, connectionId: string, deviceId: string, body: Omit<TargetCenteringRequest, 'token'>, request: ApiFetch = browserFetch) {
 	const url = deviceUrl(connectionId, 'camera', deviceId, 'target-centering')
 	return command(state, cameraKey(connectionId, deviceId), url, { ...body, token: nanoid() } satisfies TargetCenteringRequest, request)
 }
 
 // Stops the session of a camera, or dismisses a blocked one.
-export function stopTargetCentering(state: TargetCenteringRuntime, session: Pick<TargetCenteringSessionSummary, 'sessionId' | 'camera'>, request: typeof fetch = fetch) {
+export function stopTargetCentering(state: TargetCenteringRuntime, session: Pick<TargetCenteringSessionSummary, 'sessionId' | 'camera'>, request: ApiFetch = browserFetch) {
 	return command(state, cameraKey(session.camera.connectionId, session.camera.deviceId), `/api/target-centering/${encodeURIComponent(session.sessionId)}/stop`, undefined, request)
 }

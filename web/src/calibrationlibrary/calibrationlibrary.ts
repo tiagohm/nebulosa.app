@@ -20,7 +20,7 @@ import type {
 } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
-import { jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError, tryFetchJson } from '../http'
 
 // The Calibration Library as this tab knows it. The server owns every frame, master, and job, so this store only mirrors
 // them: a snapshot on every socket (re)open and on every change event, jobs as they change (which no list shows: a group
@@ -132,22 +132,12 @@ export function handleCalibrationLibraryEvent(state: CalibrationLibraryRuntime, 
 }
 
 // Fetches the snapshot; the server being away leaves what is known.
-export async function refreshCalibrationLibrary(state: CalibrationLibraryRuntime, request: typeof fetch = fetch) {
+export async function refreshCalibrationLibrary(state: CalibrationLibraryRuntime, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request(BASE_URL)
 		if (response.ok) applySummary(state, (await response.json()) as CalibrationLibrarySnapshot)
 	} catch {
 		// The server is unreachable; the next socket open refreshes the snapshot.
-	}
-}
-
-// Fetches JSON, returning undefined when it failed.
-async function fetchJson<T>(url: string, request: typeof fetch) {
-	try {
-		const response = await request(url)
-		return response.ok ? ((await response.json()) as T) : undefined
-	} catch {
-		return undefined
 	}
 }
 
@@ -159,31 +149,31 @@ function query(filter: CalibrationFilter, page: number) {
 }
 
 // Fetches a page of a list, and applies it unless a newer request of that list replaced it.
-async function loadPage(state: CalibrationLibraryRuntime, key: string, url: string, request: typeof fetch, apply: (page: unknown) => void) {
+async function loadPage(state: CalibrationLibraryRuntime, key: string, url: string, request: ApiFetch, apply: (page: unknown) => void) {
 	const number = (requests[key] = (requests[key] ?? 0) + 1)
 	state.loading = true
-	const page = await fetchJson<unknown>(url, request)
+	const page = await tryFetchJson<unknown>(url, request)
 	if (requests[key] !== number) return
 	state.loading = false
 	if (page) apply(page)
 }
 
 // Fetches a page of groups.
-export function loadCalibrationGroups(state: CalibrationLibraryRuntime, filter: CalibrationFilter, page: number, request: typeof fetch = fetch) {
+export function loadCalibrationGroups(state: CalibrationLibraryRuntime, filter: CalibrationFilter, page: number, request: ApiFetch = browserFetch) {
 	return loadPage(state, 'groups', `${BASE_URL}/groups?${query(filter, page)}`, request, (groups) => {
 		state.groups = groups as Page<CalibrationGroupSummary>
 	})
 }
 
 // Fetches a page of frames.
-export function loadCalibrationSources(state: CalibrationLibraryRuntime, filter: CalibrationFilter, page: number, request: typeof fetch = fetch) {
+export function loadCalibrationSources(state: CalibrationLibraryRuntime, filter: CalibrationFilter, page: number, request: ApiFetch = browserFetch) {
 	return loadPage(state, 'sources', `${BASE_URL}/sources?${query(filter, page)}`, request, (sources) => {
 		state.sources = sources as Page<CalibrationSourceSummary>
 	})
 }
 
 // Fetches a page of masters.
-export function loadCalibrationMasters(state: CalibrationLibraryRuntime, filter: CalibrationFilter, page: number, request: typeof fetch = fetch) {
+export function loadCalibrationMasters(state: CalibrationLibraryRuntime, filter: CalibrationFilter, page: number, request: ApiFetch = browserFetch) {
 	return loadPage(state, 'masters', `${BASE_URL}/masters?${query({ kind: filter.kind, camera: filter.camera }, page)}`, request, (masters) => {
 		state.masters = masters as Page<CalibrationMasterSummary>
 	})
@@ -196,8 +186,8 @@ const FLAT_CORRECTION_KINDS = ['darkFlat', 'bias'] as const
 const FLAT_CORRECTIONS_LIMIT = 100
 
 // Fetches the masters that can correct a flat, dark-flats first, then biases; a kind that cannot be fetched offers none.
-export async function loadFlatCorrections(request: typeof fetch = fetch): Promise<CalibrationMasterSummary[]> {
-	const pages = await Promise.all(FLAT_CORRECTION_KINDS.map((kind) => fetchJson<Page<CalibrationMasterSummary>>(`${BASE_URL}/masters?kind=${kind}&limit=${FLAT_CORRECTIONS_LIMIT}`, request)))
+export async function loadFlatCorrections(request: ApiFetch = browserFetch): Promise<CalibrationMasterSummary[]> {
+	const pages = await Promise.all(FLAT_CORRECTION_KINDS.map((kind) => tryFetchJson<Page<CalibrationMasterSummary>>(`${BASE_URL}/masters?kind=${kind}&limit=${FLAT_CORRECTIONS_LIMIT}`, request)))
 	return pages.flatMap((page) => page?.items ?? [])
 }
 
@@ -211,25 +201,25 @@ async function loadDetail<T>(key: string, load: (() => Promise<T | undefined>) |
 }
 
 // Fetches a group and its frames; one the server does not know is forgotten.
-export async function loadCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string | undefined, request: typeof fetch = fetch) {
-	const answer = await loadDetail('group', groupId === undefined ? undefined : () => fetchJson<CalibrationGroupDetail>(`${BASE_URL}/groups/${encodeURIComponent(groupId)}`, request))
+export async function loadCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string | undefined, request: ApiFetch = browserFetch) {
+	const answer = await loadDetail('group', groupId === undefined ? undefined : () => tryFetchJson<CalibrationGroupDetail>(`${BASE_URL}/groups/${encodeURIComponent(groupId)}`, request))
 	if (answer) state.group = answer.value
 }
 
 // Fetches a master; absent clears it.
-export async function loadCalibrationMaster(state: CalibrationLibraryRuntime, masterId: number | undefined, request: typeof fetch = fetch) {
-	const answer = await loadDetail('master', masterId === undefined ? undefined : () => fetchJson<CalibrationMasterDetail>(`${BASE_URL}/masters/${masterId}`, request))
+export async function loadCalibrationMaster(state: CalibrationLibraryRuntime, masterId: number | undefined, request: ApiFetch = browserFetch) {
+	const answer = await loadDetail('master', masterId === undefined ? undefined : () => tryFetchJson<CalibrationMasterDetail>(`${BASE_URL}/masters/${masterId}`, request))
 	if (answer) state.master = answer.value
 }
 
 // Fetches a frame; absent clears it.
-export async function loadCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string | undefined, request: typeof fetch = fetch) {
-	const answer = await loadDetail('source', sourceId === undefined ? undefined : () => fetchJson<CalibrationSource>(`${BASE_URL}/sources/${encodeURIComponent(sourceId)}`, request))
+export async function loadCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string | undefined, request: ApiFetch = browserFetch) {
+	const answer = await loadDetail('source', sourceId === undefined ? undefined : () => tryFetchJson<CalibrationSource>(`${BASE_URL}/sources/${encodeURIComponent(sourceId)}`, request))
 	if (answer) state.source = answer.value
 }
 
 // Sends a command and records its failure. Resolves its JSON answer, or undefined when it failed.
-async function command<T>(state: CalibrationLibraryRuntime, key: string, url: string, init: RequestInit, request: typeof fetch): Promise<T | undefined> {
+async function command<T>(state: CalibrationLibraryRuntime, key: string, url: string, init: RequestInit, request: ApiFetch): Promise<T | undefined> {
 	if (state.pending[key]) return undefined
 	state.pending[key] = true
 	delete state.errors[key]
@@ -252,7 +242,7 @@ async function command<T>(state: CalibrationLibraryRuntime, key: string, url: st
 }
 
 // Explains a recipe, starting nothing. Resolves undefined when the server cannot be reached.
-export async function validateRecipe(body: MasterRequest, request: typeof fetch = fetch) {
+export async function validateRecipe(body: MasterRequest, request: ApiFetch = browserFetch) {
 	try {
 		const response = await request(`${BASE_URL}/recipes/validate`, jsonInit('POST', body))
 		return response.ok ? ((await response.json()) as RecipeValidation) : undefined
@@ -262,56 +252,56 @@ export async function validateRecipe(body: MasterRequest, request: typeof fetch 
 }
 
 // Requests a new master, and its token keeps a retried request from starting another; its progress arrives as events.
-export function buildMaster(state: CalibrationLibraryRuntime, key: string, body: MasterRequest, request: typeof fetch = fetch) {
+export function buildMaster(state: CalibrationLibraryRuntime, key: string, body: MasterRequest, request: ApiFetch = browserFetch) {
 	return command<MasterRequestResult>(state, key, `${BASE_URL}/masters`, jsonInit('POST', { ...body, token: nanoid() } satisfies MasterRequest), request)
 }
 
 // Deletes a master and its file.
-export function deleteCalibrationMaster(state: CalibrationLibraryRuntime, masterId: number, request: typeof fetch = fetch) {
+export function deleteCalibrationMaster(state: CalibrationLibraryRuntime, masterId: number, request: ApiFetch = browserFetch) {
 	return command(state, `master:${masterId}`, `${BASE_URL}/masters/${masterId}`, { method: 'DELETE' }, request)
 }
 
 // Deletes a frame with its file.
-export function deleteCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, request: typeof fetch = fetch) {
+export function deleteCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, request: ApiFetch = browserFetch) {
 	return command<{ readonly deleted: number }>(state, `source:${sourceId}`, `${BASE_URL}/sources/${encodeURIComponent(sourceId)}`, { method: 'DELETE' }, request)
 }
 
 // Deletes a group with the files of its frames.
-export function deleteCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string, request: typeof fetch = fetch) {
+export function deleteCalibrationGroup(state: CalibrationLibraryRuntime, groupId: string, request: ApiFetch = browserFetch) {
 	return command<{ readonly deleted: number }>(state, `delete:${groupId}`, `${BASE_URL}/groups/${encodeURIComponent(groupId)}`, { method: 'DELETE' }, request)
 }
 
 // Cancels the scan of an import.
-export function cancelCalibrationImport(state: CalibrationLibraryRuntime, jobId: string, request: typeof fetch = fetch) {
+export function cancelCalibrationImport(state: CalibrationLibraryRuntime, jobId: string, request: ApiFetch = browserFetch) {
 	return command(state, `import:${jobId}`, `${BASE_URL}/imports/${encodeURIComponent(jobId)}/cancel`, jsonInit('POST'), request)
 }
 
 // Starts scanning a directory of the server; its progress arrives as events.
-export function startCalibrationImport(state: CalibrationLibraryRuntime, paths: readonly string[], recursive: boolean, request: typeof fetch = fetch) {
+export function startCalibrationImport(state: CalibrationLibraryRuntime, paths: readonly string[], recursive: boolean, request: ApiFetch = browserFetch) {
 	return command<CalibrationJobSummary>(state, 'import', `${BASE_URL}/imports`, jsonInit('POST', { paths, recursive }), request)
 }
 
 // Fetches what an import found.
-export function loadImportCandidates(jobId: string, page: number, request: typeof fetch = fetch) {
-	return fetchJson<ImportCandidatePage>(`${BASE_URL}/imports/${encodeURIComponent(jobId)}/candidates?${query({}, page)}`, request)
+export function loadImportCandidates(jobId: string, page: number, request: ApiFetch = browserFetch) {
+	return tryFetchJson<ImportCandidatePage>(`${BASE_URL}/imports/${encodeURIComponent(jobId)}/candidates?${query({}, page)}`, request)
 }
 
 // Adds reviewed files to the library.
-export function commitCalibrationImport(state: CalibrationLibraryRuntime, jobId: string, body: ImportCommit, request: typeof fetch = fetch) {
+export function commitCalibrationImport(state: CalibrationLibraryRuntime, jobId: string, body: ImportCommit, request: ApiFetch = browserFetch) {
 	return command<{ readonly committed: number }>(state, 'import', `${BASE_URL}/imports/${encodeURIComponent(jobId)}/commit`, jsonInit('POST', body), request)
 }
 
 // Declares a value a frame does not state.
-export function overrideCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, field: OverridableField, value: string | number, request: typeof fetch = fetch) {
+export function overrideCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, field: OverridableField, value: string | number, request: ApiFetch = browserFetch) {
 	return command(state, `source:${sourceId}`, `${BASE_URL}/sources/${encodeURIComponent(sourceId)}/overrides`, jsonInit('POST', { field, value }), request)
 }
 
 // Leaves a frame out of masters, or brings it back.
-export function excludeCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, excluded: boolean, request: typeof fetch = fetch) {
+export function excludeCalibrationSource(state: CalibrationLibraryRuntime, sourceId: string, excluded: boolean, request: ApiFetch = browserFetch) {
 	return command(state, `source:${sourceId}`, `${BASE_URL}/sources/${encodeURIComponent(sourceId)}/exclusion`, jsonInit('POST', { excluded }), request)
 }
 
 // Compares every indexed file with the disk.
-export function refreshCalibrationFiles(state: CalibrationLibraryRuntime, request: typeof fetch = fetch) {
+export function refreshCalibrationFiles(state: CalibrationLibraryRuntime, request: ApiFetch = browserFetch) {
 	return command(state, 'refresh', `${BASE_URL}/refresh`, jsonInit('POST'), request)
 }

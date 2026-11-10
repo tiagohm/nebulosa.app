@@ -1,7 +1,7 @@
 import type { MountNudgeDirection, MountNudgeSession, MountState, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
-import { deviceUrl, jsonInit, responseError } from '../http'
+import { type ApiFetch, browserFetch, deviceUrl, jsonInit, responseError } from '../http'
 import { followPress, type Press, pressRunning, refreshPressSessions, releasePress, startPress, stopPress } from '../press'
 import { SnapshotRefreshes } from '../refresh'
 
@@ -114,7 +114,7 @@ export function nudgeEndProblem(session: MountNudgeSession): string | undefined 
 
 // Follows another mount, or none. A press held on the previous mount is released and everything known about the
 // previous mount is dropped. The same mount changes nothing.
-export function watchNudgeMount(runtime: NudgeRuntime, target: NudgeTarget | undefined, request: typeof fetch = fetch) {
+export function watchNudgeMount(runtime: NudgeRuntime, target: NudgeTarget | undefined, request: ApiFetch = browserFetch) {
 	if (sameTarget(runtime.target, target)) return
 
 	void releaseNudge(runtime, request)
@@ -124,7 +124,7 @@ export function watchNudgeMount(runtime: NudgeRuntime, target: NudgeTarget | und
 
 // Replaces the running sessions with the server's list, which may have changed while the socket was closed, leaving
 // what an event changed meanwhile, and forgets a press of this tab that no longer runs (refreshPressSessions).
-export function refreshNudges(runtime: NudgeRuntime, request: typeof fetch = fetch) {
+export function refreshNudges(runtime: NudgeRuntime, request: ApiFetch = browserFetch) {
 	return refreshPressSessions(runtime, '/api/mounts/nudges', ({ connectionId, deviceId }: MountNudgeSession) => nudgeKey(connectionId, deviceId), refreshes, request)
 }
 
@@ -150,7 +150,7 @@ export function handleNudgeEvent(runtime: NudgeRuntime, event: ServerEvent) {
 // Starts a press of the followed mount in a direction. Ignored while this tab already holds a press, so
 // a second button cannot combine with the first. Heartbeats renew it at the server's interval from its
 // start response on; a press released before that response was already stopped by its token.
-export async function pressNudge(runtime: NudgeRuntime, direction: MountNudgeDirection, request: typeof fetch = fetch) {
+export async function pressNudge(runtime: NudgeRuntime, direction: MountNudgeDirection, request: ApiFetch = browserFetch) {
 	const target = runtime.target
 	if (!target || runtime.press) return
 
@@ -161,13 +161,13 @@ export async function pressNudge(runtime: NudgeRuntime, direction: MountNudgeDir
 // Releases the press of this tab, if any, and resolves once the server answered. The stop is sent even
 // while the start is still in flight, so the server records the press as ended before it can move, and
 // it is sent with keepalive so it still leaves a page that is being closed.
-export async function releaseNudge(runtime: NudgeRuntime, request: typeof fetch = fetch) {
+export async function releaseNudge(runtime: NudgeRuntime, request: ApiFetch = browserFetch) {
 	await releasePress(runtime, pressPath, UNREACHABLE, request)
 }
 
 // Stops the press of this tab and any nudge running on the followed mount, whichever tab holds it. It
 // stops only nudges: a slew or any other operation of the mount is left alone.
-export async function stopNudges(runtime: NudgeRuntime, request: typeof fetch = fetch) {
+export async function stopNudges(runtime: NudgeRuntime, request: ApiFetch = browserFetch) {
 	const press = runtime.press
 	const target = runtime.target
 	const running = target && runtime.sessions[nudgeKey(target.connectionId, target.id)]
@@ -185,7 +185,7 @@ export async function stopNudges(runtime: NudgeRuntime, request: typeof fetch = 
 
 // Selects the speed preset of the followed mount. The selection shown follows the mount's own report,
 // so it changes only once the driver applied it.
-export async function setNudgeSlewRate(runtime: NudgeRuntime, name: string, request: typeof fetch = fetch) {
+export async function setNudgeSlewRate(runtime: NudgeRuntime, name: string, request: ApiFetch = browserFetch) {
 	const target = runtime.target
 	if (!target || runtime.sending || runtime.press) return
 

@@ -1,7 +1,7 @@
 import type { ExecutorEligibility, FlipVerification, FlipVerificationMode, MeridianFlipArm, MeridianFlipExecuteRequest, MeridianFlipExecution, MeridianFlipExecutionRequest, MeridianFlipExecutionState, MeridianFlipExecutorSnapshot, MeridianFlipStep, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
-import { jsonInit, responseError } from '../../http'
+import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
 import type { StatusTone } from '../../ui/StatusBadge'
 import { monitorKey } from './meridianflip'
 
@@ -43,7 +43,7 @@ export function applyMeridianFlipExecutorSnapshot(state: MeridianFlipExecutorSta
 }
 
 // Fetches the executions again; called on every socket (re)open.
-export async function refreshMeridianFlipExecutor(state: MeridianFlipExecutorState, request: typeof fetch = fetch) {
+export async function refreshMeridianFlipExecutor(state: MeridianFlipExecutorState, request: ApiFetch = browserFetch) {
 	const current = ++generation
 
 	try {
@@ -90,7 +90,7 @@ export function latestExecution(state: Pick<MeridianFlipExecutorState, 'executio
 
 // Asks the server what would be decided for a request now; starts nothing. Returns the decision, or why it could not be
 // answered.
-export async function meridianFlipEligibility(connectionId: string, deviceId: string, body: Omit<MeridianFlipExecutionRequest, 'token'> & { readonly trigger: 'manual' | 'scheduled' | 'automatic' }, request: typeof fetch = fetch): Promise<{ readonly decision: ExecutorEligibility } | { readonly error: string }> {
+export async function meridianFlipEligibility(connectionId: string, deviceId: string, body: Omit<MeridianFlipExecutionRequest, 'token'> & { readonly trigger: 'manual' | 'scheduled' | 'automatic' }, request: ApiFetch = browserFetch): Promise<{ readonly decision: ExecutorEligibility } | { readonly error: string }> {
 	try {
 		const response = await request(`${executorUrl(connectionId, deviceId)}/eligibility`, jsonInit('POST', { ...body, token: nanoid() }))
 		if (!response.ok) return { error: await responseError(response, 'The flip could not be assessed.') }
@@ -101,27 +101,27 @@ export async function meridianFlipEligibility(connectionId: string, deviceId: st
 }
 
 // Flips a mount now, or once its window opens. Returns whether the server accepted it; a refusal is kept in errors.
-export function executeMeridianFlip(state: MeridianFlipExecutorState, connectionId: string, deviceId: string, mode: MeridianFlipExecuteRequest['mode'], body: Omit<MeridianFlipExecutionRequest, 'token'>, request: typeof fetch = fetch) {
+export function executeMeridianFlip(state: MeridianFlipExecutorState, connectionId: string, deviceId: string, mode: MeridianFlipExecuteRequest['mode'], body: Omit<MeridianFlipExecutionRequest, 'token'>, request: ApiFetch = browserFetch) {
 	return send(state, connectionId, deviceId, 'execute', `${executorUrl(connectionId, deviceId)}/execute`, { ...body, mode, token: nanoid() }, 'The flip could not be started.', request)
 }
 
 // Arms the automatic flip of a mount. Returns whether the server accepted it.
-export function armMeridianFlip(state: MeridianFlipExecutorState, connectionId: string, deviceId: string, body: Omit<MeridianFlipExecutionRequest, 'token'>, request: typeof fetch = fetch) {
+export function armMeridianFlip(state: MeridianFlipExecutorState, connectionId: string, deviceId: string, body: Omit<MeridianFlipExecutionRequest, 'token'>, request: ApiFetch = browserFetch) {
 	return send(state, connectionId, deviceId, 'arm', `${executorUrl(connectionId, deviceId)}/arm`, { ...body, token: nanoid() }, 'The flip could not be armed.', request)
 }
 
 // Removes the arm of a mount; commands nothing. Returns whether the request succeeded.
-export function disarmMeridianFlip(state: MeridianFlipExecutorState, connectionId: string, deviceId: string, request: typeof fetch = fetch) {
+export function disarmMeridianFlip(state: MeridianFlipExecutorState, connectionId: string, deviceId: string, request: ApiFetch = browserFetch) {
 	return send(state, connectionId, deviceId, 'disarm', `${executorUrl(connectionId, deviceId)}/disarm`, undefined, 'The flip could not be disarmed.', request)
 }
 
 // Cancels exactly one execution of a mount. Returns whether the request succeeded.
-export function cancelMeridianFlip(state: MeridianFlipExecutorState, execution: Pick<MeridianFlipExecution, 'sessionId' | 'connectionId' | 'deviceId'>, request: typeof fetch = fetch) {
+export function cancelMeridianFlip(state: MeridianFlipExecutorState, execution: Pick<MeridianFlipExecution, 'sessionId' | 'connectionId' | 'deviceId'>, request: ApiFetch = browserFetch) {
 	return send(state, execution.connectionId, execution.deviceId, 'cancel', `/api/meridian-flip/executions/${encodeURIComponent(execution.sessionId)}/cancel`, undefined, 'The flip could not be cancelled.', request)
 }
 
 // Resumes the capture an execution of a mount left paused, through the capture's own resume route. Returns whether it went on.
-export function resumePausedCapture(state: MeridianFlipExecutorState, execution: Pick<MeridianFlipExecution, 'connectionId' | 'deviceId' | 'setup' | 'captureSessionId'>, request: typeof fetch = fetch) {
+export function resumePausedCapture(state: MeridianFlipExecutorState, execution: Pick<MeridianFlipExecution, 'connectionId' | 'deviceId' | 'setup' | 'captureSessionId'>, request: ApiFetch = browserFetch) {
 	const camera = execution.setup.camera
 	if (!camera || !execution.captureSessionId) return Promise.resolve(false)
 	const url = `/api/connections/${encodeURIComponent(camera.connectionId)}/cameras/${encodeURIComponent(camera.deviceId)}/capture/resume`
@@ -129,7 +129,7 @@ export function resumePausedCapture(state: MeridianFlipExecutorState, execution:
 }
 
 // Sends one request of a mount, one at a time, keeping its refusal in errors.
-async function send(state: MeridianFlipExecutorState, connectionId: string, deviceId: string, action: MeridianFlipExecutorState['pending'][string], url: string, body: unknown, fallback: string, request: typeof fetch) {
+async function send(state: MeridianFlipExecutorState, connectionId: string, deviceId: string, action: MeridianFlipExecutorState['pending'][string], url: string, body: unknown, fallback: string, request: ApiFetch) {
 	const key = monitorKey(connectionId, deviceId)
 	if (state.pending[key]) return false
 

@@ -1,6 +1,6 @@
 import type { MeteorRadiantPath, MeteorShowerStates, MeteorSkyRadiant, MeteorSkyRadiants } from 'api'
 import { TAU } from 'nebulosa/src/core/constants'
-import { jsonInit } from '../http'
+import { type ApiFetch, browserFetch, jsonInit } from '../http'
 import type { Celestial } from './celestial/celestial'
 import { METEOR_RADIANT_SHAPE_TYPE, type MeteorRadiantData, meteorRadiantShapeId } from './objects'
 import { createRequestGuard } from './selection'
@@ -103,7 +103,7 @@ export class MeteorRadiantLayer {
 	constructor(
 		private readonly celestial: Celestial,
 		private readonly map: MeteorRadiantMap,
-		private readonly fetch: (input: string, init?: RequestInit) => Promise<Response> = (input, init) => globalThis.fetch(input, init),
+		private readonly fetch: ApiFetch = browserFetch,
 	) {}
 
 	// Sets what is drawn: a new catalog asks for everything again, a hidden layer drops the active radiants, and another

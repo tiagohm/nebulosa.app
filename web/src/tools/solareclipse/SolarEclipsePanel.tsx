@@ -1,7 +1,7 @@
 import type { LocalViewHandedness, LocalViewOrientationMode } from 'api'
 import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
-import { formatGeographic, formatKilometers, formatLongDateTime, MISSING } from '../../format'
+import { formatGeographic, formatKilometers, formatLongDateTime } from '../../format'
 import { useDisplayZone, useToolLocation } from '../../location/useLocation'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
@@ -9,7 +9,7 @@ import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { formatDuration } from '../eclipse/eclipse'
+import { formatDuration, formatEclipseAngle, formatEclipseMagnitude } from '../eclipse/eclipse'
 import { EclipseLocationSection, EclipseZoneSelect } from '../eclipse/EclipsePanelParts'
 import { GlobalPointIcon } from './GlobalPointMarker'
 import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectMapPlace, selectPoint, setViewSettings, solarEclipseState } from './solareclipse'
@@ -27,11 +27,6 @@ const ORIENTATIONS: readonly LocalViewOrientationMode[] = ['zenith', 'north']
 
 // Handedness of the Local View, in display order.
 const HANDEDNESS: readonly LocalViewHandedness[] = ['eastRight', 'eastLeft']
-
-// Returns an angle in degrees to a tenth, or a dash when it is undefined.
-function angle(value: number | undefined) {
-	return value === undefined ? MISSING : `${value.toFixed(1)}°`
-}
 
 interface GlobalPointRowProps {
 	// Point listed.
@@ -62,8 +57,8 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 				<div className="flex flex-col gap-1.5 border-t border-line-100 px-2 py-2">
 					<Notice>{info.description}</Notice>
 					<DataRow label="Position">{formatGeographic(point.latitude, point.longitude)}</DataRow>
-					{point.sunAltitude !== undefined && <DataRow label="Sun altitude">{point.sunAltitude.toFixed(1)}°</DataRow>}
-					{extreme && <DataRow label="Sun azimuth">{extreme.sunAzimuth.toFixed(1)}°</DataRow>}
+					{point.sunAltitude !== undefined && <DataRow label="Sun altitude">{formatEclipseAngle(point.sunAltitude)}</DataRow>}
+					{extreme && <DataRow label="Sun azimuth">{formatEclipseAngle(extreme.sunAzimuth)}</DataRow>}
 					{extreme?.kind && <DataRow label="Central phase">{extreme.kind === 'annular' ? 'Annular' : 'Total'}</DataRow>}
 					{extreme?.centralDuration !== undefined && <DataRow label="Central duration">{formatDuration(extreme.centralDuration)}</DataRow>}
 					{extreme?.pathWidth !== undefined && <DataRow label="Path width">{formatKilometers(extreme.pathWidth, 1)}</DataRow>}
@@ -135,7 +130,7 @@ export function SolarEclipsePanel() {
 								</span>
 								<span className="text-ink-100">{formatLongDateTime(event.time, timeZone)}</span>
 								<span className={event.observable ? 'text-ink-200' : 'text-ink-300'}>
-									Alt {event.altitude.toFixed(1)}° · P {angle(event.positionAngle)} · Z {angle(event.zenithAngle)} · {event.observable ? 'Above horizon' : 'Below horizon'}
+									Alt {formatEclipseAngle(event.altitude)} · P {formatEclipseAngle(event.positionAngle)} · Z {formatEclipseAngle(event.zenithAngle)} · {event.observable ? 'Above horizon' : 'Below horizon'}
 								</span>
 							</button>
 						)
@@ -145,14 +140,14 @@ export function SolarEclipsePanel() {
 			{eclipse && (
 				<PanelSection title="Details">
 					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
-					<DataRow label="Magnitude">{eclipse.magnitude.toFixed(4)}</DataRow>
-					<DataRow label="Gamma">{eclipse.gamma.toFixed(4)}</DataRow>
+					<DataRow label="Magnitude">{formatEclipseMagnitude(eclipse.magnitude)}</DataRow>
+					<DataRow label="Gamma">{formatEclipseMagnitude(eclipse.gamma)}</DataRow>
 					{greatest && <DataRow label="Greatest eclipse">{formatLongDateTime(greatest.time, timeZone)}</DataRow>}
 					{greatest && <DataRow label="Greatest eclipse at">{formatGeographic(greatest.latitude, greatest.longitude)}</DataRow>}
 					{duration?.centralDuration !== undefined && <DataRow label="Greatest duration">{formatDuration(duration.centralDuration)}</DataRow>}
 					{greatest?.pathWidth !== undefined && <DataRow label="Path width at greatest">{formatKilometers(greatest.pathWidth, 1)}</DataRow>}
-					{local?.details.maximalMagnitude !== undefined && <DataRow label="Magnitude here">{local.details.maximalMagnitude.toFixed(4)}</DataRow>}
-					{local?.details.moonSunDiameterRatio !== undefined && <DataRow label="Moon/Sun diameter">{local.details.moonSunDiameterRatio.toFixed(4)}</DataRow>}
+					{local?.details.maximalMagnitude !== undefined && <DataRow label="Magnitude here">{formatEclipseMagnitude(local.details.maximalMagnitude)}</DataRow>}
+					{local?.details.moonSunDiameterRatio !== undefined && <DataRow label="Moon/Sun diameter">{formatEclipseMagnitude(local.details.moonSunDiameterRatio)}</DataRow>}
 					{local?.details.partialPhaseDuration !== undefined && <DataRow label="Eclipse here (C1–C4)">{formatDuration(local.details.partialPhaseDuration)}</DataRow>}
 					{local?.details.centralPhaseDuration !== undefined && <DataRow label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatDuration(local.details.centralPhaseDuration)}</DataRow>}
 					{local?.details.pathWidthKm !== undefined && <DataRow label="Path width here">{formatKilometers(local.details.pathWidthKm)}</DataRow>}

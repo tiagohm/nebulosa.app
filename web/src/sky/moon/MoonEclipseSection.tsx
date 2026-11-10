@@ -2,7 +2,7 @@ import { useSnapshot } from 'valtio'
 import { formatLongDateTime } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { navigate, routeState } from '../../shell/route'
-import { utcDate } from '../../tools/eclipse/eclipse'
+import { formatEclipseMagnitude, utcDate } from '../../tools/eclipse/eclipse'
 import { ECLIPSE_TYPE_NAMES } from '../../tools/lunareclipse/lunareclipse'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
@@ -25,7 +25,7 @@ export function MoonEclipseSection({ hasObserver, timeZone }: { readonly hasObse
 				<>
 					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
 					<DataRow label="Greatest eclipse">{formatLongDateTime(eclipse.maximum, timeZone)}</DataRow>
-					<DataRow label="Magnitude">{eclipse.magnitude.toFixed(3)}</DataRow>
+					<DataRow label="Magnitude">{formatEclipseMagnitude(eclipse.magnitude)}</DataRow>
 					{value.local ? <DataRow label="From here">{value.local.visibility.text}</DataRow> : !hasObserver && <Notice>Select an observing site to see whether it is visible from there.</Notice>}
 					<div>
 						<Button variant="secondary" onClick={() => navigate(routeState, { workspace: 'tools', tool: 'lunar-eclipse-map', eclipse: eclipse.id })}>

@@ -1,3 +1,4 @@
+import { formatFixed, MISSING } from '../../format'
 import type { GeographicLocation, ToolLocation } from '../../location/site'
 
 // Place and formatting rules shared by the Lunar and Solar Eclipse Map tools. Each tool observes from a ToolLocation
@@ -54,6 +55,19 @@ export function utcDate(time: number): string {
 export function utcDateStart(date: string): number {
 	const [year, month, day] = date.split('-').map(Number)
 	return Date.UTC(year, month - 1, day)
+}
+
+// Returns an angle the eclipse API gives in degrees (an altitude, an azimuth, or a position or zenith angle of a contact)
+// to a tenth: "23.4°", or MISSING when it is absent or not finite.
+export function formatEclipseAngle(degrees: number | undefined) {
+	const text = degrees === undefined ? MISSING : formatFixed(degrees, 1)
+	return text === MISSING ? MISSING : `${text}°`
+}
+
+// Returns an eclipse magnitude, or a ratio of the same kind such as gamma or the Moon/Sun diameter ratio, with four
+// decimals, the one precision of every eclipse screen: "1.0123", or MISSING when it is absent or not finite.
+export function formatEclipseMagnitude(magnitude: number | undefined) {
+	return magnitude === undefined ? MISSING : formatFixed(magnitude, 4)
 }
 
 // Returns a duration in seconds as hours, minutes, and seconds, such as "3h 16m 05s".

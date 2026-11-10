@@ -50,7 +50,7 @@ export function SolarImage() {
 					{enlarged.value ? (
 						<img src={enlarged.value.url} alt={`The Sun, ${SUN_IMAGE_CHANNEL_NAMES[enlarged.value.channel]}`} className="contrast-[0.7] mx-auto block min-h-0 max-w-full flex-1 rounded-sm bg-transparent object-contain" />
 					) : (
-						<p className="m-0 text-ink-300">{enlarged.error ? `The larger image is unavailable: ${enlarged.error}` : 'Loading the larger image…'}</p>
+						<Notice>{enlarged.error ? `The larger image is unavailable: ${enlarged.error}` : 'Loading the larger image…'}</Notice>
 					)}
 					{enlarged.value && <Notice>{imageCaption(enlarged.value)}</Notice>}
 					<Notice>{SDO_CREDIT} The image is the latest SDO has, whatever instant the Sky shows.</Notice>

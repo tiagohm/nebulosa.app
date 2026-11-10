@@ -2,6 +2,7 @@ import type { MeteorShowersCalendar, MeteorShowersCalendarEntry } from 'api'
 import { cn } from 'cn'
 import { formatDate } from '../../format'
 import { Button } from '../../ui/Button'
+import { Notice } from '../../ui/Notice'
 import { occurrenceInstant } from './meteorshowers.format'
 
 // Month view of the showers: a Monday-first grid of the civil dates of the display zone, each listing the showers whose
@@ -151,7 +152,7 @@ export function MeteorShowerCalendar({
 					</div>
 				))}
 			</div>
-			<p className="m-0 text-xs text-ink-300">A name marks the published maximum; "(ref.)" marks the IAU mean reference, which is not a maximum; ★ marks a year-specific event of that year. The count is how many showers are active that day.</p>
+			<Notice>A name marks the published maximum; "(ref.)" marks the IAU mean reference, which is not a maximum; ★ marks a year-specific event of that year. The count is how many showers are active that day.</Notice>
 		</section>
 	)
 }

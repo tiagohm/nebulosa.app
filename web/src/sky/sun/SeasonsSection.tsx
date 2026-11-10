@@ -39,7 +39,7 @@ export function SeasonsSection({ seasons, latitude, timeZone }: { readonly seaso
 					<Notice>Astronomical seasons after the Sky instant, from the local model.</Notice>
 				</>
 			) : (
-				<p className="m-0 text-ink-300">Computing the seasons…</p>
+				<Notice>Computing the seasons…</Notice>
 			)}
 		</CollapsibleSection>
 	)

@@ -71,7 +71,7 @@ export function CameraSettings({ device, settings, capabilities, disabled, onCha
 		return (
 			<CollapsibleSection id="images.camera-acquisition.camera" title="Camera" summary={device?.name} defaultOpen={false}>
 				{name}
-				<p className="m-0 text-ink-300">Camera settings appear once the camera reports them.</p>
+				<Notice>Camera settings appear once the camera reports them.</Notice>
 			</CollapsibleSection>
 		)
 	}
@@ -113,7 +113,7 @@ export function CameraSettings({ device, settings, capabilities, disabled, onCha
 					)}
 				</>
 			)}
-			{!gain && !offset && !bin && formats.length === 0 && !subframe && <p className="m-0 text-ink-300">The camera reports no adjustable settings.</p>}
+			{!gain && !offset && !bin && formats.length === 0 && !subframe && <Notice>The camera reports no adjustable settings.</Notice>}
 		</CollapsibleSection>
 	)
 }

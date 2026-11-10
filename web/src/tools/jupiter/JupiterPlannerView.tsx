@@ -115,8 +115,8 @@ export function JupiterPlanner() {
 			</CollapsibleSection>
 			<GrsSettings timeZone={displayZone.zone} />
 			<CollapsibleSection id="jupiter.ephemeris" title="Ephemeris" summary={source ? (source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E + L1.2') : undefined} defaultOpen={false}>
-				<p className="m-0 text-xs text-ink-300">{describeSource(signature) ?? 'Not computed yet.'}</p>
-				{state.source && <p className="m-0 text-xs text-ink-300">{state.source.readiness === 'readyForJupiter' ? 'The enabled kernels cover the whole period.' : `Kernels: ${state.source.reason ? FALLBACK_LABELS[state.source.reason] : state.source.readiness}.`}</p>}
+				<Notice>{describeSource(signature) ?? 'Not computed yet.'}</Notice>
+				{state.source && <Notice>{state.source.readiness === 'readyForJupiter' ? 'The enabled kernels cover the whole period.' : `Kernels: ${state.source.reason ? FALLBACK_LABELS[state.source.reason] : state.source.readiness}.`}</Notice>}
 				<Button variant="secondary" onClick={() => openKernelLibrary()}>
 					Manage Kernels
 				</Button>
@@ -168,11 +168,11 @@ export function JupiterPlanner() {
 								<JupiterViewer state={state.state} positions={positions} orientation={state.orientation} box={zoom.box} moons={state.moons} />
 							</PanZoomSurface>
 							{state.stateError && <Notice error>{state.stateError}</Notice>}
-							{grs.grs && !grs.grs.model && <p className="m-0 text-xs text-ink-300">No Great Red Spot model: set it in the panel to draw the spot and predict its transits.</p>}
+							{grs.grs && !grs.grs.model && <Notice>No Great Red Spot model: set it in the panel to draw the spot and predict its transits.</Notice>}
 						</div>
 						<div className="flex min-w-0 flex-col gap-2">
 							{state.track && <MoonChart track={state.track} poleAngle={state.state?.disk.poleAngle ?? 0} moons={state.moons} nights={answer?.nights ?? []} selected={selected} time={state.time} timeZone={displayZone.zone} onTime={(time) => setTime(jupiterPlannerState, time)} />}
-							{state.trackLoading && !state.track && <p className="m-0 text-xs text-ink-300">Computing the moons over the period…</p>}
+							{state.trackLoading && !state.track && <Notice>Computing the moons over the period…</Notice>}
 							{state.trackError && <Notice error>{state.trackError}</Notice>}
 						</div>
 					</div>

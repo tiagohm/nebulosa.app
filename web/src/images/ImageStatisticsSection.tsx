@@ -109,12 +109,12 @@ export function ImageStatisticsSection({ document, view }: ImageStatisticsSectio
 	return (
 		<CollapsibleSection id={STATISTICS_SECTION} title="Histogram and Statistics" summary={summary} defaultOpen={false}>
 			{!imageId ? (
-				<p className="m-0 text-ink-300">{document.status === 'loading' ? 'Opening…' : 'Unavailable'}</p>
+				<Notice>{document.status === 'loading' ? 'Opening…' : 'Unavailable'}</Notice>
 			) : (
 				<>
 					{view?.statistics.areaDropped && <Notice>The area was cleared: the frame shown has another size.</Notice>}
 					{error && <Notice error>{error}</Notice>}
-					{active && <p className="m-0 text-ink-300">Measuring{job?.state === 'queued' ? ' (queued)' : ''}…</p>}
+					{active && <Notice>Measuring{job?.state === 'queued' ? ' (queued)' : ''}…</Notice>}
 					{result && <StatisticsBody key={result.jobId} result={result} choices={choices} onChoices={setChoices} />}
 					<Actions>
 						<Button variant="secondary" disabled={view?.overlaysHidden === true} title={view?.overlaysHidden ? 'Show the overlays to draw an area.' : 'Drag over the image to choose the pixels measured.'} onClick={() => (selecting ? stopAreaSelection() : startAreaSelection(document.key))}>
@@ -133,7 +133,7 @@ export function ImageStatisticsSection({ document, view }: ImageStatisticsSectio
 							</Button>
 						)}
 					</Actions>
-					{selecting && <p className="m-0 text-xs text-ink-300">Drag over the image to draw the area; Escape cancels.</p>}
+					{selecting && <Notice>Drag over the image to draw the area; Escape cancels.</Notice>}
 					<Checkbox label="Inspect pixels: native samples under the pointer in the status line" checked={inspectPixels} onChange={(checked) => (pixelInspection.enabled = checked)} />
 				</>
 			)}
@@ -186,7 +186,7 @@ function StatisticsBody({ result, choices, onChoices }: StatisticsBodyProps) {
 
 	return (
 		<>
-			{series.length > 0 ? <StatisticsHistogram series={series} log={scale === 'log'} zoom={zoom} onZoom={setZoom} /> : <p className="m-0 text-ink-300">No finite samples to draw.</p>}
+			{series.length > 0 ? <StatisticsHistogram series={series} log={scale === 'log'} zoom={zoom} onZoom={setZoom} /> : <Notice>No finite samples to draw.</Notice>}
 			<div className="flex flex-wrap items-end gap-2">
 				<SegmentedControl
 					options={DOMAINS}
@@ -226,7 +226,7 @@ function StatisticsBody({ result, choices, onChoices }: StatisticsBodyProps) {
 				<DataRow label="Unit">{result.rescaled ? `${unit} (rescaled read)` : unit}</DataRow>
 			</DataList>
 			{result.mosaic === 'untrusted' && <Notice>The header names a CFA pattern that is not trusted: the mosaic is measured as one plane, mixing its colors.</Notice>}
-			{result.mosaic === 'trusted' && <p className="m-0 text-xs text-ink-300">Raw mosaic: each photosite phase is measured apart, never debayered.</p>}
+			{result.mosaic === 'trusted' && <Notice>Raw mosaic: each photosite phase is measured apart, never debayered.</Notice>}
 			{result.planes.length > 1 && <SegmentedControl options={result.planes.map((p) => p.plane)} value={plane.plane} format={(p) => PLANE_LABELS[p]} onChange={setSelected} />}
 			{plane && <PlaneRows plane={plane} domain={domain} />}
 			{plane?.background && <BackgroundRows background={plane.background} />}
@@ -316,7 +316,7 @@ function BackgroundRows({ background }: { readonly background: StatisticsBackgro
 					{BACKGROUND_WARNINGS[warning]}
 				</p>
 			))}
-			<p className="m-0 text-xs text-ink-300">{BACKGROUND_HINT}</p>
+			<Notice>{BACKGROUND_HINT}</Notice>
 		</>
 	)
 }

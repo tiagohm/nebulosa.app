@@ -67,7 +67,7 @@ function WindowsWeather({ night, forecast, timeZone }: { readonly night: MeteorO
 					</p>
 				)
 			})}
-			<p className="m-0 text-xs text-ink-300">{`Forecast of Open-Meteo (${sourceStateText(forecast.meteorology.source)}) and 7Timer! (${sourceStateText(forecast.astronomy.source)}), as Astro Weather shows them: a forecast, not a measurement of the site. Only a fresh forecast is assessed, and the weather never changes a window, a rate, or a ranking.`}</p>
+			<Notice>{`Forecast of Open-Meteo (${sourceStateText(forecast.meteorology.source)}) and 7Timer! (${sourceStateText(forecast.astronomy.source)}), as Astro Weather shows them: a forecast, not a measurement of the site. Only a fresh forecast is assessed, and the weather never changes a window, a rate, or a ranking.`}</Notice>
 		</div>
 	)
 }
@@ -76,9 +76,7 @@ function WindowsWeather({ night, forecast, timeZone }: { readonly night: MeteorO
 function ObservingNight({ night, name, minimumAltitude, timeZone, forecast }: { readonly night: MeteorObservingNight; readonly name: string; readonly minimumAltitude: number; readonly timeZone: string; readonly forecast?: AstroWeatherForecast }) {
 	return (
 		<div className="flex flex-col gap-2">
-			<p className="m-0 text-xs text-ink-300">
-				Judged against {night.support.basis === 'none' ? 'no published activity period: the windows only satisfy the geometry' : `the ${BASIS_LABELS[night.support.basis]} activity period`}. Geometric altitudes, the Moon geocentric; no meteor rate is computed without an activity profile.
-			</p>
+			<Notice>Judged against {night.support.basis === 'none' ? 'no published activity period: the windows only satisfy the geometry' : `the ${BASIS_LABELS[night.support.basis]} activity period`}. Geometric altitudes, the Moon geocentric; no meteor rate is computed without an activity profile.</Notice>
 			{night.windows.length > 0 ? (
 				<DataList>
 					{night.windows.map((window) => (
@@ -92,9 +90,9 @@ function ObservingNight({ night, name, minimumAltitude, timeZone, forecast }: { 
 			)}
 			{night.model && (
 				<div className="flex flex-col gap-1">
-					<p className="m-0 text-xs text-ink-300">{`Modelled from the published activity profile for a limiting magnitude of ${night.model.limitingMagnitude.toFixed(1)}, r = ${night.model.populationIndex.toFixed(1)} (${night.model.populationIndexSource === 'profile' ? 'from the profile' : 'yours'}), and F = ${night.model.obstructionCorrection.toFixed(2)}: what an ideal observer would count, never a forecast.`}</p>
+					<Notice>{`Modelled from the published activity profile for a limiting magnitude of ${night.model.limitingMagnitude.toFixed(1)}, r = ${night.model.populationIndex.toFixed(1)} (${night.model.populationIndexSource === 'profile' ? 'from the profile' : 'yours'}), and F = ${night.model.obstructionCorrection.toFixed(2)}: what an ideal observer would count, never a forecast.`}</Notice>
 					{night.model.windows.length === 0 ? (
-						<p className="m-0 text-xs text-ink-300">The profile gives no activity in these windows.</p>
+						<Notice>The profile gives no activity in these windows.</Notice>
 					) : (
 						<DataList>
 							{night.model.windows.map((window) => (
@@ -180,11 +178,11 @@ export function MeteorShowerDetails({
 						<DataRow label="Entry speed">{`${visual.velocity} km/s`}</DataRow>
 						<DataRow label="Source">{detail.visualSource ? `${detail.visualSource.publisher}, ${detail.visualSource.title}` : '—'}</DataRow>
 					</DataList>
-					<p className="m-0 text-xs text-ink-300">The ZHR is what an ideal observer would see with the radiant overhead under a limiting magnitude of 6.5, never a count expected from a site.</p>
+					<Notice>The ZHR is what an ideal observer would see with the radiant overhead under a limiting magnitude of 6.5, never a count expected from a site.</Notice>
 				</div>
 			)}
-			{!visual && <p className="m-0 text-xs text-ink-300">No curated visual data: no ZHR or visual maximum is known for this shower here.</p>}
-			{!detail.annualPredictionAvailable && <p className="m-0 text-xs text-ink-300">No year-specific predictions were curated for this year; the visual values are the recurring baseline.</p>}
+			{!visual && <Notice>No curated visual data: no ZHR or visual maximum is known for this shower here.</Notice>}
+			{!detail.annualPredictionAvailable && <Notice>No year-specific predictions were curated for this year; the visual values are the recurring baseline.</Notice>}
 			{detail.annualEvents.length > 0 && (
 				<div className="flex flex-col gap-1">
 					<h3 className="m-0 text-sm font-semibold text-ink-100">Year-Specific Events</h3>
@@ -196,25 +194,25 @@ export function MeteorShowerDetails({
 							</li>
 						))}
 					</ul>
-					<p className="m-0 text-xs text-ink-300">Each event belongs to its year alone. A possible enhancement is not a predicted outburst, and none is a storm forecast.</p>
+					<Notice>Each event belongs to its year alone. A possible enhancement is not a predicted outburst, and none is a storm forecast.</Notice>
 				</div>
 			)}
 			<div className="flex flex-col gap-1">
 				<h3 className="m-0 text-sm font-semibold text-ink-100">Occurrences</h3>
-				{detail.occurrences.length === 0 && <p className="m-0 text-xs text-ink-300">No source dates this shower in these years.</p>}
+				{detail.occurrences.length === 0 && <Notice>No source dates this shower in these years.</Notice>}
 				{detail.occurrences.map((occurrence) => (
 					<OccurrenceRows key={occurrence.visual?.start ?? occurrence.iau?.start ?? occurrence.iau?.reference} occurrence={occurrence} timeZone={timeZone} />
 				))}
 			</div>
 			<div className="flex flex-col gap-1">
 				<h3 className="m-0 text-sm font-semibold text-ink-100">Activity</h3>
-				{activity ? <MeteorActivityChart curve={activity} timeZone={timeZone} now={Date.now()} /> : <p className="m-0 text-xs text-ink-300">Reading the activity…</p>}
-				{activity?.profile && <p className="m-0 text-xs text-ink-300">Profile: Moorhead et al. (2019), the NASA Meteoroid Environment Office forecast parameters, a model of a typical year.</p>}
+				{activity ? <MeteorActivityChart curve={activity} timeZone={timeZone} now={Date.now()} /> : <Notice>Reading the activity…</Notice>}
+				{activity?.profile && <Notice>Profile: Moorhead et al. (2019), the NASA Meteoroid Environment Office forecast parameters, a model of a typical year.</Notice>}
 			</div>
 			<div className="flex flex-col gap-1">
 				<h3 className="m-0 text-sm font-semibold text-ink-100">Observing Night</h3>
-				{!site && <p className="m-0 text-xs text-ink-300">Set the observing site of this profile to see when the radiant can be watched.</p>}
-				{site && nightLoading && <p className="m-0 text-xs text-ink-300">Computing the night…</p>}
+				{!site && <Notice>Set the observing site of this profile to see when the radiant can be watched.</Notice>}
+				{site && nightLoading && <Notice>Computing the night…</Notice>}
 				{site && nightError && <Notice error>{nightError}</Notice>}
 				{site && night && <ObservingNight night={night} name={detail.name} minimumAltitude={minimumAltitude} timeZone={timeZone} forecast={forecast} />}
 			</div>
@@ -232,7 +230,7 @@ export function MeteorShowerDetails({
 			)}
 			<div className="flex flex-col gap-1">
 				<h3 className="m-0 text-sm font-semibold text-ink-100">IAU Solutions</h3>
-				<p className="m-0 text-xs text-ink-300">{SELECTION_LABELS[detail.selectedBy]}</p>
+				<Notice>{SELECTION_LABELS[detail.selectedBy]}</Notice>
 				{detail.gaps.length > 0 && (
 					<ul className="m-0 list-disc pl-4 text-xs text-ink-300">
 						{detail.gaps.map((gap) => (
@@ -256,8 +254,8 @@ export function MeteorShowerDetails({
 						))}
 					</Table>
 				</div>
-				{detail.selected !== undefined && detail.solutions[detail.selected].geocentricSpeed !== undefined && <p className="m-0 text-xs text-ink-300">{`Geocentric speed of the preferred solution: ${kilometersPerSecond(detail.solutions[detail.selected].geocentricSpeed!).toFixed(1)} km/s.`}</p>}
-				{detail.selected !== undefined && detail.solutions[detail.selected].parentBody && <p className="m-0 text-xs text-ink-300">{`Parent body: ${detail.solutions[detail.selected].parentBody}.`}</p>}
+				{detail.selected !== undefined && detail.solutions[detail.selected].geocentricSpeed !== undefined && <Notice>{`Geocentric speed of the preferred solution: ${kilometersPerSecond(detail.solutions[detail.selected].geocentricSpeed!).toFixed(1)} km/s.`}</Notice>}
+				{detail.selected !== undefined && detail.solutions[detail.selected].parentBody && <Notice>{`Parent body: ${detail.solutions[detail.selected].parentBody}.`}</Notice>}
 			</div>
 		</section>
 	)

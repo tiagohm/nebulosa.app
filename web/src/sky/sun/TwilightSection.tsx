@@ -58,9 +58,9 @@ export function TwilightSection({ day, hasObserver, timeZone }: { readonly day?:
 	return (
 		<CollapsibleSection id="sky.twilight" title="Twilight" summary={summary} defaultOpen={false}>
 			{!hasObserver ? (
-				<p className="m-0 text-ink-300">Twilight needs the observer&apos;s location.</p>
+				<Notice>Twilight needs the observer&apos;s location.</Notice>
 			) : !day ? (
-				<p className="m-0 text-ink-300">Computing the twilight…</p>
+				<Notice>Computing the twilight…</Notice>
 			) : (
 				<>
 					<div className="grid grid-cols-[auto_1fr_1fr] items-baseline gap-x-3 gap-y-1">

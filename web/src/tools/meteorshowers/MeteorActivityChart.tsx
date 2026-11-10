@@ -1,6 +1,7 @@
 import type { MeteorActivityCurve } from 'api'
 import { useState } from 'react'
 import { formatDate } from '../../format'
+import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { formatPeak, formatSolarLongitude } from './meteorshowers.format'
 
@@ -48,11 +49,11 @@ export function MeteorActivityChart({ curve, timeZone, now }: MeteorActivityChar
 
 	if (!profile) {
 		return (
-			<p className="m-0 text-xs text-ink-300">
+			<Notice>
 				{visual
 					? `No published activity profile is curated for this shower, so no curve is drawn: only the published maximum, ${formatPeak(visual.peak, visual.peakSolarLongitudeDecimals, timeZone)}${visual.typicalZhr === undefined ? '' : ` with a typical ZHR of ${visual.typicalZhr}`}, is known.`
 					: 'No activity profile or visual maximum is known for this shower.'}
-			</p>
+			</Notice>
 		)
 	}
 

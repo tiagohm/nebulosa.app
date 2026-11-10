@@ -24,7 +24,7 @@ export function SolarPhysicalSection({ physical, time, timeZone }: { readonly ph
 					<Notice>At {formatLocalTime(time, timeZone, Date.now())}, from the local model. The equation of time is apparent minus mean solar time: positive when a sundial is ahead of the clock.</Notice>
 				</>
 			) : (
-				<p className="m-0 text-ink-300">Computing…</p>
+				<Notice>Computing…</Notice>
 			)}
 		</CollapsibleSection>
 	)

@@ -99,7 +99,7 @@ function CustomSource({ framing, hasTarget }: { readonly framing?: Readonly<SkyF
 						<PresetName key={preset.id} preset={preset} />
 					</>
 				) : (
-					<p className="m-0 text-ink-300">No presets yet. A preset describes a telescope or lens and a camera, owned or not.</p>
+					<Notice>No presets yet. A preset describes a telescope or lens and a camera, owned or not.</Notice>
 				)}
 				<div className="flex flex-wrap gap-2">
 					<Button variant="secondary" onClick={() => createOpticalPreset(profileState, `Preset ${presets.length + 1}`)}>

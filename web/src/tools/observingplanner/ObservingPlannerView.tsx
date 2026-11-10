@@ -88,9 +88,7 @@ export function ObservingPlanner() {
 					<NumberInput label="Maximum Sun altitude" suffix="°" value={Math.round(constraints.maximumSunAltitude * DEGREES)} min={-18} max={0} onChange={(value) => setConstraint('maximumSunAltitude', value / DEGREES)} />
 					<NumberInput label="Moon separation while up (0 for none)" suffix="°" value={Math.round((constraints.minimumMoonSeparation ?? 0) * DEGREES)} min={0} max={180} onChange={(value) => setConstraint('minimumMoonSeparation', value > 0 ? value / DEGREES : undefined)} />
 					<NumberInput label="Minimum continuous time" suffix="min" value={Math.round(constraints.minimumContinuousMs / MINUTE_MS)} min={state.presets.minimumContinuousMs / MINUTE_MS} max={720} step={5} onChange={(value) => setConstraint('minimumContinuousMs', value * MINUTE_MS)} />
-					<p className="m-0 text-xs text-ink-300">
-						Hard limits: a target outside them is never ranked. Altitudes are geometric, without refraction or a local horizon. The Moon separation counts only while the Moon is above the horizon. Windows shorter than {formatHours(constraints.minimumContinuousMs)} are left out.
-					</p>
+					<Notice>Hard limits: a target outside them is never ranked. Altitudes are geometric, without refraction or a local horizon. The Moon separation counts only while the Moon is above the horizon. Windows shorter than {formatHours(constraints.minimumContinuousMs)} are left out.</Notice>
 				</PanelSection>
 			)}
 		</>
@@ -106,11 +104,11 @@ export function ObservingPlanner() {
 			<div className="h-full overflow-y-auto bg-base-000">
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					{location ? (
-						<p className="m-0 text-xs text-ink-300">
+						<Notice>
 							{describeDisplayZone(displayZone)}
 							{state.eveningDate && ` · night of ${state.eveningDate}`}
 							{constraints && ` · ${MODE_LABELS[constraints.mode]}, altitude ≥ ${formatDegrees(constraints.minimumAltitude, 0)}`}
-						</p>
+						</Notice>
 					) : (
 						state.section !== 'plan' && (
 							<Notice>

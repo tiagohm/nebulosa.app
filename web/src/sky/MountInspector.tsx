@@ -7,6 +7,7 @@ import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
+import { ObjectTitle } from '../ui/ObjectTitle'
 import { skyClock } from './clock'
 import { formatDeclination, formatRightAscension } from './format'
 import { horizontalOf, mountPoint, mountRuntime, mountView } from './mount'
@@ -45,8 +46,7 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 	return (
 		<>
 			<PanelSection title="Object">
-				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{same ? runtime.target?.name || 'Mount' : 'Mount'}</p>
-				<p className="m-0 text-ink-300">Mount position</p>
+				<ObjectTitle name={same ? runtime.target?.name || 'Mount' : 'Mount'} kind="Mount position" />
 				<div>
 					<Button variant="secondary" onClick={onShowFraming}>
 						Show Framing
@@ -68,7 +68,7 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 						<Notice>As reported by the mount now{horizontal ? '; altitude is geometric, for the observing site of the profile' : ''}.</Notice>
 					</>
 				) : (
-					<p className="m-0 text-ink-300">{!same ? 'This mount is no longer the profile’s mount.' : clock.mode !== 'now' ? 'The mount position is shown in real time only.' : 'The mount is disconnected; its position is unknown.'}</p>
+					<Notice>{!same ? 'This mount is no longer the profile’s mount.' : clock.mode !== 'now' ? 'The mount position is shown in real time only.' : 'The mount is disconnected; its position is unknown.'}</Notice>
 				)}
 			</CollapsibleSection>
 		</>

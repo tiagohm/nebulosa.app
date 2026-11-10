@@ -7,6 +7,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { PanelSection } from '../shell/ContextualPanel'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
+import { ObjectTitle } from '../ui/ObjectTitle'
 import { formatApparentSize, formatDeclination, formatMagnitude, formatRightAscension, formatStellarDistance } from './format'
 import { ObserverSection, PositionSection } from './InspectorParts'
 import { MeteorShowerInspector } from './meteor/MeteorShowerInspector'
@@ -46,7 +47,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 	if (!selection) {
 		return (
 			<PanelSection title="Object">
-				<p className="m-0 text-ink-300">Select an object in the Planetarium or use Search.</p>
+				<Notice>Select an object in the Planetarium or use Search.</Notice>
 			</PanelSection>
 		)
 	}
@@ -65,9 +66,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 	return (
 		<>
 			<PanelSection title="Object">
-				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{selection.name}</p>
-				<p className="m-0 text-ink-300">{typeOf(selection)}</p>
-				{designations.length > 0 && <p className="m-0 text-xs leading-5 text-ink-200">{designations.join(' · ')}</p>}
+				<ObjectTitle name={selection.name} kind={typeOf(selection)} designations={designations.join(' · ')} />
 				{magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(magnitude)}</DataRow>}
 				{selection.detailsError && <Notice error>Details unavailable: {selection.detailsError}</Notice>}
 				<ObjectActions target={selection.ref} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />

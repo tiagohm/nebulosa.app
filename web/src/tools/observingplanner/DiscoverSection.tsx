@@ -90,7 +90,7 @@ function CatalogDiscovery({ location, timeZone, onAdd }: DiscoverSectionProps) {
 						</Button>
 					)}
 				</div>
-				<p className="m-0 text-xs text-ink-300">Computed locally from the sky catalog and the analytical ephemerides; nothing is asked of the network or of a device.</p>
+				<Notice>Computed locally from the sky catalog and the analytical ephemerides; nothing is asked of the network or of a device.</Notice>
 			</section>
 			{state.discoveryError && <Notice error>{state.discoveryError}</Notice>}
 			{discovery && (
@@ -202,7 +202,7 @@ function MinorBodySearch({ location, onAdd }: Pick<DiscoverSectionProps, 'locati
 						{search.loading ? 'Searching…' : 'Search'}
 					</Button>
 				</div>
-				<p className="m-0 text-xs text-ink-300">Looked up in the JPL Small-Body Database. An analysis uses the SPK kernels, JPL Horizons, or saved orbital elements, as the ephemeris policy of the SPICE Kernel Library allows.</p>
+				<Notice>Looked up in the JPL Small-Body Database. An analysis uses the SPK kernels, JPL Horizons, or saved orbital elements, as the ephemeris policy of the SPICE Kernel Library allows.</Notice>
 			</form>
 			{search.error && <Notice error>{search.error}</Notice>}
 			{result?.kind === 'notFound' && <Notice>{result.message || 'No asteroid or comet matches this text.'}</Notice>}
@@ -222,9 +222,9 @@ function MinorBodySearch({ location, onAdd }: Pick<DiscoverSectionProps, 'locati
 				<section className="flex flex-wrap items-start justify-between gap-3 rounded-sm border border-line-100 bg-base-100 p-4">
 					<div className="min-w-0">
 						<h3 className="m-0 text-base font-medium wrap-break-word text-ink-100">{result.body.name}</h3>
-						<p className="m-0 text-xs text-ink-300">
+						<Notice>
 							{result.body.kind === 'comet' ? 'Comet' : 'Asteroid'} · {result.body.orbitClass} · SPK-ID {result.body.spkId} · Orbit solution {result.body.solutionDate}
-						</p>
+						</Notice>
 					</div>
 					<TargetActions target={minorBodyTarget(result.body)} location={location} onAdd={onAdd} />
 				</section>

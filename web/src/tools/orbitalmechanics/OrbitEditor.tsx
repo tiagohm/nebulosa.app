@@ -65,7 +65,7 @@ export function OrbitEditor({ orbit }: { readonly orbit: ExplorerOrbit }) {
 
 			{draft.kind === 'cartesian' && (
 				<>
-					<p className="m-0 text-xs text-ink-300">Position and velocity relative to the center, J2000 equatorial axes, used as given.</p>
+					<Notice>Position and velocity relative to the center, J2000 equatorial axes, used as given.</Notice>
 					<VectorInput label="Position" suffix={distanceSymbol(unit)} value={draft.position} step={distanceStep} onChange={(i, v) => edit((d) => (d.position[i] = v))} />
 					<VectorInput label="Velocity" suffix={velocitySymbol(unit)} value={draft.velocity} step={unit === 'km' ? 0.0001 : 1e-7} onChange={(i, v) => edit((d) => (d.velocity[i] = v))} />
 				</>
@@ -110,10 +110,10 @@ export function CenterEditor() {
 				</>
 			)}
 			{state.center && (
-				<p className="m-0 text-xs text-ink-300">
+				<Notice>
 					GM {centerGm(state.center).toPrecision(12)} km³/s²{state.center.code !== undefined && ' (JPL DE440)'}
 					{state.center.system && ', the planet and its satellites at the system barycenter'}.
-				</p>
+				</Notice>
 			)}
 			<SegmentedControl label="Units" options={['km', 'au'] as readonly DistanceUnit[]} value={state.unit} format={(e) => (e === 'km' ? 'km, km/s' : 'AU, AU/day')} onChange={(unit) => setUnit(orbitalMechanicsState, unit)} />
 		</CollapsibleSection>

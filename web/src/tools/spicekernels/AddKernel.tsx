@@ -156,7 +156,7 @@ function SmallBody() {
 							Generate
 						</Button>
 					</div>
-					<p className="m-0 text-xs leading-4 text-ink-300">Horizons integrates the current orbit of the body over the interval, usually within 1600 to 2500; the kernel is relative to the Sun, so positions also need a planetary kernel.</p>
+					<Notice>Horizons integrates the current orbit of the body over the interval, usually within 1600 to 2500; the kernel is relative to the Sun, so positions also need a planetary kernel.</Notice>
 				</>
 			)}
 			{state.errors.generate && <Notice error>{state.errors.generate}</Notice>}
@@ -206,7 +206,7 @@ function JobItem({ job }: { readonly job: SpiceKernelJob }) {
 				</span>
 			</div>
 			{active && <ProgressBar fraction={job.state === 'running' ? fraction : undefined} />}
-			{job.error && <p className="m-0 text-xs leading-4 text-danger">{job.error}</p>}
+			{job.error && <Notice error>{job.error}</Notice>}
 		</li>
 	)
 }

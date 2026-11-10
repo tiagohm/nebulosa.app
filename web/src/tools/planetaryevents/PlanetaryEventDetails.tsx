@@ -52,7 +52,7 @@ export function PlanetaryEventDetails({
 				<h2 className="m-0 text-sm font-semibold text-ink-100">
 					{eventTitle(event)} · {bodiesLabel(event)}
 				</h2>
-				<p className="m-0 text-xs text-ink-300">{KIND_DEFINITIONS[event.kind]}</p>
+				<Notice>{KIND_DEFINITIONS[event.kind]}</Notice>
 			</header>
 			<DataList>
 				<DataRow label="Event time">{formatDateTime(event.time, timeZone, false)}</DataRow>
@@ -75,14 +75,14 @@ export function PlanetaryEventDetails({
 			))}
 			<div className="flex flex-col gap-1">
 				<h3 className="m-0 text-xs font-semibold text-ink-200">From the site</h3>
-				{!hasSite && <p className="m-0 text-xs text-ink-300">No site: the event is geocentric and listed without local visibility.</p>}
-				{hasSite && !visibility && <p className="m-0 text-xs text-ink-300">{visibilityLoading ? 'Computing the visibility…' : 'Visibility not computed.'}</p>}
+				{!hasSite && <Notice>No site: the event is geocentric and listed without local visibility.</Notice>}
+				{hasSite && !visibility && <Notice>{visibilityLoading ? 'Computing the visibility…' : 'Visibility not computed.'}</Notice>}
 				{visibility && <VisibilityRows visibility={visibility} event={event} timeZone={timeZone} />}
 			</div>
 			<div className="flex flex-col gap-1">
 				<h3 className="m-0 text-xs font-semibold text-ink-200">Curve</h3>
 				{chart && <PlanetaryEventChart series={chart} />}
-				{!chart && seriesLoading && <p className="m-0 text-xs text-ink-300">Sampling the curve…</p>}
+				{!chart && seriesLoading && <Notice>Sampling the curve…</Notice>}
 				{seriesError && <Notice error>{seriesError}</Notice>}
 			</div>
 			{related.length > 0 && (
@@ -95,7 +95,7 @@ export function PlanetaryEventDetails({
 					))}
 				</div>
 			)}
-			<p className="m-0 text-xs text-ink-300">{describeSource(signature) ?? ''}. Geocentric apparent positions on the true ecliptic of date; the site never changes the event time.</p>
+			<Notice>{describeSource(signature) ?? ''}. Geocentric apparent positions on the true ecliptic of date; the site never changes the event time.</Notice>
 			{event.bodies.map((code) => (
 				<Actions key={code}>
 					<Button variant="secondary" onClick={() => showPlanetInSky(code, site)}>
@@ -143,12 +143,10 @@ function VisibilityRows({ visibility, event, timeZone }: { readonly visibility: 
 				)}
 			</DataList>
 			{visibility.reasons.map((reason) => (
-				<p key={reason} className="m-0 text-xs text-ink-300">
-					{reasonLabel(reason, visibility)}
-				</p>
+				<Notice key={reason}>{reasonLabel(reason, visibility)}</Notice>
 			))}
-			{event.kind === 'station' && <p className="m-0 text-xs text-ink-300">A station is an instant of zero motion: the turn is seen by comparing the planet against the stars over several nights.</p>}
-			<p className="m-0 text-xs text-ink-300">Geometric altitudes, without refraction, terrain, or weather.</p>
+			{event.kind === 'station' && <Notice>A station is an instant of zero motion: the turn is seen by comparing the planet against the stars over several nights.</Notice>}
+			<Notice>Geometric altitudes, without refraction, terrain, or weather.</Notice>
 		</>
 	)
 }

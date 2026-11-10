@@ -35,7 +35,7 @@ export function MoonEclipseSection({ hasObserver, timeZone }: { readonly hasObse
 					<Notice>The first lunar eclipse after the Sky instant, seen wherever the Moon is above the horizon; the magnitude is the umbral one for a total or partial eclipse and the penumbral one otherwise.</Notice>
 				</>
 			) : (
-				!error && <p className="m-0 text-ink-300">{loading ? 'Searching the next eclipse…' : 'No eclipse.'}</p>
+				!error && <Notice>{loading ? 'Searching the next eclipse…' : 'No eclipse.'}</Notice>
 			)}
 			{error && <Notice error>Eclipse unavailable: {error}</Notice>}
 		</CollapsibleSection>

@@ -8,6 +8,7 @@ import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
+import { ObjectTitle } from '../../ui/ObjectTitle'
 import { Select } from '../../ui/Select'
 import {
 	BODY_NAMES,
@@ -82,17 +83,7 @@ function Overview({ approach, zone, distanceDisplay, body, children }: Encounter
 
 	return (
 		<CollapsibleSection id="closeapproaches.overview" title="Overview">
-			<p className="m-0 text-base leading-6 font-semibold text-ink-100">{body?.name ?? fullName ?? designation}</p>
-			{body && (
-				<p className="m-0 text-ink-300">
-					{body.kind === 'comet' ? 'Comet' : 'Asteroid'} · {body.orbitClass}
-				</p>
-			)}
-			{body && (
-				<p className="m-0 text-xs leading-5 text-ink-200" title={CLASS_NOTE}>
-					{[`SPK-ID ${body.spkId}`, body.neo && 'NEO', body.pha && 'PHA'].filter(Boolean).join(' · ')}
-				</p>
-			)}
+			<ObjectTitle name={body?.name ?? fullName ?? designation} kind={body && `${body.kind === 'comet' ? 'Comet' : 'Asteroid'} · ${body.orbitClass}`} designations={body && [`SPK-ID ${body.spkId}`, body.neo && 'NEO', body.pha && 'PHA'].filter(Boolean).join(' · ')} designationsTitle={CLASS_NOTE} />
 			<DataRow label="Nominal distance">{formatDistance(distance, distanceDisplay)}</DataRow>
 			<OptionalDatum label="3σ range">{formatDistanceRange(distanceMin, distanceMax, distanceDisplay)}</OptionalDatum>
 			<DataRow label="Vrel">{formatVelocity(relativeVelocity)}</DataRow>
@@ -185,7 +176,7 @@ function ObservationsSection({ details }: { readonly details: MinorBodyDetails }
 			{alternateOrbits.length > 0 && <DataRow label="Earlier solutions">{alternateOrbits.map((e) => e.orbitId).join(', ')}</DataRow>}
 			{radar.length > 0 && (
 				<>
-					<p className="m-0 text-ink-300">Radar astrometry</p>
+					<Notice>Radar astrometry</Notice>
 					<ul className="m-0 flex max-h-48 list-none flex-col gap-1 overflow-y-auto p-0 font-mono text-xs">
 						{radar.map((e) => (
 							<li key={`${e.epoch}${e.units}${e.value}`} title={e.observer}>
@@ -230,8 +221,8 @@ function OtherApproachesSection({ zone, distanceDisplay }: Omit<EncounterProps, 
 			<Select label="Target" options={CLOSE_APPROACH_BODIES} value={historyBody} format={(value: CloseApproachBody) => BODY_NAMES[value]} onChange={(value) => void filterCloseApproachHistory(closeApproachesState, { historyBody: value })} />
 			<Select label="Span" options={HISTORY_WINDOWS} value={historyWindow} format={(value) => HISTORY_WINDOW_LABELS[value]} onChange={(value) => void filterCloseApproachHistory(closeApproachesState, { historyWindow: value })} />
 			{historyError && <Notice error>{historyError}</Notice>}
-			{historyLoading && !history && <p className="m-0 text-ink-300">Reading from JPL…</p>}
-			{history?.rows.length === 0 && <p className="m-0 text-ink-300">No approaches in this span.</p>}
+			{historyLoading && !history && <Notice>Reading from JPL…</Notice>}
+			{history?.rows.length === 0 && <Notice>No approaches in this span.</Notice>}
 			<ul className="m-0 flex list-none flex-col gap-1 p-0">
 				{history?.rows.map((approach) => (
 					<li key={approach.id}>

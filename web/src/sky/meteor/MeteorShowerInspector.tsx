@@ -4,6 +4,7 @@ import { useSnapshot } from 'valtio'
 import { formatDateTime, formatDegrees, formatPercent } from '../../format'
 import { fetchJson, jsonInit } from '../../http'
 import { siteObserver, type SiteLocation } from '../../location/site'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { openMeteorShower } from '../../tools/meteorshowers/meteorshowers'
 import { ACTIVITY_LABELS, BASIS_LABELS, formatOccurrencePeak, STATUS_LABELS } from '../../tools/meteorshowers/meteorshowers.format'
 import { meteorShowerSourcesState } from '../../tools/meteorshowers/meteorshowers.sources'
@@ -11,13 +12,13 @@ import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
+import { ObjectTitle } from '../../ui/ObjectTitle'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { skyClock, skyTime } from '../clock'
 import { showCoordinateInSky, skyImageState } from '../footprint'
 import { formatDeclination, formatRightAscension } from '../format'
 import { createRequestGuard } from '../selection'
 import type { SkySelection } from '../sky'
-import { CollapsibleSection } from '../../shell/CollapsibleSection'
 
 // Object Inspector of a meteor shower radiant in the Sky: the shower's identity and status, its activity at the instant
 // the Sky shows and which source decided it, the radiant at that instant (geocentric J2000 and of date, and for the
@@ -114,9 +115,7 @@ export function MeteorShowerInspector({ selection, observer, onSetObserver, time
 	return (
 		<>
 			<CollapsibleSection id="sky.meteor.info" summary={detail?.name ?? selection.name} title="Meteor Shower">
-				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{detail?.name ?? selection.name}</p>
-				<p className="m-0 text-ink-300">Meteor shower radiant</p>
-				{detail && <p className="m-0 text-xs leading-5 text-ink-200">{[detail.code, detail.number === undefined ? undefined : `IAU ${detail.number}`, STATUS_LABELS[detail.status]].filter(Boolean).join(' · ')}</p>}
+				<ObjectTitle name={detail?.name ?? selection.name} kind="Meteor shower radiant" designations={detail && [detail.code, detail.number === undefined ? undefined : `IAU ${detail.number}`, STATUS_LABELS[detail.status]].filter(Boolean).join(' · ')} />
 				{activity && state && <StatusBadge tone={activity.tone} label={`${activity.label} (${BASIS_LABELS[state.activityBasis]})`} />}
 				{error && <Notice error>{error}</Notice>}
 				<Actions>
@@ -127,7 +126,7 @@ export function MeteorShowerInspector({ selection, observer, onSetObserver, time
 						Open in Meteor Showers
 					</Button>
 				</Actions>
-				<p className="m-0 text-xs text-ink-300">A radiant is the direction meteors of the shower seem to come from, not an object: it cannot be slewed to or framed.</p>
+				<Notice>A radiant is the direction meteors of the shower seem to come from, not an object: it cannot be slewed to or framed.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="sky.meteor.radiant" title="Radiant">
 				<DataRow label="Instant">{formatDateTime(time, timeZone, false)}</DataRow>
@@ -137,14 +136,10 @@ export function MeteorShowerInspector({ selection, observer, onSetObserver, time
 						<DataRow label="Dec (J2000)">{formatDeclination(radiant.declination)}</DataRow>
 						{state?.radiantOfDate && <DataRow label="RA (of date)">{formatRightAscension(state.radiantOfDate.rightAscension)}</DataRow>}
 						{state?.radiantOfDate && <DataRow label="Dec (of date)">{formatDeclination(state.radiantOfDate.declination)}</DataRow>}
-						{state?.radiantAtReference ? (
-							<p className="m-0 text-xs text-ink-300">Far from its activity: the catalog position at the reference solar longitude, not moved by the drift.</p>
-						) : (
-							state?.radiantExtrapolated && <p className="m-0 text-xs text-ink-300">Moved from its catalog position by its daily drift.</p>
-						)}
+						{state?.radiantAtReference ? <Notice>Far from its activity: the catalog position at the reference solar longitude, not moved by the drift.</Notice> : state?.radiantExtrapolated && <Notice>Moved from its catalog position by its daily drift.</Notice>}
 					</>
 				) : (
-					state && <p className="m-0 text-xs text-ink-300">The catalog gives no radiant for this shower at this instant.</p>
+					state && <Notice>The catalog gives no radiant for this shower at this instant.</Notice>
 				)}
 				{observer && state?.altitude !== undefined && state.azimuth !== undefined && (
 					<>
@@ -165,15 +160,15 @@ export function MeteorShowerInspector({ selection, observer, onSetObserver, time
 					</Notice>
 				)}
 				{path?.start !== undefined && path.end !== undefined && path.segments.length > 0 && (
-					<p className="m-0 text-xs text-ink-300">{`The dashed line on the map is the radiant moved by its drift over ${formatDateTime(path.start, timeZone, false).slice(0, 10)} to ${formatDateTime(path.end, timeZone, false).slice(0, 10)}, drawn in the frame of the map's stars.`}</p>
+					<Notice>{`The dashed line on the map is the radiant moved by its drift over ${formatDateTime(path.start, timeZone, false).slice(0, 10)} to ${formatDateTime(path.end, timeZone, false).slice(0, 10)}, drawn in the frame of the map's stars.`}</Notice>
 				)}
-				{state?.altitude !== undefined && state.altitude < 0 && <p className="m-0 text-xs text-ink-300">The radiant is below the horizon: no meteor of the shower is seen from here now.</p>}
+				{state?.altitude !== undefined && state.altitude < 0 && <Notice>The radiant is below the horizon: no meteor of the shower is seen from here now.</Notice>}
 			</CollapsibleSection>
 			{detail && (
 				<CollapsibleSection id="sky.meteor.activity" title="Activity">
 					{detail.visual?.typicalZhr !== undefined && <DataRow label="Typical ZHR (IMO)">{`${detail.visual.typicalZhr} per hour at maximum`}</DataRow>}
 					<DataRow label="Next">{formatOccurrencePeak(nextOccurrence, timeZone)}</DataRow>
-					{!detail.visual && <p className="m-0 text-xs text-ink-300">No curated visual data: no ZHR or visual maximum is known for this shower here.</p>}
+					{!detail.visual && <Notice>No curated visual data: no ZHR or visual maximum is known for this shower here.</Notice>}
 				</CollapsibleSection>
 			)}
 		</>

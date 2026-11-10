@@ -82,7 +82,7 @@ export function CloseApproachObservability({ body, time, site, timeZone }: SkyAc
 					</Button>
 				</>
 			)}
-			{observabilityLoading && !position && <p className="m-0 text-ink-300">Computing the position…</p>}
+			{observabilityLoading && !position && <Notice>Computing the position…</Notice>}
 			{observabilityError && (
 				<>
 					<Notice error>Position unavailable: {observabilityError}</Notice>

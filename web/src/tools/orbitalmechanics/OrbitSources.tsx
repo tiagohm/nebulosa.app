@@ -46,7 +46,7 @@ export function OrbitSources() {
 					))}
 				</div>
 			)}
-			<p className="m-0 text-xs text-ink-300">SBDB publishes osculating heliocentric elements at a solution epoch; the explorer propagates them as a two-body orbit, which drifts from the real motion away from that epoch.</p>
+			<Notice>SBDB publishes osculating heliocentric elements at a solution epoch; the explorer propagates them as a two-body orbit, which drifts from the real motion away from that epoch.</Notice>
 
 			<div className="mt-2 flex flex-col gap-2 border-t border-line-100 pt-3">
 				<NumberInput label="SPK target (NAIF ID)" value={target} step={1} onChange={setTarget} />

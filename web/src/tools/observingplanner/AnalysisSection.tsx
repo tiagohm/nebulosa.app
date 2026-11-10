@@ -63,9 +63,9 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 					<div className="flex flex-wrap items-start justify-between gap-3">
 						<div className="min-w-0">
 							<h3 className="m-0 truncate text-base font-medium text-ink-100">{analysis.name}</h3>
-							<p className="m-0 text-xs text-ink-300">
+							<Notice>
 								{analysis.typeName ?? formatTargetKind(analysis.target)} · Night of {analysis.night.sun.localDate}
-							</p>
+							</Notice>
 						</div>
 						<div className="flex flex-wrap items-center gap-2">
 							<StatusBadge tone={STATUS_LABELS[analysis.status].tone} label={STATUS_LABELS[analysis.status].label} />
@@ -134,7 +134,7 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 											)
 										})}
 									</DataList>
-									<p className="m-0 text-xs text-ink-300">A relative ranking of the hard-constraint windows (model {analysis.score.modelVersion}), not a predicted signal-to-noise ratio or sky brightness. Altitudes are geometric, without refraction or a local horizon.</p>
+									<Notice>A relative ranking of the hard-constraint windows (model {analysis.score.modelVersion}), not a predicted signal-to-noise ratio or sky brightness. Altitudes are geometric, without refraction or a local horizon.</Notice>
 								</>
 							) : (
 								<p className="m-0 text-sm text-ink-300">Scored only inside a window.</p>
@@ -172,8 +172,8 @@ function MinorBodyDetails({ analysis, cursor, timeZone }: { readonly analysis: T
 				<p className="m-0 text-sm text-ink-300">No source gives this body's trajectory over the night, so nothing is known of its visibility.</p>
 			)}
 			{ephemeris?.fallbackReason && <p className="m-0 text-xs text-warning">{FALLBACK_LABELS[ephemeris.fallbackReason]}</p>}
-			{ephemeris?.approximate && <p className="m-0 text-xs text-ink-300">A two-body orbit ignores the planets' pull: its error grows with the age of the elements and near the planets. Enable an SPK kernel of the body, or allow JPL, for an accurate trajectory.</p>}
-			<p className="m-0 text-xs text-ink-300">Positions are geometric and topocentric, without light-time. Magnitudes are estimates from published photometry; comets often differ.</p>
+			{ephemeris?.approximate && <Notice>A two-body orbit ignores the planets' pull: its error grows with the age of the elements and near the planets. Enable an SPK kernel of the body, or allow JPL, for an accurate trajectory.</Notice>}
+			<Notice>Positions are geometric and topocentric, without light-time. Magnitudes are estimates from published photometry; comets often differ.</Notice>
 		</section>
 	)
 }

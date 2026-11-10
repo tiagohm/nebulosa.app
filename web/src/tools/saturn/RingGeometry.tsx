@@ -1,6 +1,7 @@
 import type { SaturnRings } from 'api'
 import { formatDegrees } from '../../format'
 import { DataList, DataRow } from '../../ui/DataRow'
+import { Notice } from '../../ui/Notice'
 
 // The ring geometry at the tool's instant: the signed openings toward the Earth and the Sun, the pole's position angle,
 // the apparent sizes of the rings and the disk, which face of the rings the Earth sees, and whether that face is lit.
@@ -34,7 +35,7 @@ export function RingGeometry({ rings }: RingGeometryProps) {
 				<DataRow label="Disk">{`${(2 * rings.equatorialRadius * ARCSEC).toFixed(2)}″ × ${(2 * rings.polarRadius * ARCSEC).toFixed(2)}″`}</DataRow>
 				<DataRow label="Distance">{`${rings.distance.toFixed(4)} AU`}</DataRow>
 			</DataList>
-			<p className="m-0 text-xs text-ink-300">{ILLUMINATION[rings.illumination]} The ring drawing is schematic: its brightness and the shadows are not predicted.</p>
+			<Notice>{ILLUMINATION[rings.illumination]} The ring drawing is schematic: its brightness and the shadows are not predicted.</Notice>
 		</div>
 	)
 }

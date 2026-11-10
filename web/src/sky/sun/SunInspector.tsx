@@ -10,6 +10,7 @@ import { formatDuration } from '../../tools/eclipse/eclipse'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
+import { ObjectTitle } from '../../ui/ObjectTitle'
 import { formatApparentSize, formatDeclination, formatMagnitude } from '../format'
 import { PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
@@ -66,7 +67,7 @@ function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone
 		<CollapsibleSection id="sky.visibility" title="Visibility" summary={summary}>
 			{!hasObserver ? (
 				<>
-					<p className="m-0 text-ink-300">Altitude, azimuth, sunrise, and sunset need an observing site.</p>
+					<Notice>Altitude, azimuth, sunrise, and sunset need an observing site.</Notice>
 					<div>
 						<Button variant="secondary" onClick={onSetObserver}>
 							Set Location
@@ -92,7 +93,7 @@ function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone
 							<Notice>Refracted altitude at the instant. Sunrise, transit, and sunset of {day.localDate}: the upper limb at the horizon with standard refraction (the center at −50′, geometric), from the local model.</Notice>
 						</>
 					) : (
-						<p className="m-0 text-ink-300">Computing the day…</p>
+						<Notice>Computing the day…</Notice>
 					)}
 				</>
 			)}
@@ -135,8 +136,7 @@ export function SunInspector({ selection, observer, onSetObserver, timeZone, onS
 	return (
 		<>
 			<PanelSection title="Object">
-				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{selection.name}</p>
-				<p className="m-0 text-ink-300">Star</p>
+				<ObjectTitle name={selection.name} kind="Star" />
 				{position?.magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(position.magnitude)}</DataRow>}
 				<SolarImage />
 				<ObjectActions target={SUN} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />

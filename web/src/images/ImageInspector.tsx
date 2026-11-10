@@ -89,7 +89,7 @@ export function ImageInspector({ document, view, onOpen }: ImageToolPanelProps) 
 						<DataRow label="Channels">{info.channels === 3 ? 'RGB' : info.bayer ? `Mono (CFA ${info.bayer})` : 'Mono'}</DataRow>
 					</>
 				) : (
-					<p className="m-0 text-ink-300">{document.status === 'loading' ? 'Opening…' : 'Unavailable'}</p>
+					<Notice>{document.status === 'loading' ? 'Opening…' : 'Unavailable'}</Notice>
 				)}
 			</CollapsibleSection>
 			{document.camera?.shown && !document.camera.live && <CapturedFrame frame={document.camera.shown.frame} selection={document.camera.selection.kind} />}

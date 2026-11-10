@@ -39,7 +39,7 @@ function PositionData({ selection, timeZone, children }: { readonly selection: S
 					<Notice>{positionNote(position, selection.ref.kind === 'constellation', timeZone)}</Notice>
 				</>
 			) : (
-				!positionError && <p className="m-0 text-ink-300">{loading ? 'Computing the position…' : 'No position.'}</p>
+				!positionError && <Notice>{loading ? 'Computing the position…' : 'No position.'}</Notice>
 			)}
 			{positionError && <Notice error>Ephemeris unavailable: {positionError}</Notice>}
 		</>
@@ -70,7 +70,7 @@ export function ObserverSection({ position, events, hasObserver, onSetObserver, 
 	if (!hasObserver || position.altitude === undefined || position.azimuth === undefined) {
 		return (
 			<CollapsibleSection id="sky.visibility" title="Visibility">
-				<p className="m-0 text-ink-300">Altitude, azimuth, rise, and set need an observing site.</p>
+				<Notice>Altitude, azimuth, rise, and set need an observing site.</Notice>
 				<div>
 					<Button variant="secondary" onClick={onSetObserver}>
 						Set Location

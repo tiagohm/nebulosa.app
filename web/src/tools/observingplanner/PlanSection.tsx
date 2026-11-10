@@ -238,7 +238,7 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 							{formatHours(preview.totals.unallocatedMs)} of {formatHours(preview.totals.scopeMs)}
 						</DataRow>
 					</DataList>
-					<p className="m-0 text-xs text-ink-300">One target at a time: blocks of different items must not overlap. Dark time is where the Sun is below the plan's limit.</p>
+					<Notice>One target at a time: blocks of different items must not overlap. Dark time is where the Sun is below the plan's limit.</Notice>
 					{document.items.length > 0 && <PlanTimeline plan={document} preview={preview} timeZone={timeZone} onMove={(itemId, start) => editItem(itemId, (item) => ({ ...item, scheduledStartAt: start }))} />}
 				</>
 			)}

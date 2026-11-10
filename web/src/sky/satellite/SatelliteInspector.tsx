@@ -8,6 +8,7 @@ import { openArtificialSatellites } from '../../tools/artificialsatellites/artif
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
+import { ObjectTitle } from '../../ui/ObjectTitle'
 import { skyClock, skyTime } from '../clock'
 import { formatDeclination, formatRightAscension, formatSolarSystemDistance } from '../format'
 import type { SkySelection } from '../sky'
@@ -45,9 +46,7 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 	return (
 		<>
 			<PanelSection title="Object">
-				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{object?.name ?? selection.name}</p>
-				<p className="m-0 text-ink-300">{OBJECT_TYPE_NAMES[object?.objectType ?? 'unknown']}</p>
-				<p className="m-0 text-xs leading-5 text-ink-200">{[`NORAD ${noradId}`, object?.cosparId].filter(Boolean).join(' · ')}</p>
+				<ObjectTitle name={object?.name ?? selection.name} kind={OBJECT_TYPE_NAMES[object?.objectType ?? 'unknown']} designations={[`NORAD ${noradId}`, object?.cosparId].filter(Boolean).join(' · ')} />
 				<DataRow label="Brightness">Unknown</DataRow>
 				{detailsError && <Notice error>Details unavailable: {detailsError}</Notice>}
 				<div className="flex flex-wrap gap-2">

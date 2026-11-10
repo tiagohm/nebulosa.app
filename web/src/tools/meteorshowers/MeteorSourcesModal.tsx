@@ -42,7 +42,7 @@ export function MeteorSourcesModal({ open, onClose, timeZone }: { readonly open:
 							{iau.lastFailureAt !== undefined && iau.lastErrorCode && <DataRow label="Last refresh failed">{`${formatDateTime(iau.lastFailureAt, timeZone, false)}: ${FAILURE_LABELS[iau.lastErrorCode] ?? iau.lastErrorCode}`}</DataRow>}
 						</DataList>
 					) : (
-						<p className="m-0 text-xs text-ink-300">Reading the sources…</p>
+						<Notice>Reading the sources…</Notice>
 					)}
 					{state.error && <Notice error>{state.error}</Notice>}
 					<Actions>
@@ -50,13 +50,13 @@ export function MeteorSourcesModal({ open, onClose, timeZone }: { readonly open:
 							{state.refreshing ? 'Updating…' : 'Update Catalog'}
 						</Button>
 					</Actions>
-					<p className="m-0 text-xs text-ink-300">Downloads the official stream catalog again. A document that cannot be validated never replaces the one in use.</p>
+					<Notice>Downloads the official stream catalog again. A document that cannot be validated never replaces the one in use.</Notice>
 				</section>
 				<section className="flex flex-col gap-1">
 					<h3 className="m-0 text-sm font-semibold text-ink-100">Visual Data</h3>
 					{visual && (
 						<>
-							<p className="m-0 text-xs text-ink-300">{`${visual.showerCount} major showers curated by hand, revision ${visual.revision}; year-specific notes curated for ${visual.annualPredictionYears.join(' and ')}.`}</p>
+							<Notice>{`${visual.showerCount} major showers curated by hand, revision ${visual.revision}; year-specific notes curated for ${visual.annualPredictionYears.join(' and ')}.`}</Notice>
 							<ul className="m-0 list-disc pl-4 text-xs text-ink-300">
 								{visual.sources.map((source) => (
 									<li key={source.id}>
@@ -66,7 +66,7 @@ export function MeteorSourcesModal({ open, onClose, timeZone }: { readonly open:
 									</li>
 								))}
 							</ul>
-							<p className="m-0 text-xs text-ink-300">Used with credit as the IMO allows; this is a small subset, not the full Working List, and implies no endorsement.</p>
+							<Notice>Used with credit as the IMO allows; this is a small subset, not the full Working List, and implies no endorsement.</Notice>
 						</>
 					)}
 				</section>

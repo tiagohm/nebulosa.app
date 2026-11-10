@@ -140,21 +140,21 @@ export function PlanetaryEvents() {
 					<Checkbox key={kind} label={KIND_LABELS[kind]} checked={state.kinds.includes(kind)} onChange={(on) => (planetaryEventsState.kinds = toggle(state.kinds, kind, on))} />
 				))}
 				<NumberInput label="Appulse threshold" value={state.thresholdDegrees} min={THRESHOLD_DEGREES.min} max={THRESHOLD_DEGREES.max} step={0.1} suffix="°" onChange={(value) => (planetaryEventsState.thresholdDegrees = value)} />
-				<p className="m-0 text-xs text-ink-300">Appulses wider than the threshold are not listed; conjunctions always are.</p>
+				<Notice>Appulses wider than the threshold are not listed; conjunctions always are.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="planetaryEvents.visibility" title="Visibility" summary={FILTER_LABELS[state.visibilityFilter]} defaultOpen={false}>
 				<Select label="Show" options={VISIBILITY_FILTERS} value={state.visibilityFilter} format={(value: VisibilityFilter) => FILTER_LABELS[value]} onChange={(value) => (planetaryEventsState.visibilityFilter = value)} />
 			</CollapsibleSection>
 			<CollapsibleSection id="planetaryEvents.ephemeris" title="Ephemeris and Definitions" summary={sourceName(signature)} defaultOpen={false}>
-				<p className="m-0 text-xs text-ink-300">{describeSource(signature) ?? 'Not computed yet.'}</p>
-				<p className="m-0 text-xs text-ink-300">
+				<Notice>{describeSource(signature) ?? 'Not computed yet.'}</Notice>
+				<Notice>
 					Local only: the SPICE kernels you installed or the VSOP87E theory, never JPL Horizons. Policy: {signature?.policy ?? '—'}. Model version {signature?.modelVersion ?? '—'}.
-				</p>
-				<p className="m-0 text-xs text-ink-300">
+				</Notice>
+				<Notice>
 					Events are geocentric apparent (light time, aberration, solar deflection) on the true ecliptic of date; conjunctions, oppositions, and quadratures are defined by ecliptic longitude, an appulse by the least separation, the closest approach by the geometric distance. Times are refined far below a
 					second, but shown to the minute: VSOP87E and the kernels can differ by seconds to minutes.
-				</p>
-				<p className="m-0 text-xs text-ink-300">The site never changes an event's time; it only says when its planets can be watched.</p>
+				</Notice>
+				<Notice>The site never changes an event's time; it only says when its planets can be watched.</Notice>
 				<Button variant="secondary" onClick={() => openKernelLibrary()}>
 					Manage Kernels
 				</Button>
@@ -212,7 +212,7 @@ export function PlanetaryEvents() {
 							{answer && state.view === 'calendar' && month && firstMonth && lastMonth && (
 								<PlanetaryEventsCalendar month={month} events={events} selected={state.selected} timeZone={zone} first={firstMonth} last={lastMonth} onMonth={(value) => (planetaryEventsState.month = value)} onSelect={(id) => selectEvent(planetaryEventsState, id)} />
 							)}
-							{!answer && state.searchLoading && <p className="m-0 text-xs text-ink-300">Computing the events of the range…</p>}
+							{!answer && state.searchLoading && <Notice>Computing the events of the range…</Notice>}
 						</div>
 						<div className="flex min-w-0 flex-col gap-2">
 							{answer && selected ? (
@@ -231,7 +231,7 @@ export function PlanetaryEvents() {
 									onSelect={(id) => selectEvent(planetaryEventsState, id)}
 								/>
 							) : (
-								answer && events.length > 0 && <p className="m-0 text-xs text-ink-300">Choose an event to see its circumstances, when it can be watched, and its curve.</p>
+								answer && events.length > 0 && <Notice>Choose an event to see its circumstances, when it can be watched, and its curve.</Notice>
 							)}
 						</div>
 					</div>

@@ -38,7 +38,7 @@ export function MoonPhysicalSection({ appearance, time, timeZone }: { readonly a
 					</Notice>
 				</>
 			) : (
-				<p className="m-0 text-ink-300">Computing…</p>
+				<Notice>Computing…</Notice>
 			)}
 		</CollapsibleSection>
 	)

@@ -24,7 +24,7 @@ export function MoonPhasesSection({ phases, timeZone }: { readonly phases?: read
 					<Notice>Geocentric instants after the Sky instant, from the local model (Meeus).</Notice>
 				</>
 			) : (
-				<p className="m-0 text-ink-300">Computing the phases…</p>
+				<Notice>Computing the phases…</Notice>
 			)}
 		</CollapsibleSection>
 	)

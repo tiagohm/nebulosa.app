@@ -35,7 +35,7 @@ export function SunEclipseSection({ hasObserver, timeZone }: { readonly hasObser
 					<Notice>The first solar eclipse after the Sky instant, anywhere on the Earth; the greatest eclipse is where and when the shadow axis passes nearest the Earth&apos;s center.</Notice>
 				</>
 			) : (
-				!error && <p className="m-0 text-ink-300">{loading ? 'Searching the next eclipse…' : 'No eclipse.'}</p>
+				!error && <Notice>{loading ? 'Searching the next eclipse…' : 'No eclipse.'}</Notice>
 			)}
 			{error && <Notice error>Eclipse unavailable: {error}</Notice>}
 		</CollapsibleSection>

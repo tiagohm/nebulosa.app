@@ -1,5 +1,6 @@
 import type { MeteorNightRanking as Ranking } from 'api'
 import { formatDegrees, formatPercent } from '../../format'
+import { Notice } from '../../ui/Notice'
 import { Cell, Row, Table } from '../../ui/Table'
 import { REASON_LABELS } from './meteorshowers.format'
 
@@ -42,11 +43,11 @@ export function MeteorNightRanking({ ranking, onSelect }: { readonly ranking: Ra
 					))}
 				</Table>
 			</div>
-			<p className="m-0 text-xs text-ink-300">
+			<Notice>
 				{modelled
 					? 'Ordered by the count modelled from the published activity profile under the assumptions in the panel; a model, never a forecast of what will be seen.'
 					: 'Ordered by geometric suitability, the radiant height integrated over the windows in hours. It ignores how active the shower is each night and the Moon, shown apart.'}
-			</p>
+			</Notice>
 		</div>
 	)
 }

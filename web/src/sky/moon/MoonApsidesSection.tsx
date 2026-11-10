@@ -28,7 +28,7 @@ export function MoonApsidesSection({ apsides, timeZone }: { readonly apsides?: r
 					<Notice>Geocentric distance of the Moon&apos;s center, from the local model (Meeus).</Notice>
 				</>
 			) : (
-				<p className="m-0 text-ink-300">Computing the apsides…</p>
+				<Notice>Computing the apsides…</Notice>
 			)}
 		</CollapsibleSection>
 	)

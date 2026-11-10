@@ -118,10 +118,10 @@ export function OrbitComparison() {
 
 	return (
 		<CollapsibleSection id="orbitalmechanics.comparison" title="Compare with SPICE" summary={comparison ? `${comparison.response.name}, max ${km(comparison.response.summary.maxDistance).toPrecision(4)} km` : undefined} defaultOpen={false}>
-			<p className="m-0 text-xs text-ink-300">
+			<Notice>
 				Starts a two-body orbit from the target&apos;s SPK state at the clock&apos;s instant, about {state.center?.name ?? 'the center'}, and compares it with the installed SPICE kernels over the span. The difference is between two models, zero at the anchor by construction, and not an uncertainty or a
 				prediction of an impact.
-			</p>
+			</Notice>
 			<NumberInput label="Target (NAIF ID)" value={target} step={1} onChange={setTarget} />
 			<NumberInput label="Days before and after the anchor" value={halfSpan} min={0.001} step={0.001} onChange={setHalfSpan} />
 			<NumberInput label="Instants" value={count} min={2} max={COMPARE_COUNT_LIMIT} step={1} onChange={setCount} />
@@ -140,7 +140,7 @@ export function OrbitComparison() {
 					</>
 				)}
 			</Actions>
-			{refusal && <p className="m-0 text-xs text-ink-300">{refusal}</p>}
+			{refusal && <Notice>{refusal}</Notice>}
 			{state.comparisonError && <Notice error>{state.comparisonError}</Notice>}
 			{comparison && (
 				<>

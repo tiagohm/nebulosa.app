@@ -6,6 +6,7 @@ import type { SiteLocation } from '../../location/site'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
+import { ObjectTitle } from '../../ui/ObjectTitle'
 import { formatApparentSize, formatMagnitude } from '../format'
 import { ObserverSection, PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
@@ -67,8 +68,7 @@ export function MoonInspector({ selection, observer, onSetObserver, timeZone, on
 	return (
 		<>
 			<PanelSection title="Object">
-				<p className="m-0 text-base leading-6 font-semibold text-ink-100">{selection.name}</p>
-				<p className="m-0 text-ink-300">Natural Satellite</p>
+				<ObjectTitle name={selection.name} kind="Natural Satellite" />
 				{position?.magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(position.magnitude)}</DataRow>}
 				<MoonImage time={time} observer={place} />
 				<ObjectActions target={MOON} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />

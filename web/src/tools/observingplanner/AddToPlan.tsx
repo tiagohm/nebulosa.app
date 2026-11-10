@@ -79,7 +79,7 @@ export function AddToPlan({ target, onClose, location, siteId, eveningDate, cons
 					disabledReason={(id) => (id === NEW_PLAN && !canCreate ? 'Set the observing site of this profile first' : undefined)}
 				/>
 				{selected === NEW_PLAN && <TextInput label="Name" value={name} placeholder={eveningDate ? `Night of ${eveningDate}` : 'Night plan'} onChange={(event) => setName(event.target.value)} />}
-				{selected === NEW_PLAN && canCreate && <p className="m-0 text-xs text-ink-300">The new plan copies the active site, the night of {eveningDate}, and the constraints of the tool.</p>}
+				{selected === NEW_PLAN && canCreate && <Notice>The new plan copies the active site, the night of {eveningDate}, and the constraints of the tool.</Notice>}
 				{error && <Notice error>{error}</Notice>}
 			</div>
 			<ModalActions>

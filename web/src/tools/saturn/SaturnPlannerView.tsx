@@ -170,10 +170,10 @@ export function SaturnPlanner() {
 				<Checkbox label="Rings" checked={state.showRings} onChange={(on) => (saturnPlannerState.showRings = on)} />
 			</CollapsibleSection>
 			<CollapsibleSection id="saturn.ephemeris" title="Ephemeris" summary={moonSignature ? (moonSignature.source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E + TASS 1.7') : ringSignature ? (ringSignature.source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E') : undefined} defaultOpen={false}>
-				<p className="m-0 text-xs text-ink-300">Rings: {describeSource(ringSignature) ?? 'not computed yet.'}</p>
-				<p className="m-0 text-xs text-ink-300">Moons: {describeSource(moonSignature) ?? (state.moonsRefused ? 'refused by the ephemeris policy.' : 'not computed yet.')}</p>
-				{readiness('rings') && <p className="m-0 text-xs text-ink-300">{readiness('rings')}</p>}
-				{readiness('moons') && <p className="m-0 text-xs text-ink-300">{readiness('moons')}</p>}
+				<Notice>Rings: {describeSource(ringSignature) ?? 'not computed yet.'}</Notice>
+				<Notice>Moons: {describeSource(moonSignature) ?? (state.moonsRefused ? 'refused by the ephemeris policy.' : 'not computed yet.')}</Notice>
+				{readiness('rings') && <Notice>{readiness('rings')}</Notice>}
+				{readiness('moons') && <Notice>{readiness('moons')}</Notice>}
 				<Button variant="secondary" onClick={() => openKernelLibrary()}>
 					Manage Kernels
 				</Button>
@@ -232,7 +232,7 @@ export function SaturnPlanner() {
 						</div>
 						<div className="flex min-w-0 flex-col gap-2">
 							{state.track && rings && <MoonChart track={state.track} equatorialRadius={rings.equatorialRadius} ringRadius={ringRadius} moons={state.moons} time={state.time} timeZone={displayZone.zone} onTime={(time) => setTime(saturnPlannerState, time)} />}
-							{state.trackLoading && !state.track && <p className="m-0 text-xs text-ink-300">Computing the moons over the period…</p>}
+							{state.trackLoading && !state.track && <Notice>Computing the moons over the period…</Notice>}
 							{state.trackError && <Notice error>{state.trackError}</Notice>}
 						</div>
 					</div>
@@ -242,7 +242,7 @@ export function SaturnPlanner() {
 							<SegmentedControl options={RING_HISTORIES} value={state.history} format={(value) => RING_HISTORY_LABELS[value]} onChange={(value) => (saturnPlannerState.history = value)} />
 						</div>
 						<div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-							{rings ? <RingGeometry rings={rings} /> : <p className="m-0 text-xs text-ink-300">Computing the rings…</p>}
+							{rings ? <RingGeometry rings={rings} /> : <Notice>Computing the rings…</Notice>}
 							<div className="min-w-0">
 								{state.timeline && <RingHistoryChart timeline={state.timeline} time={state.time} timeZone={displayZone.zone} onTime={(time) => setTime(saturnPlannerState, time)} />}
 								{state.timelineError && <Notice error>{state.timelineError}</Notice>}

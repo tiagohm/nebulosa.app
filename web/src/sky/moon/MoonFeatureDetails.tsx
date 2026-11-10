@@ -3,6 +3,7 @@ import type { Vec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { formatGeographic, formatKilometers } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
+import { ObjectTitle } from '../../ui/ObjectTitle'
 import type { LunarFeature } from './moon.features'
 import { projectPoint } from './moon.geometry'
 
@@ -25,8 +26,7 @@ function featureState(feature: LunarFeature, view: Mat3, sun: Vec3) {
 export function MoonFeatureDetails({ feature, view, sun }: { readonly feature: LunarFeature; readonly view: Mat3; readonly sun: Vec3 }) {
 	return (
 		<div className="flex flex-col gap-2">
-			<p className="m-0 text-base leading-6 font-semibold text-ink-100">{feature.name}</p>
-			<p className="m-0 text-ink-300">{feature.descriptor}</p>
+			<ObjectTitle name={feature.name} kind={feature.descriptor} />
 			<DataRow label="Center">{formatGeographic(feature.latitude, feature.longitude, 2)}</DataRow>
 			{feature.dimension !== undefined && <DataRow label={feature.elongated ? 'Length' : 'Diameter'}>≈ {formatKilometers(feature.dimension, feature.dimension < 10 ? 1 : 0)}</DataRow>}
 			{feature.approvalYear !== undefined && <DataRow label="Approved">{feature.approvalYear}</DataRow>}

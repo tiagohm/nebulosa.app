@@ -549,9 +549,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 					<span className="break-all">{master.contentDigest}</span>
 				</DataRow>
 				{master.sourceNames.map((name) => (
-					<p key={name} className="m-0 text-xs text-ink-300">
-						{name}
-					</p>
+					<Notice key={name}>{name}</Notice>
 				))}
 			</CollapsibleSection>
 		</>

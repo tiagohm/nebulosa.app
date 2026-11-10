@@ -181,8 +181,8 @@ function OrbitList() {
 					New Orbit
 				</Button>
 			</Actions>
-			{refusal && <p className="m-0 text-xs text-ink-300">{refusal}</p>}
-			<p className="m-0 text-xs text-ink-300">Every orbit is about the same center, in the same axes, on the same clock.</p>
+			{refusal && <Notice>{refusal}</Notice>}
+			<Notice>Every orbit is about the same center, in the same axes, on the same clock.</Notice>
 		</CollapsibleSection>
 	)
 }

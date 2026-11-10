@@ -68,7 +68,7 @@ export function ActiveRegionsSection() {
 			{report ? (
 				<>
 					{report.regions.length === 0 ? (
-						<p className="m-0 text-ink-300">No active regions reported{report.observedDate && ` on ${report.observedDate}`}.</p>
+						<Notice>No active regions reported{report.observedDate && ` on ${report.observedDate}`}.</Notice>
 					) : (
 						<ul className="m-0 flex list-none flex-col p-0">
 							{report.regions.map((region) => (
@@ -83,7 +83,7 @@ export function ActiveRegionsSection() {
 					{report.stale && <Notice error>NOAA cannot be reached: this is the last report downloaded.</Notice>}
 				</>
 			) : (
-				!error && <p className="m-0 text-ink-300">{loading ? 'Loading the NOAA report…' : 'No report.'}</p>
+				!error && <Notice>{loading ? 'Loading the NOAA report…' : 'No report.'}</Notice>
 			)}
 			{error && <Notice error>NOAA report unavailable: {error}</Notice>}
 		</CollapsibleSection>

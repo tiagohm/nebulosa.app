@@ -128,14 +128,14 @@ export function MeteorShowers() {
 				<NumberInput label="Lowest radiant altitude" value={state.minimumAltitude} min={0} max={80} step={1} suffix="°" onChange={(value) => (meteorShowersState.minimumAltitude = value)} />
 				<Checkbox label="Keep the radiant away from the Moon" checked={state.moonSeparation !== undefined} onChange={(on) => (meteorShowersState.moonSeparation = on ? 30 : undefined)} />
 				{state.moonSeparation !== undefined && <NumberInput label="Smallest Moon separation" value={state.moonSeparation} min={5} max={120} step={5} suffix="°" onChange={(value) => (meteorShowersState.moonSeparation = value)} />}
-				<p className="m-0 text-xs text-ink-300">Windows are geometric: darkness, the radiant above the lowest altitude, and the Moon constraint while the Moon is up. They say when the radiant can be watched, not how many meteors appear.</p>
+				<Notice>Windows are geometric: darkness, the radiant above the lowest altitude, and the Moon constraint while the Moon is up. They say when the radiant can be watched, not how many meteors appear.</Notice>
 				<NumberInput label="Nights ranked" value={state.rankedNights} min={1} max={MAX_RANKED_NIGHTS} step={1} onChange={(value) => (meteorShowersState.rankedNights = value)} />
 			</CollapsibleSection>
 			<CollapsibleSection id="meteorShowers.rates" title="Modelled Rates" summary={state.rates.enabled ? `LM ${state.rates.limitingMagnitude}` : 'Off'} defaultOpen={false}>
 				<Checkbox label="Model meteor rates where a published activity profile exists" checked={state.rates.enabled} onChange={(on) => (meteorShowersState.rates.enabled = on)} />
 				<NumberInput label="Limiting magnitude" value={state.rates.limitingMagnitude} min={3} max={7.5} step={0.1} disabled={!state.rates.enabled} onChange={(value) => (meteorShowersState.rates.limitingMagnitude = value)} />
 				<NumberInput label="Field obstructed" value={state.rates.obstructedPercent} min={0} max={90} step={5} suffix="%" disabled={!state.rates.enabled} onChange={(value) => (meteorShowersState.rates.obstructedPercent = value)} />
-				<p className="m-0 text-xs text-ink-300">Your assumptions, not measurements: the rate is the profile ZHR scaled by the radiant height, the limiting magnitude, and the obstruction, for an ideal observer. No Moon, weather, or sporadic background is applied.</p>
+				<Notice>Your assumptions, not measurements: the rate is the profile ZHR scaled by the radiant height, the limiting magnitude, and the obstruction, for an ideal observer. No Moon, weather, or sporadic background is applied.</Notice>
 			</CollapsibleSection>
 		</>
 	)
@@ -184,7 +184,7 @@ export function MeteorShowers() {
 							{state.month && (
 								<MeteorShowerCalendar month={state.month} entries={state.calendar?.entries ?? []} annualEvents={state.calendar?.annualEvents ?? []} selected={state.selected} timeZone={zone} onMonth={(month) => (meteorShowersState.month = month)} onSelect={(id) => selectShower(meteorShowersState, id)} />
 							)}
-							<p className="m-0 text-xs text-ink-300">{state.section === 'upcoming' ? 'Curated visual showers.' : 'Established, working, and to-be-established IAU showers; removed records are not shown.'}</p>
+							<Notice>{state.section === 'upcoming' ? 'Curated visual showers.' : 'Established, working, and to-be-established IAU showers; removed records are not shown.'}</Notice>
 						</>
 					)}
 					{state.detailError && <Notice error>{state.detailError}</Notice>}
@@ -207,7 +207,7 @@ export function MeteorShowers() {
 							forecast={state.forecast?.place === place ? state.forecast.forecast : undefined}
 						/>
 					) : (
-						!state.selected && <p className="m-0 text-xs text-ink-300">Choose a shower to see its sources, its dates, and when its radiant can be watched.</p>
+						!state.selected && <Notice>Choose a shower to see its sources, its dates, and when its radiant can be watched.</Notice>
 					)}
 				</div>
 			</div>

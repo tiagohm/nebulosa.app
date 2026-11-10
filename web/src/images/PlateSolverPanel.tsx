@@ -70,7 +70,7 @@ export function PlateSolverPanel({ document, view, camera, onOpen }: ImageToolPa
 	if (!view) {
 		return (
 			<CollapsibleSection id="images.plate-solver.plate-solving" title="Plate Solving">
-				<p className="m-0 text-ink-300">{imageUnavailableReason(document) ?? 'The image is unavailable.'}</p>
+				<Notice>{imageUnavailableReason(document) ?? 'The image is unavailable.'}</Notice>
 			</CollapsibleSection>
 		)
 	}

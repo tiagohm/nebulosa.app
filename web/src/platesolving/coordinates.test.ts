@@ -47,6 +47,9 @@ describe('angles', () => {
 		expect(formatPositionAngle(undefined)).toBe(MISSING)
 		expect(formatPositionAngle(deg(123.456))).toBe('123.46°')
 		expect(formatPositionAngle(deg(359.999))).toBe('0.00°')
+		expect(formatPositionAngle(deg(359.96), 1)).toBe('0.0°')
+		expect(formatPositionAngle(deg(-0.04), 1)).toBe('0.0°')
+		expect(formatPositionAngle(deg(-90), 1)).toBe('270.0°')
 	})
 
 	test('write pixel scales in arcseconds per pixel', () => {

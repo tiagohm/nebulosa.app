@@ -1,5 +1,6 @@
 import type { JupiterState } from 'api'
 import { useId } from 'react'
+import { formatDegrees } from '../../format'
 import type { ViewBox } from '../planetary/PanZoom'
 import { type MoonPosition, type PlanetOrientation, screenOffset } from '../planetary/planetary'
 import { type GalileanMoon, GALILEAN_MOONS, MOON_COLORS, MOON_INITIALS, MOON_LABELS } from './jupiter'
@@ -115,7 +116,7 @@ export function JupiterViewer({ state, positions, orientation, box, moons }: Jup
 						const [x, y] = screenOffset(state.grs.east, state.grs.north, orientation)
 						return (
 							<ellipse cx={x} cy={y} rx={GRS_AXES[0]} ry={GRS_AXES[1]} transform={`rotate(${rotation} ${x} ${y})`} fill="#c0503a" opacity={0.85}>
-								<title>{`Great Red Spot from your model, System II ${(state.grs.longitude * DEGREES).toFixed(1)}°, drawn at a schematic 22° S`}</title>
+								<title>{`Great Red Spot from your model, System II ${formatDegrees(state.grs.longitude, 1)}, drawn at a schematic 22° S`}</title>
 							</ellipse>
 						)
 					})()}

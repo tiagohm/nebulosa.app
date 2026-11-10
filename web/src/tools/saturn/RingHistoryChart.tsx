@@ -1,6 +1,6 @@
 import type { SaturnRingEvent, SaturnRingTimeline } from 'api'
 import type { KeyboardEvent, MouseEvent } from 'react'
-import { formatDate } from '../../format'
+import { formatDate, formatDegrees } from '../../format'
 import { moveIndex } from '../../ui/navigation'
 import { RING_EVENT_LABELS } from './saturn'
 
@@ -115,7 +115,7 @@ export function RingHistoryChart({ timeline, time, timeZone, onTime }: RingHisto
 							}}
 						>
 							{eventMark(event, x(event.time), y((event.kind === 'solarPlaneCrossing' ? event.solarOpening : event.earthOpening) * DEGREES))}
-							<title>{`${RING_EVENT_LABELS[event.kind]} · ${formatDate(event.time, timeZone)} · B ${(event.earthOpening * DEGREES).toFixed(2)}° · B′ ${(event.solarOpening * DEGREES).toFixed(2)}°`}</title>
+							<title>{`${RING_EVENT_LABELS[event.kind]} · ${formatDate(event.time, timeZone)} · B ${formatDegrees(event.earthOpening, 2)} · B′ ${formatDegrees(event.solarOpening, 2)}`}</title>
 						</g>
 					))}
 					{time !== undefined && time >= start && time <= end && <line x1={x(time)} x2={x(time)} y1={MARGIN.top} y2={MARGIN.top + plotHeight} stroke="var(--color-ink-100)" strokeDasharray="2 3" />}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees } from '../../format'
+import { formatArcsec, formatDegrees } from '../../format'
 import { openObservingSites, type SiteLocation } from '../../location/site'
 import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
@@ -62,9 +62,6 @@ const ZOOM = { maxHalfWidth: 62, minHalfWidth: 1, initialHalfWidth: 7, aspect: 2
 
 // Half-width of the close-up of Saturn and its rings, in Saturn radii.
 const PLANET_HALF_WIDTH = 2.8
-
-// Arcseconds per radian.
-const ARCSEC = (180 / Math.PI) * 3600
 
 // Whether the browser asks for reduced motion.
 function prefersReducedMotion() {
@@ -201,7 +198,7 @@ export function SaturnPlanner() {
 						{rings && (
 							<span>
 								· B {rings.earthOpening >= 0 ? '+' : '−'}
-								{formatDegrees(Math.abs(rings.earthOpening), 2)} · diameter {(rings.equatorialRadius * 2 * ARCSEC).toFixed(1)}″
+								{formatDegrees(Math.abs(rings.earthOpening), 2)} · diameter {formatArcsec(rings.equatorialRadius * 2, 1)}
 							</span>
 						)}
 					</p>

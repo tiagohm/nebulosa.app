@@ -56,10 +56,10 @@ export function formatPixel(pixel: Point): string {
 	return `${pixel.x}, ${pixel.y}`
 }
 
-// Returns a position angle in radians as degrees from north through east in [0, 360) ("123.45°"), or MISSING when
-// undefined.
-export function formatPositionAngle(angle: number | undefined): string {
-	return angle === undefined ? MISSING : fullTurnDegrees(angle, 2)
+// Returns a position angle in radians as degrees from north through east in [0, 360) with `digits` decimals (2 by
+// default): "123.45°", or MISSING when undefined.
+export function formatPositionAngle(angle: number | undefined, digits: number = 2): string {
+	return angle === undefined ? MISSING : fullTurnDegrees(angle, digits)
 }
 
 // Returns a pixel scale in radians per pixel as arcseconds per pixel ("2.736″/px").

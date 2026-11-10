@@ -1,7 +1,7 @@
 import type { OrbitAngle, OrbitElementsPayload, OrbitSolveResponse, OrbitVector, OrbitWarning } from 'api'
 import { RAD2DEG } from 'nebulosa/src/core/constants'
 import { useSnapshot } from 'valtio'
-import { MISSING } from '../../format'
+import { formatDegrees, MISSING } from '../../format'
 import { useActiveSite } from '../../location/useLocation'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Actions } from '../../ui/Actions'
@@ -27,14 +27,9 @@ const WARNING_TEXTS: Readonly<Record<OrbitWarning, string>> = {
 	nearParabolic: 'The eccentricity is close to 1: the period or the asymptotes change strongly with small changes of the orbit.',
 }
 
-// Degrees of an angle in radians, to four decimals.
-function degrees(radians: number) {
-	return `${(radians * RAD2DEG).toFixed(4)}°`
-}
-
 // An angle that may be undefined.
 function angle(value: OrbitAngle) {
-	return value.defined ? degrees(value.value) : UNDEFINED_REASONS[value.reason]
+	return value.defined ? formatDegrees(value.value, 4) : UNDEFINED_REASONS[value.reason]
 }
 
 // A number with four significant digits, or in exponent form when very large or small.
@@ -114,15 +109,15 @@ function ElementsSection({ elements, unit, plane }: { readonly elements: OrbitEl
 			<DataRow label="Class">{elements.conic}</DataRow>
 			<DataRow label="Eccentricity e">{elements.eccentricity.toPrecision(10)}</DataRow>
 			<DataRow label="Semi-major axis a">{elements.semiMajorAxis === undefined ? 'undefined (parabolic)' : distance(elements.semiMajorAxis, unit)}</DataRow>
-			<DataRow label="Inclination i">{degrees(elements.inclination)}</DataRow>
+			<DataRow label="Inclination i">{formatDegrees(elements.inclination, 4)}</DataRow>
 			<DataRow label="Ascending node Ω">{angle(elements.node)}</DataRow>
 			<DataRow label="Argument of periapsis ω">{angle(elements.argumentOfPeriapsis)}</DataRow>
 			<DataRow label="Longitude of periapsis ϖ">{angle(elements.longitudeOfPeriapsis)}</DataRow>
 			<DataRow label="True anomaly ν">{angle(elements.trueAnomaly)}</DataRow>
 			<DataRow label="Argument of latitude u">{angle(elements.argumentOfLatitude)}</DataRow>
-			<DataRow label="True longitude">{degrees(elements.trueLongitude)}</DataRow>
-			<DataRow label={elements.eccentricity > 1 ? 'Hyperbolic anomaly H' : 'Eccentric anomaly E'}>{elements.eccentricAnomaly === undefined ? 'undefined' : degrees(elements.eccentricAnomaly)}</DataRow>
-			<DataRow label="Mean anomaly M">{elements.meanAnomaly === undefined ? 'undefined' : degrees(elements.meanAnomaly)}</DataRow>
+			<DataRow label="True longitude">{formatDegrees(elements.trueLongitude, 4)}</DataRow>
+			<DataRow label={elements.eccentricity > 1 ? 'Hyperbolic anomaly H' : 'Eccentric anomaly E'}>{elements.eccentricAnomaly === undefined ? 'undefined' : formatDegrees(elements.eccentricAnomaly, 4)}</DataRow>
+			<DataRow label="Mean anomaly M">{elements.meanAnomaly === undefined ? 'undefined' : formatDegrees(elements.meanAnomaly, 4)}</DataRow>
 			<DataRow label="Periapsis time">{elements.periapsisTime === undefined ? 'undefined (circular)' : formatTdb(elements.periapsisTime)}</DataRow>
 		</CollapsibleSection>
 	)

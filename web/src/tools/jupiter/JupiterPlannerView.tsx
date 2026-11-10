@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees } from '../../format'
+import { formatArcsec, formatDegrees } from '../../format'
 import { openObservingSites, type SiteLocation } from '../../location/site'
 import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
@@ -141,7 +141,7 @@ export function JupiterPlanner() {
 						<span>{describeDisplayZone(displayZone)}</span>
 						{state.state && (
 							<span>
-								· CM II {formatDegrees(state.state.disk.centralMeridian.II, 1)} · diameter {((state.state.disk.equatorialRadius * 2 * 180 * 3600) / Math.PI).toFixed(1)}″
+								· CM II {formatDegrees(state.state.disk.centralMeridian.II, 1)} · diameter {formatArcsec(state.state.disk.equatorialRadius * 2, 1)}
 							</span>
 						)}
 					</p>

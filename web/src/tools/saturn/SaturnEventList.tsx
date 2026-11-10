@@ -1,4 +1,5 @@
-import { formatDateTime, formatDegrees, formatUtcDateTime } from '../../format'
+import { formatArcsec, formatDateTime, formatDegrees, formatUtcDateTime } from '../../format'
+import { formatPositionAngle } from '../../platesolving/coordinates'
 import { Cell, Row, Table } from '../../ui/Table'
 import { listedId, MOON_LABELS, RING_EVENT_DEFINITIONS, RING_EVENT_LABELS, type SaturnListedEvent } from './saturn'
 
@@ -10,12 +11,6 @@ import { listedId, MOON_LABELS, RING_EVENT_DEFINITIONS, RING_EVENT_LABELS, type 
 // Columns of the table.
 const COLUMNS = ['When', 'Event', 'Value', 'UTC'] as const
 
-// Arcseconds per radian.
-const ARCSEC = (180 / Math.PI) * 3600
-
-// Degrees per radian.
-const DEGREES = 180 / Math.PI
-
 // Name of a listed event.
 export function listedName(event: SaturnListedEvent) {
 	return event.type === 'ring' ? RING_EVENT_LABELS[event.kind] : `${MOON_LABELS[event.moon]} at greatest separation`
@@ -23,8 +18,8 @@ export function listedName(event: SaturnListedEvent) {
 
 // Value of a listed event: the openings of a ring-plane event, the separation and position angle of a maximum.
 function listedValue(event: SaturnListedEvent) {
-	if (event.type === 'ring') return `B ${(event.earthOpening * DEGREES).toFixed(2)}° · B′ ${(event.solarOpening * DEGREES).toFixed(2)}°`
-	return `${(event.separation * ARCSEC).toFixed(1)}″ at PA ${formatDegrees(((event.positionAngle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI), 1)}`
+	if (event.type === 'ring') return `B ${formatDegrees(event.earthOpening, 2)} · B′ ${formatDegrees(event.solarOpening, 2)}`
+	return `${formatArcsec(event.separation, 1)} at PA ${formatPositionAngle(event.positionAngle, 1)}`
 }
 
 export interface SaturnEventListProps {

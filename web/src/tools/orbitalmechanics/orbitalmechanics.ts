@@ -5,6 +5,7 @@ import type { MutVec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { hermiteVec3 } from 'nebulosa/src/math/numerical/spline'
 import { proxy } from 'valtio'
 import { csvField } from '../../download'
+import { MISSING } from '../../format'
 import { fetchJson, jsonInit } from '../../http'
 import { createRequestGuard, type RequestGuard } from '../../sky/selection'
 
@@ -928,7 +929,7 @@ export function interpolatedPosition(track: Pick<OrbitTrack, 'start' | 'end' | '
 export function formatTdb(jd: number) {
 	const ms = (jd - UNIX_EPOCH_JD) * 86_400_000
 	const date = new Date(Math.round(ms / 1000) * 1000)
-	return Number.isNaN(date.getTime()) ? '—' : `${date.toISOString().slice(0, 19).replace('T', ' ')} TDB`
+	return Number.isNaN(date.getTime()) ? MISSING : `${date.toISOString().slice(0, 19).replace('T', ' ')} TDB`
 }
 
 // Julian date TDB of a TDB calendar date and time typed as YYYY-MM-DDTHH:MM[:SS], or undefined when unreadable.

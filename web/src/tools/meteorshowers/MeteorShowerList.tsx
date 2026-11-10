@@ -1,4 +1,5 @@
 import type { MeteorShowerSummary } from 'api'
+import { MISSING } from '../../format'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { ACTIVITY_LABELS, formatOccurrencePeak, formatOccurrencePeriod, STATUS_LABELS } from './meteorshowers.format'
@@ -28,7 +29,7 @@ export function MeteorShowerList({ showers, selected, timeZone, onSelect }: { re
 						</Cell>
 						<Cell>{formatOccurrencePeriod(shower.occurrence, timeZone)}</Cell>
 						<Cell>{formatOccurrencePeak(shower.occurrence, timeZone)}</Cell>
-						<Cell numeric>{shower.visual?.typicalZhr ?? '—'}</Cell>
+						<Cell numeric>{shower.visual?.typicalZhr ?? MISSING}</Cell>
 					</Row>
 				)
 			})}

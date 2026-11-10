@@ -20,11 +20,6 @@ export const FLAG_LABELS: Readonly<Record<StarProfileFlag, string>> = {
 	poorFit: 'Poor fit',
 }
 
-// Formats an optional number with digits decimals, or a dash when it is absent.
-export function formatNumber(value: number | undefined, digits: number) {
-	return value === undefined ? MISSING : value.toFixed(digits)
-}
-
 // Formats a value already in the scale of the source: whole ADU, or four significant digits of a unit it does not name.
 function formatConverted(value: number, unit: SampleConversion['unit'], suffix = '') {
 	return unit === 'adu' ? `${Math.round(value)} ADU${suffix}` : `${value.toPrecision(4)}${suffix}`

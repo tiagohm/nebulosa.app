@@ -1,5 +1,5 @@
 import type { MeteorNightRanking as Ranking } from 'api'
-import { formatDegrees, formatPercent } from '../../format'
+import { formatDegrees, formatFixed, formatPercent, MISSING } from '../../format'
 import { Notice } from '../../ui/Notice'
 import { Cell, Row, Table } from '../../ui/Table'
 import { REASON_LABELS } from './meteorshowers.format'
@@ -33,11 +33,11 @@ export function MeteorNightRanking({ ranking, onSelect }: { readonly ranking: Ra
 					{ranking.nights.map((night) => (
 						<Row key={night.eveningDate} onSelect={() => onSelect(night.eveningDate)} title="Show this night">
 							<Cell>{night.eveningDate}</Cell>
-							<Cell numeric>{night.eligible ? `${night.windowHours.toFixed(1)} h` : '—'}</Cell>
-							<Cell numeric>{night.eligible ? night.radiantSineHours.toFixed(2) : '—'}</Cell>
-							<Cell numeric>{night.maximumRadiantAltitude === undefined ? '—' : formatDegrees(night.maximumRadiantAltitude, 0)}</Cell>
+							<Cell numeric>{night.eligible ? `${formatFixed(night.windowHours, 1)} h` : MISSING}</Cell>
+							<Cell numeric>{night.eligible ? formatFixed(night.radiantSineHours, 2) : MISSING}</Cell>
+							<Cell numeric>{night.maximumRadiantAltitude === undefined ? MISSING : formatDegrees(night.maximumRadiantAltitude, 0)}</Cell>
 							<Cell numeric>{`${formatPercent(night.moonIlluminationAtBest ?? night.moonIllumination)} lit`}</Cell>
-							{modelled && <Cell numeric>{night.expectedCount === undefined ? '—' : night.expectedCount.toFixed(0)}</Cell>}
+							{modelled && <Cell numeric>{night.expectedCount === undefined ? MISSING : formatFixed(night.expectedCount, 0)}</Cell>}
 							<Cell>{night.reasons.map((reason) => REASON_LABELS[reason]).join(' ')}</Cell>
 						</Row>
 					))}

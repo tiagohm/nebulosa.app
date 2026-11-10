@@ -1,7 +1,7 @@
 import type { SkyCatalogClass } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatAngularSize, formatHours, formatSpan } from '../../format'
+import { formatAngularSize, formatHours, formatSpan, MISSING } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { formatMagnitude } from '../../sky/format'
 import { Button } from '../../ui/Button'
@@ -115,9 +115,9 @@ function CatalogDiscovery({ location, timeZone, onAdd }: DiscoverSectionProps) {
 											{candidate.constellation && <span className="text-ink-300"> · {candidate.constellation}</span>}
 										</Cell>
 										<Cell>{candidate.typeName ?? CLASS_LABELS[candidate.class]}</Cell>
-										<Cell numeric>{candidate.magnitude === undefined ? '—' : formatMagnitude(candidate.magnitude)}</Cell>
+										<Cell numeric>{candidate.magnitude === undefined ? MISSING : formatMagnitude(candidate.magnitude)}</Cell>
 										<Cell numeric>{formatScore(candidate.score)}</Cell>
-										<Cell>{best ? formatSpan(best.start, best.end, timeZone) : '—'}</Cell>
+										<Cell>{best ? formatSpan(best.start, best.end, timeZone) : MISSING}</Cell>
 										<Cell numeric>{formatHours(candidate.longestWindowMs)}</Cell>
 										<Cell>
 											<StatusBadge tone={STATUS_LABELS[candidate.status].tone} label={STATUS_LABELS[candidate.status].label} />
@@ -155,9 +155,9 @@ function CatalogDiscovery({ location, timeZone, onAdd }: DiscoverSectionProps) {
 									{entry.designations.length > 0 && <span className="text-ink-300"> · {entry.designations.join(', ')}</span>}
 								</Cell>
 								<Cell>{entry.typeName}</Cell>
-								<Cell>{entry.constellation ?? '—'}</Cell>
+								<Cell>{entry.constellation ?? MISSING}</Cell>
 								<Cell numeric>{entry.magnitude === undefined ? 'Unknown' : formatMagnitude(entry.magnitude)}</Cell>
-								<Cell numeric>{entry.majorAxis === undefined ? '—' : formatAngularSize(entry.majorAxis)}</Cell>
+								<Cell numeric>{entry.majorAxis === undefined ? MISSING : formatAngularSize(entry.majorAxis)}</Cell>
 								<Cell>
 									<TargetActions target={{ target: entry.ref, name: entry.name }} location={location} onAdd={onAdd} />
 								</Cell>

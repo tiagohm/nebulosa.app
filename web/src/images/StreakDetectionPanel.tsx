@@ -4,7 +4,7 @@ import type { Streak } from 'nebulosa/src/imaging/analysis/streak/types'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
-import { formatDegrees, formatDuration, formatExposureTime, formatPercent, formatPixelLength, formatPixelPosition, formatSignificant, MISSING } from '../format'
+import { formatDegrees, formatDuration, formatExposureTime, formatFixed, formatPercent, formatPixelLength, formatPixelPosition, formatSignificant, MISSING } from '../format'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { activeProfile, profileState, setStreakDetectionSettings, streakDetectionSettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -283,7 +283,7 @@ function Results({ job, result, resultError, selected, onSelect }: ResultsProps)
 					{result && (
 						<List emptyText="No streaks detected." className="max-h-80 overflow-y-auto">
 							{result.streaks.map((streak, index) => (
-								<ListItem key={index} title={`Streak ${index + 1}`} description={CLASS_LABELS[result.classifications?.[index]?.class ?? 'unknown']} meta={`${streak.length.toFixed(0)} px`} selected={index === selected} onClick={() => onSelect(index)} />
+								<ListItem key={index} title={`Streak ${index + 1}`} description={CLASS_LABELS[result.classifications?.[index]?.class ?? 'unknown']} meta={`${formatFixed(streak.length, 0)} px`} selected={index === selected} onClick={() => onSelect(index)} />
 							))}
 						</List>
 					)}
@@ -311,11 +311,11 @@ function SelectedStreak({ streak, classification }: SelectedStreakProps) {
 					<DataRow label="Start">{formatPixelPosition(streak.start.x, streak.start.y)}</DataRow>
 					<DataRow label="End">{formatPixelPosition(streak.end.x, streak.end.y)}</DataRow>
 					<DataRow label="Center">{formatPixelPosition(streak.center.x, streak.center.y)}</DataRow>
-					<DataRow label="Length">{streak.length.toFixed(1)} px</DataRow>
+					<DataRow label="Length">{`${formatFixed(streak.length, 1)} px`}</DataRow>
 					<DataRow label="Width (FWHM)">{formatPixelLength(streak.width)}</DataRow>
 					<DataRow label="Angle">{formatDegrees(streak.angle)}</DataRow>
-					<DataRow label="SNR">{streak.snr === undefined ? MISSING : streak.snr.toFixed(1)}</DataRow>
-					<DataRow label="Linearity">{streak.linearity.toFixed(3)}</DataRow>
+					<DataRow label="SNR">{formatFixed(streak.snr, 1)}</DataRow>
+					<DataRow label="Linearity">{formatFixed(streak.linearity, 3)}</DataRow>
 					<DataRow label="RMS residual">{formatPixelLength(streak.rmsResidual)}</DataRow>
 					<DataRow label="Coverage">{formatPercent(streak.coverage)}</DataRow>
 					<DataRow label="Support">{streak.supportPixels} px</DataRow>
@@ -324,7 +324,7 @@ function SelectedStreak({ streak, classification }: SelectedStreakProps) {
 					<DataRow label="Mean signal">{formatSignificant(streak.meanSignal)}</DataRow>
 					<DataRow label="Peak signal">{formatSignificant(streak.peakSignal)}</DataRow>
 					<DataRow label="Saturated">{streak.saturationFraction === undefined ? MISSING : formatPercent(streak.saturationFraction, 1)}</DataRow>
-					<DataRow label="Detector confidence">{streak.confidence.toFixed(2)}</DataRow>
+					<DataRow label="Detector confidence">{formatFixed(streak.confidence, 2)}</DataRow>
 					<Classification classification={classification} />
 				</>
 			) : (
@@ -343,12 +343,12 @@ function Classification({ classification }: { readonly classification?: StreakCl
 			<span className="text-xs text-ink-300 uppercase">Classification:</span>
 			<Notice>The evidence score is an uncalibrated weight of the evidence available in this image, not a probability; Unknown means the evidence does not single out a class.</Notice>
 			<DataRow label="Class">{CLASS_LABELS[classification.class]}</DataRow>
-			<DataRow label="Evidence score">{classification.confidence.toFixed(2)}</DataRow>
+			<DataRow label="Evidence score">{formatFixed(classification.confidence, 2)}</DataRow>
 			{classification.alternatives.length > 0 && (
 				<>
 					{classification.alternatives.map((alternative) => (
 						<DataRow key={alternative.class} label={CLASS_LABELS[alternative.class]}>
-							{alternative.score.toFixed(2)}
+							{formatFixed(alternative.score, 2)}
 						</DataRow>
 					))}
 				</>
@@ -357,7 +357,7 @@ function Classification({ classification }: { readonly classification?: StreakCl
 				<>
 					{classification.evidence.map((evidence, index) => (
 						<DataRow key={index} label={evidence.description ?? evidence.kind}>
-							{evidence.score.toFixed(2)}
+							{formatFixed(evidence.score, 2)}
 						</DataRow>
 					))}
 				</>

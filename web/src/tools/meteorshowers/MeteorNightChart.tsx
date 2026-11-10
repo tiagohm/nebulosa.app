@@ -1,6 +1,6 @@
 import type { MeteorNightSample, MeteorObservingNight } from 'api'
 import { type KeyboardEvent, type MouseEvent, useState } from 'react'
-import { formatClockTime, formatDegrees } from '../../format'
+import { formatClockTime, formatDegrees, MISSING } from '../../format'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { moveIndex } from '../../ui/navigation'
 import { type SkyBand, skyBands } from '../astroweather/astroweather'
@@ -147,7 +147,7 @@ export function MeteorNightChart({ night, name, minimumAltitude, timeZone }: Met
 			{sample && (
 				<DataList>
 					<DataRow label="Time">{formatClockTime(sample.time, timeZone)}</DataRow>
-					<DataRow label="Radiant Altitude">{sample.radiantAltitude === undefined ? '—' : formatDegrees(sample.radiantAltitude, 1)}</DataRow>
+					<DataRow label="Radiant Altitude">{sample.radiantAltitude === undefined ? MISSING : formatDegrees(sample.radiantAltitude, 1)}</DataRow>
 					<DataRow label="Sun Altitude">{formatDegrees(sample.sunAltitude, 1)}</DataRow>
 					<DataRow label="Moon Altitude">{formatDegrees(sample.moonAltitude, 1)}</DataRow>
 				</DataList>

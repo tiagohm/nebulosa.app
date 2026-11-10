@@ -3,7 +3,7 @@ import type { MoffatFitFailureReason } from 'nebulosa/src/imaging/stars/profile.
 import { toArcsec } from 'nebulosa/src/math/units/angle'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatPixelLength, formatPixelPosition, MISSING } from '../format'
+import { formatDegrees, formatFixed, formatPixelLength, formatPixelPosition, MISSING } from '../format'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
 import { isotropicPixelScaleAt } from '../platesolving/wcs'
 import { activeProfile, profileState, setStarProfileSettings, starProfileSettings } from '../profile/profile'
@@ -11,7 +11,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { StarPreview } from '../stars/StarPreview'
 import { measuredStar, reinspectStar, starProfileOf } from '../stars/starprofile'
-import { FLAG_LABELS, formatFlux, formatLevel, formatNumber, formatSignal } from '../stars/starprofile.format'
+import { FLAG_LABELS, formatFlux, formatLevel, formatSignal } from '../stars/starprofile.format'
 import { MAXIMUM_RADIUS_RANGE, MINIMUM_SNR_RANGE, sameMeasurement, SEARCH_RADIUS_RANGE, STAR_PROFILE_MODELS, type StarProfileSettings } from '../stars/starprofile.settings'
 import { StarProfilePlot, type StarProfileSeries } from '../stars/StarProfilePlot'
 import { Actions } from '../ui/Actions'
@@ -192,15 +192,15 @@ function Measurement({ imageId, star, settings, selected }: MeasurementProps) {
 					<DataRow label="FWHM">{formatPixelLength(profile.fwhm, pixelScale)}</DataRow>
 					<DataRow label="FWHM Major">{formatPixelLength(profile.major, pixelScale)}</DataRow>
 					<DataRow label="FWHM Minor">{formatPixelLength(profile.minor, pixelScale)}</DataRow>
-					<DataRow label="Eccentricity">{formatNumber(profile.eccentricity, 3)}</DataRow>
-					<DataRow label="Elongation">{formatNumber(profile.elongation, 3)}</DataRow>
+					<DataRow label="Eccentricity">{formatFixed(profile.eccentricity, 3)}</DataRow>
+					<DataRow label="Elongation">{formatFixed(profile.elongation, 3)}</DataRow>
 					<DataRow label="Orientation">{profile.theta === undefined ? MISSING : formatDegrees(profile.theta, 1)}</DataRow>
 					<DataRow label="Peak">{formatSignal(profile.peak, conversion)}</DataRow>
 					<DataRow label="Flux">{formatFlux(profile.flux, conversion)}</DataRow>
 					<DataRow label="Background">{formatLevel(profile.background, conversion)}</DataRow>
 					<DataRow label="Noise (σ)">{formatSignal(profile.deviation, conversion)}</DataRow>
-					<DataRow label="SNR">{formatNumber(profile.snr, 1)}</DataRow>
-					<DataRow label="Quality">{profile.quality.toFixed(2)}</DataRow>
+					<DataRow label="SNR">{formatFixed(profile.snr, 1)}</DataRow>
+					<DataRow label="Quality">{formatFixed(profile.quality, 2)}</DataRow>
 					<DataRow label="Model">{MODEL_LABELS[profile.model]}</DataRow>
 					{moffat && <FitRows fit={moffat} conversion={conversion} />}
 				</DataList>

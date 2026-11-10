@@ -38,12 +38,13 @@ import {
 } from './format'
 
 describe('numbers', () => {
-	test('fixed decimals never show a negative zero nor a non-finite number', () => {
+	test('fixed decimals never show a negative zero nor an absent or non-finite number', () => {
 		expect(formatFixed(1.005, 1)).toBe('1.0')
 		expect(formatFixed(-0.04, 1)).toBe('0.0')
 		expect(formatFixed(-0.06, 1)).toBe('-0.1')
 		expect(formatFixed(Number.NaN, 2)).toBe(MISSING)
 		expect(formatFixed(Number.POSITIVE_INFINITY, 2)).toBe(MISSING)
+		expect(formatFixed(undefined, 2)).toBe(MISSING)
 	})
 
 	test('signed differences carry their sign, except a rounded zero', () => {

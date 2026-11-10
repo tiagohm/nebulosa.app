@@ -1,5 +1,5 @@
 import type { AstroWeatherForecast, MeteorActivityCurve, MeteorNightRanking as Ranking, MeteorObservingNight, MeteorShowerDetail, MeteorShowerOccurrence } from 'api'
-import { formatDate, formatDateTime, formatDegrees, formatPercent, formatSpan } from '../../format'
+import { formatDate, formatDateTime, formatDegrees, formatPercent, formatSpan, MISSING } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
 import { Actions } from '../../ui/Actions'
@@ -176,7 +176,7 @@ export function MeteorShowerDetails({
 						<DataRow label="Typical ZHR at maximum">{visual.typicalZhr === undefined ? 'Variable' : `${visual.typicalZhr} per hour`}</DataRow>
 						<DataRow label="Population index r">{visual.populationIndex.toFixed(1)}</DataRow>
 						<DataRow label="Entry speed">{`${visual.velocity} km/s`}</DataRow>
-						<DataRow label="Source">{detail.visualSource ? `${detail.visualSource.publisher}, ${detail.visualSource.title}` : '—'}</DataRow>
+						<DataRow label="Source">{detail.visualSource ? `${detail.visualSource.publisher}, ${detail.visualSource.title}` : MISSING}</DataRow>
 					</DataList>
 					<Notice>The ZHR is what an ideal observer would see with the radiant overhead under a limiting magnitude of 6.5, never a count expected from a site.</Notice>
 				</div>
@@ -243,13 +243,13 @@ export function MeteorShowerDetails({
 						{detail.solutions.map((solution, index) => (
 							<Row key={solution.solutionId ?? index} selected={index === detail.selected}>
 								<Cell>{`${solution.solutionId ?? `#${index + 1}`}${index === detail.selected ? ' (preferred)' : ''}`}</Cell>
-								<Cell>{solution.status ? STATUS_LABELS[solution.status] : '—'}</Cell>
+								<Cell>{solution.status ? STATUS_LABELS[solution.status] : MISSING}</Cell>
 								<Cell title={solution.activity.source}>{ACTIVITY_KIND_LABELS[solution.activity.kind]}</Cell>
-								<Cell>{solution.activityInterval ? `${formatSolarLongitude(solution.activityInterval.start, 1)}–${formatSolarLongitude(solution.activityInterval.end, 1).slice(3)}` : '—'}</Cell>
-								<Cell>{solution.rightAscension !== undefined && solution.declination !== undefined ? `${formatRightAscension(solution.rightAscension)} ${formatDeclination(solution.declination)}` : '—'}</Cell>
-								<Cell numeric>{solution.memberCount ?? '—'}</Cell>
-								<Cell>{solution.observationTechnique ?? '—'}</Cell>
-								<Cell title={solution.reference}>{solution.reference?.split('\n').at(-1) ?? '—'}</Cell>
+								<Cell>{solution.activityInterval ? `${formatSolarLongitude(solution.activityInterval.start, 1)}–${formatSolarLongitude(solution.activityInterval.end, 1).slice(3)}` : MISSING}</Cell>
+								<Cell>{solution.rightAscension !== undefined && solution.declination !== undefined ? `${formatRightAscension(solution.rightAscension)} ${formatDeclination(solution.declination)}` : MISSING}</Cell>
+								<Cell numeric>{solution.memberCount ?? MISSING}</Cell>
+								<Cell>{solution.observationTechnique ?? MISSING}</Cell>
+								<Cell title={solution.reference}>{solution.reference?.split('\n').at(-1) ?? MISSING}</Cell>
 							</Row>
 						))}
 					</Table>

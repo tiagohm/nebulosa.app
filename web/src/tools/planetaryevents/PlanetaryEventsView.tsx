@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { downloadText } from '../../download'
-import { formatDate } from '../../format'
+import { formatDate, MISSING } from '../../format'
 import { openObservingSites, type SiteLocation } from '../../location/site'
 import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
@@ -148,7 +148,7 @@ export function PlanetaryEvents() {
 			<CollapsibleSection id="planetaryEvents.ephemeris" title="Ephemeris and Definitions" summary={sourceName(signature)} defaultOpen={false}>
 				<Notice>{describeSource(signature) ?? 'Not computed yet.'}</Notice>
 				<Notice>
-					Local only: the SPICE kernels you installed or the VSOP87E theory, never JPL Horizons. Policy: {signature?.policy ?? '—'}. Model version {signature?.modelVersion ?? '—'}.
+					Local only: the SPICE kernels you installed or the VSOP87E theory, never JPL Horizons. Policy: {signature?.policy ?? MISSING}. Model version {signature?.modelVersion ?? MISSING}.
 				</Notice>
 				<Notice>
 					Events are geocentric apparent (light time, aberration, solar deflection) on the true ecliptic of date; conjunctions, oppositions, and quadratures are defined by ecliptic longitude, an appulse by the least separation, the closest approach by the geometric distance. Times are refined far below a

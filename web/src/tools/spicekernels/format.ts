@@ -1,4 +1,5 @@
 import type { SpiceKernelJob, SpiceKernelReadiness, SpiceKernelSourceKind } from 'api'
+import { MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Display formats of the SPICE Kernel Library tool: NAIF body names, segment epochs, sizes, and the labels and tones of
@@ -42,7 +43,7 @@ export function naifName(code: number) {
 // difference (under 2 ms) are ignored, which never matters at the precision of a date.
 export function epochDate(seconds: number) {
 	const date = new Date(J2000_UNIX_MS + seconds * 1000)
-	return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : '—'
+	return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : MISSING
 }
 
 // Label and tone of each readiness.

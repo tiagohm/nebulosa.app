@@ -18,9 +18,9 @@ export const MISSING = '—'
 const MINUS = '−'
 
 // Returns a number with a fixed number of decimals, without the minus sign of a value that rounds to zero ("-0.0"), or
-// MISSING when it is not finite.
-export function formatFixed(value: number, digits: number) {
-	if (!Number.isFinite(value)) return MISSING
+// MISSING when it is absent or not finite.
+export function formatFixed(value: number | undefined, digits: number) {
+	if (value === undefined || !Number.isFinite(value)) return MISSING
 	const text = value.toFixed(digits)
 	return text.startsWith('-') && Number(text) === 0 ? text.slice(1) : text
 }

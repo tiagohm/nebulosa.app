@@ -1,5 +1,5 @@
 import { type PointerEvent, useState } from 'react'
-import { formatCount, formatSampleValue } from '../format'
+import { formatCount, formatSampleValue, MISSING } from '../format'
 import { binAt, HISTOGRAM_HEIGHT, HISTOGRAM_MARGIN, HISTOGRAM_WIDTH, type HistogramSeries, histogramPath, histogramRange, histogramScale, valueAt } from './statistics.plot'
 
 // Histogram of the Image Inspector: the step outline of each plane shown over a common axis in source units, linear or
@@ -95,7 +95,7 @@ export function StatisticsHistogram({ series, log, zoom, onZoom }: StatisticsHis
 					: `${formatSampleValue(hovered)}: ${series
 							.map((s) => {
 								const bin = binAt(s.histogram, hovered)
-								return `${s.label} ${bin === undefined ? '—' : formatCount(s.histogram.counts[bin])}`
+								return `${s.label} ${bin === undefined ? MISSING : formatCount(s.histogram.counts[bin])}`
 							})
 							.join(' · ')}`}
 			</p>

@@ -1,7 +1,7 @@
 import type { SpiceEphemerisPolicy, SpiceKernelSummary } from 'api'
 import { type ChangeEvent, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatByteSize } from '../../format'
+import { formatByteSize, MISSING } from '../../format'
 import { EmptyState, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
@@ -123,8 +123,8 @@ interface KernelRowProps {
 function KernelRow({ kernel, selected, onSelect }: KernelRowProps) {
 	const state = useSnapshot(spiceKernelsState)
 	const readiness = READINESS[kernel.readiness]
-	const bodies = kernel.targets.length > 3 ? `${kernel.targets.length} bodies` : kernel.targets.map(naifName).join(', ') || '—'
-	const coverage = kernel.start === undefined || kernel.end === undefined ? '—' : `${epochDate(kernel.start)} – ${epochDate(kernel.end)}`
+	const bodies = kernel.targets.length > 3 ? `${kernel.targets.length} bodies` : kernel.targets.map(naifName).join(', ') || MISSING
+	const coverage = kernel.start === undefined || kernel.end === undefined ? MISSING : `${epochDate(kernel.start)} – ${epochDate(kernel.end)}`
 
 	return (
 		<Row selected={selected} onSelect={onSelect} title={kernel.failure}>

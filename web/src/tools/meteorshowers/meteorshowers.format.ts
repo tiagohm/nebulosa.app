@@ -1,6 +1,6 @@
 import type { MeteorActivityState, MeteorAnnualEvent, MeteorDataBasis, MeteorNoWindowReason, MeteorShowerGap, MeteorShowerOccurrence, MeteorShowerStatus, MeteorShowerSummary, MeteorSolutionSelection } from 'api'
 import { AU_KM, DAYSEC } from 'nebulosa/src/core/constants'
-import { formatDate, formatDateTime } from '../../format'
+import { formatDate, formatDateTime, MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Labels and formatting of the Meteor Showers tool: the names of the states, sources, and reasons the server answers,
@@ -78,7 +78,7 @@ export function formatOccurrencePeriod(occurrence: MeteorShowerOccurrence | unde
 	const iau = occurrence?.iau
 	if (iau?.start !== undefined && iau.end !== undefined) return `${formatDate(iau.start, timeZone)} to ${formatDate(iau.end, timeZone)}`
 	if (iau?.reference !== undefined) return `around ${formatDate(iau.reference, timeZone)}`
-	return '—'
+	return MISSING
 }
 
 // Short text of the maximum of an occurrence: the published visual maximum, else the IAU mean reference, named as such.

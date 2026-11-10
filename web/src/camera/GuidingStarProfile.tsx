@@ -1,7 +1,7 @@
 import type { GuidingStarProfile } from 'api'
-import { formatDegrees, formatPixelLength, formatPixelPosition, MISSING } from '../format'
+import { formatDegrees, formatFixed, formatPixelLength, formatPixelPosition, MISSING } from '../format'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
-import { FLAG_LABELS, formatNumber } from '../stars/starprofile.format'
+import { FLAG_LABELS } from '../stars/starprofile.format'
 import { consecutiveOffsets } from '../stars/starprofile.plot'
 import { StarProfilePlot } from '../stars/StarProfilePlot'
 import { DataList, DataRow } from '../ui/DataRow'
@@ -46,8 +46,8 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 				<DataRow label="Valid">
 					<span className={star.valid ? 'text-success' : 'text-danger'}>{star.valid ? 'Yes' : 'No'}</span>
 				</DataRow>
-				<DataRow label="Quality">{star.quality.toFixed(2)}</DataRow>
-				<DataRow label="SNR">{formatNumber(star.snr, 1)}</DataRow>
+				<DataRow label="Quality">{formatFixed(star.quality, 2)}</DataRow>
+				<DataRow label="SNR">{formatFixed(star.snr, 1)}</DataRow>
 				<DataRow label="Flux">{formatIntensity(star.flux, star.adu)}</DataRow>
 				<DataRow label="Peak">{formatIntensity(star.peak, star.adu)}</DataRow>
 				<DataRow label="Background">{formatIntensity(star.background, star.adu)}</DataRow>
@@ -55,8 +55,8 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 				<DataRow label="HFD">{formatPixelLength(star.hfd, pixelScale)}</DataRow>
 				<DataRow label="FWHM">{formatPixelLength(star.fwhm, pixelScale)}</DataRow>
 				<DataRow label="FWHM Major / Minor">{star.major === undefined || star.minor === undefined ? MISSING : `${star.major.toFixed(2)} / ${star.minor.toFixed(2)} px`}</DataRow>
-				<DataRow label="Eccentricity">{formatNumber(star.eccentricity, 3)}</DataRow>
-				<DataRow label="Elongation">{formatNumber(star.elongation, 3)}</DataRow>
+				<DataRow label="Eccentricity">{formatFixed(star.eccentricity, 3)}</DataRow>
+				<DataRow label="Elongation">{formatFixed(star.elongation, 3)}</DataRow>
 				<DataRow label="Orientation">{star.theta === undefined ? MISSING : formatDegrees(star.theta, 1)}</DataRow>
 				<DataRow label="Model">{star.model === 'moffat' ? 'Moffat' : 'Moments'}</DataRow>
 			</DataList>

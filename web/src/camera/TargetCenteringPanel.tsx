@@ -25,6 +25,7 @@ import { DataList, DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
+import { Cell, Row, Table, type TableColumn } from '../ui/Table'
 import { TextInput } from '../ui/TextInput'
 import { CameraAcquisitionSection } from './CameraAcquisitionSection'
 import { cameraKey } from './capture'
@@ -289,33 +290,25 @@ function SessionState({ session }: { readonly session: TargetCenteringSessionSum
 	)
 }
 
+// Columns of the attempts of a session: distances and offsets, in angles, aligned to the end.
+const DIAGNOSTIC_COLUMNS: readonly TableColumn[] = ['Frame', 'Outcome', { key: 'distance', label: 'Distance', numeric: true }, { key: 'east', label: 'East', numeric: true }, { key: 'north', label: 'North', numeric: true }]
+
 // What each attempt of a session measured, in order, with the model that corrected its first slew.
 function Diagnostics({ session: { attempts, model, request, provider } }: { readonly session: TargetCenteringSessionSummary }) {
 	return (
 		<CollapsibleSection id="images.target-centering.diagnostics" title="Diagnostics" defaultOpen={false}>
 			<TargetCenteringBullseye attempts={attempts} tolerance={request.tolerance} />
-			<table className="w-full border-collapse text-xs tabular-nums">
-				<thead className="text-ink-300">
-					<tr>
-						<th className="text-left font-normal">Frame</th>
-						<th className="text-left font-normal">Outcome</th>
-						<th className="text-right font-normal">Distance</th>
-						<th className="text-right font-normal">East</th>
-						<th className="text-right font-normal">North</th>
-					</tr>
-				</thead>
-				<tbody>
-					{attempts.map(({ attempt, outcome, separation, dx, dy, error }) => (
-						<tr key={attempt} title={error}>
-							<td>{attempt}</td>
-							<td>{outcome ?? MISSING}</td>
-							<td className="text-right">{separation === undefined ? MISSING : formatAngularSize(separation)}</td>
-							<td className="text-right">{dx === undefined ? MISSING : formatSignedAngle(dx)}</td>
-							<td className="text-right">{dy === undefined ? MISSING : formatSignedAngle(dy)}</td>
-						</tr>
-					))}
-				</tbody>
-			</table>
+			<Table columns={DIAGNOSTIC_COLUMNS}>
+				{attempts.map(({ attempt, outcome, separation, dx, dy, error }) => (
+					<Row key={attempt} title={error}>
+						<Cell>{attempt}</Cell>
+						<Cell>{outcome ?? MISSING}</Cell>
+						<Cell numeric>{separation === undefined ? MISSING : formatAngularSize(separation)}</Cell>
+						<Cell numeric>{dx === undefined ? MISSING : formatSignedAngle(dx)}</Cell>
+						<Cell numeric>{dy === undefined ? MISSING : formatSignedAngle(dy)}</Cell>
+					</Row>
+				))}
+			</Table>
 			<DataList>
 				<DataRow label="Solver">{provider}</DataRow>
 				<DataRow label="Pointing Model">{model ? model.revisionId : 'None applied'}</DataRow>

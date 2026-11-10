@@ -16,6 +16,7 @@ import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataRow } from '../../ui/DataRow'
+import { LinkButton } from '../../ui/LinkButton'
 import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
@@ -278,11 +279,7 @@ function TargetSection({ mount, deviceId, busy, observer }: TargetSectionProps) 
 			{!observer && (mount.canGoTo || mount.canFlip) && <Notice>Select an observing site in the top bar: a goto is refused below its horizon.</Notice>}
 			{(mount.canGoTo || mount.canFlip) && (
 				<Notice>
-					Flip only moves the mount. To flip at the meridian while pausing the capture and guiding around it, use the Executor of the{' '}
-					<button type="button" className="cursor-pointer text-accent underline" onClick={() => navigate(routeState, { workspace: 'tools', tool: 'meridian-flip-monitor' })}>
-						Meridian Flip tool
-					</button>
-					.
+					Flip only moves the mount. To flip at the meridian while pausing the capture and guiding around it, use the Executor of the <LinkButton onClick={() => navigate(routeState, { workspace: 'tools', tool: 'meridian-flip-monitor' })}>Meridian Flip tool</LinkButton>.
 				</Notice>
 			)}
 			<Notice>Sexagesimal or decimal; right ascension in hours, every other component in degrees.</Notice>

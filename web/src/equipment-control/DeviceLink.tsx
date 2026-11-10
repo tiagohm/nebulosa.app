@@ -3,6 +3,7 @@ import { cn } from 'cn'
 import type { ReactNode } from 'react'
 import { MISSING } from '../format'
 import { navigate, routeState } from '../shell/route'
+import { LinkButton } from '../ui/LinkButton'
 
 // Inline link from a device named in another workspace (such as the Equipment section of an Images camera
 // tool) to its page in Equipment Control.
@@ -23,16 +24,15 @@ export function DeviceLink({ device, fallback = MISSING, className, onNavigate }
 	if (!device) return <>{fallback}</>
 
 	return (
-		<button
-			type="button"
+		<LinkButton
 			title={`Open ${device.name} in Equipment Control`}
-			className={cn('max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', className)}
+			className={cn('max-w-full truncate', className)}
 			onClick={() => {
 				navigate(routeState, { workspace: 'equipment', device: device.id })
 				onNavigate?.()
 			}}
 		>
 			{device.name}
-		</button>
+		</LinkButton>
 	)
 }

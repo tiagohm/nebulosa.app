@@ -20,6 +20,7 @@ import { activeProfile, activeSetup, profileState } from '../../profile/profile'
 import { openAstronomicalTimeConverter, qualityNotes } from '../../tools/astronomicaltime/astronomicaltime'
 import { meridianFlipHeadline, meridianFlipState, meridianFlipStatusText, monitorKey } from '../../tools/meridianflip/meridianflip'
 import { Icon, type IconName } from '../../ui/Icon'
+import { LinkButton } from '../../ui/LinkButton'
 import { SectionHeading } from '../../ui/SectionHeading'
 import { TONE_TEXT } from '../../ui/StatusBadge'
 import { useNow } from '../../useNow'
@@ -393,8 +394,8 @@ interface OpenButtonProps {
 // Link opening what a row is about: the camera tab of a session in Images, or a tool.
 function OpenButton({ label = 'Open in Images', onClick }: OpenButtonProps) {
 	return (
-		<button type="button" onClick={onClick} className="ml-2 cursor-pointer border-0 bg-transparent p-0 text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+		<LinkButton onClick={onClick} className="ml-2">
 			{label}
-		</button>
+		</LinkButton>
 	)
 }

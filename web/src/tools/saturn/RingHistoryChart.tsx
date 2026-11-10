@@ -28,9 +28,11 @@ const DEGREES = 180 / Math.PI
 // Milliseconds per Julian year.
 const YEAR_MS = 365.25 * 86_400_000
 
-// Colours of the Earth and solar openings.
-const EARTH_COLOR = '#4aa3df'
-const SUN_COLOR = '#e0a030'
+// Colour of the Earth opening, the theme's info token.
+const EARTH_COLOR = 'var(--color-info)'
+
+// Colour of the solar opening, the theme's warning token.
+const SUN_COLOR = 'var(--color-warning)'
 
 export interface RingHistoryChartProps {
 	readonly timeline: SaturnRingTimeline

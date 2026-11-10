@@ -7,7 +7,7 @@ import { formatDegrees } from '../format'
 import { formatPixelScale } from '../platesolving/coordinates'
 import { createOpticalPreset, deleteOpticalPreset, duplicateOpticalPreset, profileState, selectOpticalPreset, setEquipmentRotation, setFramingSource, setFramingVisible, setManualSensor, setGuideTelescopeOptics, setSensorSource, setTelescopeOptics, updateOpticalPreset } from '../profile/profile'
 import type { SkyFramingSettings } from '../profile/schema'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { DataRow } from '../ui/DataRow'
@@ -77,9 +77,9 @@ export function FramingPanel({ framing, telescope, guideTelescope, hasTarget }: 
 
 	return (
 		<>
-			<PanelSection title="Source">
+			<CollapsibleSection id="sky.framing.source" title="Source">
 				<Select options={SOURCES} value={source} onChange={(next) => setFramingSource(profileState, next)} format={(value) => (value === 'custom' ? 'Custom preset' : 'Equipment Setup')} />
-			</PanelSection>
+			</CollapsibleSection>
 			{source === 'custom' ? <CustomSource framing={framing} hasTarget={hasTarget} /> : <EquipmentSource framing={framing} telescope={telescope} guideTelescope={guideTelescope} hasTarget={hasTarget} />}
 		</>
 	)
@@ -92,7 +92,7 @@ function CustomSource({ framing, hasTarget }: { readonly framing?: Readonly<SkyF
 
 	return (
 		<>
-			<PanelSection title="Preset">
+			<CollapsibleSection id="sky.framing.preset" title="Preset">
 				{preset ? (
 					<>
 						<Select options={presets.map((e) => e.id)} value={preset.id} onChange={(id) => selectOpticalPreset(profileState, id)} format={(id) => presets.find((e) => e.id === id)?.name ?? id} />
@@ -116,7 +116,7 @@ function CustomSource({ framing, hasTarget }: { readonly framing?: Readonly<SkyF
 						</>
 					)}
 				</div>
-			</PanelSection>
+			</CollapsibleSection>
 			{preset && <PresetOptics preset={preset} visible={framing?.visible ?? false} hasTarget={hasTarget} />}
 		</>
 	)
@@ -149,10 +149,10 @@ function PresetOptics({ preset, visible, hasTarget }: { readonly preset: Readonl
 
 	return (
 		<>
-			<OpticsInputs title="Optics" optics={optics} onChange={change} />
-			<PanelSection title="Camera">
+			<OpticsInputs id="sky.framing.optics" title="Optics" optics={optics} onChange={change} />
+			<CollapsibleSection id="sky.framing.camera" title="Camera">
 				<SensorInputs sensor={optics.sensor} onChange={(sensor) => change({ sensor })} />
-			</PanelSection>
+			</CollapsibleSection>
 			<FramingResult optics={optics} onRotate={(rotation) => change({ rotation })} />
 			<DisplaySection visible={visible} hasTarget={hasTarget} />
 		</>
@@ -173,8 +173,8 @@ function EquipmentSource({ framing, telescope, guideTelescope, hasTarget }: Pick
 
 	return (
 		<>
-			<OpticsInputs title={guide ? 'Guide Telescope' : 'Telescope'} optics={optics} onChange={(next) => setOptics(profileState, { ...current, ...next })} />
-			<PanelSection title="Camera">
+			<OpticsInputs id="sky.framing.telescope" title={guide ? 'Guide Telescope' : 'Telescope'} optics={optics} onChange={(next) => setOptics(profileState, { ...current, ...next })} />
+			<CollapsibleSection id="sky.framing.camera" title="Camera">
 				<Select options={SENSOR_SOURCES} value={sensorSource} onChange={(next) => setSensorSource(profileState, next)} format={sensorSourceName} />
 				{sensorSource === 'manual' ? (
 					<>
@@ -199,22 +199,22 @@ function EquipmentSource({ framing, telescope, guideTelescope, hasTarget }: Pick
 						</div>
 					</>
 				)}
-			</PanelSection>
+			</CollapsibleSection>
 			<FramingResult optics={optics} missingCamera={missingCamera && `${sensorSourceName(missingCamera)} sensor`} onRotate={(rotation) => setEquipmentRotation(profileState, rotation)} />
 			<DisplaySection visible={framing?.visible ?? false} hasTarget={hasTarget} />
 		</>
 	)
 }
 
-// Focal length, reducer or Barlow, and aperture inputs, under the title of the optics they edit.
-function OpticsInputs({ title, optics, onChange }: { readonly title: string; readonly optics: Readonly<Pick<OpticalConfiguration, 'focalLength' | 'focalMultiplier' | 'aperture'>>; readonly onChange: (next: Partial<TelescopeOptics>) => void }) {
+// Focal length, reducer or Barlow, and aperture inputs, in a section of an id and the title of the optics they edit.
+function OpticsInputs({ id, title, optics, onChange }: { readonly id: string; readonly title: string; readonly optics: Readonly<Pick<OpticalConfiguration, 'focalLength' | 'focalMultiplier' | 'aperture'>>; readonly onChange: (next: Partial<TelescopeOptics>) => void }) {
 	return (
-		<PanelSection title={title}>
+		<CollapsibleSection id={id} title={title}>
 			<NumberInput label="Focal length" suffix="mm" value={optics.focalLength} min={0} step={1} onChange={(focalLength) => onChange({ focalLength })} />
 			<NumberInput label="Reducer / Barlow" suffix="×" value={optics.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => onChange({ focalMultiplier })} />
 			<NumberInput label="Aperture" suffix="mm" value={optics.aperture} min={0} step={1} onChange={(aperture) => onChange({ aperture })} />
 			<Notice>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without).</Notice>
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
@@ -247,7 +247,7 @@ function FramingResult({ optics, missingCamera, onRotate }: { readonly optics: R
 	const missing = isFraming(framing) ? [] : missingCamera ? [...framing.missing.filter((e) => !sensorFields.has(e)), missingCamera] : framing.missing
 
 	return (
-		<PanelSection title="Framing">
+		<CollapsibleSection id="sky.framing.framing" title="Framing">
 			{isFraming(framing) ? (
 				<>
 					<DataRow label="Field">
@@ -268,16 +268,16 @@ function FramingResult({ optics, missingCamera, onRotate }: { readonly optics: R
 			)}
 			<NumberInput label="Rotation (PA of the top edge)" suffix="°" value={optics.rotation} min={0} max={359.5} step={0.5} onChange={onRotate} />
 			<Notice>Position angle of the sensor&apos;s top edge, from north through east, as plate solvers report it; mirrored images are not modeled.</Notice>
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }
 
 // Whether the field of view is drawn.
 function DisplaySection({ visible, hasTarget }: { readonly visible: boolean; readonly hasTarget: boolean }) {
 	return (
-		<PanelSection title="Display">
+		<CollapsibleSection id="sky.framing.display" title="Display">
 			<Checkbox label="Show field of view" checked={visible} onChange={(next) => setFramingVisible(profileState, next)} />
 			{visible && !hasTarget && <Notice>The field of view is drawn around the selected object, once its position is known.</Notice>}
-		</PanelSection>
+		</CollapsibleSection>
 	)
 }

@@ -3,7 +3,6 @@ import { controlRuntime } from '../equipment-control/control'
 import { formatDegrees } from '../format'
 import type { GeographicLocation } from '../location/site'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
-import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
@@ -45,14 +44,14 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 
 	return (
 		<>
-			<PanelSection title="Object">
+			<CollapsibleSection id="sky.object" title="Object" summary={same ? runtime.target?.name || 'Mount' : 'Mount'}>
 				<ObjectTitle name={same ? runtime.target?.name || 'Mount' : 'Mount'} kind="Mount position" />
 				<div>
 					<Button variant="secondary" onClick={onShowFraming}>
 						Show Framing
 					</Button>
 				</div>
-			</PanelSection>
+			</CollapsibleSection>
 			<CollapsibleSection id="sky.position" title="Position" summary={state ? motionOf(state) : undefined}>
 				{point && state ? (
 					<>

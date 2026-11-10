@@ -3,7 +3,7 @@ import { AU_KM } from 'nebulosa/src/core/constants'
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import type { SiteLocation } from '../../location/site'
-import { PanelSection } from '../../shell/ContextualPanel'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { ObjectTitle } from '../../ui/ObjectTitle'
@@ -67,12 +67,12 @@ export function MoonInspector({ selection, observer, onSetObserver, timeZone, on
 
 	return (
 		<>
-			<PanelSection title="Object">
+			<CollapsibleSection id="sky.object" title="Object" summary={selection.name}>
 				<ObjectTitle name={selection.name} kind="Natural Satellite" />
 				{position?.magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(position.magnitude)}</DataRow>}
 				<MoonImage time={time} observer={place} />
 				<ObjectActions target={MOON} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
-			</PanelSection>
+			</CollapsibleSection>
 			<PositionSection selection={selection} timeZone={timeZone}>
 				{position?.distance !== undefined && <DataRow label="Angular diameter">{formatApparentSize(moonAngularDiameter(position.distance))}</DataRow>}
 			</PositionSection>

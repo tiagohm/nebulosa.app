@@ -3,7 +3,7 @@ import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
 import { formatLongDateTime, formatLongDuration } from '../../format'
 import { useDisplayZone, useToolLocation } from '../../location/useLocation'
-import { PanelSection } from '../../shell/ContextualPanel'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
@@ -39,9 +39,9 @@ export function LunarEclipsePanel() {
 
 	return (
 		<>
-			<EclipseLocationSection value={state.location} location={location} onChange={(value) => (lunarEclipseState.location = value)} />
+			<EclipseLocationSection id="lunarEclipse.location" value={state.location} location={location} onChange={(value) => (lunarEclipseState.location = value)} />
 			{place && (
-				<PanelSection title="Visibility">
+				<CollapsibleSection id="lunarEclipse.visibility" title="Visibility">
 					{local && <p className="m-0 font-medium text-ink-100">{local.visibility.text}</p>}
 					{local && !local.visibility.hasObservableEclipse && <Notice>The Moon stays below the horizon here from P1 to P4; the contact times still hold for everyone.</Notice>}
 					{local && local.visibility.kind === 'totalVisible' && <Notice>The Moon is above the horizon during at least part of totality, but not during the whole eclipse.</Notice>}
@@ -55,10 +55,10 @@ export function LunarEclipsePanel() {
 						</>
 					)}
 					<Notice>Visible means the Moon's center at or above the 0° horizon, without refraction. Partial and total contacts are computed to about 5 s and penumbral ones to about 30 s, and the edges of the Earth's shadow are too diffuse to see them that sharply.</Notice>
-				</PanelSection>
+				</CollapsibleSection>
 			)}
 			{eclipse && (
-				<PanelSection title="Contacts">
+				<CollapsibleSection id="lunarEclipse.contacts" title="Contacts">
 					<EclipseZoneSelect value={state.zone} zone={displayZone} location={location} selectedSite={state.location.mode !== 'active'} onChange={(zone) => (lunarEclipseState.zone = zone)} />
 					{eclipse.contacts.map((contact) => {
 						const event = events.get(contact.kind)
@@ -87,10 +87,10 @@ export function LunarEclipsePanel() {
 							</button>
 						)
 					})}
-				</PanelSection>
+				</CollapsibleSection>
 			)}
 			{eclipse && durations && (
-				<PanelSection title="Details">
+				<CollapsibleSection id="lunarEclipse.details" title="Details">
 					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
 					<DataRow label={eclipse.type === 'PENUMBRAL' ? 'Penumbral magnitude' : 'Umbral magnitude'}>{formatEclipseMagnitude(eclipse.magnitude)}</DataRow>
 					{local && eclipse.type !== 'PENUMBRAL' && <DataRow label="Penumbral magnitude">{formatEclipseMagnitude(local.details.maximalPenumbralMagnitude)}</DataRow>}
@@ -103,16 +103,16 @@ export function LunarEclipsePanel() {
 							{formatEclipseAngle(selectedLocal.positionAngle)} / {formatEclipseAngle(selectedLocal.zenithAngle)}
 						</DataRow>
 					)}
-				</PanelSection>
+				</CollapsibleSection>
 			)}
 			{local && (
-				<PanelSection title="Local View">
+				<CollapsibleSection id="lunarEclipse.localView" title="Local View">
 					<LunarEclipseLocalView view={local.view} />
 					<SegmentedControl label="Up" options={ORIENTATIONS} value={view.orientation} onChange={(orientation) => void setViewSettings(lunarEclipseState, { orientation })} format={(value) => (value === 'zenith' ? 'Zenith' : 'North')} />
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(lunarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />
 					<Checkbox label="Moon at the other contacts" checked={view.ghosts} onChange={(ghosts) => void setViewSettings(lunarEclipseState, { ghosts })} />
 					<Notice>The Moon at {local.view.selectedEvent ?? selectedEvent} crossing the Earth's penumbra and umbra; the red band is below the horizon. A geometric diagram, not a photorealistic rendering.</Notice>
-				</PanelSection>
+				</CollapsibleSection>
 			)}
 		</>
 	)

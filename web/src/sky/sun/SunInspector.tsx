@@ -5,7 +5,6 @@ import { useSnapshot } from 'valtio'
 import { formatDegrees, formatLocalTime, formatLongDuration } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { PanelSection } from '../../shell/ContextualPanel'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
@@ -134,12 +133,12 @@ export function SunInspector({ selection, observer, onSetObserver, timeZone, onS
 
 	return (
 		<>
-			<PanelSection title="Object">
+			<CollapsibleSection id="sky.object" title="Object" summary={selection.name}>
 				<ObjectTitle name={selection.name} kind="Star" />
 				{position?.magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(position.magnitude)}</DataRow>}
 				<SolarImage />
 				<ObjectActions target={SUN} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
-			</PanelSection>
+			</CollapsibleSection>
 			<ActiveRegionsSection />
 			<PositionSection selection={selection} timeZone={timeZone}>
 				{position?.distance !== undefined && <DataRow label="Angular diameter">{formatApparentSize(sunAngularDiameter(position.distance))}</DataRow>}

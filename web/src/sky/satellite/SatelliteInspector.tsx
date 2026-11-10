@@ -3,7 +3,6 @@ import { useSnapshot } from 'valtio'
 import { formatDegrees, formatLocalTime } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
-import { PanelSection } from '../../shell/ContextualPanel'
 import { openArtificialSatellites } from '../../tools/artificialsatellites/artificialsatellites'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
@@ -45,7 +44,7 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 
 	return (
 		<>
-			<PanelSection title="Object">
+			<CollapsibleSection id="sky.object" title="Object" summary={object?.name ?? selection.name}>
 				<ObjectTitle name={object?.name ?? selection.name} kind={OBJECT_TYPE_NAMES[object?.objectType ?? 'unknown']} designations={[`NORAD ${noradId}`, object?.cosparId].filter(Boolean).join(' · ')} />
 				<DataRow label="Brightness">Unknown</DataRow>
 				{detailsError && <Notice error>Details unavailable: {detailsError}</Notice>}
@@ -60,7 +59,7 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 						Open in Artificial Satellites
 					</Button>
 				</div>
-			</PanelSection>
+			</CollapsibleSection>
 			<CollapsibleSection id="sky.position" title="Position" summary={position?.constellationName ?? position?.constellation}>
 				{positionError && <Notice error>{positionError}</Notice>}
 				{position && (

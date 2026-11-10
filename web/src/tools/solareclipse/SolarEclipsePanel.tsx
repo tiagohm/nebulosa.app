@@ -3,7 +3,7 @@ import { cn } from 'cn'
 import { useSnapshot } from 'valtio'
 import { formatGeographic, formatKilometers, formatLongDateTime, formatLongDuration } from '../../format'
 import { useDisplayZone, useToolLocation } from '../../location/useLocation'
-import { PanelSection } from '../../shell/ContextualPanel'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { DataRow } from '../../ui/DataRow'
@@ -85,9 +85,9 @@ export function SolarEclipsePanel() {
 
 	return (
 		<>
-			<EclipseLocationSection value={state.location} location={location} onChange={(value) => (solarEclipseState.location = value)} />
+			<EclipseLocationSection id="solarEclipse.location" value={state.location} location={location} onChange={(value) => (solarEclipseState.location = value)} />
 			{place && (
-				<PanelSection title="Visibility">
+				<CollapsibleSection id="solarEclipse.visibility" title="Visibility">
 					{visibility && <p className="m-0 font-medium text-ink-100">{visibility.text}</p>}
 					{visibility && visibility.hasCentralPhase && <DataRow label="Central phase here">{visibility.centralPhaseKind === 'annular' ? 'Annular' : 'Total'}</DataRow>}
 					{visibility && visibility.hasGeometricEclipse && !visibility.hasCentralPhase && <Notice>Only a partial eclipse reaches this place.</Notice>}
@@ -104,10 +104,10 @@ export function SolarEclipsePanel() {
 						</>
 					)}
 					<Notice>Visible means the Sun's center at or above the 0° horizon; elevation and terrain are not considered.</Notice>
-				</PanelSection>
+				</CollapsibleSection>
 			)}
 			{eclipse && (
-				<PanelSection title="Contacts">
+				<CollapsibleSection id="solarEclipse.contacts" title="Contacts">
 					<EclipseZoneSelect value={state.zone} zone={displayZone} location={location} selectedSite={state.location.mode !== 'active'} onChange={(zone) => (solarEclipseState.zone = zone)} />
 					{!place && <Notice>Select a location to see its contacts.</Notice>}
 					{local && local.events.length === 0 && <Notice>The eclipse does not reach this place.</Notice>}
@@ -135,10 +135,10 @@ export function SolarEclipsePanel() {
 							</button>
 						)
 					})}
-				</PanelSection>
+				</CollapsibleSection>
 			)}
 			{eclipse && (
-				<PanelSection title="Details">
+				<CollapsibleSection id="solarEclipse.details" title="Details">
 					<DataRow label="Type">{ECLIPSE_TYPE_NAMES[eclipse.type]}</DataRow>
 					<DataRow label="Magnitude">{formatEclipseMagnitude(eclipse.magnitude)}</DataRow>
 					<DataRow label="Gamma">{formatEclipseMagnitude(eclipse.gamma)}</DataRow>
@@ -156,29 +156,29 @@ export function SolarEclipsePanel() {
 						Magnitude is the fraction of the Sun's diameter covered by the Moon, not of its area. Path width is the distance between the limits of totality or annularity, across the central line. Shadow chord is the narrowest width of the shadow at one instant, which is smaller at a low Sun. Contacts assume
 						a smooth lunar limb and are good to about 5 s; the mountains of the limb matter most near the limits of the path.
 					</Notice>
-				</PanelSection>
+				</CollapsibleSection>
 			)}
 			{map && (
-				<PanelSection title="Global Points">
+				<CollapsibleSection id="solarEclipse.globalPoints" title="Global Points">
 					<Notice>Points of the eclipse as a whole, the same for everyone. Choose one to find it on the map.</Notice>
 					{globalPoints(map).map((point) => (
 						<GlobalPointRow key={point.kind} point={point} selected={point.kind === selectedPoint} timeZone={timeZone} />
 					))}
-				</PanelSection>
+				</CollapsibleSection>
 			)}
 			{local && local.events.length > 0 && (
-				<PanelSection title="Local View">
+				<CollapsibleSection id="solarEclipse.localView" title="Local View">
 					<SolarEclipseLocalView view={local.view} />
 					<SegmentedControl label="Up" options={ORIENTATIONS} value={view.orientation} onChange={(orientation) => void setViewSettings(solarEclipseState, { orientation })} format={(value) => (value === 'zenith' ? 'Zenith' : 'North')} />
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(solarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />
 					<Checkbox label="Moon at the other contacts" checked={view.ghosts} onChange={(ghosts) => void setViewSettings(solarEclipseState, { ghosts })} />
 					<Notice>The Moon over the Sun at {local.view.selectedEvent ?? selectedEvent}; the red band is below the horizon. A geometric diagram, not a photorealistic rendering.</Notice>
-				</PanelSection>
+				</CollapsibleSection>
 			)}
-			<PanelSection title="About">
+			<CollapsibleSection id="solarEclipse.about" title="About" defaultOpen={false}>
 				<Notice>A computed prediction from the toolkit's ephemerides, without the site's elevation, the terrain, or the profile of the lunar limb; times near the edges of the path are less certain.</Notice>
 				<Notice error>Never look at the Sun without a proper solar filter, except during totality itself.</Notice>
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 }

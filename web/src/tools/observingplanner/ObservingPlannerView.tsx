@@ -6,7 +6,7 @@ import { openObservingSites } from '../../location/site'
 import { useActiveLocation, useDisplayZone } from '../../location/useLocation'
 import { describeDisplayZone } from '../../location/zone'
 import { activeProfile, profileState } from '../../profile/profile'
-import { PanelSection } from '../../shell/ContextualPanel'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { routeState } from '../../shell/route'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
@@ -77,11 +77,11 @@ export function ObservingPlanner() {
 
 	const panel = (
 		<>
-			<PanelSection title="Night">
+			<CollapsibleSection id="observingPlanner.night" title="Night">
 				<TextInput label="Evening" type="date" value={state.eveningDate ?? ''} onChange={(event) => event.target.value && (observingPlannerState.eveningDate = event.target.value)} />
-			</PanelSection>
+			</CollapsibleSection>
 			{constraints && state.presets && (
-				<PanelSection title="Constraints">
+				<CollapsibleSection id="observingPlanner.constraints" title="Constraints">
 					<Select label="Mode" options={OBSERVING_MODES} value={constraints.mode} format={(mode: ObservingMode) => MODE_LABELS[mode]} onChange={(mode) => selectMode(observingPlannerState, mode)} />
 					<NumberInput label="Minimum altitude" suffix="°" value={Math.round(constraints.minimumAltitude * DEGREES)} min={0} max={89} onChange={(value) => setConstraint('minimumAltitude', value / DEGREES)} />
 					<NumberInput label="Maximum airmass (0 for none)" value={constraints.maximumAirmass ?? 0} min={0} max={10} step={0.1} onChange={(value) => setConstraint('maximumAirmass', value >= 1 ? value : undefined)} />
@@ -89,7 +89,7 @@ export function ObservingPlanner() {
 					<NumberInput label="Moon separation while up (0 for none)" suffix="°" value={Math.round((constraints.minimumMoonSeparation ?? 0) * DEGREES)} min={0} max={180} onChange={(value) => setConstraint('minimumMoonSeparation', value > 0 ? value / DEGREES : undefined)} />
 					<NumberInput label="Minimum continuous time" suffix="min" value={Math.round(constraints.minimumContinuousMs / MINUTE_MS)} min={state.presets.minimumContinuousMs / MINUTE_MS} max={720} step={5} onChange={(value) => setConstraint('minimumContinuousMs', value * MINUTE_MS)} />
 					<Notice>Hard limits: a target outside them is never ranked. Altitudes are geometric, without refraction or a local horizon. The Moon separation counts only while the Moon is above the horizon. Windows shorter than {formatHours(constraints.minimumContinuousMs)} are left out.</Notice>
-				</PanelSection>
+				</CollapsibleSection>
 			)}
 		</>
 	)

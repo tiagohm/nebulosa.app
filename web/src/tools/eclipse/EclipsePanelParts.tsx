@@ -9,6 +9,8 @@ import { Notice } from '../../ui/Notice'
 // zone the times are shown in. Neither changes the profile, a site, or a request.
 
 export interface EclipseLocationSectionProps {
+	// Identifier of the section, namespaced by the tool's panel.
+	readonly id: string
 	// Location chosen for the tool.
 	readonly value: ToolLocation
 	// Place it gives; absent when there is none.
@@ -18,8 +20,8 @@ export interface EclipseLocationSectionProps {
 }
 
 // Location section of an eclipse map; the elevation is not asked for, since the local circumstances ignore it.
-export function EclipseLocationSection({ value, location, onChange }: EclipseLocationSectionProps) {
-	return <ToolLocationSection value={value} location={location} onChange={onChange} hint={<Notice>A click on the map observes from that point, in the zone of the coordinates entered before, or UTC.</Notice>} />
+export function EclipseLocationSection({ id, value, location, onChange }: EclipseLocationSectionProps) {
+	return <ToolLocationSection id={id} value={value} location={location} onChange={onChange} hint={<Notice>A click on the map observes from that point, in the zone of the coordinates entered before, or UTC.</Notice>} />
 }
 
 export interface EclipseZoneSelectProps {

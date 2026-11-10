@@ -1,6 +1,6 @@
 import { profileState, setSkyLayerVisible, setSkyMagnitudeLimit } from '../profile/profile'
 import type { SkySettings } from '../profile/schema'
-import { PanelSection } from '../shell/ContextualPanel'
+import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Checkbox } from '../ui/Checkbox'
 import { Notice } from '../ui/Notice'
 import { Slider } from '../ui/Slider'
@@ -22,16 +22,16 @@ export function DisplayPanel({ sky, local }: DisplayPanelProps) {
 
 	return (
 		<>
-			<PanelSection title="Layers">
+			<CollapsibleSection id="sky.display.layers" title="Layers">
 				{SKY_LAYERS.map((layer) => (
 					<Checkbox key={layer.id} label={layer.label} checked={isSkyLayerVisible(display, layer)} disabled={layer.localOnly && !local} onChange={(visible) => setSkyLayerVisible(profileState, layer.id, visible)} />
 				))}
 				{!local && <Notice>The local meridian needs the observer&apos;s location.</Notice>}
-			</PanelSection>
-			<PanelSection title="Stars">
+			</CollapsibleSection>
+			<CollapsibleSection id="sky.display.stars" title="Stars">
 				<Slider label="Faintest magnitude" value={display?.magnitudeLimit ?? MAP_STAR_MAGNITUDE_LIMIT} min={MIN_MAGNITUDE_LIMIT} max={MAP_STAR_MAGNITUDE_LIMIT} step={0.5} onChange={(limit) => setSkyMagnitudeLimit(profileState, limit)} />
 				<Notice>The map holds stars down to magnitude {MAP_STAR_MAGNITUDE_LIMIT}; fainter stars are still found by the search.</Notice>
-			</PanelSection>
+			</CollapsibleSection>
 		</>
 	)
 }

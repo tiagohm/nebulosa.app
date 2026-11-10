@@ -3,7 +3,6 @@ import { useSnapshot } from 'valtio'
 import { formatElevation, formatGeographic } from '../format'
 import { activeProfile, profileState } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
-import { PanelSection } from '../shell/ContextualPanel'
 import { Button } from '../ui/Button'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
@@ -27,8 +26,8 @@ export interface ToolLocationSectionProps {
 	readonly elevation?: boolean
 	// Extra guidance, such as how the tool's map chooses a place.
 	readonly hint?: ReactNode
-	// Identifier of the collapsible section, namespaced by panel; a plain section when absent.
-	readonly collapsibleId?: string
+	// Identifier of the collapsible section, namespaced by panel, such as "solarEclipse.location".
+	readonly id: string
 }
 
 // Option of the source selector: the active site, a saved site after "site:", or coordinates.
@@ -97,7 +96,7 @@ function ManualForm({ start, elevation, onApply }: ManualFormProps) {
 }
 
 // Location section of a tool.
-export function ToolLocationSection({ value, location, onChange, elevation = false, hint, collapsibleId }: ToolLocationSectionProps) {
+export function ToolLocationSection({ value, location, onChange, elevation = false, hint, id }: ToolLocationSectionProps) {
 	const profiles = useSnapshot(profileState)
 	const { sites } = useSnapshot(siteState)
 	const active = activeSite(activeProfile(profiles), sites)
@@ -142,10 +141,8 @@ export function ToolLocationSection({ value, location, onChange, elevation = fal
 		</>
 	)
 
-	if (!collapsibleId) return <PanelSection title="Location">{content}</PanelSection>
-
 	return (
-		<CollapsibleSection id={collapsibleId} title="Location" summary={location ? (location.name ?? formatGeographic(location.latitude, location.longitude)) : 'No site'}>
+		<CollapsibleSection id={id} title="Location" summary={location ? (location.name ?? formatGeographic(location.latitude, location.longitude)) : 'No site'}>
 			{content}
 		</CollapsibleSection>
 	)

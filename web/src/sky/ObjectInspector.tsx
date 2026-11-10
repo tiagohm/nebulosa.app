@@ -4,7 +4,6 @@ import { useSnapshot } from 'valtio'
 import { formatDegrees } from '../format'
 import type { SiteLocation } from '../location/site'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
-import { PanelSection } from '../shell/ContextualPanel'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import { ObjectTitle } from '../ui/ObjectTitle'
@@ -46,9 +45,9 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 
 	if (!selection) {
 		return (
-			<PanelSection title="Object">
+			<CollapsibleSection id="sky.object" title="Object">
 				<Notice>Select an object in the Planetarium or use Search.</Notice>
-			</PanelSection>
+			</CollapsibleSection>
 		)
 	}
 
@@ -65,12 +64,12 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 
 	return (
 		<>
-			<PanelSection title="Object">
+			<CollapsibleSection id="sky.object" title="Object" summary={selection.name}>
 				<ObjectTitle name={selection.name} kind={typeOf(selection)} designations={designations.join(' · ')} />
 				{magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(magnitude)}</DataRow>}
 				{selection.detailsError && <Notice error>Details unavailable: {selection.detailsError}</Notice>}
 				<ObjectActions target={selection.ref} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
-			</PanelSection>
+			</CollapsibleSection>
 			<PositionSection selection={selection} timeZone={timeZone} />
 			{position && <ObserverSection position={position} events={events} hasObserver={hasObserver} onSetObserver={onSetObserver} isSolarSystem={selection.ref.kind === 'body' || selection.ref.kind === 'minorBody'} timeZone={timeZone} />}
 			{catalog && <CatalogSection catalog={catalog} />}

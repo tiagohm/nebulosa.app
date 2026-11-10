@@ -29,7 +29,7 @@ export function AstronomicalTimeConverter() {
 	const panel = (
 		<>
 			<TimeInputPanel zone={zone.zone} location={location} />
-			<ToolLocationSection value={state.location} location={location} onChange={(value) => setConverterLocation(astronomicalTimeState, value)} elevation />
+			<ToolLocationSection id="tools.astronomicalTime.location" value={state.location} location={location} onChange={(value) => setConverterLocation(astronomicalTimeState, value)} elevation />
 			<HourAnglePanel />
 		</>
 	)

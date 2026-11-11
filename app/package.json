@@ -18,7 +18,7 @@
 		"web": "workspace:*"
 	},
 	"devDependencies": {
-		"@tailwindcss/node": "4.3.3",
-		"@tailwindcss/oxide": "4.3.3"
+		"@tailwindcss/node": "4.3.5",
+		"@tailwindcss/oxide": "4.3.5"
 	}
 }

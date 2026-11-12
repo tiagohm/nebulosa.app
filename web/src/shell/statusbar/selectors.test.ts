@@ -177,6 +177,8 @@ describe('device chips', () => {
 	test('a moving mount shows its motion by precedence', () => {
 		expect(mountChip({ ...mount, slewing: true, tracking: true })).toEqual({ text: 'Slewing', tone: 'active', moving: true, title: 'Slewing' })
 		expect(mountChip({ ...mount, moving: true, parked: true }).text).toBe('Moving')
+		// A manual motion also sets the broad slewing flag; the chip names the manual motion, as Equipment Control does.
+		expect(mountChip({ ...mount, moving: true, slewing: true }).text).toBe('Moving')
 		expect(mountChip({ ...mount, homing: true, slewing: true }).text).toBe('Homing')
 		expect(mountChip({ ...mount, parking: true, homing: true }).text).toBe('Parking')
 	})

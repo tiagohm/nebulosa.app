@@ -14,7 +14,8 @@ Shell (`web/src/shell/ApplicationShell.tsx`), always mounted while navigating:
   The tab's link to the application server is a server icon, green while the event socket is open (`notificationsState.server`) and red otherwise, with the link and the selected connection in its title (the top bar shows and manages the connection).
   Then a chip per assigned role whose device is present and reported connected (none for an unassigned or disconnected device, or a role the profile hides), in the order main camera, filter wheel, focuser, rotator, mount, guide camera, dome, cover, flat panel, each an icon and the readings the profile asks of it (`STATUS_CHIP_FIELDS`, by default its status and main measurement), its name and full reading in its title, opening its exact device in Equipment Control (`roleChip`).
   The status says what the device is doing: the camera's capture phase, or Exposing for an exposure of any other tool (`exposing` of its state);
-  the mount's motion (Parking, Homing, Slewing, Moving), or parked, tracking, or idle;
+  the mount's motion (Parking, Homing, Moving, Slewing, in that precedence, as Equipment Control names it too: `mountMotion` in `equipment-control/mountActivity.ts`), or parked, tracking, or idle;
+  the toolkit's `slewing` is true for any commanded motion (a goto or flip, a manual axis motion, and with some drivers parking and homing), so it is read after the flags that name the cause and alone means a goto or flip;
   Moving for a focuser, rotator, cover, or dome, whose status also says when it parks or homes;
   Changing for a wheel;
   the guide camera's running session (dither, settle, the RMS of the latest guide steps in arcseconds only when the session knows the pixel scale and in guide pixels otherwise, never an earlier RMS outside guiding, or the guider state);

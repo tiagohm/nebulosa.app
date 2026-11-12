@@ -1,5 +1,6 @@
 import type { DeviceSummary, IndiDeviceSummary, ManagedDeviceType } from 'api'
 import { type ControlStates, deviceStateOf } from './control'
+import { mountMotion } from './mountActivity'
 
 // Physical devices of the Equipment Control page. The server lists one entry per interface of a device
 // (a flip-flat is a cover and a flat panel, a mount is also a guide output), all sharing its hardware id,
@@ -115,10 +116,8 @@ function interfaceActivity(states: Readonly<ControlStates>, device: DeviceSummar
 		case 'mount': {
 			const mount = deviceStateOf(states, 'mount', device.id)
 			if (!mount) return undefined
-			if (mount.homing) return { label: 'Homing', tone: 'active' }
-			if (mount.parking) return { label: 'Parking', tone: 'active' }
-			if (mount.moving) return { label: 'Moving', tone: 'active' }
-			if (mount.slewing) return { label: 'Slewing', tone: 'active' }
+			const motion = mountMotion(mount)
+			if (motion) return { label: motion, tone: 'active' }
 			if (mount.parked) return { label: 'Parked', tone: 'idle' }
 			return mount.tracking ? { label: 'Tracking', tone: 'idle' } : undefined
 		}

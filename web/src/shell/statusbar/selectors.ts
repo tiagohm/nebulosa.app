@@ -11,6 +11,7 @@ import type { TargetCenteringRuntime } from '../../camera/targetcentering'
 import type { TppaRuntime } from '../../camera/tppa'
 import type { SelectedConnectionStatus } from '../../connection/useSelectedConnection'
 import { type ControlRuntime, watchedDeviceState } from '../../equipment-control/control'
+import { mountMotion } from '../../equipment-control/mountActivity'
 import { ROLE_STATUS_LABELS, type RoleStatus } from '../../equipment/equipment'
 import type { EquipmentRole } from '../../equipment/roles'
 import { formatClockDuration, formatDegrees } from '../../format'
@@ -282,11 +283,11 @@ export function cameraChip(state: Partial<Pick<CameraCapabilities, 'temperature'
 	return { text: chipText({ status, temperature, cooler }, fields), tone: status ? 'active' : 'ok', moving: false, title }
 }
 
-// Returns the reading of a mount: its motion (parking, homing, a goto or flip, a manual axis motion, in that precedence),
-// otherwise parked, then tracking, then idle, and its reported equatorial coordinates of date.
+// Returns the reading of a mount: its motion (mountMotion), otherwise parked, then tracking, then idle, and its
+// reported equatorial coordinates of date.
 export function mountChip(state: (Pick<MountState, 'parking' | 'homing' | 'slewing' | 'moving' | 'parked' | 'tracking'> & Partial<Pick<MountState, 'rightAscension' | 'declination'>>) | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.MOUNT.fields): ChipValue {
 	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
-	const motion = state.parking ? 'Parking' : state.homing ? 'Homing' : state.slewing ? 'Slewing' : state.moving ? 'Moving' : undefined
+	const motion = mountMotion(state)
 	const status = motion ?? (state.parked ? 'Parked' : state.tracking ? 'Tracking' : 'Idle')
 	const coordinates = state.rightAscension !== undefined && state.declination !== undefined ? `${formatRA(normalizeAngle(state.rightAscension), false)} ${formatDEC(state.declination, false)}` : undefined
 	return { text: chipText({ status, coordinates }, fields), tone: motion ? 'active' : status === 'Tracking' ? 'ok' : 'idle', moving: !!motion, title: coordinates ? `${status} · ${coordinates}` : status }

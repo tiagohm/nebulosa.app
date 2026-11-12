@@ -21,6 +21,7 @@ import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
+import { mountMotion } from '../mountActivity'
 import type { InterfaceProps } from '../parts'
 
 // Controls of a mount: where it points, a coordinate to go to, flip to, or sync on, tracking and its rate,
@@ -49,12 +50,10 @@ const TRACK_MODE_LABELS: Readonly<Record<MountState['trackMode'], string>> = { S
 // Display name of each pier side.
 const PIER_SIDE_LABELS: Readonly<Record<MountState['pierSide'], string>> = { EAST: 'East', WEST: 'West', NEITHER: 'Unknown' }
 
-// Motion state of a mount as one line.
+// Motion state of a mount as one line: its motion (mountMotion), otherwise parked, tracking, or stopped.
 function motionOf(mount: MountState) {
-	if (mount.homing) return 'Homing'
-	if (mount.parking) return 'Parking'
-	if (mount.moving) return 'Moving'
-	if (mount.slewing) return 'Slewing'
+	const motion = mountMotion(mount)
+	if (motion) return motion
 	if (mount.parked) return 'Parked'
 	return mount.tracking ? 'Tracking' : 'Stopped'
 }

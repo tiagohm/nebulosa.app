@@ -38,6 +38,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   `GET /api/capture-frames/frames/:frameId` gives one frame (latest, saved, transient, or older saved).
   Changes are published as `captureFrame:updated` (frame and camera) and `captureSource:updated` (connection state); neither carries pixels or server paths, only file names.
   A disconnected camera keeps its frames.
+- Every frame records, when the registry first learns of it, the camera of the Equipment Catalog its device is bound to then (`camera_id` of `capture_frames`, see [Equipment Catalog Contract](equipment-catalog.md)), never changed by a later binding; a frame of a device bound to none records none, and no capture is refused for it.
+  `cameraOfPath` reads it back by the path of a saved file, for Image Stacking.
 - The metadata of every saved frame is a row of `capture_frames` in the operational database (identity, origin, acquisition, size, and path, never pixels), written in the same step that makes the frame saved and deleted when its write is later reported failed;
   previewed-only frames have no row.
   The registry-wide `sequence` continues from the highest row.

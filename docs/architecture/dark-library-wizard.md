@@ -10,7 +10,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   A group short of its frames stays a state of the library: a provisional master is an operator's decision there.
 - A plan is immutable: its groups (exposure in seconds, target temperature in °C or none, accepted frames), the camera settings shared by them (`DarkPlanCapture`: gain, offset, binning, subframe, readout mode), the protection, the thermal protocol, and the rejections allowed per group.
   A group is identified by the exact values of its settings (`darkGroupKey`), never by a rounded label, and groups run so one temperature is finished before the next, keeping the requested order within it (`orderDarkGroups`).
-  The physical camera is identified by `hardwareId`, never by a connection id, a role, or a name.
+  The physical camera is identified by `hardwareId`, never by a connection id, a role, or a name, and the plan records the camera of the Equipment Catalog the camera is bound to when it is made (`camera.cameraId`), which every frame of it is recorded against; a camera bound to none is refused with 409 `cameraNotCataloged` (see [Equipment Catalog Contract](equipment-catalog.md)).
   Limits of size live in the form (`DARK_LIBRARY_WIZARD_MAXIMUM_*`); the server checks only facts about devices and plans, and the fixed frame type is DARK, the transfer FITS, uncompressed.
 - Protection is any combination of a wheel slot (`darkFilter`, 0-based), a closed cover, an unlit panel, and a manual cap.
   Each selected device must be present: one that is missing refuses the start with `protectionUnavailable` instead of becoming manual, and a slot the wheel does not have is refused with `invalidFilterSlot`, because the commander clamps a slot it cannot reach.

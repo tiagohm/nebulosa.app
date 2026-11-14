@@ -3,10 +3,17 @@ import type { CalibrationGroupSummary, CalibrationMetadata } from 'api'
 import { cameraText, coverage, exposureText, groupTitle, jobFraction, masterName, masterWarnings, overrideIsText, temperatureText } from './library'
 
 const unknown = { evidence: 'unknown' } as const
+
+// Cameras of the Equipment Catalog of the tests.
+const CAMERAS = [
+	{ id: 'k1', name: 'Main' },
+	{ id: 'k2', name: 'Guide' },
+]
 const verified = <T>(value: T) => ({ value, evidence: 'verified' }) as const
 
 function metadata(patch: Partial<CalibrationMetadata> = {}): CalibrationMetadata {
 	return {
+		cameraId: 'k1',
 		cameraName: 'Camera',
 		exposure: verified(180000000),
 		setTemperature: verified(-10),
@@ -60,9 +67,13 @@ describe('text', () => {
 describe('coverage', () => {
 	test('shows what exists for each operating point, and an unavailable master or one of another role does not count', () => {
 		const master = { masterId: 1, kind: 'dark', calibrationState: 'rawBiasIncluded', units: 'DN', metadata: metadata(), frames: 1, method: 'mean', createdAt: 1, status: 'ready', groupId: 'g', dependencies: [], contentDigest: 'd' } as const
-		const rows = coverage([group('dark', { masters: [master] }), group('dark', { masters: [{ ...master, status: 'unavailable' }] }), group('dark', { masters: [{ ...master, kind: 'darkFlat' }] }), group('bias'), group('flat', { metadata: metadata({ gain: verified(0) }) })])
+		const rows = coverage(
+			[group('dark', { masters: [master] }), group('dark', { masters: [{ ...master, status: 'unavailable' }] }), group('dark', { masters: [{ ...master, kind: 'darkFlat' }] }), group('bias'), group('flat', { metadata: metadata({ gain: verified(0) }) }), group('bias', { metadata: metadata({ cameraId: 'k2' }) })],
+			CAMERAS,
+		)
 
-		expect(rows).toHaveLength(2)
+		expect(rows).toHaveLength(3)
+		expect(rows.map(({ camera }) => camera)).toEqual(['Main', 'Main', 'Guide'])
 		expect(rows[0].kinds.dark).toEqual({ groups: 3, masters: 1 })
 		expect(rows[0].kinds.bias).toEqual({ groups: 1, masters: 0 })
 		expect(rows[1].kinds.flat.groups).toBe(1)
@@ -84,9 +95,10 @@ describe('master warnings', () => {
 })
 
 describe('names', () => {
-	test('a camera is named by its headers, and a master by its id and date', () => {
-		expect(cameraText(metadata())).toBe('Camera')
-		expect(cameraText(metadata({ cameraName: undefined }))).toBe('Unknown camera')
+	test('a camera is named by the catalog, with the name its headers give when it differs, and a master by its id and date', () => {
+		expect(cameraText(metadata(), CAMERAS)).toBe('Main (Camera)')
+		expect(cameraText(metadata({ cameraName: 'Main' }), CAMERAS)).toBe('Main')
+		expect(cameraText(metadata({ cameraId: 'gone', cameraName: undefined }), CAMERAS)).toBe('Unknown camera')
 		expect(masterName({ masterId: 12, createdAt: Date.UTC(2026, 10, 3, 21, 4) }, 'UTC')).toBe('#12 · 2026-11-03 21:04 UTC')
 	})
 })

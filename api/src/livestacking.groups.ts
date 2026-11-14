@@ -1,4 +1,4 @@
-import { type CalibrationKind, type CalibrationMetadata, type CalibrationTarget, type MasterReference, stableId } from './calibrationlibrary.compatibility'
+import { type CalibrationKind, type CalibrationTarget, type HeaderMetadata, type MasterReference, stableId } from './calibrationlibrary.compatibility'
 import { cohortKeyOf, filterKeyOf } from './imagestacking.sources'
 
 // Pure grouping policy of Live Stacking: what a light frame's header says decides its filter, the acquisition cohort
@@ -49,7 +49,7 @@ export function filterGroupOf(filter: LiveFilterClass) {
 
 // Returns why the header of a light frame cannot be grouped, or undefined when it can: its geometry and exposure must be
 // known, since a cohort must never take an unknown value for a known one.
-export function missingMetadata(metadata: CalibrationMetadata) {
+export function missingMetadata(metadata: HeaderMetadata) {
 	if (!(metadata.width > 0) || !(metadata.height > 0) || (metadata.channels !== 1 && metadata.channels !== 3)) return 'The frame has no usable image size'
 	if (metadata.exposure.value === undefined) return 'The frame does not record its exposure'
 	return undefined
@@ -72,23 +72,25 @@ export function filterCalibration(calibration: LiveStackingCalibration, filter: 
 // layout, binning, gain, offset, readout mode, and exposure in integer microseconds, unknowns kept as unknown) and its
 // calibration policy. Frames of one segment and one field share an accumulator; temperature is checked against the
 // masters, not keyed.
-export function segmentKeyOf(filter: string, metadata: CalibrationMetadata, policyId: string) {
+export function segmentKeyOf(filter: string, metadata: HeaderMetadata, policyId: string) {
 	return `v${SEGMENT_KEY_VERSION}|filter=${filter}|${cohortKeyOf(metadata)}|calibration=${policyId}`
 }
 
 // Returns the geometry key of a frame: the grid it can be registered onto, its size, subframe origin, binning and CFA
 // layout. Frames of different geometries never share a field.
-export function geometryKeyOf(metadata: CalibrationMetadata) {
+export function geometryKeyOf(metadata: HeaderMetadata) {
 	return `${metadata.width}x${metadata.height}x${metadata.channels}|origin=${metadata.originX ?? '?'},${metadata.originY ?? '?'}|bin=${metadata.binX.value ?? '?'}x${metadata.binY.value ?? '?'}|cfa=${metadata.cfa ?? ''}@${metadata.bayerOffsetX ?? 0},${metadata.bayerOffsetY ?? 0}`
 }
 
-// Returns what the masters of one frame are matched against: its own geometry, settings, exposure in seconds, sensor
-// temperature in degrees Celsius, and filter, each only when its header records it.
-export function frameTarget(metadata: CalibrationMetadata): CalibrationTarget {
+// Returns what the masters of one frame are matched against: the camera of the Equipment Catalog that took it (cameraId),
+// and its own geometry, settings, exposure in seconds, sensor temperature in degrees Celsius, and filter, each only when
+// its header records it.
+export function frameTarget(metadata: HeaderMetadata, cameraId: string): CalibrationTarget {
 	const temperature = metadata.sensorTemperature.value ?? metadata.setTemperature.value
 	const exposure = metadata.exposure.value
 
 	return {
+		cameraId,
 		width: metadata.width,
 		height: metadata.height,
 		channels: metadata.channels,

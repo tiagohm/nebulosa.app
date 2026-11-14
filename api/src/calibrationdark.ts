@@ -1,5 +1,5 @@
 import type { CalibrationMasterSummary } from './calibrationlibrary'
-import { type CalibrationMetadata, type Evidenced, TEMPERATURE_SPREAD_LIMIT } from './calibrationlibrary.compatibility'
+import { type Evidenced, type HeaderMetadata, TEMPERATURE_SPREAD_LIMIT } from './calibrationlibrary.compatibility'
 
 // Application of a master dark of the Calibration Library to one frame a service solves or measures. The library only
 // lists masters whose known metadata agree with a target, and lets an unknown value pass; subtracting a master needs a
@@ -34,7 +34,7 @@ export type DarkAssessment =
 
 // Judges whether the master dark can be subtracted from a frame, from the frame's actual metadata (inspectHeader of its
 // header) and the master's. Pure.
-export function assessDarkForFrame(frame: CalibrationMetadata, master: Pick<CalibrationMasterSummary, 'kind' | 'metadata'>): DarkAssessment {
+export function assessDarkForFrame(frame: HeaderMetadata, master: Pick<CalibrationMasterSummary, 'kind' | 'metadata'>): DarkAssessment {
 	const dark = master.metadata
 	const unverified: DarkEvidence[] = ['camera']
 
@@ -104,7 +104,7 @@ function check<T>(a: Evidenced<T>, b: Evidenced<T>): 'equal' | 'different' | 'un
 
 // Agreement of the subframe origins: equal when both are known and equal, different when known and different or when a
 // known nonzero origin faces an unknown one, and unknown otherwise (an unknown origin may well be the full frame).
-function originAgreement(frame: Pick<CalibrationMetadata, 'originX' | 'originY'>, dark: Pick<CalibrationMetadata, 'originX' | 'originY'>): 'equal' | 'different' | 'unknown' {
+function originAgreement(frame: Pick<HeaderMetadata, 'originX' | 'originY'>, dark: Pick<HeaderMetadata, 'originX' | 'originY'>): 'equal' | 'different' | 'unknown' {
 	const a = frame.originX !== undefined && frame.originY !== undefined ? [frame.originX, frame.originY] : undefined
 	const b = dark.originX !== undefined && dark.originY !== undefined ? [dark.originX, dark.originY] : undefined
 	if (a && b) return a[0] === b[0] && a[1] === b[1] ? 'equal' : 'different'

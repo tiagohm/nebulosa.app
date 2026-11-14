@@ -14,6 +14,7 @@ import {
 	flatCorrectionMismatch,
 	groupReadiness,
 	type GroupReadiness,
+	type HeaderMetadata,
 	matchesTarget,
 	type MasterReference,
 	type OverridableField,
@@ -24,6 +25,7 @@ import {
 import { ACTIVE_JOB_STATES, type CalibrationJob, CalibrationJobs, type CalibrationJobSummary, type Integrator, jobSummary, type MasterBuild, NO_PROGRESS } from './calibrationlibrary.jobs'
 import { darkPlanSource, fileIdentity, inspectFile, makeSource, regrouped, type ScanCandidate, scanDirectory } from './calibrationlibrary.sources'
 import {
+	type CalibrationCameraUsage,
 	type CalibrationLibraryStore,
 	type CalibrationMaster,
 	type CalibrationSource,
@@ -46,7 +48,9 @@ import { errorCode } from './util'
 
 // Calibration Library: the single owner of what calibration frames exist, whether they can be combined, and which masters
 // were made of them. It needs no camera and claims no device: frames come from what the Dark Library Wizard and the Flat
-// Wizard publish, and from directories an operator imports, always by reference and never modified.
+// Wizard publish, and from directories an operator imports, always by reference and never modified. Every frame is
+// recorded against the camera of the Equipment Catalog that took it, which its plan, its session, or the operator who
+// imports it declares; frames of different cameras never combine.
 // Every build publishes a new immutable master with an incremental id, however many there already are of the same frames;
 // jobs live in memory: they survive the tab, never the server. What it indexes and publishes is kept by
 // CalibrationLibraryStore in the operational database. A wizard may ask for a master, through the same path as a person.
@@ -81,6 +85,7 @@ export type CalibrationLibraryErrorCode =
 	| 'importFailed'
 	| 'masterInUse'
 	| 'deleteFailed'
+	| 'cameraRequired'
 
 // Failure of a request, with its status and stable code.
 class LibraryError extends Error {
@@ -108,8 +113,9 @@ export interface CalibrationLibrarySnapshot {
 	// Masters by state, and by role.
 	readonly masters: StateCounts
 	readonly mastersByKind: StateCounts
-	// Names of the cameras of the frames, sorted.
-	readonly cameras: readonly string[]
+	// Frames and published masters by camera of the Equipment Catalog, for every camera something is recorded against,
+	// ordered by id.
+	readonly cameras: readonly CalibrationCameraUsage[]
 	// Jobs still working.
 	readonly activeJobs: readonly CalibrationJobSummary[]
 	// Latest jobs of the wizards, so a reloaded tab still shows how their masters ended.
@@ -263,8 +269,8 @@ export interface ImportCandidate {
 	readonly kind?: CalibrationKind
 	// Whether it is not a calibration frame, and cannot be imported.
 	readonly rejectedRole?: 'light' | 'master'
-	// What is known about it.
-	readonly metadata?: CalibrationMetadata
+	// What its header says.
+	readonly metadata?: HeaderMetadata
 	// What should be said about it.
 	readonly warnings: readonly string[]
 	// Why it could not be read.
@@ -285,6 +291,10 @@ export interface ImportCommit {
 	readonly paths?: readonly string[]
 	// Roles an operator declares, by path.
 	readonly classifications?: Readonly<Record<string, CalibrationKind>>
+	// Camera of the Equipment Catalog an operator declares took every file; nothing infers it from a header.
+	readonly cameraId?: string
+	// Camera an operator declares for one file instead, by path.
+	readonly cameras?: Readonly<Record<string, string>>
 	// Whether to copy the files into the library instead of referencing them.
 	readonly copy?: boolean
 }
@@ -301,6 +311,8 @@ export interface FlatFrameRegistration {
 	readonly path: string
 	// Session it came from.
 	readonly sessionId: string
+	// Camera of the Equipment Catalog the session recorded.
+	readonly cameraId: string
 	// Name of the camera.
 	readonly cameraName: string
 	// Name of the filter in the beam, which a file taken without a wheel leaves out.
@@ -1095,19 +1107,24 @@ export class CalibrationLibrary implements Disposable {
 	}
 
 	// Adds reviewed files to the library. A role comes from the file or from an operator, never from a name; a file
-	// with neither stays out, as does a light or a master. Copies leave the original where it is. Returns how many frames entered.
-	async commitImport(jobId: string, { paths, classifications = {}, copy = false }: ImportCommit) {
+	// with neither stays out, as does a light or a master. The camera of the Equipment Catalog always comes from an
+	// operator, for the whole import or one file, and nothing enters while a file that would enter has none. Copies leave
+	// the original where it is. Returns how many frames entered.
+	async commitImport(jobId: string, { paths, classifications = {}, cameraId, cameras = {}, copy = false }: ImportCommit) {
 		const job = await this.#job(jobId)
 		if (job.type !== 'import' || job.state !== 'completed' || job.scan?.committed !== undefined) throw new LibraryError('This import cannot be committed', 409, 'jobConflict')
 
 		const chosen = paths && new Set(paths)
+		const entering = (job.candidates ?? []).filter((candidate): candidate is EnteringCandidate => (!chosen || chosen.has(candidate.path)) && (classifications[candidate.path] ?? candidate.kind) !== undefined && entersLibrary(candidate))
+		const uncataloged = entering.filter((candidate) => (cameras[candidate.path] ?? cameraId) === undefined).length
+		if (uncataloged > 0) throw new LibraryError(`Choose the camera of the Equipment Catalog of ${uncataloged} files`, 409, 'cameraRequired')
+
 		const sources: CalibrationSource[] = []
 
-		for (const candidate of job.candidates ?? []) {
-			if (chosen && !chosen.has(candidate.path)) continue
+		for (const candidate of entering) {
 			const declared = classifications[candidate.path]
 			const kind = declared ?? candidate.kind
-			if (kind === undefined || !entersLibrary(candidate)) continue
+			const camera = cameras[candidate.path] ?? cameraId
 
 			const warnings = [...candidate.warnings]
 			if (declared) warnings.push('Role declared by an operator')
@@ -1127,7 +1144,7 @@ export class CalibrationLibrary implements Disposable {
 				warnings.push(`Copied from ${candidate.path}`)
 			}
 
-			const source = makeSource('import', jobId, kind, path, candidate.format, bytes, mtimeMillis, candidate.metadata, warnings, { supported: candidate.metadata.bitpix !== 64 })
+			const source = makeSource('import', jobId, kind, path, candidate.format, bytes, mtimeMillis, { ...candidate.metadata, cameraId: camera }, warnings, { supported: candidate.metadata.bitpix !== 64 })
 			sources.push(source)
 		}
 
@@ -1150,12 +1167,12 @@ export class CalibrationLibrary implements Disposable {
 	}
 
 	// Indexes one published flat.
-	async #registerFlat({ path, sessionId, cameraName, filter }: FlatFrameRegistration) {
+	async #registerFlat({ path, sessionId, cameraId, cameraName, filter }: FlatFrameRegistration) {
 		await this.#usable()
 		const [inspection, info] = await Promise.all([inspectFile(path), stat(path)])
 		if (!inspection) return
 
-		const metadata: CalibrationMetadata = { ...inspection.metadata, cameraName: inspection.metadata.cameraName ?? cameraName, filter: inspection.metadata.filter.value === undefined && filter !== undefined ? { value: filter, evidence: 'planDeclared' } : inspection.metadata.filter }
+		const metadata: CalibrationMetadata = { ...inspection.metadata, cameraId, cameraName: inspection.metadata.cameraName ?? cameraName, filter: inspection.metadata.filter.value === undefined && filter !== undefined ? { value: filter, evidence: 'planDeclared' } : inspection.metadata.filter }
 		const source = makeSource('flatWizard', sessionId, 'flat', path, inspection.format, info.size, info.mtimeMs, metadata, inspection.warnings)
 		this.store.putSources([source])
 		this.#changed()
@@ -1315,9 +1332,12 @@ export class CalibrationLibrary implements Disposable {
 	}
 }
 
+// Candidate of an import that can enter the library once it has a role: its header and format are known.
+type EnteringCandidate = ImportCandidate & Required<Pick<ImportCandidate, 'metadata' | 'format'>>
+
 // Whether a candidate of an import can enter the library once it has a role, from its file or an operator: a readable
 // calibration frame the library does not hold yet.
-function entersLibrary(candidate: ImportCandidate): candidate is ImportCandidate & Required<Pick<ImportCandidate, 'metadata' | 'format'>> {
+function entersLibrary(candidate: ImportCandidate): candidate is EnteringCandidate {
 	return !candidate.known && candidate.error === undefined && candidate.rejectedRole === undefined && candidate.metadata !== undefined && candidate.format !== undefined
 }
 
@@ -1353,7 +1373,7 @@ function pageOf(request: Request) {
 function sourceFilter(searchParams: URLSearchParams): SourceFilter {
 	return {
 		kind: (searchParams.get('kind') as CalibrationKind | null) ?? undefined,
-		camera: searchParams.get('camera') ?? undefined,
+		cameraId: searchParams.get('cameraId') ?? undefined,
 		status: (searchParams.get('status') as SourceStatus | null) ?? undefined,
 		groupId: searchParams.get('groupId') ?? undefined,
 		search: searchParams.get('search') || undefined,
@@ -1437,7 +1457,7 @@ export function createCalibrationLibraryRoutes(library: CalibrationLibrary) {
 				const { searchParams, offset, limit } = pageOf(request)
 				const filter: MasterFilter = {
 					kind: (searchParams.get('kind') as CalibrationKind | null) ?? undefined,
-					camera: searchParams.get('camera') ?? undefined,
+					cameraId: searchParams.get('cameraId') ?? undefined,
 					filter: searchParams.get('filter') ?? undefined,
 					status: (searchParams.get('status') as ProductStatus | null) ?? undefined,
 					groupId: searchParams.get('groupId') ?? undefined,

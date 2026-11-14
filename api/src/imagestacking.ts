@@ -7,7 +7,7 @@ import { type SubframeRejectionReason, subframeRejectionReasons } from 'nebulosa
 import { medianOf } from 'nebulosa/src/math/numerical/statistics'
 import type { CalibrationMasterDetail, ResolvePreview } from './calibrationlibrary'
 import { fileDigest } from './calibrationlibrary.analysis'
-import { type CalibrationKind, type CalibrationMetadata, type CalibrationTarget, type MasterReference, stableId } from './calibrationlibrary.compatibility'
+import { type CalibrationKind, type CalibrationTarget, type HeaderMetadata, type MasterReference, stableId } from './calibrationlibrary.compatibility'
 import { fileIdentity, type FileInspection, inspectFile, scanDirectory } from './calibrationlibrary.sources'
 import { MAX_PAGE_SIZE, type Page, type ProductStatus, type SourceFormat, type SourceStatus } from './calibrationlibrary.store'
 import { errorResponse } from './http'
@@ -106,6 +106,15 @@ export interface StackingMasters {
 	readonly lease: (references: readonly Pick<MasterReference, 'masterId'>[]) => () => void
 }
 
+// What Image Stacking reads of the captured frames: the camera of the Equipment Catalog the capture that saved a file
+// recorded, or undefined when no capture of this server recorded one at that path.
+export interface StackingCaptures {
+	readonly cameraOfPath: (path: string) => string | undefined
+}
+
+// Captured frames that name no camera, for tests and services composed without the capture frame registry.
+const NO_CAPTURED_CAMERAS: StackingCaptures = { cameraOfPath: () => undefined }
+
 // Stable code of a failed request.
 export type ImageStackingErrorCode = 'notFound' | 'conflict' | 'jobConflict' | 'managedPath' | 'verifiedMetadata' | 'masterUnavailable' | 'incompatibleMaster' | 'notReady' | 'insufficientMemory' | 'insufficientSpace' | 'productInUse' | 'superseded' | 'processingFailed'
 
@@ -180,18 +189,28 @@ export interface StackingCohort extends StackingCohortDecision {
 	readonly frames: number
 	// Name of the camera its headers give, shown and never compared.
 	readonly cameraName?: string
-	// What masters are matched against: the geometry and settings of its first frame, its exposure, the median of its
-	// sensor temperatures, and its most frequent filter name.
-	readonly target: CalibrationTarget
+	// Camera of the Equipment Catalog the captures that saved its lights recorded, which every one of them shares; absent
+	// for lights no capture of this server recorded with a camera, whose camera an operator declares (cameraId).
+	readonly capturedCameraId?: string
+	// What masters are matched against: its camera (the captured one, else the declared one), the geometry and settings of
+	// its first frame, its exposure, the median of its sensor temperatures, and its most frequent filter name. Its camera is
+	// absent while it is not known, when no master can be listed.
+	readonly target: CohortTarget
 	// Masters of the library that match it, newest first; only these can be chosen.
 	readonly candidates: readonly StackingMasterCandidate[]
 }
 
-// Change of a cohort by an operator.
+// Calibration target of a cohort, whose camera of the Equipment Catalog is absent while nobody knows it.
+export type CohortTarget = Omit<CalibrationTarget, 'cameraId'> & { readonly cameraId?: string }
+
+// Change of a cohort by an operator: the camera of its lights, or the masters chosen.
 export interface StackingCohortPatch {
+	// Camera of the Equipment Catalog an operator declares for lights that name none, which drops the masters chosen for
+	// another one; null forgets it. Absent leaves it.
+	readonly cameraId?: string | null
 	// Masters chosen, which replace the previous choice; each must be a candidate of the cohort, and a bias is dropped with
-	// a dark, which already holds it.
-	readonly calibration: StackingCalibration
+	// a dark, which already holds it. Absent leaves them.
+	readonly calibration?: StackingCalibration
 }
 
 // How much a finding stops:
@@ -201,7 +220,7 @@ export interface StackingCohortPatch {
 export type StackingFindingSeverity = 'blocker' | 'review' | 'warning'
 
 // Stable code of a finding.
-export type StackingFindingCode = 'noLights' | 'multipleTargets' | 'multipleSetups' | 'partialCalibration' | 'flatWithoutPedestal' | 'masterUnavailable' | 'masterIncompatible' | 'analysisStale' | 'measurementFailed' | 'registrationFailed' | 'belowThresholds'
+export type StackingFindingCode = 'noLights' | 'multipleTargets' | 'multipleSetups' | 'unknownCamera' | 'partialCalibration' | 'flatWithoutPedestal' | 'masterUnavailable' | 'masterIncompatible' | 'analysisStale' | 'measurementFailed' | 'registrationFailed' | 'belowThresholds'
 
 // One thing validation found.
 export interface StackingFinding {
@@ -417,7 +436,7 @@ export interface StackingImportCandidate {
 	readonly object?: string
 	readonly observedAt?: number
 	// What is known about it.
-	readonly metadata?: CalibrationMetadata
+	readonly metadata?: HeaderMetadata
 	// What should be said about it.
 	readonly warnings: readonly string[]
 	// Why its header could not be read.
@@ -519,14 +538,16 @@ export function analysisFingerprint(source: Pick<StackingSource, 'bytes' | 'mtim
 	return stableId(`${ANALYSIS_VERSION}|${source.bytes}|${source.mtimeMillis}|${pins.join('|')}`)
 }
 
-// Returns what masters of a cohort are matched against.
-function cohortTarget(sources: readonly StackingSource[]): CalibrationTarget {
+// Returns what masters of a cohort taken by the camera of the Equipment Catalog cameraId (undefined while unknown) are
+// matched against.
+function cohortTarget(sources: readonly StackingSource[], cameraId: string | undefined): CohortTarget {
 	const { metadata } = sources[0]
 	const temperatures = sources.flatMap((source) => source.metadata.setTemperature.value ?? source.metadata.sensorTemperature.value ?? []).sort((a, b) => a - b)
 	const filter = mostFrequent(sources.flatMap((source) => source.metadata.filter.value ?? []))
 	const exposure = metadata.exposure.value
 
 	return {
+		...(cameraId !== undefined && { cameraId }),
 		width: metadata.width,
 		height: metadata.height,
 		channels: metadata.channels,
@@ -565,8 +586,8 @@ function counted(count: number, singular: string, plural: string) {
 }
 
 // Returns the decision a cohort holds, without what is computed from its frames.
-function decisionOf({ cohortId, groupKey, cohortKey, calibration }: StackingCohortDecision): StackingCohortDecision {
-	return { cohortId, groupKey, cohortKey, ...(calibration !== undefined && { calibration }) }
+function decisionOf({ cohortId, groupKey, cohortKey, cameraId, calibration }: StackingCohortDecision): StackingCohortDecision {
+	return { cohortId, groupKey, cohortKey, ...(cameraId !== undefined && { cameraId }), ...(calibration !== undefined && { calibration }) }
 }
 
 // Returns the most frequent value, ties broken by order of first appearance; undefined for none.
@@ -645,7 +666,8 @@ export class ImageStacking implements Disposable {
 
 	// Creates the service. listener receives every change synchronously; masters is the Calibration Library; managed lists
 	// the directories whose files belong to the application, which an import never reads; analyzer measures frames and
-	// integrator integrates them, and compositor mixes masters.
+	// integrator integrates them, compositor mixes masters, and captures says the camera of the Equipment Catalog the
+	// capture that saved a light recorded.
 	constructor(
 		readonly store: ImageStackingStore,
 		readonly listener: (event: ImageStackingEvent) => void,
@@ -654,6 +676,7 @@ export class ImageStacking implements Disposable {
 		readonly analyzer: FrameAnalyzer = new StackingAnalyzer(),
 		readonly integrator: FrameIntegrator = new StackingIntegrator(),
 		readonly compositor: FrameCompositor = new StackingCompositor(),
+		readonly captures: StackingCaptures = NO_CAPTURED_CAMERAS,
 	) {}
 
 	// Preview being computed, aborted by the next one.
@@ -884,11 +907,12 @@ export class ImageStacking implements Disposable {
 		return cohorts
 	}
 
-	// Lists the light masters of the library that match a target, newest first.
-	async #candidates(target: CalibrationTarget) {
+	// Lists the light masters of the library that match a target, newest first; none while its camera is unknown.
+	async #candidates({ cameraId, ...target }: CohortTarget) {
 		const candidates: StackingMasterCandidate[] = []
+		if (cameraId === undefined) return candidates
 
-		for (const { kind, masterId, contentDigest, status, frames, createdAt } of (await this.masters.resolvePreview(target)).candidates) {
+		for (const { kind, masterId, contentDigest, status, frames, createdAt } of (await this.masters.resolvePreview({ ...target, cameraId })).candidates) {
 			if (kind !== 'darkFlat') candidates.push({ kind, masterId, digest: contentDigest, status, frames, createdAt })
 		}
 
@@ -901,9 +925,13 @@ export class ImageStacking implements Disposable {
 		const cohorts: CohortState[] = []
 
 		for (const { cohortId, groupKey, cohortKey, sources } of this.#cohortFrames(projectId).values()) {
-			const target = cohortTarget(sources)
+			const decision = decisions.get(cohortId)
+			// The camera is part of the acquisition key, so every light of a cohort records the same one.
+			const capturedCameraId = sources[0].cameraId
+			const cameraId = capturedCameraId ?? decision?.cameraId
+			const target = cohortTarget(sources, cameraId)
 			const { cameraName } = sources[0].metadata
-			cohorts.push({ ...decisions.get(cohortId), cohortId, groupKey, cohortKey, frames: sources.length, ...(cameraName !== undefined && { cameraName }), target, candidates: await this.#candidates(target), sources })
+			cohorts.push({ ...decision, cohortId, groupKey, cohortKey, frames: sources.length, ...(cameraName !== undefined && { cameraName }), ...(capturedCameraId !== undefined && { capturedCameraId }), target, candidates: await this.#candidates(target), sources })
 		}
 
 		return cohorts.sort((a, b) => a.groupKey.localeCompare(b.groupKey) || a.cohortKey.localeCompare(b.cohortKey))
@@ -918,14 +946,30 @@ export class ImageStacking implements Disposable {
 		return cohorts
 	}
 
-	// Records the masters an operator chose for a cohort, replacing the previous choice; none at all leaves it uncalibrated.
-	// Each must be a master the library finds matching for the cohort with the content it has now; throws 409 otherwise. A
-	// bias is dropped with a dark, which already holds it.
-	async updateCohort(projectId: string, cohortId: string, { calibration }: StackingCohortPatch) {
+	// Records the camera of the Equipment Catalog an operator declares for the lights of a cohort that name none, which
+	// drops the masters chosen for another camera; throws 409 when its lights name their camera. Then records the masters
+	// an operator chose for it, replacing the previous choice; none at all leaves it uncalibrated. Each must be a master the
+	// library finds matching for the cohort with the content it has now; throws 409 otherwise. A bias is dropped with a
+	// dark, which already holds it.
+	async updateCohort(projectId: string, cohortId: string, { cameraId, calibration }: StackingCohortPatch) {
 		await this.ready()
 		this.#project(projectId)
-		const cohort = (await this.#cohorts(projectId)).find((candidate) => candidate.cohortId === cohortId)
+		let cohort = (await this.#cohorts(projectId)).find((candidate) => candidate.cohortId === cohortId)
 		if (!cohort) throw new StackingError('Unknown cohort', 404, 'notFound')
+
+		if (cameraId !== undefined) {
+			if (cohort.capturedCameraId !== undefined) throw new StackingError('These lights name the camera that took them', 409, 'conflict')
+			const { cameraId: declared, calibration: chosen, ...decision } = decisionOf(cohort)
+			const kept = cameraId === (declared ?? null) && chosen !== undefined ? { calibration: chosen } : {}
+			this.store.putCohort(projectId, { ...decision, ...(cameraId !== null && { cameraId }), ...kept }, Date.now())
+			cohort = (await this.#cohorts(projectId)).find((candidate) => candidate.cohortId === cohortId)!
+		}
+
+		if (calibration === undefined) {
+			this.#changed()
+			return (await this.cohorts(projectId)).find((candidate) => candidate.cohortId === cohortId)!
+		}
+
 		const { dark, flat, bias } = calibration
 		const chosen: StackingCalibration = { ...(dark && { dark }), ...(flat && { flat }), ...(bias && !dark && { bias }) }
 
@@ -1728,7 +1772,9 @@ export class ImageStacking implements Disposable {
 
 		for (const cohort of cohorts) {
 			const where = { groupKey: cohort.groupKey, cohortId: cohort.cohortId }
-			const label = `${cohort.groupKey} frames${cohort.target.exposure === undefined ? '' : ` of ${cohort.target.exposure} s`}`
+			const exposure = cohort.sources[0].metadata.exposure.value
+			const label = `${cohort.groupKey} frames${exposure === undefined ? '' : ` of ${exposure / 1000000} s`}`
+			if (cohort.target.cameraId === undefined) findings.push({ severity: 'warning', code: 'unknownCamera', ...where, message: `No capture of this server recorded the camera of the ${label}; declare the camera of the Equipment Catalog that took them to list their masters` })
 			if (!cohort.calibration?.flat) findings.push({ severity: 'warning', code: 'partialCalibration', ...where, message: `The ${label} have no flat; vignetting and dust stay in the stack` })
 			// A flat divides what is left once the pedestal is removed: dividing a pedestal by it imprints its dust and
 			// vignetting inverted, so a flat without a dark or a bias blocks the stack instead of being a partial calibration.
@@ -1745,7 +1791,7 @@ export class ImageStacking implements Disposable {
 
 		findings.push(...this.#analysisFindings(project, cohorts))
 		let samples = 0
-		for (const { target } of cohorts) samples = Math.max(samples, target.width * target.height * target.channels)
+		for (const { sources } of cohorts) samples = Math.max(samples, sources[0].metadata.width * sources[0].metadata.height * sources[0].metadata.channels)
 		return { findings, ready: !findings.some((finding) => finding.severity === 'blocker'), samples, memoryBytes: samples * STACK_BYTES_PER_PIXEL }
 	}
 
@@ -2002,6 +2048,7 @@ export class ImageStacking implements Disposable {
 
 			const declared = candidate.role === 'unclassified' && declaredLights.has(candidate.path)
 			const warnings = declared ? [...candidate.warnings, 'Declared a light by an operator'] : candidate.warnings
+			const cameraId = this.captures.cameraOfPath(candidate.path)
 
 			sources.push({
 				sourceId: stackingSourceId(job.projectId, candidate.path),
@@ -2014,7 +2061,8 @@ export class ImageStacking implements Disposable {
 				status: 'available',
 				role: declared ? 'light' : candidate.role,
 				filterKey: filterKeyOf(candidate.metadata.filter.value),
-				cohortKey: cohortKeyOf(candidate.metadata),
+				...(cameraId !== undefined && { cameraId }),
+				cohortKey: cohortKeyOf(candidate.metadata, cameraId),
 				...(candidate.object !== undefined && { object: candidate.object }),
 				...(candidate.observedAt !== undefined && { observedAt: candidate.observedAt }),
 				metadata: candidate.metadata,

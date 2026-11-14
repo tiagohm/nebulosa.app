@@ -6,14 +6,15 @@ import type { SubframeQualityMetrics } from 'nebulosa/src/imaging/processing/sub
 import { type FitsHeader, writeFits } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSink } from 'nebulosa/src/io/io'
 import type { ResolvePreview } from './calibrationlibrary'
-import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
+import type { HeaderMetadata } from './calibrationlibrary.compatibility'
 import { AppDatabase } from './database'
-import { createImageStackingRoutes, filterGroups, ImageStacking, type ImageStackingEvent, type StackingMasters } from './imagestacking'
+import { createImageStackingRoutes, filterGroups, ImageStacking, type ImageStackingEvent, type StackingCaptures, type StackingMasters } from './imagestacking'
 import { type AnalysisMeasurement, type AnalysisWorkerRequest, type FrameAnalyzer, readDigital, registerInThread, StackingAnalyzer } from './imagestacking.analysis'
 import { type FrameCompositor, StackingCompositor } from './imagestacking.composition'
 import { type FrameIntegrator, integrateGroup, integrationPlan } from './imagestacking.integration'
 import { cohortKeyOf, filterKeyOf, isWithin, lightRoleOf } from './imagestacking.sources'
 import { COMPOSITE_FILE, ImageStackingStore, PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingComposition, type StackingProduct, type StackingSourceFacts, type StackingStar } from './imagestacking.store'
+import { Workspace } from './workspace'
 
 const SKIP = process.env.RUN_ALL_TESTS !== 'true'
 
@@ -65,6 +66,10 @@ function directory(name: string) {
 	return mkdtempSync(join(root, `${name}-`))
 }
 
+// Cameras of the Equipment Catalog of the tests: the one the masters of the fake library were taken by, and another.
+const CATALOG_CAMERA = 'catalog-camera'
+const OTHER_CAMERA = 'other-camera'
+
 // Ids of the masters of the fake library.
 const DARK = 1
 const FLAT = 2
@@ -84,7 +89,7 @@ function masters() {
 		kind: name(masterId),
 		calibrationState: 'rawBiasIncluded',
 		units: 'DN',
-		metadata: metadata(),
+		metadata: { ...metadata(), cameraId: CATALOG_CAMERA },
 		frames: 30,
 		method: 'sigmaClip',
 		createdAt: masterId,
@@ -95,7 +100,7 @@ function masters() {
 	})
 
 	const library: StackingMasters = {
-		resolvePreview: (target): Promise<ResolvePreview> => Promise.resolve({ candidates: [...(target.exposure === 300 ? [candidate(DARK)] : []), candidate(FLAT)] }),
+		resolvePreview: (target): Promise<ResolvePreview> => Promise.resolve({ candidates: target.cameraId !== CATALOG_CAMERA ? [] : [...(target.exposure === 300 ? [candidate(DARK)] : []), candidate(FLAT)] }),
 		pinnedMaster: ({ masterId }) => Promise.resolve(available.has(masterId) ? { path: join(root, `${name(masterId)}.fit`), units: masterId === FLAT ? 'dimensionless' : 'DN', fullScaleDn: 65535 } : undefined),
 		lease: () => {
 			leases.held++
@@ -153,11 +158,23 @@ function analyzer(measurements: Record<string, AnalysisMeasurement>, during: () 
 	return { fake, requests }
 }
 
-// A service over a database and a managed directory of its own.
-function open(library: StackingMasters = masters().library, frameAnalyzer?: FrameAnalyzer, frameIntegrator?: FrameIntegrator, frameCompositor?: FrameCompositor) {
+// A database whose Equipment Catalog holds CATALOG_CAMERA and OTHER_CAMERA.
+function cataloged() {
+	const database = AppDatabase.memory()
+	const workspace = new Workspace(database)
+	for (const id of [CATALOG_CAMERA, OTHER_CAMERA]) workspace.saveCatalogCamera(id, { name: id, archived: false, revision: 0 })
+	return database
+}
+
+// Captures that recorded every light with CATALOG_CAMERA.
+const CAPTURED_WITH_CATALOG_CAMERA: StackingCaptures = { cameraOfPath: () => CATALOG_CAMERA }
+
+// A service over a database and a managed directory of its own, whose captures recorded every light with CATALOG_CAMERA
+// unless captures says otherwise.
+function open(library: StackingMasters = masters().library, frameAnalyzer?: FrameAnalyzer, frameIntegrator?: FrameIntegrator, frameCompositor?: FrameCompositor, captures: StackingCaptures = CAPTURED_WITH_CATALOG_CAMERA) {
 	const events: ImageStackingEvent[] = []
 	const managed = directory('managed')
-	const stacking = new ImageStacking(new ImageStackingStore(AppDatabase.memory(), managed), (event) => events.push(event), library, [managed], frameAnalyzer, frameIntegrator, frameCompositor)
+	const stacking = new ImageStacking(new ImageStackingStore(cataloged(), managed), (event) => events.push(event), library, [managed], frameAnalyzer, frameIntegrator, frameCompositor, captures)
 	return { stacking, events, managed }
 }
 
@@ -186,7 +203,7 @@ function contents(path: string) {
 }
 
 // Metadata with every value unknown but the ones given.
-function metadata(patch: Partial<CalibrationMetadata> = {}): CalibrationMetadata {
+function metadata(patch: Partial<HeaderMetadata> = {}): HeaderMetadata {
 	const unknown = { evidence: 'unknown' } as const
 	return { exposure: unknown, setTemperature: unknown, sensorTemperature: unknown, gain: unknown, offset: unknown, binX: unknown, binY: unknown, readoutMode: unknown, filter: unknown, telescope: unknown, focalLength: unknown, width: 10, height: 10, channels: 1, bitpix: 16, ...patch }
 }
@@ -435,6 +452,29 @@ describe('calibration and registration planning', () => {
 		const [ha, oiii] = await stacking.cohorts(projectId)
 		return { ha: await stacking.updateCohort(projectId, ha.cohortId, { calibration: { dark: DARK_PIN, flat: FLAT_PIN } }), oiii }
 	}
+
+	test('lights no capture recorded with a camera list masters once an operator declares the camera that took them', async () => {
+		const { stacking } = open(undefined, undefined, undefined, undefined, { cameraOfPath: () => undefined })
+		const { projectId } = await project(stacking)
+		const [ha] = await stacking.cohorts(projectId)
+		expect([ha.capturedCameraId, ha.cameraId, ha.target.cameraId, ha.candidates]).toEqual([undefined, undefined, undefined, []])
+		expect((await stacking.validate(projectId)).findings.filter(({ code }) => code === 'unknownCamera').map(({ groupKey }) => groupKey)).toEqual(['Ha', 'OIII'])
+
+		const declared = await stacking.updateCohort(projectId, ha.cohortId, { cameraId: CATALOG_CAMERA })
+		expect([declared.cameraId, declared.target.cameraId, declared.candidates.map(({ kind }) => kind)]).toEqual([CATALOG_CAMERA, CATALOG_CAMERA, ['dark', 'flat']])
+		expect((await stacking.updateCohort(projectId, ha.cohortId, { calibration: { dark: DARK_PIN } })).calibration).toEqual({ dark: DARK_PIN })
+
+		const other = await stacking.updateCohort(projectId, ha.cohortId, { cameraId: OTHER_CAMERA })
+		expect([other.cameraId, other.calibration, other.candidates]).toEqual([OTHER_CAMERA, undefined, []])
+	})
+
+	test('lights a capture recorded keep the camera it recorded', async () => {
+		const { stacking } = open()
+		const { projectId } = await project(stacking)
+		const [ha] = await stacking.cohorts(projectId)
+		expect([ha.capturedCameraId, ha.target.cameraId]).toEqual([CATALOG_CAMERA, CATALOG_CAMERA])
+		await expect(stacking.updateCohort(projectId, ha.cohortId, { cameraId: OTHER_CAMERA })).rejects.toThrow('name the camera')
+	})
 
 	test('cohorts are calibrated with the masters chosen among those that match them', async () => {
 		const { stacking } = open()

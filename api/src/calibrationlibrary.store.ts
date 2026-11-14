@@ -179,13 +179,13 @@ export type MasterPublication = 'publishing' | 'published' | 'deleting'
 export interface SourceFilter {
 	// Role.
 	readonly kind?: CalibrationKind
-	// Camera name; empty for frames without one.
-	readonly camera?: string
+	// Camera of the Equipment Catalog.
+	readonly cameraId?: string
 	// State of the file.
 	readonly status?: SourceStatus
 	// Group.
 	readonly groupId?: string
-	// Text in the file name or camera name.
+	// Text in the file name.
 	readonly search?: string
 }
 
@@ -193,8 +193,8 @@ export interface SourceFilter {
 export interface MasterFilter {
 	// Role.
 	readonly kind?: CalibrationKind
-	// Camera name; empty for masters without one.
-	readonly camera?: string
+	// Camera of the Equipment Catalog.
+	readonly cameraId?: string
 	// Filter name.
 	readonly filter?: string
 	// State.
@@ -225,6 +225,16 @@ export interface PendingMaster {
 	readonly master: CalibrationMaster
 	// Which half is unfinished.
 	readonly publication: Exclude<MasterPublication, 'published'>
+}
+
+// What the library records against one camera of the Equipment Catalog.
+export interface CalibrationCameraUsage {
+	// Id of the camera.
+	readonly cameraId: string
+	// Frames recorded against it.
+	readonly frames: number
+	// Published masters recorded against it.
+	readonly masters: number
 }
 
 // Returns the part of a path after its last separator, for either platform.
@@ -358,7 +368,7 @@ export class CalibrationLibraryStore {
 
 	// Writes frames in the transaction of the caller.
 	#putSources(sources: readonly CalibrationSource[]) {
-		const statement = this.database.db.query(`INSERT OR REPLACE INTO calibration_sources (${SOURCE_COLUMNS}, camera_name, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+		const statement = this.database.db.query(`INSERT OR REPLACE INTO calibration_sources (${SOURCE_COLUMNS}, camera_id, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 
 		for (const source of sources) {
 			statement.run(
@@ -379,7 +389,7 @@ export class CalibrationLibraryStore {
 				source.supported ? 1 : 0,
 				JSON.stringify(source.metadata),
 				JSON.stringify(source.warnings),
-				source.metadata.cameraName ?? '',
+				source.metadata.cameraId,
 				fileNameOf(source.path).toLowerCase(),
 			)
 		}
@@ -426,7 +436,7 @@ export class CalibrationLibraryStore {
 		const { where, values } = sourceWhere(filter)
 		const { db } = this.database
 		const { total } = db.query<{ total: number }, string[]>(`SELECT COUNT(DISTINCT group_id) AS total FROM calibration_sources ${where}`).get(...values)!
-		const rows = db.query<{ group_id: string }, (string | number)[]>(`SELECT DISTINCT group_id FROM calibration_sources ${where} ORDER BY kind, camera_name, group_id LIMIT ? OFFSET ?`).all(...values, Math.min(limit, MAX_PAGE_SIZE), offset)
+		const rows = db.query<{ group_id: string }, (string | number)[]>(`SELECT DISTINCT group_id FROM calibration_sources ${where} ORDER BY camera_id, kind, group_id LIMIT ? OFFSET ?`).all(...values, Math.min(limit, MAX_PAGE_SIZE), offset)
 		return { items: rows.map((row) => this.group(row.group_id)), total }
 	}
 
@@ -436,15 +446,17 @@ export class CalibrationLibraryStore {
 		return { groupId, sources: rows.map(rowSource) }
 	}
 
-	// Counts frames and published masters by state, and lists the camera names the filters of the tool can take.
+	// Counts frames and published masters by state, and by camera of the Equipment Catalog, which the filters of the tool
+	// can take.
 	counts() {
 		const { db } = this.database
 		const sources = db.query<{ kind: CalibrationKind; status: SourceStatus; count: number }, []>('SELECT kind, status, COUNT(*) AS count FROM calibration_sources GROUP BY kind, status').all()
 		const masters = db.query<{ kind: CalibrationKind; status: ProductStatus; count: number }, []>("SELECT kind, status, COUNT(*) AS count FROM calibration_masters WHERE publication = 'published' GROUP BY kind, status").all()
 		const cameras = db
-			.query<{ name: string }, []>("SELECT DISTINCT camera_name AS name FROM calibration_sources WHERE camera_name <> '' ORDER BY camera_name")
+			.query<CalibrationCameraUsage, []>(
+				"SELECT camera_id AS cameraId, sum(frames) AS frames, sum(masters) AS masters FROM (SELECT camera_id, COUNT(*) AS frames, 0 AS masters FROM calibration_sources GROUP BY camera_id UNION ALL SELECT camera_id, 0, COUNT(*) FROM calibration_masters WHERE publication = 'published' GROUP BY camera_id) GROUP BY camera_id ORDER BY camera_id",
+			)
 			.all()
-			.map(({ name }) => name)
 		return { sources, masters, cameras }
 	}
 
@@ -496,7 +508,7 @@ export class CalibrationLibraryStore {
 		}
 
 		if (filter.kind !== undefined) add('kind = ?', filter.kind)
-		if (filter.camera !== undefined) add('camera_name = ?', filter.camera)
+		if (filter.cameraId !== undefined) add('camera_id = ?', filter.cameraId)
 		if (filter.filter !== undefined) add('filter = ?', filter.filter)
 		if (filter.status !== undefined) add('status = ?', filter.status)
 		if (filter.groupId !== undefined) add('group_id = ?', filter.groupId)
@@ -538,8 +550,8 @@ export class CalibrationLibraryStore {
 			const status = master.status === 'warning' ? 'warning' : 'ready'
 
 			const { masterId } = db
-				.query<{ masterId: number }, (string | number)[]>("INSERT INTO calibration_masters (publication, status, published_status, kind, camera_name, filter, group_id, key, created_at, content_digest, bytes, master) VALUES ('publishing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING master_id AS masterId")
-				.get(status, status, master.kind, metadata.cameraName ?? '', metadata.filter.value ?? '', master.groupId, master.key, master.createdAt, master.contentDigest, master.bytes, JSON.stringify(content))!
+				.query<{ masterId: number }, (string | number)[]>("INSERT INTO calibration_masters (publication, status, published_status, kind, camera_id, filter, group_id, key, created_at, content_digest, bytes, master) VALUES ('publishing', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING master_id AS masterId")
+				.get(status, status, master.kind, metadata.cameraId, metadata.filter.value ?? '', master.groupId, master.key, master.createdAt, master.contentDigest, master.bytes, JSON.stringify(content))!
 
 			const source = db.query('INSERT INTO calibration_master_sources (master_id, position, source_id, digest, name) VALUES (?, ?, ?, ?, ?)')
 			for (const [position, sourceId] of master.sourceIds.entries()) source.run(masterId, position, sourceId, master.sourceDigests[position], master.sourceNames[position])
@@ -611,7 +623,7 @@ function sourceWhere(filter: SourceFilter) {
 	}
 
 	if (filter.kind !== undefined) add('kind = ?', filter.kind)
-	if (filter.camera !== undefined) add('camera_name = ?', filter.camera)
+	if (filter.cameraId !== undefined) add('camera_id = ?', filter.cameraId)
 	if (filter.status !== undefined) add('status = ?', filter.status)
 	if (filter.groupId !== undefined) add('group_id = ?', filter.groupId)
 	if (filter.search !== undefined) add('name LIKE ?', `%${filter.search.toLowerCase()}%`)

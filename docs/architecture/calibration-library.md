@@ -18,13 +18,15 @@ Image Stacking calibrates its lights with the masters an operator chose among th
   masters made of them stay, a frame whose file cannot be deleted stays, and a frame or group a master is being built from cannot go.
 - **Evidence.**
   Every value is `verified` (the file), `planDeclared` (an immutable plan or the wizard session that took it), `operatorDeclared` (an override an operator declared, only over an unknown value), or `unknown`.
-  Nothing identifies a physical camera: frames of the same geometry and settings combine whatever camera took them, and the camera name a header or a wizard gives is only shown and filtered by.
+  Every frame is recorded against the camera of the Equipment Catalog that took it (`CalibrationMetadata.cameraId`, `camera_id`, see [Equipment Catalog Contract](equipment-catalog.md)), which carries no evidence of its own: a Dark Library plan declares it (`DarkCapturePlan.camera.cameraId`), a Flat Wizard session declares it (`FlatFrameRegistration.cameraId`), and an import takes it from the operator (`ImportCommit.cameraId`, `cameras` by path, `409 cameraRequired` while a file that would enter has none), never from a header; there is no unknown camera.
+  A master inherits the camera of its group, and a camera frames or masters are recorded against cannot be deleted.
+  The camera name a header or a wizard gives is only shown.
   There is no optical train in the application, so a flat groups by `FILTER`, `TELESCOP`, and `FOCALLEN`, and what is missing asks for a review.
 - **Compatibility.**
   `calibrationlibrary.compatibility.ts` is pure.
-  A versioned key holds every property that must agree per kind; exposures are integer microseconds, so 179.9 s and 180 s never merge.
+  A versioned key (`COMPATIBILITY_VERSION` 2) holds every property that must agree per kind, the camera of the catalog first; exposures are integer microseconds, so 179.9 s and 180 s never merge.
   Between frames, a known difference blocks, unknown never matches a known value, and a group has an explained state (`ready`, `needsReview`, `incomplete`, `incompatible`, `missingFiles`, `notSupported`), never a score.
-  A master matches a target (`matchesTarget`) when every property both know agrees, a dark within 1 °C of the temperatures of the target (of their range when its frames vary, so the lights of a camera whose temperature drifts or oscillates take any dark inside the range they span) and a flat with its filter;
+  A master matches a target (`matchesTarget`) when it is of the camera of the target (`CalibrationTarget.cameraId`, always known) and every property both know agrees, a dark within 1 °C of the temperatures of the target (of their range when its frames vary, so the lights of a camera whose temperature drifts or oscillates take any dark inside the range they span) and a flat with its filter;
   what either does not know never refuses one, since the operator chooses among those listed.
   There is no closest master, no dark scaling, no temperature interpolation.
 - **Products.**
@@ -42,7 +44,7 @@ Image Stacking calibrates its lights with the masters an operator chose among th
   The latest 100 ended jobs are kept, and older ones forgotten.
   A request always queues a new job (`202` with its `jobId`), and only a repeated token meets the job it started; a completed job names the master it published.
   One master integrates at a time on `calibrationlibrary.worker.ts`, with its own queue instead of `AnalysisScheduler`, which needs an open document.
-  A wizard's session end queues automatic jobs, from the frames of one group each and only when every frame is usable and nothing but the temperature asks for a review: `flatSessionEnded` one master flat per completed filter, corrected by the newest matching master dark-flat, else the newest matching master bias (never a stale or unavailable one, and none is queued without one), and `darkSessionEnded`, when the plan asked for masters, one master per complete group.
+  A wizard's session end queues automatic jobs, from the frames of one group each and only when every frame is usable and nothing but the temperature asks for a review: `flatSessionEnded` one master flat per completed filter, corrected by the newest matching master dark-flat, else the newest matching master bias, both of the camera of the flats (never a stale or unavailable one, and none is queued without one), and `darkSessionEnded`, when the plan asked for masters, one master per complete group.
   An automatic job waits while an operation of a `camera.` kind runs (a capture, a wizard, guiding).
   Progress is a heartbeat: there is no limit on a job, but a worker silent for two minutes is terminated.
   A restart forgets every job, the masters a wizard asked for among them, and removes all staging; nothing asks for them again.
@@ -68,7 +70,7 @@ Image Stacking calibrates its lights with the masters an operator chose among th
   Jobs and what an import found are never written.
   An override, a role, an exclusion, or a deletion changes its rows in one transaction, with no history.
 - **Boundaries.**
-  `GET /api/calibration-library` (`CalibrationLibrarySnapshot`: an epoch per process, a revision, frames and masters counted by state and role, the camera names, the active jobs, and the latest jobs of the wizards), `calibrationLibrary:changed`, `calibrationLibrary:jobUpdated`, and `calibrationLibrary:masterUpdated` carry ids and no paths, and job errors hold file names or codes, never a filesystem message;
+  `GET /api/calibration-library` (`CalibrationLibrarySnapshot`: an epoch per process, a revision, frames and masters counted by state and role, frames and masters counted by camera of the catalog (`cameras`), the active jobs, and the latest jobs of the wizards), `calibrationLibrary:changed`, `calibrationLibrary:jobUpdated`, and `calibrationLibrary:masterUpdated` carry ids and no paths, and job errors hold file names or codes, never a filesystem message;
   a path comes only from a detail route.
   Frames with a BITPIX of 64 are `notSupported`.
 - **Calibrating a light.**
@@ -78,12 +80,13 @@ Image Stacking calibrates its lights with the masters an operator chose among th
   Its dead pixels are not repaired: `invalidFlat: 'passthrough'` leaves those samples without flat correction.
 - **Tool.**
   Tools → Calibration Library (`web/src/tools/calibrationlibrary/`, `/tools/calibration-library[/<group id>]`) mirrors the server through `web/src/calibrationlibrary/calibrationlibrary.ts`, a snapshot and the jobs in `SERVER_STORES` and pages fetched by the view, again whenever a change arrives.
-  Library shows the coverage of a page of groups by camera name and operating point (a group covered only by a master of its own role), their states, and the latest master of each, a flat group whose frames have several exposures named by their range (`exposures` of its summary), since only a bias corrects them together;
+  Library shows the coverage of a page of groups by camera of the catalog and operating point (a group covered only by a master of its own role), their states, and the latest master of each, a flat group whose frames have several exposures named by their range (`exposures` of its summary), since only a bias corrects them together;
   Frames shows each frame, how each value is known, and the review that declares an unknown value or leaves a frame out, without asking why;
   an import declares the role of a file its header does not say the same way;
   Frames and Masters open a file in Images through `openImage`;
   Masters lists every master, named by its id and the time it was published (`masterName`), with its provenance, and the details of a master list under its state what puts it there (`masterWarnings`: too few frames, what was accepted when building it, a missing file, an unavailable correction).
-  The camera filter lists the camera names of the frames.
+  The camera filter lists the cameras of the catalog (`?cameraId=` of the frames, groups, and masters), and Frames and Masters name each camera.
+  The review of an import asks for the camera of every file, and of one file instead, suggesting the camera of the one binding whose driver name the headers of the page give, which the operator confirms; Add stays disabled until a camera is chosen.
   Import Frames opens a dialog that adds directories, and files several at a time (the `multiple` file chooser), both choosers starting in the directory listed last (`lastCalibrationDirectory`, view state in localStorage), lists them to remove one, and then scans and reviews them;
   committing adds the frames and closes the dialog.
   A group that needs a review says that what is listed cannot be verified from the files, and that accepting it in Build Master, or declaring the missing values on its frames, is how a master gets built.

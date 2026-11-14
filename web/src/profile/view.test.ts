@@ -45,7 +45,7 @@ function record(id: string, patch: Partial<ProfileRecord> = {}): ProfileRecord {
 	return { id, name: id, sortOrder: 0, revision: 1, createdAt: 0, equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, framings: [], notifications: { readIds: [], dismissedIds: [] }, ...patch }
 }
 
-const WORKSPACE: WorkspaceSnapshot = { connections: [], sites: [], profiles: [record('p1'), record('p2', { sortOrder: 1 })] }
+const WORKSPACE: WorkspaceSnapshot = { connections: [], sites: [], cameras: [], profiles: [record('p1'), record('p2', { sortOrder: 1 })] }
 
 const stops: (() => void)[] = []
 
@@ -120,7 +120,7 @@ describe('view state', () => {
 		await Bun.sleep(0)
 		expect(storages.local.items.has('nebulosa:view:p2')).toBeFalse()
 
-		const after = await tab(storages, { connections: [], sites: [], profiles: [record('p1')] })
+		const after = await tab(storages, { connections: [], sites: [], cameras: [], profiles: [record('p1')] })
 		expect(after.profiles.activeId).toBe('p1')
 	})
 
@@ -150,7 +150,7 @@ describe('view state', () => {
 		const local = new MemoryStorage()
 		local.setItem('nebulosa:view:p1', JSON.stringify({ version: 3, fields: { skyFraming: { activePresetId: 'b', visible: true, source: 'custom' } } }))
 		local.setItem('nebulosa:view:p2', JSON.stringify({ version: 3, fields: { skyFraming: { activePresetId: 'gone', visible: true } } }))
-		const { profiles, sync, sent } = await tab({ local, session: new MemoryStorage() }, { connections: [], sites: [], profiles: [record('p1', { preferences: { skyFraming: framing } }), record('p2', { sortOrder: 1 })] })
+		const { profiles, sync, sent } = await tab({ local, session: new MemoryStorage() }, { connections: [], sites: [], cameras: [], profiles: [record('p1', { preferences: { skyFraming: framing } }), record('p2', { sortOrder: 1 })] })
 
 		expect(snapshot(profiles).profiles[0].settings.sky.framing).toMatchObject({ activePresetId: 'b', visible: true, source: 'custom' })
 		expect(profiles.profiles[1].settings.sky.framing).toBeUndefined()

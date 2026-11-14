@@ -11,6 +11,7 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
   the active profile and the view fields the server never keeps are the tab's, in browser storage (`view.ts`)
 - **Connections (INDI, Alpaca, simulator)** (Implemented): `api/src/connection.ts`, `web/src/connection/`
 - **Equipment Setup (roles, telescope and guide telescope optics)** (Implemented): `web/src/equipment/` (`roles.ts`, `equipment.ts`, `EquipmentModal.tsx`, `availability.ts`), opened from Management
+- **Equipment Catalog (physical cameras and the binding of each camera device)** (Implemented): cameras in `api/src/workspace.ts`, bindings in `api/src/equipmentcatalog.ts`; `web/src/equipment/catalog.ts`, `CatalogBinding.tsx` in the Equipment Setup, Settings → Equipment Catalog `web/src/settings/EquipmentCatalogSettings.tsx` (see [Equipment Catalog Contract](equipment-catalog.md))
 - **Server file browser** (Implemented): `api/src/files.ts`, `web/src/files/` (`FileExplorerModal`: Open Image, Save to Server, and the directory and file choices of the camera operations, Calibration Library, and Image Stacking)
 - **Device registry and identity** (Implemented): `api/src/devices.ts` (`DeviceSummary`: connection id + stable device id)
 - **Device capabilities and control states** (Implemented): `api/src/devices.ts` (`DeviceStateMap`, `<type>:updated` and `camera:capabilities` events), `GET /api/connections/:id/states` of `connection.ts`;

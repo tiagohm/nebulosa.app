@@ -19,6 +19,7 @@ import { AppDatabase, DEFAULT_DATABASE_FILE } from './database'
 import { createDewHeaterRoutes, DewHeaterCommands } from './dewheaters'
 import { CaptureDithering } from './dithering'
 import { createDomeRoutes, DomeCommands } from './domes'
+import { createEquipmentCatalogRoutes, EquipmentCatalog } from './equipmentcatalog'
 import { ServerEventDispatcher } from './events'
 import { createExternalToolsRoutes, ExternalToolsStore } from './externaltools'
 import { createFileRoutes } from './files'
@@ -141,9 +142,9 @@ export type {
 	ResolvePreview,
 	StateCounts,
 } from './calibrationlibrary'
-export type { CalibrationKind, CalibrationMetadata, CalibrationRecipe, CalibrationTarget, CompatibilityFinding, EvidenceLevel, Evidenced, FindingCode, FindingSeverity, GroupReadiness, MasterReference, OverridableField } from './calibrationlibrary.compatibility'
+export type { CalibrationKind, CalibrationMetadata, CalibrationRecipe, CalibrationTarget, CompatibilityFinding, EvidenceLevel, Evidenced, FindingCode, FindingSeverity, GroupReadiness, HeaderMetadata, MasterReference, OverridableField } from './calibrationlibrary.compatibility'
 export type { CalibrationJobErrorCode, CalibrationJobState, CalibrationJobSummary, CalibrationJobType } from './calibrationlibrary.jobs'
-export type { CalibrationMaster, CalibrationMasterDiagnostics, CalibrationSource, CalibrationSourceSummary, MasterCalibrationState, Page, ProductStatus, SourceFormat, SourceOrigin, SourceStatus } from './calibrationlibrary.store'
+export type { CalibrationCameraUsage, CalibrationMaster, CalibrationMasterDiagnostics, CalibrationSource, CalibrationSourceSummary, MasterCalibrationState, Page, ProductStatus, SourceFormat, SourceOrigin, SourceStatus } from './calibrationlibrary.store'
 export type { IntegrationProgress } from './calibrationlibrary.analysis'
 export type { CameraCoolerRequest, CameraTemperatureRequest } from './cameras'
 export type {
@@ -719,6 +720,7 @@ export type {
 	PlainOperation,
 } from './imageprocessing'
 export type {
+	CohortTarget,
 	ImageStackingErrorCode,
 	ImageStackingEvent,
 	ImageStackingSnapshot,
@@ -967,7 +969,13 @@ export type { GuidingProfileCut, GuidingStarProfile } from './guidingprofile'
 export type { NotificationCreatedEvent, NotificationRecord, NotificationSnapshot } from './notifications'
 export type { NotificationCameraTool, NotificationLevel, NotificationSource, NotificationTarget } from './notifications.rules'
 export type { ClientMessage, ServerEvent } from './websocket'
+export type { BoundDevice, CameraBinding, CameraBindingEvent, CameraBindingRequest, CameraBindingsSnapshot, EquipmentCatalogErrorCode } from './equipmentcatalog'
 export type {
+	CatalogCamera,
+	CatalogCameraFields,
+	CatalogCameraSaveRequest,
+	CatalogCameraSensor,
+	CatalogCameraUsage,
 	ObservingSite,
 	ObservingSiteSaveRequest,
 	ProfileCameraForm,
@@ -997,12 +1005,30 @@ const EXCLUSIVE_DATABASE = process.env.NODE_ENV === 'production'
 // nothing.
 const database = new AppDatabase(DEFAULT_DATABASE_FILE, EXCLUSIVE_DATABASE)
 
-// Saved connections and profiles of the operators, shared by every tab and browser; the observatory cameras of a deleted
-// site become shared by every site.
+// Saved connections, observing sites, cameras of the Equipment Catalog, and profiles of the operators, shared by every
+// tab and browser; the observatory cameras of a deleted site become shared by every site, and a deleted camera of the
+// catalog takes its bindings along and is forgotten by the captured frames.
 const workspace = new Workspace(database, (event) => {
 	broadcast(event)
 	if (event.type === 'observingSite:removed') observatoryCameras.siteRemoved(event.id)
+
+	if (event.type === 'catalogCamera:removed') {
+		equipmentCatalog.cameraRemoved(event.id)
+		captureFrames.cameraRemoved(event.id)
+	}
 })
+
+// Bindings of the camera devices of the open connections to the cameras of the Equipment Catalog, shared by every profile;
+// the wizards, the captures, and the calibrators resolve through it the camera a frame is recorded against.
+const equipmentCatalog = new EquipmentCatalog(
+	database,
+	({ connectionId, deviceId }) => {
+		const client = connections.client(connectionId)
+		const camera = client && connections.devices.camera(client, deviceId)
+		return camera ? { hardwareId: camera.hardwareId, name: camera.name } : undefined
+	},
+	broadcast,
+)
 
 // Name of a device of an open connection, or undefined.
 function deviceName(connectionId: string, deviceId: string) {
@@ -1128,6 +1154,7 @@ const captureFrames = new CaptureFrameRegistry(images, broadcast, {
 		const client = connections.client(connectionId)
 		return !!client && !!connections.devices.camera(client, deviceId)?.connected
 	},
+	catalog: equipmentCatalog,
 })
 connections.listen((event) => captureFrames.deviceChanged(event))
 listenClients(captureFrames)
@@ -1139,7 +1166,7 @@ const calibrationLibrary = new CalibrationLibrary(new CalibrationLibraryStore(da
 
 // Guiding sessions of the guide cameras of the open connections, dispatching their pulses through the commander of the
 // guide output commands and previewing their frames in the image store and the capture frame registry.
-const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, new GuidingCalibrationStore(database), calibrationLibrary, publish)
+const guiding = new GuidingSessions(connections.devices, (id) => connections.client(id), operations, guideOutputs.commander, images, captureFrames, externalTools, new GuidingCalibrationStore(database), calibrationLibrary, publish, equipmentCatalog)
 
 // Automatic dithering of the camera captures, commanded to the guiding sessions, or moving the mounts with the commanders of
 // the mount and guide output commands, refusing a GoTo dither the Meridian Flip Monitor or the geometry says could flip.
@@ -1160,7 +1187,7 @@ const tppa = new TppaSessions(connections.devices, (id) => connections.client(id
 // iPolar sessions of the cameras of the open connections, rotating the mounts in automatic mode with the commander of
 // the mount commands, taking their frames with the capturer of the captures, and solving them with the plate solving service,
 // less the master dark of the Calibration Library a session pinned.
-const ipolar = new IPolarSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, calibrationLibrary, publish)
+const ipolar = new IPolarSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, calibrationLibrary, publish, undefined, equipmentCatalog)
 
 // Fits the pointing models on a worker of its own.
 const pointingModelFitter = new PointingModelFitter()
@@ -1185,11 +1212,11 @@ const darv = new DarvSessions(connections.devices, (id) => connections.client(id
 
 // Projects of light frames for Image Stacking, which need no connection and hold no device. Imports never read the
 // directories of Nebulosa: its stacks and the Calibration Library.
-const imageStacking = new ImageStacking(new ImageStackingStore(database), publish, calibrationLibrary, [DEFAULT_IMAGE_STACKING_DIRECTORY, DEFAULT_CALIBRATION_LIBRARY_DIRECTORY])
+const imageStacking = new ImageStacking(new ImageStackingStore(database), publish, calibrationLibrary, [DEFAULT_IMAGE_STACKING_DIRECTORY, DEFAULT_CALIBRATION_LIBRARY_DIRECTORY], undefined, undefined, undefined, captureFrames)
 
 // Live Stacking sessions of the cameras of the open connections, fed every light frame of their captures by the capture
 // service, calibrated with the masters of the Calibration Library, and integrated on a worker of their own per session.
-const liveStacking = new LiveStacking(captures, connections.devices, (id) => connections.client(id), calibrationLibrary, images, new LiveStackingStore(database), publish)
+const liveStacking = new LiveStacking(captures, connections.devices, (id) => connections.client(id), calibrationLibrary, images, new LiveStackingStore(database), publish, { catalog: equipmentCatalog })
 
 // Measures Flat Wizard frames in DN on a worker of its own.
 const flatWizardAnalyzer = new FlatWizardAnalyzer()
@@ -1212,6 +1239,7 @@ const flatWizard = new FlatWizardSessions(
 	undefined,
 	(frame) => void calibrationLibrary.registerFlat(frame).catch((error: unknown) => console.error('A flat could not be registered', error)),
 	(ended) => void calibrationLibrary.flatSessionEnded(ended).catch((error: unknown) => console.error('The calibration library could not build the flats of a session', error)),
+	equipmentCatalog,
 )
 
 // Dark Library Wizard sessions of the cameras of the open connections, taking their frames with the capturer of the
@@ -1235,6 +1263,7 @@ const darkLibraryWizard = new DarkLibraryWizardSessions(
 	undefined,
 	(frame) => void calibrationLibrary.registerDark(frame).catch((error: unknown) => console.error('A dark could not be registered', error)),
 	(plan) => void calibrationLibrary.darkSessionEnded(plan).catch((error: unknown) => console.error('The calibration library could not build the darks of a session', error)),
+	equipmentCatalog,
 )
 
 // Target Centering sessions of the cameras of the open connections, sending the first slew through the mount commands, so a
@@ -1514,6 +1543,7 @@ export const routes = {
 	...createExternalToolsRoutes(externalTools),
 	...createObservatoryCameraRoutes(observatoryCameras),
 	...createWorkspaceRoutes(workspace),
+	...createEquipmentCatalogRoutes(equipmentCatalog),
 	...createStarDetectionRoutes(stars),
 	...createStarProfileRoutes(starProfiles),
 	...createPlateSolvingRoutes(plateSolving),

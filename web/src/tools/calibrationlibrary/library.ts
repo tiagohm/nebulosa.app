@@ -1,4 +1,5 @@
-import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationMaster, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
+import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationMaster, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, HeaderMetadata, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
+import { type CatalogCamera, catalogCameraName } from '../../equipment/catalog'
 import { formatDateTime, formatTemperature, MISSING, formatZonedDateTime } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 
@@ -93,7 +94,7 @@ export function temperatureText({ setTemperature, sensorTemperature }: Pick<Cali
 }
 
 // Text of an operating point.
-export function settingsText({ gain, offset, binX, binY, readoutMode }: CalibrationMetadata) {
+export function settingsText({ gain, offset, binX, binY, readoutMode }: Pick<HeaderMetadata, 'gain' | 'offset' | 'binX' | 'binY' | 'readoutMode'>) {
 	return [`Gain ${valueText(gain)}`, `Offset ${valueText(offset)}`, `Bin ${valueText(binX)}×${valueText(binY)}`, ...(readoutMode.value === undefined ? [] : [readoutMode.value])].join(' · ')
 }
 
@@ -104,9 +105,11 @@ export function groupTitle({ kind, metadata, exposures }: Pick<CalibrationGroupS
 	return `${exposureText(metadata)} · ${temperatureText(metadata)}`
 }
 
-// Name of the camera of a set of frames, as their headers give it.
-export function cameraText({ cameraName }: Pick<CalibrationMetadata, 'cameraName'>) {
-	return cameraName ?? 'Unknown camera'
+// Name of the camera of the Equipment Catalog a set of frames was recorded against, with the name their headers give when
+// it differs.
+export function cameraText({ cameraId, cameraName }: Pick<CalibrationMetadata, 'cameraId' | 'cameraName'>, cameras: readonly Pick<CatalogCamera, 'id' | 'name'>[]) {
+	const name = catalogCameraName(cameras, cameraId)
+	return cameraName === undefined || cameraName === name ? name : `${name} (${cameraName})`
 }
 
 // Name of a master: its id and when it was published, to the minute in a zone (named unless it is the active site's),
@@ -138,14 +141,15 @@ export interface CoverageRow {
 	readonly kinds: Readonly<Record<CalibrationKind, { readonly groups: number; readonly masters: number }>>
 }
 
-// Summarizes groups by camera and operating point, which shows where masters are missing without choosing one for anything.
-export function coverage(groups: readonly CalibrationGroupSummary[]): readonly CoverageRow[] {
+// Summarizes groups by camera of the Equipment Catalog (named from cameras) and operating point, which shows where masters
+// are missing without choosing one for anything.
+export function coverage(groups: readonly CalibrationGroupSummary[], cameras: readonly Pick<CatalogCamera, 'id' | 'name'>[]): readonly CoverageRow[] {
 	const rows = new Map<string, { key: string; camera: string; settings: string; kinds: Record<CalibrationKind, { groups: number; masters: number }> }>()
 
 	for (const { kind, metadata, masters } of groups) {
-		const camera = cameraText(metadata)
+		const camera = catalogCameraName(cameras, metadata.cameraId)
 		const settings = settingsText(metadata)
-		const key = `${camera}|${settings}|${metadata.width}x${metadata.height}`
+		const key = `${metadata.cameraId}|${settings}|${metadata.width}x${metadata.height}`
 		let row = rows.get(key)
 
 		if (!row) {

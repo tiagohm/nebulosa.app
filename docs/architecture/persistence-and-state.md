@@ -6,6 +6,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   the fields `schema.ts` marks as view state in browser storage (`web/src/profile/view.ts`)
 - Saved connections and the last highlighted one: `api`, database (`saved_connections`); the highlighted one in tab memory
 - Observing sites and the site each profile observes from: `api`, database (`observing_sites`, `profiles.active_site_id`); the site a tool chooses for itself in tab memory
+- Cameras of the Equipment Catalog: `api`, database (`equipment_cameras`), part of the workspace; the binding of each camera device to one of them: `api`, database (`equipment_camera_bindings`, `EquipmentCatalog` of `api/src/equipmentcatalog.ts`), mirrored in tab memory (see [Equipment Catalog Contract](equipment-catalog.md))
 - Active profile: browser storage (`web/src/profile/view.ts`): the tab across its reloads, and the profile used last in the browser for a new tab
 - Route: URL path
 - Document view, zoom/pan, camera tab presentation, astrometric measurements, markers, and target: tab memory; the tool of each camera tab and the camera tab selected last in browser storage (`web/src/profile/view.ts`)
@@ -16,7 +17,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Star detection, streak detection, plate solving, and annotation jobs and results: `api` analysis services, memory only
 - Image processing jobs and unclaimed outputs: `api/src/imageprocessing.ts`, memory only
 - Captured frame files: `api`, `captures/` under the data directory by default (`DEFAULT_CAPTURES_DIR`)
-- Saved capture frames (metadata, no pixels): `api`, database (`capture_frames`), one row per saved frame, written when its file is
+- Saved capture frames (metadata, no pixels): `api`, database (`capture_frames`), one row per saved frame, written when its file is, with the camera of the Equipment Catalog its device was bound to when it was taken (`camera_id`, `NULL` when bound to none)
 - Capture frame leases: `api`, memory, per client id
 - INDI property subscriptions: `api`, memory, per socket
 - INDI driver messages of a device (latest 100 per device, while the connection is open): `api`, memory, per connection; the subscriptions per socket
@@ -28,9 +29,9 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Focuser backlash compensation: `api`, database (`focuser_backlash`)
 - Guiding calibrations: completed solutions with their measured steps, equipment evidence, mount context, and grade (sessions, events, and telemetry stay in memory): `api`, database (`guiding_calibrations`, `GuidingCalibrationStore` of `api/src/guidingcalibration.store.ts`)
 - Mount pointing models: samples, revisions, verifications (no pixels, no active state): `api`, database (`pointing_models`, `pointing_samples`, `pointing_revisions`, `pointing_verifications`); activation in server memory
-- Calibration Library: frames and masters (jobs stay in memory): `api`, database (`calibration_sources`, `calibration_masters`, `calibration_master_sources`, `calibration_master_dependencies`);
+- Calibration Library: frames and masters, each recorded against a camera of the Equipment Catalog (`camera_id`, which keeps that camera from being deleted; jobs stay in memory): `api`, database (`calibration_sources`, `calibration_masters`, `calibration_master_sources`, `calibration_master_dependencies`);
   `master.fit` under `calibration-library/products/` of the data directory
-- Image Stacking: projects with their settings and registration, their light frames by reference with their measurements, cohort decisions, linear masters, color composites (jobs, runs among them, stay in memory): `api`, database (`stack_projects`, `stack_sources`, `stack_cohorts`, `stack_products`, `stack_product_sources`, `stack_composites`, `stack_composite_sources`) and `image-stacking/products/` and `image-stacking/composites/` under the data directory;
+- Image Stacking: projects with their settings and registration, their light frames by reference with their measurements and the camera of the Equipment Catalog their capture recorded, cohort decisions (the masters chosen, and the camera an operator declared for lights no capture recorded), linear masters, color composites (jobs, runs among them, stay in memory): `api`, database (`stack_projects`, `stack_sources`, `stack_cohorts`, `stack_products`, `stack_product_sources`, `stack_composites`, `stack_composite_sources`) and `image-stacking/products/` and `image-stacking/composites/` under the data directory;
   the frames stay where they are
 - Live Stacking: saved stacks (sessions, stacks, and queued frames stay in memory): `api`, database (`live_stack_products`, `LiveStackingStore` of `api/src/livestacking.store.ts`) and `live-stacking/products/` under the data directory
 - Artificial satellite catalog: objects with their SATCAT metadata, the latest GP and the imported element set of each, group memberships, the download state of each CelesTrak query, and the groups downloaded automatically: `api`, database (`satellite_objects`, `satellite_element_sets`, `satellite_memberships`, `satellite_sources`, `satellite_auto_downloads`, `SatelliteStore` of `api/src/satellites.store.ts`), shared by every profile;
@@ -57,16 +58,16 @@ nothing waits to be written, since every write committed when it was made.
 Every durable path of the server derives from the data directory, `NEBULOSA_HOME` or `~/Nebulosa` (`DEFAULT_DATA_DIRECTORY` of `api/src/database/index.ts`);
 the auxiliary files of the plate solver, the star detector, and the camera operations go to the system temporary directory.
 
-The workspace (`api/src/workspace.ts`, `GET /api/workspace`) holds the saved connections, the observing sites (a name, a geodetic latitude and longitude in degrees, a height above the ellipsoid in meters, and an IANA time zone), and the profiles: each profile's name, connection, active site, and position, its equipment setup on each saved connection, its preferences (one JSON value per `ProfilePreferenceKey`), the forms of each camera, its Mount Remote Control bindings, and its saved framings.
+The workspace (`api/src/workspace.ts`, `GET /api/workspace`) holds the saved connections, the observing sites (a name, a geodetic latitude and longitude in degrees, a height above the ellipsoid in meters, and an IANA time zone), the cameras of the Equipment Catalog (see [Equipment Catalog Contract](equipment-catalog.md)), and the profiles: each profile's name, connection, active site, and position, its equipment setup on each saved connection, its preferences (one JSON value per `ProfilePreferenceKey`), the forms of each camera, its Mount Remote Control bindings, and its saved framings.
 The server creates the Default profile when it has none, and refuses to delete the last one (`409 lastProfile`).
 Deleting a site clears it from every profile that observed from it (`ON DELETE SET NULL`), publishing `observingSite:removed` and then each of those profiles, never choosing another site for them;
 a profile cannot select a site that is not saved (`404 notFound`).
-Ids are generated by the tab that creates a connection, a site, a profile, or a framing, so the actions of `web/src/profile/profile.ts`, `web/src/location/site.ts`, and `web/src/connection/connection.ts` change the tab at once;
+Ids are generated by the tab that creates a connection, a site, a camera of the catalog, a profile, or a framing, so the actions of `web/src/profile/profile.ts`, `web/src/location/site.ts`, `web/src/equipment/catalog.ts`, and `web/src/connection/connection.ts` change the tab at once;
 `WorkspaceSync` (`web/src/profile/sync.ts`, which states its delays and write order) compares what the tab holds with what the server last confirmed, unit by unit, and writes each unit that changed, one request at a time, again when the server could not be reached;
 the event of a write, which the server publishes before it answers, is compared with the value in flight, so a value is never written twice.
-Saved connections, observing sites, profile headers, preferences, and camera forms are written from the revision they were edited from: when another tab saved one first the server answers `409 conflict` with what it kept, the tab shows that, and a toast says so;
+Saved connections, observing sites, cameras of the catalog, profile headers, preferences, and camera forms are written from the revision they were edited from: when another tab saved one first the server answers `409 conflict` with what it kept, the tab shows that, and a toast says so;
 equipment setups, bindings, and framings are written as they are, the last write winning.
-Every write publishes `savedConnection:updated`, `savedConnection:removed`, `observingSite:updated`, `observingSite:removed`, `profile:updated` (the whole profile), or `profile:removed` once committed, which every tab applies to the units it is not writing, never older than the revision it knows;
+Every write publishes `savedConnection:updated`, `savedConnection:removed`, `observingSite:updated`, `observingSite:removed`, `catalogCamera:updated`, `catalogCamera:removed`, `profile:updated` (the whole profile), or `profile:removed` once committed, which every tab applies to the units it is not writing, never older than the revision it knows;
 a tab reads the workspace again on every socket open.
 The shell waits for the first read (`WorkspaceGate`) and never runs on a profile of its own making.
 The tab writes nothing else to the server.

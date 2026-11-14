@@ -1,6 +1,7 @@
 import type { StackingCalibration, StackingCohort, StackingFilterGroup, StackingFrameSummary, StackingJobSummary, StackingProjectDetail, StackingSettings, StackingValidation } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { catalogCameraName, catalogState } from '../../equipment/catalog'
 import { formatTemperature, MISSING } from '../../format'
 import { useActiveTimeZone } from '../../location/useLocation'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -15,7 +16,8 @@ import { cancelStackingAnalysis, imageStackingRuntime, jobEnded, startStackingAn
 
 // Calibration and quality of an Image Stacking project. Calibration lists its cohorts, the lights of one filter that share
 // their acquisition settings, where an operator chooses each master among those of the Calibration Library that match
-// them; a cohort with none chosen is not calibrated. Quality starts the analysis that measures and registers every
+// them; a cohort with none chosen is not calibrated. Masters are listed only for the camera of the Equipment Catalog that
+// took the lights: the one the captures of this server recorded, or the one an operator declares for lights from elsewhere. Quality starts the analysis that measures and registers every
 // frame, edits the reference pins and thresholds, and shows what the server found; only the blockers of its validation
 // that keep an analysis from starting are shown and disable Analyze, since what blocks a stack comes from Integration.
 
@@ -40,6 +42,7 @@ export function CalibrationView({ projectId }: { readonly projectId: string }) {
 function CohortCard({ projectId, cohort }: { readonly projectId: string; readonly cohort: StackingCohort }) {
 	const timeZone = useActiveTimeZone()
 	const { pending, errors } = useSnapshot(imageStackingRuntime)
+	const { cameras } = useSnapshot(catalogState)
 	const key = `cohort:${cohort.cohortId}`
 	const busy = pending[key] === true
 	const { target } = cohort
@@ -78,7 +81,21 @@ function CohortCard({ projectId, cohort }: { readonly projectId: string; readonl
 				<span className="text-sm text-ink-100">{cohortText(cohort)}</span>
 				<StatusBadge tone={calibrated.tone} label={calibrated.label} />
 			</div>
-			<p className="m-0 text-xs text-ink-300 tabular-nums">{[cohort.cameraName ?? 'Unknown camera', ...settings.filter((item) => item !== undefined)].join(' · ')}</p>
+			<p className="m-0 text-xs text-ink-300 tabular-nums">{[target.cameraId === undefined ? (cohort.cameraName ?? 'Unknown camera') : catalogCameraName(cameras, target.cameraId), ...settings.filter((item) => item !== undefined)].join(' · ')}</p>
+			{cohort.capturedCameraId === undefined && (
+				<div className="flex flex-wrap items-end gap-3">
+					<Select
+						label="Camera"
+						className="w-72"
+						options={['', ...cameras.filter((camera) => !camera.archived || camera.id === cohort.cameraId).map((camera) => camera.id)]}
+						value={cohort.cameraId ?? ''}
+						disabled={busy}
+						format={(option) => (option ? catalogCameraName(cameras, option) : 'Which camera took these lights?')}
+						onChange={(option) => void updateStackingCohort(imageStackingRuntime, projectId, cohort.cohortId, { cameraId: option || null })}
+					/>
+					<Notice>No capture of this server recorded these lights. Declare the camera of the Equipment Catalog that took them to list its masters.</Notice>
+				</div>
+			)}
 			<div className="flex flex-wrap items-end gap-3">
 				{LIGHT_MASTER_KINDS.map((kind) => {
 					const candidates = cohort.candidates.filter((item) => item.kind === kind)

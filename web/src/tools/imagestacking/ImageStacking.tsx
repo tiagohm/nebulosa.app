@@ -1,6 +1,7 @@
 import type { Evidenced, Page, StackingFilterGroup, StackingFrameSummary, StackingImportCandidate, StackingSourceDetail } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { catalogCameraName, catalogState } from '../../equipment/catalog'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../../files/files'
 import { formatByteSize, formatDuration, formatExposureTime, formatZonedDateTime, MISSING } from '../../format'
@@ -385,6 +386,7 @@ function openInImages(path: string) {
 function FramePanel({ onRemoved }: { readonly onRemoved: () => void }) {
 	const timeZone = useActiveTimeZone()
 	const { frame, pending } = useSnapshot(imageStackingRuntime)
+	const { cameras } = useSnapshot(catalogState)
 	if (!frame) return <LoadingSection id="stacking.frame" title="Frame" />
 	const { metadata } = frame
 
@@ -412,7 +414,7 @@ function FramePanel({ onRemoved }: { readonly onRemoved: () => void }) {
 				<DataRow label="Image">{`${metadata.width}×${metadata.height}×${metadata.channels}, BITPIX ${metadata.bitpix}${metadata.cfa ? `, ${metadata.cfa}` : ''}`}</DataRow>
 				<EvidencedReadout label="Filter" value={metadata.filter} />
 				<DataRow label="Target">{frame.object ?? 'Unknown'}</DataRow>
-				<DataRow label="Camera">{metadata.cameraName ?? 'Unknown'}</DataRow>
+				<DataRow label="Camera">{frame.cameraId === undefined ? `${metadata.cameraName ?? 'Unknown'} (not recorded by a capture)` : catalogCameraName(cameras, frame.cameraId)}</DataRow>
 				<EvidencedReadout label="Exposure" value={metadata.exposure} format={(value) => formatExposureTime(Number(value) / 1000000)} />
 				<DataRow label="Settings">{settingsText(metadata)}</DataRow>
 				<EvidencedReadout label="Sensor" value={metadata.sensorTemperature} format={(value) => `${value} °C`} />

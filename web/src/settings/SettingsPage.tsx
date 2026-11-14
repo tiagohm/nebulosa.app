@@ -2,17 +2,18 @@ import { useSnapshot } from 'valtio'
 import { navigate, routeState, SETTINGS_SECTION_IDS, type SettingsSectionId, settingsSection } from '../shell/route'
 import { Select } from '../ui/Select'
 import { DateTimeSettings } from './DateTimeSettings'
+import { EquipmentCatalogSettings } from './EquipmentCatalogSettings'
 import { ExternalToolsActions, ExternalToolsSettings } from './ExternalToolsSettings'
 import { ObservingSitesSettings } from './ObservingSitesSettings'
 import { StatusBarSettings } from './StatusBarSettings'
 
 // Settings page (the gear button of the top bar): a selector of its sections in the header, like the Images tool
 // selector, with the actions of the section shown beside it, and the section below. The section shown is part of
-// the URL. External Tools and Observing Sites belong to the server instance, Date & Time and Status Bar to the active
-// profile.
+// the URL. External Tools, Observing Sites, and the Equipment Catalog belong to the server instance, Date & Time and
+// Status Bar to the active profile.
 
 // Display name of each section.
-const SECTION_LABELS: Readonly<Record<SettingsSectionId, string>> = { 'external-tools': 'External Tools', 'observing-sites': 'Observing Sites', 'date-time': 'Date & Time', 'status-bar': 'Status Bar' }
+const SECTION_LABELS: Readonly<Record<SettingsSectionId, string>> = { 'external-tools': 'External Tools', 'observing-sites': 'Observing Sites', 'equipment-catalog': 'Equipment Catalog', 'date-time': 'Date & Time', 'status-bar': 'Status Bar' }
 
 // Settings page.
 export function SettingsPage() {
@@ -29,6 +30,7 @@ export function SettingsPage() {
 			</header>
 			{section === 'external-tools' && <ExternalToolsSettings tool={tool} />}
 			{section === 'observing-sites' && <ObservingSitesSettings site={route.workspace === 'settings' ? route.site : undefined} />}
+			{section === 'equipment-catalog' && <EquipmentCatalogSettings camera={route.workspace === 'settings' ? route.camera : undefined} />}
 			{section === 'date-time' && <DateTimeSettings />}
 			{section === 'status-bar' && <StatusBarSettings />}
 		</section>

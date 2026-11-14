@@ -11,13 +11,15 @@ import { Modal } from '../ui/Modal'
 import { NumberInput } from '../ui/NumberInput'
 import { SectionHeading } from '../ui/SectionHeading'
 import { Select } from '../ui/Select'
+import { CatalogBinding } from './CatalogBinding'
 import { deviceState, ROLE_STATUS_LABELS, type RoleStatus, roleDevice, roleStatus, switchDevice, switchSetup } from './equipment'
 import { conflictingRole, type EquipmentSetup, type RoleDefinition, roleDefinition, ROLE_GROUPS, ROLES } from './roles'
 import { useWatchedDevices } from './useEquipment'
 
 // Modal that assigns the devices of the active profile's connection to the equipment roles and connects
 // or disconnects them one by one or all at once. Selecting a device never connects it, and closing the modal never
-// disconnects anything. It also holds the profile's telescope and guide telescope optics, which no device reports: the
+// disconnects anything. A camera role also binds its device to a camera of the Equipment Catalog (CatalogBinding), which
+// holds for every profile. It also holds the profile's telescope and guide telescope optics, which no device reports: the
 // Sky's Equipment Setup field of view of a camera uses the optics it looks through, and Guiding the second.
 
 // Select value of the None option.
@@ -266,6 +268,7 @@ function RoleRow({ definition, setup, devices, device, status, error, serverOpen
 			</span>
 			<div className="flex justify-end max-sm:col-start-3">{device && <DeviceAction device={device} status={status} />}</div>
 			{hint && <p className={`col-start-2 -col-end-1 m-0 text-xs leading-4 ${message || error ? 'text-danger' : 'text-ink-300'}`}>{hint}</p>}
+			{deviceType === 'camera' && device && <CatalogBinding device={device} />}
 		</li>
 	)
 }

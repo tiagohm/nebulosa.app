@@ -27,6 +27,7 @@ import {
 	startCalibrationImport,
 	validateRecipe,
 } from '../../calibrationlibrary/calibrationlibrary'
+import { cameraBindingsState, type CatalogCamera, catalogCameraName, catalogState, suggestedCameraId } from '../../equipment/catalog'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../../files/files'
 import { formatByteSize, formatDateTime, formatExposureTime, formatPercent, MISSING, formatZonedDateTime } from '../../format'
@@ -85,7 +86,8 @@ import {
 // works with no camera and starts no exposure; every capture stays in Images. State lives on the server, so a reload, another
 // tab, or a wizard show the same builds. A master is built from the group it belongs to, whose form follows its build, and
 // every build makes a new master, told apart by its id and date. Deleting, after a confirmation, takes a frame or a group
-// with their files, or one master.
+// with their files, or one master. Every frame and master is recorded against a camera of the Equipment Catalog, which an
+// import asks for, the filters and lists name, and the coverage groups by.
 
 // Fields of the recipe form.
 interface RecipeForm {
@@ -123,12 +125,13 @@ export function CalibrationLibrary() {
 	const linked = route.workspace === 'tools' ? route.group : undefined
 	const [section, setSection] = useState<LibrarySection>('library')
 	const [kind, setKind] = useState<KindFilter>('all')
-	const [camera, setCamera] = useState('')
+	const [cameraId, setCameraId] = useState('')
+	const { cameras: catalog } = useSnapshot(catalogState)
 	const [search, setSearch] = useState('')
 	const [page, setPage] = useState(0)
 	const [selection, setSelection] = useState<Selection | undefined>(linked ? { type: 'group', groupId: linked } : undefined)
 	const [importing, setImporting] = useState(false)
-	const filter = { kind: kind === 'all' ? undefined : kind, camera: camera || undefined, search: search || undefined }
+	const filter = { kind: kind === 'all' ? undefined : kind, cameraId: cameraId || undefined, search: search || undefined }
 	const panelState = useWorkspacePanel('tools')
 
 	// Shows something in the panel, which a narrow screen keeps closed until then.
@@ -150,7 +153,7 @@ export function CalibrationLibrary() {
 		if (section === 'library') void loadCalibrationGroups(state, filter, page)
 		else if (section === 'frames') void loadCalibrationSources(state, filter, page)
 		else void loadCalibrationMasters(state, filter, page)
-	}, [section, kind, camera, search, page, runtime.changes])
+	}, [section, kind, cameraId, search, page, runtime.changes])
 
 	// Fetches what the panel shows, again whenever the server reports a change.
 	useEffect(() => {
@@ -178,7 +181,8 @@ export function CalibrationLibrary() {
 		if (linked !== undefined) navigate(routeState, { workspace: 'tools', tool: 'calibration-library' })
 	}
 
-	const cameras = ['', ...(runtime.summary?.cameras ?? [])]
+	// Every camera of the catalog, and any other camera the library records something against.
+	const cameras = ['', ...new Set([...catalog.map(({ id }) => id), ...(runtime.summary?.cameras ?? []).map((usage) => usage.cameraId)])]
 	const panel = selection && <SelectionPanel selection={selection} onGroup={selectGroup} onDeleted={deselect} />
 
 	const actions = (
@@ -197,7 +201,7 @@ export function CalibrationLibrary() {
 				<div className="flex flex-wrap items-end gap-3">
 					<SegmentedControl options={LIBRARY_SECTIONS} value={section} format={(option) => SECTION_LABELS[option]} onChange={change(setSection)} />
 					<Select label="Frame Type" className="w-36" options={KIND_FILTERS} value={kind} format={(option) => (option === 'all' ? 'All Types' : KIND_LABELS[option])} onChange={change(setKind)} />
-					<Select label="Camera" className="w-52" options={cameras} value={camera} format={(option) => option || 'All Cameras'} onChange={change(setCamera)} />
+					<Select label="Camera" className="w-52" options={cameras} value={cameraId} format={(option) => (option ? catalogCameraName(catalog, option) : 'All Cameras')} onChange={change(setCameraId)} />
 					{section === 'frames' && <TextInput label="Search" className="w-52" value={search} onChange={(event) => change(setSearch)(event.target.value)} />}
 				</div>
 				{section === 'library' && <GroupsView selected={selection?.type === 'group' ? selection.groupId : undefined} onSelect={selectGroup} />}
@@ -220,6 +224,7 @@ function pageTotal(section: LibrarySection) {
 function GroupsView({ selected, onSelect }: { readonly selected?: string; readonly onSelect: (groupId: string) => void }) {
 	const timeZone = useActiveTimeZone()
 	const { groups, summary } = useSnapshot(calibrationLibraryRuntime)
+	const { cameras } = useSnapshot(catalogState)
 	const items = (groups?.items ?? []) as readonly CalibrationGroupSummary[]
 
 	if (items.length === 0) return <EmptyState title="No calibration frames" description="Finish a Dark Library plan in Images, or import a directory of FITS or XISF frames." />
@@ -227,13 +232,13 @@ function GroupsView({ selected, onSelect }: { readonly selected?: string; readon
 	return (
 		<>
 			<p className="m-0 text-xs text-ink-300 tabular-nums">{`${summary?.frames.available ?? 0} frames available · ${(summary?.masters.ready ?? 0) + (summary?.masters.warning ?? 0)} masters`}</p>
-			<Coverage groups={items} />
+			<Coverage groups={items} cameras={cameras} />
 			<Table columns={['Type', 'Group', 'Camera', 'Settings', 'Frames', 'State', 'Latest Master']}>
 				{items.map((group) => (
 					<Row key={group.groupId} selected={group.groupId === selected} onSelect={() => onSelect(group.groupId)}>
 						<Cell>{KIND_LABELS[group.kind]}</Cell>
 						<Cell>{groupTitle(group)}</Cell>
-						<Cell>{cameraText(group.metadata)}</Cell>
+						<Cell>{cameraText(group.metadata, cameras)}</Cell>
 						<Cell>{settingsText(group.metadata)}</Cell>
 						<Cell>{group.required === undefined ? group.usable : `${group.usable}/${group.required}`}</Cell>
 						<Cell>
@@ -247,11 +252,11 @@ function GroupsView({ selected, onSelect }: { readonly selected?: string; readon
 	)
 }
 
-// Which roles have masters, per camera and operating point.
-function Coverage({ groups }: { readonly groups: readonly CalibrationGroupSummary[] }) {
+// Which roles have masters, per camera of the Equipment Catalog and operating point.
+function Coverage({ groups, cameras }: { readonly groups: readonly CalibrationGroupSummary[]; readonly cameras: readonly CatalogCamera[] }) {
 	return (
 		<Table columns={['Camera', 'Settings', ...CALIBRATION_KINDS.map((kind) => KIND_LABELS[kind])]}>
-			{coverage(groups).map(({ key, camera, settings, kinds }) => (
+			{coverage(groups, cameras).map(({ key, camera, settings, kinds }) => (
 				<Row key={key}>
 					<Cell>{camera}</Cell>
 					<Cell>{settings}</Cell>
@@ -269,16 +274,18 @@ function Coverage({ groups }: { readonly groups: readonly CalibrationGroupSummar
 // List of frames.
 function FramesView({ selected, onSelect }: { readonly selected?: string; readonly onSelect: (sourceId: string) => void }) {
 	const { sources } = useSnapshot(calibrationLibraryRuntime)
+	const { cameras } = useSnapshot(catalogState)
 	const items = (sources?.items ?? []) as readonly CalibrationSourceSummary[]
 
 	if (items.length === 0) return <EmptyState title="No frames" description="Nothing matches these filters." />
 
 	return (
-		<Table columns={['File', 'Type', 'Exposure', 'Temperature', 'Settings', 'Origin', 'State']}>
+		<Table columns={['File', 'Type', 'Camera', 'Exposure', 'Temperature', 'Settings', 'Origin', 'State']}>
 			{items.map((source) => (
 				<Row key={source.sourceId} selected={source.sourceId === selected} onSelect={() => onSelect(source.sourceId)}>
 					<Cell>{source.name}</Cell>
 					<Cell>{KIND_LABELS[source.kind]}</Cell>
+					<Cell>{catalogCameraName(cameras, source.metadata.cameraId)}</Cell>
 					<Cell>{exposureText(source.metadata)}</Cell>
 					<Cell>{temperatureText(source.metadata)}</Cell>
 					<Cell>{settingsText(source.metadata)}</Cell>
@@ -294,6 +301,7 @@ function FramesView({ selected, onSelect }: { readonly selected?: string; readon
 function MastersView({ selection, onSelect }: { readonly selection?: Selection; readonly onSelect: (masterId: number) => void }) {
 	const timeZone = useActiveTimeZone()
 	const { masters } = useSnapshot(calibrationLibraryRuntime)
+	const { cameras } = useSnapshot(catalogState)
 	const items = (masters?.items ?? []) as readonly CalibrationMasterSummary[]
 
 	if (items.length === 0) return <EmptyState title="No masters" description="Build one from a group of the Library." />
@@ -305,7 +313,7 @@ function MastersView({ selection, onSelect }: { readonly selection?: Selection; 
 					<Cell>{masterName(master, timeZone)}</Cell>
 					<Cell>{KIND_LABELS[master.kind]}</Cell>
 					<Cell>{groupTitle(master)}</Cell>
-					<Cell>{cameraText(master.metadata)}</Cell>
+					<Cell>{cameraText(master.metadata, cameras)}</Cell>
 					<Cell>{master.frames}</Cell>
 					<Cell>{METHOD_LABELS[master.method]}</Cell>
 					<Cell>{master.units}</Cell>
@@ -353,6 +361,7 @@ function Findings({ findings }: { readonly findings: readonly CompatibilityFindi
 function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
 	const timeZone = useActiveTimeZone()
 	const { group, jobs, pending, errors } = useSnapshot(calibrationLibraryRuntime)
+	const { cameras } = useSnapshot(catalogState)
 	if (!group) return <LoadingSection id="calibration.group" title="Group" />
 
 	const key = `delete:${group.groupId}`
@@ -367,7 +376,7 @@ function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
 		<>
 			<CollapsibleSection id="calibration.group" title={`${KIND_LABELS[group.kind]} · ${groupTitle(group)}`}>
 				<StatusBadge tone={READINESS_TONES[group.readiness]} label={READINESS_LABELS[group.readiness]} />
-				<DataRow label="Camera">{cameraText(group.metadata)}</DataRow>
+				<DataRow label="Camera">{cameraText(group.metadata, cameras)}</DataRow>
 				<DataRow label="Settings">{settingsText(group.metadata)}</DataRow>
 				<DataRow label="Frames">{group.required === undefined ? `${group.usable} usable of ${group.total}` : `${group.usable} usable, ${group.required} planned`}</DataRow>
 				<Findings findings={group.findings} />
@@ -564,6 +573,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 // Frame, with how each value is known, what an operator may state about it, and its deletion, whose failure the review shows.
 function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 	const { source: snapshot, pending } = useSnapshot(calibrationLibraryRuntime)
+	const { cameras } = useSnapshot(catalogState)
 	const source = snapshot
 	if (!source) return <LoadingSection id="calibration.source" title="Frame" />
 	const { metadata } = source
@@ -589,7 +599,7 @@ function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 				</Actions>
 				<DataRow label="Size">{formatByteSize(source.bytes)}</DataRow>
 				<DataRow label="Image">{`${metadata.width}×${metadata.height}×${metadata.channels}, BITPIX ${metadata.bitpix}${metadata.cfa ? `, ${metadata.cfa}` : ''}`}</DataRow>
-				<DataRow label="Camera">{cameraText(metadata)}</DataRow>
+				<DataRow label="Camera">{cameraText(metadata, cameras)}</DataRow>
 				<EvidencedReadout label="Exposure" value={metadata.exposure} format={(value) => formatExposureTime(Number(value) / 1000000)} />
 				<EvidencedReadout label="Target" value={metadata.setTemperature} format={(value) => `${value} °C`} />
 				<EvidencedReadout label="Sensor" value={metadata.sensorTemperature} format={(value) => `${value} °C`} />
@@ -715,6 +725,12 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 	const [failed, setFailed] = useState(false)
 	const [declared, setDeclared] = useState<Readonly<Record<string, CalibrationKind>>>({})
 	const [copy, setCopy] = useState(false)
+	// Camera of the Equipment Catalog of every file, as chosen; undefined until one is, or one is suggested.
+	const [chosenCamera, setChosenCamera] = useState<string>()
+	// Camera chosen for one file instead, by path.
+	const [fileCameras, setFileCameras] = useState<Readonly<Record<string, string>>>({})
+	const { cameras } = useSnapshot(catalogState)
+	const bindings = useSnapshot(cameraBindingsState)
 	const completed = job?.state === 'completed'
 
 	// Fetches the page shown once the scan ended; a page asked for later replaces an earlier answer.
@@ -735,14 +751,20 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 		}
 	}, [completed, jobId, pageIndex])
 
-	async function commit() {
-		const answer = await commitCalibrationImport(calibrationLibraryRuntime, jobId, { classifications: declared, copy })
-		if (answer) onClose()
-	}
-
 	const items = page?.items ?? []
 	// What a commit adds: the candidates ready as they are, on every page, and those an operator declared, on any page.
 	const ready = (page?.ready ?? 0) + Object.keys(declared).length
+	// Cameras offered: those of the catalog not archived.
+	const offered = cameras.filter((camera) => !camera.archived).map((camera) => camera.id)
+	// A camera is suggested only when every file of the page names, in its header, the device one binding binds to one camera.
+	const suggestions = new Set(items.flatMap((candidate) => (candidate.metadata ? [candidate.metadata.cameraName === undefined ? undefined : suggestedCameraId(bindings, cameras, candidate.metadata.cameraName)] : [])))
+	const suggested = suggestions.size === 1 ? [...suggestions][0] : undefined
+	const camera = chosenCamera ?? suggested
+
+	async function commit() {
+		const answer = await commitCalibrationImport(calibrationLibraryRuntime, jobId, { classifications: declared, ...(camera !== undefined && { cameraId: camera }), cameras: fileCameras, copy })
+		if (answer) onClose()
+	}
 
 	return (
 		<div className="flex min-h-0 flex-col gap-3">
@@ -758,8 +780,20 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 			{job?.truncated && <Notice error>The limit of files was reached; only part of these directories was read.</Notice>}
 			{page && (
 				<>
-					<Notice>{`${page.total} files found, ${ready} ready. Declared types are kept across pages. Frames are referenced where they are and never changed.`}</Notice>
-					<Table columns={['File', 'Found', 'Exposure', 'Declared Type', 'Notes']}>
+					<Notice>{`${page.total} files found, ${ready} ready. Declared types and cameras are kept across pages. Frames are referenced where they are and never changed.`}</Notice>
+					{offered.length === 0 ? (
+						<Notice error>The Equipment Catalog has no camera. Add the camera that took these frames in Settings → Equipment Catalog first.</Notice>
+					) : (
+						<>
+							<Select label="Camera" className="w-72" options={['', ...offered]} value={camera ?? ''} format={(option) => (option ? catalogCameraName(cameras, option) : 'Choose the camera of these frames')} onChange={(option) => setChosenCamera(option || undefined)} />
+							<Notice>
+								{camera !== undefined && camera === suggested && chosenCamera === undefined
+									? 'Suggested from the camera name the headers give and the device bound to it; confirm it, since two units of one model give the same name.'
+									: 'The camera of the Equipment Catalog that took these frames; nothing is read from the files.'}
+							</Notice>
+						</>
+					)}
+					<Table columns={['File', 'Found', 'Exposure', 'Declared Type', 'Camera', 'Notes']}>
 						{items.map((candidate) => (
 							<Row key={candidate.path}>
 								<Cell>{candidate.name}</Cell>
@@ -775,6 +809,16 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 										/>
 									)}
 								</Cell>
+								<Cell>
+									{!candidate.rejectedRole && !candidate.error && !candidate.known && candidate.metadata && offered.length > 0 && (
+										<Select
+											options={['', ...offered]}
+											value={fileCameras[candidate.path] ?? ''}
+											format={(option) => (option ? catalogCameraName(cameras, option) : 'As above')}
+											onChange={(option) => setFileCameras(option ? { ...fileCameras, [candidate.path]: option } : Object.fromEntries(Object.entries(fileCameras).filter(([path]) => path !== candidate.path)))}
+										/>
+									)}
+								</Cell>
 								<Cell>{candidate.error ?? (candidate.known ? 'Already in the library' : candidate.warnings[0])}</Cell>
 							</Row>
 						))}
@@ -783,7 +827,7 @@ function ImportReview({ jobId, onClose }: { readonly jobId: string; readonly onC
 					<Checkbox label="Copy into the library" checked={copy} onChange={setCopy} />
 					{errors.import && <Notice error>{errors.import}</Notice>}
 					<Actions>
-						<Button disabled={ready === 0 || pending.import === true} onClick={() => void commit()}>
+						<Button disabled={ready === 0 || camera === undefined || pending.import === true} title={camera === undefined ? 'Choose the camera of these frames first' : undefined} onClick={() => void commit()}>
 							{`Add ${ready} Frames`}
 						</Button>
 					</Actions>

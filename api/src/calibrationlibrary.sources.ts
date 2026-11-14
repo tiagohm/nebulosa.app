@@ -5,7 +5,7 @@ import { type FitsHeader, FitsImageReader, readFits } from 'nebulosa/src/io/form
 import { readFitsProvenance } from 'nebulosa/src/io/formats/fits/provenance'
 import { cfaPatternKeyword, numericKeyword, uncompressedBitpixKeyword, uncompressedHeightKeyword, uncompressedNumberOfChannelsKeyword, uncompressedWidthKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
-import { type CalibrationKind, type CalibrationMetadata, compatibilityKey, type Evidenced, groupIdOf, stableId } from './calibrationlibrary.compatibility'
+import { type CalibrationKind, type CalibrationMetadata, compatibilityKey, type Evidenced, groupIdOf, type HeaderMetadata, stableId } from './calibrationlibrary.compatibility'
 import type { CalibrationSource, SourceFormat, SourceOrigin } from './calibrationlibrary.store'
 import { type DarkCapturePlan, type DarkFrameRecord, type DarkPlanGroup, REJECTED_DIRECTORY, STAGING_DIRECTORY } from './darklibrarywizard.plan'
 import { imageAcquisition } from './images'
@@ -61,7 +61,7 @@ export interface FileInspection {
 	// Whether it is not a calibration frame: a light, or an already integrated master.
 	readonly rejectedRole?: 'light' | 'master'
 	// What is known from the header alone.
-	readonly metadata: CalibrationMetadata
+	readonly metadata: HeaderMetadata
 	// What should be said about it.
 	readonly warnings: readonly string[]
 	// Full scale of its samples, in digital numbers.
@@ -88,7 +88,7 @@ export function inspectHeader(header: FitsHeader, format: SourceFormat, rowAddre
 	const kind = frameType === undefined || frameType === 'light' || master ? undefined : frameType
 	const origin = (key: string) => (typeof header[key] === 'number' ? numericKeyword(header, key, 0) : undefined)
 
-	const metadata: CalibrationMetadata = {
+	const metadata: HeaderMetadata = {
 		cameraName: provenance.instrument,
 		exposure: verified(acquisition.exposure === undefined ? undefined : exposureMicroseconds(acquisition.exposure)),
 		setTemperature: verified(provenance.setTemperature),
@@ -168,6 +168,7 @@ export function darkPlanSource(plan: DarkCapturePlan, group: DarkPlanGroup, fram
 
 	const metadata: CalibrationMetadata = {
 		...inspection.metadata,
+		cameraId: camera.cameraId,
 		cameraName: camera.name,
 		exposure: fromPlan(exposureMicroseconds(group.exposure), header?.exposure),
 		setTemperature: group.temperature === undefined ? { evidence: 'unknown' } : { value: group.temperature, evidence: 'planDeclared' },

@@ -26,6 +26,7 @@ Reading order for a new contributor: the [Glossary](#glossary) and the [Architec
   Every operation that moves the mount through a guide output acquires, atomically in the arbiter, the guide output and the mount it drives (the setup's `MOUNT`, which its request names: `mount`), whatever device sends the pulse, and keeps both until the motion is over: a manual pulse for the pulse, guiding for its whole run (between two pulses too), Mount dithering for the whole capture.
   With the mount's own port the two are one key; with the ST4 port of a camera, or a standalone guider, both are held, and the ST4 port of a camera is held apart from that camera's sensor, which stays free to expose.
   A stop stays a safety command that cancels whatever holds the device.
+- **Equipment Catalog**: the physical cameras calibration frames and masters are recorded against, part of the workspace, and the binding of each camera device (connection id + device id) to one of them, which belongs to the device and holds for every profile (`api/src/equipmentcatalog.ts`, see [Equipment Catalog Contract](architecture/equipment-catalog.md)).
 - **Operation**: a server-owned piece of device work holding devices under the `OperationRegistry` (`OperationKind` in `api/src/operations.ts`), observed through `operation:updated`.
 - **Reservation**: a hold of the registry's `ResourceArbiter` on several devices, under which a caller inside the process composes tools (`ToolInvocation`, see [Operation Lifecycle Rules](architecture/operation-lifecycle-rules.md));
   a manual command of a reserved device is refused as busy.
@@ -118,6 +119,7 @@ Every contract and reference below is a document of its own under `docs/architec
 - [Overlay Contracts](architecture/overlay.md)
 - [World Map Contract](architecture/world-map.md)
 - [Observing Sites and Time Zones Contract](architecture/observing-sites-and-time-zones.md)
+- [Equipment Catalog Contract](architecture/equipment-catalog.md)
 - [Operation Lifecycle Rules](architecture/operation-lifecycle-rules.md)
 - [Device Resource Matrix](architecture/device-resource-matrix.md)
 - [Equipment Control Contract](architecture/equipment-control.md)

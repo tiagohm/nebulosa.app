@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
+import type { HeaderMetadata } from './calibrationlibrary.compatibility'
 import { calibrationPolicyId, classifyFilter, filterCalibration, filterGroupOf, frameTarget, geometryKeyOf, missingMetadata, segmentKeyOf } from './livestacking.groups'
 
 // Metadata of a light with fields replaced.
-function metadata(patch: Partial<CalibrationMetadata> = {}): CalibrationMetadata {
+function metadata(patch: Partial<HeaderMetadata> = {}): HeaderMetadata {
 	const unknown = { value: undefined, evidence: 'unknown' } as const
 	const verified = <T extends string | number>(value: T) => ({ value, evidence: 'verified' }) as const
 
@@ -51,7 +51,7 @@ describe('live stacking groups', () => {
 			{ originX: 10 },
 			{ gain: { value: undefined, evidence: 'unknown' } },
 		] as const) {
-			expect(segmentKeyOf('Ha', metadata(patch as Partial<CalibrationMetadata>), 'uncalibrated')).not.toBe(base)
+			expect(segmentKeyOf('Ha', metadata(patch as Partial<HeaderMetadata>), 'uncalibrated')).not.toBe(base)
 		}
 
 		expect(segmentKeyOf('OIII', metadata(), 'uncalibrated')).not.toBe(base)
@@ -73,7 +73,7 @@ describe('live stacking groups', () => {
 	})
 
 	test('a frame matches masters with its own settings, exposure in seconds, and sensor temperature', () => {
-		expect(frameTarget(metadata())).toEqual({ width: 100, height: 80, channels: 1, binX: 1, binY: 1, gain: 100, offset: 10, exposure: 60, temperature: -9.8, filter: 'Ha' })
+		expect(frameTarget(metadata(), 'catalog-camera')).toEqual({ cameraId: 'catalog-camera', width: 100, height: 80, channels: 1, binX: 1, binY: 1, gain: 100, offset: 10, exposure: 60, temperature: -9.8, filter: 'Ha' })
 		expect(missingMetadata(metadata({ exposure: { value: undefined, evidence: 'unknown' } }))).toBe('The frame does not record its exposure')
 		expect(missingMetadata(metadata({ channels: 2 }))).toBe('The frame has no usable image size')
 		expect(missingMetadata(metadata())).toBeUndefined()

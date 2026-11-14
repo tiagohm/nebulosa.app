@@ -81,8 +81,9 @@ describe('live stacking store', () => {
 		const failing = (() => Promise.resolve(Response.json({ error: 'Unavailable' }, { status: 503 }))) as unknown as typeof fetch
 		const empty = (() => Promise.resolve(Response.json({ items: [], total: 0 }))) as unknown as typeof fetch
 
-		expect(await loadLiveMasters('dark', failing)).toBeUndefined()
-		expect(await loadLiveMasters('dark', empty)).toEqual([])
+		expect(await loadLiveMasters('dark', 'camera', failing)).toBeUndefined()
+		expect(await loadLiveMasters('dark', 'camera', empty)).toEqual([])
+		expect(await loadLiveMasters('dark', undefined, failing)).toEqual([])
 	})
 
 	test('a start sends the form of the camera with a token and keeps the session it answers', async () => {

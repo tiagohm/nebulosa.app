@@ -35,7 +35,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   A frame the dark does not apply to is guided uncalibrated.
   The module descriptions of `api/src/guiding.ts` and `api/src/guiding.worker.ts` give the details.
   The record says how it went (`darkCalibration`: `pending`, `noCompatibleDark`, `selected`, `applied`, or `failed` with the reason, the master and whether it was pinned), and `GET /api/guiding/:sessionId/dark/candidates` lists the darks matching the latest frame.
-  Nothing identifies the physical camera of a master: any dark of the same geometry and settings matches.
+  Only the darks of the camera of the Equipment Catalog the guide camera was bound to when the session started match; a session of a camera bound to none subtracts no dark, lists none, and says so (`noCompatibleDark`, see [Equipment Catalog Contract](equipment-catalog.md)).
 - Slews: while the run holds the mount nothing of the application can move it, so a slew, park or home it reports then (`slewing`, `parking`, `homing` of the mount manager; never `moving`, which pulse guiding sets) was commanded elsewhere.
   With `stopGuidingOnSlew` the service stops guiding as Stop Guiding does (closing the pulses and waiting for their observed end before the run releases the guide output and the mount), clears the lock, whose pixel the slew made meaningless, and records `interruption` (`externalSlew` with its time) and the `stopGuiding` command in the record;
   the loop goes on, guiding never starts again by itself, and the next Start Guiding clears the interruption.

@@ -30,7 +30,7 @@ Workspaces share services, not interfaces.
     - Registry: `CONTROLS` (`web/src/equipment-control/DeviceDetail.tsx`), `/equipment[/<device id>[/indi|/messages]]`
 - **Settings (top bar gear button)**
     - Responsibility: Settings of the server instance and of the active profile
-    - Features: Sections chosen by a header selector: External Tools (server), Observing Sites (server), Date & Time (profile), Status Bar (profile)
+    - Features: Sections chosen by a header selector: External Tools (server), Observing Sites (server), Equipment Catalog (server), Date & Time (profile), Status Bar (profile)
     - Registry: `SETTINGS_SECTION_IDS`, `/settings/<section>`, `/settings/external-tools[/<tool id>]` (`web/src/settings/`)
 - **About (rail footer button)**
     - Responsibility: Identity of the running distribution

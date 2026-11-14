@@ -157,6 +157,43 @@ test('deleting a saved connection drops what every profile keeps on it and publi
 	])
 })
 
+test('cameras of the Equipment Catalog are created, edited from their revision, unique by name, and refused when outdated', async () => {
+	const { routes, events } = setup()
+	const camera = { name: 'ASI2600MM #1', model: 'ZWO ASI2600MM Pro', sensor: { width: 6248, height: 4176, pixelSize: 3.76, bits: 16 }, archived: false }
+	const created = await call(routes, '/api/catalog-cameras/:id', 'PUT', { id: 'main' }, { ...camera, revision: 0 })
+	expect(await created.json()).toEqual({ id: 'main', ...camera, revision: 1 })
+
+	const twin = await call(routes, '/api/catalog-cameras/:id', 'PUT', { id: 'twin' }, { ...camera, name: 'asi2600mm #1', revision: 0 })
+	expect(twin.status).toBe(409)
+	expect(await twin.json()).toMatchObject({ code: 'nameTaken' })
+
+	const archived = await call(routes, '/api/catalog-cameras/:id', 'PUT', { id: 'main' }, { name: 'ASI2600MM #1', archived: true, revision: 1 })
+	expect(await archived.json()).toEqual({ id: 'main', name: 'ASI2600MM #1', archived: true, revision: 2 })
+
+	const stale = await call(routes, '/api/catalog-cameras/:id', 'PUT', { id: 'main' }, { ...camera, revision: 1 })
+	expect(stale.status).toBe(409)
+	expect(await stale.json()).toMatchObject({ code: 'conflict', camera: { archived: true, revision: 2 } })
+	expect(events.filter((event) => event.type === 'catalogCamera:updated')).toHaveLength(2)
+
+	const snapshot = (await (await call(routes, '/api/workspace', 'GET')).json()) as WorkspaceSnapshot
+	expect(snapshot.cameras.map(({ id }) => id)).toEqual(['main'])
+})
+
+test('a camera of the Equipment Catalog calibration frames are recorded against cannot be deleted', async () => {
+	const { routes, events, database, workspace } = setup()
+	workspace.saveCatalogCamera('main', { name: 'Main', archived: false, revision: 0 })
+	database.db.query("INSERT INTO calibration_sources (source_id, group_id, key, kind, camera_id, status, name, origin, path, format, bytes, mtime_ms, excluded, supported, metadata, warnings) VALUES ('s', 'g', 'k', 'bias', 'main', 'available', 'a.fit', 'import', '/a.fit', 'fits', 1, 1, 0, 1, '{}', '[]')").run()
+
+	const refused = await call(routes, '/api/catalog-cameras/:id', 'DELETE', { id: 'main' })
+	expect(refused.status).toBe(409)
+	expect(await refused.json()).toMatchObject({ code: 'cameraInUse', usage: { frames: 1, masters: 0 } })
+
+	database.db.query("DELETE FROM calibration_sources WHERE source_id = 's'").run()
+	expect((await call(routes, '/api/catalog-cameras/:id', 'DELETE', { id: 'main' })).status).toBe(204)
+	expect(events.at(-1)).toEqual({ type: 'catalogCamera:removed', id: 'main' })
+	expect(workspace.catalogCamera('main')).toBeUndefined()
+})
+
 test('observing sites are created, edited from their revision, and refused when outdated', async () => {
 	const { routes, events } = setup()
 	expect(await saveSite(routes)).toEqual({ id: 'home', ...HOME, revision: 1 })

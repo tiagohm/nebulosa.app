@@ -35,6 +35,7 @@ import {
 } from './darklibrarywizard.analysis'
 import { type DarkCapturePlan, type DarkFrameRecord, type DarkFrameVerdict, type DarkGroup, type DarkGroupProgress, type DarkPlanCapture, type DarkPlanGroup, type DarkProtection, type DarkThermalPolicy, darksDirectory, REJECTED_DIRECTORY, stagingDirectory } from './darklibrarywizard.plan'
 import type { DeviceRegistry } from './devices'
+import { type CameraBindings, NO_CAMERA_BINDINGS } from './equipmentcatalog'
 import { publishFrame } from './flatwizard'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
@@ -142,6 +143,7 @@ export type DarkLibraryWizardErrorCode =
 	| 'notRunning'
 	| 'publicationFailed'
 	| 'verificationFailed'
+	| 'cameraNotCataloged'
 
 // Progress of one group in a session: pending until reached, then acquiring, and complete, failed, or cancelled.
 export type DarkLibraryWizardGroupState = 'pending' | 'acquiring' | 'completed' | 'failed' | 'cancelled'
@@ -446,7 +448,8 @@ export class DarkLibraryWizardSessions implements Disposable {
 	// devices (the commanders of their commands), images receives the previews, frames records them and the published
 	// frames, analyzer measures the frames in DN, and listener receives every session change synchronously. capturesDir is
 	// the default output directory, framePublished receives every accepted frame once it was published, and sessionEnded the
-	// plan of an ended session that asked for masters.
+	// plan of an ended session that asked for masters. catalog resolves the camera of the Equipment Catalog a camera is bound
+	// to, which a plan records and without which no session starts.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -463,6 +466,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
 		readonly framePublished: (frame: DarkFrameRegistration) => void = () => undefined,
 		readonly sessionEnded: (plan: DarkCapturePlan) => void = () => undefined,
+		readonly catalog: CameraBindings = NO_CAMERA_BINDINGS,
 	) {
 		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'darkLibraryWizard:updated', session }))
 		devices.thermometers.addHandler(this.#thermometers)
@@ -496,6 +500,8 @@ export class DarkLibraryWizardSessions implements Disposable {
 	#start(connectionId: string, deviceId: string, request: DarkLibraryWizardRequest): Response {
 		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
 		if (camera instanceof Response) return camera
+		const cameraId = this.catalog.cameraOf({ connectionId, deviceId })
+		if (cameraId === undefined) return errorResponse('Bind the camera to a camera of the Equipment Catalog in the Equipment Setup first', 409, 'cameraNotCataloged')
 		const wheel = request.wheel && connectedDevice(this, request.wheel.connectionId, 'wheel', request.wheel.deviceId, 'Filter wheel')
 		if (wheel instanceof Response) return wheel
 		const panel = request.panel && connectedDevice(this, request.panel.connectionId, 'flatPanel', request.panel.deviceId, 'Flat panel')
@@ -508,7 +514,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		if (previous && previous.summary.endedAt === undefined) return errorResponse('A Dark Library Wizard session is running on this camera', 409, 'alreadyRunning')
 
 		const offered: SessionDevices = { camera, wheel, panel, cover }
-		const plan = this.#newPlan(Bun.randomUUIDv7(), request, offered)
+		const plan = this.#newPlan(Bun.randomUUIDv7(), cameraId, request, offered)
 		const { protection } = plan
 		const refused = usable(plan, offered)
 		if (refused) return refused
@@ -533,8 +539,9 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return startResponse(session)
 	}
 
-	// Builds the plan of a request; the groups run in the order that groups their temperatures.
-	#newPlan(planId: string, request: DarkLibraryWizardRequest, { camera, wheel, panel, cover }: SessionDevices): DarkCapturePlan {
+	// Builds the plan of a request for the camera of the Equipment Catalog the camera is bound to; the groups run in the
+	// order that groups their temperatures.
+	#newPlan(planId: string, cameraId: string, request: DarkLibraryWizardRequest, { camera, wheel, panel, cover }: SessionDevices): DarkCapturePlan {
 		const directory = request.directory || this.capturesDir
 		const hardwareId = resourceKey(camera)
 		const { protection, capture, thermal, maximumRejections } = request
@@ -550,7 +557,7 @@ export class DarkLibraryWizardSessions implements Disposable {
 		return {
 			planId,
 			createdAt: Date.now(),
-			camera: { hardwareId, name: camera.name, driver: { executable: camera.driver.executable, version: camera.driver.version }, sensor: sensorOf(camera) },
+			camera: { hardwareId, cameraId, name: camera.name, driver: { executable: camera.driver.executable, version: camera.driver.version }, sensor: sensorOf(camera) },
 			...(protection.darkFilter && wheel && { wheel: { ...device(wheel), slotName: slotName(wheel, protection.darkFilter.slot) } }),
 			...(protection.panelOff && panel && { panel: device(panel) }),
 			...(protection.closeCover && cover && { cover: device(cover) }),

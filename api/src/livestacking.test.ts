@@ -85,6 +85,7 @@ function captured(sessionId: string, generation: number, mode: 'preview-only' | 
 function masterMetadata(): CalibrationMetadata {
 	const unknown = { value: undefined, evidence: 'unknown' } as const
 	return {
+		cameraId: 'catalog-camera',
 		width: SIZE,
 		height: SIZE,
 		channels: 1,
@@ -138,7 +139,7 @@ function setup(options: { processor?: (recipe: LiveStackingRecipe) => LiveStacki
 		images,
 		store,
 		(event) => events.push(event),
-		{ processor: options.processor ?? ((recipe) => new InThreadProcessor(recipe)), memoryBudget: options.memoryBudget },
+		{ processor: options.processor ?? ((recipe) => new InThreadProcessor(recipe)), memoryBudget: options.memoryBudget, catalog: { cameraOf: ({ connectionId, deviceId }) => (connectionId === 'c1' && deviceId === 'cam' ? 'catalog-camera' : undefined) } },
 	)
 	disposables.push(stacking)
 	const start = (token = 't1', extra: object = {}) => stacking.start('c1', 'cam', { token, ...extra }).session.sessionId

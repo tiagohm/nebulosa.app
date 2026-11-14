@@ -20,6 +20,9 @@ import { WheelCommands } from './wheels'
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-darkwizard-test-'))
 const disposables: Disposable[] = []
 
+// Camera of the Equipment Catalog the test camera is bound to.
+const CATALOG_CAMERA = 'catalog-camera'
+
 afterEach(() => {
 	for (const disposable of disposables.splice(0).toReversed()) disposable[Symbol.dispose]()
 })
@@ -83,6 +86,8 @@ async function setup(edit: Parameters<typeof analyzer>[0] = (measurement) => mea
 	const events: DarkLibraryWizardEvent[] = []
 	const published: DarkFrameRegistration[] = []
 	const endedPlans: DarkCapturePlan[] = []
+	// Whether the camera is bound to CATALOG_CAMERA in the Equipment Catalog.
+	const catalog = { bound: true }
 	const wizard = new DarkLibraryWizardSessions(
 		manager.devices,
 		resolve,
@@ -99,6 +104,7 @@ async function setup(edit: Parameters<typeof analyzer>[0] = (measurement) => mea
 		undefined,
 		(frame) => published.push(frame),
 		(plan) => endedPlans.push(plan),
+		{ cameraOf: () => (catalog.bound ? CATALOG_CAMERA : undefined) },
 	)
 	disposables.push(wizard)
 
@@ -127,6 +133,7 @@ async function setup(edit: Parameters<typeof analyzer>[0] = (measurement) => mea
 	const confirm = async (sessionId: string) => expect(wizard.continue(sessionId, { stepId: (await pending()).stepId }).status).toBe(204)
 
 	return {
+		catalog,
 		endedPlans,
 		id,
 		manager,
@@ -318,6 +325,19 @@ describe('Dark Library Wizard sessions', () => {
 
 		expect(events).toHaveLength(0)
 		expect(existsSync(join(directory, 'darks'))).toBeFalse()
+	})
+
+	test('a camera bound to no camera of the Equipment Catalog is refused, and a plan records the one it is bound to', async () => {
+		const { id, cameraId, wizard, directory, catalog, published } = await setup()
+		catalog.bound = false
+		const refused = wizard.start(id, cameraId, request(directory, { groups: [{ exposure: 1, count: 1 }] }))
+		expect(refused.status).toBe(409)
+		expect(await refused.json()).toMatchObject({ code: 'cameraNotCataloged' })
+
+		catalog.bound = true
+		await start(wizard, id, cameraId, request(directory, { groups: [{ exposure: 1, count: 1 }] }))
+		await waitUntil(() => published.length > 0)
+		expect(published[0].plan.camera.cameraId).toBe(CATALOG_CAMERA)
 	})
 
 	test('a busy camera and a running session are refused', async () => {

@@ -104,6 +104,8 @@ export interface DarkCapturePlan {
 	readonly createdAt: number
 	// Physical camera.
 	readonly camera: DarkPlanDevice & {
+		// Camera of the Equipment Catalog the device was bound to when the plan was made; every frame is recorded against it.
+		readonly cameraId: string
 		// Executable and version of its driver.
 		readonly driver: { readonly executable: string; readonly version: string }
 		// Full sensor, in unbinned pixels; absent while unknown.

@@ -18,7 +18,7 @@ import { arcmin, arcsec, deg, hour, normalizePI, toDeg } from 'nebulosa/src/math
 import { meter } from 'nebulosa/src/math/units/distance'
 import { ipolarFrameContext, ipolarItrsToIcrs } from 'nebulosa/src/observation/alignment/ipolar.geometry'
 import type { CalibrationMasterDetail } from './calibrationlibrary'
-import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
+import type { HeaderMetadata } from './calibrationlibrary.compatibility'
 import { inspectHeader } from './calibrationlibrary.sources'
 import { CaptureFrameRegistry } from './captureframes'
 import { CameraCaptures, type CaptureStartRequest } from './captures'
@@ -178,6 +178,7 @@ async function setup(library: IPolarDarkLibrary = NO_DARKS) {
 		library,
 		(event) => events.push(event),
 		auxiliaryDir,
+		{ cameraOf: () => 'catalog-camera' },
 	)
 
 	const devices = manager.devices.list(client)
@@ -389,7 +390,7 @@ describe('iPolar dark', () => {
 
 	// A Calibration Library holding master dark #7 ('digest'): a zero dark of the simulator's frame geometry with the
 	// given metadata, whose leases are counted.
-	async function darkLibrary(header: FitsHeader, metadata: CalibrationMetadata) {
+	async function darkLibrary(header: FitsHeader, metadata: HeaderMetadata, cameraId = 'catalog-camera') {
 		const width = header.NAXIS1 as number
 		const height = header.NAXIS2 as number
 		const channels = (header.NAXIS3 as number | undefined) ?? 1
@@ -399,7 +400,7 @@ describe('iPolar dark', () => {
 		await writeFits(sink, [{ header: { SIMPLE: true, BITPIX: header.BITPIX, NAXIS: channels > 1 ? 3 : 2, NAXIS1: width, NAXIS2: height, ...(channels > 1 && { NAXIS3: channels }), ...(header.BITPIX === 16 && { BZERO: 32768, BSCALE: 1 }) }, raw }])
 		const path = join(root, `dark-${tokens++}.fit`)
 		await Bun.write(path, buffer.subarray(0, sink.position))
-		const master = { masterId: 7, kind: 'dark', metadata, contentDigest: 'digest', path, units: 'DN', fullScaleDn: 65535 } as unknown as CalibrationMasterDetail
+		const master = { masterId: 7, kind: 'dark', metadata: { ...metadata, cameraId }, contentDigest: 'digest', path, units: 'DN', fullScaleDn: 65535 } as unknown as CalibrationMasterDetail
 		const leases = { taken: 0, released: 0 }
 		const library: IPolarDarkLibrary = {
 			pinnedMaster: ({ masterId, digest }) => Promise.resolve(masterId === 7 && digest === 'digest' ? master : undefined),
@@ -468,6 +469,18 @@ describe('iPolar dark', () => {
 		const { id, cameraId, ipolar, events } = await setup(library)
 
 		expect((await ipolar.start(id, cameraId, request({ dark: { ...DARK, digest: 'changed' } }))).status).toBe(422)
+		expect(events).toEqual([])
+		expect(leases).toEqual({ taken: 0, released: 0 })
+	})
+
+	test('a pinned dark of another camera of the catalog refuses the start, leasing nothing', async () => {
+		const { header, metadata } = await frameMetadata()
+		const { library, leases } = await darkLibrary(header, metadata, 'other-camera')
+		const { id, cameraId, ipolar, events } = await setup(library)
+
+		const response = await ipolar.start(id, cameraId, request({ dark: DARK }))
+		expect(response.status).toBe(422)
+		expect(((await response.json()) as { error: string }).error).toContain('another camera')
 		expect(events).toEqual([])
 		expect(leases).toEqual({ taken: 0, released: 0 })
 	})

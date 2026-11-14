@@ -6,7 +6,7 @@ import { type FitsHeader, writeFits } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSink, bufferSource } from 'nebulosa/src/io/io'
 import { assessDarkForFrame, DarkCalibrator } from './calibrationdark'
 import type { CalibrationMasterSummary } from './calibrationlibrary'
-import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
+import type { HeaderMetadata } from './calibrationlibrary.compatibility'
 import { readDigitalFrom } from './imagestacking.analysis'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-calibration-dark-test-'))
@@ -16,7 +16,7 @@ afterAll(() => rmSync(root, { recursive: true, force: true }))
 const UNKNOWN = { evidence: 'unknown' } as const
 
 // Metadata of a 32 × 24 mono 16-bit frame exposed 2 s at gain 100, with fields replaced.
-function metadata(patch: Partial<CalibrationMetadata> = {}): CalibrationMetadata {
+function metadata(patch: Partial<HeaderMetadata> = {}): HeaderMetadata {
 	const known = <T>(value: T) => ({ value, evidence: 'verified' as const })
 	return {
 		cameraName: 'ZWO ASI120MM',
@@ -39,8 +39,8 @@ function metadata(patch: Partial<CalibrationMetadata> = {}): CalibrationMetadata
 	}
 }
 
-function master(patch: Partial<CalibrationMetadata> = {}, kind: CalibrationMasterSummary['kind'] = 'dark') {
-	return { kind, metadata: metadata(patch) }
+function master(patch: Partial<HeaderMetadata> = {}, kind: CalibrationMasterSummary['kind'] = 'dark') {
+	return { kind, metadata: { ...metadata(patch), cameraId: 'camera' } }
 }
 
 describe('assessment', () => {

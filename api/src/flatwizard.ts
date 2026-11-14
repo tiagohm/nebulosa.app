@@ -23,6 +23,7 @@ import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureSettings, type CaptureSnoop, DEFAULT_CAPTURES_DIR, exposureProgressListener, frameName, snoopedDevices } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
+import { type CameraBindings, NO_CAMERA_BINDINGS } from './equipmentcatalog'
 import type { FlatFrameContext, FlatFrameMeasurement, FlatMeasurementOptions, FlatWizardAnalyzer } from './flatwizard.analysis'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
@@ -367,6 +368,8 @@ interface Session {
 	gate?: { readonly stepId: string; readonly confirm: VoidFunction }
 	// Whether the session switched the panel light on and has not switched it off yet.
 	lightOn: boolean
+	// Camera of the Equipment Catalog the camera was bound to when the session started; every flat is recorded against it.
+	readonly cameraId: string
 	// Whether the session commanded the cover closed and has not opened it again yet; set before the command, so a
 	// close interrupted halfway is opened too.
 	coverClosed: boolean
@@ -393,7 +396,9 @@ export class FlatWizardSessions {
 	// session, capturer takes the frames (the one of the capture service), wheels, panels, and covers drive the
 	// assigned devices (the commanders of their commands), images receives the previews, frames records them and the published
 	// frames and closes their documents, analyzer measures the frames in DN, and listener receives every session change
-	// synchronously. capturesDir is the default output directory.
+	// synchronously. capturesDir is the default output directory, framePublished receives every accepted flat once it was
+	// published, sessionEnded the filters of an ended session, and catalog resolves the camera of the Equipment Catalog a
+	// camera is bound to, which every flat records and without which no session starts.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -409,6 +414,7 @@ export class FlatWizardSessions {
 		readonly capturesDir: string = DEFAULT_CAPTURES_DIR,
 		readonly framePublished: (frame: FlatFrameRegistration) => void = () => undefined,
 		readonly sessionEnded: (ended: FlatSessionEnd) => void = () => undefined,
+		readonly catalog: CameraBindings = NO_CAMERA_BINDINGS,
 	) {
 		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'flatWizard:updated', session }))
 	}
@@ -434,6 +440,8 @@ export class FlatWizardSessions {
 
 		const camera = connectedDevice(this, connectionId, 'camera', deviceId, 'Camera')
 		if (camera instanceof Response) return camera
+		const cameraId = this.catalog.cameraOf({ connectionId, deviceId })
+		if (cameraId === undefined) return errorResponse('Bind the camera to a camera of the Equipment Catalog in the Equipment Setup first', 409, 'cameraNotCataloged')
 		const wheel = request.wheel && connectedDevice(this, request.wheel.connectionId, 'wheel', request.wheel.deviceId, 'Filter wheel')
 		if (wheel instanceof Response) return wheel
 		const panel = request.panel && connectedDevice(this, request.panel.connectionId, 'flatPanel', request.panel.deviceId, 'Flat panel')
@@ -470,6 +478,7 @@ export class FlatWizardSessions {
 			},
 			attempts: [],
 			lightOn: false,
+			cameraId,
 			coverClosed: false,
 			exposures: 0,
 			ended: Promise.withResolvers(),
@@ -770,7 +779,7 @@ export class FlatWizardSessions {
 
 			const { sessionId, camera: device } = session.summary
 			this.frames.published({ sessionId, generation, ...device, cameraName, time, frameType: 'FLAT', path: join(directory, file) }, 'flatWizard')
-			this.framePublished({ path: join(directory, file), sessionId, cameraName, filter: name })
+			this.framePublished({ path: join(directory, file), sessionId, cameraId: session.cameraId, cameraName, filter: name })
 			accepted.push({ file, sample: sample! })
 			this.#record(session, { ...record, frameId: captureFrameId(sessionId, generation), verdict, file })
 			this.#patch(session, index, { accepted: run.accepted + 1, files: [...run.files, file] })

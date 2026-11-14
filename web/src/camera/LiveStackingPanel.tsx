@@ -4,6 +4,7 @@ import { useSnapshot } from 'valtio'
 import { calibrationLibraryRuntime } from '../calibrationlibrary/calibrationlibrary'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
+import { CatalogCameraNotice, useBoundCamera } from '../equipment/CatalogCameraNotice'
 import { formatByteSize, formatDuration, formatExposureTime, formatTemperature } from '../format'
 import type { CameraOperationContext } from '../images/cameracontext'
 import { selectCameraFrame } from '../images/cameratabs'
@@ -235,12 +236,15 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 	const [filter, setFilter] = useState<string>()
 	const chosenFilter = filter !== undefined && addable.includes(filter) ? filter : addable[0]
 	const cameraName = session?.cameraName ?? camera.device.device?.name
+	// Camera of the Equipment Catalog the masters come from: the one the session started with, else the one bound now.
+	const boundCamera = useBoundCamera(camera.device.device)
+	const catalogCamera = session ? session.cameraId : boundCamera
 
 	// Fetches the masters offered, again whenever the Calibration Library changes; a failed fetch keeps the masters known.
 	useEffect(() => {
 		let cancelled = false
 
-		void Promise.all(LIVE_MASTER_ORDER.map((kind) => loadLiveMasters(kind))).then(([dark, flat, bias]) => {
+		void Promise.all(LIVE_MASTER_ORDER.map((kind) => loadLiveMasters(kind, catalogCamera))).then(([dark, flat, bias]) => {
 			if (cancelled) return
 			const failed = !dark || !flat || !bias
 			setMastersFailed(failed)
@@ -250,7 +254,7 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 		return () => {
 			cancelled = true
 		}
-	}, [library.changes])
+	}, [library.changes, catalogCamera])
 
 	const update = (next: LiveStackingSettings['calibration']) => setLiveStackingSettings(profileState, camera.settings, { calibration: next })
 
@@ -282,6 +286,7 @@ function CalibrationSection({ camera, session, settings }: FormProps) {
 	return (
 		<CollapsibleSection id="images.liveStacking.calibration" title="Calibration" summary={`${Object.keys(calibration.filters).length} filters`} defaultOpen={false}>
 			{wheelNames ? <Notice>Choose the filters of the wheel to calibrate before their frames arrive.</Notice> : <Notice>Without a connected filter wheel the frames have no filter, so they take the masters of {NO_FILTER}.</Notice>}
+			<CatalogCameraNotice device={camera.device.device} lead="Masters come from" purpose="to calibrate with the Calibration Library" />
 			{mastersFailed && <Notice error>The masters of the Calibration Library could not be read; the list may be out of date.</Notice>}
 			{filters.map((name) => (
 				<CollapsibleSection key={name} id={`images.liveStacking.calibration.filter.${name}`} title={name === NO_FILTER ? 'No filter' : name} summary={chosenSummary(name)}>

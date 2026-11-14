@@ -92,13 +92,13 @@ export interface EquipmentRoute {
 }
 
 // Sections of the Settings page, in selector order; also the second path segment of a Settings route.
-export const SETTINGS_SECTION_IDS = ['external-tools', 'observing-sites', 'date-time', 'status-bar'] as const
+export const SETTINGS_SECTION_IDS = ['external-tools', 'observing-sites', 'equipment-catalog', 'date-time', 'status-bar'] as const
 
 // Identifier of a section of the Settings page.
 export type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number]
 
-// Location in the Settings page: the section shown and, in External Tools, the external program shown, or in Observing
-// Sites, the site shown, if any.
+// Location in the Settings page: the section shown and, in External Tools, the external program shown, in Observing
+// Sites, the site shown, or in Equipment Catalog, the camera shown, if any.
 // The page is opened from the gear button of the top bar, not from the navigation rail.
 export interface SettingsRoute {
 	// Settings page.
@@ -109,6 +109,8 @@ export interface SettingsRoute {
 	readonly tool?: string
 	// Id of the observing site shown in Observing Sites; absent when none is selected.
 	readonly site?: string
+	// Id of the camera shown in Equipment Catalog; absent when none is selected.
+	readonly camera?: string
 }
 
 // Location of the About page: the identity of the running distribution. The page is opened from the button at the
@@ -156,7 +158,7 @@ export function settingsSection(route: SettingsRoute): SettingsSectionId {
 
 // Returns the route of a URL path. An unknown workspace gives DEFAULT_ROUTE; an unknown tool opens the Tools
 // catalog; an unknown Settings section opens the first one; extra segments are ignored, but for the site of Observing
-// Sites, the eclipse id of the Solar and Lunar Eclipse Maps, the group of the Calibration Library, the project of Image
+// Sites, the camera of Equipment Catalog, the eclipse id of the Solar and Lunar Eclipse Maps, the group of the Calibration Library, the project of Image
 // Stacking, the satellite of Artificial Satellites, and the plan of the Observing Planner.
 export function parseRoute(pathname: string): Route {
 	const [workspace = '', first = '', second = ''] = pathname.split('/').filter(Boolean)
@@ -164,6 +166,7 @@ export function parseRoute(pathname: string): Route {
 	if (workspace === 'settings') {
 		const section = isSettingsSectionId(first) ? first : SETTINGS_SECTION_IDS[0]
 		if (first === 'external-tools' && second) return { workspace, section, tool: second }
+		if (first === 'equipment-catalog' && second) return { workspace, section, camera: decodeURIComponent(second) }
 		return first === 'observing-sites' && second ? { workspace, section, site: decodeURIComponent(second) } : { workspace, section }
 	}
 	if (workspace === 'about') return { workspace }
@@ -194,6 +197,7 @@ export function routePath(route: Route): string {
 	if (route.workspace === 'settings') {
 		const section = settingsSection(route)
 		if (section === 'external-tools' && route.tool) return `/settings/${section}/${encodeURIComponent(route.tool)}`
+		if (section === 'equipment-catalog' && route.camera) return `/settings/${section}/${encodeURIComponent(route.camera)}`
 		return section === 'observing-sites' && route.site ? `/settings/${section}/${encodeURIComponent(route.site)}` : `/settings/${section}`
 	}
 	return `/${route.workspace}`

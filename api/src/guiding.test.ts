@@ -43,12 +43,16 @@ let tokens = 0
 
 const SETTLE = { pixels: 1.5, time: 1, timeout: 10 }
 
+// Camera of the Equipment Catalog the guide camera is bound to.
+const CATALOG_CAMERA = 'catalog-camera'
+
 // A Calibration Library without any master.
 const NO_DARKS: GuidingDarkLibrary = { resolvePreview: () => Promise.resolve({ candidates: [] }), pinnedMaster: () => Promise.resolve(undefined), lease: () => () => {} }
 
 // The simulator connection with its camera and mount connected, and the guiding sessions over it, guiding through the
-// mount's ST4 port. calibrations keeps the solved calibrations, a database of its own when absent.
-async function setup(calibrations = new GuidingCalibrationStore(AppDatabase.memory()), library: GuidingDarkLibrary = NO_DARKS) {
+// mount's ST4 port. calibrations keeps the solved calibrations, a database of its own when absent, and the guide camera
+// is bound to catalogCamera in the Equipment Catalog, to none when null.
+async function setup(calibrations = new GuidingCalibrationStore(AppDatabase.memory()), library: GuidingDarkLibrary = NO_DARKS, catalogCamera: string | null = CATALOG_CAMERA) {
 	const manager = new ConnectionManager()
 	disposables.push(manager)
 	const { id } = await manager.connect({ type: 'SIMULATOR' })
@@ -75,6 +79,7 @@ async function setup(calibrations = new GuidingCalibrationStore(AppDatabase.memo
 		calibrations,
 		library,
 		(event) => events.push(event),
+		{ cameraOf: () => catalogCamera ?? undefined },
 	)
 	disposables.push(guiding)
 
@@ -767,7 +772,7 @@ describe('dark', () => {
 
 		const library: GuidingDarkLibrary = {
 			// As matchesTarget, the dark matches only frames exposed 200 ms.
-			resolvePreview: (target) => Promise.resolve({ candidates: target.exposure !== undefined && Math.round(target.exposure * 1000000) === 200000 ? [master] : [] }),
+			resolvePreview: (target) => Promise.resolve({ candidates: target.cameraId === CATALOG_CAMERA && target.exposure !== undefined && Math.round(target.exposure * 1000000) === 200000 ? [master] : [] }),
 			pinnedMaster: ({ masterId, digest }) => Promise.resolve(masterId === 7 && digest === 'digest' ? ({ ...master, path, units: 'DN', fullScaleDn: 65535 } as unknown as CalibrationMasterDetail) : undefined),
 			lease: () => {
 				leases.taken++
@@ -806,6 +811,18 @@ describe('dark', () => {
 		await waitUntil(() => context.summary()?.darkCalibration?.state === 'applied')
 		expect((await context.guiding.stop(sessionId)).status).toBe(204)
 		expect(leases).toEqual({ taken: 2, released: 2 })
+	}, 60000)
+
+	test('a guide camera bound to no camera of the Equipment Catalog subtracts no dark and is offered none', async () => {
+		const { library, leases } = await darkLibrary()
+		const context = await setup(undefined, library, null)
+		const { sessionId } = await start(context, { dark: {} })
+
+		await waitUntil(() => context.summary()?.darkCalibration?.state === 'noCompatibleDark')
+		expect(context.summary()?.darkCalibration?.reason).toContain('Equipment Catalog')
+		expect(await (await context.guiding.darkCandidates(sessionId)).json()).toEqual({ candidates: [] })
+		expect((await context.guiding.stop(sessionId)).status).toBe(204)
+		expect(leases).toEqual({ taken: 0, released: 0 })
 	}, 60000)
 })
 

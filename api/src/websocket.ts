@@ -8,6 +8,7 @@ import type { ConnectionRegistryEvent } from './connection'
 import type { DarkLibraryWizardEvent } from './darklibrarywizard'
 import type { DarvEvent } from './darv'
 import type { DomeMotionEvent } from './domes'
+import type { CameraBindingEvent } from './equipmentcatalog'
 import type { ExternalToolEvent } from './externaltools'
 import type { FlatWizardEvent } from './flatwizard'
 import type { FocuserBacklashEvent } from './focusers'
@@ -80,6 +81,7 @@ export type ServerEvent =
 	| ExternalToolEvent
 	| ObservatoryCameraEvent
 	| WorkspaceEvent
+	| CameraBindingEvent
 	| StarDetectionEvent
 	| StreakDetectionEvent
 	| ImageStatisticsEvent

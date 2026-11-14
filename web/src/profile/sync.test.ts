@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import type { ProfileRecord, WorkspaceSnapshot } from 'api'
 import { proxy, snapshot } from 'valtio'
 import { type ConnectionState, removeConnection, saveConnection } from '../connection/connection'
+import { type CatalogState, removeCatalogCamera, saveCatalogCamera } from '../equipment/catalog'
 import { forgetSite, removeSite, saveSite, selectSite, type SiteState } from '../location/site'
 import { assignDevice, createProfile, deleteFramingReference, dismissNotifications, markNotificationsRead, deleteProfile, forgetConnection, type ProfileState, saveFramingReference, selectConnection, setExposureSettings, setFramingVisible, setMountRemoteBinding, setPanelOpen, setTelescopeOptics } from './profile'
 import { PROFILE_SETTINGS_VERSION } from './schema'
@@ -26,7 +27,7 @@ afterEach(() => {
 })
 
 // Workspace of a new database: its Default profile.
-const NEW_WORKSPACE: WorkspaceSnapshot = { connections: [], sites: [], profiles: [record('p1', { name: 'Default' })] }
+const NEW_WORKSPACE: WorkspaceSnapshot = { connections: [], sites: [], cameras: [], profiles: [record('p1', { name: 'Default' })] }
 
 // Creates the stores of a tab and its synchronization over a fake server holding workspace, recording what the tab
 // sent. answer replaces the answer of the server to a write.
@@ -34,6 +35,7 @@ function setup(workspace = NEW_WORKSPACE, answer?: (sent: Sent) => Response | un
 	const connections = proxy<ConnectionState>({ open: false, connections: [], servers: [], errors: {} })
 	const profiles = proxy<ProfileState>({ profiles: [], activeId: '', open: false })
 	const sites = proxy<SiteState>({ sites: [] })
+	const catalog = proxy<CatalogState>({ cameras: [] })
 	const status = proxy<WorkspaceSyncState>({ loaded: false })
 	const sent: Sent[] = []
 
@@ -49,9 +51,9 @@ function setup(workspace = NEW_WORKSPACE, answer?: (sent: Sent) => Response | un
 		return Promise.resolve(new Response(undefined, { status: 204 }))
 	}) as typeof fetch
 
-	const sync = new WorkspaceSync(connections, profiles, sites, status, request, 0)
+	const sync = new WorkspaceSync(connections, profiles, sites, status, request, 0, catalog)
 	stops.push(sync.start())
-	return { connections, profiles, sites, status, sync, sent }
+	return { connections, profiles, sites, catalog, status, sync, sent }
 }
 
 // Fields of a site in São Paulo.
@@ -68,6 +70,7 @@ describe('loading', () => {
 		const workspace: WorkspaceSnapshot = {
 			connections: [{ id: 'c1', name: 'Simulator', type: 'SIMULATOR', host: '', port: 7624, revision: 2 }],
 			sites: [],
+			cameras: [],
 			profiles: [
 				record('p1', {
 					connectionId: 'c1',
@@ -99,7 +102,7 @@ describe('loading', () => {
 	})
 
 	test('a value of another version of its shape is read as absent', async () => {
-		const { profiles, sync } = setup({ connections: [], sites: [], profiles: [record('p1', { preferences: { telescope: { version: PROFILE_SETTINGS_VERSION + 1, value: { focalLength: 1 }, revision: 4 } } })] })
+		const { profiles, sync } = setup({ connections: [], sites: [], cameras: [], profiles: [record('p1', { preferences: { telescope: { version: PROFILE_SETTINGS_VERSION + 1, value: { focalLength: 1 }, revision: 4 } } })] })
 		await sync.refresh()
 		expect(profiles.profiles[0].settings.telescope).toBeUndefined()
 	})
@@ -181,6 +184,7 @@ describe('writes', () => {
 		const workspace: WorkspaceSnapshot = {
 			connections: [{ id: 'c1', name: 'Simulator', type: 'SIMULATOR', host: '', port: 7624, revision: 1 }],
 			sites: [],
+			cameras: [],
 			profiles: [
 				record('p1', {
 					connectionId: 'c1',
@@ -237,6 +241,7 @@ describe('writes', () => {
 		const workspace: WorkspaceSnapshot = {
 			connections: [{ id: 'c1', name: 'Simulator', type: 'SIMULATOR', host: '', port: 7624, revision: 1 }],
 			sites: [],
+			cameras: [],
 			profiles: [
 				record('p1', {
 					connectionId: 'c1',
@@ -340,7 +345,7 @@ describe('other tabs', () => {
 	})
 
 	test('a profile another tab deleted goes, and the tab works with the first one', async () => {
-		const { profiles, sync } = setup({ connections: [], sites: [], profiles: [record('p1'), record('p2', { sortOrder: 1 })] })
+		const { profiles, sync } = setup({ connections: [], sites: [], cameras: [], profiles: [record('p1'), record('p2', { sortOrder: 1 })] })
 		await sync.refresh()
 		profiles.activeId = 'p2'
 
@@ -379,7 +384,7 @@ describe('observing sites', () => {
 	})
 
 	test('a deleted site is deleted after the profiles that observed from it are cleared', async () => {
-		const { profiles, sites, sync, sent } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], profiles: [record('p1', { activeSiteId: 's1' })] })
+		const { profiles, sites, sync, sent } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], cameras: [], profiles: [record('p1', { activeSiteId: 's1' })] })
 		await sync.refresh()
 		expect(profiles.profiles[0].activeSiteId).toBe('s1')
 
@@ -392,7 +397,7 @@ describe('observing sites', () => {
 	})
 
 	test('a conflict on a site shows what the server kept', async () => {
-		const { sites, status, sync } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], profiles: [record('p1')] }, ({ path }) =>
+		const { sites, status, sync } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], cameras: [], profiles: [record('p1')] }, ({ path }) =>
 			path === '/api/observing-sites/s1' ? Response.json({ error: 'It was changed by another tab', code: 'conflict', site: { id: 's1', ...HOME, name: 'Observatory', revision: 4 } }, { status: 409 }) : undefined,
 		)
 		await sync.refresh()
@@ -420,7 +425,7 @@ describe('observing sites', () => {
 	})
 
 	test('the active site of a profile follows the server', async () => {
-		const { profiles, sync } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], profiles: [record('p1')] })
+		const { profiles, sync } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], cameras: [], profiles: [record('p1')] })
 		await sync.refresh()
 
 		sync.handle({ type: 'profile:updated', profile: record('p1', { activeSiteId: 's1', revision: 2 }) })
@@ -428,6 +433,42 @@ describe('observing sites', () => {
 
 		sync.handle({ type: 'profile:updated', profile: record('p1', { revision: 3 }) })
 		expect(profiles.profiles[0].activeSiteId).toBeUndefined()
+	})
+})
+
+describe('cameras of the Equipment Catalog', () => {
+	test('a camera is written from its revision, follows the events of the server, and is deleted', async () => {
+		const { catalog, sync, sent } = setup()
+		await sync.refresh()
+
+		const saved = saveCatalogCamera(catalog, { name: ' Main ', model: '', sensor: { width: 6248, height: 4176, pixelSize: 3.76 }, archived: false })
+		if (!saved.ok) throw new Error('not saved')
+		await settle(sync)
+		expect(sent).toEqual([{ method: 'PUT', path: `/api/catalog-cameras/${saved.camera.id}`, body: { name: 'Main', sensor: { width: 6248, height: 4176, pixelSize: 3.76 }, archived: false, revision: 0 } }])
+
+		sync.handle({ type: 'catalogCamera:updated', camera: { ...structuredClone(snapshot(catalog).cameras[0]), archived: true, revision: 2 } })
+		expect(catalog.cameras).toEqual([{ id: saved.camera.id, name: 'Main', sensor: { width: 6248, height: 4176, pixelSize: 3.76 }, archived: true }])
+
+		removeCatalogCamera(catalog, saved.camera.id)
+		await settle(sync)
+		expect(sent.at(-1)).toEqual({ method: 'DELETE', path: `/api/catalog-cameras/${saved.camera.id}` })
+	})
+
+	test('a camera of another tab arrives with the workspace and goes when the server removes it', async () => {
+		const { catalog, sync, sent } = setup({ connections: [], sites: [], cameras: [{ id: 'k1', name: 'Guide', archived: false, revision: 1 }], profiles: [record('p1')] })
+		await sync.refresh()
+		expect(catalog.cameras).toEqual([{ id: 'k1', name: 'Guide', archived: false }])
+
+		sync.handle({ type: 'catalogCamera:removed', id: 'k1' })
+		expect(catalog.cameras).toEqual([])
+		await settle(sync)
+		expect(sent).toEqual([])
+	})
+
+	test('two cameras never share a name without regard to case', () => {
+		const catalog = proxy<CatalogState>({ cameras: [{ id: 'k1', name: 'Main', archived: false }] })
+		expect(saveCatalogCamera(catalog, { name: 'main', archived: false })).toEqual({ ok: false, reason: 'nameTaken' })
+		expect(saveCatalogCamera(catalog, { name: 'MAIN', archived: true }, 'k1')).toMatchObject({ ok: true })
 	})
 })
 
@@ -455,7 +496,7 @@ describe('events of the tab own writes', () => {
 
 	test('an event published before the answer of a deletion never deletes it again', async () => {
 		const tab: { sync?: WorkspaceSync } = {}
-		const { sites, sync, sent } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], profiles: [record('p1')] }, ({ method, path }) => {
+		const { sites, sync, sent } = setup({ connections: [], sites: [{ id: 's1', ...HOME, revision: 1 }], cameras: [], profiles: [record('p1')] }, ({ method, path }) => {
 			if (method === 'DELETE') tab.sync!.handle({ type: 'observingSite:removed', id: path.split('/').at(-1)! })
 			return undefined
 		})

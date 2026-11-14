@@ -5,6 +5,8 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
+import type { BindableDevice } from '../equipment/catalog'
+import { CatalogCameraNotice } from '../equipment/CatalogCameraNotice'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { formatDegrees, formatPixelLength, formatPixelPosition, formatTemperature, formatZonedDateTime } from '../format'
@@ -186,7 +188,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 			<CameraAcquisitionSection id="images.guiding.acquisition" device={device} exposure={exposure} capabilities={capabilities} description="The guide frames are LIGHTs taken with the camera settings of Camera Acquisition, shown as the latest frame of the camera and never saved.">
 				<ExposureTimeInput value={settings.exposureTime} exposure={guidingExposureRange(capabilities?.exposure)} disabled={pending} onChange={changeExposure} />
 			</CameraAcquisitionSection>
-			<DarkSection session={running ? session : undefined} enabled={settings.useCalibrationLibraryDark} disabled={pending} onEnabled={(useCalibrationLibraryDark) => update({ useCalibrationLibraryDark })} />
+			<DarkSection device={device} session={running ? session : undefined} enabled={settings.useCalibrationLibraryDark} disabled={pending} onEnabled={(useCalibrationLibraryDark) => update({ useCalibrationLibraryDark })} />
 			<CameraStarDetectionSection
 				id="images.guiding.star-detection"
 				device={device}
@@ -298,6 +300,8 @@ const DARK_STATE_LABELS: Readonly<Record<NonNullable<GuidingSessionSummary['dark
 }
 
 interface DarkSectionProps {
+	// Guide camera, whose camera of the Equipment Catalog the darks come from.
+	readonly device: BindableDevice | undefined
 	// Running session, whose dark is shown and changed; absent while none runs.
 	readonly session?: GuidingSessionSummary
 	// Whether the form subtracts a dark.
@@ -309,7 +313,7 @@ interface DarkSectionProps {
 
 // Master dark of the guide frames: whether the form subtracts one, and for a running session, which one, how it went,
 // and the masters matching its frames, of which one can be pinned.
-function DarkSection({ session, enabled, disabled, onEnabled }: DarkSectionProps) {
+function DarkSection({ device, session, enabled, disabled, onEnabled }: DarkSectionProps) {
 	const [candidates, setCandidates] = useState<GuidingDarkCandidates['candidates']>([])
 	const dark = session?.darkCalibration
 	const sessionId = session?.sessionId
@@ -339,6 +343,7 @@ function DarkSection({ session, enabled, disabled, onEnabled }: DarkSectionProps
 	return (
 		<CollapsibleSection id="images.guiding.dark" title="Dark" defaultOpen={false}>
 			<Checkbox label="Subtract a Calibration Library dark" checked={enabled} disabled={disabled} onChange={change} />
+			{enabled && <CatalogCameraNotice device={device} lead="Darks come from" purpose="to use the Calibration Library" />}
 			{session && dark && (
 				<>
 					<DataList>

@@ -24,6 +24,9 @@ import { WheelCommands } from './wheels'
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-flatwizard-test-'))
 const disposables: Disposable[] = []
 
+// Camera of the Equipment Catalog the test camera is bound to.
+const CATALOG_CAMERA = 'catalog-camera'
+
 afterEach(() => {
 	for (const disposable of disposables.splice(0).toReversed()) disposable[Symbol.dispose]()
 })
@@ -114,6 +117,8 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	const events: FlatWizardEvent[] = []
 	const published: FlatFrameRegistration[] = []
 	const endings: FlatSessionEnd[] = []
+	// Whether the camera is bound to CATALOG_CAMERA in the Equipment Catalog.
+	const catalog = { bound: true }
 	const flatWizard = new FlatWizardSessions(
 		manager.devices,
 		(connectionId) => manager.client(connectionId),
@@ -129,6 +134,7 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 		undefined,
 		(frame) => published.push(frame),
 		(ended) => endings.push(ended),
+		{ cameraOf: () => (catalog.bound ? CATALOG_CAMERA : undefined) },
 	)
 
 	const devices = manager.devices.list(client)
@@ -156,6 +162,7 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	const session = async (sessionId: string) => (await flatWizard.session(sessionId).json()) as FlatWizardSession
 
 	return {
+		catalog,
 		published,
 		endings,
 		id,
@@ -198,9 +205,18 @@ describe('Flat Wizard sessions', () => {
 		await waitUntil(ended, 60000)
 
 		expect(published).toHaveLength(3)
-		expect(published[0]).toMatchObject({ sessionId, filter: summary()!.filters[0].name })
+		expect(published[0]).toMatchObject({ sessionId, cameraId: CATALOG_CAMERA, filter: summary()!.filters[0].name })
 		expect(published[0].cameraName).toBeString()
 		expect(existsSync(published[0].path)).toBeTrue()
+	})
+
+	test('a camera bound to no camera of the Equipment Catalog is refused', async () => {
+		const { id, cameraId, flatWizard, directory, catalog, events } = await setup()
+		catalog.bound = false
+		const refused = flatWizard.start(id, cameraId, request(directory))
+		expect(refused.status).toBe(409)
+		expect(await refused.json()).toMatchObject({ code: 'cameraNotCataloged' })
+		expect(events).toEqual([])
 	})
 
 	test('a session that asked for masters hands its completed filters to the library once it ended, and one that did not, none', async () => {

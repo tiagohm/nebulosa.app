@@ -34,8 +34,8 @@ import { type ApiFetch, browserFetch, jsonInit, responseError, tryFetchJson } fr
 export interface CalibrationFilter {
 	// Role.
 	readonly kind?: CalibrationKind
-	// Camera name.
-	readonly camera?: string
+	// Camera of the Equipment Catalog.
+	readonly cameraId?: string
 	// State of the file, for frames.
 	readonly status?: SourceStatus
 	// Text of a file name, for frames.
@@ -174,7 +174,7 @@ export function loadCalibrationSources(state: CalibrationLibraryRuntime, filter:
 
 // Fetches a page of masters.
 export function loadCalibrationMasters(state: CalibrationLibraryRuntime, filter: CalibrationFilter, page: number, request: ApiFetch = browserFetch) {
-	return loadPage(state, 'masters', `${BASE_URL}/masters?${query({ kind: filter.kind, camera: filter.camera }, page)}`, request, (masters) => {
+	return loadPage(state, 'masters', `${BASE_URL}/masters?${query({ kind: filter.kind, cameraId: filter.cameraId }, page)}`, request, (masters) => {
 		state.masters = masters as Page<CalibrationMasterSummary>
 	})
 }

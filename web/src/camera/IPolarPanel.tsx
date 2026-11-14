@@ -5,6 +5,8 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
+import type { BindableDevice } from '../equipment/catalog'
+import { CatalogCameraNotice, useBoundCamera } from '../equipment/CatalogCameraNotice'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { formatArcmin, formatArcsec, formatClockTime, formatDegrees, formatExposureTime, formatSignedArcmin, formatTemperature, MISSING } from '../format'
@@ -142,7 +144,7 @@ export function IPolarSections({ device, availability, mount, settings: identity
 			>
 				<ExposureTimeInput value={shown.exposureTime} exposure={capabilities?.exposure} disabled={locked} onChange={(exposureTime) => update({ exposureTime })} />
 			</CameraAcquisitionSection>
-			<DarkSection dark={shown.dark ?? DEFAULT_IPOLAR_DARK_SETTINGS} exposureTime={shown.exposureTime} locked={locked} session={running ? session : undefined} onChange={(patch) => update({ dark: { ...(settings.dark ?? DEFAULT_IPOLAR_DARK_SETTINGS), ...patch } })} />
+			<DarkSection device={device} dark={shown.dark ?? DEFAULT_IPOLAR_DARK_SETTINGS} exposureTime={shown.exposureTime} locked={locked} session={running ? session : undefined} onChange={(patch) => update({ dark: { ...(settings.dark ?? DEFAULT_IPOLAR_DARK_SETTINGS), ...patch } })} />
 			<CollapsibleSection id="images.ipolar.rotation" title="Rotation">
 				{automatic ? (
 					<>
@@ -327,6 +329,8 @@ function SessionState({ session }: { readonly session: IPolarSessionSummary }) {
 }
 
 interface DarkSectionProps {
+	// Camera of the session, whose camera of the Equipment Catalog the darks come from.
+	readonly device: BindableDevice | undefined
 	// Master dark of the form, or the one a running session applies.
 	readonly dark: IPolarDarkSettings
 	// Exposure time of the frames, in seconds, which a master must have exactly.
@@ -342,22 +346,23 @@ interface DarkSectionProps {
 // Option of the master selector meaning no master chosen yet.
 const NO_MASTER = ''
 
-// The master dark of the Calibration Library the frames are solved less: the operator pins one (nothing identifies the
-// camera a master came from, so none is chosen automatically), what a frame it does not fit does, and, while a session
-// runs, how it went for the latest frame. The masters are listed from the library; the server checks the pinned one
-// against the header of every frame.
-function DarkSection({ dark, exposureTime, locked, session, onChange }: DarkSectionProps) {
+// The master dark of the Calibration Library the frames are solved less: the operator pins one among the darks of the
+// camera of the Equipment Catalog the camera is bound to (none is chosen automatically), what a frame it does not fit does,
+// and, while a session runs, how it went for the latest frame. The masters are listed from the library; the server checks
+// the pinned one against the camera and the header of every frame.
+function DarkSection({ device, dark, exposureTime, locked, session, onChange }: DarkSectionProps) {
 	const [masters, setMasters] = useState<readonly CalibrationMasterSummary[]>()
 	const exposure = Math.round(exposureTime * 1e6)
+	const cameraId = useBoundCamera(device)
 
 	useEffect(() => {
 		if (!dark.enabled || session) return
 		let current = true
-		void loadLiveMasters('dark').then((loaded) => current && setMasters(loaded))
+		void loadLiveMasters('dark', cameraId).then((loaded) => current && setMasters(loaded))
 		return () => {
 			current = false
 		}
-	}, [dark.enabled, session])
+	}, [dark.enabled, session, cameraId])
 
 	const ids = (masters ?? []).map((master) => String(master.masterId))
 	const selected = dark.masterId === undefined ? NO_MASTER : String(dark.masterId)
@@ -389,6 +394,7 @@ function DarkSection({ dark, exposureTime, locked, session, onChange }: DarkSect
 	return (
 		<CollapsibleSection id="images.ipolar.dark" title="Dark">
 			<Checkbox label="Subtract a Calibration Library dark" checked={dark.enabled} disabled={locked} onChange={(enabled) => onChange({ enabled })} />
+			{dark.enabled && <CatalogCameraNotice device={device} lead="Darks come from" purpose="to use the Calibration Library" />}
 			{dark.enabled && (
 				<>
 					{session ? (

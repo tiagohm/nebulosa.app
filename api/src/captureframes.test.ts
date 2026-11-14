@@ -6,6 +6,7 @@ import { type CaptureFrameEvent, type CaptureFrameOrigin, type CaptureFramePage,
 import type { CaptureFrame } from './captures'
 import { AppDatabase } from './database'
 import { ImageStore } from './images'
+import { Workspace } from './workspace'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-capture-frames-'))
 const disposables: Disposable[] = []
@@ -72,6 +73,26 @@ describe('frames', () => {
 		expect(page.latest).toMatchObject({ frameId: 'session:1', availability: 'memory', width: 8, height: 4, acquisition: { exposure: 2.5 } })
 		expect(page.frames).toEqual([])
 		expect(events.at(-1)).toMatchObject({ type: 'captureFrame:updated', frame: { frameId: 'session:1' } })
+	})
+
+	test('a saved frame records the camera of the Equipment Catalog its device was bound to when it was taken, read back by path', async () => {
+		const database = AppDatabase.memory()
+		new Workspace(database).saveCatalogCamera('main', { name: 'Main', archived: false, revision: 0 })
+		let bound: string | undefined = 'main'
+		const { registry, preview } = setup({ database, catalog: { cameraOf: () => bound } })
+		const first = join(root, 'cataloged-1.fit')
+		const second = join(root, 'cataloged-2.fit')
+		await preview(1, { path: first })
+		bound = undefined
+		await preview(2, { path: second })
+
+		expect(registry.cameraOfPath(first)).toBe('main')
+		expect(registry.cameraOfPath(second)).toBeUndefined()
+		expect(registry.cameraOfPath(join(root, 'never-captured.fit'))).toBeUndefined()
+
+		new Workspace(database).removeCatalogCamera('main')
+		registry.cameraRemoved('main')
+		expect(registry.cameraOfPath(first)).toBeUndefined()
 	})
 
 	test('a newer previewed-only frame replaces the latest, whose frame is expired and never listed', async () => {

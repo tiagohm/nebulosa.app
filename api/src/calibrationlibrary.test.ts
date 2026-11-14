@@ -12,6 +12,7 @@ import type { Integrator } from './calibrationlibrary.jobs'
 import { CalibrationLibraryStore, MASTER_FILE } from './calibrationlibrary.store'
 import { type DarkCapturePlan, type DarkFrameRecord, STAGING_DIRECTORY } from './darklibrarywizard.plan'
 import { AppDatabase } from './database'
+import { Workspace } from './workspace'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-calibration-test-'))
 const libraries: CalibrationLibrary[] = []
@@ -50,13 +51,20 @@ function directory(name: string) {
 	return path
 }
 
+// Adds the cameras 'camera' and 'other' to the Equipment Catalog of a database, which every frame refers to.
+function cataloged(database: AppDatabase) {
+	const workspace = new Workspace(database)
+	for (const id of ['camera', 'other']) workspace.saveCatalogCamera(id, { name: id, archived: false, revision: 0 })
+	return database
+}
+
 // Database of each directory, kept so a library opened again reads the same frames and masters.
 const databases = new Map<string, AppDatabase>()
 
 // A library in a directory of its own, over a database of its own.
 function open(integrator?: Integrator, busy?: () => boolean, base = directory('library')) {
 	const events: CalibrationLibraryEvent[] = []
-	const database = databases.get(base) ?? AppDatabase.memory()
+	const database = databases.get(base) ?? cataloged(AppDatabase.memory())
 	databases.set(base, database)
 	const store = new CalibrationLibraryStore(database, join(base, 'library'))
 	const library = new CalibrationLibrary(store, (event) => events.push(event), busy, integrator)
@@ -108,7 +116,7 @@ async function plan(library: CalibrationLibrary, base: string, frames: number, r
 	const dark: DarkCapturePlan = {
 		planId: 'plan',
 		createdAt: 1,
-		camera: { hardwareId: 'camera', name: 'Camera', driver: { executable: 'x', version: '1' } },
+		camera: { hardwareId: 'camera', cameraId: 'camera', name: 'Camera', driver: { executable: 'x', version: '1' } },
 		directory: base,
 		capture: { gain: 100, offset: 50, binX: 1, binY: 1, subframe: false, x: 0, y: 0, width: 0, height: 0, frameFormat: 'RAW16' },
 		groups: [group],
@@ -173,7 +181,7 @@ describe('darks', () => {
 		expect(items[0].metadata.exposure).toEqual({ value: 60000000, evidence: 'verified' })
 		expect(items[0].metadata.setTemperature).toEqual({ value: -10, evidence: 'planDeclared' })
 		expect(items[0].readiness).toBe('ready')
-		expect(library.snapshot().cameras).toEqual(['Camera'])
+		expect(library.snapshot().cameras).toEqual([{ cameraId: 'camera', frames: 3, masters: 0 }])
 		expect(hashes(join(base, 'frames'))).toEqual(framesBefore)
 	})
 
@@ -394,7 +402,7 @@ describe('imports', () => {
 		// A page of one still counts what every page holds ready.
 		expect(await library.importCandidates(job.jobId, 0, 1)).toMatchObject({ total: 4, ready: 2 })
 
-		const { committed } = await library.commitImport(job.jobId, {})
+		const { committed } = await library.commitImport(job.jobId, { cameraId: 'camera' })
 		expect(committed).toBe(2)
 		expect(hashes(folder)).toEqual(before)
 
@@ -420,9 +428,26 @@ describe('imports', () => {
 			['a.fit', 'bias'],
 			['b.fit', 'bias'],
 		])
-		expect((await library.commitImport(job.jobId, {})).committed).toBe(2)
+		expect((await library.commitImport(job.jobId, { cameraId: 'camera' })).committed).toBe(2)
 
 		await expect(library.startImport({ paths: [join(other, 'missing.fit')] })).rejects.toThrow('missing.fit cannot be read')
+	})
+
+	test('nothing enters without a camera of the catalog, which separates the frames it declares', async () => {
+		const { library, store } = open(local)
+		const folder = directory('import')
+		await writeFrame(join(folder, 'a.fit'), () => 100, { GAIN: 0, IMAGETYP: 'Bias Frame' })
+		await writeFrame(join(folder, 'b.fit'), () => 100, { GAIN: 0, IMAGETYP: 'Bias Frame' })
+		const job = await imported(library, folder)
+		const { items } = await library.importCandidates(job.jobId, 0, 50)
+
+		await expect(library.commitImport(job.jobId, { cameras: { [items[0].path]: 'camera' } })).rejects.toThrow('camera of the Equipment Catalog of 1 files')
+		expect(store.sourcesOf()).toEqual([])
+
+		expect((await library.commitImport(job.jobId, { cameraId: 'camera', cameras: { [items[1].path]: 'other' } })).committed).toBe(2)
+		const groups = (await library.groups({}, 0, 50)).items
+		expect(groups.map(({ metadata }) => metadata.cameraId).sort()).toEqual(['camera', 'other'])
+		expect((await library.groups({ cameraId: 'other' }, 0, 50)).total).toBe(1)
 	})
 
 	test('a role can be declared, and what a file states cannot be replaced', async () => {
@@ -432,7 +457,7 @@ describe('imports', () => {
 		const job = await imported(library, folder)
 		const { items } = await library.importCandidates(job.jobId, 0, 50)
 
-		await library.commitImport(job.jobId, { classifications: { [items[0].path]: 'bias' } })
+		await library.commitImport(job.jobId, { cameraId: 'camera', classifications: { [items[0].path]: 'bias' } })
 
 		const [source] = store.sourcesOf()
 		expect(source.kind).toBe('bias')
@@ -451,7 +476,7 @@ describe('imports', () => {
 		await writeFrame(join(folder, 'a.fit'), () => 100, { IMAGETYP: 'Bias Frame' })
 		const job = await imported(library, folder)
 
-		await library.commitImport(job.jobId, { copy: true })
+		await library.commitImport(job.jobId, { cameraId: 'camera', copy: true })
 
 		const [source] = store.sourcesOf()
 		expect(source.path).not.toContain(folder)
@@ -464,8 +489,8 @@ describe('imports', () => {
 		const folder = directory('import')
 		await writeFrame(join(folder, 'a.fit'), () => 100, { IMAGETYP: 'Bias Frame' })
 		const job = await imported(library, folder)
-		await library.commitImport(job.jobId, {})
-		await expect(library.commitImport(job.jobId, {})).rejects.toThrow('cannot be committed')
+		await library.commitImport(job.jobId, { cameraId: 'camera' })
+		await expect(library.commitImport(job.jobId, { cameraId: 'camera' })).rejects.toThrow('cannot be committed')
 	})
 })
 
@@ -529,7 +554,7 @@ describe('masters', () => {
 		const folder = directory('import')
 		await writeFrame(join(folder, 'other.fit'), () => 100, { IMAGETYP: 'Dark Frame', EXPTIME: 30 })
 		const job = await settled(library, (await library.startImport({ paths: [folder] })).jobId)
-		await library.commitImport(job.jobId, {})
+		await library.commitImport(job.jobId, { cameraId: 'camera' })
 		const sourceIds = store.sourcesOf().map(({ sourceId }) => sourceId)
 
 		const validation = await library.validate({ sourceIds })
@@ -752,7 +777,7 @@ describe('flats', () => {
 
 		for (let frame = 0; frame < 4; frame++) {
 			const path = await writeFrame(join(folder, `${frame}.fit`), (x, y) => pedestal + (20000 + frame * 2000) * response(x, y), flatKeywords)
-			await library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
+			await library.registerFlat({ path, sessionId: 's', cameraId: 'camera', cameraName: 'Camera' })
 		}
 
 		const [flat] = (await library.groups({ kind: 'flat' }, 0, 50)).items
@@ -778,7 +803,7 @@ describe('flats', () => {
 		const { library, store } = open(local)
 		const folder = directory('flats')
 		const paths = await Promise.all([0, 1].map((frame) => writeFrame(join(folder, `${frame}.fit`), () => 20000, flatKeywords)))
-		for (const path of paths) void library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
+		for (const path of paths) void library.registerFlat({ path, sessionId: 's', cameraId: 'camera', cameraName: 'Camera' })
 
 		await library.flatSessionEnded({ sessionId: 's', groups: [{ filter: 'L', paths: [...paths, join(folder, 'missing.fit')] }] })
 		expect(store.sourcesOf('flatWizard')).toHaveLength(2)
@@ -792,7 +817,7 @@ describe('flats', () => {
 
 		for (const [frame, exposure] of [0.01, 0.298523, 0.298523].entries()) {
 			const path = await writeFrame(join(folder, `${frame}.fit`), () => 20000, { ...flatKeywords, EXPTIME: exposure })
-			await library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
+			await library.registerFlat({ path, sessionId: 's', cameraId: 'camera', cameraName: 'Camera' })
 		}
 
 		const [flat] = (await library.groups({ kind: 'flat' }, 0, 50)).items
@@ -808,7 +833,7 @@ describe('flats', () => {
 		const { library } = open(local)
 		const folder = directory('flats')
 		const path = await writeFrame(join(folder, 'a.fit'), () => 20000, flatKeywords)
-		await library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
+		await library.registerFlat({ path, sessionId: 's', cameraId: 'camera', cameraName: 'Camera' })
 		const [flat] = (await library.groups({ kind: 'flat' }, 0, 50)).items
 
 		const validation = await library.validate({ groupId: flat.groupId })
@@ -843,7 +868,7 @@ describe('flats', () => {
 		const { flat, correction } = await prepared(library, base, 1000)
 		const folder = directory('bias')
 		const path = await writeFrame(join(folder, 'other.fit'), () => 20000, { ...flatKeywords, GAIN: 0 })
-		await library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
+		await library.registerFlat({ path, sessionId: 's', cameraId: 'camera', cameraName: 'Camera' })
 		const other = (await library.groups({ kind: 'flat' }, 0, 50)).items.find(({ groupId }) => groupId !== flat.groupId)!
 
 		const validation = await library.validate({ groupId: other.groupId, correction })
@@ -854,7 +879,7 @@ describe('flats', () => {
 		const { library, base } = open(local)
 		const { flat, correction } = await prepared(library, base, 1000)
 		const path = await writeFrame(join(directory('flats'), 'hot.fit'), () => 65000, flatKeywords)
-		await library.registerFlat({ path, sessionId: 's', cameraName: 'Camera' })
+		await library.registerFlat({ path, sessionId: 's', cameraId: 'camera', cameraName: 'Camera' })
 
 		const masterId = await built(library, { groupId: flat.groupId, correction, acknowledged: true })
 		const { diagnostics } = await library.master(masterId)
@@ -914,14 +939,17 @@ describe('resolve preview', () => {
 		const first = await built(library, { groupId: group.groupId })
 		const second = await built(library, { groupId: group.groupId })
 
-		const exact = await library.resolvePreview({ width: WIDTH, height: HEIGHT, channels: 1, binX: 1, binY: 1, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 60, temperature: -10 })
+		const exact = await library.resolvePreview({ cameraId: 'camera', width: WIDTH, height: HEIGHT, channels: 1, binX: 1, binY: 1, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 60, temperature: -10 })
 		expect(exact.candidates.map(({ masterId }) => masterId)).toEqual([second, first])
 
-		const unknown = await library.resolvePreview({ width: WIDTH, height: HEIGHT, channels: 1 })
+		const unknown = await library.resolvePreview({ cameraId: 'camera', width: WIDTH, height: HEIGHT, channels: 1 })
 		expect(unknown.candidates).toHaveLength(2)
 
-		const other = await library.resolvePreview({ width: WIDTH, height: HEIGHT, channels: 1, binX: 1, binY: 1, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 59, temperature: -10 })
+		const other = await library.resolvePreview({ cameraId: 'camera', width: WIDTH, height: HEIGHT, channels: 1, binX: 1, binY: 1, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 59, temperature: -10 })
 		expect(other.candidates).toEqual([])
+
+		const otherCamera = await library.resolvePreview({ cameraId: 'other', width: WIDTH, height: HEIGHT, channels: 1, binX: 1, binY: 1, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 60, temperature: -10 })
+		expect(otherCamera.candidates).toEqual([])
 	})
 })
 

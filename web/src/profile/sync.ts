@@ -1,14 +1,16 @@
-import type { MountRemoteProtocol, ObservingSite as SavedObservingSite, ProfileCameraForm, ProfilePreferenceKey, ProfileRecord, SavedConnection, ServerEvent, WorkspaceSnapshot, WorkspaceValue } from 'api'
+import type { CatalogCamera as SavedCatalogCamera, MountRemoteProtocol, ObservingSite as SavedObservingSite, ProfileCameraForm, ProfilePreferenceKey, ProfileRecord, SavedConnection, ServerEvent, WorkspaceSnapshot, WorkspaceValue } from 'api'
 import { proxy, snapshot, subscribe } from 'valtio'
 import type { Connection, ConnectionState } from '../connection/connection'
+import { type CatalogCamera, catalogState, type CatalogState } from '../equipment/catalog'
 import { type ApiFetch, browserFetch, jsonInit } from '../http'
 import { type ObservingSite, siteState, type SiteState } from '../location/site'
 import { nestedObject, newProfile, type ProfileState } from './profile'
 import { type CameraSettings, type FramingReference, type MountRemoteBinding, type Profile, PROFILE_SETTINGS_VERSION, type ProfileSettings, type SkyFramingSettings, type SkySettings } from './schema'
 
-// Synchronization of the workspace (the saved connections, the observing sites, and the profiles) with the server, which
-// keeps it for every tab and browser. The tab changes its stores at once, as before; this module compares what the tab
-// holds with what the server last confirmed, unit by unit (a saved connection, an observing site, the name, connection,
+// Synchronization of the workspace (the saved connections, the observing sites, the cameras of the Equipment Catalog, and
+// the profiles) with the server, which keeps it for every tab and browser. The tab changes its stores at once, as before;
+// this module compares what the tab holds with what the server last confirmed, unit by unit (a saved connection, an
+// observing site, a camera of the catalog, the name, connection,
 // and active site of a profile, an equipment setup, a preference, a camera form, a Mount Remote Control binding, a saved
 // framing, the notifications it read or dismissed), and writes each unit that changed, a moment after the latest change
 // and one request at a time. A unit with a revision is written from the revision it was
@@ -40,6 +42,7 @@ export const workspaceSyncState = proxy<WorkspaceSyncState>({ loaded: false })
 type Unit =
 	| { readonly kind: 'connection'; readonly connectionId: string }
 	| { readonly kind: 'site'; readonly siteId: string }
+	| { readonly kind: 'catalogCamera'; readonly cameraId: string }
 	| { readonly kind: 'profile'; readonly profileId: string }
 	| { readonly kind: 'equipment'; readonly profileId: string; readonly connectionId: string }
 	| { readonly kind: 'preference'; readonly profileId: string; readonly key: ProfilePreferenceKey }
@@ -55,10 +58,10 @@ interface LocalUnit {
 }
 
 // Kinds of unit written from their revision.
-const REVISIONED = new Set<Unit['kind']>(['connection', 'site', 'profile', 'preference', 'camera'])
+const REVISIONED = new Set<Unit['kind']>(['connection', 'site', 'catalogCamera', 'profile', 'preference', 'camera'])
 
 // Kinds of unit deleted on the server when the tab removes them.
-const DELETABLE = new Set<Unit['kind']>(['connection', 'site', 'profile', 'framing'])
+const DELETABLE = new Set<Unit['kind']>(['connection', 'site', 'catalogCamera', 'profile', 'framing'])
 
 // Kinds of unit reset to their default (written as null) when the tab removes them.
 const RESETTABLE = new Set<Unit['kind']>(['preference', 'camera'])
@@ -159,13 +162,18 @@ function siteUnit(siteId: string): Unit {
 	return { kind: 'site', siteId }
 }
 
+// Camera of the Equipment Catalog unit of an id.
+function catalogCameraUnit(cameraId: string): Unit {
+	return { kind: 'catalogCamera', cameraId }
+}
+
 // Name, connection, active site, and position unit of a profile.
 function profileUnit(profileId: string): Unit {
 	return { kind: 'profile', profileId }
 }
 
 // Returns every unit the tab holds, with the value each one would be written with.
-function localUnits(connections: readonly Connection[], sites: readonly ObservingSite[], profiles: readonly Profile[]): Map<string, LocalUnit> {
+function localUnits(connections: readonly Connection[], sites: readonly ObservingSite[], cameras: readonly CatalogCamera[], profiles: readonly Profile[]): Map<string, LocalUnit> {
 	const units = new Map<string, LocalUnit>()
 
 	const add = (unit: Unit, value: unknown) => {
@@ -174,6 +182,7 @@ function localUnits(connections: readonly Connection[], sites: readonly Observin
 
 	for (const { id, name, type, host, port } of connections) add(connectionUnit(id), { name, type, host, port })
 	for (const { id, name, latitude, longitude, elevation, timeZone } of sites) add(siteUnit(id), { name, latitude, longitude, elevation, timeZone })
+	for (const { id, ...camera } of cameras) add(catalogCameraUnit(id), camera)
 
 	for (const [sortOrder, { id: profileId, name, connectionId, activeSiteId, equipment, settings }] of profiles.entries()) {
 		add(profileUnit(profileId), { name, connectionId: connectionId ?? null, activeSiteId: activeSiteId ?? null, sortOrder })
@@ -208,6 +217,8 @@ function unitPath(unit: Unit): string {
 			return `/api/saved-connections/${e(unit.connectionId)}`
 		case 'site':
 			return `/api/observing-sites/${e(unit.siteId)}`
+		case 'catalogCamera':
+			return `/api/catalog-cameras/${e(unit.cameraId)}`
 		case 'profile':
 			return `/api/profiles/${e(unit.profileId)}`
 		case 'equipment':
@@ -230,6 +241,7 @@ function unitBody(unit: Unit, value: unknown, revision: number): unknown {
 	switch (unit.kind) {
 		case 'connection':
 		case 'site':
+		case 'catalogCamera':
 		case 'profile':
 			return { ...(value as object), revision }
 		case 'equipment':
@@ -242,17 +254,17 @@ function unitBody(unit: Unit, value: unknown, revision: number): unknown {
 	}
 }
 
-// Order in which units are written: what others refer to (saved connections and observing sites) is created first and
-// deleted last.
+// Order in which units are written: what others refer to (saved connections, observing sites, and cameras of the
+// catalog) is created first and deleted last.
 function writeOrder(unit: Unit, deleting: boolean) {
 	if (deleting) return unit.kind === 'framing' ? 3 : unit.kind === 'profile' ? 4 : 5
-	return unit.kind === 'connection' || unit.kind === 'site' ? 0 : unit.kind === 'profile' ? 1 : 2
+	return unit.kind === 'connection' || unit.kind === 'site' || unit.kind === 'catalogCamera' ? 0 : unit.kind === 'profile' ? 1 : 2
 }
 
 // Profile and saved connection a unit belongs to, whose deletion takes it along; none for a saved connection, an
-// observing site, or a profile itself.
+// observing site, a camera of the catalog, or a profile itself.
 function ownersOf(unit: Unit): { readonly profileId?: string; readonly connectionId?: string } {
-	if (unit.kind === 'connection' || unit.kind === 'site' || unit.kind === 'profile') return {}
+	if (unit.kind === 'connection' || unit.kind === 'site' || unit.kind === 'catalogCamera' || unit.kind === 'profile') return {}
 	return { profileId: unit.profileId, connectionId: 'connectionId' in unit ? unit.connectionId : undefined }
 }
 
@@ -267,11 +279,13 @@ interface RefusedBody {
 	readonly code?: string
 	readonly connection?: SavedConnection | null
 	readonly site?: SavedObservingSite | null
+	readonly camera?: SavedCatalogCamera | null
 	readonly profile?: ProfileRecord | null
 	readonly value?: WorkspaceValue | null
 }
 
-// Record of the workspace a server event changes (connection:<id>, site:<id>, or profile:<id>), or undefined for another event.
+// Record of the workspace a server event changes (connection:<id>, site:<id>, catalogCamera:<id>, or profile:<id>), or
+// undefined for another event.
 function eventRecord(event: ServerEvent): string | undefined {
 	switch (event.type) {
 		case 'savedConnection:updated':
@@ -282,6 +296,10 @@ function eventRecord(event: ServerEvent): string | undefined {
 			return `site:${event.site.id}`
 		case 'observingSite:removed':
 			return `site:${event.id}`
+		case 'catalogCamera:updated':
+			return `catalogCamera:${event.camera.id}`
+		case 'catalogCamera:removed':
+			return `catalogCamera:${event.id}`
 		case 'profile:updated':
 			return `profile:${event.profile.id}`
 		case 'profile:removed':
@@ -291,8 +309,8 @@ function eventRecord(event: ServerEvent): string | undefined {
 	}
 }
 
-// Synchronizes the saved connections of connections, the observing sites of sites, and the profiles of profiles with the
-// server, through request.
+// Synchronizes the saved connections of connections, the observing sites of sites, the cameras of the Equipment Catalog
+// of catalog, and the profiles of profiles with the server, through request.
 export class WorkspaceSync {
 	// Value of each unit as the server last confirmed it, encoded, by unit key.
 	readonly #synced = new Map<string, { readonly unit: Unit; readonly encoded: string }>()
@@ -321,8 +339,8 @@ export class WorkspaceSync {
 	// Events received before the workspace was first loaded, applied once it is.
 	#pending: ServerEvent[] = []
 
-	// connections, profiles, and sites are the stores of the tab, status what it shows, request the fetch of the server,
-	// and delay the time after the latest change before writing, in milliseconds.
+	// connections, profiles, sites, and catalog are the stores of the tab, status what it shows, request the fetch of the
+	// server, and delay the time after the latest change before writing, in milliseconds.
 	constructor(
 		readonly connections: ConnectionState,
 		readonly profiles: ProfileState,
@@ -330,12 +348,13 @@ export class WorkspaceSync {
 		readonly status: WorkspaceSyncState = workspaceSyncState,
 		readonly request: ApiFetch = browserFetch,
 		readonly delay: number = WRITE_DELAY,
+		readonly catalog: CatalogState = catalogState,
 	) {}
 
 	// Starts comparing and writing the changes of the tab, writing what is left when the page is hidden. Returns a
 	// function that stops it.
 	start(): () => void {
-		const stops = [subscribe(this.connections, () => this.#scan()), subscribe(this.sites, () => this.#scan()), subscribe(this.profiles, () => this.#scan())]
+		const stops = [subscribe(this.connections, () => this.#scan()), subscribe(this.sites, () => this.#scan()), subscribe(this.catalog, () => this.#scan()), subscribe(this.profiles, () => this.#scan())]
 		const hide = () => void this.flush()
 		globalThis.addEventListener?.('pagehide', hide)
 
@@ -413,6 +432,10 @@ export class WorkspaceSync {
 				return this.#reconcile(undefined, () => this.#applySite(event.site.id, event.site))
 			case 'observingSite:removed':
 				return this.#reconcile(undefined, () => this.#applySite(event.id, undefined))
+			case 'catalogCamera:updated':
+				return this.#reconcile(undefined, () => this.#applyCatalogCamera(event.camera.id, event.camera))
+			case 'catalogCamera:removed':
+				return this.#reconcile(undefined, () => this.#applyCatalogCamera(event.id, undefined))
 			case 'profile:updated':
 				return this.#reconcile(undefined, () => this.#applyProfile(event.profile))
 			case 'profile:removed':
@@ -435,7 +458,7 @@ export class WorkspaceSync {
 
 	// Units of the tab now.
 	#local() {
-		return localUnits(snapshot(this.connections).connections, snapshot(this.sites).sites, snapshot(this.profiles).profiles)
+		return localUnits(snapshot(this.connections).connections, snapshot(this.sites).sites, snapshot(this.catalog).cameras, snapshot(this.profiles).profiles)
 	}
 
 	// Marks the units whose value differs from what the server confirmed, or from what is being written to it, as
@@ -547,6 +570,7 @@ export class WorkspaceSync {
 			this.#reconcile(key, () => {
 				if (unit.kind === 'connection') this.#applyConnection(unit.connectionId, body.connection ?? undefined, true)
 				else if (unit.kind === 'site') this.#applySite(unit.siteId, body.site ?? undefined, true)
+				else if (unit.kind === 'catalogCamera') this.#applyCatalogCamera(unit.cameraId, body.camera ?? undefined, true)
 				else if (unit.kind === 'profile') body.profile ? this.#applyProfile(body.profile, true) : this.#removeProfile(unit.profileId, true)
 				else if (unit.kind === 'preference' || unit.kind === 'camera') this.#applyValue(unit, body.value ?? undefined, true)
 			})
@@ -585,7 +609,7 @@ export class WorkspaceSync {
 
 	// Applies a snapshot of the workspace: what it holds, in its order, and what it no longer holds goes, except what the
 	// tab is creating and the records an event changed while the snapshot was read (see handle).
-	#applySnapshot({ connections, sites, profiles }: WorkspaceSnapshot) {
+	#applySnapshot({ connections, sites, cameras, profiles }: WorkspaceSnapshot) {
 		const fresh = (record: string) => !this.#touched.has(record)
 		for (const connection of connections) if (fresh(`connection:${connection.id}`)) this.#applyConnection(connection.id, connection)
 		const savedConnections = new Set(connections.map(({ id }) => id))
@@ -598,6 +622,12 @@ export class WorkspaceSync {
 		for (const id of this.sites.sites.map((site) => site.id)) if (!savedSites.has(id) && fresh(`site:${id}`)) this.#applySite(id, undefined)
 		const siteOrder = new Map(sites.map(({ id }, index) => [id, index]))
 		this.sites.sites = [...this.sites.sites].sort((a, b) => (siteOrder.get(a.id) ?? Infinity) - (siteOrder.get(b.id) ?? Infinity))
+
+		for (const camera of cameras) if (fresh(`catalogCamera:${camera.id}`)) this.#applyCatalogCamera(camera.id, camera)
+		const savedCameras = new Set(cameras.map(({ id }) => id))
+		for (const id of this.catalog.cameras.map((camera) => camera.id)) if (!savedCameras.has(id) && fresh(`catalogCamera:${id}`)) this.#applyCatalogCamera(id, undefined)
+		const cameraOrder = new Map(cameras.map(({ id }, index) => [id, index]))
+		this.catalog.cameras = [...this.catalog.cameras].sort((a, b) => (cameraOrder.get(a.id) ?? Infinity) - (cameraOrder.get(b.id) ?? Infinity))
 
 		for (const profile of profiles) if (fresh(`profile:${profile.id}`)) this.#applyProfile(profile)
 		const savedProfiles = new Set(profiles.map(({ id }) => id))
@@ -645,6 +675,27 @@ export class WorkspaceSync {
 		const { name, latitude, longitude, elevation, timeZone } = site
 		if (index >= 0) this.sites.sites[index] = { id, name, latitude, longitude, elevation, timeZone }
 		else this.sites.sites.push({ id, name, latitude, longitude, elevation, timeZone })
+	}
+
+	// Applies a camera of the Equipment Catalog of the server, or its absence, unless the tab is changing it (or force).
+	#applyCatalogCamera(id: string, camera: SavedCatalogCamera | undefined, force = false) {
+		const key = unitKey(catalogCameraUnit(id))
+		if (!force && this.#busy(key)) return
+		const index = this.catalog.cameras.findIndex((saved) => saved.id === id)
+
+		if (!camera) {
+			this.#revisions.delete(key)
+			if (index >= 0) this.catalog.cameras.splice(index, 1)
+			return
+		}
+
+		const known = this.#revisions.get(key)
+		if (!force && known !== undefined && camera.revision < known) return
+		this.#revisions.set(key, camera.revision)
+		const { revision: _, ...fields } = camera
+		const local: CatalogCamera = structuredClone(fields)
+		if (index >= 0) this.catalog.cameras[index] = local
+		else this.catalog.cameras.push(local)
 	}
 
 	// Removes a profile the server no longer holds, unless the tab is creating or changing it (or force).

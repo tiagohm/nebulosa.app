@@ -4,6 +4,7 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
+import { CatalogCameraNotice, useBoundCamera } from '../equipment/CatalogCameraNotice'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
@@ -65,6 +66,7 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 	const operations = useSnapshot(operationsState)
 	const control = useSnapshot(controlRuntime)
 	const [choosingDirectory, setChoosingDirectory] = useState(false)
+	const catalogCamera = useBoundCamera(device)
 	const profile = activeProfile(profiles)
 	const settings = flatWizardSettings(profile.settings, identity)
 	const exposure = exposureSettings(profile.settings, identity)
@@ -192,9 +194,12 @@ export function FlatWizardSections({ device, availability, wheel, flatPanel, cov
 						Stop
 					</Button>
 				) : (
-					<Button disabled={blocker !== undefined || pending || device === undefined} onClick={start}>
-						Start
-					</Button>
+					<>
+						<Button disabled={blocker !== undefined || pending || device === undefined || catalogCamera === undefined} onClick={start}>
+							Start
+						</Button>
+						<CatalogCameraNotice device={device} lead="Frames will be recorded against" purpose="to acquire calibration frames" />
+					</>
 				)}
 				{blocker && <Notice>{blocker}</Notice>}
 				{running && <Notice>Stopping aborts the exposure in flight; the frames already saved stay.</Notice>}

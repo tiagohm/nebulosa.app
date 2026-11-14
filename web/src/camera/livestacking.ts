@@ -264,11 +264,14 @@ export function removeFilterCalibration(calibration: LiveStackingCalibration, fi
 // Most masters of each kind offered for a filter.
 const MASTERS_LIMIT = 200
 
-// Fetches the usable masters of a kind of the Calibration Library, newest first; undefined when they cannot be fetched. The
-// server checks each chosen master again against every frame, so the list only offers them.
-export async function loadLiveMasters(kind: LiveMasterKind, request: ApiFetch = browserFetch): Promise<readonly CalibrationMasterSummary[] | undefined> {
+// Fetches the usable masters of a kind of the Calibration Library taken by a camera of the Equipment Catalog, newest first;
+// none for a camera bound to none (cameraId undefined), and undefined when they cannot be fetched. The server checks each
+// chosen master again against every frame, so the list only offers them.
+export async function loadLiveMasters(kind: LiveMasterKind, cameraId: string | undefined, request: ApiFetch = browserFetch): Promise<readonly CalibrationMasterSummary[] | undefined> {
+	if (cameraId === undefined) return []
+
 	try {
-		const response = await request(`/api/calibration-library/masters?kind=${kind}&limit=${MASTERS_LIMIT}`)
+		const response = await request(`/api/calibration-library/masters?kind=${kind}&cameraId=${encodeURIComponent(cameraId)}&limit=${MASTERS_LIMIT}`)
 		if (!response.ok) return undefined
 		const page = (await response.json()) as { readonly items: readonly CalibrationMasterSummary[] }
 		return page.items.filter((master) => master.status === 'ready' || master.status === 'warning')

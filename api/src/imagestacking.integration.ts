@@ -13,7 +13,7 @@ import { type FitsHeader, FitsImageRowWriter, readFits } from 'nebulosa/src/io/f
 import { type FitsProvenanceFields, writeFitsProvenance } from 'nebulosa/src/io/formats/fits/provenance'
 import { uncompressedHeightKeyword, uncompressedNumberOfChannelsKeyword, uncompressedWidthKeyword } from 'nebulosa/src/io/formats/fits/util'
 import { fileDigest } from './calibrationlibrary.analysis'
-import type { CalibrationMetadata } from './calibrationlibrary.compatibility'
+import type { HeaderMetadata } from './calibrationlibrary.compatibility'
 import { type AnalysisCalibration, calibrateLight, type CohortMasters, readCohortMasters, readDigital } from './imagestacking.analysis'
 import { PRODUCT_COVERAGE_FILE, PRODUCT_MASTER_FILE, type StackingFrameNormalization, type StackingProductDiagnostics, type StackingRecipe } from './imagestacking.store'
 import { runWorkerJob } from './workerjob'
@@ -173,7 +173,7 @@ export function integrationPlan(width: number, height: number, channels: number,
 
 // Builds the descriptive header of a master from the metadata of its first frame: only what is known and true. Its
 // product in the project holds everything else. Exposure is written only when every frame had the same one.
-export function productHeader(metadata: CalibrationMetadata, name: string, frames: number, exposure: { readonly each?: number; readonly total: number }, object?: string): FitsHeader {
+export function productHeader(metadata: HeaderMetadata, name: string, frames: number, exposure: { readonly each?: number; readonly total: number }, object?: string): FitsHeader {
 	const provenance: FitsProvenanceFields = {
 		instrument: metadata.cameraName,
 		telescope: metadata.telescope.value,

@@ -21,6 +21,7 @@ import { controlRuntime, handleControlEvent, refreshStates } from './equipment-c
 import { domeMotionRuntime, handleDomeMotionEvent, refreshDomeMotions } from './equipment-control/domeMotion'
 import { focuserBacklashRuntime, handleFocuserBacklashEvent, refreshFocuserBacklash } from './equipment-control/focuserBacklash'
 import { handleIndiDirectoryEvent, indiDirectory, refreshIndiDirectory } from './equipment-control/indi/directory'
+import { cameraBindingsState, handleCameraBindingsEvent, refreshCameraBindings } from './equipment/catalog'
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { CAMERA_ROLES } from './equipment/roles'
 import { onClose, onOpen, subscribe } from './events'
@@ -104,6 +105,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => workspace.handle(event), refresh: () => workspace.refresh() },
 	{ handle: (event) => handleConnectionEvent(connectionState, event), refresh: () => refreshServers(connectionState) },
 	{ handle: (event) => handleDeviceEvent(deviceState, event), refresh: () => refreshDevices(deviceState) },
+	{ handle: (event) => handleCameraBindingsEvent(cameraBindingsState, event), refresh: () => refreshCameraBindings(cameraBindingsState) },
 	{ handle: (event) => handleIndiDirectoryEvent(indiDirectory, event), refresh: () => refreshIndiDirectory(indiDirectory) },
 	{ handle: (event) => handleControlEvent(controlRuntime, event), refresh: () => refreshStates(controlRuntime) },
 	{ handle: (event) => handleDomeMotionEvent(domeMotionRuntime, event), refresh: () => refreshDomeMotions(domeMotionRuntime) },

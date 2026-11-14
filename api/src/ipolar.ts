@@ -29,6 +29,7 @@ import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
+import { type CameraBindings, NO_CAMERA_BINDINGS } from './equipmentcatalog'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import { type OperationDevice, type OperationRegistry, settledResult } from './operations'
@@ -422,7 +423,8 @@ export class IPolarSessions {
 	// session, commander rotates the mounts in automatic mode (the one of the mount commands), capturer takes the frames
 	// (the one of the capture service), images receives the frames, frames records them as the latest frame of their
 	// camera and closes them, plateSolving solves them, library gives the master dark a session pinned, and listener
-	// receives every session change synchronously. auxiliaryDir is the parent of the temporary directory of each session.
+	// receives every session change synchronously. auxiliaryDir is the parent of the temporary directory of each session,
+	// and catalog resolves the camera of the Equipment Catalog a camera is bound to, whose darks alone a session pins.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -435,6 +437,7 @@ export class IPolarSessions {
 		readonly library: IPolarDarkLibrary,
 		readonly listener: IPolarListener,
 		readonly auxiliaryDir: string = tmpdir(),
+		readonly catalog: CameraBindings = NO_CAMERA_BINDINGS,
 	) {
 		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'ipolar:updated', session }))
 	}
@@ -464,10 +467,14 @@ export class IPolarSessions {
 		const preparation = await this.plateSolving.prepare(request.solving)
 		if (!preparation) return unsupported('The plate solver is not configured; set it up in Settings → External Tools')
 
-		// The pinned dark is checked before anything starts; every frame checks it again against its own header.
+		// The pinned dark is checked before anything starts, which must be of the camera of the Equipment Catalog the camera
+		// is bound to; every frame checks it again against its own header.
 		if (request.dark) {
 			const master = await this.library.pinnedMaster({ masterId: request.dark.masterId, digest: request.dark.digest })
 			if (!master || master.kind !== 'dark') return unsupported(`The pinned dark #${request.dark.masterId} is no longer in the Calibration Library, or it changed`)
+			const cameraId = this.catalog.cameraOf({ connectionId, deviceId })
+			if (cameraId === undefined) return unsupported('Bind the camera to a camera of the Equipment Catalog to use the Calibration Library')
+			if (master.metadata.cameraId !== cameraId) return unsupported(`The pinned dark #${request.dark.masterId} was taken by another camera`)
 		}
 
 		// The same request, sent twice, may have started its session while this one was prepared.

@@ -5,7 +5,7 @@ import type { GlobalNormalizationMode } from 'nebulosa/src/imaging/processing/no
 import type { ImageInterpolationMode, ImageRegistrationTransform } from 'nebulosa/src/imaging/processing/registration'
 import type { StackingCombinationMethod, StackingWeightingMode } from 'nebulosa/src/imaging/processing/stacker'
 import type { SubframeQualityMetrics, SubframeSelectionOptions } from 'nebulosa/src/imaging/processing/subframe.selector'
-import type { CalibrationMetadata, MasterReference } from './calibrationlibrary.compatibility'
+import type { HeaderMetadata, MasterReference } from './calibrationlibrary.compatibility'
 import { fileNameOf, MAX_PAGE_SIZE, type Page, type SourceFormat, type SourceStatus } from './calibrationlibrary.store'
 import { type AppDatabase, DEFAULT_DATA_DIRECTORY } from './database'
 import type { StackingRole } from './imagestacking.sources'
@@ -95,6 +95,8 @@ export interface StackingCohortDecision {
 	// Key of its filter group, and of its acquisition settings.
 	readonly groupKey: string
 	readonly cohortKey: string
+	// Camera of the Equipment Catalog an operator declared for its lights, none of which names one; absent while none is.
+	readonly cameraId?: string
 	// Masters chosen; absent while none is.
 	readonly calibration?: StackingCalibration
 }
@@ -291,7 +293,10 @@ export interface StackingSource {
 	readonly role: StackingRole
 	// Its filter: the name its header writes, trimmed, or the one an operator declared; None when neither names one.
 	readonly filterKey: string
-	// Key of its acquisition settings.
+	// Camera of the Equipment Catalog the capture that saved it was bound to, read from the captured frames when it joined;
+	// absent for a frame no capture of this server recorded with a camera.
+	readonly cameraId?: string
+	// Key of its acquisition settings, its camera among them.
 	readonly cohortKey: string
 	// Target named by its header.
 	readonly object?: string
@@ -300,7 +305,7 @@ export interface StackingSource {
 	// Whether an operator left it out of stacks; absent when included.
 	readonly excluded?: true
 	// What is known about it.
-	readonly metadata: CalibrationMetadata
+	readonly metadata: HeaderMetadata
 	// What should be said about it.
 	readonly warnings: readonly string[]
 	// What the latest analysis measured.
@@ -362,6 +367,7 @@ interface CohortRow {
 	readonly cohort_id: string
 	readonly group_key: string
 	readonly cohort_key: string
+	readonly camera_id: string | null
 	readonly calibration: string | null
 }
 
@@ -378,6 +384,7 @@ interface SourceRow {
 	readonly status: SourceStatus
 	readonly role: StackingRole
 	readonly filter_key: string
+	readonly camera_id: string | null
 	readonly cohort_key: string
 	readonly object: string
 	readonly observed_at: number | null
@@ -388,7 +395,7 @@ interface SourceRow {
 }
 
 // Columns of stack_sources read into a StackingSource.
-const SOURCE_COLUMNS = 'source_id, project_id, path, format, identity, bytes, mtime_ms, digest, status, role, filter_key, cohort_key, object, observed_at, excluded, metadata, warnings, analysis'
+const SOURCE_COLUMNS = 'source_id, project_id, path, format, identity, bytes, mtime_ms, digest, status, role, filter_key, camera_id, cohort_key, object, observed_at, excluded, metadata, warnings, analysis'
 
 // Returns the project of a row.
 function rowProject(row: ProjectRow): StackingProject {
@@ -402,6 +409,7 @@ function rowCohort(row: CohortRow): StackingCohortDecision {
 		cohortId: row.cohort_id,
 		groupKey: row.group_key,
 		cohortKey: row.cohort_key,
+		...(row.camera_id !== null && { cameraId: row.camera_id }),
 		...(row.calibration !== null && { calibration: JSON.parse(row.calibration) as StackingCalibration }),
 	}
 }
@@ -420,11 +428,12 @@ function rowSource(row: SourceRow): StackingSource {
 		status: row.status,
 		role: row.role,
 		filterKey: row.filter_key,
+		...(row.camera_id !== null && { cameraId: row.camera_id }),
 		cohortKey: row.cohort_key,
 		...(row.object !== '' && { object: row.object }),
 		...(row.observed_at !== null && { observedAt: row.observed_at }),
 		...(row.excluded === 1 && { excluded: true }),
-		metadata: JSON.parse(row.metadata) as CalibrationMetadata,
+		metadata: JSON.parse(row.metadata) as HeaderMetadata,
 		warnings: JSON.parse(row.warnings) as string[],
 		...(row.analysis !== null && { analysis: JSON.parse(row.analysis) as StackingFrameAnalysis }),
 	}
@@ -676,7 +685,7 @@ export class ImageStackingStore {
 	// Writes frames and marks their project changed at `now`, in one transaction.
 	putSources(projectId: string, sources: readonly StackingSource[], now: number) {
 		this.database.write(() => {
-			const statement = this.database.db.query(`INSERT OR REPLACE INTO stack_sources (${SOURCE_COLUMNS}, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			const statement = this.database.db.query(`INSERT OR REPLACE INTO stack_sources (${SOURCE_COLUMNS}, name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 
 			for (const source of sources) {
 				statement.run(
@@ -691,6 +700,7 @@ export class ImageStackingStore {
 					source.status,
 					source.role,
 					source.filterKey,
+					source.cameraId ?? null,
 					source.cohortKey,
 					source.object ?? '',
 					source.observedAt ?? null,
@@ -770,13 +780,15 @@ export class ImageStackingStore {
 
 	// Lists the calibration decisions of a project.
 	cohorts(projectId: string) {
-		return this.database.db.query<CohortRow, [string]>('SELECT cohort_id, group_key, cohort_key, calibration FROM stack_cohorts WHERE project_id = ?').all(projectId).map(rowCohort)
+		return this.database.db.query<CohortRow, [string]>('SELECT cohort_id, group_key, cohort_key, camera_id, calibration FROM stack_cohorts WHERE project_id = ?').all(projectId).map(rowCohort)
 	}
 
 	// Writes the decision of a cohort and marks its project changed at `now`.
 	putCohort(projectId: string, decision: StackingCohortDecision, now: number) {
 		this.database.write(() => {
-			this.database.db.query('INSERT OR REPLACE INTO stack_cohorts (project_id, cohort_id, group_key, cohort_key, calibration) VALUES (?, ?, ?, ?, ?)').run(projectId, decision.cohortId, decision.groupKey, decision.cohortKey, decision.calibration === undefined ? null : JSON.stringify(decision.calibration))
+			this.database.db
+				.query('INSERT OR REPLACE INTO stack_cohorts (project_id, cohort_id, group_key, cohort_key, camera_id, calibration) VALUES (?, ?, ?, ?, ?, ?)')
+				.run(projectId, decision.cohortId, decision.groupKey, decision.cohortKey, decision.cameraId ?? null, decision.calibration === undefined ? null : JSON.stringify(decision.calibration))
 			this.#touch(projectId, now)
 		})
 	}

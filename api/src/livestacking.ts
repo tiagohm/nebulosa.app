@@ -7,10 +7,11 @@ import { readXisf } from 'nebulosa/src/io/formats/xisf/xisf'
 import { bufferSource } from 'nebulosa/src/io/io'
 import type { CalibrationMasterDetail } from './calibrationlibrary'
 import { fileDigest } from './calibrationlibrary.analysis'
-import { type CalibrationMetadata, type MasterReference, matchesTarget, stableId } from './calibrationlibrary.compatibility'
+import { type HeaderMetadata, type MasterReference, matchesTarget, stableId } from './calibrationlibrary.compatibility'
 import { type FileInspection, inspectFile, inspectHeader } from './calibrationlibrary.sources'
 import type { CapturedFrame, CaptureFrameSink, CaptureOutputMode } from './captures'
 import type { DeviceRegistry } from './devices'
+import { type CameraBindings, NO_CAMERA_BINDINGS } from './equipmentcatalog'
 import { errorResponse } from './http'
 import type { ImageInfo, ImageStore, LiveStackingProvenanceStack } from './images'
 import type { AnalysisCalibration } from './imagestacking.analysis'
@@ -184,6 +185,9 @@ export interface LiveStackingSession {
 	readonly connectionId: string
 	readonly deviceId: string
 	readonly cameraName: string
+	// Camera of the Equipment Catalog the camera was bound to when the session started, whose masters alone calibrate its
+	// frames; absent when it was bound to none, which calibrates nothing.
+	readonly cameraId?: string
 	readonly state: LiveStackingState
 	// Why it failed.
 	readonly error?: string
@@ -265,6 +269,8 @@ export interface LiveStackingOptions {
 	readonly processor?: LiveProcessorFactory
 	// Memory every session together may retain, in bytes.
 	readonly memoryBudget?: number
+	// Camera of the Equipment Catalog each camera is bound to; every camera is bound to none when absent.
+	readonly catalog?: CameraBindings
 }
 
 // Failure of a request, with its status and stable code.
@@ -281,7 +287,7 @@ class LiveStackingError extends Error {
 // What a frame was routed to before it was integrated.
 interface FrameRoute {
 	readonly filter: string
-	readonly metadata: CalibrationMetadata
+	readonly metadata: HeaderMetadata
 	readonly calibration?: LiveFilterCalibration
 }
 
@@ -329,7 +335,7 @@ interface Session {
 	readonly fields: LiveStackingFieldSummary[]
 	readonly cohorts: Map<string, LiveStackingCohort>
 	// Header of the first frame of each cohort, for the header of its export.
-	readonly cohortMetadata: Map<string, CalibrationMetadata>
+	readonly cohortMetadata: Map<string, HeaderMetadata>
 	// Captures waiting at the gate, released when the queue frees or the session ends.
 	readonly waiters: Set<() => void>
 	readonly views: ViewDocument[]
@@ -367,7 +373,7 @@ async function inspectBytes(bytes: Uint8Array<ArrayBuffer>): Promise<FileInspect
 }
 
 // Returns the acquisition summary of a cohort from the header of its first frame.
-function acquisitionOf(metadata: CalibrationMetadata): LiveCohortAcquisition {
+function acquisitionOf(metadata: HeaderMetadata): LiveCohortAcquisition {
 	return {
 		width: metadata.width,
 		height: metadata.height,
@@ -417,6 +423,8 @@ export class LiveStacking implements Disposable {
 	readonly #sessions = new Map<string, Session>()
 	readonly #processor: LiveProcessorFactory
 	readonly memoryBudget: number
+	// Camera of the Equipment Catalog each camera is bound to.
+	readonly #cameras: CameraBindings
 	readonly #detach: () => void
 	#revision = 0
 	#opened?: Promise<void>
@@ -436,6 +444,7 @@ export class LiveStacking implements Disposable {
 	) {
 		this.#processor = options.processor ?? ((recipe) => new WorkerProcessor(recipe))
 		this.memoryBudget = options.memoryBudget ?? DEFAULT_LIVE_STACKING_MEMORY_BUDGET
+		this.#cameras = options.catalog ?? NO_CAMERA_BINDINGS
 
 		this.#detach = captures.listenFrames({
 			wants: (connectionId, deviceId) => this.#wants(connectionId, deviceId),
@@ -485,9 +494,10 @@ export class LiveStacking implements Disposable {
 		const recipe = recipeOf(request.recipe)
 		const calibration = request.calibration ?? { filters: {}, otherwise: 'uncalibrated' }
 		const sessionId = Bun.randomUUIDv7()
+		const cameraId = this.#cameras.cameraOf({ connectionId, deviceId })
 
 		const session: Session = {
-			summary: { sessionId, connectionId, deviceId, cameraName: camera.name, startedAt: Date.now(), recipe, calibration, newFieldRequested: false, retainedBytes: 0, products: [], revision: 0 },
+			summary: { sessionId, connectionId, deviceId, cameraName: camera.name, ...(cameraId !== undefined && { cameraId }), startedAt: Date.now(), recipe, calibration, newFieldRequested: false, retainedBytes: 0, products: [], revision: 0 },
 			phase: 'active',
 			token: request.token,
 			processor: this.#processor(recipe),
@@ -904,14 +914,15 @@ export class LiveStacking implements Disposable {
 
 		const calibration: { -readonly [K in keyof AnalysisCalibration]: AnalysisCalibration[K] } = {}
 		const pins: MasterReference[] = []
-		const target = frameTarget(metadata)
+		const { cameraId } = session.summary
 
 		for (const kind of LIVE_MASTER_KINDS) {
 			const pin = chosen?.[kind]
 			if (!pin) continue
+			if (cameraId === undefined) return this.#finish(session, entry, 'rejected', true)
 			const master = await this.masters.pinnedMaster(pin)
 			if (!master) return this.#finish(session, entry, 'rejected', true)
-			if (master.kind !== kind || !matchesTarget(kind, master.metadata, target)) return this.#finish(session, entry, 'rejected', true)
+			if (master.kind !== kind || !matchesTarget(kind, master.metadata, frameTarget(metadata, cameraId))) return this.#finish(session, entry, 'rejected', true)
 			calibration[kind] = { path: master.path, fullScale: master.units === 'dimensionless' ? 1 : master.fullScaleDn }
 			pins.push(pin)
 		}

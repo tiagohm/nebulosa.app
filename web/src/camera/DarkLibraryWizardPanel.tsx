@@ -4,6 +4,7 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
+import { CatalogCameraNotice, useBoundCamera } from '../equipment/CatalogCameraNotice'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { FileExplorerModal } from '../files/FileExplorerModal'
@@ -102,6 +103,7 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 	const operations = useSnapshot(operationsState)
 	const control = useSnapshot(controlRuntime)
 	const [choosingDirectory, setChoosingDirectory] = useState(false)
+	const catalogCamera = useBoundCamera(device)
 	const profile = activeProfile(profiles)
 	const settings = darkLibraryWizardSettings(profile.settings, identity)
 	const exposure = exposureSettings(profile.settings, identity)
@@ -280,9 +282,10 @@ export function DarkLibraryWizardSections({ device, availability, wheel, flatPan
 				) : (
 					<>
 						{warning && <p className="m-0 text-xs leading-4 text-warning">{warning}</p>}
-						<Button disabled={blocker !== undefined || pending || device === undefined} onClick={start}>
+						<Button disabled={blocker !== undefined || pending || device === undefined || catalogCamera === undefined} onClick={start}>
 							Start
 						</Button>
+						<CatalogCameraNotice device={device} lead="Frames will be recorded against" purpose="to acquire calibration frames" />
 					</>
 				)}
 				{blocker && <Notice>{blocker}</Notice>}

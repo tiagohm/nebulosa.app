@@ -6,6 +6,7 @@ const verified = <T>(value: T) => ({ value, evidence: 'verified' }) as const
 
 function metadata(patch: Partial<CalibrationMetadata> = {}): CalibrationMetadata {
 	return {
+		cameraId: 'camera-1',
 		exposure: verified(180000000),
 		setTemperature: verified(-10),
 		sensorTemperature: verified(-10.1),
@@ -29,7 +30,7 @@ describe('keys', () => {
 	test('every physical property separates frames', () => {
 		const base = compatibilityKey('dark', metadata())
 
-		for (const patch of [{ gain: verified(101) }, { offset: verified(51) }, { binX: verified(2) }, { readoutMode: verified('RAW8') }, { originX: 16 }, { cfa: 'RGGB' }, { bitpix: 8 }, { width: 999 }, { exposure: verified(179900000) }, { setTemperature: verified(-5) }]) {
+		for (const patch of [{ cameraId: 'camera-2' }, { gain: verified(101) }, { offset: verified(51) }, { binX: verified(2) }, { readoutMode: verified('RAW8') }, { originX: 16 }, { cfa: 'RGGB' }, { bitpix: 8 }, { width: 999 }, { exposure: verified(179900000) }, { setTemperature: verified(-5) }]) {
 			expect(compatibilityKey('dark', metadata(patch))).not.toBe(base)
 		}
 	})
@@ -43,8 +44,9 @@ describe('keys', () => {
 		expect(compatibilityKey('flat', metadata({ filter: verified('L') }))).not.toBe(compatibilityKey('flat', metadata({ filter: verified('R') })))
 	})
 
-	test('frames of the same settings combine whatever camera took them', () => {
+	test('the camera of the catalog separates frames, never the name a header gives', () => {
 		expect(compatibilityKey('dark', metadata({ cameraName: 'A' }))).toBe(compatibilityKey('dark', metadata({ cameraName: 'B' })))
+		expect(compatibilityKey('bias', metadata({ cameraId: 'camera-2' }))).not.toBe(compatibilityKey('bias', metadata()))
 	})
 })
 
@@ -108,11 +110,17 @@ describe('flat corrections', () => {
 		expect(flatCorrectionMismatch('darkFlat', metadata(), [flat])).toContain('exposure')
 		expect(flatCorrectionMismatch('bias', metadata(), [flat])).toBeUndefined()
 		expect(flatCorrectionMismatch('bias', metadata({ gain: verified(0) }), [flat])).toContain('Gain')
+		expect(flatCorrectionMismatch('bias', metadata({ cameraId: 'camera-2' }), [flat])).toContain('Camera')
 	})
 })
 
 describe('matching', () => {
-	const target = { width: 1000, height: 700, channels: 1, binX: 4, binY: 4, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 180, temperature: -10 }
+	const target = { cameraId: 'camera-1', width: 1000, height: 700, channels: 1, binX: 4, binY: 4, gain: 100, offset: 50, readoutMode: 'RAW16', exposure: 180, temperature: -10 }
+
+	test('a master of another camera never matches', () => {
+		expect(matchesTarget('dark', metadata({ cameraId: 'camera-2' }), target)).toBe(false)
+		expect(matchesTarget('bias', metadata({ cameraId: 'camera-2' }), target)).toBe(false)
+	})
 
 	test('an exact master matches, and there is no closest match', () => {
 		expect(matchesTarget('dark', metadata(), target)).toBe(true)
@@ -132,7 +140,7 @@ describe('matching', () => {
 
 	test('what either side does not know never refuses a master', () => {
 		expect(matchesTarget('dark', metadata({ gain: unknown }), target)).toBe(true)
-		expect(matchesTarget('dark', metadata(), { width: 1000, height: 700, channels: 1 })).toBe(true)
+		expect(matchesTarget('dark', metadata(), { cameraId: 'camera-1', width: 1000, height: 700, channels: 1 })).toBe(true)
 	})
 
 	test('a bias ignores exposure, and a flat needs the filter of the target', () => {

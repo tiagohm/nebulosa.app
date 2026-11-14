@@ -3,7 +3,8 @@
 // pure, so the policy can be read and tested apart from files and jobs. Exposures are integer microseconds, because
 // comparing canonical integers never merges 179.9 s with 180 s by a rounded label; temperatures are degrees Celsius.
 // Unknown is never a wildcard between frames: it stays visible, asks for a review, and never agrees with a known value.
-// Nothing identifies a physical camera: frames of the same settings and geometry combine whatever camera took them.
+// The camera of the Equipment Catalog that took a frame is always known and comes first: frames of different cameras
+// never combine, and a master only calibrates a target of its own camera.
 
 // Role of a calibration frame or master.
 export type CalibrationKind = 'dark' | 'bias' | 'darkFlat' | 'flat'
@@ -23,9 +24,10 @@ export interface Evidenced<T> {
 	readonly evidence: EvidenceLevel
 }
 
-// What is known about a frame or master. Sample geometry is always read from the file.
-export interface CalibrationMetadata {
-	// Name of the camera, shown to people and never compared.
+// What the header of a frame says, before the library knows which camera took it. Sample geometry is always read from
+// the file.
+export interface HeaderMetadata {
+	// Name of the camera the header or a wizard gives, shown to people and never compared.
 	readonly cameraName?: string
 	// Exposure, in integer microseconds.
 	readonly exposure: Evidenced<number>
@@ -62,6 +64,14 @@ export interface CalibrationMetadata {
 	// CFA origin offsets (XBAYROFF, YBAYROFF), in pixels.
 	readonly bayerOffsetX?: number
 	readonly bayerOffsetY?: number
+}
+
+// What is known about a frame or master of the library: its header, and the camera of the Equipment Catalog that took it.
+// The camera carries no evidence of its own: the origin of the frame (a Dark Library plan, a Flat Wizard session, an
+// import) says who declared it, and a master inherits it from its group.
+export interface CalibrationMetadata extends HeaderMetadata {
+	// Id of the camera of the Equipment Catalog that took it.
+	readonly cameraId: string
 }
 
 // Fields an override can set, each only while its value is unknown.
@@ -120,7 +130,7 @@ export interface MasterReference {
 }
 
 // Version of the compatibility policy. A change regroups frames and makes other masters, never older ones wrong.
-export const COMPATIBILITY_VERSION = 1
+export const COMPATIBILITY_VERSION = 2
 
 // Default combination of a master: 3 sigma on both sides, which keeps almost all Gaussian samples and removes impulses.
 export const DEFAULT_RECIPE: CalibrationRecipe = { method: 'sigmaClip', sigmaLow: 3, sigmaHigh: 3, maxIterations: 5 }
@@ -146,9 +156,10 @@ interface CompatibilityField {
 	readonly unknown?: FindingSeverity
 }
 
-// Properties every kind shares: sample geometry and the operating point of the sensor. A subframe origin an old file
-// leaves out stays unknown, and only a known different origin separates frames.
+// Properties every kind shares: the camera of the Equipment Catalog, sample geometry, and the operating point of the
+// sensor. A subframe origin an old file leaves out stays unknown, and only a known different origin separates frames.
 const SENSOR_FIELDS: readonly CompatibilityField[] = [
+	{ name: 'camera', label: 'Camera', read: ({ cameraId }) => cameraId },
 	{ name: 'size', label: 'Image size', read: ({ width, height, channels }) => `${width}x${height}x${channels}` },
 	{ name: 'bitpix', label: 'Sample format', read: ({ bitpix }) => bitpix },
 	{ name: 'origin', label: 'Subframe origin', read: ({ originX, originY }) => (originX === undefined && originY === undefined ? undefined : `${originX ?? 0},${originY ?? 0}`) },
@@ -278,8 +289,10 @@ export function flatCorrectionMismatch(kind: 'bias' | 'darkFlat', master: Calibr
 }
 
 // Light, or another target, described for a metadata-only preview of which masters could calibrate it. An absent value
-// is unknown.
+// is unknown, but its camera is always known.
 export interface CalibrationTarget {
+	// Camera of the Equipment Catalog that took it.
+	readonly cameraId: string
 	// Image size in pixels and channels per pixel.
 	readonly width: number
 	readonly height: number
@@ -305,7 +318,8 @@ export interface CalibrationTarget {
 	readonly filter?: string
 }
 
-// Returns whether a master can calibrate a target, from metadata alone: every property both sides know must agree, and
+// Returns whether a master can calibrate a target, from metadata alone: it must be of the camera of the target, every
+// property both sides know must agree, and
 // what either side does not know never refuses a master, since the operator chooses among those listed. There is no
 // closest match. A dark must be within the temperature spread limit of the temperatures of the target (of their range when
 // its frames vary, since a dark inside it differs from them no more than they differ from each other), a flat must share
@@ -315,6 +329,7 @@ export function matchesTarget(kind: CalibrationKind, master: CalibrationMetadata
 		return ours === undefined || theirs === undefined || ours === theirs
 	}
 
+	if (master.cameraId !== target.cameraId) return false
 	if (master.width !== target.width || master.height !== target.height || master.channels !== target.channels || master.cfa !== target.cfa) return false
 	if (!agrees(master.binX.value === undefined ? undefined : `${master.binX.value}x${master.binY.value ?? master.binX.value}`, target.binX === undefined ? undefined : `${target.binX}x${target.binY ?? target.binX}`)) return false
 	if (!agrees(master.gain.value, target.gain) || !agrees(master.offset.value, target.offset) || !agrees(master.readoutMode.value, target.readoutMode)) return false

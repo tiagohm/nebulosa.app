@@ -3,6 +3,7 @@ import { basename } from 'path'
 import type { CaptureFileState, CaptureFrame, CaptureSettings } from './captures'
 import type { ConnectionRegistryEvent } from './connection'
 import type { AppDatabase } from './database'
+import { type CameraBindings, NO_CAMERA_BINDINGS } from './equipmentcatalog'
 import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 import { ClientPresence } from './websocket'
@@ -39,6 +40,10 @@ import { ClientPresence } from './websocket'
 // origin it was recorded with. No directory is ever scanned. A row that cannot be written is reported on the console
 // and never fails the capture that produced it. Older saved frames are listed by pages read from the database, and kept
 // in memory once listed or opened, at most ARCHIVED_FRAMES per camera besides those with an open document.
+//
+// Every frame records, once, when the registry first learns of it, the camera of the Equipment Catalog its device is
+// bound to then, so binding the device again never changes it; a frame of a device bound to none records none, and a
+// capture is never refused for it. Image Stacking reads it back by path.
 
 // Saved frames listed per camera, newest first; older ones stay in the database only. Also the number of transient
 // frames kept in memory per camera, and the size of a page of older saved frames a request does not size.
@@ -97,6 +102,9 @@ interface StoredFrame {
 	readonly deviceId: string
 	// Driver-reported camera name.
 	readonly cameraName: string
+	// Camera of the Equipment Catalog the device was bound to when the frame was taken; absent when bound to none, or when
+	// that camera was deleted since.
+	cameraId?: string
 	// Id of the capture or Auto Focus session.
 	readonly sessionId: string
 	// Frame number within the session, from 1.
@@ -286,6 +294,8 @@ export interface CaptureFrameRegistryOptions {
 	readonly leaseGrace?: number
 	// Whether a camera is connected; every camera is reported disconnected when absent.
 	readonly connected?: CameraConnectedResolver
+	// Camera of the Equipment Catalog each device is bound to; frames record none when absent.
+	readonly catalog?: CameraBindings
 }
 
 // Camera of the registry.
@@ -338,6 +348,7 @@ interface FrameRow {
 	readonly connection_id: string
 	readonly device_id: string
 	readonly camera_name: string
+	readonly camera_id: string | null
 	readonly origin: CaptureFrameOrigin
 	readonly session_id: string
 	readonly generation: number
@@ -354,7 +365,7 @@ interface FrameRow {
 
 // Returns the saved frame of a row, as restored after a restart.
 function rowFrame(row: FrameRow): FrameEntry {
-	const { frame_id, sequence, connection_id, device_id, camera_name, origin, session_id, generation, time, frame_type, width, height, channels, bitpix, cfa, acquisition, path } = row
+	const { frame_id, sequence, connection_id, device_id, camera_name, camera_id, origin, session_id, generation, time, frame_type, width, height, channels, bitpix, cfa, acquisition, path } = row
 	const frame: FrameEntry = {
 		frameId: frame_id,
 		origin,
@@ -362,6 +373,7 @@ function rowFrame(row: FrameRow): FrameEntry {
 		connectionId: connection_id,
 		deviceId: device_id,
 		cameraName: camera_name,
+		cameraId: camera_id ?? undefined,
 		sessionId: session_id,
 		generation,
 		time,
@@ -382,8 +394,8 @@ function rowFrame(row: FrameRow): FrameEntry {
 }
 
 // Values of the row of a saved frame, in the order of the columns of capture_frames.
-function rowValues({ frameId, sequence, connectionId, deviceId, cameraName, origin, sessionId, generation, time, frameType, width, height, channels, bitpix, cfa, acquisition, path }: FrameEntry) {
-	return [frameId, sequence, connectionId, deviceId, cameraName, origin, sessionId, generation, time, frameType, width ?? null, height ?? null, channels ?? null, bitpix ?? null, cfa ?? null, acquisition === undefined ? null : JSON.stringify(acquisition), path ?? ''] as const
+function rowValues({ frameId, sequence, connectionId, deviceId, cameraName, cameraId, origin, sessionId, generation, time, frameType, width, height, channels, bitpix, cfa, acquisition, path }: FrameEntry) {
+	return [frameId, sequence, connectionId, deviceId, cameraName, cameraId ?? null, origin, sessionId, generation, time, frameType, width ?? null, height ?? null, channels ?? null, bitpix ?? null, cfa ?? null, acquisition === undefined ? null : JSON.stringify(acquisition), path ?? ''] as const
 }
 
 // Removes an item from a list, if present.
@@ -434,15 +446,18 @@ export class CaptureFrameRegistry implements Disposable {
 	readonly leaseGrace: number
 	// Whether a camera is connected.
 	readonly #connected: CameraConnectedResolver
+	// Camera of the Equipment Catalog each device is bound to.
+	readonly #cameras: CameraBindings
 
 	// Creates the registry over the image store, publishing every change to listener synchronously. Reading the
 	// database waits for the first use.
 	constructor(
 		readonly images: ImageStore,
 		readonly listener: CaptureFrameListener,
-		{ database, leaseGrace = LEASE_GRACE, connected = () => false }: CaptureFrameRegistryOptions,
+		{ database, leaseGrace = LEASE_GRACE, connected = () => false, catalog = NO_CAMERA_BINDINGS }: CaptureFrameRegistryOptions,
 	) {
 		this.database = database
+		this.#cameras = catalog
 		this.leaseGrace = leaseGrace
 		this.#presence = new ClientPresence(leaseGrace, (client) => {
 			for (const [id, lease] of this.#leases) if (lease.client === client) this.release(id)
@@ -530,6 +545,29 @@ export class CaptureFrameRegistry implements Disposable {
 		return frame
 	}
 
+	// Returns the camera of the Equipment Catalog the saved frame at a path recorded, or undefined when no saved frame is at
+	// that path or it recorded none. Paths compare without case on Windows, where they name the same file.
+	cameraOfPath(path: string): string | undefined {
+		const { db } = this.database
+		const row =
+			process.platform === 'win32'
+				? db.query<{ camera_id: string | null }, [string]>('SELECT camera_id FROM capture_frames WHERE path = ? COLLATE NOCASE ORDER BY sequence DESC LIMIT 1').get(path)
+				: db.query<{ camera_id: string | null }, [string]>('SELECT camera_id FROM capture_frames WHERE path = ? ORDER BY sequence DESC LIMIT 1').get(path)
+		return row?.camera_id ?? undefined
+	}
+
+	// Forgets a camera of the Equipment Catalog that was deleted in the frames held in memory, whose rows the database
+	// already cleared, so a later write of one of them never names it again.
+	cameraRemoved(cameraId: string) {
+		for (const source of this.#load().values()) {
+			for (const frame of this.#frames(source)) {
+				if (frame.cameraId !== cameraId) continue
+				frame.cameraId = undefined
+				frame.persisted = frame.persisted === undefined ? undefined : rowValues(frame).join('\u0000')
+			}
+		}
+	}
+
 	// Returns a frame, or undefined for an unknown one.
 	async frame(frameId: string): Promise<CaptureFrameSummary | undefined> {
 		const found = this.#find(frameId)
@@ -554,7 +592,7 @@ export class CaptureFrameRegistry implements Disposable {
 			// The write may have completed before the frame was decoded.
 			if (entry.file !== 'saved' && entry.file !== 'failed') entry.file = file
 		} else {
-			entry = { frameId, origin, sequence: ++this.#counter, connectionId, deviceId, cameraName, sessionId, generation, time, frameType, width, height, channels, cfa, bitpix, acquisition, path, file, revision: 0, restored: false }
+			entry = { frameId, origin, sequence: ++this.#counter, connectionId, deviceId, cameraName, cameraId: this.#cameras.cameraOf({ connectionId, deviceId }), sessionId, generation, time, frameType, width, height, channels, cfa, bitpix, acquisition, path, file, revision: 0, restored: false }
 		}
 
 		entry.imageId = info.id
@@ -597,7 +635,7 @@ export class CaptureFrameRegistry implements Disposable {
 			this.#changed(found.source, found.frame)
 		} else if (file === 'saved') {
 			const source = this.#source(connectionId, deviceId, cameraName)
-			const entry: FrameEntry = { frameId, origin: 'capture', sequence: ++this.#counter, connectionId, deviceId, cameraName, sessionId, generation, time, frameType, path, file, revision: 0, restored: false }
+			const entry: FrameEntry = { frameId, origin: 'capture', sequence: ++this.#counter, connectionId, deviceId, cameraName, cameraId: this.#cameras.cameraOf({ connectionId, deviceId }), sessionId, generation, time, frameType, path, file, revision: 0, restored: false }
 			this.#save(source, entry)
 			this.#changed(source, entry)
 		}
@@ -622,7 +660,7 @@ export class CaptureFrameRegistry implements Disposable {
 			this.#changed(found.source, found.frame)
 		} else {
 			const source = this.#source(connectionId, deviceId, cameraName)
-			const entry: FrameEntry = { frameId, origin, sequence: ++this.#counter, connectionId, deviceId, cameraName, sessionId, generation, time, frameType, path, file: 'saved', revision: 0, restored: false }
+			const entry: FrameEntry = { frameId, origin, sequence: ++this.#counter, connectionId, deviceId, cameraName, cameraId: this.#cameras.cameraOf({ connectionId, deviceId }), sessionId, generation, time, frameType, path, file: 'saved', revision: 0, restored: false }
 			this.#save(source, entry)
 			this.#changed(source, entry)
 		}
@@ -836,7 +874,9 @@ export class CaptureFrameRegistry implements Disposable {
 
 		try {
 			if (values)
-				this.database.db.query('INSERT OR REPLACE INTO capture_frames (frame_id, sequence, connection_id, device_id, camera_name, origin, session_id, generation, time, frame_type, width, height, channels, bitpix, cfa, acquisition, path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(...values)
+				this.database.db
+					.query('INSERT OR REPLACE INTO capture_frames (frame_id, sequence, connection_id, device_id, camera_name, camera_id, origin, session_id, generation, time, frame_type, width, height, channels, bitpix, cfa, acquisition, path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+					.run(...values)
 			else this.database.db.query('DELETE FROM capture_frames WHERE frame_id = ?').run(frame.frameId)
 			frame.persisted = encoded
 			source.total = this.database.db.query<{ total: number }, [string, string]>('SELECT count(*) AS total FROM capture_frames WHERE connection_id = ? AND device_id = ?').get(source.connectionId, source.deviceId)!.total

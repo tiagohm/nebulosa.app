@@ -49,7 +49,7 @@ Shell (`web/src/shell/ApplicationShell.tsx`), always mounted while navigating:
   the details panel has an Astronomical Time section with the same data and the same action.
   Neither names the active site or its coordinates: the observing site menu of the top bar is the one place that shows them, and no workspace or tool repeats them (the Sky header says only No observing site or Simulated time).
   It is the only global status surface.
-- **Modals**: Connections, Equipment Setup, and Profiles, over native `<dialog>` (`web/src/ui/Modal.tsx`).
+- **Modals**: Connections, Equipment Setup (which also binds each camera device to a camera of the Equipment Catalog), and Profiles, over native `<dialog>` (`web/src/ui/Modal.tsx`).
 
 Workspace frame (`WorkspaceLayout.tsx`), used by every workspace and every tool view:
 

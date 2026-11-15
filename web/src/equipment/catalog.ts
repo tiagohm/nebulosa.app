@@ -115,6 +115,13 @@ export function boundCameraId(state: Pick<CameraBindingsState, 'bindings'>, devi
 	return device && state.bindings[bindingKey(device.connectionId, device.id)]?.cameraId
 }
 
+// Returns the binding of another device of the connection of device to the camera of the catalog cameraId, or undefined.
+// A camera of the catalog is bound to one device at most: binding it to a device unbinds the one it was bound to, so the
+// Equipment Setup refuses a camera another device of the connection holds, as it refuses one device for two roles.
+export function cameraBoundElsewhere(state: Pick<CameraBindingsState, 'bindings'>, device: BindableDevice, cameraId: string) {
+	return Object.values(state.bindings).find((binding) => binding.cameraId === cameraId && binding.connectionId === device.connectionId && binding.deviceId !== device.id)
+}
+
 // Returns the camera a device of an endpoint that changed most likely is: the one camera of the catalog, not archived,
 // that a binding of a device of the same driver name names, or undefined when there is none or more than one.
 export function suggestedCameraId(state: Pick<CameraBindingsState, 'bindings'>, cameras: readonly Pick<CatalogCamera, 'id' | 'archived'>[], deviceName: string) {

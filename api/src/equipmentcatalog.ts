@@ -7,7 +7,9 @@ import type { OperationDevice } from './operations'
 // wizards, the captures, and the calibrators run on the server and only ever know the device; it is edited in the
 // Equipment Setup and holds for every profile. Every frame resolves its camera once, when it is taken, so binding a device
 // again never changes what was already recorded. The bindings are kept in the operational database and in memory, so
-// resolving the camera of a frame is a lookup. The last write wins.
+// resolving the camera of a frame is a lookup. A camera of the catalog is bound to one device at most, as one camera
+// cannot be two devices: binding it to a device unbinds the device it was bound to (an endpoint that changed, or another
+// device of the connection). The last write wins.
 
 // Error codes of the binding routes.
 export type EquipmentCatalogErrorCode = 'notFound'
@@ -131,8 +133,9 @@ export class EquipmentCatalog implements CameraBindings {
 		return this.binding(device)?.cameraId
 	}
 
-	// Binds a camera device of an open connection to a camera of the catalog, replacing its binding, or unbinds it when
-	// cameraId is null. notFound when the device is not a camera of an open connection, or the camera is not in the catalog.
+	// Binds a camera device of an open connection to a camera of the catalog, replacing its binding and unbinding the
+	// device the camera was bound to, or unbinds it when cameraId is null. Publishes each device whose binding changed.
+	// notFound when the device is not a camera of an open connection, or the camera is not in the catalog.
 	bind({ connectionId, deviceId, cameraId }: CameraBindingRequest, now: number = Date.now()): CameraBindingOutcome {
 		const bindings = this.#load()
 		const key = deviceKey(connectionId, deviceId)
@@ -150,11 +153,21 @@ export class EquipmentCatalog implements CameraBindings {
 		if (!this.database.db.query('SELECT 1 FROM equipment_cameras WHERE camera_id = ?').get(cameraId)) return { status: 'notFound', what: 'camera' }
 
 		const binding: CameraBinding = { connectionId, deviceId, hardwareId: device.hardwareId, deviceName: device.name, cameraId, boundAt: now }
-		this.database.db
-			.query(
-				'INSERT INTO equipment_camera_bindings (connection_id, device_id, hardware_id, device_name, camera_id, bound_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (connection_id, device_id) DO UPDATE SET hardware_id = excluded.hardware_id, device_name = excluded.device_name, camera_id = excluded.camera_id, bound_at = excluded.bound_at',
-			)
-			.run(connectionId, deviceId, binding.hardwareId, binding.deviceName, cameraId, now)
+		const previous = [...bindings].filter(([other, entry]) => other !== key && entry.cameraId === cameraId)
+		this.database.write(() => {
+			this.database.db.query('DELETE FROM equipment_camera_bindings WHERE camera_id = ? AND NOT (connection_id = ? AND device_id = ?)').run(cameraId, connectionId, deviceId)
+			this.database.db
+				.query(
+					'INSERT INTO equipment_camera_bindings (connection_id, device_id, hardware_id, device_name, camera_id, bound_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (connection_id, device_id) DO UPDATE SET hardware_id = excluded.hardware_id, device_name = excluded.device_name, camera_id = excluded.camera_id, bound_at = excluded.bound_at',
+				)
+				.run(connectionId, deviceId, binding.hardwareId, binding.deviceName, cameraId, now)
+		})
+
+		for (const [other, entry] of previous) {
+			bindings.delete(other)
+			this.listener({ type: 'catalogCamera:bindingChanged', connectionId: entry.connectionId, deviceId: entry.deviceId })
+		}
+
 		bindings.set(key, binding)
 		this.listener({ type: 'catalogCamera:bindingChanged', connectionId, deviceId, binding })
 		return { status: 'saved', binding }

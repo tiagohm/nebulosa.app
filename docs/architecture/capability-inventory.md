@@ -84,7 +84,7 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
   mount tracking, brightness, and screening are not provided
 - **SPICE Kernel Library (SPK files for a local accurate ephemeris)** (Implemented): `api/src/spicekernels.ts` (curated NASA/JPL downloads of NAIF and JPL SSD, Horizons small-body generations through the queue of `api/src/ssd.ts`, uploads), `spicekernels.store.ts`, and the runtime set of `spicekernels.runtime.ts` over the multi-file resolver of `core/src/astronomy/ephemeris/kernels/spk.kernelset.ts`;
   SPICE Kernel Library tool `web/src/tools/spicekernels/`;
-  only J2000 SPK segments of types 2, 3, 9, and 21 are evaluated, and frame, orientation, clock, and mission kernels are not provided
+  only J2000 SPK segments of types 2, 3, 9, 17, and 21 are evaluated, and frame, orientation, clock, and mission kernels are not provided
 - **Astronomical time conversion** (Implemented): Astronomical Time Converter tool (`web/src/tools/astronomicaltime/`) and the status bar clock (`web/src/shell/statusbar/astronomicalclock.ts`) over `api/src/astronomicaltime.ts` and the Earth orientation tables of `api/src/astronomicaltime.eop.ts`, which the whole server reads;
   BJD, HJD, and FITS exposure timing are not provided
 - **Mount remote control (LX200, Stellarium)** (Implemented): Mount Remote Control tool (`web/src/tools/mountremotecontrol/`) over `api/src/mountremotecontrol.ts` and the protocol servers of `core/src/devices/protocols/`

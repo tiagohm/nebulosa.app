@@ -68,6 +68,17 @@ export async function openSpiceKernel(path: string): Promise<PreparedKernel> {
 	}
 }
 
+// Lists the segments of a kernel file, each with whether the toolkit can evaluate it, reading only its DAF records and
+// never a segment's data; throws when the file cannot be read or is not a consistent SPK. Closes the file.
+export async function inspectSpiceKernel(path: string): Promise<readonly SpkSegmentDescriptor[]> {
+	const handle = await open(path, 'r')
+	await using source = fileHandleSource(handle)
+	const { size } = await handle.stat()
+	const inspection = inspectSpk(await readDaf(source), size)
+	if (!inspection.ok) throw new Error(inspection.error)
+	return inspection.segments
+}
+
 // Readiness of a kernel in set: each evaluable segment is resolved at the middle of its coverage, where its own target
 // is covered, so a miss names a center no enabled kernel covers there.
 function readinessOf(segments: readonly SpkSegmentDescriptor[], set: SpkKernelSet): SpiceKernelSetReadiness {

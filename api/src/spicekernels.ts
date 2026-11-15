@@ -10,7 +10,7 @@ import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { errorResponse } from './http'
 import { SPICE_KERNEL_CATALOG, type SpiceCatalogEntry } from './spicekernels.catalog'
 import { type SpiceKernelJob, SpiceKernelJobs, type SpiceKernelJobContext, SpiceKernelQueueFullError } from './spicekernels.jobs'
-import { openSpiceKernel, type SpiceKernelRuntime } from './spicekernels.runtime'
+import { inspectSpiceKernel, openSpiceKernel, type SpiceKernelRuntime } from './spicekernels.runtime'
 import type { SpiceEphemerisPolicy, SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelStore, SpiceSegmentRecord, StagedSpiceKernel } from './spicekernels.store'
 import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 
@@ -350,8 +350,9 @@ export class SpiceKernelLibrary implements Disposable {
 	}
 
 	// Finishes what a previous run left, then opens the enabled kernels: clears staging, completes pending deletions,
-	// marks kernels whose file is gone as missing and those whose content changed as invalid, and publishes the first
-	// generation. Never rejects; a kernel that cannot be opened is marked invalid and the others still load.
+	// marks kernels whose file is gone as missing and those whose content changed as invalid, records again which segments
+	// the toolkit can evaluate, and publishes the first generation. Never rejects; a kernel that cannot be opened is marked
+	// invalid and the others still load.
 	start() {
 		return this.#exclusive(async () => {
 			try {
@@ -363,8 +364,9 @@ export class SpiceKernelLibrary implements Disposable {
 						this.store.delete(kernel.id)
 					} else if (!(await this.store.hasObject(kernel.sha256))) {
 						this.store.setState(kernel.id, 'missing')
-					} else if (kernel.enabled || kernel.state !== 'ready') {
-						this.#check(kernel, (await this.store.hashObject(kernel.sha256)) === kernel.sha256)
+					} else {
+						if (kernel.enabled || kernel.state !== 'ready') this.#check(kernel, (await this.store.hashObject(kernel.sha256)) === kernel.sha256)
+						if (this.store.kernel(kernel.id)?.state === 'ready') await this.#refreshSupport(kernel)
 					}
 				}
 			} catch (error) {
@@ -532,7 +534,8 @@ export class SpiceKernelLibrary implements Disposable {
 		})
 	}
 
-	// Hashes and inspects the file of a kernel again, marking it ready, invalid, or missing; never downloads it again.
+	// Hashes and inspects the file of a kernel again, marking it ready, invalid, or missing, and records again which of its
+	// segments the toolkit can evaluate; never downloads it again.
 	verify(id: string): Promise<SpiceKernelDetails> {
 		return this.#exclusive(async () => {
 			const kernel = this.#kernel(id)
@@ -543,6 +546,7 @@ export class SpiceKernelLibrary implements Disposable {
 			if (this.store.kernel(id)?.state === 'ready') {
 				try {
 					await (await openSpiceKernel(this.store.objectPath(kernel.sha256))).source.close()
+					await this.#refreshSupport(kernel)
 				} catch (error) {
 					this.store.setState(id, 'invalid')
 					this.#failures.set(id, Error.isError(error) ? error.message : String(error))
@@ -700,6 +704,17 @@ export class SpiceKernelLibrary implements Disposable {
 		} catch (error) {
 			await this.store.discard(staged)
 			throw error
+		}
+	}
+
+	// Records again which segments of a kernel the toolkit can evaluate, from the descriptors of its file, so a kernel added
+	// before the toolkit learned a data type shows those segments as supported. A file that cannot be inspected is left as
+	// it is: its integrity check and the rebuild judge it.
+	async #refreshSupport(kernel: SpiceKernelRecord) {
+		try {
+			this.store.setSegmentSupport(kernel.id, await inspectSpiceKernel(this.store.objectPath(kernel.sha256)))
+		} catch {
+			// The file is judged by the integrity check and the rebuild.
 		}
 	}
 

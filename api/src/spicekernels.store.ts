@@ -217,6 +217,23 @@ export class SpiceKernelStore {
 		})
 	}
 
+	// Records whether each segment of a kernel can be evaluated, from a new inspection of its file, since the toolkit may
+	// have learned a data type after the kernel was added. Returns whether any segment changed.
+	setSegmentSupport(id: string, segments: readonly Pick<SpkSegmentDescriptor, 'index' | 'supported' | 'reason'>[]) {
+		const { db } = this.database
+
+		return this.database.write(() => {
+			const update = db.query('UPDATE spice_segments SET supported = :supported, unsupported_reason = :reason WHERE kernel_id = :id AND segment_index = :index AND (supported != :supported OR unsupported_reason IS NOT :reason)')
+			let changed = false
+
+			for (const segment of segments) {
+				if (update.run({ id, index: segment.index, supported: segment.supported ? 1 : 0, reason: segment.reason ?? null }).changes > 0) changed = true
+			}
+
+			return changed
+		})
+	}
+
 	// Turns a kernel on or off.
 	setEnabled(id: string, enabled: boolean) {
 		this.database.db.query('UPDATE spice_kernels SET enabled = ? WHERE kernel_id = ?').run(enabled ? 1 : 0, id)

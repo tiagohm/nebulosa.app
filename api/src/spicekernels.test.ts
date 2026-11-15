@@ -341,6 +341,7 @@ test('the curated catalog lists the reviewed kernels by system', async () => {
 		'sat480',
 		'sat441',
 		'sat415',
+		'sat393-daphnis',
 		'sat456',
 		'sat457',
 		'sat455',
@@ -515,4 +516,25 @@ test('a set that cannot be prepared together keeps the kernels ready and the pre
 		prepare.mockRestore()
 		error.mockRestore()
 	}
+})
+
+test('the support of each segment follows the toolkit at start and on verify', async () => {
+	const database = AppDatabase.memory()
+	const first = setup({}, database)
+	await first.library.start()
+	const { kernel } = await first.library.importFile('planets.bsp', stream(PLANETARY))
+	first.library.runtime[Symbol.dispose]()
+
+	// Recorded by a toolkit that could not evaluate the data type of the first segment.
+	const forget = () => database.db.run("UPDATE spice_segments SET supported = 0, unsupported_reason = 'dataType' WHERE kernel_id = ? AND segment_index = 0", [kernel.id])
+	forget()
+	expect(first.store.segments(kernel.id)[0]).toMatchObject({ supported: false, reason: 'dataType' })
+
+	const second = setup({}, database, first.directory)
+	await second.library.start()
+	expect(second.library.details(kernel.id)).toMatchObject({ unsupportedSegments: 0, segments: [{ supported: true }, { supported: true }, { supported: true }] })
+	expect(second.store.segments(kernel.id)[0].reason).toBeUndefined()
+
+	forget()
+	expect((await second.library.verify(kernel.id)).unsupportedSegments).toBe(0)
 })

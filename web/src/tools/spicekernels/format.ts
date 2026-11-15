@@ -6,7 +6,7 @@ import type { StatusTone } from '../../ui/StatusBadge'
 // readiness, sources, and job states.
 
 // Names of the NAIF codes the SPK files of the library usually hold: the barycenters, the Sun, the planets, the Moon,
-// and the named moons of the curated satellite kernels but the irregular moons of Saturn and the provisional ones.
+// and the named moons of the curated satellite kernels but the irregular moons of Saturn and most provisional ones.
 const NAIF_NAMES: Readonly<Record<number, string>> = {
 	0: 'Solar system barycenter',
 	1: 'Mercury barycenter',
@@ -64,9 +64,11 @@ const NAIF_NAMES: Readonly<Record<number, string>> = {
 	632: 'Methone',
 	633: 'Pallene',
 	634: 'Polydeuces',
+	635: 'Daphnis',
 	649: 'Anthe',
 	653: 'Aegaeon',
 	699: 'Saturn',
+	65304: 'S/2009 S 2',
 	701: 'Ariel',
 	702: 'Umbriel',
 	703: 'Titania',

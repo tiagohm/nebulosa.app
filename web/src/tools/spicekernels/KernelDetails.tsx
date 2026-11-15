@@ -54,7 +54,7 @@ export function KernelDetails({ kernel, onDeleted }: KernelDetailsProps) {
 					{DEPENDENCY_HINT} Missing: {kernel.missingBodies?.map(naifName).join(', ')}.
 				</Notice>
 			)}
-			{kernel.readiness === 'unsupported' && <Notice>No segment of this file can be evaluated: the server reads only J2000 segments of SPK types 2, 3, 9, and 21.</Notice>}
+			{kernel.readiness === 'unsupported' && <Notice>No segment of this file can be evaluated: the server reads only J2000 segments of SPK types 2, 3, 9, 17, and 21.</Notice>}
 			{kernel.failure && <Notice error>{kernel.failure}</Notice>}
 			{state.errors[key] && <Notice error>{state.errors[key]}</Notice>}
 			<DataList>

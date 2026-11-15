@@ -1,6 +1,6 @@
 // Reviewed NASA/JPL downloads of the SPICE Kernel Library. A download is asked for by the id of an entry, never by a URL,
 // so the server only fetches these exact HTTPS files. Each one is an SPK whose bodies the server can evaluate (data type
-// 2 or 3, J2000 frame), checked against the file before it was listed. Their size is not limited: the toolkit reads a
+// 2, 3, or 17, J2000 frame), checked against the file before it was listed. Their size is not limited: the toolkit reads a
 // file record by record, never whole.
 
 // Planetary system a curated kernel belongs to, by which the Add Kernel section groups and filters them: the planetary
@@ -53,20 +53,20 @@ const NEEDS_PLANETARY = 'Holds only the moons and the planet relative to the pla
 // The Saturnian kernels sat480 and sat441 were inspected on 2026-11-07, their MD5 matching NAIF's aa_checksums.txt:
 // - sat480.bsp (SHA-256 12d2cfd8…c6daf32): type 2 J2000 segments of the Sun, the Earth-Moon barycenter, the Earth,
 //   the Saturnian barycenter and Saturn's centre over 1950-2050, enough for the Saturn Observing Planner's rings, plus
-//   one type 17 segment of the small moon S/2009 S 2 that the library does not evaluate;
+//   one type 17 segment of the small moon S/2009 S 2 relative to Saturn's centre;
 // - sat441.bsp (SHA-256 d7e444a9…96444d5): type 2 J2000 segments of the same planetary bodies, Saturn's centre and
 //   Mimas to Phoebe with Helene, Telesto, Calypso, Methone and Polydeuces over 1749-2250, enough for the planner's
 //   rings and seven major moons alone. NAIF publishes no smaller kernel of the major moons.
 //
 // The other entries were inspected on 2026-11-15 from the DAF file record and every summary record of the published
 // file, read through HTTP ranges, with its exact length: every segment is J2000 and of type 2, but the type 3 segments
-// of sat415.bsp. The aa_checksums.txt of NAIF's planets and satellites folders gave these MD5 at that date:
+// of sat415.bsp and the three type 17 segments of Daphnis relative to Saturn's centre in sat393_daphnis.bsp. The aa_checksums.txt of NAIF's planets and satellites folders gave these MD5 at that date:
 // - de440.bsp c9d581bfd84209dbeee8b1583939b148, de442.bsp 446656322267e7b819a26cb08a0d8718,
 //   de442s.bsp cc49327e06088124c0e39d8dde9f0b58;
 // - mar099s.bsp fd7302dfbaa0c63ce85b1e98923ee6a1, mar099.bsp 46f5740f86ec78b978ab96a82f0e42b7;
 // - jup365.bsp 9dcee11a333945310db8b76eb695fc9c, jup347.bsp 5d0fb1232055f44c0aa9a11f130fbd83, jup348.bsp a19ec916c95267772d5f261dc248b1dd,
 //   jup349.bsp c7ef9d1829bb39bbbc2ba30d4a5a8a05;
-// - sat415.bsp c6bdcf653ccbb072ab540bc6e2581ca8, sat455.bsp 8ef323b67972ba4ecc26bf12d1914401,
+// - sat415.bsp c6bdcf653ccbb072ab540bc6e2581ca8, sat393_daphnis.bsp beea6ecc195cfe0edef4289d59438df1, sat455.bsp 8ef323b67972ba4ecc26bf12d1914401,
 //   sat456.bsp 4c66748ca3209d0e66ff29954ab1ee64, sat457.bsp 1b5c6b5bf8aece9d1fed979f06140f11,
 //   sat459.bsp bcaab4a0eec7195501116701295d8697;
 // - ura184_part-1.bsp ec51c999ea103e0fb485487fb10be03d, ura184_part-2.bsp 1adbbd31608f0da812d99c0d4e1ba686,
@@ -80,7 +80,7 @@ const NEEDS_PLANETARY = 'Holds only the moons and the planet relative to the pla
 // without them; the parts are listed.
 //
 // Left out: the extra-long xl files of single moons, without planetary segments and spanning -13000 to 17000, beyond every
-// listed planetary ephemeris; the SSD copies of the NAIF files above; and sat393_daphnis.bsp (type 17 only).
+// listed planetary ephemeris; and the SSD copies of the NAIF files above.
 export const SPICE_KERNEL_CATALOG: readonly SpiceCatalogEntry[] = [
 	{
 		id: 'de440s',
@@ -210,7 +210,7 @@ export const SPICE_KERNEL_CATALOG: readonly SpiceCatalogEntry[] = [
 		bodies: 'Saturn',
 		startYear: 1950,
 		endYear: 2050,
-		description: `JPL SAT480 Saturn ephemeris, enough for the rings of the Saturn Observing Planner on its own; its segment of S/2009 S 2 is of a data type the library does not evaluate. ${OWN_PLANETARY}`,
+		description: `JPL SAT480 Saturn ephemeris, enough for the rings of the Saturn Observing Planner on its own; it also holds the small moon S/2009 S 2. ${OWN_PLANETARY}`,
 		url: `${NAIF_SATELLITES}/sat480.bsp`,
 		bytes: 12621824,
 	},
@@ -235,6 +235,17 @@ export const SPICE_KERNEL_CATALOG: readonly SpiceCatalogEntry[] = [
 		description: `JPL SAT415 ephemeris of the small inner Saturnian moons, fitted to all Cassini data. ${OWN_PLANETARY} A large download.`,
 		url: `${NAIF_SATELLITES}/sat415.bsp`,
 		bytes: 624325632,
+	},
+	{
+		id: 'sat393-daphnis',
+		name: 'sat393_daphnis.bsp',
+		system: 'saturn',
+		bodies: 'Daphnis',
+		startYear: 1950,
+		endYear: 2050,
+		description: "JPL SAT393 ephemeris of Daphnis, the moon of the Keeler gap, as precessing equinoctial elements relative to Saturn's centre, so positions also need a kernel with Saturn, such as sat480.bsp.",
+		url: `${NAIF_SATELLITES}/sat393_daphnis.bsp`,
+		bytes: 9216,
 	},
 	{
 		id: 'sat456',

@@ -1,3 +1,4 @@
+import type { CfaPattern } from 'nebulosa/src/imaging/model/types'
 import type { ConnectionType } from './connection'
 import type { AppDatabase } from './database'
 import { errorResponse } from './http'
@@ -102,8 +103,8 @@ export interface CatalogCameraSensor {
 	readonly height: number
 	// Pixel size, in micrometers; > 0; absent when not declared.
 	readonly pixelSize?: number
-	// CFA pattern (RGGB, GRBG, …); absent for a mono sensor.
-	readonly cfa?: string
+	// CFA pattern of a color sensor; absent for a mono sensor.
+	readonly cfa?: CfaPattern
 	// Bits per sample of the ADC; absent when not declared.
 	readonly bits?: number
 }

@@ -1,22 +1,28 @@
-import type { CatalogCameraFields } from 'api'
+import type { CameraModel, CatalogCameraFields } from 'api'
+import type { CfaPattern } from 'nebulosa/src/imaging/model/types'
 import { useEffect, useMemo, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { calibrationLibraryRuntime } from '../calibrationlibrary/calibrationlibrary'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
+import { DEFAULT_COLOR_CFA, modelCfa } from '../equipment/cameramodels'
 import { cameraBindingsState, type CatalogCamera, catalogState, deviceFields, removeCatalogCamera, saveCatalogCamera } from '../equipment/catalog'
 import { deviceState } from '../equipment/equipment'
+import { CFA_PATTERNS } from '../images/display'
 import { PanelSection } from '../shell/ContextualPanel'
 import { Actions } from '../ui/Actions'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
 import { ConfirmButton } from '../ui/ConfirmButton'
 import { Notice } from '../ui/Notice'
+import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
+import { CameraModelSearch } from './CameraModelSearch'
 
 // Editor of one camera of the Equipment Catalog: its name, model, serial number, notes, the sensor it declares, and
-// whether it is archived, edited as a local draft that only Save writes. The sensor can be copied from a connected camera
-// of the active profile's connection, and only warns of a binding to a device whose sensor differs. A camera the
+// whether it is archived, edited as a local draft that only Save writes. The model and sensor can be filled from a model of
+// the camera model catalog (AstroBin) or copied from a connected camera of the active profile's connection; the sensor
+// only warns of a binding to a device whose sensor differs. A camera the
 // Calibration Library records frames or masters against cannot be deleted, only archived. Nothing here commands a
 // device.
 
@@ -33,36 +39,48 @@ export interface CatalogCameraEditorProps {
 	readonly onClosed: () => void
 }
 
-// Text of the fields of a camera being edited.
+// Fields of a camera being edited. A sensor value of 0 is one not declared.
 interface Draft {
 	readonly name: string
 	readonly model: string
 	readonly serial: string
 	readonly notes: string
-	readonly width: string
-	readonly height: string
-	readonly pixelSize: string
-	readonly cfa: string
-	readonly bits: string
+	// Unbinned sensor width and height, in pixels; 0 when not declared.
+	readonly width: number
+	readonly height: number
+	// Pixel size, in micrometers; 0 when not declared.
+	readonly pixelSize: number
+	// CFA pattern; MONO for a mono sensor.
+	readonly cfa: CfaPattern | typeof MONO
+	// Bits per sample of the ADC; 0 when not declared.
+	readonly bits: number
 	readonly archived: boolean
 }
 
 // Select value of the option that copies nothing.
 const NO_DEVICE = ''
 
+// CFA select value of a mono sensor, which has no pattern.
+const MONO = ''
+
+// CFA select options: mono, then every pattern.
+const CFA_OPTIONS: readonly (CfaPattern | typeof MONO)[] = [MONO, ...CFA_PATTERNS]
+
+// Largest ADC bit depth a sensor may declare.
+const MAX_BITS = 32
+
 // Returns the draft of a camera, or of a new one.
 function draftOf(camera: CatalogCameraFields | undefined): Draft {
-	const text = (value: number | string | undefined) => (value === undefined ? '' : `${value}`)
 	return {
 		name: camera?.name ?? '',
 		model: camera?.model ?? '',
 		serial: camera?.serial ?? '',
 		notes: camera?.notes ?? '',
-		width: text(camera?.sensor?.width),
-		height: text(camera?.sensor?.height),
-		pixelSize: text(camera?.sensor?.pixelSize),
-		cfa: camera?.sensor?.cfa ?? '',
-		bits: text(camera?.sensor?.bits),
+		width: camera?.sensor?.width ?? 0,
+		height: camera?.sensor?.height ?? 0,
+		pixelSize: camera?.sensor?.pixelSize ?? 0,
+		cfa: camera?.sensor?.cfa ?? MONO,
+		bits: camera?.sensor?.bits ?? 0,
 		archived: camera?.archived ?? false,
 	}
 }
@@ -72,14 +90,10 @@ function sameDraft(a: Draft, b: Draft) {
 	return (Object.keys(a) as (keyof Draft)[]).every((key) => a[key] === b[key])
 }
 
-// Returns the camera a draft describes. A sensor is declared once its width or height is typed; a number that cannot be
-// read stays NaN, which the save refuses.
-function fieldsOf(draft: Draft): CatalogCameraFields {
-	const number = (text: string) => (text.trim() === '' ? undefined : +text)
-	const declared = draft.width.trim() !== '' || draft.height.trim() !== ''
-	const pixelSize = number(draft.pixelSize)
-	const bits = number(draft.bits)
-	const sensor = declared ? { width: +draft.width, height: +draft.height, ...(pixelSize !== undefined && { pixelSize }), ...(draft.cfa.trim() && { cfa: draft.cfa }), ...(bits !== undefined && { bits }) } : undefined
+// Returns the camera a draft describes. A sensor is declared once its width or height is not 0; a width or height left at
+// 0 then is refused by the save.
+function fieldsOf({ width, height, pixelSize, cfa, bits, ...draft }: Draft): CatalogCameraFields {
+	const sensor = width > 0 || height > 0 ? { width, height, ...(pixelSize > 0 && { pixelSize }), ...(cfa !== MONO && { cfa }), ...(bits > 0 && { bits }) } : undefined
 	return { name: draft.name, model: draft.model, serial: draft.serial, notes: draft.notes, ...(sensor && { sensor }), archived: draft.archived }
 }
 
@@ -121,11 +135,16 @@ export function CatalogCameraEditor({ camera, initial, onDirtyChange, onSaved, o
 		edit({ model: copied.model, width: copied.width, height: copied.height, pixelSize: copied.pixelSize })
 	}
 
+	// Fills the model and the sensor from a model of the camera model catalog, and the name of a camera that has none.
+	function fillFrom(model: CameraModel) {
+		edit({ name: draft.name.trim() ? draft.name : model.model, model: model.model, width: model.width, height: model.height, pixelSize: model.pixelSize ?? 0, bits: model.bits ?? 0, cfa: modelCfa(model, draft.cfa === MONO ? undefined : draft.cfa) ?? MONO })
+	}
+
 	function save() {
 		const result = saveCatalogCamera(catalogState, fieldsOf(draft), camera?.id)
 
 		if (!result.ok) {
-			setError(result.reason === 'name' ? 'Enter a name.' : result.reason === 'nameTaken' ? 'Another camera of the catalog has this name.' : 'Enter a whole positive width and height in pixels, a positive pixel size, and between 1 and 32 bits, or leave the sensor empty.')
+			setError(result.reason === 'name' ? 'Enter a name.' : result.reason === 'nameTaken' ? 'Another camera of the catalog has this name.' : 'Enter both the width and the height of the sensor in pixels, or leave both at 0 when it is not declared.')
 			return
 		}
 
@@ -174,15 +193,17 @@ export function CatalogCameraEditor({ camera, initial, onDirtyChange, onSaved, o
 						<TextInput label="Serial Number" spellCheck={false} autoComplete="off" value={draft.serial} onChange={(e) => edit({ serial: e.target.value })} />
 						<TextInput label="Notes" value={draft.notes} onChange={(e) => edit({ notes: e.target.value })} />
 						<Notice>The name tells cameras apart in every list; the model, serial number, and notes are for people only and never compared.</Notice>
+						<CameraModelSearch onPick={fillFrom} />
+						<Notice>AstroBin gives no CFA pattern: a color sensor keeps the one chosen, or {DEFAULT_COLOR_CFA} when it was mono; check it.</Notice>
 						{connected.length > 0 && <Select label="Fill From" options={[NO_DEVICE, ...connected.map((device) => device.id)]} value={NO_DEVICE} format={(id) => (id === NO_DEVICE ? 'A connected camera…' : (connected.find((device) => device.id === id)?.name ?? id))} onChange={copyFrom} />}
 						<div className="grid grid-cols-2 gap-3">
-							<TextInput label="Sensor Width" suffix="px" inputMode="numeric" value={draft.width} onChange={(e) => edit({ width: e.target.value })} />
-							<TextInput label="Sensor Height" suffix="px" inputMode="numeric" value={draft.height} onChange={(e) => edit({ height: e.target.value })} />
-							<TextInput label="Pixel Size" suffix="µm" inputMode="decimal" value={draft.pixelSize} onChange={(e) => edit({ pixelSize: e.target.value })} />
-							<TextInput label="Bits" inputMode="numeric" value={draft.bits} onChange={(e) => edit({ bits: e.target.value })} />
+							<NumberInput label="Sensor Width" suffix="px" min={0} value={draft.width} onChange={(width) => edit({ width })} />
+							<NumberInput label="Sensor Height" suffix="px" min={0} value={draft.height} onChange={(height) => edit({ height })} />
+							<NumberInput label="Pixel Size" suffix="µm" min={0} step={0.01} value={draft.pixelSize} onChange={(pixelSize) => edit({ pixelSize })} />
+							<NumberInput label="Bits" min={0} max={MAX_BITS} value={draft.bits} onChange={(bits) => edit({ bits })} />
 						</div>
-						<TextInput label="CFA Pattern" spellCheck={false} autoComplete="off" value={draft.cfa} placeholder="Empty for a mono sensor" onChange={(e) => edit({ cfa: e.target.value })} />
-						<Notice>The unbinned sensor, optional. It only warns when a device bound to this camera reports another one.</Notice>
+						<Select label="CFA Pattern" options={CFA_OPTIONS} value={draft.cfa} format={(cfa) => (cfa === MONO ? 'Mono' : cfa)} onChange={(cfa) => edit({ cfa })} />
+						<Notice>The unbinned sensor, optional: 0 leaves a value undeclared. It only warns when a device bound to this camera reports another one.</Notice>
 						<Checkbox label="Archived" checked={draft.archived} onChange={(archived) => edit({ archived })} />
 						<Notice>An archived camera is no longer offered for new bindings and imports; the frames, masters, and devices bound to it keep it.</Notice>
 						{error && <Notice error>{error}</Notice>}

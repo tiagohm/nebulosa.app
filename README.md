@@ -13,6 +13,7 @@ bun i
 bun run make:catalog --force
 bun run make:moon --force
 bun run make:meteors --force
+bun run make:cameras --force
 ```
 
 | Command                               | Description                                        |

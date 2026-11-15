@@ -18,6 +18,7 @@
 		"make:catalog": "bun run bin/src/sky.catalog.ts",
 		"make:moon": "bun run bin/src/moon.assets.ts",
 		"make:meteors": "bun run bin/src/meteor.showers.ts",
+		"make:cameras": "bun run bin/src/camera.models.ts",
 		"test:timings": "RUN_ALL_TESTS=true bun test --timings timings.json --update-timings --timeout 30000"
 	},
 	"devDependencies": {

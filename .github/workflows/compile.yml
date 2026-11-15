@@ -43,5 +43,8 @@ jobs:
             - name: Generate Meteor Shower Catalog
               run: bun make:meteors
 
+            - name: Generate Camera Model Catalog
+              run: bun make:cameras
+
             - name: Compile
               run: bun compile

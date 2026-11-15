@@ -78,8 +78,7 @@ export function saveCatalogCamera(state: CatalogState, input: CatalogCameraField
 	const model = optionalText(input.model)
 	const serial = optionalText(input.serial)
 	const notes = optionalText(input.notes)
-	const cfa = optionalText(input.sensor?.cfa)
-	const sensor = input.sensor && { width: input.sensor.width, height: input.sensor.height, ...(input.sensor.pixelSize !== undefined && { pixelSize: input.sensor.pixelSize }), ...(cfa && { cfa: cfa.toUpperCase() }), ...(input.sensor.bits !== undefined && { bits: input.sensor.bits }) }
+	const sensor = input.sensor && { width: input.sensor.width, height: input.sensor.height, ...(input.sensor.pixelSize !== undefined && { pixelSize: input.sensor.pixelSize }), ...(input.sensor.cfa && { cfa: input.sensor.cfa }), ...(input.sensor.bits !== undefined && { bits: input.sensor.bits }) }
 	const index = state.cameras.findIndex((camera) => camera.id === id)
 	const camera: CatalogCamera = { id: index >= 0 && id ? id : nanoid(), name, ...(model && { model }), ...(serial && { serial }), ...(notes && { notes }), ...(sensor && { sensor }), archived: input.archived }
 	if (index >= 0) state.cameras[index] = camera

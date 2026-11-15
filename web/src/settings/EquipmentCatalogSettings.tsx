@@ -125,7 +125,8 @@ function CameraList({ cameras, selected, onSelect, onAdd, wide }: CameraListProp
 		)
 	}
 
-	// Says how many devices are bound to a camera, and how much the library records against it.
+	// Says how many devices are bound to a camera, and how much the library records against it, on its own line under the
+	// description: beside the title it would leave the name too little width in the sidebar.
 	function meta(camera: CatalogCamera) {
 		if (camera.archived) return 'Archived'
 		const bound = Object.values(bindings).filter((binding) => binding.cameraId === camera.id).length
@@ -137,7 +138,18 @@ function CameraList({ cameras, selected, onSelect, onAdd, wide }: CameraListProp
 		<aside className="flex w-80 flex-none flex-col border-r border-line-100 bg-base-000">
 			<List emptyText="No cameras in the catalog." className="min-h-0 flex-1 overflow-y-auto p-2">
 				{cameras.map((camera) => (
-					<ListItem key={camera.id} title={camera.name} description={cameraDescription(camera)} meta={meta(camera)} selected={camera.id === selected} onClick={() => onSelect(camera.id)} />
+					<ListItem
+						key={camera.id}
+						title={camera.name}
+						description={
+							<span className="flex flex-col">
+								<span>{cameraDescription(camera)}</span>
+								<span className="text-ink-300 tabular-nums">{meta(camera)}</span>
+							</span>
+						}
+						selected={camera.id === selected}
+						onClick={() => onSelect(camera.id)}
+					/>
 				))}
 			</List>
 			<div className="flex-none border-t border-line-100 p-2">

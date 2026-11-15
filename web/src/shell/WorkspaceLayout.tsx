@@ -21,6 +21,9 @@ export interface WorkspacePanel {
 	readonly title: string
 	// Controls of the current context.
 	readonly content: ReactNode
+	// Actions on the subject of the content, shown in the panel's header before its close button, such as marking the
+	// inspected object as a favorite.
+	readonly actions?: ReactNode
 }
 
 // Visibility of the contextual panel of a workspace.
@@ -91,7 +94,7 @@ export function WorkspaceLayout({ workspace, title, context, contextFill = false
 				<div className="relative min-h-0 flex-1 overflow-hidden">{children}</div>
 			</div>
 			{panel && (
-				<ContextualPanel title={panel.title} open={open} docked={docked} onClose={() => setOpen(false)}>
+				<ContextualPanel title={panel.title} actions={panel.actions} open={open} docked={docked} onClose={() => setOpen(false)}>
 					{panel.content}
 				</ContextualPanel>
 			)}

@@ -19,6 +19,8 @@ import type {
 	MountRemoteStartRequest,
 	PlateSolveRequest,
 	PulseCaptureDither,
+	SkyObjectCategory,
+	SkyObjectRef,
 	StarDetectionRequest,
 	StreakDetectorSettings,
 } from 'api'
@@ -128,6 +130,9 @@ export interface ProfileSettings {
 	// were marked, at most SATELLITE_FAVORITES_MAXIMUM; absent until the first one. A refresh of the satellite catalog never
 	// removes one, even when the catalog no longer lists it.
 	satelliteFavorites?: readonly string[]
+	// Objects of the Sky marked as favorites, other than artificial satellites (kept in satelliteFavorites), in the order
+	// they were marked, at most SKY_FAVORITES_MAXIMUM; absent until the first one. Each keeps how it was listed when marked.
+	skyFavorites?: readonly SkyFavorite[]
 	// Preferences of the Close Approaches tool; absent until edited, and then DEFAULT_CLOSE_APPROACH_PREFERENCES holds. Tab
 	// memory, like the results, the selection, and the dates of a search.
 	closeApproaches?: CloseApproachPreferences
@@ -727,6 +732,28 @@ export const FRAMING_REFERENCES_MAXIMUM = 128
 
 // Most artificial satellites a profile keeps as favorites.
 export const SATELLITE_FAVORITES_MAXIMUM = 500
+
+// Most objects of the Sky, other than artificial satellites, a profile keeps as favorites.
+export const SKY_FAVORITES_MAXIMUM = 500
+
+// Object of the Sky marked as a favorite, as the search lists it, kept so the favorites are listed without asking the
+// server. Artificial satellites are favorites by their NORAD id (satelliteFavorites) and the mount marker never is one.
+export interface SkyFavorite {
+	// Identity of the object.
+	readonly ref: Exclude<SkyObjectRef, { readonly kind: 'satellite' }>
+	// Display name when it was marked.
+	readonly name: string
+	// Other designations, most relevant first.
+	readonly designations: readonly string[]
+	// Group of the object.
+	readonly category: SkyObjectCategory
+	// Object type, such as "Galaxy" or "Planet".
+	readonly typeName: string
+	// Visual magnitude of a star or deep-sky object; absent when unknown and for moving objects, whose magnitude changes.
+	readonly magnitude?: number
+	// IAU abbreviation of the constellation of a fixed object; absent for moving objects.
+	readonly constellation?: string
+}
 
 // DARV form of one physical camera: how the next drift alignment measurement moves the mount. The frame is taken
 // with the camera settings of the camera, which this form never holds, and with an exposure derived from the leg

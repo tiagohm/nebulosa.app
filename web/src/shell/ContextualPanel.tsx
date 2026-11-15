@@ -11,6 +11,8 @@ import { SectionHeading } from '../ui/SectionHeading'
 export interface ContextualPanelProps {
 	// Heading of the panel's current content.
 	readonly title: string
+	// Actions on the subject of the content, shown in the header before the close button.
+	readonly actions?: ReactNode
 	// Whether the panel is shown.
 	readonly open: boolean
 	// Whether the panel is docked (wide screen) rather than a drawer.
@@ -22,7 +24,7 @@ export interface ContextualPanelProps {
 }
 
 // Right-hand panel of a workspace.
-export function ContextualPanel({ title, open, docked, onClose, children }: ContextualPanelProps) {
+export function ContextualPanel({ title, actions, open, docked, onClose, children }: ContextualPanelProps) {
 	return (
 		<>
 			{!docked && open && <button type="button" title="Close panel" onClick={onClose} className="absolute inset-0 z-20 cursor-default border-0 bg-[rgb(10_10_9/0.6)] p-0" />}
@@ -39,6 +41,7 @@ export function ContextualPanel({ title, open, docked, onClose, children }: Cont
 				<div className={cn('flex h-full flex-col', docked ? 'w-80 xl:w-88' : 'w-full')}>
 					<header className="flex h-12 flex-none items-center gap-2 border-b border-line-100 pr-2 pl-4">
 						<h2 className="m-0 min-w-0 flex-1 truncate text-xs font-semibold tracking-[0.08em] text-ink-200 uppercase">{title}</h2>
+						{actions}
 						<IconButton icon="close" label="Hide panel" onClick={onClose} />
 					</header>
 					<div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{children}</div>

@@ -24,13 +24,15 @@ export interface IconButtonProps extends Omit<ComponentProps<'button'>, 'childre
 	readonly label: string
 	// Whether a toggle is on; plain buttons leave it unset.
 	readonly pressed?: boolean
+	// Whether the icon is filled, such as a marked favorite.
+	readonly filled?: boolean
 }
 
 // Icon-only button with a tooltip.
-export function IconButton({ icon, label, pressed, className, type = 'button', ...props }: IconButtonProps) {
+export function IconButton({ icon, label, pressed, filled, className, type = 'button', ...props }: IconButtonProps) {
 	return (
 		<button type={type} title={label} className={iconButton({ pressed, className })} {...props}>
-			<Icon name={icon} className="size-5" />
+			<Icon name={icon} filled={filled} className="size-5" />
 			<span className="sr-only">{label}</span>
 		</button>
 	)

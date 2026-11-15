@@ -29,6 +29,7 @@ export type ProfilePreferenceKey =
 	| 'imageAstrometry'
 	| 'statusBar'
 	| 'satelliteFavorites'
+	| 'skyFavorites'
 	| 'dateTime'
 	| 'meridianFlipMonitor'
 	| 'meridianFlipExecutor'

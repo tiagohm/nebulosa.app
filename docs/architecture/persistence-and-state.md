@@ -110,6 +110,9 @@ Its `astronomicalClock` says whether the clock is shown, its primary and seconda
 Its local time reads in the profile's display zone, with no zone of its own, and its samples are never stored.
 
 How the profile shows civil times is kept in `ProfileSettings.dateTime` (`dateTimePreferences`, `setDateTimePreferences`, default `DEFAULT_DATE_TIME_PREFERENCES`: the observing site's zone), edited in Settings → Date & Time: the zone of every civil time the profile shows unless a tool overrides it for itself, the site's, UTC, or the browser's, a server preference (`dateTime`).
+The favorites of the Sky are kept in `ProfileSettings.skyFavorites` (`skyFavorites`, `addSkyFavorite`, `removeSkyFavorite`, at most `SKY_FAVORITES_MAXIMUM`), a server preference (`skyFavorites`): each object other than a satellite as the search listed it when marked (`SkyFavorite`: reference, name, designations, category, type, and the magnitude and constellation of a fixed object), identified by its reference;
+satellites stay favorites by NORAD id in `satelliteFavorites`, shared with Artificial Satellites (see [Sky Map Contract](sky-map.md)).
+
 The site a profile observes from is its header's `activeSiteId`, written with its name, connection, and position (see [Observing Sites and Time Zones Contract](observing-sites-and-time-zones.md)).
 
 The preferences of Close Approaches are kept in `ProfileSettings.closeApproaches` (`closeApproachPreferences`, `setCloseApproachPreferences`, defaults `DEFAULT_CLOSE_APPROACH_PREFERENCES`: LD, Earth, 10 LD): the distance unit shown, and the target and distance of the last search that ran; the times follow the profile's display zone.

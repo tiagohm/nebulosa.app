@@ -17,6 +17,9 @@ import {
 	satelliteFavorites,
 	setMeridianFlipSettings,
 	setSatelliteFavorite,
+	addSkyFavorite,
+	removeSkyFavorite,
+	skyFavorites,
 	setMountRemoteBinding,
 	acquisitionSettings,
 	activeProfile,
@@ -130,6 +133,7 @@ import {
 	DEFAULT_ASTRO_WEATHER_PREFERENCES,
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 	SATELLITE_FAVORITES_MAXIMUM,
+	SKY_FAVORITES_MAXIMUM,
 	type MountDitherSettings,
 } from './schema'
 
@@ -839,5 +843,34 @@ describe('satellite favorites', () => {
 		expect(favorites).toHaveLength(SATELLITE_FAVORITES_MAXIMUM)
 		expect(favorites[0]).toBe('1')
 		expect(favorites.at(-1)).toBe(`${SATELLITE_FAVORITES_MAXIMUM}`)
+	})
+})
+
+describe('sky favorites', () => {
+	const m42 = { ref: { kind: 'catalog', id: 1 }, name: 'M 42', designations: ['NGC 1976'], category: 'deepSky', typeName: 'Emission Nebula', magnitude: 4, constellation: 'Ori' } as const
+	const mars = { ref: { kind: 'body', code: '499' }, name: 'Mars', designations: [], category: 'solarSystem', typeName: 'Planet' } as const
+
+	test('are kept in the order they were marked, identified by their reference', () => {
+		const state = load()
+		const settings = () => activeProfile(state).settings
+		expect(skyFavorites(settings())).toEqual([])
+
+		addSkyFavorite(state, m42)
+		addSkyFavorite(state, mars)
+		addSkyFavorite(state, { ...m42, name: 'Orion Nebula' })
+		expect(skyFavorites(settings()).map((e) => e.name)).toEqual(['Orion Nebula', 'Mars'])
+
+		removeSkyFavorite(state, { kind: 'catalog', id: 1 })
+		removeSkyFavorite(state, { kind: 'body', code: '599' })
+		expect(settings().skyFavorites).toEqual([mars])
+	})
+
+	test('keep the most recent ones within the limit', () => {
+		const state = load()
+		for (let i = 0; i <= SKY_FAVORITES_MAXIMUM; i++) addSkyFavorite(state, { ...m42, ref: { kind: 'catalog', id: i } })
+		const favorites = skyFavorites(activeProfile(state).settings)
+		expect(favorites).toHaveLength(SKY_FAVORITES_MAXIMUM)
+		expect(favorites[0].ref).toEqual({ kind: 'catalog', id: 1 })
+		expect(favorites.at(-1)?.ref).toEqual({ kind: 'catalog', id: SKY_FAVORITES_MAXIMUM })
 	})
 })

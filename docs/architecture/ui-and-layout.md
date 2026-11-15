@@ -59,6 +59,7 @@ Workspace frame (`WorkspaceLayout.tsx`), used by every workspace and every tool 
   below `lg` it is a drawer over the content that starts closed, is never persisted, and closes with Escape or a click outside.
   A workspace whose own controls show the panel (the Sky toolbar's Framing, Display, and Location) holds this visibility with `useWorkspacePanel` and passes it as `panelState`, so a control that needs the panel opens it in either form.
   The workspace frame clips the closed drawer (`overflow: clip`) rather than hiding it, so no focus or scroll into view inside it can shift the workspace sideways.
+  Its header holds the heading, the `actions` of the content (`WorkspacePanel.actions`, such as the favorite star of the Sky Object Inspector), and the close button.
   It holds no operational state, so collapsing or replacing it never stops what its controls started.
 - Collapsible panel sections (`CollapsibleSection` of `web/src/shell/`): the heading is the toggle (`DisclosureSummary`), with a one-line summary beside it while collapsed.
   A contextual panel holds collapsible sections only, at its top level: no plain heading (`PanelSection` is left to the pages, Equipment Control and Settings), and no loose notice, row, or button outside a section; a note of a whole panel is a section of its own (an Almanac error, a Source), and a panel waiting for its content shows `LoadingSection`, the section it will fill with a Loading line.

@@ -8,7 +8,7 @@ import { satelliteCatalogState } from '../../satellites/satellites'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
-import { IconButton } from '../../ui/IconButton'
+import { FavoriteButton } from '../../ui/FavoriteButton'
 import { Select } from '../../ui/Select'
 import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
@@ -76,13 +76,11 @@ function SatelliteRow({ satellite, favorite }: SatelliteRowProps) {
 	return (
 		<Row selected={selectedId === noradId} onSelect={select}>
 			<Cell className="w-10 py-1">
-				<IconButton
-					icon="pin"
-					label={favorite ? 'Remove from favorites' : 'Add to favorites'}
-					pressed={favorite}
-					onClick={(event) => {
+				<FavoriteButton
+					favorite={favorite}
+					onChange={(marked, event) => {
 						event.stopPropagation()
-						setSatelliteFavorite(profileState, noradId, !favorite)
+						setSatelliteFavorite(profileState, noradId, marked)
 					}}
 				/>
 			</Cell>

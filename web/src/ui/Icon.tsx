@@ -65,6 +65,8 @@ export const ICONS = {
 	stack: 'M9 3h12v12H9zM6 6v12h12M3 9v12h12',
 	frame: 'M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3M9 9h6v6H9z',
 	pin: 'M9 4h6l-1 6l3 3H7l3-3zM12 13v7',
+	// A five-pointed star, the favorite mark: outlined, or filled when marked (`filled`).
+	favorite: 'M12 3l2.6 5.5l6 .8l-4.4 4.2l1.1 6L12 16.6l-5.3 2.9l1.1-6l-4.4-4.2l6-.8z',
 	location: 'M12 21s-6.5-5.8-6.5-11a6.5 6.5 0 0 1 13 0c0 5.2-6.5 11-6.5 11zM12 7.5a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5',
 	sun: 'M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1',
 	moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
@@ -157,12 +159,14 @@ export interface IconProps {
 	readonly className?: string
 	// Stroke width in units of the 24×24 box; the rendered width scales with the icon size.
 	readonly strokeWidth?: number
+	// Whether the shape is filled with the current text color too, such as a marked favorite.
+	readonly filled?: boolean
 }
 
-// Decorative line icon stroked with the current text color.
-export function Icon({ name, className, strokeWidth = 1.5 }: IconProps) {
+// Decorative line icon stroked, and filled when asked, with the current text color.
+export function Icon({ name, className, strokeWidth = 1.5, filled = false }: IconProps) {
 	return (
-		<svg viewBox="0 0 24 24" className={cn('size-5 flex-none', className)} fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+		<svg viewBox="0 0 24 24" className={cn('size-5 flex-none', className)} fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
 			<path d={ICONS[name]} />
 		</svg>
 	)

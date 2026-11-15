@@ -7,6 +7,7 @@ import { type AstrometryGridSettings, DEFAULT_IMAGE_ASTROMETRY, type ImageAstrom
 import type { WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '../sky/display'
 import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
+import { refKey } from '../sky/objects'
 import { DEFAULT_STAR_PROFILE_SETTINGS, type StarProfileSettings } from '../stars/starprofile.settings'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
@@ -71,6 +72,8 @@ import {
 	DEFAULT_TARGET_CENTERING_SETTINGS,
 	FRAMING_REFERENCES_MAXIMUM,
 	SATELLITE_FAVORITES_MAXIMUM,
+	SKY_FAVORITES_MAXIMUM,
+	type SkyFavorite,
 	type FramingReference,
 	type TargetCenteringSettings,
 } from './schema'
@@ -605,6 +608,29 @@ export function setSatelliteFavorite(state: ProfileState, noradId: string, favor
 	const profile = activeProfile(state)
 	const others = satelliteFavorites(profile.settings).filter((id) => id !== noradId)
 	profile.settings.satelliteFavorites = favorite ? [...others, noradId].slice(-SATELLITE_FAVORITES_MAXIMUM) : others
+}
+
+// Returns the objects of the Sky marked as favorites of a profile, other than satellites, in the order they were marked.
+export function skyFavorites(settings: Pick<ProfileSettings, 'skyFavorites'>): readonly SkyFavorite[] {
+	return settings.skyFavorites ?? []
+}
+
+// Marks an object of the Sky as a favorite of the active profile, identified by its reference. A new favorite goes last;
+// marking one again replaces how it is listed, in place; beyond SKY_FAVORITES_MAXIMUM the oldest are dropped.
+export function addSkyFavorite(state: ProfileState, favorite: SkyFavorite) {
+	const profile = activeProfile(state)
+	const key = refKey(favorite.ref)
+	const favorites = skyFavorites(profile.settings)
+	const index = favorites.findIndex((e) => refKey(e.ref) === key)
+	profile.settings.skyFavorites = index >= 0 ? favorites.map((e, i) => (i === index ? favorite : e)) : [...favorites, favorite].slice(-SKY_FAVORITES_MAXIMUM)
+}
+
+// Unmarks an object of the Sky as a favorite of the active profile by its reference; nothing changes when it is not one.
+export function removeSkyFavorite(state: ProfileState, ref: SkyFavorite['ref']) {
+	const profile = activeProfile(state)
+	const key = refKey(ref)
+	const favorites = skyFavorites(profile.settings)
+	if (favorites.some((e) => refKey(e.ref) === key)) profile.settings.skyFavorites = favorites.filter((e) => refKey(e.ref) !== key)
 }
 
 // Returns how a profile shows civil times.

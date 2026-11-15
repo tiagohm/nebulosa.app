@@ -120,6 +120,7 @@ const PREFERENCES: Readonly<Record<ProfilePreferenceKey, PreferenceField>> = {
 	imageAstrometry: setting('imageAstrometry'),
 	statusBar: setting('statusBar'),
 	satelliteFavorites: setting('satelliteFavorites'),
+	skyFavorites: setting('skyFavorites'),
 	dateTime: setting('dateTime'),
 	meridianFlipMonitor: setting('meridianFlipMonitor'),
 	meridianFlipExecutor: setting('meridianFlipExecutor'),

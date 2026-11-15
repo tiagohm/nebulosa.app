@@ -1,5 +1,5 @@
 import type { MinorBody, SkySearchResult } from 'api'
-import { type ReactNode, useEffect, useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { imagesState } from '../images/images'
@@ -7,14 +7,16 @@ import { activeSite, locationKey, openObservingSites, siteState } from '../locat
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { activeProfile, profileState, satelliteFavorites, setSkyTimeBarVisible } from '../profile/profile'
 import { satelliteCatalogState } from '../satellites/satellites'
-import { EmptyState, useWorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
+import { EmptyState, useWorkspacePanel, type WorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { meteorShowerSourcesState } from '../tools/meteorshowers/meteorshowers.sources'
 import { Button } from '../ui/Button'
+import { FavoriteButton } from '../ui/FavoriteButton'
 import { IconButton } from '../ui/IconButton'
 import type { CoordinateSystem } from './celestial/celestial'
 import { skyClock } from './clock'
 import { isSkyLayerVisible, METEOR_RADIANTS_LAYER, SATELLITE_TRACKS_LIMIT, SATELLITES_LAYER } from './display'
 import { DisplayPanel } from './DisplayPanel'
+import { addSkyObjectFavorite, isSkyFavorite, removeSkyObjectFavorite, selectionResult } from './favorites'
 import { clearImageFootprint, clearSkyCoordinate, skyImageState, toggleImageFootprint } from './footprint'
 import { equipmentOptics } from './framing'
 import { FramingPanel } from './FramingPanel'
@@ -176,11 +178,29 @@ export function SkyWorkspace() {
 		return panelState.open && sky.panel === view
 	}
 
+	// Star of the Object Inspector's header: marks the selection, once what it is is known (the catalog data of a catalog
+	// object), and unmarks it at any time. The mount marker has none.
+	const selection = sky.selection
+	const selectedRef = selection?.ref
+	const favoriteEntry = selection && selectionResult(selection)
+	const favorite = !!selectedRef && isSkyFavorite(activeProfile(profiles).settings, selectedRef)
+	const inspectorActions =
+		selectedRef && selectedRef.kind !== 'mount' ? (
+			<FavoriteButton
+				favorite={favorite}
+				disabled={!favorite && !favoriteEntry}
+				onChange={(marked) => {
+					if (!marked) removeSkyObjectFavorite(profileState, selectedRef)
+					else if (favoriteEntry) addSkyObjectFavorite(profileState, favoriteEntry)
+				}}
+			/>
+		) : undefined
+
 	// The active site is named by the top bar alone; the header says only when there is none or the time is simulated.
 	const context = [!observer && 'No observing site', clock.mode !== 'now' && 'Simulated time'].filter(Boolean).join(' · ')
 
-	const panels: Record<SkyPanelView, () => { title: string; content: ReactNode }> = {
-		inspector: () => ({ title: 'Object Inspector', content: <ObjectInspector observer={observer} onSetObserver={() => openObservingSites(observer?.id)} timeZone={displayZone.zone} onShowFraming={() => openPanel('framing')} /> }),
+	const panels: Record<SkyPanelView, () => WorkspacePanel> = {
+		inspector: () => ({ title: 'Object Inspector', actions: inspectorActions, content: <ObjectInspector observer={observer} onSetObserver={() => openObservingSites(observer?.id)} timeZone={displayZone.zone} onShowFraming={() => openPanel('framing')} /> }),
 		display: () => ({ title: 'Display', content: <DisplayPanel sky={settings} local={coordinateSystem === 'horizontal'} /> }),
 		framing: () => ({ title: 'Framing', content: <FramingPanel framing={framing} telescope={telescope} guideTelescope={guideTelescope} hasTarget={!!selectionCenter} /> }),
 	}

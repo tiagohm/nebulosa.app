@@ -62,5 +62,6 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Open in Artificial Satellites opens the tool on it.
   No Slew, Framing, rise, transit, or set is offered.
 - Favorites are a profile preference the server keeps (`ProfileSettings.satelliteFavorites`, see [Persistence and State](persistence-and-state.md)); a refresh never removes an id it stops listing.
+  They are also the Sky favorites of satellites: the star of a satellite in the Sky search or Inspector marks the same list, and the Sky lists them by id (see [Sky Map Contract](sky-map.md)).
   The web mirrors the sources (`satelliteCatalogState` of `web/src/satellites/satellites.ts`, in `SERVER_STORES`), whose revision the views watch to read their own data again after a change.
 - Not provided: SupGP, the Sky display of a whole group (the API samples one), satellite brightness and flares, conjunction or collision screening, trails over images, transits of the Sun or the Moon, and tracking with a mount.

@@ -7,6 +7,7 @@ import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import { ObjectTitle } from '../ui/ObjectTitle'
+import { bodyTypeName } from './favorites'
 import { formatApparentSize, formatDeclination, formatMagnitude, formatRightAscension, formatStellarDistance } from './format'
 import { ObserverSection, PositionSection } from './InspectorParts'
 import { MeteorShowerInspector } from './meteor/MeteorShowerInspector'
@@ -83,7 +84,7 @@ function typeOf(selection: SkySelection) {
 	if (selection.catalog) return `${selection.catalog.typeName} in ${selection.catalog.constellationName}`
 	if (selection.minorBody) return `${selection.minorBody.kind === 'comet' ? 'Comet' : 'Asteroid'} · ${selection.minorBody.orbitClass}`
 	if (selection.ref.kind === 'constellation') return 'Constellation'
-	if (selection.ref.kind === 'body') return selection.ref.code === '10' ? 'Star' : selection.ref.code === '301' ? 'Natural Satellite' : selection.ref.code === '999' ? 'Dwarf Planet' : 'Planet'
+	if (selection.ref.kind === 'body') return bodyTypeName(selection.ref.code)
 	return selection.loading ? 'Loading…' : ''
 }
 

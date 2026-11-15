@@ -98,11 +98,12 @@ export class SpiceKernelRuntime implements Disposable {
 		return this.#snapshot
 	}
 
-	// Makes files, in load order (lowest precedence first), the set of a new snapshot with policy. Files already open
+	// Makes files, in load order (lowest precedence first), the set of a new snapshot with policy, selecting the preferred
+	// kernel of a body (preferences, by NAIF code, kernel ids) ahead of the load order where it covers. Files already open
 	// are reused; a new file that cannot be opened, read, or inspected is left out and reported in the returned map, by
 	// kernel id, with its error. Files that left the set are closed after the swap. A set whose files cannot be prepared together swaps
 	// nothing and reports no file, since none can be blamed. Never rejects. The caller serializes rebuilds.
-	async rebuild(files: readonly SpiceKernelFile[], policy: SpiceEphemerisPolicy): Promise<Map<string, Error>> {
+	async rebuild(files: readonly SpiceKernelFile[], policy: SpiceEphemerisPolicy, preferences: ReadonlyMap<number, string> = new Map()): Promise<Map<string, Error>> {
 		const failures = new Map<string, Error>()
 		const opened = new Map<string, PreparedKernel>()
 
@@ -127,7 +128,7 @@ export class SpiceKernelRuntime implements Disposable {
 		let set: SpkKernelSet | undefined
 
 		try {
-			set = entries.length > 0 ? await prepareSpkKernelSet(entries) : undefined
+			set = entries.length > 0 ? await prepareSpkKernelSet(entries, { preferences }) : undefined
 		} catch (error) {
 			// Every file opened alone, so this is a read failure of a file that changed meanwhile, which no file can be blamed for:
 			// nothing is swapped, the previous set stays in force, and the check of each file (on start, on verify) finds the one

@@ -1,11 +1,12 @@
-import type { SpiceKernelJob, SpiceKernelReadiness, SpiceKernelSourceKind } from 'api'
+import type { SpiceKernelJob, SpiceKernelReadiness, SpiceKernelSourceKind, SpiceSegmentUsage } from 'api'
 import { MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Display formats of the SPICE Kernel Library tool: NAIF body names, segment epochs, sizes, and the labels and tones of
 // readiness, sources, and job states.
 
-// Names of the NAIF codes the SPK files of the library usually hold: the barycenters, the Sun, the planets, and the Moon.
+// Names of the NAIF codes the SPK files of the library usually hold: the barycenters, the Sun, the planets, the Moon,
+// and the major moons of the curated satellite kernels.
 const NAIF_NAMES: Readonly<Record<number, string>> = {
 	0: 'Solar system barycenter',
 	1: 'Mercury barycenter',
@@ -22,11 +23,37 @@ const NAIF_NAMES: Readonly<Record<number, string>> = {
 	299: 'Venus',
 	301: 'Moon',
 	399: 'Earth',
+	401: 'Phobos',
+	402: 'Deimos',
 	499: 'Mars',
+	501: 'Io',
+	502: 'Europa',
+	503: 'Ganymede',
+	504: 'Callisto',
+	505: 'Amalthea',
+	514: 'Thebe',
+	515: 'Adrastea',
+	516: 'Metis',
 	599: 'Jupiter',
+	601: 'Mimas',
+	602: 'Enceladus',
+	603: 'Tethys',
+	604: 'Dione',
+	605: 'Rhea',
+	606: 'Titan',
+	607: 'Hyperion',
+	608: 'Iapetus',
+	609: 'Phoebe',
+	612: 'Helene',
+	613: 'Telesto',
+	614: 'Calypso',
+	632: 'Methone',
+	634: 'Polydeuces',
 	699: 'Saturn',
 	799: 'Uranus',
+	801: 'Triton',
 	899: 'Neptune',
+	901: 'Charon',
 	999: 'Pluto',
 }
 
@@ -55,6 +82,20 @@ export const READINESS: Readonly<Record<SpiceKernelReadiness, { readonly label: 
 	loading: { label: 'Loading', tone: 'active' },
 	invalid: { label: 'Invalid', tone: 'danger' },
 	missing: { label: 'Missing file', tone: 'danger' },
+}
+
+// Label and tone of how much of its coverage a segment is selected for.
+export const USAGE: Readonly<Record<SpiceSegmentUsage, { readonly label: string; readonly tone: StatusTone }>> = {
+	full: { label: 'Used', tone: 'success' },
+	partial: { label: 'Partly used', tone: 'neutral' },
+	never: { label: 'Never used', tone: 'muted' },
+}
+
+// UTC date and time (YYYY-MM-DD HH:MM) of an epoch in TDB seconds past J2000, to the minute, under the same
+// approximation as epochDate.
+export function epochDateTime(seconds: number) {
+	const date = new Date(J2000_UNIX_MS + seconds * 1000)
+	return Number.isFinite(date.getTime()) ? `${date.toISOString().slice(0, 10)} ${date.toISOString().slice(11, 16)}` : MISSING
 }
 
 // Label of each source.

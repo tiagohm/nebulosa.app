@@ -12,24 +12,28 @@ import { SegmentedControl } from '../../ui/SegmentedControl'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { AddKernel } from './AddKernel'
+import { Bodies } from './Bodies'
+import { Calculate } from './Calculate'
 import { epochDate, naifName, READINESS, SOURCE_LABELS } from './format'
 import { KernelDetails } from './KernelDetails'
 import { importSpiceKernel, SPICE_POLICY_LABELS, setSpicePolicy, spiceKernelsState, updateSpiceKernel } from './spicekernels'
 
 // SPICE Kernel Library tool: the SPK files the server evaluates for accurate solar-system positions, shared by every tab
-// and profile. Installed lists them with their readiness, enabled flag, and coverage, and opens the details of one in
-// the panel; Add Kernel downloads the curated planetary kernel and generates small-body kernels from Horizons; Settings
-// chooses the ephemeris policy. Import uploads a local .bsp file. Everything shown is the server's; closing the tool
+// and profile. Installed lists them by precedence with their readiness, enabled flag, and coverage, and opens the
+// details of one in the panel; Bodies shows, body by body, which segment the ephemeris selects where and lets the
+// operator prefer a kernel for a body; Calculate computes the state of a body from the kernels, through the selection
+// or from one chosen segment; Add Kernel downloads the curated planetary kernel and generates small-body kernels from
+// Horizons; Settings chooses the ephemeris policy. Import uploads a local .bsp file. Everything shown is the server's; closing the tool
 // never stops a download or a generation.
 
 // Sections of the tool.
-type Section = 'installed' | 'add' | 'settings'
+type Section = 'installed' | 'bodies' | 'calculate' | 'add' | 'settings'
 
 // Sections in display order.
-const SECTIONS: readonly Section[] = ['installed', 'add', 'settings']
+const SECTIONS: readonly Section[] = ['installed', 'bodies', 'calculate', 'add', 'settings']
 
 // Label of each section.
-const SECTION_LABELS: Readonly<Record<Section, string>> = { installed: 'Installed', add: 'Add Kernel', settings: 'Settings' }
+const SECTION_LABELS: Readonly<Record<Section, string>> = { installed: 'Installed', bodies: 'Bodies', calculate: 'Calculate', add: 'Add Kernel', settings: 'Settings' }
 
 // What each policy does.
 const POLICY_DESCRIPTIONS: Readonly<Record<SpiceEphemerisPolicy, string>> = {
@@ -66,11 +70,13 @@ export function SpiceKernelLibrary() {
 	const context = <SegmentedControl options={SECTIONS} value={section} onChange={setSection} format={(e) => SECTION_LABELS[e]} />
 
 	return (
-		<WorkspaceLayout workspace="tools" title="SPICE Kernel Library" context={context} actions={actions} panel={kernel ? { title: 'Kernel', content: <KernelDetails key={kernel.id} kernel={kernel} onDeleted={() => setSelected(undefined)} /> } : undefined}>
+		<WorkspaceLayout workspace="tools" title="SPICE Kernel Library" context={context} actions={actions} panel={kernel && section === 'installed' ? { title: 'Kernel', content: <KernelDetails key={kernel.id} kernel={kernel} onDeleted={() => setSelected(undefined)} /> } : undefined}>
 			<div className="h-full overflow-y-auto bg-base-000">
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					{state.errors.import && <Notice error>{state.errors.import}</Notice>}
 					{section === 'installed' && <Installed kernels={kernels} selected={selected} onSelect={setSelected} />}
+					{section === 'bodies' && <Bodies />}
+					{section === 'calculate' && <Calculate />}
 					{section === 'add' && <AddKernel />}
 					{section === 'settings' && <Settings />}
 				</div>
@@ -96,6 +102,8 @@ function Installed({ kernels, selected, onSelect }: InstalledProps) {
 
 	const usable = kernels.filter((e) => e.readiness === 'ready').length
 	const ordered = kernels.toReversed()
+	// Precedence of each enabled kernel, from 1, the highest.
+	const ranks = new Map(ordered.filter((e) => e.enabled).map((e, i) => [e.id, i + 1]))
 
 	return (
 		<>
@@ -103,24 +111,29 @@ function Installed({ kernels, selected, onSelect }: InstalledProps) {
 				{kernels.length} {kernels.length === 1 ? 'kernel' : 'kernels'}, {usable} ready · {formatByteSize(snapshot.bytes)} · policy {SPICE_POLICY_LABELS[snapshot.policy]}
 				{snapshot.loading && ' · opening the kernels'}
 			</p>
-			<Table columns={['On', 'Name', 'Source', 'Bodies', 'Coverage', { key: 'size', label: 'Size', numeric: true }, 'Status']}>
+			<Table columns={[{ key: 'rank', label: 'Precedence', numeric: true }, 'On', 'Name', 'Source', 'Bodies', 'Coverage', { key: 'size', label: 'Size', numeric: true }, 'Status']}>
 				{ordered.map((kernel) => (
-					<KernelRow key={kernel.id} kernel={kernel} selected={kernel.id === selected} onSelect={() => onSelect(kernel.id)} />
+					<KernelRow key={kernel.id} rank={ranks.get(kernel.id)} kernel={kernel} selected={kernel.id === selected} onSelect={() => onSelect(kernel.id)} />
 				))}
 			</Table>
-			<Notice>Kernels higher in the list take precedence where they cover the same body at the same time. A small body generated by Horizons is relative to the Sun, so it needs a planetary kernel with the Sun and the Earth.</Notice>
+			<Notice>
+				Precedence 1 wins: where several kernels cover the same body at the same instant, the one higher in the list provides it, unless a kernel is preferred for that body in Bodies. A new kernel enters at the top. Raise or lower a kernel in its panel. A small body generated by Horizons is relative to the Sun,
+				so it needs a planetary kernel with the Sun and the Earth.
+			</Notice>
 		</>
 	)
 }
 
 interface KernelRowProps {
+	// Precedence among the enabled kernels, from 1, the highest; absent for a disabled kernel.
+	readonly rank?: number
 	readonly kernel: SpiceKernelSummary
 	readonly selected: boolean
 	readonly onSelect: () => void
 }
 
 // One installed kernel.
-function KernelRow({ kernel, selected, onSelect }: KernelRowProps) {
+function KernelRow({ rank, kernel, selected, onSelect }: KernelRowProps) {
 	const state = useSnapshot(spiceKernelsState)
 	const readiness = READINESS[kernel.readiness]
 	const bodies = kernel.targets.length > 3 ? `${kernel.targets.length} bodies` : kernel.targets.map(naifName).join(', ') || MISSING
@@ -128,6 +141,7 @@ function KernelRow({ kernel, selected, onSelect }: KernelRowProps) {
 
 	return (
 		<Row selected={selected} onSelect={onSelect} title={kernel.failure}>
+			<Cell numeric>{rank ?? MISSING}</Cell>
 			<Cell>
 				{/* The checkbox turns the kernel on or off without selecting the row. */}
 				<span className="flex" onClick={(event) => event.stopPropagation()}>

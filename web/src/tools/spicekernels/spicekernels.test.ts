@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
-import type { SpiceKernelJob, SpiceKernelLibrarySnapshot } from 'api'
-import { activeJobs, applySpiceKernelSnapshot, handleSpiceKernelEvent, importSpiceKernel, refreshSpiceKernels, setSpicePolicy, type SpiceKernelsState, updateSpiceKernel } from './spicekernels'
+import type { SpiceEvaluation, SpiceKernelJob, SpiceKernelLibrarySnapshot } from 'api'
+import { activeJobs, applySpiceKernelSnapshot, evaluationDifference, handleSpiceKernelEvent, importSpiceKernel, refreshSpiceKernels, setSpicePolicy, type SpiceKernelsState, timelinePlacement, timelineSpan, updateSpiceKernel } from './spicekernels'
 
 function snapshot(epoch: string, revision: number, jobs: SpiceKernelJob[] = []): SpiceKernelLibrarySnapshot {
 	return { epoch, revision, loading: false, generation: revision, policy: 'automatic', bytes: 0, kernels: [], jobs }
@@ -96,4 +96,26 @@ test('commands keep their failures and stream an upload as the body', async () =
 	expect(await setSpicePolicy(s, 'offline', request)).toBeFalse()
 	expect(s.errors.settings).toBe('Nope')
 	expect(s.pending).toEqual({})
+})
+
+test('a timeline spans every segment and places intervals in percent of it', () => {
+	expect(timelineSpan([])).toBeUndefined()
+	expect(timelineSpan([{ start: 10, end: 10 }])).toEqual({ start: 10, end: 11 })
+	const span = timelineSpan([
+		{ start: 0, end: 100 },
+		{ start: 50, end: 200 },
+	])!
+	expect(span).toEqual({ start: 0, end: 200 })
+	expect(timelinePlacement(span, 50, 100)).toEqual({ left: 25, width: 25 })
+	expect(timelinePlacement(span, -100, 400)).toEqual({ left: 0, width: 100 })
+	// A short interval keeps a visible width, inside the track.
+	expect(timelinePlacement(span, 200, 200, 1)).toEqual({ left: 99, width: 1 })
+})
+
+test('two evaluations differ by the distance of their positions and velocities and the angle of their directions', () => {
+	const evaluation = (position: readonly [number, number, number], velocity: readonly [number, number, number]) => ({ position, velocity }) as SpiceEvaluation
+	const difference = evaluationDifference(evaluation([1000, 0, 0], [1, 0, 0]), evaluation([1000, 1, 0], [1, 0, 0.002]))
+	expect(difference.position).toBeCloseTo(1, 12)
+	expect(difference.velocity).toBeCloseTo(0.002, 12)
+	expect(difference.angle).toBeCloseTo(Math.atan2(1, 1000), 12)
 })

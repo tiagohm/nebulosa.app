@@ -123,7 +123,7 @@ test('a file with only unsupported segments is stored but not usable', async () 
 	const { kernel } = await library.importFile('ecliptic.bsp', stream(spkFixture([{ center: 0, target: 1, start: 0, end: 10, position: [1, 0, 0], frame: 17 }])))
 
 	expect(kernel).toMatchObject({ readiness: 'unsupported', targets: [], unsupportedSegments: 1 })
-	expect(library.details(kernel.id).segments).toEqual([{ index: 0, name: 'SEGMENT 1', target: 1, center: 0, frame: 17, dataType: 2, start: 0, end: 10, supported: false, reason: 'frame' }])
+	expect(library.details(kernel.id).segments).toEqual([{ index: 0, name: 'SEGMENT 1', target: 1, center: 0, frame: 17, dataType: 2, start: 0, end: 10, supported: false, reason: 'frame', usage: 'full' }])
 })
 
 test('the load order and the enabled flag decide which kernel answers', async () => {
@@ -149,6 +149,113 @@ test('the load order and the enabled flag decide which kernel answers', async ()
 	await library.update(far.kernel.id, { enabled: false })
 	expect(library.runtime.current().set).toBeUndefined()
 	await expect(library.update('unknown', { enabled: true })).rejects.toMatchObject({ status: 404, code: 'notFound' })
+})
+
+// Two Saturnian kernels: the broad one, added last, covers Saturn and its barycenter longer than the accurate one.
+const ACCURATE_SATURN = spkFixture([
+	{ center: 0, target: 6, start: -1e9, end: 1e9, position: [1e9, 0, 0] },
+	{ center: 6, target: 699, start: -5e8, end: 5e8, position: [100, 0, 0] },
+])
+const BROAD_SATURN = spkFixture([
+	{ center: 0, target: 6, start: -2e9, end: 2e9, position: [1e9, 0, 0] },
+	{ center: 6, target: 699, start: -2e9, end: 2e9, position: [300, 0, 0] },
+])
+
+// J2000 (2000-01-01 11:58:55.816 UTC), in Unix milliseconds.
+const J2000_UNIX = Date.UTC(2000, 0, 1, 11, 58, 55, 816)
+
+test('a preferred kernel answers its body where it covers, and the bodies tell which segment is used where', async () => {
+	const { library, database, directory } = await started()
+	const accurate = await library.importFile('accurate.bsp', stream(ACCURATE_SATURN))
+	const broad = await library.importFile('broad.bsp', stream(BROAD_SATURN))
+	const saturn = (time: number) => {
+		const result = library.evaluate({ target: 699, center: 6, time })
+		return result.ok ? Math.round(result.position[0]) : undefined
+	}
+
+	expect(saturn(J2000_UNIX)).toBe(300)
+	let bodies = library.bodies().bodies
+	let body = bodies.find((e) => e.body === 699)!
+	expect(body.kernelIds).toEqual([broad.kernel.id, accurate.kernel.id])
+	expect(body.segments.map((e) => [e.kernelId, e.usage])).toEqual([
+		[broad.kernel.id, 'full'],
+		[accurate.kernel.id, 'never'],
+	])
+	expect(body.preferredKernelId).toBeUndefined()
+
+	const generation = library.runtime.current().generation
+	const answer = await library.setPreference(699, { kernelId: accurate.kernel.id })
+	expect(library.runtime.current().generation).toBe(generation + 1)
+	body = answer.bodies.find((e) => e.body === 699)!
+	expect(body.preferredKernelId).toBe(accurate.kernel.id)
+	expect(body.segments.map((e) => [e.kernelId, e.preferred, e.usage])).toEqual([
+		[accurate.kernel.id, true, 'full'],
+		[broad.kernel.id, false, 'partial'],
+	])
+	expect(body.coverage.map((e) => [e.kernelId, e.start, e.end])).toEqual([
+		[broad.kernel.id, -2e9, -5e8],
+		[accurate.kernel.id, -5e8, 5e8],
+		[broad.kernel.id, 5e8, 2e9],
+	])
+	// The preference is for Saturn alone: its barycenter still comes from the kernel added last.
+	expect(answer.bodies.find((e) => e.body === 6)!.segments[0]).toMatchObject({ kernelId: broad.kernel.id, usage: 'full' })
+	expect(saturn(J2000_UNIX)).toBe(100)
+	// Outside the accurate kernel, the load order answers.
+	expect(saturn(J2000_UNIX + 1e12)).toBe(300)
+
+	// The preference survives a restart.
+	library[Symbol.dispose]()
+	library.runtime[Symbol.dispose]()
+	libraries.splice(libraries.indexOf(library), 1)
+	const restarted = setup({}, database, directory).library
+	await restarted.start()
+	expect(restarted.bodies().bodies.find((e) => e.body === 699)!.preferredKernelId).toBe(accurate.kernel.id)
+	expect(restarted.runtime.current().set?.preferences).toEqual(new Map([[699, accurate.kernel.id]]))
+
+	// Removing the preference, or deleting its kernel, returns the body to the load order.
+	await restarted.setPreference(699, {})
+	expect(restarted.bodies().bodies.find((e) => e.body === 699)!.preferredKernelId).toBeUndefined()
+	await restarted.setPreference(699, { kernelId: accurate.kernel.id })
+	await restarted.remove(accurate.kernel.id)
+	bodies = restarted.bodies().bodies
+	expect(bodies.find((e) => e.body === 699)!.preferredKernelId).toBeUndefined()
+	await expect(restarted.setPreference(699, { kernelId: 'unknown' })).rejects.toMatchObject({ status: 404, code: 'notFound' })
+})
+
+test('a body is evaluated through the selection or from one chosen segment', async () => {
+	const { library } = await started()
+	await library.importFile('planets.bsp', stream(PLANETARY))
+	const accurate = await library.importFile('accurate.bsp', stream(ACCURATE_SATURN))
+	const broad = await library.importFile('broad.bsp', stream(BROAD_SATURN))
+
+	const resolved = library.evaluate({ target: 699, center: 399, time: J2000_UNIX })
+	if (!resolved.ok) throw new Error(resolved.reason)
+	expect(resolved.position[0]).toBeCloseTo(1e9 + 300, 3)
+	expect(resolved.position[1]).toBeCloseTo(-1.5e8 - 4000, 3)
+	expect(resolved.distance).toBeCloseTo(Math.hypot(1e9 + 300, 1.5e8 + 4000), 3)
+	expect(resolved.lightTime).toBeCloseTo((resolved.distance * 1000) / 299792458, 9)
+	expect(resolved.velocity).toEqual([0, 0, 0])
+	expect(resolved.tdbSeconds).toBeCloseTo(0, 3)
+	expect(resolved.tdbJulianDate).toBeCloseTo(2451545, 8)
+	expect(resolved.declination).toBeCloseTo(0, 12)
+	expect(resolved.rightAscension).toBeCloseTo(2 * Math.PI - Math.atan2(1.5e8 + 4000, 1e9 + 300), 12)
+	expect(resolved.source).toBeUndefined()
+	expect(resolved.targetChain.map((e) => [e.body, e.kernelId])).toEqual([
+		[699, broad.kernel.id],
+		[6, broad.kernel.id],
+	])
+	expect(resolved.centerChain.map((e) => e.body)).toEqual([399, 3])
+
+	// The lower segment of the accurate kernel, relative to its own center, then to the Earth.
+	const own = library.evaluate({ target: 699, center: 6, time: J2000_UNIX, source: { kernelId: accurate.kernel.id, segment: 1 } })
+	expect(own).toMatchObject({ ok: true, position: [100, 0, 0], source: { body: 699, center: 6, kernelId: accurate.kernel.id, segment: 1, preferred: false }, targetChain: [], centerChain: [] })
+	const fromEarth = library.evaluate({ target: 699, center: 399, time: J2000_UNIX, source: { kernelId: accurate.kernel.id, segment: 1 } })
+	expect(fromEarth.ok && resolved.position[0] - fromEarth.position[0]).toBeCloseTo(200, 3)
+
+	expect(library.evaluate({ target: 699, center: 6, time: J2000_UNIX + 1e12, source: { kernelId: accurate.kernel.id, segment: 1 } })).toMatchObject({ ok: false, side: 'source', reason: 'coverage' })
+	expect(library.evaluate({ target: 699, center: 6, time: J2000_UNIX, source: { kernelId: accurate.kernel.id, segment: 0 } })).toMatchObject({ ok: false, side: 'source', reason: 'missing' })
+	expect(library.evaluate({ target: 699, center: 599, time: J2000_UNIX })).toMatchObject({ ok: false, side: 'center', reason: 'missing', body: 599 })
+	expect(library.evaluate({ target: 599, center: 399, time: J2000_UNIX })).toMatchObject({ ok: false, side: 'target', reason: 'missing', body: 599 })
 })
 
 test('a deleted kernel leaves the set and its file is removed', async () => {
@@ -291,6 +398,17 @@ test('the routes answer the snapshot, uploads, and errors', async () => {
 	const missing = await routes['/api/spice-kernels/:id'].GET({ params: { id: 'unknown' } } as never)
 	expect(missing.status).toBe(404)
 	expect(await missing.json()).toEqual({ error: 'Unknown kernel.', code: 'notFound' })
+
+	const bodies = (await routes['/api/spice-kernels/bodies'].GET().json()) as { bodies: { body: number }[] }
+	expect(bodies.bodies.map((e) => e.body)).toEqual([3, 10, 399])
+
+	const preferred = await routes['/api/spice-kernels/bodies/:body/preference'].PUT(Object.assign(new Request('http://localhost/api/spice-kernels/bodies/399/preference', { method: 'PUT', body: JSON.stringify({ kernelId: kernel.id }) }), { params: { body: '399' } }) as never)
+	expect(((await preferred.json()) as { bodies: { body: number; preferredKernelId?: string }[] }).bodies.find((e) => e.body === 399)?.preferredKernelId).toBe(kernel.id)
+
+	const evaluated = await routes['/api/spice-kernels/evaluate'].POST(new Request('http://localhost/api/spice-kernels/evaluate', { method: 'POST', body: JSON.stringify({ target: 399, center: 3, time: Date.UTC(2026, 0, 1) }) }) as never)
+	const evaluation = (await evaluated.json()) as { ok: boolean; distance: number }
+	expect(evaluation.ok).toBeTrue()
+	expect(evaluation.distance).toBeCloseTo(4000, 6)
 
 	const deleted = await routes['/api/spice-kernels/:id'].DELETE({ params: { id: kernel.id } } as never)
 	expect(deleted.status).toBe(204)

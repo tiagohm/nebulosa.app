@@ -3,8 +3,8 @@ import { join } from 'path'
 import type { SpkSegmentDescriptor, SpkUnsupportedReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.inspect'
 import { type AppDatabase, DEFAULT_DATA_DIRECTORY } from './database'
 
-// Durable part of the SPICE Kernel Library: the SPK files, their segments, and the ephemeris policy, as rows of
-// spice_kernels, spice_segments, and spice_settings in the operational database, and the bytes of each file under
+// Durable part of the SPICE Kernel Library: the SPK files, their segments, the preferred kernel of some bodies, and the
+// ephemeris policy, as rows of spice_kernels, spice_segments, spice_preferences, and spice_settings in the operational database, and the bytes of each file under
 // spice-kernels/objects/<sha256>.bsp. A file is streamed into spice-kernels/staging/, hashed while it is written,
 // renamed into objects/ once inspected, and only then recorded, so no row ever names a partial file. Content
 // addressing makes an identical file one entry. Shared by every profile.
@@ -254,6 +254,18 @@ export class SpiceKernelStore {
 	// Deletes a kernel and its segments.
 	delete(id: string) {
 		this.database.db.query('DELETE FROM spice_kernels WHERE kernel_id = ?').run(id)
+	}
+
+	// Returns the preferred kernel of each body with a preference, by NAIF code.
+	preferences(): Map<number, string> {
+		const rows = this.database.db.query<{ body: number; kernel_id: string }, []>('SELECT body, kernel_id FROM spice_preferences').all()
+		return new Map(rows.map((e) => [e.body, e.kernel_id]))
+	}
+
+	// Makes kernel the preferred one of the NAIF body, or removes the preference of the body when kernel is undefined.
+	setPreference(body: number, kernel: string | undefined) {
+		if (kernel === undefined) this.database.db.query('DELETE FROM spice_preferences WHERE body = ?').run(body)
+		else this.database.db.query('INSERT INTO spice_preferences VALUES (?, ?) ON CONFLICT (body) DO UPDATE SET kernel_id = excluded.kernel_id').run(body, kernel)
 	}
 
 	// Returns the ephemeris policy; automatic when never changed.

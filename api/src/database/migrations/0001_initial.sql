@@ -917,6 +917,15 @@ CREATE TABLE spice_segments (
 
 CREATE INDEX spice_segments_target ON spice_segments (target, start_et, end_et);
 
+-- Preferred kernel of a body in the SPICE Kernel Library (SpiceKernelStore): where a segment of that kernel for the body
+-- covers an epoch, it is selected ahead of the load order; elsewhere the load order applies. One row per body with a
+-- preference; deleting the kernel deletes it.
+CREATE TABLE spice_preferences (
+	-- NAIF code of the body.
+	body INTEGER PRIMARY KEY,
+	kernel_id TEXT NOT NULL REFERENCES spice_kernels (kernel_id) ON DELETE CASCADE
+) STRICT;
+
 -- Ephemeris policy of the SPICE Kernel Library: one row, absent until an operator changes it from automatic.
 CREATE TABLE spice_settings (
 	singleton INTEGER PRIMARY KEY CHECK (singleton = 1),

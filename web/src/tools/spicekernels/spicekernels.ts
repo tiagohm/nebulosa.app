@@ -1,4 +1,4 @@
-import type { ServerEvent, SpiceCatalogItem, SpiceEphemerisPolicy, SpiceKernelDetails, SpiceKernelGenerateRequest, SpiceKernelJob, SpiceKernelLibrarySnapshot, SpiceKernelUpdateRequest } from 'api'
+import type { ServerEvent, SpiceBodiesResponse, SpiceBodySegment, SpiceEvaluation, SpiceCatalogItem, SpiceEphemerisPolicy, SpiceEvaluationRequest, SpiceEvaluationResult, SpiceKernelDetails, SpiceKernelGenerateRequest, SpiceKernelJob, SpiceKernelLibrarySnapshot, SpiceKernelUpdateRequest } from 'api'
 import { proxy } from 'valtio'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
 
@@ -108,6 +108,29 @@ export function setSpicePolicy(state: SpiceKernelsState, policy: SpiceEphemerisP
 	return send(state, 'settings', () => request('/api/spice-kernels/settings', jsonInit('PATCH', { policy })), 'The policy could not be changed.')
 }
 
+// Prefers a kernel for a NAIF body, or, without kernelId, returns the body to the load order alone.
+export function setSpiceBodyPreference(state: SpiceKernelsState, body: number, kernelId: string | undefined, request: ApiFetch = browserFetch) {
+	return send(state, `body:${body}`, () => request(`/api/spice-kernels/bodies/${body}/preference`, jsonInit('PUT', { kernelId })), 'The preference could not be changed.')
+}
+
+// How the current set of the server selects the segments of each body; undefined when the server is unreachable.
+export async function fetchSpiceBodies(signal?: AbortSignal, request: ApiFetch = browserFetch): Promise<SpiceBodiesResponse | undefined> {
+	try {
+		const response = await request('/api/spice-kernels/bodies', { signal })
+		return response.ok ? ((await response.json()) as SpiceBodiesResponse) : undefined
+	} catch {
+		return undefined
+	}
+}
+
+// State of a body relative to another at an instant, through the selection of the server or from one segment. Throws
+// with the message of the server when the request fails.
+export async function evaluateSpice(body: SpiceEvaluationRequest, signal?: AbortSignal, request: ApiFetch = browserFetch): Promise<SpiceEvaluationResult> {
+	const response = await request('/api/spice-kernels/evaluate', { ...jsonInit('POST', body), signal })
+	if (!response.ok) throw new Error(await responseError(response, 'The state could not be computed.'))
+	return (await response.json()) as SpiceEvaluationResult
+}
+
 // A kernel and its segments; undefined when it is unknown or the server is unreachable.
 export async function fetchSpiceKernelDetails(id: string, signal?: AbortSignal, request: ApiFetch = browserFetch): Promise<SpiceKernelDetails | undefined> {
 	try {
@@ -126,6 +149,35 @@ export async function fetchSpiceCatalog(signal?: AbortSignal, request: ApiFetch 
 	} catch {
 		return []
 	}
+}
+
+// Time span of a timeline of segments, TDB seconds past J2000: from the earliest start to the latest end; undefined
+// without segments. A span of a single instant is widened by one second so positions stay finite.
+export function timelineSpan(segments: readonly Pick<SpiceBodySegment, 'start' | 'end'>[]): { readonly start: number; readonly end: number } | undefined {
+	if (segments.length === 0) return undefined
+	const start = Math.min(...segments.map((e) => e.start))
+	const end = Math.max(...segments.map((e) => e.end))
+	return end > start ? { start, end } : { start, end: start + 1 }
+}
+
+// Position and width, in percent of a timeline span, of an interval from start to end, clamped to the span. A
+// non-empty interval keeps a visible width of at least `minimum` percent.
+export function timelinePlacement(span: { readonly start: number; readonly end: number }, start: number, end: number, minimum: number = 0.4) {
+	const length = span.end - span.start
+	const left = Math.max(0, Math.min(100, ((start - span.start) / length) * 100))
+	const right = Math.max(0, Math.min(100, ((end - span.start) / length) * 100))
+	const width = Math.max(right - left, minimum)
+	return { left: Math.min(left, 100 - width), width }
+}
+
+// Difference of two evaluations of the same target and center: the distance between the positions (km), between the
+// velocities (km/s), and the angle between the directions (radians).
+export function evaluationDifference(a: SpiceEvaluation, b: SpiceEvaluation) {
+	const position = Math.hypot(a.position[0] - b.position[0], a.position[1] - b.position[1], a.position[2] - b.position[2])
+	const velocity = Math.hypot(a.velocity[0] - b.velocity[0], a.velocity[1] - b.velocity[1], a.velocity[2] - b.velocity[2])
+	const cross = Math.hypot(a.position[1] * b.position[2] - a.position[2] * b.position[1], a.position[2] * b.position[0] - a.position[0] * b.position[2], a.position[0] * b.position[1] - a.position[1] * b.position[0])
+	const dot = a.position[0] * b.position[0] + a.position[1] * b.position[1] + a.position[2] * b.position[2]
+	return { position, velocity, angle: Math.atan2(cross, dot) }
 }
 
 // Active jobs of the library, oldest first.

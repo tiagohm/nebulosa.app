@@ -15,7 +15,7 @@ import { type SpiceEphemerisPolicy, type SpiceKernelRecord, type SpiceKernelSour
 import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 
 // SPICE Kernel Library: the server-global set of SPK files the Sky ephemeris evaluates locally. Files come from three
-// explicit actions of an operator, never from a position request: a curated NAIF download, a Horizons small-body
+// explicit actions of an operator, never from a position request: a curated NASA/JPL download, a Horizons small-body
 // generation through the shared JPL queue, or an upload. Each is streamed into staging, inspected, renamed into place,
 // recorded, and published as a new runtime generation, one change at a time; a failure leaves the previous generation
 // untouched. Enabling, reordering, verifying, and deleting kernels, preferring a kernel for a body, and changing the
@@ -25,7 +25,7 @@ import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 // Every change is announced by `spiceKernels:changed` with the epoch of the process and a new revision, and every job
 // change by `spiceKernels:jobUpdated`; tabs read the snapshot again.
 
-export type { SpiceCatalogEntry } from './spicekernels.catalog'
+export type { SpiceCatalogEntry, SpiceCatalogSystem } from './spicekernels.catalog'
 export type { SpiceKernelJob, SpiceKernelJobKind, SpiceKernelJobState } from './spicekernels.jobs'
 export type { SpiceEphemerisPolicy, SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelState, SpiceSegmentRecord } from './spicekernels.store'
 
@@ -603,18 +603,19 @@ export class SpiceKernelLibrary implements Disposable {
 	// Downloads a curated entry into staging and publishes it.
 	async #download(entry: SpiceCatalogEntry, context: SpiceKernelJobContext) {
 		const signal = AbortSignal.any([context.signal, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)])
+		const host = new URL(entry.url).host
 		let response: Response
 
 		try {
 			response = await this.#fetch(entry.url, { signal, redirect: 'error' })
 		} catch (error) {
 			if (context.signal.aborted) throw error
-			throw new SpiceKernelError(`NAIF could not be reached: ${Error.isError(error) ? error.message : String(error)}`, 502, 'downloadFailed')
+			throw new SpiceKernelError(`${host} could not be reached: ${Error.isError(error) ? error.message : String(error)}`, 502, 'downloadFailed')
 		}
 
 		if (!response.ok || !response.body) {
 			await response.body?.cancel()
-			throw new SpiceKernelError(`NAIF answered ${response.status}.`, 502, 'downloadFailed')
+			throw new SpiceKernelError(`${host} answered ${response.status}.`, 502, 'downloadFailed')
 		}
 
 		const length = Number(response.headers.get('content-length')) || undefined
@@ -840,7 +841,7 @@ export function createSpiceKernelRoutes(library: SpiceKernelLibrary) {
 			GET: () => Response.json(library.snapshot() satisfies SpiceKernelLibrarySnapshot),
 		},
 		'/api/spice-kernels/catalog': {
-			// Curated NAIF downloads (SpiceCatalogItem[]).
+			// Curated NASA/JPL downloads (SpiceCatalogItem[]).
 			GET: () => Response.json(library.catalog() satisfies SpiceCatalogItem[]),
 		},
 		'/api/spice-kernels/coverage': {

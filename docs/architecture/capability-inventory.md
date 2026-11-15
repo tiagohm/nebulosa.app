@@ -82,7 +82,7 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
   Artificial Satellites tool `web/src/tools/artificialsatellites/` (Ground Track on `WorldMap`);
   Sky search, Satellite Inspector (`web/src/sky/satellite/`), and map markers (`web/src/sky/satellites.sky.ts`);
   mount tracking, brightness, and screening are not provided
-- **SPICE Kernel Library (SPK files for a local accurate ephemeris)** (Implemented): `api/src/spicekernels.ts` (curated NAIF downloads, Horizons small-body generations through the queue of `api/src/ssd.ts`, uploads), `spicekernels.store.ts`, and the runtime set of `spicekernels.runtime.ts` over the multi-file resolver of `core/src/astronomy/ephemeris/kernels/spk.kernelset.ts`;
+- **SPICE Kernel Library (SPK files for a local accurate ephemeris)** (Implemented): `api/src/spicekernels.ts` (curated NASA/JPL downloads of NAIF and JPL SSD, Horizons small-body generations through the queue of `api/src/ssd.ts`, uploads), `spicekernels.store.ts`, and the runtime set of `spicekernels.runtime.ts` over the multi-file resolver of `core/src/astronomy/ephemeris/kernels/spk.kernelset.ts`;
   SPICE Kernel Library tool `web/src/tools/spicekernels/`;
   only J2000 SPK segments of types 2, 3, 9, and 21 are evaluated, and frame, orientation, clock, and mission kernels are not provided
 - **Astronomical time conversion** (Implemented): Astronomical Time Converter tool (`web/src/tools/astronomicaltime/`) and the status bar clock (`web/src/shell/statusbar/astronomicalclock.ts`) over `api/src/astronomicaltime.ts` and the Earth orientation tables of `api/src/astronomicaltime.eop.ts`, which the whole server reads;

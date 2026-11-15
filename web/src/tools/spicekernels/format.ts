@@ -6,7 +6,7 @@ import type { StatusTone } from '../../ui/StatusBadge'
 // readiness, sources, and job states.
 
 // Names of the NAIF codes the SPK files of the library usually hold: the barycenters, the Sun, the planets, the Moon,
-// and the major moons of the curated satellite kernels.
+// and the named moons of the curated satellite kernels but the irregular moons of Saturn and the provisional ones.
 const NAIF_NAMES: Readonly<Record<number, string>> = {
 	0: 'Solar system barycenter',
 	1: 'Mercury barycenter',
@@ -31,6 +31,14 @@ const NAIF_NAMES: Readonly<Record<number, string>> = {
 	503: 'Ganymede',
 	504: 'Callisto',
 	505: 'Amalthea',
+	506: 'Himalia',
+	507: 'Elara',
+	508: 'Pasiphae',
+	509: 'Sinope',
+	510: 'Lysithea',
+	511: 'Carme',
+	512: 'Ananke',
+	513: 'Leda',
 	514: 'Thebe',
 	515: 'Adrastea',
 	516: 'Metis',
@@ -44,16 +52,51 @@ const NAIF_NAMES: Readonly<Record<number, string>> = {
 	607: 'Hyperion',
 	608: 'Iapetus',
 	609: 'Phoebe',
+	610: 'Janus',
+	611: 'Epimetheus',
 	612: 'Helene',
 	613: 'Telesto',
 	614: 'Calypso',
+	615: 'Atlas',
+	616: 'Prometheus',
+	617: 'Pandora',
+	618: 'Pan',
 	632: 'Methone',
+	633: 'Pallene',
 	634: 'Polydeuces',
+	649: 'Anthe',
+	653: 'Aegaeon',
 	699: 'Saturn',
+	701: 'Ariel',
+	702: 'Umbriel',
+	703: 'Titania',
+	704: 'Oberon',
+	705: 'Miranda',
+	715: 'Puck',
+	716: 'Caliban',
+	717: 'Sycorax',
+	718: 'Prospero',
+	719: 'Setebos',
+	720: 'Stephano',
+	721: 'Trinculo',
+	722: 'Francisco',
+	723: 'Margaret',
+	724: 'Ferdinand',
 	799: 'Uranus',
 	801: 'Triton',
+	802: 'Nereid',
+	803: 'Naiad',
+	809: 'Halimede',
+	810: 'Psamathe',
+	811: 'Sao',
+	812: 'Laomedeia',
+	813: 'Neso',
 	899: 'Neptune',
 	901: 'Charon',
+	902: 'Nix',
+	903: 'Hydra',
+	904: 'Kerberos',
+	905: 'Styx',
 	999: 'Pluto',
 }
 
@@ -99,7 +142,7 @@ export function epochDateTime(seconds: number) {
 }
 
 // Label of each source.
-export const SOURCE_LABELS: Readonly<Record<SpiceKernelSourceKind, string>> = { naif: 'NAIF', horizons: 'Horizons', import: 'Upload' }
+export const SOURCE_LABELS: Readonly<Record<SpiceKernelSourceKind, string>> = { naif: 'NASA/JPL', horizons: 'Horizons', import: 'Upload' }
 
 // Label of each job state.
 export const JOB_STATE_LABELS: Readonly<Record<SpiceKernelJob['state'], string>> = {

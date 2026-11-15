@@ -12,7 +12,7 @@ import { type AppDatabase, DEFAULT_DATA_DIRECTORY } from './database'
 // Directory of the files of the SPICE Kernel Library.
 export const DEFAULT_SPICE_KERNEL_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'spice-kernels')
 
-// Where a kernel came from: a curated NAIF download, a Horizons small-body generation, or an upload.
+// Where a kernel came from: a curated NAIF or JPL SSD download (kind naif), a Horizons small-body generation, or an upload.
 export type SpiceKernelSourceKind = 'naif' | 'horizons' | 'import'
 
 // Lifecycle of a kernel: usable, being deleted, failing its integrity or format checks, or without its file.

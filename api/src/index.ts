@@ -451,6 +451,7 @@ export type {
 export type { RejectedRecord, SatelliteRecordError } from './satellites.elements'
 export type {
 	SpiceCatalogItem,
+	SpiceCatalogSystem,
 	SpiceEphemerisPolicy,
 	SpiceKernelCoverage,
 	SpiceKernelDetails,

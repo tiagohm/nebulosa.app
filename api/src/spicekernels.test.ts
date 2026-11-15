@@ -323,20 +323,31 @@ test('a curated download is streamed, inspected, and installed', async () => {
 	expect(() => library.download('unknown')).toThrow('Unknown curated kernel.')
 })
 
-test('the curated catalog lists the reviewed Jovian and Saturnian kernels within the size limit', async () => {
+test('the curated catalog lists the reviewed kernels by system within the size limit', async () => {
 	const { library } = await started({})
 	const catalog = library.catalog()
-	expect(catalog.map((e) => e.id)).toEqual(['de440s', 'jup365-1990-2050', 'sat480', 'sat441'])
-	const jovian = catalog[1]
-	expect(jovian.url).toBe('https://naif.jpl.nasa.gov/pub/naif/JUICE/kernels/spk/jup365_19900101_20500101.bsp')
-	expect(catalog[2].url).toBe('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/sat480.bsp')
-	expect(catalog[3].url).toBe('https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites/sat441.bsp')
+	expect(catalog.map((e) => e.id)).toEqual(['de440s', 'de440', 'de442s', 'de442', 'mar099s', 'jup365-1990-2050', 'jup347', 'jup348', 'jup349', 'sat480', 'sat441', 'sat415', 'sat456', 'sat457', 'sat455', 'sat459', 'ura184-part-3', 'ura182', 'ura117', 'nep097', 'nep098-part-1', 'nep105', 'nep104', 'plu060'])
+	expect(new Set(catalog.map((e) => e.name)).size).toBe(catalog.length)
+	// Every system is one consecutive run, the planetary ephemerides first.
+	expect([...new Set(catalog.map((e) => e.system))]).toEqual(['planets', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'])
+	expect(catalog.find((e) => e.id === 'jup365-1990-2050')?.url).toBe('https://naif.jpl.nasa.gov/pub/naif/JUICE/kernels/spk/jup365_19900101_20500101.bsp')
+	expect(catalog.find((e) => e.id === 'ura182')?.url).toBe('https://ssd.jpl.nasa.gov/ftp/eph/satellites/bsp/ura182.bsp')
 	// sat441 alone is larger than the former 256 MiB limit.
-	expect(catalog[3].bytes).toBeGreaterThan(256 * 1024 * 1024)
+	expect(catalog.find((e) => e.id === 'sat441')?.bytes).toBeGreaterThan(256 * 1024 * 1024)
+
 	for (const entry of catalog) {
+		expect(entry.url).toEndWith(`/${entry.name}`)
+		expect(entry.url).toMatch(/^https:\/\/(naif|ssd)\.jpl\.nasa\.gov\//)
 		expect(entry.bytes).toBeLessThanOrEqual(MAX_SPICE_KERNEL_BYTES)
+		expect(entry.startYear).toBeLessThan(entry.endYear)
 		expect(entry.kernelId).toBeUndefined()
 	}
+})
+
+test('a failed download names the host of the entry', async () => {
+	const { library, events } = await started({ fetch: () => Promise.resolve(new Response(null, { status: 404 })) })
+	const end = await ended(events, library.download('ura117').jobId)
+	expect(end).toMatchObject({ state: 'failed', code: 'downloadFailed', error: 'ssd.jpl.nasa.gov answered 404.' })
 })
 
 test('a download larger than the limit fails without a trace', async () => {

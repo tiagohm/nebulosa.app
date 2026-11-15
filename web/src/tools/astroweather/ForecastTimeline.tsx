@@ -5,7 +5,7 @@ import { moveIndex } from '../../ui/navigation'
 import { OUTLOOK_LABELS, type SkyBand, skyBands } from './astroweather'
 import type { NightEvaluation, ObservingWindow, Outlook, OutlookSegment } from './observing'
 
-// Timeline of a night: one time axis shared by rows of the outlook, cloud, seeing, transparency, precipitation, gusts,
+// Timeline of a night: one time axis shared by rows of the outlook, cloud, seeing, transparency, precipitation, wind, gusts,
 // temperature, dew point, humidity, and the Moon, over bands of how dark the sky is. Every row has its own scale and none
 // shares an axis with another. Hourly values are bars for the hour they describe, except the temperature and the dew point,
 // written as rounded degrees because they have no natural zero to rise from, and the 7Timer! classes are tiles centered on their own timestamps and as wide as their
@@ -33,8 +33,8 @@ const ROW_PADDING = 3
 // Half the width of the tile of a 7Timer! sample, in milliseconds (half of its 3 hour step).
 const SAMPLE_HALF_WIDTH_MS = 90 * 60_000
 
-// Gust that fills its row, in km/h; stronger ones are drawn full.
-const GUST_SCALE = 60
+// Wind or gust that fills its row, in km/h; stronger ones are drawn full. Both rows share it, so their bars compare.
+const WIND_SCALE = 60
 
 // Narrowest slot, in CSS pixels, that shows the symbol of an hour.
 const SYMBOL_MINIMUM_WIDTH = 12
@@ -58,7 +58,7 @@ const OUTLOOK_FILLS: Readonly<Record<Exclude<Outlook, 'unavailable'>, string>> =
 const OUTLOOK_SYMBOLS: Readonly<Record<Outlook, string>> = { favorable: '+', variable: '~', unfavorable: '×', unavailable: '?' }
 
 // Rows of the timeline, in order.
-const ROWS = ['Outlook', 'Clouds', 'Seeing', 'Transparency', 'Rain chance', 'Gusts', 'Temperature', 'Dew point', 'Humidity', 'Moon up'] as const
+const ROWS = ['Outlook', 'Clouds', 'Seeing', 'Transparency', 'Rain chance', 'Wind', 'Gusts', 'Temperature', 'Dew point', 'Humidity', 'Moon up'] as const
 
 // Name of a row.
 type Row = (typeof ROWS)[number]
@@ -361,11 +361,21 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 				/>
 				<Bars
 					hours={segments}
+					row="Wind"
+					scale={scale}
+					value={(hour) => {
+						const value = byTime.get(hour.start)?.windSpeed
+						return value === undefined ? undefined : value / WIND_SCALE
+					}}
+					title={(hour) => `${hourLabel(hour)}: sustained wind of ${byTime.get(hour.start)?.windSpeed} km/h`}
+				/>
+				<Bars
+					hours={segments}
 					row="Gusts"
 					scale={scale}
 					value={(hour) => {
 						const value = byTime.get(hour.end)?.windGust
-						return value === undefined ? undefined : value / GUST_SCALE
+						return value === undefined ? undefined : value / WIND_SCALE
 					}}
 					title={(hour) => `${hourLabel(hour)}: gusts of ${byTime.get(hour.end)?.windGust} km/h`}
 				/>

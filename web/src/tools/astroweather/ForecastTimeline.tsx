@@ -5,9 +5,10 @@ import { moveIndex } from '../../ui/navigation'
 import { OUTLOOK_LABELS, type SkyBand, skyBands } from './astroweather'
 import type { NightEvaluation, ObservingWindow, Outlook, OutlookSegment } from './observing'
 
-// Timeline of a night: one time axis shared by rows of the outlook, cloud, seeing, transparency, precipitation, gusts, and the
-// Moon, over bands of how dark the sky is. Every row has its own scale and none shares an axis with another. Hourly values are
-// bars for the hour they describe, and the 7Timer! classes are tiles centered on their own timestamps and as wide as their
+// Timeline of a night: one time axis shared by rows of the outlook, cloud, seeing, transparency, precipitation, gusts,
+// temperature, humidity, and the Moon, over bands of how dark the sky is. Every row has its own scale and none shares an axis
+// with another. Hourly values are bars for the hour they describe, except the temperature, written as rounded degrees because
+// it has no natural zero to rise from, and the 7Timer! classes are tiles centered on their own timestamps and as wide as their
 // 3 hour step, so a sample is never drawn as an hourly reading or a continuous line. A value the forecast lacks draws nothing.
 // The hour clicked or chosen with the arrow keys is the one the readout below describes; hovering chooses nothing.
 
@@ -38,6 +39,9 @@ const GUST_SCALE = 60
 // Narrowest slot, in CSS pixels, that shows the symbol of an hour.
 const SYMBOL_MINIMUM_WIDTH = 12
 
+// Room, in CSS pixels, an hour's temperature needs to be written ("-12°"); narrower hours write every few hours instead.
+const VALUE_TEXT_WIDTH = 30
+
 // Widest gap, in CSS pixels, between labels of the time axis.
 const TICK_SPACING = 56
 
@@ -54,7 +58,7 @@ const OUTLOOK_FILLS: Readonly<Record<Exclude<Outlook, 'unavailable'>, string>> =
 const OUTLOOK_SYMBOLS: Readonly<Record<Outlook, string>> = { favorable: '+', variable: '~', unfavorable: '×', unavailable: '?' }
 
 // Rows of the timeline, in order.
-const ROWS = ['Outlook', 'Clouds', 'Seeing', 'Transparency', 'Rain chance', 'Gusts', 'Moon up'] as const
+const ROWS = ['Outlook', 'Clouds', 'Seeing', 'Transparency', 'Rain chance', 'Gusts', 'Temperature', 'Humidity', 'Moon up'] as const
 
 // Name of a row.
 type Row = (typeof ROWS)[number]
@@ -131,6 +135,48 @@ function Bars({ hours, value, title, row, scale }: BarsProps) {
 			<rect key={hour.start} x={left} y={base - height} width={Math.max(1, scale.x(hour.end) - left - MARK_GAP)} height={height} rx={1} fill="var(--color-ink-300)">
 				<title>{title(hour)}</title>
 			</rect>
+		)
+	})
+}
+
+interface ValuesProps {
+	// Hours of the row.
+	readonly hours: readonly OutlookSegment[]
+	// Text of an hour, undefined when unknown.
+	readonly value: (hour: OutlookSegment) => string | undefined
+	// Title of an hour.
+	readonly title: (hour: OutlookSegment) => string
+	// Row of the values.
+	readonly row: Row
+	// Geometry of the chart.
+	readonly scale: Scale
+}
+
+// The text of every hour with a value, centered on its hour. When hours are narrower than VALUE_TEXT_WIDTH, only every few hours
+// is written, so texts never overlap; every hour with a value keeps its title.
+function Values({ hours, value, title, row, scale }: ValuesProps) {
+	const top = scale.y(row) + ROW_PADDING
+	const room = ROW_HEIGHT - 2 * ROW_PADDING
+	const first = hours.at(0)
+	const last = hours.at(-1)
+	const slot = first && last ? (scale.x(last.end) - scale.x(first.start)) / hours.length : 0
+	const step = Math.max(1, Math.ceil(VALUE_TEXT_WIDTH / Math.max(1, slot)))
+
+	return hours.map((hour, index) => {
+		const text = value(hour)
+		if (text === undefined) return undefined
+		const left = scale.x(hour.start)
+		const width = Math.max(1, scale.x(hour.end) - left - MARK_GAP)
+		return (
+			<g key={hour.start}>
+				<title>{title(hour)}</title>
+				<rect x={left} y={top} width={width} height={room} fill="transparent" />
+				{index % step === 0 && (
+					<text x={left + width / 2} y={top + room / 2} dy="0.35em" textAnchor="middle" fill="var(--color-ink-100)">
+						{text}
+					</text>
+				)}
+			</g>
 		)
 	})
 }
@@ -323,6 +369,26 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 					}}
 					title={(hour) => `${hourLabel(hour)}: gusts of ${byTime.get(hour.end)?.windGust} km/h`}
 				/>
+				<Values
+					hours={segments}
+					row="Temperature"
+					scale={scale}
+					value={(hour) => {
+						const value = byTime.get(hour.start)?.temperature
+						return value === undefined ? undefined : `${Math.round(value)}°`
+					}}
+					title={(hour) => `${hourLabel(hour)}: air temperature of ${byTime.get(hour.start)?.temperature} °C`}
+				/>
+				<Bars
+					hours={segments}
+					row="Humidity"
+					scale={scale}
+					value={(hour) => {
+						const value = byTime.get(hour.start)?.relativeHumidity
+						return value === undefined ? undefined : value / 100
+					}}
+					title={(hour) => `${hourLabel(hour)}: ${byTime.get(hour.start)?.relativeHumidity}% relative humidity`}
+				/>
 				{moon.above.map((span) => (
 					<rect key={span.start} x={scale.x(span.start)} y={scale.y('Moon up') + ROW_HEIGHT / 2 - 3} width={Math.max(1, scale.x(span.end) - scale.x(span.start))} height={6} rx={3} fill="var(--color-ink-200)">
 						<title>{`Moon above the horizon: ${formatClockTime(span.start, timeZone)}–${formatClockTime(span.end, timeZone)}`}</title>
@@ -351,6 +417,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 					{OUTLOOK_SYMBOLS.unavailable} {OUTLOOK_LABELS.unavailable}
 				</span>
 				<span>Seeing and transparency: class 1 best, 8 worst, every 3 hours</span>
+				<span>Temperature in °C</span>
 			</p>
 		</>
 	)

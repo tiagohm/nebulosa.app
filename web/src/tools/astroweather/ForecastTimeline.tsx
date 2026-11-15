@@ -6,9 +6,9 @@ import { OUTLOOK_LABELS, type SkyBand, skyBands } from './astroweather'
 import type { NightEvaluation, ObservingWindow, Outlook, OutlookSegment } from './observing'
 
 // Timeline of a night: one time axis shared by rows of the outlook, cloud, seeing, transparency, precipitation, gusts,
-// temperature, humidity, and the Moon, over bands of how dark the sky is. Every row has its own scale and none shares an axis
-// with another. Hourly values are bars for the hour they describe, except the temperature, written as rounded degrees because
-// it has no natural zero to rise from, and the 7Timer! classes are tiles centered on their own timestamps and as wide as their
+// temperature, dew point, humidity, and the Moon, over bands of how dark the sky is. Every row has its own scale and none
+// shares an axis with another. Hourly values are bars for the hour they describe, except the temperature and the dew point,
+// written as rounded degrees because they have no natural zero to rise from, and the 7Timer! classes are tiles centered on their own timestamps and as wide as their
 // 3 hour step, so a sample is never drawn as an hourly reading or a continuous line. A value the forecast lacks draws nothing.
 // The hour clicked or chosen with the arrow keys is the one the readout below describes; hovering chooses nothing.
 
@@ -39,7 +39,7 @@ const GUST_SCALE = 60
 // Narrowest slot, in CSS pixels, that shows the symbol of an hour.
 const SYMBOL_MINIMUM_WIDTH = 12
 
-// Room, in CSS pixels, an hour's temperature needs to be written ("-12°"); narrower hours write every few hours instead.
+// Room, in CSS pixels, an hour's temperature or dew point needs to be written ("-12°"); narrower hours write every few hours instead.
 const VALUE_TEXT_WIDTH = 30
 
 // Widest gap, in CSS pixels, between labels of the time axis.
@@ -58,7 +58,7 @@ const OUTLOOK_FILLS: Readonly<Record<Exclude<Outlook, 'unavailable'>, string>> =
 const OUTLOOK_SYMBOLS: Readonly<Record<Outlook, string>> = { favorable: '+', variable: '~', unfavorable: '×', unavailable: '?' }
 
 // Rows of the timeline, in order.
-const ROWS = ['Outlook', 'Clouds', 'Seeing', 'Transparency', 'Rain chance', 'Gusts', 'Temperature', 'Humidity', 'Moon up'] as const
+const ROWS = ['Outlook', 'Clouds', 'Seeing', 'Transparency', 'Rain chance', 'Gusts', 'Temperature', 'Dew point', 'Humidity', 'Moon up'] as const
 
 // Name of a row.
 type Row = (typeof ROWS)[number]
@@ -379,6 +379,16 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 					}}
 					title={(hour) => `${hourLabel(hour)}: air temperature of ${byTime.get(hour.start)?.temperature} °C`}
 				/>
+				<Values
+					hours={segments}
+					row="Dew point"
+					scale={scale}
+					value={(hour) => {
+						const value = byTime.get(hour.start)?.dewPoint
+						return value === undefined ? undefined : `${Math.round(value)}°`
+					}}
+					title={(hour) => `${hourLabel(hour)}: dew point of ${byTime.get(hour.start)?.dewPoint} °C`}
+				/>
 				<Bars
 					hours={segments}
 					row="Humidity"
@@ -417,7 +427,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 					{OUTLOOK_SYMBOLS.unavailable} {OUTLOOK_LABELS.unavailable}
 				</span>
 				<span>Seeing and transparency: class 1 best, 8 worst, every 3 hours</span>
-				<span>Temperature in °C</span>
+				<span>Temperature and dew point in °C</span>
 			</p>
 		</>
 	)

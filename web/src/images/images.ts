@@ -8,7 +8,7 @@ import type { AstrometricMarker, AstrometrySelection, AstrometryTarget, Measurem
 import { DEFAULT_PLATE_SOLVE_REQUEST } from '../platesolving/platesolving'
 import { activeProfile, annotationPreferences, imageDisplaySettings, imageProcessingPipeline, profileCamera, profileState, setImageDisplaySettings } from '../profile/profile'
 import { type AnnotationPreferences, DEFAULT_ANNOTATION_PREFERENCES, type ImageProcessingPresetStep } from '../profile/schema'
-import { FIT_VIEW, type ViewerView } from '../viewer/transform'
+import { centerView, FIT_VIEW, type Point, type ViewerView } from '../viewer/transform'
 import type { CameraTabState } from './cameratabs'
 import { DEFAULT_AUTO_STRETCH_PRESET, ORIGINAL_DISPLAY_SETTINGS } from './display'
 import type { ImageProcessingDraft } from './imageprocessing'
@@ -177,6 +177,8 @@ export interface ImageAnnotationState {
 	magnitudeLimit: number
 	// Groups the next solar-system search lists.
 	bodies: AnnotationBodies
+	// Whether an object selected in the list is moved to the center of the viewer, keeping its zoom.
+	centerSelected: boolean
 	// Selected object: its id in the result of a job, which only counts while that result is shown.
 	selected?: { readonly jobId: string; readonly id: string }
 }
@@ -666,6 +668,13 @@ export function shownRendering(view: Pick<ImageViewState, 'display' | 'rendering
 export function setImageView(state: ImagesState, key: string, view: ViewerView) {
 	const current = state.views[key]
 	if (current) current.view = view
+}
+
+// Shows an image point (viewer coordinates, image pixels) at the center of the viewer of a document, keeping its zoom.
+// Ignored for an unknown key.
+export function centerImageView(state: ImagesState, key: string, point: Point) {
+	const current = state.views[key]
+	if (current) current.view = centerView(current.view, point)
 }
 
 // Changes how the star markers of a document are shown. Ignored for an unknown key.

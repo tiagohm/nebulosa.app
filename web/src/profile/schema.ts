@@ -37,7 +37,7 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // Version of the shape of the preferences and camera forms the server keeps (sync.ts). A value of any other version is
 // read as absent, never migrated, so a change to the shape of what is kept only raises this number; an added optional
 // field, which reads as its default, does not.
-export const PROFILE_SETTINGS_VERSION = 5
+export const PROFILE_SETTINGS_VERSION = 6
 
 // Application preferences that belong to a profile. Each preference is added here, with its default in
 // defaultSettings when it is not optional, and either kept by the server (PREFERENCES and the camera forms of sync.ts) or
@@ -152,6 +152,8 @@ export interface AnnotationPreferences {
 	readonly magnitudeLimit: number
 	// Groups the next solar-system search lists.
 	readonly bodies: AnnotationBodies
+	// Whether an object selected in the list is moved to the center of the viewer, keeping its zoom.
+	readonly centerSelected: boolean
 }
 
 // Annotation of a profile that has not edited it: every group but the constellation names, and the stars of the catalog
@@ -164,6 +166,7 @@ export const DEFAULT_ANNOTATION_PREFERENCES: AnnotationPreferences = {
 	density: 'balanced',
 	magnitudeLimit: 12,
 	bodies: { solarSystem: true, satellite: true, minorBody: true },
+	centerSelected: true,
 }
 
 // Step of the Image Processing pipeline a profile keeps.

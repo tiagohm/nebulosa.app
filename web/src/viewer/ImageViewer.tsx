@@ -297,7 +297,7 @@ export function ImageViewer({ image, loading = false, error, empty, view, onView
 	const pointed = image && cursor ? toImage(transform, cursor) : undefined
 	const pixel = pointed && pixelAt({ width, height }, pointed)
 	const viewerCursor: ViewerCursor | undefined = pointed && cursor && { image: pointed, ...(pixel && { pixel }), viewport: cursor }
-	const fitted = view.kind === 'fit'
+	const fitted = view.kind === 'fit' && !view.center
 
 	return (
 		<div className="flex h-full min-h-0 flex-col bg-base-000">

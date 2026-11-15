@@ -99,18 +99,29 @@ export function pixelAt(image: Size, point: Point): Point | undefined {
 }
 
 // View of an image as its owner keeps it: fitted to the viewport, or a scale and the image point at the
-// viewport center. Keeping the center in image pixels, rather than the offset in viewport pixels, keeps
-// the same part of the image centered when the viewport is resized.
-export type ViewerView = { readonly kind: 'fit' } | { readonly kind: 'manual'; readonly scale: number; readonly center: Point }
+// viewport center. A fitted view may also keep an image point at the viewport center, at the scale that fits
+// the image, such as an object centered without changing the zoom. Keeping the center in image pixels, rather
+// than the offset in viewport pixels, keeps the same part of the image centered when the viewport is resized.
+export type ViewerView = { readonly kind: 'fit'; readonly center?: Point } | { readonly kind: 'manual'; readonly scale: number; readonly center: Point }
 
 // View of an image just opened: fitted to the viewport.
 export const FIT_VIEW: ViewerView = { kind: 'fit' }
 
 // Returns the transform that shows an image with a view in a viewport.
 export function viewTransform(view: ViewerView, image: Size, viewport: Size): ViewTransform {
-	if (view.kind === 'fit') return fit(image, viewport)
-	const scale = clampScale(view.scale)
-	return { scale, x: viewport.width / 2 - view.center.x * scale, y: viewport.height / 2 - view.center.y * scale }
+	if (view.kind === 'manual') return around(view.center, clampScale(view.scale), viewport)
+	const fitted = fit(image, viewport)
+	return view.center ? around(view.center, fitted.scale, viewport) : fitted
+}
+
+// Returns the transform that shows an image point at the viewport center at a scale (viewport pixels per image pixel).
+function around(center: Point, scale: number, viewport: Size): ViewTransform {
+	return { scale, x: viewport.width / 2 - center.x * scale, y: viewport.height / 2 - center.y * scale }
+}
+
+// Returns a view that keeps the zoom of another and shows an image point at the viewport center.
+export function centerView(view: ViewerView, center: Point): ViewerView {
+	return { ...view, center }
 }
 
 // Returns the manual view of a transform shown in a viewport.
@@ -120,12 +131,13 @@ export function manualView(view: ViewTransform, viewport: Size): ViewerView {
 
 // Returns the view of an image of size to that replaces one of size from in the same viewer, such as the next
 // frame of a camera. A fitted view stays fitted, and a view of an image of the same size is kept as it is. Otherwise
-// the center keeps its position relative to the image size, and the scale changes by the ratio of the widths, so
-// the viewer shows the same fraction of the image (the same field after a change of binning); it stays within
-// [MIN_SCALE, MAX_SCALE]. An empty size keeps the view.
+// the center keeps its position relative to the image size, and the scale of a manual view changes by the ratio of
+// the widths, so the viewer shows the same fraction of the image (the same field after a change of binning); it
+// stays within [MIN_SCALE, MAX_SCALE]. An empty size keeps the view.
 export function adaptView(view: ViewerView, from: Size, to: Size): ViewerView {
-	if (view.kind === 'fit' || (from.width === to.width && from.height === to.height)) return view
+	if (!view.center || (from.width === to.width && from.height === to.height)) return view
 	if (from.width <= 0 || from.height <= 0 || to.width <= 0 || to.height <= 0) return view
-	const scale = clampScale((view.scale * from.width) / to.width)
-	return { kind: 'manual', scale, center: { x: (view.center.x / from.width) * to.width, y: (view.center.y / from.height) * to.height } }
+	const center = { x: (view.center.x / from.width) * to.width, y: (view.center.y / from.height) * to.height }
+	if (view.kind === 'fit') return { kind: 'fit', center }
+	return { kind: 'manual', scale: clampScale((view.scale * from.width) / to.width), center }
 }

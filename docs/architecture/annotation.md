@@ -24,9 +24,11 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The overlay (`web/src/annotations/AnnotationOverlay.tsx`) is drawn only over the image its result annotated and only while the solution shown is the one it was computed with (`annotationMatchesWcs`).
   Its geometry (`web/src/annotations/geometry.ts`, whose module description says how outlines and figures are sampled and projected) is computed once per result through `pointAt`: a deep-sky object without an orientation or minor axis is a dashed circle of its major axis, one below 10 screen pixels a marker, constellation figures are clipped to the image, and a body's predicted motion during the exposure is a dashed segment.
   Zoom and pan only place the labels again (`layoutLabels`, by priority with the selected object first, within `LABEL_BUDGETS` per density), never over a marker.
-  Groups (deep-sky objects, stars, the Sun, Moon, and planets, satellites, asteroids and comets, constellation lines and names), labels, density, outlines, motion, the magnitude limit (a lower one filters at once, a higher one applies to the next run), the groups the next solar-system search lists, and the selected object (by result job and object id) belong to the document view (`ImageAnnotationState`, started from the profile's `imageAnnotation`, see [Persistence and State](persistence-and-state.md)), so nothing of the overlay runs an analysis;
+  Groups (deep-sky objects, stars, the Sun, Moon, and planets, satellites, asteroids and comets, constellation lines and names), labels, density, outlines, motion, the magnitude limit (a lower one filters at once, a higher one applies to the next run), the groups the next solar-system search lists, whether a row selected in the list is centered in the viewer (on by default), and the selected object (by result job and object id) belong to the document view (`ImageAnnotationState`, started from the profile's `imageAnnotation`, see [Persistence and State](persistence-and-state.md)), so nothing of the overlay runs an analysis;
   a click within 8 screen pixels of a marker, or inside the extent of an object, and a row of the list select the same object, and the selection of a camera tab is cleared when another frame is committed.
-  Open in Sky selects the object's `SkyObjectRef` in the Object Inspector and opens the Sky workspace without changing its time.
+  A row selected in the list moves the object, projected with the WCS of its result, to the center of the viewer at the same zoom (`centerImageView`; a fitted view keeps fitting the image around that center), while a click on a marker never moves the view.
+  Objects in Field shows the counts of the latest local annotation and solar-system search, and filters the list by name or designation and by object type (`typeName`).
+  Open in Sky Now and Open in Sky at Image Time move `skyClock` to the real current time or to the observation instant of the image (offered only when its header gives one), then select the object's `SkyObjectRef` in the Object Inspector and open the Sky workspace.
 - A solar-system search (`kind: solarSystemBodies`, Find) is a separate job of the same routes and events, run by its own provider (`skybot`, one at a time) so it never waits for nor delays a local annotation.
   It asks the IMCCE SkyBoT cone search (`coneSearch` of `core/src/adapters/orbits/skybot.ts`) for the solar-system objects of the same cone at the observation instant, always from the geocenter (code 500): SkyBoT refuses a geographic observer on every interface despite its documentation.
   The request's `bodies` choose the groups listed, every one by default: `solarSystem` (the Sun, the Moon, and the planets, SkyBoT classes Star and Planet and the satellite Moon, which take the `SkyObjectRef` and the id of their body in the sky API, so they open in the Sky workspace), `satellite` (the other natural satellites), and `minorBody` (asteroids, dwarf planets, and comets).
@@ -45,7 +47,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   In the panel, Source & Status shows that date (UTC, with its keyword, or the current time without one) and the site with its keywords, the Solar System Bodies section the groups to list and how the positions will be seen;
   Find is disabled for an image without an observation date or with no group chosen.
   Its objects are listed and drawn with the local ones (the Sun, Moon, and planets as a diamond, a satellite as a smaller one, an asteroid or comet as a cross, the uncertainty as a dashed circle once larger than the marker);
-  a satellite does not open in the Sky workspace, and Find in SBDB and Open in Sky looks the selected minor body up by its number or designation (`/api/sky/minorbodies/search`) and opens it only when SBDB knows exactly one body;
+  a satellite does not open in the Sky workspace, and either Open in Sky button looks the selected minor body up by its number or designation (`/api/sky/minorbodies/search`) and opens it only when SBDB knows exactly one body;
   a match is never guessed from a position.
 - Limitations: the catalog is not complete to any magnitude, and the stars are those of the embedded catalog only;
   solar-system bodies need the network and SkyBoT, and their positions are predictions, not detections;
@@ -53,5 +55,5 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   no artificial satellites or nebula outlines;
   without a site in the header the Moon may be up to a degree off;
   the outline of a deep-sky object is the ellipse of its catalog axes, a dashed circle without an orientation;
-  Open in Sky shows the object at the time of the Sky workspace, not of the image;
+  the Sky workspace shows the object from the active profile's site, not from the site of the image;
   there is no annotated image export (the overlay is drawn by the viewer only, and Save As writes the scientific pixels unchanged).

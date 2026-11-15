@@ -9,10 +9,12 @@ import { useAnnotationContext, useAnnotationResult } from '../annotations/useAnn
 import { formatDegrees, formatDuration, formatElevation, formatGeographic, formatZonedDateTime, MISSING } from '../format'
 import { useActiveSite, useActiveTimeZone } from '../location/useLocation'
 import { usePlateSolution } from '../platesolving/usePlateSolution'
+import { pointAt } from '../platesolving/wcs'
 import { profileState, setAnnotationPreferences } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { navigate, routeState } from '../shell/route'
 import { EmptyState } from '../shell/WorkspaceLayout'
+import { setSkyTime, setSkyTimeNow, skyClock } from '../sky/clock'
 import { formatApparentSize, formatDeclination, formatMagnitude, formatRightAscension } from '../sky/format'
 import type { SkySelectionRef } from '../sky/objects'
 import { selectSkyObject, skyState } from '../sky/sky'
@@ -24,16 +26,18 @@ import { List, ListItem } from '../ui/List'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { SegmentedControl } from '../ui/SegmentedControl'
+import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { useNow } from '../useNow'
 import { holdCameraFrame } from './cameratabs'
-import { type AnnotationDensity, type AnnotationLayers, type ImageAnnotationState, imagesState, imageUnavailableReason, selectAnnotation, setAnnotationView } from './images'
+import { type AnnotationDensity, type AnnotationLayers, centerImageView, type ImageAnnotationState, imagesState, imageUnavailableReason, selectAnnotation, setAnnotationView } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Annotation tool of the Images workspace: identifies the catalog stars, deep-sky objects, and constellations, and the
 // Sun, Moon, planets, satellites, asteroids, and comets in the field of the active document from its WCS, on the
 // server, and shows the observation date and site of the image, the outcome, the groups and appearance of the overlay,
-// the objects in the field, and the object selected in the list or the viewer, which opens in the Sky workspace. The
+// the objects in the field, which the viewer centers when one is selected in the list, and the object selected in the
+// list or the viewer, which opens in the Sky workspace at the current time or at the time of the image. The
 // WCS is the plate solution shown when it is a completed job of the image, else the WCS of its header; nothing is
 // solved implicitly, and the date and site always come from the image. Run Analysis is the only action that queries the
 // catalog, and Find the only one that asks the SkyBoT service for the solar-system objects:
@@ -164,17 +168,23 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 				<>
 					<Objects
 						job={job}
+						solarJob={solar.job}
 						objects={results.flatMap((e) => e.objects)}
 						warnings={result?.warnings}
 						resultError={resultError}
 						annotation={annotation}
 						selected={selected?.id}
+						onCenterSelectedChange={(centerSelected) => edit({ centerSelected })}
 						onSelect={(id) => {
 							const found = results.find((e) => e.objects.some((object) => object.id === id))
-							if (found) selectAnnotation(imagesState, documentKey, { jobId: found.jobId, id })
+							if (!found) return
+							selectAnnotation(imagesState, documentKey, { jobId: found.jobId, id })
+							const object = annotation.centerSelected ? found.objects.find((e) => e.id === id) : undefined
+							const point = object && pointAt(found.solution, object.rightAscension, object.declination)
+							if (point) centerImageView(imagesState, documentKey, point)
 						}}
 					/>
-					<SelectedObject object={selected} />
+					<SelectedObject object={selected} observationTime={context?.observation?.time} />
 				</>
 			)}
 		</>
@@ -286,8 +296,6 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 	const observation = context?.observation
 	const bodies = request.bodies!
 	const chosen = bodies.solarSystem || bodies.satellite || bodies.minorBody
-	// Read here rather than asserted in the closure below, for the same reason as the selected object of the panel.
-	const counts = job?.summary?.counts
 
 	return (
 		<CollapsibleSection id="images.annotation.solar-system-bodies" title="Solar System Bodies">
@@ -317,12 +325,6 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 				<>
 					<DataRow label="Status">{ANALYSIS_STATE_LABELS[job.state]}</DataRow>
 					<DataRow label="Elapsed">{formatDuration(analysisElapsed(job, now) / 1000)}</DataRow>
-					{counts &&
-						BODY_LAYERS.map(([layer]) => (
-							<DataRow key={layer} label={LAYER_LABELS[layer]}>
-								{counts[layer]}
-							</DataRow>
-						))}
 					{job.error && <Notice error>{job.error}</Notice>}
 					{changed && <Notice>The WCS or the groups changed since this search; run it again to apply them.</Notice>}
 					{result?.warnings.map((warning) => (
@@ -343,6 +345,8 @@ function formatSite({ latitude, longitude, elevation }: AnnotationSite): string 
 interface ObjectsProps {
 	// Latest local annotation job of the image.
 	readonly job?: AnnotationJob
+	// Latest solar-system search of the image.
+	readonly solarJob?: AnnotationJob
 	// Objects of the shown results: the local annotation and the solar-system search.
 	readonly objects: readonly AnnotationObject[]
 	// Conditions worth knowing about the local annotation, meant for people.
@@ -355,22 +359,33 @@ interface ObjectsProps {
 	readonly selected?: string
 	// Selects an object by id.
 	readonly onSelect: (id: string) => void
+	// Changes whether an object selected in the list is centered in the viewer.
+	readonly onCenterSelectedChange: (centerSelected: boolean) => void
 }
 
 // Groups the local annotation counts.
 const LOCAL_LAYERS: readonly AnnotationLayer[] = ['deepSky', 'star']
 
-// Counts of the latest local annotation and the list of the objects shown, solar-system bodies included, filtered by
-// name.
-function Objects({ job, objects, warnings, resultError, annotation, selected, onSelect }: ObjectsProps) {
+// Option of the type filter that keeps every type.
+const ANY_TYPE = ''
+
+// Counts of the latest local annotation and solar-system search, and the list of the objects shown, solar-system bodies
+// included, filtered by name or designation and by type. Selecting one in the list centers it in the viewer when asked.
+function Objects({ job, solarJob, objects, warnings, resultError, annotation, selected, onSelect, onCenterSelectedChange }: ObjectsProps) {
 	const [filter, setFilter] = useState('')
+	const [type, setType] = useState(ANY_TYPE)
 	const summary = job?.summary
+	const solarCounts = solarJob?.summary?.counts
 	const text = filter.trim().toLowerCase()
-	const shown = objects.filter((object) => isAnnotationShown(annotation, object) && (!text || object.name.toLowerCase().includes(text) || object.designations.some((e) => e.toLowerCase().includes(text))))
+	const drawn = objects.filter((object) => isAnnotationShown(annotation, object))
+	const types = [ANY_TYPE, ...new Set(drawn.map((object) => object.typeName).sort())]
+	// A type no drawn object has any more, after another result or layer change, keeps every type.
+	const chosen = types.includes(type) ? type : ANY_TYPE
+	const shown = drawn.filter((object) => (chosen === ANY_TYPE || object.typeName === chosen) && (!text || object.name.toLowerCase().includes(text) || object.designations.some((e) => e.toLowerCase().includes(text))))
 
 	return (
 		<CollapsibleSection id="images.annotation.objects-in-field" title="Objects in Field">
-			{summary || objects.length > 0 ? (
+			{summary || solarCounts || objects.length > 0 ? (
 				<>
 					{summary &&
 						LOCAL_LAYERS.map((layer) => (
@@ -378,18 +393,25 @@ function Objects({ job, objects, warnings, resultError, annotation, selected, on
 								{summary.counts[layer]}
 							</DataRow>
 						))}
-					{summary && <DataRow label="Duration">{formatDuration(summary.elapsed / 1000)}</DataRow>}
+					{solarCounts &&
+						BODY_LAYERS.map(([layer]) => (
+							<DataRow key={layer} label={LAYER_LABELS[layer]}>
+								{solarCounts[layer]}
+							</DataRow>
+						))}
 					{warnings?.map((warning) => (
 						<Notice key={warning}>{warning}</Notice>
 					))}
 					{resultError && <Notice error>{resultError}</Notice>}
 					<TextInput label="Filter" value={filter} placeholder="Name or designation" onChange={(event) => setFilter(event.currentTarget.value)} />
+					<Select label="Type" options={types} value={chosen} format={(option) => (option === ANY_TYPE ? 'All types' : option)} onChange={setType} />
+					<Checkbox label="Center the selected object" checked={annotation.centerSelected} onChange={onCenterSelectedChange} />
 					<List emptyText={objects.length > 0 ? 'No object matches.' : 'No catalog object in this field.'} className="max-h-80 overflow-y-auto">
 						{shown.slice(0, MAX_LISTED).map((object) => (
 							<ListItem key={object.id} title={object.name} description={object.typeName} meta={object.magnitude === undefined ? undefined : formatMagnitude(object.magnitude)} selected={object.id === selected} onClick={() => onSelect(object.id)} />
 						))}
 					</List>
-					{shown.length > MAX_LISTED && <Notice>{`${shown.length - MAX_LISTED} more objects are drawn but not listed; filter by name to find them.`}</Notice>}
+					{shown.length > MAX_LISTED && <Notice>{`${shown.length - MAX_LISTED} more objects are drawn but not listed; filter by name or type to find them.`}</Notice>}
 				</>
 			) : (
 				<Notice>{job && isActive(job) ? 'Annotating…' : 'No results.'}</Notice>
@@ -398,10 +420,18 @@ function Objects({ job, objects, warnings, resultError, annotation, selected, on
 	)
 }
 
-// Details of the object selected in the list or the viewer, and its link to the Sky workspace. A minor body SkyBoT
-// listed has no SPK-ID, so it is looked up in SBDB first and opens only when SBDB knows exactly one body by its
-// designation; a satellite other than the Moon is not known to the Sky workspace.
-function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
+interface SelectedObjectProps {
+	// Object selected in the list or the viewer.
+	readonly object?: AnnotationObject
+	// Observation instant of the image, Unix milliseconds (UTC); absent when its header gives no date.
+	readonly observationTime?: number
+}
+
+// Details of the object selected in the list or the viewer, and its links to the Sky workspace, which move the Sky
+// simulation clock to the current time or to the observation instant of the image first. A minor body SkyBoT listed
+// has no SPK-ID, so it is looked up in SBDB first and opens only when SBDB knows exactly one body by its designation; a
+// satellite other than the Moon is not known to the Sky workspace.
+function SelectedObject({ object, observationTime }: SelectedObjectProps) {
 	// Why the SBDB lookup of the selected minor body failed, by object id, and the object being looked up.
 	const [lookup, setLookup] = useState<{ readonly id: string; readonly error?: string }>()
 	// Id of the object shown while this panel is mounted, so a lookup answering after the selection moved on, or after the
@@ -417,31 +447,39 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 	// The Sky observes from the active profile's site; the image keeps the site of its own header.
 	const observer = useActiveSite()
 
-	// Selects an object of a group in the Sky workspace and opens it; a satellite other than the Moon has no ref and never
-	// opens. The group is a parameter rather than read from an asserted `object!`, which the React Compiler of the
-	// executable reads during the render to memoize this closure, throwing while nothing is selected.
-	function openInSky(layer: AnnotationLayer, ref: SkySelectionRef, name: string, minorBody?: MinorBody) {
+	// Moves the Sky simulation clock to an instant (Unix milliseconds, UTC), or to the real current time when absent,
+	// then selects an object of a group in the Sky workspace and opens it; the clock moves first since the selection
+	// reads it. A satellite other than the Moon has no ref and never opens. The group is a parameter rather than read
+	// from an asserted `object!`, which the React Compiler of the executable reads during the render to memoize this
+	// closure, throwing while nothing is selected.
+	function openInSky(time: number | undefined, layer: AnnotationLayer, ref: SkySelectionRef, name: string, minorBody?: MinorBody) {
+		if (time === undefined) setSkyTimeNow(skyClock)
+		else setSkyTime(skyClock, time)
 		selectSkyObject(skyState, { ref, source: 'search', name, category: layer === 'satellite' ? 'solarSystem' : layer, ...(minorBody && { minorBody }) }, observer)
 		navigate(routeState, { workspace: 'sky' })
 	}
 
-	// Looks the selected minor body up in SBDB and opens it when found.
-	async function openMinorBody(target: AnnotationObject) {
+	// Opens the selected object in the Sky workspace at an instant (Unix milliseconds, UTC), or at the current time when
+	// absent; a minor body without a ref is looked up in SBDB first and opens when found.
+	async function open(target: AnnotationObject, time?: number) {
+		if (target.ref) return openInSky(time, target.layer, target.ref, target.name)
 		setLookup({ id: target.id })
 		const body = await resolveMinorBody(target)
 		if (shown.current !== target.id) return setLookup((current) => (current?.id === target.id ? undefined : current))
 		if (typeof body === 'string') setLookup({ id: target.id, error: body })
-		else openInSky(target.layer, { kind: 'minorBody', spkId: body.spkId, designation: body.designation }, body.name, body)
+		else openInSky(time, target.layer, { kind: 'minorBody', spkId: body.spkId, designation: body.designation }, body.name, body)
 	}
 
-	const skyRef = object?.ref
+	const opens = object !== undefined && (object.ref !== undefined || object.layer === 'minorBody')
+	const looking = object !== undefined && lookup?.id === object.id && lookup.error === undefined
+	const designations = object ? object.designations.filter((e) => !object.name.includes(e)) : []
 
 	return (
 		<CollapsibleSection id="images.annotation.selected-object" title="Selected Object">
 			{object ? (
 				<>
 					<DataRow label="Name">{object.name}</DataRow>
-					{object.designations.length > 0 && <p className="text-xs wrap-break-word text-ink-300">{object.designations.slice(0, 6).join(' · ')}</p>}
+					{designations.length > 0 && <DataRow label="Designations">{designations.join(' · ')}</DataRow>}
 					<DataRow label="Type">{object.typeName}</DataRow>
 					<DataRow label="Magnitude">{object.magnitude === undefined ? MISSING : formatMagnitude(object.magnitude)}</DataRow>
 					<DataRow label="Right ascension (J2000)">{formatRightAscension(object.rightAscension)}</DataRow>
@@ -450,19 +488,21 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 					{object.orientation !== undefined && <DataRow label="Position angle">{formatDegrees(object.orientation)}</DataRow>}
 					{object.positionError !== undefined && <DataRow label="Position uncertainty">{formatUncertainty(object.positionError)}</DataRow>}
 					{object.center && <DataRow label="Position">{CENTER_LABELS[object.center]}</DataRow>}
-					{skyRef ? (
-						<Button variant="secondary" className="self-start" onClick={() => openInSky(object.layer, skyRef, object.name)}>
-							Open in Sky
-						</Button>
-					) : (
-						object.layer === 'minorBody' && (
-							<Button variant="secondary" className="self-start" disabled={lookup?.id === object.id && lookup.error === undefined} onClick={() => void openMinorBody(object)}>
-								Find in SBDB and Open in Sky
+					{opens ? (
+						<Actions>
+							<Button variant="secondary" disabled={looking} onClick={() => void open(object)}>
+								Open in Sky Now
 							</Button>
-						)
+							{observationTime !== undefined && (
+								<Button variant="secondary" disabled={looking} onClick={() => void open(object, observationTime)}>
+									Open in Sky at Image Time
+								</Button>
+							)}
+						</Actions>
+					) : (
+						<Notice>This satellite cannot be opened in the Sky workspace.</Notice>
 					)}
 					{lookup?.id === object.id && lookup.error && <Notice error>{lookup.error}</Notice>}
-					{object.ref || object.layer === 'minorBody' ? <Notice>The Sky workspace keeps its own time: it shows the object now, not at the time of this image.</Notice> : <Notice>This satellite cannot be opened in the Sky workspace.</Notice>}
 				</>
 			) : (
 				<Notice>Click a marker in the image or an object in the list to inspect it.</Notice>

@@ -1,7 +1,7 @@
 import type { SpiceKernelDetails, SpiceKernelSummary } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatByteSize, formatZonedDateTime } from '../../format'
+import { formatByteSize, formatZonedDateTime, MISSING } from '../../format'
 import { useActiveTimeZone } from '../../location/useLocation'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { Actions } from '../../ui/Actions'
@@ -11,7 +11,7 @@ import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
-import { epochDate, naifName, READINESS, SOURCE_LABELS } from './format'
+import { epochDate, naifName, READINESS, SOURCE_LABELS, USAGE } from './format'
 import { deleteSpiceKernel, fetchSpiceKernelDetails, spiceKernelsState, updateSpiceKernel, verifySpiceKernel } from './spicekernels'
 
 // Panel of one kernel of the SPICE Kernel Library: its provenance and integrity, why it is or is not usable, the
@@ -34,6 +34,9 @@ export function KernelDetails({ kernel, onDeleted }: KernelDetailsProps) {
 	const key = `kernel:${kernel.id}`
 	const pending = state.pending[key]
 	const count = state.snapshot?.kernels.length ?? 0
+	// Precedence among the enabled kernels, from 1, the highest.
+	const enabled = state.snapshot?.kernels.filter((e) => e.enabled) ?? []
+	const rank = enabled.length - enabled.findIndex((e) => e.id === kernel.id)
 	const readiness = READINESS[kernel.readiness]
 
 	useEffect(() => {
@@ -77,9 +80,7 @@ export function KernelDetails({ kernel, onDeleted }: KernelDetailsProps) {
 						{kernel.segmentCount}
 						{kernel.unsupportedSegments > 0 ? `, ${kernel.unsupportedSegments} unsupported` : ''}
 					</DataRow>
-					<DataRow label="Load order">
-						{kernel.priority + 1} of {count}
-					</DataRow>
+					<DataRow label="Precedence">{kernel.enabled ? `${rank} of ${enabled.length} enabled (1 wins)` : 'Disabled'}</DataRow>
 					<DataRow label="SHA-256">
 						<span className="font-mono text-xs break-all">{kernel.sha256}</span>
 					</DataRow>
@@ -106,10 +107,11 @@ export function KernelDetails({ kernel, onDeleted }: KernelDetailsProps) {
 	)
 }
 
-// Segments of a kernel in file order, each with its own coverage.
+// Segments of a kernel in file order, each with its own coverage and, while the kernel is enabled, how much of it the
+// ephemeris selects: a segment another kernel overrides everywhere is never used.
 function Segments({ details }: { readonly details: SpiceKernelDetails }) {
 	return (
-		<Table columns={['Body', 'Center', 'Type', 'Coverage (UTC)', 'Status']}>
+		<Table columns={['Body', 'Center', 'Type', 'Coverage (UTC)', 'Status', 'Use']}>
 			{details.segments.map((segment) => (
 				<Row key={segment.index} title={segment.name}>
 					<Cell>{naifName(segment.target)}</Cell>
@@ -119,6 +121,7 @@ function Segments({ details }: { readonly details: SpiceKernelDetails }) {
 						{epochDate(segment.start)} – {epochDate(segment.end)}
 					</Cell>
 					<Cell>{segment.supported ? 'Supported' : segment.reason === 'frame' ? `Frame ${segment.frame}` : 'Unsupported type'}</Cell>
+					<Cell>{segment.usage ? <StatusBadge tone={USAGE[segment.usage].tone} label={USAGE[segment.usage].label} /> : MISSING}</Cell>
 				</Row>
 			))}
 		</Table>

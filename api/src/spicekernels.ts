@@ -1,5 +1,12 @@
 import { spkFile } from 'nebulosa/src/adapters/ephemeris/horizons'
-import { timeUnix } from 'nebulosa/src/astronomy/time/time'
+import type { PositionAndVelocity } from 'nebulosa/src/astronomy/coordinates/astrometry'
+import { equatorialToEclipticJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { eraC2s } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import { spkSeconds } from 'nebulosa/src/astronomy/ephemeris/kernels/spk'
+import type { SpkChainLink, SpkCoverageInterval, SpkKernelSet, SpkMissReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
+import { timeUnix, toJulianDay, tdb } from 'nebulosa/src/astronomy/time/time'
+import { AU_KM, DAYSEC, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
+import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { errorResponse } from './http'
 import { SPICE_KERNEL_CATALOG, type SpiceCatalogEntry } from './spicekernels.catalog'
 import { type SpiceKernelJob, SpiceKernelJobs, type SpiceKernelJobContext, SpiceKernelQueueFullError } from './spicekernels.jobs'
@@ -11,7 +18,10 @@ import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 // explicit actions of an operator, never from a position request: a curated NAIF download, a Horizons small-body
 // generation through the shared JPL queue, or an upload. Each is streamed into staging, inspected, renamed into place,
 // recorded, and published as a new runtime generation, one change at a time; a failure leaves the previous generation
-// untouched. Enabling, reordering, verifying, and deleting kernels and changing the ephemeris policy follow the same path.
+// untouched. Enabling, reordering, verifying, and deleting kernels, preferring a kernel for a body, and changing the
+// ephemeris policy follow the same path. The library also explains the selection of the current generation body by
+// body (which segment is used where, and which never is) and evaluates a body at an instant, through the selection or
+// from one chosen segment, for an operator checking the kernels.
 // Every change is announced by `spiceKernels:changed` with the epoch of the process and a new revision, and every job
 // change by `spiceKernels:jobUpdated`; tabs read the snapshot again.
 
@@ -56,9 +66,14 @@ export interface SpiceKernelSummary extends SpiceKernelRecord {
 	readonly end?: number
 }
 
+// A segment of a kernel and, while the kernel is in the current set, how much of its coverage it is selected for.
+export interface SpiceKernelSegment extends SpiceSegmentRecord {
+	readonly usage?: SpiceSegmentUsage
+}
+
 // A kernel and its segments.
 export interface SpiceKernelDetails extends SpiceKernelSummary {
-	readonly segments: readonly SpiceSegmentRecord[]
+	readonly segments: readonly SpiceKernelSegment[]
 }
 
 // Snapshot of the library (GET /api/spice-kernels).
@@ -129,6 +144,129 @@ export interface SpiceKernelCoverage {
 	readonly reason?: 'missing' | 'coverage' | 'cycle' | 'dataType' | 'frame'
 	readonly body?: number
 }
+
+// How much of its coverage a segment is selected for in the current set: all of it, part of it (another segment of
+// higher precedence covers the rest), or none (it is never used).
+export type SpiceSegmentUsage = 'full' | 'partial' | 'never'
+
+// A segment of a body in the current set, in selection order, and where it is selected. Epochs are TDB seconds past J2000.
+export interface SpiceBodySegment {
+	readonly kernelId: string
+	// Position of the segment in its file, from 0.
+	readonly segment: number
+	readonly center: number
+	readonly frame: number
+	readonly dataType: number
+	readonly start: number
+	readonly end: number
+	readonly supported: boolean
+	readonly reason?: 'dataType' | 'frame'
+	// Whether its kernel is the preferred one of the body.
+	readonly preferred: boolean
+	readonly usage: SpiceSegmentUsage
+}
+
+// One interval of the effective coverage of a body: the segment selected from start to end, TDB seconds past J2000.
+export interface SpiceBodyInterval {
+	readonly start: number
+	readonly end: number
+	readonly kernelId: string
+	readonly segment: number
+	readonly preferred: boolean
+	// An unsupported selected segment makes the body unavailable over the interval.
+	readonly supported: boolean
+}
+
+// How the current set selects the segments of one body.
+export interface SpiceBody {
+	// NAIF code.
+	readonly body: number
+	// Kernel the operator prefers for the body, whether or not it is enabled.
+	readonly preferredKernelId?: string
+	// Kernels of the set with segments of the body, in selection order.
+	readonly kernelIds: readonly string[]
+	// Segments of the body in selection order: those of the preferred kernel first, then the load order, highest first.
+	readonly segments: readonly SpiceBodySegment[]
+	// Disjoint intervals, by increasing time, with the segment selected in each.
+	readonly coverage: readonly SpiceBodyInterval[]
+}
+
+// Answer of GET /api/spice-kernels/bodies: every body of the current set, by NAIF code.
+export interface SpiceBodiesResponse {
+	readonly generation: number
+	readonly bodies: readonly SpiceBody[]
+}
+
+// Body of PUT /api/spice-kernels/bodies/:body/preference: the kernel to prefer for the body, or none to follow the load
+// order alone.
+export interface SpiceBodyPreferenceRequest {
+	readonly kernelId?: string
+}
+
+// Body of POST /api/spice-kernels/evaluate: the state of target relative to center at time (Unix milliseconds, UTC),
+// through the selection of the current set, or, with source, from that segment of the target.
+export interface SpiceEvaluationRequest {
+	readonly target: number
+	readonly center: number
+	readonly time: number
+	readonly source?: { readonly kernelId: string; readonly segment: number }
+}
+
+// One segment of a chain of the current set.
+export interface SpiceChainLink {
+	readonly body: number
+	readonly center: number
+	readonly kernelId: string
+	readonly segment: number
+	readonly preferred: boolean
+}
+
+// State of a target relative to a center, in the J2000 (ICRF) axes. The direction is geometric: no light time,
+// aberration, or deflection is applied.
+export interface SpiceEvaluation {
+	readonly ok: true
+	readonly generation: number
+	readonly target: number
+	readonly center: number
+	// Instant, Unix milliseconds (UTC), and the same instant in TDB seconds past J2000 and as a TDB Julian date.
+	readonly time: number
+	readonly tdbSeconds: number
+	readonly tdbJulianDate: number
+	// Position (km) and velocity (km/s).
+	readonly position: readonly [number, number, number]
+	readonly velocity: readonly [number, number, number]
+	// Distance (km), speed (km/s), rate of change of the distance (km/s), and one-way light time (s).
+	readonly distance: number
+	readonly speed: number
+	readonly rangeRate: number
+	readonly lightTime: number
+	// Direction of the target from the center: right ascension and declination (ICRF), and longitude and latitude on the
+	// J2000 mean ecliptic, radians.
+	readonly rightAscension: number
+	readonly declination: number
+	readonly eclipticLongitude: number
+	readonly eclipticLatitude: number
+	// Segments behind the state: the chosen source segment, if any, then the chains of the bodies resolved to the
+	// barycenter (empty when the source segment is relative to the center itself).
+	readonly source?: SpiceChainLink
+	readonly targetChain: readonly SpiceChainLink[]
+	readonly centerChain: readonly SpiceChainLink[]
+}
+
+// Why an evaluation has no state: the reason and the body where resolution stopped, the segment when it is the
+// unsupported one selected, and which side stopped (the source segment, the target, or the center).
+export interface SpiceEvaluationMiss {
+	readonly ok: false
+	readonly generation: number
+	readonly side: 'source' | 'target' | 'center'
+	readonly reason: SpkMissReason
+	readonly body: number
+	readonly kernelId?: string
+	readonly segment?: number
+}
+
+// Answer of POST /api/spice-kernels/evaluate.
+export type SpiceEvaluationResult = SpiceEvaluation | SpiceEvaluationMiss
 
 // Events of the library.
 export type SpiceKernelEvent = { readonly type: 'spiceKernels:changed'; readonly epoch: string; readonly revision: number } | { readonly type: 'spiceKernels:jobUpdated'; readonly epoch: string; readonly revision: number; readonly job: SpiceKernelJob }
@@ -258,7 +396,23 @@ export class SpiceKernelLibrary implements Disposable {
 	details(id: string): SpiceKernelDetails {
 		const kernel = this.#kernel(id)
 		const segments = this.store.segments(id)
-		return { ...this.#summary(kernel, segments), segments }
+		const { set } = this.runtime.current()
+		const inSet = set?.kernels.includes(id) ?? false
+		const coverage = new Map<number, SpkCoverageInterval[]>()
+
+		function usage(segment: SpiceSegmentRecord) {
+			if (!set || !inSet) return undefined
+			let intervals = coverage.get(segment.target)
+
+			if (!intervals) {
+				intervals = set.coverage(segment.target)
+				coverage.set(segment.target, intervals)
+			}
+
+			return usageOf(intervals, id, segment.index, segment.start, segment.end)
+		}
+
+		return { ...this.#summary(kernel, segments), segments: segments.map((e): SpiceKernelSegment => Object.assign(e, { usage: usage(e) })) }
 	}
 
 	// Curated downloads and the kernels installed from them.
@@ -273,6 +427,71 @@ export class SpiceKernelLibrary implements Disposable {
 		const result = set?.stateAt(target, timeUnix(time / 1000, true))
 		if (result?.ok) return { target, time, generation, available: true, kernels: result.kernels }
 		return { target, time, generation, available: false, reason: result?.reason ?? 'missing', body: result?.body ?? target }
+	}
+
+	// How the current set selects the segments of each of its bodies, by NAIF code. Makes no request.
+	bodies(): SpiceBodiesResponse {
+		const { generation, set } = this.runtime.current()
+		if (!set) return { generation, bodies: [] }
+		const preferences = this.store.preferences()
+		const bodies = [...set.bodies].sort((a, b) => a - b).map((body) => bodyOf(set, body, preferences.get(body)))
+		return { generation, bodies }
+	}
+
+	// Prefers a kernel for a NAIF body, or removes the preference without kernel, then publishes a new generation; throws
+	// notFound for an unknown kernel.
+	setPreference(body: number, request: SpiceBodyPreferenceRequest): Promise<SpiceBodiesResponse> {
+		return this.#exclusive(async () => {
+			if (!Number.isSafeInteger(body)) throw new SpiceKernelError('Unknown body.', 404, 'notFound')
+			if (request.kernelId !== undefined) this.#kernel(request.kernelId)
+			this.store.setPreference(body, request.kernelId)
+			await this.#rebuild()
+			this.#changed()
+			return this.bodies()
+		})
+	}
+
+	// State of a target relative to a center at an instant in Unix milliseconds, through the selection of the current set
+	// or from one chosen segment of the target. Makes no request.
+	evaluate(request: SpiceEvaluationRequest): SpiceEvaluationResult {
+		const { generation, set } = this.runtime.current()
+		const time = timeUnix(request.time / 1000, true)
+		const miss = (side: SpiceEvaluationMiss['side'], reason: SpkMissReason, body: number, kernelId?: string, segment?: number): SpiceEvaluationMiss => ({ ok: false, generation, side, reason, body, kernelId, segment })
+
+		if (!set) return miss('target', 'missing', request.target)
+
+		let target: PositionAndVelocity
+		let targetChain: readonly SpiceChainLink[] = []
+		let centerChain: readonly SpiceChainLink[] = []
+		let source: SpiceChainLink | undefined
+
+		if (request.source) {
+			const { kernelId, segment } = request.source
+			const candidate = set.candidates(request.target).find((e) => e.kernel === kernelId && e.descriptor.index === segment)
+			if (!candidate) return miss('source', 'missing', request.target, kernelId, segment)
+			const state = set.segmentStateAt(kernelId, segment, time)
+			if (!state.ok) return miss('source', state.reason, request.target, kernelId, segment)
+			source = { body: state.target, center: state.center, kernelId, segment, preferred: candidate.preferred }
+
+			// Relative to its own center, the segment alone answers.
+			if (state.center === request.center) return evaluation(generation, request, time, state.state, source, [], [])
+
+			const origin = set.stateAt(state.center, time)
+			if (!origin.ok) return miss('target', origin.reason, origin.body, origin.kernel, origin.segment)
+			target = addStates(state.state, origin.state)
+			targetChain = origin.chain.map(linkOf)
+		} else {
+			const state = set.stateAt(request.target, time)
+			if (!state.ok) return miss('target', state.reason, state.body, state.kernel, state.segment)
+			target = state.state
+			targetChain = state.chain.map(linkOf)
+		}
+
+		const center = set.stateAt(request.center, time)
+		if (!center.ok) return miss('center', center.reason, center.body, center.kernel, center.segment)
+		centerChain = center.chain.map(linkOf)
+
+		return evaluation(generation, request, time, subtractStates(target, center.state), source, targetChain, centerChain)
 	}
 
 	// Adds an uploaded file, streamed from body; an identical file returns the installed kernel.
@@ -471,6 +690,7 @@ export class SpiceKernelLibrary implements Disposable {
 		const failures = await this.runtime.rebuild(
 			kernels.map((e) => ({ id: e.id, path: this.store.objectPath(e.sha256) })),
 			this.store.policy(),
+			this.store.preferences(),
 		)
 
 		for (const [id, error] of failures) {
@@ -512,6 +732,88 @@ export class SpiceKernelLibrary implements Disposable {
 	}
 }
 
+// A chain link of the toolkit with the kernel id named for tabs.
+function linkOf(link: SpkChainLink): SpiceChainLink {
+	return { body: link.body, center: link.center, kernelId: link.kernel, segment: link.segment, preferred: link.preferred }
+}
+
+// Sum of two states (AU, AU/day), as a new one.
+function addStates([p, v]: PositionAndVelocity, [q, w]: PositionAndVelocity): PositionAndVelocity {
+	return [
+		[p[0] + q[0], p[1] + q[1], p[2] + q[2]],
+		[v[0] + w[0], v[1] + w[1], v[2] + w[2]],
+	]
+}
+
+// Difference of two states (AU, AU/day), as a new one.
+function subtractStates([p, v]: PositionAndVelocity, [q, w]: PositionAndVelocity): PositionAndVelocity {
+	return [
+		[p[0] - q[0], p[1] - q[1], p[2] - q[2]],
+		[v[0] - w[0], v[1] - w[1], v[2] - w[2]],
+	]
+}
+
+// Evaluation of a relative state (AU, AU/day) in the units and directions shown to people.
+function evaluation(generation: number, request: SpiceEvaluationRequest, time: ReturnType<typeof timeUnix>, [p, v]: PositionAndVelocity, source: SpiceChainLink | undefined, targetChain: readonly SpiceChainLink[], centerChain: readonly SpiceChainLink[]): SpiceEvaluation {
+	const kmps = AU_KM / DAYSEC
+	const position = [p[0] * AU_KM, p[1] * AU_KM, p[2] * AU_KM] as const
+	const velocity = [v[0] * kmps, v[1] * kmps, v[2] * kmps] as const
+	const distance = Math.hypot(...position)
+	const speed = Math.hypot(...velocity)
+	const rangeRate = distance > 0 ? (position[0] * velocity[0] + position[1] * velocity[1] + position[2] * velocity[2]) / distance : 0
+	const [ra, declination] = eraC2s(...p)
+	const rightAscension = normalizeAngle(ra)
+	const [longitude, eclipticLatitude] = equatorialToEclipticJ2000(rightAscension, declination)
+
+	return {
+		ok: true,
+		generation,
+		target: request.target,
+		center: request.center,
+		time: request.time,
+		tdbSeconds: spkSeconds(time),
+		tdbJulianDate: toJulianDay(tdb(time)),
+		position,
+		velocity,
+		distance,
+		speed,
+		rangeRate,
+		lightTime: (distance * 1000) / SPEED_OF_LIGHT,
+		rightAscension,
+		declination,
+		eclipticLongitude: normalizeAngle(longitude),
+		eclipticLatitude,
+		source,
+		targetChain,
+		centerChain,
+	}
+}
+
+// How set selects the segments of body, with the kernel the operator prefers for it.
+function bodyOf(set: SpkKernelSet, body: number, preferredKernelId: string | undefined): SpiceBody {
+	const coverage = set.coverage(body)
+	const segments = set.candidates(body).map(({ kernel, descriptor, preferred }): SpiceBodySegment => {
+		const { index, center, frame, dataType, start, end, supported, reason } = descriptor
+		return { kernelId: kernel, segment: index, center, frame, dataType, start, end, supported, reason, preferred, usage: usageOf(coverage, kernel, index, start, end) }
+	})
+
+	return {
+		body,
+		preferredKernelId,
+		kernelIds: [...new Set(segments.map((e) => e.kernelId))],
+		segments,
+		coverage: coverage.map((e) => ({ start: e.start, end: e.end, kernelId: e.kernel, segment: e.segment, preferred: e.preferred, supported: e.supported })),
+	}
+}
+
+// How much of its coverage, from start to end (TDB seconds past J2000), the segment of a kernel is selected for.
+function usageOf(coverage: readonly SpkCoverageInterval[], kernel: string, segment: number, start: number, end: number): SpiceSegmentUsage {
+	const selected = coverage.filter((e) => e.kernel === kernel && e.segment === segment)
+	if (selected.length === 0) return 'never'
+	const length = selected.reduce((sum, e) => sum + (e.end - e.start), 0)
+	return length >= end - start ? 'full' : 'partial'
+}
+
 // Answers a failure of a route with its status and code.
 function failure(error: unknown) {
 	if (error instanceof SpiceKernelError) return errorResponse(error.message, error.status, error.code)
@@ -547,6 +849,18 @@ export function createSpiceKernelRoutes(library: SpiceKernelLibrary) {
 				const params = new URL(req.url).searchParams
 				return Response.json(library.coverage(Number(params.get('target')), Number(params.get('time') ?? Date.now())) satisfies SpiceKernelCoverage)
 			},
+		},
+		'/api/spice-kernels/bodies': {
+			// How the current set selects the segments of each body (SpiceBodiesResponse).
+			GET: () => Response.json(library.bodies() satisfies SpiceBodiesResponse),
+		},
+		'/api/spice-kernels/bodies/:body/preference': {
+			// Prefers a kernel for a body, or removes the preference (SpiceBodyPreferenceRequest, SpiceBodiesResponse); 404 notFound.
+			PUT: (req) => answer(async () => library.setPreference(Number(req.params.body), (await req.json()) as SpiceBodyPreferenceRequest)),
+		},
+		'/api/spice-kernels/evaluate': {
+			// State of a body relative to another at an instant, through the selection or from one segment (SpiceEvaluationRequest, SpiceEvaluationResult).
+			POST: (req) => answer(async () => library.evaluate((await req.json()) as SpiceEvaluationRequest)),
 		},
 		'/api/spice-kernels/settings': {
 			// Changes the ephemeris policy (SpiceKernelSettingsRequest, SpiceKernelLibrarySnapshot).

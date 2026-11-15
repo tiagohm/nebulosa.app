@@ -471,6 +471,18 @@ export type {
 	SpiceKernelSummary,
 	SpiceKernelUpdateRequest,
 	SpiceSegmentRecord,
+	SpiceBody,
+	SpiceBodiesResponse,
+	SpiceBodyInterval,
+	SpiceBodyPreferenceRequest,
+	SpiceBodySegment,
+	SpiceChainLink,
+	SpiceEvaluation,
+	SpiceEvaluationMiss,
+	SpiceEvaluationRequest,
+	SpiceEvaluationResult,
+	SpiceSegmentUsage,
+	SpiceKernelSegment,
 } from './spicekernels'
 export type { SatelliteElementsRef, SatelliteEphemerisRow, SatelliteGroundTrack, SatelliteOrbitSummary, SatellitePassPoint, SatellitePassPrediction, SatellitePosition, SatelliteQuality, SatelliteQualityReason, SatelliteSuitability, SatelliteTrack, SatelliteVisiblePart } from './satellites.ephemeris'
 export type { SatelliteCatalogMetadata, SatelliteElementKind, SatelliteObjectType, SatelliteProvider, SatelliteSearchPage, SatelliteSourceState, SatelliteSummary } from './satellites.store'

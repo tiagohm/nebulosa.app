@@ -77,8 +77,8 @@ function Curated() {
 	}, [state.revision])
 
 	return (
-		<section className="flex flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4">
-			<div className="flex flex-wrap items-end justify-between gap-3">
+		<section className="flex flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4 min-h-0">
+			<div className="flex flex-wrap items-end justify-between gap-3 flex-1">
 				<div className="flex flex-col gap-1">
 					<h2 className="m-0 text-sm font-semibold text-ink-100">Ephemerides from NASA/JPL</h2>
 					<p className="m-0 text-xs text-ink-300">
@@ -91,7 +91,7 @@ function Curated() {
 				</div>
 			</div>
 			{shown.length > 0 ? (
-				<Table columns={['File', 'System', 'Bodies', 'Coverage', { key: 'size', label: 'Size', numeric: true }, { key: 'action', label: '' }]} className="max-h-[50vh]">
+				<Table columns={['File', 'System', 'Bodies', 'Coverage', { key: 'size', label: 'Size', numeric: true }, { key: 'action', label: '' }]} className="min-h-0 flex-1">
 					{shown.map((item) => (
 						<CatalogRow key={item.id} item={item} selected={item.id === selected} onSelect={() => setSelected(item.id)} />
 					))}

@@ -102,7 +102,7 @@ function BodyDetails({ body, kernels }: BodyDetailsProps) {
 	const disabledPreference = body.preferredKernelId !== undefined && !body.kernelIds.includes(body.preferredKernelId)
 
 	return (
-		<section className="flex flex-1 flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4 max-h-[50vh]">
+		<section className="flex flex-1 flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4 min-h-auto">
 			<div className="flex flex-wrap items-end justify-between gap-3">
 				<h2 className="m-0 text-sm font-semibold text-ink-100">{naifName(body.body)}</h2>
 				<Select

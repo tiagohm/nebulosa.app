@@ -1,6 +1,6 @@
 import type { Database } from 'bun:sqlite'
 
-// Schema of the sky catalog database (`api/data/sky.catalog.db`), shared by the generator in `bin` and
+// Schema of the sky catalog database (`api/data/sky.catalog.db.zst`, zstd-compressed), shared by the generator in `bin` and
 // the API that reads it. Objects are stars and deep-sky objects at J2000; names are their designations
 // in every catalog they belong to, keyed by the catalog codes of ./designations.
 

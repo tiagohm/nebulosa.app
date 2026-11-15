@@ -6,3 +6,4 @@ hyg_v*.csv
 *.db
 *.tmp
 *.gz
+*.zst

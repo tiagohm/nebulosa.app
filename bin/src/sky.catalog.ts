@@ -13,10 +13,10 @@ import { type Angle, deg, mas } from 'nebulosa/src/math/units/angle'
 import type { Distance } from 'nebulosa/src/math/units/distance'
 import { kilometerPerSecond, type Velocity } from 'nebulosa/src/math/units/velocity'
 
-// Generates the sky catalog database (api/data/sky.catalog.db) embedded by the API: every HYG star up to
-// STAR_MAGNITUDE_LIMIT, the Stellarium deep-sky catalog, and the star clusters of SIMBAD, with their
-// designations in every known catalog. Source files are downloaded once into api/data and reused. The
-// database is written to a temporary file and only replaces the previous one when generation succeeds.
+// Generates the sky catalog database embedded by the API, zstd-compressed (api/data/sky.catalog.db.zst): every HYG
+// star up to STAR_MAGNITUDE_LIMIT, the Stellarium deep-sky catalog, and the star clusters of SIMBAD, with their
+// designations in every known catalog. Source files are downloaded once into api/data and reused. The database is
+// built in a temporary file and only replaces the previous catalog, compressed, when generation succeeds.
 // Usage: bun make:catalog [--force]
 
 const { NAME, NGC, IC, BAYER, FLAMSTEED, HD, HR, HIP, M, C, B, SH2, LBN, LDN, MEL, CR, ARP, PGC, TR, ST, RU, UGC, CED, RCW, VDB, VV, PK, PNG, ACO, ESO, SNRG, DWB, BENNETT, DUNLOP, HERSCHEL, GUM } = CATALOG
@@ -769,15 +769,25 @@ function dataFile(name: string) {
 	return join(DATA_DIR, name)
 }
 
-const OUTPUT = dataFile('sky.catalog.db')
+// Compressed catalog the API embeds.
+const OUTPUT = dataFile('sky.catalog.db.zst')
+
+// Database being built, removed once compressed into OUTPUT.
 const TEMPORARY = dataFile('sky.catalog.db.tmp')
+
+// Compressed catalog being written, renamed to OUTPUT when complete.
+const TEMPORARY_OUTPUT = dataFile('sky.catalog.db.zst.tmp')
+
+// Zstd compression level of OUTPUT (1 to 22); 19 brings the catalog to about a third of its size in a few seconds,
+// and decompression speed does not depend on it.
+const COMPRESSION_LEVEL = 19
 
 // Whether this run writes the empty placeholder (--empty), enough for the tests, instead of the real catalog.
 const EMPTY = process.argv.includes('--empty')
 
 // Whether the catalog at OUTPUT is the placeholder of --empty, which a real catalog replaces without --force.
-function isPlaceholder() {
-	const existing = new Database(OUTPUT, { readonly: true })
+async function isPlaceholder() {
+	const existing = Database.deserialize(Bun.zstdDecompressSync(await Bun.file(OUTPUT).bytes()), true)
 
 	try {
 		return readSkyCatalogMeta(existing, 'empty') === 'true'
@@ -789,12 +799,12 @@ function isPlaceholder() {
 }
 
 if (!process.argv.includes('--force') && (await Bun.file(OUTPUT).exists())) {
-	if (EMPTY || !isPlaceholder()) {
-		console.info('sky.catalog.db already exists! Use --force to regenerate it.')
+	if (EMPTY || !(await isPlaceholder())) {
+		console.info('sky.catalog.db.zst already exists! Use --force to regenerate it.')
 		exit(0)
 	}
 
-	console.info('sky.catalog.db is the empty placeholder; generating the real catalog...')
+	console.info('sky.catalog.db.zst is the empty placeholder; generating the real catalog...')
 }
 
 if (!EMPTY) {
@@ -1173,6 +1183,8 @@ insertName.finalize()
 selectByName.finalize()
 db.close(true)
 
-await fs.rename(TEMPORARY, OUTPUT)
+await Bun.write(TEMPORARY_OUTPUT, Bun.zstdCompressSync(await Bun.file(TEMPORARY).bytes(), { level: COMPRESSION_LEVEL }))
+await fs.rename(TEMPORARY_OUTPUT, OUTPUT)
+await fs.rm(TEMPORARY)
 
 console.info(`written ${OUTPUT}`)

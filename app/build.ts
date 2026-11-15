@@ -70,6 +70,10 @@ await build({
 		SOLARECLIPSE_WORKER,
 	],
 	root: ROOT,
+	// Code shared by the entry points goes into chunks embedded once. Without it every entry point carries its own
+	// copy, and tree shaking keeps in each one whatever any entry point uses, so a worker that only reaches the Sun and
+	// Earth of VSOP87E still embeds all the planets the server uses (about 20 MB of duplicated ephemeris tables).
+	splitting: true,
 	// Syntax minification stays off: together with the React Compiler it drops the constants it inlines into the
 	// template literals of components and hooks, so `${MARGIN} ${width}` becomes `${width}` in the executable only.
 	minify: { whitespace: true, identifiers: true, syntax: false },

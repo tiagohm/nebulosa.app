@@ -8,6 +8,7 @@ The commands and when to run them are those of `AGENTS.md` (Tooling, Verificatio
 - The simulator tests that take long (Auto Focus, TPPA, DARV, the pointing model sessions and corrections, Image Stacking, the composition) are skipped unless `RUN_ALL_TESTS=true`;
   `bun test:timings` runs every test with it and updates the committed `timings.json`.
 - The smoke test of `bun compile` runs the executable from a directory outside the repository: from its root, a worker the executable fails to embed is still found among the sources.
+  The executable is built with code splitting (`app/build.ts`), so the code the server and its workers share, the ephemeris tables of the toolkit above all, is embedded once instead of in every worker that reaches it.
   The executable is built without syntax minification (`app/build.ts`): together with the React Compiler, it drops the constants inlined into the template literals of components and hooks, a failure `bun dev` cannot show.
 - `bun test` preloads `api/src/test.preload.ts` (`bunfig.toml`), which points `NEBULOSA_HOME` to a temporary directory of each test process, so no default path of a test reaches `~/Nebulosa`;
   a test of a store opens its own database (`AppDatabase.memory()`, or a temporary file to reopen).

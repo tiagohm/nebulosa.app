@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { ObservatoryCamera, ObservatoryCameraEvent, ObservatoryCamerasSnapshot } from 'api'
 import { proxy } from 'valtio'
-import { applyObservatoryCamerasSnapshot, filterCameras, handleObservatoryCameraEvent, moveCamera, type ObservatoryCamerasState, saveCamera, sortedCameras } from './observatorycameras'
+import { applyObservatoryCamerasSnapshot, filterCameras, handleObservatoryCameraEvent, moveCamera, type ObservatoryCamerasState, saveCamera, siteFilter, sortedCameras } from './observatorycameras'
 import { cameraStatus } from './status'
 import { parseOffer, sdpFragment } from './whep'
 
@@ -66,11 +66,18 @@ describe('lists', () => {
 		expect(sortedCameras(Object.fromEntries(cameras.map((c) => [c.id, c]))).map((c) => c.id)).toEqual(['a', 'c', 'b'])
 	})
 
-	test('the active site shows its cameras and the shared ones', () => {
-		expect(filterCameras(cameras, 'site', 's1').map((c) => c.id)).toEqual(['b', 'a'])
-		expect(filterCameras(cameras, 'site', undefined)).toHaveLength(3)
-		expect(filterCameras(cameras, 'all', 's1')).toHaveLength(3)
-		expect(filterCameras(cameras, 's2', 's1').map((c) => c.id)).toEqual(['b', 'c'])
+	test('a site shows its cameras and the shared ones', () => {
+		expect(filterCameras(cameras, 's1').map((c) => c.id)).toEqual(['b', 'a'])
+		expect(filterCameras(cameras, 'all')).toHaveLength(3)
+		expect(filterCameras(cameras, 's2').map((c) => c.id)).toEqual(['b', 'c'])
+	})
+
+	test('the filter defaults to the active site', () => {
+		expect(siteFilter(undefined, ['s1', 's2'], 's1')).toBe('s1')
+		expect(siteFilter(undefined, [], undefined)).toBe('all')
+		expect(siteFilter('s2', ['s1', 's2'], 's1')).toBe('s2')
+		expect(siteFilter('all', ['s1', 's2'], 's1')).toBe('all')
+		expect(siteFilter('gone', ['s1', 's2'], 's1')).toBe('s1')
 	})
 })
 
@@ -108,8 +115,8 @@ describe('status', () => {
 		expect(cameraStatus(camera({ enabled: false }), undefined, undefined, undefined).label).toBe('Disabled')
 		expect(cameraStatus(camera(), { cameraId: 'c1', state: 'ready', readers: 1 }, undefined, { status: 'ready' }).label).toBe('Live elsewhere')
 		expect(cameraStatus(camera(), { cameraId: 'c1', state: 'unavailable', code: 'sourceAuthFailed', readers: 0 }, undefined, { status: 'ready' }).label).toBe('Authentication failed')
-		expect(cameraStatus(camera(), undefined, { status: 'playing', docked: true }, { status: 'ready' }).label).toBe('Live in mini-player')
-		expect(cameraStatus(camera(), undefined, { status: 'failed', docked: false, error: 'No video' }, { status: 'ready' })).toEqual({ tone: 'danger', label: 'Failed', detail: 'No video' })
+		expect(cameraStatus(camera(), undefined, { status: 'playing' }, { status: 'ready' }).label).toBe('Live')
+		expect(cameraStatus(camera(), undefined, { status: 'failed', error: 'No video' }, { status: 'ready' })).toEqual({ tone: 'danger', label: 'Failed', detail: 'No video' })
 		expect(cameraStatus(camera(), undefined, undefined, { status: 'notInstalled' }).label).toBe('Gateway not installed')
 	})
 })

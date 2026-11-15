@@ -1,10 +1,12 @@
 import { cn } from 'cn'
 import { type Ref, useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { markPlaying, playerState, setPictureInPicture } from './player'
+import { markPlaying, playerState } from './player'
 
 // Video element of a camera: shows the stream of the camera's player, the same stream wherever it is shown, muted and
-// inline as browsers require to play it without a gesture on each element, letterboxed to keep the camera's aspect.
+// inline as browsers require to play it without a gesture on each element, letterboxed to keep the camera's aspect. The
+// browser's own picture-in-picture is off: it would close with the view, so picture-in-picture goes through
+// pictureinpicture.ts, whose element outlives the views.
 
 // Props of the video of a camera.
 export interface CameraVideoProps {
@@ -12,7 +14,7 @@ export interface CameraVideoProps {
 	readonly cameraId: string
 	// Classes of the video element.
 	readonly className?: string
-	// Receives the video element, for full screen and picture-in-picture.
+	// Receives the video element, for full screen.
 	readonly videoRef?: Ref<HTMLVideoElement>
 }
 
@@ -28,42 +30,16 @@ export function CameraVideo({ cameraId, className, videoRef }: CameraVideoProps)
 		if (video.srcObject !== (stream ?? null)) video.srcObject = stream ?? null
 	}, [stream])
 
-	useEffect(() => {
-		const video = element.current
-		if (!video) return
-		const enter = () => setPictureInPicture(cameraId)
-		const leave = () => setPictureInPicture(undefined)
-		video.addEventListener('enterpictureinpicture', enter)
-		video.addEventListener('leavepictureinpicture', leave)
-
-		return () => {
-			video.removeEventListener('enterpictureinpicture', enter)
-			video.removeEventListener('leavepictureinpicture', leave)
-		}
-	}, [cameraId])
-
 	function bind(video: HTMLVideoElement | null) {
 		element.current = video
 		if (typeof videoRef === 'function') videoRef(video)
 		else if (videoRef) videoRef.current = video
 	}
 
-	return <video ref={bind} muted autoPlay playsInline onPlaying={() => markPlaying(cameraId)} onLoadedData={() => markPlaying(cameraId)} className={cn('size-full bg-black object-contain', className)} />
+	return <video ref={bind} muted autoPlay playsInline disablePictureInPicture onPlaying={() => markPlaying(cameraId)} onLoadedData={() => markPlaying(cameraId)} className={cn('size-full bg-black object-contain', className)} />
 }
 
 // Shows the video element in full screen.
 export function requestFullscreen(video: HTMLVideoElement | null) {
 	void video?.requestFullscreen().catch(() => undefined)
-}
-
-// Whether the browser offers picture-in-picture of videos.
-export function canPictureInPicture() {
-	return typeof document !== 'undefined' && document.pictureInPictureEnabled
-}
-
-// Shows the video element in picture-in-picture, or leaves it when it already is.
-export function togglePictureInPicture(video: HTMLVideoElement | null) {
-	if (!video) return
-	if (document.pictureInPictureElement === video) void document.exitPictureInPicture().catch(() => undefined)
-	else void video.requestPictureInPicture().catch(() => undefined)
 }

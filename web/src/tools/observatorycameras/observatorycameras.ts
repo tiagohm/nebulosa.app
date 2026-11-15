@@ -66,12 +66,21 @@ export function sortedCameras(cameras: Readonly<Record<string, ObservatoryCamera
 	return Object.values(cameras).sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
 }
 
-// Returns the cameras shown for a site filter: 'site' shows the cameras of the active site and the shared ones (every
-// camera when there is no active site), 'all' every camera, and any other value the cameras of that site.
-export function filterCameras(cameras: readonly ObservatoryCamera[], filter: string, activeSiteId: string | undefined): ObservatoryCamera[] {
-	if (filter === 'all' || (filter === 'site' && !activeSiteId)) return [...cameras]
-	const siteId = filter === 'site' ? activeSiteId : filter
-	return cameras.filter((camera) => camera.observingSiteId === undefined || camera.observingSiteId === siteId)
+// Value of the site filter showing every camera.
+export const ALL_SITES = 'all'
+
+// Returns the site filter in effect: the one the operator chose while it is ALL_SITES or the id of an existing site,
+// else the active site, else ALL_SITES when there is no active site.
+export function siteFilter(chosen: string | undefined, siteIds: readonly string[], activeSiteId: string | undefined): string {
+	if (chosen !== undefined && (chosen === ALL_SITES || siteIds.includes(chosen))) return chosen
+	return activeSiteId ?? ALL_SITES
+}
+
+// Returns the cameras shown for a site filter: ALL_SITES shows every camera, a site id the cameras of that site and
+// the ones shared by every site.
+export function filterCameras(cameras: readonly ObservatoryCamera[], filter: string): ObservatoryCamera[] {
+	if (filter === ALL_SITES) return [...cameras]
+	return cameras.filter((camera) => camera.observingSiteId === undefined || camera.observingSiteId === filter)
 }
 
 // Replaces the state with a snapshot of the server, unless it is older than the events already applied.

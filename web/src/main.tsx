@@ -53,6 +53,7 @@ import { handleMeridianFlipExecutorEvent, meridianFlipExecutorState, refreshMeri
 import { handleMeteorShowersEvent, meteorShowerSourcesState, refreshMeteorShowerSources } from './tools/meteorshowers/meteorshowers.sources'
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
 import { handleObservatoryCameraEvent, observatoryCamerasState, refreshObservatoryCameras } from './tools/observatorycameras/observatorycameras'
+import { watchPictureInPicture } from './tools/observatorycameras/pictureinpicture'
 import { handlePlayerEvent, watchPlayers } from './tools/observatorycameras/player'
 import { handleObservingPlanEvent, observingPlansState, refreshObservingPlans } from './tools/observingplanner/observingplanner'
 import { handleSpiceKernelEvent, refreshSpiceKernels, spiceKernelsState } from './tools/spicekernels/spicekernels'
@@ -161,6 +162,7 @@ const stops = [
 	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), activeCameraTabEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime), pixelInspectionEntry(pixelInspection)]),
 	watchHistory(routeState),
 	watchPlayers(),
+	watchPictureInPicture(),
 	confirmUnsavedOnUnload(imagesState),
 	releaseLeasesOnHide(imagesState),
 	subscribe((event) => {

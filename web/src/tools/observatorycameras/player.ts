@@ -4,11 +4,12 @@ import { cameraUrl, isCameraEvent } from './observatorycameras'
 import { type WhepFailure, WhepReader, type WhepReaderOptions } from './whep'
 
 // Players of the observatory cameras in this tab: at most one WHEP session per camera, whose stream every view of the
-// camera (its tile, its enlarged view, the mini-player) shows, so a camera is never decoded twice. A player starts only
-// when the operator asks; it pauses while its tile is off screen (unless docked in the mini-player) and while the page is
-// hidden (unless in picture-in-picture), and resumes when shown again. A lost connection is retried a few times with a
-// growing pause; a camera that refuses the stream, or a video that never arrives, fails until Retry. Playing is the
-// state of this tab only: the server knows nothing of it but the session.
+// camera (its tile, its enlarged view, the picture-in-picture window) shows, so a camera is never decoded twice. A player
+// starts only when the operator asks; it pauses while its tile is off screen and while the page is hidden, unless it is in
+// picture-in-picture, which keeps it playing in every workspace, and resumes when shown again. A tile that goes away stops
+// its player unless it is in picture-in-picture, and leaving picture-in-picture stops a player whose tile went away. A
+// lost connection is retried a few times with a growing pause; a camera that refuses the stream, or a video that never
+// arrives, fails until Retry. Playing is the state of this tab only: the server knows nothing of it but the session.
 
 // State of a player: connecting, playing (a frame was shown), reconnecting after a loss, paused while not shown, or
 // failed until Retry.
@@ -22,8 +23,6 @@ export interface PlayerEntry {
 	error?: string
 	// When the current video started to play, in milliseconds since the Unix epoch.
 	startedAt?: number
-	// Whether it is shown in the mini-player of the shell, so it plays whatever the workspace.
-	docked: boolean
 	// Stream of the video, while connected.
 	stream?: MediaStream
 	// Reconnections tried since the video last played.
@@ -34,6 +33,8 @@ export interface PlayerEntry {
 export interface PlayerState {
 	// Players by camera id; a camera without one is stopped.
 	players: Record<string, PlayerEntry>
+	// Id of the camera shown in picture-in-picture, if any.
+	pictureInPicture?: string
 }
 
 // Time the first frame may take to arrive after a start, in milliseconds; longer than the 15 s the gateway gives a source.
@@ -57,11 +58,11 @@ const readers = new Map<string, WhepReader>()
 // Pending reconnection or first-frame deadline of each camera.
 const timers = new Map<string, Timer>()
 
+// Cameras whose tile is mounted.
+const tiles = new Set<string>()
+
 // Cameras whose tile is on screen.
 const onscreen = new Set<string>()
-
-// Camera shown in picture-in-picture, if any.
-let pictureInPicture: string | undefined
 
 // Whether the page is hidden.
 let pageHidden = false
@@ -76,9 +77,8 @@ export function setReaderFactory(factory: (options: WhepReaderOptions) => WhepRe
 
 // Whether the player of a camera should run now.
 function shouldRun(id: string) {
-	if (pictureInPicture === id) return true
-	if (pageHidden) return false
-	return playerState.players[id]?.docked === true || onscreen.has(id)
+	if (playerState.pictureInPicture === id) return true
+	return !pageHidden && onscreen.has(id)
 }
 
 // Ends the reader and the timer of a camera.
@@ -93,7 +93,7 @@ function release(id: string) {
 export function startPlayer(id: string) {
 	const entry = playerState.players[id]
 	if (entry && entry.status !== 'failed') return
-	playerState.players[id] = { status: 'connecting', docked: entry?.docked ?? false, attempt: 0 }
+	playerState.players[id] = { status: 'connecting', attempt: 0 }
 	connect(id)
 }
 
@@ -101,7 +101,7 @@ export function startPlayer(id: string) {
 export function stopPlayer(id: string) {
 	release(id)
 	delete playerState.players[id]
-	if (pictureInPicture === id) pictureInPicture = undefined
+	if (playerState.pictureInPicture === id) playerState.pictureInPicture = undefined
 }
 
 // Stops every player.
@@ -207,12 +207,17 @@ function update(id: string) {
 	else if (!run && entry.status !== 'paused') pause(id)
 }
 
-// Shows the player of a camera in the mini-player of the shell, or back in its tile only.
-export function dockPlayer(id: string, docked: boolean) {
-	const entry = playerState.players[id]
-	if (!entry) return
-	entry.docked = docked
-	update(id)
+// Registers the mounted tile of a camera. Returns the function that unregisters it when the tile goes away, which stops
+// the player unless it is in picture-in-picture.
+export function attachTile(id: string) {
+	tiles.add(id)
+
+	return () => {
+		tiles.delete(id)
+		onscreen.delete(id)
+		if (playerState.pictureInPicture === id) update(id)
+		else stopPlayer(id)
+	}
 }
 
 // Tells whether the tile of a camera is on screen.
@@ -227,11 +232,15 @@ export function isTileOnscreen(id: string) {
 	return onscreen.has(id)
 }
 
-// Tells which camera is in picture-in-picture, if any.
+// Tells which camera is in picture-in-picture, if any. The camera that leaves it stops when its tile went away, else
+// pauses or resumes with its tile.
 export function setPictureInPicture(id: string | undefined) {
-	const previous = pictureInPicture
-	pictureInPicture = id
-	if (previous) update(previous)
+	const previous = playerState.pictureInPicture
+	playerState.pictureInPicture = id
+	if (previous && previous !== id) {
+		if (tiles.has(previous)) update(previous)
+		else stopPlayer(previous)
+	}
 	if (id) update(id)
 }
 

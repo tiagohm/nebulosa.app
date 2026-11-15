@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { dockPlayer, handlePlayerEvent, markPlaying, playerState, setPageHidden, setPictureInPicture, setReaderFactory, setTileOnscreen, startPlayer, stopAllPlayers, stopPlayer } from './player'
+import { attachTile, handlePlayerEvent, markPlaying, playerState, setPageHidden, setPictureInPicture, setReaderFactory, setTileOnscreen, startPlayer, stopAllPlayers, stopPlayer } from './player'
 import type { WhepFailure, WhepReader, WhepReaderOptions } from './whep'
 
 interface FakeReader {
@@ -70,7 +70,7 @@ test('a refused stream fails until Retry, a lost one reconnects', () => {
 	expect(playerState.players.c1.status).toBe('reconnecting')
 })
 
-test('an off-screen tile pauses unless docked, and resumes when shown', () => {
+test('an off-screen tile pauses, and resumes when shown', () => {
 	setTileOnscreen('c1', true)
 	startPlayer('c1')
 	setTileOnscreen('c1', false)
@@ -80,11 +80,41 @@ test('an off-screen tile pauses unless docked, and resumes when shown', () => {
 	setTileOnscreen('c1', true)
 	expect(playerState.players.c1.status).toBe('connecting')
 	expect(readers).toHaveLength(2)
+})
 
-	dockPlayer('c1', true)
-	setTileOnscreen('c1', false)
+test('picture-in-picture keeps playing after its tile goes away, and stops when left', () => {
+	const detach = attachTile('c1')
+	setTileOnscreen('c1', true)
+	startPlayer('c1')
+	markPlaying('c1')
+	setPictureInPicture('c1')
+	detach()
+	expect(playerState.players.c1.status).toBe('playing')
+	expect(readers[0].closed).toBeFalse()
+
+	setPictureInPicture(undefined)
+	expect(playerState.players.c1).toBeUndefined()
+	expect(readers[0].closed).toBeTrue()
+})
+
+test('a tile that goes away stops its player, and leaving picture-in-picture keeps a mounted one', () => {
+	const detach = attachTile('c1')
+	setTileOnscreen('c1', true)
+	startPlayer('c1')
+	setPictureInPicture('c1')
+	setPictureInPicture(undefined)
 	expect(playerState.players.c1.status).toBe('connecting')
-	expect(readers[1].closed).toBeFalse()
+
+	detach()
+	expect(playerState.players.c1).toBeUndefined()
+})
+
+test('stopping the player in picture-in-picture leaves it', () => {
+	setTileOnscreen('c1', true)
+	startPlayer('c1')
+	setPictureInPicture('c1')
+	stopPlayer('c1')
+	expect(playerState.pictureInPicture).toBeUndefined()
 })
 
 test('a hidden page pauses every player but the one in picture-in-picture', () => {

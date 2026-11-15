@@ -13,22 +13,17 @@ import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { CameraEditor } from './CameraEditor'
 import { CameraTile, Placeholder } from './CameraTile'
-import { CameraVideo, canPictureInPicture, requestFullscreen, togglePictureInPicture } from './CameraVideo'
-import { filterCameras, moveCamera, observatoryCamerasState, sortedCameras } from './observatorycameras'
+import { CameraVideo, requestFullscreen } from './CameraVideo'
+import { ALL_SITES, filterCameras, moveCamera, observatoryCamerasState, siteFilter, sortedCameras } from './observatorycameras'
+import { canPictureInPicture, togglePictureInPicture } from './pictureinpicture'
 import { isTileOnscreen, playerState, startPlayer, stopAllPlayers } from './player'
 import { cameraStatus } from './status'
 
 // Observatory Cameras tool: the IP cameras watching the observatory, in a grid. Nothing plays until the operator starts a
-// preview, one tile at a time or every tile on screen at once; a preview can be enlarged, shown in full screen or
-// picture-in-picture, or docked in the mini-player of the shell, which keeps playing in every workspace. By default the
-// grid shows the cameras of the active site and those shared by every site. The cameras, the media gateway, and the key
-// of their addresses are the server's; this view only edits them.
-
-// Value of the site filter showing the active site and the shared cameras.
-const ACTIVE_SITE = 'site'
-
-// Value of the site filter showing every camera.
-const ALL_SITES = 'all'
+// preview, one tile at a time or every tile on screen at once; a preview can be enlarged, shown in full screen, or shown
+// in picture-in-picture, which keeps playing in every workspace. The grid shows the cameras of one site and those shared
+// by every site, the active site when the page opens, or every camera. The cameras, the media gateway, and the key of
+// their addresses are the server's; this view only edits them.
 
 // Observatory Cameras tool.
 export function ObservatoryCamerasView() {
@@ -36,14 +31,19 @@ export function ObservatoryCamerasView() {
 	const { players } = useSnapshot(playerState)
 	const { sites } = useSnapshot(siteState)
 	const activeSite = useActiveSite()
-	const [filter, setFilter] = useState(ACTIVE_SITE)
+	const [chosenFilter, setFilter] = useState<string>()
 	const [editing, setEditing] = useState<ObservatoryCamera | 'new'>()
 	const [enlarged, setEnlarged] = useState<string>()
 	const [moveError, setMoveError] = useState<string>()
-	const cameras = filterCameras(sortedCameras(state.cameras), filter, activeSite?.id)
+	const filter = siteFilter(
+		chosenFilter,
+		sites.map((site) => site.id),
+		activeSite?.id,
+	)
+	const cameras = filterCameras(sortedCameras(state.cameras), filter)
 	const playing = Object.keys(players).length
 	const installed = state.gateway !== undefined && state.gateway.status !== 'notInstalled'
-	const filterOptions = [ACTIVE_SITE, ALL_SITES, ...sites.map((site) => site.id)]
+	const filterOptions = [ALL_SITES, ...sites.map((site) => site.id)]
 
 	function startVisible() {
 		for (const camera of cameras) if (camera.enabled && isTileOnscreen(camera.id)) startPlayer(camera.id)
@@ -71,14 +71,7 @@ export function ObservatoryCamerasView() {
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					<FeatureNotices cameraCount={Object.keys(state.cameras).length} />
 					<div className="flex flex-wrap items-end gap-3">
-						<Select
-							label="Cameras of"
-							className="w-64"
-							options={filterOptions}
-							value={filter}
-							onChange={setFilter}
-							format={(value) => (value === ACTIVE_SITE ? (activeSite ? `${activeSite.name} and every site` : 'Every site') : value === ALL_SITES ? 'All sites' : (sites.find((site) => site.id === value)?.name ?? value))}
-						/>
+						<Select label="Cameras of" className="w-64" options={filterOptions} value={filter} onChange={setFilter} format={(value) => (value === ALL_SITES ? 'All sites' : (sites.find((site) => site.id === value)?.name ?? value))} />
 						<span className="pb-2 text-sm text-ink-300">{playing === 0 ? 'No preview is playing.' : `${playing} ${playing === 1 ? 'preview' : 'previews'} in this tab; each one decodes its own video.`}</span>
 					</div>
 					{moveError && <Notice error>{moveError}</Notice>}
@@ -100,7 +93,7 @@ export function ObservatoryCamerasView() {
 					)}
 				</div>
 			</div>
-			{editing && <CameraEditor camera={editing === 'new' ? undefined : editing} defaultSiteId={filter === ACTIVE_SITE ? activeSite?.id : filter === ALL_SITES ? undefined : filter} onClose={() => setEditing(undefined)} />}
+			{editing && <CameraEditor camera={editing === 'new' ? undefined : editing} defaultSiteId={filter === ALL_SITES ? undefined : filter} onClose={() => setEditing(undefined)} />}
 			{enlarged && state.cameras[enlarged] && <EnlargedCamera camera={state.cameras[enlarged]} onClose={() => setEnlarged(undefined)} />}
 		</WorkspaceLayout>
 	)
@@ -142,7 +135,9 @@ interface EnlargedCameraProps {
 
 // Enlarged view of a camera in a dialog; opening it starts the preview, which the tile shares.
 function EnlargedCamera({ camera, onClose }: EnlargedCameraProps) {
-	const player = useSnapshot(playerState).players[camera.id]
+	const { players, pictureInPicture } = useSnapshot(playerState)
+	const player = players[camera.id]
+	const inPictureInPicture = pictureInPicture === camera.id
 	const { streams, gateway } = useSnapshot(observatoryCamerasState)
 	const video = useRef<HTMLVideoElement>(null)
 
@@ -154,7 +149,7 @@ function EnlargedCamera({ camera, onClose }: EnlargedCameraProps) {
 	return (
 		<Modal open onClose={onClose} title={camera.name} className="max-w-7xl">
 			<div className="flex flex-col gap-3">
-				<div className="relative aspect-video bg-black">{player?.stream ? <CameraVideo cameraId={camera.id} videoRef={video} /> : <Placeholder text={player?.status === 'failed' ? 'Failed' : 'Connecting…'} />}</div>
+				<div className="relative aspect-video bg-black">{inPictureInPicture ? <Placeholder text="Playing in picture-in-picture" /> : player?.stream ? <CameraVideo cameraId={camera.id} videoRef={video} /> : <Placeholder text={player?.status === 'failed' ? 'Failed' : 'Connecting…'} />}</div>
 				<div className="flex flex-wrap items-center gap-2">
 					<StatusBadge tone={status.tone} label={status.label} />
 					{status.detail && <span className="text-xs text-ink-300">{status.detail}</span>}
@@ -164,8 +159,8 @@ function EnlargedCamera({ camera, onClose }: EnlargedCameraProps) {
 								Retry
 							</Button>
 						)}
-						<IconButton icon="fit" label="Full screen" disabled={!playing} onClick={() => requestFullscreen(video.current)} />
-						{canPictureInPicture() && <IconButton icon="pictureInPicture" label="Picture in picture" disabled={!playing} onClick={() => togglePictureInPicture(video.current)} />}
+						<IconButton icon="fit" label="Full screen" disabled={!playing || inPictureInPicture} onClick={() => requestFullscreen(video.current)} />
+						{canPictureInPicture() && <IconButton icon="pictureInPicture" label={inPictureInPicture ? 'Leave picture in picture' : 'Picture in picture'} pressed={inPictureInPicture} disabled={!playing && !inPictureInPicture} onClick={() => void togglePictureInPicture(camera.id)} />}
 					</span>
 				</div>
 			</div>

@@ -8,15 +8,16 @@ import { Icon } from '../../ui/Icon'
 import { IconButton } from '../../ui/IconButton'
 import { Notice } from '../../ui/Notice'
 import { StatusBadge } from '../../ui/StatusBadge'
-import { CameraVideo, canPictureInPicture, requestFullscreen, togglePictureInPicture } from './CameraVideo'
+import { CameraVideo, requestFullscreen } from './CameraVideo'
 import { observatoryCamerasState } from './observatorycameras'
-import { dockPlayer, playerState, setTileOnscreen, startPlayer, stopPlayer } from './player'
+import { canPictureInPicture, togglePictureInPicture } from './pictureinpicture'
+import { attachTile, playerState, setTileOnscreen, startPlayer, stopPlayer } from './player'
 import { cameraStatus } from './status'
 
 // Tile of a camera in the grid of Observatory Cameras: a 16:9 frame that shows the video only once the operator starts
 // its preview (a static placeholder otherwise, so a grid never opens a stream by itself), its name, site, host, and
-// status below the frame, never over the video, and its actions. A tile that leaves the screen pauses its preview
-// unless the preview is docked in the mini-player, and a tile that goes away stops it.
+// status below the frame, never over the video, and its actions. A tile that leaves the screen pauses its preview and a
+// tile that goes away stops it, unless the preview is in picture-in-picture, which keeps playing in every workspace.
 
 // Props of a camera tile.
 export interface CameraTileProps {
@@ -48,7 +49,9 @@ export function useElapsed(startedAt: number | undefined) {
 
 // Tile of a camera.
 export function CameraTile({ camera, canMove, onEdit, onEnlarge, onMove }: CameraTileProps) {
-	const player = useSnapshot(playerState).players[camera.id]
+	const { players, pictureInPicture } = useSnapshot(playerState)
+	const player = players[camera.id]
+	const inPictureInPicture = pictureInPicture === camera.id
 	const { streams, gateway } = useSnapshot(observatoryCamerasState)
 	const { sites } = useSnapshot(siteState)
 	const frame = useRef<HTMLDivElement>(null)
@@ -58,26 +61,26 @@ export function CameraTile({ camera, canMove, onEdit, onEnlarge, onMove }: Camer
 	const status = cameraStatus(camera, stream, player, gateway)
 	const site = camera.observingSiteId === undefined ? 'Every site' : (sites.find((s) => s.id === camera.observingSiteId)?.name ?? 'Every site')
 	const playing = player?.status === 'playing'
-	const showVideo = player !== undefined && !player.docked && player.stream !== undefined
+	const showVideo = player !== undefined && !inPictureInPicture && player.stream !== undefined
 	const blocked = !camera.enabled ? 'The camera is disabled.' : gateway?.status === 'notInstalled' ? 'MediaMTX is not installed.' : undefined
 
 	useEffect(() => {
 		const element = frame.current
 		if (!element) return
+		const detach = attachTile(camera.id)
 		const observer = new IntersectionObserver(([entry]) => setTileOnscreen(camera.id, entry.isIntersecting))
 		observer.observe(element)
 
 		return () => {
 			observer.disconnect()
-			setTileOnscreen(camera.id, false)
-			if (!playerState.players[camera.id]?.docked) stopPlayer(camera.id)
+			detach()
 		}
 	}, [camera.id])
 
 	return (
 		<article className="flex min-w-0 flex-col overflow-hidden rounded-sm border border-line-100 bg-base-100">
 			<div ref={frame} className="relative aspect-video bg-black">
-				{showVideo ? <CameraVideo cameraId={camera.id} videoRef={video} /> : <Placeholder text={player?.docked ? 'Playing in the mini-player' : player?.status === 'connecting' || player?.status === 'reconnecting' ? 'Connecting…' : player?.status === 'paused' ? 'Paused' : 'Preview stopped'} />}
+				{showVideo ? <CameraVideo cameraId={camera.id} videoRef={video} /> : <Placeholder text={inPictureInPicture ? 'Playing in picture-in-picture' : player?.status === 'connecting' || player?.status === 'reconnecting' ? 'Connecting…' : player?.status === 'paused' ? 'Paused' : 'Preview stopped'} />}
 			</div>
 			<div className="flex flex-col gap-2 p-3">
 				<div className="flex min-w-0 items-center gap-2">
@@ -101,9 +104,8 @@ export function CameraTile({ camera, canMove, onEdit, onEnlarge, onMove }: Camer
 						</Button>
 					)}
 					<IconButton icon="expand" label="Enlarge" disabled={blocked !== undefined} onClick={() => onEnlarge(camera)} />
-					<IconButton icon="dock" label={player?.docked ? 'Back to the tile' : 'Show in the mini-player'} pressed={player?.docked} disabled={!player} onClick={() => dockPlayer(camera.id, !player?.docked)} />
 					<IconButton icon="fit" label="Full screen" disabled={!playing || !showVideo} onClick={() => requestFullscreen(video.current)} />
-					{canPictureInPicture() && <IconButton icon="pictureInPicture" label="Picture in picture" disabled={!playing || !showVideo} onClick={() => togglePictureInPicture(video.current)} />}
+					{canPictureInPicture() && <IconButton icon="pictureInPicture" label={inPictureInPicture ? 'Leave picture in picture' : 'Picture in picture'} pressed={inPictureInPicture} disabled={!playing && !inPictureInPicture} onClick={() => void togglePictureInPicture(camera.id)} />}
 					<span className="ml-auto flex items-center gap-1">
 						<IconButton icon="arrow" label="Move up" disabled={!canMove.up} onClick={() => onMove(camera, -1)} />
 						<IconButton icon="arrow" label="Move down" className="rotate-180" disabled={!canMove.down} onClick={() => onMove(camera, 1)} />

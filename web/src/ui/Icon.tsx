@@ -85,8 +85,6 @@ export const ICONS = {
 	expand: 'M14 4h6v6M20 4l-7 7M10 20H4v-6M4 20l7-7',
 	// A small window inside a larger one.
 	pictureInPicture: 'M3 5h18v14H3zM12 12h7v5h-7z',
-	// A window docked at the bottom left of the screen.
-	dock: 'M3 5h18v14H3zM5 13h7v4H5z',
 	// Three dots in a row: more entries than the row has room for.
 	more: 'M3.75 12a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0-2.5 0M10.75 12a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0-2.5 0M17.75 12a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0-2.5 0',
 	// A histogram of pixel values over its baseline.

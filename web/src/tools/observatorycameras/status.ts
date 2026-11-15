@@ -17,13 +17,13 @@ export interface CameraStatus {
 }
 
 // Returns the status of a camera from its definition, its stream on the server, its player in this tab, and the gateway.
-export function cameraStatus(camera: ObservatoryCamera, stream: ObservatoryCameraStream | undefined, player: Pick<PlayerEntry, 'status' | 'error' | 'docked'> | undefined, gateway: GatewayState | undefined): CameraStatus {
+export function cameraStatus(camera: ObservatoryCamera, stream: ObservatoryCameraStream | undefined, player: Pick<PlayerEntry, 'status' | 'error'> | undefined, gateway: GatewayState | undefined): CameraStatus {
 	if (!camera.enabled) return { tone: 'muted', label: 'Disabled' }
 
 	if (player) {
 		switch (player.status) {
 			case 'playing':
-				return { tone: 'success', label: player.docked ? 'Live in mini-player' : 'Live' }
+				return { tone: 'success', label: 'Live' }
 			case 'connecting':
 				return { tone: 'active', label: 'Connecting' }
 			case 'reconnecting':

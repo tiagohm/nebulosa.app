@@ -88,7 +88,7 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 - **Astronomical time conversion** (Implemented): Astronomical Time Converter tool (`web/src/tools/astronomicaltime/`) and the status bar clock (`web/src/shell/statusbar/astronomicalclock.ts`) over `api/src/astronomicaltime.ts` and the Earth orientation tables of `api/src/astronomicaltime.eop.ts`, which the whole server reads;
   BJD, HJD, and FITS exposure timing are not provided
 - **Mount remote control (LX200, Stellarium)** (Implemented): Mount Remote Control tool (`web/src/tools/mountremotecontrol/`) over `api/src/mountremotecontrol.ts` and the protocol servers of `core/src/devices/protocols/`
-- **Observatory cameras (RTSP security cameras relayed over WebRTC)** (Implemented): Observatory Cameras tool (`web/src/tools/observatorycameras/`, mini-player `CameraViewerHost` in the shell) over `api/src/observatorycameras.ts` and its store, secret, gateway, and WHEP modules;
+- **Observatory cameras (RTSP security cameras relayed over WebRTC)** (Implemented): Observatory Cameras tool (`web/src/tools/observatorycameras/`, picture-in-picture that outlives the tool in `pictureinpicture.ts`) over `api/src/observatorycameras.ts` and its store, secret, gateway, and WHEP modules;
   the MediaMTX gateway is an external tool installed by the operator
 - **Alpaca server** (Integration Required): `core/src/devices/alpaca/server.ts`, `discovery.ts`; the Tools entry `alpaca-server` is planned (no view)
 - **Native guiding** (Implemented): `api/src/guiding.ts` + `guiding.worker.ts`, `guideregions.ts`, `guidingprofile.ts` over the interactive guiding session of `core/src/observation/guiding/`, mirrored by `web/src/camera/guiding.ts`;

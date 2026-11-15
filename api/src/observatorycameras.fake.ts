@@ -20,6 +20,11 @@ const paths = new Map<string, Record<string, unknown>>()
 // Path read by each WebRTC session, by session id and by session resource.
 const sessions = new Map<string, string>()
 
+// Wait, in milliseconds, between the log line of a failed source and the answer to its reader. MediaMTX logs the error
+// as soon as the camera refuses and answers the reader only at the end of sourceOnDemandStartTimeout, so the server
+// has always read the line first; answering at once would race the output pipe against the HTTP answer.
+const SOURCE_FAILURE_DELAY = 250
+
 // Host and port of a listener from an MTX_* variable such as 127.0.0.1:9997.
 function address(variable: string) {
 	const [hostname, port] = process.env[variable]!.split(':')
@@ -72,6 +77,7 @@ Bun.serve({
 
 			if (String(config.source).includes('badauth')) {
 				console.info(`2026/11/06 10:58:59 ERR [path ${pathName}] [RTSP source] bad status code: 401 (Unauthorized)`)
+				await Bun.sleep(SOURCE_FAILURE_DELAY)
 				return Response.json({ status: 'error', error: `source of path '${pathName}' has timed out` }, { status: 400 })
 			}
 

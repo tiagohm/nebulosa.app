@@ -11,7 +11,7 @@ import { errorResponse } from './http'
 import { SPICE_KERNEL_CATALOG, type SpiceCatalogEntry } from './spicekernels.catalog'
 import { type SpiceKernelJob, SpiceKernelJobs, type SpiceKernelJobContext, SpiceKernelQueueFullError } from './spicekernels.jobs'
 import { openSpiceKernel, type SpiceKernelRuntime } from './spicekernels.runtime'
-import { type SpiceEphemerisPolicy, type SpiceKernelRecord, type SpiceKernelSourceKind, type SpiceKernelStore, type SpiceSegmentRecord, SpiceKernelTooLargeError, type StagedSpiceKernel } from './spicekernels.store'
+import type { SpiceEphemerisPolicy, SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelStore, SpiceSegmentRecord, StagedSpiceKernel } from './spicekernels.store'
 import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 
 // SPICE Kernel Library: the server-global set of SPK files the Sky ephemeris evaluates locally. Files come from three
@@ -29,18 +29,15 @@ export type { SpiceCatalogEntry, SpiceCatalogSystem } from './spicekernels.catal
 export type { SpiceKernelJob, SpiceKernelJobKind, SpiceKernelJobState } from './spicekernels.jobs'
 export type { SpiceEphemerisPolicy, SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelState, SpiceSegmentRecord } from './spicekernels.store'
 
-// Largest SPK file the library accepts, in bytes (1 GiB): covers de440s.bsp, the full de440.bsp and NAIF's full Saturnian
-// satellite ephemeris sat441.bsp (631 MiB), the only NAIF source of Saturn's major moons.
-export const MAX_SPICE_KERNEL_BYTES = 1024 * 1024 * 1024
-
-// Longest wait for a curated download, in milliseconds: 30 minutes, so sat441.bsp completes at about 0.4 MB/s.
-const DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000
+// Longest wait for a curated download without receiving a byte, in milliseconds (2 minutes). The whole download has no
+// time limit, since the satellite ephemerides reach 2 GiB; a stalled one fails instead.
+const DOWNLOAD_STALL_MS = 2 * 60 * 1000
 
 // Longest wait for a Horizons SPK generation, in milliseconds, once it reaches the head of the JPL queue.
 const GENERATION_TIMEOUT_MS = 120_000
 
 // Stable code of an error of the library.
-export type SpiceKernelErrorCode = 'notFound' | 'invalidSpk' | 'tooLarge' | 'queueFull' | 'downloadFailed' | 'generationFailed' | 'rateLimited' | 'cancelled' | 'processingFailed'
+export type SpiceKernelErrorCode = 'notFound' | 'invalidSpk' | 'queueFull' | 'downloadFailed' | 'generationFailed' | 'rateLimited' | 'cancelled' | 'processingFailed'
 
 // What tabs see of a kernel in the snapshot:
 // - ready: every evaluable segment resolves to the barycenter;
@@ -294,6 +291,8 @@ export interface SpiceKernelLibraryOptions {
 	readonly generate?: SpkGenerator
 	// Clock, Unix milliseconds.
 	readonly now?: () => number
+	// Longest wait for a curated download without receiving a byte, in milliseconds; DOWNLOAD_STALL_MS by default.
+	readonly downloadStallMs?: number
 }
 
 // Provenance of a file being published.
@@ -310,7 +309,6 @@ interface Provenance {
 // Describes an error of the library as a message and a code.
 function failureOf(error: unknown): { message: string; code: SpiceKernelErrorCode } {
 	if (error instanceof SpiceKernelError) return { message: error.message, code: error.code }
-	if (error instanceof SpiceKernelTooLargeError) return { message: error.message, code: 'tooLarge' }
 	if (error instanceof SpiceKernelQueueFullError) return { message: error.message, code: 'queueFull' }
 	if (error instanceof SsdThrottledError || error instanceof SsdBusyError) return { message: 'JPL is busy or asked to slow down. Try again later.', code: 'rateLimited' }
 	if (Error.isError(error) && error.name === 'TimeoutError') return { message: 'Horizons did not answer in time.', code: 'generationFailed' }
@@ -333,6 +331,7 @@ export class SpiceKernelLibrary implements Disposable {
 	readonly #fetch: NonNullable<SpiceKernelLibraryOptions['fetch']>
 	readonly #generate: SpkGenerator
 	readonly #now: () => number
+	readonly #downloadStallMs: number
 
 	// Creates the library over its store and the runtime the ephemeris reads; publish announces its events and queue
 	// carries the Horizons generations.
@@ -346,6 +345,7 @@ export class SpiceKernelLibrary implements Disposable {
 		this.#fetch = options.fetch ?? ((url, init) => fetch(url, init))
 		this.#generate = options.generate ?? spkFile
 		this.#now = options.now ?? Date.now
+		this.#downloadStallMs = options.downloadStallMs ?? DOWNLOAD_STALL_MS
 		this.#jobs = new SpiceKernelJobs((job) => this.publish({ type: 'spiceKernels:jobUpdated', epoch: this.#epoch, revision: ++this.#revision, job }), failureOf, this.#now)
 	}
 
@@ -496,7 +496,7 @@ export class SpiceKernelLibrary implements Disposable {
 
 	// Adds an uploaded file, streamed from body; an identical file returns the installed kernel.
 	async importFile(name: string, body: ReadableStream<Uint8Array>, signal?: AbortSignal): Promise<SpiceKernelImportResponse> {
-		const staged = await this.store.stage(Bun.randomUUIDv7(), body, MAX_SPICE_KERNEL_BYTES, signal)
+		const staged = await this.store.stage(Bun.randomUUIDv7(), body, signal)
 		return this.#exclusive(() => this.#publishFile(staged, { name: displayName(name), sourceKind: 'import' }))
 	}
 
@@ -600,30 +600,59 @@ export class SpiceKernelLibrary implements Disposable {
 		}
 	}
 
-	// Downloads a curated entry into staging and publishes it.
+	// Downloads a curated entry into staging and publishes it. It fails as downloadFailed when the host cannot be reached,
+	// answers an error, or sends nothing for the stall wait, however long the whole transfer takes.
 	async #download(entry: SpiceCatalogEntry, context: SpiceKernelJobContext) {
-		const signal = AbortSignal.any([context.signal, AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)])
 		const host = new URL(entry.url).host
-		let response: Response
+		const stall = new AbortController()
+		const signal = AbortSignal.any([context.signal, stall.signal])
+		const stallMs = this.#downloadStallMs
+		const stalled = () => new SpiceKernelError(`${host} sent nothing for ${Math.round(stallMs / 1000)} s.`, 502, 'downloadFailed')
+		let timer: ReturnType<typeof setTimeout> | undefined
+
+		// Restarts the wait for the next bytes.
+		function alive() {
+			clearTimeout(timer)
+			timer = setTimeout(() => stall.abort(), stallMs)
+		}
+
+		alive()
 
 		try {
-			response = await this.#fetch(entry.url, { signal, redirect: 'error' })
-		} catch (error) {
-			if (context.signal.aborted) throw error
-			throw new SpiceKernelError(`${host} could not be reached: ${Error.isError(error) ? error.message : String(error)}`, 502, 'downloadFailed')
-		}
+			let response: Response
 
-		if (!response.ok || !response.body) {
-			await response.body?.cancel()
-			throw new SpiceKernelError(`${host} answered ${response.status}.`, 502, 'downloadFailed')
-		}
+			try {
+				response = await this.#fetch(entry.url, { signal, redirect: 'error' })
+			} catch (error) {
+				if (context.signal.aborted) throw error
+				if (stall.signal.aborted) throw stalled()
+				throw new SpiceKernelError(`${host} could not be reached: ${Error.isError(error) ? error.message : String(error)}`, 502, 'downloadFailed')
+			}
 
-		const length = Number(response.headers.get('content-length')) || undefined
-		if (length !== undefined && length > MAX_SPICE_KERNEL_BYTES) throw new SpiceKernelTooLargeError(MAX_SPICE_KERNEL_BYTES)
-		const total = length ?? entry.bytes
-		const staged = await this.store.stage(Bun.randomUUIDv7(), response.body, MAX_SPICE_KERNEL_BYTES, signal, (bytes) => context.progress(bytes, total))
-		context.stage('validating')
-		return await this.#exclusive(() => this.#publishFile(staged, { name: entry.name, sourceKind: 'naif', sourceRef: entry.id }, context))
+			if (!response.ok || !response.body) {
+				await response.body?.cancel()
+				throw new SpiceKernelError(`${host} answered ${response.status}.`, 502, 'downloadFailed')
+			}
+
+			const total = Number(response.headers.get('content-length')) || entry.bytes
+			let staged: StagedSpiceKernel
+
+			try {
+				staged = await this.store.stage(Bun.randomUUIDv7(), response.body, signal, (bytes) => {
+					alive()
+					context.progress(bytes, total)
+				})
+			} catch (error) {
+				if (!context.signal.aborted && stall.signal.aborted) throw stalled()
+				throw error
+			}
+
+			clearTimeout(timer)
+			context.stage('validating')
+			return await this.#exclusive(() => this.#publishFile(staged, { name: entry.name, sourceKind: 'naif', sourceRef: entry.id }, context))
+		} finally {
+			clearTimeout(timer)
+		}
 	}
 
 	// Asks Horizons for a small-body SPK through the JPL queue, stages it, and publishes it.
@@ -635,7 +664,7 @@ export class SpiceKernelLibrary implements Disposable {
 
 		const bytes = Buffer.from(file.spk, 'base64')
 		context.progress(bytes.byteLength, bytes.byteLength)
-		const staged = await this.store.stage(Bun.randomUUIDv7(), new Blob([bytes]).stream(), MAX_SPICE_KERNEL_BYTES, context.signal)
+		const staged = await this.store.stage(Bun.randomUUIDv7(), new Blob([bytes]).stream(), context.signal)
 		context.stage('validating')
 		return await this.#exclusive(() => this.#publishFile(staged, { name: label, sourceKind: 'horizons', sourceRef: request.spkId, requestedStart: request.start, requestedEnd: request.end, target: id }, context))
 	}
@@ -818,7 +847,6 @@ function usageOf(coverage: readonly SpkCoverageInterval[], kernel: string, segme
 // Answers a failure of a route with its status and code.
 function failure(error: unknown) {
 	if (error instanceof SpiceKernelError) return errorResponse(error.message, error.status, error.code)
-	if (error instanceof SpiceKernelTooLargeError) return errorResponse(error.message, 413, 'tooLarge')
 	if (Error.isError(error) && error.name === 'AbortError') return errorResponse('Cancelled.', 499, 'cancelled')
 	return errorResponse(Error.isError(error) ? error.message : String(error), 500, 'processingFailed')
 }
@@ -869,7 +897,7 @@ export function createSpiceKernelRoutes(library: SpiceKernelLibrary) {
 		},
 		'/api/spice-kernels/import': {
 			// Adds the SPK file of the application/octet-stream body, named by ?name (SpiceKernelImportResponse); 201 when
-			// added, 200 when an identical file was installed; 413 tooLarge, 422 invalidSpk.
+			// added, 200 when an identical file was installed; 422 invalidSpk.
 			POST: async (req) => {
 				const name = new URL(req.url).searchParams.get('name') ?? 'kernel.bsp'
 				if (!req.body) return errorResponse('The request has no file.', 422, 'invalidSpk')

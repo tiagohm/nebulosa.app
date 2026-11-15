@@ -74,14 +74,6 @@ export interface StagedSpiceKernel {
 	readonly bytes: number
 }
 
-// Raised by stage when a stream exceeds its size limit.
-export class SpiceKernelTooLargeError extends Error {
-	// Creates the error for a limit, in bytes.
-	constructor(readonly limit: number) {
-		super(`The file is larger than ${Math.round(limit / 1048576)} MiB.`)
-	}
-}
-
 // Row of spice_kernels.
 interface KernelRow {
 	readonly kernel_id: string
@@ -283,9 +275,9 @@ export class SpiceKernelStore {
 		return join(this.directory, 'objects', `${sha256}.bsp`)
 	}
 
-	// Streams bytes into staging/<id>.part while hashing them, rejecting with SpiceKernelTooLargeError past limit bytes;
-	// progress receives the bytes written so far. The partial file is removed when anything fails, including signal.
-	async stage(id: string, stream: ReadableStream<Uint8Array>, limit: number, signal?: AbortSignal, progress?: (bytes: number) => void): Promise<StagedSpiceKernel> {
+	// Streams bytes into staging/<id>.part while hashing them, whatever their size, holding one chunk at a time; progress
+	// receives the bytes written so far. The partial file is removed when anything fails, including signal.
+	async stage(id: string, stream: ReadableStream<Uint8Array>, signal?: AbortSignal, progress?: (bytes: number) => void): Promise<StagedSpiceKernel> {
 		const directory = join(this.directory, 'staging')
 		await mkdir(directory, { recursive: true })
 		const path = join(directory, `${id}.part`)
@@ -304,7 +296,6 @@ export class SpiceKernelStore {
 				signal?.throwIfAborted()
 				if (done) break
 				bytes += value.byteLength
-				if (bytes > limit) throw new SpiceKernelTooLargeError(limit)
 				hasher.update(value)
 				await writer.write(value)
 				await writer.flush()

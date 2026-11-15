@@ -1,6 +1,7 @@
 // Reviewed NASA/JPL downloads of the SPICE Kernel Library. A download is asked for by the id of an entry, never by a URL,
 // so the server only fetches these exact HTTPS files. Each one is an SPK whose bodies the server can evaluate (data type
-// 2 or 3, J2000 frame), checked against the file before it was listed, and none is larger than MAX_SPICE_KERNEL_BYTES.
+// 2 or 3, J2000 frame), checked against the file before it was listed. Their size is not limited: the toolkit reads a
+// file record by record, never whole.
 
 // Planetary system a curated kernel belongs to, by which the Add Kernel section groups and filters them: the planetary
 // ephemerides, then the satellite ephemerides of each planet with moons.
@@ -33,8 +34,7 @@ const NAIF_PLANETS = 'https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/pla
 // URL of the NAIF generic satellite ephemerides.
 const NAIF_SATELLITES = 'https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/satellites'
 
-// URL of the satellite ephemerides of the JPL Solar System Dynamics group, used for the files NAIF does not publish whole
-// within the size limit.
+// URL of the satellite ephemerides of the JPL Solar System Dynamics group, used for the files NAIF does not publish.
 const SSD_SATELLITES = 'https://ssd.jpl.nasa.gov/ftp/eph/satellites/bsp'
 
 // What a satellite kernel with its own planetary segments provides beyond its moons.
@@ -63,22 +63,24 @@ const NEEDS_PLANETARY = 'Holds only the moons and the planet relative to the pla
 // of sat415.bsp. The aa_checksums.txt of NAIF's planets and satellites folders gave these MD5 at that date:
 // - de440.bsp c9d581bfd84209dbeee8b1583939b148, de442.bsp 446656322267e7b819a26cb08a0d8718,
 //   de442s.bsp cc49327e06088124c0e39d8dde9f0b58;
-// - mar099s.bsp fd7302dfbaa0c63ce85b1e98923ee6a1;
-// - jup347.bsp 5d0fb1232055f44c0aa9a11f130fbd83, jup348.bsp a19ec916c95267772d5f261dc248b1dd,
+// - mar099s.bsp fd7302dfbaa0c63ce85b1e98923ee6a1, mar099.bsp 46f5740f86ec78b978ab96a82f0e42b7;
+// - jup365.bsp 9dcee11a333945310db8b76eb695fc9c, jup347.bsp 5d0fb1232055f44c0aa9a11f130fbd83, jup348.bsp a19ec916c95267772d5f261dc248b1dd,
 //   jup349.bsp c7ef9d1829bb39bbbc2ba30d4a5a8a05;
 // - sat415.bsp c6bdcf653ccbb072ab540bc6e2581ca8, sat455.bsp 8ef323b67972ba4ecc26bf12d1914401,
 //   sat456.bsp 4c66748ca3209d0e66ff29954ab1ee64, sat457.bsp 1b5c6b5bf8aece9d1fed979f06140f11,
 //   sat459.bsp bcaab4a0eec7195501116701295d8697;
-// - ura184_part-3.bsp cf24471fb9037543cdbe168bc0fd4c2e;
+// - ura184_part-1.bsp ec51c999ea103e0fb485487fb10be03d, ura184_part-2.bsp 1adbbd31608f0da812d99c0d4e1ba686,
+//   ura184_part-3.bsp cf24471fb9037543cdbe168bc0fd4c2e;
 // - nep097.bsp 937e05462aac5e34cb5cfddae6c99199, nep098_part-1.bsp e83c4bf7d362822d35fd6159f4f3a319,
+//   nep098_part-2.bsp 940f7b2bea8433a384b3dd680c92381b, nep098_part-3.bsp e4cfc914088b3b71691cc07e9c0d8215,
 //   nep104.bsp fcc219e730cef79a3a239d1e6b74cd55, nep105.bsp 2c32f77dd972c1a7d80e0c57d9cde2e9;
 // - plu060.bsp 9e8d40339d583273feb94bbf8c95cae4.
-// ura182.bsp and ura117.bsp come from the SSD group, which publishes no checksum; NAIF publishes URA184 whole only in
-// parts larger than the limit but the third, and no URA182 or URA117 at all.
+// ura182.bsp and ura117.bsp come from the SSD group, which publishes no checksum; NAIF publishes neither. NAIF splits
+// URA184 and NEP098 in parts of disjoint moons, each with its own planetary segments, which the SSD group publishes whole
+// without them; the parts are listed.
 //
-// Left out: mar099.bsp and jup365.bsp whole (larger than MAX_SPICE_KERNEL_BYTES; mar099s.bsp and the JUICE reduction
-// are listed instead), the other parts of ura184 and nep098 (larger than the limit), the extra-long xl files of single
-// moons without planetary segments, the SSD copies of the NAIF files above, and sat393_daphnis.bsp (type 17 only).
+// Left out: the extra-long xl files of single moons, without planetary segments and spanning -13000 to 17000, beyond every
+// listed planetary ephemeris; the SSD copies of the NAIF files above; and sat393_daphnis.bsp (type 17 only).
 export const SPICE_KERNEL_CATALOG: readonly SpiceCatalogEntry[] = [
 	{
 		id: 'de440s',
@@ -131,9 +133,20 @@ export const SPICE_KERNEL_CATALOG: readonly SpiceCatalogEntry[] = [
 		bodies: 'Mars, Phobos, Deimos',
 		startYear: 1995,
 		endYear: 2050,
-		description: `JPL MAR099 Martian satellite ephemeris, the short version of mar099.bsp, which is larger than the library accepts. ${OWN_PLANETARY}`,
+		description: `JPL MAR099 Martian satellite ephemeris, the short version of mar099.bsp. ${OWN_PLANETARY}`,
 		url: `${NAIF_SATELLITES}/mar099s.bsp`,
 		bytes: 67594240,
+	},
+	{
+		id: 'mar099',
+		name: 'mar099.bsp',
+		system: 'mars',
+		bodies: 'Mars, Phobos, Deimos',
+		startYear: 1600,
+		endYear: 2600,
+		description: `JPL MAR099 Martian satellite ephemeris over its full span. ${OWN_PLANETARY} A download of 1.1 GiB.`,
+		url: `${NAIF_SATELLITES}/mar099.bsp`,
+		bytes: 1227574272,
 	},
 	{
 		id: 'jup365-1990-2050',
@@ -145,6 +158,17 @@ export const SPICE_KERNEL_CATALOG: readonly SpiceCatalogEntry[] = [
 		description: `JPL JUP365 Jupiter satellite ephemeris reduced for the JUICE mission, enough for the Jupiter Observing Planner on its own. ${OWN_PLANETARY}`,
 		url: 'https://naif.jpl.nasa.gov/pub/naif/JUICE/kernels/spk/jup365_19900101_20500101.bsp',
 		bytes: 113735680,
+	},
+	{
+		id: 'jup365',
+		name: 'jup365.bsp',
+		system: 'jupiter',
+		bodies: 'Jupiter, Io, Europa, Ganymede, Callisto, Amalthea, Thebe, Adrastea, Metis',
+		startYear: 1600,
+		endYear: 2200,
+		description: `JPL JUP365 Jupiter satellite ephemeris over its full span. ${OWN_PLANETARY} A download of 1.1 GiB.`,
+		url: `${NAIF_SATELLITES}/jup365.bsp`,
+		bytes: 1136581632,
 	},
 	{
 		id: 'jup347',
@@ -263,9 +287,31 @@ export const SPICE_KERNEL_CATALOG: readonly SpiceCatalogEntry[] = [
 		bodies: 'Uranus, Miranda, Ariel, Umbriel, Titania, Oberon, and 10 irregular moons',
 		startYear: 1600,
 		endYear: 2400,
-		description: `JPL URA184 Uranian satellite ephemeris, the part with the major moons and the irregulars Caliban to Ferdinand and S/2023 U 1; the other parts, of the small inner moons, are larger than the library accepts. ${OWN_PLANETARY}`,
+		description: `JPL URA184 Uranian satellite ephemeris, the part with the major moons and the irregulars Caliban to Ferdinand and S/2023 U 1; parts 1 and 2 hold the small inner moons. ${OWN_PLANETARY}`,
 		url: `${NAIF_SATELLITES}/ura184_part-3.bsp`,
 		bytes: 386885632,
+	},
+	{
+		id: 'ura184-part-1',
+		name: 'ura184_part-1.bsp',
+		system: 'uranus',
+		bodies: 'Uranus, Cordelia, Ophelia, Bianca, Cressida, Desdemona, Juliet, Portia',
+		startYear: 1900,
+		endYear: 2100,
+		description: `JPL URA184 Uranian satellite ephemeris, the part with the first seven small inner moons, fitted with JWST data. ${OWN_PLANETARY} A download of 1.9 GiB.`,
+		url: `${NAIF_SATELLITES}/ura184_part-1.bsp`,
+		bytes: 2062529536,
+	},
+	{
+		id: 'ura184-part-2',
+		name: 'ura184_part-2.bsp',
+		system: 'uranus',
+		bodies: 'Uranus, Rosalind, Belinda, Puck, Perdita, Mab, Cupid, and one provisional moon',
+		startYear: 1900,
+		endYear: 2100,
+		description: `JPL URA184 Uranian satellite ephemeris, the part with the other small inner moons and the provisional moon 75052, fitted with JWST data. ${OWN_PLANETARY} A download of 1.9 GiB.`,
+		url: `${NAIF_SATELLITES}/ura184_part-2.bsp`,
+		bytes: 2062529536,
 	},
 	{
 		id: 'ura182',
@@ -307,9 +353,31 @@ export const SPICE_KERNEL_CATALOG: readonly SpiceCatalogEntry[] = [
 		bodies: 'Neptune, Triton, Nereid, Naiad',
 		startYear: 1800,
 		endYear: 2200,
-		description: `JPL NEP098 Neptunian satellite ephemeris, the part with Triton, Nereid, and Naiad; the other parts, of the other inner moons, are larger than the library accepts. ${OWN_PLANETARY} A large download.`,
+		description: `JPL NEP098 Neptunian satellite ephemeris, the part with Triton, Nereid, and Naiad; parts 2 and 3 hold the other inner moons. ${OWN_PLANETARY} A large download.`,
 		url: `${NAIF_SATELLITES}/nep098_part-1.bsp`,
 		bytes: 821838848,
+	},
+	{
+		id: 'nep098-part-2',
+		name: 'nep098_part-2.bsp',
+		system: 'neptune',
+		bodies: 'Neptune, Thalassa, Despina, Galatea',
+		startYear: 1800,
+		endYear: 2200,
+		description: `JPL NEP098 Neptunian satellite ephemeris, the part with Thalassa, Despina, and Galatea. ${OWN_PLANETARY} A download of 1.7 GiB.`,
+		url: `${NAIF_SATELLITES}/nep098_part-2.bsp`,
+		bytes: 1791917056,
+	},
+	{
+		id: 'nep098-part-3',
+		name: 'nep098_part-3.bsp',
+		system: 'neptune',
+		bodies: 'Neptune, Larissa, Proteus, Hippocamp',
+		startYear: 1800,
+		endYear: 2200,
+		description: `JPL NEP098 Neptunian satellite ephemeris, the part with Larissa, Proteus, and Hippocamp. ${OWN_PLANETARY} A download of 1.7 GiB.`,
+		url: `${NAIF_SATELLITES}/nep098_part-3.bsp`,
+		bytes: 1791917056,
 	},
 	{
 		id: 'nep105',

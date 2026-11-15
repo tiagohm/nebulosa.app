@@ -7,7 +7,7 @@ import type { SpkFile } from 'nebulosa/src/adapters/ephemeris/horizons'
 import * as kernelSets from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { AppDatabase } from './database'
-import { createSpiceKernelRoutes, MAX_SPICE_KERNEL_BYTES, SpiceKernelError, type SpiceKernelEvent, SpiceKernelLibrary, type SpiceKernelLibraryOptions, type SpkGenerator } from './spicekernels'
+import { createSpiceKernelRoutes, SpiceKernelError, type SpiceKernelEvent, SpiceKernelLibrary, type SpiceKernelLibraryOptions, type SpkGenerator } from './spicekernels'
 import { spkFixture } from './spicekernels.fixture'
 import type { SpiceKernelJob } from './spicekernels.jobs'
 import { SpiceKernelRuntime } from './spicekernels.runtime'
@@ -323,22 +323,52 @@ test('a curated download is streamed, inspected, and installed', async () => {
 	expect(() => library.download('unknown')).toThrow('Unknown curated kernel.')
 })
 
-test('the curated catalog lists the reviewed kernels by system within the size limit', async () => {
+test('the curated catalog lists the reviewed kernels by system', async () => {
 	const { library } = await started({})
 	const catalog = library.catalog()
-	expect(catalog.map((e) => e.id)).toEqual(['de440s', 'de440', 'de442s', 'de442', 'mar099s', 'jup365-1990-2050', 'jup347', 'jup348', 'jup349', 'sat480', 'sat441', 'sat415', 'sat456', 'sat457', 'sat455', 'sat459', 'ura184-part-3', 'ura182', 'ura117', 'nep097', 'nep098-part-1', 'nep105', 'nep104', 'plu060'])
+	expect(catalog.map((e) => e.id)).toEqual([
+		'de440s',
+		'de440',
+		'de442s',
+		'de442',
+		'mar099s',
+		'mar099',
+		'jup365-1990-2050',
+		'jup365',
+		'jup347',
+		'jup348',
+		'jup349',
+		'sat480',
+		'sat441',
+		'sat415',
+		'sat456',
+		'sat457',
+		'sat455',
+		'sat459',
+		'ura184-part-3',
+		'ura184-part-1',
+		'ura184-part-2',
+		'ura182',
+		'ura117',
+		'nep097',
+		'nep098-part-1',
+		'nep098-part-2',
+		'nep098-part-3',
+		'nep105',
+		'nep104',
+		'plu060',
+	])
 	expect(new Set(catalog.map((e) => e.name)).size).toBe(catalog.length)
 	// Every system is one consecutive run, the planetary ephemerides first.
 	expect([...new Set(catalog.map((e) => e.system))]).toEqual(['planets', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'])
 	expect(catalog.find((e) => e.id === 'jup365-1990-2050')?.url).toBe('https://naif.jpl.nasa.gov/pub/naif/JUICE/kernels/spk/jup365_19900101_20500101.bsp')
 	expect(catalog.find((e) => e.id === 'ura182')?.url).toBe('https://ssd.jpl.nasa.gov/ftp/eph/satellites/bsp/ura182.bsp')
-	// sat441 alone is larger than the former 256 MiB limit.
-	expect(catalog.find((e) => e.id === 'sat441')?.bytes).toBeGreaterThan(256 * 1024 * 1024)
+	// No size limit keeps a file out.
+	expect(catalog.filter((e) => e.bytes > 1024 ** 3).map((e) => e.id)).toEqual(['mar099', 'jup365', 'ura184-part-1', 'ura184-part-2', 'nep098-part-2', 'nep098-part-3'])
 
 	for (const entry of catalog) {
 		expect(entry.url).toEndWith(`/${entry.name}`)
 		expect(entry.url).toMatch(/^https:\/\/(naif|ssd)\.jpl\.nasa\.gov\//)
-		expect(entry.bytes).toBeLessThanOrEqual(MAX_SPICE_KERNEL_BYTES)
 		expect(entry.startYear).toBeLessThan(entry.endYear)
 		expect(entry.kernelId).toBeUndefined()
 	}
@@ -350,12 +380,39 @@ test('a failed download names the host of the entry', async () => {
 	expect(end).toMatchObject({ state: 'failed', code: 'downloadFailed', error: 'ssd.jpl.nasa.gov answered 404.' })
 })
 
-test('a download larger than the limit fails without a trace', async () => {
-	const { library, events, store } = await started({ fetch: () => Promise.resolve(new Response(stream(PLANETARY), { headers: { 'content-length': `${MAX_SPICE_KERNEL_BYTES + 1}` } })) })
+// Stream of bytes in chunks of size bytes, one every interval milliseconds; with stallAfter chunks, it then sends nothing more.
+function slowStream(bytes: Buffer, size: number, interval: number, stallAfter = Infinity) {
+	let offset = 0
+	let sent = 0
+
+	return new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			if (sent >= stallAfter) return await new Promise<void>(() => {})
+			if (offset >= bytes.byteLength) return controller.close()
+			await Bun.sleep(interval)
+			controller.enqueue(new Uint8Array(bytes.subarray(offset, offset + size)))
+			offset += size
+			sent++
+		},
+	})
+}
+
+test('a download that stops sending fails without a trace', async () => {
+	const { library, events, store } = await started({ downloadStallMs: 100, fetch: () => Promise.resolve(new Response(slowStream(PLANETARY, 1024, 0, 2))) })
 	const end = await ended(events, library.download('de440s').jobId)
 
-	expect(end).toMatchObject({ state: 'failed', code: 'tooLarge' })
+	expect(end).toMatchObject({ state: 'failed', code: 'downloadFailed', error: 'naif.jpl.nasa.gov sent nothing for 0 s.' })
 	expect(store.kernels()).toHaveLength(0)
+	expect(readdirSync(join(store.directory, 'staging'))).toEqual([])
+})
+
+test('a slow download that keeps sending outlasts the stall wait', async () => {
+	const chunk = Math.ceil(PLANETARY.byteLength / 6)
+	const { library, events } = await started({ downloadStallMs: 100, fetch: () => Promise.resolve(new Response(slowStream(PLANETARY, chunk, 40))) })
+	const end = await ended(events, library.download('de440s').jobId)
+
+	// Six chunks 40 ms apart take longer than the 100 ms stall wait.
+	expect(end).toMatchObject({ state: 'completed', bytes: PLANETARY.byteLength })
 })
 
 test('a Horizons generation must contain the requested body', async () => {

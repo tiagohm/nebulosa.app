@@ -105,7 +105,7 @@ export interface CameraListProps {
 
 // Returns what the list says of a camera: its model and sensor.
 function cameraDescription({ model, sensor }: Pick<CatalogCameraFields, 'model' | 'sensor'>) {
-	const size = sensor && `${sensor.width} × ${sensor.height}${sensor.pixelSize === undefined ? '' : ` · ${sensor.pixelSize} µm`}`
+	const size = sensor && `${sensor.width} × ${sensor.height}${sensor.pixelSize === undefined ? '' : ` · ${Number(sensor.pixelSize.toFixed(2))} µm${sensor.bits ? ` · ${sensor.bits} bits` : ''}`}`
 	return [model, size].filter(Boolean).join(' · ') || 'No model or sensor'
 }
 

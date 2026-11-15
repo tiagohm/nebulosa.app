@@ -2,16 +2,19 @@ import type { DeviceSummary } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
+import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
+import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
 import { bindCamera, boundCameraId, cameraBindingsState, catalogCameraName, catalogState, createCatalogCamera, deviceFields, sensorMismatch, suggestedCameraId } from './catalog'
+import { deviceState } from './equipment'
 
 // Line of a camera role of the Equipment Setup that binds its device to a camera of the Equipment Catalog: the camera
 // frames of the device are recorded against, which the Dark Library Wizard and the Flat Wizard need to start and the
 // calibrators to choose masters. The binding belongs to the physical device, so it holds for every profile. A device whose
 // endpoint changed (a new host or port) is unbound, and the camera bound to a device of the same driver name is suggested.
-// New Camera creates a camera of the catalog from the device, which Settings → Equipment Catalog renames. Binding never
-// commands the device.
+// New Camera creates a camera of the catalog from the device, which Settings → Equipment Catalog renames; the edit button
+// beside the select closes the Equipment Setup and shows the bound camera there. Binding never commands the device.
 
 // Select value of the option that unbinds the device.
 const UNBOUND = ''
@@ -72,6 +75,13 @@ export function CatalogBinding({ device }: CatalogBindingProps) {
 		else void bind(value === UNBOUND ? undefined : value)
 	}
 
+	// Closes the Equipment Setup and shows the bound camera in Settings → Equipment Catalog.
+	function editCamera() {
+		if (!camera) return
+		deviceState.open = false
+		navigate(routeState, { workspace: 'settings', section: 'equipment-catalog', camera: camera.id })
+	}
+
 	function format(value: string) {
 		if (value === UNBOUND) return 'Not bound'
 		if (value === NEW_CAMERA) return 'New Camera…'
@@ -85,6 +95,7 @@ export function CatalogBinding({ device }: CatalogBindingProps) {
 			<div className="flex flex-wrap items-center gap-2">
 				<span className="w-32 flex-none text-xs text-ink-300 max-sm:w-auto">Catalog</span>
 				<Select className="min-w-48 flex-1" options={options} value={bound ?? UNBOUND} format={format} onChange={change} disabled={busy} />
+				<IconButton icon="edit" label={camera ? `Edit ${camera.name} in the Equipment Catalog` : 'Bind a camera of the catalog to edit it'} disabled={!camera} onClick={editCamera} />
 				{suggestion && (
 					<Button variant="secondary" disabled={busy} onClick={() => void bind(suggestion)}>
 						Use {catalogCameraName(cameras, suggestion)}

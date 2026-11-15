@@ -28,6 +28,7 @@ It has two parts: the cameras of the catalog, kept with the workspace, and the b
   The model and sensor can be copied from a connected camera, or filled from a model of the camera model catalog (`CameraModelSearch`, a list floating under its search field): the cameras of the AstroBin equipment database whose sensor declares its size, with pixel size, ADC bits, and color or mono (`CameraModelCatalog` of `api/src/equipmentcatalog.models.ts`), written by `bun make:cameras` (`bin/src/camera.models.ts`) into `web/assets/cameras.json.gz`, not committed, bundled by `web` and loaded once on demand (`web/src/equipment/cameramodels.ts`); nothing asks AstroBin at run time.
   AstroBin never gives the CFA pattern, so a color model keeps the pattern chosen, or takes RGGB over Mono, and a mono model sets Mono.
   New Camera of the Equipment Setup creates a camera named after the device, with the model and sensor it reports, through the route at once, and binds the device to it.
+  The edit button beside the select of the Equipment Setup closes it and shows the bound camera in Settings → Equipment Catalog; it is disabled while the device is bound to none.
 - **Limitations.**
   An endpoint whose host, port, or protocol changes is another connection, so its devices are unbound until bound again; the Equipment Setup suggests the camera bound to a device of the same driver name.
   One camera reached through INDI and through Alpaca is two devices, each bound to it on purpose.

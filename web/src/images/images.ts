@@ -10,7 +10,7 @@ import { activeProfile, annotationPreferences, imageDisplaySettings, imageProces
 import { type AnnotationPreferences, DEFAULT_ANNOTATION_PREFERENCES, type ImageProcessingPresetStep } from '../profile/schema'
 import { FIT_VIEW, type ViewerView } from '../viewer/transform'
 import type { CameraTabState } from './cameratabs'
-import { ORIGINAL_DISPLAY_SETTINGS } from './display'
+import { DEFAULT_AUTO_STRETCH_PRESET, ORIGINAL_DISPLAY_SETTINGS } from './display'
 import type { ImageProcessingDraft } from './imageprocessing'
 import { DEFAULT_ADDED_OPERATION } from './imageprocessing.catalog'
 import type { ImageToolId } from './tools'
@@ -344,6 +344,19 @@ export function defaultDisplaySettings(info: ImageInfo): DisplaySettings {
 // or not; an untrusted one can only be debayered with an explicit pattern.
 export function isMosaic(info: Pick<ImageInfo, 'channels' | 'bayer'>): boolean {
 	return info.channels === 1 && !!info.bayer
+}
+
+// Returns whether the original rendering of an image (ORIGINAL_DISPLAY_SETTINGS) differs from its rendering with
+// settings, so Show Original has something else to show: a debayered mono image, another stretch (the link of an auto
+// stretch counts only for a color rendering), a tone adjustment, an inversion, or, for a color rendering, a saturation
+// or a color cast removal.
+export function differsFromOriginal(info: Pick<ImageInfo, 'channels'>, settings: DisplaySettings): boolean {
+	const debayered = info.channels === 1 && settings.debayer.enabled
+	const color = info.channels === 3 || debayered
+	const { stretch } = settings
+	const originalStretch = stretch.mode === 'auto' && stretch.preset === DEFAULT_AUTO_STRETCH_PRESET && (stretch.linked || !color)
+	const neutralTone = settings.brightness === 1 && settings.contrast === 1 && settings.gamma === 1 && !settings.invert
+	return debayered || !originalStretch || !neutralTone || (color && (settings.saturation !== 1 || settings.scnr.enabled))
 }
 
 // Returns the display settings a new document of an image starts with: those its profile saved, with debayering

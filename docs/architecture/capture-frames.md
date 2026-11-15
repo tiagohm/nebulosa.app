@@ -54,7 +54,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - A camera tab shows one frame at a time by its selection: `latest`, the camera's latest available frame (after a restart, the newest saved frame, labelled Latest saved), followed as each newer frame in memory arrives, only the newest of those arriving while one opens being shown;
   `saved`, a saved frame, which new frames never replace;
   `liveStack`, a snapshot of a stack or a color composition of the Live Stacking session of the camera (`showLiveStack`), asked for again when its stacks grow (`followLiveStacks`) and replaced by the latest frame when the session closes, while the frame under it keeps its lease (see [Live Stacking Contract](live-stacking.md));
-  or `inspect`, the frame held when Run Detection or Solve Image starts on a followed frame, or a star of it is inspected (`holdCameraFrame`), so the result stays on the frame analyzed.
+  or `inspect`, the frame held when Run Detection or Solve Image starts on a followed frame, or a star of it is inspected (`holdCameraFrame`), so the result stays on the frame analyzed, or by Hold for analysis of the toolbar of a tab following the latest frame, which holds it without running a tool (useful between the short frames of a loop).
   Return to Latest follows the camera again without replaying the frames in between, and a capture accepted from the Camera Acquisition panel of the tab does the same for an `inspect` frame (`releaseCameraFrame`), so the tab shows what the capture takes;
   a `saved` frame stays selected.
   A selected frame that cannot be opened keeps the frame shown with the error and never falls back to another frame.

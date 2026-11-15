@@ -1,7 +1,8 @@
-import type { DirectoryListing } from 'api'
-import { responseError } from '../http'
+import type { CreateDirectoryRequest, DirectoryListing, FileEntry } from 'api'
+import { jsonInit, responseError } from '../http'
 
-// Client of the server's file browsing API, used to choose files the server reads.
+// Client of the server's file browsing API, used to choose files the server reads and to create the directories it
+// saves in.
 
 // Extensions of the astronomical image files the Images workspace opens.
 export const IMAGE_EXTENSIONS: readonly string[] = ['fit', 'fits', 'fts', 'xisf']
@@ -15,6 +16,14 @@ export async function fetchDirectory(path: string, extensions?: readonly string[
 	const response = await fetch(`/api/files?${params}`, { signal })
 	if (!response.ok) throw new Error(await responseError(response))
 	return (await response.json()) as DirectoryListing
+}
+
+// Creates a directory named name in the server directory parent and resolves to its entry. Throws an Error with the
+// server's message when it cannot be created (its name taken, its parent missing or not writable).
+export async function createDirectory(parent: string, name: string): Promise<FileEntry> {
+	const response = await fetch('/api/files', jsonInit('POST', { parent, name } satisfies CreateDirectoryRequest))
+	if (!response.ok) throw new Error(await responseError(response))
+	return (await response.json()) as FileEntry
 }
 
 // Joins a server directory path and a file name with the directory's own separator (backslash for a

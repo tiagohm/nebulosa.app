@@ -15,6 +15,7 @@ import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
 import { type DomeDirection, domeMotionRuntime, pressDomeMotion, releaseDomeMotion } from '../domeMotion'
 import type { InterfaceProps } from '../parts'
+import { useDeviceBusy } from '../useControl'
 
 // Controls of a dome: its reported azimuth, shutter, park, home, and slaving, a slew to an azimuth or by an
 // angle, the shutter altitude, press-and-hold manual rotation, a stop, and its configuration (sync, park
@@ -44,7 +45,7 @@ export function DomeControls({ device }: InterfaceProps) {
 	const [sync, setSync] = useState(Math.round(toDeg(dome.azimuth.value)))
 	const [speed, setSpeed] = useState(dome.speed.value)
 	const [backlash, setBacklash] = useState(dome.backlash.value)
-	const busy = control.pending[device.id] !== undefined
+	const busy = useDeviceBusy(device)
 	const shutterMoving = dome.shutterState === 'OPENING' || dome.shutterState === 'CLOSING'
 	const moving = dome.slewing || dome.moving || dome.homing || dome.parking || shutterMoving
 	const locked = dome.slaved || dome.parked || dome.parking

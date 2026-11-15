@@ -9,6 +9,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Every command goes through `api` under the shared contract of `api/src/commands.ts`: settings answer 204 once the driver reports the commanded state (504 `timeout` when it never does), motions answer 202 with an operation id and report their outcome only through `operation:updated`.
   Durable requests carry a client token, so a repeated request never moves a device twice;
   the web generates tokens and ids with `nanoid`, never `crypto.randomUUID`, which browsers only provide in a secure context (HTTPS or localhost) and the app is usually opened over plain HTTP on the local network.
+- The command controls of a device are disabled while this tab has a command of it in flight or a running operation holds it, whichever tab or service started it (`useDeviceBusy` of `web/src/equipment-control/useControl.ts`), since the server would refuse them as busy;
+  the stop buttons never are.
 - Stops never wait for a lease: `POST …/stop` cancels the operation of the physical device and sends the commander's `stopMotion` (`stopResponse` of `api/src/commands.ts`).
   A filter wheel has no abort.
   Guide pulse stops never cancel another operation of the mount.

@@ -23,6 +23,7 @@ import { TextInput } from '../../ui/TextInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
 import { mountMotion } from '../mountActivity'
 import type { InterfaceProps } from '../parts'
+import { useDeviceBusy } from '../useControl'
 
 // Controls of a mount: where it points, a coordinate to go to, flip to, or sync on, tracking and its rate,
 // the manual-motion speed, park and home, and the site and clock it uses. Every value shown is the one the
@@ -74,7 +75,7 @@ export function MountControls({ device }: InterfaceProps) {
 	const mount = deviceStateOf(control.states, 'mount', device.id)!
 	const profile = activeProfile(profiles)
 	const observer = useActiveSite()
-	const busy = control.pending[device.id] !== undefined
+	const busy = useDeviceBusy(device)
 	const moving = mount.slewing || mount.parking || mount.homing || mount.moving
 	const setup = activeSetup(profile)
 	const nudgeable = setup.MOUNT?.id === device.id

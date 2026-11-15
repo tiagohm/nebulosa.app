@@ -32,7 +32,7 @@ Route prefixes, each owned by the module named:
 - `/api/observatory-cameras`: `observatorycameras.ts` (snapshot, `PUT` and `DELETE /:id` of the camera definitions, and the WHEP signaling of a browser: `POST /:id/whep`, `PATCH` and `DELETE /:id/whep/sessions/:token`)
 - `/api/workspace`, `/api/saved-connections`, `/api/observing-sites`, `/api/catalog-cameras`, `/api/profiles`: `workspace.ts` (the saved connections, the observing sites, the cameras of the Equipment Catalog, and the profiles: their snapshot, and the writes of each unit, the notifications each profile read or dismissed included)
 - `/api/equipment-catalog/bindings`: `equipmentcatalog.ts` (the binding of each camera device to a camera of the Equipment Catalog)
-- `/api/files`: `files.ts` (server filesystem browser of the file chooser)
+- `/api/files`: `files.ts` (server filesystem browser of the file chooser: `GET` lists a directory, `POST` creates one in an existing directory, 409 `exists` when its name is taken)
 - `/api/sky`: `api/src/sky/` (`routes.ts`: catalog, search, objects, positions, bodies, minor bodies, constellations; `/api/sky/sun/almanac` of `sun.ts`, `/api/sky/sun/image` of `sdo.ts`, `/api/sky/sun/active-regions` of `activeregions.ts`, `/api/sky/moon/almanac` of `moon.ts`)
 - `/api/eclipses/lunar`: `lunareclipses.ts` (eclipse navigation, global map, local circumstances)
 - `/api/eclipses/solar`: `solareclipses.ts` (eclipse navigation, global map on a worker, local circumstances)

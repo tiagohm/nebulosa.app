@@ -1,8 +1,8 @@
 import { afterAll, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { dirname, join } from 'path'
-import type { DirectoryListing } from './files'
+import type { DirectoryListing, FileEntry } from './files'
 import { routes } from './index'
 
 const root = mkdtempSync(join(tmpdir(), 'nebulosa-files-'))
@@ -54,5 +54,35 @@ describe('list directory', () => {
 		expect(drives.path).toBe('')
 		expect(drives.parent).toBeUndefined()
 		expect(drives.entries.map((e) => e.path)).toContain(drive)
+	})
+})
+
+describe('create directory', () => {
+	const post = (routes['/api/files'] as Record<string, (req: Request) => Promise<Response>>).POST
+
+	async function create(parent: string, name: string) {
+		return await post(new Request('http://localhost/api/files', { method: 'POST', body: JSON.stringify({ parent, name }) }))
+	}
+
+	test('creates a directory in an existing one', async () => {
+		const response = await create(root, 'captures')
+		const entry = (await response.json()) as FileEntry
+
+		expect(response.status).toBe(201)
+		expect(entry).toMatchObject({ name: 'captures', path: join(root, 'captures'), directory: true })
+		expect(statSync(join(root, 'captures')).isDirectory()).toBe(true)
+	})
+
+	test('a taken name is 409', async () => {
+		const response = await create(root, 'A-dir')
+		expect(response.status).toBe(409)
+		expect(await response.json()).toMatchObject({ code: 'exists' })
+	})
+
+	test('a missing parent is 404 and creates nothing', async () => {
+		const response = await create(join(root, 'missing'), 'new')
+		expect(response.status).toBe(404)
+		expect(await response.json()).toMatchObject({ code: 'notFound' })
+		expect(existsSync(join(root, 'missing'))).toBe(false)
 	})
 })

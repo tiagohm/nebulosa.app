@@ -10,6 +10,7 @@ import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand } from '../control'
 import type { InterfaceProps } from '../parts'
+import { useDeviceBusy } from '../useControl'
 
 // Controls of a filter wheel: the filter it reports, a change to another slot sent only by an explicit
 // action, and the renaming of the slots when the driver allows it. Slots are 0-based in the API and shown
@@ -27,7 +28,7 @@ export function FilterWheelControls({ device }: InterfaceProps) {
 	const wheel = deviceStateOf(control.states, 'wheel', device.id)!
 	const [target, setTarget] = useState(String(wheel.position))
 	const [names, setNames] = useState<string[]>()
-	const busy = control.pending[device.id] !== undefined
+	const busy = useDeviceBusy(device)
 	const slots = Array.from({ length: wheel.count }, (_, slot) => String(slot))
 	const slot = Number(target)
 

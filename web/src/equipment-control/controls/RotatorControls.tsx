@@ -10,6 +10,7 @@ import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
 import type { InterfaceProps } from '../parts'
+import { useDeviceBusy } from '../useControl'
 
 // Controls of a field rotator: its reported mechanical angle and range, a move to an angle or by an angle,
 // a move home, a stop, a sync of the angle, and the rotation direction. The mechanical angle is not the
@@ -26,7 +27,7 @@ export function RotatorControls({ device }: InterfaceProps) {
 	const [target, setTarget] = useState(angle.value)
 	const [delta, setDelta] = useState(DEFAULT_DELTA)
 	const [sync, setSync] = useState(angle.value)
-	const busy = control.pending[device.id] !== undefined
+	const busy = useDeviceBusy(device)
 	const blocked = busy || rotator.moving
 	const step = angle.step > 0 ? angle.step : 0.1
 

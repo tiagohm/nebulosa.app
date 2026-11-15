@@ -1,11 +1,12 @@
 import { existsSync } from 'fs'
-import { readdir, stat } from 'fs/promises'
-import { dirname, extname, join, resolve } from 'path'
+import { mkdir, readdir, stat } from 'fs/promises'
+import { basename, dirname, extname, join, resolve } from 'path'
 import { errorResponse } from './http'
 
 // Browsing of the server's filesystem, so a client on another machine can choose files the server reads,
-// such as images to open. Any directory the server process can read is listed to any client that can
-// reach the API; like every other input, the requested path is not restricted.
+// such as images to open, and creation of a directory to save in. Any directory the server process can read is
+// listed, and any it can write gets a new directory, for any client that can reach the API; like every other input,
+// the requested path is not restricted.
 
 // Entry of a directory listing.
 export interface FileEntry {
@@ -43,6 +44,36 @@ export class DirectoryError extends Error {
 		const missing = code === 'ENOENT' || code === 'ENOTDIR'
 		super(missing ? `Directory not found: ${path}` : `Unable to read directory: ${path}`, { cause })
 		this.status = missing ? 404 : 403
+	}
+}
+
+// Stable codes of the errors of the file browser: notFound (a directory, or the parent of a new one, does not exist),
+// forbidden (it cannot be read or written), exists (a new directory's name is already taken).
+export type FileErrorCode = 'notFound' | 'forbidden' | 'exists'
+
+// Body of the creation of a directory.
+export interface CreateDirectoryRequest {
+	// Absolute path of the existing directory to create it in.
+	readonly parent: string
+	// Name of the new directory.
+	readonly name: string
+}
+
+// Error of a directory that cannot be created: its parent is missing, its name is taken, or the parent is not writable.
+export class CreateDirectoryError extends Error {
+	// HTTP status matching the failure: 404 when the parent does not exist, 409 when the name is taken, 403 otherwise.
+	readonly status: 404 | 409 | 403
+	// Stable code of the failure.
+	readonly code: FileErrorCode
+
+	// Creates the error of a failed creation of path.
+	constructor(path: string, cause: unknown) {
+		const code = Error.isError(cause) && 'code' in cause ? cause.code : undefined
+		const exists = code === 'EEXIST'
+		const missing = code === 'ENOENT' || code === 'ENOTDIR'
+		super(exists ? `Already exists: ${path}` : missing ? `Directory not found: ${dirname(path)}` : `Unable to create directory: ${path}`, { cause })
+		this.status = exists ? 409 : missing ? 404 : 403
+		this.code = exists ? 'exists' : missing ? 'notFound' : 'forbidden'
 	}
 }
 
@@ -107,6 +138,21 @@ export async function listDirectory(path: string, extensions?: ReadonlySet<strin
 	return parent === undefined ? { path: directory, entries } : { path: directory, parent, entries }
 }
 
+// Creates a directory named name in the existing directory parent (resolved against the server's working directory),
+// never its missing ancestors, and resolves to its entry. Throws CreateDirectoryError.
+export async function createDirectory({ parent, name }: CreateDirectoryRequest): Promise<FileEntry> {
+	const path = join(resolve(parent || '.'), name)
+
+	try {
+		await mkdir(path)
+	} catch (error) {
+		throw new CreateDirectoryError(path, error)
+	}
+
+	const created = await entry(dirname(path), basename(path))
+	return created ?? { name: basename(path), path, directory: true }
+}
+
 // Routes of the server filesystem browser.
 export function createFileRoutes() {
 	return {
@@ -121,6 +167,16 @@ export function createFileRoutes() {
 					return Response.json(await listDirectory(params.get('path') ?? '.', extensions ? new Set(extensions.toLowerCase().split(',')) : undefined))
 				} catch (error) {
 					if (error instanceof DirectoryError) return errorResponse(error.message, error.status, error.status === 404 ? 'notFound' : 'forbidden')
+					throw error
+				}
+			},
+			// Creates a directory (CreateDirectoryRequest): responds 201 with its FileEntry, 404 when the parent does not
+			// exist, 409 when the name is taken, and 403 when the parent cannot be written.
+			POST: async (req) => {
+				try {
+					return Response.json(await createDirectory((await req.json()) as CreateDirectoryRequest), { status: 201 })
+				} catch (error) {
+					if (error instanceof CreateDirectoryError) return errorResponse(error.message, error.status, error.code)
 					throw error
 				}
 			},

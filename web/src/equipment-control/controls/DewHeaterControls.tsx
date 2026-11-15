@@ -8,6 +8,7 @@ import { Notice } from '../../ui/Notice'
 import { Slider } from '../../ui/Slider'
 import { controlRuntime, deviceStateOf, sendCommand } from '../control'
 import type { InterfaceProps } from '../parts'
+import { useDeviceBusy } from '../useControl'
 
 // Controls of a dew heater: its duty cycle as reported, and a pending duty cycle sent only with Apply, so
 // dragging the slider never sends a stream of commands.
@@ -18,7 +19,7 @@ export function DewHeaterControls({ device }: InterfaceProps) {
 	const heater = deviceStateOf(control.states, 'dewHeater', device.id)!
 	const { dutyCycle } = heater
 	const [pending, setPending] = useState<number>()
-	const busy = control.pending[device.id] !== undefined
+	const busy = useDeviceBusy(device)
 	const value = pending ?? dutyCycle.value
 	const step = dutyCycle.step > 0 ? dutyCycle.step : 1
 

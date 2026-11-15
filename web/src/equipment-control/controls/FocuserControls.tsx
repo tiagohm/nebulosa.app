@@ -12,6 +12,7 @@ import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
 import { focuserBacklashKey, focuserBacklashRuntime } from '../focuserBacklash'
 import type { InterfaceProps } from '../parts'
+import { useDeviceBusy } from '../useControl'
 import { FocuserBacklash } from './FocuserBacklash'
 
 // Controls of a focuser: its position and temperature, a move to a position, a move by a number of steps
@@ -34,7 +35,7 @@ export function FocuserControls({ device }: InterfaceProps) {
 	const [target, setTarget] = useState(logical)
 	const [steps, setSteps] = useState(DEFAULT_STEPS)
 	const [sync, setSync] = useState(position.value)
-	const busy = control.pending[device.id] !== undefined
+	const busy = useDeviceBusy(device)
 	const step = position.step > 0 ? position.step : 1
 
 	function move(action: string, label: string, body: object) {

@@ -1,4 +1,4 @@
-import type { SaveFormat } from 'api'
+import type { ImageInfo, SaveFormat } from 'api'
 import { cn } from 'cn'
 import { type KeyboardEvent, useCallback, useMemo, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
@@ -45,6 +45,7 @@ import { Select } from '../ui/Select'
 import { ImageViewer } from '../viewer/ImageViewer'
 import { Reticle } from '../viewer/Reticle'
 import { FIT_VIEW, pixelAt, type Point } from '../viewer/transform'
+import { useFullscreen } from '../viewer/useFullscreen'
 import { useAstrometryTool } from './astrometryTool'
 import { useCameraOperationContext } from './cameracontext'
 import { holdCameraFrame, selectCameraFrame } from './cameratabs'
@@ -59,6 +60,7 @@ import {
 	addMarker,
 	activeView,
 	closeImage,
+	differsFromOriginal,
 	documentPath,
 	type ImageDocument,
 	type ImageViewState,
@@ -95,9 +97,10 @@ import { IMAGE_TOOL_DEFINITIONS, imageToolsFor } from './tools'
 // Curve of its Auto Focus or the graph of its guiding on request; while Guiding is the tool, a click on the session's
 // current guide frame selects the star nearest it. Documents, with their own zoom,
 // pan, display settings, and tool, stay open while the tab lives, across document and workspace switches; a camera
-// tab follows the latest frame of its camera until a saved frame is selected or a manual analysis holds the frame
-// shown, and Return to Latest follows it again.
-// The viewer toolbar switches a document between its adjusted rendering and its original one, and holds its display
+// tab follows the latest frame of its camera until a saved frame is selected, a manual analysis or Hold for analysis
+// holds the frame shown, and Return to Latest follows it again.
+// The viewer toolbar fills the screen with the tabs, the viewer, and the bottom area (Full screen), switches a document
+// between its adjusted rendering and its original one while they differ, and holds its display
 // controls (DisplayToolbar), whose popups close when another document is shown, and its Save control
 // (SaveImagePopover), which downloads a copy of any document or writes one to a server file chosen in the file
 // explorer (SaveImageModal). The star
@@ -208,6 +211,9 @@ export function ImagesWorkspace() {
 		enabled: !!solution && !picking && !overlaysHidden,
 		editable: tool === 'plate-solver',
 	})
+	// Column of the tabs, the viewer, and the bottom area of a camera tab, which fills the screen on request.
+	const viewerRef = useRef<HTMLDivElement>(null)
+	const { active: fullscreen, supported: fullscreenSupported, toggle: toggleFullscreen } = useFullscreen(viewerRef)
 	const toolBar = <ImageToolBar tools={imageToolsFor(document)} selected={tool} disabled={!document} onSelect={(t) => document && selectImageTool(imagesState, document.key, t)} />
 	const openButton = <IconButton icon="folder" onClick={() => setChoosing(true)} label="Open file" />
 	const waiting = document?.camera && !document.info
@@ -223,7 +229,7 @@ export function ImagesWorkspace() {
 
 	return (
 		<WorkspaceLayout workspace="images" title="Images" actions={openButton} context={toolBar} contextFill panel={{ title: definition.panelTitle, content: <Panel key={document?.key} document={document} view={view} camera={camera} onOpen={() => setChoosing(true)} /> }}>
-			<div className="flex h-full flex-col">
+			<div ref={viewerRef} className="flex h-full flex-col bg-base-000">
 				{state.documents.length > 0 && <DocumentTabs documents={state.documents} activeKey={state.activeKey} onClose={requestClose} />}
 				<div className="min-h-0 flex-1">
 					<ImageViewer
@@ -236,7 +242,8 @@ export function ImagesWorkspace() {
 							document &&
 							view && (
 								<>
-									<OriginalToggle documentKey={document.key} view={view} mosaic={!!document.info && isMosaic(document.info)} />
+									<IconButton icon="expand" label={fullscreen ? 'Exit full screen' : 'Full screen'} pressed={fullscreen} disabled={!fullscreenSupported} onClick={toggleFullscreen} />
+									<OriginalToggle documentKey={document.key} view={view} info={document.info} />
 									<IconButton icon="layers" label={overlaysHidden ? 'Show overlays' : 'Hide overlays'} pressed={hasOverlays && !overlaysHidden} disabled={!hasOverlays} onClick={() => toggleImageOverlays(imagesState, document.key)} />
 									<span className="mx-1 h-5 w-px bg-line-100" />
 									<DisplayToolbar key={document.key} documentKey={document.key} info={document.info} view={view} />
@@ -336,22 +343,23 @@ export function ImagesWorkspace() {
 					/>
 				</div>
 				{document?.camera && framesShown && <CameraBottom document={document} view={bottomViews[document.key] ?? 'frames'} onView={(next) => setBottomViews({ ...bottomViews, [document.key]: next })} />}
+				{/* Inside the column, so the menu stays visible while it fills the screen. */}
+				{menu && solution && document?.info && menu.key === document.key && (
+					<ImageMenu
+						point={menu.point}
+						client={menu.client}
+						solution={solution}
+						image={document.info}
+						style={astrometry.coordinates}
+						status={menuStatus}
+						onStatus={setMenuStatus}
+						onClose={closeMenu}
+						unavailable={picking ? 'Guiding is picking a guide star.' : overlaysHidden ? 'The overlays are hidden.' : undefined}
+						onAddMarker={(point) => addMarker(imagesState, document.key, { point, visible: true })}
+						onMeasureFrom={astrometryTool.measureFrom}
+					/>
+				)}
 			</div>
-			{menu && solution && document?.info && menu.key === document.key && (
-				<ImageMenu
-					point={menu.point}
-					client={menu.client}
-					solution={solution}
-					image={document.info}
-					style={astrometry.coordinates}
-					status={menuStatus}
-					onStatus={setMenuStatus}
-					onClose={closeMenu}
-					unavailable={picking ? 'Guiding is picking a guide star.' : overlaysHidden ? 'The overlays are hidden.' : undefined}
-					onAddMarker={(point) => addMarker(imagesState, document.key, { point, visible: true })}
-					onMeasureFrom={astrometryTool.measureFrom}
-				/>
-			)}
 			<FileExplorerModal
 				open={choosing}
 				title="Open Image"
@@ -408,13 +416,17 @@ interface OriginalToggleProps {
 	readonly documentKey: string
 	// View state of the document.
 	readonly view: ImageViewState
-	// Whether the original rendering is a raw CFA mosaic.
-	readonly mosaic: boolean
+	// Server description of its image; absent until it has one.
+	readonly info?: ImageInfo
 }
 
-// Show Original toggle of the viewer toolbar, with the name of what the original shows while it is on.
-function OriginalToggle({ documentKey, view, mosaic }: OriginalToggleProps) {
+// Show Original toggle of the viewer toolbar, with the name of what the original shows while it is on. It is offered
+// only while the original differs from the applied rendering (differsFromOriginal), or while it is shown.
+function OriginalToggle({ documentKey, view, info }: OriginalToggleProps) {
 	const on = view.display.showOriginal
+	const { applied } = view.display
+	if (!on && !(info && applied && differsFromOriginal(info, applied))) return null
+	const mosaic = !!info && isMosaic(info)
 
 	return (
 		<>
@@ -440,9 +452,10 @@ interface CameraControlsProps {
 // Labels of the selections of a camera tab, as its toolbar shows them.
 const SELECTION_LABELS: Readonly<Record<NonNullable<ImageDocument['camera']>['selection']['kind'], string>> = { latest: 'Latest', saved: 'Saved frame', inspect: 'Held for analysis', liveStack: 'Live stack' }
 
-// Frame a camera tab shows, Return to Latest while it does not follow the latest frame, and the toggles of the bottom
-// area and of the central reticle (for Mount Nudge or framing). None commands the camera: they only change which frame
-// the tab shows and how.
+// Frame a camera tab shows, Hold for analysis while it follows the latest frame (keeping the frame shown without
+// running a tool, as an analysis started on it would) and Return to Latest while it does not, and the toggles of the
+// bottom area and of the central reticle (for Mount Nudge or framing). None commands the camera: they only change which
+// frame the tab shows and how.
 function CameraControls({ document, framesShown, onToggleFrames, reticle, onToggleReticle }: CameraControlsProps) {
 	const frames = useSnapshot(captureFramesState)
 	const camera = document.camera
@@ -459,7 +472,11 @@ function CameraControls({ document, framesShown, onToggleFrames, reticle, onTogg
 				{restored ? 'Latest saved' : SELECTION_LABELS[camera.selection.kind]}
 				{camera.live && ` · ${camera.live.revision} frames`}
 			</span>
-			{!following && <IconButton icon="skipToEnd" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />}
+			{following ? (
+				<IconButton icon="pin" label="Hold for analysis" disabled={!camera.shown} onClick={() => holdCameraFrame(imagesState, document.key)} />
+			) : (
+				<IconButton icon="skipToEnd" label="Return to Latest" onClick={() => void selectCameraFrame(imagesState, document.key, { kind: 'latest' }, captureFramesState)} />
+			)}
 			<IconButton icon="images" label={framesShown ? 'Hide frames and focus curve' : 'Show frames and focus curve'} pressed={framesShown} onClick={onToggleFrames} />
 			<IconButton icon="reticle" label={reticle ? 'Hide reticle' : 'Show reticle'} pressed={reticle} onClick={onToggleReticle} />
 			<CaptureStatus connectionId={document.source.connectionId} deviceId={document.source.deviceId} />

@@ -10,6 +10,7 @@ import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand, startCommand, stopCommand } from '../control'
 import type { InterfaceProps } from '../parts'
+import { useDeviceBusy } from '../useControl'
 
 // Controls of a guide output: single timed pulses along the driver's motion vectors, the guide rates, and
 // a stop of the pulses in progress. A pulse holds the physical device behind the output and, for the GUIDE_OUTPUT of the
@@ -36,7 +37,7 @@ export function GuideOutputControls({ device }: InterfaceProps) {
 	const output = deviceStateOf(control.states, 'guideOutput', device.id)!
 	const [duration, setDuration] = useState(DEFAULT_DURATION)
 	const [rates, setRates] = useState<{ readonly rightAscension: number; readonly declination: number }>()
-	const busy = control.pending[device.id] !== undefined
+	const busy = useDeviceBusy(device)
 	const shown = rates ?? output.guideRate
 	const setup = activeSetup(activeProfile(useSnapshot(profileState)))
 	// The setup says which mount its guide output drives; a guide output it does not assign drives none it knows of.

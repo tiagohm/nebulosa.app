@@ -127,7 +127,7 @@ export function OptionalDatum<T>({ label, outcome, hint, children }: { readonly 
 // Collapsible notes on a model: its equation, parameters, valid domain, and approximations.
 export function FormulaNotes({ children }: { readonly children: ReactNode }) {
 	return (
-		<details className="group/disclosure rounded-sm border border-line-100 bg-base-100">
+		<details className="rounded-sm border border-line-100 bg-base-100">
 			<DisclosureSummary title="Formula & assumptions" className="px-4 py-3 focus-visible:-outline-offset-2" />
 			<div className="flex flex-col gap-2 border-t border-line-100 px-4 py-3 text-sm leading-5 text-ink-200">{children}</div>
 		</details>

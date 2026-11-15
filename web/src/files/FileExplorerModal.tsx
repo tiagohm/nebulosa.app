@@ -8,7 +8,7 @@ import { Icon } from '../ui/Icon'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import { moveIndex } from '../ui/navigation'
-import { fetchDirectory, joinPath } from './files'
+import { createDirectory, fetchDirectory, joinPath } from './files'
 
 // Modal to choose a file on the server's filesystem, since the application may run on another machine
 // than the browser. It lists one directory at a time, filtered by extension; double click or Enter opens
@@ -16,8 +16,9 @@ import { fetchDirectory, joinPath } from './files'
 // name) and the chosen path is that name in the listed directory, whether or not it exists. In directory
 // mode only directories are listed, and the chosen path is the selected directory or, with none selected,
 // the listed one. With `multiple` in open mode, a click checks or unchecks a file of the listed directory, and
-// the checked files are chosen together; opening another directory unchecks them. Its state is transient and lives
-// in the component.
+// the checked files are chosen together; opening another directory unchecks them. Refresh lists the directory again,
+// keeping the selection and the checked files that are still there, and New Folder creates a directory in the listed
+// one and selects it. Its state is transient and lives in the component.
 
 // Props of every mode of the chooser.
 interface FileExplorerBaseProps {
@@ -58,6 +59,16 @@ interface MultipleChoiceProps {
 
 export type FileExplorerModalProps = FileExplorerBaseProps & (SingleChoiceProps | MultipleChoiceProps)
 
+// How a listing treats what was selected.
+interface BrowseOptions {
+	// Directory listed when the requested one cannot be.
+	readonly fallback?: string
+	// Whether the selection and the checked files still listed are kept.
+	readonly keep?: boolean
+	// Path of the entry selected once listed.
+	readonly select?: string
+}
+
 // Server file chooser.
 export function FileExplorerModal(props: FileExplorerModalProps) {
 	const { open, title, mode = 'open', defaultName = '', busy = false, message, initialPath, extensions, onClose } = props
@@ -70,8 +81,16 @@ export function FileExplorerModal(props: FileExplorerModalProps) {
 	const [checked, setChecked] = useState<ReadonlySet<string>>(new Set())
 	// File name typed in save mode.
 	const [name, setName] = useState(defaultName)
+	// Name of the folder being created in the listed directory; absent while none is.
+	const [folder, setFolder] = useState<string>()
+	// Whether the folder is being created on the server.
+	const [creating, setCreating] = useState(false)
+	// Why the folder could not be created.
+	const [folderError, setFolderError] = useState<string>()
 	const request = useRef<AbortController>(undefined)
 	const listRef = useRef<HTMLUListElement>(null)
+	const folderRef = useRef<HTMLInputElement>(null)
+	const naming = folder !== undefined
 	const saving = mode === 'save'
 	const choosingDirectory = mode === 'directory'
 	const multiple = props.multiple === true && mode === 'open'
@@ -79,8 +98,10 @@ export function FileExplorerModal(props: FileExplorerModalProps) {
 	const entries = (choosingDirectory ? listing?.entries.filter((entry) => entry.directory) : listing?.entries) ?? []
 
 	// Lists a directory; a newer request aborts an older one. When fallback is set, a failure lists it
-	// instead (used when the remembered directory no longer exists).
-	async function browse(path: string, fallback?: string) {
+	// instead (used when the remembered directory no longer exists). The selection and the checked files are cleared,
+	// unless keep keeps those still listed; select selects an entry instead.
+	async function browse(path: string, { fallback, keep = false, select }: BrowseOptions = {}) {
+		const kept = keep ? { selected, checked } : undefined
 		request.current?.abort()
 		const controller = new AbortController()
 		request.current = controller
@@ -89,10 +110,11 @@ export function FileExplorerModal(props: FileExplorerModalProps) {
 
 		try {
 			const result = await fetchDirectory(path, extensions, controller.signal)
+			const listed = new Set(result.entries.map((entry) => entry.path))
 			setListing(result)
 			setTyped(result.path)
-			setSelected(undefined)
-			setChecked(new Set())
+			setSelected(select ?? (kept?.selected !== undefined && listed.has(kept.selected) ? kept.selected : undefined))
+			setChecked(new Set(kept ? [...kept.checked].filter((path) => listed.has(path)) : []))
 		} catch (e) {
 			if (controller.signal.aborted) return
 			if (fallback !== undefined) return await browse(fallback)
@@ -105,9 +127,39 @@ export function FileExplorerModal(props: FileExplorerModalProps) {
 	useEffect(() => {
 		if (!open) return
 		setName(defaultName)
-		void browse(initialPath ?? '.', initialPath === undefined ? undefined : '.')
+		setFolder(undefined)
+		setFolderError(undefined)
+		void browse(initialPath ?? '.', initialPath === undefined ? {} : { fallback: '.' })
 		return () => request.current?.abort()
 	}, [open])
+
+	useEffect(() => {
+		if (naming) folderRef.current?.focus()
+	}, [naming])
+
+	// Creates the folder named in the listed directory, then lists it again with the new folder selected.
+	async function createFolder() {
+		const folderName = folder?.trim()
+		if (!folderName || !listing?.path || creating) return
+		setCreating(true)
+		setFolderError(undefined)
+
+		try {
+			const created = await createDirectory(listing.path, folderName)
+			setFolder(undefined)
+			await browse(listing.path, { select: created.path })
+		} catch (e) {
+			setFolderError(e instanceof Error ? e.message : 'Unable to reach the server')
+		} finally {
+			setCreating(false)
+		}
+	}
+
+	// Stops naming a folder.
+	function cancelFolder() {
+		setFolder(undefined)
+		setFolderError(undefined)
+	}
 
 	// Hands the chosen paths to the caller, in the shape of its mode.
 	function choose(paths: readonly string[], directory: string) {
@@ -182,7 +234,41 @@ export function FileExplorerModal(props: FileExplorerModalProps) {
 				<Button type="submit" variant="secondary">
 					Go
 				</Button>
+				<IconButton icon="refresh" label="Refresh" disabled={loading} onClick={() => void browse(listing ? listing.path : typed.trim(), { keep: true })} />
+				<IconButton icon="newFolder" label="New folder" pressed={naming} disabled={!listing?.path} onClick={() => (naming ? cancelFolder() : setFolder(''))} />
 			</form>
+			{naming && (
+				<form
+					className="mt-2 flex items-center gap-2"
+					onSubmit={(e) => {
+						e.preventDefault()
+						void createFolder()
+					}}
+				>
+					<label className="flex-none text-sm text-ink-300">Folder name</label>
+					<input
+						ref={folderRef}
+						value={folder}
+						onChange={(e) => setFolder(e.target.value)}
+						onKeyDown={(e) => {
+							// Escape stops naming the folder without closing the chooser.
+							if (e.key !== 'Escape') return
+							e.preventDefault()
+							e.stopPropagation()
+							cancelFolder()
+						}}
+						spellCheck={false}
+						className={inputClassName}
+					/>
+					<Button type="submit" disabled={!folder.trim() || creating}>
+						{creating ? 'Creating…' : 'Create'}
+					</Button>
+					<Button variant="secondary" onClick={cancelFolder}>
+						Cancel
+					</Button>
+				</form>
+			)}
+			{folderError && <p className="m-0 mt-2 text-sm text-danger">{folderError}</p>}
 			<div className="mt-3 h-[min(26rem,calc(100dvh-16rem))] min-h-32 overflow-y-auto overscroll-contain rounded-sm border border-line-100 bg-base-100">
 				{error ? (
 					<p className="m-0 p-6 text-center text-sm text-danger">{error}</p>

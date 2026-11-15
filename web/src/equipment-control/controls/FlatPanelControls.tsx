@@ -9,6 +9,7 @@ import { Notice } from '../../ui/Notice'
 import { Slider } from '../../ui/Slider'
 import { controlRuntime, deviceStateOf, sendCommand } from '../control'
 import type { InterfaceProps } from '../parts'
+import { useDeviceBusy } from '../useControl'
 
 // Controls of a flat panel: its light switch and brightness as the panel reports them. The slider and its
 // number field only change a pending brightness, sent once with Apply Brightness, so dragging never sends a
@@ -20,7 +21,7 @@ export function FlatPanelControls({ device }: InterfaceProps) {
 	const panel = deviceStateOf(control.states, 'flatPanel', device.id)!
 	const { intensity } = panel
 	const [pending, setPending] = useState<number>()
-	const busy = control.pending[device.id] !== undefined
+	const busy = useDeviceBusy(device)
 	const value = pending ?? intensity.value
 	const step = intensity.step > 0 ? intensity.step : 1
 

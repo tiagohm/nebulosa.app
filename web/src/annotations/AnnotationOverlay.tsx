@@ -124,7 +124,7 @@ export function AnnotationOverlay({ projection, view, state, selected }: Annotat
 						) : object.layer === 'solarSystem' || object.layer === 'satellite' ? (
 							<path d={diamond(anchor.x, anchor.y, (object.layer === 'satellite' ? SATELLITE_RADIUS : MARKER_RADIUS) * unit)} strokeWidth={width} vectorEffect="non-scaling-stroke" />
 						) : (
-							<circle cx={anchor.x} cy={anchor.y} r={MARKER_RADIUS * unit} strokeWidth={width} vectorEffect="non-scaling-stroke" />
+							<circle cx={anchor.x} cy={anchor.y} r={MARKER_RADIUS * unit} strokeWidth={width} vectorEffect="non-scaling-stroke" className="cursor-pointer" />
 						)}
 					</g>
 				)

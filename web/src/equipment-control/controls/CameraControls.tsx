@@ -11,6 +11,7 @@ import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { controlRuntime, deviceStateOf, sendCommand } from '../control'
 import type { InterfaceProps } from '../parts'
+import { useDeviceBusy } from '../useControl'
 
 // Auxiliary controls of a camera: what it is and what it can capture, as its driver reports it, and its
 // cooling (cooler switch, target temperature, sensor temperature, and cooler power). The target typed here
@@ -27,7 +28,7 @@ export function CameraControls({ device }: InterfaceProps) {
 	const camera = deviceStateOf(control.states, 'camera', device.id)!
 	const [target, setTarget] = useState(DEFAULT_TARGET)
 	const { sensor } = camera
-	const busy = control.pending[device.id] !== undefined
+	const busy = useDeviceBusy(device)
 	const capturing = deviceBusy(operations, device.connectionId, device.id)
 
 	return (
@@ -47,13 +48,11 @@ export function CameraControls({ device }: InterfaceProps) {
 				<PanelSection title="Cooling">
 					{camera.temperature !== undefined && <DataRow label="Sensor temperature">{formatTemperature(camera.temperature)}</DataRow>}
 					{camera.cooler && <DataRow label="Cooler power">{formatPercent(camera.cooler.power / 100)}</DataRow>}
-					{camera.cooler?.enabled !== undefined && (
-						<Checkbox label="Cooler on" checked={camera.cooler.enabled} disabled={busy || capturing} onChange={(enabled) => void sendCommand(controlRuntime, { type: 'camera', deviceId: device.id, action: 'cooler', label: enabled ? 'Cooler on' : 'Cooler off', body: { enabled } })} />
-					)}
+					{camera.cooler?.enabled !== undefined && <Checkbox label="Cooler on" checked={camera.cooler.enabled} disabled={busy} onChange={(enabled) => void sendCommand(controlRuntime, { type: 'camera', deviceId: device.id, action: 'cooler', label: enabled ? 'Cooler on' : 'Cooler off', body: { enabled } })} />}
 					{camera.canSetTemperature && (
 						<div className="flex items-end gap-2">
 							<NumberInput className="min-w-0 flex-1" label="Target temperature" value={target} min={-60} max={40} step={0.5} suffix="°C" onChange={setTarget} />
-							<Button disabled={busy || capturing} onClick={() => void sendCommand(controlRuntime, { type: 'camera', deviceId: device.id, action: 'temperature', label: 'Target temperature', body: { value: target } })}>
+							<Button disabled={busy} onClick={() => void sendCommand(controlRuntime, { type: 'camera', deviceId: device.id, action: 'temperature', label: 'Target temperature', body: { value: target } })}>
 								Apply
 							</Button>
 						</div>

@@ -6,6 +6,7 @@ import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { controlRuntime, deviceStateOf, startCommand, stopCommand } from '../control'
 import type { InterfaceProps } from '../parts'
+import { useDeviceBusy } from '../useControl'
 
 // Controls of a dust cover: whether it stands open or closed as it reports, open and close, and a stop of
 // a motion in progress. A request to open is shown as moving until the cover reports standing open.
@@ -14,7 +15,7 @@ import type { InterfaceProps } from '../parts'
 export function CoverControls({ device }: InterfaceProps) {
 	const control = useSnapshot(controlRuntime)
 	const cover = deviceStateOf(control.states, 'cover', device.id)!
-	const busy = control.pending[device.id] !== undefined
+	const busy = useDeviceBusy(device)
 
 	function move(action: 'open' | 'close') {
 		void startCommand(controlRuntime, { type: 'cover', deviceId: device.id, action, label: action === 'open' ? 'Open' : 'Close' })

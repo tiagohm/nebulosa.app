@@ -10,6 +10,7 @@ import {
 	newView,
 	applyDisplay,
 	closeImage,
+	differsFromOriginal,
 	documentPath,
 	hasUnsavedImages,
 	saveFileName,
@@ -322,6 +323,26 @@ describe('show original', () => {
 		closeImage(state, key, io)
 
 		expect(revoked).toEqual(['blob:1', 'blob:2'])
+	})
+
+	test('an original differs only when the settings change the rendering', () => {
+		const mono = { channels: 1 }
+		const rgb = { channels: 3 }
+		const original = ORIGINAL_DISPLAY_SETTINGS
+
+		expect(differsFromOriginal(mono, original)).toBe(false)
+		expect(differsFromOriginal(rgb, original)).toBe(false)
+		expect(differsFromOriginal(mono, { ...original, debayer: { enabled: true, pattern: 'auto' } })).toBe(true)
+		expect(differsFromOriginal(rgb, { ...original, debayer: { enabled: true, pattern: 'auto' } })).toBe(false)
+		expect(differsFromOriginal(mono, { ...original, stretch: { mode: 'auto', preset: 'medium', linked: false } })).toBe(false)
+		expect(differsFromOriginal(rgb, { ...original, stretch: { mode: 'auto', preset: 'medium', linked: false } })).toBe(true)
+		expect(differsFromOriginal(mono, { ...original, stretch: { mode: 'auto', preset: 'high', linked: true } })).toBe(true)
+		expect(differsFromOriginal(mono, { ...original, stretch: { mode: 'linear' } })).toBe(true)
+		expect(differsFromOriginal(mono, { ...original, gamma: 1.2 })).toBe(true)
+		expect(differsFromOriginal(mono, { ...original, invert: true })).toBe(true)
+		expect(differsFromOriginal(mono, { ...original, saturation: 2 })).toBe(false)
+		expect(differsFromOriginal(rgb, { ...original, saturation: 2 })).toBe(true)
+		expect(differsFromOriginal(rgb, { ...original, scnr: { enabled: true, channel: 'GREEN', amount: 0.5, method: 'AVERAGE_NEUTRAL' } })).toBe(true)
 	})
 })
 

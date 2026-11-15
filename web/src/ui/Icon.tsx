@@ -40,6 +40,8 @@ export const ICONS = {
 	// The dashed meridian, a target east of it, and the arc it tracks across the meridian with its direction.
 	meridian: 'M12 3v2M12 8v2M12 13v2M12 18v3M7.5 9.2A9 9 0 0 1 21 17M19.3 15.3L21 17l1.7-1.7M5.6 9.1a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3',
 	folder: 'M3 6h6l2 2h10v11H3z',
+	newFolder: 'M3 6h6l2 2h10v11H3zM12 10.5v5M9.5 13h5',
+	refresh: 'M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5',
 	file: 'M6 3h8l4 4v14H6zM14 3v4h4',
 	arrow: 'M12 19V5M6 11l6-6l6 6',
 	reticle: 'M12 3v6M12 15v6M3 12h6M15 12h6M12 7a5 5 0 1 0 0 10a5 5 0 1 0 0-10',

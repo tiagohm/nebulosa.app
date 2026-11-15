@@ -67,7 +67,7 @@ export function IndiPropertiesPanel({ connectionId, hardwareId }: IndiProperties
 			</div>
 			{shown.length === 0 && <Message>No property matches the search.</Message>}
 			{shown.map((group) => (
-				<details key={group.name} open={searching || open.has(group.name)} onToggle={(event) => toggle(group.name, event.currentTarget.open)} className="group/disclosure border-b border-line-100 px-4">
+				<details key={group.name} open={searching || open.has(group.name)} onToggle={(event) => toggle(group.name, event.currentTarget.open)} className="border-b border-line-100 px-4">
 					<DisclosureSummary title={`${group.name} · ${group.vectors.length}`} className="py-3" />
 					<div className="flex flex-col pb-1">
 						{group.vectors.map((vector) => (

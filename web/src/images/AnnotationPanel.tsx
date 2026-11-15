@@ -110,8 +110,11 @@ function Annotation({ documentKey, info, annotation, selectedSolution, unavailab
 	const request = annotationRequest({ magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId })
 	const solarRequest = annotationRequest({ kind: 'solarSystemBodies', magnitudeLimit: annotation.magnitudeLimit, plateSolveJobId, bodies: annotation.bodies })
 	const results = [result, solar.result].filter((e) => e !== undefined)
+	// Read before the closures rather than asserted inside them: the React Compiler of the executable reads an asserted
+	// `annotation.selected!.id` during the render to memoize the closure, which throws while nothing is selected.
+	const selectedId = annotation.selected?.id
 	const owner = results.find((e) => e.jobId === annotation.selected?.jobId)
-	const selected = owner?.objects.find((e) => e.id === annotation.selected!.id)
+	const selected = owner?.objects.find((e) => e.id === selectedId)
 
 	// Changes the document, and the profile for the documents opened next.
 	function edit(patch: Parameters<typeof setAnnotationView>[2]) {
@@ -283,6 +286,8 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 	const observation = context?.observation
 	const bodies = request.bodies!
 	const chosen = bodies.solarSystem || bodies.satellite || bodies.minorBody
+	// Read here rather than asserted in the closure below, for the same reason as the selected object of the panel.
+	const counts = job?.summary?.counts
 
 	return (
 		<CollapsibleSection id="images.annotation.solar-system-bodies" title="Solar System Bodies">
@@ -312,10 +317,10 @@ function SolarSystemBodies({ documentKey, imageId, request, context, job, result
 				<>
 					<DataRow label="Status">{ANALYSIS_STATE_LABELS[job.state]}</DataRow>
 					<DataRow label="Elapsed">{formatDuration(analysisElapsed(job, now) / 1000)}</DataRow>
-					{job.summary &&
+					{counts &&
 						BODY_LAYERS.map(([layer]) => (
 							<DataRow key={layer} label={LAYER_LABELS[layer]}>
-								{job.summary!.counts[layer]}
+								{counts[layer]}
 							</DataRow>
 						))}
 					{job.error && <Notice error>{job.error}</Notice>}
@@ -412,9 +417,10 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 	// The Sky observes from the active profile's site; the image keeps the site of its own header.
 	const observer = useActiveSite()
 
-	// Selects an object in the Sky workspace and opens it; a satellite other than the Moon has no ref and never opens.
-	function openInSky(ref: SkySelectionRef, name: string, minorBody?: MinorBody) {
-		const { layer } = object!
+	// Selects an object of a group in the Sky workspace and opens it; a satellite other than the Moon has no ref and never
+	// opens. The group is a parameter rather than read from an asserted `object!`, which the React Compiler of the
+	// executable reads during the render to memoize this closure, throwing while nothing is selected.
+	function openInSky(layer: AnnotationLayer, ref: SkySelectionRef, name: string, minorBody?: MinorBody) {
 		selectSkyObject(skyState, { ref, source: 'search', name, category: layer === 'satellite' ? 'solarSystem' : layer, ...(minorBody && { minorBody }) }, observer)
 		navigate(routeState, { workspace: 'sky' })
 	}
@@ -425,8 +431,10 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 		const body = await resolveMinorBody(target)
 		if (shown.current !== target.id) return setLookup((current) => (current?.id === target.id ? undefined : current))
 		if (typeof body === 'string') setLookup({ id: target.id, error: body })
-		else openInSky({ kind: 'minorBody', spkId: body.spkId, designation: body.designation }, body.name, body)
+		else openInSky(target.layer, { kind: 'minorBody', spkId: body.spkId, designation: body.designation }, body.name, body)
 	}
+
+	const skyRef = object?.ref
 
 	return (
 		<CollapsibleSection id="images.annotation.selected-object" title="Selected Object">
@@ -442,8 +450,8 @@ function SelectedObject({ object }: { readonly object?: AnnotationObject }) {
 					{object.orientation !== undefined && <DataRow label="Position angle">{formatDegrees(object.orientation)}</DataRow>}
 					{object.positionError !== undefined && <DataRow label="Position uncertainty">{formatUncertainty(object.positionError)}</DataRow>}
 					{object.center && <DataRow label="Position">{CENTER_LABELS[object.center]}</DataRow>}
-					{object.ref ? (
-						<Button variant="secondary" className="self-start" onClick={() => openInSky(object.ref!, object.name)}>
+					{skyRef ? (
+						<Button variant="secondary" className="self-start" onClick={() => openInSky(object.layer, skyRef, object.name)}>
 							Open in Sky
 						</Button>
 					) : (

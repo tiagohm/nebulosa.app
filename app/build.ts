@@ -106,6 +106,7 @@ await build({
 	reactCompiler: true,
 	reactCompilerOutputMode: 'client',
 	compile: {
+		trim: true,
 		outfile: join(ROOT, '.dist', process.platform === 'win32' ? 'nebulosa.exe' : 'nebulosa'),
 		autoloadBunfig: false,
 		autoloadDotenv: true,

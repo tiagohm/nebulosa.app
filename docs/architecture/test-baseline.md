@@ -9,6 +9,8 @@ The commands and when to run them are those of `AGENTS.md` (Tooling, Verificatio
   `bun test:timings` runs every test with it and updates the committed `timings.json`.
 - The smoke test of `bun compile` runs the executable from a directory outside the repository: from its root, a worker the executable fails to embed is still found among the sources.
   The executable is built with code splitting (`app/build.ts`), so the code the server and its workers share, the ephemeris tables of the toolkit above all, is embedded once instead of in every worker that reaches it.
+  The executable is built with `compile.trim` (`app/build.ts`), which without `aot` removes only the `bun` command line from the runtime (about 69 MB), so the executable cannot run as `bun`.
+  With `aot` it would also remove the Bun and Node.js APIs the compiler cannot see in use, and a call to one only fails in the executable, with `ERR_FEATURE_REMOVED`, never under `bun test`.
   The executable is built without syntax minification (`app/build.ts`): together with the React Compiler, it drops the constants inlined into the template literals of components and hooks, a failure `bun dev` cannot show.
 - `bun test` preloads `api/src/test.preload.ts` (`bunfig.toml`), which points `NEBULOSA_HOME` to a temporary directory of each test process, so no default path of a test reaches `~/Nebulosa`;
   a test of a store opens its own database (`AppDatabase.memory()`, or a temporary file to reopen).

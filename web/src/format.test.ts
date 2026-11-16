@@ -175,18 +175,18 @@ describe('time', () => {
 	})
 
 	test('running clocks', () => {
-		expect(formatClockDuration(65)).toBe('1:05')
-		expect(formatClockDuration(65.9)).toBe('1:05')
-		expect(formatClockDuration(3725)).toBe('1:02:05')
-		expect(formatClockDuration(-10)).toBe('0:00')
+		expect(formatClockDuration(65)).toBe('01:05')
+		expect(formatClockDuration(65.9)).toBe('01:05')
+		expect(formatClockDuration(3725)).toBe('01:02:05')
+		expect(formatClockDuration(-10)).toBe('00:00')
 	})
 
 	test('signed running clocks keep the sign of the time and none at zero', () => {
-		expect(formatSignedClockDuration(65.9)).toBe('+1:05')
-		expect(formatSignedClockDuration(-565)).toBe('−9:25')
-		expect(formatSignedClockDuration(-3725)).toBe('−1:02:05')
-		expect(formatSignedClockDuration(-0.4)).toBe('0:00')
-		expect(formatSignedClockDuration(0)).toBe('0:00')
+		expect(formatSignedClockDuration(65.9)).toBe('+01:05')
+		expect(formatSignedClockDuration(-565)).toBe('−09:25')
+		expect(formatSignedClockDuration(-3725)).toBe('−01:02:05')
+		expect(formatSignedClockDuration(-0.4)).toBe('00:00')
+		expect(formatSignedClockDuration(0)).toBe('00:00')
 		expect(formatSignedClockDuration(Number.NaN)).toBe(MISSING)
 	})
 })

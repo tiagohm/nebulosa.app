@@ -442,9 +442,9 @@ test('a guide camera shows its session, or the icon alone while it does not guid
 })
 
 test('elapsed time and progress are shown only as reported', () => {
-	expect(formatElapsed(0, 65_000)).toBe('1:05')
-	expect(formatElapsed(0, 3_725_000)).toBe('1:02:05')
-	expect(formatElapsed(10_000, 0)).toBe('0:00')
+	expect(formatElapsed(0, 65_000)).toBe('01:05')
+	expect(formatElapsed(0, 3_725_000)).toBe('01:02:05')
+	expect(formatElapsed(10_000, 0)).toBe('00:00')
 	expect(progressText(undefined)).toBeUndefined()
 	expect(progressText({ step: 2, steps: 5, message: 'Moving to 1100' })).toBe('2/5 · Moving to 1100')
 	expect(progressText({ step: 1, steps: 3, message: '' })).toBe('1/3')

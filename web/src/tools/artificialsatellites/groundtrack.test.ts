@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { SatelliteGroundTrack } from 'api'
-import { groundTrackAt, groundTrackRuns, groundTrackShadowCrossings, observerInFootprint } from './groundtrack'
+import { type GroundTrackPoint, groundTrackAt, groundTrackDistance, groundTrackRuns, groundTrackShadowCrossings, observerInFootprint } from './groundtrack'
 
 const RAD = Math.PI / 180
 
@@ -82,4 +82,15 @@ test('the next sunset and sunrise after an instant are in time order, and absent
 		{ kind: 'sunset', time: 250_000 },
 	])
 	expect(groundTrackShadowCrossings(TRACK, 200_000)).toEqual([])
+})
+
+test("the distance is from the site, or from the Earth's center without one, on the IERS 2010 ellipsoid", () => {
+	const at = (latitude: number, longitude: number, heightKm: number): GroundTrackPoint => ({ time: 0, subpoint: { latitude, longitude }, heightKm, footprint: 20, speedKmPerSecond: 7.66, shadow: 'sunlit', subsolar: { latitude: 0, longitude: 0 } })
+	const a = 6378.1366
+	const b = a * (1 - 1 / 298.25642)
+	expect(groundTrackDistance(at(0, 0, 400))).toBeCloseTo(a + 400, 6)
+	expect(groundTrackDistance(at(0, 0, 400), { latitude: 0, longitude: 0, elevation: 0 })).toBeCloseTo(400, 6)
+	expect(groundTrackDistance(at(90, 0, 400))).toBeCloseTo(b + 400, 6)
+	expect(groundTrackDistance(at(-23.5, -46.6, 420), { latitude: -23.5, longitude: -46.6, elevation: 760 })).toBeCloseTo(419.24, 6)
+	expect(groundTrackDistance(at(0, 90, 0), { latitude: 0, longitude: 0, elevation: 0 })).toBeCloseTo(a * Math.SQRT2, 6)
 })

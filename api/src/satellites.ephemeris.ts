@@ -8,7 +8,7 @@ import { satelliteEclipses, satelliteGroundFootprint, type SatellitePassEvent, s
 import { type GeographicPosition, subpoint } from 'nebulosa/src/astronomy/observer/location'
 import { recordFromOMM, type SatRec, sgp4 } from 'nebulosa/src/astronomy/orbits/propagation/sgp4'
 import { type Time, timeShift, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
-import { AU_KM, DAYMIN, DAYSEC, ONE_SECOND, TAU } from 'nebulosa/src/core/constants'
+import { AU_KM, DAYMIN, DAYSEC, EARTH_RADIUS_KM, ONE_SECOND, TAU } from 'nebulosa/src/core/constants'
 import { type Vec3, vecDot, vecLength, vecMinus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import type { EarthOrientationCoverage, EarthOrientationStatus } from './astronomicaltime.eop'
@@ -471,7 +471,7 @@ export class SatelliteEphemeris {
 	// Returns the mean elements and the orbit derived from them.
 	orbit(elements: SatelliteElementSet): SatelliteOrbitSummary {
 		const record = this.record(elements)
-		const radius = record.gravity?.radius ?? 6378.135
+		const radius = record.gravity?.radius ?? EARTH_RADIUS_KM
 		return {
 			epoch: elements.epoch,
 			meanMotion: +elements.omm.MEAN_MOTION,

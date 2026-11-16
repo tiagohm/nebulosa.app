@@ -1,11 +1,11 @@
 import type { SatelliteGroundTrack } from 'api'
-import { DEG2RAD, RAD2DEG } from 'nebulosa/src/core/constants'
+import { AU_KM, DEG2RAD, IERS2010_FLATTENING, IERS2010_RADIUS, RAD2DEG } from 'nebulosa/src/core/constants'
 import { interpolateTrack } from '../../sky/satellites.track'
 import { type GeoPoint, splitAtAntimeridian } from '../../ui/worldmap.geometry'
 
 // Ground track of a satellite on the world map, from the samples of the server: the point of an instant between two
 // samples, the runs of the line before and after an instant and in and out of the Earth's shadow, the satellite's next
-// sunset and sunrise after an instant, and whether an observer sees the satellite. Interpolation only places points between the server's samples; it is not a new
+// sunset and sunrise after an instant, its distance from an observer, and whether an observer sees the satellite. Interpolation only places points between the server's samples; it is not a new
 // prediction. Times are Unix milliseconds (UTC); the server's angles are radians, the map's degrees.
 
 // Illumination of a satellite by the Sun.
@@ -117,6 +117,34 @@ export function groundTrackRuns(track: SatelliteGroundTrack, cursor?: number): G
 	}
 
 	return runs.map(({ past, shadow, points }) => ({ past, shadow, pieces: splitAtAntimeridian(points) }))
+}
+
+// Equatorial radius of the IERS 2010 ellipsoid, km: the ellipsoid of the server's subpoints and heights.
+const EQUATORIAL_RADIUS_KM = IERS2010_RADIUS * AU_KM
+
+// Square of the eccentricity of the IERS 2010 ellipsoid.
+const ECCENTRICITY_SQUARED = IERS2010_FLATTENING * (2 - IERS2010_FLATTENING)
+
+// Returns the Earth-fixed (ITRS) position, km, of a geodetic latitude and east longitude, degrees, and a height above the
+// IERS 2010 ellipsoid, km.
+function earthFixed(latitude: number, longitude: number, heightKm: number): [number, number, number] {
+	const phi = latitude * DEG2RAD
+	const lambda = longitude * DEG2RAD
+	const sinPhi = Math.sin(phi)
+	const normal = EQUATORIAL_RADIUS_KM / Math.sqrt(1 - ECCENTRICITY_SQUARED * sinPhi * sinPhi)
+	const r = (normal + heightKm) * Math.cos(phi)
+	return [r * Math.cos(lambda), r * Math.sin(lambda), (normal * (1 - ECCENTRICITY_SQUARED) + heightKm) * sinPhi]
+}
+
+const ZERO_ORIGIN = [0, 0, 0]
+
+// Returns the distance, km, from an observer (latitude and longitude in degrees, elevation in meters) to the satellite at
+// a ground track point, or from the Earth's center without an observer: geometric, between two Earth-fixed positions at
+// the same instant, so exact for the point given, whose subpoint and height are interpolated between samples.
+export function groundTrackDistance(point: GroundTrackPoint, observer?: { readonly latitude: number; readonly longitude: number; readonly elevation: number }) {
+	const satellite = earthFixed(point.subpoint.latitude, point.subpoint.longitude, point.heightKm)
+	const origin = observer ? earthFixed(observer.latitude, observer.longitude, observer.elevation / 1000) : ZERO_ORIGIN
+	return Math.hypot(satellite[0] - origin[0], satellite[1] - origin[1], satellite[2] - origin[2])
 }
 
 // Whether an observer (degrees) is within the footprint of a ground track point: the great-circle distance to the

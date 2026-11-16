@@ -60,6 +60,7 @@ Workspace frame (`WorkspaceLayout.tsx`), used by every workspace and every tool 
 - The contextual panel (`ContextualPanel.tsx`) is the right-hand column of the current context: 280 px (`w-80`; 308 px, `w-88`, from `xl`), docked from Tailwind's `lg` breakpoint (`WIDE_SCREEN`, 64rem, 1024 px), its visibility a per-workspace preference of the profile;
   below `lg` it is a drawer over the content that starts closed, is never persisted, and closes with Escape or a click outside.
   A workspace whose own controls show the panel (the Sky toolbar's Framing, Display, and Location) holds this visibility with `useWorkspacePanel` and passes it as `panelState`, so a control that needs the panel opens it in either form.
+  Choosing a Sky search result opens the drawer on the Object Inspector, so the choice always shows; a docked panel keeps the profile's preference.
   The workspace frame clips the closed drawer (`overflow: clip`) rather than hiding it, so no focus or scroll into view inside it can shift the workspace sideways.
   Its header holds the heading, the `actions` of the content (`WorkspacePanel.actions`, such as the favorite star of the Sky Object Inspector), and the close button.
   It holds no operational state, so collapsing or replacing it never stops what its controls started.
@@ -128,4 +129,4 @@ Behaviour every screen keeps:
 - Lists, table rows that select, rails, tabs, and carousels move with the arrow keys, Home, and End (`moveIndex` in `web/src/ui/navigation.ts`) and select with Enter or Space.
   A wrapping grid of cards moves by row with ArrowUp and ArrowDown, keeping the column, and in reading order with the others (`moveInRows`).
   Native elements, `title`, and visually hidden text name controls; `aria-*` attributes are not used (`AGENTS.md`).
-- Layouts work from phone width up: secondary text hides with `max-sm:`, the panel becomes a drawer, toolbars wrap (the Sky search takes a line of its own, with the buttons below it), and nothing scrolls the page horizontally.
+- Layouts work from phone width up: secondary text hides with `max-sm:`, the panel becomes a drawer, toolbars wrap (the Sky search takes a line of its own, with the buttons below it at a 43.75 px touch size, and the Sky time bar wraps by group: Now with the date and time, the step, then play with the speed), and nothing scrolls the page horizontally.

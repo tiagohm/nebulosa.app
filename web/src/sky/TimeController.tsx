@@ -39,6 +39,10 @@ const REDRAW_MS = { playing: 250, idle: 1_000 } as const
 // Classes of the native date and time inputs.
 const inputClass = 'box-border h-9.5 rounded-sm border border-line-200 bg-base-200 px-2 font-mono text-xs text-ink-100 [color-scheme:dark] hover:border-ink-300 focus:border-accent focus:outline-none'
 
+// Classes of the bar's icon buttons: 43.75 px touch targets on phones, where the bar wraps to rows of its own, and the
+// compact 28 px toolbar size elsewhere.
+const TOUCH_BUTTON = 'max-sm:size-12.5'
+
 // Formats a speed option: "1 min/s", "−1 h/s", "1×".
 function formatRate(option: RateOption) {
 	const rate = +option
@@ -99,39 +103,45 @@ export function TimeController({ timeZone }: TimeControllerProps) {
 	}
 
 	return (
-		<div className="flex min-h-12 flex-none flex-wrap items-center gap-2 border-t border-line-100 bg-base-100 px-2 py-1.5">
-			<Button variant={clock.mode === 'now' ? 'primary' : 'secondary'} onClick={() => setSkyTimeNow(skyClock)} title="Show the real current time">
-				Now
-			</Button>
-			<IconButton icon="stepBack" label={`Back ${step}`} onClick={() => stepSkyTime(skyClock, -STEPS[step])} />
-			<input
-				type="date"
-				value={dateValue(wall)}
-				onChange={(e) => {
-					const [year, month, day] = e.target.value.split('-').map(Number)
-					if (e.target.value) edit({ year, month, day })
-				}}
-				className={inputClass}
-			/>
-			<input
-				type="time"
-				step={1}
-				value={timeValue(wall)}
-				onChange={(e) => {
-					const [hour, minute, second = 0] = e.target.value.split(':').map(Number)
-					if (e.target.value) edit({ hour, minute, second })
-				}}
-				className={inputClass}
-			/>
-			<span className="font-mono text-xs text-ink-300" title={timeZone}>
-				{zoneShortName(timeZone, time)}
-			</span>
-			<IconButton icon="stepForward" label={`Forward ${step}`} onClick={() => stepSkyTime(skyClock, STEPS[step])} />
-			<Select options={STEP_LABELS} value={step} onChange={setStep} className="w-28" />
-			<IconButton icon={playing ? 'pause' : 'play'} label={playing ? 'Pause' : 'Play'} pressed={playing} onClick={() => (playing ? pauseSkyTime(skyClock) : playSkyTime(skyClock, clock.rate))} />
-			<Select options={RATE_OPTIONS} value={`${clock.rate}`} format={formatRate} onChange={(option) => (playing ? playSkyTime(skyClock, +option) : (skyClock.rate = +option))} className="w-32" />
-			{notice && <span className="text-xs text-warning">{notice}</span>}
-			<span className={cn('ml-auto rounded-sm px-2 py-0.5 text-xs font-medium', clock.mode === 'now' ? 'text-ink-300' : 'bg-accent-subtle text-accent')}>{clock.mode === 'now' ? 'Real time' : playing ? 'Simulating' : 'Simulated'}</span>
+		<div className="flex min-h-12 flex-none flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line-100 bg-base-100 px-2 py-1.5">
+			<div className="flex min-w-0 items-center gap-2">
+				<Button variant={clock.mode === 'now' ? 'primary' : 'secondary'} onClick={() => setSkyTimeNow(skyClock)} title="Show the real current time">
+					Now
+				</Button>
+				<input
+					type="date"
+					value={dateValue(wall)}
+					onChange={(e) => {
+						const [year, month, day] = e.target.value.split('-').map(Number)
+						if (e.target.value) edit({ year, month, day })
+					}}
+					className={cn(inputClass, 'min-w-0')}
+				/>
+				<input
+					type="time"
+					step={1}
+					value={timeValue(wall)}
+					onChange={(e) => {
+						const [hour, minute, second = 0] = e.target.value.split(':').map(Number)
+						if (e.target.value) edit({ hour, minute, second })
+					}}
+					className={cn(inputClass, 'min-w-0')}
+				/>
+				<span className="flex-none font-mono text-xs text-ink-300" title={timeZone}>
+					{zoneShortName(timeZone, time)}
+				</span>
+			</div>
+			<div className="flex items-center gap-1">
+				<IconButton icon="stepBack" label={`Back ${step}`} onClick={() => stepSkyTime(skyClock, -STEPS[step])} className={TOUCH_BUTTON} />
+				<Select options={STEP_LABELS} value={step} onChange={setStep} className="w-28 flex-none" />
+				<IconButton icon="stepForward" label={`Forward ${step}`} onClick={() => stepSkyTime(skyClock, STEPS[step])} className={TOUCH_BUTTON} />
+			</div>
+			<div className="flex items-center gap-1">
+				<IconButton icon={playing ? 'pause' : 'play'} label={playing ? 'Pause' : 'Play'} pressed={playing} onClick={() => (playing ? pauseSkyTime(skyClock) : playSkyTime(skyClock, clock.rate))} className={TOUCH_BUTTON} />
+				<Select options={RATE_OPTIONS} value={`${clock.rate}`} format={formatRate} onChange={(option) => (playing ? playSkyTime(skyClock, +option) : (skyClock.rate = +option))} className="w-28 flex-none" />
+			</div>
+			<span className={cn('ml-auto flex-none rounded-sm px-2 py-0.5 text-xs font-medium', clock.mode === 'now' ? 'text-ink-300' : 'bg-accent-subtle text-accent')}>{clock.mode === 'now' ? 'Real time' : playing ? 'Simulating' : 'Simulated'}</span>
+			{notice && <span className="basis-full text-xs text-warning">{notice}</span>}
 		</div>
 	)
 }

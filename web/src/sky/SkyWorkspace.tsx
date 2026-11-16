@@ -42,6 +42,10 @@ import { TimeController } from './TimeController'
 // and a coordinate to mark; the view is only panned to them, never reprojected, and the toolbar toggles the footprint
 // and clears the mark.
 
+// Classes of the toolbar's icon buttons: 43.75 px touch targets on phones, where the buttons take a line of their own,
+// and the compact 28 px toolbar size elsewhere.
+const TOUCH_BUTTON = 'max-sm:size-12.5'
+
 // Place (locationKey) the selection's position was last computed for; undefined before the workspace is first shown.
 let appliedObserver: string | undefined
 
@@ -154,11 +158,14 @@ export function SkyWorkspace() {
 		if (status === 'ready') map.syncSelection()
 	}, [map, status, selectionKey, selectionCenter?.rightAscension, selectionCenter?.declination])
 
-	// Selects a search result as a click would; a minor body is first drawn at its position now.
+	// Selects a search result as a click would; a minor body is first drawn at its position now. Where the panel is a
+	// drawer, which starts closed, it opens on the Object Inspector, so choosing a result always shows what was chosen
+	// even when the map does not (an object below the horizon or outside the view).
 	function handleSearchSelect(result: SkySearchResult, minorBody?: MinorBody) {
 		selectSkyObject(skyState, { ref: result.ref, source: 'search', name: result.name, category: result.category, minorBody }, observer)
 		map.syncSelection()
 		if (result.ref.kind === 'minorBody') void map.locateMinorBody(result.ref)
+		if (!panelState.docked) openPanel('inspector')
 	}
 
 	// Shows a view in the panel, opening the panel.
@@ -199,6 +206,11 @@ export function SkyWorkspace() {
 	// The active site is named by the top bar alone; the header says only when there is none or the time is simulated.
 	const context = [!observer && 'No observing site', clock.mode !== 'now' && 'Simulated time'].filter(Boolean).join(' · ')
 
+	// Name of the selection when the local sky cannot draw it, its refracted altitude at the instant shown being negative;
+	// undefined otherwise, and always on the equatorial chart, which has no horizon.
+	const selectionAltitude = sky.selection?.position?.altitude
+	const hiddenSelection = coordinateSystem === 'horizontal' && selectionAltitude !== undefined && selectionAltitude < 0 ? sky.selection?.name : undefined
+
 	const panels: Record<SkyPanelView, () => WorkspacePanel> = {
 		inspector: () => ({ title: 'Object Inspector', actions: inspectorActions, content: <ObjectInspector observer={observer} onSetObserver={() => openObservingSites(observer?.id)} timeZone={displayZone.zone} onShowFraming={() => openPanel('framing')} /> }),
 		display: () => ({ title: 'Display', content: <DisplayPanel sky={settings} local={coordinateSystem === 'horizontal'} /> }),
@@ -210,9 +222,10 @@ export function SkyWorkspace() {
 			<div className="flex h-full flex-col bg-base-000">
 				<div className="flex flex-none items-center gap-2 border-b border-line-100 bg-base-100 px-2 max-sm:flex-wrap max-sm:gap-y-1 max-sm:py-1 sm:h-11">
 					<SkySearch onSelect={handleSearchSelect} />
-					<div className="ml-auto flex flex-none items-center gap-1 max-sm:w-full">
-						<IconButton icon="mount" label={mountCenter ? 'Center on Mount' : 'Center on Mount (the mount position is shown in real time only, while connected)'} disabled={!mountCenter} onClick={() => mountCenter && map.centerOn(mountCenter)} />
+					<div className="ml-auto flex flex-none items-center gap-1 max-sm:w-full max-sm:flex-wrap max-sm:justify-end">
+						<IconButton icon="mount" label={mountCenter ? 'Center on Mount' : 'Center on Mount (the mount position is shown in real time only, while connected)'} disabled={!mountCenter} onClick={() => mountCenter && map.centerOn(mountCenter)} className={TOUCH_BUTTON} />
 						<IconButton
+							className={TOUCH_BUTTON}
 							icon="reticle"
 							label={mountCenter ? 'Follow Mount' : 'Follow Mount (the mount position is shown in real time only, while connected)'}
 							disabled={!mountCenter}
@@ -222,21 +235,26 @@ export function SkyWorkspace() {
 								if (mountRuntime.following && mountCenter) map.centerOn(mountCenter)
 							}}
 						/>
-						{footprint && <IconButton icon="images" label={`${handoffs.footprintHidden ? 'Show' : 'Hide'} the footprint of ${footprint.name}`} pressed={!handoffs.footprintHidden} onClick={() => toggleImageFootprint(skyImageState)} />}
-						{handoffs.intent?.mark && <IconButton icon="pin" label={`Clear the mark of ${handoffs.intent.label}`} onClick={() => clearSkyCoordinate(skyImageState)} />}
-						<IconButton icon="clock" label="Time Bar" pressed={settings.timeBar === true} onClick={() => setSkyTimeBarVisible(profileState, settings.timeBar !== true)} />
-						<IconButton icon="frame" label="Framing" pressed={panelShows('framing')} onClick={() => togglePanel('framing')} />
-						<IconButton icon="layers" label="Display" pressed={panelShows('display')} onClick={() => togglePanel('display')} />
+						{footprint && <IconButton icon="images" label={`${handoffs.footprintHidden ? 'Show' : 'Hide'} the footprint of ${footprint.name}`} pressed={!handoffs.footprintHidden} onClick={() => toggleImageFootprint(skyImageState)} className={TOUCH_BUTTON} />}
+						{handoffs.intent?.mark && <IconButton icon="pin" label={`Clear the mark of ${handoffs.intent.label}`} onClick={() => clearSkyCoordinate(skyImageState)} className={TOUCH_BUTTON} />}
+						<IconButton icon="clock" label="Time Bar" pressed={settings.timeBar === true} onClick={() => setSkyTimeBarVisible(profileState, settings.timeBar !== true)} className={TOUCH_BUTTON} />
+						<IconButton icon="frame" label="Framing" pressed={panelShows('framing')} onClick={() => togglePanel('framing')} className={TOUCH_BUTTON} />
+						<IconButton icon="layers" label="Display" pressed={panelShows('display')} onClick={() => togglePanel('display')} className={TOUCH_BUTTON} />
 					</div>
 				</div>
 				<div className="relative isolate min-h-0 flex-1">
 					<SkyView planetarium={map} />
 					<HoverTooltip celestial={map.celestial} names={() => map.names} />
 					{status === 'loading' && <p className="pointer-events-none absolute bottom-3 left-3 m-0 text-xs text-ink-300">Loading the sky catalog…</p>}
-					{handoffs.intent && coordinateHidden && (
-						<p className="pointer-events-none absolute top-3 left-3 m-0 text-xs text-ink-200">
-							{handoffs.intent.label} {coordinateSystem === 'horizontal' ? 'is below the horizon at the time shown' : 'is outside the part of the sky this chart projects'}; the view was not moved.
-						</p>
+					{((handoffs.intent && coordinateHidden) || hiddenSelection) && (
+						<div className="pointer-events-none absolute inset-x-3 top-3 flex flex-col gap-1 text-xs text-ink-200">
+							{handoffs.intent && coordinateHidden && (
+								<p className="m-0">
+									{handoffs.intent.label} {coordinateSystem === 'horizontal' ? 'is below the horizon at the time shown' : 'is outside the part of the sky this chart projects'}; the view was not moved.
+								</p>
+							)}
+							{hiddenSelection && <p className="m-0">{hiddenSelection} is below the horizon at the time shown.</p>}
+						</div>
 					)}
 					{status === 'error' && (
 						<div className="absolute inset-0 bg-base-000/80">

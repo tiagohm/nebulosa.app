@@ -28,7 +28,7 @@ import {
 	writeProjectedSample,
 } from './drawing'
 import { angularDistance, applyViewTransform, isFiniteDiskProjection, isPointInsideViewportMargin, normalizeVector, writeBaseViewportBounds, writeRaDecUnitVector } from './geometry'
-import type { StarLabelPlacement } from './labels'
+import { CONSTELLATION_LABEL_BOX_HEIGHT, scaledLabelBoxHeight } from './labels'
 import { DEFAULT_STAR_OPTIONS, DEFAULT_THEME, TRANSPARENT } from './options'
 import { movingBodyLayerId, sameObject } from './picking'
 import { meanObliquity } from './time'
@@ -67,12 +67,6 @@ const GRID_BOUNDARY_LABEL_PADDING_Y = 1
 
 // Squared distance in pixels² under which two grid boundary label anchors are considered duplicates.
 const GRID_BOUNDARY_LABEL_DEDUPE_DISTANCE_SQ = 14 * 14
-
-// Gap in pixels kept around a deep-sky label, so two names never touch.
-const DSO_LABEL_GAP = 4
-
-// Height in pixels of the box a deep-sky label occupies, at the 9 px base size (the font grows with zoom to 30 % more).
-const DSO_LABEL_BOX_HEIGHT = 12
 
 // Dash pattern in pixels of constellation boundaries.
 const CONSTELLATION_BOUNDARY_LINE_DASH = [4, 4] as const
@@ -846,14 +840,11 @@ export class MilkyWayLayer extends InternalLayer {
 	}
 }
 
-// Deep-sky object symbols and labels; a label that would overlap a star name of the frame or one already drawn is left
-// out (the hover and selection overlay still names its object).
+// Deep-sky object symbols and labels; a label that would overlap a moving-body or star name, or one already drawn, is
+// left out (see SkyLabelSpace of ./labels; the hover and selection overlay still names its object).
 export class DeepSkyObjectLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly labelPoint = new Float32Array(2)
-	// Boxes of the labels drawn in the frame, as left, top, right, bottom in pixels, four values per label.
-	private labelBoxes = new Float32Array(64)
-	private labelBoxCount = 0
 
 	// Creates the deep-sky layer.
 	constructor() {
@@ -862,6 +853,7 @@ export class DeepSkyObjectLayer extends InternalLayer {
 
 	// Draws the projected objects visible at the current zoom and their labels.
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
+		state.labels.beginDeepSky()
 		const catalog = state.deepSkyCatalog
 		if (!catalog) return
 
@@ -872,9 +864,8 @@ export class DeepSkyObjectLayer extends InternalLayer {
 		ctx.textAlign = 'left'
 		ctx.textBaseline = 'middle'
 		catalog.beginLabelRender()
-		this.labelBoxCount = 0
-		const labelHeight = (skyLabelSize(state, 9) / 9) * DSO_LABEL_BOX_HEIGHT
-		const starLabels = state.starLabels.place(ctx, state)
+		const labels = state.labels.place(ctx, state)
+		const labelHeight = scaledLabelBoxHeight(state, 9)
 
 		for (let i = 0; i < catalog.visibleCount; i++) {
 			const index = catalog.visibleIndices[i]
@@ -895,7 +886,7 @@ export class DeepSkyObjectLayer extends InternalLayer {
 			if (object.name && isDeepSkyLabelVisible(object, state)) {
 				ctx.fillStyle = state.theme.deepSky.labelColor
 
-				if (positionSkyLabel(ctx, state, object.name, this.point[0], this.point[1], 10, -2, this.labelPoint) && this.claimLabelBox(starLabels, this.labelPoint[0], this.labelPoint[1], ctx.measureText(object.name).width, labelHeight)) {
+				if (positionSkyLabel(ctx, state, object.name, this.point[0], this.point[1], 10, -2, this.labelPoint) && labels.claimDeepSky(this.labelPoint[0], this.labelPoint[1], ctx.measureText(object.name).width, labelHeight)) {
 					ctx.fillText(object.name, this.labelPoint[0], this.labelPoint[1])
 					catalog.recordLabelVisible(index)
 				}
@@ -903,34 +894,6 @@ export class DeepSkyObjectLayer extends InternalLayer {
 				ctx.fillStyle = state.theme.deepSky.color
 			}
 		}
-	}
-
-	// Records the box of a label starting at (x, y), vertically centred, `width` by `height` pixels, and returns true,
-	// unless it would overlap (within DSO_LABEL_GAP) a star name placed for the frame or a box recorded earlier in the
-	// frame, which returns false.
-	private claimLabelBox(starLabels: StarLabelPlacement, x: number, y: number, width: number, height: number) {
-		const left = x - DSO_LABEL_GAP
-		const top = y - height / 2 - DSO_LABEL_GAP
-		const right = x + width + DSO_LABEL_GAP
-		const bottom = y + height / 2 + DSO_LABEL_GAP
-		if (starLabels.overlaps(left, top, right, bottom)) return false
-		const boxes = this.labelBoxes
-
-		for (let i = 0; i < this.labelBoxCount * 4; i += 4) {
-			if (left < boxes[i + 2] && right > boxes[i] && top < boxes[i + 3] && bottom > boxes[i + 1]) return false
-		}
-
-		if ((this.labelBoxCount + 1) * 4 > boxes.length) {
-			this.labelBoxes = new Float32Array(boxes.length * 2)
-			this.labelBoxes.set(boxes)
-		}
-
-		const at = this.labelBoxCount++ * 4
-		this.labelBoxes[at] = left
-		this.labelBoxes[at + 1] = top
-		this.labelBoxes[at + 2] = right
-		this.labelBoxes[at + 3] = bottom
-		return true
 	}
 }
 
@@ -1099,20 +1062,20 @@ export class StarLayer extends InternalLayer {
 		ctx.restore()
 	}
 
-	// Draws the star names placed for the frame (see StarLabelPlacement of ./labels), recording them as drawn.
+	// Draws the star names placed for the frame (see SkyLabelSpace of ./labels), recording them as drawn.
 	private renderStarLabels(ctx: CanvasRenderingContext2D, state: RenderState, catalog: StarCatalog) {
 		catalog.beginLabelRender()
-		const placed = state.starLabels.place(ctx, state)
-		if (placed.count === 0) return
+		const placed = state.labels.place(ctx, state)
+		if (placed.starNames === 0) return
 
 		ctx.fillStyle = state.theme.stars.labelColor
 		ctx.font = state.theme.stars.labelFont
 		ctx.textAlign = 'left'
 		ctx.textBaseline = 'middle'
 
-		for (let i = 0; i < placed.count; i++) {
-			const index = placed.index(i)
-			ctx.fillText(catalog.names[index] ?? '', placed.labelX(i), placed.labelY(i))
+		for (let i = 0; i < placed.starNames; i++) {
+			const index = placed.starIndex(i)
+			ctx.fillText(catalog.names[index] ?? '', placed.starAt(i, 0), placed.starAt(i, 1))
 			catalog.recordLabelVisible(index)
 		}
 	}
@@ -1134,8 +1097,13 @@ export class MovingBodyLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly labelPoint = new Float32Array(2)
 
-	// Draws the visible moving bodies of the layer and their labels.
+	// Draws the visible moving bodies of the layer and their names: those of the movingBodies layer where the label space
+	// placed them, always; those of the satellites layer where they overlap no other name, but the selected one's
+	// always (see SkyLabelSpace of ./labels).
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
+		const labels = state.labels.place(ctx, state)
+		const satellites = this.id === 'satellites'
+		const labelHeight = scaledLabelBoxHeight(state, 9)
 		ctx.font = skyLabelFont(state, 9)
 		ctx.textAlign = 'left'
 		ctx.textBaseline = 'middle'
@@ -1160,8 +1128,12 @@ export class MovingBodyLayer extends InternalLayer {
 			const label = object.name ?? object.type
 			ctx.fillStyle = state.theme.movingBodies.labelColor
 
-			if (positionSkyLabel(ctx, state, label, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) {
-				ctx.fillText(label, this.labelPoint[0], this.labelPoint[1])
+			if (!satellites) {
+				if (labels.movingAt(i, this.labelPoint)) ctx.fillText(label, this.labelPoint[0], this.labelPoint[1])
+			} else if (positionSkyLabel(ctx, state, label, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) {
+				const selected = state.selectedObject?.type === 'movingBody' && state.selectedObject.object.id === object.id
+				const x = this.labelPoint[0]
+				if (labels.claimDynamic(state, x, x + ctx.measureText(label).width, this.labelPoint[1], labelHeight, selected)) ctx.fillText(label, x, this.labelPoint[1])
 			}
 		}
 	}
@@ -1176,9 +1148,11 @@ export class ConstellationLabelLayer extends InternalLayer {
 		super('constellationLabels', 70)
 	}
 
-	// Draws the constellation labels above the minimum zoom.
+	// Draws the constellation labels above the minimum zoom, each where it overlaps no other name (see SkyLabelSpace of
+	// ./labels).
 	render(ctx: CanvasRenderingContext2D, state: RenderState) {
 		if (stateDensityZoom(state) < CONSTELLATION_LABEL_MIN_ZOOM) return
+		const space = state.labels.place(ctx, state)
 
 		const theme = state.theme.constellations
 		const labels = state.constellations.labels ?? []
@@ -1191,9 +1165,9 @@ export class ConstellationLabelLayer extends InternalLayer {
 		for (let i = 0; i < labels.length; i++) {
 			const label = labels[i]
 
-			if (state.projectEquatorialToScreen(label.rightAscension, label.declination, this.point)) {
-				ctx.fillText(label.name, this.point[0], this.point[1])
-			}
+			if (!state.projectEquatorialToScreen(label.rightAscension, label.declination, this.point)) continue
+			const half = ctx.measureText(label.name).width / 2
+			if (space.claimDynamic(state, this.point[0] - half, this.point[0] + half, this.point[1], CONSTELLATION_LABEL_BOX_HEIGHT)) ctx.fillText(label.name, this.point[0], this.point[1])
 		}
 
 		ctx.globalAlpha = 1

@@ -156,11 +156,10 @@ export class CanvasRenderer {
 		}
 	}
 
-	// Makes two layers redraw together from now on: marking either dirty marks both, for layers on different canvases
-	// whose drawing depends on each other, such as names placed against each other's.
-	linkLayers(a: string, b: string) {
-		this.links.set(a, [...(this.links.get(a) ?? []), b])
-		this.links.set(b, [...(this.links.get(b) ?? []), a])
+	// Makes layers redraw together from now on: marking any of them dirty marks them all, for layers on different
+	// canvases whose drawing depends on each other, such as names placed against each other's.
+	linkLayers(...ids: readonly string[]) {
+		for (const id of ids) this.links.set(id, [...new Set([...(this.links.get(id) ?? []), ...ids.filter((other) => other !== id)])])
 	}
 
 	// Marks one layer dirty, and the layers linked to it.

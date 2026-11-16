@@ -24,7 +24,7 @@ import {
 	writeViewMatrix,
 } from './geometry'
 import { anchoredTransform, beginGesture, type GestureAnchor, type GesturePointer, gestureTransform } from './gesture'
-import { StarLabelPlacement } from './labels'
+import { SkyLabelSpace } from './labels'
 import { BackgroundLayer, CONSTELLATION_LABEL_MIN_ZOOM, ConstellationBoundaryLayer, ConstellationLabelLayer, ConstellationLineLayer, DeepSkyObjectLayer, GridLayer, HorizonLayer, InteractionOverlayLayer, MilkyWayLayer, MovingBodyLayer, ReferenceLineLayer, ShapeLayer, StarLayer } from './layers'
 import { resolveOptions, validateObserver, validateProjection } from './options'
 import { FixedGridSpatialIndex, isPickableLayerId, movingBodyLayerId, objectLayerId, PICK_TYPE_CONSTELLATION_LABEL, PICK_TYPE_DSO, PICK_TYPE_MOVING_BODY, PICK_TYPE_SHAPE, PICK_TYPE_STAR, type PickIndex, pickMatchesObject, sameObject } from './picking'
@@ -153,8 +153,8 @@ export class Celestial {
 	#renderState: Writable<RenderState> | null = null
 	// Number of the last frame rendered (RenderState.frame).
 	#frame = 0
-	// Star names of the frame, shared by the star and deep-sky layers.
-	readonly #starLabels = new StarLabelPlacement()
+	// Names of the map, shared by the layers that draw them.
+	readonly #labels = new SkyLabelSpace()
 	#cachedRect: DOMRect | null = null
 	#starCatalog: StarCatalog | null = null
 	#deepSkyCatalog: DeepSkyCatalog | null = null
@@ -540,8 +540,10 @@ export class Celestial {
 		}
 	}
 
-	// Redraws moving bodies after the caller mutated one (by id) or several; returns false for an unknown id.
-	markMovingBodyDirty(id?: string) {
+	// Redraws moving bodies after the caller mutated one (by id) or several; returns false for an unknown id. Satellites
+	// only (`satellitesOnly`) redraws the satellites layer alone, not the layers whose names are placed with the other
+	// moving bodies' (see linkLayers in setupLayers), for the frequent updates of tracked satellites.
+	markMovingBodyDirty(id?: string, satellitesOnly = false) {
 		if (id !== undefined && !this.#movingBodies.has(id)) {
 			return false
 		}
@@ -549,7 +551,7 @@ export class Celestial {
 		this.syncSelectedMovingBodyObject()
 		this.syncHoverMovingBodyObject()
 		this.rebuildPickingIndex()
-		this.#renderer.markDirty('movingBodies')
+		if (!satellitesOnly) this.#renderer.markDirty('movingBodies')
 		this.#renderer.markDirty('satellites')
 
 		if (id === undefined || (this.#selectedObject?.type === 'movingBody' && this.#selectedObject.object.id === id) || (this.#hoverObject?.type === 'movingBody' && this.#hoverObject.object.id === id)) {
@@ -894,8 +896,9 @@ export class Celestial {
 			this.#renderer.addLayer(layer, LAYER_CANVAS_GROUPS[layer.id] ?? layer.id)
 		}
 
-		// Deep-sky names avoid the star names of the frame, so the two canvases redraw together.
-		this.#renderer.linkLayers('stars', 'deepSky')
+		// The names of these layers are placed against each other's (./labels), so they redraw together; satellites redraw
+		// alone, their names placed against the others' unchanged ones.
+		this.#renderer.linkLayers('movingBodies', 'stars', 'deepSky', 'constellationLabels')
 	}
 
 	// Centers the view on the zenith (north up) in horizontal views, or on RA 0, Dec 0 (celestial north up)
@@ -1460,7 +1463,7 @@ export class Celestial {
 		}
 
 		state.frame = this.#frame
-		state.starLabels = this.#starLabels
+		state.labels = this.#labels
 		state.width = options.width
 		state.height = options.height
 		state.dpr = this.#renderer.devicePixelRatio

@@ -190,7 +190,7 @@ export class SatelliteLayer {
 			changed = true
 		}
 
-		if (changed) this.celestial.markMovingBodyDirty()
+		if (changed) this.celestial.markMovingBodyDirty(undefined, true)
 		this.#drawTrail(selected)
 		if (selected && this.#targets.tracking) this.map.centerOn(selected)
 	}

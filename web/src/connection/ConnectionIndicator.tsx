@@ -14,8 +14,8 @@ const indicator = tv({
 	},
 	variants: {
 		status: {
-			connected: { dot: 'bg-success shadow-[0_0_8px_var(--color-success)]', ring: 'animate-ping bg-success opacity-60' },
-			connecting: { dot: 'animate-pulse bg-accent', ring: 'hidden' },
+			connected: { dot: 'bg-success shadow-[0_0_8px_var(--color-success)]', ring: 'animate-ping bg-success opacity-60 motion-reduce:hidden' },
+			connecting: { dot: 'animate-pulse bg-accent motion-reduce:animate-none', ring: 'hidden' },
 			disconnected: { dot: 'border-[1.5px] border-ink-300 box-border', ring: 'hidden' },
 		},
 	},

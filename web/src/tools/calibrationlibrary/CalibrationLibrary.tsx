@@ -486,7 +486,7 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 			{errors[key] && <Notice error>{errors[key]}</Notice>}
 			{failure && !building && <Notice error>{`The last build failed: ${failure}`}</Notice>}
 			<Button disabled={building || requesting || !validation?.valid} title={reason} onClick={() => void buildMaster(calibrationLibraryRuntime, key, request())}>
-				{(building || requesting) && <span className="size-3.5 flex-none animate-spin rounded-full border-2 border-current border-t-transparent" />}
+				{(building || requesting) && <span className="size-3.5 flex-none animate-spin rounded-full motion-reduce:animate-none border-2 border-current border-t-transparent" />}
 				{building ? (job.state === 'queued' ? 'Queued' : `Building ${formatPercent(jobFraction(job))}`) : requesting ? 'Building' : 'Build Master'}
 			</Button>
 		</>

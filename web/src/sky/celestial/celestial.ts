@@ -689,6 +689,19 @@ export class Celestial {
 		this.queueProjectionOnly()
 	}
 
+	// Zooms the view by `factor` (above 1 zooms in) around the middle of the viewport, as the wheel would there, within the
+	// zoom limits of the interaction options.
+	zoomBy(factor: number) {
+		const { width, height, interactions } = this.#options
+		const previousK = this.#transform.k
+		const nextK = clamp(previousK * factor, interactions.minZoom, interactions.maxZoom)
+		if (nextK === previousK) return
+
+		this.writeViewTransform(anchoredTransform(this.#transform, width / 2, height / 2, width / 2, height / 2, nextK, width, height))
+		this.restartGesture()
+		this.afterTransformChanged()
+	}
+
 	// Pans the view so a right ascension and declination of date in radians is at the middle of the
 	// viewport, keeping the zoom and the view orientation, exactly as a drag would. The view itself is
 	// never rotated, because the local sky's layers assume it stays centered on the zenith. Returns false,
@@ -1503,13 +1516,14 @@ export class Celestial {
 		this.#emitter.emit('error', error)
 	}
 
-	// Binds the pointer handlers for pan, pinch and wheel zoom, hover, and click.
+	// Binds the pointer handlers for pan, pinch and wheel zoom, hover (cleared when the pointer leaves), and click.
 	private bindInteractions() {
 		if (!this.#options.interactions.enabled) return
 
 		const element = this.#renderer.element
 		element.addEventListener('pointerdown', this.handlePointerDown)
 		element.addEventListener('pointermove', this.handlePointerMove)
+		element.addEventListener('pointerleave', this.handlePointerLeave)
 		element.addEventListener('click', this.handleClick)
 		element.addEventListener('wheel', this.handleWheel, { passive: false })
 		document.addEventListener('pointerup', this.handlePointerUp)
@@ -1521,6 +1535,7 @@ export class Celestial {
 		const element = this.#renderer.element
 		element.removeEventListener('pointerdown', this.handlePointerDown)
 		element.removeEventListener('pointermove', this.handlePointerMove)
+		element.removeEventListener('pointerleave', this.handlePointerLeave)
 		element.removeEventListener('click', this.handleClick)
 		element.removeEventListener('wheel', this.handleWheel)
 		document.removeEventListener('pointerup', this.handlePointerUp)
@@ -1593,6 +1608,12 @@ export class Celestial {
 
 		this.#lastPointerMove = now
 		this.updatePointerHover(x, y)
+	}
+
+	// Clears the hover when the pointer leaves the map, so nothing stays hovered (and no tooltip stays shown) once the
+	// pointer is elsewhere; a gesture in progress keeps it until its pointers lift.
+	private readonly handlePointerLeave = (): void => {
+		if (this.#activePointers.size === 0) this.updateHover(null)
 	}
 
 	// Removes a released or cancelled pointer from the gesture, refreshing the hover when the last one lifts

@@ -1,5 +1,5 @@
 import type { MinorBody, SkySearchResult } from 'api'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { imagesState } from '../images/images'
@@ -13,7 +13,7 @@ import { Button } from '../ui/Button'
 import { FavoriteButton } from '../ui/FavoriteButton'
 import { IconButton } from '../ui/IconButton'
 import type { CoordinateSystem } from './celestial/celestial'
-import { skyClock } from './clock'
+import { setSkyTimeNow, skyClock } from './clock'
 import { isSkyLayerVisible, METEOR_RADIANTS_LAYER, SATELLITE_TRACKS_LIMIT, SATELLITES_LAYER } from './display'
 import { DisplayPanel } from './DisplayPanel'
 import { addSkyObjectFavorite, isSkyFavorite, removeSkyObjectFavorite, selectionResult } from './favorites'
@@ -26,6 +26,7 @@ import { ObjectInspector } from './ObjectInspector'
 import { planetarium, planetariumState } from './planetarium'
 import { skySatelliteState } from './satellite/satellite'
 import { liveSensors, sensorRuntime } from './sensors'
+import { SHORTCUT_ZOOM_FACTOR, skyShortcut, takesKeys } from './shortcuts'
 import { changeSkyObserver, type SkyPanelView, selectSkyObject, skyState } from './sky'
 import { SkySearch } from './SkySearch'
 import { SkyView } from './SkyView'
@@ -40,7 +41,7 @@ import { TimeController } from './TimeController'
 // observing site, chosen in the top bar: with one the map is its local sky; without one it is an equatorial chart of the
 // whole sky, never an assumed place. Times read in the profile's display zone, which changes no position. A solved image can send its footprint, drawn while its document shows that image,
 // and a coordinate to mark; the view is only panned to them, never reprojected, and the toolbar toggles the footprint
-// and clears the mark.
+// and clears the mark. Keyboard shortcuts (./shortcuts) focus the search, zoom, and return to the real time.
 
 // Classes of the toolbar's icon buttons: 43.75 px touch targets on phones, where the buttons take a line of their own,
 // and the compact 28 px toolbar size elsewhere.
@@ -158,6 +159,25 @@ export function SkyWorkspace() {
 		if (status === 'ready') map.syncSelection()
 	}, [map, status, selectionKey, selectionCenter?.rightAscension, selectionCenter?.declination])
 
+	// Keyboard shortcuts of the workspace (./shortcuts): / focuses the search, + and − zoom, N returns to the real time.
+	const searchRef = useRef<HTMLInputElement>(null)
+
+	useEffect(() => {
+		function handleKeyDown(e: KeyboardEvent) {
+			const command = skyShortcut(e.key, e.ctrlKey || e.altKey || e.metaKey)
+			if (!command || e.defaultPrevented || takesKeys(e.target)) return
+
+			e.preventDefault()
+			if (command === 'search') searchRef.current?.focus()
+			else if (command === 'zoomIn') map.celestial.zoomBy(SHORTCUT_ZOOM_FACTOR)
+			else if (command === 'zoomOut') map.celestial.zoomBy(1 / SHORTCUT_ZOOM_FACTOR)
+			else setSkyTimeNow(skyClock)
+		}
+
+		document.addEventListener('keydown', handleKeyDown)
+		return () => document.removeEventListener('keydown', handleKeyDown)
+	}, [map])
+
 	// Selects a search result as a click would; a minor body is first drawn at its position now. Where the panel is a
 	// drawer, which starts closed, it opens on the Object Inspector, so choosing a result always shows what was chosen
 	// even when the map does not (an object below the horizon or outside the view).
@@ -222,7 +242,7 @@ export function SkyWorkspace() {
 		<WorkspaceLayout workspace="sky" title="Sky" context={context ? <span className="truncate text-xs text-ink-300">{context}</span> : undefined} panel={panels[sky.panel]()} panelState={panelState}>
 			<div className="flex h-full flex-col bg-base-000">
 				<div className="flex flex-none items-center gap-2 border-b border-line-100 bg-base-100 px-2 max-sm:flex-wrap max-sm:gap-y-1 max-sm:py-1 sm:h-11">
-					<SkySearch onSelect={handleSearchSelect} />
+					<SkySearch onSelect={handleSearchSelect} inputRef={searchRef} />
 					<div className="ml-auto flex flex-none items-center gap-1 max-sm:w-full max-sm:flex-wrap max-sm:justify-end">
 						<IconButton icon="mount" label={mountCenter ? 'Center on Mount' : 'Center on Mount (the mount position is shown in real time only, while connected)'} disabled={!mountCenter} onClick={() => mountCenter && map.centerOn(mountCenter)} className={TOUCH_BUTTON} />
 						<IconButton

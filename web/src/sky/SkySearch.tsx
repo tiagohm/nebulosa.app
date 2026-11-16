@@ -1,6 +1,6 @@
 import type { MinorBody, MinorBodySearchResponse, SkySearchResult } from 'api'
 import { cn } from 'cn'
-import { useEffect, useRef, useState } from 'react'
+import { type RefObject, useEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { activeProfile, profileState, satelliteFavorites, skyFavorites } from '../profile/profile'
 import { FavoriteButton } from '../ui/FavoriteButton'
@@ -89,10 +89,13 @@ function buildFavoriteItems(favorites: readonly SkySearchResult[], satellites: S
 export interface SkySearchProps {
 	// Called with the chosen object and, for a minor body, its SBDB data.
 	readonly onSelect: (result: SkySearchResult, minorBody?: MinorBody) => void
+	// Ref the search field is written to, so the workspace can focus it (the / shortcut); the component keeps its own
+	// when absent.
+	readonly inputRef?: RefObject<HTMLInputElement | null>
 }
 
 // Search field with its Favorites toggle and its result list.
-export function SkySearch({ onSelect }: SkySearchProps) {
+export function SkySearch({ onSelect, inputRef: focusRef }: SkySearchProps) {
 	const [query, setQuery] = useState('')
 	const [open, setOpen] = useState(false)
 	const [local, setLocal] = useState<readonly SkySearchResult[]>([])
@@ -101,7 +104,8 @@ export function SkySearch({ onSelect }: SkySearchProps) {
 	const [active, setActive] = useState(0)
 	const [favoritesOnly, setFavoritesOnly] = useState(false)
 	const [satellites, setSatellites] = useState<SatellitesState>({ status: 'idle' })
-	const inputRef = useRef<HTMLInputElement>(null)
+	const ownRef = useRef<HTMLInputElement>(null)
+	const inputRef = focusRef ?? ownRef
 	const localGuard = useRef(createRequestGuard())
 	const remoteGuard = useRef(createRequestGuard())
 	const satellitesGuard = useRef(createRequestGuard())
@@ -227,6 +231,8 @@ export function SkySearch({ onSelect }: SkySearchProps) {
 			e.preventDefault()
 			choose(items[activeIndex])
 		} else if (e.key === 'Escape') {
+			// Keeps the browser from also clearing the search field, so Escape only closes the list, then leaves the field.
+			e.preventDefault()
 			if (open) setOpen(false)
 			else inputRef.current?.blur()
 		}
@@ -245,6 +251,7 @@ export function SkySearch({ onSelect }: SkySearchProps) {
 					type="search"
 					value={query}
 					placeholder={favoritesOnly ? 'Filter favorites' : 'Search objects: M31, Sirius, HIP 32349, Mars, Ceres'}
+					title="Search objects (/)"
 					onChange={(e) => {
 						setQuery(e.target.value)
 						setOpen(true)
@@ -255,7 +262,7 @@ export function SkySearch({ onSelect }: SkySearchProps) {
 					className={cn(inputClassName, 'h-9.5 py-1 text-sm')}
 				/>
 				{showList && (
-					<div onMouseDown={(e) => e.preventDefault()} className="absolute top-full right-0 left-0 z-30 mt-1 max-h-[min(28rem,70vh)] overflow-y-auto rounded-sm border border-line-100 bg-base-200 py-1 shadow-[0_8px_32px_rgb(0_0_0/0.5)]">
+					<div onMouseDown={(e) => e.preventDefault()} className="absolute top-full right-0 left-0 z-30 mt-1 max-h-[min(28rem,70vh)] overflow-y-auto rounded-md border border-line-100 bg-base-200 py-1 shadow-[0_12px_32px_rgb(0_0_0/0.45)]">
 						{SECTIONS.map((section) => {
 							const entries = items.map((item, index) => ({ item, index })).filter((e) => e.item.section === section)
 							const remoteSection = !showFavorites && section === 'Asteroids & Comets'

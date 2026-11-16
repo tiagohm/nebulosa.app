@@ -29,7 +29,7 @@ import type { AnnotationDensity, AnnotationLayers } from '../images/images'
 import type { ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
-import type { OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } from '../sky/framing'
+import type { FramingSource, OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } from '../sky/framing'
 import type { StarProfileSettings } from '../stars/starprofile.settings'
 
 // What a profile holds, the defaults of its preferences and camera forms, and the version of the shape of the values the
@@ -368,8 +368,9 @@ export interface SkyFramingSettings {
 	activePresetId?: string
 	// Whether the field of view is drawn on the map. View state.
 	visible: boolean
-	// Where the drawn field comes from: a custom preset, or the Equipment Setup; absent means custom. View state.
-	source?: 'custom' | 'equipment'
+	// Where the drawn field comes from: a custom preset, or the Equipment Setup; absent means the Equipment Setup
+	// (framingSource). View state.
+	source?: FramingSource
 	// Sensor of the Equipment Setup source; absent means the main camera. View state.
 	sensorSource?: SensorSource
 	// Sensor entered for the Equipment Setup source when sensorSource is manual, to simulate a camera.

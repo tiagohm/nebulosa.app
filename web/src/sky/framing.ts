@@ -102,6 +102,15 @@ export interface TelescopeOptics {
 	readonly aperture: number
 }
 
+// Where the drawn field of view comes from: a custom optical preset, or the Equipment Setup.
+export type FramingSource = 'custom' | 'equipment'
+
+// Returns where the field of view comes from in a profile's framing settings: the Equipment Setup, the source of truth
+// about the devices in use, unless a custom preset was chosen.
+export function framingSource(framing?: { readonly source?: FramingSource }): FramingSource {
+	return framing?.source ?? 'equipment'
+}
+
 // Where the Equipment Setup field of view takes its sensor from: a camera role of the setup, whose
 // device reports it, or a sensor entered manually.
 export type SensorSource = CameraRole | 'manual'

@@ -10,6 +10,7 @@ import { exploreMinorBody } from '../tools/orbitalmechanics/orbitalmechanics.sou
 import { Button } from '../ui/Button'
 import { Modal, ModalActions } from '../ui/Modal'
 import { Notice } from '../ui/Notice'
+import { StatusBadge } from '../ui/StatusBadge'
 import { formatDeclination, formatRightAscension } from './format'
 import { mountRuntime, mountView, slewBlocker, slewMount, slewProgress, stopMount } from './mount'
 import { createRequestGuard } from './selection'
@@ -18,9 +19,11 @@ import { fetchSkyPosition } from './sky'
 // Actions of the selected object in the Object section of the Object Inspector: Show Framing, Add to Observing Planner for
 // a catalog object, a major body other than the Sun, or a minor body (which opens the tool to choose a plan, changing nothing else), and
 // Slew to Object while the profile's mount is connected. A slew points the mount at the object after an explicit
-// confirmation, then shows the real outcome of the operation as the server reports it. The target is resolved by the server at
-// the real current time, whatever instant the Sky shows; the dialog previews where the object is now for the
-// observer. Accepting the request is never shown as arrival.
+// confirmation, then shows the real outcome of the operation as the server reports it, as a status in words. The target is
+// resolved by the server at the real current time, whatever instant the Sky shows; the dialog previews where the object is
+// now for the observer, and Slew waits for that preview: it stays disabled while the object is located or below the
+// horizon, and reads Slew Anyway when the preview failed (the server still refuses a target below the horizon). The
+// dialog opens on Cancel, so a stray Enter never moves the mount. Accepting the request is never shown as arrival.
 
 export interface ObjectActionsProps {
 	// Object to slew to.
@@ -93,6 +96,11 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 		setPreview(undefined)
 	}
 
+	// Whether the preview shows the object below the horizon now.
+	const belowHorizon = preview?.status === 'ready' && preview.position.altitude !== undefined && preview.position.altitude < 0
+	// Why Slew cannot be pressed yet; undefined once the preview is known and above the horizon, or failed.
+	const slewWait = preview?.status === 'loading' ? 'Locating the object now' : belowHorizon ? 'The object is below the horizon now' : undefined
+
 	// Sends the slew and closes the confirmation.
 	function slew() {
 		close()
@@ -153,11 +161,11 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 					)}
 				</div>
 				<ModalActions>
-					<Button variant="secondary" onClick={close}>
+					<Button variant="secondary" onClick={close} data-autofocus>
 						Cancel
 					</Button>
-					<Button disabled={preview?.status === 'ready' && preview.position.altitude !== undefined && preview.position.altitude < 0} onClick={slew} data-autofocus>
-						Slew
+					<Button disabled={!!slewWait} title={slewWait} onClick={slew}>
+						{preview?.status === 'error' ? 'Slew Anyway' : 'Slew'}
 					</Button>
 				</ModalActions>
 			</Modal>
@@ -165,14 +173,26 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 	)
 }
 
-// Outcome of the latest slew, as the server reported it.
+// Outcome of the latest slew, as the server reported it: a status badge (Slewing, Arrived, or Failed) beside the target's
+// name, which truncates rather than widening the panel, and the reason of a failure under it.
 function SlewStatus({ targetName, operation }: { readonly targetName: string; readonly operation?: OperationRecord }) {
-	if (!operation || operation.state === 'running') return <p className="m-0 text-xs leading-4 text-ink-200">Slewing to {targetName}…</p>
-	if (operation.state === 'succeeded') return <p className="m-0 text-xs leading-4 text-ink-200">Arrived at {targetName}.</p>
+	const running = !operation || operation.state === 'running'
+	const succeeded = operation?.state === 'succeeded'
+
 	return (
-		<Notice error>
-			The slew to {targetName} failed: {operation.reason ? FAILURE_REASONS[operation.reason] : 'unknown reason'}
-			{operation.error ? ` (${operation.error})` : ''}.
-		</Notice>
+		<>
+			<div className="flex min-w-0 items-center gap-2">
+				<StatusBadge tone={running ? 'active' : succeeded ? 'success' : 'danger'} label={running ? 'Slewing' : succeeded ? 'Arrived' : 'Failed'} />
+				<span className="min-w-0 truncate text-xs text-ink-200" title={targetName}>
+					{targetName}
+				</span>
+			</div>
+			{operation && !running && !succeeded && (
+				<Notice error>
+					The slew to {targetName} failed: {operation.reason ? FAILURE_REASONS[operation.reason] : 'unknown reason'}
+					{operation.error ? ` (${operation.error})` : ''}.
+				</Notice>
+			)}
+		</>
 	)
 }

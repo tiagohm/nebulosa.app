@@ -18,7 +18,7 @@ import { isSkyLayerVisible, METEOR_RADIANTS_LAYER, SATELLITE_TRACKS_LIMIT, SATEL
 import { DisplayPanel } from './DisplayPanel'
 import { addSkyObjectFavorite, isSkyFavorite, removeSkyObjectFavorite, selectionResult } from './favorites'
 import { clearImageFootprint, clearSkyCoordinate, skyImageState, toggleImageFootprint } from './footprint'
-import { equipmentOptics } from './framing'
+import { equipmentOptics, framingSource } from './framing'
 import { FramingPanel } from './FramingPanel'
 import { HoverTooltip } from './HoverTooltip'
 import { mountPoint, mountRuntime, mountView, selectionPoint } from './mount'
@@ -120,7 +120,7 @@ export function SkyWorkspace() {
 	const sensors = liveSensors(useSnapshot(sensorRuntime), control)
 	// The sensors of the camera states the snapshot keeps while they do not change, so the frame follows them only.
 	const { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor } = sensors
-	const equipment = framing?.source === 'equipment'
+	const equipment = framingSource(framing) === 'equipment'
 	const equipmentFrame = equipment ? { name: 'Equipment Setup', optics: equipmentOptics({ telescope, guideTelescope }, framing?.sensorSource ?? 'MAIN_CAMERA', { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor }, framing?.manualSensor, framing?.equipmentRotation ?? 0).optics } : undefined
 	const frameSource = equipment ? equipmentFrame : framing?.presets.find((e) => e.id === framing.activePresetId)
 

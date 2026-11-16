@@ -4,6 +4,7 @@ import { proxy, snapshot } from 'valtio'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
 import { createOperation } from '../images/imageprocessing.catalog'
 import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
+import { framingSource } from '../sky/framing'
 import { DEFAULT_STAR_PROFILE_SETTINGS } from '../stars/starprofile.settings'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
@@ -433,10 +434,20 @@ describe('sky settings', () => {
 		setSensorSource(state, 'MAIN_CAMERA')
 
 		expect(state.profiles[0].settings.telescope?.focalLength).toBe(400)
-		expect(state.profiles[0].settings.sky.framing).toMatchObject({ source: 'equipment', sensorSource: 'manual', manualSensor: { kind: 'physical', width: 23.5, height: 15.6 }, equipmentRotation: 5 })
+		expect(framingSource(state.profiles[0].settings.sky.framing)).toBe('equipment')
+		expect(state.profiles[0].settings.sky.framing).toMatchObject({ sensorSource: 'manual', manualSensor: { kind: 'physical', width: 23.5, height: 15.6 }, equipmentRotation: 5 })
 		expect(copy.settings.telescope?.focalLength).toBe(1000)
 		expect(copy.settings.sky.framing?.sensorSource).toBe('MAIN_CAMERA')
 		expect(state.profiles[0].equipment).toEqual({})
+	})
+
+	test('the framing source is the Equipment Setup until a custom preset is chosen', () => {
+		const state = load()
+		expect(framingSource(state.profiles[0].settings.sky.framing)).toBe('equipment')
+		setFramingSource(state, 'custom')
+		expect(framingSource(state.profiles[0].settings.sky.framing)).toBe('custom')
+		setFramingSource(state, 'equipment')
+		expect(framingSource(state.profiles[0].settings.sky.framing)).toBe('equipment')
 	})
 
 	test('a duplicated profile copies its presets independently', () => {

@@ -10,17 +10,18 @@ import type { SkyFramingSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { Button } from '../ui/Button'
 import { Checkbox } from '../ui/Checkbox'
+import { ConfirmButton } from '../ui/ConfirmButton'
 import { DataRow } from '../ui/DataRow'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { formatApparentSize } from './format'
-import { DEFAULT_TELESCOPE, equipmentOptics, isFraming, type OpticalConfiguration, type OpticalPreset, resolveFraming, type SensorGeometry, type SensorSource, type TelescopeOptics, usesGuideTelescope } from './framing'
+import { DEFAULT_TELESCOPE, equipmentOptics, type FramingSource, framingSource, isFraming, type OpticalConfiguration, type OpticalPreset, resolveFraming, type SensorGeometry, type SensorSource, type TelescopeOptics, usesGuideTelescope } from './framing'
 import { liveSensors, sensorRuntime } from './sensors'
 
-// Framing settings of the Sky workspace: where the field of view comes from (a custom optical preset of
-// the active profile, or its Equipment Setup), the optics and sensor, the field and image scale they give
+// Framing settings of the Sky workspace: where the field of view comes from (the active profile's Equipment Setup by
+// default, or a custom optical preset of the profile), the optics and sensor, the field and image scale they give
 // (read-only), its rotation, and whether it is drawn around the selected object. Presets, the telescope
 // optics, and a manual sensor are planning data kept in the profile; they never change a device, and no
 // equipment has to be connected. The Equipment Setup takes its sensor from the camera of a camera role
@@ -39,11 +40,8 @@ export interface FramingPanelProps {
 	readonly hasTarget: boolean
 }
 
-// Where the optics of the field of view come from.
-type FramingSource = 'custom' | 'equipment'
-
-// Sources in menu order.
-const SOURCES: readonly FramingSource[] = ['custom', 'equipment']
+// Sources in menu order, the default first.
+const SOURCES: readonly FramingSource[] = ['equipment', 'custom']
 
 // Sensor sources of the Equipment Setup in menu order.
 const SENSOR_SOURCES: readonly SensorSource[] = ['MAIN_CAMERA', 'GUIDE_CAMERA', 'manual']
@@ -73,7 +71,7 @@ function sensorSourceName(source: SensorSource) {
 
 // Framing settings form.
 export function FramingPanel({ framing, telescope, guideTelescope, hasTarget }: FramingPanelProps) {
-	const source = framing?.source ?? 'custom'
+	const source = framingSource(framing)
 
 	return (
 		<>
@@ -110,9 +108,18 @@ function CustomSource({ framing, hasTarget }: { readonly framing?: Readonly<SkyF
 							<Button variant="secondary" onClick={() => duplicateOpticalPreset(profileState, preset.id)}>
 								Duplicate
 							</Button>
-							<Button variant="ghost" onClick={() => deleteOpticalPreset(profileState, preset.id)}>
+							<ConfirmButton
+								title="Delete preset?"
+								message={
+									<>
+										Delete <strong className="text-ink-100">{preset.name}</strong>? Its optics and camera are removed from the profile, and this cannot be undone.
+									</>
+								}
+								confirmLabel="Delete Preset"
+								onConfirm={() => deleteOpticalPreset(profileState, preset.id)}
+							>
 								Delete
-							</Button>
+							</ConfirmButton>
 						</>
 					)}
 				</div>
@@ -264,7 +271,7 @@ function FramingResult({ optics, missingCamera, onRotate }: { readonly optics: R
 					{framing.focalRatio !== undefined && <DataRow label="Focal ratio">f/{framing.focalRatio.toFixed(1)}</DataRow>}
 				</>
 			) : (
-				<Notice error>To compute the field, enter: {missing.join(', ')}.</Notice>
+				<Notice>To compute the field, enter: {missing.join(', ')}.</Notice>
 			)}
 			<NumberInput label="Rotation (PA of the top edge)" suffix="°" value={optics.rotation} min={0} max={359.5} step={0.5} onChange={onRotate} />
 			<Notice>Position angle of the sensor&apos;s top edge, from north through east, as plate solvers report it; mirrored images are not modeled.</Notice>

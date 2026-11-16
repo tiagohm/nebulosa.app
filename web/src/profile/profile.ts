@@ -6,7 +6,7 @@ import type { AnnotationLayers } from '../images/images'
 import { type AstrometryGridSettings, DEFAULT_IMAGE_ASTROMETRY, type ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '../sky/display'
-import { DEFAULT_OPTICS, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
+import { DEFAULT_OPTICS, type FramingSource, framingSource, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type SensorSource, type TelescopeOptics } from '../sky/framing'
 import { refKey } from '../sky/objects'
 import { DEFAULT_STAR_PROFILE_SETTINGS, type StarProfileSettings } from '../stars/starprofile.settings'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
@@ -762,10 +762,10 @@ export function setFramingVisible(state: ProfileState, visible: boolean) {
 }
 
 // Chooses where the drawn field of view comes from in the active profile.
-export function setFramingSource(state: ProfileState, source: 'custom' | 'equipment') {
+export function setFramingSource(state: ProfileState, source: FramingSource) {
 	const profile = activeProfile(state)
 	const framing = framingOf(profile)
-	if ((framing.source ?? 'custom') === source) return
+	if (framingSource(framing) === source) return
 	framing.source = source
 }
 

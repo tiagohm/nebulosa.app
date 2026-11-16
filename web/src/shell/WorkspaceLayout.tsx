@@ -4,11 +4,11 @@ import { useSnapshot } from 'valtio'
 import { activeProfile, panelOpen, profileState, setPanelOpen } from '../profile/profile'
 import { IconButton } from '../ui/IconButton'
 import { ContextualPanel } from './ContextualPanel'
-import type { WorkspaceId } from './route'
+import { navigate, routeState, type WorkspaceId } from './route'
 import { useMediaQuery, WIDE_SCREEN } from './useMediaQuery'
 
 // Common frame of every workspace: optional tabs spanning the whole workspace (such as the Images document and
-// camera tabs), a header with the title, the workspace's context controls (such as the Images tool bar)
+// camera tabs), a header with the title (led in a tool of Tools by the way back to its catalog), the workspace's context controls (such as the Images tool bar)
 // and actions, which wrap to a line of their own when they do not fit beside the title, the main content, and the
 // collapsible contextual panel. On
 // wide screens the panel's visibility is a preference of the active profile, kept per workspace; on
@@ -77,6 +77,9 @@ export interface WorkspaceLayoutProps {
 export function WorkspaceLayout({ workspace, title, context, contextFill = false, actions, panel, panelState, tabs, children }: WorkspaceLayoutProps) {
 	const ownPanelState = useWorkspacePanel(workspace)
 	const { docked, open, setOpen } = panelState ?? ownPanelState
+	const { route } = useSnapshot(routeState)
+	// A tool of the Tools workspace leads its title with the way back to the catalog.
+	const inTool = workspace === 'tools' && route.workspace === 'tools' && route.tool !== undefined
 
 	// Clips rather than hides its overflow: a hidden box can still be scrolled by script or by focus, and the closed
 	// drawer waiting beside it would then pull the workspace sideways.
@@ -84,7 +87,22 @@ export function WorkspaceLayout({ workspace, title, context, contextFill = false
 		<section className="relative flex min-h-0 min-w-0 flex-1 overflow-clip">
 			<div className="flex min-w-0 flex-1 flex-col">
 				<header className="flex min-h-12 flex-none flex-wrap items-center gap-x-3 gap-y-1 border-b border-line-100 bg-base-100 px-4 py-1">
-					<h1 className="m-0 flex-none text-sm font-semibold text-ink-100">{title}</h1>
+					<span className="flex min-w-0 flex-none items-center gap-2 text-sm">
+						{inTool && (
+							<>
+								<button
+									type="button"
+									title="Back to the Tools catalog"
+									onClick={() => navigate(routeState, { workspace: 'tools' })}
+									className="cursor-pointer border-0 bg-transparent p-0 text-ink-300 transition-colors duration-150 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
+								>
+									Tools
+								</button>
+								<span className="text-ink-300">/</span>
+							</>
+						)}
+						<h1 className="m-0 text-sm font-semibold text-ink-100">{title}</h1>
+					</span>
 					{context && <div className={cn('flex min-w-0 items-center gap-2', contextFill && 'flex-1')}>{context}</div>}
 					<div className="ml-auto flex flex-wrap items-center justify-end gap-1">
 						{actions}

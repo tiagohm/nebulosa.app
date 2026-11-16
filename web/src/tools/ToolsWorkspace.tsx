@@ -1,19 +1,22 @@
-import { useEffect } from 'react'
+import { type KeyboardEvent, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { useActiveSite } from '../location/useLocation'
-import { navigate, redirect, routeState, TOOL_IDS } from '../shell/route'
-import { WorkspaceLayout } from '../shell/WorkspaceLayout'
+import { navigate, redirect, routeState } from '../shell/route'
+import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Icon } from '../ui/Icon'
+import { SectionHeading } from '../ui/SectionHeading'
 import { StatusBadge } from '../ui/StatusBadge'
+import { TextInput } from '../ui/TextInput'
 import { meridianFlipHeadline, meridianFlipState, monitorKey } from './meridianflip/meridianflip'
 import { latestExecution, MERIDIAN_FLIP_STEP_LABELS, meridianFlipExecutorState } from './meridianflip/meridianflipexecutor'
 import { formatEndpoint, MOUNT_REMOTE_PROTOCOL_LABELS, mountRemoteControlState } from './mountremotecontrol/listeners'
 import { observatoryCamerasState } from './observatorycameras/observatorycameras'
 import { type ToolReadiness, toolReadiness, type ToolReadinessContext } from './readiness'
-import { TOOL_DEFINITIONS, type ToolDefinition, toolStatus } from './tools'
+import { matchesTool, TOOL_DEFINITIONS, TOOL_GROUPS, type ToolDefinition, toolStatus } from './tools'
 
-// Tools workspace: the catalog of standalone tools and the view of the tool the URL names. A card names its tool and
+// Tools workspace: the catalog of standalone tools, grouped in the order of a night and narrowed by a filter, and the
+// view of the tool the URL names. A card names its tool and
 // shows one word only by exception (readiness.ts): planned, blocked by the active profile, or running on the server.
 // A planned tool is listed but cannot be opened, so a URL naming one returns to the catalog; a blocked tool still opens,
 // into its own setup state.
@@ -34,20 +37,42 @@ export function ToolsWorkspace() {
 	return <ToolsCatalog />
 }
 
-// Catalog of the tools, each card with the readiness of its tool for the active profile.
+// Catalog of the tools, in the groups of a night, narrowed by a filter, each card with the readiness of its tool for the
+// active profile. The filter is transient view state of the catalog; Enter opens the only tool it leaves.
 function ToolsCatalog() {
 	const context = useToolReadinessContext()
+	const [query, setQuery] = useState('')
+	const groups = TOOL_GROUPS.map((group) => ({ label: group.label, tools: group.tools.filter((id) => matchesTool(TOOL_DEFINITIONS[id], query)) })).filter((group) => group.tools.length > 0)
+	const matches = groups.flatMap((group) => group.tools).filter((id) => toolStatus(TOOL_DEFINITIONS[id]) === 'available')
+
+	// Opens the only openable tool the filter leaves when Enter is pressed in it.
+	function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+		if (e.key === 'Enter' && matches.length === 1) navigate(routeState, { workspace: 'tools', tool: matches[0] })
+	}
+
+	const filter = <TextInput type="search" title="Filter tools by name or description; Enter opens the only match" placeholder="Filter tools" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown} className="w-56 max-sm:w-40" />
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Tools">
+		<WorkspaceLayout workspace="tools" title="Tools" actions={filter}>
 			<div className="h-full overflow-y-auto overscroll-contain p-4">
-				<div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2">
-					{TOOL_IDS.map((id) => {
-						const tool = TOOL_DEFINITIONS[id]
-						const planned = toolStatus(tool) === 'planned'
-						return <ToolCard key={id} tool={tool} planned={planned} readiness={toolReadiness(id, planned, context)} />
-					})}
-				</div>
+				{groups.length === 0 ? (
+					<EmptyState title="No tool matches" description="Change or clear the filter." />
+				) : (
+					<div className="flex flex-col gap-6">
+						{groups.map((group) => (
+							<section key={group.label} className="flex flex-col gap-2">
+								<SectionHeading as="h2">{group.label}</SectionHeading>
+								<div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2">
+									{group.tools.map((id) => {
+										const tool = TOOL_DEFINITIONS[id]
+										const planned = toolStatus(tool) === 'planned'
+										return <ToolCard key={id} tool={tool} planned={planned} readiness={toolReadiness(id, planned, context)} />
+									})}
+								</div>
+							</section>
+						))}
+					</div>
+				)}
 			</div>
 		</WorkspaceLayout>
 	)

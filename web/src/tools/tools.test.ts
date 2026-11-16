@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { TOOL_IDS } from '../shell/route'
-import { TOOL_DEFINITIONS, toolStatus } from './tools'
+import { matchesTool, TOOL_DEFINITIONS, TOOL_GROUPS, toolStatus } from './tools'
 
 describe('registry', () => {
 	test('lists only the standalone tools, each under its own id', () => {
@@ -47,5 +47,25 @@ describe('registry', () => {
 	test('gives every tool card an icon of its own', () => {
 		const icons = TOOL_IDS.map((id) => TOOL_DEFINITIONS[id].icon)
 		expect(new Set(icons).size).toBe(icons.length)
+	})
+
+	test('puts every tool in exactly one group', () => {
+		const grouped = TOOL_GROUPS.flatMap((group) => group.tools)
+		expect(grouped.toSorted()).toEqual([...TOOL_IDS].toSorted())
+	})
+})
+
+describe('filter', () => {
+	const satellites = TOOL_DEFINITIONS['artificial-satellites']
+
+	test('matches every word in the name or the description, ignoring case', () => {
+		expect(matchesTool(satellites, '')).toBe(true)
+		expect(matchesTool(satellites, 'SATELLITES')).toBe(true)
+		expect(matchesTool(satellites, 'celestrak passes')).toBe(true)
+		expect(matchesTool(satellites, 'satellites eclipse')).toBe(false)
+	})
+
+	test('ignores accents', () => {
+		expect(matchesTool(TOOL_DEFINITIONS['jupiter-observing-planner'], 'Júpiter')).toBe(true)
 	})
 })

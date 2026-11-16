@@ -163,4 +163,35 @@ describe('navigate', () => {
 		expect(state.route).toEqual({ workspace: 'images' })
 		expect(history.paths).toEqual(['/sky', '/images'])
 	})
+
+	test('the rail reopens the last place of Tools, and the catalog when pressed inside Tools', () => {
+		const state = newState()
+		const history = fakeHistory()
+
+		openWorkspace(state, 'tools', history)
+		navigate(state, { workspace: 'tools', tool: 'meridian-flip-monitor' }, history)
+		openWorkspace(state, 'images', history)
+		openWorkspace(state, 'tools', history)
+		expect(state.route).toEqual({ workspace: 'tools', tool: 'meridian-flip-monitor' })
+
+		openWorkspace(state, 'tools', history)
+		expect(state.route).toEqual({ workspace: 'tools' })
+
+		openWorkspace(state, 'sky', history)
+		openWorkspace(state, 'tools', history)
+		expect(state.route).toEqual({ workspace: 'tools' })
+		expect(history.paths).toEqual(['/tools', '/tools/meridian-flip-monitor', '/images', '/tools/meridian-flip-monitor', '/tools', '/sky', '/tools'])
+	})
+
+	test('a redirected Tools route is the place the rail reopens', () => {
+		const state = newState()
+		const history = fakeHistory()
+
+		navigate(state, { workspace: 'tools', tool: 'alpaca-server' }, history)
+		redirect(state, { workspace: 'tools' }, history)
+		openWorkspace(state, 'sky', history)
+		openWorkspace(state, 'tools', history)
+
+		expect(state.route).toEqual({ workspace: 'tools' })
+	})
 })

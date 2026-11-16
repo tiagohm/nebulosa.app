@@ -74,3 +74,38 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 export function toolStatus(tool: Pick<ToolDefinition, 'view'>): ToolStatus {
 	return tool.view ? 'available' : 'planned'
 }
+
+// Group of the catalog: tools that serve one moment of a night, under one heading.
+export interface ToolGroup {
+	// Heading of the group.
+	readonly label: string
+	// Tools of the group, in the order shown.
+	readonly tools: readonly ToolId[]
+}
+
+// Groups of the catalog in the order of a night: planning it, running the rig, working the frames, and the references
+// used at any time. Every tool is in exactly one group.
+export const TOOL_GROUPS: readonly ToolGroup[] = [
+	{
+		label: 'Planning',
+		tools: ['astro-weather', 'observing-planner', 'planetary-events', 'meteor-showers', 'jupiter-observing-planner', 'saturn-observing-planner', 'artificial-satellites', 'close-approaches', 'solar-eclipse-map', 'lunar-eclipse-map'],
+	},
+	{ label: 'Rig & Observatory', tools: ['meridian-flip-monitor', 'mount-remote-control', 'mount-pointing-model', 'observatory-cameras', 'alpaca-server'] },
+	{ label: 'Frames', tools: ['calibration-library', 'image-stacking'] },
+	{ label: 'Reference', tools: ['calculator', 'astronomical-time-converter', 'orbital-mechanics-explorer', 'spice-kernel-library'] },
+]
+
+// Whether a tool matches a filter: every word of the query, ignoring case and accents, is found in its name or its
+// description. An empty query matches every tool.
+export function matchesTool(tool: Pick<ToolDefinition, 'label' | 'description'>, query: string): boolean {
+	const text = foldText(`${tool.label} ${tool.description}`)
+	return foldText(query)
+		.split(/\s+/)
+		.filter(Boolean)
+		.every((word) => text.includes(word))
+}
+
+// Lowercases text and strips its diacritics, so "Júpiter" matches "jupiter".
+function foldText(text: string): string {
+	return text.normalize('NFD').replaceAll(/\p{M}/gu, '').toLowerCase()
+}

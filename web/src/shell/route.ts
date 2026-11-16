@@ -131,6 +131,9 @@ export const DEFAULT_ROUTE: Route = { workspace: 'images' }
 export interface RouteState {
 	// Current route, mirrored by the URL path.
 	route: Route
+	// Last place shown in the Tools workspace, a tool or the catalog, which the rail reopens; tab memory, never persisted,
+	// absent until Tools is first shown.
+	lastTools?: ToolsRoute
 }
 
 // Navigation store of the tab, at the default route until watchHistory runs.
@@ -207,18 +210,26 @@ export function routePath(route: Route): string {
 // what is shown: it never connects, disconnects, or stops anything.
 export function navigate(state: RouteState, route: Route, history: Pick<History, 'pushState'> = window.history) {
 	if (routePath(route) !== routePath(state.route)) history.pushState(null, '', routePath(route))
-	state.route = route
+	show(state, route)
 }
 
 // Replaces the current route without adding a history entry, for a route that cannot be shown as is.
 export function redirect(state: RouteState, route: Route, history: Pick<History, 'replaceState'> = window.history) {
 	if (routePath(route) !== routePath(state.route)) history.replaceState(null, '', routePath(route))
-	state.route = route
+	show(state, route)
 }
 
-// Opens a workspace from the navigation rail.
+// Shows a route, remembering it as the last place of Tools when it is one.
+function show(state: RouteState, route: Route) {
+	state.route = route
+	if (route.workspace === 'tools') state.lastTools = { ...route }
+}
+
+// Opens a workspace from the navigation rail. Tools reopens the last place shown in it, so a tool used between other
+// workspaces is one press away; pressed while Tools is shown, it opens the catalog.
 export function openWorkspace(state: RouteState, workspace: WorkspaceId, history: Pick<History, 'pushState'> = window.history) {
-	navigate(state, { workspace }, history)
+	if (workspace === 'tools' && state.route.workspace !== 'tools' && state.lastTools) navigate(state, state.lastTools, history)
+	else navigate(state, { workspace }, history)
 }
 
 // Loads the route of the current URL, rewriting it to its canonical path, and follows the browser's back
@@ -226,7 +237,7 @@ export function openWorkspace(state: RouteState, workspace: WorkspaceId, history
 export function watchHistory(state: RouteState, target: Window = window): () => void {
 	function sync() {
 		const route = parseRoute(target.location.pathname)
-		state.route = route
+		show(state, route)
 		if (target.location.pathname !== routePath(route)) target.history.replaceState(null, '', routePath(route) + target.location.search)
 	}
 

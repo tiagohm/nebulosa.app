@@ -4,6 +4,9 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 - Navigation: Tools → catalog card → `/tools/<id>` (`TOOL_DEFINITIONS` of `web/src/tools/tools.ts`), rendered by the tool's `view` inside its own `WorkspaceLayout`; each card shows an icon of its own, never shared with another tool.
   A tool without a view (the Alpaca Server) is planned and its URL is replaced by the catalog's.
+  The catalog shows the tools under the headings of `TOOL_GROUPS`, in the order of a night (Planning, Rig & Observatory, Frames, Reference), each tool in exactly one group.
+  A filter in the workspace actions narrows it to the tools whose name or description holds every word typed, ignoring case and accents (`matchesTool`), hides the groups left empty, and opens the only openable tool left with Enter; it is transient view state, cleared when the catalog is left.
+  The rail's Tools button reopens the last place shown in Tools, and a tool's header leads its title with `Tools /`, back to the catalog (see [UI and Layout Contracts](ui-and-layout.md)).
 - Readiness (`toolReadiness` of `web/src/tools/readiness.ts`): a card shows one word only by exception, as a `StatusBadge` whose tooltip gives the full reason, and a tool ready to use shows none.
   In order: Planned (muted, the tool cannot be opened);
   then what blocks the tool's main job for the active profile, read from the stores of the tab and never second-guessed: Needs mount (muted) for the Meridian Flip Monitor and Mount Remote Control while the profile's `MOUNT` role is not connected, with the reason of `MOUNT_ROLE_BLOCKERS`, Needs site (muted) for Astro Weather without an active observing site, and Needs MediaMTX (muted) or MediaMTX unavailable (warning) for Observatory Cameras by the status of the media gateway;

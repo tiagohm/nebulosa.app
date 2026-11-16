@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { displayValue, snapToStep, stepFractionDigits } from './numberinput.step'
+import { displayValue, isNumberText, parseNumberText, snapToStep, stepFractionDigits } from './numberinput.step'
 
 describe('stepFractionDigits', () => {
 	test('counts the decimal places of the step as written', () => {
@@ -58,5 +58,41 @@ describe('snapToStep', () => {
 		expect(snapToStep(-1, 0.1, 0.05)).toBe(0.05)
 		expect(snapToStep(10, 0.1, 0, 2.5)).toBe(2.5)
 		expect(snapToStep(1.2, 0.1, 0, 2.5)).toBe(1.2)
+	})
+})
+
+describe('parseNumberText', () => {
+	test('reads a decimal dot or comma', () => {
+		expect(parseNumberText('8.5')).toBe(8.5)
+		expect(parseNumberText('8,5')).toBe(8.5)
+		expect(parseNumberText('.5')).toBe(0.5)
+		expect(parseNumberText('8.')).toBe(8)
+		expect(parseNumberText(' 12 ')).toBe(12)
+	})
+
+	test('reads a sign, the minus sign, and an exponent', () => {
+		expect(parseNumberText('-3.76')).toBe(-3.76)
+		expect(parseNumberText('−3,76')).toBe(-3.76)
+		expect(parseNumberText('+2')).toBe(2)
+		expect(parseNumberText('1e-7')).toBe(1e-7)
+	})
+
+	test('leaves partial and malformed entries unread', () => {
+		expect(parseNumberText('')).toBeUndefined()
+		expect(parseNumberText('-')).toBeUndefined()
+		expect(parseNumberText('1e')).toBeUndefined()
+		expect(parseNumberText('1,000.5')).toBeUndefined()
+		expect(parseNumberText('1.2.3')).toBeUndefined()
+		expect(parseNumberText('0x10')).toBeUndefined()
+	})
+})
+
+describe('isNumberText', () => {
+	test('accepts what a number can be typed with and refuses anything else', () => {
+		expect(isNumberText('')).toBeTrue()
+		expect(isNumberText('-8,5e2')).toBeTrue()
+		expect(isNumberText('−1')).toBeTrue()
+		expect(isNumberText('8a')).toBeFalse()
+		expect(isNumberText('8 5')).toBeFalse()
 	})
 })

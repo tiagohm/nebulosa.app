@@ -1,6 +1,33 @@
 // Value arithmetic of NumberInput: snapping a typed or stepped value to the step grid and the bounds, and showing a
 // value that comes from outside the field, without the binary floating-point residue of a decimal number (0.1 + 0.2
 // shows 0.3, not 0.30000000000000004, and a degree value stored in radians shows 1.3, not 1.3000000000000003).
+// The typed text of the number fields (NumberInput and the value of Slider) is read here too: the fields are text
+// fields, because the browser writes a number field in its own locale (8,0 under a comma locale) whatever the page's
+// language, and every number of the interface is written with a dot.
+
+// Characters a number field accepts while typing: digits, a sign (the minus sign − included), a decimal dot or comma,
+// and an exponent.
+const NUMBER_TEXT_CHARACTERS = /^[-+−\d.,eE]*$/
+
+// A complete decimal number with an optional sign and exponent, once a comma is read as the decimal dot.
+const NUMBER_TEXT = /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i
+
+// Returns whether text holds only characters a number field accepts while typing, so the field can refuse any other
+// keystroke and keep the text typed so far.
+export function isNumberText(text: string): boolean {
+	return NUMBER_TEXT_CHARACTERS.test(text)
+}
+
+// Returns the number typed in a field: a decimal dot or comma (one of them, not both), an optional sign (- or −), and
+// an optional exponent; undefined for an empty or partial entry ("", "-", "1e") or anything else.
+export function parseNumberText(text: string): number | undefined {
+	const trimmed = text.trim().replace('−', '-')
+	if (trimmed.includes(',') && trimmed.includes('.')) return undefined
+	const normalized = trimmed.replace(',', '.')
+	if (!NUMBER_TEXT.test(normalized)) return undefined
+	const value = Number(normalized)
+	return Number.isFinite(value) ? value : undefined
+}
 
 // Largest digit count Number.prototype.toFixed accepts.
 const MAX_FRACTION_DIGITS = 100

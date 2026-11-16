@@ -1,8 +1,11 @@
 import { cn } from 'cn'
 import { useId, useState } from 'react'
+import { isNumberText, parseNumberText } from './numberinput.step'
 
 // Compact numeric control for panels: a label and a typed value on one line, with a range track below
-// for coarse changes. Values are rounded to the step and kept within the range.
+// for coarse changes. Values are rounded to the step and kept within the range. The typed value is a text field with the
+// decimal keypad, stepped with Arrow Up and Down, so it is always written with a dot whatever the browser's locale; a
+// typed comma is read as the decimal dot.
 
 export interface SliderProps {
 	// Name of the value.
@@ -46,20 +49,27 @@ export function Slider({ label, value, onChange, min, max, step, disabled, class
 					{label}
 				</label>
 				<input
-					type="number"
+					type="text"
 					inputMode="decimal"
+					autoComplete="off"
+					spellCheck={false}
 					disabled={disabled}
-					min={min}
-					max={max}
-					step={step}
 					value={draft ?? value.toFixed(decimals)}
 					onChange={(e) => {
 						const text = e.target.value
+						if (!isNumberText(text)) return
 						setDraft(text)
-						if (text !== '' && Number.isFinite(+text)) commit(+text)
+						const typed = parseNumberText(text)
+						if (typed !== undefined) commit(typed)
+					}}
+					onKeyDown={(e) => {
+						if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+						e.preventDefault()
+						setDraft(undefined)
+						commit(value + (e.key === 'ArrowUp' ? step : -step))
 					}}
 					onBlur={() => setDraft(undefined)}
-					className="box-border h-6 w-20 rounded-sm border border-line-200 bg-base-200 px-1.5 text-right font-mono text-xs text-ink-100 tabular-nums [appearance:textfield] hover:border-ink-300 focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:text-ink-300 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+					className="box-border h-6 w-20 rounded-sm border border-line-200 bg-base-200 px-1.5 text-right font-mono text-xs text-ink-100 tabular-nums hover:border-ink-300 focus:border-accent focus:outline-none disabled:cursor-not-allowed disabled:text-ink-300"
 				/>
 			</div>
 			<input id={id} type="range" disabled={disabled} min={min} max={max} step={step} value={value} onChange={(e) => commit(+e.target.value)} className="h-4 w-full cursor-pointer accent-accent disabled:cursor-not-allowed" />

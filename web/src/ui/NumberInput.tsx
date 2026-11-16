@@ -1,7 +1,7 @@
 import { cn } from 'cn'
 import { useState } from 'react'
 import { Field, InputSuffix, inputClassName, suffixPadding } from './Field'
-import { displayValue, snapToStep } from './numberinput.step'
+import { displayValue, isNumberText, parseNumberText, snapToStep } from './numberinput.step'
 
 export interface NumberInputProps {
 	readonly label?: string
@@ -22,6 +22,9 @@ export interface NumberInputProps {
 const stepButtonClassName =
 	'flex flex-[0_0_38px] cursor-pointer items-center justify-center border border-line-200 bg-base-300 p-0 text-base leading-none text-ink-100 transition-colors duration-150 not-disabled:hover:bg-accent-subtle not-disabled:hover:text-accent disabled:cursor-not-allowed disabled:bg-base-200 disabled:text-ink-300'
 
+// Numeric field with − and + step buttons, a unit suffix, and Arrow Up and Down stepping. It is a text field with the
+// decimal keypad, so the value is always written with a dot, whatever the browser's locale; a typed comma is read as
+// the decimal dot.
 export function NumberInput({ label, value, onChange, min, max, step = 1, className, classNames, disabled, suffix }: NumberInputProps) {
 	// Text being typed; undefined shows the committed value.
 	const [draft, setDraft] = useState<string>()
@@ -38,21 +41,28 @@ export function NumberInput({ label, value, onChange, min, max, step = 1, classN
 				</button>
 				<div className="relative flex min-w-0 flex-1">
 					<input
-						type="number"
+						type="text"
 						inputMode="decimal"
+						autoComplete="off"
+						spellCheck={false}
 						disabled={disabled}
-						min={min}
-						max={max}
-						step={step}
-						value={draft ?? displayValue(value, step, min, max)}
+						value={draft ?? String(displayValue(value, step, min, max))}
 						onChange={(e) => {
 							const text = e.target.value
+							if (!isNumberText(text)) return
 							setDraft(text)
-							if (text !== '' && Number.isFinite(+text)) commit(+text)
+							const typed = parseNumberText(text)
+							if (typed !== undefined) commit(typed)
+						}}
+						onKeyDown={(e) => {
+							if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+							e.preventDefault()
+							setDraft(undefined)
+							commit(value + (e.key === 'ArrowUp' ? step : -step))
 						}}
 						onBlur={() => setDraft(undefined)}
 						style={suffix ? { paddingRight: suffixPadding(suffix) } : undefined}
-						className={cn(inputClassName, 'relative flex-1 rounded-none text-center tabular-nums [appearance:textfield] focus:z-1 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none', classNames?.input)}
+						className={cn(inputClassName, 'relative flex-1 rounded-none text-center tabular-nums focus:z-1', classNames?.input)}
 					/>
 					{suffix && <InputSuffix>{suffix}</InputSuffix>}
 				</div>

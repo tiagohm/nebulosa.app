@@ -49,6 +49,8 @@
 	--color-success: #6cc28a;
 	--color-warning: #e9a13b;
 	--color-info: #6ba6e8;
+	/* Backdrop behind a modal or the contextual panel drawer, used with an opacity modifier (bg-scrim/72). */
+	--color-scrim: #0a0a09;
 
 	--radius-sm: 6px;
 	--radius-md: 10px;

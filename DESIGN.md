@@ -19,6 +19,7 @@ colors:
     success: '#6cc28a'
     warning: '#e9a13b'
     info: '#6ba6e8'
+    scrim: '#0a0a09'
 typography:
     headline:
         fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
@@ -192,6 +193,7 @@ A warm, low-light palette: near-black surfaces with a faint olive warmth, cream 
 - **Starlight Cream** (`ink-100`): primary text, values, titles.
 - **Moonlight** (`ink-200`): secondary text, panel body copy, panel headings, idle icons.
 - **Zodiacal Gray** (`ink-300`): muted text. Labels of data rows, notes, placeholders, disabled text, section headings, unit suffixes.
+- **Night Veil** (`scrim`): the backdrop behind floating layers, never a surface. Always used translucent: 72 % behind a modal, 60 % behind the contextual panel drawer.
 
 ### Signal
 
@@ -251,8 +253,8 @@ The resting interface is flat. Depth is tonal: Deep Night frames and viewers, Ni
 ### Shadow Vocabulary
 
 - **Float** (`box-shadow: 0 12px 32px rgb(0 0 0 / 0.45)`): popovers, select listboxes, context menus, search results, notification panel.
-- **Dialog** (`box-shadow: 0 24px 64px rgb(0 0 0 / 0.55)`): modals, over a `rgb(10 10 9 / 0.72)` scrim with a light backdrop blur.
-- **Drawer** (`box-shadow: -16px 0 48px rgb(0 0 0 / 0.45)`): the contextual panel as a drawer below 1024 px, over a `rgb(10 10 9 / 0.6)` scrim.
+- **Dialog** (`box-shadow: 0 24px 64px rgb(0 0 0 / 0.55)`): modals, over Night Veil at 72 % (`bg-scrim/72`) with a light backdrop blur.
+- **Drawer** (`box-shadow: -16px 0 48px rgb(0 0 0 / 0.45)`): the contextual panel as a drawer below 1024 px, over Night Veil at 60 % (`bg-scrim/60`).
 
 ### Named Rules
 

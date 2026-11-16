@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 2,
-	"generatedAt": "2026-11-16T17:06:24.549Z",
+	"generatedAt": "2026-11-16T17:17:02.362Z",
 	"title": "Design System: Nebulosa",
 	"extensions": {
 		"colorMeta": {
@@ -105,6 +105,12 @@
 				"displayName": "Vega Blue",
 				"canonical": "#6ba6e8",
 				"tonalRamp": ["oklch(15% 0.065 252.2)", "oklch(25% 0.095 252.2)", "oklch(35% 0.115 252.2)", "oklch(45% 0.115 252.2)", "oklch(55% 0.115 252.2)", "oklch(65% 0.115 252.2)", "oklch(80% 0.081 252.2)", "oklch(95% 0.024 252.2)"]
+			},
+			"scrim": {
+				"role": "neutral",
+				"displayName": "Night Veil",
+				"canonical": "#0a0a09",
+				"tonalRamp": ["oklch(15% 0.002 106.6)", "oklch(25% 0.002 106.6)", "oklch(35% 0.002 106.6)", "oklch(45% 0.002 106.6)", "oklch(55% 0.002 106.6)", "oklch(65% 0.002 106.6)", "oklch(80% 0.001 106.6)", "oklch(95% 0.000 106.6)"]
 			}
 		},
 		"typographyMeta": {
@@ -146,12 +152,12 @@
 			{
 				"name": "dialog",
 				"value": "0 24px 64px rgb(0 0 0 / 0.55)",
-				"purpose": "Modals, over a rgb(10 10 9 / 0.72) scrim with a light backdrop blur."
+				"purpose": "Modals, over Night Veil at 72 % (bg-scrim/72) with a light backdrop blur."
 			},
 			{
 				"name": "drawer",
 				"value": "-16px 0 48px rgb(0 0 0 / 0.45)",
-				"purpose": "The contextual panel as a drawer below 1024 px, over a rgb(10 10 9 / 0.6) scrim."
+				"purpose": "The contextual panel as a drawer below 1024 px, over Night Veil at 60 % (bg-scrim/60)."
 			}
 		],
 		"motion": [

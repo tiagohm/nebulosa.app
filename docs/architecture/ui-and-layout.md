@@ -91,7 +91,8 @@ Visual language (`web/src/index.css`, Tailwind 4 `@theme`):
   borders `line-100`, `line-200`;
   text `ink-100` (primary), `ink-200` (secondary), `ink-300` (muted);
   `accent`, `accent-hover`, `accent-subtle` (selected backgrounds), `on-accent`;
-  `danger`, `success`, `warning`, `info`.
+  `danger`, `success`, `warning`, `info`;
+  `scrim`, the backdrop behind a floating layer, always with an opacity modifier (`bg-scrim/72` behind a modal, `bg-scrim/60` behind the contextual panel drawer).
   A new colour is added as a token, never as a literal in a component.
 - Radii `rounded-sm` (6 px), `rounded-md` (10 px), `rounded-lg` (16 px), `rounded-xl` (24 px).
   Panel headings are small uppercase `ink-200` text; dense panels use `text-xs`.

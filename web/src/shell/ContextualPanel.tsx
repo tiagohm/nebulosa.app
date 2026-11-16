@@ -27,7 +27,7 @@ export interface ContextualPanelProps {
 export function ContextualPanel({ title, actions, open, docked, onClose, children }: ContextualPanelProps) {
 	return (
 		<>
-			{!docked && open && <button type="button" title="Close panel" onClick={onClose} className="absolute inset-0 z-20 cursor-default border-0 bg-[rgb(10_10_9/0.6)] p-0" />}
+			{!docked && open && <button type="button" title="Close panel" onClick={onClose} className="absolute inset-0 z-20 cursor-default border-0 bg-scrim/60 p-0" />}
 			<aside
 				inert={!open}
 				onKeyDown={(e) => !docked && e.key === 'Escape' && onClose()}

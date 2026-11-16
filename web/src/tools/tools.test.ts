@@ -53,6 +53,10 @@ describe('registry', () => {
 		const grouped = TOOL_GROUPS.flatMap((group) => group.tools)
 		expect(grouped.toSorted()).toEqual([...TOOL_IDS].toSorted())
 	})
+
+	test('keeps every card summary within two lines of the narrowest card', () => {
+		for (const id of TOOL_IDS) expect(TOOL_DEFINITIONS[id].summary.length).toBeLessThanOrEqual(40)
+	})
 })
 
 describe('filter', () => {
@@ -63,6 +67,7 @@ describe('filter', () => {
 		expect(matchesTool(satellites, 'SATELLITES')).toBe(true)
 		expect(matchesTool(satellites, 'celestrak passes')).toBe(true)
 		expect(matchesTool(satellites, 'satellites eclipse')).toBe(false)
+		expect(matchesTool(satellites, 'ground tracks')).toBe(true)
 	})
 
 	test('ignores accents', () => {

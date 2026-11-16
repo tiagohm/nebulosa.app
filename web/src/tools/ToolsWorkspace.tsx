@@ -189,8 +189,9 @@ interface ToolCardProps {
 	readonly onFocus: () => void
 }
 
-// Catalog card of a tool: what it does and, by exception, its readiness; clicking a tool that is not planned opens it,
-// even when its readiness says what it lacks.
+// Catalog card of a tool: its summary (hidden on a phone, where the name alone keeps the list short), the full
+// description as its tooltip, and, by exception, its readiness; clicking a tool that is not planned opens it, even when
+// its readiness says what it lacks.
 function ToolCard({ tool, planned, readiness, tabStop, onFocus }: ToolCardProps) {
 	return (
 		<button
@@ -199,9 +200,9 @@ function ToolCard({ tool, planned, readiness, tabStop, onFocus }: ToolCardProps)
 			tabIndex={tabStop ? 0 : -1}
 			onFocus={onFocus}
 			disabled={planned}
-			title={planned ? readiness?.reason : undefined}
+			title={planned ? `${tool.description} ${readiness?.reason ?? ''}`.trim() : tool.description}
 			onClick={() => navigate(routeState, { workspace: 'tools', tool: tool.id })}
-			className="flex items-start gap-3 rounded-md border border-line-100 bg-base-000 p-3 text-left font-mono text-inherit transition-colors duration-150 not-disabled:cursor-pointer not-disabled:hover:border-line-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-default motion-reduce:transition-none"
+			className="flex items-start gap-3 rounded-md max-sm:items-center border border-line-100 bg-base-000 p-3 text-left font-mono text-inherit transition-colors duration-150 not-disabled:cursor-pointer not-disabled:hover:border-line-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-default motion-reduce:transition-none"
 		>
 			<span className="flex size-9 flex-none items-center justify-center rounded-sm bg-base-200 text-ink-200">
 				<Icon name={tool.icon} />
@@ -211,7 +212,7 @@ function ToolCard({ tool, planned, readiness, tabStop, onFocus }: ToolCardProps)
 					<span className="min-w-0 text-sm leading-5 font-semibold text-ink-100">{tool.label}</span>
 					{readiness && <StatusBadge tone={readiness.tone} label={readiness.label} title={readiness.reason} />}
 				</span>
-				<span className="text-xs leading-4 text-ink-200">{tool.description}</span>
+				<span className="line-clamp-2 text-sm leading-5 text-pretty text-ink-200 max-sm:hidden">{tool.summary}</span>
 			</span>
 		</button>
 	)

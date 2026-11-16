@@ -2,10 +2,11 @@ import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from
 import { useSnapshot } from 'valtio'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { useActiveSite } from '../location/useLocation'
-import { navigate, redirect, routeState, type ToolId } from '../shell/route'
+import { navigate, openWorkspace, redirect, routeState, type ToolId } from '../shell/route'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
+import { LinkButton } from '../ui/LinkButton'
 import { moveIndex } from '../ui/navigation'
 import { SectionHeading } from '../ui/SectionHeading'
 import { StatusBadge } from '../ui/StatusBadge'
@@ -81,6 +82,7 @@ function ToolsCatalog() {
 	const [query, setQuery] = useState('')
 	const [current, setCurrent] = useState(catalogMemory.tool)
 	const scrollRef = useRef<HTMLDivElement>(null)
+	const filterRef = useRef<HTMLInputElement>(null)
 	const groups = TOOL_GROUPS.map((group) => ({ label: group.label, tools: group.tools.filter((id) => matchesTool(TOOL_DEFINITIONS[id], query)) })).filter((group) => group.tools.length > 0)
 	const openable = groups.flatMap((group) => group.tools).filter((id) => toolStatus(TOOL_DEFINITIONS[id]) === 'available')
 	const tabStop = current !== undefined && openable.includes(current) ? current : openable[0]
@@ -118,17 +120,38 @@ function ToolsCatalog() {
 		focusCard(openable[index])
 	}
 
-	const filter = <TextInput type="search" title="Filter tools by name or description; Enter opens the only match, ArrowDown moves to the tools" placeholder="Filter tools" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleFilterKeyDown} className="w-56 max-sm:w-40" />
+	// Clears the filter and keeps the focus in it, so the next query can be typed at once.
+	function clearFilter() {
+		setQuery('')
+		filterRef.current?.focus()
+	}
+
+	const filter = (
+		<TextInput
+			ref={filterRef}
+			type="search"
+			title="Find a tool by what it does, such as dew, FOV, Moon, or flip; Enter opens the only match, ArrowDown moves to the tools"
+			placeholder="Filter tools"
+			value={query}
+			onChange={(e) => setQuery(e.target.value)}
+			onKeyDown={handleFilterKeyDown}
+			className="w-56 max-sm:w-40"
+		/>
+	)
 
 	return (
 		<WorkspaceLayout workspace="tools" title="Tools" actions={filter}>
 			<div ref={scrollRef} className="h-full overflow-y-auto overscroll-contain p-4">
 				{groups.length === 0 ? (
 					<EmptyState
-						title="No tool matches"
-						description={`No tool name or description holds every word of "${query.trim()}".`}
+						title={`No tool matches "${query.trim()}"`}
+						description={
+							<>
+								Plate solving, star detection, focusing, guiding, and polar alignment are in <LinkButton onClick={() => openWorkspace(routeState, 'images')}>Images</LinkButton>; framing and finding objects are in <LinkButton onClick={() => openWorkspace(routeState, 'sky')}>Sky</LinkButton>.
+							</>
+						}
 						action={
-							<Button variant="secondary" onClick={() => setQuery('')}>
+							<Button variant="secondary" onClick={clearFilter}>
 								Clear Filter
 							</Button>
 						}

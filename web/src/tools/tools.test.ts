@@ -73,4 +73,14 @@ describe('filter', () => {
 	test('ignores accents', () => {
 		expect(matchesTool(TOOL_DEFINITIONS['jupiter-observing-planner'], 'Júpiter')).toBe(true)
 	})
+
+	test('finds a tool by the words of its keywords', () => {
+		const found = (query: string) => TOOL_IDS.filter((id) => matchesTool(TOOL_DEFINITIONS[id], query))
+		expect(found('dew')).toEqual(['calculator'])
+		expect(found('fov')).toEqual(['calculator'])
+		expect(found('critical focus')).toEqual(['calculator'])
+		expect(found('moon')).toContain('lunar-eclipse-map')
+		expect(found('iss')).toEqual(['artificial-satellites'])
+		expect(found('pier side')).toEqual(['meridian-flip-monitor'])
+	})
 })

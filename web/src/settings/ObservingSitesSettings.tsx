@@ -73,11 +73,10 @@ export function ObservingSitesSettings({ site: routeSite }: ObservingSitesSettin
 			<Modal open={pending !== undefined} onClose={() => setPending(undefined)} title="Discard unsaved changes?" className="max-w-md">
 				<p className="m-0 text-sm leading-5 text-ink-200">The changes to {creating ? 'the new site' : selected?.name} were not saved. Showing another site discards them.</p>
 				<ModalActions>
-					<Button variant="secondary" onClick={() => setPending(undefined)}>
+					<Button variant="secondary" onClick={() => setPending(undefined)} data-autofocus>
 						Keep Editing
 					</Button>
 					<Button
-						data-autofocus
 						onClick={() => {
 							if (pending) show(pending)
 							setPending(undefined)

@@ -79,11 +79,10 @@ export function ExternalToolsSettings({ tool }: ExternalToolsSettingsProps) {
 			<Modal open={pending !== undefined} onClose={() => setPending(undefined)} title="Discard unsaved changes?" className="max-w-md">
 				<p className="m-0 text-sm leading-5 text-ink-200">The changes to {selected?.name} were not saved. Showing another external tool discards them.</p>
 				<ModalActions>
-					<Button variant="secondary" onClick={() => setPending(undefined)}>
+					<Button variant="secondary" onClick={() => setPending(undefined)} data-autofocus>
 						Keep Editing
 					</Button>
 					<Button
-						data-autofocus
 						onClick={() => {
 							if (pending) show(pending)
 							setPending(undefined)

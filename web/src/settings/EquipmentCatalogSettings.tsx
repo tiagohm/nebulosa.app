@@ -72,11 +72,10 @@ export function EquipmentCatalogSettings({ camera: routeCamera }: EquipmentCatal
 			<Modal open={pending !== undefined} onClose={() => setPending(undefined)} title="Discard unsaved changes?" className="max-w-md">
 				<p className="m-0 text-sm leading-5 text-ink-200">The changes to {creating ? 'the new camera' : selected?.name} were not saved. Showing another camera discards them.</p>
 				<ModalActions>
-					<Button variant="secondary" onClick={() => setPending(undefined)}>
+					<Button variant="secondary" onClick={() => setPending(undefined)} data-autofocus>
 						Keep Editing
 					</Button>
 					<Button
-						data-autofocus
 						onClick={() => {
 							if (pending) show(pending)
 							setPending(undefined)

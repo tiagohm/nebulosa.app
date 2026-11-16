@@ -17,7 +17,8 @@ export interface ConfirmButtonProps extends Omit<ButtonProps, 'onClick'> {
 }
 
 // Button that opens a confirmation dialog and runs its command only once confirmed; Cancel or closing the dialog runs
-// nothing.
+// nothing. The dialog opens with Cancel focused, so a stray Enter or Space never runs the command: confirming takes a
+// deliberate move to the confirm button.
 export function ConfirmButton({ title, message, confirmLabel, onConfirm, size = 'md', variant = 'secondary', ...props }: ConfirmButtonProps) {
 	const [open, setOpen] = useState(false)
 
@@ -27,11 +28,10 @@ export function ConfirmButton({ title, message, confirmLabel, onConfirm, size = 
 			<Modal open={open} onClose={() => setOpen(false)} title={title} className="max-w-md">
 				<div className="m-0 text-sm leading-5 text-ink-200">{message}</div>
 				<ModalActions>
-					<Button variant="secondary" onClick={() => setOpen(false)}>
+					<Button variant="secondary" onClick={() => setOpen(false)} data-autofocus>
 						Cancel
 					</Button>
 					<Button
-						data-autofocus
 						onClick={() => {
 							setOpen(false)
 							onConfirm()

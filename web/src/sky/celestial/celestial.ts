@@ -24,6 +24,7 @@ import {
 	writeViewMatrix,
 } from './geometry'
 import { anchoredTransform, beginGesture, type GestureAnchor, type GesturePointer, gestureTransform } from './gesture'
+import { StarLabelPlacement } from './labels'
 import { BackgroundLayer, CONSTELLATION_LABEL_MIN_ZOOM, ConstellationBoundaryLayer, ConstellationLabelLayer, ConstellationLineLayer, DeepSkyObjectLayer, GridLayer, HorizonLayer, InteractionOverlayLayer, MilkyWayLayer, MovingBodyLayer, ReferenceLineLayer, ShapeLayer, StarLayer } from './layers'
 import { resolveOptions, validateObserver, validateProjection } from './options'
 import { FixedGridSpatialIndex, isPickableLayerId, movingBodyLayerId, objectLayerId, PICK_TYPE_CONSTELLATION_LABEL, PICK_TYPE_DSO, PICK_TYPE_MOVING_BODY, PICK_TYPE_SHAPE, PICK_TYPE_STAR, type PickIndex, pickMatchesObject, sameObject } from './picking'
@@ -150,6 +151,10 @@ export class Celestial {
 
 	readonly #options: ResolvedCelestialOptions
 	#renderState: Writable<RenderState> | null = null
+	// Number of the last frame rendered (RenderState.frame).
+	#frame = 0
+	// Star names of the frame, shared by the star and deep-sky layers.
+	readonly #starLabels = new StarLabelPlacement()
 	#cachedRect: DOMRect | null = null
 	#starCatalog: StarCatalog | null = null
 	#deepSkyCatalog: DeepSkyCatalog | null = null
@@ -655,7 +660,7 @@ export class Celestial {
 		}
 
 		layer.visible = visible
-		layer.markDirty()
+		this.#renderer.markDirty(layerId)
 		this.#options.layers[layerId] = visible
 
 		if (isPickableLayerId(layerId)) {
@@ -888,6 +893,9 @@ export class Celestial {
 			layer.visible = this.#options.layers[layer.id] ?? true
 			this.#renderer.addLayer(layer, LAYER_CANVAS_GROUPS[layer.id] ?? layer.id)
 		}
+
+		// Deep-sky names avoid the star names of the frame, so the two canvases redraw together.
+		this.#renderer.linkLayers('stars', 'deepSky')
 	}
 
 	// Centers the view on the zenith (north up) in horizontal views, or on RA 0, Dec 0 (celestial north up)
@@ -1417,6 +1425,7 @@ export class Celestial {
 		const emitRenderEnd = this.#emitter.has('renderEnd')
 		const start = emitRenderEnd ? performance.now() : 0
 		emitRenderStart && this.#emitter.emit('renderStart', { time: this.#options.time })
+		this.#frame++
 		this.#renderer.render(this.createRenderState())
 
 		if (emitRenderEnd) {
@@ -1450,6 +1459,8 @@ export class Celestial {
 			this.#renderState = state
 		}
 
+		state.frame = this.#frame
+		state.starLabels = this.#starLabels
 		state.width = options.width
 		state.height = options.height
 		state.dpr = this.#renderer.devicePixelRatio

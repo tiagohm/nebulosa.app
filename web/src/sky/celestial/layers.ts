@@ -28,11 +28,12 @@ import {
 	writeProjectedSample,
 } from './drawing'
 import { angularDistance, applyViewTransform, isFiniteDiskProjection, isPointInsideViewportMargin, normalizeVector, writeBaseViewportBounds, writeRaDecUnitVector } from './geometry'
+import type { StarLabelPlacement } from './labels'
 import { DEFAULT_STAR_OPTIONS, DEFAULT_THEME, TRANSPARENT } from './options'
 import { movingBodyLayerId, sameObject } from './picking'
 import { meanObliquity } from './time'
 import type { CelestialObject, CelestialShape, ConstellationLine, MilkyWayRing, MilkyWayStep, MutableShapeRenderState, RenderState, ResolvedReferenceLineOptions, StarLayerOptions, ThemeOptions } from './types'
-import { isDeepSkyLabelVisible, isDeepSkyObjectVisible, isMovingBodyVisible, starLabelMagnitudeLimit, starSymbolMagnitudeLimit, stateDensityZoom } from './visibility'
+import { isDeepSkyLabelVisible, isDeepSkyObjectVisible, isMovingBodyVisible, starSymbolMagnitudeLimit, stateDensityZoom } from './visibility'
 
 // Built-in Canvas layers of the star map, drawn back to front by z-index: background, horizon, Milky Way,
 // coordinate grid, reference lines, constellations, deep-sky objects, stars, moving bodies, labels, custom
@@ -54,9 +55,6 @@ const STAR_SQUARE_MAX_RADIUS = 1.25
 
 // Side of a square per unit of radius of the disc of the same area, √π.
 const SQRT_PI = Math.sqrt(Math.PI)
-
-// Minimum screen distance in pixels between star labels; higher reduces overlap but shows fewer labels.
-const STAR_LABEL_MIN_SPACING = 36
 
 // Distance in pixels grid boundary labels are moved inward from the projection disk edge.
 const GRID_BOUNDARY_LABEL_INSET = 8
@@ -848,8 +846,8 @@ export class MilkyWayLayer extends InternalLayer {
 	}
 }
 
-// Deep-sky object symbols and labels; a label that would overlap one already drawn in the frame is left out (the
-// hover and selection overlay still names its object).
+// Deep-sky object symbols and labels; a label that would overlap a star name of the frame or one already drawn is left
+// out (the hover and selection overlay still names its object).
 export class DeepSkyObjectLayer extends InternalLayer {
 	private readonly point = new Float32Array(2)
 	private readonly labelPoint = new Float32Array(2)
@@ -876,6 +874,7 @@ export class DeepSkyObjectLayer extends InternalLayer {
 		catalog.beginLabelRender()
 		this.labelBoxCount = 0
 		const labelHeight = (skyLabelSize(state, 9) / 9) * DSO_LABEL_BOX_HEIGHT
+		const starLabels = state.starLabels.place(ctx, state)
 
 		for (let i = 0; i < catalog.visibleCount; i++) {
 			const index = catalog.visibleIndices[i]
@@ -896,7 +895,7 @@ export class DeepSkyObjectLayer extends InternalLayer {
 			if (object.name && isDeepSkyLabelVisible(object, state)) {
 				ctx.fillStyle = state.theme.deepSky.labelColor
 
-				if (positionSkyLabel(ctx, state, object.name, this.point[0], this.point[1], 10, -2, this.labelPoint) && this.claimLabelBox(this.labelPoint[0], this.labelPoint[1], ctx.measureText(object.name).width, labelHeight)) {
+				if (positionSkyLabel(ctx, state, object.name, this.point[0], this.point[1], 10, -2, this.labelPoint) && this.claimLabelBox(starLabels, this.labelPoint[0], this.labelPoint[1], ctx.measureText(object.name).width, labelHeight)) {
 					ctx.fillText(object.name, this.labelPoint[0], this.labelPoint[1])
 					catalog.recordLabelVisible(index)
 				}
@@ -907,12 +906,14 @@ export class DeepSkyObjectLayer extends InternalLayer {
 	}
 
 	// Records the box of a label starting at (x, y), vertically centred, `width` by `height` pixels, and returns true,
-	// unless it would overlap (within DSO_LABEL_GAP) a box recorded earlier in the frame, which returns false.
-	private claimLabelBox(x: number, y: number, width: number, height: number) {
+	// unless it would overlap (within DSO_LABEL_GAP) a star name placed for the frame or a box recorded earlier in the
+	// frame, which returns false.
+	private claimLabelBox(starLabels: StarLabelPlacement, x: number, y: number, width: number, height: number) {
 		const left = x - DSO_LABEL_GAP
 		const top = y - height / 2 - DSO_LABEL_GAP
 		const right = x + width + DSO_LABEL_GAP
 		const bottom = y + height / 2 + DSO_LABEL_GAP
+		if (starLabels.overlaps(left, top, right, bottom)) return false
 		const boxes = this.labelBoxes
 
 		for (let i = 0; i < this.labelBoxCount * 4; i += 4) {
@@ -1002,12 +1003,7 @@ export class StarLayer extends InternalLayer {
 	private styles = buildStarStyles(DEFAULT_THEME, DEFAULT_STAR_OPTIONS, 1)
 	// Theme and option values the styles were built from.
 	private styleSignature = ''
-	private readonly point = new Float32Array(2)
-	private readonly labelPoint = new Float32Array(2)
 	private readonly baseViewportBounds = new Float64Array(4)
-	private labelIndices = new Int32Array(0)
-	private labelX = new Float32Array(0)
-	private labelY = new Float32Array(0)
 
 	// Creates the star layer.
 	constructor() {
@@ -1103,94 +1099,22 @@ export class StarLayer extends InternalLayer {
 		ctx.restore()
 	}
 
-	// Labels bright enough named stars in the viewport, skipping labels too close to drawn ones.
+	// Draws the star names placed for the frame (see StarLabelPlacement of ./labels), recording them as drawn.
 	private renderStarLabels(ctx: CanvasRenderingContext2D, state: RenderState, catalog: StarCatalog) {
 		catalog.beginLabelRender()
-
-		if (!state.stars.labels || !catalog.namedIndices || catalog.namedIndices.length === 0) return
-
-		const maxMagnitude = starLabelMagnitudeLimit(state)
-		let labelCount = 0
-		this.ensureLabelCapacity(catalog.namedIndices.length)
-		writeBaseViewportBounds(state.width, state.height, state.transform, 0, this.baseViewportBounds)
-
-		for (let i = 0; i < catalog.namedIndices.length; i++) {
-			const index = catalog.namedIndices[i]
-			const magnitude = catalog.mag[index]
-
-			if (!catalog.visible[index] || magnitude > maxMagnitude) {
-				continue
-			}
-
-			const x = catalog.screenX[index]
-			const y = catalog.screenY[index]
-
-			if (x < this.baseViewportBounds[0] || x > this.baseViewportBounds[1] || y < this.baseViewportBounds[2] || y > this.baseViewportBounds[3]) {
-				continue
-			}
-
-			applyViewTransform(x, y, state.width, state.height, state.transform, this.point)
-			this.labelIndices[labelCount] = index
-			this.labelX[labelCount] = this.point[0]
-			this.labelY[labelCount] = this.point[1]
-			labelCount++
-		}
-
-		if (labelCount === 0) return
+		const placed = state.starLabels.place(ctx, state)
+		if (placed.count === 0) return
 
 		ctx.fillStyle = state.theme.stars.labelColor
 		ctx.font = state.theme.stars.labelFont
 		ctx.textAlign = 'left'
 		ctx.textBaseline = 'middle'
 
-		let drawn = 0
-
-		for (let i = 0; i < labelCount; i++) {
-			const index = this.labelIndices[i]
-			const name = catalog.names[index]
-
-			if (!name || !positionSkyLabel(ctx, state, name, this.labelX[i], this.labelY[i], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) {
-				continue
-			}
-
-			const x = this.labelPoint[0]
-			const y = this.labelPoint[1]
-
-			if (this.hasNearbyLabel(drawn, x, y)) {
-				continue
-			}
-
-			this.labelX[drawn] = x
-			this.labelY[drawn] = y
-			drawn++
-			ctx.fillText(name, x, y)
+		for (let i = 0; i < placed.count; i++) {
+			const index = placed.index(i)
+			ctx.fillText(catalog.names[index] ?? '', placed.labelX(i), placed.labelY(i))
 			catalog.recordLabelVisible(index)
 		}
-	}
-
-	// Grows the label scratch arrays to at least `capacity` entries.
-	private ensureLabelCapacity(capacity: number) {
-		if (this.labelIndices.length >= capacity) return
-
-		this.labelIndices = new Int32Array(capacity)
-		this.labelX = new Float32Array(capacity)
-		this.labelY = new Float32Array(capacity)
-	}
-
-	// Returns whether one of the first `drawn` labels lies closer than the minimum spacing to (x, y).
-	private hasNearbyLabel(drawn: number, x: number, y: number) {
-		const minDistanceSquared = STAR_LABEL_MIN_SPACING * STAR_LABEL_MIN_SPACING
-
-		for (let i = 0; i < drawn; i++) {
-			const dx = this.labelX[i] - x
-			const dy = this.labelY[i] - y
-
-			if (dx * dx + dy * dy < minDistanceSquared) {
-				return true
-			}
-		}
-
-		return false
 	}
 
 	// Rebuilds the sprite styles when the theme or star options they depend on changed.

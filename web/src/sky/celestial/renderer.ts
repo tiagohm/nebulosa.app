@@ -31,6 +31,8 @@ export class CanvasRenderer {
 	private readonly groups: LayerGroupRecord[] = []
 	private readonly groupsById = new Map<string, LayerGroupRecord>()
 	private readonly layersById = new Map<string, InternalLayer>()
+	// Layers each layer redraws with (see linkLayers).
+	private readonly links = new Map<string, readonly string[]>()
 	// Device pixel ratio of the backing stores.
 	private dpr = 1
 	// Requested root width in pixels, used while the root has no layout size.
@@ -154,9 +156,17 @@ export class CanvasRenderer {
 		}
 	}
 
-	// Marks one layer dirty.
+	// Makes two layers redraw together from now on: marking either dirty marks both, for layers on different canvases
+	// whose drawing depends on each other, such as names placed against each other's.
+	linkLayers(a: string, b: string) {
+		this.links.set(a, [...(this.links.get(a) ?? []), b])
+		this.links.set(b, [...(this.links.get(b) ?? []), a])
+	}
+
+	// Marks one layer dirty, and the layers linked to it.
 	markDirty(id: string) {
 		this.layersById.get(id)?.markDirty()
+		for (const linked of this.links.get(id) ?? []) this.layersById.get(linked)?.markDirty()
 	}
 
 	// Returns a layer by id.

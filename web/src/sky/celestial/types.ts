@@ -4,6 +4,7 @@ import type { NumberArray } from 'nebulosa/src/math/numerical/math'
 import type { Angle } from 'nebulosa/src/math/units/angle'
 import type { DeepSkyCatalog, StarCatalog } from './catalog'
 import type { Celestial } from './celestial'
+import type { StarLabelPlacement } from './labels'
 
 // Public and shared types of the Celestial star map: input data, options, theme, render state, picked
 // objects, and events. Angles are radians unless a name says otherwise; screen values are CSS pixels.
@@ -437,6 +438,10 @@ export type ProjectionToScreen = (a: number, b: number, out: NumberArray) => boo
 export interface RenderState {
 	// Owning map.
 	readonly celestial: Celestial
+	// Number of the frame, increasing by one per render; keys work shared by the layers within one frame.
+	readonly frame: number
+	// Star names placed for the frame, drawn by the star layer and avoided by the deep-sky names.
+	readonly starLabels: StarLabelPlacement
 	// Canvas width in pixels.
 	readonly width: number
 	// Canvas height in pixels.

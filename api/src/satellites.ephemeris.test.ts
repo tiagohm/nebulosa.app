@@ -98,11 +98,11 @@ test('the orbital speed follows vis-viva', () => {
 	expect(ephemeris.position(GEO, GEO.epoch).speedKmPerSecond).toBeCloseTo(3.07, 1)
 })
 
-test('the next crossings of the umbra bound the eclipse, and an orbit without one has none', () => {
+test('the next crossings of the umbra bound the eclipse, and an orbit without one has none', async () => {
 	const ephemeris = new SatelliteEphemeris(covered)
 	const shadow = (time: number) => ephemeris.position(ISS, time).shadow
-	const sunlit = ephemeris.shadowCrossings(ISS, ISS.epoch)
-	const { entry, exit } = sunlit as Required<typeof sunlit>
+	const sunlit = await ephemeris.shadowCrossings(ISS, ISS.epoch)
+	const { entry, exit } = sunlit as Required<NonNullable<typeof sunlit>>
 	const period = ephemeris.orbit(ISS).periodMinutes * 60_000
 
 	expect(entry).toBeGreaterThan(ISS.epoch)
@@ -113,17 +113,26 @@ test('the next crossings of the umbra bound the eclipse, and an orbit without on
 	expect(shadow(exit + 2000)).not.toBe('umbra')
 
 	// In the shadow, the exit of this eclipse comes first and the next entry an orbit after the last one.
-	const eclipsed = ephemeris.shadowCrossings(ISS, entry + 60_000)
+	const eclipsed = (await ephemeris.shadowCrossings(ISS, entry + 60_000))!
 	expect(eclipsed.exit).toBe(exit)
 	expect(eclipsed.entry! - entry).toBeCloseTo(period, -5)
 
 	// The answer kept from the first search is the one a new search gives, to the root finder's tolerance.
-	const fresh = new SatelliteEphemeris(covered).shadowCrossings(ISS, entry + 60_000)
+	const fresh = (await new SatelliteEphemeris(covered).shadowCrossings(ISS, entry + 60_000))!
 	expect(Math.abs(fresh.exit! - eclipsed.exit!)).toBeLessThan(1000)
 	expect(Math.abs(fresh.entry! - eclipsed.entry!)).toBeLessThan(1000)
 
 	// A geostationary orbit in August stays out of the umbra, the Sun about 13° north of the equator.
-	expect(ephemeris.shadowCrossings(GEO, GEO.epoch)).toEqual({ entry: undefined, exit: undefined })
+	expect(await ephemeris.shadowCrossings(GEO, GEO.epoch)).toEqual({ entry: undefined, exit: undefined })
+})
+
+test('readings during a search of the crossings of the umbra wait for the same search', async () => {
+	const ephemeris = new SatelliteEphemeris(covered)
+	const [first, second] = await Promise.all([ephemeris.shadowCrossings(ISS, ISS.epoch), ephemeris.shadowCrossings(ISS, ISS.epoch + 5000)])
+	expect(second).toEqual(first)
+	// SGP4 cannot propagate a decayed orbit: the position fails, and the crossings are absent rather than wrong.
+	const decayed = elementsOf(tle('1 99999U 98067A   23231.51768399  .50000000  00000+0  50000-0 0  9996', '2 99999  51.6415  14.7889 0003559 325.3396 149.4637 16.40000000411611'))
+	expect(await ephemeris.shadowCrossings(decayed, decayed.epoch + 30 * DAY)).toBeUndefined()
 })
 
 test('a pass across a day boundary of the search is one pass, as in a single search', async () => {
@@ -197,7 +206,7 @@ test('a ground track spans an orbit before the instant and the orbits after it, 
 	expect(track.end).toBe(Math.round(time + 2 * period))
 	expect(track.truncated).toBeFalse()
 	expect(track.times).toHaveLength(Math.floor((track.end - track.start) / track.step) + 1)
-	for (const values of [track.latitude, track.longitude, track.heightKm, track.footprint, track.shadow, track.sunLatitude, track.sunLongitude]) expect(values).toHaveLength(track.times.length)
+	for (const values of [track.latitude, track.longitude, track.heightKm, track.footprint, track.speedKmPerSecond, track.shadow, track.sunLatitude, track.sunLongitude]) expect(values).toHaveLength(track.times.length)
 
 	// The subpoint stays within the inclination and agrees with the position, longitudes in (−π, π].
 	expect(Math.max(...track.latitude.map(Math.abs)) / DEG2RAD).toBeLessThan(51.8)
@@ -208,6 +217,15 @@ test('a ground track spans an orbit before the instant and the orbits after it, 
 	expect(track.longitude[100]).toBeCloseTo(position.subpointLongitude, 9)
 	expect(track.heightKm[100]).toBeCloseTo(position.heightKm, 6)
 	expect(track.shadow[100]).toBe(position.shadow)
+	expect(track.speedKmPerSecond[100]).toBeCloseTo(position.speedKmPerSecond, 9)
+
+	// The crossings of the umbra are those of the position's search, an entry and an exit an orbit.
+	const crossings = (await ephemeris.shadowCrossings(ISS, time))!
+	expect(track.shadowEntries.length).toBeGreaterThanOrEqual(2)
+	expect(track.shadowExits.length).toBeGreaterThanOrEqual(2)
+	expect(Math.abs(track.shadowEntries.find((entry) => entry > time)! - crossings.entry!)).toBeLessThan(1000)
+	expect(Math.abs(track.shadowExits.find((exit) => exit > time)! - crossings.exit!)).toBeLessThan(1000)
+	for (const entry of track.shadowEntries) expect(track.shadow[Math.ceil((entry - track.start) / track.step)]).toBe('umbra')
 
 	// About 420 km high, the ISS is seen up to about 20° from its subpoint, and it crosses the Earth's shadow every orbit.
 	expect(track.heightKm[0]).toBeGreaterThan(400)

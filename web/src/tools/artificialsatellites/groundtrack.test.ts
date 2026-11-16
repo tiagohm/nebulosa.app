@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test'
 import type { SatelliteGroundTrack } from 'api'
-import { groundTrackAt, groundTrackRuns, observerInFootprint } from './groundtrack'
+import { groundTrackAt, groundTrackRuns, groundTrackShadowCrossings, observerInFootprint } from './groundtrack'
 
 const RAD = Math.PI / 180
 
-// Four samples along the equator a minute apart, across the antimeridian, entering the Earth's shadow at the third.
+// Four samples along the equator a minute apart, across the antimeridian, entering the Earth's shadow at the third and
+// leaving it after the last.
 const TRACK: SatelliteGroundTrack = {
 	start: 0,
 	end: 180_000,
@@ -15,7 +16,10 @@ const TRACK: SatelliteGroundTrack = {
 	longitude: [170 * RAD, 178 * RAD, -174 * RAD, -166 * RAD],
 	heightKm: [400, 410, 420, 430],
 	footprint: [20 * RAD, 20 * RAD, 20 * RAD, 20 * RAD],
+	speedKmPerSecond: [7.6, 7.62, 7.64, 7.66],
 	shadow: ['sunlit', 'sunlit', 'umbra', 'umbra'],
+	shadowEntries: [100_000],
+	shadowExits: [200_000],
 	sunLatitude: [10 * RAD, 10 * RAD, 10 * RAD, 10 * RAD],
 	sunLongitude: [179 * RAD, 179.5 * RAD, -180 * RAD, -179.5 * RAD],
 	truncated: false,
@@ -27,6 +31,7 @@ test('a point between samples follows the great circle across the antimeridian',
 	expect(point.subpoint.latitude).toBeCloseTo(0, 9)
 	expect(point.heightKm).toBeCloseTo(415, 9)
 	expect(point.footprint).toBeCloseTo(20, 9)
+	expect(point.speedKmPerSecond).toBeCloseTo(7.63, 9)
 	expect(point.shadow).toBe('umbra')
 	expect(point.subsolar.longitude).toBeCloseTo(179.75, 1)
 	expect(groundTrackAt(TRACK, 0)!.subpoint.longitude).toBeCloseTo(170, 9)
@@ -65,4 +70,16 @@ test('an observer is in the footprint within its radius of the subpoint', () => 
 	expect(observerInFootprint({ latitude: 20.1, longitude: 170 }, point)).toBeFalse()
 	expect(observerInFootprint({ latitude: 0, longitude: -170.1 }, point)).toBeTrue()
 	expect(observerInFootprint({ latitude: 0, longitude: -169.9 }, point)).toBeFalse()
+})
+
+test('the next sunset and sunrise after an instant are in time order, and absent past the end of the track', () => {
+	expect(groundTrackShadowCrossings(TRACK, 0)).toEqual([
+		{ kind: 'sunset', time: 100_000 },
+		{ kind: 'sunrise', time: 200_000 },
+	])
+	expect(groundTrackShadowCrossings({ ...TRACK, shadowEntries: [100_000, 250_000] }, 150_000)).toEqual([
+		{ kind: 'sunrise', time: 200_000 },
+		{ kind: 'sunset', time: 250_000 },
+	])
+	expect(groundTrackShadowCrossings(TRACK, 200_000)).toEqual([])
 })

@@ -129,6 +129,7 @@ test('imported elements predict positions, passes, and ephemerides', async () =>
 
 	const position = (await call(routes, '/api/satellites/:noradId/position', 'POST', { noradId: '25544' }, { time: ISS_EPOCH + DAY, observer: SITE })) as Reply<SatellitePositionResponse>
 	expect(position.body).toMatchObject({ position: { center: 'topocentric', time: ISS_EPOCH + DAY }, elements: { digest: details.body.elements!.digest }, quality: { suitability: 'usable', elementAgeDays: 1 } })
+	expect(position.body.shadowCrossings?.entry).toBeNumber()
 
 	const passes = (await call(routes, '/api/satellites/:noradId/passes', 'POST', { noradId: '25544' }, { observer: SITE, start: ISS_EPOCH, end: ISS_EPOCH + DAY, minAltitude: 0, maxSunAltitude: -0.1 })) as Reply<SatellitePassesResponse>
 	expect(passes.body.passes.length).toBeGreaterThan(3)

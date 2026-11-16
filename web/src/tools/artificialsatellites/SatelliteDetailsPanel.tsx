@@ -13,7 +13,7 @@ import { Notice } from '../../ui/Notice'
 import { ObjectTitle } from '../../ui/ObjectTitle'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { useNow } from '../../useNow'
-import { artificialSatellitesState, formatElementAge, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
+import { artificialSatellitesState, formatElementAge, POSITION_REFRESH_MS, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 
 // Contextual panel of Artificial Satellites: the satellite selected, its position now for the observing site of the
 // active profile (read again every POSITION_REFRESH_MS, its time in the display zone), its orbit, and where its elements
@@ -85,11 +85,12 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 	const orbit = details?.orbit
 	const elements = details?.elements
 	const p = position?.position
+	const shadowCrossings = position?.shadowCrossings
 	const crossings =
-		position &&
+		shadowCrossings &&
 		[
-			{ label: 'Satellite sunset', time: position.shadowCrossings.entry },
-			{ label: 'Satellite sunrise', time: position.shadowCrossings.exit },
+			{ label: 'Satellite sunset', time: shadowCrossings.entry },
+			{ label: 'Satellite sunrise', time: shadowCrossings.exit },
 		]
 			.filter((crossing): crossing is { label: string; time: number } => crossing.time !== undefined)
 			.sort((a, b) => a.time - b.time)
@@ -146,7 +147,7 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 							<QualityRow quality={position.quality} />
 						</DataList>
 					)}
-					<Notice>{observer ? 'Read every 15 seconds for the observing site of the profile.' : "Read every 15 seconds from the Earth's center: set the observing site of the profile to see the altitude and the passes."}</Notice>
+					<Notice>{observer ? `Read every ${POSITION_REFRESH_MS / 1000} seconds for the observing site of the profile.` : `Read every ${POSITION_REFRESH_MS / 1000} seconds from the Earth's center: set the observing site of the profile to see the altitude and the passes.`}</Notice>
 					{!observer && (
 						<Button variant="ghost" className="self-start" onClick={() => openObservingSites()}>
 							Set Location

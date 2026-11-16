@@ -20,7 +20,7 @@ import { SatelliteSettings } from './SatelliteSettings'
 
 // Artificial Satellites tool: the satellite catalog of the server (search, favorites of the profile), the passes and
 // ephemeris of the satellite selected for the observing site of the active profile (the tool has no place of its own),
-// with its position now read again every 15 seconds, and its ground track on the world map, which follows the real
+// with its position now read again every 5 seconds, and its ground track on the world map, which follows the real
 // time on the same tick. Civil times are shown in the profile's display zone. The view is chosen in the header, beside
 // the title, as the Images tool is, and its workspace actions hold the Import Elements popover and the Settings of the
 // tool, where the CelesTrak groups are downloaded on request or automatically. It commands no device and changes the

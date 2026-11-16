@@ -4,8 +4,8 @@ import { interpolateTrack } from '../../sky/satellites.track'
 import { type GeoPoint, splitAtAntimeridian } from '../../ui/worldmap.geometry'
 
 // Ground track of a satellite on the world map, from the samples of the server: the point of an instant between two
-// samples, the runs of the line before and after an instant and in and out of the Earth's shadow, and whether an
-// observer sees the satellite. Interpolation only places points between the server's samples; it is not a new
+// samples, the runs of the line before and after an instant and in and out of the Earth's shadow, the satellite's next
+// sunset and sunrise after an instant, and whether an observer sees the satellite. Interpolation only places points between the server's samples; it is not a new
 // prediction. Times are Unix milliseconds (UTC); the server's angles are radians, the map's degrees.
 
 // Illumination of a satellite by the Sun.
@@ -21,6 +21,8 @@ export interface GroundTrackPoint {
 	readonly heightKm: number
 	// Angular radius of the region that sees the satellite above the horizon, degrees (spherical Earth, ideal horizon).
 	readonly footprint: number
+	// Orbital speed relative to the Earth's center, km/s.
+	readonly speedKmPerSecond: number
 	// Illumination at the nearer sample.
 	readonly shadow: GroundTrackShadow
 	// Point below the Sun, degrees (longitude in (−180, 180]).
@@ -50,7 +52,7 @@ function slerp(times: readonly number[], latitude: readonly number[], longitude:
 }
 
 // Returns the ground track at an instant between two samples: the subpoint and the subsolar point on great circles, the
-// height and footprint linearly, and the illumination of the nearer sample; undefined outside the samples.
+// height, footprint, and speed linearly, and the illumination of the nearer sample; undefined outside the samples.
 export function groundTrackAt(track: SatelliteGroundTrack, time: number): GroundTrackPoint | undefined {
 	const { times } = track
 	const subpoint = slerp(times, track.latitude, track.longitude, time)
@@ -68,7 +70,26 @@ export function groundTrackAt(track: SatelliteGroundTrack, time: number): Ground
 
 	const f = times[j] === times[i] ? 0 : (time - times[i]) / (times[j] - times[i])
 	const linear = (values: readonly number[]) => values[i] + (values[j] - values[i]) * f
-	return { time, subpoint, heightKm: linear(track.heightKm), footprint: linear(track.footprint) * RAD2DEG, shadow: track.shadow[f < 0.5 ? i : j], subsolar }
+	return { time, subpoint, heightKm: linear(track.heightKm), footprint: linear(track.footprint) * RAD2DEG, speedKmPerSecond: linear(track.speedKmPerSecond), shadow: track.shadow[f < 0.5 ? i : j], subsolar }
+}
+
+// Crossing of the Earth's umbra by a satellite: its sunset (entry) or sunrise (exit).
+export interface GroundTrackShadowCrossing {
+	// Entry into the umbra or exit from it.
+	readonly kind: 'sunset' | 'sunrise'
+	// Instant, Unix milliseconds (UTC).
+	readonly time: number
+}
+
+// Returns the next sunset and the next sunrise of the satellite after an instant (Unix milliseconds, UTC) within the
+// track, in time order; one or none near the end of the track.
+export function groundTrackShadowCrossings(track: SatelliteGroundTrack, time: number): GroundTrackShadowCrossing[] {
+	const entry = track.shadowEntries.find((crossing) => crossing > time)
+	const exit = track.shadowExits.find((crossing) => crossing > time)
+	const crossings: GroundTrackShadowCrossing[] = []
+	if (entry !== undefined) crossings.push({ kind: 'sunset', time: entry })
+	if (exit !== undefined) crossings.push({ kind: 'sunrise', time: exit })
+	return crossings.sort((a, b) => a.time - b.time)
 }
 
 // Returns the runs of the track: a new run where the illumination changes, at the sample where it does, and at the

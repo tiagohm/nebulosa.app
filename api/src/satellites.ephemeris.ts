@@ -60,20 +60,37 @@ const SHADOW_SEARCH_MAX_MINUTES = 2 * DAYMIN
 const LOW_ORBIT_SHADOW_STEP = 60 * ONE_SECOND
 const HIGH_ORBIT_SHADOW_STEP = 300 * ONE_SECOND
 
+// Tolerance of the instant of a crossing of the umbra, in days: half a second, as the times are shown to the second, which
+// saves the root finder a few evaluations at about 0.5 ms each.
+const SHADOW_CROSSING_TOLERANCE = 0.5 * ONE_SECOND
+
 // Searches of the crossings of the umbra kept, by element digest.
 const SHADOW_CACHE_SIZE = 64
 
-// Crossings of the umbra of an element set found from `start` over twice the span of a query, so every query from `start`
-// to `start + span` is answered from them. A search costs about a tenth of a second for a low orbit and a third for a
-// geostationary one, so the position read every few seconds does not repeat it.
+// Samples of the search for the crossings of the umbra between two turns of the event loop: about 20 ms of computation.
+const SHADOW_SEARCH_BATCH = 50
+
+// Crossings of the umbra closer than this are one found twice, at the boundary between two parts of a search, in
+// milliseconds.
+const SHADOW_CROSSING_TOLERANCE_MS = 1000
+
+// Crossings of the umbra found over a span, Unix milliseconds (UTC), increasing.
+interface ShadowCrossingTimes {
+	readonly entries: readonly number[]
+	readonly exits: readonly number[]
+}
+
+// Search of the crossings of the umbra of an element set from `start` over twice the span of a query, so every query from
+// `start` to `start + span` is answered from it. A search costs about a tenth of a second of computation for a low orbit
+// and a third for a geostationary one, spread over turns of the event loop; the readings that arrive meanwhile wait for
+// the same search instead of starting their own.
 interface ShadowCrossingSearch {
 	// Start of the search, Unix milliseconds (UTC).
 	readonly start: number
 	// Span searched after the instant of a query, milliseconds.
 	readonly span: number
-	// Entries into the umbra and exits from it found, Unix milliseconds (UTC), increasing.
-	readonly entries: readonly number[]
-	readonly exits: readonly number[]
+	// Crossings found; undefined when SGP4 failed in the span.
+	readonly crossings: Promise<ShadowCrossingTimes | undefined>
 }
 
 // Largest number of passes, rows of an ephemeris, objects of a Sky series, samples of a Sky series, and samples of a
@@ -302,8 +319,15 @@ export interface SatelliteGroundTrack {
 	// Geocentric half-angle of the region that sees the satellite above the horizon, radians: a spherical Earth with an
 	// ideal horizon, without terrain, refraction, or a minimum altitude.
 	readonly footprint: readonly number[]
+	// Orbital speed: the speed relative to the Earth's center in inertial axes, km/s.
+	readonly speedKmPerSecond: readonly number[]
 	// Illumination by the Sun: sunlit, in the Earth's penumbra, or in its umbra.
 	readonly shadow: readonly SatelliteShadowState[]
+	// Entries into the umbra and exits from it between the first sample and the last, Unix milliseconds (UTC),
+	// increasing: found between two samples on either side of the umbra's boundary, so an eclipse shorter than the step
+	// can be missed.
+	readonly shadowEntries: readonly number[]
+	readonly shadowExits: readonly number[]
 	// Geodetic latitude and east longitude of the point below the Sun, radians (longitude in (−π, π]).
 	readonly sunLatitude: readonly number[]
 	readonly sunLongitude: readonly number[]
@@ -381,6 +405,36 @@ function joinPasses(first: SatelliteWindowPass, second: SatelliteWindowPass): Sa
 // Converts a toolkit pass event to the API's.
 function passPoint(event: SatellitePassEvent): SatellitePassPoint {
 	return { time: timeToUnixMillis(event.time), azimuth: event.azimuth, altitude: event.altitude, rangeKm: event.range * AU_KM }
+}
+
+// Returns the crossings of the umbra between two instants (Unix milliseconds, UTC), searched every `step` days in parts
+// of SHADOW_SEARCH_BATCH samples, letting the event loop run between parts; undefined when SGP4 fails. A part that starts
+// in the shadow gives the exit of an eclipse whose entry the part before gave, and a crossing on the boundary of two parts
+// found by both is kept once.
+async function findShadowCrossings(record: SatRec, start: number, end: number, step: number): Promise<ShadowCrossingTimes | undefined> {
+	const part = SHADOW_SEARCH_BATCH * step * 86_400_000
+	const entries: number[] = []
+	const exits: number[] = []
+	const add = (times: number[], time: Time | undefined) => {
+		if (!time) return
+		const ms = timeToUnixMillis(time)
+		if (times.length === 0 || ms - times.at(-1)! > SHADOW_CROSSING_TOLERANCE_MS) times.push(ms)
+	}
+
+	try {
+		for (let from = start; from < end; from += part) {
+			if (from > start) await yieldToEventLoop(undefined)
+
+			for (const eclipse of satelliteEclipses(record, sunAt, timeUnix(from / 1000, true), timeUnix(Math.min(end, from + part) / 1000, true), { step, tolerance: SHADOW_CROSSING_TOLERANCE })) {
+				add(entries, eclipse.entry)
+				add(exits, eclipse.exit)
+			}
+		}
+	} catch {
+		return undefined
+	}
+
+	return { entries, exits }
 }
 
 // Orbital period of a prepared record, minutes.
@@ -515,8 +569,8 @@ export class SatelliteEphemeris {
 
 	// Finds the next entry into the Earth's umbra and the next exit from it after an instant (Unix milliseconds, UTC),
 	// within SHADOW_SEARCH_ORBITS orbits and at most SHADOW_SEARCH_MAX_MINUTES, from a search of the element set kept until
-	// the instant leaves it. Throws when SGP4 fails in the span.
-	shadowCrossings(elements: SatelliteElementSet, time: number): SatelliteShadowCrossings {
+	// the instant leaves it. Resolves undefined when SGP4 fails in the span searched.
+	async shadowCrossings(elements: SatelliteElementSet, time: number): Promise<SatelliteShadowCrossings | undefined> {
 		let search = this.#shadowSearches.get(elements.digest)
 
 		if (!search || time < search.start || time > search.start + search.span) {
@@ -524,23 +578,21 @@ export class SatelliteEphemeris {
 			this.#shadowSearches.set(elements.digest, search)
 		}
 
+		const crossings = await search.crossings
+		if (!crossings) return undefined
 		const end = time + search.span
 		const next = (times: readonly number[]) => times.find((crossing) => crossing > time && crossing <= end)
-		return { entry: next(search.entries), exit: next(search.exits) }
+		return { entry: next(crossings.entries), exit: next(crossings.exits) }
 	}
 
-	// Searches the crossings of the umbra of an element set from an instant (Unix milliseconds, UTC) over twice the span
-	// of a query.
+	// Starts the search of the crossings of the umbra of an element set from an instant (Unix milliseconds, UTC) over
+	// twice the span of a query.
 	#searchShadowCrossings(elements: SatelliteElementSet, time: number): ShadowCrossingSearch {
 		const record = this.record(elements)
 		const period = periodOf(record)
 		const minutes = Math.min(period * SHADOW_SEARCH_ORBITS, SHADOW_SEARCH_MAX_MINUTES)
 		const step = period < LOW_ORBIT_PERIOD_MINUTES ? LOW_ORBIT_SHADOW_STEP : HIGH_ORBIT_SHADOW_STEP
-		const start = timeUnix(time / 1000, true)
-		const eclipses = satelliteEclipses(record, sunAt, start, timeShift(start, (2 * minutes) / DAYMIN), { step })
-		const entries = eclipses.flatMap((eclipse) => (eclipse.entry ? [timeToUnixMillis(eclipse.entry)] : []))
-		const exits = eclipses.flatMap((eclipse) => (eclipse.exit ? [timeToUnixMillis(eclipse.exit)] : []))
-		return { start: time, span: minutes * 60_000, entries, exits }
+		return { start: time, span: minutes * 60_000, crossings: findShadowCrossings(record, time, time + 2 * minutes * 60_000, step) }
 	}
 
 	// Finds the passes of a satellite over an observer between two instants (Unix milliseconds, UTC), with the parts of
@@ -630,6 +682,7 @@ export class SatelliteEphemeris {
 		const longitude: number[] = []
 		const heightKm: number[] = []
 		const footprint: number[] = []
+		const speedKmPerSecond: number[] = []
 		const shadow: SatelliteShadowState[] = []
 		const sunLatitude: number[] = []
 		const sunLongitude: number[] = []
@@ -645,12 +698,27 @@ export class SatelliteEphemeris {
 			longitude.push(below.longitude)
 			heightKm.push(below.elevation * AU_KM)
 			footprint.push(satelliteGroundFootprint(record, t).halfAngle)
+			speedKmPerSecond.push((vecLength(sgp4(t, record)[1]) * AU_KM) / DAYSEC)
 			shadow.push(satelliteShadowState(record, sunAt, t))
 			sunLatitude.push(sun.latitude)
 			sunLongitude.push(sun.longitude)
 		}
 
-		return { start, end: truncated ? times.at(-1)! : end, step, periodMinutes, times, latitude, longitude, heightKm, footprint, shadow, sunLatitude, sunLongitude, truncated }
+		// The crossings are refined only between two samples on either side of the umbra's boundary, a few per orbit, with
+		// the illumination already sampled.
+		const shadowEntries: number[] = []
+		const shadowExits: number[] = []
+
+		for (let i = 0; i < times.length - 1; i++) {
+			if ((shadow[i] === 'umbra') === (shadow[i + 1] === 'umbra')) continue
+
+			for (const eclipse of satelliteEclipses(record, sunAt, timeUnix(times[i] / 1000, true), timeUnix(times[i + 1] / 1000, true), { step: (times[i + 1] - times[i]) / 86_400_000, tolerance: SHADOW_CROSSING_TOLERANCE })) {
+				if (eclipse.entry) shadowEntries.push(timeToUnixMillis(eclipse.entry))
+				if (eclipse.exit) shadowExits.push(timeToUnixMillis(eclipse.exit))
+			}
+		}
+
+		return { start, end: truncated ? times.at(-1)! : end, step, periodMinutes, times, latitude, longitude, heightKm, footprint, speedKmPerSecond, shadow, shadowEntries, shadowExits, sunLatitude, sunLongitude, truncated }
 	}
 
 	// Samples the track of a satellite for the Sky map every `step` milliseconds from `start` to `end` (Unix

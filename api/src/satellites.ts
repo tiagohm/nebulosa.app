@@ -103,13 +103,17 @@ export interface SatellitePositionRequest {
 	readonly observer?: SkyObserver
 }
 
-// Answer of POST /api/satellites/:noradId/position.
-export interface SatellitePositionResponse {
+// Position of an object at an instant, with the element set it came from and its quality.
+export interface SatelliteLocation {
 	readonly position: SatellitePosition
-	// Next crossings of the Earth's umbra after the instant.
-	readonly shadowCrossings: SatelliteShadowCrossings
 	readonly elements: SatelliteElementsRef
 	readonly quality: SatelliteQuality
+}
+
+// Answer of POST /api/satellites/:noradId/position.
+export interface SatellitePositionResponse extends SatelliteLocation {
+	// Next crossings of the Earth's umbra after the instant; absent when SGP4 fails in the span searched.
+	readonly shadowCrossings?: SatelliteShadowCrossings
 }
 
 // Body of POST /api/satellites/:noradId/passes.
@@ -329,16 +333,23 @@ export class SatelliteService {
 		return elements ? { object, elements: this.ephemeris.elementsRef(elements), orbit: this.ephemeris.orbit(elements), elementSets } : { object, elementSets }
 	}
 
-	// Computes the position of an object at an instant. Throws notFound, noElements, or predictionUnreliable when SGP4
-	// fails.
-	position(noradId: string, { time, observer }: SatellitePositionRequest): SatellitePositionResponse {
+	// Computes the position of an object at an instant and the next crossings of the Earth's umbra after it. Rejects
+	// with notFound, noElements, or predictionUnreliable when SGP4 fails at the instant.
+	async position(noradId: string, request: SatellitePositionRequest): Promise<SatellitePositionResponse> {
+		const location = this.locate(noradId, request)
+		const shadowCrossings = await this.ephemeris.shadowCrossings(this.#elements(noradId), request.time)
+		return shadowCrossings ? { ...location, shadowCrossings } : location
+	}
+
+	// Computes the position of an object at an instant, without the crossings of the umbra, for the Sky. Throws notFound,
+	// noElements, or predictionUnreliable when SGP4 fails.
+	locate(noradId: string, { time, observer }: SatellitePositionRequest): SatelliteLocation {
 		const object = this.#object(noradId)
 		const elements = this.#elements(noradId)
 
 		try {
 			const position = this.ephemeris.position(elements, time, observer)
-			const shadowCrossings = this.ephemeris.shadowCrossings(elements, time)
-			return { position, shadowCrossings, elements: this.ephemeris.elementsRef(elements), quality: this.ephemeris.quality(elements, [time], object.decayDate) }
+			return { position, elements: this.ephemeris.elementsRef(elements), quality: this.ephemeris.quality(elements, [time], object.decayDate) }
 		} catch (error) {
 			throw this.#unreliable(elements, [time], object, error)
 		}
@@ -505,7 +516,7 @@ export function satelliteSkyAdapter(service: SatelliteService): SkySatellites {
 			})),
 		position: (noradId, time, observer) => {
 			try {
-				return skyPositionOf(service.position(noradId, { time, observer }).position)
+				return skyPositionOf(service.locate(noradId, { time, observer }).position)
 			} catch (error) {
 				if (error instanceof SatelliteError) throw new SkySatelliteError(error.message, error.status, error.code)
 				throw error
@@ -598,7 +609,7 @@ export function createSatelliteRoutes(service: SatelliteService) {
 		'/api/satellites/:noradId/position': {
 			// Position at an instant (SatellitePositionRequest, SatellitePositionResponse); 404 notFound or noElements, 422
 			// predictionUnreliable.
-			POST: (req) => handle(async () => Response.json(service.position(noradIdOf(req), (await req.json()) as SatellitePositionRequest) satisfies SatellitePositionResponse)),
+			POST: (req) => handle(async () => Response.json((await service.position(noradIdOf(req), (await req.json()) as SatellitePositionRequest)) satisfies SatellitePositionResponse)),
 		},
 		'/api/satellites/:noradId/passes': {
 			// Passes over an observer (SatellitePassesRequest, SatellitePassesResponse); 404 notFound or noElements, 422

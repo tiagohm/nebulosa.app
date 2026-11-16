@@ -4,7 +4,7 @@ import { formatDateTime } from '../../format'
 import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../../http'
 import { type GeographicLocation, locationKey, siteObserver } from '../../location/site'
 import { navigate, type RouteState, routeState } from '../../shell/route'
-import { setSkyTime, SKY_REALTIME_TICK_MS, type SkyClock, skyClock, skyTime } from '../../sky/clock'
+import { setSkyTime, type SkyClock, skyClock, skyTime } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
 import { browserSkyIo, selectSkyObject, type SkyIo, type SkyState, skyState } from '../../sky/sky'
 
@@ -22,8 +22,10 @@ import { browserSkyIo, selectSkyObject, type SkyIo, type SkyState, skyState } fr
 const HOUR_MS = 3_600_000
 const DAY_MS = 86_400_000
 
-// Interval between two readings of the position now, in milliseconds: the real-time tick of the Sky.
-export const POSITION_REFRESH_MS = SKY_REALTIME_TICK_MS
+// Interval between two readings of the position now, in milliseconds: five seconds, a third of the Sky's real-time tick, so
+// the altitude and the motion keep up with a low orbit. A reading costs the server under a millisecond; the crossings of
+// the umbra it answers with come from a search kept for 1.5 orbits.
+export const POSITION_REFRESH_MS = 5000
 
 // Rows of a page of the catalog.
 export const CATALOG_PAGE_SIZE = 50

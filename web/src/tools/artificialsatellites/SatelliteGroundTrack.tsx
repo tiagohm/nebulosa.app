@@ -1,7 +1,7 @@
 import type { SatelliteGroundTrack as SatelliteGroundTrackData } from 'api'
 import { useEffect, useMemo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDateTime, formatGeographic, formatKilometers } from '../../format'
+import { formatClockDuration, formatClockTime, formatDateTime, formatGeographic, formatKilometers } from '../../format'
 import type { GeographicLocation } from '../../location/site'
 import type { DisplayZone } from '../../location/zone'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -13,13 +13,14 @@ import { WorldMap, type WorldMapHandle, WorldMapSymbol } from '../../ui/WorldMap
 import { geoPath, horizonRegionPath, smallCircleRegion } from '../../ui/worldmap.geometry'
 import { EclipseMapLegend } from '../eclipse/EclipseMapParts'
 import { artificialSatellitesState, type GroundTrackLayers, groundTrackInstant, loadSatelliteGroundTrack, MAX_GROUND_TRACK_ORBITS, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
-import { type GroundTrackPoint, type GroundTrackShadow, groundTrackAt, groundTrackRuns, observerInFootprint } from './groundtrack'
+import { type GroundTrackPoint, type GroundTrackShadow, groundTrackAt, groundTrackRuns, groundTrackShadowCrossings, observerInFootprint } from './groundtrack'
 
 // Ground Track tab of Artificial Satellites: the path of the point below the satellite selected on the world map, from
 // one orbit before an instant (the real current time, which it follows, or the Sky's) to the orbits asked for after it,
 // dashed before the instant and solid after it, fainter in the Earth's shadow, with the satellite, the region that sees
 // it above the horizon, the night side, and the observing site of the active profile at the instant shown, in the
-// display zone. A cursor chooses another instant of the window, which Show in Sky opens in the Sky. The footprint is a spherical Earth with an ideal horizon. Zooming,
+// display zone, its orbital speed, and its next sunset and sunrise (the crossings of the Earth's umbra the server found
+// along the track) counted from that instant. A cursor chooses another instant of the window, which Show in Sky opens in the Sky. The footprint is a spherical Earth with an ideal horizon. Zooming,
 // panning, moving the cursor, and hiding a layer ask the server for nothing.
 
 // Stroke width, in screen pixels, and classes of the track by illumination.
@@ -112,6 +113,7 @@ export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackPro
 
 	const following = anchor?.start === 'now' && cursor === undefined
 	const inside = point && site ? observerInFootprint(site, point) : undefined
+	const crossings = track && point ? groundTrackShadowCrossings(track, point.time) : []
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
@@ -182,7 +184,12 @@ export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackPro
 						<span>{following ? 'Now, following the real time' : 'Chosen instant'}</span>
 						<span className="font-mono text-ink-200 tabular-nums">{formatGeographic(point.subpoint.latitude, point.subpoint.longitude)}</span>
 						<span>Height {formatKilometers(point.heightKm)}</span>
+						<span>Speed {point.speedKmPerSecond.toFixed(3)} km/s</span>
 						<span>{SHADOW_LABELS[point.shadow]}</span>
+						{crossings.map((crossing) => (
+							<span key={crossing.kind}>{`${crossing.kind === 'sunset' ? 'Sunset' : 'Sunrise'} ${formatClockTime(crossing.time, timeZone, { seconds: true })} (in ${formatClockDuration((crossing.time - point.time) / 1000)})`}</span>
+						))}
+						{crossings.length === 0 && <span>No sunset or sunrise until the end of the track</span>}
 						{inside !== undefined && <span>{inside ? "Above the site's horizon" : "Below the site's horizon"}</span>}
 						<span>
 							Period {track.periodMinutes.toFixed(1)} min{track.truncated ? ' · later samples were left out' : ''}

@@ -62,15 +62,15 @@
    low-chroma hues that tell the map's kinds apart without glowing, so the Ember accent stays the selection alone. The
    rest of the map draws in the ink and line neutrals. */
 @theme static {
-	--color-map-horizon: #9a8460;
-	--color-map-equator: #8fa3b8;
-	--color-map-ecliptic: #c4a86e;
-	--color-map-meridian: #ad93a8;
-	--color-map-deep-sky: #8ea68f;
-	--color-map-planet: #e6d08f;
-	--color-map-asteroid: #a08a72;
-	--color-map-comet: #9fb7b0;
-	--color-map-radiant: #c98f98;
+	--color-map-horizon: oklch(0.6 0.08 40);
+	--color-map-equator: oklch(0.6 0.08 250);
+	--color-map-ecliptic: oklch(0.6 0.08 325);
+	--color-map-meridian: oklch(0.6 0.08 145);
+	--color-map-deep-sky: oklch(0.6 0.08 100);
+	--color-map-planet: oklch(0.6 0.08 310);
+	--color-map-asteroid: oklch(0.6 0.08 60);
+	--color-map-comet: oklch(0.6 0.08 90);
+	--color-map-radiant: oklch(0.6 0.08 360);
 }
 
 @layer base {

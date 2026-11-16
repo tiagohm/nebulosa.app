@@ -52,7 +52,7 @@ import type {
 	ViewState,
 	ViewTransform,
 } from './types'
-import { deepSkyMagnitude, isDeepSkyObjectVisibleAtZoom, isMovingBodyVisibleAtZoom, movingBodyMagnitude, starSymbolMagnitudeLimitAtZoom } from './visibility'
+import { deepSkyMagnitude, densityZoom, isDeepSkyObjectVisibleAtZoom, isMovingBodyVisibleAtZoom, movingBodyMagnitude, starSymbolMagnitudeLimitAtZoom } from './visibility'
 
 export { StarCatalog } from './catalog'
 export { drawSelectionReticle } from './drawing'
@@ -1319,13 +1319,15 @@ export class Celestial {
 
 		if (this.isLayerVisible('deepSky')) {
 			const deepSkyCatalog = this.#deepSkyCatalog
+			// The density zoom the deep-sky layer draws with, so only drawn objects are picked.
+			const deepSkyZoom = densityZoom(this.#transform.k, projectionScale(this.#options.width, this.#options.height, this.#options.projection))
 
 			if (deepSkyCatalog) {
 				for (let i = 0; i < deepSkyCatalog.visibleCount; i++) {
 					const index = deepSkyCatalog.visibleIndices[i]
 					const object = deepSkyCatalog.objects[index]
 
-					if (!isDeepSkyObjectVisibleAtZoom(object, this.#transform.k)) {
+					if (!isDeepSkyObjectVisibleAtZoom(object, deepSkyZoom)) {
 						continue
 					}
 
@@ -1352,7 +1354,7 @@ export class Celestial {
 
 		const labels = this.#constellations.labels ?? []
 
-		if (this.isLayerVisible('constellationLabels') && this.#transform.k >= CONSTELLATION_LABEL_MIN_ZOOM) {
+		if (this.isLayerVisible('constellationLabels') && densityZoom(this.#transform.k, projectionScale(this.#options.width, this.#options.height, this.#options.projection)) >= CONSTELLATION_LABEL_MIN_ZOOM) {
 			for (let i = 0; i < labels.length; i++) {
 				const label = labels[i]
 

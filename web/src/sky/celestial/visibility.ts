@@ -4,7 +4,15 @@ import type { DeepSkyObject, MovingBody, RenderState } from './types'
 
 // Zoom-dependent magnitude limits of the star map: bright objects and labels show at base zoom and fainter
 // ones appear progressively while zooming in, shared by the layers and picking so both agree on what is
-// visible. Magnitudes are visual magnitudes; a zoom octave doubles the zoom factor.
+// visible. Magnitudes are visual magnitudes; a zoom octave doubles the zoom factor. Deep-sky objects and the names of
+// stars, deep-sky objects, and constellations follow the density zoom, which also counts the size of the projection disk: a small disk
+// (a phone) holds the whole sky in fewer pixels, so it shows what a proportionally lower zoom would.
+
+// Radius in pixels of the base projection disk at which the limits read as designed (a desktop map); larger disks
+// read the same.
+const DENSITY_REFERENCE_RADIUS = 360
+// Smallest share of the zoom a small disk counts, 0 to 1; keeps a tiny map from emptying.
+const DENSITY_MIN_SHARE = 0.35
 
 // Star magnitude shown at base zoom; higher shows more faint stars initially.
 const STAR_SYMBOL_BASE_MAGNITUDE = 6
@@ -24,16 +32,16 @@ const DSO_DEFAULT_MAGNITUDE = 10
 const DSO_SYMBOL_BASE_MAGNITUDE = 7
 // Extra deep-sky magnitude unlocked per zoom octave.
 const DSO_SYMBOL_MAGNITUDE_PER_ZOOM = 1.9
-// Lower bound of the deep-sky magnitude limit when zoomed out.
-const DSO_SYMBOL_MIN_MAGNITUDE = 6
+// Lower bound of the deep-sky magnitude limit when zoomed out or on a small disk.
+const DSO_SYMBOL_MIN_MAGNITUDE = 5
 // Faintest deep-sky symbol ever shown; caps visual density.
 const DSO_SYMBOL_MAX_MAGNITUDE = 14.5
 // Deep-sky label magnitude shown at base zoom.
 const DSO_LABEL_BASE_MAGNITUDE = 4.5
 // Extra labeled deep-sky magnitude unlocked per zoom octave.
 const DSO_LABEL_MAGNITUDE_PER_ZOOM = 2.5
-// Lower bound of the deep-sky label magnitude limit.
-const DSO_LABEL_MIN_MAGNITUDE = 4.5
+// Lower bound of the deep-sky label magnitude limit when zoomed out or on a small disk.
+const DSO_LABEL_MIN_MAGNITUDE = 3
 // Faintest deep-sky label ever shown; caps label clutter.
 const DSO_LABEL_MAX_MAGNITUDE = 14
 
@@ -43,6 +51,17 @@ function zoomMagnitudeLimit(k: number, baseMagnitude: number, magnitudePerZoom: 
 	const upperMagnitude = Math.max(minMagnitude, maxMagnitude)
 	const limit = clamp(baseMagnitude + Math.log2(Math.max(k, 0.25)) * magnitudePerZoom, minMagnitude, upperMagnitude)
 	return Math.min(limit, maxMagnitude)
+}
+
+// Returns the zoom factor `zoom` as counted by the density limits on a base projection disk of `radius` pixels: the
+// zoom itself from DENSITY_REFERENCE_RADIUS up, and proportionally less below it, down to DENSITY_MIN_SHARE of it.
+export function densityZoom(zoom: number, radius: number) {
+	return zoom * clamp(radius / DENSITY_REFERENCE_RADIUS, DENSITY_MIN_SHARE, 1)
+}
+
+// Returns the density zoom of a render state.
+export function stateDensityZoom(state: RenderState) {
+	return densityZoom(state.transform.k, state.projectionRadius)
 }
 
 // Returns the faintest star magnitude drawn at a zoom factor, capped by the configured limit.
@@ -57,7 +76,7 @@ export function starSymbolMagnitudeLimit(state: RenderState) {
 
 // Returns the faintest star magnitude labeled in a render state.
 export function starLabelMagnitudeLimit(state: RenderState) {
-	return zoomMagnitudeLimit(state.transform.k, STAR_LABEL_BASE_MAGNITUDE, STAR_LABEL_MAGNITUDE_PER_ZOOM, STAR_LABEL_MIN_MAGNITUDE, state.stars.maxMagnitude)
+	return zoomMagnitudeLimit(stateDensityZoom(state), STAR_LABEL_BASE_MAGNITUDE, STAR_LABEL_MAGNITUDE_PER_ZOOM, STAR_LABEL_MIN_MAGNITUDE, state.stars.maxMagnitude)
 }
 
 // Returns whether a star of the given magnitude is drawn at a zoom factor.
@@ -80,19 +99,19 @@ function deepSkyLabelMagnitudeLimit(k: number) {
 	return zoomMagnitudeLimit(k, DSO_LABEL_BASE_MAGNITUDE, DSO_LABEL_MAGNITUDE_PER_ZOOM, DSO_LABEL_MIN_MAGNITUDE, DSO_LABEL_MAX_MAGNITUDE)
 }
 
-// Returns whether a deep-sky object is drawn at a zoom factor.
+// Returns whether a deep-sky object is drawn at a density zoom (see densityZoom).
 export function isDeepSkyObjectVisibleAtZoom(object: DeepSkyObject, zoom: number) {
 	return deepSkyMagnitude(object) <= deepSkyObjectMagnitudeLimit(zoom)
 }
 
 // Returns whether a deep-sky object is drawn in a render state.
 export function isDeepSkyObjectVisible(object: DeepSkyObject, state: RenderState) {
-	return isDeepSkyObjectVisibleAtZoom(object, state.transform.k)
+	return isDeepSkyObjectVisibleAtZoom(object, stateDensityZoom(state))
 }
 
 // Returns whether a deep-sky object is labeled in a render state.
 export function isDeepSkyLabelVisible(object: DeepSkyObject, state: RenderState) {
-	return deepSkyMagnitude(object) <= deepSkyLabelMagnitudeLimit(state.transform.k)
+	return deepSkyMagnitude(object) <= deepSkyLabelMagnitudeLimit(stateDensityZoom(state))
 }
 
 // Returns a moving body's magnitude, or 0 when it has none.

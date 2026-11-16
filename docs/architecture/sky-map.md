@@ -6,6 +6,9 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Each tick reads the instant once, shows it on the map, and refreshes the selection's position and events for that same instant (`refreshSkySelection` with the tick's time): accurately on every real-time tick, from the local models every few ticks while playing, and accurately once a fixed instant settles.
   The time bar's own redraws are display only.
   Once the clock is not playing, an instant more than `MAP_DATA_EPOCH_MS` (a Julian year) from the map data's reloads the catalogs (`mapDataCovers` of `web/src/sky/sky.ts`).
+- The map's density follows the size of its disk as well as the zoom (`densityZoom` of `web/src/sky/celestial/visibility.ts`): deep-sky symbols and the names of stars, deep-sky objects, and constellations read the zoom times the share of a 360 px disk radius the map has (at least 0.35, at most 1), so a phone draws the whole sky with the few names a desktop shows zoomed out, and the names return as it zooms in; picking reads the same limits, so only drawn objects and names are picked.
+  A deep-sky name that would overlap one already drawn is left out; the hover and selection overlay still names its object.
+- The Display panel groups the layers into Objects, Names, and Lines, each section summarizing how many of its layers are shown.
 - Picking tolerates fingers: a touch or pen tap picks within a larger radius and stays a tap over a longer travel than a mouse click (`touchPickRadius` and `touchTapSlop` of `InteractionOptions` of `web/src/sky/celestial/`).
 - On the local sky zoomed in to `SKY_ANCHOR_ZOOM` or more, a tick that changes the instant keeps the view on the same point of the sky (recentered after the update) instead of the same point of the horizon, unless the mount is followed;
   at lower zoom the horizon stays still.

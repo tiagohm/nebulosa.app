@@ -207,20 +207,39 @@ export function smallCirclePoints(center: GeoPoint, radius: number, step: number
 	return points
 }
 
-// Returns the SVG path data, in map units, of the region within an angular distance of radius degrees, in (0, 180), of a
-// center (a spherical cap, such as the footprint of a satellite), its boundary every step degrees of bearing. A cap
-// without a pole is closed along its boundary, unwrapped across the antimeridian for a wrapping map. A cap holding a pole
-// runs once around the globe, so its boundary is closed along the map's edge at that pole, as horizonRegionPath does;
-// that region is meant for a wrapping map, whose copies draw the parts beyond one map width.
-export function smallCircleRegionPath(center: GeoPoint, radius: number, step: number = 2): string {
-	const points = smallCirclePoints(center, radius, step)
-	const pole = center.latitude + radius > 90 ? 90 : center.latitude - radius < -90 ? -90 : undefined
-	if (pole === undefined) return geoPath(points, { closed: true })
+// SVG path data, in map units, of a spherical cap drawn within the map, so no part of it lies under a neighboring copy
+// of a wrapping map, whose lower layers (such as the night side) are drawn after it and would cover that part.
+export interface SmallCircleRegion {
+	// Region within the cap, to fill: closed along the antimeridian where it crosses it, and along the map's edge at a
+	// pole it holds. Its cuts are not part of the boundary, so it is not meant to be stroked.
+	readonly fill: string
+	// Boundary of the cap, to stroke: open pieces meeting at ±180° where it crosses the antimeridian, else one closed line.
+	readonly outline: string
+}
 
-	let longitude = points[0].longitude
-	for (let i = 1; i < points.length; i++) longitude += wrapLongitude(points[i].longitude - points[i - 1].longitude)
+// Returns the region within an angular distance of radius degrees, in (0, 180), of a center (a spherical cap, such as
+// the footprint of a satellite), its boundary every step degrees of bearing, cut at the antimeridian. A cap without a
+// pole that crosses it gives two regions, one at each edge of the map. A cap holding a pole runs once around the globe,
+// so its boundary runs from one edge of the map to the other and the region is closed along the map's edge at that
+// pole, as horizonRegionPath does.
+export function smallCircleRegion(center: GeoPoint, radius: number, step: number = 2): SmallCircleRegion {
+	const points = smallCirclePoints(center, radius, step).map((point) => ({ longitude: wrapLongitude(point.longitude), latitude: point.latitude }))
+	const pieces = splitAtAntimeridian(points)
+
+	if (pieces.length === 1) {
+		const path = geoPath(points, { closed: true })
+		return { fill: path, outline: path }
+	}
+
+	// The boundary is a loop, so its last piece ends where its first one starts: together they are one run.
+	const runs = [[...pieces.at(-1)!, ...pieces[0].slice(1)], ...pieces.slice(1, -1)]
+	const outline = runs.map((run) => geoPath(run)).join('')
+	const pole = center.latitude + radius > 90 ? 90 : center.latitude - radius < -90 ? -90 : undefined
+	if (pole === undefined) return { fill: runs.map((run) => geoPath(run, { closed: true })).join(''), outline }
+
+	const run = runs[0]
 	const y = round(project(0, pole).y)
-	return `${geoPath(points)}L${round(project(longitude, 0).x)} ${y}L${round(project(points[0].longitude, 0).x)} ${y}Z`
+	return { fill: `${outline}L${round(project(run.at(-1)!.longitude, 0).x)} ${y}L${round(project(run[0].longitude, 0).x)} ${y}Z`, outline }
 }
 
 // Returns the SVG path data, in map units, of meridians and parallels every spacing degrees, the equator and

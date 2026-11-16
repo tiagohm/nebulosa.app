@@ -12,7 +12,7 @@ import {
 	panWorldMap,
 	project,
 	smallCirclePoints,
-	smallCircleRegionPath,
+	smallCircleRegion,
 	splitAtAntimeridian,
 	unproject,
 	WORLD_MAP_HEIGHT,
@@ -24,6 +24,10 @@ import {
 } from './worldmap.geometry'
 
 const VIEWPORT = { width: 1000, height: 800 }
+
+const round = (value: number) => Math.round(value * 1000) / 1000
+
+const xs = (path: string) => [...path.matchAll(/[ML]([\d.-]+) /g)].map((match) => +match[1])
 
 describe('projection', () => {
 	test('maps the corners and the center', () => {
@@ -139,15 +143,21 @@ describe('small circle', () => {
 		expect(points[2].latitude).toBeCloseTo(-20, 9)
 		expect(points[3].longitude).toBeCloseTo(-20, 9)
 		expect(points[4]).toEqual(points[0])
-		const region = smallCircleRegionPath({ longitude: 0, latitude: 0 }, 20)
-		expect(region).toStartWith('M')
-		expect(region).toEndWith('Z')
-		expect(region.match(/M/g)).toHaveLength(1)
+		const region = smallCircleRegion({ longitude: 0, latitude: 0 }, 20)
+		expect(region.fill).toStartWith('M')
+		expect(region.fill).toEndWith('Z')
+		expect(region.fill.match(/M/g)).toHaveLength(1)
+		expect(region.outline).toBe(region.fill)
 	})
 
-	test('a cap across the antimeridian is unwrapped', () => {
-		const region = smallCircleRegionPath({ longitude: 175, latitude: 0 }, 20, 90)
-		expect(region).toContain(`${Math.round(project(195, 0).x * 1000) / 1000} `)
+	test('a cap across the antimeridian is cut into a region at each edge of the map', () => {
+		const region = smallCircleRegion({ longitude: 175, latitude: 0 }, 20)
+		expect(region.fill.match(/M/g)).toHaveLength(2)
+		expect(region.fill.match(/Z/g)).toHaveLength(2)
+		expect(region.outline.match(/M/g)).toHaveLength(2)
+		expect(region.outline).not.toContain('Z')
+		expect(xs(region.fill)).toContain(0)
+		expect(xs(region.fill)).toContain(round(WORLD_MAP_WIDTH))
 	})
 
 	test('a radius of 90° is the horizon of the center', () => {
@@ -159,17 +169,38 @@ describe('small circle', () => {
 	})
 
 	test('a cap holding a pole is closed along that edge of the map', () => {
-		// The boundary runs once around the globe, then along the pole's edge back to its start.
+		// The boundary runs from one edge of the map to the other, then along the pole's edge back to its start.
 		const closing = (path: string) => [...path.matchAll(/L([\d.-]+) ([\d.-]+)/g)].slice(-2).map((match) => ({ x: +match[1], y: +match[2] }))
-		const north = closing(smallCircleRegionPath({ longitude: 10, latitude: 80 }, 20))
-		expect(north.map((point) => point.y)).toEqual([0, 0])
-		expect(Math.abs(north[0].x - north[1].x)).toBeCloseTo(WORLD_MAP_WIDTH, 2)
-		const south = closing(smallCircleRegionPath({ longitude: 10, latitude: -80 }, 20))
-		expect(south.map((point) => point.y)).toEqual([WORLD_MAP_HEIGHT, WORLD_MAP_HEIGHT].map((y) => Math.round(y * 1000) / 1000))
+		const north = smallCircleRegion({ longitude: 10, latitude: 80 }, 20)
+		expect(closing(north.fill)).toEqual([
+			{ x: 0, y: 0 },
+			{ x: round(WORLD_MAP_WIDTH), y: 0 },
+		])
+		expect(north.outline).not.toContain('Z')
+		const south = closing(smallCircleRegion({ longitude: 10, latitude: -80 }, 20).fill)
+		expect(south.map((point) => point.y)).toEqual([round(WORLD_MAP_HEIGHT), round(WORLD_MAP_HEIGHT)])
 		expect(Math.abs(south[0].x - south[1].x)).toBeCloseTo(WORLD_MAP_WIDTH, 2)
 		// The lowest latitude of the northern cap is 60°, at the center's meridian.
 		const points = smallCirclePoints({ longitude: 10, latitude: 80 }, 20, 1)
 		expect(Math.min(...points.map((point) => point.latitude))).toBeCloseTo(60, 9)
+	})
+
+	test('a cap is drawn within the map, so no neighboring copy of a wrapping map covers part of it', () => {
+		for (const [latitude, radius] of [
+			[75, 30],
+			[-75, 30],
+			[50, 41],
+			[0, 20],
+			[60, 10],
+		]) {
+			for (let longitude = -180; longitude <= 180; longitude += 15) {
+				const region = smallCircleRegion({ longitude, latitude }, radius)
+				for (const path of [region.fill, region.outline]) {
+					expect(Math.min(...xs(path))).toBeGreaterThanOrEqual(0)
+					expect(Math.max(...xs(path))).toBeLessThanOrEqual(round(WORLD_MAP_WIDTH))
+				}
+			}
+		}
 	})
 })
 

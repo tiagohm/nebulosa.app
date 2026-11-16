@@ -10,7 +10,7 @@ import { Checkbox } from '../../ui/Checkbox'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { WorldMap, type WorldMapHandle, WorldMapSymbol } from '../../ui/WorldMap'
-import { geoPath, horizonRegionPath, smallCircleRegionPath } from '../../ui/worldmap.geometry'
+import { geoPath, horizonRegionPath, smallCircleRegion } from '../../ui/worldmap.geometry'
 import { EclipseMapLegend } from '../eclipse/EclipseMapParts'
 import { artificialSatellitesState, type GroundTrackLayers, groundTrackInstant, loadSatelliteGroundTrack, MAX_GROUND_TRACK_ORBITS, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 import { type GroundTrackPoint, type GroundTrackShadow, groundTrackAt, groundTrackRuns, observerInFootprint } from './groundtrack'
@@ -43,11 +43,17 @@ interface GroundTrackOverlayProps {
 // Map layers of a ground track at an instant.
 function GroundTrackOverlay({ track, point, layers, observer }: GroundTrackOverlayProps) {
 	const runs = groundTrackRuns(track, point?.time)
+	const footprint = layers.footprint && point ? smallCircleRegion(point.subpoint, point.footprint) : undefined
 
 	return (
 		<>
 			{layers.night && point && <path d={horizonRegionPath(point.subsolar, 'below')} className="fill-black/45" />}
-			{layers.footprint && point && <path d={smallCircleRegionPath(point.subpoint, point.footprint)} className="fill-accent/10 stroke-accent/70" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
+			{footprint && (
+				<>
+					<path d={footprint.fill} className="fill-accent/10" />
+					<path d={footprint.outline} className="fill-none stroke-accent/70" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+				</>
+			)}
 			{runs.map((run, i) => {
 				const style = RUN_STYLES[layers.shadow ? run.shadow : 'sunlit']
 				return run.pieces.map((piece, j) => <path key={`${i}:${j}`} d={geoPath(piece)} className={`fill-none ${style.className} ${run.past ? '[stroke-dasharray:6_4]' : ''}`} strokeWidth={style.width} vectorEffect="non-scaling-stroke" />)

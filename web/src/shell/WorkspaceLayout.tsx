@@ -101,7 +101,9 @@ export function WorkspaceLayout({ workspace, title, context, contextFill = false
 								<span className="text-ink-300">/</span>
 							</>
 						)}
-						<h1 className="m-0 text-sm font-semibold text-ink-100">{title}</h1>
+						<h1 data-workspace-title tabIndex={-1} className="m-0 text-sm font-semibold text-ink-100 outline-none">
+							{title}
+						</h1>
 					</span>
 					{context && <div className={cn('flex min-w-0 items-center gap-2', contextFill && 'flex-1')}>{context}</div>}
 					<div className="ml-auto flex flex-wrap items-center justify-end gap-1">

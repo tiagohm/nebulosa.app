@@ -1,10 +1,11 @@
-import { type KeyboardEvent, useEffect, useState } from 'react'
+import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { useRoleDevice } from '../equipment/useEquipment'
 import { useActiveSite } from '../location/useLocation'
-import { navigate, redirect, routeState } from '../shell/route'
+import { navigate, redirect, routeState, type ToolId } from '../shell/route'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Icon } from '../ui/Icon'
+import { moveIndex } from '../ui/navigation'
 import { SectionHeading } from '../ui/SectionHeading'
 import { StatusBadge } from '../ui/StatusBadge'
 import { TextInput } from '../ui/TextInput'
@@ -21,16 +22,49 @@ import { matchesTool, TOOL_DEFINITIONS, TOOL_GROUPS, type ToolDefinition, toolSt
 // A planned tool is listed but cannot be opened, so a URL naming one returns to the catalog; a blocked tool still opens,
 // into its own setup state.
 
+// Name of the application, the title of the page outside Tools.
+const APP_TITLE = 'Nebulosa'
+
+// What the catalog remembers for the tab while a tool or another workspace is shown, never persisted: how far it was
+// scrolled, in CSS pixels, and the last tool opened, whose card takes the focus and the Tab stop again.
+const catalogMemory: { scrollTop: number; tool?: ToolId } = { scrollTop: 0 }
+
 // Tools workspace.
 export function ToolsWorkspace() {
 	const { route } = useSnapshot(routeState)
 	const tool = route.workspace === 'tools' && route.tool ? TOOL_DEFINITIONS[route.tool] : undefined
 	const View = tool?.view
+	const shown = View ? tool : undefined
+	const previous = useRef<ToolId | undefined>(undefined)
 
 	// A tool that has no view yet cannot be shown, so its URL is replaced by the catalog's.
 	useEffect(() => {
 		if (tool && !View) redirect(routeState, { workspace: 'tools' })
 	}, [tool, View])
+
+	// Names the page after the tool shown, so tabs and history tell them apart, and gives the name back when Tools is left.
+	useEffect(() => {
+		document.title = `${shown?.label ?? 'Tools'} · ${APP_TITLE}`
+	}, [shown])
+	useEffect(
+		() => () => {
+			document.title = APP_TITLE
+		},
+		[],
+	)
+
+	// Moves the focus where the eye goes: to the title of a tool when it opens, and back to its card when the catalog
+	// returns from it, never scrolling the view.
+	useEffect(() => {
+		const from = previous.current
+		previous.current = shown?.id
+		if (shown) {
+			catalogMemory.tool = shown.id
+			document.querySelector<HTMLElement>('[data-workspace-title]')?.focus({ preventScroll: true })
+		} else if (from) {
+			document.querySelector<HTMLElement>(`[data-tool-card="${from}"]`)?.focus({ preventScroll: true })
+		}
+	}, [shown])
 
 	if (View) return <View />
 
@@ -38,27 +72,60 @@ export function ToolsWorkspace() {
 }
 
 // Catalog of the tools, in the groups of a night, narrowed by a filter, each card with the readiness of its tool for the
-// active profile. The filter is transient view state of the catalog; Enter opens the only tool it leaves.
+// active profile. The filter is transient view state of the catalog; Enter opens the only tool it leaves, and ArrowDown
+// moves to the cards. The cards are one Tab stop, the last one focused or opened, and Arrow keys, Home, and End move
+// between the openable ones in reading order. The scroll position is kept for the tab across tools and workspaces.
 function ToolsCatalog() {
 	const context = useToolReadinessContext()
 	const [query, setQuery] = useState('')
+	const [current, setCurrent] = useState(catalogMemory.tool)
+	const scrollRef = useRef<HTMLDivElement>(null)
 	const groups = TOOL_GROUPS.map((group) => ({ label: group.label, tools: group.tools.filter((id) => matchesTool(TOOL_DEFINITIONS[id], query)) })).filter((group) => group.tools.length > 0)
-	const matches = groups.flatMap((group) => group.tools).filter((id) => toolStatus(TOOL_DEFINITIONS[id]) === 'available')
+	const openable = groups.flatMap((group) => group.tools).filter((id) => toolStatus(TOOL_DEFINITIONS[id]) === 'available')
+	const tabStop = current !== undefined && openable.includes(current) ? current : openable[0]
 
-	// Opens the only openable tool the filter leaves when Enter is pressed in it.
-	function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-		if (e.key === 'Enter' && matches.length === 1) navigate(routeState, { workspace: 'tools', tool: matches[0] })
+	// Scrolls back to where the catalog was before it was last left, and remembers where it is when it is left.
+	useLayoutEffect(() => {
+		const scroller = scrollRef.current
+		if (!scroller) return undefined
+		scroller.scrollTop = catalogMemory.scrollTop
+		return () => {
+			catalogMemory.scrollTop = scroller.scrollTop
+		}
+	}, [])
+
+	// Focuses the card of a tool.
+	function focusCard(id: ToolId | undefined) {
+		if (id) scrollRef.current?.querySelector<HTMLElement>(`[data-tool-card="${id}"]`)?.focus()
 	}
 
-	const filter = <TextInput type="search" title="Filter tools by name or description; Enter opens the only match" placeholder="Filter tools" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleKeyDown} className="w-56 max-sm:w-40" />
+	// Opens the only openable tool the filter leaves on Enter, and moves to the cards on ArrowDown.
+	function handleFilterKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+		if (e.key === 'Enter' && openable.length === 1) navigate(routeState, { workspace: 'tools', tool: openable[0] })
+		else if (e.key === 'ArrowDown' && tabStop) {
+			e.preventDefault()
+			focusCard(tabStop)
+		}
+	}
+
+	// Moves the focus between the openable cards with the Arrow keys, Home, and End.
+	function handleCardsKeyDown(e: KeyboardEvent<HTMLElement>) {
+		const focused = (document.activeElement as HTMLElement | null)?.dataset.toolCard
+		const index = moveIndex(openable.indexOf(focused as ToolId), openable.length, e.key)
+		if (index === undefined || focused === undefined) return
+		e.preventDefault()
+		focusCard(openable[index])
+	}
+
+	const filter = <TextInput type="search" title="Filter tools by name or description; Enter opens the only match, ArrowDown moves to the tools" placeholder="Filter tools" value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={handleFilterKeyDown} className="w-56 max-sm:w-40" />
 
 	return (
 		<WorkspaceLayout workspace="tools" title="Tools" actions={filter}>
-			<div className="h-full overflow-y-auto overscroll-contain p-4">
+			<div ref={scrollRef} className="h-full overflow-y-auto overscroll-contain p-4">
 				{groups.length === 0 ? (
 					<EmptyState title="No tool matches" description="Change or clear the filter." />
 				) : (
-					<div className="flex flex-col gap-6">
+					<div onKeyDown={handleCardsKeyDown} className="flex flex-col gap-6">
 						{groups.map((group) => (
 							<section key={group.label} className="flex flex-col gap-2">
 								<SectionHeading as="h2">{group.label}</SectionHeading>
@@ -66,7 +133,7 @@ function ToolsCatalog() {
 									{group.tools.map((id) => {
 										const tool = TOOL_DEFINITIONS[id]
 										const planned = toolStatus(tool) === 'planned'
-										return <ToolCard key={id} tool={tool} planned={planned} readiness={toolReadiness(id, planned, context)} />
+										return <ToolCard key={id} tool={tool} planned={planned} readiness={toolReadiness(id, planned, context)} tabStop={id === tabStop} onFocus={() => setCurrent(id)} />
 									})}
 								</div>
 							</section>
@@ -116,14 +183,21 @@ interface ToolCardProps {
 	readonly planned: boolean
 	// Word of the card; absent for a tool ready to use.
 	readonly readiness?: ToolReadiness
+	// Whether the card is the catalog's one Tab stop.
+	readonly tabStop: boolean
+	// Called when the card takes the focus.
+	readonly onFocus: () => void
 }
 
 // Catalog card of a tool: what it does and, by exception, its readiness; clicking a tool that is not planned opens it,
 // even when its readiness says what it lacks.
-function ToolCard({ tool, planned, readiness }: ToolCardProps) {
+function ToolCard({ tool, planned, readiness, tabStop, onFocus }: ToolCardProps) {
 	return (
 		<button
 			type="button"
+			data-tool-card={tool.id}
+			tabIndex={tabStop ? 0 : -1}
+			onFocus={onFocus}
 			disabled={planned}
 			title={planned ? readiness?.reason : undefined}
 			onClick={() => navigate(routeState, { workspace: 'tools', tool: tool.id })}

@@ -105,7 +105,7 @@ export function TimeController({ timeZone }: TimeControllerProps) {
 	return (
 		<div className="flex min-h-12 flex-none flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line-100 bg-base-100 px-2 py-1.5">
 			<div className="flex min-w-0 items-center gap-2">
-				<Button variant={clock.mode === 'now' ? 'primary' : 'secondary'} onClick={() => setSkyTimeNow(skyClock)} title="Show the real current time">
+				<Button variant={clock.mode === 'now' ? 'secondary' : 'primary'} disabled={clock.mode === 'now'} onClick={() => setSkyTimeNow(skyClock)} title={clock.mode === 'now' ? 'The map already shows the real current time' : 'Show the real current time'}>
 					Now
 				</Button>
 				<input

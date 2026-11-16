@@ -9,7 +9,7 @@ import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { ObjectTitle } from '../../ui/ObjectTitle'
-import { formatApparentSize, formatDeclination, formatMagnitude } from '../format'
+import { formatApparentSize, formatMagnitude } from '../format'
 import { PositionSection } from '../InspectorParts'
 import { ObjectActions } from '../ObjectActions'
 import type { SkySelection } from '../sky'
@@ -74,7 +74,7 @@ function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone
 				</>
 			) : (
 				<>
-					{position?.altitude !== undefined && <DataRow label="Altitude">{formatDeclination(position.altitude)}</DataRow>}
+					{position?.altitude !== undefined && <DataRow label="Altitude">{formatDegrees(position.altitude)}</DataRow>}
 					{position?.azimuth !== undefined && <DataRow label="Azimuth">{formatDegrees(position.azimuth)}</DataRow>}
 					{day ? (
 						<>
@@ -83,7 +83,7 @@ function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone
 							{day.transit !== undefined && (
 								<DataRow label="Transit">
 									{formatLocalTime(day.transit, timeZone, day.start)}
-									{day.transitAltitude !== undefined && ` · ${formatDeclination(day.transitAltitude)}`}
+									{day.transitAltitude !== undefined && ` · ${formatDegrees(day.transitAltitude)}`}
 								</DataRow>
 							)}
 							{(day.sunset !== undefined || day.daylight === 'partial') && <DataRow label="Sunset">{day.sunset !== undefined ? formatLocalTime(day.sunset, timeZone, day.start) : 'None this day'}</DataRow>}

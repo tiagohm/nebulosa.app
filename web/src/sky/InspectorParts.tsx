@@ -81,8 +81,8 @@ export function ObserverSection({ position, events, hasObserver, onSetObserver, 
 	}
 
 	return (
-		<CollapsibleSection id="sky.visibility" title="Visibility" summary={`Altitude ${formatDeclination(position.altitude)}`}>
-			<DataRow label="Altitude">{formatDeclination(position.altitude)}</DataRow>
+		<CollapsibleSection id="sky.visibility" title="Visibility" summary={`Altitude ${formatDegrees(position.altitude)}`}>
+			<DataRow label="Altitude">{formatDegrees(position.altitude)}</DataRow>
 			{position.altitude < 0 && <Notice>Below the horizon at this instant, so the map does not show it.</Notice>}
 			<DataRow label="Azimuth">{formatDegrees(position.azimuth)}</DataRow>
 			{events?.state === 'circumpolar' && <DataRow label="Rise and set">Circumpolar</DataRow>}
@@ -91,7 +91,7 @@ export function ObserverSection({ position, events, hasObserver, onSetObserver, 
 			{events?.transit !== undefined && (
 				<DataRow label="Transit">
 					{formatLocalTime(events.transit, timeZone, position.time)}
-					{events.transitAltitude !== undefined && ` · ${formatDeclination(events.transitAltitude)}`}
+					{events.transitAltitude !== undefined && ` · ${formatDegrees(events.transitAltitude)}`}
 				</DataRow>
 			)}
 			{events?.set !== undefined && <DataRow label="Set">{formatLocalTime(events.set, timeZone, position.time)}</DataRow>}

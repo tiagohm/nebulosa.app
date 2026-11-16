@@ -47,7 +47,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 	if (!selection) {
 		return (
 			<CollapsibleSection id="sky.object" title="Object">
-				<Notice>Select an object in the Planetarium or use Search.</Notice>
+				<Notice>Select an object on the map, or find one with the search.</Notice>
 			</CollapsibleSection>
 		)
 	}

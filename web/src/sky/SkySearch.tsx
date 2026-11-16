@@ -275,7 +275,7 @@ export function SkySearch({ onSelect }: SkySearchProps) {
 															<span className="block truncate text-sm text-ink-100">{item.result.name}</span>
 															<span className="block truncate text-xs text-ink-300">{[item.result.typeName, ...item.result.designations].join(' · ')}</span>
 														</span>
-														{item.result.magnitude !== undefined && <span className="flex-none font-mono text-xs text-ink-300">{formatMagnitude(item.result.magnitude)}</span>}
+														{item.result.magnitude !== undefined && <span className="flex-none font-mono text-xs text-ink-300">mag {formatMagnitude(item.result.magnitude)}</span>}
 														{item.result.constellation && <span className="w-8 flex-none text-right text-xs text-ink-300">{item.result.constellation}</span>}
 													</>
 												) : (

@@ -99,7 +99,7 @@ export function MountControls({ device }: InterfaceProps) {
 				<DataRow label="Dec (JNow)">{formatDeclination(mount.declination)}</DataRow>
 				{horizontal && (
 					<>
-						<DataRow label="Altitude">{formatDeclination(horizontal.altitude)}</DataRow>
+						<DataRow label="Altitude">{formatDegrees(horizontal.altitude)}</DataRow>
 						<DataRow label="Azimuth">{formatDegrees(horizontal.azimuth)}</DataRow>
 					</>
 				)}

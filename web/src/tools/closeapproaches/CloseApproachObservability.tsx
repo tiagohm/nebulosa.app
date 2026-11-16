@@ -94,7 +94,7 @@ export function CloseApproachObservability({ body, time, site, timeZone }: SkyAc
 			{position && (
 				<>
 					<DataRow label={`At (${timeZone})`}>{formatDateTime(position.time, timeZone)}</DataRow>
-					{position.altitude !== undefined && <DataRow label="Altitude">{formatDeclination(position.altitude)}</DataRow>}
+					{position.altitude !== undefined && <DataRow label="Altitude">{formatDegrees(position.altitude)}</DataRow>}
 					{position.altitude !== undefined && position.altitude < 0 && <Notice>Below the horizon at this instant.</Notice>}
 					{position.azimuth !== undefined && <DataRow label="Azimuth">{formatDegrees(position.azimuth)}</DataRow>}
 					<DataRow label="RA (of date)">{formatRightAscension(position.rightAscension)}</DataRow>

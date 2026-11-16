@@ -60,7 +60,7 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 						<DataRow label="Dec (of date)">{formatDeclination(point.declination)}</DataRow>
 						{horizontal && (
 							<>
-								<DataRow label="Altitude">{formatDeclination(horizontal.altitude)}</DataRow>
+								<DataRow label="Altitude">{formatDegrees(horizontal.altitude)}</DataRow>
 								<DataRow label="Azimuth">{formatDegrees(horizontal.azimuth)}</DataRow>
 							</>
 						)}

@@ -2,8 +2,8 @@ import { AU_KM } from 'nebulosa/src/core/constants'
 import { formatDEC, formatRA, toArcmin, toArcsec } from 'nebulosa/src/math/units/angle'
 import { formatFixed, formatKilometers, MISSING } from '../format'
 
-// Display formats of the Sky workspace: equatorial and horizontal angles, apparent angular sizes, distances, and
-// magnitudes. Azimuths and position angles are plain degrees, written by `formatDegrees` of `format.ts`, and instants
+// Display formats of the Sky workspace: equatorial angles, apparent angular sizes, distances, and
+// magnitudes. Altitudes, azimuths, and position angles are plain degrees, written by `formatDegrees` of `format.ts`, and instants
 // by its time formats (`formatLocalTime` names the zone, so a time is never ambiguous). Right ascension and declination are
 // always sexagesimal with the toolkit's default decimals, which carry a rounded 60 into the next field. Every format
 // follows the rules of `format.ts`: a value that is not finite reads MISSING, and a unit or a number of decimals is
@@ -25,7 +25,7 @@ export function formatRightAscension(angle: number) {
 	return Number.isFinite(angle) ? formatRA(angle) : MISSING
 }
 
-// Formats a declination or altitude in radians as signed degrees, arcminutes, and arcseconds: "-16 42 58.02".
+// Formats a declination in radians as signed degrees, arcminutes, and arcseconds: "-16 42 58.02".
 export function formatDeclination(angle: number) {
 	return Number.isFinite(angle) ? formatDEC(angle) : MISSING
 }

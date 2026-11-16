@@ -145,7 +145,7 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 							</p>
 							{preview.position.altitude !== undefined && preview.position.azimuth !== undefined && (
 								<p className="m-0 font-mono">
-									Alt {formatDeclination(preview.position.altitude)} · Az {formatDegrees(preview.position.azimuth)}
+									Alt {formatDegrees(preview.position.altitude)} · Az {formatDegrees(preview.position.azimuth)}
 								</p>
 							)}
 							{preview.position.altitude !== undefined && preview.position.altitude < 0 && <p className="mt-1 mb-0 text-danger">The object is below the horizon now.</p>}

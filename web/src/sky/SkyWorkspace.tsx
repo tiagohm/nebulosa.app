@@ -203,7 +203,8 @@ export function SkyWorkspace() {
 			/>
 		) : undefined
 
-	// The active site is named by the top bar alone; the header says only when there is none or the time is simulated.
+	// The active site is named by the top bar alone; the header says only when there is none or the time is simulated, at
+	// every width: both change what the map shows, and the time bar that also says the time is simulated can be hidden.
 	const context = [!observer && 'No observing site', clock.mode !== 'now' && 'Simulated time'].filter(Boolean).join(' · ')
 
 	// Name of the selection when the local sky cannot draw it, its refracted altitude at the instant shown being negative;
@@ -218,7 +219,7 @@ export function SkyWorkspace() {
 	}
 
 	return (
-		<WorkspaceLayout workspace="sky" title="Sky" context={context ? <span className="truncate text-xs text-ink-300 max-sm:hidden">{context}</span> : undefined} panel={panels[sky.panel]()} panelState={panelState}>
+		<WorkspaceLayout workspace="sky" title="Sky" context={context ? <span className="truncate text-xs text-ink-300">{context}</span> : undefined} panel={panels[sky.panel]()} panelState={panelState}>
 			<div className="flex h-full flex-col bg-base-000">
 				<div className="flex flex-none items-center gap-2 border-b border-line-100 bg-base-100 px-2 max-sm:flex-wrap max-sm:gap-y-1 max-sm:py-1 sm:h-11">
 					<SkySearch onSelect={handleSearchSelect} />

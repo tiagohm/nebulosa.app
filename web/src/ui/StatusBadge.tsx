@@ -18,7 +18,7 @@ const badge = tv({
 		tone: {
 			muted: { root: 'border-dashed border-line-100 text-ink-300', dot: 'hidden' },
 			neutral: { root: 'border-line-100 text-ink-200', dot: 'border border-ink-200' },
-			active: { root: 'border-accent/50 text-accent', dot: 'animate-pulse bg-accent' },
+			active: { root: 'border-accent/50 text-accent', dot: 'animate-pulse bg-accent motion-reduce:animate-none' },
 			success: { root: 'border-success/50 text-success', dot: 'bg-success' },
 			warning: { root: 'border-warning/60 text-warning', dot: 'bg-warning' },
 			danger: { root: 'border-danger/60 text-danger', dot: 'bg-danger' },

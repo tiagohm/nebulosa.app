@@ -222,8 +222,9 @@ interface ToolCardProps {
 }
 
 // Catalog card of a tool: its summary (hidden on a phone, where the name alone keeps the list short), the full
-// description as its tooltip, and, by exception, its readiness; clicking a tool that is not planned opens it, even when
-// its readiness says what it lacks.
+// description as its tooltip, and, by exception, its readiness, whose reason is a caption wherever there is no hover to
+// show a tooltip (a phone, or a touch screen of any width) and visually hidden text otherwise, so a screen reader still
+// reads it with the card; clicking a tool that is not planned opens it, even when its readiness says what it lacks.
 function ToolCard({ tool, planned, readiness, tabStop, onFocus }: ToolCardProps) {
 	return (
 		<button
@@ -245,6 +246,7 @@ function ToolCard({ tool, planned, readiness, tabStop, onFocus }: ToolCardProps)
 					{readiness && <StatusBadge tone={readiness.tone} label={readiness.label} title={readiness.reason} />}
 				</span>
 				<span className="line-clamp-2 text-sm leading-5 text-pretty text-ink-200 max-sm:hidden">{tool.summary}</span>
+				{readiness && <span className="text-xs leading-4 text-pretty text-ink-300 [@media(hover:hover)_and_(min-width:40rem)]:sr-only">{readiness.reason}</span>}
 			</span>
 		</button>
 	)

@@ -57,7 +57,7 @@ export function Modal({ open, onClose, title, className, fit = false, children }
 						<Icon name="close" strokeWidth={1.8} />
 					</button>
 				</header>
-				<div className={cn('px-6 pt-4 pb-6 text-md leading-6 text-ink-200', fit && 'flex min-h-0 flex-col')}>{children}</div>
+				<div className={cn('px-6 pt-4 pb-6 leading-6 text-ink-200', fit && 'flex min-h-0 flex-col')}>{children}</div>
 			</section>
 		</dialog>
 	)

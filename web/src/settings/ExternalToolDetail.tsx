@@ -164,7 +164,7 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 		<div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
 			<header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line-100 px-4 py-3">
 				<div className="flex min-w-0 flex-1 basis-60 flex-col">
-					<h2 className="m-0 truncate text-md leading-6 font-medium text-ink-100">{tool.name}</h2>
+					<h2 className="m-0 truncate leading-6 font-medium text-ink-100">{tool.name}</h2>
 					<Notice>{tool.description}</Notice>
 				</div>
 				<div className="flex flex-wrap items-center gap-2">

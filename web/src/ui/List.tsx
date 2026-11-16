@@ -31,7 +31,7 @@ export function ListItem({ title, description, meta, selected = false, onClick }
 				)}
 			>
 				<span className="flex min-w-0 flex-auto flex-col gap-0.5">
-					<span className={cn('text-md leading-6 font-medium wrap-break-word', selected ? 'text-accent' : 'text-ink-100')}>{title}</span>
+					<span className={cn('leading-6 font-medium wrap-break-word', selected ? 'text-accent' : 'text-ink-100')}>{title}</span>
 					{description && <span className="text-sm leading-5 text-ink-200">{description}</span>}
 				</span>
 				{meta && <span className="flex-none text-sm leading-5 whitespace-nowrap text-ink-300 tabular-nums">{meta}</span>}

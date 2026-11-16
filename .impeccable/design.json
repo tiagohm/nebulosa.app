@@ -1,0 +1,345 @@
+{
+	"schemaVersion": 2,
+	"generatedAt": "2026-11-16T17:06:24.549Z",
+	"title": "Design System: Nebulosa",
+	"extensions": {
+		"colorMeta": {
+			"base-000": {
+				"role": "neutral",
+				"displayName": "Deep Night",
+				"canonical": "#141413",
+				"tonalRamp": ["oklch(15% 0.001 106.6)", "oklch(25% 0.002 106.6)", "oklch(35% 0.002 106.6)", "oklch(45% 0.002 106.6)", "oklch(55% 0.002 106.6)", "oklch(65% 0.002 106.6)", "oklch(80% 0.001 106.6)", "oklch(95% 0.000 106.6)"]
+			},
+			"base-100": {
+				"role": "neutral",
+				"displayName": "Nightfall",
+				"canonical": "#1f1e1d",
+				"tonalRamp": ["oklch(15% 0.001 67.7)", "oklch(25% 0.002 67.7)", "oklch(35% 0.002 67.7)", "oklch(45% 0.002 67.7)", "oklch(55% 0.002 67.7)", "oklch(65% 0.002 67.7)", "oklch(80% 0.002 67.7)", "oklch(95% 0.001 67.7)"]
+			},
+			"base-200": {
+				"role": "neutral",
+				"displayName": "Twilight Ash",
+				"canonical": "#262624",
+				"tonalRamp": ["oklch(15% 0.002 106.6)", "oklch(25% 0.003 106.6)", "oklch(35% 0.004 106.6)", "oklch(45% 0.004 106.6)", "oklch(55% 0.004 106.6)", "oklch(65% 0.004 106.6)", "oklch(80% 0.003 106.6)", "oklch(95% 0.001 106.6)"]
+			},
+			"base-300": {
+				"role": "neutral",
+				"displayName": "Horizon Haze",
+				"canonical": "#30302e",
+				"tonalRamp": ["oklch(15% 0.002 106.6)", "oklch(25% 0.003 106.6)", "oklch(35% 0.004 106.6)", "oklch(45% 0.004 106.6)", "oklch(55% 0.004 106.6)", "oklch(65% 0.004 106.6)", "oklch(80% 0.002 106.6)", "oklch(95% 0.001 106.6)"]
+			},
+			"line-100": {
+				"role": "neutral",
+				"displayName": "Faint Meridian",
+				"canonical": "#3d3d3a",
+				"tonalRamp": ["oklch(15% 0.003 106.7)", "oklch(25% 0.004 106.7)", "oklch(35% 0.005 106.7)", "oklch(45% 0.005 106.7)", "oklch(55% 0.005 106.7)", "oklch(65% 0.005 106.7)", "oklch(80% 0.004 106.7)", "oklch(95% 0.001 106.7)"]
+			},
+			"line-200": {
+				"role": "neutral",
+				"displayName": "Graticule",
+				"canonical": "#6b6a64",
+				"tonalRamp": ["oklch(15% 0.005 99.0)", "oklch(25% 0.008 99.0)", "oklch(35% 0.009 99.0)", "oklch(45% 0.009 99.0)", "oklch(55% 0.009 99.0)", "oklch(65% 0.009 99.0)", "oklch(80% 0.007 99.0)", "oklch(95% 0.002 99.0)"]
+			},
+			"ink-100": {
+				"role": "neutral",
+				"displayName": "Starlight Cream",
+				"canonical": "#faf9f5",
+				"tonalRamp": ["oklch(15% 0.003 95.1)", "oklch(25% 0.004 95.1)", "oklch(35% 0.005 95.1)", "oklch(45% 0.005 95.1)", "oklch(55% 0.005 95.1)", "oklch(65% 0.005 95.1)", "oklch(80% 0.004 95.1)", "oklch(95% 0.001 95.1)"]
+			},
+			"ink-200": {
+				"role": "neutral",
+				"displayName": "Moonlight",
+				"canonical": "#c2c0b6",
+				"tonalRamp": ["oklch(15% 0.008 97.5)", "oklch(25% 0.012 97.5)", "oklch(35% 0.014 97.5)", "oklch(45% 0.014 97.5)", "oklch(55% 0.014 97.5)", "oklch(65% 0.014 97.5)", "oklch(80% 0.010 97.5)", "oklch(95% 0.003 97.5)"]
+			},
+			"ink-300": {
+				"role": "neutral",
+				"displayName": "Zodiacal Gray",
+				"canonical": "#9c9a92",
+				"tonalRamp": ["oklch(15% 0.007 95.2)", "oklch(25% 0.010 95.2)", "oklch(35% 0.012 95.2)", "oklch(45% 0.012 95.2)", "oklch(55% 0.012 95.2)", "oklch(65% 0.012 95.2)", "oklch(80% 0.008 95.2)", "oklch(95% 0.002 95.2)"]
+			},
+			"accent": {
+				"role": "primary",
+				"displayName": "Ember Clay",
+				"canonical": "#d97757",
+				"tonalRamp": ["oklch(15% 0.073 38.8)", "oklch(25% 0.108 38.8)", "oklch(35% 0.131 38.8)", "oklch(45% 0.131 38.8)", "oklch(55% 0.131 38.8)", "oklch(65% 0.131 38.8)", "oklch(80% 0.092 38.8)", "oklch(95% 0.027 38.8)"]
+			},
+			"accent-hover": {
+				"role": "primary",
+				"displayName": "Ember Clay Bright",
+				"canonical": "#e3896b",
+				"tonalRamp": ["oklch(15% 0.067 39.2)", "oklch(25% 0.098 39.2)", "oklch(35% 0.119 39.2)", "oklch(45% 0.119 39.2)", "oklch(55% 0.119 39.2)", "oklch(65% 0.119 39.2)", "oklch(80% 0.083 39.2)", "oklch(95% 0.025 39.2)"]
+			},
+			"accent-subtle": {
+				"role": "primary",
+				"displayName": "Ember Wash",
+				"canonical": "#3a2620",
+				"tonalRamp": ["oklch(15% 0.018 37.4)", "oklch(25% 0.027 37.4)", "oklch(35% 0.032 37.4)", "oklch(45% 0.032 37.4)", "oklch(55% 0.032 37.4)", "oklch(65% 0.032 37.4)", "oklch(80% 0.023 37.4)", "oklch(95% 0.007 37.4)"]
+			},
+			"on-accent": {
+				"role": "primary",
+				"displayName": "On Ember",
+				"canonical": "#141413",
+				"tonalRamp": ["oklch(15% 0.001 106.6)", "oklch(25% 0.002 106.6)", "oklch(35% 0.002 106.6)", "oklch(45% 0.002 106.6)", "oklch(55% 0.002 106.6)", "oklch(65% 0.002 106.6)", "oklch(80% 0.001 106.6)", "oklch(95% 0.000 106.6)"]
+			},
+			"danger": {
+				"role": "signal",
+				"displayName": "Antares Red",
+				"canonical": "#e5675e",
+				"tonalRamp": ["oklch(15% 0.089 26.4)", "oklch(25% 0.131 26.4)", "oklch(35% 0.159 26.4)", "oklch(45% 0.159 26.4)", "oklch(55% 0.159 26.4)", "oklch(65% 0.159 26.4)", "oklch(80% 0.112 26.4)", "oklch(95% 0.033 26.4)"]
+			},
+			"success": {
+				"role": "signal",
+				"displayName": "Aurora Green",
+				"canonical": "#6cc28a",
+				"tonalRamp": ["oklch(15% 0.066 154.0)", "oklch(25% 0.097 154.0)", "oklch(35% 0.117 154.0)", "oklch(45% 0.117 154.0)", "oklch(55% 0.117 154.0)", "oklch(65% 0.117 154.0)", "oklch(80% 0.082 154.0)", "oklch(95% 0.024 154.0)"]
+			},
+			"warning": {
+				"role": "signal",
+				"displayName": "Arcturus Amber",
+				"canonical": "#e9a13b",
+				"tonalRamp": ["oklch(15% 0.079 71.6)", "oklch(25% 0.117 71.6)", "oklch(35% 0.142 71.6)", "oklch(45% 0.142 71.6)", "oklch(55% 0.142 71.6)", "oklch(65% 0.142 71.6)", "oklch(80% 0.100 71.6)", "oklch(95% 0.030 71.6)"]
+			},
+			"info": {
+				"role": "signal",
+				"displayName": "Vega Blue",
+				"canonical": "#6ba6e8",
+				"tonalRamp": ["oklch(15% 0.065 252.2)", "oklch(25% 0.095 252.2)", "oklch(35% 0.115 252.2)", "oklch(45% 0.115 252.2)", "oklch(55% 0.115 252.2)", "oklch(65% 0.115 252.2)", "oklch(80% 0.081 252.2)", "oklch(95% 0.024 252.2)"]
+			}
+		},
+		"typographyMeta": {
+			"headline": {
+				"displayName": "Headline",
+				"purpose": "Modal titles only."
+			},
+			"wordmark": {
+				"displayName": "Wordmark",
+				"purpose": "The Nebulosa name beside the logo in the top bar, hidden on phones."
+			},
+			"title": {
+				"displayName": "Title",
+				"purpose": "Workspace and tool titles in the header, tool card names, page titles."
+			},
+			"body": {
+				"displayName": "Body",
+				"purpose": "The page default; modal copy and list item names."
+			},
+			"body-dense": {
+				"displayName": "Body Dense",
+				"purpose": "The working size: controls, buttons, data rows, panel content, menus."
+			},
+			"label": {
+				"displayName": "Label",
+				"purpose": "Uppercase section headings, field labels, panel titles, status pills on tool cards."
+			},
+			"caption": {
+				"displayName": "Caption",
+				"purpose": "Notes under a control, the status bar, table cells, badges."
+			}
+		},
+		"shadows": [
+			{
+				"name": "float",
+				"value": "0 12px 32px rgb(0 0 0 / 0.45)",
+				"purpose": "Popovers, select listboxes, context menus, search results, notification panel."
+			},
+			{
+				"name": "dialog",
+				"value": "0 24px 64px rgb(0 0 0 / 0.55)",
+				"purpose": "Modals, over a rgb(10 10 9 / 0.72) scrim with a light backdrop blur."
+			},
+			{
+				"name": "drawer",
+				"value": "-16px 0 48px rgb(0 0 0 / 0.45)",
+				"purpose": "The contextual panel as a drawer below 1024 px, over a rgb(10 10 9 / 0.6) scrim."
+			}
+		],
+		"motion": [
+			{
+				"name": "duration-standard",
+				"value": "150ms",
+				"purpose": "Colour, border, and transform transitions of controls, chevrons, and modal entry."
+			},
+			{
+				"name": "duration-progress",
+				"value": "200ms",
+				"purpose": "Width of a progress bar fill."
+			},
+			{
+				"name": "pulse",
+				"value": "2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+				"purpose": "The active status dot and a progress bar whose share done is unknown."
+			},
+			{
+				"name": "reduced-motion",
+				"value": "none",
+				"purpose": "Every transition and animation turns off under prefers-reduced-motion."
+			}
+		],
+		"breakpoints": [
+			{
+				"name": "sm",
+				"value": "640px"
+			},
+			{
+				"name": "lg",
+				"value": "1024px"
+			},
+			{
+				"name": "xl",
+				"value": "1280px"
+			}
+		]
+	},
+	"components": [
+		{
+			"name": "Primary Button",
+			"kind": "button",
+			"refersTo": "button-primary",
+			"description": "The one primary action of a group: Solve Image, Start, Save.",
+			"html": "<button class=\"ds-btn-primary\">Solve Image</button>",
+			"css": ".ds-btn-primary { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 7px 14px; border-radius: 10px; border: 1px solid transparent; font-size: 12.25px; line-height: 17.5px; font-weight: 500; cursor: pointer; transition: background-color 150ms, border-color 150ms, color 150ms; background: var(--color-accent); color: var(--color-on-accent); } .ds-btn-primary:hover { background: var(--color-accent-hover); } .ds-btn-primary:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; } .ds-btn-primary:disabled { background: var(--color-base-300); color: var(--color-ink-300); cursor: not-allowed; }"
+		},
+		{
+			"name": "Secondary Button",
+			"kind": "button",
+			"refersTo": "button-secondary",
+			"description": "Every other command beside the primary one.",
+			"html": "<button class=\"ds-btn-secondary\">Test Configuration</button>",
+			"css": ".ds-btn-secondary { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 7px 14px; border-radius: 10px; border: 1px solid transparent; font-size: 12.25px; line-height: 17.5px; font-weight: 500; cursor: pointer; transition: background-color 150ms, border-color 150ms, color 150ms; background: transparent; color: var(--color-ink-100); border-color: var(--color-line-200); } .ds-btn-secondary:hover { background: var(--color-base-300); border-color: var(--color-ink-300); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }"
+		},
+		{
+			"name": "Ghost Button",
+			"kind": "button",
+			"refersTo": "button-ghost",
+			"description": "A light command inside a section, in Ember Clay text.",
+			"html": "<button class=\"ds-btn-ghost\">Show Framing</button>",
+			"css": ".ds-btn-ghost { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 7px 14px; border-radius: 10px; border: 1px solid transparent; font-size: 12.25px; line-height: 17.5px; font-weight: 500; cursor: pointer; transition: background-color 150ms, border-color 150ms, color 150ms; background: transparent; color: var(--color-accent); } .ds-btn-ghost:hover { background: var(--color-accent-subtle); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }"
+		},
+		{
+			"name": "Icon Button",
+			"kind": "button",
+			"refersTo": "icon-button",
+			"description": "An icon-only command or toggle; its label is the tooltip.",
+			"html": "<span class=\"ds-icon-row\"><button class=\"ds-icon-btn\" title=\"Toggle panel\"><svg viewBox=\"0 0 24 24\" width=\"17.5\" height=\"17.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 5h16v14H4zM15 5v14\"/></svg></button><button class=\"ds-icon-btn ds-icon-btn--pressed\" title=\"Toggle panel (pressed)\"><svg viewBox=\"0 0 24 24\" width=\"17.5\" height=\"17.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 5h16v14H4zM15 5v14\"/></svg></button></span>",
+			"css": ".ds-icon-row { display: inline-flex; gap: 7px; } .ds-icon-btn { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--color-ink-200); cursor: pointer; transition: background-color 150ms, color 150ms; } .ds-icon-btn:hover { background: var(--color-base-300); color: var(--color-ink-100); } .ds-icon-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; } .ds-icon-btn--pressed, .ds-icon-btn--pressed:hover { background: var(--color-accent-subtle); color: var(--color-accent); }"
+		},
+		{
+			"name": "Number Field",
+			"kind": "input",
+			"refersTo": "input",
+			"description": "A labelled field with its unit inside the right edge.",
+			"html": "<label class=\"ds-field\"><span class=\"ds-field-label\">Exposure Time</span><span class=\"ds-field-box\"><input class=\"ds-input\" value=\"120\" /><span class=\"ds-field-unit\">s</span></span></label>",
+			"css": ".ds-field { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: flex; flex-direction: column; gap: 3.5px; width: 220px; } .ds-field-label { font-size: 10.5px; line-height: 14px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-ink-200); } .ds-field-box { position: relative; } .ds-input { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); box-sizing: border-box; width: 100%; height: 33.25px; padding: 7px 28px 7px 10.5px; border: 1px solid var(--color-line-200); border-radius: 6px; background: var(--color-base-200); color: var(--color-ink-100); font-size: 12.25px; line-height: 17.5px; transition: border-color 150ms; } .ds-input:hover { border-color: var(--color-ink-300); } .ds-input:focus { border-color: var(--color-accent); outline: 2px solid var(--color-accent); outline-offset: -1px; } .ds-field-unit { position: absolute; top: 50%; right: 10.5px; transform: translateY(-50%); font-size: 10.5px; color: var(--color-ink-300); pointer-events: none; }"
+		},
+		{
+			"name": "Segmented Control",
+			"kind": "input",
+			"refersTo": "segmented-option-selected",
+			"description": "Two to five short options, the chosen one in Ember Wash.",
+			"html": "<div class=\"ds-seg\"><button class=\"ds-seg-opt\">Light</button><button class=\"ds-seg-opt ds-seg-opt--on\">Dark</button><button class=\"ds-seg-opt\">Flat</button><button class=\"ds-seg-opt\">Bias</button></div>",
+			"css": ".ds-seg { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: flex; height: 33.25px; } .ds-seg-opt { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); flex: 1; padding: 0 7px; border: 1px solid var(--color-line-200); background: var(--color-base-200); color: var(--color-ink-200); font-size: 12.25px; cursor: pointer; transition: background-color 150ms, color 150ms; } .ds-seg-opt + .ds-seg-opt { margin-left: -1px; } .ds-seg-opt:first-child { border-radius: 6px 0 0 6px; } .ds-seg-opt:last-child { border-radius: 0 6px 6px 0; } .ds-seg-opt:hover { background: var(--color-base-300); color: var(--color-ink-100); } .ds-seg-opt:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; position: relative; z-index: 2; } .ds-seg-opt--on, .ds-seg-opt--on:hover { position: relative; z-index: 1; border-color: var(--color-accent); background: var(--color-accent-subtle); color: var(--color-accent); }"
+		},
+		{
+			"name": "Status Badge",
+			"kind": "chip",
+			"refersTo": "status-badge",
+			"description": "A state in words, tinted by its tone.",
+			"html": "<span class=\"ds-badges\"><span class=\"ds-badge ds-badge--active\"><i></i>Exposing</span><span class=\"ds-badge ds-badge--success\"><i></i>Connected</span><span class=\"ds-badge ds-badge--warning\"><i></i>Flip soon</span><span class=\"ds-badge ds-badge--danger\"><i></i>Failed</span><span class=\"ds-badge ds-badge--muted\">Idle</span></span>",
+			"css": ".ds-badges { display: inline-flex; flex-wrap: wrap; gap: 7px; } .ds-badge { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: inline-flex; align-items: center; gap: 5.25px; height: 21px; padding: 0 8.75px; border: 1px solid var(--color-line-100); border-radius: 9999px; font-size: 10.5px; line-height: 1; white-space: nowrap; color: var(--color-ink-200); } .ds-badge i { width: 5.25px; height: 5.25px; border-radius: 9999px; background: currentColor; } .ds-badge--active { color: var(--color-accent); border-color: color-mix(in srgb, var(--color-accent) 50%, transparent); } .ds-badge--active i { animation: ds-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; } .ds-badge--success { color: var(--color-success); border-color: color-mix(in srgb, var(--color-success) 50%, transparent); } .ds-badge--warning { color: var(--color-warning); border-color: color-mix(in srgb, var(--color-warning) 60%, transparent); } .ds-badge--danger { color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 60%, transparent); } .ds-badge--muted { color: var(--color-ink-300); border-style: dashed; } .ds-badge--muted i { display: none; } @keyframes ds-pulse { 50% { opacity: 0.5; } } @media (prefers-reduced-motion: reduce) { .ds-badge--active i { animation: none; } }"
+		},
+		{
+			"name": "Tool Card",
+			"kind": "card",
+			"refersTo": "tool-card",
+			"description": "An entry of the Tools catalog: icon tile, name, availability, description.",
+			"html": "<button class=\"ds-tool-card\"><span class=\"ds-tool-icon\"><svg viewBox=\"0 0 24 24\" width=\"17.5\" height=\"17.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3l2.6 5.5l6 .8l-4.4 4.2l1.1 6L12 16.6l-5.3 2.9l1.1-6l-4.4-4.2l6-.8z\"/></svg></span><span class=\"ds-tool-body\"><span class=\"ds-tool-head\"><span class=\"ds-tool-name\">Observing Planner</span><span class=\"ds-tool-pill\">Available</span></span><span class=\"ds-tool-desc\">Finds the best targets of a night, explains why, and keeps manual night plans.</span></span></button>",
+			"css": ".ds-tool-card { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: flex; align-items: flex-start; gap: 10.5px; width: 300px; padding: 10.5px; border: 1px solid var(--color-line-100); border-radius: 10px; background: var(--color-base-000); color: inherit; text-align: left; cursor: pointer; transition: border-color 150ms; } .ds-tool-card:hover { border-color: var(--color-line-200); } .ds-tool-card:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; } .ds-tool-icon { display: flex; flex: none; align-items: center; justify-content: center; width: 31.5px; height: 31.5px; border-radius: 6px; background: var(--color-base-200); color: var(--color-ink-200); } .ds-tool-body { display: flex; flex-direction: column; gap: 3.5px; min-width: 0; } .ds-tool-head { display: flex; align-items: center; justify-content: space-between; gap: 7px; } .ds-tool-name { font-size: 12.25px; line-height: 17.5px; font-weight: 600; color: var(--color-ink-100); } .ds-tool-pill { flex: none; padding: 1px 7px; border: 1px solid color-mix(in srgb, var(--color-success) 40%, transparent); border-radius: 9999px; font-size: 10.5px; line-height: 14px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-success); } .ds-tool-desc { font-size: 10.5px; line-height: 14px; color: var(--color-ink-200); }"
+		},
+		{
+			"name": "Navigation Rail",
+			"kind": "nav",
+			"refersTo": "navigation-rail",
+			"description": "The workspace switcher; the active entry carries the Ember Clay bar.",
+			"html": "<nav class=\"ds-rail\"><button class=\"ds-rail-btn\"><svg viewBox=\"0 0 24 24\" width=\"17.5\" height=\"17.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 5h16v14H4zM4 16l5-5l4 4l2-2l5 5M15.5 8a1.5 1.5 0 1 0 0 3a1.5 1.5 0 1 0 0-3\"/></svg><span>Images</span></button><button class=\"ds-rail-btn ds-rail-btn--on\"><b></b><svg viewBox=\"0 0 24 24\" width=\"17.5\" height=\"17.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3l2.6 5.5l6 .8l-4.4 4.2l1.1 6L12 16.6l-5.3 2.9l1.1-6l-4.4-4.2l6-.8z\"/></svg><span>Sky</span></button><button class=\"ds-rail-btn\"><svg viewBox=\"0 0 24 24\" width=\"17.5\" height=\"17.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z\"/></svg><span>Tools</span></button></nav>",
+			"css": ".ds-rail { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: flex; flex-direction: column; align-items: center; gap: 3.5px; width: 56px; padding: 7px 0; border-right: 1px solid var(--color-line-100); background: var(--color-base-000); } .ds-rail-btn { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); position: relative; display: flex; flex-direction: column; align-items: center; gap: 3.5px; width: 49px; padding: 7px 0; border: 0; border-radius: 6px; background: transparent; color: var(--color-ink-300); cursor: pointer; transition: background-color 150ms, color 150ms; } .ds-rail-btn span { font-size: 10.5px; line-height: 10.5px; } .ds-rail-btn:hover { background: var(--color-base-300); color: var(--color-ink-100); } .ds-rail-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; } .ds-rail-btn--on, .ds-rail-btn--on:hover { background: var(--color-accent-subtle); color: var(--color-accent); } .ds-rail-btn--on span { font-weight: 600; } .ds-rail-btn b { position: absolute; top: 7px; bottom: 7px; left: -3.5px; width: 3.5px; border-radius: 9999px; background: var(--color-accent); }"
+		},
+		{
+			"name": "Collapsible Section with Data Rows",
+			"kind": "custom",
+			"refersTo": "contextual-panel",
+			"description": "The readout of every contextual panel: a disclosure heading over label and value rows.",
+			"html": "<div class=\"ds-panel\"><details class=\"ds-sec\" open><summary><svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 6l6 6l-6 6\"/></svg><span>Position</span></summary><div class=\"ds-rows\"><div class=\"ds-row\"><span>Right Ascension</span><b>05h 35m 17.3s</b></div><div class=\"ds-row\"><span>Declination</span><b>−05° 23′ 28″</b></div><div class=\"ds-row\"><span>Altitude</span><b>42.7°</b></div><div class=\"ds-row\"><span>Magnitude</span><b>4.0</b></div></div></details><details class=\"ds-sec\"><summary><svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 6l6 6l-6 6\"/></svg><span>Visibility</span><em>Rises 18:42</em></summary></details></div>",
+			"css": ".ds-panel { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); width: 280px; background: var(--color-base-000); border: 1px solid var(--color-line-100); } .ds-sec { padding: 10.5px 14px; border-bottom: 1px solid var(--color-line-100); } .ds-sec:last-child { border-bottom: 0; } .ds-sec summary { display: flex; align-items: center; gap: 7px; list-style: none; cursor: pointer; font-size: 10.5px; line-height: 14px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-ink-300); } .ds-sec summary::-webkit-details-marker { display: none; } .ds-sec summary:focus-visible { outline: 2px solid var(--color-accent); } .ds-sec summary svg { flex: none; transition: transform 150ms; } .ds-sec[open] > summary svg { transform: rotate(90deg); } .ds-sec summary em { margin-left: auto; font-style: normal; text-transform: none; letter-spacing: 0; color: var(--color-ink-200); } .ds-sec[open] summary em { display: none; } .ds-rows { margin-top: 7px; display: flex; flex-direction: column; } .ds-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; column-gap: 10.5px; font-size: 12.25px; line-height: 17.5px; } .ds-row span { color: var(--color-ink-300); } .ds-row b { margin-left: auto; font-weight: 400; text-align: right; font-variant-numeric: tabular-nums; color: var(--color-ink-100); } @media (prefers-reduced-motion: reduce) { .ds-sec summary svg { transition: none; } }"
+		}
+	],
+	"narrative": {
+		"northStar": "The Observatory Console",
+		"overview": "Nebulosa looks like the control desk of a small observatory at night: a dense, calm surface of warm near-black panels, monospace readouts, and one ember glow that marks what is live or chosen. It is built for an operator in the dark, often across the room or on a phone, so the interface never competes with the sky. Chrome stays quiet; readings, status words, and the image or star map in the middle carry the screen.\n\nDensity is high and deliberate. The root type size is 14 px, dense panels run at 12.25 px and 10.5 px, and the frame (top bar, navigation rail, status bar, contextual panel) is fixed so the eye always knows where status, navigation, and controls live. Depth comes from small tonal steps between warm darks and from one-pixel lines, not from shadows, gradients, or glow.\n\nThe system rejects four looks outright: the neon sci-fi HUD (glowing cyan or purple, scanlines, space-game chrome), any light or bright theme, glossy consumer SaaS (gradients, big shadowed rounded cards, marketing flourishes inside the app), and the default cool blue-gray dark palette.",
+		"keyCharacteristics": [
+			"Dark only, warm neutrals, one ember accent.",
+			"One typeface for everything: JetBrains Mono, tabular figures for values.",
+			"Flat, tonally layered surfaces divided by one-pixel lines.",
+			"Small uppercase tracked labels head every group.",
+			"Status is always written in words; colour only reinforces it.",
+			"A fixed console frame around one swappable workspace."
+		],
+		"rules": [
+			{
+				"name": "The One Ember Rule",
+				"body": "Ember Clay marks what is chosen, focused, running, or the one primary action. It is never decoration, never a background block, never a second brand colour. If two things on a screen glow, one of them is wrong.",
+				"section": "colors"
+			},
+			{
+				"name": "The Warm Dark Rule",
+				"body": "Every neutral is warm. A new colour enters as a token in `web/src/index.css`, never as a literal in a component, and never as a cool blue-gray.",
+				"section": "colors"
+			},
+			{
+				"name": "The Words First Rule",
+				"body": "A signal colour never carries a state alone: the state is a word (Connected, Slewing, Failed) and the colour only tints it.",
+				"section": "colors"
+			},
+			{
+				"name": "The One Voice Rule",
+				"body": "JetBrains Mono is the only typeface. Hierarchy comes from size, weight, case, and the three ink tones, never from a second family.",
+				"section": "typography"
+			},
+			{
+				"name": "The Aligned Digits Rule",
+				"body": "Every value that can change or be compared (coordinates, temperatures, counts, times, table numbers) uses tabular figures and is right-aligned against its label.",
+				"section": "typography"
+			},
+			{
+				"name": "The Fixed Frame Rule",
+				"body": "Status lives in the status bar, navigation in the rail, context in the right panel. A new screen fills the workspace slot and never invents a second frame, toolbar zone, or status surface.",
+				"section": "layout"
+			},
+			{
+				"name": "The Flat Desk Rule",
+				"body": "Anything that sits in the layout is flat. A shadow means \"this is floating above the desk and will go away\"; cards, panels, and sections never get one.",
+				"section": "elevation"
+			}
+		],
+		"dos": [
+			"Do use the colour tokens (`base-000`…`base-300`, `line-100`/`line-200`, `ink-100`…`ink-300`, `accent`, the four signals) and add a new token in `web/src/index.css` before using a new colour.",
+			"Do keep Ember Clay to selection, focus, running state, and one primary action per group.",
+			"Do write every state as a word and every quantity with its unit, with colour only reinforcing it.",
+			"Do show every datum as a data row: muted label left, tabular value right.",
+			"Do head every group with the uppercase 10.5 px Label (0.08em tracking).",
+			"Do use 6 px corners on controls, 10 px on buttons and cards, 24 px only on modals.",
+			"Do keep transitions at 150 ms on colour and honour `motion-reduce`.",
+			"Do compose new screens from the primitives in `web/src/ui/` and the shell frame."
+		],
+		"donts": [
+			"Don't add a light theme, white panels, or large bright fills; the interface is used in the dark.",
+			"Don't drift toward a neon sci-fi HUD: no glowing cyan or purple, scanlines, or space-game chrome.",
+			"Don't bring in glossy consumer SaaS styling: no gradients, no big rounded cards with drop shadows, no marketing flourishes inside the app.",
+			"Don't use cool blue-gray darks; every neutral stays warm.",
+			"Don't put a shadow on anything that sits in the layout; shadows are only for floating layers.",
+			"Don't add a second typeface.",
+			"Don't let colour carry a state alone.",
+			"Don't add a status surface, toolbar zone, or frame outside the fixed shell."
+		]
+	}
+}

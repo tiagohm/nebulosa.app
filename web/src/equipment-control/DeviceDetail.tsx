@@ -117,7 +117,7 @@ export function DeviceDetail({ group, view, messages }: DeviceDetailProps) {
 			<header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line-100 px-4 py-3">
 				<Icon name={primary?.type ?? 'server'} className="text-ink-300" />
 				<div className="flex min-w-0 flex-1 flex-col">
-					<h2 className="m-0 truncate text-md leading-6 font-medium text-ink-100">{group.name}</h2>
+					<h2 className="m-0 truncate leading-6 font-medium text-ink-100">{group.name}</h2>
 					<Notice>
 						{groupTypes(group)} · {connectionText(groupConnected(group), pending)}
 					</Notice>

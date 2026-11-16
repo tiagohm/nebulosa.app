@@ -7,7 +7,7 @@ import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { LinkButton } from '../ui/LinkButton'
-import { moveIndex } from '../ui/navigation'
+import { moveInRows } from '../ui/navigation'
 import { SectionHeading } from '../ui/SectionHeading'
 import { StatusBadge } from '../ui/StatusBadge'
 import { TextInput } from '../ui/TextInput'
@@ -76,8 +76,9 @@ export function ToolsWorkspace() {
 // Catalog of the tools, in the groups of a night after a Running group of the tools running work on the server, narrowed
 // by a filter, each card with the readiness of its tool for the active profile. The filter is transient view state of the
 // catalog; Enter opens the only tool it leaves, and ArrowDown
-// moves to the cards. The cards are one Tab stop, the last one focused or opened, and Arrow keys, Home, and End move
-// between the openable ones in reading order. The scroll position is kept for the tab across tools and workspaces.
+// moves to the cards. The cards are one Tab stop, the last one focused or opened; ArrowUp and ArrowDown move between
+// the openable ones by row as the grid is laid out, across groups, and ArrowLeft, ArrowRight, Home, and End in reading
+// order. The scroll position is kept for the tab across tools and workspaces.
 function ToolsCatalog() {
 	const context = useToolReadinessContext()
 	const [query, setQuery] = useState('')
@@ -113,11 +114,14 @@ function ToolsCatalog() {
 		}
 	}
 
-	// Moves the focus between the openable cards with the Arrow keys, Home, and End.
+	// Moves the focus between the openable cards: ArrowUp and ArrowDown to the card above or below as the grid is laid
+	// out, ArrowLeft and ArrowRight in reading order, and Home and End to the first and last.
 	function handleCardsKeyDown(e: KeyboardEvent<HTMLElement>) {
 		const focused = (document.activeElement as HTMLElement | null)?.dataset.toolCard
-		const index = moveIndex(openable.indexOf(focused as ToolId), openable.length, e.key)
-		if (index === undefined || focused === undefined) return
+		if (focused === undefined) return
+		const boxes = openable.map((id) => scrollRef.current?.querySelector(`[data-tool-card="${id}"]`)?.getBoundingClientRect() ?? { top: 0, left: 0, width: 0 })
+		const index = moveInRows(boxes, openable.indexOf(focused as ToolId), e.key)
+		if (index === undefined) return
 		e.preventDefault()
 		focusCard(openable[index])
 	}

@@ -126,5 +126,6 @@ Behaviour every screen keeps:
 - Values shown are those the server reports; inputs hold pending values until an explicit action (Apply, Save, Start, Solve Image, …).
 - Unavailable actions stay visible and disabled with the reason as their tooltip (`Not available yet.`, the busy or missing device); a panel that needs equipment says what to set up and offers Equipment Setup.
 - Lists, table rows that select, rails, tabs, and carousels move with the arrow keys, Home, and End (`moveIndex` in `web/src/ui/navigation.ts`) and select with Enter or Space.
+  A wrapping grid of cards moves by row with ArrowUp and ArrowDown, keeping the column, and in reading order with the others (`moveInRows`).
   Native elements, `title`, and visually hidden text name controls; `aria-*` attributes are not used (`AGENTS.md`).
 - Layouts work from phone width up: secondary text hides with `max-sm:`, the panel becomes a drawer, toolbars wrap (the Sky search takes a line of its own, with the buttons below it), and nothing scrolls the page horizontally.

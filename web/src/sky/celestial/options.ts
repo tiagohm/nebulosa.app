@@ -19,76 +19,66 @@ const DEFAULT_UPDATE_INTERVAL = 10000
 // CSS keyword for a fill that draws nothing.
 export const TRANSPARENT = 'transparent'
 
-// Material palette colors used by the default theme.
-const WHITE = '#FFFFFF'
-const RED = '#F44336'
-const PURPLE = '#9C27B0'
-const INDIGO = '#3F51B5'
-const BLUE = '#2196F3'
-const LIGHT_BLUE = '#03A9F4'
-const CYAN = '#00BCD4'
-const GREEN = '#4CAF50'
-const LIGHT_GREEN = '#8BC34A'
-const LIME = '#CDDC39'
-const YELLOW = '#FFEB3B'
-const ORANGE = '#FF9800'
-const BROWN = '#795548'
-const GREY = '#9E9E9E'
-const BLUE_GREY = '#607D8B'
+// Neutral colors of the default theme, the warm ink and line tones of the interface (web/src/index.css): a plain map
+// for callers that pass no theme, such as tests. The Sky passes the palette of its design tokens (../palette.ts).
+const INK = '#c2c0b6'
+const MUTED = '#9c9a92'
+const LINE = '#6b6a64'
 
 // Theme used for every field callers leave unspecified.
 export const DEFAULT_THEME: ThemeOptions = {
 	background: TRANSPARENT,
+	fontFamily: 'ui-monospace, monospace',
 	stars: {
-		baseColor: '#f8fbff',
-		labelColor: '#d8deca',
-		labelFont: '10px system-ui, sans-serif',
+		baseColor: '#faf9f5',
+		labelColor: MUTED,
+		labelFont: '10px ui-monospace, monospace',
 		magnitudeScale: [-1.5, 9],
 		minRadius: 0.45,
 		maxRadius: 1.8,
 	},
 	grid: {
-		color: GREY,
-		opacity: 0.38,
+		color: LINE,
+		opacity: 0.35,
 	},
 	horizon: {
-		color: GREEN,
+		color: INK,
 		fillBelowHorizon: TRANSPARENT,
 	},
 	milkyWay: {
-		lineColor: CYAN,
-		levelColors: [CYAN, LIGHT_BLUE, BLUE, INDIGO, PURPLE],
+		lineColor: LINE,
+		levelColors: [LINE, LINE, LINE, LINE, LINE],
 		levelOpacities: [0.7, 0, 0, 0, 0],
 		lineOpacity: 0.6,
 		lineWidth: 0.65,
 	},
 	constellations: {
-		color: GREY,
-		opacity: 0.7,
-		labelColor: WHITE,
-		labelFont: '10px system-ui, sans-serif',
-		labelOpacity: 0.7,
-		lineColor: BLUE_GREY,
-		lineOpacity: 0.3,
-		boundaryColor: PURPLE,
-		boundaryOpacity: 0.6,
+		color: LINE,
+		opacity: 0.6,
+		labelColor: MUTED,
+		labelFont: '10px ui-monospace, monospace',
+		labelOpacity: 0.75,
+		lineColor: LINE,
+		lineOpacity: 0.55,
+		boundaryColor: LINE,
+		boundaryOpacity: 0.35,
 	},
 	deepSky: {
-		color: ORANGE,
-		labelColor: ORANGE,
+		color: MUTED,
+		labelColor: MUTED,
 	},
 	movingBodies: {
-		planetColor: RED,
-		asteroidColor: BROWN,
-		cometColor: LIME,
-		satelliteColor: CYAN,
-		labelColor: LIGHT_GREEN,
+		planetColor: INK,
+		asteroidColor: MUTED,
+		cometColor: MUTED,
+		satelliteColor: MUTED,
+		labelColor: INK,
 	},
 	selectedObject: {
-		color: YELLOW,
+		color: INK,
 	},
 	hoverHighlight: {
-		color: LIGHT_BLUE,
+		color: INK,
 	},
 }
 
@@ -130,17 +120,17 @@ export const DEFAULT_STAR_OPTIONS: Required<StarLayerOptions> = {
 const DEFAULT_REFERENCE_LINES_OPTIONS: ResolvedReferenceLinesOptions = {
 	localMeridian: {
 		enabled: true,
-		color: 'rgba(136, 210, 255, 0.8)',
+		color: MUTED,
 		lineWidth: 0.85,
 	},
 	celestialEquator: {
 		enabled: true,
-		color: 'rgba(255, 210, 96, 0.8)',
+		color: MUTED,
 		lineWidth: 0.85,
 	},
 	ecliptic: {
 		enabled: true,
-		color: 'rgba(231, 120, 255, 0.8)',
+		color: MUTED,
 		lineWidth: 0.85,
 	},
 }
@@ -186,6 +176,7 @@ export function validateObserver(observer: ObserverLocation): ObserverLocation {
 function mergeTheme(theme?: PartialThemeOptions): ThemeOptions {
 	return {
 		background: theme?.background ?? DEFAULT_THEME.background,
+		fontFamily: theme?.fontFamily ?? DEFAULT_THEME.fontFamily,
 		stars: { ...DEFAULT_THEME.stars, ...theme?.stars },
 		grid: { ...DEFAULT_THEME.grid, ...theme?.grid },
 		horizon: { ...DEFAULT_THEME.horizon, ...theme?.horizon },

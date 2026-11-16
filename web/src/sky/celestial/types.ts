@@ -137,6 +137,8 @@ export interface MovingBody {
 export interface ThemeOptions {
 	// Sky background fill.
 	background: string
+	// CSS font family of the zoom-scaled labels (the names of deep-sky objects, moving bodies, and satellites).
+	fontFamily: string
 	// Star symbols and labels.
 	stars: {
 		// Star color when colors are not derived from B-V.

@@ -20,6 +20,15 @@ colors:
     warning: '#e9a13b'
     info: '#6ba6e8'
     scrim: '#0a0a09'
+    map-horizon: '#9a8460'
+    map-equator: '#8fa3b8'
+    map-ecliptic: '#c4a86e'
+    map-meridian: '#ad93a8'
+    map-deep-sky: '#8ea68f'
+    map-planet: '#e6d08f'
+    map-asteroid: '#a08a72'
+    map-comet: '#9fb7b0'
+    map-radiant: '#c98f98'
 typography:
     headline:
         fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
@@ -201,6 +210,10 @@ A warm, low-light palette: near-black surfaces with a faint olive warmth, cream 
 - **Arcturus Amber** (`warning`): attention needed but nothing failed; a flip window approaching.
 - **Antares Red** (`danger`): failure, refusal, a destructive confirmation, an out-of-range reading.
 - **Vega Blue** (`info`): neutral information in notifications.
+
+### Star Map
+
+The Sky's star map is drawn on a canvas in the same palette, read from the tokens (`web/src/sky/palette.ts`): stars keep their B−V colours; names are Zodiacal Gray; the grid and constellation lines and boundaries are faint Graticule; the field of view is Starlight Cream, the footprint and mark sent from an image dashed Moonlight; the selection reticle is Ember Clay and nothing else on the map is; the connected mount is Aurora Green. Kinds of objects and reference lines are told apart by muted, low-chroma `map-*` hues that never glow: horizon (umber), celestial equator (slate), ecliptic (sand), local meridian (mauve), deep-sky objects (sage), planets (pale gold), asteroids (brown), comets (gray-teal), meteor radiants (dusty rose). The Display panel shows each hue beside its layer, so it is the map's legend. Labels are JetBrains Mono.
 
 ### Named Rules
 

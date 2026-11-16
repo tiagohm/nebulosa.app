@@ -58,6 +58,21 @@
 	--radius-xl: 24px;
 }
 
+/* Star map colours of the Sky (web/src/sky/palette.ts reads them for the canvas, so they are always emitted): muted,
+   low-chroma hues that tell the map's kinds apart without glowing, so the Ember accent stays the selection alone. The
+   rest of the map draws in the ink and line neutrals. */
+@theme static {
+	--color-map-horizon: #9a8460;
+	--color-map-equator: #8fa3b8;
+	--color-map-ecliptic: #c4a86e;
+	--color-map-meridian: #ad93a8;
+	--color-map-deep-sky: #8ea68f;
+	--color-map-planet: #e6d08f;
+	--color-map-asteroid: #a08a72;
+	--color-map-comet: #9fb7b0;
+	--color-map-radiant: #c98f98;
+}
+
 @layer base {
 	html {
 		color-scheme: dark;

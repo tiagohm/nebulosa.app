@@ -11,6 +11,7 @@ import { type FramePoint, framePolygon, isFraming, type OpticalConfiguration, re
 import { MeteorRadiantLayer, type MeteorRadiantTargets } from './meteors.sky'
 import { type MountPoint, mountRuntime } from './mount'
 import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, type SkySelectionRef } from './objects'
+import { skyMapFont, skyMapPalette, skyMapReferenceLines, skyMapTheme } from './palette'
 import { isRememberable, type RememberedObject, RememberedObjects, type RememberedShapeData, REMEMBERED_SHAPE_TYPE, rememberedOf, rememberedShapeId } from './remembered'
 import { skySatelliteState } from './satellite/satellite'
 import { SatelliteLayer, type SatelliteTargets } from './satellites.sky'
@@ -51,20 +52,11 @@ const REFRESH: Readonly<Record<SkyClockMode, SkyRefreshOptions>> = { now: REALTI
 // of the horizon; at higher zoom the sky would otherwise drift by hundreds of pixels per update.
 const SKY_ANCHOR_ZOOM = 8
 
-// Color of the selection reticle.
-const SELECTION_COLOR = '#7e57c2'
-
-// Color of the symbol and name of a remembered catalog object, muted beside the map's own objects.
-const REMEMBERED_COLOR = '#b0bec5'
-
 // Radius of the ring of a remembered catalog object in pixels.
 const REMEMBERED_RING_RADIUS = 4
 
 // Id of the custom shape drawing the field of view.
 const FRAMING_SHAPE_ID = 'framing'
-
-// Color of the field of view outline.
-const FRAMING_COLOR = '#4dd0e1'
 
 // Points sampled along each edge of the field of view, so wide fields follow the projection's curvature.
 const FRAMING_EDGE_SAMPLES = 16
@@ -75,23 +67,14 @@ const FRAMING_LABEL_MIN_PX = 60
 // Id of the custom shape drawing the footprint of a solved image.
 const FOOTPRINT_SHAPE_ID = 'image-footprint'
 
-// Color of the footprint of a solved image, distinct from the field of view of the framing.
-const FOOTPRINT_COLOR = '#f2b84b'
-
 // Id of the custom shape marking a coordinate sent from an image.
 const COORDINATE_SHAPE_ID = 'image-coordinate'
-
-// Color of the mark of a coordinate sent from an image.
-const COORDINATE_COLOR = '#f2b84b'
 
 // Half length of the arms of the mark of a coordinate, in pixels.
 const COORDINATE_MARK = 8
 
 // Id of the custom shape marking the mount's position.
 const MOUNT_MARKER_ID = 'mount-marker'
-
-// Color of the mount marker, distinct from the selection reticle and the field of view.
-const MOUNT_COLOR = '#66bb6a'
 
 // Color of the dark halo under the mount marker, keeping it legible over bright areas.
 const MOUNT_HALO = 'rgba(0, 0, 0, 0.6)'
@@ -109,7 +92,7 @@ function drawMountMarker(ctx: CanvasRenderingContext2D, x: number, y: number, na
 
 	for (const [lineWidth, strokeStyle] of [
 		[4, MOUNT_HALO],
-		[1.5, MOUNT_COLOR],
+		[1.5, skyMapPalette().mount],
 	] as const) {
 		ctx.lineWidth = lineWidth
 		ctx.strokeStyle = strokeStyle
@@ -126,8 +109,8 @@ function drawMountMarker(ctx: CanvasRenderingContext2D, x: number, y: number, na
 		ctx.stroke()
 	}
 
-	ctx.fillStyle = MOUNT_COLOR
-	ctx.font = '11px ui-sans-serif, system-ui, sans-serif'
+	ctx.fillStyle = skyMapPalette().mount
+	ctx.font = skyMapFont(11)
 	ctx.textAlign = 'left'
 	ctx.textBaseline = 'middle'
 	ctx.fillText(name, x + MOUNT_TICK_RANGE[1] + 4, y)
@@ -135,13 +118,14 @@ function drawMountMarker(ctx: CanvasRenderingContext2D, x: number, y: number, na
 
 // Draws a remembered catalog object at a screen point (pixels): a small ring with its name beside it.
 function drawRememberedObject(ctx: CanvasRenderingContext2D, x: number, y: number, name: string) {
-	ctx.strokeStyle = REMEMBERED_COLOR
+	const color = skyMapPalette().ink300
+	ctx.strokeStyle = color
 	ctx.lineWidth = 1.5
 	ctx.beginPath()
 	ctx.arc(x, y, REMEMBERED_RING_RADIUS, 0, TAU)
 	ctx.stroke()
-	ctx.fillStyle = REMEMBERED_COLOR
-	ctx.font = '11px ui-sans-serif, system-ui, sans-serif'
+	ctx.fillStyle = color
+	ctx.font = skyMapFont(11)
 	ctx.textAlign = 'left'
 	ctx.textBaseline = 'middle'
 	ctx.fillText(name, x + REMEMBERED_RING_RADIUS + 4, y)
@@ -175,7 +159,7 @@ function drawOutlineLabel(ctx: CanvasRenderingContext2D, projected: readonly Scr
 	if (!placement || placement.width < FRAMING_LABEL_MIN_PX) return
 
 	ctx.fillStyle = color
-	ctx.font = '11px ui-monospace, monospace'
+	ctx.font = skyMapFont(11)
 	ctx.textAlign = placement.align
 	ctx.textBaseline = 'bottom'
 	ctx.fillText(label, placement.x, placement.y - 4)
@@ -187,11 +171,12 @@ function drawFraming(ctx: CanvasRenderingContext2D, state: RenderState, outline:
 	ctx.beginPath()
 	const projected = traceOutline(ctx, state, outline)
 
-	ctx.strokeStyle = FRAMING_COLOR
+	const color = skyMapPalette().ink100
+	ctx.strokeStyle = color
 	ctx.lineWidth = 1.5
 	ctx.stroke()
 
-	drawOutlineLabel(ctx, projected, label, FRAMING_COLOR)
+	drawOutlineLabel(ctx, projected, label, color)
 }
 
 // Strokes the footprint of a solved image (points of date in radians, undefined where its WCS could not unproject),
@@ -206,13 +191,14 @@ function drawImageFootprint(ctx: CanvasRenderingContext2D, state: RenderState, c
 	ctx.lineTo(center.x + 5, center.y)
 	ctx.moveTo(center.x, center.y - 5)
 	ctx.lineTo(center.x, center.y + 5)
-	ctx.strokeStyle = FOOTPRINT_COLOR
+	const color = skyMapPalette().ink200
+	ctx.strokeStyle = color
 	ctx.lineWidth = 1.5
 	ctx.setLineDash([6, 4])
 	ctx.stroke()
 	ctx.restore()
 
-	drawOutlineLabel(ctx, projected, name, FOOTPRINT_COLOR)
+	drawOutlineLabel(ctx, projected, name, color)
 }
 
 // Returns a sky position [right ascension, declination] in radians as a point of the map.
@@ -222,7 +208,8 @@ function framePoint([rightAscension, declination]: SkyPoint): FramePoint {
 
 // Draws the mark of a coordinate sent from an image at a screen point (pixels): an open cross with its label.
 function drawCoordinateMark(ctx: CanvasRenderingContext2D, x: number, y: number, label: string) {
-	ctx.strokeStyle = COORDINATE_COLOR
+	const color = skyMapPalette().ink200
+	ctx.strokeStyle = color
 	ctx.lineWidth = 1.5
 	ctx.beginPath()
 	ctx.moveTo(x - COORDINATE_MARK, y)
@@ -234,8 +221,8 @@ function drawCoordinateMark(ctx: CanvasRenderingContext2D, x: number, y: number,
 	ctx.moveTo(x, y + 3)
 	ctx.lineTo(x, y + COORDINATE_MARK)
 	ctx.stroke()
-	ctx.fillStyle = COORDINATE_COLOR
-	ctx.font = '11px ui-monospace, monospace'
+	ctx.fillStyle = color
+	ctx.font = skyMapFont(11)
 	ctx.textAlign = 'left'
 	ctx.textBaseline = 'middle'
 	ctx.fillText(label, x + COORDINATE_MARK + 4, y)
@@ -269,9 +256,11 @@ export interface PlanetariumState {
 // Loading state of the map data of the current map.
 export const planetariumState = proxy<PlanetariumState>({ status: 'loading' })
 
-// Construction options of a map: a stereographic chart without the Milky Way (it has no data). The local
-// meridian is drawn only on the local sky, the only chart that has an observer.
+// Construction options of a map: a stereographic chart without the Milky Way (it has no data), drawn in the palette of
+// the design tokens (./palette). The local meridian is drawn only on the local sky, the only chart that has an observer.
 function mapOptions(coordinateSystem: CoordinateSystem): CelestialOptions {
+	const references = skyMapReferenceLines()
+
 	return {
 		width: 1,
 		height: 1,
@@ -279,8 +268,8 @@ function mapOptions(coordinateSystem: CoordinateSystem): CelestialOptions {
 		coordinateSystem,
 		stars: { maxMagnitude: MAP_STAR_MAGNITUDE_LIMIT },
 		layers: { milkyWay: false, constellationBoundaries: false },
-		referenceLines: { localMeridian: { enabled: coordinateSystem === 'horizontal' } },
-		theme: { selectedObject: { color: SELECTION_COLOR } },
+		referenceLines: { ...references, localMeridian: { ...references.localMeridian, enabled: coordinateSystem === 'horizontal' } },
+		theme: skyMapTheme(),
 	}
 }
 

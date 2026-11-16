@@ -96,6 +96,7 @@ Visual language (`web/src/index.css`, Tailwind 4 `@theme`):
   `accent`, `accent-hover`, `accent-subtle` (selected backgrounds), `on-accent`;
   `danger`, `success`, `warning`, `info`;
   `scrim`, the backdrop behind a floating layer, always with an opacity modifier (`bg-scrim/72` behind a modal, `bg-scrim/60` behind the contextual panel drawer).
+  The Sky's star map draws on its canvas in these tokens and the `map-*` hues (horizon, equator, ecliptic, meridian, deep-sky, planet, asteroid, comet, radiant), declared with `@theme static` so they exist without a utility using them and read once by `web/src/sky/palette.ts`; the selection reticle is `accent`, the connected mount `success`, and the Display panel shows each layer's hue as its legend.
   A new colour is added as a token, never as a literal in a component.
 - Radii `rounded-sm` (6 px), `rounded-md` (10 px), `rounded-lg` (16 px), `rounded-xl` (24 px).
   Panel headings are small uppercase `ink-200` text; dense panels use `text-xs`.

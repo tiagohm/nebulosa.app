@@ -220,7 +220,7 @@ export function skyLabelSize(state: RenderState, baseSize: number) {
 
 // Returns the CSS font of a zoom-scaled sky label.
 export function skyLabelFont(state: RenderState, baseSize: number) {
-	return `${skyLabelSize(state, baseSize).toFixed(1)}px system-ui, sans-serif`
+	return `${skyLabelSize(state, baseSize).toFixed(1)}px ${state.theme.fontFamily}`
 }
 
 // Places a left-aligned label next to an anchor (pixels), preferring the right side and keeping it inside

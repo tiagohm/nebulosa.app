@@ -3,6 +3,7 @@ import { TAU } from 'nebulosa/src/core/constants'
 import { type ApiFetch, browserFetch, jsonInit } from '../http'
 import type { Celestial } from './celestial/celestial'
 import { METEOR_RADIANT_SHAPE_TYPE, type MeteorRadiantData, meteorRadiantShapeId } from './objects'
+import { skyMapFont, skyMapPalette } from './palette'
 import { createRequestGuard } from './selection'
 
 // Meteor shower radiants on the Sky map: the radiants of the showers active at the instant the map shows (while the
@@ -20,9 +21,6 @@ export const REFRESH_SPAN_MS = 3_600_000
 
 // Wait after a failed request before asking again, milliseconds.
 const LOAD_RETRY_DELAY_MS = 10_000
-
-// Colour of the radiant glyph, a pink apart from the stars, the deep-sky markers, the planets, and the satellites.
-const RADIANT_COLOR = 'rgb(244 114 182)'
 
 // Radii of the glyph, CSS pixels: the dot and the inner and outer ends of its rays.
 const RADIANT_DOT_RADIUS = 2.5
@@ -59,8 +57,10 @@ export interface MeteorRadiantMap {
 
 // Draws one radiant at a screen point: a dot with rays and its label.
 function drawRadiant(ctx: CanvasRenderingContext2D, x: number, y: number, label: string) {
-	ctx.strokeStyle = RADIANT_COLOR
-	ctx.fillStyle = RADIANT_COLOR
+	// The radiant hue of the palette, apart from the stars, the deep-sky markers, the planets, and the satellites.
+	const color = skyMapPalette().radiant
+	ctx.strokeStyle = color
+	ctx.fillStyle = color
 	ctx.lineWidth = 1.25
 	ctx.lineCap = 'round'
 	ctx.beginPath()
@@ -76,7 +76,7 @@ function drawRadiant(ctx: CanvasRenderingContext2D, x: number, y: number, label:
 	}
 
 	ctx.stroke()
-	ctx.font = '11px ui-sans-serif, system-ui, sans-serif'
+	ctx.font = skyMapFont(11)
 	ctx.textAlign = 'left'
 	ctx.textBaseline = 'middle'
 	ctx.fillText(label, x + RADIANT_RAY_RANGE[1] + 3, y)
@@ -178,7 +178,7 @@ export class MeteorRadiantLayer {
 			selectable: false,
 			render: (_, ctx, { state }) => {
 				const point: [number, number] = [0, 0]
-				ctx.strokeStyle = RADIANT_COLOR
+				ctx.strokeStyle = skyMapPalette().radiant
 				ctx.globalAlpha = 0.8
 				ctx.lineWidth = 1.25
 				ctx.setLineDash([5, 4])

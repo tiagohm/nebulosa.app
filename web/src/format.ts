@@ -139,14 +139,14 @@ export function formatExposureTime(seconds: number) {
 	return Number.isFinite(seconds) ? `${Number(seconds.toPrecision(6))} s` : MISSING
 }
 
-// Returns an elapsed time in seconds as a running clock, minutes and seconds below an hour ("4:05") and hours above
-// ("1:02:05"); whole seconds, a negative time shown as zero.
+// Returns an elapsed time in seconds as a running clock, minutes and seconds below an hour ("04:05") and hours above
+// ("01:02:05"); whole seconds, a negative time shown as zero.
 export function formatClockDuration(seconds: number) {
 	const total = Math.max(0, Math.floor(seconds))
 	const s = String(total % 60).padStart(2, '0')
 	const m = Math.floor(total / 60) % 60
 	const h = Math.floor(total / 3600)
-	return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`
+	return h > 0 ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${s}` : `${String(m).padStart(2, '0')}:${s}`
 }
 
 // Returns a signed time in seconds, such as one before or after an instant, as a running clock with its sign: "+4:05",

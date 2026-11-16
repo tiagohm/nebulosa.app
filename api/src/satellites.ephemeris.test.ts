@@ -83,6 +83,49 @@ test('a geostationary satellite stands at the zenith of its subpoint, and the ge
 	expect(ephemeris.orbit(ISS).periodMinutes).toBeCloseTo(92.94, 1)
 })
 
+test('the orbital speed follows vis-viva', () => {
+	const ephemeris = new SatelliteEphemeris(covered)
+	// Earth's gravitational parameter, km³/s² (WGS-72, the SGP4 constants).
+	const mu = 398_600.8
+
+	for (const elements of [ISS, GEO]) {
+		const position = ephemeris.position(elements, elements.epoch + 600_000)
+		const expected = Math.sqrt(mu * (2 / position.geocentricDistanceKm - 1 / ephemeris.orbit(elements).semiMajorAxisKm))
+		expect(position.speedKmPerSecond / expected).toBeCloseTo(1, 2)
+	}
+
+	expect(ephemeris.position(ISS, ISS.epoch).speedKmPerSecond).toBeCloseTo(7.66, 1)
+	expect(ephemeris.position(GEO, GEO.epoch).speedKmPerSecond).toBeCloseTo(3.07, 1)
+})
+
+test('the next crossings of the umbra bound the eclipse, and an orbit without one has none', () => {
+	const ephemeris = new SatelliteEphemeris(covered)
+	const shadow = (time: number) => ephemeris.position(ISS, time).shadow
+	const sunlit = ephemeris.shadowCrossings(ISS, ISS.epoch)
+	const { entry, exit } = sunlit as Required<typeof sunlit>
+	const period = ephemeris.orbit(ISS).periodMinutes * 60_000
+
+	expect(entry).toBeGreaterThan(ISS.epoch)
+	expect(entry).toBeLessThan(ISS.epoch + period)
+	expect(shadow(entry - 2000)).not.toBe('umbra')
+	expect(shadow(entry + 2000)).toBe('umbra')
+	expect(shadow(exit - 2000)).toBe('umbra')
+	expect(shadow(exit + 2000)).not.toBe('umbra')
+
+	// In the shadow, the exit of this eclipse comes first and the next entry an orbit after the last one.
+	const eclipsed = ephemeris.shadowCrossings(ISS, entry + 60_000)
+	expect(eclipsed.exit).toBe(exit)
+	expect(eclipsed.entry! - entry).toBeCloseTo(period, -5)
+
+	// The answer kept from the first search is the one a new search gives, to the root finder's tolerance.
+	const fresh = new SatelliteEphemeris(covered).shadowCrossings(ISS, entry + 60_000)
+	expect(Math.abs(fresh.exit! - eclipsed.exit!)).toBeLessThan(1000)
+	expect(Math.abs(fresh.entry! - eclipsed.entry!)).toBeLessThan(1000)
+
+	// A geostationary orbit in August stays out of the umbra, the Sun about 13° north of the equator.
+	expect(ephemeris.shadowCrossings(GEO, GEO.epoch)).toEqual({ entry: undefined, exit: undefined })
+})
+
 test('a pass across a day boundary of the search is one pass, as in a single search', async () => {
 	const ephemeris = new SatelliteEphemeris(covered)
 	const site = geodeticLocation(SITE.longitude * DEG2RAD, SITE.latitude * DEG2RAD, meter(SITE.elevation))

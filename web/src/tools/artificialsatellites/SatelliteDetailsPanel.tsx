@@ -1,6 +1,6 @@
 import type { SatelliteQuality } from 'api'
 import { useSnapshot } from 'valtio'
-import { formatDateTime, formatDegrees, formatKilometers, formatZonedDateTime } from '../../format'
+import { formatClockDuration, formatClockTime, formatDateTime, formatDegrees, formatKilometers, formatZonedDateTime } from '../../format'
 import { type GeographicLocation, openObservingSites } from '../../location/site'
 import type { DisplayZone } from '../../location/zone'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
@@ -12,12 +12,14 @@ import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { ObjectTitle } from '../../ui/ObjectTitle'
 import { SegmentedControl } from '../../ui/SegmentedControl'
+import { useNow } from '../../useNow'
 import { artificialSatellitesState, formatElementAge, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 
 // Contextual panel of Artificial Satellites: the satellite selected, its position now for the observing site of the
 // active profile (read again every POSITION_REFRESH_MS, its time in the display zone), its orbit, and where its elements
 // come from (their epoch in the display zone). Every value is the server's; an absent one is left out, never shown as 0. Positions
-// are geometric; the RA/Dec of date are those the Sky draws, J2000 is ICRS.
+// are geometric; the RA/Dec of date are those the Sky draws, J2000 is ICRS. The satellite's next sunset and sunrise (its
+// entry into the Earth's umbra and its exit) count down every second between two readings.
 
 // Names of the SATCAT object types.
 const OBJECT_TYPE_NAMES = { payload: 'Payload', rocketBody: 'Rocket body', debris: 'Debris', unknown: 'Unknown' } as const
@@ -44,6 +46,26 @@ export function QualityRow({ quality }: { readonly quality: SatelliteQuality }) 
 	)
 }
 
+// Interval of the countdowns to the satellite's sunset and sunrise, in milliseconds.
+const COUNTDOWN_INTERVAL_MS = 1000
+
+// Properties of a crossing of the Earth's umbra.
+interface ShadowCrossingRowProps {
+	// Label of the row.
+	readonly label: string
+	// Instant of the crossing, Unix milliseconds (UTC).
+	readonly time: number
+	// Zone the time of day is written in, an IANA name.
+	readonly timeZone: string
+}
+
+// Row of a crossing of the Earth's umbra: its time of day and a countdown to it, which stays at zero once it is past
+// until the next reading replaces it.
+function ShadowCrossingRow({ label, time, timeZone }: ShadowCrossingRowProps) {
+	const now = useNow(true, COUNTDOWN_INTERVAL_MS)
+	return <DataRow label={label}>{`${formatClockTime(time, timeZone, { seconds: true })} (in ${formatClockDuration((time - now) / 1000)})`}</DataRow>
+}
+
 // Properties of the panel of the satellite selected.
 interface SatelliteDetailsPanelProps {
 	// Observing site of the active profile, which the position is for; absent for the Earth's center.
@@ -63,6 +85,14 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 	const orbit = details?.orbit
 	const elements = details?.elements
 	const p = position?.position
+	const crossings =
+		position &&
+		[
+			{ label: 'Satellite sunset', time: position.shadowCrossings.entry },
+			{ label: 'Satellite sunrise', time: position.shadowCrossings.exit },
+		]
+			.filter((crossing): crossing is { label: string; time: number } => crossing.time !== undefined)
+			.sort((a, b) => a.time - b.time)
 	const name = object?.name ?? selectedId
 	const timeZone = zone.zone
 
@@ -130,10 +160,17 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 					<DataList>
 						{p.rangeRateKmPerSecond !== undefined && <DataRow label="Range rate">{`${p.rangeRateKmPerSecond.toFixed(3)} km/s (${p.rangeRateKmPerSecond > 0 ? 'receding' : 'approaching'})`}</DataRow>}
 						{p.angularRate !== undefined && <DataRow label="Angular speed">{`${formatDegrees(p.angularRate, 3)}/s`}</DataRow>}
+						<DataRow label="Orbital speed">{`${p.speedKmPerSecond.toFixed(3)} km/s`}</DataRow>
 						<DataRow label="Illumination">{SHADOW_LABELS[p.shadow]}</DataRow>
+						{crossings?.length === 0 && <DataRow label="Satellite sunset">None within 1.5 orbits</DataRow>}
+						{crossings?.map((crossing) => (
+							<ShadowCrossingRow key={crossing.label} label={crossing.label} time={crossing.time} timeZone={timeZone} />
+						))}
 						{p.sunAltitude !== undefined && <DataRow label="Sun altitude here">{formatDegrees(p.sunAltitude, 1)}</DataRow>}
 					</DataList>
-					<Notice>Brightness is unknown: no source gives the reflectivity of most satellites, so no magnitude is estimated.</Notice>
+					<Notice>
+						The orbital speed is relative to the Earth's center. The satellite's sunset and sunrise are its entry into the Earth's umbra and its exit, searched over the next 1.5 orbits (2 days at most). Brightness is unknown: no source gives the reflectivity of most satellites, so no magnitude is estimated.
+					</Notice>
 				</CollapsibleSection>
 			)}
 

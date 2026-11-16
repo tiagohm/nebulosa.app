@@ -5,7 +5,7 @@ import { AU_KM } from 'nebulosa/src/core/constants'
 import { errorResponse } from './http'
 import { CELESTRAK_GROUPS, celestrakSourceKey, parseCelestrakSourceKey } from './satellites.celestrak'
 import { normalizeImport, type RejectedRecord } from './satellites.elements'
-import { type SatelliteElementsRef, type SatelliteEphemeris, type SatelliteEphemerisTable, type SatelliteGroundTrack, type SatelliteOrbitSummary, type SatellitePasses, type SatellitePosition, type SatelliteQuality, type SatelliteTrack, SATELLITE_LIMITS } from './satellites.ephemeris'
+import { type SatelliteElementsRef, type SatelliteEphemeris, type SatelliteEphemerisTable, type SatelliteGroundTrack, type SatelliteOrbitSummary, type SatellitePasses, type SatellitePosition, type SatelliteQuality, type SatelliteShadowCrossings, type SatelliteTrack, SATELLITE_LIMITS } from './satellites.ephemeris'
 import { MANUAL_SOURCE_KEY, type SatelliteElementKind, type SatelliteElementSet, type SatelliteObjectType, type SatelliteSearchPage, type SatelliteSourceState, type SatelliteStore, type SatelliteSummary } from './satellites.store'
 import { SatelliteRefreshError, type SatelliteRefreshErrorCode, type SatelliteSync } from './satellites.sync'
 import { geographic, type SkyObserver, type SkyPosition } from './sky/ephemeris'
@@ -106,6 +106,8 @@ export interface SatellitePositionRequest {
 // Answer of POST /api/satellites/:noradId/position.
 export interface SatellitePositionResponse {
 	readonly position: SatellitePosition
+	// Next crossings of the Earth's umbra after the instant.
+	readonly shadowCrossings: SatelliteShadowCrossings
 	readonly elements: SatelliteElementsRef
 	readonly quality: SatelliteQuality
 }
@@ -335,7 +337,8 @@ export class SatelliteService {
 
 		try {
 			const position = this.ephemeris.position(elements, time, observer)
-			return { position, elements: this.ephemeris.elementsRef(elements), quality: this.ephemeris.quality(elements, [time], object.decayDate) }
+			const shadowCrossings = this.ephemeris.shadowCrossings(elements, time)
+			return { position, shadowCrossings, elements: this.ephemeris.elementsRef(elements), quality: this.ephemeris.quality(elements, [time], object.decayDate) }
 		} catch (error) {
 			throw this.#unreliable(elements, [time], object, error)
 		}

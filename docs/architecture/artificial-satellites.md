@@ -32,6 +32,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   topocentric for an observer and geocentric without one, labeled by `center`.
   RA/Dec are given of date (true equator and equinox, the frame of the Sky map) and in ICRS (J2000); altitude is geometric, with `apparentAltitude` refracted by the model of the Sky; distances are km, rates km/s and radians per second.
   Illumination is the toolkit's conical umbra and penumbra, with the Sun interpolated between hourly VSOP87E positions.
+  A position carries the orbital speed (`speedKmPerSecond`, the length of the SGP4 velocity, relative to the Earth's center in inertial axes).
+  `/position` also answers `shadowCrossings`: the next entry into the umbra and exit from it (the satellite's sunset and sunrise) within 1.5 orbits and at most two days, found by the toolkit's `satelliteEclipses` every minute for a low orbit and every five otherwise (an eclipse shorter than the step can be missed); one search per element digest covers twice that span and answers every reading in its first half, so the position read every 15 seconds does not repeat it.
   `/ephemeris` samples at most 5000 rows (`truncated` beyond them), letting the event loop run between batches.
   Satellites have no rise, transit, and set events.
 - Passes (`/passes`, the tool keeps the window within 7 days): the intervals above a minimum geometric altitude (`satelliteWindowPasses`), searched a day at a time with the event loop running between days and a pass cut by a day boundary joined again, at most 200.

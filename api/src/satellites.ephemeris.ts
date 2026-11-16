@@ -4,11 +4,11 @@ import { observerState } from 'nebulosa/src/astronomy/coordinates/correction'
 import { frameToFrame, ICRS, ITRS, TEME, TRUE_EQUATOR_AND_EQUINOX_OF_DATE } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
-import { satelliteGroundFootprint, type SatellitePassEvent, satelliteShadowState, type SatelliteShadowState, satelliteSubpoint, satelliteTrackingState, satelliteVisibleIntervals, type SatelliteWindowPass, satelliteWindowPasses } from 'nebulosa/src/astronomy/events/satellite'
+import { satelliteEclipses, satelliteGroundFootprint, type SatellitePassEvent, satelliteShadowState, type SatelliteShadowState, satelliteSubpoint, satelliteTrackingState, satelliteVisibleIntervals, type SatelliteWindowPass, satelliteWindowPasses } from 'nebulosa/src/astronomy/events/satellite'
 import { type GeographicPosition, subpoint } from 'nebulosa/src/astronomy/observer/location'
 import { recordFromOMM, type SatRec, sgp4 } from 'nebulosa/src/astronomy/orbits/propagation/sgp4'
 import { type Time, timeShift, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
-import { AU_KM, DAYSEC, ONE_SECOND, TAU } from 'nebulosa/src/core/constants'
+import { AU_KM, DAYMIN, DAYSEC, ONE_SECOND, TAU } from 'nebulosa/src/core/constants'
 import { type Vec3, vecDot, vecLength, vecMinus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import type { EarthOrientationCoverage, EarthOrientationStatus } from './astronomicaltime.eop'
@@ -23,7 +23,8 @@ import { apparentAltitude, geographic, type SkyObserver } from './sky/ephemeris'
 // and the Earth orientation data. SGP4 gives TEME states; positions are geometric (no light time, no aberration: a
 // satellite moves with the Earth, so the annual aberration of the stars does not apply to it, and the light time of a few
 // milliseconds is ignored), topocentric with an observer and geocentric without one. RA/Dec are given of date (true
-// equator and equinox, the frame of the Sky map) and in ICRS (J2000). Times are Unix milliseconds (UTC), angles radians.
+// equator and equinox, the frame of the Sky map) and in ICRS (J2000). The next crossings of the Earth's umbra after an
+// instant are searched over at most SHADOW_SEARCH_ORBITS orbits. Times are Unix milliseconds (UTC), angles radians.
 
 // Earth's resting state at the geocenter, for the observer's inertial state.
 const ZERO_EARTH_STATE = zeroPositionAndVelocity()
@@ -43,6 +44,37 @@ export const ELEMENT_AGE_LIMITS = { low: { caution: 3, unavailable: 14 }, high: 
 // minute for higher ones, whose passes last hours.
 const LOW_ORBIT_PASS_STEP = 10 * ONE_SECOND
 const HIGH_ORBIT_PASS_STEP = 60 * ONE_SECOND
+
+// Orbits searched after an instant for the next crossings of the Earth's umbra: an eclipse lasts less than half an orbit,
+// so one and a half orbits hold the next entry and the exit after it, or the exit of the eclipse under way and the next
+// entry. An orbit that is not eclipsed then (a dawn-dusk orbit, a geostationary one outside the equinoxes) has none.
+const SHADOW_SEARCH_ORBITS = 1.5
+
+// Longest span searched for the crossings of the umbra after an instant, in minutes: two days, so an orbit of several
+// days is not searched over a week of samples.
+const SHADOW_SEARCH_MAX_MINUTES = 2 * DAYMIN
+
+// Steps of the search for the crossings of the umbra, in days: a minute for a low orbit, whose eclipses last half an
+// hour, and five for higher ones, whose eclipses last more than an hour away from the edges of their seasons. Each sample
+// propagates the orbit and rotates it to ICRS, about 0.4 ms.
+const LOW_ORBIT_SHADOW_STEP = 60 * ONE_SECOND
+const HIGH_ORBIT_SHADOW_STEP = 300 * ONE_SECOND
+
+// Searches of the crossings of the umbra kept, by element digest.
+const SHADOW_CACHE_SIZE = 64
+
+// Crossings of the umbra of an element set found from `start` over twice the span of a query, so every query from `start`
+// to `start + span` is answered from them. A search costs about a tenth of a second for a low orbit and a third for a
+// geostationary one, so the position read every few seconds does not repeat it.
+interface ShadowCrossingSearch {
+	// Start of the search, Unix milliseconds (UTC).
+	readonly start: number
+	// Span searched after the instant of a query, milliseconds.
+	readonly span: number
+	// Entries into the umbra and exits from it found, Unix milliseconds (UTC), increasing.
+	readonly entries: readonly number[]
+	readonly exits: readonly number[]
+}
 
 // Largest number of passes, rows of an ephemeris, objects of a Sky series, samples of a Sky series, and samples of a
 // ground track.
@@ -146,6 +178,8 @@ export interface SatellitePosition {
 	readonly angularRate?: number
 	// Distance from the Earth's center, km.
 	readonly geocentricDistanceKm: number
+	// Orbital speed: the speed relative to the Earth's center in inertial axes, km/s.
+	readonly speedKmPerSecond: number
 	// Geodetic latitude and east longitude of the point below the satellite, radians, and its height above the
 	// ellipsoid, km.
 	readonly subpointLatitude: number
@@ -157,6 +191,15 @@ export interface SatellitePosition {
 	readonly sunAltitude?: number
 	// IAU abbreviation of the constellation of the position of date, upper case.
 	readonly constellation: string
+}
+
+// Next crossings of the Earth's umbra by a satellite after an instant: its sunset and sunrise. An eclipse shorter than a
+// step of the search can be missed, such as a grazing one or one at the edge of a geostationary eclipse season.
+export interface SatelliteShadowCrossings {
+	// Next entry into the umbra, Unix milliseconds (UTC); absent when there is none in the span searched.
+	readonly entry?: number
+	// Next exit from the umbra, Unix milliseconds (UTC); absent when there is none in the span searched.
+	readonly exit?: number
 }
 
 // Instant of a pass with the look angles.
@@ -348,6 +391,7 @@ function periodOf(record: SatRec) {
 // Predictions of satellites from their element sets.
 export class SatelliteEphemeris {
 	readonly #records = new LruCache<SatRec>(RECORD_CACHE_SIZE)
+	readonly #shadowSearches = new LruCache<ShadowCrossingSearch>(SHADOW_CACHE_SIZE)
 
 	// Creates the predictions; `coverage` tells whether the Earth orientation tables hold an instant.
 	constructor(private readonly coverage: (utc: Time) => EarthOrientationCoverage) {}
@@ -426,7 +470,10 @@ export class SatelliteEphemeris {
 	// Computes a position with a prepared record and site.
 	#position(record: SatRec, time: number, site: GeographicPosition | undefined): SatellitePosition {
 		const t = timeUnix(time / 1000, true)
-		const geocentric = frameToFrame(sgp4(t, record), TEME, ICRS, t)
+		const state = sgp4(t, record)
+		// TEME and ICRS differ by a rotation, so the speed is the length of the TEME velocity, AU/day.
+		const speed = vecLength(state[1])
+		const geocentric = frameToFrame(state, TEME, ICRS, t)
 		const origin = site ? observerState(t, ZERO_EARTH_STATE, site)[0] : ZERO_EARTH_STATE[0]
 		const relative = vecMinus(geocentric[0], origin)
 		const [raJ2000, decJ2000, distance] = equatorial(relative)
@@ -456,6 +503,7 @@ export class SatelliteEphemeris {
 			declinationJ2000: decJ2000,
 			distanceKm: distance * AU_KM,
 			geocentricDistanceKm: vecLength(geocentric[0]) * AU_KM,
+			speedKmPerSecond: (speed * AU_KM) / DAYSEC,
 			subpointLatitude: subpoint.latitude,
 			subpointLongitude: subpoint.longitude,
 			heightKm: subpoint.elevation * AU_KM,
@@ -463,6 +511,36 @@ export class SatelliteEphemeris {
 			constellation: constellationOf(rightAscension, dec, t),
 			...topocentric,
 		}
+	}
+
+	// Finds the next entry into the Earth's umbra and the next exit from it after an instant (Unix milliseconds, UTC),
+	// within SHADOW_SEARCH_ORBITS orbits and at most SHADOW_SEARCH_MAX_MINUTES, from a search of the element set kept until
+	// the instant leaves it. Throws when SGP4 fails in the span.
+	shadowCrossings(elements: SatelliteElementSet, time: number): SatelliteShadowCrossings {
+		let search = this.#shadowSearches.get(elements.digest)
+
+		if (!search || time < search.start || time > search.start + search.span) {
+			search = this.#searchShadowCrossings(elements, time)
+			this.#shadowSearches.set(elements.digest, search)
+		}
+
+		const end = time + search.span
+		const next = (times: readonly number[]) => times.find((crossing) => crossing > time && crossing <= end)
+		return { entry: next(search.entries), exit: next(search.exits) }
+	}
+
+	// Searches the crossings of the umbra of an element set from an instant (Unix milliseconds, UTC) over twice the span
+	// of a query.
+	#searchShadowCrossings(elements: SatelliteElementSet, time: number): ShadowCrossingSearch {
+		const record = this.record(elements)
+		const period = periodOf(record)
+		const minutes = Math.min(period * SHADOW_SEARCH_ORBITS, SHADOW_SEARCH_MAX_MINUTES)
+		const step = period < LOW_ORBIT_PERIOD_MINUTES ? LOW_ORBIT_SHADOW_STEP : HIGH_ORBIT_SHADOW_STEP
+		const start = timeUnix(time / 1000, true)
+		const eclipses = satelliteEclipses(record, sunAt, start, timeShift(start, (2 * minutes) / DAYMIN), { step })
+		const entries = eclipses.flatMap((eclipse) => (eclipse.entry ? [timeToUnixMillis(eclipse.entry)] : []))
+		const exits = eclipses.flatMap((eclipse) => (eclipse.exit ? [timeToUnixMillis(eclipse.exit)] : []))
+		return { start: time, span: minutes * 60_000, entries, exits }
 	}
 
 	// Finds the passes of a satellite over an observer between two instants (Unix milliseconds, UTC), with the parts of

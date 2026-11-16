@@ -26,12 +26,12 @@ const badge = tv({
 	},
 })
 
-// Badge of a tone and label.
-export function StatusBadge({ tone, label }: { readonly tone: StatusTone; readonly label: string }) {
+// Badge of a tone and label, with an optional tooltip that gives the full reason of the state.
+export function StatusBadge({ tone, label, title }: { readonly tone: StatusTone; readonly label: string; readonly title?: string }) {
 	const { root, dot } = badge({ tone })
 
 	return (
-		<span className={root()}>
+		<span title={title} className={root()}>
 			<span className={dot()} />
 			{label}
 		</span>

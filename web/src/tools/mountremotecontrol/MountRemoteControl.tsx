@@ -3,7 +3,7 @@ import { cn } from 'cn'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { DeviceLink } from '../../equipment-control/DeviceLink'
-import type { RoleStatus } from '../../equipment/equipment'
+import { MOUNT_ROLE_BLOCKERS } from '../../equipment/equipment'
 import { EquipmentSetupButton } from '../../equipment/EquipmentSetupButton'
 import { useRoleDevice } from '../../equipment/useEquipment'
 import { activeProfile, mountRemoteBinding, profileCamera, profileState, setMountRemoteBinding } from '../../profile/profile'
@@ -24,16 +24,6 @@ import { clientKey, disconnectRemoteClient, formatEndpoint, isLoopback, MOUNT_RE
 // stopped listener shows the host and port entered last for that mount (remembered by the profile when started), a
 // running one the binding it actually has.
 
-// Why a listener cannot be started, for each state of the MOUNT role that is not connected.
-const BLOCKERS: Readonly<Record<Exclude<RoleStatus, 'connected'>, string>> = {
-	notSelected: 'No mount is assigned in Equipment Setup.',
-	unavailable: 'The assigned mount is not available on the selected connection.',
-	disconnected: 'The assigned mount is disconnected.',
-	connecting: 'The assigned mount is connecting.',
-	disconnecting: 'The assigned mount is disconnecting.',
-	error: 'The assigned mount failed to connect.',
-}
-
 // What each protocol is for.
 const DESCRIPTIONS: Readonly<Record<MountRemoteProtocol, string>> = {
 	lx200: 'For programs that drive a Meade LX200 over TCP, such as SkySafari or Stellarium in LX200 mode.',
@@ -45,7 +35,7 @@ export function MountRemoteControl() {
 	const mount = useRoleDevice('MOUNT')
 	const profile = activeProfile(useSnapshot(profileState))
 	const device = mount.device
-	const blocker = mount.status === 'connected' ? undefined : BLOCKERS[mount.status]
+	const blocker = mount.status === 'connected' ? undefined : MOUNT_ROLE_BLOCKERS[mount.status]
 	const identity = profileCamera(profile, device?.id)
 
 	return (

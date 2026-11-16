@@ -3,7 +3,7 @@ import { cn } from 'cn'
 import { type ReactNode, useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { DeviceLink } from '../../equipment-control/DeviceLink'
-import type { RoleStatus } from '../../equipment/equipment'
+import { MOUNT_ROLE_BLOCKERS } from '../../equipment/equipment'
 import { EquipmentSetupButton } from '../../equipment/EquipmentSetupButton'
 import { useRoleDevice } from '../../equipment/useEquipment'
 import { formatClockDuration, formatDuration, formatHourAngle, formatZonedDateTime, MISSING } from '../../format'
@@ -44,16 +44,6 @@ import { MeridianFlipExecutorSections } from './MeridianFlipExecutorView'
 // workspace, or closing the tab, leaves it enabled for the mount it was enabled for; settings are applied explicitly
 // and remembered by the profile per mount. Nothing here commands the mount: the countdown is only interpolated between
 // the samples of the server, which takes every decision.
-
-// Why the monitor cannot be enabled, for each state of the MOUNT role that is not connected.
-const BLOCKERS: Readonly<Record<Exclude<RoleStatus, 'connected'>, string>> = {
-	notSelected: 'No mount is assigned in Equipment Setup.',
-	unavailable: 'The assigned mount is not available on the selected connection.',
-	disconnected: 'The assigned mount is disconnected.',
-	connecting: 'The assigned mount is connecting.',
-	disconnecting: 'The assigned mount is disconnecting.',
-	error: 'The assigned mount failed to connect.',
-}
 
 // Text of each timing phase.
 const PHASES: Readonly<Record<MeridianTimingPhase, string>> = {
@@ -144,7 +134,7 @@ export function MeridianFlipMonitorView() {
 	const profile = activeProfile(useSnapshot(profileState))
 	const state = useSnapshot(meridianFlipState)
 	const device = mount.device
-	const blocker = mount.status === 'connected' ? undefined : BLOCKERS[mount.status]
+	const blocker = mount.status === 'connected' ? undefined : MOUNT_ROLE_BLOCKERS[mount.status]
 	const identity = profileCamera(profile, device?.id)
 	const key = device ? monitorKey(device.connectionId, device.id) : undefined
 	const monitor = key ? state.monitors[key] : undefined

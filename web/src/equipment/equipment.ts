@@ -58,6 +58,17 @@ export const ROLE_STATUS_LABELS: Readonly<Record<RoleStatus, string>> = {
 	error: 'Error',
 }
 
+// Why a tool that needs the mount cannot do its job, for each state of the MOUNT role that is not connected: the
+// reason the Meridian Flip Monitor, Mount Remote Control, and their catalog cards give.
+export const MOUNT_ROLE_BLOCKERS: Readonly<Record<Exclude<RoleStatus, 'connected'>, string>> = {
+	notSelected: 'No mount is assigned in Equipment Setup.',
+	unavailable: 'The assigned mount is not available on the selected connection.',
+	disconnected: 'The assigned mount is disconnected.',
+	connecting: 'The assigned mount is connecting.',
+	disconnecting: 'The assigned mount is disconnecting.',
+	error: 'The assigned mount failed to connect.',
+}
+
 // Counter of device list fetches; a response is applied only if no later fetch started.
 let generation = 0
 

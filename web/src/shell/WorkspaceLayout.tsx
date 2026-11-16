@@ -94,7 +94,7 @@ export function WorkspaceLayout({ workspace, title, context, contextFill = false
 									type="button"
 									title="Back to the Tools catalog"
 									onClick={() => navigate(routeState, { workspace: 'tools' })}
-									className="cursor-pointer border-0 bg-transparent p-0 text-ink-300 transition-colors duration-150 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
+									className="-mx-1.5 cursor-pointer rounded-sm border-0 bg-transparent px-1.5 py-1.5 text-ink-300 transition-colors duration-150 hover:bg-base-300 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none"
 								>
 									Tools
 								</button>

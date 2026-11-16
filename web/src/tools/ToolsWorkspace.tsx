@@ -4,6 +4,7 @@ import { useRoleDevice } from '../equipment/useEquipment'
 import { useActiveSite } from '../location/useLocation'
 import { navigate, redirect, routeState, type ToolId } from '../shell/route'
 import { EmptyState, WorkspaceLayout } from '../shell/WorkspaceLayout'
+import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
 import { moveIndex } from '../ui/navigation'
 import { SectionHeading } from '../ui/SectionHeading'
@@ -123,7 +124,15 @@ function ToolsCatalog() {
 		<WorkspaceLayout workspace="tools" title="Tools" actions={filter}>
 			<div ref={scrollRef} className="h-full overflow-y-auto overscroll-contain p-4">
 				{groups.length === 0 ? (
-					<EmptyState title="No tool matches" description="Change or clear the filter." />
+					<EmptyState
+						title="No tool matches"
+						description={`No tool name or description holds every word of "${query.trim()}".`}
+						action={
+							<Button variant="secondary" onClick={() => setQuery('')}>
+								Clear Filter
+							</Button>
+						}
+					/>
 				) : (
 					<div onKeyDown={handleCardsKeyDown} className="flex flex-col gap-6">
 						{groups.map((group) => (
@@ -202,7 +211,7 @@ function ToolCard({ tool, planned, readiness, tabStop, onFocus }: ToolCardProps)
 			disabled={planned}
 			title={planned ? `${tool.description} ${readiness?.reason ?? ''}`.trim() : tool.description}
 			onClick={() => navigate(routeState, { workspace: 'tools', tool: tool.id })}
-			className="flex items-start gap-3 rounded-md max-sm:items-center border border-line-100 bg-base-000 p-3 text-left font-mono text-inherit transition-colors duration-150 not-disabled:cursor-pointer not-disabled:hover:border-line-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-default motion-reduce:transition-none"
+			className="flex items-start gap-3 rounded-md max-sm:items-center border border-line-100 bg-base-000 p-3 text-left font-mono text-inherit transition-colors duration-150 not-disabled:cursor-pointer not-disabled:hover:border-line-200 not-disabled:active:border-line-200 not-disabled:active:bg-base-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-default motion-reduce:transition-none"
 		>
 			<span className="flex size-9 flex-none items-center justify-center rounded-sm bg-base-200 text-ink-200">
 				<Icon name={tool.icon} />

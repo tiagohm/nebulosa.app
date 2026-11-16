@@ -271,6 +271,19 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
 	{ label: 'Reference', tools: ['calculator', 'astronomical-time-converter', 'orbital-mechanics-explorer', 'spice-kernel-library'] },
 ]
 
+// Heading of the group that lifts the tools running work on the server above the groups of the night.
+export const RUNNING_GROUP_LABEL = 'Running'
+
+// Returns the groups the catalog shows: the tools that match the filter query, under the groups of TOOL_GROUPS, except
+// the tools running reports as running work, which leave their group for a first group of their own (in the order of
+// TOOL_GROUPS); a group left empty, the running one included, is not returned.
+export function catalogGroups(query: string, running: (id: ToolId) => boolean): ToolGroup[] {
+	const shown = TOOL_GROUPS.flatMap((group) => group.tools).filter((id) => matchesTool(TOOL_DEFINITIONS[id], query))
+	const lifted = shown.filter(running)
+	const groups = TOOL_GROUPS.map((group) => ({ label: group.label, tools: group.tools.filter((id) => shown.includes(id) && !lifted.includes(id)) }))
+	return [{ label: RUNNING_GROUP_LABEL, tools: lifted }, ...groups].filter((group) => group.tools.length > 0)
+}
+
 // Whether a tool matches a filter: every word of the query, ignoring case and accents, is found in its name, its
 // summary, its description, or its keywords. An empty query matches every tool.
 export function matchesTool(tool: Pick<ToolDefinition, 'label' | 'summary' | 'description' | 'keywords'>, query: string): boolean {

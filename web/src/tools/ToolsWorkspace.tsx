@@ -16,7 +16,7 @@ import { latestExecution, MERIDIAN_FLIP_STEP_LABELS, meridianFlipExecutorState }
 import { formatEndpoint, MOUNT_REMOTE_PROTOCOL_LABELS, mountRemoteControlState } from './mountremotecontrol/listeners'
 import { observatoryCamerasState } from './observatorycameras/observatorycameras'
 import { type ToolReadiness, toolReadiness, type ToolReadinessContext } from './readiness'
-import { matchesTool, TOOL_DEFINITIONS, TOOL_GROUPS, type ToolDefinition, toolStatus } from './tools'
+import { catalogGroups, TOOL_DEFINITIONS, type ToolDefinition, toolStatus } from './tools'
 
 // Tools workspace: the catalog of standalone tools, grouped in the order of a night and narrowed by a filter, and the
 // view of the tool the URL names. A card names its tool and
@@ -73,8 +73,9 @@ export function ToolsWorkspace() {
 	return <ToolsCatalog />
 }
 
-// Catalog of the tools, in the groups of a night, narrowed by a filter, each card with the readiness of its tool for the
-// active profile. The filter is transient view state of the catalog; Enter opens the only tool it leaves, and ArrowDown
+// Catalog of the tools, in the groups of a night after a Running group of the tools running work on the server, narrowed
+// by a filter, each card with the readiness of its tool for the active profile. The filter is transient view state of the
+// catalog; Enter opens the only tool it leaves, and ArrowDown
 // moves to the cards. The cards are one Tab stop, the last one focused or opened, and Arrow keys, Home, and End move
 // between the openable ones in reading order. The scroll position is kept for the tab across tools and workspaces.
 function ToolsCatalog() {
@@ -83,7 +84,8 @@ function ToolsCatalog() {
 	const [current, setCurrent] = useState(catalogMemory.tool)
 	const scrollRef = useRef<HTMLDivElement>(null)
 	const filterRef = useRef<HTMLInputElement>(null)
-	const groups = TOOL_GROUPS.map((group) => ({ label: group.label, tools: group.tools.filter((id) => matchesTool(TOOL_DEFINITIONS[id], query)) })).filter((group) => group.tools.length > 0)
+	const readiness = (id: ToolId) => toolReadiness(id, toolStatus(TOOL_DEFINITIONS[id]) === 'planned', context)
+	const groups = catalogGroups(query, (id) => readiness(id)?.running === true)
 	const openable = groups.flatMap((group) => group.tools).filter((id) => toolStatus(TOOL_DEFINITIONS[id]) === 'available')
 	const tabStop = current !== undefined && openable.includes(current) ? current : openable[0]
 
@@ -164,8 +166,7 @@ function ToolsCatalog() {
 								<div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-2">
 									{group.tools.map((id) => {
 										const tool = TOOL_DEFINITIONS[id]
-										const planned = toolStatus(tool) === 'planned'
-										return <ToolCard key={id} tool={tool} planned={planned} readiness={toolReadiness(id, planned, context)} tabStop={id === tabStop} onFocus={() => setCurrent(id)} />
+										return <ToolCard key={id} tool={tool} planned={toolStatus(tool) === 'planned'} readiness={readiness(id)} tabStop={id === tabStop} onFocus={() => setCurrent(id)} />
 									})}
 								</div>
 							</section>

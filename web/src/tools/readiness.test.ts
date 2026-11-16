@@ -30,11 +30,17 @@ describe('tool readiness', () => {
 		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, meridianFlip: { headline, armed: false } })).toMatchObject({ label: 'Monitoring', tone: 'active' })
 		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, meridianFlip: { headline, armed: true } })).toMatchObject({ label: 'Armed', tone: 'active' })
 		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, meridianFlip: { headline, step: 'Slewing', armed: true } })).toMatchObject({ label: 'Slewing', tone: 'active' })
-		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, meridianFlip: { headline: ['Deadline passed', 'danger'], armed: false } })).toMatchObject({ label: 'Deadline passed', tone: 'danger' })
+		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, meridianFlip: { headline: ['Deadline passed', 'danger'], armed: false } })).toMatchObject({ label: 'Deadline passed', tone: 'danger', running: true })
 	})
 
 	test('a running listener of the mount is Serving', () => {
-		expect(toolReadiness('mount-remote-control', false, { ...READY, listeners: ['LX200 on 0.0.0.0:10001'] })).toEqual({ label: 'Serving', tone: 'active', reason: 'Listening: LX200 on 0.0.0.0:10001.' })
+		expect(toolReadiness('mount-remote-control', false, { ...READY, listeners: ['LX200 on 0.0.0.0:10001'] })).toEqual({ label: 'Serving', tone: 'active', reason: 'Listening: LX200 on 0.0.0.0:10001.', running: true })
+	})
+
+	test('only running work is running: setup gaps, failures, and planned tools are not', () => {
+		expect(toolReadiness('meridian-flip-monitor', false, { ...READY, mount: 'disconnected' })?.running).toBeUndefined()
+		expect(toolReadiness('observatory-cameras', false, { ...READY, gateway: { status: 'unavailable' } })?.running).toBeUndefined()
+		expect(toolReadiness('alpaca-server', true, READY)?.running).toBeUndefined()
 	})
 
 	test('Astro Weather needs an observing site', () => {

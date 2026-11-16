@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { TOOL_IDS } from '../shell/route'
-import { matchesTool, TOOL_DEFINITIONS, TOOL_GROUPS, toolStatus } from './tools'
+import { catalogGroups, matchesTool, RUNNING_GROUP_LABEL, TOOL_DEFINITIONS, TOOL_GROUPS, toolStatus } from './tools'
 
 describe('registry', () => {
 	test('lists only the standalone tools, each under its own id', () => {
@@ -82,5 +82,25 @@ describe('filter', () => {
 		expect(found('moon')).toContain('lunar-eclipse-map')
 		expect(found('iss')).toEqual(['artificial-satellites'])
 		expect(found('pier side')).toEqual(['meridian-flip-monitor'])
+	})
+})
+
+describe('catalog groups', () => {
+	const labels = (groups: readonly { label: string }[]) => groups.map((group) => group.label)
+
+	test('shows the groups of the night when nothing runs', () => {
+		expect(labels(catalogGroups('', () => false))).toEqual(['Planning', 'Rig & Observatory', 'Frames', 'Reference'])
+	})
+
+	test('lifts running tools into a first group, out of their own', () => {
+		const running = (id: string) => id === 'meridian-flip-monitor' || id === 'mount-remote-control'
+		const groups = catalogGroups('', running)
+		expect(groups[0]).toEqual({ label: RUNNING_GROUP_LABEL, tools: ['meridian-flip-monitor', 'mount-remote-control'] })
+		expect(groups.find((group) => group.label === 'Rig & Observatory')?.tools).toEqual(['mount-pointing-model', 'observatory-cameras', 'alpaca-server'])
+	})
+
+	test('filters the running group like the others', () => {
+		const groups = catalogGroups('lx200', (id) => id === 'meridian-flip-monitor' || id === 'mount-remote-control')
+		expect(groups).toEqual([{ label: RUNNING_GROUP_LABEL, tools: ['mount-remote-control'] }])
 	})
 })

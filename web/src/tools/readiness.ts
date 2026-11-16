@@ -6,7 +6,8 @@ import type { StatusTone } from '../ui/StatusBadge'
 // Readiness of the tools of the catalog: the one word a card shows, only by exception. A tool ready to use shows
 // nothing; a planned tool, a tool whose main job is blocked by the active profile (no connected mount, no observing
 // site, no MediaMTX), or a tool that keeps running on the server after its view is closed shows one word, with the full
-// reason as its tooltip. A tool that only needs the internet is never marked: it shows its own state when opened.
+// reason as its tooltip; the word of running work is marked so the catalog can lift it. A tool that only needs the
+// internet is never marked: it shows its own state when opened.
 
 // Word a card shows for its tool.
 export interface ToolReadiness {
@@ -17,6 +18,9 @@ export interface ToolReadiness {
 	readonly tone: StatusTone
 	// Full reason, shown as the tooltip.
 	readonly reason: string
+	// Whether the word reports work the tool keeps running on the server (an enabled monitor, an armed or running flip, a
+	// listener), which the catalog lifts above the other tools; absent for a setup gap or a planned tool.
+	readonly running?: boolean
 }
 
 // State of the enabled Meridian Flip Monitor of the profile's mount, as the status bar words it.
@@ -57,7 +61,7 @@ export function toolReadiness(id: ToolId, planned: boolean, context: ToolReadine
 			return context.meridianFlip && meridianFlipReadiness(context.meridianFlip)
 		case 'mount-remote-control':
 			if (context.mount !== 'connected') return { label: 'Needs mount', tone: 'muted', reason: MOUNT_ROLE_BLOCKERS[context.mount] }
-			return context.listeners.length > 0 ? { label: 'Serving', tone: 'active', reason: `Listening: ${context.listeners.join(', ')}.` } : undefined
+			return context.listeners.length > 0 ? { label: 'Serving', tone: 'active', reason: `Listening: ${context.listeners.join(', ')}.`, running: true } : undefined
 		case 'astro-weather':
 			return context.site ? undefined : { label: 'Needs site', tone: 'muted', reason: 'Set the observing site of this profile.' }
 		case 'observatory-cameras':
@@ -73,7 +77,7 @@ export function toolReadiness(id: ToolId, planned: boolean, context: ToolReadine
 // Its tone is the headline's, so a flip window or a passed deadline keeps its warning or danger, except that a
 // monitor that is only monitoring is active, never the success colour.
 function meridianFlipReadiness({ headline: [label, tone], step, armed }: MeridianFlipReadiness): ToolReadiness {
-	if (step) return { label: step, tone: 'active', reason: `Flipping the mount: ${step}.` }
-	if (armed) return { label: 'Armed', tone: tone === 'success' ? 'active' : tone, reason: `A flip is armed. Monitor: ${label}.` }
-	return { label, tone: tone === 'success' ? 'active' : tone, reason: `Monitor enabled: ${label}.` }
+	if (step) return { label: step, tone: 'active', reason: `Flipping the mount: ${step}.`, running: true }
+	if (armed) return { label: 'Armed', tone: tone === 'success' ? 'active' : tone, reason: `A flip is armed. Monitor: ${label}.`, running: true }
+	return { label, tone: tone === 'success' ? 'active' : tone, reason: `Monitor enabled: ${label}.`, running: true }
 }

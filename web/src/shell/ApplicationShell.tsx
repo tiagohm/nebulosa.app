@@ -10,11 +10,13 @@ import { SettingsPage } from '../settings/SettingsPage'
 import { NavigationRail } from './NavigationRail'
 import { routeState } from './route'
 import { StatusBar } from './StatusBar'
+import { WorkspaceErrorBoundary } from './WorkspaceErrorBoundary'
 import { workspaceDefinition } from './workspaces'
 
 // Persistent frame of the application: top bar, navigation rail, the active workspace, the Equipment
 // Control page, the Settings page, or the About page, status bar, the management modals, and the notification toasts. The frame stays mounted while navigating; only the
-// active workspace's component is swapped, and unmounting it releases presentation resources only.
+// active workspace's component is swapped, and unmounting it releases presentation resources only. A workspace that
+// throws while rendering shows its failure in its place (WorkspaceErrorBoundary), and the rest of the frame stays.
 
 // Application shell.
 export function ApplicationShell() {
@@ -26,7 +28,9 @@ export function ApplicationShell() {
 			<TopBar />
 			<div className="flex min-h-0 flex-1">
 				<NavigationRail />
-				<Workspace />
+				<WorkspaceErrorBoundary key={route.workspace}>
+					<Workspace />
+				</WorkspaceErrorBoundary>
 			</div>
 			<StatusBar />
 			<ConnectionModal />

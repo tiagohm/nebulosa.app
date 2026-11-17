@@ -15,8 +15,8 @@ import { NumberInput } from '../ui/NumberInput'
 import { TextInput } from '../ui/TextInput'
 
 // Editor of one telescope or lens of the Equipment Catalog: its name, model, serial number, notes, the aperture and native
-// focal length it declares, and whether it is archived, edited as a local draft that only Save writes; the model and the
-// optics can be filled from a model of the telescope model catalog (AstroBin). The Telescope and
+// focal length it declares, and whether it is archived, edited as a local draft that only Save writes; the Model field
+// also searches the telescope model catalog (AstroBin), and a model chosen there fills the optics. The Telescope and
 // Guide Telescope of every profile that refers to it take the values it declares; deleting it leaves those profiles on
 // the values last copied from it. Nothing here commands a device.
 
@@ -140,12 +140,11 @@ export function CatalogTelescopeEditor({ telescope, onDirtyChange, onSaved, onCl
 						}}
 					>
 						<TextInput label="Name" value={draft.name} placeholder="Esprit 100" onChange={(e) => edit({ name: e.target.value })} />
-						<TextInput label="Model" value={draft.model} placeholder="Sky-Watcher Esprit 100ED" onChange={(e) => edit({ model: e.target.value })} />
+						<TelescopeModelSearch label="Model" placeholder="Sky-Watcher Esprit 100ED" value={draft.model} onValueChange={(model) => edit({ model })} onPick={fillFrom} />
 						<TextInput label="Serial Number" spellCheck={false} autoComplete="off" value={draft.serial} onChange={(e) => edit({ serial: e.target.value })} />
 						<TextInput label="Notes" value={draft.notes} onChange={(e) => edit({ notes: e.target.value })} />
 						<Notice>The name tells telescopes apart in every list; the model, serial number, and notes are for people only and never compared.</Notice>
-						<TelescopeModelSearch onPick={fillFrom} />
-						<Notice>AstroBin lists a zoom, or a telescope with its reducer or extender, as a range of focal lengths: such a model fills the shortest; check it.</Notice>
+						<Notice>Typing the model lists the matching telescopes of the AstroBin catalog; choosing one fills the optics. AstroBin lists a zoom, or a telescope with its reducer or extender, as a range of focal lengths: such a model fills the shortest; check it.</Notice>
 						<div className="grid grid-cols-2 gap-3">
 							<NumberInput label="Aperture" suffix="mm" min={0} step={1} value={draft.aperture} onChange={(aperture) => edit({ aperture })} />
 							<NumberInput label="Focal Length" suffix="mm" min={0} step={1} value={draft.focalLength} onChange={(focalLength) => edit({ focalLength })} />

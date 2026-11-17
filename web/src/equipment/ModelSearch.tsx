@@ -6,8 +6,11 @@ import { TextInput } from '../ui/TextInput'
 // Search of a model catalog bundled with the web client (the cameras or the telescopes of the AstroBin equipment
 // database), in the Equipment Catalog editor and the calculators: the catalog is loaded the first time the field is
 // focused, and the models that match what is typed float in a list under the field, like the list of a select. Choosing
-// one, by pointer or by the arrow keys and Enter, hands it to the caller, which fills its fields with it; Enter never
-// submits the form. The list closes on Escape and when the field loses focus, which a press outside it does.
+// one, by pointer or by the arrow keys and Enter, hands it to the caller, which fills its fields with it. The list closes
+// on Escape and when the field loses focus, which a press outside it does.
+// The field is a search of its own, cleared once a model is chosen and whose Enter never submits the form, or, given a
+// value, the field that edits that value: what is typed is the value, the list opens only while typing or on the arrow
+// keys and only with models that match, so any text may be kept, and Enter submits the form while the list is closed.
 
 export interface ModelSearchProps<T extends { readonly model: string }> {
 	// Label of the field.
@@ -26,21 +29,27 @@ export interface ModelSearchProps<T extends { readonly model: string }> {
 	readonly empty: string
 	// Called with the model chosen.
 	readonly onPick: (model: T) => void
+	// Value the field edits, such as the model of a camera; absent for a search of its own.
+	readonly value?: string
+	// Called with the text typed, when the field edits a value.
+	readonly onValueChange?: (value: string) => void
 }
 
 // State of the catalog in a field.
 type Catalog<T> = { readonly state: 'idle' | 'loading' } | { readonly state: 'loaded'; readonly models: readonly T[] } | { readonly state: 'failed'; readonly error: string }
 
 // Field that searches a model catalog, with the models that match in a floating list below it.
-export function ModelSearch<T extends { readonly model: string }>({ label, placeholder, load, search, describe, noMatch, empty, onPick }: ModelSearchProps<T>) {
-	const [query, setQuery] = useState('')
+export function ModelSearch<T extends { readonly model: string }>({ label, placeholder, load, search, describe, noMatch, empty, onPick, value, onValueChange }: ModelSearchProps<T>) {
+	const [typed, setTyped] = useState('')
+	const editing = value !== undefined
+	const query = editing ? value : typed
 	const [catalog, setCatalog] = useState<Catalog<T>>({ state: 'idle' })
 	const [open, setOpen] = useState(false)
 	const [active, setActive] = useState(0)
 	const listRef = useRef<HTMLUListElement>(null)
 	const searching = catalog.state === 'loaded' && catalog.models.length > 0 && query.trim() !== ''
 	const found = searching ? search(catalog.models, query) : []
-	const shown = open && searching
+	const shown = open && searching && (!editing || found.length > 0)
 
 	function start() {
 		if (catalog.state === 'loading' || catalog.state === 'loaded') return
@@ -53,13 +62,14 @@ export function ModelSearch<T extends { readonly model: string }>({ label, place
 
 	function pick(model: T | undefined) {
 		if (!model) return
-		setQuery('')
+		if (!editing) setTyped('')
 		setOpen(false)
 		onPick(model)
 	}
 
 	function handleKeyDown(e: KeyboardEvent<HTMLInputElement>) {
 		if (e.key === 'Enter') {
+			if (!shown && editing) return
 			e.preventDefault()
 			if (shown) pick(found[active])
 		} else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -88,11 +98,12 @@ export function ModelSearch<T extends { readonly model: string }>({ label, place
 					placeholder={placeholder}
 					onFocus={() => {
 						start()
-						setOpen(true)
+						if (!editing) setOpen(true)
 					}}
 					onBlur={() => setOpen(false)}
 					onChange={(e) => {
-						setQuery(e.target.value)
+						if (editing) onValueChange?.(e.target.value)
+						else setTyped(e.target.value)
 						setActive(0)
 						setOpen(true)
 					}}

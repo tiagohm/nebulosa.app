@@ -20,11 +20,10 @@ import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 
 // Editor of one camera of the Equipment Catalog: its name, model, serial number, notes, the sensor it declares, and
-// whether it is archived, edited as a local draft that only Save writes. The model and sensor can be filled from a model of
-// the camera model catalog (AstroBin) or copied from a connected camera of the active profile's connection; the sensor
-// only warns of a binding to a device whose sensor differs. A camera the
-// Calibration Library records frames or masters against cannot be deleted, only archived. Nothing here commands a
-// device.
+// whether it is archived, edited as a local draft that only Save writes. The Model field also searches the camera model
+// catalog (AstroBin), and a model chosen there fills the sensor, which can also be copied from a connected camera of the
+// active profile's connection; the sensor only warns of a binding to a device whose sensor differs. A camera the
+// Calibration Library records frames or masters against cannot be deleted, only archived. Nothing here commands a device.
 
 export interface CatalogCameraEditorProps {
 	// Camera edited; absent while a new one is created.
@@ -189,12 +188,11 @@ export function CatalogCameraEditor({ camera, initial, onDirtyChange, onSaved, o
 						}}
 					>
 						<TextInput label="Name" value={draft.name} placeholder="ASI2600MM #1" onChange={(e) => edit({ name: e.target.value })} />
-						<TextInput label="Model" value={draft.model} placeholder="ZWO ASI2600MM Pro" onChange={(e) => edit({ model: e.target.value })} />
+						<CameraModelSearch label="Model" placeholder="ZWO ASI2600MM Pro" value={draft.model} onValueChange={(model) => edit({ model })} onPick={fillFrom} />
 						<TextInput label="Serial Number" spellCheck={false} autoComplete="off" value={draft.serial} onChange={(e) => edit({ serial: e.target.value })} />
 						<TextInput label="Notes" value={draft.notes} onChange={(e) => edit({ notes: e.target.value })} />
 						<Notice>The name tells cameras apart in every list; the model, serial number, and notes are for people only and never compared.</Notice>
-						<CameraModelSearch onPick={fillFrom} />
-						<Notice>AstroBin gives no CFA pattern: a color sensor keeps the one chosen, or {DEFAULT_COLOR_CFA} when it was mono; check it.</Notice>
+						<Notice>Typing the model lists the matching cameras of the AstroBin catalog; choosing one fills the sensor. AstroBin gives no CFA pattern: a color sensor keeps the one chosen, or {DEFAULT_COLOR_CFA} when it was mono; check it.</Notice>
 						{connected.length > 0 && <Select label="Fill From" options={[NO_DEVICE, ...connected.map((device) => device.id)]} value={NO_DEVICE} format={(id) => (id === NO_DEVICE ? 'A connected camera…' : (connected.find((device) => device.id === id)?.name ?? id))} onChange={copyFrom} />}
 						<div className="grid grid-cols-2 gap-3">
 							<NumberInput label="Sensor Width" suffix="px" min={0} value={draft.width} onChange={(width) => edit({ width })} />

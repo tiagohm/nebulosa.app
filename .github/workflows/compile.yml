@@ -46,5 +46,8 @@ jobs:
             - name: Generate Camera Model Catalog
               run: bun make:cameras
 
+            - name: Generate Telescope Model Catalog
+              run: bun make:telescopes
+
             - name: Compile
               run: bun compile

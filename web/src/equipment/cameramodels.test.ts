@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { CameraModel, CameraModelCatalog } from 'api'
-import { cameraModelDescription, loadCameraModels, modelCfa, searchCameraModels, searchKey } from './cameramodels'
+import { cameraModelDescription, loadCameraModels, modelCfa, searchCameraModels } from './cameramodels'
+import { searchKey } from './models'
 
 const MODELS: readonly CameraModel[] = [
 	{ model: 'QHY 268M', sensor: 'Sony IMX571 (mono)', width: 6280, height: 4210, pixelSize: 3.76, bits: 16, color: false },

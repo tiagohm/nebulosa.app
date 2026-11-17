@@ -982,7 +982,7 @@ export type { NotificationCreatedEvent, NotificationRecord, NotificationSnapshot
 export type { NotificationCameraTool, NotificationLevel, NotificationSource, NotificationTarget } from './notifications.rules'
 export type { ClientMessage, ServerEvent } from './websocket'
 export type { BoundDevice, CameraBinding, CameraBindingEvent, CameraBindingRequest, CameraBindingsSnapshot, EquipmentCatalogErrorCode } from './equipmentcatalog'
-export type { CameraModel, CameraModelCatalog } from './equipmentcatalog.models'
+export type { CameraModel, CameraModelCatalog, TelescopeModel, TelescopeModelCatalog } from './equipmentcatalog.models'
 export type {
 	CatalogCamera,
 	CatalogCameraFields,

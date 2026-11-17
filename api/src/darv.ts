@@ -444,37 +444,38 @@ export class DarvSessions {
 	// Records the end of the operation of a measurement, restores the slew rate it replaced, and analyzes its frame.
 	async #ended(session: Session, running: Measurement, mount: Mount, result: OperationResult<string>) {
 		const { generation } = running
+		// The frame is retained before the mount is restored, which may take as long as a device command, so a newer frame
+		// of the camera cannot pull it away before the analysis.
+		const imageId = result.ok ? result.value : undefined
+		const retained = imageId !== undefined && this.images.retain(imageId) !== undefined
 
-		// The mount is restored before the end is recorded, so a tab sees the measurement ended only once it is as it was.
-		await this.#restore(session, generation, mount)
+		try {
+			// The mount is restored before the end is recorded, so a tab sees the measurement ended only once it is as it was.
+			await this.#restore(session, generation, mount)
 
-		if (!result.ok) {
-			const state = result.reason === 'aborted' ? 'aborted' : 'failed'
-			this.#patch(session, generation, { state, ...(state === 'failed' && { reason: result.reason }), ...(result.error !== undefined && { error: result.error }), endedAt: Date.now() })
-		}
+			if (!result.ok) {
+				const state = result.reason === 'aborted' ? 'aborted' : 'failed'
+				this.#patch(session, generation, { state, ...(state === 'failed' && { reason: result.reason }), ...(result.error !== undefined && { error: result.error }), endedAt: Date.now() })
+			} else if (running.aborted) {
+				this.#patch(session, generation, { state: 'aborted', endedAt: Date.now() })
+			} else {
+				const measurement = this.#measurement(session, generation)
+				const analysis = new AbortController()
+				running.analysis = analysis
+				this.#patch(session, generation, { state: 'analyzing' })
 
-		if (result.ok && running.aborted) {
-			this.#patch(session, generation, { state: 'aborted', endedAt: Date.now() })
-		} else if (result.ok) {
-			const imageId = result.value
-			const measurement = this.#measurement(session, generation)
-			const analysis = new AbortController()
-			running.analysis = analysis
-			this.#patch(session, generation, { state: 'analyzing' })
-			// The analysis retains the document, so a newer frame of the camera cannot pull it away meanwhile.
-			const retained = this.images.retain(imageId) !== undefined
-
-			try {
-				const analyzed = await this.analyzer.analyze(imageId, measurement!.timing!, measurement!.request.direction, analysis.signal)
-				const { trails, ...summary } = analyzed
-				session.trails.push({ generation, imageId, trails })
-				this.#patch(session, generation, { state: 'ready', result: summary, endedAt: Date.now() })
-			} catch (error) {
-				if (analysis.signal.aborted) this.#patch(session, generation, { state: 'aborted', endedAt: Date.now() })
-				else this.#patch(session, generation, { state: 'failed', reason: 'commandFailed', error: Error.isError(error) ? error.message : String(error), endedAt: Date.now() })
-			} finally {
-				if (retained) this.images.release(imageId)
+				try {
+					const analyzed = await this.analyzer.analyze(result.value, measurement!.timing!, measurement!.request.direction, analysis.signal)
+					const { trails, ...summary } = analyzed
+					session.trails.push({ generation, imageId: result.value, trails })
+					this.#patch(session, generation, { state: 'ready', result: summary, endedAt: Date.now() })
+				} catch (error) {
+					if (analysis.signal.aborted) this.#patch(session, generation, { state: 'aborted', endedAt: Date.now() })
+					else this.#patch(session, generation, { state: 'failed', reason: 'commandFailed', error: Error.isError(error) ? error.message : String(error), endedAt: Date.now() })
+				}
 			}
+		} finally {
+			if (retained) this.images.release(imageId)
 		}
 
 		session.running = undefined

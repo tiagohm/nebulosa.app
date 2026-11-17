@@ -990,6 +990,23 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+// Whether a value is an array of strings.
+function isStringArray(value: unknown): value is readonly string[] {
+	return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+// Source of an orbit of a scenario file when it has every field its kind shows, else manual: the source only describes
+// where the orbit came from, so one that cannot be read costs the orbit nothing.
+function scenarioSource(source: unknown): ExplorerOrbitSource {
+	if (!isRecord(source)) return { kind: 'manual' }
+	if (source.kind === 'preset' && typeof source.id === 'string' && typeof source.name === 'string' && typeof source.sourced === 'boolean') return { kind: 'preset', id: source.id, name: source.name, sourced: source.sourced, citation: typeof source.citation === 'string' ? source.citation : undefined }
+	if (source.kind === 'sbdb' && typeof source.spkId === 'string' && typeof source.designation === 'string' && typeof source.epoch === 'number' && typeof source.fetchedAt === 'number') {
+		return { kind: 'sbdb', spkId: source.spkId, designation: source.designation, orbitId: typeof source.orbitId === 'string' ? source.orbitId : undefined, solutionDate: typeof source.solutionDate === 'string' ? source.solutionDate : undefined, epoch: source.epoch, fetchedAt: source.fetchedAt }
+	}
+	if (source.kind === 'spk' && typeof source.target === 'number' && typeof source.center === 'number' && typeof source.epoch === 'number' && typeof source.generation === 'number' && isStringArray(source.kernels)) return { kind: 'spk', target: source.target, center: source.center, epoch: source.epoch, generation: source.generation, kernels: source.kernels }
+	return { kind: 'manual' }
+}
+
 // Reads a scenario file, checking it as the editor checks a draft, or answers why it is refused. Nothing changes on a
 // refusal.
 export function importScenario(state: OrbitalMechanicsState, text: string, io: OrbitalMechanicsIo = browserIo) {
@@ -1024,10 +1041,18 @@ export function importScenario(state: OrbitalMechanicsState, text: string, io: O
 		const definition = orbit.definition as unknown as OrbitDefinitionPayload
 		if (!['elliptic', 'parabolic', 'hyperbolic', 'cartesian'].includes(definition.kind)) return refuse(`Orbit ${index + 1} has an unknown kind.`)
 		if (definition.mu !== scenarioCenter.mu) return refuse(`Orbit ${index + 1} is not about the scenario's center.`)
-		const again = draftDefinition(draftOf(definition, unit), scenarioCenter, unit, limits)
+		let again: OrbitDefinitionPayload | string
+
+		try {
+			again = draftDefinition(draftOf(definition, unit), scenarioCenter, unit, limits)
+		} catch {
+			// A definition missing a field of its kind cannot even be shown in the editor.
+			return refuse(`Orbit ${index + 1} is not readable.`)
+		}
+
 		if (typeof again === 'string') return refuse(`Orbit ${index + 1}: ${again}`)
 		const color = typeof orbit.color === 'number' && orbit.color >= 0 && orbit.color < PALETTE_SIZE ? Math.floor(orbit.color) : index % PALETTE_SIZE
-		checked.push({ name: orbit.name, color, visible: orbit.visible !== false, source: isRecord(orbit.source) ? (orbit.source as unknown as ExplorerOrbitSource) : { kind: 'manual' }, definition })
+		checked.push({ name: orbit.name, color, visible: orbit.visible !== false, source: scenarioSource(orbit.source), definition })
 	}
 
 	clearOrbits(state)

@@ -293,6 +293,25 @@ describe('exchange', () => {
 		expect(other.orbits[0].definition).toEqual(MOLNIYA)
 	})
 
+	test('a scenario orbit missing a field of its kind is refused, and an unreadable source reads as manual', async () => {
+		const { io, flush } = fakeIo()
+		const state = proxy<OrbitalMechanicsState>(initialOrbitalMechanicsState())
+		await openOrbitalMechanics(state, io)
+		await flush()
+		const scenario = exportScenario(state)!
+
+		const other = proxy<OrbitalMechanicsState>(initialOrbitalMechanicsState())
+		other.reference = REFERENCE
+		importScenario(other, JSON.stringify({ ...scenario, orbits: [{ ...scenario.orbits[0], definition: { kind: 'cartesian', mu: EARTH.mu } }] }), io)
+		expect(other.importError).toBe('Orbit 1 is not readable.')
+		expect(other.orbits).toHaveLength(0)
+
+		importScenario(other, JSON.stringify({ ...scenario, orbits: [{ ...scenario.orbits[0], source: { kind: 'spk' } }] }), io)
+		await flush()
+		expect(other.importError).toBeUndefined()
+		expect(other.orbits[0].source).toEqual({ kind: 'manual' })
+	})
+
 	test('the state table names its units, frame, origin, and model', () => {
 		const csv = trackCsv({ name: 'Molniya', source: { kind: 'preset', id: 'molniya', name: 'Molniya', sourced: false } }, { trajectory: circle(4) }, EARTH)
 		const lines = csv.trimEnd().split('\r\n')

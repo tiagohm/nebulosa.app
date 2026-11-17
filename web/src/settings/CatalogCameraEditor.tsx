@@ -115,6 +115,8 @@ export function CatalogCameraEditor({ camera, initial, onDirtyChange, onSaved, o
 	}
 
 	useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange])
+	// An editor that goes away, such as one whose record another tab deleted, leaves no unsaved changes behind.
+	useEffect(() => () => onDirtyChange(false), [onDirtyChange])
 
 	const connected = devices.filter((device) => device.type === 'camera' && device.connected)
 	const usage = camera && summary?.cameras.find((entry) => entry.cameraId === camera.id)

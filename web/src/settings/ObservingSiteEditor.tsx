@@ -78,6 +78,8 @@ export function ObservingSiteEditor({ site, onDirtyChange, onSaved, onClosed }: 
 	}
 
 	useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange])
+	// An editor that goes away, such as one whose record another tab deleted, leaves no unsaved changes behind.
+	useEffect(() => () => onDirtyChange(false), [onDirtyChange])
 
 	const latitude = parseGeographicAngle(draft.latitude, 'latitude')
 	const longitude = parseGeographicAngle(draft.longitude, 'longitude')

@@ -115,6 +115,8 @@ export function ExternalToolDetail({ tool, onDirtyChange }: ExternalToolDetailPr
 	}
 
 	useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange])
+	// An editor that goes away, such as one whose record another tab deleted, leaves no unsaved changes behind.
+	useEffect(() => () => onDirtyChange(false), [onDirtyChange])
 
 	const outdated = tool.revision !== base.revision
 	const { min, max } = tool.timeoutLimits

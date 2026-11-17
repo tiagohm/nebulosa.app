@@ -84,6 +84,8 @@ export function CatalogTelescopeEditor({ telescope, onDirtyChange, onSaved, onCl
 	}
 
 	useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange])
+	// An editor that goes away, such as one whose record another tab deleted, leaves no unsaved changes behind.
+	useEffect(() => () => onDirtyChange(false), [onDirtyChange])
 
 	function edit(patch: Partial<Draft>) {
 		setDraft({ ...draft, ...patch })

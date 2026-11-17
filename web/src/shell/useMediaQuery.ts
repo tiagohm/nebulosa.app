@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
 
 // React binding of CSS media queries, for layout decisions Tailwind classes alone cannot make, such as
 // which panel state a toggle button changes.
@@ -8,12 +8,15 @@ export const WIDE_SCREEN = '(min-width: 64rem)'
 
 // Returns whether a media query matches, updating when it starts or stops matching.
 export function useMediaQuery(query: string): boolean {
-	return useSyncExternalStore(
-		(onChange) => {
+	// The subscription only changes with the query, so a render does not remove and add the listener again.
+	const subscribe = useCallback(
+		(onChange: () => void) => {
 			const media = window.matchMedia(query)
 			media.addEventListener('change', onChange)
 			return () => media.removeEventListener('change', onChange)
 		},
-		() => window.matchMedia(query).matches,
+		[query],
 	)
+
+	return useSyncExternalStore(subscribe, () => window.matchMedia(query).matches)
 }

@@ -431,6 +431,18 @@ test('a mount disconnecting under a press ends it without confirming the stop', 
 	expect(nudgeSession(nudgeEvents, 'cut')).toMatchObject({ phase: 'failed', reason: 'disconnected', stopConfirmed: false })
 })
 
+test('a stop of a press whose mount disconnected answers that the stop was not observed', async () => {
+	const { manager, id, client, commands, mountId } = await setup()
+	await connectMount(manager, client, mountId)
+
+	expect((await nudge(commands, id, mountId, 'unseen', 'E')).status).toBe(202)
+	manager.devices.switch(client, mountId, false)
+	const response = await commands.stopNudge('unseen')
+
+	expect(response.status).toBe(409)
+	expect(await response.json()).toMatchObject({ code: 'unknownResult' })
+})
+
 test('an operation holding the camera does not block a nudge', async () => {
 	const { manager, id, client, commands, operations, mountId } = await setup()
 	await connectMount(manager, client, mountId)

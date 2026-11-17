@@ -118,6 +118,8 @@ interface ActiveSession<S extends LeasedSession> {
 	readonly ending: PromiseWithResolvers<void>
 	// Resolves once the session is moving or has ended, whichever comes first.
 	readonly started: PromiseWithResolvers<void>
+	// Resolves once the end of the session was published, with whether its device was observed at rest.
+	readonly ended: PromiseWithResolvers<void>
 }
 
 // Status a failed start is answered with.
@@ -170,6 +172,7 @@ export class LeasedMotions<S extends LeasedSession> implements Disposable {
 			commanded: false,
 			ending: Promise.withResolvers(),
 			started: Promise.withResolvers(),
+			ended: Promise.withResolvers(),
 		}
 
 		this.#active.set(key, active)
@@ -201,7 +204,8 @@ export class LeasedMotions<S extends LeasedSession> implements Disposable {
 		if (!active) return new Response(null, { status: 204 })
 
 		this.#end(active)
-		await active.operation?.result
+		// The end is recorded after the operation settled, so waiting for the operation alone would read stopConfirmed too early.
+		await active.ended.promise
 		return active.session.stopConfirmed === false ? errorResponse(`The ${this.labels.device} was not observed to stop`, 409, 'unknownResult') : new Response(null, { status: 204 })
 	}
 
@@ -275,6 +279,7 @@ export class LeasedMotions<S extends LeasedSession> implements Disposable {
 		const outcome = result.ok ? { phase: 'stopped' as const } : { phase: 'failed' as const, reason: result.reason, error: result.error }
 		this.#update(active, { ...outcome, stopConfirmed, endedAt: Date.now() } as Partial<S>)
 		active.started.resolve()
+		active.ended.resolve()
 	}
 
 	// Records a press as ended, forgetting the oldest beyond MAX_ENDED_TOKENS.

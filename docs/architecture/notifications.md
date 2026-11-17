@@ -5,7 +5,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Notifications are facts about operations, never their state: `NotificationService` (`api/src/notifications.ts`) receives every event of the connections, operations, and sessions as a subscriber of the `ServerEventDispatcher`, after the broadcast (see [Routes and Events](routes-and-events.md)), and keeps only what `NotificationClassifier` (`api/src/notifications.rules.ts`) asks for.
   Its own `notification:created` events are broadcast directly, never classified again.
   Classifying, storing, and publishing never throw into or wait inside the publishing service.
-- Classified transitions: lost connections (`connection:close` with cause `lost`, warning);
+- Classified transitions: lost connections (`connection:close` with cause `lost`, warning, per loss and server run);
   ended Meridian Flip executions (success when imaging is ready, warning when cancelled, error otherwise);
   completed or failed captures, Auto Focus runs, Flat Wizard runs, and Dark Library Wizard runs (success or error);
   failed masters of the Calibration Library, and completed ones a wizard asked for;

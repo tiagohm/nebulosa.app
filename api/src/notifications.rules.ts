@@ -193,8 +193,11 @@ export class NotificationClassifier {
 	readonly #endpoints = new Map<string, ConnectRequest>()
 	// Connections closed on request and not opened again.
 	readonly #requested = new Set<string>()
-	// Losses of each connection so far, numbering their occurrences.
+	// Losses of each connection so far, numbering their occurrences within this classifier.
 	readonly #losses = new Map<string, number>()
+	// Identity of this classifier, which keys the losses: a connection id is the same for an endpoint in every process,
+	// and the records outlive a restart, so the numbering alone would repeat the key of a loss recorded before.
+	readonly #epoch = Bun.randomUUIDv7()
 	// Guide camera of each active guiding session, by session id.
 	readonly #guidingCameras = new Map<string, OperationDevice>()
 
@@ -341,7 +344,7 @@ export class NotificationClassifier {
 		const occurrence = (this.#losses.get(id) ?? 0) + 1
 		this.#losses.set(id, occurrence)
 		const where = endpoint?.type === 'SIMULATOR' ? 'the simulator' : endpoint ? `${endpoint.host}:${endpoint.port}` : 'a server'
-		return [{ key: `connection.lost:${id}:${occurrence}`, level: 'warning', code: 'connection.lost', title: 'Connection lost', message: `The connection to ${where} was lost.`, source: { kind: 'connection', connectionId: id, endpoint } }]
+		return [{ key: `connection.lost:${id}:${this.#epoch}:${occurrence}`, level: 'warning', code: 'connection.lost', title: 'Connection lost', message: `The connection to ${where} was lost.`, source: { kind: 'connection', connectionId: id, endpoint } }]
 	}
 
 	// Reports a capture that completed or failed; stopped and aborted captures are quiet.

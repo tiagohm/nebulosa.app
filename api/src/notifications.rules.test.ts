@@ -191,11 +191,20 @@ test('a lost connection warns once per close and its failures are reported', () 
 	const classifier = new NotificationClassifier()
 	classifier.classify(open)
 	const [lost] = classifier.classify({ type: 'connection:close', id: 'c', cause: 'lost' })
-	expect(lost).toMatchObject({ key: 'connection.lost:c:1', level: 'warning', code: 'connection.lost', message: 'The connection to pi:7624 was lost.', source: { connectionId: 'c', endpoint: { type: 'INDI', host: 'pi', port: 7624 } } })
+	expect(lost.key).toEndWith(':1')
+	expect(lost).toMatchObject({ level: 'warning', code: 'connection.lost', message: 'The connection to pi:7624 was lost.', source: { connectionId: 'c', endpoint: { type: 'INDI', host: 'pi', port: 7624 } } })
 	expect(classifier.classify(capture({ phase: 'failed', reason: 'removed' }))).toHaveLength(1)
 
 	classifier.classify(open)
-	expect(classifier.classify({ type: 'connection:close', id: 'c', cause: 'lost' })[0].key).toBe('connection.lost:c:2')
+	expect(classifier.classify({ type: 'connection:close', id: 'c', cause: 'lost' })[0].key).toBe(lost.key.replace(/1$/, '2'))
+})
+
+test('a lost connection of a new classifier, as after a restart, is keyed apart from the losses recorded before', () => {
+	const before = new NotificationClassifier()
+	before.classify(open)
+	const after = new NotificationClassifier()
+	after.classify(open)
+	expect(after.classify({ type: 'connection:close', id: 'c', cause: 'lost' })[0].key).not.toBe(before.classify({ type: 'connection:close', id: 'c', cause: 'lost' })[0].key)
 })
 
 test('session notifications carry the endpoint of their connection', () => {

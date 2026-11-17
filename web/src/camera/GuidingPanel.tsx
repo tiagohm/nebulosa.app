@@ -10,7 +10,7 @@ import { CatalogCameraNotice } from '../equipment/CatalogCameraNotice'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import { useProfileTelescopes } from '../equipment/telescopes'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { formatDegrees, formatPixelLength, formatPixelPosition, formatTemperature, formatZonedDateTime } from '../format'
+import { formatDegrees, formatMillimeters, formatPixelLength, formatPixelPosition, formatTemperature, formatZonedDateTime } from '../format'
 import { useActiveTimeZone } from '../location/useLocation'
 import { operationsState } from '../operations'
 import { formatPixelScale } from '../platesolving/coordinates'
@@ -60,6 +60,7 @@ import {
 	stopGuiding,
 	stopGuidingSession,
 	formatCalibrationAdaptation,
+	formatPulse,
 	formatCalibrationPlace,
 	formatCalibrationRate,
 } from './guiding'
@@ -176,7 +177,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 						<DeviceLink device={device} />
 					</DataRow>
 					<DataRow label="Guide Output">{guideOutput ? <DeviceLink device={guideOutput.device} fallback="Not assigned" /> : 'Guide Camera only'}</DataRow>
-					<DataRow label="Guide Focal Length">{focalLength !== undefined ? `${Number(focalLength.toFixed(1))} mm` : 'Not set'}</DataRow>
+					<DataRow label="Guide Focal Length">{focalLength !== undefined ? formatMillimeters(focalLength) : 'Not set'}</DataRow>
 					{session?.pixelScale !== undefined && <DataRow label="Pixel Scale">{formatPixelScale(arcsec(session.pixelScale))}</DataRow>}
 				</DataList>
 				{!running && outputAvailability && outputAvailability.status !== 'ready' && outputAvailability.status !== 'busy' && <Notice>{outputAvailability.message}</Notice>}
@@ -255,10 +256,10 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 						<NumberInput label="Adaptation Rate" value={settings.decBacklash.adaptationRate} min={0} max={1} step={0.05} disabled={running || pending} onChange={(adaptationRate) => update({ decBacklash: { ...settings.decBacklash, adaptationRate } })} />
 						{session?.calibration && session.calibration.backlash > 0 && !running && (
 							<Button variant="secondary" className="self-start" disabled={pending} onClick={() => update({ decBacklash: { ...settings.decBacklash, initialMs: Math.min(Math.round(session.calibration!.backlash), settings.decBacklash.maximumMs) } })}>
-								{`Start from the calibration's ${Math.round(session.calibration.backlash)} ms`}
+								{`Start from the calibration's ${formatPulse(session.calibration.backlash)}`}
 							</Button>
 						)}
-						{session?.decBacklashEstimate !== undefined && <DataRow label="Estimate">{`${Math.round(session.decBacklashEstimate)} ms`}</DataRow>}
+						{session?.decBacklashEstimate !== undefined && <DataRow label="Estimate">{formatPulse(session.decBacklashEstimate)}</DataRow>}
 					</>
 				)}
 				<Notice>
@@ -558,7 +559,7 @@ function SessionState({ session, onReview }: SessionStateProps) {
 						{calibration.transformations.length > 0 && <DataRow label="Adapted">{formatCalibrationAdaptation(calibration)}</DataRow>}
 						<DataRow label="RA Rate">{`${formatCalibrationRate(calibration.raRate, pixelScale)} at ${formatDegrees(calibration.raAngle, 1)}`}</DataRow>
 						<DataRow label="DEC Rate">{`${formatCalibrationRate(calibration.decRate, pixelScale)} at ${formatDegrees(calibration.decAngle, 1)}`}</DataRow>
-						{calibration.backlash > 0 && <DataRow label="DEC Backlash">{`${Math.round(calibration.backlash)} ms`}</DataRow>}
+						{calibration.backlash > 0 && <DataRow label="DEC Backlash">{formatPulse(calibration.backlash)}</DataRow>}
 					</>
 				)}
 				{rms && rms.samples > 0 && (

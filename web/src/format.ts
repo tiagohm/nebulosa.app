@@ -2,7 +2,7 @@ import { formatAngle, toArcmin, toArcsec, toDeg } from 'nebulosa/src/math/units/
 
 // Display formats shared by every screen for quantities that are not tied to one feature: fixed and signed numbers,
 // percentages, angles in degrees, arcminutes, and arcseconds, hour angles, geographic positions and elevations, temperatures, lengths in pixels
-// with their sky size, positions in an image, distances in kilometers, exposure times, durations, elapsed and signed clocks, instants
+// with their sky size, pixel sizes, optical lengths and focal ratios, positions in an image, distances in kilometers, speeds, exposure times, durations, elapsed and signed clocks, instants
 // in an IANA time zone (named unless it is the active site's), byte sizes, and measurements of a wide dynamic range. Every Intl.DateTimeFormat of the
 // web is built and cached here (`dateTimeFormat`), and every civil time a screen shows is one of the formats below.
 // Each takes the value in its computational unit (radians, seconds, °C, pixels, bytes) and returns text only, so a
@@ -120,6 +120,38 @@ export function formatTemperature(celsius: number) {
 export function formatPixelLength(pixels: number | undefined, pixelScale?: number) {
 	if (pixels === undefined || !Number.isFinite(pixels)) return MISSING
 	return pixelScale === undefined ? `${pixels.toFixed(2)} px` : `${pixels.toFixed(2)} px (${formatFixed(pixels * pixelScale, 2)}″)`
+}
+
+// Returns a number with at most `digits` decimals and no trailing zeros, the way a configured or catalog value is entered:
+// "3.8", "162.5", "400", or MISSING when it is absent or not finite.
+function formatTrimmed(value: number | undefined, digits: number) {
+	const text = formatFixed(value, digits)
+	return text === MISSING ? MISSING : String(Number(text))
+}
+
+// Returns the size of a sensor pixel in micrometers with up to two decimals, as data sheets give it: "3.76 µm",
+// "3.8 µm", or MISSING when it is absent or not finite.
+export function formatPixelSize(micrometers: number | undefined) {
+	return withUnit(formatTrimmed(micrometers, 2), ' µm')
+}
+
+// Returns a length of optics in millimeters, such as an aperture or a focal length, with up to one decimal: "400 mm",
+// "162.5 mm", or MISSING when it is absent or not finite.
+export function formatMillimeters(millimeters: number | undefined) {
+	return withUnit(formatTrimmed(millimeters, 1), ' mm')
+}
+
+// Returns a focal ratio, the focal length over the aperture, with up to one decimal as lenses are marked: "f/5.6",
+// "f/7", or MISSING when it is absent or not finite.
+export function formatFocalRatio(ratio: number | undefined) {
+	const text = formatTrimmed(ratio, 1)
+	return text === MISSING ? MISSING : `f/${text}`
+}
+
+// Returns a speed in km/s with `digits` decimals, which each feature chooses for what its source resolves: "7.660 km/s",
+// "-0.42 km/s" (a range rate is negative while approaching), or MISSING when it is absent or not finite.
+export function formatSpeed(kilometersPerSecond: number | undefined, digits: number) {
+	return withUnit(formatFixed(kilometersPerSecond, digits), ' km/s')
 }
 
 // Returns a duration in seconds: seconds below a minute, two decimals below 10 s ("2.50 s", "42.0 s"), then minutes and

@@ -1,4 +1,6 @@
 import type { GuidingSessionCalibration } from 'api'
+import { formatFixed } from '../format'
+import { formatPulse } from './guiding'
 
 // Measured steps of a guiding calibration on the guide image, as the camera sees them: X to the right and Y down, in guide
 // pixels from where the star was when the calibration started, both axes to one scale. The RA steps out, the RA steps
@@ -41,7 +43,7 @@ const EXCLUSION_LABELS: Readonly<Record<NonNullable<CalibrationSample['excluded'
 export function calibrationSampleLabel(sample: CalibrationSample) {
 	const frame = sample.frameId === undefined ? '' : `, frame ${sample.frameId}`
 	const excluded = sample.excluded ? `, left out: ${EXCLUSION_LABELS[sample.excluded]}` : ''
-	return `${CALIBRATION_LEGS[sample.leg].label} step ${sample.step}: ${sample.pulseDirection.toLowerCase()} ${Math.round(sample.pulse)} ms${frame}, x ${sample.x.toFixed(1)} px, y ${sample.y.toFixed(1)} px${excluded}`
+	return `${CALIBRATION_LEGS[sample.leg].label} step ${sample.step}: ${sample.pulseDirection.toLowerCase()} ${formatPulse(sample.pulse)}${frame}, x ${formatFixed(sample.x, 1)} px, y ${formatFixed(sample.y, 1)} px${excluded}`
 }
 
 // Returns the half side of the plot holding every step and the calibration origins, in guide pixels.
@@ -120,7 +122,7 @@ export function GuidingCalibrationPlot({ calibration }: GuidingCalibrationPlotPr
 						{label}
 					</span>
 				))}
-				<span>{`hollow: left out · half side ${extent.toFixed(1)} px${calibration.orthogonalAssumed ? ' · dashed: DEC assumed' : ''}`}</span>
+				<span>{`hollow: left out · half side ${formatFixed(extent, 1)} px${calibration.orthogonalAssumed ? ' · dashed: DEC assumed' : ''}`}</span>
 			</figcaption>
 		</figure>
 	)

@@ -126,7 +126,7 @@ export function VisibilityRows<R extends string>({ visibility, status, planet, r
 			{visibility.eveningDate && <DataRow label="Night of">{visibility.eveningDate}</DataRow>}
 			{visibility.longestMs > 0 && <DataRow label="Longest watchable part">{formatHours(visibility.longestMs)}</DataRow>}
 			{visibility.peakAltitude !== undefined && <DataRow label={`${planet}'s highest altitude`}>{formatDegrees(visibility.peakAltitude, 1)}</DataRow>}
-			{visibility.peakAirmass !== undefined && <DataRow label="Airmass there">{visibility.peakAirmass.toFixed(2)}</DataRow>}
+			{visibility.peakAirmass !== undefined && <DataRow label="Airmass there">{formatFixed(visibility.peakAirmass, 2)}</DataRow>}
 			{visibility.sunAltitude !== undefined && <DataRow label="Sun at the maximum">{formatDegrees(visibility.sunAltitude, 1)}</DataRow>}
 			{visibility.windows.map((window) => (
 				<DataRow key={window.start} label="Watchable">

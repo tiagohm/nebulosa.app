@@ -1,6 +1,7 @@
 import type { GuidePulseRequest } from 'api'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatFixed } from '../../format'
 import { activeProfile, activeSetup, profileState } from '../../profile/profile'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Actions } from '../../ui/Actions'
@@ -63,7 +64,7 @@ export function GuideOutputControls({ device }: InterfaceProps) {
 			)}
 			{output.hasGuideRate && (
 				<>
-					<DataRow label="Guide rate">{`RA ${output.guideRate.rightAscension.toFixed(2)}× · Dec ${output.guideRate.declination.toFixed(2)}×`}</DataRow>
+					<DataRow label="Guide rate">{`RA ${formatFixed(output.guideRate.rightAscension, 2)}× · Dec ${formatFixed(output.guideRate.declination, 2)}×`}</DataRow>
 					{output.canSetGuideRate && (
 						<>
 							<div className="grid grid-cols-2 gap-2">

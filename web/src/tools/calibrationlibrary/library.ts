@@ -1,7 +1,7 @@
 import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationMaster, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, HeaderMetadata, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
 import type { CalibrationList } from '../../calibrationlibrary/calibrationlibrary'
 import { type CatalogCamera, catalogCameraName } from '../../equipment/catalog'
-import { formatDateTime, formatTemperature, MISSING, formatZonedDateTime } from '../../format'
+import { formatTemperature, formatZonedDateTime, MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // What the Calibration Library tool shows of what the server decided: labels, tones, and the coverage of a page of groups.

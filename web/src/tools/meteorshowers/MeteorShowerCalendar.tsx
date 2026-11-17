@@ -121,7 +121,7 @@ export function MeteorShowerCalendar({
 					</div>
 				))}
 				{weeks.flat().map((day) => (
-					<div key={day.date} className={cn('flex min-h-16 min-w-0 flex-col gap-0.5 bg-base-000 p-1', !day.inMonth && 'bg-base-100 text-ink-300', day.date === today && 'bg-green-950')}>
+					<div key={day.date} className={cn('flex min-h-16 min-w-0 flex-col gap-0.5 bg-base-000 p-1', !day.inMonth && 'bg-base-100 text-ink-300', day.date === today && 'bg-success/10')}>
 						<div className="flex items-center justify-between">
 							<span className={cn('tabular-nums', day.inMonth ? 'text-ink-200' : 'text-ink-300')}>{day.day}</span>
 							{day.inMonth && day.active > 0 && (

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { CameraBinding } from 'api'
 import { proxy } from 'valtio'
-import { bindCamera, cameraBoundElsewhere, type CameraBindingsState, handleCameraBindingsEvent } from './catalog'
+import { bindCamera, cameraBoundElsewhere, type CameraBindingsState, handleCameraBindingsEvent, sensorMismatch } from './catalog'
 
 function binding(connectionId: string, deviceId: string, cameraId: string): CameraBinding {
 	return { connectionId, deviceId, hardwareId: deviceId, deviceName: `Device ${deviceId}`, cameraId, boundAt: 0 }
@@ -32,4 +32,11 @@ test('the answer of a bind is applied when no event of the binding arrived yet',
 	const state = proxy<CameraBindingsState>({ bindings: {}, loaded: true })
 	expect(await bindCamera(state, { connectionId: 'c2', id: 'd2' }, 'z', () => Promise.resolve(Response.json({ binding: binding('c2', 'd2', 'z') })))).toBeUndefined()
 	expect(state.bindings['c2/d2'].cameraId).toBe('z')
+})
+
+test('a sensor mismatch names the pixel sizes as data sheets give them, never the float noise of a driver', () => {
+	const camera = { sensor: { width: 6248, height: 4176, pixelSize: 3.76 } }
+	expect(sensorMismatch(camera, { width: 6248, height: 4176, pixelSize: 3.759999990463257 })).toBeUndefined()
+	expect(sensorMismatch(camera, { width: 6248, height: 4176, pixelSize: 4.630000114440918 })).toBe('The camera of the catalog declares 3.76 µm pixels, and the device reports 4.63 µm')
+	expect(sensorMismatch(camera, { width: 3000, height: 2000, pixelSize: 3.76 })).toBe('The camera of the catalog declares a 6248 × 4176 sensor, and the device reports 3000 × 2000')
 })

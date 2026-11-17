@@ -1,8 +1,8 @@
 import type { AstronomicalTimeResult, TimeScaleName } from 'api'
-import { formatHMS, toDeg } from 'nebulosa/src/math/units/angle'
+import { formatHMS } from 'nebulosa/src/math/units/angle'
 import { useEffect, useRef, useState } from 'react'
 import { copyText } from '../../clipboard'
-import { formatHourAngle } from '../../format'
+import { formatDegrees, formatHourAngle } from '../../format'
 import { describeDisplayZone, type DisplayZone } from '../../location/zone'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { IconButton } from '../../ui/IconButton'
@@ -33,7 +33,7 @@ function formatOffset(seconds: number) {
 
 // Formats a sidereal time as time and as degrees.
 function formatSidereal(angle: number) {
-	return `${formatHMS(angle, SIDEREAL_DIGITS)} (${toDeg(angle).toFixed(5)}°)`
+	return `${formatHMS(angle, SIDEREAL_DIGITS)} (${formatDegrees(angle, 5)})`
 }
 
 // Returns the side of the meridian of an hour angle: positive is west.

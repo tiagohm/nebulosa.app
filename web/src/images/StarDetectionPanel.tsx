@@ -2,7 +2,7 @@ import type { StarDetectionJob, StarDetectionRequest, StarDetectionResult } from
 import type { DetectedStar } from 'nebulosa/src/imaging/stars/detector'
 import { useSnapshot } from 'valtio'
 import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
-import { formatDuration, formatPixelLength, formatPixelPosition, formatSignificant, MISSING } from '../format'
+import { formatDuration, formatFixed, formatPixelLength, formatPixelPosition, formatSignificant, MISSING } from '../format'
 import { activeProfile, profileState, setStarDetectionSettings, starDetectionSettings } from '../profile/profile'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
@@ -195,7 +195,7 @@ function SelectedStar({ star }: { readonly star?: DetectedStar }) {
 				<>
 					<DataRow label="Position">{formatPixelPosition(star.x, star.y, 2)}</DataRow>
 					<DataRow label="HFD">{formatPixelLength(star.hfd)}</DataRow>
-					<DataRow label="SNR">{star.snr.toFixed(1)}</DataRow>
+					<DataRow label="SNR">{formatFixed(star.snr, 1)}</DataRow>
 					<DataRow label="Flux">{formatSignificant(star.flux)}</DataRow>
 				</>
 			) : (

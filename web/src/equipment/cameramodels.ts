@@ -1,5 +1,6 @@
 import type { CameraModel } from 'api'
 import type { CfaPattern } from 'nebulosa/src/imaging/model/types'
+import { formatPixelSize } from '../format'
 import { MODEL_SEARCH_LIMIT, modelCatalogLoader, searchModels } from './models'
 
 // Camera model catalog of the Equipment Catalog editor and the calculators: the cameras of the AstroBin equipment
@@ -34,5 +35,5 @@ export function modelCfa(model: Pick<CameraModel, 'color'>, current: CfaPattern 
 
 // Returns what a model says of a sensor: its size in pixels, pixel size, bits, and color.
 export function cameraModelDescription({ sensor, width, height, pixelSize, bits, color }: CameraModel) {
-	return [sensor, `${width} × ${height}`, pixelSize !== undefined && `${pixelSize} µm`, bits !== undefined && `${bits} bits`, color !== undefined && (color ? 'Color' : 'Mono')].filter(Boolean).join(' · ')
+	return [sensor, `${width} × ${height}`, pixelSize !== undefined && formatPixelSize(pixelSize), bits !== undefined && `${bits} bits`, color !== undefined && (color ? 'Color' : 'Mono')].filter(Boolean).join(' · ')
 }

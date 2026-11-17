@@ -1,6 +1,6 @@
 import type { PlateSolution } from 'nebulosa/src/astrometry/solvers/platesolver'
 import type { ReactNode } from 'react'
-import { MISSING, formatAngularSize, formatSignedAngle } from '../format'
+import { formatAngularSize, formatFixed, formatSignedAngle, MISSING } from '../format'
 import { type CoordinateStyle, formatDeclinationAs, formatPixel, formatPositionAngle, formatRightAscensionAs } from '../platesolving/coordinates'
 import { type AstrometricMarker, type AstrometrySelection, circleValues, distanceValues, type Measurement, rectangleValues } from '../platesolving/measurement'
 import { skyAt, wcsFrame } from '../platesolving/wcs'
@@ -168,7 +168,7 @@ function MeasurementValues({ solution, measurement, style }: MeasurementValuesPr
 				<DataRow label="Top · bottom">{sides ? `${formatAngularSize(sides.top)} · ${formatAngularSize(sides.bottom)}` : MISSING}</DataRow>
 				<DataRow label="Left · right">{sides ? `${formatAngularSize(sides.left)} · ${formatAngularSize(sides.right)}` : MISSING}</DataRow>
 				<DataRow label="Diagonals">{diagonals ? `${formatAngularSize(diagonals[0])} · ${formatAngularSize(diagonals[1])}` : MISSING}</DataRow>
-				<DataRow label="Size">{`${pixels.width.toFixed(1)} × ${pixels.height.toFixed(1)} px`}</DataRow>
+				<DataRow label="Size">{`${formatFixed(pixels.width, 1)} × ${formatFixed(pixels.height, 1)} px`}</DataRow>
 				{!sides && <Notice>A corner of this rectangle cannot be located with the solution shown.</Notice>}
 				<Notice>The rectangle follows the rows and columns of the image, not right ascension and declination; its sides are measured along great circles between its corners.</Notice>
 			</>
@@ -184,7 +184,7 @@ function MeasurementValues({ solution, measurement, style }: MeasurementValuesPr
 				<DataRow label="Radius">{radius === undefined ? MISSING : formatAngularSize(radius)}</DataRow>
 				<DataRow label="Diameter">{radius === undefined ? MISSING : formatAngularSize(2 * radius)}</DataRow>
 				<DataRow label={`Centre (${frame})`}>{center ? `${formatRightAscensionAs(center[0], style)} ${formatDeclinationAs(center[1], style)}` : MISSING}</DataRow>
-				<DataRow label="Radius to the rim point">{`${pixels.toFixed(1)} px`}</DataRow>
+				<DataRow label="Radius to the rim point">{`${formatFixed(pixels, 1)} px`}</DataRow>
 				{radius === undefined && <Notice>The centre or rim of this circle cannot be located with the solution shown.</Notice>}
 				<Notice>A circle of constant angular radius on the sky; drawn through the WCS, it may look elliptical.</Notice>
 			</>
@@ -201,7 +201,7 @@ function MeasurementValues({ solution, measurement, style }: MeasurementValuesPr
 			<DataRow label="ΔDec">{offset ? formatSignedAngle(offset.declination) : MISSING}</DataRow>
 			<DataRow label="East offset">{offset?.east === undefined ? MISSING : formatSignedAngle(offset.east)}</DataRow>
 			<DataRow label="North offset">{offset?.north === undefined ? MISSING : formatSignedAngle(offset.north)}</DataRow>
-			<DataRow label="Length">{`${pixels.toFixed(1)} px`}</DataRow>
+			<DataRow label="Length">{`${formatFixed(pixels, 1)} px`}</DataRow>
 			{!offset && <Notice>An end of this distance cannot be located with the solution shown.</Notice>}
 			<Notice>ΔRA is a difference of right ascension, not an angle on the sky; east and north are the offsets of the end on the plane tangent at the start.</Notice>
 		</>

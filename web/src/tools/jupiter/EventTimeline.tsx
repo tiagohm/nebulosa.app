@@ -1,5 +1,5 @@
 import type { JupiterEvent, JupiterEvents } from 'api'
-import { formatDegrees, formatLongDateTime } from '../../format'
+import { formatDegrees, formatFixed, formatLongDateTime } from '../../format'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { ContactRows, EventTable, VisibilityRows } from '../planetary/EventTable'
 import { VISIBILITY_LABELS } from '../planetary/planetary'
@@ -56,7 +56,7 @@ export function EventInspector({ event, all, answer, timeZone }: EventInspectorP
 						<DataRow label="On the central meridian">{formatLongDateTime(event.maximum, timeZone)}</DataRow>
 						<DataRow label="Viewing window ends">{formatLongDateTime(event.end, timeZone)}</DataRow>
 						{event.grs && <DataRow label="Spot longitude (System II)">{formatDegrees(event.grs.longitude, 1)}</DataRow>}
-						{event.grs && <DataRow label="Model reference age">{`${event.grs.referenceAgeDays.toFixed(1)} days`}</DataRow>}
+						{event.grs && <DataRow label="Model reference age">{`${formatFixed(event.grs.referenceAgeDays, 1)} days`}</DataRow>}
 					</>
 				) : (
 					<ContactRows event={event} timeZone={timeZone} />

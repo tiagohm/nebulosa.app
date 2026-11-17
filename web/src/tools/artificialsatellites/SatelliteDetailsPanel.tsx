@@ -1,6 +1,6 @@
 import type { SatelliteQuality } from 'api'
 import { useSnapshot } from 'valtio'
-import { formatClockDuration, formatClockTime, formatDateTime, formatDegrees, formatKilometers, formatZonedDateTime } from '../../format'
+import { formatClockDuration, formatClockTime, formatDateTime, formatDegrees, formatFixed, formatKilometers, formatSpeed, formatZonedDateTime } from '../../format'
 import { type GeographicLocation, openObservingSites } from '../../location/site'
 import type { DisplayZone } from '../../location/zone'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
@@ -159,9 +159,9 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 			{p && (
 				<CollapsibleSection id="satellites.motion" title="Motion & Illumination" defaultOpen={false}>
 					<DataList>
-						{p.rangeRateKmPerSecond !== undefined && <DataRow label="Range rate">{`${p.rangeRateKmPerSecond.toFixed(3)} km/s (${p.rangeRateKmPerSecond > 0 ? 'receding' : 'approaching'})`}</DataRow>}
+						{p.rangeRateKmPerSecond !== undefined && <DataRow label="Range rate">{`${formatSpeed(p.rangeRateKmPerSecond, 3)} (${p.rangeRateKmPerSecond > 0 ? 'receding' : 'approaching'})`}</DataRow>}
 						{p.angularRate !== undefined && <DataRow label="Angular speed">{`${formatDegrees(p.angularRate, 3)}/s`}</DataRow>}
-						<DataRow label="Orbital speed">{`${p.speedKmPerSecond.toFixed(3)} km/s`}</DataRow>
+						<DataRow label="Orbital speed">{formatSpeed(p.speedKmPerSecond, 3)}</DataRow>
 						<DataRow label="Illumination">{SHADOW_LABELS[p.shadow]}</DataRow>
 						{crossings?.length === 0 && <DataRow label="Satellite sunset">None within 1.5 orbits</DataRow>}
 						{crossings?.map((crossing) => (
@@ -178,10 +178,10 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 			{orbit && (
 				<CollapsibleSection id="satellites.orbit" title="Orbit" defaultOpen={false}>
 					<DataList>
-						<DataRow label="Mean motion">{`${orbit.meanMotion.toFixed(8)} rev/day`}</DataRow>
-						<DataRow label="Period (derived)">{`${orbit.periodMinutes.toFixed(2)} min`}</DataRow>
+						<DataRow label="Mean motion">{`${formatFixed(orbit.meanMotion, 8)} rev/day`}</DataRow>
+						<DataRow label="Period (derived)">{`${formatFixed(orbit.periodMinutes, 2)} min`}</DataRow>
 						<DataRow label="Inclination">{formatDegrees(orbit.inclination, 4)}</DataRow>
-						<DataRow label="Eccentricity">{orbit.eccentricity.toFixed(7)}</DataRow>
+						<DataRow label="Eccentricity">{formatFixed(orbit.eccentricity, 7)}</DataRow>
 						<DataRow label="RAAN">{formatDegrees(orbit.rightAscensionOfAscendingNode, 4)}</DataRow>
 						<DataRow label="Arg. of perigee">{formatDegrees(orbit.argumentOfPerigee, 4)}</DataRow>
 						<DataRow label="Mean anomaly">{formatDegrees(orbit.meanAnomaly, 4)}</DataRow>

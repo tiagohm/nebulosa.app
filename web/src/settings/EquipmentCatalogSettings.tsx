@@ -4,6 +4,7 @@ import { useSnapshot } from 'valtio'
 import { calibrationLibraryRuntime } from '../calibrationlibrary/calibrationlibrary'
 import { cameraBindingsState, type CatalogCamera, catalogState, type CatalogTelescope } from '../equipment/catalog'
 import { profilesUsingTelescope } from '../equipment/telescopes'
+import { formatFocalRatio, formatMillimeters, formatPixelSize } from '../format'
 import { profileState } from '../profile/profile'
 import { type CatalogKind, navigate, routeState } from '../shell/route'
 import { useMediaQuery, WIDE_SCREEN } from '../shell/useMediaQuery'
@@ -217,7 +218,7 @@ export interface CameraListProps extends KindListProps {
 
 // Returns what the list says of a camera: its model and sensor.
 function cameraDescription({ model, sensor }: Pick<CatalogCameraFields, 'model' | 'sensor'>) {
-	const size = sensor && `${sensor.width} × ${sensor.height}${sensor.pixelSize === undefined ? '' : ` · ${Number(sensor.pixelSize.toFixed(2))} µm${sensor.bits ? ` · ${sensor.bits} bits` : ''}`}`
+	const size = sensor && `${sensor.width} × ${sensor.height}${sensor.pixelSize === undefined ? '' : ` · ${formatPixelSize(sensor.pixelSize)}${sensor.bits ? ` · ${sensor.bits} bits` : ''}`}`
 	return [model, size].filter(Boolean).join(' · ') || 'No model or sensor'
 }
 
@@ -246,8 +247,8 @@ export interface TelescopeListProps extends KindListProps {
 
 // Returns what the list says of a telescope: its model, aperture, focal length, and focal ratio, in millimeters.
 export function telescopeDescription({ model, aperture, focalLength }: Pick<CatalogTelescopeFields, 'model' | 'aperture' | 'focalLength'>) {
-	const ratio = aperture !== undefined && focalLength !== undefined && `f/${Number((focalLength / aperture).toFixed(1))}`
-	return [model, aperture !== undefined && `${aperture} mm`, focalLength !== undefined && `${focalLength} mm FL`, ratio].filter(Boolean).join(' · ') || 'No model or optics'
+	const ratio = aperture !== undefined && focalLength !== undefined && formatFocalRatio(focalLength / aperture)
+	return [model, aperture !== undefined && formatMillimeters(aperture), focalLength !== undefined && `${formatMillimeters(focalLength)} FL`, ratio].filter(Boolean).join(' · ') || 'No model or optics'
 }
 
 // Telescopes of the catalog, with how many profiles use each.

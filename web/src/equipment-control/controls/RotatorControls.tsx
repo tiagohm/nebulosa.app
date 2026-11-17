@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { formatFixed } from '../../format'
 import { PanelSection } from '../../shell/ContextualPanel'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
@@ -37,7 +38,7 @@ export function RotatorControls({ device }: InterfaceProps) {
 
 	return (
 		<PanelSection title="Rotator">
-			<DataRow label="Mechanical angle">{`${angle.value.toFixed(2)}°`}</DataRow>
+			<DataRow label="Mechanical angle">{`${formatFixed(angle.value, 2)}°`}</DataRow>
 			<DataRow label="Range">{`${angle.min}° to ${angle.max}°`}</DataRow>
 			<DataRow label="State">{rotator.moving ? 'Moving' : 'Idle'}</DataRow>
 			{rotator.moving && rotator.canAbort && (

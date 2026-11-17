@@ -1,5 +1,5 @@
 import { formatFixed, MISSING } from '../../format'
-import { aborted, type ApiFetch, browserFetch } from '../../http'
+import { type ApiFetch, browserFetch } from '../../http'
 import type { GeographicLocation, ToolLocation } from '../../location/site'
 
 // Place and formatting rules shared by the Lunar and Solar Eclipse Map tools. Each tool observes from a ToolLocation

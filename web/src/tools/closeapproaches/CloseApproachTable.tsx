@@ -1,5 +1,4 @@
 import type { CloseApproach, CloseApproachSortField } from 'api'
-import { cn } from 'cn'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDateTime, MISSING } from '../../format'
@@ -8,10 +7,9 @@ import { CLOSE_APPROACH_DISTANCE_DISPLAYS, type CloseApproachPreferences } from 
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { formatMagnitude } from '../../sky/format'
 import { Button } from '../../ui/Button'
-import { Icon } from '../../ui/Icon'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
-import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
+import { Cell, Row, SortHeader, Table, type TableColumn } from '../../ui/Table'
 import { bodyName, closeApproachesState, formatDiameter, formatDistance, formatDistanceRange, formatVelocity, loadCloseApproaches, pageCloseApproaches, pageCount, resizeCloseApproachPages, selectCloseApproach, sortCloseApproaches } from './closeapproaches'
 
 // Table of the Close Approaches tool: one row per encounter of the page JPL answered, so an object appears once per
@@ -32,18 +30,12 @@ interface SortButtonProps {
 function SortButton({ field, children }: SortButtonProps) {
 	const { filters } = useSnapshot(closeApproachesState)
 	const sort = filters?.sort
-	const active = sort === field || sort === `-${field}`
+	const direction = sort === field ? 'up' : sort === `-${field}` ? 'down' : undefined
 
 	return (
-		<button
-			type="button"
-			title="Order all the matches by this column, from the first page"
-			onClick={() => void sortCloseApproaches(closeApproachesState, field)}
-			className={cn('inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 font-mono text-xs font-medium whitespace-nowrap hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-accent', active ? 'text-accent' : 'text-ink-300')}
-		>
+		<SortHeader direction={direction} title="Order all the matches by this column, from the first page" onClick={() => void sortCloseApproaches(closeApproachesState, field)}>
 			{children}
-			{active && <Icon name="arrow" className={cn('size-3', sort !== field && 'rotate-180')} />}
-		</button>
+		</SortHeader>
 	)
 }
 

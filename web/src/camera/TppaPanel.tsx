@@ -6,7 +6,7 @@ import { DeviceLink } from '../equipment-control/DeviceLink'
 import { type RoleAvailability, roleAvailability } from '../equipment/availability'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { formatArcmin, formatSignedArcmin, formatDegrees, MISSING } from '../format'
+import { formatArcmin, formatDegrees, formatFixed, formatSignedArcmin, MISSING } from '../format'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
 import { useSolverConfigured } from '../platesolving/PlateSolveControls'
@@ -201,7 +201,7 @@ function Measurements({ session, details }: MeasurementsProps) {
 				})}
 				<DataRow label="Frames">{session.frameCount}</DataRow>
 				{geometry && <DataRow label="Total Rotation">{formatDegrees(geometry.rotation13, 1)}</DataRow>}
-				{geometry && <DataRow label="Geometry">{`${geometry.acceptable ? 'Good' : 'Rejected'} (Q ${geometry.quality.toFixed(3)})`}</DataRow>}
+				{geometry && <DataRow label="Geometry">{`${geometry.acceptable ? 'Good' : 'Rejected'} (Q ${formatFixed(geometry.quality, 3)})`}</DataRow>}
 			</DataList>
 			{rejected && !session.geometry && (
 				<Notice>

@@ -14,7 +14,7 @@ import { type ControlRuntime, watchedDeviceState } from '../../equipment-control
 import { mountMotion } from '../../equipment-control/mountActivity'
 import { ROLE_STATUS_LABELS, type RoleStatus } from '../../equipment/equipment'
 import type { EquipmentRole } from '../../equipment/roles'
-import { formatClockDuration, formatDegrees } from '../../format'
+import { formatClockDuration, formatDegrees, formatFixed, MISSING } from '../../format'
 import type { MountPointingRuntime } from '../../mountpointing/mountpointing'
 import type { ServerLink } from '../../notifications/notifications'
 import { OPERATION_LABELS } from '../../operations'
@@ -214,7 +214,7 @@ export function guidingValue(session: Pick<GuidingSessionSummary, 'state' | 'set
 		if (session.dithering) return { text: 'Dithering', tone: 'active' }
 		if (session.settling) return { text: 'Settling', tone: 'active' }
 		if (!rms || !(rms.samples > 0) || !Number.isFinite(rms.total)) return { text: GUIDING_STATE_LABELS.guiding, tone: 'ok' }
-		const text = pixelScale !== undefined && Number.isFinite(pixelScale) && pixelScale > 0 ? `RMS ${(rms.total * pixelScale).toFixed(2)}″` : `RMS ${rms.total.toFixed(2)} px`
+		const text = pixelScale !== undefined && Number.isFinite(pixelScale) && pixelScale > 0 ? `RMS ${formatFixed(rms.total * pixelScale, 2)}″` : `RMS ${formatFixed(rms.total, 2)} px`
 		return { text, tone: 'ok' }
 	}
 
@@ -266,7 +266,8 @@ function chipText(readings: ChipReadings, fields: readonly StatusChipField[]) {
 // Returns a sensor temperature in degrees Celsius rounded to 0.1 °C, such as "-10.2°C", or undefined when the driver
 // reports none or a non-finite one. Rounding to -0 reads 0.0.
 function temperatureText(temperature: number | undefined) {
-	return temperature !== undefined && Number.isFinite(temperature) ? `${(Math.round(temperature * 10) / 10).toFixed(1)}°C` : undefined
+	const text = formatFixed(temperature, 1)
+	return text === MISSING ? undefined : `${text}°C`
 }
 
 // Status of a camera in each phase of a capture that is running.
@@ -315,7 +316,7 @@ export function wheelChip(state: Pick<WheelState, 'moving' | 'position' | 'names
 // angle).
 export function rotatorChip(state: Pick<RotatorState, 'moving' | 'angle'> | undefined, fields: readonly StatusChipField[] = DEFAULT_STATUS_CHIPS.ROTATOR.fields): ChipValue {
 	if (!state) return { text: '', tone: 'muted', moving: false, title: 'State not reported' }
-	const angle = `${state.angle.value.toFixed(1)}°`
+	const angle = `${formatFixed(state.angle.value, 1)}°`
 	return { text: chipText({ status: state.moving ? 'Moving' : undefined, angle }, fields), tone: state.moving ? 'active' : 'ok', moving: state.moving, title: `${state.moving ? 'Moving · ' : ''}Mechanical angle ${angle}` }
 }
 

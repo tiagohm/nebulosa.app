@@ -1,7 +1,7 @@
 import type { FWHMSamplingKind } from 'nebulosa/src/astronomy/formulas'
 import { CameraModelSearch } from '../../equipment/CameraModelSearch'
 import { TelescopeModelSearch } from '../../equipment/TelescopeModelSearch'
-import { formatFixed } from '../../format'
+import { formatFixed, formatMillimeters } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
@@ -56,7 +56,7 @@ export function SamplingCalculator({ entry, onChange, context }: CalculatorViewP
 							<DataRow label="Sampling">{SAMPLING_KIND_LABELS[kind]}</DataRow>
 							{draft.mode === 'fwhm' && <DataRow label="Seeing">{formatFixed(seeing, 2)}″</DataRow>}
 							<OptionalDatum label="Focal length for the target" outcome={recommendedFocalLength} hint="Enter the pixel size and a target FWHM.">
-								{(focalLength) => `${formatFixed(focalLength, 0)} mm`}
+								{(focalLength) => formatMillimeters(focalLength)}
 							</OptionalDatum>
 						</>
 					)}

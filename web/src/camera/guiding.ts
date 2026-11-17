@@ -259,6 +259,13 @@ export function formatCalibrationRate(rate: number, pixelScale?: number) {
 	return pixelScale === undefined ? pixels : `${pixels} (${formatFixed(perSecond * pixelScale, 1)}″/s)`
 }
 
+// Returns a guide pulse or a DEC backlash in milliseconds, whole, the resolution a pulse is commanded at: "250 ms", or
+// MISSING when it is not finite.
+export function formatPulse(milliseconds: number) {
+	const text = formatFixed(milliseconds, 0)
+	return text === MISSING ? MISSING : `${text} ms`
+}
+
 // Returns how the calibration in use was adapted from the one measured: flipped for the other side of the pier, and its
 // RA response scaled for the declination ("flipped for the pier side, RA ×0.87 for the declination"), or undefined when
 // it is used as measured.

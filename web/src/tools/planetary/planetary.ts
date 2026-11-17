@@ -1,5 +1,5 @@
 import type { PlanetVisibilityStatus } from 'api'
-import { aborted, type ApiFetch, browserFetch } from '../../http'
+import { type ApiFetch, browserFetch } from '../../http'
 import { wallTimeToInstant, zonedWallTime } from '../../location/zone'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import type { StatusTone } from '../../ui/StatusBadge'

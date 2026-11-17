@@ -1,9 +1,10 @@
 import { cn } from 'cn'
 import type { KeyboardEvent, ReactNode } from 'react'
+import { Icon } from './Icon'
 import { moveIndex } from './navigation'
 
-// Compact data tables of the tools: a frame that scrolls itself under a sticky header, rows that may select what they show,
-// and cells of text or numbers. A selectable row is reached with Tab, moves to its siblings with the arrow keys, Home, and
+// Compact data tables of the tools: a frame that scrolls itself under a sticky header, header labels that may order the
+// table, rows that may select what they show, and cells of text or numbers. A selectable row is reached with Tab, moves to its siblings with the arrow keys, Home, and
 // End, and selects with Enter or Space, like every other list of the app; a key pressed on a control inside a row is left to
 // that control.
 
@@ -56,6 +57,33 @@ export function Table({ columns, className, children }: TableProps) {
 // Header cell of a column.
 function HeaderCell({ numeric = false, children }: { readonly numeric?: boolean; readonly children: ReactNode }) {
 	return <th className={cn('px-2 py-1.5 font-medium whitespace-nowrap text-ink-300', numeric ? 'text-right' : 'text-left')}>{children}</th>
+}
+
+export interface SortHeaderProps {
+	// Direction of the arrow while the column orders the table ('down' for descending, or the natural order of a column that
+	// has one), or undefined while another column orders it.
+	readonly direction?: 'up' | 'down'
+	// Tooltip, saying what ordering by the column does.
+	readonly title: string
+	// Orders the table by the column, or reverses the order when it already does.
+	readonly onClick: () => void
+	// Header text.
+	readonly children: ReactNode
+}
+
+// Label of a column header that orders the table: in the accent colour with an arrow of its direction while it orders it.
+export function SortHeader({ direction, title, onClick, children }: SortHeaderProps) {
+	return (
+		<button
+			type="button"
+			title={title}
+			onClick={onClick}
+			className={cn('inline-flex cursor-pointer items-center gap-1 rounded-sm border-0 bg-transparent p-0 font-mono text-xs font-medium whitespace-nowrap hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', direction ? 'text-accent' : 'text-ink-300')}
+		>
+			{children}
+			{direction && <Icon name="arrow" className={cn('size-3', direction === 'down' && 'rotate-180')} />}
+		</button>
+	)
 }
 
 export interface RowProps {

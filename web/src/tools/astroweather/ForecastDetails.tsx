@@ -1,5 +1,5 @@
 import type { AstronomicalSample, AstroWeatherForecast, AstroWeatherNight, MeteorologySample, SolarTwilightCrossings } from 'api'
-import { formatClockTime, formatHours, formatLongDateTime, formatPercent } from '../../format'
+import { formatClockTime, formatFixed, formatHours, formatLongDateTime, formatPercent, formatTemperature } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
@@ -83,18 +83,18 @@ export interface WeatherConditionsProps {
 
 // Weather of the hour chosen, under the hour it describes.
 export function WeatherConditions({ sample, ending, hour, timeZone }: WeatherConditionsProps) {
-	const margin = sample?.temperature !== undefined && sample.dewPoint !== undefined ? (sample.temperature - sample.dewPoint).toFixed(1) : undefined
+	const margin = sample?.temperature !== undefined && sample.dewPoint !== undefined ? formatTemperature(sample.temperature - sample.dewPoint) : undefined
 	const time = hourText(hour, timeZone)
 
 	return (
 		<CollapsibleSection id="astroWeather.weather" title="Weather Conditions" summary={time}>
 			{time && <DataRow label="Hour">{time}</DataRow>}
 			<Value label="Rain chance" value={ending?.precipitationProbability} unit="%" />
-			<Value label="Precipitation" value={ending?.precipitation?.toFixed(1)} unit=" mm" />
-			<Value label="Temperature" value={sample?.temperature} unit=" °C" />
+			<Value label="Precipitation" value={ending?.precipitation === undefined ? undefined : formatFixed(ending.precipitation, 1)} unit=" mm" />
+			<Value label="Temperature" value={sample?.temperature === undefined ? undefined : formatTemperature(sample.temperature)} />
 			<Value label="Humidity" value={sample?.relativeHumidity} unit="%" />
-			<Value label="Dew point" value={sample?.dewPoint} unit=" °C" />
-			<Value label="Dew margin" value={margin} unit=" °C" />
+			<Value label="Dew point" value={sample?.dewPoint === undefined ? undefined : formatTemperature(sample.dewPoint)} />
+			<Value label="Dew margin" value={margin} />
 			<Value label="Wind" value={sample?.windSpeed} unit=" km/h" />
 			<Value label="Direction" value={sample?.windDirection === undefined ? undefined : `${compassPoint(sample.windDirection)} (${sample.windDirection}°)`} />
 			<Value label="Gusts" value={ending?.windGust} unit=" km/h" />

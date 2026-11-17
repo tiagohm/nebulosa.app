@@ -54,7 +54,7 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 				<DataRow label="Noise (σ)">{formatIntensity(star.deviation, star.adu)}</DataRow>
 				<DataRow label="HFD">{formatPixelLength(star.hfd, pixelScale)}</DataRow>
 				<DataRow label="FWHM">{formatPixelLength(star.fwhm, pixelScale)}</DataRow>
-				<DataRow label="FWHM Major / Minor">{star.major === undefined || star.minor === undefined ? MISSING : `${star.major.toFixed(2)} / ${star.minor.toFixed(2)} px`}</DataRow>
+				<DataRow label="FWHM Major / Minor">{star.major === undefined || star.minor === undefined ? MISSING : `${formatFixed(star.major, 2)} / ${formatFixed(star.minor, 2)} px`}</DataRow>
 				<DataRow label="Eccentricity">{formatFixed(star.eccentricity, 3)}</DataRow>
 				<DataRow label="Elongation">{formatFixed(star.elongation, 3)}</DataRow>
 				<DataRow label="Orientation">{star.theta === undefined ? MISSING : formatDegrees(star.theta, 1)}</DataRow>
@@ -70,5 +70,5 @@ export function StarProfileSection({ star, pixelScale, frameId }: StarProfileSec
 // else the normalized value.
 function formatIntensity(value: number | undefined, adu: number) {
 	if (value === undefined) return MISSING
-	return adu > 1 ? `${Math.round(value * adu)} ADU` : value.toFixed(4)
+	return adu > 1 ? `${Math.round(value * adu)} ADU` : formatFixed(value, 4)
 }

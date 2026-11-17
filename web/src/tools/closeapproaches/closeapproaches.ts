@@ -1,6 +1,7 @@
 import type { CloseApproach, CloseApproachBody, CloseApproachFilters, CloseApproachHistoryFilters, CloseApproachPageResponse, CloseApproachSort, CloseApproachSortField, MinorBody, MinorBodyDetailsResponse, SkyPositionResponse } from 'api'
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
+import { formatSpeed } from '../../format'
 import { type ApiFetch, browserFetch, fetchJson } from '../../http'
 import { type GeographicLocation, locationKey, siteObserver } from '../../location/site'
 import { type CloseApproachDistanceDisplay, type CloseApproachPreferences, DEFAULT_CLOSE_APPROACH_PREFERENCES } from '../../profile/schema'
@@ -511,9 +512,9 @@ export function formatDistanceRange(min: number | undefined, max: number | undef
 	return `${distanceValue(min, unit).toPrecision(RANGE_DIGITS)} – ${distanceValue(max, unit).toPrecision(RANGE_DIGITS)} ${unit}`
 }
 
-// Formats a velocity in km/s.
+// Formats a velocity in km/s with the two decimals CAD publishes.
 export function formatVelocity(velocity: number) {
-	return `${velocity.toFixed(2)} km/s`
+	return formatSpeed(velocity, 2)
 }
 
 // Formats a measured diameter in km with its 1-sigma uncertainty when there is one.

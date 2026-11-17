@@ -235,8 +235,8 @@ interface FitRowsProps {
 function FitRows({ fit, conversion }: FitRowsProps) {
 	return (
 		<>
-			<DataRow label="Moffat β">{fit.beta.toFixed(2)}</DataRow>
-			<DataRow label="Moffat α Major / Minor">{`${fit.alphaMajor.toFixed(2)} / ${fit.alphaMinor.toFixed(2)} px`}</DataRow>
+			<DataRow label="Moffat β">{formatFixed(fit.beta, 2)}</DataRow>
+			<DataRow label="Moffat α Major / Minor">{`${formatFixed(fit.alphaMajor, 2)} / ${formatFixed(fit.alphaMinor, 2)} px`}</DataRow>
 			<DataRow label="Fit RMS">{formatSignal(fit.rms, conversion)}</DataRow>
 			<DataRow label="Fit iterations">{fit.iterations}</DataRow>
 		</>

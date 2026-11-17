@@ -204,6 +204,7 @@ describe('device chips', () => {
 	test('a rotator shows its mechanical angle in degrees', () => {
 		expect(rotatorChip({ moving: false, angle: { value: 90.25, min: 0, max: 360, step: 0 } })).toEqual({ text: '90.3°', tone: 'ok', moving: false, title: 'Mechanical angle 90.3°' })
 		expect(rotatorChip({ moving: true, angle: { value: 10, min: 0, max: 360, step: 0 } })).toMatchObject({ text: 'Moving 10.0°', moving: true })
+		expect(rotatorChip({ moving: false, angle: { value: -0.04, min: -180, max: 180, step: 0 } }).text).toBe('0.0°')
 	})
 
 	test('a cover shows open, closed, or moving', () => {
@@ -303,6 +304,7 @@ describe('guiding', () => {
 		expect(guidingValue(session({})).text).toBe('RMS 0.75″')
 		expect(guidingValue(session({ pixelScale: undefined })).text).toBe('RMS 0.50 px')
 		expect(guidingValue(session({ pixelScale: 0 })).text).toBe('RMS 0.50 px')
+		expect(guidingValue(session({ rms: { ra: 0, dec: 0, total: Number.POSITIVE_INFINITY, samples: 3 } })).text).toBe('Guiding')
 	})
 
 	test('shows no RMS before a measured step', () => {

@@ -1,6 +1,8 @@
+import { arcsec } from 'nebulosa/src/math/units/angle'
 import { CameraModelSearch } from '../../equipment/CameraModelSearch'
 import { TelescopeModelSearch } from '../../equipment/TelescopeModelSearch'
-import { formatDegrees, formatFixed } from '../../format'
+import { formatDegrees, formatFixed, formatFocalRatio, formatMillimeters } from '../../format'
+import { formatPixelScale } from '../../platesolving/coordinates'
 import { formatApparentSize } from '../../sky/format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
@@ -67,9 +69,9 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 								{formatDegrees(framing.width, 3)} × {formatDegrees(framing.height, 3)}
 							</DataRow>
 							<DataRow label="Diagonal">{formatDegrees(diagonal, 3)}</DataRow>
-							<DataRow label="Image scale">{framing.scale === undefined ? <span className="text-xs text-ink-300">Needs the pixel size: enter the sensor by resolution.</span> : `${formatFixed(framing.scale, 2)}″/px`}</DataRow>
-							<DataRow label="Effective focal length">{formatFixed(framing.effectiveFocalLength, 0)} mm</DataRow>
-							<DataRow label="Focal ratio">{framing.focalRatio === undefined ? <span className="text-xs text-ink-300">Needs the aperture.</span> : `f/${formatFixed(framing.focalRatio, 1)}`}</DataRow>
+							<DataRow label="Image scale">{framing.scale === undefined ? <span className="text-xs text-ink-300">Needs the pixel size: enter the sensor by resolution.</span> : formatPixelScale(arcsec(framing.scale))}</DataRow>
+							<DataRow label="Effective focal length">{formatMillimeters(framing.effectiveFocalLength)}</DataRow>
+							<DataRow label="Focal ratio">{framing.focalRatio === undefined ? <span className="text-xs text-ink-300">Needs the aperture.</span> : formatFocalRatio(framing.focalRatio)}</DataRow>
 							<DataRow label="Sensor">
 								{formatFixed(framing.sensorWidth, 2)} × {formatFixed(framing.sensorHeight, 2)} mm
 							</DataRow>

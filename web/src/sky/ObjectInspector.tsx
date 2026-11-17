@@ -1,7 +1,7 @@
 import type { MinorBody, SkyCatalogObject } from 'api'
 import { toMas } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
-import { formatDegrees } from '../format'
+import { formatDegrees, formatFixed } from '../format'
 import type { SiteLocation } from '../location/site'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { DataRow } from '../ui/DataRow'
@@ -95,7 +95,7 @@ function CatalogSection({ catalog }: { readonly catalog: SkyCatalogObject }) {
 
 	return (
 		<CollapsibleSection id="sky.catalog" title="Catalog" summary={catalog.classification} defaultOpen={false}>
-			{catalog.bv !== undefined && <DataRow label="B−V">{catalog.bv.toFixed(2)}</DataRow>}
+			{catalog.bv !== undefined && <DataRow label="B−V">{formatFixed(catalog.bv, 2)}</DataRow>}
 			{catalog.classification && <DataRow label={star ? 'Spectral type' : 'Morphology'}>{catalog.classification}</DataRow>}
 			{catalog.majorAxis !== undefined && (
 				<DataRow label="Size">
@@ -107,7 +107,7 @@ function CatalogSection({ catalog }: { readonly catalog: SkyCatalogObject }) {
 			{catalog.distance !== undefined && <DataRow label="Distance">{formatStellarDistance(catalog.distance)}</DataRow>}
 			{pm && (
 				<DataRow label="Proper motion">
-					{toMas(catalog.pmRA * Math.cos(catalog.declination)).toFixed(2)}, {toMas(catalog.pmDEC).toFixed(2)} mas/yr
+					{formatFixed(toMas(catalog.pmRA * Math.cos(catalog.declination)), 2)}, {formatFixed(toMas(catalog.pmDEC), 2)} mas/yr
 				</DataRow>
 			)}
 			<DataRow label="RA (J2000)">{formatRightAscension(catalog.rightAscension)}</DataRow>

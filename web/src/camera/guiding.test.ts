@@ -8,6 +8,7 @@ import {
 	formatCalibrationAdaptation,
 	formatCalibrationPlace,
 	formatCalibrationRate,
+	formatPulse,
 	guideFocalLength,
 	GUIDING_TELEMETRY_KEPT,
 	guidingBlocker,
@@ -316,6 +317,12 @@ describe('calibration text', () => {
 		expect(formatCalibrationRate(0.004123)).toBe('4.12 px/s')
 		expect(formatCalibrationRate(0.004123, 2.25)).toBe('4.12 px/s (9.3″/s)')
 		expect(formatCalibrationRate(Number.NaN)).toBe('—')
+	})
+
+	test('pulses and backlash are whole milliseconds', () => {
+		expect(formatPulse(249.6)).toBe('250 ms')
+		expect(formatPulse(-0.2)).toBe('0 ms')
+		expect(formatPulse(Number.NaN)).toBe('—')
 	})
 
 	test('the adaptation lists each transformation, or none', () => {

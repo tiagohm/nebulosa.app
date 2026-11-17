@@ -1,6 +1,7 @@
 import type { CameraBinding, CameraBindingsSnapshot, CameraSensor, CatalogCameraFields, CatalogCameraSensor, CatalogTelescopeFields, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
+import { formatPixelSize } from '../format'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../http'
 import { SnapshotRefreshes } from '../refresh'
 
@@ -193,7 +194,7 @@ export function deviceFields(device: { readonly name: string }, sensor: CameraSe
 export function sensorMismatch(camera: Pick<CatalogCamera, 'sensor'> | undefined, sensor: CameraSensor | undefined) {
 	if (!camera?.sensor || !sensor) return undefined
 	if (camera.sensor.width !== sensor.width || camera.sensor.height !== sensor.height) return `The camera of the catalog declares a ${camera.sensor.width} × ${camera.sensor.height} sensor, and the device reports ${sensor.width} × ${sensor.height}`
-	if (camera.sensor.pixelSize !== undefined && Math.abs(camera.sensor.pixelSize - sensor.pixelSize) > 0.01) return `The camera of the catalog declares ${camera.sensor.pixelSize} µm pixels, and the device reports ${sensor.pixelSize} µm`
+	if (camera.sensor.pixelSize !== undefined && Math.abs(camera.sensor.pixelSize - sensor.pixelSize) > 0.01) return `The camera of the catalog declares ${formatPixelSize(camera.sensor.pixelSize)} pixels, and the device reports ${formatPixelSize(sensor.pixelSize)}`
 	return undefined
 }
 

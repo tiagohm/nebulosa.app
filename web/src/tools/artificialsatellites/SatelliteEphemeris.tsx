@@ -1,5 +1,5 @@
 import { useSnapshot } from 'valtio'
-import { formatDateTime, formatDegrees, formatKilometers, MISSING } from '../../format'
+import { formatDateTime, formatDegrees, formatKilometers, formatSpeed, MISSING } from '../../format'
 import type { GeographicLocation } from '../../location/site'
 import { type DisplayZone, describeDisplayZone } from '../../location/zone'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -94,7 +94,7 @@ export function SatelliteEphemeris({ observer, zone }: SatelliteEphemerisProps) 
 								<Cell numeric>{row.azimuth === undefined ? MISSING : formatDegrees(row.azimuth, 1)}</Cell>
 								<Cell numeric>{row.altitude === undefined ? MISSING : formatDegrees(row.altitude, 1)}</Cell>
 								<Cell numeric>{formatKilometers(row.distanceKm)}</Cell>
-								<Cell numeric>{row.rangeRateKmPerSecond === undefined ? MISSING : `${row.rangeRateKmPerSecond.toFixed(2)} km/s`}</Cell>
+								<Cell numeric>{formatSpeed(row.rangeRateKmPerSecond, 2)}</Cell>
 								<Cell numeric>{formatKilometers(row.heightKm)}</Cell>
 								<Cell>{SHADOW_LABELS[row.shadow]}</Cell>
 							</Row>

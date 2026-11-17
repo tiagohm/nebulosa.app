@@ -1,5 +1,5 @@
 import type { AstroWeatherForecast, MeteorActivityCurve, MeteorNightRanking as Ranking, MeteorObservingNight, MeteorShowerDetail, MeteorShowerOccurrence } from 'api'
-import { formatDate, formatDateTime, formatDegrees, formatPercent, formatSpan, MISSING } from '../../format'
+import { formatDate, formatDateTime, formatDegrees, formatFixed, formatPercent, formatSpan, formatSpeed, MISSING } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
 import { Actions } from '../../ui/Actions'
@@ -90,7 +90,7 @@ function ObservingNight({ night, name, minimumAltitude, timeZone, forecast }: { 
 			)}
 			{night.model && (
 				<div className="flex flex-col gap-1">
-					<Notice>{`Modelled from the published activity profile for a limiting magnitude of ${night.model.limitingMagnitude.toFixed(1)}, r = ${night.model.populationIndex.toFixed(1)} (${night.model.populationIndexSource === 'profile' ? 'from the profile' : 'yours'}), and F = ${night.model.obstructionCorrection.toFixed(2)}: what an ideal observer would count, never a forecast.`}</Notice>
+					<Notice>{`Modelled from the published activity profile for a limiting magnitude of ${formatFixed(night.model.limitingMagnitude, 1)}, r = ${formatFixed(night.model.populationIndex, 1)} (${night.model.populationIndexSource === 'profile' ? 'from the profile' : 'yours'}), and F = ${formatFixed(night.model.obstructionCorrection, 2)}: what an ideal observer would count, never a forecast.`}</Notice>
 					{night.model.windows.length === 0 ? (
 						<Notice>The profile gives no activity in these windows.</Notice>
 					) : (
@@ -174,7 +174,7 @@ export function MeteorShowerDetails({
 					<h3 className="m-0 text-sm font-semibold text-ink-100">Visual Data (IMO)</h3>
 					<DataList>
 						<DataRow label="Typical ZHR at maximum">{visual.typicalZhr === undefined ? 'Variable' : `${visual.typicalZhr} per hour`}</DataRow>
-						<DataRow label="Population index r">{visual.populationIndex.toFixed(1)}</DataRow>
+						<DataRow label="Population index r">{formatFixed(visual.populationIndex, 1)}</DataRow>
 						<DataRow label="Entry speed">{`${visual.velocity} km/s`}</DataRow>
 						<DataRow label="Source">{detail.visualSource ? `${detail.visualSource.publisher}, ${detail.visualSource.title}` : MISSING}</DataRow>
 					</DataList>
@@ -254,7 +254,7 @@ export function MeteorShowerDetails({
 						))}
 					</Table>
 				</div>
-				{detail.selected !== undefined && detail.solutions[detail.selected].geocentricSpeed !== undefined && <Notice>{`Geocentric speed of the preferred solution: ${kilometersPerSecond(detail.solutions[detail.selected].geocentricSpeed!).toFixed(1)} km/s.`}</Notice>}
+				{detail.selected !== undefined && detail.solutions[detail.selected].geocentricSpeed !== undefined && <Notice>{`Geocentric speed of the preferred solution: ${formatSpeed(kilometersPerSecond(detail.solutions[detail.selected].geocentricSpeed!), 1)}.`}</Notice>}
 				{detail.selected !== undefined && detail.solutions[detail.selected].parentBody && <Notice>{`Parent body: ${detail.solutions[detail.selected].parentBody}.`}</Notice>}
 			</div>
 		</section>

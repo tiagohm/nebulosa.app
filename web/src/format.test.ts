@@ -18,6 +18,7 @@ import {
 	formatElevation,
 	formatExposureTime,
 	formatFixed,
+	formatFocalRatio,
 	formatGeographic,
 	formatHourAngle,
 	formatPercent,
@@ -25,14 +26,17 @@ import {
 	formatLocalTime,
 	formatLongDuration,
 	formatLongDateTime,
+	formatMillimeters,
 	formatPixelLength,
 	formatPixelPosition,
+	formatPixelSize,
 	formatSigned,
 	formatSignedClockDuration,
 	formatSignedAngle,
 	formatSignedArcmin,
 	formatSignificant,
 	formatSpan,
+	formatSpeed,
 	formatTemperature,
 	formatZonedDateTime,
 	MISSING,
@@ -147,6 +151,34 @@ describe('measurements', () => {
 		expect(formatByteSize(3.4 * 1024 ** 2)).toBe('3.4 MiB')
 		expect(formatByteSize(120 * 1024 ** 3)).toBe('120 GiB')
 		expect(formatByteSize(Number.NaN)).toBe(MISSING)
+	})
+
+	test('pixel sizes as data sheets give them', () => {
+		expect(formatPixelSize(3.76)).toBe('3.76 µm')
+		expect(formatPixelSize(3.8)).toBe('3.8 µm')
+		expect(formatPixelSize(2.9000000001)).toBe('2.9 µm')
+		expect(formatPixelSize(5.996)).toBe('6 µm')
+		expect(formatPixelSize(undefined)).toBe(MISSING)
+		expect(formatPixelSize(Number.NaN)).toBe(MISSING)
+	})
+
+	test('optical lengths and focal ratios as optics are marked', () => {
+		expect(formatMillimeters(400)).toBe('400 mm')
+		expect(formatMillimeters(162.5)).toBe('162.5 mm')
+		expect(formatMillimeters(418.66)).toBe('418.7 mm')
+		expect(formatMillimeters(undefined)).toBe(MISSING)
+		expect(formatFocalRatio(5.6)).toBe('f/5.6')
+		expect(formatFocalRatio(7)).toBe('f/7')
+		expect(formatFocalRatio(4.96)).toBe('f/5')
+		expect(formatFocalRatio(Number.POSITIVE_INFINITY)).toBe(MISSING)
+	})
+
+	test('speeds in km/s with the decimals of their source', () => {
+		expect(formatSpeed(7.66, 3)).toBe('7.660 km/s')
+		expect(formatSpeed(-0.4213, 2)).toBe('-0.42 km/s')
+		expect(formatSpeed(-0.0004, 3)).toBe('0.000 km/s')
+		expect(formatSpeed(undefined, 1)).toBe(MISSING)
+		expect(formatSpeed(Number.NaN, 1)).toBe(MISSING)
 	})
 
 	test('pixel lengths with their sky size when the scale is known', () => {

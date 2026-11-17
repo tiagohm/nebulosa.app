@@ -3,7 +3,7 @@ import { AU_KM } from 'nebulosa/src/core/constants'
 import { formatDEC, formatRA } from 'nebulosa/src/math/units/angle'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatArcsec, formatDegrees, formatFixed, formatKilometers, MISSING } from '../../format'
+import { formatArcsec, formatDegrees, formatFixed, formatKilometers, formatSpeed, MISSING } from '../../format'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
@@ -176,12 +176,12 @@ const QUANTITIES: readonly Quantity[] = [
 	{ label: 'X', value: (e) => formatKilometers(e.position[0], 3), difference: (a, b) => signed(a.position[0] - b.position[0], 3, 'km') },
 	{ label: 'Y', value: (e) => formatKilometers(e.position[1], 3), difference: (a, b) => signed(a.position[1] - b.position[1], 3, 'km') },
 	{ label: 'Z', value: (e) => formatKilometers(e.position[2], 3), difference: (a, b) => signed(a.position[2] - b.position[2], 3, 'km') },
-	{ label: 'VX', value: (e) => `${formatFixed(e.velocity[0], 6)} km/s`, difference: (a, b) => signed((a.velocity[0] - b.velocity[0]) * 1000, 3, 'm/s') },
-	{ label: 'VY', value: (e) => `${formatFixed(e.velocity[1], 6)} km/s`, difference: (a, b) => signed((a.velocity[1] - b.velocity[1]) * 1000, 3, 'm/s') },
-	{ label: 'VZ', value: (e) => `${formatFixed(e.velocity[2], 6)} km/s`, difference: (a, b) => signed((a.velocity[2] - b.velocity[2]) * 1000, 3, 'm/s') },
+	{ label: 'VX', value: (e) => formatSpeed(e.velocity[0], 6), difference: (a, b) => signed((a.velocity[0] - b.velocity[0]) * 1000, 3, 'm/s') },
+	{ label: 'VY', value: (e) => formatSpeed(e.velocity[1], 6), difference: (a, b) => signed((a.velocity[1] - b.velocity[1]) * 1000, 3, 'm/s') },
+	{ label: 'VZ', value: (e) => formatSpeed(e.velocity[2], 6), difference: (a, b) => signed((a.velocity[2] - b.velocity[2]) * 1000, 3, 'm/s') },
 	{ label: 'Distance', value: (e) => `${formatKilometers(e.distance, 3)} · ${formatFixed(e.distance / AU_KM, 9)} AU`, difference: (a, b) => signed(a.distance - b.distance, 3, 'km') },
-	{ label: 'Speed', value: (e) => `${formatFixed(e.speed, 6)} km/s` },
-	{ label: 'Range rate', value: (e) => `${formatFixed(e.rangeRate, 6)} km/s` },
+	{ label: 'Speed', value: (e) => formatSpeed(e.speed, 6) },
+	{ label: 'Range rate', value: (e) => formatSpeed(e.rangeRate, 6) },
 	{ label: 'Light time', value: (e) => `${formatFixed(e.lightTime, 3)} s` },
 	{ label: 'Right ascension (ICRF)', value: (e) => formatRA(e.rightAscension, 3) },
 	{ label: 'Declination (ICRF)', value: (e) => formatDEC(e.declination, 2) },

@@ -1,11 +1,10 @@
 import { arcsec } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { controlRuntime } from '../equipment-control/control'
 import { type CatalogTelescope, catalogState } from '../equipment/catalog'
 import { roleDefinition } from '../equipment/roles'
 import { referencedTelescope } from '../equipment/telescopes'
-import { formatDegrees, MISSING } from '../format'
+import { formatDegrees, formatFixed, formatFocalRatio, formatMillimeters, formatPixelSize, MISSING } from '../format'
 import { formatPixelScale } from '../platesolving/coordinates'
 import { createOpticalPreset, deleteOpticalPreset, duplicateOpticalPreset, profileState, selectOpticalPreset, setEquipmentRotation, setFramingSource, setFramingVisible, setManualSensor, setGuideTelescopeOptics, setSensorSource, setTelescopeOptics, updateOpticalPreset } from '../profile/profile'
 import type { SkyFramingSettings } from '../profile/schema'
@@ -207,7 +206,7 @@ function EquipmentSource({ framing, telescope, guideTelescope, hasTarget }: Pick
 						<DataRow label="Resolution">
 							{reported.width} × {reported.height} px
 						</DataRow>
-						<DataRow label="Pixel size">{reported.pixelSize > 0 ? `${reported.pixelSize.toFixed(2)} µm` : MISSING}</DataRow>
+						<DataRow label="Pixel size">{reported.pixelSize > 0 ? formatPixelSize(reported.pixelSize) : MISSING}</DataRow>
 						<Notice>{sensorOriginText(reported, sensorSourceName(sensorSource))}</Notice>
 					</>
 				) : (
@@ -291,11 +290,11 @@ function FramingResult({ optics, missingCamera, onRotate }: { readonly optics: R
 						{formatDegrees(framing.width, 3)} × {formatDegrees(framing.height, 3)}
 					</DataRow>
 					{framing.scale !== undefined && <DataRow label="Image scale">{formatPixelScale(arcsec(framing.scale))}</DataRow>}
-					<DataRow label="Effective focal length">{framing.effectiveFocalLength.toFixed(0)} mm</DataRow>
+					<DataRow label="Effective focal length">{formatMillimeters(framing.effectiveFocalLength)}</DataRow>
 					<DataRow label="Sensor">
-						{framing.sensorWidth.toFixed(2)} × {framing.sensorHeight.toFixed(2)} mm
+						{formatFixed(framing.sensorWidth, 2)} × {formatFixed(framing.sensorHeight, 2)} mm
 					</DataRow>
-					{framing.focalRatio !== undefined && <DataRow label="Focal ratio">f/{framing.focalRatio.toFixed(1)}</DataRow>}
+					{framing.focalRatio !== undefined && <DataRow label="Focal ratio">{formatFocalRatio(framing.focalRatio)}</DataRow>}
 				</>
 			) : (
 				<Notice>To compute the field, enter: {missing.join(', ')}.</Notice>

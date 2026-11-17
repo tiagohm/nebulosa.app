@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDegrees, formatLocalTime } from '../../format'
+import { formatDegrees, formatFixed, formatLocalTime } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { openArtificialSatellites } from '../../tools/artificialsatellites/artificialsatellites'
@@ -111,7 +111,7 @@ export function SatelliteInspector({ selection, observer, onSetObserver, timeZon
 				<CollapsibleSection id="sky.satelliteElements" title="Orbital Data" defaultOpen={false}>
 					<DataRow label="Source">{details.elements.kind === 'manual' ? 'Imported' : 'CelesTrak GP'}</DataRow>
 					<DataRow label="Epoch">{formatLocalTime(details.elements.epoch, 'UTC', Date.now())}</DataRow>
-					{details.orbit && <DataRow label="Period">{`${details.orbit.periodMinutes.toFixed(1)} min`}</DataRow>}
+					{details.orbit && <DataRow label="Period">{`${formatFixed(details.orbit.periodMinutes, 1)} min`}</DataRow>}
 					{details.orbit && <DataRow label="Inclination">{formatDegrees(details.orbit.inclination)}</DataRow>}
 				</CollapsibleSection>
 			)}

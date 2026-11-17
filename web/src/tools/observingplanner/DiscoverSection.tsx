@@ -8,14 +8,13 @@ import { formatMagnitude } from '../../sky/format'
 import type { Framing } from '../../sky/framing'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
-import { Icon } from '../../ui/Icon'
 import { IconButton } from '../../ui/IconButton'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
-import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
+import { Cell, Row, SortHeader, Table, type TableColumn } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 import { formatScore } from './format'
 import { FitLabel, FrameLine, fitOf, usePlannerFrame } from './FramingParts'
@@ -255,7 +254,15 @@ function Candidates({ candidates, frame, stale, location, timeZone, onAdd }: Can
 	}
 
 	// Header of a sortable column.
-	const header = (key: CandidateSortKey, label: string, numeric = false) => ({ key, numeric, label: <SortHeader label={label} active={sort.key === key} reversed={sort.reversed} onClick={() => sortBy(key)} /> })
+	const header = (key: CandidateSortKey, label: string, numeric = false) => ({
+		key,
+		numeric,
+		label: (
+			<SortHeader title={`Order by ${label.toLowerCase()}`} direction={sort.key !== key ? undefined : sort.reversed ? 'up' : 'down'} onClick={() => sortBy(key)}>
+				{label}
+			</SortHeader>
+		),
+	})
 	const columns: readonly TableColumn[] = [header('name', 'Target'), 'Type', header('magnitude', 'Mag', true), header('size', 'Size', true), header('framing', 'Framing'), header('score', 'Score', true), header('best', 'Best window'), header('longest', 'Longest', true), 'Status', { key: 'add', label: '' }]
 
 	return (
@@ -312,21 +319,6 @@ function Candidates({ candidates, frame, stale, location, timeZone, onAdd }: Can
 				})}
 			</TargetList>
 		</div>
-	)
-}
-
-// Header of a sortable column: its label, and an arrow while it orders the table (down for the natural direction).
-function SortHeader({ label, active, reversed, onClick }: { readonly label: string; readonly active: boolean; readonly reversed: boolean; readonly onClick: () => void }) {
-	return (
-		<button
-			type="button"
-			title={`Order by ${label.toLowerCase()}`}
-			onClick={onClick}
-			className={cn('inline-flex cursor-pointer items-center gap-1 rounded-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent', active ? 'text-ink-100' : 'text-ink-300 hover:text-ink-100')}
-		>
-			{label}
-			{active && <Icon name="arrow" className={cn('size-3', !reversed && 'rotate-180')} />}
-		</button>
 	)
 }
 

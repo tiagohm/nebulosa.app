@@ -1,7 +1,9 @@
+import { arcsec } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { roleDefinition } from '../../equipment/roles'
 import { useProfileTelescopes } from '../../equipment/telescopes'
 import { formatAngularSize, MISSING } from '../../format'
+import { formatPixelScale } from '../../platesolving/coordinates'
 import { activeProfile, profileState } from '../../profile/profile'
 import { activeFrameSource, type Framing, framingSource, isFraming, resolveFraming } from '../../sky/framing'
 import { useRoleSensors } from '../../sky/useSkyDevices'
@@ -53,7 +55,7 @@ export function FrameLine({ frame }: { readonly frame: PlannerFrame }) {
 
 	if (frame.frame) {
 		const { width, height, scale } = frame.frame
-		const at = scale === undefined ? '' : ` at ${scale.toFixed(2)}″/px`
+		const at = scale === undefined ? '' : ` at ${formatPixelScale(arcsec(scale))}`
 		return <Notice>{`Framing judged against the ${frame.name} field${declared}: ${formatAngularSize(width)} × ${formatAngularSize(height)}${at}. Change it in the Framing panel of the Sky.`}</Notice>
 	}
 

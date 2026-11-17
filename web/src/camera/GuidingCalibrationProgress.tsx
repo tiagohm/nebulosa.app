@@ -1,8 +1,9 @@
 import type { GuidingCalibrationProgress } from 'api'
 import { cn } from 'cn'
-import { MISSING } from '../format'
+import { formatFixed, MISSING } from '../format'
 import { Notice } from '../ui/Notice'
 import { ProgressBar } from '../ui/ProgressBar'
+import { formatPulse } from './guiding'
 
 // Progress of a running guiding calibration in the Session section of the Guiding panel: one bar per leg (the RA move,
 // the RA return to the start, the DEC move past the backlash, and the DEC return to the start once solved) with its
@@ -59,11 +60,16 @@ export function CalibrationProgress({ progress }: { readonly progress: GuidingCa
 
 	return (
 		<div className="flex flex-col gap-2">
-			<Leg label="RA" state={ra} fraction={ra === 'done' ? 1 : clampFraction(raDistance / raTarget)} detail={`${raSteps}/${maxRaSteps} steps · ${raDistance.toFixed(1)} of ${raTarget} px`} />
-			<Leg label="RA return" state={clearing} fraction={clearing === 'done' ? 1 : clearingSteps > 0 ? returned : 0} detail={`${clearingSteps}/${maxClearingSteps} steps · ${clearing === 'pending' || (clearing === 'done' && clearingSteps === 0) ? MISSING : `${clearingDistance.toFixed(1)} px from the start`}`} />
-			<Leg label="DEC" state={dec} fraction={dec === 'done' ? 1 : clampFraction(decDistance / decTarget)} detail={`${decSteps}/${maxDecSteps} steps · ${dec !== 'pending' && !decMoving ? 'clearing the backlash' : `${decDistance.toFixed(1)} of ${decTarget} px`}`} />
-			{decReturn && <Leg label="DEC return" state={decReturning} fraction={decReturning === 'done' ? 1 : decReturnSteps > 0 ? decReturned : 0} detail={`${decReturnSteps} steps · ${decReturning === 'pending' ? MISSING : `${decReturnDistance.toFixed(1)} px from the start`}`} />}
-			{backlash > 0 && <Notice>{`DEC backlash so far: ${Math.round(backlash)} ms`}</Notice>}
+			<Leg label="RA" state={ra} fraction={ra === 'done' ? 1 : clampFraction(raDistance / raTarget)} detail={`${raSteps}/${maxRaSteps} steps · ${formatFixed(raDistance, 1)} of ${raTarget} px`} />
+			<Leg
+				label="RA return"
+				state={clearing}
+				fraction={clearing === 'done' ? 1 : clearingSteps > 0 ? returned : 0}
+				detail={`${clearingSteps}/${maxClearingSteps} steps · ${clearing === 'pending' || (clearing === 'done' && clearingSteps === 0) ? MISSING : `${formatFixed(clearingDistance, 1)} px from the start`}`}
+			/>
+			<Leg label="DEC" state={dec} fraction={dec === 'done' ? 1 : clampFraction(decDistance / decTarget)} detail={`${decSteps}/${maxDecSteps} steps · ${dec !== 'pending' && !decMoving ? 'clearing the backlash' : `${formatFixed(decDistance, 1)} of ${decTarget} px`}`} />
+			{decReturn && <Leg label="DEC return" state={decReturning} fraction={decReturning === 'done' ? 1 : decReturnSteps > 0 ? decReturned : 0} detail={`${decReturnSteps} steps · ${decReturning === 'pending' ? MISSING : `${formatFixed(decReturnDistance, 1)} px from the start`}`} />}
+			{backlash > 0 && <Notice>{`DEC backlash so far: ${formatPulse(backlash)}`}</Notice>}
 			{badFrames > 0 && <Notice error>{`${badFrames} of ${maxBadFrames} unusable frames in a row; one more than the limit fails the calibration.`}</Notice>}
 		</div>
 	)

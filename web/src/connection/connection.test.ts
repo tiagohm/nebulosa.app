@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
-import { proxy } from 'valtio'
 import { connect, type ConnectionState, disconnect, handleConnectionEvent, highlightConnection, refreshServers, removeConnection, saveConnection, serverOf } from './connection'
 
 function newState(): ConnectionState {

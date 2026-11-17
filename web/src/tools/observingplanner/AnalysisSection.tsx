@@ -1,9 +1,8 @@
 import type { PlannerEphemerisProvenance, TargetAnalysis } from 'api'
-import { RAD2DEG } from 'nebulosa/src/core/constants'
 import { parseAngle } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatAngularSize, formatClockTime, formatDate, formatDateTime, formatDegrees, formatHours, formatPercent, formatSpan } from '../../format'
+import { formatAngularSize, formatArcsec, formatClockTime, formatDate, formatDateTime, formatDegrees, formatHours, formatPercent, formatSpan } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { formatMagnitude, formatSolarSystemDistance } from '../../sky/format'
 import { Button } from '../../ui/Button'
@@ -193,7 +192,7 @@ function MinorBodyDetails({ analysis, cursor, timeZone }: { readonly analysis: T
 					{ephemeris.orbitEpoch !== undefined && <DataRow label="Elements Epoch">{formatDate((ephemeris.orbitEpoch - UNIX_EPOCH_JD) * 86_400_000, timeZone)}</DataRow>}
 					{ephemeris.solutionDate && <DataRow label="Orbit Solution">{ephemeris.solutionDate}</DataRow>}
 					{ephemeris.elementsFetchedAt !== undefined && <DataRow label="Elements Read">{formatDateTime(ephemeris.elementsFetchedAt, timeZone, false)}</DataRow>}
-					{motion !== undefined && <DataRow label="Fastest Motion">{`${(motion * RAD2DEG * 3600).toFixed(1)}″/min`}</DataRow>}
+					{motion !== undefined && <DataRow label="Fastest Motion">{`${formatArcsec(motion, 1)}/min`}</DataRow>}
 					{sample && (
 						<DataRow label={`At ${formatClockTime(sample.time, timeZone)}`}>{`${sample.distance === undefined ? 'Distance unknown' : formatSolarSystemDistance(sample.distance)} · ${sample.magnitude === undefined ? 'magnitude unavailable' : `mag ${formatMagnitude(sample.magnitude)} (estimate)`}`}</DataRow>
 					)}

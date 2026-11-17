@@ -1,5 +1,6 @@
 import type { GuidingSessionSummary, GuidingTelemetrySample } from 'api'
 import { useState } from 'react'
+import { formatFixed } from '../format'
 import { Button } from '../ui/Button'
 
 // Target graph of a guiding session, drawn under the viewer beside the history: the RA and DEC errors of the latest guide
@@ -83,7 +84,7 @@ export function GuidingTargetGraph({ session, telemetry, points }: GuidingTarget
 	const values = samples.map((sample) => ({ cursor: sample.cursor, ra: sample.raDistance * scale, dec: sample.decDistance * scale, guiding: sample.phase === 'guiding' }))
 	const ring = guidingTargetRing(Math.max(...values.map(({ ra, dec }) => Math.hypot(ra, dec)), rms?.total ?? 0, 0))
 	const factor = RADIUS / (ring * RINGS)
-	const format = (value: number) => `${value.toFixed(2)}${unit}`
+	const format = (value: number) => `${formatFixed(value, 2)}${unit}`
 
 	return (
 		<figure className="m-0 flex items-center gap-4 max-sm:flex-col">

@@ -1,7 +1,7 @@
 import type { CloseApproach, CloseApproachBody, MinorBody, MinorBodyDetails, MinorBodyPublishedValue } from 'api'
 import type { ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatDate, formatDateTime, formatZonedDateTime, MISSING } from '../../format'
+import { formatDate, formatDateTime, formatFixed, formatZonedDateTime, MISSING } from '../../format'
 import type { DisplayZone } from '../../location/zone'
 import { CLOSE_APPROACH_BODIES, type CloseApproachDistanceDisplay } from '../../profile/schema'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
@@ -106,7 +106,7 @@ function ApproachSection({ approach }: { readonly approach: CloseApproach }) {
 			<DataRow label="Vrel">{formatVelocity(relativeVelocity)}</DataRow>
 			<OptionalDatum label="Vinf">{infiniteVelocity === undefined ? undefined : formatVelocity(infiniteVelocity)}</OptionalDatum>
 			<DataRow label="Orbit solution">{orbitId}</DataRow>
-			<OptionalDatum label="Absolute magnitude H">{absoluteMagnitude?.toFixed(2)}</OptionalDatum>
+			<OptionalDatum label="Absolute magnitude H">{absoluteMagnitude === undefined ? undefined : formatFixed(absoluteMagnitude, 2)}</OptionalDatum>
 			<OptionalDatum label="Diameter (1σ)">{diameter === undefined ? undefined : formatDiameter(diameter, diameterSigma)}</OptionalDatum>
 			<Notice>{RANGE_NOTE}</Notice>
 			<Notice>{VELOCITY_NOTE}</Notice>

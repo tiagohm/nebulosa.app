@@ -1,6 +1,6 @@
 import type { ObservingSample, TargetAnalysis } from 'api'
 import { type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useRef, useState } from 'react'
-import { formatClockTime, formatDegrees } from '../../format'
+import { formatClockTime, formatDegrees, formatFixed } from '../../format'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { moveIndex } from '../../ui/navigation'
 import { type SkyBand, skyBands } from '../astroweather/astroweather'
@@ -201,7 +201,7 @@ export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightC
 					<DataRow label="Time">{formatClockTime(sample.time, timeZone)}</DataRow>
 					<DataRow label="Altitude">{formatDegrees(sample.altitude, 1)}</DataRow>
 					<DataRow label="Azimuth">{formatDegrees(sample.azimuth, 1)}</DataRow>
-					<DataRow label="Airmass">{sample.airmass === undefined ? 'Below the horizon' : sample.airmass.toFixed(2)}</DataRow>
+					<DataRow label="Airmass">{sample.airmass === undefined ? 'Below the horizon' : formatFixed(sample.airmass, 2)}</DataRow>
 					<DataRow label="Sun Altitude">{formatDegrees(sample.sunAltitude, 1)}</DataRow>
 					<DataRow label="Moon Altitude">{formatDegrees(sample.moonAltitude, 1)}</DataRow>
 					<DataRow label="Moon Separation">{formatDegrees(sample.moonSeparation, 1)}</DataRow>

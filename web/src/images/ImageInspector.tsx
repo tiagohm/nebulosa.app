@@ -369,7 +369,7 @@ function AppliedDisplay({ result }: AppliedDisplayProps) {
 			<DataRow label="Channels">{result.channels === 3 ? 'RGB' : 'Mono'}</DataRow>
 			{result.stretch.map((stretch, i) => (
 				<DataRow key={i} label={`Stretch${result.stretch.length === 3 ? ` ${CHANNEL_NAMES[i]}` : ''}`}>
-					{stretch.shadow.toFixed(4)} - {stretch.highlight.toFixed(4)} | {stretch.midtone.toFixed(4)}
+					{formatFixed(stretch.shadow, 4)} - {formatFixed(stretch.highlight, 4)} | {formatFixed(stretch.midtone, 4)}
 				</DataRow>
 			))}
 		</CollapsibleSection>

@@ -1,4 +1,5 @@
 import type { PlanetaryEvent, PlanetaryEventBody, PlanetaryEventKind, PlanetaryEventQuantity, PlanetaryEventsSignature, PlanetaryEventVisibility, PlanetaryFallbackReason, PlanetaryVisibilityReason, PlanetaryVisibilityStatus } from 'api'
+import { AU_KM } from 'nebulosa/src/core/constants'
 import { csvField } from '../../download'
 import { formatDegrees, formatFixed, formatPercent } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
@@ -69,7 +70,7 @@ export function eventTitle(event: PlanetaryEvent) {
 
 // Distance in AU and millions of kilometres.
 export function formatDistance(au: number) {
-	return `${formatFixed(au, 4)} AU (${formatFixed((au * 149_597_870.7) / 1e6, 1)} million km)`
+	return `${formatFixed(au, 4)} AU (${formatFixed((au * AU_KM) / 1e6, 1)} million km)`
 }
 
 // The number that best describes an event: a separation, an elongation, a distance, a magnitude, or a longitude.

@@ -8,7 +8,7 @@ import { DataList, DataRow } from '../ui/DataRow'
 import { Modal } from '../ui/Modal'
 import { Notice } from '../ui/Notice'
 import { SectionHeading } from '../ui/SectionHeading'
-import { formatCalibrationAdaptation, formatCalibrationPlace, formatCalibrationRate, loadSavedCalibration, loadSessionCalibration } from './guiding'
+import { formatCalibrationAdaptation, formatCalibrationPlace, formatCalibrationRate, formatPulse, loadSavedCalibration, loadSessionCalibration } from './guiding'
 import { GuidingCalibrationPlot } from './GuidingCalibrationPlot'
 
 // Review Calibration: the measured steps of a guiding calibration (GuidingCalibrationPlot), the solution as it was measured
@@ -149,7 +149,7 @@ function MeasuredSection({ record, pixelScale }: { readonly record: ReviewData['
 				<DataRow label="DEC">{formatAxis(review.measuredDec.ratePxPerMs, review.measuredDec.angle, review.decSamples.length, review.measuredDec.totalTravelPx, review.measuredDec.rmsOrthogonalResidualPx, pixelScale)}</DataRow>
 				{calibration.orthogonalAssumed && <DataRow label="DEC Assumed">{`${formatCalibrationRate(calibration.dec.ratePxPerMs, pixelScale)} at ${formatDegrees(calibration.dec.angle, 1)}, perpendicular to RA`}</DataRow>}
 				<DataRow label="Off Perpendicular">{formatDegrees(review.orthogonalityError, 1)}</DataRow>
-				<DataRow label="DEC Backlash">{`${Math.round(calibration.backlash)} ms`}</DataRow>
+				<DataRow label="DEC Backlash">{formatPulse(calibration.backlash)}</DataRow>
 				<DataRow label="Returns">{`${calibration.clearingSteps} RA, ${calibration.decReturnSteps} DEC steps`}</DataRow>
 				{review.excludedSamples.length > 0 && <DataRow label="Left Out">{`${review.excludedSamples.length} steps`}</DataRow>}
 			</DataList>
@@ -226,7 +226,7 @@ function formatFinding({ code, value, limit }: ReviewData['assessment']['finding
 		case 'orthogonalityError':
 			return `${formatDegrees(value, 1)}, over ${formatDegrees(limit, 0)}`
 		case 'largeBacklash':
-			return `${Math.round(value)} ms, over ${limit} ms`
+			return `${formatPulse(value)}, over ${formatPulse(limit)}`
 		default:
 			return `${value}, limit ${limit}`
 	}

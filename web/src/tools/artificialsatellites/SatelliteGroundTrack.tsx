@@ -2,7 +2,7 @@ import type { SatelliteGroundTrack as SatelliteGroundTrackData } from 'api'
 import { cn } from 'cn'
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatClockDuration, formatClockTime, formatDateTime, formatGeographic, formatKilometers } from '../../format'
+import { formatClockDuration, formatClockTime, formatDateTime, formatFixed, formatGeographic, formatKilometers, formatSpeed } from '../../format'
 import type { GeographicLocation } from '../../location/site'
 import type { DisplayZone } from '../../location/zone'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -182,11 +182,11 @@ export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackPro
 						</div>
 					</div>
 					<div className="flex flex-wrap items-center gap-1 gap-y-1 text-xs text-ink-300">
-						<InstantChip className={following ? 'bg-green-900/10 text-green-500/80' : 'bg-blue-900/10 text-blue-500/80'}>{following ? 'Live' : 'Chosen instant'}</InstantChip>
-						<InstantChip className="font-mono text-ink-200 tabular-nums px-2 py-1 bg-ink-300/10 rounded-md">{formatGeographic(point.subpoint.latitude, point.subpoint.longitude)}</InstantChip>
+						<InstantChip className={following ? 'bg-success/10 text-success' : 'bg-accent/10 text-accent'}>{following ? 'Live' : 'Chosen instant'}</InstantChip>
+						<InstantChip className="text-ink-200 tabular-nums">{formatGeographic(point.subpoint.latitude, point.subpoint.longitude)}</InstantChip>
 						<InstantChip>Height {formatKilometers(point.heightKm)}</InstantChip>
 						<InstantChip>{observer ? `Distance ${formatKilometers(groundTrackDistance(point, observer))}` : `Distance ${formatKilometers(groundTrackDistance(point))} from the Earth's center`}</InstantChip>
-						<InstantChip>Speed {point.speedKmPerSecond.toFixed(3)} km/s</InstantChip>
+						<InstantChip>Speed {formatSpeed(point.speedKmPerSecond, 3)}</InstantChip>
 						<InstantChip>{SHADOW_LABELS[point.shadow]}</InstantChip>
 						{crossings.map((crossing) => (
 							<InstantChip key={crossing.kind}>{`${crossing.kind === 'sunset' ? 'Sunset' : 'Sunrise'} ${formatClockTime(crossing.time, timeZone, { seconds: true })} (in ${formatClockDuration((crossing.time - point.time) / 1000)})`}</InstantChip>
@@ -194,7 +194,7 @@ export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackPro
 						{crossings.length === 0 && <InstantChip>No sunset or sunrise until the end of the track</InstantChip>}
 						{inside !== undefined && <InstantChip>{inside ? "Above the site's horizon" : "Below the site's horizon"}</InstantChip>}
 						<InstantChip>
-							Period {track.periodMinutes.toFixed(1)} min{track.truncated ? ' · later samples were left out' : ''}
+							Period {formatFixed(track.periodMinutes, 1)} min{track.truncated ? ' · later samples were left out' : ''}
 						</InstantChip>
 					</div>
 				</div>

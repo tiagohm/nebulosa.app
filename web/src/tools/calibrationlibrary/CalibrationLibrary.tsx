@@ -30,7 +30,7 @@ import {
 import { cameraBindingsState, type CatalogCamera, catalogCameraName, catalogState, suggestedCameraId } from '../../equipment/catalog'
 import { FileExplorerModal } from '../../files/FileExplorerModal'
 import { IMAGE_EXTENSIONS } from '../../files/files'
-import { formatByteSize, formatDateTime, formatExposureTime, formatPercent, MISSING, formatZonedDateTime } from '../../format'
+import { formatByteSize, formatExposureTime, formatFixed, formatPercent, formatTemperature, formatZonedDateTime, MISSING } from '../../format'
 import { imagesState, openImage } from '../../images/images'
 import { useActiveTimeZone } from '../../location/useLocation'
 import { activeProfile, profileState, setLastCalibrationDirectory } from '../../profile/profile'
@@ -492,8 +492,8 @@ function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonl
 	)
 }
 
-// Value with how it is known.
-function EvidencedReadout({ label, value, format = String }: { readonly label: string; readonly value: Evidenced<string | number>; readonly format?: (value: string | number) => string }) {
+// Value with how it is known, written by `format` (as is by default).
+function EvidencedReadout<T extends string | number>({ label, value, format = String }: { readonly label: string; readonly value: Evidenced<T>; readonly format?: (value: T) => string }) {
 	return <DataRow label={label}>{value.value === undefined ? 'Unknown' : `${format(value.value)} · ${EVIDENCE_LABELS[value.evidence]}`}</DataRow>
 }
 
@@ -547,7 +547,7 @@ function MasterPanel({ onGroup, onDeleted }: { readonly onGroup: (groupId: strin
 				{diagnostics.hotPixels !== undefined && <DataRow label="Hot Pixels">{diagnostics.hotPixels}</DataRow>}
 				{diagnostics.invalidResponsePixels !== undefined && <DataRow label="Invalid Response">{diagnostics.invalidResponsePixels}</DataRow>}
 				{diagnostics.planes.map(({ plane, median, sigma }) => (
-					<DataRow key={plane} label={`Plane ${plane + 1}`}>{`${median.toFixed(master.units === 'DN' ? 1 : 4)} ± ${sigma.toFixed(master.units === 'DN' ? 1 : 4)}`}</DataRow>
+					<DataRow key={plane} label={`Plane ${plane + 1}`}>{`${formatFixed(median, master.units === 'DN' ? 1 : 4)} ± ${formatFixed(sigma, master.units === 'DN' ? 1 : 4)}`}</DataRow>
 				))}
 				{diagnostics.excludedFrames?.map(({ sourceId, reason }) => (
 					<Notice key={sourceId}>{`A frame was left out: ${reason}`}</Notice>
@@ -599,9 +599,9 @@ function SourcePanel({ onDeleted }: { readonly onDeleted: () => void }) {
 				<DataRow label="Size">{formatByteSize(source.bytes)}</DataRow>
 				<DataRow label="Image">{`${metadata.width}×${metadata.height}×${metadata.channels}, BITPIX ${metadata.bitpix}${metadata.cfa ? `, ${metadata.cfa}` : ''}`}</DataRow>
 				<DataRow label="Camera">{cameraText(metadata, cameras)}</DataRow>
-				<EvidencedReadout label="Exposure" value={metadata.exposure} format={(value) => formatExposureTime(Number(value) / 1000000)} />
+				<EvidencedReadout label="Exposure" value={metadata.exposure} format={(value) => formatExposureTime(value / 1000000)} />
 				<EvidencedReadout label="Target" value={metadata.setTemperature} format={(value) => `${value} °C`} />
-				<EvidencedReadout label="Sensor" value={metadata.sensorTemperature} format={(value) => `${value} °C`} />
+				<EvidencedReadout label="Sensor" value={metadata.sensorTemperature} format={formatTemperature} />
 				<EvidencedReadout label="Gain" value={metadata.gain} />
 				<EvidencedReadout label="Offset" value={metadata.offset} />
 				<EvidencedReadout label="Readout" value={metadata.readoutMode} />

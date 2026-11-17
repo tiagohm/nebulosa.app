@@ -1,4 +1,5 @@
 import type { TelescopeModel } from 'api'
+import { formatFocalRatio, formatMillimeters } from '../format'
 import { MODEL_SEARCH_LIMIT, modelCatalogLoader, searchModels } from './models'
 
 // Telescope model catalog of the Equipment Catalog editor and the calculators: the telescopes and lenses of the AstroBin
@@ -22,6 +23,6 @@ export function searchTelescopeModels(models: readonly TelescopeModel[], query: 
 // of the native focal length.
 export function telescopeModelDescription({ aperture, focalLength, maxFocalLength }: TelescopeModel) {
 	const length = focalLength !== undefined && (maxFocalLength !== undefined ? `${focalLength}–${maxFocalLength} mm FL` : `${focalLength} mm FL`)
-	const ratio = aperture !== undefined && focalLength !== undefined && `f/${Number((focalLength / aperture).toFixed(1))}`
-	return [aperture !== undefined && `${aperture} mm`, length, ratio].filter(Boolean).join(' · ')
+	const ratio = aperture !== undefined && focalLength !== undefined && formatFocalRatio(focalLength / aperture)
+	return [aperture !== undefined && formatMillimeters(aperture), length, ratio].filter(Boolean).join(' · ')
 }

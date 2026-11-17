@@ -1,5 +1,5 @@
 import type { MoonAppearance } from 'api'
-import { formatDegrees, formatKilometers, formatLocalTime } from '../../format'
+import { formatDegrees, formatFixed, formatKilometers, formatLocalTime } from '../../format'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
@@ -17,10 +17,10 @@ export function formatSelenographic(angle: number, positive: string, negative: s
 // Lunar Physical Data section of the Moon Inspector; `time` is the instant of the data, Unix milliseconds.
 export function MoonPhysicalSection({ appearance, time, timeZone }: { readonly appearance?: MoonAppearance; readonly time?: number; readonly timeZone: string }) {
 	return (
-		<CollapsibleSection id="sky.physical" title="Lunar Physical Data" summary={appearance && `Age ${appearance.ageDays.toFixed(1)} d · Lunation ${appearance.lunation}`} defaultOpen={false}>
+		<CollapsibleSection id="sky.physical" title="Lunar Physical Data" summary={appearance && `Age ${formatFixed(appearance.ageDays, 1)} d · Lunation ${appearance.lunation}`} defaultOpen={false}>
 			{appearance && time !== undefined ? (
 				<>
-					<DataRow label="Age">{appearance.ageDays.toFixed(2)} d</DataRow>
+					<DataRow label="Age">{formatFixed(appearance.ageDays, 2)} d</DataRow>
 					<DataRow label="Lunation">{appearance.lunation}</DataRow>
 					<DataRow label="Distance">{formatKilometers(appearance.distanceKm)}</DataRow>
 					<DataRow label="Apparent diameter">{formatApparentSize(appearance.angularDiameter)}</DataRow>

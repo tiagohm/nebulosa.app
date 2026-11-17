@@ -9,7 +9,7 @@ import type { BindableDevice } from '../equipment/catalog'
 import { CatalogCameraNotice, useBoundCamera } from '../equipment/CatalogCameraNotice'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
 import type { RoleDevice } from '../equipment/useEquipment'
-import { formatArcmin, formatArcsec, formatClockTime, formatDegrees, formatExposureTime, formatSignedArcmin, formatTemperature, MISSING } from '../format'
+import { formatArcmin, formatArcsec, formatClockTime, formatDegrees, formatExposureTime, formatFixed, formatSignedArcmin, formatTemperature, MISSING } from '../format'
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { operationsState } from '../operations'
 import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSection'
@@ -157,7 +157,7 @@ export function IPolarSections({ device, availability, mount, settings: identity
 						<NumberInput label="RA Rotation" value={shown.rotation} min={IPOLAR_MINIMUM_ROTATION} max={IPOLAR_MAXIMUM_ROTATION} step={1} suffix="°" disabled={locked} onChange={(rotation) => update({ rotation })} />
 						<NumberInput label="Settle Time" value={shown.settleDelay} min={0} max={120} step={0.5} suffix="s" disabled={locked} onChange={(settleDelay) => update({ settleDelay })} />
 						<Notice>
-							The mount turns in RA only, towards the {IPOLAR_DIRECTION_LABELS[shown.direction].toLowerCase()}, about {shown.rotation.toFixed(1)}° in bounded steps. Rotation is measured by plate solving, never assumed from the motion time.
+							The mount turns in RA only, towards the {IPOLAR_DIRECTION_LABELS[shown.direction].toLowerCase()}, about {formatFixed(shown.rotation, 1)}° in bounded steps. Rotation is measured by plate solving, never assumed from the motion time.
 						</Notice>
 					</>
 				) : (

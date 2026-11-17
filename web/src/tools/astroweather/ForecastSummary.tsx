@@ -1,5 +1,5 @@
 import type { AstroWeatherForecast, AstroWeatherNight, AstroWeatherSource } from 'api'
-import { formatClockTime, formatHours, formatPercent, formatTemperature } from '../../format'
+import { formatClockTime, formatFixed, formatHours, formatPercent, formatTemperature } from '../../format'
 import type { AstroWeatherMode } from '../../profile/schema'
 import { DataRow } from '../../ui/DataRow'
 import { Icon, type IconName } from '../../ui/Icon'
@@ -37,7 +37,7 @@ function rangeText(range: FactRange | undefined, prefix = '', unit = '') {
 // Text of the precipitation of some hours: the highest hourly chance and the modeled amount of the hours together, in mm.
 function rainText({ precipitationChance, precipitation }: NightFacts) {
 	if (precipitationChance === undefined && precipitation === undefined) return undefined
-	return [precipitationChance === undefined ? undefined : `up to ${precipitationChance}%`, precipitation === undefined ? undefined : `${precipitation.toFixed(1)} mm`].filter(Boolean).join(', ')
+	return [precipitationChance === undefined ? undefined : `up to ${precipitationChance}%`, precipitation === undefined ? undefined : `${formatFixed(precipitation, 1)} mm`].filter(Boolean).join(', ')
 }
 
 // Text of the Moon over the night shown: how much of it is lit, and when it is above the horizon.

@@ -156,6 +156,8 @@ Tests do not need documentation comments.
 
 Verification is proportional to the change, but the touched area must have zero introduced TypeScript or lint errors and passing relevant tests.
 
+The app is in development and all of its data is test data: the database, settings, equipment setups, captures, and calibration library under `NEBULOSA_HOME`, and the data directory itself. Verify against them freely, creating, changing, or deleting whatever a check needs; never skip or narrow a verification to keep them intact. Only hardware tests with real motion still need explicit authorization.
+
 - Documentation-only changes: `bun fmt --check` and `git diff --check`.
 - TypeScript changes: the closest targeted tests, `bun lint`, `bun fmt --check`, and `git diff --check`.
 - Changes to `app/`, bundling, Tailwind, `bunfig.toml`, `package.json`, or HTML entry points: also run `bun compile` and smoke-test the executable (`/api/health` and the UI load with styles).

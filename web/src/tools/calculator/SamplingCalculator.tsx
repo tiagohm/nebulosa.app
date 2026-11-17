@@ -1,11 +1,12 @@
 import type { FWHMSamplingKind } from 'nebulosa/src/astronomy/formulas'
 import { CameraModelSearch } from '../../equipment/CameraModelSearch'
+import { TelescopeModelSearch } from '../../equipment/TelescopeModelSearch'
 import { formatFixed } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
-import { DIFFRACTION_EXAMPLE, type DiffractionDraft, diffraction, diffractionFromOptics, SAMPLING_EXAMPLE, type SamplingDraft, type SamplingMode, sampling, samplingFromOptics } from './sampling'
+import { DIFFRACTION_EXAMPLE, type DiffractionDraft, diffraction, diffractionFromOptics, diffractionFromTelescopeModel, SAMPLING_EXAMPLE, type SamplingDraft, type SamplingMode, sampling, samplingFromOptics } from './sampling'
 import { positiveText } from './values'
 
 // Views of the Sampling & Focus calculators: Sampling and Diffraction & Focus, whose pixel size can be taken from a model of
@@ -94,8 +95,9 @@ export function DiffractionCalculator({ entry, onChange, context }: CalculatorVi
 						<NumberField label="Focal ratio (f/)" value={draft.focalRatio} onChange={(focalRatio) => set({ focalRatio })} />
 						<NumberField label="Pixel size" suffix="µm" optional value={draft.pixelSize} onChange={(pixelSize) => set({ pixelSize })} />
 					</FieldGrid>
+					<TelescopeModelSearch label="Focal ratio from a telescope model" onPick={(model) => onChange({ ...entry, draft: diffractionFromTelescopeModel(draft, model) })} />
 					<CameraModelSearch label="Pixel size from a camera model" onPick={(model) => model.pixelSize !== undefined && set({ pixelSize: positiveText(model.pixelSize) })} />
-					<Notice>550 nm is green light, near the eye&apos;s peak; Hα is 656.3 nm. The focal ratio is that of the effective focal length; importing needs the aperture.</Notice>
+					<Notice>550 nm is green light, near the eye&apos;s peak; Hα is 656.3 nm. The focal ratio is that of the effective focal length; importing needs the aperture, and a telescope model gives its native ratio, without reducer or Barlow.</Notice>
 				</>
 			}
 			results={

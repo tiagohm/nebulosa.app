@@ -1,8 +1,10 @@
+import { TelescopeModelSearch } from '../../equipment/TelescopeModelSearch'
 import { formatFixed, formatPercent } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary } from './CalculatorParts'
-import { APERTURE_COMPARISON_EXAMPLE, type ApertureComparisonDraft, type ApertureSide, apertureComparison, EYEPIECE_EXAMPLE, type EyepieceDraft, eyepiece, eyepieceFromOptics, type LightGrasp } from './visual'
+import { positiveText } from './values'
+import { APERTURE_COMPARISON_EXAMPLE, type ApertureComparisonDraft, type ApertureSide, apertureComparison, EYEPIECE_EXAMPLE, type EyepieceDraft, eyepiece, eyepieceFromOptics, eyepieceFromTelescopeModel, type LightGrasp } from './visual'
 
 // Views of the Visual Observation calculators: Eyepiece & Telescope and Aperture Comparison.
 
@@ -36,7 +38,8 @@ export function EyepieceCalculator({ entry, onChange, context }: CalculatorViewP
 						<NumberField label="Apparent field" suffix="°" optional value={draft.apparentField} onChange={(apparentField) => set({ apparentField })} />
 						<NumberField label="Field stop" suffix="mm" optional value={draft.fieldStop} onChange={(fieldStop) => set({ fieldStop })} />
 					</FieldGrid>
-					<Notice>The telescope focal length includes any Barlow or reducer; importing applies its factor.</Notice>
+					<TelescopeModelSearch label="Telescope from a model" onPick={(model) => onChange({ ...entry, draft: eyepieceFromTelescopeModel(draft, model) })} />
+					<Notice>The telescope focal length includes any Barlow or reducer; importing applies its factor, and a telescope model gives its native focal length, the shortest of a range.</Notice>
 				</>
 			}
 			results={
@@ -86,6 +89,8 @@ export function ApertureComparisonCalculator({ entry, onChange, context }: Calcu
 					<NumberField label="Obstruction A" suffix="mm" optional value={draft.obstructionA} onChange={(obstructionA) => set({ obstructionA })} />
 					<NumberField label="Aperture B" suffix="mm" value={draft.apertureB} onChange={(apertureB) => set({ apertureB })} />
 					<NumberField label="Obstruction B" suffix="mm" optional value={draft.obstructionB} onChange={(obstructionB) => set({ obstructionB })} />
+					<TelescopeModelSearch label="Aperture A from a telescope model" onPick={(model) => model.aperture !== undefined && set({ apertureA: positiveText(model.aperture) })} />
+					<TelescopeModelSearch label="Aperture B from a telescope model" onPick={(model) => model.aperture !== undefined && set({ apertureB: positiveText(model.aperture) })} />
 				</FieldGrid>
 			}
 			results={

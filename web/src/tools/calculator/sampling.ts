@@ -1,3 +1,4 @@
+import type { TelescopeModel } from 'api'
 import { airyDiskInPixels, airyDiskSize, classifyFWHMSampling, criticalFocusZone, type FWHMSamplingKind, fwhmPixelsToSeeing, recommendedFocalLength, samplingRatio } from 'nebulosa/src/astronomy/formulas'
 import { isFraming, type OpticalConfiguration, resolveFraming } from '../../sky/framing'
 import { newCheck, type OptionalOutcome, optional, optionalOutcome, type Outcome, outcome, POSITIVE, positiveText, ready, required } from './values'
@@ -67,6 +68,12 @@ function roundedText(value: number | undefined, digits: number) {
 // Returns the pixel size of an optical configuration's sensor; empty for a sensor given by its physical size.
 function pixelSizeText(optics: Readonly<OpticalConfiguration>) {
 	return optics.sensor.kind === 'pixels' ? positiveText(optics.sensor.pixelSize) : ''
+}
+
+// Fills the focal ratio of a Diffraction & Focus draft from a model of the telescope model catalog: its native focal
+// length over its aperture, rounded to 0.01; kept as typed when the catalog does not give both.
+export function diffractionFromTelescopeModel(draft: DiffractionDraft, { focalLength, aperture }: Pick<TelescopeModel, 'focalLength' | 'aperture'>): DiffractionDraft {
+	return focalLength === undefined || aperture === undefined ? draft : { ...draft, focalRatio: roundedText(focalLength / aperture, 2) }
 }
 
 // Returns the Sampling fields an optical configuration fills: its image scale and pixel size.

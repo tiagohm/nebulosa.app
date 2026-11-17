@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { airyDiskSize, criticalFocusZone, recommendedFocalLength } from 'nebulosa/src/astronomy/formulas'
 import { DEFAULT_OPTICS } from '../../sky/framing'
-import { DIFFRACTION_EXAMPLE, diffraction, diffractionFromOptics, SAMPLING_EXAMPLE, sampling, samplingFromOptics } from './sampling'
+import { DIFFRACTION_EXAMPLE, diffraction, diffractionFromOptics, diffractionFromTelescopeModel, SAMPLING_EXAMPLE, sampling, samplingFromOptics } from './sampling'
 
 describe('sampling', () => {
 	test('classifies the FWHM at the 2 and 3 px boundaries', () => {
@@ -56,5 +56,10 @@ describe('diffraction', () => {
 	test('imports the focal ratio only with an aperture', () => {
 		expect(diffractionFromOptics(DEFAULT_OPTICS)).toEqual({ focalRatio: '', pixelSize: '3.76' })
 		expect(diffractionFromOptics({ ...DEFAULT_OPTICS, aperture: 120, focalMultiplier: 0.8 })).toEqual({ focalRatio: '4', pixelSize: '3.76' })
+	})
+
+	test('a telescope model gives its native focal ratio only with both its focal length and aperture', () => {
+		expect(diffractionFromTelescopeModel(DIFFRACTION_EXAMPLE, { focalLength: 420, aperture: 103 })).toEqual({ ...DIFFRACTION_EXAMPLE, focalRatio: '4.08' })
+		expect(diffractionFromTelescopeModel(DIFFRACTION_EXAMPLE, { focalLength: 420 })).toBe(DIFFRACTION_EXAMPLE)
 	})
 })

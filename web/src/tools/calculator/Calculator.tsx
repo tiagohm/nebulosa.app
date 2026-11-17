@@ -75,8 +75,8 @@ function CalculatorBody({ profile }: { readonly profile: Readonly<Pick<Profile, 
 	const live = liveSensors(sensors, useSnapshot(controlRuntime))
 	const { sky } = profile.settings
 	const { telescope, guideTelescope } = useProfileTelescopes(profile.settings)
-	const catalogCameras = useSnapshot(catalogState).cameras
-	const context: SourceContext = { profileId: profile.id, settings: { telescope, guideTelescope, presets: sky.framing?.presets ?? [], manualSensor: sky.framing?.manualSensor, catalogCameras }, live, cameras: sensors.cameras }
+	const { cameras: catalogCameras, telescopes: catalogTelescopes } = useSnapshot(catalogState)
+	const context: SourceContext = { profileId: profile.id, settings: { telescope, guideTelescope, presets: sky.framing?.presets ?? [], manualSensor: sky.framing?.manualSensor, catalogCameras, catalogTelescopes }, live, cameras: sensors.cameras }
 	const definition = calculatorDefinition(selected)
 
 	// Returns the draft of a calculator and the callback that replaces it.

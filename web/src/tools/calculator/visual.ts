@@ -1,3 +1,4 @@
+import type { TelescopeModel } from 'api'
 import { dawesLimit, effectiveApertureWithObstruction, exitPupilFromApertureAndMagnification, eyepieceTrueFovViaFieldStop, eyepieceView, lightGraspRatio, limitingMagnitude, magnification, obstructionRatio, rayleighLimit } from 'nebulosa/src/astronomy/formulas'
 import type { OpticalConfiguration } from '../../sky/framing'
 import { between, newCheck, optional, type Outcome, outcome, POSITIVE, positiveText, ready, required } from './values'
@@ -78,6 +79,12 @@ export interface ApertureComparisonResult {
 	readonly collecting: LightGrasp | undefined
 	// Each side.
 	readonly sides: Readonly<Record<ApertureSide, ApertureSideResult>>
+}
+
+// Fills the telescope of an Eyepiece & Telescope draft from a model of the telescope model catalog: its native focal
+// length and aperture, in millimeters, each kept as typed when the catalog does not give it.
+export function eyepieceFromTelescopeModel(draft: EyepieceDraft, model: Pick<TelescopeModel, 'focalLength' | 'aperture'>): EyepieceDraft {
+	return { ...draft, focalLength: model.focalLength === undefined ? draft.focalLength : positiveText(model.focalLength), aperture: model.aperture === undefined ? draft.aperture : positiveText(model.aperture) }
 }
 
 // Returns the Eyepiece & Telescope fields an optical configuration fills: its effective focal length and aperture.

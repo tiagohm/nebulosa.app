@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_OPTICS } from '../../sky/framing'
-import { APERTURE_COMPARISON_EXAMPLE, apertureComparison, EYEPIECE_EXAMPLE, eyepiece, eyepieceFromOptics } from './visual'
+import { APERTURE_COMPARISON_EXAMPLE, apertureComparison, EYEPIECE_EXAMPLE, eyepiece, eyepieceFromOptics, eyepieceFromTelescopeModel } from './visual'
 
 describe('eyepiece', () => {
 	test('magnification, exit pupil, true fields, and limits', () => {
@@ -24,6 +24,11 @@ describe('eyepiece', () => {
 	test('imports the effective focal length', () => {
 		expect(eyepieceFromOptics({ ...DEFAULT_OPTICS, focalMultiplier: 2, aperture: 80 })).toEqual({ focalLength: '1200', aperture: '80' })
 		expect(eyepieceFromOptics(DEFAULT_OPTICS)).toEqual({ focalLength: '600', aperture: '' })
+	})
+
+	test('a telescope model fills the telescope and keeps what it does not give', () => {
+		expect(eyepieceFromTelescopeModel(EYEPIECE_EXAMPLE, { focalLength: 550, aperture: 100 })).toEqual({ ...EYEPIECE_EXAMPLE, focalLength: '550', aperture: '100' })
+		expect(eyepieceFromTelescopeModel(EYEPIECE_EXAMPLE, { aperture: 80 })).toEqual({ ...EYEPIECE_EXAMPLE, aperture: '80' })
 	})
 })
 

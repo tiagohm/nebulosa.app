@@ -1,4 +1,4 @@
-import type { CameraModel } from 'api'
+import type { CameraModel, TelescopeModel } from 'api'
 import { mosaicPanelCount, sensorDiagonalFov } from 'nebulosa/src/astronomy/formulas'
 import { toArcmin } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_OPTICS, type Framing, isFraming, type OpticalConfiguration, resolveFraming, type SensorGeometry } from '../../sky/framing'
@@ -76,6 +76,13 @@ function roundedText(value: number, digits: number) {
 // gives it, its pixel size (else the pixel size typed is kept); the optics are left as they are.
 export function imagingSetupFromModel(draft: ImagingSetupDraft, model: Pick<CameraModel, 'width' | 'height' | 'pixelSize'>): ImagingSetupDraft {
 	return { ...draft, sensorKind: 'pixels', width: positiveText(model.width), height: positiveText(model.height), pixelSize: model.pixelSize === undefined ? draft.pixelSize : positiveText(model.pixelSize) }
+}
+
+// Fills the optics of an Imaging Setup draft from a model of the telescope model catalog: its native focal length and
+// aperture, in millimeters, each kept as typed when the catalog does not give it; the reducer or Barlow and the sensor
+// are left as they are.
+export function imagingSetupFromTelescopeModel(draft: ImagingSetupDraft, model: Pick<TelescopeModel, 'focalLength' | 'aperture'>): ImagingSetupDraft {
+	return { ...draft, focalLength: model.focalLength === undefined ? draft.focalLength : positiveText(model.focalLength), aperture: model.aperture === undefined ? draft.aperture : positiveText(model.aperture) }
 }
 
 // Returns the Imaging Setup fields of an optical configuration. A sensor given by its pixels also fills its physical

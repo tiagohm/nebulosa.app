@@ -16,6 +16,11 @@ const CONTEXT: SourceContext = {
 			{ id: 'c3', name: 'Undeclared', archived: false },
 			{ id: 'c4', name: 'No pixel size', sensor: { width: 1920, height: 1080 }, archived: false },
 		],
+		catalogTelescopes: [
+			{ id: 't1', name: 'Esprit 100', aperture: 100, focalLength: 550, archived: false },
+			{ id: 't2', name: 'Old telescope', focalLength: 400, archived: true },
+			{ id: 't3', name: 'Aperture only', aperture: 80, archived: false },
+		],
 	},
 	live: { MAIN_CAMERA: { width: 6248, height: 4176, pixelSize: 3.76 }, GUIDE_CAMERA: { width: 1936, height: 1096, pixelSize: 2.9 } },
 	cameras: { MAIN_CAMERA: { connectionId: 'a', id: 'main' }, GUIDE_CAMERA: { connectionId: 'a', id: 'guide' } },
@@ -23,7 +28,10 @@ const CONTEXT: SourceContext = {
 
 describe('sources', () => {
 	test('lists the camera roles, the manual sensor, the cameras of the catalog not archived, then the presets', () => {
-		expect(opticsSources(CONTEXT.settings)).toEqual(['MAIN_CAMERA', 'GUIDE_CAMERA', 'manual', 'catalog:c1', 'catalog:c3', 'catalog:c4', 'preset:p1'])
+		expect(opticsSources(CONTEXT.settings)).toEqual(['MAIN_CAMERA', 'GUIDE_CAMERA', 'manual', 'catalog:c1', 'catalog:c3', 'catalog:c4', 'telescope:t1', 'telescope:t3', 'preset:p1'])
+		expect(sourceLabel(CONTEXT.settings, 'telescope:t1')).toBe('Esprit 100')
+		expect(sourceLabel(CONTEXT.settings, 'telescope:gone')).toBe('Deleted telescope')
+		expect(sourceGroup('telescope:t1')).toBe('Equipment Catalog')
 		expect(sourceLabel(CONTEXT.settings, 'catalog:c1')).toBe('ASI294MM')
 		expect(sourceGroup('catalog:c1')).toBe('Equipment Catalog')
 		expect(sourceLabel(CONTEXT.settings, 'preset:p1')).toBe('Refractor')
@@ -49,7 +57,7 @@ describe('sources', () => {
 	})
 
 	test('optics never entered are imported as zero', () => {
-		const result = importOptics({ ...CONTEXT, settings: { presets: [], catalogCameras: [] } }, 'MAIN_CAMERA')
+		const result = importOptics({ ...CONTEXT, settings: { presets: [], catalogCameras: [], catalogTelescopes: [] } }, 'MAIN_CAMERA')
 		expect('optics' in result && result.optics).toMatchObject({ focalLength: 0, focalMultiplier: 1, aperture: 0 })
 	})
 
@@ -68,6 +76,16 @@ describe('sources', () => {
 		expect(importOptics(CONTEXT, 'catalog:c4')).toMatchObject({ optics: { sensor: { kind: 'pixels', width: 1920, height: 1080, pixelSize: 0 } } })
 		expect(importOptics(CONTEXT, 'catalog:c3')).toEqual({ reason: 'No sensor is declared for Undeclared: declare it in Settings → Equipment Catalog.' })
 		expect(importOptics(CONTEXT, 'catalog:gone')).toEqual({ reason: 'The camera is no longer in the Equipment Catalog.' })
+	})
+
+	test('a telescope of the catalog takes its native optics and the sensor of the Main Camera, and one declaring no focal length is refused', () => {
+		expect(importOptics(CONTEXT, 'telescope:t1')).toEqual({
+			optics: { focalLength: 550, focalMultiplier: 1, aperture: 100, sensor: { kind: 'pixels', width: 6248, height: 4176, pixelSize: 3.76 }, rotation: 0 },
+			origin: { source: 'telescope:t1', label: 'Esprit 100', profileId: 'profile' },
+		})
+		expect(importOptics({ ...CONTEXT, live: {} }, 'telescope:t1')).toMatchObject({ optics: { sensor: { kind: 'pixels', width: 0, height: 0, pixelSize: 0 } } })
+		expect(importOptics(CONTEXT, 'telescope:t3')).toEqual({ reason: 'No focal length is declared for Aperture only: declare it in Settings → Equipment Catalog.' })
+		expect(importOptics(CONTEXT, 'telescope:gone')).toEqual({ reason: 'The telescope is no longer in the Equipment Catalog.' })
 	})
 
 	test('a preset is copied, so the copy can change without the preset', () => {

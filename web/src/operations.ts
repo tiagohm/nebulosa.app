@@ -65,7 +65,8 @@ export const operationsState = proxy<OperationsState>({ operations: {} })
 // Refreshes of the running operations, ordered against the operation events applied meanwhile.
 const refreshes = new SnapshotRefreshes()
 
-// Drops the oldest finished operations beyond MAX_FINISHED.
+// Drops the operations that finished first beyond MAX_FINISHED; the operations are kept in the order they finished
+// (see handleOperationEvent).
 function pruneFinished(state: OperationsState) {
 	const finished = Object.values(state.operations).filter((operation) => operation.state !== 'running')
 	for (const operation of finished.slice(0, Math.max(0, finished.length - MAX_FINISHED))) delete state.operations[operation.operationId]
@@ -74,7 +75,10 @@ function pruneFinished(state: OperationsState) {
 // Applies an operation event; any other event is ignored.
 export function handleOperationEvent(state: OperationsState, event: ServerEvent) {
 	if (event.type !== 'operation:updated') return
-	state.operations[event.operation.operationId] = event.operation
+	const { operationId } = event.operation
+	// A finished operation moves after the others, so a long one that finished last is never the first one dropped.
+	if (event.operation.state !== 'running') delete state.operations[operationId]
+	state.operations[operationId] = event.operation
 	refreshes.updated(event.operation.operationId)
 	pruneFinished(state)
 }

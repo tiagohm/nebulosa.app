@@ -34,6 +34,18 @@ test('keeps every running operation and only the latest finished ones', () => {
 	expect(Object.keys(state.operations)).toHaveLength(33)
 })
 
+test('an operation that started long ago and just finished is kept over those that finished before it', () => {
+	const state = newState()
+
+	handleOperationEvent(state, { type: 'operation:updated', operation: operation('long') })
+	for (let i = 0; i < 32; i++) handleOperationEvent(state, { type: 'operation:updated', operation: operation(`f${i}`, 'succeeded') })
+	handleOperationEvent(state, { type: 'operation:updated', operation: operation('long', 'failed') })
+
+	expect(state.operations.long?.state).toBe('failed')
+	expect(state.operations.f0).toBeUndefined()
+	expect(state.operations.f31).toBeDefined()
+})
+
 test('a refresh replaces the running operations with the server list', async () => {
 	const state = newState()
 	handleOperationEvent(state, { type: 'operation:updated', operation: operation('gone') })

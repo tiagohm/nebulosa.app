@@ -1,7 +1,8 @@
 import type { SatelliteDetails, SatelliteEphemerisResponse, SatelliteEphemerisRow, SatelliteGroundTrackResponse, SatelliteImportResponse, SatellitePassesResponse, SatellitePosition, SatellitePositionResponse, SatelliteSearchPage } from 'api'
 import { proxy } from 'valtio'
+import { downloadText } from '../../download'
 import { formatDateTime } from '../../format'
-import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../../http'
+import { aborted, type ApiFetch, browserFetch, fetchJson, jsonInit } from '../../http'
 import { type GeographicLocation, locationKey, siteObserver } from '../../location/site'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import { setSkyTime, type SkyClock, skyClock, skyTime } from '../../sky/clock'
@@ -220,11 +221,6 @@ export const artificialSatellitesState = proxy<ArtificialSatellitesState>(initia
 // Message of a failure.
 function messageOf(error: unknown) {
 	return error instanceof Error ? error.message : String(error)
-}
-
-// Whether a failure is the abort of a superseded request.
-function aborted(error: unknown) {
-	return error instanceof DOMException && error.name === 'AbortError'
 }
 
 // Searches the catalog with the text, group, and favorites of the state, from `offset`. Favorites only with no favorite
@@ -565,10 +561,5 @@ export function ephemerisCsv(rows: readonly SatelliteEphemerisRow[], timeZone: s
 
 // Has the browser save an ephemeris as a CSV file, its civil times in timeZone (IANA).
 export function downloadEphemerisCsv(rows: readonly SatelliteEphemerisRow[], timeZone: string, name: string) {
-	const url = URL.createObjectURL(new Blob([ephemerisCsv(rows, timeZone)], { type: 'text/csv' }))
-	const link = document.createElement('a')
-	link.href = url
-	link.download = `${name.replaceAll(/[^\w.-]+/g, '_')}.csv`
-	link.click()
-	URL.revokeObjectURL(url)
+	downloadText(ephemerisCsv(rows, timeZone), `${name}.csv`, 'text/csv')
 }

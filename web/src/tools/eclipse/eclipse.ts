@@ -1,5 +1,5 @@
 import { formatFixed, MISSING } from '../../format'
-import { type ApiFetch, browserFetch } from '../../http'
+import { aborted, type ApiFetch, browserFetch } from '../../http'
 import type { GeographicLocation, ToolLocation } from '../../location/site'
 
 // Place and formatting rules shared by the Lunar and Solar Eclipse Map tools. Each tool observes from a ToolLocation
@@ -74,9 +74,4 @@ export function formatEclipseMagnitude(magnitude: number | undefined) {
 // Returns the message of a failure, or a generic one.
 export function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : 'Request failed'
-}
-
-// Whether a failure is the abort of a superseded request.
-export function aborted(error: unknown) {
-	return error instanceof DOMException && error.name === 'AbortError'
 }

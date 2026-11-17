@@ -29,7 +29,7 @@ import type {
 } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
-import { type ApiFetch, ApiResponseError, browserFetch, fetchJson, jsonInit, responseError } from '../../http'
+import { aborted, type ApiFetch, ApiResponseError, browserFetch, fetchJson, jsonInit, responseError } from '../../http'
 import type { SiteLocation } from '../../location/site'
 import { zonedWallTime } from '../../location/zone'
 import { navigate, type RouteState, routeState } from '../../shell/route'
@@ -331,11 +331,6 @@ const previewGuard = createRequestGuard()
 // cannot copy.
 export function plain<T>(value: T): T {
 	return JSON.parse(JSON.stringify(value)) as T
-}
-
-// Returns whether a failure is the abort of a superseded request.
-function aborted(error: unknown) {
-	return error instanceof DOMException && error.name === 'AbortError'
 }
 
 // Returns the message of a failure.

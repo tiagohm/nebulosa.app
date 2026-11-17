@@ -1,5 +1,5 @@
 import type { PlanetVisibilityStatus } from 'api'
-import { type ApiFetch, browserFetch } from '../../http'
+import { aborted, type ApiFetch, browserFetch } from '../../http'
 import { wallTimeToInstant, zonedWallTime } from '../../location/zone'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import type { StatusTone } from '../../ui/StatusBadge'
@@ -93,11 +93,6 @@ const STATE_DELAY_MS = 120
 
 // Shortest wait between two requests of the exact view while the clock plays, in milliseconds.
 const PLAY_STATE_INTERVAL_MS = 750
-
-// Returns whether a failure is the abort of a superseded request.
-export function aborted(error: unknown) {
-	return error instanceof DOMException && error.name === 'AbortError'
-}
 
 // Returns the message of a failure.
 export function errorMessage(error: unknown) {

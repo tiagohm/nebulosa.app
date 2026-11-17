@@ -18,12 +18,12 @@ import type {
 	SaturnVisibilityStatus,
 } from 'api'
 import { proxy } from 'valtio'
-import { ApiResponseError, fetchJson, jsonInit } from '../../http'
+import { aborted, ApiResponseError, fetchJson, jsonInit } from '../../http'
 import type { SiteLocation } from '../../location/site'
 import { createRequestGuard } from '../../sky/selection'
 import type { StatusTone } from '../../ui/StatusBadge'
 import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
-import { aborted, browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, setTime, VISIBILITY_LABELS } from '../planetary/planetary'
+import { browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, type MoonPosition, type PlanetOrientation, type PlanetPeriod, type PlanetRate, type PlannerIo, playClock, scheduleLoad, setTime, VISIBILITY_LABELS } from '../planetary/planetary'
 
 // Saturn Observing Planner of the tab: the tool-local clock and period, the moons drawn, the view, and the answers of the
 // server (the rings and moons at the clock's instant, the ring openings and ring-plane events over a season, the moon

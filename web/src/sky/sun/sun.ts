@@ -1,6 +1,6 @@
 import type { LocalSolarEclipse, SkyObserver, SolarEclipseSummary, SunActiveRegionsResponse, SunAlmanacResponse, SunImageChannel, SunImageSize } from 'api'
 import { proxy } from 'valtio'
-import { type ApiFetch, browserFetch, fetchJson, jsonInit, responseError } from '../../http'
+import { aborted, type ApiFetch, browserFetch, fetchJson, jsonInit, responseError } from '../../http'
 import { zonedWallTime } from '../../location/zone'
 import { createRequestGuard } from '../selection'
 
@@ -123,11 +123,6 @@ const guards = { almanac: createRequestGuard(), eclipse: createRequestGuard(), i
 // Returns the message of a failure, or a generic one.
 function failure(error: unknown) {
 	return error instanceof Error ? error.message : 'Request failed'
-}
-
-// Whether a failure is the abort of a superseded request.
-function aborted(error: unknown) {
-	return error instanceof DOMException && error.name === 'AbortError'
 }
 
 // Key of the observer's place, empty without one.

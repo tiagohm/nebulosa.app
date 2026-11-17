@@ -1,10 +1,10 @@
 import type { EclipseDirection, LocalLunarEclipse, LocalLunarViewHandedness, LocalLunarViewOrientationMode, LunarEclipseContactKind, LunarEclipseMap, LunarEclipseSummary, LunarEclipseType } from 'api'
 import { proxy } from 'valtio'
-import { ApiResponseError, fetchJson } from '../../http'
+import { aborted, ApiResponseError, fetchJson } from '../../http'
 import { ACTIVE_TOOL_LOCATION, type GeographicLocation, type ToolLocation } from '../../location/site'
 import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
 import { createRequestGuard } from '../../sky/selection'
-import { aborted, browserEclipseIo, type EclipseIo, type EclipsePlace, eclipsePlace, errorMessage, mapLocation, samePlace, utcDateStart } from '../eclipse/eclipse'
+import { browserEclipseIo, type EclipseIo, type EclipsePlace, eclipsePlace, errorMessage, mapLocation, samePlace, utcDateStart } from '../eclipse/eclipse'
 
 // State of the Lunar Eclipse Map tool and its requests to /api/eclipses/lunar: the eclipse shown and its global
 // map, the contact highlighted, the location whose local circumstances are shown, how they are presented, and the

@@ -1,10 +1,10 @@
 import type { EclipseDirection, LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipse, LocalViewHandedness, LocalViewOrientationMode, SolarEclipseExtreme, SolarEclipseMap, SolarEclipseMapPoint, SolarEclipsePointKind, SolarEclipseSummary, SolarEclipseType } from 'api'
 import { proxy } from 'valtio'
-import { ApiResponseError, fetchJson } from '../../http'
+import { aborted, ApiResponseError, fetchJson } from '../../http'
 import { ACTIVE_TOOL_LOCATION, type GeographicLocation, type ToolLocation } from '../../location/site'
 import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
 import { createRequestGuard } from '../../sky/selection'
-import { aborted, browserEclipseIo, type EclipseIo, type EclipsePlace, eclipsePlace, errorMessage, mapLocation, samePlace, utcDateStart } from '../eclipse/eclipse'
+import { browserEclipseIo, type EclipseIo, type EclipsePlace, eclipsePlace, errorMessage, mapLocation, samePlace, utcDateStart } from '../eclipse/eclipse'
 
 // State of the Solar Eclipse Map tool and its requests to /api/eclipses/solar: the eclipse shown and its global
 // map, the map layers shown, the location whose local circumstances are shown, the contact drawn in the Local View,

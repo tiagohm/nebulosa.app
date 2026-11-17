@@ -1,10 +1,10 @@
 import type { AstroWeatherForecast, AstroWeatherNight, AstroWeatherNightRequest, TimeSpan } from 'api'
 import { proxy } from 'valtio'
-import { fetchJson } from '../../http'
+import { aborted, fetchJson } from '../../http'
 import { locationKey, type SiteLocation, siteObserver } from '../../location/site'
 import type { AstroWeatherMode } from '../../profile/schema'
 import { createRequestGuard } from '../../sky/selection'
-import { aborted, browserEclipseIo, type EclipseIo, errorMessage } from '../eclipse/eclipse'
+import { browserEclipseIo, type EclipseIo, errorMessage } from '../eclipse/eclipse'
 import type { MissingMetric, Outlook, OutlookReason, WindowBlock } from './observing'
 
 // State of the Astro Weather tool, tab-lived and never persisted but for the observing mode, which the profile keeps: the

@@ -1,7 +1,7 @@
 import type { ManagedDeviceType } from 'api'
 
 // Helpers shared by the stores that call the API over HTTP: the routes of the devices, JSON request bodies, JSON
-// responses, and the error messages of failed responses.
+// responses, the error messages of failed responses, and the abort of a superseded request.
 
 // URL segment of the routes of each device type.
 export const DEVICE_PATHS: Readonly<Record<ManagedDeviceType, string>> = {
@@ -40,6 +40,11 @@ export async function responseError(response: Response, fallback?: string): Prom
 	}
 
 	return fallback ?? `${response.status} ${response.statusText}`.trim()
+}
+
+// Whether a failure is the abort of a request, such as one a newer request of the same view superseded.
+export function aborted(error: unknown): boolean {
+	return error instanceof DOMException && error.name === 'AbortError'
 }
 
 // Failed API response: the API's error message, with the response's status.

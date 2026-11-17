@@ -45,7 +45,7 @@ interface Waiting {
 }
 
 // Measurements of the stars of the image documents, one at a time.
-export class StarProfileService {
+export class StarProfileService implements Disposable {
 	// Requests waiting for the worker, oldest first.
 	readonly #waiting: Waiting[] = []
 	// Whether a request holds the turn.
@@ -165,6 +165,14 @@ export class StarProfileService {
 			worker.removeEventListener('message', onMessage)
 			worker.removeEventListener('error', onError)
 		}
+	}
+
+	// Stops a server in place: terminates the worker, so it does not outlive the run, and gives up the requests waiting
+	// for it.
+	[Symbol.dispose]() {
+		this.#worker?.terminate()
+		this.#worker = undefined
+		for (const waiting of this.#waiting.splice(0)) waiting.resolve(false)
 	}
 
 	// Starts the worker.

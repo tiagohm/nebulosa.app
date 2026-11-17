@@ -332,7 +332,7 @@ export function validatedSolution(header: FitsHeader, width: number, height: num
 type JobEntry = AnalysisEntry<PlateSolveJob, JobPreparation>
 
 // Plate solving jobs of the server, their scheduling (see analysis.ts), and their results.
-export class PlateSolvingService {
+export class PlateSolvingService implements Disposable {
 	// Queue, limits, reservations, and kept results.
 	readonly #scheduler: AnalysisScheduler<PlateSolveJob, PlateSolveResult, JobPreparation, PlateSolverProvider>
 	// Wait between two polls of a nova job, in milliseconds.
@@ -548,6 +548,12 @@ export class PlateSolvingService {
 			if (error.code === 'invalidWcs') throw new PlateSolvingError('invalidSolution', error.message)
 			throw new PlateSolvingError(error.code, error.message)
 		}
+	}
+
+	// Stops a server in place: cancels every job waiting or running, which kills a solver process and ends a remote poll,
+	// so none outlives the run.
+	[Symbol.dispose]() {
+		this.#scheduler.cancelAll()
 	}
 }
 

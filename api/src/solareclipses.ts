@@ -203,6 +203,8 @@ export class SolarEclipseService {
 	#idle?: SolarEclipseMapWorker
 	// Settles when the previous map ended; maps run one at a time.
 	#queue: Promise<unknown> = Promise.resolve()
+	// Whether the service was disposed, after which no worker is started or kept.
+	#disposed = false
 
 	// Creates the service; timeout bounds every map in milliseconds and startWorker creates map workers.
 	constructor(
@@ -268,8 +270,9 @@ export class SolarEclipseService {
 		return localSolarEclipse(eclipse, location, view, local)
 	}
 
-	// Terminates the idle worker. Maps still queued start a new one.
+	// Terminates the idle worker; a map still running terminates its worker once it ends, and maps still queued reject.
 	dispose() {
+		this.#disposed = true
 		this.#idle?.terminate()
 		this.#idle = undefined
 	}
@@ -293,6 +296,7 @@ export class SolarEclipseService {
 
 	// Computes one map on the worker and keeps it.
 	async #compute(id: string): Promise<SolarEclipseMap | undefined> {
+		if (this.#disposed) throw new Error('The solar eclipse service was stopped')
 		const worker = this.#idle ?? this.startWorker()
 		this.#idle = undefined
 		const request: SolarEclipseMapWorkerRequest = { jobId: Bun.randomUUIDv7(), id }
@@ -325,7 +329,7 @@ export class SolarEclipseService {
 			worker.removeEventListener('message', onMessage)
 			worker.removeEventListener('error', onError)
 			// A map cannot be interrupted, so a worker still computing one is terminated.
-			if (reusable) this.#idle = worker
+			if (reusable && !this.#disposed) this.#idle = worker
 			else worker.terminate()
 		}
 	}

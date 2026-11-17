@@ -590,7 +590,7 @@ function catalogAnnotation(object: FieldObject): AnnotationObject {
 type JobEntry = AnalysisEntry<AnnotationJob, AnnotationPreparation>
 
 // Annotation jobs of the server, their scheduling (see analysis.ts), and their results.
-export class AnnotationService {
+export class AnnotationService implements Disposable {
 	// Queue, limits, reservations, and kept results.
 	readonly #scheduler: AnalysisScheduler<AnnotationJob, AnnotationResult, AnnotationPreparation, AnnotationProvider>
 	// Cone search of the solar-system objects.
@@ -804,6 +804,11 @@ export class AnnotationService {
 		const queueTime = entry.job.startedAt! - entry.job.queuedAt
 		const result: AnnotationResult = { ...summary, jobId: entry.job.jobId, imageId: entry.job.imageId, request, wcs: entry.preparation.wcs, solution, observation, field, width, height, objects: [...deepSky, ...stars], constellations, queueTime, warnings }
 		return Promise.resolve({ patch: { summary }, result })
+	}
+
+	// Stops a server in place: cancels every job waiting or running, so none outlives the run.
+	[Symbol.dispose]() {
+		this.#scheduler.cancelAll()
 	}
 }
 

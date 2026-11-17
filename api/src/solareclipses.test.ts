@@ -240,6 +240,23 @@ test('computes a map once for concurrent requests and keeps it', async () => {
 	expect(worker.terminated).toBe(false)
 })
 
+test('a disposed service terminates the worker of the map in flight and refuses the maps still queued', async () => {
+	const answer = { eclipse: TOTAL, deltaT: 69, points: {}, paths: {} } satisfies SolarEclipseMap
+	const { worker, service } = fakeService((request) => ({ jobId: request.jobId, status: 'computed', map: answer }))
+
+	const running = service.map(TOTAL.id)
+	const queued = service.map(ANNULAR.id)
+	// The first map reaches its worker, which answers it a few milliseconds later.
+	await Bun.sleep(1)
+	expect(worker.jobs).toBe(1)
+	service.dispose()
+
+	expect(await running).toEqual(answer)
+	expect(worker.terminated).toBe(true)
+	await expect(queued).rejects.toThrow('stopped')
+	expect(worker.jobs).toBe(1)
+})
+
 test('answers 500 when the map fails or times out, terminating a stuck worker', async () => {
 	const failing = fakeService((request) => ({ jobId: request.jobId, status: 'failed', error: 'no convergence' }))
 	const failed = await map(TOTAL.id, createSolarEclipseRoutes(failing.service))

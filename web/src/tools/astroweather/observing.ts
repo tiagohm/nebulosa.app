@@ -84,6 +84,14 @@ export interface ObservingWindow extends TimeSpan {
 	readonly reasons: readonly OutlookReason[]
 }
 
+// One reason of a night with how many of its hours give it.
+export interface ReasonCount {
+	// Reason.
+	readonly reason: OutlookReason
+	// Hours of the part of the night read that give the reason, at least 1.
+	readonly hours: number
+}
+
 // Why a recommendation is not made.
 export type WindowBlock = 'noCoverage' | 'staleForecast' | 'noDarkness' | 'noNight' | 'noWindow'
 
@@ -93,12 +101,16 @@ export interface NightEvaluation {
 	readonly segments: readonly OutlookSegment[]
 	// Hours of the part of the night that suits the mode and has not passed yet, or every hour without one.
 	readonly scope: readonly OutlookSegment[]
+	// Part of the night that suits the mode and has not passed yet, from its first to its last instant; absent when there is
+	// none and `scope` is every hour.
+	readonly usable?: TimeSpan
 	// Outlook of the part of the night that suits the mode and has not passed yet.
 	readonly outlook: Outlook
 	// Weather alone over the same part of the night.
 	readonly weather: Outlook
-	// Reasons over the same part of the night, most decisive first.
-	readonly reasons: readonly OutlookReason[]
+	// Reasons over the same part of the night, most decisive first, each with its count of hours; a milder reason is left out
+	// where its stronger one of the same kind is present, so the night never reads as both heavy and some cloud.
+	readonly reasons: readonly ReasonCount[]
 	// Metrics missing over the same part of the night.
 	readonly missing: readonly MissingMetric[]
 	// Longest favorable window, ties going to fewer cautions; absent without a recommendation.
@@ -111,6 +123,9 @@ export interface NightEvaluation {
 
 // Reasons from the most to the least decisive, so a summary leads with what actually limits the night.
 const REASON_ORDER: readonly OutlookReason[] = ['rain', 'heavyCloud', 'strongGusts', 'noDarkness', 'poorSeeing', 'poorTransparency', 'possibleRain', 'someCloud', 'moderateGusts', 'brightMoon', 'dewLikely', 'fairSeeing', 'fairTransparency', 'dewRisk', 'moonUp']
+
+// Milder reason of each kind with the stronger one that supersedes it in the summary of a night.
+const SUPERSEDED_BY: Readonly<Partial<Record<OutlookReason, OutlookReason>>> = { someCloud: 'heavyCloud', possibleRain: 'rain', moderateGusts: 'strongGusts', fairSeeing: 'poorSeeing', fairTransparency: 'poorTransparency', dewRisk: 'dewLikely' }
 
 // Severity of each reading, the worst deciding.
 const SEVERITY: Readonly<Record<Exclude<Outlook, 'unavailable'>, number>> = { favorable: 0, variable: 1, unfavorable: 2 }
@@ -270,10 +285,16 @@ function overall(outlooks: readonly Outlook[]): Outlook {
 	return 'variable'
 }
 
-// Returns the reasons of some hours, most decisive first.
-function decisiveReasons(segments: readonly OutlookSegment[]) {
-	const found = new Set(segments.flatMap((segment) => segment.reasons))
-	return REASON_ORDER.filter((reason) => found.has(reason))
+// Returns the reasons of some hours, most decisive first, each with the number of hours giving it; a milder reason is
+// dropped when its stronger one of the same kind is found, since the counts of the stronger already say how much of the
+// night it covers.
+function decisiveReasons(segments: readonly OutlookSegment[]): readonly ReasonCount[] {
+	const counts = new Map<OutlookReason, number>()
+	for (const segment of segments) for (const reason of new Set(segment.reasons)) counts.set(reason, (counts.get(reason) ?? 0) + 1)
+	return REASON_ORDER.filter((reason) => {
+		const stronger = SUPERSEDED_BY[reason]
+		return counts.has(reason) && !(stronger && counts.has(stronger))
+	}).map((reason) => ({ reason, hours: counts.get(reason)! }))
 }
 
 // Range of a value over some hours; absent when none of them has it.
@@ -341,8 +362,8 @@ export function evaluateNight(forecast: AstroWeatherForecast, night: AstroWeathe
 		const from = Math.max(start, now)
 		return from < end ? [{ start: from, end }] : []
 	})
-	const usable = segments.filter((segment) => overlaps(spans, segment.start, segment.end))
-	const scope = usable.length > 0 ? usable : segments
+	const inside = segments.filter((segment) => overlaps(spans, segment.start, segment.end))
+	const scope = inside.length > 0 ? inside : segments
 	const stale = forecast.meteorology.source.state !== 'fresh' || (mode !== 'visual' && forecast.astronomy.source.state !== 'fresh')
 
 	let best: ObservingWindow | undefined
@@ -355,7 +376,8 @@ export function evaluateNight(forecast: AstroWeatherForecast, night: AstroWeathe
 
 	const recommended = best && best.end - best.start >= MINIMUM_WINDOW_MS ? best : undefined
 	const offered = !recommended && marginal && marginal.end - marginal.start >= MINIMUM_WINDOW_MS ? marginal : undefined
-	const base = { segments, scope, outlook: overall(scope.map((e) => e.outlook)), weather: overall(scope.map((e) => e.weather)), reasons: decisiveReasons(scope), missing: [...new Set(scope.flatMap((e) => e.missing))] }
+	const usable = spans.length > 0 ? { start: spans[0].start, end: spans.at(-1)!.end } : undefined
+	const base = { segments, scope, usable, outlook: overall(scope.map((e) => e.outlook)), weather: overall(scope.map((e) => e.weather)), reasons: decisiveReasons(scope), missing: [...new Set(scope.flatMap((e) => e.missing))] }
 
 	if (spans.length === 0) return { ...base, block: mode === 'deepSky' && night.sun.darkness.length === 0 ? 'noDarkness' : 'noNight' }
 	if (scope.every((segment) => segment.missing.length > 0)) return { ...base, block: 'noCoverage' }

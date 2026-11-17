@@ -3,7 +3,7 @@ import type { AstroWeatherForecast, AstroWeatherNight } from 'api'
 import { proxy } from 'valtio'
 import { resolveDisplayZone } from '../../location/zone'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { type AstroWeatherState, coverage, firstNight, followSite, hasNextNight, loadCurrentNight, loadForecast, loadNight, nightEnded, siteKey, skyBands, stepNight } from './astroweather'
+import { type AstroWeatherState, coverage, firstNight, followSite, hasNextNight, loadCurrentNight, loadForecast, loadNight, nightEnded, nightTitle, siteKey, skyBands, stepNight } from './astroweather'
 
 const SITE = { latitude: -22.4, longitude: -45.45, elevation: 850, timeZone: 'America/Sao_Paulo' }
 const OTHER = { ...SITE, latitude: 10 }
@@ -227,6 +227,18 @@ describe('requests', () => {
 		await loadNight(state, SITE, NOW, failing)
 		expect(state.nightError).toBeDefined()
 		expect(state.forecast).toBeDefined()
+	})
+})
+
+describe('night title', () => {
+	const night = (localDate: string, start: number) => ({ sun: { localDate, start } }) as AstroWeatherNight
+	const current = Date.UTC(2026, 10, 17, 15)
+
+	test('names the current and the next night, then only the weekday and the date', () => {
+		expect(nightTitle(night('2026-11-17', current), current)).toBe('Tonight, Tue 2026-11-17')
+		expect(nightTitle(night('2026-11-18', current + 86_400_000 + 60_000), current)).toBe('Tomorrow, Wed 2026-11-18')
+		expect(nightTitle(night('2026-11-19', current + 2 * 86_400_000), current)).toBe('Thu 2026-11-19')
+		expect(nightTitle(night('2026-11-17', current), undefined)).toBe('Tue 2026-11-17')
 	})
 })
 

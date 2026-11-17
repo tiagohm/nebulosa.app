@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AstronomicalSample, AstroWeatherForecast, AstroWeatherNight, MeteorologySample } from 'api'
-import { evaluateNight, nightFacts, usableSpans } from './observing'
+import { evaluateNight, type NightEvaluation, nightFacts, usableSpans } from './observing'
 
 const HOUR = 3_600_000
 const SUNSET = Date.UTC(2026, 9, 31, 21, 30)
@@ -40,6 +40,10 @@ function classes(edit: (time: number) => Partial<AstronomicalSample> = () => ({}
 	const samples: AstronomicalSample[] = []
 	for (let time = NIGHT.display.start - 3 * HOUR; time <= NIGHT.display.end + 3 * HOUR; time += 3 * HOUR) samples.push({ time, seeing: 2, transparency: 2, ...edit(time) })
 	return samples
+}
+
+function reasonsOf(evaluation: NightEvaluation) {
+	return evaluation.reasons.map((e) => e.reason)
 }
 
 function forecast(meteorology: readonly MeteorologySample[] = hours(), astronomy: readonly AstronomicalSample[] = classes(), state: 'fresh' | 'stale' = 'fresh'): AstroWeatherForecast {
@@ -128,12 +132,30 @@ describe('hazards', () => {
 	test('the decisive reason comes first, however rare', () => {
 		const start = Math.floor(DUSK / HOUR) * HOUR + 2 * HOUR
 		const data = forecast(hours((time) => ({ temperature: 10, dewPoint: 7, cloudCover: time === start ? 80 : 5 })))
-		expect(evaluateNight(data, NIGHT, 'deepSky', NOW).reasons).toEqual(['heavyCloud', 'dewRisk'])
+		const result = evaluateNight(data, NIGHT, 'deepSky', NOW)
+		expect(result.reasons).toEqual([
+			{ reason: 'heavyCloud', hours: 1 },
+			{ reason: 'dewRisk', hours: result.scope.length },
+		])
+	})
+
+	test('a milder reason of the same kind gives way to the stronger one, which counts its own hours', () => {
+		const start = Math.floor(DUSK / HOUR) * HOUR + 2 * HOUR
+		const data = forecast(hours((time) => ({ cloudCover: time === start || time === start + HOUR ? 80 : 30 })))
+		const result = evaluateNight(data, NIGHT, 'deepSky', NOW)
+		expect(result.reasons).toEqual([{ reason: 'heavyCloud', hours: 2 }])
+		expect(result.segments.find((e) => e.start === start + 2 * HOUR)?.reasons).toEqual(['someCloud'])
+	})
+
+	test('the usable part of the night runs from its first to its last instant not yet passed', () => {
+		expect(evaluateNight(forecast(), NIGHT, 'deepSky', NOW).usable).toEqual({ start: DUSK, end: DAWN })
+		expect(evaluateNight(forecast(), NIGHT, 'deepSky', DUSK + HOUR).usable).toEqual({ start: DUSK + HOUR, end: DAWN })
+		expect(evaluateNight(forecast(), NIGHT, 'deepSky', DAWN).usable).toBeUndefined()
 	})
 
 	test('dew is told as a risk', () => {
-		expect(evaluateNight(forecast(hours(() => ({ temperature: 10, dewPoint: 9 }))), NIGHT, 'deepSky', NOW).reasons).toContain('dewLikely')
-		expect(evaluateNight(forecast(hours(() => ({ temperature: 10, dewPoint: 7 }))), NIGHT, 'deepSky', NOW).reasons).toContain('dewRisk')
+		expect(reasonsOf(evaluateNight(forecast(hours(() => ({ temperature: 10, dewPoint: 9 }))), NIGHT, 'deepSky', NOW))).toContain('dewLikely')
+		expect(reasonsOf(evaluateNight(forecast(hours(() => ({ temperature: 10, dewPoint: 7 }))), NIGHT, 'deepSky', NOW))).toContain('dewRisk')
 	})
 })
 
@@ -143,18 +165,18 @@ describe('modes', () => {
 	test('a bright Moon limits deep sky but costs planets nothing', () => {
 		const deep = evaluateNight(forecast(), moonlit, 'deepSky', NOW)
 		expect(deep.outlook).toBe('variable')
-		expect(deep.reasons).toContain('brightMoon')
+		expect(reasonsOf(deep)).toContain('brightMoon')
 		expect(deep.best).toBeUndefined()
 
 		const planetary = evaluateNight(forecast(), moonlit, 'planetary', NOW)
 		expect(planetary.outlook).toBe('favorable')
-		expect(planetary.reasons).not.toContain('brightMoon')
+		expect(reasonsOf(planetary)).not.toContain('brightMoon')
 	})
 
 	test('a bright Moon is only noted for visual observing', () => {
 		const visual = evaluateNight(forecast(), moonlit, 'visual', NOW)
 		expect(visual.outlook).toBe('favorable')
-		expect(visual.reasons).toContain('moonUp')
+		expect(reasonsOf(visual)).toContain('moonUp')
 	})
 
 	test('poor seeing matters to planets, poor transparency to deep sky', () => {

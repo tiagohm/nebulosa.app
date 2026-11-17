@@ -7,8 +7,8 @@ import { SEEING_BANDS, TRANSPARENCY_BANDS } from './astroweather'
 import { PROVIDER_NAMES } from './ForecastSummary'
 import type { OutlookSegment } from './observing'
 
-// Details of the contextual panel: the sky and the weather of the hour chosen, the astronomy of the night, and where
-// everything comes from. Each value the forecast lacks is left out, and what a value means is said where it could be
+// Details of the contextual panel: the sky and the weather of the hour chosen, each naming that hour first, the astronomy of
+// the night, and where everything comes from, summarized by when the forecast was read. Each value the forecast lacks is left out, and what a value means is said where it could be
 // misread: a class is a band, a chance is not an occurrence, and an air temperature is not the temperature of a surface.
 
 // Compass points of a wind direction, clockwise from north.
@@ -29,28 +29,42 @@ function Value({ label, value, unit = '' }: { readonly label: string; readonly v
 	)
 }
 
+// Text of an hour, from its start to its end in a time zone.
+function hourText(hour: OutlookSegment | undefined, timeZone: string) {
+	return hour && `${formatClockTime(hour.start, timeZone)}–${formatClockTime(hour.end, timeZone)}`
+}
+
+// Text of the bands the classes of a 7Timer! sample stand for, or none without a class.
+function bandsText(seeing: number | undefined, transparency: number | undefined) {
+	const bands = [seeing ? `seeing ${SEEING_BANDS[seeing - 1]}` : undefined, transparency ? `transparency ${TRANSPARENCY_BANDS[transparency - 1]} mag per airmass` : undefined].filter(Boolean)
+	return bands.length > 0 ? `Classes of the nearest 3-hour sample, not interpolated: ${bands.join(', ')}, the bands of the classes, not measurements.` : undefined
+}
+
 export interface SkyConditionsProps {
 	// Sample of the hour chosen.
 	readonly sample?: MeteorologySample
 	// Hour chosen.
 	readonly hour?: OutlookSegment
+	// IANA time zone of the times.
+	readonly timeZone: string
 }
 
-// Sky of the hour chosen: cloud layers and the classes of the nearest 7Timer! sample.
-export function SkyConditions({ sample, hour }: SkyConditionsProps) {
+// Sky of the hour chosen: cloud layers and the classes of the nearest 7Timer! sample, under the hour they describe.
+export function SkyConditions({ sample, hour, timeZone }: SkyConditionsProps) {
 	const { seeing, transparency } = hour ?? {}
+	const bands = bandsText(seeing, transparency)
+	const time = hourText(hour, timeZone)
 
 	return (
-		<CollapsibleSection id="astroWeather.sky" title="Sky Conditions">
+		<CollapsibleSection id="astroWeather.sky" title="Sky Conditions" summary={time}>
+			{time && <DataRow label="Hour">{time}</DataRow>}
 			<Value label="Total cloud" value={sample?.cloudCover} unit="%" />
 			<Value label="Low cloud" value={sample?.cloudCoverLow} unit="%" />
 			<Value label="Middle cloud" value={sample?.cloudCoverMid} unit="%" />
 			<Value label="High cloud" value={sample?.cloudCoverHigh} unit="%" />
 			<Value label="Seeing" value={seeing && `class ${seeing}`} />
-			{seeing && <Notice>{SEEING_BANDS[seeing - 1]}, the band of this class, not a measurement.</Notice>}
 			<Value label="Transparency" value={transparency && `class ${transparency}`} />
-			{transparency && <Notice>{TRANSPARENCY_BANDS[transparency - 1]} mag per airmass, the band of this class, not a measurement.</Notice>}
-			{(seeing || transparency) && <Notice>Nearest 3 hour forecast sample, not interpolated.</Notice>}
+			{bands && <Notice>{bands}</Notice>}
 			{!sample && !seeing && !transparency && <Notice>No forecast for this hour.</Notice>}
 		</CollapsibleSection>
 	)
@@ -61,16 +75,22 @@ export interface WeatherConditionsProps {
 	readonly sample?: MeteorologySample
 	// Sample ending the hour, which holds its precipitation and gusts.
 	readonly ending?: MeteorologySample
+	// Hour chosen.
+	readonly hour?: OutlookSegment
+	// IANA time zone of the times.
+	readonly timeZone: string
 }
 
-// Weather of the hour chosen.
-export function WeatherConditions({ sample, ending }: WeatherConditionsProps) {
+// Weather of the hour chosen, under the hour it describes.
+export function WeatherConditions({ sample, ending, hour, timeZone }: WeatherConditionsProps) {
 	const margin = sample?.temperature !== undefined && sample.dewPoint !== undefined ? (sample.temperature - sample.dewPoint).toFixed(1) : undefined
+	const time = hourText(hour, timeZone)
 
 	return (
-		<CollapsibleSection id="astroWeather.weather" title="Weather Conditions">
+		<CollapsibleSection id="astroWeather.weather" title="Weather Conditions" summary={time}>
+			{time && <DataRow label="Hour">{time}</DataRow>}
 			<Value label="Rain chance" value={ending?.precipitationProbability} unit="%" />
-			<Value label="Precipitation" value={ending?.precipitation} unit=" mm" />
+			<Value label="Precipitation" value={ending?.precipitation?.toFixed(1)} unit=" mm" />
 			<Value label="Temperature" value={sample?.temperature} unit=" °C" />
 			<Value label="Humidity" value={sample?.relativeHumidity} unit="%" />
 			<Value label="Dew point" value={sample?.dewPoint} unit=" °C" />
@@ -132,8 +152,6 @@ export function AstronomicalConditions({ night, timeZone }: AstronomicalConditio
 export interface SourcesProps {
 	// Forecast read; absent before the first answer.
 	readonly forecast?: AstroWeatherForecast
-	// Civil date of the evening shown.
-	readonly localDate: string
 	// IANA time zone of the times.
 	readonly timeZone: string
 }
@@ -150,10 +168,10 @@ function lastSample(samples: readonly (MeteorologySample | AstronomicalSample)[]
 	return last && formatLongDateTime(last.time, timeZone)
 }
 
-// Where the forecast comes from, with the credits the services ask for.
-export function Sources({ forecast, localDate, timeZone }: SourcesProps) {
+// Where the forecast comes from, with the credits the services ask for, summarized by when Open-Meteo was read.
+export function Sources({ forecast, timeZone }: SourcesProps) {
 	return (
-		<CollapsibleSection id="astroWeather.sources" title="Sources" defaultOpen={false} summary={localDate}>
+		<CollapsibleSection id="astroWeather.sources" title="Sources" defaultOpen={false} summary={forecast?.meteorology.source.fetchedAt === undefined ? 'No forecast' : `Read ${readAt(forecast.meteorology.source, timeZone)}`}>
 			{forecast && (
 				<>
 					<DataRow label={`${PROVIDER_NAMES.openMeteo} read`}>{readAt(forecast.meteorology.source, timeZone)}</DataRow>

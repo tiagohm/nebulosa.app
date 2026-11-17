@@ -164,6 +164,22 @@ export function loadCurrentNight(state: AstroWeatherState, site: SiteLocation, i
 	)
 }
 
+// One day in milliseconds, the rough distance between the starts of consecutive nights.
+const DAY_MS = 86_400_000
+
+// Short name of each weekday, Sunday first, as Date.getUTCDay counts them.
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const
+
+// Returns the name of a night: Tonight or Tomorrow when it is the current night or the next one, then the weekday and the
+// civil date of its evening, such as "Tonight, Tue 2026-11-17" or "Thu 2026-11-19". Without a current night, only the
+// weekday and the date.
+export function nightTitle(night: AstroWeatherNight, currentNightStart: number | undefined) {
+	const { localDate } = night.sun
+	const date = `${WEEKDAYS[new Date(`${localDate}T12:00:00Z`).getUTCDay()]} ${localDate}`
+	const day = currentNightStart === undefined ? undefined : Math.round((night.sun.start - currentNightStart) / DAY_MS)
+	return day === 0 ? `Tonight, ${date}` : day === 1 ? `Tomorrow, ${date}` : date
+}
+
 // Whether the display window of a night has ended.
 export function nightEnded(night: AstroWeatherNight, now: number) {
 	return now >= night.display.end

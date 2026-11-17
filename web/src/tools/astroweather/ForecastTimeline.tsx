@@ -5,12 +5,14 @@ import { moveIndex } from '../../ui/navigation'
 import { OUTLOOK_LABELS, type SkyBand, skyBands } from './astroweather'
 import type { NightEvaluation, ObservingWindow, Outlook, OutlookSegment } from './observing'
 
-// Timeline of a night: one time axis shared by rows of the outlook, cloud, seeing, transparency, precipitation, wind, gusts,
-// temperature, dew point, humidity, and the Moon, over bands of how dark the sky is. Every row has its own scale and none
-// shares an axis with another. Hourly values are bars for the hour they describe, except the temperature and the dew point,
-// written as rounded degrees because they have no natural zero to rise from, and the 7Timer! classes are tiles centered on their own timestamps and as wide as their
-// 3 hour step, so a sample is never drawn as an hourly reading or a continuous line. A value the forecast lacks draws nothing.
-// The hour clicked or chosen with the arrow keys is the one the readout below describes; hovering chooses nothing.
+// Timeline of a night: one time axis shared by rows of the outlook, then the sky (cloud, seeing, transparency), the weather
+// (precipitation, wind, gusts, temperature, dew point, humidity), and the Moon, each group set apart, over bands of how dark
+// the sky is. Every row has its own scale, named with its unit, and none shares an axis with another but wind and gusts.
+// Hourly values are bars for the hour they describe, except the temperature and the dew point, written as rounded degrees
+// because they have no natural zero to rise from, and the 7Timer! classes are tiles centered on their own timestamps and as
+// wide as their 3-hour step, so a sample is never drawn as an hourly reading or a continuous line. A value the forecast lacks
+// draws nothing. Fills stay dim and warm, for eyes adapted to the dark. The hour clicked or chosen with the arrow keys is the
+// one the readout describes, outlined in the accent; hovering chooses nothing. A narrow chart names its rows in short.
 
 // Height of a row, in CSS pixels.
 const ROW_HEIGHT = 30
@@ -19,7 +21,16 @@ const ROW_HEIGHT = 30
 const AXIS_HEIGHT = 22
 
 // Width of the row names, in CSS pixels.
-const LABEL_WIDTH = 92
+const LABEL_WIDTH = 104
+
+// Width of the short row names of a narrow chart, in CSS pixels.
+const NARROW_LABEL_WIDTH = 54
+
+// Width of the chart, in CSS pixels, below which its rows are named in short, leaving the hours room to be tapped.
+const NARROW_WIDTH = 480
+
+// Space between groups of rows, in CSS pixels.
+const GROUP_GAP = 8
 
 // Margin at the right of the plot, in CSS pixels.
 const RIGHT_MARGIN = 8
@@ -30,11 +41,12 @@ const MARK_GAP = 2
 // Space kept between row content and the lines around it, in CSS pixels.
 const ROW_PADDING = 3
 
-// Half the width of the tile of a 7Timer! sample, in milliseconds (half of its 3 hour step).
+// Half the width of the tile of a 7Timer! sample, in milliseconds (half of its 3-hour step).
 const SAMPLE_HALF_WIDTH_MS = 90 * 60_000
 
-// Wind or gust that fills its row, in km/h; stronger ones are drawn full. Both rows share it, so their bars compare.
-const WIND_SCALE = 60
+// Wind or gust that fills its row, in km/h; stronger ones are drawn full. Both rows share it, so their bars compare, and it
+// is low enough that common winds of 5 to 15 km/h still draw a readable bar.
+const WIND_SCALE = 40
 
 // Narrowest slot, in CSS pixels, that shows the symbol of an hour.
 const SYMBOL_MINIMUM_WIDTH = 12
@@ -42,26 +54,63 @@ const SYMBOL_MINIMUM_WIDTH = 12
 // Room, in CSS pixels, an hour's temperature or dew point needs to be written ("-12°"); narrower hours write every few hours instead.
 const VALUE_TEXT_WIDTH = 30
 
+// Share of a whole hour's width, in [0, 1], an hour cut by the edge of the chart needs to have its value written, so a value
+// never spills over the row names.
+const PARTIAL_HOUR_TEXT = 0.6
+
 // Widest gap, in CSS pixels, between labels of the time axis.
 const TICK_SPACING = 56
 
-// Fill of each kind of sky.
-const SKY_FILLS: Readonly<Record<SkyBand, string>> = { day: 'var(--color-base-300)', twilight: 'var(--color-base-200)', dark: 'var(--color-base-000)' }
+// Fill of each kind of sky, three clearly separate steps of the warm neutrals around the page's own background.
+const SKY_FILLS: Readonly<Record<SkyBand, string>> = { day: 'var(--color-line-100)', twilight: 'var(--color-base-300)', dark: 'var(--color-base-000)' }
 
 // Name of each kind of sky.
 const SKY_LABELS: Readonly<Record<SkyBand, string>> = { day: 'Sun up', twilight: 'Twilight', dark: 'Astronomical darkness' }
 
-// Fill of each reading; unknown has none, so absence stays absence.
+// Fill of each reading, drawn at OUTLOOK_OPACITY; unknown has none, so absence stays absence.
 const OUTLOOK_FILLS: Readonly<Record<Exclude<Outlook, 'unavailable'>, string>> = { favorable: 'var(--color-success)', variable: 'var(--color-warning)', unfavorable: 'var(--color-danger)' }
+
+// Opacity of the fill of a reading in [0, 1]: dim enough to keep dark adaptation and to carry its light symbol.
+const OUTLOOK_OPACITY = 0.4
+
+// Lowest opacity of the tile of a 7Timer! class in [0, 1], for class 8, the worst.
+const TILE_OPACITY_MIN = 0.06
+
+// Opacity a tile gains from class 8 to class 1, the best, in [0, 1].
+const TILE_OPACITY_RANGE = 0.3
 
 // Symbol of each reading, so it never depends on color alone.
 const OUTLOOK_SYMBOLS: Readonly<Record<Outlook, string>> = { favorable: '+', variable: '~', unfavorable: '×', unavailable: '?' }
 
-// Rows of the timeline, in order.
-const ROWS = ['Outlook', 'Clouds', 'Seeing', 'Transparency', 'Rain chance', 'Wind', 'Gusts', 'Temperature', 'Dew point', 'Humidity', 'Moon up'] as const
+// Groups of rows of the timeline, in order: the outlook, the sky, the weather, and the Moon.
+const ROW_GROUPS = [['Outlook'], ['Clouds', 'Seeing', 'Transparency'], ['Rain chance', 'Wind', 'Gusts', 'Temperature', 'Dew point', 'Humidity'], ['Moon up']] as const
 
-// Name of a row.
-type Row = (typeof ROWS)[number]
+// Key of a row.
+type Row = (typeof ROW_GROUPS)[number][number]
+
+// Rows of the timeline, in order.
+const ROWS: readonly Row[] = ROW_GROUPS.flat()
+
+// Name of each row with its unit, in full and in short for a narrow chart.
+const ROW_LABELS: Readonly<Record<Row, { readonly wide: string; readonly narrow: string }>> = {
+	Outlook: { wide: 'Outlook', narrow: 'Outlook' },
+	Clouds: { wide: 'Clouds %', narrow: 'Cloud' },
+	Seeing: { wide: 'Seeing', narrow: 'Seeing' },
+	Transparency: { wide: 'Transparency', narrow: 'Transp' },
+	'Rain chance': { wide: 'Rain chance %', narrow: 'Rain' },
+	Wind: { wide: 'Wind km/h', narrow: 'Wind' },
+	Gusts: { wide: 'Gusts km/h', narrow: 'Gusts' },
+	Temperature: { wide: 'Temperature °C', narrow: 'Temp °C' },
+	'Dew point': { wide: 'Dew point °C', narrow: 'Dew °C' },
+	Humidity: { wide: 'Humidity %', narrow: 'Humid' },
+	'Moon up': { wide: 'Moon up', narrow: 'Moon' },
+}
+
+// Top of each row below the time axis, in CSS pixels, with a gap between groups.
+const ROW_TOPS = new Map<Row, number>(ROW_GROUPS.flatMap((group, g) => group.map((row): [Row, number] => [row, AXIS_HEIGHT + ROWS.indexOf(row) * ROW_HEIGHT + g * GROUP_GAP])))
+
+// Height of the chart, in CSS pixels.
+const CHART_HEIGHT = AXIS_HEIGHT + ROWS.length * ROW_HEIGHT + (ROW_GROUPS.length - 1) * GROUP_GAP
 
 // Geometry of the chart.
 interface Scale {
@@ -102,7 +151,7 @@ export function ForecastTimeline(props: ForecastTimelineProps) {
 	}, [])
 
 	return (
-		<div ref={container} className="w-full" style={{ minHeight: AXIS_HEIGHT + ROWS.length * ROW_HEIGHT }}>
+		<div ref={container} className="w-full" style={{ minHeight: CHART_HEIGHT }}>
 			{width > 0 && <Chart {...props} width={width} />}
 		</div>
 	)
@@ -153,7 +202,8 @@ interface ValuesProps {
 }
 
 // The text of every hour with a value, centered on its hour. When hours are narrower than VALUE_TEXT_WIDTH, only every few hours
-// is written, so texts never overlap; every hour with a value keeps its title.
+// is written, so texts never overlap, and an hour cut short by the edge of the chart is not written; every hour with a value
+// keeps its title.
 function Values({ hours, value, title, row, scale }: ValuesProps) {
 	const top = scale.y(row) + ROW_PADDING
 	const room = ROW_HEIGHT - 2 * ROW_PADDING
@@ -171,7 +221,7 @@ function Values({ hours, value, title, row, scale }: ValuesProps) {
 			<g key={hour.start}>
 				<title>{title(hour)}</title>
 				<rect x={left} y={top} width={width} height={room} fill="transparent" />
-				{index % step === 0 && (
+				{index % step === 0 && width >= slot * PARTIAL_HOUR_TEXT && (
 					<text x={left + width / 2} y={top + room / 2} dy="0.35em" textAnchor="middle" fill="var(--color-ink-100)">
 						{text}
 					</text>
@@ -216,8 +266,8 @@ function Tiles({ samples, value, title, row, night, scale, timeZone }: TilesProp
 				const right = scale.x(Math.min(display.end, sample.time + SAMPLE_HALF_WIDTH_MS))
 				return (
 					<g key={sample.time}>
-						<title>{`${formatClockTime(sample.time, timeZone)}: ${title(sample, code)}, nearest 3 hour forecast sample`}</title>
-						<rect x={left} y={top} width={Math.max(1, right - left - MARK_GAP)} height={height} rx={2} fill="var(--color-info)" fillOpacity={0.12 + (0.5 * (8 - code)) / 7} />
+						<title>{`${formatClockTime(sample.time, timeZone)}: ${title(sample, code)}, nearest 3-hour forecast sample`}</title>
+						<rect x={left} y={top} width={Math.max(1, right - left - MARK_GAP)} height={height} rx={2} fill="var(--color-ink-200)" fillOpacity={TILE_OPACITY_MIN + (TILE_OPACITY_RANGE * (8 - code)) / 7} />
 						{right - left > SYMBOL_MINIMUM_WIDTH && (
 							<text x={(left + right - MARK_GAP) / 2} y={top + height / 2} dy="0.35em" textAnchor="middle" fill="var(--color-ink-100)">
 								{code}
@@ -242,10 +292,10 @@ interface MarkerProps {
 	readonly scale: Scale
 }
 
-// Outline of the best window around the outlook row.
+// Outline of the best window around the outlook row, in cream: a recommendation, not a choice, so never the accent.
 function BestWindow({ window, scale }: MarkerProps) {
 	const left = scale.x(window.start)
-	return <rect x={left} y={scale.y('Outlook') + 1} width={Math.max(1, scale.x(window.end) - left - 1)} height={ROW_HEIGHT - 2} rx={3} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
+	return <rect x={left} y={scale.y('Outlook') + 1} width={Math.max(1, scale.x(window.end) - left - 1)} height={ROW_HEIGHT - 2} rx={3} fill="none" stroke="var(--color-ink-100)" strokeWidth={1.5} />
 }
 
 // Returns the evenly spaced whole hours the time axis labels, for labels at most TICK_SPACING pixels apart.
@@ -263,11 +313,13 @@ function axisTicks(start: number, end: number, width: number) {
 function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, width }: ForecastTimelineProps & { readonly width: number }) {
 	const { display, moon } = night
 	const { segments, best } = evaluation
-	const plotWidth = Math.max(1, width - LABEL_WIDTH - RIGHT_MARGIN)
-	const height = AXIS_HEIGHT + ROWS.length * ROW_HEIGHT
+	const narrow = width < NARROW_WIDTH
+	const labelWidth = narrow ? NARROW_LABEL_WIDTH : LABEL_WIDTH
+	const plotWidth = Math.max(1, width - labelWidth - RIGHT_MARGIN)
+	const height = CHART_HEIGHT
 	const scale: Scale = {
-		x: (time) => LABEL_WIDTH + ((Math.min(display.end, Math.max(display.start, time)) - display.start) / (display.end - display.start)) * plotWidth,
-		y: (row) => AXIS_HEIGHT + ROWS.indexOf(row) * ROW_HEIGHT,
+		x: (time) => labelWidth + ((Math.min(display.end, Math.max(display.start, time)) - display.start) / (display.end - display.start)) * plotWidth,
+		y: (row) => ROW_TOPS.get(row) ?? AXIS_HEIGHT,
 	}
 	const byTime = new Map<number, MeteorologySample>(forecast.meteorology.samples.map((sample) => [sample.time, sample]))
 	const selected = segments[cursor]
@@ -276,8 +328,8 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 	// Chooses the hour clicked.
 	function onClick(event: MouseEvent<SVGSVGElement>) {
 		const x = event.clientX - event.currentTarget.getBoundingClientRect().left
-		if (x < LABEL_WIDTH) return
-		const time = display.start + ((x - LABEL_WIDTH) / plotWidth) * (display.end - display.start)
+		if (x < labelWidth) return
+		const time = display.start + ((x - labelWidth) / plotWidth) * (display.end - display.start)
 		const index = segments.findIndex((hour) => time >= hour.start && time < hour.end)
 		if (index >= 0 && index !== cursor) onCursor(index)
 	}
@@ -303,7 +355,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 					<g key={row}>
 						<line x1={0} x2={width - RIGHT_MARGIN} y1={scale.y(row) + ROW_HEIGHT} y2={scale.y(row) + ROW_HEIGHT} stroke="var(--color-line-100)" />
 						<text x={0} y={scale.y(row) + ROW_HEIGHT / 2} dy="0.35em" fill="var(--color-ink-200)">
-							{row}
+							{narrow ? ROW_LABELS[row].narrow : ROW_LABELS[row].wide}
 						</text>
 					</g>
 				))}
@@ -326,10 +378,10 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 							{hour.outlook === 'unavailable' ? (
 								<rect x={left + 0.5} y={top + 0.5} width={Math.max(0, slot - 1)} height={room - 1} rx={2} fill="none" stroke="var(--color-line-200)" strokeDasharray="2 2" />
 							) : (
-								<rect x={left} y={top} width={slot} height={room} rx={2} fill={OUTLOOK_FILLS[hour.outlook]} fillOpacity={0.7} />
+								<rect x={left} y={top} width={slot} height={room} rx={2} fill={OUTLOOK_FILLS[hour.outlook]} fillOpacity={OUTLOOK_OPACITY} />
 							)}
 							{slot >= SYMBOL_MINIMUM_WIDTH && (
-								<text x={left + slot / 2} y={top + room / 2} dy="0.35em" textAnchor="middle" fill={hour.outlook === 'unavailable' ? 'var(--color-ink-300)' : 'var(--color-on-accent)'}>
+								<text x={left + slot / 2} y={top + room / 2} dy="0.35em" textAnchor="middle" fill={hour.outlook === 'unavailable' ? 'var(--color-ink-300)' : 'var(--color-ink-100)'}>
 									{OUTLOOK_SYMBOLS[hour.outlook]}
 								</text>
 							)}
@@ -415,7 +467,7 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 					</rect>
 				))}
 				{now > display.start && now < display.end && <line x1={scale.x(now)} x2={scale.x(now)} y1={AXIS_HEIGHT} y2={height} stroke="var(--color-ink-100)" strokeDasharray="1 3" />}
-				{selected && <rect x={scale.x(selected.start)} y={AXIS_HEIGHT} width={Math.max(1, scale.x(selected.end) - scale.x(selected.start) - MARK_GAP)} height={height - AXIS_HEIGHT} fill="none" stroke="var(--color-ink-100)" strokeOpacity={0.7} pointerEvents="none" />}
+				{selected && <rect x={scale.x(selected.start)} y={AXIS_HEIGHT} width={Math.max(1, scale.x(selected.end) - scale.x(selected.start) - MARK_GAP)} height={height - AXIS_HEIGHT} rx={2} fill="none" stroke="var(--color-accent)" strokeWidth={1.5} pointerEvents="none" />}
 			</svg>
 			<p className="m-0 mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-4 text-ink-300">
 				{(['day', 'twilight', 'dark'] as const).map((band) => (
@@ -436,8 +488,15 @@ function Chart({ forecast, night, evaluation, timeZone, cursor, onCursor, now, w
 				<span>
 					{OUTLOOK_SYMBOLS.unavailable} {OUTLOOK_LABELS.unavailable}
 				</span>
+				<span className="inline-flex items-center gap-1.5">
+					<span className="inline-block h-2.5 w-4 rounded-xs border-[1.5px] border-ink-100" />
+					Best window
+				</span>
+				<span className="inline-flex items-center gap-1.5">
+					<span className="inline-block h-2.5 w-4 rounded-xs border-[1.5px] border-accent" />
+					Hour chosen
+				</span>
 				<span>Seeing and transparency: class 1 best, 8 worst, every 3 hours</span>
-				<span>Temperature and dew point in °C</span>
 			</p>
 		</>
 	)

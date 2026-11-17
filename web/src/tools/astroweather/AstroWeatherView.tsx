@@ -11,7 +11,7 @@ import { Button } from '../../ui/Button'
 import { IconButton } from '../../ui/IconButton'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { type AstroWeatherState, astroWeatherState, EMPTY_FORECAST, firstNight, followSite, hasNextNight, loadCurrentNight, loadForecast, MODE_LABELS, nightEnded, OUTLOOK_LABELS, siteKey, stepNight } from './astroweather'
+import { type AstroWeatherState, astroWeatherState, EMPTY_FORECAST, firstNight, followSite, hasNextNight, loadCurrentNight, loadForecast, MODE_LABELS, nightEnded, nightTitle, OUTLOOK_LABELS, siteKey, stepNight } from './astroweather'
 import { AstronomicalConditions, SkyConditions, Sources, WeatherConditions } from './ForecastDetails'
 import { ForecastSummary, reasonsText } from './ForecastSummary'
 import { ForecastTimeline } from './ForecastTimeline'
@@ -20,7 +20,8 @@ import { evaluateNight } from './observing'
 // Astro Weather tool: whether a night is worth observing, when, and for what, from forecasts and the local astronomy of the
 // site. It reads and commands nothing but those: no device, no profile, no site, no sequence. It always observes from the
 // active profile's observing site, followed live. Nights are named in the site's own zone; the display zone of the profile
-// only formats the times. Everything here is a forecast, and the page says so.
+// only formats the times. Everything here is a forecast, and the page says so with the time it was read. The mode is the
+// context of the header and Refresh its action, so the content opens on the night and its outlook.
 
 // How often the current time is read again for what depends on it, in milliseconds; nothing is requested for it.
 const CLOCK_INTERVAL_MS = 60_000
@@ -65,15 +66,21 @@ export function AstroWeather() {
 	const sample = hour && samples.get(hour.start)
 	const ending = hour && samples.get(hour.end)
 	const timeZone = displayZone.zone
+	const readAt = forecast && (forecast.meteorology.source.fetchedAt ?? forecast.astronomy.source.fetchedAt)
+
+	// Chooses an hour of the night shown by its index.
+	function chooseHour(i: number) {
+		if (evaluation) astroWeatherState.cursor = evaluation.segments[i].start
+	}
 
 	const panel = (
 		<>
 			{night && (
 				<>
-					<SkyConditions sample={sample} hour={hour} />
-					<WeatherConditions sample={sample} ending={ending} />
+					<SkyConditions sample={sample} hour={hour} timeZone={timeZone} />
+					<WeatherConditions sample={sample} ending={ending} hour={hour} timeZone={timeZone} />
 					<AstronomicalConditions night={night} timeZone={timeZone} />
-					<Sources forecast={forecast} localDate={night.sun.localDate} timeZone={timeZone} />
+					<Sources forecast={forecast} timeZone={timeZone} />
 				</>
 			)}
 		</>
@@ -97,41 +104,46 @@ export function AstroWeather() {
 
 	const back = night && firstNight(night, now, state.currentNightStart)
 	const forward = night && hasNextNight(night, forecast)
+	const context = <SegmentedControl options={ASTRO_WEATHER_MODES} value={mode} format={(value: AstroWeatherMode) => MODE_LABELS[value]} onChange={(value) => setAstroWeatherPreferences(profileState, { mode: value })} />
+	const actions = (
+		<Button variant="secondary" disabled={forecastLoading} onClick={() => void loadForecast(astroWeatherState, location)}>
+			{forecastLoading ? 'Refreshing…' : 'Refresh'}
+		</Button>
+	)
 
 	return (
-		<WorkspaceLayout workspace="tools" title="Astro Weather" panel={{ title: 'Details', content: panel }}>
+		<WorkspaceLayout workspace="tools" title="Astro Weather" context={context} actions={actions} panel={{ title: 'Details', content: panel }}>
 			<div className="h-full overflow-y-auto">
-				<div className="flex flex-col gap-4 p-4">
-					<div className="flex flex-wrap items-end gap-x-4 gap-y-3">
-						<div className="min-w-0 flex-1 basis-56">
-							<p className="m-0 truncate text-xs text-ink-300">{describeDisplayZone(displayZone)}</p>
-							<p className="m-0 mt-1 text-xs font-medium text-ink-200">Forecast — not live observations</p>
-						</div>
+				<div className="flex flex-col gap-5 p-4">
+					<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
 						<div className="flex items-center gap-1">
-							<IconButton icon="stepBack" label={back ? 'The previous night has passed' : 'Previous night'} disabled={!night || back} onClick={() => void stepNight(astroWeatherState, location, -1)} />
-							<span className="min-w-36 text-center text-sm text-ink-100">{night ? `Night of ${night.sun.localDate}` : 'Computing the night…'}</span>
-							<IconButton icon="stepForward" label={forward ? 'Next night' : 'The forecast ends here'} disabled={!forward} onClick={() => void stepNight(astroWeatherState, location, 1)} />
+							<IconButton icon="stepBack" label={back ? 'The previous night has passed' : 'Previous night'} disabled={!night || back} onClick={() => void stepNight(astroWeatherState, location, -1)} className="max-sm:size-11" />
+							<span className="min-w-48 text-center text-sm font-semibold text-ink-100 tabular-nums">{night ? nightTitle(night, state.currentNightStart) : 'Computing the night…'}</span>
+							<IconButton icon="stepForward" label={forward ? 'Next night' : 'The forecast ends here'} disabled={!forward} onClick={() => void stepNight(astroWeatherState, location, 1)} className="max-sm:size-11" />
 						</div>
-						<SegmentedControl options={ASTRO_WEATHER_MODES} value={mode} format={(value: AstroWeatherMode) => MODE_LABELS[value]} onChange={(value) => setAstroWeatherPreferences(profileState, { mode: value })} />
-						<Button variant="secondary" disabled={forecastLoading} onClick={() => void loadForecast(astroWeatherState, location)}>
-							{forecastLoading ? 'Refreshing…' : 'Refresh'}
-						</Button>
+						<div className="min-w-0 text-xs leading-4 text-ink-300 sm:text-right">
+							<p className="m-0 font-medium text-ink-200">{readAt === undefined ? 'Forecast, not live observations' : `Forecast read at ${formatClockTime(readAt, timeZone)}, not live observations`}</p>
+							<p className="m-0 truncate">{describeDisplayZone(displayZone)}</p>
+						</div>
 					</div>
-					{forecastError && <Notice error>{forecastError} The night below is computed locally; Refresh tries again.</Notice>}
 					{nightError && <Notice error>{nightError}</Notice>}
 					{night && evaluation ? (
 						<>
-							<ForecastSummary forecast={shown} loaded={!!forecast} night={night} evaluation={evaluation} mode={mode} timeZone={timeZone} />
-							<div>
-								<ForecastTimeline forecast={shown} night={night} evaluation={evaluation} timeZone={timeZone} cursor={index} onCursor={(i) => (astroWeatherState.cursor = evaluation.segments[i].start)} now={now} />
+							<ForecastSummary forecast={shown} loaded={!!forecast} loading={forecastLoading} error={forecastError} night={night} evaluation={evaluation} mode={mode} timeZone={timeZone} />
+							<div className="flex flex-col gap-2">
 								{hour && (
-									<p className="m-0 mt-2 text-sm leading-5 text-ink-200">
-										<span className="text-ink-100">
-											{formatClockTime(hour.start, timeZone)}–{formatClockTime(hour.end, timeZone, { named: true })}: {OUTLOOK_LABELS[hour.outlook]}
-										</span>
-										{reasonsText(hour) && `. ${reasonsText(hour)}`}
-									</p>
+									<div className="flex items-center gap-1">
+										<IconButton icon="stepBack" label="Previous hour" disabled={index <= 0} onClick={() => chooseHour(index - 1)} className="max-sm:size-11" />
+										<IconButton icon="stepForward" label="Next hour" disabled={index >= evaluation.segments.length - 1} onClick={() => chooseHour(index + 1)} className="max-sm:size-11" />
+										<output className="ml-1 min-w-0 text-sm leading-5 text-ink-200">
+											<span className="text-ink-100 tabular-nums">
+												{formatClockTime(hour.start, timeZone)}–{formatClockTime(hour.end, timeZone, { named: true })}: {OUTLOOK_LABELS[hour.outlook]}
+											</span>
+											{reasonsText(hour) && `. ${reasonsText(hour)}`}
+										</output>
+									</div>
 								)}
+								<ForecastTimeline forecast={shown} night={night} evaluation={evaluation} timeZone={timeZone} cursor={index} onCursor={chooseHour} now={now} />
 							</div>
 						</>
 					) : (

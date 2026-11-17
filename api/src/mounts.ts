@@ -8,7 +8,7 @@ import { failedOperationResult, type OperationContext, type OperationResult, typ
 import { deviceKey, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { type Angle, deg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import { admissionResponse, admitCommand, type CommandAdmission, type CommandErrorCode, type CommandRefusal, type CommandRequest, disconnected, failureCode, failureResponse, findDevice, notFound, refusal, resolveConnected, settle, startCommand, unsupported } from './commands'
+import { admissionResponse, admitCommand, busy, type CommandAdmission, type CommandErrorCode, type CommandRefusal, type CommandRequest, disconnected, failureCode, failureResponse, findDevice, notFound, refusal, resolveConnected, settle, startCommand, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import { DEFAULT_LEASE_OPTIONS, type LeasedMotion, LeasedMotions, type LeasedPhase, type LeasedSession, type LeasedStartResponse, type LeaseOptions } from './leases'
@@ -483,7 +483,9 @@ export class MountCommands implements Disposable {
 		const coordinate = targetCoordinate(target)
 		if (!mountTargetEquatorial(mount, coordinate).every(Number.isFinite)) return errorResponse('The target is not a valid coordinate', 422, 'invalidParameter')
 
-		// A Sync moves what the mount calls a position, so a model fitted before it no longer speaks for the mount.
+		// A Sync moves what the mount calls a position, so a model fitted before it no longer speaks for the mount; a Sync
+		// refused because another operation holds the mount changes nothing, so it leaves the model alone.
+		if (!this.operations.available(mount)) return busy()
 		this.corrections?.suspend(mount, 'The mount was synced')
 		return await settle(this.#commander.sync(this.operations.coordinator, mount, coordinate), 'The sync')
 	}
@@ -573,7 +575,8 @@ export class MountCommands implements Disposable {
 	async setTime(connectionId: string, deviceId: string, { utc, offset }: MountTimeRequest): Promise<Response> {
 		const mount = this.#connected(connectionId, deviceId)
 		if (mount instanceof Response) return mount
-		// The clock of the mount moves its sense of the sky, like a Sync.
+		// The clock of the mount moves its sense of the sky, like a Sync, and like a Sync a refused clock leaves the model alone.
+		if (!this.operations.available(mount)) return busy()
 		this.corrections?.suspend(mount, 'The clock of the mount was changed')
 		return await settle(this.#commander.setTime(this.operations.coordinator, mount, { utc, offset }), 'Sending the time')
 	}

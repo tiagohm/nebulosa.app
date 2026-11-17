@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { geodeticLocation, localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
+import { successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
+import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { arcsec, deg, normalizeAngle, toArcsec, toDeg, toHour } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { planPointingWaypoints } from 'nebulosa/src/observation/mount/pointing.plan'
@@ -209,6 +211,24 @@ describe('suspension', () => {
 		expect((await commands.setSite(id, deviceId, { site: { latitude: 10, longitude: 10, elevation: 0 } })).status).toBe(204)
 		await waitUntil(() => events.at(-1)?.activation?.state === 'suspended')
 		expect(events.at(-1)?.activation?.reason).toContain('site')
+	})
+
+	test('a sync or a clock refused because the mount is held leaves the model active', async () => {
+		const { id, deviceId, commands, corrections, mount, target, events, operations } = await setup()
+		corrections.activate(mount, MODEL, REVISION)
+		const released = Promise.withResolvers<void>()
+		const hold = operations.coordinator.start('test.hold', [{ key: resourceKey(mount), device: mount }], async () => {
+			await released.promise
+			return successfulOperationResult(undefined)
+		})
+
+		const { JNOW } = target(0, deg(-22))
+		expect((await commands.sync(id, deviceId, { target: { frame: 'JNOW', x: String(toHour(JNOW.x)), y: String(toDeg(JNOW.y)) } })).status).toBe(409)
+		expect((await commands.setTime(id, deviceId, { utc: Date.now(), offset: 0 })).status).toBe(409)
+		expect(events.at(-1)?.activation?.state).toBe('active')
+
+		released.resolve()
+		await hold.result
 	})
 
 	test('a mount that disconnects suspends its model, which never comes back by itself', async () => {

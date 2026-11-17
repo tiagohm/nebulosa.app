@@ -108,9 +108,12 @@ export async function novaSolve({ apiUrl, session, image, hints, scaleTolerance,
 		if (!wait.aborted) {
 			const { promise, resolve } = Promise.withResolvers<void>()
 			const timer = setTimeout(resolve, pollInterval)
-			wait.addEventListener('abort', () => resolve(), { once: true })
+			const abort = () => resolve()
+			wait.addEventListener('abort', abort, { once: true })
 			await promise
 			clearTimeout(timer)
+			// Each pause adds its own listener, so one ended by its timer removes it instead of piling up for the whole solve.
+			wait.removeEventListener('abort', abort)
 		}
 
 		stopped()

@@ -49,7 +49,13 @@ export async function runWorkerJob<R extends { readonly jobId: string }, T>({ st
 	const onMessage = ({ data }: MessageEvent<R>) => {
 		if (data.jobId !== jobId) return
 		if (resets(data)) watch()
-		receive(data, { resolve, reject })
+
+		// A receiver that throws fails the job at once, instead of leaving it to end as stalled.
+		try {
+			receive(data, { resolve, reject })
+		} catch (error) {
+			reject(Error.isError(error) ? error : new Error(String(error)))
+		}
 	}
 
 	const onError = (event: ErrorEvent) => reject(crashed(event))

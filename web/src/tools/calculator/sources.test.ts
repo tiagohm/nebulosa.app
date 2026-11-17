@@ -1,19 +1,31 @@
 import { describe, expect, test } from 'bun:test'
 import type { OpticalPreset } from '../../sky/framing'
-import { importOptics, isOriginCurrent, opticsSources, type SourceContext, sourceLabel } from './sources'
+import { importOptics, isOriginCurrent, opticsSources, type SourceContext, sourceGroup, sourceLabel } from './sources'
 
 const PRESET: OpticalPreset = { id: 'p1', name: 'Refractor', optics: { focalLength: 420, focalMultiplier: 1, aperture: 70, sensor: { kind: 'physical', width: 22.3, height: 14.9 }, rotation: 90 } }
 
 const CONTEXT: SourceContext = {
 	profileId: 'profile',
-	settings: { telescope: { focalLength: 1000, focalMultiplier: 0.8, aperture: 200 }, guideTelescope: { focalLength: 240, focalMultiplier: 1, aperture: 60 }, presets: [PRESET] },
+	settings: {
+		telescope: { focalLength: 1000, focalMultiplier: 0.8, aperture: 200 },
+		guideTelescope: { focalLength: 240, focalMultiplier: 1, aperture: 60 },
+		presets: [PRESET],
+		catalogCameras: [
+			{ id: 'c1', name: 'ASI294MM', sensor: { width: 8240, height: 5628, pixelSize: 2.32 }, archived: false },
+			{ id: 'c2', name: 'Old camera', sensor: { width: 100, height: 100, pixelSize: 1 }, archived: true },
+			{ id: 'c3', name: 'Undeclared', archived: false },
+			{ id: 'c4', name: 'No pixel size', sensor: { width: 1920, height: 1080 }, archived: false },
+		],
+	},
 	live: { MAIN_CAMERA: { width: 6248, height: 4176, pixelSize: 3.76 }, GUIDE_CAMERA: { width: 1936, height: 1096, pixelSize: 2.9 } },
 	cameras: { MAIN_CAMERA: { connectionId: 'a', id: 'main' }, GUIDE_CAMERA: { connectionId: 'a', id: 'guide' } },
 }
 
 describe('sources', () => {
-	test('lists the camera roles, the manual sensor, then the presets', () => {
-		expect(opticsSources(CONTEXT.settings)).toEqual(['MAIN_CAMERA', 'GUIDE_CAMERA', 'manual', 'preset:p1'])
+	test('lists the camera roles, the manual sensor, the cameras of the catalog not archived, then the presets', () => {
+		expect(opticsSources(CONTEXT.settings)).toEqual(['MAIN_CAMERA', 'GUIDE_CAMERA', 'manual', 'catalog:c1', 'catalog:c3', 'catalog:c4', 'preset:p1'])
+		expect(sourceLabel(CONTEXT.settings, 'catalog:c1')).toBe('ASI294MM')
+		expect(sourceGroup('catalog:c1')).toBe('Equipment Catalog')
 		expect(sourceLabel(CONTEXT.settings, 'preset:p1')).toBe('Refractor')
 		expect(sourceLabel(CONTEXT.settings, 'GUIDE_CAMERA')).toBe('Guide Camera')
 	})
@@ -37,7 +49,7 @@ describe('sources', () => {
 	})
 
 	test('optics never entered are imported as zero', () => {
-		const result = importOptics({ ...CONTEXT, settings: { presets: [] } }, 'MAIN_CAMERA')
+		const result = importOptics({ ...CONTEXT, settings: { presets: [], catalogCameras: [] } }, 'MAIN_CAMERA')
 		expect('optics' in result && result.optics).toMatchObject({ focalLength: 0, focalMultiplier: 1, aperture: 0 })
 	})
 
@@ -45,6 +57,17 @@ describe('sources', () => {
 		expect(importOptics(CONTEXT, 'manual')).toEqual({ reason: 'No manual sensor is entered in Sky → Framing.' })
 		const context = { ...CONTEXT, settings: { ...CONTEXT.settings, manualSensor: { kind: 'physical' as const, width: 36, height: 24 } } }
 		expect(importOptics(context, 'manual')).toEqual({ optics: { focalLength: 1000, focalMultiplier: 0.8, aperture: 200, sensor: { kind: 'physical', width: 36, height: 24 }, rotation: 0 }, origin: { source: 'manual', label: 'Manual sensor', profileId: 'profile' } })
+	})
+
+	test('a camera of the catalog takes the telescope and the sensor it declares, and one declaring none is refused', () => {
+		expect(importOptics(CONTEXT, 'catalog:c1')).toEqual({
+			optics: { focalLength: 1000, focalMultiplier: 0.8, aperture: 200, sensor: { kind: 'pixels', width: 8240, height: 5628, pixelSize: 2.32 }, rotation: 0 },
+			origin: { source: 'catalog:c1', label: 'ASI294MM', profileId: 'profile' },
+		})
+		// A pixel size the camera does not declare stays missing in the draft.
+		expect(importOptics(CONTEXT, 'catalog:c4')).toMatchObject({ optics: { sensor: { kind: 'pixels', width: 1920, height: 1080, pixelSize: 0 } } })
+		expect(importOptics(CONTEXT, 'catalog:c3')).toEqual({ reason: 'No sensor is declared for Undeclared: declare it in Settings → Equipment Catalog.' })
+		expect(importOptics(CONTEXT, 'catalog:gone')).toEqual({ reason: 'The camera is no longer in the Equipment Catalog.' })
 	})
 
 	test('a preset is copied, so the copy can change without the preset', () => {

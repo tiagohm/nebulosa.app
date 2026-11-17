@@ -1,18 +1,20 @@
 import type { CameraSensor } from 'api'
+import type { CatalogCamera } from '../../equipment/catalog'
 import { CAMERA_ROLES, type CameraRole, isCameraRole, roleDefinition } from '../../equipment/roles'
 import { equipmentOptics, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type TelescopeOptics } from '../../sky/framing'
 import type { SensorTarget } from '../../sky/sensors'
 
 // Sources a calculator can import an optical configuration from, read only from what the tab already has: the active
 // profile's Equipment Setup (its telescope or guide telescope with the sensor the camera of a camera role reports, or
-// with the manual sensor of Sky Framing) and the profile's optical presets. An import copies the configuration once
+// with the manual sensor of Sky Framing), the cameras of the Equipment Catalog (the telescope with the sensor a camera
+// declares), and the profile's optical presets. An import copies the configuration once
 // into a calculator draft, which is then edited on its own: the profile, the presets, and the devices are never
 // written, and a later change of the source never rewrites the draft. The origin of an import stays shown only while
 // it still describes the same profile and camera.
 
-// Source of an optical configuration: the Equipment Setup through a camera role, through the manual sensor, or a
-// preset by id.
-export type OpticsSourceId = CameraRole | 'manual' | `preset:${string}`
+// Source of an optical configuration: the Equipment Setup through a camera role, through the manual sensor, a camera of the
+// Equipment Catalog by id, or a preset by id.
+export type OpticsSourceId = CameraRole | 'manual' | `catalog:${string}` | `preset:${string}`
 
 // Profile data the sources are read from.
 export interface SourceSettings {
@@ -25,6 +27,8 @@ export interface SourceSettings {
 	readonly presets: readonly Readonly<OpticalPreset>[]
 	// Manual sensor of the Sky Framing Equipment Setup source; absent until entered.
 	readonly manualSensor?: Readonly<SensorGeometry>
+	// Cameras of the Equipment Catalog, in list order; the archived ones are not offered.
+	readonly catalogCameras: readonly Readonly<Pick<CatalogCamera, 'id' | 'name' | 'sensor' | 'archived'>>[]
 }
 
 // Everything an import reads.
@@ -67,9 +71,19 @@ export interface DraftEntry<D> {
 // Prefix of the source id of a preset.
 const PRESET_PREFIX = 'preset:'
 
-// Returns the sources in menu order: the camera roles, the manual sensor, then every preset.
-export function opticsSources(settings: Pick<SourceSettings, 'presets'>): OpticsSourceId[] {
-	return [...CAMERA_ROLES, 'manual', ...settings.presets.map((e): OpticsSourceId => `${PRESET_PREFIX}${e.id}`)]
+// Prefix of the source id of a camera of the Equipment Catalog.
+const CATALOG_PREFIX = 'catalog:'
+
+// Returns the sources in menu order: the camera roles, the manual sensor, every camera of the Equipment Catalog that is not
+// archived, then every preset.
+export function opticsSources(settings: Pick<SourceSettings, 'presets' | 'catalogCameras'>): OpticsSourceId[] {
+	const cameras = settings.catalogCameras.filter((e) => !e.archived).map((e): OpticsSourceId => `${CATALOG_PREFIX}${e.id}`)
+	return [...CAMERA_ROLES, 'manual', ...cameras, ...settings.presets.map((e): OpticsSourceId => `${PRESET_PREFIX}${e.id}`)]
+}
+
+// Returns the camera of the Equipment Catalog a source names; undefined for another source or a camera no longer there.
+function catalogCameraOf(settings: Pick<SourceSettings, 'catalogCameras'>, source: OpticsSourceId) {
+	return source.startsWith(CATALOG_PREFIX) ? settings.catalogCameras.find((e) => `${CATALOG_PREFIX}${e.id}` === source) : undefined
 }
 
 // Returns the preset a source names; undefined for another source or a preset that no longer exists.
@@ -78,19 +92,21 @@ function presetOf(settings: Pick<SourceSettings, 'presets'>, source: OpticsSourc
 }
 
 // Returns the display name of a source.
-export function sourceLabel(settings: Pick<SourceSettings, 'presets'>, source: OpticsSourceId) {
+export function sourceLabel(settings: Pick<SourceSettings, 'presets' | 'catalogCameras'>, source: OpticsSourceId) {
 	if (isCameraRole(source)) return roleDefinition(source).label
 	if (source === 'manual') return 'Manual sensor'
+	if (source.startsWith(CATALOG_PREFIX)) return catalogCameraOf(settings, source)?.name ?? 'Deleted camera'
 	return presetOf(settings, source)?.name ?? 'Deleted preset'
 }
 
 // Returns the menu group of a source.
 export function sourceGroup(source: OpticsSourceId) {
-	return source.startsWith(PRESET_PREFIX) ? 'Optical presets' : 'Equipment Setup'
+	return source.startsWith(PRESET_PREFIX) ? 'Optical presets' : source.startsWith(CATALOG_PREFIX) ? 'Equipment Catalog' : 'Equipment Setup'
 }
 
 // Copies the optical configuration of a source. A camera role takes the optics it looks through and the sensor its
-// device reports, never another camera's or the manual sensor; the manual sensor takes the telescope; a preset is
+// device reports, never another camera's or the manual sensor; the manual sensor and a camera of the Equipment Catalog take
+// the telescope, the latter with the sensor it declares (a pixel size it does not declare stays missing); a preset is
 // copied as saved. Optics the profile has not entered are zero, so the draft shows them as missing.
 export function importOptics(context: SourceContext, source: OpticsSourceId): OpticsImport {
 	const { settings, profileId } = context
@@ -107,6 +123,15 @@ export function importOptics(context: SourceContext, source: OpticsSourceId): Op
 		// equipmentOptics substitutes an example sensor for a manual sensor never entered; refuse instead.
 		if (!settings.manualSensor) return { reason: 'No manual sensor is entered in Sky → Framing.' }
 		const { optics } = equipmentOptics(settings, 'manual', context.live, { ...settings.manualSensor }, 0)
+		return { optics, origin: { source, label, profileId } }
+	}
+
+	if (source.startsWith(CATALOG_PREFIX)) {
+		const camera = catalogCameraOf(settings, source)
+		if (!camera) return { reason: 'The camera is no longer in the Equipment Catalog.' }
+		if (!camera.sensor) return { reason: `No sensor is declared for ${camera.name}: declare it in Settings → Equipment Catalog.` }
+		const { width, height, pixelSize } = camera.sensor
+		const { optics } = equipmentOptics(settings, 'manual', context.live, { kind: 'pixels', width, height, pixelSize: pixelSize ?? 0 }, 0)
 		return { optics, origin: { source, label, profileId } }
 	}
 

@@ -1,4 +1,4 @@
-import { rename, rm } from 'fs/promises'
+import { link, open, rename, rm } from 'fs/promises'
 import { resolve } from 'path'
 import type { ImageStatisticsResult } from 'nebulosa/src/imaging/analysis/statistics'
 import { type CfaPattern, type Image, type ImageChannel, shiftCfaPattern } from 'nebulosa/src/imaging/model/types'
@@ -11,6 +11,7 @@ import type { ImageProcessingStep } from './imageprocessing'
 import { encodeSampleTile } from './imagesamples'
 import type { LiveCohortAcquisition } from './livestacking'
 import type { LiveFilterCalibration } from './livestacking.groups'
+import { errorCode } from './util'
 import { type ClientListener, ClientPresence } from './websocket'
 
 // Image documents opened by clients: FITS and XISF files read from the server's filesystem, or camera
@@ -536,6 +537,27 @@ function documentRecord({ name, width, height, channels, cfa, header, acquisitio
 // whose screen locked) to find them again, as the leases of the capture frames do.
 export const DOCUMENT_GRACE = 10 * 60 * 1000
 
+// Error codes of a filesystem that cannot hard-link, such as FAT or exFAT.
+const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS'])
+
+// Publishes a written temporary file under a name no file has, and resolves to false when one has it: a hard link,
+// which fails when a file appeared under the name since it was checked, where a rename would replace it. A filesystem
+// without hard links falls back to a check and a rename, which a file appearing between the two can still lose to.
+async function publishNew(temporary: string, target: string): Promise<boolean> {
+	try {
+		await link(temporary, target)
+		return true
+	} catch (error) {
+		const code = errorCode(error)
+		if (code === 'EEXIST') return false
+		if (code === undefined || !NO_HARD_LINKS.has(code)) throw error
+	}
+
+	if (await Bun.file(target).exists()) return false
+	await rename(temporary, target)
+	return true
+}
+
 // Open image documents of every client. The pixels live in the image worker; this side tracks the
 // open ids, so unknown ones are answered without a round trip, and relays requests to the worker.
 // A document a client opened from a file or claimed from a processing job is owned by it, and closed once the client is
@@ -758,11 +780,20 @@ export class ImageStore implements Disposable, ClientListener {
 		const temporary = `${target}.${Bun.randomUUIDv7()}.tmp`
 
 		try {
-			await Bun.write(temporary, bytes)
-			await rename(temporary, target)
-		} catch (error) {
+			const handle = await open(temporary, 'w')
+
+			try {
+				await handle.writeFile(bytes)
+				await handle.sync()
+			} finally {
+				await handle.close()
+			}
+
+			if (overwrite) await rename(temporary, target)
+			else if (!(await publishNew(temporary, target))) return { status: 'exists' }
+		} finally {
+			// Gone already once renamed; a hard link leaves its temporary name behind.
 			await rm(temporary, { force: true })
-			throw error
 		}
 
 		return { status: 'saved', path: target }

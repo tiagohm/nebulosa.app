@@ -274,6 +274,17 @@ describe('derived images', () => {
 		images.close(derived.id)
 	})
 
+	test('two saves to the same new path without overwrite write it once', async () => {
+		const source = await openFits(writeFits('race-source.fits', 16, 8))
+		const target = join(root, 'race.fits')
+
+		const outcomes = await Promise.all([images.save(source.id, { path: target, format: 'fits' }), images.save(source.id, { path: target, format: 'fits' })])
+		expect(outcomes.map((outcome) => outcome.status).toSorted()).toEqual(['exists', 'saved'])
+		expect(readdirSync(root).some((name) => name.endsWith('.tmp'))).toBeFalse()
+
+		images.close(source.id)
+	})
+
 	test('download returns the encoded file as a named attachment', async () => {
 		const source = await openFits(writeFits('derive-download.fits', 16, 8))
 		const derived = await adoptCopy(source)

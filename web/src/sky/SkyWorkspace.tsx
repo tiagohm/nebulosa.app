@@ -120,13 +120,15 @@ export function SkyWorkspace() {
 	// following its position.
 	const { telescope, guideTelescope } = useProfileTelescopes(activeProfile(profiles).settings)
 	const sensors = useRoleSensors()
-	// The sensors of the camera states the snapshot keeps while they do not change, so the frame follows them only.
 	const { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor } = sensors
 	const frameSource = activeFrameSource(framing, { telescope, guideTelescope }, { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor })
+	// The workspace renders on every mount or camera update, and each render builds the frame anew, so the outline follows
+	// the value of the frame, never the object, and is rebuilt only when the frame really changed.
+	const frameKey = frameSource && JSON.stringify(frameSource)
 
 	useEffect(() => {
 		map.syncFraming(frameSource, framing?.visible ?? false, selectionCenter)
-	}, [map, frameSource, framing?.visible, selectionCenter?.rightAscension, selectionCenter?.declination])
+	}, [map, frameKey, framing?.visible, selectionCenter?.rightAscension, selectionCenter?.declination])
 
 	// Draws the footprint of a solved image, unless hidden from the toolbar, while its document still shows that image,
 	// and drops it otherwise (the document closed, or its camera tab shows another frame); marks and pans to a coordinate

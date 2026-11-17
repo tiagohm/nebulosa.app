@@ -44,7 +44,7 @@ import { type OperationDevice, type OperationRegistry, settledResult } from './o
 // A filter is selected by moving the assigned wheel, or by the operator, who confirms each manual step with its
 // step id; the light comes from the assigned panel at a fixed brightness, or from a manual source the operator
 // confirms. An assigned dust cover is closed before the first frame. A light the session switched on is switched off
-// once it ended, and then a cover it closed is opened again. Stopping cancels the operation at once:
+// once it ended, and then a cover it closed is opened again, unless the light could not be switched off. Stopping cancels the operation at once:
 // the exposure in flight is lost, and files already published stay. A session that asked for masters hands the
 // frames of every filter it completed to the Calibration Library once it ended, however it ended. Durations are
 // seconds, instants Unix milliseconds, levels DN. Records live in memory, the latest session per camera.
@@ -366,7 +366,8 @@ interface Session {
 	handle?: OperationHandle<void>
 	// Confirmation of the manual step the session waits for.
 	gate?: { readonly stepId: string; readonly confirm: VoidFunction }
-	// Whether the session switched the panel light on and has not switched it off yet.
+	// Whether the session commanded the panel light on and has not switched it off yet; set before the command, so a
+	// switch-on interrupted halfway is switched off too.
 	lightOn: boolean
 	// Camera of the Equipment Catalog the camera was bound to when the session started; every flat is recorded against it.
 	readonly cameraId: string
@@ -620,9 +621,10 @@ export class FlatWizardSessions {
 		}
 
 		if (!panel.enabled) {
+			// Recorded before the command, as the cover is: a switch-on stopped or timed out halfway may have lit the panel.
+			session.lightOn = true
 			const enabled = await this.panels.enable(context, panel)
 			if (!enabled.ok) return failedWith(enabled, 'The flat panel light did not switch on')
-			session.lightOn = true
 			changed = true
 		}
 
@@ -887,11 +889,14 @@ export class FlatWizardSessions {
 		}
 
 		if (session.coverClosed && cover) {
-			// The light goes off first, so the cover never opens on a lit panel; like the light, the cover is taken again
-			// only if no other operation took it first and it is still connected.
-			const opened = cover.connected && this.operations.available(cover) ? await this.covers.unpark(this.operations.coordinator, cover) : undefined
-			if (opened?.ok) session.coverClosed = false
-			else warnings.push(`The cover ${cover.name} was left closed: ${opened && !opened.ok ? (opened.error ?? opened.reason) : 'the cover was not available'}`)
+			// The light goes off first, so the cover never opens on a lit panel: a light left on keeps the cover closed. Like
+			// the light, the cover is taken again only if no other operation took it first and it is still connected.
+			if (session.lightOn && panel) warnings.push(`The cover ${cover.name} stayed closed because the panel light could not be confirmed off`)
+			else {
+				const opened = cover.connected && this.operations.available(cover) ? await this.covers.unpark(this.operations.coordinator, cover) : undefined
+				if (opened?.ok) session.coverClosed = false
+				else warnings.push(`The cover ${cover.name} was left closed: ${opened && !opened.ok ? (opened.error ?? opened.reason) : 'the cover was not available'}`)
+			}
 		}
 
 		if (warnings.length > 0) this.#update(session, { cleanupWarning: warnings.join(' ') })

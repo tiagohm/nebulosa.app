@@ -35,8 +35,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Once a group has its frames, `finalizeFlatSequence` evaluates their temporal stability from the retained samples (outliers at 5 robust sigmas); fewer than three frames, or frames the toolkit refuses as one stack, are `notEvaluated`.
   The result only describes the acquisition: no frame is deleted, replaced, or modified for it.
 - An assigned dust cover (`cover`, refused with 422 when it cannot open and close) is closed before the first frame (`closingCover`, confirmed by its reported state) and held for the whole session.
-  A cover already closed when the session starts stays closed afterwards; one the session closed, or began to close, is opened again once the session ended, however it ended, after the light was switched off.
-- A light the session switched on is switched off after the operation ended, with the panel taken again if it is free; otherwise, and likewise for a cover that cannot be opened again, `cleanupWarning` says what was left.
+  A cover already closed when the session starts stays closed afterwards; one the session closed, or began to close, is opened again once the session ended, however it ended, after the light was switched off, and stays closed while a light the session switched on could not be switched off.
+- A light the session switched on, or began to switch on, is switched off after the operation ended, with the panel taken again if it is free; otherwise, and likewise for a cover that cannot be opened again, `cleanupWarning` says what was left.
   Stopping (`POST /api/flat-wizard/:sessionId/stop`, 409 `notRunning` once ended) cancels the operation at once: the exposure in flight is aborted and lost, a measurement or a manual step is abandoned, and the request resolves after the devices were released and the light cleanup ran.
   A disconnection of a held device cancels the session the same way.
 - Session states: `preparing`, `closingCover`, `waitingForFilter`, `movingFilter`, `waitingForIllumination`, `settingLight`, `settling`, `exposing`, `measuring`, `saving`, `assessingSequence`, `stopping`, then `completed`, `cancelled`, or `failed`;

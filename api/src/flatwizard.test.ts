@@ -162,6 +162,8 @@ async function setup(rate: (context: FlatFrameContext) => number = () => 100000,
 	const session = async (sessionId: string) => (await flatWizard.session(sessionId).json()) as FlatWizardSession
 
 	return {
+		manager,
+		client,
 		catalog,
 		published,
 		endings,
@@ -320,6 +322,22 @@ describe('Flat Wizard sessions', () => {
 		expect(cover.parked).toBeFalse()
 		expect(panel.enabled).toBeFalse()
 		expect(released()).toBeTrue()
+	})
+
+	test('a cover stays closed while the light the session switched on could not be switched off', async () => {
+		const { manager, client, id, cameraId, flatWizard, wheelDevice, panel, panelDevice, cover, coverDevice, directory, summary, ended } = await setup()
+		await start(flatWizard, id, cameraId, request(directory, { filters: [filter({ count: 20 })], wheel: wheelDevice, panel: panelDevice, cover: coverDevice }))
+
+		await waitUntil(() => summary()?.state === 'exposing', 60000)
+		expect(panel.enabled).toBeTrue()
+		expect(cover.parked).toBeTrue()
+		// A panel that disconnects under the session cannot be switched off.
+		manager.devices.switch(client, panelDevice.deviceId, false)
+		await waitUntil(ended, 60000)
+
+		expect(summary()!.cleanupWarning).toContain(`The light of ${panel.name} was left on`)
+		expect(summary()!.cleanupWarning).toContain(`The cover ${cover.name} stayed closed`)
+		expect(cover.parked).toBeTrue()
 	})
 
 	test('a cover closed before the session stays closed, and one it closed is opened after a stop', async () => {

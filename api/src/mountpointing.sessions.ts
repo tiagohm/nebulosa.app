@@ -172,7 +172,8 @@ export interface MountPointingSessionSummary {
 	readonly skippedCount: number
 	// Frames taken so far.
 	readonly frameCount: number
-	// Whether the session started the tracking of a mount that was not tracking; absent when it was already on.
+	// Whether the session started, or began to start, the tracking of a mount that was not tracking; absent when it was
+	// already on.
 	readonly trackingStarted?: boolean
 	// Whether the tracking the session started was stopped again when it ended; absent before it ended, when it started
 	// none, or when the request asked to leave it on.
@@ -681,9 +682,10 @@ export class MountPointingSessions {
 			try {
 				// A slew, like every sample, is measured against the sky the mount tracks.
 				if (!mount.tracking) {
+					// Recorded before the command: a start stopped or timed out halfway may have left the mount tracking.
+					this.#update(session, { trackingStarted: true })
 					const started = await this.commander.setTracking(context, mount, true)
 					if (!started.ok) return started
-					this.#update(session, { trackingStarted: true })
 				}
 
 				for (const waypoint of session.waypoints) {

@@ -136,8 +136,8 @@ export interface DarvSessionSummary {
 	readonly state: DarvSessionState
 	// Measurements, oldest first; the latest MAXIMUM_MEASUREMENTS.
 	readonly measurements: readonly DarvMeasurement[]
-	// Whether a measurement of the session started the tracking of a mount that was not tracking, which stays on until
-	// the session is finished; absent when the mount was already tracking.
+	// Whether a measurement of the session started, or began to start, the tracking of a mount that was not tracking, which
+	// stays on until the session is finished; absent when the mount was already tracking.
 	readonly trackingStarted?: boolean
 	// Whether the finish stopped the tracking the session started; absent before the finish, when the session started
 	// none, or when the finish asked to leave it on.
@@ -401,9 +401,10 @@ export class DarvSessions {
 			try {
 				// A drift measured on a mount that does not track is the sidereal motion, so the tracking is started first.
 				if (!mount.tracking) {
+					// Recorded before the command: a start stopped or timed out halfway may have left the mount tracking.
+					this.#update(session, { trackingStarted: true })
 					const started = await this.commander.setTracking(context, mount, true)
 					if (!started.ok) return started
-					this.#update(session, { trackingStarted: true })
 				}
 
 				const path = join(directory, `darv-${generation}.fit`)

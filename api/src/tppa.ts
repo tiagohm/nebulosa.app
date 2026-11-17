@@ -196,7 +196,8 @@ export interface TppaSessionSummary {
 	// Whether the previous preset was restored when the session ended; absent before it ended or when there was
 	// nothing to restore.
 	readonly slewRateRestored?: boolean
-	// Whether the session started the tracking of a mount that was not tracking; absent when it was already on.
+	// Whether the session started, or began to start, the tracking of a mount that was not tracking; absent when it was
+	// already on.
 	readonly trackingStarted?: boolean
 	// Whether the tracking the session started was stopped again when it ended; absent before it ended, when it started
 	// none, or when the request asked to leave it on.
@@ -442,9 +443,10 @@ export class TppaSessions {
 			try {
 				// The poses are solved against the sky the mount tracks, so the tracking is started first.
 				if (!mount.tracking) {
+					// Recorded before the command: a start stopped or timed out halfway may have left the mount tracking.
+					this.#sessions.update(session, { trackingStarted: true })
 					const started = await this.commander.setTracking(context, mount, true)
 					if (!started.ok) return started
-					this.#sessions.update(session, { trackingStarted: true })
 				}
 
 				const { request } = session.summary

@@ -181,7 +181,8 @@ export interface TargetCenteringSessionSummary {
 	readonly attempts: readonly TargetCenteringAttempt[]
 	// Pointing model that corrected the first slew, when one did.
 	readonly model?: { readonly modelId: string; readonly revisionId: string }
-	// Whether the session started the tracking of a mount that was not tracking; absent when it was already on.
+	// Whether the session started, or began to start, the tracking of a mount that was not tracking; absent when it was
+	// already on.
 	readonly trackingStarted?: boolean
 	// Whether the tracking the session started was stopped because the session did not succeed; absent otherwise.
 	readonly trackingStopped?: boolean
@@ -576,9 +577,10 @@ export class TargetCenteringSessions {
 
 		try {
 			if (mode !== 'verifyOnly' && !mount.tracking) {
+				// Recorded before the command: a start stopped or timed out halfway may have left the mount tracking.
+				this.#sessions.update(session, { trackingStarted: true })
 				const started = await this.commander.setTracking(context, mount, true)
 				if (!started.ok) return started
-				this.#sessions.update(session, { trackingStarted: true })
 			}
 
 			if (this.#slews(session)) {

@@ -35,7 +35,7 @@ Workspaces share services, not interfaces.
 - **About (rail footer button)**
     - Responsibility: Identity of the running distribution
     - Features: Logo, version, build commits and time, server runtime and platform, Copy Version Info;
-      author, license, repositories, and the credits of the external services, data, published models and methods, and programs in use (`CREDIT_GROUPS` of `web/src/about/about.ts`), shown even when the server cannot be reached
+      author, license, repositories, and the credits of the external services, data, published models and methods, protocols, and bundled libraries and programs in use (`CREDIT_GROUPS` of `web/src/about/about.ts`), shown even when the server cannot be reached
     - Registry: `/about` (`web/src/about/`)
 
 Connections, Equipment Setup, and profiles are modals of the shell (`ConnectionModal`, `EquipmentModal`, `ProfileModal`), not routes.

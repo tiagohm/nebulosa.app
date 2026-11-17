@@ -164,6 +164,7 @@ The app is in development and all of its data is test data: the database, settin
 - UI changes: run `bun dev` and check the affected screen in a browser.
 - Report every skipped or failed verification command and its exact reason, and distinguish pre-existing failures from ones introduced by the task.
 - Confirm `docs/ARCHITECTURE.md` and the documents under `docs/architecture/` still match the change (see Architecture Reference).
+- Keep the credits of the About page (`CREDIT_GROUPS` of `web/src/about/about.ts`) current: a change that starts, changes, or stops the use of an external service, dataset, published model or method, protocol, or bundled library or program adds, updates, or removes its entry in the same commit, with the license or acknowledgment its publisher asks for. Check a citation against its publisher before writing it.
 - Review the final diff and status before staging.
 
 ## Code Review

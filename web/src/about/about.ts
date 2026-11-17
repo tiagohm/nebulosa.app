@@ -40,10 +40,10 @@ export interface CreditGroup {
 	readonly credits: readonly Credit[]
 }
 
-// Every external service, dataset, published model or method, and program the application uses, shown even when the server
-// cannot be reached. Only what runs or ships with the application is listed: toolkit adapters and models no feature reaches
-// are not. Authors and references come from the toolkit's own citations and the publisher's record. A new source adds its
-// credit here.
+// Every external service, dataset, published model or method, protocol, and bundled library or program the application
+// uses, shown even when the server cannot be reached. Only what runs or ships with the application is listed: toolkit
+// adapters, models, and native libraries no feature reaches are not. Authors and references come from the toolkit's own
+// citations and the publisher's record. A new source adds its credit here, and a source no longer used loses it.
 export const CREDIT_GROUPS: readonly CreditGroup[] = [
 	{
 		title: 'Online Services',
@@ -51,7 +51,13 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 			{ name: 'Open-Meteo', url: 'https://open-meteo.com/', use: 'Hourly weather forecast of Astro Weather.', license: { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' }, notice: 'Free tier for non-commercial use.' },
 			{ name: '7Timer!', url: 'https://www.7timer.info/', use: 'Seeing and transparency forecast of Astro Weather.', notice: 'Free for non-commercial use. Ye, Q.-Z. 2011, PASP, 123, 113.' },
 			{ name: 'Horizons', owner: 'NASA/JPL Solar System Dynamics', url: 'https://ssd-api.jpl.nasa.gov/doc/horizons.html', use: 'Accurate positions of solar system bodies in the Sky, and small-body SPK kernels of the SPICE Kernel Library.' },
-			{ name: 'SPICE generic kernels', owner: 'NASA/JPL Navigation and Ancillary Information Facility (NAIF)', url: 'https://naif.jpl.nasa.gov/naif/data_generic.html', use: 'DE440 planetary ephemeris downloaded by the SPICE Kernel Library.', notice: 'Park, R. S. et al. 2021, AJ, 161, 105.' },
+			{
+				name: 'SPICE kernels',
+				owner: 'NASA/JPL Navigation and Ancillary Information Facility (NAIF) and Solar System Dynamics',
+				url: 'https://naif.jpl.nasa.gov/naif/data_generic.html',
+				use: 'DE440 and DE442 planetary ephemerides and the satellite ephemerides of the planets, downloaded by the SPICE Kernel Library.',
+				notice: 'DE440: Park, R. S. et al. 2021, AJ, 161, 105.',
+			},
 			{ name: 'Small-Body Database', owner: 'NASA/JPL Solar System Dynamics', url: 'https://ssd-api.jpl.nasa.gov/doc/sbdb.html', use: 'Search, orbits, and details of asteroids and comets, and the 1P/Halley preset of the Orbital Mechanics Explorer.' },
 			{ name: 'Close Approach Data', owner: 'NASA/JPL Solar System Dynamics', url: 'https://ssd-api.jpl.nasa.gov/doc/cad.html', use: 'Encounters listed by the Close Approaches tool.' },
 			{ name: 'SkyBoT', owner: 'LTE, Observatoire de Paris / CNRS (developed by IMCCE)', url: 'https://ssp.imcce.fr/webservices/skybot/', use: 'Solar system objects in the field of Image Annotation.', notice: 'This research has made use of LTE SkyBoT VO tool.' },
@@ -89,9 +95,18 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 			},
 			{ name: 'CGI Moon Kit', owner: "NASA's Scientific Visualization Studio", url: 'https://svs.gsfc.nasa.gov/4720/', use: 'Color maps of the Moon Inspector.' },
 			{ name: 'Gazetteer of Planetary Nomenclature', owner: 'USGS Astrogeology Science Center and the IAU', url: 'https://planetarynames.wr.usgs.gov/', use: 'Lunar surface features of the Moon Inspector.' },
-			{ name: 'AstroBin equipment database', owner: 'AstroBin', url: 'https://app.astrobin.com/equipment/explorer/camera', use: 'Camera models and sensors that fill a camera of the Equipment Catalog.' },
+			{ name: 'AstroBin equipment database', owner: 'AstroBin', url: 'https://app.astrobin.com/equipment/explorer', use: 'Camera, sensor, telescope, and lens models that fill the cameras and telescopes of the Equipment Catalog and the optics of the Calculator.' },
+			{ name: 'IAU constellation boundaries', owner: 'E. Delporte, for the IAU', url: 'https://en.wikipedia.org/wiki/IAU_designated_constellations', use: 'The constellation a position of the Sky or a satellite lies in.', notice: 'Délimitation scientifique des constellations, Cambridge University Press, 1930.' },
 			{ name: 'World location map', owner: 'TUBS, Wikimedia Commons', url: 'https://commons.wikimedia.org/wiki/File:World_location_map_(equirectangular_180).svg', use: 'Basemap of the eclipse maps.', license: { name: 'CC BY-SA 3.0', url: 'https://creativecommons.org/licenses/by-sa/3.0/' } },
 			{ name: 'JetBrains Mono', owner: 'The JetBrains Mono Project Authors', url: 'https://github.com/JetBrains/JetBrainsMono', use: 'Typeface of the interface, bundled with the application.', license: { name: 'SIL Open Font License 1.1', url: 'https://openfontlicense.org/' } },
+			{
+				name: 'libjpeg-turbo',
+				owner: 'The libjpeg-turbo Project',
+				url: 'https://libjpeg-turbo.org/',
+				use: 'JPEG reading and writing of images, its native library bundled with the application.',
+				license: { name: 'IJG and BSD-3-Clause', url: 'https://github.com/libjpeg-turbo/libjpeg-turbo/blob/main/LICENSE.md' },
+				notice: 'This software is based in part on the work of the Independent JPEG Group.',
+			},
 		],
 	},
 	{
@@ -100,6 +115,9 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 			{ name: 'VSOP87', owner: 'P. Bretagnon and G. Francou', url: 'https://ui.adsabs.harvard.edu/abs/1988A%26A...202..309B', use: 'Positions of the Sun and the planets.', notice: 'A&A 202, 309 (1988).' },
 			{ name: 'VSOP2000', owner: 'X. Moisson and P. Bretagnon', url: 'https://doi.org/10.1023/A:1012279014297', use: 'Position of the Earth behind the eclipse maps.', notice: 'Celestial Mechanics and Dynamical Astronomy, 2001.' },
 			{ name: 'ELP/MPP02', owner: 'J. Chapront and G. Francou', url: 'https://doi.org/10.1051/0004-6361:20030529', use: 'Position of the Moon.', notice: 'A&A 404, 735 (2003).' },
+			{ name: 'L1.2', owner: 'V. Lainey, A. Vienne, and L. Duriez', url: 'https://ftp.imcce.fr/pub/ephem/satel/galilean/L1/L1.2/', use: 'Positions of the Galilean moons in the Jupiter Observing Planner without a satellite kernel.', notice: 'A&A 456, 783 (2006).' },
+			{ name: 'TASS 1.7', owner: 'A. Vienne and L. Duriez', url: 'https://ftp.imcce.fr/pub/ephem/satel/tass17/', use: 'Positions of the major moons of Saturn in the Saturn Observing Planner without a satellite kernel.', notice: 'A&A 297, 588 (1995).' },
+			{ name: 'SGP4', owner: 'D. A. Vallado, P. Crawford, R. Hujsak, and T. S. Kelso', url: 'https://celestrak.org/publications/AIAA/2006-6753/', use: 'Propagation of the element sets of artificial satellites.', notice: 'Revisiting Spacetrack Report #3, AIAA 2006-6753.' },
 			{ name: 'Astronomical Algorithms', owner: 'Jean Meeus', url: 'https://en.wikipedia.org/wiki/Jean_Meeus', use: 'Lunar phases and apsides, eclipse series, and the position of Pluto.', notice: '2nd ed., Willmann-Bell, 1998.' },
 			{ name: 'Standards of Fundamental Astronomy', owner: 'IAU SOFA Board', url: 'https://www.iausofa.org/', use: 'Time scales, precession, nutation, and reductions to the observed place.' },
 			{ name: 'ERFA', owner: 'ERFA contributors', url: 'https://github.com/liberfa/erfa', use: 'The routines the toolkit ports, derived from SOFA.' },
@@ -126,7 +144,12 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 			{ name: 'DARV', owner: 'Robert Vice', url: 'https://astrophotography.app/usersguide/darv.htm', use: 'Drift alignment method of the DARV camera operation.' },
 			{ name: 'Universal-variable Kepler propagation', owner: 'NASA/JPL NAIF SPICE Toolkit', url: 'https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/prop2b_c.html', use: 'Two-body states of the Orbital Mechanics Explorer and of small bodies away from their epoch.' },
 			{ name: 'Moffat profile', owner: 'A. F. J. Moffat', url: 'https://ui.adsabs.harvard.edu/abs/1969A%26A.....3..455M', use: 'Fits of the Star Profile Inspector.', notice: 'A&A 3, 455 (1969).' },
-			{ name: 'PixInsight', owner: 'Pleiades Astrophoto', url: 'https://pixinsight.com/', use: 'Adaptive display function, arcsinh stretch, and multiscale median transform the image tools follow.' },
+			{ name: 'PixInsight', owner: 'Pleiades Astrophoto', url: 'https://pixinsight.com/', use: 'Adaptive display function, arcsinh stretch, and multiscale median transform the image tools follow, and the XISF image format.' },
+			{ name: 'ASTAP star extraction and matching', owner: 'Han Kleijn', url: 'https://www.hnsky.org/astap_astrometric_solving.htm', use: 'Built-in star detection, and the star matching that registers the frames of image stacking.' },
+			{ name: 'INDI', owner: 'INDI Library', url: 'https://indilib.org/', use: 'Protocol of the INDI connections to devices.' },
+			{ name: 'ASCOM Alpaca', owner: 'ASCOM Initiative', url: 'https://ascom-standards.org/', use: 'Protocol of the Alpaca connections to devices.' },
+			{ name: 'LX200 command set', owner: 'Meade Instruments', url: 'https://soundstepper.sourceforge.net/LX200_Compatible_Commands.html', use: 'Protocol Mount Remote Control speaks to planetarium programs.' },
+			{ name: 'Stellarium telescope protocol', owner: 'Stellarium', url: 'https://github.com/Stellarium/stellarium/tree/master/plugins/TelescopeControl', use: 'Protocol Mount Remote Control speaks to Stellarium.' },
 			{ name: 'Hough transform', owner: 'Paul V. C. Hough, R. O. Duda, and P. E. Hart', url: 'https://doi.org/10.1145/361237.361242', use: 'Streak detection and the trails of DARV.', notice: 'Communications of the ACM 15, 11 (1972).' },
 			{ name: 'Levenberg-Marquardt', owner: 'K. Levenberg and D. W. Marquardt', url: 'https://doi.org/10.1137/0111030', use: 'Nonlinear fits, such as star profiles and focus curves.', notice: 'Q. Appl. Math. 2, 164 (1944), and SIAM J. 11, 431 (1963).' },
 			{ name: 'Theil-Sen estimator', owner: 'Henri Theil and Pranab K. Sen', url: 'https://doi.org/10.1080/01621459.1968.10480934', use: 'Robust trend lines of Auto Focus and flat frames.', notice: 'JASA 63, 1379 (1968).' },

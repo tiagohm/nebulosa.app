@@ -102,7 +102,7 @@ The path every new capability follows, so it lands in one place and is observabl
    a field the server never keeps is view state: it says so in `schema.ts` and is a key of `VIEW_FIELDS` and `VIEW_STORAGE` in `web/src/profile/view.ts`.
    A change to the shape of a kept value raises `PROFILE_SETTINGS_VERSION` (an added optional field does not), never a migration; per-device forms are keyed by the device (connection id and device id), never by a role.
 7. **Credits.**
-   An external service, dataset, published model or method, or program a feature starts using gets its entry in `CREDIT_GROUPS` (`web/src/about/about.ts`), with the license or acknowledgment its publisher asks for.
+   An external service, dataset, published model or method, protocol, or bundled library or program a feature starts using gets its entry in `CREDIT_GROUPS` (`web/src/about/about.ts`), with the license or acknowledgment its publisher asks for; a change of that use updates the entry, and the end of it removes the entry.
 8. **The documents.**
    The row of the [Capability Inventory](architecture/capability-inventory.md), the rows of the [Workspace Responsibility Matrix](architecture/workspace-responsibility-matrix.md) and the [Device Resource Matrix](architecture/device-resource-matrix.md), the routes and events of [Routes and Events](architecture/routes-and-events.md), and the feature's contract, a document of its own under `docs/architecture/` listed in [Documents](#documents), are updated in the same commit.
 

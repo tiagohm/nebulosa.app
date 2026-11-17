@@ -14,3 +14,11 @@ export interface ApiError<C extends string = string> {
 export function errorResponse(message: string, status: number, code: string, details?: object): Response {
 	return Response.json({ ...details, error: message, code } satisfies ApiError, { status })
 }
+
+// Answers a failure no route answered itself, such as a database error a route let through, with 500 internal, so it
+// keeps the shape of every other error response; the failure is logged, since its message alone may not say where it
+// came from. The server passes it as the error handler of Bun.serve.
+export function unhandledErrorResponse(error: Error): Response {
+	console.error('A request failed', error)
+	return errorResponse(error.message || 'The request failed', 500, 'internal')
+}

@@ -113,6 +113,7 @@ export type {
 
 export type { AboutInfo } from './about'
 export { createAboutRoutes } from './about'
+export { unhandledErrorResponse } from './http'
 export type { AnalysisJob, AnalysisJobState } from './analysis'
 export type { AstronomicalTimeErrorCode, AstronomicalTimeInput, AstronomicalTimeQuality, AstronomicalTimeReference, AstronomicalTimeReferenceRequest, AstronomicalTimeRequest, AstronomicalTimeResult, CalendarReference, LeapSecondStatus, TimeScaleName, TimeScaleReading } from './astronomicaltime'
 export type { AstroWeatherAstronomy, AstroWeatherErrorCode, AstroWeatherForecast, AstroWeatherMeteorology, AstroWeatherProvider, AstroWeatherSource, AstroWeatherSourceState } from './astroweather'

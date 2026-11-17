@@ -74,7 +74,8 @@ A view that follows one device, such as the Sky mount (`mountView`), Mount Nudge
 Each `api` service exposes its routes through a `create<Name>Routes(service)` factory in its own module; `api/src/index.ts` only composes the services, spreads their routes, and serves `/api/health` and `/api/ws`.
 One route is composed by `app/src/main.ts` instead: `createAboutRoutes` (`api/src/about.ts`) serves the identity of the distribution, which `app` owns (its package version, and the commits and compile time `app/build.ts` inlines into the executable), so `api` never imports `app`.
 
-Every error response of `api` is `{ error, code }` (`ApiError` and `errorResponse` in `api/src/http.ts`): a message meant for people and a stable code a client branches on, never the message.
+Every error response of `api` is `{ error, code }` (`ApiError` and `errorResponse` in `api/src/http.ts`): a message meant for people and a stable code a client branches on, never the message;
+a failure a route lets through, such as a database error, is logged and answered 500 `internal` by the error handler of the server (`unhandledErrorResponse`, passed to `Bun.serve` by `app/src/main.ts`).
 Each service names its codes in a `<Name>ErrorCode` union (`CommandErrorCode` of `api/src/commands.ts` for the device commands, `StarDetectionErrorCode`, `PlateSolveErrorCode`, `CaptureFrameErrorCode`, …), and a route may add documented fields, such as the current state after a `conflict`.
 
 ## Adding a Feature

@@ -16,6 +16,7 @@ import {
 	stopObservatoryCameras,
 	stopOperations,
 	stopServer,
+	unhandledErrorResponse,
 	websocket,
 } from 'api'
 import index from 'web/index.html'
@@ -106,6 +107,7 @@ const server = Bun.serve({
 		...createAboutRoutes(ABOUT),
 		'/*': index,
 	},
+	error: unhandledErrorResponse,
 	websocket,
 })
 

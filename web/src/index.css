@@ -83,3 +83,33 @@
 		@apply bg-base-100 font-mono text-ink-100;
 	}
 }
+
+/* Scrollbar */
+
+.no-scrollbar::-webkit-scrollbar {
+	@apply hidden;
+}
+
+::-webkit-scrollbar {
+	@apply h-1.5 w-2
+}
+
+::-webkit-scrollbar-thumb {
+	@apply rounded-sm bg-neutral-600/40 bg-clip-content;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	@apply bg-neutral-500/40 cursor-default;
+}
+
+::-webkit-scrollbar-track {
+	@apply rounded-sm bg-transparent;
+}
+
+::-webkit-scrollbar-track-piece {
+	@apply bg-transparent;
+}
+
+::-webkit-scrollbar-corner {
+	@apply bg-transparent;
+}

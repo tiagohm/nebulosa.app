@@ -211,6 +211,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   An edit becomes a draft written whole 400 ms later from the revision it was made on, one write at a time per plan; a `409` keeps the draft and shows Keep Theirs (drop it) and Save Mine (write it over the revision the server kept).
   The line under the header summarizes the night, the mode, the minimum altitude, and the display zone, and opens the panel.
   Every section opens at its top.
+  Its caveats (the hard limits, the score, the timeline's keys) keep their first sentence in view and fold the rest (`FoldedNote.tsx`), and a plan is named with its night unless its name already says it (`planLabel`).
   Discover lists the catalog without a location and ranks the night's targets in batches that add up, saying how many objects were evaluated of how many match;
   the best targets are ordered by score (the server's ranking), name, magnitude, apparent size, best window, or longest window (`candidateSort`, `sortCandidates`; an unknown magnitude or size last), by their table headers on wide screens and by an Order select on phones, where every listing shows two-line rows instead of tables;
   choosing a row analyzes its target and its own button adds it to a plan;
@@ -221,7 +222,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Add to Plan proposes the plan of the tool's night at the tool's place, else of that night, else a new plan (`defaultPlanFor`), and warns when the plan chosen is for another night.
   Night Plan without a plan lists the saved plans (name, night, site, targets) to open; with one, the plan is its night: the totals, then the timeline (`PlanTimeline.tsx`, HTML over percentages of the night so its text keeps its size), one lane per item over the bands of the sky with the windows hatched, the scheduled block, and a line at the current time, then the editor of the item selected on it, then the plan's own details folded away (name, evening, copied site and constraints, Use Active Site, Use Tool Constraints).
   A lane is selected by a click or, with the timeline focused, the up and down arrows, Home, and End; the selected block is dragged by mouse, pen, or touch or moved with the left and right arrows (5 min, 1 with Shift) to the same canonical start, rounded to the minute, and Enter schedules an unscheduled item at its first window.
-  The item editor holds the requested minutes, the start typed as a local date and time of the display zone, the priority, the notes, the problems in words, the order, Show in Sky, Analyze, and Remove;
+  The item editor holds the requested minutes, the start typed as a local date and time of the display zone, the priority (said to be a note that never reorders or schedules), the notes, the problems in words (an overlap names the other item: `conflictSentence`), the order, Show in Sky, Analyze, and Remove;
   plans are created, duplicated, and deleted (the delete confirmed in the danger tone);
   a badge says whether the plan's edits are Saved, Saving, in Conflict, or Not saved (`planSaveStatus`), and the latest item removed can be put back with Undo until another plan is opened.
   Show in Sky and Add to Plan are the handoffs of the Sky Map Contract.

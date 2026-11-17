@@ -18,8 +18,9 @@ import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 import { useNow } from '../../useNow'
+import { FoldedNote } from './FoldedNote'
 import {
-	CONFLICT_LABELS,
+	conflictSentence,
 	createPlan,
 	deletePlan,
 	discardDraft,
@@ -36,6 +37,7 @@ import {
 	overwritePlan,
 	type PlanSaveStatus,
 	planDocument,
+	planLabel,
 	planningSite,
 	planSaveStatus,
 	plain,
@@ -199,7 +201,7 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 
 	const header = (
 		<div className="flex flex-wrap items-end gap-2">
-			<Select label="Plan" className="min-w-56 flex-1" options={['', ...list.map((plan) => plan.id)]} value={planId && saved ? planId : ''} onChange={(id) => openPlan(observingPlannerState, id || undefined)} format={(id) => (id ? `${plans.plans[id]?.name} · ${plans.plans[id]?.eveningDate}` : 'All plans')} />
+			<Select label="Plan" className="min-w-56 flex-1" options={['', ...list.map((plan) => plan.id)]} value={planId && saved ? planId : ''} onChange={(id) => openPlan(observingPlannerState, id || undefined)} format={(id) => (id && plans.plans[id] ? planLabel(plans.plans[id]) : 'All plans')} />
 			{saved && (
 				<span className="flex h-[33.25px] items-center">
 					<StatusBadge {...SAVE_STATUS_LABELS[planSaveStatus(plans, saved.id)]} />
@@ -310,7 +312,7 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 			) : preview ? (
 				<div className="flex flex-col gap-2">
 					<PlanTimeline plan={document} preview={preview} timeZone={timeZone} now={now} selected={selected?.id} onSelect={setSelection} onMove={(itemId, start) => editItem(itemId, (item) => ({ ...item, scheduledStartAt: start }))} onSchedule={schedule} />
-					<Notice>Choose a target by its lane, and drag its block to schedule it. With the timeline focused, up and down choose, left and right move the block 5 min (1 min with Shift), and Enter schedules it.</Notice>
+					<FoldedNote summary="Choose a target by its lane, and drag its block to schedule it.">With the timeline focused, the up and down arrows choose a target, the left and right arrows move its block 5 min (1 min with Shift), and Enter schedules an unscheduled one at its first window.</FoldedNote>
 				</div>
 			) : (
 				<p className="m-0 text-sm text-ink-300">{tool.previewLoading ? 'Computing the plan…' : 'The plan could not be computed.'}</p>
@@ -338,6 +340,7 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 					timeZone={timeZone}
 					first={selectedIndex === 0}
 					last={selectedIndex === items.length - 1}
+					names={items}
 					canSchedule={firstStart(selectedPreview, nightStart) !== undefined}
 					onChange={(change) => editItem(selected.id, change)}
 					onSchedule={() => schedule(selected.id)}
@@ -420,6 +423,8 @@ interface ItemEditorProps {
 	// Whether it is the first and the last item.
 	readonly first: boolean
 	readonly last: boolean
+	// Items of the plan, which name the blocks it overlaps.
+	readonly names: readonly Pick<ObservingPlanItem, 'id' | 'targetName'>[]
 	// Whether it can be scheduled from the plan (a window or the night is known).
 	readonly canSchedule: boolean
 	// Changes the item.
@@ -438,7 +443,7 @@ interface ItemEditorProps {
 
 // Editor of the item selected on the timeline: its target and status, its windows, its request and start, its problems in
 // words, and its actions.
-function ItemEditor({ item, preview, timeZone, first, last, canSchedule, onChange, onSchedule, onMove, onRemove, onShow, onAnalyze }: ItemEditorProps) {
+function ItemEditor({ item, preview, timeZone, first, last, names, canSchedule, onChange, onSchedule, onMove, onRemove, onShow, onAnalyze }: ItemEditorProps) {
 	const [startError, setStartError] = useState<string>()
 	const status = preview?.analysis.status
 	const windows = preview?.analysis.windows ?? []
@@ -488,13 +493,14 @@ function ItemEditor({ item, preview, timeZone, first, last, canSchedule, onChang
 				<NumberInput label="Priority" className="w-32" value={item.priority} min={1} max={5} onChange={(priority) => onChange((current) => ({ ...current, priority }))} />
 			</div>
 			<TextInput key={`notes-${item.notes}`} label="Notes" defaultValue={item.notes} onBlur={(event) => event.target.value !== item.notes && onChange((current) => ({ ...current, notes: event.target.value }))} />
+			<Notice>The priority (1 to 5) is a note for you: it never reorders or schedules anything.</Notice>
 			{startError && <Notice error>{startError}</Notice>}
 			{preview && preview.conflicts.length > 0 && (
 				<ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-danger">
 					{preview.conflicts.map((conflict) => (
 						<li key={`${conflict.code}-${conflict.itemId ?? ''}`} className="flex items-start gap-1.5">
 							<Icon name="warning" className="mt-0.5 size-3.5 flex-none" />
-							{CONFLICT_LABELS[conflict.code]}
+							{conflictSentence(conflict, names)}
 						</li>
 					))}
 				</ul>

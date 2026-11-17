@@ -15,6 +15,7 @@ import type {
 	ObservingPlansSnapshot,
 	ObservingReasonCode,
 	ObservingSample,
+	ObservingScheduleConflict,
 	ObservingScheduleConflictCode,
 	ObservingStatus,
 	ObservingTargetRef,
@@ -132,6 +133,17 @@ export const CONFLICT_LABELS: Readonly<Record<ObservingScheduleConflictCode, str
 	outsideNight: 'The block is outside the night.',
 	outsideValidWindow: 'The block does not fit inside one window.',
 	overlapsItem: 'Overlaps another block.',
+}
+
+// Returns the sentence of a schedule problem, naming the item whose block it overlaps.
+export function conflictSentence(conflict: ObservingScheduleConflict, items: readonly Pick<ObservingPlanItem, 'id' | 'targetName'>[]) {
+	const other = conflict.code === 'overlapsItem' ? items.find((item) => item.id === conflict.itemId) : undefined
+	return other ? `Overlaps the block of ${other.targetName}.` : CONFLICT_LABELS[conflict.code]
+}
+
+// Returns the name of a plan with its night, unless its name already says it, such as "Night of 2026-11-16".
+export function planLabel(plan: Pick<ObservingPlan, 'name' | 'eveningDate'>) {
+	return plan.name.includes(plan.eveningDate) ? plan.name : `${plan.name} · ${plan.eveningDate}`
 }
 
 // Static catalog filter of the tool.

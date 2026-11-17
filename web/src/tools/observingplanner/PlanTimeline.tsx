@@ -5,7 +5,7 @@ import { formatClockTime, formatSpan } from '../../format'
 import { Icon } from '../../ui/Icon'
 import { moveIndex } from '../../ui/navigation'
 import { type SkyBand, skyBands } from '../astroweather/astroweather'
-import { CONFLICT_LABELS } from './observingplanner'
+import { conflictSentence } from './observingplanner'
 
 // Timeline of a night plan, the main surface of the Night Plan: one lane per item over the displayed night, in plan order,
 // over the bands of the sky, with the item's windows hatched, its scheduled block filled, and a line at the current time
@@ -143,7 +143,7 @@ export function PlanTimeline({ plan, preview, timeZone, now, selected, onSelect,
 						return (
 							<div
 								key={item.id}
-								title={[item.targetName, ...conflicts.map((e) => CONFLICT_LABELS[e.code])].join('\n')}
+								title={[item.targetName, ...conflicts.map((e) => conflictSentence(e, plan.items))].join('\n')}
 								onClick={() => onSelect(item.id)}
 								className={cn('flex min-w-0 cursor-pointer items-center gap-1.5 border-b border-line-100 px-2 text-xs last:border-b-0', LANE_HEIGHT, item.id === selected ? 'bg-accent-subtle text-accent' : 'text-ink-200 hover:bg-base-300')}
 							>
@@ -180,7 +180,7 @@ export function PlanTimeline({ plan, preview, timeZone, now, selected, onSelect,
 									<span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-ink-300">Not scheduled</span>
 								) : (
 									<div
-										title={`${item.targetName}: ${formatSpan(scheduled, scheduled + item.requestedDurationMs, timeZone)}${conflicts.map((e) => `\n${CONFLICT_LABELS[e.code]}`).join('')}`}
+										title={`${item.targetName}: ${formatSpan(scheduled, scheduled + item.requestedDurationMs, timeZone)}${conflicts.map((e) => `\n${conflictSentence(e, plan.items)}`).join('')}`}
 										onPointerDown={(event) => onPointerDown(event, item.id)}
 										onPointerMove={(event) => onPointerMove(event, item.id)}
 										onPointerUp={() => item.scheduledStartAt !== undefined && onPointerUp(item.id, item.scheduledStartAt)}

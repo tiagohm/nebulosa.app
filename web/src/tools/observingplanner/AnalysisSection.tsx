@@ -15,6 +15,7 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import { useNow } from '../../useNow'
 import { openMeteorShowerAt } from '../meteorshowers/meteorshowers'
+import { FoldedNote } from './FoldedNote'
 import { formatScore, formatTargetKind } from './format'
 import { NightChart } from './NightChart'
 import { analyze, defaultSampleIndex, type NamedTarget, type ObservingPlannerState, observingPlannerState, REASON_LABELS, refreshOrbitalElements, showTargetInSky, STATUS_LABELS } from './observingplanner'
@@ -150,7 +151,7 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 											)
 										})}
 									</DataList>
-									<Notice>A relative ranking of the hard-constraint windows (model {analysis.score.modelVersion}), not a predicted signal-to-noise ratio or sky brightness. Altitudes are geometric, without refraction or a local horizon.</Notice>
+									<FoldedNote summary="A relative ranking, not a predicted signal-to-noise ratio or sky brightness.">It ranks the windows that pass the hard constraints (model {analysis.score.modelVersion}). Altitudes are geometric, without refraction or a local horizon.</FoldedNote>
 								</>
 							) : (
 								<p className="m-0 text-sm text-ink-300">Scored only inside a window.</p>

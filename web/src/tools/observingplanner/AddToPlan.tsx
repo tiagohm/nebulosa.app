@@ -7,7 +7,7 @@ import { Modal, ModalActions } from '../../ui/Modal'
 import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
-import { createPlan, defaultPlanFor, editPlan, type NamedTarget, newItem, newPlanDocument, observingPlannerState, observingPlansState, openPlan, sortedPlans } from './observingplanner'
+import { createPlan, defaultPlanFor, editPlan, planLabel, type NamedTarget, newItem, newPlanDocument, observingPlannerState, observingPlansState, openPlan, sortedPlans } from './observingplanner'
 
 // Dialog adding a target to a night plan: an existing plan, or a new one for the active site and the tool's night and constraints.
 // It proposes the plan of the tool's night (at the tool's place first), else a new plan, and says so when the plan chosen
@@ -83,7 +83,7 @@ export function AddToPlan({ target, onClose, location, siteId, eveningDate, cons
 					format={(id) => {
 						if (id === NEW_PLAN) return 'New plan…'
 						const plan = plans.find((e) => e.id === id)
-						return plan ? `${plan.name} · ${plan.eveningDate}` : id
+						return plan ? planLabel(plan) : id
 					}}
 					disabledReason={(id) => (id === NEW_PLAN && !canCreate ? 'Set the observing site of this profile first' : undefined)}
 				/>

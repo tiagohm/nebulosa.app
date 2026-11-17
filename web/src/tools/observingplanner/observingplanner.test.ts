@@ -8,6 +8,7 @@ import { plannerTarget } from '../../sky/ObjectActions'
 import type { SkyIo, SkyState } from '../../sky/sky'
 import {
 	addToObservingPlanner,
+	conflictSentence,
 	createObservingPlannerState,
 	defaultPlanFor,
 	defaultSampleIndex,
@@ -20,6 +21,7 @@ import {
 	type ObservingPlansState,
 	overwritePlan,
 	planDocument,
+	planLabel,
 	planSaveStatus,
 	refreshObservingPlans,
 	sameTarget,
@@ -236,6 +238,17 @@ describe('candidate order', () => {
 		expect(ids({ key: 'size', reversed: false })).toEqual([2, 1, 3])
 		expect(ids({ key: 'best', reversed: false })).toEqual([2, 3, 1])
 		expect(ids({ key: 'longest', reversed: false })).toEqual([2, 3, 1])
+	})
+})
+
+describe('plan wording', () => {
+	test('an overlap names the other block, and a plan label adds its night only when the name lacks it', () => {
+		const items = [{ id: 'a', targetName: 'M 42' }]
+		expect(conflictSentence({ code: 'overlapsItem', itemId: 'a' }, items)).toBe('Overlaps the block of M 42.')
+		expect(conflictSentence({ code: 'overlapsItem', itemId: 'gone' }, items)).toBe('Overlaps another block.')
+		expect(conflictSentence({ code: 'outsideNight' }, items)).toBe('The block is outside the night.')
+		expect(planLabel({ name: 'Night of 2026-11-16', eveningDate: '2026-11-16' })).toBe('Night of 2026-11-16')
+		expect(planLabel({ name: 'Orion', eveningDate: '2026-11-16' })).toBe('Orion · 2026-11-16')
 	})
 })
 

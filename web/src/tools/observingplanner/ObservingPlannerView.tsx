@@ -19,6 +19,7 @@ import { TextInput } from '../../ui/TextInput'
 import { AddToPlan } from './AddToPlan'
 import { AnalysisSection } from './AnalysisSection'
 import { DiscoverSection } from './DiscoverSection'
+import { FoldedNote } from './FoldedNote'
 import { analyze, loadPresets, MODE_LABELS, type NamedTarget, OBSERVING_MODES, OBSERVING_PLANNER_SECTIONS, type ObservingPlannerState, observingPlannerState, refreshAnalysis, SECTION_LABELS, selectMode, tonight } from './observingplanner'
 import { PlanSection } from './PlanSection'
 
@@ -96,7 +97,9 @@ export function ObservingPlanner() {
 					<NumberInput label="Maximum Sun altitude" suffix="°" value={Math.round(constraints.maximumSunAltitude * DEGREES)} min={-18} max={0} onChange={(value) => setConstraint('maximumSunAltitude', value / DEGREES)} />
 					<NumberInput label="Moon separation while up (0 for none)" suffix="°" value={Math.round((constraints.minimumMoonSeparation ?? 0) * DEGREES)} min={0} max={180} onChange={(value) => setConstraint('minimumMoonSeparation', value > 0 ? value / DEGREES : undefined)} />
 					<NumberInput label="Minimum continuous time" suffix="min" value={Math.round(constraints.minimumContinuousMs / MINUTE_MS)} min={state.presets.minimumContinuousMs / MINUTE_MS} max={720} step={5} onChange={(value) => setConstraint('minimumContinuousMs', value * MINUTE_MS)} />
-					<Notice>Hard limits: a target outside them is never ranked. Altitudes are geometric, without refraction or a local horizon. The Moon separation counts only while the Moon is above the horizon. Windows shorter than {formatHours(constraints.minimumContinuousMs)} are left out.</Notice>
+					<FoldedNote summary="Hard limits: a target outside them is never ranked.">
+						Altitudes are geometric, without refraction or a local horizon. The Moon separation counts only while the Moon is above the horizon. Windows shorter than {formatHours(constraints.minimumContinuousMs)} are left out.
+					</FoldedNote>
 				</CollapsibleSection>
 			)}
 		</>
@@ -119,11 +122,7 @@ export function ObservingPlanner() {
 							onClick={() => panelState.setOpen(true)}
 							className="flex cursor-pointer items-start gap-2 self-start rounded-sm text-left text-xs leading-4 text-ink-300 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
 						>
-							<span>
-								{state.eveningDate && `Night of ${state.eveningDate}`}
-								{constraints && ` · ${MODE_LABELS[constraints.mode]}, altitude ≥ ${formatDegrees(constraints.minimumAltitude, 0)}`}
-								{` · ${describeDisplayZone(displayZone)}`}
-							</span>
+							<span>{[state.eveningDate && `Night of ${state.eveningDate}`, constraints && `${MODE_LABELS[constraints.mode]}, altitude ≥ ${formatDegrees(constraints.minimumAltitude, 0)}`, describeDisplayZone(displayZone)].filter(Boolean).join(' · ')}</span>
 							<Icon name="sliders" className="mt-px size-3.5 flex-none" />
 						</button>
 					) : (

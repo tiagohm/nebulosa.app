@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import type { Focuser, Mount, Rotator, Wheel } from 'nebulosa/src/devices/indi/device'
 import type { CameraSimulator } from 'nebulosa/src/devices/indi/simulator/camera'
 import type { ClientSimulator } from 'nebulosa/src/devices/indi/simulator/client'
-import { type ConnectionEvent, ConnectionManager, connectionId } from './connection'
+import { ConnectionCancelledError, type ConnectionEvent, ConnectionManager, connectionId, createConnectionRoutes } from './connection'
 import type { DeviceEvent, DeviceSummary } from './devices'
 import { routes, websocket } from './index'
 import type { ServerEvent } from './websocket'
@@ -255,6 +255,28 @@ test('a listener that throws does not keep the event from the listeners after it
 	expect(received).toContain('connection:open')
 })
 
+test('the route tells a cancelled opening apart from an endpoint it cannot reach', async () => {
+	const manager = new ConnectionManager()
+	disposables.push(manager)
+	const routes = createConnectionRoutes(manager)
+	const post = () => Promise.resolve(routes['/api/connections'].POST(new Request('http://localhost/api/connections', { method: 'POST', body: JSON.stringify({ type: 'SIMULATOR' }) }) as never))
+	const connect = spyOn(manager, 'connect')
+
+	try {
+		connect.mockRejectedValueOnce(new ConnectionCancelledError('The connection was closed while it opened'))
+		const cancelled = await post()
+		expect(cancelled.status).toBe(409)
+		expect(await cancelled.json()).toMatchObject({ code: 'cancelled' })
+
+		connect.mockRejectedValueOnce(new Error('connection refused'))
+		const unreachable = await post()
+		expect(unreachable.status).toBe(502)
+		expect(await unreachable.json()).toMatchObject({ code: 'unreachable' })
+	} finally {
+		connect.mockRestore()
+	}
+})
+
 test('a disconnect while a connection opens cancels it, and a disposed registry keeps none it was opening', async () => {
 	const manager = new ConnectionManager()
 	const events: string[] = []
@@ -262,12 +284,12 @@ test('a disconnect while a connection opens cancels it, and a disposed registry 
 
 	const opening = manager.connect({ type: 'SIMULATOR' })
 	expect(manager.disconnect(connectionId({ type: 'SIMULATOR' }))).toBeTrue()
-	await expect(opening).rejects.toThrow('closed while it opened')
+	await expect(opening).rejects.toBeInstanceOf(ConnectionCancelledError)
 	expect(manager.list()).toEqual([])
 	expect(events).not.toContain('connection:open')
 
 	const disposed = manager.connect({ type: 'SIMULATOR' })
 	manager[Symbol.dispose]()
-	await expect(disposed).rejects.toThrow('closed while it opened')
+	await expect(disposed).rejects.toBeInstanceOf(ConnectionCancelledError)
 	expect(manager.list()).toEqual([])
 })

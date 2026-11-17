@@ -12,7 +12,7 @@ Reading order for a new contributor: the [Glossary](#glossary) and the [Architec
 
 - **Connection**: an open INDI, Alpaca, or simulator client on the server (`api/src/connection.ts`), identified by its connection id.
   Saved connections (host, port, type) are workspace data the server keeps for every tab and browser (`api/src/workspace.ts`); open ones are server state shared by every tab.
-  A disconnect of a connection still opening cancels the opening, and a connection that finishes opening after the registry was disposed (a server stopping in place) closes at once.
+  A disconnect of a connection still opening cancels the opening, answered 409 `cancelled` rather than 502 `unreachable`, and a connection that finishes opening after the registry was disposed (a server stopping in place) closes at once.
 - **Device**: one interface a connection reports (camera, mount, focuser, …), identified by connection id + device id (`DeviceSummary`).
   Several interfaces of one physical device share a hardware id.
 - **Profile**: the workspace of an operator: its saved connection, equipment setup, optical presets, and preferences, kept by the server (`api/src/workspace.ts`) for every tab and browser and edited in the tab (`web/src/profile/`), which writes back what changed (`sync.ts`).

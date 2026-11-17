@@ -158,6 +158,10 @@ async function openClient(id: string, request: ConnectRequest, handler: IndiClie
 	}
 }
 
+// Failure of an opening a disconnect cancelled, or that a registry disposed meanwhile dropped: the endpoint may well be
+// reachable, so it is told apart from a failure to reach it.
+export class ConnectionCancelledError extends Error {}
+
 // Registry of open connections keyed by endpoint id.
 export class ConnectionManager implements Disposable {
 	// Open connections keyed by endpoint id.
@@ -193,8 +197,9 @@ export class ConnectionManager implements Disposable {
 	}
 
 	// Opens the client for request under the endpoint id, registers it as open, and publishes
-	// connection:open. Rejects with the Error thrown by openClient, leaving the registry unchanged, and with an Error when a
-	// disconnect cancelled the opening or the registry was disposed meanwhile, closing the client that opened.
+	// connection:open. Rejects with the Error thrown by openClient, leaving the registry unchanged, and with a
+	// ConnectionCancelledError when a disconnect cancelled the opening or the registry was disposed meanwhile, closing the
+	// client that opened.
 	async #connect(id: string, request: ConnectRequest): Promise<ConnectionStatus> {
 		const handler = new IndiClientHandlerSet([this.devices.handler, { close: (client: Client) => this.#closed(id, client) }])
 		const client = await openClient(id, request, handler, this.devices)
@@ -202,7 +207,7 @@ export class ConnectionManager implements Disposable {
 		if (this.#disposed || this.#cancelled.delete(id)) {
 			client[Symbol.dispose]()
 			this.devices.close(client)
-			throw new Error('The connection was closed while it opened')
+			throw new ConnectionCancelledError('The connection was closed while it opened')
 		}
 
 		const status: ConnectionStatus = { ...request, id }
@@ -293,11 +298,12 @@ export function createConnectionRoutes(connections: ConnectionManager) {
 			// The open connections, shared by every tab.
 			GET: () => Response.json(connections.list()),
 			// Opens a connection, or returns the existing one for the same endpoint. Responds 502 (unreachable) when the
-			// endpoint cannot be reached.
+			// endpoint cannot be reached, and 409 (cancelled) when a disconnect cancelled the opening.
 			POST: async (req) => {
 				try {
 					return Response.json(await connections.connect((await req.json()) as ConnectRequest))
 				} catch (error) {
+					if (error instanceof ConnectionCancelledError) return errorResponse(error.message, 409, 'cancelled')
 					return errorResponse(Error.isError(error) ? error.message : 'Unable to connect', 502, 'unreachable')
 				}
 			},

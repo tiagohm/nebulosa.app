@@ -1,6 +1,6 @@
-import type { MeteorActivityState, MeteorAnnualEvent, MeteorDataBasis, MeteorNoWindowReason, MeteorShowerGap, MeteorShowerOccurrence, MeteorShowerStatus, MeteorShowerSummary, MeteorSolutionSelection } from 'api'
+import type { MeteorActivityState, MeteorAnnualEvent, MeteorDataBasis, MeteorNoWindowReason, MeteorObservingWindow, MeteorShowerGap, MeteorShowerOccurrence, MeteorShowerStatus, MeteorShowerSummary, MeteorSolutionSelection } from 'api'
 import { AU_KM, DAYSEC } from 'nebulosa/src/core/constants'
-import { formatDate, formatDateTime, MISSING } from '../../format'
+import { formatClockTime, formatDate, formatDateTime, formatDegrees, formatPercent, formatSpan, MISSING } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Labels and formatting of the Meteor Showers tool: the names of the states, sources, and reasons the server answers,
@@ -16,7 +16,7 @@ export const ACTIVITY_KIND_LABELS: Readonly<Record<MeteorShowerSummary['activity
 export const ACTIVITY_LABELS: Readonly<Record<MeteorActivityState, { readonly label: string; readonly tone: StatusTone }>> = {
 	active: { label: 'Active', tone: 'success' },
 	inactive: { label: 'Not active', tone: 'neutral' },
-	unknown: { label: 'Activity unknown', tone: 'warning' },
+	unknown: { label: 'Activity unknown', tone: 'muted' },
 }
 
 // Name of each source of a datum.
@@ -47,6 +47,48 @@ export const REASON_LABELS: Readonly<Record<MeteorNoWindowReason, string>> = {
 	moonConstraint: 'Only the Moon constraint leaves no window.',
 	noWindow: 'No stretch of the night is dark enough with the radiant high enough.',
 	insufficientData: 'No window, for a reason the samples cannot tell.',
+}
+
+// The verdict of a night without a window, in two or three words, for a list or a badge; REASON_LABELS says it in full.
+export const VERDICT_LABELS: Readonly<Record<MeteorNoWindowReason, string>> = {
+	missingRadiant: 'No radiant',
+	noSupportedActivity: 'Not active',
+	sunTooHigh: 'Never dark enough',
+	radiantBelowThreshold: 'Radiant too low',
+	moonConstraint: 'Moon too close',
+	noWindow: 'No window',
+	insufficientData: 'No window',
+}
+
+// The window of a night with the most opportunity (the radiant height integrated over it), the one a night's verdict
+// names; absent without a window.
+export function bestWindow<T extends Pick<MeteorObservingWindow, 'radiantSineHours'>>(windows: readonly T[]): T | undefined {
+	let best: T | undefined
+	for (const window of windows) if (best === undefined || window.radiantSineHours > best.radiantSineHours) best = window
+	return best
+}
+
+// One line of a window: its span, the highest radiant and when, and the Moon then.
+export function describeWindow(window: MeteorObservingWindow, timeZone: string) {
+	const moon = window.moonAltitudeAtBest > 0 ? `${formatDegrees(window.moonAltitudeAtBest, 0)} high, ${formatDegrees(window.moonRadiantSeparationAtBest, 0)} from the radiant` : 'down'
+	return `${formatSpan(window.start, window.end, timeZone)} · radiant up to ${formatDegrees(window.maximumRadiantAltitude, 0)} at ${formatClockTime(window.bestTime, timeZone)} · Moon ${formatPercent(window.moonIlluminationAtBest)} lit, ${moon}`
+}
+
+// How far a night is from the evening shown, in whole nights: "this night", "the next night", "in 3 nights", "2 nights ago".
+export function formatNightsAway(days: number) {
+	if (days === 0) return 'this night'
+	if (days === 1) return 'the next night'
+	if (days === -1) return 'the night before'
+	return days > 0 ? `in ${days} nights` : `${-days} nights ago`
+}
+
+// Names of the weekdays, Sunday first, as Date.getUTCDay counts them.
+const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+// An evening, YYYY-MM-DD, with its weekday: "Tue 2026-11-17".
+export function formatEvening(date: string) {
+	const [year, month, day] = date.split('-').map(Number)
+	return `${WEEKDAY_NAMES[new Date(Date.UTC(year, month - 1, day)).getUTCDay()]} ${date}`
 }
 
 // Decimals of the published maximum below which only the date is meaningful.

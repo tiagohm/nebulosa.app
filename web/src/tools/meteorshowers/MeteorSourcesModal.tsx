@@ -3,8 +3,9 @@ import { formatDateTime } from '../../format'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
-import { Modal } from '../../ui/Modal'
+import { Modal, ModalActions } from '../../ui/Modal'
 import { Notice } from '../../ui/Notice'
+import { SectionHeading } from '../../ui/SectionHeading'
 import { meteorShowerSourcesState, refreshIauCatalog } from './meteorshowers.sources'
 
 // Sources of the Meteor Showers tool: the IAU catalog in use (bundled or downloaded, its version, checksum, counts, and the
@@ -29,7 +30,7 @@ export function MeteorSourcesModal({ open, onClose, timeZone }: { readonly open:
 		<Modal open={open} onClose={onClose} title="Meteor Shower Sources">
 			<div className="flex flex-col gap-3">
 				<section className="flex flex-col gap-1">
-					<h3 className="m-0 text-sm font-semibold text-ink-100">IAU Meteor Data Center</h3>
+					<SectionHeading>IAU Meteor Data Center</SectionHeading>
 					{iau ? (
 						<DataList>
 							<DataRow label="In use">{iau.origin === 'bundled' ? 'Bundled with the application' : 'Downloaded'}</DataRow>
@@ -53,7 +54,7 @@ export function MeteorSourcesModal({ open, onClose, timeZone }: { readonly open:
 					<Notice>Downloads the official stream catalog again. A document that cannot be validated never replaces the one in use.</Notice>
 				</section>
 				<section className="flex flex-col gap-1">
-					<h3 className="m-0 text-sm font-semibold text-ink-100">Visual Data</h3>
+					<SectionHeading>Visual Data</SectionHeading>
 					{visual && (
 						<>
 							<Notice>{`${visual.showerCount} major showers curated by hand, revision ${visual.revision}; year-specific notes curated for ${visual.annualPredictionYears.join(' and ')}.`}</Notice>
@@ -71,6 +72,11 @@ export function MeteorSourcesModal({ open, onClose, timeZone }: { readonly open:
 					)}
 				</section>
 			</div>
+			<ModalActions>
+				<Button variant="secondary" onClick={onClose}>
+					Close
+				</Button>
+			</ModalActions>
 		</Modal>
 	)
 }

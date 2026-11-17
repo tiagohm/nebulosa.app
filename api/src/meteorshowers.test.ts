@@ -3,7 +3,7 @@ import { meteorShowerDates } from 'nebulosa/src/astronomy/meteors/solar'
 import { timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { AstroWeatherNights } from './astroweather.night'
 import { AppDatabase } from './database'
-import { createMeteorShowersRoutes, type MeteorShowerDetail, type MeteorShowersChangedEvent, MeteorShowersService } from './meteorshowers'
+import { createMeteorShowersRoutes, type MeteorShowerDetail, type MeteorShowersChangedEvent, type MeteorShowersNight, MeteorShowersService } from './meteorshowers'
 import { iauOccurrence } from './meteorshowers.astronomy'
 import { filterMeteorShowers, indexMeteorCatalog, selectSolution } from './meteorshowers.catalog'
 import { MeteorSolarLongitudeTable } from './meteorshowers.solar'
@@ -287,6 +287,28 @@ describe('positions and nights', () => {
 		expect(june.reasons).toEqual(['noSupportedActivity'])
 		const noRadiant = (await (await post('mdc:M2023-D1', { site: SAO_PAULO, eveningDate: '2026-06-13', ...NIGHT })).json()) as { reasons: string[] }
 		expect(noRadiant.reasons).toEqual(['missingRadiant'])
+	})
+
+	test('a night answers the curated showers active in it with their windows, and counts the other active showers', async () => {
+		const { routes } = setup()
+		const post = async (body: object) => (await (await routes['/api/meteor-showers/night'].POST(new Request('http://localhost/', { method: 'POST', body: JSON.stringify(body) }) as never)).json()) as MeteorShowersNight
+
+		const geminids = await post({ site: SAO_PAULO, eveningDate: '2026-12-13', ...NIGHT })
+		expect(geminids.eveningDate).toBe('2026-12-13')
+		expect(geminids.showers.map((entry) => entry.shower.id)).toEqual(['iau:4'])
+		expect(geminids.showers[0]).toMatchObject({ kind: 'geometric', reasons: [] })
+		expect(geminids.showers[0].windows).toHaveLength(1)
+		expect(geminids.showers[0].shower.activityNow.state).toBe('active')
+		expect(geminids.showers[0].shower.occurrence?.visual?.peak).toBeGreaterThan(geminids.night.sun.start)
+		expect(geminids.showers[0].expectedCount).toBeUndefined()
+		expect(geminids.otherActive).toBe(0)
+
+		const modelled = await post({ site: SAO_PAULO, eveningDate: '2026-12-13', ...NIGHT, assumptions: { limitingMagnitude: 6.5, obstructedFraction: 0 } })
+		expect(modelled.showers[0].kind).toBe('modelled')
+		expect(modelled.showers[0].expectedCount!).toBeGreaterThan(0)
+		expect(modelled.showers[0].bestLocalHourlyRate!).toBeGreaterThan(0)
+
+		expect((await post({ site: SAO_PAULO, eveningDate: '2026-06-13', ...NIGHT })).showers).toEqual([])
 	})
 
 	test('an unknown shower is 404 notFound and a known one answers its every solution', async () => {

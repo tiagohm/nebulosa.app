@@ -20,24 +20,29 @@ import {
 	type MeteorRadiantPathRequest,
 	radiantPath,
 	type MeteorActivityState,
+	type MeteorNoWindowReason,
 	type MeteorObservingNight,
 	type MeteorObservingRequest,
+	type MeteorObservingSupport,
+	type MeteorObservingWindow,
 	type MeteorShowerOccurrence,
 	type MeteorShowerStates,
 	type MeteorShowerStatesRequest,
 	type MeteorSkyRadiants,
 	meteorShowerStatesAt,
 	observingNight,
+	observingSupport,
 	occurrenceInstant,
 	occurrencesOverlapping,
 	rankNights,
 	skyRadiantsAt,
+	supportMeetsNight,
 } from './meteorshowers.astronomy'
 import { activityKindOf, filterMeteorShowers, indexMeteorCatalog, type MeteorCatalogIndex, MeteorCatalogInvalidError, type MeteorShowerFilter, type MeteorShowerGap, type MeteorShowerIdentity, type MeteorShowerRecord, type MeteorSolutionSelection, preferredSolution } from './meteorshowers.catalog'
 import { MeteorSolarLongitudeTable } from './meteorshowers.solar'
 import type { MeteorCatalogFailureCode, MeteorShowerStore } from './meteorshowers.store'
 import { annualEventsOf, METEOR_ACTIVITY_MODEL_REVISION, METEOR_ANNUAL_PREDICTION_YEARS, METEOR_VISUAL_REVISION, METEOR_VISUAL_SOURCES, type MeteorAnnualEvent, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSource } from './meteorshowers.visual'
-import type { TargetAnalysis } from './observingplanner.astronomy'
+import { resolveNight, type TargetAnalysis } from './observingplanner.astronomy'
 import { fetchUpstream, type UpstreamFetch, UpstreamTooLargeError, UpstreamUnavailableError } from './sky/remote'
 import type { SkyMeteorShowers } from './sky/routes'
 import type { SkySearchResult } from './sky/types'
@@ -262,6 +267,41 @@ export interface MeteorShowersCalendar {
 export interface MeteorSkyRadiantsRequest {
 	// Instant, Unix milliseconds (UTC).
 	readonly time: number
+}
+
+// One curated shower of a night: its row at the evening, and its geometric windows (with the modelled count when the
+// night is modelled) under the constraints of the request.
+export interface MeteorNightShower {
+	// The shower, its activity at the start of the night, and the occurrence the night belongs to.
+	readonly shower: MeteorShowerSummary
+	// Geometric windows only, or with the rate model of a published activity profile.
+	readonly kind: MeteorObservingNight['kind']
+	// Support the windows were judged against.
+	readonly support: MeteorObservingSupport
+	// Geometric windows, chronologically.
+	readonly windows: readonly MeteorObservingWindow[]
+	// Why there is no window; empty when there are windows.
+	readonly reasons: readonly MeteorNoWindowReason[]
+	// Expected count of the modelled windows under the assumptions, meteors; only in a modelled night.
+	readonly expectedCount?: number
+	// Highest modelled local hourly rate of the night, meteors per hour; only in a modelled night.
+	readonly bestLocalHourlyRate?: number
+}
+
+// Answer of POST /api/meteor-showers/night: the curated showers whose activity meets one night at a site, the watchable
+// ones first.
+export interface MeteorShowersNight {
+	// Revision of the catalog the answer comes from.
+	readonly revision: number
+	// Civil date of the evening in the site's zone.
+	readonly eveningDate: string
+	// The Astro Weather night: the Sun, the part shown, and the Moon.
+	readonly night: AstroWeatherNight
+	// The curated showers whose activity meets the night: those with a window first, then by modelled count when
+	// modelled, then by typical ZHR, then by geometric opportunity, then by name.
+	readonly showers: readonly MeteorNightShower[]
+	// Showers without curated data, neither removed nor curated, whose IAU activity covers the middle of the night.
+	readonly otherActive: number
 }
 
 // Dependencies of the service.
@@ -553,6 +593,56 @@ export class MeteorShowersService {
 		return night
 	}
 
+	// The curated showers whose activity meets the night of a request, each with its geometric windows from the cached
+	// observing night (so selecting one then costs nothing), the watchable ones first; and how many showers without curated
+	// data are active in the middle of the night.
+	async night(request: MeteorObservingRequest): Promise<MeteorShowersNight> {
+		const { index } = await this.#catalog()
+		const night = resolveNight(this.options.night, request.site, request.eveningDate)
+		const middle = (night.sun.start + night.sun.end) / 2
+		const startLongitude = meteorSolarLongitude(timeUnix(night.sun.start / 1000, true))
+		const middleLongitude = meteorSolarLongitude(timeUnix(middle / 1000, true))
+		const showers: MeteorNightShower[] = []
+		let otherActive = 0
+
+		for (const record of index.showers) {
+			const solution = preferredSolution(record)
+
+			if (record.visual === undefined) {
+				if (record.status !== 'removed' && activityAt(record, middle, middleLongitude, this.#table).state === 'active') otherActive++
+				continue
+			}
+
+			if (solution === undefined || !supportMeetsNight(observingSupport(record, solution, middle, this.#table), night)) continue
+			const observing = await this.observing(record.id, request)
+			const modelled = observing.model?.windows
+			let expectedCount = 0
+			let bestLocalHourlyRate = 0
+			for (const window of modelled ?? []) {
+				expectedCount += window.expectedCount
+				bestLocalHourlyRate = Math.max(bestLocalHourlyRate, window.bestLocalHourlyRate)
+			}
+			showers.push({
+				shower: this.#summary(record, night.sun.start, startLongitude, undefined),
+				kind: observing.kind,
+				support: observing.support,
+				windows: observing.windows,
+				reasons: observing.reasons,
+				...(modelled && { expectedCount, bestLocalHourlyRate }),
+			})
+		}
+
+		// Geometric opportunity of a shower's night: the radiant height integrated over its windows, hours.
+		const opportunity = (entry: MeteorNightShower) => {
+			let sum = 0
+			for (const window of entry.windows) sum += window.radiantSineHours
+			return sum
+		}
+		showers.sort((a, b) => Number(b.windows.length > 0) - Number(a.windows.length > 0) || (b.expectedCount ?? -1) - (a.expectedCount ?? -1) || (b.shower.visual?.typicalZhr ?? -1) - (a.shower.visual?.typicalZhr ?? -1) || opportunity(b) - opportunity(a) || a.shower.name.localeCompare(b.shower.name))
+
+		return { revision: this.options.store.state().revision, eveningDate: request.eveningDate, night, showers, otherActive }
+	}
+
 	// Activity curve of a shower in a civil year: its published profile sampled, or none. Throws MeteorShowersError notFound.
 	async activity(id: string, request: MeteorActivityRequest): Promise<MeteorActivityCurve> {
 		return activityCurve(await this.#record(id), request, this.#table)
@@ -687,6 +777,13 @@ export function createMeteorShowersRoutes(service: MeteorShowersService) {
 			POST: async (req) => {
 				const request = (await req.json()) as MeteorShowersCalendarRequest
 				return answer(() => service.calendar(request))
+			},
+		},
+		'/api/meteor-showers/night': {
+			// The curated showers of one night at a site, each with its geometric windows (MeteorObservingRequest → MeteorShowersNight).
+			POST: async (req) => {
+				const request = (await req.json()) as MeteorObservingRequest
+				return answer(() => service.night(request))
 			},
 		},
 		'/api/meteor-showers/states': {

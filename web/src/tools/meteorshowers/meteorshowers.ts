@@ -1,4 +1,4 @@
-import type { AstroWeatherForecast, MeteorActivityCurve, MeteorNightRanking, MeteorNightsRequest, MeteorObservingNight, MeteorObservingRequest, MeteorShowerDetail, MeteorShowerListPage, MeteorShowersCalendar, MeteorShowersCalendarRequest, MeteorShowerStatus } from 'api'
+import type { AstroWeatherForecast, MeteorActivityCurve, MeteorNightRanking, MeteorNightsRequest, MeteorObservingNight, MeteorObservingRequest, MeteorShowerDetail, MeteorShowerListPage, MeteorShowerOccurrence, MeteorShowersCalendar, MeteorShowersCalendarRequest, MeteorShowersNight, MeteorShowerStatus } from 'api'
 import { proxy } from 'valtio'
 import { aborted, fetchJson, jsonInit } from '../../http'
 import type { SiteLocation } from '../../location/site'
@@ -9,17 +9,19 @@ import { browserSkyIo, selectSkyObject, type SkyIo, type SkyState, skyState } fr
 import { addToObservingPlanner, planningSite, tonight } from '../observingplanner/observingplanner'
 import { browserPlannerIo, errorMessage, type PlannerIo } from '../planetary/planetary'
 
-// Meteor Showers of the tab: the section listed (the curated showers by their next maximum, the showers active now, or the
-// whole IAU catalog), the search and filters, the list or the month of the calendar, the selected shower with its detail,
-// and its geometric observing night from the tool's location. Every date, position, and window comes from the server;
+// Meteor Showers of the tab: the section listed (the curated showers of one night at the tool's location, the curated
+// showers by their next maximum, the showers active now, or the whole IAU catalog), the evening of the night, the search
+// and filters, the list or the month of the calendar, the selected shower with its detail, and its geometric observing
+// night from the tool's location. Every date, position, and window comes from the server;
 // the tab only pages, lays out, and formats. The tab state is never persisted, and nothing here changes the Sky clock
 // (unless asked to set it to a maximum), a site, the profile, or a device. Times are Unix milliseconds (UTC); angles radians.
 
-// Section of the tool: the curated visual showers by next maximum, every shower active now, or the whole IAU catalog.
-export type MeteorShowersSection = 'upcoming' | 'active' | 'all'
+// Section of the tool: the curated showers of the evening's night at the tool's location, the curated visual showers by
+// next maximum, every shower active now, or the whole IAU catalog.
+export type MeteorShowersSection = 'night' | 'upcoming' | 'active' | 'all'
 
-// Every section, in order.
-export const METEOR_SHOWER_SECTIONS: readonly MeteorShowersSection[] = ['upcoming', 'active', 'all']
+// Every section, in order; the night comes first and is the default.
+export const METEOR_SHOWER_SECTIONS: readonly MeteorShowersSection[] = ['night', 'upcoming', 'active', 'all']
 
 // How the showers are shown.
 export type MeteorShowersDisplay = 'list' | 'calendar'
@@ -79,6 +81,14 @@ export interface MeteorShowersState {
 	pageLoading: boolean
 	// Why the page could not be read.
 	pageError?: string
+	// Showers of the whole catalog matching a search that found none in the section; absent otherwise.
+	otherMatches?: number
+	// The curated showers of the evening's night with their windows.
+	evening?: MeteorShowersNight
+	// Whether the night's showers are being computed.
+	eveningLoading: boolean
+	// Why the night's showers could not be computed.
+	eveningError?: string
 	// Month the calendar shows, YYYY-MM (UTC); absent until shown.
 	month?: string
 	// Occurrences of the month.
@@ -117,6 +127,8 @@ export interface MeteorShowersState {
 	activityError?: string
 	// Evenings the ranking spans.
 	rankedNights: number
+	// First evening of the ranking shown, YYYY-MM-DD; absent without one.
+	rankingStart?: string
 	// Ranking of the nights of the selected shower.
 	ranking?: MeteorNightRanking
 	// Whether the ranking is being computed.
@@ -132,7 +144,8 @@ export interface MeteorShowersState {
 // Creates the tab state of the tool.
 export function createMeteorShowersState(): MeteorShowersState {
 	return {
-		section: 'upcoming',
+		section: 'night',
+		eveningLoading: false,
 		display: 'list',
 		query: '',
 		status: 'any',
@@ -161,6 +174,7 @@ const nightGuard = createRequestGuard()
 const activityGuard = createRequestGuard()
 const rankingGuard = createRequestGuard()
 const forecastGuard = createRequestGuard()
+const eveningGuard = createRequestGuard()
 
 // Query string of the page of a section, the search, and the filters; a latitude keeps the reachable radiants.
 export function listQuery(state: Pick<MeteorShowersState, 'section' | 'query' | 'status' | 'reachable' | 'offset' | 'minimumAltitude'>, latitude: number | undefined): string {
@@ -186,12 +200,17 @@ export async function loadPage(state: MeteorShowersState, latitude: number | und
 
 	try {
 		const page = await fetchJson<MeteorShowerListPage>(io, `/api/meteor-showers?${listQuery(state, latitude)}`, { signal: request.signal })
+		const query = state.query.trim()
+		// A search that finds nothing in a section says how many showers of the whole catalog it finds.
+		const others = page.total === 0 && query && state.section !== 'all' ? await fetchJson<MeteorShowerListPage>(io, `/api/meteor-showers?${new URLSearchParams({ query, limit: '1' })}`, { signal: request.signal }) : undefined
 		if (!request.current()) return
 		state.page = page
+		state.otherMatches = others?.total
 		state.pageError = undefined
 	} catch (error) {
 		if (aborted(error) || !request.current()) return
 		state.page = undefined
+		state.otherMatches = undefined
 		state.pageError = errorMessage(error)
 	} finally {
 		if (request.current()) state.pageLoading = false
@@ -278,6 +297,63 @@ export function defaultEvening(site: SiteLocation, io: PlannerIo = browserPlanne
 	return tonight(io.time(), site.timeZone)
 }
 
+// The evening an instant belongs to in a zone, YYYY-MM-DD: a night is named by the civil date of its evening.
+export function eveningOf(time: number, timeZone: string) {
+	return tonight(time, timeZone)
+}
+
+// Civil date, YYYY-MM-DD, `days` days after another.
+export function addDays(date: string, days: number) {
+	const [year, month, day] = date.split('-').map(Number)
+	return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10)
+}
+
+// Whole days from one civil date, YYYY-MM-DD, to another; negative when the second comes first.
+export function daysBetween(from: string, to: string) {
+	const [a, b] = [from, to].map((date) => {
+		const [year, month, day] = date.split('-').map(Number)
+		return Date.UTC(year, month - 1, day)
+	})
+	return Math.round((b - a) / 86400000)
+}
+
+// Moves the tab's evening by whole days from the one shown (tonight when none is), or to an evening given.
+export function setEvening(state: MeteorShowersState, site: SiteLocation, change: { readonly days: number } | { readonly date: string }, io: PlannerIo = browserPlannerIo) {
+	state.eveningDate = 'date' in change ? change.date : addDays(state.eveningDate ?? defaultEvening(site, io), change.days)
+}
+
+// Civil dates, YYYY-MM-DD, of the first and last evenings of an occurrence's activity: the IMO calendar days of the visual
+// period, else the evenings of the IAU support; absent when no source dates its activity.
+export function activityEvenings(occurrence: MeteorShowerOccurrence, timeZone: string): readonly [string, string] | undefined {
+	if (occurrence.visual) return [new Date(occurrence.visual.start).toISOString().slice(0, 10), new Date(occurrence.visual.end).toISOString().slice(0, 10)]
+	const { start, end } = occurrence.iau ?? {}
+	return start === undefined || end === undefined ? undefined : [eveningOf(start, timeZone), eveningOf(end, timeZone)]
+}
+
+// The occurrence an evening belongs to: the one whose activity holds it, else the next one after it, else the last.
+export function occurrenceOfEvening(occurrences: readonly MeteorShowerOccurrence[], eveningDate: string, timeZone: string): MeteorShowerOccurrence | undefined {
+	const dated = occurrences.map((occurrence) => ({ occurrence, evenings: activityEvenings(occurrence, timeZone) }))
+	return dated.find(({ evenings }) => evenings && evenings[0] <= eveningDate && eveningDate <= evenings[1])?.occurrence ?? dated.find(({ evenings }) => evenings && evenings[0] > eveningDate)?.occurrence ?? occurrences.at(-1)
+}
+
+// The evening of an occurrence's maximum: the published visual one, else the IAU mean reference; absent without either.
+export function maximumEvening(occurrence: MeteorShowerOccurrence | undefined, timeZone: string) {
+	const time = occurrence?.visual?.peak ?? occurrence?.iau?.reference
+	return time === undefined ? undefined : eveningOf(time, timeZone)
+}
+
+// First evening of a ranking of `nights` evenings: the evening shown while the shower is active on it, else the nights
+// around the maximum of the occurrence it belongs to, never before its activity starts, so a ranking never spans only
+// nights the shower is not active.
+export function rankingStartEvening(occurrences: readonly MeteorShowerOccurrence[], eveningDate: string, nights: number, timeZone: string) {
+	const occurrence = occurrenceOfEvening(occurrences, eveningDate, timeZone)
+	const evenings = occurrence && activityEvenings(occurrence, timeZone)
+	if (!evenings || (evenings[0] <= eveningDate && eveningDate <= evenings[1])) return eveningDate
+	const maximum = maximumEvening(occurrence, timeZone)
+	const centred = maximum === undefined ? evenings[0] : addDays(maximum, -Math.floor(Math.min(MAX_RANKED_NIGHTS, nights) / 2))
+	return centred < evenings[0] ? evenings[0] : centred
+}
+
 // Request of the observing night of the tab's evening, darkness, and constraints at a site.
 export function observingRequest(state: Pick<MeteorShowersState, 'eveningDate' | 'darkness' | 'minimumAltitude' | 'moonSeparation' | 'rates'>, site: SiteLocation, eveningDate: string): MeteorObservingRequest {
 	const DEG = Math.PI / 180
@@ -337,14 +413,15 @@ export function rankingRequest(state: Pick<MeteorShowersState, 'eveningDate' | '
 	return { ...night, startEveningDate, nights: Math.min(MAX_RANKED_NIGHTS, Math.max(1, Math.round(state.rankedNights))) }
 }
 
-// Ranks the evenings from the tab's evening for the selected shower, dropping the answer of a superseded request; asked
-// for explicitly, since it searches up to a month of nights.
-export async function loadRanking(state: MeteorShowersState, site: SiteLocation, io: PlannerIo = browserPlannerIo) {
+// Ranks the evenings of the selected shower from a first evening (rankingStartEvening), dropping the answer of a
+// superseded request; asked for explicitly, since it searches up to a month of nights. Choosing a ranked night moves the
+// evening and keeps the ranking.
+export async function loadRanking(state: MeteorShowersState, site: SiteLocation, start: string, io: PlannerIo = browserPlannerIo) {
 	const id = state.selected
 	if (id === undefined) return
-	const start = (state.eveningDate ??= defaultEvening(site, io))
 	const request = rankingGuard.begin()
 	state.rankingLoading = true
+	state.rankingStart = start
 
 	try {
 		const ranking = await fetchJson<MeteorNightRanking>(io, `/api/meteor-showers/${encodeURIComponent(id)}/nights`, jsonInit('POST', rankingRequest(state, site, start), request.signal))
@@ -364,8 +441,38 @@ export async function loadRanking(state: MeteorShowersState, site: SiteLocation,
 export function clearRanking(state: MeteorShowersState) {
 	rankingGuard.cancel()
 	state.ranking = undefined
+	state.rankingStart = undefined
 	state.rankingLoading = false
 	state.rankingError = undefined
+}
+
+// Reads the curated showers of the tab's evening at a site with their windows, under the tab's darkness and constraints,
+// dropping the answer of a superseded request.
+export async function loadEvening(state: MeteorShowersState, site: SiteLocation, io: PlannerIo = browserPlannerIo) {
+	const eveningDate = (state.eveningDate ??= defaultEvening(site, io))
+	const request = eveningGuard.begin()
+	state.eveningLoading = true
+
+	try {
+		const evening = await fetchJson<MeteorShowersNight>(io, '/api/meteor-showers/night', jsonInit('POST', observingRequest(state, site, eveningDate), request.signal))
+		if (!request.current()) return
+		state.evening = evening
+		state.eveningError = undefined
+	} catch (error) {
+		if (aborted(error) || !request.current()) return
+		state.evening = undefined
+		state.eveningError = errorMessage(error)
+	} finally {
+		if (request.current()) state.eveningLoading = false
+	}
+}
+
+// Forgets the night's showers when the tool has no site, cancelling a request in flight.
+export function clearEvening(state: MeteorShowersState) {
+	eveningGuard.cancel()
+	state.evening = undefined
+	state.eveningLoading = false
+	state.eveningError = undefined
 }
 
 // Reads the Astro Weather forecast of a site once per place, dropping the answer of a superseded request; a failure keeps

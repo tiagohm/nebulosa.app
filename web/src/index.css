@@ -91,7 +91,7 @@
 }
 
 ::-webkit-scrollbar {
-	@apply h-1.5 w-2
+	@apply h-1.5 w-2;
 }
 
 ::-webkit-scrollbar-thumb {

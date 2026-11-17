@@ -147,7 +147,7 @@ export interface CellProps {
 // Cell of a row, on one line.
 export function Cell({ numeric = false, className, title, children }: CellProps) {
 	return (
-		<td title={title} className={cn('px-2 py-1.5 whitespace-nowrap', numeric && 'text-right', className)}>
+		<td title={title} className={cn('px-2 py-1.5 whitespace-pre-wrap', numeric && 'text-right', className)}>
 			{children}
 		</td>
 	)

@@ -459,6 +459,13 @@ export function observingSupport(record: MeteorShowerRecord, solution: MeteorSho
 	return solution.activityInterval === undefined ? { basis: 'none' } : { basis: 'iauScientific', interval: solution.activityInterval }
 }
 
+// Whether a support meets a night: no support is known, or the shower is active at the start or the end of the night
+// (upper transit to upper transit of the Sun). A night it does not meet has no window of that support.
+export function supportMeetsNight(support: MeteorObservingSupport, night: AstroWeatherNight) {
+	const interval = support.interval
+	return interval === undefined || isMeteorShowerActive(interval, meteorSolarLongitude(toolkitTime(night.sun.start))) || isMeteorShowerActive(interval, meteorSolarLongitude(toolkitTime(night.sun.end)))
+}
+
 // Distance from an instant to a visual occurrence's period, milliseconds; 0 inside it.
 function distanceTo(occurrence: MeteorVisualOccurrence, time: number) {
 	return time < occurrence.start ? occurrence.start - time : time > occurrence.end ? time - occurrence.end : 0
@@ -762,9 +769,8 @@ export async function rankNights(record: MeteorShowerRecord, request: MeteorNigh
 		}
 
 		const support = observingSupport(record, solution, (night.sun.start + night.sun.end) / 2, table)
-		const interval = support.interval
 
-		if (interval !== undefined && !isMeteorShowerActive(interval, meteorSolarLongitude(toolkitTime(night.sun.start))) && !isMeteorShowerActive(interval, meteorSolarLongitude(toolkitTime(night.sun.end)))) {
+		if (!supportMeetsNight(support, night)) {
 			ranked.push(unsearched('noSupportedActivity'))
 			continue
 		}

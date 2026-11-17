@@ -3,8 +3,8 @@ import type { MeteorShowersCalendarEntry, MeteorShowersSources } from 'api'
 import { parseRoute, routePath } from '../../shell/route'
 import type { PlannerIo } from '../planetary/planetary'
 import { meteorCalendarWeeks, shiftMonth } from './MeteorShowerCalendar'
-import { calendarRequest, createMeteorShowersState, listQuery, loadNight, loadPage, observingRequest, rankingRequest, selectShower } from './meteorshowers'
-import { formatOccurrencePeak, formatOccurrencePeriod, formatPeak, occurrenceInstant } from './meteorshowers.format'
+import { addDays, calendarRequest, createMeteorShowersState, daysBetween, listQuery, loadEvening, loadNight, loadPage, observingRequest, rankingRequest, rankingStartEvening, selectShower, setEvening } from './meteorshowers'
+import { bestWindow, formatEvening, formatNightsAway, formatOccurrencePeak, formatOccurrencePeriod, formatPeak, occurrenceInstant } from './meteorshowers.format'
 import { handleMeteorShowersEvent, type MeteorShowerSourcesState, refreshIauCatalog } from './meteorshowers.sources'
 import { windowsWeather } from './meteorshowers.weather'
 
@@ -36,7 +36,7 @@ function sources(revision: number): MeteorShowersSources {
 
 describe('requests', () => {
 	test('each section asks for its own listing and the reachable filter needs a latitude', () => {
-		const state = createMeteorShowersState()
+		const state = { ...createMeteorShowersState(), section: 'upcoming' as const }
 		expect(listQuery(state, undefined)).toBe('visual=true&sort=nextPeak&offset=0&limit=25')
 		expect(listQuery({ ...state, section: 'active', query: ' gem ' }, undefined)).toBe('query=gem&active=true&sort=nextPeak&offset=0&limit=25')
 		expect(listQuery({ ...state, section: 'all', status: 'removed', offset: 25 }, undefined)).toBe('status=removed&sort=name&offset=25&limit=25')
@@ -58,6 +58,34 @@ describe('requests', () => {
 		expect(state.eveningDate).toBe('2026-11-09')
 		expect(requests[0].url).toBe('/api/meteor-showers/iau%3A4/observing')
 		expect(state.night?.reasons).toEqual(['noSupportedActivity'])
+	})
+
+	test('the night is the default section and reads the curated showers of the evening with the constraints', async () => {
+		const state = createMeteorShowersState()
+		expect(state.section).toBe('night')
+		const { io, requests } = fakeIo(() => json({ revision: 0, eveningDate: '2026-11-09', night: {}, showers: [], otherActive: 3 }))
+		await loadEvening(state, SITE, io)
+		expect(requests[0].url).toBe('/api/meteor-showers/night')
+		expect(requests[0].body).toMatchObject({ eveningDate: '2026-11-09', maximumSolarAltitude: -18 * DEG, minimumRadiantAltitude: 20 * DEG })
+		expect(state.evening?.otherActive).toBe(3)
+
+		setEvening(state, SITE, { days: 1 }, io)
+		expect(state.eveningDate).toBe('2026-11-10')
+		setEvening(state, SITE, { date: '2026-12-13' }, io)
+		expect(state.eveningDate).toBe('2026-12-13')
+		expect(addDays('2026-12-31', 1)).toBe('2027-01-01')
+		expect(daysBetween('2026-11-17', '2026-12-13')).toBe(26)
+	})
+
+	test('a search that finds nothing in a section counts the matches of the whole catalog', async () => {
+		const state = { ...createMeteorShowersState(), section: 'upcoming' as const, query: 'phoenicids' }
+		const { io, requests } = fakeIo(
+			() => json({ revision: 0, time: NOW, total: 0, offset: 0, showers: [] }),
+			() => json({ revision: 0, time: NOW, total: 9, offset: 0, showers: [] }),
+		)
+		await loadPage(state, undefined, io)
+		expect(requests[1].url).toBe('/api/meteor-showers?query=phoenicids&limit=1')
+		expect(state.otherMatches).toBe(9)
 	})
 
 	test('a failed page shows why and forgets the previous one', async () => {
@@ -103,6 +131,20 @@ describe('format', () => {
 	})
 })
 
+describe('night', () => {
+	test('a night names its best window, how far its maximum is, and its weekday', () => {
+		expect(
+			bestWindow([
+				{ radiantSineHours: 0.4, id: 1 },
+				{ radiantSineHours: 1.5, id: 2 },
+			])?.id,
+		).toBe(2)
+		expect(bestWindow([])).toBeUndefined()
+		expect([0, 1, -1, 3, -2].map(formatNightsAway)).toEqual(['this night', 'the next night', 'the night before', 'in 3 nights', '2 nights ago'])
+		expect(formatEvening('2026-11-17')).toBe('Tue 2026-11-17')
+	})
+})
+
 describe('calendar', () => {
 	test('a month marks each maximum on its date and counts the showers active that day', () => {
 		const entry = (id: string, start: number, end: number, peak: number): MeteorShowersCalendarEntry => ({ id, name: id, code: id, status: 'established', visual: true, occurrence: { visual: { start, end, peak, peakSolarLongitude: 0, peakSolarLongitudeDecimals: 1, sourceId: 'imo2026' } } })
@@ -136,6 +178,14 @@ describe('sources', () => {
 })
 
 describe('rates and ranking', () => {
+	test('a ranking starts at an evening the shower is active on, else around its maximum, never before its activity', () => {
+		const geminids = { visual: { start: Date.UTC(2026, 11, 4), end: Date.UTC(2026, 11, 21) - 1, peak: Date.UTC(2026, 11, 14, 13), peakSolarLongitude: 262.2 * DEG, peakSolarLongitudeDecimals: 1, typicalZhr: 150, sourceId: 'imo2026' as const } }
+		const zone = 'America/Sao_Paulo'
+		expect(rankingStartEvening([geminids], '2026-12-10', 14, zone)).toBe('2026-12-10')
+		expect(rankingStartEvening([geminids], '2026-11-17', 14, zone)).toBe('2026-12-06')
+		expect(rankingStartEvening([geminids], '2026-11-17', 31, zone)).toBe('2026-12-04')
+	})
+
 	test('assumptions are sent only when modelled rates are on, and a ranking spans at most 31 evenings', () => {
 		const state = createMeteorShowersState()
 		expect(observingRequest(state, SITE, '2026-12-13').assumptions).toBeUndefined()

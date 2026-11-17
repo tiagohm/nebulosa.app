@@ -156,6 +156,31 @@ export function equipmentOptics({ telescope, guideTelescope }: EquipmentTelescop
 	return { optics: { ...base, sensor: { kind: 'pixels', width: live.width, height: live.height, pixelSize: live.pixelSize } } }
 }
 
+// Framing preferences the drawn field of view depends on: a profile's Sky framing settings.
+export interface FrameSettings {
+	// Presets in display order.
+	readonly presets: readonly OpticalPreset[]
+	// Id of the preset drawn; absent when there is none.
+	readonly activePresetId?: string
+	// Where the field comes from; absent means the Equipment Setup.
+	readonly source?: FramingSource
+	// Sensor of the Equipment Setup source; absent means the Main Camera.
+	readonly sensorSource?: SensorSource
+	// Sensor entered for the Equipment Setup source when sensorSource is manual.
+	readonly manualSensor?: SensorGeometry
+	// Position angle of the Equipment Setup field's top edge in degrees, from north towards east; absent means 0.
+	readonly equipmentRotation?: number
+}
+
+// Field of view a profile plans with, named: the Equipment Setup's (equipmentOptics) unless a custom preset was chosen,
+// then the active preset's, with the camera role whose device reports no sensor (missingCamera of equipmentOptics).
+// Undefined when the custom source has no preset. The Sky draws it, and the Observing Planner judges how targets fit it.
+export function activeFrameSource(framing: FrameSettings | undefined, telescopes: EquipmentTelescopes, liveSensors: Readonly<Partial<Record<CameraRole, CameraSensor>>>): (OpticalPreset & Pick<EquipmentOptics, 'missingCamera'>) | undefined {
+	if (framingSource(framing) === 'custom') return framing?.presets.find((e) => e.id === framing.activePresetId)
+	const { optics, missingCamera } = equipmentOptics(telescopes, framing?.sensorSource ?? 'MAIN_CAMERA', liveSensors, framing?.manualSensor, framing?.equipmentRotation ?? 0)
+	return { id: 'equipment', name: 'Equipment Setup', optics, missingCamera }
+}
+
 // Optical configuration of a new preset: a 600 mm telescope with an APS-C camera of 3.76 µm pixels.
 export const DEFAULT_OPTICS: OpticalConfiguration = { focalLength: 600, focalMultiplier: 1, aperture: 0, sensor: { kind: 'pixels', width: 6248, height: 4176, pixelSize: 3.76 }, rotation: 0 }
 

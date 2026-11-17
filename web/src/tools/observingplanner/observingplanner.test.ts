@@ -239,6 +239,15 @@ describe('candidate order', () => {
 		expect(ids({ key: 'best', reversed: false })).toEqual([2, 3, 1])
 		expect(ids({ key: 'longest', reversed: false })).toEqual([2, 3, 1])
 	})
+
+	test('equal scores are ordered by framing, an unknown fit counting as good, and the Framing order puts unknown fits last', () => {
+		const tied = [candidate(1, 100), candidate(2, 100), candidate(3, 100), candidate(4, 90)]
+		const factors: Record<number, number | undefined> = { 1: 0.3, 2: undefined, 3: 1, 4: 1 }
+		const fit = (e: { target: unknown }) => factors[(e.target as { id: number }).id]
+		const ids = (key: 'score' | 'framing') => sortCandidates(tied, { key, reversed: false }, fit).map((e) => (e.target as { id: number }).id)
+		expect(ids('score')).toEqual([2, 3, 1, 4])
+		expect(ids('framing')).toEqual([3, 4, 1, 2])
+	})
 })
 
 describe('plan wording', () => {

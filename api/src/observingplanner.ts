@@ -131,6 +131,8 @@ export interface ObservingCandidate {
 	readonly magnitude?: number
 	// Apparent major axis in radians; absent when unknown.
 	readonly majorAxis?: number
+	// Apparent minor axis in radians; absent when unknown.
+	readonly minorAxis?: number
 	// Observable or only in shorter windows.
 	readonly status: Extract<ObservingStatus, 'observable' | 'limitedDuration'>
 	// Why it is only partly observable.
@@ -184,7 +186,7 @@ function compareCandidates(a: ObservingCandidate, b: ObservingCandidate) {
 }
 
 // Candidate of an analysis; undefined when it has no window.
-function candidateOf(analysis: TargetAnalysis, details: Pick<ObservingCandidate, 'class' | 'constellation' | 'magnitude' | 'majorAxis'>): ObservingCandidate | undefined {
+function candidateOf(analysis: TargetAnalysis, details: Pick<ObservingCandidate, 'class' | 'constellation' | 'magnitude' | 'majorAxis' | 'minorAxis'>): ObservingCandidate | undefined {
 	if ((analysis.status !== 'observable' && analysis.status !== 'limitedDuration') || !analysis.score) return undefined
 	const { target, name, typeName, status, reasons, windows, summary, score } = analysis
 	return { target, name, typeName, ...details, status, reasons, score: score.value, bestAt: score.at, windows, longestWindowMs: summary.longestWindowMs, totalUsableMs: summary.totalUsableMs }
@@ -414,7 +416,7 @@ export class ObservingPlannerService {
 		const latitude = night.location.latitude
 		let evaluated = 0
 
-		const evaluate = async (target: Exclude<ObservingTargetRef, { kind: 'minorBody' | 'meteorShower' }>, details: Pick<ObservingCandidate, 'class' | 'constellation' | 'magnitude' | 'majorAxis'>) => {
+		const evaluate = async (target: Exclude<ObservingTargetRef, { kind: 'minorBody' | 'meteorShower' }>, details: Pick<ObservingCandidate, 'class' | 'constellation' | 'magnitude' | 'majorAxis' | 'minorAxis'>) => {
 			if (++evaluated % DISCOVERY_YIELD_EVERY === 0) await yieldToEventLoop()
 			signal?.throwIfAborted()
 			const candidate = candidateOf(this.#analyzeLocal({ target, site, eveningDate, constraints, requestedDurationMs }), details)
@@ -429,7 +431,7 @@ export class ObservingPlannerService {
 				continue
 			}
 
-			await evaluate(entry.ref, { class: entry.class, constellation: entry.constellation, magnitude: entry.magnitude, majorAxis: entry.majorAxis })
+			await evaluate(entry.ref, { class: entry.class, constellation: entry.constellation, magnitude: entry.magnitude, majorAxis: entry.majorAxis, minorAxis: entry.minorAxis })
 		}
 
 		return { candidates: candidates.sort(compareCandidates), evaluated, total: page.total + bodies.length, nextCursor: page.nextCursor, modelVersion: OBSERVING_SCORE_MODEL_VERSION }

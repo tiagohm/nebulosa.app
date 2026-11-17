@@ -369,8 +369,9 @@ export class MountCommands implements Disposable {
 
 		const planned = this.#planned(mount, { type: 'JNOW', JNOW: { x: rightAscension, y: declination } })
 		if (planned.status === 'refused') return errorResponse(planned.error, 422, 'correctionRefused')
-		// Locating the object may take seconds, during which the mount may have been parked.
+		// Locating the object may take seconds, during which the mount may have been parked or taken by another operation.
 		if (mount.parked || mount.parking) return errorResponse('The mount is parked', 409, 'unsupported')
+		if (this.operations.arbiter.availability(resourceKey(mount)) !== 'available') return errorResponse('The mount is busy', 409, 'busy')
 		const below = planned.status === 'corrected' ? slewRefusal('mount.goto', mount, planned.target, observer) : undefined
 		if (below) return errorResponse(...below)
 

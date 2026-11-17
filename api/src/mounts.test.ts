@@ -189,6 +189,37 @@ test('a GoTo without a model in force goes as asked from inside an operation', a
 	expect(await handle.result).toMatchObject({ ok: true })
 }, 40000)
 
+test('a slew whose mount another operation took while the object was located is refused as busy', async () => {
+	const { manager, id, client, operations, mountId } = await setup()
+	const mount = await connectMount(manager, client, mountId)
+	const released = Promise.withResolvers<void>()
+	const located = locator(0, deg(30))
+	const holds: Promise<unknown>[] = []
+	const commands = new MountCommands(
+		manager.devices,
+		(connectionId) => manager.client(connectionId),
+		(ref, position) => {
+			const hold = operations.coordinator.start('test.hold', [{ key: resourceKey(mount), device: mount }], async () => {
+				await released.promise
+				return successfulOperationResult(undefined)
+			})
+			holds.push(hold.result)
+			return located.locate(ref, position)
+		},
+		operations,
+		() => {},
+		DEFAULT_MOUNT_NUDGE_OPTIONS,
+	)
+	disposables.push(commands)
+
+	const response = await commands.slew(id, mountId, request)
+	expect(response.status).toBe(409)
+	expect(await response.json()).toMatchObject({ code: 'busy' })
+
+	released.resolve()
+	await Promise.all(holds)
+})
+
 test('refuses a target below the horizon', async () => {
 	const { manager, id, client, commands, events, mountId } = await setup(deg(2), deg(-5))
 	await connectMount(manager, client, mountId)

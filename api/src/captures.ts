@@ -881,11 +881,18 @@ export class CameraCaptures implements Disposable {
 			const lending = capture.dither?.lend(requester.reservation) ?? { ok: true }
 
 			if (!lending.ok) {
-				suspension.lent = false
-				result.suspension.resume()
-				capture.suspension = undefined
-				this.#update(capture, { suspension: undefined })
 				admission.resolve(refusal(lending.error, 409, 'busy'))
+
+				if (result.suspension.resume().ok) {
+					suspension.lent = false
+					capture.suspension = undefined
+					this.#update(capture, { suspension: undefined })
+				} else {
+					// The camera could not be taken back, such as one quarantined, so the capture stays paused; it waits for the
+					// operator, as one a tool released does, and the resume route takes the camera back once it can.
+					this.#update(capture, { phase: 'paused', exposure: undefined, delay: undefined, suspension: { holder: requester.holder, state: 'released' } })
+				}
+
 				return
 			}
 

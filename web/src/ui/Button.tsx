@@ -8,6 +8,8 @@ const button = tv({
 			primary: 'bg-accent text-on-accent hover:bg-accent-hover',
 			secondary: 'border-line-200 bg-transparent text-ink-100 hover:border-ink-300 hover:bg-base-300',
 			ghost: 'bg-transparent text-accent hover:bg-accent-subtle',
+			// The confirming command of a destructive confirmation, and only that.
+			danger: 'bg-danger text-on-accent hover:bg-danger/85',
 		},
 		size: {
 			sm: 'rounded-sm px-3 py-1 text-sm leading-5',

@@ -350,13 +350,27 @@ function rank(candidates: readonly ObservingCandidate[]) {
 	return candidates.toSorted((a, b) => b.score - a.score || b.longestWindowMs - a.longestWindowMs)
 }
 
+// Key of what a discovery depends on for the tool as it is now (the location, the night, the constraints, and the filter);
+// undefined until the night and the constraints are known.
+export function discoveryKey(state: Pick<ObservingPlannerState, 'eveningDate' | 'constraints' | 'filter'>, location: SiteLocation) {
+	const { eveningDate, constraints, filter } = state
+	if (!eveningDate || !constraints) return undefined
+	return JSON.stringify([nightKey(planningSite(location), eveningDate, constraints), filter])
+}
+
+// Returns whether the discovery shown was computed for another location, night, constraints, or filter than the tool's
+// now, so its ranking no longer answers them and its next batch cannot be read; false without a discovery.
+export function discoveryStale(state: Pick<ObservingPlannerState, 'eveningDate' | 'constraints' | 'filter' | 'discovery'>, location: SiteLocation | undefined) {
+	return !!state.discovery && (!location || state.discovery.key !== discoveryKey(state, location))
+}
+
 // Computes the first discovery batch of the night for the filter, or the next one with `more`; batches add up and are
 // ranked together, so the ranking covers every object evaluated so far.
 export async function discover(state: ObservingPlannerState, location: SiteLocation, more: boolean = false, io: ObservingPlannerIo = browserObservingPlannerIo) {
 	const { eveningDate, constraints, filter } = state
-	if (!eveningDate || !constraints) return
+	const key = discoveryKey(state, location)
+	if (!eveningDate || !constraints || !key) return
 	const site = planningSite(location)
-	const key = JSON.stringify([nightKey(site, eveningDate, constraints), filter])
 	const previous = more && state.discovery?.key === key ? state.discovery : undefined
 	if (more && !previous?.nextCursor) return
 
@@ -565,6 +579,25 @@ export function planDocument(state: Pick<ObservingPlansState, 'plans' | 'drafts'
 // Returns the plans, most recently changed first.
 export function sortedPlans(state: Pick<ObservingPlansState, 'plans'>): ObservingPlan[] {
 	return Object.values(state.plans).toSorted((a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id))
+}
+
+// Returns the plan a target is added to by default: the most recently changed plan of the tool's night at the tool's place,
+// else of the tool's night anywhere, else none (a new plan), so a target never lands silently in another night.
+export function defaultPlanFor(plans: readonly ObservingPlan[], location: SiteLocation | undefined, eveningDate: string | undefined) {
+	if (!eveningDate) return undefined
+	const night = plans.filter((plan) => plan.eveningDate === eveningDate)
+	const here = location && night.find(({ site }) => site.latitude === location.latitude && site.longitude === location.longitude && site.elevation === location.elevation && site.timeZone === location.timeZone)
+	return (here ?? night[0])?.id
+}
+
+// Whether a plan's edits reached the server: saved, being written (or waiting to be), refused by another revision, or failed.
+export type PlanSaveStatus = 'saved' | 'saving' | 'conflict' | 'failed'
+
+// Returns how far the edits of a plan got.
+export function planSaveStatus(state: Pick<ObservingPlansState, 'drafts' | 'saving' | 'conflicts' | 'errors'>, id: string): PlanSaveStatus {
+	if (id in state.conflicts) return 'conflict'
+	if (state.errors[id]) return 'failed'
+	return state.drafts[id] || state.saving[id] ? 'saving' : 'saved'
 }
 
 // Pending writes of the plans, by id.

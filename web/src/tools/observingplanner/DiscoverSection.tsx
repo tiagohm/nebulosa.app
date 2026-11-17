@@ -1,4 +1,5 @@
 import type { SkyCatalogClass } from 'api'
+import { cn } from 'cn'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatAngularSize, formatHours, formatSpan, MISSING } from '../../format'
@@ -13,7 +14,7 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 import { formatScore } from './format'
-import { analyze, CATALOG_CLASSES, CLASS_LABELS, type DiscoverSource, discover, listCatalog, minorBodyTarget, type NamedTarget, type ObservingPlannerState, observingPlannerState, STATUS_LABELS, searchMinorBody, stopDiscovery } from './observingplanner'
+import { analyze, CATALOG_CLASSES, CLASS_LABELS, type DiscoverSource, discover, discoveryStale, listCatalog, minorBodyTarget, type NamedTarget, type ObservingPlannerState, observingPlannerState, STATUS_LABELS, searchMinorBody, stopDiscovery } from './observingplanner'
 
 // Discover section of the Observing Planner: the static catalog listing, which needs no location, and the best targets of
 // the night, evaluated by the server in batches that add up. The coverage line says how many objects were evaluated of how
@@ -56,6 +57,7 @@ function CatalogDiscovery({ location, timeZone, onAdd }: DiscoverSectionProps) {
 	const state = useSnapshot(observingPlannerState) as ObservingPlannerState
 	const { filter, discovery, catalog } = state
 	const ready = !!location && !!state.eveningDate && !!state.constraints
+	const stale = discoveryStale(state, location)
 
 	// Toggles a class of the filter.
 	function toggleClass(value: SkyCatalogClass, checked: boolean) {
@@ -101,10 +103,18 @@ function CatalogDiscovery({ location, timeZone, onAdd }: DiscoverSectionProps) {
 							Evaluated {discovery.evaluated} of {discovery.total} · {discovery.candidates.length} observable
 						</span>
 					</div>
+					{stale && (
+						<div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-warning/60 px-3 py-2">
+							<span className="text-sm text-warning">These results are for an earlier night, constraints, or filter.</span>
+							<Button variant="secondary" disabled={!ready || state.discoveryLoading} onClick={() => location && void discover(observingPlannerState, location)}>
+								Find Again
+							</Button>
+						</div>
+					)}
 					{discovery.candidates.length === 0 ? (
 						<Notice>No target evaluated so far is observable with these constraints.</Notice>
 					) : (
-						<Table columns={CANDIDATE_COLUMNS}>
+						<Table columns={CANDIDATE_COLUMNS} className={cn(stale && 'opacity-60')}>
 							{discovery.candidates.map((candidate) => {
 								const best = candidate.windows.find((window) => window.bestAt === candidate.bestAt) ?? candidate.windows[0]
 								const target = { target: candidate.target, name: candidate.name }
@@ -131,7 +141,13 @@ function CatalogDiscovery({ location, timeZone, onAdd }: DiscoverSectionProps) {
 						</Table>
 					)}
 					{discovery.nextCursor && (
-						<Button variant="secondary" className="self-start" disabled={state.discoveryLoading} onClick={() => location && void discover(observingPlannerState, location, true)}>
+						<Button
+							variant="secondary"
+							className="self-start"
+							disabled={state.discoveryLoading || stale}
+							title={stale ? 'These results are for an earlier night, constraints, or filter; find the best targets again first' : undefined}
+							onClick={() => location && void discover(observingPlannerState, location, true)}
+						>
 							{state.discoveryLoading ? 'Evaluating…' : 'Evaluate More'}
 						</Button>
 					)}

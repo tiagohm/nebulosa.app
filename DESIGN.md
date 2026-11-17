@@ -287,6 +287,7 @@ Quiet and exact: controls step back so readings lead.
 - **Primary:** Ember Clay fill, On Ember text. One per group at most.
 - **Secondary:** transparent with a Graticule border and Starlight Cream text; hover fills Horizon Haze and lightens the border to Zodiacal Gray.
 - **Ghost:** Ember Clay text with no border; hover fills Ember Wash.
+- **Danger:** Antares Red fill, On Ember text; only the confirming button of a destructive confirmation (`ConfirmButton` with `destructive`).
 - **Disabled:** Horizon Haze fill, Zodiacal Gray text, no border, `not-allowed` cursor, and the reason in the tooltip. Unavailable actions stay visible.
 - **Focus:** a 2 px Ember Clay outline offset by 2 px on `:focus-visible`, for every interactive element.
 

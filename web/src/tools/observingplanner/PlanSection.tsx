@@ -12,7 +12,7 @@ import { IconButton } from '../../ui/IconButton'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { Select } from '../../ui/Select'
-import { StatusBadge } from '../../ui/StatusBadge'
+import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import {
 	CONFLICT_LABELS,
@@ -30,8 +30,10 @@ import {
 	observingPlansState,
 	openPlan,
 	overwritePlan,
+	type PlanSaveStatus,
 	planDocument,
 	planningSite,
+	planSaveStatus,
 	plain,
 	previewPlan,
 	showTargetInSky,
@@ -88,6 +90,22 @@ function constraintsSummary(constraints: ObservingConstraints) {
 	return parts.join(' · ')
 }
 
+// Item removed from a plan, kept so the removal can be undone: the item whole (with its notes) and where it was.
+interface RemovedItem {
+	// Item removed.
+	readonly item: ObservingPlanItem
+	// Its index in the plan's items before the removal.
+	readonly index: number
+}
+
+// Words and tone of how far a plan's edits got.
+const SAVE_STATUS_LABELS: Readonly<Record<PlanSaveStatus, { readonly label: string; readonly tone: StatusTone; readonly title: string }>> = {
+	saved: { label: 'Saved', tone: 'neutral', title: 'Every edit of this plan is saved on the server' },
+	saving: { label: 'Saving', tone: 'active', title: 'The latest edits are being written to the server' },
+	conflict: { label: 'Conflict', tone: 'warning', title: 'Another tab changed this plan; choose which version to keep' },
+	failed: { label: 'Not saved', tone: 'danger', title: 'The latest edits could not be written to the server' },
+}
+
 // Night Plan section of the Observing Planner.
 export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }: PlanSectionProps) {
 	const plans = useSnapshot(observingPlansState) as ObservingPlansState
@@ -98,6 +116,10 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 	const displayZone = useDisplayZone(document?.site)
 	const timeZone = displayZone.zone
 	const [creating, setCreating] = useState(false)
+	const [removed, setRemoved] = useState<RemovedItem>()
+
+	// A removal can be undone only in the plan it was made in.
+	useEffect(() => setRemoved(undefined), [planId])
 
 	// Previews every document shown; an unchanged document is not asked again.
 	useEffect(() => {
@@ -128,6 +150,9 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 			</Button>
 			{saved && (
 				<>
+					<span className="flex h-[33.25px] items-center">
+						<StatusBadge {...SAVE_STATUS_LABELS[planSaveStatus(plans, saved.id)]} />
+					</span>
 					<Button
 						variant="secondary"
 						onClick={() =>
@@ -140,8 +165,9 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 					</Button>
 					<ConfirmButton
 						title="Delete plan?"
-						message={`Delete ${saved.name} and its ${saved.items.length} items? This cannot be undone.`}
+						message={`Delete ${saved.name} and its ${saved.items.length === 1 ? 'one item' : `${saved.items.length} items`}? This cannot be undone.`}
 						confirmLabel="Delete"
+						destructive
 						onConfirm={() =>
 							void deletePlan(observingPlansState, saved.id).then(() => {
 								if (!observingPlansState.plans[saved.id]) openPlan(observingPlannerState, undefined)
@@ -243,6 +269,20 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 				</>
 			)}
 			{tool.previewLoading && !preview && <p className="m-0 text-sm text-ink-300">Computing the plan…</p>}
+			{removed && (
+				<div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-line-100 px-3 py-2">
+					<span className="min-w-0 text-sm wrap-break-word text-ink-200">Removed {removed.item.targetName} from the plan.</span>
+					<Button
+						variant="secondary"
+						onClick={() => {
+							edit((current) => ({ ...current, items: current.items.some((e) => e.id === removed.item.id) ? current.items : current.items.toSpliced(Math.min(removed.index, current.items.length), 0, removed.item) }))
+							setRemoved(undefined)
+						}}
+					>
+						Undo
+					</Button>
+				</div>
+			)}
 			{document.items.length === 0 ? (
 				<Notice>Add targets from Discover or Analysis, or from an object selected in the Sky.</Notice>
 			) : (
@@ -258,7 +298,10 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 							nightStart={preview?.night.display.start}
 							onChange={(change) => editItem(item.id, change)}
 							onMove={(by) => move(index, by)}
-							onRemove={() => edit((current) => ({ ...current, items: current.items.filter((e) => e.id !== item.id) }))}
+							onRemove={() => {
+								setRemoved({ item: plain(item), index })
+								edit((current) => ({ ...current, items: current.items.filter((e) => e.id !== item.id) }))
+							}}
 							onShow={() => showTargetInSky({ target: item.target, name: item.targetName }, activeSite)}
 							onAnalyze={() => onAnalyze({ target: item.target, name: item.targetName })}
 						/>

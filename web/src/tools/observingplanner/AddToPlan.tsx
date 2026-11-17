@@ -1,5 +1,5 @@
 import type { ObservingConstraints } from 'api'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import type { SiteLocation } from '../../location/site'
 import { Button } from '../../ui/Button'
@@ -7,10 +7,11 @@ import { Modal, ModalActions } from '../../ui/Modal'
 import { Notice } from '../../ui/Notice'
 import { Select } from '../../ui/Select'
 import { TextInput } from '../../ui/TextInput'
-import { createPlan, editPlan, type NamedTarget, newItem, newPlanDocument, observingPlannerState, observingPlansState, openPlan, sortedPlans } from './observingplanner'
+import { createPlan, defaultPlanFor, editPlan, type NamedTarget, newItem, newPlanDocument, observingPlannerState, observingPlansState, openPlan, sortedPlans } from './observingplanner'
 
 // Dialog adding a target to a night plan: an existing plan, or a new one for the active site and the tool's night and constraints.
-// The target joins the end of the plan unscheduled, with an hour requested; nothing else of the plan changes.
+// It proposes the plan of the tool's night (at the tool's place first), else a new plan, and says so when the plan chosen
+// is for another night. The target joins the end of the plan unscheduled, with an hour requested; nothing else of the plan changes.
 
 export interface AddToPlanProps {
 	// Target to add; the dialog is closed without one.
@@ -36,9 +37,17 @@ export function AddToPlan({ target, onClose, location, siteId, eveningDate, cons
 	const [choice, setChoice] = useState<string>()
 	const [name, setName] = useState('')
 	const [error, setError] = useState<string>()
-	const selected = choice ?? plans[0]?.id ?? NEW_PLAN
+	const selected = choice ?? defaultPlanFor(plans, location, eveningDate) ?? NEW_PLAN
 	const canCreate = !!location && !!eveningDate && !!constraints
 	const options = [...plans.map((plan) => plan.id), NEW_PLAN]
+	const chosen = selected === NEW_PLAN ? undefined : plans.find((plan) => plan.id === selected)
+
+	// Every target opens the dialog afresh, on the plan proposed for it.
+	useEffect(() => {
+		setChoice(undefined)
+		setName('')
+		setError(undefined)
+	}, [target])
 
 	// Adds the target and opens its plan.
 	async function add() {
@@ -80,6 +89,11 @@ export function AddToPlan({ target, onClose, location, siteId, eveningDate, cons
 				/>
 				{selected === NEW_PLAN && <TextInput label="Name" value={name} placeholder={eveningDate ? `Night of ${eveningDate}` : 'Night plan'} onChange={(event) => setName(event.target.value)} />}
 				{selected === NEW_PLAN && canCreate && <Notice>The new plan copies the active site, the night of {eveningDate}, and the constraints of the tool.</Notice>}
+				{chosen && eveningDate && chosen.eveningDate !== eveningDate && (
+					<p className="m-0 text-xs leading-4 text-warning">
+						This plan is for the night of {chosen.eveningDate}, not {eveningDate}: the target is judged against that night's windows and the plan's constraints.
+					</p>
+				)}
 				{error && <Notice error>{error}</Notice>}
 			</div>
 			<ModalActions>

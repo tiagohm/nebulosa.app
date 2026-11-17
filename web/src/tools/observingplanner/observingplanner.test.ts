@@ -6,7 +6,26 @@ import type { SkyClock } from '../../sky/clock'
 import type { SkyImageState } from '../../sky/footprint'
 import { plannerTarget } from '../../sky/ObjectActions'
 import type { SkyIo, SkyState } from '../../sky/sky'
-import { addToObservingPlanner, createObservingPlannerState, discardDraft, discover, editPlan, handleObservingPlanEvent, type ObservingPlannerIo, type ObservingPlansState, overwritePlan, planDocument, refreshObservingPlans, sameTarget, searchMinorBody, showTargetInSky, tonight } from './observingplanner'
+import {
+	addToObservingPlanner,
+	createObservingPlannerState,
+	defaultPlanFor,
+	discardDraft,
+	discover,
+	discoveryStale,
+	editPlan,
+	handleObservingPlanEvent,
+	type ObservingPlannerIo,
+	type ObservingPlansState,
+	overwritePlan,
+	planDocument,
+	planSaveStatus,
+	refreshObservingPlans,
+	sameTarget,
+	searchMinorBody,
+	showTargetInSky,
+	tonight,
+} from './observingplanner'
 
 const CONSTRAINTS: ObservingConstraints = { mode: 'deepSky', minimumAltitude: 0.5, maximumAirmass: 2, maximumSunAltitude: -0.3, minimumMoonSeparation: 0.7, minimumContinuousMs: 3_600_000 }
 const SITE = { name: 'Backyard', latitude: -23.55, longitude: -46.63, elevation: 760, timeZone: 'America/Sao_Paulo' }
@@ -145,6 +164,59 @@ describe('discovery', () => {
 		// The superseded answer never lands; the latest one does.
 		expect(state.discovery).toBeUndefined()
 		expect(latest.discovery).toMatchObject({ candidates: [], evaluated: 0 })
+	})
+})
+
+describe('stale results', () => {
+	test('a discovery goes stale when the night, the constraints, the filter, or the place changes, and its next batch is not read', async () => {
+		const state = createObservingPlannerState()
+		state.eveningDate = '2026-01-15'
+		state.constraints = { ...CONSTRAINTS }
+		const { io: fake, requests } = io(() => respond({ candidates: [candidate(1, 50)], evaluated: 100, total: 250, nextCursor: 'c1', modelVersion: 1 }))
+		await discover(state, SITE, false, fake)
+		expect(discoveryStale(state, SITE)).toBe(false)
+
+		state.constraints = { ...CONSTRAINTS, minimumAltitude: 0.6 }
+		expect(discoveryStale(state, SITE)).toBe(true)
+		await discover(state, SITE, true, fake)
+		expect(requests).toHaveLength(1)
+
+		state.constraints = { ...CONSTRAINTS }
+		expect(discoveryStale(state, SITE)).toBe(false)
+		state.filter.text = 'M 42'
+		expect(discoveryStale(state, SITE)).toBe(true)
+		state.filter.text = ''
+		expect(discoveryStale(state, { ...SITE, latitude: 10 })).toBe(true)
+		expect(discoveryStale(state, undefined)).toBe(true)
+		expect(discoveryStale(createObservingPlannerState(), SITE)).toBe(false)
+	})
+})
+
+describe('plan choice and saving', () => {
+	test('a target is proposed for the plan of the tool night at its place, else of its night, else a new plan', () => {
+		const elsewhere = { ...plan('elsewhere', 1), site: { ...SITE, latitude: 10 } }
+		const here = plan('here', 1)
+		const other = { ...plan('other', 1), eveningDate: '2026-01-10' }
+		expect(defaultPlanFor([other, elsewhere, here], SITE, '2026-01-15')).toBe('here')
+		expect(defaultPlanFor([other, elsewhere], SITE, '2026-01-15')).toBe('elsewhere')
+		expect(defaultPlanFor([other], SITE, '2026-01-15')).toBeUndefined()
+		expect(defaultPlanFor([here], SITE, undefined)).toBeUndefined()
+	})
+
+	test('a plan reads saving while a draft waits or is written, and saved once it is written', async () => {
+		const state = plansState()
+		state.plans.a = plan('a', 1)
+		expect(planSaveStatus(state, 'a')).toBe('saved')
+		const { io: fake, flush } = io(() => respond(plan('a', 2)))
+		editPlan(state, 'a', (document) => ({ ...document, name: 'Two' }), fake)
+		expect(planSaveStatus(state, 'a')).toBe('saving')
+		flush()
+		await Bun.sleep(0)
+		expect(planSaveStatus(state, 'a')).toBe('saved')
+		state.errors.a = 'Disk full'
+		expect(planSaveStatus(state, 'a')).toBe('failed')
+		state.conflicts.a = null
+		expect(planSaveStatus(state, 'a')).toBe('conflict')
 	})
 })
 

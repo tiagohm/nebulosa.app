@@ -14,12 +14,14 @@ export interface ConfirmButtonProps extends Omit<ButtonProps, 'onClick'> {
 	readonly confirmLabel: string
 	// Runs the command once confirmed.
 	readonly onConfirm: () => void
+	// Whether the command destroys something that cannot be recovered, which draws its confirming button in the danger tone.
+	readonly destructive?: boolean
 }
 
 // Button that opens a confirmation dialog and runs its command only once confirmed; Cancel or closing the dialog runs
 // nothing. The dialog opens with Cancel focused, so a stray Enter or Space never runs the command: confirming takes a
 // deliberate move to the confirm button.
-export function ConfirmButton({ title, message, confirmLabel, onConfirm, size = 'md', variant = 'secondary', ...props }: ConfirmButtonProps) {
+export function ConfirmButton({ title, message, confirmLabel, onConfirm, destructive = false, size = 'md', variant = 'secondary', ...props }: ConfirmButtonProps) {
 	const [open, setOpen] = useState(false)
 
 	return (
@@ -32,6 +34,7 @@ export function ConfirmButton({ title, message, confirmLabel, onConfirm, size = 
 						Cancel
 					</Button>
 					<Button
+						variant={destructive ? 'danger' : 'primary'}
 						onClick={() => {
 							setOpen(false)
 							onConfirm()

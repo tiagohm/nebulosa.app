@@ -86,3 +86,18 @@ test('the automatic downloads of a group are asked of the server, and a refusal 
 	expect(await setSatelliteAutoDownload(catalog, 'gp:GROUP:NOPE', true, request)).toBeFalse()
 	expect(catalog.errors['gp:GROUP:NOPE']).toBe('gp:GROUP:NOPE is not a CelesTrak group')
 })
+
+test('a download answered after a newer change reached the tab never moves the revision back', async () => {
+	const catalog = state()
+	const { request, pending } = deferredFetch()
+	const download = downloadSatelliteSource(catalog, 'gp:GROUP:STATIONS', request)
+
+	handleSatelliteEvent(catalog, { type: 'satellites:changed', revision: 6 }, request)
+	pending[1].resolve(Response.json(snapshot(6, 30)))
+	await Bun.sleep(0)
+	pending[0].resolve(Response.json({ results: [], snapshot: snapshot(5, 20) }))
+
+	expect(await download).toBeTrue()
+	expect(catalog.revision).toBe(6)
+	expect(catalog.snapshot?.objects).toBe(30)
+})

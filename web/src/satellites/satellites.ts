@@ -42,6 +42,16 @@ export async function refreshSatelliteCatalog(state: SatelliteCatalogState, requ
 	}
 }
 
+// Applies the sources a command answered with, unless a newer change already reached the tab, as a download of another
+// source finishing meanwhile does; an older answer would move the revision back. A refresh still in flight is dropped,
+// since its answer may be older still.
+function applyAnswer(state: SatelliteCatalogState, snapshot: SatelliteSourcesSnapshot) {
+	if (snapshot.revision < state.revision) return
+	++generation
+	state.snapshot = snapshot
+	state.revision = snapshot.revision
+}
+
 // Applies a change of the catalog: its revision, then the sources read again. Any other event is ignored.
 export function handleSatelliteEvent(state: SatelliteCatalogState, event: ServerEvent, request: ApiFetch = browserFetch) {
 	if (event.type !== 'satellites:changed') return
@@ -66,9 +76,7 @@ export async function downloadSatelliteSource(state: SatelliteCatalogState, sour
 		}
 
 		const { snapshot } = (await response.json()) as SatelliteRefreshResponse
-		++generation
-		state.snapshot = snapshot
-		state.revision = snapshot.revision
+		applyAnswer(state, snapshot)
 		return true
 	} catch {
 		state.errors[sourceKey] = 'The server could not be reached'
@@ -93,9 +101,7 @@ export async function setSatelliteAutoDownload(state: SatelliteCatalogState, sou
 		}
 
 		const snapshot = (await response.json()) as SatelliteSourcesSnapshot
-		++generation
-		state.snapshot = snapshot
-		state.revision = snapshot.revision
+		applyAnswer(state, snapshot)
 		return true
 	} catch {
 		state.errors[sourceKey] = 'The server could not be reached'

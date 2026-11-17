@@ -20,6 +20,7 @@
 		"make:meteors": "bun run bin/src/meteor.showers.ts",
 		"make:cameras": "bun run bin/src/camera.models.ts",
 		"make:telescopes": "bun run bin/src/telescope.models.ts",
+		"make": "bun run make:catalog && bun run make:moon && bun run make:meteors && bun run make:cameras && bun run make:telescopes",
 		"test:timings": "RUN_ALL_TESTS=true bun test --timings timings.json --update-timings --timeout 30000"
 	},
 	"devDependencies": {

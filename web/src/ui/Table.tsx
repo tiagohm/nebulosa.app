@@ -19,6 +19,8 @@ export type TableColumn =
 			readonly label: ReactNode
 			// Whether the column holds numbers, aligned to the end.
 			readonly numeric?: boolean
+			// Classes of the header cell, such as the width below which the column is hidden; its cells take the same.
+			readonly className?: string
 	  }
 
 export interface TableProps {
@@ -41,7 +43,7 @@ export function Table({ columns, className, children }: TableProps) {
 							typeof column === 'string' ? (
 								<HeaderCell key={column}>{column}</HeaderCell>
 							) : (
-								<HeaderCell key={column.key} numeric={column.numeric}>
+								<HeaderCell key={column.key} numeric={column.numeric} className={column.className}>
 									{column.label}
 								</HeaderCell>
 							),
@@ -55,8 +57,8 @@ export function Table({ columns, className, children }: TableProps) {
 }
 
 // Header cell of a column.
-function HeaderCell({ numeric = false, children }: { readonly numeric?: boolean; readonly children: ReactNode }) {
-	return <th className={cn('px-2 py-1.5 font-medium whitespace-nowrap text-ink-300', numeric ? 'text-right' : 'text-left')}>{children}</th>
+function HeaderCell({ numeric = false, className, children }: { readonly numeric?: boolean; readonly className?: string; readonly children: ReactNode }) {
+	return <th className={cn('px-2 py-1.5 font-medium whitespace-nowrap text-ink-300', numeric ? 'text-right' : 'text-left', className)}>{children}</th>
 }
 
 export interface SortHeaderProps {

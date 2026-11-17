@@ -3,8 +3,8 @@ import type { PlanetaryEvent, PlanetaryEventsSearch, PlanetaryEventVisibility } 
 import { proxy } from 'valtio'
 import { skyClock } from '../../sky/clock'
 import type { PlannerIo } from '../planetary/planetary'
-import { addPlanetToPlanner, calendarWeeks, createPlanetaryEventsState, groupByDay, initialize, listedEvents, loadSearch, loadVisibility, rangeEnd, searchRequest, showPlanetInSky, showPlanetInSkyAt, startAtSkyTime } from './planetaryevents'
-import { CSV_COLUMNS, eventsCsv, eventTitle, formatOffset, KIND_LABELS, spreadsheetText } from './planetaryevents.format'
+import { addPlanetToPlanner, calendarWeeks, createPlanetaryEventsState, groupByDay, initialize, listedEvents, loadSearch, loadVisibility, rangeEnd, searchRequest, showPlanetInSky, showPlanetInSkyAt, startAtSkyTime, unmatchedKinds, windowMiddle } from './planetaryevents'
+import { CSV_COLUMNS, eventsCsv, eventTitle, formatOffset, KIND_LABELS, STATUS_TONES, spreadsheetText, unmatchedSentence, windowTiming } from './planetaryevents.format'
 
 const NOW = Date.UTC(2026, 10, 8, 15)
 const DEG = Math.PI / 180
@@ -160,11 +160,19 @@ describe('requests', () => {
 describe('listing', () => {
 	test('filters by visibility without dropping events for a missing site', () => {
 		const events = [opposition('a', NOW + 2), conjunction('c', NOW), appulse('p', NOW + 1)]
-		expect(listedEvents(events, 'all', undefined).map((e) => e.id)).toEqual(['c', 'p', 'a'])
-		expect(listedEvents(events, 'unknown', undefined)).toHaveLength(3)
+		expect(listedEvents(events, 'all', undefined, false).map((e) => e.id)).toEqual(['c', 'p', 'a'])
+		expect(listedEvents(events, 'observable', undefined, false)).toHaveLength(3)
 		const visibility = { site: 'x', byId: { a: seen('nearby'), c: seen('notSuitable'), p: seen('observable') } }
-		expect(listedEvents(events, 'observable', visibility).map((e) => e.id)).toEqual(['p', 'a'])
-		expect(listedEvents(events, 'notObservable', visibility).map((e) => e.id)).toEqual(['c'])
+		expect(listedEvents(events, 'observable', visibility, true).map((e) => e.id)).toEqual(['p', 'a'])
+		expect(listedEvents(events, 'notObservable', visibility, true).map((e) => e.id)).toEqual(['c'])
+	})
+
+	test('names the kinds that none of the planets searched can have', () => {
+		expect(unmatchedKinds(['opposition', 'greatestElongation', 'station', 'planetaryConjunction'], ['199', '299'])).toEqual(['opposition'])
+		expect(unmatchedKinds(['greatestBrightness', 'planetaryAppulse', 'quadrature'], ['499'])).toEqual(['greatestBrightness', 'planetaryAppulse'])
+		expect(unmatchedKinds(['station'], [])).toEqual(['station'])
+		expect(unmatchedSentence(['opposition', 'quadrature'], ['199', '299'])).toBe('Opposition and quadrature never happen to Mercury or Venus.')
+		expect(unmatchedSentence(['greatestBrightness'], ['499'])).toBe('Greatest brilliancy never happens to Mars.')
 	})
 
 	test('groups by the civil date of the display zone, ordered by the UTC instant', () => {
@@ -197,11 +205,23 @@ describe('listing', () => {
 		expect(KIND_LABELS.planetaryConjunction).not.toBe(KIND_LABELS.planetaryAppulse)
 		expect(formatOffset(0)).toBe('at the event')
 		expect(formatOffset(-(2 * 3_600_000 + 5 * 60_000))).toBe('2 h 5 min before')
+		expect(windowTiming(0)).toBe('holds the event')
+		expect(windowTiming(3 * 3_600_000)).toBe('starts 3 h 0 min after the event')
+		expect(windowTiming(-(2 * 3_600_000 + 5 * 60_000))).toBe('ends 2 h 5 min before the event')
+	})
+
+	test('puts a subtype inside the parentheses of a label that has them', () => {
+		const half: PlanetaryEvent = { id: 'h', kind: 'halfIllumination', time: 0, bodies: ['299'], circumstances: [{ body: '299', ...CIRCUMSTANCES }], relatedIds: [], subtype: 'increasing' }
+		expect(eventTitle(half)).toBe('Half illuminated (dichotomy, waxing)')
+	})
+
+	test('keeps the pulsing active tone for running work, never a visibility', () => {
+		expect(Object.values(STATUS_TONES)).not.toContain('active')
 	})
 })
 
 describe('handoffs', () => {
-	test('Show in Sky keeps the Sky clock; Set Sky Time to Event is the only change to it', () => {
+	test('Show in Sky keeps the Sky clock; Show in Sky at Event Time is the only change to it', () => {
 		const shown: unknown[] = []
 		const show = ((target: unknown) => shown.push(target)) as typeof import('../observingplanner/observingplanner').showTargetInSky
 		const clock = { mode: 'now' as const, anchor: 0, startedAt: 0, rate: 1 }
@@ -212,6 +232,16 @@ describe('handoffs', () => {
 		showPlanetInSkyAt('599', NOW, SITE, clock, show, fakeIo().io)
 		expect(clock).toMatchObject({ mode: 'fixed', anchor: NOW, startedAt: NOW })
 		expect(shown[1]).toEqual({ target: { kind: 'body', code: '599' }, name: 'Jupiter' })
+	})
+
+	test('Show in Sky at Best Window sets the Sky clock to the middle of the window', () => {
+		const shown: unknown[] = []
+		const show = ((target: unknown) => shown.push(target)) as typeof import('../observingplanner/observingplanner').showTargetInSky
+		const clock = { mode: 'now' as const, anchor: 0, startedAt: 0, rate: 1 }
+		const window = seen('nearby').bestWindow!
+		showPlanetInSkyAt('499', windowMiddle(window), SITE, clock, show, fakeIo().io)
+		expect(clock).toMatchObject({ mode: 'fixed', anchor: NOW + 5_400_000 })
+		expect(shown[0]).toEqual({ target: { kind: 'body', code: '499' }, name: 'Mars' })
 	})
 
 	test('adds a planet to the Observing Planner as an independent target', () => {

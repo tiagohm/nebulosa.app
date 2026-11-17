@@ -33,11 +33,24 @@ export const RANGE_MONTHS: readonly RangeMonths[] = [1, 3, 6, 12, 24]
 export type PlanetaryEventsView = 'timeline' | 'calendar'
 
 // Which events the list keeps by their visibility from the site: every one, those observable at their instant or nearby,
-// those that are not (including the solar conjunctions, never recommended), or those without a known visibility.
-export type VisibilityFilter = 'all' | 'observable' | 'notObservable' | 'unknown'
+// or those that are not (including the solar conjunctions, never recommended). Without a site the list keeps every one.
+export type VisibilityFilter = 'all' | 'observable' | 'notObservable'
 
 // Every visibility filter.
-export const VISIBILITY_FILTERS: readonly VisibilityFilter[] = ['all', 'observable', 'notObservable', 'unknown']
+export const VISIBILITY_FILTERS: readonly VisibilityFilter[] = ['all', 'observable', 'notObservable']
+
+// Planets that can have each kind of event, for the kinds limited to some of them (the inner or the outer planets);
+// every other single-planet kind happens to every planet, and a pair kind needs two planets.
+export const KIND_BODIES: Readonly<Partial<Record<PlanetaryEventKind, readonly PlanetaryEventBody[]>>> = {
+	opposition: ['499', '599', '699', '799', '899'],
+	quadrature: ['499', '599', '699', '799', '899'],
+	greatestElongation: ['199', '299'],
+	halfIllumination: ['199', '299'],
+	greatestBrightness: ['299'],
+}
+
+// Kinds of events between two planets.
+const PAIR_KINDS: ReadonlySet<PlanetaryEventKind> = new Set(['planetaryConjunction', 'planetaryAppulse'])
 
 // Default appulse threshold, degrees.
 export const DEFAULT_THRESHOLD_DEGREES = 5
@@ -242,8 +255,7 @@ export function visibilityStatus(visibility: SiteVisibility | undefined, id: str
 	return visibility?.byId[id]?.status ?? 'unknownNoSite'
 }
 
-// Whether an event passes the visibility filter; without a site every event is unknown, and none is dropped by the
-// filter 'all'.
+// Whether an event passes the visibility filter; the filter 'all' drops none.
 export function passesVisibility(filter: VisibilityFilter, status: PlanetaryVisibilityStatus) {
 	switch (filter) {
 		case 'all':
@@ -252,14 +264,20 @@ export function passesVisibility(filter: VisibilityFilter, status: PlanetaryVisi
 			return status === 'observable' || status === 'nearby'
 		case 'notObservable':
 			return status === 'notObservable' || status === 'notSuitable'
-		case 'unknown':
-			return status === 'unknownNoSite'
 	}
 }
 
-// The events listed: those passing the visibility filter, chronologically by their UTC instant.
-export function listedEvents(events: readonly PlanetaryEvent[], filter: VisibilityFilter, visibility: SiteVisibility | undefined) {
-	return events.filter((e) => passesVisibility(filter, visibilityStatus(visibility, e.id))).sort((a, b) => a.time - b.time)
+// The events listed: those passing the visibility filter, chronologically by their UTC instant. Without a site the
+// filter is ignored, so no event is dropped because no site is set.
+export function listedEvents(events: readonly PlanetaryEvent[], filter: VisibilityFilter, visibility: SiteVisibility | undefined, hasSite: boolean) {
+	const kept = hasSite ? events.filter((e) => passesVisibility(filter, visibilityStatus(visibility, e.id))) : [...events]
+	return kept.sort((a, b) => a.time - b.time)
+}
+
+// Kinds searched that none of the planets searched can have: an opposition of Mercury, a greatest elongation of Mars, or
+// a conjunction of planets with fewer than two, in the order of the kinds given.
+export function unmatchedKinds(kinds: readonly PlanetaryEventKind[], bodies: readonly PlanetaryEventBody[]) {
+	return kinds.filter((kind) => (PAIR_KINDS.has(kind) ? bodies.length < 2 : KIND_BODIES[kind] ? !bodies.some((code) => KIND_BODIES[kind]!.includes(code)) : bodies.length === 0))
 }
 
 // Events grouped by the civil date of their instant in a zone, in order; the instants decide the order, never the dates.
@@ -342,6 +360,12 @@ export function showPlanetInSky(code: PlanetaryEventBody, site: SiteLocation | u
 export function showPlanetInSkyAt(code: PlanetaryEventBody, time: number, site: SiteLocation | undefined, clock: SkyClock = skyClock, show: typeof showTargetInSky = showTargetInSky, io: PlannerIo = browserPlannerIo) {
 	setSkyTime(clock, time, io.time())
 	showPlanetInSky(code, site, show)
+}
+
+// Middle of an event's best window, Unix milliseconds: the instant the separation of a pair is given for, and the one
+// Show in Sky at Best Window sets the Sky clock to.
+export function windowMiddle(window: Pick<NonNullable<PlanetaryEventVisibility['bestWindow']>, 'start' | 'end'>) {
+	return Math.round((window.start + window.end) / 2)
 }
 
 // Offers a planet to the Observing Planner as an independent target; it never picks a night or schedules the event.

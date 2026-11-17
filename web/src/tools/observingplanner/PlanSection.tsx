@@ -203,7 +203,7 @@ export function PlanSection({ planId, location, siteId, activeSite, onAnalyze }:
 		<div className="flex flex-wrap items-end gap-2">
 			<Select label="Plan" className="min-w-56 flex-1" options={['', ...list.map((plan) => plan.id)]} value={planId && saved ? planId : ''} onChange={(id) => openPlan(observingPlannerState, id || undefined)} format={(id) => (id && plans.plans[id] ? planLabel(plans.plans[id]) : 'All plans')} />
 			{saved && (
-				<span className="flex h-[33.25px] items-center">
+				<span className="flex h-9.5 items-center">
 					<StatusBadge {...SAVE_STATUS_LABELS[planSaveStatus(plans, saved.id)]} />
 				</span>
 			)}

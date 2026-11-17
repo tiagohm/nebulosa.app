@@ -1,7 +1,7 @@
 import type { PlanetaryEvent, PlanetaryEventBody, PlanetaryEventKind, PlanetaryEventQuantity, PlanetaryEventsSignature, PlanetaryEventVisibility, PlanetaryFallbackReason, PlanetaryVisibilityReason, PlanetaryVisibilityStatus } from 'api'
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { csvField } from '../../download'
-import { formatDegrees, formatFixed, formatPercent } from '../../format'
+import { formatDegrees, formatFixed } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Words and numbers of Planetary Events: the names of the planets and kinds, the one-sentence definition of each kind
@@ -40,6 +40,20 @@ export const KIND_DEFINITIONS: Readonly<Record<PlanetaryEventKind, string>> = {
 	halfIllumination: 'Exactly half of the disk seen from the Earth is lit (dichotomy). Not the instant of the greatest elongation.',
 }
 
+// Short name of each kind, for the cells of the calendar, where the planets follow it.
+export const SHORT_KIND_LABELS: Readonly<Record<PlanetaryEventKind, string>> = {
+	solarConjunction: 'Solar conjunction',
+	opposition: 'Opposition',
+	quadrature: 'Quadrature',
+	greatestElongation: 'Elongation',
+	station: 'Station',
+	planetaryConjunction: 'Conjunction',
+	planetaryAppulse: 'Appulse',
+	closestEarthApproach: 'Closest to Earth',
+	greatestBrightness: 'Brilliancy',
+	halfIllumination: 'Dichotomy',
+}
+
 // Name of each subtype.
 export const SUBTYPE_LABELS: Readonly<Record<string, string>> = {
 	inferior: 'inferior',
@@ -64,8 +78,32 @@ export function eventTitle(event: PlanetaryEvent) {
 		return outer ? KIND_LABELS.solarConjunction : `${event.subtype === 'inferior' ? 'Inferior' : 'Superior'} conjunction`
 	}
 
-	if ('subtype' in event) return `${KIND_LABELS[event.kind]} (${SUBTYPE_LABELS[event.subtype]})`
-	return KIND_LABELS[event.kind]
+	const label = KIND_LABELS[event.kind]
+	if (!('subtype' in event)) return label
+	const subtype = SUBTYPE_LABELS[event.subtype]
+	// A label that already ends in parentheses takes the subtype inside them: "Half illuminated (dichotomy, waxing)".
+	return label.endsWith(')') ? `${label.slice(0, -1)}, ${subtype})` : `${label} (${subtype})`
+}
+
+// Name of an event with its planets first, as the list and the inspector show it: "Mars · Quadrature (west)".
+export function eventName(event: PlanetaryEvent) {
+	return `${bodiesLabel(event)} · ${eventTitle(event)}`
+}
+
+// Words joined as a list: "A", "A and B", "A, B and C", with `last` as the last joiner.
+function joinWords(words: readonly string[], last: string) {
+	return words.length < 2 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} ${last} ${words.at(-1)}`
+}
+
+// Sentence saying which kinds searched none of the planets searched can have, such as "Opposition and quadrature never
+// happen to Mercury or Venus."; `unmatched` is unmatchedKinds of the search, not empty, and so are the planets.
+export function unmatchedSentence(unmatched: readonly PlanetaryEventKind[], bodies: readonly PlanetaryEventBody[]) {
+	const names = unmatched.map((kind, i) => (i === 0 ? KIND_LABELS[kind] : KIND_LABELS[kind].charAt(0).toLowerCase() + KIND_LABELS[kind].slice(1)))
+	const planets = joinWords(
+		bodies.map((code) => BODY_LABELS[code]),
+		'or',
+	)
+	return `${joinWords(names, 'and')} never ${names.length === 1 ? 'happens' : 'happen'} to ${planets}.`
 }
 
 // Distance in AU and millions of kilometres.
@@ -84,9 +122,9 @@ export function primaryValue(event: PlanetaryEvent) {
 		case 'quadrature':
 			return `${formatDegrees(body.elongation, 1)} from the Sun`
 		case 'greatestElongation':
-			return formatDegrees(event.elongation, 1)
+			return `${formatDegrees(event.elongation, 1)} from the Sun`
 		case 'station':
-			return `λ ${formatDegrees(body.longitude, 2)}`
+			return `longitude ${formatDegrees(body.longitude, 2)}`
 		case 'planetaryConjunction':
 			return `${formatDegrees(event.separation, 2)} apart, ${BODY_LABELS[event.northBody]} north`
 		case 'planetaryAppulse':
@@ -96,7 +134,7 @@ export function primaryValue(event: PlanetaryEvent) {
 		case 'greatestBrightness':
 			return `magnitude ${formatFixed(event.magnitude, 2)}`
 		case 'halfIllumination':
-			return formatPercent(body.illuminatedFraction, 0)
+			return `${formatDegrees(body.elongation, 1)} from the Sun`
 	}
 }
 
@@ -109,8 +147,34 @@ export const STATUS_LABELS: Readonly<Record<PlanetaryVisibilityStatus, string>> 
 	unknownNoSite: 'No site',
 }
 
-// Tone of each visibility status.
-export const STATUS_TONES: Readonly<Record<PlanetaryVisibilityStatus, StatusTone>> = { observable: 'success', nearby: 'active', notObservable: 'neutral', notSuitable: 'warning', unknownNoSite: 'muted' }
+// Tone of each visibility status: the observable ones lead, those that cannot be watched recede. None is the active tone,
+// whose pulsing dot is kept for running work.
+export const STATUS_TONES: Readonly<Record<PlanetaryVisibilityStatus, StatusTone>> = { observable: 'success', nearby: 'neutral', notObservable: 'muted', notSuitable: 'warning', unknownNoSite: 'muted' }
+
+// What each visibility status means, as the tooltip of its badge; `pair` is whether the event is of two planets, whose
+// nearby span is shorter.
+export function statusTitle(status: PlanetaryVisibilityStatus, pair: boolean) {
+	const span = pair ? '2.5' : '3.5'
+	switch (status) {
+		case 'observable':
+			return 'Every planet is high enough and the Sun low enough at the instant of the event.'
+		case 'nearby':
+			return `Not at the instant of the event, but in a window of at least 15 minutes within ${span} days of it.`
+		case 'notObservable':
+			return `No window of at least 15 minutes within ${span} days of the event.`
+		case 'notSuitable':
+			return 'A conjunction with the Sun: the planet is in its glare, never recommended for watching.'
+		case 'unknownNoSite':
+			return 'No observing site is set.'
+	}
+}
+
+// When the best window falls against the event: "holds the event", "starts 5 h 20 min after the event", or
+// "ends 2 h 5 min before the event"; `offsetMs` is the server's offset of the window from the event, milliseconds.
+export function windowTiming(offsetMs: number) {
+	if (offsetMs === 0) return 'holds the event'
+	return `${offsetMs > 0 ? 'starts' : 'ends'} ${formatOffset(offsetMs)} the event`
+}
 
 // Sentence of each visibility reason.
 export function reasonLabel(reason: PlanetaryVisibilityReason, visibility: Pick<PlanetaryEventVisibility, 'minimumAltitude' | 'maximumSunAltitude' | 'atEvent'>) {
@@ -171,6 +235,17 @@ export const QUANTITY_LABELS: Readonly<Record<PlanetaryEventQuantity, string>> =
 	earthDistance: 'Distance from the Earth (AU)',
 	magnitude: 'Magnitude',
 	illuminatedFraction: 'Illuminated (%)',
+}
+
+// Unit of each sampled quantity on the axis of the chart.
+export const QUANTITY_UNITS: Readonly<Record<PlanetaryEventQuantity, string>> = {
+	elongation: '°',
+	separation: '°',
+	longitudeDifference: '°',
+	longitude: '°',
+	earthDistance: 'AU',
+	magnitude: 'mag',
+	illuminatedFraction: '%',
 }
 
 // Display value of a sampled quantity: degrees, AU, a magnitude, or a percentage.

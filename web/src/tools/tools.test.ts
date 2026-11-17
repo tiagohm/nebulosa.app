@@ -76,12 +76,19 @@ describe('filter', () => {
 
 	test('finds a tool by the words of its keywords', () => {
 		const found = (query: string) => TOOL_IDS.filter((id) => matchesTool(TOOL_DEFINITIONS[id], query))
-		expect(found('dew')).toEqual(['calculator'])
+		expect(found('dew')).toEqual(['calculator', 'astro-weather'])
 		expect(found('fov')).toEqual(['calculator'])
 		expect(found('critical focus')).toEqual(['calculator'])
+		expect(found('pixel scale')).toEqual(['calculator'])
 		expect(found('moon')).toContain('lunar-eclipse-map')
+		expect(found('blood moon')).toEqual(['lunar-eclipse-map'])
 		expect(found('iss')).toEqual(['artificial-satellites'])
 		expect(found('pier side')).toEqual(['meridian-flip-monitor'])
+		expect(found('perseids')).toEqual(['meteor-showers'])
+		expect(found('retrograde')).toEqual(['planetary-events'])
+		expect(found('xisf')).toEqual(['calibration-library'])
+		expect(found('sigma clip')).toEqual(['image-stacking'])
+		expect(found('jupiter')).toEqual(['jupiter-observing-planner', 'planetary-events'])
 	})
 })
 

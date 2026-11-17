@@ -3,7 +3,7 @@ import { RAD2DEG } from 'nebulosa/src/core/constants'
 import { parseAngle } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatClockTime, formatDate, formatDateTime, formatDegrees, formatHours, formatPercent, formatSpan } from '../../format'
+import { formatAngularSize, formatClockTime, formatDate, formatDateTime, formatDegrees, formatHours, formatPercent, formatSpan } from '../../format'
 import type { SiteLocation } from '../../location/site'
 import { formatMagnitude, formatSolarSystemDistance } from '../../sky/format'
 import { Button } from '../../ui/Button'
@@ -17,13 +17,15 @@ import { useNow } from '../../useNow'
 import { openMeteorShowerAt } from '../meteorshowers/meteorshowers'
 import { FoldedNote } from './FoldedNote'
 import { formatScore, formatTargetKind } from './format'
+import { FitLabel, FrameLine, fitOf, usePlannerFrame } from './FramingParts'
 import { NightChart } from './NightChart'
 import { analyze, defaultSampleIndex, type NamedTarget, type ObservingPlannerState, observingPlannerState, REASON_LABELS, refreshOrbitalElements, showTargetInSky, STATUS_LABELS } from './observingplanner'
 
 // Analysis section of the Observing Planner: one target over the tool's night, with its status and reasons, its windows,
-// the factors of its score, and the chart of its altitude. Fixed coordinates typed here are analyzed the same way. A minor
-// body also shows where its trajectory came from and how far it can be trusted, its distance and estimated magnitude at the
-// instant chosen on the chart, and Refresh Orbital Elements. Show in Sky selects the object in the Sky at the Sky's own
+// the factors of its score, the chart of its altitude, and, for a catalog object of known size, how it fits the field of
+// view the profile plans with. Fixed coordinates typed here are analyzed the same way. A minor body also shows where its
+// trajectory came from and how far it can be trusted, its distance and estimated magnitude at the instant chosen on the
+// chart, and Refresh Orbital Elements. Show in Sky selects the object in the Sky at the Sky's own
 // time; nothing moves the mount or the clock.
 
 // Names of the score factors.
@@ -62,6 +64,8 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 	const [chosen, setChosen] = useState<{ readonly analysis: TargetAnalysis; readonly index: number }>()
 	const cursor = analysis ? (chosen?.analysis === analysis ? chosen.index : defaultSampleIndex(analysis, now)) : 0
 	const setCursor = (index: number) => analysis && setChosen({ analysis, index })
+	const frame = usePlannerFrame()
+	const fit = analysis && fitOf(analysis, frame.frame)
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -82,10 +86,12 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 							<h2 className="m-0 text-base font-medium wrap-break-word text-ink-100">{analysis.name}</h2>
 							<Notice>
 								{analysis.typeName ?? formatTargetKind(analysis.target)} · Night of {analysis.night.sun.localDate}
+								{analysis.majorAxis !== undefined && ` · ${formatAngularSize(analysis.majorAxis)}${analysis.minorAxis === undefined ? '' : ` × ${formatAngularSize(analysis.minorAxis)}`}`}
 							</Notice>
 						</div>
 						<div className="flex flex-wrap items-center gap-2">
 							<StatusBadge tone={STATUS_LABELS[analysis.status].tone} label={STATUS_LABELS[analysis.status].label} />
+							{fit && <FitLabel assessment={fit} frame={frame.frame} />}
 							<Button variant="secondary" disabled={analysis.status === 'unresolved'} onClick={() => showTargetInSky(selected, activeSite)}>
 								Show in Sky
 							</Button>
@@ -104,6 +110,7 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 							</Button>
 						</div>
 					</div>
+					{analysis.majorAxis !== undefined && <FrameLine frame={frame} />}
 					{analysis.reasons.length > 0 && (
 						<Notice>
 							{analysis.reasons.map((reason) => (

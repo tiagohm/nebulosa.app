@@ -279,6 +279,10 @@ export interface TargetAnalysis {
 	readonly name: string
 	// Object type, such as "Galaxy" or "Planet"; absent for coordinates and unresolved targets.
 	readonly typeName?: string
+	// Apparent major axis of a catalog object, in radians; absent for other targets and when the catalog gives none.
+	readonly majorAxis?: number
+	// Apparent minor axis of a catalog object, in radians; absent for other targets and when the catalog gives none.
+	readonly minorAxis?: number
 	// ICRS right ascension of the target's direction at the middle of the night, in radians; absent when unresolved.
 	readonly rightAscension?: number
 	// ICRS declination of the target's direction at the middle of the night, in radians; absent when unresolved.
@@ -471,6 +475,9 @@ export interface ResolvedTarget {
 	readonly name: string
 	// Object type; absent for coordinates.
 	readonly typeName?: string
+	// Apparent major and minor axes of a catalog object, in radians; absent for other targets and when unknown.
+	readonly majorAxis?: number
+	readonly minorAxis?: number
 	// ICRS direction over time.
 	readonly directionAt: PositionOverTime
 	// Root-finder step of the visibility search, in days; SEARCH_STEP_DAYS when absent.
@@ -503,7 +510,7 @@ export function resolveTarget(catalog: Database, night: PlanningNight, ref: Excl
 	if (ref.kind === 'catalog') {
 		const object = catalogObject(catalog, ref.id)
 		if (!object) return undefined
-		return { ref, name: object.name, typeName: object.typeName, directionAt: fixedDirection(object.rightAscension, object.declination, object.pmRA, object.pmDEC, middle) }
+		return { ref, name: object.name, typeName: object.typeName, majorAxis: object.majorAxis, minorAxis: object.minorAxis, directionAt: fixedDirection(object.rightAscension, object.declination, object.pmRA, object.pmDEC, middle) }
 	}
 
 	if (ref.kind === 'body') {
@@ -682,6 +689,8 @@ export function analyzeTarget(night: PlanningNight, target: ResolvedTarget, cons
 		target: target.ref,
 		name: target.name,
 		typeName: target.typeName,
+		majorAxis: target.majorAxis,
+		minorAxis: target.minorAxis,
 		rightAscension,
 		declination,
 		night: night.night,

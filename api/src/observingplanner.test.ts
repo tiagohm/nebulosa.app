@@ -91,6 +91,9 @@ describe('analysis', () => {
 		expect(analysis.status).toBe('observable')
 		expect(analysis.reasons).toEqual([])
 		expect(analysis.name).toBe('Great Orion Nebula')
+		// The catalog's apparent size travels with the analysis, so the tool can judge its framing.
+		expect(analysis.majorAxis).toBeCloseTo((90 * Math.PI) / (180 * 60), 12)
+		expect(analysis.minorAxis).toBeUndefined()
 		expect(analysis.night.sun.localDate).toBe('2026-01-15')
 		expect(analysis.windows).toHaveLength(1)
 		const [window] = analysis.windows

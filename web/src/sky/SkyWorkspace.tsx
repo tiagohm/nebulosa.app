@@ -25,12 +25,12 @@ import { mountPoint, mountRuntime, mountView, selectionPoint } from './mount'
 import { ObjectInspector } from './ObjectInspector'
 import { planetarium, planetariumState } from './planetarium'
 import { skySatelliteState } from './satellite/satellite'
-import { liveSensors, sensorRuntime } from './sensors'
 import { SHORTCUT_ZOOM_FACTOR, skyShortcut, takesKeys } from './shortcuts'
 import { changeSkyObserver, type SkyPanelView, selectSkyObject, skyState } from './sky'
 import { SkySearch } from './SkySearch'
 import { SkyView } from './SkyView'
 import { TimeController } from './TimeController'
+import { useRoleSensors } from './useSkyDevices'
 
 // Sky workspace: explores the sky on the tab's star map (./planetarium), independently of any connection
 // or equipment. It shows the map, a tooltip for the hovered object, the search, the Object Inspector of
@@ -118,7 +118,7 @@ export function SkyWorkspace() {
 	// Draws the field of view of the selected preset, or of the Equipment Setup, around the selection,
 	// following its position.
 	const { telescope, guideTelescope } = activeProfile(profiles).settings
-	const sensors = liveSensors(useSnapshot(sensorRuntime), control)
+	const sensors = useRoleSensors()
 	// The sensors of the camera states the snapshot keeps while they do not change, so the frame follows them only.
 	const { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor } = sensors
 	const frameSource = activeFrameSource(framing, { telescope, guideTelescope }, { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor })

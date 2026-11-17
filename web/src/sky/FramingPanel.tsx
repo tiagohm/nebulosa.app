@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
 import { roleDefinition } from '../equipment/roles'
-import { formatDegrees } from '../format'
+import { formatDegrees, MISSING } from '../format'
 import { formatPixelScale } from '../platesolving/coordinates'
 import { createOpticalPreset, deleteOpticalPreset, duplicateOpticalPreset, profileState, selectOpticalPreset, setEquipmentRotation, setFramingSource, setFramingVisible, setManualSensor, setGuideTelescopeOptics, setSensorSource, setTelescopeOptics, updateOpticalPreset } from '../profile/profile'
 import type { SkyFramingSettings } from '../profile/schema'
@@ -18,7 +18,8 @@ import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
 import { formatApparentSize } from './format'
 import { DEFAULT_TELESCOPE, equipmentOptics, type FramingSource, framingSource, isFraming, type OpticalConfiguration, type OpticalPreset, resolveFraming, type SensorGeometry, type SensorSource, type TelescopeOptics, usesGuideTelescope } from './framing'
-import { liveSensors, sensorRuntime } from './sensors'
+import type { RoleSensor } from './sensors'
+import { useRoleSensors } from './useSkyDevices'
 
 // Framing settings of the Sky workspace: where the field of view comes from (the active profile's Equipment Setup by
 // default, or a custom optical preset of the profile), the optics and sensor, the field and image scale they give
@@ -62,6 +63,14 @@ function convertSensor(sensor: SensorGeometry, kind: SensorKind): SensorGeometry
 	if (sensor.kind === kind) return sensor
 	if (sensor.kind === 'pixels') return { kind: 'physical', width: (sensor.width * sensor.pixelSize) / 1000, height: (sensor.height * sensor.pixelSize) / 1000 }
 	return { kind: 'pixels', width: Math.round((sensor.width * 1000) / CONVERTED_PIXEL_SIZE), height: Math.round((sensor.height * 1000) / CONVERTED_PIXEL_SIZE), pixelSize: CONVERTED_PIXEL_SIZE }
+}
+
+// Says where the sensor of a camera role comes from, for its device of a display name: its report at full frame, the
+// sensor the Equipment Catalog declares for the camera it is bound to, or the report completed with declared values.
+function sensorOriginText({ origin, catalogCamera }: Pick<RoleSensor, 'origin' | 'catalogCamera'>, device: string) {
+	if (origin === 'catalog') return `Declared for ${catalogCamera} in the Equipment Catalog; the ${device} has not reported its sensor.`
+	if (origin === 'completed') return `Reported by the ${device} device, completed with what the Equipment Catalog declares for ${catalogCamera}.`
+	return `Reported by the ${device} device at full frame.`
 }
 
 // Display name of a sensor source.
@@ -171,12 +180,12 @@ function PresetOptics({ preset, visible, hasTarget }: { readonly preset: Readonl
 // display.
 function EquipmentSource({ framing, telescope, guideTelescope, hasTarget }: Pick<FramingPanelProps, 'framing' | 'telescope' | 'guideTelescope' | 'hasTarget'>) {
 	const sensorSource = framing?.sensorSource ?? 'MAIN_CAMERA'
-	const live = liveSensors(useSnapshot(sensorRuntime), useSnapshot(controlRuntime))
-	const { optics, missingCamera } = equipmentOptics({ telescope, guideTelescope }, sensorSource, live, framing?.manualSensor, framing?.equipmentRotation ?? 0)
+	const sensors = useRoleSensors()
+	const { optics, missingCamera } = equipmentOptics({ telescope, guideTelescope }, sensorSource, sensors, framing?.manualSensor, framing?.equipmentRotation ?? 0)
 	const guide = usesGuideTelescope(sensorSource)
 	const current = (guide ? guideTelescope : telescope) ?? DEFAULT_TELESCOPE
 	const setOptics = guide ? setGuideTelescopeOptics : setTelescopeOptics
-	const reported = sensorSource === 'manual' ? undefined : live[sensorSource]
+	const reported = sensorSource === 'manual' ? undefined : sensors[sensorSource]
 
 	return (
 		<>
@@ -193,12 +202,12 @@ function EquipmentSource({ framing, telescope, guideTelescope, hasTarget }: Pick
 						<DataRow label="Resolution">
 							{reported.width} × {reported.height} px
 						</DataRow>
-						<DataRow label="Pixel size">{reported.pixelSize.toFixed(2)} µm</DataRow>
-						<Notice>Reported by the {sensorSourceName(sensorSource)} device at full frame.</Notice>
+						<DataRow label="Pixel size">{reported.pixelSize > 0 ? `${reported.pixelSize.toFixed(2)} µm` : MISSING}</DataRow>
+						<Notice>{sensorOriginText(reported, sensorSourceName(sensorSource))}</Notice>
 					</>
 				) : (
 					<>
-						<Notice>The {sensorSourceName(sensorSource)} has not reported its sensor: assign and connect it in the Equipment Setup, or enter a sensor manually.</Notice>
+						<Notice>The {sensorSourceName(sensorSource)} has not reported its sensor: assign and connect it in the Equipment Setup, declare the sensor of the camera it is bound to in the Equipment Catalog, or enter a sensor manually.</Notice>
 						<div>
 							<Button variant="secondary" onClick={() => setSensorSource(profileState, 'manual')}>
 								Enter Manually

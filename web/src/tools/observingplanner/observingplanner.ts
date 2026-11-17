@@ -226,7 +226,7 @@ export const CANDIDATE_SORT_KEYS: readonly CandidateSortKey[] = ['score', 'name'
 export const CANDIDATE_SORT_LABELS: Readonly<Record<CandidateSortKey, string>> = { score: 'Score', name: 'Name', magnitude: 'Magnitude', size: 'Size', framing: 'Framing', best: 'Best window', longest: 'Longest window' }
 
 // Returns the best targets in an order. `fit` gives the framing factor of a candidate (0..1, 1 a good fit; undefined when
-// its size or the field is unknown): equal scores are ordered by it, an unknown fit counting as a good one so a target is
+// its size or the field is unknown): scores equal as shown (to the whole number) are ordered by it, an unknown fit counting as a good one so a target is
 // never penalized for a size nobody knows, and the Framing order puts unknown fits last. An unknown magnitude or size
 // always comes last, and remaining ties keep the server's ranking (score, then longest window).
 export function sortCandidates(candidates: readonly ObservingCandidate[], { key, reversed }: CandidateSort, fit: (candidate: ObservingCandidate) => number | undefined = () => undefined) {
@@ -234,7 +234,7 @@ export function sortCandidates(candidates: readonly ObservingCandidate[], { key,
 	// Compares two optional values in the natural direction, unknown last whatever the direction.
 	const known = (a: number | undefined, b: number | undefined, ascending: boolean) => (a === undefined ? (b === undefined ? 0 : 1) : b === undefined ? -1 : sign * (ascending ? a - b : b - a))
 	const compare: Record<CandidateSortKey, (a: ObservingCandidate, b: ObservingCandidate) => number> = {
-		score: (a, b) => b.score - a.score || (fit(b) ?? 1) - (fit(a) ?? 1),
+		score: (a, b) => Math.round(b.score) - Math.round(a.score) || (fit(b) ?? 1) - (fit(a) ?? 1),
 		framing: (a, b) => known(fit(a), fit(b), false) || b.score - a.score,
 		name: (a, b) => sign * a.name.localeCompare(b.name),
 		magnitude: (a, b) => known(a.magnitude, b.magnitude, true),

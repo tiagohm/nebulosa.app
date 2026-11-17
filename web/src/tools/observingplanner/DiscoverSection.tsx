@@ -1,15 +1,11 @@
-import type { ObservingCandidate, SkyCatalogClass, SkyCatalogEntry } from 'api'
+import type { ObservingCandidate, SkyCatalogClass } from 'api'
 import { cn } from 'cn'
 import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
-import { controlRuntime } from '../../equipment-control/control'
-import { roleDefinition } from '../../equipment/roles'
 import { formatAngularSize, formatHours, formatSpan, MISSING } from '../../format'
 import type { SiteLocation } from '../../location/site'
-import { activeProfile, profileState } from '../../profile/profile'
 import { formatMagnitude } from '../../sky/format'
-import { activeFrameSource, type Framing, isFraming, resolveFraming } from '../../sky/framing'
-import { liveSensors, sensorRuntime } from '../../sky/sensors'
+import type { Framing } from '../../sky/framing'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { Icon } from '../../ui/Icon'
@@ -22,7 +18,7 @@ import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table, type TableColumn } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 import { formatScore } from './format'
-import { assessFraming, FRAMING_LABELS, type FramingAssessment, framingDetail } from './framingfit'
+import { FitLabel, FrameLine, fitOf, usePlannerFrame } from './FramingParts'
 import {
 	analyze,
 	CANDIDATE_SORT_KEYS,
@@ -59,9 +55,6 @@ const CATALOG_COLUMNS: readonly TableColumn[] = ['Target', 'Type', 'Const.', { k
 const DISCOVER_SOURCES: readonly DiscoverSource[] = ['catalog', 'minorBodies']
 const DISCOVER_SOURCE_LABELS: Readonly<Record<DiscoverSource, string>> = { catalog: 'Sky Catalog', minorBodies: 'Asteroids & Comets' }
 
-// Parameters of resolveFraming a camera's sensor gives, replaced by the camera's name when it reports none.
-const SENSOR_FIELDS: ReadonlySet<string> = new Set(['Width in pixels', 'Height in pixels', 'Pixel size'])
-
 // Uppercase label of a group of controls, the field label style.
 const GROUP_LABEL = 'm-0 text-xs font-medium tracking-[0.08em] text-ink-200 uppercase'
 
@@ -89,57 +82,6 @@ export function DiscoverSection({ location, timeZone, onAdd }: DiscoverSectionPr
 // Analyzes a target over the tool's night when there is a location.
 function analyzeTarget(location: SiteLocation | undefined, target: NamedTarget) {
 	if (location) void analyze(observingPlannerState, location, target)
-}
-
-// Field of view the targets are judged against: its name, and its angular size and scale, or what it lacks.
-interface PlannerFrame {
-	// Name of the source: Equipment Setup or a preset's; absent when the custom source has no preset.
-	readonly name?: string
-	// Field of view, once every parameter is known.
-	readonly frame?: Framing
-	// Parameters missing to compute it, by display name.
-	readonly missing?: readonly string[]
-	// Whether a camera of the Equipment Setup reports no sensor, which connecting it or a manual sensor gives.
-	readonly cameraMissing?: boolean
-}
-
-// Returns the field of view the active profile plans with, as the Sky draws it, following the profile and the cameras.
-function usePlannerFrame(): PlannerFrame {
-	const { settings } = activeProfile(useSnapshot(profileState))
-	const sensors = liveSensors(useSnapshot(sensorRuntime), useSnapshot(controlRuntime))
-	const source = activeFrameSource(settings.sky.framing, { telescope: settings.telescope, guideTelescope: settings.guideTelescope }, sensors)
-	if (!source) return {}
-	const resolved = resolveFraming(source.optics)
-	if (isFraming(resolved)) return { name: source.name, frame: resolved }
-	// A camera that reports no sensor is named once, in place of the sensor fields it leaves empty.
-	const missing = source.missingCamera ? [...resolved.missing.filter((e) => !SENSOR_FIELDS.has(e)), `${roleDefinition(source.missingCamera).label} sensor`] : resolved.missing
-	return { name: source.name, missing, cameraMissing: !!source.missingCamera }
-}
-
-// Line naming the field of view the fits are judged against, or why they are not judged.
-function FrameLine({ frame }: { readonly frame: PlannerFrame }) {
-	if (frame.frame) {
-		const { width, height, scale } = frame.frame
-		const at = scale === undefined ? '' : ` at ${scale.toFixed(2)}″/px`
-		return <Notice>{`Framing judged against the ${frame.name} field: ${formatAngularSize(width)} × ${formatAngularSize(height)}${at}. Change it in the Framing panel of the Sky.`}</Notice>
-	}
-
-	const lacking = (frame.missing ?? []).join(', ').toLowerCase()
-	const remedy = frame.cameraMissing ? 'Connect the camera, or enter a manual sensor in the Framing panel of the Sky.' : 'Enter it in the Framing panel of the Sky.'
-	return <Notice>{frame.name ? `Framing not judged: the ${frame.name} field lacks the ${lacking}. ${remedy}` : 'Framing not judged: choose a preset in the Framing panel of the Sky.'}</Notice>
-}
-
-// Fit of a target in a table cell or a list line: its words, with the share of the field and the pixels in its tooltip;
-// a dash when its size or the field is unknown.
-function FitLabel({ assessment, frame, badge = true }: { readonly assessment?: FramingAssessment; readonly frame?: Framing; readonly badge?: boolean }) {
-	if (!assessment) return <span title={frame ? 'Size unknown' : 'Field of view unknown'}>{badge ? MISSING : `Framing ${MISSING}`}</span>
-	const { label, tone } = FRAMING_LABELS[assessment.fit]
-	return badge ? <StatusBadge tone={tone} label={label} title={framingDetail(assessment)} /> : <span title={framingDetail(assessment)}>{label}</span>
-}
-
-// Assesses how a target of a known size fits a field of view; undefined without a field or a size.
-function entryFit(entry: Pick<SkyCatalogEntry, 'majorAxis' | 'minorAxis'>, frame: Framing | undefined) {
-	return frame && assessFraming(entry.majorAxis, entry.minorAxis, frame)
 }
 
 // Catalog listing and best targets of the night.
@@ -251,7 +193,7 @@ function CatalogDiscovery({ location, timeZone, onAdd }: DiscoverSectionProps) {
 									<Cell numeric>{entry.magnitude === undefined ? 'Unknown' : formatMagnitude(entry.magnitude)}</Cell>
 									<Cell numeric>{entry.majorAxis === undefined ? MISSING : formatAngularSize(entry.majorAxis)}</Cell>
 									<Cell>
-										<FitLabel assessment={entryFit(entry, frame.frame)} frame={frame.frame} />
+										<FitLabel assessment={fitOf(entry, frame.frame)} frame={frame.frame} />
 									</Cell>
 									<Cell>
 										<AddButton target={target} onAdd={onAdd} />
@@ -268,7 +210,7 @@ function CatalogDiscovery({ location, timeZone, onAdd }: DiscoverSectionProps) {
 									<span>{entry.typeName}</span>
 									<span>Mag {entry.magnitude === undefined ? 'unknown' : formatMagnitude(entry.magnitude)}</span>
 									{entry.majorAxis !== undefined && <span>{formatAngularSize(entry.majorAxis)}</span>}
-									<FitLabel assessment={entryFit(entry, frame.frame)} frame={frame.frame} badge={false} />
+									<FitLabel assessment={fitOf(entry, frame.frame)} frame={frame.frame} badge={false} />
 								</TargetListItem>
 							)
 						})}
@@ -304,7 +246,7 @@ interface CandidatesProps {
 // order selector on phones.
 function Candidates({ candidates, frame, stale, location, timeZone, onAdd }: CandidatesProps) {
 	const sort = (useSnapshot(observingPlannerState) as ObservingPlannerState).candidateSort
-	const fits = new Map(candidates.map((candidate) => [candidate, entryFit(candidate, frame)]))
+	const fits = new Map(candidates.map((candidate) => [candidate, fitOf(candidate, frame)]))
 	const sorted = sortCandidates(candidates, sort, (candidate) => fits.get(candidate)?.factor)
 
 	// Orders by a quantity, or reverses the order when it is the one already chosen.

@@ -1011,6 +1011,7 @@ export type {
 	WorkspaceValue,
 	WorkspaceValueSaveRequest,
 } from './workspace'
+export { closeSockets } from './websocket'
 export { websocket }
 
 // Whether the operational database is locked against every other process while the server runs: in production only,

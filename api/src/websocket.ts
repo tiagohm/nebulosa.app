@@ -229,6 +229,16 @@ export function listenSockets(listener: SocketListener): () => void {
 // Code of the close of a socket that lost an event: 1013, Try Again Later.
 const EVENT_DROPPED_CLOSE_CODE = 1013
 
+// Code of the close of the sockets of a server run that was replaced in place: 1012, Service Restart.
+const SERVER_RESTART_CLOSE_CODE = 1012
+
+// Closes every socket this run opened, once a new run of the server took over in place (bun --hot): the new run never sees
+// these sockets, so a tab left on one would receive no event of it. Closed, each tab reconnects to the new run and
+// refreshes its snapshots.
+export function closeSockets() {
+	for (const ws of Array.from(sockets)) ws.close(SERVER_RESTART_CLOSE_CODE, 'The server restarted')
+}
+
 // Sends an event as JSON to every open socket. A socket whose backlog went past the backpressure limit drops the event;
 // it is closed then, so its tab reconnects and refreshes its snapshots instead of mirroring a state that lost an event.
 export function broadcast(event: ServerEvent) {

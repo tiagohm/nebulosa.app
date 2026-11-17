@@ -2,6 +2,7 @@ import {
 	type AboutInfo,
 	type ConnectRequest,
 	closeDatabase,
+	closeSockets,
 	createAboutRoutes,
 	identifyCelestrakClient,
 	identifyJplClient,
@@ -51,6 +52,8 @@ const STOP_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const
 interface HotReloadState {
 	// Stops the run in place and resolves the connections it had open.
 	stop?: () => Promise<readonly ConnectRequest[]>
+	// Closes the event sockets the run opened.
+	closeSockets?: () => void
 }
 
 // Key of the hot reload state on globalThis, shared by every evaluation of this module.
@@ -126,7 +129,11 @@ for (const signal of STOP_SIGNALS) {
 	process.once(signal, () => void stop())
 }
 
+// The tabs on a socket of the previous run would receive no event of this one, so they are sent to it now that it serves;
+// closed earlier, a tab could reconnect to the previous run before this one took over.
+hotReload.closeSockets?.()
 hotReload.stop = stopServer
+hotReload.closeSockets = closeSockets
 
 // The connections the previous run had open are opened again, so a change of the server code keeps the equipment connected.
 void reopenConnections(reopened)

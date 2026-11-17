@@ -1,5 +1,5 @@
 import type { ObservingSample, TargetAnalysis } from 'api'
-import { type KeyboardEvent, type MouseEvent, useEffect, useRef, useState } from 'react'
+import { type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useRef, useState } from 'react'
 import { formatClockTime, formatDegrees } from '../../format'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { moveIndex } from '../../ui/navigation'
@@ -30,6 +30,14 @@ const SKY_FILLS: Readonly<Record<SkyBand, string>> = { day: 'var(--color-base-30
 
 // Name of each band of the sky.
 const SKY_LABELS: Readonly<Record<SkyBand, string>> = { day: 'Sun up', twilight: 'Twilight', dark: 'Astronomical darkness' }
+
+// Stroke and dash of the Moon's line.
+const MOON_STROKE = 'var(--color-ink-300)'
+const MOON_DASH = '5 4'
+
+// Stroke and dash of the minimum altitude, dotted and labeled so it never reads as another body's line.
+const MINIMUM_STROKE = 'var(--color-ink-200)'
+const MINIMUM_DASH = '1.5 3'
 
 // Hours between two labels of the time axis.
 const LABEL_HOURS = 2
@@ -89,8 +97,9 @@ export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightC
 	const plotWidth = width - MARGIN.left - MARGIN.right
 	const plotHeight = HEIGHT - MARGIN.top - MARGIN.bottom
 	const x = (time: number) => MARGIN.left + ((time - start) / span) * plotWidth
-	// Altitudes from −10° to 90°, so a target just under the horizon still shows its course.
-	const y = (altitude: number) => MARGIN.top + ((90 - Math.max(-10, (altitude * 180) / Math.PI)) / 100) * plotHeight
+	// Altitudes from −10° to 90°, so a target just under the horizon still shows its course; lower ones are drawn outside
+	// the plot and clipped, never flattened onto its floor.
+	const y = (altitude: number) => MARGIN.top + ((90 - (altitude * 180) / Math.PI) / 100) * plotHeight
 	const firstLabel = Math.ceil(start / (LABEL_HOURS * HOUR_MS)) * LABEL_HOURS * HOUR_MS
 	const labels: number[] = []
 	for (let time = firstLabel; time < end; time += LABEL_HOURS * HOUR_MS) labels.push(time)
@@ -121,6 +130,9 @@ export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightC
 						<pattern id="observing-window" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
 							<line x1="0" y1="0" x2="0" y2="6" stroke="var(--color-success)" strokeWidth="2" />
 						</pattern>
+						<clipPath id="observing-plot">
+							<rect x={MARGIN.left} y={MARGIN.top - 4} width={plotWidth} height={plotHeight + 4} />
+						</clipPath>
 					</defs>
 					{skyBands(night).map((band) => (
 						<rect key={band.start} x={x(band.start)} y={MARGIN.top} width={Math.max(0, x(band.end) - x(band.start))} height={plotHeight} fill={SKY_FILLS[band.band]}>
@@ -140,17 +152,22 @@ export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightC
 							</text>
 						</g>
 					))}
-					<line x1={MARGIN.left} x2={width - MARGIN.right} y1={y(constraints.minimumAltitude)} y2={y(constraints.minimumAltitude)} stroke="var(--color-warning)" strokeDasharray="4 3">
+					<line x1={MARGIN.left} x2={width - MARGIN.right} y1={y(constraints.minimumAltitude)} y2={y(constraints.minimumAltitude)} stroke={MINIMUM_STROKE} strokeDasharray={MINIMUM_DASH}>
 						<title>Minimum altitude</title>
 					</line>
+					<text x={width - MARGIN.right - 4} y={y(constraints.minimumAltitude) - 4} textAnchor="end" fill="var(--color-ink-200)">
+						minimum {formatDegrees(constraints.minimumAltitude, 0)}
+					</text>
 					{labels.map((time) => (
 						<text key={time} x={x(time)} y={HEIGHT - 10} textAnchor="middle" fill="var(--color-ink-300)">
 							{formatClockTime(time, timeZone)}
 						</text>
 					))}
-					<path d={linePath(samples, x, y, (e) => e.moonAltitude)} fill="none" stroke="var(--color-ink-300)" strokeWidth={1.5} strokeDasharray="5 4" />
-					<path d={linePath(samples, x, y, (e) => e.altitude)} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
-					{summary.culminationAt !== undefined && summary.culminationAltitude !== undefined && summary.culminationAt >= start && summary.culminationAt <= end && <circle cx={x(summary.culminationAt)} cy={y(summary.culminationAltitude)} r={3.5} fill="var(--color-accent)" />}
+					<g clipPath="url(#observing-plot)">
+						<path d={linePath(samples, x, y, (e) => e.moonAltitude)} fill="none" stroke={MOON_STROKE} strokeWidth={1.5} strokeDasharray={MOON_DASH} />
+						<path d={linePath(samples, x, y, (e) => e.altitude)} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
+						{summary.culminationAt !== undefined && summary.culminationAltitude !== undefined && summary.culminationAt >= start && summary.culminationAt <= end && <circle cx={x(summary.culminationAt)} cy={y(summary.culminationAltitude)} r={3.5} fill="var(--color-accent)" />}
+					</g>
 					{nowShown && (
 						<g>
 							<line x1={x(now)} x2={x(now)} y1={MARGIN.top} y2={MARGIN.top + plotHeight} stroke="var(--color-ink-100)" />
@@ -163,13 +180,21 @@ export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightC
 				</svg>
 			</div>
 			<div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-300">
-				<span>
-					<span className="text-accent">━</span> {analysis.name}
-				</span>
-				<span>╌ Moon</span>
-				<span className="text-warning">╌ minimum altitude</span>
-				<span className="text-success">▨ window</span>
-				<span>● culmination</span>
+				<LegendItem label={analysis.name}>
+					<line x1="0" y1="5" x2="16" y2="5" stroke="var(--color-accent)" strokeWidth="2" />
+				</LegendItem>
+				<LegendItem label="Moon">
+					<line x1="0" y1="5" x2="16" y2="5" stroke={MOON_STROKE} strokeWidth="1.5" strokeDasharray={MOON_DASH} />
+				</LegendItem>
+				<LegendItem label="minimum altitude">
+					<line x1="0" y1="5" x2="16" y2="5" stroke={MINIMUM_STROKE} strokeDasharray={MINIMUM_DASH} />
+				</LegendItem>
+				<LegendItem label="window">
+					<rect x="0" y="0" width="16" height="10" fill="url(#observing-window)" opacity={0.6} />
+				</LegendItem>
+				<LegendItem label="culmination">
+					<circle cx="8" cy="5" r="3.5" fill="var(--color-accent)" />
+				</LegendItem>
 			</div>
 			{sample && (
 				<DataList>
@@ -184,5 +209,17 @@ export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightC
 				</DataList>
 			)}
 		</div>
+	)
+}
+
+// Entry of the chart's legend: a 16 × 10 px swatch drawn like its line or area, and its label.
+function LegendItem({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+	return (
+		<span className="inline-flex items-center gap-1.5">
+			<svg viewBox="0 0 16 10" className="h-2.5 w-4 flex-none overflow-visible">
+				{children}
+			</svg>
+			{label}
+		</span>
 	)
 }

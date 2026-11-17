@@ -91,7 +91,7 @@ export function AddToPlan({ target, onClose, location, siteId, eveningDate, cons
 				{selected === NEW_PLAN && canCreate && <Notice>The new plan copies the active site, the night of {eveningDate}, and the constraints of the tool.</Notice>}
 				{chosen && eveningDate && chosen.eveningDate !== eveningDate && (
 					<p className="m-0 text-xs leading-4 text-warning">
-						This plan is for the night of {chosen.eveningDate}, not {eveningDate}: the target is judged against that night's windows and the plan's constraints.
+						This plan is for the night of <span className="whitespace-nowrap">{chosen.eveningDate}</span>, not <span className="whitespace-nowrap">{eveningDate}</span>: the target is judged against that night's windows and the plan's constraints.
 					</p>
 				)}
 				{error && <Notice error>{error}</Notice>}

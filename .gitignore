@@ -12,7 +12,11 @@ __pycache__/
 CLAUDE.local.md
 /memory
 .claude/agents
-.claude/skills
+# Installed skills stay local; the project's own skills are tracked, their run ledgers are not.
+.claude/skills/*
+!.claude/skills/cqa/
+!.claude/skills/ui-standardization/
+.claude/skills/*/ledger.md
 
 # Per-file review state
 .reviews/

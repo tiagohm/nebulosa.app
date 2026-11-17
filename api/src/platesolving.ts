@@ -396,7 +396,8 @@ export class PlateSolvingService implements Disposable {
 	// Solves an open image and resolves to the result once the job completed, for a consumer that needs the
 	// solution of one specific image, such as a TPPA frame: the job is bound to that image and is never
 	// replaced by a newer frame. A completed job without solution resolves with `outcome: noSolution`. Aborting
-	// signal cancels the job. Throws PlateSolvingError when the job does not complete. A preparation keeps the
+	// signal cancels the job this call started; a job it joined, which another requester started and still waits for, is
+	// left running and only stops being waited for. Throws PlateSolvingError when the job does not complete. A preparation keeps the
 	// provider settings of a whole session, as submit does; the provider never falls back to another. Pixels are solved in place of
 	// a copy of the image, as submit does.
 	async solve(imageId: string, request: PlateSolveRequest | PlateSolvePreparation, signal?: AbortSignal, origin?: PlateSolveOrigin, pixels?: PlateSolvePixels): Promise<PlateSolveResult> {
@@ -413,14 +414,17 @@ export class PlateSolvingService implements Disposable {
 		const entry = this.#scheduler.entry(jobId)
 		if (!settled || !entry) throw new PlateSolvingError('expired', 'The result is no longer kept')
 
-		const cancel = () => this.cancel(jobId)
+		// A job this call joined belongs to whoever started it, so giving up only stops the wait.
+		const abandoned = Promise.withResolvers<undefined>()
+		const cancel = outcome.status === 'accepted' ? () => void this.cancel(jobId) : () => abandoned.resolve(undefined)
 		// The signal may have aborted while the request was being submitted.
 		if (signal?.aborted) cancel()
 		else signal?.addEventListener('abort', cancel, { once: true })
 
 		try {
-			const result = await settled
+			const result = await Promise.race([settled, abandoned.promise])
 			if (result) return result
+			if (signal?.aborted && outcome.status === 'active') throw new PlateSolvingError('cancelled', 'The plate solve stopped being waited for')
 			const { code = 'cancelled', error = 'The plate solve did not complete' } = entry.job
 			throw new PlateSolvingError(code, error)
 		} finally {

@@ -529,6 +529,28 @@ describe('nova', () => {
 		expect(paths.filter((path) => path === '/api/upload')).toHaveLength(1)
 	})
 
+	test('a solve that joined a job another requester started leaves it running when aborted', async () => {
+		const { server } = fakeNova({ job: 'solving' })
+		using _ = server
+		const { images, tools, service, events } = setup()
+		await signIn(tools, server.url.origin)
+		const info = await images.open(writeImage())
+
+		const job = await submit(service, info.id, { provider: 'nova', strategy: 'blind' })
+		const controller = new AbortController()
+		const joined = service.solve(info.id, { provider: 'nova', strategy: 'blind' }, controller.signal).then(
+			() => undefined,
+			(error: unknown) => error,
+		)
+		while (service.job(job.jobId)?.stage !== 'solving') await Bun.sleep(5)
+		controller.abort()
+
+		expect(await joined).toMatchObject({ code: 'cancelled' })
+		expect(service.job(job.jobId)?.state).toBe('running')
+		service.cancel(job.jobId)
+		await ended(events, job.jobId)
+	})
+
 	test('gives up when the service cannot be reached', async () => {
 		const { server } = fakeNova()
 		const { images, tools, service, events } = setup()

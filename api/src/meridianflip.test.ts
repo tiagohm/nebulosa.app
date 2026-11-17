@@ -512,6 +512,20 @@ test('enabling is idempotent and the monitor follows a tracking mount', async ()
 	expect(operationEvents).toEqual([])
 })
 
+test('a session that slews the mount repositions it while it runs, as a GoTo does', async () => {
+	const { id, mountId, mount, manager, service } = await setup()
+	service.enable(id, mountId, FAST)
+	manager.devices.mounts.tracking(mount, true)
+	await waitUntil(() => service.monitor(id, mountId)?.availability === 'monitoring')
+
+	const operation = { operationId: 'centering', kind: 'mount.targetCentering', devices: [{ connectionId: id, deviceId: mountId }], startedAt: Date.now() } as const
+	service.consume({ type: 'operation:updated', operation: { ...operation, state: 'running' } })
+	expect(service.monitor(id, mountId)?.availability).toBe('repositioning')
+
+	service.consume({ type: 'operation:updated', operation: { ...operation, state: 'succeeded' } })
+	await waitUntil(() => service.monitor(id, mountId)?.availability === 'monitoring')
+})
+
 test('an unknown mount is answered 404 and a disconnected one 409', async () => {
 	const { id, mountId, client, manager, service } = await setup()
 	expect(service.enable(id, 'nope', FAST).status).toBe(404)

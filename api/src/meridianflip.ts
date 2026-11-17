@@ -45,9 +45,12 @@ export const TRANSITION_HISTORY = 100
 // hours, π/2 radians of hour angle.
 export const MAXIMUM_OFFSET_SECONDS = Math.floor(PIOVERTWO / SIDEREAL_DRIFT_RATE)
 
-// Operations moving a mount to another place; while one runs the mount is repositioning even before its driver
-// reports the motion. Nudges and guiding pulses stay within the context tolerance and are not listed.
-const MOTION_KINDS: ReadonlySet<OperationKind> = new Set<OperationKind>(['mount.slew', 'mount.goto', 'mount.flip', 'mount.park', 'mount.unpark', 'mount.home', 'mount.findHome', 'mount.remoteMove'])
+// Operations moving a mount to another place, by a command or by the slews of a session (TPPA, Target Centering, the
+// pointing model and its verification); while one runs the mount is repositioning even before its driver reports the
+// motion. Nudges, guiding pulses, and the drift of a DARV measurement stay within the context tolerance and are not
+// listed, nor is the Meridian Flip Executor, which checks the monitor again while it runs and moves the mount only
+// through the flip and the Target Centering it starts, both listed.
+const MOTION_KINDS: ReadonlySet<OperationKind> = new Set<OperationKind>(['mount.slew', 'mount.goto', 'mount.flip', 'mount.park', 'mount.unpark', 'mount.home', 'mount.findHome', 'mount.remoteMove', 'mount.tppa', 'mount.targetCentering', 'mount.pointingModel', 'mount.pointingVerification'])
 
 // Preferences of one monitor, in wall-clock seconds.
 export interface MeridianFlipSettings {

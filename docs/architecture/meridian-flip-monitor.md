@@ -14,7 +14,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Never the active observing site of a profile, which the server does not know.
     - The hour angle is LAST − RA in (−π, π], positive west, and the forecast follows the signed hour angle, so it never jumps to the next day after the transit.
     - The monitor subscribes to the dispatcher after its other subscribers.
-      `mount:updated`, `device:updated`, and a running motion operation of the mount (`mount.slew`, `mount.goto`, `mount.flip`, `mount.park`, `mount.unpark`, `mount.home`, `mount.findHome`, `mount.remoteMove`) evaluate it at once, and a 1 s timer evaluates every monitor so sidereal time is observed without new telemetry.
+      `mount:updated`, `device:updated`, and a running motion operation of the mount (`mount.slew`, `mount.goto`, `mount.flip`, `mount.park`, `mount.unpark`, `mount.home`, `mount.findHome`, `mount.remoteMove`, and the sessions that slew it: `mount.tppa`, `mount.targetCentering`, `mount.pointingModel`, `mount.pointingVerification`) evaluate it at once, and a 1 s timer evaluates every monitor so sidereal time is observed without new telemetry.
 - Settings are wall-clock seconds:
     - early warning (900);
     - window minimum and maximum after the transit (300, 900);

@@ -74,9 +74,10 @@ await build({
 	// copy, and tree shaking keeps in each one whatever any entry point uses, so a worker that only reaches the Sun and
 	// Earth of VSOP87E still embeds all the planets the server uses (about 20 MB of duplicated ephemeris tables).
 	splitting: true,
-	// Syntax minification stays off: together with the React Compiler it drops the constants it inlines into the
-	// template literals of components and hooks, so `${MARGIN} ${width}` becomes `${width}` in the executable only.
-	minify: { whitespace: true, identifiers: true, syntax: false },
+	// Syntax minification together with the React Compiler needs Bun 1.4.5 or a canary since oven-sh/bun#47316: earlier
+	// versions drop the constants it inlines into the template literals of components and hooks, so
+	// `${MARGIN} ${width}` becomes `${width}` in the executable only.
+	minify: true,
 	sourcemap: false,
 	target: 'bun',
 	env: 'APP_*',

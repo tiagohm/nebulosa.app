@@ -1,5 +1,5 @@
 import { CoverCommander } from 'nebulosa/src/devices/commanders/cover'
-import { type ClientResolver, type CommandRequest, connectedDevice, findDevice, notFound, startCommand, stateResponse, stopResponse, unsupported } from './commands'
+import { type ClientResolver, type CommandRequest, connectedDevice, findDevice, notFound, startCommand, stateResponse, stopResponse, unsupported, repeatedResponse } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { OperationRegistry } from './operations'
 
@@ -37,6 +37,8 @@ export class CoverCommands implements Disposable {
 	// Starts opening a cover. Responds 202 with the operation id; 404, 409 disconnected or busy, 422 when the
 	// cover cannot be opened and closed.
 	open(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const cover = connectedDevice(this, connectionId, 'cover', deviceId, 'Cover')
 		if (cover instanceof Response) return cover
 		if (!cover.canPark) return unsupported('The cover cannot be opened or closed')
@@ -45,6 +47,8 @@ export class CoverCommands implements Disposable {
 
 	// Starts closing a cover; answered like open.
 	close(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const cover = connectedDevice(this, connectionId, 'cover', deviceId, 'Cover')
 		if (cover instanceof Response) return cover
 		if (!cover.canPark) return unsupported('The cover cannot be opened or closed')

@@ -1,7 +1,7 @@
 import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import type { GuideDirection, GuideOutput } from 'nebulosa/src/devices/indi/device'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
-import { admissionResponse, busy, type ClientResolver, type CommandRequest, disconnected, findDevice, notFound, settle, startCommand, unsupported } from './commands'
+import { admissionResponse, busy, type ClientResolver, type CommandRequest, disconnected, findDevice, notFound, settle, startCommand, unsupported, repeatedResponse } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { OperationDevice, OperationRegistry } from './operations'
 
@@ -65,6 +65,8 @@ export class GuideOutputCommands implements Disposable {
 	// Starts a pulse. Responds 202 with the operation id; 404 for an unknown output or mount, 409 when either is
 	// disconnected or the device behind either is busy, 422 when the output cannot pulse.
 	pulse(connectionId: string, deviceId: string, request: GuidePulseRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const output = this.#connected(connectionId, deviceId)
 		if (output instanceof Response) return output
 		if (!output.canPulseGuide) return unsupported('The guide output cannot pulse')
@@ -74,8 +76,6 @@ export class GuideOutputCommands implements Disposable {
 		if (!mount) return notFound('Mount')
 		if (!mount.connected) return disconnected('Mount')
 
-		const known = this.operations.repeated(request.token)
-		if (known) return admissionResponse({ ok: true, admission: known })
 		if (!this.operations.available(output) || !this.operations.available(mount)) return busy()
 
 		// The root takes both at once, and the pulse acquires the guide output again inside it.

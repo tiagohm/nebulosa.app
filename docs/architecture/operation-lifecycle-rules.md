@@ -13,6 +13,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Each start, progress, and end is published as `operation:updated` (`OperationRecord`: id, `OperationKind`, exact devices, state, start instant, latest progress, failure reason and error);
   an operation is published as running before its work starts, so a progress reported from its first synchronous step is published too.
   An operation started for a command token is remembered by it (the newest 256), so a repeated token answers the same operation.
+  A command answers a repeated token before it resolves or refuses its device (`repeatedAdmission` of `api/src/commands.ts`), so a request repeated after a lost response answers the same operation whatever the device is now, even disconnected.
   `GET /api/operations` lists the running ones.
   The web mirrors them in `web/src/operations.ts`.
 - `OperationRecorder` (`api/src/operationhistory.ts`) keeps the history of the operations in `operation_runs`: `publish` of `api/src/index.ts` hands it every event through the `ServerEventDispatcher`, and it writes the start of an operation and its end (state and reason), with the names its devices had, never a progress nor the text of an error, which can hold server paths.

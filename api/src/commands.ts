@@ -182,17 +182,32 @@ export function resolveConnected<T extends ManagedDeviceType>(context: DeviceCon
 	return { ok: true, device }
 }
 
+// Answers a request whose token was already seen with the operation it first started, or undefined for a new token.
+// Every durable command calls it before it resolves or refuses its device, so a request repeated after a lost response
+// answers that operation whatever the device is now, even disconnected, never a refusal; admitCommand checks it again,
+// so the device is never commanded twice either way.
+export function repeatedAdmission(operations: OperationRegistry, { token }: CommandRequest): CommandAdmission | undefined {
+	const known = operations.repeated(token)
+	return known && { ok: true, admission: known }
+}
+
+// Responds to a request whose token was already seen as repeatedAdmission answers it, or undefined for a new token.
+export function repeatedResponse(operations: OperationRegistry, request: CommandRequest): Response | undefined {
+	const repeated = repeatedAdmission(operations, request)
+	return repeated && admissionResponse(repeated)
+}
+
 // Admits a durable command on a device. A token already seen answers its first operation without commanding again;
 // otherwise a device the operations cannot grant now (see OperationRegistry.admits) is refused as busy before anything
 // is sent. start receives the scope to command the device under, the invocation's reservation when given, and the
 // progress reporter of the operation.
-export function admitCommand(operations: OperationRegistry, kind: OperationKind, connectionId: string, device: Device, { token }: CommandRequest, start: (scope: OperationScope, report: OperationProgressReporter) => Promise<OperationResult<unknown>>, invocation?: ToolInvocation): CommandAdmission {
-	const known = operations.repeated(token)
-	if (known) return { ok: true, admission: known }
+export function admitCommand(operations: OperationRegistry, kind: OperationKind, connectionId: string, device: Device, request: CommandRequest, start: (scope: OperationScope, report: OperationProgressReporter) => Promise<OperationResult<unknown>>, invocation?: ToolInvocation): CommandAdmission {
+	const repeated = repeatedAdmission(operations, request)
+	if (repeated) return repeated
 	if (!operations.admits(device, invocation)) return refusal('The device is busy', 409, 'busy')
 
 	const scope = operations.scope(invocation)
-	return { ok: true, admission: operations.admit(kind, [{ connectionId, deviceId: device.id }], token, (report) => start(scope, report)) }
+	return { ok: true, admission: operations.admit(kind, [{ connectionId, deviceId: device.id }], request.token, (report) => start(scope, report)) }
 }
 
 // Starts a durable command of a manual request on a device and responds 202 with its operation id, or with its refusal

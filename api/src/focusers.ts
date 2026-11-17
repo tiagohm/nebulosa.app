@@ -5,7 +5,7 @@ import { failedOperationResult, type OperationResult, type OperationScope, succe
 import { abortReason } from 'nebulosa/src/devices/orchestration/operation.wait'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { BacklashCompensator } from 'nebulosa/src/observation/focus/backlash'
-import { type ClientResolver, type CommandRequest, connectedDevice, notFound, findDevice, settle, startCommand, stateResponse, stopResponse, unsupported } from './commands'
+import { type ClientResolver, type CommandRequest, connectedDevice, notFound, findDevice, settle, startCommand, stateResponse, stopResponse, unsupported, repeatedResponse } from './commands'
 import type { DeviceRegistry } from './devices'
 import { type FocuserBacklashConfig, type FocuserBacklashStore, focuserKey, type StoredFocuserBacklash } from './focuserbacklash'
 import { errorResponse } from './http'
@@ -152,6 +152,8 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	// Starts a move to an absolute position of the logical counter. Responds 202 with the operation id; 404,
 	// 409 disconnected or busy, 422 when the focuser has no absolute positioning.
 	moveTo(connectionId: string, deviceId: string, request: FocuserMoveToRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const focuser = connectedDevice(this, connectionId, 'focuser', deviceId, 'Focuser')
 		if (focuser instanceof Response) return focuser
 		if (!focuser.canAbsoluteMove) return unsupported('The focuser cannot move to a position')
@@ -163,6 +165,8 @@ export class FocuserCommands implements DeviceHandler<Focuser>, Disposable {
 	// when the focuser has no relative positioning. Answered like moveTo, with 422 when the focuser cannot move
 	// by steps. A repeated request with the same token never moves it twice.
 	move(connectionId: string, deviceId: string, request: FocuserMoveRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const focuser = connectedDevice(this, connectionId, 'focuser', deviceId, 'Focuser')
 		if (focuser instanceof Response) return focuser
 		if (!focuser.canRelativeMove && !focuser.canAbsoluteMove) return unsupported('The focuser cannot move by steps')

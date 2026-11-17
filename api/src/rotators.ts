@@ -1,5 +1,5 @@
 import { RotatorCommander } from 'nebulosa/src/devices/commanders/rotator'
-import { type ClientResolver, type CommandRequest, connectedDevice, findDevice, notFound, settle, startCommand, stateResponse, stopResponse, unsupported } from './commands'
+import { type ClientResolver, type CommandRequest, connectedDevice, findDevice, notFound, settle, startCommand, stateResponse, stopResponse, unsupported, repeatedResponse } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { OperationRegistry } from './operations'
 
@@ -56,6 +56,8 @@ export class RotatorCommands implements Disposable {
 
 	// Starts a move to a mechanical angle. Responds 202 with the operation id; 404, 409 disconnected or busy.
 	moveTo(connectionId: string, deviceId: string, request: RotatorMoveToRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const rotator = connectedDevice(this, connectionId, 'rotator', deviceId, 'Rotator')
 		if (rotator instanceof Response) return rotator
 		return startCommand(this.operations, 'rotator.move', connectionId, rotator, request, () => this.#commander.moveTo(this.operations.coordinator, rotator, request.angle))
@@ -64,6 +66,8 @@ export class RotatorCommands implements Disposable {
 	// Starts a move by an angle from where the rotator stands when the command starts; answered like
 	// moveTo. A repeated request with the same token never rotates it twice.
 	moveBy(connectionId: string, deviceId: string, request: RotatorMoveByRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const rotator = connectedDevice(this, connectionId, 'rotator', deviceId, 'Rotator')
 		if (rotator instanceof Response) return rotator
 		return startCommand(this.operations, 'rotator.move', connectionId, rotator, request, () => this.#commander.moveTo(this.operations.coordinator, rotator, rotator.angle.value + request.delta))
@@ -72,6 +76,8 @@ export class RotatorCommands implements Disposable {
 	// Starts a move to the home position. Responds 202 with the operation id; 404, 409, 422 when the rotator
 	// has no home.
 	home(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const rotator = connectedDevice(this, connectionId, 'rotator', deviceId, 'Rotator')
 		if (rotator instanceof Response) return rotator
 		if (!rotator.canHome) return unsupported('The rotator has no home position')

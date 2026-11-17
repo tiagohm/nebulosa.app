@@ -8,7 +8,7 @@ import { failedOperationResult, type OperationContext, type OperationResult, typ
 import { deviceKey, resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { type Angle, deg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import { admissionResponse, admitCommand, busy, type CommandAdmission, type CommandErrorCode, type CommandRefusal, type CommandRequest, disconnected, failureCode, failureResponse, findDevice, notFound, refusal, resolveConnected, settle, startCommand, unsupported } from './commands'
+import { admissionResponse, admitCommand, busy, type CommandAdmission, type CommandErrorCode, type CommandRefusal, type CommandRequest, disconnected, failureCode, failureResponse, findDevice, notFound, refusal, resolveConnected, settle, startCommand, unsupported, repeatedResponse, repeatedAdmission } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import { DEFAULT_LEASE_OPTIONS, type LeasedMotion, LeasedMotions, type LeasedPhase, type LeasedSession, type LeasedStartResponse, type LeaseOptions } from './leases'
@@ -403,6 +403,8 @@ export class MountCommands implements Disposable {
 	// Admits a goto to a coordinate, under the invocation's reservation when given, with the refusals and the single
 	// correction of the model in force the goto route applies, and returns its operation, or its refusal (as goTo answers).
 	admitGoTo(connectionId: string, deviceId: string, request: MountGoToRequest, invocation?: ToolInvocation): CommandAdmission {
+		const repeated = repeatedAdmission(this.operations, request)
+		if (repeated) return repeated
 		const resolved = resolveConnected(this, connectionId, 'mount', deviceId, 'Mount')
 		if (!resolved.ok) return resolved
 		const mount = resolved.device
@@ -422,6 +424,8 @@ export class MountCommands implements Disposable {
 	// Starts a meridian flip to a coordinate; answered like goTo, with 422 when the mount cannot flip. A flip is never
 	// corrected: its transition between pier sides was not proven safe, so it goes as asked.
 	flip(connectionId: string, deviceId: string, request: MountGoToRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const mount = this.#connected(connectionId, deviceId)
 		if (mount instanceof Response) return mount
 
@@ -438,6 +442,9 @@ export class MountCommands implements Disposable {
 	// observer's horizon. The command is always sent, even toward the coordinate the mount holds, and never corrected by a
 	// pointing model: the first motion of a flip is the one that decides the pier side, so it goes exactly as frozen.
 	admitMeridianFlip(connectionId: string, deviceId: string, request: MountMeridianFlipRequest, invocation?: ToolInvocation): MountMeridianFlipAdmission {
+		const repeated = repeatedAdmission(this.operations, request)
+		if (repeated?.ok) return this.#flipAdmission(repeated.admission)
+
 		const resolved = resolveConnected(this, connectionId, 'mount', deviceId, 'Mount')
 		if (!resolved.ok) return resolved
 		const mount = resolved.device
@@ -471,7 +478,13 @@ export class MountCommands implements Disposable {
 			if (this.#flips.size > MAX_FLIP_RESULTS) this.#flips.delete(this.#flips.keys().next().value!)
 		}
 
-		return { ok: true, admission: admitted.admission, result: this.#flips.get(operationId) ?? Promise.resolve(failedOperationResult('unexpectedState', 'The evidence of this flip is no longer known')) }
+		return this.#flipAdmission(admitted.admission)
+	}
+
+	// Admission of a meridian flip with the evidence its operation leaves, remembered by operation id, so a repeated token
+	// still finds it.
+	#flipAdmission(admission: OperationAdmission): MountMeridianFlipAdmission {
+		return { ok: true, admission, result: this.#flips.get(admission.record.operationId) ?? Promise.resolve(failedOperationResult('unexpectedState', 'The evidence of this flip is no longer known')) }
 	}
 
 	// Redefines where the mount points. Responds 204 once applied, 404 unknown mount, 409 disconnected or
@@ -494,6 +507,8 @@ export class MountCommands implements Disposable {
 	// Starts parking the mount. Responds 202 with the operation id; 404, 409 disconnected or busy, 422 when
 	// the mount cannot park.
 	park(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const mount = this.#connected(connectionId, deviceId)
 		if (mount instanceof Response) return mount
 		if (!mount.canPark) return unsupported('The mount cannot park')
@@ -502,6 +517,8 @@ export class MountCommands implements Disposable {
 
 	// Starts unparking the mount; answered like park.
 	unpark(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const mount = this.#connected(connectionId, deviceId)
 		if (mount instanceof Response) return mount
 		if (!mount.canPark) return unsupported('The mount cannot unpark')
@@ -511,6 +528,8 @@ export class MountCommands implements Disposable {
 	// Starts a slew to the home position the mount knows. Responds 202 with the operation id; 404, 409
 	// disconnected, parked, or busy, 422 when the mount has no home command.
 	home(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const mount = this.#connected(connectionId, deviceId)
 		if (mount instanceof Response) return mount
 		if (!mount.canHome) return unsupported('The mount cannot go home')
@@ -520,6 +539,8 @@ export class MountCommands implements Disposable {
 
 	// Starts the search for the home position by the mount's sensors; answered like home.
 	findHome(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const mount = this.#connected(connectionId, deviceId)
 		if (mount instanceof Response) return mount
 		if (!mount.canFindHome) return unsupported('The mount cannot search its home position')

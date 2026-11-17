@@ -545,6 +545,23 @@ test('parks and unparks as operations, and a repeated token does not command twi
 	await waitUntil(() => !mount.parked && operations.running().length === 0, 30000)
 }, 40000)
 
+test('a GoTo repeated after its mount disconnected answers its first operation instead of a refusal', async () => {
+	const { manager, id, client, commands, mountId } = await setup()
+	const mount = await connectMount(manager, client, mountId)
+	const request = { token: 'retried', target: currentTarget(mount, deg(1)), observer: SITE_OBSERVER }
+
+	const first = commands.goTo(id, mountId, request)
+	expect(first.status).toBe(202)
+	const { operationId } = (await first.json()) as CommandAccepted
+	manager.devices.switch(client, mountId, false)
+	await waitUntil(() => !mount.connected)
+
+	const repeated = commands.goTo(id, mountId, request)
+	expect(repeated.status).toBe(202)
+	expect(((await repeated.json()) as CommandAccepted).operationId).toBe(operationId)
+	expect(commands.goTo(id, mountId, { ...request, token: 'new' }).status).toBe(409)
+})
+
 test('goes to a coordinate above the horizon only, and syncs on one', async () => {
 	const { manager, id, client, commands, events, mountId } = await setup()
 	const mount = await connectMount(manager, client, mountId)

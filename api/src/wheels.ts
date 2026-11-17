@@ -1,5 +1,5 @@
 import { WheelCommander } from 'nebulosa/src/devices/commanders/wheel'
-import { admissionResponse, admitCommand, type ClientResolver, type CommandAdmission, type CommandRequest, connectedDevice, refusal, resolveConnected, settle, stateResponse, unsupported } from './commands'
+import { admissionResponse, admitCommand, type ClientResolver, type CommandAdmission, type CommandRequest, connectedDevice, refusal, resolveConnected, settle, stateResponse, unsupported, repeatedAdmission } from './commands'
 import type { DeviceRegistry } from './devices'
 import type { OperationRegistry, ToolInvocation } from './operations'
 
@@ -56,6 +56,8 @@ export class WheelCommands implements Disposable {
 	// Admits a change to a slot, under the invocation's reservation when given, and returns its operation, or its refusal:
 	// 404, 409 disconnected or busy, 422 for a slot the wheel does not have.
 	admitMove(connectionId: string, deviceId: string, request: WheelMoveRequest, invocation?: ToolInvocation): CommandAdmission {
+		const repeated = repeatedAdmission(this.operations, request)
+		if (repeated) return repeated
 		const resolved = resolveConnected(this, connectionId, 'wheel', deviceId, 'Filter wheel')
 		if (!resolved.ok) return resolved
 		const wheel = resolved.device

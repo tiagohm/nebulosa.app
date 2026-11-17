@@ -2,7 +2,7 @@ import { DomeCommander } from 'nebulosa/src/devices/commanders/dome'
 import type { Dome, DomeDirection } from 'nebulosa/src/devices/indi/device'
 import type { OperationContext, OperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { deg } from 'nebulosa/src/math/units/angle'
-import { type ClientResolver, type CommandRequest, connectedDevice, findDevice, notFound, settle, startCommand, stateResponse, stopResponse, unsupported } from './commands'
+import { type ClientResolver, type CommandRequest, connectedDevice, findDevice, notFound, settle, startCommand, stateResponse, stopResponse, unsupported, repeatedResponse } from './commands'
 import type { DeviceRegistry } from './devices'
 import { errorResponse } from './http'
 import { DEFAULT_LEASE_OPTIONS, type LeasedMotion, LeasedMotions, type LeasedSession, type LeasedStartResponse, type LeaseOptions } from './leases'
@@ -141,6 +141,8 @@ export class DomeCommands implements Disposable {
 	// Starts a slew to an azimuth. Responds 202 with the operation id; 404, 409 disconnected, slaved,
 	// parked, or busy, 422 when the dome cannot slew to an azimuth.
 	slew(connectionId: string, deviceId: string, request: DomeSlewRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const dome = this.#connected(connectionId, deviceId)
 		if (dome instanceof Response) return dome
 		if (!dome.canSetAzimuth) return unsupported('The dome cannot slew to an azimuth')
@@ -150,6 +152,8 @@ export class DomeCommands implements Disposable {
 	// Starts a rotation by an angle; answered like slew, with 422 when the dome cannot rotate by an angle. A
 	// repeated request with the same token never rotates it twice.
 	moveBy(connectionId: string, deviceId: string, request: DomeMoveByRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const dome = this.#connected(connectionId, deviceId)
 		if (dome instanceof Response) return dome
 		if (!dome.canRelativeMove) return unsupported('The dome cannot rotate by an angle')
@@ -158,6 +162,8 @@ export class DomeCommands implements Disposable {
 
 	// Starts a move of the shutter to an altitude; answered like slew, with 422 when the dome cannot.
 	moveToAltitude(connectionId: string, deviceId: string, request: DomeAltitudeRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const dome = this.#connected(connectionId, deviceId)
 		if (dome instanceof Response) return dome
 		if (!dome.canSetAltitude) return unsupported('The dome cannot move its shutter to an altitude')
@@ -167,6 +173,8 @@ export class DomeCommands implements Disposable {
 	// Starts the search for the home position. Responds 202 with the operation id; 404, 409, 422 when the
 	// dome cannot search it.
 	home(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const dome = this.#connected(connectionId, deviceId)
 		if (dome instanceof Response) return dome
 		if (!dome.canFindHome) return unsupported('The dome cannot search its home position')
@@ -176,6 +184,8 @@ export class DomeCommands implements Disposable {
 	// Starts parking. Responds 202 with the operation id; 404, 409 disconnected, slaved, or busy, 422 when the
 	// dome cannot park.
 	park(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const dome = this.#connected(connectionId, deviceId)
 		if (dome instanceof Response) return dome
 		if (!dome.canPark) return unsupported('The dome cannot park')
@@ -185,6 +195,8 @@ export class DomeCommands implements Disposable {
 
 	// Starts unparking; answered like park, with 422 when the dome cannot unpark.
 	unpark(connectionId: string, deviceId: string, request: CommandRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const dome = this.#connected(connectionId, deviceId)
 		if (dome instanceof Response) return dome
 		if (!dome.canUnpark) return unsupported('The dome cannot unpark')
@@ -194,6 +206,8 @@ export class DomeCommands implements Disposable {
 	// Starts opening or closing the shutter. Responds 202 with the operation id; 404, 409, 422 when the dome
 	// has no shutter it can command.
 	shutter(connectionId: string, deviceId: string, request: DomeShutterRequest): Response {
+		const repeated = repeatedResponse(this.operations, request)
+		if (repeated) return repeated
 		const dome = this.#connected(connectionId, deviceId)
 		if (dome instanceof Response) return dome
 		if (!dome.hasShutter || !dome.canSetShutter) return unsupported('The dome has no shutter it can open or close')

@@ -41,9 +41,6 @@ export const CELESTRAK_GROUPS = [
 	{ group: 'CUBESAT', label: 'CubeSats' },
 ] as const satisfies readonly { readonly group: string; readonly label: string; readonly large?: boolean }[]
 
-// GROUP value of an allowlisted group.
-export type CelestrakGroup = (typeof CELESTRAK_GROUPS)[number]['group']
-
 // Query parameter of a source.
 export type CelestrakQueryType = 'GROUP' | 'CATNR'
 

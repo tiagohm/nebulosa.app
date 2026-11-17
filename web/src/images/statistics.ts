@@ -44,11 +44,6 @@ export function submittedActive(state: Pick<StatisticsState, 'jobs' | 'submitted
 	return jobId !== undefined && isActive(state.jobs[jobId])
 }
 
-// Whether a scan of an image and area is being submitted.
-export function isSubmitting(imageId: string, area?: ImageRect): boolean {
-	return submitting.has(statisticsKey(imageId, area))
-}
-
 // Records a job under its image and area (trackJob); submitted makes it the latest, as the answer to a submission of
 // this tab, which may be the completed job of an equivalent earlier scan.
 function track(state: StatisticsState, job: ImageStatisticsJob, submitted = false) {

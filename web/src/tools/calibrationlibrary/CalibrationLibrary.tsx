@@ -414,13 +414,12 @@ function GroupPanel({ onDeleted }: { readonly onDeleted: () => void }) {
 // shown is what the group section already lists, so only what the recipe itself adds is listed here.
 function BuildForm({ groupId, kind, shown }: { readonly groupId: string; readonly kind: CalibrationKind; readonly shown: readonly CompatibilityFinding[] }) {
 	const timeZone = useActiveTimeZone()
-	const { pending, errors, masters, changes, jobs } = useSnapshot(calibrationLibraryRuntime)
+	const { pending, errors, changes, jobs } = useSnapshot(calibrationLibraryRuntime)
 	const [form, setForm] = useState<RecipeForm>(DEFAULT_FORM)
 	const [validation, setValidation] = useState<RecipeValidation>()
 	const [corrections, setCorrections] = useState<readonly CalibrationMasterSummary[]>([])
 	const key = `group:${groupId}`
 	const edit = (patch: Partial<RecipeForm>) => setForm({ ...form, ...patch })
-	void masters
 
 	const request = (): MasterRequest => ({ groupId, ...(kind === 'dark' && { kind: form.kind }), recipe: { method: form.method, sigmaLow: form.sigmaLow, sigmaHigh: form.sigmaHigh, maxIterations: form.maxIterations }, correction: form.correction ? Number(form.correction) : undefined, acknowledged: form.acknowledged })
 

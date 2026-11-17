@@ -1,9 +1,7 @@
-import { writeImageToFits } from 'nebulosa/src/imaging/model/image'
-import type { Image } from 'nebulosa/src/imaging/model/types'
-import { calibrationMasterImage } from 'nebulosa/src/imaging/processing/calibration'
-import { bufferSink, bufferSource } from 'nebulosa/src/io/io'
+import { bufferSource } from 'nebulosa/src/io/io'
 import type { DarkWorkerRequest, DarkWorkerResponse } from './calibrationdark'
-import { calibrateLight, readDigital, readDigitalFrom } from './imagestacking.analysis'
+import { calibratedFits, LatestMasterDark } from './calibrationdark.master'
+import { calibrateLight, readDigitalFrom } from './imagestacking.analysis'
 
 // Worker thread of the master dark subtraction of one session (calibrationdark.ts). For each job it reads the frame file
 // in digital numbers, subtracts the master dark from its raw samples with the toolkit's calibrate (no scaling, before any
@@ -15,34 +13,18 @@ import { calibrateLight, readDigital, readDigitalFrom } from './imagestacking.an
 
 declare const self: Worker
 
-// Latest master a job named, in the normalized scale of calibrate, and its `<masterId>:<digest>`.
-let master: { readonly key: string; readonly image: Promise<Image> } | undefined
+// Latest master a job named, by its `<masterId>:<digest>`.
+const master = new LatestMasterDark()
 
-// Returns the master of a job, reading it when another one is kept. A read that failed is forgotten, so the next job
-// reads it again.
-function masterOf(request: DarkWorkerRequest) {
-	if (master?.key !== request.masterKey) {
-		const image = readDigital(request.darkPath).then((digital) => calibrationMasterImage(digital, request.fullScale))
-		const entry = { key: request.masterKey, image }
-		master = entry
-		image.catch(() => master === entry && (master = undefined))
-	}
-
-	return master.image
-}
-
-// Subtracts the master of a job from its frame and encodes the result as FITS. The calibrated frame keeps the header of
-// the frame (BITPIX included), so the frame's size and two more header blocks hold it.
+// Subtracts the master of a job from its frame and encodes the result as FITS, with the header of the frame (BITPIX
+// included) but the keywords the job leaves out.
 async function calibrated(request: DarkWorkerRequest): Promise<Uint8Array<ArrayBuffer>> {
 	const bytes = Buffer.from(await Bun.file(request.framePath).arrayBuffer())
 	const light = await readDigitalFrom(bufferSource(bytes), false)
-	const image = calibrateLight(light, { dark: await masterOf(request) })
+	const image = calibrateLight(light, { dark: await master.image(request.masterKey, request.darkPath, request.fullScale) })
 	const omitted = new Set(request.omit)
 	const header = Object.fromEntries(Object.entries(image.header).filter(([key]) => !omitted.has(key)))
-	const buffer = Buffer.alloc(bytes.byteLength + 2 * 2880)
-	const sink = bufferSink(buffer)
-	await writeImageToFits({ ...image, header }, sink)
-	return new Uint8Array(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + sink.position))
+	return await calibratedFits({ ...image, header }, bytes.byteLength)
 }
 
 self.addEventListener('message', async (event: MessageEvent<DarkWorkerRequest>) => {

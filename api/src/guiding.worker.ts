@@ -1,16 +1,15 @@
-import { writeImageToFits } from 'nebulosa/src/imaging/model/image'
 import type { Image } from 'nebulosa/src/imaging/model/types'
-import { calibrationMasterImage } from 'nebulosa/src/imaging/processing/calibration'
 import { detectStars } from 'nebulosa/src/imaging/stars/detector'
-import { bufferSink, bufferSource } from 'nebulosa/src/io/io'
+import { bufferSource } from 'nebulosa/src/io/io'
 import { decodeCameraBlobFromBase64 } from 'nebulosa/src/observation/capture/capture'
 import { enrichGuideStars } from 'nebulosa/src/observation/guiding/tracker.star'
+import { calibratedFits, LatestMasterDark } from './calibrationdark.master'
 import { inspectHeader } from './calibrationlibrary.sources'
 import { detectStarsInRegions } from './guideregions'
 import type { GuidingWorkerDark, GuidingWorkerDarkOutcome, GuidingWorkerRequest, GuidingWorkerResponse } from './guiding'
 import { luminanceImage, readImageFrom } from './imagedecode'
 import { cfaPattern } from './images'
-import { calibrateLight, readDigital, readDigitalFrom } from './imagestacking.analysis'
+import { calibrateLight, readDigitalFrom } from './imagestacking.analysis'
 
 // Worker thread of the guide frames of one guiding session. It receives the BLOB of one guide exposure at a time,
 // decodes it (base64 or raw FITS/XISF), takes the grayscale copy star detection measures (the luminance of a color or
@@ -29,21 +28,8 @@ import { calibrateLight, readDigital, readDigitalFrom } from './imagestacking.an
 
 declare const self: Worker
 
-// Latest master dark a job named, in the normalized scale of calibrate, and its id; read once and kept while jobs name it.
-let master: { readonly masterId: number; readonly image: Promise<Image> } | undefined
-
-// Returns the master dark of a job, reading it when another one is kept. A read that failed is forgotten, so the next
-// job reads it again.
-function masterOf(dark: GuidingWorkerDark) {
-	if (master?.masterId !== dark.masterId) {
-		const image = readDigital(dark.path).then((digital) => calibrationMasterImage(digital, dark.fullScale))
-		const entry = { masterId: dark.masterId, image }
-		master = entry
-		image.catch(() => master === entry && (master = undefined))
-	}
-
-	return master.image
-}
+// Latest master dark a job named, by its id.
+const master = new LatestMasterDark()
 
 // Reads the frame of bytes in digital numbers and subtracts the master dark from it, in the normalized scale. Returns
 // the calibrated image, or why it was not calibrated.
@@ -52,7 +38,7 @@ async function calibrated(bytes: Buffer, dark: GuidingWorkerDark): Promise<{ rea
 		const light = await readDigitalFrom(bufferSource(bytes), isXisf(bytes))
 		const exposure = inspectHeader(light.header, 'fits', false).metadata.exposure.value
 		if (exposure !== dark.exposure) return { outcome: { masterId: dark.masterId, applied: false, reason: exposure === undefined ? 'The frame does not state its exposure' : `The frame was exposed ${exposure / 1000} ms, the dark ${dark.exposure / 1000} ms` } }
-		const image = calibrateLight(light, { dark: await masterOf(dark) })
+		const image = calibrateLight(light, { dark: await master.image(String(dark.masterId), dark.path, dark.fullScale) })
 		return { image, outcome: { masterId: dark.masterId, applied: true } }
 	} catch (error) {
 		return { outcome: { masterId: dark.masterId, applied: false, reason: Error.isError(error) ? error.message : String(error) } }
@@ -62,15 +48,6 @@ async function calibrated(bytes: Buffer, dark: GuidingWorkerDark): Promise<{ rea
 // Returns whether bytes hold an XISF file, by its signature.
 function isXisf(bytes: Uint8Array) {
 	return bytes.length >= 8 && String.fromCharCode(...bytes.subarray(0, 8)) === 'XISF0100'
-}
-
-// Encodes a calibrated frame as FITS in the integer scale of its header, the negative values clipped to 0, for ASTAP.
-// The calibrated frame has the header of the original one, so the original size and two more header blocks hold it.
-async function calibratedFits(image: Image, size: number): Promise<Uint8Array<ArrayBuffer>> {
-	const buffer = Buffer.alloc(size + 2 * 2880)
-	const sink = bufferSink(buffer)
-	await writeImageToFits(image, sink)
-	return new Uint8Array(buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + sink.position))
 }
 
 // Decodes and measures the frame of a request and posts the outcome.

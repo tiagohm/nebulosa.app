@@ -104,7 +104,8 @@ export function applySession<S extends CameraSessionSummary, D extends CameraSes
 }
 
 // Fetches the complete record of a session; a record no newer than the one known, as a late response can be, never
-// replaces it, and a session the server no longer keeps is forgotten.
+// replaces it, a session the server no longer keeps is forgotten, and the record of a session a newer one of its camera
+// replaced while it was fetched is dropped, as applySession dropped the records of the others.
 export async function loadSessionRecord<S extends CameraSessionSummary, D extends CameraSessionRecord>(state: CameraSessionRecords<S, D>, kind: CameraSessionKind<S, D>, sessionId: string, request: ApiFetch) {
 	try {
 		const response = await request(`${kind.url}/${encodeURIComponent(sessionId)}`)
@@ -117,6 +118,7 @@ export async function loadSessionRecord<S extends CameraSessionSummary, D extend
 		if (!response.ok) return
 		const record = (await response.json()) as D
 		const known = state.details[sessionId]
+		if (known === undefined && !Object.values(state.sessions).some((session) => session.sessionId === sessionId)) return
 		if (known === undefined || (kind.newer ?? newerRevision)(record, known)) state.details[sessionId] = record
 	} catch {
 		// The server is unreachable; the next socket open refreshes the sessions.

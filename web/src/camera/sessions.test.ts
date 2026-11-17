@@ -100,6 +100,13 @@ describe('records', () => {
 		expect(state.details.s1).toBeUndefined()
 	})
 
+	test('the record of a session replaced while it was fetched is dropped', async () => {
+		const state = newState()
+
+		await loadSessionRecord(state, kind(), 'replaced', fakeFetch(() => Response.json(record({ revision: 1 }))).request)
+		expect(state.details.replaced).toBeUndefined()
+	})
+
 	test('a kind may order its records by its own rule', async () => {
 		const state = newState()
 		state.details.s1 = record({ items: [1, 2] })

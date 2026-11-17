@@ -1,5 +1,5 @@
 import type { ObservingSample, TargetAnalysis } from 'api'
-import type { KeyboardEvent, MouseEvent } from 'react'
+import { type KeyboardEvent, type MouseEvent, useEffect, useRef, useState } from 'react'
 import { formatClockTime, formatDegrees } from '../../format'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { moveIndex } from '../../ui/navigation'
@@ -12,9 +12,12 @@ import { nearestSample } from './observingplanner'
 // are the exact crossings, never read from the samples. A sample is chosen by a click or with the arrow keys, Home, and
 // End, never by hovering, and its values are listed below the chart.
 
-// Size of the drawing, in viewBox units.
-const WIDTH = 720
+// Height of the drawing, in viewBox units, which are CSS pixels: the drawing takes the width of its frame, so its text
+// keeps the caption size at any width.
 const HEIGHT = 240
+
+// Narrowest width the drawing is laid out for, in CSS pixels; a narrower frame scales it down.
+const MIN_WIDTH = 280
 
 // Margins of the plot, in viewBox units.
 const MARGIN = { top: 12, right: 12, bottom: 28, left: 36 } as const
@@ -69,9 +72,21 @@ function linePath(samples: readonly ObservingSample[], x: (time: number) => numb
 // Chart of a target over a night.
 export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightChartProps) {
 	const { samples, night, windows, constraints, summary } = analysis
+	const frame = useRef<HTMLDivElement>(null)
+	const [measured, setMeasured] = useState(0)
+	const width = Math.max(MIN_WIDTH, measured)
+
+	// Follows the width of the frame.
+	useEffect(() => {
+		const element = frame.current
+		if (!element) return
+		const observer = new ResizeObserver(([entry]) => setMeasured(entry.contentRect.width))
+		observer.observe(element)
+		return () => observer.disconnect()
+	}, [])
 	const { start, end } = night.display
 	const span = Math.max(1, end - start)
-	const plotWidth = WIDTH - MARGIN.left - MARGIN.right
+	const plotWidth = width - MARGIN.left - MARGIN.right
 	const plotHeight = HEIGHT - MARGIN.top - MARGIN.bottom
 	const x = (time: number) => MARGIN.left + ((time - start) / span) * plotWidth
 	// Altitudes from −10° to 90°, so a target just under the horizon still shows its course.
@@ -85,7 +100,7 @@ export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightC
 	// Chooses the sample nearest the point clicked.
 	function onClick(event: MouseEvent<SVGSVGElement>) {
 		const box = event.currentTarget.getBoundingClientRect()
-		const time = start + (((event.clientX - box.left) / box.width) * WIDTH - MARGIN.left) * (span / plotWidth)
+		const time = start + (((event.clientX - box.left) / box.width) * width - MARGIN.left) * (span / plotWidth)
 		onCursor(nearestSample(samples, time))
 	}
 
@@ -99,8 +114,8 @@ export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightC
 
 	return (
 		<div className="flex flex-col gap-3">
-			<div className="overflow-x-auto">
-				<svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} tabIndex={0} onClick={onClick} onKeyDown={onKeyDown} className="block h-auto w-full min-w-[480px] cursor-pointer text-[10px] outline-none focus-visible:outline-2 focus-visible:outline-accent">
+			<div ref={frame}>
+				<svg viewBox={`0 0 ${width} ${HEIGHT}`} tabIndex={0} onClick={onClick} onKeyDown={onKeyDown} className="block h-auto w-full cursor-pointer text-xs outline-none focus-visible:outline-2 focus-visible:outline-accent">
 					<title>{`Altitude of ${analysis.name} and of the Moon over the night; shaded stretches are the observing windows.`}</title>
 					<defs>
 						<pattern id="observing-window" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
@@ -119,13 +134,13 @@ export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightC
 					))}
 					{GRID.map((degrees) => (
 						<g key={degrees}>
-							<line x1={MARGIN.left} x2={WIDTH - MARGIN.right} y1={y((degrees * Math.PI) / 180)} y2={y((degrees * Math.PI) / 180)} stroke="var(--color-line-100)" />
+							<line x1={MARGIN.left} x2={width - MARGIN.right} y1={y((degrees * Math.PI) / 180)} y2={y((degrees * Math.PI) / 180)} stroke="var(--color-line-100)" />
 							<text x={MARGIN.left - 4} y={y((degrees * Math.PI) / 180)} dy="0.35em" textAnchor="end" fill="var(--color-ink-300)">
 								{degrees}°
 							</text>
 						</g>
 					))}
-					<line x1={MARGIN.left} x2={WIDTH - MARGIN.right} y1={y(constraints.minimumAltitude)} y2={y(constraints.minimumAltitude)} stroke="var(--color-warning)" strokeDasharray="4 3">
+					<line x1={MARGIN.left} x2={width - MARGIN.right} y1={y(constraints.minimumAltitude)} y2={y(constraints.minimumAltitude)} stroke="var(--color-warning)" strokeDasharray="4 3">
 						<title>Minimum altitude</title>
 					</line>
 					{labels.map((time) => (

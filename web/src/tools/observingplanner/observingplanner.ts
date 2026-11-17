@@ -195,6 +195,41 @@ export interface DiscoveryListing {
 	readonly nextCursor?: string
 }
 
+// Order of the best targets: the server's ranking (score, then longest window), or by name, magnitude, apparent size, the
+// start of the best window, or the longest window.
+export type CandidateSortKey = 'score' | 'name' | 'magnitude' | 'size' | 'best' | 'longest'
+
+// Order of the best targets, and whether it is reversed from its natural direction.
+export interface CandidateSort {
+	// Quantity ordered by.
+	key: CandidateSortKey
+	// Whether the natural direction (best score, name A to Z, brightest, largest, earliest, longest first) is reversed.
+	reversed: boolean
+}
+
+// Every order of the best targets, in display order.
+export const CANDIDATE_SORT_KEYS: readonly CandidateSortKey[] = ['score', 'name', 'magnitude', 'size', 'best', 'longest']
+
+// Label of each order of the best targets.
+export const CANDIDATE_SORT_LABELS: Readonly<Record<CandidateSortKey, string>> = { score: 'Score', name: 'Name', magnitude: 'Magnitude', size: 'Size', best: 'Best window', longest: 'Longest window' }
+
+// Returns the best targets in an order; an unknown magnitude or size always comes last, and ties keep the server's ranking.
+export function sortCandidates(candidates: readonly ObservingCandidate[], { key, reversed }: CandidateSort) {
+	const sign = reversed ? -1 : 1
+	// Compares two optional values in the natural direction, unknown last whatever the direction.
+	const known = (a: number | undefined, b: number | undefined, ascending: boolean) => (a === undefined ? (b === undefined ? 0 : 1) : b === undefined ? -1 : sign * (ascending ? a - b : b - a))
+	const compare: Record<CandidateSortKey, (a: ObservingCandidate, b: ObservingCandidate) => number> = {
+		score: () => 0,
+		name: (a, b) => sign * a.name.localeCompare(b.name),
+		magnitude: (a, b) => known(a.magnitude, b.magnitude, true),
+		size: (a, b) => known(a.majorAxis, b.majorAxis, false),
+		best: (a, b) => sign * (a.bestAt - b.bestAt),
+		longest: (a, b) => sign * (b.longestWindowMs - a.longestWindowMs),
+	}
+	const sorted = candidates.toSorted(compare[key])
+	return key === 'score' && reversed ? sorted.toReversed() : sorted
+}
+
 // Tab-lived state of the tool.
 export interface ObservingPlannerState {
 	// Section shown.
@@ -219,6 +254,8 @@ export interface ObservingPlannerState {
 	catalogError?: string
 	// Discovery of the night.
 	discovery?: DiscoveryListing
+	// Order the best targets are shown in.
+	candidateSort: CandidateSort
 	// Whether a discovery batch is being computed.
 	discoveryLoading: boolean
 	// Why the discovery failed.
@@ -256,6 +293,7 @@ export function createObservingPlannerState(): ObservingPlannerState {
 		filter: structuredClone(DEFAULT_FILTER),
 		minorBodySearch: { text: '', loading: false },
 		catalogLoading: false,
+		candidateSort: { key: 'score', reversed: false },
 		discoveryLoading: false,
 		analysisLoading: false,
 		elementsRefreshing: false,

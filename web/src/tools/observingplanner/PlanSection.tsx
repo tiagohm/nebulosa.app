@@ -446,7 +446,7 @@ function ItemEditor({ item, preview, timeZone, first, last, canSchedule, onChang
 	return (
 		<section className="flex flex-col gap-3 rounded-md border border-line-100 bg-base-100 p-4">
 			<div className="flex flex-wrap items-start gap-2">
-				<div className="flex min-w-0 flex-1 flex-col gap-1">
+				<div className="flex min-w-0 flex-1 basis-48 flex-col gap-1">
 					<h2 className="m-0 text-base font-medium wrap-break-word text-ink-100">{item.targetName}</h2>
 					<Notice>{windows.length === 0 ? 'No window this night' : `${windows.length === 1 ? 'Window' : 'Windows'} ${windows.map((window) => formatSpan(window.start, window.end, timeZone)).join(', ')}`}</Notice>
 				</div>

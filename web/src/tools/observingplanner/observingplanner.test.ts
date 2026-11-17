@@ -24,6 +24,7 @@ import {
 	refreshObservingPlans,
 	sameTarget,
 	searchMinorBody,
+	sortCandidates,
 	showTargetInSky,
 	tonight,
 } from './observingplanner'
@@ -218,6 +219,23 @@ describe('plan choice and saving', () => {
 		expect(planSaveStatus(state, 'a')).toBe('failed')
 		state.conflicts.a = null
 		expect(planSaveStatus(state, 'a')).toBe('conflict')
+	})
+})
+
+describe('candidate order', () => {
+	test('candidates sort by each quantity, unknown magnitudes and sizes last, and the score order is the server ranking', () => {
+		const a = { ...candidate(1, 90), name: 'Beta', magnitude: 6, majorAxis: 0.001, bestAt: 3, longestWindowMs: 1 }
+		const b = { ...candidate(2, 80), name: 'alpha', magnitude: undefined, majorAxis: 0.01, bestAt: 1, longestWindowMs: 3 }
+		const c = { ...candidate(3, 70), name: 'Gamma', magnitude: 4, majorAxis: undefined, bestAt: 2, longestWindowMs: 2 }
+		const ids = (sort: Parameters<typeof sortCandidates>[1]) => sortCandidates([a, b, c], sort).map((e) => (e.target as { id: number }).id)
+		expect(ids({ key: 'score', reversed: false })).toEqual([1, 2, 3])
+		expect(ids({ key: 'score', reversed: true })).toEqual([3, 2, 1])
+		expect(ids({ key: 'name', reversed: false })).toEqual([2, 1, 3])
+		expect(ids({ key: 'magnitude', reversed: false })).toEqual([3, 1, 2])
+		expect(ids({ key: 'magnitude', reversed: true })).toEqual([1, 3, 2])
+		expect(ids({ key: 'size', reversed: false })).toEqual([2, 1, 3])
+		expect(ids({ key: 'best', reversed: false })).toEqual([2, 3, 1])
+		expect(ids({ key: 'longest', reversed: false })).toEqual([2, 3, 1])
 	})
 })
 

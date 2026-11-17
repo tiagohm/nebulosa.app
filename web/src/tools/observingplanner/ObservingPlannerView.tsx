@@ -1,5 +1,5 @@
 import type { ObservingMode } from 'api'
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDegrees, formatHours } from '../../format'
 import { openObservingSites } from '../../location/site'
@@ -8,8 +8,9 @@ import { describeDisplayZone } from '../../location/zone'
 import { activeProfile, profileState } from '../../profile/profile'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { routeState } from '../../shell/route'
-import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
+import { useWorkspacePanel, WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Button } from '../../ui/Button'
+import { Icon } from '../../ui/Icon'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
@@ -42,13 +43,14 @@ export function ObservingPlanner() {
 	const displayZone = useDisplayZone(location)
 	const planId = route.route.workspace === 'tools' && route.route.tool === 'observing-planner' ? route.route.plan : undefined
 	const [adding, setAdding] = useState<NamedTarget>()
+	const panelState = useWorkspacePanel('tools')
 	const siteId = profile.activeSiteId
 	const key = location && JSON.stringify([location.latitude, location.longitude, location.elevation, location.timeZone, state.eveningDate, state.constraints])
 
 	useEffect(() => void loadPresets(observingPlannerState), [])
 
-	// A plan in the route opens the Night Plan section.
-	useEffect(() => {
+	// A plan in the route opens the Night Plan section, before the first paint so another section never flashes.
+	useLayoutEffect(() => {
 		if (planId) observingPlannerState.section = 'plan'
 	}, [planId])
 
@@ -100,15 +102,24 @@ export function ObservingPlanner() {
 			title="Observing Planner"
 			context={<SegmentedControl options={OBSERVING_PLANNER_SECTIONS} value={state.section} format={(section) => SECTION_LABELS[section]} onChange={(section) => (observingPlannerState.section = section)} />}
 			panel={{ title: 'Night and Constraints', content: panel }}
+			panelState={panelState}
 		>
 			<div className="h-full overflow-y-auto bg-base-000">
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					{location ? (
-						<Notice>
-							{describeDisplayZone(displayZone)}
-							{state.eveningDate && ` · night of ${state.eveningDate}`}
-							{constraints && ` · ${MODE_LABELS[constraints.mode]}, altitude ≥ ${formatDegrees(constraints.minimumAltitude, 0)}`}
-						</Notice>
+						<button
+							type="button"
+							title="Night and Constraints"
+							onClick={() => panelState.setOpen(true)}
+							className="flex cursor-pointer items-start gap-2 self-start rounded-sm text-left text-xs leading-4 text-ink-300 hover:text-ink-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+						>
+							<span>
+								{state.eveningDate && `Night of ${state.eveningDate}`}
+								{constraints && ` · ${MODE_LABELS[constraints.mode]}, altitude ≥ ${formatDegrees(constraints.minimumAltitude, 0)}`}
+								{` · ${describeDisplayZone(displayZone)}`}
+							</span>
+							<Icon name="sliders" className="mt-px size-3.5 flex-none" />
+						</button>
 					) : (
 						state.section !== 'plan' && (
 							<Notice>

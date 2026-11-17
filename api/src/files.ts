@@ -2,6 +2,7 @@ import { existsSync } from 'fs'
 import { mkdir, readdir, stat } from 'fs/promises'
 import { basename, dirname, extname, join, resolve } from 'path'
 import { errorResponse } from './http'
+import { errorCode } from './util'
 
 // Browsing of the server's filesystem, so a client on another machine can choose files the server reads,
 // such as images to open, and creation of a directory to save in. Any directory the server process can read is
@@ -40,7 +41,7 @@ export class DirectoryError extends Error {
 
 	// Creates the error of a failed listing of path.
 	constructor(path: string, cause: unknown) {
-		const code = Error.isError(cause) && 'code' in cause ? cause.code : undefined
+		const code = errorCode(cause)
 		const missing = code === 'ENOENT' || code === 'ENOTDIR'
 		super(missing ? `Directory not found: ${path}` : `Unable to read directory: ${path}`, { cause })
 		this.status = missing ? 404 : 403
@@ -68,7 +69,7 @@ export class CreateDirectoryError extends Error {
 
 	// Creates the error of a failed creation of path.
 	constructor(path: string, cause: unknown) {
-		const code = Error.isError(cause) && 'code' in cause ? cause.code : undefined
+		const code = errorCode(cause)
 		const exists = code === 'EEXIST'
 		const missing = code === 'ENOENT' || code === 'ENOTDIR'
 		super(exists ? `Already exists: ${path}` : missing ? `Directory not found: ${dirname(path)}` : `Unable to create directory: ${path}`, { cause })

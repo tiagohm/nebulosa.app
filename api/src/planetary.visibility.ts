@@ -5,8 +5,8 @@ import { type Time, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
 import { LruCache } from './lrucache'
 import { OBSERVING_PRESETS, type PlanningBodyCode, type PlanningSite, PlanningNight, SEARCH_STEP_DAYS } from './observingplanner.astronomy'
-import { yieldToEventLoop } from './planetary.source'
 import type { TimeSpan } from './sky/sun'
+import { yieldToEventLoop } from './util'
 
 // Site visibility shared by the planetary satellite planners (Jupiter, Saturn). A phenomenon is geocentric; a site only
 // decides when it can be watched: the parts of its physically visible interval inside the site's planetary windows,

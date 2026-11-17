@@ -1,8 +1,9 @@
 import { mkdir, open, rename, rm } from 'fs/promises'
 import { dirname } from 'path'
 
-// Filesystem helpers of the server: atomic writes of the files it keeps from external providers, such as the IERS
-// tables, and filesystem error codes. Operational state lives in the database, never in files written here.
+// Small helpers of the server: atomic writes of the files it keeps from external providers, such as the IERS tables,
+// filesystem error codes, and the yield of long computations to the event loop. Operational state lives in the
+// database, never in files written here.
 
 // Replaces a file so it never appears partially written: the content is written to a temporary file next
 // to it, readable and writable by the server's user only, synced to the disk, then renamed over it, so a crash or
@@ -27,6 +28,13 @@ export async function writeAtomically(file: string, text: string) {
 		await rm(temporary, { force: true })
 		throw error
 	}
+}
+
+// Lets the event loop run, so a long computation on the main thread answers other requests between two of its pieces.
+export function yieldToEventLoop(): Promise<void> {
+	return new Promise<void>((resolve) => {
+		setImmediate(resolve)
+	})
 }
 
 // Error code of a failed filesystem call, if any.

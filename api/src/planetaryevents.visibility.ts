@@ -7,11 +7,12 @@ import { type Time, tdbMinusTtByFairheadAndBretagnon1990, timeShift, timeToUnixM
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
 import { fixedOrientationProviders, OBSERVING_PRESETS, type PlanningSite, SEARCH_STEP_DAYS, SiteOffset } from './observingplanner.astronomy'
-import { toolkitTime, yieldToEventLoop } from './planetary.source'
+import { toolkitTime } from './planetary.source'
 import { intersect } from './planetary.visibility'
 import { analyticalPlanetaryEventsEphemeris, geocentricOf, type PlanetaryEventBody, type PlanetaryEventKind, type PlanetaryEventsEphemeris } from './planetaryevents.astronomy'
 import { geographic } from './sky/ephemeris'
 import type { TimeSpan } from './sky/sun'
+import { yieldToEventLoop } from './util'
 
 // Visibility of planetary events from a site. An event is geocentric and instantaneous; a site only decides whether it can
 // be watched at its instant and when the best nearby stretch to watch its planets is. Each event gets one span around its

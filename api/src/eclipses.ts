@@ -90,13 +90,6 @@ export function findRefinedEclipse<E>({ nearest, refine, instant, cache }: Refin
 	}
 }
 
-// Lets the event loop run between two pieces of long work.
-export function yieldEventLoop() {
-	return new Promise<void>((resolve) => {
-		setImmediate(resolve)
-	})
-}
-
 // Reads the place of the `longitude` and `latitude` query parameters, in degrees.
 export function locationParams(params: URLSearchParams): EclipseLocation {
 	return { longitude: Number(params.get('longitude')), latitude: Number(params.get('latitude')) }

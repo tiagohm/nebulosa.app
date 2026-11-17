@@ -65,6 +65,7 @@ export type {
 	TargetAnalysis,
 	TargetAnalysisRequest,
 } from './observingplanner.astronomy'
+import { yieldToEventLoop } from './util'
 export { MINIMUM_CONTINUOUS_MS, OBSERVING_PRESETS, PLANNING_BODY_CODES } from './observingplanner.astronomy'
 
 // Catalog objects one discovery request evaluates.
@@ -190,13 +191,6 @@ function candidateOf(analysis: TargetAnalysis, details: Pick<ObservingCandidate,
 	if ((analysis.status !== 'observable' && analysis.status !== 'limitedDuration') || !analysis.score) return undefined
 	const { target, name, typeName, status, reasons, windows, summary, score } = analysis
 	return { target, name, typeName, ...details, status, reasons, score: score.value, bestAt: score.at, windows, longestWindowMs: summary.longestWindowMs, totalUsableMs: summary.totalUsableMs }
-}
-
-// Yields to the event loop.
-function yieldToEventLoop() {
-	return new Promise<void>((resolve) => {
-		setImmediate(resolve)
-	})
 }
 
 // Change of a saved plan, published once its transaction committed.

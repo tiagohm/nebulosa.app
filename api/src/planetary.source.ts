@@ -4,6 +4,7 @@ import { type Time, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/ti
 import { errorResponse } from './http'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 import type { SpiceEphemerisPolicy } from './spicekernels.store'
+import { yieldToEventLoop } from './util'
 
 // Source orchestration shared by the planetary satellite planners (Jupiter, Saturn): every computation takes all its
 // states from one source chosen once, the kernels of the SPICE Kernel Library when they resolve every body the
@@ -94,13 +95,6 @@ export interface SourcedResult<B extends string, A extends object, T> {
 
 // Restarts allowed when the kernel generation changes during a computation.
 const GENERATION_RESTARTS = 2
-
-// Yields to the event loop.
-export function yieldToEventLoop() {
-	return new Promise<void>((resolve) => {
-		setImmediate(resolve)
-	})
-}
 
 // Toolkit instant of a Unix time in milliseconds.
 export function toolkitTime(time: number): Time {

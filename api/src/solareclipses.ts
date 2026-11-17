@@ -14,10 +14,11 @@ import {
 import type { PolynomialBesselianElements } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
-import { type EclipseDirection, type EclipseLocation, eclipseNotFound, eclipseSunMoon, locationParams, yieldEventLoop } from './eclipses'
+import { type EclipseDirection, type EclipseLocation, eclipseNotFound, eclipseSunMoon, locationParams } from './eclipses'
 import { errorResponse } from './http'
 import { LruCache } from './lrucache'
 import { findSolarEclipse, resolveSolarEclipse, type SolarEclipseMap, type SolarEclipseSummary, solarEclipseElements, solarEclipseId, solarEclipseSummary } from './solareclipses.map'
+import { yieldToEventLoop } from './util'
 
 // Solar eclipses for the Solar Eclipse Map tool: stateless, read-only queries over the toolkit's solar eclipse
 // engine (core/src/astronomy/events/eclipse/solar), answered under /api/eclipses/solar with the conventions of
@@ -228,7 +229,7 @@ export class SolarEclipseService {
 			const eclipse = findSolarEclipse(cursor, direction)
 			if (circumstances(solarEclipseElements(eclipse), location).visibility.hasObservableEclipse) return solarEclipseSummary(eclipse)
 			cursor = +solarEclipseId(eclipse)
-			await yieldEventLoop()
+			await yieldToEventLoop()
 			if (signal?.aborted) return undefined
 		}
 

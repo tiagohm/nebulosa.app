@@ -12,9 +12,10 @@ import {
 import { computeLunarEclipseMapGeometry, type LunarEclipseContactKind, lunarEclipseEvents, lunarEclipseMapToSvgPaths, refineLunarEclipse } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
 import { timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
-import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, eclipseNotFound, eclipseSunMoon, findRefinedEclipse, ID_SEARCH_MARGIN, locationParams, MAP_PRECISION, type RefinedEclipseSearch, yieldEventLoop } from './eclipses'
+import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, eclipseNotFound, eclipseSunMoon, findRefinedEclipse, ID_SEARCH_MARGIN, locationParams, MAP_PRECISION, type RefinedEclipseSearch } from './eclipses'
 import { errorResponse } from './http'
 import { LruCache } from './lrucache'
+import { yieldToEventLoop } from './util'
 
 // Lunar eclipses for the Lunar Eclipse Map tool: stateless, read-only queries over the toolkit's lunar eclipse
 // engine (core/src/astronomy/events/eclipse/lunar), answered under /api/eclipses/lunar with the conventions of
@@ -266,7 +267,7 @@ export class LunarEclipseService {
 			const eclipse = findLunarEclipse(cursor, direction)
 			if (circumstances(eclipse, location, VISIBILITY_SAMPLES).visibility.hasObservableEclipse) return lunarEclipseSummary(eclipse)
 			cursor = +eclipseId(eclipse)
-			await yieldEventLoop()
+			await yieldToEventLoop()
 			if (signal?.aborted) return undefined
 		}
 

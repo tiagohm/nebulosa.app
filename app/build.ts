@@ -7,7 +7,7 @@ import bunTailwindPlugin from './tailwind.plugin'
 // directory of the build (app/), and the workers are embedded outside of it, under a path nothing finds.
 const ROOT = join(import.meta.dir, '..')
 
-// Image, image processing, star detection, star profile, streak detection, DARV analysis, Flat Wizard measurement, Dark Library Wizard measurement, Calibration Library integration, master dark subtraction, Live Stacking, guide frame, mount pointing fit, and solar eclipse map workers, bundled as extra entry points so
+// Image, image processing, star detection, star profile, streak detection, DARV analysis, Flat Wizard measurement, Dark Library Wizard measurement, Calibration Library integration, master dark subtraction, Live Stacking, Image Stacking, guide frame, mount pointing fit, and solar eclipse map workers, bundled as extra entry points so
 // the executable embeds them transpiled with their imports. Inside the executable a worker is only found by its
 // path relative to the embedded root, never through `new URL(..., import.meta.url)`, which points at the
 // executable itself.

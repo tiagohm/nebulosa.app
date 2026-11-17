@@ -30,6 +30,7 @@ import type { OperationAdmission, OperationKind, OperationProgressReporter, Oper
 // - connectionLost: the device disappeared while commanded.
 // - unknownResult: the command could not be confirmed as sent; the device may or may not have received it.
 // - serviceUnavailable: a service the command depends on, such as an ephemeris provider, failed or is absent.
+// - correctionRefused: the pointing model in force refused to correct the target, such as one far from its samples.
 export type CommandErrorCode = 'notFound' | 'disconnected' | 'busy' | 'unsupported' | 'invalidParameter' | 'timeout' | 'rejected' | 'deviceError' | 'connectionLost' | 'unknownResult' | 'serviceUnavailable' | 'correctionRefused'
 
 // Body of an error response of a command.

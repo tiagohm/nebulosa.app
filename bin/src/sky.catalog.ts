@@ -17,7 +17,7 @@ import { kilometerPerSecond, type Velocity } from 'nebulosa/src/math/units/veloc
 // star up to STAR_MAGNITUDE_LIMIT, the Stellarium deep-sky catalog, and the star clusters of SIMBAD, with their
 // designations in every known catalog. Source files are downloaded once into api/data and reused. The database is
 // built in a temporary file and only replaces the previous catalog, compressed, when generation succeeds.
-// Usage: bun make:catalog [--force]
+// Usage: bun make:catalog [--force] [--empty]
 
 const { NAME, NGC, IC, BAYER, FLAMSTEED, HD, HR, HIP, M, C, B, SH2, LBN, LDN, MEL, CR, ARP, PGC, TR, ST, RU, UGC, CED, RCW, VDB, VV, PK, PNG, ACO, ESO, SNRG, DWB, BENNETT, DUNLOP, HERSCHEL, GUM } = CATALOG
 

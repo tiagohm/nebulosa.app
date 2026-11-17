@@ -8,20 +8,22 @@ import { errorResponse } from './http'
 import type { ImageAcquisition, ImageInfo, ImageStore } from './images'
 import { ClientPresence } from './websocket'
 
-// Capture frame registry: the index of the frames acquired by Camera Capture and Auto Focus, by physical camera
+// Capture frame registry: the index of the frames acquired by Camera Capture and the camera operations (the origins of
+// CaptureFrameOrigin), by physical camera
 // (connection id + device id), so the Images workspace can show the latest frame of any camera and its recent saved
 // frames. It never holds pixels: a frame is available while its capture document is open in the image store, or
 // while its saved file exists, which is opened as a new document when asked. A frame is identified by its frameId
 // (session id and generation), which always names the same acquisition, whatever document currently holds its
-// pixels, and its origin names the operation that took it. Both producers share one latest frame per camera,
+// pixels, and its origin names the operation that took it. Every producer shares one latest frame per camera,
 // ordered by the order the registry received them, never by their session numbering.
 //
 // Each camera keeps two collections with their own retention: its latest frame, the newest one the preview
 // decoded (previewed only, being saved, or saved), and its saved frames, the newest FRAMES_PER_SOURCE frames whose
 // file was written, which is the only history. A frame the preview decoded is never added to the saved frames
 // unless its file is written, so any number of previewed-only frames never evicts a saved one; the latest frame
-// counts among the saved frames only when it was saved itself. Auto Focus, TPPA, and DARV frames are never saved: their
-// files are auxiliary and deleted after each measurement, so they only ever become the latest frame. A Flat Wizard frame is
+// counts among the saved frames only when it was saved itself. The frames of the camera operations other than Flat Wizard and
+// Dark Library Wizard are never saved: their files are auxiliary and deleted after each measurement, so they only ever
+// become the latest frame. A Flat Wizard frame is
 // previewed from its staging file and saved only once accepted, when published() names its final path. A previous latest
 // frame that was not saved is kept in memory among the transient frames of its camera (at most FRAMES_PER_SOURCE), only so its state can still be
 // asked for, and is never listed.

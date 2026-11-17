@@ -235,6 +235,26 @@ describe('routes', () => {
 	})
 })
 
+test('a listener that throws does not keep the event from the listeners after it', async () => {
+	const manager = new ConnectionManager()
+	disposables.push(manager)
+	const received: string[] = []
+	manager.listen(() => {
+		throw new Error('listener failure')
+	})
+	manager.listen((event) => received.push(event.type))
+	const error = console.error
+	console.error = () => {}
+
+	try {
+		await manager.connect({ type: 'SIMULATOR' })
+	} finally {
+		console.error = error
+	}
+
+	expect(received).toContain('connection:open')
+})
+
 test('a disconnect while a connection opens cancels it, and a disposed registry keeps none it was opening', async () => {
 	const manager = new ConnectionManager()
 	const events: string[] = []

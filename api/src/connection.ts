@@ -256,9 +256,16 @@ export class ConnectionManager implements Disposable {
 		this.#emit({ type: 'connection:close', id, cause: 'lost' })
 	}
 
-	// Delivers event synchronously to every registered listener, in registration order.
+	// Delivers event synchronously to every registered listener, in registration order. A listener that throws is logged
+	// and the others still receive the event; the failure never reaches the device handler that reported the change.
 	#emit(event: ConnectionRegistryEvent) {
-		for (const listener of this.#listeners) listener(event)
+		for (const listener of this.#listeners) {
+			try {
+				listener(event)
+			} catch (error) {
+				console.error('a connection listener failed:', event.type, error)
+			}
+		}
 	}
 
 	// Closes every open connection; one still opening closes as soon as it opened.

@@ -11,10 +11,11 @@ import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
+import { useNow } from '../../useNow'
 import { openMeteorShowerAt } from '../meteorshowers/meteorshowers'
 import { formatScore, formatTargetKind } from './format'
 import { NightChart } from './NightChart'
-import { analyze, type NamedTarget, type ObservingPlannerState, observingPlannerState, REASON_LABELS, refreshOrbitalElements, showTargetInSky, STATUS_LABELS } from './observingplanner'
+import { analyze, defaultSampleIndex, type NamedTarget, type ObservingPlannerState, observingPlannerState, REASON_LABELS, refreshOrbitalElements, showTargetInSky, STATUS_LABELS } from './observingplanner'
 
 // Analysis section of the Observing Planner: one target over the tool's night, with its status and reasons, its windows,
 // the factors of its score, and the chart of its altitude. Fixed coordinates typed here are analyzed the same way. A minor
@@ -35,6 +36,9 @@ const FALLBACK_LABELS: Readonly<Record<NonNullable<PlannerEphemerisProvenance['f
 // below the precision shown).
 const UNIX_EPOCH_JD = 2440587.5
 
+// Interval of the clock that places the current time on the chart, in milliseconds.
+const NOW_INTERVAL_MS = 30_000
+
 export interface AnalysisSectionProps {
 	// Location of the tool; undefined without one.
 	readonly location?: SiteLocation
@@ -50,7 +54,11 @@ export interface AnalysisSectionProps {
 export function AnalysisSection({ location, activeSite, timeZone, onAdd }: AnalysisSectionProps) {
 	const state = useSnapshot(observingPlannerState) as ObservingPlannerState
 	const { analysis, selected } = state
-	const [cursor, setCursor] = useState(0)
+	const now = useNow(!!analysis, NOW_INTERVAL_MS)
+	// The sample chosen on the chart, for the analysis it was chosen on; a new analysis opens on its default sample.
+	const [chosen, setChosen] = useState<{ readonly analysis: TargetAnalysis; readonly index: number }>()
+	const cursor = analysis ? (chosen?.analysis === analysis ? chosen.index : defaultSampleIndex(analysis, now)) : 0
+	const setCursor = (index: number) => analysis && setChosen({ analysis, index })
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -97,7 +105,7 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 						</Notice>
 					)}
 					{state.elementsError && <Notice error>{state.elementsError}</Notice>}
-					{analysis.samples.length > 0 && <NightChart analysis={analysis} timeZone={timeZone} cursor={Math.min(cursor, analysis.samples.length - 1)} onCursor={setCursor} />}
+					{analysis.samples.length > 0 && <NightChart analysis={analysis} timeZone={timeZone} cursor={Math.min(cursor, analysis.samples.length - 1)} onCursor={setCursor} now={now} />}
 					{analysis.target.kind === 'minorBody' && <MinorBodyDetails analysis={analysis} cursor={Math.min(cursor, analysis.samples.length - 1)} timeZone={timeZone} />}
 					<div className="grid gap-4 md:grid-cols-2">
 						<section className="flex flex-col gap-2 rounded-sm border border-line-100 bg-base-100 p-4">

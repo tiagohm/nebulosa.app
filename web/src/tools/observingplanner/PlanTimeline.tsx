@@ -1,30 +1,38 @@
 import type { ObservingPlanDocument, ObservingPlanPreview } from 'api'
-import { type KeyboardEvent, type PointerEvent, useState } from 'react'
-import { formatClockTime } from '../../format'
+import { cn } from 'cn'
+import { type KeyboardEvent, type PointerEvent, useRef, useState } from 'react'
+import { formatClockTime, formatSpan } from '../../format'
+import { Icon } from '../../ui/Icon'
+import { moveIndex } from '../../ui/navigation'
 import { type SkyBand, skyBands } from '../astroweather/astroweather'
 import { CONFLICT_LABELS } from './observingplanner'
 
-// Timeline of a night plan: one lane per item over the displayed night, with the item's windows and its scheduled block.
-// A block is moved by dragging it, written once released, or with the arrow keys while focused (5 minutes, or 1 with
-// Shift); both give the same canonical start, rounded to the minute, as the numeric start of the item. Blocks with a
-// problem are drawn apart, with a symbol. Nothing moves a block on its own.
-
-// Width of the drawing, in viewBox units.
-const WIDTH = 760
-
-// Width of the label column, in viewBox units.
-const LABEL_WIDTH = 150
-
-// Height of a lane and of the axis, in viewBox units.
-const LANE_HEIGHT = 28
-const AXIS_HEIGHT = 22
+// Timeline of a night plan, the main surface of the Night Plan: one lane per item over the displayed night, in plan order,
+// over the bands of the sky, with the item's windows hatched, its scheduled block filled, and a line at the current time
+// while the night is shown. A lane is selected by a click or, with the timeline focused, by the up and down arrows, Home,
+// and End; the selected block moves with the left and right arrows (5 minutes, or 1 with Shift), Enter schedules an
+// unscheduled item, and a block is dragged by mouse, pen, or touch. Every move gives the same canonical start, rounded to
+// the minute. Drawn in HTML over percentages of the night, so its text keeps its size at any width. Nothing moves a block
+// on its own.
 
 // Fill of each band of the sky.
-const SKY_FILLS: Readonly<Record<SkyBand, string>> = { day: 'var(--color-base-300)', twilight: 'var(--color-base-200)', dark: 'var(--color-base-000)' }
+const SKY_FILLS: Readonly<Record<SkyBand, string>> = { day: 'bg-base-300', twilight: 'bg-base-200', dark: 'bg-base-000' }
+
+// Hatch of an observing window, in the success tone.
+const WINDOW_HATCH = 'bg-[repeating-linear-gradient(45deg,var(--color-success)_0_1.5px,transparent_1.5px_6px)] opacity-40'
+
+// Height of a lane and of its label: 36 px, 44 px on phones so a lane is a comfortable touch target.
+const LANE_HEIGHT = 'h-9 max-sm:h-11'
 
 // Milliseconds per minute and per hour.
 const MINUTE_MS = 60_000
 const HOUR_MS = 3_600_000
+
+// Hours between two labels of the time axis.
+const LABEL_HOURS = 2
+
+// Closest an hour label may stand to the current time, in milliseconds, before the "Now" label replaces it.
+const NOW_CLEARANCE_MS = 45 * MINUTE_MS
 
 export interface PlanTimelineProps {
 	// Plan drawn.
@@ -33,14 +41,22 @@ export interface PlanTimelineProps {
 	readonly preview: ObservingPlanPreview
 	// IANA zone the times are labeled in.
 	readonly timeZone: string
+	// Current time, Unix milliseconds.
+	readonly now: number
+	// Id of the item selected.
+	readonly selected?: string
+	// Selects an item.
+	readonly onSelect: (itemId: string) => void
 	// Receives the new start of an item, Unix milliseconds rounded to the minute.
 	readonly onMove: (itemId: string, start: number) => void
+	// Schedules an unscheduled item at its first window.
+	readonly onSchedule: (itemId: string) => void
 }
 
-// Block being dragged: its item, where the pointer started, and how far it moved, in milliseconds.
+// Block being dragged: its item, the pointer's starting x in CSS pixels, and how far it moved, in milliseconds.
 interface Drag {
 	readonly itemId: string
-	readonly origin: number
+	readonly originX: number
 	readonly offset: number
 }
 
@@ -50,102 +66,136 @@ function roundToMinute(time: number) {
 }
 
 // Timeline of a night plan.
-export function PlanTimeline({ plan, preview, timeZone, onMove }: PlanTimelineProps) {
+export function PlanTimeline({ plan, preview, timeZone, now, selected, onSelect, onMove, onSchedule }: PlanTimelineProps) {
 	const [drag, setDrag] = useState<Drag>()
+	const plot = useRef<HTMLDivElement>(null)
 	const { start, end } = preview.night.display
 	const span = Math.max(1, end - start)
-	const plotWidth = WIDTH - LABEL_WIDTH - 8
-	const height = AXIS_HEIGHT + plan.items.length * LANE_HEIGHT + 4
-	const x = (time: number) => LABEL_WIDTH + ((Math.min(end, Math.max(start, time)) - start) / span) * plotWidth
-	const msPerUnit = span / plotWidth
+	// Position of an instant on the night, as a CSS percentage clamped to the drawing.
+	const at = (time: number) => `${(Math.min(1, Math.max(0, (time - start) / span)) * 100).toFixed(3)}%`
+	const width = (from: number, to: number) => `${(Math.max(0, (Math.min(end, to) - Math.max(start, from)) / span) * 100).toFixed(3)}%`
+	const nowShown = now >= start && now <= end
 	const labels: number[] = []
-	for (let time = Math.ceil(start / HOUR_MS) * HOUR_MS; time < end; time += 2 * HOUR_MS) labels.push(time)
+	for (let time = Math.ceil(start / (LABEL_HOURS * HOUR_MS)) * LABEL_HOURS * HOUR_MS; time < end; time += LABEL_HOURS * HOUR_MS) if (!nowShown || Math.abs(time - now) > NOW_CLEARANCE_MS) labels.push(time)
+	const index = plan.items.findIndex((item) => item.id === selected)
 
-	// Converts a pointer position to viewBox units of the drawing.
-	function unitsOf(event: PointerEvent<SVGRectElement>) {
-		const svg = event.currentTarget.ownerSVGElement!.getBoundingClientRect()
-		return ((event.clientX - svg.left) / svg.width) * WIDTH
+	// Selects a lane with the vertical keys, moves the selected block with the horizontal ones, and schedules it with Enter.
+	function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+		const item = plan.items[index]
+
+		if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+			if (item?.scheduledStartAt === undefined) return
+			event.preventDefault()
+			const step = (event.shiftKey ? 1 : 5) * MINUTE_MS
+			onMove(item.id, roundToMinute(item.scheduledStartAt + (event.key === 'ArrowRight' ? step : -step)))
+		} else if (event.key === 'Enter') {
+			if (!item || item.scheduledStartAt !== undefined) return
+			event.preventDefault()
+			onSchedule(item.id)
+		} else if (event.key === 'ArrowUp' || event.key === 'ArrowDown' || event.key === 'Home' || event.key === 'End') {
+			const next = moveIndex(index, plan.items.length, event.key)
+			if (next === undefined) return
+			event.preventDefault()
+			onSelect(plan.items[next].id)
+		}
 	}
 
-	// Moves a focused block with the keyboard.
-	function onKeyDown(event: KeyboardEvent<SVGRectElement>, itemId: string, scheduledStartAt: number) {
-		const step = (event.shiftKey ? 1 : 5) * MINUTE_MS
-		const delta = event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0
-		if (!delta) return
-		event.preventDefault()
-		onMove(itemId, roundToMinute(scheduledStartAt + delta))
+	// Starts dragging a block and selects its item.
+	function onPointerDown(event: PointerEvent<HTMLDivElement>, itemId: string) {
+		event.stopPropagation()
+		event.currentTarget.setPointerCapture(event.pointerId)
+		setDrag({ itemId, originX: event.clientX, offset: 0 })
+		onSelect(itemId)
+	}
+
+	// Follows the pointer of the block being dragged.
+	function onPointerMove(event: PointerEvent<HTMLDivElement>, itemId: string) {
+		const pixels = plot.current?.getBoundingClientRect().width
+		if (drag?.itemId !== itemId || !pixels) return
+		setDrag({ ...drag, offset: ((event.clientX - drag.originX) / pixels) * span })
+	}
+
+	// Writes the start of a block where it was released.
+	function onPointerUp(itemId: string, scheduledStartAt: number) {
+		if (drag?.itemId === itemId && drag.offset !== 0) onMove(itemId, roundToMinute(scheduledStartAt + drag.offset))
+		setDrag(undefined)
 	}
 
 	return (
-		<div className="overflow-x-auto">
-			<svg viewBox={`0 0 ${WIDTH} ${height}`} className="block h-auto w-full min-w-[560px] text-[10px]">
-				<title>Lanes of the plan's items over the night: windows hatched, scheduled blocks filled.</title>
-				<defs>
-					<pattern id="plan-window" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-						<line x1="0" y1="0" x2="0" y2="6" stroke="var(--color-success)" strokeWidth="2" />
-					</pattern>
-				</defs>
-				{skyBands(preview.night).map((band) => (
-					<rect key={band.start} x={x(band.start)} y={AXIS_HEIGHT} width={Math.max(0, x(band.end) - x(band.start))} height={height - AXIS_HEIGHT} fill={SKY_FILLS[band.band]} />
-				))}
-				{labels.map((time) => (
-					<g key={time}>
-						<line x1={x(time)} x2={x(time)} y1={AXIS_HEIGHT - 4} y2={height} stroke="var(--color-line-100)" />
-						<text x={x(time)} y={AXIS_HEIGHT - 8} textAnchor="middle" fill="var(--color-ink-300)">
+		<div tabIndex={0} onKeyDown={onKeyDown} className="overflow-hidden rounded-md border border-line-100 bg-base-100 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent">
+			<div className="grid grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[11rem_minmax(0,1fr)]">
+				<div className="border-r border-b border-line-100" />
+				<div className="relative h-7 border-b border-line-100 text-xs tabular-nums">
+					{labels.map((time) => (
+						<span key={time} className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 text-ink-300 max-sm:[&:nth-child(even)]:hidden" style={{ left: at(time) }}>
 							{formatClockTime(time, timeZone)}
-						</text>
-					</g>
-				))}
-				{plan.items.map((item, index) => {
-					const top = AXIS_HEIGHT + index * LANE_HEIGHT
-					const itemPreview = preview.items.find((e) => e.itemId === item.id)
-					const conflicts = itemPreview?.conflicts ?? []
-					const offset = drag?.itemId === item.id ? drag.offset : 0
-					const scheduled = item.scheduledStartAt === undefined ? undefined : item.scheduledStartAt + offset
+						</span>
+					))}
+					{nowShown && (
+						<span className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 font-medium text-ink-100" style={{ left: at(now) }} title={`Now, ${formatClockTime(now, timeZone)}`}>
+							Now
+						</span>
+					)}
+				</div>
+				<div className="flex flex-col border-r border-line-100">
+					{plan.items.map((item) => {
+						const conflicts = preview.items.find((e) => e.itemId === item.id)?.conflicts ?? []
+						return (
+							<div
+								key={item.id}
+								title={[item.targetName, ...conflicts.map((e) => CONFLICT_LABELS[e.code])].join('\n')}
+								onClick={() => onSelect(item.id)}
+								className={cn('flex min-w-0 cursor-pointer items-center gap-1.5 border-b border-line-100 px-2 text-xs last:border-b-0', LANE_HEIGHT, item.id === selected ? 'bg-accent-subtle text-accent' : 'text-ink-200 hover:bg-base-300')}
+							>
+								{conflicts.length > 0 && (
+									<>
+										<Icon name="warning" className="size-3.5 flex-none text-danger" />
+										<span className="sr-only">Problem:</span>
+									</>
+								)}
+								<span className="truncate">{item.targetName}</span>
+							</div>
+						)
+					})}
+				</div>
+				<div ref={plot} className="relative">
+					{skyBands(preview.night).map((band) => (
+						<div key={band.start} className={cn('absolute inset-y-0', SKY_FILLS[band.band])} style={{ left: at(band.start), width: width(band.start, band.end) }} />
+					))}
+					{labels.map((time) => (
+						<div key={time} className="absolute inset-y-0 w-px bg-line-100" style={{ left: at(time) }} />
+					))}
+					{plan.items.map((item) => {
+						const itemPreview = preview.items.find((e) => e.itemId === item.id)
+						const conflicts = itemPreview?.conflicts ?? []
+						const scheduled = item.scheduledStartAt === undefined ? undefined : item.scheduledStartAt + (drag?.itemId === item.id ? drag.offset : 0)
+						const chosen = item.id === selected
 
-					return (
-						<g key={item.id}>
-							<line x1={0} x2={WIDTH} y1={top + LANE_HEIGHT} y2={top + LANE_HEIGHT} stroke="var(--color-line-100)" />
-							<text x={4} y={top + LANE_HEIGHT / 2} dy="0.35em" fill="var(--color-ink-200)">
-								{item.targetName.length > 24 ? `${item.targetName.slice(0, 23)}…` : item.targetName}
-							</text>
-							{itemPreview?.analysis.windows.map((window) => (
-								<rect key={window.start} x={x(window.start)} y={top + 4} width={Math.max(1, x(window.end) - x(window.start))} height={LANE_HEIGHT - 8} fill="url(#plan-window)" opacity={0.35} />
-							))}
-							{scheduled !== undefined && (
-								<rect
-									x={x(scheduled)}
-									y={top + 7}
-									width={Math.max(2, x(scheduled + item.requestedDurationMs) - x(scheduled))}
-									height={LANE_HEIGHT - 14}
-									rx={3}
-									tabIndex={0}
-									fill={conflicts.length > 0 ? 'var(--color-danger)' : 'var(--color-accent)'}
-									className="cursor-grab outline-none focus-visible:stroke-ink-100 focus-visible:stroke-2"
-									onPointerDown={(event) => {
-										event.currentTarget.setPointerCapture(event.pointerId)
-										setDrag({ itemId: item.id, origin: unitsOf(event), offset: 0 })
-									}}
-									onPointerMove={(event) => drag?.itemId === item.id && setDrag({ ...drag, offset: (unitsOf(event) - drag.origin) * msPerUnit })}
-									onPointerUp={() => {
-										if (drag?.itemId === item.id && item.scheduledStartAt !== undefined && drag.offset !== 0) onMove(item.id, roundToMinute(item.scheduledStartAt + drag.offset))
-										setDrag(undefined)
-									}}
-									onPointerCancel={() => setDrag(undefined)}
-									onKeyDown={(event) => item.scheduledStartAt !== undefined && onKeyDown(event, item.id, item.scheduledStartAt)}
-								>
-									<title>{`${item.targetName}: ${formatClockTime(scheduled, timeZone)}–${formatClockTime(scheduled + item.requestedDurationMs, timeZone)}${conflicts.map((e) => `\n${CONFLICT_LABELS[e.code]}`).join('')}`}</title>
-								</rect>
-							)}
-							{scheduled !== undefined && conflicts.length > 0 && (
-								<text x={x(scheduled + item.requestedDurationMs) + 4} y={top + LANE_HEIGHT / 2} dy="0.35em" fill="var(--color-danger)">
-									!
-								</text>
-							)}
-						</g>
-					)
-				})}
-			</svg>
+						return (
+							<div key={item.id} onPointerDown={() => onSelect(item.id)} className={cn('relative border-b border-line-100 last:border-b-0', LANE_HEIGHT, chosen && 'bg-ink-100/5')}>
+								{itemPreview?.analysis.windows.map((window) => (
+									<div key={window.start} className={cn('absolute inset-y-1', WINDOW_HATCH)} style={{ left: at(window.start), width: width(window.start, window.end) }} title={`Window ${formatSpan(window.start, window.end, timeZone)}`} />
+								))}
+								{scheduled === undefined ? (
+									<span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-xs text-ink-300">Not scheduled</span>
+								) : (
+									<div
+										title={`${item.targetName}: ${formatSpan(scheduled, scheduled + item.requestedDurationMs, timeZone)}${conflicts.map((e) => `\n${CONFLICT_LABELS[e.code]}`).join('')}`}
+										onPointerDown={(event) => onPointerDown(event, item.id)}
+										onPointerMove={(event) => onPointerMove(event, item.id)}
+										onPointerUp={() => item.scheduledStartAt !== undefined && onPointerUp(item.id, item.scheduledStartAt)}
+										onPointerCancel={() => setDrag(undefined)}
+										onLostPointerCapture={() => setDrag(undefined)}
+										className={cn('absolute inset-y-2 min-w-0.5 cursor-grab touch-none rounded-sm max-sm:inset-y-2.5', conflicts.length > 0 ? 'bg-danger' : 'bg-accent', chosen && 'ring-1 ring-ink-100', drag?.itemId === item.id && 'cursor-grabbing')}
+										style={{ left: at(scheduled), width: width(scheduled, scheduled + item.requestedDurationMs) }}
+									/>
+								)}
+							</div>
+						)
+					})}
+					{nowShown && <div className="pointer-events-none absolute inset-y-0 w-px bg-ink-100" style={{ left: at(now) }} />}
+				</div>
+			</div>
 		</div>
 	)
 }

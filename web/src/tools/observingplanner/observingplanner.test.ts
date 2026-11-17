@@ -10,6 +10,7 @@ import {
 	addToObservingPlanner,
 	createObservingPlannerState,
 	defaultPlanFor,
+	defaultSampleIndex,
 	discardDraft,
 	discover,
 	discoveryStale,
@@ -217,6 +218,23 @@ describe('plan choice and saving', () => {
 		expect(planSaveStatus(state, 'a')).toBe('failed')
 		state.conflicts.a = null
 		expect(planSaveStatus(state, 'a')).toBe('conflict')
+	})
+})
+
+describe('chart readout', () => {
+	const night = { display: { start: 0, end: 10 * 3_600_000 } }
+	const samples = Array.from({ length: 61 }, (_, i) => ({ time: i * 600_000 }))
+
+	test('an analysis opens on now during its night, else on the best instant of its best window, else on its culmination', () => {
+		const windows = [
+			{ start: 0, end: 1, durationMs: 1, bestAt: 3_600_000, bestScore: 40 },
+			{ start: 2, end: 3, durationMs: 1, bestAt: 7_200_000, bestScore: 90 },
+		]
+		const analysis = { samples, night, windows, summary: { culminationAt: 18_000_000 } } as unknown as Parameters<typeof defaultSampleIndex>[0]
+		expect(defaultSampleIndex(analysis, 5 * 3_600_000 + 100_000)).toBe(30)
+		expect(defaultSampleIndex(analysis, 20 * 3_600_000)).toBe(12)
+		expect(defaultSampleIndex({ ...analysis, windows: [] }, -1)).toBe(30)
+		expect(defaultSampleIndex({ ...analysis, windows: [], summary: {} } as unknown as typeof analysis, -1)).toBe(0)
 	})
 })
 

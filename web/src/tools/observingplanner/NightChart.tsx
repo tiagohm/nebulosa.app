@@ -5,9 +5,10 @@ import { DataList, DataRow } from '../../ui/DataRow'
 import { moveIndex } from '../../ui/navigation'
 import { type SkyBand, skyBands } from '../astroweather/astroweather'
 import { formatScore } from './format'
+import { nearestSample } from './observingplanner'
 
 // Chart of a target over a night: its geometric altitude and the Moon's against time, over bands of how dark the sky is,
-// with the windows shaded and the minimum altitude drawn. The lines join the display samples of the server; the windows
+// with the windows shaded, the minimum altitude drawn, and a line at the current time while the night shown contains it. The lines join the display samples of the server; the windows
 // are the exact crossings, never read from the samples. A sample is chosen by a click or with the arrow keys, Home, and
 // End, never by hovering, and its values are listed below the chart.
 
@@ -42,6 +43,8 @@ export interface NightChartProps {
 	readonly cursor: number
 	// Receives the index of a sample chosen.
 	readonly onCursor: (index: number) => void
+	// Current time, Unix milliseconds, drawn as a line while the night shown contains it.
+	readonly now: number
 }
 
 // Path through the samples of a quantity, in viewBox units; a sample without the quantity breaks the line.
@@ -64,7 +67,7 @@ function linePath(samples: readonly ObservingSample[], x: (time: number) => numb
 }
 
 // Chart of a target over a night.
-export function NightChart({ analysis, timeZone, cursor, onCursor }: NightChartProps) {
+export function NightChart({ analysis, timeZone, cursor, onCursor, now }: NightChartProps) {
 	const { samples, night, windows, constraints, summary } = analysis
 	const { start, end } = night.display
 	const span = Math.max(1, end - start)
@@ -77,14 +80,13 @@ export function NightChart({ analysis, timeZone, cursor, onCursor }: NightChartP
 	const labels: number[] = []
 	for (let time = firstLabel; time < end; time += LABEL_HOURS * HOUR_MS) labels.push(time)
 	const sample = samples[cursor]
+	const nowShown = now >= start && now <= end
 
 	// Chooses the sample nearest the point clicked.
 	function onClick(event: MouseEvent<SVGSVGElement>) {
 		const box = event.currentTarget.getBoundingClientRect()
 		const time = start + (((event.clientX - box.left) / box.width) * WIDTH - MARGIN.left) * (span / plotWidth)
-		let nearest = 0
-		for (let i = 1; i < samples.length; i++) if (Math.abs(samples[i].time - time) < Math.abs(samples[nearest].time - time)) nearest = i
-		onCursor(nearest)
+		onCursor(nearestSample(samples, time))
 	}
 
 	// Moves the cursor with the keyboard.
@@ -134,6 +136,14 @@ export function NightChart({ analysis, timeZone, cursor, onCursor }: NightChartP
 					<path d={linePath(samples, x, y, (e) => e.moonAltitude)} fill="none" stroke="var(--color-ink-300)" strokeWidth={1.5} strokeDasharray="5 4" />
 					<path d={linePath(samples, x, y, (e) => e.altitude)} fill="none" stroke="var(--color-accent)" strokeWidth={2} />
 					{summary.culminationAt !== undefined && summary.culminationAltitude !== undefined && summary.culminationAt >= start && summary.culminationAt <= end && <circle cx={x(summary.culminationAt)} cy={y(summary.culminationAltitude)} r={3.5} fill="var(--color-accent)" />}
+					{nowShown && (
+						<g>
+							<line x1={x(now)} x2={x(now)} y1={MARGIN.top} y2={MARGIN.top + plotHeight} stroke="var(--color-ink-100)" />
+							<text x={x(now) + 4} y={MARGIN.top + 10} fill="var(--color-ink-100)">
+								Now
+							</text>
+						</g>
+					)}
 					{sample && <line x1={x(sample.time)} x2={x(sample.time)} y1={MARGIN.top} y2={MARGIN.top + plotHeight} stroke="var(--color-ink-100)" strokeDasharray="1 3" />}
 				</svg>
 			</div>

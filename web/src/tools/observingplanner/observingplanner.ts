@@ -14,6 +14,7 @@ import type {
 	ObservingPlanPreview,
 	ObservingPlansSnapshot,
 	ObservingReasonCode,
+	ObservingSample,
 	ObservingScheduleConflictCode,
 	ObservingStatus,
 	ObservingTargetRef,
@@ -485,6 +486,25 @@ export async function refreshAnalysis(state: ObservingPlannerState, location: Si
 	}
 
 	state.analysisLoading = false
+}
+
+// Returns the index of the sample nearest an instant (Unix milliseconds); 0 without samples.
+export function nearestSample(samples: readonly Pick<ObservingSample, 'time'>[], time: number) {
+	let nearest = 0
+	for (let i = 1; i < samples.length; i++) if (Math.abs(samples[i].time - time) < Math.abs(samples[nearest].time - time)) nearest = i
+	return nearest
+}
+
+// Returns the sample an analysis opens on: now (Unix milliseconds) while its night is shown, else the best instant of its
+// best window, else its culmination, else the first sample; so the readout answers "where is it now" at the telescope
+// and "when is it best" while planning.
+export function defaultSampleIndex(analysis: Pick<TargetAnalysis, 'samples' | 'night' | 'windows' | 'summary'>, now: number) {
+	const { samples, night, windows, summary } = analysis
+	if (now >= night.display.start && now <= night.display.end) return nearestSample(samples, now)
+	let best = windows[0]
+	for (const window of windows) if ((window.bestScore ?? -1) > (best.bestScore ?? -1)) best = window
+	const time = best?.bestAt ?? summary.culminationAt
+	return time === undefined ? 0 : nearestSample(samples, time)
 }
 
 // Key of what a plan's preview depends on.

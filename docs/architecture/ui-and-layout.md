@@ -65,6 +65,7 @@ Workspace frame (`WorkspaceLayout.tsx`), used by every workspace and every tool 
   Its header holds the heading, the `actions` of the content (`WorkspacePanel.actions`, such as the favorite star of the Sky Object Inspector), and the close button.
   It holds no operational state, so collapsing or replacing it never stops what its controls started.
 - Collapsible panel sections (`CollapsibleSection` of `web/src/shell/`): the heading is the toggle (`DisclosureSummary`), with a one-line summary beside it while collapsed.
+  The summary owns the padding of its row, so its whole band toggles, 35 px tall and 43.75 px on phones, in every disclosure of the app.
   A contextual panel holds collapsible sections only, at its top level: no plain heading (`PanelSection` is left to the pages, Equipment Control and Settings), and no loose notice, row, or button outside a section; a note of a whole panel is a section of its own (an Almanac error, a Source), and a panel waiting for its content shows `LoadingSection`, the section it will fill with a Loading line.
   The one exception is `EmptyState`, which replaces a whole panel that has nothing to show (no image, no camera tab, no selection).
   Important sections start expanded, advanced or secondary ones collapsed (`defaultOpen`);

@@ -51,9 +51,9 @@ function InterfaceDiagnostics({ device }: { readonly device: DeviceSummary }) {
 // Collapsible diagnostics of a device.
 export function DeviceDiagnostics({ group }: DeviceDiagnosticsProps) {
 	return (
-		<details className="border-b border-line-100 px-4 py-3 text-sm leading-5 text-ink-200">
+		<details className="border-b border-line-100 px-4 text-sm leading-5 text-ink-200">
 			<DisclosureSummary title="Diagnostics" />
-			<div className="mt-2 flex flex-col gap-2">
+			<div className="-mt-1 flex flex-col gap-2 pb-3">
 				{group.devices.map((device) => (
 					<InterfaceDiagnostics key={device.id} device={device} />
 				))}

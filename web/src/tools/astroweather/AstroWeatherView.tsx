@@ -117,9 +117,9 @@ export function AstroWeather() {
 				<div className="flex flex-col gap-5 p-4">
 					<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
 						<div className="flex items-center gap-1">
-							<IconButton icon="stepBack" label={back ? 'The previous night has passed' : 'Previous night'} disabled={!night || back} onClick={() => void stepNight(astroWeatherState, location, -1)} className="max-sm:size-11" />
+							<IconButton icon="stepBack" label={back ? 'The previous night has passed' : 'Previous night'} disabled={!night || back} onClick={() => void stepNight(astroWeatherState, location, -1)} className="max-sm:size-12.5" />
 							<span className="min-w-48 text-center text-sm font-semibold text-ink-100 tabular-nums">{night ? nightTitle(night, state.currentNightStart) : 'Computing the night…'}</span>
-							<IconButton icon="stepForward" label={forward ? 'Next night' : 'The forecast ends here'} disabled={!forward} onClick={() => void stepNight(astroWeatherState, location, 1)} className="max-sm:size-11" />
+							<IconButton icon="stepForward" label={forward ? 'Next night' : 'The forecast ends here'} disabled={!forward} onClick={() => void stepNight(astroWeatherState, location, 1)} className="max-sm:size-12.5" />
 						</div>
 						<div className="min-w-0 text-xs leading-4 text-ink-300 sm:text-right">
 							<p className="m-0 font-medium text-ink-200">{readAt === undefined ? 'Forecast, not live observations' : `Forecast read at ${formatClockTime(readAt, timeZone)}, not live observations`}</p>
@@ -133,8 +133,8 @@ export function AstroWeather() {
 							<div className="flex flex-col gap-2">
 								{hour && (
 									<div className="flex items-center gap-1">
-										<IconButton icon="stepBack" label="Previous hour" disabled={index <= 0} onClick={() => chooseHour(index - 1)} className="max-sm:size-11" />
-										<IconButton icon="stepForward" label="Next hour" disabled={index >= evaluation.segments.length - 1} onClick={() => chooseHour(index + 1)} className="max-sm:size-11" />
+										<IconButton icon="stepBack" label="Previous hour" disabled={index <= 0} onClick={() => chooseHour(index - 1)} className="max-sm:size-12.5" />
+										<IconButton icon="stepForward" label="Next hour" disabled={index >= evaluation.segments.length - 1} onClick={() => chooseHour(index + 1)} className="max-sm:size-12.5" />
 										<output className="ml-1 min-w-0 text-sm leading-5 text-ink-200">
 											<span className="text-ink-100 tabular-nums">
 												{formatClockTime(hour.start, timeZone)}–{formatClockTime(hour.end, timeZone, { named: true })}: {OUTLOOK_LABELS[hour.outlook]}

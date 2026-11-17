@@ -41,9 +41,9 @@ interface Base {
 function CheckDiagnostics({ check }: { readonly check: ExternalToolCheck }) {
 	const timeZone = useActiveTimeZone()
 	return (
-		<details className="text-sm leading-5 text-ink-200">
+		<details className="-my-3 text-sm leading-5 text-ink-200">
 			<DisclosureSummary title="Diagnostics" />
-			<div className="mt-2 flex flex-col gap-1">
+			<div className="-mt-1 flex flex-col gap-1 pb-3">
 				{check.config.endpoint === undefined ? <DataRow label="Executable path">{check.config.executable || MISSING}</DataRow> : <DataRow label="Endpoint">{check.config.endpoint || 'Default'}</DataRow>}
 				{check.config.config !== undefined && <DataRow label="Configuration file">{check.config.config || 'Default'}</DataRow>}
 				<DataRow label="Resolved path">{check.resolvedPath ?? MISSING}</DataRow>

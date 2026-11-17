@@ -27,9 +27,9 @@ export function CollapsibleSection({ id, title, summary, defaultOpen = true, chi
 	const open = sectionOpen(useSnapshot(collapsibleSections), id, defaultOpen)
 
 	return (
-		<details open={open} onToggle={(e) => e.currentTarget.open !== open && setSectionOpen(collapsibleSections, id, e.currentTarget.open)} className="border-b border-line-100 px-4 py-3 last:border-b-0">
+		<details open={open} onToggle={(e) => e.currentTarget.open !== open && setSectionOpen(collapsibleSections, id, e.currentTarget.open)} className="border-b border-line-100 px-4 last:border-b-0">
 			<DisclosureSummary title={title}>{!open && summary && <span className="ml-auto min-w-0 truncate text-xs text-ink-200">{summary}</span>}</DisclosureSummary>
-			<div className="mt-2 flex flex-col gap-2 text-sm leading-5 text-ink-200">{children}</div>
+			<div className="-mt-1 flex pb-3 flex-col gap-2 text-sm leading-5 text-ink-200">{children}</div>
 		</details>
 	)
 }

@@ -22,7 +22,8 @@ export type RtspTransport = 'tcp' | 'automatic'
 export type ObservatoryCameraStreamState = 'disabled' | 'idle' | 'connecting' | 'ready' | 'unavailable'
 
 // Reason a stream is unavailable: a code of the source, the address cannot be decrypted (secretKeyUnavailable,
-// secretKeyMismatch), the gateway refused its path (controlFailed), or the stream has no codec WebRTC can carry.
+// secretKeyMismatch), the gateway refused its path or could not list its paths (controlFailed), or the stream has no
+// codec WebRTC can carry.
 export type ObservatoryCameraStreamCode = SourceCode | 'secretKeyUnavailable' | 'secretKeyMismatch' | 'controlFailed' | 'unsupportedCodec' | 'sourceUnavailable'
 
 // Error codes of the routes of Observatory Cameras:
@@ -192,6 +193,8 @@ export class ObservatoryCameraService implements Disposable {
 	readonly #streams = new Map<string, ObservatoryCameraStream>()
 	// Revision of each camera whose path the running gateway has, so an unchanged one is left alone.
 	readonly #applied = new Map<string, number>()
+	// Cameras made unavailable because the gateway could not list its paths, cleared once a reconciliation lists them.
+	readonly #unlisted = new Set<string>()
 	// Site of each camera as last published, to republish those whose site was deleted.
 	readonly #sites = new Map<string, string | undefined>()
 	// State of the key of the addresses.
@@ -377,6 +380,14 @@ export class ObservatoryCameraService implements Disposable {
 		try {
 			existing = await this.#gateway.cameraPaths()
 		} catch {
+			// No path can be configured without the list, so every enabled camera says why until a reconciliation lists them.
+			for (const source of sources) {
+				const camera = this.store.get(source.id)
+				if (!camera) continue
+				this.#unlisted.add(source.id)
+				this.#setStream(camera, 'unavailable', 'controlFailed')
+			}
+
 			return
 		}
 
@@ -387,9 +398,14 @@ export class ObservatoryCameraService implements Disposable {
 		}
 
 		for (const source of sources) {
-			if (this.#applied.get(source.id) === source.revision && existing.includes(cameraPathName(source.id))) continue
 			const camera = this.store.get(source.id)
 			if (!camera) continue
+			const unlisted = this.#unlisted.delete(source.id)
+
+			if (this.#applied.get(source.id) === source.revision && existing.includes(cameraPathName(source.id))) {
+				if (unlisted) this.#setStream(camera, undefined)
+				continue
+			}
 
 			if (outcome.status !== 'available') {
 				this.#setStream(camera, 'unavailable', 'secretKeyUnavailable')

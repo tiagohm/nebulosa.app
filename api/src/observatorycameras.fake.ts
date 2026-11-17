@@ -2,7 +2,8 @@
 // `bun observatorycameras.fake.ts <mode> [--version]`: it prints a version, or serves the parts of the control API and of
 // WHEP the server uses, on the addresses of its MTX_* variables, and prints log lines as MediaMTX does. A path whose
 // source contains "badauth" fails as a camera refusing its credentials. Modes: ok; exit, which ends the process 300 ms
-// after it is ready; old, which reports version 1.20.0; and silent, which never listens.
+// after it is ready; old, which reports version 1.20.0; unlisted, which refuses the list of configured paths; and silent,
+// which never listens.
 
 // Behavior asked by the command line.
 const mode = process.argv[2] ?? 'ok'
@@ -43,7 +44,7 @@ Bun.serve({
 		const [, , group, action, kind, name] = pathname.split('/')
 
 		if (pathname === '/v3/paths/list') return list([...paths.keys()].map((name) => ({ name })))
-		if (pathname === '/v3/config/paths/list') return list([...paths.keys()].map((name) => ({ name })))
+		if (pathname === '/v3/config/paths/list') return mode === 'unlisted' ? Response.json({ error: 'refused' }, { status: 500 }) : list([...paths.keys()].map((name) => ({ name })))
 		if (pathname === '/v3/webrtc/sessions/list') return list([...sessions.keys()].map((id) => ({ id })))
 		if (group === 'paths' && action === 'get') return paths.has(kind) ? Response.json({ name: kind, available: [...sessions.values()].includes(kind), readers: [...sessions.values()].filter((path) => path === kind).map((id) => ({ id })) }) : Response.json({ error: 'not found' }, { status: 404 })
 		if (group === 'webrtc' && kind === 'kick') {

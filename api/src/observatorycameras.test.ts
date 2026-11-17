@@ -28,12 +28,12 @@ afterEach(async () => {
 	await Promise.all(running.splice(0).map((service) => service.stop()))
 })
 
-function setup(options: { readonly storage?: CameraSecretStorage; readonly executable?: boolean } = {}) {
+function setup(options: { readonly storage?: CameraSecretStorage; readonly executable?: boolean; readonly mode?: string } = {}) {
 	const database = AppDatabase.memory()
 	const events: ObservatoryCameraEvent[] = []
 	const program = () => Promise.resolve(options.executable === false ? undefined : { executable: FAKE, timeout: 5000 })
 	const service = new ObservatoryCameraService(new ObservatoryCameraStore(database), new CameraSecretKey(undefined, options.storage ?? memoryStorage()), program, (event) => events.push(event), {
-		command: (_, args) => [process.execPath, FAKE, 'ok', ...args],
+		command: (_, args) => [process.execPath, FAKE, options.mode ?? 'ok', ...args],
 		pollInterval: 50,
 		sweepInterval: 50,
 	})
@@ -176,6 +176,15 @@ describe('whep', () => {
 		expect(offer.status).toBe(502)
 		expect(await offer.json()).toMatchObject({ code: 'sourceAuthFailed' })
 		expect((await snapshot(routes)).streams[0]).toMatchObject({ state: 'unavailable', code: 'sourceAuthFailed' })
+	})
+
+	test('a gateway that cannot list its paths makes every enabled camera unavailable', async () => {
+		const { service, routes } = setup({ mode: 'unlisted' })
+		await save(routes, 'c1', { source: SECRET })
+		await service.start()
+
+		await until(async () => (await snapshot(routes)).streams[0].state === 'unavailable')
+		expect((await snapshot(routes)).streams[0]).toMatchObject({ state: 'unavailable', code: 'controlFailed' })
 	})
 
 	test('a disabled or unknown camera cannot be watched', async () => {

@@ -16,7 +16,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - One MediaMTX process ([External Tools](external-tools.md), `mediamtx`, 1.21 or a later 1.x checked with `--version`) serves every camera.
   It runs while any camera is enabled and MediaMTX is set, configured only by `MTX_*` variables in an empty private temporary directory: the control API and WebRTC signaling listen on loopback ports chosen at each start, WebRTC media on UDP 8189 of every interface with the addresses of the interfaces as ICE candidates, and every other protocol, recording, and hook is off.
   Each enabled camera is the path `obs-<id>`, configured through the control API with `sourceOnDemand` (15 s to start, closed 10 s after its last reader);
-  the server brings the paths to the database after every save and start, and never touches a path without that prefix.
+  the server brings the paths to the database after every save and start, and never touches a path without that prefix;
+  a gateway that cannot list its paths makes every enabled camera unavailable (`controlFailed`) until a later reconciliation lists them.
   Its output is only classified (`sourceAuthFailed`, `sourceNotFound`, `sourceUnreachable`, `sourceFailed`) and never logged.
   An unexpected exit is followed by at most 3 restarts (`RESTART_DELAYS`); a stop, from both the stop signals and `stopServer`, waits for it to exit, then kills it.
   Without MediaMTX the cameras are kept and the gateway is `notInstalled`; nothing else of the server depends on it.

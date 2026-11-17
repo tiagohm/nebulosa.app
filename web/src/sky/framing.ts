@@ -100,6 +100,9 @@ export interface TelescopeOptics {
 	readonly focalMultiplier: number
 	// Aperture in millimeters, informative only; 0 when unknown.
 	readonly aperture: number
+	// Id of the telescope of the Equipment Catalog these optics refer to, whose declared aperture and focal length replace
+	// the ones above (web/src/equipment/telescopes.ts); absent when entered by hand.
+	readonly telescopeId?: string
 }
 
 // Where the drawn field of view comes from: a custom optical preset, or the Equipment Setup.

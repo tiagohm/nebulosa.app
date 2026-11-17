@@ -82,7 +82,7 @@ export function CatalogBinding({ device }: CatalogBindingProps) {
 	function editCamera() {
 		if (!camera) return
 		deviceState.open = false
-		navigate(routeState, { workspace: 'settings', section: 'equipment-catalog', camera: camera.id })
+		navigate(routeState, { workspace: 'settings', section: 'equipment-catalog', catalog: 'cameras', item: camera.id })
 	}
 
 	function format(value: string) {

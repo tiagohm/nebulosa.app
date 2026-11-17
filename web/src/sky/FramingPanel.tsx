@@ -2,7 +2,9 @@ import { arcsec } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
+import { type CatalogTelescope, catalogState } from '../equipment/catalog'
 import { roleDefinition } from '../equipment/roles'
+import { referencedTelescope } from '../equipment/telescopes'
 import { formatDegrees, MISSING } from '../format'
 import { formatPixelScale } from '../platesolving/coordinates'
 import { createOpticalPreset, deleteOpticalPreset, duplicateOpticalPreset, profileState, selectOpticalPreset, setEquipmentRotation, setFramingSource, setFramingVisible, setManualSensor, setGuideTelescopeOptics, setSensorSource, setTelescopeOptics, updateOpticalPreset } from '../profile/profile'
@@ -27,15 +29,17 @@ import { useRoleSensors } from './useSkyDevices'
 // optics, and a manual sensor are planning data kept in the profile; they never change a device, and no
 // equipment has to be connected. The Equipment Setup takes its sensor from the camera of a camera role
 // as the server reports it, or from a sensor entered manually to simulate another camera, and its optics from the
-// telescope that camera looks through: the guide telescope for the Guide Camera, the telescope otherwise.
+// telescope that camera looks through: the guide telescope for the Guide Camera, the telescope otherwise; the values a
+// telescope of the Equipment Catalog it refers to declares are shown and edited in the Equipment Catalog only.
 
 export interface FramingPanelProps {
 	// Framing preferences of the active profile; absent before the first change.
 	readonly framing?: Readonly<SkyFramingSettings>
-	// Telescope optics of the active profile's Equipment Setup; absent until entered.
-	readonly telescope?: Readonly<TelescopeOptics>
-	// Guide telescope optics of the active profile's Equipment Setup, which the Guide Camera looks through; absent until
+	// Telescope optics of the active profile's Equipment Setup, resolved through the Equipment Catalog; absent until
 	// entered.
+	readonly telescope?: Readonly<TelescopeOptics>
+	// Guide telescope optics of the active profile's Equipment Setup, which the Guide Camera looks through, resolved
+	// through the Equipment Catalog; absent until entered.
 	readonly guideTelescope?: Readonly<TelescopeOptics>
 	// Whether the selected object has a position the field of view can be drawn at.
 	readonly hasTarget: boolean
@@ -186,10 +190,11 @@ function EquipmentSource({ framing, telescope, guideTelescope, hasTarget }: Pick
 	const current = (guide ? guideTelescope : telescope) ?? DEFAULT_TELESCOPE
 	const setOptics = guide ? setGuideTelescopeOptics : setTelescopeOptics
 	const reported = sensorSource === 'manual' ? undefined : sensors[sensorSource]
+	const referenced = referencedTelescope(current, useSnapshot(catalogState).telescopes)
 
 	return (
 		<>
-			<OpticsInputs id="sky.framing.telescope" title={guide ? 'Guide Telescope' : 'Telescope'} optics={optics} onChange={(next) => setOptics(profileState, { ...current, ...next })} />
+			<OpticsInputs id="sky.framing.telescope" title={guide ? 'Guide Telescope' : 'Telescope'} optics={optics} telescope={referenced} onChange={(next) => setOptics(profileState, { ...current, ...next })} />
 			<CollapsibleSection id="sky.framing.camera" title="Camera">
 				<Select options={SENSOR_SOURCES} value={sensorSource} onChange={(next) => setSensorSource(profileState, next)} format={sensorSourceName} />
 				{sensorSource === 'manual' ? (
@@ -222,14 +227,27 @@ function EquipmentSource({ framing, telescope, guideTelescope, hasTarget }: Pick
 	)
 }
 
+interface OpticsInputsProps {
+	// Id of the collapsible section.
+	readonly id: string
+	// Title of the optics edited.
+	readonly title: string
+	// Values shown, in millimeters and a factor.
+	readonly optics: Readonly<Pick<OpticalConfiguration, 'focalLength' | 'focalMultiplier' | 'aperture'>>
+	// Telescope of the Equipment Catalog the optics refer to, whose declared values are not edited here; absent otherwise.
+	readonly telescope?: Readonly<Pick<CatalogTelescope, 'name' | 'aperture' | 'focalLength'>>
+	// Saves a change of one value.
+	readonly onChange: (next: Partial<TelescopeOptics>) => void
+}
+
 // Focal length, reducer or Barlow, and aperture inputs, in a section of an id and the title of the optics they edit.
-function OpticsInputs({ id, title, optics, onChange }: { readonly id: string; readonly title: string; readonly optics: Readonly<Pick<OpticalConfiguration, 'focalLength' | 'focalMultiplier' | 'aperture'>>; readonly onChange: (next: Partial<TelescopeOptics>) => void }) {
+function OpticsInputs({ id, title, optics, telescope, onChange }: OpticsInputsProps) {
 	return (
 		<CollapsibleSection id={id} title={title}>
-			<NumberInput label="Focal length" suffix="mm" value={optics.focalLength} min={0} step={1} onChange={(focalLength) => onChange({ focalLength })} />
+			<NumberInput label="Focal length" suffix="mm" value={optics.focalLength} min={0} step={1} disabled={telescope?.focalLength !== undefined} onChange={(focalLength) => onChange({ focalLength })} />
 			<NumberInput label="Reducer / Barlow" suffix="×" value={optics.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => onChange({ focalMultiplier })} />
-			<NumberInput label="Aperture" suffix="mm" value={optics.aperture} min={0} step={1} onChange={(aperture) => onChange({ aperture })} />
-			<Notice>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without).</Notice>
+			<NumberInput label="Aperture" suffix="mm" value={optics.aperture} min={0} step={1} disabled={telescope?.aperture !== undefined} onChange={(aperture) => onChange({ aperture })} />
+			<Notice>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without).{telescope && ` The values ${telescope.name} declares come from Settings → Equipment Catalog.`}</Notice>
 		</CollapsibleSection>
 	)
 }

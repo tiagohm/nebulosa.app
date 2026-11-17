@@ -194,6 +194,35 @@ test('a camera of the Equipment Catalog calibration frames are recorded against 
 	expect(workspace.catalogCamera('main')).toBeUndefined()
 })
 
+test('telescopes of the Equipment Catalog are created, edited from their revision, unique by name, and deleted', async () => {
+	const { routes, events, workspace } = setup()
+	const telescope = { name: 'Esprit 100', model: 'Sky-Watcher Esprit 100ED', aperture: 100, focalLength: 550, archived: false }
+	const created = await call(routes, '/api/catalog-telescopes/:id', 'PUT', { id: 'esprit' }, { ...telescope, revision: 0 })
+	expect(await created.json()).toEqual({ id: 'esprit', ...telescope, revision: 1 })
+	workspace.saveCatalogTelescope('guide', { name: 'Guide 50', archived: false, revision: 0 })
+
+	const twin = await call(routes, '/api/catalog-telescopes/:id', 'PUT', { id: 'twin' }, { ...telescope, name: 'ESPRIT 100', revision: 0 })
+	expect(twin.status).toBe(409)
+	expect(await twin.json()).toMatchObject({ code: 'nameTaken' })
+
+	const edited = await call(routes, '/api/catalog-telescopes/:id', 'PUT', { id: 'esprit' }, { name: 'Esprit 100', focalLength: 420, archived: true, revision: 1 })
+	expect(await edited.json()).toEqual({ id: 'esprit', name: 'Esprit 100', focalLength: 420, archived: true, revision: 2 })
+
+	const stale = await call(routes, '/api/catalog-telescopes/:id', 'PUT', { id: 'esprit' }, { ...telescope, revision: 1 })
+	expect(stale.status).toBe(409)
+	expect(await stale.json()).toMatchObject({ code: 'conflict', telescope: { archived: true, revision: 2 } })
+	expect(events.filter((event) => event.type === 'catalogTelescope:updated')).toHaveLength(3)
+
+	const snapshot = (await (await call(routes, '/api/workspace', 'GET')).json()) as WorkspaceSnapshot
+	expect(snapshot.telescopes.map(({ id }) => id)).toEqual(['esprit', 'guide'])
+
+	expect((await call(routes, '/api/catalog-telescopes/:id', 'DELETE', { id: 'esprit' })).status).toBe(204)
+	expect(events.at(-1)).toEqual({ type: 'catalogTelescope:removed', id: 'esprit' })
+	expect(workspace.catalogTelescope('esprit')).toBeUndefined()
+	expect((await call(routes, '/api/catalog-telescopes/:id', 'DELETE', { id: 'esprit' })).status).toBe(204)
+	expect(events.filter((event) => event.type === 'catalogTelescope:removed')).toHaveLength(1)
+})
+
 test('observing sites are created, edited from their revision, and refused when outdated', async () => {
 	const { routes, events } = setup()
 	expect(await saveSite(routes)).toEqual({ id: 'home', ...HOME, revision: 1 })

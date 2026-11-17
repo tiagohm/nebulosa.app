@@ -6,6 +6,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   the fields `schema.ts` marks as view state in browser storage (`web/src/profile/view.ts`)
 - Saved connections and the last highlighted one: `api`, database (`saved_connections`); the highlighted one in tab memory
 - Observing sites and the site each profile observes from: `api`, database (`observing_sites`, `profiles.active_site_id`); the site a tool chooses for itself in tab memory
+- Telescopes of the Equipment Catalog: `api`, database (`equipment_telescopes`), part of the workspace; a profile refers to one by id inside its `telescope` and `guideTelescope` preferences, with no foreign key (see [Equipment Catalog Contract](equipment-catalog.md))
 - Cameras of the Equipment Catalog: `api`, database (`equipment_cameras`), part of the workspace; the binding of each camera device to one of them: `api`, database (`equipment_camera_bindings`, `EquipmentCatalog` of `api/src/equipmentcatalog.ts`), mirrored in tab memory (see [Equipment Catalog Contract](equipment-catalog.md))
 - Active profile: browser storage (`web/src/profile/view.ts`): the tab across its reloads, and the profile used last in the browser for a new tab
 - Route: URL path
@@ -59,7 +60,7 @@ nothing waits to be written, since every write committed when it was made.
 Every durable path of the server derives from the data directory, `NEBULOSA_HOME` or `~/Nebulosa` (`DEFAULT_DATA_DIRECTORY` of `api/src/database/index.ts`);
 the auxiliary files of the plate solver, the star detector, and the camera operations go to the system temporary directory.
 
-The workspace (`api/src/workspace.ts`, `GET /api/workspace`) holds the saved connections, the observing sites (a name, a geodetic latitude and longitude in degrees, a height above the ellipsoid in meters, and an IANA time zone), the cameras of the Equipment Catalog (see [Equipment Catalog Contract](equipment-catalog.md)), and the profiles: each profile's name, connection, active site, and position, its equipment setup on each saved connection, its preferences (one JSON value per `ProfilePreferenceKey`), the forms of each camera, its Mount Remote Control bindings, and its saved framings.
+The workspace (`api/src/workspace.ts`, `GET /api/workspace`) holds the saved connections, the observing sites (a name, a geodetic latitude and longitude in degrees, a height above the ellipsoid in meters, and an IANA time zone), the cameras and telescopes of the Equipment Catalog (see [Equipment Catalog Contract](equipment-catalog.md)), and the profiles: each profile's name, connection, active site, and position, its equipment setup on each saved connection, its preferences (one JSON value per `ProfilePreferenceKey`), the forms of each camera, its Mount Remote Control bindings, and its saved framings.
 The server creates the Default profile when it has none, and refuses to delete the last one (`409 lastProfile`).
 Deleting a site clears it from every profile that observed from it (`ON DELETE SET NULL`), publishing `observingSite:removed` and then each of those profiles, never choosing another site for them;
 a profile cannot select a site that is not saved (`404 notFound`).
@@ -84,7 +85,7 @@ Kept values are not migrated while the application is in development: each prefe
 An added optional field reads as its default and raises nothing.
 
 Camera forms belong to the physical camera, never to a camera role: `ProfileSettings.cameras` keeps, per saved connection id and device id (`CameraIdentity`, `profileCamera`), one form per key of `CameraSettings` (`web/src/profile/schema.ts`, which states each field and its unit), each a row of `profile_camera_settings`: the exposure time of Camera Acquisition and the camera settings its other operations share (`exposure`), the rest of the Camera Acquisition form (`acquisition`), the plate solving settings (`plateSolving`), the display settings applied last (`display`), and the forms of Auto Focus (`autoFocus`), TPPA (`tppa`), iPolar (`ipolar`), the Pointing Model Builder (`pointingModel`), Target Centering (`targetCentering`), DARV (`darv`), the Flat Wizard (`flatWizard`), the Dark Library Wizard (`darkLibraryWizard`, whose plan keeps its own copy; no progress is ever kept), Live Stacking (`liveStacking`), and guiding (`guiding`, whose guide frames take the camera settings of the camera's `exposure` without its exposure time).
-The guide focal length is the profile's guide telescope (`guideTelescope`, the optics of Equipment Setup beside the telescope).
+The guide focal length is the profile's guide telescope (`guideTelescope`, the optics of Equipment Setup beside the telescope, resolved through the telescope of the Equipment Catalog it refers to).
 An operation fits them to the camera when it starts and keeps that snapshot.
 A camera of a profile without a saved connection shows the defaults and keeps nothing.
 

@@ -8,6 +8,7 @@ import { type RoleAvailability, roleAvailability } from '../equipment/availabili
 import type { BindableDevice } from '../equipment/catalog'
 import { CatalogCameraNotice } from '../equipment/CatalogCameraNotice'
 import { EquipmentSetupButton } from '../equipment/EquipmentSetupButton'
+import { useProfileTelescopes } from '../equipment/telescopes'
 import type { RoleDevice } from '../equipment/useEquipment'
 import { formatDegrees, formatPixelLength, formatPixelPosition, formatTemperature, formatZonedDateTime } from '../format'
 import { useActiveTimeZone } from '../location/useLocation'
@@ -138,7 +139,7 @@ export function GuidingSections({ device, availability, guideOutput, mount, sett
 	const mountState = watchedDeviceState(control, 'mount', mount.device)
 	const outputAvailability = guideOutput && roleAvailability('GUIDE_OUTPUT', guideOutput, operations, outputState && !outputState.canPulseGuide ? 'The guide output cannot pulse guide.' : undefined)
 	const blocker = running ? undefined : guidingBlocker(availability, outputAvailability, settings, detection.provider === 'astap' && !astapConfigured)
-	const focalLength = guideFocalLength(profile.settings.guideTelescope)
+	const focalLength = guideFocalLength(useProfileTelescopes(profile.settings).guideTelescope)
 	const calibrationInputs = { focalLength, pixelSize: capabilities?.sensor?.pixelSize, guideRate: outputState?.hasGuideRate ? outputState.guideRate.rightAscension : undefined, declination: mountState?.declination }
 	const calculateBlocker = guidingCalibrationBlocker(calibrationInputs, exposure.binX)
 	const calibrationPulse =

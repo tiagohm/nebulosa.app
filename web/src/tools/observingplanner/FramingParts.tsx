@@ -1,5 +1,6 @@
 import { useSnapshot } from 'valtio'
 import { roleDefinition } from '../../equipment/roles'
+import { useProfileTelescopes } from '../../equipment/telescopes'
 import { formatAngularSize, MISSING } from '../../format'
 import { activeProfile, profileState } from '../../profile/profile'
 import { activeFrameSource, type Framing, framingSource, isFraming, resolveFraming } from '../../sky/framing'
@@ -35,7 +36,7 @@ export function usePlannerFrame(): PlannerFrame {
 	const { settings } = activeProfile(useSnapshot(profileState))
 	const sensors = useRoleSensors()
 	const framing = settings.sky.framing
-	const source = activeFrameSource(framing, { telescope: settings.telescope, guideTelescope: settings.guideTelescope }, sensors)
+	const source = activeFrameSource(framing, useProfileTelescopes(settings), sensors)
 	if (!source) return {}
 	const role = framingSource(framing) === 'equipment' ? (framing?.sensorSource ?? 'MAIN_CAMERA') : 'manual'
 	const catalogCamera = role === 'manual' ? undefined : sensors[role]?.catalogCamera

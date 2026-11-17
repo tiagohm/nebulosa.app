@@ -4,26 +4,34 @@ import { tv } from 'tailwind-variants'
 import { useSnapshot } from 'valtio'
 import { connect, connectionState, serverOf } from '../connection/connection'
 import { activeProfile, activeSetup, assignDevice, profileState, setGuideTelescopeOptics, setTelescopeOptics } from '../profile/profile'
+import { navigate, routeState } from '../shell/route'
 import { DEFAULT_TELESCOPE, type TelescopeOptics } from '../sky/framing'
 import { Button } from '../ui/Button'
 import { Icon } from '../ui/Icon'
+import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import { NumberInput } from '../ui/NumberInput'
 import { SectionHeading } from '../ui/SectionHeading'
 import { Select } from '../ui/Select'
+import { catalogState } from './catalog'
 import { CatalogBinding } from './CatalogBinding'
 import { deviceState, ROLE_STATUS_LABELS, type RoleStatus, roleDevice, roleStatus, switchDevice, switchSetup } from './equipment'
 import { conflictingRole, type EquipmentSetup, type RoleDefinition, roleDefinition, ROLE_GROUPS, ROLES } from './roles'
+import { referencedTelescope, referToTelescope, resolveTelescope } from './telescopes'
 import { useWatchedDevices } from './useEquipment'
 
 // Modal that assigns the devices of the active profile's connection to the equipment roles and connects
 // or disconnects them one by one or all at once. Selecting a device never connects it, and closing the modal never
 // disconnects anything. A camera role also binds its device to a camera of the Equipment Catalog (CatalogBinding), which
-// holds for every profile. It also holds the profile's telescope and guide telescope optics, which no device reports: the
-// Sky's Equipment Setup field of view of a camera uses the optics it looks through, and Guiding the second.
+// holds for every profile. It also holds the profile's telescope and guide telescope optics, which no device reports,
+// each a telescope of the Equipment Catalog or entered by hand: the Sky's Equipment Setup field of view of a camera uses
+// the optics it looks through, and Guiding the second.
 
 // Select value of the None option.
 const NONE = ''
+
+// Select value of telescope optics entered by hand, which refer to no telescope of the catalog.
+const BY_HAND = ''
 
 // Styles of the status badge for each role status; the text label always accompanies the color.
 const badge = tv({
@@ -155,24 +163,63 @@ interface TelescopeSectionProps {
 	readonly children: ReactNode
 }
 
-// Telescope optics of the active profile, entered by hand: planning data never sent to a device.
+// Telescope optics of the active profile: a telescope of the Equipment Catalog, whose declared aperture and focal length
+// are shown and not edited here, or optics entered by hand; the reducer or Barlow is always the profile's. Planning data
+// never sent to a device.
 function TelescopeSection({ title, telescope, onChange, children }: TelescopeSectionProps) {
-	const current = telescope ?? DEFAULT_TELESCOPE
+	const { telescopes } = useSnapshot(catalogState)
+	const saved = telescope ?? DEFAULT_TELESCOPE
+	const referenced = referencedTelescope(saved, telescopes)
+	const current = resolveTelescope(saved, telescopes) ?? saved
+	const chosen = saved.telescopeId ?? BY_HAND
+	// A referenced telescope stays selectable while archived or deleted, so the reference is shown and can be replaced.
+	const options = [BY_HAND, ...telescopes.filter((entry) => !entry.archived || entry.id === chosen).map((entry) => entry.id), ...(chosen !== BY_HAND && !referenced ? [chosen] : [])]
 
 	// Saves a change of the optics.
 	function change(next: Partial<TelescopeOptics>) {
 		onChange({ ...current, ...next })
 	}
 
+	// Refers to a telescope of the catalog, copying what it declares, or to none, keeping the optics last copied.
+	function choose(id: string) {
+		onChange(
+			referToTelescope(
+				current,
+				telescopes.find((entry) => entry.id === id),
+			),
+		)
+	}
+
+	// Closes the Equipment Setup and shows the referenced telescope in Settings → Equipment Catalog.
+	function editTelescope() {
+		if (!referenced) return
+		deviceState.open = false
+		navigate(routeState, { workspace: 'settings', section: 'equipment-catalog', catalog: 'telescopes', item: referenced.id })
+	}
+
+	function format(id: string) {
+		if (id === BY_HAND) return 'Entered by hand'
+		return telescopes.find((entry) => entry.id === id)?.name ?? 'Deleted telescope'
+	}
+
+	const source = referenced ? `The values ${referenced.name} declares come from the Equipment Catalog, for every profile that uses it; the others are this profile's.` : chosen !== BY_HAND ? 'The telescope was deleted from the Equipment Catalog; these are the values last copied from it.' : undefined
+
 	return (
 		<section className="flex flex-col gap-2">
 			<SectionHeading>{title}</SectionHeading>
-			<div className="grid grid-cols-3 gap-2 max-sm:grid-cols-1">
-				<NumberInput label="Focal length" suffix="mm" value={current.focalLength} min={0} step={1} onChange={(focalLength) => change({ focalLength })} />
-				<NumberInput label="Reducer / Barlow" suffix="×" value={current.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => change({ focalMultiplier })} />
-				<NumberInput label="Aperture" suffix="mm" value={current.aperture} min={0} step={1} onChange={(aperture) => change({ aperture })} />
+			<div className="flex flex-wrap items-center gap-2">
+				<Select label="Catalog Telescope" className="min-w-48 flex-1" options={options} value={chosen} format={format} onChange={choose} />
+				<IconButton icon="edit" className="self-end" label={referenced ? `Edit ${referenced.name} in the Equipment Catalog` : 'Choose a telescope of the catalog to edit it'} disabled={!referenced} onClick={editTelescope} />
 			</div>
-			<p className="m-0 text-xs leading-5 text-ink-300">{children}</p>
+			<div className="grid grid-cols-3 gap-2 max-sm:grid-cols-1">
+				<NumberInput label="Focal length" suffix="mm" value={current.focalLength} min={0} step={1} disabled={referenced?.focalLength !== undefined} onChange={(focalLength) => change({ focalLength })} />
+				<NumberInput label="Reducer / Barlow" suffix="×" value={current.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => change({ focalMultiplier })} />
+				<NumberInput label="Aperture" suffix="mm" value={current.aperture} min={0} step={1} disabled={referenced?.aperture !== undefined} onChange={(aperture) => change({ aperture })} />
+			</div>
+			<p className="m-0 text-xs leading-5 text-ink-300">
+				{source && `${source} `}
+				{children}
+			</p>
 		</section>
 	)
 }

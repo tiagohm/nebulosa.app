@@ -2,6 +2,7 @@ import type { MinorBody, SkySearchResult } from 'api'
 import { useEffect, useMemo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
+import { useProfileTelescopes } from '../equipment/telescopes'
 import { imagesState } from '../images/images'
 import { activeSite, locationKey, openObservingSites, siteState } from '../location/site'
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
@@ -117,7 +118,7 @@ export function SkyWorkspace() {
 
 	// Draws the field of view of the selected preset, or of the Equipment Setup, around the selection,
 	// following its position.
-	const { telescope, guideTelescope } = activeProfile(profiles).settings
+	const { telescope, guideTelescope } = useProfileTelescopes(activeProfile(profiles).settings)
 	const sensors = useRoleSensors()
 	// The sensors of the camera states the snapshot keeps while they do not change, so the frame follows them only.
 	const { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor } = sensors

@@ -30,7 +30,7 @@ export function SettingsPage() {
 			</header>
 			{section === 'external-tools' && <ExternalToolsSettings tool={tool} />}
 			{section === 'observing-sites' && <ObservingSitesSettings site={route.workspace === 'settings' ? route.site : undefined} />}
-			{section === 'equipment-catalog' && <EquipmentCatalogSettings camera={route.workspace === 'settings' ? route.camera : undefined} />}
+			{section === 'equipment-catalog' && <EquipmentCatalogSettings catalog={route.workspace === 'settings' ? route.catalog : undefined} item={route.workspace === 'settings' ? route.item : undefined} />}
 			{section === 'date-time' && <DateTimeSettings />}
 			{section === 'status-bar' && <StatusBarSettings />}
 		</section>

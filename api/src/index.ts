@@ -989,6 +989,9 @@ export type {
 	CatalogCameraSaveRequest,
 	CatalogCameraSensor,
 	CatalogCameraUsage,
+	CatalogTelescope,
+	CatalogTelescopeFields,
+	CatalogTelescopeSaveRequest,
 	ObservingSite,
 	ObservingSiteSaveRequest,
 	ProfileCameraForm,
@@ -1018,7 +1021,7 @@ const EXCLUSIVE_DATABASE = process.env.NODE_ENV === 'production'
 // nothing.
 const database = new AppDatabase(DEFAULT_DATABASE_FILE, EXCLUSIVE_DATABASE)
 
-// Saved connections, observing sites, cameras of the Equipment Catalog, and profiles of the operators, shared by every
+// Saved connections, observing sites, cameras and telescopes of the Equipment Catalog, and profiles of the operators, shared by every
 // tab and browser; the observatory cameras of a deleted site become shared by every site, and a deleted camera of the
 // catalog takes its bindings along and is forgotten by the captured frames.
 const workspace = new Workspace(database, (event) => {

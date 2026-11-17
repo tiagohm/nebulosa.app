@@ -794,18 +794,24 @@ export function setEquipmentRotation(state: ProfileState, rotation: number) {
 	framing.equipmentRotation = value
 }
 
-// Replaces the telescope optics of the active profile's Equipment Setup; planning data only, never sent
-// to a device.
-export function setTelescopeOptics(state: ProfileState, optics: TelescopeOptics) {
-	const profile = activeProfile(state)
-	profile.settings.telescope = { focalLength: optics.focalLength, focalMultiplier: optics.focalMultiplier, aperture: optics.aperture }
+// Returns a copy of telescope optics with only the fields the profile keeps, and the telescope of the Equipment Catalog
+// they refer to, if any.
+function copyTelescopeOptics({ focalLength, focalMultiplier, aperture, telescopeId }: TelescopeOptics): TelescopeOptics {
+	return { focalLength, focalMultiplier, aperture, ...(telescopeId !== undefined && { telescopeId }) }
 }
 
-// Replaces the guide telescope optics of the active profile's Equipment Setup, which guiding takes its pixel scale and
-// calibration step from; never sent to a device.
+// Replaces the telescope optics of the active profile's Equipment Setup, with the telescope of the Equipment Catalog they
+// refer to; planning data only, never sent to a device.
+export function setTelescopeOptics(state: ProfileState, optics: TelescopeOptics) {
+	const profile = activeProfile(state)
+	profile.settings.telescope = copyTelescopeOptics(optics)
+}
+
+// Replaces the guide telescope optics of the active profile's Equipment Setup, with the telescope of the Equipment Catalog
+// they refer to, which guiding takes its pixel scale and calibration step from; never sent to a device.
 export function setGuideTelescopeOptics(state: ProfileState, optics: TelescopeOptics) {
 	const profile = activeProfile(state)
-	profile.settings.guideTelescope = { focalLength: optics.focalLength, focalMultiplier: optics.focalMultiplier, aperture: optics.aperture }
+	profile.settings.guideTelescope = copyTelescopeOptics(optics)
 }
 
 // Forgets a removed saved connection in every profile: profiles that selected it lose their selection,

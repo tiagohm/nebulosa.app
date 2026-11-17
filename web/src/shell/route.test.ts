@@ -91,6 +91,17 @@ describe('parse', () => {
 		expect(routePath({ workspace: 'settings', tool: 'astap' })).toBe('/settings/external-tools/astap')
 	})
 
+	test('reads the Equipment Catalog, the kind of equipment it lists, and the item shown', () => {
+		expect(parseRoute('/settings/equipment-catalog')).toEqual({ workspace: 'settings', section: 'equipment-catalog' })
+		expect(parseRoute('/settings/equipment-catalog/other')).toEqual({ workspace: 'settings', section: 'equipment-catalog' })
+		expect(parseRoute('/settings/equipment-catalog/telescopes')).toEqual({ workspace: 'settings', section: 'equipment-catalog', catalog: 'telescopes' })
+		expect(parseRoute('/settings/equipment-catalog/cameras/a%20b/extra')).toEqual({ workspace: 'settings', section: 'equipment-catalog', catalog: 'cameras', item: 'a b' })
+		expect(routePath({ workspace: 'settings', section: 'equipment-catalog' })).toBe('/settings/equipment-catalog')
+		expect(routePath({ workspace: 'settings', section: 'equipment-catalog', catalog: 'telescopes' })).toBe('/settings/equipment-catalog/telescopes')
+		expect(routePath({ workspace: 'settings', section: 'equipment-catalog', catalog: 'telescopes', item: 't1' })).toBe('/settings/equipment-catalog/telescopes/t1')
+		expect(routePath({ workspace: 'settings', section: 'equipment-catalog', item: 'a b' })).toBe('/settings/equipment-catalog/cameras/a%20b')
+	})
+
 	test('reads the Observing Sites and Date & Time sections, and the site shown', () => {
 		expect(parseRoute('/settings/observing-sites')).toEqual({ workspace: 'settings', section: 'observing-sites' })
 		expect(parseRoute('/settings/observing-sites/a%20b/extra')).toEqual({ workspace: 'settings', section: 'observing-sites', site: 'a b' })

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../../equipment-control/control'
 import { catalogState } from '../../equipment/catalog'
+import { useProfileTelescopes } from '../../equipment/telescopes'
 import { activeProfile, profileState } from '../../profile/profile'
 import type { Profile } from '../../profile/schema'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
@@ -72,7 +73,8 @@ function CalculatorBody({ profile }: { readonly profile: Readonly<Pick<Profile, 
 	const [drafts, setDrafts] = useState(INITIAL_DRAFTS)
 	const sensors = useSnapshot(sensorRuntime)
 	const live = liveSensors(sensors, useSnapshot(controlRuntime))
-	const { telescope, guideTelescope, sky } = profile.settings
+	const { sky } = profile.settings
+	const { telescope, guideTelescope } = useProfileTelescopes(profile.settings)
 	const catalogCameras = useSnapshot(catalogState).cameras
 	const context: SourceContext = { profileId: profile.id, settings: { telescope, guideTelescope, presets: sky.framing?.presets ?? [], manualSensor: sky.framing?.manualSensor, catalogCameras }, live, cameras: sensors.cameras }
 	const definition = calculatorDefinition(selected)

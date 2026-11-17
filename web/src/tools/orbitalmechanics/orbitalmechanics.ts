@@ -1003,7 +1003,8 @@ function scenarioSource(source: unknown): ExplorerOrbitSource {
 	if (source.kind === 'sbdb' && typeof source.spkId === 'string' && typeof source.designation === 'string' && typeof source.epoch === 'number' && typeof source.fetchedAt === 'number') {
 		return { kind: 'sbdb', spkId: source.spkId, designation: source.designation, orbitId: typeof source.orbitId === 'string' ? source.orbitId : undefined, solutionDate: typeof source.solutionDate === 'string' ? source.solutionDate : undefined, epoch: source.epoch, fetchedAt: source.fetchedAt }
 	}
-	if (source.kind === 'spk' && typeof source.target === 'number' && typeof source.center === 'number' && typeof source.epoch === 'number' && typeof source.generation === 'number' && isStringArray(source.kernels)) return { kind: 'spk', target: source.target, center: source.center, epoch: source.epoch, generation: source.generation, kernels: source.kernels }
+	if (source.kind === 'spk' && typeof source.target === 'number' && typeof source.center === 'number' && typeof source.epoch === 'number' && typeof source.generation === 'number' && isStringArray(source.kernels))
+		return { kind: 'spk', target: source.target, center: source.center, epoch: source.epoch, generation: source.generation, kernels: source.kernels }
 	return { kind: 'manual' }
 }
 

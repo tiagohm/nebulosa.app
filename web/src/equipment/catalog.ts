@@ -48,6 +48,9 @@ export const cameraBindingsState = proxy<CameraBindingsState>({ bindings: {}, lo
 // Ordering of the refreshes of the bindings against their events.
 const refreshes = new SnapshotRefreshes()
 
+// Events received for each binding, by bindingKey, so the answer of a bind never replaces what a later event set.
+const bindingEvents = new Map<string, number>()
+
 // Camera device of an open connection, as a binding names it.
 export interface BindableDevice {
 	// Id of the open connection that provides it.
@@ -219,18 +222,24 @@ export function handleCameraBindingsEvent(state: CameraBindingsState, event: Ser
 	if (event.type !== 'catalogCamera:bindingChanged') return
 	const key = bindingKey(event.connectionId, event.deviceId)
 	refreshes.updated(key)
+	bindingEvents.set(key, (bindingEvents.get(key) ?? 0) + 1)
 	if (event.binding) state.bindings[key] = event.binding
 	else delete state.bindings[key]
 }
 
 // Binds a camera device to a camera of the catalog, or unbinds it when cameraId is undefined. The server publishes the
-// change; the answer is applied too, so the tab never waits for the event. Returns the error message of a refusal.
+// change; the answer is applied too, so the tab never waits for the event, unless an event of the binding arrived during
+// the request: that one is this change or a later one, such as another tab binding the device just after, so the answer
+// is older. Returns the error message of a refusal.
 export async function bindCamera(state: CameraBindingsState, device: BindableDevice, cameraId: string | undefined, request: ApiFetch = browserFetch): Promise<string | undefined> {
+	const key = bindingKey(device.connectionId, device.id)
+	const events = bindingEvents.get(key) ?? 0
+
 	try {
 		const response = await request('/api/equipment-catalog/bindings', jsonInit('PUT', { connectionId: device.connectionId, deviceId: device.id, cameraId: cameraId ?? null }))
 		if (!response.ok) return await responseError(response)
 		const { binding } = (await response.json()) as { readonly binding?: CameraBinding }
-		const key = bindingKey(device.connectionId, device.id)
+		if ((bindingEvents.get(key) ?? 0) !== events) return undefined
 		if (binding) state.bindings[key] = binding
 		else delete state.bindings[key]
 		return undefined

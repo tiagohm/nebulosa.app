@@ -1,6 +1,7 @@
 import { errorResponse } from './http'
 import type { DocumentSize, ImageRect, ImageRegion, ImageStore } from './images'
 import { regionAround, regionHalfSize, type StarProfileRequest, type StarProfileResult, type StarProfileWorkerRequest, type StarProfileWorkerResponse } from './starprofile.analysis'
+import { runPooledWorkerJob, WorkerPool } from './workerjob'
 
 // Star Profile Inspector service: measures the star a person pointed at in an image document, for as long as one HTTP
 // request lasts. The image store hands out a small grayscale region around the point, and a worker of its own
@@ -52,8 +53,8 @@ export class StarProfileService implements Disposable {
 	#busy = false
 	// Id of the next message to the worker.
 	#id = 0
-	// Worker started on first use, and replaced when it dies or runs out of time.
-	#worker?: StarProfileWorker
+	// Worker started on first use, kept between requests, and replaced when it dies or runs out of time.
+	readonly #workers = new WorkerPool(() => this.#start())
 
 	// Creates the service over the image store.
 	constructor(readonly images: ImageStore) {}
@@ -128,50 +129,27 @@ export class StarProfileService implements Disposable {
 	// Sends a region to the worker, transferring its buffer, and resolves to its result. Throws StarProfileError, and
 	// replaces the worker when it died or did not answer in time.
 	async #post(imageId: string, region: ImageRegion, rect: ImageRect, size: DocumentSize, request: StarProfileRequest): Promise<StarProfileResult> {
-		const worker = (this.#worker ??= this.#start())
 		const id = this.#id++
-		const { promise, resolve, reject } = Promise.withResolvers<StarProfileResult>()
 
-		const discard = () => {
-			worker.terminate()
-			this.#worker = undefined
-		}
-
-		const onMessage = (event: MessageEvent<StarProfileWorkerResponse>) => {
-			const response = event.data
-			if (response.id !== id) return
-			if (response.status === 'completed') resolve(response.result)
-			else reject(new StarProfileError('workerFailed', `The measurement failed: ${response.error}`))
-		}
-
-		const onError = (event: ErrorEvent) => {
-			discard()
-			reject(new StarProfileError('workerFailed', `The star profile worker died: ${event.message}`))
-		}
-
-		const timer = setTimeout(() => {
-			discard()
-			reject(new StarProfileError('timeout', `The measurement did not finish within ${MEASUREMENT_TIMEOUT / 1000} s`))
-		}, MEASUREMENT_TIMEOUT)
-
-		worker.addEventListener('message', onMessage)
-		worker.addEventListener('error', onError)
-
-		try {
-			worker.postMessage({ id, imageId, region, rect, size, request } satisfies StarProfileWorkerRequest, [region.image.raw.buffer])
-			return await promise
-		} finally {
-			clearTimeout(timer)
-			worker.removeEventListener('message', onMessage)
-			worker.removeEventListener('error', onError)
-		}
+		return await runPooledWorkerJob<StarProfileWorkerResponse, StarProfileResult>({
+			pool: this.#workers,
+			request: { id, imageId, region, rect, size, request } satisfies StarProfileWorkerRequest,
+			transfer: [region.image.raw.buffer],
+			timeout: MEASUREMENT_TIMEOUT,
+			timedOut: () => new StarProfileError('timeout', `The measurement did not finish within ${MEASUREMENT_TIMEOUT / 1000} s`),
+			crashed: (event) => new StarProfileError('workerFailed', `The star profile worker died: ${event.message}`),
+			receive: (response, settle) => {
+				if (response.id !== id) return
+				if (response.status === 'completed') settle.resolve(response.result)
+				else settle.reject(new StarProfileError('workerFailed', `The measurement failed: ${response.error}`))
+			},
+		})
 	}
 
-	// Stops a server in place: terminates the worker, so it does not outlive the run, and gives up the requests waiting
-	// for it.
+	// Stops a server in place: terminates the worker, at once when idle or once its measurement ended, so it does not
+	// outlive the run, and gives up the requests waiting for it.
 	[Symbol.dispose]() {
-		this.#worker?.terminate()
-		this.#worker = undefined
+		this.#workers[Symbol.dispose]()
 		for (const waiting of this.#waiting.splice(0)) waiting.resolve(false)
 	}
 

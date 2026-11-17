@@ -8,6 +8,7 @@ import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import type { PlateSolvingService } from './platesolving'
 import type { StarDetectionService } from './stars'
+import { runPooledWorkerJob, WorkerPool } from './workerjob'
 
 // Streak detection service of the Images workspace. A detection measures an image document of the image store,
 // addressed by its id, with the toolkit's detectStreaks on a worker thread of its own (streaks.worker.ts), fed a full
@@ -256,8 +257,8 @@ type JobEntry = AnalysisEntry<StreakDetectionJob, StreakDetectionPreparation>
 export class StreakDetectionService implements Disposable {
 	// Queue, limits, reservations, and kept results.
 	readonly #scheduler: AnalysisScheduler<StreakDetectionJob, StreakDetectionResult, StreakDetectionPreparation, 'builtin'>
-	// Idle workers.
-	readonly #idle: StreakWorker[] = []
+	// Workers kept between jobs.
+	readonly #workers = new WorkerPool(() => this.#startWorker())
 	// Time a detection may run, in milliseconds.
 	readonly #timeout: number
 
@@ -380,49 +381,32 @@ export class StreakDetectionService implements Disposable {
 
 	// Detects and classifies the streaks of a job on a worker. Throws StreakDetectionError.
 	async #detect(entry: JobEntry, image: Image): Promise<Extract<StreakWorkerResponse, { status: 'detected' }>> {
-		const worker = this.#idle.pop() ?? this.#startWorker()
-		const { promise, resolve, reject } = Promise.withResolvers<Extract<StreakWorkerResponse, { status: 'detected' }>>()
-		const { signal } = entry.controller
 		const { jobId } = entry.job
 		const { request, context } = entry.preparation
-		let reusable = false
 
-		const onMessage = (event: MessageEvent<StreakWorkerResponse>) => {
-			const response = event.data
-			if (response.jobId !== jobId) return
-			// A detection that threw leaves the worker usable; only a crash, a timeout, or a cancel does not.
-			reusable = true
-			if (response.status === 'detected') resolve(response)
-			else reject(new StreakDetectionError('detectionFailed', `The streak detector refused the image or its settings: ${response.error}`))
-		}
-
-		const onError = (event: ErrorEvent) => reject(new StreakDetectionError('workerFailed', `The streak detector worker died: ${event.message}`))
-		const onAbort = () => reject(new StreakDetectionError('cancelled', 'The streak detection was cancelled'))
-		const timer = setTimeout(() => reject(new StreakDetectionError('timeout', `The streak detection did not finish within ${this.#timeout / 1000} s`)), this.#timeout)
-
-		worker.addEventListener('message', onMessage)
-		worker.addEventListener('error', onError)
-		signal.addEventListener('abort', onAbort, { once: true })
-
-		try {
-			worker.postMessage({ jobId, image, settings: request.settings, context } satisfies StreakWorkerRequest, [image.raw.buffer])
-			return await promise
-		} finally {
-			clearTimeout(timer)
-			worker.removeEventListener('message', onMessage)
-			worker.removeEventListener('error', onError)
-			signal.removeEventListener('abort', onAbort)
-			// The detection cannot be interrupted, so a worker still running one is terminated.
-			if (reusable) this.#idle.push(worker)
-			else worker.terminate()
-		}
+		return await runPooledWorkerJob<StreakWorkerResponse, Extract<StreakWorkerResponse, { status: 'detected' }>>({
+			pool: this.#workers,
+			request: { jobId, image, settings: request.settings, context } satisfies StreakWorkerRequest,
+			transfer: [image.raw.buffer],
+			signal: entry.controller.signal,
+			timeout: this.#timeout,
+			timedOut: () => new StreakDetectionError('timeout', `The streak detection did not finish within ${this.#timeout / 1000} s`),
+			crashed: (event) => new StreakDetectionError('workerFailed', `The streak detector worker died: ${event.message}`),
+			cancelled: () => new StreakDetectionError('cancelled', 'The streak detection was cancelled'),
+			receive: (response, settle) => {
+				if (response.jobId !== jobId) return
+				// A detection that threw leaves the worker usable; only a crash, a timeout, or a cancel does not.
+				if (response.status === 'detected') settle.resolve(response)
+				else settle.reject(new StreakDetectionError('detectionFailed', `The streak detector refused the image or its settings: ${response.error}`))
+			},
+		})
 	}
 
 	// Stops a server in place: cancels every job waiting or running and terminates the idle workers, so none outlives
 	// the run.
 	[Symbol.dispose]() {
 		this.#scheduler.cancelAll()
-		for (const worker of this.#idle.splice(0)) worker.terminate()
+		this.#workers[Symbol.dispose]()
 	}
 
 	// Starts a detector worker.

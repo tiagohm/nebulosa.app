@@ -5,6 +5,7 @@ import type { BackgroundNeutralizationMode } from 'nebulosa/src/imaging/processi
 import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, AnalysisScheduler } from './analysis'
 import { errorResponse } from './http'
 import type { ImageInfo, ImageStore } from './images'
+import { runPooledWorkerJob, WorkerPool } from './workerjob'
 
 // Image processing pipelines of the Images workspace: an ordered list of single-image operations of the toolkit
 // applied to a copy of the scientific pixels of an image document, whose result is adopted as one new derived
@@ -326,8 +327,8 @@ interface ProcessingOutput {
 export class ImageProcessingService implements Disposable {
 	// Queue, limit, and retention of the sources.
 	readonly #scheduler: AnalysisScheduler<ImageProcessingJob, ImageProcessingResult, ImageProcessingPreparation, 'builtin'>
-	// Idle workers.
-	readonly #idle: ProcessingWorker[] = []
+	// Workers kept between jobs.
+	readonly #workers = new WorkerPool(() => this.#startWorker())
 	// Output documents of completed jobs still open, by job id.
 	readonly #outputs = new Map<string, ProcessingOutput>()
 
@@ -446,52 +447,36 @@ export class ImageProcessingService implements Disposable {
 		const { steps } = entry.preparation
 		const { signal } = entry.controller
 		const { jobId } = entry.job
-		const worker = this.#idle.pop() ?? this.#startWorker()
-		const { promise, resolve, reject } = Promise.withResolvers<Image>()
-		let reusable = false
 
-		const onMessage = (event: MessageEvent<ProcessingWorkerResponse>) => {
-			const response = event.data
-			if (response.jobId !== jobId) return
+		return await runPooledWorkerJob<ProcessingWorkerResponse, Image>({
+			pool: this.#workers,
+			request: { jobId, image, steps } satisfies ProcessingWorkerRequest,
+			transfer: [image.raw.buffer],
+			signal,
+			timeout: PROCESSING_TIMEOUT,
+			timedOut: () => new ImageProcessingError('timeout', `The image processing did not finish within ${PROCESSING_TIMEOUT / 60000} min`),
+			crashed: (event) => new ImageProcessingError('workerFailed', `The image processing worker died: ${event.message}`),
+			cancelled: () => new ImageProcessingError('cancelled', 'The image processing was cancelled'),
+			receive: (response, settle) => {
+				if (response.jobId !== jobId) return
 
-			if (response.status === 'step') {
-				this.#scheduler.update(jobId, { currentStepIndex: response.index, completedSteps: response.index })
-				return
-			}
+				if (response.status === 'step') {
+					this.#scheduler.update(jobId, { currentStepIndex: response.index, completedSteps: response.index })
+					return
+				}
 
-			// A step that threw leaves the worker usable; only a crash, a timeout, or a cancel does not.
-			reusable = true
-			if (response.status === 'processed') resolve(response.image)
-			else reject(new ImageProcessingError('processingFailed', response.error, response.stepId))
-		}
-
-		const onError = (event: ErrorEvent) => reject(new ImageProcessingError('workerFailed', `The image processing worker died: ${event.message}`))
-		const onAbort = () => reject(new ImageProcessingError('cancelled', 'The image processing was cancelled'))
-		const timer = setTimeout(() => reject(new ImageProcessingError('timeout', `The image processing did not finish within ${PROCESSING_TIMEOUT / 60000} min`)), PROCESSING_TIMEOUT)
-
-		worker.addEventListener('message', onMessage)
-		worker.addEventListener('error', onError)
-		signal.addEventListener('abort', onAbort, { once: true })
-
-		try {
-			worker.postMessage({ jobId, image, steps } satisfies ProcessingWorkerRequest, [image.raw.buffer])
-			return await promise
-		} finally {
-			clearTimeout(timer)
-			worker.removeEventListener('message', onMessage)
-			worker.removeEventListener('error', onError)
-			signal.removeEventListener('abort', onAbort)
-			// The steps cannot be interrupted, so a worker still running one is terminated.
-			if (reusable) this.#idle.push(worker)
-			else worker.terminate()
-		}
+				// A step that threw leaves the worker usable; only a crash, a timeout, or a cancel does not.
+				if (response.status === 'processed') settle.resolve(response.image)
+				else settle.reject(new ImageProcessingError('processingFailed', response.error, response.stepId))
+			},
+		})
 	}
 
 	// Stops a server in place: cancels every job waiting or running and terminates the idle workers, so none outlives
 	// the run.
 	[Symbol.dispose]() {
 		this.#scheduler.cancelAll()
-		for (const worker of this.#idle.splice(0)) worker.terminate()
+		this.#workers[Symbol.dispose]()
 		for (const output of this.#outputs.values()) clearTimeout(output.timer)
 	}
 

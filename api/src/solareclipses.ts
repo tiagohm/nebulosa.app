@@ -19,6 +19,7 @@ import { errorResponse } from './http'
 import { LruCache } from './lrucache'
 import { findSolarEclipse, resolveSolarEclipse, type SolarEclipseMap, type SolarEclipseSummary, solarEclipseElements, solarEclipseId, solarEclipseSummary } from './solareclipses.map'
 import { yieldToEventLoop } from './util'
+import { runPooledWorkerJob, WorkerPool } from './workerjob'
 
 // Solar eclipses for the Solar Eclipse Map tool: stateless, read-only queries over the toolkit's solar eclipse
 // engine (core/src/astronomy/events/eclipse/solar), answered under /api/eclipses/solar with the conventions of
@@ -200,11 +201,11 @@ export class SolarEclipseService {
 	readonly #locals = new LruCache<LocalSolarEclipseCircumstances>(CACHE_LIMIT)
 	// Maps being computed, by id.
 	readonly #pending = new Map<string, Promise<SolarEclipseMap | undefined>>()
-	// Worker kept between maps.
-	#idle?: SolarEclipseMapWorker
+	// Map workers kept between maps.
+	readonly #workers = new WorkerPool(() => this.startWorker())
 	// Settles when the previous map ended; maps run one at a time.
 	#queue: Promise<unknown> = Promise.resolve()
-	// Whether the service was disposed, after which no worker is started or kept.
+	// Whether the service was disposed, after which no map starts.
 	#disposed = false
 
 	// Creates the service; timeout bounds every map in milliseconds and startWorker creates map workers.
@@ -274,8 +275,7 @@ export class SolarEclipseService {
 	// Terminates the idle worker; a map still running terminates its worker once it ends, and maps still queued reject.
 	dispose() {
 		this.#disposed = true
-		this.#idle?.terminate()
-		this.#idle = undefined
+		this.#workers[Symbol.dispose]()
 	}
 
 	// Same as dispose, so the service can be scoped with `using`.
@@ -298,41 +298,25 @@ export class SolarEclipseService {
 	// Computes one map on the worker and keeps it.
 	async #compute(id: string): Promise<SolarEclipseMap | undefined> {
 		if (this.#disposed) throw new Error('The solar eclipse service was stopped')
-		const worker = this.#idle ?? this.startWorker()
-		this.#idle = undefined
-		const request: SolarEclipseMapWorkerRequest = { jobId: Bun.randomUUIDv7(), id }
-		const { promise, resolve, reject } = Promise.withResolvers<SolarEclipseMap | undefined>()
-		let reusable = false
+		const jobId = Bun.randomUUIDv7()
 
-		const onMessage = (event: MessageEvent<SolarEclipseMapWorkerResponse>) => {
-			const response = event.data
-			if (response.jobId !== request.jobId) return
-			// A map that threw leaves the worker usable; only a crash or a timeout does not.
-			reusable = true
-			if (response.status === 'computed') resolve(response.map)
-			else if (response.status === 'notFound') resolve(undefined)
-			else reject(new Error(`The solar eclipse map failed: ${response.error}`))
-		}
+		const map = await runPooledWorkerJob<SolarEclipseMapWorkerResponse, SolarEclipseMap | undefined>({
+			pool: this.#workers,
+			request: { jobId, id } satisfies SolarEclipseMapWorkerRequest,
+			timeout: this.timeout,
+			timedOut: () => new Error(`The solar eclipse map did not finish within ${this.timeout / 1000} s`),
+			crashed: (event) => new Error(`The solar eclipse map worker died: ${event.message}`),
+			receive: (response, settle) => {
+				if (response.jobId !== jobId) return
+				// A map that threw leaves the worker usable; only a crash or a timeout does not.
+				if (response.status === 'computed') settle.resolve(response.map)
+				else if (response.status === 'notFound') settle.resolve(undefined)
+				else settle.reject(new Error(`The solar eclipse map failed: ${response.error}`))
+			},
+		})
 
-		const onError = (event: ErrorEvent) => reject(new Error(`The solar eclipse map worker died: ${event.message}`))
-		const timer = setTimeout(() => reject(new Error(`The solar eclipse map did not finish within ${this.timeout / 1000} s`)), this.timeout)
-
-		worker.addEventListener('message', onMessage)
-		worker.addEventListener('error', onError)
-
-		try {
-			worker.postMessage(request, [])
-			const map = await promise
-			if (map) this.#maps.set(id, map)
-			return map
-		} finally {
-			clearTimeout(timer)
-			worker.removeEventListener('message', onMessage)
-			worker.removeEventListener('error', onError)
-			// A map cannot be interrupted, so a worker still computing one is terminated.
-			if (reusable && !this.#disposed) this.#idle = worker
-			else worker.terminate()
-		}
+		if (map) this.#maps.set(id, map)
+		return map
 	}
 }
 

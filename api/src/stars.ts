@@ -9,6 +9,7 @@ import { type AnalysisCompletion, type AnalysisEntry, type AnalysisJob, type Ana
 import type { ExternalToolConfig, ExternalToolsStore } from './externaltools'
 import { errorResponse } from './http'
 import type { DocumentSize, ImageStore } from './images'
+import { runPooledWorkerJob, WorkerPool } from './workerjob'
 
 // Star detection service shared by every consumer: manual runs of the Images workspace and the measurements of
 // Auto Focus. A detection measures an image
@@ -309,8 +310,8 @@ type JobEntry = AnalysisEntry<StarDetectionJob, StarDetectionPreparation>
 export class StarDetectionService implements Disposable {
 	// Queue, limits, reservations, and kept results.
 	readonly #scheduler: AnalysisScheduler<StarDetectionJob, StarDetectionResult, StarDetectionPreparation, StarDetectorProvider>
-	// Idle built-in workers.
-	readonly #idle: StarWorker[] = []
+	// Built-in detector workers kept between jobs.
+	readonly #workers = new WorkerPool(() => this.#startWorker())
 
 	// Creates the service over the image store and the External Tools settings, publishing every job change
 	// to listener. The results of an image are dropped when the store releases it.
@@ -431,49 +432,32 @@ export class StarDetectionService implements Disposable {
 		if (!image) throw new StarDetectionError('expired', 'The image was released before it could be measured')
 		if (entry.controller.signal.aborted) throw new StarDetectionError('cancelled', 'The star detection was cancelled')
 
-		const worker = this.#idle.pop() ?? this.#startWorker()
-		const { promise, resolve, reject } = Promise.withResolvers<DetectedStar[]>()
-		const { signal } = entry.controller
 		const { jobId } = entry.job
-		let reusable = false
+		const options: Partial<DetectStarOptions> = { maxStars: detector.maxStars, minSNR: detector.minSNR, searchRegion: detector.searchRegion, ...(detector.maximumRadius !== undefined && { maximumRadius: detector.maximumRadius }) }
 
-		const onMessage = (event: MessageEvent<StarWorkerResponse>) => {
-			const response = event.data
-			if (response.jobId !== jobId) return
-			// A detection that threw leaves the worker usable; only a crash, a timeout, or a cancel does not.
-			reusable = true
-			if (response.status === 'detected') resolve(response.stars)
-			else reject(new StarDetectionError('workerFailed', `The built-in detector failed: ${response.error}`))
-		}
-
-		const onError = (event: ErrorEvent) => reject(new StarDetectionError('workerFailed', `The built-in detector worker died: ${event.message}`))
-		const onAbort = () => reject(new StarDetectionError('cancelled', 'The star detection was cancelled'))
-		const timer = setTimeout(() => reject(new StarDetectionError('timeout', `The built-in detection did not finish within ${BUILTIN_TIMEOUT / 1000} s`)), BUILTIN_TIMEOUT)
-
-		worker.addEventListener('message', onMessage)
-		worker.addEventListener('error', onError)
-		signal.addEventListener('abort', onAbort, { once: true })
-
-		try {
-			const options: Partial<DetectStarOptions> = { maxStars: detector.maxStars, minSNR: detector.minSNR, searchRegion: detector.searchRegion, ...(detector.maximumRadius !== undefined && { maximumRadius: detector.maximumRadius }) }
-			worker.postMessage({ jobId, image, options } satisfies StarWorkerRequest, [image.raw.buffer])
-			return await promise
-		} finally {
-			clearTimeout(timer)
-			worker.removeEventListener('message', onMessage)
-			worker.removeEventListener('error', onError)
-			signal.removeEventListener('abort', onAbort)
-			// The detection cannot be interrupted, so a worker still running one is terminated.
-			if (reusable) this.#idle.push(worker)
-			else worker.terminate()
-		}
+		return await runPooledWorkerJob<StarWorkerResponse, DetectedStar[]>({
+			pool: this.#workers,
+			request: { jobId, image, options } satisfies StarWorkerRequest,
+			transfer: [image.raw.buffer],
+			signal: entry.controller.signal,
+			timeout: BUILTIN_TIMEOUT,
+			timedOut: () => new StarDetectionError('timeout', `The built-in detection did not finish within ${BUILTIN_TIMEOUT / 1000} s`),
+			crashed: (event) => new StarDetectionError('workerFailed', `The built-in detector worker died: ${event.message}`),
+			cancelled: () => new StarDetectionError('cancelled', 'The star detection was cancelled'),
+			receive: (response, settle) => {
+				if (response.jobId !== jobId) return
+				// A detection that threw leaves the worker usable; only a crash, a timeout, or a cancel does not.
+				if (response.status === 'detected') settle.resolve(response.stars)
+				else settle.reject(new StarDetectionError('workerFailed', `The built-in detector failed: ${response.error}`))
+			},
+		})
 	}
 
 	// Stops a server in place: cancels every job waiting or running and terminates the idle workers, so none outlives
 	// the run.
 	[Symbol.dispose]() {
 		this.#scheduler.cancelAll()
-		for (const worker of this.#idle.splice(0)) worker.terminate()
+		this.#workers[Symbol.dispose]()
 	}
 
 	// Starts a built-in detector worker.

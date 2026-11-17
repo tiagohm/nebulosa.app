@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import type { CalibrationJobSummary, CalibrationLibrarySnapshot, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { buildMaster, type CalibrationLibraryRuntime, handleCalibrationLibraryEvent, jobEnded, latestGroupJob, loadCalibrationGroups, loadCalibrationMaster, loadFlatCorrections, refreshCalibrationLibrary } from './calibrationlibrary'
+import { buildMaster, type CalibrationLibraryRuntime, handleCalibrationLibraryEvent, jobEnded, latestGroupJob, loadCalibrationGroups, loadCalibrationMaster, loadCalibrationSources, loadFlatCorrections, refreshCalibrationLibrary } from './calibrationlibrary'
 
 function runtime() {
-	return proxy<CalibrationLibraryRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
+	return proxy<CalibrationLibraryRuntime>({ jobs: {}, changes: 0, loading: {}, pending: {}, errors: {} })
 }
 
 function snapshot(epoch: string, revision: number, activeJobs: readonly CalibrationJobSummary[] = []): CalibrationLibrarySnapshot {
@@ -68,6 +68,20 @@ describe('groups', () => {
 })
 
 describe('requests', () => {
+	test('a list stays loading until its own page answered, whatever another list answers', async () => {
+		const state = runtime()
+		const sources = Promise.withResolvers<Response>()
+		const page = { items: [], total: 0 }
+
+		const frames = loadCalibrationSources(state, {}, 0, () => sources.promise)
+		await loadCalibrationGroups(state, {}, 0, () => Promise.resolve(Response.json(page)))
+		expect(state.loading).toEqual({ groups: false, sources: true })
+
+		sources.resolve(Response.json(page))
+		await frames
+		expect(state.loading.sources).toBeFalse()
+	})
+
 	test('a refresh brings a job created elsewhere', async () => {
 		const state = runtime()
 		await refreshCalibrationLibrary(state, () => Promise.resolve(Response.json(snapshot('a', 3, [job('j', 'queued', 1)]))))

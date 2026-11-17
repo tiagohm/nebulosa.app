@@ -76,6 +76,7 @@ import {
 	READINESS_TONES,
 	RECIPE_METHODS,
 	SECTION_LABELS,
+	SECTION_LISTS,
 	settingsText,
 	SOURCE_STATUS_LABELS,
 	SOURCE_STATUS_TONES,
@@ -207,7 +208,7 @@ export function CalibrationLibrary() {
 				{section === 'library' && <GroupsView selected={selection?.type === 'group' ? selection.groupId : undefined} onSelect={selectGroup} />}
 				{section === 'frames' && <FramesView selected={selection?.type === 'source' ? selection.sourceId : undefined} onSelect={(sourceId) => select({ type: 'source', sourceId })} />}
 				{section === 'masters' && <MastersView selection={selection} onSelect={(masterId) => select({ type: 'master', masterId })} />}
-				<Pager page={page} total={pageTotal(section)} pageSize={CALIBRATION_PAGE_SIZE} noun="rows" loading={runtime.loading} onPage={setPage} />
+				<Pager page={page} total={pageTotal(section)} pageSize={CALIBRATION_PAGE_SIZE} noun="rows" loading={runtime.loading[SECTION_LISTS[section]] === true} onPage={setPage} />
 			</div>
 			{importing && <ImportDialog onClose={() => setImporting(false)} />}
 		</WorkspaceLayout>
@@ -216,8 +217,7 @@ export function CalibrationLibrary() {
 
 // Rows of the list a section shows.
 function pageTotal(section: LibrarySection) {
-	const { groups, sources, masters } = calibrationLibraryRuntime
-	return (section === 'library' ? groups : section === 'frames' ? sources : masters)?.total ?? 0
+	return calibrationLibraryRuntime[SECTION_LISTS[section]]?.total ?? 0
 }
 
 // Coverage and groups.

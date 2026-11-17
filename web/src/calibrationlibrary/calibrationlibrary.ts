@@ -59,8 +59,8 @@ export interface CalibrationLibraryRuntime {
 	master?: CalibrationMasterDetail
 	// Frame shown in detail, with its path.
 	source?: CalibrationSource
-	// Whether a page is on its way.
-	loading: boolean
+	// Lists whose page is on its way.
+	loading: Partial<Record<CalibrationList, boolean>>
 	// Commands of this tab waiting for the server, by key.
 	pending: Record<string, boolean>
 	// Why a command of this tab failed, by key; cleared by its next command.
@@ -68,7 +68,7 @@ export interface CalibrationLibraryRuntime {
 }
 
 // Calibration Library state of the tab.
-export const calibrationLibraryRuntime = proxy<CalibrationLibraryRuntime>({ jobs: {}, changes: 0, loading: false, pending: {}, errors: {} })
+export const calibrationLibraryRuntime = proxy<CalibrationLibraryRuntime>({ jobs: {}, changes: 0, loading: {}, pending: {}, errors: {} })
 
 // Base of the routes of the library.
 const BASE_URL = '/api/calibration-library'
@@ -148,13 +148,17 @@ function query(filter: CalibrationFilter, page: number) {
 	return parameters.toString()
 }
 
-// Fetches a page of a list, and applies it unless a newer request of that list replaced it.
-async function loadPage(state: CalibrationLibraryRuntime, key: string, url: string, request: ApiFetch, apply: (page: unknown) => void) {
-	const number = (requests[key] = (requests[key] ?? 0) + 1)
-	state.loading = true
+// Paged list of the library: the groups, the frames, or the masters.
+export type CalibrationList = 'groups' | 'sources' | 'masters'
+
+// Fetches a page of a list, and applies it unless a newer request of that list replaced it; the list is loading until
+// its newest request answered, whatever the other lists do.
+async function loadPage(state: CalibrationLibraryRuntime, list: CalibrationList, url: string, request: ApiFetch, apply: (page: unknown) => void) {
+	const number = (requests[list] = (requests[list] ?? 0) + 1)
+	state.loading[list] = true
 	const page = await tryFetchJson<unknown>(url, request)
-	if (requests[key] !== number) return
-	state.loading = false
+	if (requests[list] !== number) return
+	state.loading[list] = false
 	if (page) apply(page)
 }
 

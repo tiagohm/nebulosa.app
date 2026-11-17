@@ -1,4 +1,5 @@
 import type { CalibrationGroupSummary, CalibrationJobSummary, CalibrationMaster, CalibrationKind, CalibrationMetadata, CalibrationRecipe, Evidenced, EvidenceLevel, GroupReadiness, HeaderMetadata, OverridableField, ProductStatus, SourceOrigin, SourceStatus } from 'api'
+import type { CalibrationList } from '../../calibrationlibrary/calibrationlibrary'
 import { type CatalogCamera, catalogCameraName } from '../../equipment/catalog'
 import { formatDateTime, formatTemperature, MISSING, formatZonedDateTime } from '../../format'
 import type { StatusTone } from '../../ui/StatusBadge'
@@ -11,6 +12,9 @@ export const LIBRARY_SECTIONS = ['library', 'frames', 'masters'] as const
 
 // Section of the tool.
 export type LibrarySection = (typeof LIBRARY_SECTIONS)[number]
+
+// List of the library each section pages through.
+export const SECTION_LISTS: Readonly<Record<LibrarySection, CalibrationList>> = { library: 'groups', frames: 'sources', masters: 'masters' }
 
 // Label of each section.
 export const SECTION_LABELS: Readonly<Record<LibrarySection, string>> = { library: 'Library', frames: 'Frames', masters: 'Masters' }

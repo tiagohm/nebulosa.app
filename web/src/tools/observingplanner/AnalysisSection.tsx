@@ -8,7 +8,9 @@ import type { SiteLocation } from '../../location/site'
 import { formatMagnitude, formatSolarSystemDistance } from '../../sky/format'
 import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
+import { DisclosureSummary } from '../../ui/DisclosureSummary'
 import { Notice } from '../../ui/Notice'
+import { SectionHeading } from '../../ui/SectionHeading'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import { useNow } from '../../useNow'
@@ -62,15 +64,21 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 
 	return (
 		<div className="flex flex-col gap-4">
-			<CoordinatesForm disabled={!location} onAnalyze={(target) => location && void analyze(observingPlannerState, location, target)} />
+			{!selected && (
+				<>
+					<Notice>Choose a target in Discover or a night plan, or type fixed coordinates.</Notice>
+					<section className="rounded-md border border-line-100 bg-base-100 p-4">
+						<CoordinatesForm disabled={!location} onAnalyze={(target) => location && void analyze(observingPlannerState, location, target)} />
+					</section>
+				</>
+			)}
 			{state.analysisError && <Notice error>{state.analysisError}</Notice>}
-			{!selected && !state.analysisLoading && <Notice>Choose a target in Discover, or type fixed coordinates above.</Notice>}
 			{state.analysisLoading && <p className="m-0 text-sm text-ink-300">Analyzing {selected?.name}…</p>}
 			{analysis && selected && (
 				<>
 					<div className="flex flex-wrap items-start justify-between gap-3">
 						<div className="min-w-0">
-							<h3 className="m-0 truncate text-base font-medium text-ink-100">{analysis.name}</h3>
+							<h2 className="m-0 text-base font-medium wrap-break-word text-ink-100">{analysis.name}</h2>
 							<Notice>
 								{analysis.typeName ?? formatTargetKind(analysis.target)} · Night of {analysis.night.sun.localDate}
 							</Notice>
@@ -91,7 +99,7 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 								</Button>
 							)}
 							<Button variant="secondary" onClick={() => onAdd(selected)}>
-								Add
+								Add to Plan
 							</Button>
 						</div>
 					</div>
@@ -108,8 +116,8 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 					{analysis.samples.length > 0 && <NightChart analysis={analysis} timeZone={timeZone} cursor={Math.min(cursor, analysis.samples.length - 1)} onCursor={setCursor} now={now} />}
 					{analysis.target.kind === 'minorBody' && <MinorBodyDetails analysis={analysis} cursor={Math.min(cursor, analysis.samples.length - 1)} timeZone={timeZone} />}
 					<div className="grid gap-4 md:grid-cols-2">
-						<section className="flex flex-col gap-2 rounded-sm border border-line-100 bg-base-100 p-4">
-							<h4 className="m-0 text-sm font-medium text-ink-100">Windows</h4>
+						<section className="flex flex-col gap-2 rounded-md border border-line-100 bg-base-100 p-4">
+							<SectionHeading>Windows</SectionHeading>
 							{analysis.windows.length === 0 ? (
 								<p className="m-0 text-sm text-ink-300">None this night.</p>
 							) : (
@@ -127,8 +135,8 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 								<DataRow label="Culmination">{analysis.summary.culminationAt === undefined ? 'Not during this night' : `${formatClockTime(analysis.summary.culminationAt, timeZone)} at ${formatDegrees(analysis.summary.culminationAltitude ?? 0, 1)}`}</DataRow>
 							</DataList>
 						</section>
-						<section className="flex flex-col gap-2 rounded-sm border border-line-100 bg-base-100 p-4">
-							<h4 className="m-0 text-sm font-medium text-ink-100">Score</h4>
+						<section className="flex flex-col gap-2 rounded-md border border-line-100 bg-base-100 p-4">
+							<SectionHeading>Score</SectionHeading>
 							{analysis.score ? (
 								<>
 									<p className="m-0 text-2xl font-medium text-ink-100 tabular-nums">{formatScore(analysis.score.value)}</p>
@@ -149,6 +157,12 @@ export function AnalysisSection({ location, activeSite, timeZone, onAdd }: Analy
 							)}
 						</section>
 					</div>
+					<details className="rounded-md border border-line-100 bg-base-100">
+						<DisclosureSummary title="Analyze coordinates" className="px-4" />
+						<div className="-mt-1 px-4 pb-4">
+							<CoordinatesForm disabled={!location} onAnalyze={(target) => location && void analyze(observingPlannerState, location, target)} />
+						</div>
+					</details>
 				</>
 			)}
 		</div>
@@ -162,8 +176,8 @@ function MinorBodyDetails({ analysis, cursor, timeZone }: { readonly analysis: T
 	const sample = analysis.samples[cursor]
 
 	return (
-		<section className="flex flex-col gap-2 rounded-sm border border-line-100 bg-base-100 p-4">
-			<h4 className="m-0 text-sm font-medium text-ink-100">Ephemeris</h4>
+		<section className="flex flex-col gap-2 rounded-md border border-line-100 bg-base-100 p-4">
+			<SectionHeading>Ephemeris</SectionHeading>
 			{ephemeris ? (
 				<DataList>
 					<DataRow label="Source">{SOURCE_LABELS[ephemeris.source]}</DataRow>
@@ -205,7 +219,7 @@ function CoordinatesForm({ disabled, onAnalyze }: { readonly disabled: boolean; 
 
 	return (
 		<form
-			className="flex flex-col gap-2 rounded-sm border border-line-100 bg-base-100 p-4"
+			className="flex flex-col gap-2"
 			onSubmit={(event) => {
 				event.preventDefault()
 				submit()

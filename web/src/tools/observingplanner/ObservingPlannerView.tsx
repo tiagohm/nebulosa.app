@@ -1,5 +1,5 @@
 import type { ObservingMode } from 'api'
-import { useEffect, useLayoutEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDegrees, formatHours } from '../../format'
 import { openObservingSites } from '../../location/site'
@@ -44,6 +44,12 @@ export function ObservingPlanner() {
 	const planId = route.route.workspace === 'tools' && route.route.tool === 'observing-planner' ? route.route.plan : undefined
 	const [adding, setAdding] = useState<NamedTarget>()
 	const panelState = useWorkspacePanel('tools')
+	const scroller = useRef<HTMLDivElement>(null)
+
+	// Every section opens at its top, never at the scroll position of the one before.
+	useLayoutEffect(() => {
+		scroller.current?.scrollTo({ top: 0 })
+	}, [state.section])
 	const siteId = profile.activeSiteId
 	const key = location && JSON.stringify([location.latitude, location.longitude, location.elevation, location.timeZone, state.eveningDate, state.constraints])
 
@@ -104,7 +110,7 @@ export function ObservingPlanner() {
 			panel={{ title: 'Night and Constraints', content: panel }}
 			panelState={panelState}
 		>
-			<div className="h-full overflow-y-auto bg-base-000">
+			<div ref={scroller} className="h-full overflow-y-auto bg-base-000">
 				<div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
 					{location ? (
 						<button

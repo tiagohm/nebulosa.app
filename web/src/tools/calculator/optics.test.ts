@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { sensorDiagonalFov } from 'nebulosa/src/astronomy/formulas'
 import { toArcmin } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_OPTICS, isFraming, type OpticalConfiguration, resolveFraming } from '../../sky/framing'
-import { IMAGING_SETUP_EXAMPLE, imagingSetup, imagingSetupFromOptics, MOSAIC_EXAMPLE, mosaic, mosaicFromOptics } from './optics'
+import { IMAGING_SETUP_EXAMPLE, imagingSetup, imagingSetupFromModel, imagingSetupFromOptics, MOSAIC_EXAMPLE, mosaic, mosaicFromOptics } from './optics'
 
 const REDUCED: OpticalConfiguration = { focalLength: 800, focalMultiplier: 0.8, aperture: 160, sensor: { kind: 'pixels', width: 4144, height: 2822, pixelSize: 4.63 }, rotation: 120 }
 const PHYSICAL: OpticalConfiguration = { focalLength: 400, focalMultiplier: 2, aperture: 0, sensor: { kind: 'physical', width: 23.5, height: 15.6 }, rotation: 0 }
@@ -78,4 +78,11 @@ describe('mosaic', () => {
 		expect('width' in framing && Number(mosaicFromOptics(DEFAULT_OPTICS).fieldWidth)).toBeCloseTo('width' in framing ? toArcmin(framing.width) : 0, 2)
 		expect(mosaicFromOptics({ ...DEFAULT_OPTICS, focalLength: 0 })).toEqual({ fieldWidth: '', fieldHeight: '' })
 	})
+})
+
+test('a camera model fills the sensor of Imaging Setup by its resolution and leaves the optics alone', () => {
+	const physical = { ...IMAGING_SETUP_EXAMPLE, sensorKind: 'physical' as const, pixelSize: '4.8' }
+	expect(imagingSetupFromModel(physical, { width: 8288, height: 5644, pixelSize: 3.76 })).toEqual({ ...physical, sensorKind: 'pixels', width: '8288', height: '5644', pixelSize: '3.76' })
+	// A model without a pixel size keeps the one typed.
+	expect(imagingSetupFromModel(physical, { width: 1920, height: 1080 }).pixelSize).toBe('4.8')
 })

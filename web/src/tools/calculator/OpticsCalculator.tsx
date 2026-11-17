@@ -1,12 +1,14 @@
+import { CameraModelSearch } from '../../equipment/CameraModelSearch'
 import { formatDegrees, formatFixed } from '../../format'
 import { formatApparentSize } from '../../sky/format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary } from './CalculatorParts'
-import { IMAGING_SETUP_EXAMPLE, type ImagingSetupDraft, imagingSetup, imagingSetupFromOptics, MOSAIC_EXAMPLE, type MosaicDraft, mosaic, mosaicFromOptics, type SensorKind } from './optics'
+import { IMAGING_SETUP_EXAMPLE, type ImagingSetupDraft, imagingSetup, imagingSetupFromModel, imagingSetupFromOptics, MOSAIC_EXAMPLE, type MosaicDraft, mosaic, mosaicFromOptics, type SensorKind } from './optics'
 
-// Views of the Optics & Field of View calculators: Imaging Setup and Mosaic Estimator.
+// Views of the Optics & Field of View calculators: Imaging Setup, whose sensor can be filled from a model of the camera
+// model catalog, and Mosaic Estimator.
 
 // Sensor kinds in display order.
 const SENSOR_KINDS: readonly SensorKind[] = ['pixels', 'physical']
@@ -46,7 +48,8 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 							</>
 						)}
 					</FieldGrid>
-					<Notice>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without).</Notice>
+					<CameraModelSearch label="Sensor from a camera model" onPick={(model) => onChange({ ...entry, draft: imagingSetupFromModel(draft, model) })} />
+					<Notice>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without). A camera model of the AstroBin catalog fills the resolution and pixel size and leaves the optics as they are.</Notice>
 				</>
 			}
 			results={

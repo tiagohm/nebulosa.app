@@ -1,3 +1,4 @@
+import type { CameraModel } from 'api'
 import { mosaicPanelCount, sensorDiagonalFov } from 'nebulosa/src/astronomy/formulas'
 import { toArcmin } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_OPTICS, type Framing, isFraming, type OpticalConfiguration, resolveFraming, type SensorGeometry } from '../../sky/framing'
@@ -5,7 +6,7 @@ import { between, newCheck, optional, type Outcome, outcome, POSITIVE, POSITIVE_
 
 // Optics & Field of View calculators. Imaging Setup resolves a telescope or lens with a camera through resolveFraming,
 // the convention of Sky Framing (2·atan(d / 2F) per axis, the reducer or Barlow factor applied once to the native focal
-// length), and adds the diagonal field. Mosaic Estimator counts the panels of a rectangular mosaic along each axis
+// length), and adds the diagonal field; its sensor can be filled from a model of the camera model catalog. Mosaic Estimator counts the panels of a rectangular mosaic along each axis
 // with mosaicPanelCount. Lengths are millimeters, pixel sizes micrometers, angles radians in results and arcminutes in
 // the mosaic fields.
 
@@ -69,6 +70,12 @@ export interface MosaicResult {
 // Returns the text of a positive number rounded to digits decimals; empty for a value that is not positive.
 function roundedText(value: number, digits: number) {
 	return positiveText(Number(value.toFixed(digits)))
+}
+
+// Fills the sensor of an Imaging Setup draft from a model of the camera model catalog: its resolution and, when the catalog
+// gives it, its pixel size (else the pixel size typed is kept); the optics are left as they are.
+export function imagingSetupFromModel(draft: ImagingSetupDraft, model: Pick<CameraModel, 'width' | 'height' | 'pixelSize'>): ImagingSetupDraft {
+	return { ...draft, sensorKind: 'pixels', width: positiveText(model.width), height: positiveText(model.height), pixelSize: model.pixelSize === undefined ? draft.pixelSize : positiveText(model.pixelSize) }
 }
 
 // Returns the Imaging Setup fields of an optical configuration. A sensor given by its pixels also fills its physical

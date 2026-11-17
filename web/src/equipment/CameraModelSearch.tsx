@@ -2,26 +2,28 @@ import type { CameraModel } from 'api'
 import { cn } from 'cn'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import cameraModels from '../../assets/cameras.json.gz' with { type: 'file' }
-import { cameraModelDescription, loadCameraModels, searchCameraModels } from '../equipment/cameramodels'
 import { Notice } from '../ui/Notice'
 import { TextInput } from '../ui/TextInput'
+import { cameraModelDescription, loadCameraModels, searchCameraModels } from './cameramodels'
 
-// Search of the camera model catalog (the cameras of the AstroBin equipment database) in the Equipment Catalog editor: the
-// catalog is loaded the first time the field is focused, and the models that match what is typed float in a list under
-// the field, like the list of a select. Choosing one, by pointer or by the arrow keys and Enter, hands it to the editor,
-// which fills the camera with it; Enter never submits the form. The list closes on Escape and when the field loses focus,
+// Search of the camera model catalog (the cameras of the AstroBin equipment database), in the Equipment Catalog editor and
+// the calculators that take a sensor: the catalog is loaded the first time the field is focused, and the models that
+// match what is typed float in a list under the field, like the list of a select. Choosing one, by pointer or by the
+// arrow keys and Enter, hands it to the caller, which fills its fields with it; Enter never submits the form. The list closes on Escape and when the field loses focus,
 // which a press outside it does.
 
 export interface CameraModelSearchProps {
 	// Called with the model chosen.
 	readonly onPick: (model: CameraModel) => void
+	// Label of the field; "Fill From Model" when absent.
+	readonly label?: string
 }
 
 // State of the catalog in this field.
 type Catalog = { readonly state: 'idle' | 'loading' } | { readonly state: 'loaded'; readonly models: readonly CameraModel[] } | { readonly state: 'failed'; readonly error: string }
 
 // Field that searches the camera model catalog, with the models that match in a floating list below it.
-export function CameraModelSearch({ onPick }: CameraModelSearchProps) {
+export function CameraModelSearch({ onPick, label = 'Fill From Model' }: CameraModelSearchProps) {
 	const [query, setQuery] = useState('')
 	const [catalog, setCatalog] = useState<Catalog>({ state: 'idle' })
 	const [open, setOpen] = useState(false)
@@ -70,11 +72,11 @@ export function CameraModelSearch({ onPick }: CameraModelSearchProps) {
 		<div className="flex flex-col gap-2">
 			<div className="relative">
 				<TextInput
-					label="Fill From Model"
+					label={label}
 					spellCheck={false}
 					autoComplete="off"
 					value={query}
-					placeholder="Search AstroBin cameras, such as ASI2600MM"
+					placeholder="Search cameras, such as ASI2600MM"
 					onFocus={() => {
 						load()
 						setOpen(true)

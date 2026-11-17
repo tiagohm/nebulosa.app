@@ -5,6 +5,7 @@ import { useSnapshot } from 'valtio'
 import { calibrationLibraryRuntime } from '../calibrationlibrary/calibrationlibrary'
 import { controlRuntime, watchedDeviceState } from '../equipment-control/control'
 import { DEFAULT_COLOR_CFA, modelCfa } from '../equipment/cameramodels'
+import { CameraModelSearch } from '../equipment/CameraModelSearch'
 import { cameraBindingsState, type CatalogCamera, catalogState, deviceFields, removeCatalogCamera, saveCatalogCamera } from '../equipment/catalog'
 import { deviceState } from '../equipment/equipment'
 import { CFA_PATTERNS } from '../images/display'
@@ -17,7 +18,6 @@ import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { CameraModelSearch } from './CameraModelSearch'
 
 // Editor of one camera of the Equipment Catalog: its name, model, serial number, notes, the sensor it declares, and
 // whether it is archived, edited as a local draft that only Save writes. The model and sensor can be filled from a model of

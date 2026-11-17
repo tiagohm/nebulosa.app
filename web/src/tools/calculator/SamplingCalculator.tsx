@@ -1,12 +1,15 @@
 import type { FWHMSamplingKind } from 'nebulosa/src/astronomy/formulas'
+import { CameraModelSearch } from '../../equipment/CameraModelSearch'
 import { formatFixed } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
 import { DIFFRACTION_EXAMPLE, type DiffractionDraft, diffraction, diffractionFromOptics, SAMPLING_EXAMPLE, type SamplingDraft, type SamplingMode, sampling, samplingFromOptics } from './sampling'
+import { positiveText } from './values'
 
-// Views of the Sampling & Focus calculators: Sampling and Diffraction & Focus.
+// Views of the Sampling & Focus calculators: Sampling and Diffraction & Focus, whose pixel size can be taken from a model of
+// the camera model catalog.
 
 // Sampling modes in display order.
 const SAMPLING_MODES: readonly SamplingMode[] = ['seeing', 'fwhm']
@@ -40,6 +43,7 @@ export function SamplingCalculator({ entry, onChange, context }: CalculatorViewP
 						<NumberField label="Pixel size" suffix="µm" optional value={draft.pixelSize} onChange={(pixelSize) => set({ pixelSize })} />
 						<NumberField label="Target FWHM" suffix="px" optional value={draft.targetSampling} onChange={(targetSampling) => set({ targetSampling })} />
 					</FieldGrid>
+					<CameraModelSearch label="Pixel size from a camera model" onPick={(model) => model.pixelSize !== undefined && set({ pixelSize: positiveText(model.pixelSize) })} />
 					<Notice>{draft.mode === 'seeing' ? 'The seeing is the FWHM of a star in arcseconds, not its HFD.' : 'The FWHM of stars measured on a frame, in pixels; an HFD is a different measure.'} The pixel size and target FWHM give the focal length for that sampling.</Notice>
 				</>
 			}
@@ -90,6 +94,7 @@ export function DiffractionCalculator({ entry, onChange, context }: CalculatorVi
 						<NumberField label="Focal ratio (f/)" value={draft.focalRatio} onChange={(focalRatio) => set({ focalRatio })} />
 						<NumberField label="Pixel size" suffix="µm" optional value={draft.pixelSize} onChange={(pixelSize) => set({ pixelSize })} />
 					</FieldGrid>
+					<CameraModelSearch label="Pixel size from a camera model" onPick={(model) => model.pixelSize !== undefined && set({ pixelSize: positiveText(model.pixelSize) })} />
 					<Notice>550 nm is green light, near the eye&apos;s peak; Hα is 656.3 nm. The focal ratio is that of the effective focal length; importing needs the aperture.</Notice>
 				</>
 			}

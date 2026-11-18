@@ -147,6 +147,10 @@ export const ICONS = {
 	cctv: 'M4.5 4.2l12.6 5.6l-2.7 6l-12.6-5.6zM17.1 9.8l3.4.6l-1.6 4.6l-3.2-1.5M7.8 13l-1 4.5H2.5M2.5 15v5M13 12.5h.01',
 	// A database cylinder: stored ephemeris files.
 	database: 'M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3s-3.6 3-8 3s-8-1.3-8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
+	// An open eye: shown.
+	eye: 'M2.5 12s3.5-6.5 9.5-6.5s9.5 6.5 9.5 6.5s-3.5 6.5-9.5 6.5s-9.5-6.5-9.5-6.5zM12 9a3 3 0 1 0 0 6a3 3 0 1 0 0-6',
+	// An eye struck through: hidden.
+	eyeOff: 'M3 3l18 18M10.6 5.6a8.6 8.6 0 0 1 1.4-.1c6 0 9.5 6.5 9.5 6.5a16.4 16.4 0 0 1-2.6 3.3M6.6 6.6C3.9 8.3 2.5 12 2.5 12s3.5 6.5 9.5 6.5a9 9 0 0 0 4.8-1.4M9.9 9.9a3 3 0 0 0 4.2 4.2',
 } as const satisfies Readonly<Record<string, string>>
 
 // Name of an icon in ICONS.

@@ -19,13 +19,14 @@ import { mountPoint, mountRuntime, mountView } from '../../sky/mount'
 import { skyState } from '../../sky/sky'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
+import { IconButton } from '../../ui/IconButton'
 import { moveIndex } from '../../ui/navigation'
 import { Notice } from '../../ui/Notice'
 import { SectionHeading } from '../../ui/SectionHeading'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { Select } from '../../ui/Select'
 import { CenterSearch } from './CenterSearch'
-import { framingPreviewState, mountCenter, newFramingDocument, newFramingName, type PreviewFit, type PreviewSource, setPreviewCenter, showFraming } from './framing'
+import { framingPreviewState, mountCenter, newFramingDocument, newFramingName, type PreviewFit, type PreviewSource, setFramingHidden, setPreviewCenter, showFraming } from './framing'
 import { FramingEditor, RotationInput, SaveStatus } from './FramingEditor'
 import { FramingPreview } from './FramingPreview'
 
@@ -33,8 +34,9 @@ import { FramingPreview } from './FramingPreview'
 // one preview around a J2000 center that no framing holds (an object searched in the catalog, typed coordinates, the
 // object selected in Sky, the mount's position, or a point clicked on the preview). The preview is the editor of the
 // framing shown: its rotation handle turns it, and the strip under it holds its rotation and opens its details; the
-// legend beside it (below it on narrower screens) names every framing in its colour with its field and chooses the one
-// shown, and the contextual panel edits its exact values (the URL names it). The Mini-Sky is drawn offline and a survey
+// legend beside it (below it on narrower screens) names every framing in its colour with its field, chooses the one
+// shown, and hides any from the preview with the eye at its right, and the contextual panel edits its exact values (the
+// URL names it). The Mini-Sky is drawn offline and a survey
 // image over it once downloaded; nothing waits on a download. Nothing here moves a device or changes the profile.
 
 // Backgrounds in menu order.
@@ -90,7 +92,7 @@ export function FramingView() {
 							<div className="aspect-4/3 max-h-[70vh] min-h-64 lg:aspect-auto lg:h-[min(68vh,46rem)]">
 								{preview.center ? (
 									<FramingPreview
-										framings={framings}
+										framings={framings.filter((framing) => !preview.hidden.includes(framing.id))}
 										selectedId={selected.id}
 										center={preview.center}
 										source={preview.source}
@@ -110,7 +112,7 @@ export function FramingView() {
 							<SelectionStrip framing={selected} panel={panel} onRotate={rotate} />
 							<BackgroundNote />
 						</div>
-						<FramingLegend framings={framings} selectedId={selected.id} empty={(loaded || Object.keys(saved).length > 0) && framings.length === 1} />
+						<FramingLegend framings={framings} selectedId={selected.id} hidden={preview.hidden} empty={(loaded || Object.keys(saved).length > 0) && framings.length === 1} />
 					</div>
 				</div>
 			</div>
@@ -297,49 +299,55 @@ interface FramingLegendProps {
 	readonly framings: readonly ResolvedFraming[]
 	// Id of the framing shown.
 	readonly selectedId: string
+	// Ids of the framings hidden from the preview.
+	readonly hidden: readonly string[]
 	// Whether no framing was created yet.
 	readonly empty: boolean
 }
 
-// Moves the focus, and the framing shown, between the legend's buttons on an arrow key, Home, or End.
+// Moves the focus, and the framing shown, between the legend's framings on an arrow key, Home, or End.
 function navigate(event: KeyboardEvent<HTMLUListElement>) {
-	const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button')]
-	const next = moveIndex(buttons.indexOf(event.target as HTMLButtonElement), buttons.length, event.key)
+	const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button[data-framing]')]
+	const index = buttons.indexOf(event.target as HTMLButtonElement)
+	if (index < 0) return
+	const next = moveIndex(index, buttons.length, event.key)
 	if (next === undefined) return
 	event.preventDefault()
 	buttons[next].focus()
 	buttons[next].click()
 }
 
-// Legend of the preview: every framing with its colour, field, and rotation, choosing the one shown.
-function FramingLegend({ framings, selectedId, empty }: FramingLegendProps) {
+// Legend of the preview: every framing with its colour, field, and rotation, choosing the one shown, each with the eye
+// that hides it from the preview or shows it again.
+function FramingLegend({ framings, selectedId, hidden, empty }: FramingLegendProps) {
 	return (
 		<section className="flex min-w-0 flex-col gap-2 xl:max-h-[min(68vh,46rem)]">
 			<SectionHeading as="h2">Framings</SectionHeading>
 			<ul onKeyDown={navigate} className="m-0 grid min-h-0 list-none grid-cols-1 gap-1.5 overflow-y-auto p-0 sm:grid-cols-2 xl:grid-cols-1">
 				{framings.map((framing) => {
 					const selected = framing.id === selectedId
+					const off = hidden.includes(framing.id)
 
 					return (
-						<li key={framing.id}>
+						<li key={framing.id} className={cn('flex items-center rounded-sm border transition-colors duration-150 motion-reduce:transition-none', selected ? 'border-accent bg-accent-subtle' : 'border-line-100 bg-base-100 hover:bg-base-300')}>
 							<button
 								type="button"
+								data-framing={framing.id}
 								tabIndex={selected ? 0 : -1}
 								onClick={() => showFraming(framing.id)}
-								className={cn(
-									'flex w-full cursor-pointer items-start gap-3 rounded-sm border px-3 py-2 text-left font-mono transition-colors duration-150 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent motion-reduce:transition-none max-sm:min-h-12.5',
-									selected ? 'border-accent bg-accent-subtle' : 'border-line-100 bg-base-100 hover:bg-base-300',
-								)}
+								className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 rounded-sm border-0 bg-transparent py-2 pr-1 pl-3 text-left font-mono focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent max-sm:min-h-12.5"
 							>
-								<span className={cn('mt-1.5 size-3 flex-none rounded-full', frameSwatch(framing.color))} />
+								<span className={cn('mt-1.5 size-3 flex-none rounded-full', frameSwatch(framing.color), off && 'opacity-40')} />
 								<span className="flex min-w-0 flex-1 flex-col">
-									<span className={cn('text-sm leading-5 font-medium wrap-break-word', selected ? 'text-accent' : 'text-ink-100')}>{framing.name}</span>
+									<span className={cn('text-sm leading-5 font-medium wrap-break-word', selected ? 'text-accent' : off ? 'text-ink-300' : 'text-ink-100')}>{framing.name}</span>
 									<span className="text-xs leading-5 text-ink-300">
+										{off ? 'Hidden · ' : ''}
 										{fieldSummary(framing.field, missingCameraName(framing.camera))}
 										{isFraming(framing.field) && framing.id !== EQUIPMENT_FRAMING_ID ? ` · PA ${formatFixed(framing.optics.rotation, 1)}°` : ''}
 									</span>
 								</span>
 							</button>
+							<IconButton icon={off ? 'eyeOff' : 'eye'} label={off ? `Show ${framing.name} on the preview` : `Hide ${framing.name} from the preview`} onClick={() => setFramingHidden(framingPreviewState, framing.id, !off)} className="mr-1.5 flex-none max-sm:size-12.5" />
 						</li>
 					)
 				})}

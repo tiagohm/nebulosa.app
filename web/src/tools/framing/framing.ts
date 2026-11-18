@@ -12,7 +12,8 @@ import type { MountPoint } from '../../sky/mount'
 // compared in: its J2000 center, which no framing holds (typed, an object of the catalog searched, the catalog object
 // selected in Sky, a point of the preview clicked, or where the profile's mount points), its background, the Mini-Sky of
 // the catalog or a survey cutout of hips2fits drawn over it, and what it is scaled to fit, every framing or the one
-// shown. The center, background, survey, and fit are kept in this browser only (framingPreviewEntry).
+// shown, leaving out the framings hidden from it. The center, background, survey, fit, and hidden framings are kept in
+// this browser only (framingPreviewEntry).
 
 // Background of the preview: the stars and deep-sky objects of the catalog, drawn offline, or a survey image.
 export type PreviewSource = 'sky' | 'survey'
@@ -32,10 +33,12 @@ export interface FramingPreviewState {
 	survey: string
 	// What the scale fits.
 	fit: PreviewFit
+	// Ids of the framings left out of the preview, the Equipment Setup's included; the Sky hides its own.
+	hidden: string[]
 }
 
 // Preview of the tab.
-export const framingPreviewState = proxy<FramingPreviewState>({ source: 'sky', survey: DEFAULT_SURVEY, fit: 'all' })
+export const framingPreviewState = proxy<FramingPreviewState>({ source: 'sky', survey: DEFAULT_SURVEY, fit: 'all', hidden: [] })
 
 // Shape kept in browser storage.
 interface StoredPreview {
@@ -44,9 +47,10 @@ interface StoredPreview {
 	readonly source?: PreviewSource
 	readonly survey?: string
 	readonly fit?: PreviewFit
+	readonly hidden?: readonly string[]
 }
 
-// Keeps the center, background, survey, and fit of the preview in browser storage.
+// Keeps the center, background, survey, fit, and hidden framings of the preview in browser storage.
 export function framingPreviewEntry(state: FramingPreviewState): ViewEntry {
 	return {
 		name: 'framingPreview',
@@ -58,8 +62,9 @@ export function framingPreviewEntry(state: FramingPreviewState): ViewEntry {
 			if (stored.source === 'sky' || stored.source === 'survey') state.source = stored.source
 			if (typeof stored.survey === 'string' && stored.survey) state.survey = stored.survey
 			if (stored.fit === 'all' || stored.fit === 'selected') state.fit = stored.fit
+			if (Array.isArray(stored.hidden)) state.hidden = stored.hidden.filter((id) => typeof id === 'string')
 		},
-		value: () => ({ center: state.center && { ...state.center }, centerName: state.centerName, source: state.source, survey: state.survey, fit: state.fit }) satisfies StoredPreview,
+		value: () => ({ center: state.center && { ...state.center }, centerName: state.centerName, source: state.source, survey: state.survey, fit: state.fit, hidden: [...state.hidden] }) satisfies StoredPreview,
 	}
 }
 
@@ -67,6 +72,12 @@ export function framingPreviewEntry(state: FramingPreviewState): ViewEntry {
 export function setPreviewCenter(state: FramingPreviewState, center: FramePoint | undefined, name?: string) {
 	state.center = center && { rightAscension: center.rightAscension, declination: center.declination }
 	state.centerName = center ? name : undefined
+}
+
+// Hides a framing from the preview, or shows it again.
+export function setFramingHidden(state: FramingPreviewState, id: string, hidden: boolean) {
+	const others = state.hidden.filter((each) => each !== id)
+	state.hidden = hidden ? [...others, id] : others
 }
 
 // Returns the J2000 position (radians) of where a mount points, which it reports on the true equator and equinox of date

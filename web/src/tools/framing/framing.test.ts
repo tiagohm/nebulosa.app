@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import { deg } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import { ofDateMatrix, toDate } from '../../sky/footprint'
-import { framingPreviewEntry, type FramingPreviewState, mountCenter, newFramingDocument, newFramingName, setPreviewCenter } from './framing'
+import { framingPreviewEntry, type FramingPreviewState, mountCenter, newFramingDocument, newFramingName, setFramingHidden, setPreviewCenter } from './framing'
 
 test('a new framing gets the first free name, its colour, and the Equipment Setup or the default optics', () => {
 	expect(newFramingName([])).toBe('Framing 1')
@@ -27,17 +27,22 @@ test('the mount position of date is centered at J2000', () => {
 	expect(center.declination).toBeCloseTo(deg(-5.4), 12)
 })
 
-test('the preview keeps its center, background, survey, and fit', () => {
-	const state = proxy<FramingPreviewState>({ source: 'sky', survey: 'CDS/P/DSS2/color', fit: 'all' })
+test('the preview keeps its center, background, survey, fit, and hidden framings', () => {
+	const state = proxy<FramingPreviewState>({ source: 'sky', survey: 'CDS/P/DSS2/color', fit: 'all', hidden: [] })
 	const entry = framingPreviewEntry(state)
 	setPreviewCenter(state, { rightAscension: 1.5, declination: -0.1 }, 'M 42')
 	state.source = 'survey'
 	state.fit = 'selected'
-	expect(entry.value()).toEqual({ center: { rightAscension: 1.5, declination: -0.1 }, centerName: 'M 42', source: 'survey', survey: 'CDS/P/DSS2/color', fit: 'selected' })
+	setFramingHidden(state, 'a', true)
+	setFramingHidden(state, 'equipment', true)
+	setFramingHidden(state, 'a', true)
+	setFramingHidden(state, 'equipment', false)
+	expect(entry.value()).toEqual({ center: { rightAscension: 1.5, declination: -0.1 }, centerName: 'M 42', source: 'survey', survey: 'CDS/P/DSS2/color', fit: 'selected', hidden: ['a'] })
 
-	const restored = proxy<FramingPreviewState>({ source: 'sky', survey: 'x', fit: 'all' })
-	framingPreviewEntry(restored).restore({ center: { rightAscension: 2, declination: 0.2 }, source: 'survey', survey: 'CDS/P/2MASS/color', fit: 'selected' })
+	const restored = proxy<FramingPreviewState>({ source: 'sky', survey: 'x', fit: 'all', hidden: [] })
+	framingPreviewEntry(restored).restore({ center: { rightAscension: 2, declination: 0.2 }, source: 'survey', survey: 'CDS/P/2MASS/color', fit: 'selected', hidden: ['b', 3] })
 	expect(restored).toMatchObject({ center: { rightAscension: 2, declination: 0.2 }, source: 'survey', survey: 'CDS/P/2MASS/color', fit: 'selected' })
+	expect([...restored.hidden]).toEqual(['b'])
 	framingPreviewEntry(restored).restore({ fit: 'sideways' })
 	expect(restored.fit).toBe('selected')
 

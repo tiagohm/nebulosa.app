@@ -11,7 +11,7 @@ const iconButton = tv({
 	variants: {
 		pressed: {
 			true: 'bg-accent-subtle text-accent hover:bg-accent-subtle',
-			false: 'text-ink-200 hover:bg-base-300 hover:text-ink-100',
+			false: 'text-ink-200 hover:bg-base-300/70 hover:text-ink-100',
 		},
 	},
 	defaultVariants: { pressed: false },

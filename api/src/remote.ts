@@ -1,4 +1,4 @@
-import { LruCache } from '../lrucache'
+import { LruCache } from './lrucache'
 
 // Cached reads of public sources (NASA SDO images and NOAA SWPC active regions of the Sun Inspector, the forecasts of
 // Astro Weather): a bounded download with a timeout, and a cache per key that is fresh for a time to live, shares one

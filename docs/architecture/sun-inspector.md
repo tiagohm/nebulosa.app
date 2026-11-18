@@ -15,7 +15,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The image is one of the fixed public JPEGs of the SDO `latest` directory, chosen from an allowlist of channels (`aia193`, `aia171`, `aia304`, `hmiIntensitygram` = HMI colored intensitygram, `hmiMagnetogram`) and sizes (512, 1024), so no URL is built from a request.
   SDO tells only when a file was modified (`Last-Modified`), never when it was observed, so the route answers that time and the download time (`X-Sun-Fetched-At`) as headers, and the client calls it the update time.
   The NOAA feed keeps a month of daily records; the report is the records of its latest observed date, one per region, with null fields absent; its spot counts are per group, never the international sunspot number.
-- Both sources go through `RemoteCache` (`api/src/sky/remote.ts`): fresh for 15 minutes (images) or 30 minutes (report), one download shared by concurrent requests, a timeout, a size limit, and a content type check.
+- Both sources go through `RemoteCache` (`api/src/remote.ts`): fresh for 15 minutes (images) or 30 minutes (report), one download shared by concurrent requests, a timeout, a size limit, and a content type check.
   When a download fails the last good value is answered marked stale (`X-Sun-Stale: 1`, `stale: true`), without downloading again for a minute; with none, `502 upstreamUnavailable`.
   A failure of one source never affects the other nor the almanac.
 - Sun Inspector (`web/src/sky/sun/`): the Object Inspector of the body `10` (`SunInspector`, dispatched by `ObjectInspector`); no Sky panel view or navigation entry of its own, and no lunar data.

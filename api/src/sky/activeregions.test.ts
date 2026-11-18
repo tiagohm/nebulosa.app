@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
+import type { UpstreamFetch } from '../remote'
 import { createActiveRegionRoutes, latestSolarRegionReport, NOAA_SOLAR_REGIONS_URL, SolarActiveRegions } from './activeregions'
-import type { UpstreamFetch } from './remote'
 
 // Records trimmed from the NOAA SWPC feed of 2026-10-28, with the fields it carries.
 const RECORDS = [

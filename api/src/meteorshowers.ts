@@ -43,7 +43,7 @@ import { MeteorSolarLongitudeTable } from './meteorshowers.solar'
 import type { MeteorCatalogFailureCode, MeteorShowerStore } from './meteorshowers.store'
 import { annualEventsOf, METEOR_ACTIVITY_MODEL_REVISION, METEOR_ANNUAL_PREDICTION_YEARS, METEOR_VISUAL_REVISION, METEOR_VISUAL_SOURCES, type MeteorAnnualEvent, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSource } from './meteorshowers.visual'
 import { resolveNight, type TargetAnalysis } from './observingplanner.astronomy'
-import { fetchUpstream, type UpstreamFetch, UpstreamTooLargeError, UpstreamUnavailableError } from './sky/remote'
+import { fetchUpstream, type UpstreamFetch, UpstreamTooLargeError, UpstreamUnavailableError } from './remote'
 import type { SkyMeteorShowers } from './sky/routes'
 import type { SkySearchResult } from './sky/types'
 

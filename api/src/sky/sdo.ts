@@ -1,5 +1,5 @@
 import { errorResponse } from '../http'
-import { fetchUpstream, RemoteCache, type UpstreamBody, type UpstreamFetch, UpstreamUnavailableError } from './remote'
+import { fetchUpstream, RemoteCache, type UpstreamBody, type UpstreamFetch, UpstreamUnavailableError } from '../remote'
 
 // Latest full-disk images of the Sun from NASA's Solar Dynamics Observatory, proxied for the Sun
 // Inspector. Only the fixed public JPEGs of the SDO "latest" directory are read, one per channel and

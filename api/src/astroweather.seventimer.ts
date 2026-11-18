@@ -1,4 +1,4 @@
-import { UpstreamInvalidError } from './sky/remote'
+import { UpstreamInvalidError } from './remote'
 
 // 7Timer! ASTRO adapter of Astro Weather: the fixed URL of the seeing and transparency forecast of a place and the reading
 // of its answer. The service redirects api.pl to its own script and rounds the place to 0.1° there, despite documenting

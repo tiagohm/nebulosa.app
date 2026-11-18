@@ -2,7 +2,7 @@ import { type AstroWeatherNight, type AstroWeatherNightRequest, AstroWeatherNigh
 import { type MeteorologyGrid, type MeteorologySample, type OpenMeteoForecast, openMeteoUrl, parseOpenMeteo } from './astroweather.openmeteo'
 import { type AstronomicalSample, parseSevenTimer, SEVEN_TIMER_DECIMALS, type SevenTimerForecast, sevenTimerUrl } from './astroweather.seventimer'
 import { errorResponse } from './http'
-import { fetchUpstream, RemoteCache, type UpstreamFetch, UpstreamInvalidError, UpstreamUnavailableError } from './sky/remote'
+import { fetchUpstream, RemoteCache, type UpstreamFetch, UpstreamInvalidError, UpstreamUnavailableError } from './remote'
 
 // Astro Weather: stateless, read-only forecasts of a place from two fixed public services, Open-Meteo for the weather and
 // 7Timer! ASTRO for seeing and transparency, and the local astronomy of a night. Never an operation or an event, and nothing

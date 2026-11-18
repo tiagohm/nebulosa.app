@@ -3,7 +3,7 @@ import { type AstroWeatherForecast, AstroWeatherService, createAstroWeatherRoute
 import { AstroWeatherNights } from './astroweather.night'
 import { openMeteoUrl, parseOpenMeteo } from './astroweather.openmeteo'
 import { parseSevenTimer, sevenTimerUrl } from './astroweather.seventimer'
-import { UpstreamInvalidError, type UpstreamFetch } from './sky/remote'
+import { UpstreamInvalidError, type UpstreamFetch } from './remote'
 
 const LATITUDE = -22.4
 const LONGITUDE = -45.45

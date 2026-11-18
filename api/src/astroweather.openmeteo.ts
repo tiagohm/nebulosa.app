@@ -1,4 +1,4 @@
-import { UpstreamInvalidError } from './sky/remote'
+import { UpstreamInvalidError } from './remote'
 
 // Open-Meteo adapter of Astro Weather: the fixed URL of the hourly forecast of a place and the reading of its answer. The
 // model is the service's default best_match, which names no run, and the elevation is left to the service, since the height

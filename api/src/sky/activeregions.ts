@@ -1,5 +1,5 @@
 import { errorResponse } from '../http'
-import { fetchUpstream, RemoteCache, type UpstreamFetch, UpstreamUnavailableError } from './remote'
+import { fetchUpstream, RemoteCache, type UpstreamFetch, UpstreamUnavailableError } from '../remote'
 
 // Active regions of the Sun from the NOAA SWPC solar regions feed, for the Sun Inspector. The feed
 // keeps about a month of daily reports (one record per region and observed date, from the Solar Region

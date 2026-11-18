@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { UpstreamFetch } from './remote'
+import type { UpstreamFetch } from '../remote'
 import { createSolarImageRoutes, SolarImages, sdoImageUrl } from './sdo'
 
 function request(query: string) {

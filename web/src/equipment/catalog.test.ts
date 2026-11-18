@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import type { CameraBinding } from 'api'
 import { proxy } from 'valtio'
-import { bindCamera, cameraBoundElsewhere, type CameraBindingsState, handleCameraBindingsEvent, sensorMismatch } from './catalog'
+import { bindCamera, cameraBoundElsewhere, type CameraBindingsState, deviceIdCameraId, handleCameraBindingsEvent, sensorMismatch } from './catalog'
 
 function binding(connectionId: string, deviceId: string, cameraId: string): CameraBinding {
 	return { connectionId, deviceId, hardwareId: deviceId, deviceName: `Device ${deviceId}`, cameraId, boundAt: 0 }
@@ -13,6 +13,14 @@ test('a camera of the catalog is held elsewhere only by another device of the sa
 	expect(cameraBoundElsewhere(state, { connectionId: 'c1', id: 'd3' }, 'a')?.deviceName).toBe('Device d1')
 	expect(cameraBoundElsewhere(state, { connectionId: 'c1', id: 'd1' }, 'a')).toBeUndefined()
 	expect(cameraBoundElsewhere(state, { connectionId: 'c1', id: 'd3' }, 'b')).toBeUndefined()
+})
+
+test('a device kept by id alone resolves the camera only when every binding of that id names it', () => {
+	const state = { bindings: { 'c1/d1': binding('c1', 'd1', 'a'), 'c2/d1': binding('c2', 'd1', 'a'), 'c1/d2': binding('c1', 'd2', 'b'), 'c2/d2': binding('c2', 'd2', 'c') } }
+
+	expect(deviceIdCameraId(state, 'd1')).toBe('a')
+	expect(deviceIdCameraId(state, 'd2')).toBeUndefined()
+	expect(deviceIdCameraId(state, 'd3')).toBeUndefined()
 })
 
 test('the answer of a bind never replaces a binding another tab changed during the request', async () => {

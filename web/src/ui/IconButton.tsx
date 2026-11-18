@@ -7,7 +7,7 @@ import { Icon, type IconName } from './Icon'
 
 // Styles of the button, plain or pressed (a toggle that is on).
 const iconButton = tv({
-	base: 'relative flex size-9 flex-none cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:text-ink-300 disabled:hover:bg-transparent motion-reduce:transition-none',
+	base: 'relative flex size-9.5 flex-none cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:text-ink-300 disabled:hover:bg-transparent motion-reduce:transition-none',
 	variants: {
 		pressed: {
 			true: 'bg-accent-subtle text-accent hover:bg-accent-subtle',

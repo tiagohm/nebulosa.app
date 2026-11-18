@@ -168,6 +168,14 @@ export function boundCameraId(state: Pick<CameraBindingsState, 'bindings'>, devi
 	return device && state.bindings[bindingKey(device.connectionId, device.id)]?.cameraId
 }
 
+// Returns the camera of the catalog a device the Equipment Setup keeps by id alone is bound to, while its connection is
+// closed and so unknown: the one camera every binding of a device of that id names, or undefined when none does or they
+// disagree.
+export function deviceIdCameraId(state: Pick<CameraBindingsState, 'bindings'>, deviceId: string) {
+	const cameras = new Set(Object.values(state.bindings).flatMap((binding) => (binding.deviceId === deviceId ? [binding.cameraId] : [])))
+	return cameras.size === 1 ? [...cameras][0] : undefined
+}
+
 // Returns the binding of another device of the connection of device to the camera of the catalog cameraId, or undefined.
 // A camera of the catalog is bound to one device at most: binding it to a device unbinds the one it was bound to, so the
 // Equipment Setup refuses a camera another device of the connection holds, as it refuses one device for two roles.

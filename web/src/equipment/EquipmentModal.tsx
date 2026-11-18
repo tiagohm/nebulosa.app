@@ -22,8 +22,9 @@ import { useWatchedDevices } from './useEquipment'
 
 // Modal that assigns the devices of the active profile's connection to the equipment roles and connects
 // or disconnects them one by one or all at once. Selecting a device never connects it, and closing the modal never
-// disconnects anything. A camera role also binds its device to a camera of the Equipment Catalog (CatalogBinding), which
-// holds for every profile. It also holds the profile's telescope and guide telescope optics, which no device reports,
+// disconnects anything; while the server of the connection is not connected, the assignments are shown and cannot be
+// changed. A camera role also binds its device to a camera of the Equipment Catalog (CatalogBinding), which holds for
+// every profile and is shown read-only while the device is not on an open connection. It also holds the profile's telescope and guide telescope optics, which no device reports,
 // each a telescope of the Equipment Catalog or entered by hand: the Sky's Equipment Setup field of view of a camera uses
 // the optics it looks through, and Guiding the second.
 
@@ -307,7 +308,7 @@ function RoleRow({ definition, setup, devices, device, status, error, serverOpen
 			<Icon name={deviceType} className="text-ink-300 max-sm:mt-0.5" />
 			<div className="flex min-w-0 items-center gap-3 max-sm:col-span-2 max-sm:flex-col max-sm:items-stretch max-sm:gap-1">
 				<span className="w-32 flex-none text-xs font-medium tracking-[0.08em] text-ink-200 uppercase max-sm:w-auto">{label}</span>
-				<Select options={options} value={assigned ?? NONE} onChange={handleChange} format={format} disabledReason={disabledReason} />
+				<Select options={options} value={assigned ?? NONE} onChange={handleChange} format={format} disabledReason={disabledReason} disabled={!serverOpen} />
 			</div>
 			<span className={root({ className: 'max-sm:col-start-2 max-sm:self-center max-sm:justify-self-start' })}>
 				<span className={dot()} />
@@ -315,7 +316,7 @@ function RoleRow({ definition, setup, devices, device, status, error, serverOpen
 			</span>
 			<div className="flex justify-end max-sm:col-start-3">{device && <DeviceAction device={device} status={status} />}</div>
 			{hint && <p className={`col-start-2 -col-end-1 m-0 text-xs leading-4 ${message || error ? 'text-danger' : 'text-ink-300'}`}>{hint}</p>}
-			{deviceType === 'camera' && device && <CatalogBinding device={device} />}
+			{deviceType === 'camera' && assigned && <CatalogBinding deviceId={assigned} device={device} />}
 		</li>
 	)
 }

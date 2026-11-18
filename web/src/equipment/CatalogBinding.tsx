@@ -6,7 +6,7 @@ import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
-import { bindCamera, boundCameraId, cameraBindingsState, cameraBoundElsewhere, catalogCameraName, catalogState, createCatalogCamera, deviceFields, sensorMismatch, suggestedCameraId } from './catalog'
+import { bindCamera, boundCameraId, cameraBindingsState, cameraBoundElsewhere, catalogCameraName, catalogState, createCatalogCamera, deviceFields, deviceIdCameraId, sensorMismatch, suggestedCameraId } from './catalog'
 import { deviceState } from './equipment'
 
 // Line of a camera role of the Equipment Setup that binds its device to a camera of the Equipment Catalog: the camera
@@ -16,7 +16,10 @@ import { deviceState } from './equipment'
 // A camera of the catalog is bound to one device at most: like a device that already fills another role, a camera another
 // device of the connection is bound to cannot be chosen, and binding one a device of an old endpoint holds moves it. New
 // Camera creates a camera of the catalog from the device, which Settings → Equipment Catalog renames; the edit button
-// beside the select closes the Equipment Setup and shows the bound camera there. Binding never commands the device.
+// beside the select closes the Equipment Setup and shows the bound camera there. Binding never commands the device. While
+// the device is not on an open connection (its server is not connected, or it is missing from it), the line shows the
+// camera the device id the setup keeps is bound to (deviceIdCameraId) with the select disabled, since only a device of an
+// open connection can be bound.
 
 // Select value of the option that unbinds the device.
 const UNBOUND = ''
@@ -25,8 +28,10 @@ const UNBOUND = ''
 const NEW_CAMERA = '\u0000new'
 
 export interface CatalogBindingProps {
-	// Camera device of the role, present on the connection.
-	readonly device: DeviceSummary
+	// Id of the camera device the role is assigned to.
+	readonly deviceId: string
+	// Camera device of the role while it is present on an open connection; absent shows the binding read-only.
+	readonly device?: DeviceSummary
 }
 
 // Returns a name for a new camera of the catalog from a device name, numbered when the catalog already has it.
@@ -37,21 +42,23 @@ function newCameraName(name: string, taken: readonly string[]) {
 }
 
 // Camera of the catalog a camera device is bound to, with a select that binds it to another one or to none.
-export function CatalogBinding({ device }: CatalogBindingProps) {
+export function CatalogBinding({ deviceId, device }: CatalogBindingProps) {
 	const { cameras } = useSnapshot(catalogState)
 	const bindings = useSnapshot(cameraBindingsState)
 	const control = useSnapshot(controlRuntime)
 	const [busy, setBusy] = useState(false)
 	const [error, setError] = useState<string>()
-	const bound = boundCameraId(bindings, device)
+	const bound = device ? boundCameraId(bindings, device) : deviceIdCameraId(bindings, deviceId)
 	const camera = cameras.find((entry) => entry.id === bound)
-	const options = [UNBOUND, ...cameras.filter((entry) => !entry.archived || entry.id === bound).map((entry) => entry.id), NEW_CAMERA]
-	const named = bound === undefined ? suggestedCameraId(bindings, cameras, device.name) : undefined
-	const suggestion = named !== undefined && !cameraBoundElsewhere(bindings, device, named) ? named : undefined
-	const sensor = watchedDeviceState(control, 'camera', device)?.sensor
+	// New Camera needs the device on an open connection.
+	const options = [UNBOUND, ...cameras.filter((entry) => !entry.archived || entry.id === bound).map((entry) => entry.id), ...(device ? [NEW_CAMERA] : [])]
+	const named = device && bound === undefined ? suggestedCameraId(bindings, cameras, device.name) : undefined
+	const suggestion = device && named !== undefined && !cameraBoundElsewhere(bindings, device, named) ? named : undefined
+	const sensor = device && watchedDeviceState(control, 'camera', device)?.sensor
 	const mismatch = sensorMismatch(camera, sensor)
 
 	async function bind(cameraId: string | undefined) {
+		if (!device) return
 		setBusy(true)
 		setError(await bindCamera(cameraBindingsState, device, cameraId))
 		setBusy(false)
@@ -59,6 +66,7 @@ export function CatalogBinding({ device }: CatalogBindingProps) {
 
 	// Creates a camera of the catalog named after the device, with the model and sensor it reports, and binds the device to it.
 	async function bindNew() {
+		if (!device) return
 		setBusy(true)
 		const created = await createCatalogCamera({
 			name: newCameraName(
@@ -93,18 +101,24 @@ export function CatalogBinding({ device }: CatalogBindingProps) {
 
 	// Reason an option cannot be chosen: another device of the connection is bound to the camera.
 	function disabledReason(value: string) {
-		if (value === UNBOUND || value === NEW_CAMERA || value === bound) return undefined
+		if (!device || value === UNBOUND || value === NEW_CAMERA || value === bound) return undefined
 		const other = cameraBoundElsewhere(bindings, device, value)
 		return other && `Bound to ${other.deviceName}`
 	}
 
-	const hint = error ?? mismatch ?? (bound === undefined ? 'Bind it to calibrate: the wizards and the Calibration Library record frames against a camera of the catalog. The binding holds for every profile.' : 'The binding belongs to this device and holds for every profile.')
+	const hint =
+		error ??
+		mismatch ??
+		(!device
+			? 'Only a device of a connected server can be bound. The binding belongs to the device and holds for every profile.'
+			: bound === undefined
+				? 'Bind it to calibrate: the wizards and the Calibration Library record frames against a camera of the catalog. The binding holds for every profile.'
+				: 'The binding belongs to this device and holds for every profile.')
 
 	return (
 		<div className="col-start-2 -col-end-1 flex flex-col gap-1">
-			<div className="flex flex-wrap items-center gap-2">
-				<span className="w-32 flex-none text-xs text-ink-300 max-sm:w-auto">Catalog</span>
-				<Select className="min-w-48 flex-1" options={options} value={bound ?? UNBOUND} format={format} onChange={change} disabledReason={disabledReason} disabled={busy} />
+			<div className="flex flex-wrap items-end gap-2">
+				<Select label="Catalog Camera" className="min-w-48 flex-1" options={options} value={bound ?? UNBOUND} format={format} onChange={change} disabledReason={disabledReason} disabled={busy || !device} />
 				<IconButton icon="edit" label={camera ? `Edit ${camera.name} in the Equipment Catalog` : 'Bind a camera of the catalog to edit it'} disabled={!camera} onClick={editCamera} />
 				{suggestion && (
 					<Button variant="secondary" disabled={busy} onClick={() => void bind(suggestion)}>

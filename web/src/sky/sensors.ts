@@ -1,7 +1,7 @@
 import type { CameraSensor } from 'api'
 import { proxy } from 'valtio'
 import { type ControlRuntime, watchedDeviceState } from '../equipment-control/control'
-import { boundCameraId, type CameraBindingsState, type CatalogCamera } from '../equipment/catalog'
+import { boundCameraId, type CameraBindingsState, type CatalogCamera, deviceIdCameraId } from '../equipment/catalog'
 import { CAMERA_ROLES, type CameraRole } from '../equipment/roles'
 
 // Camera sensor runtime of the tab for the Equipment Setup field of view: the devices the active profile assigns to
@@ -78,9 +78,7 @@ function positive(value: number | undefined) {
 // id names the same camera; undefined when none does or they disagree.
 function roleCameraId(bindings: Pick<CameraBindingsState, 'bindings'>, followed: SensorTarget | undefined, deviceId: string | undefined) {
 	if (followed) return boundCameraId(bindings, followed)
-	if (deviceId === undefined) return undefined
-	const cameras = new Set(Object.values(bindings.bindings).flatMap((binding) => (binding.deviceId === deviceId ? [binding.cameraId] : [])))
-	return cameras.size === 1 ? [...cameras][0] : undefined
+	return deviceId === undefined ? undefined : deviceIdCameraId(bindings, deviceId)
 }
 
 // Returns the sensor of each camera role for the field of view: what its device reports, each value it does not report

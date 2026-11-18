@@ -1,15 +1,14 @@
 import { describe, expect, test } from 'bun:test'
-import type { OpticalPreset } from '../../sky/framing'
-import { importOptics, isOriginCurrent, opticsSources, type SourceContext, sourceGroup, sourceLabel } from './sources'
+import { importOptics, isOriginCurrent, opticsSources, type SourceContext, type SourceFraming, sourceGroup, sourceLabel } from './sources'
 
-const PRESET: OpticalPreset = { id: 'p1', name: 'Refractor', optics: { focalLength: 420, focalMultiplier: 1, aperture: 70, sensor: { kind: 'physical', width: 22.3, height: 14.9 }, rotation: 90 } }
+const FRAMING: SourceFraming = { id: 'p1', name: 'Refractor', optics: { focalLength: 420, focalMultiplier: 1, aperture: 70, sensor: { kind: 'physical', width: 22.3, height: 14.9 }, rotation: 90 } }
 
 const CONTEXT: SourceContext = {
 	profileId: 'profile',
 	settings: {
 		telescope: { focalLength: 1000, focalMultiplier: 0.8, aperture: 200 },
 		guideTelescope: { focalLength: 240, focalMultiplier: 1, aperture: 60 },
-		presets: [PRESET],
+		framings: [FRAMING],
 		catalogCameras: [
 			{ id: 'c1', name: 'ASI294MM', sensor: { width: 8240, height: 5628, pixelSize: 2.32 }, archived: false },
 			{ id: 'c2', name: 'Old camera', sensor: { width: 100, height: 100, pixelSize: 1 }, archived: true },
@@ -27,14 +26,16 @@ const CONTEXT: SourceContext = {
 }
 
 describe('sources', () => {
-	test('lists the camera roles, the manual sensor, the cameras of the catalog not archived, then the presets', () => {
-		expect(opticsSources(CONTEXT.settings)).toEqual(['MAIN_CAMERA', 'GUIDE_CAMERA', 'manual', 'catalog:c1', 'catalog:c3', 'catalog:c4', 'telescope:t1', 'telescope:t3', 'preset:p1'])
+	test('lists the camera roles, the cameras and telescopes of the catalog not archived, then the framings', () => {
+		expect(opticsSources(CONTEXT.settings)).toEqual(['MAIN_CAMERA', 'GUIDE_CAMERA', 'catalog:c1', 'catalog:c3', 'catalog:c4', 'telescope:t1', 'telescope:t3', 'framing:p1'])
 		expect(sourceLabel(CONTEXT.settings, 'telescope:t1')).toBe('Esprit 100')
 		expect(sourceLabel(CONTEXT.settings, 'telescope:gone')).toBe('Deleted telescope')
 		expect(sourceGroup('telescope:t1')).toBe('Equipment Catalog')
 		expect(sourceLabel(CONTEXT.settings, 'catalog:c1')).toBe('ASI294MM')
 		expect(sourceGroup('catalog:c1')).toBe('Equipment Catalog')
-		expect(sourceLabel(CONTEXT.settings, 'preset:p1')).toBe('Refractor')
+		expect(sourceLabel(CONTEXT.settings, 'framing:p1')).toBe('Refractor')
+		expect(sourceLabel(CONTEXT.settings, 'framing:gone')).toBe('Deleted framing')
+		expect(sourceGroup('framing:p1')).toBe('Framings')
 		expect(sourceLabel(CONTEXT.settings, 'GUIDE_CAMERA')).toBe('Guide Camera')
 	})
 
@@ -52,19 +53,13 @@ describe('sources', () => {
 	})
 
 	test('a camera that reports no sensor is refused, never replaced by another sensor', () => {
-		const context = { ...CONTEXT, live: { MAIN_CAMERA: CONTEXT.live.MAIN_CAMERA }, settings: { ...CONTEXT.settings, manualSensor: { kind: 'physical' as const, width: 10, height: 10 } } }
+		const context = { ...CONTEXT, live: { MAIN_CAMERA: CONTEXT.live.MAIN_CAMERA } }
 		expect(importOptics(context, 'GUIDE_CAMERA')).toEqual({ reason: 'The Guide Camera has not reported its sensor: assign and connect it in the Equipment Setup.' })
 	})
 
 	test('optics never entered are imported as zero', () => {
-		const result = importOptics({ ...CONTEXT, settings: { presets: [], catalogCameras: [], catalogTelescopes: [] } }, 'MAIN_CAMERA')
+		const result = importOptics({ ...CONTEXT, settings: { framings: [], catalogCameras: [], catalogTelescopes: [] } }, 'MAIN_CAMERA')
 		expect('optics' in result && result.optics).toMatchObject({ focalLength: 0, focalMultiplier: 1, aperture: 0 })
-	})
-
-	test('a manual sensor never entered is refused instead of an example sensor', () => {
-		expect(importOptics(CONTEXT, 'manual')).toEqual({ reason: 'No manual sensor is entered in Sky → Framing.' })
-		const context = { ...CONTEXT, settings: { ...CONTEXT.settings, manualSensor: { kind: 'physical' as const, width: 36, height: 24 } } }
-		expect(importOptics(context, 'manual')).toEqual({ optics: { focalLength: 1000, focalMultiplier: 0.8, aperture: 200, sensor: { kind: 'physical', width: 36, height: 24 }, rotation: 0 }, origin: { source: 'manual', label: 'Manual sensor', profileId: 'profile' } })
 	})
 
 	test('a camera of the catalog takes the telescope and the sensor it declares, and one declaring none is refused', () => {
@@ -88,15 +83,15 @@ describe('sources', () => {
 		expect(importOptics(CONTEXT, 'telescope:gone')).toEqual({ reason: 'The telescope is no longer in the Equipment Catalog.' })
 	})
 
-	test('a preset is copied, so the copy can change without the preset', () => {
-		const result = importOptics(CONTEXT, 'preset:p1')
-		if (!('optics' in result)) throw new Error('preset not imported')
-		expect(result.optics).toEqual(PRESET.optics)
-		expect(result.optics).not.toBe(PRESET.optics)
-		expect(result.optics.sensor).not.toBe(PRESET.optics.sensor)
+	test('a framing is copied, so the copy can change without the framing', () => {
+		const result = importOptics(CONTEXT, 'framing:p1')
+		if (!('optics' in result)) throw new Error('framing not imported')
+		expect(result.optics).toEqual(FRAMING.optics)
+		expect(result.optics).not.toBe(FRAMING.optics)
+		expect(result.optics.sensor).not.toBe(FRAMING.optics.sensor)
 		;(result.optics as { focalLength: number }).focalLength = 1
-		expect(PRESET.optics.focalLength).toBe(420)
-		expect(importOptics(CONTEXT, 'preset:gone')).toEqual({ reason: 'The preset no longer exists.' })
+		expect(FRAMING.optics.focalLength).toBe(420)
+		expect(importOptics(CONTEXT, 'framing:gone')).toEqual({ reason: 'The framing no longer exists.' })
 	})
 
 	test('an origin is current only for the same profile and the same camera', () => {
@@ -106,7 +101,7 @@ describe('sources', () => {
 		expect(isOriginCurrent(result.origin, { ...CONTEXT, profileId: 'other' })).toBe(false)
 		expect(isOriginCurrent(result.origin, { ...CONTEXT, cameras: { MAIN_CAMERA: { connectionId: 'b', id: 'main' } } })).toBe(false)
 		expect(isOriginCurrent(result.origin, { ...CONTEXT, cameras: {} })).toBe(false)
-		const preset = importOptics(CONTEXT, 'preset:p1')
-		expect('origin' in preset && isOriginCurrent(preset.origin, { ...CONTEXT, cameras: {} })).toBe(true)
+		const framing = importOptics(CONTEXT, 'framing:p1')
+		expect('origin' in framing && isOriginCurrent(framing.origin, { ...CONTEXT, cameras: {} })).toBe(true)
 	})
 })

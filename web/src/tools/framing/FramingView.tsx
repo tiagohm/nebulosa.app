@@ -224,7 +224,7 @@ function FramingList({ framings, selectedId, loaded }: FramingListProps) {
 					</li>
 				))}
 			</ul>
-			{loaded && framings.length === 1 && <Notice>No framing yet: New Framing creates one, from the Equipment Setup, the Equipment Catalog, an AstroBin model, or values typed by hand.</Notice>}
+			{loaded && framings.length === 1 && <Notice>No framing yet: New Framing creates one, from the Equipment Setup, the Equipment Catalog, an Equipment model, or values typed by hand.</Notice>}
 		</section>
 	)
 }

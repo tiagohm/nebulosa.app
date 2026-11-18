@@ -37,7 +37,7 @@ const SETUP_OPTICS: readonly FramingSetupOptics[] = ['telescope', 'guideTelescop
 
 // Display name of a source.
 function sourceName(source: FramingOpticsSource) {
-	return source === 'setup' ? 'Equipment Setup' : source === 'catalog' ? 'Equipment Catalog' : source === 'model' ? 'AstroBin model' : 'Entered by hand'
+	return source === 'setup' ? 'Equipment Setup' : source === 'catalog' ? 'Equipment Catalog' : source === 'model' ? 'Equipment model' : 'Entered by hand'
 }
 
 // Label and tone of each save status.

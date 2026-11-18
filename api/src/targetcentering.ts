@@ -58,8 +58,6 @@ export type TargetCenteringMode = 'center' | 'recenter' | 'verifyOnly'
 export interface TargetCenteringTarget extends CenteringTarget {
 	// Name meant for people.
 	readonly label?: string
-	// Saved framing the target was copied from; informative, since the coordinates here are what the session uses.
-	readonly framingId?: string
 }
 
 // Settings of the frames of a session; the exposure in seconds. The frame type is always LIGHT.

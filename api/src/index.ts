@@ -1011,7 +1011,6 @@ export type {
 	WorkspaceDevice,
 	WorkspaceErrorCode,
 	WorkspaceEvent,
-	WorkspaceFramingReference,
 	WorkspaceMountBinding,
 	WorkspaceNotificationState,
 	WorkspaceSnapshot,

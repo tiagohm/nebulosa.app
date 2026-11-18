@@ -15,7 +15,7 @@ Reading order for a new contributor: the [Glossary](#glossary) and the [Architec
   A disconnect of a connection still opening cancels the opening, answered 409 `cancelled` rather than 502 `unreachable`, and a connection that finishes opening after the registry was disposed (a server stopping in place) closes at once.
 - **Device**: one interface a connection reports (camera, mount, focuser, …), identified by connection id + device id (`DeviceSummary`).
   Several interfaces of one physical device share a hardware id.
-- **Profile**: the workspace of an operator: its saved connection, equipment setup, optical presets, and preferences, kept by the server (`api/src/workspace.ts`) for every tab and browser and edited in the tab (`web/src/profile/`), which writes back what changed (`sync.ts`).
+- **Profile**: the workspace of an operator: its saved connection, equipment setup, and preferences, kept by the server (`api/src/workspace.ts`) for every tab and browser and edited in the tab (`web/src/profile/`), which writes back what changed (`sync.ts`).
   Which profile is active is the tab's own.
 - **Equipment setup** and **role**: the assignment, in a profile, of devices of its connection to operational roles (`EquipmentRole` in `web/src/equipment/roles.ts`: `MAIN_CAMERA`, `GUIDE_CAMERA`, `MOUNT`, `FOCUSER`, `FILTER_WHEEL`, `ROTATOR`, `GUIDE_OUTPUT`, `DOME`, `COVER`, `FLAT_PANEL`), edited in the Equipment Setup modal, which connects or disconnects the assigned devices one by one or all at once (Connect all, Disconnect all: `switchSetup`); a device is assigned only while the server of the connection is connected, so its devices are listed, and the assignments are shown read-only otherwise.
   Roles only choose devices in the UI; every command still names the exact device.
@@ -70,7 +70,7 @@ it receives a full snapshot on that socket, then the changes, so snapshot and ch
 the subscription belongs to the socket, not to the tab's client id, and ends with it.
 
 The control states of the devices of the active profile's connection are mirrored once in the web, by `controlRuntime` (`web/src/equipment-control/control.ts`), from `GET /api/connections/:id/states` and the `<type>:updated` events.
-A view that follows one device, such as the Sky mount (`mountView`), Mount Nudge, the camera capabilities of Camera Acquisition and Auto Focus, or the sensor geometry of the camera roles that Sky Framing and the Calculator use (`CameraCapabilities.sensor`, `liveSensors` of `web/src/sky/sensors.ts`), reads that mirror (`watchedDeviceState`) and never fetches or tracks the device's state apart.
+A view that follows one device, such as the Sky mount (`mountView`), Mount Nudge, the camera capabilities of Camera Acquisition and Auto Focus, or the sensor geometry of the camera roles that the framings and the Calculator use (`CameraCapabilities.sensor`, `liveSensors` of `web/src/sky/sensors.ts`), reads that mirror (`watchedDeviceState`) and never fetches or tracks the device's state apart.
 
 Each `api` service exposes its routes through a `create<Name>Routes(service)` factory in its own module; `api/src/index.ts` only composes the services, spreads their routes, and serves `/api/health` and `/api/ws`.
 One route is composed by `app/src/main.ts` instead: `createAboutRoutes` (`api/src/about.ts`) serves the identity of the distribution, which `app` owns (its package version, and the commits and compile time `app/build.ts` inlines into the executable), so `api` never imports `app`.
@@ -130,7 +130,6 @@ Every contract and reference below is a document of its own under `docs/architec
 - [Sky Map Contract](architecture/sky-map.md)
 - [Sun Inspector Contract](architecture/sun-inspector.md)
 - [Moon Inspector Contract](architecture/moon-inspector.md)
-- [Sky Framing Integration Contract](architecture/sky-framing-integration.md)
 - [Framing Contract](architecture/framing.md)
 - [Tools Integration Contract](architecture/tools-integration.md)
 - [Astro Weather Contract](architecture/astro-weather.md)

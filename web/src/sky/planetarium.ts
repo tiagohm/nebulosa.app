@@ -55,8 +55,8 @@ const SKY_ANCHOR_ZOOM = 8
 // Radius of the ring of a remembered catalog object in pixels.
 const REMEMBERED_RING_RADIUS = 4
 
-// Id of the custom shape drawing the field of view.
-const FRAMING_SHAPE_ID = 'framing'
+// Prefix of the ids of the custom shapes drawing the fields of view, followed by the id of each framing.
+const FRAMING_SHAPE_PREFIX = 'framing:'
 
 // Points sampled along each edge of the field of view, so wide fields follow the projection's curvature.
 const FRAMING_EDGE_SAMPLES = 16
@@ -165,13 +165,12 @@ function drawOutlineLabel(ctx: CanvasRenderingContext2D, projected: readonly Scr
 	ctx.fillText(label, placement.x, placement.y - 4)
 }
 
-// Strokes the outline of a field of view (equatorial points in radians), breaking it where points cannot
-// be projected, with a cross at its center and, when it is large enough on screen, its label.
-function drawFraming(ctx: CanvasRenderingContext2D, state: RenderState, outline: readonly FramePoint[], label: string) {
+// Strokes the outline of a field of view (equatorial points in radians) in a colour, breaking it where points cannot be
+// projected, with its label when it is large enough on screen.
+function drawFraming(ctx: CanvasRenderingContext2D, state: RenderState, outline: readonly FramePoint[], label: string, color: string) {
 	ctx.beginPath()
 	const projected = traceOutline(ctx, state, outline)
 
-	const color = skyMapPalette().ink100
 	ctx.strokeStyle = color
 	ctx.lineWidth = 1.5
 	ctx.stroke()
@@ -242,6 +241,18 @@ const BODY_TYPES: readonly (readonly [string, MovingBodyType, string])[] = [
 	['999', 'asteroid', 'Pluto'],
 ]
 
+// Framing drawn around the selection.
+export interface SkyFrame {
+	// Id of the framing, unique among those drawn.
+	readonly id: string
+	// Name shown in its label.
+	readonly name: string
+	// Optical configuration, with the rotation of the sensor.
+	readonly optics: Readonly<OpticalConfiguration>
+	// CSS colour of its outline and label.
+	readonly color: string
+}
+
 // Loading state of the map data, shown by the workspace.
 export interface PlanetariumState {
 	// Whether the map data is loading, loaded, or failed to load.
@@ -311,8 +322,8 @@ export class Planetarium {
 	#dataTime?: number
 	// Ids of the shapes of the remembered catalog objects on the map.
 	readonly #rememberedShapes = new Set<string>()
-	// Whether the field of view shape is on the map.
-	#framing = false
+	// Ids of the framings whose field of view shape is on the map.
+	readonly #framings = new Set<string>()
 	// Footprint of a solved image to draw; absent when none is shown.
 	#footprint?: ImageFootprint
 	// Coordinate requested last from an image, and the request number already applied.
@@ -476,22 +487,27 @@ export class Planetarium {
 		this.celestial.setLayerVisible('horizon', !!observer)
 	}
 
-	// Draws the field of view of an optical configuration named name around a center (equatorial point of
-	// date in radians), or removes it when hidden or when there is no configuration, field, or center. The
-	// caller passes the selection's point at the instant shown, so the field follows it.
-	syncFraming(source: { readonly name: string; readonly optics: Readonly<OpticalConfiguration> } | undefined, visible: boolean, center: FramePoint | undefined) {
-		const framing = source && resolveFraming(source.optics)
+	// Draws the fields of view of framings (each named, with its optical configuration and colour) around a center
+	// (equatorial point of date in radians), and removes the others; every one is removed while hidden or without a
+	// center. A framing without a field is not drawn. The caller passes the selection's point at the instant shown, so the
+	// fields follow it.
+	syncFramings(framings: readonly SkyFrame[], visible: boolean, center: FramePoint | undefined) {
+		const drawn = new Set<string>()
 
-		if (!visible || !source || !framing || !isFraming(framing) || !center) {
-			if (this.#framing) this.celestial.removeShape(FRAMING_SHAPE_ID)
-			this.#framing = false
-			return
+		if (visible && center) {
+			for (const { id, name, optics, color } of framings) {
+				const framing = resolveFraming(optics)
+				if (!isFraming(framing)) continue
+				const outline = framePolygon(center, framing.width, framing.height, optics.rotation * DEG2RAD, FRAMING_EDGE_SAMPLES)
+				const label = `${name} · ${formatApparentSize(framing.width)} × ${formatApparentSize(framing.height)} · PA ${optics.rotation.toFixed(1)}°`
+				drawn.add(id)
+				this.celestial.addShape({ id: `${FRAMING_SHAPE_PREFIX}${id}`, coordinate: { ...center }, selectable: false, render: (_, ctx, state) => drawFraming(ctx, state.state, outline, label, color) })
+			}
 		}
 
-		const outline = framePolygon(center, framing.width, framing.height, source.optics.rotation * DEG2RAD, FRAMING_EDGE_SAMPLES)
-		const label = `${source.name} · ${formatApparentSize(framing.width)} × ${formatApparentSize(framing.height)} · PA ${source.optics.rotation.toFixed(1)}°`
-		this.#framing = true
-		this.celestial.addShape({ id: FRAMING_SHAPE_ID, coordinate: { ...center }, selectable: false, render: (_, ctx, state) => drawFraming(ctx, state.state, outline, label) })
+		for (const id of this.#framings) if (!drawn.has(id)) this.celestial.removeShape(`${FRAMING_SHAPE_PREFIX}${id}`)
+		this.#framings.clear()
+		for (const id of drawn) this.#framings.add(id)
 	}
 
 	// Draws the footprint of a solved image (J2000 points), or removes it when absent. It is converted to the frame of

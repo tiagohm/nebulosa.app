@@ -2,7 +2,8 @@ import type { MinorBody, SkySearchResult } from 'api'
 import { useEffect, useMemo, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../equipment-control/control'
-import { useProfileTelescopes } from '../equipment/telescopes'
+import { frameColor } from '../framing/palette'
+import { useResolvedFramings } from '../framing/resolve'
 import { imagesState } from '../images/images'
 import { activeSite, locationKey, openObservingSites, siteState } from '../location/site'
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
@@ -19,7 +20,6 @@ import { isSkyLayerVisible, METEOR_RADIANTS_LAYER, SATELLITE_TRACKS_LIMIT, SATEL
 import { DisplayPanel } from './DisplayPanel'
 import { addSkyObjectFavorite, isSkyFavorite, removeSkyObjectFavorite, selectionResult } from './favorites'
 import { clearImageFootprint, clearSkyCoordinate, skyImageState, toggleImageFootprint } from './footprint'
-import { activeFrameSource } from './framing'
 import { FramingPanel } from './FramingPanel'
 import { HoverTooltip } from './HoverTooltip'
 import { mountPoint, mountRuntime, mountView, selectionPoint } from './mount'
@@ -31,14 +31,13 @@ import { changeSkyObserver, type SkyPanelView, selectSkyObject, skyState } from 
 import { SkySearch } from './SkySearch'
 import { SkyView } from './SkyView'
 import { TimeController } from './TimeController'
-import { useRoleSensors } from './useSkyDevices'
 
 // Sky workspace: explores the sky on the tab's star map (./planetarium), independently of any connection
 // or equipment. It shows the map, a tooltip for the hovered object, the search, the Object Inspector of
 // the selection, which is the same whether it comes from a click or from the search (selecting never
 // moves the view), and the time bar of the simulation clock, hidden unless toggled on from the toolbar (a
-// profile preference). The contextual panel also holds the display (layers) and framing (field of view of custom optical
-// presets or of the Equipment Setup, drawn around the selection) settings. The Sky observes from the active profile's
+// profile preference). The contextual panel also holds the display (layers) and the framings of the Framing tool drawn
+// around the selection, each of which can be hidden. The Sky observes from the active profile's
 // observing site, chosen in the top bar: with one the map is its local sky; without one it is an equatorial chart of the
 // whole sky, never an assumed place. Times read in the profile's display zone, which changes no position. A solved image can send its footprint, drawn while its document shows that image,
 // and a coordinate to mark; the view is only panned to them, never reprojected, and the toolbar toggles the footprint
@@ -116,19 +115,17 @@ export function SkyWorkspace() {
 		map.setMeteorRadiants({ visible: showRadiants, revision: meteorRevision, selected: selectedShower, selectedName: selectedShowerName })
 	}, [map, showRadiants, meteorRevision, selectedShower, selectedShowerName])
 
-	// Draws the field of view of the selected preset, or of the Equipment Setup, around the selection,
-	// following its position.
-	const { telescope, guideTelescope } = useProfileTelescopes(activeProfile(profiles).settings)
-	const sensors = useRoleSensors()
-	const { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor } = sensors
-	const frameSource = activeFrameSource(framing, { telescope, guideTelescope }, { MAIN_CAMERA: mainSensor, GUIDE_CAMERA: guideSensor })
-	// The workspace renders on every mount or camera update, and each render builds the frame anew, so the outline follows
-	// the value of the frame, never the object, and is rebuilt only when the frame really changed.
-	const frameKey = frameSource && JSON.stringify(frameSource)
+	// Draws the fields of view of the framings not hidden around the selection, each in its colour, following its position.
+	const framings = useResolvedFramings()
+	const hidden = framing?.hidden
+	const skyFrames = framings.flatMap((each, position) => (hidden?.includes(each.id) ? [] : [{ id: each.id, name: each.name, optics: each.optics, color: frameColor(position) }]))
+	// The workspace renders on every mount or camera update, and each render builds the frames anew, so the outlines follow
+	// the value of the frames, never the objects, and are rebuilt only when a frame really changed.
+	const framesKey = JSON.stringify(skyFrames)
 
 	useEffect(() => {
-		map.syncFraming(frameSource, framing?.visible ?? false, selectionCenter)
-	}, [map, frameKey, framing?.visible, selectionCenter?.rightAscension, selectionCenter?.declination])
+		map.syncFramings(skyFrames, framing?.visible ?? false, selectionCenter)
+	}, [map, framesKey, framing?.visible, selectionCenter?.rightAscension, selectionCenter?.declination])
 
 	// Draws the footprint of a solved image, unless hidden from the toolbar, while its document still shows that image,
 	// and drops it otherwise (the document closed, or its camera tab shows another frame); marks and pans to a coordinate
@@ -236,7 +233,7 @@ export function SkyWorkspace() {
 	const panels: Record<SkyPanelView, () => WorkspacePanel> = {
 		inspector: () => ({ title: 'Object Inspector', actions: inspectorActions, content: <ObjectInspector observer={observer} onSetObserver={() => openObservingSites(observer?.id)} timeZone={displayZone.zone} onShowFraming={() => openPanel('framing')} /> }),
 		display: () => ({ title: 'Display', content: <DisplayPanel sky={settings} local={coordinateSystem === 'horizontal'} /> }),
-		framing: () => ({ title: 'Framing', content: <FramingPanel framing={framing} telescope={telescope} guideTelescope={guideTelescope} hasTarget={!!selectionCenter} /> }),
+		framing: () => ({ title: 'Framing', content: <FramingPanel framings={framings} framing={framing} hasTarget={!!selectionCenter} /> }),
 	}
 
 	return (

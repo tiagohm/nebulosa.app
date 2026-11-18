@@ -36,7 +36,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   the choice is offered whenever the image has a header solution, even before any solve, or more than one completed job (`solutionOptions`), and a header solution is never shown unless chosen;
   results are fetched only for the image shown.
   Zoom, pan, stretch, and the overlay toggles never solve.
-  The solution shows the position angle of the image top (`imageTopPositionAngle`, the sky direction of the top edge as the viewer draws it, at the reference pixel), the same quantity as the Rotation of Sky Framing;
+  The solution shows the position angle of the image top (`imageTopPositionAngle`, the sky direction of the top edge as the viewer draws it, at the reference pixel), the same quantity as the Rotation of a framing;
   `solution.orientation` is the solver’s own angle and is not shown.
 - Operation integration: `PlateSolvingService.solve(imageId, request, signal, origin)` resolves to the result of that image (a search without a solution completes with `outcome: noSolution`), whatever newer frame arrives, cancels with its signal the job it started (a job it joined, which another requester started, is left running and only stops being waited for), and throws `PlateSolvingError` with the job code otherwise;
   a preparation resolved once keeps the provider settings of a whole session.

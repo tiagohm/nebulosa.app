@@ -62,12 +62,12 @@ function fakeFetch(answers: Record<string, () => Response>) {
 }
 
 describe('target centering blockers', () => {
-	const blocker = (mode: Parameters<typeof targetCenteringBlocker>[0], state: MountState | undefined = MOUNT, draft: Parameters<typeof targetCenteringBlocker>[4] = TARGET, framingId?: string, configured = true) => targetCenteringBlocker(mode, READY, READY, state, draft, framingId, configured)
+	const blocker = (mode: Parameters<typeof targetCenteringBlocker>[0], state: MountState | undefined = MOUNT, draft: Parameters<typeof targetCenteringBlocker>[4] = TARGET, configured = true) => targetCenteringBlocker(mode, READY, READY, state, draft, configured)
 
 	test('a center needs a target, a solver, and a mount able to move', () => {
 		expect(blocker('center')).toBeUndefined()
 		expect(blocker('center', MOUNT, {})).toBe('Enter the coordinates of the target.')
-		expect(blocker('center', MOUNT, TARGET, undefined, false)).toBe('The plate solver is not configured.')
+		expect(blocker('center', MOUNT, TARGET, false)).toBe('The plate solver is not configured.')
 		expect(blocker('center', { ...MOUNT, parked: true })).toBe('The mount is parked.')
 		expect(blocker('center', { ...MOUNT, site: { latitude: 0, longitude: 0 } } as MountState)).toContain('no site')
 		expect(blocker('center', { ...MOUNT, canGoTo: false })).toBe('The mount cannot go to a target.')
@@ -75,20 +75,20 @@ describe('target centering blockers', () => {
 		expect(blocker('center', { ...MOUNT, tracking: false })).toBeUndefined()
 	})
 
-	test('recenter is disabled with its reason until a framing is selected', () => {
-		expect(blocker('recenter')).toBe('Recenter needs a saved framing: load or save one first.')
-		expect(blocker('recenter', MOUNT, TARGET, 'framing')).toBeUndefined()
+	test('recenter needs only the target, like center', () => {
+		expect(blocker('recenter')).toBeUndefined()
+		expect(blocker('recenter', MOUNT, {})).toBe('Enter the coordinates of the target.')
 	})
 
 	test('verify only asks nothing of a mount it never commands', () => {
 		expect(blocker('verifyOnly', { ...MOUNT, parked: true, canGoTo: false, tracking: false, canTracking: false })).toBeUndefined()
-		expect(targetCenteringBlocker('verifyOnly', READY, READY, undefined, TARGET, undefined, true)).toBe('The mount state is not known yet.')
+		expect(targetCenteringBlocker('verifyOnly', READY, READY, undefined, TARGET, true)).toBe('The mount state is not known yet.')
 	})
 
 	test('the camera and the mount come first', () => {
 		const busy = { status: 'busy', message: 'The camera is busy.' } as RoleAvailability
-		expect(targetCenteringBlocker('center', busy, READY, MOUNT, TARGET, undefined, true)).toBe('The camera is busy.')
-		expect(targetCenteringBlocker('verifyOnly', READY, busy, MOUNT, TARGET, undefined, true)).toBe('The camera is busy.')
+		expect(targetCenteringBlocker('center', busy, READY, MOUNT, TARGET, true)).toBe('The camera is busy.')
+		expect(targetCenteringBlocker('verifyOnly', READY, busy, MOUNT, TARGET, true)).toBe('The camera is busy.')
 	})
 
 	test('a mount that cannot abort is unsupported, and an unknown state says nothing', () => {
@@ -98,11 +98,11 @@ describe('target centering blockers', () => {
 })
 
 describe('target centering request', () => {
-	test('sends radians and the form, copying the target and the framing it came from', () => {
-		const settings = { ...DEFAULT_TARGET_CENTERING_SETTINGS, tolerance: 3600, maximumCorrection: 180, framingId: 'f1' }
+	test('sends radians and the form, copying the target', () => {
+		const settings = { ...DEFAULT_TARGET_CENTERING_SETTINGS, tolerance: 3600, maximumCorrection: 180 }
 		const request = targetCenteringRequest('recenter', { ...TARGET, label: 'M 42' }, settings, DEFAULT_EXPOSURE_SETTINGS, DEFAULT_CAMERA_PLATE_SOLVING, { mount, guideOutput: { connectionId: 'c', deviceId: 'st4' } })
 
-		expect(request).toMatchObject({ mode: 'recenter', mount, guideOutput: { connectionId: 'c', deviceId: 'st4' }, target: { frame: 'J2000', ...TARGET, label: 'M 42', framingId: 'f1' }, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, blindRetry: false })
+		expect(request).toMatchObject({ mode: 'recenter', mount, guideOutput: { connectionId: 'c', deviceId: 'st4' }, target: { frame: 'J2000', ...TARGET, label: 'M 42' }, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, blindRetry: false })
 		expect(request.tolerance).toBeCloseTo(Math.PI / 180, 9)
 		expect(request.maximumCorrection).toBeCloseTo(Math.PI, 9)
 		expect(request.capture.exposureTime).toBe(DEFAULT_TARGET_CENTERING_SETTINGS.exposureTime)

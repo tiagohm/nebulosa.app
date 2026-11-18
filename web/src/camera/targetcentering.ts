@@ -16,7 +16,7 @@ import { applySession, type CameraSessionKind, type CameraSessionRecords, refres
 // revision, and a snapshot leaves what an event changed during its fetch. Cameras and mounts are addressed by their exact
 // connection and device ids, never by role. A start carries a token, so a retried request answers the session of the first
 // one instead of starting another. The target being edited is kept for the tab across its reloads (centeringTargetsEntry of
-// profile/view.ts); a saved framing is what lasts, in the profile.
+// profile/view.ts).
 
 // J2000 target being edited for a camera, in radians.
 export interface TargetCenteringDraft {
@@ -24,7 +24,7 @@ export interface TargetCenteringDraft {
 	readonly rightAscension?: number
 	// Declination; absent until entered.
 	readonly declination?: number
-	// Name of the object or framing it came from.
+	// Name of the object it came from.
 	readonly label?: string
 }
 
@@ -70,9 +70,9 @@ export function targetCenteringMountSupport(state: Pick<MountState, 'canGoTo' | 
 
 // Returns why a mode cannot start now, or undefined when it can, from the availability of the camera and of the setup's
 // mount, the mount's reported state (undefined while unknown), the target, and whether the plate solver is configured. A
-// mount that is not tracking is accepted when it can switch tracking, which the server starts for the session. Recenter needs
-// a saved framing, which names the reference it recovers. The server checks again.
-export function targetCenteringBlocker(mode: TargetCenteringMode, camera: RoleAvailability, mount: RoleAvailability, state: MountState | undefined, draft: TargetCenteringDraft | undefined, framingId: string | undefined, solverConfigured: boolean): string | undefined {
+// mount that is not tracking is accepted when it can switch tracking, which the server starts for the session. The server
+// checks again.
+export function targetCenteringBlocker(mode: TargetCenteringMode, camera: RoleAvailability, mount: RoleAvailability, state: MountState | undefined, draft: TargetCenteringDraft | undefined, solverConfigured: boolean): string | undefined {
 	if (camera.status !== 'ready') return camera.message
 	if (mount.status !== 'ready') return mount.message
 	if (!state) return 'The mount state is not known yet.'
@@ -85,7 +85,6 @@ export function targetCenteringBlocker(mode: TargetCenteringMode, camera: RoleAv
 		if (!state.tracking && !state.canTracking) return 'The mount is not tracking and cannot start tracking.'
 	}
 
-	if (mode === 'recenter' && framingId === undefined) return 'Recenter needs a saved framing: load or save one first.'
 	if (draft?.rightAscension === undefined || draft.declination === undefined) return 'Enter the coordinates of the target.'
 	if (!solverConfigured) return 'The plate solver is not configured.'
 	return undefined
@@ -106,13 +105,13 @@ export function targetCenteringRequest(
 	capabilities?: CameraCapabilities,
 ): Omit<TargetCenteringRequest, 'token'> {
 	const { rightAscension, declination, label } = target
-	const { framingId, exposureTime, tolerance, maximumCorrections, noSolutionRetries, maximumFrames, settleDelay, maximumCorrection, blindRetry, coordinateGuiding } = settings
+	const { exposureTime, tolerance, maximumCorrections, noSolutionRetries, maximumFrames, settleDelay, maximumCorrection, blindRetry, coordinateGuiding } = settings
 
 	return {
 		mount,
 		...(guideOutput && { guideOutput }),
 		mode,
-		target: { frame: 'J2000', rightAscension, declination, ...(label !== undefined && { label }), ...(framingId !== undefined && { framingId }) },
+		target: { frame: 'J2000', rightAscension, declination, ...(label !== undefined && { label }) },
 		capture: fitExposure({ ...exposure, exposureTime }, capabilities),
 		solving: { ...solving },
 		tolerance: tolerance * ASEC2RAD,

@@ -42,7 +42,7 @@ const BLOCKED = {
 }
 
 function record(id: string, patch: Partial<ProfileRecord> = {}): ProfileRecord {
-	return { id, name: id, sortOrder: 0, revision: 1, createdAt: 0, equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, framings: [], notifications: { readIds: [], dismissedIds: [] }, ...patch }
+	return { id, name: id, sortOrder: 0, revision: 1, createdAt: 0, equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, notifications: { readIds: [], dismissedIds: [] }, ...patch }
 }
 
 const WORKSPACE: WorkspaceSnapshot = { connections: [], sites: [], cameras: [], telescopes: [], profiles: [record('p1'), record('p2', { sortOrder: 1 })] }
@@ -133,26 +133,18 @@ describe('view state', () => {
 
 		setLastImageDirectory(profiles, '/new')
 		await settle(sync)
-		expect(JSON.parse(local.getItem('nebulosa:view:p1')!)).toEqual({ version: 3, fields: { lastImageDirectory: '/new' } })
+		expect(JSON.parse(local.getItem('nebulosa:view:p1')!)).toEqual({ version: 4, fields: { lastImageDirectory: '/new' } })
 	})
 
-	test('the drawn framing applies to the presets the server kept, never creating a framing', async () => {
-		const framing = {
-			version: PROFILE_SETTINGS_VERSION,
-			value: {
-				presets: [
-					{ id: 'a', name: 'A' },
-					{ id: 'b', name: 'B' },
-				],
-			},
-			revision: 1,
-		}
+	test('the framings the Sky draws and the one the planner judges against are kept by the browser only', async () => {
 		const local = new MemoryStorage()
-		local.setItem('nebulosa:view:p1', JSON.stringify({ version: 3, fields: { skyFraming: { activePresetId: 'b', visible: true, source: 'custom' } } }))
-		local.setItem('nebulosa:view:p2', JSON.stringify({ version: 3, fields: { skyFraming: { activePresetId: 'gone', visible: true } } }))
-		const { profiles, sync, sent } = await tab({ local, session: new MemoryStorage() }, { connections: [], sites: [], cameras: [], telescopes: [], profiles: [record('p1', { preferences: { skyFraming: framing } }), record('p2', { sortOrder: 1 })] })
+		local.setItem('nebulosa:view:p1', JSON.stringify({ version: 4, fields: { skyFraming: { visible: true, hidden: ['f1', 7] }, plannerFramingId: 'f2' } }))
+		local.setItem('nebulosa:view:p2', JSON.stringify({ version: 3, fields: { skyFraming: { activePresetId: 'b', visible: true, source: 'custom' } } }))
+		const { profiles, sync, sent } = await tab({ local, session: new MemoryStorage() })
 
-		expect(snapshot(profiles).profiles[0].settings.sky.framing).toMatchObject({ activePresetId: 'b', visible: true, source: 'custom' })
+		expect(snapshot(profiles).profiles[0].settings.sky.framing).toEqual({ visible: true, hidden: ['f1'] })
+		expect(profiles.profiles[0].settings.plannerFramingId).toBe('f2')
+		// A document of the previous version, which kept presets, is ignored.
 		expect(profiles.profiles[1].settings.sky.framing).toBeUndefined()
 		await settle(sync)
 		expect(sent).toEqual([])

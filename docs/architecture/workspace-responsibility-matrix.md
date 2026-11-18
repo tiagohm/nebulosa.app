@@ -13,7 +13,7 @@ Workspaces share services, not interfaces.
 - **Sky**
     - Responsibility: Exploration, planning, contextual mount control
     - Features: Planetarium, search with favorites (a star on every result and on the Object Inspector header, listed by the Favorites toggle and on an empty field), time bar (toggled from the toolbar, view state of the tab), mount center and follow;
-      panel views Object Inspector (with slew; the Sun, the Moon, artificial satellites, and the mount marker have their own views: the Sun, Moon, Satellite, and Mount Inspectors), Observer, Display (layers), Framing (FOV)
+      panel views Object Inspector (with slew; the Sun, the Moon, artificial satellites, and the mount marker have their own views: the Sun, Moon, Satellite, and Mount Inspectors), Observer, Display (layers), Framing (the framings of the Framing tool drawn around the selection)
     - Registry: `SkyPanelView` (`web/src/sky/sky.ts`), panels in `SkyWorkspace.tsx`
 - **Tools**
     - Responsibility: Standalone utilities, no camera or document needed

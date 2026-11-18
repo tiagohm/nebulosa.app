@@ -3,6 +3,7 @@ import { useSnapshot } from 'valtio'
 import { controlRuntime } from '../../equipment-control/control'
 import { catalogState } from '../../equipment/catalog'
 import { useProfileTelescopes } from '../../equipment/telescopes'
+import { EQUIPMENT_FRAMING_ID, useResolvedFramings } from '../../framing/resolve'
 import { activeProfile, profileState } from '../../profile/profile'
 import type { Profile } from '../../profile/schema'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
@@ -24,7 +25,7 @@ import { ApertureComparisonCalculator, EyepieceCalculator } from './VisualCalcul
 // Calculator tool: task-oriented observing and imaging calculations over the pure formulas of the toolkit, computed in
 // the browser as the fields are typed. One grouped menu chooses the calculator; each keeps its own draft while the tool
 // is open, so switching calculators never changes another's values. Drafts start from labeled examples, may import an
-// optical configuration of the active profile by value, and are never saved: the profile, its presets, and the devices
+// optical configuration of the active profile by value, and are never saved: the profile, the framings, and the devices
 // are only read. A change of the active profile starts over from the examples, so no draft keeps another profile's
 // equipment.
 
@@ -73,10 +74,10 @@ function CalculatorBody({ profile }: { readonly profile: Readonly<Pick<Profile, 
 	const [drafts, setDrafts] = useState(INITIAL_DRAFTS)
 	const sensors = useSnapshot(sensorRuntime)
 	const live = liveSensors(sensors, useSnapshot(controlRuntime))
-	const { sky } = profile.settings
+	const framings = useResolvedFramings().flatMap(({ id, name, optics }) => (id === EQUIPMENT_FRAMING_ID ? [] : [{ id, name, optics }]))
 	const { telescope, guideTelescope } = useProfileTelescopes(profile.settings)
 	const { cameras: catalogCameras, telescopes: catalogTelescopes } = useSnapshot(catalogState)
-	const context: SourceContext = { profileId: profile.id, settings: { telescope, guideTelescope, presets: sky.framing?.presets ?? [], manualSensor: sky.framing?.manualSensor, catalogCameras, catalogTelescopes }, live, cameras: sensors.cameras }
+	const context: SourceContext = { profileId: profile.id, settings: { telescope, guideTelescope, framings, catalogCameras, catalogTelescopes }, live, cameras: sensors.cameras }
 	const definition = calculatorDefinition(selected)
 
 	// Returns the draft of a calculator and the callback that replaces it.

@@ -85,7 +85,9 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 						F = F_native × factor{'\n'}FOV = 2·atan(d / 2F){'\n'}scale = 206.265 × pixel / F
 					</Formula>
 					<p className="m-0">d is the sensor width, height, or diagonal in millimeters, F the effective focal length in millimeters, and the pixel size in micrometers gives the scale in arcseconds per pixel. The focal ratio is F divided by the aperture.</p>
-					<p className="m-0">This is the geometric field of a flat sensor, the same Sky Framing draws; the small-angle d / F differs from it only for wide fields. Distortion, vignetting, and the image circle of the optics are not modeled, and the rotation of the camera does not change the field.</p>
+					<p className="m-0">
+						This is the geometric field of a flat sensor, the same the Framing tool and the Sky draw; the small-angle d / F differs from it only for wide fields. Distortion, vignetting, and the image circle of the optics are not modeled, and the rotation of the camera does not change the field.
+					</p>
 				</FormulaNotes>
 			}
 		/>

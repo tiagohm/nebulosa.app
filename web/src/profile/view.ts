@@ -8,10 +8,10 @@ import type { ProfileSettings, SkyFramingSettings } from './schema'
 import { type WorkspaceSyncState, workspaceSyncState } from './sync'
 
 // View state of the tab: the fields of a profile the server never keeps (panels, last directories, the time bar, which
-// framing is drawn, the bottom area of the camera tabs, the Image Processing pipeline, the preferences of Close
-// Approaches and Astro Weather), which profile is active, and the view entries kept outside the profiles (which panel
-// sections are expanded, the tool of each camera tab, the camera tab selected last, the target being typed for each camera
-// in Target Centering, the preview of the Framing tool).
+// framings the Sky draws and the one the Observing Planner judges against, the bottom area of the camera tabs, the Image
+// Processing pipeline, the preferences of Close Approaches and Astro Weather), which profile is active, and the view
+// entries kept outside the profiles (which panel sections are expanded, the tool of each camera tab, the camera tab
+// selected last, the target being typed for each camera in Target Centering, the preview of the Framing tool).
 // VIEW_STORAGE says, for each one, the browser storage areas it is kept in: sessionStorage keeps it for this tab across
 // its reloads, localStorage for every tab of the browser across its restarts, and one kept in both is read from the first
 // area that holds it and written to all of them. Each area holds one document per profile, written whenever a field kept
@@ -26,9 +26,10 @@ export type ViewStorageArea = 'local' | 'session'
 // Storage areas of the browser, or none where one cannot be used.
 export type ViewStorages = Readonly<Partial<Record<ViewStorageArea, Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>>>>
 
-// Version of the shape of the documents; a document of another version is ignored and replaced, never migrated. 3: the
-// Close Approaches preferences lost their zone (closeApproaches.timeDisplay); the tool shows the profile's display zone.
-const VIEW_VERSION = 3
+// Version of the shape of the documents; a document of another version is ignored and replaced, never migrated. 4: the
+// Sky draws the framings of the Framing tool (skyFraming keeps whether they are shown and which are hidden, no preset or
+// source).
+const VIEW_VERSION = 4
 
 // Prefix of the keys of this application in browser storage.
 const PREFIX = 'nebulosa:'
@@ -49,11 +50,8 @@ interface ViewField {
 	readonly set: (settings: ProfileSettings, value: unknown) => void
 }
 
-// Fields of the framing that are view state; the presets and the sensor are kept by the server.
-type FramingView = Pick<SkyFramingSettings, 'activePresetId' | 'visible' | 'source' | 'sensorSource'>
-
 // Field of the view kept as an optional field of ProfileSettings.
-function setting(key: 'lastImageDirectory' | 'lastSaveDirectory' | 'lastStackingDirectory' | 'lastCalibrationDirectory' | 'framesHidden' | 'imageProcessing' | 'closeApproaches' | 'astroWeather' | 'guidingGraph'): ViewField {
+function setting(key: 'lastImageDirectory' | 'lastSaveDirectory' | 'lastStackingDirectory' | 'lastCalibrationDirectory' | 'framesHidden' | 'imageProcessing' | 'closeApproaches' | 'astroWeather' | 'guidingGraph' | 'plannerFramingId'): ViewField {
 	return {
 		get: (settings) => settings[key],
 		set: (settings, value) => Object.assign(settings, { [key]: value }),
@@ -79,14 +77,12 @@ const VIEW_FIELDS = {
 		get: (settings) => settings.sky.timeBar,
 		set: (settings, value) => (settings.sky.timeBar = value as boolean),
 	},
+	plannerFramingId: setting('plannerFramingId'),
 	skyFraming: {
-		get: ({ sky: { framing } }) => framing && ({ activePresetId: framing.activePresetId, visible: framing.visible, source: framing.source, sensorSource: framing.sensorSource } satisfies FramingView),
-		// Applies to the framing the server kept, never creating one, and draws only a preset it still has.
+		get: ({ sky: { framing } }) => framing && ({ visible: framing.visible, ...(framing.hidden && framing.hidden.length > 0 && { hidden: [...framing.hidden] }) } satisfies SkyFramingSettings),
 		set: (settings, value) => {
-			const framing = settings.sky.framing
-			if (!framing) return
-			const { activePresetId, visible, source, sensorSource } = value as FramingView
-			Object.assign(framing, { visible, source, sensorSource, activePresetId: framing.presets.some(({ id }) => id === activePresetId) ? activePresetId : framing.activePresetId })
+			const { visible, hidden } = value as SkyFramingSettings
+			settings.sky.framing = { visible: visible === true, ...(Array.isArray(hidden) && { hidden: hidden.filter((id): id is string => typeof id === 'string') }) }
 		},
 	},
 } as const satisfies Record<string, ViewField>
@@ -118,6 +114,7 @@ export const VIEW_STORAGE: Readonly<Record<ViewFieldKey | ViewEntryName | 'activ
 	// Whether the simulation clock is shown belongs to what this tab is doing.
 	skyTimeBar: ['session'],
 	skyFraming: ['local'],
+	plannerFramingId: ['local'],
 	// How the operator arranged the panels, wherever a section appears.
 	sections: ['local'],
 	// Whether the viewer status line reads the samples under the pointer.

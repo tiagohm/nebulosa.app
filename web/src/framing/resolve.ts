@@ -44,7 +44,7 @@ export interface FramingContext {
 
 // Where the resolved values of a telescope or camera come from, for people.
 export interface OpticsOrigin {
-	// Short name of the source, such as the catalog item, the AstroBin model, or the camera role.
+	// Short name of the source, such as the catalog item, the AstroBin equipment model, or the camera role.
 	readonly label: string
 	// Whether the catalog item it refers to was deleted, so its last copy is used.
 	readonly deleted?: boolean
@@ -90,7 +90,7 @@ function resolveTelescopeOf(telescope: FramingTelescope, context: FramingContext
 			return { values: { focalLength: item.focalLength ?? focalLength, aperture: item.aperture ?? aperture, focalMultiplier }, origin: { label: item.name } }
 		}
 		case 'model':
-			return { values: { focalLength, aperture, focalMultiplier }, origin: { label: telescope.model ?? 'AstroBin model' } }
+			return { values: { focalLength, aperture, focalMultiplier }, origin: { label: telescope.model ?? 'Telescope model' } }
 		case 'manual':
 			return { values: { focalLength, aperture, focalMultiplier }, origin: { label: 'Entered by hand' } }
 	}
@@ -114,7 +114,7 @@ function resolveCameraOf(camera: FramingCamera, context: FramingContext): { read
 			return { sensor: { kind: 'pixels', width: item.sensor.width, height: item.sensor.height, pixelSize: item.sensor.pixelSize ?? copied }, origin: { label: item.name } }
 		}
 		case 'model':
-			return { sensor: camera.sensor, origin: { label: camera.model ?? 'AstroBin model' } }
+			return { sensor: camera.sensor, origin: { label: camera.model ?? 'Camera model' } }
 		case 'manual':
 			return { sensor: camera.sensor, origin: { label: 'Entered by hand' } }
 	}

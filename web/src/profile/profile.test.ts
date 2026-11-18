@@ -4,7 +4,6 @@ import { proxy, snapshot } from 'valtio'
 import { ORIGINAL_DISPLAY_SETTINGS } from '../images/display'
 import { createOperation } from '../images/imageprocessing.catalog'
 import { DEFAULT_IMAGE_ASTROMETRY } from '../platesolving/preferences'
-import { framingSource } from '../sky/framing'
 import { DEFAULT_STAR_PROFILE_SETTINGS } from '../stars/starprofile.settings'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
 import { DEFAULT_STREAK_SETTINGS } from '../streaks/streaks'
@@ -50,11 +49,8 @@ import {
 	setDarvSettings,
 	setFlatWizardSettings,
 	setGuidingSettings,
-	createOpticalPreset,
 	createProfile,
-	deleteOpticalPreset,
 	deleteProfile,
-	duplicateOpticalPreset,
 	duplicateProfile,
 	forgetConnection,
 	newProfile,
@@ -63,12 +59,12 @@ import {
 	rememberDeviceNames,
 	renameProfile,
 	selectConnection,
-	selectOpticalPreset,
 	selectProfile,
 	setAcquisitionSettings,
-	setEquipmentRotation,
-	setFramingSource,
+	framingShownInSky,
+	setFramingShownInSky,
 	setFramingVisible,
+	setPlannerFraming,
 	setLastImageDirectory,
 	setLastSaveDirectory,
 	setLastCalibrationDirectory,
@@ -80,9 +76,7 @@ import {
 	setAnnotationPreferences,
 	setImagePlateSolving,
 	setImageProcessingPipeline,
-	setManualSensor,
 	setPanelOpen,
-	setSensorSource,
 	setSkyLayerVisible,
 	setSkyTimeBarVisible,
 	setSkyMagnitudeLimit,
@@ -98,16 +92,11 @@ import {
 	starProfileSettings,
 	setStarProfileSettings,
 	streakDetectionSettings,
-	updateOpticalPreset,
 	imageDisplaySettings,
 	setImageDisplaySettings,
 	dismissNotifications,
 	markNotificationsRead,
 	pruneNotificationPreferences,
-	deleteFramingReference,
-	framingReferences,
-	renameFramingReference,
-	saveFramingReference,
 	setTargetCenteringSettings,
 	targetCenteringSettings,
 } from './profile'
@@ -130,7 +119,6 @@ import {
 	DEFAULT_TPPA_SETTINGS,
 	DEFAULT_IPOLAR_SETTINGS,
 	DEFAULT_TARGET_CENTERING_SETTINGS,
-	FRAMING_REFERENCES_MAXIMUM,
 	DEFAULT_ASTRO_WEATHER_PREFERENCES,
 	DEFAULT_CLOSE_APPROACH_PREFERENCES,
 	SATELLITE_FAVORITES_MAXIMUM,
@@ -183,18 +171,6 @@ describe('management', () => {
 
 		assignDevice(state, 'MOUNT', dev('mount-2'))
 		expect(state.profiles[1].equipment.conn.MOUNT).toEqual(dev('mount-1'))
-	})
-
-	test('a duplicate gives its framing references ids of their own', () => {
-		const state = load()
-		const source = activeProfile(state)
-		source.settings.framingReferences = [{ id: 'm31', name: 'M31', rightAscension: 0.18, declination: 0.72, source: 'manual', createdAt: 1, updatedAt: 1 }]
-		const copy = duplicateProfile(state, source.id)!
-
-		expect(copy.settings.framingReferences).toHaveLength(1)
-		expect(copy.settings.framingReferences![0]).toMatchObject({ name: 'M31', rightAscension: 0.18, declination: 0.72 })
-		expect(copy.settings.framingReferences![0].id).not.toBe('m31')
-		expect(source.settings.framingReferences[0].id).toBe('m31')
 	})
 
 	test('the last profile cannot be deleted; deleting the active one selects another', () => {
@@ -380,30 +356,21 @@ describe('sky settings', () => {
 		expect(state.profiles[0].settings.sky.timeBar).toBeTrue()
 	})
 
-	test('manages optical presets without touching the equipment setup', () => {
+	test('the Sky draws every framing but those hidden, and the planner judges against the one chosen', () => {
 		const state = load()
-		selectConnection(state, 'c1')
-		assignDevice(state, 'MAIN_CAMERA', dev('cam'))
-		const equipment = structuredClone(snapshot(state).profiles[0].equipment)
+		const settings = () => state.profiles[0].settings
+		expect(framingShownInSky(settings(), 'equipment')).toBeTrue()
 
-		const first = createOpticalPreset(state, ' Refractor + APS-C ')!
-		expect(createOpticalPreset(state, '  ')).toBeUndefined()
-		expect(state.profiles[0].settings.sky.framing).toEqual({ presets: [first], activePresetId: first.id, visible: true })
+		setFramingVisible(state, true)
+		setFramingShownInSky(state, 'f1', false)
+		setFramingShownInSky(state, 'f2', false)
+		setFramingShownInSky(state, 'f1', true)
+		expect(settings().sky.framing).toEqual({ visible: true, hidden: ['f2'] })
+		expect(framingShownInSky(settings(), 'f1')).toBeTrue()
+		expect(framingShownInSky(settings(), 'f2')).toBeFalse()
 
-		expect(updateOpticalPreset(state, first.id, { optics: { ...first.optics, focalLength: 420, focalMultiplier: 0.8 } })).toBe(true)
-		const copy = duplicateOpticalPreset(state, first.id)!
-		expect(copy.name).toBe('Refractor + APS-C (copy)')
-		expect(copy.optics.focalLength).toBe(420)
-		expect(state.profiles[0].settings.sky.framing?.activePresetId).toBe(copy.id)
-
-		selectOpticalPreset(state, first.id)
-		deleteOpticalPreset(state, first.id)
-		expect(state.profiles[0].settings.sky.framing?.presets.map((e) => e.id)).toEqual([copy.id])
-		expect(state.profiles[0].settings.sky.framing?.activePresetId).toBe(copy.id)
-
-		setFramingVisible(state, false)
-		expect(state.profiles[0].settings.sky.framing?.visible).toBe(false)
-		expect(state.profiles[0].equipment).toEqual(equipment)
+		setPlannerFraming(state, 'f2')
+		expect(settings().plannerFramingId).toBe('f2')
 	})
 
 	test('the guide telescope belongs to the active profile and is persisted', () => {
@@ -420,46 +387,17 @@ describe('sky settings', () => {
 		])
 	})
 
-	test('Equipment Setup framing choices and telescope belong to the active profile', () => {
+	test('the telescope belongs to the active profile', () => {
 		const state = load()
-		setFramingSource(state, 'equipment')
-		setSensorSource(state, 'manual')
-		setManualSensor(state, { kind: 'physical', width: 23.5, height: 15.6 })
-		setEquipmentRotation(state, 365)
 		setTelescopeOptics(state, { focalLength: 400, focalMultiplier: 1, aperture: 80 })
 		const copy = duplicateProfile(state, state.profiles[0].id)!
 
 		selectProfile(state, copy.id)
 		setTelescopeOptics(state, { focalLength: 1000, focalMultiplier: 1, aperture: 200 })
-		setSensorSource(state, 'MAIN_CAMERA')
 
 		expect(state.profiles[0].settings.telescope?.focalLength).toBe(400)
-		expect(framingSource(state.profiles[0].settings.sky.framing)).toBe('equipment')
-		expect(state.profiles[0].settings.sky.framing).toMatchObject({ sensorSource: 'manual', manualSensor: { kind: 'physical', width: 23.5, height: 15.6 }, equipmentRotation: 5 })
 		expect(copy.settings.telescope?.focalLength).toBe(1000)
-		expect(copy.settings.sky.framing?.sensorSource).toBe('MAIN_CAMERA')
 		expect(state.profiles[0].equipment).toEqual({})
-	})
-
-	test('the framing source is the Equipment Setup until a custom preset is chosen', () => {
-		const state = load()
-		expect(framingSource(state.profiles[0].settings.sky.framing)).toBe('equipment')
-		setFramingSource(state, 'custom')
-		expect(framingSource(state.profiles[0].settings.sky.framing)).toBe('custom')
-		setFramingSource(state, 'equipment')
-		expect(framingSource(state.profiles[0].settings.sky.framing)).toBe('equipment')
-	})
-
-	test('a duplicated profile copies its presets independently', () => {
-		const state = load()
-		const preset = createOpticalPreset(state, 'Newtonian')!
-		const copy = duplicateProfile(state, state.profiles[0].id)!
-
-		selectProfile(state, copy.id)
-		updateOpticalPreset(state, preset.id, { name: 'Changed' })
-
-		expect(state.profiles[0].settings.sky.framing?.presets[0].name).toBe('Newtonian')
-		expect(copy.settings.sky.framing?.presets[0].name).toBe('Changed')
 	})
 
 	test('a duplicated profile observes from the same site, and each one changes its own', () => {
@@ -628,31 +566,6 @@ describe('camera forms', () => {
 	})
 
 	const CAMERA = { connectionId: 'c', deviceId: 'cam' }
-
-	test('saved framings survive a reload, unchanged by anything but their own actions', () => {
-		const state = load()
-		const first = saveFramingReference(state, { name: ' M 42 ', rightAscension: 1.46, declination: -0.09, source: 'sky' }, 100)!
-		const second = saveFramingReference(state, { name: 'Field', rightAscension: 2, declination: 0.5, source: 'manual' }, 200)!
-
-		expect(first).toMatchObject({ name: 'M 42', createdAt: 100, updatedAt: 100 })
-		expect(saveFramingReference(state, { name: '  ', rightAscension: 0, declination: 0, source: 'manual' })).toBeUndefined()
-		expect(renameFramingReference(state, first.id, 'Orion', 300)).toBeTrue()
-		expect(renameFramingReference(state, first.id, ' ')).toBeFalse()
-		expect(renameFramingReference(state, 'unknown', 'x')).toBeFalse()
-		deleteFramingReference(state, second.id)
-		deleteFramingReference(state, 'unknown')
-		setTargetCenteringSettings(state, CAMERA, { tolerance: 10, framingId: first.id })
-
-		const reloaded = state
-		expect(framingReferences(reloaded.profiles[0].settings)).toEqual([{ ...first, name: 'Orion', updatedAt: 300 }])
-		expect(targetCenteringSettings(reloaded.profiles[0].settings, CAMERA)).toEqual({ ...DEFAULT_TARGET_CENTERING_SETTINGS, tolerance: 10, framingId: first.id })
-	})
-
-	test('a framing library holds a bounded number of framings', () => {
-		const state = load()
-		for (let i = 0; i < FRAMING_REFERENCES_MAXIMUM; i++) expect(saveFramingReference(state, { name: `F${i}`, rightAscension: 0, declination: 0, source: 'manual' })).toBeDefined()
-		expect(saveFramingReference(state, { name: 'One too many', rightAscension: 0, declination: 0, source: 'manual' })).toBeUndefined()
-	})
 
 	test('the star detection request is the profile one, and is persisted', () => {
 		const state = load()

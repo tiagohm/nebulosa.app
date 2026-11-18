@@ -5,7 +5,7 @@ import { DEFAULT_OPTICS, type Framing, isFraming, type OpticalConfiguration, res
 import { between, newCheck, optional, type Outcome, outcome, POSITIVE, POSITIVE_INTEGER, positiveText, ready, required } from './values'
 
 // Optics & Field of View calculators. Imaging Setup resolves a telescope or lens with a camera through resolveFraming,
-// the convention of Sky Framing (2·atan(d / 2F) per axis, the reducer or Barlow factor applied once to the native focal
+// the convention of the Framing tool (2·atan(d / 2F) per axis, the reducer or Barlow factor applied once to the native focal
 // length), and adds the diagonal field; its sensor can be filled from a model of the camera model catalog. Mosaic Estimator counts the panels of a rectangular mosaic along each axis
 // with mosaicPanelCount. Lengths are millimeters, pixel sizes micrometers, angles radians in results and arcminutes in
 // the mosaic fields.
@@ -104,7 +104,7 @@ export function imagingSetupFromOptics(optics: Readonly<OpticalConfiguration>): 
 	}
 }
 
-// Example of Imaging Setup: the default optics of a new Sky Framing preset.
+// Example of Imaging Setup: the default optics of a new framing.
 export const IMAGING_SETUP_EXAMPLE: ImagingSetupDraft = imagingSetupFromOptics(DEFAULT_OPTICS)
 
 // Computes Imaging Setup. The aperture is optional and only gives the focal ratio; a sensor given by its physical size

@@ -199,7 +199,7 @@ export function DraftBar<D extends object>({ entry, onChange, context, example, 
 					</Button>
 				</div>
 			)}
-			{fromOptics && context.settings.presets.length === 0 && <Notice>No optical presets yet: they are created in Sky → Framing.</Notice>}
+			{fromOptics && context.settings.framings.length === 0 && <Notice>No framing yet: framings are created in the Framing tool.</Notice>}
 			<div>
 				<Button variant="ghost" disabled={!differs(entry.draft, example) && !entry.origin} onClick={() => onChange({ draft: example })}>
 					Reset to example

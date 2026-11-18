@@ -220,7 +220,7 @@ function draw(context: CanvasRenderingContext2D, layout: PreviewLayout, center: 
 	context.moveTo(width / 2, height / 2 - 6)
 	context.lineTo(width / 2, height / 2 + 6)
 	context.stroke()
-	drawCompass(context, palette.ink100, 24, height - 24)
+	drawCompass(context, palette.ink100, 32, height - 24)
 }
 
 // Draws the catalog objects of a view: the deep-sky objects as ellipses of their axes, the brightest named, and the stars

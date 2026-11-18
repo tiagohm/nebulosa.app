@@ -42,9 +42,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   `targetCentering:updated` carries summaries, without any WCS, with a monotonic `revision`; `GET /api/target-centering` is the snapshot and `GET /api/target-centering/:sessionId` the complete record, with the solution of each attempt.
   The start, `POST /api/connections/:id/cameras/:deviceId/target-centering`, takes a token, so a repeated request answers the same session.
 - Images → Target Centering (`web/src/camera/TargetCenteringPanel.tsx`, a camera operation of camera tabs only, with any camera of the connection and the MOUNT of the setup) holds Center, Recenter, and Verify Only as actions of one tool.
-  The target is explicit and always shown: right ascension and declination typed in J2000, the catalog object selected in Sky (`catalogTarget`, shared with Target Offset; its J2000 position at epoch J2000.0, without proper motion, and solar-system bodies, minor bodies, constellations, and the mount are refused with the reason), or a saved framing.
+  The target is explicit and always shown: right ascension and declination typed in J2000, the catalog object selected in Sky (`catalogTarget`, shared with Target Offset; its J2000 position at epoch J2000.0, without proper motion, and solar-system bodies, minor bodies, constellations, and the mount are refused with the reason); a framing holds no position, so none is offered.
   Nothing replaces it with where the mount points or with the latest solved center.
-  Recenter is disabled, with the reason, until a saved framing is selected.
   Center and Recenter ask for a confirmation that names the mount and the target; Verify Only, which commands nothing, asks for none, and starting any of them is the only thing here that commands a device.
   The exposure time is the form's;
   the other camera settings are shown and belong to Camera Acquisition (`CameraAcquisitionSection`, the Acquisition section of every camera operation that takes frames), and the solver is shown and belongs to Images → Plate Solver, each with a link that only selects the tool on the same tab.

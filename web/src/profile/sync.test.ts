@@ -4,7 +4,7 @@ import { proxy, snapshot } from 'valtio'
 import { type ConnectionState, removeConnection, saveConnection } from '../connection/connection'
 import { type CatalogState, removeCatalogCamera, removeCatalogTelescope, saveCatalogCamera, saveCatalogTelescope } from '../equipment/catalog'
 import { forgetSite, removeSite, saveSite, selectSite, type SiteState } from '../location/site'
-import { assignDevice, createProfile, deleteFramingReference, dismissNotifications, markNotificationsRead, deleteProfile, forgetConnection, type ProfileState, saveFramingReference, selectConnection, setExposureSettings, setFramingVisible, setMountRemoteBinding, setPanelOpen, setTelescopeOptics } from './profile'
+import { assignDevice, createProfile, dismissNotifications, markNotificationsRead, deleteProfile, forgetConnection, type ProfileState, selectConnection, setExposureSettings, setFramingShownInSky, setFramingVisible, setMountRemoteBinding, setPanelOpen, setPlannerFraming, setTelescopeOptics } from './profile'
 import { PROFILE_SETTINGS_VERSION } from './schema'
 import { WorkspaceSync, type WorkspaceSyncState } from './sync'
 
@@ -17,7 +17,7 @@ interface Sent {
 
 // Profile record of the server with nothing kept.
 function record(id: string, patch: Partial<ProfileRecord> = {}): ProfileRecord {
-	return { id, name: id, sortOrder: 0, revision: 1, createdAt: 0, equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, framings: [], notifications: { readIds: [], dismissedIds: [] }, ...patch }
+	return { id, name: id, sortOrder: 0, revision: 1, createdAt: 0, equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, notifications: { readIds: [], dismissedIds: [] }, ...patch }
 }
 
 const stops: (() => void)[] = []
@@ -79,7 +79,6 @@ describe('loading', () => {
 					preferences: { telescope: { version: PROFILE_SETTINGS_VERSION, value: { focalLength: 800, focalMultiplier: 1, aperture: 200 }, revision: 3 } },
 					cameras: { c1: { cam: { exposure: { version: PROFILE_SETTINGS_VERSION, value: { exposureTime: 2 }, revision: 1 } } } },
 					mountBindings: { c1: { mount: { lx200: { host: '0.0.0.0', port: 4030 } } } },
-					framings: [{ id: 'f1', name: 'M 42', rightAscension: 1.46, declination: -0.09, source: 'manual', createdAt: 1, updatedAt: 1 }],
 				}),
 				record('p2', { sortOrder: 1 }),
 			],
@@ -95,7 +94,7 @@ describe('loading', () => {
 		expect(snapshot(profiles).profiles[0]).toMatchObject({
 			connectionId: 'c1',
 			equipment: { c1: { MAIN_CAMERA: { id: 'cam', name: 'Camera' } } },
-			settings: { telescope: { focalLength: 800 }, cameras: { c1: { cam: { exposure: { exposureTime: 2 } } } }, mountRemoteControl: { c1: { mount: { lx200: { port: 4030 } } } }, framingReferences: [{ id: 'f1', name: 'M 42' }] },
+			settings: { telescope: { focalLength: 800 }, cameras: { c1: { cam: { exposure: { exposureTime: 2 } } } }, mountRemoteControl: { c1: { mount: { lx200: { port: 4030 } } } } },
 		})
 
 		await settle(sync)
@@ -171,14 +170,11 @@ describe('writes', () => {
 
 		setPanelOpen(profiles, 'sky', false)
 		setFramingVisible(profiles, true)
+		setFramingShownInSky(profiles, 'f1', false)
+		setPlannerFraming(profiles, 'f1')
 		await settle(sync)
 
-		expect(sent.map(({ path }) => path)).toEqual(['/api/profiles/p1/preferences/skyFraming'])
-		expect(sent[0].body).toMatchObject({ value: { presets: [] } })
-
-		setFramingVisible(profiles, false)
-		await settle(sync)
-		expect(sent).toHaveLength(1)
+		expect(sent).toEqual([])
 	})
 
 	test('camera forms and bindings are written on every edit, whether the server or the tab created them', async () => {
@@ -250,7 +246,6 @@ describe('writes', () => {
 					connectionId: 'c1',
 					preferences: { dateTime: { version: PROFILE_SETTINGS_VERSION, value: { displayTimeZone: 'utc' }, revision: 2 } },
 					cameras: { c1: { cam: { exposure: { version: PROFILE_SETTINGS_VERSION, value: { exposureTime: 2 }, revision: 1 } } } },
-					framings: [{ id: 'f1', name: 'M 42', rightAscension: 1, declination: 0, source: 'manual', createdAt: 1, updatedAt: 1 }],
 				}),
 				record('p2', { sortOrder: 1 }),
 			],
@@ -259,29 +254,24 @@ describe('writes', () => {
 		await sync.refresh()
 
 		delete profiles.profiles[0].settings.dateTime
-		deleteFramingReference(profiles, 'f1')
 		deleteProfile(profiles, 'p2')
 		removeConnection(connections, 'c1')
 		forgetConnection(profiles, 'c1')
 		await settle(sync)
 
-		expect(sent.map(({ method, path }) => `${method} ${path}`)).toEqual(['PUT /api/profiles/p1', 'PUT /api/profiles/p1/preferences/dateTime', 'DELETE /api/profiles/p1/framing-references/f1', 'DELETE /api/profiles/p2', 'DELETE /api/saved-connections/c1'])
+		expect(sent.map(({ method, path }) => `${method} ${path}`)).toEqual(['PUT /api/profiles/p1', 'PUT /api/profiles/p1/preferences/dateTime', 'DELETE /api/profiles/p2', 'DELETE /api/saved-connections/c1'])
 		expect(sent[1].body).toEqual({ version: PROFILE_SETTINGS_VERSION, value: null, revision: 2 })
 	})
 
-	test('a profile created in the tab is created on the server with its framings', async () => {
+	test('a profile created in the tab is created on the server', async () => {
 		const { profiles, sync, sent } = setup()
 		await sync.refresh()
 
 		const created = createProfile(profiles, 'Planetary')!
 		profiles.activeId = created.id
-		const framing = saveFramingReference(profiles, { name: 'Jupiter', rightAscension: 1, declination: 0.1, source: 'sky' }, 5)!
 		await settle(sync)
 
-		expect(sent).toEqual([
-			{ method: 'PUT', path: `/api/profiles/${created.id}`, body: { name: 'Planetary', connectionId: null, activeSiteId: null, sortOrder: 1, revision: 0 } },
-			{ method: 'PUT', path: `/api/profiles/${created.id}/framing-references/${framing.id}`, body: { name: 'Jupiter', rightAscension: 1, declination: 0.1, source: 'sky', createdAt: 5, updatedAt: 5 } },
-		])
+		expect(sent).toEqual([{ method: 'PUT', path: `/api/profiles/${created.id}`, body: { name: 'Planetary', connectionId: null, activeSiteId: null, sortOrder: 1, revision: 0 } }])
 	})
 
 	test('the notifications a profile read or dismissed are written as they grow, and come back with the profile', async () => {

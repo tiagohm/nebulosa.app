@@ -52,7 +52,7 @@ test('a new database has one Default profile, and only one', async () => {
 	const snapshot = (await (await call(routes, '/api/workspace', 'GET')).json()) as WorkspaceSnapshot
 	expect(snapshot.connections).toEqual([])
 	expect(snapshot.sites).toEqual([])
-	expect(snapshot.profiles).toEqual([{ id: expect.any(String), name: DEFAULT_PROFILE_NAME, sortOrder: 0, revision: 1, createdAt: expect.any(Number), equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, framings: [], notifications: { readIds: [], dismissedIds: [] } }])
+	expect(snapshot.profiles).toEqual([{ id: expect.any(String), name: DEFAULT_PROFILE_NAME, sortOrder: 0, revision: 1, createdAt: expect.any(Number), equipment: {}, preferences: {}, cameras: {}, mountBindings: {}, notifications: { readIds: [], dismissedIds: [] } }])
 })
 
 test('the workspace survives a restart', async () => {
@@ -282,28 +282,16 @@ test('equipment setups replace the roles of their connection', async () => {
 	expect(workspace.profile(profileId)!.equipment).toEqual({ sim: { MOUNT: { id: 'm', name: 'M' } } })
 })
 
-test('framings are saved, renamed, and deleted', async () => {
-	const { workspace, routes, profileId } = setup()
-	const framing = { name: 'M31', rightAscension: 0.18, declination: 0.72, source: 'sky', createdAt: 1, updatedAt: 1 }
-	expect((await call(routes, '/api/profiles/:id/framing-references/:framingId', 'PUT', { id: profileId, framingId: 'f1' }, framing)).status).toBe(204)
-	await call(routes, '/api/profiles/:id/framing-references/:framingId', 'PUT', { id: profileId, framingId: 'f1' }, { ...framing, name: 'Andromeda', updatedAt: 2 })
-	expect(workspace.profile(profileId)!.framings).toEqual([{ id: 'f1', ...framing, name: 'Andromeda', updatedAt: 2 }] as ProfileRecord['framings'])
-
-	expect((await call(routes, '/api/profiles/:id/framing-references/:framingId', 'DELETE', { id: profileId, framingId: 'f1' })).status).toBe(204)
-	expect(workspace.profile(profileId)!.framings).toEqual([])
-})
-
 test('deleting a profile deletes everything it keeps', async () => {
 	const { database, routes, profileId } = setup()
 	await saveSimulator(routes)
 	await call(routes, '/api/profiles/:id', 'PUT', { id: 'second' }, { name: 'Second', connectionId: 'sim', activeSiteId: null, sortOrder: 1, revision: 0 })
 	await call(routes, '/api/profiles/:id/preferences/:key', 'PUT', { id: 'second', key: 'telescope' }, { version: 1, value: {}, revision: 0 })
 	await call(routes, '/api/profiles/:id/cameras/:connectionId/:deviceId/:form', 'PUT', { id: 'second', connectionId: 'sim', deviceId: 'camera', form: 'exposure' }, { version: 1, value: {}, revision: 0 })
-	await call(routes, '/api/profiles/:id/framing-references/:framingId', 'PUT', { id: 'second', framingId: 'f' }, { name: 'X', rightAscension: 0, declination: 0, source: 'manual', createdAt: 1, updatedAt: 1 })
 
 	await call(routes, '/api/profiles/:id', 'DELETE', { id: 'second' })
 
-	for (const table of ['profile_preferences', 'profile_camera_settings', 'framing_references']) {
+	for (const table of ['profile_preferences', 'profile_camera_settings']) {
 		expect(database.db.query(`SELECT count(*) AS count FROM ${table} WHERE profile_id = 'second'`).get()).toEqual({ count: 0 })
 	}
 

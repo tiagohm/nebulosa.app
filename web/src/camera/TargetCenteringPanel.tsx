@@ -13,8 +13,8 @@ import { CameraPlateSolvingSection } from '../platesolving/CameraPlateSolvingSec
 import { type CoordinateStyle, formatDeclinationAs, formatRightAscensionAs } from '../platesolving/coordinates'
 import { catalogTarget } from '../platesolving/measurement'
 import { AngleField, useSolverConfigured } from '../platesolving/PlateSolveControls'
-import { activeProfile, cameraPlateSolving, deleteFramingReference, exposureSettings, framingReferences, imageAstrometrySettings, profileState, renameFramingReference, saveFramingReference, setTargetCenteringSettings, targetCenteringSettings } from '../profile/profile'
-import { type CameraIdentity, FRAMING_REFERENCES_MAXIMUM, TARGET_CENTERING_LIMITS, type TargetCenteringSettings } from '../profile/schema'
+import { activeProfile, cameraPlateSolving, exposureSettings, imageAstrometrySettings, profileState, setTargetCenteringSettings, targetCenteringSettings } from '../profile/profile'
+import { type CameraIdentity, TARGET_CENTERING_LIMITS, type TargetCenteringSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { skyState } from '../sky/sky'
 import { Actions } from '../ui/Actions'
@@ -53,7 +53,7 @@ import { TargetCenteringBullseye } from './TargetCenteringBullseye'
 // actions of this one tool. The target is explicit and always shown: nothing replaces it with where the mount points or with
 // the latest solved center. The exposure time is this form's; every other camera setting is edited only in Camera
 // Acquisition, and the solver only in Images → Plate Solver, both linked from here. The form is the camera's, kept in the
-// profile with the saved framings; the session is the server's, shown here whichever tab started it, and keeps running when
+// profile; the session is the server's, shown here whichever tab started it, and keeps running when
 // the panel unmounts. Nothing here commands a device but Center, Recenter, Verify Only, and Stop.
 
 // Limits of the settings, as the number inputs take them.
@@ -87,7 +87,6 @@ export function TargetCenteringSections({ device, availability, mount, guideOutp
 	const solving = cameraPlateSolving(profile.settings, identity)
 	const { coordinates } = imageAstrometrySettings(profile.settings)
 	const configured = useSolverConfigured(solving.provider)
-	const references = framingReferences(profile.settings)
 	const key = device && cameraKey(device.connectionId, device.id)
 	const session = key ? runtime.sessions[key] : undefined
 	const capabilities = watchedDeviceState(control, 'camera', device)
@@ -96,45 +95,25 @@ export function TargetCenteringSections({ device, availability, mount, guideOutp
 	const pending = key !== undefined && runtime.pending[key] === true
 	const error = key ? runtime.errors[key] : undefined
 	const locked = running || pending
-	const framing = references.find((reference) => reference.id === settings.framingId)
-	// A framing stays selected across reloads, and the target being typed across reloads of the tab.
-	const draft: TargetCenteringDraft | undefined = (key ? runtime.drafts[key] : undefined) ?? (framing && { rightAscension: framing.rightAscension, declination: framing.declination, label: framing.name })
+	// The target being typed stays across reloads of the tab.
+	const draft: TargetCenteringDraft | undefined = key ? runtime.drafts[key] : undefined
 	// While running, the panel shows the target and the values the session applied.
 	const shownTarget: TargetCenteringDraft | undefined = running && session ? session.request.target : draft
 	const shown: Readonly<TargetCenteringSettings> = running && session ? appliedSettings(session, settings) : settings
-	const [name, setName] = useState('')
 	const mountAvailability = roleAvailability('MOUNT', mount, operations)
-	const blockerOf = (mode: TargetCenteringMode) => (running ? undefined : targetCenteringBlocker(mode, availability, mountAvailability, mountState, draft, framing?.id, configured))
+	const blockerOf = (mode: TargetCenteringMode) => (running ? undefined : targetCenteringBlocker(mode, availability, mountAvailability, mountState, draft, configured))
 	const catalog = catalogTarget(sky.selection)
 	const mountDevice = mount.device && { connectionId: mount.device.connectionId, deviceId: mount.device.id }
 	const mountName = mount.device?.name ?? 'The mount'
-	const canSave = !locked && draft?.rightAscension !== undefined && draft.declination !== undefined && name.trim() !== '' && references.length < FRAMING_REFERENCES_MAXIMUM
 
 	// Updates fields of the camera's form.
 	function update(patch: Partial<TargetCenteringSettings>) {
 		setTargetCenteringSettings(profileState, identity, patch)
 	}
 
-	// Replaces the target being edited, which no longer is the selected framing.
-	function edit(next: TargetCenteringDraft, framingId?: string) {
+	// Replaces the target being edited.
+	function edit(next: TargetCenteringDraft) {
 		if (key) targetCenteringRuntime.drafts[key] = next
-		update({ framingId })
-	}
-
-	// Selects a saved framing, or none, keeping the target being edited.
-	function load(id: string) {
-		const reference = references.find((each) => each.id === id)
-		edit(reference ? { rightAscension: reference.rightAscension, declination: reference.declination, label: reference.name } : (draft ?? {}), reference?.id)
-	}
-
-	function save() {
-		if (draft?.rightAscension === undefined || draft.declination === undefined) return
-		const saved = saveFramingReference(profileState, { name, rightAscension: normalizeAngle(draft.rightAscension), declination: draft.declination, source: draft.label === undefined ? 'manual' : 'sky' })
-
-		if (saved) {
-			edit({ ...draft, label: saved.name }, saved.id)
-			setName('')
-		}
 	}
 
 	function run(mode: TargetCenteringMode) {
@@ -163,7 +142,6 @@ export function TargetCenteringSections({ device, availability, mount, guideOutp
 				{!running && mountAvailability.status === 'notSelected' && <EquipmentSetupButton />}
 			</CollapsibleSection>
 			<CollapsibleSection id="images.target-centering.target" title="Target" summary={shownTarget?.label}>
-				{references.length > 0 && <Select label="Saved Framing" options={['', ...references.map((reference) => reference.id)]} value={framing?.id ?? ''} format={(id) => references.find((reference) => reference.id === id)?.name ?? 'None'} disabled={locked} onChange={load} />}
 				<AngleField label="RA (J2000)" hour value={shownTarget?.rightAscension} placeholder="Such as 10h 45m 03s" disabled={locked} onChange={(rightAscension) => edit({ rightAscension, declination: draft?.declination })} />
 				<AngleField label="Dec (J2000)" value={shownTarget?.declination} placeholder="Such as -59° 41′ 04″" disabled={locked} onChange={(declination) => edit({ rightAscension: draft?.rightAscension, declination })} />
 				<Actions>
@@ -177,22 +155,6 @@ export function TargetCenteringSections({ device, availability, mount, guideOutp
 					</Button>
 				</Actions>
 				{shownTarget?.label && <Notice>{shownTarget.label}</Notice>}
-				<TextInput label="Framing Name" value={name} disabled={locked} onChange={(event) => setName(event.target.value)} />
-				<Actions>
-					<Button variant="secondary" disabled={!canSave} onClick={save}>
-						Save Framing
-					</Button>
-					{framing && (
-						<>
-							<Button variant="secondary" disabled={locked || name.trim() === ''} onClick={() => renameFramingReference(profileState, framing.id, name) && setName('')}>
-								Rename
-							</Button>
-							<ConfirmButton variant="secondary" disabled={locked} title="Delete the framing" confirmLabel="Delete" onConfirm={() => deleteFramingReference(profileState, framing.id)} message={`The saved framing ${framing.name} will be deleted. Nothing is sent to the mount.`}>
-								Delete
-							</ConfirmButton>
-						</>
-					)}
-				</Actions>
 				<Notice>Catalog positions are J2000, epoch J2000.0, without proper motion. Solar-system bodies move, so they cannot be targets yet.</Notice>
 			</CollapsibleSection>
 			<CollapsibleSection id="images.target-centering.settings" title="Centering Settings">
@@ -232,7 +194,7 @@ export function TargetCenteringSections({ device, availability, mount, guideOutp
 						<ConfirmButton variant="primary" disabled={blockerOf('center') !== undefined || pending} title="Center the target" confirmLabel="Center" onConfirm={() => run('center')} message={moveMessage(mountName, draft, coordinates, 'will slew to')}>
 							Center
 						</ConfirmButton>
-						<ConfirmButton variant="secondary" disabled={blockerOf('recenter') !== undefined || pending} title="Recenter the framing" confirmLabel="Recenter" onConfirm={() => run('recenter')} message={moveMessage(mountName, draft, coordinates, 'will be corrected, or slewed when it stands far, towards')}>
+						<ConfirmButton variant="secondary" disabled={blockerOf('recenter') !== undefined || pending} title="Recenter the target" confirmLabel="Recenter" onConfirm={() => run('recenter')} message={moveMessage(mountName, draft, coordinates, 'will be corrected, or slewed when it stands far, towards')}>
 							Recenter
 						</ConfirmButton>
 						<Button variant="secondary" disabled={blockerOf('verifyOnly') !== undefined || pending} onClick={() => run('verifyOnly')}>

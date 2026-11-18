@@ -2,12 +2,11 @@ import type { AnnotationBodies, DisplaySettings, MeridianFlipExecutorPolicy, Mer
 import { nanoid } from 'nanoid'
 import { proxy, snapshot } from 'valtio'
 import { conflictingRole, type DeviceAssignment, type EquipmentRole, type EquipmentSetup, isEquipmentRole } from '../equipment/roles'
-import { DEFAULT_OPTICS, type OpticalConfiguration, type SensorGeometry, type TelescopeOptics } from '../framing/geometry'
+import type { TelescopeOptics } from '../framing/geometry'
 import type { AnnotationLayers } from '../images/images'
 import { type AstrometryGridSettings, DEFAULT_IMAGE_ASTROMETRY, type ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import { MAP_STAR_MAGNITUDE_LIMIT, MIN_MAGNITUDE_LIMIT, type SkyLayerId } from '../sky/display'
-import { type FramingSource, framingSource, type OpticalPreset, type SensorSource } from '../sky/framing'
 import { refKey } from '../sky/objects'
 import { DEFAULT_STAR_PROFILE_SETTINGS, type StarProfileSettings } from '../stars/starprofile.settings'
 import { DEFAULT_STAR_REQUEST } from '../stars/stars'
@@ -71,11 +70,9 @@ import {
 	type MountRemoteBinding,
 	MAX_NOTIFICATION_IDS,
 	DEFAULT_TARGET_CENTERING_SETTINGS,
-	FRAMING_REFERENCES_MAXIMUM,
 	SATELLITE_FAVORITES_MAXIMUM,
 	SKY_FAVORITES_MAXIMUM,
 	type SkyFavorite,
-	type FramingReference,
 	type TargetCenteringSettings,
 } from './schema'
 
@@ -143,10 +140,7 @@ export function duplicateProfile(state: ProfileState, id: string): Profile | und
 	if (index < 0) return undefined
 
 	const source = structuredClone(snapshot(state).profiles[index]) as Profile
-	// Framing references are rows of their own, keyed by their id across every profile, so the copy gets new ones.
-	const framingReferences = source.settings.framingReferences?.map((reference) => ({ ...reference, id: nanoid() }))
-	const settings = framingReferences ? { ...source.settings, framingReferences } : source.settings
-	const copy: Profile = { ...source, id: nanoid(), name: `${source.name} (copy)`, settings }
+	const copy: Profile = { ...source, id: nanoid(), name: `${source.name} (copy)` }
 	state.profiles.splice(index + 1, 0, copy)
 	return copy
 }
@@ -416,40 +410,6 @@ export function setTargetCenteringSettings(state: ProfileState, camera: CameraId
 	setCameraForm(state, camera, 'targetCentering', targetCenteringSettings(activeProfile(state).settings, camera), patch)
 }
 
-// Returns the framings saved in a profile.
-export function framingReferences(settings: Pick<ProfileSettings, 'framingReferences'>): readonly Readonly<FramingReference>[] {
-	return settings.framingReferences ?? []
-}
-
-// Saves a framing in the active profile. Returns it, or undefined for a blank name or a full library.
-export function saveFramingReference(state: ProfileState, framing: Pick<FramingReference, 'name' | 'rightAscension' | 'declination' | 'source'>, now = Date.now()): FramingReference | undefined {
-	const profile = activeProfile(state)
-	const name = framing.name.trim()
-	const saved = profile.settings.framingReferences ?? []
-	if (!name || saved.length >= FRAMING_REFERENCES_MAXIMUM) return undefined
-	const reference: FramingReference = { ...framing, id: nanoid(), name, createdAt: now, updatedAt: now }
-	profile.settings.framingReferences = [...saved, reference]
-	return reference
-}
-
-// Renames a framing of the active profile. Returns whether it exists and the name is not blank.
-export function renameFramingReference(state: ProfileState, id: string, name: string, now = Date.now()): boolean {
-	const profile = activeProfile(state)
-	const trimmed = name.trim()
-	if (!trimmed || !profile.settings.framingReferences?.some((framing) => framing.id === id)) return false
-	const framing = profile.settings.framingReferences.find((saved) => saved.id === id)!
-	framing.name = trimmed
-	framing.updatedAt = now
-	return true
-}
-
-// Deletes a framing of the active profile. A camera that had it selected keeps its form, which then selects nothing.
-export function deleteFramingReference(state: ProfileState, id: string) {
-	const profile = activeProfile(state)
-	if (!profile.settings.framingReferences?.some((framing) => framing.id === id)) return
-	profile.settings.framingReferences = profile.settings.framingReferences.filter((framing) => framing.id !== id)
-}
-
 // Returns the DARV form of a camera: the one edited last, or the defaults.
 export function darvSettings(settings: Pick<ProfileSettings, 'cameras'>, camera: CameraIdentity | undefined): Readonly<DarvSettings> {
 	return cameraSettings(settings, camera)?.darv ?? DEFAULT_DARV_SETTINGS
@@ -664,11 +624,6 @@ export function setImageAstrometrySettings(state: ProfileState, patch: Partial<O
 	profile.settings.imageAstrometry = { ...current, ...patch, coordinates: { ...current.coordinates, ...patch.coordinates }, grid: { ...current.grid, ...patch.grid } }
 }
 
-// Normalizes an angle in degrees to [0, 360).
-function normalizeDegrees(angle: number) {
-	return ((angle % 360) + 360) % 360
-}
-
 // Shows or hides the Sky time bar in the active profile; hidden is kept as the absent default.
 export function setSkyTimeBarVisible(state: ProfileState, visible: boolean) {
 	const sky = activeProfile(state).settings.sky
@@ -695,104 +650,33 @@ export function setSkyMagnitudeLimit(state: ProfileState, limit: number) {
 	display.magnitudeLimit = value
 }
 
-// Copies optics, which may be a store proxy or snapshot, into a plain object.
-function copyOptics(optics: OpticalConfiguration): OpticalConfiguration {
-	return { ...optics, sensor: { ...optics.sensor } }
-}
-
-// Returns the framing preferences of a profile, creating them empty and hidden.
+// Returns the Sky's choice of framings of a profile, creating it hidden.
 function framingOf(profile: Profile): SkyFramingSettings {
-	return (profile.settings.sky.framing ??= { presets: [], visible: false })
+	return (profile.settings.sky.framing ??= { visible: false })
 }
 
-// Creates an optical preset in the active profile from optics (the defaults when absent), selects it,
-// and shows the field of view. Returns the preset, or undefined for a blank name.
-export function createOpticalPreset(state: ProfileState, name: string, optics: OpticalConfiguration = DEFAULT_OPTICS): OpticalPreset | undefined {
-	const trimmed = name.trim()
-	if (!trimmed) return undefined
-	const profile = activeProfile(state)
-	const framing = framingOf(profile)
-	const preset: OpticalPreset = { id: nanoid(), name: trimmed, optics: copyOptics(optics) }
-	framing.presets = [...framing.presets, preset]
-	framing.activePresetId = preset.id
-	framing.visible = true
-	return preset
-}
-
-// Replaces the name or optics of a preset of the active profile; a blank name is ignored. Returns
-// whether the preset exists.
-export function updateOpticalPreset(state: ProfileState, id: string, changes: { readonly name?: string; readonly optics?: OpticalConfiguration }): boolean {
-	const profile = activeProfile(state)
-	const framing = profile.settings.sky.framing
-	const current = framing?.presets.find((preset) => preset.id === id)
-	if (!framing || !current) return false
-	const updated: OpticalPreset = { id, name: changes.name?.trim() || current.name, optics: changes.optics ? copyOptics(changes.optics) : current.optics }
-	framing.presets = framing.presets.map((preset) => (preset.id === id ? updated : preset))
-	return true
-}
-
-// Copies a preset of the active profile under the name "<name> (copy)" and selects the copy.
-export function duplicateOpticalPreset(state: ProfileState, id: string): OpticalPreset | undefined {
-	const source = activeProfile(state).settings.sky.framing?.presets.find((preset) => preset.id === id)
-	return source && createOpticalPreset(state, `${source.name} (copy)`, source.optics)
-}
-
-// Deletes a preset of the active profile; deleting the selected one selects the first left, if any.
-export function deleteOpticalPreset(state: ProfileState, id: string) {
-	const profile = activeProfile(state)
-	const framing = profile.settings.sky.framing
-	if (!framing?.presets.some((preset) => preset.id === id)) return
-	framing.presets = framing.presets.filter((preset) => preset.id !== id)
-	if (framing.activePresetId === id) framing.activePresetId = framing.presets[0]?.id
-}
-
-// Selects the preset drawn in the active profile.
-export function selectOpticalPreset(state: ProfileState, id: string) {
-	const profile = activeProfile(state)
-	const framing = profile.settings.sky.framing
-	if (!framing?.presets.some((preset) => preset.id === id) || framing.activePresetId === id) return
-	framing.activePresetId = id
-}
-
-// Shows or hides the field of view in the active profile.
+// Shows or hides the fields of view in the Sky of the active profile.
 export function setFramingVisible(state: ProfileState, visible: boolean) {
-	const profile = activeProfile(state)
-	const framing = framingOf(profile)
+	const framing = framingOf(activeProfile(state))
 	if (framing.visible === visible) return
 	framing.visible = visible
 }
 
-// Chooses where the drawn field of view comes from in the active profile.
-export function setFramingSource(state: ProfileState, source: FramingSource) {
-	const profile = activeProfile(state)
-	const framing = framingOf(profile)
-	if (framingSource(framing) === source) return
-	framing.source = source
+// Returns whether the Sky of a profile draws a framing (by id, EQUIPMENT_FRAMING_ID for the Equipment Setup's).
+export function framingShownInSky(settings: Pick<ProfileSettings, 'sky'>, id: string) {
+	return !settings.sky.framing?.hidden?.includes(id)
 }
 
-// Chooses the sensor of the Equipment Setup field of view in the active profile.
-export function setSensorSource(state: ProfileState, source: SensorSource) {
-	const profile = activeProfile(state)
-	const framing = framingOf(profile)
-	if ((framing.sensorSource ?? 'MAIN_CAMERA') === source) return
-	framing.sensorSource = source
+// Hides or shows one framing in the Sky of the active profile, which keeps drawing the others.
+export function setFramingShownInSky(state: ProfileState, id: string, shown: boolean) {
+	const framing = framingOf(activeProfile(state))
+	const hidden = (framing.hidden ?? []).filter((each) => each !== id)
+	framing.hidden = shown ? hidden : [...hidden, id]
 }
 
-// Replaces the manual sensor of the Equipment Setup field of view in the active profile; it only
-// simulates a camera and is never sent to a device.
-export function setManualSensor(state: ProfileState, sensor: SensorGeometry) {
-	const profile = activeProfile(state)
-	framingOf(profile).manualSensor = { ...sensor }
-}
-
-// Sets the position angle in degrees of the Equipment Setup field of view in the active profile,
-// normalized to [0, 360).
-export function setEquipmentRotation(state: ProfileState, rotation: number) {
-	const profile = activeProfile(state)
-	const framing = framingOf(profile)
-	const value = normalizeDegrees(rotation)
-	if (framing.equipmentRotation === value) return
-	framing.equipmentRotation = value
+// Chooses the framing the Observing Planner of the active profile judges targets against.
+export function setPlannerFraming(state: ProfileState, id: string) {
+	activeProfile(state).settings.plannerFramingId = id
 }
 
 // Returns a copy of telescope optics with only the fields the profile keeps, and the telescope of the Equipment Catalog

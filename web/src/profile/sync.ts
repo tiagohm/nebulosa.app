@@ -5,14 +5,14 @@ import { type CatalogCamera, catalogState, type CatalogState, type CatalogTelesc
 import { type ApiFetch, browserFetch, jsonInit } from '../http'
 import { type ObservingSite, siteState, type SiteState } from '../location/site'
 import { nestedObject, newProfile, type ProfileState } from './profile'
-import { type CameraSettings, type FramingReference, type MountRemoteBinding, type Profile, PROFILE_SETTINGS_VERSION, type ProfileSettings, type SkyFramingSettings, type SkySettings } from './schema'
+import { type CameraSettings, type MountRemoteBinding, type Profile, PROFILE_SETTINGS_VERSION, type ProfileSettings, type SkySettings } from './schema'
 
 // Synchronization of the workspace (the saved connections, the observing sites, the cameras and telescopes of the
 // Equipment Catalog, and the profiles) with the server, which keeps it for every tab and browser. The tab changes its
 // stores at once, as before; this module compares what the tab holds with what the server last confirmed, unit by unit (a
 // saved connection, an observing site, a camera or a telescope of the catalog, the name, connection,
-// and active site of a profile, an equipment setup, a preference, a camera form, a Mount Remote Control binding, a saved
-// framing, the notifications it read or dismissed), and writes each unit that changed, a moment after the latest change
+// and active site of a profile, an equipment setup, a preference, a camera form, a Mount Remote Control binding, the
+// notifications it read or dismissed), and writes each unit that changed, a moment after the latest change
 // and one request at a time. A unit with a revision is written from the revision it was
 // edited from; when another tab saved it first the server refuses it, and the tab shows what the server kept and says
 // so. The others are written as they are, the last write winning. What the server publishes applies to every unit the
@@ -49,7 +49,6 @@ type Unit =
 	| { readonly kind: 'preference'; readonly profileId: string; readonly key: ProfilePreferenceKey }
 	| { readonly kind: 'camera'; readonly profileId: string; readonly connectionId: string; readonly deviceId: string; readonly form: ProfileCameraForm }
 	| { readonly kind: 'binding'; readonly profileId: string; readonly connectionId: string; readonly deviceId: string; readonly protocol: MountRemoteProtocol }
-	| { readonly kind: 'framing'; readonly profileId: string; readonly framingId: string }
 	| { readonly kind: 'notifications'; readonly profileId: string }
 
 // A unit the tab holds and its value, as written to the server.
@@ -62,7 +61,7 @@ interface LocalUnit {
 const REVISIONED = new Set<Unit['kind']>(['connection', 'site', 'catalogCamera', 'catalogTelescope', 'profile', 'preference', 'camera'])
 
 // Kinds of unit deleted on the server when the tab removes them.
-const DELETABLE = new Set<Unit['kind']>(['connection', 'site', 'catalogCamera', 'catalogTelescope', 'profile', 'framing'])
+const DELETABLE = new Set<Unit['kind']>(['connection', 'site', 'catalogCamera', 'catalogTelescope', 'profile'])
 
 // Kinds of unit reset to their default (written as null) when the tab removes them.
 const RESETTABLE = new Set<Unit['kind']>(['preference', 'camera'])
@@ -94,24 +93,11 @@ function skySetting(key: keyof Pick<SkySettings, 'display'>): PreferenceField {
 	}
 }
 
-// Fields of the framing kept by the server; which preset is drawn, and whether and where from, are view state.
-type KeptFraming = Pick<SkyFramingSettings, 'presets' | 'manualSensor' | 'equipmentRotation'>
-
 // Every preference the server keeps, and where it lives in the settings of a profile.
 const PREFERENCES: Readonly<Record<ProfilePreferenceKey, PreferenceField>> = {
 	telescope: setting('telescope'),
 	guideTelescope: setting('guideTelescope'),
 	skyDisplay: skySetting('display'),
-	skyFraming: {
-		get: ({ sky: { framing } }) => framing && ({ presets: framing.presets, manualSensor: framing.manualSensor, equipmentRotation: framing.equipmentRotation } satisfies KeptFraming),
-		set: (settings, value) => {
-			const framing = settings.sky.framing
-			const { presets, manualSensor, equipmentRotation } = (value as KeptFraming | undefined) ?? { presets: [] }
-			if (!value && !framing) return
-			const activePresetId = presets.some((preset) => preset.id === framing?.activePresetId) ? framing?.activePresetId : presets[0]?.id
-			settings.sky.framing = { ...(framing ?? { visible: false }), presets, manualSensor, equipmentRotation, activePresetId }
-		},
-	},
 	starDetection: setting('starDetection'),
 	starProfile: setting('starProfile'),
 	streakDetection: setting('streakDetection'),
@@ -209,7 +195,6 @@ function localUnits(connections: readonly Connection[], sites: readonly Observin
 			}
 		}
 
-		for (const { id: framingId, ...framing } of settings.framingReferences ?? []) add({ kind: 'framing', profileId, framingId }, framing)
 		add({ kind: 'notifications', profileId }, settings.notifications)
 	}
 
@@ -239,8 +224,6 @@ function unitPath(unit: Unit): string {
 			return `/api/profiles/${e(unit.profileId)}/cameras/${e(unit.connectionId)}/${e(unit.deviceId)}/${unit.form}`
 		case 'binding':
 			return `/api/profiles/${e(unit.profileId)}/mount-bindings/${e(unit.connectionId)}/${e(unit.deviceId)}/${unit.protocol}`
-		case 'framing':
-			return `/api/profiles/${e(unit.profileId)}/framing-references/${e(unit.framingId)}`
 		case 'notifications':
 			return `/api/profiles/${e(unit.profileId)}/notifications`
 	}
@@ -273,7 +256,7 @@ function workspaceWide(unit: Unit) {
 // Order in which units are written: what others refer to (saved connections, observing sites, and cameras and
 // telescopes of the catalog) is created first and deleted last.
 function writeOrder(unit: Unit, deleting: boolean) {
-	if (deleting) return unit.kind === 'framing' ? 3 : unit.kind === 'profile' ? 4 : 5
+	if (deleting) return unit.kind === 'profile' ? 4 : 5
 	return workspaceWide(unit) ? 0 : unit.kind === 'profile' ? 1 : 2
 }
 
@@ -814,17 +797,6 @@ export class WorkspaceSync {
 			if (stored) protocols[protocol] = { host: stored.host, port: stored.port } satisfies MountRemoteBinding
 			else delete protocols[protocol]
 		}
-
-		const local = settings.framingReferences ?? []
-		const busy = (framingId: string) => this.#busy(unitKey({ kind: 'framing', profileId, framingId }))
-		const kept = record.framings.flatMap((framing): FramingReference[] => {
-			if (!busy(framing.id)) return [{ ...framing }]
-			const own = local.find(({ id }) => id === framing.id)
-			return own ? [own] : []
-		})
-		const created = local.filter(({ id }) => busy(id) && !record.framings.some((framing) => framing.id === id))
-		const framings = [...kept, ...created]
-		if (framings.length > 0 || settings.framingReferences) settings.framingReferences = framings
 
 		if (!this.#busy(unitKey({ kind: 'notifications', profileId }))) {
 			const { readIds, dismissedIds } = record.notifications

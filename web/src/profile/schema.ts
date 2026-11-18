@@ -25,12 +25,11 @@ import type {
 	StreakDetectorSettings,
 } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
-import type { SensorGeometry, TelescopeOptics } from '../framing/geometry'
+import type { TelescopeOptics } from '../framing/geometry'
 import type { AnnotationDensity, AnnotationLayers } from '../images/images'
 import type { ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
-import type { FramingSource, OpticalPreset, SensorSource } from '../sky/framing'
 import type { StarProfileSettings } from '../stars/starprofile.settings'
 
 // What a profile holds, the defaults of its preferences and camera forms, and the version of the shape of the values the
@@ -40,7 +39,7 @@ import type { StarProfileSettings } from '../stars/starprofile.settings'
 // Version of the shape of the preferences and camera forms the server keeps (sync.ts). A value of any other version is
 // read as absent, never migrated, so a change to the shape of what is kept only raises this number; an added optional
 // field, which reads as its default, does not.
-export const PROFILE_SETTINGS_VERSION = 7
+export const PROFILE_SETTINGS_VERSION = 8
 
 // Application preferences that belong to a profile. Each preference is added here, with its default in
 // defaultSettings when it is not optional, and either kept by the server (PREFERENCES and the camera forms of sync.ts) or
@@ -66,8 +65,6 @@ export interface ProfileSettings {
 	guidingGraph?: GuidingGraphView
 	// Forms of each physical camera edited so far, by saved connection id, then device id.
 	cameras: Record<string, Record<string, CameraSettings>>
-	// Targets saved to recover a framing, at most FRAMING_REFERENCES_MAXIMUM; absent until one is saved.
-	framingReferences?: readonly FramingReference[]
 	// Star detection request edited in Images → Star Detection, shared by every document and by the frames of Auto
 	// Focus; absent until edited, and then DEFAULT_STAR_REQUEST holds.
 	starDetection?: StarDetectionRequest
@@ -137,6 +134,9 @@ export interface ProfileSettings {
 	// Preferences of the Close Approaches tool; absent until edited, and then DEFAULT_CLOSE_APPROACH_PREFERENCES holds. Tab
 	// memory, like the results, the selection, and the dates of a search.
 	closeApproaches?: CloseApproachPreferences
+	// Framing the Observing Planner judges how targets fit (a framing of the Framing tool, or EQUIPMENT_FRAMING_ID); absent
+	// means the Equipment Setup's. View state.
+	plannerFramingId?: string
 	// Preferences of the Astro Weather tool; absent until edited, and then DEFAULT_ASTRO_WEATHER_PREFERENCES holds. Tab
 	// memory, like the forecasts, the sites typed in, and the night shown.
 	astroWeather?: AstroWeatherPreferences
@@ -354,31 +354,19 @@ export const MERIDIAN_FLIP_MAXIMUM_SECONDS = 21541
 export interface SkySettings {
 	// What the star map shows; absent until the user changes a preference, and then every default holds.
 	display?: SkyDisplaySettings
-	// Field of view drawn around the selection; absent until the user creates a preset.
+	// Fields of view drawn around the selection; absent until the user changes them. View state.
 	framing?: SkyFramingSettings
 	// Whether the time bar of the simulation clock is shown under the star map; absent hides it. View state.
 	timeBar?: boolean
 }
 
-// Field of view preferences of the Sky workspace: custom optical presets, independent of the equipment
-// setup, which one is drawn, and how the Equipment Setup source builds its field.
+// Which framings of the Framing tool the Sky draws around the selection, all of it view state: every framing that has
+// a field, but those hidden, while the fields of view are shown.
 export interface SkyFramingSettings {
-	// Presets in display order.
-	presets: readonly OpticalPreset[]
-	// Id of the preset drawn; absent when there is none. View state.
-	activePresetId?: string
-	// Whether the field of view is drawn on the map. View state.
+	// Whether the fields of view are drawn on the map.
 	visible: boolean
-	// Where the drawn field comes from: a custom preset, or the Equipment Setup; absent means the Equipment Setup
-	// (framingSource). View state.
-	source?: FramingSource
-	// Sensor of the Equipment Setup source; absent means the main camera. View state.
-	sensorSource?: SensorSource
-	// Sensor entered for the Equipment Setup source when sensorSource is manual, to simulate a camera.
-	manualSensor?: SensorGeometry
-	// Position angle of the Equipment Setup field's top edge in degrees, from north towards east, [0, 360);
-	// absent means 0.
-	equipmentRotation?: number
+	// Ids of the framings not drawn (EQUIPMENT_FRAMING_ID for the Equipment Setup's); a new framing is drawn.
+	hidden?: readonly string[]
 }
 
 // Exposure and camera settings of one physical camera, edited in Camera Acquisition. The other operations that take
@@ -680,7 +668,7 @@ export const POINTING_MODEL_PRESETS = [
 export const DEFAULT_POINTING_MODEL_SETTINGS: PointingModelSettings = { exposureTime: 5, pattern: 'goldenSpiral', count: 30, minimumAltitude: 25, meridianAvoidance: 5, settleDelay: 2, stopTracking: true }
 
 // Target Centering form of one physical camera. The frames take the camera settings of the camera, which this form never
-// holds, and its solver settings; the target being edited is kept for the tab only (view.ts), and only a saved framing lasts.
+// holds, and its solver settings; the target being edited is kept for the tab only (view.ts).
 export interface TargetCenteringSettings {
 	// Exposure of each frame, in seconds; > 0.
 	exposureTime: number
@@ -701,8 +689,6 @@ export interface TargetCenteringSettings {
 	// Whether guiding that is correcting the mount is stopped for the session and restored after, recalibrating; otherwise it
 	// refuses the start.
 	coordinateGuiding: boolean
-	// Saved framing selected; absent when the target is not one.
-	framingId?: string
 }
 
 // Bounds of the Target Centering form, [minimum, maximum], in the units of each field.
@@ -710,27 +696,6 @@ export const TARGET_CENTERING_LIMITS = { tolerance: [1, 3600], maximumCorrection
 
 // Target Centering form of a camera that has none yet; the values are provisional starting points.
 export const DEFAULT_TARGET_CENTERING_SETTINGS: TargetCenteringSettings = { exposureTime: 3, tolerance: 30, maximumCorrections: 4, noSolutionRetries: 1, maximumFrames: 10, settleDelay: 2, maximumCorrection: 1, blindRetry: false, coordinateGuiding: true }
-
-// Target saved to recover a framing. It is a definition, never a reference to an image, so it outlives any frame.
-export interface FramingReference {
-	// Id of the framing, unique across every profile: the server keeps each framing as a row keyed by it.
-	id: string
-	// Name of the framing, not blank.
-	name: string
-	// Right ascension, J2000, in radians, in [0, 2π).
-	rightAscension: number
-	// Declination, J2000, in radians, in [−π/2, π/2].
-	declination: number
-	// Where the coordinates came from: typed, or a catalog object of Sky.
-	source: 'manual' | 'sky'
-	// When it was saved, Unix milliseconds.
-	createdAt: number
-	// When it was last changed, Unix milliseconds.
-	updatedAt: number
-}
-
-// Most framings a profile keeps.
-export const FRAMING_REFERENCES_MAXIMUM = 128
 
 // Most artificial satellites a profile keeps as favorites.
 export const SATELLITE_FAVORITES_MAXIMUM = 500

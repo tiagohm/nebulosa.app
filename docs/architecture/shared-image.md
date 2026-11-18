@@ -28,5 +28,5 @@ There is **one** image store, `ImageStore` in `api/src/images.ts`, and the scien
 - An analysis of one spot of an image reads a region instead of the whole image: `ImageStore.detectionRegion` answers the grayscale copy of a rectangle, sample for sample the same as that rectangle of `detectionImage`, without copying the rest of the image, and the `SampleConversion` back to the scale of the source (see their comments in `api/src/images.ts` and `luminanceRegion` of `api/src/imagedecode.ts`).
 - A document a page opens from a file (`POST /api/images` with its `client`, `ImageOpenRequest`) or claims from image processing belongs to that client: once the last socket of the client closed and stayed closed for `DOCUMENT_GRACE` (10 min, the grace of the capture frame leases), the store closes it (`ClientPresence` of `api/src/websocket.ts`), so a tab that reloaded or closed leaves no decoded image behind, and a tab that reconnects in time keeps its documents.
   A document a service opened (a camera frame, a live stack snapshot, an unclaimed processing result) is closed by that service.
-- A Sky Framing survey image is not an image document.
+- A survey cutout of the Framing preview is not an image document.
   Importing one into Images is an explicit action, available only when the cutout carries usable WCS metadata.

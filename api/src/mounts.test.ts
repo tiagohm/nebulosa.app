@@ -99,7 +99,7 @@ test('slews to an object resolved at the real current time and reports the real 
 	expect(events[1].operation).toEqual({ ...running, state: 'succeeded' })
 	expect(operations.running()).toBeEmpty()
 	expect(mount.equatorialCoordinate.rightAscension).toBeCloseTo(body.rightAscension, 2)
-}, 40000)
+})
 
 // Commands over a fake model that answers plan, recording its calls.
 async function setupCorrected(plan: MountCorrectionPlan | ((target: MountTargetCoordinate<string | number>) => MountCorrectionPlan)) {
@@ -156,7 +156,7 @@ test('a GoTo from inside an operation holding the mount is planned once and goes
 	expect(plans).toHaveLength(1)
 	await waitUntil(() => observed.length === 1)
 	expect(observed).toEqual(['WEST'])
-}, 40000)
+})
 
 test('a GoTo from inside an operation refused by the model or the horizon commands nothing', async () => {
 	const { commands, operations, mount } = await setupCorrected({ status: 'refused', error: 'The target is too far from the samples of the pointing model' })
@@ -187,7 +187,7 @@ test('a GoTo without a model in force goes as asked from inside an operation', a
 	})
 
 	expect(await handle.result).toMatchObject({ ok: true })
-}, 40000)
+})
 
 test('a slew whose mount another operation took while the object was located is refused as busy', async () => {
 	const { manager, id, client, operations, mountId } = await setup()
@@ -253,7 +253,7 @@ test('refuses a second slew while the first holds the mount, and stop aborts it'
 	await waitUntil(() => events.length === 2)
 	expect(events[1].operation).toMatchObject({ state: 'failed', reason: 'aborted' })
 	expect(mount.slewing).toBeFalse()
-}, 30000)
+})
 
 // Short lease used where expiry is under test, in milliseconds.
 const SHORT_LEASE: MountNudgeOptions = { heartbeatInterval: 50, leaseTimeout: 300 }
@@ -438,7 +438,7 @@ test('arbitrates nudges against slews, other presses, and slew rate changes', as
 	expect((await commands.slew(id, mountId, request)).status).toBe(409)
 	expect((await commands.setSlewRate(id, mountId, { name: 'SPEED_3' })).status).toBe(409)
 	expect((await commands.stopNudge('first-tab')).status).toBe(204)
-}, 30000)
+})
 
 test('selects only a slew rate the mount reports', async () => {
 	const { manager, id, client, commands, mountId } = await setup()
@@ -543,12 +543,13 @@ test('parks and unparks as operations, and a repeated token does not command twi
 
 	expect(commands.unpark(id, mountId, { token: 'unpark-1' }).status).toBe(202)
 	await waitUntil(() => !mount.parked && operations.running().length === 0, 30000)
-}, 40000)
+})
 
 test('a GoTo repeated after its mount disconnected answers its first operation instead of a refusal', async () => {
 	const { manager, id, client, commands, mountId } = await setup()
 	const mount = await connectMount(manager, client, mountId)
-	const request = { token: 'retried', target: currentTarget(mount, deg(1)), observer: SITE_OBSERVER }
+	// Seen from where the mount points at the zenith, so the target is above the horizon at any time of the day.
+	const request = { token: 'retried', target: currentTarget(mount, deg(1)), observer: zenithOf(mount).observer }
 
 	const first = commands.goTo(id, mountId, request)
 	expect(first.status).toBe(202)
@@ -580,7 +581,7 @@ test('goes to a coordinate above the horizon only, and syncs on one', async () =
 	const { operationId } = (await response.json()) as CommandAccepted
 	await waitUntil(() => events.some((event) => event.operation.operationId === operationId && event.operation.state !== 'running'), 30000)
 	expect(events.findLast((event) => event.operation.operationId === operationId)?.operation).toMatchObject({ kind: 'mount.goto', state: 'succeeded' })
-}, 40000)
+})
 
 test('home commands follow the capabilities and set home asks nothing to move', async () => {
 	const { manager, id, client, commands, events, mountId } = await setup()
@@ -593,7 +594,7 @@ test('home commands follow the capabilities and set home asks nothing to move', 
 	const { operationId } = (await response.json()) as CommandAccepted
 	await waitUntil(() => events.some((event) => event.operation.operationId === operationId && event.operation.state !== 'running'), 30000)
 	expect(events.findLast((event) => event.operation.operationId === operationId)?.operation).toMatchObject({ kind: 'mount.home', state: 'succeeded' })
-}, 40000)
+})
 
 test('a mount command is refused while a nudge holds the mount', async () => {
 	const { manager, id, client, commands, mountId } = await setup()

@@ -1,7 +1,7 @@
 import { eraC2s, eraS2c } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { precessionNutationMatrix, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import type { FitsHeader } from 'nebulosa/src/io/formats/fits/fits'
-import { type Mat3, matMulVec } from 'nebulosa/src/math/linear-algebra/mat3'
+import { type Mat3, matMulVec, matTransposeMulVec } from 'nebulosa/src/math/linear-algebra/mat3'
 import type { MutVec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
@@ -149,6 +149,15 @@ export function imageFootprint(solution: FitsHeader, frame: WcsFrame, image: Siz
 // toolkit's precession-nutation matrix, the one the Sky catalogs are precessed with.
 export function ofDateMatrix(time: number): Mat3 {
 	return precessionNutationMatrix(timeUnix(time / 1000, true))
+}
+
+// Returns the J2000 (ICRS) position (radians) of a position on the true equator and equinox of the instant of a matrix of
+// ofDateMatrix, through its transpose, right ascension in [0, 2π): the inverse of toDate.
+export function fromDate(matrix: Mat3, [rightAscension, declination]: SkyPoint): SkyPoint {
+	const vector: MutVec3 = [0, 0, 0]
+	const [x, y, z] = matTransposeMulVec(matrix, eraS2c(rightAscension, declination, vector), vector)
+	const [ra, dec] = eraC2s(x, y, z)
+	return [normalizeAngle(ra), dec]
 }
 
 // Returns a J2000 position (radians) on the true equator and equinox of the instant of a matrix of ofDateMatrix, right

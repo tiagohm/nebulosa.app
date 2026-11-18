@@ -11,7 +11,7 @@ import { type WorkspaceSyncState, workspaceSyncState } from './sync'
 // framing is drawn, the bottom area of the camera tabs, the Image Processing pipeline, the preferences of Close
 // Approaches and Astro Weather), which profile is active, and the view entries kept outside the profiles (which panel
 // sections are expanded, the tool of each camera tab, the camera tab selected last, the target being typed for each camera
-// in Target Centering).
+// in Target Centering, the preview of the Framing tool).
 // VIEW_STORAGE says, for each one, the browser storage areas it is kept in: sessionStorage keeps it for this tab across
 // its reloads, localStorage for every tab of the browser across its restarts, and one kept in both is read from the first
 // area that holds it and written to all of them. Each area holds one document per profile, written whenever a field kept
@@ -98,7 +98,7 @@ export type ViewFieldKey = keyof typeof VIEW_FIELDS
 const VIEW_FIELD_KEYS = Object.keys(VIEW_FIELDS) as ViewFieldKey[]
 
 // View state kept outside the profiles, each under one key of browser storage (ViewEntry).
-export type ViewEntryName = 'sections' | 'cameraTools' | 'activeCameraTab' | 'centeringTargets' | 'pixelInspection'
+export type ViewEntryName = 'sections' | 'cameraTools' | 'activeCameraTab' | 'centeringTargets' | 'pixelInspection' | 'framingPreview'
 
 // Storage areas of each field of the view, of the active profile, and of each view entry, in the order they are read;
 // every one listed is written. An empty list keeps it in the memory of the page only.
@@ -122,6 +122,8 @@ export const VIEW_STORAGE: Readonly<Record<ViewFieldKey | ViewEntryName | 'activ
 	sections: ['local'],
 	// Whether the viewer status line reads the samples under the pointer.
 	pixelInspection: ['local'],
+	// Center, background, and survey of the preview of the Framing tool, wherever it is opened.
+	framingPreview: ['local'],
 	// What this tab was doing with each camera, and which camera it was showing.
 	cameraTools: ['session'],
 	activeCameraTab: ['session'],

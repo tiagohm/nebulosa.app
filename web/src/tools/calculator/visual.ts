@@ -1,6 +1,6 @@
 import type { TelescopeModel } from 'api'
 import { dawesLimit, effectiveApertureWithObstruction, exitPupilFromApertureAndMagnification, eyepieceTrueFovViaFieldStop, eyepieceView, lightGraspRatio, limitingMagnitude, magnification, obstructionRatio, rayleighLimit } from 'nebulosa/src/astronomy/formulas'
-import type { OpticalConfiguration } from '../../sky/framing'
+import type { OpticalConfiguration } from '../../framing/geometry'
 import { between, newCheck, optional, type Outcome, outcome, POSITIVE, positiveText, ready, required } from './values'
 
 // Visual Observation calculators. Eyepiece & Telescope gives the magnification, exit pupil, and true field of an

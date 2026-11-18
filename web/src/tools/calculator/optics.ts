@@ -1,7 +1,7 @@
 import type { CameraModel, TelescopeModel } from 'api'
 import { mosaicPanelCount, sensorDiagonalFov } from 'nebulosa/src/astronomy/formulas'
 import { toArcmin } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_OPTICS, type Framing, isFraming, type OpticalConfiguration, resolveFraming, type SensorGeometry } from '../../sky/framing'
+import { DEFAULT_OPTICS, type Framing, isFraming, type OpticalConfiguration, resolveFraming, type SensorGeometry } from '../../framing/geometry'
 import { between, newCheck, optional, type Outcome, outcome, POSITIVE, POSITIVE_INTEGER, positiveText, ready, required } from './values'
 
 // Optics & Field of View calculators. Imaging Setup resolves a telescope or lens with a camera through resolveFraming,

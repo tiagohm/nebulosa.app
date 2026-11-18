@@ -4,8 +4,8 @@ import { fetchUpstream, RemoteCache, type UpstreamBody, type UpstreamFetch, Upst
 
 // Survey cutouts of the preview of the Framing tool, proxied from the CDS hips2fits service (the survey list is bundled
 // with the web client, see framings.surveys.ts): a JPEG in the TAN projection centered on an ICRS position, north up and
-// east left (no rotation), whose field of view spans the larger side of the image, so a gnomonic projection of the same
-// center and scale draws the framings on it without a WCS. A cutout of a URL never changes, so it is kept for a day, the
+// east left (no rotation), whose field angle spans the larger side of the image (its tangent-plane extent 2·tan(fov/2)),
+// so a gnomonic projection of the same center and scale draws the framings on it without a WCS. A cutout of a URL never changes, so it is kept for a day, the
 // latest ones in memory; the mirror is asked when the main host fails, and a failure is remembered for a minute so an
 // unreachable service answers at once.
 
@@ -16,7 +16,11 @@ const CUTOUT_TTL_MS = 24 * 60 * 60_000
 const CUTOUT_LIMIT = 24
 
 // Budget of one download from one host, in milliseconds; hips2fits resamples the survey before it answers.
-const CUTOUT_TIMEOUT_MS = 45_000
+const CUTOUT_TIMEOUT_MS = 30_000
+
+// Idle time the server allows the cutout route, in seconds: both hosts' budgets and a margin, longer than the default
+// idle timeout of Bun.serve (10 s), which would close the connection while hips2fits resamples.
+const CUTOUT_IDLE_TIMEOUT_S = (2 * CUTOUT_TIMEOUT_MS) / 1000 + 10
 
 // Largest cutout accepted, in bytes (a 2000 px JPEG is about 1 MB).
 const CUTOUT_MAX_BYTES = 8 * 1024 * 1024
@@ -32,7 +36,7 @@ export interface FramingCutoutRequest {
 	readonly rightAscension: number
 	// Declination of the center, in radians.
 	readonly declination: number
-	// Field of view along the larger side of the image, in radians (the tangent-plane extent of TAN).
+	// Field angle of the larger side of the image, in radians: the side spans the tangent-plane extent 2·tan(fov/2).
 	readonly fov: number
 	// Width of the image, in pixels.
 	readonly width: number
@@ -92,7 +96,9 @@ export function createHipsCutoutRoutes(service: HipsCutouts) {
 			// JPEG of the cutout of ?survey, ra, dec, fov (radians), width, and height (pixels) (FramingCutoutRequest).
 			// X-Framing-Fetched-At is when it was downloaded (Unix milliseconds). 502 upstreamUnavailable when neither
 			// hips2fits host answers a JPEG.
-			GET: async (req) => {
+			GET: async (req: Bun.BunRequest<'/api/framings/cutout'>, server: Pick<Bun.Server<unknown>, 'timeout'>) => {
+				server.timeout(req, CUTOUT_IDLE_TIMEOUT_S)
+
 				try {
 					const { value, fetchedAt } = await service.cutout(cutoutRequest(new URL(req.url).searchParams))
 					return new Response(value.bytes, { headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'no-store', 'X-Framing-Fetched-At': `${fetchedAt}` } })

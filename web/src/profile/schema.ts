@@ -25,11 +25,12 @@ import type {
 	StreakDetectorSettings,
 } from 'api'
 import type { EquipmentSetup } from '../equipment/roles'
+import type { SensorGeometry, TelescopeOptics } from '../framing/geometry'
 import type { AnnotationDensity, AnnotationLayers } from '../images/images'
 import type { ImageAstrometrySettings } from '../platesolving/preferences'
 import type { WorkspaceId } from '../shell/route'
 import type { SkyDisplaySettings } from '../sky/display'
-import type { FramingSource, OpticalPreset, SensorGeometry, SensorSource, TelescopeOptics } from '../sky/framing'
+import type { FramingSource, OpticalPreset, SensorSource } from '../sky/framing'
 import type { StarProfileSettings } from '../stars/starprofile.settings'
 
 // What a profile holds, the defaults of its preferences and camera forms, and the version of the shape of the values the

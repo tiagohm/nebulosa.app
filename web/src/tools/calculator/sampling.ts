@@ -1,6 +1,6 @@
 import type { TelescopeModel } from 'api'
 import { airyDiskInPixels, airyDiskSize, classifyFWHMSampling, criticalFocusZone, type FWHMSamplingKind, fwhmPixelsToSeeing, recommendedFocalLength, samplingRatio } from 'nebulosa/src/astronomy/formulas'
-import { isFraming, type OpticalConfiguration, resolveFraming } from '../../sky/framing'
+import { isFraming, type OpticalConfiguration, resolveFraming } from '../../framing/geometry'
 import { newCheck, type OptionalOutcome, optional, optionalOutcome, type Outcome, outcome, POSITIVE, positiveText, ready, required } from './values'
 
 // Sampling & Focus calculators. Sampling relates the seeing, a stellar FWHM in arcseconds, to the image scale: the

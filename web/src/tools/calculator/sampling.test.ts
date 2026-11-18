@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { airyDiskSize, criticalFocusZone, recommendedFocalLength } from 'nebulosa/src/astronomy/formulas'
-import { DEFAULT_OPTICS } from '../../sky/framing'
+import { DEFAULT_OPTICS } from '../../framing/geometry'
 import { DIFFRACTION_EXAMPLE, diffraction, diffractionFromOptics, diffractionFromTelescopeModel, SAMPLING_EXAMPLE, sampling, samplingFromOptics } from './sampling'
 
 describe('sampling', () => {

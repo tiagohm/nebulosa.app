@@ -15,7 +15,7 @@ function jpeg() {
 
 function get(routes: ReturnType<typeof createHipsCutoutRoutes>, request: FramingCutoutRequest) {
 	const params = new URLSearchParams({ survey: request.survey, ra: `${request.rightAscension}`, dec: `${request.declination}`, fov: `${request.fov}`, width: `${request.width}`, height: `${request.height}` })
-	return routes['/api/framings/cutout'].GET(new Request(`http://localhost/api/framings/cutout?${params}`) as never)
+	return routes['/api/framings/cutout'].GET(new Request(`http://localhost/api/framings/cutout?${params}`) as never, { timeout: () => undefined })
 }
 
 test('asks for a north-up TAN JPEG of the field on the larger side', () => {

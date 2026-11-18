@@ -7,6 +7,7 @@ import { AstroWeather } from './astroweather/AstroWeatherView'
 import { Calculator } from './calculator/Calculator'
 import { CalibrationLibrary } from './calibrationlibrary/CalibrationLibrary'
 import { CloseApproaches } from './closeapproaches/CloseApproachesView'
+import { FramingView } from './framing/FramingView'
 import { ImageStacking } from './imagestacking/ImageStacking'
 import { JupiterPlanner } from './jupiter/JupiterPlannerView'
 import { LunarEclipseMap } from './lunareclipse/LunarEclipseMap'
@@ -172,6 +173,15 @@ export const TOOL_DEFINITIONS: Readonly<Record<ToolId, ToolDefinition>> = {
 		icon: 'compass',
 		view: ObservingPlanner,
 	},
+	framing: {
+		id: 'framing',
+		label: 'Framing',
+		summary: 'Compares fields of view on the sky.',
+		description: 'The framings every tool plans with: a telescope and a camera from the Equipment Setup, the Equipment Catalog, AstroBin, or typed, and the rotation of the sensor, compared over the sky catalog or a hips2fits survey image.',
+		keywords: ['FOV', 'field of view', 'framing', 'rotation', 'position angle', 'PA', 'sensor', 'telescope', 'camera', 'image scale', 'optical preset', 'hips2fits', 'HiPS', 'survey', 'DSS', 'AstroBin', 'mosaic'],
+		icon: 'frame',
+		view: FramingView,
+	},
 	'jupiter-observing-planner': {
 		id: 'jupiter-observing-planner',
 		label: 'Jupiter Observing Planner',
@@ -308,7 +318,7 @@ export interface ToolGroup {
 export const TOOL_GROUPS: readonly ToolGroup[] = [
 	{
 		label: 'Planning',
-		tools: ['astro-weather', 'observing-planner', 'planetary-events', 'meteor-showers', 'jupiter-observing-planner', 'saturn-observing-planner', 'artificial-satellites', 'close-approaches', 'solar-eclipse-map', 'lunar-eclipse-map'],
+		tools: ['astro-weather', 'observing-planner', 'framing', 'planetary-events', 'meteor-showers', 'jupiter-observing-planner', 'saturn-observing-planner', 'artificial-satellites', 'close-approaches', 'solar-eclipse-map', 'lunar-eclipse-map'],
 	},
 	{ label: 'Rig & Observatory', tools: ['meridian-flip-monitor', 'mount-remote-control', 'mount-pointing-model', 'observatory-cameras', 'alpaca-server'] },
 	{ label: 'Frames', tools: ['calibration-library', 'image-stacking'] },

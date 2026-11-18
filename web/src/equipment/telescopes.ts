@@ -1,5 +1,5 @@
 import { useSnapshot } from 'valtio'
-import type { EquipmentTelescopes, TelescopeOptics } from '../sky/framing'
+import type { EquipmentTelescopes, TelescopeOptics } from '../framing/geometry'
 import { type CatalogTelescope, catalogState } from './catalog'
 
 // Telescopes of the Equipment Setup resolved through the Equipment Catalog. The Telescope and Guide Telescope of a profile

@@ -25,6 +25,7 @@ import { cameraBindingsState, handleCameraBindingsEvent, refreshCameraBindings }
 import { deviceState, handleDeviceEvent, refreshDevices } from './equipment/equipment'
 import { CAMERA_ROLES } from './equipment/roles'
 import { onClose, onOpen, subscribe } from './events'
+import { framingsState, handleFramingEvent, refreshFramings } from './framing/framings'
 import { type CameraTabSource, followLiveStacks, handleCapturedFrame, reconcileCameraTabs, reconcileCapturedFrames, releaseLeasesOnHide } from './images/cameratabs'
 import { captureFramesState, handleCaptureFramesEvent, refreshCaptureFrames } from './images/captureframes'
 import { handleImageProcessingEvent, imageProcessingState, refreshImageProcessing } from './images/imageprocessing'
@@ -46,6 +47,7 @@ import { collapsibleSections } from './shell/collapsible'
 import { routeState, watchHistory } from './shell/route'
 import { handleStarsEvent, refreshStars, starsState } from './stars/stars'
 import { handleStreaksEvent, refreshStreaks, streaksState } from './streaks/streaks'
+import { framingPreviewEntry, framingPreviewState } from './tools/framing/framing'
 import { handleImageStackingEvent, imageStackingRuntime, refreshImageStacking } from './tools/imagestacking/projects'
 import { handleJupiterGrsEvent, jupiterGrsState, refreshJupiterGrs } from './tools/jupiter/jupiter'
 import { handleMeridianFlipEvent, meridianFlipState, refreshMeridianFlip } from './tools/meridianflip/meridianflip'
@@ -127,6 +129,7 @@ const SERVER_STORES: readonly ServerStore[] = [
 	{ handle: (event) => handleMeteorShowersEvent(meteorShowerSourcesState, event), refresh: () => refreshMeteorShowerSources(meteorShowerSourcesState) },
 	{ handle: (event) => handleSpiceKernelEvent(spiceKernelsState, event), refresh: () => refreshSpiceKernels(spiceKernelsState) },
 	{ handle: (event) => handleObservingPlanEvent(observingPlansState, event), refresh: () => refreshObservingPlans(observingPlansState) },
+	{ handle: (event) => handleFramingEvent(framingsState, event), refresh: () => refreshFramings(framingsState) },
 	{ handle: (event) => handleJupiterGrsEvent(jupiterGrsState, event), refresh: () => refreshJupiterGrs(jupiterGrsState) },
 	{ handle: (event) => handleAutoFocusEvent(autoFocusRuntime, event), refresh: () => refreshAutoFocus(autoFocusRuntime) },
 	{ handle: (event) => handleTppaEvent(tppaRuntime, event), refresh: () => refreshTppa(tppaRuntime) },
@@ -159,7 +162,7 @@ const stops = [
 	watchActiveSiteZone(profileState, siteState),
 	workspace.start(),
 	new ViewPersistence(profileState).start(),
-	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), activeCameraTabEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime), pixelInspectionEntry(pixelInspection)]),
+	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), activeCameraTabEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime), pixelInspectionEntry(pixelInspection), framingPreviewEntry(framingPreviewState)]),
 	watchHistory(routeState),
 	watchPlayers(),
 	watchPictureInPicture(),

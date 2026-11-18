@@ -13,6 +13,7 @@ describe('registry', () => {
 			'orbital-mechanics-explorer',
 			'astro-weather',
 			'observing-planner',
+			'framing',
 			'jupiter-observing-planner',
 			'saturn-observing-planner',
 			'planetary-events',
@@ -77,7 +78,7 @@ describe('filter', () => {
 	test('finds a tool by the words of its keywords', () => {
 		const found = (query: string) => TOOL_IDS.filter((id) => matchesTool(TOOL_DEFINITIONS[id], query))
 		expect(found('dew')).toEqual(['calculator', 'astro-weather'])
-		expect(found('fov')).toEqual(['calculator'])
+		expect(found('fov')).toEqual(['calculator', 'framing'])
 		expect(found('critical focus')).toEqual(['calculator'])
 		expect(found('pixel scale')).toEqual(['calculator'])
 		expect(found('moon')).toContain('lunar-eclipse-map')

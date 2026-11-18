@@ -6,7 +6,7 @@ import { sphericalSeparation } from 'nebulosa/src/math/numerical/geometry'
 import { deg, normalizeAngle, toArcmin } from 'nebulosa/src/math/units/angle'
 import { proxy } from 'valtio'
 import { skyAt } from '../platesolving/wcs'
-import { clearImageFootprint, clearSkyCoordinate, imageFootprint, ofDateMatrix, outlineLabel, showCoordinateInSky, showFootprintInSky, type SkyImageState, toDate, toggleImageFootprint } from './footprint'
+import { clearImageFootprint, clearSkyCoordinate, fromDate, imageFootprint, ofDateMatrix, outlineLabel, showCoordinateInSky, showFootprintInSky, type SkyImageState, toDate, toggleImageFootprint } from './footprint'
 
 // A TAN solution of a 2000×1000 image, 0.001° per pixel.
 const SOLUTION: FitsHeader = { CTYPE1: 'RA---TAN', CTYPE2: 'DEC--TAN', CRPIX1: 1000.5, CRPIX2: 500.5, CRVAL1: 83.8, CRVAL2: -5.4, CD1_1: -0.001, CD1_2: 0, CD2_1: 0, CD2_2: 0.001, NAXIS1: 2000, NAXIS2: 1000 }
@@ -28,6 +28,20 @@ describe('frame of date', () => {
 			expect(ra).toBeGreaterThanOrEqual(0)
 			expect(ra).toBeCloseTo(normalizeAngle(expectedRa), 12)
 			expect(dec).toBeCloseTo(expectedDec, 12)
+		}
+	})
+
+	test('a position of date goes back to J2000', () => {
+		const matrix = ofDateMatrix(LATER)
+		for (const point of [
+			[deg(83.8), deg(-5.4)],
+			[deg(359.9), deg(89.7)],
+			[deg(0.1), deg(-60)],
+		] as const) {
+			const [ra, dec] = fromDate(matrix, toDate(matrix, point))
+			expect(ra).toBeGreaterThanOrEqual(0)
+			expect(ra).toBeCloseTo(point[0], 12)
+			expect(dec).toBeCloseTo(point[1], 12)
 		}
 	})
 

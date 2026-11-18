@@ -72,6 +72,13 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 				use: 'The meteor shower stream catalog, bundled and downloaded again on request.',
 				notice: 'Jopek, T. J. and Kaňuchová, Z., Planetary and Space Science 143, 3 (2017); Hajduková, M. et al., A&A 671, A155 (2023); Jopek, T. J. et al., A&A 682, A159 (2024); and the other references listed at https://iaumdc.astro.sk/references.',
 			},
+			{
+				name: 'hips2fits',
+				owner: 'CDS, Strasbourg, France',
+				url: 'https://alasky.cds.unistra.fr/hips-image-services/hips2fits',
+				use: 'Survey images behind the framings of the Framing preview, and the surveys listed by bun make:surveys through the MocServer; each survey shows the credit of its publisher with its image.',
+				notice: 'This research has made use of the hips2fits, a tool developed at CDS, Strasbourg, France aiming at extracting FITS images from HiPS sky maps with respect to a WCS.',
+			},
 			{ name: 'Nova Astrometry.net', owner: 'Astrometry.net', url: 'https://nova.astrometry.net/', use: 'Optional online plate solving, with your own account.' },
 		],
 	},

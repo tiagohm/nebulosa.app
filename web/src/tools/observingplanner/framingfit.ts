@@ -1,4 +1,4 @@
-import type { Framing } from '../../sky/framing'
+import type { Framing } from '../../framing/geometry'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // How a target fits the field of view the profile plans with (the Equipment Setup's, or the active Sky Framing preset):

@@ -1,7 +1,8 @@
 import type { CameraSensor } from 'api'
 import type { CatalogCamera, CatalogTelescope } from '../../equipment/catalog'
 import { CAMERA_ROLES, type CameraRole, isCameraRole, roleDefinition } from '../../equipment/roles'
-import { equipmentOptics, type OpticalConfiguration, type OpticalPreset, type SensorGeometry, type TelescopeOptics } from '../../sky/framing'
+import type { OpticalConfiguration, SensorGeometry, TelescopeOptics } from '../../framing/geometry'
+import { equipmentOptics, type OpticalPreset } from '../../sky/framing'
 import type { SensorTarget } from '../../sky/sensors'
 
 // Sources a calculator can import an optical configuration from, read only from what the tab already has: the active

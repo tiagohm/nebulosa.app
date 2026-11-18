@@ -56,11 +56,12 @@ Status: **Implemented** (works end to end), **Integration Required** (exists in 
 - **Moon Inspector (almanac, drawing, phases, apsides, next lunar eclipse)** (Implemented): `web/src/sky/moon/` over `api/src/sky/moon.ts`, the generated `web/assets/moon/`, and `/api/eclipses/lunar`; see [Moon Inspector Contract](moon-inspector.md)
 - **Image processing (derived images beyond the display pipeline)** (Implemented): `api/src/imageprocessing.ts` + `imageprocessing.worker.ts`;
   Images tool `web/src/images/ImageProcessingPanel.tsx`, store `imageprocessing.ts`, catalog `imageprocessing.catalog.ts`
-- **FOV and optical presets** (Implemented): `web/src/sky/framing.ts` (gnomonic outline, position angle), Sky Framing panel `FramingPanel.tsx`; camera sensors of the Equipment Setup `web/src/sky/sensors.ts`
+- **FOV and optical presets** (Implemented): `web/src/sky/framing.ts`, Sky Framing panel `FramingPanel.tsx`; camera sensors of the Equipment Setup `web/src/sky/sensors.ts`
+- **Framings** (Implemented): Framing tool (`web/src/tools/framing/`) over the framings of `api/src/framings.ts` and the shared geometry and resolution of `web/src/framing/` (gnomonic outline, position angle, sources of the optics); Mini-Sky and hips2fits preview (see [Framing Contract](framing.md))
 - **HiPS surveys** (Partial: hips2fits cutouts of the Framing preview through `api/src/framings.hips.ts` and the bundled survey catalog of `bun make:surveys`; HEALPix tiles are not read): `core/src/adapters/sky/hips2fits.ts`, `core/src/astronomy/sky/spatial/healpix.ts`
 - **Lunar eclipses and map** (Implemented): Lunar Eclipse Map tool (`web/src/tools/lunareclipse/`) over `api/src/lunareclipses.ts` and the conventions of `api/src/eclipses.ts`, drawn on `WorldMap` (`web/src/ui/WorldMap.tsx`)
 - **Solar eclipses and map** (Implemented): Solar Eclipse Map tool (`web/src/tools/solareclipse/`) over `api/src/solareclipses.ts`, `solareclipses.map.ts` on `solareclipses.worker.ts`, drawn on `WorldMap`
-- **Calculator formulas** (Implemented): Calculator tool (`web/src/tools/calculator/`) over `core/src/astronomy/formulas.ts` and Sky Framing's `resolveFraming`; computed in the browser
+- **Calculator formulas** (Implemented): Calculator tool (`web/src/tools/calculator/`) over `core/src/astronomy/formulas.ts` and the `resolveFraming` of `web/src/framing/geometry.ts`; computed in the browser
 - **Close approaches of small bodies** (Implemented): Close Approaches tool (`web/src/tools/closeapproaches/`) over `api/src/closeapproaches.ts`, JPL CAD and SBDB through the queue of `api/src/ssd.ts`;
   MPC observations are not provided
 - **Two-body orbital mechanics** (Implemented): Orbital Mechanics Explorer tool (`web/src/tools/orbitalmechanics/`) over `api/src/orbitalmechanics.ts` and the toolkit's `core/src/astronomy/orbits/mechanics.ts` and `sampling.ts`;

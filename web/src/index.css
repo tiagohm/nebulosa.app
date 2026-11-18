@@ -73,6 +73,19 @@
 	--color-map-radiant: oklch(0.6 0.08 360);
 }
 
+/* Outline colours of the framings (web/src/framing/palette.ts reads them for the canvases of the Framing preview and the
+   Sky, and the legends show them as swatches): brighter than the map hues, so a field of view reads over the stars and a
+   survey image, and far apart in hue, so the framings compared side by side are told apart. Framing n takes hue
+   n mod 6, in the order the framings are listed. */
+@theme static {
+	--color-frame-1: oklch(0.78 0.12 200);
+	--color-frame-2: oklch(0.78 0.13 85);
+	--color-frame-3: oklch(0.76 0.13 330);
+	--color-frame-4: oklch(0.78 0.13 145);
+	--color-frame-5: oklch(0.74 0.12 270);
+	--color-frame-6: oklch(0.76 0.13 30);
+}
+
 @layer base {
 	html {
 		color-scheme: dark;

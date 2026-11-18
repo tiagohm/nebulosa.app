@@ -1,11 +1,11 @@
-import { arcsec } from 'nebulosa/src/math/units/angle'
 import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { type CatalogTelescope, catalogState } from '../equipment/catalog'
 import { roleDefinition } from '../equipment/roles'
 import { referencedTelescope } from '../equipment/telescopes'
-import { formatDegrees, formatFixed, formatFocalRatio, formatMillimeters, formatPixelSize, MISSING } from '../format'
-import { formatPixelScale } from '../platesolving/coordinates'
+import { formatPixelSize, MISSING } from '../format'
+import { DEFAULT_TELESCOPE, type OpticalConfiguration, resolveFraming, type TelescopeOptics } from '../framing/geometry'
+import { FieldRows, SensorInputs, TelescopeInputs } from '../framing/OpticsFields'
 import { createOpticalPreset, deleteOpticalPreset, duplicateOpticalPreset, profileState, selectOpticalPreset, setEquipmentRotation, setFramingSource, setFramingVisible, setManualSensor, setGuideTelescopeOptics, setSensorSource, setTelescopeOptics, updateOpticalPreset } from '../profile/profile'
 import type { SkyFramingSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -17,8 +17,7 @@ import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
 import { Select } from '../ui/Select'
 import { TextInput } from '../ui/TextInput'
-import { formatApparentSize } from './format'
-import { DEFAULT_TELESCOPE, equipmentOptics, type FramingSource, framingSource, isFraming, type OpticalConfiguration, type OpticalPreset, resolveFraming, type SensorGeometry, type SensorSource, type TelescopeOptics, usesGuideTelescope } from './framing'
+import { equipmentOptics, type FramingSource, framingSource, type OpticalPreset, type SensorSource, usesGuideTelescope } from './framing'
 import type { RoleSensor } from './sensors'
 import { useRoleSensors } from './useSkyDevices'
 
@@ -49,24 +48,6 @@ const SOURCES: readonly FramingSource[] = ['equipment', 'custom']
 
 // Sensor sources of the Equipment Setup in menu order.
 const SENSOR_SOURCES: readonly SensorSource[] = ['MAIN_CAMERA', 'GUIDE_CAMERA', 'manual']
-
-// How the sensor size is entered.
-type SensorKind = SensorGeometry['kind']
-
-// Sensor kinds in menu order.
-const SENSOR_KINDS: readonly SensorKind[] = ['pixels', 'physical']
-
-// Pixel size in micrometers given to a sensor entered by its size when it is switched to pixels: a common
-// CMOS pixel, adjusted afterwards by the user.
-const CONVERTED_PIXEL_SIZE = 3.76
-
-// Converts a sensor to the other way of entering it, keeping its physical size; pixels of an unknown
-// size get the default pixel size.
-function convertSensor(sensor: SensorGeometry, kind: SensorKind): SensorGeometry {
-	if (sensor.kind === kind) return sensor
-	if (sensor.kind === 'pixels') return { kind: 'physical', width: (sensor.width * sensor.pixelSize) / 1000, height: (sensor.height * sensor.pixelSize) / 1000 }
-	return { kind: 'pixels', width: Math.round((sensor.width * 1000) / CONVERTED_PIXEL_SIZE), height: Math.round((sensor.height * 1000) / CONVERTED_PIXEL_SIZE), pixelSize: CONVERTED_PIXEL_SIZE }
-}
 
 // Says where the sensor of a camera role comes from, for its device of a display name: its report at full frame, the
 // sensor the Equipment Catalog declares for the camera it is bound to, or the report completed with declared values.
@@ -243,62 +224,18 @@ interface OpticsInputsProps {
 function OpticsInputs({ id, title, optics, telescope, onChange }: OpticsInputsProps) {
 	return (
 		<CollapsibleSection id={id} title={title}>
-			<NumberInput label="Focal length" suffix="mm" value={optics.focalLength} min={0} step={1} disabled={telescope?.focalLength !== undefined} onChange={(focalLength) => onChange({ focalLength })} />
-			<NumberInput label="Reducer / Barlow" suffix="×" value={optics.focalMultiplier} min={0.1} max={10} step={0.01} onChange={(focalMultiplier) => onChange({ focalMultiplier })} />
-			<NumberInput label="Aperture" suffix="mm" value={optics.aperture} min={0} step={1} disabled={telescope?.aperture !== undefined} onChange={(aperture) => onChange({ aperture })} />
+			<TelescopeInputs optics={optics} lockedFocalLength={telescope?.focalLength !== undefined} lockedAperture={telescope?.aperture !== undefined} onChange={onChange} />
 			<Notice>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without).{telescope && ` The values ${telescope.name} declares come from Settings → Equipment Catalog.`}</Notice>
 		</CollapsibleSection>
-	)
-}
-
-// Sensor size inputs, by resolution and pixel size or by physical size.
-function SensorInputs({ sensor, onChange }: { readonly sensor: Readonly<SensorGeometry>; readonly onChange: (sensor: SensorGeometry) => void }) {
-	return (
-		<>
-			<Select options={SENSOR_KINDS} value={sensor.kind} onChange={(kind) => onChange(convertSensor(sensor, kind))} format={(kind) => (kind === 'pixels' ? 'Resolution and pixel size' : 'Sensor size')} />
-			{sensor.kind === 'pixels' ? (
-				<>
-					<NumberInput label="Width" suffix="px" value={sensor.width} min={0} step={1} onChange={(width) => onChange({ ...sensor, width })} />
-					<NumberInput label="Height" suffix="px" value={sensor.height} min={0} step={1} onChange={(height) => onChange({ ...sensor, height })} />
-					<NumberInput label="Pixel size" suffix="µm" value={sensor.pixelSize} min={0} step={0.01} onChange={(pixelSize) => onChange({ ...sensor, pixelSize })} />
-				</>
-			) : (
-				<>
-					<NumberInput label="Sensor width" suffix="mm" value={sensor.width} min={0} step={0.01} onChange={(width) => onChange({ ...sensor, width })} />
-					<NumberInput label="Sensor height" suffix="mm" value={sensor.height} min={0} step={0.01} onChange={(height) => onChange({ ...sensor, height })} />
-				</>
-			)}
-		</>
 	)
 }
 
 // Computed field of view of optics, or what is missing to compute it, and the rotation input. A camera
 // that reports no sensor is named instead of its individual sensor fields.
 function FramingResult({ optics, missingCamera, onRotate }: { readonly optics: Readonly<OpticalConfiguration>; readonly missingCamera?: string; readonly onRotate: (rotation: number) => void }) {
-	const framing = resolveFraming(optics)
-	const sensorFields = new Set(['Width in pixels', 'Height in pixels', 'Pixel size'])
-	const missing = isFraming(framing) ? [] : missingCamera ? [...framing.missing.filter((e) => !sensorFields.has(e)), missingCamera] : framing.missing
-
 	return (
 		<CollapsibleSection id="sky.framing.framing" title="Framing">
-			{isFraming(framing) ? (
-				<>
-					<DataRow label="Field">
-						{formatApparentSize(framing.width)} × {formatApparentSize(framing.height)}
-					</DataRow>
-					<DataRow label="Field (degrees)">
-						{formatDegrees(framing.width, 3)} × {formatDegrees(framing.height, 3)}
-					</DataRow>
-					{framing.scale !== undefined && <DataRow label="Image scale">{formatPixelScale(arcsec(framing.scale))}</DataRow>}
-					<DataRow label="Effective focal length">{formatMillimeters(framing.effectiveFocalLength)}</DataRow>
-					<DataRow label="Sensor">
-						{formatFixed(framing.sensorWidth, 2)} × {formatFixed(framing.sensorHeight, 2)} mm
-					</DataRow>
-					{framing.focalRatio !== undefined && <DataRow label="Focal ratio">{formatFocalRatio(framing.focalRatio)}</DataRow>}
-				</>
-			) : (
-				<Notice>To compute the field, enter: {missing.join(', ')}.</Notice>
-			)}
+			<FieldRows field={resolveFraming(optics)} missingCamera={missingCamera} />
 			<NumberInput label="Rotation (PA of the top edge)" suffix="°" value={optics.rotation} min={0} max={359.5} step={0.5} onChange={onRotate} />
 			<Notice>Position angle of the sensor&apos;s top edge, from north through east, as plate solvers report it; mirrored images are not modeled.</Notice>
 		</CollapsibleSection>

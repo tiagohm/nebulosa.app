@@ -1,6 +1,6 @@
 import { cn } from 'cn'
 import { type ReactNode, useState } from 'react'
-import type { OpticalConfiguration } from '../../sky/framing'
+import type { OpticalConfiguration } from '../../framing/geometry'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { DisclosureSummary } from '../../ui/DisclosureSummary'

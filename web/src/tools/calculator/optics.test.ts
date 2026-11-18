@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { sensorDiagonalFov } from 'nebulosa/src/astronomy/formulas'
 import { toArcmin } from 'nebulosa/src/math/units/angle'
-import { DEFAULT_OPTICS, isFraming, type OpticalConfiguration, resolveFraming } from '../../sky/framing'
+import { DEFAULT_OPTICS, isFraming, type OpticalConfiguration, resolveFraming } from '../../framing/geometry'
 import { IMAGING_SETUP_EXAMPLE, imagingSetup, imagingSetupFromModel, imagingSetupFromOptics, imagingSetupFromTelescopeModel, MOSAIC_EXAMPLE, mosaic, mosaicFromOptics } from './optics'
 
 const REDUCED: OpticalConfiguration = { focalLength: 800, focalMultiplier: 0.8, aperture: 160, sensor: { kind: 'pixels', width: 4144, height: 2822, pixelSize: 4.63 }, rotation: 120 }

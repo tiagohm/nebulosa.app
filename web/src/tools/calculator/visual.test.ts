@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { DEFAULT_OPTICS } from '../../sky/framing'
+import { DEFAULT_OPTICS } from '../../framing/geometry'
 import { APERTURE_COMPARISON_EXAMPLE, apertureComparison, EYEPIECE_EXAMPLE, eyepiece, eyepieceFromOptics, eyepieceFromTelescopeModel } from './visual'
 
 describe('eyepiece', () => {

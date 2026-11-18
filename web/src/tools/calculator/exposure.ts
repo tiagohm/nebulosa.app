@@ -1,6 +1,6 @@
 import { maxExposureBeforeTrail, requiredSubframeCount, stackingMagnitudeGain, stackingSnrGain, starTrailLength, totalIntegrationTime } from 'nebulosa/src/astronomy/formulas'
 import { deg } from 'nebulosa/src/math/units/angle'
-import { isFraming, type OpticalConfiguration, resolveFraming } from '../../sky/framing'
+import { isFraming, type OpticalConfiguration, resolveFraming } from '../../framing/geometry'
 import { between, newCheck, NON_NEGATIVE, optional, type Outcome, outcome, POSITIVE, POSITIVE_INTEGER, positiveText, ready, required } from './values'
 
 // Exposure & Integration calculators. Exposure Planner relates the subexposure, the number of frames, and the total

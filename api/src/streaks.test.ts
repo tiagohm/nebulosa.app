@@ -2,7 +2,6 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { PI } from 'nebulosa/src/core/constants'
 import { DEFAULT_STREAK_DETECTION_OPTIONS, type Streak } from 'nebulosa/src/imaging/analysis/streak/types'
 import { AppDatabase } from './database'
 import { ExternalToolsStore } from './externaltools'
@@ -144,7 +143,7 @@ describe('cache key', () => {
 	test('changes with the image, the settings, and the context jobs', () => {
 		expect(streakCacheKey('a', REQUEST)).toBe(streakCacheKey('a', { settings: { ...DEFAULT_STREAK_DETECTION_OPTIONS } }))
 		expect(streakCacheKey('a', REQUEST)).not.toBe(streakCacheKey('b', REQUEST))
-		expect(streakCacheKey('a', REQUEST)).not.toBe(streakCacheKey('a', withSettings({ minSNR: 6 })))
+		expect(streakCacheKey('a', REQUEST)).not.toBe(streakCacheKey('a', withSettings({ minLength: 60 })))
 		expect(streakCacheKey('a', REQUEST)).not.toBe(streakCacheKey('a', { ...REQUEST, plateSolveJobId: 'p' }))
 		expect(streakCacheKey('a', REQUEST)).not.toBe(streakCacheKey('a', { ...REQUEST, starDetectionJobId: 's' }))
 	})
@@ -199,20 +198,6 @@ describe('detection', () => {
 		expect(service.result(job.jobId)!.streaks).toEqual([])
 	})
 
-	test('fails with the reason of the toolkit when it refuses the settings', async () => {
-		const { images, service, events } = setup()
-		const info = await images.open(writeStreakField())
-		const job = submit(service, info.id, withSettings({ angleStep: PI / 4096, orientationTolerance: PI / 2 }))
-		const last = await ended(events, job.jobId)
-
-		expect(last).toMatchObject({ state: 'failed', code: 'detectionFailed' })
-		expect(last.error).toContain('Hough')
-
-		// The worker that refused the request still detects.
-		const next = submit(service, info.id)
-		expect((await ended(events, next.jobId)).state).toBe('completed')
-	})
-
 	test('fails with a timeout when the detection runs too long', async () => {
 		const { images, service, events } = setup({ timeout: 1 })
 		const info = await images.open(writeStreakField())
@@ -241,7 +226,7 @@ describe('scheduling', () => {
 		const { images, service, events } = setup()
 		const info = await images.open(writeStreakField())
 		const running = submit(service, info.id)
-		const waiting = submit(service, info.id, withSettings({ minSNR: 6 }))
+		const waiting = submit(service, info.id, withSettings({ minLength: 50 }))
 
 		expect(service.cancel(waiting.jobId)).toBeTrue()
 		expect(service.cancel(running.jobId)).toBeTrue()
@@ -250,7 +235,7 @@ describe('scheduling', () => {
 		expect(events.some((event) => event.job.jobId === waiting.jobId && event.job.state === 'running')).toBeFalse()
 		expect(service.cancel(running.jobId)).toBeFalse()
 
-		const next = submit(service, info.id, withSettings({ minSNR: 7 }))
+		const next = submit(service, info.id, withSettings({ minLength: 60 }))
 		expect((await ended(events, next.jobId)).state).toBe('completed')
 	})
 

@@ -1,6 +1,4 @@
 import type { ServerEvent, StreakDetectionJob, StreakDetectionRequest, StreakDetectionResult, StreakDetectionSnapshot, StreakDetectorSettings } from 'api'
-import { PI, PIOVERTWO } from 'nebulosa/src/core/constants'
-import type { ImageAnalysisPlane } from 'nebulosa/src/imaging/analysis/plane'
 import type { StreakClass } from 'nebulosa/src/imaging/analysis/streak/classification.types'
 import { DEFAULT_STREAK_DETECTION_OPTIONS } from 'nebulosa/src/imaging/analysis/streak/types'
 import { proxy, ref } from 'valtio'
@@ -12,8 +10,8 @@ import type { Point, Rect } from '../viewer/transform'
 // server runs every job and keeps every result: this store mirrors the compact jobs of its snapshot and streaks:updated
 // events, remembers the latest job of each image id, and fetches the full result of a completed job (the streaks and
 // their classifications) only when a view needs it. A result is always matched to the image id it measured, so a late
-// result never lands on another image. Also holds the limits of the detector settings the form keeps within the
-// toolkit's ranges, and the pure geometry of the streak overlay: the segments in view and the streak under a point.
+// result never lands on another image. Also holds the bounds the form keeps the minimum length within, and the pure
+// geometry of the streak overlay: the segments in view and the streak under a point.
 
 // Mirror of the server's streak detection jobs.
 export interface StreaksState {
@@ -29,59 +27,12 @@ export interface StreaksState {
 	submitErrors: Record<string, string>
 }
 
-// Analysis plane of the detector: automatic, or one the image layout has.
-export type StreakPlane = StreakDetectorSettings['plane']
-
 // Settings of a first run: the toolkit's defaults.
-export const DEFAULT_STREAK_SETTINGS: StreakDetectorSettings = {
-	...DEFAULT_STREAK_DETECTION_OPTIONS,
-	maxWidth: 12,
-	minLinearity: 0.9,
-	minCoverage: 0.9,
-}
+export const DEFAULT_STREAK_SETTINGS: StreakDetectorSettings = { ...DEFAULT_STREAK_DETECTION_OPTIONS }
 
-// Bounds of a numeric setting: the range the toolkit accepts, and whether it is an integer.
-export interface StreakSettingLimit {
-	// Smallest value, in the unit of the setting.
-	readonly min: number
-	// Largest value, in the unit of the setting.
-	readonly max: number
-	// Whether the value is an integer.
-	readonly integer?: boolean
-}
-
-// Numeric settings of the detector.
-export type StreakNumericSetting = Exclude<keyof StreakDetectorSettings, 'plane' | 'allowBorderClipping'>
-
-// Ranges the toolkit's detectStreaks accepts for each numeric setting (angles in radians, lengths in pixels).
-export const STREAK_LIMITS: Readonly<Record<StreakNumericSetting, StreakSettingLimit>> = {
-	minLength: { min: 1, max: 1e6 },
-	maxWidth: { min: 1, max: 256 },
-	minSNR: { min: 0, max: 1e6 },
-	minLinearity: { min: 0, max: 1 },
-	minCoverage: { min: 0, max: 1 },
-	minCoherence: { min: 0, max: 1 },
-	maxStreaks: { min: 1, max: 4096, integer: true },
-	backgroundCellSize: { min: 8, max: 32768, integer: true },
-	thresholdSigma: { min: 0, max: 64 },
-	gradientSigma: { min: 0, max: 64 },
-	angleStep: { min: PI / 4096, max: PI },
-	orientationTolerance: { min: 0, max: PIOVERTWO },
-	distanceStep: { min: 1 / 16, max: 65536 },
-	maxCandidates: { min: 1, max: 512, integer: true },
-	mergeAngleTolerance: { min: 0, max: PIOVERTWO },
-	mergeGap: { min: 0, max: 1e6 },
-	mergeDistance: { min: 0, max: 1e6 },
-}
-
-// Most Hough angle bins one edge may vote for (MAX_STREAK_LOCAL_ANGLE_VOTES of the toolkit).
-const MAX_LOCAL_ANGLE_VOTES = 33
-
-// Every analysis plane of the detector; an image has only some (see streakPlanes).
-export const STREAK_PLANES: readonly StreakPlane[] = ['auto', 'mono', 'red', 'green', 'blue', 'green1', 'green2']
-
-// Display names of the analysis planes.
-export const PLANE_LABELS: Readonly<Record<StreakPlane, string>> = { auto: 'Automatic', mono: 'Mono', red: 'Red', green: 'Green', blue: 'Blue', green1: 'Green 1', green2: 'Green 2' }
+// Bounds of the minimum length the form accepts, in image pixels: the toolkit raises shorter values to 8 pixels of its
+// analysis plane anyway.
+export const MIN_LENGTH_LIMITS = { min: 8, max: 100000 } as const
 
 // Display names of the classes.
 export const CLASS_LABELS: Readonly<Record<StreakClass, string>> = {
@@ -101,33 +52,9 @@ export const streaksState = proxy<StreaksState>({ jobs: {}, latest: {}, results:
 // Jobs whose result is being fetched.
 const fetching = new Set<string>()
 
-// Returns the planes an image of channels channels, a CFA mosaic when cfa, can be analyzed on, automatic first.
-export function streakPlanes(channels: number, cfa: boolean): readonly StreakPlane[] {
-	const planes: readonly ImageAnalysisPlane[] = cfa ? ['red', 'green1', 'green2', 'blue'] : channels === 3 ? ['red', 'green', 'blue'] : ['mono']
-	return ['auto', ...planes]
-}
-
-// Returns the largest orientation tolerance, in radians, an angle step (radians) allows: the toolkit rounds the step
-// to divide PI evenly, and an edge may vote for at most MAX_LOCAL_ANGLE_VOTES bins of it.
-export function maxOrientationTolerance(angleStep: number): number {
-	const actual = PI / Math.ceil(PI / angleStep)
-	return Math.min(STREAK_LIMITS.orientationTolerance.max, ((MAX_LOCAL_ANGLE_VOTES - 1) / 2) * actual)
-}
-
-// Returns a value kept within the limit of a setting; a non-finite value becomes its fallback.
-function bounded(value: number, { min, max, integer }: StreakSettingLimit, fallback: number): number {
-	if (!Number.isFinite(value)) return fallback
-	const clamped = Math.min(max, Math.max(min, value))
-	return integer ? Math.round(clamped) : clamped
-}
-
-// Returns settings kept within the ranges of the toolkit, with the orientation tolerance within the Hough voting budget
-// of the angle step. The plane is kept as is: whether an image has it is known only with the image.
-export function clampStreakSettings(settings: StreakDetectorSettings): StreakDetectorSettings {
-	const next = { ...settings }
-	for (const key of Object.keys(STREAK_LIMITS) as StreakNumericSetting[]) next[key] = bounded(settings[key], STREAK_LIMITS[key], DEFAULT_STREAK_SETTINGS[key])
-	next.orientationTolerance = Math.min(next.orientationTolerance, maxOrientationTolerance(next.angleStep))
-	return next
+// Returns settings with the minimum length within MIN_LENGTH_LIMITS; a non-finite one becomes the default.
+export function clampStreakSettings({ minLength }: StreakDetectorSettings): StreakDetectorSettings {
+	return { minLength: Number.isFinite(minLength) ? Math.min(MIN_LENGTH_LIMITS.max, Math.max(MIN_LENGTH_LIMITS.min, minLength)) : DEFAULT_STREAK_SETTINGS.minLength }
 }
 
 // Whether two requests measure the same way, with the same context jobs.

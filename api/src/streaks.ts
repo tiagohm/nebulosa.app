@@ -13,9 +13,10 @@ import { runPooledWorkerJob, WorkerPool } from './workerjob'
 // Streak detection service of the Images workspace. A detection measures an image document of the image store,
 // addressed by its id, with the toolkit's detectStreaks on a worker thread of its own (streaks.worker.ts), fed a full
 // copy of the decoded samples in their own precision and layout: a mono, RGB, or trusted CFA image, never the
-// debayered luminance copy Star Detection measures, so the analysis plane is a native one (mono, RGB green, or CFA
-// green1 by default). Every streak is reported in 0-based pixel coordinates of the received image (origin at the
-// upper-left sample, +X right, +Y down, integers at pixel centres), with its axial angle in radians in [0, PI).
+// debayered luminance copy Star Detection measures nor anything the viewer applies; the toolkit reduces it to its own
+// luminance plane (the channel mean, a 2x2 superpixel of a mosaic). Every streak is reported in 0-based pixel
+// coordinates of the received image (origin at the upper-left sample, +X right, +Y down, integers at pixel centres),
+// with its axial angle in radians in [0, PI).
 //
 // The worker then classifies the streaks with the toolkit's classifyStreaks, from the evidence of the same image only:
 // its samples, its exposure and observation date, its WCS (the header's own, or the solution of a completed plate
@@ -30,12 +31,12 @@ import { runPooledWorkerJob, WorkerPool } from './workerjob'
 // jobs) still waiting or running, or completed with its result kept, is answered instead of running again. Results
 // are kept only in memory, keyed by job and grouped by image, until their image is released or the bounded store
 // evicts them. Every change of a job is published as a compact streaks:updated event without the streaks, which are
-// fetched on demand. The settings are not validated: the toolkit refuses invalid ones, and the job fails with its
-// reason (detectionFailed).
+// fetched on demand. The settings are not validated: a detection the toolkit throws on fails the job with its reason
+// (detectionFailed).
 
-// Options of detectStreaks a request runs with: all of them but the analysis area (the whole image is analyzed) and
-// the saturation level, which the toolkit compares with normalized samples.
-export type StreakDetectorSettings = Required<Omit<StreakDetectionOptions, 'area' | 'saturationLevel'>>
+// Options of detectStreaks a request runs with: all of them but the saturation level, which the toolkit compares with
+// normalized samples and only reports.
+export type StreakDetectorSettings = Required<Omit<StreakDetectionOptions, 'saturationLevel'>>
 
 // What a job measures and with which context.
 export interface StreakDetectionRequest {
@@ -72,7 +73,7 @@ export type StreakDetectionJobState = AnalysisJobState
 // - workerFailed: the detector worker died.
 // - timeout: the detection ran longer than its timeout.
 // - invalidImage: the image could not be prepared for the detector.
-// - detectionFailed: the toolkit refused the image or the settings, or exceeded its bounded work budget.
+// - detectionFailed: the toolkit threw on the image or the settings.
 // - contextUnavailable: a context job named by the request is unknown, not kept, of another image, or without the
 //   solution or stars it should give.
 // - cancelled: the job was cancelled.
@@ -227,8 +228,8 @@ export { MAX_QUEUED } from './analysis'
 // Options of the detector, in the fixed order of the cache key.
 const SETTING_KEYS = Object.keys(DEFAULT_STREAK_DETECTION_OPTIONS) as readonly (keyof StreakDetectorSettings)[]
 
-// Detections running at once, one worker each: a detection holds the image copy plus its plane, background, and Hough
-// workspaces, so a large frame costs hundreds of megabytes while it runs.
+// Detections running at once, one worker each: a detection holds the image copy plus its analysis plane, background,
+// mask, and Hough buffers, so a large frame costs hundreds of megabytes while it runs.
 const CONCURRENCY = 1
 
 // Time a detection may run by default, in milliseconds, before its worker is terminated.
@@ -427,7 +428,6 @@ export class StreakDetectionService implements Disposable {
 		const queueTime = entry.job.startedAt! - entry.job.queuedAt
 		const warnings: string[] = []
 
-		if (streaks.length >= request.settings.maxStreaks) warnings.push('The streak limit was reached: fainter streaks were not reported.')
 		if (classificationError !== undefined) warnings.push(`The streaks could not be classified: ${classificationError}`)
 
 		const summary: StreakDetectionSummary = { detectedCount: streaks.length, classified: classifications !== undefined, classes: classifications ? countClasses(classifications) : {}, elapsed }

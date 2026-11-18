@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { StreakDetectionJob, StreakDetectionResult } from 'api'
 import type { Streak } from 'nebulosa/src/imaging/analysis/streak/types'
 import { proxy } from 'valtio'
-import { clampStreakSettings, DEFAULT_STREAK_SETTINGS, handleStreaksEvent, latestStreakJob, latestStreakResult, loadStreakResult, maxOrientationTolerance, pickStreak, refreshStreaks, runStreakDetection, sameStreakRequest, streakPlanes, streakSegments, type StreaksState } from './streaks'
+import { clampStreakSettings, DEFAULT_STREAK_SETTINGS, handleStreaksEvent, latestStreakJob, latestStreakResult, loadStreakResult, pickStreak, refreshStreaks, runStreakDetection, sameStreakRequest, streakSegments, type StreaksState } from './streaks'
 
 function state(): StreaksState {
 	return proxy<StreaksState>({ jobs: {}, latest: {}, results: {}, resultErrors: {}, submitErrors: {} })
@@ -14,7 +14,7 @@ function job(patch: Partial<StreakDetectionJob> = {}): StreakDetectionJob {
 
 function streak(start: { x: number; y: number }, end: { x: number; y: number }): Streak {
 	const length = Math.hypot(end.x - start.x, end.y - start.y)
-	return { start, end, center: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }, length, width: 2, angle: 0, linearity: 1, rmsResidual: 0, coverage: 1, supportPixels: 10, clippedAtBorder: false, flux: 1, meanSignal: 1, peakSignal: 1, confidence: 1 }
+	return { start, end, center: { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }, length, width: 2, angle: 0, linearity: 1, rmsResidual: 0, coverage: 1, clippedAtBorder: false, flux: 1, meanSignal: 1, peakSignal: 1, confidence: 1 }
 }
 
 // Horizontal, vertical, diagonal, and short streaks.
@@ -89,29 +89,18 @@ describe('jobs', () => {
 	test('requests differ by settings and by context jobs', () => {
 		const request = { settings: DEFAULT_STREAK_SETTINGS }
 		expect(sameStreakRequest(request, { settings: { ...DEFAULT_STREAK_SETTINGS } })).toBeTrue()
-		expect(sameStreakRequest(request, { settings: { ...DEFAULT_STREAK_SETTINGS, minSNR: 6 } })).toBeFalse()
+		expect(sameStreakRequest(request, { settings: { ...DEFAULT_STREAK_SETTINGS, minLength: 60 } })).toBeFalse()
 		expect(sameStreakRequest(request, { ...request, plateSolveJobId: 'p' })).toBeFalse()
 		expect(sameStreakRequest(request, { ...request, starDetectionJobId: 's' })).toBeFalse()
 	})
 })
 
 describe('settings', () => {
-	test('are kept within the ranges of the toolkit', () => {
-		const clamped = clampStreakSettings({ ...DEFAULT_STREAK_SETTINGS, minLength: 0, maxWidth: 1000, minLinearity: 2, minCoverage: 1.5, minCoherence: -0.1, maxStreaks: 10.4, backgroundCellSize: 2, minSNR: Number.NaN })
-		expect(clamped).toEqual({ ...DEFAULT_STREAK_SETTINGS, minLength: 1, maxWidth: 256, minLinearity: 1, minCoverage: 1, minCoherence: 0, maxStreaks: 10, backgroundCellSize: 8 })
-	})
-
-	test('keep the orientation tolerance within the voting budget of the angle step', () => {
-		expect(maxOrientationTolerance(Math.PI / 90)).toBeCloseTo((16 * Math.PI) / 90, 9)
-		expect(maxOrientationTolerance(Math.PI / 4)).toBe(Math.PI / 2)
-		expect(clampStreakSettings({ ...DEFAULT_STREAK_SETTINGS, angleStep: Math.PI / 1800, orientationTolerance: Math.PI / 2 }).orientationTolerance).toBeCloseTo((16 * Math.PI) / 1800, 9)
+	test('keep the minimum length within its bounds', () => {
+		expect(clampStreakSettings({ minLength: 2 })).toEqual({ minLength: 8 })
+		expect(clampStreakSettings({ minLength: 1e9 })).toEqual({ minLength: 100000 })
+		expect(clampStreakSettings({ minLength: Number.NaN })).toEqual(DEFAULT_STREAK_SETTINGS)
 		expect(clampStreakSettings(DEFAULT_STREAK_SETTINGS)).toEqual(DEFAULT_STREAK_SETTINGS)
-	})
-
-	test('planes follow the layout of the image', () => {
-		expect(streakPlanes(1, false)).toEqual(['auto', 'mono'])
-		expect(streakPlanes(3, false)).toEqual(['auto', 'red', 'green', 'blue'])
-		expect(streakPlanes(1, true)).toEqual(['auto', 'red', 'green1', 'green2', 'blue'])
 	})
 })
 

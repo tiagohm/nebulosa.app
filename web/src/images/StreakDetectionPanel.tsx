@@ -1,7 +1,6 @@
 import type { ImageInfo, StreakDetectionJob, StreakDetectionRequest, StreakDetectionResult, StreakDetectorSettings } from 'api'
 import type { StreakClassification } from 'nebulosa/src/imaging/analysis/streak/classification.types'
 import type { Streak } from 'nebulosa/src/imaging/analysis/streak/types'
-import { deg, toDeg } from 'nebulosa/src/math/units/angle'
 import { useSnapshot } from 'valtio'
 import { isActive, analysisElapsed, ANALYSIS_STATE_LABELS } from '../analysis'
 import { formatDegrees, formatDuration, formatExposureTime, formatFixed, formatPercent, formatPixelLength, formatPixelPosition, formatSignificant, MISSING } from '../format'
@@ -10,7 +9,7 @@ import { activeProfile, profileState, setStreakDetectionSettings, streakDetectio
 import { CollapsibleSection } from '../shell/CollapsibleSection'
 import { EmptyState } from '../shell/WorkspaceLayout'
 import { useStarResult } from '../stars/useStarResult'
-import { CLASS_LABELS, cancelStreakDetection, clampStreakSettings, DEFAULT_STREAK_SETTINGS, maxOrientationTolerance, PLANE_LABELS, runStreakDetection, sameStreakRequest, STREAK_LIMITS, STREAK_PLANES, streakPlanes, streaksState } from '../streaks/streaks'
+import { CLASS_LABELS, cancelStreakDetection, clampStreakSettings, DEFAULT_STREAK_SETTINGS, MIN_LENGTH_LIMITS, runStreakDetection, sameStreakRequest, streaksState } from '../streaks/streaks'
 import { useStreakResult } from '../streaks/useStreakResult'
 import { Actions } from '../ui/Actions'
 import { Button } from '../ui/Button'
@@ -19,20 +18,19 @@ import { DataRow } from '../ui/DataRow'
 import { List, ListItem } from '../ui/List'
 import { Notice } from '../ui/Notice'
 import { NumberInput } from '../ui/NumberInput'
-import { Select } from '../ui/Select'
 import { useNow } from '../useNow'
 import { holdCameraFrame } from './cameratabs'
 import { type ImageStreaksState, type ImageViewState, imagesState, imageUnavailableReason, selectStreak, setStreakView } from './images'
 import type { ImageToolPanelProps } from './tools'
 
 // Streak Detection tool of the Images workspace: runs a detection of the straight streaks of the active document on the
-// server, on a native plane of its samples, and shows the outcome, the list of streaks, the streak selected in the list or
-// the viewer with its measurements and classification, and how the lines are drawn. The detector settings are the
-// profile's, shared by every document, and sent only by Run Detection; the context of the classification (the plate
-// solution shown and the latest detected stars of the image) is chosen per document and frozen by the server when the
-// detection is submitted. A classification is an uncalibrated evidence weight, never shown as a probability. The
-// settings are editable before the document has an image (a camera tab waiting for its first frame), with Run Detection
-// disabled until it has one; a result always belongs to the image it measured.
+// server, on the samples of its image, and shows the outcome, the list of streaks, the streak selected in the list or
+// the viewer with its measurements and classification, and how the lines are drawn. The only detector setting, the
+// minimum length, is the profile's, shared by every document, and sent only by Run Detection; the context of the
+// classification (the plate solution shown and the latest detected stars of the image) is chosen per document and
+// frozen by the server when the detection is submitted. A classification is an uncalibrated evidence weight, never
+// shown as a probability. The settings are editable before the document has an image (a camera tab waiting for its
+// first frame), with Run Detection disabled until it has one; a result always belongs to the image it measured.
 
 // Display names of the WCS sources of a classification.
 const WCS_LABELS = { header: 'Image header', plateSolve: 'Plate solving' } as const
@@ -81,30 +79,14 @@ function StreakDetection({ documentKey, info, view, unavailable }: StreakDetecti
 	const starDetectionJobId = starJob?.state === 'completed' ? starJob.jobId : undefined
 	const request: StreakDetectionRequest = { settings, ...(streaks?.useSolution && plateSolveJobId && { plateSolveJobId }), ...(streaks?.useStars && starDetectionJobId && { starDetectionJobId }) }
 	const selectedIndex = result && streaks?.selected?.jobId === result.jobId ? streaks.selected.index : undefined
-	const cfa = info !== undefined && info.channels === 1 && info.cfa !== undefined
-	const planes = info ? streakPlanes(info.channels, cfa) : undefined
-	const planeUnavailable = planes && !planes.includes(settings.plane) ? `The ${PLANE_LABELS[settings.plane].toLowerCase()} plane is not one of this image; choose another in Advanced Settings.` : undefined
 	const edit = (patch: Partial<StreakDetectorSettings>) => setStreakDetectionSettings(profileState, clampStreakSettings({ ...settings, ...patch }))
 
 	return (
 		<>
 			<CollapsibleSection id="images.streak-detection.detection" title="Detection" defaultOpen={false}>
-				<DetectionSettings settings={settings} cfa={cfa} onChange={edit} />
+				<DetectionSettings settings={settings} onChange={edit} />
 			</CollapsibleSection>
-			<CollapsibleSection id="images.streak-detection.advanced-settings" title="Advanced Settings" defaultOpen={false}>
-				<AdvancedSettings settings={settings} planes={planes} onChange={edit} />
-			</CollapsibleSection>
-			<Analysis
-				documentKey={documentKey}
-				imageId={imageId}
-				request={request}
-				job={job}
-				streaks={streaks}
-				solutionAvailable={plateSolveJobId !== undefined}
-				starsAvailable={starDetectionJobId !== undefined}
-				submitError={imageId === undefined ? undefined : submitErrors[imageId]}
-				unavailable={unavailable ?? planeUnavailable}
-			/>
+			<Analysis documentKey={documentKey} imageId={imageId} request={request} job={job} streaks={streaks} solutionAvailable={plateSolveJobId !== undefined} starsAvailable={starDetectionJobId !== undefined} submitError={imageId === undefined ? undefined : submitErrors[imageId]} unavailable={unavailable} />
 			{imageId !== undefined && (
 				<>
 					<Results job={job} result={result} resultError={resultError} selected={selectedIndex} onSelect={(index) => result && selectStreak(imagesState, documentKey, { jobId: result.jobId, index })} />
@@ -129,53 +111,15 @@ interface SettingsProps {
 	readonly onChange: (patch: Partial<StreakDetectorSettings>) => void
 }
 
-// Main settings of the detector: what a streak must be to be reported.
-function DetectionSettings({ settings, cfa, onChange }: SettingsProps & { readonly cfa: boolean }) {
+// Setting of the detector: the shortest streak reported. Every threshold adapts to the image, so there is no other.
+function DetectionSettings({ settings, onChange }: SettingsProps) {
 	return (
 		<>
-			<NumberInput label="Min length" value={settings.minLength} min={STREAK_LIMITS.minLength.min} max={10000} suffix="px" onChange={(minLength) => onChange({ minLength })} />
-			<NumberInput label="Max width (FWHM)" value={settings.maxWidth} min={cfa ? 2 : STREAK_LIMITS.maxWidth.min} max={STREAK_LIMITS.maxWidth.max} step={0.5} suffix="px" onChange={(maxWidth) => onChange({ maxWidth })} />
-			<NumberInput label="Min SNR" value={settings.minSNR} min={STREAK_LIMITS.minSNR.min} max={1000} step={0.5} onChange={(minSNR) => onChange({ minSNR })} />
-			<NumberInput label="Min linearity" value={settings.minLinearity} min={STREAK_LIMITS.minLinearity.min} max={STREAK_LIMITS.minLinearity.max} step={0.05} onChange={(minLinearity) => onChange({ minLinearity })} />
-			<NumberInput label="Min coverage" value={settings.minCoverage} min={STREAK_LIMITS.minCoverage.min} max={STREAK_LIMITS.minCoverage.max} step={0.05} onChange={(minCoverage) => onChange({ minCoverage })} />
-			<NumberInput label="Max streaks" value={settings.maxStreaks} min={STREAK_LIMITS.maxStreaks.min} max={STREAK_LIMITS.maxStreaks.max} onChange={(maxStreaks) => onChange({ maxStreaks })} />
-			<Checkbox label="Keep streaks cut by the image border" checked={settings.allowBorderClipping} onChange={(allowBorderClipping) => onChange({ allowBorderClipping })} />
-			<Notice>Lengths and widths are in image pixels. A CFA mosaic is measured on one color plane, so its widths are at least 2 px. The coverage is the fraction of a streak with signal: a dashed trail covers only part of its length, so keeping one needs a lower min coverage.</Notice>
+			<NumberInput label="Min length" value={settings.minLength} min={MIN_LENGTH_LIMITS.min} max={MIN_LENGTH_LIMITS.max} suffix="px" onChange={(minLength) => onChange({ minLength })} />
+			<Notice>The length is in image pixels. The detection adapts its thresholds to the noise and texture of each image, so stars, nebulae, the Moon, edges, and sensor rows or columns are not reported as streaks.</Notice>
 			<Button variant="secondary" className="self-start" onClick={() => onChange(DEFAULT_STREAK_SETTINGS)}>
 				Reset to Defaults
 			</Button>
-		</>
-	)
-}
-
-// Returns an angle in radians as degrees rounded to 0.001°, for an input field.
-function degrees(angle: number): number {
-	return Math.round(toDeg(angle) * 1000) / 1000
-}
-
-// Plane and algorithm settings of the detector, in a section collapsed by default.
-function AdvancedSettings({ settings, planes, onChange }: SettingsProps & { readonly planes?: readonly StreakDetectorSettings['plane'][] }) {
-	const tolerance = degrees(maxOrientationTolerance(settings.angleStep))
-
-	return (
-		<>
-			<Select label="Analysis plane" options={STREAK_PLANES} value={settings.plane} format={(plane) => PLANE_LABELS[plane]} disabledReason={(plane) => (planes && !planes.includes(plane) ? 'Not a plane of this image.' : undefined)} onChange={(plane) => onChange({ plane })} />
-			<Notice>Automatic measures a mono image, the green channel of a color image, or the first green plane of a CFA mosaic, never a debayered or stretched copy.</Notice>
-			<NumberInput label="Background cell" value={settings.backgroundCellSize} min={STREAK_LIMITS.backgroundCellSize.min} max={1024} suffix="px" onChange={(backgroundCellSize) => onChange({ backgroundCellSize })} />
-			<NumberInput label="Signal threshold" value={settings.thresholdSigma} min={STREAK_LIMITS.thresholdSigma.min} max={STREAK_LIMITS.thresholdSigma.max} step={0.1} suffix="σ" onChange={(thresholdSigma) => onChange({ thresholdSigma })} />
-			<NumberInput label="Gradient threshold" value={settings.gradientSigma} min={STREAK_LIMITS.gradientSigma.min} max={STREAK_LIMITS.gradientSigma.max} step={0.1} suffix="σ" onChange={(gradientSigma) => onChange({ gradientSigma })} />
-			<NumberInput label="Min coherence" value={settings.minCoherence} min={STREAK_LIMITS.minCoherence.min} max={STREAK_LIMITS.minCoherence.max} step={0.05} onChange={(minCoherence) => onChange({ minCoherence })} />
-			<NumberInput label="Angle step" value={degrees(settings.angleStep)} min={degrees(STREAK_LIMITS.angleStep.min)} max={10} step={0.1} suffix="°" onChange={(angleStep) => onChange({ angleStep: deg(angleStep) })} />
-			<NumberInput label="Orientation tolerance" value={degrees(settings.orientationTolerance)} min={0} max={tolerance} step={0.1} suffix="°" onChange={(orientationTolerance) => onChange({ orientationTolerance: deg(orientationTolerance) })} />
-			<NumberInput label="Distance step" value={settings.distanceStep} min={STREAK_LIMITS.distanceStep.min} max={16} step={0.25} suffix="px" onChange={(distanceStep) => onChange({ distanceStep })} />
-			<NumberInput label="Max candidates" value={settings.maxCandidates} min={STREAK_LIMITS.maxCandidates.min} max={STREAK_LIMITS.maxCandidates.max} onChange={(maxCandidates) => onChange({ maxCandidates })} />
-			<NumberInput label="Merge angle" value={degrees(settings.mergeAngleTolerance)} min={0} max={degrees(STREAK_LIMITS.mergeAngleTolerance.max)} step={0.1} suffix="°" onChange={(mergeAngleTolerance) => onChange({ mergeAngleTolerance: deg(mergeAngleTolerance) })} />
-			<NumberInput label="Merge gap" value={settings.mergeGap} min={0} max={10000} suffix="px" onChange={(mergeGap) => onChange({ mergeGap })} />
-			<NumberInput label="Merge distance" value={settings.mergeDistance} min={0} max={1000} step={0.5} suffix="px" onChange={(mergeDistance) => onChange({ mergeDistance })} />
-			<Notice>
-				The background cell and the distance step are in pixels of the analysis plane, which are 2 image pixels apart on a CFA mosaic. Bright pixels whose gradients are less coherent than the min coherence (stars, hot pixels) are ignored, so a trail among many stars is still found; 0 keeps them, which a dotted
-				trail of very short dashes needs. The orientation tolerance is at most {tolerance}° with this angle step.
-			</Notice>
 		</>
 	)
 }
@@ -318,7 +262,6 @@ function SelectedStreak({ streak, classification }: SelectedStreakProps) {
 					<DataRow label="Linearity">{formatFixed(streak.linearity, 3)}</DataRow>
 					<DataRow label="RMS residual">{formatPixelLength(streak.rmsResidual)}</DataRow>
 					<DataRow label="Coverage">{formatPercent(streak.coverage)}</DataRow>
-					<DataRow label="Support">{streak.supportPixels} px</DataRow>
 					<DataRow label="Cut by the border">{streak.clippedAtBorder ? 'Yes' : 'No'}</DataRow>
 					<DataRow label="Flux">{formatSignificant(streak.flux)}</DataRow>
 					<DataRow label="Mean signal">{formatSignificant(streak.meanSignal)}</DataRow>

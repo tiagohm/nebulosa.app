@@ -675,7 +675,7 @@ describe('camera forms', () => {
 		const state = load()
 		expect(streakDetectionSettings(activeProfile(state).settings)).toEqual(DEFAULT_STREAK_SETTINGS)
 
-		const settings = { ...DEFAULT_STREAK_SETTINGS, minLength: 30, plane: 'red', allowBorderClipping: false } as const
+		const settings = { ...DEFAULT_STREAK_SETTINGS, minLength: 30 } as const
 		setStreakDetectionSettings(state, settings)
 		expect(streakDetectionSettings(state.profiles[0].settings)).toEqual(settings)
 	})

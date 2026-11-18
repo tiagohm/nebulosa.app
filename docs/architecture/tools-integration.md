@@ -49,6 +49,10 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   a download replaces a table only if the new one reaches today (IERS A) or 120 days ago (IERS B).
   An instant no table holds takes DUT1 = 0 rather than the toolkit's clamped edge, leaves `dut1` and `ttMinusUt1` out, and says so in `quality.eop` (`covered`, `outsideTable`, or `notLoaded`), and the tool states UT1 and sidereal times as approximate.
   No observed or predicted label is given, since the tables do not keep it per row.
+- Nutation (`installInterpolatedNutation` of `api/src/astronomicaltime.nutation.ts`): the IAU 2006/2000A nutation of every instant without its own providers.
+  `app/src/main.ts` installs it after the Earth orientation, and so do the solar eclipse map and pointing fit workers, since `TIME_PROVIDERS` belongs to each thread: the toolkit's `interpolatedNutationProviders` evaluates the series only on quarter-day TT nodes (a bounded cache of 16384 nodes) and interpolates between them, within about 0.01 mas of the full series and independent of the order of the instants.
+  The precession-nutation matrix it gives also feeds the apparent sidereal time, the CIRS and ITRS rotations, and the ICRS↔CIRS and observed astrometry setups of the toolkit, so an instant evaluates it once.
+  Instants with their own orientation providers keep them (Planetary Events, the Observing Planner); tests use the full series, except those comparing a worker's results with their own thread's.
 - Astronomical Time Converter tool: its state is a tab-lived valtio proxy (`astronomicalTimeState`), never persisted.
   Now converts the real current time every second while the page is visible, one request at a time, and never the Sky simulation clock;
   Custom sends an entry 250 ms after the last edit, superseding the request before it, and an entry the tool cannot read or a refused one leaves no result, so an old value never stands for new inputs.

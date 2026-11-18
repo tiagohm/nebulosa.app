@@ -19,6 +19,7 @@ import {
 	stopServer,
 	unhandledErrorResponse,
 	websocket,
+	installInterpolatedNutation,
 } from 'api'
 import index from 'web/index.html'
 import { version, description } from '../package.json'
@@ -78,6 +79,9 @@ identifyCelestrakClient(version)
 
 // The first request already reads the same Earth orientation data as every later one.
 await startEarthOrientation()
+
+// Every instant of the server thread interpolates the IAU 2006/2000A nutation instead of evaluating its whole series.
+installInterpolatedNutation()
 
 // What a crash left of the products of the Calibration Library and Image Stacking is finished without anyone opening them.
 startStores()

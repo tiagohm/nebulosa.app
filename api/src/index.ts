@@ -123,6 +123,7 @@ export type { AstroWeatherMoon, AstroWeatherNight, AstroWeatherNightRequest } fr
 export type { MeteorologyGrid, MeteorologySample } from './astroweather.openmeteo'
 export type { AstronomicalSample, SevenTimerClass } from './astroweather.seventimer'
 export type { EarthOrientationCoverage, EarthOrientationSource, EarthOrientationStatus } from './astronomicaltime.eop'
+export { installInterpolatedNutation } from './astronomicaltime.nutation'
 export type { AutoFocusCaptureSettings, AutoFocusEvent, AutoFocusRequest, AutoFocusSession, AutoFocusSessionSummary, AutoFocusSnapshot, AutoFocusStartResponse, AutoFocusState, AutoFocusVerification, FocusMeasurement } from './autofocus'
 export type { FocusCurve, FocusCurveHyperbola, FocusCurveParabola, FocusCurveSeries, FocusCurveSeriesKind, FocusCurveTrendLines } from './autofocus.curve'
 export type {

@@ -1,11 +1,18 @@
 import { afterAll, expect, test } from 'bun:test'
+import { installInterpolatedNutation } from './astronomicaltime.nutation'
 import { createSolarEclipseRoutes, type LocalSolarEclipse, type SolarEclipseMapWorkerRequest, type SolarEclipseMapWorkerResponse, SolarEclipseService } from './solareclipses'
 import { findSolarEclipse, resolveSolarEclipse, type SolarEclipseMap, type SolarEclipseSummary, solarEclipseSummary } from './solareclipses.map'
+
+// The map worker interpolates the nutation, as the server thread does, so the summaries compared with its maps do too.
+const restoreNutation = installInterpolatedNutation()
 
 const service = new SolarEclipseService()
 const routes = createSolarEclipseRoutes(service)
 
-afterAll(() => service.dispose())
+afterAll(() => {
+	service.dispose()
+	restoreNutation()
+})
 
 function list(query: string) {
 	return routes['/api/eclipses/solar'].GET(new Request(`http://localhost/api/eclipses/solar?${query}`))

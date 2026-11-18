@@ -1,12 +1,15 @@
 import { installCachedEarthOrientation } from './astronomicaltime.eop'
+import { installInterpolatedNutation } from './astronomicaltime.nutation'
 import { computePointingFit, type PointingFitWorkerRequest, type PointingFitWorkerResponse } from './mountpointing.fit'
 
 // Worker thread of the mount pointing fits. It receives one fit at a time as plain numbers and answers the model and its
 // measures, so the leave-one-out refits never block the server event loop. The hour angles of a fit read the same Earth
-// orientation data as the corrections on the server thread, when that thread has them. A fit cannot be interrupted: the
-// service terminates the worker to cancel one, or when it runs out of time.
+// orientation data as the corrections on the server thread, when that thread has them, and its interpolated nutation.
+// A fit cannot be interrupted: the service terminates the worker to cancel one, or when it runs out of time.
 
 declare const self: Worker
+
+installInterpolatedNutation()
 
 // Fits a request and posts the outcome.
 async function handle({ jobId, request, earthOrientation }: PointingFitWorkerRequest): Promise<void> {

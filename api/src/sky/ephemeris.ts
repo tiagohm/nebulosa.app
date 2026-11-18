@@ -12,7 +12,7 @@ import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87
 import { asteroidMagnitudeEstimate, cometMagnitudeEstimate } from 'nebulosa/src/astronomy/formulas'
 import type { GeographicPosition } from 'nebulosa/src/astronomy/observer/location'
 import { asteroid, comet, type KeplerOrbit } from 'nebulosa/src/astronomy/orbits/asteroid'
-import { type Time, Timescale, time as makeJulianTime, timeShift, timeUnix, toJulianEpoch, tt } from 'nebulosa/src/astronomy/time/time'
+import { precessionNutationMatrix, type Time, Timescale, time as makeJulianTime, timeShift, timeUnix, toJulianEpoch, tt } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, DEG2RAD, GM_SUN_PITJEVA_2005, J2000, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
 import { type MutVec3, type Vec3, vecAngle, vecLength, vecPlus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { deg, normalizeAngle, normalizePI, toDeg } from 'nebulosa/src/math/units/angle'
@@ -612,7 +612,7 @@ function apparentPlace(direction: Vec3 | readonly [number, number], time: Time, 
 	const a = tt(time)
 	// CIRS right ascension is referred to the CIO; subtracting the equation of the origins refers it to
 	// the true equinox of date.
-	const rightAscension = normalizeAngle(ri - eraEo06a(a.day, a.fraction))
+	const rightAscension = normalizeAngle(ri - eraEo06a(a.day, a.fraction, precessionNutationMatrix(time)))
 	const observed = time.location ? cirsToObserved([ri, di], time, false) : undefined
 	return { rightAscension, declination: di, azimuth: observed?.azimuth, altitude: observed && apparentAltitude(observed.altitude), geometricAltitude: observed?.altitude, hourAngle: observed && normalizePI(observed.hourAngle) }
 }

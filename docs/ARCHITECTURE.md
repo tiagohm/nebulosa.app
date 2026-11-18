@@ -131,6 +131,7 @@ Every contract and reference below is a document of its own under `docs/architec
 - [Sun Inspector Contract](architecture/sun-inspector.md)
 - [Moon Inspector Contract](architecture/moon-inspector.md)
 - [Sky Framing Integration Contract](architecture/sky-framing-integration.md)
+- [Framing Contract](architecture/framing.md)
 - [Tools Integration Contract](architecture/tools-integration.md)
 - [Astro Weather Contract](architecture/astro-weather.md)
 - [Observing Planner Contract](architecture/observing-planner.md)

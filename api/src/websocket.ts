@@ -12,6 +12,7 @@ import type { CameraBindingEvent } from './equipmentcatalog'
 import type { ExternalToolEvent } from './externaltools'
 import type { FlatWizardEvent } from './flatwizard'
 import type { FocuserBacklashEvent } from './focusers'
+import type { FramingEvent } from './framings'
 import type { GuidingServerEvent } from './guiding'
 import type { ImageProcessingEvent } from './imageprocessing'
 import type { ImageStackingEvent } from './imagestacking'
@@ -94,6 +95,7 @@ export type ServerEvent =
 	| SatellitesChangedEvent
 	| SpiceKernelEvent
 	| ObservingPlanEvent
+	| FramingEvent
 	| JupiterGrsEvent
 	| MeteorShowersChangedEvent
 	| IndiServerEvent

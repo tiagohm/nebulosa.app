@@ -28,6 +28,7 @@ import { createFlatWizardRoutes, FlatWizardSessions } from './flatwizard'
 import { FlatWizardAnalyzer } from './flatwizard.analysis'
 import { FocuserBacklashStore } from './focuserbacklash'
 import { createFocuserRoutes, FocuserCommands } from './focusers'
+import { createFramingRoutes, FramingService, FramingStore } from './framings'
 import { createGuideOutputRoutes, GuideOutputCommands } from './guideoutputs'
 import { createGuidingRoutes, GuidingSessions } from './guiding'
 import { GuidingCalibrationStore } from './guidingcalibration.store'
@@ -354,6 +355,7 @@ export type {
 	MeridianTimingQuality,
 	MeridianTransitionKind,
 } from './meridianflip'
+export type { Framing, FramingCamera, FramingCameraRole, FramingDocument, FramingDuplicateRequest, FramingErrorCode, FramingEvent, FramingField, FramingFieldRequest, FramingOptics, FramingOpticsSource, FramingSaveRequest, FramingSensor, FramingSetupOptics, FramingsSnapshot, FramingTelescope } from './framings'
 export type { MountRemoteClient, MountRemoteControlEvent, MountRemoteErrorCode, MountRemoteKey, MountRemoteProtocol, MountRemoteServer, MountRemoteSnapshot, MountRemoteStartRequest } from './mountremotecontrol'
 export type { ObservatoryCamera, ObservatoryCameraErrorCode, ObservatoryCameraEvent, ObservatoryCameraSaveRequest, ObservatoryCameraSecretKeyState, ObservatoryCameraStream, ObservatoryCameraStreamCode, ObservatoryCameraStreamState, ObservatoryCamerasSnapshot, RtspTransport } from './observatorycameras'
 export type {
@@ -1325,6 +1327,10 @@ const observingPlanner = new ObservingPlannerService({
 	minorBodyStore: new ObservingMinorBodyStore(database),
 })
 
+// Framings of the Framing tool in the operational database, sent to every tab once saved, and the catalog objects of
+// the field of their preview.
+const framings = new FramingService({ store: new FramingStore(database), field: annotationSky.objects, listener: broadcast })
+
 // Read-only predictions of the Jupiter Observing Planner over the SPICE kernels or the analytical theories, and the
 // server's Great Red Spot model in the operational database, sent to every tab once saved.
 const jupiterPlanner = new JupiterPlannerService({ kernels: spiceKernels, night: (request) => astroWeather.night(request), store: new JupiterGrsStore(database, broadcast) })
@@ -1581,6 +1587,7 @@ export const routes = {
 	...createOrbitalMechanicsRoutes(orbitalMechanics),
 	...createAstroWeatherRoutes(astroWeather),
 	...createObservingPlannerRoutes(observingPlanner),
+	...createFramingRoutes(framings),
 	...createJupiterRoutes(jupiterPlanner),
 	...createSaturnRoutes(saturnPlanner),
 	...createPlanetaryEventsRoutes(planetaryEvents),

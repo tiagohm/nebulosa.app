@@ -1,6 +1,6 @@
 import type { FramingDocument } from 'api'
 import { proxy } from 'valtio'
-import { DEFAULT_OPTICS, type FramePoint } from '../../framing/geometry'
+import { DEFAULT_OPTICS, type FramePoint, type OpticalConfiguration } from '../../framing/geometry'
 import { EQUIPMENT_FRAMING_ID } from '../../framing/resolve'
 import { DEFAULT_SURVEY } from '../../framing/surveys'
 import type { ViewEntry } from '../../profile/view'
@@ -9,30 +9,33 @@ import { fromDate, ofDateMatrix } from '../../sky/footprint'
 import type { MountPoint } from '../../sky/mount'
 
 // State of the Framing tool: the framing shown, chosen by the URL (/tools/framing/<id>), and the preview every framing is
-// compared in: its J2000 center, which no framing holds (typed, the catalog object selected in Sky, or where the profile's
-// mount points), and its background, the Mini-Sky of the catalog or a survey
-// cutout of hips2fits, never both. The center, background, and survey are kept in this browser only (framingPreviewEntry);
-// whether a cutout is downloading is tab memory.
+// compared in: its J2000 center, which no framing holds (typed, an object of the catalog searched, the catalog object
+// selected in Sky, a point of the preview clicked, or where the profile's mount points), its background, the Mini-Sky of
+// the catalog or a survey cutout of hips2fits drawn over it, and what it is scaled to fit, every framing or the one
+// shown. The center, background, survey, and fit are kept in this browser only (framingPreviewEntry).
 
 // Background of the preview: the stars and deep-sky objects of the catalog, drawn offline, or a survey image.
 export type PreviewSource = 'sky' | 'survey'
+
+// What the preview is scaled to fit: every framing that has a field, or the one shown in the panel.
+export type PreviewFit = 'all' | 'selected'
 
 // Preview of the tool.
 export interface FramingPreviewState {
 	// J2000 center of the preview, in radians; absent until one is entered.
 	center?: FramePoint
-	// Name of the object the center was taken from; absent for typed coordinates.
+	// Name of the object the center was taken from; absent for typed or clicked coordinates.
 	centerName?: string
 	// Background.
 	source: PreviewSource
 	// Survey id of the survey background, of the bundled survey catalog.
 	survey: string
-	// Whether a survey cutout is downloading, which locks the inputs until it ends.
-	downloading: boolean
+	// What the scale fits.
+	fit: PreviewFit
 }
 
 // Preview of the tab.
-export const framingPreviewState = proxy<FramingPreviewState>({ source: 'sky', survey: DEFAULT_SURVEY, downloading: false })
+export const framingPreviewState = proxy<FramingPreviewState>({ source: 'sky', survey: DEFAULT_SURVEY, fit: 'all' })
 
 // Shape kept in browser storage.
 interface StoredPreview {
@@ -40,9 +43,10 @@ interface StoredPreview {
 	readonly centerName?: string
 	readonly source?: PreviewSource
 	readonly survey?: string
+	readonly fit?: PreviewFit
 }
 
-// Keeps the center, background, and survey of the preview in browser storage.
+// Keeps the center, background, survey, and fit of the preview in browser storage.
 export function framingPreviewEntry(state: FramingPreviewState): ViewEntry {
 	return {
 		name: 'framingPreview',
@@ -53,8 +57,9 @@ export function framingPreviewEntry(state: FramingPreviewState): ViewEntry {
 			if (typeof stored.centerName === 'string') state.centerName = stored.centerName
 			if (stored.source === 'sky' || stored.source === 'survey') state.source = stored.source
 			if (typeof stored.survey === 'string' && stored.survey) state.survey = stored.survey
+			if (stored.fit === 'all' || stored.fit === 'selected') state.fit = stored.fit
 		},
-		value: () => ({ center: state.center && { ...state.center }, centerName: state.centerName, source: state.source, survey: state.survey }) satisfies StoredPreview,
+		value: () => ({ center: state.center && { ...state.center }, centerName: state.centerName, source: state.source, survey: state.survey, fit: state.fit }) satisfies StoredPreview,
 	}
 }
 
@@ -71,11 +76,17 @@ export function mountCenter(point: MountPoint, time: number): FramePoint {
 	return { rightAscension, declination }
 }
 
-// Returns the document of a new framing named name: a 600 mm telescope and an APS-C camera of 3.76 µm pixels, typed by
-// hand, without rotation.
-export function newFramingDocument(name: string): FramingDocument {
+// Returns the document of a new framing named name in a colour, without rotation: the telescope and Main Camera of the
+// Equipment Setup, with the optics they resolve to (setup) kept as the copy it falls back to, when the setup gives a
+// field; otherwise a 600 mm telescope and an APS-C camera of 3.76 µm pixels, typed by hand.
+export function newFramingDocument(name: string, color: number, setup?: OpticalConfiguration): FramingDocument {
+	if (setup) {
+		const { focalLength, focalMultiplier, aperture, sensor } = setup
+		return { name, color, optics: { telescope: { source: 'setup', setupOptics: 'telescope', focalLength, aperture, focalMultiplier }, camera: { source: 'setup', role: 'MAIN_CAMERA', sensor } }, rotation: 0 }
+	}
+
 	const { focalLength, focalMultiplier, aperture, sensor } = DEFAULT_OPTICS
-	return { name, optics: { telescope: { source: 'manual', focalLength, aperture, focalMultiplier }, camera: { source: 'manual', sensor } }, rotation: 0 }
+	return { name, color, optics: { telescope: { source: 'manual', focalLength, aperture, focalMultiplier }, camera: { source: 'manual', sensor } }, rotation: 0 }
 }
 
 // Returns a name no framing has yet: "Framing n" for the first free n from the count of framings plus one.

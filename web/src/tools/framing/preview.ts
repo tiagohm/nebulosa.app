@@ -1,12 +1,14 @@
 import type { FramingCutoutRequest, FramingField, FramingFieldRequest } from 'api'
-import { type FramePoint, frameHalfExtent, type TangentPoint, toTangentPlane } from '../../framing/geometry'
+import { type FramePoint, frameHalfExtent, fromTangentPlane, type TangentPoint, toTangentPlane } from '../../framing/geometry'
 import { type ApiFetch, ApiResponseError, browserFetch, fetchJson, jsonInit, responseError } from '../../http'
 
 // Layout of the preview of the Framing tool: one north-up gnomonic view of a fixed J2000 center, east on the left, scaled
 // so the largest framing, turned by its rotation, fits with a margin. The same view frames the stars and deep-sky objects
 // of the catalog (the Mini-Sky) and a hips2fits cutout of a survey, which is a TAN image of the same center whose field
 // angle `fov` spans the larger side as the tangent-plane extent 2·tan(fov/2), so the outlines are drawn on either without
-// a WCS. Pixel coordinates are CSS pixels of the canvas, origin at its top-left corner, x right and y down.
+// a WCS. Every framing is centered on the view, so the top edge of one points from the center of the canvas along its
+// position angle, where its rotation handle sits. Pixel coordinates are CSS pixels of the canvas, origin at its top-left
+// corner, x right and y down.
 
 // Room left around the largest framing, as a factor of its half extent.
 export const PREVIEW_MARGIN = 1.25
@@ -60,6 +62,57 @@ export function previewLayout(width: number, height: number, frames: readonly Pr
 // Returns the canvas point of a point of the tangent plane: east to the left, north up.
 export function canvasPoint(layout: Pick<PreviewLayout, 'width' | 'height' | 'scale'>, point: TangentPoint): { readonly x: number; readonly y: number } {
 	return { x: layout.width / 2 - point.xi * layout.scale, y: layout.height / 2 - point.eta * layout.scale }
+}
+
+// Returns the J2000 position (radians) of a canvas point of a view of a center: the inverse of projectPosition.
+export function skyPosition(layout: Pick<PreviewLayout, 'width' | 'height' | 'scale'>, center: FramePoint, x: number, y: number): FramePoint {
+	const xi = (layout.width / 2 - x) / layout.scale
+	const eta = (layout.height / 2 - y) / layout.scale
+	return fromTangentPlane(center.rightAscension, Math.sin(center.declination), Math.cos(center.declination), xi, eta)
+}
+
+// Returns the position angle, in degrees in [0, 360) from north through east, of the direction from the center of the
+// canvas to a canvas point; 0 at the center itself.
+export function positionAngleAt(layout: Pick<PreviewLayout, 'width' | 'height'>, x: number, y: number) {
+	const dx = x - layout.width / 2
+	const dy = y - layout.height / 2
+	if (dx === 0 && dy === 0) return 0
+	// North is up (−y) and east is left (−x).
+	const angle = (Math.atan2(-dx, -dy) * 180) / Math.PI
+	return (angle + 360) % 360
+}
+
+// Distance in CSS pixels between the top edge of a framing and its rotation handle, outside the outline.
+export const HANDLE_OFFSET = 14
+
+// Returns the canvas point of the rotation handle of a framing of an angular height (radians, below π) turned by a
+// position angle (radians): HANDLE_OFFSET pixels beyond the middle of its top edge.
+export function rotationHandle(layout: Pick<PreviewLayout, 'width' | 'height' | 'scale'>, height: number, rotation: number) {
+	const distance = Math.tan(height / 2) * layout.scale + HANDLE_OFFSET
+	return { x: layout.width / 2 - Math.sin(rotation) * distance, y: layout.height / 2 - Math.cos(rotation) * distance }
+}
+
+// Returns a rotation in degrees snapped to a step (degrees, > 0) and brought into [0, 360).
+export function snapRotation(degrees: number, step: number) {
+	const snapped = Math.round(degrees / step) * step
+	return Number((((snapped % 360) + 360) % 360).toFixed(6))
+}
+
+// Box of a label drawn on the canvas, in CSS pixels.
+export interface LabelBox {
+	readonly x: number
+	readonly y: number
+	readonly width: number
+	readonly height: number
+}
+
+// Places a label among the ones already placed (changed in place): false, placing nothing, when it would overlap one of
+// them or leave a canvas of a width and height, so crowded names are left out rather than drawn over each other.
+export function placeLabel(placed: LabelBox[], box: LabelBox, width: number, height: number) {
+	if (box.x < 0 || box.y < 0 || box.x + box.width > width || box.y + box.height > height) return false
+	if (placed.some((other) => box.x < other.x + other.width && other.x < box.x + box.width && box.y < other.y + other.height && other.y < box.y + box.height)) return false
+	placed.push(box)
+	return true
 }
 
 // Returns the canvas point of a J2000 position seen from the center; undefined for a position the plane cannot show.

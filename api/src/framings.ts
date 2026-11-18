@@ -4,7 +4,8 @@ import type { FieldObjects, FieldQuery } from './sky/catalog'
 
 // Framings of the Framing tool (table framings): the telescope and camera a field of view is computed from and the
 // rotation of the sensor, one catalog shared by every profile, tab, and browser. A framing never holds a position on
-// the sky: a tool that needs one asks for it itself. Each framing is written whole from the revision it was edited
+// the sky: a tool that needs one asks for it itself. Each framing keeps the colour it is drawn in, given when it is
+// created, so renaming or adding another never repaints it. Each framing is written whole from the revision it was edited
 // from, so a change another tab saved first is refused with what the server kept, and every committed write is
 // published. The field of its preview (the catalog objects of a cone) is answered here too.
 
@@ -89,7 +90,12 @@ export interface FramingDocument {
 	readonly optics: FramingOptics
 	// Position angle of the top edge of the sensor, north through east, in degrees in [0, 360).
 	readonly rotation: number
+	// Colour the framing is drawn in, an index of the `frame-*` tokens of the web client, in [0, FRAMING_COLOR_COUNT).
+	readonly color: number
 }
+
+// Number of framing colours, the `frame-1` to `frame-6` tokens of the web client.
+export const FRAMING_COLOR_COUNT = 6
 
 // Saved framing.
 export interface Framing extends FramingDocument {
@@ -121,6 +127,8 @@ export interface FramingDuplicateRequest {
 	readonly id: string
 	// Name of the copy.
 	readonly name: string
+	// Colour of the copy, in [0, FRAMING_COLOR_COUNT).
+	readonly color: number
 }
 
 // Body of POST /api/framings/field: the cone of a preview, around a J2000 center.
@@ -175,13 +183,14 @@ interface FramingRow {
 	readonly name: string
 	readonly optics: string
 	readonly rotation: number
+	readonly color: number
 	readonly revision: number
 	readonly createdAt: number
 	readonly updatedAt: number
 }
 
 // Columns of a framing, named as the API names them.
-const FRAMING_COLUMNS = 'id, name, optics, rotation, revision, created_at AS createdAt, updated_at AS updatedAt'
+const FRAMING_COLUMNS = 'id, name, optics, rotation, color, revision, created_at AS createdAt, updated_at AS updatedAt'
 
 // Returns the framing of a row.
 function framingOf({ optics, ...row }: FramingRow): Framing {
@@ -216,16 +225,16 @@ export class FramingStore {
 		})
 	}
 
-	// Copies a framing under a new id and name, as revision 1; nameTaken when another framing has the name, conflict when
-	// the new id is taken.
-	duplicate(id: string, newId: string, name: string, now: number = Date.now()): FramingOutcome {
+	// Copies a framing under a new id, name, and colour, as revision 1; nameTaken when another framing has the name,
+	// conflict when the new id is taken.
+	duplicate(id: string, newId: string, name: string, color: number, now: number = Date.now()): FramingOutcome {
 		return this.database.write((): FramingOutcome => {
 			const source = this.get(id)
 			if (!source) return { status: 'notFound' }
 			const taken = this.get(newId)
 			if (taken) return { status: 'conflict', current: taken }
 			if (this.#nameTaken(name, newId)) return { status: 'nameTaken' }
-			this.#write(newId, { ...source, name }, 1, now, now)
+			this.#write(newId, { ...source, name, color }, 1, now, now)
 			return { status: 'saved', framing: this.get(newId)! }
 		})
 	}
@@ -247,10 +256,12 @@ export class FramingStore {
 	}
 
 	// Writes a framing row; runs inside a transaction.
-	#write(id: string, { name, optics, rotation }: FramingDocument, revision: number, createdAt: number, updatedAt: number) {
+	#write(id: string, { name, optics, rotation, color }: FramingDocument, revision: number, createdAt: number, updatedAt: number) {
 		this.database.db
-			.query('INSERT INTO framings (id, name, optics, rotation, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET name = excluded.name, optics = excluded.optics, rotation = excluded.rotation, revision = excluded.revision, updated_at = excluded.updated_at')
-			.run(id, name.trim(), JSON.stringify(optics), rotation, revision, createdAt, updatedAt)
+			.query(
+				'INSERT INTO framings (id, name, optics, rotation, color, revision, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET name = excluded.name, optics = excluded.optics, rotation = excluded.rotation, color = excluded.color, revision = excluded.revision, updated_at = excluded.updated_at',
+			)
+			.run(id, name.trim(), JSON.stringify(optics), rotation, color, revision, createdAt, updatedAt)
 	}
 }
 
@@ -280,8 +291,8 @@ export class FramingService {
 	}
 
 	// Copies a framing under a new id and name, publishing the copy once committed.
-	duplicate(id: string, { id: newId, name }: FramingDuplicateRequest) {
-		return this.#published(this.options.store.duplicate(id, newId, name))
+	duplicate(id: string, { id: newId, name, color }: FramingDuplicateRequest) {
+		return this.#published(this.options.store.duplicate(id, newId, name, color))
 	}
 
 	// Deletes a framing when the revision matches, publishing the removal once committed.

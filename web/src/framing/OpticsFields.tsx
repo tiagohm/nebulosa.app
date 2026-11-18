@@ -70,7 +70,7 @@ export interface SensorInputsProps {
 export function SensorInputs({ sensor, disabled = false, onChange }: SensorInputsProps) {
 	return (
 		<>
-			<Select options={SENSOR_KINDS} value={sensor.kind} disabled={disabled} onChange={(kind) => onChange(convertSensor(sensor, kind))} format={(kind) => (kind === 'pixels' ? 'Resolution and pixel size' : 'Sensor size')} />
+			<Select label="Sensor given by" options={SENSOR_KINDS} value={sensor.kind} disabled={disabled} onChange={(kind) => onChange(convertSensor(sensor, kind))} format={(kind) => (kind === 'pixels' ? 'Resolution and pixel size' : 'Sensor size')} />
 			{sensor.kind === 'pixels' ? (
 				<>
 					<NumberInput label="Width" suffix="px" value={sensor.width} min={0} step={1} disabled={disabled} onChange={(width) => onChange({ ...sensor, width })} />
@@ -87,23 +87,30 @@ export function SensorInputs({ sensor, disabled = false, onChange }: SensorInput
 	)
 }
 
+// Sensor values a camera without a sensor stands for, named once as that camera instead.
+const SENSOR_FIELDS = new Set(['Width in pixels', 'Height in pixels', 'Pixel size'])
+
+// Returns what a field of view lacks, with a camera that has no sensor (missingCamera) named instead of its individual
+// sensor values: "Focal length, Main Camera sensor".
+export function missingText(field: MissingFraming, missingCamera?: string) {
+	return (missingCamera ? [...field.missing.filter((e) => !SENSOR_FIELDS.has(e)), missingCamera] : field.missing).join(', ')
+}
+
+// Returns the angular width and height of a field in one unit chosen by its larger side: degrees from 1°, else arcminutes
+// or arcseconds (formatApparentSize), such as "5.38° × 3.60°" or "48.21′ × 32.14′".
+export function formatFieldSize(width: number, height: number) {
+	if (Math.max(width, height) >= Math.PI / 180) return `${formatDegrees(width, 2)} × ${formatDegrees(height, 2)}`
+	return `${formatApparentSize(width)} × ${formatApparentSize(height)}`
+}
+
 // Rows of a computed field of view, or what is missing to compute it; a camera that has no sensor is named (missingCamera)
 // instead of its individual sensor fields.
 export function FieldRows({ field, missingCamera }: { readonly field: FieldOfView | MissingFraming; readonly missingCamera?: string }) {
-	if (!isFraming(field)) {
-		const sensorFields = new Set(['Width in pixels', 'Height in pixels', 'Pixel size'])
-		const missing = missingCamera ? [...field.missing.filter((e) => !sensorFields.has(e)), missingCamera] : field.missing
-		return <Notice>To compute the field, enter: {missing.join(', ')}.</Notice>
-	}
+	if (!isFraming(field)) return <Notice>The field needs: {missingText(field, missingCamera)}.</Notice>
 
 	return (
 		<>
-			<DataRow label="Field">
-				{formatApparentSize(field.width)} × {formatApparentSize(field.height)}
-			</DataRow>
-			<DataRow label="Field (degrees)">
-				{formatDegrees(field.width, 3)} × {formatDegrees(field.height, 3)}
-			</DataRow>
+			<DataRow label="Field">{formatFieldSize(field.width, field.height)}</DataRow>
 			{field.scale !== undefined && <DataRow label="Image scale">{formatPixelScale(arcsec(field.scale))}</DataRow>}
 			<DataRow label="Effective focal length">{formatMillimeters(field.effectiveFocalLength)}</DataRow>
 			<DataRow label="Sensor">
@@ -114,9 +121,10 @@ export function FieldRows({ field, missingCamera }: { readonly field: FieldOfVie
 	)
 }
 
-// Returns the one-line summary of a field of view: its size in degrees and its image scale, or that it is incomplete.
-export function fieldSummary(field: FieldOfView | MissingFraming) {
-	if (!isFraming(field)) return 'Incomplete'
-	const size = `${formatApparentSize(field.width)} × ${formatApparentSize(field.height)}`
+// Returns the one-line summary of a field of view: its size and its image scale, or what it needs (missingCamera names a
+// camera that has no sensor).
+export function fieldSummary(field: FieldOfView | MissingFraming, missingCamera?: string) {
+	if (!isFraming(field)) return `Needs: ${missingText(field, missingCamera)}`
+	const size = formatFieldSize(field.width, field.height)
 	return field.scale === undefined ? size : `${size} · ${formatPixelScale(arcsec(field.scale))}`
 }

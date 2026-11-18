@@ -1,4 +1,4 @@
-import type { FramingDocument, FramingsSnapshot, Framing as SavedFraming, ServerEvent } from 'api'
+import type { FramingDocument, FramingDuplicateRequest, FramingsSnapshot, Framing as SavedFraming, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { type ApiFetch, ApiResponseError, browserFetch, fetchJson, jsonInit, responseError } from '../http'
@@ -73,8 +73,8 @@ function errorMessage(error: unknown) {
 }
 
 // Returns the fields of a framing document, without what the server adds.
-function documentOf({ name, optics, rotation }: FramingDocument): FramingDocument {
-	return { name, optics, rotation }
+function documentOf({ name, optics, rotation, color }: FramingDocument): FramingDocument {
+	return { name, optics, rotation, color }
 }
 
 // Keeps a framing unless the tab already knows a newer revision of it.
@@ -209,10 +209,10 @@ export async function createFraming(state: FramingsState, document: FramingDocum
 	return id
 }
 
-// Copies a framing under a new name and returns the id of the copy; rejects with the server's reason.
-export async function duplicateFraming(state: FramingsState, id: string, name: string, io: FramingsIo = browserFramingsIo) {
+// Copies a framing under a new name and colour and returns the id of the copy; rejects with the server's reason.
+export async function duplicateFraming(state: FramingsState, id: string, name: string, color: number, io: FramingsIo = browserFramingsIo) {
 	const copy = io.id()
-	const framing = await fetchJson<SavedFraming>(io, `/api/framings/${encodeURIComponent(id)}/duplicate`, jsonInit('POST', { id: copy, name }))
+	const framing = await fetchJson<SavedFraming>(io, `/api/framings/${encodeURIComponent(id)}/duplicate`, jsonInit('POST', { id: copy, name, color } satisfies FramingDuplicateRequest))
 	applyFraming(state, framing)
 	return copy
 }

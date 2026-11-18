@@ -14,6 +14,7 @@ const MANUAL: FramingDocument = {
 	name: 'Manual',
 	optics: { telescope: { source: 'manual', focalLength: 400, aperture: 80, focalMultiplier: 1 }, camera: { source: 'manual', sensor: { kind: 'physical', width: 23.5, height: 15.6 } } },
 	rotation: 30,
+	color: 1,
 }
 
 test('the Equipment Setup follows the Main Camera and the telescope with its reducer, without rotation', () => {
@@ -25,7 +26,7 @@ test('the Equipment Setup follows the Main Camera and the telescope with its red
 })
 
 test('a role without a sensor is named as missing, and the guide telescope is followed', () => {
-	const document: FramingDocument = { ...EQUIPMENT_FRAMING, optics: { telescope: { ...EQUIPMENT_FRAMING.optics.telescope, setupOptics: 'guideTelescope' }, camera: { source: 'setup', role: 'GUIDE_CAMERA', sensor: { kind: 'pixels', width: 1, height: 1, pixelSize: 1 } } } }
+	const document: FramingDocument = { ...EQUIPMENT_FRAMING, color: 0, optics: { telescope: { ...EQUIPMENT_FRAMING.optics.telescope, setupOptics: 'guideTelescope' }, camera: { source: 'setup', role: 'GUIDE_CAMERA', sensor: { kind: 'pixels', width: 1, height: 1, pixelSize: 1 } } } }
 	const resolved = resolveFramingOptics('g', document, CONTEXT)
 	expect(resolved.optics.focalLength).toBe(240)
 	expect(resolved.camera.missingCamera).toBe('GUIDE_CAMERA')
@@ -36,6 +37,7 @@ test('typed and model values are kept, with the rotation of the framing', () => 
 	const resolved = resolveFramingOptics('m', MANUAL, CONTEXT)
 	expect(resolved.optics).toEqual({ focalLength: 400, aperture: 80, focalMultiplier: 1, sensor: { kind: 'physical', width: 23.5, height: 15.6 }, rotation: 30 })
 	expect(resolved.telescope.label).toBe('Entered by hand')
+	expect(resolved.color).toBe(1)
 
 	const model = resolveFramingOptics('m', { ...MANUAL, optics: { ...MANUAL.optics, telescope: { ...MANUAL.optics.telescope, source: 'model', model: 'RedCat 51' } } }, CONTEXT)
 	expect(model.telescope.label).toBe('RedCat 51')

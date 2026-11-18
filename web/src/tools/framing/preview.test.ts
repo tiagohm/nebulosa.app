@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import { deg } from 'nebulosa/src/math/units/angle'
-import { canvasAngle, canvasPoint, cutoutQuery, cutoutSize, MAX_CUTOUT_SIZE, PREVIEW_MARGIN, previewLayout, projectPosition, starRadius } from './preview'
+import { canvasAngle, canvasPoint, cutoutQuery, cutoutSize, HANDLE_OFFSET, type LabelBox, MAX_CUTOUT_SIZE, placeLabel, positionAngleAt, PREVIEW_MARGIN, previewLayout, projectPosition, rotationHandle, skyPosition, snapRotation, starRadius } from './preview'
 
 test('the largest turned frame fits with its margin, and the cutout field spans the larger side', () => {
 	const frames = [
@@ -44,4 +44,48 @@ test('stars, cutout sizes, and the cutout query', () => {
 	expect(cutoutSize(800, 400, 2)).toEqual({ width: MAX_CUTOUT_SIZE, height: MAX_CUTOUT_SIZE / 2 })
 	expect(cutoutSize(400, 300, 1)).toEqual({ width: 400, height: 300 })
 	expect(new URLSearchParams(cutoutQuery({ survey: 'CDS/P/DSS2/color', rightAscension: 1, declination: -0.5, fov: 0.02, width: 400, height: 300 })).get('survey')).toBe('CDS/P/DSS2/color')
+})
+
+test('a canvas point goes back to the sky position it shows', () => {
+	const layout = previewLayout(600, 400, [{ width: deg(2), height: deg(1.5), rotation: deg(20) }])
+	const center = { rightAscension: deg(83.8), declination: deg(-5.4) }
+	const position = { rightAscension: deg(84.2), declination: deg(-5.1) }
+	const point = projectPosition(layout, center, position)
+	expect(point).toBeDefined()
+	const back = skyPosition(layout, center, point?.x ?? 0, point?.y ?? 0)
+	expect(back.rightAscension).toBeCloseTo(position.rightAscension, 12)
+	expect(back.declination).toBeCloseTo(position.declination, 12)
+	const middle = skyPosition(layout, center, 300, 200)
+	expect(middle.rightAscension).toBeCloseTo(center.rightAscension, 12)
+	expect(middle.declination).toBeCloseTo(center.declination, 12)
+})
+
+test('the position angle of a canvas point runs from north through east, and the handle sits along it', () => {
+	const layout = { width: 400, height: 300, scale: 1000 }
+	expect(positionAngleAt(layout, 200, 50)).toBeCloseTo(0, 12)
+	expect(positionAngleAt(layout, 50, 150)).toBeCloseTo(90, 12)
+	expect(positionAngleAt(layout, 200, 290)).toBeCloseTo(180, 12)
+	expect(positionAngleAt(layout, 350, 150)).toBeCloseTo(270, 12)
+	expect(positionAngleAt(layout, 200, 150)).toBe(0)
+
+	const height = deg(4)
+	const handle = rotationHandle(layout, height, deg(90))
+	expect(handle.x).toBeCloseTo(200 - (Math.tan(height / 2) * 1000 + HANDLE_OFFSET), 9)
+	expect(handle.y).toBeCloseTo(150, 9)
+	expect(positionAngleAt(layout, handle.x, handle.y)).toBeCloseTo(90, 9)
+})
+
+test('rotations snap to their step within a turn', () => {
+	expect(snapRotation(12.26, 0.5)).toBe(12.5)
+	expect(snapRotation(359.8, 0.5)).toBe(0)
+	expect(snapRotation(-0.6, 0.5)).toBe(359.5)
+})
+
+test('a label is placed only where it overlaps none and stays on the canvas', () => {
+	const placed: LabelBox[] = []
+	expect(placeLabel(placed, { x: 10, y: 10, width: 50, height: 12 }, 200, 100)).toBeTrue()
+	expect(placeLabel(placed, { x: 40, y: 15, width: 50, height: 12 }, 200, 100)).toBeFalse()
+	expect(placeLabel(placed, { x: 60, y: 10, width: 50, height: 12 }, 200, 100)).toBeTrue()
+	expect(placeLabel(placed, { x: 180, y: 50, width: 50, height: 12 }, 200, 100)).toBeFalse()
+	expect(placed).toHaveLength(2)
 })

@@ -36,7 +36,7 @@ export function NumberInput({ label, value, onChange, min, max, step = 1, classN
 	return (
 		<Field label={label} className={className}>
 			<div className="flex h-9.5 items-stretch">
-				<button type="button" tabIndex={-1} disabled={disabled || (min !== undefined && value <= min)} onClick={() => commit(value - step)} className={cn(stepButtonClassName, 'rounded-l-sm border-r-0')}>
+				<button type="button" tabIndex={-1} title="Decrease" disabled={disabled || (min !== undefined && value <= min)} onClick={() => commit(value - step)} className={cn(stepButtonClassName, 'rounded-l-sm border-r-0')}>
 					−
 				</button>
 				<div className="relative flex min-w-0 flex-1">
@@ -66,7 +66,7 @@ export function NumberInput({ label, value, onChange, min, max, step = 1, classN
 					/>
 					{suffix && <InputSuffix>{suffix}</InputSuffix>}
 				</div>
-				<button type="button" tabIndex={-1} disabled={disabled || (max !== undefined && value >= max)} onClick={() => commit(value + step)} className={cn(stepButtonClassName, 'rounded-r-sm border-l-0')}>
+				<button type="button" tabIndex={-1} title="Increase" disabled={disabled || (max !== undefined && value >= max)} onClick={() => commit(value + step)} className={cn(stepButtonClassName, 'rounded-r-sm border-l-0')}>
 					+
 				</button>
 			</div>

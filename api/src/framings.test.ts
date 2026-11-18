@@ -12,6 +12,7 @@ const REFRACTOR: FramingSaveRequest = {
 		camera: { source: 'setup', role: 'MAIN_CAMERA', sensor: { kind: 'pixels', width: 6248, height: 4176, pixelSize: 3.76 } },
 	},
 	rotation: 90,
+	color: 2,
 	revision: 0,
 }
 
@@ -33,7 +34,7 @@ function setup() {
 describe('store', () => {
 	test('creates, reads back, and edits with a new revision', () => {
 		const { store } = setup()
-		expect(store.save('f1', REFRACTOR, 1000)).toEqual({ status: 'saved', framing: { id: 'f1', name: REFRACTOR.name, optics: REFRACTOR.optics, rotation: 90, revision: 1, createdAt: 1000, updatedAt: 1000 } })
+		expect(store.save('f1', REFRACTOR, 1000)).toEqual({ status: 'saved', framing: { id: 'f1', name: REFRACTOR.name, optics: REFRACTOR.optics, rotation: 90, color: 2, revision: 1, createdAt: 1000, updatedAt: 1000 } })
 		expect(store.save('f1', { ...REFRACTOR, name: '  Renamed  ', rotation: 12.5, revision: 1 }, 2000)).toMatchObject({ status: 'saved', framing: { name: 'Renamed', rotation: 12.5, revision: 2, createdAt: 1000, updatedAt: 2000 } })
 		expect(store.list()).toEqual([store.get('f1')!])
 	})
@@ -60,10 +61,10 @@ describe('store', () => {
 		store.save('a', { ...REFRACTOR, name: 'narrow' })
 		expect(store.list().map((e) => e.name)).toEqual(['narrow', 'Wide'])
 
-		expect(store.duplicate('b', 'c', 'Wide copy', 5000)).toMatchObject({ status: 'saved', framing: { id: 'c', name: 'Wide copy', optics: REFRACTOR.optics, revision: 1, createdAt: 5000 } })
-		expect(store.duplicate('b', 'd', 'narrow')).toEqual({ status: 'nameTaken' })
-		expect(store.duplicate('b', 'a', 'Other')).toMatchObject({ status: 'conflict', current: { id: 'a' } })
-		expect(store.duplicate('x', 'e', 'Other')).toEqual({ status: 'notFound' })
+		expect(store.duplicate('b', 'c', 'Wide copy', 4, 5000)).toMatchObject({ status: 'saved', framing: { id: 'c', name: 'Wide copy', optics: REFRACTOR.optics, color: 4, revision: 1, createdAt: 5000 } })
+		expect(store.duplicate('b', 'd', 'narrow', 4)).toEqual({ status: 'nameTaken' })
+		expect(store.duplicate('b', 'a', 'Other', 4)).toMatchObject({ status: 'conflict', current: { id: 'a' } })
+		expect(store.duplicate('x', 'e', 'Other', 4)).toEqual({ status: 'notFound' })
 
 		expect(store.remove('a', 2)).toMatchObject({ status: 'conflict', current: { id: 'a' } })
 		expect(store.remove('a', 1)).toEqual({ status: 'removed' })
@@ -91,8 +92,9 @@ describe('routes', () => {
 		const list = routes['/api/framings'].GET()
 		expect(await list.json()).toMatchObject({ framings: [{ id: 'f1' }] })
 
-		const duplicate = await routes['/api/framings/:id/duplicate'].POST(Object.assign(new Request('http://localhost/api/framings/f1/duplicate', { method: 'POST', body: JSON.stringify({ id: 'f2', name: 'Copy' }) }), { params: { id: 'f1' } }) as never)
+		const duplicate = await routes['/api/framings/:id/duplicate'].POST(Object.assign(new Request('http://localhost/api/framings/f1/duplicate', { method: 'POST', body: JSON.stringify({ id: 'f2', name: 'Copy', color: 3 }) }), { params: { id: 'f1' } }) as never)
 		expect(duplicate.status).toBe(200)
+		expect(await duplicate.json()).toMatchObject({ id: 'f2', color: 3 })
 
 		const remove = (revision: number) => routes['/api/framings/:id'].DELETE(Object.assign(new Request(`http://localhost/api/framings/f1?revision=${revision}`, { method: 'DELETE' }), { params: { id: 'f1' } }) as never)
 		expect(remove(3).status).toBe(409)

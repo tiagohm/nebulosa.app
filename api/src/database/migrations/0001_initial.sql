@@ -1122,6 +1122,8 @@ CREATE TABLE framings (
 	optics TEXT NOT NULL CHECK (json_valid(optics)),
 	-- Position angle of the top edge of the sensor, north through east, in degrees in [0, 360).
 	rotation REAL NOT NULL CHECK (rotation >= 0 AND rotation < 360),
+	-- Colour the framing is drawn in, an index of the frame-* tokens of the web client (FRAMING_COLOR_COUNT).
+	color INTEGER NOT NULL CHECK (color >= 0 AND color < 6),
 	-- Revision of the framing, increased by every save; >= 1.
 	revision INTEGER NOT NULL CHECK (revision > 0),
 	-- When it was created and last changed, Unix milliseconds (UTC).

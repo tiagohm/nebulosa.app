@@ -118,7 +118,7 @@ export function SkyWorkspace() {
 	// Draws the fields of view of the framings not hidden around the selection, each in its colour, following its position.
 	const framings = useResolvedFramings()
 	const hidden = framing?.hidden
-	const skyFrames = framings.flatMap((each, position) => (hidden?.includes(each.id) ? [] : [{ id: each.id, name: each.name, optics: each.optics, color: frameColor(position) }]))
+	const skyFrames = framings.flatMap((each) => (hidden?.includes(each.id) ? [] : [{ id: each.id, name: each.name, optics: each.optics, color: frameColor(each.color) }]))
 	// The workspace renders on every mount or camera update, and each render builds the frames anew, so the outlines follow
 	// the value of the frames, never the objects, and are rebuilt only when a frame really changed.
 	const framesKey = JSON.stringify(skyFrames)

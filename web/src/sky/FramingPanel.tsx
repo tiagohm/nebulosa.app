@@ -2,7 +2,7 @@ import { cn } from 'cn'
 import { formatFixed } from '../format'
 import { fieldSummary } from '../framing/OpticsFields'
 import { frameSwatch } from '../framing/palette'
-import type { ResolvedFraming } from '../framing/resolve'
+import { missingCameraName, type ResolvedFraming } from '../framing/resolve'
 import { profileState, setFramingShownInSky, setFramingVisible } from '../profile/profile'
 import type { SkyFramingSettings } from '../profile/schema'
 import { CollapsibleSection } from '../shell/CollapsibleSection'
@@ -17,7 +17,7 @@ import { Notice } from '../ui/Notice'
 
 // Props of the panel.
 export interface FramingPanelProps {
-	// Framings resolved for the tab, the Equipment Setup's first, in the order that gives their colours.
+	// Framings resolved for the tab, the Equipment Setup's first, each with its colour.
 	readonly framings: readonly ResolvedFraming[]
 	// Which framings the profile draws; absent before the first change.
 	readonly framing?: Readonly<SkyFramingSettings>
@@ -39,16 +39,16 @@ export function FramingPanel({ framings, framing, hasTarget }: FramingPanelProps
 			</CollapsibleSection>
 			<CollapsibleSection id="sky.framing.framings" title="Framings" summary={`${shown} of ${framings.length} shown`}>
 				<ul className="m-0 flex list-none flex-col gap-1 p-0">
-					{framings.map((each, position) => {
+					{framings.map((each) => {
 						const drawn = !hidden.includes(each.id)
 
 						return (
 							<li key={each.id} className="flex items-start gap-2">
-								<span className={cn('mt-2 size-3 flex-none rounded-full', frameSwatch(position), !drawn && 'opacity-40')} />
+								<span className={cn('mt-2 size-3 flex-none rounded-full', frameSwatch(each.color), !drawn && 'opacity-40')} />
 								<div className="min-w-0 flex-1">
 									<Checkbox label={each.name} checked={drawn} disabled={!visible} onChange={(next) => setFramingShownInSky(profileState, each.id, next)} />
 									<p className="m-0 text-xs leading-5 text-ink-300">
-										{fieldSummary(each.field)} · PA {formatFixed(each.optics.rotation, 1)}°
+										{fieldSummary(each.field, missingCameraName(each.camera))} · PA {formatFixed(each.optics.rotation, 1)}°
 									</p>
 								</div>
 							</li>

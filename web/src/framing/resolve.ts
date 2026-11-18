@@ -23,8 +23,12 @@ export const EQUIPMENT_FRAMING_ID = 'equipment'
 // Zero sensor of a camera that reports none, which resolveFraming lists as missing.
 const NO_SENSOR: SensorGeometry = { kind: 'pixels', width: 0, height: 0, pixelSize: 0 }
 
-// Document of the pseudo-framing of the Equipment Setup: the Main Camera behind the telescope, without rotation.
-export const EQUIPMENT_FRAMING: FramingDocument = {
+// Document of a framing as resolve reads it: a saved one has a colour, the Equipment Setup's pseudo-framing none.
+export type ResolvableFraming = Omit<FramingDocument, 'color'> & Partial<Pick<FramingDocument, 'color'>>
+
+// Document of the pseudo-framing of the Equipment Setup: the Main Camera behind the telescope, without rotation, drawn in
+// the colour of the Equipment Setup (no `color`).
+export const EQUIPMENT_FRAMING: ResolvableFraming = {
 	name: 'Equipment Setup',
 	optics: { telescope: { source: 'setup', setupOptics: 'telescope', focalLength: 0, aperture: 0, focalMultiplier: 1 }, camera: { source: 'setup', role: 'MAIN_CAMERA', sensor: NO_SENSOR } },
 	rotation: 0,
@@ -64,6 +68,8 @@ export interface ResolvedFraming {
 	readonly id: string
 	// Name of the framing.
 	readonly name: string
+	// Colour of the framing, an index of the `frame-*` tokens; absent for the Equipment Setup's, drawn in its own.
+	readonly color?: number
 	// Optical configuration, with the rotation of the framing.
 	readonly optics: OpticalConfiguration
 	// Field of view, or what is missing to compute it.
@@ -72,6 +78,12 @@ export interface ResolvedFraming {
 	readonly telescope: OpticsOrigin
 	// Where the camera values come from.
 	readonly camera: CameraOrigin
+}
+
+// Returns the name of the camera whose missing sensor keeps a framing from its field, such as "Main Camera sensor";
+// undefined when its camera has one or is not of the Equipment Setup.
+export function missingCameraName(camera: Pick<CameraOrigin, 'missingCamera'>) {
+	return camera.missingCamera && `${roleDefinition(camera.missingCamera).label} sensor`
 }
 
 // Returns the telescope values of a framing, in millimeters, with their origin.
@@ -121,16 +133,16 @@ function resolveCameraOf(camera: FramingCamera, context: FramingContext): { read
 }
 
 // Resolves a framing for the tab: its optical configuration, its field of view, and where its values come from.
-export function resolveFramingOptics(id: string, framing: FramingDocument, context: FramingContext): ResolvedFraming {
+export function resolveFramingOptics(id: string, framing: ResolvableFraming, context: FramingContext): ResolvedFraming {
 	const telescope = resolveTelescopeOf(framing.optics.telescope, context)
 	const camera = resolveCameraOf(framing.optics.camera, context)
 	const optics: OpticalConfiguration = { ...telescope.values, sensor: camera.sensor, rotation: framing.rotation }
-	return { id, name: framing.name, optics, field: resolveFraming(optics), telescope: telescope.origin, camera: camera.origin }
+	return { id, name: framing.name, color: framing.color, optics, field: resolveFraming(optics), telescope: telescope.origin, camera: camera.origin }
 }
 
 // Resolves the pseudo-framing of the Equipment Setup and every saved framing (drafts applied), in the order every select
 // lists them.
-export function resolveAllFramings(framings: readonly Pick<SavedFraming, 'id' | 'name' | 'optics' | 'rotation'>[], context: FramingContext): ResolvedFraming[] {
+export function resolveAllFramings(framings: readonly Pick<SavedFraming, 'id' | 'name' | 'optics' | 'rotation' | 'color'>[], context: FramingContext): ResolvedFraming[] {
 	return [resolveFramingOptics(EQUIPMENT_FRAMING_ID, EQUIPMENT_FRAMING, context), ...framings.map((framing) => resolveFramingOptics(framing.id, framing, context))]
 }
 

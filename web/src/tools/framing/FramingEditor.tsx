@@ -9,7 +9,8 @@ import { TelescopeModelSearch } from '../../equipment/TelescopeModelSearch'
 import { formatPixelSize, MISSING } from '../../format'
 import { copyName, deleteFraming, discardFramingDraft, duplicateFraming, editFraming, framingSaveStatus, framingsState, overwriteFraming } from '../../framing/framings'
 import { FieldRows, SensorInputs, TelescopeInputs } from '../../framing/OpticsFields'
-import { EQUIPMENT_FRAMING_ID, type ResolvedFraming } from '../../framing/resolve'
+import { nextFrameColor } from '../../framing/palette'
+import { EQUIPMENT_FRAMING_ID, missingCameraName, type ResolvedFraming } from '../../framing/resolve'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import type { RoleSensor } from '../../sky/sensors'
 import { Actions } from '../../ui/Actions'
@@ -23,11 +24,12 @@ import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
 import { TextInput } from '../../ui/TextInput'
 import { showFraming } from './framing'
 
-// Editor of a framing, the contextual panel of the Framing tool: its name, where its telescope and camera come from (the
-// Equipment Setup of the active profile, an item of the Equipment Catalog, a model of the AstroBin equipment database, or
-// typed by hand), their values, the field of view they give, and the rotation of the sensor. Every edit becomes a draft
-// written a moment later (framings.ts); changing a source keeps the values shown as the copy the framing falls back to.
-// The Equipment Setup's pseudo-framing is shown, never edited.
+// Editor of a framing, the contextual panel of the Framing tool, readout first: why the last write failed or conflicted
+// when it did, the field of view and the rotation of the sensor, where the telescope and camera come from (the Equipment
+// Setup of the active profile, an item of the Equipment Catalog, a model of the AstroBin equipment database, or typed by
+// hand) with their values, and last its name, Duplicate, and Delete. Its save status is shown in the panel header
+// (SaveStatus). Every edit becomes a draft written a moment later (framings.ts); changing a source keeps the values shown
+// as the copy the framing falls back to. The Equipment Setup's pseudo-framing is shown, never edited.
 
 // Sources of a telescope or camera in menu order.
 const SOURCES: readonly FramingOpticsSource[] = ['setup', 'catalog', 'model', 'manual']
@@ -60,12 +62,10 @@ function sensorOriginText({ origin, catalogCamera }: Pick<RoleSensor, 'origin' |
 export interface FramingEditorProps {
 	// Framing edited, resolved for the tab.
 	readonly framing: ResolvedFraming
-	// Whether the inputs are locked, while a survey cutout downloads.
-	readonly locked: boolean
 }
 
 // Editor of a framing.
-export function FramingEditor({ framing, locked }: FramingEditorProps) {
+export function FramingEditor({ framing }: FramingEditorProps) {
 	const state = useSnapshot(framingsState)
 
 	if (framing.id === EQUIPMENT_FRAMING_ID) return <EquipmentFraming framing={framing} />
@@ -80,11 +80,45 @@ export function FramingEditor({ framing, locked }: FramingEditorProps) {
 
 	return (
 		<>
-			<NameSection id={framing.id} name={document.name} locked={locked} />
-			<TelescopeSection telescope={document.optics.telescope} resolved={framing} locked={locked} onChange={(telescope) => change((d) => ({ ...d, optics: { ...d.optics, telescope } }))} />
-			<CameraSection camera={document.optics.camera} resolved={framing} locked={locked} onChange={(camera) => change((d) => ({ ...d, optics: { ...d.optics, camera } }))} />
-			<FieldSection framing={framing} locked={locked} onRotate={(rotation) => change((d) => ({ ...d, rotation }))} />
+			<SaveNotices id={framing.id} />
+			<FieldSection framing={framing} onRotate={(rotation) => change((d) => ({ ...d, rotation }))} />
+			<TelescopeSection telescope={document.optics.telescope} resolved={framing} onChange={(telescope) => change((d) => ({ ...d, optics: { ...d.optics, telescope } }))} />
+			<CameraSection camera={document.optics.camera} resolved={framing} onChange={(camera) => change((d) => ({ ...d, optics: { ...d.optics, camera } }))} />
+			<NameSection id={framing.id} name={document.name} />
 		</>
+	)
+}
+
+// Save status of a framing, in words, for the panel header.
+export function SaveStatus({ id }: { readonly id: string }) {
+	const state = useSnapshot(framingsState)
+	const status = SAVE_STATUS[framingSaveStatus(state, id)]
+	return <StatusBadge tone={status.tone} label={status.label} title={state.errors[id]} />
+}
+
+// Why the last write of a framing failed, or the conflict with another tab and its two ways out; nothing when it saved.
+function SaveNotices({ id }: { readonly id: string }) {
+	const state = useSnapshot(framingsState)
+	const conflict = id in state.conflicts
+	if (!state.errors[id] && !conflict) return null
+
+	return (
+		<div className="flex flex-col gap-2 border-b border-line-100 px-3.5 py-3">
+			{state.errors[id] && <Notice error>Not saved: {state.errors[id]}</Notice>}
+			{conflict && (
+				<>
+					<Notice>Another tab changed this framing{state.conflicts[id] ? '' : ' and deleted it'} while it was being edited here.</Notice>
+					<Actions>
+						<Button variant="secondary" onClick={() => discardFramingDraft(framingsState, id)}>
+							Keep Theirs
+						</Button>
+						<Button variant="secondary" onClick={() => void overwriteFraming(framingsState, id)}>
+							Save Mine
+						</Button>
+					</Actions>
+				</>
+			)}
+		</div>
 	)
 }
 
@@ -92,26 +126,27 @@ export function FramingEditor({ framing, locked }: FramingEditorProps) {
 function EquipmentFraming({ framing }: { readonly framing: ResolvedFraming }) {
 	return (
 		<>
+			<CollapsibleSection id="framing.equipment.field" title="Field">
+				<FieldRows field={framing.field} missingCamera={missingCameraName(framing.camera)} />
+				<Notice>Without rotation: create a framing to turn the sensor.</Notice>
+			</CollapsibleSection>
 			<CollapsibleSection id="framing.equipment" title="Equipment Setup">
 				<Notice>Follows the Main Camera and the Telescope of the active profile&apos;s Equipment Setup, without rotation; it is what every tool uses until another framing is chosen. Change them in the Equipment Setup, or create a framing to plan with other optics.</Notice>
 				<DataRow label="Telescope">{framing.telescope.label}</DataRow>
 				<DataRow label="Camera">{framing.camera.label}</DataRow>
 				<EquipmentSetupButton />
 			</CollapsibleSection>
-			<CollapsibleSection id="framing.field" title="Field">
-				<FieldRows field={framing.field} missingCamera={framing.camera.missingCamera && `${roleDefinition(framing.camera.missingCamera).label} sensor`} />
-			</CollapsibleSection>
 		</>
 	)
 }
 
-// Name, save status, conflict, duplicate, and delete of a framing.
-function NameSection({ id, name, locked }: { readonly id: string; readonly name: string; readonly locked: boolean }) {
+// Name, Duplicate, and Delete of a framing.
+function NameSection({ id, name }: { readonly id: string; readonly name: string }) {
 	const state = useSnapshot(framingsState)
 	const [text, setText] = useState(name)
 	const [error, setError] = useState<string>()
-	const status = SAVE_STATUS[framingSaveStatus(state, id)]
-	const conflict = id in state.conflicts
+	// The name the server saved, which Delete names: a draft name another framing has is never saved.
+	const savedName = state.framings[id]?.name ?? name
 
 	// Follows a name changed elsewhere, such as by another tab.
 	useEffect(() => setText(name), [name])
@@ -127,7 +162,8 @@ function NameSection({ id, name, locked }: { readonly id: string; readonly name:
 		setError(undefined)
 
 		try {
-			showFraming(await duplicateFraming(framingsState, id, copyName(framingsState, name)))
+			const color = nextFrameColor(Object.values(framingsState.framings).map((framing) => framing.color))
+			showFraming(await duplicateFraming(framingsState, id, copyName(framingsState, name), color))
 		} catch (failure) {
 			setError(failure instanceof Error ? failure.message : String(failure))
 		}
@@ -152,37 +188,19 @@ function NameSection({ id, name, locked }: { readonly id: string; readonly name:
 					commit()
 				}}
 			>
-				<TextInput label="Name" value={text} disabled={locked} onChange={(event) => setText(event.target.value)} onBlur={commit} />
+				<TextInput label="Name" value={text} onChange={(event) => setText(event.target.value)} onBlur={commit} />
 			</form>
-			<div>
-				<StatusBadge tone={status.tone} label={status.label} title={state.errors[id]} />
-			</div>
-			{state.errors[id] && <Notice error>{state.errors[id]}</Notice>}
-			{conflict && (
-				<>
-					<Notice>Another tab changed this framing{state.conflicts[id] ? '' : ' and deleted it'} while it was being edited here.</Notice>
-					<Actions>
-						<Button variant="secondary" onClick={() => discardFramingDraft(framingsState, id)}>
-							Keep Theirs
-						</Button>
-						<Button variant="secondary" onClick={() => void overwriteFraming(framingsState, id)}>
-							Save Mine
-						</Button>
-					</Actions>
-				</>
-			)}
 			{error && <Notice error>{error}</Notice>}
 			<Actions>
-				<Button variant="secondary" disabled={locked} onClick={() => void duplicate()}>
+				<Button variant="secondary" onClick={() => void duplicate()}>
 					Duplicate
 				</Button>
 				<ConfirmButton
-					disabled={locked}
 					destructive
 					title="Delete framing?"
 					message={
 						<>
-							Delete <strong className="text-ink-100">{name}</strong>? Every profile and tool that chose it falls back to the Equipment Setup, and this cannot be undone.
+							Delete <strong className="text-ink-100">{savedName}</strong>? Every profile and tool that chose it falls back to the Equipment Setup, and this cannot be undone.
 						</>
 					}
 					confirmLabel="Delete Framing"
@@ -201,14 +219,12 @@ interface TelescopeSectionProps {
 	readonly telescope: FramingTelescope
 	// Framing resolved for the tab, with the values shown.
 	readonly resolved: ResolvedFraming
-	// Whether the inputs are locked.
-	readonly locked: boolean
 	// Writes a change of the telescope.
 	readonly onChange: (telescope: FramingTelescope) => void
 }
 
 // Source and values of the telescope of a framing.
-function TelescopeSection({ telescope, resolved, locked, onChange }: TelescopeSectionProps) {
+function TelescopeSection({ telescope, resolved, onChange }: TelescopeSectionProps) {
 	const { telescopes } = useSnapshot(catalogState)
 	const offered = telescopes.filter((e) => !e.archived || e.id === telescope.telescopeId)
 	const item = telescope.source === 'catalog' ? telescopes.find((e) => e.id === telescope.telescopeId) : undefined
@@ -226,15 +242,14 @@ function TelescopeSection({ telescope, resolved, locked, onChange }: TelescopeSe
 
 	return (
 		<CollapsibleSection id="framing.telescope" title="Telescope" summary={resolved.telescope.label}>
-			<Select label="Source" options={SOURCES} value={telescope.source} disabled={locked} onChange={changeSource} format={sourceName} />
-			{telescope.source === 'setup' && <Select label="Optics" options={SETUP_OPTICS} value={telescope.setupOptics ?? 'telescope'} disabled={locked} onChange={(setupOptics) => onChange({ ...telescope, setupOptics })} format={(value) => (value === 'guideTelescope' ? 'Guide Telescope' : 'Telescope')} />}
+			<Select label="Source" options={SOURCES} value={telescope.source} onChange={changeSource} format={sourceName} />
+			{telescope.source === 'setup' && <Select label="Optics" options={SETUP_OPTICS} value={telescope.setupOptics ?? 'telescope'} onChange={(setupOptics) => onChange({ ...telescope, setupOptics })} format={(value) => (value === 'guideTelescope' ? 'Guide Telescope' : 'Telescope')} />}
 			{telescope.source === 'catalog' &&
 				(offered.length > 0 ? (
 					<Select
 						label="Telescope"
 						options={offered.map((e) => e.id)}
 						value={telescope.telescopeId ?? offered[0].id}
-						disabled={locked}
 						onChange={(telescopeId) => {
 							const next = telescopes.find((e) => e.id === telescopeId)
 							onChange({ ...telescope, telescopeId, focalLength: next?.focalLength ?? telescope.focalLength, aperture: next?.aperture ?? telescope.aperture })
@@ -249,7 +264,6 @@ function TelescopeSection({ telescope, resolved, locked, onChange }: TelescopeSe
 			)}
 			<TelescopeInputs
 				optics={resolved.optics}
-				disabled={locked}
 				lockedFocalLength={telescope.source === 'setup' || item?.focalLength !== undefined}
 				lockedAperture={telescope.source === 'setup' || item?.aperture !== undefined}
 				lockedMultiplier={telescope.source === 'setup'}
@@ -271,14 +285,12 @@ interface CameraSectionProps {
 	readonly camera: FramingCamera
 	// Framing resolved for the tab, with the sensor shown.
 	readonly resolved: ResolvedFraming
-	// Whether the inputs are locked.
-	readonly locked: boolean
 	// Writes a change of the camera.
 	readonly onChange: (camera: FramingCamera) => void
 }
 
 // Source and sensor of the camera of a framing.
-function CameraSection({ camera, resolved, locked, onChange }: CameraSectionProps) {
+function CameraSection({ camera, resolved, onChange }: CameraSectionProps) {
 	const { cameras } = useSnapshot(catalogState)
 	const offered = cameras.filter((e) => !e.archived || e.id === camera.cameraId)
 	const sensor = resolved.optics.sensor
@@ -295,10 +307,10 @@ function CameraSection({ camera, resolved, locked, onChange }: CameraSectionProp
 
 	return (
 		<CollapsibleSection id="framing.camera" title="Camera" summary={resolved.camera.label}>
-			<Select label="Source" options={SOURCES} value={camera.source} disabled={locked} onChange={changeSource} format={sourceName} />
+			<Select label="Source" options={SOURCES} value={camera.source} onChange={changeSource} format={sourceName} />
 			{camera.source === 'setup' && (
 				<>
-					<Select label="Camera" options={CAMERA_ROLES} value={camera.role ?? 'MAIN_CAMERA'} disabled={locked} onChange={(role: CameraRole) => onChange({ ...camera, role })} format={(role) => roleDefinition(role).label} />
+					<Select label="Camera" options={CAMERA_ROLES} value={camera.role ?? 'MAIN_CAMERA'} onChange={(role: CameraRole) => onChange({ ...camera, role })} format={(role) => roleDefinition(role).label} />
 					{roleSensor ? (
 						<>
 							<DataRow label="Resolution">
@@ -322,7 +334,6 @@ function CameraSection({ camera, resolved, locked, onChange }: CameraSectionProp
 							label="Camera"
 							options={offered.map((e) => e.id)}
 							value={camera.cameraId ?? offered[0].id}
-							disabled={locked}
 							onChange={(cameraId) => {
 								const declared = cameras.find((e) => e.id === cameraId)?.sensor
 								const pixelSize = declared?.pixelSize ?? (camera.sensor.kind === 'pixels' ? camera.sensor.pixelSize : 0)
@@ -345,10 +356,10 @@ function CameraSection({ camera, resolved, locked, onChange }: CameraSectionProp
 						onValueChange={(model) => onChange({ ...camera, model })}
 						onPick={(model) => onChange({ ...camera, model: model.model, sensor: { kind: 'pixels', width: model.width, height: model.height, pixelSize: model.pixelSize ?? (camera.sensor.kind === 'pixels' ? camera.sensor.pixelSize : 0) } })}
 					/>
-					<SensorInputs sensor={camera.sensor} disabled={locked} onChange={(next) => onChange({ ...camera, sensor: next })} />
+					<SensorInputs sensor={camera.sensor} onChange={(next) => onChange({ ...camera, sensor: next })} />
 				</>
 			)}
-			{camera.source === 'manual' && <SensorInputs sensor={camera.sensor} disabled={locked} onChange={(next) => onChange({ ...camera, sensor: next })} />}
+			{camera.source === 'manual' && <SensorInputs sensor={camera.sensor} onChange={(next) => onChange({ ...camera, sensor: next })} />}
 		</CollapsibleSection>
 	)
 }
@@ -372,12 +383,17 @@ function SensorRows({ sensor }: { readonly sensor: FramingCamera['sensor'] }) {
 }
 
 // Field of view of a framing and the rotation of its sensor.
-function FieldSection({ framing, locked, onRotate }: { readonly framing: ResolvedFraming; readonly locked: boolean; readonly onRotate: (rotation: number) => void }) {
+function FieldSection({ framing, onRotate }: { readonly framing: ResolvedFraming; readonly onRotate: (rotation: number) => void }) {
 	return (
 		<CollapsibleSection id="framing.field" title="Field">
-			<FieldRows field={framing.field} missingCamera={framing.camera.missingCamera && `${roleDefinition(framing.camera.missingCamera).label} sensor`} />
-			<NumberInput label="Rotation (PA of the top edge)" suffix="°" value={framing.optics.rotation} min={0} max={359.5} step={0.5} disabled={locked} onChange={(rotation) => onRotate(((rotation % 360) + 360) % 360)} />
+			<FieldRows field={framing.field} missingCamera={missingCameraName(framing.camera)} />
+			<RotationInput value={framing.optics.rotation} onChange={onRotate} />
 			<Notice>Position angle of the sensor&apos;s top edge, from north through east, as plate solvers report it; mirrored images are not modeled.</Notice>
 		</CollapsibleSection>
 	)
+}
+
+// Rotation of a framing, the position angle of its top edge in degrees, wrapped into [0, 360).
+export function RotationInput({ value, onChange, className }: { readonly value: number; readonly onChange: (rotation: number) => void; readonly className?: string }) {
+	return <NumberInput label="Rotation (PA of the top edge)" suffix="°" className={className} value={value} min={0} max={359.5} step={0.5} onChange={(rotation) => onChange(((rotation % 360) + 360) % 360)} />
 }

@@ -9,6 +9,7 @@ function framing(id: string, revision: number, name: string = id): SavedFraming 
 		name,
 		optics: { telescope: { source: 'manual', focalLength: 600, aperture: 120, focalMultiplier: 1 }, camera: { source: 'manual', sensor: { kind: 'pixels', width: 6248, height: 4176, pixelSize: 3.76 } } },
 		rotation: 0,
+		color: 0,
 		revision,
 		createdAt: 0,
 		updatedAt: revision,

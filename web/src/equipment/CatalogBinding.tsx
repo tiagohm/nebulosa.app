@@ -6,7 +6,7 @@ import { navigate, routeState } from '../shell/route'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Select } from '../ui/Select'
-import { bindCamera, boundCameraId, cameraBindingsState, cameraBoundElsewhere, catalogCameraName, catalogState, createCatalogCamera, deviceFields, deviceIdCameraId, sensorMismatch, suggestedCameraId } from './catalog'
+import { bindCamera, boundCameraId, cameraBindingsState, cameraBoundElsewhere, catalogCameraName, catalogState, createCatalogCamera, deviceFields, sensorMismatch, suggestedCameraId } from './catalog'
 import { deviceState } from './equipment'
 
 // Line of a camera role of the Equipment Setup that binds its device to a camera of the Equipment Catalog: the camera
@@ -18,8 +18,8 @@ import { deviceState } from './equipment'
 // Camera creates a camera of the catalog from the device, which Settings → Equipment Catalog renames; the edit button
 // beside the select closes the Equipment Setup and shows the bound camera there. Binding never commands the device. While
 // the device is not on an open connection (its server is not connected, or it is missing from it), the line shows the
-// camera the device id the setup keeps is bound to (deviceIdCameraId) with the select disabled, since only a device of an
-// open connection can be bound.
+// camera the device id the setup keeps is bound to with the select disabled, since only a device of an open connection
+// can be bound.
 
 // Select value of the option that unbinds the device.
 const UNBOUND = ''
@@ -48,7 +48,7 @@ export function CatalogBinding({ deviceId, device }: CatalogBindingProps) {
 	const control = useSnapshot(controlRuntime)
 	const [busy, setBusy] = useState(false)
 	const [error, setError] = useState<string>()
-	const bound = device ? boundCameraId(bindings, device) : deviceIdCameraId(bindings, deviceId)
+	const bound = boundCameraId(bindings, deviceId)
 	const camera = cameras.find((entry) => entry.id === bound)
 	// New Camera needs the device on an open connection.
 	const options = [UNBOUND, ...cameras.filter((entry) => !entry.archived || entry.id === bound).map((entry) => entry.id), ...(device ? [NEW_CAMERA] : [])]

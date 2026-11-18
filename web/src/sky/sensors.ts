@@ -1,7 +1,7 @@
 import type { CameraSensor } from 'api'
 import { proxy } from 'valtio'
 import { type ControlRuntime, watchedDeviceState } from '../equipment-control/control'
-import { boundCameraId, type CameraBindingsState, type CatalogCamera, deviceIdCameraId } from '../equipment/catalog'
+import { boundCameraId, type CameraBindingsState, type CatalogCamera } from '../equipment/catalog'
 import { CAMERA_ROLES, type CameraRole } from '../equipment/roles'
 
 // Camera sensor runtime of the tab for the Equipment Setup field of view: the devices the active profile assigns to
@@ -73,17 +73,10 @@ function positive(value: number | undefined) {
 	return value !== undefined && value > 0 ? value : undefined
 }
 
-// Returns the camera of the Equipment Catalog a role's device is bound to: by its connection and id while its server
-// connection is open (followed), else by the device id the Equipment Setup keeps, when every binding of a device of that
-// id names the same camera; undefined when none does or they disagree.
-function roleCameraId(bindings: Pick<CameraBindingsState, 'bindings'>, followed: SensorTarget | undefined, deviceId: string | undefined) {
-	if (followed) return boundCameraId(bindings, followed)
-	return deviceId === undefined ? undefined : deviceIdCameraId(bindings, deviceId)
-}
-
 // Returns the sensor of each camera role for the field of view: what its device reports, each value it does not report
 // (every one while it is disconnected or its connection is closed) taken from the sensor the Equipment Catalog declares
-// for the camera the device is bound to (roleCameraId, from the device id of each role in `setupDevices`). A role whose
+// for the camera the device is bound to (boundCameraId, by the device followed or else the device id of each role in
+// `setupDevices`, so also while its connection is closed). A role whose
 // width or height neither gives has no sensor; a pixel size neither gives is 0, which resolveFraming lists as missing.
 export function roleSensors(
 	runtime: Readonly<SensorRuntime>,
@@ -97,7 +90,7 @@ export function roleSensors(
 
 	for (const role of CAMERA_ROLES) {
 		const live = reported[role]
-		const cameraId = roleCameraId(bindings, runtime.cameras[role], setupDevices[role])
+		const cameraId = boundCameraId(bindings, runtime.cameras[role]?.id ?? setupDevices[role])
 		const camera = cameraId === undefined ? undefined : catalog.cameras.find((e) => e.id === cameraId)
 		const declared = camera?.sensor
 		const width = positive(live?.width) ?? positive(declared?.width)

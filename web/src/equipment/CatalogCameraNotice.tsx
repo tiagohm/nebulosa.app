@@ -9,14 +9,14 @@ import { deviceState } from './equipment'
 // read from the mirror of the server, which is what the wizards and the calibrators use.
 
 // Returns the camera of the Equipment Catalog a camera device is bound to, followed live, or undefined.
-export function useBoundCamera(device: BindableDevice | undefined) {
+export function useBoundCamera(device: Pick<BindableDevice, 'id'> | undefined) {
 	const bindings = useSnapshot(cameraBindingsState)
-	return boundCameraId(bindings, device)
+	return boundCameraId(bindings, device?.id)
 }
 
 export interface CatalogCameraNoticeProps {
 	// Camera device of the panel.
-	readonly device: BindableDevice | undefined
+	readonly device: Pick<BindableDevice, 'id'> | undefined
 	// What is recorded against the camera, or comes from it, such as "Frames will be recorded against".
 	readonly lead: string
 	// What binding allows, said while the device is bound to none, such as "to acquire calibration frames".

@@ -4,7 +4,8 @@ import { type CameraBindingEvent, createEquipmentCatalogRoutes, EquipmentCatalog
 import { Workspace, type WorkspaceEvent } from './workspace'
 
 // Creates the catalog of a database in memory whose Equipment Catalog holds the cameras a and b, over two open camera
-// devices (connection c1, devices d1 and d3) and the events it publishes.
+// devices (connection c1, devices d1 and d3 of hardware h1 and h3, d1 also reached through connection c2) and the events
+// it publishes.
 function setup(database = AppDatabase.memory()) {
 	const events: CameraBindingEvent[] = []
 	const workspaceEvents: WorkspaceEvent[] = []
@@ -12,7 +13,7 @@ function setup(database = AppDatabase.memory()) {
 	for (const id of ['a', 'b']) workspace.saveCatalogCamera(id, { name: `Camera ${id}`, archived: false, revision: 0 })
 	const catalog = new EquipmentCatalog(
 		database,
-		({ connectionId, deviceId }) => (connectionId === 'c1' && deviceId === 'd1' ? { hardwareId: 'h1', name: 'ZWO ASI2600MM' } : connectionId === 'c1' && deviceId === 'd3' ? { hardwareId: 'h3', name: 'ZWO ASI120MM' } : undefined),
+		({ connectionId, deviceId }) => (connectionId !== 'c1' && connectionId !== 'c2' ? undefined : deviceId === 'd1' ? { hardwareId: 'h1', name: 'ZWO ASI2600MM' } : deviceId === 'd3' && connectionId === 'c1' ? { hardwareId: 'h3', name: 'ZWO ASI120MM' } : undefined),
 		(event) => events.push(event),
 	)
 	return { catalog, workspace, events, workspaceEvents, database }
@@ -22,7 +23,7 @@ test('a device is bound to one camera of the catalog, bound again, and unbound, 
 	const { catalog, events } = setup()
 	expect(catalog.cameraOf({ connectionId: 'c1', deviceId: 'd1' })).toBeUndefined()
 
-	expect(catalog.bind({ connectionId: 'c1', deviceId: 'd1', cameraId: 'a' }, 10)).toEqual({ status: 'saved', binding: { connectionId: 'c1', deviceId: 'd1', hardwareId: 'h1', deviceName: 'ZWO ASI2600MM', cameraId: 'a', boundAt: 10 } })
+	expect(catalog.bind({ connectionId: 'c1', deviceId: 'd1', cameraId: 'a' }, 10)).toEqual({ status: 'saved', binding: { hardwareId: 'h1', connectionId: 'c1', deviceId: 'd1', deviceName: 'ZWO ASI2600MM', cameraId: 'a', boundAt: 10 } })
 	expect(catalog.cameraOf({ connectionId: 'c1', deviceId: 'd1' })).toBe('a')
 	catalog.bind({ connectionId: 'c1', deviceId: 'd1', cameraId: 'b' })
 	expect(catalog.cameraOf({ connectionId: 'c1', deviceId: 'd1' })).toBe('b')
@@ -39,9 +40,9 @@ test('a camera of the catalog is bound to one device at most, binding it again u
 
 	expect(catalog.cameraOf({ connectionId: 'c1', deviceId: 'd1' })).toBeUndefined()
 	expect(catalog.cameraOf({ connectionId: 'c1', deviceId: 'd3' })).toBe('a')
-	expect(events.slice(1).map(({ deviceId, binding }) => [deviceId, binding?.cameraId])).toEqual([
-		['d1', undefined],
-		['d3', 'a'],
+	expect(events.slice(1).map(({ hardwareId, binding }) => [hardwareId, binding?.cameraId])).toEqual([
+		['h1', undefined],
+		['h3', 'a'],
 	])
 	expect(new EquipmentCatalog(catalog.database, () => undefined).snapshot().bindings.map(({ deviceId }) => deviceId)).toEqual(['d3'])
 })
@@ -51,6 +52,17 @@ test('only a camera device of an open connection is bound, and only to a camera 
 	expect(catalog.bind({ connectionId: 'c1', deviceId: 'other', cameraId: 'a' })).toEqual({ status: 'notFound', what: 'device' })
 	expect(catalog.bind({ connectionId: 'c1', deviceId: 'd1', cameraId: 'missing' })).toEqual({ status: 'notFound', what: 'camera' })
 	expect(events).toEqual([])
+})
+
+test('a device has one binding by its hardware, whatever connection reaches it', () => {
+	const { catalog } = setup()
+	catalog.bind({ connectionId: 'c1', deviceId: 'd1', cameraId: 'a' })
+	catalog.bind({ connectionId: 'c2', deviceId: 'd1', cameraId: 'b' })
+
+	expect(catalog.snapshot().bindings).toEqual([{ hardwareId: 'h1', connectionId: 'c2', deviceId: 'd1', deviceName: 'ZWO ASI2600MM', cameraId: 'b', boundAt: expect.any(Number) }])
+	expect(catalog.cameraOf({ connectionId: 'c1', deviceId: 'd1' })).toBe('b')
+	catalog.bind({ connectionId: 'c1', deviceId: 'd1', cameraId: null })
+	expect(catalog.snapshot().bindings).toEqual([])
 })
 
 test('the bindings survive a restart', () => {
@@ -69,7 +81,7 @@ test('deleting a camera of the catalog removes its bindings, published as unboun
 
 	expect(catalog.cameraOf({ connectionId: 'c1', deviceId: 'd1' })).toBeUndefined()
 	expect(new EquipmentCatalog(catalog.database, () => undefined).snapshot().bindings).toEqual([])
-	expect(events.at(-1)).toEqual({ type: 'catalogCamera:bindingChanged', connectionId: 'c1', deviceId: 'd1' })
+	expect(events.at(-1)).toEqual({ type: 'catalogCamera:bindingChanged', hardwareId: 'h1' })
 })
 
 test('the routes list and change the bindings', async () => {

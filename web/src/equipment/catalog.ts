@@ -8,7 +8,7 @@ import { SnapshotRefreshes } from '../refresh'
 // Equipment Catalog of the tab: the physical cameras calibration frames and masters are recorded against and the
 // telescopes the Equipment Setup refers to, one catalog shared by every profile, tab, and browser, which the server keeps
 // as part of the workspace (sync.ts of the profiles writes what the tab changes), and the binding of each camera device to one of them, which belongs to the physical
-// device, holds for every profile, and is mirrored from the server (GET /api/equipment-catalog/bindings and
+// device (keyed by its hardware id), holds for every profile, and is mirrored from the server (GET /api/equipment-catalog/bindings and
 // catalogCamera:bindingChanged). Binding a device never commands it; the wizards, the captures, and the calibrators read
 // the binding on the server.
 
@@ -37,7 +37,7 @@ export const catalogState = proxy<CatalogState>({ cameras: [], telescopes: [] })
 
 // Mirror of the bindings of the server.
 export interface CameraBindingsState {
-	// Binding of each camera device, by bindingKey.
+	// Binding of each camera device, by hardware id.
 	bindings: Record<string, CameraBinding>
 	// Whether the bindings were read at least once.
 	loaded: boolean
@@ -49,7 +49,7 @@ export const cameraBindingsState = proxy<CameraBindingsState>({ bindings: {}, lo
 // Ordering of the refreshes of the bindings against their events.
 const refreshes = new SnapshotRefreshes()
 
-// Events received for each binding, by bindingKey, so the answer of a bind never replaces what a later event set.
+// Events received for each binding, by hardware id, so the answer of a bind never replaces what a later event set.
 const bindingEvents = new Map<string, number>()
 
 // Camera device of an open connection, as a binding names it.
@@ -58,15 +58,12 @@ export interface BindableDevice {
 	readonly connectionId: string
 	// Exact id of the device.
 	readonly id: string
+	// Id of the physical device, which keys its binding.
+	readonly hardwareId: string
 }
 
 // Outcome of a save of a camera of the catalog: saved, or refused for an empty or taken name, or a sensor out of range.
 export type CatalogCameraSave = { readonly ok: true; readonly camera: CatalogCamera } | { readonly ok: false; readonly reason: 'name' | 'nameTaken' | 'sensor' }
-
-// Returns the key of the binding of a device.
-export function bindingKey(connectionId: string, deviceId: string) {
-	return `${connectionId}/${deviceId}`
-}
 
 // Returns the text of an optional field trimmed, or undefined when it is blank.
 function optionalText(text: string | undefined) {
@@ -163,24 +160,19 @@ export function catalogCameraName(cameras: readonly Pick<CatalogCamera, 'id' | '
 	return cameras.find((camera) => camera.id === id)?.name ?? (id === undefined ? 'No camera' : 'Unknown camera')
 }
 
-// Returns the camera of the catalog a device is bound to, or undefined.
-export function boundCameraId(state: Pick<CameraBindingsState, 'bindings'>, device: BindableDevice | undefined) {
-	return device && state.bindings[bindingKey(device.connectionId, device.id)]?.cameraId
-}
-
-// Returns the camera of the catalog a device the Equipment Setup keeps by id alone is bound to, while its connection is
-// closed and so unknown: the one camera every binding of a device of that id names, or undefined when none does or they
-// disagree.
-export function deviceIdCameraId(state: Pick<CameraBindingsState, 'bindings'>, deviceId: string) {
-	const cameras = new Set(Object.values(state.bindings).flatMap((binding) => (binding.deviceId === deviceId ? [binding.cameraId] : [])))
-	return cameras.size === 1 ? [...cameras][0] : undefined
+// Returns the camera of the catalog a camera device is bound to, or undefined. The device id of a camera determines the
+// hardware id that keys its binding, so the id the Equipment Setup keeps finds it while its connection is closed too.
+export function boundCameraId(state: Pick<CameraBindingsState, 'bindings'>, deviceId: string | undefined) {
+	if (deviceId === undefined) return undefined
+	for (const binding of Object.values(state.bindings)) if (binding.deviceId === deviceId) return binding.cameraId
+	return undefined
 }
 
 // Returns the binding of another device of the connection of device to the camera of the catalog cameraId, or undefined.
 // A camera of the catalog is bound to one device at most: binding it to a device unbinds the one it was bound to, so the
 // Equipment Setup refuses a camera another device of the connection holds, as it refuses one device for two roles.
 export function cameraBoundElsewhere(state: Pick<CameraBindingsState, 'bindings'>, device: BindableDevice, cameraId: string) {
-	return Object.values(state.bindings).find((binding) => binding.cameraId === cameraId && binding.connectionId === device.connectionId && binding.deviceId !== device.id)
+	return Object.values(state.bindings).find((binding) => binding.cameraId === cameraId && binding.connectionId === device.connectionId && binding.hardwareId !== device.hardwareId)
 }
 
 // Returns the camera a device of an endpoint that changed most likely is: the one camera of the catalog, not archived,
@@ -216,7 +208,7 @@ export async function refreshCameraBindings(state: CameraBindingsState, request:
 		if (!response.ok || !refreshes.current(token)) return false
 		const { bindings } = (await response.json()) as CameraBindingsSnapshot
 		if (!refreshes.current(token)) return false
-		state.bindings = refreshes.merge(state.bindings, bindings, (binding) => bindingKey(binding.connectionId, binding.deviceId))
+		state.bindings = refreshes.merge(state.bindings, bindings, (binding) => binding.hardwareId)
 		state.loaded = true
 		return true
 	} catch {
@@ -229,7 +221,7 @@ export async function refreshCameraBindings(state: CameraBindingsState, request:
 // Applies a change of a binding the server published.
 export function handleCameraBindingsEvent(state: CameraBindingsState, event: ServerEvent) {
 	if (event.type !== 'catalogCamera:bindingChanged') return
-	const key = bindingKey(event.connectionId, event.deviceId)
+	const key = event.hardwareId
 	refreshes.updated(key)
 	bindingEvents.set(key, (bindingEvents.get(key) ?? 0) + 1)
 	if (event.binding) state.bindings[key] = event.binding
@@ -241,7 +233,7 @@ export function handleCameraBindingsEvent(state: CameraBindingsState, event: Ser
 // the request: that one is this change or a later one, such as another tab binding the device just after, so the answer
 // is older. Returns the error message of a refusal.
 export async function bindCamera(state: CameraBindingsState, device: BindableDevice, cameraId: string | undefined, request: ApiFetch = browserFetch): Promise<string | undefined> {
-	const key = bindingKey(device.connectionId, device.id)
+	const key = device.hardwareId
 	const events = bindingEvents.get(key) ?? 0
 
 	try {

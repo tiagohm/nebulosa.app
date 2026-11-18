@@ -40,7 +40,6 @@ At the end of the run, update it: the coverage row of the area (date, `git rev-p
 1. Read `AGENTS.md`, the core of `docs/ARCHITECTURE.md`, and the documents under `docs/architecture/` that own the area. They are the contract the code must meet, not proof that it does.
 2. Inspect `git status --short` and preserve existing changes.
 3. Record a baseline: run the tests that cover the area and `bun lint`, so pre-existing failures are not attributed to this run.
-4. Use `codebase-memory-mcp` for symbols, callers, and dependencies when its index is current, with `check_index_coverage` before any negative claim such as "unused". Confirm everything in the source.
 
 ## What to Look For
 

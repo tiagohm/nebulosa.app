@@ -32,12 +32,6 @@ Keep it current: every change that adds, removes, or alters a capability, a cont
 - Reuse the existing stack and the `nebulosa` toolkit. Add a dependency only when they cannot solve the problem and its startup, bundle, and binary-size costs are justified.
 - Do not introduce unrelated formatting, generated files, logs, or local-only configuration.
 
-## Code Discovery
-
-This repository uses `codebase-memory-mcp` (see `.mcp.json`). Prefer graph discovery when it is available and current: `search_graph` to locate symbols, `trace_path` for callers and dependencies, `get_code_snippet` to read a symbol, and `check_index_coverage` before relying on negative or exhaustive claims.
-
-The graph is an index, not source authority. Read the exact implementation before editing. If the MCP service is unavailable or stale, continue with `rg` and direct source inspection. Use `rg` first for string literals, errors, and configuration.
-
 ## Workspaces and Dependency Boundaries
 
 - `core/` (package `nebulosa`): the astronomy toolkit, a git submodule of [`nebulosa.ts`](https://github.com/tiagohm/nebulosa.ts). Its `postinstall` extracts the native libraries, which is why it is listed in the root `trustedDependencies`.

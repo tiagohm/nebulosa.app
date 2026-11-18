@@ -49,5 +49,8 @@ jobs:
             - name: Generate Telescope Model Catalog
               run: bun make:telescopes
 
+            - name: Generate Survey Catalog
+              run: bun make:surveys
+
             - name: Compile
               run: bun compile

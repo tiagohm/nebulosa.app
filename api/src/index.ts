@@ -29,6 +29,7 @@ import { FlatWizardAnalyzer } from './flatwizard.analysis'
 import { FocuserBacklashStore } from './focuserbacklash'
 import { createFocuserRoutes, FocuserCommands } from './focusers'
 import { createFramingRoutes, FramingService, FramingStore } from './framings'
+import { createHipsCutoutRoutes, HipsCutouts } from './framings.hips'
 import { createGuideOutputRoutes, GuideOutputCommands } from './guideoutputs'
 import { createGuidingRoutes, GuidingSessions } from './guiding'
 import { GuidingCalibrationStore } from './guidingcalibration.store'
@@ -355,6 +356,8 @@ export type {
 	MeridianTimingQuality,
 	MeridianTransitionKind,
 } from './meridianflip'
+export type { FramingCutoutErrorCode, FramingCutoutRequest } from './framings.hips'
+export type { HipsSurveyCatalog } from './framings.surveys'
 export type { Framing, FramingCamera, FramingCameraRole, FramingDocument, FramingDuplicateRequest, FramingErrorCode, FramingEvent, FramingField, FramingFieldRequest, FramingOptics, FramingOpticsSource, FramingSaveRequest, FramingSensor, FramingSetupOptics, FramingsSnapshot, FramingTelescope } from './framings'
 export type { MountRemoteClient, MountRemoteControlEvent, MountRemoteErrorCode, MountRemoteKey, MountRemoteProtocol, MountRemoteServer, MountRemoteSnapshot, MountRemoteStartRequest } from './mountremotecontrol'
 export type { ObservatoryCamera, ObservatoryCameraErrorCode, ObservatoryCameraEvent, ObservatoryCameraSaveRequest, ObservatoryCameraSecretKeyState, ObservatoryCameraStream, ObservatoryCameraStreamCode, ObservatoryCameraStreamState, ObservatoryCamerasSnapshot, RtspTransport } from './observatorycameras'
@@ -1588,6 +1591,7 @@ export const routes = {
 	...createAstroWeatherRoutes(astroWeather),
 	...createObservingPlannerRoutes(observingPlanner),
 	...createFramingRoutes(framings),
+	...createHipsCutoutRoutes(new HipsCutouts()),
 	...createJupiterRoutes(jupiterPlanner),
 	...createSaturnRoutes(saturnPlanner),
 	...createPlanetaryEventsRoutes(planetaryEvents),

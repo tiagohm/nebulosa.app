@@ -338,8 +338,17 @@ export function drawDsoSymbol(ctx: CanvasRenderingContext2D, type: DeepSkyObject
 	}
 }
 
-// Draws a moving body symbol: a tailed circle for comets, a square with two solar panels for artificial satellites, and a
-// filled disc otherwise.
+// Radius in pixels of the filled nucleus of a comet, the size of an asteroid's disc.
+const COMET_NUCLEUS_RADIUS = 3
+
+// Radius in pixels of the translucent coma around a comet's nucleus.
+const COMET_COMA_RADIUS = 6
+
+// Opacity of a comet's coma, in [0, 1].
+const COMET_COMA_ALPHA = 0.35
+
+// Draws a moving body symbol: a filled nucleus inside a translucent round coma for comets, with no tail since its direction
+// is not computed, a square with two solar panels for artificial satellites, and a filled disc otherwise.
 export function drawMovingBodySymbol(ctx: CanvasRenderingContext2D, type: MovingBodyType, x: number, y: number) {
 	if (type === 'satellite') {
 		ctx.fillRect(x - 2.5, y - 2.5, 5, 5)
@@ -351,13 +360,15 @@ export function drawMovingBodySymbol(ctx: CanvasRenderingContext2D, type: Moving
 	}
 
 	if (type === 'comet') {
+		const alpha = ctx.globalAlpha
+		ctx.globalAlpha = alpha * COMET_COMA_ALPHA
 		ctx.beginPath()
-		ctx.moveTo(x - 6, y + 3)
-		ctx.lineTo(x - 1, y)
-		ctx.stroke()
+		ctx.arc(x, y, COMET_COMA_RADIUS, 0, TAU)
+		ctx.fill()
+		ctx.globalAlpha = alpha
 		ctx.beginPath()
-		ctx.arc(x, y, 2.8, 0, TAU)
-		ctx.stroke()
+		ctx.arc(x, y, COMET_NUCLEUS_RADIUS, 0, TAU)
+		ctx.fill()
 		return
 	}
 

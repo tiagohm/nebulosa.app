@@ -67,9 +67,9 @@
 	--color-map-ecliptic: oklch(0.6 0.08 325);
 	--color-map-meridian: oklch(0.6 0.08 145);
 	--color-map-deep-sky: oklch(0.6 0.08 100);
-	--color-map-planet: oklch(0.6 0.08 310);
-	--color-map-asteroid: oklch(0.6 0.08 60);
-	--color-map-comet: oklch(0.6 0.08 90);
+	--color-map-planet: oklch(0.6 0.14 310);
+	--color-map-asteroid: oklch(0.6 0.14 20);
+	--color-map-comet: oklch(0.6 0.14 160);
 	--color-map-radiant: oklch(0.6 0.08 360);
 }
 

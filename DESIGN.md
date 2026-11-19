@@ -25,9 +25,9 @@ colors:
     map-ecliptic: 'oklch(0.6 0.08 325)'
     map-meridian: 'oklch(0.6 0.08 145)'
     map-deep-sky: 'oklch(0.6 0.08 100)'
-    map-planet: 'oklch(0.6 0.08 310)'
-    map-asteroid: 'oklch(0.6 0.08 60)'
-    map-comet: 'oklch(0.6 0.08 90)'
+    map-planet: 'oklch(0.6 0.14 310)'
+    map-asteroid: 'oklch(0.6 0.14 20)'
+    map-comet: 'oklch(0.6 0.14 160)'
     map-radiant: 'oklch(0.6 0.08 360)'
 typography:
     headline:

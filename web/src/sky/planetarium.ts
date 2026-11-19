@@ -9,6 +9,7 @@ import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } fr
 import { fromDate, type ImageFootprint, ofDateMatrix, outlineLabel, type ScreenPoint, type SkyCoordinateIntent, type SkyPoint, toDate } from './footprint'
 import { formatApparentSize } from './format'
 import { isCometSpkId, type KernelBody } from './kernels.sky'
+import { mapDataCovers, type SkyMapCatalog, skyMapAt } from './mapdata'
 import { MeteorRadiantLayer, type MeteorRadiantTargets } from './meteors.sky'
 import { type MountPoint, mountRuntime } from './mount'
 import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, SKY_POINT_NAME, SKY_POINT_SHAPE_ID, SKY_POINT_SHAPE_TYPE, type SkyPointData, type SkyPointRef, type SkySelectionRef } from './objects'
@@ -17,7 +18,7 @@ import { isRememberable, type RememberedObject, RememberedObjects, type Remember
 import { skySatelliteState } from './satellite/satellite'
 import { SatelliteLayer, type SatelliteTargets } from './satellites.sky'
 import { createRequestGuard } from './selection'
-import { browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapDataCovers, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, type SkySelection, selectSkyObject, skyState } from './sky'
+import { browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapCatalog, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, type SkySelection, selectSkyObject, skyState } from './sky'
 
 // The Sky workspace's star map, kept for the whole tab: the Celestial instance, its catalogs, the moving
 // bodies, and the selection highlight live here rather than in React, so leaving the workspace only
@@ -25,8 +26,9 @@ import { browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapData
 // view, data, and selection. A new map is created only when the kind of chart changes: the observer's
 // local sky (horizontal, zenith at the center) when there is an observer, an equatorial chart of the
 // whole sky otherwise. Objects below the local horizon are neither drawn nor highlighted. The map shows
-// the instant of the Sky simulation clock (./clock); its catalogs are reloaded in place when the clock
-// stops more than a year away from the instant they were computed for. The mount's reported position is
+// the instant of the Sky simulation clock (./clock); its J2000 catalog, downloaded once per tab, is moved and precessed
+// to the instant in the browser (./mapdata) and computed again in place whenever the clock reaches an instant more than a
+// year away from the one it was computed for, playing or not. The mount's reported position is
 // drawn as a selectable marker while the clock shows the real time, and the view can be centered on it
 // or follow it until the user pans. A click on an empty part of the map selects the Sky point there: fixed J2000
 // coordinates, converted from the frame of the loaded catalogs and marked while selected, so the mount can be sent
@@ -354,7 +356,9 @@ export class Planetarium {
 	#bodiesBusy = false
 	// Instant (Unix milliseconds) of the latest update that arrived while body positions were requested.
 	#bodiesPending?: number
-	// Instant the loaded catalogs were computed for, Unix milliseconds; absent before the first load.
+	// J2000 map catalog of the tab; absent before it is loaded.
+	#catalog?: SkyMapCatalog
+	// Instant the drawn catalogs were computed for, Unix milliseconds; absent before the first load.
 	#dataTime?: number
 	// Small bodies of the Horizons kernels of the library, by reference key, drawn once their first position arrives
 	// unless they are remembered, whose object then draws them.
@@ -548,27 +552,18 @@ export class Planetarium {
 		return this.#dataMatrix.matrix
 	}
 
-	// Loads the map data for the instant shown (downloaded once per tab and epoch), or retries after a
-	// failure. A reload for another epoch keeps the current data drawn until the new data arrives.
+	// Loads the J2000 map catalog (downloaded once per tab) and shows it at the instant shown, or retries after a failure.
 	load() {
 		planetariumState.status = 'loading'
 		planetariumState.error = undefined
 		const request = this.#loadGuard.begin()
 
-		loadSkyMapData().then(
-			({ stars, dsos, constellations, time }) => {
+		loadSkyMapCatalog().then(
+			(catalog) => {
 				if (this.#destroyed || !request.current()) return
-				this.#dataTime = time
-				this.#names = { typeNames: dsos.typeNames, starDesignations: stars.designations, constellationCodes: new Map(constellations.labels.map((e) => [e.name, e.code])) }
-				this.celestial.loadStars({ ra: stars.ra as number[], dec: stars.dec as number[], mag: stars.mag as number[], bv: stars.bv as number[], names: stars.names, ids: stars.ids })
-				this.celestial.loadDeepSkyObjects(dsos.ids.map((id, i) => ({ id, name: dsos.names[i], type: dsos.types[i], rightAscension: dsos.ra[i], declination: dsos.dec[i], magnitude: dsos.mag[i] ?? undefined, sizeArcMin: dsos.size[i] || undefined })))
-				this.celestial.loadConstellations({ lines: constellations.lines as ConstellationLine[], boundaries: constellations.boundaries as ConstellationLine[], labels: constellations.labels.map(({ name, rightAscension, declination }) => ({ name, rightAscension, declination })) })
+				this.#catalog = catalog
+				this.#showEpoch(this.time)
 				planetariumState.status = 'ready'
-				// The Sky point is marked again in the frame of the new data.
-				this.#skyPointKey = undefined
-				this.syncSelection()
-				this.#drawImageShapes()
-				this.#meteorRadiants.redraw()
 			},
 			(error: unknown) => {
 				if (this.#destroyed || !request.current()) return
@@ -576,6 +571,30 @@ export class Planetarium {
 				planetariumState.status = 'error'
 			},
 		)
+	}
+
+	// Draws the catalog at its positions of date for an instant (Unix milliseconds), computed in the browser (./mapdata),
+	// and redraws what is placed in the frame of the map data: the selection, the Sky point, the image shapes, and the
+	// meteor radiants.
+	#showEpoch(time: number) {
+		const catalog = this.#catalog
+		if (!catalog) return
+		const { stars, dsos, constellations } = skyMapAt(catalog, time)
+		this.#dataTime = time
+		this.#names = { typeNames: dsos.typeNames, starDesignations: stars.designations, constellationCodes: new Map(constellations.labels.map((e) => [e.name, e.code])) }
+		this.celestial.loadStars({ ra: stars.ra as number[], dec: stars.dec as number[], mag: stars.mag as number[], bv: stars.bv as number[], names: stars.names, ids: stars.ids })
+		this.celestial.loadDeepSkyObjects(dsos.ids.map((id, i) => ({ id, name: dsos.names[i], type: dsos.types[i], rightAscension: dsos.ra[i], declination: dsos.dec[i], magnitude: dsos.mag[i] ?? undefined, sizeArcMin: dsos.size[i] || undefined })))
+		this.celestial.loadConstellations({ lines: constellations.lines as ConstellationLine[], boundaries: constellations.boundaries as ConstellationLine[], labels: constellations.labels.map(({ name, rightAscension, declination }) => ({ name, rightAscension, declination })) })
+		// The Sky point is marked again in the frame of the new data.
+		this.#skyPointKey = undefined
+		this.syncSelection()
+		this.#drawImageShapes()
+		this.#meteorRadiants.redraw()
+	}
+
+	// Computes the map data again for an instant (Unix milliseconds) more than MAP_DATA_EPOCH_MS from the data's.
+	#followEpoch(time: number) {
+		if (this.#dataTime !== undefined && !mapDataCovers(this.#dataTime, time)) this.#showEpoch(time)
 	}
 
 	// Follows an observer: its location on the map and in the requests of bodies and selections.
@@ -847,8 +866,8 @@ export class Planetarium {
 	// SKY_REALTIME_TICK_MS while following the real time, frequently while playing, and none for a fixed
 	// instant. Each update refreshes the selection's position and events for the same instant as the map:
 	// on every real-time update, every PLAYING_SELECTION_TICKS updates while playing, and once
-	// FIXED_SETTLE_MS after a fixed instant settles. Once the clock is not playing, reloads the catalogs
-	// when the instant is more than a year away from theirs.
+	// FIXED_SETTLE_MS after a fixed instant settles. Each update also computes the catalogs again when the instant is
+	// more than a year away from theirs.
 	#followClock() {
 		this.#stopClock()
 
@@ -861,6 +880,7 @@ export class Planetarium {
 			this.#anchor = time !== this.#shownTime ? this.#viewAnchor() : undefined
 			this.#shownTime = time
 			this.celestial.setTime(time)
+			this.#followEpoch(time)
 			if (mode !== 'fixed' && ticks++ % (mode === 'playing' ? PLAYING_SELECTION_TICKS : 1) === 0) this.#refreshSelection(mode, time)
 		}
 
@@ -868,7 +888,6 @@ export class Planetarium {
 
 		if (mode === 'fixed') this.#settleTimer = setTimeout(() => this.#refreshSelection(mode, this.time), FIXED_SETTLE_MS)
 		else this.#clockTimer = setInterval(tick, mode === 'playing' ? PLAYING_INTERVAL_MS : SKY_REALTIME_TICK_MS)
-		if (mode !== 'playing' && this.#dataTime !== undefined && !mapDataCovers(this.#dataTime, this.time)) this.load()
 	}
 
 	// Point of date (radians) at the middle of the view that a clock update keeps there: only on the local

@@ -4,15 +4,15 @@ import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../http'
 import { type GeographicLocation, siteObserver } from '../location/site'
 import { skyClock, skyTime } from './clock'
 import { MAP_STAR_MAGNITUDE_LIMIT } from './display'
+import type { SkyMapCatalog } from './mapdata'
 import { refKey, type SkySelectionRef } from './objects'
 import { createRequestGuard } from './selection'
 
 // State and API access of the tab's Sky workspace: the selected object with its catalog, minor body,
 // or constellation data, position, and events; and the contextual panel view. The selection is independent of where it came from (a click on the map or a search
-// result); only the latest selection's responses are applied. Map data (stars, deep-sky objects, and
-// constellations) is kept in memory for the tab, so returning to the workspace never downloads it again;
-// it is downloaded again only for an instant more than a year away from the one it was computed for, as
-// precession moves its positions of date. Positions and events are computed for the instant of the Sky
+// result); only the latest selection's responses are applied. The J2000 map catalog (stars, deep-sky objects, and
+// constellations) is downloaded once and kept in memory for the tab, so returning to the workspace or moving the clock
+// by any span never downloads it again; the map computes its positions of date itself (./mapdata). Positions and events are computed for the instant of the Sky
 // simulation clock (./clock), which is the real current time unless the user chose another. The mount
 // marker can be selected too: its identity and name are kept here, and its position is the mount
 // runtime's (./mount), never requested from the sky API. The Sky point, selected by a click on an empty part of the map,
@@ -78,18 +78,6 @@ export interface SkySelectionInput {
 	readonly minorBody?: MinorBody
 }
 
-// Map data of the Sky workspace.
-export interface SkyMapData {
-	// Stars to render.
-	readonly stars: SkyStarData
-	// Deep-sky objects to render.
-	readonly dsos: SkyDeepSkyData
-	// Constellation figures, boundaries, and labels.
-	readonly constellations: SkyConstellations
-	// Instant the positions of date were computed for, Unix milliseconds (UTC).
-	readonly time: number
-}
-
 // Browser services the store uses, replaced in tests.
 export interface SkyIo {
 	// Performs HTTP requests to the API.
@@ -120,48 +108,33 @@ const FRESH_POSITION_MS = 5_000
 // Refresh while the clock follows the real time: positions younger than FRESH_POSITION_MS are kept.
 export const REALTIME_REFRESH: SkyRefreshOptions = { tolerance: FRESH_POSITION_MS, mode: 'accurate' }
 
-// Largest distance in milliseconds between the instant shown and the instant of the map data before the
-// data is downloaded again: one Julian year, about 50″ of precession.
-export const MAP_DATA_EPOCH_MS = 365.25 * 86_400_000
-
 // Sky workspace state of the tab.
 export const skyState = proxy<SkyState>({ panel: 'inspector' })
 
 // Requests of the current selection; a new selection supersedes them.
 const selectionGuard = createRequestGuard()
 
-// Latest map data download of the tab, started on the first visit to the workspace, with its instant.
-let mapData: { readonly time: number; readonly data: Promise<SkyMapData> } | undefined
+// Download of the J2000 map catalog of the tab, started on the first visit to the workspace.
+let mapCatalog: Promise<SkyMapCatalog> | undefined
 
 // Posts a JSON body to the API and returns the JSON answer.
 function postJson<T>(io: SkyIo, input: string, body: unknown, signal?: AbortSignal): Promise<T> {
 	return fetchJson<T>(io, input, jsonInit('POST', body, signal))
 }
 
-// Whether map data computed for an instant can show another instant (both Unix milliseconds).
-export function mapDataCovers(dataTime: number, time: number) {
-	return Math.abs(time - dataTime) <= MAP_DATA_EPOCH_MS
-}
+// Returns the J2000 map catalog, downloading it on the first call of the tab; a failed download is forgotten so the
+// next call retries.
+export function loadSkyMapCatalog(io: SkyIo = browserSkyIo): Promise<SkyMapCatalog> {
+	if (mapCatalog) return mapCatalog
 
-// Returns the map data for the instant shown, downloading it on the first call of the tab and again only
-// when the instant is more than MAP_DATA_EPOCH_MS away from the data's. Only the latest download is
-// kept; a failed download is forgotten so the next call retries.
-export function loadSkyMapData(io: SkyIo = browserSkyIo): Promise<SkyMapData> {
-	const time = io.time()
+	const download = Promise.all([fetchJson<SkyStarData>(io, `/api/sky/catalog/stars?magnitude=${MAP_STAR_MAGNITUDE_LIMIT}`), fetchJson<SkyDeepSkyData>(io, '/api/sky/catalog/dsos'), fetchJson<SkyConstellations>(io, '/api/sky/constellations')]).then(([stars, dsos, constellations]) => ({ stars, dsos, constellations }))
+	mapCatalog = download
 
-	if (!mapData || !mapDataCovers(mapData.time, time)) {
-		const data = Promise.all([fetchJson<SkyStarData>(io, `/api/sky/catalog/stars?time=${time}&magnitude=${MAP_STAR_MAGNITUDE_LIMIT}`), fetchJson<SkyDeepSkyData>(io, `/api/sky/catalog/dsos?time=${time}`), fetchJson<SkyConstellations>(io, `/api/sky/constellations?time=${time}`)]).then(
-			([stars, dsos, constellations]) => ({ stars, dsos, constellations, time }),
-		)
-		const download = { time, data }
-		mapData = download
+	download.catch(() => {
+		if (mapCatalog === download) mapCatalog = undefined
+	})
 
-		data.catch(() => {
-			if (mapData === download) mapData = undefined
-		})
-	}
-
-	return mapData.data
+	return download
 }
 
 // Searches the local catalog and the major bodies.

@@ -27,11 +27,12 @@ test('object details and 404', async () => {
 	expect(missing.status).toBe(404)
 })
 
-test('star data honors the requested time', async () => {
-	const response = routes['/api/sky/catalog/stars'].GET(new Request('http://localhost/api/sky/catalog/stars?time=946728000000'))
+test('star data is the J2000 catalog with proper motion, up to a magnitude', async () => {
+	const response = routes['/api/sky/catalog/stars'].GET(new Request('http://localhost/api/sky/catalog/stars'))
 	const stars = (await response.json()) as SkyStarData
-	expect(stars.time).toBe(946728000000)
 	expect(stars.ids).toHaveLength(4)
+	expect(stars.pmRA).toHaveLength(4)
+	expect((await routes['/api/sky/catalog/stars'].GET(new Request('http://localhost/api/sky/catalog/stars?magnitude=1')).json()) as SkyStarData).toMatchObject({ ids: [32263, 27919] })
 })
 
 test('position of a catalog object with events', async () => {

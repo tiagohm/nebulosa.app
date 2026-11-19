@@ -64,12 +64,6 @@ const SATELLITE_SEARCH_LIMIT = 5
 // Most meteor showers a search lists, after the satellites and before the catalog.
 const METEOR_SHOWER_SEARCH_LIMIT = 5
 
-// Reads the `time` query parameter (Unix milliseconds); the current time when absent.
-function timeParam(params: URLSearchParams) {
-	const time = params.get('time')
-	return time ? +time : Date.now()
-}
-
 // Stable key of an object identity, used to cache its events.
 function refKey(ref: SkyObjectRef) {
 	if (ref.kind === 'catalog') return `catalog:${ref.id}`
@@ -130,24 +124,22 @@ export function createSkyRoutes(services: SkyServices) {
 
 	return {
 		'/api/sky/catalog/stars': {
-			// Stars to render at the equator of `time`, up to the `magnitude` limit (all when absent).
+			// J2000 stars to render with their proper motion, up to the `magnitude` limit (all when absent).
 			GET: (req: Request) => {
-				const params = new URL(req.url).searchParams
-				const magnitude = params.get('magnitude')
-				return Response.json(renderStars(catalog, timeParam(params), magnitude ? +magnitude : undefined))
+				const magnitude = new URL(req.url).searchParams.get('magnitude')
+				return Response.json(renderStars(catalog, magnitude ? +magnitude : undefined))
 			},
 		},
 		'/api/sky/catalog/dsos': {
-			// Deep-sky objects to render at the equator of `time`, up to the `magnitude` limit.
+			// J2000 deep-sky objects to render, up to the `magnitude` limit.
 			GET: (req: Request) => {
-				const params = new URL(req.url).searchParams
-				const magnitude = params.get('magnitude')
-				return Response.json(renderDeepSky(catalog, timeParam(params), magnitude ? +magnitude : DEFAULT_DEEP_SKY_MAGNITUDE_LIMIT))
+				const magnitude = new URL(req.url).searchParams.get('magnitude')
+				return Response.json(renderDeepSky(catalog, magnitude ? +magnitude : DEFAULT_DEEP_SKY_MAGNITUDE_LIMIT))
 			},
 		},
 		'/api/sky/constellations': {
-			// Constellation figures, boundaries, and labels at the equator of `time`.
-			GET: (req: Request) => Response.json(renderConstellations(constellations, timeParam(new URL(req.url).searchParams))),
+			// J2000 constellation figures, boundaries, and labels.
+			GET: () => Response.json(renderConstellations(constellations)),
 		},
 		'/api/sky/constellations/:code': {
 			// A constellation by its upper-case IAU code; 404 when unknown.

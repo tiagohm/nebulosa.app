@@ -162,40 +162,40 @@ export interface SkyCatalogObject {
 	readonly orientation?: number
 }
 
-// Stars to render, as parallel arrays. Positions are referred to the true equator and equinox of `time`
-// (precession, nutation, and proper motion applied), the frame the star map projects.
+// Stars to render, as parallel arrays, at their J2000 catalog positions with their proper motion: independent of any
+// instant, as the map moves and precesses them to the true equator and equinox of the instant it shows.
 export interface SkyStarData {
-	// Instant the positions were computed for, Unix milliseconds (UTC).
-	readonly time: number
 	// Catalog id of each star.
 	readonly ids: readonly number[]
 	// Proper name of each star; empty when it has none.
 	readonly names: readonly string[]
 	// Preferred catalog designation of each star (Bayer, Flamsteed, HIP, HD, or HR); empty when it has none.
 	readonly designations: readonly string[]
-	// Right ascension of each star in radians.
+	// J2000 (ICRS) right ascension of each star at epoch J2000, in radians.
 	readonly ra: readonly number[]
-	// Declination of each star in radians.
+	// J2000 declination of each star at epoch J2000, in radians.
 	readonly dec: readonly number[]
+	// Proper motion dα/dt of each star in milliarcseconds of right ascension per Julian year (not multiplied by cos δ).
+	readonly pmRA: readonly number[]
+	// Proper motion in declination of each star in milliarcseconds per Julian year.
+	readonly pmDEC: readonly number[]
 	// Visual magnitude of each star.
 	readonly mag: readonly number[]
 	// B-V color index of each star in magnitudes; 0.65 when unknown.
 	readonly bv: readonly number[]
 }
 
-// Deep-sky objects to render, as parallel arrays, in the same frame as SkyStarData.
+// Deep-sky objects to render, as parallel arrays, at their J2000 positions, which the map precesses.
 export interface SkyDeepSkyData {
-	// Instant the positions were computed for, Unix milliseconds (UTC).
-	readonly time: number
 	// Catalog id of each object.
 	readonly ids: readonly number[]
 	// Display name of each object.
 	readonly names: readonly string[]
 	// Stellarium object type of each object.
 	readonly types: readonly number[]
-	// Right ascension of each object in radians.
+	// J2000 (ICRS) right ascension of each object in radians.
 	readonly ra: readonly number[]
-	// Declination of each object in radians.
+	// J2000 declination of each object in radians.
 	readonly dec: readonly number[]
 	// Visual magnitude of each object; null when unknown.
 	readonly mag: readonly (number | null)[]
@@ -205,11 +205,9 @@ export interface SkyDeepSkyData {
 	readonly typeNames: readonly string[]
 }
 
-// Constellation figures, boundaries, and labels. Vertices are [right ascension, declination] in
-// radians, in the same frame as SkyStarData.
+// Constellation figures, boundaries, and labels. Vertices are J2000 [right ascension, declination] in radians, which the
+// map precesses.
 export interface SkyConstellations {
-	// Instant the positions were computed for, Unix milliseconds (UTC).
-	readonly time: number
 	// Stick-figure polylines.
 	readonly lines: readonly (readonly (readonly [number, number])[])[]
 	// Boundary polylines.

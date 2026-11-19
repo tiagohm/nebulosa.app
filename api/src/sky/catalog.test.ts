@@ -1,6 +1,6 @@
 import { Database } from 'bun:sqlite'
 import { describe, expect, test } from 'bun:test'
-import { mas } from 'nebulosa/src/math/units/angle'
+import { mas, toMas } from 'nebulosa/src/math/units/angle'
 import { catalogObject, catalogStars, fieldConstellations, fieldObjects, queryCatalog, renderConstellations, renderDeepSky, renderStars, searchCatalog } from './catalog'
 import { fixtureCatalog } from './fixture'
 import { assertSkyCatalogSchema } from './schema'
@@ -84,34 +84,35 @@ test('catalog object', () => {
 	expect(catalogObject(db, 1)).toBeUndefined()
 })
 
-test('render stars at the equator of date', () => {
-	const stars = renderStars(db, TIME)
-	expect(stars.time).toBe(TIME)
+test('render stars at their J2000 position with their proper motion', () => {
+	const stars = renderStars(db)
 	expect(stars.ids).toEqual([32263, 27919, 22449, 22509])
 	expect(stars.names).toEqual(['Sirius', 'Betelgeuse', 'Tabit', ''])
 	expect(stars.designations).toEqual(['Alp CMa', 'Alp Ori', 'Pi-3 Ori', 'Pi-2 Ori'])
 	expect(stars.mag[0]).toBe(-1.44)
 	expect(stars.bv[0]).toBe(0.65)
-	// Precession over 26 years moves Sirius about 0.3° east in right ascension.
-	const shift = stars.ra[0] - 1.7677953696021995
-	expect(shift).toBeGreaterThan(0.0045)
-	expect(shift).toBeLessThan(0.006)
+	expect(stars.ra[0]).toBeCloseTo(1.7677953696021995, 7)
+	expect(stars.dec[0]).toBeCloseTo(-0.291751258517685, 7)
+	// The catalog's proper motion of each star, in mas per Julian year, as stored.
+	const sirius = catalogObject(db, 32263)!
+	expect(stars.pmRA[0]).toBeCloseTo(toMas(sirius.pmRA), 2)
+	expect(stars.pmDEC[0]).toBeCloseTo(toMas(sirius.pmDEC), 2)
 })
 
 test('render deep-sky objects', () => {
-	const dsos = renderDeepSky(db, TIME)
+	const dsos = renderDeepSky(db)
 	// The PGC galaxy has no magnitude and no classic designation, so it is not rendered.
 	expect(dsos.ids).toEqual([1000255, 1001879])
 	expect(dsos.names).toEqual(['Andromeda Galaxy', 'Great Orion Nebula'])
 	expect(dsos.types).toEqual([1, 18])
 	expect(dsos.size[0]).toBeCloseTo(189.1, 1)
 	expect(dsos.typeNames[18]).toBe('HII Region')
-	expect(renderDeepSky(db, TIME, 3.5).ids).toEqual([1000255])
+	expect(renderDeepSky(db, 3.5).ids).toEqual([1000255])
 })
 
 test('render constellations', () => {
-	const data = renderConstellations({ lines: [[[1.7677953696021995, -0.291751258517685]]], boundaries: [], labels: [{ name: 'Canis Major', rightAscension: 1.8, declination: -0.4 }] }, TIME)
-	expect(data.lines[0][0][0]).toBeCloseTo(renderStars(db, TIME).ra[0], 3)
+	const data = renderConstellations({ lines: [[[1.7677953696021995, -0.291751258517685]]], boundaries: [], labels: [{ name: 'Canis Major', rightAscension: 1.8, declination: -0.4 }] })
+	expect(data.lines[0][0][0]).toBeCloseTo(renderStars(db).ra[0], 7)
 	expect(data.labels[0].name).toBe('Canis Major')
 })
 
@@ -121,12 +122,12 @@ test('schema version', () => {
 })
 
 test('render stars up to a magnitude', () => {
-	expect(renderStars(db, TIME, 1).ids).toEqual([32263, 27919])
-	expect(renderStars(db, TIME, -2).ids).toEqual([])
+	expect(renderStars(db, 1).ids).toEqual([32263, 27919])
+	expect(renderStars(db, -2).ids).toEqual([])
 })
 
 test('constellation labels carry their code', () => {
-	const data = renderConstellations({ lines: [], boundaries: [], labels: [{ name: 'Serpens Cauda', rightAscension: 4.8, declination: -0.1 }] }, TIME)
+	const data = renderConstellations({ lines: [], boundaries: [], labels: [{ name: 'Serpens Cauda', rightAscension: 4.8, declination: -0.1 }] })
 	expect(data.labels[0].code).toBe('SER')
 })
 

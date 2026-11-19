@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test'
 import { proxy } from 'valtio'
-import { changeSkyObserver, clearSkySelection, loadSkyMapData, REALTIME_REFRESH, refreshSkySelection, selectSkyObject, type SkyIo, type SkyState } from './sky'
+import { MAP_STAR_MAGNITUDE_LIMIT } from './display'
+import { changeSkyObserver, clearSkySelection, loadSkyMapCatalog, REALTIME_REFRESH, refreshSkySelection, selectSkyObject, type SkyIo, type SkyState } from './sky'
 
 // Fake API whose responses are released by the test, in any order.
 function fakeApi() {
@@ -142,28 +143,27 @@ test('positions are computed for the instant shown', async () => {
 	expect(pending[0].body).toMatchObject({ time: 12_000_000, mode: 'accurate' })
 })
 
-test('map data is downloaded again only for an instant more than a year away', async () => {
+test('the J2000 map catalog is downloaded once per tab, whatever the instant, and again after a failure', async () => {
 	const { io, pending, release } = fakeApi()
 	let time = Date.UTC(2026, 0, 1)
 	const clocked: SkyIo = { ...io, time: () => time }
-	const answer = async () => {
-		await release((url) => url.startsWith('/api/sky/catalog/stars'), {})
-		await release((url) => url.startsWith('/api/sky/catalog/dsos'), {})
-		await release((url) => url.startsWith('/api/sky/constellations'), {})
-	}
 
-	const first = loadSkyMapData(clocked)
+	const failed = loadSkyMapCatalog(clocked)
+	expect(pending.map((e) => e.url)).toEqual([`/api/sky/catalog/stars?magnitude=${MAP_STAR_MAGNITUDE_LIMIT}`, '/api/sky/catalog/dsos', '/api/sky/constellations'])
+	await release((url) => url.startsWith('/api/sky/catalog/stars'), { error: 'down' }, 503)
+	await release((url) => url.startsWith('/api/sky/catalog/dsos'), {})
+	await release((url) => url.startsWith('/api/sky/constellations'), {})
+	await expect(failed).rejects.toThrow()
+
+	const first = loadSkyMapCatalog(clocked)
+	expect(first).not.toBe(failed)
 	expect(pending).toHaveLength(3)
-	await answer()
-	expect((await first).time).toBe(time)
+	await release((url) => url.startsWith('/api/sky/catalog/stars'), { ids: [1] })
+	await release((url) => url.startsWith('/api/sky/catalog/dsos'), { ids: [2] })
+	await release((url) => url.startsWith('/api/sky/constellations'), { lines: [] })
+	expect(await first).toEqual({ stars: { ids: [1] }, dsos: { ids: [2] }, constellations: { lines: [] } } as never)
 
-	time = Date.UTC(2026, 11, 1)
-	expect(loadSkyMapData(clocked)).toBe(first)
+	time = Date.UTC(1500, 0, 1)
+	expect(loadSkyMapCatalog(clocked)).toBe(first)
 	expect(pending).toHaveLength(0)
-
-	time = Date.UTC(2028, 0, 1)
-	const second = loadSkyMapData(clocked)
-	expect(pending[0].url).toContain(`time=${time}`)
-	await answer()
-	expect((await second).time).toBe(time)
 })

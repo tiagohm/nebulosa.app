@@ -14,8 +14,8 @@ import type { SkyCatalogNameRow, SkyCatalogObjectRow } from './schema'
 import type { SkyCatalogClass, SkyCatalogEntry, SkyCatalogObject, SkyCatalogPage, SkyCatalogQuery, SkyConstellations, SkyDeepSkyData, SkySearchResult, SkyStarData } from './types'
 
 // Queries of the sky catalog database: local search by designation and name, the filtered and paged listing the
-// Observing Planner browses, the catalog data of one object, the columnar star and deep-sky data the star map renders, with positions referred to the
-// true equator and equinox of the requested instant, the J2000 stars the camera simulator renders, and the J2000 objects
+// Observing Planner browses, the catalog data of one object, the columnar star, deep-sky, and constellation data the star
+// map renders, at their J2000 positions with the stars' proper motion (the map moves and precesses them itself), the J2000 stars the camera simulator renders, and the J2000 objects
 // and constellation figures of a field the image annotation projects.
 // Every function takes the database, so tests can pass an in-memory one built with createSkyCatalogSchema.
 
@@ -399,29 +399,6 @@ export function catalogObject(db: Database, id: number): SkyCatalogObject | unde
 	}
 }
 
-// Converts J2000 coordinates to the true equator and equinox of date with a precomputed
-// precession-nutation matrix.
-class EquatorOfDate {
-	readonly #matrix: Mat3
-	readonly #input: MutVec3 = [0, 0, 0]
-	readonly #output: MutVec3 = [0, 0, 0]
-	// Julian years elapsed since J2000, for proper motion.
-	readonly years: number
-
-	// Prepares the conversion to the equator of `time`.
-	constructor(time: Time) {
-		this.#matrix = precessionNutationMatrix(time)
-		this.years = (time.day - J2000 + time.fraction) / DAYS_PER_JULIAN_YEAR
-	}
-
-	// Returns [right ascension in [0, 2π), declination] in radians of a J2000 position.
-	convert(rightAscension: number, declination: number): [number, number] {
-		const [x, y, z] = matMulVec(this.#matrix, eraS2c(rightAscension, declination, this.#input), this.#output)
-		const [ra, dec] = eraC2s(x, y, z)
-		return [normalizeAngle(ra), dec]
-	}
-}
-
 // J2000 data of a rendered star, read once per database.
 interface StarRow {
 	// Catalog id.
@@ -498,23 +475,32 @@ function roundAngle(value: number) {
 	return Math.round(value * 1e7) / 1e7
 }
 
-// Returns every star of the catalog for rendering, at the true equator of `time` (Unix milliseconds).
-// Proper motion is applied linearly from J2000, which is accurate to well under an arcsecond over the
-// decades the map is used for.
-export function renderStars(db: Database, time: number, magnitudeLimit: number = Number.POSITIVE_INFINITY): SkyStarData {
-	const equator = new EquatorOfDate(timeUnix(time / 1000, true))
+// Milliarcseconds in one radian.
+const MAS_PER_RADIAN = 206_264_806.247
+
+// Returns a proper motion in radians per Julian year in milliarcseconds per Julian year, rounded to 0.01 mas/yr (1 mas
+// over a century), to keep payloads small.
+function roundProperMotion(value: number) {
+	return Math.round(value * MAS_PER_RADIAN * 100) / 100
+}
+
+// Returns every star of the catalog for rendering, up to `magnitudeLimit`, at its J2000 catalog position with its proper
+// motion: the map moves and precesses them to the instant it shows, so the data does not depend on it.
+export function renderStars(db: Database, magnitudeLimit: number = Number.POSITIVE_INFINITY): SkyStarData {
 	const all = starRows(db)
 	const rows = Number.isFinite(magnitudeLimit) ? all.slice(0, upperBound(all, magnitudeLimit)) : all
-	const data = { time, ids: new Array<number>(rows.length), names: new Array<string>(rows.length), designations: new Array<string>(rows.length), ra: new Array<number>(rows.length), dec: new Array<number>(rows.length), mag: new Array<number>(rows.length), bv: new Array<number>(rows.length) }
+	const n = rows.length
+	const data = { ids: new Array<number>(n), names: new Array<string>(n), designations: new Array<string>(n), ra: new Array<number>(n), dec: new Array<number>(n), pmRA: new Array<number>(n), pmDEC: new Array<number>(n), mag: new Array<number>(n), bv: new Array<number>(n) }
 
-	for (let i = 0; i < rows.length; i++) {
+	for (let i = 0; i < n; i++) {
 		const row = rows[i]
-		const [ra, dec] = equator.convert(row.rightAscension + row.pmRA * equator.years, row.declination + row.pmDEC * equator.years)
 		data.ids[i] = row.id
 		data.names[i] = row.name
 		data.designations[i] = row.designation
-		data.ra[i] = roundAngle(ra)
-		data.dec[i] = roundAngle(dec)
+		data.ra[i] = roundAngle(row.rightAscension)
+		data.dec[i] = roundAngle(row.declination)
+		data.pmRA[i] = roundProperMotion(row.pmRA)
+		data.pmDEC[i] = roundProperMotion(row.pmDEC)
 		data.mag[i] = row.magnitude
 		data.bv[i] = row.bv ?? DEFAULT_BV
 	}
@@ -553,10 +539,9 @@ export function catalogStars(db: Database, rightAscension: number, declination: 
 	return stars
 }
 
-// Returns the deep-sky objects to render, at the true equator of `time` (Unix milliseconds): those up to
-// `magnitudeLimit` and those without a magnitude that belong to a classic visual catalog.
-export function renderDeepSky(db: Database, time: number, magnitudeLimit: number = DEFAULT_DEEP_SKY_MAGNITUDE_LIMIT): SkyDeepSkyData {
-	const equator = new EquatorOfDate(timeUnix(time / 1000, true))
+// Returns the deep-sky objects to render, at their J2000 catalog position, which the map precesses to the instant it
+// shows: those up to `magnitudeLimit` and those without a magnitude that belong to a classic visual catalog.
+export function renderDeepSky(db: Database, magnitudeLimit: number = DEFAULT_DEEP_SKY_MAGNITUDE_LIMIT): SkyDeepSkyData {
 	const rows = db
 		.query<Pick<SkyCatalogObjectRow, 'id' | 'type' | 'rightAscension' | 'declination' | 'magnitude' | 'majorAxis' | 'constellation'>, (number | string)[]>(
 			`SELECT o.id, o.type, o.rightAscension, o.declination, o.magnitude, o.majorAxis, o.constellation FROM objects o WHERE o.type <> ? AND (o.magnitude <= ? OR (o.magnitude IS NULL AND EXISTS (SELECT 1 FROM names n WHERE n.objectId = o.id AND n.type IN (${placeholders(RENDERED_UNKNOWN_MAGNITUDE_CATALOGS.length)})))) ORDER BY o.magnitude IS NULL, o.magnitude`,
@@ -567,7 +552,6 @@ export function renderDeepSky(db: Database, time: number, magnitudeLimit: number
 		rows.map((e) => e.id),
 	)
 	const data = {
-		time,
 		ids: new Array<number>(rows.length),
 		names: new Array<string>(rows.length),
 		types: new Array<number>(rows.length),
@@ -580,12 +564,11 @@ export function renderDeepSky(db: Database, time: number, magnitudeLimit: number
 
 	for (let i = 0; i < rows.length; i++) {
 		const row = rows[i]
-		const [ra, dec] = equator.convert(row.rightAscension, row.declination)
 		data.ids[i] = row.id
 		data.names[i] = objectNames(names.get(row.id) ?? [], row.constellation).name
 		data.types[i] = row.type
-		data.ra[i] = roundAngle(ra)
-		data.dec[i] = roundAngle(dec)
+		data.ra[i] = roundAngle(row.rightAscension)
+		data.dec[i] = roundAngle(row.declination)
 		data.mag[i] = row.magnitude
 		data.size[i] = row.majorAxis === null ? 0 : Math.round(toArcmin(row.majorAxis) * 100) / 100
 	}
@@ -780,19 +763,14 @@ export interface ConstellationSource {
 	readonly labels: readonly { readonly name: string; readonly rightAscension: number; readonly declination: number }[]
 }
 
-// Returns the constellation data at the true equator of `time` (Unix milliseconds).
-export function renderConstellations(source: ConstellationSource, time: number): SkyConstellations {
-	const equator = new EquatorOfDate(timeUnix(time / 1000, true))
-	const polyline = (line: readonly (readonly number[])[]) => line.map(([ra, dec]) => equator.convert(ra, dec).map(roundAngle) as [number, number])
+// Returns the J2000 constellation data, which the map precesses to the instant it shows, with the code of each label.
+export function renderConstellations(source: ConstellationSource): SkyConstellations {
+	const polyline = (line: readonly (readonly number[])[]) => line.map(([ra, dec]) => [roundAngle(ra), roundAngle(dec)] as [number, number])
 
 	return {
-		time,
 		lines: source.lines.map(polyline),
 		boundaries: source.boundaries.map(polyline),
-		labels: source.labels.map(({ name, rightAscension, declination }) => {
-			const [ra, dec] = equator.convert(rightAscension, declination)
-			return { name, code: constellationOfLabel(name) ?? '', rightAscension: roundAngle(ra), declination: roundAngle(dec) }
-		}),
+		labels: source.labels.map(({ name, rightAscension, declination }) => ({ name, code: constellationOfLabel(name) ?? '', rightAscension: roundAngle(rightAscension), declination: roundAngle(declination) })),
 	}
 }
 

@@ -6,11 +6,13 @@ import { DEFAULT_SURVEY } from '../../framing/surveys'
 import type { ViewEntry } from '../../profile/view'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import { fromDate, ofDateMatrix } from '../../sky/footprint'
-import type { MountPoint } from '../../sky/mount'
+import { type MountPoint, type MountView, selectionPoint } from '../../sky/mount'
+import type { SkySelection } from '../../sky/sky'
 
 // State of the Framing tool: the framing shown, chosen by the URL (/tools/framing/<id>), and the preview every framing is
 // compared in: its J2000 center, which no framing holds (typed, an object of the catalog searched, the catalog object
-// selected in Sky, a point of the preview clicked, or where the profile's mount points), its background, the Mini-Sky of
+// selected in Sky, a point of the preview clicked, where the profile's mount points, or the Sky selection sent by Open in
+// Framing), its background, the Mini-Sky of
 // the catalog or a survey cutout of hips2fits drawn over it, and what it is scaled to fit, every framing or the one
 // shown, leaving out the framings hidden from it. The center, background, survey, fit, and hidden framings are kept in
 // this browser only (framingPreviewEntry).
@@ -85,6 +87,34 @@ export function setFramingHidden(state: FramingPreviewState, id: string, hidden:
 export function mountCenter(point: MountPoint, time: number): FramePoint {
 	const [rightAscension, declination] = fromDate(ofDateMatrix(time), [point.rightAscension, point.declination])
 	return { rightAscension, declination }
+}
+
+// Center the Sky sends to the tool: a J2000 position with the name it is shown under.
+export interface FramingCenter {
+	// J2000 position, in radians.
+	readonly center: FramePoint
+	// Name of what the center was taken from.
+	readonly name: string
+}
+
+// Returns the J2000 center of a Sky selection at an instant in Unix milliseconds (UTC), or undefined while it is not known:
+// a catalog object's catalog position, where the mount points now (see selectionPoint: only while live and connected),
+// or the astrometric J2000 position of anything else, once computed.
+export function skySelectionCenter(selection: Pick<SkySelection, 'ref' | 'name' | 'catalog' | 'position'>, mount: Pick<MountView, 'target' | 'state'>, live: boolean, time: number): FramingCenter | undefined {
+	if (selection.ref.kind === 'mount') {
+		const point = selectionPoint(selection, mount, live)
+		return point && { center: mountCenter(point, time), name: mount.target?.name || 'Mount' }
+	}
+
+	if (selection.catalog) return { center: { rightAscension: selection.catalog.rightAscension, declination: selection.catalog.declination }, name: selection.name }
+	const position = selection.position
+	return position && { center: { rightAscension: position.rightAscensionJ2000, declination: position.declinationJ2000 }, name: selection.name }
+}
+
+// Opens the tool on the Equipment Setup's framing with the preview centered on a position sent from the Sky.
+export function openFramingAt({ center, name }: FramingCenter, state: FramingPreviewState = framingPreviewState, route: RouteState = routeState, history: Pick<History, 'pushState'> = window.history) {
+	setPreviewCenter(state, center, name)
+	navigate(route, { workspace: 'tools', tool: 'framing' }, history)
 }
 
 // Returns the document of a new framing named name in a colour, without rotation: the telescope and Main Camera of the

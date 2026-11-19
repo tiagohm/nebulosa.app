@@ -16,7 +16,8 @@ import { mountRuntime, mountView, slewBlocker, slewMount, slewProgress, stopMoun
 import { createRequestGuard } from './selection'
 import { fetchSkyPosition } from './sky'
 
-// Actions of the selected object in the Object section of the Object Inspector: Show Framing, Add to Observing Planner for
+// Actions of the selected object in the Object section of the Object Inspector: Open in Framing (the Framing tool centered
+// on the object's J2000 position), Add to Observing Planner for
 // a catalog object, a major body other than the Sun, a minor body, or the Sky point as fixed coordinates (which opens the tool to choose a plan, changing nothing else), and
 // Slew to Object (Slew to Point for the Sky point) while the profile's mount is connected. A slew points the mount at the object after an explicit
 // confirmation, then shows the real outcome of the operation as the server reports it, as a status in words. The target is
@@ -32,8 +33,8 @@ export interface ObjectActionsProps {
 	readonly targetName: string
 	// Observer of the active profile; slewing needs it to check the horizon.
 	readonly observer?: GeographicLocation
-	// Opens the framing settings, which draw the field of view around the selection.
-	readonly onShowFraming: () => void
+	// Opens the Framing tool centered on the selection; absent while its position is not known.
+	readonly onOpenFraming?: () => void
 }
 
 // Description of each reason a mount operation fails.
@@ -63,7 +64,7 @@ export function plannerTarget(ref: SkyObjectRef, name: string): ObservingTargetR
 type Preview = { readonly status: 'loading' } | { readonly status: 'ready'; readonly position: SkyPosition } | { readonly status: 'error'; readonly error: string }
 
 // Actions of the selected object.
-export function ObjectActions({ target, targetName, observer, onShowFraming }: ObjectActionsProps) {
+export function ObjectActions({ target, targetName, observer, onOpenFraming }: ObjectActionsProps) {
 	const runtime = mountView(useSnapshot(mountRuntime), useSnapshot(controlRuntime))
 	const operations = useSnapshot(operationsState)
 	const [preview, setPreview] = useState<Preview>()
@@ -115,8 +116,8 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 	return (
 		<>
 			<div className="flex flex-wrap gap-2">
-				<Button variant="secondary" onClick={onShowFraming}>
-					Show Framing
+				<Button variant="secondary" disabled={!onOpenFraming} title={onOpenFraming ? undefined : 'The position of the object is not known yet'} onClick={onOpenFraming}>
+					Open in Framing
 				</Button>
 				{plannable && (
 					<Button variant="secondary" onClick={() => addToObservingPlanner({ target: plannable, name: targetName })}>

@@ -10,6 +10,7 @@ import { useActiveSite, useDisplayZone } from '../location/useLocation'
 import { activeProfile, profileState, satelliteFavorites, setSkyTimeBarVisible } from '../profile/profile'
 import { satelliteCatalogState } from '../satellites/satellites'
 import { EmptyState, useWorkspacePanel, type WorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
+import { openFramingAt, skySelectionCenter } from '../tools/framing/framing'
 import { meteorShowerSourcesState } from '../tools/meteorshowers/meteorshowers.sources'
 import { Button } from '../ui/Button'
 import { FavoriteButton } from '../ui/FavoriteButton'
@@ -221,6 +222,16 @@ export function SkyWorkspace() {
 			/>
 		) : undefined
 
+	// Open in Framing of the Object Inspector: the Framing tool centered on the selection's J2000 position, offered once it
+	// is known and computed again at the click, so the mount's is where it points then.
+	const openFraming =
+		selection && skySelectionCenter(selection, mount, live, Date.now())
+			? () => {
+					const current = skyState.selection && skySelectionCenter(skyState.selection, mountView(mountRuntime, controlRuntime), skyClock.mode === 'now', Date.now())
+					if (current) openFramingAt(current)
+				}
+			: undefined
+
 	// The active site is named by the top bar alone; the header says only when there is none or the time is simulated, at
 	// every width: both change what the map shows, and the time bar that also says the time is simulated can be hidden.
 	const context = [!observer && 'No observing site', clock.mode !== 'now' && 'Simulated time'].filter(Boolean).join(' · ')
@@ -231,7 +242,7 @@ export function SkyWorkspace() {
 	const hiddenSelection = coordinateSystem === 'horizontal' && selectionAltitude !== undefined && selectionAltitude < 0 ? sky.selection?.name : undefined
 
 	const panels: Record<SkyPanelView, () => WorkspacePanel> = {
-		inspector: () => ({ title: 'Object Inspector', actions: inspectorActions, content: <ObjectInspector observer={observer} onSetObserver={() => openObservingSites(observer?.id)} timeZone={displayZone.zone} onShowFraming={() => openPanel('framing')} /> }),
+		inspector: () => ({ title: 'Object Inspector', actions: inspectorActions, content: <ObjectInspector observer={observer} onSetObserver={() => openObservingSites(observer?.id)} timeZone={displayZone.zone} onOpenFraming={openFraming} /> }),
 		display: () => ({ title: 'Display', content: <DisplayPanel sky={settings} local={coordinateSystem === 'horizontal'} /> }),
 		framing: () => ({ title: 'Framing', content: <FramingPanel framings={framings} framing={framing} hasTarget={!!selectionCenter} /> }),
 	}

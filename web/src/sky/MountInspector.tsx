@@ -21,8 +21,8 @@ export interface MountInspectorProps {
 	readonly mountRef: MountRef
 	// Observer of the active profile, for altitude and azimuth.
 	readonly observer?: GeographicLocation
-	// Opens the framing settings, which draw the field of view around the selection.
-	readonly onShowFraming: () => void
+	// Opens the Framing tool centered on the selection; absent while its position is not known.
+	readonly onOpenFraming?: () => void
 }
 
 // Motion state of a mount, as one line.
@@ -34,7 +34,7 @@ function motionOf(state: { readonly slewing: boolean; readonly parked: boolean; 
 }
 
 // Mount view of the Object Inspector.
-export function MountInspector({ mountRef, observer, onShowFraming }: MountInspectorProps) {
+export function MountInspector({ mountRef, observer, onOpenFraming }: MountInspectorProps) {
 	const runtime = mountView(useSnapshot(mountRuntime), useSnapshot(controlRuntime))
 	const clock = useSnapshot(skyClock)
 	const same = runtime.target?.connectionId === mountRef.connectionId && runtime.target.id === mountRef.id
@@ -47,8 +47,8 @@ export function MountInspector({ mountRef, observer, onShowFraming }: MountInspe
 			<CollapsibleSection id="sky.object" title="Object" summary={same ? runtime.target?.name || 'Mount' : 'Mount'}>
 				<ObjectTitle name={same ? runtime.target?.name || 'Mount' : 'Mount'} kind="Mount position" />
 				<div>
-					<Button variant="secondary" onClick={onShowFraming}>
-						Show Framing
+					<Button variant="secondary" disabled={!onOpenFraming} title={onOpenFraming ? undefined : 'The mount position is known in real time only, while connected'} onClick={onOpenFraming}>
+						Open in Framing
 					</Button>
 				</div>
 			</CollapsibleSection>

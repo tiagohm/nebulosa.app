@@ -38,8 +38,8 @@ export interface SunInspectorProps {
 	readonly onSetObserver: () => void
 	// IANA time zone times are shown in: the profile's display zone.
 	readonly timeZone: string
-	// Opens the framing settings.
-	readonly onShowFraming: () => void
+	// Opens the Framing tool centered on the selection; absent while its position is not known.
+	readonly onOpenFraming?: () => void
 }
 
 // Identity of the Sun.
@@ -100,7 +100,7 @@ function VisibilitySection({ position, day, hasObserver, onSetObserver, timeZone
 }
 
 // Sun Inspector.
-export function SunInspector({ selection, observer, onSetObserver, timeZone, onShowFraming }: SunInspectorProps) {
+export function SunInspector({ selection, observer, onSetObserver, timeZone, onOpenFraming }: SunInspectorProps) {
 	const { almanac } = useSnapshot(sunState)
 	const { position } = selection
 	const time = position?.time ?? selection.requestedTime
@@ -137,7 +137,7 @@ export function SunInspector({ selection, observer, onSetObserver, timeZone, onS
 				<ObjectTitle name={selection.name} kind="Star" />
 				{position?.magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(position.magnitude)}</DataRow>}
 				<SolarImage />
-				<ObjectActions target={SUN} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
+				<ObjectActions target={SUN} targetName={selection.name} observer={observer} onOpenFraming={onOpenFraming} />
 			</CollapsibleSection>
 			<ActiveRegionsSection />
 			<PositionSection selection={selection} timeZone={timeZone}>

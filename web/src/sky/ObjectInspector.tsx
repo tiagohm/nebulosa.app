@@ -37,12 +37,12 @@ export interface ObjectInspectorProps {
 	readonly onSetObserver: () => void
 	// IANA time zone times are shown in: the profile's display zone.
 	readonly timeZone: string
-	// Opens the framing settings, which draw the field of view around the selection.
-	readonly onShowFraming: () => void
+	// Opens the Framing tool centered on the selection; absent while its position is not known.
+	readonly onOpenFraming?: () => void
 }
 
 // Object Inspector.
-export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFraming }: ObjectInspectorProps) {
+export function ObjectInspector({ observer, onSetObserver, timeZone, onOpenFraming }: ObjectInspectorProps) {
 	const { selection } = useSnapshot(skyState)
 
 	if (!selection) {
@@ -53,11 +53,11 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 		)
 	}
 
-	if (selection.ref.kind === 'mount') return <MountInspector mountRef={selection.ref} observer={observer} onShowFraming={onShowFraming} />
-	if (selection.ref.kind === 'body' && selection.ref.code === '10') return <SunInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} onShowFraming={onShowFraming} />
+	if (selection.ref.kind === 'mount') return <MountInspector mountRef={selection.ref} observer={observer} onOpenFraming={onOpenFraming} />
+	if (selection.ref.kind === 'body' && selection.ref.code === '10') return <SunInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} onOpenFraming={onOpenFraming} />
 	if (selection.ref.kind === 'meteorShower') return <MeteorShowerInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} />
 	if (selection.ref.kind === 'satellite') return <SatelliteInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} />
-	if (selection.ref.kind === 'body' && selection.ref.code === '301') return <MoonInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} onShowFraming={onShowFraming} />
+	if (selection.ref.kind === 'body' && selection.ref.code === '301') return <MoonInspector selection={selection} observer={observer} onSetObserver={onSetObserver} timeZone={timeZone} onOpenFraming={onOpenFraming} />
 
 	const hasObserver = !!observer
 	const { catalog, minorBody, constellation, position, events } = selection as SkySelection
@@ -70,7 +70,7 @@ export function ObjectInspector({ observer, onSetObserver, timeZone, onShowFrami
 				<ObjectTitle name={selection.name} kind={typeOf(selection)} designations={designations.join(' · ')} />
 				{magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(magnitude)}</DataRow>}
 				{selection.detailsError && <Notice error>Details unavailable: {selection.detailsError}</Notice>}
-				<ObjectActions target={selection.ref} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
+				<ObjectActions target={selection.ref} targetName={selection.name} observer={observer} onOpenFraming={onOpenFraming} />
 			</CollapsibleSection>
 			<PositionSection selection={selection} timeZone={timeZone} />
 			{position && <ObserverSection position={position} events={events} hasObserver={hasObserver} onSetObserver={onSetObserver} isSolarSystem={selection.ref.kind === 'body' || selection.ref.kind === 'minorBody'} timeZone={timeZone} />}

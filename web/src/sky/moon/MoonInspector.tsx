@@ -33,8 +33,8 @@ export interface MoonInspectorProps {
 	readonly onSetObserver: () => void
 	// IANA time zone times are shown in: the profile's display zone.
 	readonly timeZone: string
-	// Opens the framing settings.
-	readonly onShowFraming: () => void
+	// Opens the Framing tool centered on the selection; absent while its position is not known.
+	readonly onOpenFraming?: () => void
 }
 
 // Identity of the Moon.
@@ -49,7 +49,7 @@ export function moonAngularDiameter(distance: number) {
 }
 
 // Moon Inspector.
-export function MoonInspector({ selection, observer, onSetObserver, timeZone, onShowFraming }: MoonInspectorProps) {
+export function MoonInspector({ selection, observer, onSetObserver, timeZone, onOpenFraming }: MoonInspectorProps) {
 	const { almanac } = useSnapshot(moonState)
 	const { position, events } = selection
 	const time = position?.time ?? selection.requestedTime
@@ -71,7 +71,7 @@ export function MoonInspector({ selection, observer, onSetObserver, timeZone, on
 				<ObjectTitle name={selection.name} kind="Natural Satellite" />
 				{position?.magnitude !== undefined && <DataRow label="Magnitude">{formatMagnitude(position.magnitude)}</DataRow>}
 				<MoonImage time={time} observer={place} />
-				<ObjectActions target={MOON} targetName={selection.name} observer={observer} onShowFraming={onShowFraming} />
+				<ObjectActions target={MOON} targetName={selection.name} observer={observer} onOpenFraming={onOpenFraming} />
 			</CollapsibleSection>
 			<PositionSection selection={selection} timeZone={timeZone}>
 				{position?.distance !== undefined && <DataRow label="Angular diameter">{formatApparentSize(moonAngularDiameter(position.distance))}</DataRow>}

@@ -22,6 +22,9 @@ export type SkyObjectRef =
 	| { readonly kind: 'satellite'; readonly noradId: string }
 	// Radiant of a meteor shower of the Meteor Showers catalog, by its shower id ('iau:4'): a direction, never a target.
 	| { readonly kind: 'meteorShower'; readonly id: string }
+	// Fixed point of the sky, such as the Sky point clicked on an empty part of the map: right ascension in [0, 2π) and
+	// declination in [−π/2, π/2] at J2000 (ICRS), radians, located like a catalog object without proper motion.
+	| { readonly kind: 'coordinates'; readonly rightAscension: number; readonly declination: number }
 
 // Group an object belongs to in search results and in the inspector.
 export type SkyObjectCategory = 'star' | 'deepSky' | 'solarSystem' | 'minorBody' | 'constellation' | 'satellite' | 'meteorShower'

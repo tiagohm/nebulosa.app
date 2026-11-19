@@ -289,15 +289,16 @@ describe('handoffs', () => {
 		return { route, sky, images, clock, io: skyIo, history: { pushState: () => undefined } }
 	}
 
-	test('the Sky adds catalog objects, bodies, and minor bodies but the Sun and other kinds', () => {
+	test('the Sky adds catalog objects, bodies, minor bodies, and the Sky point but the Sun and other kinds', () => {
 		const refs: SkyObjectRef[] = [
 			{ kind: 'catalog', id: 1 },
 			{ kind: 'body', code: '599' },
 			{ kind: 'body', code: '10' },
 			{ kind: 'minorBody', spkId: '1', designation: '1' },
 			{ kind: 'constellation', code: 'ORI' },
+			{ kind: 'coordinates', rightAscension: 1, declination: -0.5 },
 		]
-		expect(refs.map(plannerTarget)).toEqual([{ kind: 'catalog', id: 1 }, { kind: 'body', code: '599' }, undefined, { kind: 'minorBody', spkId: '1', designation: '1' }, undefined])
+		expect(refs.map((ref) => plannerTarget(ref, 'Sky Point'))).toEqual([{ kind: 'catalog', id: 1 }, { kind: 'body', code: '599' }, undefined, { kind: 'minorBody', spkId: '1', designation: '1' }, undefined, { kind: 'coordinates', name: 'Sky Point', rightAscension: 1, declination: -0.5 }])
 	})
 
 	test('adding from the Sky opens the tool with the target pending and changes nothing else', () => {

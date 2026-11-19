@@ -704,7 +704,8 @@ export const SATELLITE_FAVORITES_MAXIMUM = 500
 export const SKY_FAVORITES_MAXIMUM = 500
 
 // Object of the Sky marked as a favorite, as the search lists it, kept so the favorites are listed without asking the
-// server. Artificial satellites are favorites by their NORAD id (satelliteFavorites) and the mount marker never is one.
+// server. Artificial satellites are favorites by their NORAD id (satelliteFavorites); the mount marker and the Sky point never
+// are.
 export interface SkyFavorite {
 	// Identity of the object.
 	readonly ref: Exclude<SkyObjectRef, { readonly kind: 'satellite' }>

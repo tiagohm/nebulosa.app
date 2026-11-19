@@ -24,7 +24,8 @@ import { SunInspector } from './sun/SunInspector'
 // says what it is: catalog J2000 or apparent of date, topocentric or geocentric, the instant, and the
 // provider (Horizons or a local model, with the reason). Missing data is shown as missing, never as a
 // placeholder value, and catalog data stays shown when a position fails. With a mount on the profile's
-// connection, the object can be slewed to from its Object section. The mount marker, the Sun, the Moon, satellites, and meteor shower radiants have their own views.
+// connection, the object can be slewed to from its Object section. The Sky point, a fixed J2000 point clicked on an empty
+// part of the map, is shown as an object without catalog data. The mount marker, the Sun, the Moon, satellites, and meteor shower radiants have their own views.
 
 // Orbital elements and physical parameters of minor bodies shown, in order.
 const MINOR_BODY_PARAMETERS = ['a', 'e', 'i', 'q', 'per', 'H', 'G', 'M1', 'diameter'] as const
@@ -85,6 +86,7 @@ function typeOf(selection: SkySelection) {
 	if (selection.minorBody) return `${selection.minorBody.kind === 'comet' ? 'Comet' : 'Asteroid'} · ${selection.minorBody.orbitClass}`
 	if (selection.ref.kind === 'constellation') return 'Constellation'
 	if (selection.ref.kind === 'body') return bodyTypeName(selection.ref.code)
+	if (selection.ref.kind === 'coordinates') return selection.position?.constellationName ? `Point of the sky in ${selection.position.constellationName}` : 'Point of the sky'
 	return selection.loading ? 'Loading…' : ''
 }
 

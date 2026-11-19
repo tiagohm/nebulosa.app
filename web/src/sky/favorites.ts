@@ -32,9 +32,9 @@ export function bodyTypeName(code: string) {
 }
 
 // Whether an object is a favorite of the profile: a satellite by its NORAD id, any other object by its reference; never
-// the mount.
+// the mount or the Sky point.
 export function isSkyFavorite(settings: Pick<ProfileSettings, 'satelliteFavorites' | 'skyFavorites'>, ref: SkySelectionRef) {
-	if (ref.kind === 'mount') return false
+	if (ref.kind === 'mount' || ref.kind === 'coordinates') return false
 	if (ref.kind === 'satellite') return satelliteFavorites(settings).includes(ref.noradId)
 	const key = refKey(ref)
 	return skyFavorites(settings).some((favorite) => refKey(favorite.ref) === key)
@@ -68,13 +68,14 @@ export function setSkyObjectFavorite(state: ProfileState, result: SkySearchResul
 	else removeSkyObjectFavorite(state, result.ref)
 }
 
-// Returns the entry the Object Inspector marks for a selection, as the search would list it; undefined for the mount,
-// and for a catalog object until its catalog data arrives, as its type is not known before.
+// Returns the entry the Object Inspector marks for a selection, as the search would list it; undefined for the mount and
+// the Sky point, and for a catalog object until its catalog data arrives, as its type is not known before.
 export function selectionResult(selection: Pick<SkySelection, 'ref' | 'name' | 'catalog' | 'minorBody' | 'constellation'>): SkySearchResult | undefined {
 	const { ref, name } = selection
 
 	switch (ref.kind) {
 		case 'mount':
+		case 'coordinates':
 			return undefined
 		case 'catalog': {
 			const { catalog } = selection

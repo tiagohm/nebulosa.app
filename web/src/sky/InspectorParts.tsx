@@ -34,7 +34,7 @@ function PositionData({ selection, timeZone, children }: { readonly selection: S
 					{position.illuminated !== undefined && selection.ref.kind !== 'catalog' && <DataRow label="Illuminated">{formatPercent(position.illuminated, 1)}</DataRow>}
 					{position.elongation !== undefined && !(selection.ref.kind === 'body' && selection.ref.code === '10') && selection.ref.kind !== 'catalog' && <DataRow label="Solar elongation">{formatDegrees(position.elongation)}</DataRow>}
 					{children}
-					<Notice>{positionNote(position, selection.ref.kind === 'constellation', timeZone)}</Notice>
+					<Notice>{positionNote(position, selection.ref.kind, timeZone)}</Notice>
 				</>
 			) : (
 				!positionError && <Notice>{loading ? 'Computing the position…' : 'No position.'}</Notice>
@@ -55,11 +55,13 @@ export function PositionSection({ selection, timeZone, children }: { readonly se
 	)
 }
 
-// Describes how and when a position was computed; a constellation is located at its label, a fixed J2000
-// point near its center. Times are shown in a time zone, or in the browser's when absent.
-function positionNote(position: SkyPosition, constellation: boolean, timeZone: string) {
+// Describes how and when a position was computed for the kind of the selection; a constellation is located at its label,
+// a fixed J2000 point near its center, and the Sky point is a fixed J2000 point. Times are shown in a time zone, or in the
+// browser's when absent.
+function positionNote(position: SkyPosition, kind: SkySelection['ref']['kind'], timeZone: string) {
+	if (kind === 'coordinates') return `Apparent ${position.center} place at ${formatLocalTime(position.time, timeZone, Date.now())} of a fixed J2000 point.`
 	const place = `Apparent ${position.center} place at ${formatLocalTime(position.time, timeZone, Date.now())}, from ${describeEphemerisSource(position.source, position.attempts)}.`
-	return constellation ? `${place} The position is the constellation label, a fixed J2000 point near its center.` : place
+	return kind === 'constellation' ? `${place} The position is the constellation label, a fixed J2000 point near its center.` : place
 }
 
 // Horizontal coordinates and events for the observer, or an invitation to set one.

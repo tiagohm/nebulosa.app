@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 import type { CelestialObject } from './celestial/celestial'
-import { hoverLabel, METEOR_RADIANT_SHAPE_TYPE, meteorRadiantShapeId, movingBodyId, refKey, refOfCelestialObject, selectionTargets } from './objects'
+import { hoverLabel, METEOR_RADIANT_SHAPE_TYPE, meteorRadiantShapeId, movingBodyId, refKey, refOfCelestialObject, selectionTargets, SKY_POINT_SHAPE_ID, SKY_POINT_SHAPE_TYPE, type SkyPointRef } from './objects'
 import { type RememberedObject, REMEMBERED_SHAPE_TYPE, rememberedShapeId } from './remembered'
 import { createRequestGuard } from './selection'
 
@@ -95,4 +95,15 @@ test('a meteor shower radiant is a shape selected by its shower id, never a body
 	const object: CelestialObject = { type: 'shape', id, shape: { id, type: METEOR_RADIANT_SHAPE_TYPE, coordinate: { rightAscension: 2, declination: 0.5 }, data: { ref, name: 'Geminids', code: 'GEM' }, render: () => {} } }
 	expect(refOfCelestialObject(object, names)).toEqual(ref)
 	expect(hoverLabel(object, names)).toEqual({ name: 'Geminids', typeName: 'Meteor shower radiant' })
+})
+
+test('the Sky point is a shape of fixed J2000 coordinates, keyed by them', () => {
+	const ref: SkyPointRef = { kind: 'coordinates', rightAscension: 1.25, declination: -0.5 }
+	expect(refKey(ref)).toBe('coordinates:1.25:-0.5')
+	expect(movingBodyId(ref)).toBeUndefined()
+	expect(selectionTargets(ref, undefined, names)).toEqual([{ type: 'shape', id: SKY_POINT_SHAPE_ID }])
+
+	const object: CelestialObject = { type: 'shape', id: SKY_POINT_SHAPE_ID, shape: { id: SKY_POINT_SHAPE_ID, type: SKY_POINT_SHAPE_TYPE, coordinate: { rightAscension: 1.26, declination: -0.49 }, data: { ref }, render: () => {} } }
+	expect(refOfCelestialObject(object, names)).toEqual(ref)
+	expect(hoverLabel(object, names)).toEqual({ name: 'Sky Point', typeName: 'Point of the sky' })
 })

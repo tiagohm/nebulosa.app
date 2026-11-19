@@ -17,8 +17,8 @@ import { createRequestGuard } from './selection'
 import { fetchSkyPosition } from './sky'
 
 // Actions of the selected object in the Object section of the Object Inspector: Show Framing, Add to Observing Planner for
-// a catalog object, a major body other than the Sun, or a minor body (which opens the tool to choose a plan, changing nothing else), and
-// Slew to Object while the profile's mount is connected. A slew points the mount at the object after an explicit
+// a catalog object, a major body other than the Sun, a minor body, or the Sky point as fixed coordinates (which opens the tool to choose a plan, changing nothing else), and
+// Slew to Object (Slew to Point for the Sky point) while the profile's mount is connected. A slew points the mount at the object after an explicit
 // confirmation, then shows the real outcome of the operation as the server reports it, as a status in words. The target is
 // resolved by the server at the real current time, whatever instant the Sky shows; the dialog previews where the object is
 // now for the observer, and Slew waits for that preview: it stays disabled while the object is located or below the
@@ -48,12 +48,14 @@ const FAILURE_REASONS: Readonly<Record<NonNullable<OperationRecord['reason']>, s
 	unexpectedState: 'the mount was in an unexpected state',
 }
 
-// Target of the Observing Planner for an object: a catalog object, a major body other than the Sun, or a minor body by its
-// SPK-ID; undefined for what the planner does not evaluate (the Sun, constellations, satellites).
-export function plannerTarget(ref: SkyObjectRef): ObservingTargetRef | undefined {
+// Target of the Observing Planner for an object named `name`: a catalog object, a major body other than the Sun, a minor
+// body by its SPK-ID, or fixed coordinates (the Sky point) under that name; undefined for what the planner does not
+// evaluate (the Sun, constellations, satellites, meteor shower radiants).
+export function plannerTarget(ref: SkyObjectRef, name: string): ObservingTargetRef | undefined {
 	if (ref.kind === 'catalog') return { kind: 'catalog', id: ref.id }
 	if (ref.kind === 'body' && ref.code !== '10') return { kind: 'body', code: ref.code }
 	if (ref.kind === 'minorBody') return { kind: 'minorBody', spkId: ref.spkId, designation: ref.designation }
+	if (ref.kind === 'coordinates') return { kind: 'coordinates', name, rightAscension: ref.rightAscension, declination: ref.declination }
 	return undefined
 }
 
@@ -72,7 +74,9 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 	const progress = slewProgress(runtime, operations)
 	const moving = runtime.state?.slewing === true || progress?.state === 'running'
 	const connected = !!mount && runtime.state?.connected === true
-	const plannable = plannerTarget(target)
+	const plannable = plannerTarget(target, targetName)
+	// What the slew points at, in the button and the confirmation.
+	const what = target.kind === 'coordinates' ? 'Point' : 'Object'
 
 	useEffect(() => {
 		const guard = lookup.current
@@ -126,7 +130,7 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 				)}
 				{connected && (
 					<Button variant="secondary" disabled={!!blocker} title={blocker} onClick={confirm}>
-						Slew to Object
+						Slew to {what}
 					</Button>
 				)}
 				{connected && moving && (
@@ -138,7 +142,7 @@ export function ObjectActions({ target, targetName, observer, onShowFraming }: O
 			{connected && blocker && !moving && <Notice>{blocker}.</Notice>}
 			{mount && runtime.slew && <SlewStatus targetName={runtime.slew.targetName} operation={progress} />}
 			{mount && runtime.error && <Notice error>{runtime.error}</Notice>}
-			<Modal open={!!preview} onClose={close} title="Slew to object?" className="max-w-md">
+			<Modal open={!!preview} onClose={close} title={`Slew to ${what.toLowerCase()}?`} className="max-w-md">
 				<p className="m-0 text-sm">
 					Slew <strong className="text-ink-100">{mount?.name || 'the mount'}</strong> to <strong className="text-ink-100">{targetName}</strong>.
 				</p>

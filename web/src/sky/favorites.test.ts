@@ -28,6 +28,7 @@ describe('marking', () => {
 		expect(isSkyFavorite(settings(), { kind: 'catalog', id: 1 })).toBe(true)
 		expect(isSkyFavorite(settings(), { kind: 'catalog', id: 2 })).toBe(false)
 		expect(isSkyFavorite(settings(), { kind: 'mount', connectionId: 'c', id: 'm' })).toBe(false)
+		expect(isSkyFavorite(settings(), { kind: 'coordinates', rightAscension: 1, declination: 0 })).toBe(false)
 
 		setSkyObjectFavorite(state, iss, false)
 		setSkyObjectFavorite(state, m42, false)
@@ -39,6 +40,7 @@ describe('marking', () => {
 describe('selection entry', () => {
 	test('is the one the search lists, and waits for the catalog data of a catalog object', () => {
 		expect(selectionResult({ ref: { kind: 'mount', connectionId: 'c', id: 'm' }, name: 'Mount' })).toBeUndefined()
+		expect(selectionResult({ ref: { kind: 'coordinates', rightAscension: 1, declination: 0 }, name: 'Sky Point' })).toBeUndefined()
 		expect(selectionResult({ ref: { kind: 'catalog', id: 1 }, name: 'M 42' })).toBeUndefined()
 
 		const catalog: SkyCatalogObject = { id: 1, category: 'deepSky', type: 0, typeName: 'Emission Nebula', name: 'M 42', designations: ['NGC 1976'], rightAscension: 0, declination: 0, magnitude: 4, pmRA: 0, pmDEC: 0, rv: 0, constellation: 'Ori', constellationName: 'Orion' }

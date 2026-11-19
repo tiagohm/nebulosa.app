@@ -3,7 +3,7 @@ import type { CelestialObject, MovingBodyType, SelectionTarget } from './celesti
 import { rememberedOf, rememberedShapeId } from './remembered'
 
 // Identity of sky objects in the web client: the stable key of an API object reference or of the mount
-// marker, the map ids of moving bodies, and conversions between objects picked on the Celestial map and
+// marker, the Sky point (fixed coordinates clicked on an empty part of the map), the map ids of moving bodies, and conversions between objects picked on the Celestial map and
 // selection references. Pure functions, shared by the store and the workspace.
 
 // Prefix of the map id of a major solar-system body, followed by its Horizons command.
@@ -17,6 +17,31 @@ export const SATELLITE_ID_PREFIX = 'satellite:'
 
 // Kind of the custom map shape marking the mount.
 export const MOUNT_SHAPE_TYPE = 'mount'
+
+// Kind of the custom map shape marking the Sky point.
+export const SKY_POINT_SHAPE_TYPE = 'skyPoint'
+
+// Map id of the shape marking the Sky point; there is at most one.
+export const SKY_POINT_SHAPE_ID = 'sky-point'
+
+// Name of the Sky point, shown in the Object Inspector and the hover tooltip.
+export const SKY_POINT_NAME = 'Sky Point'
+
+// Identity of the Sky point: fixed J2000 coordinates, in radians.
+export type SkyPointRef = Extract<SkyObjectRef, { kind: 'coordinates' }>
+
+// Data the Sky point shape carries.
+export interface SkyPointData {
+	// Identity of the point.
+	readonly ref: SkyPointRef
+}
+
+// Returns the Sky point data of a picked object; undefined for anything else.
+export function skyPointOf(object: CelestialObject): SkyPointData | undefined {
+	if (object.type !== 'shape' || object.shape.type !== SKY_POINT_SHAPE_TYPE) return undefined
+	const data = object.shape.data as Partial<SkyPointData> | undefined
+	return data?.ref?.kind === 'coordinates' ? (data as SkyPointData) : undefined
+}
 
 // Kind of the custom map shape of a meteor shower radiant.
 export const METEOR_RADIANT_SHAPE_TYPE = 'meteorRadiant'
@@ -89,7 +114,8 @@ export interface MapNames {
 }
 
 // Returns the stable key of a selection reference: "catalog:32263", "body:499", "minor:20000001",
-// "constellation:ORI", "satellite:25544", "meteor:iau:4", or "mount:<connection id>:<device id>".
+// "constellation:ORI", "satellite:25544", "meteor:iau:4", "coordinates:<J2000 RA>:<J2000 Dec>" (radians), or
+// "mount:<connection id>:<device id>".
 export function refKey(ref: SkySelectionRef): string {
 	if (ref.kind === 'mount') return `mount:${ref.connectionId}:${ref.id}`
 	if (ref.kind === 'catalog') return `catalog:${ref.id}`
@@ -97,6 +123,7 @@ export function refKey(ref: SkySelectionRef): string {
 	if (ref.kind === 'constellation') return `constellation:${ref.code}`
 	if (ref.kind === 'satellite') return `${SATELLITE_ID_PREFIX}${ref.noradId}`
 	if (ref.kind === 'meteorShower') return `meteor:${ref.id}`
+	if (ref.kind === 'coordinates') return `coordinates:${ref.rightAscension}:${ref.declination}`
 	return `${MINOR_ID_PREFIX}${ref.spkId}`
 }
 
@@ -106,7 +133,7 @@ export function movingBodyId(ref: SkySelectionRef): string | undefined {
 }
 
 // Returns the selection reference of an object picked on the map: an API reference, the remembered
-// object's for its shape, or the mount's for the mount marker; undefined for other custom shapes and
+// object's for its shape, the mount's for the mount marker, or the Sky point's for its marker; undefined for other custom shapes and
 // labels of unknown constellations.
 export function refOfCelestialObject(object: CelestialObject, names: MapNames): SkySelectionRef | undefined {
 	switch (object.type) {
@@ -126,7 +153,7 @@ export function refOfCelestialObject(object: CelestialObject, names: MapNames): 
 			return code ? { kind: 'constellation', code } : undefined
 		}
 		case 'shape':
-			return mountMarkerOf(object)?.ref ?? meteorRadiantOf(object)?.ref ?? rememberedOf(object)?.ref
+			return mountMarkerOf(object)?.ref ?? skyPointOf(object)?.ref ?? meteorRadiantOf(object)?.ref ?? rememberedOf(object)?.ref
 		default:
 			return undefined
 	}
@@ -134,11 +161,12 @@ export function refOfCelestialObject(object: CelestialObject, names: MapNames): 
 
 // Returns the map objects a reference may select, in the order to try: a catalog id may be a star or a
 // deep-sky object of the map data, or else the shape of the remembered object; solar-system objects are
-// moving bodies; a constellation is any of its labels. The mount marker is a custom shape, highlighted
-// only when clicked, so it has none.
+// moving bodies; a constellation is any of its labels; the Sky point is its marker. The mount marker is a custom shape,
+// highlighted only when clicked, so it has none.
 export function selectionTargets(ref: SkySelectionRef, category: SkySearchResult['category'] | undefined, names: MapNames): SelectionTarget[] {
 	if (ref.kind === 'mount') return []
 	if (ref.kind === 'meteorShower') return [{ type: 'shape', id: meteorRadiantShapeId(ref.id) }]
+	if (ref.kind === 'coordinates') return [{ type: 'shape', id: SKY_POINT_SHAPE_ID }]
 
 	if (ref.kind === 'constellation') {
 		return [...names.constellationCodes].filter(([, code]) => code === ref.code).map(([name]) => ({ type: 'constellationLabel', id: name }))
@@ -178,7 +206,7 @@ const MOVING_BODY_TYPE_NAMES: Readonly<Record<MovingBodyType, string>> = {
 }
 
 // Returns the hover label of a picked object; undefined for objects without one (custom shapes other than
-// the mount marker and remembered objects). A star without a proper name is named by its catalog
+// the mount marker, the Sky point, and remembered objects). A star without a proper name is named by its catalog
 // designation.
 export function hoverLabel(object: CelestialObject, names: MapNames): HoverLabel | undefined {
 	switch (object.type) {
@@ -195,6 +223,7 @@ export function hoverLabel(object: CelestialObject, names: MapNames): HoverLabel
 		case 'shape': {
 			const mount = mountMarkerOf(object)
 			if (mount) return { name: mount.name || 'Mount', typeName: 'Mount position' }
+			if (skyPointOf(object)) return { name: SKY_POINT_NAME, typeName: 'Point of the sky' }
 			const radiant = meteorRadiantOf(object)
 			if (radiant) return { name: radiant.name, typeName: 'Meteor shower radiant' }
 			const remembered = rememberedOf(object)

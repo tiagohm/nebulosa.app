@@ -204,13 +204,13 @@ export function SkyWorkspace() {
 	}
 
 	// Star of the Object Inspector's header: marks the selection, once what it is is known (the catalog data of a catalog
-	// object), and unmarks it at any time. The mount marker has none.
+	// object), and unmarks it at any time. The mount marker and the Sky point have none.
 	const selection = sky.selection
 	const selectedRef = selection?.ref
 	const favoriteEntry = selection && selectionResult(selection)
 	const favorite = !!selectedRef && isSkyFavorite(activeProfile(profiles).settings, selectedRef)
 	const inspectorActions =
-		selectedRef && selectedRef.kind !== 'mount' ? (
+		selectedRef && selectedRef.kind !== 'mount' && selectedRef.kind !== 'coordinates' ? (
 			<FavoriteButton
 				favorite={favorite}
 				disabled={!favorite && !favoriteEntry}

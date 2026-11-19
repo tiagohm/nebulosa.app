@@ -6,11 +6,11 @@ import { type GeographicLocation, locationKey, siteObserver } from '../location/
 import { Celestial, type CelestialObject, type CelestialOptions, type ConstellationLine, type CoordinateSystem, type MovingBody, type MovingBodyType, type RenderState, type SelectionTarget } from './celestial/celestial'
 import { SKY_REALTIME_TICK_MS, type SkyClockMode, skyClock, skyTime } from './clock'
 import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
-import { type ImageFootprint, ofDateMatrix, outlineLabel, type ScreenPoint, type SkyCoordinateIntent, type SkyPoint, toDate } from './footprint'
+import { fromDate, type ImageFootprint, ofDateMatrix, outlineLabel, type ScreenPoint, type SkyCoordinateIntent, type SkyPoint, toDate } from './footprint'
 import { formatApparentSize } from './format'
 import { MeteorRadiantLayer, type MeteorRadiantTargets } from './meteors.sky'
 import { type MountPoint, mountRuntime } from './mount'
-import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, type SkySelectionRef } from './objects'
+import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, SKY_POINT_NAME, SKY_POINT_SHAPE_ID, SKY_POINT_SHAPE_TYPE, type SkyPointData, type SkyPointRef, type SkySelectionRef } from './objects'
 import { skyMapFont, skyMapPalette, skyMapReferenceLines, skyMapTheme } from './palette'
 import { isRememberable, type RememberedObject, RememberedObjects, type RememberedShapeData, REMEMBERED_SHAPE_TYPE, rememberedOf, rememberedShapeId } from './remembered'
 import { skySatelliteState } from './satellite/satellite'
@@ -27,7 +27,9 @@ import { browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapData
 // the instant of the Sky simulation clock (./clock); its catalogs are reloaded in place when the clock
 // stops more than a year away from the instant they were computed for. The mount's reported position is
 // drawn as a selectable marker while the clock shows the real time, and the view can be centered on it
-// or follow it until the user pans. Selected objects the map data lacks (minor bodies, and catalog
+// or follow it until the user pans. A click on an empty part of the map selects the Sky point there: fixed J2000
+// coordinates, converted from the frame of the loaded catalogs and marked while selected, so the mount can be sent
+// between objects. Selected objects the map data lacks (minor bodies, and catalog
 // objects fainter than it) are remembered for the tab (./remembered) and stay drawn and selectable, the
 // minor bodies moved at every update. The footprint of a solved image and a coordinate sent from an image
 // (./footprint) are drawn in the frame of the loaded catalogs, so they line up with the stars, and the view is only
@@ -84,6 +86,36 @@ const MOUNT_RING_RADIUS = 9
 
 // Inner and outer distance of the mount marker's crosshair ticks from its center, in pixels.
 const MOUNT_TICK_RANGE = [4, 15] as const
+
+// Half length of the arms of the Sky point's cross, in pixels.
+const SKY_POINT_MARK = 7
+
+// Gap of the Sky point's cross around its center, in pixels.
+const SKY_POINT_GAP = 2
+
+// Draws the Sky point at a screen point (pixels): a small open cross over a dark halo, which the selection reticle
+// surrounds.
+function drawSkyPoint(ctx: CanvasRenderingContext2D, x: number, y: number) {
+	ctx.lineCap = 'round'
+
+	for (const [lineWidth, strokeStyle] of [
+		[3.5, MOUNT_HALO],
+		[1.5, skyMapPalette().ink100],
+	] as const) {
+		ctx.lineWidth = lineWidth
+		ctx.strokeStyle = strokeStyle
+		ctx.beginPath()
+		ctx.moveTo(x - SKY_POINT_MARK, y)
+		ctx.lineTo(x - SKY_POINT_GAP, y)
+		ctx.moveTo(x + SKY_POINT_GAP, y)
+		ctx.lineTo(x + SKY_POINT_MARK, y)
+		ctx.moveTo(x, y - SKY_POINT_MARK)
+		ctx.lineTo(x, y - SKY_POINT_GAP)
+		ctx.moveTo(x, y + SKY_POINT_GAP)
+		ctx.lineTo(x, y + SKY_POINT_MARK)
+		ctx.stroke()
+	}
+}
 
 // Draws the mount marker at a screen point (pixels): a ring with a crosshair through it and the mount's
 // name beside it.
@@ -284,9 +316,9 @@ function mapOptions(coordinateSystem: CoordinateSystem): CelestialOptions {
 	}
 }
 
-// Group of an object picked on the map; undefined for the mount marker.
+// Group of an object picked on the map; undefined for the mount marker and the Sky point.
 function categoryOf(object: CelestialObject, objectRef: SkySelectionRef): SkyObjectCategory | undefined {
-	if (objectRef.kind === 'mount') return undefined
+	if (objectRef.kind === 'mount' || objectRef.kind === 'coordinates') return undefined
 	if (objectRef.kind === 'meteorShower') return 'meteorShower'
 	if (object.type === 'shape') return rememberedOf(object)?.category
 	if (object.type === 'star') return 'star'
@@ -331,6 +363,8 @@ export class Planetarium {
 	#coordinateSeq = 0
 	// Mount marker on the map, whose coordinate is moved in place as the mount moves; absent while not drawn.
 	#mountMarker?: { readonly coordinate: { rightAscension: number; declination: number }; readonly data: MountMarkerData }
+	// Key of the Sky point marked on the map; absent while none is.
+	#skyPointKey?: string
 	#resizeObserver?: ResizeObserver
 	// Timer of the clock updates while attached.
 	#clockTimer?: Timer
@@ -373,6 +407,9 @@ export class Planetarium {
 		this.celestial.setTime(this.#shownTime)
 		this.#unsubscribe = [
 			this.celestial.on('selectionChange', ({ object }) => this.#handleClick(object)),
+			this.celestial.on('click', ({ object, coordinate }) => {
+				if (!object) this.#selectSkyPoint(coordinate)
+			}),
 			this.celestial.on('updateEnd', ({ time }) => this.#updateEnded(time)),
 			this.celestial.on('panStart', () => {
 				mountRuntime.following = false
@@ -446,10 +483,16 @@ export class Planetarium {
 	// A geocentric J2000 direction (radians) in the frame of the loaded map data, as the stars are drawn; undefined before
 	// the data is loaded. The matrix is computed once per data load.
 	#toMapFrame(rightAscension: number, declination: number) {
+		const matrix = this.#mapMatrix()
+		return matrix && framePoint(toDate(matrix, [rightAscension, declination]))
+	}
+
+	// Precession-nutation matrix of the loaded map data, computed once per data load; undefined before the data is loaded.
+	#mapMatrix() {
 		const time = this.#dataTime
 		if (time === undefined) return undefined
 		if (this.#dataMatrix?.time !== time) this.#dataMatrix = { time, matrix: ofDateMatrix(time) }
-		return framePoint(toDate(this.#dataMatrix.matrix, [rightAscension, declination]))
+		return this.#dataMatrix.matrix
 	}
 
 	// Loads the map data for the instant shown (downloaded once per tab and epoch), or retries after a
@@ -468,6 +511,8 @@ export class Planetarium {
 				this.celestial.loadDeepSkyObjects(dsos.ids.map((id, i) => ({ id, name: dsos.names[i], type: dsos.types[i], rightAscension: dsos.ra[i], declination: dsos.dec[i], magnitude: dsos.mag[i] ?? undefined, sizeArcMin: dsos.size[i] || undefined })))
 				this.celestial.loadConstellations({ lines: constellations.lines as ConstellationLine[], boundaries: constellations.boundaries as ConstellationLine[], labels: constellations.labels.map(({ name, rightAscension, declination }) => ({ name, rightAscension, declination })) })
 				planetariumState.status = 'ready'
+				// The Sky point is marked again in the frame of the new data.
+				this.#skyPointKey = undefined
 				this.syncSelection()
 				this.#drawImageShapes()
 				this.#meteorRadiants.redraw()
@@ -595,6 +640,7 @@ export class Planetarium {
 	// and kept on the map for the tab, following the selection's position while selected.
 	syncSelection() {
 		const selection = skyState.selection
+		this.#markSkyPoint(selection?.ref.kind === 'coordinates' ? selection.ref : undefined)
 
 		if (!selection) {
 			this.celestial.selectObject(null)
@@ -698,6 +744,33 @@ export class Planetarium {
 		const object = this.celestial.selectedObject
 		const objectRef = object && refOfCelestialObject(object, this.#names)
 		return !!objectRef && refKey(objectRef) === key
+	}
+
+	// Selects the Sky point at a coordinate clicked where there is no object (in the frame of the loaded map data, radians),
+	// as fixed J2000 coordinates; nothing happens before the data is loaded.
+	#selectSkyPoint(coordinate: { readonly rightAscension: number; readonly declination: number }) {
+		const matrix = this.#mapMatrix()
+		if (!matrix) return
+		const [rightAscension, declination] = fromDate(matrix, [coordinate.rightAscension, coordinate.declination])
+		selectSkyObject(skyState, { ref: { kind: 'coordinates', rightAscension, declination }, source: 'map', name: SKY_POINT_NAME }, this.#observer)
+		this.syncSelection()
+	}
+
+	// Marks the Sky point in the frame of the loaded map data, or removes its mark when there is none; waits for the data
+	// when it is not loaded yet.
+	#markSkyPoint(ref: SkyPointRef | undefined) {
+		const key = ref && refKey(ref)
+		if (key === this.#skyPointKey) return
+		const point = ref && this.#toMapFrame(ref.rightAscension, ref.declination)
+
+		if (ref && key && point) {
+			const data: SkyPointData = { ref }
+			this.celestial.addShape({ id: SKY_POINT_SHAPE_ID, type: SKY_POINT_SHAPE_TYPE, coordinate: point, data, render: (_, ctx, state) => drawSkyPoint(ctx, state.x, state.y) })
+			this.#skyPointKey = key
+		} else {
+			this.celestial.removeShape(SKY_POINT_SHAPE_ID)
+			this.#skyPointKey = undefined
+		}
 	}
 
 	// Selects the object clicked on the map; custom shapes keep the current highlight.

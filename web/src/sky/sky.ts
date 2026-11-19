@@ -15,7 +15,8 @@ import { createRequestGuard } from './selection'
 // precession moves its positions of date. Positions and events are computed for the instant of the Sky
 // simulation clock (./clock), which is the real current time unless the user chose another. The mount
 // marker can be selected too: its identity and name are kept here, and its position is the mount
-// runtime's (./mount), never requested from the sky API.
+// runtime's (./mount), never requested from the sky API. The Sky point, selected by a click on an empty part of the map,
+// is fixed J2000 coordinates the sky API locates like a catalog object.
 
 // Where a selection came from.
 export type SkySelectionSource = 'map' | 'search'

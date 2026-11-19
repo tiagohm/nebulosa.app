@@ -123,3 +123,17 @@ test('a meteor shower radiant is a direction the position route refuses and a mo
 	const locate = createSkyLocator({ catalog: fixtureCatalog(), constellations: { lines: [], boundaries: [], labels: [] }, ephemeris: new SkyEphemeris({ observer: () => Promise.reject(new TypeError('offline')) }), minorBodies: new MinorBodies({ fetch: () => Promise.reject(new TypeError('offline')) }) })
 	expect(await locate({ kind: 'meteorShower', id: 'iau:4' }, { time: 0 })).toBeUndefined()
 })
+
+test('fixed coordinates are located as a J2000 point, with events, by the route and the locator of the mounts', async () => {
+	const target = { kind: 'coordinates', rightAscension: 1.45, declination: -0.1 } as const
+	const observer = { latitude: -23.5, longitude: -46.6, elevation: 760 }
+	const response = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify({ target, time: Date.UTC(2026, 9, 18, 12), observer }) }) as never)
+	const { position, events } = (await response.json()) as SkyPositionResponse
+	expect(position.source).toBe('catalog')
+	expect(position.rightAscensionJ2000).toBeCloseTo(1.45, 12)
+	expect(position.declinationJ2000).toBeCloseTo(-0.1, 12)
+	expect(position.altitude).toBeNumber()
+	expect(events).toBeDefined()
+	const locate = createSkyLocator({ catalog: fixtureCatalog(), constellations: { lines: [], boundaries: [], labels: [] }, ephemeris: new SkyEphemeris(), minorBodies: new MinorBodies() })
+	expect((await locate(target, { time: Date.UTC(2026, 9, 18, 12), observer }))?.rightAscensionJ2000).toBeCloseTo(1.45, 12)
+})

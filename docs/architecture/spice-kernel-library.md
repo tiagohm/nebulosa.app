@@ -45,6 +45,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   tabs read the snapshot (`GET /api/spice-kernels`, `SpiceKernelLibrarySnapshot`) again.
 - Sky (see [Sky Map Contract](sky-map.md)): `SkyEphemeris` reads `current()` once per position or events calculation and evaluates it synchronously, so an in-flight request finishes on the generation it started with.
   Every computation of positions uses it through the [Ephemeris Chain](ephemeris-chain.md).
+  The map draws the asteroids and comets of the Horizons kernels of the library, and a new generation recomputes its selection and bodies at once.
   The Observing Planner reads it once per minor-body trajectory and copies every node it needs before the analysis, with the generation and the offline switch in the keys of its trajectories.
   The Jupiter Observing Planner reads it before each chunk of a computation and restarts when the generation changed (see [Jupiter Observing Planner Contract](jupiter-observing-planner.md)), with the generation and the offline switch in the keys of its answers;
   the Saturn Observing Planner does the same for each scope (see [Saturn Observing Planner Contract](saturn-observing-planner.md)), and Planetary Events for each search and series, taking a planet from its system barycentre when the set lacks its centre (see [Planetary Events Contract](planetary-events.md)).

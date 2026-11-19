@@ -8,6 +8,7 @@ import { SKY_REALTIME_TICK_MS, type SkyClockMode, skyClock, skyTime } from './cl
 import { applySkyDisplay, MAP_STAR_MAGNITUDE_LIMIT, type SkyDisplaySettings } from './display'
 import { fromDate, type ImageFootprint, ofDateMatrix, outlineLabel, type ScreenPoint, type SkyCoordinateIntent, type SkyPoint, toDate } from './footprint'
 import { formatApparentSize } from './format'
+import { isCometSpkId, type KernelBody } from './kernels.sky'
 import { MeteorRadiantLayer, type MeteorRadiantTargets } from './meteors.sky'
 import { type MountPoint, mountRuntime } from './mount'
 import { hoverLabel, type MapNames, MOUNT_SHAPE_TYPE, type MountMarkerData, type MountRef, movingBodyId, refKey, refOfCelestialObject, selectionTargets, SKY_POINT_NAME, SKY_POINT_SHAPE_ID, SKY_POINT_SHAPE_TYPE, type SkyPointData, type SkyPointRef, type SkySelectionRef } from './objects'
@@ -31,7 +32,10 @@ import { browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapData, mapData
 // coordinates, converted from the frame of the loaded catalogs and marked while selected, so the mount can be sent
 // between objects. Selected objects the map data lacks (minor bodies, and catalog
 // objects fainter than it) are remembered for the tab (./remembered) and stay drawn and selectable, the
-// minor bodies moved at every update. The footprint of a solved image and a coordinate sent from an image
+// minor bodies moved at every update. The asteroids and comets whose kernels Horizons generated for the SPICE Kernel
+// Library (./kernels.sky) are drawn and moved the same way while the library has them, and a new kernel generation
+// recomputes the selection and every body at once, so adding, removing, or turning off a kernel shows the source that
+// takes over without waiting for the next update. The footprint of a solved image and a coordinate sent from an image
 // (./footprint) are drawn in the frame of the loaded catalogs, so they line up with the stars, and the view is only
 // panned to such a coordinate (as to the mount), keeping its zoom and its projection on the observer's sky.
 
@@ -352,6 +356,13 @@ export class Planetarium {
 	#bodiesPending?: number
 	// Instant the loaded catalogs were computed for, Unix milliseconds; absent before the first load.
 	#dataTime?: number
+	// Small bodies of the Horizons kernels of the library, by reference key, drawn once their first position arrives
+	// unless they are remembered, whose object then draws them.
+	readonly #kernelBodies = new Map<string, RememberedObject>()
+	// Keys of the kernel bodies that have a position.
+	readonly #kernelPlaced = new Set<string>()
+	// Kernel generation of the library the positions were last asked for; absent before the library is known.
+	#kernelGeneration?: number
 	// Ids of the shapes of the remembered catalog objects on the map.
 	readonly #rememberedShapes = new Set<string>()
 	// Ids of the framings whose field of view shape is on the map.
@@ -478,6 +489,48 @@ export class Planetarium {
 	// Sets the meteor shower radiants drawn: those of the active showers while the layer is shown, and the selected one.
 	setMeteorRadiants(targets: MeteorRadiantTargets) {
 		this.#meteorRadiants.set(targets)
+	}
+
+	// Draws the small bodies of the Horizons kernels of the library and removes those no longer in it, unless the map
+	// remembers them; a change of the kernel generation (a kernel added, removed, turned on or off, or the offline switch)
+	// recomputes the selection and every body for the instant shown, as their ephemeris source may have changed.
+	setKernelBodies(bodies: readonly KernelBody[], generation: number | undefined) {
+		const keys = new Set<string>()
+		let changed = false
+
+		for (const { spkId, name, comet } of bodies) {
+			const ref: RememberedObject['ref'] = { kind: 'minorBody', spkId, designation: name }
+			const key = refKey(ref)
+			keys.add(key)
+			const known = this.#kernelBodies.get(key)
+
+			if (!known) {
+				this.#kernelBodies.set(key, { ref, key, name, typeName: comet ? 'Comet' : 'Minor Body', category: 'minorBody', rightAscension: 0, declination: 0 })
+				changed = true
+			} else if (known.name !== name) {
+				known.name = name
+				if (this.#kernelPlaced.has(key) && !remembered.get(key)) this.#showMinorBody(known)
+			}
+		}
+
+		for (const [key, object] of this.#kernelBodies) {
+			if (keys.has(key)) continue
+			this.#kernelBodies.delete(key)
+			this.#kernelPlaced.delete(key)
+			if (remembered.get(key)) continue
+			const id = movingBodyId(object.ref)!
+			this.#bodies.delete(id)
+			this.celestial.removeMovingBody(id)
+		}
+
+		const regenerated = this.#kernelGeneration !== undefined && generation !== undefined && generation !== this.#kernelGeneration
+		if (generation !== undefined) this.#kernelGeneration = generation
+		if (regenerated) void refreshSkySelection(skyState, this.#observer, { tolerance: -1, mode: REFRESH[skyClock.mode].mode }, browserSkyIo, this.time)
+
+		if (changed || regenerated) {
+			this.#bodiesKey = ''
+			this.#requestMovingBodies(this.time)
+		}
 	}
 
 	// A geocentric J2000 direction (radians) in the frame of the loaded map data, as the stars are drawn; undefined before
@@ -725,11 +778,14 @@ export class Planetarium {
 		}
 	}
 
-	// Removes a forgotten object from the map.
+	// Removes a forgotten object from the map; a minor body of a kernel of the library stays drawn as the kernel's.
 	#forget(object: RememberedObject) {
 		const bodyId = movingBodyId(object.ref)
+		const kernelBody = this.#kernelBodies.get(object.key)
 
-		if (bodyId) {
+		if (bodyId && kernelBody && this.#kernelPlaced.has(object.key)) {
+			this.#showMinorBody(kernelBody)
+		} else if (bodyId) {
 			this.#bodies.delete(bodyId)
 			this.celestial.removeMovingBody(bodyId)
 		} else {
@@ -866,8 +922,8 @@ export class Planetarium {
 		})
 	}
 
-	// Recomputes the local positions of the major bodies, and of the remembered minor bodies other than the
-	// selection (which follows the Inspector's position of the same instant), for an instant. Updates of the
+	// Recomputes the local positions of the major bodies, and of the remembered minor bodies and those of the kernels of
+	// the library other than the selection (which follows the Inspector's position of the same instant), for an instant. Updates of the
 	// same second and observer, such as those after loading data, reuse the positions requested for them.
 	async #updateMovingBodies(time: number) {
 		const key = `${Math.round(time / 1000)}|${locationKey(this.#observer)}`
@@ -895,7 +951,7 @@ export class Planetarium {
 		}
 
 		const selected = skyState.selection?.key
-		const minorBodies = [...remembered.values()].filter((object) => object.ref.kind === 'minorBody' && object.key !== selected)
+		const minorBodies = [...remembered.values(), ...[...this.#kernelBodies.values()].filter((object) => !remembered.get(object.key))].filter((object) => object.ref.kind === 'minorBody' && object.key !== selected)
 		if (minorBodies.length === 0) return
 
 		const minorRequest = this.#minorGuard.begin()
@@ -904,10 +960,11 @@ export class Planetarium {
 			minorBodies.map(async (object) => {
 				try {
 					const { position } = await fetchSkyPosition(object.ref, time, siteObserver(this.#observer), 'fast', minorRequest.signal)
-					if (!minorRequest.current() || remembered.get(object.key) !== object || skyState.selection?.key === object.key) return
+					if (!minorRequest.current() || (remembered.get(object.key) ?? this.#kernelBodies.get(object.key)) !== object || skyState.selection?.key === object.key) return
 					object.rightAscension = position.rightAscension
 					object.declination = position.declination
 					object.magnitude = position.magnitude
+					if (this.#kernelBodies.get(object.key) === object) this.#kernelPlaced.add(object.key)
 					this.#showMinorBody(object)
 				} catch {
 					// Without elements the minor body keeps its last position.
@@ -916,10 +973,12 @@ export class Planetarium {
 		)
 	}
 
-	// Adds or moves the map's moving body of a remembered minor body.
+	// Adds or moves the map's moving body of a remembered minor body or of one of a kernel of the library; without SBDB
+	// data, a comet is told by its SPK-ID.
 	#showMinorBody(object: RememberedObject) {
 		const id = movingBodyId(object.ref)!
-		const type: MovingBodyType = object.minorBody?.kind === 'comet' ? 'comet' : 'asteroid'
+		const comet = object.minorBody ? object.minorBody.kind === 'comet' : object.ref.kind === 'minorBody' && isCometSpkId(object.ref.spkId)
+		const type: MovingBodyType = comet ? 'comet' : 'asteroid'
 		let movingBody = this.#bodies.get(id)
 
 		// A name or kind learned later (from SBDB) replaces the body.

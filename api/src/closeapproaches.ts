@@ -127,7 +127,8 @@ interface CachedPage {
 }
 
 // Instant of a CAD Julian date TDB as Unix milliseconds (UTC). The text is split at the point, since one double cannot
-// hold its digits, and the timescale conversion of the toolkit gives the true TDB - UTC with leap seconds.
+// hold its digits, and the timescale conversion of the toolkit gives the true TDB - UTC with leap seconds, and before
+// 1960, when UTC did not exist, the UT of the instant (TDB less the best-estimate Delta T).
 export function approachTime(jd: string) {
 	const [day, fraction = '0'] = jd.split('.')
 	return timeToUnixMillis(time(+day, +`0.${fraction}`, Timescale.TDB))

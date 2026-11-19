@@ -38,7 +38,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The only errors are readings that name no single instant: `422 ambiguousLocalTime` with `{ earlier, later }` for a reading the clocks repeat, which the tool resolves with Earlier or Later (`fold`), and `422 nonexistentTime` for one they skip or a `:60` on a day without a leap second.
   An inserted leap second keeps its calendar and has no `unixMillis`, which POSIX cannot represent; on such a day JD(UTC) is the ERFA quasi-JD of a stretched day.
   Calendars are proleptic Gregorian with astronomical year numbering.
-  Before 1960 UTC did not exist, so TAI−UTC is taken as 0 (`leapSeconds: beforeUtc`), and after the server's now no further leap second is assumed (`assumed`).
+  Before 1960 UTC did not exist, so a reading is taken as UT and TT as it plus the toolkit's best-estimate ΔT (`leapSeconds: beforeUtc`, TAI−UTC not shown), and after the server's now no further leap second is assumed (`assumed`).
 - Earth orientation (`EarthOrientationData`): the IERS tables of the whole server.
   `app/src/main.ts` calls `startEarthOrientation` before it serves, which reads them from `iers/` of the data directory (`DEFAULT_IERS_DIRECTORY`, under `NEBULOSA_HOME`) and installs them as the default providers of the toolkit (`installEarthOrientation`), so the Sky, the mounts, the pointing models, and the converter read one UT1 and one polar motion, and a refresh reaches them all.
   `iersab`, the shared table of the toolkit, stays empty, since its lookups clamp to the edge of a table, and a process that never starts them, such as a test, keeps UT1 = UTC and no polar motion.

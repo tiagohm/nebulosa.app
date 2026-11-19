@@ -71,7 +71,8 @@ export interface TimeScaleReading {
 
 // What the leap-second table says of an instant:
 // - tabulated: the table covers it.
-// - beforeUtc: before 1960, when UTC did not exist, so TAI-UTC is taken as 0.
+// - beforeUtc: before 1960, when UTC did not exist, so the reading is taken as UT and TT is it plus the best-estimate
+//   Delta T of the toolkit.
 // - assumed: in the future of the server, assuming no leap second is added after the last one known.
 export type LeapSecondStatus = 'tabulated' | 'beforeUtc' | 'assumed'
 

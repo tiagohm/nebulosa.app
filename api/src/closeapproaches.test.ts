@@ -60,9 +60,9 @@ test('the instant of a CAD Julian date TDB is UTC, with leap seconds', () => {
 	expect(approachTime('2462240.407091969')).toBe(Date.UTC(2029, 3, 13, 21, 45, 3, 560))
 })
 
-test('an instant before UTC existed takes TAI - UTC as zero, like the rest of the toolkit', () => {
-	// 22:17:48.5 TDB, minus the 32.184 s of TT - TAI.
-	expect(approachTime('2433287.429033323')).toBe(Date.UTC(1950, 0, 5, 22, 17, 16, 296))
+test('an instant before UTC existed is read as UT, TT being it plus Delta T, like the rest of the toolkit', () => {
+	// 22:17:48.5 TDB, minus the 28.96 s the S15 Delta T gives in early 1950.
+	expect(approachTime('2433287.429033323')).toBe(Date.UTC(1950, 0, 5, 22, 17, 19, 542))
 })
 
 test('a page of every object normalizes the encounters', async () => {

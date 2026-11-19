@@ -7,7 +7,7 @@ import { useResolvedFramings } from '../framing/resolve'
 import { imagesState } from '../images/images'
 import { activeSite, locationKey, openObservingSites, siteState } from '../location/site'
 import { useActiveSite, useDisplayZone } from '../location/useLocation'
-import { activeProfile, profileState, satelliteFavorites, setSkyTimeBarVisible } from '../profile/profile'
+import { activeProfile, profileState, satelliteFavorites, setSkyAllSmallBodiesVisible, setSkyTimeBarVisible } from '../profile/profile'
 import { satelliteCatalogState } from '../satellites/satellites'
 import { EmptyState, useWorkspacePanel, type WorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { openFramingAt, skySelectionCenter } from '../tools/framing/framing'
@@ -271,6 +271,7 @@ export function SkyWorkspace() {
 						/>
 						{footprint && <IconButton icon="images" label={`${handoffs.footprintHidden ? 'Show' : 'Hide'} the footprint of ${footprint.name}`} pressed={!handoffs.footprintHidden} onClick={() => toggleImageFootprint(skyImageState)} className={TOUCH_BUTTON} />}
 						{handoffs.intent?.mark && <IconButton icon="pin" label={`Clear the mark of ${handoffs.intent.label}`} onClick={() => clearSkyCoordinate(skyImageState)} className={TOUCH_BUTTON} />}
+						<IconButton icon="smallBodies" label="All Asteroids & Comets" pressed={display?.allSmallBodies === true} onClick={() => setSkyAllSmallBodiesVisible(profileState, display?.allSmallBodies !== true)} className={TOUCH_BUTTON} />
 						<IconButton icon="clock" label="Time Bar" pressed={settings.timeBar === true} onClick={() => setSkyTimeBarVisible(profileState, settings.timeBar !== true)} className={TOUCH_BUTTON} />
 						<IconButton icon="frame" label="Framing" pressed={panelShows('framing')} onClick={() => togglePanel('framing')} className={TOUCH_BUTTON} />
 						<IconButton icon="layers" label="Display" pressed={panelShows('display')} onClick={() => togglePanel('display')} className={TOUCH_BUTTON} />

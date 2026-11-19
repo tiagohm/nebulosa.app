@@ -9,7 +9,7 @@ function body(id: string, type: MovingBody['type'], x: number, y: number, extra:
 
 // Render state of a gnomonic 800 x 600 view at zoom 1 projecting a body at its right ascension and declination in
 // pixels, and a context measuring 7 px per character.
-function frame(movingBodies: readonly MovingBody[], frameNumber = 1) {
+function frame(movingBodies: readonly MovingBody[], frameNumber = 1, allSmallBodies = false) {
 	const state = {
 		frame: frameNumber,
 		width: 800,
@@ -19,6 +19,7 @@ function frame(movingBodies: readonly MovingBody[], frameNumber = 1) {
 		theme: { fontFamily: 'sans-serif' },
 		stars: { labels: false },
 		movingBodies,
+		allSmallBodies,
 		celestial: { isLayerVisible: () => true },
 		projectEquatorialToScreen: (rightAscension: number, declination: number, out: Float32Array) => {
 			out[0] = rightAscension
@@ -49,6 +50,15 @@ test('planets and looked-for bodies are always named; other asteroids only where
 	expect(labels.movingAt(3, out)).toBeUndefined()
 	// Placed after Jupiter, it moves around its body rather than being left out.
 	expect(labels.movingAt(4, out)).toBeDefined()
+})
+
+test('drawing every asteroid keeps the faint ones unnamed', () => {
+	const { state, ctx } = frame([body('faint', 'asteroid', 400, 300, { magnitude: 20 }), body('bright', 'asteroid', 100, 100, { magnitude: 6 })], 1, true)
+	const labels = new SkyLabelSpace().place(ctx, state)
+	const out = new Float32Array(2)
+
+	expect(labels.movingAt(0, out)).toBeUndefined()
+	expect(labels.movingAt(1, out)).toBeDefined()
 })
 
 test('a later frame forgets the names of the bodies that are gone', () => {

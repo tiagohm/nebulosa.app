@@ -482,6 +482,8 @@ export interface RenderState {
 	readonly milkyWay: readonly Readonly<MilkyWayStep>[]
 	// Moving bodies in insertion order.
 	readonly movingBodies: readonly Readonly<MovingBody>[]
+	// Whether every asteroid and comet is drawn whatever its magnitude and the zoom (their names keep their limits).
+	readonly allSmallBodies: boolean
 	// Custom shapes in insertion order.
 	readonly shapes: readonly Readonly<CelestialShape>[]
 	// Object under the pointer.

@@ -150,10 +150,11 @@ export function movingBodyMagnitude(object: MovingBody) {
 	return isFiniteNumber(object.magnitude) ? object.magnitude : 0
 }
 
-// Returns whether a moving body is drawn at a zoom factor: an asteroid or comet within smallBodyMagnitudeLimit, any other
-// within the deep-sky limit; bodies without magnitude, or always visible, always are.
-export function isMovingBodyVisibleAtZoom(object: MovingBody, zoom: number) {
-	if (object.alwaysVisible === true || !isFiniteNumber(object.magnitude)) return true
+// Returns whether a moving body is drawn at a zoom factor: an asteroid or comet within smallBodyMagnitudeLimit, or at
+// any magnitude when `allSmallBodies`, any other within the deep-sky limit; bodies without magnitude, or always visible,
+// always are.
+export function isMovingBodyVisibleAtZoom(object: MovingBody, zoom: number, allSmallBodies: boolean = false) {
+	if (object.alwaysVisible === true || !isFiniteNumber(object.magnitude) || (allSmallBodies && isSmallBody(object))) return true
 	return object.magnitude <= (isSmallBody(object) ? smallBodyMagnitudeLimit(zoom) : deepSkyObjectMagnitudeLimit(zoom))
 }
 
@@ -172,5 +173,5 @@ export function isOptionalMovingLabelVisible(object: MovingBody, state: RenderSt
 
 // Returns whether a moving body is drawn in a render state.
 export function isMovingBodyVisible(object: MovingBody, state: RenderState) {
-	return object.visible !== false && isMovingBodyVisibleAtZoom(object, state.transform.k)
+	return object.visible !== false && isMovingBodyVisibleAtZoom(object, state.transform.k, state.allSmallBodies)
 }

@@ -650,6 +650,15 @@ export function setSkyMagnitudeLimit(state: ProfileState, limit: number) {
 	display.magnitudeLimit = value
 }
 
+// Draws every asteroid and comet on the star map of the active profile whatever its magnitude and the zoom, or only those
+// within the limit of the zoom, kept as the absent default.
+export function setSkyAllSmallBodiesVisible(state: ProfileState, visible: boolean) {
+	const display = (activeProfile(state).settings.sky.display ??= { layers: {} })
+	if ((display.allSmallBodies === true) === visible) return
+	if (visible) display.allSmallBodies = true
+	else delete display.allSmallBodies
+}
+
 // Returns the Sky's choice of framings of a profile, creating it hidden.
 function framingOf(profile: Profile): SkyFramingSettings {
 	return (profile.settings.sky.framing ??= { visible: false })

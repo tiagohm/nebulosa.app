@@ -166,6 +166,8 @@ export class Celestial {
 	#milkyWay: MilkyWayStep[] = []
 	readonly #movingBodies = new Map<string, MovingBody>()
 	readonly #movingBodyList: MovingBody[] = []
+	// Whether every asteroid and comet is drawn whatever its magnitude and the zoom (setAllSmallBodiesVisible).
+	#allSmallBodies = false
 	readonly #shapes = new Map<string, CelestialShape>()
 	readonly #shapeList: CelestialShape[] = []
 	// Shapes registered in the picking index, by pick index.
@@ -265,6 +267,17 @@ export class Celestial {
 
 			this.requestRender()
 		}
+	}
+
+	// Draws every asteroid and comet whatever its magnitude and the zoom, or only those within the limit of the zoom; their
+	// names keep the limits of the zoom either way.
+	setAllSmallBodiesVisible(visible: boolean) {
+		if (this.#allSmallBodies === visible) return
+		this.#allSmallBodies = visible
+		this.#pickingDirty = true
+		this.#renderer.markDirty('movingBodies')
+		this.#renderer.markDirty('overlay')
+		this.requestRender()
 	}
 
 	// Toggles star labels without reprojecting stars.
@@ -1402,7 +1415,7 @@ export class Celestial {
 		for (let i = 0; i < this.#movingBodyList.length; i++) {
 			const object = this.#movingBodyList[i]
 
-			if (object.visible === false || object.selectable === false || !this.isLayerVisible(movingBodyLayerId(object.type)) || !isMovingBodyVisibleAtZoom(object, this.#transform.k)) {
+			if (object.visible === false || object.selectable === false || !this.isLayerVisible(movingBodyLayerId(object.type)) || !isMovingBodyVisibleAtZoom(object, this.#transform.k, this.#allSmallBodies)) {
 				continue
 			}
 
@@ -1518,6 +1531,7 @@ export class Celestial {
 		state.constellations = this.#constellations
 		state.milkyWay = this.#milkyWay
 		state.movingBodies = this.#movingBodyList
+		state.allSmallBodies = this.#allSmallBodies
 		state.shapes = this.#shapeList
 		state.hoverObject = this.#hoverObject
 		state.selectedObject = this.#selectedObject

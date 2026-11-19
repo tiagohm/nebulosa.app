@@ -20,6 +20,13 @@ test('asteroids and comets reach fainter magnitudes than deep-sky objects as the
 	expect(isMovingBodyVisibleAtZoom({ ...eros, type: 'jupiter', magnitude: 15 }, 16)).toBeFalse()
 })
 
+test('every asteroid and comet is drawn whatever its magnitude when asked, and no other body', () => {
+	const faint: MovingBody = { id: 'minor:20099942', type: 'asteroid', name: '(99942) Apophis', magnitude: 21, position: { rightAscension: 1, declination: 0 } }
+	expect(isMovingBodyVisibleAtZoom(faint, 1, true)).toBeTrue()
+	expect(isMovingBodyVisibleAtZoom(halley, 1, true)).toBeTrue()
+	expect(isMovingBodyVisibleAtZoom({ ...faint, type: 'neptune', magnitude: 21 }, 1, true)).toBeFalse()
+})
+
 test('only the names of asteroids and comets not looked for are optional', () => {
 	expect(isMovingLabelOptional(halley)).toBeTrue()
 	expect(isMovingLabelOptional({ ...halley, alwaysVisible: true })).toBeFalse()

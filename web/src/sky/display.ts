@@ -6,7 +6,8 @@ import type { ResolvedReferenceLinesOptions } from './celestial/celestial'
 // planets, asteroids, and comets) shares one layer of the map, so they are shown or hidden together. Artificial
 // satellites have a layer of their own: hidden, no satellite is drawn, neither the selected one nor the favorites. The
 // radiants of the active meteor showers are custom shapes the map draws apart (meteors.sky.ts): hidden, none is drawn and
-// none is asked for, and a selected radiant is still drawn.
+// none is asked for, and a selected radiant is still drawn. Asteroids and comets are drawn within a magnitude limit of
+// the zoom, or all of them (their disks; their names keep the limit) when the preference asks.
 
 // Layer of the star map a user can show or hide.
 export type SkyLayerId = 'stars' | 'starLabels' | 'deepSky' | 'movingBodies' | 'satellites' | 'meteorRadiants' | 'constellations' | 'constellationBoundaries' | 'constellationLabels' | 'grid' | 'celestialEquator' | 'ecliptic' | 'localMeridian'
@@ -18,6 +19,9 @@ export interface SkyDisplaySettings {
 	// Faintest star magnitude drawn, [MIN_MAGNITUDE_LIMIT, MAP_STAR_MAGNITUDE_LIMIT]; absent draws every
 	// star downloaded.
 	magnitudeLimit?: number
+	// Whether every asteroid and comet is drawn whatever its magnitude and the zoom; absent draws those within the limit
+	// of the zoom.
+	allSmallBodies?: boolean
 }
 
 // Definition of a layer.
@@ -42,6 +46,8 @@ export interface SkyDisplayTarget {
 	readonly setStarLabelsVisible: (visible: boolean) => void
 	// Sets the faintest star magnitude drawn.
 	readonly setMagnitudeLimit: (limit: number) => void
+	// Draws every asteroid and comet, or only those within the limit of the zoom.
+	readonly setAllSmallBodiesVisible: (visible: boolean) => void
 }
 
 // Layer of the artificial satellites: the selected satellite and the profile's favorites.
@@ -106,4 +112,5 @@ export function applySkyDisplay(target: SkyDisplayTarget, display: Readonly<SkyD
 	}
 
 	target.setMagnitudeLimit(display?.magnitudeLimit ?? maxMagnitude)
+	target.setAllSmallBodiesVisible(display?.allSmallBodies === true)
 }

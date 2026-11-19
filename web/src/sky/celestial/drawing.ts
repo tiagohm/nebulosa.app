@@ -224,10 +224,12 @@ export function skyLabelFont(state: RenderState, baseSize: number) {
 }
 
 // Places a left-aligned label next to an anchor (pixels), preferring the right side and keeping it inside
-// the viewport and the projection disk; writes its position at `out[0..1]` and returns false when it does
-// not fit. Uses the context's current font for measurement.
+// the viewport and the projection disk; writes its position at `out[0..1]` and its width (pixels) at `out[2]`, so
+// callers never measure it again, and returns false when it does not fit. Uses the context's current font for
+// measurement.
 export function positionSkyLabel(ctx: CanvasRenderingContext2D, state: RenderState, name: string, anchorX: number, anchorY: number, offsetX: number, offsetY: number, out: Float32Array) {
 	const width = ctx.measureText(name).width
+	out[2] = width
 	const horizontalInset = 2
 	const verticalInset = 6
 	let minX = horizontalInset
@@ -301,36 +303,36 @@ export function drawZenithLabel(ctx: CanvasRenderingContext2D, state: RenderStat
 	ctx.fillText('Z', point[0], point[1] - 14 * Math.sqrt(Math.min(2.25, state.transform.k)))
 }
 
-// Draws a deep-sky symbol of `radius` pixels for a Stellarium object type: an ellipse for galaxies, a circle
-// for clusters, a crossed circle for globular clusters, and a small square otherwise.
-export function drawDsoSymbol(ctx: CanvasRenderingContext2D, type: DeepSkyObject['type'], x: number, y: number, radius: number) {
+// Cosine and sine of the tilt of a galaxy's ellipse, −45°.
+const GALAXY_TILT_COS = Math.cos(-PIOVERTWO / 2)
+const GALAXY_TILT_SIN = Math.sin(-PIOVERTWO / 2)
+
+// Adds a deep-sky symbol of `radius` pixels for a Stellarium object type to the current path, each outline a subpath of
+// its own so one stroke draws them all: an ellipse for galaxies, a circle for clusters, a crossed circle for globular
+// clusters; any other type is a small square filled at once with the current fill style.
+export function traceDsoSymbol(ctx: CanvasRenderingContext2D, type: DeepSkyObject['type'], x: number, y: number, radius: number) {
 	switch (type) {
 		case 1: // galaxy
 		case 2: // active galaxy
 		case 3: // radio galaxy
 		case 4: // interacting galaxy
-			ctx.beginPath()
+			ctx.moveTo(x + radius * 1.4 * GALAXY_TILT_COS, y + radius * 1.4 * GALAXY_TILT_SIN)
 			ctx.ellipse(x, y, radius * 1.4, radius * 0.7, -PIOVERTWO / 2, 0, TAU)
-			ctx.stroke()
 			break
 		case 6: // star cluster
 		case 7: // open cluster
 		case 9: // stellar association
 		case 17: // cluster associated with nebulosity
-			ctx.beginPath()
+			ctx.moveTo(x + radius, y)
 			ctx.arc(x, y, radius, 0, TAU)
-			ctx.stroke()
 			break
 		case 8: // globular cluster
-			ctx.beginPath()
+			ctx.moveTo(x + radius, y)
 			ctx.arc(x, y, radius, 0, TAU)
-			ctx.stroke()
-			ctx.beginPath()
 			ctx.moveTo(x - radius, y)
 			ctx.lineTo(x + radius, y)
 			ctx.moveTo(x, y - radius)
 			ctx.lineTo(x, y + radius)
-			ctx.stroke()
 			break
 		default:
 			ctx.fillRect(x - 2, y - 2, 2 * 2, 2 * 2)

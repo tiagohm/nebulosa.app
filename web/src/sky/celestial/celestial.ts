@@ -90,6 +90,10 @@ const LAYER_CANVAS_GROUPS: Record<string, string> = {
 	overlay: 'overlay',
 }
 
+// Span of time in milliseconds over which the equatorial chart keeps its sampled lines: one Julian year, over which the
+// mean obliquity of the ecliptic of date changes by about 0.5″.
+const EQUATORIAL_GEOMETRY_MS = 365.25 * 86_400_000
+
 // Layers whose content depends on time and observer and must redraw after an astronomical update.
 const ASTRONOMICAL_DIRTY_LAYER_IDS = ['grid', 'referenceLines', 'milkyWay', 'constellations', 'constellationBoundaries', 'constellationLabels', 'deepSky', 'stars', 'movingBodies', 'satellites', 'shapes'] as const
 
@@ -175,6 +179,10 @@ export class Celestial {
 	#updateQueued = false
 	#projectedGeometryRevision = 0
 	#pickingDirty = false
+	// Instant (Unix milliseconds) of the last full update (projection and sampled lines); NaN to force the next one.
+	#geometryTime = Number.NaN
+	// Media query matching the current device pixel ratio, to learn when it changes.
+	#dprQuery?: MediaQueryList
 	#destroyed = false
 	// Pressed pointers by pointer id, with their press positions, in map-local pixels.
 	readonly #activePointers = new Map<number, ActivePointer>()
@@ -199,6 +207,7 @@ export class Celestial {
 		this.setupLayers()
 
 		this.bindInteractions()
+		this.watchDevicePixelRatio()
 
 		// The element rect is cached for pointer math; scroll/resize can move it, so invalidate on both.
 		window.addEventListener('scroll', this.invalidateRect, { capture: true, passive: true })
@@ -248,7 +257,7 @@ export class Celestial {
 		if (limit !== this.#options.stars.maxMagnitude) {
 			this.#options.stars.maxMagnitude = limit
 			this.projectStars()
-			this.rebuildPickingIndex()
+			this.#pickingDirty = true
 
 			if (this.#hoverObject?.type === 'star' || this.#selectedObject?.type === 'star') {
 				this.#renderer.markDirty('overlay')
@@ -339,13 +348,13 @@ export class Celestial {
 
 	// Resizes the map to a size in pixels and reprojects without recreating the instance. The cached
 	// element rect is dropped even when the size is unchanged, since the map may have moved (for example,
-	// re-attached to another container).
+	// re-attached to another container). An unchanged size does nothing else unless the device pixel ratio changed.
 	resize(width: number, height: number) {
 		const nextWidth = Math.max(1, Math.floor(width))
 		const nextHeight = Math.max(1, Math.floor(height))
 		this.#cachedRect = null
 
-		if (nextWidth === this.#options.width && nextHeight === this.#options.height) {
+		if (nextWidth === this.#options.width && nextHeight === this.#options.height && !this.#renderer.devicePixelRatioChanged()) {
 			return
 		}
 
@@ -356,7 +365,7 @@ export class Celestial {
 		this.#renderer.resize(this.#options.width, this.#options.height)
 		this.projectStars()
 		this.projectDeepSkyObjects()
-		this.rebuildPickingIndex()
+		this.#pickingDirty = true
 		this.#renderer.markAllDirty()
 		this.#emitter.has('resize') && this.#emitter.emit('resize', { width: this.#options.width, height: this.#options.height })
 		this.requestRender()
@@ -379,6 +388,8 @@ export class Celestial {
 		this.#destroyed = true
 		this.stopAutoUpdate()
 		this.unbindInteractions()
+		this.#dprQuery?.removeEventListener('change', this.handleDevicePixelRatioChange)
+		this.#dprQuery = undefined
 		this.#activePointers.clear()
 		this.#gesture = undefined
 		window.removeEventListener('scroll', this.invalidateRect, { capture: true })
@@ -407,6 +418,8 @@ export class Celestial {
 		try {
 			this.#starCatalog = new StarCatalog(stars)
 			this.#starCatalog.cacheStyleBuckets(this.#options.stars, this.#options.theme)
+			// The next update projects them, whatever the chart.
+			this.#geometryTime = Number.NaN
 			this.queueUpdate()
 		} catch (error) {
 			this.emitError(normalizeError(error))
@@ -425,7 +438,7 @@ export class Celestial {
 		this.#renderer.markDirty('constellations')
 		this.#renderer.markDirty('constellationBoundaries')
 		this.#renderer.markDirty('constellationLabels')
-		this.rebuildPickingIndex()
+		this.#pickingDirty = true
 		this.requestRender()
 	}
 
@@ -443,7 +456,7 @@ export class Celestial {
 		this.syncSelectedDeepSkyObject()
 		this.syncHoverDeepSkyObject()
 		this.projectDeepSkyObjects()
-		this.rebuildPickingIndex()
+		this.#pickingDirty = true
 		this.#renderer.markDirty('overlay')
 		this.requestRender()
 	}
@@ -465,7 +478,7 @@ export class Celestial {
 		this.syncSelectedDeepSkyObject()
 		this.syncHoverDeepSkyObject()
 		this.projectDeepSkyObjects()
-		this.rebuildPickingIndex()
+		this.#pickingDirty = true
 
 		if (id === undefined || (this.#selectedObject?.type === 'deepSky' && this.#selectedObject.object.id === id) || (this.#hoverObject?.type === 'deepSky' && this.#hoverObject.object.id === id)) {
 			this.#renderer.markDirty('overlay')
@@ -550,7 +563,7 @@ export class Celestial {
 
 		this.syncSelectedMovingBodyObject()
 		this.syncHoverMovingBodyObject()
-		this.rebuildPickingIndex()
+		this.#pickingDirty = true
 		if (!satellitesOnly) this.#renderer.markDirty('movingBodies')
 		this.#renderer.markDirty('satellites')
 
@@ -644,7 +657,7 @@ export class Celestial {
 			return false
 		}
 
-		this.rebuildPickingIndex()
+		this.#pickingDirty = true
 		this.#renderer.markDirty('shapes')
 
 		if (id === undefined || (this.#selectedObject?.type === 'shape' && this.#selectedObject.id === id) || (this.#hoverObject?.type === 'shape' && this.#hoverObject.id === id)) {
@@ -674,7 +687,7 @@ export class Celestial {
 				this.clearHiddenLayerObjects(layerId)
 			}
 
-			this.rebuildPickingIndex()
+			this.#pickingDirty = true
 		}
 
 		this.requestRender()
@@ -843,21 +856,31 @@ export class Celestial {
 	}
 
 	// Recomputes the equatorial-to-horizontal rotation for the current time and observer, reprojects every
-	// catalog, rebuilds picking, and schedules a render.
+	// catalog, marks picking stale, and schedules a render. The equatorial chart does not turn with time: its catalogs,
+	// grid, and figures keep their place, so only what moves among the stars is redrawn, and its lines are sampled again
+	// once the instant is more than EQUATORIAL_GEOMETRY_MS from theirs, for the ecliptic of date, or new stars were loaded.
 	run() {
 		if (this.#destroyed) return
 
 		const emitUpdateStart = this.#emitter.has('updateStart')
 		const emitUpdateEnd = this.#emitter.has('updateEnd')
 		const start = emitUpdateEnd ? performance.now() : 0
+		const time = unixTimeOf(this.#options.time)
 		emitUpdateStart && this.#emitter.emit('updateStart', { time: this.#options.time })
-		writeEquatorialToHorizontalMatrix(this.#options.time, this.#options.observer, this.#eqToHorizontal)
-		this.invalidateProjectedGeometry()
-		this.projectStars()
-		this.projectDeepSkyObjects()
-		this.rebuildPickingIndex()
+
+		if (this.#options.coordinateSystem === 'horizontal' || !(Math.abs(time - this.#geometryTime) <= EQUATORIAL_GEOMETRY_MS)) {
+			this.#geometryTime = time
+			writeEquatorialToHorizontalMatrix(this.#options.time, this.#options.observer, this.#eqToHorizontal)
+			this.invalidateProjectedGeometry()
+			this.projectStars()
+			this.projectDeepSkyObjects()
+			this.#pickingDirty = true
+			this.markAstronomicalDirty()
+		} else {
+			this.markMovingDirty()
+		}
+
 		emitUpdateEnd && this.#emitter.emit('updateEnd', { time: this.#options.time, duration: performance.now() - start })
-		this.markAstronomicalDirty()
 		this.requestRender()
 	}
 
@@ -952,7 +975,7 @@ export class Celestial {
 		this.invalidateProjectedGeometry()
 		this.projectStars()
 		this.projectDeepSkyObjects()
-		this.rebuildPickingIndex()
+		this.#pickingDirty = true
 		this.#renderer.markAllDirty()
 		this.requestRender()
 	}
@@ -1061,6 +1084,14 @@ export class Celestial {
 	}
 
 	// Marks the layers that depend on time and observer dirty.
+	// Marks the layers of what moves among the stars dirty: the bodies, the satellites, the shapes, and the highlight.
+	private markMovingDirty() {
+		this.#renderer.markDirty('movingBodies')
+		this.#renderer.markDirty('satellites')
+		this.#renderer.markDirty('shapes')
+		if (this.#hoverObject || this.#selectedObject) this.#renderer.markDirty('overlay')
+	}
+
 	private markAstronomicalDirty() {
 		for (let i = 0; i < ASTRONOMICAL_DIRTY_LAYER_IDS.length; i++) {
 			this.#renderer.markDirty(ASTRONOMICAL_DIRTY_LAYER_IDS[i])
@@ -1409,7 +1440,8 @@ export class Celestial {
 		}
 	}
 
-	// Rebuilds the picking index when a view change left it stale.
+	// Rebuilds the picking index when a change left it stale. Changes only mark it stale, so a burst of them (moving
+	// bodies, shapes, a clock update) costs one rebuild, at the next click or hover that reads it.
 	private ensurePickingIndex() {
 		if (!this.#pickingDirty) return
 
@@ -1546,6 +1578,21 @@ export class Celestial {
 		element.addEventListener('wheel', this.handleWheel, { passive: false })
 		document.addEventListener('pointerup', this.handlePointerUp)
 		document.addEventListener('pointercancel', this.handlePointerUp)
+	}
+
+	// Watches the device pixel ratio of the screen, which changes without a resize when the window moves to a screen of
+	// another scale; a media query matches only the ratio it was made for, so each change makes a new one.
+	private watchDevicePixelRatio() {
+		this.#dprQuery?.removeEventListener('change', this.handleDevicePixelRatioChange)
+		this.#dprQuery = window.matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`)
+		this.#dprQuery.addEventListener('change', this.handleDevicePixelRatioChange)
+	}
+
+	// Sizes the backing stores and the star sprites for the new device pixel ratio.
+	private readonly handleDevicePixelRatioChange = () => {
+		if (this.#destroyed) return
+		this.watchDevicePixelRatio()
+		this.resize(this.#options.width, this.#options.height)
 	}
 
 	// Removes the pointer handlers.

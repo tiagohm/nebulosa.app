@@ -191,6 +191,12 @@ export class CanvasRenderer {
 		return this.dpr
 	}
 
+	// Whether the screen's device pixel ratio, clamped as resize clamps it, is no longer that of the backing stores, as
+	// after the window moved to a screen of another scale.
+	devicePixelRatioChanged() {
+		return Math.max(1, Math.min(window.devicePixelRatio || 1, this.maxDevicePixelRatio)) !== this.dpr
+	}
+
 	// Sizes a canvas backing store to the root layout size (or the requested size before layout) times the
 	// device pixel ratio.
 	private resizeCanvas(canvas: HTMLCanvasElement) {

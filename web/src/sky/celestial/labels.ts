@@ -98,7 +98,7 @@ export class SkyLabelSpace {
 	private candidateX = new Float32Array(0)
 	private candidateY = new Float32Array(0)
 	private readonly point = new Float32Array(2)
-	private readonly labelPoint = new Float32Array(2)
+	private readonly labelPoint = new Float32Array(3)
 	private readonly baseViewportBounds = new Float64Array(4)
 
 	// Number of star names placed for the frame.
@@ -205,7 +205,7 @@ export class SkyLabelSpace {
 
 			// A name that would overlap an earlier moving body's (two planets in conjunction) tries the other side of its
 			// body, then just below and above it, and is drawn where it first fits, or where it was placed when none does.
-			const width = ctx.measureText(name).width
+			const width = this.labelPoint[2]
 			let x = this.labelPoint[0]
 			let y = this.labelPoint[1]
 
@@ -274,7 +274,7 @@ export class SkyLabelSpace {
 
 			const x = this.labelPoint[0]
 			const y = this.labelPoint[1]
-			const right = x + ctx.measureText(name).width
+			const right = x + this.labelPoint[2]
 			if (this.hasNearbyStar(x, y) || this.placed.overlaps(x, y - half, right, y + half)) continue
 
 			this.starIndices[this.starCount] = index

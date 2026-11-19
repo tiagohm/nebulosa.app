@@ -90,12 +90,12 @@ export function deepSkyMagnitude(object: DeepSkyObject) {
 }
 
 // Returns the faintest deep-sky magnitude drawn at zoom factor `k`.
-function deepSkyObjectMagnitudeLimit(k: number) {
+export function deepSkyObjectMagnitudeLimit(k: number) {
 	return zoomMagnitudeLimit(k, DSO_SYMBOL_BASE_MAGNITUDE, DSO_SYMBOL_MAGNITUDE_PER_ZOOM, DSO_SYMBOL_MIN_MAGNITUDE, DSO_SYMBOL_MAX_MAGNITUDE)
 }
 
 // Returns the faintest deep-sky magnitude labeled at zoom factor `k`.
-function deepSkyLabelMagnitudeLimit(k: number) {
+export function deepSkyLabelMagnitudeLimit(k: number) {
 	return zoomMagnitudeLimit(k, DSO_LABEL_BASE_MAGNITUDE, DSO_LABEL_MAGNITUDE_PER_ZOOM, DSO_LABEL_MIN_MAGNITUDE, DSO_LABEL_MAX_MAGNITUDE)
 }
 

@@ -12,8 +12,8 @@ import { createRequestGuard } from './selection'
 // instant, the selected one's track drawn on request, and the view kept on it while tracked. Only the samples of the
 // window are requested, never the catalog, and never once per update: a new window is asked for when the clock leaves
 // the current one, the satellites or the observer change, or the catalog changes.
-// Markers move about four times a second (once a second with reduced motion) while the page is shown: each move of a
-// moving body rebuilds the pick index of the map, so a per-frame update would cost more than the motion needs.
+// Markers move about four times a second (once a second with reduced motion) while the page is shown: each move redraws
+// the satellites layer, so a per-frame update would cost more than the motion needs.
 
 // Interval of the marker updates, in milliseconds, and with reduced motion.
 const UPDATE_INTERVAL_MS = 250

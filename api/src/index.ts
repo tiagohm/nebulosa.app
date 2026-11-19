@@ -463,6 +463,7 @@ export type {
 	SpiceKernelErrorCode,
 	SpiceKernelEvent,
 	SpiceKernelGenerateRequest,
+	SpiceKernelGenerationSource,
 	SpiceKernelImportResponse,
 	SpiceKernelJob,
 	SpiceKernelJobKind,

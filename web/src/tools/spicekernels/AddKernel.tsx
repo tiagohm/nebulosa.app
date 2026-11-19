@@ -1,4 +1,4 @@
-import type { MinorBody, SpiceCatalogItem, SpiceCatalogSystem, SpiceKernelJob } from 'api'
+import type { MinorBody, SpiceCatalogItem, SpiceCatalogSystem, SpiceKernelGenerationSource, SpiceKernelJob } from 'api'
 import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatByteSize } from '../../format'
@@ -13,9 +13,9 @@ import { TextInput } from '../../ui/TextInput'
 import { epochDate, JOB_STATE_LABELS } from './format'
 import { activeJobs, cancelSpiceKernelJob, downloadSpiceKernel, fetchSpiceCatalog, generateSpiceKernel, spiceKernelsState } from './spicekernels'
 
-// Add Kernel section of the SPICE Kernel Library tool: the curated NASA/JPL downloads, the Horizons generation of a
-// small-body kernel over an interval, and the acquisitions of the server with their progress. Nothing is downloaded or
-// generated without a click here.
+// Add Kernel section of the SPICE Kernel Library tool: the curated NASA/JPL downloads, the generation of a small-body
+// kernel over an interval, by Horizons or by this server from the MPC Orbit Database, and the acquisitions of the server
+// with their progress. Nothing is downloaded or generated without a click here.
 
 // Years of the interval suggested for a new generation, from today.
 const SUGGESTED_YEARS = 10
@@ -42,10 +42,10 @@ export function AddKernel() {
 type SystemFilter = 'all' | SpiceCatalogSystem
 
 // Systems of the filter, in the order of the catalog.
-const SYSTEM_FILTERS: readonly SystemFilter[] = ['all', 'planets', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto']
+const SYSTEM_FILTERS: readonly SystemFilter[] = ['all', 'planets', 'asteroids', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto']
 
 // Label of each system of the filter.
-const SYSTEM_LABELS: Readonly<Record<SystemFilter, string>> = { all: 'All systems', planets: 'Planets', mars: 'Mars', jupiter: 'Jupiter', saturn: 'Saturn', uranus: 'Uranus', neptune: 'Neptune', pluto: 'Pluto' }
+const SYSTEM_LABELS: Readonly<Record<SystemFilter, string>> = { all: 'All systems', planets: 'Planets', asteroids: 'Asteroids', mars: 'Mars', jupiter: 'Jupiter', saturn: 'Saturn', uranus: 'Uranus', neptune: 'Neptune', pluto: 'Pluto' }
 
 // Whether item belongs to system and contains every word of query, case-insensitive, in its file name, bodies, or
 // description.
@@ -162,7 +162,19 @@ function CatalogRow({ item, selected, onSelect }: CatalogRowProps) {
 	)
 }
 
-// Generation of a small-body kernel: an SBDB search that resolves the body to its SPK-ID, then an interval.
+// Who integrates a generated kernel, in the order of the selector.
+const GENERATION_SOURCES: readonly SpiceKernelGenerationSource[] = ['horizons', 'mpc']
+
+// Label of each generation source.
+const GENERATION_LABELS: Readonly<Record<SpiceKernelGenerationSource, string>> = { horizons: 'JPL Horizons', mpc: 'MPC orbit, integrated here' }
+
+// What each generation source does, shown below the form.
+const GENERATION_NOTES: Readonly<Record<SpiceKernelGenerationSource, string>> = {
+	horizons: 'Horizons integrates the current JPL orbit of the body over the interval, usually within 1600 to 2500; the kernel is relative to the Sun, so positions also need a planetary kernel.',
+	mpc: 'This server integrates the current MPC orbit of the body over the planetary kernels of the library, with the asteroids of sb441-n16.bsp when it is installed and the non-gravitational forces of the orbit. The interval may span any years the planetary kernels cover; the kernel is relative to the Sun.',
+}
+
+// Generation of a small-body kernel: an SBDB search that resolves the body to its SPK-ID, then the source and an interval.
 function SmallBody() {
 	const state = useSnapshot(spiceKernelsState)
 	const [query, setQuery] = useState('')
@@ -171,6 +183,7 @@ function SmallBody() {
 	const [matches, setMatches] = useState<readonly { readonly designation: string; readonly name: string }[]>([])
 	const [body, setBody] = useState<MinorBody>()
 	const [interval, setInterval] = useState(suggestedInterval)
+	const [source, setSource] = useState<SpiceKernelGenerationSource>('horizons')
 	const start = Date.parse(`${interval.start}T00:00:00Z`)
 	const end = Date.parse(`${interval.end}T00:00:00Z`)
 	const valid = Number.isFinite(start) && Number.isFinite(end) && start < end
@@ -196,7 +209,7 @@ function SmallBody() {
 
 	return (
 		<section className="flex flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4">
-			<h2 className="m-0 text-sm font-semibold text-ink-100">Asteroid or comet from JPL Horizons</h2>
+			<h2 className="m-0 text-sm font-semibold text-ink-100">Asteroid or comet</h2>
 			<form
 				onSubmit={(event) => {
 					event.preventDefault()
@@ -233,13 +246,14 @@ function SmallBody() {
 					</p>
 					{installed && installed.length > 0 && <Notice>Already covered by {installed.map((e) => `${e.name}${e.start !== undefined && e.end !== undefined ? ` (${epochDate(e.start)} – ${epochDate(e.end)})` : ''}`).join(', ')}.</Notice>}
 					<div className="flex flex-wrap items-end gap-2">
+						<Select label="Integrated by" className="w-56" options={GENERATION_SOURCES} value={source} format={(e) => GENERATION_LABELS[e]} onChange={setSource} />
 						<TextInput label="Start (UTC)" type="date" className="w-40" value={interval.start} onChange={(e) => setInterval({ ...interval, start: e.target.value })} />
 						<TextInput label="End (UTC)" type="date" className="w-40" value={interval.end} onChange={(e) => setInterval({ ...interval, end: e.target.value })} />
-						<Button disabled={!valid || state.pending.generate} onClick={() => void generateSpiceKernel(spiceKernelsState, { spkId: body.spkId, name: body.name, start, end })}>
+						<Button disabled={!valid || state.pending.generate} onClick={() => void generateSpiceKernel(spiceKernelsState, { spkId: body.spkId, name: body.name, designation: body.designation, source, start, end })}>
 							Generate
 						</Button>
 					</div>
-					<Notice>Horizons integrates the current orbit of the body over the interval, usually within 1600 to 2500; the kernel is relative to the Sun, so positions also need a planetary kernel.</Notice>
+					<Notice>{GENERATION_NOTES[source]}</Notice>
 				</>
 			)}
 			{state.errors.generate && <Notice error>{state.errors.generate}</Notice>}

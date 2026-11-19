@@ -1,22 +1,25 @@
 import { spkFile } from 'nebulosa/src/adapters/ephemeris/horizons'
+import { type MPCOrbitSolution, orbit as mpcOrbit } from 'nebulosa/src/adapters/orbits/mpc'
 import type { PositionAndVelocity } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { equatorialToEclipticJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { eraC2s } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { spkSeconds } from 'nebulosa/src/astronomy/ephemeris/kernels/spk'
-import type { SpkChainLink, SpkCoverageInterval, SpkKernelSet, SpkMissReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
-import { timeUnix, toJulianDay, tdb } from 'nebulosa/src/astronomy/time/time'
+import { prepareSpkKernelSet, type SpkChainLink, type SpkCoverageInterval, type SpkKernelSet, type SpkMissReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
+import { Timescale, timeUnix, toJulianDay, tdb } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, DAYSEC, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { errorResponse } from './http'
 import { SPICE_KERNEL_CATALOG, type SpiceCatalogEntry } from './spicekernels.catalog'
 import { type SpiceKernelJob, SpiceKernelJobs, type SpiceKernelJobContext, SpiceKernelQueueFullError } from './spicekernels.jobs'
+import { integrateMpcKernel, type MpcKernel, MpcKernelError } from './spicekernels.mpc'
 import { inspectSpiceKernel, openSpiceKernel, type SpiceKernelRuntime } from './spicekernels.runtime'
 import type { SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelStore, SpiceSegmentRecord, StagedSpiceKernel } from './spicekernels.store'
 import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 
-// SPICE Kernel Library: the server-global set of SPK files the Sky ephemeris evaluates locally. Files come from three
+// SPICE Kernel Library: the server-global set of SPK files the Sky ephemeris evaluates locally. Files come from four
 // explicit actions of an operator, never from a position request: a curated NASA/JPL download, a Horizons small-body
-// generation through the shared JPL queue, or an upload. Each is streamed into staging, inspected, renamed into place,
+// generation through the shared JPL queue, an integration on this server of the MPC Orbit Database solution of a small
+// body over the planetary kernels of the library, or an upload. Each is streamed into staging, inspected, renamed into place,
 // recorded, and published as a new runtime generation, one change at a time; a failure leaves the previous generation
 // untouched. Enabling, reordering, verifying, and deleting kernels, preferring a kernel for a body, and changing the
 // offline switch of the ephemeris sources follow the same path. The library also explains the selection of the current generation body by
@@ -33,11 +36,14 @@ export type { SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelState, SpiceS
 // time limit, since the satellite ephemerides reach 2 GiB; a stalled one fails instead.
 const DOWNLOAD_STALL_MS = 2 * 60 * 1000
 
+// Julian date of the Unix epoch, 1970-01-01 00:00, used to write a Julian date of any time scale as a calendar date.
+const UNIX_EPOCH_JULIAN_DATE = 2440587.5
+
 // Longest wait for a Horizons SPK generation, in milliseconds, once it reaches the head of the JPL queue.
 const GENERATION_TIMEOUT_MS = 120_000
 
 // Stable code of an error of the library.
-export type SpiceKernelErrorCode = 'notFound' | 'invalidSpk' | 'queueFull' | 'downloadFailed' | 'generationFailed' | 'rateLimited' | 'cancelled' | 'processingFailed'
+export type SpiceKernelErrorCode = 'notFound' | 'invalidSpk' | 'queueFull' | 'downloadFailed' | 'generationFailed' | 'missingDependency' | 'rateLimited' | 'cancelled' | 'processingFailed'
 
 // What tabs see of a kernel in the snapshot:
 // - ready: every evaluable segment resolves to the barycenter;
@@ -130,7 +136,15 @@ export interface SpiceKernelGenerateRequest {
 	readonly name?: string
 	readonly start: number
 	readonly end: number
+	// Who integrates the orbit: Horizons (the default), or this server from the MPC Orbit Database solution.
+	readonly source?: SpiceKernelGenerationSource
+	// Designation the MPC knows the body by, such as "433", "2P", or "2024 YR4" (the primary designation of SBDB); the
+	// SPK-ID when absent.
+	readonly designation?: string
 }
+
+// Who integrates a generated small-body kernel.
+export type SpiceKernelGenerationSource = 'horizons' | 'mpc'
 
 // Answer of GET /api/spice-kernels/coverage: whether the current set resolves a NAIF body at an instant (Unix
 // milliseconds), and if not, which body of its chain stopped it and why.
@@ -285,12 +299,17 @@ export class SpiceKernelError extends Error {
 // Generator of Horizons SPK files, as spkFile.
 export type SpkGenerator = typeof spkFile
 
+// Reader of MPC Orbit Database solutions, as orbit of the toolkit's MPC client.
+export type MpcOrbitReader = (designation: string, signal?: AbortSignal) => Promise<MPCOrbitSolution | undefined>
+
 // Optional dependencies of the library, replaced by tests.
 export interface SpiceKernelLibraryOptions {
 	// Fetch of the curated downloads.
 	readonly fetch?: (url: string, init: RequestInit) => Promise<Response>
 	// Generator of Horizons SPK files.
 	readonly generate?: SpkGenerator
+	// Reader of MPC Orbit Database solutions.
+	readonly mpcOrbit?: MpcOrbitReader
 	// Clock, Unix milliseconds.
 	readonly now?: () => number
 	// Longest wait for a curated download without receiving a byte, in milliseconds; DOWNLOAD_STALL_MS by default.
@@ -304,6 +323,8 @@ interface Provenance {
 	readonly sourceRef?: string
 	readonly requestedStart?: number
 	readonly requestedEnd?: number
+	// How a kernel integrated here was made, for people.
+	readonly provenance?: string
 	// NAIF code the file must contain a segment for.
 	readonly target?: number
 }
@@ -332,6 +353,7 @@ export class SpiceKernelLibrary implements Disposable {
 	readonly #jobs: SpiceKernelJobs
 	readonly #fetch: NonNullable<SpiceKernelLibraryOptions['fetch']>
 	readonly #generate: SpkGenerator
+	readonly #mpcOrbit: MpcOrbitReader
 	readonly #now: () => number
 	readonly #downloadStallMs: number
 
@@ -346,6 +368,7 @@ export class SpiceKernelLibrary implements Disposable {
 	) {
 		this.#fetch = options.fetch ?? ((url, init) => fetch(url, init))
 		this.#generate = options.generate ?? spkFile
+		this.#mpcOrbit = options.mpcOrbit ?? mpcOrbit
 		this.#now = options.now ?? Date.now
 		this.#downloadStallMs = options.downloadStallMs ?? DOWNLOAD_STALL_MS
 		this.#jobs = new SpiceKernelJobs((job) => this.publish({ type: 'spiceKernels:jobUpdated', epoch: this.#epoch, revision: ++this.#revision, job }), failureOf, this.#now)
@@ -511,9 +534,11 @@ export class SpiceKernelLibrary implements Disposable {
 		return this.#submit('download', `download:${entry.id}`, entry.name, (context) => this.#download(entry, context))
 	}
 
-	// Starts, or joins, the Horizons generation of a small-body SPK over an interval in Unix milliseconds (UTC).
+	// Starts, or joins, the generation of a small-body SPK over an interval in Unix milliseconds (UTC): by Horizons, or by an
+	// integration of the MPC Orbit Database solution on this server.
 	generate(request: SpiceKernelGenerateRequest): SpiceKernelJob {
 		const label = request.name ? `${request.name} (${request.spkId})` : request.spkId
+		if (request.source === 'mpc') return this.#submit('generate', `generate:mpc:${request.spkId}:${request.start}:${request.end}`, label, (context) => this.#integrateFile(request, label, context))
 		return this.#submit('generate', `generate:${request.spkId}:${request.start}:${request.end}`, label, (context) => this.#generateFile(request, label, context))
 	}
 
@@ -673,6 +698,73 @@ export class SpiceKernelLibrary implements Disposable {
 		const staged = await this.store.stage(Bun.randomUUIDv7(), new Blob([bytes]).stream(), context.signal)
 		context.stage('validating')
 		return await this.#exclusive(() => this.#publishFile(staged, { name: label, sourceKind: 'horizons', sourceRef: request.spkId, requestedStart: request.start, requestedEnd: request.end, target: id }, context))
+	}
+
+	// Integrates the MPC Orbit Database solution of a small body over its own read-only copies of the enabled kernels (so a
+	// new generation never closes them mid-way), stages the written SPK, and publishes it. Fails as generationFailed when
+	// the MPC cannot be reached, has no solution, or its solution has no Cartesian state, and as missingDependency when the
+	// kernels miss a planetary body over the integrated span.
+	async #integrateFile(request: SpiceKernelGenerateRequest, label: string, context: SpiceKernelJobContext) {
+		const designation = request.designation ?? request.spkId
+		let solution: MPCOrbitSolution | undefined
+
+		try {
+			solution = await this.#mpcOrbit(designation, context.signal)
+		} catch (error) {
+			if (context.signal.aborted) throw error
+			throw new SpiceKernelError(`The MPC could not be reached: ${Error.isError(error) ? error.message : String(error)}`, 502, 'generationFailed')
+		}
+
+		if (!solution) throw new SpiceKernelError(`The MPC Orbit Database has no orbit of ${designation}.`, 404, 'generationFailed')
+
+		const opened: { readonly id: string; readonly kernel: Awaited<ReturnType<typeof openSpiceKernel>> }[] = []
+		let integrated: MpcKernel
+
+		try {
+			for (const kernel of this.store.kernels()) {
+				if (!kernel.enabled || kernel.state !== 'ready') continue
+
+				try {
+					opened.push({ id: kernel.id, kernel: await openSpiceKernel(this.store.objectPath(kernel.sha256)) })
+				} catch {
+					// A file that cannot be opened is judged by the rebuild; the integration goes on without it.
+				}
+			}
+
+			const set = await prepareSpkKernelSet(
+				opened.map((e) => ({ id: e.id, daf: e.kernel.daf, segments: e.kernel.segments })),
+				{ preferences: this.store.preferences() },
+			)
+			integrated = await integrateMpcKernel(solution, Number(request.spkId), `MPC ${designation}`.slice(0, 40), timeUnix(request.start / 1000, true), timeUnix(request.end / 1000, true), set, context.signal)
+		} catch (error) {
+			if (!(error instanceof MpcKernelError)) throw error
+			if (error.reason === 'unsupportedOrbit') throw new SpiceKernelError(error.message, 422, 'generationFailed')
+			throw new SpiceKernelError(`${error.message} Add a planetary kernel such as de440s.bsp covering the epoch of the orbit and the interval.`, 409, 'missingDependency')
+		} finally {
+			for (const e of opened) await e.kernel.source.close()
+		}
+
+		context.progress(integrated.bytes.byteLength, integrated.bytes.byteLength)
+		const staged = await this.store.stage(Bun.randomUUIDv7(), new Blob([Buffer.from(integrated.bytes)]).stream(), context.signal)
+		context.stage('validating')
+		const provenance = this.#mpcProvenance(designation, solution, integrated)
+		return await this.#exclusive(() => this.#publishFile(staged, { name: label, sourceKind: 'mpc', sourceRef: request.spkId, requestedStart: request.start, requestedEnd: request.end, provenance, target: Number(request.spkId) }, context))
+	}
+
+	// How an MPC integration was made, for people: the solution, the force model, and the kernels it read.
+	#mpcProvenance(designation: string, solution: MPCOrbitSolution, kernel: MpcKernel) {
+		// The calendar date of the epoch in its own time scale, as the MPC publishes it.
+		const epoch = `${new Date((kernel.epoch.day + kernel.epoch.fraction - UNIX_EPOCH_JULIAN_DATE) * DAYSEC * 1000).toISOString().slice(0, 10)} ${kernel.epoch.scale === Timescale.TT ? 'TT' : 'TDB'}`
+		const system = solution.systemData
+		const fit = [system?.ephemeris, system?.forceModel].filter(Boolean).join(', ')
+		const forces = ['the DE440 planets and Moon', `${kernel.asteroids} SB441-N16 asteroids`, "the Sun's relativistic term"]
+		const ng = kernel.nonGravitational
+
+		if (ng?.model === 'asteroid') forces.push(`Yarkovsky A2 = ${ng.a2.toExponential(3)} au/d²`)
+		else if (ng) forces.push(`cometary A1 = ${ng.a1.toExponential(3)}, A2 = ${ng.a2.toExponential(3)}, A3 = ${ng.a3.toExponential(3)} au/d²`)
+
+		const names = kernel.kernelIds.map((id) => this.store.kernel(id)?.name ?? id)
+		return `MPC orbit of ${designation} at ${epoch}${fit ? ` (${fit})` : ''}; integrated with ${forces.join(', ')}, over ${names.join(', ')}; ${kernel.states} states.`
 	}
 
 	// Inspects a staged file, moves it into place, records it, and publishes a new generation. An identical installed file

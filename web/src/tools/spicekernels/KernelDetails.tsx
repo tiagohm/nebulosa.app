@@ -62,6 +62,7 @@ export function KernelDetails({ kernel, onDeleted }: KernelDetailsProps) {
 					{SOURCE_LABELS[kernel.sourceKind]}
 					{kernel.sourceRef ? ` · ${kernel.sourceRef}` : ''}
 				</DataRow>
+				{kernel.provenance && <DataRow label="Provenance">{kernel.provenance}</DataRow>}
 				{kernel.requestedStart !== undefined && kernel.requestedEnd !== undefined && (
 					<DataRow label="Requested">
 						{new Date(kernel.requestedStart).toISOString().slice(0, 10)} – {new Date(kernel.requestedEnd).toISOString().slice(0, 10)} UTC

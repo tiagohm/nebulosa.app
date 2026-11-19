@@ -12,8 +12,9 @@ import { type AppDatabase, DEFAULT_DATA_DIRECTORY } from './database'
 // Directory of the files of the SPICE Kernel Library.
 export const DEFAULT_SPICE_KERNEL_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'spice-kernels')
 
-// Where a kernel came from: a curated NAIF or JPL SSD download (kind naif), a Horizons small-body generation, or an upload.
-export type SpiceKernelSourceKind = 'naif' | 'horizons' | 'import'
+// Where a kernel came from: a curated NAIF or JPL SSD download (kind naif), a Horizons small-body generation, an integration
+// of an MPC Orbit Database solution on this server, or an upload.
+export type SpiceKernelSourceKind = 'naif' | 'horizons' | 'mpc' | 'import'
 
 // Lifecycle of a kernel: usable, being deleted, failing its integrity or format checks, or without its file.
 export type SpiceKernelState = 'ready' | 'pendingDelete' | 'invalid' | 'missing'
@@ -28,9 +29,11 @@ export interface SpiceKernelRecord {
 	readonly sourceKind: SpiceKernelSourceKind
 	// Id of the curated source, or SPK-ID of the generated small body.
 	readonly sourceRef?: string
-	// Interval asked of Horizons for a generated kernel, Unix milliseconds (UTC).
+	// Interval asked for a generated kernel, Unix milliseconds (UTC).
 	readonly requestedStart?: number
 	readonly requestedEnd?: number
+	// How a kernel integrated here was made, for people: the orbit solution and the force model.
+	readonly provenance?: string
 	// Size of the file, in bytes.
 	readonly bytes: number
 	// When it was added, Unix milliseconds (UTC).
@@ -79,6 +82,7 @@ interface KernelRow {
 	readonly source_ref: string | null
 	readonly requested_start: number | null
 	readonly requested_end: number | null
+	readonly provenance: string | null
 	readonly bytes: number
 	readonly created_at: number
 	readonly enabled: number
@@ -110,6 +114,7 @@ function kernelOf(row: KernelRow): SpiceKernelRecord {
 		sourceRef: row.source_ref ?? undefined,
 		requestedStart: row.requested_start ?? undefined,
 		requestedEnd: row.requested_end ?? undefined,
+		provenance: row.provenance ?? undefined,
 		bytes: row.bytes,
 		createdAt: row.created_at,
 		enabled: row.enabled === 1,
@@ -189,7 +194,7 @@ export class SpiceKernelStore {
 
 		return this.database.write(() => {
 			const { next } = db.query<{ next: number }, []>('SELECT COALESCE(MAX(priority) + 1, 0) AS next FROM spice_kernels').get()!
-			db.query('INSERT INTO spice_kernels VALUES (:id, :sha256, :name, :sourceKind, :sourceRef, :requestedStart, :requestedEnd, :bytes, :createdAt, 1, :priority, :state)').run({
+			db.query('INSERT INTO spice_kernels VALUES (:id, :sha256, :name, :sourceKind, :sourceRef, :requestedStart, :requestedEnd, :provenance, :bytes, :createdAt, 1, :priority, :state)').run({
 				id: kernel.id,
 				sha256: kernel.sha256,
 				name: kernel.name,
@@ -197,6 +202,7 @@ export class SpiceKernelStore {
 				sourceRef: kernel.sourceRef ?? null,
 				requestedStart: kernel.requestedStart ?? null,
 				requestedEnd: kernel.requestedEnd ?? null,
+				provenance: kernel.provenance ?? null,
 				bytes: kernel.bytes,
 				createdAt: kernel.createdAt,
 				priority: next,

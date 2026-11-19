@@ -77,7 +77,7 @@ export function downloadSpiceKernel(state: SpiceKernelsState, sourceId: string, 
 
 // Starts, or joins, the Horizons generation of a small-body kernel.
 export function generateSpiceKernel(state: SpiceKernelsState, body: SpiceKernelGenerateRequest, request: ApiFetch = browserFetch) {
-	return send(state, 'generate', () => request('/api/spice-kernels/generate', jsonInit('POST', body)), 'The kernel could not be requested from Horizons.')
+	return send(state, 'generate', () => request('/api/spice-kernels/generate', jsonInit('POST', body)), 'The kernel could not be requested.')
 }
 
 // Cancels an acquisition job.

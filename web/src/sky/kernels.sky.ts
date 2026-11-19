@@ -36,14 +36,14 @@ export function kernelBodyName(kernel: Pick<SpiceKernelSummary, 'name' | 'source
 	return name.trim() || kernel.sourceRef || kernel.name
 }
 
-// Returns the small bodies of the Horizons kernels of the library, in library order, once per SPK-ID; empty without a
+// Returns the small bodies of the Horizons and MPC kernels of the library, in library order, once per SPK-ID; empty without a
 // snapshot.
 export function kernelBodies(kernels: readonly SpiceKernelSummary[] | undefined): KernelBody[] {
 	const bodies = new Map<string, KernelBody>()
 
 	for (const kernel of kernels ?? []) {
 		const spkId = kernel.sourceRef
-		if (kernel.sourceKind !== 'horizons' || !spkId || HIDDEN_READINESS.has(kernel.readiness) || bodies.has(spkId)) continue
+		if ((kernel.sourceKind !== 'horizons' && kernel.sourceKind !== 'mpc') || !spkId || HIDDEN_READINESS.has(kernel.readiness) || bodies.has(spkId)) continue
 		bodies.set(spkId, { spkId, name: kernelBodyName(kernel), comet: isCometSpkId(spkId) })
 	}
 

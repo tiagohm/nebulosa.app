@@ -20,7 +20,7 @@ test('the designation drops the SPK-ID the library appends to a generated kernel
 	expect(kernelBodyName({ name: 'Ceres (2021)', sourceRef: '20000001' })).toBe('Ceres (2021)')
 })
 
-test('the Sky draws the small bodies of the Horizons kernels the ephemeris may use, once each', () => {
+test('the Sky draws the small bodies of the Horizons and MPC kernels the ephemeris may use, once each', () => {
 	const bodies = kernelBodies([
 		kernel({ name: 'de440s.bsp', sourceKind: 'naif', sourceRef: 'de440s' }),
 		kernel({ name: '161P/Hartley-IRAS (1000042)', sourceRef: '1000042' }),
@@ -29,11 +29,14 @@ test('the Sky draws the small bodies of the Horizons kernels the ephemeris may u
 		kernel({ name: '4 Vesta (20000004)', sourceRef: '20000004', enabled: false, readiness: 'disabled' }),
 		kernel({ name: '433 Eros (20000433)', sourceRef: '20000433', readiness: 'invalid' }),
 		kernel({ name: 'upload.bsp', sourceKind: 'import' }),
+		kernel({ name: '3200 Phaethon (20003200)', sourceKind: 'mpc', sourceRef: '20003200' }),
+		kernel({ name: '1 Ceres (20000001)', sourceKind: 'mpc', sourceRef: '20000001' }),
 	])
 
 	expect(bodies).toEqual([
 		{ spkId: '1000042', name: '161P/Hartley-IRAS', comet: true },
 		{ spkId: '20000001', name: '1 Ceres', comet: false },
+		{ spkId: '20003200', name: '3200 Phaethon', comet: false },
 	])
 	expect(kernelBodies(undefined)).toEqual([])
 })

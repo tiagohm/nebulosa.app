@@ -4,10 +4,11 @@ import { mkdir, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type { SpkFile } from 'nebulosa/src/adapters/ephemeris/horizons'
+import { type MPCOrbitSolution, orbitCartesianState, orbitToKeplerOrbit } from 'nebulosa/src/adapters/orbits/mpc'
 import * as kernelSets from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { AppDatabase } from './database'
-import { createSpiceKernelRoutes, SpiceKernelError, type SpiceKernelEvent, SpiceKernelLibrary, type SpiceKernelLibraryOptions, type SpkGenerator } from './spicekernels'
+import { createSpiceKernelRoutes, type MpcOrbitReader, SpiceKernelError, type SpiceKernelEvent, SpiceKernelLibrary, type SpiceKernelLibraryOptions, type SpkGenerator } from './spicekernels'
 import { spkFixture } from './spicekernels.fixture'
 import type { SpiceKernelJob } from './spicekernels.jobs'
 import { SpiceKernelRuntime } from './spicekernels.runtime'
@@ -331,6 +332,7 @@ test('the curated catalog lists the reviewed kernels by system', async () => {
 		'de440',
 		'de442s',
 		'de442',
+		'sb441-n16',
 		'mar099s',
 		'mar099',
 		'jup365-1990-2050',
@@ -361,7 +363,7 @@ test('the curated catalog lists the reviewed kernels by system', async () => {
 	])
 	expect(new Set(catalog.map((e) => e.name)).size).toBe(catalog.length)
 	// Every system is one consecutive run, the planetary ephemerides first.
-	expect([...new Set(catalog.map((e) => e.system))]).toEqual(['planets', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'])
+	expect([...new Set(catalog.map((e) => e.system))]).toEqual(['planets', 'asteroids', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'])
 	expect(catalog.find((e) => e.id === 'jup365-1990-2050')?.url).toBe('https://naif.jpl.nasa.gov/pub/naif/JUICE/kernels/spk/jup365_19900101_20500101.bsp')
 	expect(catalog.find((e) => e.id === 'ura182')?.url).toBe('https://ssd.jpl.nasa.gov/ftp/eph/satellites/bsp/ura182.bsp')
 	// No size limit keeps a file out.
@@ -434,6 +436,57 @@ test('a Horizons generation must contain the requested body', async () => {
 	expect(await ended(events, library.generate({ spkId: '20000002', start, end }).jobId)).toMatchObject({ state: 'failed', code: 'generationFailed', error: 'The generated kernel has no segment for 20000002.' })
 	expect(await ended(events, library.generate({ spkId: '20000003', start, end }).jobId)).toMatchObject({ state: 'failed', code: 'generationFailed', error: 'No ephemeris for target "3 Juno"' })
 	expect(requested).toEqual([20000001, 20000002, 20000003])
+})
+
+// Every DE440 body an MPC integration needs, at rest: the Sun at the barycenter and the planets far from the orbit.
+const DE440_BODIES = spkFixture([
+	{ center: 0, target: 10, start: -1e9, end: 1e9, position: [0, 0, 0] },
+	...[1, 2, 4, 5, 6, 7, 8, 9].map((target) => ({ center: 0, target, start: -1e9, end: 1e9, position: [0, 0, 6e9 + target * 1e8] as [number, number, number] })),
+	{ center: 0, target: 3, start: -1e9, end: 1e9, position: [0, 0, -6e9] },
+	{ center: 3, target: 399, start: -1e9, end: 1e9, position: [4000, 0, 0] },
+	{ center: 3, target: 301, start: -1e9, end: 1e9, position: [-3.8e5, 0, 0] },
+])
+
+// An MPC solution at MJD 60000 TT on a near-circular ecliptic orbit of 2.7 AU, with a Yarkovsky coefficient.
+const MPC_SOLUTION: MPCOrbitSolution = {
+	car: { coefficientNames: ['x', 'y', 'z', 'vx', 'vy', 'vz', 'yarkovsky'], coefficients: [2.7, 0, 0.1, 0, 0.0104, 0.001, -0.0003] },
+	epochData: { epoch: 60000, timeForm: 'MJD', timeSystem: 'TDT' },
+	systemData: { referenceSystem: 'Ecliptic', referenceFrame: 'ICRF', ephemeris: 'DE431', forceModel: 'AST17' },
+}
+
+test('an MPC orbit is integrated over the planetary kernels into a kernel relative to the Sun', async () => {
+	const asked: string[] = []
+	const mpcOrbit: MpcOrbitReader = (designation) => {
+		asked.push(designation)
+		return Promise.resolve(designation === '4' ? MPC_SOLUTION : undefined)
+	}
+	const { library, events } = await started({ mpcOrbit })
+	const start = Date.UTC(2023, 0, 1)
+	const end = Date.UTC(2023, 6, 1)
+
+	// Without a planetary kernel the integration cannot start.
+	expect(await ended(events, library.generate({ spkId: '20000004', designation: '4', source: 'mpc', start, end }).jobId)).toMatchObject({ state: 'failed', code: 'missingDependency' })
+
+	await library.importFile('de440-bodies.bsp', stream(DE440_BODIES))
+	const job = await ended(events, library.generate({ spkId: '20000004', name: '4 Vesta', designation: '4', source: 'mpc', start, end }).jobId)
+	expect(job.state).toBe('completed')
+
+	const details = library.details(job.kernelId!)
+	expect(details).toMatchObject({ name: '4 Vesta (20000004)', sourceKind: 'mpc', sourceRef: '20000004', requestedStart: start, requestedEnd: end, readiness: 'ready', targets: [20000004] })
+	expect(details.segments).toMatchObject([{ target: 20000004, center: 10, dataType: 9 }])
+	expect(details.provenance).toStartWith('MPC orbit of 4 at 2023-02-25 TT (DE431, AST17); integrated with the DE440 planets and Moon, 0 SB441-N16 asteroids')
+	expect(details.provenance).toContain('Yarkovsky A2 = -3.000e-14 au/d²')
+
+	// At the epoch the kernel holds the solution's state, rotated from the ecliptic to the equator.
+	const epoch = Date.UTC(2023, 1, 25) - 69_184
+	const state = orbitToKeplerOrbit(MPC_SOLUTION)!.at(orbitCartesianState(MPC_SOLUTION)!.epoch)[0]
+	const evaluation = library.evaluate({ target: 20000004, center: 10, time: epoch })
+	expect(evaluation.ok).toBeTrue()
+	if (evaluation.ok) for (let i = 0; i < 3; i++) expect(evaluation.position[i] / AU_KM).toBeCloseTo(state[i], 6)
+
+	// A body the MPC does not know fails without a kernel.
+	expect(await ended(events, library.generate({ spkId: '20000099', designation: '99', source: 'mpc', start, end }).jobId)).toMatchObject({ state: 'failed', code: 'generationFailed', error: 'The MPC Orbit Database has no orbit of 99.' })
+	expect(asked).toEqual(['4', '4', '99'])
 })
 
 test('a running job can be cancelled', async () => {

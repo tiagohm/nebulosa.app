@@ -4,8 +4,8 @@
 // file record by record, never whole.
 
 // Planetary system a curated kernel belongs to, by which the Add Kernel section groups and filters them: the planetary
-// ephemerides, then the satellite ephemerides of each planet with moons.
-export type SpiceCatalogSystem = 'planets' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto'
+// ephemerides, the asteroids that perturb small bodies, then the satellite ephemerides of each planet with moons.
+export type SpiceCatalogSystem = 'planets' | 'asteroids' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune' | 'pluto'
 
 // A curated SPK file of the NAIF or JPL Solar System Dynamics archives.
 export interface SpiceCatalogEntry {
@@ -75,7 +75,12 @@ const NEEDS_PLANETARY = 'Holds only the moons and the planet relative to the pla
 //   nep098_part-2.bsp 940f7b2bea8433a384b3dd680c92381b, nep098_part-3.bsp e4cfc914088b3b71691cc07e9c0d8215,
 //   nep104.bsp fcc219e730cef79a3a239d1e6b74cd55, nep105.bsp 2c32f77dd972c1a7d80e0c57d9cde2e9;
 // - plu060.bsp 9e8d40339d583273feb94bbf8c95cae4.
-// ura182.bsp and ura117.bsp come from the SSD group, which publishes no checksum; NAIF publishes neither. NAIF splits
+// ura182.bsp and ura117.bsp come from the SSD group, which publishes no checksum; NAIF publishes neither.
+//
+// The asteroid perturber file sb441-n16.bsp of the SSD group was inspected on 2026-11-19 the same way (645727232 bytes,
+// published 2021-03-31): 64 type 2 J2000 segments, four per asteroid, of the 16 SB441-N16 asteroids relative to the Sun,
+// under the codes 2000000 + number, over -7999 to 9000. Its memo, JPL IOM 392R-21-005 (Farnocchia 2021), gives the
+// DE441 masses the integration of MPC orbits uses; the SSD group publishes no checksum. NAIF splits
 // URA184 and NEP098 in parts of disjoint moons, each with its own planetary segments, which the SSD group publishes whole
 // without them; the parts are listed.
 //
@@ -125,6 +130,17 @@ export const SPICE_KERNEL_CATALOG: readonly SpiceCatalogEntry[] = [
 		description: 'JPL DE442 planetary ephemeris over its full span, the same bodies as de442s.bsp.',
 		url: `${NAIF_PLANETS}/de442.bsp`,
 		bytes: 119771136,
+	},
+	{
+		id: 'sb441-n16',
+		name: 'sb441-n16.bsp',
+		system: 'asteroids',
+		bodies: 'Ceres, Vesta, Pallas, Hygiea, and 12 other massive main-belt asteroids',
+		startYear: -7999,
+		endYear: 9000,
+		description: 'JPL SB441-N16 ephemeris of the 16 most massive main-belt asteroids, consistent with DE441. Their pull joins the integration of MPC orbits, where it matters at the level of 0.1″ within a decade; not needed for positions. A download of 616 MiB.',
+		url: 'https://ssd.jpl.nasa.gov/ftp/eph/small_bodies/asteroids_de441/sb441-n16.bsp',
+		bytes: 645727232,
 	},
 	{
 		id: 'mar099s',

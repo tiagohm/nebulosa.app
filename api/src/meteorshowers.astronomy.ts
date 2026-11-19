@@ -1,22 +1,24 @@
 import { altitudeOf } from 'nebulosa/src/astronomy/events/horizon'
 import { isMeteorShowerActive, meteorActivityZhr, meteorShowerActivityYearApplies } from 'nebulosa/src/astronomy/meteors/activity'
-import { meteorLocalHourlyRate, meteorMoonDirection, meteorSunDirection } from 'nebulosa/src/astronomy/meteors/observation'
+import { meteorLocalHourlyRate } from 'nebulosa/src/astronomy/meteors/observation'
 import { meteorGeometricObservingWindows, meteorObservingWindows } from 'nebulosa/src/astronomy/meteors/planner'
 import { meteorRadiantPathSegmentsBetween, meteorRadiantVector } from 'nebulosa/src/astronomy/meteors/radiant'
-import { meteorSolarLongitude } from 'nebulosa/src/astronomy/meteors/solar'
+import { meteorSolarLongitude, meteorSolarLongitudeOf } from 'nebulosa/src/astronomy/meteors/solar'
 import { meteorShowerComputationContext, meteorShowerState, meteorShowerStates } from 'nebulosa/src/astronomy/meteors/state'
-import type { MeteorExponentialActivityProfile, MeteorGeometricObservingWindow, MeteorGeometricObservingWindowOptions, MeteorShowerSolution, MeteorSolarLongitudeInterval, MeteorVisualObservation } from 'nebulosa/src/astronomy/meteors/types'
+import type { MeteorEphemeris, MeteorExponentialActivityProfile, MeteorGeometricObservingWindow, MeteorGeometricObservingWindowOptions, MeteorShowerSolution, MeteorSolarLongitudeInterval, MeteorVisualObservation } from 'nebulosa/src/astronomy/meteors/types'
 import { type Time, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
-import { type Vec3, vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
+import { vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
+import { LruCache } from './lrucache'
 import { type MeteorShowerRecord, preferredSolution } from './meteorshowers.catalog'
 import type { MeteorSolarLongitudeTable } from './meteorshowers.solar'
 import { annualEventsOf, type MeteorActivityProfileEntry, type MeteorAnnualEvent, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSourceId } from './meteorshowers.visual'
 import { type ObservingReasonCode, type ObservingSample, type ObservingWindow, type PlanningSite, resolveNight, type TargetAnalysis, type TargetAnalysisRequest } from './observingplanner.astronomy'
-import { geographic, type SkyObserver } from './sky/ephemeris'
+import { geocentricInterpolation, geographic, type SkyObserver, solarSystemStates } from './sky/ephemeris'
 import type { TimeSpan } from './sky/sun'
+import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 
 // Astronomy of the Meteor Showers tool over the toolkit's meteor modules: the dates of a shower's occurrence from each
 // source apart (the IAU support and mean reference longitude, the IMO activity period and maximum), the instantaneous
@@ -487,15 +489,42 @@ function windowAnswer(window: MeteorGeometricObservingWindow): MeteorObservingWi
 	}
 }
 
+// Reach of the Sun and the Moon of a night beyond its ends, in milliseconds (two hours): the hourly nodes around them.
+const NIGHT_EPHEMERIS_MARGIN_MS = 7_200_000
+
+// Sun and Moon of the nights computed lately, by the source of their states and the night: every shower of a night shares
+// them, so its hourly nodes are evaluated once.
+const NIGHT_EPHEMERIDES = new LruCache<MeteorEphemeris>(16)
+
+// Sun and Moon of the meteor computations of a night span (Unix milliseconds): geometric geocentric vectors from one
+// source of the fast ephemeris chain (the SPK kernels of snapshot when they cover the night, else VSOP87E and ELPMPP02),
+// interpolated linearly between whole UTC hours. The Moon moves about 0.55° an hour, so the chord departs from its arc by
+// under 0.001°, while one ELPMPP02 evaluation costs about 10 ms, far more than a sample of a window search can.
+export function nightEphemeris(snapshot: SpiceKernelSnapshot, span: TimeSpan): MeteorEphemeris {
+	const { states, key } = solarSystemStates(snapshot, ['301'], [span.start - NIGHT_EPHEMERIS_MARGIN_MS, (span.start + span.end) / 2, span.end + NIGHT_EPHEMERIS_MARGIN_MS])
+	const id = `${key}|${span.start}|${span.end}`
+	let ephemeris = NIGHT_EPHEMERIDES.get(id)
+
+	if (!ephemeris) {
+		const sun = geocentricInterpolation(states.sun, states)
+		const moon = geocentricInterpolation(states.body('301'), states)
+		ephemeris = { sun: (time) => sun(timeToUnixMillis(time)), moon: (time) => moon(timeToUnixMillis(time)) }
+		NIGHT_EPHEMERIDES.set(id, ephemeris)
+	}
+
+	return ephemeris
+}
+
 // Geometric windows of a solution over a span, chronological.
 export function geometricWindows(solution: MeteorShowerSolution, observer: SkyObserver, span: TimeSpan, options: MeteorGeometricObservingWindowOptions): readonly MeteorObservingWindow[] {
 	return meteorGeometricObservingWindows(solution, geographic(observer), toolkitTime(span.start), toolkitTime(span.end), options).map(windowAnswer)
 }
 
-// Toolkit options of a request, with a support.
-export function windowOptions(request: Omit<MeteorObservingRequest, 'site' | 'eveningDate'>, support: MeteorObservingSupport, moon = true): MeteorGeometricObservingWindowOptions {
+// Toolkit options of a request, with a support and the Sun and Moon of the night.
+export function windowOptions(request: Omit<MeteorObservingRequest, 'site' | 'eveningDate'>, support: MeteorObservingSupport, ephemeris: MeteorEphemeris, moon = true): MeteorGeometricObservingWindowOptions {
 	return {
 		support: support.interval,
+		ephemeris,
 		maximumSolarAltitude: request.maximumSolarAltitude,
 		minimumRadiantAltitude: request.minimumRadiantAltitude,
 		...(moon && request.minimumMoonSeparation !== undefined && { minimumMoonRadiantSeparation: request.minimumMoonSeparation }),
@@ -506,21 +535,22 @@ export function windowOptions(request: Omit<MeteorObservingRequest, 'site' | 'ev
 // The observing night of a shower: its geometric windows over the whole night (upper transit to upper transit) of the
 // evening, the samples of the part shown, and, without a window, why. With assumptions and a published activity profile,
 // the night is modelled too: the profile-based planner's windows with their expected counts, and the profile ZHR and the
-// local rate at each sample.
-export function observingNight(record: MeteorShowerRecord, request: MeteorObservingRequest, nights: (request: AstroWeatherNightRequest) => AstroWeatherNight, table: MeteorSolarLongitudeTable): MeteorObservingNight {
+// local rate at each sample. The Sun and the Moon of the night come from the kernels of snapshot (nightEphemeris).
+export function observingNight(record: MeteorShowerRecord, request: MeteorObservingRequest, nights: (request: AstroWeatherNightRequest) => AstroWeatherNight, table: MeteorSolarLongitudeTable, snapshot: SpiceKernelSnapshot): MeteorObservingNight {
 	const night = resolveNight(nights, request.site, request.eveningDate)
+	const ephemeris = nightEphemeris(snapshot, night.sun)
 	const solution = preferredSolution(record)
 	const located = solution !== undefined && solution.rightAscension !== undefined && solution.declination !== undefined
 	const rate = located && request.assumptions !== undefined && record.profile !== undefined ? prepareRate(record.profile, request.assumptions) : undefined
-	const samples = nightSamples(solution, request.site, night.display, rate)
+	const samples = nightSamples(solution, request.site, night.display, ephemeris, rate)
 
 	if (!located) return { kind: 'geometric', eveningDate: request.eveningDate, night, support: { basis: 'none' }, windows: [], reasons: ['missingRadiant'], samples }
 
 	const support = observingSupport(record, solution, (night.sun.start + night.sun.end) / 2, table)
-	const windows = geometricWindows(solution, request.site, night.sun, windowOptions(request, support))
-	const reasons = windows.length > 0 ? [] : noWindowReasons(solution, request, support, night, samples)
+	const windows = geometricWindows(solution, request.site, night.sun, windowOptions(request, support, ephemeris))
+	const reasons = windows.length > 0 ? [] : noWindowReasons(solution, request, support, night, samples, ephemeris)
 	if (rate === undefined) return { kind: 'geometric', eveningDate: request.eveningDate, night, support, windows, reasons, samples }
-	return { kind: 'modelled', eveningDate: request.eveningDate, night, support, windows, reasons, samples, model: { ...rateSummary(rate), windows: modelledWindows(solution, rate, request, night.sun) } }
+	return { kind: 'modelled', eveningDate: request.eveningDate, night, support, windows, reasons, samples, model: { ...rateSummary(rate), windows: modelledWindows(solution, rate, request, night.sun, ephemeris) } }
 }
 
 // Lowest ZHR of a profile's support, meteors per hour: the profile is taken as zero where its model falls below one meteor
@@ -574,9 +604,10 @@ function rateSummary(rate: PreparedRate): Omit<MeteorRateModel, 'windows'> {
 
 // The profile-based planner's windows of a span: the request's constraints, bounded by the profile's support alone (the
 // catalog interval is left out, so the model decides where the shower is active), chronologically.
-function modelledWindows(solution: MeteorShowerSolution, rate: PreparedRate, request: Omit<MeteorObservingRequest, 'eveningDate'>, span: TimeSpan): readonly MeteorModelledWindow[] {
+function modelledWindows(solution: MeteorShowerSolution, rate: PreparedRate, request: Omit<MeteorObservingRequest, 'eveningDate'>, span: TimeSpan, ephemeris: MeteorEphemeris): readonly MeteorModelledWindow[] {
 	const { observation } = rate
 	const windows = meteorObservingWindows({ ...solution, activityInterval: undefined }, rate.profile, geographic(request.site), toolkitTime(span.start), toolkitTime(span.end), {
+		ephemeris,
 		maximumSolarAltitude: request.maximumSolarAltitude,
 		minimumRadiantAltitude: request.minimumRadiantAltitude,
 		...(request.minimumMoonSeparation !== undefined && { minimumMoonRadiantSeparation: request.minimumMoonSeparation }),
@@ -749,7 +780,8 @@ function compareNights(modelled: boolean) {
 
 // Ranks the nights of a period from a site, one after the other, yielding to the event loop between nights and stopping
 // when the request is aborted. A night whose support does not meet it is not searched. Returns undefined when aborted.
-export async function rankNights(record: MeteorShowerRecord, request: MeteorNightsRequest, nights: (request: AstroWeatherNightRequest) => AstroWeatherNight, table: MeteorSolarLongitudeTable, signal?: AbortSignal): Promise<MeteorNightRanking | undefined> {
+// The Sun and the Moon of each night come from the kernels of snapshot (nightEphemeris).
+export async function rankNights(record: MeteorShowerRecord, request: MeteorNightsRequest, nights: (request: AstroWeatherNightRequest) => AstroWeatherNight, table: MeteorSolarLongitudeTable, snapshot: SpiceKernelSnapshot, signal?: AbortSignal): Promise<MeteorNightRanking | undefined> {
 	const solution = preferredSolution(record)
 	const located = solution !== undefined && solution.rightAscension !== undefined && solution.declination !== undefined
 	const rate = located && request.assumptions !== undefined && record.profile !== undefined ? prepareRate(record.profile, request.assumptions) : undefined
@@ -775,10 +807,11 @@ export async function rankNights(record: MeteorShowerRecord, request: MeteorNigh
 			continue
 		}
 
-		const windows = geometricWindows(solution, request.site, night.sun, windowOptions(request, support))
+		const ephemeris = nightEphemeris(snapshot, night.sun)
+		const windows = geometricWindows(solution, request.site, night.sun, windowOptions(request, support, ephemeris))
 		let longest: MeteorObservingWindow | undefined
 		for (const window of windows) if (longest === undefined || window.end - window.start > longest.end - longest.start) longest = window
-		const modelled = rate === undefined ? undefined : modelledWindows(solution, rate, request, night.sun)
+		const modelled = rate === undefined ? undefined : modelledWindows(solution, rate, request, night.sun, ephemeris)
 
 		let windowHours = 0
 		let radiantSineHours = 0
@@ -810,50 +843,39 @@ export async function rankNights(record: MeteorShowerRecord, request: MeteorNigh
 
 // Why a night has no window: no radiant, no darkness, no support overlapping it, a radiant never high enough in the dark,
 // or only the lunar constraints; else the samples could not tell.
-function noWindowReasons(solution: MeteorShowerSolution, request: MeteorObservingRequest, support: MeteorObservingSupport, night: AstroWeatherNight, samples: readonly MeteorNightSample[]): readonly MeteorNoWindowReason[] {
+function noWindowReasons(solution: MeteorShowerSolution, request: MeteorObservingRequest, support: MeteorObservingSupport, night: AstroWeatherNight, samples: readonly MeteorNightSample[], ephemeris: MeteorEphemeris): readonly MeteorNoWindowReason[] {
 	const reasons: MeteorNoWindowReason[] = []
 	const dark = samples.filter((sample) => sample.sunAltitude <= request.maximumSolarAltitude)
 	if (dark.length === 0) reasons.push('sunTooHigh')
 
 	if (support.interval !== undefined) {
-		const start = meteorSolarLongitude(toolkitTime(night.sun.start))
-		const end = meteorSolarLongitude(toolkitTime(night.sun.end))
+		const start = meteorSolarLongitudeOf(ephemeris.sun(toolkitTime(night.sun.start)))
+		const end = meteorSolarLongitudeOf(ephemeris.sun(toolkitTime(night.sun.end)))
 		if (!isMeteorShowerActive(support.interval, start) && !isMeteorShowerActive(support.interval, end)) reasons.push('noSupportedActivity')
 	}
 
 	if (dark.length > 0 && !dark.some((sample) => sample.radiantAltitude !== undefined && sample.radiantAltitude >= request.minimumRadiantAltitude)) reasons.push('radiantBelowThreshold')
 
 	if (reasons.length === 0 && (request.minimumMoonSeparation !== undefined || request.maximumMoonIllumination !== undefined)) {
-		if (geometricWindows(solution, request.site, night.sun, windowOptions(request, support, false)).length > 0) reasons.push('moonConstraint')
+		if (geometricWindows(solution, request.site, night.sun, windowOptions(request, support, ephemeris, false)).length > 0) reasons.push('moonConstraint')
 	}
 
 	if (reasons.length === 0) reasons.push('insufficientData')
 	return reasons
 }
 
-// Spacing of the Sun and Moon vectors interpolated for the night chart, milliseconds. The Moon moves about 0.55° an hour,
-// so the chord between hourly geocentric vectors departs from its arc by under 0.001°, while one ELPMPP02 evaluation
-// costs about 9 ms, far more than a sample of the chart can.
-const EPHEMERIS_SPACING_MS = 3600000
-
 // Samples of the radiant, the Sun, and the Moon every NIGHT_SAMPLE_MS over a span, with the profile ZHR and the modelled
-// local rate when a rate model is given. The Sun and the Moon are the toolkit's geocentric J2000 vectors at whole hours,
-// interpolated linearly; their altitudes are geometric and the Moon's geocentric.
-function nightSamples(solution: MeteorShowerSolution | undefined, site: SkyObserver, span: TimeSpan, rate?: PreparedRate): readonly MeteorNightSample[] {
+// local rate when a rate model is given. The Sun and the Moon, and the solar longitude of the activity, come from the
+// night's ephemeris (nightEphemeris); their altitudes are geometric and the Moon's geocentric.
+function nightSamples(solution: MeteorShowerSolution | undefined, site: SkyObserver, span: TimeSpan, ephemeris: MeteorEphemeris, rate?: PreparedRate): readonly MeteorNightSample[] {
 	const observer = geographic(site)
-	const firstHour = Math.floor(span.start / EPHEMERIS_SPACING_MS) * EPHEMERIS_SPACING_MS
-	const hours: { readonly sun: Vec3; readonly moon: Vec3 }[] = []
-	for (let hour = firstHour; hour <= span.end + EPHEMERIS_SPACING_MS; hour += EPHEMERIS_SPACING_MS) hours.push({ sun: meteorSunDirection(toolkitTime(hour)), moon: meteorMoonDirection(toolkitTime(hour)) })
-
 	const samples: MeteorNightSample[] = []
+
 	for (let time = span.start; time <= span.end; time += NIGHT_SAMPLE_MS) {
-		const index = Math.floor((time - firstHour) / EPHEMERIS_SPACING_MS)
-		const fraction = (time - firstHour - index * EPHEMERIS_SPACING_MS) / EPHEMERIS_SPACING_MS
 		const instant = toolkitTime(time)
-		const [before, after] = [hours[index], hours[index + 1]]
-		const sun = vecLerp(before.sun, after.sun, fraction)
-		const moon = vecLerp(before.moon, after.moon, fraction)
-		const context = meteorShowerComputationContext(instant, observer, { includeHorizontal: true, includeSun: false, includeMoon: false })
+		const sun = ephemeris.sun(instant)
+		const moon = ephemeris.moon(instant)
+		const context = meteorShowerComputationContext(instant, observer, { includeHorizontal: true, includeSun: false, includeMoon: false, ephemeris })
 		const state = solution === undefined ? undefined : meteorShowerState(solution, context, { includeHorizontal: true, includeSun: false, includeMoon: false, includeRadiantOfDate: false })
 		const altitude = state?.horizontal?.altitude
 		const azimuth = state?.horizontal?.azimuth
@@ -872,11 +894,6 @@ function nightSamples(solution: MeteorShowerSolution | undefined, site: SkyObser
 		})
 	}
 	return samples
-}
-
-// Linear interpolation between two vectors.
-function vecLerp(a: Vec3, b: Vec3, fraction: number): Vec3 {
-	return [a[0] + (b[0] - a[0]) * fraction, a[1] + (b[1] - a[1]) * fraction, a[2] + (b[2] - a[2]) * fraction]
 }
 
 // Toolkit time of a Unix instant in milliseconds.
@@ -946,7 +963,7 @@ const PLANNER_REASONS: Readonly<Record<MeteorNoWindowReason, ObservingReasonCode
 // constraints (its minimum altitude is the radiant's, its Sun limit the darkness, its Moon separation applied while the
 // Moon is up), kept when they last the minimum continuous duration, and the radiant's samples. It has no score, airmass,
 // or magnitude, and it is never a pointing: a radiant is a direction. A shower the catalog does not know is unresolved.
-export function plannerAnalysis(record: MeteorShowerRecord | undefined, request: MeteorPlannerRequest, nights: (request: AstroWeatherNightRequest) => AstroWeatherNight, table: MeteorSolarLongitudeTable): TargetAnalysis {
+export function plannerAnalysis(record: MeteorShowerRecord | undefined, request: MeteorPlannerRequest, nights: (request: AstroWeatherNightRequest) => AstroWeatherNight, table: MeteorSolarLongitudeTable, snapshot: SpiceKernelSnapshot): TargetAnalysis {
 	const { target, site, eveningDate, constraints, requestedDurationMs } = request
 
 	if (record === undefined) {
@@ -954,7 +971,7 @@ export function plannerAnalysis(record: MeteorShowerRecord | undefined, request:
 		return { target, name: target.id, night, constraints, requestedDurationMs, status: 'unresolved', reasons: ['unresolvedTarget'], windows: [], summary: { totalUsableMs: 0, longestWindowMs: 0 }, samples: [] }
 	}
 
-	const observing = observingNight(record, { site, eveningDate, maximumSolarAltitude: constraints.maximumSunAltitude, minimumRadiantAltitude: constraints.minimumAltitude, ...(constraints.minimumMoonSeparation !== undefined && { minimumMoonSeparation: constraints.minimumMoonSeparation }) }, nights, table)
+	const observing = observingNight(record, { site, eveningDate, maximumSolarAltitude: constraints.maximumSunAltitude, minimumRadiantAltitude: constraints.minimumAltitude, ...(constraints.minimumMoonSeparation !== undefined && { minimumMoonSeparation: constraints.minimumMoonSeparation }) }, nights, table, snapshot)
 	const windows = observing.windows.filter((window) => window.end - window.start >= constraints.minimumContinuousMs).map((window): ObservingWindow => ({ start: window.start, end: window.end, durationMs: window.end - window.start, bestAt: window.bestTime }))
 	const samples: ObservingSample[] = []
 	for (const sample of observing.samples) {

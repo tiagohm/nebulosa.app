@@ -43,7 +43,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   Answers are kept in an `LruCache` (8), keyed by the model version (`PLANETARY_EVENTS_MODEL_VERSION`, 1), the range, the sorted bodies and kinds, the threshold, the offline switch, and the generation, and stored under the snapshot actually used.
 - Visibility (`/visibility`, `PlanetaryEventVisibility`): a batch of events, a `PlanningSite`, and the threshold, answered per event id.
   Each event is cached in an `LruCache` (1024) by its id, the site's coordinates, and the threshold; the zone only formats, and an aborted batch caches nothing.
-  Positions are geometric VSOP87E, interpolated, never the kernels; they only decide when an event can be watched.
+  Positions are geometric and interpolated, from one source of the fast [Ephemeris Chain](ephemeris-chain.md) for the events of a batch not cached (`withVisibilitySource`: the SPICE kernels when they resolve the Sun, the Earth, and every planet of them, else VSOP87E; a miss reruns the batch from VSOP87E), and the cache key holds the kernel generation; they only decide when an event can be watched.
     - Span: each event gets one span around its instant, ±3.5 days, or ±2.5 for a pair.
       It holds the precession-nutation matrix and the sidereal time of its middle fixed (`fixedOrientationProviders` and `SiteOffset` of `observingplanner.astronomy.ts`, shared with `PlanningNight`), under 2″ of altitude error.
       The toolkit's `visibilityWindows` finds every 10 minutes, then refines, where each planet is high enough and the Sun low enough; a pair needs both planets at once.

@@ -2,9 +2,13 @@ import { afterAll, afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { meteorMoonDirection, meteorSunDirection } from 'nebulosa/src/astronomy/meteors/observation'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM } from 'nebulosa/src/core/constants'
+import { vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
 import { AstroWeatherNights } from '../astroweather.night'
+import { NO_EPHEMERIS_KERNELS } from '../ephemeris.chain'
+import { nightEphemeris } from '../meteorshowers.astronomy'
 import { spkFixture, type SpkFixtureSegment } from '../spicekernels.fixture'
 import { SpiceKernelRuntime } from '../spicekernels.runtime'
 import { solarSystemStates } from './ephemeris'
@@ -78,4 +82,18 @@ test('the nights of Astro Weather take the Sun and the Moon of the kernels, cach
 	expect(Math.abs(kernels.sun.start - theories.sun.start)).toBeGreaterThan(3_600_000)
 	expect(kernels.sun.end - kernels.sun.start).toBeGreaterThan(23 * 3_600_000)
 	expect(kernels.moon.illuminatedFraction).not.toBeCloseTo(theories.moon.illuminatedFraction, 2)
+})
+
+test('the Sun and the Moon of a meteor night come from the kernels, else match the toolkit theories', async () => {
+	const span = { start: NIGHT - 6 * 3_600_000, end: NIGHT + 6 * 3_600_000 }
+	const time = timeUnix((NIGHT + 1_234_567) / 1000, true)
+
+	const theories = nightEphemeris(NO_EPHEMERIS_KERNELS.current(), span)
+	expect(vecAngle(theories.sun(time), meteorSunDirection(time))).toBeLessThan(1e-6)
+	expect(vecAngle(theories.moon(time), meteorMoonDirection(time))).toBeLessThan(2e-5)
+
+	const runtime = await runtimeOf(planetaryKernel(NIGHT - 10 * 86_400_000, NIGHT + 10 * 86_400_000))
+	const kernels = nightEphemeris(runtime.current(), span)
+	expect(kernels.sun(time)[1] * AU_KM).toBeCloseTo(-149600000, 0)
+	expect(kernels.moon(time)[0] * AU_KM).toBeCloseTo(380000, 0)
 })

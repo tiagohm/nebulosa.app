@@ -767,10 +767,11 @@ export async function computeSeries(kernels: PlanetaryEventsKernels, request: Pl
 	return { kind, time, times, curves: sourced.results[0], sourced }
 }
 
-// VSOP87E positions of the bodies on the interpolation grid, for the visibility of events, which only decides when an
-// event can be watched and never uses the kernels. Nodes are cached for the lifetime of the ephemeris.
-export function analyticalPlanetaryEventsEphemeris(): PlanetaryEventsEphemeris {
-	return interpolatedSatelliteEphemeris(SYSTEM, ANALYTICAL)
+// Runs `count` visibility computations of events of `bodies` with one source for all of them, the SPICE kernels when the
+// set resolves the Sun, the Earth, and every planet over all of them, else VSOP87E, interpolated on the grid (nodes cached
+// for the whole run). A miss in any computation reruns all of them from VSOP87E; yields to the event loop between them.
+export async function withVisibilitySource<T>(kernels: PlanetaryEventsKernels, bodies: readonly PlanetaryEventBody[], count: number, compute: (ephemeris: PlanetaryEventsEphemeris, index: number) => T, signal?: AbortSignal) {
+	return await withSatelliteSource(kernels, SOURCE, sourceBodies(bodies), count, compute, (ephemeris) => interpolatedSatelliteEphemeris(SYSTEM, ephemeris), signal)
 }
 
 // Geometric geocentric ICRS vector (AU) of the Sun or a planet over Unix milliseconds, from an ephemeris; a new vector.

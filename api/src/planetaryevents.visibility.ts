@@ -9,17 +9,17 @@ import { vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
 import { fixedOrientationProviders, OBSERVING_PRESETS, type PlanningSite, SEARCH_STEP_DAYS, SiteOffset } from './observingplanner.astronomy'
 import { toolkitTime } from './planetary.source'
 import { intersect } from './planetary.visibility'
-import { analyticalPlanetaryEventsEphemeris, geocentricOf, type PlanetaryEventBody, type PlanetaryEventKind, type PlanetaryEventsEphemeris } from './planetaryevents.astronomy'
+import { geocentricOf, type PlanetaryEventBody, type PlanetaryEventKind, type PlanetaryEventsEphemeris, type PlanetaryEventsKernels, withVisibilitySource } from './planetaryevents.astronomy'
 import { geographic } from './sky/ephemeris'
 import type { TimeSpan } from './sky/sun'
-import { yieldToEventLoop } from './util'
 
 // Visibility of planetary events from a site. An event is geocentric and instantaneous; a site only decides whether it can
 // be watched at its instant and when the best nearby stretch to watch its planets is. Each event gets one span around its
 // instant (±3.5 days, ±2.5 for a pair) with a fixed Earth orientation (under 2″ of altitude error over a week), and the
 // toolkit's visibilityWindows finds, every 10 minutes and refined, where each planet is high enough and the Sun low
-// enough; a pair needs both planets at once. Positions are geometric VSOP87E, interpolated, never the kernels: they only
-// decide when an event can be watched. Altitudes are geometric (airless) and the horizon has no terrain. Times are Unix
+// enough; a pair needs both planets at once. Positions are geometric and interpolated, from one source of the fast
+// ephemeris chain per batch (the SPICE kernels when they resolve every planet, else VSOP87E); they only decide when an
+// event can be watched. Altitudes are geometric (airless) and the horizon has no terrain. Times are Unix
 // milliseconds (UTC), angles radians.
 
 // Constraints chosen for an event: the Observing Planner's planetary preset (the planet at least 25° high, the Sun at
@@ -140,9 +140,6 @@ const PEAK_SAMPLE_MS = 600_000
 // Half-step of the Sun's altitude rate that tells evening from morning, milliseconds.
 const PERIOD_HALF_MS = 300_000
 
-// Events between two yields of a batch.
-const BATCH_YIELD = 10
-
 // Profile of an event: twilight when Mercury or Venus takes part.
 function profileOf(bodies: readonly PlanetaryEventBody[]): PlanetaryVisibilityProfile {
 	return bodies.some((code) => code === '199' || code === '299') ? 'twilight' : 'night'
@@ -247,30 +244,25 @@ function eventVisibility(ephemeris: PlanetaryEventsEphemeris, site: SiteOffset, 
 	return { ...base, status: 'notObservable', reasons }
 }
 
-// Visibility of a batch of events from one site, yielding to the event loop every few events and stopping when `signal`
-// aborts; `cached` answers the events already computed, which are neither recomputed nor counted toward a yield.
-export async function computeVisibility(request: PlanetaryEventsVisibilityRequest, cached: (event: PlanetaryVisibilityEvent) => PlanetaryEventVisibility | undefined, signal?: AbortSignal): Promise<Map<string, PlanetaryEventVisibility>> {
+// Visibility of a batch of events from one site, the events not answered by `cached` computed with one source of the
+// kernels (withVisibilitySource), yielding to the event loop between events and stopping when `signal` aborts. Returns the
+// visibility of every event and the snapshot of the kernels the computed ones came from.
+export async function computeVisibility(kernels: PlanetaryEventsKernels, request: PlanetaryEventsVisibilityRequest, cached: (event: PlanetaryVisibilityEvent) => PlanetaryEventVisibility | undefined, signal?: AbortSignal) {
 	signal?.throwIfAborted()
-	const ephemeris = analyticalPlanetaryEventsEphemeris()
 	const site = new SiteOffset(geographic(request.site))
 	const out = new Map<string, PlanetaryEventVisibility>()
-	let computed = 0
+	const pending: PlanetaryVisibilityEvent[] = []
 
 	for (const event of request.events) {
 		const known = cached(event)
-		if (known) {
-			out.set(event.id, known)
-			continue
-		}
-
-		if (computed > 0 && computed % BATCH_YIELD === 0) {
-			await yieldToEventLoop()
-			signal?.throwIfAborted()
-		}
-
-		out.set(event.id, eventVisibility(ephemeris, site, event, request.appulseThreshold))
-		computed++
+		if (known) out.set(event.id, known)
+		else pending.push(event)
 	}
 
-	return out
+	if (pending.length === 0) return { visibility: out, snapshot: kernels.current() }
+
+	const bodies = [...new Set(pending.flatMap((event) => event.bodies))]
+	const { results, snapshot } = await withVisibilitySource(kernels, bodies, pending.length, (ephemeris, i) => eventVisibility(ephemeris, site, pending[i], request.appulseThreshold), signal)
+	for (let i = 0; i < pending.length; i++) out.set(pending[i].id, results[i])
+	return { visibility: out, snapshot }
 }

@@ -4,6 +4,7 @@ import type { MeteorShowerActivity, MeteorShowerSolution, MeteorShowerStatus } f
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import bundledCatalogPath from '../data/meteor.showers.json.gz' with { type: 'file' }
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
+import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { errorResponse } from './http'
 import { LruCache } from './lrucache'
 import {
@@ -310,6 +311,8 @@ export interface MeteorShowersOptions {
 	readonly store: MeteorShowerStore
 	// Nights of a site (AstroWeatherService.night), called in process.
 	readonly night: (request: AstroWeatherNightRequest) => AstroWeatherNight
+	// Kernels of the SPICE Kernel Library the Sun and the Moon of the windows come from; none by default.
+	readonly kernels?: EphemerisKernels
 	// Pushes an event to every tab.
 	readonly publish: (event: MeteorShowersChangedEvent) => void
 	// Fetch of the Data Center, injectable in tests.
@@ -566,13 +569,16 @@ export class MeteorShowersService {
 		return skyRadiantsAt(index.showers, request.time, this.#table)
 	}
 
-	// Geometric observing night of a shower, cached by the catalog revision, the shower, the site's place, the evening, and
-	// the constraints; the site's zone names the evening, so it is part of the key. Throws MeteorShowersError notFound.
+	// Geometric observing night of a shower, cached by the catalog revision, the kernel generation, the shower, the site's
+	// place, the evening, and the constraints; the site's zone names the evening, so it is part of the key. Throws
+	// MeteorShowersError notFound.
 	async observing(id: string, request: MeteorObservingRequest): Promise<MeteorObservingNight> {
 		const record = await this.#record(id)
 		const { site } = request
+		const snapshot = this.#snapshot()
 		const key = JSON.stringify([
 			this.options.store.state().revision,
+			snapshot.generation,
 			METEOR_ACTIVITY_MODEL_REVISION,
 			id,
 			site.latitude,
@@ -588,7 +594,7 @@ export class MeteorShowersService {
 		])
 		const cached = this.#nights.get(key)
 		if (cached) return cached
-		const night = observingNight(record, request, this.options.night, this.#table)
+		const night = observingNight(record, request, this.options.night, this.#table, snapshot)
 		this.#nights.set(key, night)
 		return night
 	}
@@ -651,7 +657,7 @@ export class MeteorShowersService {
 	// Ranking of the nights of a period for a shower from a site; undefined when the request was aborted. Throws
 	// MeteorShowersError notFound.
 	async nights(id: string, request: MeteorNightsRequest, signal?: AbortSignal): Promise<MeteorNightRanking | undefined> {
-		return rankNights(await this.#record(id), request, this.options.night, this.#table, signal)
+		return rankNights(await this.#record(id), request, this.options.night, this.#table, this.#snapshot(), signal)
 	}
 
 	// Radiant drift path of a shower over the occurrence nearest to an instant, cached by the catalog revision, the shower,
@@ -669,7 +675,12 @@ export class MeteorShowersService {
 	// The Observing Planner analysis of a meteor shower observation; a shower the catalog does not know is unresolved.
 	async plannerAnalysis(request: MeteorPlannerRequest): Promise<TargetAnalysis> {
 		const { index } = await this.#catalog()
-		return plannerAnalysis(index.byId.get(request.target.id), request, this.options.night, this.#table)
+		return plannerAnalysis(index.byId.get(request.target.id), request, this.options.night, this.#table, this.#snapshot())
+	}
+
+	// Snapshot of the kernels the Sun and the Moon of a computation come from.
+	#snapshot() {
+		return (this.options.kernels ?? NO_EPHEMERIS_KERNELS).current()
 	}
 
 	// Shower of an id, or MeteorShowersError notFound.

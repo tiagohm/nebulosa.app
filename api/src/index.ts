@@ -1341,7 +1341,7 @@ const planetaryEvents = new PlanetaryEventsService({ kernels: spiceKernels })
 
 // Meteor shower catalog of the IAU Meteor Data Center with its curated visual subset, its snapshots in the operational
 // database, and the observing nights of a shower over the nights of Astro Weather; a refreshed catalog is sent to every tab.
-const meteorShowers = new MeteorShowersService({ store: new MeteorShowerStore(database), night: (request) => astroWeather.night(request), publish: broadcast })
+const meteorShowers = new MeteorShowersService({ store: new MeteorShowerStore(database), night: (request) => astroWeather.night(request), kernels: spiceKernels, publish: broadcast })
 
 // Earth orientation tables of the process, shared by the converter and, once installed, by every Time of the server.
 const earthOrientation = new EarthOrientationData()

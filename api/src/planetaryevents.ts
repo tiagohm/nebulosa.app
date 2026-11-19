@@ -65,14 +65,15 @@ export class PlanetaryEventsService {
 		return answer
 	}
 
-	// The visibility of each event of a batch from the site, each cached by the event, the site's place and the threshold;
-	// only the events not cached are computed, and an aborted batch caches nothing.
+	// The visibility of each event of a batch from the site, each cached by the event, the site's place, the threshold, and
+	// the kernel generation; only the events not cached are computed, and an aborted batch caches nothing.
 	async visibility(request: PlanetaryEventsVisibilityRequest, signal?: AbortSignal): Promise<PlanetaryEventsVisibility> {
 		const { site, appulseThreshold } = request
-		const key = (event: PlanetaryVisibilityEvent) => JSON.stringify(['visibility', PLANETARY_EVENTS_MODEL_VERSION, event.id, site.latitude, site.longitude, site.elevation, appulseThreshold])
-		const computed = await computeVisibility(request, (event) => this.#visibility.get(key(event)), signal)
-		for (const event of request.events) this.#visibility.set(key(event), computed.get(event.id)!)
-		return { visibility: Object.fromEntries(computed) }
+		const key = (event: PlanetaryVisibilityEvent, snapshot: SpiceKernelSnapshot) => JSON.stringify(['visibility', PLANETARY_EVENTS_MODEL_VERSION, event.id, site.latitude, site.longitude, site.elevation, appulseThreshold, snapshot.generation])
+		const current = this.options.kernels.current()
+		const { visibility, snapshot } = await computeVisibility(this.options.kernels, request, (event) => this.#visibility.get(key(event, current)), signal)
+		for (const event of request.events) this.#visibility.set(key(event, snapshot), visibility.get(event.id)!)
+		return { visibility: Object.fromEntries(visibility) }
 	}
 
 	// The sampled curves of one event, cached by the event and the kernel identity.

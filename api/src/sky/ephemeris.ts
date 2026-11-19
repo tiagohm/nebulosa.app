@@ -202,6 +202,9 @@ export interface PositionRequest {
 	readonly observer?: SkyObserver
 	// Calculation path; accurate by default.
 	readonly mode?: EphemerisMode
+	// Whether only the local sources (kernels and theories) may give it, never Horizons: for the many bodies of a map,
+	// where one remote request would hold the others.
+	readonly local?: boolean
 	// Cancels the request.
 	readonly signal?: AbortSignal
 }
@@ -727,17 +730,19 @@ export class SkyEphemeris {
 					return { position: () => solarSystemPosition({ state: calculation.target, magnitude: magnitudeModel(target) }, time, isSun, calculation.source), kernelIds: calculation.kernelIds }
 				},
 				analytical: () => model && { position: () => solarSystemPosition(model, time, isSun, analyticalEphemerisSource) },
-				horizons: async (signal) => {
-					const samples = await untilAborted(this.#horizonsTable(horizonsCommand(target)!, request.time, request.observer), signal)
+				horizons: request.local
+					? undefined
+					: async (signal) => {
+							const samples = await untilAborted(this.#horizonsTable(horizonsCommand(target)!, request.time, request.observer), signal)
 
-					return {
-						position: () => {
-							const position = horizonsPositionAt(samples, request.time, !!request.observer)
-							if (!position) throw new HorizonsEphemerisError('Horizons did not cover the requested time')
-							return position
+							return {
+								position: () => {
+									const position = horizonsPositionAt(samples, request.time, !!request.observer)
+									if (!position) throw new HorizonsEphemerisError('Horizons did not cover the requested time')
+									return position
+								},
+							}
 						},
-					}
-				},
 				kernelsOf: (computation) => computation.kernelIds?.() ?? [],
 			},
 			compute: (computation) => computation.position(),

@@ -167,3 +167,36 @@ test('the J2000 map catalog is downloaded once per tab, whatever the instant, an
 	expect(loadSkyMapCatalog(clocked)).toBe(first)
 	expect(pending).toHaveLength(0)
 })
+
+test('a forced refresh asked while the selection loads runs once that load ends', async () => {
+	const state = proxy<SkyState>({ panel: 'inspector' })
+	const { io, pending, release } = fakeApi()
+
+	selectSkyObject(state, { ref: { kind: 'minorBody', spkId: '1000042', designation: '161P' }, source: 'map', name: '161P' }, undefined, io)
+	expect(pending.filter((e) => e.url === '/api/sky/position')).toHaveLength(1)
+
+	// A new kernel generation while the first position is computed: nothing is asked yet.
+	void refreshSkySelection(state, undefined, { tolerance: -1, mode: 'accurate', force: true }, io)
+	void refreshSkySelection(state, undefined, { tolerance: -1, mode: 'accurate' }, io)
+	expect(pending.filter((e) => e.url === '/api/sky/position')).toHaveLength(1)
+
+	await release((url) => url.startsWith('/api/sky/minorbodies/search'), { kind: 'notFound' })
+	await release((url) => url === '/api/sky/position', { position: position(1) })
+	expect(state.selection?.position?.rightAscension).toBe(1)
+	expect(pending.filter((e) => e.url === '/api/sky/position')).toHaveLength(1)
+	await release((url) => url === '/api/sky/position', { position: position(2) })
+	expect(state.selection?.position?.rightAscension).toBe(2)
+	expect(pending.filter((e) => e.url === '/api/sky/position')).toHaveLength(0)
+})
+
+test('a new selection drops the forced refresh of the previous one', async () => {
+	const state = proxy<SkyState>({ panel: 'inspector' })
+	const { io, pending, release } = fakeApi()
+
+	selectSkyObject(state, { ref: { kind: 'body', code: '499' }, source: 'map', name: 'Mars', category: 'solarSystem' }, undefined, io)
+	void refreshSkySelection(state, undefined, { tolerance: -1, mode: 'accurate', force: true }, io)
+	selectSkyObject(state, { ref: { kind: 'body', code: '599' }, source: 'map', name: 'Jupiter', category: 'solarSystem' }, undefined, io)
+
+	await release((url, body) => url === '/api/sky/position' && (body as { target: { code: string } }).target.code === '599', { position: position(3) })
+	expect(pending.filter((e) => e.url === '/api/sky/position' && (e.body as { target: { code: string } }).target.code === '599')).toHaveLength(0)
+})

@@ -677,6 +677,8 @@ export type {
 	MinorBodyVirtualImpactor,
 	SkyBodiesRequest,
 	SkyBodyPosition,
+	SkyMinorBodiesRequest,
+	SkyMinorBodyPosition,
 	SkyCatalogClass,
 	SkyCatalogEntry,
 	SkyCatalogObject,

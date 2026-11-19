@@ -469,6 +469,24 @@ export interface SkyBodiesRequest {
 	readonly observer?: SkyObserver
 }
 
+// Body of POST /api/sky/minorbodies/positions: minor bodies the map draws, located together for one instant.
+export interface SkyMinorBodiesRequest {
+	// Instant, Unix milliseconds (UTC).
+	readonly time: number
+	// Observer; the geocenter when absent.
+	readonly observer?: SkyObserver
+	// Minor bodies by SPK-ID, with the designation shown for each.
+	readonly bodies: readonly Extract<SkyObjectRef, { kind: 'minorBody' }>[]
+}
+
+// Position of a minor body of POST /api/sky/minorbodies/positions.
+export interface SkyMinorBodyPosition {
+	// SPK-ID of the body.
+	readonly spkId: string
+	// Position at the requested instant, from the kernels or the two-body orbit of the SBDB elements already known.
+	readonly position: SkyPosition
+}
+
 // IAU constellation, located at its label: a fixed J2000 point near its center, without proper motion,
 // distance, or radial velocity.
 export interface SkyConstellation {

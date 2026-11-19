@@ -6,10 +6,11 @@ import { type ConstellationSource, catalogObject, DEFAULT_DEEP_SKY_MAGNITUDE_LIM
 import { constellationDetails, searchConstellations } from './constellations'
 import { type EphemerisTarget, EphemerisUnavailableError, HorizonsEphemerisError, type PositionRequest, type SkyEphemeris, type SkyObserver, type SkyPosition } from './ephemeris'
 import { type MinorBodies, SbdbUnavailableError } from './minorbodies'
-import type { SkyBodiesRequest, SkyBodyPosition, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult } from './types'
+import type { SkyBodiesRequest, SkyBodyPosition, SkyMinorBodiesRequest, SkyMinorBodyPosition, SkyObjectRef, SkyPositionRequest, SkyPositionResponse, SkySearchResult } from './types'
 
 // HTTP routes of the sky API under /api/sky, built over the services they need so tests can pass an
-// in-memory catalog and mocked remote services. Search and catalog data are local and never wait on
+// in-memory catalog and mocked remote services. The map locates its minor bodies together, locally only, so one of them
+// never waits on JPL or holds the others. Search and catalog data are local and never wait on
 // the network; positions of solar-system objects and minor body searches may, within their budgets.
 
 // Services the sky routes read.
@@ -224,6 +225,26 @@ export function createSkyRoutes(services: SkyServices) {
 				}
 
 				return Response.json(bodies)
+			},
+		},
+		'/api/sky/minorbodies/positions': {
+			// Positions of the minor bodies the map draws, for one instant, without events: from the kernels or the two-body
+			// orbit of the SBDB elements already known, never asking SBDB or Horizons, so a body neither gives is left out
+			// and never holds the others.
+			POST: async (req) => {
+				const { time, observer, bodies } = (await req.json()) as SkyMinorBodiesRequest
+				const positions: SkyMinorBodyPosition[] = []
+
+				for (const { spkId } of bodies) {
+					try {
+						const position = await ephemeris.position({ type: 'minorBody', spkId, elements: minorBodies.cached(spkId)?.elements }, { time, observer, mode: 'fast', local: true, signal: req.signal })
+						positions.push({ spkId, position })
+					} catch (error) {
+						if (!(error instanceof EphemerisUnavailableError)) throw error
+					}
+				}
+
+				return Response.json(positions)
 			},
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>

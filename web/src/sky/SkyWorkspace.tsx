@@ -144,10 +144,12 @@ export function SkyWorkspace() {
 	// Draws the footprint of a solved image, unless hidden from the toolbar, while its document still shows that image,
 	// and drops it otherwise (the document closed, or its camera tab shows another frame); marks and pans to a coordinate
 	// sent from an image.
+	// The image documents are read only while a footprint was sent, so the workspace never renders again for a change of
+	// the camera tabs otherwise.
 	const handoffs = useSnapshot(skyImageState)
-	const documents = useSnapshot(imagesState).documents
+	const images = useSnapshot(imagesState)
 	const sent = handoffs.footprint
-	const footprint = sent && documents.some((document) => document.key === sent.documentKey && document.info?.id === sent.imageId) ? sent : undefined
+	const footprint = sent && images.documents.some((document) => document.key === sent.documentKey && document.info?.id === sent.imageId) ? sent : undefined
 
 	useEffect(() => {
 		if (sent && !footprint) clearImageFootprint(skyImageState)
@@ -166,10 +168,13 @@ export function SkyWorkspace() {
 		map.syncMount(mountTarget && { ref: { kind: 'mount', connectionId: mountTarget.connectionId, id: mountTarget.id }, name: mountTarget.name }, mountCenter)
 	}, [map, mountTarget, mountCenter?.rightAscension, mountCenter?.declination])
 
-	// Highlights the selection whenever it, its position, or the map data change.
+	// Highlights the selection whenever it, its position, its name or type (which a remembered object is drawn with), or
+	// the map data change.
+	const selectionName = sky.selection?.name
+	const selectionType = sky.selection?.catalog?.typeName ?? sky.selection?.minorBody?.kind
 	useEffect(() => {
 		if (status === 'ready') map.syncSelection()
-	}, [map, status, selectionKey, selectionCenter?.rightAscension, selectionCenter?.declination])
+	}, [map, status, selectionKey, selectionCenter?.rightAscension, selectionCenter?.declination, selectionName, selectionType])
 
 	// Keyboard shortcuts of the workspace (./shortcuts): / focuses the search, + and − zoom, N returns to the real time.
 	const searchRef = useRef<HTMLInputElement>(null)

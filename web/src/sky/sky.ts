@@ -1,4 +1,4 @@
-import type { MinorBody, MinorBodySearchResponse, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyEvents, SkyObjectCategory, SkyObjectRef, SkyObserver, SkyPosition, SkyPositionResponse, SkySearchResult, SkyStarData } from 'api'
+import type { MinorBody, MinorBodySearchResponse, SkyBodyPosition, SkyCatalogObject, SkyConstellation, SkyConstellations, SkyDeepSkyData, SkyEvents, SkyMinorBodiesRequest, SkyMinorBodyPosition, SkyObjectCategory, SkyObjectRef, SkyObserver, SkyPosition, SkyPositionResponse, SkySearchResult, SkyStarData } from 'api'
 import { proxy } from 'valtio'
 import { type ApiFetch, browserFetch, fetchJson, jsonInit } from '../http'
 import { type GeographicLocation, siteObserver } from '../location/site'
@@ -98,6 +98,9 @@ export interface SkyRefreshOptions {
 	readonly tolerance: number
 	// Calculation path: `accurate` asks Horizons first; `fast` is local only.
 	readonly mode: 'fast' | 'accurate'
+	// Whether the refresh must happen even while the selection loads, for a change the load in flight may not reflect
+	// (a new kernel generation): it then runs once that load ends, for the instant shown then.
+	readonly force?: boolean
 }
 
 // Age in milliseconds below which a position is fresh enough that a refresh skips it, such as when the
@@ -113,6 +116,9 @@ export const skyState = proxy<SkyState>({ panel: 'inspector' })
 
 // Requests of the current selection; a new selection supersedes them.
 const selectionGuard = createRequestGuard()
+
+// Forced refresh asked while the selection was loading, run once that load ends; a new selection drops it.
+let deferredRefresh: (() => void) | undefined
 
 // Download of the J2000 map catalog of the tab, started on the first visit to the workspace.
 let mapCatalog: Promise<SkyMapCatalog> | undefined
@@ -152,6 +158,12 @@ export function fetchSkyPosition(ref: SkyObjectRef, time: number, observer: SkyO
 	return postJson<SkyPositionResponse>(io, '/api/sky/position', { target: ref, time, observer, mode }, signal)
 }
 
+// Computes the local positions of minor bodies at an instant (Unix milliseconds) for the map, together and without
+// events; a body neither its kernels nor its known SBDB elements locate is left out of the answer.
+export function fetchMinorBodyPositions(time: number, observer: SkyObserver | undefined, bodies: readonly Extract<SkyObjectRef, { kind: 'minorBody' }>[], signal?: AbortSignal, io: SkyIo = browserSkyIo): Promise<SkyMinorBodyPosition[]> {
+	return postJson<SkyMinorBodyPosition[]>(io, '/api/sky/minorbodies/positions', { time, observer, bodies } satisfies SkyMinorBodiesRequest, signal)
+}
+
 // Computes the local positions of the major bodies at an instant (Unix milliseconds) for the map.
 export function fetchSkyBodies(time: number, observer: SkyObserver | undefined, signal?: AbortSignal, io: SkyIo = browserSkyIo): Promise<SkyBodyPosition[]> {
 	return postJson<SkyBodyPosition[]>(io, '/api/sky/bodies', { time, observer }, signal)
@@ -168,6 +180,7 @@ export function selectSkyObject(state: SkyState, input: SkySelectionInput, obser
 		return
 	}
 
+	deferredRefresh = undefined
 	state.selection = { ref: input.ref, key, source: input.source, category: input.category, name: input.name, minorBody: input.minorBody, loading: true }
 	state.panel = 'inspector'
 	void loadSelection(state, observer, io, true, 'accurate')
@@ -176,6 +189,7 @@ export function selectSkyObject(state: SkyState, input: SkySelectionInput, obser
 // Clears the selection and abandons its requests.
 export function clearSkySelection(state: SkyState) {
 	selectionGuard.cancel()
+	deferredRefresh = undefined
 	state.selection = undefined
 }
 
@@ -183,10 +197,17 @@ export function clearSkySelection(state: SkyState) {
 // instant shown), keeping its details. The map passes the instant of its own update, so the map, the
 // position, and the events show the same instant. Skips a selection still loading or whose latest request
 // was within the tolerance of the instant, so remounting the workspace, a fast clock, or a failing service
-// never piles up requests.
+// never piles up requests. A forced refresh of a selection still loading waits for that load to end instead.
 export async function refreshSkySelection(state: SkyState, observer: GeographicLocation | undefined, options: SkyRefreshOptions = REALTIME_REFRESH, io: SkyIo = browserSkyIo, time: number = io.time()): Promise<void> {
 	const selection = state.selection
-	if (!selection || selection.loading || (selection.requestedTime !== undefined && Math.abs(time - selection.requestedTime) <= options.tolerance)) return
+	if (!selection) return
+
+	if (selection.loading) {
+		if (options.force) deferredRefresh = () => void refreshSkySelection(state, observer, options, io)
+		return
+	}
+
+	if (selection.requestedTime !== undefined && Math.abs(time - selection.requestedTime) <= options.tolerance) return
 	await loadSelection(state, observer, io, false, options.mode, time)
 }
 
@@ -288,7 +309,11 @@ async function loadSelection(state: SkyState, observer: GeographicLocation | und
 	)
 
 	await Promise.all(tasks)
-	if (applies()) state.selection!.loading = false
+	if (!applies()) return
+	state.selection!.loading = false
+	const deferred = deferredRefresh
+	deferredRefresh = undefined
+	deferred?.()
 }
 
 // Returns the message of a failure, or a generic one.

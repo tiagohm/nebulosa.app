@@ -4,7 +4,7 @@ import { type ApiFetch, browserFetch, jsonInit } from '../http'
 import type { Celestial } from './celestial/celestial'
 import { METEOR_RADIANT_SHAPE_TYPE, type MeteorRadiantData, meteorRadiantShapeId } from './objects'
 import { skyMapFont, skyMapPalette } from './palette'
-import { createRequestGuard } from './selection'
+import { createLatestRunner, createRequestGuard } from './selection'
 
 // Meteor shower radiants on the Sky map: the radiants of the showers active at the instant the map shows (while the
 // meteorRadiants layer is shown) and the selected shower's radiant (always), drawn as selectable custom shapes. A radiant
@@ -98,6 +98,13 @@ export class MeteorRadiantLayer {
 	#path?: MeteorRadiantPath
 	#pathTime?: number
 	readonly #pathGuard = createRequestGuard()
+	#destroyed = false
+	// Requests of the active radiants: one in flight, the latest instant waiting, so a fast clock never aborts one before
+	// it answers.
+	readonly #requestActive = createLatestRunner(
+		(time) => this.#loadActive(time),
+		() => !this.#destroyed && this.#targets.visible,
+	)
 
 	// Creates the layer of a map.
 	constructor(
@@ -135,7 +142,7 @@ export class MeteorRadiantLayer {
 	// Follows an update of the map for an instant (Unix milliseconds), asking again for what is out of date.
 	update(time: number) {
 		if (Date.now() < this.#retryAt) return
-		if (this.#targets.visible && outdated(this.#activeTime, time)) void this.#loadActive(time)
+		if (this.#targets.visible && outdated(this.#activeTime, time)) this.#requestActive(time)
 		const selected = this.#targets.selected
 		if (selected !== undefined && outdated(this.#selectedTime, time) && !this.#radiants.some((radiant) => radiant.id === selected)) void this.#loadSelected(selected, time)
 		if (selected !== undefined && pathOutdated(this.#path, this.#pathTime, time)) void this.#loadPath(selected, time)
@@ -229,6 +236,7 @@ export class MeteorRadiantLayer {
 
 	// Releases the layer for good.
 	destroy() {
+		this.#destroyed = true
 		this.#guard.cancel()
 		this.#selectedGuard.cancel()
 		this.#pathGuard.cancel()

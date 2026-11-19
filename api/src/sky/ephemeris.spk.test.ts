@@ -208,3 +208,32 @@ test.skipIf(!existsSync(DE440S))('the DE440s Sun and Moon agree with the theorie
 	// DE440s has no planet centers beyond Venus: the planet Jupiter is never its system barycenter.
 	expect((await ephemeris.position({ type: 'body', code: '599' }, { time: TIME, observer })).source).toBe('horizons')
 })
+
+test('the map locates its minor bodies together, locally, without events or remote requests', async () => {
+	let sbdb = 0
+	const { ephemeris, calls } = await ephemerisOf(false, PLANETARY, CERES)
+	const routes = createSkyRoutes({
+		catalog: (await import('./fixture')).fixtureCatalog(),
+		constellations: { lines: [], boundaries: [], labels: [] },
+		ephemeris,
+		minorBodies: new MinorBodies({
+			fetch: () => {
+				sbdb++
+				return Promise.reject(new TypeError('offline'))
+			},
+		}),
+	})
+
+	const bodies = [
+		{ kind: 'minorBody', spkId: '20000001', designation: '1 Ceres' },
+		{ kind: 'minorBody', spkId: '20000002', designation: '2 Pallas' },
+	]
+	const response = await routes['/api/sky/minorbodies/positions'].POST(new Request('http://localhost/api/sky/minorbodies/positions', { method: 'POST', body: JSON.stringify({ time: TIME, observer, bodies }) }) as never)
+	const positions = (await response.json()) as { spkId: string; position: { source: string }; events?: unknown }[]
+
+	// Ceres comes from its kernel; Pallas has no kernel and no SBDB elements known, so it is left out rather than asked for.
+	expect(positions.map((e) => [e.spkId, e.position.source])).toEqual([['20000001', 'spk']])
+	expect(positions[0].events).toBeUndefined()
+	expect(sbdb).toBe(0)
+	expect(calls).toEqual([])
+})

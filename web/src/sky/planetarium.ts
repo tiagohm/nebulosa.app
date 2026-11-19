@@ -17,8 +17,8 @@ import { skyMapFont, skyMapPalette, skyMapReferenceLines, skyMapTheme } from './
 import { isRememberable, type RememberedObject, RememberedObjects, type RememberedShapeData, REMEMBERED_SHAPE_TYPE, rememberedOf, rememberedShapeId } from './remembered'
 import { skySatelliteState } from './satellite/satellite'
 import { SatelliteLayer, type SatelliteTargets } from './satellites.sky'
-import { createRequestGuard } from './selection'
-import { browserSkyIo, fetchSkyBodies, fetchSkyPosition, loadSkyMapCatalog, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, type SkySelection, selectSkyObject, skyState } from './sky'
+import { createLatestRunner, createRequestGuard } from './selection'
+import { browserSkyIo, fetchMinorBodyPositions, fetchSkyBodies, fetchSkyPosition, loadSkyMapCatalog, REALTIME_REFRESH, refreshSkySelection, type SkyRefreshOptions, type SkySelection, selectSkyObject, skyState } from './sky'
 
 // The Sky workspace's star map, kept for the whole tab: the Celestial instance, its catalogs, the moving
 // bodies, and the selection highlight live here rather than in React, so leaving the workspace only
@@ -350,12 +350,19 @@ export class Planetarium {
 	readonly #unsubscribe: VoidFunction[]
 	#names: MapNames = { typeNames: [], starDesignations: [], constellationCodes: new Map() }
 	#observer?: GeographicLocation
-	// Second and observer of the body positions requested last, so repeated updates do not refetch them.
+	// Second and observer of the major and of the minor body positions requested last, so repeated updates do not
+	// refetch them.
 	#bodiesKey = ''
-	// Whether body positions are being requested; updates meanwhile only record their instant.
-	#bodiesBusy = false
-	// Instant (Unix milliseconds) of the latest update that arrived while body positions were requested.
-	#bodiesPending?: number
+	#minorKey = ''
+	// Runners of the major and of the minor body requests: one of each in flight, for the latest instant asked.
+	readonly #requestMajorBodies = createLatestRunner(
+		(time) => this.#updateMajorBodies(time),
+		() => !this.#destroyed,
+	)
+	readonly #requestMinorBodies = createLatestRunner(
+		(time) => this.#updateMinorBodies(time),
+		() => !this.#destroyed,
+	)
 	// J2000 map catalog of the tab; absent before it is loaded.
 	#catalog?: SkyMapCatalog
 	// Instant the drawn catalogs were computed for, Unix milliseconds; absent before the first load.
@@ -529,10 +536,11 @@ export class Planetarium {
 
 		const regenerated = this.#kernelGeneration !== undefined && generation !== undefined && generation !== this.#kernelGeneration
 		if (generation !== undefined) this.#kernelGeneration = generation
-		if (regenerated) void refreshSkySelection(skyState, this.#observer, { tolerance: -1, mode: REFRESH[skyClock.mode].mode }, browserSkyIo, this.time)
+		if (regenerated) void refreshSkySelection(skyState, this.#observer, { tolerance: -1, mode: REFRESH[skyClock.mode].mode, force: true }, browserSkyIo, this.time)
 
+		if (regenerated) this.#bodiesKey = ''
 		if (changed || regenerated) {
-			this.#bodiesKey = ''
+			this.#minorKey = ''
 			this.#requestMovingBodies(this.time)
 		}
 	}
@@ -922,29 +930,16 @@ export class Planetarium {
 		void refreshSkySelection(skyState, this.#observer, REFRESH[mode], browserSkyIo, time)
 	}
 
-	// Asks for the body positions of an instant (Unix milliseconds). While a request is running, only the
-	// latest instant asked meanwhile is kept and requested after it, so a fast clock never aborts requests
-	// before they finish or queues more than one.
+	// Asks for the positions of the major bodies and of the minor bodies of an instant (Unix milliseconds), each through
+	// its own runner, so a slow answer for one never holds the other.
 	#requestMovingBodies(time: number) {
-		if (this.#bodiesBusy) {
-			this.#bodiesPending = time
-			return
-		}
-
-		this.#bodiesBusy = true
-
-		void this.#updateMovingBodies(time).finally(() => {
-			this.#bodiesBusy = false
-			const pending = this.#bodiesPending
-			this.#bodiesPending = undefined
-			if (pending !== undefined && !this.#destroyed) this.#requestMovingBodies(pending)
-		})
+		this.#requestMajorBodies(time)
+		this.#requestMinorBodies(time)
 	}
 
-	// Recomputes the local positions of the major bodies, and of the remembered minor bodies and those of the kernels of
-	// the library other than the selection (which follows the Inspector's position of the same instant), for an instant. Updates of the
-	// same second and observer, such as those after loading data, reuse the positions requested for them.
-	async #updateMovingBodies(time: number) {
+	// Recomputes the local positions of the major bodies for an instant (Unix milliseconds). Updates of the same second
+	// and observer, such as those after loading data, reuse the positions requested for them.
+	async #updateMajorBodies(time: number) {
 		const key = `${Math.round(time / 1000)}|${locationKey(this.#observer)}`
 		if (key === this.#bodiesKey) return
 
@@ -968,33 +963,56 @@ export class Planetarium {
 			// The bodies keep their last positions; the next update retries.
 			if (request.current()) this.#bodiesKey = ''
 		}
-
-		const selected = skyState.selection?.key
-		const minorBodies = [...remembered.values(), ...[...this.#kernelBodies.values()].filter((object) => !remembered.get(object.key))].filter((object) => object.ref.kind === 'minorBody' && object.key !== selected)
-		if (minorBodies.length === 0) return
-
-		const minorRequest = this.#minorGuard.begin()
-
-		await Promise.all(
-			minorBodies.map(async (object) => {
-				try {
-					const { position } = await fetchSkyPosition(object.ref, time, siteObserver(this.#observer), 'fast', minorRequest.signal)
-					if (!minorRequest.current() || (remembered.get(object.key) ?? this.#kernelBodies.get(object.key)) !== object || skyState.selection?.key === object.key) return
-					object.rightAscension = position.rightAscension
-					object.declination = position.declination
-					object.magnitude = position.magnitude
-					if (this.#kernelBodies.get(object.key) === object) this.#kernelPlaced.add(object.key)
-					this.#showMinorBody(object)
-				} catch {
-					// Without elements the minor body keeps its last position.
-				}
-			}),
-		)
 	}
 
-	// Adds or moves the map's moving body of a remembered minor body or of one of a kernel of the library; without SBDB
-	// data, a comet is told by its SPK-ID.
+	// Recomputes, in one request, the local positions of the remembered minor bodies and of those of the kernels of the
+	// library other than the selection (which follows the Inspector's position of the same instant) for an instant (Unix
+	// milliseconds), and redraws them once. A body the server cannot locate locally keeps its last position.
+	async #updateMinorBodies(time: number) {
+		const key = `${Math.round(time / 1000)}|${locationKey(this.#observer)}`
+		if (key === this.#minorKey) return
+
+		const selected = skyState.selection?.key
+		const objects = [...remembered.values(), ...[...this.#kernelBodies.values()].filter((object) => !remembered.get(object.key))].filter((object) => object.ref.kind === 'minorBody' && object.key !== selected)
+		this.#minorKey = key
+		if (objects.length === 0) return
+
+		const request = this.#minorGuard.begin()
+
+		try {
+			const refs = objects.flatMap((object) => (object.ref.kind === 'minorBody' ? [object.ref] : []))
+			const positions = await fetchMinorBodyPositions(time, siteObserver(this.#observer), refs, request.signal)
+			if (!request.current()) return
+			const bySpkId = new Map(positions.map((e) => [e.spkId, e.position]))
+			let moved = false
+
+			for (const object of objects) {
+				const position = object.ref.kind === 'minorBody' ? bySpkId.get(object.ref.spkId) : undefined
+				if (!position || (remembered.get(object.key) ?? this.#kernelBodies.get(object.key)) !== object || skyState.selection?.key === object.key) continue
+				object.rightAscension = position.rightAscension
+				object.declination = position.declination
+				object.magnitude = position.magnitude
+				if (this.#kernelBodies.get(object.key) === object) this.#kernelPlaced.add(object.key)
+				this.#placeMinorBody(object)
+				moved = true
+			}
+
+			if (moved) this.celestial.markMovingBodyDirty()
+		} catch {
+			// The bodies keep their last positions; the next update retries.
+			if (request.current()) this.#minorKey = ''
+		}
+	}
+
+	// Adds or moves the map's moving body of a remembered minor body or of one of a kernel of the library, and redraws it.
 	#showMinorBody(object: RememberedObject) {
+		this.#placeMinorBody(object)
+		this.celestial.markMovingBodyDirty(movingBodyId(object.ref))
+	}
+
+	// Adds or moves the map's moving body of a remembered minor body or of one of a kernel of the library without redrawing
+	// it; without SBDB data, a comet is told by its SPK-ID.
+	#placeMinorBody(object: RememberedObject) {
 		const id = movingBodyId(object.ref)!
 		const comet = object.minorBody ? object.minorBody.kind === 'comet' : object.ref.kind === 'minorBody' && isCometSpkId(object.ref.spkId)
 		const type: MovingBodyType = comet ? 'comet' : 'asteroid'
@@ -1010,7 +1028,6 @@ export class Planetarium {
 
 		Object.assign(movingBody.position, { rightAscension: object.rightAscension, declination: object.declination })
 		movingBody.magnitude = object.magnitude
-		this.celestial.markMovingBodyDirty(id)
 	}
 }
 

@@ -560,13 +560,13 @@ export class MeteorShowersService {
 			.slice(0, MAX_STATE_IDS)
 			.map((id) => index.byId.get(id))
 			.filter((record) => record !== undefined)
-		return meteorShowerStatesAt(records, request, this.#table)
+		return meteorShowerStatesAt(records, request, this.#table, this.#snapshot())
 	}
 
 	// Radiants the Sky draws at an instant.
 	async radiants(request: MeteorSkyRadiantsRequest): Promise<MeteorSkyRadiants> {
 		const { index } = await this.#catalog()
-		return skyRadiantsAt(index.showers, request.time, this.#table)
+		return skyRadiantsAt(index.showers, request.time, this.#table, this.#snapshot())
 	}
 
 	// Geometric observing night of a shower, cached by the catalog revision, the kernel generation, the shower, the site's

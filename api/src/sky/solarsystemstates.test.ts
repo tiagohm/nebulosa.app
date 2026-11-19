@@ -8,7 +8,7 @@ import { AU_KM } from 'nebulosa/src/core/constants'
 import { vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
 import { AstroWeatherNights } from '../astroweather.night'
 import { NO_EPHEMERIS_KERNELS } from '../ephemeris.chain'
-import { nightEphemeris } from '../meteorshowers.astronomy'
+import { instantEphemeris, nightEphemeris } from '../meteorshowers.astronomy'
 import { spkFixture, type SpkFixtureSegment } from '../spicekernels.fixture'
 import { SpiceKernelRuntime } from '../spicekernels.runtime'
 import { solarSystemStates } from './ephemeris'
@@ -96,4 +96,19 @@ test('the Sun and the Moon of a meteor night come from the kernels, else match t
 	const kernels = nightEphemeris(runtime.current(), span)
 	expect(kernels.sun(time)[1] * AU_KM).toBeCloseTo(-149600000, 0)
 	expect(kernels.moon(time)[0] * AU_KM).toBeCloseTo(380000, 0)
+})
+
+test('the Sun and the Moon of a meteor instant come from the kernels, and need no Moon when it is not asked for', async () => {
+	const time = timeUnix(NIGHT / 1000, true)
+	const theories = instantEphemeris(NO_EPHEMERIS_KERNELS.current(), NIGHT, true)
+	// The same theories on ICRS axes, against the toolkit's on J2000 ecliptic axes rotated back: under 0.2″.
+	expect(vecAngle(theories.sun(time), meteorSunDirection(time))).toBeLessThan(1e-6)
+	expect(vecAngle(theories.moon(time), meteorMoonDirection(time))).toBeLessThan(1e-6)
+
+	const kernels = instantEphemeris((await runtimeOf(planetaryKernel(NIGHT - 86_400_000, NIGHT + 86_400_000))).current(), NIGHT, true)
+	expect(kernels.moon(time)[0] * AU_KM).toBeCloseTo(380000, 0)
+
+	// A kernel without the Moon still gives the Sun of an instant that asks for no Moon.
+	const moonless = instantEphemeris((await runtimeOf(planetaryKernel(NIGHT - 86_400_000, NIGHT + 86_400_000, false))).current(), NIGHT, false)
+	expect(moonless.sun(time)[1] * AU_KM).toBeCloseTo(-149600000, 0)
 })

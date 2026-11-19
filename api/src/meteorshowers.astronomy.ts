@@ -8,7 +8,7 @@ import { meteorShowerComputationContext, meteorShowerState, meteorShowerStates }
 import type { MeteorEphemeris, MeteorExponentialActivityProfile, MeteorGeometricObservingWindow, MeteorGeometricObservingWindowOptions, MeteorShowerSolution, MeteorSolarLongitudeInterval, MeteorVisualObservation } from 'nebulosa/src/astronomy/meteors/types'
 import { type Time, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
-import { vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
+import { vecAngle, vecMinus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
 import { LruCache } from './lrucache'
@@ -18,6 +18,7 @@ import { annualEventsOf, type MeteorActivityProfileEntry, type MeteorAnnualEvent
 import { type ObservingReasonCode, type ObservingSample, type ObservingWindow, type PlanningSite, resolveNight, type TargetAnalysis, type TargetAnalysisRequest } from './observingplanner.astronomy'
 import { geocentricInterpolation, geographic, type SkyObserver, solarSystemStates } from './sky/ephemeris'
 import type { TimeSpan } from './sky/sun'
+import type { SolarSystemBodyCode } from './sky/types'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 
 // Astronomy of the Meteor Showers tool over the toolkit's meteor modules: the dates of a shower's occurrence from each
@@ -213,11 +214,12 @@ export const MAX_STATE_IDS = 100
 export const MAX_DRIFT_DAYS = 30
 
 // The state of a batch of showers at one instant: one toolkit context (the Sun, the Moon, the sidereal time) shared by
-// every radiant through meteorShowerStates. Showers without a usable solution keep their activity and have no radiant.
-export function meteorShowerStatesAt(records: readonly MeteorShowerRecord[], request: MeteorShowerStatesRequest, table: MeteorSolarLongitudeTable): MeteorShowerStates {
+// every radiant through meteorShowerStates, with the Sun and the Moon of the kernels of snapshot (instantEphemeris).
+// Showers without a usable solution keep their activity and have no radiant.
+export function meteorShowerStatesAt(records: readonly MeteorShowerRecord[], request: MeteorShowerStatesRequest, table: MeteorSolarLongitudeTable, snapshot: SpiceKernelSnapshot): MeteorShowerStates {
 	const time = timeUnix(request.time / 1000, true)
 	const observer = request.observer === undefined ? undefined : geographic(request.observer)
-	const context = meteorShowerComputationContext(time, observer, { includeHorizontal: observer !== undefined, includeSun: observer !== undefined, includeMoon: true })
+	const context = meteorShowerComputationContext(time, observer, { ephemeris: instantEphemeris(snapshot, request.time, true), includeHorizontal: observer !== undefined, includeSun: observer !== undefined, includeMoon: true })
 	const withSolution = records.filter((record) => preferredSolution(record) !== undefined)
 	const options = { includeHorizontal: observer !== undefined, includeSun: observer !== undefined, includeMoon: true, includeRadiantOfDate: true, maxExtrapolationDays: MAX_DRIFT_DAYS }
 	const states = meteorShowerStates(
@@ -279,10 +281,11 @@ export const MAX_SKY_RADIANTS = 100
 
 // The radiants of the showers active at an instant that the Sky draws by default: every curated visual shower inside its
 // activity period, and every established IAU shower whose annual preferred solution is inside its support; never a
-// removed, working, or year-limited record, nor one without a radiant. At most MAX_SKY_RADIANTS, visual ones first.
-export function skyRadiantsAt(records: readonly MeteorShowerRecord[], time: number, table: MeteorSolarLongitudeTable): MeteorSkyRadiants {
+// removed, working, or year-limited record, nor one without a radiant. At most MAX_SKY_RADIANTS, visual ones first. The
+// solar longitude comes from the Sun of the kernels of snapshot (instantEphemeris).
+export function skyRadiantsAt(records: readonly MeteorShowerRecord[], time: number, table: MeteorSolarLongitudeTable, snapshot: SpiceKernelSnapshot): MeteorSkyRadiants {
 	const instant = timeUnix(time / 1000, true)
-	const context = meteorShowerComputationContext(instant, undefined, { includeMoon: false, includeSun: false, includeHorizontal: false })
+	const context = meteorShowerComputationContext(instant, undefined, { ephemeris: instantEphemeris(snapshot, time, false), includeMoon: false, includeSun: false, includeHorizontal: false })
 	const candidates = records.filter((record) => {
 		const solution = preferredSolution(record)
 		if (solution === undefined || record.status === 'removed') return false
@@ -513,6 +516,16 @@ export function nightEphemeris(snapshot: SpiceKernelSnapshot, span: TimeSpan): M
 	}
 
 	return ephemeris
+}
+
+// Sun and Moon of a meteor computation at one instant (Unix milliseconds): geometric geocentric vectors of one source of
+// the fast ephemeris chain, the SPK kernels of snapshot when they resolve the Sun, the Earth, and (with `moon`) the Moon
+// there, else VSOP87E and ELPMPP02, evaluated exactly at each instant asked. Without `moon` the Moon is never asked for.
+export function instantEphemeris(snapshot: SpiceKernelSnapshot, time: number, moon: boolean): MeteorEphemeris {
+	const codes: readonly SolarSystemBodyCode[] = moon ? ['301'] : []
+	const { states } = solarSystemStates(snapshot, codes, [time])
+	const moonState = states.body('301')
+	return { sun: (t) => vecMinus(states.sun(t)[0], states.earth(t)[0]), moon: (t) => vecMinus(moonState(t)[0], states.earth(t)[0]) }
 }
 
 // Geometric windows of a solution over a span, chronological.

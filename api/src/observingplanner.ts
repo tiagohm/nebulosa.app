@@ -333,13 +333,14 @@ export class ObservingPlannerService {
 		return queryCatalog(this.options.catalog, query)
 	}
 
-	// Night of a site whose evening falls on a civil date, shared by every analysis of it.
+	// Night of a site whose evening falls on a civil date, shared by every analysis of it over one kernel generation.
 	planningNight(site: PlanningSite, eveningDate: string) {
-		const key = `${site.latitude}|${site.longitude}|${site.elevation}|${site.timeZone}|${eveningDate}`
+		const snapshot = this.options.kernels.current()
+		const key = `${site.latitude}|${site.longitude}|${site.elevation}|${site.timeZone}|${eveningDate}|${snapshot.generation}`
 		let night = this.#nights.get(key)
 
 		if (!night) {
-			night = new PlanningNight(site, resolveNight(this.options.night, site, eveningDate))
+			night = new PlanningNight(site, resolveNight(this.options.night, site, eveningDate), snapshot)
 			this.#nights.set(key, night)
 		}
 
@@ -360,7 +361,7 @@ export class ObservingPlannerService {
 		if (preparation.kind === 'unresolved') return unresolvedAnalysis(night, target, constraints, requestedDurationMs)
 		if (preparation.kind === 'unavailable') return ephemerisUnavailableAnalysis(night, target, preparation.reason, constraints, requestedDurationMs, preparation.name, preparation.typeName)
 
-		const key = JSON.stringify([OBSERVING_SCORE_MODEL_VERSION, target, site.latitude, site.longitude, site.elevation, site.timeZone, eveningDate, constraints, requestedDurationMs, preparation.revision])
+		const key = JSON.stringify([OBSERVING_SCORE_MODEL_VERSION, target, night.key, constraints, requestedDurationMs, preparation.revision])
 		const cached = this.#analyses.get(key)
 		if (cached) return cached
 
@@ -371,11 +372,11 @@ export class ObservingPlannerService {
 
 	// Analyzes a target computed locally (a catalog object, a major body, or coordinates) over a night, synchronously.
 	#analyzeLocal({ target, site, eveningDate, constraints, requestedDurationMs }: TargetAnalysisRequest & { readonly target: Exclude<ObservingTargetRef, { kind: 'minorBody' | 'meteorShower' }> }): TargetAnalysis {
-		const key = JSON.stringify([OBSERVING_SCORE_MODEL_VERSION, target, site.latitude, site.longitude, site.elevation, site.timeZone, eveningDate, constraints, requestedDurationMs])
+		const night = this.planningNight(site, eveningDate)
+		const key = JSON.stringify([OBSERVING_SCORE_MODEL_VERSION, target, night.key, constraints, requestedDurationMs])
 		const cached = this.#analyses.get(key)
 		if (cached) return cached
 
-		const night = this.planningNight(site, eveningDate)
 		const resolved = resolveTarget(this.options.catalog, night, target)
 		const analysis = resolved ? analyzeTarget(night, resolved, constraints, requestedDurationMs) : unresolvedAnalysis(night, target, constraints, requestedDurationMs)
 		this.#analyses.set(key, analysis)

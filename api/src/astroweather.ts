@@ -1,6 +1,7 @@
 import { type AstroWeatherNight, type AstroWeatherNightRequest, AstroWeatherNights } from './astroweather.night'
 import { type MeteorologyGrid, type MeteorologySample, type OpenMeteoForecast, openMeteoUrl, parseOpenMeteo } from './astroweather.openmeteo'
 import { type AstronomicalSample, parseSevenTimer, SEVEN_TIMER_DECIMALS, type SevenTimerForecast, sevenTimerUrl } from './astroweather.seventimer'
+import type { EphemerisKernels } from './ephemeris.chain'
 import { errorResponse } from './http'
 import { fetchUpstream, RemoteCache, type UpstreamFetch, UpstreamInvalidError, UpstreamUnavailableError } from './remote'
 
@@ -101,6 +102,8 @@ export interface AstroWeatherOptions {
 	readonly fetch?: UpstreamFetch
 	// Current time, Unix milliseconds; Date.now by default.
 	readonly now?: () => number
+	// Kernels of the SPICE Kernel Library the nights take the Sun and the Moon from; none by default.
+	readonly kernels?: EphemerisKernels
 }
 
 // Part of a service read for a forecast.
@@ -123,12 +126,13 @@ export class AstroWeatherService {
 	readonly #now: () => number
 	readonly #openMeteo: RemoteCache<OpenMeteoForecast>
 	readonly #sevenTimer: RemoteCache<SevenTimerForecast>
-	readonly #nights = new AstroWeatherNights()
+	readonly #nights: AstroWeatherNights
 
 	// Creates the service.
-	constructor({ fetch: upstream = (url, init) => fetch(url, init), now = Date.now }: AstroWeatherOptions = {}) {
+	constructor({ fetch: upstream = (url, init) => fetch(url, init), now = Date.now, kernels }: AstroWeatherOptions = {}) {
 		this.#fetch = upstream
 		this.#now = now
+		this.#nights = new AstroWeatherNights(kernels)
 		this.#openMeteo = new RemoteCache(OPEN_METEO_TTL_MS, now, { limit: FORECAST_CACHE_LIMIT, maxStaleMs: OPEN_METEO_MAX_STALE_MS, rememberFailure: true })
 		this.#sevenTimer = new RemoteCache(SEVEN_TIMER_TTL_MS, now, { limit: FORECAST_CACHE_LIMIT, maxStaleMs: SEVEN_TIMER_MAX_STALE_MS, rememberFailure: true })
 	}

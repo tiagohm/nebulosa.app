@@ -1,25 +1,25 @@
 import { type LunarPhase, lunation, moonParallax, nearestLunarApsis, nearestLunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
 import { MOON_ROTATION, bodyFixedMatrix, positionAngleOfPole, subObserverPoint, subSolarPoint } from 'nebulosa/src/astronomy/bodies/orientation'
 import { cirsToObserved, icrsToCirs, lightTime, parallacticAngle, topocentricDirection } from 'nebulosa/src/astronomy/coordinates/astrometry'
-import * as elpmpp02 from 'nebulosa/src/astronomy/ephemeris/models/analytical/elpmpp02'
-import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
 import { searchIntervals } from 'nebulosa/src/astronomy/events/search'
 import { precessionNutationMatrix, type Time, timeShift, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, ECLIPTIC_J2000_MATRIX, TAU } from 'nebulosa/src/core/constants'
 import { type Mat3, matMul, matMulVec, matTranspose } from 'nebulosa/src/math/linear-algebra/mat3'
 import { type MutVec3, type Vec3, vecAngle, vecCross, vecLength, vecMinus, vecNegate, vecNormalize } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle, normalizePI } from 'nebulosa/src/math/units/angle'
-import { bodyModel, makeTime, moonHorizonMargin, observerBarycentric, type SkyObserver } from './ephemeris'
+import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from '../ephemeris.chain'
+import { ANALYTICAL_STATES, makeTime, moonHorizonMargin, observerBarycentric, type SkyObserver, type SolarSystemStates, solarSystemStates } from './ephemeris'
 import type { TimeSpan } from './sun'
 
 // Lunar almanac of the Moon Inspector: the Moon's appearance at an instant (phase, illuminated
 // fraction, age, apparent size, optical and physical libration, the orientation of its pole and bright
 // limb, and the rotation that draws its surface as the observer sees it), the next four principal
 // phases, and the next perigee and apogee; and when the Moon is above an observer's horizon, which
-// Astro Weather reads. Everything is computed locally from the toolkit (ELPMPP02 for
-// the Moon, VSOP87E for the Earth and the Sun, the IAU rotation model of the Moon, Meeus' phase and
-// apsis series), never from the network, so it may differ slightly from the Horizons position of the
-// Sky selection. The appearance is topocentric with an observer and geocentric without one; the phases
+// Astro Weather reads. Everything is computed locally, never from the network: the Moon, the Earth, and the Sun of the
+// appearance and of the horizon come from the SPK kernels of the SPICE Kernel Library when they cover the instant, else
+// from ELPMPP02 and VSOP87E (the fast ephemeris chain), with the IAU rotation model of the Moon; the phases and apsides
+// from the toolkit's searches of the theories, so they may differ slightly from the Horizons position of the Sky
+// selection. The appearance is topocentric with an observer and geocentric without one; the phases
 // and apsides are geocentric events. Times are Unix milliseconds (UTC, converted from the toolkit's TT),
 // angles radians, distances kilometers.
 
@@ -210,24 +210,27 @@ export function northUpView(direction: Vec3, time: Time): Mat3 {
 	return [-east[0], -east[1], -east[2], north[0], north[1], north[2], -line[0], -line[1], -line[2]]
 }
 
-// Computes the Moon's appearance at an instant (Unix milliseconds) for an observer, or the geocenter.
-export function moonAppearance(time: number, observer?: SkyObserver): MoonAppearance {
+// Computes the Moon's appearance at an instant (Unix milliseconds) for an observer, or the geocenter, with the Moon, the
+// Earth, and the Sun of states (the theories by default).
+export function moonAppearance(time: number, observer?: SkyObserver, states: SolarSystemStates = ANALYTICAL_STATES): MoonAppearance {
 	const instant = makeTime(time, observer)
-	const model = bodyModel('301')
+	const model = states.body('301')
 	const direction: MutVec3 = [0, 0, 0]
-	topocentricDirection(model, observerBarycentric, instant, LIGHT_TIME_ITERATIONS, direction)
+	topocentricDirection(model, (t) => observerBarycentric(t, states), instant, LIGHT_TIME_ITERATIONS, direction)
 
 	const emission = timeShift(instant, -lightTime(direction))
 	const moon = model(emission)[0]
-	const moonToSun = vecMinus(vsop.sun(emission)[0], moon)
+	const moonToSun = vecMinus(states.sun(emission)[0], moon)
 	const moonToObserver = vecNegate(direction)
 	const phaseAngle = vecAngle(moonToSun, moonToObserver)
 	const distanceAu = vecLength(direction)
 
 	// Geocentric ecliptic longitudes, enough to name the phase.
-	const earth = vsop.earth(instant)[0]
-	const elongation = normalizeAngle(eclipticLongitude(elpmpp02.moon(instant)[0]) - eclipticLongitude(vecMinus(vsop.sun(instant)[0], earth)))
-	const geocentricDistanceAu = vecLength(elpmpp02.moon(instant)[0])
+	const earthState = states.earth(instant)
+	const earth = earthState[0]
+	const geocentricMoon = vecMinus(model(instant)[0], earth)
+	const elongation = normalizeAngle(eclipticLongitude(geocentricMoon) - eclipticLongitude(vecMinus(states.sun(instant)[0], earth)))
+	const geocentricDistanceAu = vecLength(geocentricMoon)
 
 	const bodyFixed = bodyFixedMatrix(MOON_ROTATION, emission)
 	const view = northUpView(direction, instant)
@@ -240,7 +243,7 @@ export function moonAppearance(time: number, observer?: SkyObserver): MoonAppear
 	let parallactic: number | undefined
 
 	if (observer && instant.location) {
-		const [rightAscension, declination] = icrsToCirs(direction, instant, vsop.earth(instant))
+		const [rightAscension, declination] = icrsToCirs(direction, instant, earthState)
 		const { hourAngle } = cirsToObserved([rightAscension, declination], instant, false)
 		parallactic = parallacticAngle(hourAngle, declination, instant.location.latitude)
 	}
@@ -268,9 +271,10 @@ export function moonAppearance(time: number, observer?: SkyObserver): MoonAppear
 }
 
 // Returns the intervals in which the Moon is above the horizon of an observer between two instants (Unix milliseconds),
-// however many rises and sets fall between them, clipped to the instants; empty when it stays below.
-export function moonAboveHorizon(observer: SkyObserver, start: number, end: number): TimeSpan[] {
-	const margin = moonHorizonMargin(observer)
+// however many rises and sets fall between them, clipped to the instants; empty when it stays below. The Moon, the Earth,
+// and the Sun come from states (the theories by default).
+export function moonAboveHorizon(observer: SkyObserver, start: number, end: number, states: SolarSystemStates = ANALYTICAL_STATES): TimeSpan[] {
+	const margin = moonHorizonMargin(observer, states)
 	const intervals = searchIntervals([(time) => margin(timeToUnixMillis(time))], makeTime(start), makeTime(end), { step: HORIZON_SEARCH_STEP })
 	return intervals.map((interval) => ({ start: timeToUnixMillis(interval.start), end: timeToUnixMillis(interval.end) }))
 }
@@ -320,10 +324,15 @@ export function moonCalendar(time: number): MoonCalendar {
 export class MoonAlmanac {
 	readonly #calendars: MoonCalendar[] = []
 
-	// Computes the almanac of a request.
+	// Creates the service over the kernels of the SPICE Kernel Library (none by default).
+	constructor(private readonly kernels: EphemerisKernels = NO_EPHEMERIS_KERNELS) {}
+
+	// Computes the almanac of a request: the appearance with the Moon of the fast ephemeris chain (the SPK kernels when they
+	// cover the instant, else the theories), the phases and apsides with the toolkit's searches of the theories.
 	almanac({ time, observer }: MoonAlmanacRequest): MoonAlmanacResponse {
 		const { phases, apsides } = this.calendar(time)
-		return { time, appearance: moonAppearance(time, observer), phases, apsides, source: 'local' }
+		const { states } = solarSystemStates(this.kernels.current(), ['301'], [time])
+		return { time, appearance: moonAppearance(time, observer, states), phases, apsides, source: 'local' }
 	}
 
 	// Returns the calendar of an instant (Unix milliseconds), computing it only when no cached one holds.

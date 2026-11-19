@@ -3,6 +3,7 @@
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 - Solar almanac (`api/src/sky/sun.ts`, `POST /api/sky/sun/almanac`): a stateless, read-only computation from the toolkit, never the network.
+  The Sun and the Earth of the local day come from the fast [Ephemeris Chain](ephemeris-chain.md): the SPK kernels of the SPICE Kernel Library when they cover the day and a day on either side, else VSOP87E; days are kept by that source.
   For an instant (Unix milliseconds), an observer, and an IANA time zone it answers the Sun's day on the observer's civil date of that instant (`localDay`, absent without an observer), the next four equinoxes and solstices strictly after the instant (named `marchEquinox`, `juneSolstice`, `septemberEquinox`, `decemberSolstice`, so the names hold in both hemispheres), and the equation of time and the Carrington rotation in progress at the instant.
 - The civil date is the time zone's, with its real bounds (`zonedDay`): a day the clocks change is 23 or 25 hours long, and a skipped midnight starts the day when the clocks jump.
   Sunrise, transit, sunset, the daylight (the time above the sunrise threshold within the day), the civil, nautical, and astronomical twilight, and the astronomical night (from the day's astronomical dusk to the next astronomical dawn within 36 hours) use the toolkit's almanac convention: the geometric, geocentric altitude of the Sun's center against `SUN_HORIZON` (−50′) and −6°, −12°, and −18°.

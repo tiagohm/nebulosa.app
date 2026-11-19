@@ -17,8 +17,23 @@ import { AU_KM, DEG2RAD, GM_SUN_PITJEVA_2005, J2000, SPEED_OF_LIGHT } from 'nebu
 import { type MutVec3, type Vec3, vecAngle, vecLength, vecPlus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { deg, normalizeAngle, normalizePI, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import { computeEphemeris, computeEphemerisSync, type EphemerisAttempt, EphemerisKernelMiss, type EphemerisKernels, type EphemerisKernelsUsed, type EphemerisMode, type EphemerisSourceKind, EphemerisUnavailableError, HorizonsCircuitBreaker, NO_EPHEMERIS_KERNELS, snapshotKernels } from '../ephemeris.chain'
+import {
+	computeEphemeris,
+	computeEphemerisSync,
+	type EphemerisAttempt,
+	EphemerisKernelMiss,
+	type EphemerisKernels,
+	type EphemerisKernelsUsed,
+	type EphemerisMode,
+	type EphemerisProvenance,
+	type EphemerisSourceKind,
+	EphemerisUnavailableError,
+	HorizonsCircuitBreaker,
+	NO_EPHEMERIS_KERNELS,
+	snapshotKernels,
+} from '../ephemeris.chain'
 import { LruCache } from '../lrucache'
+import type { SpiceKernelSnapshot } from '../spicekernels.runtime'
 import { SsdRequestQueue } from '../ssd'
 import { solarSystemBody, type SolarSystemBodyKind } from './bodies'
 import type { SolarSystemBodyCode } from './types'
@@ -442,6 +457,71 @@ export function bodyModel(code: SolarSystemBodyCode): PositionAndVelocityOverTim
 	return PLANET_MODELS[code]!
 }
 
+// Barycentric ICRS states of the major bodies a computation takes from one source of the fast ephemeris chain: the
+// kernels of the SPICE Kernel Library or the analytical theories, never mixed.
+export interface SolarSystemStates extends EphemerisFoundation {
+	// Barycentric ICRS state of a major body over time.
+	readonly body: (code: SolarSystemBodyCode) => PositionAndVelocityOverTime
+}
+
+// States of the analytical theories: VSOP87E, ELPMPP02 for the Moon, and the Pluto theory.
+export const ANALYTICAL_STATES: SolarSystemStates = { ...ANALYTIC_FOUNDATION, body: bodyModel }
+
+// States of a kernel set, each throwing EphemerisKernelMiss at an epoch the set does not resolve.
+export function kernelStates(set: SpkKernelSet): SolarSystemStates {
+	const state =
+		(code: number): PositionAndVelocityOverTime =>
+		(t) => {
+			const result = set.stateAt(code, t)
+			if (!result.ok) throw new EphemerisKernelMiss(code, result.body, result.reason, t)
+			return result.state
+		}
+
+	const sun = state(10)
+	const earth = state(399)
+	return { sun, earth, body: (code) => (code === '10' ? sun : state(Number(code))) }
+}
+
+// States chosen for a computation, where they come from, and the key of their source for caches (analytical, or spk
+// with the kernel generation).
+export interface SolarSystemStatesChoice {
+	readonly states: SolarSystemStates
+	readonly provenance: EphemerisProvenance
+	readonly key: string
+}
+
+// Chooses over the fast ephemeris chain the states of a computation that evaluates the Sun, the Earth, and the major
+// bodies `codes` lazily within a span: the kernels of snapshot when they resolve every one of them at each probe (Unix
+// milliseconds: the ends and the middle of the span), else the analytical theories, which always can. A kernel set
+// covers a body over years to centuries, so a span probed at its ends never misses inside; a miss there would surface
+// as an error of the computation, never as a mix of sources.
+export function solarSystemStates(snapshot: SpiceKernelSnapshot, codes: readonly SolarSystemBodyCode[], probes: readonly number[]): SolarSystemStatesChoice {
+	const bodies = codes.filter((code) => code !== '10').map((code) => ({ name: code, naif: Number(code) }))
+	const { result, provenance } = computeEphemerisSync({
+		kernels: snapshotKernels(snapshot),
+		mode: 'fast',
+		sources: {
+			bodies: [...bodies, { name: '399', naif: 399, dependency: true }, { name: '10', naif: 10, dependency: true }],
+			spk: (set) => {
+				const states = kernelStates(set)
+
+				for (const probe of probes) {
+					const time = timeUnix(probe / 1000, true)
+					states.earth(time)
+					states.sun(time)
+					for (const code of codes) states.body(code)(time)
+				}
+
+				return states
+			},
+			analytical: () => ANALYTICAL_STATES,
+		},
+		compute: (states, _, context) => ({ states, key: context.key }),
+	})
+
+	return { ...result, provenance }
+}
+
 // Kepler orbit of osculating elements; undefined for B1950 elements, which the local model does not support, and for
 // hyperbolic elements without a perihelion distance and time.
 export function keplerOrbit(elements: MinorBodyElements): KeplerOrbit | undefined {
@@ -614,9 +694,10 @@ function solarSystemHorizontalModel(model: SolarSystemModel, observer: SkyObserv
 }
 
 // Height in radians of the Moon's upper limb above the refracted horizon of an observer, over Unix milliseconds: positive
-// while the Moon is up, with the rise and set convention of SkyEphemeris.events.
-export function moonHorizonMargin(observer: SkyObserver) {
-	const horizontal = solarSystemHorizontalModel({ state: bodyModel('301'), magnitude: () => undefined }, observer, true)
+// while the Moon is up, with the rise and set convention of SkyEphemeris.events. The Moon, the Earth, and the Sun come
+// from states, the analytical theories by default.
+export function moonHorizonMargin(observer: SkyObserver, states: SolarSystemStates = ANALYTICAL_STATES) {
+	const horizontal = solarSystemHorizontalModel({ state: states.body('301'), magnitude: () => undefined }, observer, true, states)
 	const threshold = RISE_SET_ALTITUDE.moon!
 	return (time: number) => horizontal(time).altitude - threshold
 }

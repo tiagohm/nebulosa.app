@@ -85,7 +85,7 @@ export class SaturnPlannerService {
 	readonly #nights: SiteNightCache
 
 	constructor(readonly options: SaturnPlannerOptions) {
-		this.#nights = new SiteNightCache(options.night)
+		this.#nights = new SiteNightCache(options.night, options.kernels)
 	}
 
 	// The disk and ring geometry at an instant, from a rings source.

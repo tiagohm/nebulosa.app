@@ -3,7 +3,7 @@
 Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 - The Observing Planner (`api/src/observingplanner.ts` with `observingplanner.astronomy.ts`, `observingplanner.minorbodies.ts`, `observingplanner.minorbodies.store.ts`, `observingplanner.schedule.ts`, and `observingplanner.store.ts`) finds and analyzes targets over a night of a site and keeps the night plans the operator writes.
-  Catalog objects, major bodies, and coordinates are computed locally: the embedded sky catalog, the toolkit's analytical models (VSOP87E, ELPMPP02, and the Pluto model through `bodyModel` and `geocentricInterpolation` of `api/src/sky/ephemeris.ts`), and the Sun night of Astro Weather (`AstroWeatherService.night`, called in process).
+  Catalog objects, major bodies, and coordinates are computed locally: the embedded sky catalog, the Sun, the Moon, and the planets of the fast [Ephemeris Chain](ephemeris-chain.md) (`solarSystemStates` and `geocentricInterpolation` of `api/src/sky/ephemeris.ts`: the SPK kernels when they cover the night, else VSOP87E, ELPMPP02, and the Pluto model; a night is kept by kernel generation, and so are the analyses of its targets), and the Sun night of Astro Weather (`AstroWeatherService.night`, called in process).
   Only a minor body is asked of anything else, on demand when it is analyzed: the SPK kernels of the SPICE Kernel Library, and SBDB and Horizons through the shared JPL queue while the ephemeris sources are online (see Minor bodies below).
   It never asks a forecast or a device, never starts an operation or a session, and moves no mount, Sky clock, profile, or site.
   Plans are documents to read and edit, not runnable sequences.

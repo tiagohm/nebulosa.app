@@ -15,12 +15,13 @@ import { greenwichApparentSiderealTime, precessionNutationMatrix, type Time, typ
 import { DEG2RAD, J2000, TAU } from 'nebulosa/src/core/constants'
 import { type Vec3, vecAngle, vecLength } from 'nebulosa/src/math/linear-algebra/vec3'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
-import type { EphemerisAttempt, EphemerisMode, EphemerisSourceKind } from './ephemeris.chain'
+import { type EphemerisAttempt, type EphemerisMode, type EphemerisSourceKind, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { solarSystemBody } from './sky/bodies'
 import { catalogObject } from './sky/catalog'
-import { bodyModel, geocentricInterpolation, geographic, type SkyObserver } from './sky/ephemeris'
+import { geocentricInterpolation, geographic, type SkyObserver, solarSystemStates } from './sky/ephemeris'
 import { type TimeSpan, zonedDate } from './sky/sun'
 import type { SolarSystemBodyCode } from './sky/types'
+import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 
 // Astronomy of the Observing Planner: the night of a site and civil evening date, and the analysis of one target over
 // it (visibility windows, display samples, culmination, reasons, and an explainable score). Fixed targets and major
@@ -382,8 +383,13 @@ export class SiteOffset {
 	}
 }
 
+// Reach of the states of a night beyond its ends, in milliseconds (two hours): the hourly nodes around them.
+const PLANNING_STATES_MARGIN_MS = 7_200_000
+
 // One night of a site with the Sun and Moon directions every analysis of it shares: their geocentric vectors are
-// evaluated hourly and interpolated, and the observer's offset is removed, so the directions are topocentric. Every
+// evaluated hourly and interpolated, and the observer's offset is removed, so the directions are topocentric. The Sun,
+// the Earth, and the Moon come from one source of the fast ephemeris chain (the SPK kernels of a snapshot when they cover
+// the night, else the theories), and each major body with the Earth it is seen from from one source of its own. Every
 // instant of the night carries the night's Earth orientation (fixedOrientationProviders).
 export class PlanningNight {
 	// Toolkit location of the site.
@@ -404,6 +410,10 @@ export class PlanningNight {
 	readonly #middle: Time
 	// The site offset shared by the providers evaluated at the same epoch.
 	readonly #site: SiteOffset
+	// Kernels the states of the night are chosen from.
+	readonly #snapshot: SpiceKernelSnapshot
+	// Instants at which the kernels must resolve every body of the night, Unix milliseconds.
+	readonly #probes: readonly number[]
 
 	// Toolkit instant of a Unix time in milliseconds, with the night's Earth orientation.
 	time(time: number) {
@@ -411,23 +421,28 @@ export class PlanningNight {
 		return timeShift(middle, (time - timeToUnixMillis(middle)) / 86_400_000)
 	}
 
-	// Prepares the night of a site from its Astro Weather night.
+	// Prepares the night of a site from its Astro Weather night, with the kernels of snapshot (none by default).
 	constructor(
 		readonly site: PlanningSite,
 		readonly night: AstroWeatherNight,
+		snapshot: SpiceKernelSnapshot = NO_EPHEMERIS_KERNELS.current(),
 	) {
 		this.location = geographic(site)
 		this.#site = new SiteOffset(this.location)
 		this.#middle = fixedOrientationTime((night.sun.start + night.sun.end) / 2)
 		this.start = this.time(night.sun.start)
 		this.end = this.time(night.sun.end)
-		this.sunAt = this.topocentric(geocentricInterpolation(bodyModel('10')))
-		this.moonAt = this.topocentric(geocentricInterpolation(bodyModel('301')))
+		this.#snapshot = snapshot
+		this.#probes = [night.sun.start - PLANNING_STATES_MARGIN_MS, (night.sun.start + night.sun.end) / 2, night.sun.end + PLANNING_STATES_MARGIN_MS]
+		const { states } = solarSystemStates(snapshot, ['301'], this.#probes)
+		this.sunAt = this.topocentric(geocentricInterpolation(states.body('10'), states))
+		this.moonAt = this.topocentric(geocentricInterpolation(states.body('301'), states))
 	}
 
-	// Key of the night among the nights of other sites and evenings: the site's place and zone, and the evening date.
+	// Key of the night among the nights of other sites and evenings: the site's place and zone, the evening date, and the
+	// kernel generation its states were chosen from.
 	get key() {
-		return `${this.site.latitude}|${this.site.longitude}|${this.site.elevation}|${this.site.timeZone}|${this.night.sun.localDate}`
+		return `${this.site.latitude}|${this.site.longitude}|${this.site.elevation}|${this.site.timeZone}|${this.night.sun.localDate}|${this.#snapshot.generation}`
 	}
 
 	// Stretches of the night with the Sun's center at or below a geometric altitude (radians), the planning scope of a
@@ -444,12 +459,15 @@ export class PlanningNight {
 		return windows
 	}
 
-	// Topocentric direction of a planning body.
+	// Topocentric direction of a planning body: the night's Moon, or a planet with the Earth it is seen from from one
+	// source of its own, chosen on first use.
 	bodyAt(code: PlanningBodyCode): PositionOverTime {
+		if (code === '301') return this.moonAt
 		let provider = this.#bodies.get(code)
 
 		if (!provider) {
-			provider = code === '301' ? this.moonAt : this.topocentric(geocentricInterpolation(bodyModel(code)))
+			const { states } = solarSystemStates(this.#snapshot, [code], this.#probes)
+			provider = this.topocentric(geocentricInterpolation(states.body(code), states))
 			this.#bodies.set(code, provider)
 		}
 

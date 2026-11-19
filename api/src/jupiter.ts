@@ -69,7 +69,7 @@ export class JupiterPlannerService {
 	readonly #nights: SiteNightCache
 
 	constructor(readonly options: JupiterPlannerOptions) {
-		this.#nights = new SiteNightCache(options.night)
+		this.#nights = new SiteNightCache(options.night, options.kernels)
 	}
 
 	// The Great Red Spot model and its state at `now` (Unix milliseconds).

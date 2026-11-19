@@ -3,9 +3,11 @@ import { visibilityWindows } from 'nebulosa/src/astronomy/events/visibility'
 import { airmassKastenYoung } from 'nebulosa/src/astronomy/formulas'
 import { type Time, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
+import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { LruCache } from './lrucache'
 import { OBSERVING_PRESETS, type PlanningBodyCode, type PlanningSite, PlanningNight, SEARCH_STEP_DAYS } from './observingplanner.astronomy'
 import type { TimeSpan } from './sky/sun'
+import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 import { yieldToEventLoop } from './util'
 
 // Site visibility shared by the planetary satellite planners (Jupiter, Saturn). A phenomenon is geocentric; a site only
@@ -119,9 +121,9 @@ export function totalMs(spans: readonly TimeSpan[]) {
 }
 
 // The planning nights of a site covering [start, end): each with its PlanningNight and the windows of the planet of NAIF
-// `body` (a code of PLANNING_BODY_CODES, such as '599' or '699'). Yields to the event loop between nights, whose Sun
-// and Moon take a noticeable time to compute the first time.
-export async function siteNights(nights: (request: AstroWeatherNightRequest) => AstroWeatherNight, site: PlanningSite, body: PlanningBodyCode, start: number, end: number, signal?: AbortSignal): Promise<SiteNight[]> {
+// `body` (a code of PLANNING_BODY_CODES, such as '599' or '699'), whose states are chosen from the kernels of snapshot.
+// Yields to the event loop between nights, whose Sun and Moon take a noticeable time to compute the first time.
+export async function siteNights(nights: (request: AstroWeatherNightRequest) => AstroWeatherNight, site: PlanningSite, body: PlanningBodyCode, start: number, end: number, snapshot: SpiceKernelSnapshot, signal?: AbortSignal): Promise<SiteNight[]> {
 	const out: SiteNight[] = []
 	const { minimumAltitude, maximumSunAltitude } = OBSERVING_PRESETS.planetary
 	let time = start
@@ -133,7 +135,7 @@ export async function siteNights(nights: (request: AstroWeatherNightRequest) => 
 		}
 
 		const night = nights({ observer: site, timeZone: site.timeZone, time })
-		const planning = new PlanningNight(site, night)
+		const planning = new PlanningNight(site, night, snapshot)
 		const found = visibilityWindows(planning.bodyAt(body), planning.location, planning.start, planning.end, { minimumAltitude, maximumSunAltitude }, { sunAt: planning.sunAt, step: SEARCH_STEP_DAYS })
 		const windows = found.map((e) => ({ start: timeToUnixMillis(e.start), end: timeToUnixMillis(e.end) }))
 		out.push({ planning, night: { eveningDate: night.sun.localDate, start: night.sun.start, end: night.sun.end, sunset: night.sun.sunset, sunrise: night.sun.sunrise, windows } })
@@ -232,17 +234,22 @@ const NIGHT_SITES_LIMIT = 8
 const NIGHTS_PER_SITE = 20
 
 // Nights of sites by instant, from the provider once and then from a bounded per-site list, which holds a whole range of
-// nights where the provider keeps fewer. Keyed by the site's zone and coordinates.
+// nights where the provider keeps fewer. Keyed by the site's zone and coordinates and the kernel generation, which the
+// provider takes the Sun and the Moon from.
 export class SiteNightCache {
 	readonly #nights = new LruCache<AstroWeatherNight[]>(NIGHT_SITES_LIMIT)
 
-	// `provider` gives the night of a site containing an instant (Astro Weather's local night).
-	constructor(private readonly provider: (request: AstroWeatherNightRequest) => AstroWeatherNight) {}
+	// `provider` gives the night of a site containing an instant (Astro Weather's local night) from the kernels of `kernels`
+	// (none by default).
+	constructor(
+		private readonly provider: (request: AstroWeatherNightRequest) => AstroWeatherNight,
+		private readonly kernels: EphemerisKernels = NO_EPHEMERIS_KERNELS,
+	) {}
 
 	// Night of a site containing an instant.
 	readonly night = (request: AstroWeatherNightRequest): AstroWeatherNight => {
 		const { observer, timeZone, time } = request
-		const key = `${timeZone}|${observer.latitude}|${observer.longitude}|${observer.elevation}`
+		const key = `${this.kernels.current().generation}|${timeZone}|${observer.latitude}|${observer.longitude}|${observer.elevation}`
 		const nights = this.#nights.get(key) ?? []
 		const cached = nights.find(({ sun }) => sun.start <= time && time < sun.end)
 		if (cached) return cached

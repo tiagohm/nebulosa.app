@@ -222,7 +222,7 @@ export async function computeEvents(
 	const selected = all.filter((e) => kinds.has(e.kind) && e.moons.some((moon) => moons.has(moon)))
 	const overlaps = overlapsOf(selected)
 	// Nights over the padded range, so the parts of the events beyond the range are judged too.
-	const siteNightList = site ? await siteNights(nights, site, SATURN_CODE, from, to, signal) : []
+	const siteNightList = site ? await siteNights(nights, site, SATURN_CODE, from, to, snapshot, signal) : []
 	const events: SaturnEvent[] = []
 
 	for (let i = 0; i < selected.length; i++) {

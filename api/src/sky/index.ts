@@ -52,7 +52,7 @@ export const annotationSky: AnnotationSky = {
 // Routes of the sky API, with those of the Sun and Moon Inspectors; the satellites of the satellite catalog, which the
 // server composes apart, are searched and located through `satellites`.
 export function createSkyApiRoutes(satellites: SkySatellites, meteorShowers: SkyMeteorShowers) {
-	return { ...createSkyRoutes({ ...services, satellites, meteorShowers }), ...createSunAlmanacRoutes(new SunAlmanac()), ...createMoonAlmanacRoutes(new MoonAlmanac()), ...createSolarImageRoutes(new SolarImages()), ...createActiveRegionRoutes(new SolarActiveRegions()) }
+	return { ...createSkyRoutes({ ...services, satellites, meteorShowers }), ...createSunAlmanacRoutes(new SunAlmanac(spiceKernels)), ...createMoonAlmanacRoutes(new MoonAlmanac(spiceKernels)), ...createSolarImageRoutes(new SolarImages()), ...createActiveRegionRoutes(new SolarActiveRegions()) }
 }
 
 // Locator of the objects of the sky API, used to resolve mount targets.

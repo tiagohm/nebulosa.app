@@ -3,7 +3,6 @@ import { constellation as constellationOf } from 'nebulosa/src/astronomy/coordin
 import { observerState } from 'nebulosa/src/astronomy/coordinates/correction'
 import { frameToFrame, ICRS, ITRS, TEME, TRUE_EQUATOR_AND_EQUINOX_OF_DATE } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
-import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
 import { satelliteEclipses, satelliteGroundFootprint, type SatellitePassEvent, satelliteShadowState, type SatelliteShadowState, satelliteSubpoint, satelliteTrackingState, satelliteVisibleIntervals, type SatelliteWindowPass, satelliteWindowPasses } from 'nebulosa/src/astronomy/events/satellite'
 import { type GeographicPosition, subpoint } from 'nebulosa/src/astronomy/observer/location'
 import { recordFromOMM, type SatRec, sgp4 } from 'nebulosa/src/astronomy/orbits/propagation/sgp4'
@@ -12,9 +11,10 @@ import { AU_KM, DAYMIN, DAYSEC, EARTH_RADIUS_KM, ONE_SECOND, TAU } from 'nebulos
 import { type Vec3, vecDot, vecLength, vecMinus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import type { EarthOrientationCoverage, EarthOrientationStatus } from './astronomicaltime.eop'
+import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { LruCache } from './lrucache'
 import type { SatelliteElementKind, SatelliteElementSet } from './satellites.store'
-import { apparentAltitude, geographic, type SkyObserver } from './sky/ephemeris'
+import { apparentAltitude, geographic, type SkyObserver, type SolarSystemStatesChoice, solarSystemStates } from './sky/ephemeris'
 
 // Predictions of artificial satellites from their stored element sets, with the toolkit's SGP4 and frames only: one
 // instant (position, motion, illumination), passes over an observer with their sunlit and dark parts, sampled
@@ -335,39 +335,45 @@ export interface SatelliteGroundTrack {
 	readonly truncated: boolean
 }
 
-// Nodes of the interpolated Sun per day: one per hour. Linear interpolation between hourly VSOP87E positions departs
-// from the orbit by its sagitta, about 6e-8 of the distance (0.01″), far below what shadow and twilight need, while a
-// VSOP87E evaluation costs about half a millisecond and the event searches evaluate the Sun at every sample.
+// Nodes of the interpolated Sun per day: one per hour. Linear interpolation between hourly positions departs from the
+// orbit by its sagitta, about 6e-8 of the distance (0.01″), far below what shadow and twilight need, while a VSOP87E
+// evaluation costs about half a millisecond and the event searches evaluate the Sun at every sample.
 const SUN_NODES_PER_DAY = 24
 
 // Hourly geocentric Sun positions kept, by hour index: about half a year.
 const SUN_CACHE_SIZE = 4096
 
-// Geocentric Sun positions at the hourly nodes, shared by every prediction since they depend on the instant only.
+// Geocentric Sun positions at the hourly nodes by the key of their source, shared by every prediction since they depend
+// on the source and the instant only.
 const SUN_NODES = new LruCache<Vec3>(SUN_CACHE_SIZE)
 
-// Geocentric Sun in ICRS at the hourly node `node` (hours from the Julian day origin of the scale of `time`), AU.
-function sunNode(time: Time, node: number) {
-	const key = `${time.scale}:${node}`
-	let sun = SUN_NODES.get(key)
+// Geocentric Sun in ICRS over time, AU.
+type SunOverTime = (time: Time) => Vec3
 
-	if (!sun) {
-		const at = timeShift(time, node / SUN_NODES_PER_DAY - time.day - time.fraction)
-		sun = vecMinus(vsop.sun(at)[0], vsop.earth(at)[0])
-		SUN_NODES.set(key, sun)
+// Geocentric Sun in ICRS, AU, of the states of a choice, interpolated linearly between the positions of the hourly nodes
+// around each instant (hours from the Julian day origin of the scale of the instant).
+function interpolatedSun({ states, key }: SolarSystemStatesChoice): SunOverTime {
+	const node = (time: Time, index: number) => {
+		const id = `${key}:${time.scale}:${index}`
+		let sun = SUN_NODES.get(id)
+
+		if (!sun) {
+			const at = timeShift(time, index / SUN_NODES_PER_DAY - time.day - time.fraction)
+			sun = vecMinus(states.sun(at)[0], states.earth(at)[0])
+			SUN_NODES.set(id, sun)
+		}
+
+		return sun
 	}
 
-	return sun
-}
-
-// Geocentric Sun in ICRS, AU, interpolated linearly between the VSOP87E positions of the hourly nodes around the instant.
-function sunAt(time: Time): Vec3 {
-	const hours = (time.day + time.fraction) * SUN_NODES_PER_DAY
-	const node = Math.floor(hours)
-	const f = hours - node
-	const a = sunNode(time, node)
-	const b = sunNode(time, node + 1)
-	return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]
+	return (time) => {
+		const hours = (time.day + time.fraction) * SUN_NODES_PER_DAY
+		const index = Math.floor(hours)
+		const f = hours - index
+		const a = node(time, index)
+		const b = node(time, index + 1)
+		return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]
+	}
 }
 
 // Unit vector of the local vertical of a geodetic site, in ITRS.
@@ -376,8 +382,8 @@ function zenith(site: GeographicPosition): [number, number, number] {
 	return [cosLat * Math.cos(site.longitude), cosLat * Math.sin(site.longitude), Math.sin(site.latitude)]
 }
 
-// Geometric altitude of the Sun's center for a site, radians; the solar parallax (8.8″) is neglected.
-function sunAltitudeAt(site: GeographicPosition, time: Time) {
+// Geometric altitude of the Sun's center for a site, radians, from sunAt; the solar parallax (8.8″) is neglected.
+function sunAltitudeAt(site: GeographicPosition, time: Time, sunAt: SunOverTime) {
 	const sun = frameToFrame(sunAt(time), ICRS, ITRS, time)
 	return Math.asin(Math.max(-1, Math.min(1, vecDot(sun, zenith(site)) / vecLength(sun))))
 }
@@ -411,7 +417,7 @@ function passPoint(event: SatellitePassEvent): SatellitePassPoint {
 // of SHADOW_SEARCH_BATCH samples, letting the event loop run between parts; undefined when SGP4 fails. A part that starts
 // in the shadow gives the exit of an eclipse whose entry the part before gave, and a crossing on the boundary of two parts
 // found by both is kept once.
-async function findShadowCrossings(record: SatRec, start: number, end: number, step: number): Promise<ShadowCrossingTimes | undefined> {
+async function findShadowCrossings(record: SatRec, start: number, end: number, step: number, sunAt: SunOverTime): Promise<ShadowCrossingTimes | undefined> {
 	const part = SHADOW_SEARCH_BATCH * step * 86_400_000
 	const entries: number[] = []
 	const exits: number[] = []
@@ -447,8 +453,18 @@ export class SatelliteEphemeris {
 	readonly #records = new LruCache<SatRec>(RECORD_CACHE_SIZE)
 	readonly #shadowSearches = new LruCache<ShadowCrossingSearch>(SHADOW_CACHE_SIZE)
 
-	// Creates the predictions; `coverage` tells whether the Earth orientation tables hold an instant.
-	constructor(private readonly coverage: (utc: Time) => EarthOrientationCoverage) {}
+	// Creates the predictions; `coverage` tells whether the Earth orientation tables hold an instant, and the Sun comes from
+	// the kernels of `kernels` (none by default) over the fast ephemeris chain.
+	constructor(
+		private readonly coverage: (utc: Time) => EarthOrientationCoverage,
+		private readonly kernels: EphemerisKernels = NO_EPHEMERIS_KERNELS,
+	) {}
+
+	// Interpolated geocentric Sun of a computation between two instants (Unix milliseconds): from the SPK kernels when they
+	// cover the span, else VSOP87E.
+	#sun(start: number, end: number): SunOverTime {
+		return interpolatedSun(solarSystemStates(this.kernels.current(), [], [start, end]))
+	}
 
 	// Returns a fresh copy of the prepared record of an element set. SGP4 writes into a record as it propagates, so every
 	// computation gets its own copy and concurrent requests never share one.
@@ -518,11 +534,11 @@ export class SatelliteEphemeris {
 	// Computes the position of a satellite at an instant, from an observer or the Earth's center. Throws when SGP4 fails
 	// at the instant.
 	position(elements: SatelliteElementSet, time: number, observer?: SkyObserver): SatellitePosition {
-		return this.#position(this.record(elements), time, observer && geographic(observer))
+		return this.#position(this.record(elements), time, observer && geographic(observer), this.#sun(time, time))
 	}
 
-	// Computes a position with a prepared record and site.
-	#position(record: SatRec, time: number, site: GeographicPosition | undefined): SatellitePosition {
+	// Computes a position with a prepared record, site, and Sun.
+	#position(record: SatRec, time: number, site: GeographicPosition | undefined, sunAt: SunOverTime): SatellitePosition {
 		const t = timeUnix(time / 1000, true)
 		const state = sgp4(t, record)
 		// TEME and ICRS differ by a rotation, so the speed is the length of the TEME velocity, AU/day.
@@ -544,7 +560,7 @@ export class SatelliteEphemeris {
 				apparentAltitude: apparentAltitude(tracking.altitude),
 				rangeRateKmPerSecond: (tracking.rangeRate * AU_KM) / DAYSEC,
 				angularRate: tracking.angularRate / DAYSEC,
-				sunAltitude: sunAltitudeAt(site, t),
+				sunAltitude: sunAltitudeAt(site, t, sunAt),
 			}
 		}
 
@@ -571,11 +587,12 @@ export class SatelliteEphemeris {
 	// within SHADOW_SEARCH_ORBITS orbits and at most SHADOW_SEARCH_MAX_MINUTES, from a search of the element set kept until
 	// the instant leaves it. Resolves undefined when SGP4 fails in the span searched.
 	async shadowCrossings(elements: SatelliteElementSet, time: number): Promise<SatelliteShadowCrossings | undefined> {
-		let search = this.#shadowSearches.get(elements.digest)
+		const key = `${elements.digest}|${this.kernels.current().generation}`
+		let search = this.#shadowSearches.get(key)
 
 		if (!search || time < search.start || time > search.start + search.span) {
 			search = this.#searchShadowCrossings(elements, time)
-			this.#shadowSearches.set(elements.digest, search)
+			this.#shadowSearches.set(key, search)
 		}
 
 		const crossings = await search.crossings
@@ -592,7 +609,8 @@ export class SatelliteEphemeris {
 		const period = periodOf(record)
 		const minutes = Math.min(period * SHADOW_SEARCH_ORBITS, SHADOW_SEARCH_MAX_MINUTES)
 		const step = period < LOW_ORBIT_PERIOD_MINUTES ? LOW_ORBIT_SHADOW_STEP : HIGH_ORBIT_SHADOW_STEP
-		return { start: time, span: minutes * 60_000, crossings: findShadowCrossings(record, time, time + 2 * minutes * 60_000, step) }
+		const end = time + 2 * minutes * 60_000
+		return { start: time, span: minutes * 60_000, crossings: findShadowCrossings(record, time, end, step, this.#sun(time, end)) }
 	}
 
 	// Finds the passes of a satellite over an observer between two instants (Unix milliseconds, UTC), with the parts of
@@ -602,6 +620,7 @@ export class SatelliteEphemeris {
 	async passes(elements: SatelliteElementSet, observer: SkyObserver, start: number, end: number, options: SatellitePassOptions, signal?: AbortSignal): Promise<SatellitePasses> {
 		const record = this.record(elements)
 		const site = geographic(observer)
+		const sunAt = this.#sun(start, end)
 		const step = periodOf(record) < LOW_ORBIT_PERIOD_MINUTES ? LOW_ORBIT_PASS_STEP : HIGH_ORBIT_PASS_STEP
 		const found: SatelliteWindowPass[] = []
 
@@ -635,7 +654,7 @@ export class SatelliteEphemeris {
 				startsBeforeWindow: pass.startsBeforeWindow,
 				endsAfterWindow: pass.endsAfterWindow,
 				culminationShadow: satelliteShadowState(record, sunAt, pass.culmination.time),
-				culminationSunAltitude: sunAltitudeAt(site, pass.culmination.time),
+				culminationSunAltitude: sunAltitudeAt(site, pass.culmination.time, sunAt),
 				visible: parts,
 			})
 		}
@@ -649,13 +668,14 @@ export class SatelliteEphemeris {
 	async ephemeris(elements: SatelliteElementSet, start: number, end: number, step: number, observer?: SkyObserver, signal?: AbortSignal): Promise<SatelliteEphemerisTable> {
 		const record = this.record(elements)
 		const site = observer && geographic(observer)
+		const sunAt = this.#sun(start, end)
 		const count = Math.floor((end - start) / step) + 1
 		const truncated = count > SATELLITE_LIMITS.ephemerisRows
 		const rows: SatelliteEphemerisRow[] = []
 
 		for (let i = 0; i < Math.min(count, SATELLITE_LIMITS.ephemerisRows); i++) {
 			if (i > 0 && i % EPHEMERIS_BATCH === 0) await yieldToEventLoop(signal)
-			rows.push(this.#position(record, start + i * step, site))
+			rows.push(this.#position(record, start + i * step, site, sunAt))
 		}
 
 		return { rows, truncated }
@@ -674,6 +694,7 @@ export class SatelliteEphemeris {
 		const before = Math.min(period, GROUND_TRACK_MAX_MS / 2)
 		const start = Math.round(time - before)
 		const end = Math.round(time + Math.min(after, GROUND_TRACK_MAX_MS - before))
+		const sunAt = this.#sun(start, end)
 		const step = Math.max(GROUND_TRACK_MIN_STEP_MS, Math.min(GROUND_TRACK_MAX_STEP_MS, Math.round(period / GROUND_TRACK_SAMPLES_PER_ORBIT / 1000) * 1000))
 		const count = Math.floor((end - start) / step) + 1
 		const truncated = count > SATELLITE_LIMITS.groundTrackSamples
@@ -726,6 +747,7 @@ export class SatelliteEphemeris {
 	track(elements: SatelliteElementSet, start: number, end: number, step: number, samples: number, observer?: SkyObserver): SatelliteTrack {
 		const record = this.record(elements)
 		const site = observer && geographic(observer)
+		const sunAt = this.#sun(start, end)
 		const count = Math.max(1, Math.min(samples, Math.floor((end - start) / step) + 1))
 		const times: number[] = []
 		const rightAscension: number[] = []

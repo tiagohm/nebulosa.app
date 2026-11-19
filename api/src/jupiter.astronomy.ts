@@ -561,7 +561,7 @@ export async function computeEvents(kernels: JupiterKernels, nights: (request: A
 	const selected = all.filter((e) => kinds.has(e.kind) && (e.moons.length === 0 || e.moons.some((moon) => moons.has(moon))))
 	const overlaps = overlapsOf(selected)
 	// Nights over the padded range, so the parts of the events beyond the range are judged too.
-	const siteNightList = site ? await siteNights(nights, site, JUPITER_CODE, from, to, signal) : []
+	const siteNightList = site ? await siteNights(nights, site, JUPITER_CODE, from, to, snapshot, signal) : []
 
 	const events: JupiterEvent[] = []
 

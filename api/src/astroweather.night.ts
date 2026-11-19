@@ -1,10 +1,12 @@
+import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { LruCache } from './lrucache'
-import { geographic, type SkyObserver } from './sky/ephemeris'
+import { geographic, type SkyObserver, solarSystemStates } from './sky/ephemeris'
 import { moonAboveHorizon, moonAppearance, type MoonPhaseName } from './sky/moon'
 import { type SunLocalNight, sunNightAt, type TimeSpan } from './sky/sun'
 
 // Local astronomical context of Astro Weather: the Sun over one night of a site and the Moon above its horizon. Computed
-// from the toolkit, never the network, so it needs no forecast. A night costs a few hundred milliseconds, so the nights of
+// locally, never from the network, so it needs no forecast: the Sun, the Earth, and the Moon of a night come from one
+// source of the fast ephemeris chain, the SPK kernels of the SPICE Kernel Library when they cover it, else the theories. A night costs a few hundred milliseconds, so the nights of
 // each site are kept and found by the instant they contain. Times are Unix milliseconds.
 
 // Sites kept in memory.
@@ -15,6 +17,10 @@ const NIGHTS_PER_SITE = 10
 
 // Margin shown before sunset and after sunrise, in milliseconds (one hour).
 const DISPLAY_MARGIN_MS = 3_600_000
+
+// Reach of a night on either side of an instant it contains, in milliseconds (two days): the night runs between two
+// upper transits of the Sun, and the instant may be just before the first one, so the kernels are probed this far.
+const NIGHT_REACH_MS = 2 * 86_400_000
 
 // Body of POST /api/astro-weather/night.
 export interface AstroWeatherNightRequest {
@@ -53,22 +59,26 @@ function displayWindow({ start, end, sunset, sunrise }: SunLocalNight): TimeSpan
 	return { start: sunset === undefined ? start : Math.max(start, sunset - DISPLAY_MARGIN_MS), end: sunrise === undefined ? end : Math.min(end, sunrise + DISPLAY_MARGIN_MS) }
 }
 
-// Nights of the sites asked for, kept by site.
+// Nights of the sites asked for, kept by site and by the source of their ephemeris.
 export class AstroWeatherNights {
 	readonly #sites = new LruCache<AstroWeatherNight[]>(SITE_CACHE_LIMIT)
 
+	// Creates the nights over the kernels of the SPICE Kernel Library (none by default).
+	constructor(private readonly kernels: EphemerisKernels = NO_EPHEMERIS_KERNELS) {}
+
 	// Returns the night containing an instant.
 	night({ observer, timeZone, time }: AstroWeatherNightRequest): AstroWeatherNight {
-		const key = `${timeZone}|${observer.latitude}|${observer.longitude}|${observer.elevation}`
+		const { states, key: source } = solarSystemStates(this.kernels.current(), ['301'], [time - NIGHT_REACH_MS, time, time + NIGHT_REACH_MS])
+		const key = `${source}|${timeZone}|${observer.latitude}|${observer.longitude}|${observer.elevation}`
 		const nights = this.#sites.get(key) ?? []
 		const cached = nights.find(({ sun }) => sun.start <= time && time < sun.end)
 		if (cached) return cached
 
-		const sun = sunNightAt(geographic(observer), time, timeZone)
+		const sun = sunNightAt(geographic(observer), time, timeZone, states)
 		const display = displayWindow(sun)
 		const middle = (display.start + display.end) / 2
-		const { illuminatedFraction, phase } = moonAppearance(middle, observer)
-		const night = { sun, display, moon: { time: middle, illuminatedFraction, phase, above: moonAboveHorizon(observer, display.start, display.end) } }
+		const { illuminatedFraction, phase } = moonAppearance(middle, observer, states)
+		const night = { sun, display, moon: { time: middle, illuminatedFraction, phase, above: moonAboveHorizon(observer, display.start, display.end, states) } }
 
 		this.#sites.set(key, [...nights, night].slice(-NIGHTS_PER_SITE))
 		return night

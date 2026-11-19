@@ -1313,7 +1313,7 @@ const closeApproaches = new CloseApproachesService(minorBodies, ssdRequests, { k
 const orbitalMechanics = new OrbitalMechanicsService({ minorBodies, kernels: spiceKernels })
 
 // Forecasts of the Astro Weather tool, read from their public services and cached for every tab.
-const astroWeather = new AstroWeatherService()
+const astroWeather = new AstroWeatherService({ kernels: spiceKernels })
 
 // Target discovery and analysis of the Observing Planner, over the sky catalog and the nights of Astro Weather, and its
 // night plans in the operational database, sent to every tab once saved.
@@ -1353,7 +1353,7 @@ const astronomicalTime = new AstronomicalTimeService(earthOrientation)
 // rules, and the SGP4 predictions of the Artificial Satellites tool and the Sky.
 const satelliteStore = new SatelliteStore(database)
 const satelliteSync = new SatelliteSync(satelliteStore, () => satellites.changed())
-const satellites = new SatelliteService(satelliteStore, satelliteSync, new SatelliteEphemeris((utc) => earthOrientation.coverage(utc)), broadcast)
+const satellites = new SatelliteService(satelliteStore, satelliteSync, new SatelliteEphemeris((utc) => earthOrientation.coverage(utc), spiceKernels), broadcast)
 const satelliteAutoDownload = new SatelliteAutoDownload(satellites)
 
 // SPICE Kernel Library: the SPK files of the operational database and its directory, the runtime set the Sky ephemeris

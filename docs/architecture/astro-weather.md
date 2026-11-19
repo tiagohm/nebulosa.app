@@ -20,7 +20,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Through `RemoteCache` with the limits of `api/src/astroweather.ts`: fresh for 30 minutes (Open-Meteo) or 2 hours (7Timer!), one download shared by concurrent requests, places keyed at 0.01° and 0.1°, a failure repeated for a minute without downloading, and the last good value answered as `stale` for up to 6 or 12 hours from its download.
   The cache is shared by every tab, so no route bypasses it.
   The free services allow fewer than 10,000 Open-Meteo calls a day, and 7Timer! states no limit.
-- `POST /api/astro-weather/night` (`AstroWeatherNightRequest`, `AstroWeatherNight`) answers the night containing an instant, computed from the toolkit and never the network.
+- `POST /api/astro-weather/night` (`AstroWeatherNightRequest`, `AstroWeatherNight`) answers the night containing an instant, computed from the toolkit and never the network, with the Sun, the Earth, and the Moon of one source of the fast [Ephemeris Chain](ephemeris-chain.md): the SPK kernels of the SPICE Kernel Library when they cover two days on either side of the instant, else VSOP87E and ELPMPP02.
   A night runs from one upper transit of the Sun to the next (`sunNightAt`), so it is named by its evening's civil date, dawn needs no second day, and any zone, even UTC for a site far from Greenwich, gives every night one evening, which civil days do not.
   The previous night is asked with `start − 1` and the next with `end`.
   Crossings use the convention of the Sun Inspector, absent ones are absent, and `darkness` is the time the Sun's center stays below −18°, empty when it never does.
@@ -28,7 +28,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The Moon's illuminated fraction and phase are taken at the middle of `display`, and its intervals above the horizon (`moonAboveHorizon`, the rise and set convention of `SkyEphemeris.events`, on a coarse search) cover `display`, however many rises and sets fall in it;
   a grazing pass near a polar latitude can be missed.
   This is site-wide guidance: nothing knows a target or its separation from the Moon.
-  A night costs about half a second of local computation, so the latest nights of the latest sites are kept (`astroweather.night.ts`) and found by the instant they contain.
+  A night costs about half a second of local computation on the theories (tens of milliseconds on the kernels), so the latest nights of the latest sites are kept (`astroweather.night.ts`) and found by the instant they contain.
 - Reading a forecast (`web/src/tools/astroweather/observing.ts`) is pure and deterministic, with no request and no score: every hour of `display` gets `favorable`, `variable`, `unfavorable`, or `unavailable`, with its reasons and what it misses, beside a reading of the weather alone.
   Its limits are planning heuristics in constants, not scientific or equipment limits.
   Instantaneous values come from the sample starting an hour, and precipitation and gusts from the one ending it.

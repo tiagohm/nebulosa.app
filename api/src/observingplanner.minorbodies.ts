@@ -1,6 +1,5 @@
 import { vector as horizonsVector } from 'nebulosa/src/adapters/ephemeris/horizons'
 import type { SpkKernelSet } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
-import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
 import type { KeplerOrbit } from 'nebulosa/src/astronomy/orbits/asteroid'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
@@ -9,7 +8,7 @@ import { computeEphemeris, EphemerisKernelMiss, EphemerisUnavailableError, Horiz
 import { LruCache } from './lrucache'
 import { type ObservingReasonCode, type ObservingTargetRef, type PlannerEphemerisProvenance, type PlanningNight, type ResolvedTarget, SEARCH_STEP_DAYS } from './observingplanner.astronomy'
 import type { ObservingMinorBodyStore, SavedMinorBody } from './observingplanner.minorbodies.store'
-import { keplerOrbit, type MinorBodyElements, minorBodyMagnitude } from './sky/ephemeris'
+import { ANALYTICAL_STATES, geocentricInterpolation, keplerOrbit, type MinorBodyElements, minorBodyMagnitude } from './sky/ephemeris'
 import type { MinorBodies } from './sky/minorbodies'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 import type { SsdRequestQueue } from './ssd'
@@ -216,22 +215,6 @@ function spkNodes(set: SpkKernelSet, code: number, grid: NodeGrid, kernels: Set<
 	return nodes
 }
 
-// Geocentric vectors of the Sun (VSOP87E) every COARSE_NODE_MS over a night, interpolated for any grid of it, so a
-// 1-minute Kepler grid costs no more evaluations of the analytical model than a 10-minute one.
-function sunGeocentric(night: PlanningNight): (time: number) => Vec3 {
-	const grid = gridOf(night, COARSE_NODE_MS)
-	const nodes = new Float64Array(3 * grid.count)
-
-	for (let i = 0; i < grid.count; i++) {
-		const time = timeUnix((grid.start + i * grid.spacing) / 1000, true)
-		const sun = vsop.sun(time)[0]
-		const earth = vsop.earth(time)[0]
-		for (let k = 0; k < 3; k++) nodes[3 * i + k] = sun[k] - earth[k]
-	}
-
-	return interpolate(nodes, grid)
-}
-
 // Geocentric vectors of a grid from a Kepler orbit: its heliocentric position plus the geocentric Sun.
 function keplerNodes(orbit: KeplerOrbit, sun: (time: number) => Vec3, grid: NodeGrid): Nodes {
 	const nodes = new Float64Array(3 * grid.count)
@@ -324,7 +307,9 @@ export class MinorBodyTrajectories {
 					},
 					analytical: () => {
 						if (!orbit) return undefined
-						const sun = sunGeocentric(night)
+						// The Sun of the theories, interpolated hourly, so a 1-minute grid costs no more VSOP87E evaluations than a
+						// 10-minute one.
+						const sun = geocentricInterpolation(ANALYTICAL_STATES.sun, ANALYTICAL_STATES)
 						return { trajectory: refined(night, (grid) => keplerNodes(orbit, sun, grid)), elements: known }
 					},
 					...(!unresolved && { horizons: async (horizonsSignal) => ({ trajectory: await this.#horizonsTrajectory(target.spkId, night, horizonsSignal) }) }),

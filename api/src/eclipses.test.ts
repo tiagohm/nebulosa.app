@@ -3,11 +3,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { timeShift, timeUnix } from 'nebulosa/src/astronomy/time/time'
-import { EclipseEphemerisUnavailableError, eclipseEphemeris } from './eclipses'
+import { eclipseEphemeris } from './eclipses'
 import { createLunarEclipseRoutes, LunarEclipseService } from './lunareclipses'
 import { spkFixture, type SpkFixtureSegment } from './spicekernels.fixture'
 import { SpiceKernelRuntime } from './spicekernels.runtime'
-import type { SpiceEphemerisPolicy } from './spicekernels.store'
 
 // J2000.0 (TDB) as Unix milliseconds, to within the ~70 s of TT − UTC that the fixture coverages do not care about.
 const J2000_MS = Date.UTC(2000, 0, 1, 11, 58, 56)
@@ -26,14 +25,14 @@ afterEach(() => {
 	for (const runtime of runtimes.splice(0)) runtime[Symbol.dispose]()
 })
 
-// A runtime of one fixture kernel under a policy.
-async function runtimeOf(policy: SpiceEphemerisPolicy, segments: readonly SpkFixtureSegment[]) {
+// A runtime of one fixture kernel, online unless offline.
+async function runtimeOf(offline: boolean, segments: readonly SpkFixtureSegment[]) {
 	const runtime = new SpiceKernelRuntime()
 	runtimes.push(runtime)
 	const id = `kernel-${++files}`
 	const path = join(directory, `${id}.bsp`)
 	writeFileSync(path, spkFixture(segments))
-	expect((await runtime.rebuild([{ id, path }], policy)).size).toBe(0)
+	expect((await runtime.rebuild([{ id, path }], offline)).size).toBe(0)
 	return runtime
 }
 
@@ -51,52 +50,55 @@ function planetaryKernel(start: number, end: number, moon = true): SpkFixtureSeg
 
 const ECLIPSE = Date.UTC(2024, 3, 8, 18, 17)
 
+// The source a computation of the eclipse centered on time runs on, with its key and the sources tried before.
+function sourceOf(snapshot: Parameters<typeof eclipseEphemeris>[0], time: number) {
+	const { result, provenance } = eclipseEphemeris(snapshot, timeUnix(time / 1000)).run((_, key) => key)
+	return { key: result, source: provenance.source, attempts: provenance.attempts }
+}
+
 test('every eclipse is computed on the theories without kernels', async () => {
 	const runtime = new SpiceKernelRuntime()
 	runtimes.push(runtime)
-	await runtime.rebuild([], 'automatic')
-	const ephemeris = eclipseEphemeris(runtime.current(), timeUnix(ECLIPSE / 1000))
-	expect(ephemeris).toMatchObject({ source: 'analytical', key: 'analytical' })
+	await runtime.rebuild([], false)
+	expect(sourceOf(runtime.current(), ECLIPSE)).toEqual({ key: 'analytical', source: 'analytical', attempts: [{ source: 'spk', reason: 'noKernel' }] })
 })
 
 test('the kernels give an eclipse whose whole window they cover, and the theories one outside them', async () => {
-	const runtime = await runtimeOf('automatic', planetaryKernel(Date.UTC(2020, 0, 1), Date.UTC(2030, 0, 1)))
+	const runtime = await runtimeOf(false, planetaryKernel(Date.UTC(2020, 0, 1), Date.UTC(2030, 0, 1)))
 	const snapshot = runtime.current()
 
-	expect(eclipseEphemeris(snapshot, timeUnix(ECLIPSE / 1000))).toMatchObject({ source: 'spk', key: `spk:${snapshot.generation}` })
-	expect(eclipseEphemeris(snapshot, timeUnix(Date.UTC(1997, 8, 16) / 1000)).source).toBe('analytical')
+	expect(sourceOf(snapshot, ECLIPSE)).toEqual({ key: `spk:${snapshot.generation}`, source: 'spk', attempts: [] })
+	expect(sourceOf(snapshot, Date.UTC(1997, 8, 16))).toMatchObject({ source: 'analytical', attempts: [{ source: 'spk', reason: 'outOfCoverage', target: 'sun', body: 10 }] })
 	// The window reaches 13 hours on either side, so an eclipse half a day before the kernels end is not theirs.
-	expect(eclipseEphemeris(snapshot, timeUnix((Date.UTC(2030, 0, 1) - 6 * 3_600_000) / 1000)).source).toBe('analytical')
+	expect(sourceOf(snapshot, Date.UTC(2030, 0, 1) - 6 * 3_600_000).source).toBe('analytical')
 })
 
-test('spkOnly fails an eclipse the kernels do not cover, and the routes answer 503', async () => {
-	const runtime = await runtimeOf('spkOnly', planetaryKernel(Date.UTC(2020, 0, 1), Date.UTC(2030, 0, 1)))
-	expect(() => eclipseEphemeris(runtime.current(), timeUnix(Date.UTC(1997, 8, 16) / 1000))).toThrow(EclipseEphemerisUnavailableError)
+test('an eclipse without a kernel of the Moon falls to the theories, offline or not', async () => {
+	const withoutMoon = await runtimeOf(true, planetaryKernel(Date.UTC(2020, 0, 1), Date.UTC(2030, 0, 1), false))
+	expect(sourceOf(withoutMoon.current(), ECLIPSE)).toMatchObject({ source: 'analytical', attempts: [{ source: 'spk', reason: 'targetMissing', target: 'moon', body: 301 }] })
 
-	const withoutMoon = await runtimeOf('spkOnly', planetaryKernel(Date.UTC(2020, 0, 1), Date.UTC(2030, 0, 1), false))
 	const routes = createLunarEclipseRoutes(new LunarEclipseService({ kernels: withoutMoon }))
 	const response = await routes['/api/eclipses/lunar'].GET(new Request(`http://localhost/api/eclipses/lunar?time=${Date.UTC(2025, 0, 1)}&direction=next`))
-	expect(response.status).toBe(503)
-	expect(await response.json()).toMatchObject({ code: 'missingDependency', reason: 'targetMissing', miss: { target: 'moon', body: 301 } })
+	expect(response.status).toBe(200)
 })
 
-test('a kernel gap inside the window reruns the whole computation on the theories, or fails it under spkOnly', async () => {
+test('a kernel gap inside the window reruns the whole computation on the theories', async () => {
 	// Coverage up to 4 hours after the eclipse and again from 7 hours after it: the probes at the eclipse and 13 hours
 	// on either side all resolve, but a state 5 hours after it does not.
 	const before = planetaryKernel(Date.UTC(2020, 0, 1), ECLIPSE + 4 * 3_600_000)
 	const after = planetaryKernel(ECLIPSE + 7 * 3_600_000, Date.UTC(2030, 0, 1))
 	const center = timeUnix(ECLIPSE / 1000)
+	const runs: string[] = []
 	const compute = (sunMoon: (time: ReturnType<typeof timeUnix>) => unknown, key: string) => {
+		runs.push(key)
 		sunMoon(center)
 		sunMoon(timeShift(center, 5 / 24))
 		return key
 	}
 
-	const automatic = await runtimeOf('automatic', [...before, ...after])
-	const ephemeris = eclipseEphemeris(automatic.current(), center)
-	expect(ephemeris.source).toBe('spk')
-	expect(ephemeris.run(compute)).toBe('analytical')
-
-	const strict = await runtimeOf('spkOnly', [...before, ...after])
-	expect(() => eclipseEphemeris(strict.current(), center).run(compute)).toThrow(EclipseEphemerisUnavailableError)
+	const runtime = await runtimeOf(false, [...before, ...after])
+	const { result, provenance } = eclipseEphemeris(runtime.current(), center).run(compute)
+	expect(result).toBe('analytical')
+	expect(runs).toEqual([`spk:${runtime.current().generation}`, 'analytical'])
+	expect(provenance).toMatchObject({ source: 'analytical', mode: 'fast', attempts: [{ source: 'spk', reason: 'outOfCoverage' }] })
 })

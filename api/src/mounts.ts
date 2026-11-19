@@ -10,11 +10,12 @@ import { type Angle, deg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
 import { admissionResponse, admitCommand, busy, type CommandAdmission, type CommandErrorCode, type CommandRefusal, type CommandRequest, disconnected, failureCode, failureResponse, findDevice, notFound, refusal, resolveConnected, settle, startCommand, unsupported, repeatedResponse, repeatedAdmission } from './commands'
 import type { DeviceRegistry } from './devices'
+import { type EphemerisAttempt, ephemerisUnavailableResponse } from './ephemeris.chain'
 import { errorResponse } from './http'
 import { DEFAULT_LEASE_OPTIONS, type LeasedMotion, LeasedMotions, type LeasedPhase, type LeasedSession, type LeasedStartResponse, type LeaseOptions } from './leases'
 import type { MountCorrectionPlan, MountCorrections } from './mountpointing.corrections'
 import type { OperationAdmission, OperationRegistry, ToolInvocation } from './operations'
-import { EphemerisUnavailableError, HorizonsEphemerisError, type SkyObserver, type SkyPosition } from './sky/ephemeris'
+import { EphemerisUnavailableError, HorizonsEphemerisError, type SkyObserver, type SkyPosition, type SkyPositionSource } from './sky/ephemeris'
 import type { SkyLocator } from './sky/routes'
 import type { SkyObjectRef } from './sky/types'
 
@@ -72,6 +73,11 @@ export interface MountSlewResponse {
 	readonly azimuth: number
 	// Refracted altitude of the target in radians at time; never negative.
 	readonly altitude: number
+	// Where the target's position came from: the SPK kernels, Horizons, or the analytical theories of the accurate
+	// ephemeris chain, the astrometry of a catalog object, or SGP4.
+	readonly source: SkyPositionSource
+	// Sources of the chain tried before, with why each did not give the position.
+	readonly attempts?: readonly EphemerisAttempt[]
 }
 
 // Logical direction of a nudge: a cardinal moves one axis, a diagonal one direction of each axis. Names
@@ -339,8 +345,8 @@ export class MountCommands implements Disposable {
 
 	// Slews a mount to an object resolved now. Responds 202 with MountSlewResponse once the command
 	// started; 404 for an unknown mount or object, 409 when the mount is disconnected, parked, or busy,
-	// 422 when it cannot go to a target or the target is below the horizon, 502 when Horizons rejects the
-	// target, and 503 when no provider can compute it.
+	// 422 when it cannot go to a target or the target is below the horizon, 502 rejected when Horizons rejects the
+	// target, and 503 with the code of the ephemeris chain (ephemeris.chain.ts) when no source can compute it.
 	async slew(connectionId: string, deviceId: string, { target, observer }: MountSlewRequest, signal?: AbortSignal): Promise<Response> {
 		const client = this.client(connectionId)
 		const mount = client && this.devices.mount(client, deviceId)
@@ -356,8 +362,8 @@ export class MountCommands implements Disposable {
 		try {
 			position = await this.locate(target, { time, observer, mode: 'accurate', signal })
 		} catch (error) {
-			if (error instanceof EphemerisUnavailableError) return errorResponse(error.message, 503, 'serviceUnavailable')
-			if (error instanceof HorizonsEphemerisError) return errorResponse(error.message, 502, 'serviceUnavailable')
+			if (error instanceof EphemerisUnavailableError) return ephemerisUnavailableResponse(error)
+			if (error instanceof HorizonsEphemerisError) return errorResponse(error.message, 502, 'rejected')
 			throw error
 		}
 
@@ -378,7 +384,7 @@ export class MountCommands implements Disposable {
 		const result = this.#goTo(mount, planned)
 		const { operationId } = this.operations.track('mount.slew', [{ connectionId, deviceId: mount.id }], result)
 
-		return Response.json({ operationId, time, rightAscension, declination, azimuth, altitude } satisfies MountSlewResponse, { status: 202 })
+		return Response.json({ operationId, time, rightAscension, declination, azimuth, altitude, source: position.source, ...(position.attempts && { attempts: position.attempts }) } satisfies MountSlewResponse, { status: 202 })
 	}
 
 	// Cancels the operation holding a mount and stops its motion, resolving once it has stopped. Responds

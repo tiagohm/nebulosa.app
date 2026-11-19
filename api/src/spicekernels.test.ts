@@ -278,7 +278,7 @@ test('a restart reopens the kernels and reconciles what a previous run left', as
 	const planetary = await first.library.importFile('planets.bsp', stream(PLANETARY))
 	const ceres = await first.library.importFile('ceres.bsp', stream(CERES))
 	const other = await first.library.importFile('other.bsp', stream(spkFixture([{ center: 0, target: 5, start: 0, end: 10, position: [1, 0, 0] }])))
-	await first.library.setPolicy('offline')
+	await first.library.setOffline(true)
 	first.library.runtime[Symbol.dispose]()
 
 	// A crash left a staged file, the file of a kernel is gone, and another changed.
@@ -292,7 +292,7 @@ test('a restart reopens the kernels and reconciles what a previous run left', as
 	await second.library.start()
 
 	const snapshot = second.library.snapshot()
-	expect(snapshot.policy).toBe('offline')
+	expect(snapshot.offline).toBeTrue()
 	expect(Object.fromEntries(snapshot.kernels.map((e) => [e.id, e.readiness]))).toEqual({ [planetary.kernel.id]: 'ready', [ceres.kernel.id]: 'missing', [other.kernel.id]: 'invalid' })
 	expect(snapshot.kernels.find((e) => e.id === other.kernel.id)?.failure).toBe('The file changed since it was added.')
 	expect(readdirSync(join(first.directory, 'staging'))).toEqual([])
@@ -461,8 +461,8 @@ test('the routes answer the snapshot, uploads, and errors', async () => {
 	const snapshot = (await routes['/api/spice-kernels'].GET().json()) as { kernels: unknown[] }
 	expect(snapshot.kernels).toHaveLength(1)
 
-	const policy = await routes['/api/spice-kernels/settings'].PATCH(new Request('http://localhost/api/spice-kernels/settings', { method: 'PATCH', body: JSON.stringify({ policy: 'spkOnly' }) }) as never)
-	expect(((await policy.json()) as { policy: string }).policy).toBe('spkOnly')
+	const settings = await routes['/api/spice-kernels/settings'].PATCH(new Request('http://localhost/api/spice-kernels/settings', { method: 'PATCH', body: JSON.stringify({ offline: true }) }) as never)
+	expect(((await settings.json()) as { offline: boolean }).offline).toBeTrue()
 
 	const missing = await routes['/api/spice-kernels/:id'].GET({ params: { id: 'unknown' } } as never)
 	expect(missing.status).toBe(404)

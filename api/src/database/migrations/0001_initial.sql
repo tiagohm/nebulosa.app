@@ -938,12 +938,11 @@ CREATE TABLE spice_preferences (
 	kernel_id TEXT NOT NULL REFERENCES spice_kernels (kernel_id) ON DELETE CASCADE
 ) STRICT;
 
--- Ephemeris policy of the SPICE Kernel Library: one row, absent until an operator changes it from automatic.
+-- Ephemeris sources of the server: one row, absent until an operator turns the offline switch on.
 CREATE TABLE spice_settings (
 	singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-	-- Source of accurate solar-system positions: SPK then Horizons (automatic), SPK then local models without any
-	-- request to JPL (offline), or SPK alone (spkOnly).
-	policy TEXT NOT NULL CHECK (policy IN ('automatic', 'offline', 'spkOnly'))
+	-- Whether no automatic request reaches JPL (Horizons, SBDB, CAD): 1 offline, 0 online.
+	offline INTEGER NOT NULL CHECK (offline IN (0, 1))
 ) STRICT;
 
 -- Night plans of the Observing Planner (ObservingPlanStore), one catalog shared by every profile, tab, and browser: what

@@ -78,8 +78,8 @@ export function PlanetaryEvents() {
 	const zone = displayZone.zone
 	const site: SiteLocation | undefined = location && { name: location.name, latitude: location.latitude, longitude: location.longitude, elevation: location.elevation, timeZone: location.timeZone }
 	const place = site && siteKey(site)
-	// A new kernel generation or policy may change every event, so the search is read again.
-	const kernelKey = `${kernels.snapshot?.generation ?? -1}|${kernels.snapshot?.policy ?? ''}`
+	// A new kernel generation may change every event, so the search is read again.
+	const kernelKey = `${kernels.snapshot?.generation ?? -1}`
 
 	// The range opens on real now, once.
 	useEffect(() => initialize(planetaryEventsState), [])
@@ -195,9 +195,7 @@ export function PlanetaryEvents() {
 			</CollapsibleSection>
 			<CollapsibleSection id="planetaryEvents.ephemeris" title="Ephemeris" summary={sourceName(signature)} defaultOpen={false}>
 				<Notice>{describeSource(signature) ?? 'Not computed yet.'}</Notice>
-				<Notice>
-					Local only: the SPICE kernels you installed or the VSOP87E theory, never JPL Horizons. Policy: {signature?.policy ?? MISSING}. Model version {signature?.modelVersion ?? MISSING}.
-				</Notice>
+				<Notice>Local only: the SPICE kernels you installed or the VSOP87E theory, never JPL Horizons. Model version {signature?.modelVersion ?? MISSING}.</Notice>
 				<Notice>
 					Events are geocentric apparent (light time, aberration, solar deflection) on the true ecliptic of date; conjunctions, oppositions, and quadratures are defined by ecliptic longitude, an appulse by the least separation, the closest approach by the geometric distance. Times are refined far below a
 					second, but shown to the minute: VSOP87E and the kernels can differ by seconds to minutes.
@@ -253,15 +251,7 @@ export function PlanetaryEvents() {
 								</Button>
 							</Notice>
 						)}
-						{state.kernelsRefused && (
-							<Notice error>
-								<span className="block">{state.searchError} The ephemeris policy allows only SPICE kernels, so nothing is computed from VSOP87E.</span>
-								<Button variant="secondary" className="mt-2" onClick={() => openKernelLibrary()}>
-									Manage Kernels
-								</Button>
-							</Notice>
-						)}
-						{state.searchError && !state.kernelsRefused && <Notice error>{state.searchError}</Notice>}
+						{state.searchError && <Notice error>{state.searchError}</Notice>}
 						{state.visibilityError && <Notice error>{state.visibilityError}</Notice>}
 						{answer && answer.events.length === 0 && (
 							<Notice>

@@ -1,24 +1,6 @@
-import type {
-	PlanetaryFallbackReason,
-	SaturnElongation,
-	SaturnElongations,
-	SaturnEvent,
-	SaturnEventKind,
-	SaturnEvents,
-	SaturnEventsRequest,
-	SaturnMoon,
-	SaturnMoonsState,
-	SaturnRingEvent,
-	SaturnRingState,
-	SaturnRingTimeline,
-	SaturnSignature,
-	SaturnSourceReport,
-	SaturnTrack,
-	SaturnVisibilityReason,
-	SaturnVisibilityStatus,
-} from 'api'
+import type { PlanetaryFallbackReason, SaturnElongation, SaturnElongations, SaturnEvent, SaturnEventKind, SaturnEvents, SaturnEventsRequest, SaturnMoon, SaturnMoonsState, SaturnRingEvent, SaturnRingTimeline, SaturnSignature, SaturnSourceReport, SaturnTrack, SaturnVisibilityReason, SaturnVisibilityStatus } from 'api'
 import { proxy } from 'valtio'
-import { aborted, ApiResponseError, fetchJson, jsonInit } from '../../http'
+import { aborted, fetchJson, jsonInit } from '../../http'
 import type { SiteLocation } from '../../location/site'
 import { createRequestGuard } from '../../sky/selection'
 import type { StatusTone } from '../../ui/StatusBadge'
@@ -29,9 +11,8 @@ import { browserPlannerIo, errorMessage, interpolateTrack as interpolateMoons, t
 // server (the rings and moons at the clock's instant, the ring openings and ring-plane events over a season, the moon
 // tracks and their greatest separations over the period, and the kernel readiness of the rings and the moons). Every
 // position, opening, event, and classification comes from the server; the tab only interpolates the sampled tracks for
-// display while the clock moves, and never derives an event from samples. When the moons cannot be computed (spkOnly
-// without a satellite kernel) the rings are still read on their own. Nothing here changes the Sky clock, a site, the
-// profile, or a device. Times are Unix milliseconds (UTC); angles radians.
+// display while the clock moves, and never derives an event from samples. Nothing here changes the Sky clock, a site,
+// the profile, or a device. Times are Unix milliseconds (UTC); angles radians.
 
 // The seven major moons, in orbital order.
 export const SATURN_MOONS: readonly SaturnMoon[] = ['mimas', 'enceladus', 'tethys', 'dione', 'rhea', 'titan', 'iapetus']
@@ -111,6 +92,7 @@ export const FALLBACK_LABELS: Readonly<Record<PlanetaryFallbackReason, string>> 
 	unsupportedFrame: 'a selected segment uses an unsupported frame',
 	unsupportedType: 'a selected segment uses an unsupported data type',
 	cycle: 'a kernel chain never reaches the barycenter',
+	kernelReadFailed: 'a kernel could not be read',
 }
 
 // How much of Saturn's seasons the ring history shows: the year of the first evening, ten years around it, or a whole
@@ -157,12 +139,6 @@ export interface SaturnPlannerState {
 	moonsState?: SaturnMoonsState
 	// Why the moons could not be computed.
 	moonsError?: string
-	// Whether the moons were refused under spkOnly, so the rings are read on their own.
-	moonsRefused: boolean
-	// Rings at the clock's instant, read when the moons are refused.
-	ringState?: SaturnRingState
-	// Why the rings could not be computed.
-	ringError?: string
 	// Ring openings and events over the history span.
 	timeline?: SaturnRingTimeline
 	// Whether the ring history is being computed.
@@ -203,7 +179,6 @@ export function createSaturnPlannerState(): SaturnPlannerState {
 		orientation: 'north',
 		showRings: true,
 		history: 'decade',
-		moonsRefused: false,
 		timelineLoading: false,
 		trackLoading: false,
 	}
@@ -214,7 +189,6 @@ export const saturnPlannerState = proxy<SaturnPlannerState>(createSaturnPlannerS
 
 // Guards of the requests of the tool, each superseding its previous one.
 const stateGuard = createRequestGuard()
-const ringGuard = createRequestGuard()
 const timelineGuard = createRequestGuard()
 const trackGuard = createRequestGuard()
 const elongationsGuard = createRequestGuard()
@@ -240,24 +214,7 @@ export function historyRange(history: RingHistory, time: number): Range {
 	return { start: Math.floor((time - half) / day) * day, end: Math.ceil((time + half) / day) * day }
 }
 
-// Reads the rings on their own at the clock's instant, when the moons are refused.
-export async function loadRingState(state: SaturnPlannerState, io: PlannerIo = browserPlannerIo) {
-	if (state.time === undefined) return
-	const request = ringGuard.begin()
-
-	try {
-		const answer = await fetchJson<SaturnRingState>(io, '/api/saturn/rings/state', jsonInit('POST', { time: state.time }, request.signal))
-		if (!request.current()) return
-		state.ringState = answer
-		state.ringError = undefined
-	} catch (error) {
-		if (aborted(error) || !request.current()) return
-		state.ringError = errorMessage(error)
-	}
-}
-
-// Reads the rings and moons at the clock's instant, dropping the answer of a superseded request. A refusal of the moons
-// (503) reads the rings on their own.
+// Reads the rings and moons at the clock's instant, dropping the answer of a superseded request.
 export async function loadState(state: SaturnPlannerState, io: PlannerIo = browserPlannerIo) {
 	if (state.time === undefined) return
 	const request = stateGuard.begin()
@@ -267,14 +224,10 @@ export async function loadState(state: SaturnPlannerState, io: PlannerIo = brows
 		if (!request.current()) return
 		state.moonsState = answer
 		state.moonsError = undefined
-		state.moonsRefused = false
-		state.ringState = undefined
 	} catch (error) {
 		if (aborted(error) || !request.current()) return
 		state.moonsState = undefined
 		state.moonsError = errorMessage(error)
-		state.moonsRefused = error instanceof ApiResponseError && error.status === 503
-		if (state.moonsRefused) await loadRingState(state, io)
 	}
 }
 

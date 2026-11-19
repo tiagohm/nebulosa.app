@@ -5,7 +5,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - Planetary Events (`api/src/planetaryevents.ts` with `planetaryevents.astronomy.ts` and `planetaryevents.visibility.ts`) is a read-only almanac of the geocentric phenomena of Mercury to Neptune.
   It finds the phenomena over a range (`POST /search`), says how each one can be watched from a site (`POST /visibility`), and samples display curves around one (`POST /series`).
   It stores nothing, publishes no event, starts no operation, reserves no device, and never changes a device, a site, a profile, or the Sky clock.
-  Horizons is never asked and nothing is downloaded, whatever the policy.
+  Horizons is never asked and nothing is downloaded, offline or not: its source is the fast [Ephemeris Chain](ephemeris-chain.md) without Horizons.
   Pluto, the Moon, satellites, minor bodies, occultations, solar transits, groupings of three or more planets, and heliocentric apsides are not covered.
 - Definitions (the toolkit's Planetary Longitude Events, Appulses, Greatest Elongations, Stations, Closest Approaches, Illumination Crossings, and Brightness Maxima):
     - `solarConjunction` (Mercury–Neptune): the planet's apparent true ecliptic longitude of date equals the Sun's. It is `inferior` when the planet is nearer than the Sun, `superior` otherwise; an outer planet is always superior. The separation at the instant is reported, never assumed zero.
@@ -34,13 +34,13 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The signature's `origins` names which one, per planet.
   The barycentre offset is at most about 300 km (Saturn, Titan): under 0.1″ seen from the Earth, about a second at an opposition and tens of seconds for a slow pair, far below VSOP87E's own error.
   This exception to the never-barycentre rule of the [Jupiter Observing Planner](jupiter-observing-planner.md) and the [Saturn Observing Planner](saturn-observing-planner.md) belongs to this almanac alone, which needs no moon.
-  A miss anywhere reruns the whole computation from VSOP87E under `automatic` and `offline` (`fallbackReason`, `miss`), or answers `503` under `spkOnly` (`coverageUnavailable`, `missingDependency`, `unsupportedKernel`).
+  A miss anywhere reruns the whole computation from VSOP87E (`fallbackReason`, `miss`).
   The kernel set is read again after each yield, and a changed generation restarts the computation at most twice, then answers `503 generationChanged`; an aborted request is not answered.
   The positions are interpolated (six-point Lagrange on one- or two-day TDB nodes, `interpolatedSatelliteEphemeris`), whose nodes reach about six days beyond a scan, so a scan that close to the end of a kernel's coverage falls back.
   The Earth orientation is interpolated linearly between half-day IAU 2006/2000A nodes (under 0.001″), and TDB − TT comes from the USNO Circular 179 series.
 - Scan: `/search` covers `[start, end)` in 30-day chunks, each scanned three days beyond both edges and keeping the events whose instant falls in it, so none is reported twice or lost at an edge.
   The coarse step is one day and the refinement 1e-6 day; two events of one kind and pair closer than about two days could merge.
-  Answers are kept in an `LruCache` (8), keyed by the model version (`PLANETARY_EVENTS_MODEL_VERSION`, 1), the range, the sorted bodies and kinds, the threshold, the policy, and the generation, and stored under the snapshot actually used.
+  Answers are kept in an `LruCache` (8), keyed by the model version (`PLANETARY_EVENTS_MODEL_VERSION`, 1), the range, the sorted bodies and kinds, the threshold, the offline switch, and the generation, and stored under the snapshot actually used.
 - Visibility (`/visibility`, `PlanetaryEventVisibility`): a batch of events, a `PlanningSite`, and the threshold, answered per event id.
   Each event is cached in an `LruCache` (1024) by its id, the site's coordinates, and the threshold; the zone only formats, and an aborted batch caches nothing.
   Positions are geometric VSOP87E, interpolated, never the kernels; they only decide when an event can be watched.
@@ -56,10 +56,10 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
       It gives its `period` (`evening` or `morning`), each planet's peak altitude, a pair's separation at its middle, and its `offsetMs` from the instant.
       Altitudes are geometric (airless), and no terrain, horizon mask, or weather is applied.
       A batch yields to the event loop every 10 events.
-- Series (`/series`, `PlanetaryEventSeries`): 241 samples around one event from the same source policy, for display only; the event's instant is the solved one and never a sample.
+- Series (`/series`, `PlanetaryEventSeries`): 241 samples around one event from the same source chain, for display only; the event's instant is the solved one and never a sample.
     - The span is ±10 days for a pair, ±30 to ±60 days otherwise.
     - The curves are elongation, a pair's separation and longitude difference, a station's longitude (unwrapped about the event), Earth distance, magnitude (null where undefined), or illuminated fraction.
-    - Cached in an `LruCache` (32) by the event, the policy, and the generation.
+    - Cached in an `LruCache` (32) by the event, the offline switch, and the generation.
 - Limits: the routes trust their requests, and the tool asks for ranges of at most 24 months.
   On a desktop a 12-month search of every planet takes about 1.5 s and its visibility from a site about 2.5 s, computed once per range and site; both yield between chunks and batches.
   The display precision is minutes, and the refinement tolerance is no accuracy claim: VSOP87E and the kernels differ by seconds to minutes depending on the event's rate.

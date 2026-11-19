@@ -202,6 +202,7 @@ export const FALLBACK_LABELS: Readonly<Record<PlanetaryFallbackReason, string>> 
 	unsupportedFrame: 'a selected segment uses an unsupported frame',
 	unsupportedType: 'a selected segment uses an unsupported data type',
 	cycle: 'a kernel chain never reaches the barycenter',
+	kernelReadFailed: 'a kernel could not be read',
 }
 
 // Short name of a source: the kernels or VSOP87E.

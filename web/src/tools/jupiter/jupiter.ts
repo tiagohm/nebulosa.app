@@ -1,6 +1,6 @@
 import type { JupiterEvent, JupiterEventKind, JupiterEvents, JupiterEventsRequest, JupiterFallbackReason, JupiterGrsModel, JupiterGrsResponse, JupiterGrsSaveRequest, JupiterMoonState, JupiterSignature, JupiterSourceReport, JupiterState, JupiterTrack, JupiterVisibilityReason, ServerEvent } from 'api'
 import { proxy } from 'valtio'
-import { aborted, ApiResponseError, fetchJson, jsonInit } from '../../http'
+import { aborted, fetchJson, jsonInit } from '../../http'
 import type { SiteLocation } from '../../location/site'
 import { createRequestGuard } from '../../sky/selection'
 import { planningSite, showTargetInSky } from '../observingplanner/observingplanner'
@@ -71,6 +71,7 @@ export const FALLBACK_LABELS: Readonly<Record<JupiterFallbackReason, string>> = 
 	unsupportedFrame: 'a selected segment uses an unsupported frame',
 	unsupportedType: 'a selected segment uses an unsupported data type',
 	cycle: 'a kernel chain never reaches the barycenter',
+	kernelReadFailed: 'a kernel could not be read',
 }
 
 // Tab-lived state of the tool.
@@ -109,8 +110,6 @@ export interface JupiterPlannerState {
 	eventsLoading: boolean
 	// Why the events could not be computed.
 	eventsError?: string
-	// Whether the error of the events is the kernels' refusal under spkOnly.
-	kernelsRefused: boolean
 	// Readiness of the kernels over the period.
 	source?: JupiterSourceReport
 }
@@ -126,7 +125,6 @@ export function createJupiterPlannerState(): JupiterPlannerState {
 		orientation: 'north',
 		trackLoading: false,
 		eventsLoading: false,
-		kernelsRefused: false,
 	}
 }
 
@@ -186,12 +184,10 @@ export async function loadEvents(state: JupiterPlannerState, range: { readonly s
 		if (!request.current()) return
 		state.events = answer
 		state.eventsError = undefined
-		state.kernelsRefused = false
 	} catch (error) {
 		if (aborted(error) || !request.current()) return
 		state.events = undefined
 		state.eventsError = errorMessage(error)
-		state.kernelsRefused = error instanceof ApiResponseError && error.status === 503
 	} finally {
 		if (request.current()) state.eventsLoading = false
 	}

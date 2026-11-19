@@ -5,6 +5,7 @@ import { formatDateTime, formatDegrees, formatLocalTime } from '../../format'
 import { type ObservingSite, openObservingSites } from '../../location/site'
 import { collapsibleSections, sectionOpen } from '../../shell/collapsible'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
+import { describeEphemerisSource } from '../../sky/ephemerissource'
 import { formatDeclination, formatMagnitude, formatRightAscension, formatSolarSystemDistance } from '../../sky/format'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
@@ -22,9 +23,6 @@ const OBSERVABILITY_SECTION = 'closeapproaches.observability'
 
 // Name of each instant the section evaluates.
 const INSTANT_LABELS: Readonly<Record<ObservabilityInstant, string>> = { approach: 'Approach', now: 'Now', sky: 'Sky Time' }
-
-// Description of each reason an accurate position fell back to the local model.
-const FALLBACK_REASONS = { timeout: 'Horizons did not answer in time', network: 'Horizons cannot be reached', breakerOpen: 'Horizons failed repeatedly and is paused', offline: 'the offline policy forbids asking Horizons' } as const
 
 // Why the numbers of a close flyby are less certain than they read.
 const FLYBY_NOTE = 'Rise, transit, and set come from a two-body orbit, and Horizons positions are interpolated every 10 minutes, so both lose accuracy during a very close flyby.'
@@ -108,7 +106,7 @@ export function CloseApproachObservability({ body, time, site, timeZone }: SkyAc
 					{events?.transit !== undefined && <DataRow label="Transit">{formatLocalTime(events.transit, timeZone, position.time)}</DataRow>}
 					{events?.set !== undefined && <DataRow label="Set">{formatLocalTime(events.set, timeZone, position.time)}</DataRow>}
 					<Notice>
-						Apparent {position.center} place from {position.source === 'horizons' ? 'JPL Horizons' : position.source === 'spk' ? 'the SPK kernels' : position.fallbackReason ? `the local model (${FALLBACK_REASONS[position.fallbackReason]})` : 'the local model'}.
+						Apparent {position.center} place from {describeEphemerisSource(position.source, position.attempts)}.
 					</Notice>
 					<Notice>{FLYBY_NOTE}</Notice>
 				</>

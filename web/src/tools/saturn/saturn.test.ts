@@ -36,7 +36,7 @@ function deferred<T>() {
 	return { promise, resolve }
 }
 
-const signature = (source: SaturnSignature['source']): SaturnSignature => ({ modelVersion: 1, ringModelVersion: 1, scope: 'moons', source, policy: 'automatic', generation: 3 })
+const signature = (source: SaturnSignature['source']): SaturnSignature => ({ modelVersion: 1, ringModelVersion: 1, scope: 'moons', source, offline: false, generation: 3 })
 
 describe('requests', () => {
 	test('a superseded view never replaces a newer one', async () => {
@@ -58,19 +58,15 @@ describe('requests', () => {
 		expect(state.moonsState?.time).toBe(2)
 	})
 
-	test('refused moons read the rings on their own', async () => {
+	test('a failure of the moons keeps its error', async () => {
 		const state = proxy(createSaturnPlannerState())
 		state.time = 5
-		const { io, requests } = fakeIo(
-			() => json({ error: 'The SPICE kernels cannot give the Saturnian states (targetMissing)', code: 'missingDependency' }, 503),
-			() => json({ time: 5, rings: { earthOpening: 0.1 } }),
-		)
+		const { io, requests } = fakeIo(() => json({ error: 'The SPK kernels kept changing during the computation', code: 'generationChanged' }, 503))
 		await loadState(state, io)
 
-		expect(requests).toEqual(['/api/saturn/moons/state', '/api/saturn/rings/state'])
-		expect(state.moonsRefused).toBeTrue()
+		expect(requests).toEqual(['/api/saturn/moons/state'])
 		expect(state.moonsState).toBeUndefined()
-		expect(state.ringState?.time).toBe(5)
+		expect(state.moonsError).toContain('SPK kernels')
 	})
 })
 

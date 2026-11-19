@@ -1,4 +1,4 @@
-import type { SpiceEphemerisPolicy, SpiceKernelSummary } from 'api'
+import type { SpiceKernelSummary } from 'api'
 import { type ChangeEvent, useRef, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatByteSize, MISSING } from '../../format'
@@ -7,7 +7,6 @@ import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { Notice } from '../../ui/Notice'
-import { RadioGroup } from '../../ui/RadioGroup'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
@@ -16,14 +15,14 @@ import { Bodies } from './Bodies'
 import { Calculate } from './Calculate'
 import { epochDate, naifName, READINESS, SOURCE_LABELS } from './format'
 import { KernelDetails, KernelSegments } from './KernelDetails'
-import { importSpiceKernel, SPICE_POLICY_LABELS, setSpicePolicy, spiceKernelsState, updateSpiceKernel } from './spicekernels'
+import { importSpiceKernel, setEphemerisOffline, spiceKernelsState, updateSpiceKernel } from './spicekernels'
 
 // SPICE Kernel Library tool: the SPK files the server evaluates for accurate solar-system positions, shared by every tab
 // and profile. Installed lists them by precedence with their readiness, enabled flag, and coverage, opens the details of
 // one in the panel, and shows its segments below the list; Bodies shows, body by body, which segment the ephemeris
 // selects where and lets the operator prefer a kernel for a body; Calculate computes the state of a body from the kernels, through the selection
 // or from one chosen segment; Add Kernel downloads the curated planetary kernel and generates small-body kernels from
-// Horizons; Settings chooses the ephemeris policy. Import uploads a local .bsp file. Everything shown is the server's; closing the tool
+// Horizons; Settings turns the offline switch of the ephemeris sources on or off. Import uploads a local .bsp file. Everything shown is the server's; closing the tool
 // never stops a download or a generation.
 
 // Sections of the tool.
@@ -34,13 +33,6 @@ const SECTIONS: readonly Section[] = ['installed', 'bodies', 'calculate', 'add',
 
 // Label of each section.
 const SECTION_LABELS: Readonly<Record<Section, string>> = { installed: 'Installed', bodies: 'Bodies', calculate: 'Calculate', add: 'Add Kernel', settings: 'Settings' }
-
-// What each policy does.
-const POLICY_DESCRIPTIONS: Readonly<Record<SpiceEphemerisPolicy, string>> = {
-	automatic: 'Accurate positions come from the kernels when they cover the target, the Earth, and the Sun; otherwise from JPL Horizons, with the local models when Horizons is unreachable.',
-	offline: 'Accurate positions come from the kernels when they cover them, otherwise from the local models. No position, event, or mount target ever asks JPL anything.',
-	spkOnly: 'Accurate positions come only from the kernels; anything they do not cover is reported as unavailable. Map positions keep using the local models.',
-}
 
 // SPICE Kernel Library tool.
 export function SpiceKernelLibrary() {
@@ -111,7 +103,8 @@ function Installed({ kernels, selected, onSelect }: InstalledProps) {
 	return (
 		<>
 			<p className="m-0 text-sm text-ink-300">
-				{kernels.length} {kernels.length === 1 ? 'kernel' : 'kernels'}, {usable} ready · {formatByteSize(snapshot.bytes)} · policy {SPICE_POLICY_LABELS[snapshot.policy]}
+				{kernels.length} {kernels.length === 1 ? 'kernel' : 'kernels'}, {usable} ready · {formatByteSize(snapshot.bytes)}
+				{snapshot.offline && ' · offline'}
 				{snapshot.loading && ' · opening the kernels'}
 			</p>
 			<Notice>
@@ -168,7 +161,7 @@ function KernelRow({ rank, kernel, selected, onSelect }: KernelRowProps) {
 	)
 }
 
-// Ephemeris policy of the server and the storage of the library.
+// Ephemeris sources of the server and the storage of the library.
 function Settings() {
 	const state = useSnapshot(spiceKernelsState)
 	const snapshot = state.snapshot
@@ -176,11 +169,12 @@ function Settings() {
 
 	return (
 		<section className="flex flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4">
-			<h2 className="m-0 text-sm font-semibold text-ink-100">Ephemeris policy</h2>
-			<RadioGroup className="items-start" options={['automatic', 'offline', 'spkOnly'] as const} value={snapshot.policy} format={(e) => SPICE_POLICY_LABELS[e]} disabled={state.pending.settings} onChange={(policy) => void setSpicePolicy(spiceKernelsState, policy)} />
-			<Notice>{POLICY_DESCRIPTIONS[snapshot.policy]}</Notice>
+			<h2 className="m-0 text-sm font-semibold text-ink-100">Ephemeris sources</h2>
+			<Notice>Positions come from the kernels when they cover the object, the Earth, and the Sun. Otherwise the map, the planners, and the events use the analytical theories, then JPL Horizons; the selected object and mount targets use JPL Horizons, then the analytical theories.</Notice>
+			<Checkbox label="Offline" checked={snapshot.offline} disabled={state.pending.settings} onChange={(offline) => void setEphemerisOffline(spiceKernelsState, offline)} />
+			<Notice>Offline, no position, event, or plan asks JPL Horizons or SBDB: an object only the network can give is reported as unavailable.</Notice>
 			{state.errors.settings && <Notice error>{state.errors.settings}</Notice>}
-			<Notice>The policy applies to the whole server and every profile. Downloading or generating a kernel, and searching SBDB, still need the network whatever the policy. The library uses {formatByteSize(snapshot.bytes)} of the data directory.</Notice>
+			<Notice>The switch applies to the whole server and every profile. Downloading or generating a kernel still needs the network. The library uses {formatByteSize(snapshot.bytes)} of the data directory.</Notice>
 		</section>
 	)
 }

@@ -1,4 +1,5 @@
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
+import { ephemerisUnavailableResponse, EphemerisUnavailableError } from './ephemeris.chain'
 import { errorResponse } from './http'
 import {
 	computeEvents,
@@ -14,7 +15,6 @@ import {
 	type JupiterSource,
 	type JupiterSourceReport,
 	type JupiterSourceRequest,
-	JupiterSourceUnavailableError,
 	type JupiterState,
 	type JupiterStateRequest,
 	type JupiterTrack,
@@ -24,7 +24,7 @@ import {
 } from './jupiter.astronomy'
 import type { JupiterGrsSaveOutcome, JupiterGrsSaveRequest, JupiterGrsSettings, JupiterGrsStore } from './jupiter.store'
 import { LruCache } from './lrucache'
-import { type PlanetarySourceErrorCode, unavailableResponse } from './planetary.source'
+import type { PlanetarySourceErrorCode } from './planetary.source'
 import { SiteNightCache } from './planetary.visibility'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 
@@ -32,12 +32,11 @@ import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 // instant, the satellite tracks over a range, and the phenomena over a range with their visibility from a site), and
 // the server's Great Red Spot model, the only thing it stores. Predictions are computed on request from one ephemeris
 // source each (see jupiter.astronomy.ts) and kept in bounded in-memory caches whose keys hold every input that changes
-// them, including the kernel generation, the ephemeris policy, and the Great Red Spot revision. Nothing here moves a
+// them, including the kernel generation, the offline switch, and the Great Red Spot revision. Nothing here moves a
 // device, changes the Sky clock or a site, starts an operation, or asks a remote service.
 
 // Stable codes of the planner's error responses: 409 conflict of a Great Red Spot save, 500 writeFailed, and 503 when the
-// spkOnly policy finds the kernels unable to give a computation (coverageUnavailable, missingDependency,
-// unsupportedKernel) or the kernel set kept changing during one (generationChanged).
+// kernel set kept changing during a computation (generationChanged).
 export type JupiterErrorCode = 'conflict' | 'writeFailed' | PlanetarySourceErrorCode
 
 // Great Red Spot model with its state now.
@@ -48,7 +47,7 @@ export interface JupiterGrsResponse extends JupiterGrsSettings {
 
 // Dependencies of the planner.
 export interface JupiterPlannerOptions {
-	// Kernels of the SPICE Kernel Library and its ephemeris policy.
+	// Kernels of the SPICE Kernel Library and the offline switch.
 	readonly kernels: JupiterKernels
 	// Night of a site containing an instant (Astro Weather's local night).
 	readonly night: (request: AstroWeatherNightRequest) => AstroWeatherNight
@@ -123,18 +122,18 @@ export class JupiterPlannerService {
 
 // Signature of a result computed from a source and a kernel snapshot.
 function signature(source: JupiterSource, snapshot: SpiceKernelSnapshot, grsRevision?: number): JupiterSignature {
-	return { modelVersion: JUPITER_MODEL_VERSION, source, policy: snapshot.policy, generation: snapshot.generation, ...(grsRevision !== undefined && { grsRevision }) }
+	return { modelVersion: JUPITER_MODEL_VERSION, source, offline: snapshot.offline, generation: snapshot.generation, ...(grsRevision !== undefined && { grsRevision }) }
 }
 
 // Cache key of a track: the model, the range, and the kernel identity.
 function trackKey({ start, end }: JupiterTrackRequest, snapshot: SpiceKernelSnapshot) {
-	return JSON.stringify([JUPITER_MODEL_VERSION, start, end, snapshot.policy, snapshot.generation])
+	return JSON.stringify([JUPITER_MODEL_VERSION, start, end, snapshot.offline, snapshot.generation])
 }
 
 // Cache key of the events: the model, every input of the request, the kernel identity, and the Great Red Spot revision.
 function eventsKey({ start, end, site, kinds, moons }: JupiterEventsRequest, snapshot: SpiceKernelSnapshot, grsRevision: number) {
 	const place = site ? [site.latitude, site.longitude, site.elevation, site.timeZone] : null
-	return JSON.stringify([JUPITER_MODEL_VERSION, start, end, place, kinds ?? null, moons ?? null, snapshot.policy, snapshot.generation, grsRevision])
+	return JSON.stringify([JUPITER_MODEL_VERSION, start, end, place, kinds ?? null, moons ?? null, snapshot.offline, snapshot.generation, grsRevision])
 }
 
 // Answers a computation, turning an unavailable kernel source into 503 with its reason and the state it lacked.
@@ -142,8 +141,8 @@ async function answer(compute: () => Promise<unknown>): Promise<Response> {
 	try {
 		return Response.json(await compute())
 	} catch (error) {
-		if (!(error instanceof JupiterSourceUnavailableError)) throw error
-		return unavailableResponse(error)
+		if (!(error instanceof EphemerisUnavailableError)) throw error
+		return ephemerisUnavailableResponse(error)
 	}
 }
 
@@ -168,7 +167,7 @@ export function createJupiterRoutes(service: JupiterPlannerService) {
 			},
 		},
 		'/api/jupiter/state': {
-			// The view at the instant of the body (JupiterStateRequest → JupiterState); 503 under spkOnly without kernels.
+			// The view at the instant of the body (JupiterStateRequest → JupiterState); 503 generationChanged when the kernels kept changing.
 			POST: async (req) => {
 				const request = (await req.json()) as JupiterStateRequest
 				return answer(() => service.state(request, req.signal))
@@ -176,7 +175,7 @@ export function createJupiterRoutes(service: JupiterPlannerService) {
 		},
 		'/api/jupiter/track': {
 			// The satellite tracks over the range of the body (JupiterTrackRequest → JupiterTrack); a request that left stops
-			// between chunks and is not answered; 503 under spkOnly without kernels.
+			// between chunks and is not answered; 503 generationChanged when the kernels kept changing.
 			POST: async (req) => {
 				const request = (await req.json()) as JupiterTrackRequest
 				return answer(() => service.track(request, req.signal))
@@ -184,7 +183,7 @@ export function createJupiterRoutes(service: JupiterPlannerService) {
 		},
 		'/api/jupiter/events': {
 			// The events over the range of the body (JupiterEventsRequest → JupiterEvents); a request that left stops between
-			// chunks and is not answered; 503 under spkOnly without kernels.
+			// chunks and is not answered; 503 generationChanged when the kernels kept changing.
 			POST: async (req) => {
 				const request = (await req.json()) as JupiterEventsRequest
 				return answer(() => service.events(request, req.signal))

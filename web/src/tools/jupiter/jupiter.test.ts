@@ -63,16 +63,15 @@ describe('requests', () => {
 		expect(state.state?.time).toBe(2)
 	})
 
-	test('events are asked for whole, with the site, and a 503 is the kernels refusing', async () => {
+	test('events are asked for whole, with the site, and an error is kept', async () => {
 		const state = proxy(createJupiterPlannerState())
-		const { io, requests } = fakeIo(() => json({ error: 'The SPICE kernels cannot give the Jovian states (noKernel)', code: 'missingDependency' }, 503))
+		const { io, requests } = fakeIo(() => json({ error: 'The SPK kernels kept changing during the computation', code: 'generationChanged' }, 503))
 		const site = { name: 'São Paulo', latitude: -23.55, longitude: -46.633, elevation: 760, timeZone: 'America/Sao_Paulo' }
 		await loadEvents(state, { start: 0, end: DAY }, site, io)
 
 		expect(requests[0]).toMatchObject({ url: '/api/jupiter/events', method: 'POST', body: { start: 0, end: DAY, site } })
 		expect(requests[0].body).not.toHaveProperty('kinds')
-		expect(state.kernelsRefused).toBeTrue()
-		expect(state.eventsError).toContain('SPICE kernels')
+		expect(state.eventsError).toContain('SPK kernels')
 		expect(state.eventsLoading).toBeFalse()
 	})
 })

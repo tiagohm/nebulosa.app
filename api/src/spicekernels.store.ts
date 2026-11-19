@@ -4,7 +4,7 @@ import type { SpkSegmentDescriptor, SpkUnsupportedReason } from 'nebulosa/src/as
 import { type AppDatabase, DEFAULT_DATA_DIRECTORY } from './database'
 
 // Durable part of the SPICE Kernel Library: the SPK files, their segments, the preferred kernel of some bodies, and the
-// ephemeris policy, as rows of spice_kernels, spice_segments, spice_preferences, and spice_settings in the operational database, and the bytes of each file under
+// offline switch of the ephemeris sources, as rows of spice_kernels, spice_segments, spice_preferences, and spice_settings in the operational database, and the bytes of each file under
 // spice-kernels/objects/<sha256>.bsp. A file is streamed into spice-kernels/staging/, hashed while it is written,
 // renamed into objects/ once inspected, and only then recorded, so no row ever names a partial file. Content
 // addressing makes an identical file one entry. Shared by every profile.
@@ -17,10 +17,6 @@ export type SpiceKernelSourceKind = 'naif' | 'horizons' | 'import'
 
 // Lifecycle of a kernel: usable, being deleted, failing its integrity or format checks, or without its file.
 export type SpiceKernelState = 'ready' | 'pendingDelete' | 'invalid' | 'missing'
-
-// Source of accurate solar-system positions: SPK then Horizons, SPK then the local models without any request to JPL,
-// or SPK alone.
-export type SpiceEphemerisPolicy = 'automatic' | 'offline' | 'spkOnly'
 
 // One SPK file of the library.
 export interface SpiceKernelRecord {
@@ -277,14 +273,14 @@ export class SpiceKernelStore {
 		else this.database.db.query('INSERT INTO spice_preferences VALUES (?, ?) ON CONFLICT (body) DO UPDATE SET kernel_id = excluded.kernel_id').run(body, kernel)
 	}
 
-	// Returns the ephemeris policy; automatic when never changed.
-	policy(): SpiceEphemerisPolicy {
-		return this.database.db.query<{ policy: SpiceEphemerisPolicy }, []>('SELECT policy FROM spice_settings WHERE singleton = 1').get()?.policy ?? 'automatic'
+	// Returns whether the ephemeris sources are offline; online when never changed.
+	offline(): boolean {
+		return this.database.db.query<{ offline: number }, []>('SELECT offline FROM spice_settings WHERE singleton = 1').get()?.offline === 1
 	}
 
-	// Sets the ephemeris policy.
-	setPolicy(policy: SpiceEphemerisPolicy) {
-		this.database.db.query('INSERT INTO spice_settings VALUES (1, ?) ON CONFLICT (singleton) DO UPDATE SET policy = excluded.policy').run(policy)
+	// Turns the offline switch of the ephemeris sources on or off.
+	setOffline(offline: boolean) {
+		this.database.db.query('INSERT INTO spice_settings VALUES (1, ?) ON CONFLICT (singleton) DO UPDATE SET offline = excluded.offline').run(offline ? 1 : 0)
 	}
 
 	// Path of the file of a kernel by its SHA-256.

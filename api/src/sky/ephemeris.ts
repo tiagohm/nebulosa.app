@@ -5,7 +5,7 @@ import { constellation as constellationOf, CONSTELLATIONS } from 'nebulosa/src/a
 import { eraC2s, eraEo06a } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { frameToFrame, ICRS, ITRS } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
-import type { SpkMiss } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
+import type { SpkKernelSet } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
 import * as elpmpp02 from 'nebulosa/src/astronomy/ephemeris/models/analytical/elpmpp02'
 import { pluto } from 'nebulosa/src/astronomy/ephemeris/models/analytical/pluto'
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
@@ -17,24 +17,23 @@ import { AU_KM, DEG2RAD, GM_SUN_PITJEVA_2005, J2000, SPEED_OF_LIGHT } from 'nebu
 import { type MutVec3, type Vec3, vecAngle, vecLength, vecPlus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { deg, normalizeAngle, normalizePI, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
+import { computeEphemeris, computeEphemerisSync, type EphemerisAttempt, EphemerisKernelMiss, type EphemerisKernels, type EphemerisKernelsUsed, type EphemerisMode, type EphemerisSourceKind, EphemerisUnavailableError, HorizonsCircuitBreaker, NO_EPHEMERIS_KERNELS, snapshotKernels } from '../ephemeris.chain'
 import { LruCache } from '../lrucache'
-import type { SpiceKernelSnapshot } from '../spicekernels.runtime'
-import { SsdBusyError, SsdRequestQueue, SsdThrottledError } from '../ssd'
+import { SsdRequestQueue } from '../ssd'
 import { solarSystemBody, type SolarSystemBodyKind } from './bodies'
 import type { SolarSystemBodyCode } from './types'
 
 // Ephemerides of the sky API: the apparent position of a catalog object, a major solar-system body, or
 // a minor body at an instant, for an observer on the Earth or the geocenter, plus its rise, transit,
-// and set. Accurate positions of solar-system targets come first from the SPK kernels of the SPICE Kernel
-// Library when the whole chain of the target, the Earth, and the Sun is covered at every epoch the
-// calculation needs; otherwise, by the ephemeris policy of the library, from JPL Horizons (automatic),
-// falling back to the local models (VSOP87E, ELPMPP02, Pluto, Kepler orbits, and catalog astrometry) when
-// Horizons times out or is unreachable, from the local models without any request (offline), or from
-// nothing (spkOnly). A calculation never mixes kernel states with the local models. The source and the
-// reason are stated in the result. Fast positions, used to draw the map, are local whenever a local model
-// exists. Events are always computed locally, from kernels or local models, so they never wait on the network. Horizons requests go
-// through the JPL queue, so an accurate position may wait behind another JPL request, within the limit
-// of the queue. Angles are radians, times Unix milliseconds (UTC), and distances AU.
+// and set. Positions of solar-system targets follow the ephemeris chain of ephemeris.chain.ts in the mode the request
+// asks: accurate (the default, for the selected object and pointing) tries the SPK kernels of the SPICE Kernel Library,
+// then JPL Horizons, then the local models (VSOP87E, ELPMPP02, Pluto, Kepler orbits of SBDB elements); fast (drawing
+// the map) tries the kernels, then the local models, then Horizons. The kernels are used when the whole chain of the
+// target, the Earth, and the Sun is covered at every epoch the calculation needs; the offline switch removes Horizons;
+// a calculation never mixes sources, and its source and the sources tried before are stated in the result. Catalog
+// objects are always computed from their astrometry. Events always follow the fast chain without Horizons, so they never
+// wait on the network. Horizons requests go through the JPL queue, so an accurate position may wait behind another JPL
+// request, within the limit of the queue. Angles are radians, times Unix milliseconds (UTC), and distances AU.
 
 // Budget of one Horizons request in milliseconds.
 export const HORIZONS_TIMEOUT_MS = 8_000
@@ -130,37 +129,25 @@ export type EphemerisTarget =
 	// Asteroid or comet by SPK-ID, with its osculating elements when known (the local model needs them).
 	| { readonly type: 'minorBody'; readonly spkId: string; readonly elements?: MinorBodyElements }
 
-// Calculation path: `accurate` asks Horizons first; `fast` is local only.
-export type EphemerisMode = 'fast' | 'accurate'
+export type { EphemerisMode }
 
-// Provider of a position: JPL Horizons, the local models, or the SPK kernels of the SPICE Kernel Library.
-export type EphemerisSource = 'horizons' | 'local' | 'spk'
-
-// Why an accurate position came from the local models: Horizons timed out, could not be reached, or is paused by its
-// breaker, or the offline policy of the SPICE Kernel Library forbids requests and no kernel covers the target.
-export type EphemerisFallbackReason = 'timeout' | 'network' | 'breakerOpen' | 'offline'
+// Provider of a position: a source of the ephemeris chain, the astrometry of a catalog object, or the SGP4 propagation
+// of the elements of an artificial satellite.
+export type SkyPositionSource = EphemerisSourceKind | 'catalog' | 'sgp4'
 
 // Kernels a position was computed from.
-export interface SkyPositionKernels {
-	// Generation of the kernel set of the SPICE Kernel Library.
-	readonly generation: number
-	// Ids of the kernels whose segments were used, in the order the calculation first needed them.
-	readonly kernelIds: readonly string[]
-}
-
-// Why the policy of the SPICE Kernel Library left no source for an accurate position: no kernel covers the target at the
-// epochs needed, a kernel the chain needs is missing (the Earth, the Sun, or a center), or the offline policy forbids
-// requests and no local model exists.
-export type EphemerisUnavailableCode = 'coverageUnavailable' | 'missingDependency' | 'offline'
+export type SkyPositionKernels = EphemerisKernelsUsed
 
 // Apparent position of an object at an instant.
 export interface SkyPosition {
 	// Instant of the position, Unix milliseconds (UTC).
 	readonly time: number
 	// Provider of the position.
-	readonly source: EphemerisSource
-	// Why Horizons was not used, for an accurate position computed locally.
-	readonly fallbackReason?: EphemerisFallbackReason
+	readonly source: SkyPositionSource
+	// Mode of the ephemeris chain; absent for a catalog object.
+	readonly mode?: EphemerisMode
+	// Sources of the chain tried before the one that gave the position, with why each did not; absent for a catalog object.
+	readonly attempts?: readonly EphemerisAttempt[]
 	// Kernels of a position computed from SPK.
 	readonly kernels?: SkyPositionKernels
 	// Whether the position is seen from the observer or from the Earth's center (no observer).
@@ -233,11 +220,13 @@ export interface SkyEphemerisOptions {
 	readonly timeoutMs?: number
 	// Clock of the circuit breaker; Date.now by default.
 	readonly now?: () => number
-	// Kernels of the SPICE Kernel Library and its ephemeris policy; none and automatic by default.
-	readonly kernels?: { readonly current: () => SpiceKernelSnapshot }
+	// Kernels of the SPICE Kernel Library and the offline switch; none, online, by default.
+	readonly kernels?: EphemerisKernels
 }
 
-// Horizons answered without an ephemeris (unknown target or invalid request). Not retried locally:
+export { EphemerisUnavailableError }
+
+// Horizons answered without an ephemeris (unknown target or invalid request). Not retried on another source:
 // the request itself is wrong.
 export class HorizonsEphemerisError extends Error {
 	// Creates the error.
@@ -247,107 +236,36 @@ export class HorizonsEphemerisError extends Error {
 	}
 }
 
-// Neither Horizons, the kernels, nor a local model can compute the position; code says why when the policy of the SPICE
-// Kernel Library decided it.
-export class EphemerisUnavailableError extends Error {
-	// Creates the error with the reason no source could compute the position.
-	constructor(
-		message: string,
-		options?: ErrorOptions,
-		readonly code?: EphemerisUnavailableCode,
-	) {
-		super(message, options)
-		this.name = 'EphemerisUnavailableError'
-	}
-}
-
-// A kernel state a calculation needs is not covered; the whole calculation is abandoned, never completed with a local model.
-class SpkCoverageMiss extends Error {
-	// Creates the miss of a body of the chain of NAIF code target.
-	constructor(
-		readonly miss: SpkMiss,
-		readonly target: number,
-	) {
-		super(`SPK does not cover ${miss.body} (${miss.reason})`)
-	}
-
-	// Code of the error when the policy allows no other source: a miss of the target itself is a lack of coverage, a miss of
-	// another body (the Earth, the Sun, a center) a missing dependency.
-	get code(): EphemerisUnavailableCode {
-		return this.miss.body === this.target ? 'coverageUnavailable' : 'missingDependency'
-	}
-}
-
 // NAIF code of the SPK state of a solar-system target: the body code itself, such as 399 for the Earth or 599 for the
 // planet Jupiter (never its system barycenter 5), or the SBDB SPK-ID of a minor body.
 function naifCode(target: Exclude<EphemerisTarget, { type: 'catalog' }>) {
 	return Number(target.type === 'body' ? target.code : target.spkId)
 }
 
-// States of one calculation from a kernel set: the target, the Earth, and the Sun, each throwing SpkCoverageMiss when not
-// covered at an epoch, and the kernels they used.
-function spkCalculation(snapshot: SpiceKernelSnapshot, target: number) {
-	const set = snapshot.set!
+// Bodies the kernels must have for a target: the target itself, and the Earth and the Sun its apparent place is reduced with.
+function kernelBodies(target: Exclude<EphemerisTarget, { type: 'catalog' }>) {
+	return [
+		{ name: target.type === 'body' ? target.code : target.spkId, naif: naifCode(target) },
+		{ name: '399', naif: 399, dependency: true },
+		{ name: '10', naif: 10, dependency: true },
+	]
+}
+
+// States of one calculation from a kernel set: the target, the Earth, and the Sun, each throwing EphemerisKernelMiss when
+// not covered at an epoch, and the kernels they used.
+function spkCalculation(set: SpkKernelSet, target: number) {
 	const kernels = new Set<string>()
 
 	const state =
 		(body: number): PositionAndVelocityOverTime =>
 		(t) => {
 			const result = set.stateAt(body, t)
-			if (!result.ok) throw new SpkCoverageMiss(result, target)
+			if (!result.ok) throw new EphemerisKernelMiss(target, result.body, result.reason, t)
 			for (const id of result.kernels) kernels.add(id)
 			return result.state
 		}
 
-	return { target: state(target), foundation: { earth: state(399), sun: state(10) } satisfies EphemerisFoundation, kernels: () => ({ generation: snapshot.generation, kernelIds: [...kernels] }) }
-}
-
-// Whether the JPL queue refused the request, which says nothing about Horizons.
-function isQueueRefusal(error: unknown) {
-	return error instanceof SsdBusyError || error instanceof SsdThrottledError
-}
-
-// Returns why a Horizons failure is transient (and may fall back to a local model), or undefined for a
-// semantic failure that must be reported as is.
-function transientReason(error: unknown): EphemerisFallbackReason | undefined {
-	if (error instanceof HorizonsEphemerisError) return undefined
-	if (isQueueRefusal(error)) return 'timeout'
-	if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) return 'timeout'
-	if (error instanceof TypeError) return 'network'
-	if (error instanceof Error && 'code' in error) return 'network'
-	return undefined
-}
-
-// Consecutive-failure circuit breaker: after HORIZONS_BREAKER_FAILURE_THRESHOLD transient failures,
-// Horizons is skipped for HORIZONS_BREAKER_OPEN_MS; a success closes it.
-class HorizonsCircuitBreaker {
-	#failures = 0
-	#openUntil = 0
-
-	// Creates the breaker over a clock in milliseconds.
-	constructor(private readonly now: () => number) {}
-
-	// Whether Horizons is skipped now; an expired window closes the breaker.
-	isOpen() {
-		if (this.#openUntil === 0) return false
-		if (this.now() < this.#openUntil) return true
-		this.#openUntil = 0
-		this.#failures = 0
-		return false
-	}
-
-	// Records a successful Horizons request.
-	recordSuccess() {
-		this.#failures = 0
-		this.#openUntil = 0
-	}
-
-	// Records a transient Horizons failure.
-	recordFailure() {
-		if (++this.#failures >= HORIZONS_BREAKER_FAILURE_THRESHOLD && this.#openUntil === 0) {
-			this.#openUntil = this.now() + HORIZONS_BREAKER_OPEN_MS
-		}
-	}
+	return { target: state(target), foundation: { earth: state(399), sun: state(10) } satisfies EphemerisFoundation, kernelIds: () => [...kernels] }
 }
 
 // One Horizons table row.
@@ -757,6 +675,12 @@ async function untilAborted<T>(promise: Promise<T>, signal?: AbortSignal): Promi
 	}
 }
 
+// What one source of the chain computes a position with, and the kernels it used.
+interface PositionComputation {
+	readonly position: () => Omit<SkyPosition, 'source' | 'mode' | 'attempts' | 'kernels' | 'time'>
+	readonly kernelIds?: () => readonly string[]
+}
+
 // Ephemeris service with its Horizons cache, circuit breaker, Kepler orbit cache, and event cache.
 export class SkyEphemeris {
 	readonly #queue: SsdRequestQueue
@@ -766,7 +690,7 @@ export class SkyEphemeris {
 	readonly #tables = new LruCache<Promise<readonly HorizonsSample[]>>(HORIZONS_CACHE_LIMIT)
 	readonly #orbits = new LruCache<KeplerOrbit>(HORIZONS_CACHE_LIMIT)
 	readonly #events = new LruCache<SkyEvents>(EVENTS_CACHE_LIMIT)
-	readonly #kernels?: SkyEphemerisOptions['kernels']
+	readonly #kernels: EphemerisKernels
 
 	// Creates the service; options replace the JPL queue, the Horizons client, its budget, and the breaker clock, and give
 	// the kernels of the SPICE Kernel Library.
@@ -774,20 +698,19 @@ export class SkyEphemeris {
 		this.#queue = options.queue ?? new SsdRequestQueue()
 		this.#observer = options.observer ?? horizonsObserver
 		this.#timeoutMs = options.timeoutMs ?? HORIZONS_TIMEOUT_MS
-		this.#breaker = new HorizonsCircuitBreaker(options.now ?? Date.now)
-		this.#kernels = options.kernels
+		this.#breaker = new HorizonsCircuitBreaker(options.now ?? Date.now, HORIZONS_BREAKER_FAILURE_THRESHOLD, HORIZONS_BREAKER_OPEN_MS)
+		this.#kernels = options.kernels ?? NO_EPHEMERIS_KERNELS
 	}
 
-	// Whether the ephemeris policy allows requests to JPL to resolve or compute a target: only the automatic policy does.
+	// Whether automatic requests may reach JPL to resolve or compute a target: not while the ephemeris sources are offline.
 	get remoteAllowed() {
-		return (this.#kernels?.current().policy ?? 'automatic') === 'automatic'
+		return !this.#kernels.current().offline
 	}
 
-	// Apparent position of a target. Accurate requests of bodies and minor bodies use the kernels when they cover the
-	// whole calculation; otherwise, by the ephemeris policy, Horizons with the local model as a fallback on a transient
-	// failure (timeout, network, open breaker) stating the reason, the local model alone, or nothing. Semantic Horizons
-	// failures and minor bodies without any source reject. Catalog objects are always local, and fast requests local
-	// whenever a local model exists.
+	// Apparent position of a target. Bodies and minor bodies follow the ephemeris chain of the request's mode (accurate by
+	// default), from one source, stating it and the sources tried before; rejects with EphemerisUnavailableError when no
+	// source can give it (no kernel, no local model, and Horizons offline or failing) and with HorizonsEphemerisError when
+	// Horizons rejects the request itself. Catalog objects are always computed from their astrometry.
 	async position(target: EphemerisTarget, request: PositionRequest): Promise<SkyPosition> {
 		const position = await this.#position(target, request)
 		const name = CONSTELLATIONS[position.constellation as keyof typeof CONSTELLATIONS]?.name
@@ -798,95 +721,85 @@ export class SkyEphemeris {
 	async #position(target: EphemerisTarget, request: PositionRequest): Promise<SkyPosition> {
 		request.signal?.throwIfAborted()
 
-		if (target.type === 'catalog') return { time: request.time, source: 'local', ...catalogPosition(target.object, makeTime(request.time, request.observer)) }
+		if (target.type === 'catalog') return { time: request.time, source: 'catalog', ...catalogPosition(target.object, makeTime(request.time, request.observer)) }
 
+		const time = makeTime(request.time, request.observer)
+		const isSun = target.type === 'body' && target.code === '10'
 		const model = solarSystemModel(target, this.#orbits)
-		const local = () => {
-			if (!model) throw new EphemerisUnavailableError('No local model for this minor body; its orbital elements are unknown')
-			return { time: request.time, source: 'local' as const, ...solarSystemPosition(model, makeTime(request.time, request.observer), target.type === 'body' && target.code === '10') }
-		}
 
-		if (request.mode === 'fast' && model) return local()
+		const { results, provenance } = await computeEphemeris<PositionComputation, ReturnType<PositionComputation['position']>>({
+			kernels: this.#kernels,
+			mode: request.mode ?? 'accurate',
+			signal: request.signal,
+			breaker: this.#breaker,
+			sources: {
+				bodies: kernelBodies(target),
+				spk: (set) => {
+					const calculation = spkCalculation(set, naifCode(target))
+					return { position: () => solarSystemPosition({ state: calculation.target, magnitude: magnitudeModel(target) }, time, isSun, calculation.foundation), kernelIds: calculation.kernelIds }
+				},
+				analytical: () => model && { position: () => solarSystemPosition(model, time, isSun) },
+				horizons: async (signal) => {
+					const samples = await untilAborted(this.#horizonsTable(horizonsCommand(target)!, request.time, request.observer), signal)
 
-		const snapshot = this.#kernels?.current()
-		const policy = snapshot?.policy ?? 'automatic'
-		const spk = snapshot?.set ? this.#spkPosition(snapshot, target, request) : undefined
-		if (spk && !(spk instanceof SpkCoverageMiss)) return spk
+					return {
+						position: () => {
+							const position = horizonsPositionAt(samples, request.time, !!request.observer)
+							if (!position) throw new HorizonsEphemerisError('Horizons did not cover the requested time')
+							return position
+						},
+					}
+				},
+				kernelsOf: (computation) => computation.kernelIds?.() ?? [],
+			},
+			compute: (computation) => computation.position(),
+		})
 
-		if (policy === 'spkOnly') throw new EphemerisUnavailableError(spk ? `The SPK kernels do not cover this calculation: ${spk.message}` : 'No SPK kernel is enabled', undefined, spk?.code ?? 'coverageUnavailable')
-
-		if (policy === 'offline') {
-			if (model) return { ...local(), fallbackReason: 'offline' }
-			throw new EphemerisUnavailableError('No SPK kernel covers this minor body, and the offline policy forbids asking Horizons', undefined, 'offline')
-		}
-
-		if (this.#breaker.isOpen()) {
-			if (model) return { ...local(), fallbackReason: 'breakerOpen' }
-			throw new EphemerisUnavailableError('Horizons is temporarily unavailable')
-		}
-
-		try {
-			const samples = await untilAborted(this.#horizonsTable(horizonsCommand(target)!, request.time, request.observer), request.signal)
-			const position = horizonsPositionAt(samples, request.time, !!request.observer)
-			if (!position) throw new HorizonsEphemerisError('Horizons did not cover the requested time')
-			return { ...position, source: 'horizons' }
-		} catch (error) {
-			if (request.signal?.aborted) throw error
-			const reason = transientReason(error)
-			if (reason === undefined) throw error
-			if (model) return { ...local(), fallbackReason: reason }
-			throw new EphemerisUnavailableError(`Horizons is unavailable (${reason})`, { cause: error })
-		}
+		return { time: request.time, ...results[0], source: provenance.source, mode: provenance.mode, attempts: provenance.attempts, ...(provenance.kernels && { kernels: provenance.kernels }) }
 	}
 
-	// Rise, transit, and set nearest `time` within ±12 h for an observer, sampled every 10 minutes from the kernels when
-	// they cover the whole window, else from the local model (never under the spkOnly policy); undefined for a minor body
-	// without either. Cached per target, observer, hour, kernel generation, and policy.
+	// Rise, transit, and set nearest `time` within ±12 h for an observer, sampled every 10 minutes over the fast ephemeris
+	// chain without Horizons: the kernels when they cover the whole window, else the local model; undefined for a minor
+	// body without either. Cached per target, observer, hour, and kernel generation.
 	events(target: EphemerisTarget, time: number, observer: SkyObserver, key: string): SkyEvents | undefined {
-		const snapshot = this.#kernels?.current()
-		const cacheKey = `${key}|${observerKey(observer)}|${Math.floor(time / HOUR_MS)}|${snapshot?.generation ?? 0}|${snapshot?.policy ?? 'automatic'}`
+		const snapshot = this.#kernels.current()
+		const cacheKey = `${key}|${observerKey(observer)}|${Math.floor(time / HOUR_MS)}|${snapshot.generation}`
 		const cached = this.#events.get(cacheKey)
 		if (cached) return cached
 
-		let events: SkyEvents | undefined
+		let events: SkyEvents
 
-		if (target.type !== 'catalog' && snapshot?.set?.bodies.has(naifCode(target))) {
-			const calculation = spkCalculation(snapshot, naifCode(target))
-			const horizontalAt = solarSystemHorizontalModel({ state: calculation.target, magnitude: () => undefined }, observer, !(target.type === 'body' && target.code === '10'), calculation.foundation)
+		if (target.type === 'catalog') {
+			events = this.#sampleEvents(target, time, (t) => {
+				const { geometricAltitude, hourAngle } = catalogPlace(target.object, makeTime(t, observer))
+				return { altitude: geometricAltitude!, hourAngle: hourAngle! }
+			})
+		} else {
+			const deflected = !(target.type === 'body' && target.code === '10')
+			const model = solarSystemModel(target, this.#orbits)
 
 			try {
-				events = this.#sampleEvents(target, time, horizontalAt)
+				events = computeEphemerisSync({
+					kernels: snapshotKernels(snapshot),
+					mode: 'fast',
+					sources: {
+						bodies: kernelBodies(target),
+						spk: (set) => {
+							const calculation = spkCalculation(set, naifCode(target))
+							return solarSystemHorizontalModel({ state: calculation.target, magnitude: () => undefined }, observer, deflected, calculation.foundation)
+						},
+						analytical: () => model && solarSystemHorizontalModel(model, observer, deflected),
+					},
+					compute: (horizontalAt) => this.#sampleEvents(target, time, horizontalAt),
+				}).result
 			} catch (error) {
-				if (!(error instanceof SpkCoverageMiss)) throw error
+				if (error instanceof EphemerisUnavailableError) return undefined
+				throw error
 			}
-		}
-
-		if (!events) {
-			if (target.type !== 'catalog' && snapshot?.policy === 'spkOnly') return undefined
-			const horizontalAt = this.#horizontalModel(target, observer)
-			if (!horizontalAt) return undefined
-			events = this.#sampleEvents(target, time, horizontalAt)
 		}
 
 		this.#events.set(cacheKey, events)
 		return events
-	}
-
-	// Position of a solar-system target computed entirely from the kernels, synchronously from snapshot; the miss when they
-	// do not cover a state the calculation needs (the target at its emission epochs, the Earth, the Sun). A kernel that
-	// cannot be read rejects with EphemerisUnavailableError instead of falling back.
-	#spkPosition(snapshot: SpiceKernelSnapshot, target: Exclude<EphemerisTarget, { type: 'catalog' }>, request: PositionRequest): SkyPosition | SpkCoverageMiss {
-		const code = naifCode(target)
-		if (!snapshot.set!.bodies.has(code)) return new SpkCoverageMiss({ ok: false, reason: 'missing', body: code }, code)
-		const calculation = spkCalculation(snapshot, code)
-
-		try {
-			const position = solarSystemPosition({ state: calculation.target, magnitude: magnitudeModel(target) }, makeTime(request.time, request.observer), target.type === 'body' && target.code === '10', calculation.foundation)
-			return { time: request.time, source: 'spk', kernels: calculation.kernels(), ...position }
-		} catch (error) {
-			if (error instanceof SpkCoverageMiss) return error
-			throw new EphemerisUnavailableError(`An SPK kernel could not be read: ${Error.isError(error) ? error.message : String(error)}`, { cause: error })
-		}
 	}
 
 	// Rise, transit, and set nearest time from a horizontal model sampled every 10 minutes over ±12 h.
@@ -907,20 +820,6 @@ export class SkyEphemeris {
 		return findEvents(times, altitudes, hourAngles, threshold, time)
 	}
 
-	// Airless altitude and hour angle model of a target over time for an observer; undefined without a local model.
-	#horizontalModel(target: EphemerisTarget, observer: SkyObserver): ((time: number) => HorizontalSample) | undefined {
-		if (target.type === 'catalog') {
-			return (t) => {
-				const { geometricAltitude, hourAngle } = catalogPlace(target.object, makeTime(t, observer))
-				return { altitude: geometricAltitude!, hourAngle: hourAngle! }
-			}
-		}
-
-		const model = solarSystemModel(target, this.#orbits)
-		if (!model) return undefined
-		return solarSystemHorizontalModel(model, observer, !(target.type === 'body' && target.code === '10'))
-	}
-
 	// Horizons table of a command at 10-minute steps over a 25 h window around `time`, shared by
 	// concurrent requests and cached per command, observer, and hour. Failed tables are not cached.
 	#horizonsTable(command: string, time: number, observer?: SkyObserver): Promise<readonly HorizonsSample[]> {
@@ -936,21 +835,14 @@ export class SkyEphemeris {
 		return promise
 	}
 
-	// Requests and parses one Horizons table in a turn of the JPL queue, recording the outcome in the circuit breaker. A
-	// refusal of the queue is not a failure of Horizons, so it never counts.
+	// Requests and parses one Horizons table in a turn of the JPL queue; the chain records the outcome in the circuit
+	// breaker. An empty answer is a semantic failure.
 	async #fetchTable(command: string, start: number, end: number, observer?: SkyObserver): Promise<readonly HorizonsSample[]> {
 		const site = observer ? geographic(observer) : undefined
 		const options = { stepSize: SAMPLE_STEP_MS / 60_000, stepSizeUnit: 'm', refractionCorrection: false, headers: this.#queue.headers } as const
-
-		try {
-			const rows = await this.#queue.run((signal) => this.#observer(command, site ? 'coord' : 'geo', site ? [site.longitude, site.latitude, site.elevation] : undefined, start, end, HORIZONS_QUANTITIES, options, signal), { timeoutMs: this.#timeoutMs })
-			this.#breaker.recordSuccess()
-			if (rows.length === 0) throw new HorizonsEphemerisError(`Horizons returned no ephemeris for ${command}`)
-			return rows.map((row, i) => parseHorizonsRow(row, start + i * SAMPLE_STEP_MS))
-		} catch (error) {
-			if (!isQueueRefusal(error) && transientReason(error)) this.#breaker.recordFailure()
-			throw error
-		}
+		const rows = await this.#queue.run((signal) => this.#observer(command, site ? 'coord' : 'geo', site ? [site.longitude, site.latitude, site.elevation] : undefined, start, end, HORIZONS_QUANTITIES, options, signal), { timeoutMs: this.#timeoutMs })
+		if (rows.length === 0) throw new HorizonsEphemerisError(`Horizons returned no ephemeris for ${command}`)
+		return rows.map((row, i) => parseHorizonsRow(row, start + i * SAMPLE_STEP_MS))
 	}
 }
 

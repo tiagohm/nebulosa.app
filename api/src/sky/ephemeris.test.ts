@@ -22,14 +22,13 @@ function horizons(row: readonly string[] | undefined) {
 	return { observe, calls }
 }
 
-test('accurate positions come from Horizons', async () => {
+test('accurate positions come from Horizons when no kernel is enabled', async () => {
 	const { observe, calls } = horizons(MARS_ROW)
 	const ephemeris = new SkyEphemeris({ observer: observe })
 	const position = await ephemeris.position({ type: 'body', code: '499' }, { time: TIME, observer })
 
 	expect(calls).toEqual(['499'])
-	expect(position.source).toBe('horizons')
-	expect(position.fallbackReason).toBeUndefined()
+	expect(position).toMatchObject({ source: 'horizons', mode: 'accurate', attempts: [{ source: 'spk', reason: 'noKernel' }] })
 	expect(position.center).toBe('topocentric')
 	expect(toDeg(position.rightAscension)).toBeCloseTo(134.3978, 4)
 	expect(toDeg(position.declinationJ2000)).toBeCloseTo(18.6999, 4)
@@ -46,18 +45,18 @@ test('accurate positions come from Horizons', async () => {
 	expect(calls).toHaveLength(1)
 })
 
-test('local models agree with Horizons', async () => {
+test('the analytical theories agree with Horizons', async () => {
 	const ephemeris = new SkyEphemeris({ observer: horizons(undefined).observe })
 	const position = await ephemeris.position({ type: 'body', code: '499' }, { time: TIME, observer, mode: 'fast' })
 
-	expect(position.source).toBe('local')
+	expect(position).toMatchObject({ source: 'analytical', mode: 'fast', attempts: [{ source: 'spk', reason: 'noKernel' }] })
 	expect(toDeg(position.rightAscension)).toBeCloseTo(134.3978, 2)
 	expect(toDeg(position.declination)).toBeCloseTo(18.5974, 2)
 	expect(toDeg(position.altitude!)).toBeCloseTo(40.867, 1)
 	expect(position.distance).toBeCloseTo(1.5387, 3)
 })
 
-test('fast positions never call Horizons', async () => {
+test('fast positions never call Horizons when a theory exists', async () => {
 	const { observe, calls } = horizons(MARS_ROW)
 	const ephemeris = new SkyEphemeris({ observer: observe })
 	const position = await ephemeris.position({ type: 'body', code: '301' }, { time: TIME, mode: 'fast' })
@@ -67,7 +66,7 @@ test('fast positions never call Horizons', async () => {
 	expect(position.altitude).toBeUndefined()
 })
 
-test('transient Horizons failures fall back to the local model and open the breaker', async () => {
+test('transient Horizons failures fall back to the theories and open the breaker', async () => {
 	let calls = 0
 	const observe = (() => {
 		calls++
@@ -77,22 +76,22 @@ test('transient Horizons failures fall back to the local model and open the brea
 
 	for (let i = 0; i < 3; i++) {
 		const position = await ephemeris.position({ type: 'body', code: '599' }, { time: TIME + i * 3_600_000, observer })
-		expect(position.source).toBe('local')
-		expect(position.fallbackReason).toBe('network')
+		expect(position.source).toBe('analytical')
+		expect(position.attempts?.at(-1)).toEqual({ source: 'horizons', reason: 'network' })
 	}
 
 	const position = await ephemeris.position({ type: 'body', code: '599' }, { time: TIME, observer })
-	expect(position.fallbackReason).toBe('breakerOpen')
+	expect(position.attempts?.at(-1)).toEqual({ source: 'horizons', reason: 'breakerOpen' })
 	expect(calls).toBe(3)
 })
 
-test('Horizons timeouts fall back to the local model', async () => {
+test('Horizons timeouts fall back to the theories', async () => {
 	const observe = (() => new Promise<never>(() => {})) as unknown as HorizonsObserver
 	const ephemeris = new SkyEphemeris({ observer: observe, timeoutMs: 20 })
 	const position = await ephemeris.position({ type: 'body', code: '10' }, { time: TIME, observer })
 
-	expect(position.source).toBe('local')
-	expect(position.fallbackReason).toBe('timeout')
+	expect(position.source).toBe('analytical')
+	expect(position.attempts?.at(-1)).toEqual({ source: 'horizons', reason: 'timeout' })
 	expect(position.magnitude).toBe(-26.74)
 })
 
@@ -105,8 +104,8 @@ test('a refusal of the JPL queue falls back without counting against Horizons', 
 
 	for (let i = 0; i < 4; i++) {
 		const position = await ephemeris.position({ type: 'body', code: '599' }, { time: TIME + i * 3_600_000, observer })
-		expect(position.source).toBe('local')
-		expect(position.fallbackReason).toBe('timeout')
+		expect(position.source).toBe('analytical')
+		expect(position.attempts?.at(-1)).toEqual({ source: 'horizons', reason: 'timeout' })
 	}
 
 	now += 60_000
@@ -146,24 +145,44 @@ test('minor bodies without elements need Horizons', async () => {
 	expect(ephemeris.events({ type: 'minorBody', spkId: '20000001' }, TIME, observer, 'minor:20000001')).toBeUndefined()
 })
 
+test('offline, Horizons is never asked: an accurate position comes from the theories, and a body without one is unavailable', async () => {
+	const { observe, calls } = horizons(MARS_ROW)
+	const kernels = { current: () => ({ generation: 0, offline: true, loading: false, readiness: new Map() }) }
+	const ephemeris = new SkyEphemeris({ observer: observe, kernels })
+	const position = await ephemeris.position({ type: 'body', code: '499' }, { time: TIME, observer })
+
+	expect(position).toMatchObject({
+		source: 'analytical',
+		mode: 'accurate',
+		attempts: [
+			{ source: 'spk', reason: 'noKernel' },
+			{ source: 'horizons', reason: 'offline' },
+		],
+	})
+	const error = await ephemeris.position({ type: 'minorBody', spkId: '20000001' }, { time: TIME, observer }).catch((e: unknown) => e)
+	expect(error).toBeInstanceOf(EphemerisUnavailableError)
+	expect(error).toMatchObject({ code: 'offline' })
+	expect(calls).toEqual([])
+})
+
 test('minor bodies with elements have a local model', async () => {
 	// Ceres, SBDB solution of epoch JD 2461200.5.
 	const elements = { epoch: 2461200.5, ec: 0.0795, tpqr: { a: 2.7656, ma: deg(268.9) }, i: deg(10.588), om: deg(80.25), w: deg(73.3), h: 3.34, g: 0.12 }
 	const ephemeris = new SkyEphemeris({ observer: horizons(undefined).observe })
 	const position = await ephemeris.position({ type: 'minorBody', spkId: '20000001', elements }, { time: TIME, observer, mode: 'fast' })
 
-	expect(position.source).toBe('local')
+	expect(position.source).toBe('analytical')
 	expect(position.distance).toBeGreaterThan(1)
 	expect(position.magnitude).toBeGreaterThan(6)
 	expect(position.magnitude).toBeLessThan(10)
 })
 
-test('catalog positions are local', async () => {
+test('catalog positions come from their astrometry', async () => {
 	const ephemeris = new SkyEphemeris({ observer: horizons(MARS_ROW).observe })
 	const sirius = { rightAscension: 1.7677953696021995, declination: -0.291751258517685, pmRA: -0.0000027639303691821937, pmDEC: -0.000005929659164, magnitude: -1.44 }
 	const position = await ephemeris.position({ type: 'catalog', object: sirius }, { time: TIME, observer })
 
-	expect(position.source).toBe('local')
+	expect(position.source).toBe('catalog')
 	expect(toDeg(position.rightAscension)).toBeCloseTo(101.586, 2)
 	expect(toDeg(position.altitude!)).toBeCloseTo(34.75, 1)
 	expect(position.constellation).toBe('CMA')

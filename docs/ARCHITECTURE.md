@@ -140,6 +140,7 @@ Every contract and reference below is a document of its own under `docs/architec
 - [Meteor Showers Contract](architecture/meteor-showers.md)
 - [Artificial Satellites Contract](architecture/artificial-satellites.md)
 - [SPICE Kernel Library Contract](architecture/spice-kernel-library.md)
+- [Ephemeris Chain Contract](architecture/ephemeris-chain.md)
 - [Orbital Mechanics Explorer Contract](architecture/orbital-mechanics-explorer.md)
 - [External Tools Contract](architecture/external-tools.md)
 - [Observatory Cameras Contract](architecture/observatory-cameras.md)

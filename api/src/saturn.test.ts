@@ -8,7 +8,6 @@ import { createSaturnRoutes, type SaturnEvents, SaturnPlannerService } from './s
 import type { SaturnElongations, SaturnKernels, SaturnMoonsState, SaturnRingState, SaturnRingTimeline, SaturnSourceReport, SaturnTrack } from './saturn.astronomy'
 import { spkFixture, type SpkFixtureSegment } from './spicekernels.fixture'
 import { SpiceKernelRuntime, type SpiceKernelSnapshot } from './spicekernels.runtime'
-import type { SpiceEphemerisPolicy } from './spicekernels.store'
 
 const DAY = 86_400_000
 const NOV_1 = Date.UTC(2026, 10, 1)
@@ -39,13 +38,13 @@ afterEach(() => {
 	for (const runtime of runtimes.splice(0)) runtime[Symbol.dispose]()
 })
 
-// A snapshot of no kernel under a policy.
-function noKernels(policy: SpiceEphemerisPolicy = 'automatic'): SaturnKernels {
-	return { current: (): SpiceKernelSnapshot => ({ generation: 0, policy, loading: false, readiness: new Map() }) }
+// A snapshot of no kernel, online unless offline.
+function noKernels(offline = false): SaturnKernels {
+	return { current: (): SpiceKernelSnapshot => ({ generation: 0, offline, loading: false, readiness: new Map() }) }
 }
 
-// A runtime of fixture kernels under a policy.
-async function runtimeOf(policy: SpiceEphemerisPolicy, ...kernels: (readonly SpkFixtureSegment[])[]) {
+// A runtime of fixture kernels, online unless offline.
+async function runtimeOf(offline: boolean, ...kernels: (readonly SpkFixtureSegment[])[]) {
 	const runtime = new SpiceKernelRuntime()
 	runtimes.push(runtime)
 	const entries = kernels.map((kernel) => {
@@ -54,7 +53,7 @@ async function runtimeOf(policy: SpiceEphemerisPolicy, ...kernels: (readonly Spk
 		writeFileSync(path, spkFixture(kernel))
 		return { id, path }
 	})
-	expect((await runtime.rebuild(entries, policy)).size).toBe(0)
+	expect((await runtime.rebuild(entries, offline)).size).toBe(0)
 	return { runtime, ids: entries.map((e) => e.id) }
 }
 
@@ -111,7 +110,7 @@ describe('state', () => {
 		const state = (await response.json()) as SaturnMoonsState
 
 		expect(state.moons.map((m) => m.moon)).toEqual(['mimas', 'enceladus', 'tethys', 'dione', 'rhea', 'titan', 'iapetus'])
-		expect(state.signature).toMatchObject({ modelVersion: 1, ringModelVersion: 1, scope: 'moons', source: { kind: 'analytical', planetary: 'VSOP87E', satellites: 'TASS1.7', fallbackReason: 'noKernel' }, policy: 'automatic', generation: 0 })
+		expect(state.signature).toMatchObject({ modelVersion: 1, ringModelVersion: 1, scope: 'moons', source: { kind: 'analytical', planetary: 'VSOP87E', satellites: 'TASS1.7', fallbackReason: 'noKernel' }, offline: false, generation: 0 })
 		expect(state.rings.earthOpening / (Math.PI / 180)).toBeCloseTo(-6.58, 1)
 		expect(state.rings.illumination).toBe('sameFace')
 		expect(state.model.annuli.map((a) => a.name)).toEqual(['C', 'B', 'cassini', 'A'])
@@ -122,22 +121,18 @@ describe('state', () => {
 		expect(numbers(state).every(Number.isFinite)).toBeTrue()
 	})
 
-	test('gives the rings from a ring-only kernel under spkOnly and refuses the moons', async () => {
-		const { runtime, ids } = await runtimeOf('spkOnly', RING_KERNEL)
+	test('gives the rings from a ring-only kernel', async () => {
+		const { runtime, ids } = await runtimeOf(true, RING_KERNEL)
 		const { routes } = setup(runtime)
 
 		const rings = (await (await routes['/api/saturn/rings/state'].POST(post({ time: NOV_1 }))).json()) as SaturnRingState
-		expect(rings.signature).toMatchObject({ scope: 'rings', source: { kind: 'spk', kernels: { saturn: [ids[0]] } }, policy: 'spkOnly' })
+		expect(rings.signature).toMatchObject({ scope: 'rings', source: { kind: 'spk', kernels: { saturn: [ids[0]] } }, offline: true })
 		// Saturn is north of the Earth's orbit plane, so the Earth sees the rings at a finite opening.
 		expect(Number.isFinite(rings.rings.earthOpening)).toBeTrue()
-
-		const refused = await routes['/api/saturn/moons/state'].POST(post({ time: NOV_1 }))
-		expect(refused.status).toBe(503)
-		expect(await refused.json()).toMatchObject({ code: 'missingDependency', reason: 'targetMissing', miss: { target: 'mimas', body: 601 } })
 	})
 
-	test('falls back to the theories for the moons only, under automatic', async () => {
-		const { runtime } = await runtimeOf('automatic', RING_KERNEL)
+	test('falls back to the theories for the moons only', async () => {
+		const { runtime } = await runtimeOf(false, RING_KERNEL)
 		const { routes } = setup(runtime)
 		const rings = (await (await routes['/api/saturn/rings/state'].POST(post({ time: NOV_1 }))).json()) as SaturnRingState
 		const moons = (await (await routes['/api/saturn/moons/state'].POST(post({ time: NOV_1 }))).json()) as SaturnMoonsState
@@ -146,7 +141,7 @@ describe('state', () => {
 	})
 
 	test('uses a complete satellite kernel for the moons', async () => {
-		const { runtime } = await runtimeOf('spkOnly', RING_KERNEL, MOON_KERNEL)
+		const { runtime } = await runtimeOf(false, RING_KERNEL, MOON_KERNEL)
 		const { routes } = setup(runtime)
 		const moons = (await (await routes['/api/saturn/moons/state'].POST(post({ time: NOV_1 }))).json()) as SaturnMoonsState
 		expect(moons.signature.source.kind).toBe('spk')
@@ -189,12 +184,12 @@ describe('ring timeline', () => {
 	})
 
 	test('restarts on a generation change and answers 503 when it keeps changing', async () => {
-		const { runtime } = await runtimeOf('automatic', RING_KERNEL)
+		const { runtime } = await runtimeOf(false, RING_KERNEL)
 		let generation = 0
 		const changing: SaturnKernels = { current: () => ({ ...runtime.current(), generation: generation++ }) }
 		const response = await setup(changing).routes['/api/saturn/rings/timeline'].POST(post({ start: Date.UTC(2024, 0, 1), end: Date.UTC(2027, 0, 1) }))
 		expect(response.status).toBe(503)
-		expect(await response.json()).toMatchObject({ code: 'generationChanged', reason: 'generationChanged' })
+		expect(await response.json()).toMatchObject({ code: 'generationChanged' })
 	})
 
 	test('stops an aborted request without an answer', async () => {
@@ -237,15 +232,15 @@ describe('moons', () => {
 
 describe('sources', () => {
 	test('reports the rings and the moons separately', async () => {
-		const { runtime } = await runtimeOf('spkOnly', RING_KERNEL)
+		const { runtime } = await runtimeOf(true, RING_KERNEL)
 		const report = (await (await setup(runtime).routes['/api/saturn/source'].POST(post({ start: Date.UTC(2020, 0, 1), end: Date.UTC(2049, 0, 1) }))).json()) as SaturnSourceReport
-		expect(report.rings).toMatchObject({ readiness: 'ready', source: 'spk', policy: 'spkOnly' })
+		expect(report.rings).toMatchObject({ readiness: 'ready', source: 'spk', offline: true })
 		expect(report.rings.probes).toBeLessThanOrEqual(2000)
-		expect(report.moons).toMatchObject({ readiness: 'missingDependencies', source: 'unavailable', reason: 'targetMissing', miss: { target: 'mimas' } })
+		expect(report.moons).toMatchObject({ readiness: 'missingDependencies', source: 'analytical', reason: 'targetMissing', miss: { target: 'mimas' } })
 	})
 
 	test('reports partial coverage beyond the kernels', async () => {
-		const { runtime } = await runtimeOf('automatic', RING_KERNEL, MOON_KERNEL)
+		const { runtime } = await runtimeOf(false, RING_KERNEL, MOON_KERNEL)
 		const report = (await (await setup(runtime).routes['/api/saturn/source'].POST(post({ start: Date.UTC(2049, 0, 1), end: Date.UTC(2051, 0, 1) }))).json()) as SaturnSourceReport
 		expect(report.rings).toMatchObject({ readiness: 'partialCoverage', source: 'analytical', reason: 'outOfCoverage' })
 	})
@@ -293,12 +288,5 @@ describe('events', () => {
 		expect(first.events.every((e) => e.moons.includes('tethys') && (e.kind === 'satelliteTransit' || e.kind === 'satelliteOccultation'))).toBeTrue()
 		const again = await setup().service.events({ start, end, kinds: ['satelliteTransit', 'satelliteOccultation'], moons: ['tethys'] })
 		expect(again.events.map((e) => e.id)).toEqual(first.events.map((e) => e.id))
-	})
-
-	test('are refused under spkOnly without a satellite kernel', async () => {
-		const { runtime } = await runtimeOf('spkOnly', RING_KERNEL)
-		const response = await setup(runtime).routes['/api/saturn/moons/events'].POST(post({ start, end }))
-		expect(response.status).toBe(503)
-		expect(await response.json()).toMatchObject({ code: 'missingDependency' })
 	})
 })

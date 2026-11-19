@@ -11,7 +11,6 @@ import { JupiterGrsStore } from './jupiter.store'
 import type { PlanningSite } from './observingplanner.astronomy'
 import { spkFixture, type SpkFixtureSegment } from './spicekernels.fixture'
 import { SpiceKernelRuntime, type SpiceKernelSnapshot } from './spicekernels.runtime'
-import type { SpiceEphemerisPolicy } from './spicekernels.store'
 
 const SAO_PAULO: PlanningSite = { name: 'São Paulo', latitude: -23.55, longitude: -46.633, elevation: 760, timeZone: 'America/Sao_Paulo' }
 const NEW_YORK: PlanningSite = { name: 'New York', latitude: 40.7128, longitude: -74.006, elevation: 10, timeZone: 'America/New_York' }
@@ -45,13 +44,13 @@ afterEach(() => {
 	for (const runtime of runtimes.splice(0)) runtime[Symbol.dispose]()
 })
 
-// A snapshot of no kernel under a policy.
-function noKernels(policy: SpiceEphemerisPolicy = 'automatic'): JupiterKernels {
-	return { current: (): SpiceKernelSnapshot => ({ generation: 0, policy, loading: false, readiness: new Map() }) }
+// A snapshot of no kernel, online unless offline.
+function noKernels(offline = false): JupiterKernels {
+	return { current: (): SpiceKernelSnapshot => ({ generation: 0, offline, loading: false, readiness: new Map() }) }
 }
 
-// A runtime of fixture kernels under a policy.
-async function runtimeOf(policy: SpiceEphemerisPolicy, ...kernels: (readonly SpkFixtureSegment[])[]) {
+// A runtime of fixture kernels, online unless offline.
+async function runtimeOf(offline: boolean, ...kernels: (readonly SpkFixtureSegment[])[]) {
 	const runtime = new SpiceKernelRuntime()
 	runtimes.push(runtime)
 	const entries = kernels.map((kernel) => {
@@ -60,7 +59,7 @@ async function runtimeOf(policy: SpiceEphemerisPolicy, ...kernels: (readonly Spk
 		writeFileSync(path, spkFixture(kernel))
 		return { id, path }
 	})
-	expect((await runtime.rebuild(entries, policy)).size).toBe(0)
+	expect((await runtime.rebuild(entries, offline)).size).toBe(0)
 	return { runtime, ids: entries.map((e) => e.id) }
 }
 
@@ -162,13 +161,6 @@ describe('state', () => {
 		expect(state.grs).toBeDefined()
 		expect(state.grs!.longitude).toBeCloseTo(50 * DEG2RAD, 9)
 		expect(state.signature.grsRevision).toBe(1)
-	})
-
-	test('spkOnly without kernels answers 503 missingDependency', async () => {
-		const { routes } = setup(noKernels('spkOnly'))
-		const response = await routes['/api/jupiter/state'].POST(post({ time: DEC_1 }))
-		expect(response.status).toBe(503)
-		expect(await response.json()).toMatchObject({ code: 'missingDependency', reason: 'noKernel' })
 	})
 })
 
@@ -290,7 +282,7 @@ describe('events', () => {
 
 describe('sources', () => {
 	test('a complete kernel set is the source, with the kernels of each body', async () => {
-		const { runtime, ids } = await runtimeOf('automatic', jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY))
+		const { runtime, ids } = await runtimeOf(false, jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY))
 		const { service } = setup(runtime)
 		const answer = await service.events({ start: DEC_1, end: DEC_1 + DAY })
 		expect(answer.signature.source).toEqual({ kind: 'spk', kernels: { sun: ids, earth: ids, jupiter: ids, io: ids, europa: ids, ganymede: ids, callisto: ids } })
@@ -300,7 +292,7 @@ describe('sources', () => {
 	})
 
 	test('a gap in the middle of a scan reruns it whole from the theories', async () => {
-		const { runtime } = await runtimeOf('automatic', jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY, DEC_1 + 12 * HOUR))
+		const { runtime } = await runtimeOf(false, jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY, DEC_1 + 12 * HOUR))
 		const { service } = setup(runtime)
 		const answer = await service.events({ start: DEC_1, end: DEC_1 + DAY })
 		expect(answer.signature.source).toMatchObject({ kind: 'analytical', fallbackReason: 'outOfCoverage', miss: { target: 'callisto', body: 504 } })
@@ -308,24 +300,16 @@ describe('sources', () => {
 		expect(of(answer.events, 'satelliteTransit', 'io').length).toBeGreaterThan(0)
 	})
 
-	test('spkOnly refuses a scan the kernels cannot cover', async () => {
-		const { runtime } = await runtimeOf('spkOnly', jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY, DEC_1 + 12 * HOUR))
-		const { routes } = setup(runtime)
-		const response = await routes['/api/jupiter/events'].POST(post({ start: DEC_1, end: DEC_1 + DAY }))
-		expect(response.status).toBe(503)
-		expect(await response.json()).toMatchObject({ code: 'coverageUnavailable', reason: 'outOfCoverage', miss: { target: 'callisto' } })
-	})
-
 	test('a planetary kernel alone is not a Jovian source', async () => {
 		const planetary = jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY).filter((e) => e.target < 100 || e.target === 399)
-		const { runtime } = await runtimeOf('automatic', planetary)
+		const { runtime } = await runtimeOf(false, planetary)
 		const { service } = setup(runtime)
 		const state = await service.state({ time: DEC_1 })
 		expect(state.signature.source).toMatchObject({ kind: 'analytical', fallbackReason: 'targetMissing', miss: { target: 'jupiter', body: 599 } })
 	})
 
 	test('a kernel generation change during a scan restarts it on the new snapshot', async () => {
-		const { runtime } = await runtimeOf('automatic', jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY))
+		const { runtime } = await runtimeOf(false, jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY))
 		const snapshot = runtime.current()
 		let reads = 0
 		// The second read, after the first chunk, sees a new generation once.
@@ -337,7 +321,7 @@ describe('sources', () => {
 	})
 
 	test('a kernel set that keeps changing ends with 503 generationChanged', async () => {
-		const { runtime } = await runtimeOf('automatic', jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY))
+		const { runtime } = await runtimeOf(false, jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY))
 		const snapshot = runtime.current()
 		let generation = snapshot.generation
 		const kernels: JupiterKernels = { current: () => ({ ...snapshot, generation: generation++ }) }
@@ -350,13 +334,13 @@ describe('sources', () => {
 	test('the readiness probes explain what the kernels lack', async () => {
 		expect(setup().service.source({ start: DEC_1, end: DEC_1 + DAY })).toMatchObject({ readiness: 'missingDependencies', source: 'analytical', reason: 'noKernel' })
 
-		const { runtime } = await runtimeOf('spkOnly', jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY, DEC_1 + 12 * HOUR))
+		const { runtime } = await runtimeOf(false, jovianKernel(DEC_1 - 10 * DAY, DEC_1 + 10 * DAY, DEC_1 + 12 * HOUR))
 		const { routes } = setup(runtime)
 		const covered = (await (await routes['/api/jupiter/source'].POST(post({ start: DEC_1 - DAY, end: DEC_1 }))).json()) as JupiterSourceReport
 		expect(covered).toMatchObject({ readiness: 'readyForJupiter', source: 'spk', probes: 5 })
 
 		const report = (await (await routes['/api/jupiter/source'].POST(post({ start: DEC_1, end: DEC_1 + DAY }))).json()) as JupiterSourceReport
-		expect(report).toMatchObject({ readiness: 'partialCoverage', source: 'unavailable', reason: 'outOfCoverage', miss: { target: 'callisto' } })
+		expect(report).toMatchObject({ readiness: 'partialCoverage', source: 'analytical', reason: 'outOfCoverage', miss: { target: 'callisto' } })
 	})
 })
 

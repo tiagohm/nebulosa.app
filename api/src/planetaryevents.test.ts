@@ -8,7 +8,6 @@ import type { PlanetaryEvent, PlanetaryEventBody, PlanetaryEventKind, PlanetaryE
 import type { PlanetaryEventsVisibility } from './planetaryevents.visibility'
 import { spkFixture, type SpkFixtureSegment } from './spicekernels.fixture'
 import { SpiceKernelRuntime, type SpiceKernelSnapshot } from './spicekernels.runtime'
-import type { SpiceEphemerisPolicy } from './spicekernels.store'
 
 const DAY = 86_400_000
 const DEG = Math.PI / 180
@@ -40,13 +39,13 @@ afterEach(() => {
 	for (const runtime of runtimes.splice(0)) runtime[Symbol.dispose]()
 })
 
-// A snapshot of no kernel under a policy.
-function noKernels(policy: SpiceEphemerisPolicy = 'automatic'): PlanetaryEventsKernels {
-	return { current: (): SpiceKernelSnapshot => ({ generation: 0, policy, loading: false, readiness: new Map() }) }
+// A snapshot of no kernel, online unless offline.
+function noKernels(offline = false): PlanetaryEventsKernels {
+	return { current: (): SpiceKernelSnapshot => ({ generation: 0, offline, loading: false, readiness: new Map() }) }
 }
 
-// A runtime of fixture kernels under a policy.
-async function runtimeOf(policy: SpiceEphemerisPolicy, ...kernels: (readonly SpkFixtureSegment[])[]) {
+// A runtime of fixture kernels, online unless offline.
+async function runtimeOf(offline: boolean, ...kernels: (readonly SpkFixtureSegment[])[]) {
 	const runtime = new SpiceKernelRuntime()
 	runtimes.push(runtime)
 	const entries = kernels.map((kernel) => {
@@ -55,7 +54,7 @@ async function runtimeOf(policy: SpiceEphemerisPolicy, ...kernels: (readonly Spk
 		writeFileSync(path, spkFixture(kernel))
 		return { id, path }
 	})
-	expect((await runtime.rebuild(entries, policy)).size).toBe(0)
+	expect((await runtime.rebuild(entries, offline)).size).toBe(0)
 	return runtime
 }
 
@@ -108,7 +107,7 @@ const year = outer.service.search(request(['499', '599', '699']))
 describe('search', () => {
 	test('finds the 2027 oppositions and their closest approaches from VSOP87E', async () => {
 		const { events, signature } = await year
-		expect(signature).toMatchObject({ modelVersion: 1, convention: { position: 'geocentricApparent', longitudeFrame: 'trueEclipticOfDate', distance: 'geometricCenterToCenter' }, source: { kind: 'analytical', planetary: 'VSOP87E', fallbackReason: 'noKernel' }, policy: 'automatic', generation: 0 })
+		expect(signature).toMatchObject({ modelVersion: 1, convention: { position: 'geocentricApparent', longitudeFrame: 'trueEclipticOfDate', distance: 'geometricCenterToCenter' }, source: { kind: 'analytical', planetary: 'VSOP87E', fallbackReason: 'noKernel' }, offline: false, generation: 0 })
 		expect(signature.origins).toBeUndefined()
 		// Published oppositions (IMCCE): Jupiter 2027-02-11, Mars 2027-02-19, Saturn 2027-10-18.
 		for (const [code, date] of [
@@ -197,24 +196,23 @@ describe('search', () => {
 describe('source', () => {
 	test('uses a planet barycentre when the kernels lack its centre, and the centre when present', async () => {
 		const range = request(['499'], NOV_8, NOV_8 + 10 * DAY, ['station'])
-		const barycentre = await setup(await runtimeOf('automatic', BARYCENTRE_KERNEL)).service.search(range)
+		const barycentre = await setup(await runtimeOf(false, BARYCENTRE_KERNEL)).service.search(range)
 		expect(barycentre.signature.source.kind).toBe('spk')
 		expect(barycentre.signature.origins).toEqual({ '499': 'barycentre' })
-		const centre = await setup(await runtimeOf('automatic', BARYCENTRE_KERNEL, MARS_CENTRE_KERNEL)).service.search(range)
+		const centre = await setup(await runtimeOf(false, BARYCENTRE_KERNEL, MARS_CENTRE_KERNEL)).service.search(range)
 		expect(centre.signature.origins).toEqual({ '499': 'centre' })
 	})
 
-	test('falls back whole under automatic and answers 503 under spkOnly when a planet is missing', async () => {
+	test('falls back whole to the theories when a planet is missing, even offline', async () => {
 		const range = request(['499', '599'], NOV_8, NOV_8 + 10 * DAY, ['station'])
-		const fallback = await setup(await runtimeOf('automatic', BARYCENTRE_KERNEL)).service.search(range)
+		const fallback = await setup(await runtimeOf(false, BARYCENTRE_KERNEL)).service.search(range)
 		expect(fallback.signature.source).toMatchObject({ kind: 'analytical', fallbackReason: 'targetMissing', miss: { target: 'jupiter', body: 5 } })
-		const response = await setup(await runtimeOf('spkOnly', BARYCENTRE_KERNEL)).routes['/api/planetary-events/search'].POST(post(range))
-		expect(response.status).toBe(503)
-		expect(await response.json()).toMatchObject({ code: 'missingDependency', reason: 'targetMissing' })
+		const offline = await setup(await runtimeOf(true, BARYCENTRE_KERNEL)).service.search(range)
+		expect(offline.signature).toMatchObject({ source: { kind: 'analytical', fallbackReason: 'targetMissing' }, offline: true })
 	})
 
 	test('answers 503 when the kernel generation keeps changing', async () => {
-		const runtime = await runtimeOf('automatic', BARYCENTRE_KERNEL)
+		const runtime = await runtimeOf(false, BARYCENTRE_KERNEL)
 		let generation = 0
 		const changing: PlanetaryEventsKernels = { current: () => ({ ...runtime.current(), generation: generation++ }) }
 		const response = await setup(changing).routes['/api/planetary-events/search'].POST(post(request(['499'], NOV_8, NOV_8 + 120 * DAY, ['station'])))

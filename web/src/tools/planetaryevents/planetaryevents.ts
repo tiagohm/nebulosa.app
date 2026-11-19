@@ -1,7 +1,7 @@
 import type { PlanetaryEvent, PlanetaryEventBody, PlanetaryEventKind, PlanetaryEventSeries, PlanetaryEventSeriesRequest, PlanetaryEventsSearch, PlanetaryEventsSearchRequest, PlanetaryEventsVisibility, PlanetaryEventsVisibilityRequest, PlanetaryEventVisibility, PlanetaryVisibilityStatus } from 'api'
 import { proxy } from 'valtio'
 import { formatDate } from '../../format'
-import { aborted, ApiResponseError, fetchJson, jsonInit } from '../../http'
+import { aborted, fetchJson, jsonInit } from '../../http'
 import type { SiteLocation } from '../../location/site'
 import { wallTimeToInstant, zonedWallTime } from '../../location/zone'
 import { type SkyClock, setSkyTime, skyClock, skyTime } from '../../sky/clock'
@@ -91,8 +91,6 @@ export interface PlanetaryEventsState {
 	searchLoading: boolean
 	// Why the events could not be computed.
 	searchError?: string
-	// Whether the error of the events is the kernels' refusal under spkOnly.
-	kernelsRefused: boolean
 	// Visibility of the events from the tool's location.
 	visibility?: SiteVisibility
 	// Whether the visibility is being computed.
@@ -117,7 +115,6 @@ export function createPlanetaryEventsState(): PlanetaryEventsState {
 		view: 'timeline',
 		visibilityFilter: 'all',
 		searchLoading: false,
-		kernelsRefused: false,
 		visibilityLoading: false,
 		seriesLoading: false,
 	}
@@ -168,7 +165,6 @@ export async function loadSearch(state: PlanetaryEventsState, io: PlannerIo = br
 		if (!request.current()) return
 		state.search = answer
 		state.searchError = undefined
-		state.kernelsRefused = false
 		state.visibility = undefined
 		state.visibilityLoading = false
 		if (state.selected && !answer.events.some((e) => e.id === state.selected)) state.selected = undefined
@@ -177,7 +173,6 @@ export async function loadSearch(state: PlanetaryEventsState, io: PlannerIo = br
 		state.search = undefined
 		state.visibility = undefined
 		state.searchError = errorMessage(error)
-		state.kernelsRefused = error instanceof ApiResponseError && error.status === 503
 	} finally {
 		if (request.current()) state.searchLoading = false
 	}

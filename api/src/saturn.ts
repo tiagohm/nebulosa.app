@@ -1,6 +1,7 @@
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
+import { ephemerisUnavailableResponse, EphemerisUnavailableError } from './ephemeris.chain'
 import { LruCache } from './lrucache'
-import { type PlanetarySourceErrorCode, unavailableResponse } from './planetary.source'
+import type { PlanetarySourceErrorCode } from './planetary.source'
 import { SiteNightCache } from './planetary.visibility'
 import {
 	computeElongations,
@@ -22,7 +23,6 @@ import {
 	saturnSignature,
 	type SaturnSourceReport,
 	type SaturnSourceRequest,
-	SaturnSourceUnavailableError,
 	type SaturnStateRequest,
 	type SaturnTrack,
 	type SaturnTrackRequest,
@@ -35,17 +35,16 @@ import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 // seasons over a range) and of its seven major moons (the view at an instant, their tracks, their greatest separations,
 // and their phenomena with their visibility from a site). Each answer is computed on request from one ephemeris source of its scope (see saturn.astronomy.ts), so
 // a rings answer survives a missing satellite kernel, and kept in bounded in-memory caches whose keys hold every input
-// that changes it, including the kernel generation and the ephemeris policy. Nothing is stored; nothing here moves a
+// that changes it, including the kernel generation and the offline switch. Nothing is stored; nothing here moves a
 // device, changes the Sky clock or a site, starts an operation, or asks a remote service.
 
-// Stable codes of the planner's error responses: 503 when the spkOnly policy finds the kernels unable to give a
-// computation of a scope (coverageUnavailable, missingDependency, unsupportedKernel) or the kernel set kept changing
-// during one (generationChanged).
+// Stable codes of the planner's error responses: 503 when the kernel set kept changing during a computation of a scope
+// (generationChanged).
 export type SaturnErrorCode = PlanetarySourceErrorCode
 
 // Dependencies of the planner.
 export interface SaturnPlannerOptions {
-	// Kernels of the SPICE Kernel Library and its ephemeris policy.
+	// Kernels of the SPICE Kernel Library and the offline switch.
 	readonly kernels: SaturnKernels
 	// Night of a site containing an instant (Astro Weather's local night).
 	readonly night: (request: AstroWeatherNightRequest) => AstroWeatherNight
@@ -159,7 +158,7 @@ export class SaturnPlannerService {
 
 // Cache key of a range answer: what it is, the model versions, the range, and the kernel identity.
 function rangeKey(kind: string, { start, end }: { readonly start: number; readonly end: number }, snapshot: SpiceKernelSnapshot) {
-	return JSON.stringify([kind, SATURN_MODEL_VERSION, SATURN_RING_DRAWING.version, start, end, snapshot.policy, snapshot.generation])
+	return JSON.stringify([kind, SATURN_MODEL_VERSION, SATURN_RING_DRAWING.version, start, end, snapshot.offline, snapshot.generation])
 }
 
 // Answers a computation, turning an unavailable kernel source into 503 with its reason and the state it lacked.
@@ -167,13 +166,13 @@ async function answer(compute: () => Promise<unknown>): Promise<Response> {
 	try {
 		return Response.json(await compute())
 	} catch (error) {
-		if (!(error instanceof SaturnSourceUnavailableError)) throw error
-		return unavailableResponse(error)
+		if (!(error instanceof EphemerisUnavailableError)) throw error
+		return ephemerisUnavailableResponse(error)
 	}
 }
 
 // Routes of the Saturn Observing Planner. A request that left stops between chunks and is not answered; a computation
-// of a scope answers 503 under spkOnly when the kernels cannot give it, without affecting the other scope.
+// of a scope answers 503 generationChanged when the kernels kept changing during it, without affecting the other scope.
 export function createSaturnRoutes(service: SaturnPlannerService) {
 	return {
 		'/api/saturn/rings/state': {

@@ -1,37 +1,24 @@
+import { ephemerisUnavailableResponse, EphemerisUnavailableError } from './ephemeris.chain'
 import { LruCache } from './lrucache'
-import { type PlanetarySourceErrorCode, unavailableResponse } from './planetary.source'
-import {
-	computeSeries,
-	PLANETARY_EVENTS_MODEL_VERSION,
-	type PlanetaryEvent,
-	type PlanetaryEventSeries,
-	type PlanetaryEventSeriesRequest,
-	type PlanetaryEventsKernels,
-	type PlanetaryEventsSearchRequest,
-	type PlanetaryEventsSignature,
-	planetaryEventsSignature,
-	PlanetaryEventsSourceUnavailableError,
-	searchPlanetaryEvents,
-} from './planetaryevents.astronomy'
+import type { PlanetarySourceErrorCode } from './planetary.source'
+import { computeSeries, PLANETARY_EVENTS_MODEL_VERSION, type PlanetaryEvent, type PlanetaryEventSeries, type PlanetaryEventSeriesRequest, type PlanetaryEventsKernels, type PlanetaryEventsSearchRequest, type PlanetaryEventsSignature, planetaryEventsSignature, searchPlanetaryEvents } from './planetaryevents.astronomy'
 import { computeVisibility, type PlanetaryEventsVisibility, type PlanetaryEventsVisibilityRequest, type PlanetaryEventVisibility, type PlanetaryVisibilityEvent } from './planetaryevents.visibility'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 
 // Planetary Events service: a read-only almanac of the geocentric phenomena of Mercury to Neptune over a range (see
 // planetaryevents.astronomy.ts), the visibility of a batch of them from a site (planetaryevents.visibility.ts), and the
 // sampled curves of one for a chart. Answers are computed on request and kept in bounded in-memory caches whose keys hold
-// every input that changes them: the search and the curves by the kernel generation and the ephemeris policy, never by a
+// every input that changes them: the search and the curves by the kernel generation and the offline switch, never by a
 // site; the visibility by the event and the site's place, never by a time zone, which only formats. Nothing is stored,
 // no event is published, and nothing here moves a device, changes the Sky clock or a site, starts an operation, or asks a
 // remote service.
 
-// Stable codes of the error responses: 503 when the spkOnly policy finds the kernels unable to give a computation
-// (coverageUnavailable, missingDependency, unsupportedKernel) or the kernel set kept changing during one
-// (generationChanged).
+// Stable codes of the error responses: 503 when the kernel set kept changing during a computation (generationChanged).
 export type PlanetaryEventsErrorCode = PlanetarySourceErrorCode
 
 // Dependencies of the service.
 export interface PlanetaryEventsOptions {
-	// Kernels of the SPICE Kernel Library and its ephemeris policy.
+	// Kernels of the SPICE Kernel Library and the offline switch.
 	readonly kernels: PlanetaryEventsKernels
 }
 
@@ -67,7 +54,7 @@ export class PlanetaryEventsService {
 	async search(request: PlanetaryEventsSearchRequest, signal?: AbortSignal): Promise<PlanetaryEventsSearch> {
 		const key = (snapshot: SpiceKernelSnapshot) => {
 			const { start, end, bodies, kinds, appulseThreshold } = request
-			return JSON.stringify(['search', PLANETARY_EVENTS_MODEL_VERSION, start, end, [...bodies].sort(), [...kinds].sort(), appulseThreshold, snapshot.policy, snapshot.generation])
+			return JSON.stringify(['search', PLANETARY_EVENTS_MODEL_VERSION, start, end, [...bodies].sort(), [...kinds].sort(), appulseThreshold, snapshot.offline, snapshot.generation])
 		}
 		const cached = this.#searches.get(key(this.options.kernels.current()))
 		if (cached) return cached
@@ -90,7 +77,7 @@ export class PlanetaryEventsService {
 
 	// The sampled curves of one event, cached by the event and the kernel identity.
 	async series(request: PlanetaryEventSeriesRequest, signal?: AbortSignal): Promise<PlanetaryEventSeries> {
-		const key = (snapshot: SpiceKernelSnapshot) => JSON.stringify(['series', PLANETARY_EVENTS_MODEL_VERSION, request.kind, request.bodies, request.time, snapshot.policy, snapshot.generation])
+		const key = (snapshot: SpiceKernelSnapshot) => JSON.stringify(['series', PLANETARY_EVENTS_MODEL_VERSION, request.kind, request.bodies, request.time, snapshot.offline, snapshot.generation])
 		const cached = this.#series.get(key(this.options.kernels.current()))
 		if (cached) return cached
 
@@ -106,8 +93,8 @@ async function answer(compute: () => Promise<unknown>): Promise<Response> {
 	try {
 		return Response.json(await compute())
 	} catch (error) {
-		if (!(error instanceof PlanetaryEventsSourceUnavailableError)) throw error
-		return unavailableResponse(error)
+		if (!(error instanceof EphemerisUnavailableError)) throw error
+		return ephemerisUnavailableResponse(error)
 	}
 }
 

@@ -1,9 +1,9 @@
 import { expect, test } from 'bun:test'
 import type { SpiceEvaluation, SpiceKernelJob, SpiceKernelLibrarySnapshot } from 'api'
-import { activeJobs, applySpiceKernelSnapshot, evaluationDifference, handleSpiceKernelEvent, importSpiceKernel, refreshSpiceKernels, setSpicePolicy, type SpiceKernelsState, timelinePlacement, timelineSpan, updateSpiceKernel } from './spicekernels'
+import { activeJobs, applySpiceKernelSnapshot, evaluationDifference, handleSpiceKernelEvent, importSpiceKernel, refreshSpiceKernels, setEphemerisOffline, type SpiceKernelsState, timelinePlacement, timelineSpan, updateSpiceKernel } from './spicekernels'
 
 function snapshot(epoch: string, revision: number, jobs: SpiceKernelJob[] = []): SpiceKernelLibrarySnapshot {
-	return { epoch, revision, loading: false, generation: revision, policy: 'automatic', bytes: 0, kernels: [], jobs }
+	return { epoch, revision, loading: false, generation: revision, offline: false, bytes: 0, kernels: [], jobs }
 }
 
 function job(jobId: string, state: SpiceKernelJob['state'], createdAt = 0): SpiceKernelJob {
@@ -93,7 +93,7 @@ test('commands keep their failures and stream an upload as the body', async () =
 	expect(await updateSpiceKernel(s, 'k1', { enabled: false }, request)).toBeTrue()
 	expect(calls[1]).toMatchObject({ url: '/api/spice-kernels/k1', init: { method: 'PATCH', body: JSON.stringify({ enabled: false }) } })
 
-	expect(await setSpicePolicy(s, 'offline', request)).toBeFalse()
+	expect(await setEphemerisOffline(s, true, request)).toBeFalse()
 	expect(s.errors.settings).toBe('Nope')
 	expect(s.pending).toEqual({})
 })

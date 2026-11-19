@@ -28,7 +28,7 @@ const REFERENCE: Record<number, readonly [number, number, number]> = {
 }
 
 test.skipIf(!FIXTURE)('the curated Jovian kernel resolves every body like CSPICE and drives the planner alone', async () => {
-	expect((await runtime.rebuild([{ id: 'jup365', path: FIXTURE! }], 'spkOnly')).size).toBe(0)
+	expect((await runtime.rebuild([{ id: 'jup365', path: FIXTURE! }], false)).size).toBe(0)
 	const set = runtime.current().set!
 
 	for (const [body, position] of Object.entries(REFERENCE)) {

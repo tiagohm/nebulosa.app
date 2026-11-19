@@ -11,18 +11,17 @@ import { normalizePI } from 'nebulosa/src/math/units/angle'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
 import type { JupiterGrsModel } from './jupiter.store'
 import type { PlanningSite } from './observingplanner.astronomy'
-import { kernelReadiness as planetaryReadiness, type PlanetaryFallbackReason, type PlanetaryKernels, type PlanetarySource, type PlanetarySourceMiss, PlanetarySourceUnavailableError, type SatelliteSourceConfig, type SourcedResult as PlanetarySourcedResult, toolkitTime, withSatelliteSource } from './planetary.source'
+import { kernelReadiness as planetaryReadiness, type PlanetaryFallbackReason, type PlanetaryKernels, type PlanetarySource, type PlanetarySourceMiss, type SatelliteSourceConfig, type SourcedResult as PlanetarySourcedResult, toolkitTime, withSatelliteSource } from './planetary.source'
 import { definedContacts, type HiddenIntervals, hiddenIntervals, type MoonEventContacts, overlapsOf, physicallyVisible, type PlanetEventVisibility, type PlanetNight, type PlanetVisibilityStatus, rank, siteNights, type SiteReasons, siteVisibility, unixMillisOf } from './planetary.visibility'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
-import type { SpiceEphemerisPolicy } from './spicekernels.store'
 import { yieldToEventLoop } from './util'
 
 // Astronomy of the Jupiter Observing Planner: the apparent view of Jupiter and its Galilean satellites at an instant, the
 // sampled tracks of the satellites, and the phenomena over a range (Great Red Spot transits, satellite transits, shadow
 // transits, occultations, eclipses, and mutual events) with their visibility from a site. Every computation takes all its
 // states from one source chosen once with the shared orchestration of planetary.source.ts: the kernels of the SPICE
-// Kernel Library when they resolve every Jovian body, else the analytical VSOP87E + L1.2 theories, unless the ephemeris
-// policy is spkOnly, which fails instead; sources are never mixed and Horizons is never asked. Long computations run in
+// Kernel Library when they resolve every Jovian body, else the analytical VSOP87E + L1.2 theories (the fast ephemeris
+// chain of ephemeris.chain.ts); sources are never mixed and Horizons is never asked. Long computations run in
 // chunks that restart when the kernel generation changed. Phenomena are geocentric; a site only decides when they can be
 // watched (planetary.visibility.ts), with the planetary constraints of the Observing Planner on Jupiter's own altitude,
 // which is a separate question from the phenomena. Angles are radians and times Unix milliseconds (UTC).
@@ -63,20 +62,12 @@ export interface JupiterSignature {
 	readonly modelVersion: number
 	// Source of the states.
 	readonly source: JupiterSource
-	// Ephemeris policy of the SPICE Kernel Library.
-	readonly policy: SpiceEphemerisPolicy
+	// Whether the ephemeris sources were offline.
+	readonly offline: boolean
 	// Generation of the kernel set the source was chosen from.
 	readonly generation: number
 	// Revision of the Great Red Spot model used; absent when none was.
 	readonly grsRevision?: number
-}
-
-// Thrown when the ephemeris policy is spkOnly and the kernels cannot give a whole computation, or when the kernel set
-// kept changing during one.
-export class JupiterSourceUnavailableError extends PlanetarySourceUnavailableError<JovianBody> {
-	constructor(reason: JupiterFallbackReason | 'generationChanged', miss?: JupiterSourceMiss) {
-		super(reason === 'generationChanged' ? 'The SPICE kernels changed during the computation' : `The SPICE kernels cannot give the Jovian states (${reason})`, reason, miss)
-	}
 }
 
 // Live kernel snapshots of the SPICE Kernel Library.
@@ -89,15 +80,13 @@ const JOVIAN_SOURCE: SatelliteSourceConfig<JovianBody, JovianEphemeris, Analytic
 	analyticalSource: { kind: 'analytical', planetary: 'VSOP87E', satellites: 'L1.2' },
 	spk: spkJovianEphemeris,
 	miss: JovianEphemerisMiss,
-	unavailable: (reason, miss) => new JupiterSourceUnavailableError(reason, miss),
 }
 
 // Result of a computation and the source it used.
 export type SourcedResult<T> = PlanetarySourcedResult<JovianBody, AnalyticalJupiterSource, T>
 
 // Runs `count` chunks of a computation over every Jovian body with one source for all of them (see
-// withSatelliteSource): the kernels when they resolve every Jovian body, else VSOP87E + L1.2, or
-// JupiterSourceUnavailableError under spkOnly. `interpolate` wraps the source for dense sampling; a single instant is
+// withSatelliteSource): the kernels when they resolve every Jovian body, else VSOP87E + L1.2. `interpolate` wraps the source for dense sampling; a single instant is
 // evaluated directly.
 export function withJovianSource<T>(kernels: JupiterKernels, count: number, chunk: (ephemeris: JovianEphemeris, index: number) => T, interpolate: boolean, signal?: AbortSignal): Promise<SourcedResult<T>> {
 	return withSatelliteSource(kernels, JOVIAN_SOURCE, JOVIAN_BODIES, count, chunk, interpolate ? interpolatedJovianEphemeris : undefined, signal)
@@ -616,13 +605,14 @@ export interface JupiterSourceRequest {
 // Readiness of the kernels and the source a computation over the range would use.
 export interface JupiterSourceReport {
 	readonly readiness: JupiterKernelReadiness
-	// Source a computation would use: the kernels, the theories, or none under spkOnly.
-	readonly source: 'spk' | 'analytical' | 'unavailable'
+	// Source a computation would use: the kernels or the theories.
+	readonly source: 'spk' | 'analytical'
 	// Why the kernels are not ready; absent when they are.
 	readonly reason?: JupiterFallbackReason
 	// First state the kernels could not resolve.
 	readonly miss?: JupiterSourceMiss
-	readonly policy: SpiceEphemerisPolicy
+	// Whether the ephemeris sources are offline.
+	readonly offline: boolean
 	readonly generation: number
 	// Number of probed epochs (every 6 hours of the range, both ends included).
 	readonly probes: number

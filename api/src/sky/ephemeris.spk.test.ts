@@ -6,7 +6,6 @@ import { spkSeconds } from 'nebulosa/src/astronomy/ephemeris/kernels/spk'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { spkFixture, type SpkFixtureSegment } from '../spicekernels.fixture'
 import { type SpiceKernelSnapshot, SpiceKernelRuntime } from '../spicekernels.runtime'
-import type { SpiceEphemerisPolicy } from '../spicekernels.store'
 import { EphemerisUnavailableError, type HorizonsObserver, SkyEphemeris } from './ephemeris'
 import { MinorBodies } from './minorbodies'
 import { createSkyRoutes } from './routes'
@@ -50,8 +49,8 @@ function horizons() {
 
 let files = 0
 
-// A runtime of kernels made of fixture files, under a policy.
-async function runtimeOf(policy: SpiceEphemerisPolicy, ...kernels: (readonly SpkFixtureSegment[] | string)[]) {
+// A runtime of kernels made of fixture files, online unless offline.
+async function runtimeOf(offline: boolean, ...kernels: (readonly SpkFixtureSegment[] | string)[]) {
 	const runtime = new SpiceKernelRuntime()
 	runtimes.push(runtime)
 	const entries = kernels.map((kernel) => {
@@ -61,48 +60,49 @@ async function runtimeOf(policy: SpiceEphemerisPolicy, ...kernels: (readonly Spk
 		writeFileSync(path, spkFixture(kernel))
 		return { id, path }
 	})
-	const failures = await runtime.rebuild(entries, policy)
+	const failures = await runtime.rebuild(entries, offline)
 	expect(failures.size).toBe(0)
 	return { runtime, ids: entries.map((e) => e.id) }
 }
 
-async function ephemerisOf(policy: SpiceEphemerisPolicy, ...kernels: (readonly SpkFixtureSegment[] | string)[]) {
-	const { runtime, ids } = await runtimeOf(policy, ...kernels)
+async function ephemerisOf(offline: boolean, ...kernels: (readonly SpkFixtureSegment[] | string)[]) {
+	const { runtime, ids } = await runtimeOf(offline, ...kernels)
 	const { observe, calls } = horizons()
 	return { ephemeris: new SkyEphemeris({ observer: observe, kernels: runtime }), calls, ids, runtime }
 }
 
 test('accurate positions covered by the kernels come from them with their provenance', async () => {
-	const { ephemeris, calls, ids, runtime } = await ephemerisOf('automatic', PLANETARY, CERES)
+	const { ephemeris, calls, ids, runtime } = await ephemerisOf(false, PLANETARY, CERES)
 	const position = await ephemeris.position({ type: 'minorBody', spkId: '20000001' }, { time: TIME, observer })
 
 	expect(calls).toEqual([])
-	expect(position.source).toBe('spk')
-	expect(position.fallbackReason).toBeUndefined()
+	expect(position).toMatchObject({ source: 'spk', attempts: [] })
 	expect(position.kernels).toEqual({ generation: runtime.current().generation, kernelIds: [ids[0], ids[1]] })
 	// Geocentric distance of a body 2 AU from the Sun at right angles to the Earth: √5 AU, within the site offset.
 	expect(position.distance).toBeCloseTo(Math.sqrt(5), 3)
 	expect(position.magnitude).toBeUndefined()
 
-	// Fast positions stay on the local models.
-	expect((await ephemeris.position({ type: 'body', code: '10' }, { time: TIME, observer, mode: 'fast' })).source).toBe('local')
+	// Fast positions also try the kernels first.
+	expect((await ephemeris.position({ type: 'body', code: '10' }, { time: TIME, observer, mode: 'fast' })).source).toBe('spk')
 	expect((await ephemeris.position({ type: 'body', code: '10' }, { time: TIME, observer })).source).toBe('spk')
 })
 
-test('the automatic policy asks Horizons for what the kernels do not cover', async () => {
-	const { ephemeris, calls } = await ephemerisOf('automatic', PLANETARY)
+test('accurate positions ask Horizons for what the kernels do not cover, fast ones the theories', async () => {
+	const { ephemeris, calls } = await ephemerisOf(false, PLANETARY)
 	const position = await ephemeris.position({ type: 'body', code: '499' }, { time: TIME, observer })
 
 	expect(calls).toEqual(['499'])
-	expect(position.source).toBe('horizons')
+	expect(position).toMatchObject({ source: 'horizons', attempts: [{ source: 'spk', reason: 'targetMissing', target: '499', body: 499 }] })
+	expect((await ephemeris.position({ type: 'body', code: '499' }, { time: TIME, observer, mode: 'fast' })).source).toBe('analytical')
+	expect(calls).toHaveLength(1)
 })
 
-test('the offline policy uses the local models and never asks Horizons', async () => {
-	const { ephemeris, calls } = await ephemerisOf('offline', PLANETARY)
+test('offline, the theories are used and Horizons is never asked', async () => {
+	const { ephemeris, calls } = await ephemerisOf(true, PLANETARY)
 	const mars = await ephemeris.position({ type: 'body', code: '499' }, { time: TIME, observer })
 
-	expect(mars.source).toBe('local')
-	expect(mars.fallbackReason).toBe('offline')
+	expect(mars.source).toBe('analytical')
+	expect(mars.attempts?.at(-1)).toEqual({ source: 'horizons', reason: 'offline' })
 	expect(ephemeris.remoteAllowed).toBeFalse()
 
 	const unknown = ephemeris.position({ type: 'minorBody', spkId: '20000002' }, { time: TIME, observer })
@@ -111,30 +111,35 @@ test('the offline policy uses the local models and never asks Horizons', async (
 	expect(calls).toEqual([])
 })
 
-test('the spkOnly policy has no other source', async () => {
-	const { ephemeris, calls } = await ephemerisOf('spkOnly', CERES)
+test('a kernel without the Earth and the Sun is a missing center, and offline leaves a minor body without elements unavailable', async () => {
+	const { ephemeris, calls } = await ephemerisOf(true, CERES)
+	const unavailable = ephemeris.position({ type: 'minorBody', spkId: '20000001' }, { time: TIME, observer })
 
-	await expect(ephemeris.position({ type: 'body', code: '499' }, { time: TIME, observer })).rejects.toMatchObject({ code: 'coverageUnavailable' })
-	await expect(ephemeris.position({ type: 'minorBody', spkId: '20000001' }, { time: TIME, observer })).rejects.toMatchObject({ code: 'missingDependency' })
-	expect(ephemeris.events({ type: 'body', code: '499' }, TIME, observer, 'mars')).toBeUndefined()
+	await expect(unavailable).rejects.toMatchObject({
+		code: 'offline',
+		attempts: [
+			{ source: 'spk', reason: 'missingCenter', body: 399 },
+			{ source: 'horizons', reason: 'offline' },
+			{ source: 'analytical', reason: 'noModel' },
+		],
+	})
+	expect(ephemeris.events({ type: 'minorBody', spkId: '20000001' }, TIME, observer, 'ceres')).toBeUndefined()
 	expect(calls).toEqual([])
 })
 
 test('a light-time epoch outside the coverage abandons the whole kernel calculation', async () => {
 	// The segment covers the reception instant but starts 10 s before it, after the emission about 1000 s earlier.
 	const edge: SpkFixtureSegment[] = [{ center: 10, target: 20000001, start: SECONDS - 10, end: SECONDS + 1e6, position: [0, 2.992e8, 0] }]
-	const automatic = await ephemerisOf('automatic', PLANETARY, edge)
+	const automatic = await ephemerisOf(false, PLANETARY, edge)
 	const position = await automatic.ephemeris.position({ type: 'minorBody', spkId: '20000001' }, { time: TIME, observer })
 
 	expect(position.source).toBe('horizons')
 	expect(automatic.calls).toEqual(['DES=20000001;'])
-
-	const strict = await ephemerisOf('spkOnly', PLANETARY, edge)
-	await expect(strict.ephemeris.position({ type: 'minorBody', spkId: '20000001' }, { time: TIME, observer })).rejects.toMatchObject({ code: 'coverageUnavailable' })
+	expect(position.attempts).toEqual([{ source: 'spk', reason: 'outOfCoverage', body: 20000001, time: position.attempts![0].time }])
 })
 
 test('events come from the kernels covering the whole window and follow a new generation', async () => {
-	const { runtime } = await runtimeOf('automatic', PLANETARY, CERES)
+	const { runtime } = await runtimeOf(false, PLANETARY, CERES)
 	const ephemeris = new SkyEphemeris({ observer: horizons().observe, kernels: runtime })
 	const target = { type: 'minorBody', spkId: '20000001' } as const
 
@@ -142,24 +147,24 @@ test('events come from the kernels covering the whole window and follow a new ge
 	expect(covered).toBeDefined()
 
 	// Without the kernels and without elements there is no local model: the cached events of the old generation are not reused.
-	await runtime.rebuild([], 'automatic')
+	await runtime.rebuild([], false)
 	expect(ephemeris.events(target, TIME, observer, 'ceres')).toBeUndefined()
 })
 
 test('a snapshot swap never mixes generations within a position', async () => {
-	const { runtime, ids } = await runtimeOf('automatic', PLANETARY, CERES)
+	const { runtime, ids } = await runtimeOf(false, PLANETARY, CERES)
 	const ephemeris = new SkyEphemeris({ observer: horizons().observe, kernels: runtime })
 	const pending = ephemeris.position({ type: 'minorBody', spkId: '20000001' }, { time: TIME, observer })
-	const swap = runtime.rebuild([], 'automatic')
+	const swap = runtime.rebuild([], false)
 
 	expect((await pending).kernels?.kernelIds).toEqual([ids[0], ids[1]])
 	await swap
 	expect(runtime.current().set).toBeUndefined()
 })
 
-test('under the offline policy a minor body is resolved without SBDB', async () => {
+test('offline, a minor body is resolved without SBDB', async () => {
 	let sbdb = 0
-	const snapshot: SpiceKernelSnapshot = { generation: 1, policy: 'offline', loading: false, readiness: new Map() }
+	const snapshot: SpiceKernelSnapshot = { generation: 1, offline: true, loading: false, readiness: new Map() }
 	const { observe, calls } = horizons()
 	const routes = createSkyRoutes({
 		catalog: (await import('./fixture')).fixtureCatalog(),
@@ -182,17 +187,17 @@ test('under the offline policy a minor body is resolved without SBDB', async () 
 	expect(calls).toEqual([])
 })
 
-// DE440s of the toolkit fixtures, when downloaded: the kernel Sun and Moon against the local models (VSOP87E, ELPMPP02),
+// DE440s of the toolkit fixtures, when downloaded: the kernel Sun and Moon against the theories (VSOP87E, ELPMPP02),
 // accurate to about an arcsecond and a few arcseconds near 2026, as a consistency check of the reductions.
 const DE440S = join(import.meta.dir, '../../../core/data/de440s.bsp')
 
-test.skipIf(!existsSync(DE440S))('the DE440s Sun and Moon agree with the local models', async () => {
-	const { ephemeris } = await ephemerisOf('automatic', DE440S)
+test.skipIf(!existsSync(DE440S))('the DE440s Sun and Moon agree with the theories', async () => {
+	const { ephemeris } = await ephemerisOf(false, DE440S)
 	const arcsec = Math.PI / 648000
 
 	for (const code of ['10', '301'] as const) {
 		const spk = await ephemeris.position({ type: 'body', code }, { time: TIME, observer })
-		const local = await ephemeris.position({ type: 'body', code }, { time: TIME, observer, mode: 'fast' })
+		const local = await new SkyEphemeris({ observer: horizons().observe }).position({ type: 'body', code }, { time: TIME, observer, mode: 'fast' })
 		const separation = Math.acos(Math.min(1, Math.sin(spk.declination) * Math.sin(local.declination) + Math.cos(spk.declination) * Math.cos(local.declination) * Math.cos(spk.rightAscension - local.rightAscension)))
 
 		expect(spk.source).toBe('spk')

@@ -240,11 +240,12 @@ test('computes a map once for concurrent requests and keeps it', async () => {
 	const { worker, service } = fakeService((request) => ({ jobId: request.jobId, status: 'computed', map: answer }))
 
 	const [a, b] = await Promise.all([service.map(TOTAL.id), service.map(TOTAL.id)])
-	expect(a).toEqual(answer)
-	expect(b).toEqual(answer)
+	// The service tells the source of the elements it sent the worker.
+	expect(a).toEqual({ ...answer, ephemeris: { source: 'analytical', mode: 'fast', attempts: [{ source: 'spk', reason: 'noKernel' }] } })
+	expect(b).toEqual(a)
 	expect(worker.jobs).toBe(1)
 
-	expect(await service.map(TOTAL.id)).toEqual(answer)
+	expect(await service.map(TOTAL.id)).toEqual(a)
 	expect(worker.jobs).toBe(1)
 	expect(worker.terminated).toBe(false)
 })
@@ -260,7 +261,7 @@ test('a disposed service terminates the worker of the map in flight and refuses 
 	expect(worker.jobs).toBe(1)
 	service.dispose()
 
-	expect(await running).toEqual(answer)
+	expect(await running).toMatchObject(answer)
 	expect(worker.terminated).toBe(true)
 	await expect(queued).rejects.toThrow('stopped')
 	expect(worker.jobs).toBe(1)

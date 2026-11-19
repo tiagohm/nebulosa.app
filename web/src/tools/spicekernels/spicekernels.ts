@@ -1,4 +1,4 @@
-import type { ServerEvent, SpiceBodiesResponse, SpiceBodySegment, SpiceEvaluation, SpiceCatalogItem, SpiceEphemerisPolicy, SpiceEvaluationRequest, SpiceEvaluationResult, SpiceKernelDetails, SpiceKernelGenerateRequest, SpiceKernelJob, SpiceKernelLibrarySnapshot, SpiceKernelUpdateRequest } from 'api'
+import type { ServerEvent, SpiceBodiesResponse, SpiceBodySegment, SpiceEvaluation, SpiceCatalogItem, SpiceEvaluationRequest, SpiceEvaluationResult, SpiceKernelDetails, SpiceKernelGenerateRequest, SpiceKernelJob, SpiceKernelLibrarySnapshot, SpiceKernelUpdateRequest } from 'api'
 import { proxy } from 'valtio'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
 
@@ -27,9 +27,6 @@ export const spiceKernelsState = proxy<SpiceKernelsState>({ revision: 0, pending
 
 // Generation of the latest snapshot request; an older response is dropped.
 let generation = 0
-
-// Display name of each ephemeris policy.
-export const SPICE_POLICY_LABELS: Readonly<Record<SpiceEphemerisPolicy, string>> = { automatic: 'Automatic', offline: 'Offline', spkOnly: 'SPK only' }
 
 // Replaces the library with a snapshot of the server, unless it is older than the events already applied.
 export function applySpiceKernelSnapshot(state: SpiceKernelsState, snapshot: SpiceKernelLibrarySnapshot) {
@@ -103,9 +100,9 @@ export function deleteSpiceKernel(state: SpiceKernelsState, id: string, request:
 	return send(state, `kernel:${id}`, () => request(`/api/spice-kernels/${encodeURIComponent(id)}`, { method: 'DELETE' }), 'The kernel could not be deleted.')
 }
 
-// Changes the ephemeris policy of the server.
-export function setSpicePolicy(state: SpiceKernelsState, policy: SpiceEphemerisPolicy, request: ApiFetch = browserFetch) {
-	return send(state, 'settings', () => request('/api/spice-kernels/settings', jsonInit('PATCH', { policy })), 'The policy could not be changed.')
+// Turns the offline switch of the ephemeris sources of the server on or off.
+export function setEphemerisOffline(state: SpiceKernelsState, offline: boolean, request: ApiFetch = browserFetch) {
+	return send(state, 'settings', () => request('/api/spice-kernels/settings', jsonInit('PATCH', { offline })), 'The ephemeris sources could not be changed.')
 }
 
 // Prefers a kernel for a NAIF body, or, without kernelId, returns the body to the load order alone.

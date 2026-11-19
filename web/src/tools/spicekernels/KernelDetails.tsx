@@ -88,7 +88,7 @@ export function KernelDetails({ kernel, onDeleted }: KernelDetailsProps) {
 				<Button variant="secondary" disabled={pending} onClick={() => void verifySpiceKernel(spiceKernelsState, kernel.id)}>
 					Verify
 				</Button>
-				<ConfirmButton disabled={pending} title="Delete the kernel?" message={`${kernel.name} and its file are removed from the server. Positions it provided come from the other sources of the ephemeris policy.`} confirmLabel="Delete" onConfirm={() => void remove()}>
+				<ConfirmButton disabled={pending} title="Delete the kernel?" message={`${kernel.name} and its file are removed from the server. Positions it provided come from the other sources of the ephemeris chain.`} confirmLabel="Delete" onConfirm={() => void remove()}>
 					Delete
 				</ConfirmButton>
 			</Actions>

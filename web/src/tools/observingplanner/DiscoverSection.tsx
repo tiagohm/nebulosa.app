@@ -408,7 +408,7 @@ function MinorBodySearch({ location, onAdd }: Pick<DiscoverSectionProps, 'locati
 						{search.loading ? 'Searching…' : 'Search'}
 					</Button>
 				</div>
-				<Notice>Looked up in the JPL Small-Body Database. An analysis uses the SPK kernels, JPL Horizons, or saved orbital elements, as the ephemeris policy of the SPICE Kernel Library allows.</Notice>
+				<Notice>Looked up in the JPL Small-Body Database. An analysis uses the SPK kernels, JPL Horizons, or saved orbital elements; offline, JPL is never asked.</Notice>
 			</form>
 			{search.error && <Notice error>{search.error}</Notice>}
 			{result?.kind === 'notFound' && <Notice>{result.message || 'No asteroid or comet matches this text.'}</Notice>}

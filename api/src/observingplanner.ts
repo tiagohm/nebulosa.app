@@ -40,7 +40,7 @@ import type { SsdRequestQueue } from './ssd'
 // saves. The catalog listing, the analysis of one target, the bounded discovery, and the preview of a plan are read-only.
 // Catalog objects, major bodies, and coordinates are computed locally from the embedded sky catalog and the toolkit; a
 // minor body (asteroid or comet) is asked of the SPK kernels, or of JPL (SBDB and Horizons, through the shared JPL queue)
-// when the ephemeris policy of the SPICE Kernel Library allows it, never a forecast or a device. Derived results are kept
+// when the ephemeris sources are online, never a forecast or a device. Derived results are kept
 // only in memory; the orbital elements of the minor bodies of saved plans are kept in the database for offline use.
 // Plans are documents of the operational database, written whole with an optimistic revision and published once
 // committed; they never command a device or start an operation. Angles are radians and times Unix milliseconds (UTC).
@@ -85,7 +85,7 @@ const NIGHT_CACHE_LIMIT = 8
 const ANALYSIS_CACHE_LIMIT = 256
 
 // Codes of the Observing Planner errors: an unknown plan or minor body, another revision saved since, a refresh the
-// ephemeris policy forbids, or SBDB unavailable.
+// offline switch forbids, or SBDB unavailable.
 export type ObservingPlannerErrorCode = 'notFound' | 'conflict' | 'offline' | 'serviceUnavailable'
 
 // Orbital elements of a minor body read again from SBDB on request (POST /minor-bodies/:spkId/refresh).
@@ -249,7 +249,7 @@ export interface ObservingPlannerOptions {
 	readonly listener?: (event: ObservingPlanEvent) => void
 	// SBDB lookups of the process, shared with the Sky and Close Approaches.
 	readonly minorBodies: Pick<MinorBodies, 'body' | 'cached'>
-	// Kernels of the SPICE Kernel Library and its ephemeris policy.
+	// Kernels of the SPICE Kernel Library and the offline switch.
 	readonly kernels: { readonly current: () => SpiceKernelSnapshot }
 	// Queue of every request of the process to JPL.
 	readonly queue: SsdRequestQueue
@@ -306,11 +306,11 @@ export class ObservingPlannerService {
 	}
 
 	// Reads the orbital elements of a minor body again from SBDB and saves them, so later analyses use them; the plans
-	// naming it are not changed. Refused under the offline and spkOnly policies, which forbid asking JPL; notFound when
+	// naming it are not changed. Refused while the ephemeris sources are offline, which forbids asking JPL; notFound when
 	// SBDB does not know the body. Rejects with SbdbUnavailableError when SBDB times out, cannot be reached, or the JPL
 	// queue refuses the request.
 	async refreshMinorBody(spkId: string, signal?: AbortSignal): Promise<{ readonly status: 'refreshed'; readonly refresh: ObservingMinorBodyRefresh } | { readonly status: 'offline' | 'notFound' }> {
-		if (this.options.kernels.current().policy !== 'automatic') return { status: 'offline' }
+		if (this.options.kernels.current().offline) return { status: 'offline' }
 		const resolved = await this.options.minorBodies.body(spkId, signal, true)
 		if (!resolved) return { status: 'notFound' }
 		this.options.minorBodyStore.put(resolved)
@@ -364,7 +364,7 @@ export class ObservingPlannerService {
 
 	// Analyzes one target over a night; an unknown catalog id or SPK-ID is unresolved, and a minor body no source covers
 	// over the night is ephemerisUnavailable, never an error. A minor body is first prepared from its ephemeris source,
-	// which may ask JPL; its analysis is cached with the identity of that source, so a new kernel set, policy, or orbit
+	// which may ask JPL; its analysis is cached with the identity of that source, so a new kernel set, offline switch, or orbit
 	// solution analyzes it again. Rejects only when `signal` aborts.
 	async analyze(request: TargetAnalysisRequest, signal?: AbortSignal): Promise<TargetAnalysis> {
 		const { target, site, eveningDate, constraints, requestedDurationMs } = request
@@ -521,12 +521,12 @@ export function createObservingPlannerRoutes(service: ObservingPlannerService) {
 		},
 		'/api/observing-planner/minor-bodies/:spkId/refresh': {
 			// Reads the orbital elements of a minor body again from SBDB and saves them (ObservingMinorBodyRefresh); 404
-			// notFound, 503 offline when the ephemeris policy forbids asking JPL, 503 serviceUnavailable when SBDB is unavailable.
+			// notFound, 503 offline when the ephemeris sources are offline, 503 serviceUnavailable when SBDB is unavailable.
 			POST: async (req) => {
 				try {
 					const outcome = await service.refreshMinorBody(req.params.spkId, req.signal)
 					if (outcome.status === 'refreshed') return Response.json(outcome.refresh satisfies ObservingMinorBodyRefresh)
-					if (outcome.status === 'offline') return errorResponse('The ephemeris policy forbids asking JPL', 503, 'offline' satisfies ObservingPlannerErrorCode)
+					if (outcome.status === 'offline') return errorResponse('The ephemeris sources are offline, so JPL is not asked', 503, 'offline' satisfies ObservingPlannerErrorCode)
 					return errorResponse('SBDB does not know this minor body', 404, 'notFound' satisfies ObservingPlannerErrorCode)
 				} catch (error) {
 					if (error instanceof SbdbUnavailableError) return errorResponse(error.message, 503, 'serviceUnavailable' satisfies ObservingPlannerErrorCode)

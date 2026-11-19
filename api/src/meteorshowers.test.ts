@@ -435,7 +435,7 @@ describe('observing planner blocks', () => {
 		const { service: meteors } = setup()
 		const database = AppDatabase.memory()
 		const nights = new AstroWeatherNights()
-		const kernels = { current: () => ({ generation: 0, policy: 'offline' as const, loading: false, readiness: new Map() }) }
+		const kernels = { current: () => ({ generation: 0, offline: true, loading: false, readiness: new Map() }) }
 		const minorBodies = { cached: () => undefined, body: () => Promise.resolve(undefined) } as never
 		return new ObservingPlannerService({
 			catalog: fixtureCatalog(),

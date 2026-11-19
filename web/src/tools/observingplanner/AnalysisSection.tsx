@@ -34,7 +34,7 @@ const FACTOR_LABELS = { altitude: 'Altitude', airmass: 'Airmass', twilight: 'Twi
 const SOURCE_LABELS: Readonly<Record<PlannerEphemerisProvenance['source'], string>> = { spk: 'SPK kernels', horizons: 'JPL Horizons', kepler: 'Approximate orbital elements (two-body)' }
 
 // Why the approximate orbital elements were used.
-const FALLBACK_LABELS: Readonly<Record<NonNullable<PlannerEphemerisProvenance['fallbackReason']>, string>> = { offline: 'The ephemeris policy forbids asking JPL.', timeout: 'JPL Horizons did not answer in time.', network: 'JPL Horizons could not be reached.' }
+const FALLBACK_LABELS: Readonly<Record<NonNullable<PlannerEphemerisProvenance['fallbackReason']>, string>> = { offline: 'The ephemeris sources are offline, so JPL is not asked.', timeout: 'JPL Horizons did not answer in time.', network: 'JPL Horizons could not be reached.' }
 
 // Julian date of the Unix epoch, to show a TDB Julian date as a calendar date (the TDB-UTC offset of about a minute is
 // below the precision shown).

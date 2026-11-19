@@ -116,7 +116,7 @@ test('a slew is blocked while any operation holds the exact mount', () => {
 	expect(slewBlocker(base, { operations: { x: operation('b', 'running') } })).toBeUndefined()
 	expect(slewBlocker(base, { operations: { x: operation('a', 'failed') } })).toBeUndefined()
 	expect(slewBlocker(base, { operations: { x: operation('a', 'running') } })).toBe('The mount is busy')
-	expect(slewBlocker({ ...base, slew: { operationId: 'x', targetName: 'M31', response: { operationId: 'x', time: 1, rightAscension: 0, declination: 0, azimuth: 0, altitude: 1 } } }, { operations: { x: operation('a', 'running') } })).toBe('The mount is slewing')
+	expect(slewBlocker({ ...base, slew: { operationId: 'x', targetName: 'M31', response: { operationId: 'x', time: 1, rightAscension: 0, declination: 0, azimuth: 0, altitude: 1, source: 'catalog' } } }, { operations: { x: operation('a', 'running') } })).toBe('The mount is slewing')
 })
 
 test('records an accepted slew and keeps the reason of a refused one', async () => {

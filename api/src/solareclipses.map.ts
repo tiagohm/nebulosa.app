@@ -4,7 +4,8 @@ import { computeGreatestDurationCircumstances, computeGreatestEclipseCircumstanc
 import { computePolynomialBesselianElements, computeSolarEclipseMapGeometry, refineSolarEclipse, type HybridEclipseKind, type PolynomialBesselianElements, type SolarEclipseContactPoints, solarAltitudeAtPoint, solarEclipseMapToSvgPaths, splitCentralLineByKind } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { timeAtJulianDay, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { toDeg } from 'nebulosa/src/math/units/angle'
-import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, findRefinedEclipse, MAP_PRECISION, NO_ECLIPSE_KERNELS, type RefinedEclipseSearch, resolveRefinedEclipse } from './eclipses'
+import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, findRefinedEclipse, MAP_PRECISION, type RefinedEclipseSearch, resolveRefinedEclipse } from './eclipses'
+import { type EphemerisProvenance, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { LruCache } from './lrucache'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 
@@ -92,6 +93,8 @@ export interface SolarEclipseMap {
 	readonly greatestDuration?: SolarEclipseExtreme
 	// Lines.
 	readonly paths: SolarEclipsePaths
+	// Source of the Sun and the Moon the elements were fitted on; set by the service, absent from the worker's map.
+	readonly ephemeris?: EphemerisProvenance
 }
 
 // Id of an eclipse: the Unix milliseconds of its greatest eclipse, truncated.
@@ -112,13 +115,13 @@ const SEARCH: RefinedEclipseSearch<SolarEclipse> = {
 // Returns the eclipse nearest an instant in a direction: the next one has an id later than time, the previous one an
 // id earlier than it, so stepping from an id never returns the same eclipse. time is in Unix milliseconds; each
 // candidate is refined on the ephemeris snapshot gives it (eclipses.ts), the theories when absent.
-export function findSolarEclipse(time: number, direction: EclipseDirection, snapshot: SpiceKernelSnapshot = NO_ECLIPSE_KERNELS.current()): SolarEclipse {
+export function findSolarEclipse(time: number, direction: EclipseDirection, snapshot: SpiceKernelSnapshot = NO_EPHEMERIS_KERNELS.current()): SolarEclipse {
 	return findRefinedEclipse(SEARCH, time, direction, snapshot)
 }
 
 // Returns the eclipse an id names on the ephemeris of snapshot, the one whose greatest eclipse is within
 // ID_MATCH_TOLERANCE of it, or undefined when it names none.
-export function resolveSolarEclipse(id: string, snapshot: SpiceKernelSnapshot = NO_ECLIPSE_KERNELS.current()): SolarEclipse | undefined {
+export function resolveSolarEclipse(id: string, snapshot: SpiceKernelSnapshot = NO_EPHEMERIS_KERNELS.current()): SolarEclipse | undefined {
 	return resolveRefinedEclipse(SEARCH, id, snapshot)
 }
 

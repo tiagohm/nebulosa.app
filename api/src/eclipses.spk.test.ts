@@ -19,14 +19,14 @@ afterAll(() => {
 })
 
 test.skipIf(!FIXTURE)('de440s gives the eclipses, within a fraction of a second of the theories, and names them by the same ids', async () => {
-	expect((await runtime.rebuild([{ id: 'de440s', path: FIXTURE! }], 'spkOnly')).size).toBe(0)
+	expect((await runtime.rebuild([{ id: 'de440s', path: FIXTURE! }], true)).size).toBe(0)
 	const solar = new SolarEclipseService({ kernels: runtime })
 	const analyticalSolar = new SolarEclipseService()
 
 	try {
 		const total = solar.find(Date.UTC(2024, 2, 1), 'next')
 		const reference = analyticalSolar.find(Date.UTC(2024, 2, 1), 'next')
-		expect(eclipseEphemeris(runtime.current(), timeUnix(total.maximum / 1000)).source).toBe('spk')
+		expect(eclipseEphemeris(runtime.current(), timeUnix(total.maximum / 1000)).run(() => 0).provenance.source).toBe('spk')
 		expect(total.type).toBe(reference.type)
 		expect(Math.abs(total.maximum - reference.maximum)).toBeLessThan(1000)
 		expect(Math.abs(total.gamma - reference.gamma)).toBeLessThan(1e-4)
@@ -35,6 +35,7 @@ test.skipIf(!FIXTURE)('de440s gives the eclipses, within a fraction of a second 
 		const dallas = solar.local(reference.id, { longitude: -96.8, latitude: 32.78 }, view)!
 		const referenceDallas = analyticalSolar.local(reference.id, { longitude: -96.8, latitude: 32.78 }, view)!
 		expect(dallas.eclipseId).toBe(total.id)
+		expect(dallas.ephemeris).toMatchObject({ source: 'spk', mode: 'fast', attempts: [] })
 		expect(dallas.events.map((event) => event.kind)).toEqual(referenceDallas.events.map((event) => event.kind))
 		for (let i = 0; i < dallas.events.length; i++) expect(Math.abs(dallas.events[i].time - referenceDallas.events[i].time)).toBeLessThan(1000)
 	} finally {
@@ -49,6 +50,7 @@ test.skipIf(!FIXTURE)('de440s gives the eclipses, within a fraction of a second 
 	expect(Math.abs(eclipse.magnitude - reference.magnitude)).toBeLessThan(1e-4)
 	for (let i = 0; i < eclipse.contacts.length; i++) expect(Math.abs(eclipse.contacts[i].time - reference.contacts[i].time)).toBeLessThan(1000)
 
-	// de440s ends in 2150: under spkOnly an eclipse beyond it is refused, not computed on the theories.
-	expect(() => lunar.find(Date.UTC(2151, 0, 1), 'next')).toThrow('The SPK kernels cannot give')
+	// de440s ends in 2150: an eclipse beyond it is computed on the theories.
+	const beyond = lunar.find(Date.UTC(2151, 0, 1), 'next')
+	expect(lunar.local(beyond.id, { longitude: -46.633, latitude: -23.55 }, view)!.ephemeris).toMatchObject({ source: 'analytical', attempts: [{ source: 'spk', reason: 'outOfCoverage' }] })
 })

@@ -80,8 +80,8 @@ export function SaturnPlanner() {
 	const siteKey = site && JSON.stringify([site.latitude, site.longitude, site.elevation, site.timeZone])
 	const range = useMemo(() => (state.eveningDate ? periodRange(state.eveningDate, state.period, namingZone) : undefined), [state.eveningDate, state.period, namingZone])
 	const history = useMemo(() => (range ? historyRange(state.history, range.start) : undefined), [state.history, range?.start])
-	// A new kernel generation or policy may change every answer, so they are all read again.
-	const kernelKey = `${kernels.snapshot?.generation ?? -1}|${kernels.snapshot?.policy ?? ''}`
+	// A new kernel generation may change every answer, so they are all read again.
+	const kernelKey = `${kernels.snapshot?.generation ?? -1}`
 
 	// The clock starts at real now and the period at tonight, once.
 	useEffect(() => {
@@ -129,9 +129,9 @@ export function SaturnPlanner() {
 	}, [state.playing])
 
 	const view = state.moonsState
-	const rings = view?.rings ?? state.ringState?.rings
-	const model = view?.model ?? state.ringState?.model
-	const ringSignature = view?.signature ?? state.ringState?.signature ?? state.timeline?.signature
+	const rings = view?.rings
+	const model = view?.model
+	const ringSignature = view?.signature ?? state.timeline?.signature
 	const moonSignature = view?.signature ?? state.track?.signature
 	const positions = state.playing && state.time !== undefined ? interpolateTrack(state.track, state.time) : undefined
 	const events = listedEvents(state.timeline, state.elongations, range, state.moons)
@@ -147,7 +147,7 @@ export function SaturnPlanner() {
 		const report = state.source?.[scope]
 		if (!report) return undefined
 		const name = scope === 'rings' ? 'Rings' : 'Moons'
-		return report.readiness === 'ready' ? `${name}: the enabled kernels cover the period.` : `${name}: ${report.reason ? FALLBACK_LABELS[report.reason] : report.readiness}${report.source === 'unavailable' ? ', and the policy allows only kernels' : ''}.`
+		return report.readiness === 'ready' ? `${name}: the enabled kernels cover the period.` : `${name}: ${report.reason ? FALLBACK_LABELS[report.reason] : report.readiness}.`
 	}
 
 	const panel = (
@@ -168,7 +168,7 @@ export function SaturnPlanner() {
 			</CollapsibleSection>
 			<CollapsibleSection id="saturn.ephemeris" title="Ephemeris" summary={moonSignature ? (moonSignature.source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E + TASS 1.7') : ringSignature ? (ringSignature.source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E') : undefined} defaultOpen={false}>
 				<Notice>Rings: {describeSource(ringSignature) ?? 'not computed yet.'}</Notice>
-				<Notice>Moons: {describeSource(moonSignature) ?? (state.moonsRefused ? 'refused by the ephemeris policy.' : 'not computed yet.')}</Notice>
+				<Notice>Moons: {describeSource(moonSignature) ?? 'not computed yet.'}</Notice>
 				{readiness('rings') && <Notice>{readiness('rings')}</Notice>}
 				{readiness('moons') && <Notice>{readiness('moons')}</Notice>}
 				<Button variant="secondary" onClick={() => openKernelLibrary()}>
@@ -193,7 +193,6 @@ export function SaturnPlanner() {
 					<p className="m-0 flex flex-wrap items-center gap-2 text-xs text-ink-300">
 						{ringSignature && <StatusBadge tone={ringSignature.source.kind === 'spk' ? 'success' : 'neutral'} label={`Rings: ${ringSignature.source.kind === 'spk' ? 'SPICE kernels' : 'VSOP87E'}`} />}
 						{moonSignature && <StatusBadge tone={moonSignature.source.kind === 'spk' ? 'success' : 'neutral'} label={`Moons: ${moonSignature.source.kind === 'spk' ? 'SPICE kernels' : 'TASS 1.7'}`} />}
-						{state.moonsRefused && <StatusBadge tone="danger" label="Moons refused" />}
 						<span>{describeDisplayZone(displayZone)}</span>
 						{rings && (
 							<span>
@@ -202,14 +201,6 @@ export function SaturnPlanner() {
 							</span>
 						)}
 					</p>
-					{state.moonsRefused && (
-						<Notice error>
-							<span className="block">{state.moonsError} The ephemeris policy allows only SPICE kernels and none gives Saturn's moons, so only the rings are shown. A Saturnian satellite kernel such as sat441.bsp gives them.</span>
-							<Button variant="secondary" className="mt-2" onClick={() => openKernelLibrary()}>
-								Manage Kernels
-							</Button>
-						</Notice>
-					)}
 					{!location && (
 						<Notice>
 							<span className="block">Without a site the phenomena are listed without their local visibility. Set the observing site of this profile.</span>
@@ -218,8 +209,7 @@ export function SaturnPlanner() {
 							</Button>
 						</Notice>
 					)}
-					{state.moonsError && !state.moonsRefused && <Notice error>{state.moonsError}</Notice>}
-					{state.ringError && <Notice error>{state.ringError}</Notice>}
+					{state.moonsError && <Notice error>{state.moonsError}</Notice>}
 					{range && <TimeBar state={state} store={saturnPlannerState} range={range} events={jumps} timeZone={displayZone.zone} now={browserPlannerIo.time} />}
 					<div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
 						<div className="flex min-w-0 flex-col gap-2">
@@ -248,7 +238,7 @@ export function SaturnPlanner() {
 					</section>
 					<section className="flex flex-col gap-2">
 						<h2 className="m-0 text-sm font-semibold text-ink-100">Phenomena {state.eventsLoading && <span className="font-normal text-ink-300">· computing…</span>}</h2>
-						{state.eventsError && !state.moonsRefused && <Notice error>{state.eventsError}</Notice>}
+						{state.eventsError && <Notice error>{state.eventsError}</Notice>}
 						{state.events && phenomena.length === 0 && (
 							<Notice>No transit, shadow, occultation, eclipse, or mutual event of the chosen kinds and moons falls in this period. With the rings open the moons pass north or south of Saturn: these phenomena happen only within a few years of the ring-plane crossings (around 2025 and 2038–2039).</Notice>
 						)}

@@ -488,7 +488,7 @@ function skyPositionOf(position: SatellitePosition): SkyPosition {
 	const code = position.constellation as Constellation
 	return {
 		time: position.time,
-		source: 'local',
+		source: 'sgp4',
 		center: position.center,
 		rightAscension: position.rightAscension,
 		declination: position.declination,

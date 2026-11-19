@@ -5,10 +5,9 @@ import { prepareSpkKernelSet, type SpkKernelEntry, type SpkKernelSet } from 'neb
 import { Timescale, time } from 'nebulosa/src/astronomy/time/time'
 import { DAYSEC, J2000 } from 'nebulosa/src/core/constants'
 import { type FileHandleSource, fileHandleSource } from 'nebulosa/src/io/file'
-import type { SpiceEphemerisPolicy } from './spicekernels.store'
 
 // Runtime of the SPICE Kernel Library: the open SPK files of the enabled kernels and the immutable snapshot the
-// ephemeris reads, made of a generation, the ephemeris policy, and the prepared kernel set. A rebuild opens and
+// ephemeris reads, made of a generation, the offline switch of the ephemeris sources, and the prepared kernel set. A rebuild opens and
 // inspects only the files that joined, prepares a complete new set beside the current one, swaps the reference, and
 // only then closes the files that left. Every SPK evaluation runs synchronously from current() to its result, so no
 // calculation ever sees a half-built set or a closed file, and no lease is needed. One instance is shared by the
@@ -21,9 +20,10 @@ export type SpiceKernelSetReadiness = { readonly status: 'ready' } | { readonly 
 
 // What the ephemeris reads of the library at one instant. Immutable; a change makes a new snapshot.
 export interface SpiceKernelSnapshot {
-	// Increased by every change of the set or the policy; part of the keys of the results computed from it.
+	// Increased by every change of the set or the offline switch; part of the keys of the results computed from it.
 	readonly generation: number
-	readonly policy: SpiceEphemerisPolicy
+	// Whether no automatic request may reach JPL (Horizons, SBDB, CAD); the ephemeris chains then skip Horizons.
+	readonly offline: boolean
 	// Whether the files of the previous run are still being opened at the start of the server.
 	readonly loading: boolean
 	// Prepared set of the enabled kernels; absent when none is enabled.
@@ -47,7 +47,7 @@ interface PreparedKernel {
 }
 
 // Snapshot before the library has loaded anything.
-const LOADING_SNAPSHOT: SpiceKernelSnapshot = { generation: 0, policy: 'automatic', loading: true, readiness: new Map() }
+const LOADING_SNAPSHOT: SpiceKernelSnapshot = { generation: 0, offline: false, loading: true, readiness: new Map() }
 
 // Opens a kernel file, reads its DAF, inspects it, and initializes its segments alone, so a file that cannot be read
 // fails here, by itself, and never the rebuild of the whole set. Closes the file on failure.
@@ -109,12 +109,12 @@ export class SpiceKernelRuntime implements Disposable {
 		return this.#snapshot
 	}
 
-	// Makes files, in load order (lowest precedence first), the set of a new snapshot with policy, selecting the preferred
+	// Makes files, in load order (lowest precedence first), the set of a new snapshot with the offline switch, selecting the preferred
 	// kernel of a body (preferences, by NAIF code, kernel ids) ahead of the load order where it covers. Files already open
 	// are reused; a new file that cannot be opened, read, or inspected is left out and reported in the returned map, by
 	// kernel id, with its error. Files that left the set are closed after the swap. A set whose files cannot be prepared together swaps
 	// nothing and reports no file, since none can be blamed. Never rejects. The caller serializes rebuilds.
-	async rebuild(files: readonly SpiceKernelFile[], policy: SpiceEphemerisPolicy, preferences: ReadonlyMap<number, string> = new Map()): Promise<Map<string, Error>> {
+	async rebuild(files: readonly SpiceKernelFile[], offline: boolean, preferences: ReadonlyMap<number, string> = new Map()): Promise<Map<string, Error>> {
 		const failures = new Map<string, Error>()
 		const opened = new Map<string, PreparedKernel>()
 
@@ -160,7 +160,7 @@ export class SpiceKernelRuntime implements Disposable {
 		}
 
 		const previous = [...this.#prepared.entries()]
-		this.#snapshot = { generation: this.#snapshot.generation + 1, policy, loading: false, set, readiness }
+		this.#snapshot = { generation: this.#snapshot.generation + 1, offline, loading: false, set, readiness }
 		this.#prepared.clear()
 		for (const [id, kernel] of opened) this.#prepared.set(id, kernel)
 
@@ -171,9 +171,9 @@ export class SpiceKernelRuntime implements Disposable {
 		return failures
 	}
 
-	// Makes a new snapshot with policy and the same set.
-	setPolicy(policy: SpiceEphemerisPolicy) {
-		this.#snapshot = { ...this.#snapshot, generation: this.#snapshot.generation + 1, policy }
+	// Makes a new snapshot with the offline switch and the same set.
+	setOffline(offline: boolean) {
+		this.#snapshot = { ...this.#snapshot, generation: this.#snapshot.generation + 1, offline }
 	}
 
 	// Closes every file, in the background, and returns to the loading snapshot, for a server stopping in place.

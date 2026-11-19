@@ -12,11 +12,11 @@ import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 
 // Trajectories of asteroids and comets for the Observing Planner: one source prepared for a whole night, before the
-// synchronous analysis evaluates it. The source follows the ephemeris policy of the SPICE Kernel Library: the SPK
-// kernels when they cover the body and the Earth at every node of the night; then, under the automatic policy, a
-// geometric vector table of JPL Horizons, and the two-body Kepler model of the SBDB elements when Horizons fails; under
-// the offline policy, the Kepler model of elements already read (in memory or saved with a plan); under spkOnly,
-// nothing else. A source covers the whole night or none of it: nodes of two sources are never mixed.
+// synchronous analysis evaluates it. The source follows the offline switch of the ephemeris sources: the SPK kernels
+// when they cover the body and the Earth at every node of the night; then, online, a geometric vector table of JPL
+// Horizons, and the two-body Kepler model of the SBDB elements when Horizons fails; offline, the Kepler model of
+// elements already read (in memory or saved with a plan). A source covers the whole night or none of it: nodes of two
+// sources are never mixed.
 //
 // A trajectory is a grid of geometric geocentric ICRS vectors (AU, no light-time, like the planets of the planner),
 // materialized when it is prepared, so evaluating it never reads a kernel, asks JPL, or queries the database, and a
@@ -71,7 +71,7 @@ export type MinorBodyPreparation = { readonly kind: 'prepared'; readonly target:
 export interface MinorBodyTrajectoriesOptions {
 	// SBDB lookups shared with the Sky and Close Approaches.
 	readonly minorBodies: Pick<MinorBodies, 'body' | 'cached'>
-	// Kernels of the SPICE Kernel Library and its ephemeris policy.
+	// Kernels of the SPICE Kernel Library and the offline switch.
 	readonly kernels: { readonly current: () => SpiceKernelSnapshot }
 	// Queue of every request of the process to JPL.
 	readonly queue: SsdRequestQueue
@@ -241,15 +241,15 @@ export class MinorBodyTrajectories {
 		this.#vectors = options.vectors ?? horizonsVector
 	}
 
-	// Prepares a minor body for a night by the ephemeris policy of the SPICE Kernel Library, read once. A trajectory is
-	// cached by the body, the night, the kernel generation and policy, and the answers of SBDB it may use; a Kepler
+	// Prepares a minor body for a night by the kernels and the offline switch, read once. A trajectory is cached by the
+	// body, the night, the kernel generation and the offline switch, and the answers of SBDB it may use; a Kepler
 	// trajectory that replaced a failed Horizons request is not, so Horizons is asked again next time. Rejects only when
 	// `signal` aborts.
 	async prepare(target: MinorBodyTarget, night: PlanningNight, signal?: AbortSignal): Promise<MinorBodyPreparation> {
 		const snapshot = this.options.kernels.current()
 		const saved = this.options.store.get(target.spkId)
 		const cached = this.options.minorBodies.cached(target.spkId)
-		const key = JSON.stringify([target.spkId, night.key, snapshot.policy, snapshot.generation, saved?.fetchedAt ?? 0, cached?.fetchedAt ?? 0])
+		const key = JSON.stringify([target.spkId, night.key, snapshot.offline, snapshot.generation, saved?.fetchedAt ?? 0, cached?.fetchedAt ?? 0])
 		const hit = this.#cache.get(key)
 		if (hit) return hit
 
@@ -273,7 +273,7 @@ export class MinorBodyTrajectories {
 				}
 
 				const trajectory = await this.#refined(grid)
-				if (!known && snapshot.policy === 'automatic') known = await this.#lookup(target, signal)
+				if (!known && !snapshot.offline) known = await this.#lookup(target, signal)
 				return this.#prepared(target, night, known, trajectory, { source: 'spk', approximate: false, kernels: { generation: snapshot.generation, kernelIds: [...kernels] } })
 			} catch (error) {
 				if (error instanceof SpkReadFailure) return this.#unavailable('kernelCoverageUnavailable', known)
@@ -281,9 +281,7 @@ export class MinorBodyTrajectories {
 			}
 		}
 
-		if (snapshot.policy === 'spkOnly') return this.#unavailable('kernelCoverageUnavailable', known)
-
-		if (snapshot.policy === 'offline') {
+		if (snapshot.offline) {
 			if (!known) return this.#unavailable('ephemerisOffline', known)
 			return this.#kepler(target, night, known, 'offline')
 		}

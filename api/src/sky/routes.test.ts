@@ -38,7 +38,7 @@ test('position of a catalog object with events', async () => {
 	const body = { target: { kind: 'catalog', id: 32263 }, time: Date.UTC(2026, 9, 18, 12), observer: { latitude: -23.5, longitude: -46.6, elevation: 760 } }
 	const response = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify(body) }) as never)
 	const { position, events } = (await response.json()) as SkyPositionResponse
-	expect(position.source).toBe('local')
+	expect(position.source).toBe('catalog')
 	expect(position.altitude).toBeDefined()
 	expect(events?.state).toBe('normal')
 })
@@ -47,7 +47,7 @@ test('a fast position of a body has its events too', async () => {
 	const body = { target: { kind: 'body', code: '499' }, time: Date.UTC(2026, 9, 18, 12), observer: { latitude: -23.5, longitude: -46.6, elevation: 760 }, mode: 'fast' }
 	const response = await routes['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify(body) }) as never)
 	const { position, events } = (await response.json()) as SkyPositionResponse
-	expect(position.source).toBe('local')
+	expect(position.source).toBe('analytical')
 	expect(events).toBeDefined()
 })
 
@@ -81,7 +81,7 @@ test('constellations are located at their label', async () => {
 	const body = { target: { kind: 'constellation', code: 'ORI' }, time: Date.UTC(2026, 9, 18, 12) }
 	const response = await withLabels['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify(body) }) as never)
 	const { position } = (await response.json()) as SkyPositionResponse
-	expect(position.source).toBe('local')
+	expect(position.source).toBe('catalog')
 	expect(position.rightAscensionJ2000).toBe(1.45)
 	expect(position.distance).toBeUndefined()
 	expect(position.constellationName).toBe('Orion')
@@ -101,7 +101,7 @@ test('satellites are searched and located through the satellite catalog, without
 	const locate = (noradId: string, observer?: object) => sky['/api/sky/position'].POST(new Request('http://localhost/api/sky/position', { method: 'POST', body: JSON.stringify({ target: { kind: 'satellite', noradId }, time: Date.UTC(2023, 7, 19, 13), observer }) }) as never)
 	const response = await locate('25544', { latitude: -23.5, longitude: -46.6, elevation: 760 })
 	const { position, events } = (await response.json()) as SkyPositionResponse
-	expect(position).toMatchObject({ source: 'local', center: 'topocentric', time: Date.UTC(2023, 7, 19, 13) })
+	expect(position).toMatchObject({ source: 'sgp4', center: 'topocentric', time: Date.UTC(2023, 7, 19, 13) })
 	expect(position.distance! * 149_597_870.7).toBeGreaterThan(400)
 	expect(position.constellationName).toBeString()
 	expect(position.magnitude).toBeUndefined()

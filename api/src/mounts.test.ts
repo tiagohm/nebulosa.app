@@ -38,7 +38,7 @@ function locator(offset: number, altitude: number) {
 		requests.push(request)
 		const rightAscension = (base?.rightAscension ?? 0) + offset
 		const declination = base?.declination ?? 0
-		return Promise.resolve({ time: request.time, source: 'local', center: 'topocentric', rightAscension, declination, rightAscensionJ2000: rightAscension, declinationJ2000: declination, azimuth: 1, altitude, constellation: 'ORI' } satisfies SkyPosition)
+		return Promise.resolve({ time: request.time, source: 'analytical', center: 'topocentric', rightAscension, declination, rightAscensionJ2000: rightAscension, declinationJ2000: declination, azimuth: 1, altitude, constellation: 'ORI' } satisfies SkyPosition)
 	}
 	return { requests, locate, setBase: (value: typeof base) => (base = value) }
 }

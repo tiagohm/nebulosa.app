@@ -37,7 +37,7 @@ afterAll(async () => {
 
 // Snapshot of a library holding `set`, or none.
 function kernels(set?: SpkKernelSet, generation = 7) {
-	return { current: (): SpiceKernelSnapshot => ({ generation, policy: 'automatic', loading: false, set, readiness: new Map() }) }
+	return { current: (): SpiceKernelSnapshot => ({ generation, offline: false, loading: false, set, readiness: new Map() }) }
 }
 
 // Minimal SBDB answer for Apophis.

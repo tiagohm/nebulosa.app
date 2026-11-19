@@ -78,7 +78,7 @@ function answer(events: PlanetaryEvent[]): PlanetaryEventsSearch {
 		start: NOW,
 		end: rangeEnd(NOW, 12),
 		events,
-		signature: { modelVersion: 1, convention: { position: 'geocentricApparent', longitudeFrame: 'trueEclipticOfDate', distance: 'geometricCenterToCenter' }, source: { kind: 'analytical', planetary: 'VSOP87E', fallbackReason: 'noKernel' }, policy: 'automatic', generation: 0 },
+		signature: { modelVersion: 1, convention: { position: 'geocentricApparent', longitudeFrame: 'trueEclipticOfDate', distance: 'geometricCenterToCenter' }, source: { kind: 'analytical', planetary: 'VSOP87E', fallbackReason: 'noKernel' }, offline: false, generation: 0 },
 	}
 }
 
@@ -134,9 +134,9 @@ describe('requests', () => {
 		expect(state.search?.events.map((e) => e.id)).toEqual(['b'])
 		expect(requests[1]).toMatchObject({ url: '/api/planetary-events/search', method: 'POST', body: { start: NOW, end: Date.UTC(2027, 1, 8, 15) } })
 
-		const refused = fakeIo(() => json({ error: 'The SPICE kernels cannot give the planetary states (targetMissing)', code: 'missingDependency' }, 503))
-		await loadSearch(state, refused.io)
-		expect(state.kernelsRefused).toBeTrue()
+		const failed = fakeIo(() => json({ error: 'The SPK kernels kept changing during the computation', code: 'generationChanged' }, 503))
+		await loadSearch(state, failed.io)
+		expect(state.searchError).toContain('SPK kernels')
 		expect(state.search).toBeUndefined()
 		expect(state.searchLoading).toBeFalse()
 	})

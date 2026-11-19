@@ -6,13 +6,13 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   It stores nothing, publishes no event, and never changes a device, a site, an operation, or the Sky clock.
 - Scopes and source: a computation of the `rings` scope evaluates only the Sun, the Earth, and Saturn's centre (NAIF 699, never the barycenter 6);
   a computation of the `moons` scope also evaluates Mimas, Enceladus, Tethys, Dione, Rhea, Titan, and Iapetus (601-606, 608; Hyperion is not planned).
-  Each takes all its states from one source chosen once with the shared `withSatelliteSource` of `api/src/planetary.source.ts`: the SPICE kernels when the set has every body of the scope, else VSOP87E (+ TASS 1.7 for the moons), with the same fallback reasons, full reruns after a `SaturnianEphemerisMiss`, and `503` codes as the Jupiter planner.
-  A scope that `spkOnly` refuses leaves the other one answering: `sat480.bsp` alone gives the rings from the kernels while the moons answer `503 missingDependency`.
-  `/moons/state` carries the ring geometry from the same source as its moons, so a drawing never joins two sources; `/rings/state` serves when the moons cannot be computed.
+  Each takes all its states from one source chosen once with the shared `withSatelliteSource` of `api/src/planetary.source.ts`: the SPICE kernels when the set has every body of the scope, else VSOP87E (+ TASS 1.7 for the moons), with the same fallback reasons and full reruns after a `SaturnianEphemerisMiss` as the Jupiter planner.
+  Each scope chooses its own source: `sat480.bsp` alone gives the rings from the kernels while the moons come from VSOP87E + TASS 1.7.
+  `/moons/state` carries the ring geometry from the same source as its moons, so a drawing never joins two sources; `/rings/state` gives the rings of the ring scope alone.
 - Kernel lifetime: timelines, tracks, separations, and events run in chunks with the restarts and `503 generationChanged` of the [Jupiter Observing Planner](jupiter-observing-planner.md);
   an aborted request is not answered and caches nothing.
-- Signature (`SaturnSignature`) of every answer: the model version (`SATURN_MODEL_VERSION`, 1), the ring model version (`SATURN_RING_MODEL`, 1), the scope, the source (an analytical rings source names VSOP87E alone), the policy, and the kernel generation.
-  Caches: timelines, tracks, separations, and events, keyed by the kind, the model versions, the range, the requested moons and kinds, the site's coordinates and zone for events, the policy, and the generation;
+- Signature (`SaturnSignature`) of every answer: the model version (`SATURN_MODEL_VERSION`, 1), the ring model version (`SATURN_RING_MODEL`, 1), the scope, the source (an analytical rings source names VSOP87E alone), the offline switch, and the kernel generation.
+  Caches: timelines, tracks, separations, and events, keyed by the kind, the model versions, the range, the requested moons and kinds, the site's coordinates and zone for events, the offline switch, and the generation;
   states and readiness are not cached.
 - Geometry (see the toolkit's Saturn Ring Geometry and Saturnian Satellite Geometry): geocentric observed instants;
   signed Earth and solar openings B and B′ (planetocentric, north positive), the pole position angle on the true equator of date, and the apparent disk and outer A-ring axes in radians;

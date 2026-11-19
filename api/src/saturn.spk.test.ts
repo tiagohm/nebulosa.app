@@ -32,7 +32,7 @@ const OFFSETS: Readonly<Record<string, readonly [number, number]>> = {
 }
 
 test.skipIf(!FIXTURE)('the curated Saturnian kernel drives the rings and the moons alone like Horizons', async () => {
-	expect((await runtime.rebuild([{ id: 'sat441', path: FIXTURE! }], 'spkOnly')).size).toBe(0)
+	expect((await runtime.rebuild([{ id: 'sat441', path: FIXTURE! }], false)).size).toBe(0)
 	const service = new SaturnPlannerService({ kernels: runtime, night: (request) => new AstroWeatherNights().night(request) })
 
 	const state = await service.moonsState({ time: Date.UTC(2026, 10, 1) })

@@ -153,14 +153,6 @@ export function JupiterPlanner() {
 							</Button>
 						</Notice>
 					)}
-					{state.kernelsRefused && (
-						<Notice error>
-							<span className="block">{state.eventsError} The ephemeris policy allows only SPICE kernels, so nothing is computed from the analytical theories.</span>
-							<Button variant="secondary" className="mt-2" onClick={() => openKernelLibrary()}>
-								Manage Kernels
-							</Button>
-						</Notice>
-					)}
 					{range && <TimeBar state={state} store={jupiterPlannerState} range={range} events={events} timeZone={displayZone.zone} now={browserPlannerIo.time} />}
 					<div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
 						<div className="flex min-w-0 flex-col gap-2">
@@ -178,7 +170,7 @@ export function JupiterPlanner() {
 					</div>
 					<section className="flex flex-col gap-2">
 						<h2 className="m-0 text-sm font-semibold text-ink-100">Events {state.eventsLoading && <span className="font-normal text-ink-300">· computing…</span>}</h2>
-						{state.eventsError && !state.kernelsRefused && <Notice error>{state.eventsError}</Notice>}
+						{state.eventsError && <Notice error>{state.eventsError}</Notice>}
 						{answer && events.length === 0 && <Notice>No phenomenon of the chosen kinds and moons falls in this period. Mutual events only happen in the seasons around Jupiter's equinox, and Callisto misses the disk in some years.</Notice>}
 						{answer && events.length > 0 && <EventTimeline events={events} selected={state.selected} timeZone={displayZone.zone} onSelect={(event) => selectEvent(jupiterPlannerState, event)} />}
 						{answer && selected && <EventInspector event={selected} all={answer.events} answer={answer} timeZone={displayZone.zone} />}

@@ -11,7 +11,7 @@ import { errorResponse } from './http'
 import { SPICE_KERNEL_CATALOG, type SpiceCatalogEntry } from './spicekernels.catalog'
 import { type SpiceKernelJob, SpiceKernelJobs, type SpiceKernelJobContext, SpiceKernelQueueFullError } from './spicekernels.jobs'
 import { inspectSpiceKernel, openSpiceKernel, type SpiceKernelRuntime } from './spicekernels.runtime'
-import type { SpiceEphemerisPolicy, SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelStore, SpiceSegmentRecord, StagedSpiceKernel } from './spicekernels.store'
+import type { SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelStore, SpiceSegmentRecord, StagedSpiceKernel } from './spicekernels.store'
 import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 
 // SPICE Kernel Library: the server-global set of SPK files the Sky ephemeris evaluates locally. Files come from three
@@ -19,7 +19,7 @@ import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 // generation through the shared JPL queue, or an upload. Each is streamed into staging, inspected, renamed into place,
 // recorded, and published as a new runtime generation, one change at a time; a failure leaves the previous generation
 // untouched. Enabling, reordering, verifying, and deleting kernels, preferring a kernel for a body, and changing the
-// ephemeris policy follow the same path. The library also explains the selection of the current generation body by
+// offline switch of the ephemeris sources follow the same path. The library also explains the selection of the current generation body by
 // body (which segment is used where, and which never is) and evaluates a body at an instant, through the selection or
 // from one chosen segment, for an operator checking the kernels.
 // Every change is announced by `spiceKernels:changed` with the epoch of the process and a new revision, and every job
@@ -27,7 +27,7 @@ import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 
 export type { SpiceCatalogEntry, SpiceCatalogSystem } from './spicekernels.catalog'
 export type { SpiceKernelJob, SpiceKernelJobKind, SpiceKernelJobState } from './spicekernels.jobs'
-export type { SpiceEphemerisPolicy, SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelState, SpiceSegmentRecord } from './spicekernels.store'
+export type { SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelState, SpiceSegmentRecord } from './spicekernels.store'
 
 // Longest wait for a curated download without receiving a byte, in milliseconds (2 minutes). The whole download has no
 // time limit, since the satellite ephemerides reach 2 GiB; a stalled one fails instead.
@@ -77,13 +77,14 @@ export interface SpiceKernelDetails extends SpiceKernelSummary {
 export interface SpiceKernelLibrarySnapshot {
 	// Random id of the server process; a different one means the revisions started again.
 	readonly epoch: string
-	// Increased by every change of the kernels, the policy, or a job.
+	// Increased by every change of the kernels, the offline switch, or a job.
 	readonly revision: number
 	// Whether the kernels of the previous run are still being opened.
 	readonly loading: boolean
 	// Generation of the runtime set the ephemeris evaluates.
 	readonly generation: number
-	readonly policy: SpiceEphemerisPolicy
+	// Whether no automatic request reaches JPL (Horizons, SBDB, CAD), for every ephemeris of the server.
+	readonly offline: boolean
 	// Bytes of every file of the library.
 	readonly bytes: number
 	// Kernels by priority, lowest first.
@@ -112,7 +113,8 @@ export interface SpiceKernelUpdateRequest {
 
 // Body of PATCH /api/spice-kernels/settings.
 export interface SpiceKernelSettingsRequest {
-	readonly policy: SpiceEphemerisPolicy
+	// Whether no automatic request may reach JPL.
+	readonly offline: boolean
 }
 
 // Body of POST /api/spice-kernels/download.
@@ -388,10 +390,10 @@ export class SpiceKernelLibrary implements Disposable {
 
 	// Snapshot of the library.
 	snapshot(): SpiceKernelLibrarySnapshot {
-		const { generation, policy } = this.runtime.current()
+		const { generation, offline } = this.runtime.current()
 		const segments = this.store.allSegments()
 		const kernels = this.store.kernels().map((e) => this.#summary(e, segments.get(e.id) ?? []))
-		return { epoch: this.#epoch, revision: this.#revision, loading: this.#loading, generation, policy, bytes: kernels.reduce((sum, e) => sum + e.bytes, 0), kernels, jobs: this.#jobs.list() }
+		return { epoch: this.#epoch, revision: this.#revision, loading: this.#loading, generation, offline, bytes: kernels.reduce((sum, e) => sum + e.bytes, 0), kernels, jobs: this.#jobs.list() }
 	}
 
 	// A kernel and its segments; throws notFound.
@@ -572,11 +574,11 @@ export class SpiceKernelLibrary implements Disposable {
 		})
 	}
 
-	// Changes the ephemeris policy.
-	setPolicy(policy: SpiceEphemerisPolicy): Promise<SpiceKernelLibrarySnapshot> {
+	// Turns the offline switch of the ephemeris sources on or off.
+	setOffline(offline: boolean): Promise<SpiceKernelLibrarySnapshot> {
 		return this.#exclusive(() => {
-			this.store.setPolicy(policy)
-			this.runtime.setPolicy(policy)
+			this.store.setOffline(offline)
+			this.runtime.setOffline(offline)
 			this.#changed()
 			return this.snapshot()
 		})
@@ -734,7 +736,7 @@ export class SpiceKernelLibrary implements Disposable {
 		const kernels = this.store.kernels().filter((e) => e.enabled && e.state === 'ready')
 		const failures = await this.runtime.rebuild(
 			kernels.map((e) => ({ id: e.id, path: this.store.objectPath(e.sha256) })),
-			this.store.policy(),
+			this.store.offline(),
 			this.store.preferences(),
 		)
 
@@ -907,8 +909,8 @@ export function createSpiceKernelRoutes(library: SpiceKernelLibrary) {
 			POST: (req) => answer(async () => library.evaluate((await req.json()) as SpiceEvaluationRequest)),
 		},
 		'/api/spice-kernels/settings': {
-			// Changes the ephemeris policy (SpiceKernelSettingsRequest, SpiceKernelLibrarySnapshot).
-			PATCH: (req) => answer(async () => library.setPolicy(((await req.json()) as SpiceKernelSettingsRequest).policy)),
+			// Turns the offline switch of the ephemeris sources on or off (SpiceKernelSettingsRequest, SpiceKernelLibrarySnapshot).
+			PATCH: (req) => answer(async () => library.setOffline(((await req.json()) as SpiceKernelSettingsRequest).offline)),
 		},
 		'/api/spice-kernels/import': {
 			// Adds the SPK file of the application/octet-stream body, named by ?name (SpiceKernelImportResponse); 201 when

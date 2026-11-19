@@ -150,9 +150,9 @@ export type ObservingReasonCode =
 	| 'unresolvedTarget'
 	// No usable orbital elements of the minor body are known (none published, or a model the local propagator lacks).
 	| 'orbitalSolutionUnavailable'
-	// The spkOnly policy allows only the SPK kernels, and they do not cover the body, the Earth, or a center all night.
+	// An SPK kernel that covers the body could not be read.
 	| 'kernelCoverageUnavailable'
-	// The offline policy forbids asking JPL, and no kernel or saved orbital elements cover the body.
+	// The ephemeris sources are offline, so JPL is not asked, and no kernel or saved orbital elements cover the body.
 	| 'ephemerisOffline'
 	// SBDB and Horizons could not be reached or did not answer, and no kernel or orbital elements cover the body.
 	| 'ephemerisSourceUnavailable'
@@ -229,8 +229,8 @@ export interface PlannerEphemerisProvenance {
 	readonly source: PlannerEphemerisSource
 	// Whether the source is an approximation (the Kepler model ignores planetary perturbations).
 	readonly approximate: boolean
-	// Why the Kepler model was used although the policy allows JPL: Horizons timed out or could not be reached; offline
-	// when the policy forbids JPL.
+	// Why the Kepler model was used instead of Horizons: Horizons timed out or could not be reached, or the ephemeris
+	// sources are offline.
 	readonly fallbackReason?: 'timeout' | 'network' | 'offline'
 	// Generation of the kernel set and the kernels used, for the SPK source.
 	readonly kernels?: { readonly generation: number; readonly kernelIds: readonly string[] }

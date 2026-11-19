@@ -21,7 +21,6 @@ import { ObservingPlanStore } from './observingplanner.store'
 import { fixtureCatalog } from './sky/fixture'
 import type { ResolvedMinorBody } from './sky/minorbodies'
 import type { SkyCatalogPage } from './sky/types'
-import type { SpiceEphemerisPolicy } from './spicekernels.store'
 import { SsdRequestQueue } from './ssd'
 
 const SAO_PAULO: PlanningSite = { name: 'São Paulo', latitude: -23.55, longitude: -46.633, elevation: 760, timeZone: 'America/Sao_Paulo' }
@@ -36,8 +35,8 @@ const nights = new AstroWeatherNights()
 const events: ObservingPlanEvent[] = []
 const database = AppDatabase.memory()
 const minorBodyStore = new ObservingMinorBodyStore(database)
-// Ephemeris policy of the SPICE Kernel Library the tests set; no kernel is enabled.
-let policy: SpiceEphemerisPolicy = 'offline'
+// Offline switch of the ephemeris sources the tests set; no kernel is enabled.
+let offline = true
 // What SBDB answers, by SPK-ID, and the SPK-IDs asked again with a refresh.
 const sbdb = new Map<string, ResolvedMinorBody>()
 const refreshed: string[] = []
@@ -48,7 +47,7 @@ const minorBodies = {
 		return Promise.resolve(sbdb.get(spkId))
 	},
 }
-const kernels = { current: () => ({ generation: 0, policy, loading: false, readiness: new Map() }) }
+const kernels = { current: () => ({ generation: 0, offline, loading: false, readiness: new Map() }) }
 const service = new ObservingPlannerService({ catalog: fixtureCatalog(), night: (request) => nights.night(request), store: new ObservingPlanStore(database), listener: (event) => events.push(event), minorBodies, kernels, queue: new SsdRequestQueue(), minorBodyStore })
 const routes = createObservingPlannerRoutes(service)
 
@@ -339,20 +338,20 @@ describe('minor bodies', () => {
 		expect(minorBodyStore.get(VESTA.spkId)).toBeUndefined()
 	})
 
-	test('refreshing orbital elements asks SBDB again only when the policy allows it', async () => {
+	test('refreshing orbital elements asks SBDB again only online', async () => {
 		sbdb.set(VESTA.spkId, vesta)
-		policy = 'offline'
+		offline = true
 		const refused = await refresh(VESTA.spkId)
 		expect(refused.status).toBe(503)
 		expect(await refused.json()).toMatchObject({ code: 'offline' })
 		expect(refreshed).toEqual([])
 
-		policy = 'automatic'
+		offline = false
 		const response = await refresh(VESTA.spkId)
 		expect(await response.json()).toMatchObject({ body: { spkId: VESTA.spkId }, orbitEpoch: elements.epoch, fetchedAt: vesta.fetchedAt })
 		expect(refreshed).toEqual([VESTA.spkId])
 		expect(minorBodyStore.get(VESTA.spkId)?.elements).toEqual(elements)
 		expect((await refresh(UNKNOWN.spkId)).status).toBe(404)
-		policy = 'offline'
+		offline = true
 	})
 })

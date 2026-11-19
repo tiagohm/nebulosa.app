@@ -16,7 +16,6 @@ import { keplerOrbit } from './sky/ephemeris'
 import type { ResolvedMinorBody } from './sky/minorbodies'
 import { spkFixture, type SpkFixtureSegment } from './spicekernels.fixture'
 import { type SpiceKernelSnapshot, SpiceKernelRuntime } from './spicekernels.runtime'
-import type { SpiceEphemerisPolicy } from './spicekernels.store'
 import { SsdRequestQueue } from './ssd'
 
 const directory = mkdtempSync(join(tmpdir(), 'nebulosa-planner-minor-'))
@@ -55,8 +54,8 @@ const BODY: SpkFixtureSegment[] = [{ center: 10, target: 2000004, ...WIDE, posit
 
 let files = 0
 
-// Snapshot of a kernel set of fixture files under a policy.
-async function snapshotOf(policy: SpiceEphemerisPolicy, ...kernels: (readonly SpkFixtureSegment[])[]): Promise<SpiceKernelSnapshot> {
+// Snapshot of a kernel set of fixture files, online unless offline.
+async function snapshotOf(offline: boolean, ...kernels: (readonly SpkFixtureSegment[])[]): Promise<SpiceKernelSnapshot> {
 	const runtime = new SpiceKernelRuntime()
 	runtimes.push(runtime)
 	const entries = kernels.map((kernel) => {
@@ -65,13 +64,13 @@ async function snapshotOf(policy: SpiceEphemerisPolicy, ...kernels: (readonly Sp
 		writeFileSync(path, spkFixture(kernel))
 		return { id, path }
 	})
-	expect((await runtime.rebuild(entries, policy)).size).toBe(0)
+	expect((await runtime.rebuild(entries, offline)).size).toBe(0)
 	return runtime.current()
 }
 
-// Snapshot without kernels under a policy.
-function bare(policy: SpiceEphemerisPolicy, generation: number = 1): SpiceKernelSnapshot {
-	return { generation, policy, loading: false, readiness: new Map() }
+// Snapshot without kernels, online unless offline.
+function bare(offline: boolean, generation: number = 1): SpiceKernelSnapshot {
+	return { generation, offline, loading: false, readiness: new Map() }
 }
 
 // SBDB lookups answering one body, counting the requests.
@@ -132,7 +131,7 @@ function prepared(preparation: MinorBodyPreparation) {
 
 describe('kernels', () => {
 	test('a kernel set covering the night is the source, without asking JPL', async () => {
-		const snapshot = await snapshotOf('offline', PLANETARY, BODY)
+		const snapshot = await snapshotOf(true, PLANETARY, BODY)
 		const { minorBodies, calls } = lookups()
 		const target = prepared(await trajectoriesOf(snapshot, minorBodies, unreachable, VESTA_BODY).prepare(VESTA, night))
 		expect(target.ephemeris).toMatchObject({ source: 'spk', approximate: false, nodeSpacingMs: 600_000, searchStepMs: 600_000 })
@@ -145,15 +144,12 @@ describe('kernels', () => {
 		expect(declination).toBeCloseTo(0, 4)
 	})
 
-	test('a kernel set covering part of the night is refused under spkOnly and replaced whole otherwise', async () => {
+	test('a kernel set covering part of the night is replaced whole', async () => {
 		const end = spkSeconds(timeUnix(MIDDLE / 1000, true))
 		const partial: SpkFixtureSegment[] = [{ center: 10, target: 2000004, start: -1e9, end, position: [0, 2.992e8, 0] }]
 
-		const strict = trajectoriesOf(await snapshotOf('spkOnly', PLANETARY, partial), lookups().minorBodies, unreachable, VESTA_BODY)
-		expect(await strict.prepare(VESTA, night)).toEqual({ kind: 'unavailable', reason: 'kernelCoverageUnavailable', name: '4 Vesta (A807 FA)', typeName: 'Main-belt Asteroid' })
-
 		const { vectors, calls } = vectorsOf(keplerGeocentric)
-		const automatic = prepared(await trajectoriesOf(await snapshotOf('automatic', PLANETARY, partial), lookups(VESTA_BODY).minorBodies, vectors).prepare(VESTA, night))
+		const automatic = prepared(await trajectoriesOf(await snapshotOf(false, PLANETARY, partial), lookups(VESTA_BODY).minorBodies, vectors).prepare(VESTA, night))
 		expect(automatic.ephemeris!.source).toBe('horizons')
 		expect(calls).toHaveLength(1)
 	})
@@ -162,7 +158,7 @@ describe('kernels', () => {
 describe('policies without kernels', () => {
 	test('offline uses the saved elements with the approximate Kepler model and never asks JPL', async () => {
 		const { minorBodies, calls } = lookups()
-		const target = prepared(await trajectoriesOf(bare('offline'), minorBodies, unreachable, VESTA_BODY).prepare(VESTA, night))
+		const target = prepared(await trajectoriesOf(bare(true), minorBodies, unreachable, VESTA_BODY).prepare(VESTA, night))
 		expect(target.ephemeris).toMatchObject({ source: 'kepler', approximate: true, fallbackReason: 'offline', orbitEpoch: VESTA_ELEMENTS.epoch, solutionDate: '2026-09-01', elementsFetchedAt: VESTA_BODY.fetchedAt })
 		expect(calls).toEqual([])
 		// The body moves against the stars over the night, unlike a fixed target.
@@ -173,19 +169,16 @@ describe('policies without kernels', () => {
 		expect(analysis.samples.every((e) => e.distance! > 1 && e.magnitude! > 5 && e.magnitude! < 9)).toBe(true)
 	})
 
-	test('offline without kernels or elements is unavailable, and spkOnly never falls back', async () => {
-		expect(await trajectoriesOf(bare('offline'), lookups().minorBodies).prepare(VESTA, night)).toEqual({ kind: 'unavailable', reason: 'ephemerisOffline' })
-		const { minorBodies, calls } = lookups(VESTA_BODY)
-		expect(await trajectoriesOf(bare('spkOnly'), minorBodies, unreachable, VESTA_BODY).prepare(VESTA, night)).toMatchObject({ kind: 'unavailable', reason: 'kernelCoverageUnavailable' })
-		expect(calls).toEqual([])
+	test('offline without kernels or elements is unavailable', async () => {
+		expect(await trajectoriesOf(bare(true), lookups().minorBodies).prepare(VESTA, night)).toEqual({ kind: 'unavailable', reason: 'ephemerisOffline' })
 	})
 
 	test('automatic asks Horizons for geometric vectors that match the Kepler nodes they replace', async () => {
 		const { vectors, calls } = vectorsOf(keplerGeocentric)
-		const trajectories = trajectoriesOf(bare('automatic'), lookups(VESTA_BODY).minorBodies, vectors)
+		const trajectories = trajectoriesOf(bare(false), lookups(VESTA_BODY).minorBodies, vectors)
 		const horizons = prepared(await trajectories.prepare(VESTA, night))
 		expect(horizons.ephemeris).toMatchObject({ source: 'horizons', approximate: false })
-		const kepler = prepared(await trajectoriesOf(bare('offline'), lookups().minorBodies, unreachable, VESTA_BODY).prepare(VESTA, night))
+		const kepler = prepared(await trajectoriesOf(bare(true), lookups().minorBodies, unreachable, VESTA_BODY).prepare(VESTA, night))
 		const windows = analyzeTarget(night, kepler, OBSERVING_PRESETS.visual).windows
 		const fromHorizons = analyzeTarget(night, horizons, OBSERVING_PRESETS.visual).windows
 		expect(windows.length).toBeGreaterThan(0)
@@ -201,34 +194,34 @@ describe('policies without kernels', () => {
 
 	test('automatic falls back to Kepler when Horizons fails, and asks it again next time', async () => {
 		const { minorBodies, calls } = lookups(VESTA_BODY)
-		const trajectories = trajectoriesOf(bare('automatic'), minorBodies)
+		const trajectories = trajectoriesOf(bare(false), minorBodies)
 		expect(prepared(await trajectories.prepare(VESTA, night)).ephemeris).toMatchObject({ source: 'kepler', fallbackReason: 'network' })
 		await trajectories.prepare(VESTA, night)
 		expect(calls).toHaveLength(2)
 	})
 
 	test('a body SBDB does not know is unresolved; SBDB and Horizons unreachable is unavailable', async () => {
-		expect(await trajectoriesOf(bare('automatic'), lookups().minorBodies).prepare(VESTA, night)).toEqual({ kind: 'unresolved' })
-		expect(await trajectoriesOf(bare('automatic'), lookups('unavailable').minorBodies).prepare(VESTA, night)).toEqual({ kind: 'unavailable', reason: 'ephemerisSourceUnavailable' })
+		expect(await trajectoriesOf(bare(false), lookups().minorBodies).prepare(VESTA, night)).toEqual({ kind: 'unresolved' })
+		expect(await trajectoriesOf(bare(false), lookups('unavailable').minorBodies).prepare(VESTA, night)).toEqual({ kind: 'unavailable', reason: 'ephemerisSourceUnavailable' })
 	})
 
 	test('elements the local model cannot propagate are unavailable', async () => {
 		const b1950: SavedMinorBody = { ...VESTA_BODY, elements: { ...VESTA_ELEMENTS, referenceEclipticFrame: 'B1950' } }
-		expect(await trajectoriesOf(bare('offline'), lookups().minorBodies, unreachable, b1950).prepare(VESTA, night)).toMatchObject({ kind: 'unavailable', reason: 'orbitalSolutionUnavailable' })
+		expect(await trajectoriesOf(bare(true), lookups().minorBodies, unreachable, b1950).prepare(VESTA, night)).toMatchObject({ kind: 'unavailable', reason: 'orbitalSolutionUnavailable' })
 	})
 
 	test('a cancelled preparation rejects instead of answering a status', async () => {
 		const controller = new AbortController()
 		controller.abort(new Error('left'))
 		const minorBodies = { body: (_: string, signal?: AbortSignal) => Promise.reject(signal!.reason as Error), cached: () => undefined }
-		await expect(trajectoriesOf(bare('automatic'), minorBodies).prepare(VESTA, night, controller.signal)).rejects.toThrow('left')
+		await expect(trajectoriesOf(bare(false), minorBodies).prepare(VESTA, night, controller.signal)).rejects.toThrow('left')
 	})
 })
 
 describe('fast bodies', () => {
 	test('a fast body is sampled every minute and searched with a shorter step', async () => {
 		const { vectors, calls } = vectorsOf(circling(6e-3))
-		const target = prepared(await trajectoriesOf(bare('automatic'), lookups(VESTA_BODY).minorBodies, vectors).prepare(FAST, night))
+		const target = prepared(await trajectoriesOf(bare(false), lookups(VESTA_BODY).minorBodies, vectors).prepare(FAST, night))
 		expect(calls.map((e) => e.step)).toEqual([600_000, 60_000])
 		expect(target.ephemeris!.nodeSpacingMs).toBe(60_000)
 		expect(target.ephemeris!.searchStepMs).toBeLessThan(600_000)
@@ -239,6 +232,6 @@ describe('fast bodies', () => {
 
 	test('a body too fast to follow has no trajectory', async () => {
 		const { vectors } = vectorsOf(circling(2e-2))
-		expect(await trajectoriesOf(bare('automatic'), lookups(VESTA_BODY).minorBodies, vectors).prepare(FAST, night)).toMatchObject({ kind: 'unavailable', reason: 'trajectoryResolutionExceeded' })
+		expect(await trajectoriesOf(bare(false), lookups(VESTA_BODY).minorBodies, vectors).prepare(FAST, night)).toMatchObject({ kind: 'unavailable', reason: 'trajectoryResolutionExceeded' })
 	})
 })

@@ -18,18 +18,17 @@ import { SATURN_MODEL, SATURN_RING_MODEL, type SaturnRingAnnulus, type SaturnRin
 import { precessionNutationMatrix, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { SATURN_EQUATORIAL_RADIUS_KM, SATURN_POLAR_RADIUS_KM } from 'nebulosa/src/core/constants'
 import { type Vec3, vecCross, vecNormalize } from 'nebulosa/src/math/linear-algebra/vec3'
-import { kernelReadiness, type PlanetaryFallbackReason, type PlanetaryKernels, type PlanetaryReadinessReport, type PlanetarySource, type PlanetarySourceMiss, PlanetarySourceUnavailableError, type SatelliteSourceConfig, type SourcedResult, toolkitTime, withSatelliteSource } from './planetary.source'
+import { kernelReadiness, type PlanetaryFallbackReason, type PlanetaryKernels, type PlanetaryReadinessReport, type PlanetarySource, type PlanetarySourceMiss, type SatelliteSourceConfig, type SourcedResult, toolkitTime, withSatelliteSource } from './planetary.source'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
-import type { SpiceEphemerisPolicy } from './spicekernels.store'
 
 // Astronomy of the Saturn Observing Planner: the geometry of Saturn's disk and rings at an instant and over seasons
 // (signed Earth and solar ring openings, pole position angle, apparent sizes, and the ring-plane crossings and opening
 // extrema found by root search), the apparent view of the seven major moons at an instant, their sampled tracks, and
 // their greatest separations from Saturn. Every computation takes all its states from one source chosen once with the
 // shared orchestration of planetary.source.ts, per scope: a rings computation needs only the Sun, the Earth and Saturn's
-// centre (NAIF 699, never the barycenter 6), so a planetary kernel such as sat480.bsp serves it even under spkOnly; a
-// moons computation needs those and Mimas to Iapetus (601-606, 608), as in sat441.bsp. Without them the analytical
-// VSOP87E (+ TASS 1.7 for the moons) theories are used, unless the policy is spkOnly, which fails that scope alone.
+// centre (NAIF 699, never the barycenter 6), so a planetary kernel such as sat480.bsp serves it; a moons computation
+// needs those and Mimas to Iapetus (601-606, 608), as in sat441.bsp. Without them the analytical VSOP87E (+ TASS 1.7 for
+// the moons) theories are used, scope by scope (the fast ephemeris chain of ephemeris.chain.ts).
 // Everything is geocentric; times are Unix milliseconds (UTC), angles radians.
 
 // Version of the Saturn prediction model; changes whenever the meaning of a computed field changes.
@@ -72,18 +71,10 @@ export interface SaturnSignature {
 	readonly scope: SaturnScope
 	// Source of the states.
 	readonly source: SaturnSource
-	// Ephemeris policy of the SPICE Kernel Library.
-	readonly policy: SpiceEphemerisPolicy
+	// Whether the ephemeris sources were offline.
+	readonly offline: boolean
 	// Generation of the kernel set the source was chosen from.
 	readonly generation: number
-}
-
-// Thrown when the ephemeris policy is spkOnly and the kernels cannot give a whole computation of a scope, or when the
-// kernel set kept changing during one.
-export class SaturnSourceUnavailableError extends PlanetarySourceUnavailableError<SaturnianBody> {
-	constructor(reason: SaturnFallbackReason | 'generationChanged', miss?: SaturnSourceMiss) {
-		super(reason === 'generationChanged' ? 'The SPICE kernels changed during the computation' : `The SPICE kernels cannot give the Saturnian states (${reason})`, reason, miss)
-	}
 }
 
 // Live kernel snapshots of the SPICE Kernel Library.
@@ -97,7 +88,7 @@ const SATURN_SOURCES: Readonly<Record<SaturnScope, SatelliteSourceConfig<Saturni
 
 // The Saturnian source configuration with the given description of the analytical theories.
 function sourceConfig(analyticalSource: AnalyticalSaturnSource): SatelliteSourceConfig<SaturnianBody, SaturnianEphemeris, AnalyticalSaturnSource> {
-	return { naif: SATURNIAN_NAIF, analytical: analyticalSaturnianEphemeris, analyticalSource, spk: spkSaturnianEphemeris, miss: SaturnianEphemerisMiss, unavailable: (reason, miss) => new SaturnSourceUnavailableError(reason, miss) }
+	return { naif: SATURNIAN_NAIF, analytical: analyticalSaturnianEphemeris, analyticalSource, spk: spkSaturnianEphemeris, miss: SaturnianEphemerisMiss }
 }
 
 // Result of a computation of one scope and the source it used.
@@ -111,7 +102,7 @@ export function withSaturnianSource<T>(kernels: SaturnKernels, scope: SaturnScop
 
 // Signature of a result of a scope computed from a source and a kernel snapshot.
 export function saturnSignature(scope: SaturnScope, source: SaturnSource, snapshot: SpiceKernelSnapshot): SaturnSignature {
-	return { modelVersion: SATURN_MODEL_VERSION, ringModelVersion: SATURN_RING_MODEL.version, scope, source, policy: snapshot.policy, generation: snapshot.generation }
+	return { modelVersion: SATURN_MODEL_VERSION, ringModelVersion: SATURN_RING_MODEL.version, scope, source, offline: snapshot.offline, generation: snapshot.generation }
 }
 
 // The adopted ring and disk model, for drawing: the named annuli and Saturn's radii.

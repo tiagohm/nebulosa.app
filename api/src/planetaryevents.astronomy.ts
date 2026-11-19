@@ -13,9 +13,8 @@ import { DEG2RAD } from 'nebulosa/src/core/constants'
 import type { Mat3, MutMat3 } from 'nebulosa/src/math/linear-algebra/mat3'
 import { type Vec3, vecAngle, vecLatitude, vecLength, vecLongitude, vecMinus, vecMulScalar, vecNegate, vecZero } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizePI } from 'nebulosa/src/math/units/angle'
-import { type PlanetaryFallbackReason, type PlanetaryKernels, type PlanetarySource, type PlanetarySourceMiss, PlanetarySourceUnavailableError, type SatelliteSourceConfig, type SourcedResult, toolkitTime, withSatelliteSource } from './planetary.source'
+import { type PlanetaryFallbackReason, type PlanetaryKernels, type PlanetarySource, type PlanetarySourceMiss, type SatelliteSourceConfig, type SourcedResult, toolkitTime, withSatelliteSource } from './planetary.source'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
-import type { SpiceEphemerisPolicy } from './spicekernels.store'
 
 // Astronomy of the Planetary Events almanac: the geocentric phenomena of Mercury to Neptune over a range, defined as an
 // almanac defines them and found with the toolkit's planetary finders. Conjunctions with the Sun, oppositions and
@@ -126,13 +125,6 @@ export type PlanetaryEventsSourceMiss = PlanetarySourceMiss<Body>
 // Live kernel snapshots of the SPICE Kernel Library.
 export type PlanetaryEventsKernels = PlanetaryKernels
 
-// Thrown when the policy is spkOnly and the kernels cannot give a whole computation, or when the kernel set kept changing.
-export class PlanetaryEventsSourceUnavailableError extends PlanetarySourceUnavailableError<Body> {
-	constructor(reason: PlanetaryFallbackReason | 'generationChanged', miss?: PlanetaryEventsSourceMiss) {
-		super(reason === 'generationChanged' ? 'The SPICE kernels changed during the computation' : `The SPICE kernels cannot give the planetary states (${reason})`, reason, miss)
-	}
-}
-
 // How the bodies are evaluated from the kernels or VSOP87E.
 const SOURCE: SatelliteSourceConfig<Body, PlanetaryEventsEphemeris, AnalyticalPlanetaryEventsSource> = {
 	naif: REQUIRED,
@@ -140,7 +132,6 @@ const SOURCE: SatelliteSourceConfig<Body, PlanetaryEventsEphemeris, AnalyticalPl
 	analyticalSource: { kind: 'analytical', planetary: 'VSOP87E' },
 	spk: (set) => spkSatelliteEphemeris({ ...SYSTEM, naif: resolvedNaif(set) }, set),
 	miss: PlanetaryEventsEphemerisMiss,
-	unavailable: (reason, miss) => new PlanetaryEventsSourceUnavailableError(reason, miss),
 }
 
 // The conventions every event follows, for comparison with a printed almanac.
@@ -166,14 +157,15 @@ export interface PlanetaryEventsSignature {
 	readonly source: PlanetaryEventsSource
 	// For a kernel source, whether each planet came from its centre or its barycentre; absent for VSOP87E.
 	readonly origins?: Readonly<Partial<Record<PlanetaryEventBody, PlanetaryEventsBodyOrigin>>>
-	readonly policy: SpiceEphemerisPolicy
+	// Whether the ephemeris sources were offline.
+	readonly offline: boolean
 	// Generation of the kernel set the source was chosen from.
 	readonly generation: number
 }
 
 // Signature of an answer computed from a source and a kernel snapshot, for the planets of `bodies`.
 export function planetaryEventsSignature(source: PlanetaryEventsSource, snapshot: SpiceKernelSnapshot, bodies: readonly PlanetaryEventBody[]): PlanetaryEventsSignature {
-	const signature = { modelVersion: PLANETARY_EVENTS_MODEL_VERSION, convention: PLANETARY_EVENTS_CONVENTION, source, policy: snapshot.policy, generation: snapshot.generation }
+	const signature = { modelVersion: PLANETARY_EVENTS_MODEL_VERSION, convention: PLANETARY_EVENTS_CONVENTION, source, offline: snapshot.offline, generation: snapshot.generation }
 	if (source.kind !== 'spk' || !snapshot.set) return signature
 	const naif = resolvedNaif(snapshot.set)
 	const origins: Partial<Record<PlanetaryEventBody, PlanetaryEventsBodyOrigin>> = {}

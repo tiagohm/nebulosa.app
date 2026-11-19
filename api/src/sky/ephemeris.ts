@@ -9,9 +9,11 @@ import type { SpkKernelSet } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.
 import { analyticalEphemerisSource, type EphemerisSource, interpolatedEphemerisSource, relativeEphemerisState, spkEphemerisSource, type SpkEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { asteroidMagnitudeEstimate, cometMagnitudeEstimate } from 'nebulosa/src/astronomy/formulas'
 import type { GeographicPosition } from 'nebulosa/src/astronomy/observer/location'
-import { asteroid, comet, type KeplerOrbit } from 'nebulosa/src/astronomy/orbits/asteroid'
+import { asteroid, comet, KeplerOrbit } from 'nebulosa/src/astronomy/orbits/asteroid'
+import { DE440_PERTURBERS } from 'nebulosa/src/astronomy/orbits/propagation/nbody'
 import { precessionNutationMatrix, type Time, Timescale, time as makeJulianTime, timeShift, timeUnix, toJulianEpoch, tt } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, DEG2RAD, GM_SUN_PITJEVA_2005, J2000, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
+import { matIdentity } from 'nebulosa/src/math/linear-algebra/mat3'
 import { type MutVec3, type Vec3, vecAngle, vecLength, vecPlus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { deg, normalizeAngle, normalizePI, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
@@ -445,9 +447,41 @@ export function solarSystemSource(snapshot: SpiceKernelSnapshot, codes: readonly
 	return { ...result, provenance }
 }
 
+// Semi-major axis (AU) beyond which a closed two-body orbit is propagated around the solar-system barycenter rather than
+// the Sun. The Sun moves about the barycenter by up to 0.01 AU with Jupiter's period, which a heliocentric conic carries
+// into the whole orbit of a distant body (over 100″ within 5 years for (2060) Chiron), while from Jupiter's distance
+// outward the barycentric conic is the better approximation (1.4″ for Chiron, 0.1″ for (136199) Eris); inside it the
+// heliocentric conic is far better, since the planets' pull there is not that of a central mass.
+export const BARYCENTRIC_KEPLER_AXIS = 5.5
+
+// Gravitational parameter (AU³/day²) of the barycentric conic: the Sun, the planets, and the Moon of DE440.
+const GM_SOLAR_SYSTEM = DE440_PERTURBERS.reduce((sum, e) => sum + e.gm, 0)
+
+// A two-body orbit of a minor body and the body it is relative to: the Sun (10), or the solar-system barycenter (0) for a
+// closed orbit beyond BARYCENTRIC_KEPLER_AXIS. Positions are the orbit's state plus the state of its center, ICRF.
+export interface MinorBodyKeplerOrbit {
+	// Conic relative to the center, ICRF axes: position AU, velocity AU/day.
+	readonly orbit: KeplerOrbit
+	// NAIF code of the center: 10 for the Sun, 0 for the solar-system barycenter.
+	readonly center: 0 | 10
+}
+
 // Kepler orbit of osculating elements; undefined for B1950 elements, which the local model does not support, and for
-// hyperbolic elements without a perihelion distance and time.
-export function keplerOrbit(elements: MinorBodyElements): KeplerOrbit | undefined {
+// hyperbolic elements without a perihelion distance and time. A closed orbit beyond BARYCENTRIC_KEPLER_AXIS becomes
+// barycentric: the heliocentric state at the epoch of the elements plus the barycentric Sun of the analytical theories
+// there, which hold at any epoch whatever kernels are loaded, propagated with the mass of the whole Solar System.
+export function keplerOrbit(elements: MinorBodyElements): MinorBodyKeplerOrbit | undefined {
+	const orbit = heliocentricKeplerOrbit(elements)
+	if (!orbit) return undefined
+	if (!(orbit.eccentricity < 1 && orbit.semiMajorAxis > BARYCENTRIC_KEPLER_AXIS)) return { orbit, center: 10 }
+
+	const [position, velocity] = orbit.at(orbit.epoch)
+	const [sun, sunVelocity] = analyticalEphemerisSource.state(10, orbit.epoch)
+	return { orbit: new KeplerOrbit(vecPlus(position, sun), vecPlus(velocity, sunVelocity), orbit.epoch, GM_SOLAR_SYSTEM, matIdentity()), center: 0 }
+}
+
+// Heliocentric Kepler orbit of osculating elements, as keplerOrbit describes.
+function heliocentricKeplerOrbit(elements: MinorBodyElements) {
 	if (elements.referenceEclipticFrame === 'B1950') return undefined
 
 	const { tpqr, ec, i, om, w } = elements
@@ -506,8 +540,9 @@ export function minorBodyMagnitude(elements: MinorBodyElements, sunToBody: Vec3,
 }
 
 // Model of a body or minor body over a source: a body is the source's state of its code, a minor body the Kepler orbit of
-// its elements around the source's Sun; undefined when there is none (minor body without usable elements).
-function solarSystemModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>, orbits: LruCache<KeplerOrbit>, source: EphemerisSource): SolarSystemModel | undefined {
+// its elements around the source's Sun or barycenter (see keplerOrbit); undefined when there is none (minor body without
+// usable elements).
+function solarSystemModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>, orbits: LruCache<MinorBodyKeplerOrbit>, source: EphemerisSource): SolarSystemModel | undefined {
 	if (target.type === 'body') return { state: (t) => source.state(Number(target.code), t), magnitude: magnitudeModel(target) }
 
 	const elements = target.elements
@@ -521,9 +556,9 @@ function solarSystemModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>,
 		orbits.set(target.spkId, orbit)
 	}
 
-	const kepler = orbit
+	const { orbit: kepler, center } = orbit
 
-	return { state: (t) => addStates(source.state(10, t), kepler.at(t)), magnitude: magnitudeModel(target) }
+	return { state: (t) => addStates(source.state(center, t), kepler.at(t)), magnitude: magnitudeModel(target) }
 }
 
 // Apparent place of date and observed azimuth and altitude of an astrometric ICRS direction (vector or
@@ -676,7 +711,7 @@ export class SkyEphemeris {
 	readonly #timeoutMs: number
 	readonly #breaker: HorizonsCircuitBreaker
 	readonly #tables = new LruCache<Promise<readonly HorizonsSample[]>>(HORIZONS_CACHE_LIMIT)
-	readonly #orbits = new LruCache<KeplerOrbit>(HORIZONS_CACHE_LIMIT)
+	readonly #orbits = new LruCache<MinorBodyKeplerOrbit>(HORIZONS_CACHE_LIMIT)
 	readonly #events = new LruCache<SkyEvents>(EVENTS_CACHE_LIMIT)
 	readonly #kernels: EphemerisKernels
 

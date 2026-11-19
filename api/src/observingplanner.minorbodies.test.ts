@@ -105,7 +105,7 @@ const unreachable = (() => Promise.reject(new TypeError('fetch failed'))) as unk
 // Geocentric vector of the Vesta-like orbit at an instant, exactly as the Kepler model computes its nodes.
 function keplerGeocentric(time: number) {
 	const t = timeUnix(time / 1000, true)
-	const heliocentric = keplerOrbit(VESTA_ELEMENTS)!.at(t)[0]
+	const heliocentric = keplerOrbit(VESTA_ELEMENTS)!.orbit.at(t)[0]
 	const sun = vsop.sun(t)[0]
 	const earth = vsop.earth(t)[0]
 	return [heliocentric[0] + sun[0] - earth[0], heliocentric[1] + sun[1] - earth[1], heliocentric[2] + sun[2] - earth[2]]

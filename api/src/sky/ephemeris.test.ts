@@ -1,7 +1,9 @@
 import { expect, test } from 'bun:test'
+import { analyticalEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
+import { asteroid } from 'nebulosa/src/astronomy/orbits/asteroid'
 import { deg, normalizePI, toDeg } from 'nebulosa/src/math/units/angle'
 import { SsdRequestQueue } from '../ssd'
-import { apparentAltitude, EphemerisUnavailableError, findEvents, HorizonsEphemerisError, type HorizonsObserver, SkyEphemeris } from './ephemeris'
+import { apparentAltitude, BARYCENTRIC_KEPLER_AXIS, EphemerisUnavailableError, findEvents, HorizonsEphemerisError, type HorizonsObserver, keplerOrbit, SkyEphemeris } from './ephemeris'
 
 const observer = { latitude: -23.5, longitude: -46.6, elevation: 760 }
 
@@ -254,4 +256,27 @@ test('the altitude holds the refraction of the horizon and ends below it', () =>
 	expect(toDeg(apparentAltitude(deg(-34 / 60)))).toBeCloseTo(0, 1)
 	expect(toDeg(apparentAltitude(deg(-6)))).toBeCloseTo(-6, 9)
 	expect(toDeg(apparentAltitude(deg(30))) - 30).toBeCloseTo(0.0275, 2)
+})
+
+test('distant closed orbits are propagated around the barycenter, the others around the Sun', () => {
+	const vesta = { epoch: 2461331.5, referenceEclipticFrame: 'J2000', ec: 0.0902, i: deg(7.144), om: deg(103.7), w: deg(151.5), tpqr: { a: 2.3615, ma: deg(120) } } as const
+	const eris = { epoch: 2461000.5, referenceEclipticFrame: 'J2000', ec: 0.437, i: deg(44.04), om: deg(35.87), w: deg(151.43), tpqr: { a: 67.86, ma: deg(211) } } as const
+	const hyperbolic = { epoch: 2461000.5, referenceEclipticFrame: 'J2000', ec: 1.0002, i: deg(70), om: deg(10), w: deg(20), tpqr: { qr: 6, tp: 2461200.5 } } as const
+
+	expect(keplerOrbit(vesta)?.center).toBe(10)
+	expect(keplerOrbit(hyperbolic)?.center).toBe(10)
+
+	// At the epoch the barycentric orbit is the heliocentric state plus the barycentric Sun.
+	const barycentric = keplerOrbit(eris)!
+	const heliocentric = keplerOrbit({ ...eris, tpqr: { a: BARYCENTRIC_KEPLER_AXIS - 1, ma: deg(211) } })!
+	expect(barycentric.center).toBe(0)
+	expect(heliocentric.center).toBe(10)
+	expect(barycentric.orbit.mu).toBeGreaterThan(heliocentric.orbit.mu * 1.0013)
+
+	const epoch = barycentric.orbit.epoch
+	const [p] = barycentric.orbit.at(epoch)
+	const [h] = asteroid(67.86, 0.437, deg(44.04), deg(35.87), deg(151.43), deg(211), epoch).at(epoch)
+	const [sun] = analyticalEphemerisSource.state(10, epoch)
+	expect(Math.hypot(p[0] - h[0] - sun[0], p[1] - h[1] - sun[1], p[2] - h[2] - sun[2])).toBeLessThan(1e-12)
+	expect(Math.hypot(sun[0], sun[1], sun[2])).toBeGreaterThan(1e-3)
 })

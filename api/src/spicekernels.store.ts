@@ -2,6 +2,7 @@ import { mkdir, readdir, rename, rm, stat } from 'fs/promises'
 import { join } from 'path'
 import type { SpkSegmentDescriptor, SpkUnsupportedReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.inspect'
 import { type AppDatabase, DEFAULT_DATA_DIRECTORY } from './database'
+import type { SpiceTargetPhotometry } from './spicekernels.runtime'
 
 // Durable part of the SPICE Kernel Library: the SPK files, their segments, the preferred kernel of some bodies, and the
 // offline switch of the ephemeris sources, as rows of spice_kernels, spice_segments, spice_preferences, and spice_settings in the operational database, and the bytes of each file under
@@ -188,8 +189,9 @@ export class SpiceKernelStore {
 		return segments
 	}
 
-	// Records a kernel and its segments, enabled, ready, and with the highest priority, in one transaction.
-	insert(kernel: NewSpiceKernel, segments: readonly SpkSegmentDescriptor[]): SpiceKernelRecord {
+	// Records a kernel, its segments, and the photometry of its minor bodies (by NAIF code), enabled, ready, and with the
+	// highest priority, in one transaction.
+	insert(kernel: NewSpiceKernel, segments: readonly SpkSegmentDescriptor[], photometry: ReadonlyMap<number, SpiceTargetPhotometry> = new Map()): SpiceKernelRecord {
 		const { db } = this.database
 
 		return this.database.write(() => {
@@ -214,6 +216,9 @@ export class SpiceKernelStore {
 			for (const segment of segments) {
 				insert.run({ id: kernel.id, index: segment.index, name: segment.name, target: segment.target, center: segment.center, frame: segment.frame, dataType: segment.dataType, start: segment.start, end: segment.end, supported: segment.supported ? 1 : 0, reason: segment.reason ?? null })
 			}
+
+			const photometric = db.query('INSERT INTO spice_photometry VALUES (:id, :target, :h, :g)')
+			for (const [target, { h, g }] of photometry) photometric.run({ id: kernel.id, target, h, g: g ?? null })
 
 			return { ...kernel, enabled: true, priority: next, state: 'ready' }
 		})
@@ -271,6 +276,13 @@ export class SpiceKernelStore {
 	preferences(): Map<number, string> {
 		const rows = this.database.db.query<{ body: number; kernel_id: string }, []>('SELECT body, kernel_id FROM spice_preferences').all()
 		return new Map(rows.map((e) => [e.body, e.kernel_id]))
+	}
+
+	// Returns the photometry of the minor bodies of the enabled ready kernels, by NAIF code; where kernels share a body, the
+	// one of the highest priority wins.
+	photometry(): Map<number, SpiceTargetPhotometry> {
+		const rows = this.database.db.query<{ target: number; magnitude_h: number; slope_g: number | null }, []>("SELECT p.target, p.magnitude_h, p.slope_g FROM spice_photometry p JOIN spice_kernels k ON k.kernel_id = p.kernel_id WHERE k.enabled = 1 AND k.state = 'ready' ORDER BY k.priority").all()
+		return new Map(rows.map((e) => [e.target, { h: e.magnitude_h, g: e.slope_g ?? undefined }]))
 	}
 
 	// Makes kernel the preferred one of the NAIF body, or removes the preference of the body when kernel is undefined.

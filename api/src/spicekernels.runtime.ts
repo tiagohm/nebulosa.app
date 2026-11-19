@@ -18,6 +18,15 @@ import { type FileHandleSource, fileHandleSource } from 'nebulosa/src/io/file'
 // be evaluated.
 export type SpiceKernelSetReadiness = { readonly status: 'ready' } | { readonly status: 'missingDependency'; readonly bodies: readonly number[] } | { readonly status: 'unsupported' }
 
+// Photometry of a minor body of the library: the IAU H-G model of an asteroid, recorded with the elements it was
+// integrated from.
+export interface SpiceTargetPhotometry {
+	// Absolute magnitude H.
+	readonly h: number
+	// Slope parameter G; absent when unknown (no phase correction).
+	readonly g?: number
+}
+
 // What the ephemeris reads of the library at one instant. Immutable; a change makes a new snapshot.
 export interface SpiceKernelSnapshot {
 	// Increased by every change of the set or the offline switch; part of the keys of the results computed from it.
@@ -30,6 +39,8 @@ export interface SpiceKernelSnapshot {
 	readonly set?: SpkKernelSet
 	// Readiness of each kernel of the set, by kernel id.
 	readonly readiness: ReadonlyMap<string, SpiceKernelSetReadiness>
+	// Photometry of the minor bodies of the enabled kernels, by NAIF code; absent or without a body when none is recorded.
+	readonly photometry?: ReadonlyMap<number, SpiceTargetPhotometry>
 }
 
 // A kernel to load: its id and the path of its file.
@@ -110,11 +121,12 @@ export class SpiceKernelRuntime implements Disposable {
 	}
 
 	// Makes files, in load order (lowest precedence first), the set of a new snapshot with the offline switch, selecting the preferred
-	// kernel of a body (preferences, by NAIF code, kernel ids) ahead of the load order where it covers. Files already open
+	// kernel of a body (preferences, by NAIF code, kernel ids) ahead of the load order where it covers, with the photometry of
+	// the minor bodies of those kernels. Files already open
 	// are reused; a new file that cannot be opened, read, or inspected is left out and reported in the returned map, by
 	// kernel id, with its error. Files that left the set are closed after the swap. A set whose files cannot be prepared together swaps
 	// nothing and reports no file, since none can be blamed. Never rejects. The caller serializes rebuilds.
-	async rebuild(files: readonly SpiceKernelFile[], offline: boolean, preferences: ReadonlyMap<number, string> = new Map()): Promise<Map<string, Error>> {
+	async rebuild(files: readonly SpiceKernelFile[], offline: boolean, preferences: ReadonlyMap<number, string> = new Map(), photometry: ReadonlyMap<number, SpiceTargetPhotometry> = new Map()): Promise<Map<string, Error>> {
 		const failures = new Map<string, Error>()
 		const opened = new Map<string, PreparedKernel>()
 
@@ -160,7 +172,7 @@ export class SpiceKernelRuntime implements Disposable {
 		}
 
 		const previous = [...this.#prepared.entries()]
-		this.#snapshot = { generation: this.#snapshot.generation + 1, offline, loading: false, set, readiness }
+		this.#snapshot = { generation: this.#snapshot.generation + 1, offline, loading: false, set, readiness, photometry }
 		this.#prepared.clear()
 		for (const [id, kernel] of opened) this.#prepared.set(id, kernel)
 

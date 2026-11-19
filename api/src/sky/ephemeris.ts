@@ -2,16 +2,16 @@ import { observer as horizonsObserver, type ObserverWithOsculatingElements, Quan
 import { planetMagnitude } from 'nebulosa/src/astronomy/bodies/photometry'
 import { cirsToObserved, icrsToCirs, lightTime, refractedAltitude, type PositionAndVelocity, type PositionAndVelocityOverTime, phaseAngle, topocentricDirection } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { constellation as constellationOf, CONSTELLATIONS } from 'nebulosa/src/astronomy/coordinates/constellation'
-import { eraC2s, eraEo06a } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import { eraApci13, eraC2s, eraEo06a } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { frameToFrame, ICRS, ITRS } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
 import type { SpkKernelSet } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
-import { analyticalEphemerisSource, type EphemerisSource, interpolatedEphemerisSource, relativeEphemerisState, spkEphemerisSource, type SpkEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
+import { analyticalEphemerisSource, EphemerisMiss, type EphemerisSource, interpolatedEphemerisSource, relativeEphemerisState, spkEphemerisSource, type SpkEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { asteroidMagnitudeEstimate, cometMagnitudeEstimate } from 'nebulosa/src/astronomy/formulas'
 import type { GeographicPosition } from 'nebulosa/src/astronomy/observer/location'
 import { asteroid, comet, KeplerOrbit } from 'nebulosa/src/astronomy/orbits/asteroid'
 import { DE440_PERTURBERS } from 'nebulosa/src/astronomy/orbits/propagation/nbody'
-import { precessionNutationMatrix, type Time, Timescale, time as makeJulianTime, timeShift, timeUnix, toJulianEpoch, tt } from 'nebulosa/src/astronomy/time/time'
+import { precessionNutationMatrix, tdb, type Time, Timescale, time as makeJulianTime, timeShift, timeUnix, toJulianEpoch, tt } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, DEG2RAD, GM_SUN_PITJEVA_2005, J2000, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
 import { matIdentity } from 'nebulosa/src/math/linear-algebra/mat3'
 import { type MutVec3, type Vec3, vecAngle, vecLength, vecPlus } from 'nebulosa/src/math/linear-algebra/vec3'
@@ -19,8 +19,9 @@ import { deg, normalizeAngle, normalizePI, toDeg } from 'nebulosa/src/math/units
 import { meter } from 'nebulosa/src/math/units/distance'
 import { computeEphemeris, computeEphemerisSync, type EphemerisAttempt, type EphemerisKernels, type EphemerisKernelsUsed, type EphemerisMode, type EphemerisProvenance, type EphemerisSourceKind, EphemerisUnavailableError, HorizonsCircuitBreaker, NO_EPHEMERIS_KERNELS, snapshotKernels } from '../ephemeris.chain'
 import { LruCache } from '../lrucache'
-import type { SpiceKernelSnapshot } from '../spicekernels.runtime'
+import type { SpiceKernelSnapshot, SpiceTargetPhotometry } from '../spicekernels.runtime'
 import { SsdRequestQueue } from '../ssd'
+import { yieldToEventLoop } from '../util'
 import { solarSystemBody, type SolarSystemBodyKind } from './bodies'
 import type { SolarSystemBodyCode } from './types'
 
@@ -60,6 +61,10 @@ const HOUR_MS = 3_600_000
 // Half-width of the window around the instant in which rise, transit, and set are searched, in
 // milliseconds: the events nearest the instant within ±12 h.
 const EVENT_HALF_WINDOW_MS = 12 * HOUR_MS
+
+// Minor bodies located per chunk of a batch of map positions (SkyEphemeris.mapPositions), between which the event loop
+// runs, so thousands of bodies never hold it for long.
+const MAP_POSITIONS_CHUNK = 500
 
 // Light-time iterations of the local solar-system reduction; two converge to well under a millisecond.
 const LIGHT_TIME_ITERATIONS = 2
@@ -510,8 +515,9 @@ interface SolarSystemModel {
 	readonly magnitude: MagnitudeModel
 }
 
-// Magnitude model of a body or minor body, whatever its states come from; a minor body without elements has none.
-function magnitudeModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>): MagnitudeModel {
+// Magnitude model of a body or minor body, whatever its states come from: a minor body's comes from its SBDB elements,
+// else from the photometry the SPICE Kernel Library recorded with its kernel; without either it has none.
+function magnitudeModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>, photometry?: SpiceTargetPhotometry): MagnitudeModel {
 	if (target.type === 'body') {
 		const kind = solarSystemBody(target.code)?.kind
 		if (kind === 'sun') return () => SUN_MAGNITUDE
@@ -522,7 +528,7 @@ function magnitudeModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>): 
 		}
 	}
 
-	const elements = target.elements
+	const elements = target.elements ?? photometry
 	if (!elements) return () => undefined
 	return (sunToBody, observerToBody) => minorBodyMagnitude(elements, sunToBody, observerToBody)
 }
@@ -530,7 +536,7 @@ function magnitudeModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>): 
 // Estimated visual magnitude of a minor body from its photometry and the Sun-to-body and observer-to-body vectors (AU):
 // the comet model of M1 and K1 (K1 = 10 when absent), else the asteroid H-G model (no phase correction without G);
 // undefined without either.
-export function minorBodyMagnitude(elements: MinorBodyElements, sunToBody: Vec3, observerToBody: Vec3) {
+export function minorBodyMagnitude(elements: Pick<MinorBodyElements, 'h' | 'g' | 'm1' | 'k1'>, sunToBody: Vec3, observerToBody: Vec3) {
 	const r = vecLength(sunToBody)
 	const delta = vecLength(observerToBody)
 	if (elements.m1 !== undefined) return cometMagnitudeEstimate(elements.m1, delta, r, elements.k1 ?? 10)
@@ -540,9 +546,9 @@ export function minorBodyMagnitude(elements: MinorBodyElements, sunToBody: Vec3,
 }
 
 // Model of a body or minor body over a source: a body is the source's state of its code, a minor body the Kepler orbit of
-// its elements around the source's Sun or barycenter (see keplerOrbit); undefined when there is none (minor body without
-// usable elements).
-function solarSystemModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>, orbits: LruCache<MinorBodyKeplerOrbit>, source: EphemerisSource): SolarSystemModel | undefined {
+// its elements around the source's Sun or barycenter (see keplerOrbit), with the photometry of the library as the
+// fallback of its magnitude; undefined when there is none (minor body without usable elements).
+function solarSystemModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>, orbits: LruCache<MinorBodyKeplerOrbit>, source: EphemerisSource, photometry?: SpiceTargetPhotometry): SolarSystemModel | undefined {
 	if (target.type === 'body') return { state: (t) => source.state(Number(target.code), t), magnitude: magnitudeModel(target) }
 
 	const elements = target.elements
@@ -558,7 +564,7 @@ function solarSystemModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>,
 
 	const { orbit: kepler, center } = orbit
 
-	return { state: (t) => addStates(source.state(center, t), kepler.at(t)), magnitude: magnitudeModel(target) }
+	return { state: (t) => addStates(source.state(center, t), kepler.at(t)), magnitude: magnitudeModel(target, photometry) }
 }
 
 // Apparent place of date and observed azimuth and altitude of an astrometric ICRS direction (vector or
@@ -675,6 +681,44 @@ function solarSystemPosition(model: SolarSystemModel, time: Time, isSun: boolean
 	}
 }
 
+// Apparent place of date and estimated magnitude of a minor body drawn on the map (SkyEphemeris.mapPositions).
+export interface SkyMapPlace {
+	// Apparent right ascension of date, radians from the true equinox, [0, 2π).
+	readonly rightAscension: number
+	// Apparent declination of date, radians.
+	readonly declination: number
+	// Estimated visual magnitude; absent without photometry.
+	readonly magnitude?: number
+}
+
+// Reduction of many targets to their map places over one source at one instant: the observer's barycentric state, the
+// astrometry parameters of the instant, and the equation of the origins are computed once and shared, so each target
+// costs only its light-time solution and its own aberration and deflection. The light-time epochs are shifted from the
+// instant in TDB, which needs no time scale conversion (about 20 µs each from UTC, most of the cost of a body otherwise).
+// The places equal those of solarSystemPosition with the same source within 1e-12 rad.
+function mapReduction(source: EphemerisSource, time: Time) {
+	const at = tdb(time)
+	const earth = source.state(399, time)
+	const observer = observerBarycentric(time, source)
+	const a = tt(time)
+	const astrom = eraApci13(a.day, a.fraction, earth, earth[0], undefined, precessionNutationMatrix(time))
+	const equationOfOrigins = eraEo06a(a.day, a.fraction, precessionNutationMatrix(time))
+	const direction: MutVec3 = [0, 0, 0]
+
+	// Map place of a target whose barycentric state is `state`; magnitude estimated by `magnitude` when given.
+	return (state: PositionAndVelocityOverTime, magnitude?: MagnitudeModel): SkyMapPlace => {
+		topocentricDirection(state, () => observer, at, LIGHT_TIME_ITERATIONS, direction)
+		const [ri, di] = icrsToCirs(direction, time, earth, undefined, astrom)
+		const rightAscension = normalizeAngle(ri - equationOfOrigins)
+		if (!magnitude) return { rightAscension, declination: di }
+
+		const emission = timeShift(at, -lightTime(direction))
+		const body = state(emission)[0]
+		const sun = source.state(10, emission)[0]
+		return { rightAscension, declination: di, magnitude: magnitude([body[0] - sun[0], body[1] - sun[1], body[2] - sun[2]], direction, time) }
+	}
+}
+
 // Rounds an observer coordinate for cache keys: 1e-4° (about 10 m) and 1 m.
 function observerKey(observer?: SkyObserver) {
 	return observer ? `${observer.latitude.toFixed(4)},${observer.longitude.toFixed(4)},${observer.elevation.toFixed(0)}` : 'geo'
@@ -740,6 +784,59 @@ export class SkyEphemeris {
 		return name ? { ...position, constellationName: name } : position
 	}
 
+	// Apparent places of date and estimated magnitudes of minor bodies at one instant for an observer (the geocenter when
+	// absent), for drawing them on the map: each from the kernels of the library when they cover it, else from the Kepler
+	// orbit of its SBDB elements, never from Horizons; a body neither gives is left out. The magnitude comes from the SBDB
+	// elements, else from the photometry the library recorded with its kernel. Places equal those of position() in fast
+	// mode, without its horizontal coordinates, constellation, illumination, events, and provenance, and the Earth, the
+	// observer, and the precession-nutation of the instant are computed once for the whole batch. The event loop runs
+	// every MAP_POSITIONS_CHUNK bodies; rejects when `signal` aborts.
+	async mapPositions(targets: readonly Extract<EphemerisTarget, { type: 'minorBody' }>[], time: number, observer?: SkyObserver, signal?: AbortSignal): Promise<(SkyMapPlace & { readonly spkId: string })[]> {
+		const snapshot = this.#kernels.current()
+		const t = makeTime(time, observer)
+		const set = !snapshot.loading && snapshot.set?.bodies.has(399) && snapshot.set.bodies.has(10) ? snapshot.set : undefined
+		const spk = set && spkEphemerisSource(set)
+		let spkPlace: ReturnType<typeof mapReduction> | undefined
+		let analyticalPlace: ReturnType<typeof mapReduction> | undefined
+		const places: (SkyMapPlace & { readonly spkId: string })[] = []
+
+		for (let i = 0; i < targets.length; i++) {
+			if (i > 0 && i % MAP_POSITIONS_CHUNK === 0) {
+				await yieldToEventLoop()
+				signal?.throwIfAborted()
+			}
+
+			const target = targets[i]
+			const naif = Number(target.spkId)
+			const photometry = snapshot.photometry?.get(naif)
+			const magnitude = target.elements || photometry ? magnitudeModel(target, photometry) : undefined
+			let place: SkyMapPlace | undefined
+
+			if (spk && set.bodies.has(naif)) {
+				try {
+					spkPlace ??= mapReduction(spk, t)
+					place = spkPlace((at) => spk.state(naif, at), magnitude)
+				} catch (error) {
+					// A body the kernels do not resolve at the instant falls back to its orbit, as the fast chain does.
+					if (!(error instanceof EphemerisMiss)) console.error('An SPK kernel could not be read; the orbit of the body is used', error)
+				}
+			}
+
+			if (!place) {
+				const model = solarSystemModel(target, this.#orbits, analyticalEphemerisSource, photometry)
+
+				if (model) {
+					analyticalPlace ??= mapReduction(analyticalEphemerisSource, t)
+					place = analyticalPlace(model.state, magnitude && model.magnitude)
+				}
+			}
+
+			if (place) places.push({ spkId: target.spkId, ...place })
+		}
+
+		return places
+	}
+
 	// Computes a position as described by position(), without the constellation name.
 	async #position(target: EphemerisTarget, request: PositionRequest): Promise<SkyPosition> {
 		request.signal?.throwIfAborted()
@@ -751,7 +848,8 @@ export class SkyEphemeris {
 
 		const time = makeTime(request.time, request.observer)
 		const isSun = target.type === 'body' && target.code === '10'
-		const model = solarSystemModel(target, this.#orbits, analyticalEphemerisSource)
+		const photometry = target.type === 'minorBody' ? this.#kernels.current().photometry?.get(naifCode(target)) : undefined
+		const model = solarSystemModel(target, this.#orbits, analyticalEphemerisSource, photometry)
 
 		const { results, provenance } = await computeEphemeris<PositionComputation, ReturnType<PositionComputation['position']>>({
 			kernels: this.#kernels,
@@ -762,7 +860,7 @@ export class SkyEphemeris {
 				bodies: kernelBodies(target),
 				spk: (set) => {
 					const calculation = spkCalculation(set, naifCode(target))
-					return { position: () => solarSystemPosition({ state: calculation.target, magnitude: magnitudeModel(target) }, time, isSun, calculation.source), kernelIds: calculation.kernelIds }
+					return { position: () => solarSystemPosition({ state: calculation.target, magnitude: magnitudeModel(target, photometry) }, time, isSun, calculation.source), kernelIds: calculation.kernelIds }
 				},
 				analytical: () => model && { position: () => solarSystemPosition(model, time, isSun, analyticalEphemerisSource) },
 				horizons: request.local

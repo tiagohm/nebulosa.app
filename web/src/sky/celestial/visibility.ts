@@ -5,7 +5,8 @@ import type { DeepSkyObject, MovingBody, RenderState } from './types'
 // Zoom-dependent magnitude limits of the star map: bright objects and labels show at base zoom and fainter
 // ones appear progressively while zooming in, shared by the layers and picking so both agree on what is
 // visible. Magnitudes are visual magnitudes; a zoom octave doubles the zoom factor. Deep-sky objects and the names of
-// stars, deep-sky objects, and constellations follow the density zoom, which also counts the size of the projection disk: a small disk
+// stars, deep-sky objects, and constellations follow the density zoom; asteroids and comets, which a library of
+// kernels may hold by the thousand, follow limits of their own that reach much fainter bodies when zoomed in. The density zoom which also counts the size of the projection disk: a small disk
 // (a phone) holds the whole sky in fewer pixels, so it shows what a proportionally lower zoom would.
 
 // Radius in pixels of the base projection disk at which the limits read as designed (a desktop map); larger disks
@@ -44,6 +45,21 @@ const DSO_LABEL_MAGNITUDE_PER_ZOOM = 2.5
 const DSO_LABEL_MIN_MAGNITUDE = 3
 // Faintest deep-sky label ever shown; caps label clutter.
 const DSO_LABEL_MAX_MAGNITUDE = 14
+
+// Faintest asteroid or comet drawn at zoom factor 1 (the whole sky), visual magnitude: the few brightest of them.
+const SMALL_BODY_SYMBOL_BASE_MAGNITUDE = 9
+// Magnitudes added to the asteroid and comet limit per zoom octave.
+const SMALL_BODY_SYMBOL_MAGNITUDE_PER_ZOOM = 1.5
+// Bounds of the asteroid and comet limit, visual magnitudes; the faintest reaches the near-Earth asteroids of a deep zoom.
+const SMALL_BODY_SYMBOL_MIN_MAGNITUDE = 6
+const SMALL_BODY_SYMBOL_MAX_MAGNITUDE = 22
+
+// Faintest asteroid or comet named at zoom factor 1, visual magnitude, and per zoom octave, two magnitudes brighter than
+// the symbols, within the bounds below.
+const SMALL_BODY_LABEL_BASE_MAGNITUDE = 7
+const SMALL_BODY_LABEL_MAGNITUDE_PER_ZOOM = 1.5
+const SMALL_BODY_LABEL_MIN_MAGNITUDE = 4
+const SMALL_BODY_LABEL_MAX_MAGNITUDE = 20
 
 // Returns the magnitude limit at zoom factor `k`: `baseMagnitude` at k = 1 plus `magnitudePerZoom` per zoom
 // octave (k below 0.25 counts as 0.25), clamped to [minMagnitude, maxMagnitude].
@@ -114,15 +130,44 @@ export function isDeepSkyLabelVisible(object: DeepSkyObject, state: RenderState)
 	return deepSkyMagnitude(object) <= deepSkyLabelMagnitudeLimit(stateDensityZoom(state))
 }
 
+// Returns the faintest asteroid or comet magnitude drawn at zoom factor `k`.
+export function smallBodyMagnitudeLimit(k: number) {
+	return zoomMagnitudeLimit(k, SMALL_BODY_SYMBOL_BASE_MAGNITUDE, SMALL_BODY_SYMBOL_MAGNITUDE_PER_ZOOM, SMALL_BODY_SYMBOL_MIN_MAGNITUDE, SMALL_BODY_SYMBOL_MAX_MAGNITUDE)
+}
+
+// Returns the faintest asteroid or comet magnitude named at zoom factor `k`.
+export function smallBodyLabelMagnitudeLimit(k: number) {
+	return zoomMagnitudeLimit(k, SMALL_BODY_LABEL_BASE_MAGNITUDE, SMALL_BODY_LABEL_MAGNITUDE_PER_ZOOM, SMALL_BODY_LABEL_MIN_MAGNITUDE, SMALL_BODY_LABEL_MAX_MAGNITUDE)
+}
+
+// Returns whether a moving body is an asteroid or a comet.
+function isSmallBody(object: MovingBody) {
+	return object.type === 'asteroid' || object.type === 'comet'
+}
+
 // Returns a moving body's magnitude, or 0 when it has none.
 export function movingBodyMagnitude(object: MovingBody) {
 	return isFiniteNumber(object.magnitude) ? object.magnitude : 0
 }
 
-// Returns whether a moving body is drawn at a zoom factor; bodies without magnitude, or always visible,
-// always are.
+// Returns whether a moving body is drawn at a zoom factor: an asteroid or comet within smallBodyMagnitudeLimit, any other
+// within the deep-sky limit; bodies without magnitude, or always visible, always are.
 export function isMovingBodyVisibleAtZoom(object: MovingBody, zoom: number) {
-	return object.alwaysVisible === true || !isFiniteNumber(object.magnitude) || object.magnitude <= deepSkyObjectMagnitudeLimit(zoom)
+	if (object.alwaysVisible === true || !isFiniteNumber(object.magnitude)) return true
+	return object.magnitude <= (isSmallBody(object) ? smallBodyMagnitudeLimit(zoom) : deepSkyObjectMagnitudeLimit(zoom))
+}
+
+// Returns whether the name of a visible moving body may be left out: that of an asteroid or comet not always visible
+// (such as one of the kernels of the library), named only where it fits; the names of the Sun, the Moon, the planets, and
+// the bodies always visible are always drawn.
+export function isMovingLabelOptional(object: MovingBody) {
+	return isSmallBody(object) && object.alwaysVisible !== true
+}
+
+// Returns whether an optional moving-body name is bright enough to be drawn in a render state; one without magnitude
+// always is.
+export function isOptionalMovingLabelVisible(object: MovingBody, state: RenderState) {
+	return !isFiniteNumber(object.magnitude) || object.magnitude <= smallBodyLabelMagnitudeLimit(state.transform.k)
 }
 
 // Returns whether a moving body is drawn in a render state.

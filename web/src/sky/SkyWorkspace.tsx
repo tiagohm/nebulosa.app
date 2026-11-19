@@ -12,7 +12,6 @@ import { satelliteCatalogState } from '../satellites/satellites'
 import { EmptyState, useWorkspacePanel, type WorkspacePanel, WorkspaceLayout } from '../shell/WorkspaceLayout'
 import { openFramingAt, skySelectionCenter } from '../tools/framing/framing'
 import { meteorShowerSourcesState } from '../tools/meteorshowers/meteorshowers.sources'
-import { spiceKernelsState } from '../tools/spicekernels/spicekernels'
 import { Button } from '../ui/Button'
 import { FavoriteButton } from '../ui/FavoriteButton'
 import { IconButton } from '../ui/IconButton'
@@ -24,7 +23,6 @@ import { addSkyObjectFavorite, isSkyFavorite, removeSkyObjectFavorite, selection
 import { clearImageFootprint, clearSkyCoordinate, skyImageState, toggleImageFootprint } from './footprint'
 import { FramingPanel } from './FramingPanel'
 import { HoverTooltip } from './HoverTooltip'
-import { kernelBodies } from './kernels.sky'
 import { mountPoint, mountRuntime, mountView, selectionPoint } from './mount'
 import { ObjectInspector } from './ObjectInspector'
 import { planetarium, planetariumState } from './planetarium'
@@ -117,17 +115,6 @@ export function SkyWorkspace() {
 	useEffect(() => {
 		map.setMeteorRadiants({ visible: showRadiants, revision: meteorRevision, selected: selectedShower, selectedName: selectedShowerName })
 	}, [map, showRadiants, meteorRevision, selectedShower, selectedShowerName])
-
-	// Draws the asteroids and comets of the Horizons kernels of the SPICE Kernel Library, following the library, and
-	// recomputes the selection and the bodies when its kernel generation changes.
-	const library = useSnapshot(spiceKernelsState).snapshot
-	const kernelGeneration = library?.generation
-	const kernelBodyList = kernelBodies(library?.kernels)
-	const kernelBodiesKey = JSON.stringify(kernelBodyList)
-
-	useEffect(() => {
-		map.setKernelBodies(kernelBodies(spiceKernelsState.snapshot?.kernels), kernelGeneration)
-	}, [map, kernelBodiesKey, kernelGeneration])
 
 	// Draws the fields of view of the framings not hidden around the selection, each in its colour, following its position.
 	const framings = useResolvedFramings()

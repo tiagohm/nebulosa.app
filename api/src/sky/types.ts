@@ -479,12 +479,17 @@ export interface SkyMinorBodiesRequest {
 	readonly bodies: readonly Extract<SkyObjectRef, { kind: 'minorBody' }>[]
 }
 
-// Position of a minor body of POST /api/sky/minorbodies/positions.
+// Place of a minor body of POST /api/sky/minorbodies/positions, for drawing it on the map: at the requested instant, from
+// the kernels or the two-body orbit of the SBDB elements already known.
 export interface SkyMinorBodyPosition {
 	// SPK-ID of the body.
 	readonly spkId: string
-	// Position at the requested instant, from the kernels or the two-body orbit of the SBDB elements already known.
-	readonly position: SkyPosition
+	// Apparent right ascension of date, radians from the true equinox, [0, 2π).
+	readonly rightAscension: number
+	// Apparent declination of date, radians.
+	readonly declination: number
+	// Estimated visual magnitude, from the SBDB elements or the photometry of the kernel; absent without either.
+	readonly magnitude?: number
 }
 
 // IAU constellation, located at its label: a fixed J2000 point near its center, without proper motion,

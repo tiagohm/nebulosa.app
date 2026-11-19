@@ -933,6 +933,19 @@ CREATE TABLE spice_segments (
 
 CREATE INDEX spice_segments_target ON spice_segments (target, start_et, end_et);
 
+-- Photometry of the minor bodies of a kernel of the SPICE Kernel Library, recorded with the elements it was integrated
+-- from (the MPC 1-line elements of an import): the IAU H-G model the Sky estimates their magnitude with. One row per body
+-- of the kernel that has one; deleting the kernel deletes them.
+CREATE TABLE spice_photometry (
+	kernel_id TEXT NOT NULL REFERENCES spice_kernels (kernel_id) ON DELETE CASCADE,
+	-- NAIF code of the body.
+	target INTEGER NOT NULL,
+	-- Absolute magnitude H, and slope parameter G (NULL when unknown).
+	magnitude_h REAL NOT NULL,
+	slope_g REAL,
+	PRIMARY KEY (kernel_id, target)
+) STRICT;
+
 -- Preferred kernel of a body in the SPICE Kernel Library (SpiceKernelStore): where a segment of that kernel for the body
 -- covers an epoch, it is selected ahead of the load order; elsewhere the load order applies. One row per body with a
 -- preference; deleting the kernel deletes it.

@@ -3,11 +3,12 @@ import { positionSkyLabel, skyLabelFont, skyLabelSize, STAR_LABEL_OFFSET_X, STAR
 import { applyViewTransform, writeBaseViewportBounds } from './geometry'
 import { movingBodyLayerId } from './picking'
 import type { RenderState } from './types'
-import { isMovingBodyVisible, starLabelMagnitudeLimit } from './visibility'
+import { isMovingBodyVisible, isMovingLabelOptional, isOptionalMovingLabelVisible, starLabelMagnitudeLimit } from './visibility'
 
 // Space the names of the star map share, so no name is drawn over another, in a fixed priority: the names of the Sun,
-// the Moon, the planets, asteroids, and comets are always drawn; then star names, the map's landmarks; then deep-sky
-// names; then satellite names (the selected satellite's always); then constellation names. A name that would overlap
+// the Moon, the planets, and the asteroids and comets always visible (looked for) are always drawn; then star names, the
+// map's landmarks; then the names of the other asteroids and comets (those of the kernels of the library), bright enough
+// for the zoom; then deep-sky names; then satellite names (the selected satellite's always); then constellation names. A name that would overlap
 // one of a higher priority, or one of its own kind drawn before, is left out (the hover and selection overlay still names
 // a star or a deep-sky object).
 //
@@ -83,9 +84,11 @@ export class SkyLabelSpace {
 	private readonly deepSky = new Boxes()
 	// Boxes of the satellite and constellation names of the dynamic canvas's frame.
 	private readonly dynamic = new Boxes()
-	// Moving-body names of the frame: index in RenderState.movingBodies, and where each starts (pixels).
+	// Moving-body names of the frame: the slot of the name of each body by its index in RenderState.movingBodies (-1 when
+	// it has none) for the frame's `movingBodyCount` bodies, and where each name starts (pixels), by slot.
+	private movingBodyCount = 0
 	private movingCount = 0
-	private movingIndices = new Int32Array(0)
+	private movingSlots = new Int32Array(0)
 	private movingX = new Float32Array(0)
 	private movingY = new Float32Array(0)
 	// Star names of the frame: catalog index, and where each starts (pixels, the left end on the text's middle line).
@@ -119,21 +122,19 @@ export class SkyLabelSpace {
 	// Returns where the name of moving body `index` (of RenderState.movingBodies) starts, as x then y in pixels; undefined
 	// when it has no name placed in the frame.
 	movingAt(index: number, out: Float32Array) {
-		for (let i = 0; i < this.movingCount; i++) {
-			if (this.movingIndices[i] !== index) continue
-			out[0] = this.movingX[i]
-			out[1] = this.movingY[i]
-			return out
-		}
-
-		return undefined
+		const slot = index < this.movingBodyCount ? this.movingSlots[index] : -1
+		if (slot < 0) return undefined
+		out[0] = this.movingX[slot]
+		out[1] = this.movingY[slot]
+		return out
 	}
 
-	// Places the moving-body and star names of the state's frame, unless already placed for it: every visible
-	// moving body of the movingBodies layer by its name, then the named stars bright enough for the zoom and inside the
+	// Places the moving-body and star names of the state's frame, unless already placed for it: every visible moving body
+	// of the movingBodies layer whose name is always drawn, then the named stars bright enough for the zoom and inside the
 	// viewport, in the order the catalog names them, each beside its star and left out when it would overlap a
-	// moving-body name or sit closer than STAR_LABEL_MIN_SPACING to a star name placed before. Hidden layers and hidden
-	// star names place nothing. The context only measures names; its state is restored.
+	// moving-body name or sit closer than STAR_LABEL_MIN_SPACING to a star name placed before, then the optional names of
+	// the other asteroids and comets bright enough for the zoom, each left out when it would overlap any name placed before.
+	// Hidden layers and hidden star names place nothing. The context only measures names; its state is restored.
 	place(ctx: CanvasRenderingContext2D, state: RenderState) {
 		if (this.frame === state.frame) return this
 		this.frame = state.frame
@@ -141,9 +142,14 @@ export class SkyLabelSpace {
 		this.movingCount = 0
 		this.starCount = 0
 
+		this.movingBodyCount = state.movingBodies.length
+		this.ensureMovingCapacity(this.movingBodyCount)
+		this.movingSlots.fill(-1, 0, this.movingBodyCount)
+
 		ctx.save()
-		this.placeMovingBodies(ctx, state)
+		this.placeMovingBodies(ctx, state, false)
 		this.placeStars(ctx, state)
+		this.placeMovingBodies(ctx, state, true)
 		ctx.restore()
 		return this
 	}
@@ -187,21 +193,24 @@ export class SkyLabelSpace {
 		return true
 	}
 
-	// Places the names of the visible moving bodies of the movingBodies layer, which are always drawn.
-	private placeMovingBodies(ctx: CanvasRenderingContext2D, state: RenderState) {
+	// Places the names of the visible moving bodies of the movingBodies layer: those always drawn, each moved around its
+	// body to fit where it can, or the `optional` ones, bright enough for the zoom, each left out when it would overlap a
+	// name placed before.
+	private placeMovingBodies(ctx: CanvasRenderingContext2D, state: RenderState, optional: boolean) {
 		if (!state.celestial.isLayerVisible('movingBodies')) return
 
 		ctx.font = skyLabelFont(state, MOVING_LABEL_BASE_PX)
 		const height = skyLabelSize(state, MOVING_LABEL_BASE_PX) * LABEL_BOX_HEIGHT_PER_FONT_PX
-		this.ensureMovingCapacity(state.movingBodies.length)
 
 		for (let i = 0; i < state.movingBodies.length; i++) {
 			const object = state.movingBodies[i]
-			if (movingBodyLayerId(object.type) !== 'movingBodies' || !isMovingBodyVisible(object, state)) continue
+			if (movingBodyLayerId(object.type) !== 'movingBodies' || isMovingLabelOptional(object) !== optional || !isMovingBodyVisible(object, state)) continue
+			if (optional && !isOptionalMovingLabelVisible(object, state)) continue
 			if (!state.projectEquatorialToScreen(object.position.rightAscension, object.position.declination, this.point)) continue
 
 			const name = object.name ?? object.type
 			if (!positionSkyLabel(ctx, state, name, this.point[0], this.point[1], STAR_LABEL_OFFSET_X, STAR_LABEL_OFFSET_Y, this.labelPoint)) continue
+			if (optional && this.placed.overlaps(this.labelPoint[0], this.labelPoint[1] - height / 2, this.labelPoint[0] + this.labelPoint[2], this.labelPoint[1] + height / 2)) continue
 
 			// A name that would overlap an earlier moving body's (two planets in conjunction) tries the other side of its
 			// body, then just below and above it, and is drawn where it first fits, or where it was placed when none does.
@@ -231,7 +240,7 @@ export class SkyLabelSpace {
 				}
 			}
 
-			this.movingIndices[this.movingCount] = i
+			this.movingSlots[i] = this.movingCount
 			this.movingX[this.movingCount] = x
 			this.movingY[this.movingCount] = y
 			this.movingCount++
@@ -300,9 +309,9 @@ export class SkyLabelSpace {
 
 	// Grows the moving-body arrays to at least `capacity` names.
 	private ensureMovingCapacity(capacity: number) {
-		if (this.movingIndices.length >= capacity) return
+		if (this.movingSlots.length >= capacity) return
 
-		this.movingIndices = new Int32Array(capacity)
+		this.movingSlots = new Int32Array(capacity)
 		this.movingX = new Float32Array(capacity)
 		this.movingY = new Float32Array(capacity)
 	}

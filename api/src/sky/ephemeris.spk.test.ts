@@ -9,6 +9,7 @@ import { type SpiceKernelSnapshot, SpiceKernelRuntime } from '../spicekernels.ru
 import { EphemerisUnavailableError, type HorizonsObserver, SkyEphemeris } from './ephemeris'
 import { MinorBodies } from './minorbodies'
 import { createSkyRoutes } from './routes'
+import type { SkyMinorBodyPosition } from './types'
 
 const directory = mkdtempSync(join(tmpdir(), 'nebulosa-sky-spk-'))
 const runtimes: SpiceKernelRuntime[] = []
@@ -229,11 +230,37 @@ test('the map locates its minor bodies together, locally, without events or remo
 		{ kind: 'minorBody', spkId: '20000002', designation: '2 Pallas' },
 	]
 	const response = await routes['/api/sky/minorbodies/positions'].POST(new Request('http://localhost/api/sky/minorbodies/positions', { method: 'POST', body: JSON.stringify({ time: TIME, observer, bodies }) }) as never)
-	const positions = (await response.json()) as { spkId: string; position: { source: string }; events?: unknown }[]
+	const positions = (await response.json()) as SkyMinorBodyPosition[]
 
-	// Ceres comes from its kernel; Pallas has no kernel and no SBDB elements known, so it is left out rather than asked for.
-	expect(positions.map((e) => [e.spkId, e.position.source])).toEqual([['20000001', 'spk']])
-	expect(positions[0].events).toBeUndefined()
+	// Ceres comes from its kernel, at the place of its fast position; Pallas has no kernel and no SBDB elements known, so it
+	// is left out rather than asked for.
+	const fast = await ephemeris.position({ type: 'minorBody', spkId: '20000001' }, { time: TIME, observer, mode: 'fast', local: true })
+	expect(fast.source).toBe('spk')
+	expect(positions.map((e) => e.spkId)).toEqual(['20000001'])
+	expect(positions[0].rightAscension).toBeCloseTo(fast.rightAscension, 12)
+	expect(positions[0].declination).toBeCloseTo(fast.declination, 12)
+	expect(positions[0].magnitude).toBeUndefined()
 	expect(sbdb).toBe(0)
 	expect(calls).toEqual([])
+})
+
+test('map positions estimate the magnitude from the photometry recorded with a kernel, as positions do', async () => {
+	const runtime = new SpiceKernelRuntime()
+	runtimes.push(runtime)
+	const entries = [PLANETARY, CERES].map((kernel) => {
+		const id = `kernel-${++files}`
+		const path = join(directory, `${id}.bsp`)
+		writeFileSync(path, spkFixture(kernel))
+		return { id, path }
+	})
+	await runtime.rebuild(entries, false, new Map(), new Map([[20000001, { h: 3.34, g: 0.12 }]]))
+	const ephemeris = new SkyEphemeris({ observer: horizons().observe, kernels: runtime })
+
+	const [place] = await ephemeris.mapPositions([{ type: 'minorBody', spkId: '20000001' }], TIME, observer)
+	const position = await ephemeris.position({ type: 'minorBody', spkId: '20000001' }, { time: TIME, observer, mode: 'fast' })
+
+	expect(position.magnitude).toBeNumber()
+	expect(place.rightAscension).toBeCloseTo(position.rightAscension, 12)
+	expect(place.declination).toBeCloseTo(position.declination, 12)
+	expect(place.magnitude).toBeCloseTo(position.magnitude!, 9)
 })

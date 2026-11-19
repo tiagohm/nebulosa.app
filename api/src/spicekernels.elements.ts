@@ -16,8 +16,9 @@ import { MpcKernelError, type SmallBodyOrbit } from './spicekernels.mpc'
 // Origin of the MPC files the lists come from.
 const MPC_FILES = 'https://www.minorplanetcenter.net/iau'
 
-// Longest wait for a list, in milliseconds.
-const LIST_TIMEOUT_MS = 60_000
+// Longest wait for a list, in milliseconds: the largest lists (about 9 MB) took 40 s from minorplanetcenter.net, so the
+// budget leaves room for a slower link.
+export const LIST_TIMEOUT_MS = 180_000
 
 // Largest list read, in bytes; the largest published list is under 10 MB.
 const LIST_MAX_BYTES = 16 * 1024 * 1024

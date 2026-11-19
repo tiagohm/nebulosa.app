@@ -533,6 +533,12 @@ test('imported elements are integrated by the workers into one kernel of one seg
 	const eros = library.evaluate({ target: 20000433, center: 10, time: Date.UTC(2026, 10, 20) })
 	expect(eros.ok && eros.distance / AU_KM).toBeGreaterThan(1.1)
 
+	// The photometry of the elements is recorded with the kernel for the magnitudes of the map, and leaves with it.
+	expect(library.runtime.current().photometry?.get(20000433)).toEqual({ h: 10.39, g: 0.15 })
+	expect(library.runtime.current().photometry?.size).toBe(3)
+	await library.remove(job.kernelId!)
+	expect(library.runtime.current().photometry?.size).toBe(0)
+
 	expect(() => library.integrateElements({ ...request, objects: Array.from({ length: 10_001 }, () => preview.objects[0]) })).toThrow('At most 10000 objects can be integrated at once.')
 })
 

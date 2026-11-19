@@ -3,6 +3,7 @@ import { type MPCOrbitSolution, orbit as mpcOrbit } from 'nebulosa/src/adapters/
 import type { PositionAndVelocity } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { equatorialToEclipticJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import { eraC2s } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import { extendedPermanentAsteroidNumber } from 'nebulosa/src/astronomy/ephemeris/kernels/naif'
 import { spkSeconds } from 'nebulosa/src/astronomy/ephemeris/kernels/spk'
 import { prepareSpkKernelSet, type SpkChainLink, type SpkCoverageInterval, type SpkKernelSet, type SpkMissReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
 import { writeSpk } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.write'
@@ -11,10 +12,10 @@ import { AU_KM, DAYSEC, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { errorResponse } from './http'
 import { SPICE_KERNEL_CATALOG, type SpiceCatalogEntry } from './spicekernels.catalog'
-import { downloadElementList, type ElementsBatchResult, integrateElementsBatch, MPC_ELEMENT_LISTS, parseMpcElements, type SpiceElementList, type SpiceElementsObject, type SpiceElementsPreview } from './spicekernels.elements'
+import { downloadElementList, type ElementsBatchResult, integrateElementsBatch, LIST_TIMEOUT_MS, MPC_ELEMENT_LISTS, parseMpcElements, type SpiceElementList, type SpiceElementsObject, type SpiceElementsPreview } from './spicekernels.elements'
 import { type SpiceKernelJob, SpiceKernelJobs, type SpiceKernelJobContext, SpiceKernelQueueFullError } from './spicekernels.jobs'
 import { integrateMpcKernel, type MpcKernel, MpcKernelError } from './spicekernels.mpc'
-import { inspectSpiceKernel, openSpiceKernel, type SpiceKernelRuntime } from './spicekernels.runtime'
+import { inspectSpiceKernel, openSpiceKernel, type SpiceKernelRuntime, type SpiceTargetPhotometry } from './spicekernels.runtime'
 import type { SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelStore, SpiceSegmentRecord, StagedSpiceKernel } from './spicekernels.store'
 import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 
@@ -170,6 +171,10 @@ export type SpiceKernelGenerationSource = 'horizons' | 'mpc'
 // Most objects one import of elements may integrate into a kernel: about 80 MB of kernel and a few minutes of integration
 // for two years, which bounds the memory of the job and the size of the file.
 export const MAX_IMPORTED_OBJECTS = 10_000
+
+// Idle time the server allows the download of an element list, in seconds: its whole budget and a margin, longer than the
+// default idle timeout of Bun.serve (10 s), which would close the connection while a large list downloads.
+const LIST_IDLE_TIMEOUT_S = LIST_TIMEOUT_MS / 1000 + 10
 
 // Body of POST /api/spice-kernels/elements/integrate: the numbered asteroids to integrate into one kernel, the months of
 // the window from today it covers, its name, and where the elements came from (the id of an MPC list, or a file name).
@@ -361,6 +366,8 @@ interface Provenance {
 	readonly provenance?: string
 	// NAIF code the file must contain a segment for.
 	readonly target?: number
+	// Photometry of the minor bodies of the file, by NAIF code, recorded with it.
+	readonly photometry?: ReadonlyMap<number, SpiceTargetPhotometry>
 }
 
 // Describes an error of the library as a message and a code.
@@ -857,7 +864,14 @@ export class SpiceKernelLibrary implements Disposable {
 		const staged = await this.store.stage(Bun.randomUUIDv7(), new Blob([Buffer.from(bytes)]).stream(), context.signal)
 		context.stage('validating')
 		const provenance = this.#elementsProvenance(request, result)
-		return await this.#exclusive(() => this.#publishFile(staged, { name: request.label, sourceKind: 'elements', sourceRef: request.sourceRef, requestedStart: window.start, requestedEnd: window.end, provenance }, context))
+		const integrated = new Set(result.segments.map((e) => e.target))
+		const photometry = new Map(
+			request.objects.flatMap((e) => {
+				const target = extendedPermanentAsteroidNumber(e.number)
+				return e.h === undefined || !integrated.has(target) ? [] : [[target, { h: e.h, g: e.g }] as const]
+			}),
+		)
+		return await this.#exclusive(() => this.#publishFile(staged, { name: request.label, sourceKind: 'elements', sourceRef: request.sourceRef, requestedStart: window.start, requestedEnd: window.end, provenance, photometry }, context))
 	}
 
 	// How an import of elements was integrated, for people: the source and epochs of the elements, the force model, the
@@ -901,8 +915,8 @@ export class SpiceKernelLibrary implements Disposable {
 
 			context?.stage('publishing')
 			await this.store.promote(staged)
-			const { target: _, ...record } = provenance
-			const kernel = this.store.insert({ ...record, id: Bun.randomUUIDv7(), sha256: staged.sha256, bytes: staged.bytes, createdAt: this.#now() }, prepared.segments)
+			const { target: _, photometry, ...record } = provenance
+			const kernel = this.store.insert({ ...record, id: Bun.randomUUIDv7(), sha256: staged.sha256, bytes: staged.bytes, createdAt: this.#now() }, prepared.segments, photometry)
 			await this.#rebuild()
 			this.#changed()
 			return { kernel: this.#summary(kernel, this.store.segments(kernel.id)), kernelId: kernel.id, alreadyInstalled: false }
@@ -941,6 +955,7 @@ export class SpiceKernelLibrary implements Disposable {
 			kernels.map((e) => ({ id: e.id, path: this.store.objectPath(e.sha256) })),
 			this.store.offline(),
 			this.store.preferences(),
+			this.store.photometry(),
 		)
 
 		for (const [id, error] of failures) {
@@ -1148,7 +1163,12 @@ export function createSpiceKernelRoutes(library: SpiceKernelLibrary) {
 			GET: () => Response.json(library.elementLists()),
 		},
 		'/api/spice-kernels/elements/lists/:id': {
-			POST: (req) => answer(() => library.downloadElements(req.params.id, req.signal)),
+			// Downloads a list of MPC_ELEMENT_LISTS and answers its preview (SpiceElementsPreview); the connection stays open for
+			// the whole download budget, beyond the default idle timeout of Bun.serve (10 s).
+			POST: (req: Bun.BunRequest, server: Pick<Bun.Server<unknown>, 'timeout'>) => {
+				server.timeout(req, LIST_IDLE_TIMEOUT_S)
+				return answer(() => library.downloadElements(req.params.id, req.signal))
+			},
 		},
 		'/api/spice-kernels/elements/parse': {
 			POST: (req) => answer(async () => library.parseElements(await req.text())),

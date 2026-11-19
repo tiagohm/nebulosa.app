@@ -228,22 +228,17 @@ export function createSkyRoutes(services: SkyServices) {
 			},
 		},
 		'/api/sky/minorbodies/positions': {
-			// Positions of the minor bodies the map draws, for one instant, without events: from the kernels or the two-body
-			// orbit of the SBDB elements already known, never asking SBDB or Horizons, so a body neither gives is left out
-			// and never holds the others.
+			// Places and magnitudes of the minor bodies the map draws, for one instant (SkyEphemeris.mapPositions): from the
+			// kernels or the two-body orbit of the SBDB elements already known, never asking SBDB or Horizons, so a body neither
+			// gives is left out and never holds the others.
 			POST: async (req) => {
 				const { time, observer, bodies } = (await req.json()) as SkyMinorBodiesRequest
-				const positions: SkyMinorBodyPosition[] = []
-
-				for (const { spkId } of bodies) {
-					try {
-						const position = await ephemeris.position({ type: 'minorBody', spkId, elements: minorBodies.cached(spkId)?.elements }, { time, observer, mode: 'fast', local: true, signal: req.signal })
-						positions.push({ spkId, position })
-					} catch (error) {
-						if (!(error instanceof EphemerisUnavailableError)) throw error
-					}
-				}
-
+				const positions: SkyMinorBodyPosition[] = await ephemeris.mapPositions(
+					bodies.map(({ spkId }) => ({ type: 'minorBody', spkId, elements: minorBodies.cached(spkId)?.elements })),
+					time,
+					observer,
+					req.signal,
+				)
 				return Response.json(positions)
 			},
 		},

@@ -2,12 +2,14 @@ import { afterAll, afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
+import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { GuideOutputCommander } from 'nebulosa/src/devices/commanders/guideoutput'
 import { type OperationContext, type OperationResult, successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
 import { resourceKey } from 'nebulosa/src/devices/orchestration/resource'
 import { writeFits } from 'nebulosa/src/io/formats/fits/fits'
 import { bufferSink } from 'nebulosa/src/io/io'
-import { deg, hour } from 'nebulosa/src/math/units/angle'
+import { type Angle, deg, hour, normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_GUIDING_CALIBRATOR_CONFIG, type GuidingCalibrationDiagnostics } from 'nebulosa/src/observation/guiding/calibrator'
 import type { StarTracker } from 'nebulosa/src/observation/guiding/tracker.star'
 import type { CalibrationMasterDetail, CalibrationMasterSummary } from './calibrationlibrary'
@@ -132,17 +134,25 @@ function guided(context: Setup, patch: Partial<GuidingStartRequest> = {}): Parti
 	}
 }
 
-// Points the mount at RA 6h, declination +20° (it starts at the pole, where an RA pulse moves nothing), a field of stars
-// that does not depend on the time of day, and has it track at a
+// Points the mount at rightAscension (radians), declination +20° (it starts at the pole, where an RA pulse moves
+// nothing), by default RA 6h, a field of catalog stars that does not depend on the time of day, and has it track at a
 // guide rate of 1× sidereal, so a 2 s pulse moves the catalog stars the camera renders through its 50 mm lens by more
 // than a pixel, and turns off the sky noise of the camera, so the detections are the stars.
-async function trackStars(context: Setup) {
+async function trackStars(context: Setup, rightAscension: Angle = hour(6)) {
 	const { mounts } = context.manager.devices
-	mounts.syncTo(context.mount, hour(6), deg(20))
+	mounts.syncTo(context.mount, rightAscension, deg(20))
 	await waitUntil(() => Math.abs(context.mount.equatorialCoordinate.declination - deg(20)) < deg(0.1))
 	mounts.tracking(context.mount, true)
 	context.client.sendNumber({ device: context.mount.name, name: 'GUIDE_RATE', elements: { GUIDE_RATE_WE: 1, GUIDE_RATE_NS: 1 } })
 	context.client.sendSwitch({ device: context.camera.name, name: 'SIMULATOR_NOISE_FEATURES', elements: { SKY_ENABLED: false, LIGHT_POLLUTION_ENABLED: false, MOON_ENABLED: false, AMP_GLOW_ENABLED: false } })
+}
+
+// Right ascension three hours east of the meridian of the mount's site now, in radians. RA 6h crosses the upper or the
+// lower meridian twice a sidereal day, and a GoTo across it turns the simulator over to the other pier side, a slew of
+// about a minute; three hours away, neither the tracking nor a GoTo of a few degrees east reaches a meridian within a
+// test. Only for a field of random stars, since the catalog stars there depend on the time of day.
+function eastOfMeridian({ mount }: Setup): Angle {
+	return normalizeAngle(localSiderealTime(timeUnix(Date.now() / 1000, true), mount.geographicCoordinate.longitude) + hour(3))
 }
 
 // Starts a session and waits until it loops; returns its ids.
@@ -557,7 +567,7 @@ describe('guiding', () => {
 
 	test('a slew of the mount while guiding, commanded elsewhere, stops guiding and clears the lock while the loop goes on', async () => {
 		const context = await setup()
-		await trackStars(context)
+		await trackStars(context, eastOfMeridian(context))
 		// The CI sky catalog is empty; use the simulator's seeded star field for target selection.
 		context.client.sendSwitch({ device: context.camera.name, name: 'SIMULATOR_CATALOG_SOURCE', elements: { RANDOM: true } })
 		const { sessionId } = await start(context, guided(context))
@@ -585,7 +595,7 @@ describe('guiding', () => {
 
 	test('without stopGuidingOnSlew a slew leaves guiding alone', async () => {
 		const context = await setup()
-		await trackStars(context)
+		await trackStars(context, eastOfMeridian(context))
 		// The CI sky catalog is empty; use the simulator's seeded star field for target selection.
 		context.client.sendSwitch({ device: context.camera.name, name: 'SIMULATOR_CATALOG_SOURCE', elements: { RANDOM: true } })
 		const { sessionId } = await start(context, guided(context, { stopGuidingOnSlew: false }))

@@ -886,10 +886,11 @@ CREATE TABLE spice_kernels (
 	sha256 TEXT NOT NULL UNIQUE,
 	-- Name shown to people: the uploaded file name, the curated name, or the designation of a generated kernel.
 	name TEXT NOT NULL,
-	-- Where it came from: a curated NAIF download, a Horizons small-body generation, an integration of an MPC orbit on this
-	-- server, or an upload.
-	source_kind TEXT NOT NULL CHECK (source_kind IN ('naif', 'horizons', 'mpc', 'import')),
-	-- Id of the curated source, or SPK-ID of the generated small body; NULL for an upload.
+	-- Where it came from: a curated NAIF download, a Horizons small-body generation, an integration on this server of an MPC
+	-- orbit (mpc) or of imported MPC 1-line elements (elements), or an upload.
+	source_kind TEXT NOT NULL CHECK (source_kind IN ('naif', 'horizons', 'mpc', 'elements', 'import')),
+	-- Id of the curated source, SPK-ID of the generated small body, or the MPC list or file name of imported elements; NULL
+	-- for an upload.
 	source_ref TEXT,
 	-- Interval asked for a generated kernel, Unix milliseconds (UTC); NULL otherwise.
 	requested_start INTEGER,

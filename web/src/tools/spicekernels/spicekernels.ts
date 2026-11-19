@@ -1,4 +1,20 @@
-import type { ServerEvent, SpiceBodiesResponse, SpiceBodySegment, SpiceEvaluation, SpiceCatalogItem, SpiceEvaluationRequest, SpiceEvaluationResult, SpiceKernelDetails, SpiceKernelGenerateRequest, SpiceKernelJob, SpiceKernelLibrarySnapshot, SpiceKernelUpdateRequest } from 'api'
+import type {
+	ServerEvent,
+	SpiceBodiesResponse,
+	SpiceBodySegment,
+	SpiceCatalogItem,
+	SpiceElementList,
+	SpiceElementsIntegrateRequest,
+	SpiceElementsPreview,
+	SpiceEvaluation,
+	SpiceEvaluationRequest,
+	SpiceEvaluationResult,
+	SpiceKernelDetails,
+	SpiceKernelGenerateRequest,
+	SpiceKernelJob,
+	SpiceKernelLibrarySnapshot,
+	SpiceKernelUpdateRequest,
+} from 'api'
 import { proxy } from 'valtio'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
 
@@ -75,7 +91,46 @@ export function downloadSpiceKernel(state: SpiceKernelsState, sourceId: string, 
 	return send(state, `download:${sourceId}`, () => request('/api/spice-kernels/download', jsonInit('POST', { sourceId })), 'The download could not be started.')
 }
 
-// Starts, or joins, the Horizons generation of a small-body kernel.
+// Outcome of reading elements: the numbered asteroids they hold, or why they could not be read.
+export type SpiceElementsAnswer = { readonly ok: true; readonly preview: SpiceElementsPreview } | { readonly ok: false; readonly error: string }
+
+// The MPC lists of elements the server may download; empty when it cannot be reached.
+export async function fetchElementLists(request: ApiFetch = browserFetch): Promise<readonly SpiceElementList[]> {
+	try {
+		const response = await request('/api/spice-kernels/elements/lists')
+		return response.ok ? ((await response.json()) as SpiceElementList[]) : []
+	} catch {
+		return []
+	}
+}
+
+// Has the server download an MPC list of elements and answers its numbered asteroids.
+export function downloadElements(id: string, request: ApiFetch = browserFetch) {
+	return readElements(() => request(`/api/spice-kernels/elements/lists/${encodeURIComponent(id)}`, { method: 'POST' }), 'The list could not be downloaded.')
+}
+
+// Sends a file of MPC 1-line elements to the server and answers its numbered asteroids.
+export function parseElementsFile(file: File, request: ApiFetch = browserFetch) {
+	return readElements(() => request('/api/spice-kernels/elements/parse', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: file }), 'The file could not be read.')
+}
+
+// Starts, or joins, the integration of imported elements into one kernel.
+export function integrateElements(state: SpiceKernelsState, body: SpiceElementsIntegrateRequest, request: ApiFetch = browserFetch) {
+	return send(state, 'integrate', () => request('/api/spice-kernels/elements/integrate', jsonInit('POST', body)), 'The integration could not be started.')
+}
+
+// Runs a request answering a preview of elements.
+async function readElements(run: () => Promise<Response>, fallback: string): Promise<SpiceElementsAnswer> {
+	try {
+		const response = await run()
+		if (response.ok) return { ok: true, preview: (await response.json()) as SpiceElementsPreview }
+		return { ok: false, error: await responseError(response, fallback) }
+	} catch {
+		return { ok: false, error: 'The server is unreachable.' }
+	}
+}
+
+// Starts, or joins, the generation of a small-body kernel.
 export function generateSpiceKernel(state: SpiceKernelsState, body: SpiceKernelGenerateRequest, request: ApiFetch = browserFetch) {
 	return send(state, 'generate', () => request('/api/spice-kernels/generate', jsonInit('POST', body)), 'The kernel could not be requested.')
 }

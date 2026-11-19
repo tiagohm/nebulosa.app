@@ -7,7 +7,7 @@ import bunTailwindPlugin from './tailwind.plugin'
 // directory of the build (app/), and the workers are embedded outside of it, under a path nothing finds.
 const ROOT = join(import.meta.dir, '..')
 
-// Image, image processing, star detection, star profile, streak detection, DARV analysis, Flat Wizard measurement, Dark Library Wizard measurement, Calibration Library integration, master dark subtraction, Live Stacking, Image Stacking, guide frame, mount pointing fit, and solar eclipse map workers, bundled as extra entry points so
+// Image, image processing, star detection, star profile, streak detection, DARV analysis, Flat Wizard measurement, Dark Library Wizard measurement, Calibration Library integration, master dark subtraction, Live Stacking, Image Stacking, guide frame, mount pointing fit, solar eclipse map, and SPICE kernel integration workers, bundled as extra entry points so
 // the executable embeds them transpiled with their imports. Inside the executable a worker is only found by its
 // path relative to the embedded root, never through `new URL(..., import.meta.url)`, which points at the
 // executable itself.
@@ -26,6 +26,7 @@ const LIVESTACKING_WORKER = join(ROOT, 'api/src/livestacking.worker.ts')
 const MOUNTPOINTING_WORKER = join(ROOT, 'api/src/mountpointing.worker.ts')
 const GUIDING_WORKER = join(ROOT, 'api/src/guiding.worker.ts')
 const SOLARECLIPSE_WORKER = join(ROOT, 'api/src/solareclipses.worker.ts')
+const SPICEKERNELS_WORKER = join(ROOT, 'api/src/spicekernels.worker.ts')
 
 // Path of a worker relative to the embedded root, as the executable finds it, as a define value.
 function embeddedPath(path: string) {
@@ -68,6 +69,7 @@ await build({
 		GUIDING_WORKER,
 		MOUNTPOINTING_WORKER,
 		SOLARECLIPSE_WORKER,
+		SPICEKERNELS_WORKER,
 	],
 	root: ROOT,
 	// Code shared by the entry points goes into chunks embedded once. Without it every entry point carries its own
@@ -89,6 +91,7 @@ await build({
 		'process.env.NEBULOSA_STAR_PROFILE_WORKER': embeddedPath(STAR_PROFILE_WORKER),
 		'process.env.NEBULOSA_STREAK_WORKER': embeddedPath(STREAK_WORKER),
 		'process.env.NEBULOSA_DARV_WORKER': embeddedPath(DARV_WORKER),
+		'process.env.NEBULOSA_SPICEKERNELS_WORKER': embeddedPath(SPICEKERNELS_WORKER),
 		'process.env.NEBULOSA_FLATWIZARD_WORKER': embeddedPath(FLATWIZARD_WORKER),
 		'process.env.NEBULOSA_DARKLIBRARY_WORKER': embeddedPath(DARKLIBRARY_WORKER),
 		'process.env.NEBULOSA_CALIBRATION_WORKER': embeddedPath(CALIBRATION_WORKER),

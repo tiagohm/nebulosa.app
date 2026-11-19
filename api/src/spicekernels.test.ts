@@ -8,7 +8,7 @@ import { type MPCOrbitSolution, orbitCartesianState, orbitToKeplerOrbit } from '
 import * as kernelSets from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { AppDatabase } from './database'
-import { createSpiceKernelRoutes, type MpcOrbitReader, SpiceKernelError, type SpiceKernelEvent, SpiceKernelLibrary, type SpiceKernelLibraryOptions, type SpkGenerator } from './spicekernels'
+import { createSpiceKernelRoutes, type MpcOrbitReader, SpiceKernelError, spiceKernelWindow, type SpiceKernelEvent, SpiceKernelLibrary, type SpiceKernelLibraryOptions, type SpkGenerator } from './spicekernels'
 import { spkFixture } from './spicekernels.fixture'
 import type { SpiceKernelJob } from './spicekernels.jobs'
 import { SpiceKernelRuntime } from './spicekernels.runtime'
@@ -421,21 +421,26 @@ test('a slow download that keeps sending outlasts the stall wait', async () => {
 test('a Horizons generation must contain the requested body', async () => {
 	const files: Record<string, SpkFile> = { '20000001': { spk: CERES.toString('base64') }, '20000002': { spk: CERES.toString('base64') }, '20000003': { error: 'No ephemeris for target "3 Juno"' } }
 	const requested: number[] = []
-	const generate: SpkGenerator = (id) => {
+	const windows: unknown[] = []
+	const generate: SpkGenerator = (id, start, end) => {
 		requested.push(id)
+		windows.push([start, end])
 		return Promise.resolve(files[id])
 	}
-	const { library, events } = await started({ generate })
-	const start = Date.UTC(2026, 0, 1)
-	const end = Date.UTC(2036, 0, 1)
+	// The window starts at the beginning of the UTC day of the clock and lasts the months asked.
+	const { library, events } = await started({ generate, now: () => Date.UTC(2026, 0, 31, 15, 30) })
+	const start = Date.UTC(2026, 0, 31)
+	const end = Date.UTC(2027, 0, 31)
 
-	const ceres = await ended(events, library.generate({ spkId: '20000001', name: '1 Ceres', start, end }).jobId)
+	const ceres = await ended(events, library.generate({ spkId: '20000001', name: '1 Ceres', months: 12 }).jobId)
 	expect(ceres.state).toBe('completed')
 	expect(library.details(ceres.kernelId!)).toMatchObject({ name: '1 Ceres (20000001)', sourceKind: 'horizons', sourceRef: '20000001', requestedStart: start, requestedEnd: end, readiness: 'missingDependency' })
 
-	expect(await ended(events, library.generate({ spkId: '20000002', start, end }).jobId)).toMatchObject({ state: 'failed', code: 'generationFailed', error: 'The generated kernel has no segment for 20000002.' })
-	expect(await ended(events, library.generate({ spkId: '20000003', start, end }).jobId)).toMatchObject({ state: 'failed', code: 'generationFailed', error: 'No ephemeris for target "3 Juno"' })
+	expect(await ended(events, library.generate({ spkId: '20000002', months: 12 }).jobId)).toMatchObject({ state: 'failed', code: 'generationFailed', error: 'The generated kernel has no segment for 20000002.' })
+	expect(await ended(events, library.generate({ spkId: '20000003', months: 12 }).jobId)).toMatchObject({ state: 'failed', code: 'generationFailed', error: 'No ephemeris for target "3 Juno"' })
 	expect(requested).toEqual([20000001, 20000002, 20000003])
+	expect(windows[0]).toEqual([start, end])
+	expect(spiceKernelWindow(Date.UTC(2026, 0, 31, 23, 59), 1)).toEqual({ start: Date.UTC(2026, 0, 31), end: Date.UTC(2026, 2, 3) })
 })
 
 // Every DE440 body an MPC integration needs, at rest: the Sun at the barycenter and the planets far from the orbit.
@@ -460,15 +465,15 @@ test('an MPC orbit is integrated over the planetary kernels into a kernel relati
 		asked.push(designation)
 		return Promise.resolve(designation === '4' ? MPC_SOLUTION : undefined)
 	}
-	const { library, events } = await started({ mpcOrbit })
+	const { library, events } = await started({ mpcOrbit, now: () => Date.UTC(2023, 0, 1, 8) })
 	const start = Date.UTC(2023, 0, 1)
 	const end = Date.UTC(2023, 6, 1)
 
 	// Without a planetary kernel the integration cannot start.
-	expect(await ended(events, library.generate({ spkId: '20000004', designation: '4', source: 'mpc', start, end }).jobId)).toMatchObject({ state: 'failed', code: 'missingDependency' })
+	expect(await ended(events, library.generate({ spkId: '20000004', designation: '4', source: 'mpc', months: 6 }).jobId)).toMatchObject({ state: 'failed', code: 'missingDependency' })
 
 	await library.importFile('de440-bodies.bsp', stream(DE440_BODIES))
-	const job = await ended(events, library.generate({ spkId: '20000004', name: '4 Vesta', designation: '4', source: 'mpc', start, end }).jobId)
+	const job = await ended(events, library.generate({ spkId: '20000004', name: '4 Vesta', designation: '4', source: 'mpc', months: 6 }).jobId)
 	expect(job.state).toBe('completed')
 
 	const details = library.details(job.kernelId!)
@@ -485,8 +490,50 @@ test('an MPC orbit is integrated over the planetary kernels into a kernel relati
 	if (evaluation.ok) for (let i = 0; i < 3; i++) expect(evaluation.position[i] / AU_KM).toBeCloseTo(state[i], 6)
 
 	// A body the MPC does not know fails without a kernel.
-	expect(await ended(events, library.generate({ spkId: '20000099', designation: '99', source: 'mpc', start, end }).jobId)).toMatchObject({ state: 'failed', code: 'generationFailed', error: 'The MPC Orbit Database has no orbit of 99.' })
+	expect(await ended(events, library.generate({ spkId: '20000099', designation: '99', source: 'mpc', months: 6 }).jobId)).toMatchObject({ state: 'failed', code: 'generationFailed', error: 'The MPC Orbit Database has no orbit of 99.' })
 	expect(asked).toEqual(['4', '4', '99'])
+})
+
+// MPCORB lines of three numbered asteroids, as Soft00Bright.txt and NEA.txt publish them.
+const ELEMENT_LINES = [
+	'00001    3.35  0.15 K25BL 231.53975   73.29974   80.24963   10.58789  0.0795763  0.21429712   2.7656157  0 MPO950947  7369 126 1801-2025 0.69 M-v 30k MPC        0000              (1) Ceres',
+	'00004    3.25  0.15 K25BL  26.80968  151.53712  103.70232    7.14406  0.0901676  0.27158812   2.3615413  0 MPO925791  7543 112 1821-2025 0.69 M-p 18k MPC        0000              (4) Vesta',
+	'00433   10.39  0.15 K2669  62.51145  178.91814  304.26797   10.82855  0.2228780  0.55970463   1.4582437  0 E2026-TG8 18065  59 1893-2026 0.61 M-v 3Ek MPCORBFIT  1804    (433) Eros               20260919',
+].join('\n')
+
+test('imported elements are integrated by the workers into one kernel of one segment per asteroid', async () => {
+	const fetch = (url: string) => Promise.resolve(new Response(url.endsWith('Soft00Bright.txt') ? ELEMENT_LINES : ''))
+	const { library, events } = await started({ fetch, now: () => Date.UTC(2026, 10, 19, 21) })
+	const preview = await library.downloadElements('bright-2026')
+	expect(preview.objects.map((e) => e.number)).toEqual([1, 4, 433])
+	expect(library.parseElements(ELEMENT_LINES)).toEqual(preview)
+	expect(library.elementLists().length).toBe(14)
+	await expect(library.downloadElements('unknown')).rejects.toThrow('Unknown element list.')
+
+	const request = { label: 'Bright minor planets', sourceRef: 'bright-2026', objects: preview.objects, months: 1 } as const
+
+	// Without a planetary kernel the workers stop at the first object.
+	expect(await ended(events, library.integrateElements(request).jobId)).toMatchObject({ state: 'failed', code: 'missingDependency', unit: 'objects' })
+
+	await library.importFile('de440-bodies.bsp', stream(DE440_BODIES))
+	const job = await ended(events, library.integrateElements(request).jobId)
+	expect(job).toMatchObject({ state: 'completed', kind: 'integrate', unit: 'objects', bytes: 3, totalBytes: 3 })
+
+	const details = library.details(job.kernelId!)
+	expect(details).toMatchObject({ name: 'Bright minor planets', sourceKind: 'elements', sourceRef: 'bright-2026', requestedStart: Date.UTC(2026, 10, 19), requestedEnd: Date.UTC(2026, 11, 19), readiness: 'ready', targets: [20000001, 20000004, 20000433] })
+	expect(details.targetNames).toEqual({ 20000001: '(1) Ceres', 20000004: '(4) Vesta', 20000433: '(433) Eros' })
+	expect(details.segments.map((e) => [e.target, e.center, e.dataType])).toEqual([
+		[20000001, 10, 9],
+		[20000004, 10, 9],
+		[20000433, 10, 9],
+	])
+	expect(details.provenance).toStartWith('3 numbered asteroids of Bright minor planets at opposition in 2026, MPC 1-line elements at 2025-11-21 to 2026-06-09 TT')
+
+	// At its epoch Eros is where its elements put it.
+	const eros = library.evaluate({ target: 20000433, center: 10, time: Date.UTC(2026, 10, 20) })
+	expect(eros.ok && eros.distance / AU_KM).toBeGreaterThan(1.1)
+
+	expect(() => library.integrateElements({ ...request, objects: Array.from({ length: 10_001 }, () => preview.objects[0]) })).toThrow('At most 10000 objects can be integrated at once.')
 })
 
 test('a running job can be cancelled', async () => {
@@ -495,7 +542,7 @@ test('a running job can be cancelled', async () => {
 			signal?.addEventListener('abort', () => reject(signal.reason as Error))
 		})
 	const { library, events } = await started({ generate })
-	const job = library.generate({ spkId: '20000001', start: 0, end: 1 })
+	const job = library.generate({ spkId: '20000001', months: 1 })
 	await Bun.sleep(20)
 
 	library.cancel(job.jobId)

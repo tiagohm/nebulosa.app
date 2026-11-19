@@ -63,7 +63,7 @@ export const CREDIT_GROUPS: readonly CreditGroup[] = [
 				name: 'MPC Orbit Database',
 				owner: 'International Astronomical Union Minor Planet Center',
 				url: 'https://data.minorplanetcenter.net/',
-				use: 'Orbits of asteroids and comets the SPICE Kernel Library integrates into small-body kernels on this server.',
+				use: 'Orbits of asteroids and comets, and the MPCORB and MPCAT element lists, the SPICE Kernel Library integrates into small-body kernels on this server.',
 				notice: 'The source of the data is the Minor Planet Center (https://www.minorplanetcenter.net/).',
 			},
 			{ name: 'Close Approach Data', owner: 'NASA/JPL Solar System Dynamics', url: 'https://ssd-api.jpl.nasa.gov/doc/cad.html', use: 'Encounters listed by the Close Approaches tool.' },

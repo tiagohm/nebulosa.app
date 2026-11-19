@@ -300,7 +300,7 @@ function Candidates({ candidates, frame, stale, location, timeZone, onAdd }: Can
 			</Table>
 			<div className="flex items-end gap-2 sm:hidden">
 				<Select label="Order" options={CANDIDATE_SORT_KEYS} value={sort.key} format={(key) => CANDIDATE_SORT_LABELS[key]} onChange={(key) => (observingPlannerState.candidateSort = { key, reversed: false })} />
-				<IconButton icon="arrow" label={sort.reversed ? 'Natural order' : 'Reverse the order'} pressed={sort.reversed} className={cn('size-[33.25px]', !sort.reversed && 'rotate-180')} onClick={() => sortBy(sort.key)} />
+				<IconButton icon="arrow" label={sort.reversed ? 'Natural order' : 'Reverse the order'} pressed={sort.reversed} className={cn('size-9.5', !sort.reversed && 'rotate-180')} onClick={() => sortBy(sort.key)} />
 			</div>
 			<TargetList>
 				{sorted.map((candidate) => {

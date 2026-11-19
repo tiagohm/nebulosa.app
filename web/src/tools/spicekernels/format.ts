@@ -162,7 +162,7 @@ export function epochDateTime(seconds: number) {
 }
 
 // Label of each source.
-export const SOURCE_LABELS: Readonly<Record<SpiceKernelSourceKind, string>> = { naif: 'NASA/JPL', horizons: 'Horizons', mpc: 'MPC orbit', import: 'Upload' }
+export const SOURCE_LABELS: Readonly<Record<SpiceKernelSourceKind, string>> = { naif: 'NASA/JPL', horizons: 'Horizons', mpc: 'MPC orbit', elements: 'MPC elements', import: 'Upload' }
 
 // Label of each job state.
 export const JOB_STATE_LABELS: Readonly<Record<SpiceKernelJob['state'], string>> = {

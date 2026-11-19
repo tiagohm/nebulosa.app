@@ -7,7 +7,7 @@ function snapshot(epoch: string, revision: number, jobs: SpiceKernelJob[] = []):
 }
 
 function job(jobId: string, state: SpiceKernelJob['state'], createdAt = 0): SpiceKernelJob {
-	return { jobId, kind: 'download', key: `download:${jobId}`, label: jobId, state, createdAt, updatedAt: createdAt }
+	return { jobId, kind: 'download', key: `download:${jobId}`, label: jobId, state, unit: 'bytes', createdAt, updatedAt: createdAt }
 }
 
 function state(): SpiceKernelsState {

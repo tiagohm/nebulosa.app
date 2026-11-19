@@ -13,8 +13,8 @@ import { type AppDatabase, DEFAULT_DATA_DIRECTORY } from './database'
 export const DEFAULT_SPICE_KERNEL_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'spice-kernels')
 
 // Where a kernel came from: a curated NAIF or JPL SSD download (kind naif), a Horizons small-body generation, an integration
-// of an MPC Orbit Database solution on this server, or an upload.
-export type SpiceKernelSourceKind = 'naif' | 'horizons' | 'mpc' | 'import'
+// on this server of an MPC Orbit Database solution (mpc) or of imported MPC 1-line elements (elements), or an upload.
+export type SpiceKernelSourceKind = 'naif' | 'horizons' | 'mpc' | 'elements' | 'import'
 
 // Lifecycle of a kernel: usable, being deleted, failing its integrity or format checks, or without its file.
 export type SpiceKernelState = 'ready' | 'pendingDelete' | 'invalid' | 'missing'
@@ -27,7 +27,7 @@ export interface SpiceKernelRecord {
 	// Name shown to people.
 	readonly name: string
 	readonly sourceKind: SpiceKernelSourceKind
-	// Id of the curated source, or SPK-ID of the generated small body.
+	// Id of the curated source, SPK-ID of the generated small body, or the MPC list or file name of imported elements.
 	readonly sourceRef?: string
 	// Interval asked for a generated kernel, Unix milliseconds (UTC).
 	readonly requestedStart?: number

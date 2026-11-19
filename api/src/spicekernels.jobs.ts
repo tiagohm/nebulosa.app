@@ -1,11 +1,15 @@
-// Acquisition jobs of the SPICE Kernel Library: curated downloads and Horizons small-body generations, run one at a time
+// Acquisition jobs of the SPICE Kernel Library: curated downloads, small-body generations (by Horizons or from an MPC
+// orbit), and integrations of imported element sets, run one at a time
 // in submission order. A submission whose intent matches a queued or running job joins it instead of starting another.
 // Jobs live in memory only: they survive the tabs that started them but never a restart of the server, whose staging
 // files are cleared at the next start. Progress updates are published at most four times a second; state changes at
 // once.
 
 // Kind of an acquisition.
-export type SpiceKernelJobKind = 'download' | 'generate'
+export type SpiceKernelJobKind = 'download' | 'generate' | 'integrate'
+
+// What the progress of a job counts: bytes transferred, or the objects of an integration of element sets.
+export type SpiceKernelJobUnit = 'bytes' | 'objects'
 
 // Lifecycle of a job: waiting its turn, transferring, inspecting the file, recording it, and the three ends.
 export type SpiceKernelJobState = 'queued' | 'running' | 'validating' | 'publishing' | 'completed' | 'failed' | 'cancelled'
@@ -28,7 +32,9 @@ export interface SpiceKernelJob {
 	// When it was submitted and last changed, Unix milliseconds (UTC).
 	readonly createdAt: number
 	readonly updatedAt: number
-	// Bytes transferred so far, and in total when known.
+	// What bytes and totalBytes count: bytes, or objects for an integration.
+	readonly unit: SpiceKernelJobUnit
+	// Progress so far, and in total when known, in the unit of the job.
 	readonly bytes?: number
 	readonly totalBytes?: number
 	// Kernel it produced, when completed.
@@ -42,7 +48,7 @@ export interface SpiceKernelJob {
 // What a running task can report.
 export interface SpiceKernelJobContext {
 	readonly signal: AbortSignal
-	// Reports the bytes transferred so far, and in total when known.
+	// Reports the progress so far, and in total when known, in the unit of the job.
 	readonly progress: (bytes: number, totalBytes?: number) => void
 	// Reports a later stage of the job.
 	readonly stage: (state: 'validating' | 'publishing') => void
@@ -104,7 +110,7 @@ export class SpiceKernelJobs implements Disposable {
 		if (this.#queue.length >= MAX_QUEUED_SPICE_KERNEL_JOBS) throw new SpiceKernelQueueFullError()
 
 		const now = this.now()
-		const job: SpiceKernelJob = { jobId: Bun.randomUUIDv7(), kind, key, label, state: 'queued', createdAt: now, updatedAt: now }
+		const job: SpiceKernelJob = { jobId: Bun.randomUUIDv7(), kind, key, label, state: 'queued', unit: kind === 'integrate' ? 'objects' : 'bytes', createdAt: now, updatedAt: now }
 		const entry: JobEntry = { job, task, controller: new AbortController(), published: 0 }
 		this.#entries.set(job.jobId, entry)
 		this.#queue.push(entry)

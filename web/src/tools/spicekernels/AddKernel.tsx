@@ -5,27 +5,21 @@ import { formatByteSize } from '../../format'
 import { searchMinorBodies } from '../../sky/sky'
 import { Button } from '../../ui/Button'
 import { Notice } from '../../ui/Notice'
+import { NumberInput } from '../../ui/NumberInput'
 import { ProgressBar } from '../../ui/ProgressBar'
 import { Select } from '../../ui/Select'
 import { StatusBadge } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
+import { DEFAULT_WINDOW_MONTHS } from './elements'
+import { ElementsImport } from './ElementsImport'
 import { epochDate, JOB_STATE_LABELS } from './format'
 import { activeJobs, cancelSpiceKernelJob, downloadSpiceKernel, fetchSpiceCatalog, generateSpiceKernel, spiceKernelsState } from './spicekernels'
 
 // Add Kernel section of the SPICE Kernel Library tool: the curated NASA/JPL downloads, the generation of a small-body
-// kernel over an interval, by Horizons or by this server from the MPC Orbit Database, and the acquisitions of the server
-// with their progress. Nothing is downloaded or generated without a click here.
-
-// Years of the interval suggested for a new generation, from today.
-const SUGGESTED_YEARS = 10
-
-// Today and SUGGESTED_YEARS later, as UTC dates (YYYY-MM-DD).
-function suggestedInterval() {
-	const now = new Date()
-	const end = new Date(Date.UTC(now.getUTCFullYear() + SUGGESTED_YEARS, now.getUTCMonth(), now.getUTCDate()))
-	return { start: now.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
-}
+// kernel over a window from today, by Horizons or by this server from the MPC Orbit Database, the import of the MPC
+// elements of numbered asteroids into one kernel, and the acquisitions of the server with their progress. Nothing is
+// downloaded or generated without a click here.
 
 // Add Kernel section.
 export function AddKernel() {
@@ -33,6 +27,7 @@ export function AddKernel() {
 		<>
 			<Curated />
 			<SmallBody />
+			<ElementsImport />
 			<Jobs />
 		</>
 	)
@@ -170,11 +165,12 @@ const GENERATION_LABELS: Readonly<Record<SpiceKernelGenerationSource, string>> =
 
 // What each generation source does, shown below the form.
 const GENERATION_NOTES: Readonly<Record<SpiceKernelGenerationSource, string>> = {
-	horizons: 'Horizons integrates the current JPL orbit of the body over the interval, usually within 1600 to 2500; the kernel is relative to the Sun, so positions also need a planetary kernel.',
-	mpc: 'This server integrates the current MPC orbit of the body over the planetary kernels of the library, with the asteroids of sb441-n16.bsp when it is installed and the non-gravitational forces of the orbit. The interval may span any years the planetary kernels cover; the kernel is relative to the Sun.',
+	horizons: 'Horizons integrates the current JPL orbit of the body from today; the kernel is relative to the Sun, so positions also need a planetary kernel.',
+	mpc: 'This server integrates the current MPC orbit of the body from today over the planetary kernels of the library, with the asteroids of sb441-n16.bsp when it is installed and the non-gravitational forces of the orbit; the kernel is relative to the Sun.',
 }
 
-// Generation of a small-body kernel: an SBDB search that resolves the body to its SPK-ID, then the source and an interval.
+// Generation of a small-body kernel: an SBDB search that resolves the body to its SPK-ID, then the source and the duration
+// from today. An orbit is refined within months, so a kernel covers a short window and is generated again when it ends.
 function SmallBody() {
 	const state = useSnapshot(spiceKernelsState)
 	const [query, setQuery] = useState('')
@@ -182,11 +178,8 @@ function SmallBody() {
 	const [message, setMessage] = useState<string>()
 	const [matches, setMatches] = useState<readonly { readonly designation: string; readonly name: string }[]>([])
 	const [body, setBody] = useState<MinorBody>()
-	const [interval, setInterval] = useState(suggestedInterval)
+	const [months, setMonths] = useState(DEFAULT_WINDOW_MONTHS)
 	const [source, setSource] = useState<SpiceKernelGenerationSource>('horizons')
-	const start = Date.parse(`${interval.start}T00:00:00Z`)
-	const end = Date.parse(`${interval.end}T00:00:00Z`)
-	const valid = Number.isFinite(start) && Number.isFinite(end) && start < end
 	const installed = body ? state.snapshot?.kernels.filter((e) => e.targets.includes(Number(body.spkId))) : undefined
 
 	async function search(text: string) {
@@ -247,9 +240,8 @@ function SmallBody() {
 					{installed && installed.length > 0 && <Notice>Already covered by {installed.map((e) => `${e.name}${e.start !== undefined && e.end !== undefined ? ` (${epochDate(e.start)} – ${epochDate(e.end)})` : ''}`).join(', ')}.</Notice>}
 					<div className="flex flex-wrap items-end gap-2">
 						<Select label="Integrated by" className="w-56" options={GENERATION_SOURCES} value={source} format={(e) => GENERATION_LABELS[e]} onChange={setSource} />
-						<TextInput label="Start (UTC)" type="date" className="w-40" value={interval.start} onChange={(e) => setInterval({ ...interval, start: e.target.value })} />
-						<TextInput label="End (UTC)" type="date" className="w-40" value={interval.end} onChange={(e) => setInterval({ ...interval, end: e.target.value })} />
-						<Button disabled={!valid || state.pending.generate} onClick={() => void generateSpiceKernel(spiceKernelsState, { spkId: body.spkId, name: body.name, designation: body.designation, source, start, end })}>
+						<NumberInput label="Duration from today" className="w-44" value={months} onChange={(value) => setMonths(value)} min={1} max={60} suffix="mo" />
+						<Button disabled={state.pending.generate} onClick={() => void generateSpiceKernel(spiceKernelsState, { spkId: body.spkId, name: body.name, designation: body.designation, source, months })}>
 							Generate
 						</Button>
 					</div>
@@ -284,7 +276,7 @@ function JobItem({ job }: { readonly job: SpiceKernelJob }) {
 	const state = useSnapshot(spiceKernelsState)
 	const active = job.state !== 'completed' && job.state !== 'failed' && job.state !== 'cancelled'
 	const fraction = job.bytes !== undefined && job.totalBytes ? job.bytes / job.totalBytes : undefined
-	const outcome = job.state === 'completed' && job.alreadyInstalled ? 'Already installed' : JOB_STATE_LABELS[job.state]
+	const outcome = job.state === 'completed' && job.alreadyInstalled ? 'Already installed' : job.state === 'running' && job.unit === 'objects' ? 'Integrating' : JOB_STATE_LABELS[job.state]
 
 	return (
 		<li className="flex flex-col gap-1">
@@ -293,7 +285,7 @@ function JobItem({ job }: { readonly job: SpiceKernelJob }) {
 				<span className="flex items-center gap-3">
 					<span className={job.state === 'failed' ? 'text-danger' : 'text-ink-300'}>
 						{outcome}
-						{job.state === 'running' && job.bytes !== undefined ? ` · ${formatByteSize(job.bytes)}` : ''}
+						{job.state === 'running' && job.bytes !== undefined ? ` · ${job.unit === 'objects' ? `${job.bytes} of ${job.totalBytes ?? '?'} objects` : formatByteSize(job.bytes)}` : ''}
 					</span>
 					{active && (
 						<Button variant="secondary" disabled={state.pending[`job:${job.jobId}`]} onClick={() => void cancelSpiceKernelJob(spiceKernelsState, job.jobId)}>

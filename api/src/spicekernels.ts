@@ -5,11 +5,13 @@ import { equatorialToEclipticJ2000 } from 'nebulosa/src/astronomy/coordinates/co
 import { eraC2s } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { spkSeconds } from 'nebulosa/src/astronomy/ephemeris/kernels/spk'
 import { prepareSpkKernelSet, type SpkChainLink, type SpkCoverageInterval, type SpkKernelSet, type SpkMissReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
+import { writeSpk } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.write'
 import { Timescale, timeUnix, toJulianDay, tdb } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, DAYSEC, SPEED_OF_LIGHT } from 'nebulosa/src/core/constants'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { errorResponse } from './http'
 import { SPICE_KERNEL_CATALOG, type SpiceCatalogEntry } from './spicekernels.catalog'
+import { downloadElementList, type ElementsBatchResult, integrateElementsBatch, MPC_ELEMENT_LISTS, parseMpcElements, type SpiceElementList, type SpiceElementsObject, type SpiceElementsPreview } from './spicekernels.elements'
 import { type SpiceKernelJob, SpiceKernelJobs, type SpiceKernelJobContext, SpiceKernelQueueFullError } from './spicekernels.jobs'
 import { integrateMpcKernel, type MpcKernel, MpcKernelError } from './spicekernels.mpc'
 import { inspectSpiceKernel, openSpiceKernel, type SpiceKernelRuntime } from './spicekernels.runtime'
@@ -19,7 +21,8 @@ import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 // SPICE Kernel Library: the server-global set of SPK files the Sky ephemeris evaluates locally. Files come from four
 // explicit actions of an operator, never from a position request: a curated NASA/JPL download, a Horizons small-body
 // generation through the shared JPL queue, an integration on this server of the MPC Orbit Database solution of a small
-// body over the planetary kernels of the library, or an upload. Each is streamed into staging, inspected, renamed into place,
+// body or of the MPC 1-line elements of numbered asteroids (an uploaded file or an MPC list) over the planetary kernels of
+// the library, or an upload. Each is streamed into staging, inspected, renamed into place,
 // recorded, and published as a new runtime generation, one change at a time; a failure leaves the previous generation
 // untouched. Enabling, reordering, verifying, and deleting kernels, preferring a kernel for a body, and changing the
 // offline switch of the ephemeris sources follow the same path. The library also explains the selection of the current generation body by
@@ -29,7 +32,8 @@ import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
 // change by `spiceKernels:jobUpdated`; tabs read the snapshot again.
 
 export type { SpiceCatalogEntry, SpiceCatalogSystem } from './spicekernels.catalog'
-export type { SpiceKernelJob, SpiceKernelJobKind, SpiceKernelJobState } from './spicekernels.jobs'
+export type { SpiceElementList, SpiceElementsObject, SpiceElementsPreview } from './spicekernels.elements'
+export type { SpiceKernelJob, SpiceKernelJobKind, SpiceKernelJobState, SpiceKernelJobUnit } from './spicekernels.jobs'
 export type { SpiceKernelRecord, SpiceKernelSourceKind, SpiceKernelState, SpiceSegmentRecord } from './spicekernels.store'
 
 // Longest wait for a curated download without receiving a byte, in milliseconds (2 minutes). The whole download has no
@@ -43,7 +47,7 @@ const UNIX_EPOCH_JULIAN_DATE = 2440587.5
 const GENERATION_TIMEOUT_MS = 120_000
 
 // Stable code of an error of the library.
-export type SpiceKernelErrorCode = 'notFound' | 'invalidSpk' | 'queueFull' | 'downloadFailed' | 'generationFailed' | 'missingDependency' | 'rateLimited' | 'cancelled' | 'processingFailed'
+export type SpiceKernelErrorCode = 'notFound' | 'invalidSpk' | 'queueFull' | 'downloadFailed' | 'generationFailed' | 'missingDependency' | 'tooManyObjects' | 'rateLimited' | 'cancelled' | 'processingFailed'
 
 // What tabs see of a kernel in the snapshot:
 // - ready: every evaluable segment resolves to the barycenter;
@@ -67,6 +71,8 @@ export interface SpiceKernelSummary extends SpiceKernelRecord {
 	// Earliest start and latest end of its segments, in TDB seconds past J2000; gaps between segments are not shown here.
 	readonly start?: number
 	readonly end?: number
+	// Name of each body of a kernel of imported elements, by NAIF code, from its segment, such as "(433) Eros".
+	readonly targetNames?: Readonly<Record<number, string>>
 }
 
 // A segment of a kernel and, while the kernel is in the current set, how much of its coverage it is selected for.
@@ -129,13 +135,28 @@ export interface SpiceKernelDownloadRequest {
 	readonly sourceId: string
 }
 
-// Body of POST /api/spice-kernels/generate: a small body by its canonical SBDB SPK-ID and an interval in Unix
-// milliseconds (UTC); name is the designation shown to people.
+// A window of a generated kernel, Unix milliseconds (UTC).
+export interface SpiceKernelWindow {
+	readonly start: number
+	readonly end: number
+}
+
+// The window of `months` from the start of the UTC day of `now` (Unix milliseconds), to the same day of the month that
+// many months later (a day the month lacks rolls over into the next).
+export function spiceKernelWindow(now: number, months: number): SpiceKernelWindow {
+	const date = new Date(now)
+	const year = date.getUTCFullYear()
+	const month = date.getUTCMonth()
+	const day = date.getUTCDate()
+	return { start: Date.UTC(year, month, day), end: Date.UTC(year, month + months, day) }
+}
+
+// Body of POST /api/spice-kernels/generate: a small body by its canonical SBDB SPK-ID and the months of the window from
+// today it covers; name is the designation shown to people.
 export interface SpiceKernelGenerateRequest {
 	readonly spkId: string
 	readonly name?: string
-	readonly start: number
-	readonly end: number
+	readonly months: number
 	// Who integrates the orbit: Horizons (the default), or this server from the MPC Orbit Database solution.
 	readonly source?: SpiceKernelGenerationSource
 	// Designation the MPC knows the body by, such as "433", "2P", or "2024 YR4" (the primary designation of SBDB); the
@@ -145,6 +166,19 @@ export interface SpiceKernelGenerateRequest {
 
 // Who integrates a generated small-body kernel.
 export type SpiceKernelGenerationSource = 'horizons' | 'mpc'
+
+// Most objects one import of elements may integrate into a kernel: about 80 MB of kernel and a few minutes of integration
+// for two years, which bounds the memory of the job and the size of the file.
+export const MAX_IMPORTED_OBJECTS = 10_000
+
+// Body of POST /api/spice-kernels/elements/integrate: the numbered asteroids to integrate into one kernel, the months of
+// the window from today it covers, its name, and where the elements came from (the id of an MPC list, or a file name).
+export interface SpiceElementsIntegrateRequest {
+	readonly label: string
+	readonly sourceRef: string
+	readonly objects: readonly SpiceElementsObject[]
+	readonly months: number
+}
 
 // Answer of GET /api/spice-kernels/coverage: whether the current set resolves a NAIF body at an instant (Unix
 // milliseconds), and if not, which body of its chain stopped it and why.
@@ -534,12 +568,42 @@ export class SpiceKernelLibrary implements Disposable {
 		return this.#submit('download', `download:${entry.id}`, entry.name, (context) => this.#download(entry, context))
 	}
 
-	// Starts, or joins, the generation of a small-body SPK over an interval in Unix milliseconds (UTC): by Horizons, or by an
+	// Starts, or joins, the generation of a small-body SPK over the window of months from today: by Horizons, or by an
 	// integration of the MPC Orbit Database solution on this server.
 	generate(request: SpiceKernelGenerateRequest): SpiceKernelJob {
 		const label = request.name ? `${request.name} (${request.spkId})` : request.spkId
-		if (request.source === 'mpc') return this.#submit('generate', `generate:mpc:${request.spkId}:${request.start}:${request.end}`, label, (context) => this.#integrateFile(request, label, context))
-		return this.#submit('generate', `generate:${request.spkId}:${request.start}:${request.end}`, label, (context) => this.#generateFile(request, label, context))
+		const window = spiceKernelWindow(this.#now(), request.months)
+		if (request.source === 'mpc') return this.#submit('generate', `generate:mpc:${request.spkId}:${window.start}:${window.end}`, label, (context) => this.#integrateFile(request, window, label, context))
+		return this.#submit('generate', `generate:${request.spkId}:${window.start}:${window.end}`, label, (context) => this.#generateFile(request, window, label, context))
+	}
+
+	// The MPC lists of 1-line asteroid elements the library may download.
+	elementLists(): readonly SpiceElementList[] {
+		return MPC_ELEMENT_LISTS
+	}
+
+	// Downloads an MPC list of elements, on an explicit request, from its exact URL, and answers its numbered asteroids.
+	// Throws notFound for an unknown list and downloadFailed when the MPC cannot be read.
+	async downloadElements(id: string, signal?: AbortSignal): Promise<SpiceElementsPreview> {
+		const list = MPC_ELEMENT_LISTS.find((e) => e.id === id)
+		if (!list) throw new SpiceKernelError('Unknown element list.', 404, 'notFound')
+		const download = await downloadElementList(list, this.#fetch, signal)
+		if (!download.ok) throw new SpiceKernelError(download.message, 502, 'downloadFailed')
+		return parseMpcElements(download.text)
+	}
+
+	// The numbered asteroids of an uploaded file of MPC 1-line elements.
+	parseElements(text: string): SpiceElementsPreview {
+		return parseMpcElements(text)
+	}
+
+	// Starts, or joins, the integration of the elements of numbered asteroids into one kernel over the window of months from
+	// today. Throws tooManyObjects beyond MAX_IMPORTED_OBJECTS.
+	integrateElements(request: SpiceElementsIntegrateRequest): SpiceKernelJob {
+		if (request.objects.length > MAX_IMPORTED_OBJECTS) throw new SpiceKernelError(`At most ${MAX_IMPORTED_OBJECTS} objects can be integrated at once.`, 413, 'tooManyObjects')
+		const window = spiceKernelWindow(this.#now(), request.months)
+		const intent = Bun.hash(JSON.stringify([request.sourceRef, request.objects.map((e) => [e.number, e.epoch]), window.start, window.end])).toString(36)
+		return this.#submit('integrate', `integrate:${intent}`, request.label, (context) => this.#integrateElements(request, window, context))
 	}
 
 	// Cancels a job; throws notFound.
@@ -687,9 +751,9 @@ export class SpiceKernelLibrary implements Disposable {
 	}
 
 	// Asks Horizons for a small-body SPK through the JPL queue, stages it, and publishes it.
-	async #generateFile(request: SpiceKernelGenerateRequest, label: string, context: SpiceKernelJobContext) {
+	async #generateFile(request: SpiceKernelGenerateRequest, window: SpiceKernelWindow, label: string, context: SpiceKernelJobContext) {
 		const id = Number(request.spkId)
-		const file = await this.queue.run((signal) => this.#generate(id, request.start, request.end, signal, { headers: this.queue.headers }), { timeoutMs: GENERATION_TIMEOUT_MS, signal: context.signal, key: `spk:${request.spkId}:${request.start}:${request.end}` })
+		const file = await this.queue.run((signal) => this.#generate(id, window.start, window.end, signal, { headers: this.queue.headers }), { timeoutMs: GENERATION_TIMEOUT_MS, signal: context.signal, key: `spk:${request.spkId}:${window.start}:${window.end}` })
 
 		if (!file.spk) throw new SpiceKernelError(file.error?.trim() || 'Horizons did not generate the kernel.', 502, 'generationFailed')
 
@@ -697,14 +761,14 @@ export class SpiceKernelLibrary implements Disposable {
 		context.progress(bytes.byteLength, bytes.byteLength)
 		const staged = await this.store.stage(Bun.randomUUIDv7(), new Blob([bytes]).stream(), context.signal)
 		context.stage('validating')
-		return await this.#exclusive(() => this.#publishFile(staged, { name: label, sourceKind: 'horizons', sourceRef: request.spkId, requestedStart: request.start, requestedEnd: request.end, target: id }, context))
+		return await this.#exclusive(() => this.#publishFile(staged, { name: label, sourceKind: 'horizons', sourceRef: request.spkId, requestedStart: window.start, requestedEnd: window.end, target: id }, context))
 	}
 
 	// Integrates the MPC Orbit Database solution of a small body over its own read-only copies of the enabled kernels (so a
 	// new generation never closes them mid-way), stages the written SPK, and publishes it. Fails as generationFailed when
 	// the MPC cannot be reached, has no solution, or its solution has no Cartesian state, and as missingDependency when the
 	// kernels miss a planetary body over the integrated span.
-	async #integrateFile(request: SpiceKernelGenerateRequest, label: string, context: SpiceKernelJobContext) {
+	async #integrateFile(request: SpiceKernelGenerateRequest, window: SpiceKernelWindow, label: string, context: SpiceKernelJobContext) {
 		const designation = request.designation ?? request.spkId
 		let solution: MPCOrbitSolution | undefined
 
@@ -735,7 +799,7 @@ export class SpiceKernelLibrary implements Disposable {
 				opened.map((e) => ({ id: e.id, daf: e.kernel.daf, segments: e.kernel.segments })),
 				{ preferences: this.store.preferences() },
 			)
-			integrated = await integrateMpcKernel(solution, Number(request.spkId), `MPC ${designation}`.slice(0, 40), timeUnix(request.start / 1000, true), timeUnix(request.end / 1000, true), set, context.signal)
+			integrated = await integrateMpcKernel(solution, Number(request.spkId), `MPC ${designation}`.slice(0, 40), timeUnix(window.start / 1000, true), timeUnix(window.end / 1000, true), set, context.signal)
 		} catch (error) {
 			if (!(error instanceof MpcKernelError)) throw error
 			if (error.reason === 'unsupportedOrbit') throw new SpiceKernelError(error.message, 422, 'generationFailed')
@@ -748,13 +812,13 @@ export class SpiceKernelLibrary implements Disposable {
 		const staged = await this.store.stage(Bun.randomUUIDv7(), new Blob([Buffer.from(integrated.bytes)]).stream(), context.signal)
 		context.stage('validating')
 		const provenance = this.#mpcProvenance(designation, solution, integrated)
-		return await this.#exclusive(() => this.#publishFile(staged, { name: label, sourceKind: 'mpc', sourceRef: request.spkId, requestedStart: request.start, requestedEnd: request.end, provenance, target: Number(request.spkId) }, context))
+		return await this.#exclusive(() => this.#publishFile(staged, { name: label, sourceKind: 'mpc', sourceRef: request.spkId, requestedStart: window.start, requestedEnd: window.end, provenance, target: Number(request.spkId) }, context))
 	}
 
 	// How an MPC integration was made, for people: the solution, the force model, and the kernels it read.
 	#mpcProvenance(designation: string, solution: MPCOrbitSolution, kernel: MpcKernel) {
 		// The calendar date of the epoch in its own time scale, as the MPC publishes it.
-		const epoch = `${new Date((kernel.epoch.day + kernel.epoch.fraction - UNIX_EPOCH_JULIAN_DATE) * DAYSEC * 1000).toISOString().slice(0, 10)} ${kernel.epoch.scale === Timescale.TT ? 'TT' : 'TDB'}`
+		const epoch = `${calendarDate(kernel.epoch.day + kernel.epoch.fraction)} ${kernel.epoch.scale === Timescale.TT ? 'TT' : 'TDB'}`
 		const system = solution.systemData
 		const fit = [system?.ephemeris, system?.forceModel].filter(Boolean).join(', ')
 		const forces = ['the DE440 planets and Moon', `${kernel.asteroids} SB441-N16 asteroids`, "the Sun's relativistic term"]
@@ -765,6 +829,53 @@ export class SpiceKernelLibrary implements Disposable {
 
 		const names = kernel.kernelIds.map((id) => this.store.kernel(id)?.name ?? id)
 		return `MPC orbit of ${designation} at ${epoch}${fit ? ` (${fit})` : ''}; integrated with ${forces.join(', ')}, over ${names.join(', ')}; ${kernel.states} states.`
+	}
+
+	// Integrates the elements of an import on worker threads, each over its own read-only copy of the enabled kernels, writes
+	// the segments into one kernel, and publishes it. Fails as missingDependency when the kernels miss a planetary body over
+	// the integrated span, and as generationFailed when no object could be integrated; an object that fails alone is left
+	// out and named in the provenance.
+	async #integrateElements(request: SpiceElementsIntegrateRequest, window: SpiceKernelWindow, context: SpiceKernelJobContext) {
+		const kernels = this.store
+			.kernels()
+			.filter((e) => e.enabled && e.state === 'ready')
+			.map((e) => ({ id: e.id, path: this.store.objectPath(e.sha256) }))
+		const total = request.objects.length
+		context.progress(0, total)
+		let result: ElementsBatchResult
+
+		try {
+			result = await integrateElementsBatch({ objects: request.objects, kernels, preferences: [...this.store.preferences()], start: window.start, end: window.end }, context.signal, (done) => context.progress(done, total))
+		} catch (error) {
+			if (error instanceof MpcKernelError) throw new SpiceKernelError(`${error.message} Add a planetary kernel such as de440s.bsp covering the epochs of the elements and the window.`, 409, 'missingDependency')
+			throw error
+		}
+
+		if (result.segments.length === 0) throw new SpiceKernelError(`No object could be integrated${result.failed[0] ? `: ${result.failed[0].message}` : '.'}`, 422, 'generationFailed')
+
+		const bytes = writeSpk(result.segments, 'NEBULOSA MPC ELEMENTS')
+		const staged = await this.store.stage(Bun.randomUUIDv7(), new Blob([Buffer.from(bytes)]).stream(), context.signal)
+		context.stage('validating')
+		const provenance = this.#elementsProvenance(request, result)
+		return await this.#exclusive(() => this.#publishFile(staged, { name: request.label, sourceKind: 'elements', sourceRef: request.sourceRef, requestedStart: window.start, requestedEnd: window.end, provenance }, context))
+	}
+
+	// How an import of elements was integrated, for people: the source and epochs of the elements, the force model, the
+	// kernels read, and the objects left out.
+	#elementsProvenance(request: SpiceElementsIntegrateRequest, result: ElementsBatchResult) {
+		const source = MPC_ELEMENT_LISTS.find((e) => e.id === request.sourceRef)?.title ?? request.sourceRef
+		const epochs = request.objects.map((e) => e.epoch)
+		const first = calendarDate(Math.min(...epochs))
+		const last = calendarDate(Math.max(...epochs))
+		const names = result.kernelIds.map((id) => this.store.kernel(id)?.name ?? id)
+		const failed =
+			result.failed.length > 0
+				? ` Left out ${result.failed.length}: ${result.failed
+						.slice(0, 5)
+						.map((e) => `${e.name} (${e.message})`)
+						.join('; ')}${result.failed.length > 5 ? '; …' : ''}.`
+				: ''
+		return `${result.segments.length} numbered asteroids of ${source}, MPC 1-line elements at ${first === last ? first : `${first} to ${last}`} TT, without non-gravitational forces; integrated with the DE440 planets and Moon and the Sun's relativistic term, over ${names.join(', ')}.${failed}`
 	}
 
 	// Inspects a staged file, moves it into place, records it, and publishes a new generation. An identical installed file
@@ -857,7 +968,8 @@ export class SpiceKernelLibrary implements Disposable {
 		const targets = [...new Set(supported.map((e) => e.target))].sort((a, b) => a - b)
 		const start = segments.length > 0 ? Math.min(...segments.map((e) => e.start)) : undefined
 		const end = segments.length > 0 ? Math.max(...segments.map((e) => e.end)) : undefined
-		const base = { ...kernel, targets, segmentCount: segments.length, unsupportedSegments: segments.length - supported.length, start, end }
+		const targetNames = kernel.sourceKind === 'elements' ? Object.fromEntries(supported.map((e) => [e.target, e.name])) : undefined
+		const base = { ...kernel, targets, segmentCount: segments.length, unsupportedSegments: segments.length - supported.length, start, end, targetNames }
 
 		if (kernel.state === 'missing') return { ...base, readiness: 'missing' }
 		if (kernel.state === 'invalid') return { ...base, readiness: 'invalid', failure: this.#failures.get(kernel.id) }
@@ -869,6 +981,11 @@ export class SpiceKernelLibrary implements Disposable {
 		if (readiness.status === 'missingDependency') return { ...base, readiness: 'missingDependency', missingBodies: readiness.bodies }
 		return { ...base, readiness: readiness.status }
 	}
+}
+
+// Calendar date (YYYY-MM-DD) of a Julian date of any time scale, as that scale reads it.
+function calendarDate(julianDate: number) {
+	return new Date((julianDate - UNIX_EPOCH_JULIAN_DATE) * DAYSEC * 1000).toISOString().slice(0, 10)
 }
 
 // A chain link of the toolkit with the kernel id named for tabs.
@@ -1026,6 +1143,18 @@ export function createSpiceKernelRoutes(library: SpiceKernelLibrary) {
 		'/api/spice-kernels/generate': {
 			// Starts or joins a Horizons small-body generation (SpiceKernelGenerateRequest, SpiceKernelJob); 503 queueFull.
 			POST: (req) => answer(async () => library.generate((await req.json()) as SpiceKernelGenerateRequest), 202),
+		},
+		'/api/spice-kernels/elements/lists': {
+			GET: () => Response.json(library.elementLists()),
+		},
+		'/api/spice-kernels/elements/lists/:id': {
+			POST: (req) => answer(() => library.downloadElements(req.params.id, req.signal)),
+		},
+		'/api/spice-kernels/elements/parse': {
+			POST: (req) => answer(async () => library.parseElements(await req.text())),
+		},
+		'/api/spice-kernels/elements/integrate': {
+			POST: (req) => answer(async () => library.integrateElements((await req.json()) as SpiceElementsIntegrateRequest), 202),
 		},
 		'/api/spice-kernels/jobs/:jobId/cancel': {
 			// Cancels a queued or running job (SpiceKernelJob); 404 notFound.

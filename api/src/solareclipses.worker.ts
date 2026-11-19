@@ -1,23 +1,19 @@
-import { installInterpolatedNutation } from './astronomicaltime.nutation'
 import type { SolarEclipseMapWorkerRequest, SolarEclipseMapWorkerResponse } from './solareclipses'
-import { resolveSolarEclipse, solarEclipseMap } from './solareclipses.map'
+import { solarEclipseMap } from './solareclipses.map'
 
-// Worker thread of the solar eclipse global maps. It resolves the eclipse an id names and answers its whole map,
-// which costs hundreds of milliseconds and would otherwise stall the API's event loop (guiding, captures, and
-// events). It keeps nothing between jobs but the nutation nodes, the same interpolated nutation as the server thread;
-// the service caches the maps it answers.
+// Worker thread of the solar eclipse global maps. It answers the whole map of an eclipse from the eclipse and the
+// elements the server thread found on its ephemeris, so it reads no ephemeris and no kernel; a map costs hundreds of
+// milliseconds and would otherwise stall the API's event loop (guiding, captures, and events). It keeps nothing
+// between jobs; the service caches the maps it answers.
 
 declare const self: Worker
 
-installInterpolatedNutation()
-
 // Computes the map of a request and posts the outcome.
-function handle({ jobId, id }: SolarEclipseMapWorkerRequest) {
+function handle({ jobId, eclipse, elements }: SolarEclipseMapWorkerRequest) {
 	let response: SolarEclipseMapWorkerResponse
 
 	try {
-		const eclipse = resolveSolarEclipse(id)
-		response = eclipse ? { jobId, status: 'computed', map: solarEclipseMap(eclipse) } : { jobId, status: 'notFound' }
+		response = { jobId, status: 'computed', map: solarEclipseMap(eclipse, elements) }
 	} catch (error) {
 		response = { jobId, status: 'failed', error: Error.isError(error) ? error.message : String(error) }
 	}

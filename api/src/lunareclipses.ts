@@ -1,4 +1,5 @@
 import { type LunarEclipse, type LunarEclipseType, nearestLunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
+import type { SunMoonProvider } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import {
 	computeLocalLunarEclipseCircumstances,
 	computeLocalLunarEclipseViewGeometry,
@@ -12,16 +13,19 @@ import {
 import { computeLunarEclipseMapGeometry, type LunarEclipseContactKind, lunarEclipseEvents, lunarEclipseMapToSvgPaths, refineLunarEclipse } from 'nebulosa/src/astronomy/events/eclipse/lunar/map'
 import { timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
-import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, eclipseNotFound, eclipseSunMoon, findRefinedEclipse, ID_SEARCH_MARGIN, locationParams, MAP_PRECISION, type RefinedEclipseSearch } from './eclipses'
+import { answerEclipse, DEGREE_PLANE, type EclipseDirection, eclipseEphemeris, type EclipseLocation, eclipseNotFound, findRefinedEclipse, locationParams, MAP_PRECISION, NO_ECLIPSE_KERNELS, type RefinedEclipseSearch, resolveRefinedEclipse } from './eclipses'
 import { errorResponse } from './http'
 import { LruCache } from './lrucache'
+import type { PlanetaryKernels } from './planetary.source'
+import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 import { yieldToEventLoop } from './util'
 
 // Lunar eclipses for the Lunar Eclipse Map tool: stateless, read-only queries over the toolkit's lunar eclipse
 // engine (core/src/astronomy/events/eclipse/lunar), answered under /api/eclipses/lunar with the conventions of
 // eclipses.ts. An eclipse is named by its id, the Unix milliseconds of its greatest eclipse, so no eclipse is
-// stored on the server. Times are Unix milliseconds (UTC), angles and geographic positions degrees (longitude
-// east positive), durations seconds. Visibility is the Moon's center at or above the geometric 0° horizon,
+// stored on the server. The Sun, the Earth, and the Moon come from the ephemeris of eclipses.ts, the kernels of
+// the SPICE Kernel Library when they cover the eclipse. Times are Unix milliseconds (UTC), angles and geographic
+// positions degrees (longitude east positive), durations seconds. Visibility is the Moon's center at or above the geometric 0° horizon,
 // without refraction, on the map and locally alike.
 
 export type { LocalLunarEclipseDetails, LocalLunarEclipseSvgShape, LocalLunarEclipseVisibilityKind, LocalLunarViewHandedness, LocalLunarViewOrientationMode, LunarEclipseContactKind, LunarEclipseType }
@@ -174,21 +178,23 @@ const SERIES_PENUMBRAL_MARGIN = 0.02
 const SEARCH: RefinedEclipseSearch<LunarEclipse> = {
 	// The greatest eclipse is up to a millisecond after its id, so the instant is moved by one millisecond away from it.
 	nearest: (time, next) => nearestLunarEclipse(timeUnix((time + (next ? 1 : -1)) / 1000), next, SERIES_PENUMBRAL_MARGIN),
-	refine: (candidate) => refineLunarEclipse(candidate, eclipseSunMoon(candidate.maximalTime)),
+	refine: (candidate, sunMoon) => refineLunarEclipse(candidate, sunMoon),
+	center: (eclipse) => eclipse.maximalTime,
 	instant: (eclipse) => timeToUnixMillis(eclipse.maximalTime),
 	cache: new LruCache(128),
 }
 
 // Returns the eclipse nearest an instant in a direction: the next one has an id later than time, the previous one an
-// id earlier than it, so stepping from an id never returns the same eclipse. time is in Unix milliseconds.
-export function findLunarEclipse(time: number, direction: EclipseDirection): LunarEclipse {
-	return findRefinedEclipse(SEARCH, time, direction)
+// id earlier than it, so stepping from an id never returns the same eclipse. time is in Unix milliseconds; each
+// candidate is refined on the ephemeris snapshot gives it (eclipses.ts), the theories when absent.
+export function findLunarEclipse(time: number, direction: EclipseDirection, snapshot: SpiceKernelSnapshot = NO_ECLIPSE_KERNELS.current()): LunarEclipse {
+	return findRefinedEclipse(SEARCH, time, direction, snapshot)
 }
 
-// Returns the eclipse an id names, or undefined when it names none.
-export function resolveLunarEclipse(id: string): LunarEclipse | undefined {
-	const eclipse = findLunarEclipse(+id - ID_SEARCH_MARGIN, 'next')
-	return eclipseId(eclipse) === id ? eclipse : undefined
+// Returns the eclipse an id names on the ephemeris of snapshot, the one whose greatest eclipse is within
+// ID_MATCH_TOLERANCE of it, or undefined when it names none.
+export function resolveLunarEclipse(id: string, snapshot: SpiceKernelSnapshot = NO_ECLIPSE_KERNELS.current()): LunarEclipse | undefined {
+	return resolveRefinedEclipse(SEARCH, id, snapshot)
 }
 
 // Returns the global circumstances of an eclipse.
@@ -208,22 +214,23 @@ function contactPaths(paths: Readonly<Record<LunarEclipseContactKind, string>>):
 	return result
 }
 
-// Returns the global map of an eclipse.
-export function lunarEclipseMap(eclipse: LunarEclipse): LunarEclipseMap {
-	const geometry = computeLunarEclipseMapGeometry(eclipse, eclipseSunMoon(eclipse.maximalTime))
+// Returns the global map of an eclipse on the Sun and the Moon of its ephemeris (eclipses.ts).
+export function lunarEclipseMap(eclipse: LunarEclipse, sunMoon: SunMoonProvider): LunarEclipseMap {
+	const geometry = computeLunarEclipseMapGeometry(eclipse, sunMoon)
 	const lines = lunarEclipseMapToSvgPaths(geometry, DEGREE_PLANE, { precision: MAP_PRECISION })
 	const fills = lunarEclipseMapToSvgPaths(geometry, DEGREE_PLANE, { fill: true, fillRegion: 'aboveHorizon', precision: MAP_PRECISION })
 	const events = geometry.events.map((event) => ({ kind: event.kind, time: timeToUnixMillis(event.time), sublunar: { longitude: toDeg(event.sublunar.x), latitude: toDeg(event.sublunar.y) } }))
 	return { eclipse: lunarEclipseSummary(eclipse), events, lines: contactPaths(lines.moonRiseSet), fills: contactPaths(fills.moonRiseSet) }
 }
 
-// Returns the toolkit's circumstances of an eclipse for a place, with altitudeSamples samples of the Moon's altitude.
-function circumstances(eclipse: LunarEclipse, { longitude, latitude }: EclipseLocation, altitudeSamples?: number) {
-	return computeLocalLunarEclipseCircumstances(eclipse, deg(longitude), deg(latitude), eclipseSunMoon(eclipse.maximalTime), { altitudeSamples })
+// Returns the toolkit's circumstances of an eclipse for a place on the Sun and the Moon of its ephemeris, with
+// altitudeSamples samples of the Moon's altitude.
+function circumstances(eclipse: LunarEclipse, { longitude, latitude }: EclipseLocation, sunMoon: SunMoonProvider, altitudeSamples?: number) {
+	return computeLocalLunarEclipseCircumstances(eclipse, deg(longitude), deg(latitude), sunMoon, { altitudeSamples })
 }
 
-// Returns the circumstances of an eclipse from a place, with its Local View drawn as view asks.
-export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocation, view: LunarEclipseViewOptions, local: LocalLunarEclipseCircumstances = circumstances(eclipse, location)): LocalLunarEclipse {
+// Returns the circumstances of an eclipse from a place, local, with its Local View drawn as view asks.
+export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocation, view: LunarEclipseViewOptions, local: LocalLunarEclipseCircumstances): LocalLunarEclipse {
 	const events: LocalLunarEclipseContact[] = []
 
 	for (const contact of lunarEclipseEvents(eclipse)) {
@@ -246,15 +253,30 @@ export function localLunarEclipse(eclipse: LunarEclipse, location: EclipseLocati
 	}
 }
 
-// Lunar eclipse queries, keeping the latest maps and local circumstances so moving between contacts or redrawing
-// the Local View does not compute them again.
+// Options of the lunar eclipse service.
+export interface LunarEclipseServiceOptions {
+	// Kernels of the SPICE Kernel Library; none by default, so every eclipse is computed on the theories.
+	readonly kernels?: PlanetaryKernels
+}
+
+// Lunar eclipse queries, keeping the latest maps and local circumstances by ephemeris source and kernel generation,
+// so moving between contacts or redrawing the Local View does not compute them again, and a change of the kernels does.
+// The kernel snapshot is read once per request (once per candidate of a visible-only search). Every query throws
+// EclipseEphemerisUnavailableError under spkOnly when the kernels do not cover an eclipse it computes.
 export class LunarEclipseService {
 	readonly #maps = new LruCache<LunarEclipseMap>(CACHE_LIMIT)
 	readonly #locals = new LruCache<LocalLunarEclipseCircumstances>(CACHE_LIMIT)
+	// Kernels the ephemeris of every eclipse is chosen from.
+	readonly kernels: PlanetaryKernels
+
+	// Creates the service.
+	constructor({ kernels = NO_ECLIPSE_KERNELS }: LunarEclipseServiceOptions = {}) {
+		this.kernels = kernels
+	}
 
 	// Returns the eclipse nearest time (Unix milliseconds) in a direction.
 	find(time: number, direction: EclipseDirection): LunarEclipseSummary {
-		return lunarEclipseSummary(findLunarEclipse(time, direction))
+		return lunarEclipseSummary(findLunarEclipse(time, direction, this.kernels.current()))
 	}
 
 	// Returns the eclipse nearest time (Unix milliseconds) in a direction whose Moon is above the horizon of a place
@@ -264,8 +286,10 @@ export class LunarEclipseService {
 		let cursor = time
 
 		for (let i = 0; i < MAX_VISIBLE_SCAN; i++) {
-			const eclipse = findLunarEclipse(cursor, direction)
-			if (circumstances(eclipse, location, VISIBILITY_SAMPLES).visibility.hasObservableEclipse) return lunarEclipseSummary(eclipse)
+			const snapshot = this.kernels.current()
+			const eclipse = findLunarEclipse(cursor, direction, snapshot)
+			const visible = eclipseEphemeris(snapshot, eclipse.maximalTime).run((sunMoon) => circumstances(eclipse, location, sunMoon, VISIBILITY_SAMPLES).visibility.hasObservableEclipse)
+			if (visible) return lunarEclipseSummary(eclipse)
 			cursor = +eclipseId(eclipse)
 			await yieldToEventLoop()
 			if (signal?.aborted) return undefined
@@ -276,29 +300,40 @@ export class LunarEclipseService {
 
 	// Returns the global map of the eclipse an id names, or undefined when it names none.
 	map(id: string): LunarEclipseMap | undefined {
-		const cached = this.#maps.get(id)
-		if (cached) return cached
-
-		const eclipse = resolveLunarEclipse(id)
+		const snapshot = this.kernels.current()
+		const eclipse = resolveLunarEclipse(id, snapshot)
 		if (!eclipse) return undefined
 
-		const map = lunarEclipseMap(eclipse)
-		this.#maps.set(id, map)
-		return map
+		return eclipseEphemeris(snapshot, eclipse.maximalTime).run((sunMoon, source) => {
+			const key = `${source}:${eclipseId(eclipse)}`
+			let map = this.#maps.get(key)
+
+			if (!map) {
+				map = lunarEclipseMap(eclipse, sunMoon)
+				this.#maps.set(key, map)
+			}
+
+			return map
+		})
 	}
 
 	// Returns the circumstances of the eclipse an id names from a place, or undefined when it names none.
 	local(id: string, location: EclipseLocation, view: LunarEclipseViewOptions): LocalLunarEclipse | undefined {
-		const eclipse = resolveLunarEclipse(id)
+		const snapshot = this.kernels.current()
+		const eclipse = resolveLunarEclipse(id, snapshot)
 		if (!eclipse) return undefined
 
-		const key = `${id}:${location.longitude}:${location.latitude}`
-		let local = this.#locals.get(key)
+		const local = eclipseEphemeris(snapshot, eclipse.maximalTime).run((sunMoon, source) => {
+			const key = `${source}:${eclipseId(eclipse)}:${location.longitude}:${location.latitude}`
+			let circumstancesHere = this.#locals.get(key)
 
-		if (!local) {
-			local = circumstances(eclipse, location)
-			this.#locals.set(key, local)
-		}
+			if (!circumstancesHere) {
+				circumstancesHere = circumstances(eclipse, location, sunMoon)
+				this.#locals.set(key, circumstancesHere)
+			}
+
+			return circumstancesHere
+		})
 
 		return localLunarEclipse(eclipse, location, view, local)
 	}
@@ -329,32 +364,35 @@ export function createLunarEclipseRoutes(service: LunarEclipseService) {
 			// The eclipse nearest `time` (Unix milliseconds, now when absent) in `direction` (next when absent); with
 			// `longitude` and `latitude`, the nearest one whose Moon is above their horizon at some instant, or 404
 			// when none is within MAX_VISIBLE_SCAN eclipses.
-			GET: async (req: Request) => {
-				const params = new URL(req.url).searchParams
-				const time = params.get('time')
-				const at = time ? +time : Date.now()
-				const direction = (params.get('direction') as EclipseDirection | null) ?? 'next'
-				if (!params.has('longitude') || !params.has('latitude')) return Response.json(service.find(at, direction))
+			GET: (req: Request) =>
+				answerEclipse(async () => {
+					const params = new URL(req.url).searchParams
+					const time = params.get('time')
+					const at = time ? +time : Date.now()
+					const direction = (params.get('direction') as EclipseDirection | null) ?? 'next'
+					if (!params.has('longitude') || !params.has('latitude')) return Response.json(service.find(at, direction))
 
-				const eclipse = await service.findVisible(at, direction, locationParams(params), req.signal)
-				return eclipse ? Response.json(eclipse) : errorResponse(`No lunar eclipse visible here within ${MAX_VISIBLE_SCAN} eclipses`, 404, 'notFound' satisfies LunarEclipseErrorCode)
-			},
+					const eclipse = await service.findVisible(at, direction, locationParams(params), req.signal)
+					return eclipse ? Response.json(eclipse) : errorResponse(`No lunar eclipse visible here within ${MAX_VISIBLE_SCAN} eclipses`, 404, 'notFound' satisfies LunarEclipseErrorCode)
+				}),
 		},
 		'/api/eclipses/lunar/:id/map': {
 			// Global map of an eclipse; 404 when the id names none.
-			GET: (req) => {
-				const map = service.map(req.params.id)
-				return map ? Response.json(map) : lunarEclipseNotFound()
-			},
+			GET: (req) =>
+				answerEclipse(() => {
+					const map = service.map(req.params.id)
+					return map ? Response.json(map) : lunarEclipseNotFound()
+				}),
 		},
 		'/api/eclipses/lunar/:id/local': {
 			// Circumstances of an eclipse from the place of `longitude` and `latitude`, with the Local View drawn as
 			// `event`, `orientation`, `handedness`, and `ghosts` ask; 404 when the id names no eclipse.
-			GET: (req) => {
-				const params = new URL(req.url).searchParams
-				const local = service.local(req.params.id, locationParams(params), viewParams(params))
-				return local ? Response.json(local) : lunarEclipseNotFound()
-			},
+			GET: (req) =>
+				answerEclipse(() => {
+					const params = new URL(req.url).searchParams
+					const local = service.local(req.params.id, locationParams(params), viewParams(params))
+					return local ? Response.json(local) : lunarEclipseNotFound()
+				}),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

@@ -1,4 +1,5 @@
 import type { SolarEclipse } from 'nebulosa/src/astronomy/bodies/sun'
+import type { SunMoonProvider } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import {
 	computeLocalSolarEclipseCircumstances,
 	computeLocalSolarEclipseViewGeometry,
@@ -14,9 +15,10 @@ import {
 import type { PolynomialBesselianElements } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { deg, toDeg } from 'nebulosa/src/math/units/angle'
-import { type EclipseDirection, type EclipseLocation, eclipseNotFound, eclipseSunMoon, locationParams } from './eclipses'
+import { answerEclipse, type EclipseDirection, eclipseEphemeris, type EclipseLocation, eclipseNotFound, locationParams, NO_ECLIPSE_KERNELS } from './eclipses'
 import { errorResponse } from './http'
 import { LruCache } from './lrucache'
+import type { PlanetaryKernels } from './planetary.source'
 import { findSolarEclipse, resolveSolarEclipse, type SolarEclipseMap, type SolarEclipseSummary, solarEclipseElements, solarEclipseId, solarEclipseSummary } from './solareclipses.map'
 import { yieldToEventLoop } from './util'
 import { runPooledWorkerJob, WorkerPool } from './workerjob'
@@ -24,8 +26,10 @@ import { runPooledWorkerJob, WorkerPool } from './workerjob'
 // Solar eclipses for the Solar Eclipse Map tool: stateless, read-only queries over the toolkit's solar eclipse
 // engine (core/src/astronomy/events/eclipse/solar), answered under /api/eclipses/solar with the conventions of
 // eclipses.ts. An eclipse is named by its id, the Unix milliseconds of its greatest eclipse, so no eclipse is
-// stored on the server. The global map (solareclipses.map.ts) is computed on a worker of its own
-// (solareclipses.worker.ts), since it costs hundreds of milliseconds; the local circumstances, tens at most, are
+// stored on the server. The Sun, the Earth, and the Moon come from the ephemeris of eclipses.ts, the kernels of
+// the SPICE Kernel Library when they cover the eclipse, read once per request. The global map (solareclipses.map.ts)
+// is computed on a worker of its own (solareclipses.worker.ts), since it costs hundreds of milliseconds, from the
+// eclipse and the elements found here; the elements and the local circumstances, tens of milliseconds at most, are
 // computed here. Times are Unix milliseconds (UTC), angles and geographic positions degrees (longitude east
 // positive), durations seconds, widths kilometers; values an eclipse or a place lacks are absent, never zero.
 // Locally, visible means the Sun's center at or above the 0° horizon, without terrain or the site's elevation.
@@ -135,12 +139,14 @@ export interface LocalSolarEclipse {
 export interface SolarEclipseMapWorkerRequest {
 	// Id of the job, echoed by the response.
 	readonly jobId: string
-	// Id of the eclipse.
-	readonly id: string
+	// The eclipse, refined on its ephemeris.
+	readonly eclipse: SolarEclipse
+	// Its polynomial Besselian elements, fitted on the same ephemeris.
+	readonly elements: PolynomialBesselianElements
 }
 
 // Response of the map worker.
-export type SolarEclipseMapWorkerResponse = { readonly jobId: string; readonly status: 'computed'; readonly map: SolarEclipseMap } | { readonly jobId: string; readonly status: 'notFound' } | { readonly jobId: string; readonly status: 'failed'; readonly error: string }
+export type SolarEclipseMapWorkerResponse = { readonly jobId: string; readonly status: 'computed'; readonly map: SolarEclipseMap } | { readonly jobId: string; readonly status: 'failed'; readonly error: string }
 
 // Worker thread of the maps. `unref` is a Bun extension that the DOM Worker type lacks.
 type SolarEclipseMapWorker = Worker & Pick<Bun.Worker, 'unref'>
@@ -163,9 +169,20 @@ const CONTACT_ORDER: readonly LocalEclipseContactKind[] = ['C1', 'C2', 'MAX', 'C
 // Default presentation of the Local View.
 const DEFAULT_VIEW_OPTIONS: SolarEclipseViewOptions = { event: 'MAX', orientation: 'zenith', handedness: 'eastRight', ghosts: true }
 
-// Returns the toolkit's circumstances of an eclipse for a place, from its elements, on the 0° horizon.
-function circumstances(pbe: PolynomialBesselianElements, { longitude, latitude }: EclipseLocation) {
-	return computeLocalSolarEclipseCircumstances(pbe, deg(longitude), deg(latitude), { sunMoonPosition: eclipseSunMoon(pbe.maximumTime), horizonAltitude: 0 })
+// Returns the toolkit's circumstances of an eclipse for a place, from its elements and the Sun and the Moon they were
+// fitted on, on the 0° horizon.
+function circumstances(pbe: PolynomialBesselianElements, { longitude, latitude }: EclipseLocation, sunMoon: SunMoonProvider) {
+	return computeLocalSolarEclipseCircumstances(pbe, deg(longitude), deg(latitude), { sunMoonPosition: sunMoon, horizonAltitude: 0 })
+}
+
+// Options of the solar eclipse service.
+export interface SolarEclipseServiceOptions {
+	// Time a map may take, in milliseconds; MAP_TIMEOUT by default.
+	readonly timeout?: number
+	// Creates map workers; injectable so tests can observe the worker lifecycle.
+	readonly startWorker?: SolarEclipseMapWorkerFactory
+	// Kernels of the SPICE Kernel Library; none by default, so every eclipse is computed on the theories.
+	readonly kernels?: PlanetaryKernels
 }
 
 // Returns the circumstances of an eclipse from a place, with its Local View drawn as view asks.
@@ -193,8 +210,9 @@ export function localSolarEclipse(eclipse: SolarEclipse, location: EclipseLocati
 }
 
 // Solar eclipse queries. Maps are computed on a worker, one at a time, and concurrent requests for the same map
-// share one job; the latest maps, elements, and local circumstances are kept, so moving between contacts or
-// redrawing the Local View does not compute them again.
+// share one job; the latest maps, elements, and local circumstances are kept by ephemeris source and kernel
+// generation, so moving between contacts or redrawing the Local View does not compute them again, and a change of the
+// kernels does.
 export class SolarEclipseService {
 	readonly #maps = new LruCache<SolarEclipseMap>(CACHE_LIMIT)
 	readonly #elements = new LruCache<PolynomialBesselianElements>(CACHE_LIMIT)
@@ -208,15 +226,24 @@ export class SolarEclipseService {
 	// Whether the service was disposed, after which no map starts.
 	#disposed = false
 
-	// Creates the service; timeout bounds every map in milliseconds and startWorker creates map workers.
-	constructor(
-		readonly timeout: number = MAP_TIMEOUT,
-		readonly startWorker: SolarEclipseMapWorkerFactory = startSolarEclipseMapWorker,
-	) {}
+	// Time a map may take, in milliseconds, before its worker is terminated.
+	readonly timeout: number
+	// Creates map workers.
+	readonly startWorker: SolarEclipseMapWorkerFactory
+	// Kernels the ephemeris of every eclipse is chosen from.
+	readonly kernels: PlanetaryKernels
 
-	// Returns the eclipse nearest time (Unix milliseconds) in a direction.
+	// Creates the service.
+	constructor({ timeout = MAP_TIMEOUT, startWorker = startSolarEclipseMapWorker, kernels = NO_ECLIPSE_KERNELS }: SolarEclipseServiceOptions = {}) {
+		this.timeout = timeout
+		this.startWorker = startWorker
+		this.kernels = kernels
+	}
+
+	// Returns the eclipse nearest time (Unix milliseconds) in a direction; throws EclipseEphemerisUnavailableError under
+	// spkOnly when the kernels do not cover a candidate.
 	find(time: number, direction: EclipseDirection): SolarEclipseSummary {
-		return solarEclipseSummary(findSolarEclipse(time, direction))
+		return solarEclipseSummary(findSolarEclipse(time, direction, this.kernels.current()))
 	}
 
 	// Returns the eclipse nearest time (Unix milliseconds) in a direction whose Sun is above the horizon of a place
@@ -227,8 +254,11 @@ export class SolarEclipseService {
 		let cursor = time
 
 		for (let i = 0; i < MAX_VISIBLE_SCAN; i++) {
-			const eclipse = findSolarEclipse(cursor, direction)
-			if (circumstances(solarEclipseElements(eclipse), location).visibility.hasObservableEclipse) return solarEclipseSummary(eclipse)
+			// Each candidate is one computation on the snapshot of its turn, since the kernels may change between turns.
+			const snapshot = this.kernels.current()
+			const eclipse = findSolarEclipse(cursor, direction, snapshot)
+			const visible = eclipseEphemeris(snapshot, eclipse.maximalTime).run((sunMoon) => circumstances(solarEclipseElements(eclipse, sunMoon), location, sunMoon).visibility.hasObservableEclipse)
+			if (visible) return solarEclipseSummary(eclipse)
 			cursor = +solarEclipseId(eclipse)
 			await yieldToEventLoop()
 			if (signal?.aborted) return undefined
@@ -238,19 +268,27 @@ export class SolarEclipseService {
 	}
 
 	// Returns the global map of the eclipse an id names, or undefined when it names none; rejects when the worker
-	// fails or times out.
+	// fails or times out. The eclipse and its elements are found here, synchronously on one kernel snapshot, and only
+	// the geometry waits for the worker. Throws EclipseEphemerisUnavailableError under spkOnly when the kernels do not
+	// cover the eclipse.
 	map(id: string): Promise<SolarEclipseMap | undefined> {
-		const cached = this.#maps.get(id)
-		if (cached) return Promise.resolve(cached)
-		if (!resolveSolarEclipse(id)) return Promise.resolve(undefined)
+		const snapshot = this.kernels.current()
+		const eclipse = resolveSolarEclipse(id, snapshot)
+		if (!eclipse) return Promise.resolve(undefined)
 
-		let pending = this.#pending.get(id)
+		const ephemeris = eclipseEphemeris(snapshot, eclipse.maximalTime)
+		const key = `${ephemeris.key}:${solarEclipseId(eclipse)}`
+		const cached = this.#maps.get(key)
+		if (cached) return Promise.resolve(cached)
+
+		let pending = this.#pending.get(key)
 
 		if (!pending) {
-			const run = this.#queue.then(() => this.#compute(id))
+			const elements = ephemeris.run((sunMoon, source) => this.#elementsOf(eclipse, sunMoon, source))
+			const run = this.#queue.then(() => this.#compute(key, eclipse, elements))
 			this.#queue = run.catch(() => undefined)
-			pending = run.finally(() => this.#pending.delete(id))
-			this.#pending.set(id, pending)
+			pending = run.finally(() => this.#pending.delete(key))
+			this.#pending.set(key, pending)
 		}
 
 		return pending
@@ -258,16 +296,21 @@ export class SolarEclipseService {
 
 	// Returns the circumstances of the eclipse an id names from a place, or undefined when it names none.
 	local(id: string, location: EclipseLocation, view: SolarEclipseViewOptions): LocalSolarEclipse | undefined {
-		const eclipse = resolveSolarEclipse(id)
+		const snapshot = this.kernels.current()
+		const eclipse = resolveSolarEclipse(id, snapshot)
 		if (!eclipse) return undefined
 
-		const key = `${id}:${location.longitude}:${location.latitude}`
-		let local = this.#locals.get(key)
+		const local = eclipseEphemeris(snapshot, eclipse.maximalTime).run((sunMoon, source) => {
+			const key = `${source}:${solarEclipseId(eclipse)}:${location.longitude}:${location.latitude}`
+			let circumstancesHere = this.#locals.get(key)
 
-		if (!local) {
-			local = circumstances(this.#elementsOf(id, eclipse), location)
-			this.#locals.set(key, local)
-		}
+			if (!circumstancesHere) {
+				circumstancesHere = circumstances(this.#elementsOf(eclipse, sunMoon, source), location, sunMoon)
+				this.#locals.set(key, circumstancesHere)
+			}
+
+			return circumstancesHere
+		})
 
 		return localSolarEclipse(eclipse, location, view, local)
 	}
@@ -283,26 +326,28 @@ export class SolarEclipseService {
 		this.dispose()
 	}
 
-	// Returns the elements of an eclipse, fitted once while they stay in the cache.
-	#elementsOf(id: string, eclipse: SolarEclipse) {
-		let elements = this.#elements.get(id)
+	// Returns the elements of an eclipse fitted on the Sun and the Moon of the source whose key is source, once while
+	// they stay in the cache.
+	#elementsOf(eclipse: SolarEclipse, sunMoon: SunMoonProvider, source: string) {
+		const key = `${source}:${solarEclipseId(eclipse)}`
+		let elements = this.#elements.get(key)
 
 		if (!elements) {
-			elements = solarEclipseElements(eclipse)
-			this.#elements.set(id, elements)
+			elements = solarEclipseElements(eclipse, sunMoon)
+			this.#elements.set(key, elements)
 		}
 
 		return elements
 	}
 
-	// Computes one map on the worker and keeps it.
-	async #compute(id: string): Promise<SolarEclipseMap | undefined> {
+	// Computes on the worker the map of an eclipse from its elements and keeps it under key.
+	async #compute(key: string, eclipse: SolarEclipse, elements: PolynomialBesselianElements): Promise<SolarEclipseMap> {
 		if (this.#disposed) throw new Error('The solar eclipse service was stopped')
 		const jobId = Bun.randomUUIDv7()
 
-		const map = await runPooledWorkerJob<SolarEclipseMapWorkerResponse, SolarEclipseMap | undefined>({
+		const map = await runPooledWorkerJob<SolarEclipseMapWorkerResponse, SolarEclipseMap>({
 			pool: this.#workers,
-			request: { jobId, id } satisfies SolarEclipseMapWorkerRequest,
+			request: { jobId, eclipse, elements } satisfies SolarEclipseMapWorkerRequest,
 			timeout: this.timeout,
 			timedOut: () => new Error(`The solar eclipse map did not finish within ${this.timeout / 1000} s`),
 			crashed: (event) => new Error(`The solar eclipse map worker died: ${event.message}`),
@@ -310,12 +355,11 @@ export class SolarEclipseService {
 				if (response.jobId !== jobId) return
 				// A map that threw leaves the worker usable; only a crash or a timeout does not.
 				if (response.status === 'computed') settle.resolve(response.map)
-				else if (response.status === 'notFound') settle.resolve(undefined)
 				else settle.reject(new Error(`The solar eclipse map failed: ${response.error}`))
 			},
 		})
 
-		if (map) this.#maps.set(id, map)
+		this.#maps.set(key, map)
 		return map
 	}
 }
@@ -354,36 +398,41 @@ export function createSolarEclipseRoutes(service: SolarEclipseService) {
 			// The eclipse nearest `time` (Unix milliseconds, now when absent) in `direction` (next when absent); with
 			// `longitude` and `latitude`, the nearest one whose Sun is above their horizon during the local eclipse, or
 			// 404 when none is within MAX_VISIBLE_SCAN eclipses.
-			GET: async (req: Request) => {
-				const params = new URL(req.url).searchParams
-				const time = params.get('time')
-				const at = time ? +time : Date.now()
-				const direction = (params.get('direction') as EclipseDirection | null) ?? 'next'
-				if (!params.has('longitude') || !params.has('latitude')) return Response.json(service.find(at, direction))
+			GET: (req: Request) =>
+				answerEclipse(async () => {
+					const params = new URL(req.url).searchParams
+					const time = params.get('time')
+					const at = time ? +time : Date.now()
+					const direction = (params.get('direction') as EclipseDirection | null) ?? 'next'
+					if (!params.has('longitude') || !params.has('latitude')) return Response.json(service.find(at, direction))
 
-				const eclipse = await service.findVisible(at, direction, locationParams(params), req.signal)
-				return eclipse ? Response.json(eclipse) : errorResponse(`No solar eclipse visible here within ${MAX_VISIBLE_SCAN} eclipses`, 404, 'notFound' satisfies SolarEclipseErrorCode)
-			},
+					const eclipse = await service.findVisible(at, direction, locationParams(params), req.signal)
+					return eclipse ? Response.json(eclipse) : errorResponse(`No solar eclipse visible here within ${MAX_VISIBLE_SCAN} eclipses`, 404, 'notFound' satisfies SolarEclipseErrorCode)
+				}),
 		},
 		'/api/eclipses/solar/:id/map': {
 			// Global map of an eclipse; 404 when the id names none, 500 when it could not be computed.
-			GET: async (req) => {
-				try {
-					const map = await service.map(req.params.id)
-					return map ? Response.json(map) : solarEclipseNotFound()
-				} catch (error) {
-					return errorResponse(error instanceof Error ? error.message : 'The solar eclipse map failed', 500, 'computationFailed' satisfies SolarEclipseErrorCode)
-				}
-			},
+			GET: (req) =>
+				answerEclipse(async () => {
+					const pending = service.map(req.params.id)
+
+					try {
+						const map = await pending
+						return map ? Response.json(map) : solarEclipseNotFound()
+					} catch (error) {
+						return errorResponse(error instanceof Error ? error.message : 'The solar eclipse map failed', 500, 'computationFailed' satisfies SolarEclipseErrorCode)
+					}
+				}),
 		},
 		'/api/eclipses/solar/:id/local': {
 			// Circumstances of an eclipse from the place of `longitude` and `latitude`, with the Local View drawn as
 			// `event`, `orientation`, `handedness`, and `ghosts` ask; 404 when the id names no eclipse.
-			GET: (req) => {
-				const params = new URL(req.url).searchParams
-				const local = service.local(req.params.id, locationParams(params), viewParams(params))
-				return local ? Response.json(local) : solarEclipseNotFound()
-			},
+			GET: (req) =>
+				answerEclipse(() => {
+					const params = new URL(req.url).searchParams
+					const local = service.local(req.params.id, locationParams(params), viewParams(params))
+					return local ? Response.json(local) : solarEclipseNotFound()
+				}),
 		},
 	} as const satisfies Bun.Serve.Routes<undefined, string>
 }

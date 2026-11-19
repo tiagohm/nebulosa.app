@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test'
+import { ID_MATCH_TOLERANCE } from './eclipses'
 import { createLunarEclipseRoutes, findLunarEclipse, type LocalLunarEclipse, type LunarEclipseMap, LunarEclipseService, type LunarEclipseSummary, lunarEclipseSummary, resolveLunarEclipse } from './lunareclipses'
 
 const routes = createLunarEclipseRoutes(new LunarEclipseService())
@@ -66,11 +67,18 @@ test('steps through eclipses strictly in both directions, and resolves every id'
 	}
 })
 
-test('answers 404 for an id that names no eclipse', async () => {
-	const response = map(`${TOTAL.maximum + 1}`)
+test('answers 404 for an id more than ID_MATCH_TOLERANCE from every eclipse', async () => {
+	const response = map(`${TOTAL.maximum + ID_MATCH_TOLERANCE + 1}`)
 	expect(response.status).toBe(404)
 	expect(await response.json()).toMatchObject({ code: 'notFound' })
-	expect(local(`${TOTAL.maximum - 60000}`, 'longitude=0&latitude=0').status).toBe(404)
+	expect(local(`${TOTAL.maximum - ID_MATCH_TOLERANCE - 1}`, 'longitude=0&latitude=0').status).toBe(404)
+})
+
+// An id taken from another ephemeris source is up to about a second off the eclipse it names.
+test('an id within ID_MATCH_TOLERANCE of an eclipse names it, answered with its own id', async () => {
+	const response = map(`${TOTAL.maximum - 1500}`)
+	expect(response.status).toBe(200)
+	expect(((await response.json()) as LunarEclipseMap).eclipse).toEqual(TOTAL)
 })
 
 test('draws the contact lines and fills on the degree plane', async () => {

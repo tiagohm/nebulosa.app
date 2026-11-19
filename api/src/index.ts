@@ -1302,10 +1302,10 @@ const meridianFlipExecutor = new MeridianFlipExecutor(connections.devices, (id) 
 events.subscribe((event) => meridianFlipExecutor.consume(event))
 
 // Lunar eclipse queries of the Lunar Eclipse Map tool.
-const lunarEclipses = new LunarEclipseService()
+const lunarEclipses = new LunarEclipseService({ kernels: spiceKernels })
 
 // Solar eclipse queries of the Solar Eclipse Map tool; their maps are computed on a worker.
-const solarEclipses = new SolarEclipseService()
+const solarEclipses = new SolarEclipseService({ kernels: spiceKernels })
 
 // Close approach queries of the Close Approaches tool, over the minor bodies and the JPL queue of the Sky.
 const closeApproaches = new CloseApproachesService(minorBodies, ssdRequests)

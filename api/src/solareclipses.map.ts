@@ -1,16 +1,18 @@
 import { nearestSolarEclipse, type SolarEclipse, type SolarEclipseType } from 'nebulosa/src/astronomy/bodies/sun'
-import { type EclipseGeoPoint, geoPolylinesToSvgPathData } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
+import { type EclipseGeoPoint, geoPolylinesToSvgPathData, type SunMoonProvider } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import { computeGreatestDurationCircumstances, computeGreatestEclipseCircumstances, type SolarEclipseExtremeCircumstances } from 'nebulosa/src/astronomy/events/eclipse/solar/local'
 import { computePolynomialBesselianElements, computeSolarEclipseMapGeometry, refineSolarEclipse, type HybridEclipseKind, type PolynomialBesselianElements, type SolarEclipseContactPoints, solarAltitudeAtPoint, solarEclipseMapToSvgPaths, splitCentralLineByKind } from 'nebulosa/src/astronomy/events/eclipse/solar/map'
 import { timeAtJulianDay, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { toDeg } from 'nebulosa/src/math/units/angle'
-import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, eclipseSunMoon, findRefinedEclipse, ID_SEARCH_MARGIN, MAP_PRECISION, type RefinedEclipseSearch } from './eclipses'
+import { DEGREE_PLANE, type EclipseDirection, type EclipseLocation, findRefinedEclipse, MAP_PRECISION, NO_ECLIPSE_KERNELS, type RefinedEclipseSearch, resolveRefinedEclipse } from './eclipses'
 import { LruCache } from './lrucache'
+import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 
 // Solar eclipses and their global maps, the pure part of the solar eclipse routes (solareclipses.ts) shared with
 // the map worker (solareclipses.worker.ts): stepping through the toolkit's solar eclipses, naming them by id, the
 // Unix milliseconds of their greatest eclipse, and drawing their central line, limits, and sunrise/sunset curves
-// on the degree plane of eclipses.ts. A map costs hundreds of milliseconds, which is why it runs on the worker.
+// on the degree plane of eclipses.ts. A map costs hundreds of milliseconds, which is why it runs on the worker, from the
+// eclipse and the elements the server thread found on the ephemeris of eclipses.ts, so the worker needs none.
 // Times are Unix milliseconds (UTC, converted from the toolkit's TT), angles and positions degrees (longitude east
 // positive), durations seconds, widths kilometers.
 
@@ -101,21 +103,23 @@ export function solarEclipseId(eclipse: SolarEclipse): string {
 const SEARCH: RefinedEclipseSearch<SolarEclipse> = {
 	// The greatest eclipse is up to a millisecond after its id, so the instant is moved by one millisecond away from it.
 	nearest: (time, next) => nearestSolarEclipse(timeUnix((time + (next ? 1 : -1)) / 1000), next),
-	refine: (candidate) => refineSolarEclipse(candidate, eclipseSunMoon(candidate.maximalTime)),
+	refine: (candidate, sunMoon) => refineSolarEclipse(candidate, sunMoon),
+	center: (eclipse) => eclipse.maximalTime,
 	instant: (eclipse) => timeToUnixMillis(eclipse.maximalTime),
 	cache: new LruCache(128),
 }
 
 // Returns the eclipse nearest an instant in a direction: the next one has an id later than time, the previous one an
-// id earlier than it, so stepping from an id never returns the same eclipse. time is in Unix milliseconds.
-export function findSolarEclipse(time: number, direction: EclipseDirection): SolarEclipse {
-	return findRefinedEclipse(SEARCH, time, direction)
+// id earlier than it, so stepping from an id never returns the same eclipse. time is in Unix milliseconds; each
+// candidate is refined on the ephemeris snapshot gives it (eclipses.ts), the theories when absent.
+export function findSolarEclipse(time: number, direction: EclipseDirection, snapshot: SpiceKernelSnapshot = NO_ECLIPSE_KERNELS.current()): SolarEclipse {
+	return findRefinedEclipse(SEARCH, time, direction, snapshot)
 }
 
-// Returns the eclipse an id names, or undefined when it names none.
-export function resolveSolarEclipse(id: string): SolarEclipse | undefined {
-	const eclipse = findSolarEclipse(+id - ID_SEARCH_MARGIN, 'next')
-	return solarEclipseId(eclipse) === id ? eclipse : undefined
+// Returns the eclipse an id names on the ephemeris of snapshot, the one whose greatest eclipse is within
+// ID_MATCH_TOLERANCE of it, or undefined when it names none.
+export function resolveSolarEclipse(id: string, snapshot: SpiceKernelSnapshot = NO_ECLIPSE_KERNELS.current()): SolarEclipse | undefined {
+	return resolveRefinedEclipse(SEARCH, id, snapshot)
 }
 
 // Returns the global circumstances of an eclipse.
@@ -123,10 +127,10 @@ export function solarEclipseSummary(eclipse: SolarEclipse): SolarEclipseSummary 
 	return { id: solarEclipseId(eclipse), type: eclipse.type, maximum: timeToUnixMillis(eclipse.maximalTime), magnitude: eclipse.magnitude, gamma: eclipse.gamma, central: eclipse.central, lunation: eclipse.lunation }
 }
 
-// Returns the polynomial Besselian elements of an eclipse, fitted on the ephemeris every solar eclipse
-// computation of the API uses, so the map and the local circumstances agree.
-export function solarEclipseElements(eclipse: SolarEclipse): PolynomialBesselianElements {
-	return computePolynomialBesselianElements(eclipse.maximalTime, eclipseSunMoon(eclipse.maximalTime))
+// Returns the polynomial Besselian elements of an eclipse, fitted on the Sun and the Moon of its ephemeris
+// (eclipses.ts), the same for its map and its local circumstances, so they agree.
+export function solarEclipseElements(eclipse: SolarEclipse, sunMoon: SunMoonProvider): PolynomialBesselianElements {
+	return computePolynomialBesselianElements(eclipse.maximalTime, sunMoon)
 }
 
 // Returns the Unix milliseconds of a Julian Day on the time scale of the elements (TT).
@@ -148,9 +152,8 @@ function extreme(circumstances: SolarEclipseExtremeCircumstances | undefined): S
 }
 
 // Returns the global map of an eclipse: its named points, its greatest eclipse and duration, and its lines, with
-// the central line split where a hybrid eclipse changes between total and annular.
-export function solarEclipseMap(eclipse: SolarEclipse): SolarEclipseMap {
-	const pbe = solarEclipseElements(eclipse)
+// the central line split where a hybrid eclipse changes between total and annular, from its elements alone.
+export function solarEclipseMap(eclipse: SolarEclipse, pbe: PolynomialBesselianElements): SolarEclipseMap {
 	const geometry = computeSolarEclipseMapGeometry(eclipse, pbe, { includeRiseSetCurves: true })
 	const svg = solarEclipseMapToSvgPaths(geometry, DEGREE_PLANE, { precision: MAP_PRECISION })
 	const central = splitCentralLineByKind(geometry.lines.centerLine, pbe)

@@ -1,18 +1,12 @@
 import { afterAll, expect, test } from 'bun:test'
-import { installInterpolatedNutation } from './astronomicaltime.nutation'
+import { ID_MATCH_TOLERANCE } from './eclipses'
 import { createSolarEclipseRoutes, type LocalSolarEclipse, type SolarEclipseMapWorkerRequest, type SolarEclipseMapWorkerResponse, SolarEclipseService } from './solareclipses'
 import { findSolarEclipse, resolveSolarEclipse, type SolarEclipseMap, type SolarEclipseSummary, solarEclipseSummary } from './solareclipses.map'
-
-// The map worker interpolates the nutation, as the server thread does, so the summaries compared with its maps do too.
-const restoreNutation = installInterpolatedNutation()
 
 const service = new SolarEclipseService()
 const routes = createSolarEclipseRoutes(service)
 
-afterAll(() => {
-	service.dispose()
-	restoreNutation()
-})
+afterAll(() => service.dispose())
 
 function list(query: string) {
 	return routes['/api/eclipses/solar'].GET(new Request(`http://localhost/api/eclipses/solar?${query}`))
@@ -59,7 +53,7 @@ class FakeWorker extends EventTarget {
 
 function fakeService(answer: (request: SolarEclipseMapWorkerRequest) => SolarEclipseMapWorkerResponse | undefined, timeout?: number) {
 	const worker = new FakeWorker(answer)
-	return { worker, service: new SolarEclipseService(timeout, () => worker as never) }
+	return { worker, service: new SolarEclipseService({ timeout, startWorker: () => worker as never }) }
 }
 
 test('finds the eclipses after a date with their types and greatest eclipse in UTC', async () => {
@@ -97,11 +91,19 @@ test('steps through eclipses strictly in both directions, and resolves every id'
 	}
 })
 
-test('answers 404 for an id that names no eclipse', async () => {
-	const response = await map(`${TOTAL.maximum + 1}`)
+test('answers 404 for an id more than ID_MATCH_TOLERANCE from every eclipse', async () => {
+	const response = await map(`${TOTAL.maximum + ID_MATCH_TOLERANCE + 1}`)
 	expect(response.status).toBe(404)
 	expect(await response.json()).toMatchObject({ code: 'notFound' })
-	expect(local(`${TOTAL.maximum - 60000}`, 'longitude=0&latitude=0').status).toBe(404)
+	expect(local(`${TOTAL.maximum - ID_MATCH_TOLERANCE - 1}`, 'longitude=0&latitude=0').status).toBe(404)
+})
+
+// An id taken from another ephemeris source is up to about a second off the eclipse it names.
+test('an id within ID_MATCH_TOLERANCE of an eclipse names it, answered with its own id', async () => {
+	const response = await map(`${TOTAL.maximum + 1500}`)
+	expect(response.status).toBe(200)
+	expect(((await response.json()) as SolarEclipseMap).eclipse).toEqual(TOTAL)
+	expect(((await local(`${TOTAL.maximum - 1500}`, 'longitude=-96.8&latitude=32.78').json()) as LocalSolarEclipse).eclipseId).toBe(TOTAL.id)
 })
 
 test('draws the central line by kind and the limits on the degree plane', async () => {

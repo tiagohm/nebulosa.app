@@ -4,6 +4,7 @@ import { equatorialFromJ2000, equatorialToHorizontal } from 'nebulosa/src/astron
 import { eraS2c } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { frameToFrame, ICRS, ITRS } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
+import { interpolatedEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { altitudeOf, ASTRONOMICAL_TWILIGHT } from 'nebulosa/src/astronomy/events/horizon'
 import { searchExtrema } from 'nebulosa/src/astronomy/events/search'
 import { type VisibilityConstraints, visibilityWindows } from 'nebulosa/src/astronomy/events/visibility'
@@ -18,7 +19,7 @@ import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather
 import { type EphemerisAttempt, type EphemerisMode, type EphemerisSourceKind, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { solarSystemBody } from './sky/bodies'
 import { catalogObject } from './sky/catalog'
-import { geocentricInterpolation, geographic, type SkyObserver, solarSystemStates } from './sky/ephemeris'
+import { geocentricOf, geographic, type SkyObserver, solarSystemSource } from './sky/ephemeris'
 import { type TimeSpan, zonedDate } from './sky/sun'
 import type { SolarSystemBodyCode } from './sky/types'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
@@ -434,9 +435,9 @@ export class PlanningNight {
 		this.end = this.time(night.sun.end)
 		this.#snapshot = snapshot
 		this.#probes = [night.sun.start - PLANNING_STATES_MARGIN_MS, (night.sun.start + night.sun.end) / 2, night.sun.end + PLANNING_STATES_MARGIN_MS]
-		const { states } = solarSystemStates(snapshot, ['301'], this.#probes)
-		this.sunAt = this.topocentric(geocentricInterpolation(states.body('10'), states))
-		this.moonAt = this.topocentric(geocentricInterpolation(states.body('301'), states))
+		const source = interpolatedEphemerisSource(solarSystemSource(snapshot, ['301'], this.#probes).source)
+		this.sunAt = this.topocentric(geocentricOf(source, 10))
+		this.moonAt = this.topocentric(geocentricOf(source, 301))
 	}
 
 	// Key of the night among the nights of other sites and evenings: the site's place and zone, the evening date, and the
@@ -466,8 +467,8 @@ export class PlanningNight {
 		let provider = this.#bodies.get(code)
 
 		if (!provider) {
-			const { states } = solarSystemStates(this.#snapshot, [code], this.#probes)
-			provider = this.topocentric(geocentricInterpolation(states.body(code), states))
+			const source = interpolatedEphemerisSource(solarSystemSource(this.#snapshot, [code], this.#probes).source)
+			provider = this.topocentric(geocentricOf(source, Number(code)))
 			this.#bodies.set(code, provider)
 		}
 

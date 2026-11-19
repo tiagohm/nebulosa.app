@@ -1,17 +1,5 @@
-import {
-	analyticalSaturnianEphemeris,
-	interpolatedSaturnianEphemeris,
-	interpolatedSaturnianRingEphemeris,
-	SATURNIAN_BODIES,
-	SATURNIAN_MOONS,
-	SATURNIAN_NAIF,
-	SATURNIAN_RING_BODIES,
-	type SaturnianBody,
-	type SaturnianEphemeris,
-	SaturnianEphemerisMiss,
-	type SaturnianMoon,
-	spkSaturnianEphemeris,
-} from 'nebulosa/src/astronomy/ephemeris/saturnian'
+import { interpolatedSaturnianEphemeris, interpolatedSaturnianRingEphemeris, SATURNIAN_BODIES, SATURNIAN_MOONS, SATURNIAN_NAIF, SATURNIAN_RING_BODIES, type SaturnianBody, type SaturnianEphemeris, type SaturnianMoon, saturnianEphemeris } from 'nebulosa/src/astronomy/ephemeris/saturnian'
+import type { EphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { planetSystemState, type SatelliteDiskState, type SatelliteEclipseState, type SkyBasis } from 'nebulosa/src/astronomy/events/satellites.geometry'
 import { type SaturnianMoonView, saturnianMoonView, saturnianSeparationMaxima, saturnianView, type SaturnRingOverlap } from 'nebulosa/src/astronomy/events/saturn.geometry'
 import { SATURN_MODEL, SATURN_RING_MODEL, type SaturnRingAnnulus, type SaturnRingEventKind, saturnRingEvents, type SaturnRingGeometry, saturnRingGeometry, type SaturnRingIllumination, saturnRingOpenings } from 'nebulosa/src/astronomy/events/saturn.rings'
@@ -88,16 +76,16 @@ const SATURN_SOURCES: Readonly<Record<SaturnScope, SatelliteSourceConfig<Saturni
 
 // The Saturnian source configuration with the given description of the analytical theories.
 function sourceConfig(analyticalSource: AnalyticalSaturnSource): SatelliteSourceConfig<SaturnianBody, SaturnianEphemeris, AnalyticalSaturnSource> {
-	return { naif: SATURNIAN_NAIF, analytical: analyticalSaturnianEphemeris, analyticalSource, spk: spkSaturnianEphemeris, miss: SaturnianEphemerisMiss }
+	return { naif: SATURNIAN_NAIF, analyticalSource, ephemeris: saturnianEphemeris }
 }
 
 // Result of a computation of one scope and the source it used.
 export type SaturnSourced<T> = SourcedResult<SaturnianBody, AnalyticalSaturnSource, T>
 
-// Runs `count` chunks of a computation of `scope` with one source for all of them (see withSatelliteSource). `wrap`
-// interpolates the source for dense sampling; a single instant is evaluated directly.
-export function withSaturnianSource<T>(kernels: SaturnKernels, scope: SaturnScope, count: number, chunk: (ephemeris: SaturnianEphemeris, index: number) => T, wrap?: (ephemeris: SaturnianEphemeris) => SaturnianEphemeris, signal?: AbortSignal): Promise<SaturnSourced<T>> {
-	return withSatelliteSource(kernels, SATURN_SOURCES[scope], SCOPE_BODIES[scope], count, chunk, wrap, signal)
+// Runs `count` chunks of a computation of `scope` with one source for all of them (see withSatelliteSource). `build`
+// builds an interpolated system over the source for dense sampling; a single instant is evaluated directly.
+export function withSaturnianSource<T>(kernels: SaturnKernels, scope: SaturnScope, count: number, chunk: (ephemeris: SaturnianEphemeris, index: number) => T, build?: (source: EphemerisSource) => SaturnianEphemeris, signal?: AbortSignal): Promise<SaturnSourced<T>> {
+	return withSatelliteSource(kernels, SATURN_SOURCES[scope], SCOPE_BODIES[scope], count, chunk, build, signal)
 }
 
 // Signature of a result of a scope computed from a source and a kernel snapshot.

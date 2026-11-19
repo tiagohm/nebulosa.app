@@ -3,6 +3,7 @@ import { nearestLunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
 import { bodyFixedMatrix, MOON_ROTATION } from 'nebulosa/src/astronomy/bodies/orientation'
 import { frameToFrame, ICRS, ITRS } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
+import { analyticalEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { type Mat3, matMulVec, matTransposeMulVec } from 'nebulosa/src/math/linear-algebra/mat3'
@@ -11,6 +12,7 @@ import { normalizePI } from 'nebulosa/src/math/units/angle'
 import { makeTime, SkyEphemeris } from './ephemeris'
 import { createMoonAlmanacRoutes, MoonAlmanac, moonAboveHorizon, moonAppearance, moonCalendar, moonPhaseName } from './moon'
 
+const SOURCE = analyticalEphemerisSource
 const SAO_PAULO = { latitude: -23.5505, longitude: -46.6333, elevation: 760 }
 const LONDON = { latitude: 51.5074, longitude: -0.1278, elevation: 11 }
 const TIME = Date.UTC(2026, 9, 28, 22)
@@ -51,7 +53,7 @@ describe('appearance', () => {
 	test('the view rotation is the frame of the sub-observer point, the pole, and the sub-solar point', () => {
 		for (const observer of [undefined, SAO_PAULO, LONDON]) {
 			for (const time of [TIME, TIME + 7 * DAY, TIME + 200 * DAY]) {
-				const appearance = moonAppearance(time, observer)
+				const appearance = moonAppearance(time, observer, SOURCE)
 				const m = appearance.bodyToCamera
 				expectRotation(m)
 
@@ -72,7 +74,7 @@ describe('appearance', () => {
 	})
 
 	test('lunar east is drawn on the west of the sky: Mare Crisium right, Copernicus and Aristarchus left, Tycho below', () => {
-		const m = moonAppearance(TIME).bodyToCamera
+		const m = moonAppearance(TIME, undefined, SOURCE).bodyToCamera
 		const crisium = matMulVec(m, surface(16.1774, 59.1037))
 		const copernicus = matMulVec(m, surface(9.6209, -20.0786))
 		const aristarchus = matMulVec(m, surface(23.7299, -47.4901))
@@ -90,8 +92,8 @@ describe('appearance', () => {
 	test('an observer sees a slightly different libration than the geocenter, and gets the parallactic angle of its zenith', () => {
 		for (const observer of [SAO_PAULO, LONDON]) {
 			for (const time of [TIME, TIME + 6 * HOUR, TIME + 12 * HOUR]) {
-				const geocentric = moonAppearance(time)
-				const topocentric = moonAppearance(time, observer)
+				const geocentric = moonAppearance(time, undefined, SOURCE)
+				const topocentric = moonAppearance(time, observer, SOURCE)
 				const shift = Math.hypot(normalizePI(topocentric.subObserver.longitude - geocentric.subObserver.longitude), topocentric.subObserver.latitude - geocentric.subObserver.latitude)
 
 				expect(geocentric.center).toBe('geocentric')
@@ -115,26 +117,26 @@ describe('appearance', () => {
 	test('names the phase and measures the light around the phases', () => {
 		const calendar = moonCalendar(TIME)
 		const at = (kind: string) => calendar.phases.find((e) => e.kind === kind)!.time
-		const full = moonAppearance(at('fullMoon'))
-		const fresh = moonAppearance(at('newMoon') + 3 * DAY)
-		const quarter = moonAppearance(at('firstQuarter'))
+		const full = moonAppearance(at('fullMoon'), undefined, SOURCE)
+		const fresh = moonAppearance(at('newMoon') + 3 * DAY, undefined, SOURCE)
+		const quarter = moonAppearance(at('firstQuarter'), undefined, SOURCE)
 
 		expect(full.phase).toBe('fullMoon')
 		expect(full.illuminatedFraction).toBeGreaterThan(0.99)
 		expectAngle(full.colongitude, Math.PI / 2, 10 * DEG2RAD)
-		expect(moonAppearance(at('newMoon')).illuminatedFraction).toBeLessThan(0.01)
-		expect(moonAppearance(at('newMoon') + HOUR).ageDays).toBeCloseTo(1 / 24, 6)
+		expect(moonAppearance(at('newMoon'), undefined, SOURCE).illuminatedFraction).toBeLessThan(0.01)
+		expect(moonAppearance(at('newMoon') + HOUR, undefined, SOURCE).ageDays).toBeCloseTo(1 / 24, 6)
 		expect(fresh.phase).toBe('waxingCrescent')
 		expect(fresh.ageDays).toBeCloseTo(3, 6)
 		expect(quarter.phase).toBe('firstQuarter')
 		expect(quarter.illuminatedFraction).toBeCloseTo(0.5, 1)
-		expect(moonAppearance(at('lastQuarter')).phase).toBe('lastQuarter')
-		expect(moonAppearance(at('fullMoon') - 4 * DAY).phase).toBe('waxingGibbous')
-		expect(moonAppearance(at('fullMoon') + 4 * DAY).phase).toBe('waningGibbous')
+		expect(moonAppearance(at('lastQuarter'), undefined, SOURCE).phase).toBe('lastQuarter')
+		expect(moonAppearance(at('fullMoon') - 4 * DAY, undefined, SOURCE).phase).toBe('waxingGibbous')
+		expect(moonAppearance(at('fullMoon') + 4 * DAY, undefined, SOURCE).phase).toBe('waningGibbous')
 
 		// A waxing Moon is lit on its west limb (position angle near 270°), a waning one on its east limb.
 		expectAngle(fresh.brightLimbAngle, 1.5 * Math.PI, 30 * DEG2RAD)
-		expectAngle(moonAppearance(at('fullMoon') + 8 * DAY).brightLimbAngle, Math.PI / 2, 30 * DEG2RAD)
+		expectAngle(moonAppearance(at('fullMoon') + 8 * DAY, undefined, SOURCE).brightLimbAngle, Math.PI / 2, 30 * DEG2RAD)
 	})
 
 	test('phase names follow the elongation', () => {
@@ -214,7 +216,7 @@ describe('Moon above the horizon', () => {
 	const END = START + DAY
 
 	test('agrees with the rise and set of the ephemeris across midnight', () => {
-		const intervals = moonAboveHorizon(SAO_PAULO, START, END)
+		const intervals = moonAboveHorizon(SAO_PAULO, START, END, SOURCE)
 		const midnight = Date.UTC(2026, 9, 31, 3)
 		const events = new SkyEphemeris().events({ type: 'body', code: '301' }, midnight, SAO_PAULO, 'moon')!
 		const up = intervals.find((e) => e.end > midnight)!
@@ -224,7 +226,7 @@ describe('Moon above the horizon', () => {
 	})
 
 	test('intervals are clipped to the instants and ordered', () => {
-		const intervals = moonAboveHorizon(SAO_PAULO, START, END)
+		const intervals = moonAboveHorizon(SAO_PAULO, START, END, SOURCE)
 		expect(intervals.length).toBeGreaterThan(0)
 		expect(intervals[0].start).toBeGreaterThanOrEqual(START)
 		expect(intervals.at(-1)!.end).toBeLessThanOrEqual(END)
@@ -233,7 +235,7 @@ describe('Moon above the horizon', () => {
 
 	test('a Moon that never rises gives none', () => {
 		const pole = { latitude: -89.9, longitude: 0, elevation: 0 }
-		const days = Array.from({ length: 10 }, (_, i) => moonAboveHorizon(pole, START + 3 * i * DAY, START + (3 * i + 1) * DAY))
+		const days = Array.from({ length: 10 }, (_, i) => moonAboveHorizon(pole, START + 3 * i * DAY, START + (3 * i + 1) * DAY, SOURCE))
 		expect(days.some((e) => e.length === 0)).toBeTrue()
 		expect(days.some((e) => e.length === 1 && e[0].end - e[0].start >= DAY - 1000)).toBeTrue()
 	})

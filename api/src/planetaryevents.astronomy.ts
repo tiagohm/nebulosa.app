@@ -3,9 +3,8 @@ import { apparentDirection, type LightDeflector, SUN_LIGHT_DEFLECTOR_LIMITER, SU
 import type { PositionAndVelocityOverTime, PositionOverTime } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { eraNut06a, eraPnm06a } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { ecliptic } from 'nebulosa/src/astronomy/coordinates/frame'
-import type { SpkKernelSet, SpkMissReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
-import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
-import { interpolatedSatelliteEphemeris, type SatelliteEphemeris, SatelliteEphemerisMiss, type SatelliteSystem, spkSatelliteEphemeris } from 'nebulosa/src/astronomy/ephemeris/satellites'
+import { interpolatedSatelliteEphemeris, type SatelliteEphemeris, satelliteEphemeris, type SatelliteSystem } from 'nebulosa/src/astronomy/ephemeris/satellites'
+import { type EphemerisSource, spkEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { planetaryAppulses, planetaryBrightnessMaxima, planetaryClosestApproaches, planetaryGreatestElongations, planetaryIlluminationCrossings, planetaryLongitudeConjunctions, planetaryLongitudeOppositions, planetaryLongitudeQuadratures, planetaryStations } from 'nebulosa/src/astronomy/events/planetary'
 import type { TimeSearchOptions } from 'nebulosa/src/astronomy/events/search'
 import { type Time, type TimeProviders, tdbMinusTtByFairheadAndBretagnon1990, timeShift, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
@@ -75,14 +74,6 @@ const REQUIRED: Readonly<Record<Body, number>> = { sun: 10, earth: 399, mercury:
 // slowly enough for two days.
 const NODE_STEP: Readonly<Record<Body, number>> = { sun: 1, earth: 1, mercury: 1, venus: 1, mars: 1, jupiter: 2, saturn: 2, uranus: 2, neptune: 2 }
 
-// Thrown by the kernel source when a body state cannot be resolved, so the computation reruns from VSOP87E.
-export class PlanetaryEventsEphemerisMiss extends SatelliteEphemerisMiss<Body> {
-	constructor(target: Body, body: number, reason: SpkMissReason, time: Time) {
-		super(target, body, reason, time)
-		this.name = 'PlanetaryEventsEphemerisMiss'
-	}
-}
-
 // The bodies of a computation as an Earth-centred system without moons, so the toolkit's coherent satellite-system
 // machinery (one kernel set, misses, interpolation) serves the planets.
 const SYSTEM: SatelliteSystem<Body, never> = {
@@ -91,23 +82,30 @@ const SYSTEM: SatelliteSystem<Body, never> = {
 	moons: [],
 	naif: REQUIRED,
 	nodeStep: NODE_STEP,
-	miss: (target, body, reason, time) => new PlanetaryEventsEphemerisMiss(target, body, reason, time),
 }
 
 // Positions of the bodies of a computation (barycentric AU, ICRF), from one source.
 export type PlanetaryEventsEphemeris = SatelliteEphemeris<Body, never, { readonly kind: 'spk' | 'analytical' }>
 
-// VSOP87E barycentric positions of the bodies.
-const ANALYTICAL: PlanetaryEventsEphemeris = {
-	source: { kind: 'analytical' },
-	position: (body, time) => vsop[body](time)[0],
+// The NAIF code that supplies each body from a source: from the kernels a planet's centre when the set has it, else its
+// barycentre; from the theories the barycentre, which VSOP87E gives.
+function resolvedNaif(source: EphemerisSource): Record<Body, number> {
+	const naif = { ...REQUIRED }
+	if (source.kind === 'spk') for (const body of SYSTEM.bodies) if (source.has(CENTRE[body])) naif[body] = CENTRE[body]
+	return naif
 }
 
-// The NAIF code that supplies each body from a kernel set: a planet's centre when the set has it, else its barycentre.
-function resolvedNaif(set: SpkKernelSet): Record<Body, number> {
-	const naif = { ...REQUIRED }
-	for (const body of SYSTEM.bodies) if (set.bodies.has(CENTRE[body])) naif[body] = CENTRE[body]
-	return naif
+// Provenance of the analytical source.
+const ANALYTICAL_SOURCE = { kind: 'analytical' } as const
+
+// The bodies of a computation over a source.
+function eventsEphemeris(source: EphemerisSource): PlanetaryEventsEphemeris {
+	return satelliteEphemeris({ ...SYSTEM, naif: resolvedNaif(source) }, source, ANALYTICAL_SOURCE)
+}
+
+// The bodies of a computation over a source, interpolated on SYSTEM's nodes for dense searches.
+function interpolatedEventsEphemeris(source: EphemerisSource): PlanetaryEventsEphemeris {
+	return interpolatedSatelliteEphemeris({ ...SYSTEM, naif: resolvedNaif(source) }, source, ANALYTICAL_SOURCE)
 }
 
 // The analytical theory of a computation.
@@ -128,10 +126,8 @@ export type PlanetaryEventsKernels = PlanetaryKernels
 // How the bodies are evaluated from the kernels or VSOP87E.
 const SOURCE: SatelliteSourceConfig<Body, PlanetaryEventsEphemeris, AnalyticalPlanetaryEventsSource> = {
 	naif: REQUIRED,
-	analytical: ANALYTICAL,
 	analyticalSource: { kind: 'analytical', planetary: 'VSOP87E' },
-	spk: (set) => spkSatelliteEphemeris({ ...SYSTEM, naif: resolvedNaif(set) }, set),
-	miss: PlanetaryEventsEphemerisMiss,
+	ephemeris: eventsEphemeris,
 }
 
 // The conventions every event follows, for comparison with a printed almanac.
@@ -167,7 +163,7 @@ export interface PlanetaryEventsSignature {
 export function planetaryEventsSignature(source: PlanetaryEventsSource, snapshot: SpiceKernelSnapshot, bodies: readonly PlanetaryEventBody[]): PlanetaryEventsSignature {
 	const signature = { modelVersion: PLANETARY_EVENTS_MODEL_VERSION, convention: PLANETARY_EVENTS_CONVENTION, source, offline: snapshot.offline, generation: snapshot.generation }
 	if (source.kind !== 'spk' || !snapshot.set) return signature
-	const naif = resolvedNaif(snapshot.set)
+	const naif = resolvedNaif(spkEphemerisSource(snapshot.set))
 	const origins: Partial<Record<PlanetaryEventBody, PlanetaryEventsBodyOrigin>> = {}
 	for (const code of bodies) origins[code] = naif[BODY_OF[code]] === CENTRE[BODY_OF[code]] ? 'centre' : 'barycentre'
 	return { ...signature, origins }
@@ -647,7 +643,7 @@ export async function searchPlanetaryEvents(kernels: PlanetaryEventsKernels, req
 			const providers = new Providers(ephemeris)
 			return scanEvents(providers, request, oriented(from - halo, orientation), oriented(to + halo, orientation)).filter((event) => event.time >= from && event.time < to)
 		},
-		(ephemeris) => interpolatedSatelliteEphemeris(SYSTEM, ephemeris),
+		interpolatedEventsEphemeris,
 		signal,
 	)
 
@@ -760,7 +756,7 @@ export async function computeSeries(kernels: PlanetaryEventsKernels, request: Pl
 			const instants = times.map((ms) => oriented(ms, orientation))
 			return SERIES_QUANTITIES[kind].map((quantity): PlanetaryEventSeriesCurve => ({ quantity, values: instants.map((t) => sample(quantity, t)) }))
 		},
-		(ephemeris) => interpolatedSatelliteEphemeris(SYSTEM, ephemeris),
+		interpolatedEventsEphemeris,
 		signal,
 	)
 
@@ -771,7 +767,7 @@ export async function computeSeries(kernels: PlanetaryEventsKernels, request: Pl
 // set resolves the Sun, the Earth, and every planet over all of them, else VSOP87E, interpolated on the grid (nodes cached
 // for the whole run). A miss in any computation reruns all of them from VSOP87E; yields to the event loop between them.
 export async function withVisibilitySource<T>(kernels: PlanetaryEventsKernels, bodies: readonly PlanetaryEventBody[], count: number, compute: (ephemeris: PlanetaryEventsEphemeris, index: number) => T, signal?: AbortSignal) {
-	return await withSatelliteSource(kernels, SOURCE, sourceBodies(bodies), count, compute, (ephemeris) => interpolatedSatelliteEphemeris(SYSTEM, ephemeris), signal)
+	return await withSatelliteSource(kernels, SOURCE, sourceBodies(bodies), count, compute, interpolatedEventsEphemeris, signal)
 }
 
 // Geometric geocentric ICRS vector (AU) of the Sun or a planet over Unix milliseconds, from an ephemeris; a new vector.

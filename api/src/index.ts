@@ -1085,7 +1085,7 @@ connections.listen(publish)
 const operations = new OperationRegistry(connections.devices, publish)
 
 // Pointing models in force on the mounts of the open connections, which suspend when a mount stops matching them.
-const corrections = new MountCorrections(connections.devices.mounts, (event) => publish(event))
+const corrections = new MountCorrections(connections.devices.mounts, (event) => publish(event), spiceKernels)
 
 // Mount commands and nudge sessions over the devices of the open connections, whose GoTos a model in force corrects.
 const mounts = new MountCommands(connections.devices, (id) => connections.client(id), skyLocator, operations, broadcast, undefined, corrections)
@@ -1211,7 +1211,7 @@ const tppa = new TppaSessions(connections.devices, (id) => connections.client(id
 // iPolar sessions of the cameras of the open connections, rotating the mounts in automatic mode with the commander of
 // the mount commands, taking their frames with the capturer of the captures, and solving them with the plate solving service,
 // less the master dark of the Calibration Library a session pinned.
-const ipolar = new IPolarSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, calibrationLibrary, publish, undefined, equipmentCatalog)
+const ipolar = new IPolarSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, calibrationLibrary, publish, undefined, equipmentCatalog, spiceKernels)
 
 // Fits the pointing models on a worker of its own.
 const pointingModelFitter = new PointingModelFitter()
@@ -1222,7 +1222,7 @@ const pointingModels = new PointingModels(new PointingModelStore(database), poin
 // Mount pointing sessions of the cameras of the open connections, slewing the mounts with the commander of the mount
 // commands, so no model corrects them, taking their frames with the capturer of the captures, and solving them with the
 // plate solving service.
-const mountPointing = new MountPointingSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, pointingModels, publish)
+const mountPointing = new MountPointingSessions(connections.devices, (id) => connections.client(id), operations, mounts.commander, captures.capturer, images, captureFrames, plateSolving, pointingModels, publish, undefined, spiceKernels)
 
 // Activation of the models: the checks of the moment, and the routes of the models in force.
 const pointingActivations = new PointingActivations(connections.devices, (id) => connections.client(id), corrections, pointingModels, operations)

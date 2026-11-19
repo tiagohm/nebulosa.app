@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test'
 import { equatorialFromJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
+import { analyticalEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { deg, normalizePI, toArcsec } from 'nebulosa/src/math/units/angle'
 import { apparentFromIcrs, type PointingSite } from './mountpointing.frames'
@@ -14,7 +15,7 @@ test('the apparent place is the precessed one plus the aberration of the year, a
 		[4.5, -1.1],
 		[5.9, 0.6],
 	]) {
-		const apparent = apparentFromIcrs({ rightAscension, declination }, NOW, SITE)
+		const apparent = apparentFromIcrs({ rightAscension, declination }, NOW, SITE, analyticalEphemerisSource)
 		const [meanRightAscension, meanDeclination] = equatorialFromJ2000(rightAscension, declination, timeUnix(NOW / 1000, true))
 		const separation = toArcsec(Math.hypot(normalizePI(apparent.rightAscension - meanRightAscension) * Math.cos(declination), apparent.declination - meanDeclination))
 
@@ -25,7 +26,7 @@ test('the apparent place is the precessed one plus the aberration of the year, a
 })
 
 test('the right ascension stays in a full turn across its wrap', () => {
-	const { rightAscension } = apparentFromIcrs({ rightAscension: 6.28318, declination: 0 }, NOW, SITE)
+	const { rightAscension } = apparentFromIcrs({ rightAscension: 6.28318, declination: 0 }, NOW, SITE, analyticalEphemerisSource)
 	expect(rightAscension).toBeGreaterThanOrEqual(0)
 	expect(rightAscension).toBeLessThan(2 * Math.PI)
 })

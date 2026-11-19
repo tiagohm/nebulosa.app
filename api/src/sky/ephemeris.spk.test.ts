@@ -135,7 +135,7 @@ test('a light-time epoch outside the coverage abandons the whole kernel calculat
 
 	expect(position.source).toBe('horizons')
 	expect(automatic.calls).toEqual(['DES=20000001;'])
-	expect(position.attempts).toEqual([{ source: 'spk', reason: 'outOfCoverage', body: 20000001, time: position.attempts![0].time }])
+	expect(position.attempts).toEqual([{ source: 'spk', reason: 'outOfCoverage', target: '20000001', body: 20000001, time: position.attempts![0].time }])
 })
 
 test('events come from the kernels covering the whole window and follow a new generation', async () => {

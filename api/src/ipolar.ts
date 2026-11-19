@@ -29,12 +29,14 @@ import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
+import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { type CameraBindings, NO_CAMERA_BINDINGS } from './equipmentcatalog'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import { type OperationDevice, type OperationRegistry, settledResult } from './operations'
 import type { PlateSolvePixels, PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, PlateSolvingService } from './platesolving'
 import { POINTING_KEYWORDS } from './platesolving.hints'
+import { solarSystemSource } from './sky/ephemeris'
 
 // iPolar service: runs the toolkit's camera-based polar alignment (calibration of the mechanical RA axis from two
 // solved frames, then refinement while the operator adjusts the mount base) for one camera inside a single operation
@@ -53,6 +55,9 @@ import { POINTING_KEYWORDS } from './platesolving.hints'
 // disconnection. When it ends, the slew-rate preset an automatic rotation replaced is restored if the mount is free; the
 // tracking is never changed. Angles are radians, durations seconds, instants Unix milliseconds; records live in memory,
 // the latest per camera.
+
+// Span after the start of a session its Earth source must cover, milliseconds: a day, far longer than a session.
+const SESSION_EPHEMERIS_SPAN_MS = 86_400_000
 
 // Settings of the frames of a session; the exposure in seconds. The frame type is always LIGHT.
 export type IPolarCaptureSettings = Pick<CaptureSettings, 'exposureTime' | 'gain' | 'offset' | 'binX' | 'binY' | 'subframe' | 'x' | 'y' | 'width' | 'height' | 'frameFormat'>
@@ -424,7 +429,8 @@ export class IPolarSessions {
 	// (the one of the capture service), images receives the frames, frames records them as the latest frame of their
 	// camera and closes them, plateSolving solves them, library gives the master dark a session pinned, and listener
 	// receives every session change synchronously. auxiliaryDir is the parent of the temporary directory of each session,
-	// and catalog resolves the camera of the Equipment Catalog a camera is bound to, whose darks alone a session pins.
+	// catalog resolves the camera of the Equipment Catalog a camera is bound to, whose darks alone a session pins, and kernels
+	// are those of the SPICE Kernel Library the Earth of the frames comes from (none by default).
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -438,6 +444,7 @@ export class IPolarSessions {
 		readonly listener: IPolarListener,
 		readonly auxiliaryDir: string = tmpdir(),
 		readonly catalog: CameraBindings = NO_CAMERA_BINDINGS,
+		readonly kernels: EphemerisKernels = NO_EPHEMERIS_KERNELS,
 	) {
 		this.#sessions = new CameraSessionRegistry(operations, (session) => listener({ type: 'ipolar:updated', session }))
 	}
@@ -617,6 +624,9 @@ export class IPolarSessions {
 				const automatic = request.mode === 'automatic'
 				const { latitude, longitude, elevation } = request.site
 				const observer: IPolarObserver = { location: geodeticLocation(longitude, latitude, meter(elevation)), refraction: request.refraction ? DEFAULT_REFRACTION_PARAMETERS : false }
+				// The Earth of the frames: the kernels when they cover the next day of the session, else VSOP87E.
+				const now = Date.now()
+				const { source: ephemeris } = solarSystemSource(this.kernels.current(), [], [now, now + SESSION_EPHEMERIS_SPAN_MS])
 				const capture: CenteringCaptureOptions = { ...request.capture, exposureTimeUnit: 'second', frameType: 'LIGHT', compressed: false }
 				const services: IPolarServices = {
 					...(automatic && { mountCommander: this.commander }),
@@ -637,6 +647,7 @@ export class IPolarSessions {
 						mode: request.mode,
 						capture,
 						observer,
+						ephemeris,
 						...(automatic && { motion: { direction: request.direction, slewRate: request.slewRate!, targetRotation: request.rotation, initialMotion: INITIAL_MOTION, maximumMotion: MAXIMUM_MOTION, maximumTotalMotion: MAXIMUM_TOTAL_MOTION } }),
 						settle: request.settleDelay,
 						maximumAttempts: MAXIMUM_ATTEMPTS,
@@ -652,6 +663,7 @@ export class IPolarSessions {
 				const calibration = calibrated.value
 				session.calibration = calibration
 				const refinement = {
+					ephemeris,
 					capture,
 					delay: request.refinementDelay,
 					maximumFailures: MAXIMUM_REFINEMENT_FAILURES,

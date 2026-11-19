@@ -1,7 +1,5 @@
 import { IAU_METEOR_SHOWER_CATALOG_URL } from 'nebulosa/src/adapters/catalogs/iau.meteor.showers'
-import { meteorSolarLongitude } from 'nebulosa/src/astronomy/meteors/solar'
 import type { MeteorShowerActivity, MeteorShowerSolution, MeteorShowerStatus } from 'nebulosa/src/astronomy/meteors/types'
-import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import bundledCatalogPath from '../data/meteor.showers.json.gz' with { type: 'file' }
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
 import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
@@ -370,7 +368,7 @@ function isIsoDate(version: string) {
 
 // Meteor shower catalog, dates, positions, and observing nights.
 export class MeteorShowersService {
-	readonly #table = new MeteorSolarLongitudeTable()
+	readonly #table: MeteorSolarLongitudeTable
 	readonly #nights = new LruCache<MeteorObservingNight>(NIGHT_CACHE_LIMIT)
 	readonly #paths = new LruCache<MeteorRadiantPath>(PATH_CACHE_LIMIT)
 	readonly #fetch: UpstreamFetch
@@ -383,6 +381,7 @@ export class MeteorShowersService {
 		this.#fetch = options.fetch ?? ((url, init) => fetch(url, init))
 		this.#now = options.now ?? Date.now
 		this.#bundled = options.bundled ?? readBundled
+		this.#table = new MeteorSolarLongitudeTable(options.kernels)
 	}
 
 	// The catalog in use, loaded on first use: the active snapshot of the database, unless the bundled document has a later
@@ -498,7 +497,7 @@ export class MeteorShowersService {
 		const { index } = await this.#catalog()
 		const time = this.#now()
 		const revision = this.options.store.state().revision
-		const solarLongitude = meteorSolarLongitude(timeUnix(time / 1000, true))
+		const solarLongitude = this.#table.solarLongitude(time)
 		let rows = filterMeteorShowers(index, request).map((record) => this.#summary(record, time, solarLongitude, request.year))
 		if (request.active !== undefined) rows = rows.filter((row) => (row.activityNow.state === 'active') === request.active)
 
@@ -515,7 +514,7 @@ export class MeteorShowersService {
 	async detail(id: string): Promise<MeteorShowerDetail> {
 		const record = await this.#record(id)
 		const time = this.#now()
-		const solarLongitude = meteorSolarLongitude(timeUnix(time / 1000, true))
+		const solarLongitude = this.#table.solarLongitude(time)
 		const year = new Date(time).getUTCFullYear()
 		const occurrences = occurrencesOverlapping(record, Date.UTC(year - 1, 0, 1), Date.UTC(year + 2, 0, 1), this.#table)
 		return {
@@ -606,8 +605,8 @@ export class MeteorShowersService {
 		const { index } = await this.#catalog()
 		const night = resolveNight(this.options.night, request.site, request.eveningDate)
 		const middle = (night.sun.start + night.sun.end) / 2
-		const startLongitude = meteorSolarLongitude(timeUnix(night.sun.start / 1000, true))
-		const middleLongitude = meteorSolarLongitude(timeUnix(middle / 1000, true))
+		const startLongitude = this.#table.solarLongitude(night.sun.start)
+		const middleLongitude = this.#table.solarLongitude(middle)
 		const showers: MeteorNightShower[] = []
 		let otherActive = 0
 
@@ -619,7 +618,7 @@ export class MeteorShowersService {
 				continue
 			}
 
-			if (solution === undefined || !supportMeetsNight(observingSupport(record, solution, middle, this.#table), night)) continue
+			if (solution === undefined || !supportMeetsNight(observingSupport(record, solution, middle, this.#table), night, this.#table)) continue
 			const observing = await this.observing(record.id, request)
 			const modelled = observing.model?.windows
 			let expectedCount = 0

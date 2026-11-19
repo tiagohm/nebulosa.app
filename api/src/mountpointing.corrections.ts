@@ -10,9 +10,10 @@ import { normalizePI } from 'nebulosa/src/math/units/angle'
 import { correctPointingCoordinate, type FittedPointingModel, predictPointingModelError } from 'nebulosa/src/observation/mount/pointing'
 import { busy, type ClientResolver, connectedDevice, notFound, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
+import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { errorResponse } from './http'
 import type { PointingModels } from './mountpointing'
-import { apparentFromIcrs, type EquatorialPosition, POINTING_MODEL_FRAME, type PointingSite } from './mountpointing.frames'
+import { apparentFromIcrs, type EquatorialPosition, POINTING_MODEL_FRAME, pointingEphemeris, type PointingSite } from './mountpointing.frames'
 import type { PointingModelFile, PointingRevision } from './mountpointing.store'
 import type { OperationRegistry } from './operations'
 
@@ -147,13 +148,13 @@ interface ActiveModel {
 
 // Returns the apparent target of a GoTo. J2000 and galactic targets are reduced as the samples were, so aberration stays out
 // of the model; the other frames are of date already, ALTAZ with its default refraction.
-function apparentTarget(mount: Mount, target: MountTargetCoordinate<string | number>, time: number, site: PointingSite): EquatorialPosition {
+function apparentTarget(mount: Mount, target: MountTargetCoordinate<string | number>, time: number, site: PointingSite, kernels: EphemerisKernels): EquatorialPosition {
 	const instant = timeUnix(time / 1000, true)
 	const [rightAscension, declination] = mountTargetEquatorial(mount, target, instant)
 
 	if (target.type === 'J2000' || target.type === 'GALACTIC') {
 		const [icrsRightAscension, icrsDeclination] = equatorialToJ2000(rightAscension, declination, instant)
-		return apparentFromIcrs({ rightAscension: icrsRightAscension, declination: icrsDeclination }, time, site)
+		return apparentFromIcrs({ rightAscension: icrsRightAscension, declination: icrsDeclination }, time, site, pointingEphemeris(kernels, time))
 	}
 
 	return { rightAscension, declination }
@@ -169,10 +170,12 @@ export class MountCorrections implements DeviceHandler<Mount>, Disposable {
 	// Sequence of the latest event.
 	#sequence = 0
 
-	// Creates the corrections over the mounts of the registry. listener receives every change synchronously.
+	// Creates the corrections over the mounts of the registry. listener receives every change synchronously, and kernels
+	// supplies the Earth and the Sun of the reduction of a J2000 or galactic target.
 	constructor(
 		readonly mounts: Pick<DeviceManager<Mount>, 'addHandler' | 'removeHandler'>,
 		readonly listener: PointingActivationListener,
+		readonly kernels: EphemerisKernels = NO_EPHEMERIS_KERNELS,
 	) {
 		mounts.addHandler(this)
 	}
@@ -249,7 +252,7 @@ export class MountCorrections implements DeviceHandler<Mount>, Disposable {
 		}
 
 		const { fitted, site } = active
-		const requested = apparentTarget(mount, target, time, site)
+		const requested = apparentTarget(mount, target, time, site, this.kernels)
 		const lst = localSiderealTime(timeUnix(time / 1000, true), geodeticLocation(site.longitude, site.latitude, 0))
 		const pierSide = expectedPierSide(requested.rightAscension, requested.declination, lst)
 

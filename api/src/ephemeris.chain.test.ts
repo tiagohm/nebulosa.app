@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test'
 import type { SpkKernelSet } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
-import { computeEphemeris, computeEphemerisSync, EphemerisKernelMiss, type EphemerisKernels, type EphemerisMode, type EphemerisSources, EphemerisUnavailableError, HorizonsCircuitBreaker } from './ephemeris.chain'
+import { EphemerisMiss } from 'nebulosa/src/astronomy/ephemeris/source'
+import { timeUnix } from 'nebulosa/src/astronomy/time/time'
+import { computeEphemeris, computeEphemerisSync, type EphemerisKernels, type EphemerisMode, type EphemerisSources, EphemerisUnavailableError, HorizonsCircuitBreaker } from './ephemeris.chain'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 
 // A snapshot whose set has segments for bodies, online unless offline.
@@ -30,7 +32,7 @@ async function sourceOf(mode: EphemerisMode, value: SpiceKernelSnapshot, offered
 		sources: offered,
 		chunks: 2,
 		compute: (ephemeris, index) => {
-			if (ephemeris === 'spk' && index === missAt) throw new EphemerisKernelMiss(499, 499, 'coverage')
+			if (ephemeris === 'spk' && index === missAt) throw new EphemerisMiss(499, 499, 'coverage', timeUnix(0))
 			return ephemeris
 		},
 	})
@@ -48,7 +50,7 @@ test('fast asks the theories before Horizons, accurate Horizons before the theor
 test('a kernel miss in any chunk reruns every chunk on the next source', async () => {
 	const { results, provenance } = await sourceOf('accurate', snapshot([499]), sources(), 1)
 	expect(results).toEqual(['horizons', 'horizons'])
-	expect(provenance.attempts).toEqual([{ source: 'spk', reason: 'outOfCoverage', body: 499 }])
+	expect(provenance.attempts).toEqual([{ source: 'spk', reason: 'outOfCoverage', target: 'mars', body: 499, time: 0 }])
 })
 
 test('offline never asks Horizons, and fails what only Horizons could give', async () => {

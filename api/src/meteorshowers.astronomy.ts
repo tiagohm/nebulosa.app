@@ -1,14 +1,15 @@
+import { type EphemerisSource, interpolatedEphemerisSource, relativeEphemerisState } from 'nebulosa/src/astronomy/ephemeris/source'
 import { altitudeOf } from 'nebulosa/src/astronomy/events/horizon'
 import { isMeteorShowerActive, meteorActivityZhr, meteorShowerActivityYearApplies } from 'nebulosa/src/astronomy/meteors/activity'
 import { meteorLocalHourlyRate } from 'nebulosa/src/astronomy/meteors/observation'
 import { meteorGeometricObservingWindows, meteorObservingWindows } from 'nebulosa/src/astronomy/meteors/planner'
 import { meteorRadiantPathSegmentsBetween, meteorRadiantVector } from 'nebulosa/src/astronomy/meteors/radiant'
-import { meteorSolarLongitude, meteorSolarLongitudeOf } from 'nebulosa/src/astronomy/meteors/solar'
+import { meteorSolarLongitude } from 'nebulosa/src/astronomy/meteors/solar'
 import { meteorShowerComputationContext, meteorShowerState, meteorShowerStates } from 'nebulosa/src/astronomy/meteors/state'
-import type { MeteorEphemeris, MeteorExponentialActivityProfile, MeteorGeometricObservingWindow, MeteorGeometricObservingWindowOptions, MeteorShowerSolution, MeteorSolarLongitudeInterval, MeteorVisualObservation } from 'nebulosa/src/astronomy/meteors/types'
+import type { MeteorExponentialActivityProfile, MeteorGeometricObservingWindow, MeteorGeometricObservingWindowOptions, MeteorShowerSolution, MeteorSolarLongitudeInterval, MeteorVisualObservation } from 'nebulosa/src/astronomy/meteors/types'
 import { type Time, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
-import { vecAngle, vecMinus } from 'nebulosa/src/math/linear-algebra/vec3'
+import { vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
 import { LruCache } from './lrucache'
@@ -16,7 +17,7 @@ import { type MeteorShowerRecord, preferredSolution } from './meteorshowers.cata
 import type { MeteorSolarLongitudeTable } from './meteorshowers.solar'
 import { annualEventsOf, type MeteorActivityProfileEntry, type MeteorAnnualEvent, type MeteorDataBasis, type MeteorVisualEntry, type MeteorVisualSourceId } from './meteorshowers.visual'
 import { type ObservingReasonCode, type ObservingSample, type ObservingWindow, type PlanningSite, resolveNight, type TargetAnalysis, type TargetAnalysisRequest } from './observingplanner.astronomy'
-import { geocentricInterpolation, geographic, type SkyObserver, solarSystemStates } from './sky/ephemeris'
+import { geographic, type SkyObserver, solarSystemSource } from './sky/ephemeris'
 import type { TimeSpan } from './sky/sun'
 import type { SolarSystemBodyCode } from './sky/types'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
@@ -458,17 +459,18 @@ export function observingSupport(record: MeteorShowerRecord, solution: MeteorSho
 		const occurrences = [year - 1, year, year + 1].map((candidate) => visualOccurrence(record.visual!, candidate, table))
 		let nearest = occurrences[0]
 		for (const occurrence of occurrences) if (distanceTo(occurrence, time) < distanceTo(nearest, time)) nearest = occurrence
-		return { basis: 'imoVisual', interval: { start: meteorSolarLongitude(timeUnix(nearest.start / 1000, true)), end: meteorSolarLongitude(timeUnix(nearest.end / 1000, true)) } }
+		return { basis: 'imoVisual', interval: { start: table.solarLongitude(nearest.start), end: table.solarLongitude(nearest.end) } }
 	}
 
 	return solution.activityInterval === undefined ? { basis: 'none' } : { basis: 'iauScientific', interval: solution.activityInterval }
 }
 
 // Whether a support meets a night: no support is known, or the shower is active at the start or the end of the night
-// (upper transit to upper transit of the Sun). A night it does not meet has no window of that support.
-export function supportMeetsNight(support: MeteorObservingSupport, night: AstroWeatherNight) {
+// (upper transit to upper transit of the Sun), with the solar longitudes of the table. A night it does not meet has no
+// window of that support.
+export function supportMeetsNight(support: MeteorObservingSupport, night: AstroWeatherNight, table: MeteorSolarLongitudeTable) {
 	const interval = support.interval
-	return interval === undefined || isMeteorShowerActive(interval, meteorSolarLongitude(toolkitTime(night.sun.start))) || isMeteorShowerActive(interval, meteorSolarLongitude(toolkitTime(night.sun.end)))
+	return interval === undefined || isMeteorShowerActive(interval, table.solarLongitude(night.sun.start)) || isMeteorShowerActive(interval, table.solarLongitude(night.sun.end))
 }
 
 // Distance from an instant to a visual occurrence's period, milliseconds; 0 inside it.
@@ -492,40 +494,36 @@ function windowAnswer(window: MeteorGeometricObservingWindow): MeteorObservingWi
 	}
 }
 
-// Reach of the Sun and the Moon of a night beyond its ends, in milliseconds (two hours): the hourly nodes around them.
-const NIGHT_EPHEMERIS_MARGIN_MS = 7_200_000
+// Reach of the source of a night beyond its ends, in milliseconds (two days): the interpolation nodes around them.
+const NIGHT_EPHEMERIS_MARGIN_MS = 2 * 86_400_000
 
-// Sun and Moon of the nights computed lately, by the source of their states and the night: every shower of a night shares
-// them, so its hourly nodes are evaluated once.
-const NIGHT_EPHEMERIDES = new LruCache<MeteorEphemeris>(16)
+// Sources of the nights computed lately, by the source chosen and the night: every shower of a night shares one, so its
+// interpolation nodes are evaluated once.
+const NIGHT_EPHEMERIDES = new LruCache<EphemerisSource>(16)
 
-// Sun and Moon of the meteor computations of a night span (Unix milliseconds): geometric geocentric vectors from one
-// source of the fast ephemeris chain (the SPK kernels of snapshot when they cover the night, else VSOP87E and ELPMPP02),
-// interpolated linearly between whole UTC hours. The Moon moves about 0.55° an hour, so the chord departs from its arc by
-// under 0.001°, while one ELPMPP02 evaluation costs about 10 ms, far more than a sample of a window search can.
-export function nightEphemeris(snapshot: SpiceKernelSnapshot, span: TimeSpan): MeteorEphemeris {
-	const { states, key } = solarSystemStates(snapshot, ['301'], [span.start - NIGHT_EPHEMERIS_MARGIN_MS, (span.start + span.end) / 2, span.end + NIGHT_EPHEMERIS_MARGIN_MS])
+// Source of the Sun and the Moon of the meteor computations of a night span (Unix milliseconds): one source of the fast
+// ephemeris chain (the SPK kernels of snapshot when they cover the night, else VSOP87E and ELPMPP02), interpolated
+// (interpolatedEphemerisSource), since one ELPMPP02 evaluation costs about 10 ms, far more than a sample of a window
+// search can.
+export function nightEphemeris(snapshot: SpiceKernelSnapshot, span: TimeSpan): EphemerisSource {
+	const { source, key } = solarSystemSource(snapshot, ['301'], [span.start - NIGHT_EPHEMERIS_MARGIN_MS, (span.start + span.end) / 2, span.end + NIGHT_EPHEMERIS_MARGIN_MS])
 	const id = `${key}|${span.start}|${span.end}`
 	let ephemeris = NIGHT_EPHEMERIDES.get(id)
 
 	if (!ephemeris) {
-		const sun = geocentricInterpolation(states.sun, states)
-		const moon = geocentricInterpolation(states.body('301'), states)
-		ephemeris = { sun: (time) => sun(timeToUnixMillis(time)), moon: (time) => moon(timeToUnixMillis(time)) }
+		ephemeris = interpolatedEphemerisSource(source)
 		NIGHT_EPHEMERIDES.set(id, ephemeris)
 	}
 
 	return ephemeris
 }
 
-// Sun and Moon of a meteor computation at one instant (Unix milliseconds): geometric geocentric vectors of one source of
-// the fast ephemeris chain, the SPK kernels of snapshot when they resolve the Sun, the Earth, and (with `moon`) the Moon
-// there, else VSOP87E and ELPMPP02, evaluated exactly at each instant asked. Without `moon` the Moon is never asked for.
-export function instantEphemeris(snapshot: SpiceKernelSnapshot, time: number, moon: boolean): MeteorEphemeris {
+// Source of the Sun and the Moon of a meteor computation at one instant (Unix milliseconds): one source of the fast
+// ephemeris chain, the SPK kernels of snapshot when they resolve the Sun, the Earth, and (with `moon`) the Moon there, else
+// VSOP87E and ELPMPP02, evaluated exactly. Without `moon` the kernels need no Moon.
+export function instantEphemeris(snapshot: SpiceKernelSnapshot, time: number, moon: boolean): EphemerisSource {
 	const codes: readonly SolarSystemBodyCode[] = moon ? ['301'] : []
-	const { states } = solarSystemStates(snapshot, codes, [time])
-	const moonState = states.body('301')
-	return { sun: (t) => vecMinus(states.sun(t)[0], states.earth(t)[0]), moon: (t) => vecMinus(moonState(t)[0], states.earth(t)[0]) }
+	return solarSystemSource(snapshot, codes, [time]).source
 }
 
 // Geometric windows of a solution over a span, chronological.
@@ -534,7 +532,7 @@ export function geometricWindows(solution: MeteorShowerSolution, observer: SkyOb
 }
 
 // Toolkit options of a request, with a support and the Sun and Moon of the night.
-export function windowOptions(request: Omit<MeteorObservingRequest, 'site' | 'eveningDate'>, support: MeteorObservingSupport, ephemeris: MeteorEphemeris, moon = true): MeteorGeometricObservingWindowOptions {
+export function windowOptions(request: Omit<MeteorObservingRequest, 'site' | 'eveningDate'>, support: MeteorObservingSupport, ephemeris: EphemerisSource, moon = true): MeteorGeometricObservingWindowOptions {
 	return {
 		support: support.interval,
 		ephemeris,
@@ -617,7 +615,7 @@ function rateSummary(rate: PreparedRate): Omit<MeteorRateModel, 'windows'> {
 
 // The profile-based planner's windows of a span: the request's constraints, bounded by the profile's support alone (the
 // catalog interval is left out, so the model decides where the shower is active), chronologically.
-function modelledWindows(solution: MeteorShowerSolution, rate: PreparedRate, request: Omit<MeteorObservingRequest, 'eveningDate'>, span: TimeSpan, ephemeris: MeteorEphemeris): readonly MeteorModelledWindow[] {
+function modelledWindows(solution: MeteorShowerSolution, rate: PreparedRate, request: Omit<MeteorObservingRequest, 'eveningDate'>, span: TimeSpan, ephemeris: EphemerisSource): readonly MeteorModelledWindow[] {
 	const { observation } = rate
 	const windows = meteorObservingWindows({ ...solution, activityInterval: undefined }, rate.profile, geographic(request.site), toolkitTime(span.start), toolkitTime(span.end), {
 		ephemeris,
@@ -815,7 +813,7 @@ export async function rankNights(record: MeteorShowerRecord, request: MeteorNigh
 
 		const support = observingSupport(record, solution, (night.sun.start + night.sun.end) / 2, table)
 
-		if (!supportMeetsNight(support, night)) {
+		if (!supportMeetsNight(support, night, table)) {
 			ranked.push(unsearched('noSupportedActivity'))
 			continue
 		}
@@ -856,14 +854,14 @@ export async function rankNights(record: MeteorShowerRecord, request: MeteorNigh
 
 // Why a night has no window: no radiant, no darkness, no support overlapping it, a radiant never high enough in the dark,
 // or only the lunar constraints; else the samples could not tell.
-function noWindowReasons(solution: MeteorShowerSolution, request: MeteorObservingRequest, support: MeteorObservingSupport, night: AstroWeatherNight, samples: readonly MeteorNightSample[], ephemeris: MeteorEphemeris): readonly MeteorNoWindowReason[] {
+function noWindowReasons(solution: MeteorShowerSolution, request: MeteorObservingRequest, support: MeteorObservingSupport, night: AstroWeatherNight, samples: readonly MeteorNightSample[], ephemeris: EphemerisSource): readonly MeteorNoWindowReason[] {
 	const reasons: MeteorNoWindowReason[] = []
 	const dark = samples.filter((sample) => sample.sunAltitude <= request.maximumSolarAltitude)
 	if (dark.length === 0) reasons.push('sunTooHigh')
 
 	if (support.interval !== undefined) {
-		const start = meteorSolarLongitudeOf(ephemeris.sun(toolkitTime(night.sun.start)))
-		const end = meteorSolarLongitudeOf(ephemeris.sun(toolkitTime(night.sun.end)))
+		const start = meteorSolarLongitude(ephemeris, toolkitTime(night.sun.start))
+		const end = meteorSolarLongitude(ephemeris, toolkitTime(night.sun.end))
 		if (!isMeteorShowerActive(support.interval, start) && !isMeteorShowerActive(support.interval, end)) reasons.push('noSupportedActivity')
 	}
 
@@ -880,14 +878,14 @@ function noWindowReasons(solution: MeteorShowerSolution, request: MeteorObservin
 // Samples of the radiant, the Sun, and the Moon every NIGHT_SAMPLE_MS over a span, with the profile ZHR and the modelled
 // local rate when a rate model is given. The Sun and the Moon, and the solar longitude of the activity, come from the
 // night's ephemeris (nightEphemeris); their altitudes are geometric and the Moon's geocentric.
-function nightSamples(solution: MeteorShowerSolution | undefined, site: SkyObserver, span: TimeSpan, ephemeris: MeteorEphemeris, rate?: PreparedRate): readonly MeteorNightSample[] {
+function nightSamples(solution: MeteorShowerSolution | undefined, site: SkyObserver, span: TimeSpan, ephemeris: EphemerisSource, rate?: PreparedRate): readonly MeteorNightSample[] {
 	const observer = geographic(site)
 	const samples: MeteorNightSample[] = []
 
 	for (let time = span.start; time <= span.end; time += NIGHT_SAMPLE_MS) {
 		const instant = toolkitTime(time)
-		const sun = ephemeris.sun(instant)
-		const moon = ephemeris.moon(instant)
+		const sun = relativeEphemerisState(ephemeris, 10, 399, instant)[0]
+		const moon = relativeEphemerisState(ephemeris, 301, 399, instant)[0]
 		const context = meteorShowerComputationContext(instant, observer, { includeHorizontal: true, includeSun: false, includeMoon: false, ephemeris })
 		const state = solution === undefined ? undefined : meteorShowerState(solution, context, { includeHorizontal: true, includeSun: false, includeMoon: false, includeRadiantOfDate: false })
 		const altitude = state?.horizontal?.altitude
@@ -953,7 +951,9 @@ export function radiantPath(record: MeteorShowerRecord, request: MeteorRadiantPa
 	const start = table.nearest(request.time, support.interval.start)
 	const end = table.after(start, support.interval.end)
 	const step = Math.max((end - start) / (MAX_PATH_POINTS - 1), 3600000) / 86400000
-	const segments = meteorRadiantPathSegmentsBetween(solution, toolkitTime(start), toolkitTime(end), { step }).map((segment) => segment.map((point): MeteorRadiantPathPoint => ({ time: timeToUnixMillis(point.time), rightAscension: point.rightAscension, declination: point.declination })))
+	const segments = meteorRadiantPathSegmentsBetween(solution, toolkitTime(start), toolkitTime(end), { step, ephemeris: table.sourceAt(start) }).map((segment) =>
+		segment.map((point): MeteorRadiantPathPoint => ({ time: timeToUnixMillis(point.time), rightAscension: point.rightAscension, declination: point.declination })),
+	)
 	return { support, start, end, segments }
 }
 

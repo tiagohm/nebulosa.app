@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
+import { analyticalEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { geographic } from './ephemeris'
 import { createSunAlmanacRoutes, nextSeasons, SunAlmanac, sunNightAt, sunPhysicalData, zonedDate, zonedDay } from './sun'
 
 const MINUTE = 60_000
+const SOURCE = analyticalEphemerisSource
 
 const london = { latitude: 51.5074, longitude: -0.1278, elevation: 0 }
 const tromso = { latitude: 69.6492, longitude: 18.9553, elevation: 0 }
@@ -115,12 +117,12 @@ test('the next four seasons follow the instant across the year', () => {
 })
 
 test('equation of time and Carrington rotation', () => {
-	const data = sunPhysicalData(Date.UTC(2026, 10, 4))
+	const data = sunPhysicalData(Date.UTC(2026, 10, 4), SOURCE)
 	expect(data.equationOfTimeSeconds / 60).toBeCloseTo(16.4, 1)
 	expect(data.carringtonRotation).toBe(2317)
 	expect(data.source).toBe('local')
 
-	expect(sunPhysicalData(Date.UTC(2026, 1, 11)).equationOfTimeSeconds / 60).toBeCloseTo(-14.2, 0)
+	expect(sunPhysicalData(Date.UTC(2026, 1, 11), SOURCE).equationOfTimeSeconds / 60).toBeCloseTo(-14.2, 0)
 })
 
 test('the almanac route answers without an observer', async () => {
@@ -137,7 +139,7 @@ test('the almanac route answers without an observer', async () => {
 
 describe('nights', () => {
 	function night(time: number, observer: typeof london, timeZone: string) {
-		return sunNightAt(geographic(observer), time, timeZone)
+		return sunNightAt(geographic(observer), time, timeZone, SOURCE)
 	}
 
 	test('a night runs from one transit to the next, with its crossings in order', () => {

@@ -1,14 +1,15 @@
 import { vector as horizonsVector } from 'nebulosa/src/adapters/ephemeris/horizons'
 import type { SpkKernelSet } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
+import { analyticalEphemerisSource, EphemerisMiss, interpolatedEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import type { KeplerOrbit } from 'nebulosa/src/astronomy/orbits/asteroid'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
 import { type Vec3, vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
-import { computeEphemeris, EphemerisKernelMiss, EphemerisUnavailableError, HorizonsCircuitBreaker, snapshotKernels } from './ephemeris.chain'
+import { computeEphemeris, EphemerisUnavailableError, HorizonsCircuitBreaker, snapshotKernels } from './ephemeris.chain'
 import { LruCache } from './lrucache'
 import { type ObservingReasonCode, type ObservingTargetRef, type PlannerEphemerisProvenance, type PlanningNight, type ResolvedTarget, SEARCH_STEP_DAYS } from './observingplanner.astronomy'
 import type { ObservingMinorBodyStore, SavedMinorBody } from './observingplanner.minorbodies.store'
-import { ANALYTICAL_STATES, geocentricInterpolation, keplerOrbit, type MinorBodyElements, minorBodyMagnitude } from './sky/ephemeris'
+import { geocentricOf, keplerOrbit, type MinorBodyElements, minorBodyMagnitude } from './sky/ephemeris'
 import type { MinorBodies } from './sky/minorbodies'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 import type { SsdRequestQueue } from './ssd'
@@ -197,7 +198,7 @@ function searchStepOf(rate: number) {
 }
 
 // Geocentric vectors of a grid from the SPK kernels: the body minus the Earth, both resolved to the barycenter at every
-// node, adding the kernels used. Throws EphemerisKernelMiss when a node is not covered.
+// node, adding the kernels used. Throws EphemerisMiss when a node is not covered.
 function spkNodes(set: SpkKernelSet, code: number, grid: NodeGrid, kernels: Set<string>): Nodes {
 	const nodes = new Float64Array(3 * grid.count)
 
@@ -205,8 +206,8 @@ function spkNodes(set: SpkKernelSet, code: number, grid: NodeGrid, kernels: Set<
 		const time = timeUnix((grid.start + i * grid.spacing) / 1000, true)
 		const body = set.stateAt(code, time)
 		const earth = set.stateAt(399, time)
-		if (!body.ok) throw new EphemerisKernelMiss(code, body.body, body.reason, time)
-		if (!earth.ok) throw new EphemerisKernelMiss(code, earth.body, earth.reason, time)
+		if (!body.ok) throw new EphemerisMiss(code, body.body, body.reason, time)
+		if (!earth.ok) throw new EphemerisMiss(code, earth.body, earth.reason, time)
 		for (const id of body.kernels) kernels.add(id)
 		for (const id of earth.kernels) kernels.add(id)
 		for (let k = 0; k < 3; k++) nodes[3 * i + k] = body.state[0][k] - earth.state[0][k]
@@ -307,9 +308,9 @@ export class MinorBodyTrajectories {
 					},
 					analytical: () => {
 						if (!orbit) return undefined
-						// The Sun of the theories, interpolated hourly, so a 1-minute grid costs no more VSOP87E evaluations than a
-						// 10-minute one.
-						const sun = geocentricInterpolation(ANALYTICAL_STATES.sun, ANALYTICAL_STATES)
+						// The Sun of the theories, interpolated, so a 1-minute grid costs no more VSOP87E evaluations than a 10-minute
+						// one.
+						const sun = geocentricOf(interpolatedEphemerisSource(analyticalEphemerisSource), 10)
 						return { trajectory: refined(night, (grid) => keplerNodes(orbit, sun, grid)), elements: known }
 					},
 					...(!unresolved && { horizons: async (horizonsSignal) => ({ trajectory: await this.#horizonsTrajectory(target.spkId, night, horizonsSignal) }) }),

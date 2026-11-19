@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
+import { analyticalEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { geodeticLocation, localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { successfulOperationResult } from 'nebulosa/src/devices/orchestration/operation'
@@ -142,7 +143,7 @@ describe('corrected GoTos', () => {
 		const rightAscension = normalizeAngle(localSiderealTime(timeUnix(time / 1000, true), LOCATION) - deg(30))
 		expect(commands.goToNow(id, mount, { type: 'J2000', J2000: { x: rightAscension, y: deg(-40) } }, OBSERVER)).toMatchObject({ ok: true })
 
-		const apparent = apparentFromIcrs({ rightAscension, declination: deg(-40) }, time, SITE)
+		const apparent = apparentFromIcrs({ rightAscension, declination: deg(-40) }, time, SITE, analyticalEphemerisSource)
 		const { y } = goTo.mock.calls[0][2].JNOW as { y: number }
 		expect(toArcsec(apparent.declination - y)).toBeCloseTo(90, -1)
 	})

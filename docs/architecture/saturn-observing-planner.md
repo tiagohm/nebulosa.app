@@ -6,7 +6,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   It stores nothing, publishes no event, and never changes a device, a site, an operation, or the Sky clock.
 - Scopes and source: a computation of the `rings` scope evaluates only the Sun, the Earth, and Saturn's centre (NAIF 699, never the barycenter 6);
   a computation of the `moons` scope also evaluates Mimas, Enceladus, Tethys, Dione, Rhea, Titan, and Iapetus (601-606, 608; Hyperion is not planned).
-  Each takes all its states from one source chosen once with the shared `withSatelliteSource` of `api/src/planetary.source.ts`: the SPICE kernels when the set has every body of the scope, else VSOP87E (+ TASS 1.7 for the moons), with the same fallback reasons and full reruns after a `SaturnianEphemerisMiss` as the Jupiter planner.
+  Each takes all its states from one source chosen once with the shared `withSatelliteSource` of `api/src/planetary.source.ts`: the SPICE kernels when the set has every body of the scope, else VSOP87E (+ TASS 1.7 for the moons), with the same fallback reasons and full reruns after an `EphemerisMiss` as the Jupiter planner.
   Each scope chooses its own source: `sat480.bsp` alone gives the rings from the kernels while the moons come from VSOP87E + TASS 1.7.
   `/moons/state` carries the ring geometry from the same source as its moons, so a drawing never joins two sources; `/rings/state` gives the rings of the ring scope alone.
 - Kernel lifetime: timelines, tracks, separations, and events run in chunks with the restarts and `503 generationChanged` of the [Jupiter Observing Planner](jupiter-observing-planner.md);

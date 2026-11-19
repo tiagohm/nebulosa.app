@@ -1,11 +1,9 @@
-import type { PositionAndVelocity, PositionAndVelocityMut } from 'nebulosa/src/astronomy/coordinates/astrometry'
-import type { SpkKernelSet } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
-import { computeSunMoonPositionAt, type SunMoonProvider, sunMoonPositionAround } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
+import { analyticalEphemerisSource, type EphemerisSource, interpolatedEphemerisSource, spkEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
+import { type SunMoonProvider, sunMoonPositionOf } from 'nebulosa/src/astronomy/events/eclipse/eclipse'
 import { PlateCarree } from 'nebulosa/src/astronomy/projections/projection'
 import { type Time, timeShift, toJulianDay, tt } from 'nebulosa/src/astronomy/time/time'
 import { PIOVERTWO, RAD2DEG } from 'nebulosa/src/core/constants'
-import { vecMinus } from 'nebulosa/src/math/linear-algebra/vec3'
-import { computeEphemerisSync, EphemerisKernelMiss, type EphemerisProvenance, snapshotKernels } from './ephemeris.chain'
+import { computeEphemerisSync, type EphemerisProvenance, snapshotKernels } from './ephemeris.chain'
 import { errorResponse } from './http'
 import { LruCache } from './lrucache'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
@@ -15,7 +13,8 @@ import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 // paths are SVG path data on the degree plane. Geographic positions are degrees, longitude east positive. Every
 // computation of one eclipse takes the Sun, the Earth, and the Moon from one source of the fast ephemeris chain
 // (ephemeris.chain.ts): the kernels of the SPICE Kernel Library when they cover the three bodies over the eclipse, else
-// the analytical theories (eraEpv00 and eraMoon98 corrected by ELPMPP02), which always can.
+// the analytical theories (VSOP87E and ELPMPP02), which always can, interpolated (interpolatedEphemerisSource) since a
+// contact or map search samples hundreds of instants.
 
 // Direction in which to look for an eclipse from an instant.
 export type EclipseDirection = 'next' | 'previous'
@@ -51,9 +50,10 @@ const REFINEMENT_MARGIN = 600_000
 // Providers of the Sun and the Moon and refinements kept in memory: enough for a scan of eclipses to reuse them.
 const ECLIPSE_CACHE_LIMIT = 128
 
-// Half-width of the window the kernels must cover around an eclipse, in days: 13 hours, beyond the 8 hours of the
-// analytical provider (more than an eclipse lasts on either side), the light time of the Sun, and the refinement.
-const KERNEL_WINDOW_HALF_SPAN = 13 / 24
+// Half-width of the window the kernels must cover around an eclipse, in days: a day and a half, beyond the 8 hours an
+// eclipse lasts on either side, the light time of the Sun, the refinement, and the three node steps the interpolation of
+// the Earth reads on either side of an instant.
+const KERNEL_WINDOW_HALF_SPAN = 1.5
 
 // Bodies of an eclipse computation.
 export type EclipseBody = 'sun' | 'earth' | 'moon'
@@ -78,8 +78,8 @@ export interface EclipseEphemeris {
 	readonly run: <T>(compute: (sunMoon: SunMoonProvider, key: string) => T) => EclipseComputation<T>
 }
 
-// Analytical providers of the Sun and the Moon of each eclipse, by the Julian Day it falls on: creating one costs tens
-// of milliseconds, and an eclipse needs it for its elements, its map, and every place.
+// Analytical providers of the Sun and the Moon of each eclipse, by the Julian Day it falls on: the interpolation nodes
+// of the theories cost tens of milliseconds, and an eclipse needs them for its elements, its map, and every place.
 const analyticalProviders = new LruCache<SunMoonProvider>(ECLIPSE_CACHE_LIMIT)
 
 // Returns the analytical provider of the Sun and the Moon of the eclipse at an instant.
@@ -88,39 +88,23 @@ function analyticalSunMoon(time: Time): SunMoonProvider {
 	let provider = analyticalProviders.get(key)
 
 	if (!provider) {
-		provider = sunMoonPositionAround(time)
+		provider = sunMoonPositionOf(interpolatedEphemerisSource(analyticalEphemerisSource))
 		analyticalProviders.set(key, provider)
 	}
 
 	return provider
 }
 
-// State of a body from the kernels, throwing EphemerisKernelMiss at an epoch they do not resolve.
-function kernelState(set: SpkKernelSet, body: EclipseBody, time: Time): PositionAndVelocity {
-	const result = set.stateAt(ECLIPSE_NAIF[body], time)
-	if (!result.ok) throw new EphemerisKernelMiss(ECLIPSE_NAIF[body], result.body, result.reason, time, body)
-	return result.state
-}
-
-// Returns the provider of the Sun and the Moon from the kernels: barycentric Sun and Earth and the Moon relative to the
-// Earth. It first probes the three bodies at both ends and at the center of the window of the eclipse centered on
-// center, so an eclipse the kernels do not cover falls to the theories before any computation.
-function kernelSunMoon(set: SpkKernelSet, center: Time): SunMoonProvider {
+// Returns the provider of the Sun and the Moon of an SPK source, interpolated, after probing the three bodies at both ends
+// and at the center of the window of the eclipse centered on center, so an eclipse the kernels do not cover falls to the
+// theories before any computation; a state they miss throws EphemerisMiss.
+function kernelSunMoon(source: EphemerisSource, center: Time): SunMoonProvider {
 	for (const offset of [-KERNEL_WINDOW_HALF_SPAN, 0, KERNEL_WINDOW_HALF_SPAN]) {
 		const time = timeShift(center, offset)
-		for (const body of ECLIPSE_BODIES) kernelState(set, body, time)
+		for (const body of ECLIPSE_BODIES) source.state(ECLIPSE_NAIF[body], time)
 	}
 
-	const sun = (time: Time) => kernelState(set, 'sun', time)
-	const earth = (time: Time) => kernelState(set, 'earth', time)
-
-	const moon = (time: Time): PositionAndVelocityMut => {
-		const [moonPosition, moonVelocity] = kernelState(set, 'moon', time)
-		const [earthPosition, earthVelocity] = earth(time)
-		return [vecMinus(moonPosition, earthPosition), vecMinus(moonVelocity, earthVelocity)]
-	}
-
-	return (time) => computeSunMoonPositionAt(time, sun, earth, moon)
+	return sunMoonPositionOf(interpolatedEphemerisSource(source))
 }
 
 // Returns the ephemeris of the eclipse centered on center (its greatest eclipse, or a candidate's) from snapshot, read
@@ -134,7 +118,7 @@ export function eclipseEphemeris(snapshot: SpiceKernelSnapshot, center: Time): E
 				mode: 'fast',
 				sources: {
 					bodies: ECLIPSE_BODIES.map((body) => ({ name: body, naif: ECLIPSE_NAIF[body] })),
-					spk: (set) => kernelSunMoon(set, center),
+					spk: (set) => kernelSunMoon(spkEphemerisSource(set), center),
 					analytical: () => analyticalSunMoon(center),
 				},
 				compute: (sunMoon, _, context) => compute(sunMoon, context.key),

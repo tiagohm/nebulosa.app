@@ -3,10 +3,11 @@ import { constellation as constellationOf } from 'nebulosa/src/astronomy/coordin
 import { observerState } from 'nebulosa/src/astronomy/coordinates/correction'
 import { frameToFrame, ICRS, ITRS, TEME, TRUE_EQUATOR_AND_EQUINOX_OF_DATE } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
+import { interpolatedEphemerisSource, relativeEphemerisState } from 'nebulosa/src/astronomy/ephemeris/source'
 import { satelliteEclipses, satelliteGroundFootprint, type SatellitePassEvent, satelliteShadowState, type SatelliteShadowState, satelliteSubpoint, satelliteTrackingState, satelliteVisibleIntervals, type SatelliteWindowPass, satelliteWindowPasses } from 'nebulosa/src/astronomy/events/satellite'
 import { type GeographicPosition, subpoint } from 'nebulosa/src/astronomy/observer/location'
 import { recordFromOMM, type SatRec, sgp4 } from 'nebulosa/src/astronomy/orbits/propagation/sgp4'
-import { type Time, timeShift, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
+import { type Time, timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, DAYMIN, DAYSEC, EARTH_RADIUS_KM, ONE_SECOND, TAU } from 'nebulosa/src/core/constants'
 import { type Vec3, vecDot, vecLength, vecMinus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
@@ -14,7 +15,7 @@ import type { EarthOrientationCoverage, EarthOrientationStatus } from './astrono
 import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { LruCache } from './lrucache'
 import type { SatelliteElementKind, SatelliteElementSet } from './satellites.store'
-import { apparentAltitude, geographic, type SkyObserver, type SolarSystemStatesChoice, solarSystemStates } from './sky/ephemeris'
+import { apparentAltitude, geographic, type SkyObserver, solarSystemSource } from './sky/ephemeris'
 
 // Predictions of artificial satellites from their stored element sets, with the toolkit's SGP4 and frames only: one
 // instant (position, motion, illumination), passes over an observer with their sunlit and dark parts, sampled
@@ -335,46 +336,8 @@ export interface SatelliteGroundTrack {
 	readonly truncated: boolean
 }
 
-// Nodes of the interpolated Sun per day: one per hour. Linear interpolation between hourly positions departs from the
-// orbit by its sagitta, about 6e-8 of the distance (0.01″), far below what shadow and twilight need, while a VSOP87E
-// evaluation costs about half a millisecond and the event searches evaluate the Sun at every sample.
-const SUN_NODES_PER_DAY = 24
-
-// Hourly geocentric Sun positions kept, by hour index: about half a year.
-const SUN_CACHE_SIZE = 4096
-
-// Geocentric Sun positions at the hourly nodes by the key of their source, shared by every prediction since they depend
-// on the source and the instant only.
-const SUN_NODES = new LruCache<Vec3>(SUN_CACHE_SIZE)
-
 // Geocentric Sun in ICRS over time, AU.
 type SunOverTime = (time: Time) => Vec3
-
-// Geocentric Sun in ICRS, AU, of the states of a choice, interpolated linearly between the positions of the hourly nodes
-// around each instant (hours from the Julian day origin of the scale of the instant).
-function interpolatedSun({ states, key }: SolarSystemStatesChoice): SunOverTime {
-	const node = (time: Time, index: number) => {
-		const id = `${key}:${time.scale}:${index}`
-		let sun = SUN_NODES.get(id)
-
-		if (!sun) {
-			const at = timeShift(time, index / SUN_NODES_PER_DAY - time.day - time.fraction)
-			sun = vecMinus(states.sun(at)[0], states.earth(at)[0])
-			SUN_NODES.set(id, sun)
-		}
-
-		return sun
-	}
-
-	return (time) => {
-		const hours = (time.day + time.fraction) * SUN_NODES_PER_DAY
-		const index = Math.floor(hours)
-		const f = hours - index
-		const a = node(time, index)
-		const b = node(time, index + 1)
-		return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]
-	}
-}
 
 // Unit vector of the local vertical of a geodetic site, in ITRS.
 function zenith(site: GeographicPosition): [number, number, number] {
@@ -460,10 +423,12 @@ export class SatelliteEphemeris {
 		private readonly kernels: EphemerisKernels = NO_EPHEMERIS_KERNELS,
 	) {}
 
-	// Interpolated geocentric Sun of a computation between two instants (Unix milliseconds): from the SPK kernels when they
-	// cover the span, else VSOP87E.
+	// Geocentric Sun of a computation between two instants (Unix milliseconds): from the SPK kernels when they cover the
+	// span, else VSOP87E, interpolated on the nodes of interpolatedEphemerisSource (one a day, within 0.1 km), since the event
+	// searches evaluate the Sun at every sample.
 	#sun(start: number, end: number): SunOverTime {
-		return interpolatedSun(solarSystemStates(this.kernels.current(), [], [start, end]))
+		const source = interpolatedEphemerisSource(solarSystemSource(this.kernels.current(), [], [start, end]).source)
+		return (time) => relativeEphemerisState(source, 10, 399, time)[0]
 	}
 
 	// Returns a fresh copy of the prepared record of an element set. SGP4 writes into a record as it propagates, so every

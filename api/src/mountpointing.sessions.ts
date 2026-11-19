@@ -25,11 +25,12 @@ import { type CaptureFrameRegistry, captureFrameId } from './captureframes'
 import { type CaptureFrame, type CaptureSettings, exposureProgressListener } from './captures'
 import { busy, type ClientResolver, type CommandRequest, connectedDevice, notFound, unsupported } from './commands'
 import type { DeviceRegistry } from './devices'
+import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { errorResponse } from './http'
 import type { ImageStore } from './images'
 import type { PointingModels } from './mountpointing'
 import { CORRECTION_REFUSALS, correctedCommand } from './mountpointing.corrections'
-import { apparentFromIcrs, type EquatorialPosition, type PointingSite } from './mountpointing.frames'
+import { apparentFromIcrs, type EquatorialPosition, pointingEphemeris, type PointingSite } from './mountpointing.frames'
 import type { PointingAcquisitionState, PointingModelFile, PointingMountIdentity, PointingOpticsFingerprint, PointingSampleRecord, PointingVerification } from './mountpointing.store'
 import { type OperationDevice, type OperationRegistry, settledResult } from './operations'
 import type { PlateSolvePreparation, PlateSolveRequest, PlateSolverProvider, PlateSolvingService } from './platesolving'
@@ -341,7 +342,8 @@ export class MountPointingSessions {
 	// stretch of work, commander moves the mounts (the one of the mount commands), capturer takes the frames (the one of
 	// the capture service), images receives the frames, frames records them as the latest frame of their camera and
 	// closes them, plateSolving solves them, models keeps the samples, and listener receives every session change
-	// synchronously. auxiliaryDir is the parent of the temporary directory of each stretch of work.
+	// synchronously. auxiliaryDir is the parent of the temporary directory of each stretch of work, and kernels supplies the
+	// Earth and the Sun of the reduction of each solution.
 	constructor(
 		readonly devices: DeviceRegistry,
 		readonly client: ClientResolver,
@@ -354,6 +356,7 @@ export class MountPointingSessions {
 		readonly models: PointingModels,
 		readonly listener: MountPointingListener,
 		readonly auxiliaryDir: string = tmpdir(),
+		readonly kernels: EphemerisKernels = NO_EPHEMERIS_KERNELS,
 	) {
 		models.protectWith((modelId) => this.#holds(modelId))
 	}
@@ -770,7 +773,7 @@ export class MountPointingSessions {
 			if (!solved.ok) return solved
 			if (!solved.value) return successfulOperationResult(undefined)
 
-			const reached = apparentFromIcrs(solved.value.solution, solved.value.observedAt, site)
+			const reached = apparentFromIcrs(solved.value.solution, solved.value.observedAt, site, pointingEphemeris(this.kernels, solved.value.observedAt))
 			return successfulOperationResult(computePointingError(target.rightAscension, target.declination, reached.rightAscension, reached.declination).angularSeparation)
 		}
 
@@ -864,7 +867,7 @@ export class MountPointingSessions {
 	async #record(session: Session, waypoint: PointingWaypoint, commandedAt: number, command: EquatorialPosition, reported: EquatorialPosition, pierSide: Mount['pierSide'], solution: PlateSolution, time: number): Promise<OperationResult<void>> {
 		const { rightAscension, declination, scale, orientation, parity } = solution
 		const solvedIcrs: EquatorialPosition = { rightAscension, declination }
-		const solved = apparentFromIcrs(solvedIcrs, time, session.site)
+		const solved = apparentFromIcrs(solvedIcrs, time, session.site, pointingEphemeris(this.kernels, time))
 		const reason = this.#rejection(session, command, solved, scale)
 		const attempt = (session.attempts.get(waypoint.index) ?? 0) + 1
 		const { sessionId } = session.summary

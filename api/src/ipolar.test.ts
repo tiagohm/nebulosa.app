@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import { type PlateSolution, plateSolutionFrom } from 'nebulosa/src/astrometry/solvers/platesolver'
 import { eraS2c } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
+import { analyticalEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { geodeticLocation } from 'nebulosa/src/astronomy/observer/location'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { MountCommander } from 'nebulosa/src/devices/commanders/mount'
@@ -83,7 +84,7 @@ class Rig {
 	rotation = 0
 
 	solution(): PlateSolution {
-		const context = ipolarFrameContext(timeUnix(Date.now() / 1000), OBSERVER)
+		const context = ipolarFrameContext(timeUnix(Date.now() / 1000), OBSERVER, analyticalEphemerisSource)
 		const turn = matRodriguesRotation(this.axis, this.rotation)
 		const f = matMulVec(turn, this.forward)
 		const r = vecNormalize(matMulVec(turn, vecCross(this.forward, [0, 0, 1])))

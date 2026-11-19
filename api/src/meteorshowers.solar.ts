@@ -1,10 +1,14 @@
+import type { EphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { meteorSolarLongitude } from 'nebulosa/src/astronomy/meteors/solar'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { normalizeAngle } from 'nebulosa/src/math/units/angle'
+import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { LruCache } from './lrucache'
+import { solarSystemSource } from './sky/ephemeris'
 
 // Solar longitudes of the Meteor Showers catalog: the instants at which the geometric geocentric solar longitude of the
-// toolkit (meteorSolarLongitude, J2000 ecliptic, VSOP87E) reaches a value, for every shower of a year at once. Solving
+// toolkit (meteorSolarLongitude, J2000 ecliptic) reaches a value, for every shower of a year at once, with the Sun and the Earth
+// of one source of the fast ephemeris chain per year (the SPK kernels when they cover the year, else VSOP87E). Solving
 // each longitude by root search costs about 3 ms, about 10 s for the whole IAU catalog, so each civil UTC year is sampled
 // once a day (about 0.25 s, once) and inverted on the cubic through the four samples around the crossing. The longitude
 // is smooth on the scale of a day (its rate changes by 3% over a year), so the cubic errs by far less than a second of
@@ -39,6 +43,9 @@ function cubic(a: number, b: number, c: number, d: number, u: number) {
 // Instants of solar longitudes, by civil UTC year.
 export class MeteorSolarLongitudeTable {
 	readonly #years = new LruCache<YearSamples>(YEAR_CACHE_LIMIT)
+
+	// Creates the table over the kernels of the SPICE Kernel Library (none by default).
+	constructor(private readonly kernels: EphemerisKernels = NO_EPHEMERIS_KERNELS) {}
 
 	// Instant, Unix milliseconds (UTC), at which the solar longitude (radians, any turn) is reached in the civil UTC year,
 	// or undefined when the year never reaches it.
@@ -90,9 +97,27 @@ export class MeteorSolarLongitudeTable {
 		}
 	}
 
+	// Source of the Sun and the Earth of a civil UTC year: the kernels when they cover it with a day on either side, else the
+	// theories, read once per call so a change of the kernels samples the year again.
+	#choice(year: number) {
+		return solarSystemSource(this.kernels.current(), [], [Date.UTC(year, 0, 0), Date.UTC(year + 1, 0, 2)])
+	}
+
+	// Source of the solar longitude of an instant (Unix milliseconds): the one of its civil UTC year.
+	sourceAt(time: number): EphemerisSource {
+		return this.#choice(new Date(time).getUTCFullYear()).source
+	}
+
+	// Geometric solar longitude of an instant (Unix milliseconds) in the J2000 ecliptic, radians in [0, 2π), with the source
+	// of its civil UTC year.
+	solarLongitude(time: number) {
+		return meteorSolarLongitude(this.sourceAt(time), timeUnix(time / 1000, true))
+	}
+
 	// Samples of a civil year, computed on first use.
 	#samples(year: number): YearSamples {
-		const key = String(year)
+		const { source, key: sourceKey } = this.#choice(year)
+		const key = `${sourceKey}|${year}`
 		const cached = this.#years.get(key)
 		if (cached) return cached
 
@@ -103,7 +128,7 @@ export class MeteorSolarLongitudeTable {
 		let previous = Number.NEGATIVE_INFINITY
 
 		for (let i = 0; i < longitudes.length; i++) {
-			const raw = meteorSolarLongitude(timeUnix((origin + i * SAMPLE_SPACING_MS) / 1000, true))
+			const raw = meteorSolarLongitude(source, timeUnix((origin + i * SAMPLE_SPACING_MS) / 1000, true))
 			if (raw + turns < previous) turns += 2 * Math.PI
 			previous = raw + turns
 			longitudes[i] = previous

@@ -6,9 +6,7 @@ import { eraC2s, eraEo06a } from 'nebulosa/src/astronomy/coordinates/erfa/erfa'
 import { frameToFrame, ICRS, ITRS } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
 import type { SpkKernelSet } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
-import * as elpmpp02 from 'nebulosa/src/astronomy/ephemeris/models/analytical/elpmpp02'
-import { pluto } from 'nebulosa/src/astronomy/ephemeris/models/analytical/pluto'
-import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
+import { analyticalEphemerisSource, type EphemerisSource, interpolatedEphemerisSource, relativeEphemerisState, spkEphemerisSource, type SpkEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { asteroidMagnitudeEstimate, cometMagnitudeEstimate } from 'nebulosa/src/astronomy/formulas'
 import type { GeographicPosition } from 'nebulosa/src/astronomy/observer/location'
 import { asteroid, comet, type KeplerOrbit } from 'nebulosa/src/astronomy/orbits/asteroid'
@@ -17,21 +15,7 @@ import { AU_KM, DEG2RAD, GM_SUN_PITJEVA_2005, J2000, SPEED_OF_LIGHT } from 'nebu
 import { type MutVec3, type Vec3, vecAngle, vecLength, vecPlus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { deg, normalizeAngle, normalizePI, toDeg } from 'nebulosa/src/math/units/angle'
 import { meter } from 'nebulosa/src/math/units/distance'
-import {
-	computeEphemeris,
-	computeEphemerisSync,
-	type EphemerisAttempt,
-	EphemerisKernelMiss,
-	type EphemerisKernels,
-	type EphemerisKernelsUsed,
-	type EphemerisMode,
-	type EphemerisProvenance,
-	type EphemerisSourceKind,
-	EphemerisUnavailableError,
-	HorizonsCircuitBreaker,
-	NO_EPHEMERIS_KERNELS,
-	snapshotKernels,
-} from '../ephemeris.chain'
+import { computeEphemeris, computeEphemerisSync, type EphemerisAttempt, type EphemerisKernels, type EphemerisKernelsUsed, type EphemerisMode, type EphemerisProvenance, type EphemerisSourceKind, EphemerisUnavailableError, HorizonsCircuitBreaker, NO_EPHEMERIS_KERNELS, snapshotKernels } from '../ephemeris.chain'
 import { LruCache } from '../lrucache'
 import type { SpiceKernelSnapshot } from '../spicekernels.runtime'
 import { SsdRequestQueue } from '../ssd'
@@ -266,21 +250,18 @@ function kernelBodies(target: Exclude<EphemerisTarget, { type: 'catalog' }>) {
 	]
 }
 
-// States of one calculation from a kernel set: the target, the Earth, and the Sun, each throwing EphemerisKernelMiss when
-// not covered at an epoch, and the kernels they used.
+// One calculation over a kernel set: its SPK source, the state of the target, and the kernels the evaluated states used.
+// Every state throws EphemerisMiss at an epoch the set does not resolve.
 function spkCalculation(set: SpkKernelSet, target: number) {
-	const kernels = new Set<string>()
+	const source = spkEphemerisSource(set)
+	return { source, target: (t: Time) => source.state(target, t), kernelIds: () => kernelIdsOf(source) }
+}
 
-	const state =
-		(body: number): PositionAndVelocityOverTime =>
-		(t) => {
-			const result = set.stateAt(body, t)
-			if (!result.ok) throw new EphemerisKernelMiss(target, result.body, result.reason, t)
-			for (const id of result.kernels) kernels.add(id)
-			return result.state
-		}
-
-	return { target: state(target), foundation: { earth: state(399), sun: state(10) } satisfies EphemerisFoundation, kernelIds: () => [...kernels] }
+// Identifiers of the files an SPK source used for every body it evaluated.
+function kernelIdsOf(source: SpkEphemerisSource) {
+	const ids = new Set<string>()
+	for (const kernels of source.kernelsByBody.values()) for (const id of kernels) ids.add(id)
+	return [...ids]
 }
 
 // One Horizons table row.
@@ -408,20 +389,9 @@ export function makeTime(time: number, observer?: SkyObserver): Time {
 	return result
 }
 
-// Barycentric ICRS states of the Earth and the Sun a calculation reduces its positions with: all from the kernels or all
-// from the local models, never mixed.
-interface EphemerisFoundation {
-	readonly earth: PositionAndVelocityOverTime
-	readonly sun: PositionAndVelocityOverTime
-}
-
-// States of the Earth and the Sun from VSOP87E.
-const ANALYTIC_FOUNDATION: EphemerisFoundation = { earth: (t) => vsop.earth(t), sun: (t) => vsop.sun(t) }
-
-// Barycentric state of the observer: the Earth's center plus the site offset when there is a site. The Earth comes from
-// foundation, VSOP87E by default.
-export function observerBarycentric(time: Time, foundation: EphemerisFoundation = ANALYTIC_FOUNDATION): PositionAndVelocity {
-	const earth = foundation.earth(time)
+// Barycentric state of the observer: the Earth's center of a source plus the site offset when there is a site.
+export function observerBarycentric(time: Time, source: EphemerisSource): PositionAndVelocity {
+	const earth = source.state(399, time)
 	if (!time.location) return earth
 	const site = frameToFrame(itrs(time.location), ITRS, ICRS, time)
 	return [[earth[0][0] + site[0], earth[0][1] + site[1], earth[0][2] + site[2]], earth[1]]
@@ -432,70 +402,20 @@ function addStates(a: PositionAndVelocity, b: PositionAndVelocity): PositionAndV
 	return [vecPlus(a[0], b[0]), vecPlus(a[1], b[1])]
 }
 
-// VSOP87E planet model by Horizons command.
-const PLANET_MODELS: Readonly<Partial<Record<SolarSystemBodyCode, PositionAndVelocityOverTime>>> = {
-	'199': vsop.mercury,
-	'299': vsop.venus,
-	'499': vsop.mars,
-	'599': vsop.jupiter,
-	'699': vsop.saturn,
-	'799': vsop.uranus,
-	'899': vsop.neptune,
-}
-
-// Barycentric ICRS model of a major body.
-export function bodyModel(code: SolarSystemBodyCode): PositionAndVelocityOverTime {
-	if (code === '10') return (t) => vsop.sun(t)
-	if (code === '301') return (t) => addStates(vsop.earth(t), elpmpp02.moon(t))
-	if (code === '999') {
-		return (t) => {
-			const sun = vsop.sun(t)
-			const helio = pluto(t)
-			return [vecPlus(sun[0], helio), sun[1]]
-		}
-	}
-	return PLANET_MODELS[code]!
-}
-
-// Barycentric ICRS states of the major bodies a computation takes from one source of the fast ephemeris chain: the
-// kernels of the SPICE Kernel Library or the analytical theories, never mixed.
-export interface SolarSystemStates extends EphemerisFoundation {
-	// Barycentric ICRS state of a major body over time.
-	readonly body: (code: SolarSystemBodyCode) => PositionAndVelocityOverTime
-}
-
-// States of the analytical theories: VSOP87E, ELPMPP02 for the Moon, and the Pluto theory.
-export const ANALYTICAL_STATES: SolarSystemStates = { ...ANALYTIC_FOUNDATION, body: bodyModel }
-
-// States of a kernel set, each throwing EphemerisKernelMiss at an epoch the set does not resolve.
-export function kernelStates(set: SpkKernelSet): SolarSystemStates {
-	const state =
-		(code: number): PositionAndVelocityOverTime =>
-		(t) => {
-			const result = set.stateAt(code, t)
-			if (!result.ok) throw new EphemerisKernelMiss(code, result.body, result.reason, t)
-			return result.state
-		}
-
-	const sun = state(10)
-	const earth = state(399)
-	return { sun, earth, body: (code) => (code === '10' ? sun : state(Number(code))) }
-}
-
-// States chosen for a computation, where they come from, and the key of their source for caches (analytical, or spk
+// The source chosen for a computation, where it comes from, and the key of that source for caches (analytical, or spk
 // with the kernel generation).
-export interface SolarSystemStatesChoice {
-	readonly states: SolarSystemStates
+export interface SolarSystemSourceChoice {
+	readonly source: EphemerisSource
 	readonly provenance: EphemerisProvenance
 	readonly key: string
 }
 
-// Chooses over the fast ephemeris chain the states of a computation that evaluates the Sun, the Earth, and the major
-// bodies `codes` lazily within a span: the kernels of snapshot when they resolve every one of them at each probe (Unix
+// Chooses over the fast ephemeris chain the source of a computation that evaluates the Sun, the Earth, and the major
+// bodies `codes` lazily within a span: the SPK kernels of snapshot when they resolve every one of them at each probe (Unix
 // milliseconds: the ends and the middle of the span), else the analytical theories, which always can. A kernel set
 // covers a body over years to centuries, so a span probed at its ends never misses inside; a miss there would surface
 // as an error of the computation, never as a mix of sources.
-export function solarSystemStates(snapshot: SpiceKernelSnapshot, codes: readonly SolarSystemBodyCode[], probes: readonly number[]): SolarSystemStatesChoice {
+export function solarSystemSource(snapshot: SpiceKernelSnapshot, codes: readonly SolarSystemBodyCode[], probes: readonly number[]): SolarSystemSourceChoice {
 	const bodies = codes.filter((code) => code !== '10').map((code) => ({ name: code, naif: Number(code) }))
 	const { result, provenance } = computeEphemerisSync({
 		kernels: snapshotKernels(snapshot),
@@ -503,20 +423,20 @@ export function solarSystemStates(snapshot: SpiceKernelSnapshot, codes: readonly
 		sources: {
 			bodies: [...bodies, { name: '399', naif: 399, dependency: true }, { name: '10', naif: 10, dependency: true }],
 			spk: (set) => {
-				const states = kernelStates(set)
+				const source = spkEphemerisSource(set)
 
 				for (const probe of probes) {
 					const time = timeUnix(probe / 1000, true)
-					states.earth(time)
-					states.sun(time)
-					for (const code of codes) states.body(code)(time)
+					source.state(399, time)
+					source.state(10, time)
+					for (const code of codes) source.state(Number(code), time)
 				}
 
-				return states
+				return source
 			},
-			analytical: () => ANALYTICAL_STATES,
+			analytical: () => analyticalEphemerisSource,
 		},
-		compute: (states, _, context) => ({ states, key: context.key }),
+		compute: (source, _, context) => ({ source, key: context.key }),
 	})
 
 	return { ...result, provenance }
@@ -582,9 +502,10 @@ export function minorBodyMagnitude(elements: MinorBodyElements, sunToBody: Vec3,
 	return asteroidMagnitudeEstimate(elements.h, r, delta, correction)
 }
 
-// Local model of a body or minor body; undefined when there is none (minor body without usable elements).
-function solarSystemModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>, orbits: LruCache<KeplerOrbit>): SolarSystemModel | undefined {
-	if (target.type === 'body') return { state: bodyModel(target.code), magnitude: magnitudeModel(target) }
+// Model of a body or minor body over a source: a body is the source's state of its code, a minor body the Kepler orbit of
+// its elements around the source's Sun; undefined when there is none (minor body without usable elements).
+function solarSystemModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>, orbits: LruCache<KeplerOrbit>, source: EphemerisSource): SolarSystemModel | undefined {
+	if (target.type === 'body') return { state: (t) => source.state(Number(target.code), t), magnitude: magnitudeModel(target) }
 
 	const elements = target.elements
 	if (!elements) return undefined
@@ -599,7 +520,7 @@ function solarSystemModel(target: Exclude<EphemerisTarget, { type: 'catalog' }>,
 
 	const kepler = orbit
 
-	return { state: (t) => addStates(vsop.sun(t), kepler.at(t)), magnitude: magnitudeModel(target) }
+	return { state: (t) => addStates(source.state(10, t), kepler.at(t)), magnitude: magnitudeModel(target) }
 }
 
 // Apparent place of date and observed azimuth and altitude of an astrometric ICRS direction (vector or
@@ -623,17 +544,18 @@ interface HorizontalSample {
 	readonly hourAngle: number
 }
 
-// Apparent place of a catalog object: its J2000 place moved by proper motion.
-function catalogPlace(object: CatalogAstrometry, time: Time) {
+// Apparent place of a catalog object: its J2000 place moved by proper motion, with the Earth of a source.
+function catalogPlace(object: CatalogAstrometry, time: Time, source: EphemerisSource) {
 	const years = (time.day - J2000 + time.fraction) / 365.25
 	const ra = normalizeAngle(object.rightAscension + object.pmRA * years)
 	const dec = object.declination + object.pmDEC * years
-	return apparentPlace([ra, dec], time, vsop.earth(time))
+	return apparentPlace([ra, dec], time, source.state(399, time))
 }
 
-// Local position of a catalog object: J2000 place moved by proper motion, then to the apparent place.
-function catalogPosition(object: CatalogAstrometry, time: Time): Omit<SkyPosition, 'source' | 'fallbackReason' | 'time'> {
-	const { rightAscension, declination, azimuth, altitude } = catalogPlace(object, time)
+// Local position of a catalog object: J2000 place moved by proper motion, then to the apparent place with the Earth of a
+// source.
+function catalogPosition(object: CatalogAstrometry, time: Time, source: EphemerisSource): Omit<SkyPosition, 'source' | 'fallbackReason' | 'time'> {
+	const { rightAscension, declination, azimuth, altitude } = catalogPlace(object, time, source)
 	const apparent = { rightAscension, declination, azimuth, altitude }
 
 	return {
@@ -646,77 +568,59 @@ function catalogPosition(object: CatalogAstrometry, time: Time): Omit<SkyPositio
 	}
 }
 
-// Geometric geocentric ICRS vector (AU) of a barycentric model over Unix milliseconds, neglecting light-time: the model
-// and the Earth are evaluated once at each whole UTC hour and interpolated linearly in between, which keeps slow models
-// such as ELPMPP02 cheap over a night (about 2″ for the Moon). The Earth comes from foundation. Returns a new vector.
-export function geocentricInterpolation(state: PositionAndVelocityOverTime, foundation: EphemerisFoundation = ANALYTIC_FOUNDATION): (time: number) => Vec3 {
-	const nodes = new Map<number, Vec3>()
-
-	const node = (hour: number) => {
-		let vector = nodes.get(hour)
-
-		if (!vector) {
-			const t = timeUnix((hour * HOUR_MS) / 1000, true)
-			const body = state(t)[0]
-			const earth = foundation.earth(t)[0]
-			vector = [body[0] - earth[0], body[1] - earth[1], body[2] - earth[2]]
-			nodes.set(hour, vector)
-		}
-
-		return vector
-	}
-
-	return (time: number) => {
-		const hour = Math.floor(time / HOUR_MS)
-		const fraction = (time - hour * HOUR_MS) / HOUR_MS
-		const a = node(hour)
-		const b = node(hour + 1)
-		return [lerp(a[0], b[0], fraction), lerp(a[1], b[1], fraction), lerp(a[2], b[2], fraction)]
-	}
+// Geometric geocentric ICRS vector (AU) of a body of a source over Unix milliseconds, neglecting light-time; a new vector.
+// A computation sampling many instants passes an interpolated source (interpolatedEphemerisSource), where the slow
+// theories such as ELPMPP02 cost a few node evaluations a night.
+export function geocentricOf(source: EphemerisSource, naif: number): (time: number) => Vec3 {
+	return (time) => relativeEphemerisState(source, naif, 399, timeUnix(time / 1000, true))[0]
 }
 
-// Airless altitude and hour angle model of a solar-system target for an observer, over Unix milliseconds.
-// The model is evaluated once per hour as a geocentric geometric vector (neglecting light-time, under
-// 15″ for the planets and 1″ for the Moon) and interpolated linearly in between (about 2″ for the
-// Moon), so a day of event samples costs about 25 evaluations of models as slow as ELPMPP02; the
-// observer's offset is then removed and the direction reduced to the observed place. The Earth comes from foundation.
-function solarSystemHorizontalModel(model: SolarSystemModel, observer: SkyObserver, deflected: boolean, foundation: EphemerisFoundation = ANALYTIC_FOUNDATION): (time: number) => HorizontalSample {
-	const geocentric = geocentricInterpolation(model.state, foundation)
-
+// Airless altitude and hour angle model of a solar-system target for an observer, over Unix milliseconds: the geometric
+// geocentric vector of the model (neglecting light-time, under 15″ for the planets and 1″ for the Moon) less the
+// observer's offset, reduced to the observed place with the Earth of the source. A computation sampling many instants
+// passes an interpolated source, so the model and the Earth cost a few node evaluations a day.
+function solarSystemHorizontalModel(model: SolarSystemModel, observer: SkyObserver, deflected: boolean, source: EphemerisSource): (time: number) => HorizontalSample {
 	return (time: number) => {
-		const center = geocentric(time)
 		const t = makeTime(time, observer)
+		const earth = source.state(399, t)
+		const body = model.state(t)[0]
 		const site = frameToFrame(itrs(t.location!), ITRS, ICRS, t)
-		const direction: Vec3 = [center[0] - site[0], center[1] - site[1], center[2] - site[2]]
-		const { geometricAltitude, hourAngle } = apparentPlace(direction, t, foundation.earth(t), deflected)
+		const direction: Vec3 = [body[0] - earth[0][0] - site[0], body[1] - earth[0][1] - site[1], body[2] - earth[0][2] - site[2]]
+		const { geometricAltitude, hourAngle } = apparentPlace(direction, t, earth, deflected)
 		return { altitude: geometricAltitude!, hourAngle: hourAngle! }
 	}
 }
 
 // Height in radians of the Moon's upper limb above the refracted horizon of an observer, over Unix milliseconds: positive
 // while the Moon is up, with the rise and set convention of SkyEphemeris.events. The Moon, the Earth, and the Sun come
-// from states, the analytical theories by default.
-export function moonHorizonMargin(observer: SkyObserver, states: SolarSystemStates = ANALYTICAL_STATES) {
-	const horizontal = solarSystemHorizontalModel({ state: states.body('301'), magnitude: () => undefined }, observer, true, states)
+// from a source, interpolated by the caller when it samples many instants.
+export function moonHorizonMargin(observer: SkyObserver, source: EphemerisSource) {
+	const horizontal = solarSystemHorizontalModel({ state: (t) => source.state(301, t), magnitude: () => undefined }, observer, true, source)
 	const threshold = RISE_SET_ALTITUDE.moon!
 	return (time: number) => horizontal(time).altitude - threshold
 }
 
+// Apparent geocentric right ascension of date of a body of a source at an instant, in radians from the true equinox,
+// with light time, aberration (and light deflection except for the Sun), precession, and nutation.
+export function apparentRightAscension(source: EphemerisSource, naif: number, time: Time): number {
+	return solarSystemPosition({ state: (t) => source.state(naif, t), magnitude: () => undefined }, time, naif === 10, source).rightAscension
+}
+
 // Local position of a solar-system target: light-time corrected direction from the observer, apparent
-// place, magnitude, illumination, and elongation. The Earth and the Sun come from foundation.
-function solarSystemPosition(model: SolarSystemModel, time: Time, isSun: boolean, foundation: EphemerisFoundation = ANALYTIC_FOUNDATION): Omit<SkyPosition, 'source' | 'fallbackReason' | 'time'> {
+// place, magnitude, illumination, and elongation. The Earth and the Sun come from a source.
+function solarSystemPosition(model: SolarSystemModel, time: Time, isSun: boolean, source: EphemerisSource): Omit<SkyPosition, 'source' | 'fallbackReason' | 'time'> {
 	const direction: MutVec3 = [0, 0, 0]
-	topocentricDirection(model.state, (t) => observerBarycentric(t, foundation), time, LIGHT_TIME_ITERATIONS, direction)
+	topocentricDirection(model.state, (t) => observerBarycentric(t, source), time, LIGHT_TIME_ITERATIONS, direction)
 	const [rightAscensionJ2000, declinationJ2000] = eraC2s(...direction)
-	const earth = foundation.earth(time)
+	const earth = source.state(399, time)
 	const { rightAscension, declination, azimuth, altitude } = apparentPlace(direction, time, earth, !isSun)
 	const apparent = { rightAscension, declination, azimuth, altitude }
 	const distance = vecLength(direction)
 
 	const emission = timeShift(time, -lightTime(direction))
 	const body = model.state(emission)[0]
-	const sun = foundation.sun(emission)[0]
-	const observer = observerBarycentric(time, foundation)[0]
+	const sun = source.state(10, emission)[0]
+	const observer = observerBarycentric(time, source)[0]
 	const sunToBody: Vec3 = [body[0] - sun[0], body[1] - sun[1], body[2] - sun[2]]
 	const observerToSun: Vec3 = [sun[0] - observer[0], sun[1] - observer[1], sun[2] - observer[2]]
 
@@ -802,11 +706,14 @@ export class SkyEphemeris {
 	async #position(target: EphemerisTarget, request: PositionRequest): Promise<SkyPosition> {
 		request.signal?.throwIfAborted()
 
-		if (target.type === 'catalog') return { time: request.time, source: 'catalog', ...catalogPosition(target.object, makeTime(request.time, request.observer)) }
+		if (target.type === 'catalog') {
+			const { source } = solarSystemSource(this.#kernels.current(), [], [request.time])
+			return { time: request.time, source: 'catalog', ...catalogPosition(target.object, makeTime(request.time, request.observer), source) }
+		}
 
 		const time = makeTime(request.time, request.observer)
 		const isSun = target.type === 'body' && target.code === '10'
-		const model = solarSystemModel(target, this.#orbits)
+		const model = solarSystemModel(target, this.#orbits, analyticalEphemerisSource)
 
 		const { results, provenance } = await computeEphemeris<PositionComputation, ReturnType<PositionComputation['position']>>({
 			kernels: this.#kernels,
@@ -817,9 +724,9 @@ export class SkyEphemeris {
 				bodies: kernelBodies(target),
 				spk: (set) => {
 					const calculation = spkCalculation(set, naifCode(target))
-					return { position: () => solarSystemPosition({ state: calculation.target, magnitude: magnitudeModel(target) }, time, isSun, calculation.foundation), kernelIds: calculation.kernelIds }
+					return { position: () => solarSystemPosition({ state: calculation.target, magnitude: magnitudeModel(target) }, time, isSun, calculation.source), kernelIds: calculation.kernelIds }
 				},
-				analytical: () => model && { position: () => solarSystemPosition(model, time, isSun) },
+				analytical: () => model && { position: () => solarSystemPosition(model, time, isSun, analyticalEphemerisSource) },
 				horizons: async (signal) => {
 					const samples = await untilAborted(this.#horizonsTable(horizonsCommand(target)!, request.time, request.observer), signal)
 
@@ -851,13 +758,15 @@ export class SkyEphemeris {
 		let events: SkyEvents
 
 		if (target.type === 'catalog') {
+			const source = interpolatedEphemerisSource(solarSystemSource(snapshot, [], [time - EVENT_HALF_WINDOW_MS, time + EVENT_HALF_WINDOW_MS]).source)
 			events = this.#sampleEvents(target, time, (t) => {
-				const { geometricAltitude, hourAngle } = catalogPlace(target.object, makeTime(t, observer))
+				const { geometricAltitude, hourAngle } = catalogPlace(target.object, makeTime(t, observer), source)
 				return { altitude: geometricAltitude!, hourAngle: hourAngle! }
 			})
 		} else {
 			const deflected = !(target.type === 'body' && target.code === '10')
-			const model = solarSystemModel(target, this.#orbits)
+			const analytical = interpolatedEphemerisSource(analyticalEphemerisSource)
+			const model = solarSystemModel(target, this.#orbits, analytical)
 
 			try {
 				events = computeEphemerisSync({
@@ -866,10 +775,11 @@ export class SkyEphemeris {
 					sources: {
 						bodies: kernelBodies(target),
 						spk: (set) => {
-							const calculation = spkCalculation(set, naifCode(target))
-							return solarSystemHorizontalModel({ state: calculation.target, magnitude: () => undefined }, observer, deflected, calculation.foundation)
+							const source = interpolatedEphemerisSource(spkEphemerisSource(set))
+							const naif = naifCode(target)
+							return solarSystemHorizontalModel({ state: (t) => source.state(naif, t), magnitude: () => undefined }, observer, deflected, source)
 						},
-						analytical: () => model && solarSystemHorizontalModel(model, observer, deflected),
+						analytical: () => model && solarSystemHorizontalModel(model, observer, deflected, analytical),
 					},
 					compute: (horizontalAt) => this.#sampleEvents(target, time, horizontalAt),
 				}).result

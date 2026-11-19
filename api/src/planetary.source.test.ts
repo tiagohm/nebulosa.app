@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { SpkKernelSet } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
-import { SatelliteEphemerisMiss } from 'nebulosa/src/astronomy/ephemeris/satellites'
+import { EphemerisMiss, type EphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import type { Time } from 'nebulosa/src/astronomy/time/time'
 import { EphemerisUnavailableError } from './ephemeris.chain'
 import { kernelReadiness, type PlanetaryKernels, type SatelliteSourceConfig, toolkitTime, withSatelliteSource } from './planetary.source'
@@ -14,25 +14,24 @@ interface FakeEphemeris {
 	readonly position: (body: Body, time: Time) => number
 }
 
-class FakeMiss extends SatelliteEphemerisMiss<Body> {}
-
 const NAIF = { sun: 10, moon: 301 } as const
 
 // A system whose kernel ephemeris misses the moon after `moonUntil` (Unix milliseconds).
 function config(moonUntil = Infinity): SatelliteSourceConfig<Body, FakeEphemeris, { readonly kind: 'analytical'; readonly theory: 'fake' }> {
 	return {
 		naif: NAIF,
-		analytical: { source: 'analytical', position: () => 0 },
 		analyticalSource: { kind: 'analytical', theory: 'fake' },
-		spk: () => ({
-			source: 'spk',
-			kernelsByBody: new Map([['sun', new Set(['a'])]]),
-			position: (body, time) => {
-				if (body === 'moon' && toUnix(time) > moonUntil) throw new FakeMiss('moon', 301, 'coverage', time)
-				return 1
-			},
-		}),
-		miss: FakeMiss,
+		ephemeris: (source: EphemerisSource) =>
+			source.kind === 'analytical'
+				? { source: 'analytical', position: () => 0 }
+				: {
+						source: 'spk',
+						kernelsByBody: new Map([['sun', new Set(['a'])]]),
+						position: (body, time) => {
+							if (body === 'moon' && toUnix(time) > moonUntil) throw new EphemerisMiss(301, 301, 'coverage', time)
+							return 1
+						},
+					},
 	}
 }
 

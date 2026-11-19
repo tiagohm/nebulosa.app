@@ -1,4 +1,4 @@
-import { analyticalJovianEphemeris, GALILEAN_MOONS, type GalileanMoon, interpolatedJovianEphemeris, JOVIAN_BODIES, JOVIAN_NAIF, type JovianBody, type JovianEphemeris, JovianEphemerisMiss, spkJovianEphemeris } from 'nebulosa/src/astronomy/ephemeris/jovian'
+import { GALILEAN_MOONS, type GalileanMoon, interpolatedJovianEphemeris, JOVIAN_BODIES, JOVIAN_NAIF, type JovianBody, type JovianEphemeris, jovianEphemeris } from 'nebulosa/src/astronomy/ephemeris/jovian'
 import { greatRedSpotLongitude, type GreatRedSpotModel, greatRedSpotTransitsWithDrift, jupiterCentralMeridian } from 'nebulosa/src/astronomy/events/jupiter'
 import { type JovianDiskState, type JovianEclipseState, type JovianMoonMargins, jovianMoonMargins, jovianSystemState, jovianView, projectJovianSurfacePoint } from 'nebulosa/src/astronomy/events/jupiter.geometry'
 import { type JovianPhenomenon, type JovianPhenomenonKind, jovianPhenomena } from 'nebulosa/src/astronomy/events/jupiter.phenomena'
@@ -73,13 +73,11 @@ export interface JupiterSignature {
 // Live kernel snapshots of the SPICE Kernel Library.
 export type JupiterKernels = PlanetaryKernels
 
-// How the Jovian system is evaluated from the kernels or the VSOP87E + L1.2 theories.
+// How the Jovian system is evaluated over a source: the kernels or the VSOP87E + L1.2 theories.
 const JOVIAN_SOURCE: SatelliteSourceConfig<JovianBody, JovianEphemeris, AnalyticalJupiterSource> = {
 	naif: JOVIAN_NAIF,
-	analytical: analyticalJovianEphemeris,
 	analyticalSource: { kind: 'analytical', planetary: 'VSOP87E', satellites: 'L1.2' },
-	spk: spkJovianEphemeris,
-	miss: JovianEphemerisMiss,
+	ephemeris: jovianEphemeris,
 }
 
 // Result of a computation and the source it used.

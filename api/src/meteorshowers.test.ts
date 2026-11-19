@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { analyticalEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { meteorShowerDates } from 'nebulosa/src/astronomy/meteors/solar'
 import { timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { AstroWeatherNights } from './astroweather.night'
@@ -211,7 +212,7 @@ describe('dates', () => {
 		for (const record of index.showers) {
 			for (const solution of record.solutions) {
 				for (const year of [2025, 2026, 2027]) {
-					const core = meteorShowerDates(solution, year, { step: 7, tolerance: 1e-9 })
+					const core = meteorShowerDates(solution, year, { step: 7, tolerance: 1e-9, ephemeris: analyticalEphemerisSource })
 					const mine = iauOccurrence(solution, year, table)
 					expect(mine?.start !== undefined).toBe(core.start !== undefined)
 					for (const key of ['start', 'end', 'reference'] as const) if (core[key] !== undefined && solution.activityInterval !== undefined) expect(Math.abs(mine![key]! - timeToUnixMillis(core[key]))).toBeLessThan(1000)

@@ -4,7 +4,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 - A model maps the coordinates a mount was commanded to onto the sky position it reached.
   The fit, the prediction, and the inverse correction are the toolkit's (`core/src/observation/mount/pointing.ts`); nothing is fitted in `api` or `web` by other means.
-- Frame (`api/src/mountpointing.frames.ts`): a sample holds the exact JNOW values the driver received, as opaque coordinates of the driver, and the plate solved ICRS center reduced to the true apparent topocentric place of the middle of the exposure, without refraction (`apparentFromIcrs`).
+- Frame (`api/src/mountpointing.frames.ts`): a sample holds the exact JNOW values the driver received, as opaque coordinates of the driver, and the plate solved ICRS center reduced to the true apparent topocentric place of the middle of the exposure, without refraction (`apparentFromIcrs`), with the Earth and the Sun of one source of the fast [Ephemeris Chain](ephemeris-chain.md) at that instant (`pointingEphemeris`: the SPK kernels when they resolve both, else VSOP87E); a corrected GoTo reduces its J2000 or galactic target the same way.
   Refraction, the semantics of the driver, and the mechanics of the mount therefore end up in the fit.
   The reduction is not the toolkit's `equatorialFromJ2000`, which the mount manager applies to a J2000 GoTo and which leaves aberration out, so a model of that frame would carry up to about 20″ that drift over the year.
   The error is solved minus command, east and north positive.

@@ -1,6 +1,7 @@
 import { type LunarPhase, lunation, moonParallax, nearestLunarApsis, nearestLunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
 import { MOON_ROTATION, bodyFixedMatrix, positionAngleOfPole, subObserverPoint, subSolarPoint } from 'nebulosa/src/astronomy/bodies/orientation'
 import { cirsToObserved, icrsToCirs, lightTime, parallacticAngle, topocentricDirection } from 'nebulosa/src/astronomy/coordinates/astrometry'
+import { type EphemerisSource, interpolatedEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { searchIntervals } from 'nebulosa/src/astronomy/events/search'
 import { precessionNutationMatrix, type Time, timeShift, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, ECLIPTIC_J2000_MATRIX, TAU } from 'nebulosa/src/core/constants'
@@ -8,7 +9,7 @@ import { type Mat3, matMul, matMulVec, matTranspose } from 'nebulosa/src/math/li
 import { type MutVec3, type Vec3, vecAngle, vecCross, vecLength, vecMinus, vecNegate, vecNormalize } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle, normalizePI } from 'nebulosa/src/math/units/angle'
 import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from '../ephemeris.chain'
-import { ANALYTICAL_STATES, makeTime, moonHorizonMargin, observerBarycentric, type SkyObserver, type SolarSystemStates, solarSystemStates } from './ephemeris'
+import { makeTime, moonHorizonMargin, observerBarycentric, type SkyObserver, solarSystemSource } from './ephemeris'
 import type { TimeSpan } from './sun'
 
 // Lunar almanac of the Moon Inspector: the Moon's appearance at an instant (phase, illuminated
@@ -212,24 +213,24 @@ export function northUpView(direction: Vec3, time: Time): Mat3 {
 
 // Computes the Moon's appearance at an instant (Unix milliseconds) for an observer, or the geocenter, with the Moon, the
 // Earth, and the Sun of states (the theories by default).
-export function moonAppearance(time: number, observer?: SkyObserver, states: SolarSystemStates = ANALYTICAL_STATES): MoonAppearance {
+export function moonAppearance(time: number, observer: SkyObserver | undefined, source: EphemerisSource): MoonAppearance {
 	const instant = makeTime(time, observer)
-	const model = states.body('301')
+	const model = (t: Time) => source.state(301, t)
 	const direction: MutVec3 = [0, 0, 0]
-	topocentricDirection(model, (t) => observerBarycentric(t, states), instant, LIGHT_TIME_ITERATIONS, direction)
+	topocentricDirection(model, (t) => observerBarycentric(t, source), instant, LIGHT_TIME_ITERATIONS, direction)
 
 	const emission = timeShift(instant, -lightTime(direction))
 	const moon = model(emission)[0]
-	const moonToSun = vecMinus(states.sun(emission)[0], moon)
+	const moonToSun = vecMinus(source.state(10, emission)[0], moon)
 	const moonToObserver = vecNegate(direction)
 	const phaseAngle = vecAngle(moonToSun, moonToObserver)
 	const distanceAu = vecLength(direction)
 
 	// Geocentric ecliptic longitudes, enough to name the phase.
-	const earthState = states.earth(instant)
+	const earthState = source.state(399, instant)
 	const earth = earthState[0]
 	const geocentricMoon = vecMinus(model(instant)[0], earth)
-	const elongation = normalizeAngle(eclipticLongitude(geocentricMoon) - eclipticLongitude(vecMinus(states.sun(instant)[0], earth)))
+	const elongation = normalizeAngle(eclipticLongitude(geocentricMoon) - eclipticLongitude(vecMinus(source.state(10, instant)[0], earth)))
 	const geocentricDistanceAu = vecLength(geocentricMoon)
 
 	const bodyFixed = bodyFixedMatrix(MOON_ROTATION, emission)
@@ -273,8 +274,8 @@ export function moonAppearance(time: number, observer?: SkyObserver, states: Sol
 // Returns the intervals in which the Moon is above the horizon of an observer between two instants (Unix milliseconds),
 // however many rises and sets fall between them, clipped to the instants; empty when it stays below. The Moon, the Earth,
 // and the Sun come from states (the theories by default).
-export function moonAboveHorizon(observer: SkyObserver, start: number, end: number, states: SolarSystemStates = ANALYTICAL_STATES): TimeSpan[] {
-	const margin = moonHorizonMargin(observer, states)
+export function moonAboveHorizon(observer: SkyObserver, start: number, end: number, source: EphemerisSource): TimeSpan[] {
+	const margin = moonHorizonMargin(observer, interpolatedEphemerisSource(source))
 	const intervals = searchIntervals([(time) => margin(timeToUnixMillis(time))], makeTime(start), makeTime(end), { step: HORIZON_SEARCH_STEP })
 	return intervals.map((interval) => ({ start: timeToUnixMillis(interval.start), end: timeToUnixMillis(interval.end) }))
 }
@@ -331,8 +332,8 @@ export class MoonAlmanac {
 	// cover the instant, else the theories), the phases and apsides with the toolkit's searches of the theories.
 	almanac({ time, observer }: MoonAlmanacRequest): MoonAlmanacResponse {
 		const { phases, apsides } = this.calendar(time)
-		const { states } = solarSystemStates(this.kernels.current(), ['301'], [time])
-		return { time, appearance: moonAppearance(time, observer, states), phases, apsides, source: 'local' }
+		const { source } = solarSystemSource(this.kernels.current(), ['301'], [time])
+		return { time, appearance: moonAppearance(time, observer, source), phases, apsides, source: 'local' }
 	}
 
 	// Returns the calendar of an instant (Unix milliseconds), computing it only when no cached one holds.

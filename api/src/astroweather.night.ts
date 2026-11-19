@@ -1,6 +1,6 @@
 import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { LruCache } from './lrucache'
-import { geographic, type SkyObserver, solarSystemStates } from './sky/ephemeris'
+import { geographic, type SkyObserver, solarSystemSource } from './sky/ephemeris'
 import { moonAboveHorizon, moonAppearance, type MoonPhaseName } from './sky/moon'
 import { type SunLocalNight, sunNightAt, type TimeSpan } from './sky/sun'
 
@@ -68,17 +68,17 @@ export class AstroWeatherNights {
 
 	// Returns the night containing an instant.
 	night({ observer, timeZone, time }: AstroWeatherNightRequest): AstroWeatherNight {
-		const { states, key: source } = solarSystemStates(this.kernels.current(), ['301'], [time - NIGHT_REACH_MS, time, time + NIGHT_REACH_MS])
-		const key = `${source}|${timeZone}|${observer.latitude}|${observer.longitude}|${observer.elevation}`
+		const { source, key: sourceKey } = solarSystemSource(this.kernels.current(), ['301'], [time - NIGHT_REACH_MS, time, time + NIGHT_REACH_MS])
+		const key = `${sourceKey}|${timeZone}|${observer.latitude}|${observer.longitude}|${observer.elevation}`
 		const nights = this.#sites.get(key) ?? []
 		const cached = nights.find(({ sun }) => sun.start <= time && time < sun.end)
 		if (cached) return cached
 
-		const sun = sunNightAt(geographic(observer), time, timeZone, states)
+		const sun = sunNightAt(geographic(observer), time, timeZone, source)
 		const display = displayWindow(sun)
 		const middle = (display.start + display.end) / 2
-		const { illuminatedFraction, phase } = moonAppearance(middle, observer, states)
-		const night = { sun, display, moon: { time: middle, illuminatedFraction, phase, above: moonAboveHorizon(observer, display.start, display.end, states) } }
+		const { illuminatedFraction, phase } = moonAppearance(middle, observer, source)
+		const night = { sun, display, moon: { time: middle, illuminatedFraction, phase, above: moonAboveHorizon(observer, display.start, display.end, source) } }
 
 		this.#sites.set(key, [...nights, night].slice(-NIGHTS_PER_SITE))
 		return night

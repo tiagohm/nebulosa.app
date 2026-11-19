@@ -1,17 +1,17 @@
 import { carringtonRotationNumber, equationOfTime, type Season, season } from 'nebulosa/src/astronomy/bodies/sun'
 import { equatorial } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { equatorialFromJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
-import { Solar } from 'nebulosa/src/astronomy/ephemeris/meeus'
+import type { EphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { ASTRONOMICAL_TWILIGHT, CIVIL_TWILIGHT, NAUTICAL_TWILIGHT, SUN_HORIZON } from 'nebulosa/src/astronomy/events/horizon'
 import { searchExtrema, searchIntervals, searchRoots } from 'nebulosa/src/astronomy/events/search'
 import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
-import { type Time, time as julianTime, timeShift, timeToUnixMillis, timeUnix, toJulianDay, tt } from 'nebulosa/src/astronomy/time/time'
+import { type Time, time as julianTime, timeShift, timeToUnixMillis, timeUnix, tt } from 'nebulosa/src/astronomy/time/time'
 import { TAU } from 'nebulosa/src/core/constants'
 import { vecMinus } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizePI } from 'nebulosa/src/math/units/angle'
 import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from '../ephemeris.chain'
 import { LruCache } from '../lrucache'
-import { ANALYTICAL_STATES, geographic, type SkyObserver, type SolarSystemStates, solarSystemStates } from './ephemeris'
+import { apparentRightAscension, geographic, type SkyObserver, solarSystemSource } from './ephemeris'
 
 // Solar almanac of the Sun Inspector: the Sun's day for an observer's civil date in an IANA time zone
 // (sunrise, transit, sunset, daylight, civil, nautical, and astronomical twilight, astronomical night),
@@ -254,8 +254,8 @@ function toolkitTime(time: number) {
 // it. The Sun's right ascension and declination of date and the local apparent sidereal time are
 // computed exactly at whole UTC hours and interpolated in between (the sidereal time at the sidereal
 // rate), which keeps the error far below a second of time while evaluating the ephemeris once per hour. The Sun and the
-// Earth come from states.
-function sunAltitude(location: GeographicPosition, states: SolarSystemStates) {
+// Earth come from source.
+function sunAltitude(location: GeographicPosition, source: EphemerisSource) {
 	const nodes = new Map<number, readonly [number, number, number]>()
 	const sinLatitude = Math.sin(location.latitude)
 	const cosLatitude = Math.cos(location.latitude)
@@ -265,7 +265,7 @@ function sunAltitude(location: GeographicPosition, states: SolarSystemStates) {
 
 		if (!result) {
 			const instant = julianTime(Math.floor(hour / 24), (hour % 24) / 24)
-			const [ra2000, dec2000] = equatorial(vecMinus(states.sun(instant)[0], states.earth(instant)[0]))
+			const [ra2000, dec2000] = equatorial(vecMinus(source.state(10, instant)[0], source.state(399, instant)[0]))
 			const [rightAscension, declination] = equatorialFromJ2000(ra2000, dec2000, instant)
 			result = [rightAscension, declination, localSiderealTime(instant, location, false)]
 			nodes.set(hour, result)
@@ -316,9 +316,9 @@ function twilight(altitude: (time: Time) => number, threshold: number, start: Ti
 	return { dawn: up, dusk: down, state }
 }
 
-// Computes the Sun's day for a place over a civil date, with the Sun and the Earth of states (the theories by default).
-export function sunLocalDay(location: GeographicPosition, day: ZonedDay, states: SolarSystemStates = ANALYTICAL_STATES): SunLocalDay {
-	const altitude = sunAltitude(location, states)
+// Computes the Sun's day for a place over a civil date, with the Sun and the Earth of a source.
+export function sunLocalDay(location: GeographicPosition, day: ZonedDay, source: EphemerisSource): SunLocalDay {
+	const altitude = sunAltitude(location, source)
 	const start = toolkitTime(day.start)
 	const stop = toolkitTime(day.end)
 	const middle = toolkitTime((day.start + day.end) / 2)
@@ -381,10 +381,10 @@ function solarTransit(altitude: (time: Time) => number, day: ZonedDay) {
 // Computes the night containing an instant (Unix milliseconds): every crossing between two consecutive upper transits of
 // the Sun, so dawn and sunrise need no second day, and the time the Sun spends below −18°. An instant before the transit of
 // its civil date belongs to the evening before, and any time zone, even UTC for a site far from Greenwich, gives every
-// night exactly one evening. The evening's civil date names the night. The Sun and the Earth come from states (the
-// theories by default), which must cover a day and a half on either side of the instant.
-export function sunNightAt(location: GeographicPosition, time: number, timeZone: string, states: SolarSystemStates = ANALYTICAL_STATES): SunLocalNight {
-	const altitude = sunAltitude(location, states)
+// night exactly one evening. The evening's civil date names the night. The Sun and the Earth come from a source, which
+// must cover a day and a half on either side of the instant.
+export function sunNightAt(location: GeographicPosition, time: number, timeZone: string, source: EphemerisSource): SunLocalNight {
+	const altitude = sunAltitude(location, source)
 	let day = zonedDay(time, timeZone)
 	let startMillis = solarTransit(altitude, day)
 	let next = zonedDay(day.end, timeZone)
@@ -448,10 +448,10 @@ export function nextSeasons(time: number): SolarSeasonEvent[] {
 // Returns the equation of time and the Carrington rotation at an instant (Unix milliseconds). The
 // equation of time takes the Sun's apparent geocentric right ascension of date, with nutation and
 // aberration, never the observer's topocentric one.
-export function sunPhysicalData(time: number): SunPhysicalData {
+export function sunPhysicalData(time: number, source: EphemerisSource): SunPhysicalData {
 	const instant = toolkitTime(time)
 	const dynamical = tt(instant)
-	const [rightAscension] = Solar.apparentEquatorialVSOP87(toJulianDay(dynamical))
+	const rightAscension = apparentRightAscension(source, 10, instant)
 	const equationOfTimeSeconds = (equationOfTime(instant, rightAscension) / TAU) * 86_400
 	return { equationOfTimeSeconds, carringtonRotation: carringtonRotationNumber(dynamical), source: 'local' }
 }
@@ -465,18 +465,19 @@ export class SunAlmanac {
 
 	// Computes the almanac of a request.
 	almanac({ time, observer, timeZone }: SunAlmanacRequest): SunAlmanacResponse {
-		return { time, localDay: observer && this.localDay(time, observer, timeZone), seasons: nextSeasons(time), physical: sunPhysicalData(time) }
+		const { source } = solarSystemSource(this.kernels.current(), [], [time])
+		return { time, localDay: observer && this.localDay(time, observer, timeZone), seasons: nextSeasons(time), physical: sunPhysicalData(time, source) }
 	}
 
 	// Returns the Sun's day of an observer on the civil date of an instant (Unix milliseconds) in a time zone.
 	localDay(time: number, observer: SkyObserver, timeZone: string) {
 		const day = zonedDay(time, timeZone)
-		const { states, key: source } = solarSystemStates(this.kernels.current(), [], [day.start - DAY_MS, day.end + DAY_MS])
-		const key = `${source}|${day.localDate}|${timeZone}|${observer.latitude}|${observer.longitude}|${observer.elevation}`
+		const choice = solarSystemSource(this.kernels.current(), [], [day.start - DAY_MS, day.end + DAY_MS])
+		const key = `${choice.key}|${day.localDate}|${timeZone}|${observer.latitude}|${observer.longitude}|${observer.elevation}`
 		let result = this.#days.get(key)
 
 		if (!result) {
-			result = sunLocalDay(geographic(observer), day, states)
+			result = sunLocalDay(geographic(observer), day, choice.source)
 			this.#days.set(key, result)
 		}
 

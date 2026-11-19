@@ -1,4 +1,5 @@
 import type { SpkKernelSet, SpkMissReason } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
+import { EphemerisMiss } from 'nebulosa/src/astronomy/ephemeris/source'
 import { type Time, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { errorResponse } from './http'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
@@ -89,22 +90,6 @@ export const NO_EPHEMERIS_KERNELS: EphemerisKernels = { current: () => NO_KERNEL
 // Kernels of a snapshot already read, for the parts of a computation that must not read the library again.
 export function snapshotKernels(snapshot: SpiceKernelSnapshot): EphemerisKernels {
 	return { current: () => snapshot }
-}
-
-// A state the kernels could not resolve during a computation; the computation then runs whole on the next source.
-export class EphemerisKernelMiss extends Error {
-	// Creates the miss of the state of target (NAIF code) at time, stopped at body for reason.
-	constructor(
-		readonly target: number,
-		readonly body: number,
-		readonly reason: SpkMissReason,
-		readonly time?: Time,
-		// Name of the target as the computation names it.
-		readonly targetName?: string,
-	) {
-		super(`the state of ${targetName ?? target} is unavailable from the SPK kernels (${reason} at NAIF ${body})`)
-		this.name = 'EphemerisKernelMiss'
-	}
 }
 
 // Stable codes of a computation no source of its chain could give: offline when Horizons was the source left and the
@@ -212,7 +197,7 @@ export interface EphemerisContext {
 export interface EphemerisSources<E> {
 	// Bodies the kernels must have, checked before the kernels are tried.
 	readonly bodies?: readonly EphemerisBody[]
-	// Ephemeris over the kernel set; its evaluations throw EphemerisKernelMiss (or what miss classifies) at an epoch the
+	// Ephemeris over the kernel set; its evaluations throw EphemerisMiss (or what miss classifies) at an epoch the
 	// kernels do not resolve. It may throw a miss itself, after probing the kernels.
 	readonly spk?: (set: SpkKernelSet, snapshot: SpiceKernelSnapshot) => E
 	// Ephemeris of the theories; undefined when there is no theory for the target.
@@ -220,7 +205,7 @@ export interface EphemerisSources<E> {
 	// Ephemeris from Horizons, fetched before the computation; rejects with a transient failure (timeout, network) or a
 	// semantic one, which is rethrown.
 	readonly horizons?: (signal: AbortSignal | undefined) => Promise<E>
-	// Classifies a kernel miss thrown by the SPK ephemeris other than EphemerisKernelMiss; undefined for any other error.
+	// Classifies a kernel miss thrown by the SPK ephemeris other than EphemerisMiss; undefined for any other error.
 	readonly miss?: (error: unknown) => EphemerisAttempt | undefined
 	// Ids of the kernels the SPK ephemeris used, read after the computation.
 	readonly kernelsOf?: (ephemeris: E) => readonly string[]
@@ -261,16 +246,18 @@ function kernelSkip(sources: Pick<EphemerisSources<unknown>, 'bodies'>, snapshot
 }
 
 // The attempt of a failure of a computation on the kernels, or undefined when error must be rethrown. A failure that is
-// not a miss (a file that cannot be read) is logged and goes on to the next source.
-function kernelFailure(error: unknown, sources: Pick<EphemerisSources<unknown>, 'miss'>, signal: AbortSignal | undefined): EphemerisAttempt | undefined {
+// not a miss (a file that cannot be read) is logged and goes on to the next source. A miss of a body the sources name
+// reports it by that name.
+function kernelFailure(error: unknown, sources: Pick<EphemerisSources<unknown>, 'miss' | 'bodies'>, signal: AbortSignal | undefined): EphemerisAttempt | undefined {
 	if (signal?.aborted || error instanceof EphemerisUnavailableError) return undefined
-
-	if (error instanceof EphemerisKernelMiss) {
-		return { source: 'spk', reason: kernelReason(error.reason, error.body === error.target), ...(error.targetName && { target: error.targetName }), body: error.body, ...(error.time && { time: timeToUnixMillis(error.time) }) }
-	}
 
 	const classified = sources.miss?.(error)
 	if (classified) return classified
+
+	if (error instanceof EphemerisMiss && error.reason !== 'noModel') {
+		const target = sources.bodies?.find((body) => body.naif === error.target)?.name
+		return { source: 'spk', reason: kernelReason(error.reason, error.body === error.target), ...(target && { target }), body: error.body, time: timeToUnixMillis(error.time) }
+	}
 
 	console.error('An SPK kernel could not be read; the next ephemeris source is used', error)
 	return { source: 'spk', reason: 'kernelReadFailed' }

@@ -25,6 +25,8 @@ colors:
     map-ecliptic: 'oklch(0.6 0.08 325)'
     map-meridian: 'oklch(0.6 0.08 145)'
     map-deep-sky: 'oklch(0.6 0.08 100)'
+    map-sun: 'oklch(0.8 0.14 95)'
+    map-moon: 'oklch(0.65 0.12 245)'
     map-planet: 'oklch(0.6 0.14 310)'
     map-asteroid: 'oklch(0.6 0.14 20)'
     map-comet: 'oklch(0.6 0.14 160)'

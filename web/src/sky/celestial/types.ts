@@ -210,10 +210,14 @@ export interface ThemeOptions {
 		// Label color.
 		labelColor: string
 	}
-	// Planets, asteroids, and comets.
+	// The Sun, the Moon, planets, asteroids, and comets.
 	movingBodies: {
 		// Planet symbol color.
 		planetColor: string
+		// Sun symbol color.
+		sunColor: string
+		// Moon symbol color.
+		moonColor: string
 		// Asteroid symbol color.
 		asteroidColor: string
 		// Comet symbol color.

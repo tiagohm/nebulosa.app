@@ -379,6 +379,8 @@ export function drawMovingBodySymbol(ctx: CanvasRenderingContext2D, type: Moving
 
 // Returns the theme color of a moving body by type.
 export function movingBodyColor(object: MovingBody, state: RenderState) {
+	if (object.type === 'sun') return state.theme.movingBodies.sunColor
+	if (object.type === 'moon') return state.theme.movingBodies.moonColor
 	if (object.type === 'comet') return state.theme.movingBodies.cometColor
 	if (object.type === 'asteroid') return state.theme.movingBodies.asteroidColor
 	if (object.type === 'satellite') return state.theme.movingBodies.satelliteColor

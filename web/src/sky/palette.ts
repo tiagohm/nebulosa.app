@@ -31,8 +31,12 @@ export interface SkyMapPalette {
 	readonly meridian: string
 	// Deep-sky symbols and names.
 	readonly deepSky: string
-	// Planets, the Sun, and the Moon.
+	// Planets and Pluto.
 	readonly planet: string
+	// The Sun.
+	readonly sun: string
+	// The Moon.
+	readonly moon: string
 	// Asteroids.
 	readonly asteroid: string
 	// Comets.
@@ -71,6 +75,8 @@ export function skyMapPalette(): SkyMapPalette {
 		meridian: token('--color-map-meridian'),
 		deepSky: token('--color-map-deep-sky'),
 		planet: token('--color-map-planet'),
+		sun: token('--color-map-sun'),
+		moon: token('--color-map-moon'),
 		asteroid: token('--color-map-asteroid'),
 		comet: token('--color-map-comet'),
 		radiant: token('--color-map-radiant'),
@@ -97,7 +103,7 @@ export function skyMapTheme(): PartialThemeOptions {
 		milkyWay: { lineColor: p.line, levelColors: [p.line, p.line, p.line, p.line, p.line] },
 		constellations: { color: p.line, opacity: 0.6, labelColor: p.ink300, labelFont: skyMapFont(10), labelOpacity: 0.75, lineColor: p.line, lineOpacity: 0.55, boundaryColor: p.line, boundaryOpacity: 0.35 },
 		deepSky: { color: p.deepSky, labelColor: p.deepSky },
-		movingBodies: { planetColor: p.planet, asteroidColor: p.asteroid, cometColor: p.comet, satelliteColor: p.ink200, labelColor: p.ink200 },
+		movingBodies: { planetColor: p.planet, sunColor: p.sun, moonColor: p.moon, asteroidColor: p.asteroid, cometColor: p.comet, satelliteColor: p.ink200, labelColor: p.ink200 },
 		selectedObject: { color: p.accent },
 		hoverHighlight: { color: p.ink100 },
 	}

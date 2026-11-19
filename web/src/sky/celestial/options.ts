@@ -69,6 +69,8 @@ export const DEFAULT_THEME: ThemeOptions = {
 	},
 	movingBodies: {
 		planetColor: INK,
+		sunColor: INK,
+		moonColor: INK,
 		asteroidColor: MUTED,
 		cometColor: MUTED,
 		satelliteColor: MUTED,

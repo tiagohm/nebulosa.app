@@ -294,6 +294,18 @@ export interface SkyFrame {
 	readonly color: string
 }
 
+// Whether two optical configurations are the same, sensor included.
+function sameOptics(a: Readonly<OpticalConfiguration>, b: Readonly<OpticalConfiguration>) {
+	if (a.focalLength !== b.focalLength || a.focalMultiplier !== b.focalMultiplier || a.aperture !== b.aperture || a.rotation !== b.rotation) return false
+	const keys = Object.keys(a.sensor) as (keyof OpticalConfiguration['sensor'])[]
+	return keys.length === Object.keys(b.sensor).length && keys.every((key) => a.sensor[key] === (b.sensor as Record<string, unknown>)[key])
+}
+
+// Whether two lists of framings are the same by value, in the same order, whatever objects hold them.
+export function sameSkyFrames(a: readonly SkyFrame[], b: readonly SkyFrame[]) {
+	return a.length === b.length && a.every((frame, i) => frame.id === b[i].id && frame.name === b[i].name && frame.color === b[i].color && sameOptics(frame.optics, b[i].optics))
+}
+
 // Loading state of the map data, shown by the workspace.
 export interface PlanetariumState {
 	// Whether the map data is loading, loaded, or failed to load.
@@ -384,6 +396,8 @@ export class Planetarium {
 	readonly #rememberedShapes = new Set<string>()
 	// Ids of the framings whose field of view shape is on the map.
 	readonly #framings = new Set<string>()
+	// Framings, visibility, and center (radians) the fields of view were last drawn for; absent before the first.
+	#framingsDrawn?: { readonly frames: readonly SkyFrame[]; readonly visible: boolean; readonly center?: FramePoint }
 	// Footprint of a solved image to draw; absent when none is shown.
 	#footprint?: ImageFootprint
 	// Coordinate requested last from an image, and the request number already applied.
@@ -633,8 +647,12 @@ export class Planetarium {
 	// Draws the fields of view of framings (each named, with its optical configuration and colour) around a center
 	// (equatorial point of date in radians), and removes the others; every one is removed while hidden or without a
 	// center. A framing without a field is not drawn. The caller passes the selection's point at the instant shown, so the
-	// fields follow it.
+	// fields follow it. Nothing is redrawn when the framings (by value), the visibility, and the center are those drawn last,
+	// so the caller may sync on every render.
 	syncFramings(framings: readonly SkyFrame[], visible: boolean, center: FramePoint | undefined) {
+		const last = this.#framingsDrawn
+		if (last && last.visible === visible && last.center?.rightAscension === center?.rightAscension && last.center?.declination === center?.declination && sameSkyFrames(last.frames, framings)) return
+		this.#framingsDrawn = { frames: framings, visible, center: center && { rightAscension: center.rightAscension, declination: center.declination } }
 		const drawn = new Set<string>()
 
 		if (visible && center) {

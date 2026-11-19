@@ -117,16 +117,15 @@ export function SkyWorkspace() {
 	}, [map, showRadiants, meteorRevision, selectedShower, selectedShowerName])
 
 	// Draws the fields of view of the framings not hidden around the selection, each in its colour, following its position.
+	// Each render builds the frames anew; the map compares them by value with those it drew and redraws only a change.
 	const framings = useResolvedFramings()
 	const hidden = framing?.hidden
 	const skyFrames = framings.flatMap((each) => (hidden?.includes(each.id) ? [] : [{ id: each.id, name: each.name, optics: each.optics, color: frameColor(each.color) }]))
-	// The workspace renders on every mount or camera update, and each render builds the frames anew, so the outlines follow
-	// the value of the frames, never the objects, and are rebuilt only when a frame really changed.
-	const framesKey = JSON.stringify(skyFrames)
+	const framingsVisible = framing?.visible ?? false
 
 	useEffect(() => {
-		map.syncFramings(skyFrames, framing?.visible ?? false, selectionCenter)
-	}, [map, framesKey, framing?.visible, selectionCenter?.rightAscension, selectionCenter?.declination])
+		map.syncFramings(skyFrames, framingsVisible, selectionCenter)
+	})
 
 	// Draws the footprint of a solved image, unless hidden from the toolbar, while its document still shows that image,
 	// and drops it otherwise (the document closed, or its camera tab shows another frame); marks and pans to a coordinate

@@ -1,7 +1,8 @@
 import { stat } from 'fs/promises'
 import { join } from 'path'
 import { IersA, IersAB, IersB } from 'nebulosa/src/astronomy/time/iers'
-import { type Time, TIME_PROVIDERS, type TimeProviders } from 'nebulosa/src/astronomy/time/time'
+import { type Time, TIME_PROVIDERS, type TimeProviders, toJulianDay } from 'nebulosa/src/astronomy/time/time'
+import { MJD0 } from 'nebulosa/src/core/constants'
 import { DEFAULT_DATA_DIRECTORY } from './database'
 import { errorCode, writeAtomically } from './util'
 
@@ -10,7 +11,8 @@ import { errorCode, writeAtomically } from './util'
 // of the process reads them. Nothing is installed in a test that does not ask for it. The tables are read from the cache of
 // the server, and a conversion that finds them old starts one background refresh from the IERS. No request waits on the
 // network, no timer runs, and an offline server keeps answering from its cache, or with DUT1 = 0 and an explicit status
-// when it has none.
+// when it has none. After the tables, UT1 follows the best-estimate Delta T from their last value, as the toolkit's
+// lookups extrapolate it; before them DUT1 is 0, so a reading of that era is UT.
 
 // Directory of the cached tables.
 export const DEFAULT_IERS_DIRECTORY = join(DEFAULT_DATA_DIRECTORY, 'iers')
@@ -149,10 +151,11 @@ export class EarthOrientationData {
 	#loading?: Promise<void>
 	#refreshing?: Promise<void>
 
-	// Provider of the private tables: UT1-UTC and polar motion of the tables, 0 for an instant no table holds, unlike
-	// the toolkit's lookups, which clamp to the edge of the table.
+	// Provider of the private tables: UT1-UTC and polar motion of the tables. After them (an instant later than now that
+	// no table holds) UT1-UTC follows Delta T from their last value, as the toolkit's lookups give it; before them it is
+	// 0, unlike the toolkit's lookups, which clamp to the first row, and polar motion is 0 outside them.
 	readonly providers: Readonly<Required<Pick<TimeProviders, 'dut1' | 'pm'>>> = {
-		dut1: (time) => (this.#tables.combined.covers(time) ? this.#tables.combined.dut1(time) : 0),
+		dut1: (time) => (this.#tables.combined.covers(time) || toJulianDay(time) - MJD0 > this.#now() / DAY_MS + UNIX_EPOCH_MJD ? this.#tables.combined.dut1(time) : 0),
 		pm: (time) => (this.#tables.combined.covers(time) ? this.#tables.combined.xy(time) : [0, 0]),
 	}
 

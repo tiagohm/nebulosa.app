@@ -1,7 +1,7 @@
 import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { LruCache } from './lrucache'
 import { geographic, type SkyObserver, solarSystemSource } from './sky/ephemeris'
-import { moonAboveHorizon, moonAppearance, type MoonPhaseName } from './sky/moon'
+import { moonAboveHorizon, moonGeometry, type MoonPhaseName } from './sky/moon'
 import { type SunLocalNight, sunNightAt, type TimeSpan } from './sky/sun'
 
 // Local astronomical context of Astro Weather: the Sun over one night of a site and the Moon above its horizon. Computed
@@ -77,7 +77,7 @@ export class AstroWeatherNights {
 		const sun = sunNightAt(geographic(observer), time, timeZone, source)
 		const display = displayWindow(sun)
 		const middle = (display.start + display.end) / 2
-		const { illuminatedFraction, phase } = moonAppearance(middle, observer, source)
+		const { illuminatedFraction, phase } = moonGeometry(middle, observer, source)
 		const night = { sun, display, moon: { time: middle, illuminatedFraction, phase, above: moonAboveHorizon(observer, display.start, display.end, source) } }
 
 		this.#sites.set(key, [...nights, night].slice(-NIGHTS_PER_SITE))

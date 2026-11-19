@@ -1,7 +1,8 @@
-import { type LunarPhase, lunation, moonParallax, nearestLunarApsis, nearestLunarPhase } from 'nebulosa/src/astronomy/bodies/moon'
+import { type LunarPhase, lunation, moonParallax } from 'nebulosa/src/astronomy/bodies/moon'
 import { MOON_ROTATION, bodyFixedMatrix, positionAngleOfPole, subObserverPoint, subSolarPoint } from 'nebulosa/src/astronomy/bodies/orientation'
 import { cirsToObserved, icrsToCirs, lightTime, parallacticAngle, topocentricDirection } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { type EphemerisSource, interpolatedEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
+import { nearestLunarApsisOf, nearestLunarPhaseOf } from 'nebulosa/src/astronomy/events/almanac'
 import { searchIntervals } from 'nebulosa/src/astronomy/events/search'
 import { precessionNutationMatrix, type Time, timeShift, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
 import { AU_KM, ECLIPTIC_J2000_MATRIX, TAU } from 'nebulosa/src/core/constants'
@@ -9,7 +10,7 @@ import { type Mat3, matMul, matMulVec, matTranspose } from 'nebulosa/src/math/li
 import { type MutVec3, type Vec3, vecAngle, vecCross, vecLength, vecMinus, vecNegate, vecNormalize } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizeAngle, normalizePI } from 'nebulosa/src/math/units/angle'
 import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from '../ephemeris.chain'
-import { makeTime, moonHorizonMargin, observerBarycentric, type SkyObserver, solarSystemSource } from './ephemeris'
+import { makeTime, moonHorizonMargin, observerBarycentric, type SkyObserver, type SolarSystemSourceChoice, solarSystemSource } from './ephemeris'
 import type { TimeSpan } from './sun'
 
 // Lunar almanac of the Moon Inspector: the Moon's appearance at an instant (phase, illuminated
@@ -17,12 +18,12 @@ import type { TimeSpan } from './sun'
 // limb, and the rotation that draws its surface as the observer sees it), the next four principal
 // phases, and the next perigee and apogee; and when the Moon is above an observer's horizon, which
 // Astro Weather reads. Everything is computed locally, never from the network: the Moon, the Earth, and the Sun of the
-// appearance and of the horizon come from the SPK kernels of the SPICE Kernel Library when they cover the instant, else
-// from ELPMPP02 and VSOP87E (the fast ephemeris chain), with the IAU rotation model of the Moon; the phases and apsides
-// from the toolkit's searches of the theories, so they may differ slightly from the Horizons position of the Sky
-// selection. The appearance is topocentric with an observer and geocentric without one; the phases
-// and apsides are geocentric events. Times are Unix milliseconds (UTC, converted from the toolkit's TT),
-// angles radians, distances kilometers.
+// appearance, of the horizon, and of the phases and apsides come from the SPK kernels of the SPICE Kernel Library when
+// they cover the instant, else from ELPMPP02 and VSOP87E (the fast ephemeris chain), with the IAU rotation model of the
+// Moon, so they may differ slightly from the Horizons position of the Sky selection. The phases and apsides are the
+// toolkit's series instants refined on that source (nearestLunarPhaseOf, nearestLunarApsisOf). The appearance is
+// topocentric with an observer and geocentric without one; the phases and apsides are geocentric events. Times are Unix
+// milliseconds (UTC, converted from the toolkit's TT), angles radians, distances kilometers.
 
 // IAU mean radius of the Moon in km.
 const MOON_RADIUS_KM = 1737.4
@@ -37,8 +38,12 @@ const PRINCIPAL_PHASE_HALF_WIDTH = TAU / 29.530589 / 2
 // Light-time iterations of the observer→Moon direction; two converge to well under a millisecond.
 const LIGHT_TIME_ITERATIONS = 2
 
-// Calendars kept in memory: one per validity interval, a few per tab moving through time.
+// Calendars kept in memory: one per validity interval and source, a few per tab moving through time.
 const CALENDAR_CACHE_LIMIT = 8
+
+// Reach of the source of an almanac on either side of its instant, milliseconds: 31 days, beyond the previous new Moon
+// and the next phases and apsides, which fall within a synodic month (29.5 days) of it.
+const CALENDAR_REACH_MS = 31 * 86_400_000
 
 // Coarse step of the search for the Moon's rises and sets in days (15 minutes): each sample costs a full reduction to
 // the observed place, and only a grazing pass near a polar latitude is shorter than this, which the search may miss.
@@ -151,6 +156,9 @@ export interface MoonAlmanacResponse {
 	readonly source: 'local'
 }
 
+// How the Moon looks at an instant without its age and lunation, which need the previous new Moon.
+export type MoonGeometry = Omit<MoonAppearance, 'ageDays' | 'lunation'>
+
 // Phase and apsis events of an instant, which hold from the previous new Moon until the first event.
 interface MoonCalendar {
 	// Previous geocentric new Moon at or before the instants it serves, Unix milliseconds.
@@ -211,9 +219,9 @@ export function northUpView(direction: Vec3, time: Time): Mat3 {
 	return [-east[0], -east[1], -east[2], north[0], north[1], north[2], -line[0], -line[1], -line[2]]
 }
 
-// Computes the Moon's appearance at an instant (Unix milliseconds) for an observer, or the geocenter, with the Moon, the
-// Earth, and the Sun of states (the theories by default).
-export function moonAppearance(time: number, observer: SkyObserver | undefined, source: EphemerisSource): MoonAppearance {
+// Computes the Moon's geometry at an instant (Unix milliseconds) for an observer, or the geocenter, with the Moon, the
+// Earth, and the Sun of a source.
+export function moonGeometry(time: number, observer: SkyObserver | undefined, source: EphemerisSource): MoonGeometry {
 	const instant = makeTime(time, observer)
 	const model = (t: Time) => source.state(301, t)
 	const direction: MutVec3 = [0, 0, 0]
@@ -239,8 +247,6 @@ export function moonAppearance(time: number, observer: SkyObserver | undefined, 
 	const sunDirection = vecNormalize(matMulVec(bodyFixed, moonToSun))
 	const subSolar = surfacePoint(subSolarPoint(MOON_ROTATION, instant, moonToObserver, moonToSun))
 
-	const previousNew = timeToUnixMillis(nearestLunarPhase(instant, 'NEW', false))
-
 	let parallactic: number | undefined
 
 	if (observer && instant.location) {
@@ -255,8 +261,6 @@ export function moonAppearance(time: number, observer: SkyObserver | undefined, 
 		phaseAngle,
 		elongation,
 		phase: moonPhaseName(elongation),
-		ageDays: (time - previousNew) / DAY_MS,
-		lunation: lunation(instant),
 		distanceKm: distanceAu * AU_KM,
 		angularDiameter: 2 * Math.asin(MOON_RADIUS_KM / (distanceAu * AU_KM)),
 		horizontalParallax: moonParallax(geocentricDistanceAu),
@@ -269,6 +273,13 @@ export function moonAppearance(time: number, observer: SkyObserver | undefined, 
 		bodyToCamera,
 		sunDirection,
 	}
+}
+
+// Computes the Moon's appearance at an instant (Unix milliseconds) for an observer, or the geocenter, with the Moon, the
+// Earth, and the Sun of a source, its age and Brown lunation counted from newMoon, the previous geocentric new Moon (Unix
+// milliseconds) on the same source.
+export function moonAppearance(time: number, observer: SkyObserver | undefined, source: EphemerisSource, newMoon: number): MoonAppearance {
+	return { ...moonGeometry(time, observer, source), ageDays: (time - newMoon) / DAY_MS, lunation: lunation(makeTime(newMoon)) }
 }
 
 // Returns the intervals in which the Moon is above the horizon of an observer between two instants (Unix milliseconds),
@@ -295,15 +306,16 @@ function eventAfter<T extends readonly unknown[] | Time>(time: number, search: (
 	return { event, at }
 }
 
-// Computes the phases and apsides that follow an instant (Unix milliseconds), with the interval in which
-// they stay the next ones.
-export function moonCalendar(time: number): MoonCalendar {
+// Computes the phases and apsides that follow an instant (Unix milliseconds) on a source, with the interval in which
+// they stay the next ones. Each event refines its series instant on the source, so pass an interpolated source over the
+// theories, where an ELPMPP02 evaluation costs about 10 ms.
+export function moonCalendar(time: number, source: EphemerisSource): MoonCalendar {
 	const instant = makeTime(time)
 	const phases = PHASES.map(([phase, kind]) => ({
 		kind,
 		time: eventAfter(
 			time,
-			(t) => nearestLunarPhase(t, phase, true),
+			(t) => nearestLunarPhaseOf(source, t, phase, true),
 			(e) => e,
 		).at,
 	})).sort((a, b) => a.time - b.time)
@@ -311,34 +323,42 @@ export function moonCalendar(time: number): MoonCalendar {
 		.map((kind) => {
 			const { event, at } = eventAfter(
 				time,
-				(t) => nearestLunarApsis(t, kind === 'perigee' ? 'PERIGEE' : 'APOGEE', true),
+				(t) => nearestLunarApsisOf(source, t, kind === 'perigee' ? 'PERIGEE' : 'APOGEE', true),
 				(e) => e[0],
 			)
 			return { kind, time: at, distanceKm: event[1] * AU_KM, angularDiameter: event[2] }
 		})
 		.sort((a, b) => a.time - b.time)
-	const from = timeToUnixMillis(nearestLunarPhase(instant, 'NEW', false))
+	const from = timeToUnixMillis(nearestLunarPhaseOf(source, instant, 'NEW', false))
 	return { from, until: Math.min(phases[0].time, apsides[0].time), phases, apsides }
 }
 
-// Lunar almanac service, caching the calendars it computes by the interval in which they hold.
+// A calendar kept by the almanac, with the key of the source it was computed on.
+interface CachedMoonCalendar extends MoonCalendar {
+	// Cache key of the source (analytical, or spk with the kernel generation).
+	readonly key: string
+}
+
+// Lunar almanac service, caching the calendars it computes by the interval in which they hold and their source.
 export class MoonAlmanac {
-	readonly #calendars: MoonCalendar[] = []
+	readonly #calendars: CachedMoonCalendar[] = []
 
 	// Creates the service over the kernels of the SPICE Kernel Library (none by default).
 	constructor(private readonly kernels: EphemerisKernels = NO_EPHEMERIS_KERNELS) {}
 
-	// Computes the almanac of a request: the appearance with the Moon of the fast ephemeris chain (the SPK kernels when they
-	// cover the instant, else the theories), the phases and apsides with the toolkit's searches of the theories.
+	// Computes the almanac of a request on one source of the fast ephemeris chain (the SPK kernels when they cover a month on
+	// either side of the instant, else the theories): the appearance, its age from the previous new Moon, and the phases and
+	// apsides.
 	almanac({ time, observer }: MoonAlmanacRequest): MoonAlmanacResponse {
-		const { phases, apsides } = this.calendar(time)
-		const { source } = solarSystemSource(this.kernels.current(), ['301'], [time])
-		return { time, appearance: moonAppearance(time, observer, source), phases, apsides, source: 'local' }
+		const choice = solarSystemSource(this.kernels.current(), ['301'], [time - CALENDAR_REACH_MS, time, time + CALENDAR_REACH_MS])
+		const { from, phases, apsides } = this.calendar(time, choice)
+		return { time, appearance: moonAppearance(time, observer, choice.source, from), phases, apsides, source: 'local' }
 	}
 
-	// Returns the calendar of an instant (Unix milliseconds), computing it only when no cached one holds.
-	calendar(time: number): MoonCalendar {
-		const index = this.#calendars.findIndex((e) => e.from <= time && time < e.until)
+	// Returns the calendar of an instant (Unix milliseconds) on a chosen source, computing it, on the source interpolated,
+	// only when no cached one of that source holds.
+	calendar(time: number, { source, key }: SolarSystemSourceChoice): MoonCalendar {
+		const index = this.#calendars.findIndex((e) => e.key === key && e.from <= time && time < e.until)
 
 		if (index >= 0) {
 			const [calendar] = this.#calendars.splice(index, 1)
@@ -346,7 +366,7 @@ export class MoonAlmanac {
 			return calendar
 		}
 
-		const calendar = moonCalendar(time)
+		const calendar = { ...moonCalendar(time, interpolatedEphemerisSource(source)), key }
 		this.#calendars.push(calendar)
 		if (this.#calendars.length > CALENDAR_CACHE_LIMIT) this.#calendars.shift()
 		return calendar

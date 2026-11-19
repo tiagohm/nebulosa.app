@@ -1,7 +1,8 @@
-import { carringtonRotationNumber, equationOfTime, type Season, season } from 'nebulosa/src/astronomy/bodies/sun'
+import { carringtonRotationNumber, equationOfTime, type Season } from 'nebulosa/src/astronomy/bodies/sun'
 import { equatorial } from 'nebulosa/src/astronomy/coordinates/astrometry'
 import { equatorialFromJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { EphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
+import { seasonOf } from 'nebulosa/src/astronomy/events/almanac'
 import { ASTRONOMICAL_TWILIGHT, CIVIL_TWILIGHT, NAUTICAL_TWILIGHT, SUN_HORIZON } from 'nebulosa/src/astronomy/events/horizon'
 import { searchExtrema, searchIntervals, searchRoots } from 'nebulosa/src/astronomy/events/search'
 import { type GeographicPosition, localSiderealTime } from 'nebulosa/src/astronomy/observer/location'
@@ -18,7 +19,8 @@ import { apparentRightAscension, geographic, type SkyObserver, solarSystemSource
 // the next four equinoxes and solstices, and the equation of time and Carrington rotation at an instant,
 // plus the Sun's night from one transit to the next, which Astro Weather reads.
 // Everything is computed locally, never from the network: the Sun and the Earth of the day come from the SPK kernels of
-// the SPICE Kernel Library when they cover it, else from VSOP87E (the fast ephemeris chain). Rise and set and the
+// the SPICE Kernel Library when they cover it, else from VSOP87E (the fast ephemeris chain), and so do those of the
+// equinoxes and solstices, the toolkit's series instants refined on that source (seasonOf). Rise and set and the
 // twilight limits use the toolkit's almanac convention: the geometric, geocentric altitude of the
 // Sun's center against SUN_HORIZON (−50′: the upper limb with standard refraction) and −6°, −12°, and
 // −18°. Times are Unix milliseconds (UTC, converted from the toolkit's TT), durations seconds.
@@ -42,6 +44,9 @@ const SIDEREAL_RATE = TAU * 1.00273781191135448
 
 // Local days kept in memory.
 const LOCAL_DAY_CACHE_LIMIT = 64
+
+// Years of equinoxes and solstices kept in memory, by source: an almanac reads two.
+const SEASON_YEAR_CACHE_LIMIT = 16
 
 // How the Sun's center relates to a threshold over a local day: crossing it both ways, only one way,
 // or staying above or below it all day.
@@ -430,19 +435,19 @@ function astronomicalNight(altitude: (time: Time) => number, { dusk, state }: So
 	return { start: dusk, end, durationSeconds: end === undefined ? undefined : (end - dusk) / 1000, state }
 }
 
-// Returns the next four equinoxes and solstices strictly after an instant (Unix milliseconds).
-export function nextSeasons(time: number): SolarSeasonEvent[] {
+// Returns the equinoxes and solstices of a Gregorian year on a source, in calendar order.
+export function yearSeasons(year: number, source: EphemerisSource): SolarSeasonEvent[] {
+	return SEASONS.map(([name, kind]) => ({ kind, time: timeToUnixMillis(seasonOf(source, year, name)) }))
+}
+
+// Returns the next four equinoxes and solstices strictly after an instant (Unix milliseconds), from the seasons of each
+// year that seasonsOf gives (yearSeasons on a source, or a cache of them).
+export function nextSeasons(time: number, seasonsOf: (year: number) => readonly SolarSeasonEvent[]): SolarSeasonEvent[] {
 	const year = new Date(time).getUTCFullYear()
-	const events: SolarSeasonEvent[] = []
-
-	for (const y of [year, year + 1]) {
-		for (const [name, kind] of SEASONS) {
-			const instant = timeToUnixMillis(season(y, name))
-			if (instant > time) events.push({ kind, time: instant })
-		}
-	}
-
-	return events.sort((a, b) => a.time - b.time).slice(0, 4)
+	return [...seasonsOf(year), ...seasonsOf(year + 1)]
+		.filter((event) => event.time > time)
+		.sort((a, b) => a.time - b.time)
+		.slice(0, 4)
 }
 
 // Returns the equation of time and the Carrington rotation at an instant (Unix milliseconds). The
@@ -459,14 +464,30 @@ export function sunPhysicalData(time: number, source: EphemerisSource): SunPhysi
 // Solar almanac service, caching the local days it computes by their source.
 export class SunAlmanac {
 	readonly #days = new LruCache<SunLocalDay>(LOCAL_DAY_CACHE_LIMIT)
+	readonly #seasons = new LruCache<readonly SolarSeasonEvent[]>(SEASON_YEAR_CACHE_LIMIT)
 
 	// Creates the service over the kernels of the SPICE Kernel Library (none by default).
 	constructor(private readonly kernels: EphemerisKernels = NO_EPHEMERIS_KERNELS) {}
 
-	// Computes the almanac of a request.
+	// Computes the almanac of a request: its seasons and physical data on one source of the fast ephemeris chain, the SPK
+	// kernels when they cover the instant and the end of the next year, where the last season can fall, else the theories.
 	almanac({ time, observer, timeZone }: SunAlmanacRequest): SunAlmanacResponse {
-		const { source } = solarSystemSource(this.kernels.current(), [], [time])
-		return { time, localDay: observer && this.localDay(time, observer, timeZone), seasons: nextSeasons(time), physical: sunPhysicalData(time, source) }
+		const { source, key } = solarSystemSource(this.kernels.current(), [], [time, Date.UTC(new Date(time).getUTCFullYear() + 2, 0, 1)])
+		const seasons = nextSeasons(time, (year) => this.yearSeasons(year, source, key))
+		return { time, localDay: observer && this.localDay(time, observer, timeZone), seasons, physical: sunPhysicalData(time, source) }
+	}
+
+	// Returns the equinoxes and solstices of a year on a source whose cache key is key, computing them only once.
+	yearSeasons(year: number, source: EphemerisSource, key: string): readonly SolarSeasonEvent[] {
+		const id = `${key}|${year}`
+		let seasons = this.#seasons.get(id)
+
+		if (!seasons) {
+			seasons = yearSeasons(year, source)
+			this.#seasons.set(id, seasons)
+		}
+
+		return seasons
 	}
 
 	// Returns the Sun's day of an observer on the civil date of an instant (Unix milliseconds) in a time zone.

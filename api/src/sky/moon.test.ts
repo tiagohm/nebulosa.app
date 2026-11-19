@@ -3,16 +3,18 @@ import { nearestLunarEclipse } from 'nebulosa/src/astronomy/bodies/moon'
 import { bodyFixedMatrix, MOON_ROTATION } from 'nebulosa/src/astronomy/bodies/orientation'
 import { frameToFrame, ICRS, ITRS } from 'nebulosa/src/astronomy/coordinates/frame'
 import { itrs } from 'nebulosa/src/astronomy/coordinates/itrs'
-import { analyticalEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
+import { analyticalEphemerisSource, interpolatedEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { timeToUnixMillis, timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { DEG2RAD } from 'nebulosa/src/core/constants'
 import { type Mat3, matMulVec, matTransposeMulVec } from 'nebulosa/src/math/linear-algebra/mat3'
 import type { Vec3 } from 'nebulosa/src/math/linear-algebra/vec3'
 import { normalizePI } from 'nebulosa/src/math/units/angle'
-import { makeTime, SkyEphemeris } from './ephemeris'
-import { createMoonAlmanacRoutes, MoonAlmanac, moonAboveHorizon, moonAppearance, moonCalendar, moonPhaseName } from './moon'
+import { NO_EPHEMERIS_KERNELS } from '../ephemeris.chain'
+import { makeTime, SkyEphemeris, solarSystemSource } from './ephemeris'
+import { createMoonAlmanacRoutes, MoonAlmanac, moonAboveHorizon, moonAppearance, moonCalendar, moonGeometry, moonPhaseName } from './moon'
 
 const SOURCE = analyticalEphemerisSource
+const INTERPOLATED = interpolatedEphemerisSource(SOURCE)
 const SAO_PAULO = { latitude: -23.5505, longitude: -46.6333, elevation: 760 }
 const LONDON = { latitude: 51.5074, longitude: -0.1278, elevation: 11 }
 const TIME = Date.UTC(2026, 9, 28, 22)
@@ -53,7 +55,7 @@ describe('appearance', () => {
 	test('the view rotation is the frame of the sub-observer point, the pole, and the sub-solar point', () => {
 		for (const observer of [undefined, SAO_PAULO, LONDON]) {
 			for (const time of [TIME, TIME + 7 * DAY, TIME + 200 * DAY]) {
-				const appearance = moonAppearance(time, observer, SOURCE)
+				const appearance = moonGeometry(time, observer, SOURCE)
 				const m = appearance.bodyToCamera
 				expectRotation(m)
 
@@ -74,7 +76,7 @@ describe('appearance', () => {
 	})
 
 	test('lunar east is drawn on the west of the sky: Mare Crisium right, Copernicus and Aristarchus left, Tycho below', () => {
-		const m = moonAppearance(TIME, undefined, SOURCE).bodyToCamera
+		const m = moonGeometry(TIME, undefined, SOURCE).bodyToCamera
 		const crisium = matMulVec(m, surface(16.1774, 59.1037))
 		const copernicus = matMulVec(m, surface(9.6209, -20.0786))
 		const aristarchus = matMulVec(m, surface(23.7299, -47.4901))
@@ -92,8 +94,8 @@ describe('appearance', () => {
 	test('an observer sees a slightly different libration than the geocenter, and gets the parallactic angle of its zenith', () => {
 		for (const observer of [SAO_PAULO, LONDON]) {
 			for (const time of [TIME, TIME + 6 * HOUR, TIME + 12 * HOUR]) {
-				const geocentric = moonAppearance(time, undefined, SOURCE)
-				const topocentric = moonAppearance(time, observer, SOURCE)
+				const geocentric = moonGeometry(time, undefined, SOURCE)
+				const topocentric = moonGeometry(time, observer, SOURCE)
 				const shift = Math.hypot(normalizePI(topocentric.subObserver.longitude - geocentric.subObserver.longitude), topocentric.subObserver.latitude - geocentric.subObserver.latitude)
 
 				expect(geocentric.center).toBe('geocentric')
@@ -115,28 +117,30 @@ describe('appearance', () => {
 	})
 
 	test('names the phase and measures the light around the phases', () => {
-		const calendar = moonCalendar(TIME)
+		const calendar = moonCalendar(TIME, INTERPOLATED)
 		const at = (kind: string) => calendar.phases.find((e) => e.kind === kind)!.time
-		const full = moonAppearance(at('fullMoon'), undefined, SOURCE)
-		const fresh = moonAppearance(at('newMoon') + 3 * DAY, undefined, SOURCE)
-		const quarter = moonAppearance(at('firstQuarter'), undefined, SOURCE)
+		const full = moonGeometry(at('fullMoon'), undefined, SOURCE)
+		const fresh = moonAppearance(at('newMoon') + 3 * DAY, undefined, SOURCE, at('newMoon'))
+		const quarter = moonGeometry(at('firstQuarter'), undefined, SOURCE)
 
 		expect(full.phase).toBe('fullMoon')
 		expect(full.illuminatedFraction).toBeGreaterThan(0.99)
 		expectAngle(full.colongitude, Math.PI / 2, 10 * DEG2RAD)
-		expect(moonAppearance(at('newMoon'), undefined, SOURCE).illuminatedFraction).toBeLessThan(0.01)
-		expect(moonAppearance(at('newMoon') + HOUR, undefined, SOURCE).ageDays).toBeCloseTo(1 / 24, 6)
+		expect(moonGeometry(at('newMoon'), undefined, SOURCE).illuminatedFraction).toBeLessThan(0.01)
+		// The age and the lunation count from the previous new Moon: one more lunation after the next one.
+		expect(moonAppearance(at('newMoon') + HOUR, undefined, SOURCE, at('newMoon')).ageDays).toBeCloseTo(1 / 24, 6)
+		expect(moonAppearance(at('newMoon') + HOUR, undefined, SOURCE, at('newMoon')).lunation).toBe(moonAppearance(TIME, undefined, SOURCE, calendar.from).lunation + 1)
 		expect(fresh.phase).toBe('waxingCrescent')
 		expect(fresh.ageDays).toBeCloseTo(3, 6)
 		expect(quarter.phase).toBe('firstQuarter')
 		expect(quarter.illuminatedFraction).toBeCloseTo(0.5, 1)
-		expect(moonAppearance(at('lastQuarter'), undefined, SOURCE).phase).toBe('lastQuarter')
-		expect(moonAppearance(at('fullMoon') - 4 * DAY, undefined, SOURCE).phase).toBe('waxingGibbous')
-		expect(moonAppearance(at('fullMoon') + 4 * DAY, undefined, SOURCE).phase).toBe('waningGibbous')
+		expect(moonGeometry(at('lastQuarter'), undefined, SOURCE).phase).toBe('lastQuarter')
+		expect(moonGeometry(at('fullMoon') - 4 * DAY, undefined, SOURCE).phase).toBe('waxingGibbous')
+		expect(moonGeometry(at('fullMoon') + 4 * DAY, undefined, SOURCE).phase).toBe('waningGibbous')
 
 		// A waxing Moon is lit on its west limb (position angle near 270°), a waning one on its east limb.
 		expectAngle(fresh.brightLimbAngle, 1.5 * Math.PI, 30 * DEG2RAD)
-		expectAngle(moonAppearance(at('fullMoon') + 8 * DAY, undefined, SOURCE).brightLimbAngle, Math.PI / 2, 30 * DEG2RAD)
+		expectAngle(moonGeometry(at('fullMoon') + 8 * DAY, undefined, SOURCE).brightLimbAngle, Math.PI / 2, 30 * DEG2RAD)
 	})
 
 	test('phase names follow the elongation', () => {
@@ -156,7 +160,7 @@ describe('appearance', () => {
 describe('calendar', () => {
 	test('the next four principal phases and the next perigee and apogee, strictly after the instant and in order', () => {
 		for (const time of [TIME, Date.UTC(2027, 0, 1), Date.UTC(2030, 5, 15, 12)]) {
-			const { phases, apsides, from, until } = moonCalendar(time)
+			const { phases, apsides, from, until } = moonCalendar(time, INTERPOLATED)
 			expect(phases).toHaveLength(4)
 			expect(new Set(phases.map((e) => e.kind)).size).toBe(4)
 			expect(phases[0].time).toBeGreaterThan(time)
@@ -176,24 +180,26 @@ describe('calendar', () => {
 	test('a total lunar eclipse falls within an hour of the full Moon', () => {
 		const eclipse = nearestLunarEclipse(timeUnix(Date.UTC(2026, 0, 1) / 1000), true)
 		const maximum = timeToUnixMillis(eclipse.maximalTime)
-		const full = moonCalendar(maximum - 5 * DAY).phases.find((e) => e.kind === 'fullMoon')!
+		const full = moonCalendar(maximum - 5 * DAY, INTERPOLATED).phases.find((e) => e.kind === 'fullMoon')!
 		expect(Math.abs(full.time - maximum)).toBeLessThan(HOUR)
 	})
 
 	test('a calendar is reused while it holds and computed again past an event or back in time', () => {
 		const almanac = new MoonAlmanac()
-		const first = almanac.calendar(TIME)
-		expect(almanac.calendar(TIME + HOUR)).toBe(first)
-		expect(almanac.calendar(first.until - 1)).toBe(first)
+		const choice = solarSystemSource(NO_EPHEMERIS_KERNELS.current(), ['301'], [TIME])
+		const first = almanac.calendar(TIME, choice)
+		expect(almanac.calendar(TIME, { ...choice, key: 'spk:1' })).not.toBe(first)
+		expect(almanac.calendar(TIME + HOUR, choice)).toBe(first)
+		expect(almanac.calendar(first.until - 1, choice)).toBe(first)
 
-		const next = almanac.calendar(first.until)
+		const next = almanac.calendar(first.until, choice)
 		expect(next).not.toBe(first)
 		expect(next.phases[0].time).toBeGreaterThan(first.until)
 
-		const before = almanac.calendar(first.from - 1)
+		const before = almanac.calendar(first.from - 1, choice)
 		expect(before).not.toBe(first)
 		expect(before.until).toBeLessThanOrEqual(first.from)
-		expect(almanac.calendar(TIME)).toBe(first)
+		expect(almanac.calendar(TIME, choice)).toBe(first)
 	})
 })
 

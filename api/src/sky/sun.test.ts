@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { analyticalEphemerisSource } from 'nebulosa/src/astronomy/ephemeris/source'
 import { geographic } from './ephemeris'
-import { createSunAlmanacRoutes, nextSeasons, SunAlmanac, sunNightAt, sunPhysicalData, zonedDate, zonedDay } from './sun'
+import { createSunAlmanacRoutes, nextSeasons, SunAlmanac, sunNightAt, sunPhysicalData, yearSeasons, zonedDate, zonedDay } from './sun'
 
 const MINUTE = 60_000
 const SOURCE = analyticalEphemerisSource
@@ -106,14 +106,22 @@ test('a day with one crossing is partial', () => {
 })
 
 test('the next four seasons follow the instant across the year', () => {
-	const seasons = nextSeasons(Date.UTC(2026, 10, 4))
+	const seasons = nextSeasons(Date.UTC(2026, 10, 4), (year) => yearSeasons(year, SOURCE))
 	expect(seasons.map((e) => e.kind)).toEqual(['decemberSolstice', 'marchEquinox', 'juneSolstice', 'septemberEquinox'])
 	expectNear(seasons[0].time, Date.UTC(2026, 11, 21, 20, 50))
 	expectNear(seasons[1].time, Date.UTC(2027, 2, 20, 20, 25))
 
-	const after = nextSeasons(seasons[0].time)
+	const after = nextSeasons(seasons[0].time, (year) => yearSeasons(year, SOURCE))
 	expect(after[0].kind).toBe('marchEquinox')
 	expect(after).toHaveLength(4)
+})
+
+test('the seasons of a year are computed once per source', () => {
+	const almanac = new SunAlmanac()
+	const first = almanac.yearSeasons(2026, SOURCE, 'analytical')
+	expect(almanac.yearSeasons(2026, SOURCE, 'analytical')).toBe(first)
+	expect(almanac.yearSeasons(2026, SOURCE, 'spk:1')).not.toBe(first)
+	expect(first.map((e) => e.kind)).toEqual(['marchEquinox', 'juneSolstice', 'septemberEquinox', 'decemberSolstice'])
 })
 
 test('equation of time and Carrington rotation', () => {

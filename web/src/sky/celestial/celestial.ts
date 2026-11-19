@@ -562,7 +562,8 @@ export class Celestial {
 		return true
 	}
 
-	// Adds or replaces a custom shape by id, redraws it, and returns the id.
+	// Adds or replaces a custom shape by id, redraws it, and returns the id. A replaced shape that is selected or hovered
+	// stays so as the new shape, so the highlight follows its coordinate and data.
 	addShape(shape: CelestialShape) {
 		const id = shape.id
 		const previous = this.#shapes.get(id)
@@ -576,6 +577,9 @@ export class Celestial {
 			} else {
 				this.#shapeList.push(shape)
 			}
+
+			if (this.#selectedObject?.type === 'shape' && this.#selectedObject.id === id) this.#selectedObject = { type: 'shape', id, shape }
+			if (this.#hoverObject?.type === 'shape' && this.#hoverObject.id === id) this.#hoverObject = { type: 'shape', id, shape }
 		} else {
 			this.#shapeList.push(shape)
 		}

@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import { approachTime, type CloseApproachFilters, type CloseApproachHistoryFilters, type CloseApproachPageResponse, CloseApproachesService, createCloseApproachRoutes } from './closeapproaches'
 import { MinorBodies } from './sky/minorbodies'
 import type { MinorBodyDetailsResponse } from './sky/types'
+import type { SpiceKernelSnapshot } from './spicekernels.runtime'
 import { SsdRequestQueue } from './ssd'
 
 const SIGNATURE = { source: 'NASA/JPL SBDB Close Approach Data API', version: '1.5' }
@@ -18,8 +19,9 @@ const SBDB = {
 	phys_par: [],
 }
 
-// Test server over a fake JPL that answers each URL through `reply`, and records the requests.
-function serve(reply: (url: URL) => Response | Promise<Response>) {
+// Test server over a fake JPL that answers each URL through `reply`, and records the requests; the ephemeris sources
+// are offline while `state.offline`.
+function serve(reply: (url: URL) => Response | Promise<Response>, state?: { readonly offline: boolean }) {
 	const urls: URL[] = []
 	let now = 1_000_000
 	const fetch = ((url: string) => {
@@ -28,7 +30,8 @@ function serve(reply: (url: URL) => Response | Promise<Response>) {
 		return Promise.resolve(reply(parsed))
 	}) as unknown as typeof globalThis.fetch
 	const queue = new SsdRequestQueue({ fetch })
-	const service = new CloseApproachesService(new MinorBodies({ queue }), queue, { now: () => now })
+	const kernels = { current: (): SpiceKernelSnapshot => ({ generation: 1, offline: state?.offline ?? false, loading: false, readiness: new Map() }) }
+	const service = new CloseApproachesService(new MinorBodies({ queue }), queue, { now: () => now, kernels })
 	const routes = createCloseApproachRoutes(service)
 
 	return {
@@ -113,6 +116,29 @@ test('pages are cached, shared while pending, and read again on refresh', async 
 	again.tick(300_000)
 	await again.list()
 	expect(again.urls).toHaveLength(3)
+})
+
+test('offline, only the pages and objects already read are answered, whatever their age, and JPL is never asked', async () => {
+	const state = { offline: true }
+	const server = serve((url) => (url.pathname.endsWith('sbdb.api') ? Response.json(SBDB) : earthPage()), state)
+
+	const refused = await server.list()
+	expect(refused.status).toBe(503)
+	expect(await refused.json()).toMatchObject({ code: 'offline' })
+	expect((await server.object('99942')).status).toBe(503)
+	expect(server.urls).toHaveLength(0)
+
+	state.offline = false
+	await server.list()
+	await server.object('99942')
+	expect(server.urls).toHaveLength(2)
+
+	state.offline = true
+	server.tick(3_600_000)
+	expect((await server.list('&refresh=true')).status).toBe(200)
+	expect(((await (await server.object('99942')).json()) as MinorBodyDetailsResponse).kind).toBe('found')
+	expect((await server.list('&page=2')).status).toBe(503)
+	expect(server.urls).toHaveLength(2)
 })
 
 test('the history of an object selects its SPK-ID, to any distance, without the NEO filter', async () => {

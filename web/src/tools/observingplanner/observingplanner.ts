@@ -110,7 +110,6 @@ export const REASON_LABELS: Readonly<Record<ObservingReasonCode, string>> = {
 	meteorShowerInactive: 'The meteor shower is not active this night.',
 	radiantUnknown: 'The catalog gives no radiant for this meteor shower.',
 	orbitalSolutionUnavailable: 'No usable orbital elements are known for this body.',
-	kernelCoverageUnavailable: 'An SPK kernel covering this body could not be read.',
 	ephemerisOffline: 'No SPK kernel or saved orbital elements cover this body, and the ephemeris sources are offline.',
 	ephemerisSourceUnavailable: 'JPL could not be reached, and no SPK kernel or orbital elements cover this body.',
 	trajectoryResolutionExceeded: 'The body moves too fast to be followed over the night.',

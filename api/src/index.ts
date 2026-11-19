@@ -392,7 +392,6 @@ export type {
 	ObservingTargetRef,
 	ObservingWindow,
 	PlannerEphemerisProvenance,
-	PlannerEphemerisSource,
 	PlanningBodyCode,
 	PlanningSite,
 	ScheduleItemDiagnostics,
@@ -1308,7 +1307,7 @@ const lunarEclipses = new LunarEclipseService({ kernels: spiceKernels })
 const solarEclipses = new SolarEclipseService({ kernels: spiceKernels })
 
 // Close approach queries of the Close Approaches tool, over the minor bodies and the JPL queue of the Sky.
-const closeApproaches = new CloseApproachesService(minorBodies, ssdRequests)
+const closeApproaches = new CloseApproachesService(minorBodies, ssdRequests, { kernels: spiceKernels })
 
 // Stateless two-body analysis of the Orbital Mechanics Explorer.
 const orbitalMechanics = new OrbitalMechanicsService({ minorBodies, kernels: spiceKernels })

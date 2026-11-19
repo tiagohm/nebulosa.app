@@ -172,7 +172,7 @@ function Settings() {
 			<h2 className="m-0 text-sm font-semibold text-ink-100">Ephemeris sources</h2>
 			<Notice>Positions come from the kernels when they cover the object, the Earth, and the Sun. Otherwise the map, the planners, and the events use the analytical theories, then JPL Horizons; the selected object and mount targets use JPL Horizons, then the analytical theories.</Notice>
 			<Checkbox label="Offline" checked={snapshot.offline} disabled={state.pending.settings} onChange={(offline) => void setEphemerisOffline(spiceKernelsState, offline)} />
-			<Notice>Offline, no position, event, or plan asks JPL Horizons or SBDB: an object only the network can give is reported as unavailable.</Notice>
+			<Notice>Offline, no position, event, plan, orbit lookup, or close approach asks JPL (Horizons, SBDB, or CAD): only what was already read is answered, and an object only the network can give is reported as unavailable.</Notice>
 			{state.errors.settings && <Notice error>{state.errors.settings}</Notice>}
 			<Notice>The switch applies to the whole server and every profile. Downloading or generating a kernel still needs the network. The library uses {formatByteSize(snapshot.bytes)} of the data directory.</Notice>
 		</section>

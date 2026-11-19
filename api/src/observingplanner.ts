@@ -48,23 +48,7 @@ import type { SsdRequestQueue } from './ssd'
 export type { ObservingScheduleConflict, ObservingScheduleConflictCode, ScheduleItemDiagnostics, ScheduleTotals } from './observingplanner.schedule'
 export type { ObservingConstraintsOverride, ObservingPlan, ObservingPlanDocument, ObservingPlanItem, ObservingPlanSaveRequest } from './observingplanner.store'
 
-export type {
-	ObservingConstraints,
-	ObservingMode,
-	ObservingReasonCode,
-	ObservingSample,
-	ObservingScore,
-	ObservingStatus,
-	ObservingSummary,
-	ObservingTargetRef,
-	ObservingWindow,
-	PlannerEphemerisProvenance,
-	PlannerEphemerisSource,
-	PlanningBodyCode,
-	PlanningSite,
-	TargetAnalysis,
-	TargetAnalysisRequest,
-} from './observingplanner.astronomy'
+export type { ObservingConstraints, ObservingMode, ObservingReasonCode, ObservingSample, ObservingScore, ObservingStatus, ObservingSummary, ObservingTargetRef, ObservingWindow, PlannerEphemerisProvenance, PlanningBodyCode, PlanningSite, TargetAnalysis, TargetAnalysisRequest } from './observingplanner.astronomy'
 import { yieldToEventLoop } from './util'
 export { MINIMUM_CONTINUOUS_MS, OBSERVING_PRESETS, PLANNING_BODY_CODES } from './observingplanner.astronomy'
 

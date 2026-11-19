@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatAngularSize, formatArcsec, formatClockTime, formatDate, formatDateTime, formatDegrees, formatHours, formatPercent, formatSpan } from '../../format'
 import type { SiteLocation } from '../../location/site'
+import { EPHEMERIS_SKIP_REASONS } from '../../sky/ephemerissource'
 import { formatMagnitude, formatSolarSystemDistance } from '../../sky/format'
 import { Button } from '../../ui/Button'
 import { DataList, DataRow } from '../../ui/DataRow'
@@ -31,10 +32,10 @@ import { analyze, defaultSampleIndex, type NamedTarget, type ObservingPlannerSta
 const FACTOR_LABELS = { altitude: 'Altitude', airmass: 'Airmass', twilight: 'Twilight', moon: 'Moon', duration: 'Duration' } as const
 
 // Name of each source of a minor body's trajectory.
-const SOURCE_LABELS: Readonly<Record<PlannerEphemerisProvenance['source'], string>> = { spk: 'SPK kernels', horizons: 'JPL Horizons', kepler: 'Approximate orbital elements (two-body)' }
+const SOURCE_LABELS: Readonly<Record<PlannerEphemerisProvenance['source'], string>> = { spk: 'SPK kernels', horizons: 'JPL Horizons', analytical: 'Approximate orbital elements (two-body)' }
 
-// Why the approximate orbital elements were used.
-const FALLBACK_LABELS: Readonly<Record<NonNullable<PlannerEphemerisProvenance['fallbackReason']>, string>> = { offline: 'The ephemeris sources are offline, so JPL is not asked.', timeout: 'JPL Horizons did not answer in time.', network: 'JPL Horizons could not be reached.' }
+// Short name of each source tried before the one used.
+const ATTEMPT_LABELS: Readonly<Record<PlannerEphemerisProvenance['source'], string>> = { spk: 'SPK kernels', horizons: 'JPL Horizons', analytical: 'Orbital elements' }
 
 // Julian date of the Unix epoch, to show a TDB Julian date as a calendar date (the TDB-UTC offset of about a minute is
 // below the precision shown).
@@ -200,7 +201,7 @@ function MinorBodyDetails({ analysis, cursor, timeZone }: { readonly analysis: T
 			) : (
 				<p className="m-0 text-sm text-ink-300">No source gives this body's trajectory over the night, so nothing is known of its visibility.</p>
 			)}
-			{ephemeris?.fallbackReason && <p className="m-0 text-xs text-warning">{FALLBACK_LABELS[ephemeris.fallbackReason]}</p>}
+			{ephemeris && ephemeris.attempts.length > 0 && <p className="m-0 text-xs text-ink-300">{`Tried before: ${ephemeris.attempts.map((attempt) => `${ATTEMPT_LABELS[attempt.source]} (${EPHEMERIS_SKIP_REASONS[attempt.reason]})`).join('; ')}.`}</p>}
 			{ephemeris?.approximate && <Notice>A two-body orbit ignores the planets' pull: its error grows with the age of the elements and near the planets. Enable an SPK kernel of the body, or allow JPL, for an accurate trajectory.</Notice>}
 			<Notice>Positions are geometric and topocentric, without light-time. Magnitudes are estimates from published photometry; comets often differ.</Notice>
 		</section>

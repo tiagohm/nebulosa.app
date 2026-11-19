@@ -305,7 +305,7 @@ describe('minor bodies', () => {
 		sbdb.set(VESTA.spkId, vesta)
 		const request = new Request('http://localhost/api/observing-planner/analyze', { method: 'POST', body: JSON.stringify({ target: VESTA, site: SAO_PAULO, eveningDate: '2026-01-15', constraints: OBSERVING_PRESETS.visual } satisfies TargetAnalysisRequest) })
 		const analysis = (await (await routes['/api/observing-planner/analyze'].POST(request as never)).json()) as TargetAnalysis
-		expect(analysis).toMatchObject({ target: VESTA, name: '4 Vesta (A807 FA)', typeName: 'Main-belt Asteroid', ephemeris: { source: 'kepler', approximate: true, fallbackReason: 'offline' } })
+		expect(analysis).toMatchObject({ target: VESTA, name: '4 Vesta (A807 FA)', typeName: 'Main-belt Asteroid', ephemeris: { source: 'analytical', mode: 'fast', approximate: true } })
 		expect(['observable', 'limitedDuration', 'notObservable']).toContain(analysis.status)
 		expect(analysis.samples.every((e) => e.distance! > 1 && e.magnitude !== undefined)).toBe(true)
 		expectFinite(analysis)

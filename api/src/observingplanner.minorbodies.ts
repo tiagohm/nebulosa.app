@@ -1,22 +1,25 @@
 import { vector as horizonsVector } from 'nebulosa/src/adapters/ephemeris/horizons'
+import type { SpkKernelSet } from 'nebulosa/src/astronomy/ephemeris/kernels/spk.kernelset'
 import * as vsop from 'nebulosa/src/astronomy/ephemeris/models/analytical/vsop87e'
+import type { KeplerOrbit } from 'nebulosa/src/astronomy/orbits/asteroid'
 import { timeUnix } from 'nebulosa/src/astronomy/time/time'
 import { ASEC2RAD, DEG2RAD } from 'nebulosa/src/core/constants'
 import { type Vec3, vecAngle } from 'nebulosa/src/math/linear-algebra/vec3'
+import { computeEphemeris, EphemerisKernelMiss, EphemerisUnavailableError, HorizonsCircuitBreaker, snapshotKernels } from './ephemeris.chain'
 import { LruCache } from './lrucache'
 import { type ObservingReasonCode, type ObservingTargetRef, type PlannerEphemerisProvenance, type PlanningNight, type ResolvedTarget, SEARCH_STEP_DAYS } from './observingplanner.astronomy'
 import type { ObservingMinorBodyStore, SavedMinorBody } from './observingplanner.minorbodies.store'
 import { keplerOrbit, type MinorBodyElements, minorBodyMagnitude } from './sky/ephemeris'
 import type { MinorBodies } from './sky/minorbodies'
 import type { SpiceKernelSnapshot } from './spicekernels.runtime'
-import { SsdBusyError, type SsdRequestQueue, SsdThrottledError } from './ssd'
+import type { SsdRequestQueue } from './ssd'
 
 // Trajectories of asteroids and comets for the Observing Planner: one source prepared for a whole night, before the
-// synchronous analysis evaluates it. The source follows the offline switch of the ephemeris sources: the SPK kernels
-// when they cover the body and the Earth at every node of the night; then, online, a geometric vector table of JPL
-// Horizons, and the two-body Kepler model of the SBDB elements when Horizons fails; offline, the Kepler model of
-// elements already read (in memory or saved with a plan). A source covers the whole night or none of it: nodes of two
-// sources are never mixed.
+// synchronous analysis evaluates it, over the fast ephemeris chain (ephemeris.chain.ts): the SPK kernels when they cover
+// the body and the Earth at every node of the night, then the two-body Kepler model of the body's osculating elements
+// (from SBDB, in memory or saved with a plan), then a geometric vector table of JPL Horizons. Online, SBDB is asked once
+// for a body not yet known, for its name, type, photometry, and elements; offline, neither SBDB nor Horizons is asked. A
+// source covers the whole night or none of it: nodes of two sources are never mixed.
 //
 // A trajectory is a grid of geometric geocentric ICRS vectors (AU, no light-time, like the planets of the planner),
 // materialized when it is prepared, so evaluating it never reads a kernel, asks JPL, or queries the database, and a
@@ -61,7 +64,7 @@ export type MinorBodyTarget = Extract<ObservingTargetRef, { kind: 'minorBody' }>
 export type HorizonsVectors = typeof horizonsVector
 
 // Why a minor body has no trajectory over the night.
-export type MinorBodyUnavailableReason = Extract<ObservingReasonCode, 'orbitalSolutionUnavailable' | 'kernelCoverageUnavailable' | 'ephemerisOffline' | 'ephemerisSourceUnavailable' | 'trajectoryResolutionExceeded'>
+export type MinorBodyUnavailableReason = Extract<ObservingReasonCode, 'orbitalSolutionUnavailable' | 'ephemerisOffline' | 'ephemerisSourceUnavailable' | 'trajectoryResolutionExceeded'>
 
 // Outcome of preparing a minor body for a night: its trajectory ready to analyze with the identity of its source, a body
 // SBDB does not know, or a known body without a trajectory, with its name and type when known.
@@ -91,11 +94,27 @@ interface NodeGrid {
 // Geocentric ICRS vectors of a grid, in AU, x, y, z of each node in turn.
 type Nodes = Float64Array
 
-// A kernel set does not cover a node of the body or the Earth.
-class SpkNodesMiss extends Error {}
+// Nodes of a source on a grid.
+interface Trajectory {
+	readonly grid: NodeGrid
+	readonly nodes: Nodes
+}
 
-// A kernel of the set could not be read: the kernels are broken, which is reported rather than replaced by another source.
-class SpkReadFailure extends Error {}
+// What one source of the chain gives a night: its trajectory (undefined when even the fine grid cannot follow the body)
+// and what its provenance tells of it.
+interface SourceTrajectory {
+	readonly trajectory?: Trajectory
+	// Kernels the nodes came from, for the SPK source.
+	readonly kernelIds?: ReadonlySet<string>
+	// Elements of the Kepler model, for the analytical source.
+	readonly elements?: KnownMinorBody
+}
+
+// Horizons answered a table without every node; a failure of the source, as a network one is, so the chain goes on.
+class HorizonsTableIncomplete extends Error {
+	// Marks the failure transient for the chain (see horizonsFailureReason).
+	readonly code = 'HORIZONS_TABLE_INCOMPLETE'
+}
 
 // What is known of a body: its name, type, and elements with their solution.
 interface KnownMinorBody {
@@ -178,35 +197,17 @@ function searchStepOf(rate: number) {
 	return step >= MINIMUM_SEARCH_STEP_MS ? step : undefined
 }
 
-// Why a failed Horizons request fell back to the Kepler model: the JPL queue refused or the request ran out of time, or
-// Horizons could not be reached or answered without the table.
-function fallbackReasonOf(error: unknown): 'timeout' | 'network' {
-	if (error instanceof SsdBusyError || error instanceof SsdThrottledError) return 'timeout'
-	return error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError') ? 'timeout' : 'network'
-}
-
 // Geocentric vectors of a grid from the SPK kernels: the body minus the Earth, both resolved to the barycenter at every
-// node, and the kernels used. Throws SpkNodesMiss when a node is not covered and SpkReadFailure when a kernel cannot be
-// read.
-function spkNodes(snapshot: SpiceKernelSnapshot, code: number, grid: NodeGrid, kernels: Set<string>): Nodes {
-	const set = snapshot.set
-	if (!set?.bodies.has(code)) throw new SpkNodesMiss(`no kernel has the body ${code}`)
+// node, adding the kernels used. Throws EphemerisKernelMiss when a node is not covered.
+function spkNodes(set: SpkKernelSet, code: number, grid: NodeGrid, kernels: Set<string>): Nodes {
 	const nodes = new Float64Array(3 * grid.count)
 
 	for (let i = 0; i < grid.count; i++) {
 		const time = timeUnix((grid.start + i * grid.spacing) / 1000, true)
-		let body: ReturnType<typeof set.stateAt>
-		let earth: ReturnType<typeof set.stateAt>
-
-		try {
-			body = set.stateAt(code, time)
-			earth = set.stateAt(399, time)
-		} catch (error) {
-			throw new SpkReadFailure(`a kernel could not be read: ${Error.isError(error) ? error.message : String(error)}`, { cause: error })
-		}
-
-		if (!body.ok) throw new SpkNodesMiss(`the kernels do not cover ${body.body} (${body.reason})`)
-		if (!earth.ok) throw new SpkNodesMiss(`the kernels do not cover ${earth.body} (${earth.reason})`)
+		const body = set.stateAt(code, time)
+		const earth = set.stateAt(399, time)
+		if (!body.ok) throw new EphemerisKernelMiss(code, body.body, body.reason, time)
+		if (!earth.ok) throw new EphemerisKernelMiss(code, earth.body, earth.reason, time)
 		for (const id of body.kernels) kernels.add(id)
 		for (const id of earth.kernels) kernels.add(id)
 		for (let k = 0; k < 3; k++) nodes[3 * i + k] = body.state[0][k] - earth.state[0][k]
@@ -231,20 +232,48 @@ function sunGeocentric(night: PlanningNight): (time: number) => Vec3 {
 	return interpolate(nodes, grid)
 }
 
+// Geocentric vectors of a grid from a Kepler orbit: its heliocentric position plus the geocentric Sun.
+function keplerNodes(orbit: KeplerOrbit, sun: (time: number) => Vec3, grid: NodeGrid): Nodes {
+	const nodes = new Float64Array(3 * grid.count)
+
+	for (let i = 0; i < grid.count; i++) {
+		const time = grid.start + i * grid.spacing
+		const heliocentric = orbit.at(timeUnix(time / 1000, true))[0]
+		const center = sun(time)
+		for (let k = 0; k < 3; k++) nodes[3 * i + k] = heliocentric[k] + center[k]
+	}
+
+	return nodes
+}
+
+// Nodes of a source on the coarse grid of a night, or on the fine one when the coarse interpolation errs beyond the
+// tolerance; undefined when the fine one does too.
+function refined(night: PlanningNight, nodesOf: (grid: NodeGrid) => Nodes): Trajectory | undefined {
+	for (const spacing of [COARSE_NODE_MS, FINE_NODE_MS]) {
+		const grid = gridOf(night, spacing)
+		const nodes = nodesOf(grid)
+		if (interpolationError(nodes, grid.count) <= INTERPOLATION_TOLERANCE) return { grid, nodes }
+	}
+
+	return undefined
+}
+
 // Prepares the trajectories of minor bodies over the nights of the planner, with a cache of the prepared ones.
 export class MinorBodyTrajectories {
 	readonly #vectors: HorizonsVectors
 	readonly #cache = new LruCache<MinorBodyPreparation>(TRAJECTORY_CACHE_LIMIT)
+	// Circuit breaker of the Horizons vector tables.
+	readonly #breaker = new HorizonsCircuitBreaker()
 
 	// Creates the service over its dependencies.
 	constructor(readonly options: MinorBodyTrajectoriesOptions) {
 		this.#vectors = options.vectors ?? horizonsVector
 	}
 
-	// Prepares a minor body for a night by the kernels and the offline switch, read once. A trajectory is cached by the
-	// body, the night, the kernel generation and the offline switch, and the answers of SBDB it may use; a Kepler
-	// trajectory that replaced a failed Horizons request is not, so Horizons is asked again next time. Rejects only when
-	// `signal` aborts.
+	// Prepares a minor body for a night over the fast ephemeris chain, with the kernels and the offline switch read once. A
+	// trajectory is cached by the body, the night, the kernel generation and the offline switch, and the answers of SBDB it
+	// may use; a body without a trajectory is not, so its sources are tried again next time. Rejects only when `signal`
+	// aborts.
 	async prepare(target: MinorBodyTarget, night: PlanningNight, signal?: AbortSignal): Promise<MinorBodyPreparation> {
 		const snapshot = this.options.kernels.current()
 		const saved = this.options.store.get(target.spkId)
@@ -254,102 +283,74 @@ export class MinorBodyTrajectories {
 		if (hit) return hit
 
 		const preparation = await this.#prepare(target, night, snapshot, saved, cached, signal)
-		const fallback = preparation.kind === 'prepared' && (preparation.target.ephemeris!.fallbackReason === 'timeout' || preparation.target.ephemeris!.fallbackReason === 'network')
-		if (preparation.kind === 'prepared' && !fallback) this.#cache.set(key, preparation)
+		if (preparation.kind === 'prepared') this.#cache.set(key, preparation)
 		return preparation
 	}
 
-	// Prepares a minor body as prepare() describes, without the cache.
+	// Prepares a minor body as prepare() describes, without the cache: the body is first known from what SBDB answered
+	// (asked now when online and nothing is known), then the chain gives its trajectory.
 	async #prepare(target: MinorBodyTarget, night: PlanningNight, snapshot: SpiceKernelSnapshot, saved: SavedMinorBody | undefined, cached: SavedMinorBody | undefined, signal?: AbortSignal): Promise<MinorBodyPreparation> {
 		let known = knownOf(cached ?? saved)
+		// Whether SBDB answered that it does not know the body, so Horizons is not asked either.
+		let unresolved = false
 
-		if (snapshot.set) {
-			const kernels = new Set<string>()
-
+		if (!known && !snapshot.offline) {
 			try {
-				const grid = (spacing: number) => {
-					const nodes = gridOf(night, spacing)
-					return { grid: nodes, nodes: spkNodes(snapshot, Number(target.spkId), nodes, kernels) }
-				}
-
-				const trajectory = await this.#refined(grid)
-				if (!known && !snapshot.offline) known = await this.#lookup(target, signal)
-				return this.#prepared(target, night, known, trajectory, { source: 'spk', approximate: false, kernels: { generation: snapshot.generation, kernelIds: [...kernels] } })
+				const resolved = await this.options.minorBodies.body(target.spkId, signal)
+				if (resolved) known = knownOf(resolved)
+				else unresolved = true
 			} catch (error) {
-				if (error instanceof SpkReadFailure) return this.#unavailable('kernelCoverageUnavailable', known)
-				if (!(error instanceof SpkNodesMiss)) throw error
+				if (signal?.aborted) throw error
 			}
 		}
 
-		if (snapshot.offline) {
-			if (!known) return this.#unavailable('ephemerisOffline', known)
-			return this.#kepler(target, night, known, 'offline')
-		}
-
-		let resolved: SavedMinorBody | undefined
+		const code = Number(target.spkId)
+		const orbit = known?.elements && keplerOrbit(known.elements)
 
 		try {
-			resolved = await this.options.minorBodies.body(target.spkId, signal)
-			if (!resolved) return { kind: 'unresolved' }
-			known = knownOf(resolved)
-		} catch (error) {
-			if (signal?.aborted) throw error
-		}
+			const { results, provenance } = await computeEphemeris<SourceTrajectory, SourceTrajectory>({
+				kernels: snapshotKernels(snapshot),
+				mode: 'fast',
+				signal,
+				breaker: this.#breaker,
+				sources: {
+					bodies: [
+						{ name: target.spkId, naif: code },
+						{ name: '399', naif: 399, dependency: true },
+					],
+					spk: (set) => {
+						const kernelIds = new Set<string>()
+						return { trajectory: refined(night, (grid) => spkNodes(set, code, grid, kernelIds)), kernelIds }
+					},
+					analytical: () => {
+						if (!orbit) return undefined
+						const sun = sunGeocentric(night)
+						return { trajectory: refined(night, (grid) => keplerNodes(orbit, sun, grid)), elements: known }
+					},
+					...(!unresolved && { horizons: async (horizonsSignal) => ({ trajectory: await this.#horizonsTrajectory(target.spkId, night, horizonsSignal) }) }),
+					kernelsOf: (source) => [...(source.kernelIds ?? [])],
+				},
+				compute: (source) => source,
+			})
 
-		try {
-			const grid = async (spacing: number) => {
-				const nodes = gridOf(night, spacing)
-				return { grid: nodes, nodes: await this.#horizonsNodes(target.spkId, nodes, signal) }
-			}
-
-			return this.#prepared(target, night, known, await this.#refined(grid), { source: 'horizons', approximate: false })
+			const { trajectory, elements } = results[0]
+			const orbitOf = elements && { orbitEpoch: elements.elements?.epoch, solutionDate: elements.solutionDate, elementsFetchedAt: elements.fetchedAt }
+			return this.#prepared(target, night, known, trajectory, { source: provenance.source, mode: provenance.mode, attempts: provenance.attempts, approximate: provenance.source === 'analytical', ...(provenance.kernels && { kernels: provenance.kernels }), ...orbitOf })
 		} catch (error) {
-			if (signal?.aborted) throw error
-			if (!known) return this.#unavailable('ephemerisSourceUnavailable', known)
-			return this.#kepler(target, night, known, fallbackReasonOf(error))
+			if (!(error instanceof EphemerisUnavailableError)) throw error
+			if (unresolved) return { kind: 'unresolved' }
+			if (known && !orbit) return this.#unavailable('orbitalSolutionUnavailable', known)
+			return this.#unavailable(error.code === 'offline' ? 'ephemerisOffline' : 'ephemerisSourceUnavailable', known)
 		}
 	}
 
-	// What SBDB answers for a body, for its name, type, and photometry; undefined when it does not know it or cannot be
-	// reached. Rejects only when `signal` aborts.
-	async #lookup(target: MinorBodyTarget, signal?: AbortSignal) {
-		try {
-			return knownOf(await this.options.minorBodies.body(target.spkId, signal))
-		} catch (error) {
-			if (signal?.aborted) throw error
-			return undefined
-		}
-	}
-
-	// Kepler trajectory of the elements of a known body, approximate, stating why it was used.
-	async #kepler(target: MinorBodyTarget, night: PlanningNight, known: KnownMinorBody, fallbackReason: PlannerEphemerisProvenance['fallbackReason']): Promise<MinorBodyPreparation> {
-		const orbit = known.elements && keplerOrbit(known.elements)
-		if (!orbit) return this.#unavailable('orbitalSolutionUnavailable', known)
-		const sun = sunGeocentric(night)
-
-		const grid = (spacing: number) => {
-			const nodes = gridOf(night, spacing)
-			const vectors = new Float64Array(3 * nodes.count)
-
-			for (let i = 0; i < nodes.count; i++) {
-				const time = nodes.start + i * nodes.spacing
-				const heliocentric = orbit.at(timeUnix(time / 1000, true))[0]
-				const center = sun(time)
-				for (let k = 0; k < 3; k++) vectors[3 * i + k] = heliocentric[k] + center[k]
-			}
-
-			return { grid: nodes, nodes: vectors }
-		}
-
-		return this.#prepared(target, night, known, await this.#refined(grid), { source: 'kepler', approximate: true, fallbackReason, orbitEpoch: known.elements?.epoch, solutionDate: known.solutionDate, elementsFetchedAt: known.fetchedAt })
-	}
-
-	// Nodes of a source on the coarse grid, or on the fine one when the coarse interpolation errs beyond the tolerance;
-	// undefined when the fine one does too.
-	async #refined(nodesOf: (spacing: number) => { readonly grid: NodeGrid; readonly nodes: Nodes } | Promise<{ readonly grid: NodeGrid; readonly nodes: Nodes }>) {
+	// Trajectory of a body from Horizons vector tables: the coarse grid, and the fine one when the coarse interpolation
+	// errs beyond the tolerance; undefined when the fine one does too.
+	async #horizonsTrajectory(spkId: string, night: PlanningNight, signal?: AbortSignal): Promise<Trajectory | undefined> {
 		for (const spacing of [COARSE_NODE_MS, FINE_NODE_MS]) {
-			const trajectory = await nodesOf(spacing)
-			if (interpolationError(trajectory.nodes, trajectory.grid.count) <= INTERPOLATION_TOLERANCE) return trajectory
+			const grid = gridOf(night, spacing)
+			const nodes = await this.#horizonsNodes(spkId, grid, signal)
+			if (interpolationError(nodes, grid.count) <= INTERPOLATION_TOLERANCE) return { grid, nodes }
 		}
 
 		return undefined
@@ -357,7 +358,7 @@ export class MinorBodyTrajectories {
 
 	// Trajectory ready to analyze from its nodes and its source, with the search step its motion needs; unavailable when
 	// the nodes or the step cannot follow the body.
-	#prepared(target: MinorBodyTarget, night: PlanningNight, known: KnownMinorBody | undefined, trajectory: { readonly grid: NodeGrid; readonly nodes: Nodes } | undefined, source: Omit<PlannerEphemerisProvenance, 'nodeSpacingMs' | 'searchStepMs'>): MinorBodyPreparation {
+	#prepared(target: MinorBodyTarget, night: PlanningNight, known: KnownMinorBody | undefined, trajectory: Trajectory | undefined, source: Omit<PlannerEphemerisProvenance, 'nodeSpacingMs' | 'searchStepMs'>): MinorBodyPreparation {
 		if (!trajectory) return this.#unavailable('trajectoryResolutionExceeded', known)
 		const directionAt = night.topocentric(interpolate(trajectory.nodes, trajectory.grid))
 		const motion = highestRate(night, directionAt, trajectory.grid)
@@ -377,13 +378,14 @@ export class MinorBodyTrajectories {
 	}
 
 	// Geocentric vectors of a grid from a Horizons vector table (geometric, ICRF equator, centered on the Earth), asked in a
-	// turn of the JPL queue and shared with identical requests. Rejects when the table does not cover every node.
+	// turn of the JPL queue and shared with identical requests. Rejects with HorizonsTableIncomplete when the table does
+	// not cover every node.
 	async #horizonsNodes(spkId: string, grid: NodeGrid, signal?: AbortSignal): Promise<Nodes> {
 		const { queue } = this.options
 		const end = grid.start + (grid.count - 1) * grid.spacing
 		const options = { stepSize: grid.spacing / 60_000, stepSizeUnit: 'm', referencePlane: 'FRAME', vectorCorrection: 'NONE', outputUnits: 'AU-D', headers: queue.headers } as const
 		const rows = await queue.run((taskSignal) => this.#vectors(`DES=${spkId};`, '500@399', false, grid.start, end, options, taskSignal), { timeoutMs: HORIZONS_VECTORS_TIMEOUT_MS, signal, key: `horizons:vectors:${spkId}:${grid.start}:${grid.spacing}:${grid.count}` })
-		if (rows.length < grid.count) throw new Error(`Horizons answered ${rows.length} of ${grid.count} vectors`)
+		if (rows.length < grid.count) throw new HorizonsTableIncomplete(`Horizons answered ${rows.length} of ${grid.count} vectors`)
 		const nodes = new Float64Array(3 * grid.count)
 
 		for (let i = 0; i < grid.count; i++) {

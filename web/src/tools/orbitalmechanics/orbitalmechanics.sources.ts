@@ -80,7 +80,6 @@ async function resolve(state: OrbitalMechanicsState, request: OrbitResolveReques
 	const { lookup } = state
 	lookup.loading = true
 	lookup.error = undefined
-	lookup.offerOnline = false
 	lookup.kernelProblem = false
 	lookup.matches = undefined
 	lookup.pending = undefined
@@ -96,19 +95,17 @@ async function resolve(state: OrbitalMechanicsState, request: OrbitResolveReques
 	} catch (error) {
 		if (!guard.current()) return
 		lookup.error = error instanceof Error ? error.message : String(error)
-		// An offline lookup the server could not answer from the bodies it read recently is a 404; JPL may know it.
-		lookup.offerOnline = request.kind === 'minorBody' && !request.online && error instanceof ApiResponseError && error.status === 404
 		lookup.kernelProblem = request.kind === 'spk' && error instanceof ApiResponseError && error.status !== 404
 	}
 
 	lookup.loading = false
 }
 
-// Looks a minor body up by SPK-ID, designation, or name: from the bodies the server read recently, or from JPL when
-// `online` allows it.
-export function resolveMinorBody(state: OrbitalMechanicsState, query: string, online: boolean, io: OrbitalMechanicsIo = browserIo) {
+// Looks a minor body up by SPK-ID, designation, or name: from JPL, or only from the bodies the server read recently while
+// its ephemeris sources are offline.
+export function resolveMinorBody(state: OrbitalMechanicsState, query: string, io: OrbitalMechanicsIo = browserIo) {
 	state.lookup.query = query
-	return resolve(state, { kind: 'minorBody', query, online }, io)
+	return resolve(state, { kind: 'minorBody', query }, io)
 }
 
 // Reads the osculating state of an SPK target (NAIF ID) about a center (NAIF ID) at an instant (Julian date TDB) from the
@@ -155,15 +152,14 @@ export function exploreMinorBody(target: { readonly spkId: string; readonly name
 	navigate(handoff.route, { workspace: 'tools', tool: 'orbital-mechanics-explorer' }, handoff.history)
 }
 
-// Resolves the minor body handed over, once the reference is read, from the bodies the server read recently, and shows
-// its orbit in place of the scene; when only JPL can answer, opens the lookups so the operator can ask it. Does nothing
-// without a body handed over.
+// Resolves the minor body handed over, once the reference is read, and shows its orbit in place of the scene; when it
+// cannot be resolved, opens the lookups with the reason. Does nothing without a body handed over.
 export async function consumePendingTarget(state: OrbitalMechanicsState, io: OrbitalMechanicsIo = browserIo, sections = collapsibleSections) {
 	const target = state.pendingTarget
 	if (!target || !state.reference) return
 	state.pendingTarget = undefined
 	state.lookup.query = target.spkId
-	await resolve(state, { kind: 'minorBody', query: target.spkId, online: false }, io, true)
+	await resolve(state, { kind: 'minorBody', query: target.spkId }, io, true)
 	if (state.lookup.error) setSectionOpen(sections, SOURCES_SECTION, true)
 }
 

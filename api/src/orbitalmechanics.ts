@@ -33,7 +33,7 @@ const NEAR_PARABOLIC = 1e-3
 
 // Stable codes of the orbital mechanics errors.
 // - degenerateOrbit, outOfRange, solverFailed (422): outcomes of the two-body model.
-// - objectNotFound (404): SBDB knows no such body; notCached (404): an offline lookup found no body read recently.
+// - objectNotFound (404): SBDB knows no such body; notCached (404): offline, no body read recently matches.
 // - orbitSolutionUnavailable (422): SBDB publishes no usable elements; unsupportedFrame (422): they are not J2000.
 // - centerUnavailable (422): the center has no trustworthy gravitational parameter.
 // - kernelMissing, kernelCoverageUnavailable, unsupportedKernel (422), kernelReadFailed (503): the installed SPICE kernels
@@ -349,10 +349,10 @@ export type OrbitSourcePayload =
 			readonly kernels: readonly string[]
 	  }
 
-// Request of POST /api/orbital-mechanics/resolve: a minor body by SPK-ID, designation, or name, read only from the
-// bodies resolved recently unless `online` allows asking SBDB; or the osculating state of an SPK target about a center at
-// an instant from the installed SPICE kernels.
-export type OrbitResolveRequest = { readonly kind: 'minorBody'; readonly query: string; readonly online: boolean } | { readonly kind: 'spk'; readonly target: number; readonly center: number; readonly epoch: number }
+// Request of POST /api/orbital-mechanics/resolve: a minor body by SPK-ID, designation, or name, from SBDB, or only from
+// the bodies resolved recently while the ephemeris sources are offline; or the osculating state of an SPK target about a
+// center at an instant from the installed SPICE kernels.
+export type OrbitResolveRequest = { readonly kind: 'minorBody'; readonly query: string } | { readonly kind: 'spk'; readonly target: number; readonly center: number; readonly epoch: number }
 
 // Answer of a resolve: the orbit, or the candidates of an ambiguous name to choose from.
 export type OrbitResolveResponse =
@@ -499,19 +499,20 @@ export class OrbitalMechanicsService {
 
 	// The orbit of a real object: a minor body's published SBDB solution, or an SPK target's osculating state.
 	async resolve(request: OrbitResolveRequest, signal?: AbortSignal): Promise<OrbitResolveResponse> {
-		return request.kind === 'spk' ? this.#spkState(request.target, request.center, request.epoch) : await this.#minorBody(request.query.trim(), request.online, signal)
+		return request.kind === 'spk' ? this.#spkState(request.target, request.center, request.epoch) : await this.#minorBody(request.query.trim(), signal)
 	}
 
-	// The SBDB orbit of a minor body, as heliocentric J2000 ecliptic elements with the Sun's DE440 GM.
-	async #minorBody(query: string, online: boolean, signal?: AbortSignal): Promise<OrbitResolveResponse> {
+	// The SBDB orbit of a minor body, as heliocentric J2000 ecliptic elements with the Sun's DE440 GM; offline (the switch of
+	// the ephemeris sources), only from the bodies read recently, by SPK-ID, never asking JPL.
+	async #minorBody(query: string, signal?: AbortSignal): Promise<OrbitResolveResponse> {
 		const bodies = this.#minorBodies!
 		// An SPK-ID of a small body has at least seven digits; anything else is a designation or a name.
 		const spkId = /^\d{7,}$/.test(query) ? query : undefined
 		let resolved: ResolvedMinorBody | undefined
 
-		if (!online) {
+		if (this.#kernels?.current().offline) {
 			resolved = spkId === undefined ? undefined : bodies.cached(spkId)
-			if (!resolved) throw new OrbitModelError('notCached', `${query} was not looked up recently, so it needs JPL`, 404)
+			if (!resolved) throw new OrbitModelError('notCached', `${query} was not looked up recently, and the ephemeris sources are offline`, 404)
 		} else if (spkId !== undefined) {
 			resolved = await bodies.body(spkId, signal)
 		} else {

@@ -271,6 +271,14 @@ export class MinorBodies {
 	// the cache of the bodies. A close-approach row names a body exactly, so this never searches names. Rejects with
 	// SbdbUnavailableError when SBDB times out or cannot be reached, and with SmallBodyResponseError for a format of
 	// another major version.
+	// Details of an object already read, by its exact designation, whatever their age; undefined when none is in memory.
+	// Never asks SBDB, for the callers whose ephemeris sources are offline.
+	cachedDetails(designation: string): MinorBodyDetailsResponse | undefined {
+		const spkId = this.#designations.get(designation)
+		const cached = spkId === undefined ? undefined : this.#bodies.get(spkId)
+		return cached && { kind: 'found', body: cached.body, details: detailsOf(cached.found, cached.fetchedAt) }
+	}
+
 	async details(designation: string, signal?: AbortSignal): Promise<MinorBodyDetailsResponse> {
 		const spkId = this.#designations.get(designation)
 		const cached = spkId === undefined ? undefined : this.#bodies.get(spkId)

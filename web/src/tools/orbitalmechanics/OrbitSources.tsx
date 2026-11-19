@@ -29,18 +29,20 @@ export function OrbitSources() {
 		<CollapsibleSection id="orbitalmechanics.sources" title="Real Objects" summary={lookup.loading ? 'Looking up…' : undefined} defaultOpen={false}>
 			<TextInput label="Minor body (SPK-ID, designation, or name)" value={lookup.query} onChange={(e) => (orbitalMechanicsState.lookup.query = e.target.value)} placeholder="20099942, 1P, Apophis" />
 			<Actions>
-				<Button variant="secondary" disabled={!query || lookup.loading} title="Reads only the bodies the server looked up recently, by SPK-ID; never asks JPL." onClick={() => void resolveMinorBody(orbitalMechanicsState, query, false)}>
-					Find
-				</Button>
-				<Button variant="secondary" disabled={!query || lookup.loading} title="Asks the JPL Small-Body Database for the published orbit solution." onClick={() => void resolveMinorBody(orbitalMechanicsState, query, true)}>
-					Look up on JPL
+				<Button
+					variant="secondary"
+					disabled={!query || lookup.loading}
+					title="Asks the JPL Small-Body Database for the published orbit solution; while the ephemeris sources are offline, reads only the bodies the server looked up recently, by SPK-ID."
+					onClick={() => void resolveMinorBody(orbitalMechanicsState, query)}
+				>
+					Look Up
 				</Button>
 			</Actions>
 			{lookup.matches && (
 				<div className="flex flex-col gap-1">
 					<span className="text-xs text-ink-300">Several bodies match; choose one:</span>
 					{lookup.matches.map((e) => (
-						<Button key={e.designation} variant="ghost" className="justify-start" onClick={() => void resolveMinorBody(orbitalMechanicsState, e.designation, true)}>
+						<Button key={e.designation} variant="ghost" className="justify-start" onClick={() => void resolveMinorBody(orbitalMechanicsState, e.designation)}>
 							{e.name}
 						</Button>
 					))}
@@ -59,13 +61,6 @@ export function OrbitSources() {
 			</div>
 
 			{lookup.error && <Notice error>{lookup.error}</Notice>}
-			{lookup.offerOnline && (
-				<Actions>
-					<Button variant="secondary" onClick={() => void resolveMinorBody(orbitalMechanicsState, query, true)}>
-						Look up on JPL
-					</Button>
-				</Actions>
-			)}
 			{lookup.kernelProblem && (
 				<Actions>
 					<Button variant="ghost" onClick={() => navigate(routeState, { workspace: 'tools', tool: 'spice-kernel-library' })}>

@@ -131,6 +131,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   It shares the cache of `MinorBodies`, fresh for an hour here while the Sky keeps a body as long as it stays cached.
   `GET /api/close-approaches/objects/:spkId/approaches` pages the encounters of one body with CAD's `spk` selector.
   Pages stay cached for 5 minutes (64 pages, successes only) and `refresh=true` reads one again.
+  While the offline switch of the [Ephemeris Chain](ephemeris-chain.md) is on, nothing asks JPL: a page or an object already read is answered whatever its age (`refresh` included), and any other is `503 offline`.
   The tool checks the filters, so the routes take them as valid;
   `400` from CAD is `502 rejected`, another major format `502 upstreamSchemaChanged`, an unreadable table `502 invalidResponse`, a 429, a 503, or a paused queue `503 rateLimited` with `retryAfter` in milliseconds, and any other failure `503 serviceUnavailable`.
   Virtual impactors are Sentry's as published through SBDB, an empty list says only that SBDB lists none, and nothing here computes or infers an impact probability.

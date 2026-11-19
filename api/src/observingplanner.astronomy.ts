@@ -15,6 +15,7 @@ import { greenwichApparentSiderealTime, precessionNutationMatrix, type Time, typ
 import { DEG2RAD, J2000, TAU } from 'nebulosa/src/core/constants'
 import { type Vec3, vecAngle, vecLength } from 'nebulosa/src/math/linear-algebra/vec3'
 import type { AstroWeatherNight, AstroWeatherNightRequest } from './astroweather.night'
+import type { EphemerisAttempt, EphemerisMode, EphemerisSourceKind } from './ephemeris.chain'
 import { solarSystemBody } from './sky/bodies'
 import { catalogObject } from './sky/catalog'
 import { bodyModel, geocentricInterpolation, geographic, type SkyObserver } from './sky/ephemeris'
@@ -150,8 +151,6 @@ export type ObservingReasonCode =
 	| 'unresolvedTarget'
 	// No usable orbital elements of the minor body are known (none published, or a model the local propagator lacks).
 	| 'orbitalSolutionUnavailable'
-	// An SPK kernel that covers the body could not be read.
-	| 'kernelCoverageUnavailable'
 	// The ephemeris sources are offline, so JPL is not asked, and no kernel or saved orbital elements cover the body.
 	| 'ephemerisOffline'
 	// SBDB and Horizons could not be reached or did not answer, and no kernel or orbital elements cover the body.
@@ -219,19 +218,16 @@ export interface ObservingSample {
 	readonly magnitude?: number
 }
 
-// Provider of the trajectory of a minor body over a night.
-export type PlannerEphemerisSource = 'spk' | 'horizons' | 'kepler'
-
 // Where the trajectory of a minor body came from, and how far it can be trusted. One source covers the whole night.
 export interface PlannerEphemerisProvenance {
-	// Provider: the SPK kernels of the SPICE Kernel Library, a geometric vector table of JPL Horizons, or a two-body
-	// Kepler propagation of osculating elements.
-	readonly source: PlannerEphemerisSource
+	// Provider of the fast ephemeris chain: the SPK kernels of the SPICE Kernel Library, a two-body Kepler propagation of
+	// osculating elements (analytical), or a geometric vector table of JPL Horizons.
+	readonly source: EphemerisSourceKind
+	readonly mode: EphemerisMode
+	// Sources of the chain tried before, with why each did not give the trajectory.
+	readonly attempts: readonly EphemerisAttempt[]
 	// Whether the source is an approximation (the Kepler model ignores planetary perturbations).
 	readonly approximate: boolean
-	// Why the Kepler model was used instead of Horizons: Horizons timed out or could not be reached, or the ephemeris
-	// sources are offline.
-	readonly fallbackReason?: 'timeout' | 'network' | 'offline'
 	// Generation of the kernel set and the kernels used, for the SPK source.
 	readonly kernels?: { readonly generation: number; readonly kernelIds: readonly string[] }
 	// Epoch of the osculating elements, Julian date (TDB), for the Kepler source.

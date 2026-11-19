@@ -27,4 +27,6 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
     - Mount slews (`MountCommands.slew`): accurate, with the `source` and `attempts` in `MountSlewResponse`.
     - Jupiter, Saturn, and Planetary Events (`withSatelliteSource` of `api/src/planetary.source.ts`): fast, kernels then theories, with their own `PlanetarySource` shape (`fallbackReason` is the kernels' attempt).
     - Solar and lunar eclipses (`eclipseEphemeris` of `api/src/eclipses.ts`): fast, kernels then theories, with the provenance in the map and local answers.
-    - The minor bodies of the Observing Planner keep a chain of their own (see [Observing Planner Contract](observing-planner.md)), and the Astro Weather nights, the almanacs, meteor showers, and the Sun of the satellites use the theories alone.
+    - The minor bodies of the Observing Planner (`MinorBodyTrajectories`, see [Observing Planner Contract](observing-planner.md)): fast, kernels, then the Kepler orbit of the SBDB elements, then Horizons vector tables.
+    - Orbital Mechanics Explorer and Close Approaches follow the offline switch: offline, a minor body is read only from the SBDB answers already cached and a page of CAD only from those already read, whatever their age, else `notCached` or `503 offline`.
+    - The Astro Weather nights, the almanacs, meteor showers, and the Sun of the satellites use the theories alone.

@@ -78,8 +78,6 @@ export interface OrbitLookup {
 	loading: boolean
 	// Why the last lookup failed.
 	error?: string
-	// Whether the last failure was an offline lookup of a body not read recently, which JPL may answer.
-	offerOnline: boolean
 	// Whether the last failure was the SPICE library's, which the SPICE Kernel Library may fix.
 	kernelProblem: boolean
 	// Candidates of an ambiguous name.
@@ -291,7 +289,7 @@ export function initialOrbitalMechanicsState(): OrbitalMechanicsState {
 		view: initialView(),
 		fitPending: false,
 		ratePending: false,
-		lookup: { query: '', loading: false, offerOnline: false, kernelProblem: false },
+		lookup: { query: '', loading: false, kernelProblem: false },
 		comparing: false,
 	}
 }

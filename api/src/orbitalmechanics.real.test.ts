@@ -22,6 +22,7 @@ async function load() {
 	if (de440s || SKIP) return de440s
 	// The DE440 short kernel of the toolkit's fixtures, 1849 to 2150.
 	const handle = await fs.open(DE440S_PATH)
+	de440sFileHandle = handle
 	const daf = await readDaf(fileHandleSource(handle))
 	const inspection = inspectSpk(daf, (await handle.stat()).size)
 	if (!inspection.ok) throw new Error(inspection.error)
@@ -35,9 +36,9 @@ afterAll(async () => {
 	de440sFileHandle = undefined
 })
 
-// Snapshot of a library holding `set`, or none.
-function kernels(set?: SpkKernelSet, generation = 7) {
-	return { current: (): SpiceKernelSnapshot => ({ generation, offline: false, loading: false, set, readiness: new Map() }) }
+// Snapshot of a library holding `set`, or none, online unless `state.offline`.
+function kernels(set?: SpkKernelSet, generation = 7, state?: { readonly offline: boolean }) {
+	return { current: (): SpiceKernelSnapshot => ({ generation, offline: state?.offline ?? false, loading: false, set, readiness: new Map() }) }
 }
 
 // Minimal SBDB answer for Apophis.
@@ -61,8 +62,8 @@ const APOPHIS = {
 } as unknown as SmallBodySearchFound
 
 // Service over a fake SBDB answering `answers` by query text, recording the queries, and a library holding `set`, or
-// none when it is false.
-async function serve(answers: Record<string, SmallBodySearch | Error>, set: boolean = true) {
+// none when it is false, offline while `state.offline`.
+async function serve(answers: Record<string, SmallBodySearch | Error>, set: boolean = true, state?: { readonly offline: boolean }) {
 	const queries: string[] = []
 	const minorBodies = new MinorBodies({
 		fetch: (text) => {
@@ -71,20 +72,22 @@ async function serve(answers: Record<string, SmallBodySearch | Error>, set: bool
 			return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer ?? { message: 'not found' })
 		},
 	})
-	const routes = createOrbitalMechanicsRoutes(new OrbitalMechanicsService({ minorBodies, kernels: kernels(set === false ? undefined : await load()) }))
+	const routes = createOrbitalMechanicsRoutes(new OrbitalMechanicsService({ minorBodies, kernels: kernels(set === false ? undefined : await load(), 7, state) }))
 	const post = (path: '/api/orbital-mechanics/resolve' | '/api/orbital-mechanics/compare', body: unknown) => routes[path].POST(new Request(`http://localhost${path}`, { method: 'POST', body: JSON.stringify(body) }))
 	return { queries, post }
 }
 
 test.skipIf(SKIP)('an offline lookup never asks SBDB, and an online one resolves the published solution', async () => {
-	const { queries, post } = await serve({ '20099942': APOPHIS, apophis: APOPHIS })
+	const state = { offline: true }
+	const { queries, post } = await serve({ '20099942': APOPHIS, apophis: APOPHIS }, true, state)
 
-	const offline = await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: '20099942', online: false })
+	const offline = await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: '20099942' })
 	expect(offline.status).toBe(404)
 	expect(await offline.json()).toMatchObject({ code: 'notCached' })
 	expect(queries).toEqual([])
 
-	const online = (await (await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: 'apophis', online: true })).json()) as OrbitResolveResponse
+	state.offline = false
+	const online = (await (await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: 'apophis' })).json()) as OrbitResolveResponse
 	expect(queries).toEqual(['apophis'])
 	if (online.kind !== 'resolved') throw new Error(online.kind)
 	expect(online.center).toBe(10)
@@ -92,7 +95,8 @@ test.skipIf(SKIP)('an offline lookup never asks SBDB, and an online one resolves
 	expect(online.definition).toMatchObject({ kind: 'elliptic', plane: 'ecliptic', semiMajorAxis: 0.9224, eccentricity: 0.1911, epoch: 2461200.5, mu: orbitCenter(10)!.mu })
 
 	// Once resolved, the same body is available offline by its SPK-ID.
-	const again = (await (await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: '20099942', online: false })).json()) as OrbitResolveResponse
+	state.offline = true
+	const again = (await (await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: '20099942' })).json()) as OrbitResolveResponse
 	expect(again.kind).toBe('resolved')
 	expect(queries).toEqual(['apophis'])
 })
@@ -110,7 +114,7 @@ test.skipIf(SKIP)('ambiguous, unknown, B1950, and throttled lookups answer their
 		busy: new SsdThrottledError(4000),
 	})
 
-	expect(await (await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: 'halley', online: true })).json()).toEqual({
+	expect(await (await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: 'halley' })).json()).toEqual({
 		kind: 'ambiguous',
 		matches: [
 			{ designation: '1P', name: '1P/Halley' },
@@ -118,15 +122,15 @@ test.skipIf(SKIP)('ambiguous, unknown, B1950, and throttled lookups answer their
 		],
 	})
 
-	const unknown = await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: 'xyzzy', online: true })
+	const unknown = await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: 'xyzzy' })
 	expect(unknown.status).toBe(404)
 	expect(await unknown.json()).toMatchObject({ code: 'objectNotFound' })
 
-	const old = await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: 'old', online: true })
+	const old = await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: 'old' })
 	expect(old.status).toBe(422)
 	expect(await old.json()).toMatchObject({ code: 'unsupportedFrame' })
 
-	const busy = await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: 'busy', online: true })
+	const busy = await post('/api/orbital-mechanics/resolve', { kind: 'minorBody', query: 'busy' })
 	expect(busy.status).toBe(503)
 	expect(await busy.json()).toMatchObject({ code: 'rateLimited', retryAfter: 4000 })
 })

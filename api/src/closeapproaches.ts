@@ -1,5 +1,6 @@
 import { type CloseApproachBody, type CloseApproachCatalogQuery, type CloseApproachObjectQuery, type CloseApproachPage, type CloseApproachQuery, type CloseApproachRow, type CloseApproachSort, closeApproachesUrl, parseCloseApproaches, SmallBodyResponseError } from 'nebulosa/src/adapters/orbits/sbd'
 import { time, Timescale, timeToUnixMillis } from 'nebulosa/src/astronomy/time/time'
+import { type EphemerisKernels, NO_EPHEMERIS_KERNELS } from './ephemeris.chain'
 import { errorResponse } from './http'
 import { LruCache } from './lrucache'
 import { type MinorBodies, SbdbUnavailableError } from './sky/minorbodies'
@@ -8,7 +9,8 @@ import { SsdBusyError, type SsdRequestQueue, SsdThrottledError, SsdTimeoutError 
 // Close Approaches: stateless, read-only queries of the JPL close-approach data (CAD), never operations or events. Each
 // row is one encounter of a small body with a target body, not a unique object, and CAD filters, sorts, and pages them
 // itself. Identity and details of an object come from SBDB through MinorBodies, by its exact designation, since a CAD row
-// has no SPK-ID. Every request goes through the JPL queue. Close approach is not a measure of risk: nothing here infers
+// has no SPK-ID. Every request goes through the JPL queue; while the ephemeris sources are offline, nothing asks JPL and
+// only the pages and objects already read are answered. Close approach is not a measure of risk: nothing here infers
 // an impact probability or estimates a diameter. Distances are AU, velocities km/s, and times Unix milliseconds (UTC).
 
 // Budget of one CAD request in milliseconds.
@@ -25,7 +27,16 @@ const PAGE_CACHE_LIMIT = 64
 const OBJECT_DISTANCE_LIMIT_AU = 100
 
 // Stable codes of the close approach errors.
-export type CloseApproachErrorCode = 'serviceUnavailable' | 'rateLimited' | 'rejected' | 'upstreamSchemaChanged' | 'invalidResponse'
+export type CloseApproachErrorCode = 'serviceUnavailable' | 'rateLimited' | 'rejected' | 'upstreamSchemaChanged' | 'invalidResponse' | 'offline'
+
+// A page or an object not read before while the ephemeris sources are offline, which forbids asking JPL.
+export class CloseApproachesOfflineError extends Error {
+	// Creates the error.
+	constructor() {
+		super('The ephemeris sources are offline, and this was not read from JPL before')
+		this.name = 'CloseApproachesOfflineError'
+	}
+}
 
 // One encounter of a small body with a target body.
 export interface CloseApproach extends Omit<CloseApproachRow, 'body'> {
@@ -135,13 +146,16 @@ export class CloseApproachesService {
 	readonly #timeoutMs: number
 	readonly #now: () => number
 	readonly #pages = new LruCache<CachedPage>(PAGE_CACHE_LIMIT)
+	readonly #kernels: EphemerisKernels
 
-	// Creates the service; options replace the CAD budget and the clock.
-	constructor(minorBodies: MinorBodies, queue: SsdRequestQueue, options: { readonly timeoutMs?: number; readonly now?: () => number } = {}) {
+	// Creates the service; options replace the CAD budget and the clock, and give the offline switch of the ephemeris
+	// sources (the SPICE Kernel Library's; online by default).
+	constructor(minorBodies: MinorBodies, queue: SsdRequestQueue, options: { readonly timeoutMs?: number; readonly now?: () => number; readonly kernels?: EphemerisKernels } = {}) {
 		this.#minorBodies = minorBodies
 		this.#queue = queue
 		this.#timeoutMs = options.timeoutMs ?? CAD_TIMEOUT_MS
 		this.#now = options.now ?? Date.now
+		this.#kernels = options.kernels ?? NO_EPHEMERIS_KERNELS
 	}
 
 	// Page of the close approaches of every object.
@@ -156,9 +170,12 @@ export class CloseApproachesService {
 		return await this.#page(query, filters, page, pageSize, refresh, signal)
 	}
 
-	// Identity and details of the object of a designation.
+	// Identity and details of the object of a designation; offline, only those already read, or CloseApproachesOfflineError.
 	async object(designation: string, signal?: AbortSignal) {
-		return await this.#minorBodies.details(designation, signal)
+		if (!this.#kernels.current().offline) return await this.#minorBodies.details(designation, signal)
+		const cached = this.#minorBodies.cachedDetails(designation)
+		if (!cached) throw new CloseApproachesOfflineError()
+		return cached
 	}
 
 	// Answers a page from the cache or CAD; `refresh` reads it again whatever its age.
@@ -167,9 +184,16 @@ export class CloseApproachesService {
 		return { query: filters, page, pageSize, total: read.total, rows: read.rows.map((row) => encounter(row, query.body)), fetchedAt, source: read.signature.source, sourceVersion: read.signature.version }
 	}
 
-	// Reads a page of CAD in a turn of the JPL queue, keeping only successes.
+	// Reads a page of CAD in a turn of the JPL queue, keeping only successes; offline, the page already read whatever its
+	// age, or CloseApproachesOfflineError.
 	async #read(url: string, refresh: boolean, signal?: AbortSignal): Promise<CachedPage> {
 		const cached = this.#pages.get(url)
+
+		if (this.#kernels.current().offline) {
+			if (!cached) throw new CloseApproachesOfflineError()
+			return cached
+		}
+
 		if (cached && !refresh && this.#now() - cached.fetchedAt < PAGE_TTL_MS) return cached
 
 		const page = await this.#queue.run((taskSignal) => this.#download(url, taskSignal), { timeoutMs: this.#timeoutMs, signal, key: `cad:${url}` })
@@ -193,6 +217,7 @@ export class CloseApproachesService {
 
 // Answers a failure of JPL with a stable code, or rethrows what is not one, such as the abort of the request.
 function failure(error: unknown): Response {
+	if (error instanceof CloseApproachesOfflineError) return errorResponse(error.message, 503, 'offline' satisfies CloseApproachErrorCode)
 	const cause = error instanceof SbdbUnavailableError ? error.cause : error
 	if (cause instanceof SsdThrottledError) return errorResponse(cause.message, 503, 'rateLimited' satisfies CloseApproachErrorCode, { retryAfter: cause.retryAfter })
 	if (error instanceof SbdbUnavailableError || error instanceof SsdBusyError || error instanceof SsdTimeoutError) return errorResponse(error.message, 503, 'serviceUnavailable' satisfies CloseApproachErrorCode)

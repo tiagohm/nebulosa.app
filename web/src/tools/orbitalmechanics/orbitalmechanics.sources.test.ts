@@ -66,18 +66,22 @@ function scene(center: OrbitCenterPayload) {
 	return state
 }
 
-test('an offline lookup of a body not read recently offers JPL and asks it only when told', async () => {
-	const { io, calls } = fakeIo((body) => (body.online ? Response.json(RESOLVED) : Response.json({ error: '20099942 was not looked up recently, so it needs JPL', code: 'notCached' }, { status: 404 })))
+test('a lookup the offline server cannot answer shows why, and a later one replaces the error', async () => {
+	let offline = true
+	const { io, calls } = fakeIo(() => (offline ? Response.json({ error: '20099942 was not looked up recently, and the ephemeris sources are offline', code: 'notCached' }, { status: 404 }) : Response.json(RESOLVED)))
 	const state = scene(SUN)
 
-	await resolveMinorBody(state, '20099942', false, io)
-	expect(state.lookup.offerOnline).toBeTrue()
-	expect(state.lookup.error).toContain('needs JPL')
+	await resolveMinorBody(state, '20099942', io)
+	expect(state.lookup.error).toContain('offline')
 	expect(state.orbits).toHaveLength(0)
 
-	await resolveMinorBody(state, '20099942', true, io)
-	expect(calls.filter((e) => e.url.endsWith('/resolve')).map((e) => e.body.online)).toEqual([false, true])
-	expect(state.lookup.offerOnline).toBeFalse()
+	offline = false
+	await resolveMinorBody(state, '20099942', io)
+	expect(calls.filter((e) => e.url.endsWith('/resolve')).map((e) => e.body)).toEqual([
+		{ kind: 'minorBody', query: '20099942' },
+		{ kind: 'minorBody', query: '20099942' },
+	])
+	expect(state.lookup.error).toBeUndefined()
 	expect(state.orbits.map((e) => e.name)).toEqual(['99942 Apophis'])
 	expect(state.orbits[0].source).toEqual(RESOLVED.source)
 	expect(state.orbits[0].definition).toEqual(APOPHIS)
@@ -87,7 +91,7 @@ test('an orbit about another center waits, and replaces the scene only when aske
 	const { io } = fakeIo(() => Response.json(RESOLVED))
 	const state = scene(EARTH)
 
-	await resolveMinorBody(state, 'apophis', true, io)
+	await resolveMinorBody(state, 'apophis', io)
 	expect(state.orbits).toHaveLength(0)
 	expect(state.lookup.pending?.name).toBe('99942 Apophis')
 
@@ -104,7 +108,7 @@ test('an ambiguous name lists its candidates, and an SPK failure points to the k
 	const { io } = fakeIo((body) => (body.kind === 'spk' ? Response.json({ error: 'NAIF 301 is not covered at JD 2300000.00000 TDB', code: 'kernelCoverageUnavailable', body: 301, epoch: 2300000 }, { status: 422 }) : Response.json({ kind: 'ambiguous', matches: [{ designation: '1P', name: '1P/Halley' }] })))
 	const state = scene(EARTH)
 
-	await resolveMinorBody(state, 'halley', true, io)
+	await resolveMinorBody(state, 'halley', io)
 	expect(state.lookup.matches).toEqual([{ designation: '1P', name: '1P/Halley' }])
 
 	await resolveSpkState(state, 301, 399, 2300000, io)
@@ -113,7 +117,7 @@ test('an ambiguous name lists its candidates, and an SPK failure points to the k
 	expect(state.lookup.matches).toBeUndefined()
 })
 
-test('a handoff carries the identity only and shows the orbit once the explorer opens, offline', async () => {
+test('a handoff carries the identity only and shows the orbit once the explorer opens', async () => {
 	const { io, calls } = fakeIo(() => Response.json(RESOLVED))
 	const state = scene(EARTH)
 	const route: RouteState = { route: { workspace: 'sky' } }
@@ -126,13 +130,13 @@ test('a handoff carries the identity only and shows the orbit once the explorer 
 
 	await consumePendingTarget(state, io, proxy<Record<string, boolean>>({}))
 	expect(state.pendingTarget).toBeUndefined()
-	expect(calls[0].body).toEqual({ kind: 'minorBody', query: '20099942', online: false })
+	expect(calls[0].body).toEqual({ kind: 'minorBody', query: '20099942' })
 	// The scene was about the Earth; the orbit asked for replaces it, about the Sun.
 	expect(state.center?.code).toBe(10)
 	expect(state.orbits.map((e) => e.name)).toEqual(['99942 Apophis'])
 })
 
-test('a handoff of a body not read recently opens the lookups instead of asking JPL', async () => {
+test('a handoff the server cannot resolve opens the lookups with the reason', async () => {
 	const { io, calls } = fakeIo(() => Response.json({ error: 'needs JPL', code: 'notCached' }, { status: 404 }))
 	const state = scene(EARTH)
 	const sections = proxy<Record<string, boolean>>({})
@@ -140,7 +144,7 @@ test('a handoff of a body not read recently opens the lookups instead of asking 
 
 	await consumePendingTarget(state, io, sections)
 	expect(calls).toHaveLength(1)
-	expect(state.lookup.offerOnline).toBeTrue()
+	expect(state.lookup.error).toBe('needs JPL')
 	expect(state.lookup.query).toBe('20099942')
 	expect(sections['orbitalmechanics.sources']).toBeTrue()
 })

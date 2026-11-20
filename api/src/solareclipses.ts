@@ -3,6 +3,7 @@ import type { SunMoonProvider } from 'nebulosa/src/astronomy/events/eclipse/ecli
 import {
 	computeLocalSolarEclipseCircumstances,
 	computeLocalSolarEclipseViewGeometry,
+	type CentralLineSide,
 	type LocalCentralPhaseKind,
 	type LocalEclipseContactKind,
 	type LocalSolarEclipseCircumstances,
@@ -36,7 +37,7 @@ import { runPooledWorkerJob, WorkerPool } from './workerjob'
 // Locally, visible means the Sun's center at or above the 0° horizon, without terrain or the site's elevation.
 
 export type { HybridEclipseKind, SolarEclipseExtreme, SolarEclipseMap, SolarEclipseMapPoint, SolarEclipsePathKind, SolarEclipsePaths, SolarEclipsePointKind, SolarEclipseSummary, SolarEclipseType } from './solareclipses.map'
-export type { LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipseSvgShape, LocalSunMotion, LocalViewHandedness, LocalViewOrientationMode, LocalVisibilityKind }
+export type { CentralLineSide, LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipseSvgShape, LocalSunMotion, LocalViewHandedness, LocalViewOrientationMode, LocalVisibilityKind }
 
 // Codes of the errors of the solar eclipse routes.
 export type SolarEclipseErrorCode = 'notFound' | 'computationFailed'
@@ -95,7 +96,9 @@ export interface LocalSolarEclipseVisibility {
 // Magnitude, ratio, durations in seconds, and two widths in kilometers, each absent when the place lacks it: the width
 // of the path through the place, between the limits of the central phase and across the central line, and the
 // shadow's chord through it, the narrowest width of the shadow on the ground at the local maximum. At a low Sun the
-// path can be several times wider than the chord.
+// path can be several times wider than the chord. centralLineDistance is the ground distance, in kilometers, from
+// the place to the central line and the compass side of the line it is on, inside the path or outside it; absent for
+// an eclipse without a central line.
 export type LocalSolarEclipseDetails = LocalSolarEclipseCircumstances['details']
 
 // Presentation of the Local View: the Sun and the Moon as seen from a place at a contact.

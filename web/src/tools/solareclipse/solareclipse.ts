@@ -1,4 +1,5 @@
 import type {
+	CentralLineSide,
 	EclipseDirection,
 	LocalCentralPhaseKind,
 	LocalEclipseContactKind,
@@ -15,6 +16,7 @@ import type {
 	SolarEclipseType,
 } from 'api'
 import { proxy } from 'valtio'
+import { formatKilometers } from '../../format'
 import { aborted, ApiResponseError, fetchJson } from '../../http'
 import { ACTIVE_TOOL_LOCATION, type GeographicLocation, type ToolLocation } from '../../location/site'
 import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
@@ -268,6 +270,15 @@ export function visibilityHeadline({ kind, hasCentralPhase, centralPhaseKind }: 
 		case 'partiallyVisible':
 			return `Only the partial phase is visible: ${phase.toLowerCase()} is below the horizon`
 	}
+}
+
+// Names of the sides of the central line, for people.
+const CENTRAL_LINE_SIDE_NAMES: Readonly<Record<CentralLineSide, string>> = { north: 'north', northeast: 'north-east', east: 'east', southeast: 'south-east', south: 'south', southwest: 'south-west', west: 'west', northwest: 'north-west' }
+
+// Returns where a place lies from the central line, for people: the distance in whole kilometers and the side of the
+// line, such as "46 km, north-west side", or "On the line" without a side, within about 1 km of it.
+export function centralLineText(distanceKm: number, side: CentralLineSide | undefined): string {
+	return side ? `${formatKilometers(distanceKm)}, ${CENTRAL_LINE_SIDE_NAMES[side]} side` : 'On the line'
 }
 
 // Returns the name of the limits of the central path of an eclipse type, for people.

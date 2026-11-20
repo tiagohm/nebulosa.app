@@ -12,7 +12,7 @@ import { SegmentedControl } from '../../ui/SegmentedControl'
 import { formatEclipseAngle, formatEclipseMagnitude } from '../eclipse/eclipse'
 import { EclipseLocationSection, EclipseZoneSelect } from '../eclipse/EclipsePanelParts'
 import { GlobalPointIcon } from './GlobalPointMarker'
-import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectMapPlace, selectPoint, setViewSettings, solarEclipseState, visibilityHeadline } from './solareclipse'
+import { centralLineText, contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectMapPlace, selectPoint, setViewSettings, solarEclipseState, visibilityHeadline } from './solareclipse'
 import { SolarEclipseLocalView } from './SolarEclipseLocalView'
 
 // Local Circumstances panel of the Solar Eclipse Map, in the order an observer needs it: the location (the shared
@@ -95,6 +95,7 @@ export function SolarEclipsePanel() {
 					{local?.details.centralPhaseDuration !== undefined && <DataRow label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatLongDuration(local.details.centralPhaseDuration)}</DataRow>}
 					{local?.details.partialPhaseDuration !== undefined && <DataRow label="Eclipse here (C1–C4)">{formatLongDuration(local.details.partialPhaseDuration)}</DataRow>}
 					{local?.details.maximalMagnitude !== undefined && <DataRow label="Magnitude here">{formatEclipseMagnitude(local.details.maximalMagnitude)}</DataRow>}
+					{local?.details.centralLineDistance && <DataRow label="From the central line">{centralLineText(local.details.centralLineDistance.distanceKm, local.details.centralLineDistance.side)}</DataRow>}
 					{maximum && <DataRow label="Sun altitude at MAX">{formatEclipseAngle(maximum.altitude)}</DataRow>}
 					{visibility && visibility.hasObservableEclipse && visibility.sunMotion !== 'none' && <Notice>The Sun is {visibility.sunMotion === 'rising' ? 'climbing' : 'descending'} during the eclipse.</Notice>}
 					{visibility?.hasGeometricEclipse && (!visibility.completeness.partialContactsComplete || !visibility.completeness.centralContactsComplete) && <Notice>Some contacts could not be found; the visibility rests on those that were.</Notice>}

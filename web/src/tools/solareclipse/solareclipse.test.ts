@@ -3,6 +3,7 @@ import type { SolarEclipseSummary } from 'api'
 import { proxy } from 'valtio'
 import type { EclipseIo } from '../eclipse/eclipse'
 import {
+	centralLineText,
 	contactName,
 	eclipseBounds,
 	findEclipse,
@@ -263,6 +264,12 @@ test('tells what a place sees with its central phase, never the whole eclipse ou
 	expect(visibilityHeadline({ kind: 'centralPhaseVisible', hasCentralPhase: true, centralPhaseKind: 'total' })).toBe('Totality visible, but not the whole eclipse')
 	expect(visibilityHeadline({ kind: 'partiallyVisible', hasCentralPhase: true, centralPhaseKind: 'annular' })).toBe('Only the partial phase is visible: annularity is below the horizon')
 	expect(visibilityHeadline({ kind: 'notVisible', hasCentralPhase: false, centralPhaseKind: 'none' })).toBe('The eclipse does not reach this place')
+})
+
+test('tells the distance from the central line with its side, or that the place is on it', () => {
+	expect(centralLineText(46.36, 'northwest')).toBe('46 km, north-west side')
+	expect(centralLineText(1391.8, 'south')).toBe('1,392 km, south side')
+	expect(centralLineText(0.4, undefined)).toBe('On the line')
 })
 
 test('lists every global point in time order, the greatest duration among them', () => {

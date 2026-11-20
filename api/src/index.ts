@@ -214,6 +214,7 @@ export type {
 	LunarEclipseViewOptions,
 } from './lunareclipses'
 export type {
+	CentralLineSide,
 	HybridEclipseKind,
 	LocalCentralPhaseKind,
 	LocalEclipseContactKind,

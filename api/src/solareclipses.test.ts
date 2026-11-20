@@ -188,6 +188,9 @@ test('computes the circumstances and the Local View of a place', async () => {
 	expect(Math.abs(dallas.details.centralPhaseDuration! - 231)).toBeLessThan(10)
 	expect(dallas.details.maximalMagnitude).toBeGreaterThan(1)
 	expect(dallas.details.shadowPathWidthKm).toBeGreaterThan(100)
+	// Dallas lay some 46 km north-west of the central line, well inside the 190 km path.
+	expect(dallas.details.centralLineDistance?.side).toBe('northwest')
+	expect(Math.abs(dallas.details.centralLineDistance!.distanceKm - 46)).toBeLessThan(5)
 
 	const times = dallas.events.map((event) => event.time)
 	expect(times).toEqual(times.toSorted((a, b) => a - b))

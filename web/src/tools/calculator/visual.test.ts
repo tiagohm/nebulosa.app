@@ -55,6 +55,6 @@ describe('aperture comparison', () => {
 	})
 
 	test('an obstruction as large as its aperture is invalid', () => {
-		expect(apertureComparison({ ...APERTURE_COMPARISON_EXAMPLE, obstructionA: '200' })).toEqual({ status: 'invalid', reason: 'Obstruction A must be smaller than aperture A.' })
+		expect(apertureComparison({ ...APERTURE_COMPARISON_EXAMPLE, obstructionA: '200' })).toEqual({ status: 'invalid', reason: 'Obstruction A must be smaller than aperture A.', issues: [{ field: 'Obstruction A', reason: 'Obstruction A must be smaller than aperture A.' }] })
 	})
 })

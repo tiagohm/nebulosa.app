@@ -12,9 +12,10 @@ describe('airmass', () => {
 		expect(low.status === 'ready' && low.value.refraction).toBeCloseTo(1.7, 1)
 	})
 
-	test('the altitude must be above the horizon, the coefficient may be zero', () => {
-		expect(airmass({ altitude: '0', extinction: '' }).status).toBe('invalid')
-		expect(airmass({ altitude: '-5', extinction: '' }).status).toBe('invalid')
+	test('the altitude may be the horizon but not below it, the coefficient may be zero', () => {
+		const horizon = airmass({ altitude: '0', extinction: '' })
+		expect(horizon.status === 'ready' && horizon.value.refraction).toBeCloseTo(29, 0)
+		expect(airmass({ altitude: '-5', extinction: '' })).toMatchObject({ status: 'invalid', reason: 'Altitude must be at least 0° and at most 90°.' })
 		expect(airmass({ altitude: '90.5', extinction: '' }).status).toBe('invalid')
 		const clear = airmass({ altitude: '45', extinction: '0' })
 		expect(clear.status === 'ready' && clear.value.extinction).toBe(0)
@@ -40,14 +41,18 @@ describe('dew', () => {
 	test('the humidity must be within (0, 100] and the temperature within the Magnus domain', () => {
 		for (const humidity of ['0', '-1', '100.1']) expect(dew({ ...DEW_EXAMPLE, humidity }).status).toBe('invalid')
 		expect(dew({ ...DEW_EXAMPLE, humidity: '' })).toEqual({ status: 'incomplete', missing: ['Relative humidity'] })
-		expect(dew({ ...DEW_EXAMPLE, temperature: '120' })).toEqual({ status: 'invalid', reason: 'Temperature must be at least -100 and at most 100.' })
+		expect(dew({ ...DEW_EXAMPLE, temperature: '120' })).toEqual({
+			status: 'invalid',
+			reason: 'Temperature must be at least -100 °C and at most 100 °C.',
+			issues: [{ field: 'Temperature', reason: 'Temperature must be at least -100 °C and at most 100 °C.' }],
+		})
 	})
 
 	test('the humidity of a dew point, never from a dew point above the temperature', () => {
 		const result = dew({ ...DEW_EXAMPLE, mode: 'humidity', dewPoint: String(dewPoint(10, 85)) })
 		expect(result.status === 'ready' && result.value.mode === 'humidity' && result.value.humidity).toBeCloseTo(85, 8)
 		expect(dew({ ...DEW_EXAMPLE, mode: 'humidity', dewPoint: '10' })).toEqual({ status: 'ready', value: { mode: 'humidity', humidity: 100 } })
-		expect(dew({ ...DEW_EXAMPLE, mode: 'humidity', dewPoint: '12' })).toEqual({ status: 'invalid', reason: 'Dew point must not be above the temperature.' })
+		expect(dew({ ...DEW_EXAMPLE, mode: 'humidity', dewPoint: '12' })).toEqual({ status: 'invalid', reason: 'Dew point must not be above the temperature.', issues: [{ field: 'Dew point', reason: 'Dew point must not be above the temperature.' }] })
 	})
 
 	test('the frost point reads the humidity over ice, not over water', () => {

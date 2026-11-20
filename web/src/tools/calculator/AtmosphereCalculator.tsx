@@ -2,8 +2,9 @@ import { formatFixed, formatPercent, formatTemperature } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { AIRMASS_EXAMPLE, type AirmassDraft, airmass, DEW_EXAMPLE, type DewDraft, type DewMode, dew } from './atmosphere'
-import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary } from './CalculatorParts'
+import { AIRMASS_EXAMPLE, type AirmassDraft, airmass, DEW_EXAMPLE, type DewDraft, type DewMode, dew, type DewResult } from './atmosphere'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary, Summary, type SummaryValue } from './CalculatorParts'
+import { fieldIssues } from './values'
 
 // Views of the Atmosphere & Conditions calculators: Airmass & Visibility Effects and Dew Conditions.
 
@@ -15,6 +16,20 @@ const DEW_MODE_LABELS: Readonly<Record<DewMode, string>> = {
 	dew: 'Dew point',
 	humidity: 'Humidity',
 	frost: 'Frost point',
+}
+
+// Returns the heuristic dew risk, 0 to 1, in words, with its share once there is any: none from a 5 °C margin, low,
+// moderate from 3 °C, high within 1 °C of the dew point.
+function formatDewRisk(risk: number) {
+	if (risk <= 0) return 'None'
+	return `${risk < 0.4 ? 'Low' : risk < 0.8 ? 'Moderate' : 'High'} (${formatPercent(risk)})`
+}
+
+// Returns the principal result of Dew Conditions in its mode.
+function dewSummary(value: DewResult): SummaryValue {
+	if (value.mode === 'dew') return { label: 'Dew point', value: formatTemperature(value.dewPoint) }
+	if (value.mode === 'humidity') return { label: 'Relative humidity', value: formatPercent(value.humidity / 100, 1) }
+	return { label: 'Frost point', value: formatTemperature(value.frostPoint) }
 }
 
 // Airmass & Visibility Effects calculator.
@@ -29,12 +44,14 @@ export function AirmassCalculator({ entry, onChange, context }: CalculatorViewPr
 
 	return (
 		<CalculatorLayout
+			issues={fieldIssues(result)}
+			summary={<Summary outcome={result}>{(value) => ({ label: 'Airmass', value: formatFixed(value.airmass, 3) })}</Summary>}
 			bar={<DraftBar entry={entry} onChange={onChange} context={context} example={AIRMASS_EXAMPLE} />}
 			inputs={
 				<>
 					<FieldGrid>
 						<NumberField label="Altitude" suffix="°" value={draft.altitude} onChange={(altitude) => set({ altitude })} />
-						<NumberField label="Extinction coefficient" suffix="mag/X" optional value={draft.extinction} onChange={(extinction) => set({ extinction })} />
+						<NumberField label="Extinction coefficient" suffix="mag/airmass" optional value={draft.extinction} onChange={(extinction) => set({ extinction })} />
 					</FieldGrid>
 					<Notice>The true altitude above the horizon, without refraction. Typical visual extinction is 0.15–0.3 mag per airmass, more in hazy or low sites.</Notice>
 				</>
@@ -75,15 +92,17 @@ export function DewCalculator({ entry, onChange, context }: CalculatorViewProps<
 
 	return (
 		<CalculatorLayout
+			issues={fieldIssues(result)}
+			summary={<Summary outcome={result}>{dewSummary}</Summary>}
 			bar={<DraftBar entry={entry} onChange={onChange} context={context} example={DEW_EXAMPLE} />}
 			inputs={
 				<>
 					<SegmentedControl label="Compute" options={DEW_MODES} value={draft.mode} onChange={(mode) => set({ mode })} format={(mode) => DEW_MODE_LABELS[mode]} />
 					<FieldGrid>
-						<NumberField label="Temperature" suffix="°C" value={draft.temperature} onChange={(temperature) => set({ temperature })} />
+						<NumberField label="Temperature" suffix="°C" signed value={draft.temperature} onChange={(temperature) => set({ temperature })} />
 						{draft.mode === 'dew' && <NumberField label="Relative humidity" suffix="%" value={draft.humidity} onChange={(humidity) => set({ humidity })} />}
-						{draft.mode === 'humidity' && <NumberField label="Dew point" suffix="°C" value={draft.dewPoint} onChange={(dewPoint) => set({ dewPoint })} />}
-						{draft.mode === 'frost' && <NumberField label="Humidity over ice" suffix="%" value={draft.iceHumidity} onChange={(iceHumidity) => set({ iceHumidity })} />}
+						{draft.mode === 'humidity' && <NumberField label="Dew point" suffix="°C" signed value={draft.dewPoint} onChange={(dewPoint) => set({ dewPoint })} />}
+						{draft.mode === 'frost' && <NumberField label="Humidity over ice" field="Relative humidity over ice" suffix="%" value={draft.iceHumidity} onChange={(iceHumidity) => set({ iceHumidity })} />}
 					</FieldGrid>
 					{draft.mode === 'frost' ? (
 						<Notice>The humidity relative to ice, not the humidity a weather station reports, which is relative to water. Above freezing the dew point is the condensation temperature.</Notice>
@@ -99,7 +118,7 @@ export function DewCalculator({ entry, onChange, context }: CalculatorViewProps<
 							<>
 								<Primary label="Dew point">{formatTemperature(value.dewPoint)}</Primary>
 								<DataRow label="Margin to the dew point">{formatTemperature(value.margin)}</DataRow>
-								<DataRow label="Dew risk (heuristic)">{formatPercent(value.risk)}</DataRow>
+								<DataRow label="Dew risk (heuristic)">{formatDewRisk(value.risk)}</DataRow>
 							</>
 						) : value.mode === 'humidity' ? (
 							<Primary label="Relative humidity">{formatPercent(value.humidity / 100, 1)}</Primary>

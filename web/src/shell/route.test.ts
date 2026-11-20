@@ -28,7 +28,7 @@ describe('parse', () => {
 		expect(parseRoute('/tools/calibration-library/abc')).toEqual({ workspace: 'tools', tool: 'calibration-library', group: 'abc' })
 		expect(routePath({ workspace: 'tools', tool: 'calibration-library', group: 'abc' })).toBe('/tools/calibration-library/abc')
 		expect(parseRoute('/tools/calibration-library')).toEqual({ workspace: 'tools', tool: 'calibration-library' })
-		expect(parseRoute('/tools/calculator/abc')).toEqual({ workspace: 'tools', tool: 'calculator' })
+		expect(parseRoute('/tools/astronomical-time-converter/abc')).toEqual({ workspace: 'tools', tool: 'astronomical-time-converter' })
 	})
 
 	test('reads the project of Image Stacking and writes it back', () => {
@@ -39,19 +39,22 @@ describe('parse', () => {
 		expect(routePath({ workspace: 'tools', tool: 'artificial-satellites', satellite: '800000001' })).toBe('/tools/artificial-satellites/800000001')
 		expect(parseRoute('/tools/artificial-satellites')).toEqual({ workspace: 'tools', tool: 'artificial-satellites' })
 		expect(parseRoute('/tools/close-approaches/25544')).toEqual({ workspace: 'tools', tool: 'close-approaches' })
-		expect(routePath({ workspace: 'tools', tool: 'calculator', project: 'p' })).toBe('/tools/calculator')
+		expect(routePath({ workspace: 'tools', tool: 'astronomical-time-converter', project: 'p' })).toBe('/tools/astronomical-time-converter')
 		expect(parseRoute('/tools/observing-planner/plan%20a')).toEqual({ workspace: 'tools', tool: 'observing-planner', plan: 'plan a' })
 		expect(routePath({ workspace: 'tools', tool: 'observing-planner', plan: 'plan a' })).toBe('/tools/observing-planner/plan%20a')
 		expect(parseRoute('/tools/observing-planner')).toEqual({ workspace: 'tools', tool: 'observing-planner' })
 		expect(parseRoute('/tools/framing/f%201')).toEqual({ workspace: 'tools', tool: 'framing', framing: 'f 1' })
 		expect(routePath({ workspace: 'tools', tool: 'framing', framing: 'f 1' })).toBe('/tools/framing/f%201')
 		expect(parseRoute('/tools/framing')).toEqual({ workspace: 'tools', tool: 'framing' })
+		expect(parseRoute('/tools/calculator/sampling')).toEqual({ workspace: 'tools', tool: 'calculator', calculator: 'sampling' })
+		expect(routePath({ workspace: 'tools', tool: 'calculator', calculator: 'sampling' })).toBe('/tools/calculator/sampling')
+		expect(parseRoute('/tools/calculator')).toEqual({ workspace: 'tools', tool: 'calculator' })
 		expect(parseRoute('/tools/jupiter-observing-planner')).toEqual({ workspace: 'tools', tool: 'jupiter-observing-planner' })
 		expect(parseRoute('/tools/jupiter-observing-planner/extra')).toEqual({ workspace: 'tools', tool: 'jupiter-observing-planner' })
 		expect(routePath({ workspace: 'tools', tool: 'jupiter-observing-planner' })).toBe('/tools/jupiter-observing-planner')
 		expect(parseRoute('/tools/saturn-observing-planner')).toEqual({ workspace: 'tools', tool: 'saturn-observing-planner' })
 		expect(routePath({ workspace: 'tools', tool: 'saturn-observing-planner' })).toBe('/tools/saturn-observing-planner')
-		expect(routePath({ workspace: 'tools', tool: 'calculator', plan: 'p' })).toBe('/tools/calculator')
+		expect(routePath({ workspace: 'tools', tool: 'astronomical-time-converter', plan: 'p' })).toBe('/tools/astronomical-time-converter')
 	})
 
 	test('reads the eclipse of the Solar and Lunar Eclipse Maps, and no id for other tools', () => {
@@ -59,10 +62,10 @@ describe('parse', () => {
 		expect(parseRoute('/tools/solar-eclipse-map')).toEqual({ workspace: 'tools', tool: 'solar-eclipse-map' })
 		expect(parseRoute('/tools/lunar-eclipse-map/1803423600000')).toEqual({ workspace: 'tools', tool: 'lunar-eclipse-map', eclipse: '1803423600000' })
 		expect(parseRoute('/tools/lunar-eclipse-map')).toEqual({ workspace: 'tools', tool: 'lunar-eclipse-map' })
-		expect(parseRoute('/tools/calculator/1786556760000')).toEqual({ workspace: 'tools', tool: 'calculator' })
+		expect(parseRoute('/tools/astronomical-time-converter/1786556760000')).toEqual({ workspace: 'tools', tool: 'astronomical-time-converter' })
 		expect(routePath({ workspace: 'tools', tool: 'solar-eclipse-map', eclipse: '1786556760000' })).toBe('/tools/solar-eclipse-map/1786556760000')
 		expect(routePath({ workspace: 'tools', tool: 'lunar-eclipse-map', eclipse: '1803423600000' })).toBe('/tools/lunar-eclipse-map/1803423600000')
-		expect(routePath({ workspace: 'tools', tool: 'calculator', eclipse: '1786556760000' })).toBe('/tools/calculator')
+		expect(routePath({ workspace: 'tools', tool: 'astronomical-time-converter', eclipse: '1786556760000' })).toBe('/tools/astronomical-time-converter')
 	})
 
 	test('reads the INDI properties view of a device', () => {

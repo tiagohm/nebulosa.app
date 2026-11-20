@@ -2,8 +2,8 @@ import { TelescopeModelSearch } from '../../equipment/TelescopeModelSearch'
 import { formatFixed, formatPercent } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
-import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary } from './CalculatorParts'
-import { positiveText } from './values'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary, Summary } from './CalculatorParts'
+import { fieldIssues, positiveText } from './values'
 import { APERTURE_COMPARISON_EXAMPLE, type ApertureComparisonDraft, type ApertureSide, apertureComparison, EYEPIECE_EXAMPLE, type EyepieceDraft, eyepiece, eyepieceFromOptics, eyepieceFromTelescopeModel, type LightGrasp } from './visual'
 
 // Views of the Visual Observation calculators: Eyepiece & Telescope and Aperture Comparison.
@@ -11,9 +11,9 @@ import { APERTURE_COMPARISON_EXAMPLE, type ApertureComparisonDraft, type Apertur
 // Sides of Aperture Comparison in display order.
 const APERTURE_SIDES: readonly ApertureSide[] = ['A', 'B']
 
-// Formats a light grasp ratio with the side that collects more.
+// Formats a light grasp ratio with the side that collects more: "A gathers 4.00×", or "Equal".
 function formatLightGrasp({ ratio, larger }: LightGrasp) {
-	return larger ? `${larger} ×${formatFixed(ratio, 2)}` : 'Equal'
+	return larger ? `${larger} gathers ${formatFixed(ratio, 2)}×` : 'Equal'
 }
 
 // Eyepiece & Telescope calculator.
@@ -28,11 +28,13 @@ export function EyepieceCalculator({ entry, onChange, context }: CalculatorViewP
 
 	return (
 		<CalculatorLayout
+			issues={fieldIssues(result)}
+			summary={<Summary outcome={result}>{(view) => ({ label: 'Magnification', value: `${formatFixed(view.magnification, 0)}×` })}</Summary>}
 			bar={<DraftBar entry={entry} onChange={onChange} context={context} example={EYEPIECE_EXAMPLE} fromOptics={eyepieceFromOptics} />}
 			inputs={
 				<>
 					<FieldGrid>
-						<NumberField label="Telescope focal length" suffix="mm" value={draft.focalLength} onChange={(focalLength) => set({ focalLength })} />
+						<NumberField label="Telescope focal length" field="Focal length" suffix="mm" value={draft.focalLength} onChange={(focalLength) => set({ focalLength })} />
 						<NumberField label="Aperture" suffix="mm" value={draft.aperture} onChange={(aperture) => set({ aperture })} />
 						<NumberField label="Eyepiece focal length" suffix="mm" value={draft.eyepiece} onChange={(value) => set({ eyepiece: value })} />
 						<NumberField label="Apparent field" suffix="°" optional value={draft.apparentField} onChange={(apparentField) => set({ apparentField })} />
@@ -46,13 +48,13 @@ export function EyepieceCalculator({ entry, onChange, context }: CalculatorViewP
 				<OutcomeView outcome={result}>
 					{(view) => (
 						<>
-							<Primary label="Magnification">×{formatFixed(view.magnification, 0)}</Primary>
+							<Primary label="Magnification">{formatFixed(view.magnification, 0)}×</Primary>
 							<DataRow label="Exit pupil">{formatFixed(view.exitPupil, 2)} mm</DataRow>
 							{view.trueField !== undefined && <DataRow label="True field (apparent field)">{formatFixed(view.trueField, 2)}°</DataRow>}
 							{view.fieldStopTrueField !== undefined && <DataRow label="True field (field stop)">{formatFixed(view.fieldStopTrueField, 2)}°</DataRow>}
 							<DataRow label="Dawes limit">{formatFixed(view.dawes, 2)}″</DataRow>
 							<DataRow label="Rayleigh limit">{formatFixed(view.rayleigh, 2)}″</DataRow>
-							<DataRow label="Limiting magnitude">{formatFixed(view.limitingMagnitude, 1)}</DataRow>
+							<DataRow label="Limiting magnitude">{formatFixed(view.limitingMagnitude, 1)} mag</DataRow>
 						</>
 					)}
 				</OutcomeView>
@@ -82,16 +84,20 @@ export function ApertureComparisonCalculator({ entry, onChange, context }: Calcu
 
 	return (
 		<CalculatorLayout
+			issues={fieldIssues(result)}
+			summary={<Summary outcome={result}>{({ clear }) => ({ label: 'Light grasp of the apertures', value: formatLightGrasp(clear) })}</Summary>}
 			bar={<DraftBar entry={entry} onChange={onChange} context={context} example={APERTURE_COMPARISON_EXAMPLE} />}
 			inputs={
-				<FieldGrid>
-					<NumberField label="Aperture A" suffix="mm" value={draft.apertureA} onChange={(apertureA) => set({ apertureA })} />
-					<NumberField label="Obstruction A" suffix="mm" optional value={draft.obstructionA} onChange={(obstructionA) => set({ obstructionA })} />
-					<NumberField label="Aperture B" suffix="mm" value={draft.apertureB} onChange={(apertureB) => set({ apertureB })} />
-					<NumberField label="Obstruction B" suffix="mm" optional value={draft.obstructionB} onChange={(obstructionB) => set({ obstructionB })} />
+				<>
+					<FieldGrid>
+						<NumberField label="Aperture A" suffix="mm" value={draft.apertureA} onChange={(apertureA) => set({ apertureA })} />
+						<NumberField label="Obstruction A" suffix="mm" optional value={draft.obstructionA} onChange={(obstructionA) => set({ obstructionA })} />
+						<NumberField label="Aperture B" suffix="mm" value={draft.apertureB} onChange={(apertureB) => set({ apertureB })} />
+						<NumberField label="Obstruction B" suffix="mm" optional value={draft.obstructionB} onChange={(obstructionB) => set({ obstructionB })} />
+					</FieldGrid>
 					<TelescopeModelSearch label="Aperture A from a telescope model" onPick={(model) => model.aperture !== undefined && set({ apertureA: positiveText(model.aperture) })} />
 					<TelescopeModelSearch label="Aperture B from a telescope model" onPick={(model) => model.aperture !== undefined && set({ apertureB: positiveText(model.aperture) })} />
-				</FieldGrid>
+				</>
 			}
 			results={
 				<OutcomeView outcome={result}>
@@ -104,8 +110,8 @@ export function ApertureComparisonCalculator({ entry, onChange, context }: Calcu
 
 								return (
 									obstruction !== undefined && (
-										<DataRow key={side} label={`${side}: obstruction, equivalent clear aperture`}>
-											{formatPercent(obstruction / 100)}, {formatFixed(effectiveAperture, 1)} mm
+										<DataRow key={side} label={`Obstruction ${side}`}>
+											{formatPercent(obstruction / 100)} of the diameter, like a clear {formatFixed(effectiveAperture, 1)} mm
 										</DataRow>
 									)
 								)

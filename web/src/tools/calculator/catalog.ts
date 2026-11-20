@@ -46,6 +46,11 @@ export const CALCULATORS: readonly CalculatorDefinition[] = [
 // Ids of every calculator in display order.
 export const CALCULATOR_IDS: readonly CalculatorId[] = CALCULATORS.map((e) => e.id)
 
+// Whether a value names a calculator, such as the segment of a Calculator route.
+export function isCalculatorId(value: unknown): value is CalculatorId {
+	return CALCULATORS.some((e) => e.id === value)
+}
+
 // Returns the definition of a calculator.
 export function calculatorDefinition(id: CalculatorId): CalculatorDefinition {
 	return CALCULATORS.find((e) => e.id === id) ?? CALCULATORS[0]

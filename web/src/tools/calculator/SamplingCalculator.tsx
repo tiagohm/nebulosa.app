@@ -5,9 +5,9 @@ import { formatFixed, formatMillimeters } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OptionalDatum, OutcomeView, Primary, Summary } from './CalculatorParts'
 import { DIFFRACTION_EXAMPLE, type DiffractionDraft, diffraction, diffractionFromOptics, diffractionFromTelescopeModel, SAMPLING_EXAMPLE, type SamplingDraft, type SamplingMode, sampling, samplingFromOptics } from './sampling'
-import { positiveText } from './values'
+import { fieldIssues, positiveText } from './values'
 
 // Views of the Sampling & Focus calculators: Sampling and Diffraction & Focus, whose pixel size can be taken from a model of
 // the camera model catalog.
@@ -34,13 +34,15 @@ export function SamplingCalculator({ entry, onChange, context }: CalculatorViewP
 
 	return (
 		<CalculatorLayout
+			issues={fieldIssues(result, result.status === 'ready' ? result.value.recommendedFocalLength : undefined)}
+			summary={<Summary outcome={result}>{({ fwhmPixels }) => ({ label: 'Stellar FWHM', value: `${formatFixed(fwhmPixels, 2)} px` })}</Summary>}
 			bar={<DraftBar entry={entry} onChange={onChange} context={context} example={SAMPLING_EXAMPLE} fromOptics={samplingFromOptics} />}
 			inputs={
 				<>
 					<SegmentedControl label="Compute from" options={SAMPLING_MODES} value={draft.mode} onChange={(mode) => set({ mode })} format={(mode) => (mode === 'seeing' ? 'Seeing' : 'Measured FWHM')} />
 					<FieldGrid>
 						<NumberField label="Image scale" suffix="″/px" value={draft.scale} onChange={(scale) => set({ scale })} />
-						{draft.mode === 'seeing' ? <NumberField label="Seeing (FWHM)" suffix="″" value={draft.seeing} onChange={(seeing) => set({ seeing })} /> : <NumberField label="Measured FWHM" suffix="px" value={draft.fwhm} onChange={(fwhm) => set({ fwhm })} />}
+						{draft.mode === 'seeing' ? <NumberField label="Seeing (FWHM)" field="Seeing" suffix="″" value={draft.seeing} onChange={(seeing) => set({ seeing })} /> : <NumberField label="Measured FWHM" suffix="px" value={draft.fwhm} onChange={(fwhm) => set({ fwhm })} />}
 						<NumberField label="Pixel size" suffix="µm" optional value={draft.pixelSize} onChange={(pixelSize) => set({ pixelSize })} />
 						<NumberField label="Target FWHM" suffix="px" optional value={draft.targetSampling} onChange={(targetSampling) => set({ targetSampling })} />
 					</FieldGrid>
@@ -87,12 +89,14 @@ export function DiffractionCalculator({ entry, onChange, context }: CalculatorVi
 
 	return (
 		<CalculatorLayout
+			issues={fieldIssues(result)}
+			summary={<Summary outcome={result}>{({ airyDisk }) => ({ label: 'Airy disk', value: `${formatFixed(airyDisk, 2)} µm` })}</Summary>}
 			bar={<DraftBar entry={entry} onChange={onChange} context={context} example={DIFFRACTION_EXAMPLE} fromOptics={diffractionFromOptics} />}
 			inputs={
 				<>
 					<FieldGrid>
 						<NumberField label="Wavelength" suffix="nm" value={draft.wavelength} onChange={(wavelength) => set({ wavelength })} />
-						<NumberField label="Focal ratio (f/)" value={draft.focalRatio} onChange={(focalRatio) => set({ focalRatio })} />
+						<NumberField label="Focal ratio (f/)" field="Focal ratio" value={draft.focalRatio} onChange={(focalRatio) => set({ focalRatio })} />
 						<NumberField label="Pixel size" suffix="µm" optional value={draft.pixelSize} onChange={(pixelSize) => set({ pixelSize })} />
 					</FieldGrid>
 					<TelescopeModelSearch label="Focal ratio from a telescope model" onPick={(model) => onChange({ ...entry, draft: diffractionFromTelescopeModel(draft, model) })} />

@@ -13,5 +13,5 @@ export interface NoticeProps {
 
 // One line of explanation, or an error.
 export function Notice({ error = false, children }: NoticeProps) {
-	return <p className={cn('m-0 text-xs leading-4', error ? 'text-danger' : 'text-ink-300')}>{children}</p>
+	return <p className={cn('m-0 text-xs leading-4 text-pretty', error ? 'text-danger' : 'text-ink-300')}>{children}</p>
 }

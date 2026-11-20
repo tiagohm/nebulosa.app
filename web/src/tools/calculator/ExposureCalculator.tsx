@@ -2,8 +2,9 @@ import { formatFixed, formatDuration } from '../../format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OptionalDatum, OutcomeView, Primary } from './CalculatorParts'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OptionalDatum, OutcomeView, Primary, Summary } from './CalculatorParts'
 import { EXPOSURE_PLAN_EXAMPLE, type ExposurePlanDraft, exposurePlan, type PlanMode, STAR_TRAIL_EXAMPLE, type StarTrailDraft, starTrail, starTrailFromOptics } from './exposure'
+import { fieldIssues } from './values'
 
 // Views of the Exposure & Integration calculators: Exposure Planner and Star Trailing.
 
@@ -22,6 +23,8 @@ export function ExposurePlannerCalculator({ entry, onChange, context }: Calculat
 
 	return (
 		<CalculatorLayout
+			issues={fieldIssues(result)}
+			summary={<Summary outcome={result}>{({ frames, total }) => (draft.mode === 'count' ? { label: 'Total integration', value: formatDuration(total) } : { label: 'Frames needed', value: frames })}</Summary>}
 			bar={<DraftBar entry={entry} onChange={onChange} context={context} example={EXPOSURE_PLAN_EXAMPLE} />}
 			inputs={
 				<>
@@ -38,7 +41,7 @@ export function ExposurePlannerCalculator({ entry, onChange, context }: Calculat
 						<>
 							{draft.mode === 'count' ? <Primary label="Total integration">{formatDuration(total)}</Primary> : <Primary label="Frames needed">{frames}</Primary>}
 							{draft.mode === 'time' && <DataRow label="Total integration">{formatDuration(total)}</DataRow>}
-							<DataRow label="Stacking SNR gain">×{formatFixed(snrGain, 2)}</DataRow>
+							<DataRow label="Stacking SNR gain">{formatFixed(snrGain, 2)}×</DataRow>
 							<DataRow label="Stacking depth gain">{formatFixed(magnitudeGain, 2)} mag</DataRow>
 						</>
 					)}
@@ -69,11 +72,19 @@ export function StarTrailingCalculator({ entry, onChange, context }: CalculatorV
 
 	return (
 		<CalculatorLayout
+			issues={fieldIssues(result)}
+			summary={
+				<Summary outcome={result}>
+					{({ trail, maxExposure }) =>
+						trail !== undefined ? { label: 'Star trail', value: `${formatFixed(trail, 1)} px` } : maxExposure?.status === 'ready' ? { label: 'Longest exposure in budget', value: formatDuration(maxExposure.value) } : maxExposure && { label: 'Longest exposure in budget', value: 'No limit' }
+					}
+				</Summary>
+			}
 			bar={<DraftBar entry={entry} onChange={onChange} context={context} example={STAR_TRAIL_EXAMPLE} fromOptics={starTrailFromOptics} />}
 			inputs={
 				<>
 					<FieldGrid>
-						<NumberField label="Declination" suffix="°" value={draft.declination} onChange={(declination) => set({ declination })} />
+						<NumberField label="Declination" suffix="°" signed value={draft.declination} onChange={(declination) => set({ declination })} />
 						<NumberField label="Image scale" suffix="″/px" value={draft.scale} onChange={(scale) => set({ scale })} />
 						<NumberField label="Exposure" suffix="s" optional value={draft.exposure} onChange={(exposure) => set({ exposure })} />
 						<NumberField label="Trail budget" suffix="px" optional value={draft.trailLimit} onChange={(trailLimit) => set({ trailLimit })} />

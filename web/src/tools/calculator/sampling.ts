@@ -1,7 +1,7 @@
 import type { TelescopeModel } from 'api'
 import { airyDiskInPixels, airyDiskSize, classifyFWHMSampling, criticalFocusZone, type FWHMSamplingKind, fwhmPixelsToSeeing, recommendedFocalLength, samplingRatio } from 'nebulosa/src/astronomy/formulas'
 import { isFraming, type OpticalConfiguration, resolveFraming } from '../../framing/geometry'
-import { newCheck, type OptionalOutcome, optional, optionalOutcome, type Outcome, outcome, POSITIVE, positiveText, ready, required } from './values'
+import { newCheck, type OptionalOutcome, optional, optionalOutcome, type Outcome, outcome, PIXEL_SIZE, POSITIVE, positiveText, ready, required } from './values'
 
 // Sampling & Focus calculators. Sampling relates the seeing, a stellar FWHM in arcseconds, to the image scale: the
 // FWHM in pixels it gives (or, inverted, the seeing a measured FWHM in pixels implies), its sampling class, and the
@@ -96,7 +96,7 @@ export function sampling(draft: SamplingDraft): Outcome<SamplingResult> {
 		const fwhmPixels = draft.mode === 'seeing' ? samplingRatio(seeing, scale) : fwhm
 		const actualSeeing = draft.mode === 'seeing' ? seeing : fwhmPixelsToSeeing(fwhm, scale)
 		const recommended = optionalOutcome([draft.pixelSize, draft.targetSampling], (target) => {
-			const pixelSize = required(target, 'Pixel size', draft.pixelSize, POSITIVE)
+			const pixelSize = required(target, 'Pixel size', draft.pixelSize, PIXEL_SIZE)
 			const targetSampling = required(target, 'Target FWHM', draft.targetSampling, POSITIVE)
 			return () => ready(recommendedFocalLength(pixelSize, targetSampling, actualSeeing))
 		})
@@ -120,7 +120,7 @@ export function diffraction(draft: DiffractionDraft): Outcome<DiffractionResult>
 	const check = newCheck()
 	const wavelength = required(check, 'Wavelength', draft.wavelength, POSITIVE) / 1000
 	const focalRatio = required(check, 'Focal ratio', draft.focalRatio, POSITIVE)
-	const pixelSize = optional(check, 'Pixel size', draft.pixelSize, POSITIVE)
+	const pixelSize = optional(check, 'Pixel size', draft.pixelSize, PIXEL_SIZE)
 
 	return outcome(check, () => {
 		const airyDisk = airyDiskSize(wavelength, focalRatio)

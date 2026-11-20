@@ -2,7 +2,7 @@ import { proxy } from 'valtio'
 
 // Navigation state of the tab: the active workspace, and for Tools the standalone tool shown. The URL path is the
 // source of truth, so each tab navigates independently and a reload reopens the same context.
-// Paths are /images, /sky, /tools, /tools/<tool>, /tools/solar-eclipse-map/<eclipse id>,
+// Paths are /images, /sky, /tools, /tools/<tool>, /tools/calculator/<calculator id>, /tools/solar-eclipse-map/<eclipse id>,
 // /tools/lunar-eclipse-map/<eclipse id>, /tools/calibration-library/<group id>, /tools/image-stacking/<project id>,
 // /tools/artificial-satellites/<NORAD id>, /tools/observing-planner/<plan id>, /tools/framing/<framing id>, the Equipment
 // Control page
@@ -73,6 +73,8 @@ export interface ToolsRoute {
 	readonly framing?: string
 	// Id of the shower Meteor Showers shows (such as iau:4); absent for its own choice and for every other tool.
 	readonly meteorShower?: string
+	// Id of the calculator the Calculator shows (such as sampling); absent for its first one and for every other tool.
+	readonly calculator?: string
 }
 
 // View of a device in the Equipment Control page besides its controls: its INDI properties, or the messages its INDI
@@ -171,7 +173,8 @@ export function settingsSection(route: SettingsRoute): SettingsSectionId {
 // Returns the route of a URL path. An unknown workspace gives DEFAULT_ROUTE; an unknown tool opens the Tools
 // catalog; an unknown Settings section opens the first one; extra segments are ignored, but for the site of Observing
 // Sites, the kind and item of Equipment Catalog, the eclipse id of the Solar and Lunar Eclipse Maps, the group of the Calibration Library, the project of Image
-// Stacking, the satellite of Artificial Satellites, the plan of the Observing Planner, and the framing of Framing.
+// Stacking, the satellite of Artificial Satellites, the plan of the Observing Planner, the framing of Framing, and the
+// calculator of the Calculator.
 export function parseRoute(pathname: string): Route {
 	const [workspace = '', first = '', second = '', third = ''] = pathname.split('/').filter(Boolean)
 	if (workspace === 'equipment') return first ? (isEquipmentView(second) ? { workspace, device: first, view: second } : { workspace, device: first }) : { workspace }
@@ -192,6 +195,7 @@ export function parseRoute(pathname: string): Route {
 		if (first === 'observing-planner' && second) return { workspace, tool: first, plan: decodeURIComponent(second) }
 		if (first === 'meteor-showers' && second) return { workspace, tool: first, meteorShower: decodeURIComponent(second) }
 		if (first === 'framing' && second) return { workspace, tool: first, framing: decodeURIComponent(second) }
+		if (first === 'calculator' && second) return { workspace, tool: first, calculator: decodeURIComponent(second) }
 		return ECLIPSE_MAP_TOOLS.has(first) && second ? { workspace, tool: first, eclipse: decodeURIComponent(second) } : { workspace, tool: first }
 	}
 
@@ -206,6 +210,7 @@ export function routePath(route: Route): string {
 	if (route.workspace === 'tools' && route.tool === 'observing-planner' && route.plan) return `/tools/${route.tool}/${encodeURIComponent(route.plan)}`
 	if (route.workspace === 'tools' && route.tool === 'meteor-showers' && route.meteorShower) return `/tools/${route.tool}/${encodeURIComponent(route.meteorShower)}`
 	if (route.workspace === 'tools' && route.tool === 'framing' && route.framing) return `/tools/${route.tool}/${encodeURIComponent(route.framing)}`
+	if (route.workspace === 'tools' && route.tool === 'calculator' && route.calculator) return `/tools/${route.tool}/${encodeURIComponent(route.calculator)}`
 	if (route.workspace === 'tools' && route.tool) return ECLIPSE_MAP_TOOLS.has(route.tool) && route.eclipse ? `/tools/${route.tool}/${encodeURIComponent(route.eclipse)}` : `/tools/${route.tool}`
 	if (route.workspace === 'equipment') return route.device ? `/equipment/${encodeURIComponent(route.device)}${route.view ? `/${route.view}` : ''}` : '/equipment'
 	if (route.workspace === 'settings') {

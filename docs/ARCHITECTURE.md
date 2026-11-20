@@ -70,7 +70,7 @@ it receives a full snapshot on that socket, then the changes, so snapshot and ch
 the subscription belongs to the socket, not to the tab's client id, and ends with it.
 
 The control states of the devices of the active profile's connection are mirrored once in the web, by `controlRuntime` (`web/src/equipment-control/control.ts`), from `GET /api/connections/:id/states` and the `<type>:updated` events.
-A view that follows one device, such as the Sky mount (`mountView`), Mount Nudge, the camera capabilities of Camera Acquisition and Auto Focus, or the sensor geometry of the camera roles that the framings and the Calculator use (`CameraCapabilities.sensor`, `liveSensors` of `web/src/sky/sensors.ts`), reads that mirror (`watchedDeviceState`) and never fetches or tracks the device's state apart.
+A view that follows one device, such as the Sky mount (`mountView`), Mount Nudge, the camera capabilities of Camera Acquisition and Auto Focus, or the sensor geometry of the camera roles that the framings and the Calculator use (`CameraCapabilities.sensor`, `liveSensors` and `roleSensors` of `web/src/sky/sensors.ts`), reads that mirror (`watchedDeviceState`) and never fetches or tracks the device's state apart.
 
 Each `api` service exposes its routes through a `create<Name>Routes(service)` factory in its own module; `api/src/index.ts` only composes the services, spreads their routes, and serves `/api/health` and `/api/ws`.
 One route is composed by `app/src/main.ts` instead: `createAboutRoutes` (`api/src/about.ts`) serves the identity of the distribution, which `app` owns (its package version, and the commits and compile time `app/build.ts` inlines into the executable), so `api` never imports `app`.

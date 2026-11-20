@@ -1,7 +1,7 @@
 import type { TelescopeModel } from 'api'
 import { dawesLimit, effectiveApertureWithObstruction, exitPupilFromApertureAndMagnification, eyepieceTrueFovViaFieldStop, eyepieceView, lightGraspRatio, limitingMagnitude, magnification, obstructionRatio, rayleighLimit } from 'nebulosa/src/astronomy/formulas'
 import type { OpticalConfiguration } from '../../framing/geometry'
-import { between, newCheck, optional, type Outcome, outcome, POSITIVE, positiveText, ready, required } from './values'
+import { APERTURE, between, FOCAL_LENGTH, newCheck, optional, type Outcome, outcome, POSITIVE, positiveText, ready, required } from './values'
 
 // Visual Observation calculators. Eyepiece & Telescope gives the magnification, exit pupil, and true field of an
 // eyepiece, with the resolving and limiting magnitude estimates of the aperture. Aperture Comparison compares the light
@@ -98,10 +98,10 @@ export const EYEPIECE_EXAMPLE: EyepieceDraft = { focalLength: '1000', aperture: 
 // Computes Eyepiece & Telescope.
 export function eyepiece(draft: EyepieceDraft): Outcome<EyepieceResult> {
 	const check = newCheck()
-	const focalLength = required(check, 'Focal length', draft.focalLength, POSITIVE)
-	const aperture = required(check, 'Aperture', draft.aperture, POSITIVE)
+	const focalLength = required(check, 'Focal length', draft.focalLength, FOCAL_LENGTH)
+	const aperture = required(check, 'Aperture', draft.aperture, APERTURE)
 	const eyepieceFocalLength = required(check, 'Eyepiece focal length', draft.eyepiece, POSITIVE)
-	const apparentField = optional(check, 'Apparent field', draft.apparentField, between(0, 180, true, true))
+	const apparentField = optional(check, 'Apparent field', draft.apparentField, between(0, 180, { minOpen: true, maxOpen: true, unit: '°' }))
 	const fieldStop = optional(check, 'Field stop', draft.fieldStop, POSITIVE)
 
 	return outcome(check, () => {
@@ -130,12 +130,12 @@ function compare(a: number, b: number): LightGrasp {
 // Computes Aperture Comparison. An obstruction must be smaller than its aperture.
 export function apertureComparison(draft: ApertureComparisonDraft): Outcome<ApertureComparisonResult> {
 	const check = newCheck()
-	const apertureA = required(check, 'Aperture A', draft.apertureA, POSITIVE)
+	const apertureA = required(check, 'Aperture A', draft.apertureA, APERTURE)
 	const obstructionA = optional(check, 'Obstruction A', draft.obstructionA, POSITIVE)
-	const apertureB = required(check, 'Aperture B', draft.apertureB, POSITIVE)
+	const apertureB = required(check, 'Aperture B', draft.apertureB, APERTURE)
 	const obstructionB = optional(check, 'Obstruction B', draft.obstructionB, POSITIVE)
-	if (obstructionA !== undefined && obstructionA >= apertureA) check.invalid.push('Obstruction A must be smaller than aperture A.')
-	if (obstructionB !== undefined && obstructionB >= apertureB) check.invalid.push('Obstruction B must be smaller than aperture B.')
+	if (obstructionA !== undefined && obstructionA >= apertureA) check.invalid.push({ field: 'Obstruction A', reason: 'Obstruction A must be smaller than aperture A.' })
+	if (obstructionB !== undefined && obstructionB >= apertureB) check.invalid.push({ field: 'Obstruction B', reason: 'Obstruction B must be smaller than aperture B.' })
 
 	return outcome(check, () => {
 		// Returns one side: a clear aperture keeps its diameter.

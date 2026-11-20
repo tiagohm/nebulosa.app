@@ -7,8 +7,9 @@ import { formatApparentSize } from '../../sky/format'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary } from './CalculatorParts'
+import { CalculatorLayout, type CalculatorViewProps, DraftBar, FieldGrid, Formula, FormulaNotes, NumberField, OutcomeView, Primary, Summary } from './CalculatorParts'
 import { IMAGING_SETUP_EXAMPLE, type ImagingSetupDraft, imagingSetup, imagingSetupFromModel, imagingSetupFromOptics, imagingSetupFromTelescopeModel, MOSAIC_EXAMPLE, type MosaicDraft, mosaic, mosaicFromOptics, type SensorKind } from './optics'
+import { fieldIssues } from './values'
 
 // Views of the Optics & Field of View calculators: Imaging Setup, whose sensor can be filled from a model of the camera
 // model catalog, and Mosaic Estimator.
@@ -20,6 +21,7 @@ const SENSOR_KINDS: readonly SensorKind[] = ['pixels', 'physical']
 export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorViewProps<ImagingSetupDraft>) {
 	const { draft } = entry
 	const result = imagingSetup(draft)
+	const apertureIssue = result.status === 'ready' ? result.value.apertureIssue : undefined
 
 	// Changes one field of the draft.
 	function set(next: Partial<ImagingSetupDraft>) {
@@ -28,12 +30,14 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 
 	return (
 		<CalculatorLayout
+			issues={apertureIssue ? [apertureIssue] : fieldIssues(result)}
+			summary={<Summary outcome={result}>{({ framing }) => ({ label: 'Field of view', value: `${formatApparentSize(framing.width)} × ${formatApparentSize(framing.height)}` })}</Summary>}
 			bar={<DraftBar entry={entry} onChange={onChange} context={context} example={IMAGING_SETUP_EXAMPLE} fromOptics={imagingSetupFromOptics} />}
 			inputs={
 				<>
 					<FieldGrid>
-						<NumberField label="Focal length (native)" suffix="mm" value={draft.focalLength} onChange={(focalLength) => set({ focalLength })} />
-						<NumberField label="Reducer / Barlow" suffix="×" value={draft.focalMultiplier} onChange={(focalMultiplier) => set({ focalMultiplier })} />
+						<NumberField label="Focal length (native)" field="Focal length" suffix="mm" value={draft.focalLength} onChange={(focalLength) => set({ focalLength })} />
+						<NumberField label="Reducer / Barlow" field="Reducer / Barlow factor" suffix="×" value={draft.focalMultiplier} onChange={(focalMultiplier) => set({ focalMultiplier })} />
 						<NumberField label="Aperture" suffix="mm" optional value={draft.aperture} onChange={(aperture) => set({ aperture })} />
 					</FieldGrid>
 					<SegmentedControl label="Sensor" options={SENSOR_KINDS} value={draft.sensorKind} onChange={(sensorKind) => set({ sensorKind })} format={(kind) => (kind === 'pixels' ? 'Resolution' : 'Physical size')} />
@@ -53,9 +57,7 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 					</FieldGrid>
 					<TelescopeModelSearch label="Optics from a telescope model" onPick={(model) => onChange({ ...entry, draft: imagingSetupFromTelescopeModel(draft, model) })} />
 					<CameraModelSearch label="Sensor from a camera model" onPick={(model) => onChange({ ...entry, draft: imagingSetupFromModel(draft, model) })} />
-					<Notice>
-						The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without). A telescope model of the AstroBin catalog fills the focal length, the shortest of a range, and the aperture; a camera model fills the resolution and pixel size. Each leaves the rest as it is.
-					</Notice>
+					<Notice>The focal length is the native one; the reducer or Barlow factor is applied to it once (1 without).</Notice>
 				</>
 			}
 			results={
@@ -71,7 +73,7 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 							<DataRow label="Diagonal">{formatDegrees(diagonal, 3)}</DataRow>
 							<DataRow label="Image scale">{framing.scale === undefined ? <span className="text-xs text-ink-300">Needs the pixel size: enter the sensor by resolution.</span> : formatPixelScale(arcsec(framing.scale))}</DataRow>
 							<DataRow label="Effective focal length">{formatMillimeters(framing.effectiveFocalLength)}</DataRow>
-							<DataRow label="Focal ratio">{framing.focalRatio === undefined ? <span className="text-xs text-ink-300">Needs the aperture.</span> : formatFocalRatio(framing.focalRatio)}</DataRow>
+							<DataRow label="Focal ratio">{apertureIssue ? <span className="text-xs text-danger">{apertureIssue.reason}</span> : framing.focalRatio === undefined ? <span className="text-xs text-ink-300">Needs the aperture.</span> : formatFocalRatio(framing.focalRatio)}</DataRow>
 							<DataRow label="Sensor">
 								{formatFixed(framing.sensorWidth, 2)} × {formatFixed(framing.sensorHeight, 2)} mm
 							</DataRow>
@@ -88,6 +90,7 @@ export function ImagingSetupCalculator({ entry, onChange, context }: CalculatorV
 					<p className="m-0">
 						This is the geometric field of a flat sensor, the same the Framing tool and the Sky draw; the small-angle d / F differs from it only for wide fields. Distortion, vignetting, and the image circle of the optics are not modeled, and the rotation of the camera does not change the field.
 					</p>
+					<p className="m-0">A telescope model of the AstroBin catalog fills the focal length, the shortest of a range, and the aperture; a camera model fills the resolution and pixel size. Each leaves the rest as it is.</p>
 				</FormulaNotes>
 			}
 		/>
@@ -106,6 +109,8 @@ export function MosaicCalculator({ entry, onChange, context }: CalculatorViewPro
 
 	return (
 		<CalculatorLayout
+			issues={fieldIssues(result)}
+			summary={<Summary outcome={result}>{({ columns, rows, panels }) => ({ label: 'Panels', value: `${panels} (${columns} × ${rows})` })}</Summary>}
 			bar={<DraftBar entry={entry} onChange={onChange} context={context} example={MOSAIC_EXAMPLE} fromOptics={mosaicFromOptics} />}
 			inputs={
 				<>

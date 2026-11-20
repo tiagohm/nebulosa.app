@@ -175,6 +175,7 @@ export function Select<T extends string>({ label, options, value, onChange, clas
 					ref={triggerRef}
 					type="button"
 					role="combobox"
+					title={label}
 					disabled={disabled}
 					onClick={() => (open ? close(false) : openList())}
 					onKeyDown={handleKeyDown}

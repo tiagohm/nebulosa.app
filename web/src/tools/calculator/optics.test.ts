@@ -56,9 +56,29 @@ describe('imaging setup', () => {
 		expect(imagingSetup(draft)).toEqual({ status: 'incomplete', missing: ['Sensor width'] })
 	})
 
-	test('rejects a fractional resolution and a non-positive factor', () => {
+	test('rejects a fractional resolution and a factor outside real reducers and Barlows', () => {
 		const result = imagingSetup({ ...IMAGING_SETUP_EXAMPLE, width: '100.5', focalMultiplier: '0' })
-		expect(result).toEqual({ status: 'invalid', reason: 'Reducer / Barlow factor must be greater than 0. Width must be a whole number greater than 0.' })
+		expect(result).toEqual({
+			status: 'invalid',
+			reason: 'Reducer / Barlow factor must be at least 0.1× and at most 10×. Width must be a whole number greater than 0.',
+			issues: [
+				{ field: 'Reducer / Barlow factor', reason: 'Reducer / Barlow factor must be at least 0.1× and at most 10×.' },
+				{ field: 'Width', reason: 'Width must be a whole number greater than 0.' },
+			],
+		})
+	})
+
+	test('rejects a focal length or pixel size no real optics have', () => {
+		expect(imagingSetup({ ...IMAGING_SETUP_EXAMPLE, focalLength: '1e-300' })).toMatchObject({ status: 'invalid', reason: 'Focal length must be at least 1 mm and at most 100000 mm.' })
+		expect(imagingSetup({ ...IMAGING_SETUP_EXAMPLE, pixelSize: '0.001' })).toMatchObject({ status: 'invalid', reason: 'Pixel size must be at least 0.1 µm and at most 100 µm.' })
+	})
+
+	test('an aperture that cannot be used keeps the field and only loses the focal ratio', () => {
+		const result = imagingSetup({ ...IMAGING_SETUP_EXAMPLE, aperture: '0' })
+		if (result.status !== 'ready') throw new Error('field not computed')
+		expect(result.value.framing.focalRatio).toBeUndefined()
+		expect(result.value.apertureIssue).toEqual({ field: 'Aperture', reason: 'Aperture must be at least 1 mm and at most 100000 mm.' })
+		expect(imagingSetup(IMAGING_SETUP_EXAMPLE)).toMatchObject({ status: 'ready', value: { apertureIssue: undefined } })
 	})
 })
 
@@ -70,7 +90,7 @@ describe('mosaic', () => {
 	})
 
 	test('an overlap of 100 % or more is invalid', () => {
-		expect(mosaic({ ...MOSAIC_EXAMPLE, overlap: '100' })).toEqual({ status: 'invalid', reason: 'Overlap must be at least 0 and less than 100.' })
+		expect(mosaic({ ...MOSAIC_EXAMPLE, overlap: '100' })).toMatchObject({ status: 'invalid', reason: 'Overlap must be at least 0 % and less than 100 %.' })
 	})
 
 	test('the field comes from the optics, or is empty when they are incomplete', () => {

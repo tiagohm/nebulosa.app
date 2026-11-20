@@ -5,13 +5,15 @@ import { DEFAULT_TELESCOPE, type EquipmentTelescopes, type OpticalConfiguration,
 import type { SensorTarget } from '../../sky/sensors'
 
 // Sources a calculator can import an optical configuration from, read only from what the tab already has: the active
-// profile's Equipment Setup (its telescope or guide telescope with the sensor the camera of a camera role reports), the
-// cameras of the Equipment Catalog (the telescope with the sensor a camera declares), the telescopes of the Equipment
-// Catalog (the optics a telescope declares with the sensor the Main Camera reports), and the framings of the Framing
-// tool as the tab resolves them. An import copies the configuration once into a calculator draft, which is then edited
-// on its own: the profile, the framings, and the devices are never written, and a later change of the source never
-// rewrites the draft. The origin of an import stays shown only while
-// it still describes the same profile and camera.
+// profile's Equipment Setup (its telescope or guide telescope with the sensor of a camera role: what its device reports,
+// completed by the Equipment Catalog), the cameras of the Equipment Catalog (the telescope with the sensor a camera
+// declares), the telescopes of the Equipment Catalog (the optics a telescope declares with the sensor of the Main
+// Camera), and the framings of the Framing tool as the tab resolves them. An import copies the configuration once into a
+// calculator draft, keeping each field the source does not give, and the draft is then edited on its own: the profile,
+// the framings, and the devices are never written, and a later change of the source never rewrites the draft. Until a
+// calculator is first edited, imported into, or reset, it shows the Main Camera of the Equipment Setup when that fills
+// every field it imports, else its example. The origin of an import stays shown only while it still describes the same
+// profile and camera.
 
 // Source of an optical configuration: the Equipment Setup through a camera role, a camera or a telescope of the
 // Equipment Catalog by id, or a framing of the Framing tool by id.
@@ -47,7 +49,8 @@ export interface SourceContext {
 	readonly profileId: string
 	// Profile data.
 	readonly settings: SourceSettings
-	// Sensor each camera role's device reports; absent for a role whose camera reports none.
+	// Sensor of each camera role: what its device reports, completed by the Equipment Catalog; absent for a role whose
+	// camera has none.
 	readonly live: Readonly<Partial<Record<CameraRole, CameraSensor>>>
 	// Camera device each camera role follows on the open connection.
 	readonly cameras: Readonly<Partial<Record<CameraRole, SensorTarget>>>
@@ -76,6 +79,11 @@ export interface DraftEntry<D> {
 	readonly origin?: ImportOrigin
 	// Draft right after the last import; present with origin.
 	readonly imported?: D
+	// Whether the last import left some fields as they were, because the source does not give them.
+	readonly partial?: boolean
+	// Whether the draft was never edited, imported into, or reset since the tool opened, so it shows the Equipment
+	// Setup when it can (shownEntry).
+	readonly pristine?: boolean
 }
 
 // Prefix of the source id of a framing.
@@ -119,14 +127,17 @@ export function sourceLabel(settings: Pick<SourceSettings, 'framings' | 'catalog
 	return framingOf(settings, source)?.name ?? 'Deleted framing'
 }
 
-// Returns the menu group of a source.
+// Returns the menu group of a source, which also tells what it brings: a camera of the catalog its sensor, a telescope
+// of the catalog its optics.
 export function sourceGroup(source: OpticsSourceId) {
-	return source.startsWith(FRAMING_PREFIX) ? 'Framings' : source.startsWith(CATALOG_PREFIX) || source.startsWith(TELESCOPE_PREFIX) ? 'Equipment Catalog' : 'Equipment Setup'
+	if (source.startsWith(FRAMING_PREFIX)) return 'Framings'
+	if (source.startsWith(CATALOG_PREFIX)) return 'Catalog cameras'
+	return source.startsWith(TELESCOPE_PREFIX) ? 'Catalog telescopes' : 'Equipment Setup'
 }
 
 // Optical configuration of a camera role of the Equipment Setup, or of a sensor behind the telescope: the optics it looks
 // through (the guide telescope for the Guide Camera, the telescope otherwise; zero when not entered) with the sensor
-// given or the one the role reports, else an empty sensor and the role that has none (missingCamera).
+// given or the role's own, else an empty sensor and the role that has none (missingCamera).
 function setupOptics({ telescope, guideTelescope }: EquipmentTelescopes, role: CameraRole, live: SourceContext['live'], sensor?: SensorGeometry): { readonly optics: OpticalConfiguration; readonly missingCamera?: CameraRole } {
 	const { focalLength, focalMultiplier, aperture } = (role === 'GUIDE_CAMERA' ? guideTelescope : telescope) ?? DEFAULT_TELESCOPE
 	const base = { focalLength, focalMultiplier, aperture, rotation: 0 }
@@ -147,7 +158,7 @@ export function importOptics(context: SourceContext, source: OpticsSourceId): Op
 
 	if (isCameraRole(source)) {
 		const { optics, missingCamera } = setupOptics(settings, source, context.live)
-		if (missingCamera) return { reason: `The ${label} has not reported its sensor: assign and connect it in the Equipment Setup.` }
+		if (missingCamera) return { reason: `The ${label} has no sensor: assign its camera in the Equipment Setup, and connect it or declare its sensor in Settings → Equipment Catalog.` }
 		const camera = context.cameras[source]
 		return { optics, origin: { source, label, profileId, camera: camera && { connectionId: camera.connectionId, id: camera.id } } }
 	}
@@ -158,7 +169,7 @@ export function importOptics(context: SourceContext, source: OpticsSourceId): Op
 		if (!camera.sensor) return { reason: `No sensor is declared for ${camera.name}: declare it in Settings → Equipment Catalog.` }
 		const { width, height, pixelSize } = camera.sensor
 		const { optics } = setupOptics(settings, 'MAIN_CAMERA', context.live, { kind: 'pixels', width, height, pixelSize: pixelSize ?? 0 })
-		return { optics, origin: { source, label, profileId } }
+		return { optics, origin: { source, label: `${label} behind the telescope of the Equipment Setup`, profileId } }
 	}
 
 	if (source.startsWith(TELESCOPE_PREFIX)) {
@@ -167,12 +178,39 @@ export function importOptics(context: SourceContext, source: OpticsSourceId): Op
 		if (telescope.focalLength === undefined) return { reason: `No focal length is declared for ${telescope.name}: declare it in Settings → Equipment Catalog.` }
 		const main = context.live.MAIN_CAMERA
 		const sensor: SensorGeometry = { kind: 'pixels', width: main?.width ?? 0, height: main?.height ?? 0, pixelSize: main?.pixelSize ?? 0 }
-		return { optics: { focalLength: telescope.focalLength, focalMultiplier: 1, aperture: telescope.aperture ?? 0, sensor, rotation: 0 }, origin: { source, label, profileId } }
+		return { optics: { focalLength: telescope.focalLength, focalMultiplier: 1, aperture: telescope.aperture ?? 0, sensor, rotation: 0 }, origin: { source, label: `${label} with the Main Camera`, profileId } }
 	}
 
 	const framing = framingOf(settings, source)
 	if (!framing) return { reason: 'The framing no longer exists.' }
 	return { optics: { ...framing.optics, sensor: { ...framing.optics.sensor } }, origin: { source, label, profileId } }
+}
+
+// Returns a draft with a source imported into it, as a new entry: each field the configuration fills, and each one it
+// leaves empty kept as it was (partial); or why the source cannot be imported.
+export function importDraft<D extends object>(draft: D, context: SourceContext, source: OpticsSourceId, fromOptics: (optics: Readonly<OpticalConfiguration>) => Partial<D>): DraftEntry<D> | { readonly reason: string } {
+	const result = importOptics(context, source)
+	if ('reason' in result) return result
+	const fields = fromOptics(result.optics)
+	const next: D = { ...draft }
+	let partial = false
+
+	for (const key of Object.keys(fields) as (keyof D)[]) {
+		const value = fields[key]
+		if (value === undefined || value === '') partial = true
+		else next[key] = value
+	}
+
+	return { draft: next, origin: result.origin, imported: next, partial }
+}
+
+// Returns the entry a calculator shows: for a pristine one that imports optics, the Main Camera of the Equipment Setup
+// imported into its example when it fills every field, still pristine so it follows the setup until first changed;
+// otherwise the entry itself.
+export function shownEntry<D extends object>(entry: DraftEntry<D>, context: SourceContext, fromOptics?: (optics: Readonly<OpticalConfiguration>) => Partial<D>): DraftEntry<D> {
+	if (!entry.pristine || !fromOptics) return entry
+	const imported = importDraft(entry.draft, context, 'MAIN_CAMERA', fromOptics)
+	return 'reason' in imported || imported.partial ? entry : { ...imported, pristine: true }
 }
 
 // Whether an import origin still describes the active profile and, for a camera, the camera its role follows now.

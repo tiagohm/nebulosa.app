@@ -18,14 +18,21 @@ export function suffixPadding(suffix: string) {
 
 export interface FieldProps {
 	readonly label?: string
+	// Id of the control the label names, so the label gives the control its name and a click on it focuses the control;
+	// absent for a control named otherwise.
+	readonly htmlFor?: string
 	readonly className?: string
 	readonly children: ReactNode
 }
 
-export function Field({ label, className, children }: FieldProps) {
+export function Field({ label, htmlFor, className, children }: FieldProps) {
 	return (
 		<div className={cn('flex min-w-fit flex-col gap-1', className)}>
-			{label && <label className="text-xs font-medium tracking-[0.08em] text-ink-200 uppercase">{label}</label>}
+			{label && (
+				<label htmlFor={htmlFor} className="text-xs font-medium tracking-[0.08em] text-ink-200 uppercase">
+					{label}
+				</label>
+			)}
 			{children}
 		</div>
 	)

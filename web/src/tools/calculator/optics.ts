@@ -2,7 +2,7 @@ import type { CameraModel, TelescopeModel } from 'api'
 import { mosaicPanelCount, sensorDiagonalFov } from 'nebulosa/src/astronomy/formulas'
 import { toArcmin } from 'nebulosa/src/math/units/angle'
 import { DEFAULT_OPTICS, type Framing, isFraming, type OpticalConfiguration, resolveFraming, type SensorGeometry } from '../../framing/geometry'
-import { between, newCheck, optional, type Outcome, outcome, POSITIVE, POSITIVE_INTEGER, positiveText, ready, required } from './values'
+import { APERTURE, between, FOCAL_LENGTH, FOCAL_MULTIPLIER, type FieldIssue, newCheck, optional, type Outcome, outcome, PIXEL_SIZE, POSITIVE, POSITIVE_INTEGER, positiveText, ready, required } from './values'
 
 // Optics & Field of View calculators. Imaging Setup resolves a telescope or lens with a camera through resolveFraming,
 // the convention of the Framing tool (2·atan(d / 2F) per axis, the reducer or Barlow factor applied once to the native focal
@@ -41,6 +41,8 @@ export interface ImagingSetupResult {
 	readonly framing: Framing
 	// Diagonal field of view in radians.
 	readonly diagonal: number
+	// Why the aperture typed cannot be used; the field is still computed, only the focal ratio is missing.
+	readonly apertureIssue?: FieldIssue
 }
 
 // Fields of Mosaic Estimator, as typed.
@@ -107,22 +109,24 @@ export function imagingSetupFromOptics(optics: Readonly<OpticalConfiguration>): 
 // Example of Imaging Setup: the default optics of a new framing.
 export const IMAGING_SETUP_EXAMPLE: ImagingSetupDraft = imagingSetupFromOptics(DEFAULT_OPTICS)
 
-// Computes Imaging Setup. The aperture is optional and only gives the focal ratio; a sensor given by its physical size
-// gives no image scale.
+// Computes Imaging Setup. The aperture is optional and only gives the focal ratio, so an aperture that cannot be used
+// leaves the field computed and is reported on its own; a sensor given by its physical size gives no image scale.
 export function imagingSetup(draft: ImagingSetupDraft): Outcome<ImagingSetupResult> {
 	const check = newCheck()
-	const focalLength = required(check, 'Focal length', draft.focalLength, POSITIVE)
-	const focalMultiplier = required(check, 'Reducer / Barlow factor', draft.focalMultiplier, POSITIVE)
-	const aperture = optional(check, 'Aperture', draft.aperture, POSITIVE)
+	const focalLength = required(check, 'Focal length', draft.focalLength, FOCAL_LENGTH)
+	const focalMultiplier = required(check, 'Reducer / Barlow factor', draft.focalMultiplier, FOCAL_MULTIPLIER)
+	const apertureCheck = newCheck()
+	const aperture = optional(apertureCheck, 'Aperture', draft.aperture, APERTURE)
 	const sensor: SensorGeometry =
 		draft.sensorKind === 'pixels'
-			? { kind: 'pixels', width: required(check, 'Width', draft.width, POSITIVE_INTEGER), height: required(check, 'Height', draft.height, POSITIVE_INTEGER), pixelSize: required(check, 'Pixel size', draft.pixelSize, POSITIVE) }
+			? { kind: 'pixels', width: required(check, 'Width', draft.width, POSITIVE_INTEGER), height: required(check, 'Height', draft.height, POSITIVE_INTEGER), pixelSize: required(check, 'Pixel size', draft.pixelSize, PIXEL_SIZE) }
 			: { kind: 'physical', width: required(check, 'Sensor width', draft.sensorWidth, POSITIVE), height: required(check, 'Sensor height', draft.sensorHeight, POSITIVE) }
 
 	return outcome(check, () => {
-		const framing = resolveFraming({ focalLength, focalMultiplier, aperture: aperture ?? 0, sensor, rotation: 0 })
+		const apertureIssue = apertureCheck.invalid[0]
+		const framing = resolveFraming({ focalLength, focalMultiplier, aperture: apertureIssue ? 0 : (aperture ?? 0), sensor, rotation: 0 })
 		if (!isFraming(framing)) return { status: 'incomplete', missing: framing.missing }
-		return ready({ framing, diagonal: sensorDiagonalFov(Math.hypot(framing.sensorWidth, framing.sensorHeight), framing.effectiveFocalLength) })
+		return ready({ framing, diagonal: sensorDiagonalFov(Math.hypot(framing.sensorWidth, framing.sensorHeight), framing.effectiveFocalLength), apertureIssue })
 	})
 }
 
@@ -146,7 +150,7 @@ export function mosaic(draft: MosaicDraft): Outcome<MosaicResult> {
 	const targetHeight = required(check, 'Target height', draft.targetHeight, POSITIVE)
 	const fieldWidth = required(check, 'Field width', draft.fieldWidth, POSITIVE)
 	const fieldHeight = required(check, 'Field height', draft.fieldHeight, POSITIVE)
-	const overlap = required(check, 'Overlap', draft.overlap, between(0, 100, false, true))
+	const overlap = required(check, 'Overlap', draft.overlap, between(0, 100, { maxOpen: true, unit: ' %' }))
 
 	return outcome(check, () => {
 		const columns = mosaicPanelCount(targetWidth, fieldWidth, overlap / 100)

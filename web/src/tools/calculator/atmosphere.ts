@@ -10,7 +10,7 @@ import { between, newCheck, NON_NEGATIVE, optional, type Outcome, outcome, ready
 
 // Fields of Airmass & Visibility Effects, as typed.
 export interface AirmassDraft {
-	// True altitude in degrees, (0, 90].
+	// True altitude in degrees, [0, 90].
 	readonly altitude: string
 	// Extinction coefficient in magnitudes per airmass; optional.
 	readonly extinction: string
@@ -70,10 +70,10 @@ export type DewResult =
 	  }
 
 // Temperatures the Magnus approximation accepts, in degrees Celsius.
-const MAGNUS_DOMAIN = between(MAGNUS_MIN_CELSIUS, MAGNUS_MAX_CELSIUS)
+const MAGNUS_DOMAIN = between(MAGNUS_MIN_CELSIUS, MAGNUS_MAX_CELSIUS, { unit: ' °C' })
 
 // Relative humidities the Magnus approximation accepts, in percent.
-const HUMIDITY_DOMAIN = between(0, 100, true)
+const HUMIDITY_DOMAIN = between(0, 100, { minOpen: true, unit: ' %' })
 
 // Example of Airmass & Visibility Effects: 30° of altitude with a typical visual extinction of 0.2 mag per airmass.
 export const AIRMASS_EXAMPLE: AirmassDraft = { altitude: '30', extinction: '0.2' }
@@ -81,7 +81,7 @@ export const AIRMASS_EXAMPLE: AirmassDraft = { altitude: '30', extinction: '0.2'
 // Computes Airmass & Visibility Effects.
 export function airmass(draft: AirmassDraft): Outcome<AirmassResult> {
 	const check = newCheck()
-	const altitude = required(check, 'Altitude', draft.altitude, between(0, 90, true))
+	const altitude = required(check, 'Altitude', draft.altitude, between(0, 90, { unit: '°' }))
 	const extinction = optional(check, 'Extinction coefficient', draft.extinction, NON_NEGATIVE)
 
 	return outcome(check, () => {
@@ -106,7 +106,7 @@ export function dew(draft: DewDraft): Outcome<DewResult> {
 
 	if (draft.mode === 'humidity') {
 		const point = required(check, 'Dew point', draft.dewPoint, MAGNUS_DOMAIN)
-		if (point > temperature) check.invalid.push('Dew point must not be above the temperature.')
+		if (point > temperature) check.invalid.push({ field: 'Dew point', reason: 'Dew point must not be above the temperature.' })
 		return outcome(check, () => ready({ mode: 'humidity', humidity: Math.min(100, relativeHumidity(temperature, point)) }))
 	}
 

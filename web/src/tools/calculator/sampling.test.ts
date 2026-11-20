@@ -33,7 +33,7 @@ describe('sampling', () => {
 
 	test('only the field of the mode is required', () => {
 		expect(sampling({ ...SAMPLING_EXAMPLE, mode: 'fwhm', fwhm: '' })).toEqual({ status: 'incomplete', missing: ['Measured FWHM'] })
-		expect(sampling({ ...SAMPLING_EXAMPLE, seeing: '0' })).toEqual({ status: 'invalid', reason: 'Seeing must be greater than 0.' })
+		expect(sampling({ ...SAMPLING_EXAMPLE, seeing: '0' })).toEqual({ status: 'invalid', reason: 'Seeing must be greater than 0.', issues: [{ field: 'Seeing', reason: 'Seeing must be greater than 0.' }] })
 	})
 
 	test('imports the image scale and the pixel size', () => {

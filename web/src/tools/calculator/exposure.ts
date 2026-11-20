@@ -86,11 +86,11 @@ export const STAR_TRAIL_EXAMPLE: StarTrailDraft = { declination: '30', scale: '1
 // drift, so it sets no exposure limit.
 export function starTrail(draft: StarTrailDraft): Outcome<StarTrailResult> {
 	const check = newCheck()
-	const declination = required(check, 'Declination', draft.declination, between(-90, 90))
+	const declination = required(check, 'Declination', draft.declination, between(-90, 90, { unit: '°' }))
 	const scale = required(check, 'Image scale', draft.scale, POSITIVE)
 	const exposure = optional(check, 'Exposure', draft.exposure, NON_NEGATIVE)
 	const trailLimit = optional(check, 'Trail budget', draft.trailLimit, NON_NEGATIVE)
-	if (draft.exposure.trim() === '' && draft.trailLimit.trim() === '') check.missing.push('Exposure or Trail budget')
+	if (draft.exposure.trim() === '' && draft.trailLimit.trim() === '') check.missing.push('Exposure or trail budget')
 
 	return outcome(check, () => {
 		const dec = deg(declination)

@@ -39,8 +39,8 @@ describe('star trailing', () => {
 	})
 
 	test('needs the exposure or the budget, and a declination within ±90°', () => {
-		expect(starTrail({ ...STAR_TRAIL_EXAMPLE, exposure: '', trailLimit: '' })).toEqual({ status: 'incomplete', missing: ['Exposure or Trail budget'] })
-		expect(starTrail({ ...STAR_TRAIL_EXAMPLE, declination: '91' })).toEqual({ status: 'invalid', reason: 'Declination must be at least -90 and at most 90.' })
+		expect(starTrail({ ...STAR_TRAIL_EXAMPLE, exposure: '', trailLimit: '' })).toEqual({ status: 'incomplete', missing: ['Exposure or trail budget'] })
+		expect(starTrail({ ...STAR_TRAIL_EXAMPLE, declination: '91' })).toMatchObject({ status: 'invalid', reason: 'Declination must be at least -90° and at most 90°.' })
 		const trailOnly = starTrail({ ...STAR_TRAIL_EXAMPLE, trailLimit: '' })
 		expect(trailOnly.status === 'ready' && trailOnly.value.maxExposure).toBeUndefined()
 	})

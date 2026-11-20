@@ -80,8 +80,11 @@ export function LunarEclipsePanel() {
 								</span>
 								<span className="text-ink-100">{formatLongDateTime(contact.time, timeZone)}</span>
 								{event && (
-									<span className={event.observable ? 'text-ink-200' : 'text-ink-300'}>
-										Alt {formatEclipseAngle(event.altitude)} · Az {formatEclipseAngle(event.azimuth)} · {event.observable ? 'Above horizon' : 'Below horizon'}
+									<span className={cn('flex flex-wrap items-baseline justify-between gap-x-2', event.observable ? 'text-ink-200' : 'text-ink-300')}>
+										<span>
+											Alt {formatEclipseAngle(event.altitude)} · Az {formatEclipseAngle(event.azimuth)}
+										</span>
+										<span>{event.observable ? 'Above horizon' : 'Below horizon'}</span>
 									</span>
 								)}
 							</button>

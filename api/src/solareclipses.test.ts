@@ -179,6 +179,12 @@ test('computes the circumstances and the Local View of a place', async () => {
 	expect(dallas.visibility.hasObservableEclipse).toBe(true)
 	expect(dallas.events.map((event) => event.kind)).toEqual(['C1', 'C2', 'MAX', 'C3', 'C4'])
 	expect(dallas.events.every((event) => event.observable && event.altitude > 0)).toBe(true)
+	// Dallas saw the eclipse across its solar noon: the Sun east of south at C1 and west of it at C4, in degrees.
+	const [c1, , , , c4] = dallas.events
+	expect(c1.azimuth).toBeGreaterThan(90)
+	expect(c1.azimuth).toBeLessThan(180)
+	expect(c4.azimuth).toBeGreaterThan(180)
+	expect(c4.azimuth).toBeLessThan(270)
 	expect(Math.abs(dallas.details.centralPhaseDuration! - 231)).toBeLessThan(10)
 	expect(dallas.details.maximalMagnitude).toBeGreaterThan(1)
 	expect(dallas.details.shadowPathWidthKm).toBeGreaterThan(100)

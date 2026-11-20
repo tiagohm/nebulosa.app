@@ -133,8 +133,11 @@ export function SolarEclipsePanel() {
 									<span className="truncate text-ink-300">{contactName(event.kind, local.visibility.centralPhaseKind)}</span>
 								</span>
 								<span className="text-ink-100">{formatLongDateTime(event.time, timeZone)}</span>
-								<span className={event.observable ? 'text-ink-200' : 'text-ink-300'}>
-									Alt {formatEclipseAngle(event.altitude)} · {event.observable ? 'Above horizon' : 'Below horizon'}
+								<span className={cn('flex flex-wrap items-baseline justify-between gap-x-2', event.observable ? 'text-ink-200' : 'text-ink-300')}>
+									<span>
+										Alt {formatEclipseAngle(event.altitude)} · Az {formatEclipseAngle(event.azimuth)}
+									</span>
+									<span>{event.observable ? 'Above horizon' : 'Below horizon'}</span>
 								</span>
 							</button>
 						)

@@ -52,6 +52,8 @@ export interface LocalSolarEclipseContact {
 	readonly observable: boolean
 	// Apparent altitude of the Sun's center, in degrees.
 	readonly altitude: number
+	// Apparent azimuth of the Sun's center, in degrees from north through east, [0, 360).
+	readonly azimuth: number
 	// Position angle of the contact point on the solar limb, in degrees from celestial north through east, [0, 360);
 	// absent when the direction is undefined, as at a perfectly central maximum.
 	readonly positionAngle?: number
@@ -195,8 +197,19 @@ export function localSolarEclipse(eclipse: SolarEclipse, location: EclipseLocati
 	for (const kind of CONTACT_ORDER) {
 		const event = local.events[kind]
 		if (!event) continue
-		const { observable, sunAltitude, positionAngle, zenithAngle, magnitude, moonSunDiameterRatio, centralPhaseKind } = event
-		events.push({ kind, time: timeToUnixMillis(event.time), observable, altitude: toDeg(sunAltitude), positionAngle: positionAngle === undefined ? undefined : toDeg(positionAngle), zenithAngle: zenithAngle === undefined ? undefined : toDeg(zenithAngle), magnitude, moonSunDiameterRatio, centralPhaseKind })
+		const { observable, sunAltitude, sunAzimuth, positionAngle, zenithAngle, magnitude, moonSunDiameterRatio, centralPhaseKind } = event
+		events.push({
+			kind,
+			time: timeToUnixMillis(event.time),
+			observable,
+			altitude: toDeg(sunAltitude),
+			azimuth: toDeg(sunAzimuth),
+			positionAngle: positionAngle === undefined ? undefined : toDeg(positionAngle),
+			zenithAngle: zenithAngle === undefined ? undefined : toDeg(zenithAngle),
+			magnitude,
+			moonSunDiameterRatio,
+			centralPhaseKind,
+		})
 	}
 
 	const geometry = computeLocalSolarEclipseViewGeometry(local, { selectedEvent: view.event, orientationMode: view.orientation, handedness: view.handedness, includeGhostDisks: view.ghosts, includeHorizon: true })

@@ -64,8 +64,8 @@ export function FlipToolSections({ camera, focuser, policy }: FlipToolSectionsPr
 				description="Frames are temporary LIGHT frames taken with the camera settings of Camera Acquisition, shown as the latest frame of the camera and never saved. The paused capture keeps its own settings."
 			>
 				<DataList>
-					<DataRow label="Target Centering frames">{formatExposureTime(centering.exposureTime)}</DataRow>
-					{focuser.device && <DataRow label="Auto Focus frames">{formatExposureTime(focus.exposureTime)}</DataRow>}
+					<DataRow label="Target Centering">{formatExposureTime(centering.exposureTime)}</DataRow>
+					{focuser.device && <DataRow label="Auto Focus">{formatExposureTime(focus.exposureTime)}</DataRow>}
 				</DataList>
 			</CameraAcquisitionSection>
 			<CameraPlateSolvingSection

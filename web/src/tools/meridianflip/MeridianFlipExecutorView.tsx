@@ -271,7 +271,7 @@ export function MeridianFlipExecutorSections({ mount, monitor }: { readonly moun
 						Flip Now
 					</ConfirmButton>
 					<Button variant="secondary" disabled={!!checkBlocker} title={checkBlocker ?? 'Asks the server what it would decide now; starts nothing.'} onClick={() => void check()}>
-						Check
+						Check Now
 					</Button>
 				</Actions>
 			</FlipSection>

@@ -48,6 +48,7 @@ import {
 } from './meridianflip'
 import { latestExecution, meridianFlipExecutorState } from './meridianflipexecutor'
 import { ExecutorPanelSections, FlipStrip, MeridianFlipExecutorSections } from './MeridianFlipExecutorView'
+import { MeridianFlipGuide } from './MeridianFlipGuide'
 import { FlipSection } from './MeridianFlipSection'
 
 // Meridian Flip tool, laid out as one passage of the target the MOUNT of the active profile's Equipment Setup tracks:
@@ -55,9 +56,9 @@ import { FlipSection } from './MeridianFlipSection'
 // whether the pier side the driver reports still needs a flip, and the timeline of the preferred window), the strip of a
 // flip that runs, is armed, or left the capture paused (MeridianFlipExecutorView.tsx), then the Monitor section (what
 // the server's monitor observes and the transitions it reported) or the Executor section (the flip and its latest
-// execution). The contextual panel holds what is set rather than read: the flip window, the flip policy, the
-// equipment, and the summaries of the camera tools a flip invokes. The mount is never chosen here: a missing or unavailable one is reported and
-// Enable is disabled. The monitor is the server's, so changing profile, setup, or workspace, or closing the tab, leaves
+// execution), and a guide to how a flip works and the tools it involves (MeridianFlipGuide.tsx). The contextual panel
+// holds what is set rather than read: the flip window, the flip policy, the equipment, and the summaries of the camera
+// tools a flip invokes. The mount is never chosen here: a missing or unavailable one is reported and Enable is disabled. The monitor is the server's, so changing profile, setup, or workspace, or closing the tab, leaves
 // it enabled for the mount it was enabled for; settings are applied explicitly and remembered by the profile per mount.
 // Nothing here commands the mount: the countdowns are only interpolated between the samples of the server, which takes
 // every decision.
@@ -245,6 +246,7 @@ export function MeridianFlipMonitorView() {
 							<EventsSection monitorKey={key} now={now} />
 						</div>
 					)}
+					<MeridianFlipGuide />
 				</div>
 			</div>
 		</WorkspaceLayout>

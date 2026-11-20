@@ -1,4 +1,19 @@
-import type { EclipseDirection, LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipse, LocalViewHandedness, LocalViewOrientationMode, SolarEclipseExtreme, SolarEclipseMap, SolarEclipseMapPoint, SolarEclipsePathKind, SolarEclipsePointKind, SolarEclipseSummary, SolarEclipseType } from 'api'
+import type {
+	EclipseDirection,
+	LocalCentralPhaseKind,
+	LocalEclipseContactKind,
+	LocalSolarEclipse,
+	LocalSolarEclipseVisibility,
+	LocalViewHandedness,
+	LocalViewOrientationMode,
+	SolarEclipseExtreme,
+	SolarEclipseMap,
+	SolarEclipseMapPoint,
+	SolarEclipsePathKind,
+	SolarEclipsePointKind,
+	SolarEclipseSummary,
+	SolarEclipseType,
+} from 'api'
 import { proxy } from 'valtio'
 import { aborted, ApiResponseError, fetchJson } from '../../http'
 import { ACTIVE_TOOL_LOCATION, type GeographicLocation, type ToolLocation } from '../../location/site'
@@ -51,6 +66,8 @@ export interface SolarEclipseState {
 	loading: boolean
 	// Why the eclipse or its map could not be loaded.
 	error?: string
+	// Whether the error is that the eclipse a link names does not exist, a mistyped or cut link rather than a failure.
+	unknownLink: boolean
 	// Why a search left the eclipse shown as it was, such as no visible eclipse within the searched range.
 	notice?: string
 	// Map layers shown.
@@ -81,6 +98,7 @@ export interface SolarEclipseState {
 export function initialSolarEclipseState(): SolarEclipseState {
 	return {
 		loading: false,
+		unknownLink: false,
 		layers: { centralLine: true, umbralLimits: true, penumbralLimits: true, riseSet: true, points: true, labels: true },
 		selectedEvent: 'MAX',
 		location: ACTIVE_TOOL_LOCATION,
@@ -230,6 +248,28 @@ export function contactName(kind: LocalEclipseContactKind, centralPhaseKind: Loc
 	}
 }
 
+// Returns what a place sees of an eclipse, in one line for people: the toolkit's visibility kind told with the
+// central phase of the place, so a place outside the central path never reads as seeing the whole eclipse, and a
+// place inside it says whether its total or annular phase is up.
+export function visibilityHeadline({ kind, hasCentralPhase, centralPhaseKind }: Pick<LocalSolarEclipseVisibility, 'kind' | 'hasCentralPhase' | 'centralPhaseKind'>): string {
+	const phase = centralPhaseKind === 'annular' ? 'Annularity' : 'Totality'
+
+	switch (kind) {
+		case 'notVisible':
+			return 'The eclipse does not reach this place'
+		case 'geometricOnlyBelowHorizon':
+			return 'Not visible: the Sun is below the horizon throughout'
+		case 'completelyVisible':
+			return hasCentralPhase ? `${centralPhaseKind === 'annular' ? 'Annular' : 'Total'} eclipse here, all of it visible` : 'Partial eclipse here, all of it visible'
+		case 'centralPhaseVisible':
+			return `${phase} visible, but not the whole eclipse`
+		case 'partialOnlyVisible':
+			return 'Partial eclipse here, part of it visible'
+		case 'partiallyVisible':
+			return `Only the partial phase is visible: ${phase.toLowerCase()} is below the horizon`
+	}
+}
+
 // Returns the name of the limits of the central path of an eclipse type, for people.
 export function limitName(type: SolarEclipseType): string {
 	return type === 'total' ? 'Limits of totality' : type === 'annular' ? 'Limits of annularity' : 'Limits of the central path'
@@ -244,6 +284,7 @@ async function searchEclipse(state: SolarEclipseState, time: number, direction: 
 
 	state.loading = true
 	state.error = undefined
+	state.unknownLink = false
 	state.notice = undefined
 
 	try {
@@ -304,6 +345,7 @@ export async function showEclipse(state: SolarEclipseState, id: string, io: Ecli
 
 	state.loading = true
 	state.error = undefined
+	state.unknownLink = false
 	state.notice = undefined
 
 	if (state.eclipse?.id !== id) {
@@ -323,6 +365,7 @@ export async function showEclipse(state: SolarEclipseState, id: string, io: Ecli
 	} catch (error) {
 		if (!request.current() || aborted(error)) return
 		state.error = errorMessage(error)
+		state.unknownLink = error instanceof ApiResponseError && error.status === 404
 		state.loading = false
 	}
 }

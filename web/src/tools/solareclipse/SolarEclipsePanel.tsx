@@ -12,7 +12,7 @@ import { SegmentedControl } from '../../ui/SegmentedControl'
 import { formatEclipseAngle, formatEclipseMagnitude } from '../eclipse/eclipse'
 import { EclipseLocationSection, EclipseZoneSelect } from '../eclipse/EclipsePanelParts'
 import { GlobalPointIcon } from './GlobalPointMarker'
-import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectMapPlace, selectPoint, setViewSettings, solarEclipseState } from './solareclipse'
+import { contactName, ECLIPSE_TYPE_NAMES, GLOBAL_POINTS, type GlobalPoint, globalPoints, loadLocal, selectEvent, selectMapPlace, selectPoint, setViewSettings, solarEclipseState, visibilityHeadline } from './solareclipse'
 import { SolarEclipseLocalView } from './SolarEclipseLocalView'
 
 // Local Circumstances panel of the Solar Eclipse Map: the location (the shared Location section), the visibility of
@@ -61,7 +61,7 @@ function GlobalPointRow({ point, selected, timeZone }: GlobalPointRowProps) {
 					{extreme && <DataRow label="Sun azimuth">{formatEclipseAngle(extreme.sunAzimuth)}</DataRow>}
 					{extreme?.kind && <DataRow label="Central phase">{extreme.kind === 'annular' ? 'Annular' : 'Total'}</DataRow>}
 					{extreme?.centralDuration !== undefined && <DataRow label="Central duration">{formatLongDuration(extreme.centralDuration)}</DataRow>}
-					{extreme?.pathWidth !== undefined && <DataRow label="Path width">{formatKilometers(extreme.pathWidth, 1)}</DataRow>}
+					{extreme?.pathWidth !== undefined && <DataRow label="Path width">{formatKilometers(extreme.pathWidth)}</DataRow>}
 					<Button variant="secondary" className="self-start" onClick={() => void selectMapPlace(solarEclipseState, { longitude: point.longitude, latitude: point.latitude })}>
 						Use as Location
 					</Button>
@@ -82,18 +82,21 @@ export function SolarEclipsePanel() {
 	const central = visibility?.centralPhaseKind === 'annular' ? 'annular' : 'total'
 	const greatest = map?.greatestEclipse
 	const duration = map?.greatestDuration
+	const maximum = local?.events.find((event) => event.kind === 'MAX')
+	const shown = local?.events.find((event) => event.kind === (local.view.selectedEvent ?? selectedEvent))
 
 	return (
 		<>
 			<EclipseLocationSection id="solarEclipse.location" value={state.location} location={location} onChange={(value) => (solarEclipseState.location = value)} />
 			{place && (
 				<CollapsibleSection id="solarEclipse.visibility" title="Visibility">
-					{visibility && <p className="m-0 font-medium text-ink-100">{visibility.text}</p>}
-					{visibility && visibility.hasCentralPhase && <DataRow label="Central phase here">{visibility.centralPhaseKind === 'annular' ? 'Annular' : 'Total'}</DataRow>}
-					{visibility && visibility.hasGeometricEclipse && !visibility.hasCentralPhase && <Notice>Only a partial eclipse reaches this place.</Notice>}
-					{visibility?.kind === 'partialOnlyVisible' && visibility.hasCentralPhase && <Notice>The {central} phase happens with the Sun below the horizon; only the partial phase is visible.</Notice>}
+					{visibility && <p className="m-0 font-medium text-ink-100">{visibilityHeadline(visibility)}</p>}
+					{local?.details.centralPhaseDuration !== undefined && <DataRow label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatLongDuration(local.details.centralPhaseDuration)}</DataRow>}
+					{local?.details.partialPhaseDuration !== undefined && <DataRow label="Eclipse here (C1–C4)">{formatLongDuration(local.details.partialPhaseDuration)}</DataRow>}
+					{local?.details.maximalMagnitude !== undefined && <DataRow label="Magnitude here">{formatEclipseMagnitude(local.details.maximalMagnitude)}</DataRow>}
+					{maximum && <DataRow label="Sun altitude at MAX">{formatEclipseAngle(maximum.altitude)}</DataRow>}
 					{visibility && visibility.hasObservableEclipse && visibility.sunMotion !== 'none' && <Notice>The Sun is {visibility.sunMotion === 'rising' ? 'climbing' : 'descending'} during the eclipse.</Notice>}
-					{visibility && (!visibility.completeness.partialContactsComplete || !visibility.completeness.centralContactsComplete) && <Notice>Some contacts could not be found; the visibility rests on those that were.</Notice>}
+					{visibility?.hasGeometricEclipse && (!visibility.completeness.partialContactsComplete || !visibility.completeness.centralContactsComplete) && <Notice>Some contacts could not be found; the visibility rests on those that were.</Notice>}
 					{localLoading && <Notice>Computing the local circumstances…</Notice>}
 					{localError && (
 						<>
@@ -130,7 +133,7 @@ export function SolarEclipsePanel() {
 								</span>
 								<span className="text-ink-100">{formatLongDateTime(event.time, timeZone)}</span>
 								<span className={event.observable ? 'text-ink-200' : 'text-ink-300'}>
-									Alt {formatEclipseAngle(event.altitude)} · P {formatEclipseAngle(event.positionAngle)} · Z {formatEclipseAngle(event.zenithAngle)} · {event.observable ? 'Above horizon' : 'Below horizon'}
+									Sun at {formatEclipseAngle(event.altitude)} altitude · {event.observable ? 'Above horizon' : 'Below horizon'}
 								</span>
 							</button>
 						)
@@ -145,11 +148,8 @@ export function SolarEclipsePanel() {
 					{greatest && <DataRow label="Greatest eclipse">{formatLongDateTime(greatest.time, timeZone)}</DataRow>}
 					{greatest && <DataRow label="Greatest eclipse at">{formatGeographic(greatest.latitude, greatest.longitude)}</DataRow>}
 					{duration?.centralDuration !== undefined && <DataRow label="Greatest duration">{formatLongDuration(duration.centralDuration)}</DataRow>}
-					{greatest?.pathWidth !== undefined && <DataRow label="Path width at greatest">{formatKilometers(greatest.pathWidth, 1)}</DataRow>}
-					{local?.details.maximalMagnitude !== undefined && <DataRow label="Magnitude here">{formatEclipseMagnitude(local.details.maximalMagnitude)}</DataRow>}
+					{greatest?.pathWidth !== undefined && <DataRow label="Path width at greatest">{formatKilometers(greatest.pathWidth)}</DataRow>}
 					{local?.details.moonSunDiameterRatio !== undefined && <DataRow label="Moon/Sun diameter">{formatEclipseMagnitude(local.details.moonSunDiameterRatio)}</DataRow>}
-					{local?.details.partialPhaseDuration !== undefined && <DataRow label="Eclipse here (C1–C4)">{formatLongDuration(local.details.partialPhaseDuration)}</DataRow>}
-					{local?.details.centralPhaseDuration !== undefined && <DataRow label={`${central === 'annular' ? 'Annularity' : 'Totality'} here (C2–C3)`}>{formatLongDuration(local.details.centralPhaseDuration)}</DataRow>}
 					{local?.details.pathWidthKm !== undefined && <DataRow label="Path width here">{formatKilometers(local.details.pathWidthKm)}</DataRow>}
 					{local?.details.shadowPathWidthKm !== undefined && <DataRow label="Shadow chord here">{formatKilometers(local.details.shadowPathWidthKm)}</DataRow>}
 					<Notice>
@@ -169,10 +169,18 @@ export function SolarEclipsePanel() {
 			{local && local.events.length > 0 && (
 				<CollapsibleSection id="solarEclipse.localView" title="Local View">
 					<SolarEclipseLocalView view={local.view} />
+					{shown?.positionAngle !== undefined && shown.zenithAngle !== undefined && (
+						<DataRow label={`Position / zenith angle at ${shown.kind}`}>
+							{formatEclipseAngle(shown.positionAngle)} / {formatEclipseAngle(shown.zenithAngle)}
+						</DataRow>
+					)}
 					<SegmentedControl label="Up" options={ORIENTATIONS} value={view.orientation} onChange={(orientation) => void setViewSettings(solarEclipseState, { orientation })} format={(value) => (value === 'zenith' ? 'Zenith' : 'North')} />
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(solarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />
 					<Checkbox label="Moon at the other contacts" checked={view.ghosts} onChange={(ghosts) => void setViewSettings(solarEclipseState, { ghosts })} />
-					<Notice>The Moon over the Sun at {local.view.selectedEvent ?? selectedEvent}; the red band is below the horizon. A geometric diagram, not a photorealistic rendering.</Notice>
+					<Notice>
+						The Moon over the Sun at {local.view.selectedEvent ?? selectedEvent}; the red band is below the horizon. The position angle places the contact on the Sun's limb from celestial north through east, the zenith angle from the direction of the zenith. A geometric diagram, not a photorealistic
+						rendering.
+					</Notice>
 				</CollapsibleSection>
 			)}
 			<CollapsibleSection id="solarEclipse.about" title="About" defaultOpen={false}>

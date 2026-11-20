@@ -118,7 +118,7 @@ function LineSwatch({ dashed, shadow, thick }: { readonly dashed?: boolean; read
 // Solar Eclipse Map tool.
 export function SolarEclipseMap() {
 	const state = useSnapshot(solarEclipseState)
-	const { eclipse, map, loading, error, notice, layers, place, visibleOnly, selectedPoint } = state
+	const { eclipse, map, loading, error, unknownLink, notice, layers, place, visibleOnly, selectedPoint } = state
 	const [date, setDate] = useState('')
 	const mapRef = useRef<WorldMapHandle>(null)
 	const legendRef = useRef<HTMLDivElement>(null)
@@ -239,21 +239,27 @@ export function SolarEclipseMap() {
 							{limits && <LegendItem layer="umbralLimits" label={limitName(eclipse.type)} swatch={<LineSwatch shadow />} checked={layers.umbralLimits} />}
 							<LegendItem layer="penumbralLimits" label="Limits of the partial eclipse" swatch={<LineSwatch />} checked={layers.penumbralLimits} />
 							{map.paths.riseSet && <LegendItem layer="riseSet" label="Eclipse at sunrise or sunset" swatch={<LineSwatch dashed />} checked={layers.riseSet} />}
-							<LegendItem layer="points" label="Global points (see the panel)" swatch={<GlobalPointIcon kind="MAX" />} checked={layers.points} />
+							<LegendItem layer="points" label="Global points" swatch={<GlobalPointIcon kind="MAX" />} checked={layers.points} />
 							<LegendItem layer="labels" label="Names of the points" swatch={<span className="font-mono text-xs font-semibold text-ink-100">P1</span>} checked={layers.labels} />
 						</EclipseMapLegend>
 					)}
 					{loading && <p className="pointer-events-none absolute top-3 left-3 m-0 text-xs text-ink-300">Computing the eclipse…</p>}
-					{notice && <p className="pointer-events-none absolute top-3 left-3 m-0 rounded-sm bg-base-100/90 px-2 py-1 text-xs text-ink-200">{notice}</p>}
+					{notice && !loading && <p className="pointer-events-none absolute top-3 left-3 m-0 rounded-sm bg-base-100/90 px-2 py-1 text-xs text-ink-200">{notice}</p>}
 					{error && (
 						<div className="absolute inset-0 bg-base-000/80">
 							<EmptyState
-								title="The solar eclipse could not be computed"
-								description={error}
+								title={unknownLink ? 'No solar eclipse at this link' : 'The solar eclipse could not be computed'}
+								description={unknownLink ? 'The link names no solar eclipse; it may be mistyped or cut short.' : error}
 								action={
-									<Button variant="secondary" onClick={() => (linked && !eclipse ? void showEclipse(solarEclipseState, linked) : follow(retryEclipse(solarEclipseState)))}>
-										Retry
-									</Button>
+									unknownLink ? (
+										<Button variant="secondary" onClick={() => redirect(routeState, { workspace: 'tools', tool: 'solar-eclipse-map' })}>
+											Show the next eclipse
+										</Button>
+									) : (
+										<Button variant="secondary" onClick={() => (linked && !eclipse ? void showEclipse(solarEclipseState, linked) : follow(retryEclipse(solarEclipseState)))}>
+											Retry
+										</Button>
+									)
 								}
 							/>
 						</div>

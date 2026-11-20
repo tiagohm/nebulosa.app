@@ -143,6 +143,7 @@ test('a linked eclipse supersedes a search in progress, and an unknown id is an 
 	expect(state.eclipse).toBeUndefined()
 	expect(state.map).toBeUndefined()
 	expect(state.error).toBe('Lunar eclipse not found')
+	expect(state.unknownLink).toBe(true)
 	expect(state.loading).toBe(false)
 })
 

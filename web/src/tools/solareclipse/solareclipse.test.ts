@@ -2,7 +2,27 @@ import { expect, test } from 'bun:test'
 import type { SolarEclipseSummary } from 'api'
 import { proxy } from 'valtio'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { contactName, eclipseBounds, findEclipse, findEclipseFrom, globalPoints, initialSolarEclipseState, labelRows, limitName, nextEclipse, openSolarEclipseMap, selectEvent, selectMapPlace, selectPoint, setLayer, setViewSettings, showEclipse, type SolarEclipseState, syncPlace } from './solareclipse'
+import {
+	contactName,
+	eclipseBounds,
+	findEclipse,
+	findEclipseFrom,
+	globalPoints,
+	initialSolarEclipseState,
+	labelRows,
+	limitName,
+	nextEclipse,
+	openSolarEclipseMap,
+	selectEvent,
+	selectMapPlace,
+	selectPoint,
+	setLayer,
+	setViewSettings,
+	showEclipse,
+	type SolarEclipseState,
+	syncPlace,
+	visibilityHeadline,
+} from './solareclipse'
 
 // Fake API whose responses are released by the test, in any order.
 function fakeApi() {
@@ -139,6 +159,7 @@ test('a linked eclipse supersedes a search in progress, and an unknown id is an 
 	expect(state.eclipse).toBeUndefined()
 	expect(state.map).toBeUndefined()
 	expect(state.error).toBe('Solar eclipse not found')
+	expect(state.unknownLink).toBe(true)
 	expect(state.loading).toBe(false)
 })
 
@@ -221,6 +242,7 @@ test('a failed map is reported as an error', async () => {
 	await release((url) => url.endsWith('/map'), { error: 'The solar eclipse map did not finish within 30 s', code: 'computationFailed' }, 500)
 
 	expect(state.error).toBe('The solar eclipse map did not finish within 30 s')
+	expect(state.unknownLink).toBe(false)
 	expect(state.notice).toBeUndefined()
 	expect(state.loading).toBe(false)
 })
@@ -233,6 +255,14 @@ test('names local contacts by the central phase of the place, and limits by the 
 	expect(limitName('total')).toBe('Limits of totality')
 	expect(limitName('annular')).toBe('Limits of annularity')
 	expect(limitName('hybrid')).toBe('Limits of the central path')
+})
+
+test('tells what a place sees with its central phase, never the whole eclipse outside the path', () => {
+	expect(visibilityHeadline({ kind: 'completelyVisible', hasCentralPhase: false, centralPhaseKind: 'none' })).toBe('Partial eclipse here, all of it visible')
+	expect(visibilityHeadline({ kind: 'completelyVisible', hasCentralPhase: true, centralPhaseKind: 'annular' })).toBe('Annular eclipse here, all of it visible')
+	expect(visibilityHeadline({ kind: 'centralPhaseVisible', hasCentralPhase: true, centralPhaseKind: 'total' })).toBe('Totality visible, but not the whole eclipse')
+	expect(visibilityHeadline({ kind: 'partiallyVisible', hasCentralPhase: true, centralPhaseKind: 'annular' })).toBe('Only the partial phase is visible: annularity is below the horizon')
+	expect(visibilityHeadline({ kind: 'notVisible', hasCentralPhase: false, centralPhaseKind: 'none' })).toBe('The eclipse does not reach this place')
 })
 
 test('lists every global point in time order, the greatest duration among them', () => {

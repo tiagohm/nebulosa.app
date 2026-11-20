@@ -115,10 +115,11 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   A global point is chosen in the panel's Global Points list, since a click on the map chooses the place;
   the map then rings it and centers on it, and the panel tells what it is, where and when, the Sun's altitude, and for the greatest eclipse and duration the Sun's azimuth, the central phase, its duration, and the path width, and can make it the place.
   The Local Circumstances show the path width at the greatest eclipse, the path width here, and the shadow chord here under their own names.
+  Visibility leads with what the place sees (`visibilityHeadline`: the toolkit's visibility kind told with the place's central phase, so a place outside the path never reads as seeing the whole eclipse), then the duration of the central phase and of the eclipse here, the magnitude here, and the Sun's altitude at MAX; contact rows give the Sun's altitude, and the position and zenith angles of the contact drawn sit in the Local View, as on the lunar map.
   Global points are named apart from the local contacts: C1 and C2 on the map are the ends of the central path, never the contacts of a place.
   Contacts, durations, and the shadow chord a place lacks are left out, and the magnitude is a fraction of the solar diameter, never an obscured area.
   A URL that names an eclipse (`/tools/solar-eclipse-map/<eclipse id>`, the id of `/api/eclipses/solar`) shows that eclipse with its map (`showEclipse`, under the same request guard as the searches), whatever the tab showed before, on a link, a reload, back, or forward;
-  an id that names no eclipse shows the error, never another eclipse.
+  an id that names no eclipse (`404`, `unknownLink`) says no eclipse is at that link and offers the next eclipse instead, never showing another eclipse on its own; on both maps.
   Stepping to another eclipse from such a URL replaces it with the new id, so the URL never names an eclipse other than the one shown; without an id the tool keeps its own choice.
 - Close approaches (`api/src/closeapproaches.ts`): stateless, read-only queries of JPL, never operations or events, through the queue of the Sky Map Contract.
   The toolkit builds the requests and reads the tables (`closeApproachesUrl`, `parseCloseApproaches`); no list is computed or kept locally, so without JPL there is none.

@@ -98,20 +98,23 @@ export function LunarEclipsePanel() {
 					{durations.partial !== undefined && <DataRow label="Partial phase">{formatLongDuration(durations.partial)}</DataRow>}
 					{durations.total !== undefined && <DataRow label="Totality">{formatLongDuration(durations.total)}</DataRow>}
 					{local && <DataRow label="Observable here">{formatLongDuration(local.details.observableDuration)}</DataRow>}
-					{selectedLocal && (
-						<DataRow label={`P / Z at ${selectedEvent}`}>
-							{formatEclipseAngle(selectedLocal.positionAngle)} / {formatEclipseAngle(selectedLocal.zenithAngle)}
-						</DataRow>
-					)}
 				</CollapsibleSection>
 			)}
 			{local && (
 				<CollapsibleSection id="lunarEclipse.localView" title="Local View">
 					<LunarEclipseLocalView view={local.view} />
+					{selectedLocal && (
+						<DataRow label={`Position / zenith angle at ${selectedEvent}`}>
+							{formatEclipseAngle(selectedLocal.positionAngle)} / {formatEclipseAngle(selectedLocal.zenithAngle)}
+						</DataRow>
+					)}
 					<SegmentedControl label="Up" options={ORIENTATIONS} value={view.orientation} onChange={(orientation) => void setViewSettings(lunarEclipseState, { orientation })} format={(value) => (value === 'zenith' ? 'Zenith' : 'North')} />
 					<SegmentedControl label="East" options={HANDEDNESS} value={view.handedness} onChange={(handedness) => void setViewSettings(lunarEclipseState, { handedness })} format={(value) => (value === 'eastRight' ? 'Right' : 'Left')} />
 					<Checkbox label="Moon at the other contacts" checked={view.ghosts} onChange={(ghosts) => void setViewSettings(lunarEclipseState, { ghosts })} />
-					<Notice>The Moon at {local.view.selectedEvent ?? selectedEvent} crossing the Earth's penumbra and umbra; the red band is below the horizon. A geometric diagram, not a photorealistic rendering.</Notice>
+					<Notice>
+						The Moon at {local.view.selectedEvent ?? selectedEvent} crossing the Earth's penumbra and umbra; the red band is below the horizon. The position angle places the contact on the Moon's limb from celestial north through east, the zenith angle from the direction of the zenith. A geometric diagram,
+						not a photorealistic rendering.
+					</Notice>
 				</CollapsibleSection>
 			)}
 		</>

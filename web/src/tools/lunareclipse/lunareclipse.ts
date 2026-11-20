@@ -33,6 +33,8 @@ export interface LunarEclipseState {
 	loading: boolean
 	// Why the eclipse or its map could not be loaded.
 	error?: string
+	// Whether the error is that the eclipse a link names does not exist, a mistyped or cut link rather than a failure.
+	unknownLink: boolean
 	// Why a search left the eclipse shown as it was, such as no visible eclipse within the searched range.
 	notice?: string
 	// Contact highlighted on the map and drawn in the Local View.
@@ -57,7 +59,7 @@ export interface LunarEclipseState {
 
 // Initial state of the tool.
 export function initialLunarEclipseState(): LunarEclipseState {
-	return { loading: false, selectedEvent: 'MAX', location: ACTIVE_TOOL_LOCATION, localLoading: false, view: { orientation: 'zenith', handedness: 'eastRight', ghosts: true }, zone: DEFAULT_ZONE_OVERRIDE, visibleOnly: false }
+	return { loading: false, unknownLink: false, selectedEvent: 'MAX', location: ACTIVE_TOOL_LOCATION, localLoading: false, view: { orientation: 'zenith', handedness: 'eastRight', ghosts: true }, zone: DEFAULT_ZONE_OVERRIDE, visibleOnly: false }
 }
 
 // Lunar Eclipse Map state of the tab.
@@ -92,6 +94,7 @@ async function searchEclipse(state: LunarEclipseState, time: number, direction: 
 
 	state.loading = true
 	state.error = undefined
+	state.unknownLink = false
 	state.notice = undefined
 
 	try {
@@ -152,6 +155,7 @@ export async function showLunarEclipse(state: LunarEclipseState, id: string, io:
 
 	state.loading = true
 	state.error = undefined
+	state.unknownLink = false
 	state.notice = undefined
 
 	if (state.eclipse?.id !== id) {
@@ -171,6 +175,7 @@ export async function showLunarEclipse(state: LunarEclipseState, id: string, io:
 	} catch (error) {
 		if (!request.current() || aborted(error)) return
 		state.error = errorMessage(error)
+		state.unknownLink = error instanceof ApiResponseError && error.status === 404
 		state.loading = false
 	}
 }

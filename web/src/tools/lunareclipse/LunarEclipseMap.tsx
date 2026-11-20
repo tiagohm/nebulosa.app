@@ -70,7 +70,7 @@ function EclipseOverlay({ map, selectedEvent }: EclipseOverlayProps) {
 // Lunar Eclipse Map tool.
 export function LunarEclipseMap() {
 	const state = useSnapshot(lunarEclipseState)
-	const { eclipse, map, loading, error, notice, selectedEvent, place, visibleOnly } = state
+	const { eclipse, map, loading, error, unknownLink, notice, selectedEvent, place, visibleOnly } = state
 	const [date, setDate] = useState('')
 	const location = useToolLocation(state.location)
 	const placeKey = locationKey(location)
@@ -154,16 +154,22 @@ export function LunarEclipseMap() {
 						</EclipseMapLegend>
 					)}
 					{loading && <p className="pointer-events-none absolute top-3 left-3 m-0 text-xs text-ink-300">Computing the eclipse…</p>}
-					{notice && <p className="pointer-events-none absolute top-3 left-3 m-0 rounded-sm bg-base-100/90 px-2 py-1 text-xs text-ink-200">{notice}</p>}
+					{notice && !loading && <p className="pointer-events-none absolute top-3 left-3 m-0 rounded-sm bg-base-100/90 px-2 py-1 text-xs text-ink-200">{notice}</p>}
 					{error && (
 						<div className="absolute inset-0 bg-base-000/80">
 							<EmptyState
-								title="The lunar eclipse could not be computed"
-								description={error}
+								title={unknownLink ? 'No lunar eclipse at this link' : 'The lunar eclipse could not be computed'}
+								description={unknownLink ? 'The link names no lunar eclipse; it may be mistyped or cut short.' : error}
 								action={
-									<Button variant="secondary" onClick={() => (linked && !eclipse ? void showLunarEclipse(lunarEclipseState, linked) : follow(retryEclipse(lunarEclipseState)))}>
-										Retry
-									</Button>
+									unknownLink ? (
+										<Button variant="secondary" onClick={() => redirect(routeState, { workspace: 'tools', tool: 'lunar-eclipse-map' })}>
+											Show the next eclipse
+										</Button>
+									) : (
+										<Button variant="secondary" onClick={() => (linked && !eclipse ? void showLunarEclipse(lunarEclipseState, linked) : follow(retryEclipse(lunarEclipseState)))}>
+											Retry
+										</Button>
+									)
 								}
 							/>
 						</div>

@@ -134,7 +134,7 @@ export function SolarEclipsePanel() {
 								</span>
 								<span className="text-ink-100">{formatLongDateTime(event.time, timeZone)}</span>
 								<span className={event.observable ? 'text-ink-200' : 'text-ink-300'}>
-									Sun at {formatEclipseAngle(event.altitude)} altitude · {event.observable ? 'Above horizon' : 'Below horizon'}
+									Alt {formatEclipseAngle(event.altitude)} · {event.observable ? 'Above horizon' : 'Below horizon'}
 								</span>
 							</button>
 						)

@@ -1,8 +1,8 @@
-import type { CloseApproach, CloseApproachBody, CloseApproachFilters, CloseApproachHistoryFilters, CloseApproachPageResponse, CloseApproachSort, CloseApproachSortField, MinorBody, MinorBodyDetailsResponse, SkyPositionResponse } from 'api'
+import type { CloseApproach, CloseApproachBody, CloseApproachErrorCode, CloseApproachFilters, CloseApproachHistoryFilters, CloseApproachPageResponse, CloseApproachSort, CloseApproachSortField, MinorBody, MinorBodyDetailsResponse, SkyPositionResponse } from 'api'
 import { AU_KM } from 'nebulosa/src/core/constants'
 import { proxy } from 'valtio'
 import { formatSpeed } from '../../format'
-import { type ApiFetch, browserFetch, fetchJson } from '../../http'
+import { type ApiFetch, ApiResponseError, browserFetch, fetchJson } from '../../http'
 import { type GeographicLocation, locationKey, siteObserver } from '../../location/site'
 import { type CloseApproachDistanceDisplay, type CloseApproachPreferences, DEFAULT_CLOSE_APPROACH_PREFERENCES } from '../../profile/schema'
 import { navigate, type RouteState, routeState } from '../../shell/route'
@@ -76,6 +76,30 @@ export type ObjectKind = (typeof OBJECT_KINDS)[number]
 // Name of each option of the objects a search takes.
 export const OBJECT_KIND_LABELS: Readonly<Record<ObjectKind, string>> = { all: 'All', a: 'Asteroids', c: 'Comets' }
 
+// Failure of a read of JPL through the server: its message, the code the server answered it with, and how long JPL asked
+// to wait.
+export interface CloseApproachFailure {
+	// Message of the server, or of the request that could not reach it.
+	readonly message: string
+	// Code of the server; absent when the server named none, such as when it could not be reached.
+	readonly code?: CloseApproachErrorCode
+	// Rest of the pause JPL asked for, milliseconds; only with `rateLimited`.
+	readonly retryAfter?: number
+}
+
+// How a failure is shown: a title naming what happened, what to do, and whether repeating the read can help.
+export interface CloseApproachFailureNotice {
+	// Title naming what happened.
+	readonly title: string
+	// The message of the server, with what to do about it.
+	readonly description: string
+	// Whether reading again can succeed: never offline, where only what was read before is answered, nor for a search JPL
+	// refused, which only new filters change.
+	readonly retry: boolean
+	// Whether the failure comes from the offline switch of the ephemeris sources, kept in the SPICE Kernel Library.
+	readonly offline: boolean
+}
+
 // Filters being edited, which only reach the server through an explicit search. Text fields keep what was typed.
 export interface CloseApproachDraft {
 	// Time span.
@@ -114,12 +138,12 @@ export interface CloseApproachesState {
 	page: number
 	// Rows per page.
 	pageSize: number
-	// Latest page received.
+	// Latest page received; a failure keeps it, so `page` and `pageSize` may name a page that could not be read.
 	result?: CloseApproachPageResponse<CloseApproachFilters>
 	// Whether a page is being read.
 	loading: boolean
 	// Why the latest page could not be read.
-	error?: string
+	error?: CloseApproachFailure
 	// Encounter selected; it stays selected on the other pages of the same search.
 	selected?: CloseApproach
 	// Designation of the object loaded or being loaded.
@@ -129,7 +153,7 @@ export interface CloseApproachesState {
 	// Whether the object is being read.
 	objectLoading: boolean
 	// Why the object could not be read.
-	objectError?: string
+	objectError?: CloseApproachFailure
 	// Target body of the history.
 	historyBody: CloseApproachBody
 	// Time span of the history.
@@ -176,6 +200,33 @@ const historyGuard = createRequestGuard()
 
 // Request of the position of the object selected.
 const observabilityGuard = createRequestGuard()
+
+// Returns the failure of a read from what it threw: the code and pause the server answered, or only the message of a
+// request that never reached it.
+export function closeApproachFailure(error: unknown): CloseApproachFailure {
+	if (!(error instanceof ApiResponseError)) return { message: error instanceof Error ? error.message : String(error) }
+	const { retryAfter } = error.details
+	return { message: error.message, code: error.code as CloseApproachErrorCode | undefined, retryAfter: typeof retryAfter === 'number' ? retryAfter : undefined }
+}
+
+// Returns how a failure is shown, by its code; a failure without one is a JPL that did not answer.
+export function closeApproachFailureNotice({ message, code, retryAfter }: CloseApproachFailure): CloseApproachFailureNotice {
+	const said = /[.!?]$/.test(message) ? message : `${message}.`
+
+	switch (code) {
+		case 'offline':
+			return { title: 'Offline', description: `${said} Turn Offline off in the SPICE Kernel Library to ask JPL.`, retry: false, offline: true }
+		case 'rateLimited':
+			return { title: 'JPL asked to wait', description: retryAfter === undefined ? said : `${said} Try again in ${Math.max(1, Math.ceil(retryAfter / 1000))} s.`, retry: true, offline: false }
+		case 'rejected':
+			return { title: 'JPL refused the search', description: `${said} Change the filters and search again.`, retry: false, offline: false }
+		case 'upstreamSchemaChanged':
+		case 'invalidResponse':
+			return { title: 'JPL answered something unreadable', description: said, retry: true, offline: false }
+		default:
+			return { title: 'JPL did not answer', description: said, retry: true, offline: false }
+	}
+}
 
 // Returns a day as YYYY-MM-DD from Unix milliseconds. The dates of the filters are TDB, about a minute from the UTC used
 // for the presets, which only name a span.
@@ -254,7 +305,8 @@ export function historyUrl(spkId: string, filters: CloseApproachHistoryFilters, 
 	return `/api/close-approaches/objects/${encodeURIComponent(spkId)}/approaches?${params}`
 }
 
-// Reads the page of the current filters. The rows shown stay until the answer, which `refresh` asks JPL for again.
+// Reads the page of the current filters. The rows shown stay until the answer, which `refresh` asks JPL for again, and
+// a failure keeps them too: the page shown is then the one of `result`, and Retry reads `page` again.
 export async function loadCloseApproaches(state: CloseApproachesState, refresh = false, io: CloseApproachesIo = browserIo) {
 	const { filters } = state
 	if (!filters) return
@@ -269,11 +321,32 @@ export async function loadCloseApproaches(state: CloseApproachesState, refresh =
 		state.result = result
 	} catch (error) {
 		if (!request.current()) return
-		state.result = undefined
-		state.error = error instanceof Error ? error.message : String(error)
+		state.error = closeApproachFailure(error)
 	}
 
 	state.loading = false
+}
+
+// Whether the filters being edited differ from those of the page shown, or cannot be searched: what is shown is then not
+// what the form says until Search.
+export function closeApproachDraftPending(state: Pick<CloseApproachesState, 'draft' | 'filters'>) {
+	const { filters } = state
+	if (!filters) return false
+	const draft = draftFilters(state.draft, filters.sort)
+	if (typeof draft === 'string') return true
+	return (Object.keys(draft) as (keyof CloseApproachFilters)[]).some((key) => draft[key] !== filters[key])
+}
+
+// Returns the filters of a search in one line, such as "Earth · 2026-10-31 to 2026-11-30 · ≤ 10 LD · Comets · NEOs".
+export function describeCloseApproachFilters(filters: CloseApproachFilters) {
+	const kind = filters.kind && OBJECT_KIND_LABELS[filters.kind]
+	const h = filters.hMin === undefined ? (filters.hMax === undefined ? undefined : `H ≤ ${filters.hMax}`) : filters.hMax === undefined ? `H ≥ ${filters.hMin}` : `H ${filters.hMin} to ${filters.hMax}`
+	return [bodyName(filters.body), `${filters.dateMin} to ${filters.dateMax}`, `≤ ${filters.distanceMax} ${filters.distanceUnit === 'au' ? 'AU' : filters.distanceUnit}`, kind, filters.neoOnly && 'NEOs', filters.phaOnly && 'PHAs', h].filter(Boolean).join(' · ')
+}
+
+// Returns the step of the largest distance of a search in a unit: whole lunar distances, hundredths of an AU.
+export function distanceStep(unit: CloseApproachFilters['distanceUnit']) {
+	return unit === 'au' ? 0.01 : 1
 }
 
 // Forgets the encounter selected and the object behind it, abandoning their requests.
@@ -425,7 +498,7 @@ export async function loadCloseApproachObject(state: CloseApproachesState, desig
 		await loadCloseApproachHistory(state, io)
 	} catch (error) {
 		if (!request.current()) return
-		state.objectError = error instanceof Error ? error.message : String(error)
+		state.objectError = closeApproachFailure(error)
 		state.objectLoading = false
 	}
 }
@@ -500,16 +573,35 @@ export function distanceValue(au: number, unit: CloseApproachDistanceDisplay) {
 	return unit === 'km' ? au * AU_KM : (au * AU_KM) / LUNAR_DISTANCE_KM
 }
 
-// Formats a distance in AU in a unit. A kilometer has no fraction worth showing.
+// Name of each distance unit as shown after a value.
+const DISTANCE_UNIT_NAMES: Readonly<Record<CloseApproachDistanceDisplay, string>> = { au: 'AU', LD: 'LD', km: 'km' }
+
+// Writes a number with `digits` significant digits, never in exponential notation: a value with more whole digits than
+// that is rounded to a whole number, grouped by thousands.
+function significant(value: number, digits: number) {
+	return Math.abs(value) >= 10 ** digits ? Math.round(value).toLocaleString('en-US') : value.toPrecision(digits)
+}
+
+// Formats a distance in AU in a unit. A kilometer has no fraction worth showing, and its thousands are grouped.
 export function formatDistance(au: number, unit: CloseApproachDistanceDisplay) {
 	const value = distanceValue(au, unit)
-	return unit === 'km' ? `${Math.round(value)} km` : `${value.toPrecision(4)} ${unit}`
+	return unit === 'km' ? `${Math.round(value).toLocaleString('en-US')} km` : `${significant(value, 4)} ${DISTANCE_UNIT_NAMES[unit]}`
 }
 
 // Formats the 3-sigma bounds of a distance in AU in one unit, with the digits that tell them apart; absent without both.
 export function formatDistanceRange(min: number | undefined, max: number | undefined, unit: CloseApproachDistanceDisplay) {
 	if (min === undefined || max === undefined) return undefined
-	return `${distanceValue(min, unit).toPrecision(RANGE_DIGITS)} – ${distanceValue(max, unit).toPrecision(RANGE_DIGITS)} ${unit}`
+	return `${significant(distanceValue(min, unit), RANGE_DIGITS)} – ${significant(distanceValue(max, unit), RANGE_DIGITS)} ${DISTANCE_UNIT_NAMES[unit]}`
+}
+
+// Formats the 3-sigma uncertainty of the time of an encounter as CAD publishes it, "[< ][days_]hh:mm", in words, such as
+// "< 1 min" or "1 d 15 h 27 min"; a text of another form is shown as published.
+export function formatTimeUncertainty(text: string) {
+	const match = /^(<\s*)?(?:(\d+)_)?(\d{1,2}):(\d{2})$/.exec(text.trim())
+	if (!match) return text
+	const [, below, days, hours, minutes] = match
+	const parts = [Number(days) > 0 && `${Number(days)} d`, Number(hours) > 0 && `${Number(hours)} h`, (Number(minutes) > 0 || (!Number(days) && !Number(hours))) && `${Number(minutes)} min`].filter(Boolean)
+	return `${below ? '< ' : ''}${parts.join(' ')}`
 }
 
 // Formats a velocity in km/s with the two decimals CAD publishes.

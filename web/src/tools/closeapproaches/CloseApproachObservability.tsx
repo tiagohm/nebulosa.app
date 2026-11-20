@@ -3,22 +3,24 @@ import { useEffect } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatDateTime, formatDegrees, formatLocalTime } from '../../format'
 import { type ObservingSite, openObservingSites } from '../../location/site'
+import type { CloseApproachDistanceDisplay } from '../../profile/schema'
 import { collapsibleSections, sectionOpen } from '../../shell/collapsible'
 import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { describeEphemerisSource } from '../../sky/ephemerissource'
-import { formatDeclination, formatMagnitude, formatRightAscension, formatSolarSystemDistance } from '../../sky/format'
+import { formatDeclination, formatMagnitude, formatRightAscension } from '../../sky/format'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { exploreMinorBody } from '../orbitalmechanics/orbitalmechanics.sources'
-import { closeApproachesState, loadCloseApproachObservability, OBSERVABILITY_INSTANTS, type ObservabilityInstant, observabilityKey, showInSky } from './closeapproaches'
+import { closeApproachesState, formatDistance, loadCloseApproachObservability, OBSERVABILITY_INSTANTS, type ObservabilityInstant, observabilityKey, showInSky } from './closeapproaches'
 
 // How the Close Approaches tool meets the Sky: the two explicit actions that show the object there, and the Observability
 // section, read through the route of the Sky only while it is open, from the active observing site of the profile. Nothing
 // here computes a position or changes the site or any device; the zone of the times only formats them.
 
-// Section identifier of Observability, which keys its expanded state.
+// Section identifier of Observability, which keys its expanded state; it starts open, since where the object stands is
+// what an observer asks first.
 const OBSERVABILITY_SECTION = 'closeapproaches.observability'
 
 // Name of each instant the section evaluates.
@@ -53,11 +55,23 @@ export function CloseApproachSkyActions({ body, time, site }: SkyActionsProps) {
 	)
 }
 
-// Sky position of the object at the instant chosen, read while the section is open. timeZone (IANA) only formats its
-// times.
-export function CloseApproachObservability({ body, time, site, timeZone }: SkyActionsProps & { readonly timeZone: string }) {
+// Altitude and apparent magnitude of a position in one line, such as "Alt 77.12° · mag 17.40"; each only when known.
+function observabilitySummary({ altitude, magnitude }: { readonly altitude?: number; readonly magnitude?: number }) {
+	return [altitude !== undefined && `Alt ${formatDegrees(altitude)}`, magnitude !== undefined && `mag ${formatMagnitude(magnitude)}`].filter(Boolean).join(' · ') || undefined
+}
+
+interface ObservabilityProps extends SkyActionsProps {
+	// IANA zone the times are formatted in.
+	readonly timeZone: string
+	// Unit of the distance shown, the tool's.
+	readonly distanceDisplay: CloseApproachDistanceDisplay
+}
+
+// Sky position of the object at the instant chosen, read while the section is open; collapsed, its altitude and
+// brightness stay in its heading. timeZone (IANA) only formats its times.
+export function CloseApproachObservability({ body, time, site, timeZone, distanceDisplay }: ObservabilityProps) {
 	const { observabilityInstant, observability, observabilityLoading, observabilityError } = useSnapshot(closeApproachesState)
-	const open = sectionOpen(useSnapshot(collapsibleSections), OBSERVABILITY_SECTION, false)
+	const open = sectionOpen(useSnapshot(collapsibleSections), OBSERVABILITY_SECTION, true)
 	const position = observability?.position
 	const events = observability?.events
 	const load = () => void loadCloseApproachObservability(closeApproachesState, body, time, site)
@@ -70,7 +84,7 @@ export function CloseApproachObservability({ body, time, site, timeZone }: SkyAc
 	}, [open, key])
 
 	return (
-		<CollapsibleSection id={OBSERVABILITY_SECTION} title="Observability" summary={site ? undefined : 'No observing site'} defaultOpen={false}>
+		<CollapsibleSection id={OBSERVABILITY_SECTION} title="Observability" summary={site ? position && observabilitySummary(position) : 'No observing site'}>
 			<SegmentedControl label="Instant" options={OBSERVABILITY_INSTANTS} value={observabilityInstant} format={(value) => INSTANT_LABELS[value]} onChange={(value) => (closeApproachesState.observabilityInstant = value)} />
 			{!site && (
 				<>
@@ -99,7 +113,7 @@ export function CloseApproachObservability({ body, time, site, timeZone }: SkyAc
 					<DataRow label="Dec (of date)">{formatDeclination(position.declination)}</DataRow>
 					<DataRow label="Constellation">{position.constellationName ?? position.constellation}</DataRow>
 					{position.magnitude !== undefined && <DataRow label="Apparent magnitude">{formatMagnitude(position.magnitude)}</DataRow>}
-					{position.distance !== undefined && <DataRow label="Distance">{formatSolarSystemDistance(position.distance)}</DataRow>}
+					{position.distance !== undefined && <DataRow label="Distance">{formatDistance(position.distance, distanceDisplay)}</DataRow>}
 					{events?.state === 'circumpolar' && <DataRow label="Rise and set">Circumpolar</DataRow>}
 					{events?.state === 'belowHorizon' && <DataRow label="Rise and set">Below the horizon all day</DataRow>}
 					{events?.rise !== undefined && <DataRow label="Rise">{formatLocalTime(events.rise, timeZone, position.time)}</DataRow>}

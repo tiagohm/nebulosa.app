@@ -124,6 +124,7 @@ export function Row({ selected = false, onSelect, title, children }: RowProps) {
 	return (
 		<tr
 			title={title}
+			data-selected={selected || undefined}
 			tabIndex={onSelect ? 0 : undefined}
 			onClick={onSelect}
 			onKeyDown={onSelect ? press : undefined}

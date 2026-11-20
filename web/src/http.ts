@@ -29,17 +29,36 @@ export function jsonInit(method: 'POST' | 'PUT' | 'PATCH', body?: unknown, signa
 	return { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal }
 }
 
+// Error of a failed API response as the API sends it (ApiError): its message, its stable code, and the other fields
+// some routes add, such as `retryAfter`.
+export interface ApiErrorBody {
+	// Message of the error, or the fallback when the body has none.
+	readonly message: string
+	// Stable code of the error; absent when the body names none.
+	readonly code?: string
+	// Every field of the body, the message and code included; empty when it is not JSON.
+	readonly details: Readonly<Record<string, unknown>>
+}
+
+// Reads the error of a failed API response, which the API sends as { error, code } (ApiError), its message falling back
+// to fallback when given, or to the response's status line.
+export async function responseErrorBody(response: Response, fallback?: string): Promise<ApiErrorBody> {
+	const message = fallback ?? `${response.status} ${response.statusText}`.trim()
+
+	try {
+		const body = (await response.json()) as unknown
+		if (typeof body !== 'object' || body === null) return { message, details: {} }
+		const details = body as Readonly<Record<string, unknown>>
+		return { message: typeof details.error === 'string' ? details.error : message, code: typeof details.code === 'string' ? details.code : undefined, details }
+	} catch {
+		return { message, details: {} }
+	}
+}
+
 // Reads the error message of a failed API response, which the API sends as { error, code } (ApiError), falling
 // back to fallback when given, or to the response's status line.
 export async function responseError(response: Response, fallback?: string): Promise<string> {
-	try {
-		const body = (await response.json()) as { error?: unknown }
-		if (typeof body.error === 'string') return body.error
-	} catch {
-		// Not a JSON error body.
-	}
-
-	return fallback ?? `${response.status} ${response.statusText}`.trim()
+	return (await responseErrorBody(response, fallback)).message
 }
 
 // Whether a failure is the abort of a request, such as one a newer request of the same view superseded.
@@ -47,12 +66,15 @@ export function aborted(error: unknown): boolean {
 	return error instanceof DOMException && error.name === 'AbortError'
 }
 
-// Failed API response: the API's error message, with the response's status.
+// Failed API response: the API's error message, with the response's status and, when the API sent them, its code and the
+// other fields of its error.
 export class ApiResponseError extends Error {
-	// Creates the error of a response answered with a status (such as 404).
+	// Creates the error of a response answered with a status (such as 404), its code, and the fields of its error body.
 	constructor(
 		message: string,
 		readonly status: number,
+		readonly code?: string,
+		readonly details: Readonly<Record<string, unknown>> = {},
 	) {
 		super(message)
 	}
@@ -67,11 +89,16 @@ export type ApiFetch = (input: string, init?: RequestInit) => Promise<Response>
 // throws "Illegal invocation".
 export const browserFetch: ApiFetch = (input, init) => globalThis.fetch(input, init)
 
-// Fetches JSON from the API through io's fetch, rejecting with an ApiResponseError carrying the API's error message
-// and the status on failure.
+// Fetches JSON from the API through io's fetch, rejecting with an ApiResponseError carrying the API's error message,
+// code, and fields, and the status on failure.
 export async function fetchJson<T>(io: { readonly fetch: ApiFetch }, input: string, init?: RequestInit): Promise<T> {
 	const response = await io.fetch(input, init)
-	if (!response.ok) throw new ApiResponseError(await responseError(response), response.status)
+
+	if (!response.ok) {
+		const { message, code, details } = await responseErrorBody(response)
+		throw new ApiResponseError(message, response.status, code, details)
+	}
+
 	return (await response.json()) as T
 }
 

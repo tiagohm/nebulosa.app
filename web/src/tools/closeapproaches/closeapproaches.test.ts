@@ -9,13 +9,18 @@ import type { SkyState } from '../../sky/sky'
 import {
 	catalogUrl,
 	clearCloseApproachSelection,
+	closeApproachDraftPending,
 	type CloseApproachesIo,
 	type CloseApproachesState,
+	closeApproachFailureNotice,
+	describeCloseApproachFilters,
+	distanceStep,
 	draftFilters,
 	filterCloseApproachHistory,
 	formatDiameter,
 	formatDistance,
 	formatDistanceRange,
+	formatTimeUncertainty,
 	historyDates,
 	initialCloseApproachesState,
 	initialDraft,
@@ -193,13 +198,69 @@ describe('catalog', () => {
 		const { io } = fakeIo(() => (online ? Response.json(page([row('a')])) : Response.json({ error: 'JPL cannot be reached', code: 'serviceUnavailable' }, { status: 503 })))
 		await searchCloseApproaches(state, io)
 
-		expect(state.error).toBe('JPL cannot be reached')
+		expect(state.error).toEqual({ message: 'JPL cannot be reached', code: 'serviceUnavailable', retryAfter: undefined })
 		expect(state.result).toBeUndefined()
 
 		online = true
 		await loadCloseApproaches(state, false, io)
 		expect(state.error).toBeUndefined()
 		expect(state.result?.rows).toHaveLength(1)
+	})
+
+	test('a failed page keeps the rows shown, and Retry reads the page asked for', async () => {
+		const state = newState()
+		let online = true
+		const { io, urls } = fakeIo((url) => (online ? Response.json({ ...page([row(`p${url.searchParams.get('page')}`)], 120), page: Number(url.searchParams.get('page')) }) : Response.json({ error: 'JPL is pacing requests', code: 'rateLimited', retryAfter: 4200 }, { status: 503 })))
+		await searchCloseApproaches(state, io)
+		online = false
+		await pageCloseApproaches(state, 2, io)
+
+		expect(state.result?.rows[0].id).toBe('p1')
+		expect(state.result?.page).toBe(1)
+		expect(state.error).toEqual({ message: 'JPL is pacing requests', code: 'rateLimited', retryAfter: 4200 })
+
+		online = true
+		await loadCloseApproaches(state, false, io)
+		expect(urls.at(-1)?.searchParams.get('page')).toBe('2')
+		expect(state.result?.rows[0].id).toBe('p2')
+		expect(state.error).toBeUndefined()
+	})
+
+	test('a failure is named by its code, offering Retry only where reading again can help', () => {
+		expect(closeApproachFailureNotice({ message: 'The ephemeris sources are offline, and this was not read from JPL before', code: 'offline' })).toEqual({
+			title: 'Offline',
+			description: 'The ephemeris sources are offline, and this was not read from JPL before. Turn Offline off in the SPICE Kernel Library to ask JPL.',
+			retry: false,
+			offline: true,
+		})
+		expect(closeApproachFailureNotice({ message: 'JPL is pacing requests', code: 'rateLimited', retryAfter: 4200 })).toMatchObject({ title: 'JPL asked to wait', description: 'JPL is pacing requests. Try again in 5 s.', retry: true })
+		expect(closeApproachFailureNotice({ message: 'Bad sort', code: 'rejected' })).toMatchObject({ title: 'JPL refused the search', retry: false })
+		expect(closeApproachFailureNotice({ message: 'JPL answered an unreadable table: x', code: 'invalidResponse' })).toMatchObject({ title: 'JPL answered something unreadable', retry: true })
+		expect(closeApproachFailureNotice({ message: 'Failed to fetch' })).toMatchObject({ title: 'JPL did not answer', description: 'Failed to fetch.', retry: true, offline: false })
+	})
+
+	test('the filters say when they differ from the page shown', async () => {
+		const state = newState()
+		const { io } = fakeIo()
+		expect(closeApproachDraftPending(state)).toBeFalse()
+		await searchCloseApproaches(state, io)
+		expect(closeApproachDraftPending(state)).toBeFalse()
+
+		state.draft.hMax = '20'
+		expect(closeApproachDraftPending(state)).toBeTrue()
+		state.draft.hMax = ''
+		expect(closeApproachDraftPending(state)).toBeFalse()
+		state.draft.distanceMax = 0
+		expect(closeApproachDraftPending(state)).toBeTrue()
+	})
+
+	test('the filters of a search read in one line', () => {
+		const filters = draftFilters({ ...initialDraft(NOW), kind: 'c', neoOnly: true, hMax: '20' }, 'date')
+		if (typeof filters === 'string') throw new Error(filters)
+		expect(describeCloseApproachFilters(filters)).toBe('Earth · 2026-10-31 to 2026-11-30 · ≤ 10 LD · Comets · NEOs · H ≤ 20')
+		expect(describeCloseApproachFilters({ ...filters, distanceUnit: 'au', distanceMax: 0.05, kind: undefined, neoOnly: false, hMin: 18, hMax: 22 })).toBe('Earth · 2026-10-31 to 2026-11-30 · ≤ 0.05 AU · H 18 to 22')
+		expect(distanceStep('au')).toBe(0.01)
+		expect(distanceStep('LD')).toBe(1)
 	})
 
 	test('a refresh keeps the rows until the answer and asks JPL again', async () => {
@@ -251,7 +312,7 @@ describe('selection', () => {
 		await selectCloseApproach(state, row('e1', '99942'), io)
 
 		expect(state.selected?.id).toBe('e1')
-		expect(state.objectError).toBe('SBDB cannot be reached')
+		expect(state.objectError?.message).toBe('SBDB cannot be reached')
 
 		online = true
 		await selectCloseApproach(state, row('e1', '99942'), io)
@@ -443,14 +504,25 @@ describe('formats', () => {
 	})
 
 	test('a distance states its unit, the LD being 384400 km', () => {
-		expect(formatDistance(APOPHIS, 'au')).toBe('0.0002541 au')
-		expect(formatDistance(APOPHIS, 'km')).toBe('38011 km')
+		expect(formatDistance(APOPHIS, 'au')).toBe('0.0002541 AU')
+		expect(formatDistance(APOPHIS, 'km')).toBe('38,011 km')
 		expect(formatDistance(APOPHIS, 'LD')).toBe('0.09889 LD')
+		expect(formatDistance(100, 'LD')).toBe('38,917 LD')
+		expect(formatDistance(1.5, 'au')).toBe('1.500 AU')
 	})
 
 	test('the 3-sigma range keeps one unit and tells its ends apart', () => {
-		expect(formatDistanceRange(0.000254068999976389, 0.000254112821017663, 'au')).toBe('0.000254069 – 0.000254113 au')
+		expect(formatDistanceRange(0.000254068999976389, 0.000254112821017663, 'au')).toBe('0.000254069 – 0.000254113 AU')
+		expect(formatDistanceRange(9, 10, 'km')).toBe('1,346,380,836 – 1,495,978,707 km')
 		expect(formatDistanceRange(undefined, 1, 'au')).toBeUndefined()
+	})
+
+	test('the time uncertainty reads in words, as CAD publishes it otherwise', () => {
+		expect(formatTimeUncertainty('< 00:01')).toBe('< 1 min')
+		expect(formatTimeUncertainty('13:02')).toBe('13 h 2 min')
+		expect(formatTimeUncertainty('2_09:00')).toBe('2 d 9 h')
+		expect(formatTimeUncertainty('00:00')).toBe('0 min')
+		expect(formatTimeUncertainty('n/a')).toBe('n/a')
 	})
 
 	test('a diameter names its uncertainty only when there is one', () => {

@@ -9,28 +9,32 @@ import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { ObjectTitle } from '../../ui/ObjectTitle'
+import { Pager } from '../../ui/Pager'
 import { Select } from '../../ui/Select'
+import { FoldedNote } from '../observingplanner/FoldedNote'
 import {
 	BODY_NAMES,
 	bodyName,
 	type CloseApproachesState,
 	closeApproachesState,
+	closeApproachFailureNotice,
 	filterCloseApproachHistory,
 	formatDiameter,
 	formatDistance,
 	formatDistanceRange,
+	formatTimeUncertainty,
 	formatVelocity,
 	HISTORY_WINDOW_LABELS,
 	HISTORY_WINDOWS,
 	loadCloseApproachObject,
 	pageCloseApproachHistory,
-	pageCount,
 	selectCloseApproach,
 } from './closeapproaches'
 
-// Inspector of the Close Approaches tool: what the encounter selected says on its own, then what SBDB publishes about the
-// object, each section only when it has something. Values are shown as published, with their units and uncertainties, and
-// an unknown value is left out. Terms that are easy to read as a risk say what they mean: none of them is a prediction.
+// Inspector of the Close Approaches tool: what the encounter selected says on its own, where the object stands in the sky
+// of the active site, then what SBDB publishes about the object, each section only when it has something. Values are
+// shown as published, with their units and uncertainties, and an unknown value is left out. Terms that are easy to read
+// as a risk say what they mean: none of them is a prediction.
 
 // What a close approach distance and its range mean.
 const RANGE_NOTE = 'Distances are from the target center. The 3σ range is the uncertainty of the nominal distance, not a size of the object.'
@@ -79,15 +83,14 @@ interface EncounterProps {
 
 // Overview of the encounter and, once known, of the object.
 function Overview({ approach, zone, distanceDisplay, body, children }: EncounterProps & { readonly body?: MinorBody; readonly children?: ReactNode }) {
-	const { distance, distanceMin, distanceMax, relativeVelocity, time, fullName, designation } = approach
+	const { distance, distanceMin, distanceMax, time, fullName, designation } = approach
 
 	return (
 		<CollapsibleSection id="closeapproaches.overview" title="Overview">
 			<ObjectTitle name={body?.name ?? fullName ?? designation} kind={body && `${body.kind === 'comet' ? 'Comet' : 'Asteroid'} · ${body.orbitClass}`} designations={body && [`SPK-ID ${body.spkId}`, body.neo && 'NEO', body.pha && 'PHA'].filter(Boolean).join(' · ')} designationsTitle={CLASS_NOTE} />
 			<DataRow label="Nominal distance">{formatDistance(distance, distanceDisplay)}</DataRow>
 			<OptionalDatum label="3σ range">{formatDistanceRange(distanceMin, distanceMax, distanceDisplay)}</OptionalDatum>
-			<DataRow label="Vrel">{formatVelocity(relativeVelocity)}</DataRow>
-			<DataRow label="Time">{formatDateTime(time, zone.zone)}</DataRow>
+			<DataRow label={`Time (${zone.zone})`}>{formatDateTime(time, zone.zone)}</DataRow>
 			{children}
 		</CollapsibleSection>
 	)
@@ -102,14 +105,15 @@ function ApproachSection({ approach }: { readonly approach: CloseApproach }) {
 			<DataRow label="Target">{bodyName(body)}</DataRow>
 			<DataRow label="JD (TDB)">{jd}</DataRow>
 			<DataRow label="Calendar (TDB)">{calendarDate}</DataRow>
-			<OptionalDatum label="Time 3σ">{timeUncertainty}</OptionalDatum>
+			<OptionalDatum label="Time 3σ">{timeUncertainty && formatTimeUncertainty(timeUncertainty)}</OptionalDatum>
 			<DataRow label="Vrel">{formatVelocity(relativeVelocity)}</DataRow>
 			<OptionalDatum label="Vinf">{infiniteVelocity === undefined ? undefined : formatVelocity(infiniteVelocity)}</OptionalDatum>
 			<DataRow label="Orbit solution">{orbitId}</DataRow>
-			<OptionalDatum label="Absolute magnitude H">{absoluteMagnitude === undefined ? undefined : formatFixed(absoluteMagnitude, 2)}</OptionalDatum>
+			<OptionalDatum label="Absolute magnitude H">{absoluteMagnitude === undefined ? undefined : `${formatFixed(absoluteMagnitude, 2)} mag`}</OptionalDatum>
 			<OptionalDatum label="Diameter (1σ)">{diameter === undefined ? undefined : formatDiameter(diameter, diameterSigma)}</OptionalDatum>
-			<Notice>{RANGE_NOTE}</Notice>
-			<Notice>{VELOCITY_NOTE}</Notice>
+			<FoldedNote summary="What the range and speeds mean">
+				{RANGE_NOTE} {VELOCITY_NOTE}
+			</FoldedNote>
 		</CollapsibleSection>
 	)
 }
@@ -214,7 +218,6 @@ function VirtualImpactorsSection({ details: { virtualImpactors } }: { readonly d
 // Other encounters of the object with any target, paged by JPL.
 function OtherApproachesSection({ zone, distanceDisplay }: Omit<EncounterProps, 'approach'>) {
 	const { history, historyBody, historyWindow, historyPage, historyLoading, historyError, selected } = useSnapshot(closeApproachesState) as CloseApproachesState
-	const pages = history ? pageCount(history.total, history.pageSize) : 1
 
 	return (
 		<CollapsibleSection id="closeapproaches.other-approaches" title="Other Approaches" summary={history && `${history.total} in this span`} defaultOpen={false}>
@@ -238,36 +241,29 @@ function OtherApproachesSection({ zone, distanceDisplay }: Omit<EncounterProps, 
 					</li>
 				))}
 			</ul>
-			{history && pages > 1 && (
-				<div className="flex items-center justify-between gap-2">
-					<Button variant="secondary" disabled={historyLoading || historyPage <= 1} onClick={() => void pageCloseApproachHistory(closeApproachesState, historyPage - 1)}>
-						Previous
-					</Button>
-					<span className="text-xs tabular-nums">
-						{historyPage} of {pages}
-					</span>
-					<Button variant="secondary" disabled={historyLoading || historyPage >= pages} onClick={() => void pageCloseApproachHistory(closeApproachesState, historyPage + 1)}>
-						Next
-					</Button>
-				</div>
-			)}
+			{history && <Pager page={historyPage - 1} total={history.total} pageSize={history.pageSize} noun="approaches" loading={historyLoading} onPage={(index) => void pageCloseApproachHistory(closeApproachesState, index + 1)} />}
 		</CollapsibleSection>
 	)
 }
 
 // Inspector of the encounter selected: `actions` receives the body once known and adds to the first section, and
-// `observability` receives it after the sections of the object.
+// `observability` receives it right after, before what the encounter and SBDB publish.
 export function CloseApproachInspector({ approach, zone, distanceDisplay, actions, observability }: EncounterProps & { readonly actions: (body: MinorBody) => ReactNode; readonly observability: (body: MinorBody) => ReactNode }) {
 	const { object, objectLoading, objectError, designation } = useSnapshot(closeApproachesState) as CloseApproachesState
 	const found = object?.kind === 'found' ? object : undefined
+	const failure = objectError && closeApproachFailureNotice(objectError)
 
 	return (
 		<>
 			<Overview approach={approach} zone={zone} distanceDisplay={distanceDisplay} body={found?.body}>
 				{found && actions(found.body)}
 				{objectLoading && <Notice>Reading the object from SBDB…</Notice>}
-				{objectError && <Notice error>Object details unavailable: {objectError}</Notice>}
-				{objectError && designation && (
+				{failure && (
+					<Notice error>
+						Object details unavailable. {failure.title}: {failure.description}
+					</Notice>
+				)}
+				{failure?.retry && designation && (
 					<Button variant="secondary" className="self-start" onClick={() => void loadCloseApproachObject(closeApproachesState, designation)}>
 						Retry
 					</Button>
@@ -284,6 +280,7 @@ export function CloseApproachInspector({ approach, zone, distanceDisplay, action
 					</>
 				)}
 			</Overview>
+			{found && observability(found.body)}
 			<ApproachSection approach={approach} />
 			{found && (
 				<>
@@ -292,7 +289,6 @@ export function CloseApproachInspector({ approach, zone, distanceDisplay, action
 					<ObservationsSection details={found.details} />
 					<VirtualImpactorsSection details={found.details} />
 					<OtherApproachesSection zone={zone} distanceDisplay={distanceDisplay} />
-					{observability(found.body)}
 					<CollapsibleSection id="closeapproaches.source" title="Source" summary={found.details.source} defaultOpen={false}>
 						<Notice>
 							{found.details.source} {found.details.sourceVersion}, read {formatZonedDateTime(found.details.fetchedAt, zone.zone)}.

@@ -1,4 +1,5 @@
 import type { SatelliteGroupStatus, SatelliteSummary } from 'api'
+import { useEffect, useRef } from 'react'
 import { useSnapshot } from 'valtio'
 import { formatZonedDateTime, MISSING } from '../../format'
 import { activeSite, siteState } from '../../location/site'
@@ -14,12 +15,15 @@ import { Cell, Row, Table } from '../../ui/Table'
 import { TextInput } from '../../ui/TextInput'
 import { artificialSatellitesState, CATALOG_PAGE_SIZE, searchSatellites, selectSatellite } from './artificialsatellites'
 
-// Catalog tab of Artificial Satellites: the local search of the server's catalog (never CelesTrak), its pages, and the
-// favorites of the profile. The groups and their downloads are in the Settings of the tool, the imports in the Import
+// Catalog tab of Artificial Satellites: the local search of the server's catalog (never CelesTrak), run as the search is
+// typed or a filter changes, its pages, and the favorites of the profile. The groups and their downloads are in the Settings of the tool, the imports in the Import
 // Elements popover of its workspace actions.
 
 // Names of the SATCAT object types.
 const OBJECT_TYPE_NAMES = { payload: 'Payload', rocketBody: 'Rocket body', debris: 'Debris', unknown: 'Unknown' } as const
+
+// Pause after the last key of the search text before searching, in milliseconds.
+const SEARCH_DELAY_MS = 250
 
 // Searches the catalog with the state of the tab and the favorites of the active profile.
 function search(offset = 0) {
@@ -34,9 +38,20 @@ function groupName(sourceKey: string, groups: readonly SatelliteGroupStatus[]) {
 	return group && provider === 'gp' ? group.label : sourceKey
 }
 
-// Search form of the catalog.
+// Search form of the catalog: a change of the text searches after SEARCH_DELAY_MS, of a filter at once, and Enter at once;
+// the page shown when the form appears is kept.
 function SearchForm() {
-	const { query, group, favoritesOnly, searching } = useSnapshot(artificialSatellitesState)
+	const { query, group, favoritesOnly } = useSnapshot(artificialSatellitesState)
+	const last = useRef({ query, group, favoritesOnly })
+
+	useEffect(() => {
+		const previous = last.current
+		last.current = { query, group, favoritesOnly }
+		if (previous.group !== group || previous.favoritesOnly !== favoritesOnly) return search()
+		if (previous.query === query) return undefined
+		const timer = setTimeout(() => search(), SEARCH_DELAY_MS)
+		return () => clearTimeout(timer)
+	}, [query, group, favoritesOnly])
 	const { snapshot } = useSnapshot(satelliteCatalogState)
 	const groups = snapshot?.groups.filter((entry) => entry.members > 0).map((entry) => `gp:GROUP:${entry.group}`) ?? []
 	const options = ['', ...groups, ...(snapshot?.imported ? ['manual'] : [])]
@@ -50,13 +65,10 @@ function SearchForm() {
 			className="flex flex-none flex-wrap items-end gap-2 border-b border-line-100 bg-base-100 px-4 py-3"
 		>
 			<TextInput label="Name, NORAD ID, or COSPAR ID" className="w-72 max-w-full" value={query} onChange={(event) => (artificialSatellitesState.query = event.target.value)} />
-			<Select label="Group" className="w-56" options={options} value={options.includes(group) ? group : ''} format={(value) => (value ? groupName(value, snapshot?.groups ?? []) : 'Every object')} onChange={(value) => (artificialSatellitesState.group = value)} />
+			<Select label="Group" className="w-56 max-w-full flex-none" options={options} value={options.includes(group) ? group : ''} format={(value) => (value ? groupName(value, snapshot?.groups ?? []) : 'Every object')} onChange={(value) => (artificialSatellitesState.group = value)} />
 			<span className="flex h-9.5 items-center">
 				<Checkbox label="Favorites only" checked={favoritesOnly} onChange={(value) => (artificialSatellitesState.favoritesOnly = value)} />
 			</span>
-			<Button type="submit" className="ml-auto" disabled={searching}>
-				Search
-			</Button>
 		</form>
 	)
 }

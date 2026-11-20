@@ -1,6 +1,6 @@
 import type { SatelliteQuality } from 'api'
 import { useSnapshot } from 'valtio'
-import { formatClockDuration, formatClockTime, formatDateTime, formatDegrees, formatFixed, formatKilometers, formatSpeed, formatZonedDateTime } from '../../format'
+import { formatClockTime, formatDegrees, formatDuration, formatFixed, formatGeographic, formatKilometers, formatSpan, formatSpeed, formatZonedDateTime } from '../../format'
 import { type GeographicLocation, openObservingSites } from '../../location/site'
 import type { DisplayZone } from '../../location/zone'
 import { activeProfile, profileState, satelliteFavorites, setSatelliteFavorite } from '../../profile/profile'
@@ -13,10 +13,11 @@ import { Notice } from '../../ui/Notice'
 import { ObjectTitle } from '../../ui/ObjectTitle'
 import { SegmentedControl } from '../../ui/SegmentedControl'
 import { useNow } from '../../useNow'
-import { artificialSatellitesState, formatElementAge, POSITION_REFRESH_MS, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
+import { artificialSatellitesState, formatElementAge, highestVisiblePoint, NEXT_PASS_MIN_ALTITUDE, NEXT_PASS_WINDOW_MS, POSITION_REFRESH_MS, setSatelliteElementSource, SHADOW_LABELS, showSatelliteInSky } from './artificialsatellites'
 
-// Contextual panel of Artificial Satellites: the satellite selected, its position now for the observing site of the
-// active profile (read again every POSITION_REFRESH_MS, its time in the display zone), its orbit, and where its elements
+// Contextual panel of Artificial Satellites: the satellite selected, its next visible pass and its position now for the
+// observing site of the active profile (read again every POSITION_REFRESH_MS, its time in the display zone), its orbit,
+// and where its elements
 // come from (their epoch in the display zone). Every value is the server's; an absent one is left out, never shown as 0. Positions
 // are geometric; the RA/Dec of date are those the Sky draws, J2000 is ICRS. The satellite's next sunset and sunrise (its
 // entry into the Earth's umbra and its exit) count down every second between two readings.
@@ -36,17 +37,30 @@ const QUALITY_REASONS: Readonly<Record<SatelliteQuality['reasons'][number], stri
 	eopApproximate: 'no Earth orientation data for this time (UT1 taken as UTC)',
 }
 
-// Quality of a prediction, in words.
-export function QualityRow({ quality }: { readonly quality: SatelliteQuality }) {
+// Tone of each suitability: a usable prediction is plain, an approximate one asks for attention, and an unreliable one
+// is a failure.
+const QUALITY_TONES = { usable: 'default', caution: 'warning', unavailable: 'danger' } as const
+
+// Properties of the quality row of a prediction.
+interface QualityRowProps {
+	// Quality of the prediction.
+	readonly quality: SatelliteQuality
+	// What the quality is judged over, which names the row: the instant of a reading or the window of a result.
+	readonly scope: 'now' | 'window'
+}
+
+// Quality of a prediction, in words, named by what it is judged over: the age of the elements differs between an instant
+// and a window, whose worst instant counts.
+export function QualityRow({ quality, scope }: QualityRowProps) {
 	const text = quality.suitability === 'usable' ? 'Usable' : `${quality.suitability === 'caution' ? 'Approximate' : 'Unreliable'}: ${quality.reasons.map((reason) => QUALITY_REASONS[reason]).join('; ')}`
 	return (
-		<DataRow label="Prediction" tone={quality.suitability === 'unavailable' ? 'danger' : quality.suitability === 'usable' ? 'success' : 'default'}>
+		<DataRow label={scope === 'now' ? 'Prediction now' : 'Prediction over the window'} tone={QUALITY_TONES[quality.suitability]}>
 			{text}
 		</DataRow>
 	)
 }
 
-// Interval of the countdowns to the satellite's sunset and sunrise, in milliseconds.
+// Interval of the countdowns to the satellite's sunset and sunrise and to its next visible pass, in milliseconds.
 const COUNTDOWN_INTERVAL_MS = 1000
 
 // Properties of a crossing of the Earth's umbra.
@@ -63,7 +77,56 @@ interface ShadowCrossingRowProps {
 // until the next reading replaces it.
 function ShadowCrossingRow({ label, time, timeZone }: ShadowCrossingRowProps) {
 	const now = useNow(true, COUNTDOWN_INTERVAL_MS)
-	return <DataRow label={label}>{`${formatClockTime(time, timeZone, { seconds: true })} (in ${formatClockDuration((time - now) / 1000)})`}</DataRow>
+	return <DataRow label={label}>{`${formatClockTime(time, timeZone, { seconds: true })} (in ${formatDuration(Math.max(0, (time - now) / 1000))})`}</DataRow>
+}
+
+// Properties of the section of the next visible pass.
+interface NextPassSectionProps {
+	// Name of the satellite selected.
+	readonly name: string
+	// Observing site of the active profile, which the pass is for.
+	readonly observer: GeographicLocation
+	// Zone the times are written in, an IANA name.
+	readonly timeZone: string
+}
+
+// Next visible pass of the satellite selected within NEXT_PASS_WINDOW_MS: when it can be seen, counted down every
+// COUNTDOWN_INTERVAL_MS, its highest visible point, and where it starts and ends, with the way to its other passes.
+function NextPassSection({ name, observer, timeZone }: NextPassSectionProps) {
+	const { selectedId, nextPass, nextPassLoading, nextPassError } = useSnapshot(artificialSatellitesState)
+	const now = useNow(!!nextPass, COUNTDOWN_INTERVAL_MS)
+	const days = NEXT_PASS_WINDOW_MS / 86_400_000
+	const first = nextPass?.visible[0]
+	const last = nextPass?.visible.at(-1)
+	const highest = nextPass ? highestVisiblePoint(nextPass) : undefined
+	const countdown = first && (first.start <= now ? 'Now' : `in ${formatDuration((first.start - now) / 1000)}`)
+	const summary = countdown ?? (nextPass === null ? 'none' : undefined)
+
+	return (
+		<CollapsibleSection id="satellites.nextPass" title="Next Visible Pass" summary={summary}>
+			{nextPassError && <Notice error>{nextPassError}</Notice>}
+			{nextPassLoading && nextPass === undefined && <Notice>{`Searching the next ${days} days…`}</Notice>}
+			{nextPass === null && <Notice>{`No visible pass above ${NEXT_PASS_MIN_ALTITUDE}° in the next ${days} days.`}</Notice>}
+			{nextPass && first && last && highest && (
+				<DataList>
+					<DataRow label="Visible">{formatSpan(first.start, last.end, timeZone)}</DataRow>
+					<DataRow label="Starts">{countdown}</DataRow>
+					<DataRow label="Highest">{`${formatClockTime(highest.time, timeZone)} · ${formatDegrees(highest.altitude, 1)}`}</DataRow>
+					<DataRow label="Azimuth">{`${formatDegrees(nextPass.start.azimuth, 0)} to ${formatDegrees(nextPass.end.azimuth, 0)}`}</DataRow>
+				</DataList>
+			)}
+			<Actions>
+				{highest && selectedId && (
+					<Button variant="secondary" title="Sets the Sky time to the highest visible point and shows the satellite there." onClick={() => showSatelliteInSky(selectedId, name, observer, highest.time)}>
+						View in Sky
+					</Button>
+				)}
+				<Button variant="secondary" title={`Shows the passes of ${name} over more days.`} onClick={() => (artificialSatellitesState.tab = 'passes')}>
+					All Passes
+				</Button>
+			</Actions>
+		</CollapsibleSection>
+	)
 }
 
 // Properties of the panel of the satellite selected.
@@ -127,12 +190,14 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 				{!elements && details && <Notice>This satellite has catalog data only: no orbital elements to predict it with. Download a group that lists it, or import its elements.</Notice>}
 			</CollapsibleSection>
 
+			{elements && observer && <NextPassSection name={name} observer={observer} timeZone={timeZone} />}
+
 			{elements && (
 				<CollapsibleSection id="satellites.position" title="Position Now" summary={p?.altitude === undefined ? undefined : `altitude ${formatDegrees(p.altitude, 1)}`}>
 					{positionError && <Notice error>{positionError}</Notice>}
 					{p && position && (
 						<DataList>
-							<DataRow label="Time">{formatDateTime(p.time, timeZone)}</DataRow>
+							<DataRow label="Time">{formatZonedDateTime(p.time, timeZone)}</DataRow>
 							<DataRow label="Seen from">{p.center === 'topocentric' ? 'The observing site' : "The Earth's center"}</DataRow>
 							{p.altitude !== undefined && <DataRow label="Altitude">{`${formatDegrees(p.altitude)} (${p.altitude > 0 ? 'above' : 'below'} the horizon)`}</DataRow>}
 							{p.azimuth !== undefined && <DataRow label="Azimuth">{formatDegrees(p.azimuth)}</DataRow>}
@@ -143,8 +208,8 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 							<DataRow label="Constellation">{p.constellation}</DataRow>
 							<DataRow label="Distance">{formatKilometers(p.distanceKm)}</DataRow>
 							<DataRow label="Height">{formatKilometers(p.heightKm, 1)}</DataRow>
-							<DataRow label="Below">{`${formatDegrees(p.subpointLatitude)}, ${formatDegrees(p.subpointLongitude)}`}</DataRow>
-							<QualityRow quality={position.quality} />
+							<DataRow label="Below">{formatGeographic((p.subpointLatitude * 180) / Math.PI, (p.subpointLongitude * 180) / Math.PI, 2)}</DataRow>
+							<QualityRow quality={position.quality} scope="now" />
 						</DataList>
 					)}
 					<Notice>{observer ? `Read every ${POSITION_REFRESH_MS / 1000} seconds for the observing site of the profile.` : `Read every ${POSITION_REFRESH_MS / 1000} seconds from the Earth's center: set the observing site of the profile to see the altitude and the passes.`}</Notice>
@@ -169,9 +234,7 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 						))}
 						{p.sunAltitude !== undefined && <DataRow label="Sun altitude here">{formatDegrees(p.sunAltitude, 1)}</DataRow>}
 					</DataList>
-					<Notice>
-						The orbital speed is relative to the Earth's center. The satellite's sunset and sunrise are its entry into the Earth's umbra and its exit, searched over the next 1.5 orbits (2 days at most). Brightness is unknown: no source gives the reflectivity of most satellites, so no magnitude is estimated.
-					</Notice>
+					<Notice>Orbital speed is relative to the Earth's center. Sunset and sunrise are the satellite's entry into the Earth's umbra and its exit, within 1.5 orbits (2 days at most). No magnitude is estimated: the reflectivity of most satellites is unknown.</Notice>
 				</CollapsibleSection>
 			)}
 
@@ -188,7 +251,7 @@ export function SatelliteDetailsPanel({ observer, zone }: SatelliteDetailsPanelP
 						<DataRow label="B*">{orbit.bstar.toExponential(4)}</DataRow>
 						<DataRow label="Apogee / perigee (derived)">{`${formatKilometers(orbit.apogeeHeightKm)} / ${formatKilometers(orbit.perigeeHeightKm)}`}</DataRow>
 						{object?.apogeeKm !== undefined && object.perigeeKm !== undefined && <DataRow label="Apogee / perigee (catalog)">{`${formatKilometers(object.apogeeKm)} / ${formatKilometers(object.perigeeKm)}`}</DataRow>}
-						{object?.periodMinutes !== undefined && <DataRow label="Period (catalog)">{`${object.periodMinutes} min`}</DataRow>}
+						{object?.periodMinutes !== undefined && <DataRow label="Period (catalog)">{`${formatFixed(object.periodMinutes, 2)} min`}</DataRow>}
 						<DataRow label="Model">{orbit.model === 'deepSpace' ? 'SDP4 (deep space)' : 'SGP4 (near Earth)'}</DataRow>
 					</DataList>
 					<Notice>Derived values come from the mean elements at their epoch; catalog values are published by SATCAT, possibly for another epoch.</Notice>

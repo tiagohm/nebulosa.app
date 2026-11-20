@@ -1,16 +1,32 @@
-import type { SatelliteDetails, SatelliteEphemerisResponse, SatelliteEphemerisRow, SatelliteGroundTrackResponse, SatelliteImportResponse, SatellitePassesResponse, SatellitePosition, SatellitePositionResponse, SatelliteSearchPage } from 'api'
+import type {
+	AstroWeatherNight,
+	AstroWeatherNightRequest,
+	SatelliteDetails,
+	SatelliteEphemerisResponse,
+	SatelliteEphemerisRow,
+	SatelliteGroundTrackResponse,
+	SatelliteImportResponse,
+	SatellitePassesRequest,
+	SatellitePassesResponse,
+	SatellitePassPrediction,
+	SatellitePosition,
+	SatellitePositionResponse,
+	SatelliteQuality,
+	SatelliteSearchPage,
+} from 'api'
 import { proxy } from 'valtio'
 import { downloadText } from '../../download'
 import { formatDateTime } from '../../format'
 import { aborted, type ApiFetch, browserFetch, fetchJson, jsonInit } from '../../http'
-import { type GeographicLocation, locationKey, siteObserver } from '../../location/site'
+import { type GeographicLocation, locationKey, type SiteLocation, siteObserver } from '../../location/site'
 import { navigate, type RouteState, routeState } from '../../shell/route'
 import { setSkyTime, type SkyClock, skyClock, skyTime } from '../../sky/clock'
 import { createRequestGuard } from '../../sky/selection'
 import { browserSkyIo, selectSkyObject, type SkyIo, type SkyState, skyState } from '../../sky/sky'
 
-// State of the Artificial Satellites tool, tab-lived and never persisted: the catalog search, the satellite selected
-// with its details and position, the windows of its passes, ephemeris, and ground track, and an import being typed.
+// State of the Artificial Satellites tool, tab-lived and never persisted: the visible passes of the profile's favorites
+// tonight, the catalog search, the satellite selected with its details, position, and next visible pass, the windows of
+// its passes, ephemeris, and ground track, and an import being typed.
 // Every prediction is for the observing site of the active profile, or the Earth's center without one; the tool has no
 // place of its own, and the ground track needs none. The catalog, its downloads, and every prediction are the server's;
 // each kind of answer has a request guard of its own, so an old answer never replaces a newer one, and only the
@@ -41,14 +57,29 @@ export const MAX_EPHEMERIS_ROWS = 5000
 // Most orbits a ground track shows after its instant: GROUND_TRACK_MAX_ORBITS of the server.
 export const MAX_GROUND_TRACK_ORBITS = 5
 
-// Views of the tool.
-export const SATELLITE_TABS = ['catalog', 'passes', 'ephemeris', 'groundTrack'] as const
+// Views of the tool; Tonight is the one it opens on.
+export const SATELLITE_TABS = ['tonight', 'catalog', 'passes', 'groundTrack', 'ephemeris'] as const
 
 // View of the tool.
 export type SatelliteTab = (typeof SATELLITE_TABS)[number]
 
 // Name of each view.
-export const SATELLITE_TAB_LABELS: Readonly<Record<SatelliteTab, string>> = { catalog: 'Catalog', passes: 'Passes', ephemeris: 'Ephemeris', groundTrack: 'Ground Track' }
+export const SATELLITE_TAB_LABELS: Readonly<Record<SatelliteTab, string>> = { tonight: 'Tonight', catalog: 'Catalog', passes: 'Passes', groundTrack: 'Ground Track', ephemeris: 'Ephemeris' }
+
+// Most favorites Tonight predicts, the first of the profile's list: SATELLITE_TRACKS_LIMIT of the Sky, which keeps the
+// searches of a night within a few seconds of the server.
+export const TONIGHT_LIMIT = 50
+
+// Pass searches Tonight keeps in flight at once.
+const TONIGHT_CONCURRENCY = 4
+
+// Window of the next visible pass of the satellite selected, in milliseconds after now: two days, as the Sky's Show Next
+// Pass.
+export const NEXT_PASS_WINDOW_MS = 2 * 86_400_000
+
+// Minimum altitude of the next visible pass of the satellite selected, degrees: low enough to count a pass over the
+// trees of most sites, as the default of the pass search.
+export const NEXT_PASS_MIN_ALTITUDE = 10
 
 // Start of a pass search or an ephemeris: the real current time, or the instant the Sky shows.
 export type SatelliteWindowStart = 'now' | 'sky'
@@ -74,6 +105,51 @@ export interface PassDraft {
 	twilight: TwilightLimit
 	// Whether passes without a visible part are listed.
 	showAll: boolean
+}
+
+// Search of tonight's passes being edited.
+export interface TonightDraft {
+	// Minimum altitude, degrees, 0 to 89.
+	minAltitude: number
+	// Twilight limit of the visible parts, which also bounds the dark part of the night shown.
+	twilight: TwilightLimit
+}
+
+// A visible pass of a favorite tonight.
+export interface TonightPass {
+	// NORAD id and name of the satellite.
+	readonly noradId: string
+	readonly name: string
+	// The pass, with at least one visible part.
+	readonly pass: SatellitePassPrediction
+	// Quality of the prediction over the night.
+	readonly quality: SatelliteQuality
+}
+
+// A favorite whose passes could not be predicted tonight, and why.
+export interface TonightFailure {
+	readonly noradId: string
+	readonly name: string
+	// Message of the server, such as no elements or a refused prediction.
+	readonly error: string
+}
+
+// Visible passes of the favorites over one night of the observing site.
+export interface TonightResult {
+	// The night: the Sun from noon to noon, with its twilight crossings.
+	readonly night: AstroWeatherNight
+	// Window searched, Unix milliseconds (UTC): the rest of the night from the instant asked, to its closing noon.
+	readonly start: number
+	readonly end: number
+	// Twilight limit and minimum altitude (degrees) of the search.
+	readonly twilight: TwilightLimit
+	readonly minAltitude: number
+	// Visible passes of every favorite predicted, by the start of their first visible part.
+	readonly passes: readonly TonightPass[]
+	// Favorites predicted, those that could not be, and those beyond TONIGHT_LIMIT left out.
+	readonly predicted: number
+	readonly failures: readonly TonightFailure[]
+	readonly leftOut: number
 }
 
 // Ephemeris being edited.
@@ -118,6 +194,14 @@ export interface GroundTrackLayers {
 export interface ArtificialSatellitesState {
 	// View shown.
 	tab: SatelliteTab
+	// Search of tonight's passes being edited, the latest answer, the inputs it was made for (favorites, place, catalog
+	// revision), the pass chosen in it by its position, and its state.
+	tonightDraft: TonightDraft
+	tonight?: TonightResult
+	tonightKey?: string
+	tonightSelected?: number
+	tonightLoading: boolean
+	tonightError?: string
 	// Text of the search, as typed.
 	query: string
 	// Source key of the group searched; empty for every object.
@@ -138,6 +222,11 @@ export interface ArtificialSatellitesState {
 	detailsError?: string
 	position?: SatellitePositionResponse
 	positionError?: string
+	// Next visible pass of the satellite selected within NEXT_PASS_WINDOW_MS for the observing site: null when it has none,
+	// absent before an answer or without a site.
+	nextPass?: SatellitePassPrediction | null
+	nextPassLoading: boolean
+	nextPassError?: string
 	// Place (locationKey) of the site the predictions shown were made for: its latitude, longitude, and elevation, never
 	// its name or zone; empty for the Earth's center, absent before the first site was seen.
 	observerKey?: string
@@ -193,17 +282,22 @@ const positionGuard = createRequestGuard()
 const passesGuard = createRequestGuard()
 const ephemerisGuard = createRequestGuard()
 const groundTrackGuard = createRequestGuard()
+const tonightGuard = createRequestGuard()
+const nextPassGuard = createRequestGuard()
 
 // Initial state of the tool.
 export function initialArtificialSatellitesState(): ArtificialSatellitesState {
 	return {
-		tab: 'catalog',
+		tab: 'tonight',
+		tonightDraft: { minAltitude: 10, twilight: 'civil' },
+		tonightLoading: false,
+		nextPassLoading: false,
 		query: '',
 		group: '',
 		favoritesOnly: false,
 		offset: 0,
 		searching: false,
-		passDraft: { start: 'now', days: 2, minAltitude: 10, twilight: 'civil', showAll: true },
+		passDraft: { start: 'now', days: 2, minAltitude: 10, twilight: 'civil', showAll: false },
 		passesLoading: false,
 		ephemerisDraft: { start: 'now', hours: 2, stepSeconds: 60 },
 		ephemerisLoading: false,
@@ -254,24 +348,41 @@ export async function searchSatellites(state: ArtificialSatellitesState, favorit
 	state.searching = false
 }
 
-// Selects a satellite: reads its details and its position now for the observing site. Another satellite drops the
-// passes, the ephemeris, and the ground track of the previous one at once, so they are never shown as the new one's.
+// Drops the passes and the ephemeris shown and cancels those being read, so a view that shows them reads them again.
+function dropPredictions(state: ArtificialSatellitesState) {
+	state.passes = undefined
+	state.passesError = undefined
+	state.passesLoading = false
+	state.selectedPass = undefined
+	state.ephemeris = undefined
+	state.ephemerisError = undefined
+	state.ephemerisLoading = false
+	passesGuard.cancel()
+	ephemerisGuard.cancel()
+}
+
+// Drops the next visible pass shown and cancels the one being read.
+function dropNextPass(state: ArtificialSatellitesState) {
+	state.nextPass = undefined
+	state.nextPassError = undefined
+	state.nextPassLoading = false
+	nextPassGuard.cancel()
+}
+
+// Selects a satellite: reads its details, its position now, and its next visible pass for the observing site. Another
+// satellite drops the passes, the ephemeris, the next pass, and the ground track of the previous one at once, so they are
+// never shown as the new one's.
 export async function selectSatellite(state: ArtificialSatellitesState, noradId: string, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
 	if (state.selectedId !== noradId) {
 		state.selectedId = noradId
 		state.details = undefined
 		state.position = undefined
-		state.passes = undefined
-		state.passesError = undefined
-		state.selectedPass = undefined
-		state.ephemeris = undefined
-		state.ephemerisError = undefined
-		passesGuard.cancel()
-		ephemerisGuard.cancel()
+		dropPredictions(state)
+		dropNextPass(state)
 		dropGroundTrack(state)
 	}
 
-	await Promise.all([loadSatelliteDetails(state, io), loadSatellitePosition(state, observer, io)])
+	await Promise.all([loadSatelliteDetails(state, io), loadSatellitePosition(state, observer, io), loadNextVisiblePass(state, observer, io)])
 }
 
 // Reads the details of the satellite selected.
@@ -311,20 +422,146 @@ export async function loadSatellitePosition(state: ArtificialSatellitesState, ob
 }
 
 // Follows the observing site of the active profile: when its place differs from the one the predictions shown were made
-// for, the position is read again, and the passes and ephemeris of the previous place are dropped at once. Another name
-// or zone of the same place keeps them. The first site seen is only recorded.
+// for, the position and the next visible pass are read again, and the passes and ephemeris of the previous place are
+// dropped at once. Another name or zone of the same place keeps them. The first site seen is only recorded.
 export function followSatelliteObserver(state: ArtificialSatellitesState, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
 	const key = locationKey(observer)
 	if (state.observerKey === key) return
 	const first = state.observerKey === undefined
 	state.observerKey = key
 	if (first) return
-	state.passes = undefined
-	state.selectedPass = undefined
-	state.ephemeris = undefined
-	passesGuard.cancel()
-	ephemerisGuard.cancel()
+	dropPredictions(state)
+	dropNextPass(state)
 	void loadSatellitePosition(state, observer, io)
+	void loadNextVisiblePass(state, observer, io)
+}
+
+// Searches the next visible pass of the satellite selected for the observing site: the first pass within
+// NEXT_PASS_WINDOW_MS from now above NEXT_PASS_MIN_ALTITUDE with a visible part (sunlit while the Sun is below civil
+// twilight) not over yet, or null without one. Without a site nothing is asked and the pass is left absent.
+export async function loadNextVisiblePass(state: ArtificialSatellitesState, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
+	const site = siteObserver(observer)
+	if (!state.selectedId || !site) return dropNextPass(state)
+	const request = nextPassGuard.begin()
+	const now = io.now()
+	const body: SatellitePassesRequest = { observer: site, start: now, end: now + NEXT_PASS_WINDOW_MS, minAltitude: (NEXT_PASS_MIN_ALTITUDE * Math.PI) / 180, maxSunAltitude: (TWILIGHT_LIMITS.civil * Math.PI) / 180 }
+	state.nextPassLoading = true
+	state.nextPassError = undefined
+
+	try {
+		const { passes } = await fetchJson<SatellitePassesResponse>(io, `/api/satellites/${encodeURIComponent(state.selectedId)}/passes`, jsonInit('POST', body, request.signal))
+		if (!request.current()) return
+		state.nextPass = passes.find((pass) => pass.visible.some((part) => part.end > now)) ?? null
+	} catch (error) {
+		if (!request.current() || aborted(error)) return
+		state.nextPass = undefined
+		state.nextPassError = messageOf(error)
+	}
+
+	state.nextPassLoading = false
+}
+
+// Highest point of the visible parts of a pass, which has at least one: the culmination of the pass when it is visible
+// then, else the highest of its visible parts.
+export function highestVisiblePoint(pass: SatellitePassPrediction) {
+	let highest = pass.visible[0].culmination
+	for (const part of pass.visible) if (part.culmination.altitude > highest.altitude) highest = part.culmination
+	return highest
+}
+
+// Reads the next visible pass again once the one shown is over, on the tick of the position.
+export function tickNextVisiblePass(state: ArtificialSatellitesState, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
+	const last = state.nextPass?.visible.at(-1)
+	if (last && last.end <= io.now() && !state.nextPassLoading) void loadNextVisiblePass(state, observer, io)
+}
+
+// Key of the inputs tonight's passes are made for: the favorites predicted, the place of the site, and the catalog
+// revision; another key makes the passes shown stale.
+export function tonightKey(favorites: readonly string[], observer: GeographicLocation | undefined, revision: number) {
+	return `${favorites.slice(0, TONIGHT_LIMIT).join(',')}|${locationKey(observer)}|${revision}`
+}
+
+// Reads the night of the site containing an instant, its civil date named in an IANA zone.
+function readNight(site: AstroWeatherNightRequest['observer'], timeZone: string, time: number, signal: AbortSignal, io: ArtificialSatellitesIo) {
+	const body: AstroWeatherNightRequest = { observer: site, timeZone, time }
+	return fetchJson<AstroWeatherNight>(io, '/api/astro-weather/night', jsonInit('POST', body, signal))
+}
+
+// Runs task on every item with at most `limit` in flight, in the order of the items.
+async function eachLimited<T>(items: readonly T[], limit: number, task: (item: T) => Promise<void>) {
+	let next = 0
+	const worker = async () => {
+		while (next < items.length) await task(items[next++])
+	}
+	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+}
+
+// Searches tonight's visible passes of the favorites (the first TONIGHT_LIMIT) for the observing site, with the draft.
+// Tonight is the night of the site (noon to noon, the Sun of the server) containing now, or the next one once its
+// morning twilight at the limit is past; the window runs from now to its closing noon, and only passes with a visible
+// part are kept. A favorite that cannot be predicted is listed with the server's reason, never hidden. Needs a site and
+// at least one favorite; the night is named in the site's own zone, whatever zone times are shown in. key records the
+// inputs (tonightKey) the answer is for.
+export async function loadTonight(state: ArtificialSatellitesState, favorites: readonly string[], observer: SiteLocation | undefined, key: string, io: ArtificialSatellitesIo = browserIo) {
+	const site = siteObserver(observer)
+	if (!observer || !site || favorites.length === 0) return
+	const request = tonightGuard.begin()
+	const { minAltitude, twilight } = state.tonightDraft
+	const ids = favorites.slice(0, TONIGHT_LIMIT)
+	const now = io.now()
+	state.tonightKey = key
+	state.tonightLoading = true
+	state.tonightError = undefined
+
+	try {
+		let night = await readNight(site, observer.timeZone, now, request.signal, io)
+		const morning = night.sun[twilight].dawn ?? night.sun.sunrise
+		if (morning !== undefined && morning <= now) night = await readNight(site, observer.timeZone, night.sun.end, request.signal, io)
+		const start = Math.max(now, night.sun.start)
+		const end = night.sun.end
+		const passes: TonightPass[] = []
+		const failures: TonightFailure[] = []
+
+		// A Sun that never goes below the limit leaves no dark sky to see a satellite in, so nothing is searched.
+		if (night.sun[twilight].state !== 'continuousAbove') {
+			const page = await fetchJson<SatelliteSearchPage>(io, `/api/satellites?${new URLSearchParams({ ids: ids.join(','), limit: `${ids.length}` })}`, { signal: request.signal })
+			const names = new Map(page.items.map((item) => [item.noradId, item.name]))
+			const body = { observer: site, start, end, minAltitude: (minAltitude * Math.PI) / 180, maxSunAltitude: (TWILIGHT_LIMITS[twilight] * Math.PI) / 180 } satisfies SatellitePassesRequest
+
+			await eachLimited(ids, TONIGHT_CONCURRENCY, async (noradId) => {
+				const name = names.get(noradId) ?? noradId
+				try {
+					const answer = await fetchJson<SatellitePassesResponse>(io, `/api/satellites/${encodeURIComponent(noradId)}/passes`, jsonInit('POST', body, request.signal))
+					for (const pass of answer.passes) if (pass.visible.length > 0) passes.push({ noradId, name, pass, quality: answer.quality })
+				} catch (error) {
+					if (aborted(error)) throw error
+					failures.push({ noradId, name, error: messageOf(error) })
+				}
+			})
+		}
+
+		if (!request.current()) return
+		passes.sort((a, b) => a.pass.visible[0].start - b.pass.visible[0].start)
+		failures.sort((a, b) => ids.indexOf(a.noradId) - ids.indexOf(b.noradId))
+		state.tonight = { night, start, end, twilight, minAltitude, passes, predicted: ids.length, failures, leftOut: Math.max(0, favorites.length - ids.length) }
+		// No pass is chosen until the operator chooses one, which also selects its satellite.
+		state.tonightSelected = undefined
+	} catch (error) {
+		if (!request.current() || aborted(error)) return
+		state.tonight = undefined
+		state.tonightError = messageOf(error)
+	}
+
+	state.tonightLoading = false
+}
+
+// Reads tonight's passes when the view shows them and the answer shown, if any, is for other inputs (key) or for a night
+// already over; a failed read waits for Retry.
+export function ensureTonight(state: ArtificialSatellitesState, favorites: readonly string[], observer: SiteLocation | undefined, key: string, io: ArtificialSatellitesIo = browserIo) {
+	if (state.tab !== 'tonight' || state.tonightLoading || favorites.length === 0 || !observer) return
+	if (state.tonightError && state.tonightKey === key) return
+	if (state.tonight && state.tonightKey === key && state.tonight.end > io.now()) return
+	void loadTonight(state, favorites, observer, key, io)
 }
 
 // Start of a window, Unix milliseconds: the real current time, or the instant the Sky shows.
@@ -347,7 +584,9 @@ export async function loadSatellitePasses(state: ArtificialSatellitesState, obse
 		const passes = await fetchJson<SatellitePassesResponse>(io, `/api/satellites/${encodeURIComponent(state.selectedId)}/passes`, jsonInit('POST', body, request.signal))
 		if (!request.current()) return
 		state.passes = passes
-		state.selectedPass = passes.passes.length > 0 ? 0 : undefined
+		// The pass shown first is the first one listed: the first visible one unless the daylight ones are listed too.
+		const first = state.passDraft.showAll ? 0 : passes.passes.findIndex((pass) => pass.visible.length > 0)
+		state.selectedPass = first >= 0 && first < passes.passes.length ? first : undefined
 	} catch (error) {
 		if (!request.current() || aborted(error)) return
 		state.passes = undefined
@@ -391,6 +630,20 @@ export async function loadSatelliteEphemeris(state: ArtificialSatellitesState, o
 	}
 
 	state.ephemerisLoading = false
+}
+
+// Searches the passes when the view shows them for a satellite with elements and a site, and none were found, are being
+// found, or failed; a failure waits for Retry and another draft for Find Passes.
+export function ensureSatellitePasses(state: ArtificialSatellitesState, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
+	if (state.tab !== 'passes' || !observer || !state.selectedId || !state.details?.elements || state.passes || state.passesLoading || state.passesError) return
+	void loadSatellitePasses(state, observer, io)
+}
+
+// Computes the ephemeris when the view shows it for a satellite with elements and none was computed, is being computed,
+// or failed.
+export function ensureSatelliteEphemeris(state: ArtificialSatellitesState, observer: GeographicLocation | undefined, io: ArtificialSatellitesIo = browserIo) {
+	if (state.tab !== 'ephemeris' || !state.selectedId || !state.details?.elements || state.ephemeris || state.ephemerisLoading || state.ephemerisError) return
+	void loadSatelliteEphemeris(state, observer, io)
 }
 
 // Drops the ground track shown and cancels the one being read.
@@ -486,10 +739,9 @@ export async function setSatelliteElementSource(state: ArtificialSatellitesState
 		return
 	}
 
-	state.passes = undefined
-	state.ephemeris = undefined
+	dropPredictions(state)
 	dropGroundTrack(state)
-	await Promise.all([loadSatelliteDetails(state, io), loadSatellitePosition(state, observer, io)])
+	await Promise.all([loadSatelliteDetails(state, io), loadSatellitePosition(state, observer, io), loadNextVisiblePass(state, observer, io)])
 }
 
 // Places the Sky in a tool: what showing an object changes, replaced in tests.

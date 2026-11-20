@@ -1,8 +1,8 @@
 import type { SatelliteGroundTrack as SatelliteGroundTrackData } from 'api'
 import { cn } from 'cn'
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, type ReactNode } from 'react'
 import { useSnapshot } from 'valtio'
-import { formatClockDuration, formatClockTime, formatDateTime, formatFixed, formatGeographic, formatKilometers, formatSpeed } from '../../format'
+import { formatClockTime, formatDateTime, formatDuration, formatFixed, formatGeographic, formatKilometers, formatSpeed } from '../../format'
 import type { GeographicLocation } from '../../location/site'
 import type { DisplayZone } from '../../location/zone'
 import { EmptyState } from '../../shell/WorkspaceLayout'
@@ -10,6 +10,7 @@ import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
+import { StatusBadge } from '../../ui/StatusBadge'
 import { WorldMap, type WorldMapHandle, WorldMapSymbol } from '../../ui/WorldMap'
 import { geoPath, horizonRegionPath, smallCircleRegion } from '../../ui/worldmap.geometry'
 import { EclipseMapLegend } from '../eclipse/EclipseMapParts'
@@ -19,17 +20,23 @@ import { type GroundTrackPoint, type GroundTrackShadow, groundTrackAt, groundTra
 // Ground Track tab of Artificial Satellites: the path of the point below the satellite selected on the world map, from
 // one orbit before an instant (the real current time, which it follows, or the Sky's) to the orbits asked for after it,
 // dashed before the instant and solid after it, fainter in the Earth's shadow, with the satellite, the region that sees
-// it above the horizon, the night side, and the observing site of the active profile at the instant shown, in the
-// display zone, its distance from the site (from the Earth's center without one), its orbital speed, and its next sunset and sunrise (the crossings of the Earth's umbra the server found
-// along the track) counted from that instant. A cursor chooses another instant of the window, which Show in Sky opens in the Sky. The footprint is a spherical Earth with an ideal horizon. Zooming,
-// panning, moving the cursor, and hiding a layer ask the server for nothing.
+// it above the horizon, the night side with its terminator, and the observing site of the active profile at the instant
+// shown, in the display zone, its distance from the site (from the Earth's center without one), its orbital speed, and
+// its next sunset and sunrise (the crossings of the Earth's umbra the server found along the track) counted from that
+// instant. Ember marks only the satellite and its track ahead; the track behind and the footprint are drawn in ink. A
+// cursor chooses another instant of the window by the minute, which Show in Sky opens in the Sky. The footprint is a
+// spherical Earth with an ideal horizon. Zooming, panning, moving the cursor, and hiding a layer ask the server for
+// nothing.
 
-// Stroke width, in screen pixels, and classes of the track by illumination.
+// Stroke width, in screen pixels, and opacity class of the track by illumination.
 const RUN_STYLES: Readonly<Record<GroundTrackShadow, { readonly width: number; readonly className: string }>> = {
-	sunlit: { width: 2, className: 'stroke-accent' },
-	penumbra: { width: 1.5, className: 'stroke-accent/60' },
-	umbra: { width: 1, className: 'stroke-accent/40' },
+	sunlit: { width: 2, className: 'opacity-100' },
+	penumbra: { width: 1.5, className: 'opacity-60' },
+	umbra: { width: 1, className: 'opacity-40' },
 }
+
+// Milliseconds per step of the cursor: a minute, which a low orbit crosses in about 4° of longitude.
+const CURSOR_STEP_MS = 60_000
 
 interface GroundTrackOverlayProps {
 	// Samples of the ground track.
@@ -46,19 +53,22 @@ interface GroundTrackOverlayProps {
 function GroundTrackOverlay({ track, point, layers, observer }: GroundTrackOverlayProps) {
 	const runs = groundTrackRuns(track, point?.time)
 	const footprint = layers.footprint && point ? smallCircleRegion(point.subpoint, point.footprint) : undefined
+	// The terminator is the great circle 90° from the subsolar point, drawn so the night side reads over a dark map.
+	const terminator = layers.night && point ? smallCircleRegion({ longitude: point.subsolar.longitude + 180, latitude: -point.subsolar.latitude }, 90).outline : undefined
 
 	return (
 		<>
-			{layers.night && point && <path d={horizonRegionPath(point.subsolar, 'below')} className="fill-black/45" />}
+			{layers.night && point && <path d={horizonRegionPath(point.subsolar, 'below')} className="fill-scrim/60" />}
+			{terminator && <path d={terminator} className="fill-none stroke-ink-300/5" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
 			{footprint && (
 				<>
-					<path d={footprint.fill} className="fill-accent/10" />
-					<path d={footprint.outline} className="fill-none stroke-accent/70" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+					<path d={footprint.fill} className="fill-ink-100/5" />
+					<path d={footprint.outline} className="fill-none stroke-ink-200/20" strokeWidth={1} vectorEffect="non-scaling-stroke" />
 				</>
 			)}
 			{runs.map((run, i) => {
 				const style = RUN_STYLES[layers.shadow ? run.shadow : 'sunlit']
-				return run.pieces.map((piece, j) => <path key={`${i}:${j}`} d={geoPath(piece)} className={`fill-none ${style.className} ${run.past ? '[stroke-dasharray:6_4]' : ''}`} strokeWidth={style.width} vectorEffect="non-scaling-stroke" />)
+				return run.pieces.map((piece, j) => <path key={`${i}:${j}`} d={geoPath(piece)} className={cn('fill-none', style.className, run.past ? 'stroke-ink-300 [stroke-dasharray:6_4]' : 'stroke-accent')} strokeWidth={style.width} vectorEffect="non-scaling-stroke" />)
 			})}
 			{layers.observer && observer && (
 				<WorldMapSymbol longitude={observer.longitude} latitude={observer.latitude}>
@@ -68,8 +78,8 @@ function GroundTrackOverlay({ track, point, layers, observer }: GroundTrackOverl
 			)}
 			{point && (
 				<WorldMapSymbol longitude={point.subpoint.longitude} latitude={point.subpoint.latitude}>
-					<path d="M-8 0H8" className="stroke-base-000" strokeWidth={4} />
-					<rect x={-4} y={-4} width={8} height={8} className="fill-accent stroke-base-000" strokeWidth={1.5} />
+					<path d="M-8 0H8" className="stroke-base-300" strokeWidth={4} />
+					<rect x={-4} y={-4} width={8} height={8} className="fill-accent stroke-base-300" strokeWidth={1.5} />
 					<path d="M-8 0H-4M4 0H8" className="stroke-accent" strokeWidth={2} />
 				</WorldMapSymbol>
 			)}
@@ -97,6 +107,7 @@ export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackPro
 	const site = observer && { latitude: observer.latitude, longitude: observer.longitude }
 	const mapRef = useRef<WorldMapHandle>(null)
 	const centered = useRef<string>(undefined)
+	const cursorId = useId()
 
 	// The map layers are drawn again only when the track, the instant, the layers, or the site change, never on zoom
 	// or pan.
@@ -139,7 +150,11 @@ export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackPro
 					<EclipseMapLegend>
 						<span className="flex items-center gap-2">
 							<span className="h-0.5 w-4 flex-none bg-accent" />
-							After the instant shown; dashed before it
+							Ahead of the instant shown
+						</span>
+						<span className="flex items-center gap-2">
+							<span className="h-0.5 w-4 flex-none border-t-2 border-dashed border-ink-300" />
+							Behind it
 						</span>
 						<Checkbox label="Fainter in the Earth's shadow" checked={layers.shadow} onChange={(checked) => (artificialSatellitesState.groundTrackLayers.shadow = checked)} />
 						<Checkbox label="Footprint (spherical Earth, ideal horizon)" checked={layers.footprint} onChange={(checked) => (artificialSatellitesState.groundTrackLayers.footprint = checked)} />
@@ -167,9 +182,21 @@ export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackPro
 					<div className="flex flex-wrap items-center gap-x-4 gap-y-2">
 						<label className="flex min-w-60 flex-1 items-center gap-3 text-xs text-ink-300">
 							Instant
-							<input type="range" min={track.start} max={track.times.at(-1)} step={1000} value={point.time} onChange={(event) => (artificialSatellitesState.groundTrackCursor = +event.target.value)} className="h-4 min-w-0 flex-1 cursor-pointer accent-accent" />
+							<input
+								id={cursorId}
+								type="range"
+								min={0}
+								max={Math.floor((track.times.at(-1)! - track.start) / CURSOR_STEP_MS)}
+								step={1}
+								value={Math.round((point.time - track.start) / CURSOR_STEP_MS)}
+								title="Minutes after the start of the track; Page Up and Page Down move by larger steps."
+								onChange={(event) => (artificialSatellitesState.groundTrackCursor = Math.min(track.start + +event.target.value * CURSOR_STEP_MS, track.times.at(-1)!))}
+								className="h-4 min-w-0 flex-1 cursor-pointer accent-ink-200"
+							/>
 						</label>
-						<span className="font-mono text-xs text-ink-100 tabular-nums">{formatDateTime(point.time, timeZone)}</span>
+						<output htmlFor={cursorId} className="text-xs text-ink-100 tabular-nums">
+							{formatDateTime(point.time, timeZone)}
+						</output>
 						<div className="flex gap-2">
 							{anchor?.start === 'now' && !following && (
 								<Button variant="secondary" onClick={() => (artificialSatellitesState.groundTrackCursor = undefined)}>
@@ -181,21 +208,27 @@ export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackPro
 							</Button>
 						</div>
 					</div>
-					<div className="flex flex-wrap items-center gap-1 gap-y-1 text-xs text-ink-300">
-						<InstantChip className={following ? 'bg-success/10 text-success' : 'bg-accent/10 text-accent'}>{following ? 'Live' : 'Chosen instant'}</InstantChip>
-						<InstantChip className="text-ink-200 tabular-nums">{formatGeographic(point.subpoint.latitude, point.subpoint.longitude)}</InstantChip>
-						<InstantChip>Height {formatKilometers(point.heightKm)}</InstantChip>
-						<InstantChip>{observer ? `Distance ${formatKilometers(groundTrackDistance(point, observer))}` : `Distance ${formatKilometers(groundTrackDistance(point))} from the Earth's center`}</InstantChip>
-						<InstantChip>Speed {formatSpeed(point.speedKmPerSecond, 3)}</InstantChip>
-						<InstantChip>{SHADOW_LABELS[point.shadow]}</InstantChip>
+					<div className="flex flex-wrap items-center gap-1 text-xs text-ink-100 tabular-nums">
+						<StatusBadge tone={following ? 'success' : 'neutral'} label={following ? 'Live' : 'Chosen instant'} />
+						{inside !== undefined && <Readout>{inside ? "Above the site's horizon" : "Below the site's horizon"}</Readout>}
+						<Readout>{SHADOW_LABELS[point.shadow]}</Readout>
 						{crossings.map((crossing) => (
-							<InstantChip key={crossing.kind}>{`${crossing.kind === 'sunset' ? 'Sunset' : 'Sunrise'} ${formatClockTime(crossing.time, timeZone, { seconds: true })} (in ${formatClockDuration((crossing.time - point.time) / 1000)})`}</InstantChip>
+							<Readout key={crossing.kind} label={crossing.kind === 'sunset' ? 'Sunset' : 'Sunrise'}>{`${formatClockTime(crossing.time, timeZone, { seconds: true })} (in ${formatDuration(Math.max(0, (crossing.time - point.time) / 1000))})`}</Readout>
 						))}
-						{crossings.length === 0 && <InstantChip>No sunset or sunrise until the end of the track</InstantChip>}
-						{inside !== undefined && <InstantChip>{inside ? "Above the site's horizon" : "Below the site's horizon"}</InstantChip>}
-						<InstantChip>
-							Period {formatFixed(track.periodMinutes, 1)} min{track.truncated ? ' · later samples were left out' : ''}
-						</InstantChip>
+						{crossings.length === 0 && <Readout>No sunset or sunrise until the end of the track</Readout>}
+						<Readout label="Height">{formatKilometers(point.heightKm)}</Readout>
+						<Readout label="Below" secondary>
+							{formatGeographic(point.subpoint.latitude, point.subpoint.longitude, 2)}
+						</Readout>
+						<Readout label={observer ? 'Distance' : "Distance from the Earth's center"} secondary>
+							{formatKilometers(groundTrackDistance(point, observer))}
+						</Readout>
+						<Readout label="Speed" secondary>
+							{formatSpeed(point.speedKmPerSecond, 3)}
+						</Readout>
+						<Readout label="Period" secondary>
+							{`${formatFixed(track.periodMinutes, 1)} min${track.truncated ? ' · later samples were left out' : ''}`}
+						</Readout>
 					</div>
 				</div>
 			)}
@@ -203,11 +236,22 @@ export function SatelliteGroundTrack({ observer, zone }: SatelliteGroundTrackPro
 	)
 }
 
-interface InstantChipProps {
-	readonly className?: string
+// Properties of a readout of the instant shown.
+interface ReadoutProps {
+	// Name of the value, muted before it; absent for a state written as words alone.
+	readonly label?: string
+	// Whether the readout is secondary, hidden on phones so the map keeps its room.
+	readonly secondary?: boolean
+	// Value with its unit, or the state in words.
 	readonly children: ReactNode
 }
 
-function InstantChip({ className, children }: InstantChipProps) {
-	return <span className={cn('px-2 py-1 bg-ink-300/10 rounded-md', className)}>{children}</span>
+// Readout of the instant shown: a muted name and its value, on one line.
+function Readout({ label, secondary = false, children }: ReadoutProps) {
+	return (
+		<span className={cn('whitespace-nowrap bg-ink-300/10 px-2 py-1 rounded-full', secondary && 'max-sm:hidden')}>
+			{label && <span className="mr-1.5 text-ink-300">{label}</span>}
+			{children}
+		</span>
+	)
 }

@@ -6,13 +6,14 @@ import { tv, type VariantProps } from 'tailwind-variants'
 // and a label or value wider than the panel wraps instead of being cut. A list groups consecutive rows outside a
 // section with the spacing a section gives them.
 
-// Value of a row, by its tone: plain, a success, or a failure.
+// Value of a row, by its tone: plain, a success, a reading that asks for attention, or a failure.
 const value = tv({
 	base: 'ml-auto max-w-full min-w-0 text-right wrap-break-word tabular-nums',
 	variants: {
 		tone: {
 			default: 'text-ink-100',
 			success: 'text-success',
+			warning: 'text-warning',
 			danger: 'text-danger',
 		},
 	},

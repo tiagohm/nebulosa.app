@@ -4,7 +4,7 @@ import { formatDateTime } from '../../format'
 import { downloadSatelliteSource, satelliteCatalogState, setSatelliteAutoDownload } from '../../satellites/satellites'
 import { Button } from '../../ui/Button'
 import { Checkbox } from '../../ui/Checkbox'
-import { Modal } from '../../ui/Modal'
+import { Modal, ModalActions } from '../../ui/Modal'
 import { Notice } from '../../ui/Notice'
 
 // Settings of Artificial Satellites, opened from the workspace actions of the tool: the CelesTrak groups of the server's
@@ -12,12 +12,17 @@ import { Notice } from '../../ui/Notice'
 // belong to the server, shared by every profile and tab, and its downloads follow CelesTrak's fair-use rules whoever
 // asks.
 
-// State of the downloads of a group, in words, its instants in an IANA time zone.
+// Failure of a download in words: the server's message without the address it asked, which the operator never chose.
+export function describeDownloadFailure(error: string) {
+	return error.replaceAll(/https?:\/\/\S+\s*/g, '').trim() || 'no answer'
+}
+
+// State of the downloads of a group, in words, its instants in an IANA time zone. The elements kept from the last
+// download stay in use after a failure, so the state says so.
 function groupStatus(group: SatelliteGroupStatus, now: number, timeZone: string) {
 	const parts = [group.members > 0 ? `${group.members} objects` : 'Not downloaded']
 	if (group.gp?.lastSuccessAt) parts.push(`elements read ${formatDateTime(group.gp.lastSuccessAt, timeZone)}`)
 	if (group.gpAllowedAt > now) parts.push(`next download from ${formatDateTime(group.gpAllowedAt, timeZone)}`)
-	if (group.gp?.lastError) parts.push(`last failure: ${group.gp.lastError}`)
 	return parts.join(' · ')
 }
 
@@ -38,8 +43,9 @@ function GroupRow({ group, now, timeZone }: GroupRowProps) {
 		<li className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-line-100 py-2 pe-1 last:border-b-0">
 			<span className="min-w-0 flex-1 basis-64">
 				<span className="text-ink-100">{group.label}</span>
-				{group.large && <span className="ml-2 text-xs text-warning">large</span>}
+				{group.large && <span className="ml-2 text-xs text-ink-300">large</span>}
 				<span className="block text-xs text-ink-300">{groupStatus(group, now, timeZone)}</span>
+				{group.gp?.lastError && <span className="block text-xs text-warning">{`Last download failed (${describeDownloadFailure(group.gp.lastError)})${group.members > 0 ? '; the elements read before are still used' : ''}.`}</span>}
 				{errors[key] && <span className="block text-xs text-danger">{errors[key]}</span>}
 			</span>
 			<span className="flex flex-none items-center gap-4">
@@ -73,9 +79,8 @@ export function SatelliteSettings({ open, onClose, timeZone }: SatelliteSettings
 	const now = Date.now()
 
 	return (
-		<Modal open={open} onClose={onClose} title="Settings" className="max-w-[760px]" fit>
+		<Modal open={open} onClose={onClose} title="CelesTrak Groups" className="max-w-[760px]" fit>
 			<div className="flex min-h-0 flex-col gap-2 overflow-y-auto">
-				<h3 className="m-0 text-sm font-semibold text-ink-100">CelesTrak Groups</h3>
 				<Notice>
 					Groups are downloaded from CelesTrak when you ask, and those marked Automatic also when the server starts and every 6 hours. Each group is downloaded at most once per update of its data (every 2 hours), and never by opening the Sky or this tool. Large groups take longer and their catalog data is not
 					downloaded with them.
@@ -89,6 +94,11 @@ export function SatelliteSettings({ open, onClose, timeZone }: SatelliteSettings
 					</ul>
 				)}
 			</div>
+			<ModalActions>
+				<Button variant="secondary" onClick={onClose}>
+					Close
+				</Button>
+			</ModalActions>
 		</Modal>
 	)
 }

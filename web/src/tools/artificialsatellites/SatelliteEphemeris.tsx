@@ -5,6 +5,7 @@ import { type DisplayZone, describeDisplayZone } from '../../location/zone'
 import { EmptyState } from '../../shell/WorkspaceLayout'
 import { formatDeclination, formatRightAscension } from '../../sky/format'
 import { Button } from '../../ui/Button'
+import { DataList } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
@@ -13,6 +14,7 @@ import { artificialSatellitesState, downloadEphemerisCsv, ephemerisDraftError, e
 import { QualityRow } from './SatelliteDetailsPanel'
 
 // Ephemeris tab of Artificial Satellites: positions of the satellite selected sampled from now or from the Sky's time,
+// computed when the view shows a satellite without them and again on Compute,
 // for the observing site of the active profile or the Earth's center without one, with an export of the rows received
 // as CSV. Times are shown, and exported, in the display zone. Positions are geometric: RA/Dec of date (the Sky's frame)
 // and the altitude without refraction.
@@ -75,17 +77,19 @@ export function SatelliteEphemeris({ observer, zone }: SatelliteEphemerisProps) 
 				</div>
 			)}
 			{!selectedId && <EmptyState title="No satellite selected" description="Select a satellite in the catalog." />}
-			{ephemerisError && <EmptyState title="No ephemeris could be computed" description={ephemerisError} />}
+			{ephemerisError && <EmptyState title="No ephemeris could be computed" description={ephemerisError} action={<Button onClick={() => void loadSatelliteEphemeris(artificialSatellitesState, observer)}>Retry</Button>} />}
 			{ephemerisLoading && <EmptyState title="Computing" />}
 			{ephemeris && !ephemerisLoading && (
 				<div className="flex flex-col gap-2 px-4 py-3">
 					<div className="text-xs text-ink-300">
 						{name} · {observer ? 'from the observing site' : "from the Earth's center"} · times {describeDisplayZone(zone)} · RA/Dec of date, geometric{ephemeris.truncated ? ' · more rows were left out' : ''}
 					</div>
-					<div className="max-w-md">
-						<QualityRow quality={ephemeris.quality} />
+					<div className="max-w-2xl">
+						<DataList>
+							<QualityRow quality={ephemeris.quality} scope="window" />
+						</DataList>
 					</div>
-					<Table columns={EPHEMERIS_COLUMNS}>
+					<Table columns={EPHEMERIS_COLUMNS} className="whitespace-nowrap">
 						{rows.map((row) => (
 							<Row key={row.time}>
 								<Cell>{formatDateTime(row.time, timeZone)}</Cell>

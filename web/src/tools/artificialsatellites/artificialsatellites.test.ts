@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import type { SatelliteEphemerisRow, SatelliteGroundTrackResponse, SatelliteSearchPage } from 'api'
+import type { AstroWeatherNight, SatelliteEphemerisRow, SatelliteGroundTrackResponse, SatellitePassPrediction, SatelliteSearchPage } from 'api'
 import { proxy } from 'valtio'
 import type { RouteState } from '../../shell/route'
 import type { SkyClock } from '../../sky/clock'
@@ -8,13 +8,17 @@ import {
 	type ArtificialSatellitesIo,
 	type ArtificialSatellitesState,
 	ensureSatelliteGroundTrack,
+	ensureSatellitePasses,
+	ensureTonight,
 	ephemerisCsv,
 	ephemerisDraftError,
 	followSatelliteObserver,
 	groundTrackInstant,
 	initialArtificialSatellitesState,
+	loadNextVisiblePass,
 	loadSatelliteGroundTrack,
 	loadSatellitePasses,
+	loadTonight,
 	type SatelliteSkyHandoff,
 	searchSatellites,
 	selectSatellite,
@@ -82,11 +86,12 @@ test('selecting another satellite drops the predictions of the previous one at o
 	tool.selectedPass = 0
 	const selection = selectSatellite(tool, '48274', OBSERVER, io)
 	expect(tool).toMatchObject({ selectedId: '48274', passes: undefined, selectedPass: undefined, ephemeris: undefined })
-	expect(calls.map((call) => call.url)).toEqual(['/api/satellites/48274', '/api/satellites/48274/position'])
+	expect(calls.map((call) => call.url)).toEqual(['/api/satellites/48274', '/api/satellites/48274/position', '/api/satellites/48274/passes'])
 	// The position is asked for now, from the observing site with its elevation, without its name or zone.
 	expect(calls[1].body).toEqual({ time: NOW, observer: { latitude: -23.5, longitude: -46.6, elevation: 760 } })
 	calls[0].resolve(Response.json({ object: { noradId: '48274', name: 'CSS', groups: [] }, elementSets: [] }))
 	calls[1].resolve(Response.json({ error: 'Satellite 48274 has no orbital elements', code: 'noElements' }, { status: 404 }))
+	calls[2].resolve(Response.json({ error: 'Satellite 48274 has no orbital elements', code: 'noElements' }, { status: 404 }))
 	await selection
 	expect(tool.details?.object.name).toBe('CSS')
 	expect(tool.positionError).toBe('Satellite 48274 has no orbital elements')
@@ -139,8 +144,10 @@ test('another place of the observing site drops the passes and the ephemeris and
 
 	followSatelliteObserver(tool, undefined, io)
 	expect(tool).toMatchObject({ passes: undefined, selectedPass: undefined, ephemeris: undefined, observerKey: '' })
-	expect(calls.map((call) => call.url)).toEqual(['/api/satellites/25544/position', '/api/satellites/25544/position'])
-	expect(calls[1].body).toEqual({ time: NOW })
+	// The next visible pass is read again for the new place, and left absent without a site.
+	expect(calls.map((call) => call.url)).toEqual(['/api/satellites/25544/position', '/api/satellites/25544/passes', '/api/satellites/25544/position'])
+	expect(calls[2].body).toEqual({ time: NOW })
+	expect(tool.nextPass).toBeUndefined()
 })
 
 test('an ephemeris draft is checked before it is sent', () => {
@@ -304,4 +311,141 @@ test('Open in Sky selects the satellite and moves the clock only when asked', ()
 
 	showSatelliteInSky('25544', 'ISS (ZARYA)', OBSERVER, NOW, handoff)
 	expect(clock).toMatchObject({ mode: 'fixed', anchor: NOW })
+})
+
+const HOUR = 3_600_000
+
+// Pass from start to end (Unix milliseconds), visible over the parts given.
+function pass(start: number, end: number, visible: readonly (readonly [number, number])[] = []) {
+	const point = (time: number, altitude = 0.5) => ({ time, azimuth: 1, altitude, rangeKm: 800 })
+	return {
+		start: point(start),
+		culmination: point((start + end) / 2, 1),
+		end: point(end),
+		startsBeforeWindow: false,
+		endsAfterWindow: false,
+		culminationShadow: 'sunlit',
+		culminationSunAltitude: -0.3,
+		visible: visible.map(([from, to]) => ({ start: from, end: to, culmination: point((from + to) / 2, 0.8) })),
+	} satisfies SatellitePassPrediction
+}
+
+// Night of the site from noon to noon, with its civil twilight at dusk and dawn, Unix milliseconds.
+function night(start: number, dusk: number | undefined, dawn: number | undefined, state: 'normal' | 'continuousAbove' = 'normal') {
+	const crossings = { dusk, dawn, state }
+	return {
+		sun: { start, end: start + 24 * HOUR, localDate: '2026-11-04', sunset: dusk, sunrise: dawn, daylight: crossings, civil: crossings, nautical: crossings, astronomical: crossings, darkness: [] },
+		display: { start, end: start + 24 * HOUR },
+		moon: { time: start, illuminatedFraction: 0, phase: 'newMoon', above: [] },
+	} as unknown as AstroWeatherNight
+}
+
+// API answering at once by the path of each request, recording them.
+function routedIo(answer: (url: string, body: unknown) => Response) {
+	const calls: { url: string; body?: unknown }[] = []
+	const io: ArtificialSatellitesIo = {
+		fetch: (url, init) => {
+			const body = init?.body ? JSON.parse(init.body as string) : undefined
+			calls.push({ url, body })
+			return Promise.resolve(answer(url, body))
+		},
+		now: () => NOW,
+		skyTime: () => NOW,
+	}
+	return { io, calls }
+}
+
+const QUALITY = { suitability: 'usable', reasons: [], elementAgeDays: 1, eop: 'covered' }
+
+test('tonight is the next night once the morning twilight is past, and lists the visible passes of the favorites in order', async () => {
+	const tool = state()
+	// The night containing NOW ended its dark part four hours before, so the next one, from its closing noon, is asked for.
+	const today = night(NOW - 23 * HOUR, NOW - 16 * HOUR, NOW - 4 * HOUR)
+	const next = night(NOW + HOUR, NOW + 10 * HOUR, NOW + 20 * HOUR)
+	const { io, calls } = routedIo((url, body) => {
+		if (url === '/api/astro-weather/night') return Response.json((body as { time: number }).time === NOW ? today : next)
+		if (url.startsWith('/api/satellites?')) return Response.json(page('25544', '48274', '1'))
+		if (url === '/api/satellites/25544/passes') return Response.json({ passes: [pass(NOW + 12 * HOUR, NOW + 12.2 * HOUR, [[NOW + 12.1 * HOUR, NOW + 12.2 * HOUR]]), pass(NOW + 15 * HOUR, NOW + 15.1 * HOUR)], truncated: false, quality: QUALITY })
+		if (url === '/api/satellites/48274/passes') return Response.json({ passes: [pass(NOW + 11 * HOUR, NOW + 11.2 * HOUR, [[NOW + 11 * HOUR, NOW + 11.1 * HOUR]])], truncated: false, quality: QUALITY })
+		return Response.json({ error: 'Satellite 1 has no orbital elements', code: 'noElements' }, { status: 404 })
+	})
+
+	await loadTonight(tool, ['25544', '48274', '1'], OBSERVER, 'k', io)
+	expect(calls[0].body).toEqual({ observer: { latitude: -23.5, longitude: -46.6, elevation: 760 }, timeZone: 'America/Sao_Paulo', time: NOW })
+	expect(calls[1].body).toMatchObject({ time: NOW + HOUR })
+	// The window runs from the noon starting the next night to the one ending it.
+	const passes = calls.find((call) => call.url === '/api/satellites/25544/passes')!.body as { start: number; end: number; maxSunAltitude: number }
+	expect(passes.start).toBe(NOW + HOUR)
+	expect(passes.end).toBe(NOW + 25 * HOUR)
+	expect(passes.maxSunAltitude).toBeCloseTo((-6 * Math.PI) / 180, 12)
+	// Passes without a visible part are left out, the others are in the order they appear, and a failure is listed.
+	expect(tool.tonight?.passes.map((entry) => entry.name)).toEqual(['SAT 48274', 'SAT 25544'])
+	expect(tool.tonight?.failures).toEqual([{ noradId: '1', name: 'SAT 1', error: 'Satellite 1 has no orbital elements' }])
+	expect(tool).toMatchObject({ tonightKey: 'k', tonightSelected: undefined, tonightLoading: false })
+	expect(tool.tonight).toMatchObject({ predicted: 3, leftOut: 0 })
+})
+
+test('tonight searches nothing when the Sun never goes below the twilight limit, and waits for a site and a favorite', async () => {
+	const tool = state()
+	const { io, calls } = routedIo(() => Response.json(night(NOW - 6 * HOUR, undefined, undefined, 'continuousAbove')))
+	await loadTonight(tool, ['25544'], OBSERVER, 'k', io)
+	expect(calls.map((call) => call.url)).toEqual(['/api/astro-weather/night'])
+	expect(tool.tonight?.passes).toEqual([])
+	expect(tool.tonight?.start).toBe(NOW)
+
+	// Shown for the same inputs and a night not over, it is not read again; another key reads it again.
+	ensureTonight(tool, ['25544'], OBSERVER, 'k', io)
+	expect(calls).toHaveLength(1)
+	ensureTonight(tool, ['25544'], OBSERVER, 'other', io)
+	await Promise.resolve()
+	expect(calls).toHaveLength(2)
+
+	await loadTonight(tool, [], OBSERVER, 'k', io)
+	await loadTonight(tool, ['25544'], undefined, 'k', io)
+	expect(calls).toHaveLength(2)
+})
+
+test('the next visible pass is the first one with a visible part not over, or null', async () => {
+	const tool = state()
+	tool.selectedId = '25544'
+	let answer = [pass(NOW - HOUR, NOW + HOUR, [[NOW - HOUR, NOW - HOUR / 2]]), pass(NOW + 2 * HOUR, NOW + 3 * HOUR), pass(NOW + 5 * HOUR, NOW + 6 * HOUR, [[NOW + 5 * HOUR, NOW + 5.5 * HOUR]])]
+	const { io, calls } = routedIo(() => Response.json({ passes: answer, truncated: false, quality: QUALITY }))
+
+	await loadNextVisiblePass(tool, OBSERVER, io)
+	expect(tool.nextPass?.start.time).toBe(NOW + 5 * HOUR)
+	const body = calls[0].body as { start: number; end: number; minAltitude: number }
+	expect(body.end - body.start).toBe(2 * 24 * HOUR)
+	expect(body.minAltitude).toBeCloseTo((10 * Math.PI) / 180, 12)
+
+	answer = [pass(NOW + 2 * HOUR, NOW + 3 * HOUR)]
+	await loadNextVisiblePass(tool, OBSERVER, io)
+	expect(tool.nextPass).toBeNull()
+
+	// Without a site nothing is asked and the pass is dropped.
+	await loadNextVisiblePass(tool, undefined, io)
+	expect(calls).toHaveLength(2)
+	expect(tool.nextPass).toBeUndefined()
+})
+
+test('the passes are searched when their view shows a satellite with elements and a site, once', async () => {
+	const tool = state()
+	const { io, calls } = deferredIo()
+	tool.selectedId = '25544'
+	ensureSatellitePasses(tool, OBSERVER, io)
+	tool.tab = 'passes'
+	ensureSatellitePasses(tool, OBSERVER, io)
+	expect(calls).toHaveLength(0)
+
+	tool.details = { object: { noradId: '25544', name: 'ISS', groups: [] }, elementSets: [], elements: { digest: 'd', epoch: NOW, kind: 'gp', sourceKey: 'gp:GROUP:STATIONS' } } as never
+	ensureSatellitePasses(tool, undefined, io)
+	expect(calls).toHaveLength(0)
+	ensureSatellitePasses(tool, OBSERVER, io)
+	ensureSatellitePasses(tool, OBSERVER, io)
+	expect(calls).toHaveLength(1)
+
+	// Another satellite cancels the search, so the view searches again for it.
+	const selection = selectSatellite(tool, '48274', OBSERVER, io)
+	expect(tool.passesLoading).toBe(false)
+	for (const call of calls.slice(1)) call.resolve(Response.json({ error: 'gone', code: 'notFound' }, { status: 404 }))
+	await selection
 })

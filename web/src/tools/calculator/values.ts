@@ -75,12 +75,17 @@ export const FOCAL_MULTIPLIER = between(0.1, 10, { unit: '×' })
 // Pixel sizes of real sensors in micrometers.
 export const PIXEL_SIZE = between(0.1, 100, { unit: ' µm' })
 
+// Returns the text of a number as JavaScript reads it: the decimal comma as a dot and the minus sign − as a hyphen.
+function writtenNumber(text: string) {
+	return text.replace(',', '.').replace('−', '-')
+}
+
 // Parses the text of a field: undefined when it is blank, NaN when it is not a finite number, the number otherwise.
-// A comma is accepted as the decimal separator.
+// A comma is accepted as the decimal separator, and the minus sign − as the hyphen.
 export function parseNumber(text: string): number | undefined {
 	const trimmed = text.trim()
 	if (trimmed === '') return undefined
-	const value = Number(trimmed.replace(',', '.'))
+	const value = Number(writtenNumber(trimmed))
 	return Number.isFinite(value) ? value : Number.NaN
 }
 
@@ -173,7 +178,7 @@ export function fieldIssues(...outcomes: readonly OptionalOutcome<unknown>[]): F
 // or written with an exponent, which has no last digit to step.
 export function stepText(text: string, direction: 1 | -1, large: boolean = false) {
 	const value = parseNumber(text)
-	const written = text.trim().replace(',', '.')
+	const written = writtenNumber(text.trim())
 	if (value === undefined || Number.isNaN(value) || /e/i.test(written)) return undefined
 	const decimals = written.includes('.') ? written.length - written.indexOf('.') - 1 : 0
 	const next = (value + direction * (large ? 10 : 1) * 10 ** -decimals).toFixed(decimals)

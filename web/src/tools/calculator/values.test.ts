@@ -18,6 +18,7 @@ describe('parseNumber', () => {
 	test('reads numbers, with a comma as the decimal separator', () => {
 		expect(parseNumber(' 3.76 ')).toBe(3.76)
 		expect(parseNumber('3,76')).toBe(3.76)
+		expect(parseNumber('−12.5')).toBe(-12.5)
 		expect(parseNumber('-0')).toBe(-0)
 		expect(parseNumber('1e3')).toBe(1000)
 	})
@@ -104,6 +105,7 @@ describe('text', () => {
 		expect(stepText('0.1', -1)).toBe('0.0')
 		expect(stepText('-0.1', 1)).toBe('0.0')
 		expect(stepText('-1', -1)).toBe('-2')
+		expect(stepText('−1', -1)).toBe('-2')
 		expect(stepText('', 1)).toBeUndefined()
 		expect(stepText('abc', 1)).toBeUndefined()
 		expect(stepText('1e3', 1)).toBeUndefined()

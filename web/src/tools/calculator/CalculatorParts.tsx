@@ -4,8 +4,10 @@ import type { OpticalConfiguration } from '../../framing/geometry'
 import { Button } from '../../ui/Button'
 import { DataRow } from '../../ui/DataRow'
 import { DisclosureSummary } from '../../ui/DisclosureSummary'
-import { Field, InputSuffix, inputClassName, suffixPadding } from '../../ui/Field'
+import { Field, InputSuffix, suffixPadding } from '../../ui/Field'
 import { Notice } from '../../ui/Notice'
+import { StepperFrame, stepperInputClassName } from '../../ui/NumberInput'
+import { isNumberText } from '../../ui/numberinput.step'
 import { SectionHeading } from '../../ui/SectionHeading'
 import { Select } from '../../ui/Select'
 import { type DraftEntry, importDraft, importOptics, isOriginCurrent, type OpticsSourceId, opticsSources, type SourceContext, sourceGroup, sourceLabel } from './sources'
@@ -76,9 +78,10 @@ export function CalculatorLayout({ bar, inputs, results, notes, summary, issues 
 	)
 }
 
-// Grid of input fields, two per row when there is room.
+// Grid of input fields, two per row when there is room for the step buttons and the number of each: from sm while the
+// inputs span the tool, one per row from md, where they share it with the results, and two again from lg.
 export function FieldGrid({ children }: { readonly children: ReactNode }) {
-	return <div className="grid gap-3 sm:grid-cols-2">{children}</div>
+	return <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">{children}</div>
 }
 
 // Props of a number field.
@@ -101,11 +104,15 @@ export interface NumberFieldProps {
 }
 
 // Number field that keeps the text as typed, so an empty or partial entry stays as it is and the calculation reads it
-// as missing or invalid instead of keeping a previous number. Arrow Up and Down step its last typed decimal, by ten
-// with Shift. A field the calculation cannot use is drawn in the danger colour with the reason under it.
+// as missing or invalid instead of keeping a previous number. It has the frame of NumberInput: the − and + buttons, like
+// Arrow Up and Down, step its last typed decimal (by ten with Shift on the keys), and are disabled while there is no
+// number to step; keystrokes that cannot be part of a number are refused. A field the calculation cannot use is drawn
+// in the danger colour with the reason under it.
 export function NumberField({ label, field = label, value, onChange, suffix, optional, signed }: NumberFieldProps) {
 	const id = useId()
 	const issue = useContext(FieldIssuesContext).find((e) => e.field === field)
+	const down = stepText(value, -1)
+	const up = stepText(value, 1)
 
 	// Steps the value with the arrow keys.
 	function step(event: KeyboardEvent<HTMLInputElement>) {
@@ -118,7 +125,7 @@ export function NumberField({ label, field = label, value, onChange, suffix, opt
 
 	return (
 		<Field label={label} htmlFor={id}>
-			<div className="relative flex">
+			<StepperFrame decreaseDisabled={down === undefined} increaseDisabled={up === undefined} onDecrease={() => down !== undefined && onChange(down)} onIncrease={() => up !== undefined && onChange(up)}>
 				<input
 					id={id}
 					type="text"
@@ -127,13 +134,13 @@ export function NumberField({ label, field = label, value, onChange, suffix, opt
 					spellCheck={false}
 					value={value}
 					placeholder={optional ? 'Optional' : undefined}
-					onChange={(e) => onChange(e.target.value)}
+					onChange={(e) => isNumberText(e.target.value) && onChange(e.target.value)}
 					onKeyDown={step}
 					style={suffix ? { paddingRight: suffixPadding(suffix) } : undefined}
-					className={cn(inputClassName, 'tabular-nums', issue && 'border-danger hover:border-danger')}
+					className={cn(stepperInputClassName, issue && 'border-danger hover:border-danger')}
 				/>
 				{suffix && <InputSuffix>{suffix}</InputSuffix>}
-			</div>
+			</StepperFrame>
 			{issue && <Notice error>{issue.reason}</Notice>}
 		</Field>
 	)

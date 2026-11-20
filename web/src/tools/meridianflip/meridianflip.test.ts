@@ -7,11 +7,17 @@ import {
 	enableMeridianFlip,
 	handleMeridianFlipEvent,
 	loadMeridianFlipTransitions,
+	formatTransitOffset,
 	MERIDIAN_FLIP_STALE_AFTER,
 	meridianFlipHeadline,
 	meridianFlipStatusText,
 	type MeridianFlipState,
+	meridianFlipViewEntry,
+	meridianHourAngle,
+	meridianPhaseText,
 	monitorKey,
+	mountSiteLongitudeOffset,
+	nextMeridianEvent,
 	normalizeMeridianFlipSettings,
 	refreshMeridianFlip,
 	secondsToTransit,
@@ -162,16 +168,70 @@ describe('status', () => {
 	test('names the state and its tone, warning only for a pending flip', () => {
 		expect(meridianFlipHeadline(undefined)).toEqual(['Disabled', 'muted'])
 		expect(meridianFlipHeadline(monitor(1, { availability: 'waitingForMount' }))).toEqual(['Waiting for the mount', 'warning'])
-		expect(meridianFlipHeadline(monitor(1, { timing: { phase: 'approaching', quality: 'valid' } }))).toEqual(['Approaching', 'active'])
+		expect(meridianFlipHeadline(monitor(1, { timing: { phase: 'approaching', quality: 'valid', secondsToTransit: 30 } }))).toEqual(['Approaching', 'neutral'])
+		expect(meridianFlipHeadline(monitor(1, { timing: { phase: 'approaching', quality: 'valid', secondsToTransit: 30 } }), 1000 + 31000)).toEqual(['Past the meridian', 'neutral'])
+		expect(meridianFlipHeadline(monitor(1, { timing: { phase: 'approaching', quality: 'valid', secondsToTransit: -10 } }))).toEqual(['Past the meridian', 'neutral'])
 		expect(meridianFlipHeadline(monitor(1, { timing: { phase: 'windowOpen', quality: 'valid' }, mechanical: 'flipCandidate' }))).toEqual(['Flip window open', 'warning'])
 		expect(meridianFlipHeadline(monitor(1, { timing: { phase: 'windowOpen', quality: 'valid' }, mechanical: 'alreadyOnExpectedSide' }))).toEqual(['Window open', 'neutral'])
 		expect(meridianFlipHeadline(monitor(1, { timing: { phase: 'pastDeadline', quality: 'valid' }, mechanical: 'flipCandidate' }))).toEqual(['Deadline passed', 'danger'])
 	})
 
 	test('adds the time to or since the transit while monitoring a current forecast', () => {
-		expect(meridianFlipStatusText(monitor(1, { timing: { phase: 'approaching', quality: 'valid', secondsToTransit: 565 } }), 1000)).toBe('Approaching · −09:25')
-		expect(meridianFlipStatusText(monitor(1, { timing: { phase: 'windowOpen', quality: 'valid', secondsToTransit: -370 }, mechanical: 'flipCandidate' }), 1000)).toBe('Flip window open · +06:10')
+		expect(meridianFlipStatusText(monitor(1, { timing: { phase: 'approaching', quality: 'valid', secondsToTransit: 565 } }), 1000)).toBe('Approaching · T−09:25')
+		expect(meridianFlipStatusText(monitor(1, { timing: { phase: 'windowOpen', quality: 'valid', secondsToTransit: -370 }, mechanical: 'flipCandidate' }), 1000)).toBe('Flip window open · T+06:10')
 		expect(meridianFlipStatusText(monitor(1, { availability: 'idle', timing: { phase: 'unavailable', quality: 'unavailable' } }), 1000)).toBe('Idle')
 		expect(meridianFlipStatusText(monitor(1), 1000 + MERIDIAN_FLIP_STALE_AFTER + 1)).toBe('Monitoring')
+	})
+})
+
+describe('passage', () => {
+	test('writes the time to and since the transit with one sign convention', () => {
+		expect(formatTransitOffset(565)).toBe('T−09:25')
+		expect(formatTransitOffset(-370)).toBe('T+06:10')
+		expect(formatTransitOffset(0)).toBe('T+00:00')
+		expect(formatTransitOffset(3725)).toBe('T−01:02:05')
+	})
+
+	test('tells the approach apart before and after the transit', () => {
+		const approaching = monitor(1, { timing: { phase: 'approaching', quality: 'valid', secondsToTransit: 60 } })
+		expect(meridianPhaseText(approaching, 1000)).toBe('Approaching the meridian')
+		expect(meridianPhaseText(approaching, 62000)).toBe('Past the meridian')
+		expect(meridianPhaseText(monitor(1, { timing: { phase: 'windowOpen', quality: 'valid', secondsToTransit: -400 } }))).toBe('Preferred window open')
+	})
+
+	test('names the next instant of the forecast, none once the window closed', () => {
+		const timing = { phase: 'approaching', quality: 'valid', warningAt: 100, transitAt: 200, windowOpensAt: 300, deadlineWarningAt: 400, windowClosesAt: 500 } as const
+		expect(nextMeridianEvent(timing, 50)).toEqual({ label: 'Early warning', at: 100 })
+		expect(nextMeridianEvent(timing, 200)).toEqual({ label: 'Window opens', at: 300 })
+		expect(nextMeridianEvent(timing, 450)).toEqual({ label: 'Window closes', at: 500 })
+		expect(nextMeridianEvent(timing, 500)).toBeUndefined()
+		expect(nextMeridianEvent({ phase: 'unavailable', quality: 'unavailable' }, 0)).toBeUndefined()
+	})
+
+	test('moves the hour angle on at the sidereal rate only while it tracks a monitored target', () => {
+		const tracked = monitor(1, { timing: { phase: 'before', quality: 'valid', hourAngle: -0.1, secondsToTransit: 600 } })
+		// A minute of wall clock turns the sky by 2π × 60 / 86164.0905 radians.
+		expect(meridianHourAngle(tracked, 1000 + 60000)).toBeCloseTo(-0.1 + (2 * Math.PI * 60) / 86164.0905, 12)
+		expect(meridianHourAngle({ ...tracked, mount: { ...tracked.mount, tracking: false } }, 1000 + 60000)).toBe(-0.1)
+		expect(meridianHourAngle({ ...tracked, availability: 'settling' }, 1000 + 30000)).toBe(-0.1)
+		expect(meridianHourAngle(tracked, 1000 + MERIDIAN_FLIP_STALE_AFTER + 1)).toBeUndefined()
+		expect(meridianHourAngle({ ...tracked, timing: { ...tracked.timing, hourAngle: Math.PI - 1e-6 } }, 1000 + 60000)).toBeLessThan(0)
+	})
+
+	test('measures the longitude of the mount site from the active one, east positive and wrapped', () => {
+		expect(mountSiteLongitudeOffset(-45, -47.5)).toBeCloseTo(2.5, 9)
+		expect(mountSiteLongitudeOffset(179, -179)).toBeCloseTo(-2, 9)
+		expect(mountSiteLongitudeOffset(-179, 179)).toBeCloseTo(2, 9)
+	})
+
+	test('keeps only the Executor section of the tool, the Monitor being its default', () => {
+		const view = proxy({ section: 'Monitor' as 'Monitor' | 'Executor' })
+		const entry = meridianFlipViewEntry(view)
+		expect(entry.value()).toBeUndefined()
+		entry.restore('Executor')
+		expect(view.section).toBe('Executor')
+		expect(entry.value()).toBe('Executor')
+		entry.restore('Elsewhere')
+		expect(view.section).toBe('Executor')
 	})
 })

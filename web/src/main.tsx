@@ -50,7 +50,7 @@ import { handleStreaksEvent, refreshStreaks, streaksState } from './streaks/stre
 import { framingPreviewEntry, framingPreviewState } from './tools/framing/framing'
 import { handleImageStackingEvent, imageStackingRuntime, refreshImageStacking } from './tools/imagestacking/projects'
 import { handleJupiterGrsEvent, jupiterGrsState, refreshJupiterGrs } from './tools/jupiter/jupiter'
-import { handleMeridianFlipEvent, meridianFlipState, refreshMeridianFlip } from './tools/meridianflip/meridianflip'
+import { handleMeridianFlipEvent, meridianFlipState, meridianFlipView, meridianFlipViewEntry, refreshMeridianFlip } from './tools/meridianflip/meridianflip'
 import { handleMeridianFlipExecutorEvent, meridianFlipExecutorState, refreshMeridianFlipExecutor } from './tools/meridianflip/meridianflipexecutor'
 import { handleMeteorShowersEvent, meteorShowerSourcesState, refreshMeteorShowerSources } from './tools/meteorshowers/meteorshowers.sources'
 import { handleMountRemoteControlEvent, mountRemoteControlState, refreshMountRemoteControl } from './tools/mountremotecontrol/listeners'
@@ -158,7 +158,7 @@ const stops = [
 	watchActiveSiteZone(profileState, siteState),
 	workspace.start(),
 	new ViewPersistence(profileState).start(),
-	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), activeCameraTabEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime), pixelInspectionEntry(pixelInspection), framingPreviewEntry(framingPreviewState)]),
+	keepViewEntries([sectionsEntry(collapsibleSections), cameraToolsEntry(imagesState), activeCameraTabEntry(imagesState), centeringTargetsEntry(targetCenteringRuntime), pixelInspectionEntry(pixelInspection), framingPreviewEntry(framingPreviewState), meridianFlipViewEntry(meridianFlipView)]),
 	watchHistory(routeState),
 	watchPlayers(),
 	watchPictureInPicture(),

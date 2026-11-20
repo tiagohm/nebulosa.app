@@ -1,12 +1,13 @@
 import type { ExecutorEligibility, FlipVerification, FlipVerificationMode, MeridianFlipArm, MeridianFlipExecuteRequest, MeridianFlipExecution, MeridianFlipExecutionRequest, MeridianFlipExecutionState, MeridianFlipExecutorSnapshot, MeridianFlipStep, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
+import { cameraKey } from '../../camera/capture'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
 import type { StatusTone } from '../../ui/StatusBadge'
 import { monitorKey } from './meridianflip'
 
-// Mirror of the Meridian Flip Executor of the server: its executions, its arms, and the requests this tab sends to
-// execute, arm, disarm, and cancel them. The executions are the server's: this mirror is fed by
+// Mirror of the Meridian Flip Executor of the server: its executions, its arms, the requests this tab sends to
+// execute, arm, disarm, and cancel them, and the words and checks the tool and the status bar read them by. The executions are the server's: this mirror is fed by
 // GET /api/meridian-flip/executions and the meridianFlipExecutor:updated and meridianFlipExecutor:armed events, and no tab,
 // profile, or route change starts, arms, or cancels one. Revisions order the snapshot and the events within one server
 // process (epoch). Requests carry a token generated here, so a repeated request never flips twice.
@@ -177,9 +178,17 @@ export const FLIP_VERIFICATION_LABELS: Readonly<Record<FlipVerification, string>
 // Text of each verification mode.
 export const FLIP_VERIFICATION_MODE_LABELS: Readonly<Record<FlipVerificationMode, string>> = { driverPierSide: 'Pier side reported by the driver', inference: 'Plate solutions before and after', none: 'None: the flip cannot be verified' }
 
-// Headline of an execution: its state in words and the tone it is shown with.
-export function meridianFlipExecutionHeadline(execution: Pick<MeridianFlipExecution, 'state' | 'step'> | undefined): readonly [string, StatusTone] {
+// Headline of an execution: its state in words and the tone it is shown with. A failed execution whose mount was seen
+// moving after a completed command did cross the meridian, so it reads as a flip that is not verified or not ready for
+// imaging, a warning, rather than a flip that never happened.
+export function meridianFlipExecutionHeadline(execution: Pick<MeridianFlipExecution, 'state' | 'step' | 'outcome'> | undefined): readonly [string, StatusTone] {
 	if (!execution) return ['Idle', 'muted']
+	const { outcome } = execution
+
+	if (execution.state === 'failed' && outcome?.flipCommandCompleted && outcome.movementObserved) {
+		return [outcome.verification === 'unverified' ? 'Flipped, not verified' : 'Flipped, not ready', 'warning']
+	}
+
 	const states: Readonly<Record<MeridianFlipExecutionState, readonly [string, StatusTone]>> = {
 		running: [execution.step ? MERIDIAN_FLIP_STEP_LABELS[execution.step] : 'Running', 'active'],
 		completed: ['Flipped', 'success'],
@@ -188,4 +197,13 @@ export function meridianFlipExecutionHeadline(execution: Pick<MeridianFlipExecut
 		cancelled: ['Cancelled', 'warning'],
 	}
 	return states[execution.state]
+}
+
+// Whether the capture an ended execution left paused still waits for the operator: the same session of its main camera,
+// released by the flip and not resumed or stopped since. captures are the capture sessions of the tab by cameraKey.
+export function capturePausedBy(execution: Pick<MeridianFlipExecution, 'state' | 'outcome' | 'setup' | 'captureSessionId'> | undefined, captures: Readonly<Record<string, { readonly sessionId: string; readonly suspension?: { readonly state: string } } | undefined>>) {
+	const camera = execution?.setup.camera
+	if (!execution || execution.state === 'running' || execution.outcome?.captureRestoration !== 'leftSuspended' || !camera || !execution.captureSessionId) return false
+	const capture = captures[cameraKey(camera.connectionId, camera.deviceId)]
+	return capture?.sessionId === execution.captureSessionId && capture.suspension?.state === 'released'
 }

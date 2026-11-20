@@ -145,20 +145,21 @@ interface MeridianFlipItemProps {
 	readonly monitor: MeridianFlipMonitor
 	// Name of the mount, read through the title.
 	readonly name?: string
-	// Executor of the mount: the step of its running flip, or whether a flip is armed or scheduled.
-	readonly executor?: { readonly step?: string; readonly armed: boolean }
+	// Executor of the mount: the step of its running flip, whether a flip is armed or scheduled, and whether its latest flip
+	// left the capture paused for the operator.
+	readonly executor?: { readonly step?: string; readonly armed: boolean; readonly paused: boolean }
 }
 
 // Meridian Flip Monitor of the profile's mount while it is enabled: its icon and short status in the tone of its headline
-// (the step of a running flip of the Executor instead, and whether a flip is armed),
-// with the time to or since the transit while it monitors, opening the tool. The countdown is only interpolated from the
-// server's sample.
+// (the step of a running flip of the Executor instead, and whether a flip is armed or left the capture paused, the
+// latter in the warning tone), with the time to or since the transit while it monitors, opening the tool. The countdown
+// is only interpolated from the server's sample.
 export function MeridianFlipItem({ monitor, name, executor }: MeridianFlipItemProps) {
 	const now = useNow(monitor.availability === 'monitoring')
-	const [, headline] = meridianFlipHeadline(monitor)
-	// A running flip shows its step; an armed one is said after the monitor status.
-	const text = executor?.step ?? `${meridianFlipStatusText(monitor, now)}${executor?.armed ? ' · Armed' : ''}`
-	const tone = executor?.step ? 'active' : headline
+	const [, headline] = meridianFlipHeadline(monitor, now)
+	// A running flip shows its step; an armed one and a capture left paused are said after the monitor status.
+	const text = executor?.step ?? `${meridianFlipStatusText(monitor, now)}${executor?.armed ? ' · Armed' : ''}${executor?.paused ? ' · Capture paused' : ''}`
+	const tone = executor?.step ? 'active' : executor?.paused && headline !== 'danger' ? 'warning' : headline
 	const title = `Meridian Flip Monitor${name ? ` of ${name}` : ''}: ${text}`
 
 	return (

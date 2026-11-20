@@ -1,67 +1,76 @@
-import type { DeviceSummary, MeridianExposureAssessment, MeridianFlipMonitor, MeridianFlipSettings, MeridianMechanicalAssessment, MeridianMonitorReason, MeridianMountView, MeridianTimingPhase, MeridianTransitionKind } from 'api'
+import type { DeviceSummary, MeridianExposureAssessment, MeridianFlipMonitor, MeridianFlipSettings, MeridianMechanicalAssessment, MeridianMonitorReason, MeridianTransitionKind } from 'api'
 import { cn } from 'cn'
-import { type ReactNode, useEffect, useState } from 'react'
+import { toDeg } from 'nebulosa/src/math/units/angle'
+import { useEffect, useState } from 'react'
 import { useSnapshot } from 'valtio'
+import { controlRuntime, watchedDeviceState } from '../../equipment-control/control'
 import { DeviceLink } from '../../equipment-control/DeviceLink'
 import { MOUNT_ROLE_BLOCKERS } from '../../equipment/equipment'
 import { EquipmentSetupButton } from '../../equipment/EquipmentSetupButton'
-import { useRoleDevice } from '../../equipment/useEquipment'
-import { formatClockDuration, formatDuration, formatHourAngle, formatZonedDateTime, MISSING } from '../../format'
-import { useActiveTimeZone } from '../../location/useLocation'
-import { activeProfile, meridianFlipSettings, profileCamera, profileState, setMeridianFlipSettings } from '../../profile/profile'
+import { type RoleDevice, useRoleDevice } from '../../equipment/useEquipment'
+import { formatClockDuration, formatClockTime, formatDuration, formatFixed, formatGeographic, formatHourAngle, formatLocalTime, MISSING } from '../../format'
+import { useActiveSite, useActiveTimeZone } from '../../location/useLocation'
+import { activeProfile, exposureSettings, meridianFlipSettings, profileCamera, profileState, setMeridianFlipSettings } from '../../profile/profile'
 import { MERIDIAN_FLIP_MAXIMUM_SECONDS } from '../../profile/schema'
+import { CollapsibleSection } from '../../shell/CollapsibleSection'
 import { WorkspaceLayout } from '../../shell/WorkspaceLayout'
 import { Actions } from '../../ui/Actions'
 import { Button } from '../../ui/Button'
+import { ConfirmButton } from '../../ui/ConfirmButton'
 import { DataList, DataRow } from '../../ui/DataRow'
 import { Notice } from '../../ui/Notice'
 import { NumberInput } from '../../ui/NumberInput'
 import { SegmentedControl } from '../../ui/SegmentedControl'
-import { StatusBadge } from '../../ui/StatusBadge'
+import { StatusBadge, type StatusTone } from '../../ui/StatusBadge'
 import { Cell, Row, Table } from '../../ui/Table'
 import { useNow } from '../../useNow'
 import {
 	assessMeridianExposure,
 	disableMeridianFlip,
 	enableMeridianFlip,
+	formatTransitOffset,
 	loadMeridianFlipTransitions,
 	MERIDIAN_AVAILABILITY_LABELS,
 	MERIDIAN_FLIP_MAXIMUM_SETTLE_SECONDS,
-	meridianFlipHeadline,
+	MERIDIAN_PIER_SIDES,
+	type MeridianFlipSection,
 	meridianFlipState,
+	meridianFlipView,
+	meridianHourAngle,
+	meridianPhaseText,
 	monitorKey,
+	MOUNT_SITE_LONGITUDE_TOLERANCE,
+	mountSiteLongitudeOffset,
+	nextMeridianEvent,
 	normalizeMeridianFlipSettings,
 	sameMeridianFlipSettings,
 	secondsToTransit,
 	updateMeridianFlipSettings,
 } from './meridianflip'
-import { MeridianFlipExecutorSections } from './MeridianFlipExecutorView'
+import { latestExecution, meridianFlipExecutorState } from './meridianflipexecutor'
+import { ExecutorPanelSections, FlipStrip, MeridianFlipExecutorSections } from './MeridianFlipExecutorView'
+import { FlipSection } from './MeridianFlipSection'
 
-// Meridian Flip tool, Monitor section (the Executor section is MeridianFlipExecutorView.tsx): shows the server's monitor of the MOUNT of the active profile's Equipment Setup, where
-// its tracked target stands relative to the upper meridian and the preferred flip window, whether the pier side the
-// driver reports still needs a flip, and the transitions it observed. The mount is never chosen here: a missing or
-// unavailable one is reported and Enable is disabled. The monitor is the server's, so changing profile, setup, or
-// workspace, or closing the tab, leaves it enabled for the mount it was enabled for; settings are applied explicitly
-// and remembered by the profile per mount. Nothing here commands the mount: the countdown is only interpolated between
-// the samples of the server, which takes every decision.
+// Meridian Flip tool, laid out as one passage of the target the MOUNT of the active profile's Equipment Setup tracks:
+// a readout of where it stands (the time to or since the upper transit, the phase and the next instant of the forecast,
+// whether the pier side the driver reports still needs a flip, and the timeline of the preferred window), the strip of a
+// flip that runs, is armed, or left the capture paused (MeridianFlipExecutorView.tsx), then the Monitor section (what
+// the server's monitor observes and the transitions it reported) or the Executor section (the flip and its latest
+// execution). The contextual panel holds what is set rather than read: the flip window, the flip policy, the
+// equipment, and the exposure forecast. The mount is never chosen here: a missing or unavailable one is reported and
+// Enable is disabled. The monitor is the server's, so changing profile, setup, or workspace, or closing the tab, leaves
+// it enabled for the mount it was enabled for; settings are applied explicitly and remembered by the profile per mount.
+// Nothing here commands the mount: the countdowns are only interpolated between the samples of the server, which takes
+// every decision.
 
-// Text of each timing phase.
-const PHASES: Readonly<Record<MeridianTimingPhase, string>> = {
-	unavailable: 'No forecast',
-	before: 'Before the early warning',
-	approaching: 'Approaching the meridian',
-	windowOpen: 'Preferred window open',
-	pastDeadline: 'Preferred window closed',
-}
-
-// Text of each mechanical assessment.
-const MECHANICAL: Readonly<Record<MeridianMechanicalAssessment, string>> = {
-	unsupportedMountType: 'Not applicable to this mount type',
-	unknown: 'Unknown',
-	notDue: 'Not due yet',
-	alreadyOnExpectedSide: 'Already on the expected side',
-	flipCandidate: 'Flip may be needed',
-	verificationPending: 'Waiting for the mount to settle',
+// Text of each mechanical assessment, and its tone.
+const MECHANICAL: Readonly<Record<MeridianMechanicalAssessment, readonly [string, StatusTone]>> = {
+	unsupportedMountType: ['No flip for this mount type', 'muted'],
+	unknown: ['Pier side unknown', 'muted'],
+	notDue: ['Flip not due yet', 'neutral'],
+	alreadyOnExpectedSide: ['Already on the expected side', 'success'],
+	flipCandidate: ['Flip may be needed', 'warning'],
+	verificationPending: ['Waiting for the mount to settle', 'neutral'],
 }
 
 // Explanation of each reason.
@@ -96,59 +105,66 @@ const TRANSITIONS: Readonly<Record<MeridianTransitionKind, string>> = {
 	monitorRecovered: 'Mount telemetry recovered',
 }
 
-// Text of each pier side.
-const PIER_SIDES: Readonly<Record<MeridianMountView['pierSide'], string>> = { EAST: 'East', WEST: 'West', NEITHER: 'Unknown' }
-
 // Text of each exposure decision.
 const DECISIONS: Readonly<Record<MeridianExposureAssessment['decision'], string>> = { allowed: 'Fits', defer: 'Defer', blocked: 'Does not fit', unknown: 'Unknown' }
 
-// Fill of each part of the timeline: the stretches of the bar and the marks of the transit and of now.
+// Fill of each part of the timeline: the stretches of the bar and the marks of the transit and of now. The approach is
+// neutral, since nothing is due during it; only the window and its closing are tinted.
 const TIMELINE = {
 	outside: 'bg-base-200',
-	approach: 'bg-accent/40',
+	approach: 'bg-line-200',
 	window: 'bg-warning/60',
 	closing: 'bg-danger/60',
 	transit: 'w-px bg-ink-200',
-	now: 'w-1 bg-ink-100',
+	now: 'w-1 rounded-full bg-ink-100',
 } as const
 
-// Legend of the timeline: the sample mark of each part and what it means.
+// Legend of the stretches and the transit mark of the timeline; now and the instants are labeled on the bar itself.
 const TIMELINE_LEGEND: readonly { readonly mark: string; readonly label: string }[] = [
-	{ mark: cn('h-2 w-4 rounded-sm', TIMELINE.approach), label: 'Approach: early warning to window' },
-	{ mark: cn('h-2 w-4 rounded-sm', TIMELINE.window), label: 'Preferred flip window' },
-	{ mark: cn('h-2 w-4 rounded-sm', TIMELINE.closing), label: 'Window closing: deadline warning' },
-	{ mark: cn('h-2 w-4 rounded-sm border border-line-100', TIMELINE.outside), label: 'Outside the warning and the window' },
+	{ mark: cn('h-2 w-4 rounded-sm', TIMELINE.approach), label: 'Approach' },
+	{ mark: cn('h-2 w-4 rounded-sm', TIMELINE.window), label: 'Preferred window' },
+	{ mark: cn('h-2 w-4 rounded-sm', TIMELINE.closing), label: 'Window closing' },
 	{ mark: cn('h-3', TIMELINE.transit), label: 'Upper transit' },
-	{ mark: cn('h-3', TIMELINE.now), label: 'Now' },
 ]
 
-// Countdown to or since the transit: "in 4:05", "4:05 ago", or MISSING.
-function formatCountdown(seconds: number | undefined) {
-	if (seconds === undefined) return MISSING
-	return seconds >= 0 ? `in ${formatClockDuration(seconds)}` : `${formatClockDuration(-seconds)} ago`
+// Time to an instant from now (Unix milliseconds), or since it: "in 07:41", "03:12 ago".
+function formatFromNow(at: number, now: number) {
+	return at >= now ? `in ${formatClockDuration((at - now) / 1000)}` : `${formatClockDuration((now - at) / 1000)} ago`
 }
 
-// Meridian Flip Monitor tool.
+// Meridian Flip tool.
 export function MeridianFlipMonitorView() {
 	const mount = useRoleDevice('MOUNT')
 	const profile = activeProfile(useSnapshot(profileState))
 	const state = useSnapshot(meridianFlipState)
+	const executor = useSnapshot(meridianFlipExecutorState)
 	const device = mount.device
 	const blocker = mount.status === 'connected' ? undefined : MOUNT_ROLE_BLOCKERS[mount.status]
-	const identity = profileCamera(profile, device?.id)
 	const key = device ? monitorKey(device.connectionId, device.id) : undefined
 	const monitor = key ? state.monitors[key] : undefined
 	const pending = key ? state.pending[key] : undefined
 	const error = key ? state.errors[key] : undefined
+	const arm = key ? executor.arms[key] : undefined
+	const running = device ? latestExecution(executor, device.connectionId, device.id)?.state === 'running' : false
+	const now = useNow(!!monitor)
+	const identity = profileCamera(profile, device?.id)
 	const saved = meridianFlipSettings(profile.settings, identity)
 	const [draft, setDraft] = useState<MeridianFlipSettings>(() => monitor?.settings ?? saved)
-	const [label, tone] = meridianFlipHeadline(monitor)
 
-	// Section shown: the passive monitor or the executor that flips; transient, a view choice of this tab.
-	const [section, setSection] = useState<'Monitor' | 'Executor'>('Monitor')
+	// Section shown: the one this tab showed last, and the Executor whenever a flip of the mount starts running or gets
+	// armed, including once the mirror of the Executor loads after a reload.
+	const live = running || arm !== undefined
+	const [section, setSection] = useState<MeridianFlipSection>(() => (live ? 'Executor' : meridianFlipView.section))
+	const [wasLive, setWasLive] = useState(live)
 
-	// The draft starts over from the settings of another mount, profile, or enablement.
-	const draftKey = `${profile.id}:${key}:${monitor?.monitorId}`
+	if (live !== wasLive) {
+		setWasLive(live)
+		if (live) setSection('Executor')
+	}
+	const monitorId = monitor?.monitorId
+
+	// The draft of the flip window starts over from the settings of another mount, profile, or enablement.
+	const draftKey = `${profile.id}:${key}:${monitorId}`
 	const [draftOf, setDraftOf] = useState(draftKey)
 
 	if (draftOf !== draftKey) {
@@ -156,12 +172,16 @@ export function MeridianFlipMonitorView() {
 		setDraft(monitor?.settings ?? saved)
 	}
 
-	const monitorId = monitor?.monitorId
-
 	useEffect(() => {
 		if (device && monitorId) void loadMeridianFlipTransitions(meridianFlipState, device.connectionId, device.id)
 	}, [device?.connectionId, device?.id, monitorId])
 
+	function show(next: MeridianFlipSection) {
+		setSection(next)
+		meridianFlipView.section = next
+	}
+
+	// Enables the monitor with the flip window being edited, which the profile then remembers for the mount.
 	function enable() {
 		if (!device) return
 		const settings = normalizeMeridianFlipSettings(draft)
@@ -169,59 +189,66 @@ export function MeridianFlipMonitorView() {
 		void enableMeridianFlip(meridianFlipState, device.connectionId, device.id, settings)
 	}
 
+	// Remembers the flip window being edited and applies it to the running monitor.
 	function apply() {
 		const settings = normalizeMeridianFlipSettings(draft)
 		setMeridianFlipSettings(profileState, identity, settings)
 		if (device && monitor) void updateMeridianFlipSettings(meridianFlipState, device.connectionId, device.id, settings, monitor.settingsRevision)
 	}
 
+	function disable() {
+		if (monitor) void disableMeridianFlip(meridianFlipState, monitor.connectionId, monitor.deviceId)
+	}
+
 	const actions = (
 		<Actions>
-			{monitor ? (
-				<Button variant="secondary" disabled={!!pending} onClick={() => void disableMeridianFlip(meridianFlipState, monitor.connectionId, monitor.deviceId)}>
-					{pending === 'disable' ? 'Disabling…' : 'Disable'}
-				</Button>
-			) : (
-				<Button disabled={!device || !!blocker || !!pending} title={blocker} onClick={enable}>
+			{!monitor ? (
+				<Button disabled={!device || !!blocker || !!pending} title={blocker ?? (pending ? 'Waiting for the server to answer.' : undefined)} onClick={enable}>
 					{pending === 'enable' ? 'Enabling…' : 'Enable'}
+				</Button>
+			) : arm ? (
+				<ConfirmButton title="Disable the monitor?" message={`The ${arm.trigger === 'automatic' ? 'armed' : 'scheduled'} flip of ${arm.mountName} ends with it, since the Executor follows the forecast of the monitor.`} confirmLabel="Disable" disabled={!!pending} onConfirm={disable}>
+					Disable
+				</ConfirmButton>
+			) : (
+				<Button variant="secondary" disabled={!!pending || running} title={running ? 'A flip of this mount is running; disable the monitor once it ends.' : undefined} onClick={disable}>
+					{pending === 'disable' ? 'Disabling…' : 'Disable'}
 				</Button>
 			)}
 		</Actions>
 	)
 
+	const panel = (
+		<>
+			<WindowSection draft={draft} onChange={(settings) => setDraft(normalizeMeridianFlipSettings(settings))} monitor={monitor} saved={saved} pending={!!pending} onApply={apply} />
+			<ExecutorPanelSections mount={mount} />
+			<ExposureSection device={device} monitor={monitor} />
+		</>
+	)
+
 	return (
-		<WorkspaceLayout workspace="tools" title="Meridian Flip" actions={section === 'Monitor' ? actions : undefined}>
+		<WorkspaceLayout workspace="tools" title="Meridian Flip" actions={actions} panel={{ title: 'Flip Settings', content: panel }}>
 			<div className="h-full overflow-y-auto bg-base-000">
-				<div className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
-					<SegmentedControl options={['Monitor', 'Executor'] as const} value={section} onChange={setSection} className="max-w-xs" />
+				<div className="mx-auto flex max-w-5xl flex-col gap-5 p-4">
 					<div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm leading-5">
 						<span className="text-ink-300">Mount</span>
 						<span className="min-w-0 truncate text-ink-100">
 							<DeviceLink device={device} fallback={mount.status === 'notSelected' ? 'None selected' : 'Unavailable'} />
 						</span>
-						<StatusBadge tone={tone} label={label} />
 						{blocker && !monitor && <span className="text-ink-300">{blocker}</span>}
 						{mount.status === 'notSelected' && <EquipmentSetupButton />}
 					</div>
 					{error && <Notice error>{error}</Notice>}
+					<PassageReadout monitor={monitor} now={now} />
+					<FlipStrip mount={mount} monitor={monitor} />
+					<SegmentedControl options={['Monitor', 'Executor'] as const} value={section} onChange={show} className="max-w-xs" />
 					{section === 'Executor' ? (
 						<MeridianFlipExecutorSections mount={mount} monitor={monitor} />
 					) : (
-						<>
-							<div className="grid gap-4 md:grid-cols-2">
-								<ObservationPanel monitor={monitor} />
-								<SettingsPanel draft={draft} onChange={(settings) => setDraft(normalizeMeridianFlipSettings(settings))} monitor={monitor} saved={saved} pending={!!pending} onApply={apply} />
-							</div>
-							{monitor && <TimelinePanel monitor={monitor} />}
-							<div className="grid gap-4 md:grid-cols-2">
-								<ExposurePanel device={device} monitor={monitor} />
-								<EventsPanel monitorKey={key} />
-							</div>
-							<Notice>
-								The monitor only observes: it never moves the mount, stops tracking, or interrupts an exposure. The window is a timing preference, not a physical limit of the mount. A pier side change is reported as observed, never as a verified flip; the Executor is what flips. It stays enabled when
-								this tab closes and ends when the server stops.
-							</Notice>
-						</>
+						<div className="grid gap-x-8 gap-y-5 md:grid-cols-2">
+							<ObservationSection mount={mount} monitor={monitor} now={now} />
+							<EventsSection monitorKey={key} now={now} />
+						</div>
 					)}
 				</div>
 			</div>
@@ -229,58 +256,177 @@ export function MeridianFlipMonitorView() {
 	)
 }
 
-// Card of one section of the tool.
-function Panel({ title, children }: { readonly title: string; readonly children: ReactNode }) {
+// Where the tracked target stands at instant now (Unix milliseconds): the time to or since the transit in large figures
+// (or the state of the monitor when it has no forecast), the phase and the next instant of the forecast, whether a flip
+// may be needed, and the timeline; the one reading of the tool meant to be read from across the room.
+function PassageReadout({ monitor, now }: { readonly monitor?: MeridianFlipMonitor; readonly now: number }) {
+	const timeZone = useActiveTimeZone()
+
+	if (!monitor) {
+		return (
+			<section className="flex flex-col gap-1">
+				<p className="m-0 text-3xl leading-9 font-semibold tracking-[-0.01em] text-ink-300">Not monitoring</p>
+				<p className="m-0 text-sm leading-5 text-ink-200">Enable the monitor to follow the target the mount tracks. It runs on the server, so it keeps going when this tab closes.</p>
+			</section>
+		)
+	}
+
+	const seconds = secondsToTransit(monitor, now)
+	const stale = monitor.timing.secondsToTransit !== undefined && seconds === undefined
+	const forecast = monitor.availability === 'monitoring' && seconds !== undefined
+	const next = forecast ? nextMeridianEvent(monitor.timing, now) : undefined
+	const [mechanical, mechanicalTone] = MECHANICAL[monitor.mechanical]
+	const tone = monitor.mechanical === 'flipCandidate' && monitor.timing.phase === 'pastDeadline' ? 'danger' : mechanicalTone
+	const headline = forecast ? formatTransitOffset(seconds) : stale ? 'Stale' : MERIDIAN_AVAILABILITY_LABELS[monitor.availability]
+	const phase = stale ? `The last sample, at ${formatClockTime(monitor.sampledAt, timeZone, { seconds: true })}, is too old to count down from.` : meridianPhaseText(monitor, now)
+
 	return (
-		<section className="flex min-w-0 flex-col gap-3 rounded-sm border border-line-100 bg-base-100 p-4">
-			<h2 className="m-0 text-sm font-semibold text-ink-100">{title}</h2>
-			{children}
+		<section className="flex flex-col gap-4">
+			<div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-3">
+				<div className="flex min-w-0 flex-col gap-1">
+					<p className={cn('m-0 text-3xl leading-9 font-semibold tracking-[-0.01em] tabular-nums', forecast ? 'text-ink-100' : 'text-ink-200')}>{headline}</p>
+					<p className="m-0 text-sm leading-5 text-ink-200 tabular-nums">
+						{phase}
+						{next && (
+							<span className="text-ink-300">
+								{' · '}
+								{next.label} {formatFromNow(next.at, now)}, at {formatLocalTime(next.at, timeZone, now)}
+							</span>
+						)}
+					</p>
+				</div>
+				<StatusBadge tone={tone} label={mechanical} title={monitor.reason ? REASONS[monitor.reason] : undefined} />
+			</div>
+			{forecast && <Timeline monitor={monitor} now={now} />}
+			{monitor.reason && <Notice>{REASONS[monitor.reason]}</Notice>}
 		</section>
 	)
 }
 
-// What the monitor observes now: the hour angle, the transit, the window, the pier sides, and the assessment.
-function ObservationPanel({ monitor }: { readonly monitor?: MeridianFlipMonitor }) {
+// Timeline from the early warning to the closing of the window, with the transit and now marked on it, at instant now
+// (Unix milliseconds); now off the scale is said rather than pinned to an edge.
+function Timeline({ monitor, now }: { readonly monitor: MeridianFlipMonitor; readonly now: number }) {
 	const timeZone = useActiveTimeZone()
-	const now = useNow(!!monitor)
+	const { warningAt, transitAt, windowOpensAt, deadlineWarningAt, windowClosesAt } = monitor.timing
 
-	if (!monitor) {
-		return (
-			<Panel title="Observation">
-				<Notice>Enable the monitor to follow the target the mount tracks.</Notice>
-			</Panel>
-		)
-	}
+	if (warningAt === undefined || transitAt === undefined || windowOpensAt === undefined || deadlineWarningAt === undefined || windowClosesAt === undefined) return null
 
-	const { timing, mount, reason } = monitor
-	const countdown = secondsToTransit(monitor, now)
-	const stale = timing.secondsToTransit !== undefined && countdown === undefined
+	const span = Math.max(windowClosesAt - warningAt, 60000)
+	const start = warningAt - span * 0.1
+	const end = windowClosesAt + span * 0.1
+	const fraction = (time: number) => (time - start) / (end - start)
+	const position = (time: number) => `${(Math.min(Math.max(fraction(time), 0), 1) * 100).toFixed(2)}%`
+	const width = (from: number, to: number) => `${((Math.max(to - from, 0) / (end - start)) * 100).toFixed(2)}%`
+	const inside = fraction(now) >= 0 && fraction(now) <= 1
 
 	return (
-		<Panel title="Observation">
-			<DataList>
-				<DataRow label="Status">{MERIDIAN_AVAILABILITY_LABELS[monitor.availability]}</DataRow>
-				<DataRow label="Phase">{stale ? 'Stale' : PHASES[timing.phase]}</DataRow>
-				<DataRow label={timing.phase === 'unavailable' ? 'Hour angle (geometry only)' : 'Hour angle'}>{timing.hourAngle === undefined ? MISSING : formatHourAngle(timing.hourAngle)}</DataRow>
-				<DataRow label="Transit">{stale ? 'Stale' : formatCountdown(countdown)}</DataRow>
-				<DataRow label="Transit at">{timing.transitAt === undefined ? MISSING : formatZonedDateTime(timing.transitAt, timeZone)}</DataRow>
-				<DataRow label="Window opens">{timing.windowOpensAt === undefined ? MISSING : formatZonedDateTime(timing.windowOpensAt, timeZone)}</DataRow>
-				<DataRow label="Window closes">{timing.windowClosesAt === undefined ? MISSING : formatZonedDateTime(timing.windowClosesAt, timeZone)}</DataRow>
-				<DataRow label="Forecast">{timing.quality === 'valid' ? 'Sidereal tracking' : timing.quality === 'approximate' ? 'Approximate' : MISSING}</DataRow>
-				<DataRow label="Tracking">{mount.tracking ? mount.trackMode.toLowerCase().replace(/^./, (c) => c.toUpperCase()) : 'Off'}</DataRow>
-				<DataRow label="Pier side (reported)">{PIER_SIDES[mount.pierSide]}</DataRow>
-				<DataRow label="Pier side (geometric)">{mount.expectedPierSide ? PIER_SIDES[mount.expectedPierSide] : MISSING}</DataRow>
-				<DataRow label="Flip" tone={monitor.mechanical === 'flipCandidate' ? 'danger' : 'default'}>
-					{MECHANICAL[monitor.mechanical]}
-				</DataRow>
-				<DataRow label="Sampled">{formatZonedDateTime(monitor.sampledAt, timeZone)}</DataRow>
-			</DataList>
-			{reason && <Notice>{REASONS[reason]}</Notice>}
-		</Panel>
+		<div className="flex flex-col gap-2">
+			<div className="relative mx-3 h-10">
+				{inside && (
+					<span className="absolute top-0 -translate-x-1/2 text-xs leading-4 text-ink-100" style={{ left: position(now) }}>
+						Now
+					</span>
+				)}
+				<div className={cn('absolute inset-x-0 top-5 h-2 rounded-full', TIMELINE.outside)} />
+				<div className={cn('absolute top-5 h-2 border-r border-base-000', TIMELINE.approach)} style={{ left: position(warningAt), width: width(warningAt, windowOpensAt) }} />
+				<div className={cn('absolute top-5 h-2 border-r border-base-000', TIMELINE.window)} style={{ left: position(windowOpensAt), width: width(windowOpensAt, deadlineWarningAt) }} />
+				<div className={cn('absolute top-5 h-2', TIMELINE.closing)} style={{ left: position(deadlineWarningAt), width: width(deadlineWarningAt, windowClosesAt) }} />
+				<div className={cn('absolute top-4 h-4', TIMELINE.transit)} style={{ left: position(transitAt) }} />
+				{inside && <div className={cn('absolute top-4 h-4 -translate-x-1/2', TIMELINE.now)} style={{ left: position(now) }} />}
+			</div>
+			<div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs leading-4 text-ink-300 tabular-nums">
+				<span>Warning {formatLocalTime(warningAt, timeZone, now)}</span>
+				<span>Transit {formatLocalTime(transitAt, timeZone, now)}</span>
+				<span>Opens {formatLocalTime(windowOpensAt, timeZone, now)}</span>
+				<span>Closes {formatLocalTime(windowClosesAt, timeZone, now)}</span>
+			</div>
+			{!inside && <Notice>{now < start ? 'Now is before the timeline, which starts shortly before the early warning.' : 'Now is past the end of the timeline: the window closed.'}</Notice>}
+			<ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-xs leading-4 text-ink-300">
+				{TIMELINE_LEGEND.map(({ mark, label }) => (
+					<li key={label} className="flex items-center gap-1.5">
+						<span className={cn('flex-none', mark)} />
+						{label}
+					</li>
+				))}
+			</ul>
+		</div>
 	)
 }
 
-interface SettingsPanelProps {
+// What the monitor observes at instant now (Unix milliseconds): its state, the hour angle, the instants of the passage,
+// the tracking, the pier sides, and the site the forecast follows, warned about when it is not the active observing
+// site's.
+function ObservationSection({ mount, monitor, now }: { readonly mount: RoleDevice; readonly monitor?: MeridianFlipMonitor; readonly now: number }) {
+	const timeZone = useActiveTimeZone()
+	const control = useSnapshot(controlRuntime)
+	const site = useActiveSite()
+
+	if (!monitor) {
+		return (
+			<FlipSection title="Observation">
+				<Notice>The observation of the mount shows here once the monitor is enabled.</Notice>
+			</FlipSection>
+		)
+	}
+
+	const { timing, mount: view } = monitor
+	const hourAngle = meridianHourAngle(monitor, now)
+	const mountState = watchedDeviceState(control, 'mount', mount.device)
+	const mountSite = monitor.reason === 'noSite' ? undefined : mountState?.site
+	const offset = mountSite && site ? mountSiteLongitudeOffset(toDeg(mountSite.longitude), site.longitude) : undefined
+
+	return (
+		<FlipSection title="Observation">
+			<DataList>
+				<DataRow label="Status">{MERIDIAN_AVAILABILITY_LABELS[monitor.availability]}</DataRow>
+				<DataRow label={timing.phase === 'unavailable' ? 'Hour angle (geometry only)' : 'Hour angle'}>{hourAngle === undefined ? MISSING : formatHourAngle(hourAngle)}</DataRow>
+				<DataRow label="Transit">{timing.transitAt === undefined ? MISSING : formatLocalTime(timing.transitAt, timeZone, now)}</DataRow>
+				<DataRow label="Window">{timing.windowOpensAt === undefined || timing.windowClosesAt === undefined ? MISSING : `${formatLocalTime(timing.windowOpensAt, timeZone, now)} to ${formatLocalTime(timing.windowClosesAt, timeZone, now)}`}</DataRow>
+				<DataRow label="Forecast">{timing.quality === 'valid' ? 'Sidereal tracking' : timing.quality === 'approximate' ? 'Approximate' : MISSING}</DataRow>
+				<DataRow label="Tracking">{view.tracking ? view.trackMode.toLowerCase().replace(/^./, (c) => c.toUpperCase()) : 'Off'}</DataRow>
+				<DataRow label="Pier side (reported)">{MERIDIAN_PIER_SIDES[view.pierSide]}</DataRow>
+				<DataRow label="Pier side (geometric)">{view.expectedPierSide ? MERIDIAN_PIER_SIDES[view.expectedPierSide] : MISSING}</DataRow>
+				<DataRow label="Mount site">{monitor.reason === 'noSite' ? 'Not reported' : mountSite ? formatGeographic(toDeg(mountSite.latitude), toDeg(mountSite.longitude)) : MISSING}</DataRow>
+				<DataRow label="Sampled">{formatClockTime(monitor.sampledAt, timeZone, { seconds: true })}</DataRow>
+			</DataList>
+			{offset !== undefined && Math.abs(offset) > MOUNT_SITE_LONGITUDE_TOLERANCE && (
+				<Notice>
+					The forecast follows the site the mount reports, {formatFixed(Math.abs(offset), 2)}° {offset > 0 ? 'east' : 'west'} of the active observing site, so its instants come about {formatFixed(Math.abs(offset) * 4, 0)} min {offset > 0 ? 'early' : 'late'} for the sky of the site. Send the active site to the
+					mount from Equipment Control.
+				</Notice>
+			)}
+		</FlipSection>
+	)
+}
+
+// Recent transitions of the monitor, newest first, at instant now (Unix milliseconds).
+function EventsSection({ monitorKey: key, now }: { readonly monitorKey?: string; readonly now: number }) {
+	const timeZone = useActiveTimeZone()
+	const state = useSnapshot(meridianFlipState)
+	const transitions = key ? (state.transitions[key] ?? []) : []
+
+	return (
+		<FlipSection title="Recent Events">
+			{transitions.length > 0 ? (
+				<div className="max-h-80 overflow-y-auto">
+					<Table columns={['Time', 'Event', 'Pier side']}>
+						{transitions.toReversed().map((transition) => (
+							<Row key={transition.transitionId}>
+								<Cell numeric>{formatLocalTime(transition.at, timeZone, now)}</Cell>
+								<Cell>{TRANSITIONS[transition.kind]}</Cell>
+								<Cell>{transition.previousPierSide ? `${MERIDIAN_PIER_SIDES[transition.previousPierSide]} → ${MERIDIAN_PIER_SIDES[transition.pierSide]}` : MERIDIAN_PIER_SIDES[transition.pierSide]}</Cell>
+							</Row>
+						))}
+					</Table>
+				</div>
+			) : (
+				<Notice>No events yet; the server keeps them while the monitor is enabled.</Notice>
+			)}
+		</FlipSection>
+	)
+}
+
+interface WindowSectionProps {
 	// Settings being edited, in seconds.
 	readonly draft: MeridianFlipSettings
 	// Replaces the settings being edited.
@@ -295,86 +441,41 @@ interface SettingsPanelProps {
 	readonly onApply: () => void
 }
 
-// Window settings in minutes, the settle time in seconds, and Apply.
-function SettingsPanel({ draft, onChange, monitor, saved, pending, onApply }: SettingsPanelProps) {
+// Flip window of the mount, a section of the contextual panel: the early warning, the window, and its closing warning in
+// minutes after the upper transit, the settle time in seconds, and Apply (or Remember while the monitor is off, whose
+// Enable also takes them).
+function WindowSection({ draft, onChange, monitor, saved, pending, onApply }: WindowSectionProps) {
 	const maximumMinutes = Math.floor(MERIDIAN_FLIP_MAXIMUM_SECONDS / 60)
-	const minutes = (field: keyof MeridianFlipSettings) => (value: number) => onChange({ ...draft, [field]: value * 60 })
 	const running = monitor?.settings
 	const changed = running ? !sameMeridianFlipSettings(draft, running) : !sameMeridianFlipSettings(draft, saved)
+	const minutes = (field: keyof MeridianFlipSettings) => (value: number) => onChange({ ...draft, [field]: value * 60 })
+	const inForce = running ?? saved
 
 	return (
-		<Panel title="Settings">
-			<div className="grid gap-3 sm:grid-cols-2">
-				<NumberInput label="Early warning" value={draft.earlyWarningSeconds / 60} min={0} max={maximumMinutes} suffix="min" disabled={pending} onChange={minutes('earlyWarningSeconds')} />
-				<NumberInput label="Deadline warning" value={draft.deadlineWarningSeconds / 60} min={0} max={(draft.maximumSeconds - draft.minimumSeconds) / 60} suffix="min" disabled={pending} onChange={minutes('deadlineWarningSeconds')} />
-				<NumberInput label="Window opens after" value={draft.minimumSeconds / 60} min={0} max={draft.maximumSeconds / 60} suffix="min" disabled={pending} onChange={minutes('minimumSeconds')} />
-				<NumberInput label="Window closes after" value={draft.maximumSeconds / 60} min={0} max={maximumMinutes} suffix="min" disabled={pending} onChange={minutes('maximumSeconds')} />
-				<NumberInput label="Settle time" value={draft.settleSeconds} min={0} max={MERIDIAN_FLIP_MAXIMUM_SETTLE_SECONDS} suffix="s" disabled={pending} onChange={(value) => onChange({ ...draft, settleSeconds: value })} />
-			</div>
+		<CollapsibleSection id="meridianFlip.window" title="Flip Window" summary={`${formatFixed(inForce.minimumSeconds / 60, 0)} to ${formatFixed(inForce.maximumSeconds / 60, 0)} min after transit`}>
+			<NumberInput label="Early warning" value={draft.earlyWarningSeconds / 60} min={0} max={maximumMinutes} suffix="min" disabled={pending} onChange={minutes('earlyWarningSeconds')} />
+			<NumberInput label="Window opens after transit" value={draft.minimumSeconds / 60} min={0} max={draft.maximumSeconds / 60} suffix="min" disabled={pending} onChange={minutes('minimumSeconds')} />
+			<NumberInput label="Window closes after transit" value={draft.maximumSeconds / 60} min={0} max={maximumMinutes} suffix="min" disabled={pending} onChange={minutes('maximumSeconds')} />
+			<NumberInput label="Closing warning" value={draft.deadlineWarningSeconds / 60} min={0} max={(draft.maximumSeconds - draft.minimumSeconds) / 60} suffix="min" disabled={pending} onChange={minutes('deadlineWarningSeconds')} />
+			<NumberInput label="Settle time" value={draft.settleSeconds} min={0} max={MERIDIAN_FLIP_MAXIMUM_SETTLE_SECONDS} suffix="s" disabled={pending} onChange={(value) => onChange({ ...draft, settleSeconds: value })} />
 			{running && changed && <Notice>The running monitor uses other settings until these are applied.</Notice>}
-			<Notice>Times are relative to the upper meridian transit. They are preferences of when to flip, not a physical limit of the mount, which only the mount itself enforces.</Notice>
+			<Notice>Preferences of when to flip, not a physical limit of the mount, which only the mount itself enforces.</Notice>
 			<Actions>
-				<Button variant="secondary" disabled={pending || !changed} onClick={onApply}>
+				<Button variant="secondary" disabled={pending || !changed} title={changed ? undefined : 'Nothing changed.'} onClick={onApply}>
 					{running ? 'Apply' : 'Remember'}
 				</Button>
 			</Actions>
-		</Panel>
+		</CollapsibleSection>
 	)
 }
 
-// Timeline from the early warning to the closing of the window, with the transit and now marked.
-function TimelinePanel({ monitor }: { readonly monitor: MeridianFlipMonitor }) {
+// Whether a hypothetical next exposure ends within the preferred window, asked of the server on demand, a section of the
+// contextual panel; the exposure starts from the one set for the main camera.
+function ExposureSection({ device, monitor }: { readonly device?: DeviceSummary; readonly monitor?: MeridianFlipMonitor }) {
 	const timeZone = useActiveTimeZone()
-	const now = useNow()
-	const { warningAt, transitAt, windowOpensAt, deadlineWarningAt, windowClosesAt } = monitor.timing
-	const stale = secondsToTransit(monitor, now) === undefined
-
-	if (warningAt === undefined || transitAt === undefined || windowOpensAt === undefined || deadlineWarningAt === undefined || windowClosesAt === undefined || stale) {
-		return (
-			<Panel title="Timeline">
-				<Notice>{stale && monitor.timing.transitAt !== undefined ? 'The last sample is stale.' : 'No forecast while the mount does not track a settled target.'}</Notice>
-			</Panel>
-		)
-	}
-
-	const span = Math.max(windowClosesAt - warningAt, 60000)
-	const start = warningAt - span * 0.1
-	const end = windowClosesAt + span * 0.1
-	const position = (time: number) => `${(Math.min(Math.max((time - start) / (end - start), 0), 1) * 100).toFixed(2)}%`
-	const width = (from: number, to: number) => `${((Math.max(to - from, 0) / (end - start)) * 100).toFixed(2)}%`
-
-	return (
-		<Panel title="Timeline">
-			<div className="relative h-8">
-				<div className={cn('absolute inset-x-0 top-3 h-2 rounded-full', TIMELINE.outside)} />
-				<div className={cn('absolute top-3 h-2', TIMELINE.approach)} style={{ left: position(warningAt), width: width(warningAt, windowOpensAt) }} />
-				<div className={cn('absolute top-3 h-2', TIMELINE.window)} style={{ left: position(windowOpensAt), width: width(windowOpensAt, deadlineWarningAt) }} />
-				<div className={cn('absolute top-3 h-2', TIMELINE.closing)} style={{ left: position(deadlineWarningAt), width: width(deadlineWarningAt, windowClosesAt) }} />
-				<div className={cn('absolute top-1 h-6', TIMELINE.transit)} style={{ left: position(transitAt) }} />
-				<div className={cn('absolute top-0 h-8 -translate-x-6/12', TIMELINE.now)} style={{ left: position(now) }} />
-			</div>
-			<div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs leading-4 text-ink-300">
-				<span>Warning {formatZonedDateTime(warningAt, timeZone)}</span>
-				<span>Transit {formatZonedDateTime(transitAt, timeZone)}</span>
-				<span>Window {formatZonedDateTime(windowOpensAt, timeZone)}</span>
-				<span>Closes {formatZonedDateTime(windowClosesAt, timeZone)}</span>
-			</div>
-			<ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-xs leading-4 text-ink-300">
-				{TIMELINE_LEGEND.map(({ mark, label }) => (
-					<li key={label} className="flex items-center gap-1.5">
-						<span className={cn('flex-none', mark)} />
-						{label}
-					</li>
-				))}
-			</ul>
-		</Panel>
-	)
-}
-
-// Whether a hypothetical next exposure ends within the preferred window, asked of the server on demand.
-function ExposurePanel({ device, monitor }: { readonly device?: DeviceSummary; readonly monitor?: MeridianFlipMonitor }) {
-	const timeZone = useActiveTimeZone()
-	const [exposure, setExposure] = useState(300)
+	const profile = activeProfile(useSnapshot(profileState))
+	const camera = useRoleDevice('MAIN_CAMERA')
+	const [exposure, setExposure] = useState(() => exposureSettings(profile.settings, profileCamera(profile, camera.device?.id)).exposureTime)
 	const [overhead, setOverhead] = useState(10)
 	const [result, setResult] = useState<{ readonly assessment: MeridianExposureAssessment } | { readonly error: string }>()
 	const [busy, setBusy] = useState(false)
@@ -389,13 +490,11 @@ function ExposurePanel({ device, monitor }: { readonly device?: DeviceSummary; r
 	const assessment = result && 'assessment' in result ? result.assessment : undefined
 
 	return (
-		<Panel title="Exposure Forecast">
-			<div className="grid gap-3 sm:grid-cols-2">
-				<NumberInput label="Exposure" value={exposure} min={0} max={86400} suffix="s" onChange={setExposure} />
-				<NumberInput label="Overhead" value={overhead} min={0} max={3600} suffix="s" onChange={setOverhead} />
-			</div>
+		<CollapsibleSection id="meridianFlip.exposure" title="Exposure Forecast" summary={assessment ? DECISIONS[assessment.decision] : undefined} defaultOpen={false}>
+			<NumberInput label="Exposure" value={exposure} min={0} max={86400} suffix="s" onChange={setExposure} />
+			<NumberInput label="Overhead" value={overhead} min={0} max={3600} suffix="s" onChange={setOverhead} />
 			<Actions>
-				<Button variant="secondary" disabled={!monitor || busy} title={monitor ? undefined : 'Enable the monitor first.'} onClick={() => void assess()}>
+				<Button variant="secondary" disabled={!monitor || busy} title={monitor ? 'Asks the server; starts and changes nothing.' : 'Enable the monitor first.'} onClick={() => void assess()}>
 					{busy ? 'Assessing…' : 'Assess'}
 				</Button>
 			</Actions>
@@ -405,40 +504,12 @@ function ExposurePanel({ device, monitor }: { readonly device?: DeviceSummary; r
 					<DataRow label="Next exposure" tone={assessment.decision === 'allowed' ? 'success' : assessment.decision === 'blocked' ? 'danger' : 'default'}>
 						{DECISIONS[assessment.decision]}
 					</DataRow>
-					{assessment.decision === 'allowed' && assessment.latestSafeStartAt !== undefined && <DataRow label="Latest start">{formatZonedDateTime(assessment.latestSafeStartAt, timeZone)}</DataRow>}
-					{assessment.decision === 'defer' && assessment.reevaluateAt !== undefined && <DataRow label="Ask again at">{formatZonedDateTime(assessment.reevaluateAt, timeZone)}</DataRow>}
+					{assessment.decision === 'allowed' && assessment.latestSafeStartAt !== undefined && <DataRow label="Latest start">{formatLocalTime(assessment.latestSafeStartAt, timeZone)}</DataRow>}
+					{assessment.decision === 'defer' && assessment.reevaluateAt !== undefined && <DataRow label="Ask again at">{formatLocalTime(assessment.reevaluateAt, timeZone)}</DataRow>}
 					<DataRow label="Duration">{formatDuration(exposure + overhead)}</DataRow>
 				</DataList>
 			)}
-			{assessment && <Notice>{assessment.reason}.</Notice>}
-			<Notice>A preview only: it starts and changes nothing, and it holds for the current target at the moment it was asked.</Notice>
-		</Panel>
-	)
-}
-
-// Recent transitions of the monitor, newest first.
-function EventsPanel({ monitorKey: key }: { readonly monitorKey?: string }) {
-	const timeZone = useActiveTimeZone()
-	const state = useSnapshot(meridianFlipState)
-	const transitions = key ? (state.transitions[key] ?? []) : []
-
-	return (
-		<Panel title="Recent Events">
-			{transitions.length > 0 ? (
-				<div className="max-h-80 overflow-y-auto">
-					<Table columns={['Time', 'Event', 'Pier side']}>
-						{transitions.toReversed().map((transition) => (
-							<Row key={transition.transitionId}>
-								<Cell numeric>{formatZonedDateTime(transition.at, timeZone)}</Cell>
-								<Cell>{TRANSITIONS[transition.kind]}</Cell>
-								<Cell>{transition.previousPierSide ? `${PIER_SIDES[transition.previousPierSide]} → ${PIER_SIDES[transition.pierSide]}` : PIER_SIDES[transition.pierSide]}</Cell>
-							</Row>
-						))}
-					</Table>
-				</div>
-			) : (
-				<Notice>No events yet. They are kept by the server while the monitor is enabled.</Notice>
-			)}
-		</Panel>
+			{assessment && <Notice>{assessment.reason}. It holds for the current target at the moment it was asked.</Notice>}
+		</CollapsibleSection>
 	)
 }

@@ -253,8 +253,8 @@ describe('positions, distances, and instants', () => {
 			setActiveSiteZone('America/Sao_Paulo')
 			expect(formatZonedDateTime(time, 'America/Sao_Paulo')).toBe('2026-11-05 11:23:05')
 			expect(formatZonedDateTime(time, 'UTC')).toBe('2026-11-05 14:23:05 UTC')
-			expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23')
-			expect(formatLocalTime(time + 86_400_000, 'America/Sao_Paulo', time)).toBe('Nov 6, 11:23')
+			expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23:05')
+			expect(formatLocalTime(time + 86_400_000, 'America/Sao_Paulo', time)).toBe('Nov 6, 11:23:05')
 			expect(formatLongDateTime(time, 'America/Sao_Paulo')).toBe('Nov 05, 2026, 11:23:05')
 			expect(formatClockTime(time, 'America/Sao_Paulo', { named: true })).toBe('11:23')
 			expect(formatClockTime(time, 'Asia/Tokyo', { named: true })).toBe('23:23 GMT+9')
@@ -299,13 +299,15 @@ describe('positions, distances, and instants', () => {
 	})
 
 	test('a local time names its zone and shows its date on another day than the reference', () => {
-		const time = Date.UTC(2026, 9, 18, 14, 23)
-		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23 GMT-3')
-		expect(formatLocalTime(time, 'UTC')).toBe('14:23 UTC')
-		expect(formatLocalTime(time + 86_400_000, 'UTC', time)).toBe('Oct 19, 14:23 UTC')
+		const time = Date.UTC(2026, 9, 18, 14, 23, 5)
+		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23:05 GMT-3')
+		expect(formatLocalTime(time, 'UTC')).toBe('14:23:05 UTC')
+		expect(formatLocalTime(time + 86_400_000, 'UTC', time)).toBe('Oct 19, 14:23:05 UTC')
 		// 23:00 UTC is already the next day in Tokyo.
-		expect(formatLocalTime(Date.UTC(2026, 9, 18, 23), 'Asia/Tokyo', time)).toBe('Oct 19, 08:00 GMT+9')
+		expect(formatLocalTime(Date.UTC(2026, 9, 18, 23), 'Asia/Tokyo', time)).toBe('Oct 19, 08:00:00 GMT+9')
 		expect(formatLocalTime(Number.NaN, 'UTC')).toBe(MISSING)
+		expect(formatLocalTime(time, 'America/Sao_Paulo', undefined, false)).toBe('11:23 GMT-3')
+		expect(formatLocalTime(time, 'UTC', undefined, false)).toBe('14:23 UTC')
 	})
 
 	test('a long date and time names its zone, which follows daylight saving time', () => {

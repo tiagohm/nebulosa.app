@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import type { MeridianFlipArm, MeridianFlipExecution, MeridianFlipExecutorEvent } from 'api'
+import type { MeridianFlipArm, MeridianFlipExecution, MeridianFlipExecutorEvent, MeridianFlipOutcome } from 'api'
 import { proxy } from 'valtio'
 import { DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY } from '../../profile/schema'
 import { monitorKey } from './meridianflip'
-import { applyMeridianFlipExecutorSnapshot, cancelMeridianFlip, disarmMeridianFlip, executeMeridianFlip, handleMeridianFlipExecutorEvent, latestExecution, meridianFlipExecutionHeadline, type MeridianFlipExecutorState, resumePausedCapture } from './meridianflipexecutor'
+import { applyMeridianFlipExecutorSnapshot, cancelMeridianFlip, capturePausedBy, disarmMeridianFlip, executeMeridianFlip, handleMeridianFlipExecutorEvent, latestExecution, meridianFlipExecutionHeadline, type MeridianFlipExecutorState, resumePausedCapture } from './meridianflipexecutor'
 
 function newState() {
 	return proxy<MeridianFlipExecutorState>({ revision: 0, executions: {}, arms: {}, pending: {}, errors: {} })
@@ -95,6 +95,26 @@ describe('mirror', () => {
 		expect(meridianFlipExecutionHeadline({ state: 'running', step: 'flipping' })).toEqual(['Flipping', 'active'])
 		expect(meridianFlipExecutionHeadline({ state: 'completed' })).toEqual(['Flipped', 'success'])
 		expect(meridianFlipExecutionHeadline({ state: 'blocked' })).toEqual(['Needs attention', 'danger'])
+	})
+
+	test('a failed execution whose mount crossed the meridian reads as a flip, not as one that never happened', () => {
+		const outcome = { verification: 'unverified', flipCommandCompleted: true, movementObserved: true } as MeridianFlipOutcome
+		expect(meridianFlipExecutionHeadline({ state: 'failed', outcome })).toEqual(['Flipped, not verified', 'warning'])
+		expect(meridianFlipExecutionHeadline({ state: 'failed', outcome: { ...outcome, verification: 'inferred' } })).toEqual(['Flipped, not ready', 'warning'])
+		expect(meridianFlipExecutionHeadline({ state: 'failed', outcome: { ...outcome, movementObserved: false } })).toEqual(['Not completed', 'danger'])
+		expect(meridianFlipExecutionHeadline({ state: 'failed' })).toEqual(['Not completed', 'danger'])
+	})
+
+	test('a capture counts as left paused only while the same session still waits for the operator', () => {
+		const ended = { state: 'failed', setup: { camera: { connectionId: 'c', deviceId: 'cam' } }, captureSessionId: 's1', outcome: { captureRestoration: 'leftSuspended' } } as Pick<MeridianFlipExecution, 'state' | 'outcome' | 'setup' | 'captureSessionId'>
+		const waiting = { 'c:cam': { sessionId: 's1', suspension: { state: 'released' } } }
+
+		expect(capturePausedBy(ended, waiting)).toBe(true)
+		expect(capturePausedBy(ended, { 'c:cam': { sessionId: 's2', suspension: { state: 'released' } } })).toBe(false)
+		expect(capturePausedBy(ended, { 'c:cam': { sessionId: 's1' } })).toBe(false)
+		expect(capturePausedBy({ ...ended, state: 'running' }, waiting)).toBe(false)
+		expect(capturePausedBy({ ...ended, outcome: { captureRestoration: 'resumed' } as MeridianFlipOutcome }, waiting)).toBe(false)
+		expect(capturePausedBy(undefined, waiting)).toBe(false)
 	})
 })
 

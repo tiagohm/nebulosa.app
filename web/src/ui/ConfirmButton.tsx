@@ -16,17 +16,19 @@ export interface ConfirmButtonProps extends Omit<ButtonProps, 'onClick'> {
 	readonly onConfirm: () => void
 	// Whether the command destroys something that cannot be recovered, which draws its confirming button in the danger tone.
 	readonly destructive?: boolean
+	// Tooltip of the button, such as why it is disabled; title names the dialog.
+	readonly tooltip?: string
 }
 
 // Button that opens a confirmation dialog and runs its command only once confirmed; Cancel or closing the dialog runs
 // nothing. The dialog opens with Cancel focused, so a stray Enter or Space never runs the command: confirming takes a
 // deliberate move to the confirm button.
-export function ConfirmButton({ title, message, confirmLabel, onConfirm, destructive = false, size = 'md', variant = 'secondary', ...props }: ConfirmButtonProps) {
+export function ConfirmButton({ title, message, confirmLabel, onConfirm, destructive = false, tooltip, size = 'md', variant = 'secondary', ...props }: ConfirmButtonProps) {
 	const [open, setOpen] = useState(false)
 
 	return (
 		<>
-			<Button size={size} variant={variant} {...props} onClick={() => setOpen(true)} />
+			<Button size={size} variant={variant} {...props} title={tooltip} onClick={() => setOpen(true)} />
 			<Modal open={open} onClose={() => setOpen(false)} title={title} className="max-w-md">
 				<div className="m-0 text-sm leading-5 text-ink-200">{message}</div>
 				<ModalActions>

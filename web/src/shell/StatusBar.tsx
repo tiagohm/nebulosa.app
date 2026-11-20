@@ -11,7 +11,7 @@ import { notificationsState } from '../notifications/notifications'
 import { operationsState } from '../operations'
 import { activeProfile, activeSetup, astronomicalClockPreferences, profileState, statusChipPreferences } from '../profile/profile'
 import { meridianFlipState, monitorKey } from '../tools/meridianflip/meridianflip'
-import { latestExecution, MERIDIAN_FLIP_STEP_LABELS, meridianFlipExecutorState } from '../tools/meridianflip/meridianflipexecutor'
+import { capturePausedBy, latestExecution, MERIDIAN_FLIP_STEP_LABELS, meridianFlipExecutorState } from '../tools/meridianflip/meridianflipexecutor'
 import { Icon, type IconName } from '../ui/Icon'
 import { astronomicalClockRuntime, effectiveReadings, watchAstronomicalClock } from './statusbar/astronomicalclock'
 import { AstronomicalClockChip } from './statusbar/AstronomicalClockChip'
@@ -136,7 +136,7 @@ export function StatusBar() {
 	const mountState = watchedDeviceState(control, 'mount', mount)
 	const monitor = mount ? meridianFlip.monitors[monitorKey(mount.connectionId, mount.id)] : undefined
 	const flip = mount ? latestExecution(meridianFlipExecutor, mount.connectionId, mount.id) : undefined
-	const executor = mount && { step: flip?.state === 'running' && flip.step ? MERIDIAN_FLIP_STEP_LABELS[flip.step] : undefined, armed: meridianFlipExecutor.arms[monitorKey(mount.connectionId, mount.id)] !== undefined }
+	const executor = mount && { step: flip?.state === 'running' && flip.step ? MERIDIAN_FLIP_STEP_LABELS[flip.step] : undefined, armed: meridianFlipExecutor.arms[monitorKey(mount.connectionId, mount.id)] !== undefined, paused: capturePausedBy(flip, captures.sessions) }
 	const capture = activeCapture(captures.sessions, mainCamera)
 	const session = activeGuiding(guiding.sessions, roleDevice(setup, 'GUIDE_CAMERA', devices))
 	const errors = scopedDeviceErrors({ serverId, devices, control })

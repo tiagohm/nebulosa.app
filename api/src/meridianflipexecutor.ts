@@ -817,7 +817,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 				const accepted = acceptsVerification(verification, policy)
 				this.#stepEnd(session, accepted ? 'done' : 'failed', `The flip is ${verification}`)
 
-				if (!accepted) fail('failed', verification === 'unverified' ? 'noFlipEvidence' : 'notReady', verification === 'unverified' ? 'The flip could not be established; imaging stays paused' : 'The flip was inferred, which the policy does not accept for imaging to go on by itself')
+				if (!accepted) fail('failed', verification === 'unverified' ? 'noFlipEvidence' : 'notReady', verification === 'unverified' ? 'The flip could not be established; imaging does not go on by itself' : 'The flip was inferred, which the policy does not accept for imaging to go on by itself')
 			}
 
 			// Recenters and refocuses, only once the flip is accepted.

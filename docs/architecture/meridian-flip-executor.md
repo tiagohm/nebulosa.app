@@ -31,7 +31,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   States: `completed` (ready), `failed` (with `code`), `blocked` (the flip motion failed with the mount still moving: the operator must look), `cancelled` (`POST /api/meridian-flip/executions/:sessionId/cancel`, which cancels its operations through the reservation).
 - `GET /api/meridian-flip/executions` is the snapshot (`epoch`, `revision`, the running and last 50 executions, the arms), `GET …/executions/:sessionId` one execution;
   `meridianFlipExecutor:updated` and `meridianFlipExecutor:armed` (arm absent once removed) carry the epoch and the service revision.
-  Notifications report each ended execution once (`meridianFlip.verified`, `.inferred`, `.unverified`, `.failed`, `.blocked`, `.cancelled`), saying when the capture stays paused.
+  Notifications report each ended execution once (`meridianFlip.verified`, `.inferred`, `.unverified`, `.failed`, `.blocked`, `.cancelled`), saying when the capture stays paused; an unverified flip whose mount was seen moving after a completed command is a warning (Meridian flip not verified), since the mount did cross the meridian, and every other failure an error.
 - Nothing survives the process: arms, executions, passages, and the reservation are memory only; a restart re-arms nothing and replays no motion.
   The policy is a profile preference of the web.
 - Limitations: one capture (the main camera's) is paused, a capture admitted under a reservation is never paused, a non-sidereal target is never flipped, the firmware limit is only what the operator enters, a dome is not slaved, no rotator is moved, and the plate-solution inference is supporting evidence, never a mechanical confirmation.

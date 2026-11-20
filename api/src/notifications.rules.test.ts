@@ -8,7 +8,7 @@ import type { FlatWizardSessionSummary } from './flatwizard'
 import type { GuidingSessionSummary } from './guiding'
 import type { IPolarSessionSummary } from './ipolar'
 import type { MeridianFlipTransition } from './meridianflip'
-import type { MeridianFlipExecution } from './meridianflipexecutor'
+import type { MeridianFlipArm, MeridianFlipExecution } from './meridianflipexecutor'
 import { failureText, NotificationClassifier } from './notifications.rules'
 import type { OperationRecord } from './operations'
 import type { TargetCenteringSessionSummary } from './targetcentering'
@@ -269,6 +269,22 @@ describe('meridian flip monitor', () => {
 		}
 	})
 
+	test('a flip armed or running for the mount silences the candidate and the closing window, not the end of the window', () => {
+		const quiet = new NotificationClassifier()
+		const armed = (arm: boolean): ServerEvent => ({ type: 'meridianFlipExecutor:armed', epoch: 'e', revision: 1, key: { connectionId: 'c', deviceId: 'mnt' }, arm: arm ? ({ armId: 'a' } as MeridianFlipArm) : undefined })
+		const execution = (state: MeridianFlipExecution['state']): ServerEvent => ({ type: 'meridianFlipExecutor:updated', epoch: 'e', revision: 2, execution: { sessionId: 's', connectionId: 'c', deviceId: 'mnt', mountName: 'EQ6', state } as MeridianFlipExecution })
+
+		expect(quiet.classify(armed(true))).toEqual([])
+		expect(quiet.classify(transition('flipCandidate'))).toEqual([])
+		expect(quiet.classify(armed(false))).toEqual([])
+		expect(quiet.classify(execution('running'))).toEqual([])
+		expect(quiet.classify(transition('deadlineApproaching'))).toEqual([])
+		expect(quiet.classify(transition('deadlinePassed', { phase: 'pastDeadline' }))).toHaveLength(1)
+		expect(quiet.classify(transition('flipCandidate', { deviceId: 'other' }))).toHaveLength(1)
+		quiet.classify(execution('cancelled'))
+		expect(quiet.classify(transition('flipCandidate'))).toHaveLength(1)
+	})
+
 	test('every text fits its limits', () => {
 		for (const kind of ['flipCandidate', 'deadlineApproaching', 'deadlinePassed', 'monitorUnavailable'] as const) {
 			for (const draft of classifier.classify(transition(kind))) {
@@ -319,5 +335,18 @@ describe('meridian flip executor', () => {
 
 		expect(draft).toMatchObject({ code: 'meridianFlip.failed', message: 'The flip of EQ6 did not leave imaging ready: the result of a command could not be established.' })
 		expect(draft.message).not.toContain('secret')
+	})
+
+	test('a mount seen crossing the meridian without evidence of its new side is a warning, not a failure', () => {
+		const outcome = { verification: 'unverified', flipCommandCompleted: true, movementObserved: true, captureRestoration: 'notNeeded' }
+		const execution = { sessionId: 'u', connectionId: 'c', deviceId: 'mnt', mountName: 'EQ6', state: 'failed', code: 'noFlipEvidence', outcome } as unknown as MeridianFlipExecution
+		const [draft] = classifier.classify({ type: 'meridianFlipExecutor:updated', epoch: 'e', revision: 1, execution })
+
+		expect(draft).toMatchObject({ level: 'warning', code: 'meridianFlip.unverified', title: 'Meridian flip not verified' })
+		expect(draft.message).toStartWith('EQ6 moved across the meridian')
+		expect(draft.message).not.toContain('paused')
+
+		const still = { ...execution, sessionId: 'v', outcome: { ...outcome, movementObserved: false } } as MeridianFlipExecution
+		expect(classifier.classify({ type: 'meridianFlipExecutor:updated', epoch: 'e', revision: 2, execution: still })[0]).toMatchObject({ level: 'error', code: 'meridianFlip.unverified', title: 'Meridian flip not completed' })
 	})
 })

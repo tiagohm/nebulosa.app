@@ -87,13 +87,13 @@ test('a time in the zone of the active site leaves its zone unnamed, following t
 	const stop = watchActiveSiteZone(profiles, sites)
 
 	try {
-		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23 GMT-3')
+		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23:00 GMT-3')
 		sites.sites.push({ ...HOME, id: 'home', name: 'Home', timeZone: 'America/Sao_Paulo' })
 		profiles.profiles[0].activeSiteId = 'home'
-		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23')
-		expect(formatLocalTime(time, 'UTC')).toBe('14:23 UTC')
+		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23:00')
+		expect(formatLocalTime(time, 'UTC')).toBe('14:23:00 UTC')
 		profiles.activeId = 'b'
-		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23 GMT-3')
+		expect(formatLocalTime(time, 'America/Sao_Paulo')).toBe('11:23:00 GMT-3')
 	} finally {
 		stop()
 	}

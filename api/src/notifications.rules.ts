@@ -187,7 +187,8 @@ const COMMAND_TEXT: Readonly<Record<string, string>> = {
 
 // Classifier of the server events. It remembers only what a transition needs: the endpoints of the open
 // connections, the connections closed on request (whose sessions then fail quietly), the number of losses of
-// each connection, and the guide camera of each active guiding session.
+// each connection, the guide camera of each active guiding session, and the mounts whose meridian flip is armed or
+// running.
 export class NotificationClassifier {
 	// Endpoint of each open connection, by connection id.
 	readonly #endpoints = new Map<string, ConnectRequest>()
@@ -200,6 +201,10 @@ export class NotificationClassifier {
 	readonly #epoch = Bun.randomUUIDv7()
 	// Guide camera of each active guiding session, by session id.
 	readonly #guidingCameras = new Map<string, OperationDevice>()
+	// Mounts with a meridian flip armed or scheduled, by flipKey; the Executor already acts on their passage.
+	readonly #flipArmed = new Set<string>()
+	// Mounts with a meridian flip running, by flipKey.
+	readonly #flipRunning = new Set<string>()
 
 	// Creates the classifier; deviceName names the devices of operations, which carry only ids.
 	constructor(readonly deviceName: DeviceNameResolver = () => undefined) {}
@@ -241,6 +246,10 @@ export class NotificationClassifier {
 				return this.#meridianFlip(event.transition)
 			case 'meridianFlipExecutor:updated':
 				return this.#meridianFlipExecution(event.execution)
+			case 'meridianFlipExecutor:armed':
+				if (event.arm) this.#flipArmed.add(flipKey(event.key.connectionId, event.key.deviceId))
+				else this.#flipArmed.delete(flipKey(event.key.connectionId, event.key.deviceId))
+				return []
 			case 'indi:globalMessage':
 				return [{ key: `indi:global:${event.connectionId}:${event.epoch}:${event.id}`, level: 'info', code: 'indi.globalMessage', title: 'INDI Server', message: event.text, source: this.#indiSource(event.connectionId) }]
 			case 'indi:globalMessagesSuppressed':
@@ -261,9 +270,13 @@ export class NotificationClassifier {
 
 	// Warns about the transitions of a Meridian Flip Monitor an operator acts on: the preferred window reached with a
 	// flip candidate, its end nearing or passed with the candidate still pending (once per episode each), and the mount
-	// lost near the meridian. Never a verified flip, and never telemetry.
+	// lost near the meridian. Never a verified flip, and never telemetry. The candidate and the nearing end are left out
+	// while a flip of the mount is armed or running, since the Executor is already flipping that passage and reports how
+	// it ended itself.
 	#meridianFlip(transition: MeridianFlipTransition): NotificationDraft[] {
 		const { kind, monitorId, episodeId, transitionId, connectionId, deviceId, phase } = transition
+		const key = flipKey(connectionId, deviceId)
+		if ((kind === 'flipCandidate' || kind === 'deadlineApproaching') && (this.#flipArmed.has(key) || this.#flipRunning.has(key))) return []
 		const name = this.deviceName(connectionId, deviceId) ?? 'The mount'
 		const source: NotificationSource = { kind: 'meridianFlip', connectionId, endpoint: this.#endpoints.get(connectionId), deviceId }
 		const base = { key: `meridianFlip:${monitorId}:${episodeId}:${kind}`, level: 'warning', source, target: { kind: 'tool', tool: 'meridian-flip-monitor' } } as const
@@ -288,7 +301,14 @@ export class NotificationClassifier {
 	#meridianFlipExecution(execution: MeridianFlipExecution): NotificationDraft[] {
 		const { sessionId, state, connectionId, deviceId, mountName, outcome, code } = execution
 		const why = code ? MERIDIAN_FLIP_FAILURE_TEXT[code] : 'an error occurred'
-		if (state === 'running') return []
+		const key = flipKey(connectionId, deviceId)
+
+		if (state === 'running') {
+			this.#flipRunning.add(key)
+			return []
+		}
+
+		this.#flipRunning.delete(key)
 
 		const source: NotificationSource = { kind: 'meridianFlip', connectionId, endpoint: this.#endpoints.get(connectionId), deviceId }
 		const base = { key: `meridianFlipExecutor:${sessionId}`, source, target: { kind: 'tool', tool: 'meridian-flip-monitor' } } as const
@@ -302,6 +322,11 @@ export class NotificationClassifier {
 			case 'cancelled':
 				return [{ ...base, level: 'warning', code: 'meridianFlip.cancelled', title: 'Meridian flip cancelled', message: `The flip of ${mountName} was cancelled.${paused}` }]
 			default:
+				// A mount seen moving after a completed command did cross the meridian; only its new side is not established.
+				if (outcome?.verification === 'unverified' && outcome.flipCommandCompleted && outcome.movementObserved) {
+					return [{ ...base, level: 'warning', code: 'meridianFlip.unverified', title: 'Meridian flip not verified', message: `${mountName} moved across the meridian, but the flip could not be established: ${why}. Check the mount and the framing before imaging goes on.${paused}` }]
+				}
+
 				return [{ ...base, level: 'error', code: outcome?.verification === 'unverified' && outcome.flipCommandCompleted ? 'meridianFlip.unverified' : 'meridianFlip.failed', title: 'Meridian flip not completed', message: `The flip of ${mountName} did not leave imaging ready: ${why}.${paused}` }]
 		}
 	}
@@ -553,6 +578,11 @@ export class NotificationClassifier {
 	#source(kind: string, connectionId: string, deviceId: string, operationId?: string, sessionId?: string): NotificationSource {
 		return { kind, connectionId, endpoint: this.#endpoints.get(connectionId), deviceId, operationId, sessionId }
 	}
+}
+
+// Key of a mount among the flips the classifier follows: its connection and exact device id.
+function flipKey(connectionId: string, deviceId: string) {
+	return JSON.stringify([connectionId, deviceId])
 }
 
 // Target opening a tool of a camera tab.

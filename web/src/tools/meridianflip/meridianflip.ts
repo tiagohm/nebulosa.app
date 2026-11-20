@@ -1,12 +1,16 @@
-import type { MeridianAvailability, MeridianExposureAssessment, MeridianExposureRequest, MeridianFlipMonitor, MeridianFlipSettings, MeridianFlipSnapshot, MeridianFlipTransition, ServerEvent } from 'api'
+import type { MeridianAvailability, MeridianExposureAssessment, MeridianExposureRequest, MeridianFlipMonitor, MeridianFlipSettings, MeridianFlipSnapshot, MeridianFlipTransition, MeridianMountView, MeridianTiming, MeridianTimingPhase, ServerEvent } from 'api'
+import { PI, SIDEREAL_DRIFT_RATE, TAU } from 'nebulosa/src/core/constants'
+import type { MountType } from 'nebulosa/src/devices/indi/device'
 import { proxy } from 'valtio'
-import { formatSignedClockDuration } from '../../format'
+import { formatClockDuration } from '../../format'
 import { type ApiFetch, browserFetch, jsonInit, responseError } from '../../http'
 import { MERIDIAN_FLIP_MAXIMUM_SECONDS } from '../../profile/schema'
+import type { ViewEntry } from '../../profile/view'
 import type { StatusTone } from '../../ui/StatusBadge'
 
 // Mirror of the Meridian Flip Monitors of the server, of every mount and connection, their recent transitions, and the
-// requests this tab sends to enable, disable, and update them. The monitors are the server's: this mirror is fed by
+// requests this tab sends to enable, disable, and update them, with the words and interpolations the tool and the
+// status bar read them by, and the section of the tool this tab shows. The monitors are the server's: this mirror is fed by
 // GET /api/meridian-flip and the meridianFlip:updated and meridianFlip:transition events, and no tab, profile, or
 // route change enables, disables, or redirects one. Revisions order the snapshot and the events within one server
 // process (epoch), so a snapshot or a response older than an event already applied never brings back a disabled
@@ -40,6 +44,28 @@ export interface MeridianFlipState {
 
 // Monitors of the server, shared by every view of the tab.
 export const meridianFlipState = proxy<MeridianFlipState>({ revision: 0, monitors: {}, transitions: {}, pending: {}, errors: {} })
+
+// Section of the Meridian Flip tool: the passive monitor or the executor that flips.
+export type MeridianFlipSection = 'Monitor' | 'Executor'
+
+// Section of the tool this tab shows, kept across its reloads (meridianFlipViewEntry).
+export const meridianFlipView = proxy<{ section: MeridianFlipSection }>({ section: 'Monitor' })
+
+// Keeps the section of the Meridian Flip tool this tab shows.
+export function meridianFlipViewEntry(view: { section: MeridianFlipSection }): ViewEntry {
+	return {
+		name: 'meridianFlipSection',
+		store: view,
+		restore: (value) => {
+			if (value === 'Monitor' || value === 'Executor') view.section = value
+		},
+		value: () => (view.section === 'Executor' ? view.section : undefined),
+	}
+}
+
+// Difference of longitude between the site a mount reports and the active observing site beyond which the tool warns,
+// in degrees: a quarter of a degree moves every instant of the forecast by one minute of time.
+export const MOUNT_SITE_LONGITUDE_TOLERANCE = 0.25
 
 // Generation of the latest snapshot request; an older response is dropped.
 let generation = 0
@@ -233,24 +259,94 @@ export const MERIDIAN_AVAILABILITY_LABELS: Readonly<Record<MeridianAvailability,
 	monitoring: 'Monitoring',
 }
 
-// Headline of a monitor: its state in words and the tone it is shown with; Disabled without a monitor. Only a flip
-// candidate in or past the window is a warning or a danger, never a mount already on the expected side.
-export function meridianFlipHeadline(monitor: Pick<MeridianFlipMonitor, 'availability' | 'timing' | 'mechanical'> | undefined): readonly [string, StatusTone] {
+// Text of each pier side.
+export const MERIDIAN_PIER_SIDES: Readonly<Record<MeridianMountView['pierSide'], string>> = { EAST: 'East', WEST: 'West', NEITHER: 'Unknown' }
+
+// Text of each mount type.
+export const MOUNT_TYPE_LABELS: Readonly<Record<MountType, string>> = { EQ_GEM: 'German equatorial', EQ_FORK: 'Fork', ALTAZ: 'Altazimuth', UNKNOWN: 'Not reported' }
+
+// Headline of a monitor at instant now (Unix milliseconds; the instant of its sample when absent): its state in words
+// and the tone it is shown with; Disabled without a monitor. The approach is said apart before and after the transit,
+// in a neutral tone, since nothing runs then. Only a flip candidate in or past the window is a warning or a danger,
+// never a mount already on the expected side.
+export function meridianFlipHeadline(monitor: Pick<MeridianFlipMonitor, 'availability' | 'timing' | 'mechanical' | 'sampledAt'> | undefined, now?: number): readonly [string, StatusTone] {
 	if (!monitor) return ['Disabled', 'muted']
 	if (monitor.availability !== 'monitoring') return [MERIDIAN_AVAILABILITY_LABELS[monitor.availability], monitor.availability === 'waitingForMount' || monitor.availability === 'waitingForCoordinates' ? 'warning' : 'neutral']
 	const candidate = monitor.mechanical === 'flipCandidate'
 	if (monitor.timing.phase === 'pastDeadline') return candidate ? ['Deadline passed', 'danger'] : ['Past the window', 'neutral']
 	if (monitor.timing.phase === 'windowOpen') return candidate ? ['Flip window open', 'warning'] : ['Window open', 'neutral']
-	if (monitor.timing.phase === 'approaching') return ['Approaching', 'active']
+	if (monitor.timing.phase === 'approaching') return [pastTransit(monitor, now) ? 'Past the meridian' : 'Approaching', 'neutral']
 	return ['Monitoring', 'success']
 }
 
+// Words of each timing phase; the approach reads Past the meridian after the transit (meridianPhaseText).
+const MERIDIAN_PHASES: Readonly<Record<MeridianTimingPhase, string>> = {
+	unavailable: 'No forecast',
+	before: 'Before the early warning',
+	approaching: 'Approaching the meridian',
+	windowOpen: 'Preferred window open',
+	pastDeadline: 'Preferred window closed',
+}
+
+// Words of the timing phase of a monitor at instant now (Unix milliseconds; the instant of its sample when absent), the
+// approach told apart before and after the transit.
+export function meridianPhaseText(monitor: Pick<MeridianFlipMonitor, 'timing' | 'sampledAt'>, now?: number) {
+	if (monitor.timing.phase === 'approaching' && pastTransit(monitor, now)) return 'Past the meridian'
+	return MERIDIAN_PHASES[monitor.timing.phase]
+}
+
+// Whether the transit of a monitor is behind instant now (Unix milliseconds; the instant of its sample when absent).
+function pastTransit(monitor: Pick<MeridianFlipMonitor, 'timing' | 'sampledAt'>, now: number = monitor.sampledAt) {
+	const seconds = monitor.timing.secondsToTransit
+	return seconds !== undefined && seconds - (now - monitor.sampledAt) / 1000 <= 0
+}
+
+// Instant of the forecast that comes next after instant now (Unix milliseconds), with its words: the early warning, the
+// transit, the opening, the closing warning, or the closing of the window. Undefined without a forecast or once the
+// window closed.
+export function nextMeridianEvent(timing: MeridianTiming, now: number): { readonly label: string; readonly at: number } | undefined {
+	const events = [
+		{ label: 'Early warning', at: timing.warningAt },
+		{ label: 'Transit', at: timing.transitAt },
+		{ label: 'Window opens', at: timing.windowOpensAt },
+		{ label: 'Window closing', at: timing.deadlineWarningAt },
+		{ label: 'Window closes', at: timing.windowClosesAt },
+	]
+
+	let next: { readonly label: string; readonly at: number } | undefined
+	for (const { label, at } of events) if (at !== undefined && at > now && (!next || at < next.at)) next = { label, at }
+	return next
+}
+
+// Wall-clock time to or since the upper transit, from its seconds before it (negative once past): "T−09:25" before,
+// "T+06:10" from the transit on, as the tool and the status bar write it.
+export function formatTransitOffset(seconds: number) {
+	return `T${seconds > 0 ? '−' : '+'}${formatClockDuration(Math.abs(seconds))}`
+}
+
 // Short status of a monitor at instant now (Unix milliseconds), for the status bar: its headline and, while a forecast is
-// current, the wall-clock time relative to the transit, negative before it ("−9:25", "+6:10", formatSignedClockDuration).
+// current, the wall-clock time relative to the transit ("T−09:25", "T+06:10", formatTransitOffset).
 export function meridianFlipStatusText(monitor: Pick<MeridianFlipMonitor, 'availability' | 'timing' | 'mechanical' | 'sampledAt'>, now: number) {
-	const [label] = meridianFlipHeadline(monitor)
+	const [label] = meridianFlipHeadline(monitor, now)
 	const seconds = monitor.availability === 'monitoring' ? secondsToTransit(monitor, now) : undefined
-	return seconds === undefined ? label : `${label} · ${formatSignedClockDuration(-seconds)}`
+	return seconds === undefined ? label : `${label} · ${formatTransitOffset(seconds)}`
+}
+
+// Hour angle of the position of a monitor at instant now (Unix milliseconds), radians in (−π, π], positive west: moved
+// on from its sample at the sidereal rate while the mount tracks a monitored target at that rate, the sample's
+// otherwise; undefined without one or when the sample is stale.
+export function meridianHourAngle(monitor: Pick<MeridianFlipMonitor, 'availability' | 'timing' | 'mount' | 'sampledAt'>, now: number) {
+	const { hourAngle, quality } = monitor.timing
+	if (hourAngle === undefined || now - monitor.sampledAt > MERIDIAN_FLIP_STALE_AFTER) return undefined
+	if (monitor.availability !== 'monitoring' || !monitor.mount.tracking || quality !== 'valid') return hourAngle
+	const angle = hourAngle + (Math.max(now - monitor.sampledAt, 0) / 1000) * SIDEREAL_DRIFT_RATE
+	return angle > PI ? angle - TAU : angle
+}
+
+// Longitude of the site a mount reports less that of the active observing site, both in degrees east positive, as
+// degrees in [−180, 180), east positive: a mount that believes itself east of the site forecasts every instant early.
+export function mountSiteLongitudeOffset(mountLongitude: number, siteLongitude: number) {
+	return ((((mountLongitude - siteLongitude + 180) % 360) + 360) % 360) - 180
 }
 
 // Wall-clock seconds to the upper transit at instant now (Unix milliseconds), interpolated from the sample of a monitor,

@@ -355,12 +355,13 @@ export function formatSpan(start: number, end: number, timeZone: string) {
 }
 
 // Returns an instant (Unix milliseconds) as its time of day in an IANA time zone, with the zone named unless it is the
-// active site's, so a time is never ambiguous: "14:23", "14:23 GMT-3". A time on another calendar day of the zone than `reference` (Unix milliseconds) also shows
-// its month and day: "Oct 19, 14:23 UTC". An instant that is not finite reads MISSING.
-export function formatLocalTime(time: number, timeZone: string, reference: number = time) {
+// active site's, so a time is never ambiguous: "14:23", "14:23 GMT-3". A time on another calendar day of the zone
+// than `reference` (Unix milliseconds) also shows its month and day: "Oct 19, 14:23 UTC".
+// An instant that is not finite reads MISSING.
+export function formatLocalTime(time: number, timeZone: string, reference: number = time, seconds: boolean = true) {
 	if (!Number.isFinite(time)) return MISSING
 	const dated = Number.isFinite(reference) && formatDate(time, timeZone) !== formatDate(reference, timeZone)
-	return dateTimeFormat({ timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZoneName: namesZone(timeZone) ? 'short' : undefined, ...(dated && { month: 'short', day: 'numeric' }) }).format(time)
+	return dateTimeFormat({ timeZone, hour: '2-digit', minute: '2-digit', second: seconds ? '2-digit' : undefined, hourCycle: 'h23', timeZoneName: namesZone(timeZone) ? 'short' : undefined, ...(dated && { month: 'short', day: 'numeric' }) }).format(time)
 }
 
 // Returns a civil date given as YYYY-MM-DD (a night's evening, which belongs to no zone) in the style of

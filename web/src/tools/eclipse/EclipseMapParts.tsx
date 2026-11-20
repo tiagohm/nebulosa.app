@@ -1,5 +1,5 @@
 import { cn } from 'cn'
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, type Ref, useState } from 'react'
 import { IconButton } from '../../ui/IconButton'
 
 // Pieces of the eclipse map tools shared by the solar and the lunar map: the heading of the eclipse shown, between
@@ -40,17 +40,19 @@ export interface EclipseMapLegendProps {
 	readonly children: ReactNode
 	// Whether clicks on the legend reach the map under it above the sm breakpoint, for a legend without controls.
 	readonly passThrough?: boolean
+	// Box of the legend while shown, so the map can keep what it frames out from under it.
+	readonly ref?: Ref<HTMLDivElement>
 }
 
 // Legend of an eclipse map. Below the sm breakpoint it starts collapsed to a button that opens it, and once open it
 // has a button that collapses it again; above it the legend is always shown.
-export function EclipseMapLegend({ children, passThrough = false }: EclipseMapLegendProps) {
+export function EclipseMapLegend({ children, passThrough = false, ref }: EclipseMapLegendProps) {
 	const [open, setOpen] = useState(false)
 
 	return (
 		<>
 			{!open && <IconButton icon="layers" label="Show legend" onClick={() => setOpen(true)} className="absolute bottom-9 left-3 border border-line-100 bg-base-100/80 sm:hidden" />}
-			<div className={cn('absolute bottom-9 left-3 flex max-w-[calc(100%-1.5rem)] items-start gap-2 rounded-sm border border-line-100 bg-base-100/80 px-2.5 py-2 text-xs leading-4 text-ink-200', !open && 'max-sm:hidden', passThrough && 'sm:pointer-events-none')}>
+			<div ref={ref} className={cn('absolute bottom-9 left-3 flex max-w-[calc(100%-1.5rem)] items-start gap-2 rounded-sm border border-line-100 bg-base-100/80 px-2.5 py-2 text-xs leading-4 text-ink-200', !open && 'max-sm:hidden', passThrough && 'sm:pointer-events-none')}>
 				<div className="flex min-w-0 flex-col gap-1">{children}</div>
 				<IconButton icon="close" label="Hide legend" onClick={() => setOpen(false)} className="-my-1.5 -mr-1.5 sm:hidden" />
 			</div>

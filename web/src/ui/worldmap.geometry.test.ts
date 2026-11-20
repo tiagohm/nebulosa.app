@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import {
 	constrainWorldMapView,
 	DEGREE_PLANE_TRANSFORM,
+	fitWorldMapView,
+	geoBounds,
 	geoPath,
 	graticulePath,
 	horizonCurve,
@@ -18,6 +20,7 @@ import {
 	WORLD_MAP_HEIGHT,
 	WORLD_MAP_HOME,
 	WORLD_MAP_WIDTH,
+	worldMapShows,
 	worldMapTransform,
 	wrapLongitude,
 	zoomWorldMapAt,
@@ -261,6 +264,62 @@ describe('view', () => {
 		expect(half.center.x).toBeCloseTo(0, 9)
 		expect(interpolateWorldMapView(from, to, 0.5, false).center.x).toBeCloseTo(WORLD_MAP_WIDTH / 2, 9)
 		expect(interpolateWorldMapView(WORLD_MAP_HOME, to, 1, true).center).toEqual(to.center)
+	})
+})
+
+describe('fit', () => {
+	const NO_PADDING = { top: 0, right: 0, bottom: 0, left: 0 }
+
+	test('bounds take longitudes the shorter way around', () => {
+		expect(geoBounds([])).toBeUndefined()
+		expect(
+			geoBounds([
+				{ longitude: -40, latitude: -10 },
+				{ longitude: 20, latitude: 30 },
+				{ longitude: 0, latitude: 5 },
+			]),
+		).toEqual({ west: -40, east: 20, south: -10, north: 30 })
+		const pacific = geoBounds([
+			{ longitude: 170, latitude: 0 },
+			{ longitude: -170, latitude: 10 },
+			{ longitude: 175, latitude: -5 },
+		])!
+		expect(pacific.west).toBe(170)
+		expect(pacific.east).toBe(190)
+		expect(geoBounds([{ longitude: 190, latitude: 0 }])).toEqual({ west: -170, east: -170, south: 0, north: 0 })
+	})
+
+	test('frames a box whole and centered in the padded viewport', () => {
+		const bounds = { west: -60, east: 0, south: -40, north: 0 }
+		const padding = { top: 10, right: 60, bottom: 30, left: 20 }
+		const view = fitWorldMapView(bounds, VIEWPORT, true, padding)
+		const { scale, x, y } = worldMapTransform(view, VIEWPORT, true)
+		const a = project(bounds.west, bounds.north)
+		const b = project(bounds.east, bounds.south)
+		const left = x + a.x * scale
+		const right = x + b.x * scale
+		const top = y + a.y * scale
+		const bottom = y + b.y * scale
+		expect(left).toBeGreaterThanOrEqual(padding.left - 1e-6)
+		expect(right).toBeLessThanOrEqual(VIEWPORT.width - padding.right + 1e-6)
+		expect(top).toBeGreaterThanOrEqual(padding.top - 1e-6)
+		expect(bottom).toBeLessThanOrEqual(VIEWPORT.height - padding.bottom + 1e-6)
+		// The tighter axis fills the padded area.
+		expect(Math.max(right - left - (VIEWPORT.width - padding.left - padding.right), bottom - top - (VIEWPORT.height - padding.top - padding.bottom))).toBeCloseTo(0, 6)
+		expect((left + right) / 2).toBeCloseTo((padding.left + VIEWPORT.width - padding.right) / 2, 6)
+	})
+
+	test('caps the zoom and never zooms out past the whole map', () => {
+		expect(fitWorldMapView({ west: 10, east: 10.001, south: 0, north: 0.001 }, VIEWPORT, true, NO_PADDING, 8).zoom).toBe(8)
+		expect(fitWorldMapView({ west: -180, east: 180, south: -90, north: 90 }, VIEWPORT, true, NO_PADDING).zoom).toBe(1)
+	})
+
+	test('tells whether a position is in view on any copy of a wrapping map', () => {
+		const view = { zoom: 4, center: project(180, 0) }
+		expect(worldMapShows(view, VIEWPORT, true, { longitude: -175, latitude: 0 })).toBeTrue()
+		expect(worldMapShows(view, VIEWPORT, false, { longitude: -175, latitude: 0 })).toBeFalse()
+		expect(worldMapShows(view, VIEWPORT, true, { longitude: 0, latitude: 0 })).toBeFalse()
+		expect(worldMapShows(view, VIEWPORT, true, { longitude: 180, latitude: 60 })).toBeFalse()
 	})
 })
 

@@ -1,9 +1,10 @@
-import type { EclipseDirection, LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipse, LocalViewHandedness, LocalViewOrientationMode, SolarEclipseExtreme, SolarEclipseMap, SolarEclipseMapPoint, SolarEclipsePointKind, SolarEclipseSummary, SolarEclipseType } from 'api'
+import type { EclipseDirection, LocalCentralPhaseKind, LocalEclipseContactKind, LocalSolarEclipse, LocalViewHandedness, LocalViewOrientationMode, SolarEclipseExtreme, SolarEclipseMap, SolarEclipseMapPoint, SolarEclipsePathKind, SolarEclipsePointKind, SolarEclipseSummary, SolarEclipseType } from 'api'
 import { proxy } from 'valtio'
 import { aborted, ApiResponseError, fetchJson } from '../../http'
 import { ACTIVE_TOOL_LOCATION, type GeographicLocation, type ToolLocation } from '../../location/site'
 import { DEFAULT_ZONE_OVERRIDE, type DisplayZoneOverride } from '../../location/zone'
 import { createRequestGuard } from '../../sky/selection'
+import { type GeoBounds, geoBounds } from '../../ui/worldmap.geometry'
 import { browserEclipseIo, type EclipseIo, type EclipsePlace, eclipsePlace, errorMessage, mapLocation, samePlace, utcDateStart } from '../eclipse/eclipse'
 
 // State of the Solar Eclipse Map tool and its requests to /api/eclipses/solar: the eclipse shown and its global
@@ -160,6 +161,31 @@ export function globalPoints(map: SolarEclipseMap): GlobalPoint[] {
 	if (duration) points.push({ kind: 'GD', longitude: duration.longitude, latitude: duration.latitude, time: duration.time, sunAltitude: duration.sunAltitude, extreme: duration })
 
 	return points.sort((a, b) => (a.time ?? Infinity) - (b.time ?? Infinity))
+}
+
+// Vertex of SVG path data drawn on the degree plane (x = longitude + 180° in [0, 360], y = 90° − latitude in [0, 180],
+// the plane of DEGREE_PLANE_TRANSFORM), as the API writes it: a moveto or lineto and its two coordinates, in degrees.
+const PATH_VERTEX = /[ML](-?[\d.]+) (-?[\d.]+)/g
+
+// Paths and point families of the central path: the central line, its limits, the contacts of the umbra, the ends of
+// the central line, and the greatest eclipse and duration.
+const CENTRAL_PATHS: ReadonlySet<SolarEclipsePathKind> = new Set(['total', 'annular', 'umbraNorth', 'umbraSouth'])
+const CENTRAL_FAMILIES: ReadonlySet<GlobalPointFamily> = new Set(['umbralContact', 'centralLineEnd', 'extreme'])
+
+// Returns the geographic box of what the map frames of an eclipse, the shorter way around in longitude: the central
+// path (its paths and points) when it has one, where the eclipse is total or annular, otherwise every path and point,
+// where it is partial; undefined for a map with neither.
+export function eclipseBounds(map: SolarEclipseMap): GeoBounds | undefined {
+	const central = !!(map.paths.total || map.paths.annular)
+	const points = globalPoints(map)
+		.filter((point) => !central || CENTRAL_FAMILIES.has(GLOBAL_POINTS[point.kind].family))
+		.map(({ longitude, latitude }) => ({ longitude, latitude }))
+
+	for (const [kind, path] of Object.entries(map.paths) as [SolarEclipsePathKind, string | undefined][]) {
+		if (path && (!central || CENTRAL_PATHS.has(kind))) for (const [, x, y] of path.matchAll(PATH_VERTEX)) points.push({ longitude: +x - 180, latitude: 90 - +y })
+	}
+
+	return geoBounds(points)
 }
 
 // Distance in degrees, along each axis, below which two global points share a stack of labels, so the labels of

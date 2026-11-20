@@ -5,7 +5,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 - `WorldMap` (`web/src/ui/WorldMap.tsx`) draws the basemap `web/assets/world.map.svg` (equirectangular, 2520.631 × 1260.315 map units, longitude −180° at x = 0 and latitude +90° at y = 0) with zoom (wheel, pinch, double click, `+`/`-`, buttons, from the whole map up to `MAX_WORLD_MAP_ZOOM` = 64×) and pan (drag, arrows), and reports a click, never a drag or a pinch, as a geographic position through `onSelect`;
   the owner keeps the selection and passes it back as `selected`, drawn as a marker.
   Geographic positions are degrees, longitude east positive.
-  The owner moves the view through the `WorldMapHandle` ref (`centerOn`, `zoomBy`, `reset`).
+  The owner moves the view through the `WorldMapHandle` ref (`centerOn`, `zoomBy`, `reset`, `fit` to show a `GeoBounds` box whole inside the viewport less a padding, at a capped zoom, and `reveal` to center a position only when it is off screen), and may add buttons of its own under the zoom buttons (`tools`).
+  `geoBounds` takes the box of positions the shorter way around in longitude, so a region across the antimeridian frames as one.
 - The map wraps across the antimeridian by default: the basemap and the children are drawn again one map width west and east, panning east or west never ends, and the smallest zoom fits the map's width.
   The graticule then draws the antimeridian once, at x = 0, as the seam between copies.
   Each copy draws all the children, so a filled region that reaches past the map's width lies under the lower layers of the neighboring copy (the night side over a footprint, say); a region on a wrapping map is cut at the antimeridian to stay within the map.

@@ -4,7 +4,7 @@ import worldMapUrl from '../../assets/world.map.svg'
 import { MISSING, formatGeographic } from '../format'
 import type { Point, Size } from '../viewer/transform'
 import { IconButton } from './IconButton'
-import { constrainWorldMapView, type GeoPoint, graticulePath, interpolateWorldMapView, panWorldMap, project, unproject, WORLD_MAP_HOME, WORLD_MAP_WIDTH, type WorldMapView, worldMapTransform, zoomWorldMapAt } from './worldmap.geometry'
+import { constrainWorldMapView, fitWorldMapView, type GeoBounds, type GeoPoint, graticulePath, interpolateWorldMapView, panWorldMap, project, unproject, WORLD_MAP_HOME, WORLD_MAP_WIDTH, type ViewportPadding, type WorldMapView, worldMapShows, worldMapTransform, zoomWorldMapAt } from './worldmap.geometry'
 import { permanentTiles, TileCache, tileKey } from './worldmap.tiles'
 import { startTileWorker, type TileWorkerMessage, type TileWorkerWant } from './worldmap.worker'
 
@@ -34,6 +34,12 @@ export interface WorldMapHandle {
 	readonly zoomBy: (factor: number) => void
 	// Animates the view back to the whole map.
 	readonly reset: () => void
+	// Animates the view to show a geographic box whole inside the viewport less padding (viewport pixels, none by
+	// default), at a zoom of at most maxZoom (a multiple of the smallest one).
+	readonly fit: (bounds: GeoBounds, padding?: ViewportPadding, maxZoom?: number) => void
+	// Animates the view to center a geographic position at the current zoom, only when it is not already shown at least
+	// margin viewport pixels inside the edges (24 by default).
+	readonly reveal: (point: GeoPoint, margin?: number) => void
 	// Returns the current view.
 	readonly view: () => WorldMapView
 }
@@ -51,6 +57,8 @@ export interface WorldMapProps {
 	readonly graticule?: number | false
 	// Whether the zoom buttons are shown. On by default.
 	readonly controls?: boolean
+	// Buttons of the owner, shown under the zoom buttons, such as one framing what the map is about.
+	readonly tools?: ReactNode
 	// Whether the coordinates under the pointer are shown. On by default.
 	readonly coordinates?: boolean
 	// View when mounted; the whole map by default. Later changes are applied through the handle.
@@ -68,6 +76,9 @@ const WHEEL_ZOOM_RATE = 0.0015
 
 // Zoom factor of a zoom button, key press, or double click.
 const ZOOM_STEP = 2
+
+// Room kept free by default by fit, in viewport pixels: none.
+const NO_PADDING: ViewportPadding = { top: 0, right: 0, bottom: 0, left: 0 }
 
 // Fraction of the viewport moved by one arrow key press.
 const KEY_PAN_FRACTION = 0.1
@@ -298,7 +309,7 @@ function pinchSpan(pointers: ReadonlyMap<number, Point>): PinchSpan | undefined 
 }
 
 // World map.
-export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule = 30, controls = true, coordinates = true, initialView = WORLD_MAP_HOME, ref, className, children }: WorldMapProps) {
+export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule = 30, controls = true, tools, coordinates = true, initialView = WORLD_MAP_HOME, ref, className, children }: WorldMapProps) {
 	const [controller] = useState(() => new WorldMapController(initialView))
 	const boxRef = useRef<HTMLDivElement>(null)
 	const readoutRef = useRef<HTMLSpanElement>(null)
@@ -315,6 +326,10 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 			centerOn: ({ longitude, latitude }, zoom) => controller.animate({ zoom: zoom ?? controller.view.zoom, center: project(longitude, latitude) }),
 			zoomBy: (factor) => controller.zoomTo(factor),
 			reset: () => controller.animate(WORLD_MAP_HOME),
+			fit: (bounds, padding = NO_PADDING, maxZoom) => controller.animate(fitWorldMapView(bounds, controller.viewport, controller.wrap, padding, maxZoom)),
+			reveal: (point, margin = 24) => {
+				if (!worldMapShows(controller.view, controller.viewport, controller.wrap, point, margin)) controller.animate({ zoom: controller.view.zoom, center: project(point.longitude, point.latitude) })
+			},
 			view: () => controller.view,
 		}),
 		[controller],
@@ -476,6 +491,7 @@ export function WorldMap({ selected, onSelect, onHover, wrap = true, graticule =
 					<IconButton icon="zoomIn" label="Zoom in (+)" onClick={() => controller.zoomTo(ZOOM_STEP)} />
 					<IconButton icon="zoomOut" label="Zoom out (-)" onClick={() => controller.zoomTo(1 / ZOOM_STEP)} />
 					<IconButton icon="fit" label="Whole map (0)" onClick={() => controller.animate(WORLD_MAP_HOME)} />
+					{tools}
 				</div>
 			)}
 			<p ref={(failure) => void (controller.failure = failure)} hidden className="pointer-events-none absolute inset-x-0 top-1/2 m-0 -translate-y-1/2 text-center text-sm text-danger">

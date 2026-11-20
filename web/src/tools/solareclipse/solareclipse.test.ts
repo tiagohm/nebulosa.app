@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 import type { SolarEclipseSummary } from 'api'
 import { proxy } from 'valtio'
 import type { EclipseIo } from '../eclipse/eclipse'
-import { contactName, findEclipse, findEclipseFrom, globalPoints, initialSolarEclipseState, labelRows, limitName, nextEclipse, openSolarEclipseMap, selectEvent, selectMapPlace, selectPoint, setLayer, setViewSettings, showEclipse, type SolarEclipseState, syncPlace } from './solareclipse'
+import { contactName, eclipseBounds, findEclipse, findEclipseFrom, globalPoints, initialSolarEclipseState, labelRows, limitName, nextEclipse, openSolarEclipseMap, selectEvent, selectMapPlace, selectPoint, setLayer, setViewSettings, showEclipse, type SolarEclipseState, syncPlace } from './solareclipse'
 
 // Fake API whose responses are released by the test, in any order.
 function fakeApi() {
@@ -247,6 +247,15 @@ test('lists every global point in time order, the greatest duration among them',
 	expect(points.map((point) => point.kind)).toEqual(['P1', 'MAX', 'GD', 'P4', 'N1'])
 	expect(points[1].extreme).toEqual(map.greatestEclipse)
 	expect(points[2]).toMatchObject({ longitude: 12, latitude: 11, extreme: { centralDuration: 268 } })
+})
+
+test('frames the central path of a central eclipse, and every path and point of a partial one', () => {
+	expect(eclipseBounds(mapOf(A))).toBeUndefined()
+	const points = { MAX: { longitude: -160, latitude: 20, time: 20 }, N1: { longitude: 60, latitude: 70 } }
+	const partial = { ...mapOf(A), points, paths: { penumbraNorth: 'M10 40L30 50', riseSet: 'M350 80L355 85' } }
+	expect(eclipseBounds(partial)).toEqual({ west: 60, east: 210, south: 5, north: 70 })
+	const central = { ...mapOf(A), points, paths: { ...partial.paths, total: 'M15 60L25 70', umbraNorth: 'M15 58L25 68' } }
+	expect(eclipseBounds(central)).toEqual({ west: -165, east: -155, south: 20, north: 32 })
 })
 
 test('stacks the labels of points that nearly coincide, across the antimeridian too', () => {

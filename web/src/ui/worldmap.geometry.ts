@@ -320,3 +320,90 @@ export function interpolateWorldMapView(from: WorldMapView, to: WorldMapView, t:
 	const zoom = from.zoom * (to.zoom / from.zoom) ** t
 	return { zoom, center: { x: from.center.x + dx * t, y: from.center.y + (to.center.y - from.center.y) * t } }
 }
+
+// Geographic box, in degrees: from west to east going east, so a box across the antimeridian has east beyond 180°.
+export interface GeoBounds {
+	// Western edge, in degrees in [−180, 180).
+	readonly west: number
+	// Eastern edge, in degrees, east of west by at most 360°.
+	readonly east: number
+	// Southern edge, in degrees in [−90, 90].
+	readonly south: number
+	// Northern edge, in degrees in [south, 90].
+	readonly north: number
+}
+
+// Room kept free at each edge of the viewport, in viewport pixels, such as under the controls drawn over the map.
+export interface ViewportPadding {
+	// Room at the top edge, in viewport pixels.
+	readonly top: number
+	// Room at the right edge, in viewport pixels.
+	readonly right: number
+	// Room at the bottom edge, in viewport pixels.
+	readonly bottom: number
+	// Room at the left edge, in viewport pixels.
+	readonly left: number
+}
+
+// Returns the smallest box holding every position, taking longitudes the shorter way around: its western edge follows
+// the widest gap between the longitudes, so positions on both sides of the antimeridian make one narrow box. Undefined
+// without positions.
+export function geoBounds(points: readonly GeoPoint[]): GeoBounds | undefined {
+	if (points.length === 0) return undefined
+	const longitudes = points.map((point) => modulo(point.longitude + 180, 360) - 180).sort((a, b) => a - b)
+	let south = 90
+	let north = -90
+
+	for (const { latitude } of points) {
+		south = Math.min(south, latitude)
+		north = Math.max(north, latitude)
+	}
+
+	// The widest gap starts after the last longitude and wraps to the first, unless one between two longitudes is wider.
+	let gap = longitudes[0] + 360 - longitudes.at(-1)!
+	let west = longitudes[0]
+
+	for (let i = 1; i < longitudes.length; i++) {
+		const step = longitudes[i] - longitudes[i - 1]
+
+		if (step > gap) {
+			gap = step
+			west = longitudes[i]
+		}
+	}
+
+	return { west, east: west + 360 - gap, south, north }
+}
+
+// Returns the view showing a box whole inside the viewport less its padding, centered there, at a zoom of at most
+// maxZoom (a multiple of the smallest one), constrained; a box too small to frame is shown at maxZoom.
+export function fitWorldMapView(bounds: GeoBounds, viewport: Size, wrap: boolean, padding: ViewportPadding, maxZoom: number = MAX_WORLD_MAP_ZOOM): WorldMapView {
+	const base = minWorldMapScale(viewport, wrap)
+	const corner = project(bounds.west, bounds.north)
+	const opposite = project(bounds.east, bounds.south)
+	const center = { x: (corner.x + opposite.x) / 2, y: (corner.y + opposite.y) / 2 }
+	if (base <= 0) return { zoom: 1, center }
+	const width = Math.max(1, viewport.width - padding.left - padding.right)
+	const height = Math.max(1, viewport.height - padding.top - padding.bottom)
+	const scale = Math.min(width / Math.max(opposite.x - corner.x, 1e-9), height / Math.max(opposite.y - corner.y, 1e-9))
+	const zoom = Math.max(1, Math.min(maxZoom, MAX_WORLD_MAP_ZOOM, scale / base))
+	const fitted = base * zoom
+	// The box centers on the middle of the padded area, so the viewport center sits off the box's center by half the
+	// difference of the opposite paddings.
+	return constrainWorldMapView({ zoom, center: { x: center.x - (padding.left - padding.right) / 2 / fitted, y: center.y - (padding.top - padding.bottom) / 2 / fitted } }, viewport, wrap)
+}
+
+// Returns whether a geographic position is shown inside the viewport less a margin, in viewport pixels, on any copy of
+// a wrapping map.
+export function worldMapShows(view: WorldMapView, viewport: Size, wrap: boolean, point: GeoPoint, margin: number = 0): boolean {
+	const { scale, x, y } = worldMapTransform(view, viewport, wrap)
+	if (scale <= 0) return false
+	const at = project(point.longitude, point.latitude)
+	const top = y + at.y * scale
+	if (top < margin || top > viewport.height - margin) return false
+	const copies = wrap ? [-WORLD_MAP_WIDTH, 0, WORLD_MAP_WIDTH] : [0]
+	return copies.some((offset) => {
+		const left = x + (at.x + offset) * scale
+		return left >= margin && left <= viewport.width - margin
+	})
+}

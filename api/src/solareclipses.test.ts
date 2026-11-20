@@ -98,6 +98,13 @@ test('answers 404 for an id more than ID_MATCH_TOLERANCE from every eclipse', as
 	expect(local(`${TOTAL.maximum - ID_MATCH_TOLERANCE - 1}`, 'longitude=0&latitude=0').status).toBe(404)
 })
 
+test('answers 404 for an id that is not a number', async () => {
+	const response = await map('bogus-id')
+	expect(response.status).toBe(404)
+	expect(await response.json()).toMatchObject({ code: 'notFound' })
+	expect(local('bogus-id', 'longitude=0&latitude=0').status).toBe(404)
+})
+
 // An id taken from another ephemeris source is up to about a second off the eclipse it names.
 test('an id within ID_MATCH_TOLERANCE of an eclipse names it, answered with its own id', async () => {
 	const response = await map(`${TOTAL.maximum + 1500}`)

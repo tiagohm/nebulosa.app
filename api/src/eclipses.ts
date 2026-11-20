@@ -170,9 +170,11 @@ export function findRefinedEclipse<E>({ nearest, refine, center, instant, cache 
 }
 
 // Returns the eclipse an id names on the sources of snapshot: the one whose greatest eclipse is within
-// ID_MATCH_TOLERANCE of it, or undefined when there is none; search is the search of its kind.
+// ID_MATCH_TOLERANCE of it, or undefined when there is none, as for an id that is not a number of milliseconds,
+// which would otherwise never end the search; search is the search of its kind.
 export function resolveRefinedEclipse<E>(search: RefinedEclipseSearch<E>, id: string, snapshot: SpiceKernelSnapshot): E | undefined {
 	const time = +id
+	if (!Number.isFinite(time)) return undefined
 	const eclipse = findRefinedEclipse(search, time - ID_SEARCH_MARGIN, 'next', snapshot)
 	return Math.abs(search.instant(eclipse) - time) <= ID_MATCH_TOLERANCE ? eclipse : undefined
 }

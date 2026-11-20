@@ -4,7 +4,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
 
 - `MeridianFlipExecutor` (`api/src/meridianflipexecutor.ts`, pure decisions in `api/src/meridianflipexecutor.policy.ts`) flips a German equatorial mount at the passage its Meridian Flip Monitor follows and gives imaging back.
   It reads the monitor, which stays passive, and composes the services that own each step; it commands no device itself.
-  One execution runs per physical mount (`resourceKey`), and nothing starts it but a request: `POST …/meridian-flip/execute` with `mode: 'now'` (refused unless eligible at once) or `mode: 'whenEligible'` (a one-shot arm), or `POST …/meridian-flip/arm` (the automatic arm);
+  One execution runs per physical mount (`resourceKey`), and nothing starts it but a request: `POST …/meridian-flip/execute` with `mode: 'now'` (refused unless eligible at once) or `mode: 'whenEligible'` (a one-shot arm that then flips unattended);
   `POST …/meridian-flip/disarm` removes an arm and commands nothing.
   An arm is consumed by the execution it starts.
   Requests carry a token, the equipment of the Equipment Setup by exact ids (`MeridianFlipSetup`: main camera, guide output, focuser, rotator), an optional framed target (ICRS; absent, where the mount points is frozen as `derivedFromMount`), the `MeridianFlipExecutorPolicy`, and the Target Centering and Auto Focus settings the policy needs.
@@ -14,8 +14,8 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   the monitor tracks a settled, sidereal target away from the pole, still the context an arm was decided for;
   the mount is not already on its post-meridian side, and the passage (`passageKey`: mount, target to the arcminute, transit minute) was not flipped in the last 12 h;
   the window is open (now refuses `notDue` before it, an arm waits until `windowOpensAt`, and only a manual flip goes past `windowClosesAt`);
-  the flip, after the estimated wait for the capture's frame boundary, ends before `firmwareLimitSeconds` after the transit, and an automatic arm refuses a window closing after that limit.
-  A pier side the driver does not report, or the simulator's, never erases the timing: it makes the verification mode `inference` (with a camera and Target Centering settings) or `none`, and the automatic arm refuses it (`noPierSide`) unless `allowInferredVerification`.
+  the flip, after the estimated wait for the capture's frame boundary, ends before `firmwareLimitSeconds` after the transit, and an arm refuses a window closing after that limit.
+  A pier side the driver does not report, or the simulator's, never erases the timing: it makes the verification mode `inference` (with a camera and Target Centering settings) or `none`, now or armed alike.
 - Execution, under one reservation of the execution (`ResourceReservationOwner` kind `mount.meridianFlipExecutor`, also tracked as a `mount.meridianFlipExecutor` operation) and a guiding hold of the setup's guide output: pause the running capture of the main camera at its next frame boundary (`CameraCaptures.suspendForMotion`, which lends its camera and Mount dithering reservation);
   suspend the guiding runs of the guide output into the reservation (`GuidingSessions.suspendForMotion` with the reservation; a run calibrating or paused refuses `guidingActive`);
   reserve the mount, guide output, camera, and focuser;

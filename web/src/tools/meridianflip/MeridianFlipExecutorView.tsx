@@ -1,4 +1,4 @@
-import type { ExecutorEligibility, FlipStrategyChoice, MeridianFlipArm, MeridianFlipExecution, MeridianFlipExecutionRequest, MeridianFlipExecutorPolicy, MeridianFlipMonitor, MeridianFlipStepOutcome, OperationDevice } from 'api'
+import type { ExecutorEligibility, FlipStrategyChoice, MeridianFlipExecution, MeridianFlipExecutionRequest, MeridianFlipExecutorPolicy, MeridianFlipMonitor, MeridianFlipStepOutcome, OperationDevice } from 'api'
 import { type ReactNode, useState } from 'react'
 import { useSnapshot } from 'valtio'
 import { autoFocusRequest, defaultStepSize } from '../../camera/autofocus'
@@ -24,7 +24,6 @@ import { Cell, Row, Table } from '../../ui/Table'
 import { useNow } from '../../useNow'
 import { MERIDIAN_AVAILABILITY_LABELS, MERIDIAN_PIER_SIDES, monitorKey, MOUNT_TYPE_LABELS } from './meridianflip'
 import {
-	armMeridianFlip,
 	cancelMeridianFlip,
 	capturePausedBy,
 	disarmMeridianFlip,
@@ -43,7 +42,7 @@ import { FlipToolSections } from './MeridianFlipToolSections'
 
 // Executor parts of the Meridian Flip tool: the strip of the flip of the MOUNT that runs, is armed, or left the capture
 // paused, shown above both sections with its Stop, Disarm, or Resume Capture; the Executor section, with what the server
-// would decide now, the requests (flip when the window opens, flip now, arm the automatic flip), and the latest
+// would decide now, the requests (flip when the window opens, which runs unattended, and flip now), and the latest
 // execution with its steps and outcome; and the sections of the contextual panel with the policy the profile remembers
 // for that mount, the equipment of the Equipment Setup a flip uses, and the summaries of the camera tools it invokes
 // (MeridianFlipToolSections.tsx). Every decision and every command is the
@@ -65,11 +64,6 @@ const RESTORATIONS: Readonly<Record<string, string>> = { restored: 'Restored', r
 // Converts a role device into the exact ids a request names it by.
 function operationDevice(role: RoleDevice): OperationDevice | undefined {
 	return role.device && { connectionId: role.device.connectionId, deviceId: role.device.id }
-}
-
-// Words of an arm: scheduled once, or armed for the automatic flip.
-function armLabel(arm: Pick<MeridianFlipArm, 'trigger'>) {
-	return arm.trigger === 'automatic' ? 'Armed' : 'Scheduled'
 }
 
 // Time to an instant from now (Unix milliseconds), or since it: "in 07:41", "03:12 ago".
@@ -117,7 +111,7 @@ export function FlipStrip({ mount, monitor }: { readonly mount: RoleDevice; read
 		)
 	} else if (arm) {
 		const opensAt = monitor?.timing.windowOpensAt
-		badge = [armLabel(arm), 'neutral']
+		badge = ['Scheduled', 'neutral']
 		text = arm.decision.decision === 'refuse' ? `${arm.decision.reason}.` : opensAt !== undefined && opensAt > now ? `Flips when the window opens at ${formatLocalTime(opensAt, timeZone, now)}, ${formatFromNow(opensAt, now)}.` : `Flips as soon as it is eligible: ${arm.decision.reason}.`
 		action = (
 			<Button variant="secondary" disabled={pending} title={pending ? 'Waiting for the server to answer the last request.' : 'Removes the arm; moves nothing.'} onClick={() => void disarmMeridianFlip(meridianFlipExecutorState, device.connectionId, device.id)}>
@@ -172,7 +166,7 @@ export function MeridianFlipExecutorSections({ mount, monitor }: { readonly moun
 	const blocker = !connected ? 'The mount of the Equipment Setup is not connected.' : !monitor ? 'Enable the monitor first; the Executor follows its forecast.' : undefined
 	const busy = pending ? 'Waiting for the server to answer the last request.' : running ? 'A flip of this mount is running.' : undefined
 	// Why a flip cannot be asked for now; the server decides again in any case.
-	const flipBlocker = blocker ?? busy ?? (arm ? `A flip is already ${armLabel(arm).toLowerCase()}; disarm it first.` : monitor && monitor.availability !== 'monitoring' ? `The monitor follows no settled target: ${MERIDIAN_AVAILABILITY_LABELS[monitor.availability].toLowerCase()}.` : undefined)
+	const flipBlocker = blocker ?? busy ?? (arm ? 'A flip is already scheduled; disarm it first.' : monitor && monitor.availability !== 'monitoring' ? `The monitor follows no settled target: ${MERIDIAN_AVAILABILITY_LABELS[monitor.availability].toLowerCase()}.` : undefined)
 	const checkBlocker = blocker ?? busy
 	const captureCamera = camera.device && captureRunning(captures.sessions[cameraKey(camera.device.connectionId, camera.device.id)]) ? camera.device.name : undefined
 	const opensAt = monitor?.timing.windowOpensAt
@@ -229,12 +223,6 @@ export function MeridianFlipExecutorSections({ mount, monitor }: { readonly moun
 		if (device && request) void executeMeridianFlip(meridianFlipExecutorState, device.connectionId, device.id, mode, request)
 	}
 
-	function armAutomatic() {
-		const request = body()
-		setDecision(undefined)
-		if (device && request) void armMeridianFlip(meridianFlipExecutorState, device.connectionId, device.id, request)
-	}
-
 	const decided = decision && 'decision' in decision ? decision.decision : undefined
 	// Not yet is not a refusal: the window has not opened, or the server waits for the target.
 	const notYet = decided !== undefined && (decided.decision === 'wait' || (decided.decision === 'refuse' && decided.code === 'notDue'))
@@ -266,7 +254,10 @@ export function MeridianFlipExecutorSections({ mount, monitor }: { readonly moun
 						message={
 							<>
 								<FlipWarning {...warning} when={whenOpen} />
-								<p className="mt-2">Scheduled once, for this passage only. It flips even when the flip can only be inferred from plate solutions or cannot be verified at all; a restart of the server forgets it.</p>
+								<p className="mt-2">
+									The server flips this mount by itself, once, for this passage only. It is refused when the preferred window closes after the firmware limit. A flip that can only be inferred from plate solutions, or not verified at all, still runs, and leaves the capture paused unless the policy
+									accepts it. A restart of the server forgets it.
+								</p>
 							</>
 						}
 						confirmLabel="Schedule"
@@ -279,29 +270,10 @@ export function MeridianFlipExecutorSections({ mount, monitor }: { readonly moun
 					<ConfirmButton title="Flip the mount now?" message={<FlipWarning {...warning} when="Right away" />} confirmLabel="Flip Now" disabled={!!flipBlocker} tooltip={flipBlocker} onConfirm={() => execute('now')}>
 						Flip Now
 					</ConfirmButton>
-					<ConfirmButton
-						title="Arm the automatic flip?"
-						message={
-							<>
-								<FlipWarning {...warning} when={whenOpen} />
-								<p className="mt-2">
-									Armed once, for this passage only, with the checks of an unattended flip: it is refused when the mount reports no usable pier side{policy.allowInferredVerification ? '' : ' (unless allowed in Advanced Policy)'} or when the preferred window closes after the firmware limit. A restart
-									of the server disarms it.
-								</p>
-							</>
-						}
-						confirmLabel="Arm"
-						disabled={!!flipBlocker}
-						tooltip={flipBlocker}
-						onConfirm={armAutomatic}
-					>
-						Arm Automatic
-					</ConfirmButton>
 					<Button variant="secondary" disabled={!!checkBlocker} title={checkBlocker ?? 'Asks the server what it would decide now; starts nothing.'} onClick={() => void check()}>
 						Check
 					</Button>
 				</Actions>
-				<Notice>Flip When Eligible and Arm Automatic both wait for the window and flip this passage once. Arm Automatic adds the checks of an unattended flip: a pier side the driver reports, or inference allowed in Advanced Policy, and a window that closes before the firmware limit.</Notice>
 			</FlipSection>
 			<LatestFlip execution={execution} />
 		</div>
@@ -431,9 +403,8 @@ export function ExecutorPanelSections({ mount }: { readonly mount: RoleDevice })
 				{!hasCamera && <Notice>Recentering and Auto Focus need a main camera in the Equipment Setup.</Notice>}
 				{locked && <Notice>{locked}</Notice>}
 			</CollapsibleSection>
-			<CollapsibleSection id="meridianFlip.advanced" title="Advanced Policy" summary={[policy.treatUnknownMountAsGem, policy.allowInferredVerification, policy.allowInferredAutoResume].some(Boolean) ? 'Changed' : 'Defaults'} defaultOpen={false}>
+			<CollapsibleSection id="meridianFlip.advanced" title="Advanced Policy" summary={[policy.treatUnknownMountAsGem, policy.allowInferredAutoResume].some(Boolean) ? 'Changed' : 'Defaults'} defaultOpen={false}>
 				<Checkbox label="Treat an unknown mount type as German equatorial" checked={policy.treatUnknownMountAsGem} disabled={running} onChange={(treatUnknownMountAsGem) => update({ treatUnknownMountAsGem })} />
-				<Checkbox label="Allow the automatic flip without a pier side (inferred)" checked={policy.allowInferredVerification} disabled={running || !hasCamera} onChange={(allowInferredVerification) => update({ allowInferredVerification })} />
 				<Checkbox label="Resume imaging after an inferred flip" checked={policy.allowInferredAutoResume} disabled={running || !hasCamera} onChange={(allowInferredAutoResume) => update({ allowInferredAutoResume })} />
 				<Notice>A mount that reports no usable pier side, or a simulator, has its flip inferred: Target Centering solves the target before and after it and compares the turn of the field. A pier side the driver reports verifies the flip by itself, without these solves.</Notice>
 				{policy.allowInferredAutoResume && <Notice>An inferred flip rests on plate solutions taken before and after the motion, not on the mount's own report: a rotator, a changed optical train, or a flipped image can mimic it.</Notice>}

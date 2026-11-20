@@ -203,7 +203,7 @@ export function MeridianFlipMonitorView() {
 					{pending === 'enable' ? 'Enabling…' : 'Enable'}
 				</Button>
 			) : arm ? (
-				<ConfirmButton title="Disable the monitor?" message={`The ${arm.trigger === 'automatic' ? 'armed' : 'scheduled'} flip of ${arm.mountName} ends with it, since the Executor follows the forecast of the monitor.`} confirmLabel="Disable" disabled={!!pending} onConfirm={disable}>
+				<ConfirmButton title="Disable the monitor?" message={`The scheduled flip of ${arm.mountName} ends with it, since the Executor follows the forecast of the monitor.`} confirmLabel="Disable" disabled={!!pending} onConfirm={disable}>
 					Disable
 				</ConfirmButton>
 			) : (

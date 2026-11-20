@@ -73,10 +73,10 @@ describe('eligibility', () => {
 		const approaching = monitor({ mechanical: 'notDue' }, { phase: 'approaching', windowOpensAt: NOW + 30000 })
 		expect(evaluateEligibility(input({ monitor: approaching }))).toMatchObject({ decision: 'refuse', code: 'notDue' })
 		expect(evaluateEligibility(input({ monitor: approaching, trigger: 'scheduled' }))).toMatchObject({ decision: 'wait', code: 'notDue', reevaluateAt: NOW + 30000 })
-		expect(evaluateEligibility(input({ monitor: monitor({ mechanical: 'notDue' }, { phase: 'before', windowOpensAt: NOW + 7200000 }), trigger: 'automatic' }))).toMatchObject({ decision: 'wait', reevaluateAt: NOW + 60000 })
+		expect(evaluateEligibility(input({ monitor: monitor({ mechanical: 'notDue' }, { phase: 'before', windowOpensAt: NOW + 7200000 }), trigger: 'scheduled' }))).toMatchObject({ decision: 'wait', reevaluateAt: NOW + 60000 })
 
 		const past = monitor({}, { phase: 'pastDeadline' })
-		expect(evaluateEligibility(input({ monitor: past, trigger: 'automatic' }))).toMatchObject({ decision: 'refuse', code: 'unsafeWindow' })
+		expect(evaluateEligibility(input({ monitor: past, trigger: 'scheduled' }))).toMatchObject({ decision: 'refuse', code: 'unsafeWindow' })
 		expect(evaluateEligibility(input({ monitor: past }))).toMatchObject({ decision: 'eligible' })
 	})
 
@@ -85,17 +85,17 @@ describe('eligibility', () => {
 		// Transit 400 s ago, limit 600 s after it: 200 s left, while the flip needs FLIP_DURATION_SECONDS plus the boundary.
 		expect(evaluateEligibility(input({ policy, boundarySeconds: 0 }))).toMatchObject({ decision: 'eligible' })
 		expect(evaluateEligibility(input({ policy, boundarySeconds: 200 - FLIP_DURATION_SECONDS + 1 }))).toMatchObject({ decision: 'refuse', code: 'unsafeWindow' })
-		// The automatic arm also refuses a preferred window that closes after the firmware limit.
-		expect(evaluateEligibility(input({ policy: { ...policy, firmwareLimitSeconds: 800 }, trigger: 'automatic' }))).toMatchObject({ decision: 'refuse', code: 'unsafeWindow' })
+		// A scheduled flip also refuses a preferred window that closes after the firmware limit; a manual one does not.
+		expect(evaluateEligibility(input({ policy: { ...policy, firmwareLimitSeconds: 800 }, trigger: 'scheduled' }))).toMatchObject({ decision: 'refuse', code: 'unsafeWindow' })
+		expect(evaluateEligibility(input({ policy: { ...policy, firmwareLimitSeconds: 800 } }))).toMatchObject({ decision: 'eligible' })
 	})
 
-	test('a missing or simulated pier side never erases the timing, and only the automatic arm needs consent to infer', () => {
+	test('a missing or simulated pier side never erases the timing; it only changes how the flip is verified', () => {
 		for (const unusable of [mount({ hasPierSide: false, pierSide: 'NEITHER' }), mount({ client: { type: 'SIMULATOR', id: 'simulator' } })]) {
-			expect(evaluateEligibility(input({ mount: unusable }))).toMatchObject({ decision: 'eligible', verificationMode: 'inference' })
-			expect(evaluateEligibility(input({ mount: unusable, canInfer: false }))).toMatchObject({ decision: 'eligible', verificationMode: 'none' })
-			expect(evaluateEligibility(input({ mount: unusable, trigger: 'automatic' }))).toMatchObject({ decision: 'refuse', code: 'noPierSide' })
-			expect(evaluateEligibility(input({ mount: unusable, trigger: 'automatic', policy: { ...DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY, allowInferredVerification: true } }))).toMatchObject({ decision: 'eligible', verificationMode: 'inference' })
-			expect(evaluateEligibility(input({ mount: unusable, trigger: 'automatic', canInfer: false, policy: { ...DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY, allowInferredVerification: true } }))).toMatchObject({ decision: 'refuse', code: 'noPierSide' })
+			for (const trigger of ['manual', 'scheduled'] as const) {
+				expect(evaluateEligibility(input({ mount: unusable, trigger }))).toMatchObject({ decision: 'eligible', verificationMode: 'inference' })
+				expect(evaluateEligibility(input({ mount: unusable, trigger, canInfer: false }))).toMatchObject({ decision: 'eligible', verificationMode: 'none' })
+			}
 		}
 	})
 

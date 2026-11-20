@@ -1,4 +1,4 @@
-import type { ExecutorEligibility, FlipVerification, FlipVerificationMode, MeridianFlipArm, MeridianFlipExecuteRequest, MeridianFlipExecution, MeridianFlipExecutionRequest, MeridianFlipExecutionState, MeridianFlipExecutorSnapshot, MeridianFlipStep, ServerEvent } from 'api'
+import type { ExecutorEligibility, FlipTrigger, FlipVerification, FlipVerificationMode, MeridianFlipArm, MeridianFlipExecuteRequest, MeridianFlipExecution, MeridianFlipExecutionRequest, MeridianFlipExecutionState, MeridianFlipExecutorSnapshot, MeridianFlipStep, ServerEvent } from 'api'
 import { nanoid } from 'nanoid'
 import { proxy } from 'valtio'
 import { cameraKey } from '../../camera/capture'
@@ -7,7 +7,7 @@ import type { StatusTone } from '../../ui/StatusBadge'
 import { monitorKey } from './meridianflip'
 
 // Mirror of the Meridian Flip Executor of the server: its executions, its arms, the requests this tab sends to
-// execute, arm, disarm, and cancel them, and the words and checks the tool and the status bar read them by. The executions are the server's: this mirror is fed by
+// execute (now or once eligible), disarm, and cancel them, and the words and checks the tool and the status bar read them by. The executions are the server's: this mirror is fed by
 // GET /api/meridian-flip/executions and the meridianFlipExecutor:updated and meridianFlipExecutor:armed events, and no tab,
 // profile, or route change starts, arms, or cancels one. Revisions order the snapshot and the events within one server
 // process (epoch). Requests carry a token generated here, so a repeated request never flips twice.
@@ -23,7 +23,7 @@ export interface MeridianFlipExecutorState {
 	// Arms by monitorKey of their mount.
 	arms: Record<string, MeridianFlipArm>
 	// Request in flight, by monitorKey of the mount.
-	pending: Record<string, 'execute' | 'arm' | 'disarm' | 'cancel' | 'resume'>
+	pending: Record<string, 'execute' | 'disarm' | 'cancel' | 'resume'>
 	// Why the last request of a mount failed, by monitorKey.
 	errors: Record<string, string>
 }
@@ -91,7 +91,7 @@ export function latestExecution(state: Pick<MeridianFlipExecutorState, 'executio
 
 // Asks the server what would be decided for a request now; starts nothing. Returns the decision, or why it could not be
 // answered.
-export async function meridianFlipEligibility(connectionId: string, deviceId: string, body: Omit<MeridianFlipExecutionRequest, 'token'> & { readonly trigger: 'manual' | 'scheduled' | 'automatic' }, request: ApiFetch = browserFetch): Promise<{ readonly decision: ExecutorEligibility } | { readonly error: string }> {
+export async function meridianFlipEligibility(connectionId: string, deviceId: string, body: Omit<MeridianFlipExecutionRequest, 'token'> & { readonly trigger: FlipTrigger }, request: ApiFetch = browserFetch): Promise<{ readonly decision: ExecutorEligibility } | { readonly error: string }> {
 	try {
 		const response = await request(`${executorUrl(connectionId, deviceId)}/eligibility`, jsonInit('POST', { ...body, token: nanoid() }))
 		if (!response.ok) return { error: await responseError(response, 'The flip could not be assessed.') }
@@ -104,11 +104,6 @@ export async function meridianFlipEligibility(connectionId: string, deviceId: st
 // Flips a mount now, or once its window opens. Returns whether the server accepted it; a refusal is kept in errors.
 export function executeMeridianFlip(state: MeridianFlipExecutorState, connectionId: string, deviceId: string, mode: MeridianFlipExecuteRequest['mode'], body: Omit<MeridianFlipExecutionRequest, 'token'>, request: ApiFetch = browserFetch) {
 	return send(state, connectionId, deviceId, 'execute', `${executorUrl(connectionId, deviceId)}/execute`, { ...body, mode, token: nanoid() }, 'The flip could not be started.', request)
-}
-
-// Arms the automatic flip of a mount. Returns whether the server accepted it.
-export function armMeridianFlip(state: MeridianFlipExecutorState, connectionId: string, deviceId: string, body: Omit<MeridianFlipExecutionRequest, 'token'>, request: ApiFetch = browserFetch) {
-	return send(state, connectionId, deviceId, 'arm', `${executorUrl(connectionId, deviceId)}/arm`, { ...body, token: nanoid() }, 'The flip could not be armed.', request)
 }
 
 // Removes the arm of a mount; commands nothing. Returns whether the request succeeded.

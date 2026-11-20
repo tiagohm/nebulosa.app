@@ -33,7 +33,7 @@ function execution(sessionId: string, startedAt: number, patch: Partial<Meridian
 }
 
 function arm(): MeridianFlipArm {
-	return { armId: 'arm', connectionId: 'c', deviceId: 'd', mountName: 'GEM', trigger: 'automatic', armedAt: 1, decision: { decision: 'wait', code: 'notDue', reason: 'Waiting' }, policy: DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY }
+	return { armId: 'arm', connectionId: 'c', deviceId: 'd', mountName: 'GEM', armedAt: 1, decision: { decision: 'wait', code: 'notDue', reason: 'Waiting' }, policy: DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY }
 }
 
 function updated(epoch: string, revision: number, value: MeridianFlipExecution): MeridianFlipExecutorEvent {

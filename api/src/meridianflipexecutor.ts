@@ -39,7 +39,7 @@ import type { ServerEvent } from './websocket'
 // imaging back, composing the services that already own each step instead of commanding devices itself. It reads the
 // passive Meridian Flip Monitor (meridianflip.ts), which never moves anything, and adds the decisions of
 // meridianflipexecutor.policy.ts. One execution runs per physical mount; a flip is started by an explicit request (now),
-// by a one-shot request that waits for the window (when eligible), or by the automatic arm, never by the Monitor alone.
+// or by a one-shot request that waits for the window (when eligible), never by the Monitor alone.
 //
 // An execution freezes its target and the equipment of the Equipment Setup it was asked with, opens one reservation of the
 // arbiter, and in order: pauses the running capture of the main camera at its next frame boundary, lending the camera (and
@@ -146,7 +146,7 @@ export type MeridianFlipCentering = Omit<TargetCenteringRequest, 'token' | 'moun
 // Settings of Auto Focus an execution refocuses with; the focuser is the setup's.
 export type MeridianFlipAutoFocus = Omit<AutoFocusRequest, 'token' | 'focuser'>
 
-// Body of POST .../meridian-flip/execute and .../meridian-flip/arm.
+// Body of POST .../meridian-flip/execute and .../meridian-flip/eligibility.
 export interface MeridianFlipExecutionRequest extends CommandRequest {
 	// Equipment of the setup.
 	readonly setup: MeridianFlipSetup
@@ -213,7 +213,7 @@ export interface MeridianFlipExecution {
 	readonly revision: number
 }
 
-// Request waiting for its flip window, scheduled once or armed automatically.
+// One-shot request waiting for its flip window.
 export interface MeridianFlipArm {
 	// Id of the arm.
 	readonly armId: string
@@ -223,8 +223,6 @@ export interface MeridianFlipArm {
 	readonly deviceId: string
 	// Name of the mount.
 	readonly mountName: string
-	// One-shot (scheduled) or automatic.
-	readonly trigger: Exclude<FlipTrigger, 'manual'>
 	// Instant it was armed.
 	readonly armedAt: number
 	// Latest decision taken for it.
@@ -394,12 +392,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 	// execution or the arm, and refuses with { error, code }: 404 unknown mount or device; 409 disconnected, busy (an execution
 	// runs or an arm waits), or a decision refusing it; 422 when the setup lacks what the policy needs.
 	execute(connectionId: string, deviceId: string, request: MeridianFlipExecuteRequest): Response {
-		return this.#remembered(request.token, () => (request.mode === 'now' ? this.#now(connectionId, deviceId, request) : this.#arm(connectionId, deviceId, request, 'scheduled')))
-	}
-
-	// Arms the automatic flip of a mount, answered like execute.
-	arm(connectionId: string, deviceId: string, request: MeridianFlipExecutionRequest): Response {
-		return this.#remembered(request.token, () => this.#arm(connectionId, deviceId, request, 'automatic'))
+		return this.#remembered(request.token, () => (request.mode === 'now' ? this.#now(connectionId, deviceId, request) : this.#arm(connectionId, deviceId, request)))
 	}
 
 	// Removes the arm of a mount; a running execution is left alone. Responds 204, also when nothing was armed.
@@ -461,16 +454,16 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 	}
 
 	// Arms a flip for its window, starting it at once when it is already eligible.
-	#arm(connectionId: string, deviceId: string, request: MeridianFlipExecutionRequest, trigger: Exclude<FlipTrigger, 'manual'>): Response {
+	#arm(connectionId: string, deviceId: string, request: MeridianFlipExecutionRequest): Response {
 		const prepared = this.#prepare(connectionId, deviceId, request)
 		if (!prepared.ok) return refusalResponse(prepared)
 
-		const decision = this.#decide(connectionId, deviceId, prepared.mount, request, trigger)
+		const decision = this.#decide(connectionId, deviceId, prepared.mount, request, 'scheduled')
 		if (decision.decision === 'refuse' && decision.code !== 'notTracking') return errorResponse(decision.reason, 409, decision.code)
 
 		const key = resourceKey(prepared.mount)
 		const arm: Arm = {
-			arm: { armId: Bun.randomUUIDv7(), connectionId, deviceId, mountName: prepared.mount.name, trigger, armedAt: this.options.now(), decision, policy: request.policy },
+			arm: { armId: Bun.randomUUIDv7(), connectionId, deviceId, mountName: prepared.mount.name, armedAt: this.options.now(), decision, policy: request.policy },
 			request,
 			target: this.#frozen(prepared.mount, request),
 			contextId: decision.decision === 'eligible' ? decision.contextId : this.services.monitor.monitor(connectionId, deviceId)?.contextId,
@@ -540,17 +533,17 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 		clearTimeout(arm.timer)
 		arm.timer = undefined
 
-		const { connectionId, deviceId, trigger } = arm.arm
+		const { connectionId, deviceId } = arm.arm
 		const mount = findDevice(this, connectionId, 'mount', deviceId)
 		if (!mount) return this.#removeArm(key)
 
-		const decision = this.#decide(connectionId, deviceId, mount, arm.request, trigger, arm.contextId)
+		const decision = this.#decide(connectionId, deviceId, mount, arm.request, 'scheduled', arm.contextId)
 		arm.arm = { ...arm.arm, decision }
 		this.#publishArm(arm)
 
 		if (decision.decision === 'eligible') {
 			this.#removeArm(key)
-			this.#start(connectionId, deviceId, mount, arm.request, arm.target, trigger, decision)
+			this.#start(connectionId, deviceId, mount, arm.request, arm.target, 'scheduled', decision)
 		} else if (decision.decision === 'wait') {
 			const delay = Math.min(MAXIMUM_REEVALUATION_DELAY, Math.max(1000, (decision.reevaluateAt ?? this.options.now() + MAXIMUM_REEVALUATION_DELAY) - this.options.now()))
 			arm.timer = setTimeout(() => this.#reevaluate(key), delay)
@@ -741,7 +734,7 @@ export class MeridianFlipExecutor implements DeviceContext, Disposable {
 				if (!extended.ok) {
 					fail('failed', 'busy', `Another operation holds ${extended.conflicts.map((conflict) => conflict.ownerKind).join(', ')}`)
 				} else {
-					const decision = this.#decide(session.execution.connectionId, session.execution.deviceId, mount, request, session.execution.trigger === 'manual' ? 'manual' : 'scheduled', session.execution.contextId, session.execution.passage)
+					const decision = this.#decide(session.execution.connectionId, session.execution.deviceId, mount, request, session.execution.trigger, session.execution.contextId, session.execution.passage)
 					if (decision.decision !== 'eligible') fail('failed', decision.code, decision.reason)
 				}
 
@@ -1042,10 +1035,6 @@ export function createMeridianFlipExecutorRoutes(executor: MeridianFlipExecutor)
 		'/api/connections/:id/mounts/:deviceId/meridian-flip/execute': {
 			// Flips now, or once eligible.
 			POST: async (req) => executor.execute(req.params.id, req.params.deviceId, (await req.json()) as MeridianFlipExecuteRequest),
-		},
-		'/api/connections/:id/mounts/:deviceId/meridian-flip/arm': {
-			// Arms the automatic flip of the mount.
-			POST: async (req) => executor.arm(req.params.id, req.params.deviceId, (await req.json()) as MeridianFlipExecutionRequest),
 		},
 		'/api/connections/:id/mounts/:deviceId/meridian-flip/disarm': {
 			// Removes the arm of the mount; commands nothing.

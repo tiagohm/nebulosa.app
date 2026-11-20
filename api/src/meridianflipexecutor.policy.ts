@@ -24,9 +24,9 @@ export type FlipVerificationMode = 'driverPierSide' | 'inference' | 'none'
 // How a flip is commanded, as the operator chooses it: auto takes the driver's own flip when it has one, else a forced GoTo.
 export type FlipStrategyChoice = 'auto' | MountFlipStrategy
 
-// What started a flip: an explicit request to flip now, a one-shot request to flip once the window opens, or the automatic
-// arm.
-export type FlipTrigger = 'manual' | 'scheduled' | 'automatic'
+// What started a flip: an explicit request to flip now, or a one-shot request to flip once the window opens, which then
+// flips unattended.
+export type FlipTrigger = 'manual' | 'scheduled'
 
 // Policy of the Executor for one mount, as the operator configured it.
 export interface MeridianFlipExecutorPolicy {
@@ -38,9 +38,6 @@ export interface MeridianFlipExecutorPolicy {
 	readonly autofocusAfterFlip: boolean
 	// Wait after the flip motion before anything measures or moves again, in seconds; >= 0.
 	readonly mountSettleSeconds: number
-	// Whether a mount without a usable pier side may be flipped by the automatic arm, its flip then established by plate
-	// solutions before and after (inferred), never by the pier side.
-	readonly allowInferredVerification: boolean
 	// Whether an inferred flip lets the paused capture go on by itself; the operator acknowledged that inference is not a
 	// mechanical confirmation. Off, an inferred flip leaves the capture paused for the operator.
 	readonly allowInferredAutoResume: boolean
@@ -52,13 +49,12 @@ export interface MeridianFlipExecutorPolicy {
 }
 
 // Policy a mount starts with: the driver's own flip when it has one, recentering, no Auto Focus, 5 s of mount settle, and no
-// inference without the operator's consent.
+// imaging resumed after an inferred flip without the operator's consent.
 export const DEFAULT_MERIDIAN_FLIP_EXECUTOR_POLICY: MeridianFlipExecutorPolicy = {
 	strategy: 'auto',
 	recenterAfterFlip: true,
 	autofocusAfterFlip: false,
 	mountSettleSeconds: 5,
-	allowInferredVerification: false,
 	allowInferredAutoResume: false,
 	treatUnknownMountAsGem: false,
 }
@@ -77,7 +73,6 @@ export type MeridianFlipExecutorErrorCode =
 	| 'parked'
 	| 'nonSidereal'
 	| 'nearPole'
-	| 'noPierSide'
 	| 'alreadyFlipped'
 	| 'alreadyServiced'
 	| 'unsafeWindow'
@@ -119,7 +114,7 @@ export interface EligibilityInput {
 	readonly boundarySeconds: number
 	// Passages of the mount already flipped or being flipped (see passageKey).
 	readonly serviced: ReadonlySet<string>
-	// Context the request was decided for, when it must still be the monitor's (a scheduled or automatic flip).
+	// Context the request was decided for, when it must still be the monitor's (a scheduled flip).
 	readonly expectedContextId?: string
 }
 
@@ -191,15 +186,12 @@ export function evaluateEligibility({ now, trigger, monitor, mount, policy, canI
 		const limit = transitAt + policy.firmwareLimitSeconds * 1000
 		const end = now + (boundarySeconds + FLIP_DURATION_SECONDS) * 1000
 		if (end > limit) return refuse('unsafeWindow', 'The flip would not end before the firmware limit of the mount')
-		if (trigger === 'automatic' && windowClosesAt !== undefined && windowClosesAt > limit) return refuse('unsafeWindow', 'The preferred flip window closes after the firmware limit of the mount; shorten the window')
+		if (trigger === 'scheduled' && windowClosesAt !== undefined && windowClosesAt > limit) return refuse('unsafeWindow', 'The preferred flip window closes after the firmware limit of the mount; shorten the window')
 	}
 
 	const usableSide = pierSideProvenance(mount) === 'driverReported' && (mount.pierSide === 'EAST' || mount.pierSide === 'WEST')
 
-	if (!usableSide) {
-		if (trigger === 'automatic' && !(policy.allowInferredVerification && canInfer)) return refuse('noPierSide', `${mount.name} publishes no usable pier side; allow inferred verification with a camera and plate solving, or flip it by hand`)
-		return eligible(strategy, canInfer ? 'inference' : 'none', monitor.contextId, passage, `${mount.name} publishes no usable pier side; the flip can only be ${canInfer ? 'inferred' : 'unverified'}`)
-	}
+	if (!usableSide) return eligible(strategy, canInfer ? 'inference' : 'none', monitor.contextId, passage, `${mount.name} publishes no usable pier side; the flip can only be ${canInfer ? 'inferred' : 'unverified'}`)
 
 	return eligible(strategy, 'driverPierSide', monitor.contextId, passage, 'The flip window is open')
 }

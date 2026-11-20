@@ -296,7 +296,7 @@ test('an inferred flip lets imaging go on only when the policy accepts it', asyn
 	const context = await setup({ hasPierSide: false, pierSide: 'NEITHER' })
 	context.setFlip(moved({ pierSideProvenance: 'unavailable', pierSideChanged: false }))
 
-	const accepted = await context.ended(context.execute('now', context.request({}, { allowInferredVerification: true, allowInferredAutoResume: true })))
+	const accepted = await context.ended(context.execute('now', context.request({}, { allowInferredAutoResume: true })))
 	expect(accepted).toMatchObject({ state: 'completed' })
 	expect(accepted.outcome).toMatchObject({ verification: 'inferred', recentering: 'completed', captureRestoration: 'resumed' })
 })
@@ -336,16 +336,12 @@ test('a flip is refused before the window when asked now, scheduled when eligibl
 	expect(await again.json()).toMatchObject({ code: 'alreadyServiced' })
 })
 
-test('the automatic arm refuses a mount without a usable pier side unless inference is allowed, and disarming commands nothing', async () => {
+test('a mount without a usable pier side is scheduled to be inferred, and disarming commands nothing', async () => {
 	const context = await setup({ client: { type: 'SIMULATOR', id: 'simulator' } })
 
-	const refused = context.executor.arm(context.id, context.mountId, context.request())
-	expect(refused.status).toBe(409)
-	expect(await refused.json()).toMatchObject({ code: 'noPierSide' })
-
 	context.setMonitor(openWindow(context.id, context.mountId, { mechanical: 'notDue' }, { phase: 'before', windowOpensAt: Date.now() + 3600000 }))
-	expect(context.executor.arm(context.id, context.mountId, context.request({}, { allowInferredVerification: true })).status).toBe(202)
-	expect(context.executor.snapshot().arms[0]).toMatchObject({ trigger: 'automatic', decision: { decision: 'wait', code: 'notDue' } })
+	expect(context.execute('whenEligible').status).toBe(202)
+	expect(context.executor.snapshot().arms[0]).toMatchObject({ decision: { decision: 'wait', code: 'notDue' } })
 	expect(context.executor.disarm(context.id, context.mountId).status).toBe(204)
 	expect(context.executor.snapshot().arms).toEqual([])
 	expect(context.calls).toEqual([])

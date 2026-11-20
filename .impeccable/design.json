@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 2,
-	"generatedAt": "2026-11-16T17:17:02.362Z",
+	"generatedAt": "2026-11-20T11:58:05.113Z",
 	"title": "Design System: Nebulosa",
 	"extensions": {
 		"colorMeta": {
@@ -111,6 +111,72 @@
 				"displayName": "Night Veil",
 				"canonical": "#0a0a09",
 				"tonalRamp": ["oklch(15% 0.002 106.6)", "oklch(25% 0.002 106.6)", "oklch(35% 0.002 106.6)", "oklch(45% 0.002 106.6)", "oklch(55% 0.002 106.6)", "oklch(65% 0.002 106.6)", "oklch(80% 0.001 106.6)", "oklch(95% 0.000 106.6)"]
+			},
+			"map-horizon": {
+				"role": "map",
+				"displayName": "Horizon Umber",
+				"canonical": "oklch(0.6 0.08 40)",
+				"tonalRamp": ["oklch(15% 0.048 40)", "oklch(25% 0.048 40)", "oklch(35% 0.080 40)", "oklch(45% 0.080 40)", "oklch(55% 0.080 40)", "oklch(65% 0.080 40)", "oklch(80% 0.048 40)", "oklch(95% 0.048 40)"]
+			},
+			"map-equator": {
+				"role": "map",
+				"displayName": "Equator Slate",
+				"canonical": "oklch(0.6 0.08 250)",
+				"tonalRamp": ["oklch(15% 0.048 250)", "oklch(25% 0.048 250)", "oklch(35% 0.080 250)", "oklch(45% 0.080 250)", "oklch(55% 0.080 250)", "oklch(65% 0.080 250)", "oklch(80% 0.048 250)", "oklch(95% 0.048 250)"]
+			},
+			"map-ecliptic": {
+				"role": "map",
+				"displayName": "Ecliptic Mauve",
+				"canonical": "oklch(0.6 0.08 325)",
+				"tonalRamp": ["oklch(15% 0.048 325)", "oklch(25% 0.048 325)", "oklch(35% 0.080 325)", "oklch(45% 0.080 325)", "oklch(55% 0.080 325)", "oklch(65% 0.080 325)", "oklch(80% 0.048 325)", "oklch(95% 0.048 325)"]
+			},
+			"map-meridian": {
+				"role": "map",
+				"displayName": "Meridian Sage",
+				"canonical": "oklch(0.6 0.08 145)",
+				"tonalRamp": ["oklch(15% 0.048 145)", "oklch(25% 0.048 145)", "oklch(35% 0.080 145)", "oklch(45% 0.080 145)", "oklch(55% 0.080 145)", "oklch(65% 0.080 145)", "oklch(80% 0.048 145)", "oklch(95% 0.048 145)"]
+			},
+			"map-deep-sky": {
+				"role": "map",
+				"displayName": "Deep-Sky Olive",
+				"canonical": "oklch(0.6 0.08 100)",
+				"tonalRamp": ["oklch(15% 0.048 100)", "oklch(25% 0.048 100)", "oklch(35% 0.080 100)", "oklch(45% 0.080 100)", "oklch(55% 0.080 100)", "oklch(65% 0.080 100)", "oklch(80% 0.048 100)", "oklch(95% 0.048 100)"]
+			},
+			"map-sun": {
+				"role": "map",
+				"displayName": "Sun Pale Gold",
+				"canonical": "oklch(0.8 0.14 95)",
+				"tonalRamp": ["oklch(15% 0.084 95)", "oklch(25% 0.084 95)", "oklch(35% 0.140 95)", "oklch(45% 0.140 95)", "oklch(55% 0.140 95)", "oklch(65% 0.140 95)", "oklch(80% 0.084 95)", "oklch(95% 0.084 95)"]
+			},
+			"map-moon": {
+				"role": "map",
+				"displayName": "Moon Steel Blue",
+				"canonical": "oklch(0.65 0.12 245)",
+				"tonalRamp": ["oklch(15% 0.072 245)", "oklch(25% 0.072 245)", "oklch(35% 0.120 245)", "oklch(45% 0.120 245)", "oklch(55% 0.120 245)", "oklch(65% 0.120 245)", "oklch(80% 0.072 245)", "oklch(95% 0.072 245)"]
+			},
+			"map-planet": {
+				"role": "map",
+				"displayName": "Planet Violet",
+				"canonical": "oklch(0.6 0.14 310)",
+				"tonalRamp": ["oklch(15% 0.084 310)", "oklch(25% 0.084 310)", "oklch(35% 0.140 310)", "oklch(45% 0.140 310)", "oklch(55% 0.140 310)", "oklch(65% 0.140 310)", "oklch(80% 0.084 310)", "oklch(95% 0.084 310)"]
+			},
+			"map-asteroid": {
+				"role": "map",
+				"displayName": "Asteroid Brick",
+				"canonical": "oklch(0.6 0.14 20)",
+				"tonalRamp": ["oklch(15% 0.084 20)", "oklch(25% 0.084 20)", "oklch(35% 0.140 20)", "oklch(45% 0.140 20)", "oklch(55% 0.140 20)", "oklch(65% 0.140 20)", "oklch(80% 0.084 20)", "oklch(95% 0.084 20)"]
+			},
+			"map-comet": {
+				"role": "map",
+				"displayName": "Comet Jade",
+				"canonical": "oklch(0.6 0.14 160)",
+				"tonalRamp": ["oklch(15% 0.084 160)", "oklch(25% 0.084 160)", "oklch(35% 0.140 160)", "oklch(45% 0.140 160)", "oklch(55% 0.140 160)", "oklch(65% 0.140 160)", "oklch(80% 0.084 160)", "oklch(95% 0.084 160)"]
+			},
+			"map-radiant": {
+				"role": "map",
+				"displayName": "Radiant Dusty Rose",
+				"canonical": "oklch(0.6 0.08 360)",
+				"tonalRamp": ["oklch(15% 0.048 360)", "oklch(25% 0.048 360)", "oklch(35% 0.080 360)", "oklch(45% 0.080 360)", "oklch(55% 0.080 360)", "oklch(65% 0.080 360)", "oklch(80% 0.048 360)", "oklch(95% 0.048 360)"]
 			}
 		},
 		"typographyMeta": {
@@ -221,6 +287,14 @@
 			"description": "A light command inside a section, in Ember Clay text.",
 			"html": "<button class=\"ds-btn-ghost\">Show Framing</button>",
 			"css": ".ds-btn-ghost { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 7px 14px; border-radius: 10px; border: 1px solid transparent; font-size: 12.25px; line-height: 17.5px; font-weight: 500; cursor: pointer; transition: background-color 150ms, border-color 150ms, color 150ms; background: transparent; color: var(--color-accent); } .ds-btn-ghost:hover { background: var(--color-accent-subtle); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }"
+		},
+		{
+			"name": "Danger Button",
+			"kind": "button",
+			"refersTo": "button-danger",
+			"description": "Only the confirming button of a destructive confirmation (ConfirmButton with destructive).",
+			"html": "<button class=\"ds-btn-danger\">Delete</button>",
+			"css": ".ds-btn-danger { font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 7px 14px; border-radius: 10px; border: 1px solid transparent; font-size: 12.25px; line-height: 17.5px; font-weight: 500; cursor: pointer; transition: background-color 150ms, border-color 150ms, color 150ms; background: var(--color-danger); color: var(--color-on-accent); } .ds-btn-danger:hover { background: color-mix(in srgb, var(--color-danger) 85%, transparent); } .ds-btn-danger:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }"
 		},
 		{
 			"name": "Icon Button",

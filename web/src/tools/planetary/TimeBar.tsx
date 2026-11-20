@@ -4,12 +4,13 @@ import { IconButton } from '../../ui/IconButton'
 import { Select } from '../../ui/Select'
 import { Slider } from '../../ui/Slider'
 import { TextInput } from '../../ui/TextInput'
-import { adjacentEvent, FOLLOW_INTERVAL_MS, followNow, inputInstant, localInput, PLANET_PERIODS, PLANET_RATES, type PlanetPeriod, type PlanetRate, type PlannerClock, RATE_LABELS, setTime, STEP_MS } from './planetary'
+import { adjacentEvent, FOLLOW_INTERVAL_MS, followedEvening, followNow, inputInstant, localInput, PLANET_PERIODS, PLANET_RATES, type PlanetPeriod, type PlanetRate, type PlannerClock, RATE_LABELS, setTime, STEP_MS } from './planetary'
 
 // Clock of a planetary planner, independent of the Sky clock: the evening the period starts and its length, the instant
 // shown, now, steps, the previous and next listed events, and play with its rate. Times are entered and shown in the
 // display zone. Now makes the clock follow real now: the button stays pressed and the clock reads real now again every
-// FOLLOW_INTERVAL_MS, and as soon as the tab is shown again, until another instant is chosen or play starts. Every
+// FOLLOW_INTERVAL_MS, and as soon as the tab is shown again, moving the period to tonight once real now leaves it, until
+// another instant or another first evening is chosen or play starts. Every
 // transport button has its own glyph, a media player's: the clock for now, skip for the events, step for ten minutes;
 // on a coarse pointer each is a 44 px target.
 
@@ -33,6 +34,8 @@ export interface TimeBarProps {
 	readonly events: readonly { readonly maximum: number }[]
 	// IANA zone the times are entered and shown in.
 	readonly timeZone: string
+	// IANA zone that names the evenings, in which a clock that follows real now finds tonight.
+	readonly eveningZone: string
 	// Real now, Unix milliseconds.
 	readonly now: () => number
 }
@@ -44,7 +47,7 @@ const HOUR_MS = 3_600_000
 const BUTTON_CLASS = 'pointer-coarse:size-[44px]'
 
 // Clock of a planner.
-export function TimeBar({ state, store, range, events, timeZone, now }: TimeBarProps) {
+export function TimeBar({ state, store, range, events, timeZone, eveningZone, now }: TimeBarProps) {
 	const time = state.time ?? range.start
 	const previous = adjacentEvent(events, time, -1)
 	const next = adjacentEvent(events, time, 1)
@@ -63,10 +66,25 @@ export function TimeBar({ state, store, range, events, timeZone, now }: TimeBarP
 		}
 	}, [state.following, store, now])
 
+	// A clock that follows real now out of the period moves the period to tonight.
+	useEffect(() => {
+		const evening = followedEvening(state, range, eveningZone)
+		if (evening !== undefined) store.eveningDate = evening
+	}, [state.following, state.time, range.start, range.end, eveningZone, store])
+
 	return (
 		<div className="flex flex-col gap-2 rounded border border-line-100 bg-base-100 p-3">
 			<div className="flex flex-wrap items-end gap-2">
-				<TextInput label="First evening" type="date" value={state.eveningDate ?? ''} onChange={(event) => event.target.value && (store.eveningDate = event.target.value)} />
+				<TextInput
+					label="First evening"
+					type="date"
+					value={state.eveningDate ?? ''}
+					onChange={(event) => {
+						if (!event.target.value) return
+						store.eveningDate = event.target.value
+						store.following = false
+					}}
+				/>
 				<Select label="Period" className="w-32 flex-none" options={PLANET_PERIODS.map(String)} value={String(state.period)} format={(days) => (days === '1' ? '1 day' : `${days} days`)} onChange={(days) => (store.period = Number(days) as PlanetPeriod)} />
 				<TextInput
 					label={`Time (${timeZone})`}

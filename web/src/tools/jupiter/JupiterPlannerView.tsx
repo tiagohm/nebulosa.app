@@ -269,7 +269,7 @@ export function JupiterPlanner() {
 						</div>
 						{range && (
 							<div className="min-w-0 lg:col-span-2 lg:row-start-1">
-								<TimeBar state={state} store={jupiterPlannerState} range={range} events={events} timeZone={displayZone.zone} now={browserPlannerIo.time} />
+								<TimeBar state={state} store={jupiterPlannerState} range={range} events={events} timeZone={displayZone.zone} eveningZone={namingZone} now={browserPlannerIo.time} />
 							</div>
 						)}
 						<div className="flex min-w-0 flex-col gap-2 lg:col-start-2 lg:row-start-2">

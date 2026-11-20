@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { proxy } from 'valtio'
 import type { SkyClock } from '../../sky/clock'
 import { panZoomViewBox } from './PanZoom'
-import { adjacentEvent, equatorOffset, eveningOf, followNow, inputInstant, interpolateTrack, localInput, periodRange, type PlannerClock, playClock, screenOffset, setTime, syncSkyClock } from './planetary'
+import { adjacentEvent, equatorOffset, eveningOf, followedEvening, followNow, inputInstant, interpolateTrack, localInput, periodRange, type PlannerClock, playClock, screenOffset, setTime, syncSkyClock } from './planetary'
 
 const HOUR = 3_600_000
 const DAY = 24 * HOUR
@@ -43,6 +43,19 @@ describe('clock', () => {
 		const clock = proxy<PlannerClock>({ time: 0, playing: true, following: false, rate: 60 })
 		followNow(clock, 7)
 		expect(clock).toEqual({ time: 7, playing: false, following: true, rate: 60 })
+	})
+
+	test('a clock that follows real now out of its period moves the period to tonight', () => {
+		const range = periodRange('2026-12-01', 3, 'America/Sao_Paulo')
+		const inside = Date.UTC(2026, 11, 3, 4)
+		// 01:00 of December 3 in São Paulo is inside the period, which ends at noon of December 4 there.
+		expect(followedEvening({ time: inside, following: true }, range, 'America/Sao_Paulo')).toBeUndefined()
+		const after = range.end + HOUR
+		expect(followedEvening({ time: after, following: true }, range, 'America/Sao_Paulo')).toBe('2026-12-04')
+		expect(periodRange('2026-12-04', 3, 'America/Sao_Paulo').start).toBeLessThanOrEqual(after)
+		expect(followedEvening({ time: range.start - HOUR, following: true }, range, 'America/Sao_Paulo')).toBe('2026-11-30')
+		// A clock set by hand stays where it was put.
+		expect(followedEvening({ time: after, following: false }, range, 'America/Sao_Paulo')).toBeUndefined()
 	})
 
 	test('the Sky takes the planner instant, or follows now with the planner', () => {

@@ -158,6 +158,14 @@ export function followNow(clock: PlannerClock, now: number) {
 	clock.following = true
 }
 
+// The evening a clock that follows real now moves its period to once real now has left it: tonight's in the zone that
+// names the evenings, whose period holds real now again. Undefined while the clock is set by hand, or real now is
+// inside the period.
+export function followedEvening(clock: Readonly<Pick<PlannerClock, 'time' | 'following'>>, range: { readonly start: number; readonly end: number }, timeZone: string) {
+	if (!clock.following || clock.time === undefined || (clock.time >= range.start && clock.time < range.end)) return undefined
+	return eveningOf(clock.time, timeZone)
+}
+
 // Hands a planner's clock to the Sky before Show in Sky: the Sky follows real now when the planner does (or has no
 // instant yet), else it shows the planner's instant, fixed or still playing as the Sky was. The one deliberate change
 // of the Sky clock by a planner.

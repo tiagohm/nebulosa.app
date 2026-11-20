@@ -211,7 +211,7 @@ export function SaturnPlanner() {
 						</Notice>
 					)}
 					{state.moonsError && <Notice error>{state.moonsError}</Notice>}
-					{range && <TimeBar state={state} store={saturnPlannerState} range={range} events={jumps} timeZone={displayZone.zone} now={browserPlannerIo.time} />}
+					{range && <TimeBar state={state} store={saturnPlannerState} range={range} events={jumps} timeZone={displayZone.zone} eveningZone={namingZone} now={browserPlannerIo.time} />}
 					<div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
 						<div className="flex min-w-0 flex-col gap-2">
 							<PanZoomSurface zoom={zoom} planetHalfWidth={PLANET_HALF_WIDTH} planet="Saturn">

@@ -7,7 +7,7 @@ import type { Mount } from 'nebulosa/src/devices/indi/device'
 import { isDeviceQuiescent } from 'nebulosa/src/devices/orchestration/device.lifecycle'
 import { deg, hour, normalizeAngle } from 'nebulosa/src/math/units/angle'
 import { ConnectionManager } from './connection'
-import { DEFAULT_MOUNT_REMOTE_CONTROL_OPTIONS, type MountRemoteControlEvent, MountRemoteControlService, type MountRemoteControlOptions, type MountRemoteServer, type MountRemoteSnapshot } from './mountremotecontrol'
+import { DEFAULT_MOUNT_REMOTE_CONTROL_OPTIONS, type MountRemoteControlEvent, MountRemoteControlService, type MountRemoteControlOptions, type MountRemoteServer, type MountRemoteSnapshot, reachableAddresses } from './mountremotecontrol'
 import { MountCommands } from './mounts'
 import { type OperationEvent, OperationRegistry } from './operations'
 
@@ -125,7 +125,7 @@ test('starts both protocols of a mount, answers a repeated start, refuses anothe
 	const stellarium = await json(service.start(id, mountId, 'stellarium', { host: '127.0.0.1', port: stellariumPort }))
 
 	expect(lx200.status).toBe(200)
-	expect(lx200.body).toMatchObject({ connectionId: id, deviceId: mountId, protocol: 'lx200', host: '127.0.0.1', port: lx200Port, clients: [] })
+	expect(lx200.body).toMatchObject({ connectionId: id, deviceId: mountId, protocol: 'lx200', host: '127.0.0.1', port: lx200Port, addresses: ['127.0.0.1'], clients: [] })
 	expect(stellarium.body).toMatchObject({ protocol: 'stellarium', port: stellariumPort })
 
 	const repeated = await json(service.start(id, mountId, 'lx200', { host: '127.0.0.1', port: lx200Port }))
@@ -347,4 +347,23 @@ test('writes the site a client sends to the mount, latitude and longitude togeth
 	expect(mount.geographicCoordinate.longitude).toBeCloseTo(deg(-(46 + 38 / 60)), 8)
 	expect(mount.geographicCoordinate.elevation).toBe(elevation)
 	expect(await client.ask(':Gt#:Gg#', (text) => text.split('#').length === 3)).toBe('-23*30#+046*38#')
+})
+
+test('lists the addresses a client can reach a listener at', () => {
+	const base = { netmask: '', mac: '00:00:00:00:00:00', cidr: null }
+	const interfaces = {
+		lo: [{ ...base, address: '127.0.0.1', family: 'IPv4' as const, internal: true }],
+		eth0: [
+			{ ...base, address: '192.168.1.20', family: 'IPv4' as const, internal: false },
+			{ ...base, address: 'fe80::1', family: 'IPv6' as const, internal: false, scopeid: 2 },
+			{ ...base, address: 'fd00::20', family: 'IPv6' as const, internal: false, scopeid: 0 },
+		],
+		wlan0: [{ ...base, address: '10.0.0.5', family: 'IPv4' as const, internal: false }],
+	}
+
+	expect(reachableAddresses('0.0.0.0', interfaces)).toEqual(['192.168.1.20', '10.0.0.5'])
+	expect(reachableAddresses('::', interfaces)).toEqual(['192.168.1.20', 'fd00::20', '10.0.0.5'])
+	expect(reachableAddresses('192.168.1.20', interfaces)).toEqual(['192.168.1.20'])
+	expect(reachableAddresses('[::1]', interfaces)).toEqual(['::1'])
+	expect(reachableAddresses('0.0.0.0', {})).toEqual([])
 })

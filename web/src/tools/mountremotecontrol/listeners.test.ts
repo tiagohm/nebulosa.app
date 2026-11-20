@@ -1,14 +1,14 @@
 import { describe, expect, test } from 'bun:test'
 import type { MountRemoteControlEvent, MountRemoteServer, MountRemoteSnapshot } from 'api'
 import { proxy } from 'valtio'
-import { applyMountRemoteSnapshot, clientKey, disconnectRemoteClient, formatEndpoint, handleMountRemoteControlEvent, isLoopback, type MountRemoteControlState, refreshMountRemoteControl, remoteKey, startRemoteServer, stopRemoteServer } from './listeners'
+import { applyMountRemoteSnapshot, clientKey, connectEndpoints, disconnectRemoteClient, formatEndpoint, handleMountRemoteControlEvent, isLoopback, listenersStatusText, type MountRemoteControlState, mountListeners, refreshMountRemoteControl, remoteKey, startRemoteServer, stopRemoteServer } from './listeners'
 
 function newState() {
 	return proxy<MountRemoteControlState>({ revision: 0, servers: {}, pending: {}, disconnecting: {}, errors: {} })
 }
 
 function server(revision: number, overrides: Partial<MountRemoteServer> = {}): MountRemoteServer {
-	return { connectionId: 'c', deviceId: 'm', protocol: 'lx200', host: '0.0.0.0', port: 10002, clients: [], revision, ...overrides }
+	return { connectionId: 'c', deviceId: 'm', protocol: 'lx200', host: '0.0.0.0', port: 10002, addresses: ['192.168.1.20'], clients: [], revision, ...overrides }
 }
 
 function event(epoch: string, revision: number, value?: MountRemoteServer): MountRemoteControlEvent {
@@ -87,10 +87,10 @@ describe('requests', () => {
 
 	test('a refused start or stop keeps the error of the server', async () => {
 		const state = newState()
-		const refused = (() => Promise.resolve(Response.json({ error: '0.0.0.0:10002 is already in use', code: 'addressInUse' }, { status: 409 }))) as unknown as typeof fetch
+		const refused = (() => Promise.resolve(Response.json({ error: '0.0.0.0:10002 is already in use by another server or program. Choose another port.', code: 'addressInUse' }, { status: 409 }))) as unknown as typeof fetch
 
 		expect(await startRemoteServer(state, 'c', 'm', 'lx200', { host: '0.0.0.0', port: 10002 }, refused)).toBe(false)
-		expect(state.errors[KEY]).toBe('0.0.0.0:10002 is already in use')
+		expect(state.errors[KEY]).toBe('0.0.0.0:10002 is already in use by another server or program. Choose another port.')
 
 		const ok = (() => Promise.resolve(new Response(null, { status: 204 }))) as unknown as typeof fetch
 		expect(await stopRemoteServer(state, 'c', 'm', 'lx200', ok)).toBe(true)
@@ -116,4 +116,18 @@ test('formats endpoints and recognizes loopback hosts', () => {
 	expect(formatEndpoint('fe80::1', 51000)).toBe('[fe80::1]:51000')
 	expect(['127.0.0.1', 'localhost', '::1'].map(isLoopback)).toEqual([true, true, true])
 	expect(['0.0.0.0', '192.168.0.5', '::'].map(isLoopback)).toEqual([false, false, false])
+})
+
+test('lists the listeners of a mount, where clients connect, and their status', () => {
+	const lx200 = server(1, { clients: [{ id: 'a', ip: '192.168.1.42', port: 51000 }] })
+	const stellarium = server(2, { protocol: 'stellarium', port: 10001, addresses: ['192.168.1.20', 'fd00::20'] })
+	const other = server(3, { deviceId: 'other' })
+	const servers = { [remoteKey('c', 'm', 'stellarium')]: stellarium, [remoteKey('c', 'm', 'lx200')]: lx200, [remoteKey('c', 'other', 'lx200')]: other }
+
+	expect(mountListeners(servers, 'c', 'm')).toEqual([lx200, stellarium])
+	expect(connectEndpoints(stellarium)).toEqual(['192.168.1.20:10001', '[fd00::20]:10001'])
+	expect(listenersStatusText([lx200])).toBe('LX200 · 1 client')
+	expect(listenersStatusText([lx200, stellarium, { ...lx200, clients: [...lx200.clients, ...lx200.clients] }])).toBe('LX200, Stellarium, LX200 · 3 clients')
+	expect(listenersStatusText([stellarium])).toBe('Stellarium · No clients')
+	expect(listenersStatusText([])).toBeUndefined()
 })

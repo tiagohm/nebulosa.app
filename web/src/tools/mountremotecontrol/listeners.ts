@@ -54,6 +54,29 @@ export function isLoopback(host: string) {
 	return name === 'localhost' || name.startsWith('127.') || name === '::1' || name === '[::1]'
 }
 
+// Order of the protocols wherever the listeners of a mount are listed together.
+const PROTOCOL_ORDER: readonly MountRemoteProtocol[] = ['lx200', 'stellarium']
+
+// Running listeners of one mount of one open connection, in protocol order.
+export function mountListeners(servers: Readonly<Record<string, MountRemoteServer>>, connectionId: string, deviceId: string): MountRemoteServer[] {
+	return PROTOCOL_ORDER.flatMap((protocol) => servers[remoteKey(connectionId, deviceId, protocol)] ?? [])
+}
+
+// Addresses as IP:port a planetarium on another computer enters to reach a listener; empty when the server reports
+// none, such as a wildcard host on a computer without a network.
+export function connectEndpoints(server: Pick<MountRemoteServer, 'addresses' | 'port'>): string[] {
+	return server.addresses.map((address) => formatEndpoint(address, server.port))
+}
+
+// Short status of the running listeners of a mount, as the status bar writes it: the protocols and the count of
+// clients, such as "LX200 · 1 client" or "LX200, Stellarium · No clients"; undefined when none runs.
+export function listenersStatusText(servers: readonly Pick<MountRemoteServer, 'protocol' | 'clients'>[]): string | undefined {
+	if (servers.length === 0) return undefined
+	const clients = servers.reduce((count, server) => count + server.clients.length, 0)
+	const protocols = servers.map((server) => MOUNT_REMOTE_PROTOCOL_LABELS[server.protocol]).join(', ')
+	return `${protocols} · ${clients === 0 ? 'No clients' : clients === 1 ? '1 client' : `${clients} clients`}`
+}
+
 // Replaces the listeners with a snapshot of the server, unless it is older than the events already applied.
 export function applyMountRemoteSnapshot(state: MountRemoteControlState, snapshot: MountRemoteSnapshot) {
 	if (snapshot.epoch === state.epoch && snapshot.revision < state.revision) return

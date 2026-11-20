@@ -12,7 +12,7 @@ import { StatusBadge } from '../ui/StatusBadge'
 import { TextInput } from '../ui/TextInput'
 import { meridianFlipHeadline, meridianFlipState, monitorKey } from './meridianflip/meridianflip'
 import { latestExecution, MERIDIAN_FLIP_STEP_LABELS, meridianFlipExecutorState } from './meridianflip/meridianflipexecutor'
-import { formatEndpoint, MOUNT_REMOTE_PROTOCOL_LABELS, mountRemoteControlState } from './mountremotecontrol/listeners'
+import { formatEndpoint, MOUNT_REMOTE_PROTOCOL_LABELS, mountListeners, mountRemoteControlState } from './mountremotecontrol/listeners'
 import { observatoryCamerasState } from './observatorycameras/observatorycameras'
 import { type ToolReadiness, toolReadiness, type ToolReadinessContext } from './readiness'
 import { catalogGroups, TOOL_DEFINITIONS, type ToolDefinition, toolStatus } from './tools'
@@ -167,11 +167,7 @@ function useToolReadinessContext(): ToolReadinessContext {
 			step: flip?.state === 'running' && flip.step ? MERIDIAN_FLIP_STEP_LABELS[flip.step] : undefined,
 			armed: key !== undefined && executor.arms[key] !== undefined,
 		},
-		listeners: device
-			? Object.values(servers)
-					.filter((server) => server.connectionId === device.connectionId && server.deviceId === device.id)
-					.map((server) => `${MOUNT_REMOTE_PROTOCOL_LABELS[server.protocol]} on ${formatEndpoint(server.host, server.port)}`)
-			: [],
+		listeners: device ? mountListeners(servers, device.connectionId, device.id).map((server) => `${MOUNT_REMOTE_PROTOCOL_LABELS[server.protocol]} on ${formatEndpoint(server.host, server.port)}`) : [],
 	}
 }
 

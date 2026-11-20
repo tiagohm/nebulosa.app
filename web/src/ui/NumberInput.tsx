@@ -24,7 +24,8 @@ const stepButtonClassName =
 
 // Numeric field with − and + step buttons, a unit suffix, and Arrow Up and Down stepping. It is a text field with the
 // decimal keypad, so the value is always written with a dot, whatever the browser's locale; a typed comma is read as
-// the decimal dot.
+// the decimal dot. A field of whole non-negative values (an integer step and a minimum of zero or more), such as a TCP
+// port, opens the digits keypad instead, which has neither a dot nor a minus sign.
 export function NumberInput({ label, value, onChange, min, max, step = 1, className, classNames, disabled, suffix }: NumberInputProps) {
 	// Text being typed; undefined shows the committed value.
 	const [draft, setDraft] = useState<string>()
@@ -42,7 +43,7 @@ export function NumberInput({ label, value, onChange, min, max, step = 1, classN
 				<div className="relative flex min-w-0 flex-1">
 					<input
 						type="text"
-						inputMode="decimal"
+						inputMode={Number.isInteger(step) && min !== undefined && min >= 0 ? 'numeric' : 'decimal'}
 						autoComplete="off"
 						spellCheck={false}
 						disabled={disabled}

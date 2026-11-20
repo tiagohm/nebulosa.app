@@ -19,6 +19,7 @@ import { OPERATION_LABELS, operationsState } from '../../operations'
 import { activeProfile, activeSetup, profileState } from '../../profile/profile'
 import { openAstronomicalTimeConverter, qualityNotes } from '../../tools/astronomicaltime/astronomicaltime'
 import { meridianFlipHeadline, meridianFlipState, meridianFlipStatusText, monitorKey } from '../../tools/meridianflip/meridianflip'
+import { listenersStatusText, mountListeners, mountRemoteControlState } from '../../tools/mountremotecontrol/listeners'
 import { Icon, type IconName } from '../../ui/Icon'
 import { LinkButton } from '../../ui/LinkButton'
 import { SectionHeading } from '../../ui/SectionHeading'
@@ -33,8 +34,8 @@ import { AbortButton, TONE_CLASSES, useOperationAbortable } from './StatusItems'
 // Details of the status bar: a button at its right end, showing how many items the bar left out, that opens a panel
 // above itself with everything the bar summarizes for the active profile's server connection — the server link and
 // the selected connection, every role with its device and what it reports, the running capture and guiding sessions
-// and the enabled Meridian Flip Monitor of the mount, every other running operation with its devices, elapsed time, and
-// reported progress, each with its Abort, the device failures, and the real-time clock, even when the bar has no room
+// with the enabled Meridian Flip Monitor and the running Mount Remote Control listeners of the mount, every other
+// running operation with its devices, elapsed time, and reported progress, each with its Abort, the device failures, and the real-time clock, even when the bar has no room
 // for it. The panel is placed in the viewport (fixed), so the clipping bar never cuts it, and closes when the button is
 // pressed again, on a press outside both, on Escape (returning the focus to the button), when the window resizes, and
 // after it opened a device, a camera tab, or a tool. Closing it, or anything it opens, never stops a session or an operation; only an Abort does.
@@ -148,6 +149,8 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 	const mount = useRoleDevice('MOUNT').device
 	const meridianFlip = useSnapshot(meridianFlipState)
 	const monitor = mount ? meridianFlip.monitors[monitorKey(mount.connectionId, mount.id)] : undefined
+	const remoteControl = useSnapshot(mountRemoteControlState)
+	const listeners = listenersStatusText(mount ? mountListeners(remoteControl.servers, mount.connectionId, mount.id) : [])
 	const capture = activeCapture(captures.sessions, mainCamera)
 	const session = activeGuiding(guiding.sessions, guideCamera)
 	const others = otherOperations(scopedRunningOperations(operations, serverId), sessionOperationIds(capture, session))
@@ -167,6 +170,12 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 		onClose()
 	}
 
+	// Opens the Mount Remote Control tool.
+	function openRemoteControl() {
+		navigate(routeState, { workspace: 'tools', tool: 'mount-remote-control' })
+		onClose()
+	}
+
 	const captureTarget: NotificationTarget | undefined = mainCamera && { kind: 'cameraTool', connectionId: mainCamera.connectionId, deviceId: mainCamera.id, tool: 'camera-acquisition' }
 	const guidingTarget: NotificationTarget | undefined = guideCamera && { kind: 'cameraTool', connectionId: guideCamera.connectionId, deviceId: guideCamera.id, tool: 'guiding' }
 
@@ -180,7 +189,7 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 			<Section title="Equipment">
 				<EquipmentRows devices={devices} onNavigate={onClose} sessions={{ capture, guiding: session }} />
 			</Section>
-			{(capture !== undefined || session !== undefined || monitor !== undefined) && (
+			{(capture !== undefined || session !== undefined || monitor !== undefined || listeners !== undefined) && (
 				<Section title="Sessions">
 					{capture && (
 						<Row label="Capture">
@@ -202,6 +211,12 @@ function StatusDetailsPanel({ placement: { bottom, right, width }, onClose }: St
 						<Row label="Meridian flip">
 							<span className={TONE_TEXT[meridianFlipHeadline(monitor)[1]]}>{meridianFlipStatusText(monitor, now)}</span>
 							<OpenButton label="Open tool" onClick={openMeridianFlip} />
+						</Row>
+					)}
+					{listeners && (
+						<Row label="Remote control">
+							<span className="text-accent">Serving</span> · {listeners}
+							<OpenButton label="Open tool" onClick={openRemoteControl} />
 						</Row>
 					)}
 				</Section>

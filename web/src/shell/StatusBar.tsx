@@ -12,6 +12,7 @@ import { operationsState } from '../operations'
 import { activeProfile, activeSetup, astronomicalClockPreferences, profileState, statusChipPreferences } from '../profile/profile'
 import { meridianFlipState, monitorKey } from '../tools/meridianflip/meridianflip'
 import { capturePausedBy, latestExecution, MERIDIAN_FLIP_STEP_LABELS, meridianFlipExecutorState } from '../tools/meridianflip/meridianflipexecutor'
+import { mountListeners, mountRemoteControlState } from '../tools/mountremotecontrol/listeners'
 import { Icon, type IconName } from '../ui/Icon'
 import { astronomicalClockRuntime, effectiveReadings, watchAstronomicalClock } from './statusbar/astronomicalclock'
 import { AstronomicalClockChip } from './statusbar/AstronomicalClockChip'
@@ -37,16 +38,16 @@ import {
 	scopedRunningOperations,
 } from './statusbar/selectors'
 import { StatusDetails } from './statusbar/StatusDetailsPanel'
-import { MeridianFlipItem, OperationItem, ServerLinkItem, StatusChip, useOperationAbortable } from './statusbar/StatusItems'
+import { MeridianFlipItem, MountRemoteItem, OperationItem, ServerLinkItem, StatusChip, useOperationAbortable } from './statusbar/StatusItems'
 
 // Compact bar at the bottom of the window, visible from every workspace, showing everything the active profile has in
 // as little room as it can: the tab's link to the application server, a chip per connected device of the profile's
 // roles with what the profile asks of it, the device operations running on the profile's server connection, each with
-// its Abort, the Meridian Flip Monitor of the profile's mount while it is enabled, its device failures, and the details
-// button that lists all of it. A device that is not connected shows no chip. A narrower bar shows fewer chips, by
-// priority, and fewer operations, and counts the others on the details button; the server link, the monitor, the
-// failures, and the first operation are never left out. Every operation has its own Abort,
-// through the same command as the page that started it, and it interrupts that operation alone; a motion of the mount
+// its Abort, the Meridian Flip Monitor of the profile's mount while it is enabled, the Mount Remote Control listeners of
+// that mount while one runs, its device failures, and the details button that lists all of it. A device that is not
+// connected shows no chip. A narrower bar shows fewer chips, by priority, and fewer operations, and counts the others
+// on the details button; the server link, the monitor, the listeners, the failures, and the first operation are never
+// left out. Every operation has its own Abort, through the same command as the page that started it, and it interrupts that operation alone; a motion of the mount
 // of the profile that no operation holds has one too. In the room all of that leaves, the bar shows the real-time clock
 // the profile asks for, which opens the Astronomical Time Converter; it never takes room from anything else, and is
 // never the Sky simulation clock.
@@ -122,6 +123,7 @@ export function StatusBar() {
 	const guiding = useSnapshot(guidingRuntime)
 	const meridianFlip = useSnapshot(meridianFlipState)
 	const meridianFlipExecutor = useSnapshot(meridianFlipExecutorState)
+	const remoteControl = useSnapshot(mountRemoteControlState)
 	const abortable = useOperationAbortable()
 	const devices = useWatchedDevices()
 	const profile = activeProfile(profiles)
@@ -137,6 +139,7 @@ export function StatusBar() {
 	const monitor = mount ? meridianFlip.monitors[monitorKey(mount.connectionId, mount.id)] : undefined
 	const flip = mount ? latestExecution(meridianFlipExecutor, mount.connectionId, mount.id) : undefined
 	const executor = mount && { step: flip?.state === 'running' && flip.step ? MERIDIAN_FLIP_STEP_LABELS[flip.step] : undefined, armed: meridianFlipExecutor.arms[monitorKey(mount.connectionId, mount.id)] !== undefined, paused: capturePausedBy(flip, captures.sessions) }
+	const listeners = mount ? mountListeners(remoteControl.servers, mount.connectionId, mount.id) : []
 	const capture = activeCapture(captures.sessions, mainCamera)
 	const session = activeGuiding(guiding.sessions, roleDevice(setup, 'GUIDE_CAMERA', devices))
 	const errors = scopedDeviceErrors({ serverId, devices, control })
@@ -240,6 +243,7 @@ export function StatusBar() {
 				{operations.map((operation) => (!fitted || fitted.operations.has(operation.id)) && <OperationItem key={operation.id} operation={operation} online={online} />)}
 				{readings.map((reading) => fittedClocks?.has(reading) && <AstronomicalClockChip key={reading} reading={reading} timeZone={timeZone} showSeconds={clock.showSeconds} hasSite={observer !== undefined} />)}
 				{monitor && <MeridianFlipItem monitor={monitor} name={mount?.name} executor={executor} />}
+				{listeners.length > 0 && <MountRemoteItem servers={listeners} name={mount?.name} />}
 				{errors.length > 0 && (
 					<span data-fixed title={errors.map((error) => `${error.name}: ${error.message}`).join('\n')} className="flex flex-none items-center gap-1 text-danger">
 						<Icon name="error" className="size-3.5" />

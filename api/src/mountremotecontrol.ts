@@ -1,3 +1,4 @@
+import { networkInterfaces, type NetworkInterfaceInfo } from 'node:os'
 import { equatorialToJ2000 } from 'nebulosa/src/astronomy/coordinates/coordinate'
 import type { GeographicCoordinate } from 'nebulosa/src/astronomy/observer/location'
 import { timeNow } from 'nebulosa/src/astronomy/time/time'
@@ -65,6 +66,10 @@ export interface MountRemoteServer extends MountRemoteKey {
 	readonly host: string
 	// TCP port the listener is bound to.
 	readonly port: number
+	// Addresses a client on another computer can connect to, without brackets for IPv6: the host itself when it names
+	// one interface, or the external addresses of this computer a wildcard host binds; read again at every publication
+	// and snapshot, so a network that changed is followed. Empty for a wildcard host on a computer without a network.
+	readonly addresses: readonly string[]
 	// Connected clients, in connection order.
 	readonly clients: readonly MountRemoteClient[]
 	// Revision of the service at the last change of this listener.
@@ -124,6 +129,30 @@ export const DEFAULT_MOUNT_REMOTE_CONTROL_OPTIONS: MountRemoteControlOptions = {
 // longitude with two commands, sent together, and writing each alone would send the mount a site that mixes the new
 // value with the old other one.
 const SITE_WRITE_DELAY = 250
+
+// Hosts that bind every IPv4 interface, and every interface of both families.
+const IPV4_WILDCARDS = new Set(['0.0.0.0'])
+const ANY_WILDCARDS = new Set(['', '::', '[::]'])
+
+// Returns the addresses a client can reach a listener bound to host at, without brackets for IPv6: the host itself
+// when it names one interface, or else every non-internal address of interfaces, IPv4 for 0.0.0.0 and both families
+// for :: (link-local IPv6 left out, since it needs a zone a planetarium cannot be given), in interface order.
+export function reachableAddresses(host: string, interfaces: NodeJS.Dict<NetworkInterfaceInfo[]> = networkInterfaces()): string[] {
+	const name = host.trim()
+	const ipv4Only = IPV4_WILDCARDS.has(name)
+	if (!ipv4Only && !ANY_WILDCARDS.has(name)) return [name.replace(/^\[(.*)\]$/, '$1')]
+
+	const addresses: string[] = []
+
+	for (const entries of Object.values(interfaces)) {
+		for (const entry of entries ?? []) {
+			if (entry.internal || (ipv4Only && entry.family !== 'IPv4') || (entry.family === 'IPv6' && entry.address.toLowerCase().startsWith('fe80:'))) continue
+			if (!addresses.includes(entry.address)) addresses.push(entry.address)
+		}
+	}
+
+	return addresses
+}
 
 // Product name reported to LX200 clients.
 const LX200_PRODUCT_NAME = 'Nebulosa'
@@ -235,7 +264,7 @@ export class MountRemoteControlService implements Disposable {
 
 		if (running) {
 			if (running.host === host && running.port === port) return Response.json(this.#server(running))
-			return remoteError(`The ${protocol === 'lx200' ? 'LX200' : 'Stellarium'} server of this mount already runs on ${running.host}:${running.port}`, 409, 'conflict')
+			return remoteError(`The ${protocol === 'lx200' ? 'LX200' : 'Stellarium'} server of this mount already runs on ${running.host}:${running.port}. Stop it before starting it on another address.`, 409, 'conflict')
 		}
 
 		// The handlers of the server reach the entry once it exists; none runs before the server starts.
@@ -246,8 +275,8 @@ export class MountRemoteControlService implements Disposable {
 			entry.server.start(host, port)
 		} catch (error) {
 			entry.stopped = true
-			if (Error.isError(error) && 'code' in error && error.code === 'EADDRINUSE') return remoteError(`${host}:${port} is already in use`, 409, 'addressInUse')
-			return remoteError(`${host}:${port} cannot be bound${Error.isError(error) ? `: ${error.message}` : ''}`, 500, 'bindFailed')
+			if (Error.isError(error) && 'code' in error && error.code === 'EADDRINUSE') return remoteError(`${host}:${port} is already in use by another server or program. Choose another port.`, 409, 'addressInUse')
+			return remoteError(`${host}:${port} cannot be bound${Error.isError(error) ? ` (${error.message})` : ''}. Use 0.0.0.0, 127.0.0.1, or an address of this computer.`, 500, 'bindFailed')
 		}
 
 		if (entry.server instanceof StellariumProtocolServer) {
@@ -549,7 +578,7 @@ export class MountRemoteControlService implements Disposable {
 	// Returns a listener as published.
 	#server(entry: RemoteEntry): MountRemoteServer {
 		const { connectionId, deviceId, protocol, host, port, revision } = entry
-		return { connectionId, deviceId, protocol, host, port, clients: Array.from(entry.clients.values(), ({ client }) => ({ id: client.id, ip: client.ip, port: client.port })), revision }
+		return { connectionId, deviceId, protocol, host, port, addresses: reachableAddresses(host), clients: Array.from(entry.clients.values(), ({ client }) => ({ id: client.id, ip: client.ip, port: client.port })), revision }
 	}
 }
 

@@ -1,4 +1,4 @@
-import type { MeridianFlipMonitor, OperationRecord } from 'api'
+import type { MeridianFlipMonitor, MountRemoteServer, OperationRecord } from 'api'
 import { cn } from 'cn'
 import type { Ref } from 'react'
 import { useSnapshot } from 'valtio'
@@ -19,6 +19,7 @@ import { notificationsState } from '../../notifications/notifications'
 import { operationsState } from '../../operations'
 import { profileState } from '../../profile/profile'
 import { meridianFlipHeadline, meridianFlipStatusText } from '../../tools/meridianflip/meridianflip'
+import { connectEndpoints, listenersStatusText, MOUNT_REMOTE_PROTOCOL_LABELS } from '../../tools/mountremotecontrol/listeners'
 import { Icon, type IconName } from '../../ui/Icon'
 import { TONE_TEXT } from '../../ui/StatusBadge'
 import { useNow } from '../../useNow'
@@ -28,8 +29,9 @@ import { type BarOperation, type ChipValue, operationInterruption, type ScopedDe
 
 // Items of the status bar, as small as they can be: the server link is an icon alone, each chip an icon and a short
 // reading, its name and full reading in its title, each running operation its icon, name, and progress, followed by
-// its Abort, and the enabled Meridian Flip Monitor of the profile's mount its icon and status. A chip with a device
-// opens that exact device in Equipment Control.
+// its Abort, the enabled Meridian Flip Monitor of the profile's mount its icon and status, and the running Mount Remote
+// Control listeners of that mount their protocols and clients. A chip with a device opens that exact device in
+// Equipment Control.
 
 // Text color of each status tone.
 export const TONE_CLASSES: Readonly<Record<StatusTone, string>> = {
@@ -167,6 +169,29 @@ export function MeridianFlipItem({ monitor, name, executor }: MeridianFlipItemPr
 			<Icon name="meridian" className="size-3.5 text-ink-300" />
 			<span className="sr-only">{title}</span>
 			<span className={cn('tabular-nums', TONE_TEXT[tone])}>{text}</span>
+		</button>
+	)
+}
+
+interface MountRemoteItemProps {
+	// Running listeners of the profile's mount, in protocol order; at least one.
+	readonly servers: readonly MountRemoteServer[]
+	// Name of the mount, read through the title.
+	readonly name?: string
+}
+
+// Mount Remote Control listeners of the profile's mount while one runs: the remote icon and their protocols and count
+// of clients in the active tone, with each listener's address and clients in the title, opening the tool.
+export function MountRemoteItem({ servers, name }: MountRemoteItemProps) {
+	const text = listenersStatusText(servers)
+	const details = servers.map((server) => `${MOUNT_REMOTE_PROTOCOL_LABELS[server.protocol]} on ${connectEndpoints(server).join(', ') || `port ${server.port}`}`).join('; ')
+	const title = `Mount Remote Control${name ? ` of ${name}` : ''}: ${text}. ${details}`
+
+	return (
+		<button type="button" data-fixed title={`${title} · Open the tool`} onClick={() => navigate(routeState, { workspace: 'tools', tool: 'mount-remote-control' })} className={cn('flex flex-none items-center gap-1', BUTTON_CLASS)}>
+			<Icon name="remote" className="size-3.5 text-ink-300" />
+			<span className="sr-only">{title}</span>
+			<span className="text-accent">{text}</span>
 		</button>
 	)
 }

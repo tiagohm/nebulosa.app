@@ -21,7 +21,7 @@ Part of the [architecture](../ARCHITECTURE.md) of Nebulosa.
   The cache is shared by every tab, so no route bypasses it.
   The free services allow fewer than 10,000 Open-Meteo calls a day, and 7Timer! states no limit.
 - `POST /api/astro-weather/night` (`AstroWeatherNightRequest`, `AstroWeatherNight`) answers the night containing an instant, computed from the toolkit and never the network, with the Sun, the Earth, and the Moon of one source of the fast [Ephemeris Chain](ephemeris-chain.md): the SPK kernels of the SPICE Kernel Library when they cover two days on either side of the instant, else VSOP87E and ELPMPP02.
-  The Tonight view of Artificial Satellites reads the same night to bound its search of visible passes (see [Tools Integration](tools-integration.md)).
+  The Tonight view of Artificial Satellites reads the same night to bound its search of visible passes (see [Artificial Satellites Contract](artificial-satellites.md)).
   A night runs from one upper transit of the Sun to the next (`sunNightAt`), so it is named by its evening's civil date, dawn needs no second day, and any zone, even UTC for a site far from Greenwich, gives every night one evening, which civil days do not.
   The previous night is asked with `start − 1` and the next with `end`.
   Crossings use the convention of the Sun Inspector, absent ones are absent, and `darkness` is the time the Sun's center stays below −18°, empty when it never does.
